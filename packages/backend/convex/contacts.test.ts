@@ -4,6 +4,7 @@
 // Subjects are built as `${userId}|session_x` over REAL `users` rows, exactly as `tenant.test.ts`
 // does: `requireScope` derives `tenantId` from the segment before the `|`, so a hand-made subject
 // that skips this shape silently tests nothing.
+import { dashboardCursorFor, parseDashboardCursor } from "@pikar/core";
 import { convexTest } from "convex-test";
 import { describe, expect, test, vi } from "vitest";
 // `audit.log` maintains the auditCounts aggregate (audit.ts), so the component must be registered
@@ -175,6 +176,52 @@ describe("contacts: tenant isolation across every public function (BETA-05 / SC#
         addresses: ["stop@x.com", "ok@x.com"],
       }),
     ).toEqual([]);
+  });
+
+  // The three Pipeline read models (19-07). Every new PUBLIC function belongs in this block, and
+  // the export-set pin at the bottom of the file fails if one is added without landing here.
+  test("pipelineTiles — B counts NOTHING of A's substrate", async () => {
+    const h = await harness();
+    const aId = await h.asA.mutation(api.contacts.upsertContact, {
+      email: "a@x.com",
+      origin: "user-entered",
+    });
+    await h.asA.mutation(api.contacts.createFollowUp, {
+      contactId: aId,
+      note: "chase",
+      dueAt: Date.now() - 1000,
+    });
+    await h.asA.mutation(api.contacts.markSuppressed, { address: "stop@x.com" });
+
+    expect(await h.asB.query(api.contacts.pipelineTiles, {})).toEqual({
+      needingAttention: 0,
+      followUpsDue: 0,
+      consentOnRecord: 0,
+      suppressed: 0,
+    });
+    // Non-vacuity: A, over the SAME database, sees the rows.
+    const forA = await h.asA.query(api.contacts.pipelineTiles, {});
+    expect(forA.followUpsDue).toBe(1);
+    expect(forA.suppressed).toBe(1);
+  });
+
+  test("listContacts — B's page contains no row of A's", async () => {
+    const h = await harness();
+    await h.asA.mutation(api.contacts.upsertContact, {
+      email: "a-only@x.com",
+      origin: "user-entered",
+    });
+    const forB = await h.asB.query(api.contacts.listContacts, {});
+    expect(forB.contacts).toEqual([]);
+    expect(forB.bound.returned).toBe(0);
+    expect((await h.asA.query(api.contacts.listContacts, {})).contacts).toHaveLength(1);
+  });
+
+  test("listUnassignedFollowUps — B's page contains no follow-up of A's", async () => {
+    const h = await harness();
+    await h.asA.mutation(api.contacts.createFollowUp, { note: "supplier quote", dueAt: Date.now() });
+    expect((await h.asB.query(api.contacts.listUnassignedFollowUps, {})).followUps).toEqual([]);
+    expect((await h.asA.query(api.contacts.listUnassignedFollowUps, {})).followUps).toHaveLength(1);
   });
 });
 
@@ -629,6 +676,302 @@ describe("contacts: the unsubscribe token verifies before it resolves", () => {
   });
 });
 
+// ── The Pipeline read models (19-07, VALIDATION rows 19-backend and 21) ───────────────────────
+
+/** The CLOSED `DashboardPartialReason` vocabulary, restated so a hand-rolled reason fails here. */
+const PARTIAL_REASONS = [
+  "row-cap",
+  "time-cap",
+  "legacy-window",
+  "coverage-gap",
+  "source-unavailable",
+];
+
+/** A DELIVERED send, inserted directly: `requests` is written by the delivery spine, not by this
+ *  module, so seeding the terminal row is the only way to give a contact a "last touch". */
+async function seedSend(h: Harness, tenantId: string, recipient: string, createdAt: number) {
+  await h.t.run((ctx) =>
+    ctx.db.insert("requests", {
+      tenantId,
+      correlationId: `seed-${createdAt}-${recipient}`,
+      goal: "seeded",
+      recipient,
+      status: "sent",
+      attachmentRefs: [],
+      createdAt,
+    }),
+  );
+}
+
+describe("contacts: pipelineTiles are ALWAYS-KNOWN counts (invariant 3)", () => {
+  test("an EMPTY tenant reads four real zeroes — never null, never undefined", async () => {
+    const h = await harness();
+    const tiles = await h.asA.query(api.contacts.pipelineTiles, {});
+    // `toEqual({...0})` alone would pass on `undefined` for a key that is simply absent, so each
+    // one is also pinned by TYPE. Contacts and follow-ups have no coverage-start concept, so
+    // "we weren't watching" cannot apply and Unknown is never the truth here.
+    expect(tiles).toEqual({
+      needingAttention: 0,
+      followUpsDue: 0,
+      consentOnRecord: 0,
+      suppressed: 0,
+    });
+    for (const value of Object.values(tiles)) expect(typeof value).toBe("number");
+  });
+
+  test("needingAttention counts contacts with NO OPEN follow-up — done/canceled still needs you", async () => {
+    const h = await harness();
+    const owed = await h.asA.mutation(api.contacts.upsertContact, {
+      email: "owed@x.com",
+      origin: "user-entered",
+    });
+    const settled = await h.asA.mutation(api.contacts.upsertContact, {
+      email: "settled@x.com",
+      origin: "user-entered",
+    });
+    const bare = await h.asA.mutation(api.contacts.upsertContact, {
+      email: "bare@x.com",
+      origin: "user-entered",
+    });
+    // `settled` keeps an OPEN follow-up; `owed`'s only one is DONE; `bare` has none at all.
+    await h.asA.mutation(api.contacts.createFollowUp, {
+      contactId: settled,
+      note: "open one",
+      dueAt: Date.now() + 60_000,
+    });
+    const finished = await h.asA.mutation(api.contacts.createFollowUp, {
+      contactId: owed,
+      note: "finished one",
+      dueAt: Date.now() - 60_000,
+    });
+    await h.asA.mutation(api.contacts.setFollowUpStatus, { followUpId: finished, status: "done" });
+
+    expect(bare).toBeDefined();
+    const tiles = await h.asA.query(api.contacts.pipelineTiles, {});
+    // owed + bare, NOT settled. Complementary to followUpsDue, never a restatement of it.
+    expect(tiles.needingAttention).toBe(2);
+  });
+
+  test("followUpsDue counts CONTACTLESS follow-ups too — one honest total, no asterisk", async () => {
+    const h = await harness();
+    const contactId = await h.asA.mutation(api.contacts.upsertContact, {
+      email: "person@x.com",
+      origin: "user-entered",
+    });
+    await h.asA.mutation(api.contacts.createFollowUp, {
+      contactId,
+      note: "call them",
+      dueAt: Date.now() - 60_000,
+    });
+    await h.asA.mutation(api.contacts.createFollowUp, {
+      note: "chase the supplier quote",
+      dueAt: Date.now() - 60_000,
+    });
+    // Not yet due, so it must NOT be counted — otherwise the tile is "open follow-ups" wearing
+    // the word "due".
+    await h.asA.mutation(api.contacts.createFollowUp, {
+      note: "next month",
+      dueAt: Date.now() + 86_400_000,
+    });
+
+    expect((await h.asA.query(api.contacts.pipelineTiles, {})).followUpsDue).toBe(2);
+  });
+
+  test("consentOnRecord counts only a real consent event — nothing is defaulted to consented", async () => {
+    const h = await harness();
+    const consented = await h.asA.mutation(api.contacts.upsertContact, {
+      email: "yes@x.com",
+      origin: "user-entered",
+    });
+    await h.asA.mutation(api.contacts.upsertContact, {
+      email: "silent@x.com",
+      origin: "user-entered",
+    });
+    expect((await h.asA.query(api.contacts.pipelineTiles, {})).consentOnRecord).toBe(0);
+
+    await h.asA.mutation(api.contacts.assertConsent, { contactId: consented, wording: WORDING });
+    expect((await h.asA.query(api.contacts.pipelineTiles, {})).consentOnRecord).toBe(1);
+  });
+});
+
+describe("contacts: listContacts is bounded by the 26-01 contract (VALIDATION row 21)", () => {
+  test("a page SHORTER than the limit is complete — no cursor, not partial", async () => {
+    const h = await harness();
+    await h.asA.mutation(api.contacts.upsertContact, {
+      email: "only@x.com",
+      origin: "user-entered",
+    });
+    const result = await h.asA.query(api.contacts.listContacts, { limit: 10 });
+    expect(result.bound.nextCursor).toBeNull();
+    expect(result.bound.partial).toBe(false);
+    expect(result.bound.partialReason).toBeUndefined();
+    expect(result.bound.returned).toBe(1);
+  });
+
+  test("MORE rows than the limit produce a cursor, and the cursor implies partial + a CLOSED reason", async () => {
+    const h = await harness();
+    for (const email of ["one@x.com", "two@x.com", "three@x.com"]) {
+      await h.asA.mutation(api.contacts.upsertContact, { email, origin: "user-entered" });
+    }
+    const first = await h.asA.query(api.contacts.listContacts, { limit: 2 });
+    expect(first.contacts).toHaveLength(2);
+    expect(first.bound.returned).toBe(2);
+    expect(first.bound.limit).toBe(2);
+    expect(first.bound.nextCursor).not.toBeNull();
+    expect(first.bound.partial).toBe(true);
+    expect(PARTIAL_REASONS).toContain(first.bound.partialReason);
+  });
+
+  test("the cursor round-trips and page 2 shares NO row with page 1", async () => {
+    const h = await harness();
+    for (const email of ["one@x.com", "two@x.com", "three@x.com", "four@x.com"]) {
+      await h.asA.mutation(api.contacts.upsertContact, { email, origin: "user-entered" });
+    }
+    const first = await h.asA.query(api.contacts.listContacts, { limit: 2 });
+    const cursor = first.bound.nextCursor;
+    if (cursor === null) throw new Error("expected a cursor with 4 rows and a limit of 2");
+    // The cursor is the 26-01 "v1:" shape, not an opaque backend token.
+    expect(dashboardCursorFor(parseDashboardCursor(cursor))).toBe(cursor);
+
+    const second = await h.asA.query(api.contacts.listContacts, { limit: 2, cursor });
+    const firstIds = first.contacts.map((c) => c.contactId);
+    expect(second.contacts).toHaveLength(2);
+    for (const row of second.contacts) expect(firstIds).not.toContain(row.contactId);
+    // Every row is reached exactly once across the two pages.
+    expect(new Set([...firstIds, ...second.contacts.map((c) => c.contactId)]).size).toBe(4);
+    expect(second.bound.nextCursor).toBeNull();
+    expect(second.bound.partial).toBe(false);
+  });
+
+  test("lastTouchAt is the NEWER of the newest delivered send and the newest completed follow-up", async () => {
+    const h = await harness();
+    const now = Date.now();
+    const sendWins = await h.asA.mutation(api.contacts.upsertContact, {
+      email: "send-wins@x.com",
+      origin: "user-entered",
+    });
+    const doneWins = await h.asA.mutation(api.contacts.upsertContact, {
+      email: "done-wins@x.com",
+      origin: "user-entered",
+    });
+    await h.asA.mutation(api.contacts.upsertContact, {
+      email: "never@x.com",
+      origin: "user-entered",
+    });
+
+    // Mixed case on the wire proves the fold keys on `normalizeAddress`, not on the raw header.
+    await seedSend(h, h.tenantA, "Send-Wins@X.com", now - 1_000);
+    await seedSend(h, h.tenantA, "send-wins@x.com", now - 90_000);
+    await seedSend(h, h.tenantA, "done-wins@x.com", now - 500_000);
+
+    const oldTouch = await h.asA.mutation(api.contacts.createFollowUp, {
+      contactId: sendWins,
+      note: "old",
+      dueAt: now - 900_000,
+    });
+    await h.asA.mutation(api.contacts.setFollowUpStatus, { followUpId: oldTouch, status: "done" });
+    const newTouch = await h.asA.mutation(api.contacts.createFollowUp, {
+      contactId: doneWins,
+      note: "new",
+      dueAt: now - 900_000,
+    });
+    await h.asA.mutation(api.contacts.setFollowUpStatus, { followUpId: newTouch, status: "done" });
+
+    const rows = await h.asA.query(api.contacts.listContacts, {});
+    const by = (email: string) => {
+      const row = rows.contacts.find((c) => c.email === email);
+      if (!row) throw new Error(`missing ${email}`);
+      return row;
+    };
+    // The send is newer than the completion here…
+    expect(by("send-wins@x.com").lastTouchAt).toBe(now - 1_000);
+    // …and the completion (stamped just now by setFollowUpStatus) is newer than the send there.
+    expect(by("done-wins@x.com").lastTouchAt).toBeGreaterThan(now - 500_000);
+    // Neither: NULL, which the component renders as an explicit "no contact yet" — not 0.
+    expect(by("never@x.com").lastTouchAt).toBeNull();
+    expect(by("never@x.com").lastTouchAt).not.toBe(0);
+  });
+
+  test("a row carries the soonest OPEN follow-up as nextStep, and null consent stays null", async () => {
+    const h = await harness();
+    const now = Date.now();
+    const contactId = await h.asA.mutation(api.contacts.upsertContact, {
+      email: "busy@x.com",
+      origin: "user-entered",
+    });
+    await h.asA.mutation(api.contacts.createFollowUp, {
+      contactId,
+      note: "later",
+      dueAt: now + 200_000,
+    });
+    await h.asA.mutation(api.contacts.createFollowUp, {
+      contactId,
+      note: "sooner",
+      dueAt: now + 10_000,
+    });
+    const canceled = await h.asA.mutation(api.contacts.createFollowUp, {
+      contactId,
+      note: "soonest but canceled",
+      dueAt: now + 1_000,
+    });
+    await h.asA.mutation(api.contacts.setFollowUpStatus, {
+      followUpId: canceled,
+      status: "canceled",
+    });
+
+    const row = (await h.asA.query(api.contacts.listContacts, {})).contacts[0];
+    expect(row?.nextStep?.note).toBe("sooner");
+    expect(row?.consent).toBeNull();
+    expect(row?.name).toBeNull();
+
+    await h.asA.mutation(api.contacts.assertConsent, { contactId, wording: WORDING });
+    const withConsent = (await h.asA.query(api.contacts.listContacts, {})).contacts[0];
+    expect(withConsent?.consent?.source).toBe("asserted-by-user");
+    expect(typeof withConsent?.consent?.at).toBe("number");
+  });
+});
+
+describe("contacts: listUnassignedFollowUps is the contactless section's own read", () => {
+  test("it returns ONLY open follow-ups with no contact, bounded", async () => {
+    const h = await harness();
+    const contactId = await h.asA.mutation(api.contacts.upsertContact, {
+      email: "person@x.com",
+      origin: "user-entered",
+    });
+    await h.asA.mutation(api.contacts.createFollowUp, {
+      contactId,
+      note: "assigned",
+      dueAt: Date.now(),
+    });
+    await h.asA.mutation(api.contacts.createFollowUp, { note: "supplier quote", dueAt: Date.now() });
+    const closed = await h.asA.mutation(api.contacts.createFollowUp, {
+      note: "already handled",
+      dueAt: Date.now(),
+    });
+    await h.asA.mutation(api.contacts.setFollowUpStatus, { followUpId: closed, status: "done" });
+
+    const result = await h.asA.query(api.contacts.listUnassignedFollowUps, {});
+    expect(result.followUps.map((f) => f.note)).toEqual(["supplier quote"]);
+    expect(result.bound.partial).toBe(false);
+    expect(result.bound.nextCursor).toBeNull();
+  });
+
+  test("more contactless follow-ups than the limit page through their own cursor", async () => {
+    const h = await harness();
+    for (const note of ["a", "b", "c"]) {
+      await h.asA.mutation(api.contacts.createFollowUp, { note, dueAt: Date.now() });
+    }
+    const first = await h.asA.query(api.contacts.listUnassignedFollowUps, { limit: 2 });
+    expect(first.followUps).toHaveLength(2);
+    const cursor = first.bound.nextCursor;
+    if (cursor === null) throw new Error("expected a cursor with 3 rows and a limit of 2");
+    const second = await h.asA.query(api.contacts.listUnassignedFollowUps, { limit: 2, cursor });
+    expect(second.followUps).toHaveLength(1);
+    const firstIds = first.followUps.map((f) => f.followUpId);
+    expect(firstIds).not.toContain(second.followUps[0]?.followUpId);
+  });
+});
+
 // ── Structural scan: no opportunity / stage / monetary concept (VALIDATION row 20) ────────────
 // edge-runtime has no `node:fs`, so sources are inlined by Vite's raw loader (importGuard.test.ts's
 // pattern) rather than read from disk.
@@ -698,7 +1041,10 @@ describe("PIPE-01/BETA-05: the public surface is exactly what the isolation bloc
   const COVERED = [
     "assertConsent",
     "createFollowUp",
+    "listContacts",
+    "listUnassignedFollowUps",
     "markSuppressed",
+    "pipelineTiles",
     "setFollowUpStatus",
     "unsuppress",
     "upsertContact",
