@@ -1,13 +1,30 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-08-09 (Plan cash-business-finance Task 9 SELF-REVIEW FOLLOW-UP — a
+> Last verified: 2026-08-09 (Plan cash-business-finance Task 9 REVIEW FIX ROUND 2 — the
+> self-review follow-up below was itself corrected by a second reviewer pass. FOUR fixes: (1) the
+> "no orphan headline" guard in `metricSetFor` (`packages/core/src/cash.ts`) always prepended an
+> orphaned headline to `solvency` and claimed in comment that solvency is "the row every headline
+> candidate here belongs to" — false, `cfa` is a `CashUnitEconomics` key, and the guard now routes to
+> whichever row's TYPE actually owns the key via two compile-bound `Record<keyof T, true>` maps next
+> to it, so a bootstrapped startup's unit-economics row now actually shows CFA rather than only the
+> headline card. (2) `SolvencySection` had zero test coverage — the exact reason the routing defect
+> was found by hand instead of by a red test; `cashView.test.ts` gained 4 tests. (3) failure isolation
+> was asserted in prose only — `cashView.test.ts` gained a pure-component test, and the claim itself
+> was corrected: isolated means each section's `useQuery` returning `undefined`/empty independently,
+> NOT a thrown exception, which still escapes to `FinanceView.tsx`'s one shared error boundary. (4)
+> minor — `cash.shape`'s read-only test's `toMatchObject` cannot catch a `revenueStage` leak; added
+> an explicit key-set assertion, verified it actually fails on a reintroduced leak. See the "Cash —
+> the Business tab, assembled" and Task 8's "No orphan headline" entries below.)
+>
+> Prior: 2026-08-09 (Plan cash-business-finance Task 9 SELF-REVIEW FOLLOW-UP — a
 > `ponytail:` comment records a known, harmless edge case: `metricSetFor`'s "no orphan headline" rule
 > can list a unit-economics key, `cfa`, inside `SolvencySection`'s own `set` for a bootstrapped
 > `startup`; `cash.solvency`'s `CashSolvency` return has no `cfa` field, so that tile is silently
 > skipped there — `HeadlineCard` already renders it from `economics`, so nothing is lost. Fixing the
 > row duplication would require `ConnectedSolvency` to also read `cash.unitEconomics`, which would
 > let a scorecard failure take Solvency down with it — the failure-isolation requirement outranks
-> this row-completeness nicety.)
+> this row-completeness nicety. **SUPERSEDED by the entry above: the premise here (always prepend to
+> `solvency`) was itself the defect; kept for history, do not treat as current.**)
 >
 > Prior: 2026-08-09 (Plan cash-business-finance Task 9 — the Business tab is ASSEMBLED.
 > `cash.shape`/`cash.solvency` adapters land, and `CashView.tsx` composes `HeadlineCard` →
@@ -449,11 +466,22 @@ raising watches the date the money ends exactly like a funded one does.
   else-branch's rows instead of failing to compile. Each tier's `typicalHeadline` is the `funding:
   null` fallback — what that tier's typical posture would produce — so an incomplete profile still
   gets a sensible lead, never a blank.
-- **No orphan headline.** After composing the tier's three rows and picking the headline, the
-  function checks the headline appears somewhere in `[...unitEconomics, ...solvency, ...activity]`
-  and prepends it to `solvency` if not — the only case this fires is a bootstrapped `startup`,
-  whose own rows don't otherwise carry `cfa`. A test loops every tier × posture combination
-  (including `funding: null`) and asserts the headline is always in the concatenated rows.
+- **No orphan headline, routed to the row that OWNS the key (Task 9 review fix).** After composing
+  the tier's three rows and picking the headline, the function checks the headline appears
+  somewhere in `[...unitEconomics, ...solvency, ...activity]` and, if not, prepends it to whichever
+  row's TYPE actually carries that key — `UNIT_ECONOMICS_KEY_SET`/`SOLVENCY_KEY_SET`, two
+  `Record<keyof CashUnitEconomics | CashSolvency, true>` maps declared next to the guard and
+  compile-bound to those two types, so an added/renamed field there fails to compile until the map
+  is updated too. **An earlier version always prepended to `solvency` and claimed in comment that
+  solvency is "the row every headline candidate here belongs to" — false: `cfa` is a
+  `CashUnitEconomics` member, `cash.solvency`'s actual return has no such field, and the only reason
+  nothing broke on screen was `SolvencySection` defensively skipping a key it cannot resolve
+  (correct by accident, not by construction — Task 9 review).** The only case this fires today is a
+  bootstrapped `startup`, whose own rows don't otherwise carry `cfa`; it now lands in
+  `unitEconomics`, so the "Does each customer pay for itself?" row actually shows CFA for that
+  tenant, not just the headline card above it. A test loops every tier × posture combination
+  (including `funding: null`) and asserts the headline is always in the concatenated rows; a second
+  test pins the bootstrapped-startup case specifically: `cfa` is in `unitEconomics`, never `solvency`.
 - **Agreement with `CASH_INPUTS` checked by hand, not re-derived.** Every row in `TIER_SETS` is
   backed by an input `cashInputsForTier(tier)` actually collects for that tier: `mrr`/`arr` appear
   only where the catalogue's `mrr` spec lists the tier (`startup`/`sme`/`enterprise`, never
@@ -532,10 +560,19 @@ raising watches the date the money ends exactly like a funded one does.
   unchanged from Task 2/3. Several `Connected*` components independently subscribing to `cash.shape`
   (or to `cash.unitEconomics`/`cash.solvency`) is the SAME pattern `FinanceView.tsx`'s `RailsSection`/
   `TrackedSection` already use for `finance.summary` — one client-side subscription per unique
-  query+args, not a duplicated network read. A failing `cash.unitEconomics` read (the scorecard) is
-  isolated to `UnitEconomicsSection` and (because it shares the read) the headline; `SolvencySection`,
-  `ActivitySection`, `NumbersPanel` and the whole Pikar-spend tab stay standing — the isolation the
-  spec asks for.
+  query+args, not a duplicated network read.
+  **What "isolated" precisely means here (Task 9 review correction — an earlier version of this
+  entry overstated it):** each section's `useQuery` returning `undefined` (loading) or an empty
+  result is independent of every other section's — `ConnectedUnitEconomics`'s `cash.unitEconomics`
+  read having nothing to show does not blank `ConnectedSolvency`/`ConnectedActivity`, because each
+  is its own hook call with its own subscription. **What is NOT isolated: a `useQuery` call
+  THROWING.** `FinanceTabs.tsx` mounts `CashTab` under `FinanceView.tsx`'s single
+  `FinanceErrorBoundary`, shared with the always-mounted `PikarSpendTab` — a genuinely thrown query
+  exception from ANY section would unwind to that one shared boundary and take the whole tab tree
+  down with it, not stop at a section edge. Fixing that would be a `FinanceView.tsx` change, outside
+  this task's scope; `cashView.test.ts`'s `describe("section isolation — what is proven and what is
+  not", ...)` pins the undefined/empty-independence claim at the pure-component level and states the
+  exception caveat in its own comment, rather than claiming more than the architecture provides.
 - **`metricSetFor(tier, funding)` is computed once per `Connected*` wrapper** (not hoisted into a
   shared context/provider — nothing here asked for one) from `cash.shape`'s tier, falling back to
   `"solopreneur"` via the same `fallbackTier` helper wherever `tier` is `null` — matching
@@ -548,14 +585,12 @@ raising watches the date the money ends exactly like a funded one does.
   of the growth framework. These are the figures investors and accountants ask for." — marking the
   finance-ops layer as OUTSIDE the Hormozi framework wherever it renders, per Task 7's own module
   comment. A `set` with zero keys renders nothing, matching `UnitEconomicsSection`'s existing contract.
-  **Known, harmless edge case (`ponytail:` comment at the site):** `metricSetFor`'s "no orphan
-  headline" rule can put a UNIT-ECONOMICS key (`cfa`, for a bootstrapped `startup`) into the
-  `solvency` array — `cash.solvency`'s actual `CashSolvency` return has no `cfa` field, so that tile
-  is silently skipped in THIS row (same "skip, don't invent" contract as a missing key anywhere
-  else). Nothing is lost to the reader: `HeadlineCard` renders `cfa` from `economics` regardless.
-  Wiring `ConnectedSolvency` to also read `cash.unitEconomics` would de-duplicate the row, but a
-  failing scorecard read would then take Solvency down with it — the failure-isolation requirement
-  outranks this row-completeness nicety.
+  **Fixed, not just documented (Task 9 review):** `metricSetFor`'s "no orphan headline" rule used to
+  put a UNIT-ECONOMICS key (`cfa`, for a bootstrapped `startup`) into the `solvency` array regardless
+  of which type actually owns it — see the corrected "No orphan headline" bullet in the Task 8
+  section above for the routing fix itself (`@pikar/core`). `SolvencySection` still defensively
+  skips any `set` entry with no matching figure — that backstop is real and stays, it is just no
+  longer the ONLY thing standing between this row and an unresolvable key.
 - **`HeadlineCard({ metric, figure, tier, funding })`** looks its label up in the SAME two label maps
   the two rows already use (`UNIT_ECONOMICS_LABELS`, `SOLVENCY_LABELS`) rather than inventing a third
   copy — CFA's label is already phrased as a question ("Does a customer pay for itself in 30 days?"),
@@ -567,14 +602,22 @@ raising watches the date the money ends exactly like a funded one does.
   "must"; `ConnectedShapeNotice` renders it only once `cash.shape` has resolved and `tier === null`,
   and renders nothing otherwise (loading or a tier present) — the rest of the tab renders exactly the
   same regardless of whether it is on screen.
-- Test evidence: `cash.test.ts` gained `describe("cash.shape", ...)` (3 tests: null-tier for no row,
-  tier/funding read back verbatim, tenant isolation) and `describe("tier change", ...)` (1 test: a
-  solopreneur's saved inputs persist untouched and a newly-visible field like `mrr` reads `null`, never
-  back-filled, once a `tenantProfiles` row appears) — `pnpm --filter @pikar/backend test cash` — 20/20.
-  `cashView.test.ts` gained `describe("the headline", ...)` (3 tests: a bootstrapped tenant's CFA
-  headline is framed as its 30-day question, a funded tenant's runway headline renders its month
-  figure, and `ShapeMissingNotice` invites without gating) — `pnpm --filter @pikar/web test cashView`
-  — 18/18. `pnpm typecheck` — 10/10 packages green.
+- Test evidence: `packages/backend/convex/cash.test.ts` gained `describe("cash.shape", ...)`
+  (3 tests: null-tier for no row, tier/funding read back verbatim — with an explicit
+  `Object.keys(result).sort()` check, since `toMatchObject` alone cannot catch a `revenueStage`
+  leak — and tenant isolation) and `describe("tier change", ...)` (1 test: a solopreneur's saved
+  inputs persist untouched and a newly-visible field like `mrr` reads `null`, never back-filled,
+  once a `tenantProfiles` row appears) — `pnpm --filter @pikar/backend test cash` — 20/20.
+  `packages/core/src/cash.test.ts` gained one test pinning the orphan-routing fix directly:
+  a bootstrapped startup's `cfa` is in `unitEconomics`, never `solvency` —
+  `pnpm --filter @pikar/core test cash` — 63/63.
+  `apps/web/app/(app)/dashboard/finance/cashView.test.ts` gained `describe("the headline", ...)`
+  (3 tests), `describe("solvency section", ...)` (4 tests: the outside-the-framework frame text, an
+  empty `set` renders nothing, a normal `set` renders one tile per key, and a `set` entry absent
+  from the `solvency` record is skipped without crashing) and
+  `describe("section isolation — what is proven and what is not", ...)` (1 test, pure-component
+  layer: a degraded section renders independently of a healthy sibling in the same pass) —
+  `pnpm --filter @pikar/web test cashView` — 23/23. `pnpm typecheck` — 10/10 packages green.
 
 ### Frontend and connected browser evidence
 

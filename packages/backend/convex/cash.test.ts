@@ -275,6 +275,9 @@ describe("cash.shape", () => {
     });
     const result = await asTenant(t, "tenant-a").query(api.cash.shape, {});
     expect(result).toMatchObject({ tier: "startup", funding: "funded" });
+    // `toMatchObject` ignores extra keys, so it cannot catch a `revenueStage` leak — the exact
+    // binding this test looks like it guards. An explicit key-set check does.
+    expect(Object.keys(result).sort()).toEqual(["funding", "tier"]);
   });
 
   test("one tenant's shape is not another's", async () => {

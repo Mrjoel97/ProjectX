@@ -787,6 +787,31 @@ export const hasOutsideMoney = (funding: Funding | null): boolean =>
   funding === "funded" || funding === "seeking";
 
 /**
+ * Which row OWNS a given metric key — derived from `CashUnitEconomics`/`CashSolvency` themselves,
+ * not a hand-maintained third list. Each is a `Record<keyof T, true>`: add, rename or remove a
+ * field on either type and the corresponding object below fails to compile until it matches, so
+ * this cannot silently drift from the types it exists to describe. Used ONLY by the orphan-routing
+ * guard in `metricSetFor`, immediately below — kept here, next to it, on purpose.
+ */
+const UNIT_ECONOMICS_KEY_SET: Record<keyof CashUnitEconomics, true> = {
+  cfa: true,
+  ltgp: true,
+  ltgpCac: true,
+  cacPayback: true,
+  cacVsIndustry: true,
+  grossMargin: true,
+  cohortChurn: true,
+  referralPct: true,
+};
+const SOLVENCY_KEY_SET: Record<keyof CashSolvency, true> = {
+  runway: true,
+  netBurn: true,
+  mrr: true,
+  arr: true,
+  workingCapital: true,
+};
+
+/**
  * The sets below the headline, by tier. A TABLE, deliberately not a switch or a ternary: a ternary
  * is total by construction, so a tier added to the union without a set here would silently inherit
  * the else-branch's rows instead of failing to compile (the `TIER_REASON` precedent,
@@ -891,9 +916,20 @@ export function metricSetFor(tier: Tier, funding: Funding | null): CashMetricSet
   // No orphan headline: the headline must also appear in one of the rendered rows, or the page
   // names a figure it never shows. This only fires when posture overrides the tier's usual
   // headline into a metric that tier's rows don't already carry (e.g. a bootstrapped startup led
-  // by CFA, which its own rows don't list) — added to solvency, the row every headline candidate
-  // here belongs to.
+  // by CFA, which its own `unitEconomics`/`solvency`/`activity` rows don't list).
+  //
+  // Routed to whichever row actually OWNS the key — `UNIT_ECONOMICS_KEY_SET`/`SOLVENCY_KEY_SET`
+  // above, compile-bound to `CashUnitEconomics`/`CashSolvency` — NOT hardcoded to `solvency`
+  // regardless of the key's real type. An earlier version of this guard always prepended to
+  // `solvency` and claimed (wrongly — Task 9 review) that solvency is "the row every headline
+  // candidate here belongs to": `cfa` is a `CashUnitEconomics` member, and `cash.solvency`'s actual
+  // return has no `cfa` field, so that was silently unresolvable — correct only by accident,
+  // because the view defensively skips a key it cannot find, not by construction.
   const rendered = [...set.unitEconomics, ...set.solvency, ...set.activity];
-  if (!rendered.includes(headline)) set.solvency = [headline, ...set.solvency];
+  if (!rendered.includes(headline)) {
+    if (headline in UNIT_ECONOMICS_KEY_SET) set.unitEconomics = [headline, ...set.unitEconomics];
+    else if (headline in SOLVENCY_KEY_SET) set.solvency = [headline, ...set.solvency];
+    else set.activity = [headline, ...set.activity];
+  }
   return set;
 }

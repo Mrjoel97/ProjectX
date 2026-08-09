@@ -13,6 +13,8 @@ import {
   HeadlineCard,
   NumbersPanel,
   ShapeMissingNotice,
+  SolvencySection,
+  UnitEconomicsSection,
 } from "./CashView";
 
 const render = (component: unknown, props: Record<string, unknown>): string =>
@@ -269,5 +271,95 @@ describe("the headline", () => {
     const html = render(ShapeMissingNotice, {});
     expect(html).toMatch(/business profile|business shape/i);
     expect(html).not.toMatch(/required|must/i);
+  });
+});
+
+const knownFigure = (value: number, unit = "usd") => ({
+  state: "known",
+  origin: "derived",
+  value,
+  unit,
+  from: "x",
+});
+
+// A real `CashSolvency`-shaped record — five fields, matching `packages/core/src/cash.ts`'s type.
+const realSolvency = () => ({
+  runway: knownFigure(6, "months"),
+  netBurn: knownFigure(2000),
+  mrr: knownFigure(500),
+  arr: knownFigure(6000),
+  workingCapital: knownFigure(1000),
+});
+
+describe("solvency section", () => {
+  test("carries the outside-the-framework frame", () => {
+    const html = render(SolvencySection, { solvency: realSolvency(), set: ["runway"] });
+    expect(html).toMatch(/not part of the growth framework/i);
+  });
+
+  test("an empty set renders nothing, not an empty heading", () => {
+    const html = render(SolvencySection, { solvency: {}, set: [] });
+    expect(html).toBe("");
+  });
+
+  test("a normal set renders one tile per key", () => {
+    const html = render(SolvencySection, {
+      solvency: realSolvency(),
+      set: ["runway", "mrr"],
+    });
+    expect(html).toContain('data-figure-state="known"');
+    expect((html.match(/data-figure-state="known"/g) ?? []).length).toBe(2);
+    expect(html).toMatch(/months until the cash runs out/i);
+    expect(html).toMatch(/monthly recurring revenue/i);
+    // workingCapital/netBurn/arr are in `realSolvency()` but NOT in `set` — never rendered.
+    expect(html).not.toMatch(/working capital/i);
+  });
+
+  // Task 9 review: `metricSetFor`'s orphan-headline guard used to be able to hand `SolvencySection`
+  // a key (`cfa`) that `CashSolvency` structurally cannot carry — fixed at the source in
+  // `packages/core/src/cash.ts` (the orphan is now routed to the row that owns it), but this pins
+  // the DEFENSIVE side too: a `solvency` object is never handed a key it cannot resolve without the
+  // component skipping it cleanly — no crash, no blank tile, no invented figure.
+  test("a set key absent from the solvency record is skipped, never crashes or renders blank", () => {
+    const html = render(SolvencySection, {
+      solvency: realSolvency(),
+      set: ["runway", "cfa"],
+    });
+    expect((html.match(/data-figure-state="known"/g) ?? []).length).toBe(1);
+    expect(html).not.toContain('data-figure="cfa"');
+    expect(html).toMatch(/months until the cash runs out/i);
+  });
+});
+
+/**
+ * What this proves and what it does NOT (Task 9 review — the report/playbook asserted isolation in
+ * prose only, with no test behind it):
+ *
+ * PROVEN here: each section component is a pure function of its OWN props — no shared module state,
+ * no prop threading between sections — so one section given empty/degraded data (the render-layer
+ * shape of `useQuery` returning `undefined`/an empty result) renders independently of a SIBLING
+ * section given full, healthy data in the same pass. This is what `CashTab`'s per-section
+ * `Connected*` wrappers rely on: `ConnectedUnitEconomics`'s `cash.unitEconomics` read failing to
+ * return data leaves `ConnectedSolvency`/`ConnectedActivity`'s OWN independent `useQuery` calls
+ * completely unaffected.
+ *
+ * NOT proven, and NOT true: that a `useQuery` call THROWING (a real Convex query error, as opposed
+ * to returning `undefined` while loading) stays contained to one section. `FinanceTabs.tsx` mounts
+ * `CashTab` under `FinanceView.tsx`'s single `FinanceErrorBoundary`, shared with the
+ * always-mounted `PikarSpendTab` — a thrown exception from ANY section's query would unwind to that
+ * one shared boundary and take the whole tab tree down with it. Fixing that is a `FinanceView.tsx`
+ * change, outside this task's scope; this test does not claim otherwise.
+ */
+describe("section isolation — what is proven and what is not", () => {
+  test("a section given empty/degraded data renders independently of a sibling given full data", () => {
+    const degradedUnitEconomics = render(UnitEconomicsSection, { economics: {}, keys: [] });
+    const healthySolvency = render(SolvencySection, { solvency: realSolvency(), set: ["runway"] });
+    const healthyActivity = render(ActivitySection, { activity: activity(), partial: false });
+
+    // The degraded section renders nothing (its own "no data yet" shape) ...
+    expect(degradedUnitEconomics).toBe("");
+    // ... while its siblings, rendered in the same pass, show their real content untouched.
+    expect(healthySolvency).toMatch(/months until the cash runs out/i);
+    expect(healthyActivity).toContain("4");
   });
 });

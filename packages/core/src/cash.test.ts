@@ -569,6 +569,18 @@ describe("which metrics a tenant sees", () => {
     );
   });
 
+  // Task 9 review: the orphan-headline guard used to prepend EVERY orphan into `solvency`
+  // regardless of which row's type actually carries the key. `cfa` is a `CashUnitEconomics`
+  // member — `CashSolvency` (the object `cash.solvency` actually returns) has no such field, so it
+  // was silently unresolvable there. It must land in `unitEconomics`, the row that owns it, so a
+  // bootstrapped startup's "Does each customer pay for itself?" row actually shows CFA and not just
+  // the headline card above it.
+  test("an orphaned headline is routed to the row that owns its key, not always to solvency", () => {
+    const bootstrappedStartup = metricSetFor("startup", "bootstrapped");
+    expect(bootstrappedStartup.unitEconomics).toContain("cfa");
+    expect(bootstrappedStartup.solvency).not.toContain("cfa");
+  });
+
   test("seeking outside money reads as outside money, like the tier rule already treats it", () => {
     expect(metricSetFor("startup", "seeking").headline).toBe("runway");
   });
