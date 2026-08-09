@@ -3268,6 +3268,15 @@ async function runAgentLoop(
     // violates.
     turnId?: string;
     threadId?: string;
+    // 19-11 (§2-D, the ACTN-05 root cause). THE LOOP BUILDS ITS OWN TOOL SET, so every input
+    // `buildCockpitTools` takes must ride these args or it is silently lost. `skillVersions` and
+    // `omitRecipientEdits` were both threaded when someone hit that; the CLOCK never was, and the
+    // 4th positional arg sat hardcoded `undefined` below. Consequence: `setSendTime`,
+    // `checkAvailability`, `proposeCalendarEvent` and `stageCrmWrite`'s dated follow-up ALL took
+    // their no-clock refusal on every live cockpit turn — the tools were only ever exercised
+    // through `__invokeCockpitTool` (which passes a clock) or the pinned SMOKE path, so no test
+    // could see it. Absent ⇒ byte-identical to today for the specialist/dispatch callers.
+    clientContext?: { tz: string; nowMs: number };
     // UAT-F2: the loop builds its OWN tool set below, so the withholding flag must ride these args
     // too (append-only optional — every existing caller keeps working; absent = full set).
     omitRecipientEdits?: boolean;
@@ -3313,6 +3322,7 @@ async function runAgentLoop(
     skillVersions,
     turnId,
     threadId,
+    clientContext,
     omitRecipientEdits,
     toolNames,
     maxSteps,
@@ -3323,7 +3333,7 @@ async function runAgentLoop(
     ctx,
     tenantId,
     planId,
-    undefined,
+    clientContext,
     skillVersions,
     omitRecipientEdits,
     // ACTN-03: the hosted-search key is BUILT only for an agent whose grant names it. A
@@ -4116,6 +4126,10 @@ export const runCockpitAgent = internalAction({
       skillVersions, // the loop builds its OWN tools — the drafter pin must ride there too
       turnId, // activity trace (CKPT-05) — undefined ⇒ the loop emits nothing
       threadId,
+      // 19-11: the trusted clock (§2-D). `effectiveClientContext`, not `clientContext`, so the
+      // loop and the SMOKE path above agree on the instant rather than diverging by which branch
+      // ran. Without this the tools the loop builds refuse every dated request.
+      clientContext: effectiveClientContext,
       omitRecipientEdits, // UAT-F2 — the loop's own tool build must honor the withholding
     });
     return { reply, costUsd };
@@ -4204,6 +4218,11 @@ export const __runCockpitAgentWithScript = internalAction({
     // DISP-01 (15-02): drive the loop's tool-set filter offline. Append-only test-support arg —
     // ABSENT is the pre-existing full-record behaviour, `[]` is an empty record (not the full one).
     toolNames: v.optional(v.array(v.string())),
+    // 19-11 (§2-D): the trusted clock, so the loop's OWN tool build is observable offline. This is
+    // the only test surface that can catch the clock being dropped between runAgentLoop and
+    // buildCockpitTools — `__invokeCockpitTool` bypasses the loop and passes a clock directly,
+    // which is exactly why that whole plane looked healthy while it was disconnected.
+    clientContext: v.optional(v.object({ tz: v.string(), nowMs: v.number() })),
   },
   handler: async (
     ctx,
@@ -4217,6 +4236,7 @@ export const __runCockpitAgentWithScript = internalAction({
       turnId,
       threadId,
       toolNames,
+      clientContext,
     },
   ): Promise<{
     reply: string;
@@ -4258,6 +4278,7 @@ export const __runCockpitAgentWithScript = internalAction({
       turnId,
       threadId,
       toolNames,
+      clientContext,
     });
     return { ...res, skillVersion: skill.version };
   },

@@ -783,3 +783,36 @@ test("19-11 anti-vacuity: a contact-only list with NO refused follow-up still st
   expect(plan?.kind).toBe("crm_write");
   expect(plan?.crmOperations).toHaveLength(1);
 });
+
+// ── 19-11 (§2-D): the CLOCK must survive into the loop's OWN tool set ─────────
+// THE ACTN-05 ROOT CAUSE. `runAgentLoop` builds its own tools and passed `undefined` for
+// `buildCockpitTools`' 4th (clientContext) argument, so `setSendTime`, `checkAvailability`,
+// `proposeCalendarEvent` and `stageCrmWrite`'s dated follow-up all took their no-clock refusal on
+// every live turn. Invisible because the only offline callers were `__invokeCockpitTool` (bypasses
+// the loop, passes a clock directly) and the SMOKE path (pins its own). Measured on eval run
+// 7e375c3c: seven refusals, every one `{"reason":"no_clock","ops":["addFollowUp"],
+// "dueProvided":[true]}` — the model had supplied the whole follow-up all along.
+test("19-11: the trusted clock reaches the tools runAgentLoop builds (§2-D)", async () => {
+  const { t, planId } = await setup();
+
+  await t.action(internal.llm.__runCockpitAgentWithScript, {
+    tenantId: "t1",
+    planId,
+    clientContext: { tz: "UTC", nowMs: Date.UTC(2020, 0, 1, 12, 0, 0) },
+    primary: [
+      crmStep("c-1", [
+        { op: "addFollowUp", email: "rhea@example.com", note: "chase the renewal", due: "tomorrow" },
+      ]),
+      textStep("Staged the follow-up."),
+    ],
+  });
+
+  const plan = await readPlan(t, planId);
+  expect(plan?.kind).toBe("crm_write");
+  const ops = plan?.crmOperations as Array<{ op: string; dueAt: number }> | undefined;
+  expect(ops).toHaveLength(1);
+  expect(ops?.[0]?.op).toBe("addFollowUp");
+  // A FINITE dueAt is the observable end of the whole §2-D chain: the user's words, parsed against
+  // the trusted clock. "tomorrow" off the pinned instant is the 09:00 default the next day.
+  expect(ops?.[0]?.dueAt).toBe(Date.UTC(2020, 0, 2, 9, 0, 0));
+});
