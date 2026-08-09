@@ -1079,8 +1079,7 @@ Plans:
 > backing data, the owner chose to build the substrate first. This is a genuine unblock rather than
 > a reorder: Phase 19 gates **26-18** (Pipeline nav), **Phase 28** twice (28-17 readiness gate,
 > 28-10 CRM projections), and now **Phase 31** (Marketing tranche A needs the one person store for
-> lead capture). It is **0/TBD — no plans exist yet**, so it needs `/gsd:plan-phase 19` before any
-> work. **The PIPE-01 "opportunities / pipeline value" contradiction was RESOLVED 2026-08-09** in
+> lead capture). **PLANNED 2026-08-09: 10 plans across 9 waves.** **The PIPE-01 "opportunities / pipeline value" contradiction was RESOLVED 2026-08-09** in
 > favour of the requirement as written (see Phase 26 above): the two tiles come off the mockup, no
 > `opportunities` table and no monetary column ship in this phase.
 
@@ -1096,7 +1095,20 @@ Plans:
   6. `tenantProfiles` gains a physical postal address field (CAN-SPAM requires one in the body of every commercial email) and the drafter cannot omit the footer that renders it.
   7. The phase states IN WRITING — in the playbook, not only in a plan summary — why a contacts table does not violate the "no contacts cache at rest" invariant at `schema.ts:210-211`.
   8. A narrow connected Pipeline route shows contacts needing attention, follow-ups due, consent and suppression states from this one store; it does not invent opportunities, stages, monetary value or a second CRM data plane.
-**Plans**: TBD
+**Plans**: **10 plans across 9 waves.** Waves are longer than the dependency graph alone requires because exactly ONE plan per wave may bump a given playbook, and `convex/contacts.ts`, `cockpit.ts`, `gmail.ts`, `schema.ts` and `cards.tsx` are each touched by several plans. **26-18 still owns the nav flip** — Phase 19 ships `/dashboard/pipeline` URL-reachable with `soon: true` intact.
+
+Plans:
+- [ ] 19-01-PLAN.md — Pure contacts core (normalizeAddress + the three predicates + renderFooter), the THREE new tables, `tenantProfiles.postalAddress`, and the new `contacts-crm.md` playbook with its `watch.json` registration (Wave 1)
+- [ ] 19-02-PLAN.md — The person store: the tenant-scoped write surface, the suppression/footer/unsubscribe-token internals, the BETA-05 asA/asB isolation assertion and the no-opportunities structural scan (Wave 2)
+- [ ] 19-03-PLAN.md — The CAN-SPAM postal address: write-boundary validation on `tenantProfile.saveFacts` and the `/dashboard/profile` field, deliberately NOT an onboarding slot (Wave 2)
+- [ ] 19-04-PLAN.md — The public unsubscribe route on `convex/http.ts`: an inert signed GET landing page and a confirm-only idempotent POST (Wave 3)
+- [ ] 19-05-PLAN.md — The send-path trust boundary: the pre-CAS refusals and the per-address drop BEFORE the group join, the unbypassable `gmail.send` backstop, the footer at the `buildMime` call site, and an honest terminal for a post-approve suppression (Wave 4)
+- [ ] 19-06-PLAN.md — `crm_write` joins `ACTION_TYPES` on the `inline` arm across all eleven registration sites in one commit, with the stale `actionType.ts` Phase-19 prediction corrected by the commit that falsifies it (Wave 5)
+- [ ] 19-07-PLAN.md — The connected Pipeline route: three bounded read models, four always-known tiles that render a real zero as `0`, the five-column table, the unassigned-follow-ups section, and the authored e2e spec (Wave 6)
+- [ ] 19-08-PLAN.md — Contacts-first in-loop resolution and the ONE `stageCrmWrite` tool, landed at all three registration surfaces with both guards proven red-able, plus the offline SMOKE driver (Wave 7)
+- [ ] 19-09-PLAN.md — Teach `cockpit-agent` the capability and pay the 18-08 override debt: `eval-cases/36-*.json`, a $0 observable and the 34 → 35 fixture floor bump (Wave 8, has a blocking checkpoint)
+- [ ] 19-10-PLAN.md — Correct the two documents this phase falsified, fill in all 22 verification rows, close the playbook against a real sha, and the blocking owner browser UAT (Wave 9, has a blocking checkpoint)
+
 
 ### Phase 20: Media Canvas
 **Goal**: A media-creation canvas produces a FINISHED SHORT-FORM REEL - one mp4 assembled from N generated clips with a voiceover over them - as async governed jobs drawing a separate capped media budget. Generation is wrapped, not rebuilt (PROJECT.md mandate).
