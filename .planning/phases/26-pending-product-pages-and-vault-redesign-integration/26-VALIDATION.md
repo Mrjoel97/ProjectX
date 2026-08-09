@@ -42,7 +42,7 @@ created: 2026-08-05
 | 26-06 | 4 | FIN-01 | append-only/idempotent ledger arithmetic and coverage start | `pnpm --filter @pikar/backend test -- spendLedger` | ⬜ pending |
 | 26-07 | 5 | FIN-01 | reasoning/ingest limiter-to-ledger parity | `pnpm --filter @pikar/backend test -- guardrails vaultFolders spendLedger` | ⬜ pending |
 | 26-08 | 5 | FIN-01 | media reserve/actual/refund/unlanded replay safety | `pnpm --filter @pikar/backend test -- media spendLedger` | ⬜ pending |
-| 26-09 | 6 | FIN-01 | tenant/owner finance projections and controls | `pnpm --filter @pikar/backend test -- finance` | ⬜ pending |
+| 26-09 | 6 | FIN-01 | tenant/owner finance projections and controls | `pnpm --filter @pikar/backend test -- finance` | ✅ green (15/15) |
 | 26-10 | 7 | FIN-01 | honest coverage UI + owner/non-owner browser flow | `pnpm --filter @pikar/web test -- finance && pnpm --filter @pikar/web test:e2e -- e2e/finance.spec.ts` | ⬜ pending |
 | 26-11 | 8 | CONT-01 | provenance and promote-ingest-exactly-once | `pnpm --filter @pikar/backend test -- vault research evaluations content` | ⬜ pending |
 | 26-12 | 9 | CONT-01 | union pagination, signed URL ownership and sidecar proof | `pnpm --filter @pikar/backend test -- content media plans requests` | ⬜ pending |
