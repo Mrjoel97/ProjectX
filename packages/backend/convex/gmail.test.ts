@@ -595,6 +595,10 @@ describe("gmail.send — the suppression backstop + the CAN-SPAM footer (19-05)"
   // notifyExternal reads the user's own address here first (a GET, never a write).
   const PROFILE_ENDPOINT = "https://gmail.googleapis.com/gmail/v1/users/me/profile";
 
+  /** No audit row is written on any path below except the successful send, so these skip the
+   *  aggregate component that `harness()` registers — 19-02's fork-crash lesson, re-applied. */
+  const plain = () => convexTest(schema, modules);
+
   /** Every fetch the action makes, in order. The token refresh POSTs form-encoded bodies and the
    *  send POSTs JSON, so the raw body string is kept and parsed per assertion. */
   function mockGoogle() {
@@ -625,12 +629,12 @@ describe("gmail.send — the suppression backstop + the CAN-SPAM footer (19-05)"
     };
   }
 
-  const seedTokens = (t: ReturnType<typeof harness>, tenantId = SEND_TENANT) =>
+  const seedTokens = (t: ReturnType<typeof convexTest>, tenantId = SEND_TENANT) =>
     t.run((ctx) =>
       ctx.db.insert("gmailTokens", { tenantId, refreshToken: "r", scope: "s", updatedAt: BASE_MS }),
     );
 
-  const seedProfile = (t: ReturnType<typeof harness>, postalAddress: string | null = POSTAL) =>
+  const seedProfile = (t: ReturnType<typeof convexTest>, postalAddress: string | null = POSTAL) =>
     t.run((ctx) =>
       ctx.db.insert("tenantProfiles", {
         tenantId: SEND_TENANT,
@@ -641,7 +645,7 @@ describe("gmail.send — the suppression backstop + the CAN-SPAM footer (19-05)"
       }),
     );
 
-  const seedRequest = (t: ReturnType<typeof harness>, recipient = RECIPIENT) =>
+  const seedRequest = (t: ReturnType<typeof convexTest>, recipient = RECIPIENT) =>
     t.run((ctx) =>
       ctx.db.insert("requests", {
         tenantId: SEND_TENANT,
@@ -691,7 +695,7 @@ describe("gmail.send — the suppression backstop + the CAN-SPAM footer (19-05)"
   // this recipient was clean; the suppression is created afterwards, exactly as it would be during
   // a scheduled send's wait. Only the backstop can see it.
   test("a suppression created AFTER approve is refused at send, and nothing is POSTed", async () => {
-    const t = harness();
+    const t = plain();
     await seedTokens(t);
     await seedProfile(t);
     const requestId = await seedRequest(t); // frozen at approve time, recipient clean
@@ -715,7 +719,7 @@ describe("gmail.send — the suppression backstop + the CAN-SPAM footer (19-05)"
   });
 
   test("a suppressed MEMBER of a group recipient string refuses the whole row (the join's ceiling)", async () => {
-    const t = harness();
+    const t = plain();
     await seedTokens(t);
     await seedProfile(t);
     const requestId = await seedRequest(t, "a@example.com, b@example.com");
@@ -741,7 +745,7 @@ describe("gmail.send — the suppression backstop + the CAN-SPAM footer (19-05)"
   // Row 16b. The postal address was present at approve and gone at fire. Fail CLOSED — the same
   // precedent as the missing attachment blob: never silently send without the promised part.
   test("a tenant whose postalAddress vanished between approve and fire makes the send THROW", async () => {
-    const t = harness();
+    const t = plain();
     await seedTokens(t);
     await seedProfile(t, null); // a profile row, but the field is gone
     const requestId = await seedRequest(t);
@@ -754,7 +758,7 @@ describe("gmail.send — the suppression backstop + the CAN-SPAM footer (19-05)"
   });
 
   test("an unset UNSUBSCRIBE_SECRET also refuses the send, and the error says so", async () => {
-    const t = harness();
+    const t = plain();
     vi.stubEnv("UNSUBSCRIBE_SECRET", "");
     await seedTokens(t);
     await seedProfile(t);
@@ -773,7 +777,7 @@ describe("gmail.send — the suppression backstop + the CAN-SPAM footer (19-05)"
   // Row 17, second half. The service notice goes to the user's OWN mailbox: it is not commercial
   // mail, it has no recipient to unsubscribe, and a footer on it would be a lie.
   test("notifyExternal's service notice carries NO postal address and NO unsubscribe URL", async () => {
-    const t = harness();
+    const t = plain();
     await seedTokens(t);
     await seedProfile(t);
     const g = mockGoogle();
