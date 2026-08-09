@@ -8,9 +8,9 @@
 // is decided by the CLI's OUTPUT (the "Failed to run function" / "Uncaught Error"
 // banner), NOT by the exit code.
 import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
 
 const backendDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const convexBin = resolve(backendDir, "node_modules/convex/bin/main.js");

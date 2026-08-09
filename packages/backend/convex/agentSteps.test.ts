@@ -135,8 +135,18 @@ describe("agentSteps.record / finish (the step lifecycle)", () => {
 describe("agentSteps.latestTurn (the first-turn window)", () => {
   test("returns ONLY the newest turn's rows, plus its threadId", async () => {
     const t = convexTest(schema, modules);
-    await record(t, { turnId: "turn_old", threadId: "thread_old", stepKey: "old_1", startedAt: NOW });
-    await record(t, { turnId: "turn_new", threadId: "thread_new", stepKey: "new_1", startedAt: NOW + 1000 });
+    await record(t, {
+      turnId: "turn_old",
+      threadId: "thread_old",
+      stepKey: "old_1",
+      startedAt: NOW,
+    });
+    await record(t, {
+      turnId: "turn_new",
+      threadId: "thread_new",
+      stepKey: "new_1",
+      startedAt: NOW + 1000,
+    });
     await record(t, {
       turnId: "turn_new",
       threadId: "thread_new",

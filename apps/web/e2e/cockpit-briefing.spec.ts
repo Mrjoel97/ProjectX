@@ -68,15 +68,21 @@ async function resolveTenantId(page: Page): Promise<string> {
     const key = Object.keys(window.localStorage).find((k) => k.startsWith("__convexAuthJWT"));
     return key ? window.localStorage.getItem(key) : null;
   });
-  if (!jwt) throw new Error("No Convex Auth JWT in localStorage — is the storageState session still valid?");
+  if (!jwt)
+    throw new Error(
+      "No Convex Auth JWT in localStorage — is the storageState session still valid?",
+    );
   const payload = jwt.split(".")[1];
   if (!payload) throw new Error("Malformed Convex Auth JWT (no payload segment).");
   const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { sub?: string };
-  if (!claims.sub) throw new Error("Convex Auth JWT carries no `sub` claim — cannot resolve the tenant.");
+  if (!claims.sub)
+    throw new Error("Convex Auth JWT carries no `sub` claim — cannot resolve the tenant.");
   return claims.sub;
 }
 
-test("seeded inbox → SMOKE brief=today → grouped BRIEFING card (Needs-you is suggestions only)", async ({ page }) => {
+test("seeded inbox → SMOKE brief=today → grouped BRIEFING card (Needs-you is suggestions only)", async ({
+  page,
+}) => {
   await page.goto("/dashboard/workspace");
 
   const composer = page.getByPlaceholder("Describe your goal…");
@@ -103,10 +109,9 @@ test("seeded inbox → SMOKE brief=today → grouped BRIEFING card (Needs-you is
   await expect(lede).toBeVisible();
   await expect(lede).toContainText("need you"); // the code-owned count clause
   await expect(lede).toContainText(LEDE_SYNOPSIS); // the model's qualitative clause, folded in
-  await expect(card.locator('[data-testid="briefing-lede"], [data-testid="briefing-item"]').first()).toHaveAttribute(
-    "data-testid",
-    "briefing-lede",
-  );
+  await expect(
+    card.locator('[data-testid="briefing-lede"], [data-testid="briefing-item"]').first(),
+  ).toHaveAttribute("data-testid", "briefing-lede");
 
   // SC-1: the triage section first, then the pure-code time groups. The fixture's 5 messages bucket
   // 3/1/1 against the pinned clock; index 1 collapses as newsletter, so all three sections still render.

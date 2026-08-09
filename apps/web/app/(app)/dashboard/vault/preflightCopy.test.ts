@@ -31,14 +31,15 @@ describe("refusalCopy names both numbers (the locked sentence)", () => {
 
   // The deny-list is the deliberate exception: pricing never ran, so both figures are 0 and a
   // sentence naming them would be a confident lie. It must not name a MONEY figure at all.
-  test.each(["kill_switch", "not_reserving", "manifest_short"])(
-    "%s names no figure, because it has none",
-    (reason) => {
-      const { title, remedy } = refusalCopy({ reason, estimateCents: 0, remainingCents: 0 });
-      expect(`${title} ${remedy}`).not.toMatch(/\$\d/);
-      expect(title.length).toBeGreaterThan(0);
-    },
-  );
+  test.each([
+    "kill_switch",
+    "not_reserving",
+    "manifest_short",
+  ])("%s names no figure, because it has none", (reason) => {
+    const { title, remedy } = refusalCopy({ reason, estimateCents: 0, remainingCents: 0 });
+    expect(`${title} ${remedy}`).not.toMatch(/\$\d/);
+    expect(title.length).toBeGreaterThan(0);
+  });
 
   // Rounding is part of "the number the reserve takes": 5 cents must read $0.05, not $0.5.
   test("cents render as two decimals", () => {

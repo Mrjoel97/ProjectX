@@ -116,11 +116,12 @@ export function inlineRuns(text: string): InlineRun[] {
   const runs: InlineRun[] = [];
   const re = /(\*\*|__)(.+?)\1/g;
   let last = 0;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(text)) !== null) {
+  let m = re.exec(text);
+  while (m !== null) {
     if (m.index > last) runs.push({ text: clean(text.slice(last, m.index)), bold: false });
     runs.push({ text: clean(m[2]!), bold: true });
     last = m.index + m[0].length;
+    m = re.exec(text);
   }
   if (last < text.length) runs.push({ text: clean(text.slice(last)), bold: false });
   return runs.filter((r) => r.text.length > 0);

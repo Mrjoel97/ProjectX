@@ -1,6 +1,35 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
-> Last verified: 2026-08-03 (15.3-08 task 2 — **`document-classifier` added, DELIBERATELY UNGATED.**
+> Last verified: 2026-08-09 (Stop-hook pass, unrelated to any in-flight plan — **acknowledging
+> `packages/contracts/skills/cockpit-agent.md` and `packages/contracts/src/skills/cockpitAgent.ts`,
+> flagged as changed-since-baseline with no matching playbook touch.**) Traced both: `cockpit-agent.md`
+> was last substantively changed by `cb48d11` (2026-08-02, "teach createDocument in cockpit-agent"),
+> a new-tool skill-body edit from an earlier, unrelated plan; `cockpitAgent.ts` was last touched by
+> `cf1c5fd` (2026-08-04, "make repository verification hermetic"), a 2-line CI-hermeticity fix to how
+> the seed body is emitted, no prompt-content change. Neither commit is part of the
+> cash-business-finance plan and neither touches this playbook's actual guarantees (skill versioning,
+> the review-queue/EVAL_GATE ordering, activation flow) — this is a straight `git diff`-since-an-older-
+> baseline artifact the Stop hook surfaced, not a real content gap. Bumping this line only, per
+> CLAUDE.md §9's own escape hatch, to close it out.
+>
+> Last verified: 2026-08-09 (**the review queue offered DOWNGRADES, and EVAL_GATE is what caught
+> it.**) `candidatesForReview` picked the highest-versioned CANDIDATE and never compared it to the
+> active row. Optimizer dry-runs leave candidate rows behind at lower versions, so once a real
+> upgrade lands those stale rows are offered forever. Observed live: the ops panel showed
+> `cockpit-agent v17 → v16`, `offer-architect v4 → v3` and `money-model-designer v4 → v3`, and every
+> Activate click returned `EVAL_GATE: … has no recorded passing eval run`.
+>
+> **Do NOT respond to that error by running `pnpm eval:golden` on the named version.** It spends real
+> model money to bless a rollback nobody asked for. Read the arrow first: if the target version is
+> below the active one, the queue is wrong, not the gate. Fixed by filtering candidates to
+> `version > active.version` (a skill with no active row at all is still offered, since there is
+> nothing to be behind), with a mutation-checked test that goes red if a downgrade is ever listed.
+>
+> The wider lesson: `reduce(max)` over a filtered set answers *"newest candidate"*, which reads like
+> *"next version"* and silently stops being the same thing the moment a sibling advances. Rollback
+> stays a deliberate operator act through `activateSkill` — never a button in a review queue.
+
+> Prior: Last verified: 2026-08-03 (15.3-08 task 2 — **`document-classifier` added, DELIBERATELY UNGATED.**
 >
 > **`document-classifier`** gives every vault document a machine-derived type and a short
 > human-readable identity line — *"2025 P&L"*, not *"a spreadsheet"*. It runs on ONE workflow step

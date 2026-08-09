@@ -1,20 +1,20 @@
 "use client";
 
 import { api } from "@pikar/backend/api";
-// The pure view model (Gap 1): lede + action-first needs-you + time-grouped fyi remainder +
-// collapsed-noise count. ALL the ordering/collapse/lede intelligence lives in @pikar/core — this
-// card is a dumb renderer over it, never re-deriving any of it (ADR-004 / cockpit.md).
-import { buildBriefingView } from "@pikar/core/briefing";
 // Far-future cap (SCHD-01): the soft UI complement to executePlan's hard send_time_too_far refusal —
 // one shared horizon, so the picker can't offer a time the server will reject.
 // REVIEW_THREAD_ID (BEVL-03): the ONE deterministic thread the weekly cron writes to, so the card
 // can tell "this is the weekly review" from "someone asked for an evaluation in a chat".
 import { REVIEW_THREAD_ID, SEND_TIME_HORIZON_MS } from "@pikar/core";
+// The pure view model (Gap 1): lede + action-first needs-you + time-grouped fyi remainder +
+// collapsed-noise count. ALL the ordering/collapse/lede intelligence lives in @pikar/core — this
+// card is a dumb renderer over it, never re-deriving any of it (ADR-004 / cockpit.md).
+import { buildBriefingView } from "@pikar/core/briefing";
 // The voice-doc framework literal, imported rather than re-typed: schema.ts, voiceDoc.ts and this
 // card must agree, and one shared constant is the only way a rename cannot silently desync them.
 import { DOC_REVIEW_FRAMEWORK } from "@pikar/voice";
-import type { FunctionReturnType } from "convex/server";
 import { useAction, useMutation, useQuery } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
 import Link from "next/link";
 import { useState } from "react";
 import { MediaCanvas } from "./MediaCanvas";
@@ -77,7 +77,13 @@ function badge(status: string) {
     awaiting_reauth: { bg: "#fef3c7", fg: "#92400e" },
   };
   const c = map[status] ?? { bg: "#f1f5f9", fg: "#334155" }; // in-progress (approved/delivering/…)
-  return { ...c, padding: "0.1rem 0.5rem", borderRadius: "0.375rem", fontSize: "0.8rem", fontWeight: 700 };
+  return {
+    ...c,
+    padding: "0.1rem 0.5rem",
+    borderRadius: "0.375rem",
+    fontSize: "0.8rem",
+    fontWeight: 700,
+  };
 }
 
 // Human byte size for the attachment rows (lazy: KB/MB thresholds, no lib).
@@ -138,32 +144,62 @@ function PlanAttachments({ plan, threadId }: { plan: Plan; threadId?: string }) 
   return (
     <div style={{ margin: "0.5rem 0" }}>
       <div style={label}>ATTACHMENTS</div>
-      <ul style={{ listStyle: "none", padding: 0, margin: "0.4rem 0 0", display: "grid", gap: "0.4rem" }}>
+      <ul
+        style={{
+          listStyle: "none",
+          padding: 0,
+          margin: "0.4rem 0 0",
+          display: "grid",
+          gap: "0.4rem",
+        }}
+      >
         {attachments.map((a, i) => {
           const url = urls?.[i]?.url ?? null; // urls loads async + may be null (getUrl); guard both
           return (
             <li key={a.storageId} style={attRow}>
               {url ? (
-                <a href={url} target="_blank" rel="noopener noreferrer" style={{ fontWeight: 600, color: "var(--teal-600)" }}>
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ fontWeight: 600, color: "var(--teal-600)" }}
+                >
                   {a.filename}
                 </a>
               ) : (
                 <span style={{ fontWeight: 600 }}>{a.filename}</span>
               )}
               <span style={dim}>{fmtSize(a.size)}</span>
-              <span style={{ marginLeft: "auto", display: "flex", gap: "0.3rem", alignItems: "center" }}>
+              <span
+                style={{ marginLeft: "auto", display: "flex", gap: "0.3rem", alignItems: "center" }}
+              >
                 <input
                   value={topics[i] ?? ""}
                   onChange={(e) => setTopics((p) => ({ ...p, [i]: e.target.value }))}
                   placeholder="new topic…"
                   aria-label={`Regenerate ${a.filename} topic`}
-                  style={{ fontSize: "0.8rem", padding: "0.15rem 0.4rem", border: "1px solid #e5e5e5", borderRadius: "0.3rem" }}
+                  style={{
+                    fontSize: "0.8rem",
+                    padding: "0.15rem 0.4rem",
+                    border: "1px solid #e5e5e5",
+                    borderRadius: "0.3rem",
+                  }}
                 />
                 <button
                   type="button"
                   disabled={busy || !(topics[i] ?? "").trim()}
-                  onClick={() => void drive(`Please regenerate the "${a.filename}" attachment about: ${(topics[i] ?? "").trim()}.`)}
-                  style={{ ...btn, padding: "0.2rem 0.6rem", fontSize: "0.8rem", border: "1px solid #e5e5e5", background: "#fff" }}
+                  onClick={() =>
+                    void drive(
+                      `Please regenerate the "${a.filename}" attachment about: ${(topics[i] ?? "").trim()}.`,
+                    )
+                  }
+                  style={{
+                    ...btn,
+                    padding: "0.2rem 0.6rem",
+                    fontSize: "0.8rem",
+                    border: "1px solid #e5e5e5",
+                    background: "#fff",
+                  }}
                 >
                   Regenerate
                 </button>
@@ -172,7 +208,13 @@ function PlanAttachments({ plan, threadId }: { plan: Plan; threadId?: string }) 
                   disabled={busy}
                   onClick={() => void drive(`Please remove the "${a.filename}" attachment.`)}
                   aria-label={`Remove ${a.filename}`}
-                  style={{ ...btn, padding: "0.2rem 0.5rem", fontSize: "0.8rem", border: "1px solid #e5e5e5", background: "#fff" }}
+                  style={{
+                    ...btn,
+                    padding: "0.2rem 0.5rem",
+                    fontSize: "0.8rem",
+                    border: "1px solid #e5e5e5",
+                    background: "#fff",
+                  }}
                 >
                   ✕
                 </button>
@@ -202,15 +244,39 @@ function PlanRecipientBodies({ plan }: { plan: Plan }) {
   return (
     <div style={{ margin: "0.5rem 0" }}>
       <div style={label}>PER-RECIPIENT BODY</div>
-      <ul style={{ listStyle: "none", padding: 0, margin: "0.4rem 0 0", display: "grid", gap: "0.5rem" }}>
+      <ul
+        style={{
+          listStyle: "none",
+          padding: 0,
+          margin: "0.4rem 0 0",
+          display: "grid",
+          gap: "0.5rem",
+        }}
+      >
         {recipients.map((r) => {
           const tailored = overrides[r]; // exact-string lookup — same key executePlan seeds with
           const bodyText = tailored ?? sharedBody;
           return (
-            <li key={r} style={{ border: "1px solid #e5e5e5", borderRadius: "0.5rem", padding: "0.5rem 0.6rem" }}>
-              <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", marginBottom: "0.3rem" }}>
+            <li
+              key={r}
+              style={{
+                border: "1px solid #e5e5e5",
+                borderRadius: "0.5rem",
+                padding: "0.5rem 0.6rem",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  gap: "0.4rem",
+                  alignItems: "center",
+                  marginBottom: "0.3rem",
+                }}
+              >
                 <span style={chip}>{r}</span>
-                <span style={{ ...dim, fontWeight: 700 }}>{tailored ? "tailored" : "shared body"}</span>
+                <span style={{ ...dim, fontWeight: 700 }}>
+                  {tailored ? "tailored" : "shared body"}
+                </span>
               </div>
               <p style={{ whiteSpace: "pre-wrap", margin: 0, color: "#444", fontSize: "0.85rem" }}>
                 {bodyText.slice(0, 240)}
@@ -242,7 +308,8 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
     setNote(null);
     try {
       const res = await execute({ planId: plan._id });
-      if (!res.ok && res.reason === "gmail_not_connected") setNote("Connect Gmail before approving.");
+      if (!res.ok && res.reason === "gmail_not_connected")
+        setNote("Connect Gmail before approving.");
     } finally {
       setBusy(false);
     }
@@ -256,7 +323,14 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
     return (
       <div style={box} data-testid="memo-plan-card">
         <div style={label}>NEXT-STEP MEMO</div>
-        <p style={{ whiteSpace: "pre-wrap", margin: "0.5rem 0 0.75rem", color: "var(--ink)", fontSize: "0.9rem" }}>
+        <p
+          style={{
+            whiteSpace: "pre-wrap",
+            margin: "0.5rem 0 0.75rem",
+            color: "var(--ink)",
+            fontSize: "0.9rem",
+          }}
+        >
           {body}
         </p>
         <p style={{ ...dim, margin: "0 0 0.75rem" }}>
@@ -266,7 +340,13 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
           type="button"
           disabled={busy}
           onClick={() => void approve()}
-          style={{ ...btn, background: "var(--teal-600)", color: "#fff", border: "none", fontWeight: 600 }}
+          style={{
+            ...btn,
+            background: "var(--teal-600)",
+            color: "#fff",
+            border: "none",
+            fontWeight: 600,
+          }}
         >
           {busy ? "Saving…" : "Approve & save"}
         </button>
@@ -299,7 +379,9 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
         </div>
         {/* A partially-staged row may carry none of these — render a dash, never NaN. */}
         <div style={dim}>When: {startMs ? formatAbsolute(startMs) : "—"}</div>
-        <div style={dim}>Duration: {durationMs ? `${Math.round(durationMs / 60000)} min` : "—"}</div>
+        <div style={dim}>
+          Duration: {durationMs ? `${Math.round(durationMs / 60000)} min` : "—"}
+        </div>
         <p style={{ ...dim, margin: "0.75rem 0" }}>
           Approving adds this to your Google Calendar. No one is invited and nothing is emailed.
         </p>
@@ -307,7 +389,13 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
           type="button"
           disabled={busy}
           onClick={() => void approve()}
-          style={{ ...btn, background: "var(--teal-600)", color: "#fff", border: "none", fontWeight: 600 }}
+          style={{
+            ...btn,
+            background: "var(--teal-600)",
+            color: "#fff",
+            border: "none",
+            fontWeight: 600,
+          }}
         >
           {busy ? "Adding…" : "Approve & add to calendar"}
         </button>
@@ -319,7 +407,15 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
     <div style={box}>
       <div style={label}>PLAN</div>
       <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", margin: "0.5rem 0" }}>
-        {recipients.length === 0 ? <span style={dim}>No recipients yet.</span> : recipients.map((r) => <span key={r} style={chip}>{r}</span>)}
+        {recipients.length === 0 ? (
+          <span style={dim}>No recipients yet.</span>
+        ) : (
+          recipients.map((r) => (
+            <span key={r} style={chip}>
+              {r}
+            </span>
+          ))
+        )}
       </div>
       <div style={dim}>Mode: {mode}</div>
       <div style={{ margin: "0.5rem 0" }}>
@@ -346,17 +442,27 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
           min={toLocalInputValue(Date.now())}
           max={toLocalInputValue(Date.now() + SEND_TIME_HORIZON_MS)}
           onChange={(e) =>
-            void setSendTime({ planId: plan._id, sendAt: e.target.value ? new Date(e.target.value).getTime() : undefined })
+            void setSendTime({
+              planId: plan._id,
+              sendAt: e.target.value ? new Date(e.target.value).getTime() : undefined,
+            })
           }
           style={{ ...btn, cursor: "auto", border: "1px solid #e5e5e5", marginTop: "0.35rem" }}
         />
         {sendAt ? (
           <p style={{ ...dim, margin: "0.35rem 0 0" }}>
-            Sends {formatAbsolute(sendAt)}{" · "}
+            Sends {formatAbsolute(sendAt)}
+            {" · "}
             <button
               type="button"
               onClick={() => void setSendTime({ planId: plan._id, sendAt: undefined })}
-              style={{ ...btn, padding: "0.1rem 0.5rem", border: "1px solid #e5e5e5", background: "transparent", color: "var(--teal-600)" }}
+              style={{
+                ...btn,
+                padding: "0.1rem 0.5rem",
+                border: "1px solid #e5e5e5",
+                background: "transparent",
+                color: "var(--teal-600)",
+              }}
             >
               Send immediately
             </button>
@@ -369,7 +475,13 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
         type="button"
         disabled={busy}
         onClick={() => void approve()}
-        style={{ ...btn, background: "var(--teal-600)", color: "#fff", border: "none", fontWeight: 600 }}
+        style={{
+          ...btn,
+          background: "var(--teal-600)",
+          color: "#fff",
+          border: "none",
+          fontWeight: 600,
+        }}
       >
         {busy ? "Approving…" : sendAt ? "Approve & schedule" : "Approve"}
       </button>
@@ -403,13 +515,20 @@ function ScheduledCard({ plan }: { plan: Plan }) {
     <div style={box}>
       <div style={label}>SCHEDULED</div>
       <p style={{ margin: "0.5rem 0", color: "#444" }}>
-        Scheduled for <strong>{plan.sendAt ? formatAbsolute(plan.sendAt) : "—"}</strong>. Nothing sends before then.
+        Scheduled for <strong>{plan.sendAt ? formatAbsolute(plan.sendAt) : "—"}</strong>. Nothing
+        sends before then.
       </p>
       <button
         type="button"
         disabled={busy}
         onClick={() => void doCancel()}
-        style={{ ...btn, border: "1px solid #dc2626", background: "transparent", color: "#dc2626", fontWeight: 600 }}
+        style={{
+          ...btn,
+          border: "1px solid #dc2626",
+          background: "transparent",
+          color: "#dc2626",
+          fontWeight: 600,
+        }}
       >
         {busy ? "Canceling…" : "Cancel"}
       </button>
@@ -450,7 +569,9 @@ function CanceledCard({ plan }: { plan: Plan; threadId?: string }) {
   return (
     <div style={box}>
       <div style={label}>CANCELED</div>
-      <p style={{ ...dim, margin: "0.5rem 0 0" }}>This scheduled send was canceled. Nothing was sent.</p>
+      <p style={{ ...dim, margin: "0.5rem 0 0" }}>
+        This scheduled send was canceled. Nothing was sent.
+      </p>
       <div style={{ margin: "0.75rem 0 0" }}>
         <div style={label}>RESCHEDULE</div>
         <input
@@ -459,21 +580,35 @@ function CanceledCard({ plan }: { plan: Plan; threadId?: string }) {
           min={toLocalInputValue(Date.now())}
           max={toLocalInputValue(Date.now() + SEND_TIME_HORIZON_MS)}
           onChange={(e) =>
-            void setSendTime({ planId: plan._id, sendAt: e.target.value ? new Date(e.target.value).getTime() : undefined })
+            void setSendTime({
+              planId: plan._id,
+              sendAt: e.target.value ? new Date(e.target.value).getTime() : undefined,
+            })
           }
           style={{ ...btn, cursor: "auto", border: "1px solid #e5e5e5", marginTop: "0.35rem" }}
         />
         {futureSet ? (
-          <p style={{ ...dim, margin: "0.35rem 0 0" }}>Re-sends {formatAbsolute(sendAt as number)}.</p>
+          <p style={{ ...dim, margin: "0.35rem 0 0" }}>
+            Re-sends {formatAbsolute(sendAt as number)}.
+          </p>
         ) : (
-          <p style={{ ...dim, margin: "0.35rem 0 0" }}>Pick a future time to reschedule this send.</p>
+          <p style={{ ...dim, margin: "0.35rem 0 0" }}>
+            Pick a future time to reschedule this send.
+          </p>
         )}
       </div>
       <button
         type="button"
         disabled={busy || !futureSet}
         onClick={() => void doReschedule()}
-        style={{ ...btn, marginTop: "0.5rem", background: "var(--teal-600)", color: "#fff", border: "none", fontWeight: 600 }}
+        style={{
+          ...btn,
+          marginTop: "0.5rem",
+          background: "var(--teal-600)",
+          color: "#fff",
+          border: "none",
+          fontWeight: 600,
+        }}
       >
         {busy ? "Rescheduling…" : "Reschedule"}
       </button>
@@ -495,7 +630,9 @@ function DraftCard({ plan }: { plan: Plan }) {
       <div style={{ margin: "0.5rem 0" }}>
         <strong>Subject:</strong> {plan.subject || "—"}
       </div>
-      <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", margin: 0, color: "#333" }}>{plan.body ?? ""}</pre>
+      <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", margin: 0, color: "#333" }}>
+        {plan.body ?? ""}
+      </pre>
     </div>
   );
 }
@@ -577,7 +714,15 @@ function FeedbackControl({ requestId }: { requestId: RequestId }) {
   };
 
   return (
-    <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", flexWrap: "wrap", width: "100%" }}>
+    <div
+      style={{
+        display: "flex",
+        gap: "0.4rem",
+        alignItems: "center",
+        flexWrap: "wrap",
+        width: "100%",
+      }}
+    >
       <span style={{ ...dim, fontSize: "0.78rem" }}>Rate this reply:</span>
       {thumb("up", "👍", "Helpful")}
       {thumb("down", "👎", "Not helpful")}
@@ -620,9 +765,20 @@ function ReportCard({ planId }: { planId: PlanId }) {
       ) : rows.length === 0 ? (
         <p style={{ ...dim, marginTop: "0.5rem" }}>No recipients yet.</p>
       ) : (
-        <ul style={{ listStyle: "none", padding: 0, margin: "0.5rem 0 0", display: "grid", gap: "0.5rem" }}>
+        <ul
+          style={{
+            listStyle: "none",
+            padding: 0,
+            margin: "0.5rem 0 0",
+            display: "grid",
+            gap: "0.5rem",
+          }}
+        >
           {rows.map((r) => (
-            <li key={r.correlationId} style={{ display: "flex", gap: "0.6rem", alignItems: "center", flexWrap: "wrap" }}>
+            <li
+              key={r.correlationId}
+              style={{ display: "flex", gap: "0.6rem", alignItems: "center", flexWrap: "wrap" }}
+            >
               <span style={badge(r.status)}>{r.status}</span>
               <span style={{ fontWeight: 600 }}>{r.recipient}</span>
               {r.messageId && <span style={dim}>msg {r.messageId}</span>}
@@ -632,7 +788,12 @@ function ReportCard({ planId }: { planId: PlanId }) {
                 <span key={att.filename} style={{ ...chip, display: "inline-flex", gap: "0.3rem" }}>
                   📎
                   {att.url ? (
-                    <a href={att.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--teal-600)" }}>
+                    <a
+                      href={att.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: "var(--teal-600)" }}
+                    >
                       {att.filename}
                     </a>
                   ) : (
@@ -684,7 +845,7 @@ function ResolutionCard({ plan, threadId }: { plan: Plan; threadId: string }) {
 
   const allPicked = candidates.every((c) => (picked[c.name]?.length ?? 0) > 0);
 
-  async function useContacts() {
+  async function applyContacts() {
     if (busy || !allPicked) return;
     setBusy(true);
     try {
@@ -733,7 +894,10 @@ function ResolutionCard({ plan, threadId }: { plan: Plan; threadId: string }) {
                   }}
                 >
                   <span style={{ fontWeight: 600 }}>{m.displayName ?? m.address}</span>
-                  <span style={dim}> · {m.address} · {matchHint(m)}</span>
+                  <span style={dim}>
+                    {" "}
+                    · {m.address} · {matchHint(m)}
+                  </span>
                 </button>
               );
             })}
@@ -745,7 +909,16 @@ function ResolutionCard({ plan, threadId }: { plan: Plan; threadId: string }) {
           <div style={{ ...dim, fontWeight: 600, marginBottom: "0.3rem" }}>Already valid</div>
           <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
             {pendingValid.map((a) => (
-              <span key={a} style={{ ...chip, borderColor: "var(--teal-600)", background: "var(--teal-50, #f0fdfa)" }}>{a}</span>
+              <span
+                key={a}
+                style={{
+                  ...chip,
+                  borderColor: "var(--teal-600)",
+                  background: "var(--teal-50, #f0fdfa)",
+                }}
+              >
+                {a}
+              </span>
             ))}
           </div>
         </div>
@@ -753,8 +926,16 @@ function ResolutionCard({ plan, threadId }: { plan: Plan; threadId: string }) {
       <button
         type="button"
         disabled={busy || !allPicked}
-        onClick={() => void useContacts()}
-        style={{ ...btn, marginTop: "0.5rem", background: "var(--teal-600)", color: "#fff", border: "none", fontWeight: 600, opacity: allPicked ? 1 : 0.5 }}
+        onClick={() => void applyContacts()}
+        style={{
+          ...btn,
+          marginTop: "0.5rem",
+          background: "var(--teal-600)",
+          color: "#fff",
+          border: "none",
+          fontWeight: 600,
+          opacity: allPicked ? 1 : 0.5,
+        }}
       >
         {busy ? "Resolving…" : "Use these contacts"}
       </button>
@@ -875,12 +1056,28 @@ function RowBody({ item }: { item: BriefingItem }) {
           {item.category}
         </span>
       </div>
-      <div style={{ color: "var(--ink-soft)", fontSize: "0.85rem", lineHeight: 1.5, marginTop: "0.15rem", ...wrapAnywhere }}>
+      <div
+        style={{
+          color: "var(--ink-soft)",
+          fontSize: "0.85rem",
+          lineHeight: 1.5,
+          marginTop: "0.15rem",
+          ...wrapAnywhere,
+        }}
+      >
         {item.gist}
       </div>
       {/* Emphasis via weight, not amber: --held is spent on the approval gate alone (BRAND §2). */}
       {item.deadline && (
-        <div style={{ color: "var(--ink)", fontWeight: 700, fontSize: "0.85rem", marginTop: "0.15rem", ...wrapAnywhere }}>
+        <div
+          style={{
+            color: "var(--ink)",
+            fontWeight: 700,
+            fontSize: "0.85rem",
+            marginTop: "0.15rem",
+            ...wrapAnywhere,
+          }}
+        >
           Due: {item.deadline}
         </div>
       )}
@@ -897,7 +1094,13 @@ function SenderCell({ item }: { item: BriefingItem }) {
           role="img"
           title="Unread"
           aria-label="Unread"
-          style={{ width: "0.45rem", height: "0.45rem", borderRadius: "50%", background: "var(--teal-600)", flex: "none" }}
+          style={{
+            width: "0.45rem",
+            height: "0.45rem",
+            borderRadius: "50%",
+            background: "var(--teal-600)",
+            flex: "none",
+          }}
         />
       ) : (
         <span aria-hidden="true" style={{ width: "0.45rem", flex: "none" }} />
@@ -918,14 +1121,24 @@ function BriefingRow({ item, tz, first }: { item: BriefingItem; tz: string; firs
     >
       <SenderCell item={item} />
       <RowBody item={item} />
-      <span style={{ ...dimBrand, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{fmtItemTime(item.ts, tz, item.bucket)}</span>
+      <span style={{ ...dimBrand, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+        {fmtItemTime(item.ts, tz, item.bucket)}
+      </span>
     </li>
   );
 }
 
 /** A titled group of rows on the shared column grid. NO `gap` — the hairline border-top on every
  *  row after the first IS the separator, and a gap would float the rules off the rows they divide. */
-function BriefingSection({ title, items, tz }: { title: string; items: readonly BriefingItem[]; tz: string }) {
+function BriefingSection({
+  title,
+  items,
+  tz,
+}: {
+  title: string;
+  items: readonly BriefingItem[];
+  tz: string;
+}) {
   return (
     <>
       <div style={labelBrand}>{title}</div>
@@ -966,10 +1179,27 @@ export const briefingSheet = {
 function Kpi({ value, caption, hot }: { value: number; caption: string; hot?: boolean }) {
   return (
     <div style={{ textAlign: "right" }}>
-      <div style={{ fontSize: "1.45rem", fontWeight: 800, lineHeight: 1, fontVariantNumeric: "tabular-nums", color: hot ? "var(--teal-400)" : "#fff" }}>
+      <div
+        style={{
+          fontSize: "1.45rem",
+          fontWeight: 800,
+          lineHeight: 1,
+          fontVariantNumeric: "tabular-nums",
+          color: hot ? "var(--teal-400)" : "#fff",
+        }}
+      >
         {value}
       </div>
-      <div style={{ fontSize: "0.56rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgb(255 255 255 / 70%)", marginTop: "0.28rem" }}>
+      <div
+        style={{
+          fontSize: "0.56rem",
+          fontWeight: 700,
+          letterSpacing: "0.1em",
+          textTransform: "uppercase",
+          color: "rgb(255 255 255 / 70%)",
+          marginTop: "0.28rem",
+        }}
+      >
         {caption}
       </div>
     </div>
@@ -989,26 +1219,84 @@ const PRIORITY_GRID = {
   alignItems: "start",
 } as const;
 
-function PriorityRow({ item, tz, first }: { item: BriefingItem & { move: string }; tz: string; first?: boolean }) {
+function PriorityRow({
+  item,
+  tz,
+  first,
+}: {
+  item: BriefingItem & { move: string };
+  tz: string;
+  first?: boolean;
+}) {
   return (
-    <li data-testid="briefing-item" style={{ ...PRIORITY_GRID, ...(first ? {} : { borderTop: "1px solid var(--rule)" }) }}>
-      <span aria-hidden="true" style={{ width: "3px", borderRadius: "2px", background: "var(--teal-900)", alignSelf: "stretch" }} />
+    <li
+      data-testid="briefing-item"
+      style={{ ...PRIORITY_GRID, ...(first ? {} : { borderTop: "1px solid var(--rule)" }) }}
+    >
+      <span
+        aria-hidden="true"
+        style={{
+          width: "3px",
+          borderRadius: "2px",
+          background: "var(--teal-900)",
+          alignSelf: "stretch",
+        }}
+      />
       <SenderCell item={item} />
       <div style={{ minWidth: 0 }}>
         <SubjectLine subject={item.subject} />
-        <div style={{ color: "var(--ink-soft)", fontSize: "0.85rem", lineHeight: 1.5, marginTop: "0.15rem", ...wrapAnywhere }}>{item.gist}</div>
+        <div
+          style={{
+            color: "var(--ink-soft)",
+            fontSize: "0.85rem",
+            lineHeight: 1.5,
+            marginTop: "0.15rem",
+            ...wrapAnywhere,
+          }}
+        >
+          {item.gist}
+        </div>
         {/* The recommended next move — the bridge back to the gated action. "Recommended" is card
             chrome (teal-900, legible on white); the sentence is the code-derived suggestedMove. Text
             only, never a control. */}
-        <div data-testid="briefing-move" style={{ fontSize: "0.8rem", lineHeight: 1.4, marginTop: "0.3rem", color: "var(--ink-soft)", ...wrapAnywhere }}>
-          <span style={{ fontWeight: 800, color: "var(--teal-900)", letterSpacing: "0.01em" }}>Recommended</span> {item.move}
+        <div
+          data-testid="briefing-move"
+          style={{
+            fontSize: "0.8rem",
+            lineHeight: 1.4,
+            marginTop: "0.3rem",
+            color: "var(--ink-soft)",
+            ...wrapAnywhere,
+          }}
+        >
+          <span style={{ fontWeight: 800, color: "var(--teal-900)", letterSpacing: "0.01em" }}>
+            Recommended
+          </span>{" "}
+          {item.move}
         </div>
       </div>
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.35rem", textAlign: "right", whiteSpace: "nowrap" }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "flex-end",
+          gap: "0.35rem",
+          textAlign: "right",
+          whiteSpace: "nowrap",
+        }}
+      >
         {/* Emphasis via WEIGHT, not amber (BRAND §2 — --held is the approval gate's alone). */}
-        {item.deadline && <span style={{ fontWeight: 800, fontSize: "0.78rem", color: "var(--ink)" }}>Due: {item.deadline}</span>}
-        <span data-testid="briefing-category" style={categoryTag}>{item.category}</span>
-        <span style={{ ...dimBrand, fontVariantNumeric: "tabular-nums" }}>{fmtItemTime(item.ts, tz, item.bucket)}</span>
+        {item.deadline && (
+          <span style={{ fontWeight: 800, fontSize: "0.78rem", color: "var(--ink)" }}>
+            Due: {item.deadline}
+          </span>
+        )}
+        <span data-testid="briefing-category" style={categoryTag}>
+          {item.category}
+        </span>
+        <span style={{ ...dimBrand, fontVariantNumeric: "tabular-nums" }}>
+          {fmtItemTime(item.ts, tz, item.bucket)}
+        </span>
       </div>
     </li>
   );
@@ -1049,8 +1337,27 @@ function BriefingCard({ briefing, demoted }: { briefing: Briefing; demoted?: boo
         }}
       >
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: "0.66rem", fontWeight: 800, letterSpacing: "0.15em", textTransform: "uppercase", color: "var(--teal-400)" }}>Inbox Briefing</div>
-          <div style={{ color: "rgb(255 255 255 / 72%)", fontSize: "0.8rem", marginTop: "0.28rem", ...wrapAnywhere }}>{scope}</div>
+          <div
+            style={{
+              fontSize: "0.66rem",
+              fontWeight: 800,
+              letterSpacing: "0.15em",
+              textTransform: "uppercase",
+              color: "var(--teal-400)",
+            }}
+          >
+            Inbox Briefing
+          </div>
+          <div
+            style={{
+              color: "rgb(255 255 255 / 72%)",
+              fontSize: "0.8rem",
+              marginTop: "0.28rem",
+              ...wrapAnywhere,
+            }}
+          >
+            {scope}
+          </div>
         </div>
         <div style={{ display: "flex", gap: "1.35rem", flex: "none", alignItems: "center" }}>
           <Kpi value={listedCount} caption="Messages" />
@@ -1083,57 +1390,78 @@ function BriefingCard({ briefing, demoted }: { briefing: Briefing; demoted?: boo
       </div>
 
       {!collapsed && (
-      <div data-testid="briefing-body" style={{ padding: "1.05rem 1.15rem 1.2rem" }}>
-        {/* LEDE first (Gap 1.1) — the executive summary line. MUST stay the first briefing-lede/-item
+        <div data-testid="briefing-body" style={{ padding: "1.05rem 1.15rem 1.2rem" }}>
+          {/* LEDE first (Gap 1.1) — the executive summary line. MUST stay the first briefing-lede/-item
             element in the card (the E2E asserts lede-first); the masthead above carries no such testid. */}
-        <p data-testid="briefing-lede" style={{ color: "var(--ink)", fontWeight: 500, fontSize: "1rem", lineHeight: 1.45, margin: "0 0 1rem" }}>
-          {view.lede}
-        </p>
+          <p
+            data-testid="briefing-lede"
+            style={{
+              color: "var(--ink)",
+              fontWeight: 500,
+              fontSize: "1rem",
+              lineHeight: 1.45,
+              margin: "0 0 1rem",
+            }}
+          >
+            {view.lede}
+          </p>
 
-        {/* SC-4: suggestions ONLY. No button, link, or onClick anywhere below — the move line, the
+          {/* SC-4: suggestions ONLY. No button, link, or onClick anywhere below — the move line, the
             category tags, and the collapsed count are TEXT. Acting on a briefing re-enters chat →
             PLAN → Approve, so nothing a third-party email says can become a one-click action. */}
-        {view.needsYou.length > 0 && (
-          <div data-testid="briefing-needs-you" style={{ marginBottom: "1.15rem" }}>
-            <div style={{ ...labelBrand, color: "var(--teal-900)" }}>Needs you</div>
-            <ul style={{ listStyle: "none", padding: 0, margin: "0.35rem 0 0", display: "grid" }}>
-              {view.needsYou.map((item, i) => (
-                <PriorityRow key={item.id} item={item} tz={tz} first={i === 0} />
-              ))}
-            </ul>
-            <p style={{ ...dimBrand, margin: "0.55rem 0 0" }}>Suggestions only — ask in chat to act on any of these.</p>
-          </div>
-        )}
-
-        {/* TIME-GROUPED LEDGER (the SECONDARY axis) — reuses the quiet BriefingSection/Row. Order +
-            empty-skipping are the view model's; this only maps a bucket to its chrome. */}
-        {view.timeSections.map(({ bucket, items: rows }) => {
-          const meta = SECTION_META[bucket];
-          return (
-            <div key={bucket} data-testid={meta.testid} style={{ marginBottom: "1.1rem" }}>
-              <BriefingSection title={meta.title} items={rows} tz={tz} />
+          {view.needsYou.length > 0 && (
+            <div data-testid="briefing-needs-you" style={{ marginBottom: "1.15rem" }}>
+              <div style={{ ...labelBrand, color: "var(--teal-900)" }}>Needs you</div>
+              <ul style={{ listStyle: "none", padding: 0, margin: "0.35rem 0 0", display: "grid" }}>
+                {view.needsYou.map((item, i) => (
+                  <PriorityRow key={item.id} item={item} tz={tz} first={i === 0} />
+                ))}
+              </ul>
+              <p style={{ ...dimBrand, margin: "0.55rem 0 0" }}>
+                Suggestions only — ask in chat to act on any of these.
+              </p>
             </div>
-          );
-        })}
+          )}
 
-        {/* FOOTER: the collapsed-noise count (Gap 1.3 — its own testid, the E2E asserts it) + cap
+          {/* TIME-GROUPED LEDGER (the SECONDARY axis) — reuses the quiet BriefingSection/Row. Order +
+            empty-skipping are the view model's; this only maps a bucket to its chrome. */}
+          {view.timeSections.map(({ bucket, items: rows }) => {
+            const meta = SECTION_META[bucket];
+            return (
+              <div key={bucket} data-testid={meta.testid} style={{ marginBottom: "1.1rem" }}>
+                <BriefingSection title={meta.title} items={rows} tz={tz} />
+              </div>
+            );
+          })}
+
+          {/* FOOTER: the collapsed-noise count (Gap 1.3 — its own testid, the E2E asserts it) + cap
             honesty. One muted line, never N rows; text, not a clickable disclosure (SC-4). */}
-        <div style={{ marginTop: "0.5rem", paddingTop: "0.8rem", borderTop: "1px dashed var(--rule)", display: "flex", flexWrap: "wrap", gap: "0.35rem 1rem", justifyContent: "space-between" }}>
-          {view.collapsedCount > 0 ? (
-            <p data-testid="briefing-collapsed" style={{ ...dimBrand, margin: 0 }}>
-              {view.collapsedCount} automated notification{view.collapsedCount === 1 ? "" : "s"}
-            </p>
-          ) : (
-            <span />
-          )}
-          {/* Cap honesty: the digest reads the newest BRIEFING_BODY_CAP bodies, never the long tail. */}
-          {listedCount > items.length && (
-            <p style={{ ...dimBrand, margin: 0 }}>
-              Summarized {items.length} of {listedCount}
-            </p>
-          )}
+          <div
+            style={{
+              marginTop: "0.5rem",
+              paddingTop: "0.8rem",
+              borderTop: "1px dashed var(--rule)",
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "0.35rem 1rem",
+              justifyContent: "space-between",
+            }}
+          >
+            {view.collapsedCount > 0 ? (
+              <p data-testid="briefing-collapsed" style={{ ...dimBrand, margin: 0 }}>
+                {view.collapsedCount} automated notification{view.collapsedCount === 1 ? "" : "s"}
+              </p>
+            ) : (
+              <span />
+            )}
+            {/* Cap honesty: the digest reads the newest BRIEFING_BODY_CAP bodies, never the long tail. */}
+            {listedCount > items.length && (
+              <p style={{ ...dimBrand, margin: 0 }}>
+                Summarized {items.length} of {listedCount}
+              </p>
+            )}
+          </div>
         </div>
-      </div>
       )}
     </div>
   );
@@ -1165,6 +1493,11 @@ const VERB: Record<string, [running: string, done: string]> = {
   briefInbox: ["Reading and summarizing your inbox…", "Briefed your inbox"],
   searchVault: ["Searching your knowledge vault…", "Grounded in the vault"],
   evaluateBusiness: ["Assessing your business…", "Assessed your business"],
+  // Both literals were MISSING from agentSteps.tool until 2026-08-08, so neither step could record
+  // at all — the trace never showed them and the parity test never saw them. Now that the union
+  // carries them, they need real verbs or they render the generic "Working…"/"Done" fallback.
+  recordScorecardAnswer: ["Noting that figure…", "Noted that figure"],
+  resetPlan: ["Clearing the draft…", "Cleared the draft"],
   dispatchOfferArchitect: ["Working with the offer architect…", "Offer architect finished"],
   dispatchMoneyModelDesigner: [
     "Working with the money-model designer…",
@@ -1172,6 +1505,10 @@ const VERB: Record<string, [running: string, done: string]> = {
   ],
   dispatchLeadEngine: ["Working with the lead engine…", "Lead engine finished"],
   dispatchResearch: ["Researching…", "Research finished"],
+  // The individual web search INSIDE a research run (llm.ts `webResearch`). It emits step rows only
+  // since 2026-08-07, when it stopped being a provider-executed hosted tool and became a local
+  // Tavily call — a hosted tool never fired onToolExecutionStart, so there was nothing to label.
+  webResearch: ["Searching the web…", "Search finished"],
   checkAvailability: ["Checking your calendar…", "Checked your calendar"],
   proposeCalendarEvent: ["Putting the event together…", "Event ready to approve"],
   // PRE-EXISTING GAP, unrelated to Phase 17 (RPLY-01, Phase 3.11): this live tool (llm.ts
@@ -1216,7 +1553,8 @@ export function stepText(step: StepView, now: number = Date.now()): string {
   // would be a lie (BRAND §5 honest zeros). No amber, no colour: the meaning is in the text (§6).
   const attempt = running.replace(/…$/, "");
   if (step.phase === "error") return `${attempt} — couldn't complete this step`;
-  if (now - step.startedAt > STALE_MS) return `${attempt} — this step may have stalled; try sending again`;
+  if (now - step.startedAt > STALE_MS)
+    return `${attempt} — this step may have stalled; try sending again`;
   return running;
 }
 
@@ -1256,7 +1594,9 @@ function ActivityCard({ steps }: { steps: StepView[] }) {
             <span style={traceText}>{stepText(s, now)}</span>
             {s.phase === "done" && s.durationMs !== undefined && (
               // Measured server-side by the SDK and already in the row — never a setInterval.
-              <span style={{ flex: "none", opacity: 0.7 }}>· {(s.durationMs / 1000).toFixed(1)}s</span>
+              <span style={{ flex: "none", opacity: 0.7 }}>
+                · {(s.durationMs / 1000).toFixed(1)}s
+              </span>
             )}
           </div>
         ))}
@@ -1286,14 +1626,28 @@ function SourceCard({ threadId }: { threadId?: string }) {
   if (!sources || sources.count === 0) return null;
   return (
     <div style={{ ...briefingSheet, padding: "1rem 1.15rem" }} data-testid="source-card">
-      <p style={capsTeal}>📚 Grounded in {sources.count} document{sources.count === 1 ? "" : "s"}</p>
-      <ul style={{ listStyle: "none", margin: "0.7rem 0 0", padding: 0, display: "grid", gap: "0.4rem" }}>
+      <p style={capsTeal}>
+        📚 Grounded in {sources.count} document{sources.count === 1 ? "" : "s"}
+      </p>
+      <ul
+        style={{
+          listStyle: "none",
+          margin: "0.7rem 0 0",
+          padding: 0,
+          display: "grid",
+          gap: "0.4rem",
+        }}
+      >
         {sources.titles.map((title, i) => (
           // ponytail: doc-level link to /dashboard/vault (context-sanctioned fallback, no new query).
           //  Inline PreviewModal upgrade = add a getVaultDoc(byId) tenant query + import PreviewModal —
           //  deferred (Pitfall 5). docIds ride along in the row for that future targeted click-through.
           <li key={sources.docIds[i] ?? title} style={traceText}>
-            <Link href="/dashboard/vault" data-testid="source-title" style={{ color: "var(--teal-600)" }}>
+            <Link
+              href="/dashboard/vault"
+              data-testid="source-title"
+              style={{ color: "var(--teal-600)" }}
+            >
               {title}
             </Link>
           </li>
@@ -1370,13 +1724,25 @@ function OutputCard({ threadId }: { threadId?: string }) {
         <p style={capsTeal}>✍️ Created{many ? ` · ${created.count}` : ""}</p>
         <span style={typeBadge}>{kind}</span>
       </div>
-      <ul style={{ listStyle: "none", margin: "0.7rem 0 0", padding: 0, display: "grid", gap: "0.4rem" }}>
+      <ul
+        style={{
+          listStyle: "none",
+          margin: "0.7rem 0 0",
+          padding: 0,
+          display: "grid",
+          gap: "0.4rem",
+        }}
+      >
         {created.titles.map((title, i) => (
           // ponytail: doc-level link to /dashboard/vault — the SAME context-sanctioned click-through
           // SourceCard uses, and the inline-PreviewModal upgrade is deferred with SourceCard's.
           <li key={created.docIds[i] ?? title} style={{ ...traceText, fontWeight: 600 }}>
             {many && <span style={{ color: "var(--ink-soft)", fontWeight: 500 }}>#{i + 1} </span>}
-            <Link href="/dashboard/vault" data-testid="output-title" style={{ color: "var(--teal-600)" }}>
+            <Link
+              href="/dashboard/vault"
+              data-testid="output-title"
+              style={{ color: "var(--teal-600)" }}
+            >
               {title}
             </Link>
           </li>
@@ -1514,7 +1880,15 @@ function GapRow({
       <span style={{ ...traceText, flex: 1, color: "var(--ink)", fontWeight: 500 }}>
         {gap.label}
         {note && (
-          <span role="alert" style={{ display: "block", marginTop: "0.3rem", color: "var(--ink-soft)", fontSize: "0.8rem" }}>
+          <span
+            role="alert"
+            style={{
+              display: "block",
+              marginTop: "0.3rem",
+              color: "var(--ink-soft)",
+              fontSize: "0.8rem",
+            }}
+          >
             {note}
           </span>
         )}
@@ -1614,7 +1988,10 @@ function EvaluationCard({ threadId }: { threadId?: string }) {
         Evaluation · {frameworkLabel}
       </p>
       {changed && (
-        <p data-testid="evaluation-delta" style={{ margin: "0.3rem 0 0", color: "var(--ink-soft)", fontSize: "0.85rem" }}>
+        <p
+          data-testid="evaluation-delta"
+          style={{ margin: "0.3rem 0 0", color: "var(--ink-soft)", fontSize: "0.85rem" }}
+        >
           {changed}
         </p>
       )}
@@ -1623,7 +2000,15 @@ function EvaluationCard({ threadId }: { threadId?: string }) {
         // Thin-data ONLY: the distinct dashed nudge, no fabricated findings or gaps (SC #1).
         <div data-testid="evaluation-insufficient" style={insufficientBox}>
           <div style={{ fontWeight: 700, color: "var(--ink)" }}>Not enough data to assess yet</div>
-          <ul style={{ margin: "0.5rem 0 0", paddingLeft: "1.1rem", color: "var(--ink-soft)", fontSize: "0.85rem", ...traceText }}>
+          <ul
+            style={{
+              margin: "0.5rem 0 0",
+              paddingLeft: "1.1rem",
+              color: "var(--ink-soft)",
+              fontSize: "0.85rem",
+              ...traceText,
+            }}
+          >
             {notEnoughData.map((n) => (
               <li key={n.section}>{n.needs}</li>
             ))}
@@ -1636,7 +2021,17 @@ function EvaluationCard({ threadId }: { threadId?: string }) {
               report that could not be assessed, so offering it would be a dead link dressed as a
               fix. The box's honest "not enough data" message is exactly right and stays. */}
           {!isDocReview && (
-            <Link href="/dashboard/profile" data-testid="evaluation-enrich" style={{ display: "inline-block", marginTop: "0.55rem", color: "var(--teal-900)", fontWeight: 600, fontSize: "0.85rem" }}>
+            <Link
+              href="/dashboard/profile"
+              data-testid="evaluation-enrich"
+              style={{
+                display: "inline-block",
+                marginTop: "0.55rem",
+                color: "var(--teal-900)",
+                fontWeight: 600,
+                fontSize: "0.85rem",
+              }}
+            >
               Add more about your business →
             </Link>
           )}
@@ -1646,23 +2041,37 @@ function EvaluationCard({ threadId }: { threadId?: string }) {
           {sections.map((section) => (
             <div key={section}>
               <p style={evalSection}>{section}</p>
-              <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "0.4rem" }}>
+              <ul
+                style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "0.4rem" }}
+              >
                 {findings
                   .filter((f) => f.section === section)
-                  .map((f, i) => (
+                  .map((f) => (
                     <li
-                      key={`${f.label}-${i}`}
-                      style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", ...traceText }}
+                      key={`${f.section}:${f.label}:${f.citationDocId ?? "uncited"}`}
+                      style={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: "0.5rem",
+                        ...traceText,
+                      }}
                     >
                       <ConfChip c={f.confidence} />
                       <span style={{ ...traceText, flex: 1, color: "var(--ink)" }}>
                         {f.label}{" "}
                         {f.citationDocId ? (
-                          <Link href="/dashboard/vault" data-testid="evaluation-citation" style={{ color: "var(--teal-600)", fontSize: "0.8rem" }}>
+                          <Link
+                            href="/dashboard/vault"
+                            data-testid="evaluation-citation"
+                            style={{ color: "var(--teal-600)", fontSize: "0.8rem" }}
+                          >
                             [{f.citationTitle}]
                           </Link>
                         ) : (
-                          <span data-testid="evaluation-citation" style={{ color: "var(--ink-soft)", fontSize: "0.8rem" }}>
+                          <span
+                            data-testid="evaluation-citation"
+                            style={{ color: "var(--ink-soft)", fontSize: "0.8rem" }}
+                          >
                             [{f.citationTitle}]
                           </span>
                         )}
@@ -1714,19 +2123,47 @@ function EvaluationCard({ threadId }: { threadId?: string }) {
             topGaps.length > 0 && (
               <>
                 <p style={evalSection}>Highest-leverage gaps</p>
-                <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "0.5rem" }}>
+                <ul
+                  style={{
+                    listStyle: "none",
+                    margin: 0,
+                    padding: 0,
+                    display: "grid",
+                    gap: "0.5rem",
+                  }}
+                >
                   {topGaps.map(({ gap, gapIndex }) => (
-                    <GapRow key={`gap-${gapIndex}`} gap={gap} gapIndex={gapIndex} threadId={threadId} />
+                    <GapRow
+                      key={`gap-${gapIndex}`}
+                      gap={gap}
+                      gapIndex={gapIndex}
+                      threadId={threadId}
+                    />
                   ))}
                 </ul>
                 {moreGaps.length > 0 && (
                   <details style={{ marginTop: "0.5rem" }}>
-                    <summary style={{ cursor: "pointer", color: "var(--teal-600)", fontSize: "0.85rem" }}>
+                    <summary
+                      style={{ cursor: "pointer", color: "var(--teal-600)", fontSize: "0.85rem" }}
+                    >
                       {moreGaps.length} more
                     </summary>
-                    <ul style={{ listStyle: "none", margin: "0.5rem 0 0", padding: 0, display: "grid", gap: "0.5rem" }}>
+                    <ul
+                      style={{
+                        listStyle: "none",
+                        margin: "0.5rem 0 0",
+                        padding: 0,
+                        display: "grid",
+                        gap: "0.5rem",
+                      }}
+                    >
                       {moreGaps.map(({ gap, gapIndex }) => (
-                        <GapRow key={`more-gap-${gapIndex}`} gap={gap} gapIndex={gapIndex} threadId={threadId} />
+                        <GapRow
+                          key={`more-gap-${gapIndex}`}
+                          gap={gap}
+                          gapIndex={gapIndex}
+                          threadId={threadId}
+                        />
                       ))}
                     </ul>
                   </details>
@@ -1737,9 +2174,22 @@ function EvaluationCard({ threadId }: { threadId?: string }) {
 
           {/* Residual not-enough-data alongside real findings — same DISTINCT dashed neutral look. */}
           {notEnoughData.length > 0 && (
-            <div data-testid="evaluation-partial-nudge" style={{ ...insufficientBox, marginTop: "0.8rem" }}>
-              <div style={{ fontWeight: 700, color: "var(--ink)", fontSize: "0.85rem" }}>To assess more, add:</div>
-              <ul style={{ margin: "0.4rem 0 0", paddingLeft: "1.1rem", color: "var(--ink-soft)", fontSize: "0.85rem", ...traceText }}>
+            <div
+              data-testid="evaluation-partial-nudge"
+              style={{ ...insufficientBox, marginTop: "0.8rem" }}
+            >
+              <div style={{ fontWeight: 700, color: "var(--ink)", fontSize: "0.85rem" }}>
+                To assess more, add:
+              </div>
+              <ul
+                style={{
+                  margin: "0.4rem 0 0",
+                  paddingLeft: "1.1rem",
+                  color: "var(--ink-soft)",
+                  fontSize: "0.85rem",
+                  ...traceText,
+                }}
+              >
                 {notEnoughData.map((n) => (
                   <li key={n.section}>{n.needs}</li>
                 ))}
@@ -1779,7 +2229,8 @@ export function CardList({
   // is in flight (`sending`, lifted from ChatPane) — an idle/fresh chat must not leak the previous
   // thread's trace. `sending` stays true across the whole first turn, so the first-turn trap (no
   // threadId until sendCockpitMessage resolves) is still covered. Both surfaces share this gate.
-  const showActivity = activity && (threadId !== undefined ? activity.threadId === threadId : sending);
+  const showActivity =
+    activity && (threadId !== undefined ? activity.threadId === threadId : sending);
   const trace = showActivity ? <ActivityCard steps={activity.steps} /> : null;
   const running = Boolean(showActivity && activity.steps.some((s) => s.phase === "running"));
 
@@ -1793,7 +2244,11 @@ export function CardList({
     if (plan === undefined || briefing === undefined) return <p style={muted}>Loading…</p>;
 
     if (plan === null)
-      return briefing ? <BriefingCard briefing={briefing} /> : running ? null : <p style={muted}>{noPlanHint}</p>;
+      return briefing ? (
+        <BriefingCard briefing={briefing} />
+      ) : running ? null : (
+        <p style={muted}>{noPlanHint}</p>
+      );
     return <PlanCards plan={plan} threadId={threadId} briefing={briefing} />;
   };
 
@@ -1815,7 +2270,15 @@ export function CardList({
 }
 
 /** The existing plan-status dispatch, unchanged — lifted out so CardList can render the trace above it. */
-function PlanCards({ plan, threadId, briefing }: { plan: Plan; threadId: string; briefing: Briefing | null }) {
+function PlanCards({
+  plan,
+  threadId,
+  briefing,
+}: {
+  plan: Plan;
+  threadId: string;
+  briefing: Briefing | null;
+}) {
   const reporting = plan.status === "delivering" || plan.status === "done";
   // A scheduled/canceled plan is dominated by its own card (Open Question 3) — suppress the DraftCard.
   const halted = plan.status === "scheduled" || plan.status === "canceled";
@@ -1849,7 +2312,9 @@ function PlanCards({ plan, threadId, briefing }: { plan: Plan; threadId: string;
       {resolving && <ResolutionCard plan={plan} threadId={threadId} />}
       {/* UAT-C: never the unpickable "#1 (no name)" placeholder while a pick is parked — exactly
           one card (the picker) renders in that deadlock state. */}
-      {plan.status === "proposed" && !plan.candidates?.length && <PlanCard plan={plan} threadId={threadId} />}
+      {plan.status === "proposed" && !plan.candidates?.length && (
+        <PlanCard plan={plan} threadId={threadId} />
+      )}
       {plan.status === "scheduled" && <ScheduledCard plan={plan} />}
       {plan.status === "canceled" && <CanceledCard plan={plan} threadId={threadId} />}
       {hasDraft && <DraftCard plan={plan} />}

@@ -246,6 +246,17 @@ export default defineSchema({
     // optional → no migration (append-only, like recipientBodies/attachments). Content-plane only.
     sendAt: v.optional(v.number()),
     scheduledFunctionId: v.optional(v.id("_scheduled_functions")),
+    // Phase-26 Approvals. Missing provenance on a legacy canceled row means a historical
+    // scheduled cancellation; every new cancel writes the discriminator explicitly.
+    cancelKind: v.optional(v.union(v.literal("scheduled_cancel"), v.literal("discarded"))),
+    canceledAt: v.optional(v.number()),
+    // Delivery terminals own these counters. `counterComplete` is the honesty bit: absent/false
+    // keeps legacy reads on the bounded partial projection instead of inventing exact progress.
+    recipientTotal: v.optional(v.number()),
+    sentCount: v.optional(v.number()),
+    failedCount: v.optional(v.number()),
+    queuedCount: v.optional(v.number()),
+    counterComplete: v.optional(v.boolean()),
     // Reply threading (03.11 RPLY-01). Set by the replyToMessage tool (Plan 04) when a plan is a
     // reply, copied to the per-recipient `requests` rows at executePlan (Plan 03). All optional →
     // no migration; a non-reply send simply carries none (append-only, like sendAt/attachments).
@@ -275,9 +286,7 @@ export default defineSchema({
     // Phase-20 (20-07, MEDIA-01) widened it a THIRD time: "media" = a reel staged as a BLOCK DECK,
     // reserved and started on Approve by the same `externalAction` arm. Still optional, still
     // closed, still no migration.
-    kind: v.optional(
-      v.union(v.literal("memo"), v.literal("calendar_event"), v.literal("media")),
-    ),
+    kind: v.optional(v.union(v.literal("memo"), v.literal("calendar_event"), v.literal("media"))),
     // Phase-17 (ACTN-02) staged calendar event. CONTENT-PLANE ONLY, NEVER audited (§4).
     // `resetPlan` wipes all six — a staged event surviving a reset would re-stage onto the NEXT
     // plan. All optional → no migration (the sendAt precedent).
@@ -454,7 +463,9 @@ export default defineSchema({
     // lede degrades to counts-only (@pikar/core composeLede handles the absent case).
     synopsis: v.optional(v.string()),
     createdAt: v.number(),
-  }).index("by_thread", ["tenantId", "threadId"]),
+  })
+    .index("by_thread", ["tenantId", "threadId"])
+    .index("by_tenant_createdAt", ["tenantId", "createdAt"]),
 
   // ── Phase-10 vault-grounding content plane (VGND-01) ──────────────────────
   // The read-only sibling of `briefings`: holds the labels the SOURCE card renders for a
@@ -560,6 +571,16 @@ export default defineSchema({
     notEnoughData: v.array(v.object({ section: v.string(), needs: v.string() })),
     scorecard: v.any(), // the parsed + carried-forward @pikar/core Scorecard snapshot
     userProvided: v.array(v.string()), // scorecard dot-path keys the user supplied in-conversation
+    // Dot-path → epoch-ms the user stated/confirmed it (cash-business-finance Task 3 fix).
+    // `applyScorecardAnswer` is the ONE writer, stamping `Date.now()` on every answer, and
+    // `runEvaluation`'s carry-forward copies this map UNCHANGED into every new row — the whole
+    // point is that it survives the weekly re-evaluation that stamps a fresh `createdAt` on the
+    // ROW. Without this, `createdAt` was read as a stand-in stated-time and a re-evaluation that
+    // merely carries a field forward silently reported it "confirmed today", which suppresses the
+    // 90-day confirm-or-update prompt for a number that may be months stale — the unsafe direction.
+    // Optional ⇒ no migration; a legacy row with a value but no entry here has UNKNOWN age, which
+    // `cash.ts` reads as needing confirmation, never as fresh.
+    userProvidedAt: v.optional(v.record(v.string(), v.number())),
     verdict: v.union(v.literal("gaps"), v.literal("healthy"), v.literal("insufficient")),
     // BEVL-03 "what changed" line. Written ONLY by a cron-driven run (runEvaluation withDelta) —
     // an on-demand row has none and the card simply hides the line. Optional → no migration.
@@ -625,6 +646,18 @@ export default defineSchema({
       // engine's "Assessing…" step insert throws and is silently swallowed in prod while tests
       // pass (Pitfall 2 — the same closed-union trap as searchVault above).
       v.literal("evaluateBusiness"),
+      // Phase-12 (BEVL-01) again: the "store" half of vault-first→ask→store. MISSING until
+      // 2026-08-08, and it cost exactly what the two comments above predict — every scorecard tool
+      // call threw `ArgumentValidationError` inside `agentSteps:record`, the SDK swallowed it, and
+      // the trace silently lost a step in prod while the whole suite stayed green. That is the
+      // THIRD time this closed union has been the trap, so the omission is now guarded
+      // STRUCTURALLY: cockpitTools.test.ts scans every `<name>: tool(` key in buildCockpitTools and
+      // fails if any lacks a literal here. Add the literal in the SAME commit as a new tool.
+      v.literal("recordScorecardAnswer"),
+      // `resetPlan` — the cancel-and-start-over tool. ALSO missing, and nobody knew: the guard test
+      // found it the first time it ran, which is the argument for the guard existing at all. Every
+      // "cancel and begin again" turn has been losing its trace step the same silent way.
+      v.literal("resetPlan"),
       // Phase-15 (DISP-01): the sub-agent dispatch steps. N literals, NOT a `specialist: v.string()`
       // field — §4 on this path is enforced by the ABSENCE of anywhere to put text ("a
       // `count: v.number()` literally cannot hold a subject line", :435-439). Adding a text field
@@ -633,14 +666,18 @@ export default defineSchema({
       v.literal("dispatchOfferArchitect"),
       v.literal("dispatchMoneyModelDesigner"),
       v.literal("dispatchLeadEngine"),
-      // Phase-16 (DISP-02): the research sub-agent's dispatch step. ONE literal — there is
-      // deliberately NO `webResearch` companion. `openai.tools.webSearch()` is a
-      // PROVIDER-EXECUTED tool, and ai@7.0.20's `executeToolCall` returns early at
-      // `if (!isExecutableTool(tool)) return undefined;` BEFORE it fires `onToolExecutionStart`,
-      // so a hosted search emits no step row at all. A declared-and-never-written literal is
-      // worse than none: it reads as a trace that exists and would send the next reader hunting
-      // for the insert that writes it.
+      // Phase-16 (DISP-02): the research sub-agent's dispatch step.
       v.literal("dispatchResearch"),
+      // ...and `webResearch`, whose ABSENCE used to be deliberate — THAT REASONING INVERTED on
+      // 2026-08-07. It was a PROVIDER-EXECUTED hosted tool, and ai@7.0.20's `executeToolCall`
+      // returns early at `if (!isExecutableTool(tool)) return undefined;` BEFORE firing
+      // `onToolExecutionStart`, so it emitted no step row and a declared-but-never-written literal
+      // would have read as a trace that exists. It is now a LOCAL Tavily-backed tool (llm.ts), so
+      // `onToolExecutionStart` DOES fire and the insert DOES need this literal — the same swallow
+      // trap as every literal above, which this codebase has already been bitten by at searchVault
+      // and evaluateBusiness. Still no text field: §4 on this path stays enforced by the ABSENCE of
+      // anywhere to put a query string or a retrieved URL.
+      v.literal("webResearch"),
       // Phase-17 (ACTN-02): the in-loop availability READ and the plan-staging WRITE. Two literals,
       // no text field — §4 on this path stays enforced by the ABSENCE of anywhere to put an event
       // title or an attendee address. Without these literals the step insert throws and the AI SDK
@@ -876,6 +913,10 @@ export default defineSchema({
     // read. The `by_tenant_kind` index named as the upgrade path now exists (added for the
     // onboarding profile read); this field may move onto it if freshness ever needs ranking.
     retrievedAt: v.optional(v.number()),
+    // Phase-26 Content provenance. Only authoritative write sites populate these; absence on
+    // existing artifacts remains an explicit unknown and is never inferred by reverse scans.
+    sourceThreadId: v.optional(v.string()),
+    sourcePlanId: v.optional(v.id("plans")),
     // Phase-18 (ACTN-04). ABSENT ⇒ user-supplied (every row that exists today; ZERO backfill).
     // "agent" ⇒ agent-authored: excluded from vault retrieval (structurally — it is never
     // ingested) and from the blueprint drift signal. "agent_promoted" ⇒ the user promoted it to
@@ -970,6 +1011,7 @@ export default defineSchema({
     // Phase-15.3. The Drive re-import primary key: "have I already imported this Drive file for
     // this tenant?" — answered without scanning the partition.
     .index("by_tenant_driveFileId", ["tenantId", "driveFileId"])
+    .index("by_tenant_origin_createdAt", ["tenantId", "origin", "createdAt"])
     .index("by_kind", ["kind"]), // BEVL-03 cron: enumerate onboarded tenants without reading every
   // document's `text` blob (this table holds book-sized uploads; a .collect() would walk into the
   // 16 MiB / 32k-doc read cap). The ONE deliberately cross-tenant index in the repo — read by a
@@ -1129,6 +1171,7 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_tenant_request", ["tenantId", "requestId"]) // one editable row per (tenant, request)
+    .index("by_tenant_createdAt", ["tenantId", "createdAt"])
     .index("by_skill", ["skillName", "skillVersion"]), // eligibility rolls the negative-rate over this
 
   // The optimizer kill switch + tunable thresholds (IMPR-02). SINGLE row, upserted by
@@ -1218,6 +1261,16 @@ export default defineSchema({
      *  on every grounding call and every cockpit turn. One indexed row + one `ctx.db.get`. */
     blueprintDocId: v.optional(v.id("vaultDocuments")),
     blueprintConfirmedAt: v.optional(v.number()),
+    // ── Phase-19 CAN-SPAM postal address (PIPE-01 SC#6) ───────────────────────
+    // ALL optional ⇒ NO migration (convex-migration-helper: "Safe Changes → Adding Optional
+    // Field"), and the table's own comment above already blesses optionality.
+    /** A SINGLE free-text block, deliberately NOT a structured object: CAN-SPAM requires "a valid
+     *  physical postal address", not a parsed one, and a structured object invites a country/state
+     *  enum this phase does not need. Completeness is enforced at the WRITE boundary (this table's
+     *  own rule) and at SEND (`renderFooter` throws on a blank address — fail closed). Optional
+     *  here on purpose: Phase 11 deliberately admits idea-stage users, so this must never become a
+     *  required onboarding field; `/dashboard/profile` is the enrichment surface. */
+    postalAddress: v.optional(v.string()),
   }).index("by_tenant", ["tenantId"]),
 
   // Living-map slice 3 (§5.1). The intention plane: what the business is driving toward and by
@@ -1236,6 +1289,40 @@ export default defineSchema({
     // time — no history table until something needs more than the last transition.
     statusChangedAt: v.number(),
   }).index("by_tenant_status", ["tenantId", "status"]),
+
+  // ── Phase-26 connected dashboard accounting foundation ────────────────────
+  // Append-only reporting facts. Enforcement remains in the rate limiter; these rows retain
+  // refs, code-owned identifiers and integer cents only — never prompts, provider prose or URLs.
+  spendEvents: defineTable({
+    tenantId: v.string(),
+    rail: v.union(v.literal("reasoning"), v.literal("media"), v.literal("ingest")),
+    phase: v.union(
+      v.literal("estimated"),
+      v.literal("reserved"),
+      v.literal("actual"),
+      v.literal("refunded"),
+      v.literal("adjustment"),
+    ),
+    amountCents: v.number(),
+    correlationId: v.string(),
+    planId: v.optional(v.id("plans")),
+    requestId: v.optional(v.id("requests")),
+    folderId: v.optional(v.id("vaultFolders")),
+    mediaJobId: v.optional(v.id("mediaJobs")),
+    model: v.optional(v.string()),
+    kind: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_tenant_createdAt", ["tenantId", "createdAt"])
+    .index("by_tenant_rail_createdAt", ["tenantId", "rail", "createdAt"])
+    .index("by_correlation", ["correlationId"]),
+
+  // One durable start per tenant, created before the first paid movement. A missing row means
+  // coverage has not begun; it never means historical spend was zero.
+  spendCoverage: defineTable({
+    tenantId: v.string(),
+    coverageStartedAt: v.number(),
+  }).index("by_tenant", ["tenantId"]),
 
   // ── Phase-20 media plane (MEDIA-01) ────────────────────────────────────────
   // ONE table for the job AND the asset it produces: a job yields at most one asset, so a second
@@ -1261,12 +1348,7 @@ export default defineSchema({
     blockIndex: v.number(), // index into plans.shots; -1 for a job that belongs to the whole deck (stt)
     provider: v.literal("fal"), // closed literal — a second provider is a deliberate schema edit
     // FOUR kinds, closed. A fifth member is a deliberate schema edit, the `provider` precedent.
-    kind: v.union(
-      v.literal("video"),
-      v.literal("image"),
-      v.literal("tts"),
-      v.literal("stt"),
-    ),
+    kind: v.union(v.literal("video"), v.literal("image"), v.literal("tts"), v.literal("stt")),
     model: v.string(), // MUST be a key of the @pikar/cost/media price table (fail-closed at estimate)
     // Exactly what was SUBMITTED — never a provider default. fal's Wan 2.5 defaults to 1080p, so a
     // spec that omits its resolution is an estimate 3x below the invoice.
@@ -1316,5 +1398,111 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_plan", ["tenantId", "planId"])
-    .index("by_batch", ["tenantId", "batchId"]),
+    .index("by_batch", ["tenantId", "batchId"])
+    .index("by_tenant_createdAt", ["tenantId", "createdAt"]),
+
+  // ── Phase-19 contacts, follow-ups & suppression (ACTN-05 / PIPE-01) ────────
+  // THREE tables. As a set: there is NO `opportunities` table, NO stage enum and NO `amountCents`
+  // anywhere below — PIPE-01 and Phase 19 SC#8. Real money arrives with Phase 28's
+  // connector-backed Cash surface, from observed provider data rather than typed guesses.
+  // Retrofitting stages onto a committed schema is the expensive order; do not pre-empt it.
+
+  // The ONE person store. A row exists ONLY because a human deliberately made it — typed it, or
+  // approved a staged add. Gmail header resolution NEVER writes here, which is what preserves the
+  // "no contacts cache at rest" invariant (`plans.candidates`, above): nothing accretes as a side
+  // effect of reading the mailbox. See `docs/playbooks/contacts-crm.md`.
+  // New table ⇒ NO migration (prior-phase discipline, the `tenantProfiles` comment above).
+  contacts: defineTable({
+    tenantId: v.string(),
+    /** Identity. ALREADY normalized by the write boundary (`normalizeAddress` from @pikar/core —
+     *  trim + lowercase). One row per address; a person with two addresses is two contacts.
+     *  The send-path guard keys `suppressions` on the SAME function, so the guard and the contact
+     *  row agree by construction rather than by convention. */
+    email: v.string(),
+    name: v.optional(v.string()), // no name-only contacts; the table falls back to the address
+    /** The PROVENANCE OF THE DATA, not who triggered the write. `mailbox-resolved` = the address
+     *  came out of Gmail headers and a human pressed save; `user-entered` = typed from scratch;
+     *  `inbound` = a Phase 31 lead form (not written in this phase). */
+    origin: v.union(v.literal("mailbox-resolved"), v.literal("user-entered"), v.literal("inbound")),
+    /** Consent stays EMPTY when no consent event occurred — the Pipeline cell then reads "none on
+     *  record", the truth. NOTHING is defaulted to consented. */
+    consentAt: v.optional(v.number()),
+    consentSource: v.optional(v.union(v.literal("asserted-by-user"), v.literal("inbound-form"))),
+    /** Content plane. CLAUDE.md §4 — this text MUST NEVER reach `audit.payload`, which carries
+     *  refs/ids/counts only. `consentWording` is the exact wording shown; `consentContext` is the
+     *  user's free-text capture context ("they signed up at the trade show"). */
+    consentWording: v.optional(v.string()),
+    consentContext: v.optional(v.string()),
+    /** DISPLAY MIRROR ONLY. The send-path guard reads `suppressions` and NEVER this field or this
+     *  table — that is what makes a contacts bug unable to un-suppress anyone, and contact
+     *  deletion a non-event for the guard (SC#5). */
+    unsubscribedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant_email", ["tenantId", "email"])
+    .index("by_tenant_createdAt", ["tenantId", "createdAt"]),
+
+  // What is owed, and when. Bound to a contact OPTIONALLY — free-standing follow-ups are allowed
+  // ("chase the supplier quote"), but the AGENT must always name a contact; contactless follow-ups
+  // are a USER-only capability. That is the structural brake against the CRM quietly becoming a
+  // general task generator. New table ⇒ NO migration (prior-phase discipline).
+  followUps: defineTable({
+    tenantId: v.string(),
+    contactId: v.optional(v.id("contacts")),
+    note: v.string(), // user/agent content — content plane ONLY, never audited (CLAUDE.md §4)
+    /** REQUIRED. No date, no follow-up: "Follow-ups due" is a headline tile and an undated
+     *  follow-up could never appear in it. Moving this date IS the snooze, which is why there is
+     *  no snooze state — the date stays the single source of truth for "due". */
+    dueAt: v.number(),
+    /** `canceled` is distinct from `done` because "I decided not to" and "I did it" are different
+     *  facts. Three states, closed. */
+    status: v.union(v.literal("open"), v.literal("done"), v.literal("canceled")),
+    completedAt: v.optional(v.number()),
+    /** Provenance ref so "why is this here" stays answerable. An id — refs-only, audit-safe by
+     *  construction. Optional ⇒ no migration. */
+    sourcePlanId: v.optional(v.id("plans")),
+    createdAt: v.number(),
+  })
+    .index("by_tenant_status_dueAt", ["tenantId", "status", "dueAt"])
+    .index("by_tenant_contact", ["tenantId", "contactId"]),
+
+  // The send-path trust boundary, kept ADDRESS-KEYED and separate from `contacts` on purpose:
+  // suppression OUTLIVES the contact, so deleting a contact can never restore the ability to email
+  // someone who asked you to stop. Un-suppressing is behind an explicit confirm plus a refs-only
+  // audit row, never a plain toggle. New table ⇒ NO migration (prior-phase discipline).
+  suppressions: defineTable({
+    tenantId: v.string(),
+    address: v.string(), // normalized by `normalizeAddress` at the write boundary
+    suppressedAt: v.number(),
+    source: v.union(v.literal("unsubscribe-link"), v.literal("user-marked")),
+  })
+    // The ONE index the send guard reads — per-address, so a 5-recipient fan-out drops exactly the
+    // suppressed address and still sends to the other four.
+    .index("by_tenant_address", ["tenantId", "address"]),
+
+  // The FINANCE-OPS inputs, and only those (design §5). The Hormozi inputs stay on the scorecard —
+  // duplicating CAC into a second table is what produced two separate selector bugs on 2026-08-09.
+  //
+  // One row per (tenant, field), read with `.unique()` so a duplicate is LOUD rather than silently
+  // shadowed (the tenantProfiles precedent). `statedAt` is per FIELD, not per row-set: cash on hand
+  // goes stale far faster than payables, and one shared timestamp would make the 90-day
+  // confirm-or-update prompt fire on the wrong number.
+  //
+  // Values are USD DOLLARS as a plain number, matching `scorecard.financials.cac`. The Pikar-spend
+  // plane's integer cents never appear here.
+  financeInputs: defineTable({
+    tenantId: v.string(),
+    field: v.union(
+      v.literal("cashOnHand"),
+      v.literal("monthlyOperatingCost"),
+      v.literal("mrr"),
+      v.literal("receivables"),
+      v.literal("payables"),
+    ),
+    valueUsd: v.number(),
+    statedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_field", ["tenantId", "field"]),
 });

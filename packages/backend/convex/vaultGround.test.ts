@@ -9,7 +9,7 @@
 // These tests seed a graph via internal.vaultGraph.upsertGraph and assert: vector-seed + ≤2-hop
 // graph merge, hop-cap exclusion, cross-tenant isolation, plus the cheap metadata read plane
 // (listVaultDocs / vaultStats / vaultDownloadUrl / docEntities / vaultSearch).
-import { serializeBlueprint, type BusinessBlueprint } from "@pikar/core";
+import { type BusinessBlueprint, serializeBlueprint } from "@pikar/core";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api, internal } from "./_generated/api";

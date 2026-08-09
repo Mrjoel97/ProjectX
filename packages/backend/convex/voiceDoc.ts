@@ -72,13 +72,10 @@ async function docScopedPassages(
   // Reuse the Phase-10 retrieval engine rather than reading `vaultDocuments.text` here: that blob
   // is book-sized (the 16 MiB read cap) and re-selecting chunks by hand would fork the one place
   // chunk selection lives. `namespace = tenantId` inside it is the isolation linchpin (BETA-05).
-  const { docIds, chunks, spine } = await ctx.runAction(
-    internal.vaultGround.vaultGroundHydrated,
-    {
-      tenantId,
-      query,
-    },
-  );
+  const { docIds, chunks, spine } = await ctx.runAction(internal.vaultGround.vaultGroundHydrated, {
+    tenantId,
+    query,
+  });
 
   // ponytail: DOC SCOPING IS POST-HOC. `vaultGroundHydrated` searches the tenant's WHOLE vault
   // (`rag.search` top-K, limit 8) and everything that is not `docRef` is dropped right here.
@@ -103,11 +100,7 @@ async function docScopedPassages(
   if (spine) passages.push(spine);
   let used = 0; // RETRIEVAL_CHAR_CAP accounting is unchanged: the spine is budgeted outside it.
   let documentPassageCount = 0;
-  for (
-    let i = 0;
-    i < docIds.length && documentPassageCount < RETRIEVAL_MAX_PASSAGES;
-    i++
-  ) {
+  for (let i = 0; i < docIds.length && documentPassageCount < RETRIEVAL_MAX_PASSAGES; i++) {
     if (docIds[i] !== docRef) continue;
     // One entry per doc, whose several matched passages `vaultGroundHydrated` joined with a blank
     // line — split on that same separator so RETRIEVAL_MAX_PASSAGES counts passages, not documents.
@@ -384,6 +377,7 @@ function withVerifiedExcerpts(raw: RawDocReview, docText: string): RawDocReview 
 async function modelDocReview(
   ctx: GenericActionCtx<DataModel>,
   tenantId: string,
+  sessionId: Id<"voiceSessions">,
   transcript: { speaker: string; text: string }[],
   doc: { title: string; text: string | undefined; extractionTruncated: boolean },
 ): Promise<RawDocReview> {
@@ -415,7 +409,19 @@ async function modelDocReview(
   // The intake.ts idiom for a model call outside the governed llm.ts loop — the priced usage is
   // charged against the same daily spend limiter, so a doc review cannot spend off-budget.
   const priced = priceUsage(DEFAULT_MODEL, usage);
-  if (priced.ok) await ctx.runMutation(internal.guardrails.recordSpend, { tenantId, costUsd: priced.value });
+  if (priced.ok)
+    // FIN-01 correlation. `sessionId` names WHICH review this money bought; the per-execution
+    // `runId` is the discriminator. `reviewDocument` is an ACTION, so a re-entry re-runs the
+    // `generateObject` above for real money — a correlation of session alone would suppress that
+    // second row and leave the ledger below the limiter, the unrecoverable direction. The
+    // idempotence a re-review needs already lives in `reviewSession`'s read-guard, not here.
+    await ctx.runMutation(internal.guardrails.recordSpend, {
+      tenantId,
+      costUsd: priced.value,
+      correlationId: `voicedoc:review:${sessionId}:${crypto.randomUUID()}`,
+      model: DEFAULT_MODEL,
+      kind: "docReview",
+    });
   return object;
 }
 
@@ -462,7 +468,7 @@ export const reviewDocument = internalAction({
     const raw: RawDocReview =
       offlineSeamAvailable() && first.startsWith(SMOKE_REVIEW_PREFIX)
         ? smokeDocReview(first.slice(SMOKE_REVIEW_PREFIX.length).trim(), docText)
-        : await modelDocReview(ctx, tenantId, transcript, doc);
+        : await modelDocReview(ctx, tenantId, sessionId, transcript, doc);
 
     // Citations, gap route/playbook, the leverage rank, the excerpt cap and the honesty verdict all
     // land in pure tested code (14-02). Do NOT re-derive any of them here, and never pass a verdict.
@@ -665,7 +671,8 @@ export const pickableDocs = tenantQuery({
     const docs: { docId: Id<"vaultDocuments">; title: string }[] = [];
     let processingCount = 0;
     for (const row of rows) {
-      if (row.status === "ready" && row.text?.trim()) docs.push({ docId: row._id, title: row.title });
+      if (row.status === "ready" && row.text?.trim())
+        docs.push({ docId: row._id, title: row.title });
       else if (DOC_IN_PROGRESS.has(row.status)) processingCount += 1;
     }
     return { docs, processingCount };

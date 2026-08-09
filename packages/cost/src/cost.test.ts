@@ -3,18 +3,18 @@ import { scanText } from "@pikar/pii";
 import { describe, expect, it } from "vitest";
 import {
   CHEAP_MODEL,
-  DEFAULT_MODEL,
-  REALTIME_PRICING,
-  RESEARCH_FALLBACK_MODEL,
-  RESEARCH_MODEL,
-  TRANSCRIPTION_PRICING,
-  WEB_SEARCH_CALL_USD,
   chooseModel,
+  DEFAULT_MODEL,
   estimateCostUsd,
   estimateTokens,
   priceRealtime,
   priceTranscription,
   priceUsage,
+  REALTIME_PRICING,
+  RESEARCH_FALLBACK_MODEL,
+  RESEARCH_MODEL,
+  TRANSCRIPTION_PRICING,
+  WEB_SEARCH_CALL_USD,
 } from "./cost";
 
 // SafeText only comes out of scanText — no cast, keeps the brand honest.
@@ -26,7 +26,13 @@ describe("estimateTokens", () => {
 });
 
 describe("estimateCostUsd", () => {
-  it("default 1M input tokens → $0.15", () => {
+  // The literal is a deliberate PIN on whatever DEFAULT_MODEL currently is, not a fixture: a model
+  // repoint SHOULD break this and force a conscious re-read of the rate. It did exactly that on
+  // 2026-08-07 when DEFAULT_MODEL moved gpt-4o-mini ($0.15/MTok in) → gemini-3.5-flash ($0.30), and
+  // again on 2026-08-08 when the OpenAI balance was topped up and the pin moved BACK to $0.15.
+  // Keep it a literal for that reason — reading the rate back out of PRICING would make the test
+  // agree with itself and assert nothing.
+  it("default 1M input tokens → $0.15 (gpt-4o-mini)", () => {
     const r = estimateCostUsd(DEFAULT_MODEL, 1_000_000, 0);
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.value).toBeCloseTo(0.15, 10);
@@ -141,7 +147,6 @@ describe("priceRealtime", () => {
     expect(priceRealtime(0, Number.POSITIVE_INFINITY, 0, 0).ok).toBe(false);
   });
 });
-
 
 // ── Phase 16 (16-02, ACTN-03/D8) — the research model pins ───────────────────────────────────
 //

@@ -10,8 +10,9 @@
 // Uses `internalMutation` (not a tenant wrapper): it runs from inside the durable
 // workflow, which carries no client identity. `internalMutation` is not banned by
 // the import guard, so this file needs no raw-builder allowlist entry.
-import { v } from "convex/values";
+
 import { buildTelemetry } from "@pikar/core";
+import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
 
 /** The accumulated outcome the terminal transition hands in (mirrors TerminalOutcome). */

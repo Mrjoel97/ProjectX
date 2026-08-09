@@ -3,7 +3,7 @@
 // BLPR-02 items 17/18: a confirmed Business Blueprint is standing context, not a search result.
 // These tests drive the REAL searchVault tool through its action-context shim and pin the two
 // regressions that would return if the spine were inserted into vaultGroundHydrated's arrays.
-import { serializeBlueprint, type BusinessBlueprint } from "@pikar/core";
+import { type BusinessBlueprint, serializeBlueprint } from "@pikar/core";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
@@ -116,10 +116,7 @@ const searchAudits = (t: T) =>
     ctx.db
       .query("audit")
       .filter((q) =>
-        q.and(
-          q.eq(q.field("tenantId"), TENANT),
-          q.eq(q.field("eventType"), "vault.searched"),
-        ),
+        q.and(q.eq(q.field("tenantId"), TENANT), q.eq(q.field("eventType"), "vault.searched")),
       )
       .collect(),
   );
@@ -136,7 +133,9 @@ describe("searchVault with a confirmed Blueprint (BLPR-02)", () => {
     expect(await t.run((ctx) => ctx.db.query("vaultSources").first())).toBeNull();
     const rows = await searchAudits(t);
     expect(rows).toHaveLength(1);
-    expect((rows[0]?.payload as { resultCount: number }).resultCount).toBe(0);
+    const auditRow = rows[0];
+    if (auditRow === undefined) throw new Error("expected vault.searched audit row");
+    expect((auditRow.payload as { resultCount: number }).resultCount).toBe(0);
   });
 
   test("shows only matched retrieval documents in the source card", async () => {
@@ -155,6 +154,8 @@ describe("searchVault with a confirmed Blueprint (BLPR-02)", () => {
     expect(source?.titles).toEqual(["Matched source"]);
     expect(source?.count).toBe(1);
     const rows = await searchAudits(t);
-    expect((rows[0]?.payload as { resultCount: number }).resultCount).toBe(1);
+    const auditRow = rows[0];
+    if (auditRow === undefined) throw new Error("expected vault.searched audit row");
+    expect((auditRow.payload as { resultCount: number }).resultCount).toBe(1);
   });
 });

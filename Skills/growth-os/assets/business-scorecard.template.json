@@ -19,7 +19,7 @@
     "cost_to_service_per_customer": null,
     "gross_margin_pct": null,
     "refund_pct": null,
-    "churn_by_cadence": {"monthly": null, "quarterly": null, "annual": null}
+    "churn_by_cadence": { "monthly": null, "quarterly": null, "annual": null }
   },
   "position": {
     "roadmap_level": null,
@@ -27,20 +27,46 @@
     "funnel": []
   },
   "offer_card": {
-    "value_equation": {"dream_outcome": null, "likelihood": null, "time_delay": null, "effort_sacrifice": null},
-    "enhancers": {"scarcity": false, "urgency": false, "bonuses": false, "guarantee": false, "named": false},
+    "value_equation": {
+      "dream_outcome": null,
+      "likelihood": null,
+      "time_delay": null,
+      "effort_sacrifice": null
+    },
+    "enhancers": {
+      "scarcity": false,
+      "urgency": false,
+      "bonuses": false,
+      "guarantee": false,
+      "named": false
+    },
     "guarantee": null,
     "offer_name": null
   },
   "model_card": {
-    "offer_types_present": {"attraction": false, "upsell": false, "downsell": false, "continuity": false},
+    "offer_types_present": {
+      "attraction": false,
+      "upsell": false,
+      "downsell": false,
+      "continuity": false
+    },
     "thirty_day_payback": null,
     "continuity_take_pct": null
   },
   "lead_card": {
-    "core_four_active": {"warm_outreach": false, "content": false, "cold_outreach": false, "paid_ads": false},
+    "core_four_active": {
+      "warm_outreach": false,
+      "content": false,
+      "cold_outreach": false,
+      "paid_ads": false
+    },
     "rule_of_100_active": false,
-    "lead_getters_active": {"customers": false, "employees": false, "agencies": false, "affiliates": false},
+    "lead_getters_active": {
+      "customers": false,
+      "employees": false,
+      "agencies": false,
+      "affiliates": false
+    },
     "primary_constraint_step": null
   },
   "history": []

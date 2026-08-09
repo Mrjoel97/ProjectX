@@ -1,7 +1,5 @@
 {
-  "_unassigned": [
-    "packages/backend/vitest.diag.setup.ts"
-  ],
+  "_unassigned": ["packages/backend/vitest.diag.setup.ts"],
   "ci-gate.md": [
     ".github/workflows/ci.yml",
     "package.json",
@@ -60,6 +58,47 @@
     "packages/backend/scripts/launch-detached.ps1",
     "packages/backend/convex/smoke.ts"
   ],
+  "dashboard-pages.md": [
+    "packages/core/src/dashboard.ts",
+    "packages/core/src/dashboard.test.ts",
+    "packages/core/src/spend.ts",
+    "packages/core/src/spend.test.ts",
+    "packages/backend/convex/dashboardSchema.test.ts",
+    "packages/backend/convex/approvals.ts",
+    "packages/backend/convex/approvals.test.ts",
+    "packages/backend/convex/spendLedger.ts",
+    "packages/backend/convex/spendLedger.test.ts",
+    "packages/backend/convex/finance.ts",
+    "packages/backend/convex/finance.test.ts",
+    "packages/core/src/cash.ts",
+    "packages/core/src/cash.test.ts",
+    "packages/backend/convex/cash.ts",
+    "packages/backend/convex/cash.test.ts",
+    "packages/backend/convex/content.ts",
+    "packages/backend/convex/content.test.ts",
+    "packages/backend/convex/reportsBusiness.ts",
+    "packages/backend/convex/reportsBusiness.test.ts",
+    "packages/backend/convex/reportsGovernance.ts",
+    "packages/backend/convex/reportsGovernance.test.ts",
+    "packages/backend/convex/reportPack.ts",
+    "packages/backend/convex/reportPack.test.ts",
+    "packages/backend/convex/home.ts",
+    "packages/backend/convex/home.test.ts",
+    "apps/web/app/(app)/dashboard/approvals/",
+    "apps/web/app/(app)/dashboard/finance/",
+    "apps/web/app/(app)/dashboard/content/",
+    "apps/web/app/(app)/dashboard/reports/",
+    "apps/web/app/(app)/dashboard/page.tsx",
+    "apps/web/app/(app)/dashboard/CommandCenter.tsx",
+    "apps/web/app/(app)/dashboard/commandCenter.test.tsx",
+    "apps/web/app/(app)/layout.tsx",
+    "apps/web/e2e/approvals.spec.ts",
+    "apps/web/e2e/finance.spec.ts",
+    "apps/web/e2e/content.spec.ts",
+    "apps/web/e2e/reports.spec.ts",
+    "apps/web/e2e/pipeline.spec.ts",
+    "apps/web/e2e/command-center.spec.ts"
+  ],
   "cockpit.md": [
     "apps/web/app/(app)/dashboard/workspace/",
     "apps/web/app/(app)/connect-gmail/",
@@ -97,7 +136,8 @@
     "packages/backend/convex/calendar.test.ts",
     "packages/backend/convex/traceParity.test.ts",
     "packages/core/src/calendar.ts",
-    "packages/core/src/calendar.test.ts"
+    "packages/core/src/calendar.test.ts",
+    "packages/backend/scripts/probe-gemini.mjs"
   ],
   "audit-dead-letter.md": [
     "packages/backend/convex/audit.ts",
@@ -170,7 +210,8 @@
     "packages/backend/convex/vaultDrive.ts",
     "apps/web/app/(app)/dashboard/vault/",
     "apps/web/e2e/vault.spec.ts",
-    "packages/backend/scripts/run-smoke-vault.mjs"
+    "packages/backend/scripts/run-smoke-vault.mjs",
+    "packages/backend/convex/vaultRag.test.ts"
   ],
   "media.md": [
     "packages/cost/src/media.ts",
@@ -186,8 +227,16 @@
     "packages/backend/scripts/check-fal-catalog.mjs",
     "apps/web/scripts/bake-sandbox-snapshot.mjs"
   ],
+  "contacts-crm.md": [
+    "packages/core/src/contacts.ts",
+    "packages/core/src/contacts.test.ts",
+    "packages/backend/convex/contacts.ts",
+    "packages/backend/convex/contacts.test.ts",
+    "apps/web/app/(app)/dashboard/pipeline/"
+  ],
   "guardrails.md": [
     "packages/backend/convex/guardrails.ts",
-    "packages/backend/scripts/run-smoke-guardrails.mjs"
+    "packages/backend/scripts/run-smoke-guardrails.mjs",
+    "packages/cost/src/cost.ts"
   ]
 }

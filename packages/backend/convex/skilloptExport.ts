@@ -79,7 +79,8 @@ export const buildTrajectoryExport = internalQuery({
       const counts = { email: 0, card: 0, ssn: 0, phone: 0 };
       for (const scan of comment ? [goal, body, comment] : [goal, body]) {
         if (!scan.ok) continue; // unreachable (guarded above) — narrows the Result union
-        for (const k of ["email", "card", "ssn", "phone"] as const) counts[k] += scan.value.counts[k];
+        for (const k of ["email", "card", "ssn", "phone"] as const)
+          counts[k] += scan.value.counts[k];
       }
 
       const conversation: { role: "user" | "assistant"; content: string }[] = [

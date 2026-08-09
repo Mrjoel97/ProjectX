@@ -5,9 +5,15 @@ import { DOC_TYPE_LABEL, type DocType } from "@pikar/core";
 import { useAction, useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { failureCopy } from "./failureCopy";
 import { FileTextIcon, FolderIcon, GridIcon, ListIcon, SearchIcon } from "./icons";
+import { FolderOpenControl } from "./VaultBrowseControls";
+import {
+  deriveVaultViewState,
+  type VaultContentState,
+  type VaultSearchState,
+} from "./vaultViewState";
 
 // The browse grid (brand-024242 / brand-024258): a search bar, the N ITEMS count, a grid/list
 // toggle, and the doc cards/rows off the reactive listVaultDocs. Search runs vault.vaultSearch
@@ -180,15 +186,116 @@ function DocTypeChip({ docType }: { docType: DocType }) {
   );
 }
 
+function VaultContentNotice({
+  state,
+  onClearSearch,
+  onRetrySearch,
+}: {
+  state: VaultContentState;
+  onClearSearch: () => void;
+  onRetrySearch: () => void;
+}) {
+  switch (state.kind) {
+    case "ready":
+      return null;
+    case "initial-loading":
+      return (
+        <section className="vault-state" aria-live="polite">
+          <p className="caps-label">Loading vault</p>
+          <h2>Gathering your documents…</h2>
+        </section>
+      );
+    case "list-error":
+      return (
+        <section className="vault-state vault-state-error" role="alert">
+          <p className="caps-label">Vault unavailable</p>
+          <h2>We couldn&rsquo;t load your documents.</h2>
+          <p>{state.message}</p>
+        </section>
+      );
+    case "search-loading":
+      return (
+        <section className="vault-state vault-state-compact" aria-live="polite">
+          Searching for &ldquo;{state.query}&rdquo;…
+        </section>
+      );
+    case "search-error":
+      return (
+        <section className="vault-state vault-state-error vault-state-compact" role="alert">
+          <div>
+            <strong>Search didn&rsquo;t finish.</strong>
+            <p>{state.message}</p>
+          </div>
+          <div className="vault-state-actions">
+            <button type="button" className="vault-button vault-button-primary" onClick={onRetrySearch}>
+              Try again
+            </button>
+            <button type="button" className="vault-button" onClick={onClearSearch}>
+              Clear search
+            </button>
+          </div>
+        </section>
+      );
+    case "root-empty":
+      return (
+        <section className="vault-state">
+          <p className="caps-label">Your source library</p>
+          <h2>No documents yet.</h2>
+          <p>Upload a file, choose a folder, or import from Drive to give your agents grounded context.</p>
+        </section>
+      );
+    case "category-empty":
+      return (
+        <section className="vault-state">
+          <p className="caps-label">Category empty</p>
+          <h2>No documents in this category.</h2>
+          <p>Choose another category or add a source from the actions above.</p>
+        </section>
+      );
+    case "folder-empty":
+      return (
+        <section className="vault-state">
+          <p className="caps-label">Folder empty</p>
+          <h2>This folder has no documents.</h2>
+          <p>Return to all documents to choose another folder or add a new source.</p>
+        </section>
+      );
+    case "no-results":
+      return (
+        <section className="vault-state vault-state-compact" aria-live="polite">
+          <div>
+            <strong>No documents match &ldquo;{state.query}&rdquo;.</strong>
+            <p>Folders are not searched. Open one to search inside it.</p>
+          </div>
+          <button type="button" className="vault-button" onClick={onClearSearch}>
+            Clear search
+          </button>
+        </section>
+      );
+    default: {
+      const exhaustive: never = state;
+      return exhaustive;
+    }
+  }
+}
+
 export function DocGrid({
   docs,
   category,
+  folderId,
+  loading = false,
+  totalCount,
   folders,
   onOpen,
   onOpenFolder,
 }: {
   docs: VaultDoc[];
   category: string;
+  folderId?: VaultFolder["_id"];
+  loading?: boolean;
+  /** Bounded root count. It distinguishes an empty category from a truly empty Vault; it is never
+   *  displayed as an exact category count. */
+  totalCount: number;
   /** PRESENCE IS THE SCOPE SIGNAL: an array (possibly empty) at the top level, OMITTED inside a
    *  folder — a folder holds documents, not folders. That is what lets the empty state say "This
    *  folder is empty." with no extra prop. */
@@ -202,12 +309,24 @@ export function DocGrid({
   const [query, setQuery] = useState("");
   const [hitIds, setHitIds] = useState<Set<string> | null>(null);
   const [view, setView] = useState<"grid" | "list">("grid");
-  const [searching, setSearching] = useState(false);
+  const [searchState, setSearchState] = useState<VaultSearchState>({ kind: "idle" });
+  const searchSequence = useRef(0);
+  const activeSearchIdentity = useRef<string | null>(null);
   const [retryingId, setRetryingId] = useState<string | null>(null);
   // Deliberately NOT retryingId: that is a GLOBAL one-at-a-time lock, so sharing it would
   // cross-disable every failed document's Retry while a folder cancel is in flight.
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const folderCount = folders?.length ?? 0;
+
+  // Folder/category changes invalidate both the result set and every response still in flight.
+  // The identity carries folderId explicitly so a response from folder A cannot paint folder B.
+  useEffect(() => {
+    searchSequence.current += 1;
+    activeSearchIdentity.current = null;
+    setQuery("");
+    setHitIds(null);
+    setSearchState({ kind: "idle" });
+  }, [category, folderId]);
 
   async function runCancel(f: VaultFolder) {
     setCancellingId(f._id);
@@ -230,16 +349,44 @@ export function DocGrid({
   async function runSearch() {
     const q = query.trim();
     if (!q) {
+      searchSequence.current += 1;
+      activeSearchIdentity.current = null;
       setHitIds(null);
+      setSearchState({ kind: "idle" });
       return;
     }
-    setSearching(true);
+    const sequence = ++searchSequence.current;
+    const identity = `${folderId ?? "root"}\u0000${folderId ? "all" : category}\u0000${q}`;
+    activeSearchIdentity.current = identity;
+    setSearchState({ kind: "loading", query: q });
     try {
-      const results = await search({ query: q, category });
+      // A folder is provenance, not a category. Root keeps the selected category; folder browse
+      // sends folderId and searches every member category, matching the list directly beneath it.
+      const results = await search(folderId ? { query: q, folderId } : { query: q, category });
+      if (searchSequence.current !== sequence || activeSearchIdentity.current !== identity) return;
       setHitIds(new Set(results.map((r) => r._id)));
+      setSearchState({ kind: "complete", query: q, resultCount: results.length });
+    } catch {
+      if (searchSequence.current !== sequence || activeSearchIdentity.current !== identity) return;
+      setHitIds(null);
+      setSearchState({
+        kind: "error",
+        query: q,
+        message: "Search is unavailable right now. Your documents are still here.",
+      });
     } finally {
-      setSearching(false);
+      if (searchSequence.current === sequence && activeSearchIdentity.current === identity) {
+        activeSearchIdentity.current = null;
+      }
     }
+  }
+
+  function clearSearch() {
+    searchSequence.current += 1;
+    activeSearchIdentity.current = null;
+    setQuery("");
+    setHitIds(null);
+    setSearchState({ kind: "idle" });
   }
 
   // The rows to show: all category docs, or (when a search ran) only its hits — full metadata kept.
@@ -254,6 +401,28 @@ export function DocGrid({
     () => (hitIds ? docs.filter((d) => hitIds.has(d._id)) : docs),
     [docs, hitIds],
   );
+  const viewState = deriveVaultViewState({
+    scope: folderId ? "folder" : "root",
+    list: loading
+      ? { kind: "loading" }
+      : {
+          kind: "ready",
+          visibleCount: rows.length,
+          totalCount: totalCount + folderCount,
+        },
+    search: searchState,
+    processingCount: docs.filter(
+      (doc) => doc.status !== "ready" && doc.status !== "failed",
+    ).length,
+    failedCount: docs.filter((doc) => doc.status === "failed").length,
+  });
+  const suppressGrid =
+    viewState.content.kind === "initial-loading" ||
+    viewState.content.kind === "list-error" ||
+    viewState.content.kind === "root-empty" ||
+    viewState.content.kind === "category-empty" ||
+    viewState.content.kind === "folder-empty" ||
+    (viewState.content.kind === "no-results" && folderCount === 0);
 
   return (
     <div>
@@ -290,7 +459,7 @@ export function DocGrid({
             color: "var(--ink)",
           }}
         />
-        {searching && (
+        {searchState.kind === "loading" && (
           <span style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>Searching…</span>
         )}
         <span
@@ -333,34 +502,27 @@ export function DocGrid({
         </div>
       </div>
 
-      {/* A SEARCH THAT MATCHED NO DOCUMENT MUST SAY SO EVEN WHEN FOLDER CARDS REMAIN ON SCREEN.
-          The zero test below is "nothing at all to show", which is right for the grid — but it also
-          meant that at the top level with folders present, a query matching nothing rendered three
-          folder cards and NO explanation. Folders are not searched (`rows` is filtered by `hitIds`,
-          `folders` is not), so the user saw cards after a search and was never told the search came
-          back empty — the one state they are most likely to misread (BRAND §1). */}
-      {hitIds && rows.length === 0 && folderCount > 0 && (
-        <p style={{ color: "var(--ink-soft)", textAlign: "center", margin: "1.25rem 0 0" }}>
-          No documents match. Folders aren&rsquo;t searched — open one to search inside it.
-        </p>
+      {viewState.ingest.kind === "partial" && (
+        <section className="vault-state vault-state-warning vault-state-compact" role="status">
+          <strong>Some sources still need attention.</strong>
+          <p>
+            {viewState.ingest.processingCount > 0
+              ? `${viewState.ingest.processingCount} still processing. `
+              : ""}
+            {viewState.ingest.failedCount > 0
+              ? `${viewState.ingest.failedCount} failed and can be retried below.`
+              : ""}
+          </p>
+        </section>
       )}
 
-      {/* The zero test is "nothing at all to show", not "no documents" — gating on rows.length
-          alone would suppress the whole grid container and with it every folder card. */}
-      {rows.length === 0 && folderCount === 0 ? (
-        <p style={{ color: "var(--ink-soft)", textAlign: "center", margin: "2.5rem 0" }}>
-          {hitIds
-            ? // Inside a folder the tabs are gone, so there is no category to be talking about.
-              // OUTSIDE one the wording stays BYTE-IDENTICAL to pre-15.3-07 — "a tenant with no
-              // folders sees a vault page identical to today's" includes the words.
-              folders === undefined
-              ? "No matches here."
-              : "No matches in this category."
-            : folders === undefined
-              ? "This folder is empty."
-              : "No documents yet — upload a file or paste a Brain Dump."}
-        </p>
-      ) : (
+      <VaultContentNotice
+        state={viewState.content}
+        onClearSearch={clearSearch}
+        onRetrySearch={() => void runSearch()}
+      />
+
+      {!suppressGrid && (
         <div
           style={
             view === "grid"
@@ -386,9 +548,10 @@ export function DocGrid({
             const sealed = f.status === "reserving" || f.status === "ingesting";
             return (
               <div key={f._id} style={{ position: "relative" }}>
-                <button
-                  type="button"
-                  onClick={() => onOpenFolder?.(f._id)}
+                <FolderOpenControl
+                  name={f.name}
+                  onOpen={() => onOpenFolder?.(f._id)}
+                  disabled={!onOpenFolder}
                   className="clay-card"
                   style={{
                     display: "flex",
@@ -443,13 +606,11 @@ export function DocGrid({
                   <span style={{ display: "inline-flex", gap: "0.35rem", flex: "none" }}>
                     <StatusChip status={chip.status} label={chip.label} />
                   </span>
-                </button>
+                </FolderOpenControl>
                 {sealed && (
                   // A ROW, because unlike a document card these two controls coexist: a folder
                   // being read is both cancellable and not yet discussable.
-                  <span
-                    style={{ ...pillAnchor(view), display: "inline-flex", gap: "0.35rem" }}
-                  >
+                  <span style={{ ...pillAnchor(view), display: "inline-flex", gap: "0.35rem" }}>
                     <button
                       type="button"
                       onClick={() => void runCancel(f)}
@@ -607,7 +768,11 @@ export function DocGrid({
                 <Link
                   href={`/dashboard/voice?doc=${doc._id}`}
                   aria-label={`Discuss by voice: ${docLabel(doc)}`}
-                  style={{ ...discussPillStyle(view), background: "var(--teal-600)", color: "#fff" }}
+                  style={{
+                    ...discussPillStyle(view),
+                    background: "var(--teal-600)",
+                    color: "#fff",
+                  }}
                 >
                   Discuss
                 </Link>

@@ -1,9 +1,7 @@
 {
   "id": "26-vault-empty",
   "description": "No-match: agent finds nothing relevant, stays in a read/answer posture (no fabricated compose)",
-  "turns": [
-    "What do my notes in the vault say about my quarterly dividend tax filing deadlines?"
-  ],
+  "turns": ["What do my notes in the vault say about my quarterly dividend tax filing deadlines?"],
   "expect": {
     "statusAtMost": "collecting",
     "recipientCount": 0,

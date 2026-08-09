@@ -19,7 +19,7 @@ import { ATTACHMENT_EXTRACTOR_SKILL } from "@pikar/contracts/skill";
 import { priceTranscription, priceUsage } from "@pikar/cost";
 import { classify, frameForConversation, type IntakeKind } from "@pikar/extraction";
 import { scanText } from "@pikar/pii";
-import { experimental_transcribe as transcribe, generateText } from "ai";
+import { generateText, experimental_transcribe as transcribe } from "ai";
 import type { GenericActionCtx } from "convex/server";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
@@ -62,9 +62,11 @@ async function transcribeAudio(
   ctx: GenericActionCtx<DataModel>,
   tenantId: string,
   bytes: Uint8Array,
+  artifactId: Id<"intakeArtifacts">,
 ): Promise<string> {
   const sniffed = decodeUtf8(bytes);
-  if (sniffed.startsWith(SMOKE_TRANSCRIBE_PREFIX)) return sniffed.slice(SMOKE_TRANSCRIBE_PREFIX.length);
+  if (sniffed.startsWith(SMOKE_TRANSCRIBE_PREFIX))
+    return sniffed.slice(SMOKE_TRANSCRIBE_PREFIX.length);
 
   const result = await transcribe({
     model: openai.transcription("gpt-4o-transcribe"),
@@ -73,7 +75,20 @@ async function transcribeAudio(
   });
   const priced = priceTranscription(result.durationInSeconds ?? 0);
   if (priced.ok) {
-    await ctx.runMutation(internal.guardrails.recordSpend, { tenantId, costUsd: priced.value });
+    // FIN-01 correlation. `artifactId` is the discriminator: runIntake inserts a FRESH
+    // intakeArtifacts row per attempt (step 4, unconditional), so an action re-entry — which
+    // re-runs the transcription above for real money — mints a new id and therefore a new row,
+    // while a correlation derived from tenant/thread/storageId would collapse that second charge
+    // into the first and leave the ledger BELOW the limiter. The `transcribe` token separates this
+    // rail from extractVisual's: one artifact carrying both (a video's audio track plus its frames)
+    // would otherwise be two real charges under one correlation.
+    await ctx.runMutation(internal.guardrails.recordSpend, {
+      tenantId,
+      costUsd: priced.value,
+      correlationId: `intake:transcribe:${artifactId}`,
+      model: "gpt-4o-transcribe",
+      kind: "transcribe",
+    });
   }
   return result.text;
 }
@@ -89,6 +104,7 @@ async function extractVisual(
   tenantId: string,
   bytes: Uint8Array,
   mimeType: string,
+  artifactId: Id<"intakeArtifacts">,
 ): Promise<string> {
   const sniffed = decodeUtf8(bytes);
   if (sniffed.startsWith(SMOKE_EXTRACT_PREFIX)) return sniffed.slice(SMOKE_EXTRACT_PREFIX.length);
@@ -105,7 +121,16 @@ async function extractVisual(
   });
   const priced = priceUsage("openai/gpt-4o-mini", usage);
   if (priced.ok) {
-    await ctx.runMutation(internal.guardrails.recordSpend, { tenantId, costUsd: priced.value });
+    // FIN-01 correlation — same reasoning as transcribeAudio above: the per-attempt `artifactId`
+    // is what keeps a re-entered action's second (real) vision call on its own ledger row, and the
+    // `extract` token keeps it off the transcription rail's correlation.
+    await ctx.runMutation(internal.guardrails.recordSpend, {
+      tenantId,
+      costUsd: priced.value,
+      correlationId: `intake:extract:${artifactId}`,
+      model: "gpt-4o-mini",
+      kind: "extract",
+    });
   }
   return text;
 }
@@ -138,8 +163,12 @@ async function runIntake(
 
   // 1. Governed gate BEFORE any model call (kill-switch/budget) — a stop is conversational
   // data, never a throw/DLQ. NO artifact row is created past this point (no extraction ran).
-  const pre: { ok: true } | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted" } =
-    await ctx.runMutation(internal.guardrails.preCall, { tenantId });
+  const pre:
+    | { ok: true }
+    | {
+        ok: false;
+        reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted";
+      } = await ctx.runMutation(internal.guardrails.preCall, { tenantId });
   if (!pre.ok) return respond(PAUSED_TEXT);
 
   // 2. Load bytes (a missing blob is a client-visible failure, not a bug — respond, don't throw).
@@ -151,35 +180,42 @@ async function runIntake(
   // gate) — before any model call.
   if (bytes.byteLength > INTAKE_UPLOAD_CAP_BYTES) {
     const capMb = Math.floor(INTAKE_UPLOAD_CAP_BYTES / (1024 * 1024));
-    return respond(`That file is too large to process (over ${capMb}MB). Please try a smaller file.`);
+    return respond(
+      `That file is too large to process (over ${capMb}MB). Please try a smaller file.`,
+    );
   }
 
   // 3. classify (dictation forces the audio path — the MediaRecorder blob is already known-audio).
   const kind: IntakeKind = isDictation ? "audio" : classify(bytes, mimeType, filename).kind;
 
   // 4. insertArtifact (uploaded) -> patch (extracting).
-  const artifactId: Id<"intakeArtifacts"> = await ctx.runMutation(internal.intakeDb.insertArtifact, {
-    tenantId,
-    threadId,
-    storageId,
-    filename,
-    mimeType,
-    size: bytes.byteLength,
-    kind,
-  });
+  const artifactId: Id<"intakeArtifacts"> = await ctx.runMutation(
+    internal.intakeDb.insertArtifact,
+    {
+      tenantId,
+      threadId,
+      storageId,
+      filename,
+      mimeType,
+      size: bytes.byteLength,
+      kind,
+    },
+  );
   await ctx.runMutation(internal.intakeDb.patchArtifact, { artifactId, status: "extracting" });
 
   // 5. EXTRACTION MODEL CALL (the bounded GRDL-01 exception) -> rawText.
   let rawText: string;
   if (kind === "audio") {
-    rawText = await transcribeAudio(ctx, tenantId, bytes);
+    rawText = await transcribeAudio(ctx, tenantId, bytes, artifactId);
   } else if (kind === "image" || kind === "pdf") {
-    rawText = await extractVisual(ctx, tenantId, bytes, mimeType);
+    rawText = await extractVisual(ctx, tenantId, bytes, mimeType, artifactId);
   } else if (kind === "document") {
     rawText = decodeUtf8(bytes); // NO model, NO spend — the bytes already ARE the text.
   } else {
     await ctx.runMutation(internal.intakeDb.patchArtifact, { artifactId, status: "failed" });
-    return respond(`I don't recognize the file type of ${filename} — I can't process it. Please try a different file.`);
+    return respond(
+      `I don't recognize the file type of ${filename} — I can't process it. Please try a different file.`,
+    );
   }
 
   // 6. scanText FAIL-CLOSED on the EXTRACTED OUTPUT (redact BEFORE any audit write or merge, §4).
@@ -195,12 +231,18 @@ async function runIntake(
       actor: "system",
       payload: { artifactId, kind, reason: "pii_scan_failed" },
     });
-    return respond(`I couldn't safely process ${filename} — the content failed a safety scan. Please try again or paste the text directly.`);
+    return respond(
+      `I couldn't safely process ${filename} — the content failed a safety scan. Please try again or paste the text directly.`,
+    );
   }
   const { safeText, counts } = scan.value;
 
   // 7. Persist REDACTED safeText only (content plane; §4 keeps it out of audit).
-  await ctx.runMutation(internal.intakeDb.patchArtifact, { artifactId, status: "extracted", extracted: safeText });
+  await ctx.runMutation(internal.intakeDb.patchArtifact, {
+    artifactId,
+    status: "extracted",
+    extracted: safeText,
+  });
 
   // 8. Refs/counts-only audit (§4) — NEVER rawText/safeText.
   await ctx.runMutation(internal.audit.log, {
@@ -254,8 +296,18 @@ export const attachToThread = tenantAction({
     mimeType: v.string(),
     size: v.number(),
   },
-  handler: async (ctx, { threadId, storageId, filename, mimeType }): Promise<{ threadId: string }> =>
-    runIntake(ctx, { tenantId: ctx.tenantId, threadId, storageId, filename, mimeType, isDictation: false }),
+  handler: async (
+    ctx,
+    { threadId, storageId, filename, mimeType },
+  ): Promise<{ threadId: string }> =>
+    runIntake(ctx, {
+      tenantId: ctx.tenantId,
+      threadId,
+      storageId,
+      filename,
+      mimeType,
+      isDictation: false,
+    }),
 });
 
 /** Dictate a request via audio — transcribed VERBATIM into the conversation (INTK-03). */

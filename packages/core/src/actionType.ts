@@ -10,9 +10,8 @@ export type ActionType = (typeof ACTION_TYPES)[number];
 
 /** plans.kind is `v.optional(v.literal("memo"))` — ABSENT means the email plan every prior
  *  phase built, so this needs no migration and no backfill. */
-export const actionTypeOf = (
-  kind: "memo" | "calendar_event" | "media" | undefined,
-): ActionType => kind ?? "email";
+export const actionTypeOf = (kind: "memo" | "calendar_event" | "media" | undefined): ActionType =>
+  kind ?? "email";
 
 /** How an arm executes. `workflow` = durable multi-step orchestration (email). `inline` = a single
  *  transactional write (memo). `externalAction` = ONE governed external side effect, executed by

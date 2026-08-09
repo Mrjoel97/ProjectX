@@ -19,12 +19,13 @@
 //
 // pipeline.ts is on the raw-builder allowlist (internalMutation, not a tenant
 // wrapper — the workflow carries no client identity).
-import { priceUsage } from "@pikar/cost";
+
 import { classifyReviewDecision, notificationMessage } from "@pikar/core";
-import { workflow } from "./index";
-import { internalMutation } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { priceUsage } from "@pikar/cost";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
+import { internalMutation } from "./_generated/server";
+import { workflow } from "./index";
 import { reviewEventValidator } from "./review";
 
 // The 13-member requests.status union (kept in sync with schema.ts).
@@ -47,6 +48,7 @@ export const REQUEST_STATUS = v.union(
 );
 
 const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+
 // REVW-02: the regenerate cap is now @pikar/core's single source of truth —
 // classifyReviewDecision enforces it in the gate below (fail closed at the cap: escalate,
 // never deliver). Re-exported so requests.ts's `canRegenerate` hint and the review UI read
@@ -55,6 +57,24 @@ export { MAX_REGENERATE } from "@pikar/core";
 
 /** One accumulated LLM usage (route/draft/regenerate) for the OPSG-01 row. */
 type Usage = { inputTokens: number; outputTokens: number; costUsd: number };
+
+/**
+ * FIN-01 replay identity for ONE pipeline LLM charge, DERIVED not minted: `recordSpend` runs
+ * as a journaled step below, so a workflow replay re-runs it WITHOUT re-spending and a nonce
+ * would mint a second `actual` row for money that moved once.
+ *
+ * `requestId` — a Convex id, so regex-safe by construction — rather than the handler's
+ * `correlationId`, which is a bare `v.string()` the smoke seeder supplies freely and could
+ * therefore carry whitespace or run past 128 chars.
+ *
+ * `seq` is the discriminator that matters: `stage` alone would collapse every regenerate
+ * onto the first draft's row, and each regenerate IS a real second model call. Losing it
+ * puts the ledger BELOW the limiter — the unrecoverable direction.
+ *
+ * Exported (not inlined) so a collision is testable — see pipeline.test.ts.
+ */
+export const llmSpendCorrelation = (requestId: string, stage: string, seq: number) =>
+  `req:${requestId}:${stage}:${seq}`;
 // GRDL-03: real costUsd from priceUsage of the actual SDK usage; 0 on a cache hit
 // (GRDL-04 — a hit spent nothing).
 const toUsage = (
@@ -184,8 +204,28 @@ export const pipelineWorkflow = workflow.define({
       stage: "route" | "draft",
     ) => {
       const u = toUsage(usage, model, cacheHit);
+      // The sequence read BEFORE the push: `usages` is append-only and appended ONLY here, so
+      // its length is 0 for route, 1 for the first draft, 2 for the first regenerate's draft —
+      // deterministic on replay, and distinct for every real charge.
+      const seq = usages.length;
       usages.push(u);
-      await step.runMutation(internal.guardrails.recordSpend, { tenantId, costUsd: u.costUsd });
+      await step.runMutation(
+        internal.guardrails.recordSpend,
+        {
+          tenantId,
+          costUsd: u.costUsd,
+          correlationId: llmSpendCorrelation(requestId, stage, seq),
+          model,
+          kind: `pipeline.${stage}`, // code-owned token, refs only (§4)
+          requestId,
+        },
+        // These step args just GREW, and this pipeline parks for up to SEVEN_DAYS at the review
+        // gate. A workflow already mid-flight would replay this step against a journal entry
+        // recorded with the old args and die on "Journal entry mismatch" — killing an in-flight,
+        // already-paid request. Droppable once nothing started before this deploy can still be
+        // parked, i.e. SEVEN_DAYS after it ships.
+        { unstableArgs: true },
+      );
       if (cacheHit) {
         await step.runMutation(internal.audit.log, {
           tenantId,
@@ -281,7 +321,10 @@ export const pipelineWorkflow = workflow.define({
 
       if (decisionAction.action === "terminate") {
         // reject → rejected terminal (unchanged).
-        await step.runMutation(internal.pipeline.saveDraft, { requestId, rejectReason: evt.reason });
+        await step.runMutation(internal.pipeline.saveDraft, {
+          requestId,
+          rejectReason: evt.reason,
+        });
         await setStatusStep("rejected");
         await audit("review.rejected");
         await writeTelemetry("rejected");
@@ -320,7 +363,10 @@ export const pipelineWorkflow = workflow.define({
 
       // decisionAction.action === "proceed": approve | edit_text → DELIVER.
       if (evt.decision === "edit_text") {
-        await step.runMutation(internal.pipeline.saveDraft, { requestId, editedBody: evt.editedText });
+        await step.runMutation(internal.pipeline.saveDraft, {
+          requestId,
+          editedBody: evt.editedText,
+        });
       }
       break;
     }
@@ -358,7 +404,8 @@ export const saveDraft = internalMutation({
     rejectReason: v.optional(v.string()),
   },
   handler: async (ctx, { requestId, route, draft, editedBody, rejectReason }) => {
-    const patch: { route?: string; draft?: string; editedBody?: string; rejectReason?: string } = {};
+    const patch: { route?: string; draft?: string; editedBody?: string; rejectReason?: string } =
+      {};
     if (route !== undefined) patch.route = route;
     if (draft !== undefined) patch.draft = draft;
     if (editedBody !== undefined) patch.editedBody = editedBody;

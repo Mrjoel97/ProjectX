@@ -709,9 +709,15 @@ describe("the caption burn shares the sandbox, and that is the point", () => {
 
   it("maps the burn script's OWN error wording to codes, and never returns the wording", async () => {
     for (const [stderr, code] of [
-      ["ERROR: this ffmpeg has no 'subtitles' filter — libass is missing from the image", "missing_binary"],
+      [
+        "ERROR: this ffmpeg has no 'subtitles' filter — libass is missing from the image",
+        "missing_binary",
+      ],
       ["ERROR: subtitle track is empty: in/caps.ass", "caption_track_empty"],
-      ["ERROR: burned duration 11.4s != expected 20.0s — the caption pass re-timed the video", "duration_mismatch"],
+      [
+        "ERROR: burned duration 11.4s != expected 20.0s — the caption pass re-timed the video",
+        "duration_mismatch",
+      ],
     ] as const) {
       const { deps: d } = deps({ exitCode: 1, stderr });
       const res = await handleRenderRequest(post(captionBody()), d);

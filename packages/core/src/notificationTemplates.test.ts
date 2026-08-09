@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
-  type NotificationKind,
   NOTIFICATION_KINDS,
+  type NotificationKind,
   notificationMessage,
 } from "./notificationTemplates";
 

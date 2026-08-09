@@ -24,20 +24,27 @@ import {
   VaultIcon,
   WalletIcon,
 } from "../(auth)/icons";
-import { AbnormalBriefBanner } from "./dashboard/voice/AbnormalBriefBanner";
 import { NotificationsBanner } from "./_components/NotificationsBanner";
 import { ReconnectBanner } from "./_components/ReconnectBanner";
+import { AbnormalBriefBanner } from "./dashboard/voice/AbnormalBriefBanner";
 
 // The authenticated shell: the brand's dark-teal left nav rail + light canvas
 // (BRAND.md §4, brand-024016). The rail shows the full product nav; sections whose
 // pages don't exist yet render disabled with a "Soon" tag — honest, no dead links.
+// Approvals is FULLY live: the owner approved its UAT on 2026-08-08 (26-05 Task 2), which is what
+// unblocked its `ApprovalsBadge` count. Rollback is still one link: delete the NAV entry and the
+// route goes undiscoverable without touching plan state, provenance or the read model.
 // Knowledge Vault went LIVE with Phase 5 (lane-c merge): /dashboard/vault.
 // The retired /submit and /review links are gone (cockpit supersession, Phase 3.1);
 // the pages stay on disk and reachable by URL.
 const NAV: Array<{ label: string; icon: ReactNode; href?: string; soon?: boolean }> = [
   { label: "Command Center", href: "/dashboard", icon: <GridIcon /> },
-  { label: "Approvals", icon: <BellIcon />, soon: true },
-  { label: "Finance", icon: <WalletIcon />, soon: true },
+  { label: "Approvals", href: "/dashboard/approvals", icon: <BellIcon /> },
+  // Activated 26-10 Task 3 on owner direction, 2026-08-09. The branch below keys off `href`, not
+  // `soon`, so adding the href IS the activation. Rollback is deleting the href — the ledger
+  // writers, coverage start and enforcement limiters keep running regardless (the non-negotiable
+  // rule in docs/playbooks/dashboard-pages.md: a dark window is a permanent hole in the record).
+  { label: "Finance", href: "/dashboard/finance", icon: <WalletIcon /> },
   { label: "Content", icon: <FileIcon />, soon: true },
   { label: "Sales Pipeline", icon: <TrendIcon />, soon: true },
   { label: "Compliance", href: "/ops", icon: <ShieldIcon size={18} /> },
@@ -59,11 +66,28 @@ function DeadLetterBadge() {
   const count = useQuery(api.deadLetters.newCount);
   if (!count) return null;
   return (
+    <span className="rail-badge" title={`${count} unresolved dead letter${count === 1 ? "" : "s"}`}>
+      {count}
+    </span>
+  );
+}
+
+// 26-05 Task 3 (post owner-UAT approval). The rail count and the Approvals page read the SAME
+// `approvals.summary` subscription, so the badge cannot disagree with the page it links to — the
+// plan's "one shared subscription" key link. Shaped on DeadLetterBadge deliberately: `undefined`
+// (still loading) and 0 both render nothing, so the rail never flashes a zero or a stale number.
+// `awaitingCountCapped` is surfaced as "N+" rather than silently reporting the capped figure as
+// exact — the same honesty rule the page's partial notice follows.
+function ApprovalsBadge() {
+  const summary = useQuery(api.approvals.summary);
+  if (!summary?.awaitingCount) return null;
+  const label = `${summary.awaitingCount}${summary.awaitingCountCapped ? "+" : ""}`;
+  return (
     <span
       className="rail-badge"
-      title={`${count} unresolved dead letter${count === 1 ? "" : "s"}`}
+      title={`${label} plan${summary.awaitingCount === 1 && !summary.awaitingCountCapped ? "" : "s"} awaiting your approval`}
     >
-      {count}
+      {label}
     </span>
   );
 }
@@ -138,6 +162,7 @@ function Shell({ children }: { children: ReactNode }) {
                 {item.icon}
                 <span className="rail-label">{item.label}</span>
                 {item.href === "/ops" && <DeadLetterBadge />}
+                {item.href === "/dashboard/approvals" && <ApprovalsBadge />}
               </Link>
             ) : (
               <span key={item.label} className="rail-item is-soon" aria-disabled="true">
@@ -178,7 +203,12 @@ function Shell({ children }: { children: ReactNode }) {
             aria-expanded={!collapsed}
             title={collapsed ? "Expand" : undefined}
           >
-            <span style={{ display: "inline-flex", transform: collapsed ? "rotate(180deg)" : undefined }}>
+            <span
+              style={{
+                display: "inline-flex",
+                transform: collapsed ? "rotate(180deg)" : undefined,
+              }}
+            >
               <ChevronLeftIcon />
             </span>
             <span className="rail-label">Collapse</span>
@@ -257,14 +287,24 @@ function AuthGate({ variant }: { variant: "loading" | "signedout" }) {
   const showSignIn = variant === "signedout" || stalled;
   return (
     <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: "2rem" }}>
-      <div style={{ textAlign: "center", maxWidth: "22rem", display: "grid", gap: "0.75rem", justifyItems: "center" }}>
+      <div
+        style={{
+          textAlign: "center",
+          maxWidth: "22rem",
+          display: "grid",
+          gap: "0.75rem",
+          justifyItems: "center",
+        }}
+      >
         {variant === "signedout" ? (
           <>
             <h1 style={{ fontSize: "1.25rem", margin: 0 }}>Your session ended</h1>
             <p style={{ color: "var(--ink-soft)", margin: 0 }}>Please sign in again to continue.</p>
           </>
         ) : (
-          <p style={{ color: "var(--ink-soft)", margin: 0 }}>{stalled ? "Still connecting…" : "Loading…"}</p>
+          <p style={{ color: "var(--ink-soft)", margin: 0 }}>
+            {stalled ? "Still connecting…" : "Loading…"}
+          </p>
         )}
         {showSignIn && (
           <Link

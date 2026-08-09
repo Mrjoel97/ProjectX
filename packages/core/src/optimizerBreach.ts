@@ -26,11 +26,7 @@ export interface BreachInput {
   readonly cfg: BreachConfig;
 }
 
-export type BreachReason =
-  | "below_sample_floor"
-  | "below_threshold"
-  | "cooldown"
-  | "eligible";
+export type BreachReason = "below_sample_floor" | "below_threshold" | "cooldown" | "eligible";
 
 export interface BreachResult {
   readonly eligible: boolean;

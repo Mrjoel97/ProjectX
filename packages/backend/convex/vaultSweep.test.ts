@@ -20,8 +20,9 @@
 // folder members is not marked stalled while healthy. Every assertion below that used to read
 // "scheduling also armed a watchdog" therefore reads ZERO — the arm has its own coverage in
 // vaultFolders.test.ts, driven from markExtracting.
-import { convexTest } from "convex-test";
+
 import { getFunctionName } from "convex/server";
+import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 // Fake timers — the `vault.test.ts` / `vaultExtract.test.ts` guard, applied here for the same
@@ -34,6 +35,11 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
 import migrationsSchema from "../node_modules/@convex-dev/migrations/src/component/schema.js";
+// `retryExtraction` on an agent-authored doc reaches `startIngest` → `workflow.start`, so the
+// workflow component (and the workpool it nests) must be registered or the mutation throws
+// "Component \"workflow\" is not registered" — the cockpit.test.ts registration set, reused.
+import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/schema.js";
+import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { vaultIngestPool } from "./index";
@@ -43,12 +49,20 @@ const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 const migrationsModules = import.meta.glob(
   "../node_modules/@convex-dev/migrations/src/component/**/!(*.test).ts",
 );
+const workflowModules = import.meta.glob(
+  "../node_modules/@convex-dev/workflow/src/component/**/!(*.test).ts",
+);
+const workpoolModules = import.meta.glob(
+  "../node_modules/@convex-dev/workpool/src/component/**/!(*.test).ts",
+);
 
 const TENANT = "tenant_sweep";
 
 function setup() {
   const t = convexTest(schema, modules);
   t.registerComponent("migrations", migrationsSchema, migrationsModules);
+  t.registerComponent("workflow", workflowSchema, workflowModules);
+  t.registerComponent("workflow/workpool", workpoolSchema, workpoolModules);
   return t;
 }
 
@@ -73,15 +87,17 @@ beforeEach(() => {
   enqueuedExtractions.length = 0;
   // The generic signature of `enqueueAction` cannot be satisfied by a concrete stub, so the
   // implementation is cast once here rather than typed twice.
-  vi.spyOn(vaultIngestPool, "enqueueAction").mockImplementation(
-    ((async (_ctx: unknown, fn: never, fnArgs: unknown) => {
-      enqueuedExtractions.push({
-        name: getFunctionName(fn),
-        args: [fnArgs as Record<string, unknown>],
-      });
-      return "workId_test" as never;
-    }) as never) as never,
-  );
+  vi.spyOn(vaultIngestPool, "enqueueAction").mockImplementation((async (
+    _ctx: unknown,
+    fn: never,
+    fnArgs: unknown,
+  ) => {
+    enqueuedExtractions.push({
+      name: getFunctionName(fn),
+      args: [fnArgs as Record<string, unknown>],
+    });
+    return "workId_test" as never;
+  }) as never as never);
 });
 afterEach(() => vi.restoreAllMocks());
 
@@ -244,6 +260,48 @@ describe("retryExtraction (EXTR-G retry mutation)", () => {
     const res = await asTenant(t).mutation(api.vaultSweep.retryExtraction, { vaultDocId: docId });
     expect(res).toEqual({ ok: true });
     expect(await extractionScheduled(t)).toHaveLength(1);
+  });
+
+  // AN AGENT-AUTHORED DOC'S RETRY IS A RE-INGEST. `evaluation`/`agent`/`voice` rows carry their text
+  // directly and have NO storageId, so the old `!doc.storageId` refusal made a failed ingest
+  // PERMANENT: the user pressed Retry and nothing observable happened, for ever. Found live on two
+  // `ingest_failed` memos (text present, ragEntryId absent ⇒ un-groundable) whose workflow died
+  // during a machine-level resource exhaustion. Same objection this mutation already accepted for
+  // unrecognized mime types, so it gets the same answer: do the work the doc actually needs.
+  test("a failed agent-authored doc with text but no bytes re-INGESTS instead of silently refusing", async () => {
+    const t = setup();
+    const docId = await seedDoc(t, {
+      status: "failed",
+      failureReason: "ingest_failed",
+      source: "evaluation",
+      kind: "memo",
+      mimeType: "text/markdown",
+      storageId: undefined, // agent-authored: nothing was ever stored
+      text: "Next step: raise the retainer.",
+    });
+
+    const res = await asTenant(t).mutation(api.vaultSweep.retryExtraction, { vaultDocId: docId });
+    expect(res).toEqual({ ok: true });
+
+    const doc = await t.run(async (ctx) => ctx.db.get(docId));
+    expect(doc?.status).toBe("processing"); // re-ingesting, NOT re-extracting
+    expect(doc?.failureReason).toBeUndefined();
+    // It is an INGEST retry, so it must not queue the extraction rail — that path needs bytes.
+    expect(await extractionScheduled(t)).toHaveLength(0);
+  });
+
+  test("a failed doc with neither bytes nor text is genuinely nothing to retry", async () => {
+    const t = setup();
+    const docId = await seedDoc(t, {
+      status: "failed",
+      source: "evaluation",
+      storageId: undefined,
+      text: undefined,
+    });
+
+    expect(
+      await asTenant(t).mutation(api.vaultSweep.retryExtraction, { vaultDocId: docId }),
+    ).toEqual({ ok: false });
   });
 
   test("retry on a ready doc is a no-op", async () => {

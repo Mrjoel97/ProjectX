@@ -37,7 +37,11 @@ afterAll(async () => {
   // file that scheduled them rather than to whichever file runs next.
   await new Promise((r) => setTimeout(r, 0));
 
-  const file = String(expect.getState().testPath ?? "unknown").split(/[\\/]/).pop();
-  for (const m of swallowed) origError(`[DIAG-SWALLOWED] ${file} :: ${m.replace(/\s+/g, " ").slice(0, 220)}`);
-  for (const m of rejected) origError(`[DIAG-REJECTED] ${file} :: ${m.replace(/\s+/g, " ").slice(0, 220)}`);
+  const file = String(expect.getState().testPath ?? "unknown")
+    .split(/[\\/]/)
+    .pop();
+  for (const m of swallowed)
+    origError(`[DIAG-SWALLOWED] ${file} :: ${m.replace(/\s+/g, " ").slice(0, 220)}`);
+  for (const m of rejected)
+    origError(`[DIAG-REJECTED] ${file} :: ${m.replace(/\s+/g, " ").slice(0, 220)}`);
 });

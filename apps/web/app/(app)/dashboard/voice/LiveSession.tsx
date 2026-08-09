@@ -53,6 +53,7 @@ export function LiveSession({ session, docId }: { session: VoiceSession; docId?:
 
   // Keep the newest turn in view.
   useEffect(() => {
+    if (transcript.length === 0) return;
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [transcript]);

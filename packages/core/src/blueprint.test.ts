@@ -10,8 +10,8 @@ import {
   mergeBlueprint,
   probesFor,
   renderSpine,
-  serializeBlueprint,
   SPINE_CHAR_CAP,
+  serializeBlueprint,
   statedFromProfile,
   validateCandidates,
 } from "./blueprint";
@@ -36,7 +36,7 @@ const entry = (value: string): BlueprintEntry => ({ values: [value], origin: "st
 /** A whole blueprint: every field `null` unless the case supplies one. */
 const blueprint = (over: Partial<Record<BlueprintField, BlueprintEntry>> = {}): BusinessBlueprint =>
   Object.fromEntries(
-    BLUEPRINT_FIELDS.map((f) => [f, over[f] ?? null])
+    BLUEPRINT_FIELDS.map((f) => [f, over[f] ?? null]),
   ) as unknown as BusinessBlueprint;
 
 describe("the closed field set and its totality table", () => {
@@ -85,7 +85,7 @@ describe("statedFromProfile", () => {
     // "pre-launch idea" is not a member of REVENUE_STAGES — reading `tenantProfiles.revenueStage`
     // instead would have produced one of those three literals.
     expect(["pre-revenue", "early-revenue", "steady-revenue"]).not.toContain(
-      stated.stage?.values[0]
+      stated.stage?.values[0],
     );
     expect(stated.tier).toEqual({ values: ["solopreneur"], origin: "stated" });
   });
@@ -111,14 +111,15 @@ describe("statedFromProfile", () => {
     const stated = statedFromProfile(
       profile({ name: "", offering: "   ", primaryGoals: [], knownConstraints: ["", "  "] }),
       "startup",
-      []
+      [],
     );
     for (const f of ["name", "offering", "primaryGoals", "knownConstraints", "entities"] as const) {
       expect({ f, value: stated[f] }).toEqual({ f, value: undefined });
     }
     // …and a partially-blank list keeps only the surviving values.
-    expect(statedFromProfile(profile({ primaryGoals: ["", "Ship v2"] }), "startup", []).primaryGoals)
-      .toEqual({ values: ["Ship v2"], origin: "stated" });
+    expect(
+      statedFromProfile(profile({ primaryGoals: ["", "Ship v2"] }), "startup", []).primaryGoals,
+    ).toEqual({ values: ["Ship v2"], origin: "stated" });
   });
 });
 
@@ -241,7 +242,9 @@ describe("serializeBlueprint / deserializeBlueprint", () => {
   });
 
   it("deserialize is TOTAL — it fills all eleven fields whatever it is handed", () => {
-    expect(Object.keys(deserializeBlueprint("garbage")).sort()).toEqual([...BLUEPRINT_FIELDS].sort());
+    expect(Object.keys(deserializeBlueprint("garbage")).sort()).toEqual(
+      [...BLUEPRINT_FIELDS].sort(),
+    );
   });
 });
 
@@ -263,7 +266,7 @@ describe("validateCandidates — an invented citation DROPS the claim (item 3)",
         { field: "bindingConstraint", values: ["Roasting"], sourceIndex: 1.5 },
         { field: "stage", values: ["Growing"], sourceIndex: Number.NaN },
       ],
-      SOURCES
+      SOURCES,
     );
     // The KEY SET, not one field: nothing was emitted at all, so nothing was emitted with a
     // missing or placeholder source.
@@ -292,7 +295,7 @@ describe("validateCandidates — an invented citation DROPS the claim (item 3)",
         { field: "profitMargin", values: ["40%"], sourceIndex: 0 },
         { field: "__proto__", values: ["owned"], sourceIndex: 0 },
       ],
-      SOURCES
+      SOURCES,
     );
     expect(Object.keys(out.derived)).toEqual([]);
     expect(out.dropped.map((d) => [d.field, d.reason])).toEqual([
@@ -310,7 +313,7 @@ describe("validateCandidates — an invented citation DROPS the claim (item 3)",
         { field: "offering", values: [], sourceIndex: 0 },
         { field: "revenueModel", values: ["  ", "\n"], sourceIndex: 1 },
       ],
-      SOURCES
+      SOURCES,
     );
     expect(Object.keys(out.derived)).toEqual([]);
     expect(out.dropped.map((d) => d.reason)).toEqual(["empty", "empty"]);
@@ -320,9 +323,13 @@ describe("validateCandidates — an invented citation DROPS the claim (item 3)",
     const out = validateCandidates(
       [
         { field: "offering", values: ["  Single-origin beans  "], sourceIndex: 1 },
-        { field: "primaryGoals", values: ["Reach £10k MRR", "  ", "Open a roastery"], sourceIndex: 0 },
+        {
+          field: "primaryGoals",
+          values: ["Reach £10k MRR", "  ", "Open a roastery"],
+          sourceIndex: 0,
+        },
       ],
-      SOURCES
+      SOURCES,
     );
     expect(out.derived).toEqual({
       // The TITLE, not the docId — it is what the spine's `[source: …]` marker shows the agent.
@@ -342,7 +349,7 @@ describe("validateCandidates — an invented citation DROPS the claim (item 3)",
         { field: "offering", values: ["First"], sourceIndex: 0 },
         { field: "offering", values: ["Second"], sourceIndex: 1 },
       ],
-      SOURCES
+      SOURCES,
     );
     expect(out.derived.offering).toEqual({
       values: ["First"],
@@ -356,7 +363,7 @@ describe("validateCandidates — an invented citation DROPS the claim (item 3)",
   it("drops are REPORTED so the live gate can count them (VALIDATION L2: 0 and 8 are both signals)", () => {
     const clean = validateCandidates(
       [{ field: "offering", values: ["Beans"], sourceIndex: 0 }],
-      SOURCES
+      SOURCES,
     );
     expect(clean.dropped).toHaveLength(0);
     const dirty = validateCandidates(
@@ -364,7 +371,7 @@ describe("validateCandidates — an invented citation DROPS the claim (item 3)",
         { field: "offering", values: ["Beans"], sourceIndex: 7 },
         { field: "name", values: ["Globex"], sourceIndex: 0 },
       ],
-      SOURCES
+      SOURCES,
     );
     expect(dirty.dropped).toHaveLength(2);
   });
@@ -383,7 +390,7 @@ describe("mergeBlueprint — the typed value wins (item 2, the owner-required ru
   it("a contradicting derived candidate does NOT change the typed value; it raises ONE row", () => {
     const { blueprint: merged, diff } = mergeBlueprint(
       { targetCustomer: entry("independent consultants") },
-      { targetCustomer: derivedEntry("enterprise procurement teams", "Pricing deck.pdf") }
+      { targetCustomer: derivedEntry("enterprise procurement teams", "Pricing deck.pdf") },
     );
 
     // The value the user typed survived, still marked as their own words.
@@ -429,7 +436,7 @@ describe("mergeBlueprint — the typed value wins (item 2, the owner-required ru
   it("a derived candidate that AGREES with the typed value raises no row", () => {
     const { blueprint: merged, diff } = mergeBlueprint(
       { offering: entry("Single-origin beans") },
-      { offering: derivedEntry("  Single-origin beans  ") }
+      { offering: derivedEntry("  Single-origin beans  ") },
     );
     expect(merged.offering).toEqual({ values: ["Single-origin beans"], origin: "stated" });
     expect(diff).toEqual([]);
@@ -446,7 +453,7 @@ describe("mergeBlueprint — diff classification (item 5)", () => {
   it("typed ≠ derived is a CONTRADICTION and nothing else", () => {
     const { diff } = mergeBlueprint(
       { stage: entry("pre-launch idea") },
-      { stage: derivedEntry("scaling") }
+      { stage: derivedEntry("scaling") },
     );
     expect(diff.map((r) => r.kind)).toEqual(["contradiction"]);
   });
@@ -466,7 +473,7 @@ describe("mergeBlueprint — diff classification (item 5)", () => {
     const { blueprint: merged, diff } = mergeBlueprint(
       {},
       { offering: derivedEntry("Beans and brewing kit", "Doc B.pdf") },
-      live
+      live,
     );
     expect(diff).toEqual([
       {
@@ -481,7 +488,7 @@ describe("mergeBlueprint — diff classification (item 5)", () => {
   it("a contradiction row carries BOTH values and the derived source — the UI defaults it OFF", () => {
     const { diff } = mergeBlueprint(
       { targetCustomer: entry("independent consultants") },
-      { targetCustomer: derivedEntry("enterprise buyers", "Ops notes.docx") }
+      { targetCustomer: derivedEntry("enterprise buyers", "Ops notes.docx") },
     );
     const [row] = diff;
     expect(row?.kind).toBe("contradiction");
@@ -549,7 +556,7 @@ describe("renderSpine — origin markers (item 26)", () => {
 
   it("a derived field carries [source: <the actual document title>]", () => {
     expect(spineLine(spine, "targetCustomer")).toBe(
-      "- Target customer: Independent cafés [source: Deck.pptx]"
+      "- Target customer: Independent cafés [source: Deck.pptx]",
     );
     expect(spineLine(spine, "bindingConstraint")).toContain("[source: Ops notes.docx]");
   });
@@ -682,11 +689,8 @@ describe("profile Blueprint confirmation surface source contract", () => {
   const readUi = (name: "BlueprintPanel" | "BlueprintDiff") => {
     try {
       return readFileSync(
-        new URL(
-          `../../../apps/web/app/(app)/dashboard/profile/${name}.tsx`,
-          import.meta.url
-        ),
-        "utf8"
+        new URL(`../../../apps/web/app/(app)/dashboard/profile/${name}.tsx`, import.meta.url),
+        "utf8",
       );
     } catch {
       return "";
@@ -709,20 +713,18 @@ describe("profile Blueprint confirmation surface source contract", () => {
 
   it("defaults the one additions group ON", () => {
     expect(diffSource).toMatch(
-      /const\s*\[\s*acceptAdditions\s*,\s*setAcceptAdditions\s*\]\s*=\s*useState\(\s*true\s*\)/
+      /const\s*\[\s*acceptAdditions\s*,\s*setAcceptAdditions\s*\]\s*=\s*useState\(\s*true\s*\)/,
     );
     expect(diffSource).toMatch(
-      /<input[\s\S]{0,500}?name="accept-additions"[\s\S]{0,500}?checked=\{acceptAdditions\}[\s\S]{0,500}?\/>/
+      /<input[\s\S]{0,500}?name="accept-additions"[\s\S]{0,500}?checked=\{acceptAdditions\}[\s\S]{0,500}?\/>/,
     );
   });
 
   it("defaults every destructive contradiction checkbox OFF", () => {
     const contradictionInput = diffSource.match(
-      /<input[\s\S]{0,700}?data-blueprint-control="contradiction"[\s\S]{0,700}?\/>/
+      /<input[\s\S]{0,700}?data-blueprint-control="contradiction"[\s\S]{0,700}?\/>/,
     )?.[0];
-    expect(contradictionInput).toMatch(
-      /checked=\{acceptedContradictions\.has\(row\.field\)\}/
-    );
+    expect(contradictionInput).toMatch(/checked=\{acceptedContradictions\.has\(row\.field\)\}/);
     expect(contradictionInput).not.toMatch(/defaultChecked|checked\s*=\s*\{\s*true\s*\}/);
   });
 
@@ -738,7 +740,7 @@ describe("profile Blueprint confirmation surface source contract", () => {
   it("page.tsx never spends --held itself as a text colour (background tint via color-mix is fine)", () => {
     const pageSource = readFileSync(
       new URL("../../../apps/web/app/(app)/dashboard/profile/page.tsx", import.meta.url),
-      "utf8"
+      "utf8",
     );
     expect(pageSource.length).toBeGreaterThan(0);
     expect(pageSource).not.toMatch(/color:\s*["']?var\(\s*--held\s*\)/i);

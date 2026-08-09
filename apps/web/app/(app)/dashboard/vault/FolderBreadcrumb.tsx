@@ -4,7 +4,8 @@ import { api } from "@pikar/backend/api";
 import { useMutation, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 import type { VaultFolder } from "./DocGrid";
-import { pillPrimary, pillSecondary } from "./Dropzone";
+import { DigestRebuildControl } from "./VaultBrowseControls";
+import { deriveVaultViewState } from "./vaultViewState";
 
 // The in-folder scope header. It REPLACES CategoryTabs while the user is inside a folder (the
 // caller owns that ternary): a folder is a provenance scope, not a category, and leaving the tabs
@@ -42,8 +43,14 @@ export function FolderBreadcrumb({
 
   // Staleness is DERIVED upstream from unincorporatedCount > 0 — never a stored flag — and nothing
   // here reacts to it. The rebuild is the user's click.
-  const stale = digest?.state === "stale";
   const unincorporated = digest?.unincorporatedCount ?? 0;
+  const viewState = deriveVaultViewState({
+    scope: "folder",
+    list: { kind: "ready", visibleCount: folder.memberCount, totalCount: folder.memberCount },
+    search: { kind: "idle" },
+    unincorporatedCount: unincorporated,
+  });
+  const stale = viewState.digest.kind === "stale";
 
   async function onRebuild() {
     setRebuilding(true);
@@ -63,45 +70,38 @@ export function FolderBreadcrumb({
   }
 
   return (
-    <div style={{ display: "grid", gap: "0.5rem" }}>
-      <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "0.75rem" }}>
-        <button type="button" onClick={onExit} style={pillSecondary(false)}>
+    <section className="vault-folder-context" aria-label="Current folder">
+      <div className="vault-folder-row">
+        <button type="button" onClick={onExit} className="vault-button">
           ← All documents
         </button>
-        <strong style={{ color: "var(--ink)" }}>{folder.name}</strong>
-        <span style={{ color: "var(--ink-soft)", fontSize: "0.88rem" }}>
+        <strong>{folder.name}</strong>
+        <span className="vault-folder-count">
           · {folder.memberCount} document{folder.memberCount === 1 ? "" : "s"}
         </span>
         {/* Emphasis is weight and position, never a coloured pill and never amber (BRAND §5/§2).
             No aria-live: this is an ambient count, not an outcome. */}
         {unincorporated > 0 && (
-          <span
-            className="caps-label"
-            style={{ margin: 0, fontVariantNumeric: "tabular-nums" }}
-          >
+          <span className="caps-label" style={{ margin: 0, fontVariantNumeric: "tabular-nums" }}>
             {unincorporated} added since the last digest
           </span>
         )}
-        {digest !== undefined && digest.state !== "none" && (
-          <button
-            type="button"
-            disabled={rebuilding}
-            onClick={() => void onRebuild()}
-            style={stale ? pillPrimary(rebuilding) : pillSecondary(rebuilding)}
-          >
-            {rebuilding ? "Rebuilding…" : "Rebuild digest"}
-          </button>
-        )}
+        <DigestRebuildControl
+          available={digest !== undefined && digest.state !== "none"}
+          stale={stale}
+          rebuilding={rebuilding}
+          onRebuild={() => void onRebuild()}
+        />
       </div>
       {rebuildStatus && (
         <p
           role="status"
           aria-live="polite"
-          style={{ margin: 0, color: "var(--ink-soft)", fontSize: "0.88rem" }}
+          className="vault-folder-outcome"
         >
           {rebuildStatus}
         </p>
       )}
-    </div>
+    </section>
   );
 }

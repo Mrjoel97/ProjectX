@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ZERO_USAGE, accumulateUsage } from "./metering";
+import { accumulateUsage, ZERO_USAGE } from "./metering";
 
 describe("accumulateUsage", () => {
   it("folds a stream of usage deltas into cumulative counters", () => {

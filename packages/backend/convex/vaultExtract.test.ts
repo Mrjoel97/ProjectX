@@ -29,10 +29,18 @@ import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
-const rateLimiterModules = import.meta.glob("../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts");
-const workflowModules = import.meta.glob("../node_modules/@convex-dev/workflow/src/component/**/!(*.test).ts");
-const workpoolModules = import.meta.glob("../node_modules/@convex-dev/workpool/src/component/**/!(*.test).ts");
-const aggregateModules = import.meta.glob("../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts");
+const rateLimiterModules = import.meta.glob(
+  "../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts",
+);
+const workflowModules = import.meta.glob(
+  "../node_modules/@convex-dev/workflow/src/component/**/!(*.test).ts",
+);
+const workpoolModules = import.meta.glob(
+  "../node_modules/@convex-dev/workpool/src/component/**/!(*.test).ts",
+);
+const aggregateModules = import.meta.glob(
+  "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
+);
 
 const TENANT = "tenant_extract";
 type T = ReturnType<typeof convexTest>;
@@ -109,9 +117,18 @@ describe("extractDoc spine — SMOKE, gate, scan-then-audit, seam (EXTR-D/E/F)",
   test("a governed stop (kill switch) marks failed with the reason — no throw, no audit row (EXTR-E)", async () => {
     const t = setup();
     await t.run((ctx) =>
-      ctx.db.insert("guardrailConfig", { killSwitch: true, budgetUsdPerRequest: 0.05, updatedAt: Date.now() }),
+      ctx.db.insert("guardrailConfig", {
+        killSwitch: true,
+        budgetUsdPerRequest: 0.05,
+        updatedAt: Date.now(),
+      }),
     );
-    const docId = await uploadBytes(t, "SMOKE::extract::never processed", "image/png", "blocked.png");
+    const docId = await uploadBytes(
+      t,
+      "SMOKE::extract::never processed",
+      "image/png",
+      "blocked.png",
+    );
 
     await runExtract(t, docId); // a governed stop is a RETURN, never a throw
 
@@ -137,7 +154,11 @@ describe("extractDoc spine — SMOKE, gate, scan-then-audit, seam (EXTR-D/E/F)",
     const rows = await auditRows(t);
     const failures = rows.filter((r) => r.eventType === "vault.extraction_failed");
     expect(failures).toHaveLength(1);
-    expect(failures[0]?.payload).toEqual({ vaultDocId: docId, kind: "text", reason: "pii_scan_failed" });
+    expect(failures[0]?.payload).toEqual({
+      vaultDocId: docId,
+      kind: "text",
+      reason: "pii_scan_failed",
+    });
     expect(rows.some((r) => r.eventType === "vault.extracted")).toBe(false);
     // Needle scan (vaultRedaction.test.ts pattern): the raw text is absent from EVERY audit write.
     const all = JSON.stringify(rows.map((r) => r.payload));
@@ -191,7 +212,9 @@ describe("extractDoc spine — SMOKE, gate, scan-then-audit, seam (EXTR-D/E/F)",
   test("text over VAULT_EXTRACT_CHAR_CAP truncates at the cap with truncated: true (EXTR-F)", async () => {
     const t = setup();
     // Word-shaped filler (a single unbroken run makes the pii email regex backtrack O(n²)).
-    const over = "lorem ipsum ".repeat(Math.ceil((VAULT_EXTRACT_CHAR_CAP + 500) / 12)).slice(0, VAULT_EXTRACT_CHAR_CAP + 500);
+    const over = "lorem ipsum "
+      .repeat(Math.ceil((VAULT_EXTRACT_CHAR_CAP + 500) / 12))
+      .slice(0, VAULT_EXTRACT_CHAR_CAP + 500);
     const docId = await uploadBytes(t, `SMOKE::extract::${over}`, "image/png", "big.png");
 
     await runExtract(t, docId);
@@ -208,7 +231,12 @@ describe("extractDoc spine — SMOKE, gate, scan-then-audit, seam (EXTR-D/E/F)",
   test("an unexpected throw inside the body marks failed with a refs-only reason — never a throw out", async () => {
     const t = setup();
     // Real-looking (non-sentinel) but corrupt PDF bytes: the pdf engine throws, the wrapper catches.
-    const docId = await uploadBytes(t, "%PDF-1.4 garbage not parseable", "application/pdf", "corrupt.pdf");
+    const docId = await uploadBytes(
+      t,
+      "%PDF-1.4 garbage not parseable",
+      "application/pdf",
+      "corrupt.pdf",
+    );
 
     await runExtract(t, docId); // resolves — the catch-all converted the throw
 
@@ -525,9 +553,10 @@ describe("rail dispatch — content decides, and every refusal is TERMINAL (SC#1
     // above and silently loses every value (numbers are binary doubles) — it would pass the
     // first loop and fail this one, landing a `ready` spreadsheet with no data in it.
     for (const value of ["152340.5", "98120", "0.31"]) {
-      expect(doc?.text, `NUMBER ${value} missing — the parser degraded to header recovery`).toContain(
-        value,
-      );
+      expect(
+        doc?.text,
+        `NUMBER ${value} missing — the parser degraded to header recovery`,
+      ).toContain(value);
     }
     expect(await successAudit(t)).toMatchObject({ kind: "legacy_xls", path: "legacy" });
   }, 20000);
@@ -807,11 +836,18 @@ describe("fanOutPages — bounded, ordered, isolated, deadline-bounded (SC#5 sha
     const { fanOutPages } = await load();
     const calls: number[] = [];
 
-    const out = await fanOutPages(7, async (i) => { calls.push(i); return `p${i}`; }, {
-      batchSize: 3,
-      pageTimeoutMs: 2_000,
-      deadlineAt: Date.now() - 1,
-    });
+    const out = await fanOutPages(
+      7,
+      async (i) => {
+        calls.push(i);
+        return `p${i}`;
+      },
+      {
+        batchSize: 3,
+        pageTimeoutMs: 2_000,
+        deadlineAt: Date.now() - 1,
+      },
+    );
 
     expect(calls).toHaveLength(0);
     expect(out.truncated).toBe(true);
@@ -841,11 +877,17 @@ describe("fanOutPages — bounded, ordered, isolated, deadline-bounded (SC#5 sha
   test("ZERO successful pages is REPORTED (okPages 0), not hidden behind a document of markers", async () => {
     const { fanOutPages } = await load();
 
-    const out = await fanOutPages(4, async () => { throw new Error("nope"); }, {
-      batchSize: 2,
-      pageTimeoutMs: 2_000,
-      deadlineAt: far(),
-    });
+    const out = await fanOutPages(
+      4,
+      async () => {
+        throw new Error("nope");
+      },
+      {
+        batchSize: 2,
+        pageTimeoutMs: 2_000,
+        deadlineAt: far(),
+      },
+    );
 
     // The text is non-empty (all markers) — which is exactly why the CALLER must judge okPages.
     // A document of markers passing `empty_extraction` is the false-ready this phase exists to
@@ -870,7 +912,10 @@ describe("fanOutPages — bounded, ordered, isolated, deadline-bounded (SC#5 sha
 });
 
 describe("dispatcher source contract (vaultRedaction.test.ts static-scan pattern)", () => {
-  const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "vaultExtract.ts"), "utf8");
+  const src = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "vaultExtract.ts"),
+    "utf8",
+  );
 
   test("spine ordering: preCall -> markExtracting -> bytes -> scanText -> audit -> seam", () => {
     // Call-site needles (runMutation/ctx-prefixed so header comments can't match).
@@ -888,7 +933,9 @@ describe("dispatcher source contract (vaultRedaction.test.ts static-scan pattern
       return i;
     });
     for (let i = 1; i < indexes.length; i++) {
-      expect(indexes[i], `"${order[i]}" must come after "${order[i - 1]}"`).toBeGreaterThan(indexes[i - 1]!);
+      expect(indexes[i], `"${order[i]}" must come after "${order[i - 1]}"`).toBeGreaterThan(
+        indexes[i - 1]!,
+      );
     }
   });
 
@@ -968,7 +1015,32 @@ describe("dispatcher source contract (vaultRedaction.test.ts static-scan pattern
     expect(src, "slicePdfToPageCap's output must never reach extractHosted again").not.toMatch(
       /extractHosted\(\s*ctx\s*,\s*tenantId\s*,\s*sliced/,
     );
-    expect(src, "the hosted call must receive ONE PAGE").toMatch(/extractHosted\(\s*ctx\s*,\s*tenantId\s*,\s*pages\[/);
+    expect(src, "the hosted call must receive ONE PAGE").toMatch(
+      /extractHosted\(\s*ctx\s*,\s*tenantId\s*,\s*pages\[/,
+    );
+  });
+
+  test("every hosted page books its OWN ledger row (FIN-01 — the per-page discriminator)", () => {
+    // recordSpend mints `auto:<uuid>` when correlationId is absent, so this is NOT about a row
+    // existing — it is about the row COUNT. The failure this scan stands against is a
+    // document-level correlation: 50 pages, 50 hosted calls, 50 limiter movements, but ONE
+    // `actual` row carrying one page's cents. The ledger would then sit BELOW the limiter, and a
+    // missing movement is indistinguishable from money never spent.
+    expect(src, "the hosted call must take an explicit correlation").toContain("correlationId,");
+    expect(src, "each page needs its OWN correlation segment").toMatch(
+      /pages\[i\]!,\s*"application\/pdf",\s*`\$\{correlation\}:p\$\{i\}`/,
+    );
+    // The attempt nonce: the daily sweep / Retry genuinely RE-EXTRACT a document and pay again.
+    // Derive from the doc id alone and the second extraction is suppressed as a replay — free OCR
+    // in the ledger, real OCR on the invoice.
+    expect(src, "the attempt nonce must be minted per handler run").toMatch(
+      /vault:extract:\$\{vaultDocId\}:\$\{crypto\.randomUUID\(\)\}/,
+    );
+    // An image is ONE call — a `:p0` there would claim a fan-out that does not exist.
+    expect(src, "the image branch must not fake a page segment").toMatch(
+      /imageMediaType,\s*correlation,/,
+    );
+    expect(src).not.toContain(":pundefined");
   });
 
   test("unpdf gets a COPY — pdf.js detaches the buffer the fan-out emitter then reads", () => {

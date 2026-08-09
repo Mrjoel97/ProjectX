@@ -32,7 +32,8 @@ export function canTransition(from: SessionStatus, to: SessionStatus): boolean {
  * cap time is the caller's concern; this is pure arithmetic with no wall-clock of its own.
  */
 export function graceExpired(sinceMs: number, now: number, windowMs: number): boolean {
-  if (!Number.isFinite(sinceMs) || !Number.isFinite(now) || !Number.isFinite(windowMs)) return false;
+  if (!Number.isFinite(sinceMs) || !Number.isFinite(now) || !Number.isFinite(windowMs))
+    return false;
   if (sinceMs < 0 || now < 0 || windowMs < 0) return false;
   return now - sinceMs >= windowMs;
 }

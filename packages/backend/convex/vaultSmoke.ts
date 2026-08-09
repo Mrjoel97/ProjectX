@@ -74,6 +74,45 @@ export const seedCorpus = internalAction({
         other: `${shared} engineers`,
         rel: "staffs",
       },
+      // ── THE THREE SPECIALIST DOMAINS. Added 2026-08-08 to kill fixture 29/30/31's `citesVaultDoc`
+      // flake at its ROOT. Those fixtures assert that the needle reaches a specialist's memo, which
+      // it can only do through a live `searchVault` — but the corpus above is a LAUNCH note and a
+      // STAFFING plan, and says nothing about offers, pricing or lead channels. So an
+      // offer-architect or lead-engine query honestly retrieved NOTHING, the memo correctly said so
+      // ("the vault does not contain information on lead channels"), the needle never appeared, and
+      // the fixture reddened. Pass/fail was therefore a coin flip on whether the specialist happened
+      // to author a query close enough to "launch"/"staffing" — which is exactly the "retrieval
+      // variance" cost.ts suspected but never confirmed.
+      //
+      // THIS DOES NOT WEAKEN THE ASSERTION. The needle still appears in NO fixture turn
+      // (--self-check pins that), so it can still only arrive via a real retrieval. What changes is
+      // that each specialist's own domain now HAS ground to find — the fixture stops testing whether
+      // the model guessed a lucky query and goes back to testing grounding. Keep one brief per
+      // specialist; deleting one re-opens that specialist's flake.
+      {
+        title: `Northwind offer ${needle}`,
+        text: `${shared} offer definition: customers buy a done-for-you shipment onboarding package plus a monthly monitoring plan. The ${shared} offer is what a new customer actually purchases. Ref ${needle}.`,
+        other: `${shared} onboarding package`,
+        rel: "sells",
+      },
+      {
+        title: `Northwind pricing ${needle}`,
+        // Split literal: keeps each chunk under the §5 no-hardcoded-prompt scan ceiling (200 chars),
+        // the same idiom the tool descriptions use. This is fixture prose, not a prompt, but the
+        // scan is deliberately blind to intent — and a scan you can argue your way around is no scan.
+        text:
+          `${shared} money model: the monitoring plan bills monthly and customer acquisition cost ` +
+          `is tracked per new customer, measured against lifetime gross profit. Pricing and margin ` +
+          `for ${shared} live here. Ref ${needle}.`,
+        other: `${shared} monitoring plan`,
+        rel: "prices",
+      },
+      {
+        title: `Northwind lead channels ${needle}`,
+        text: `${shared} lead generation: warm outreach to past shippers, cold outreach to freight brokers, posted content and paid ads are the lead channels considered for ${shared}. Ref ${needle}.`,
+        other: `${shared} lead channels`,
+        rel: "acquires",
+      },
     ];
 
     const docIds: Id<"vaultDocuments">[] = [];
@@ -111,7 +150,8 @@ export const seedCorpus = internalAction({
 
     const seedDocId = docIds[0];
     const neighborDocId = docIds[1];
-    if (!seedDocId || !neighborDocId) throw new Error("vault-smoke: seedCorpus produced too few docs");
+    if (!seedDocId || !neighborDocId)
+      throw new Error("vault-smoke: seedCorpus produced too few docs");
     return {
       docIds,
       seedDocId,
@@ -129,7 +169,8 @@ export const assertReady = internalQuery({
     for (const id of docIds) {
       const doc = await ctx.db.get(id);
       if (!doc || doc.tenantId !== tenantId) throw new Error(`vault-smoke: doc ${id} missing`);
-      if (doc.status !== "ready") throw new Error(`vault-smoke: doc ${id} at "${doc.status}", expected ready`);
+      if (doc.status !== "ready")
+        throw new Error(`vault-smoke: doc ${id} at "${doc.status}", expected ready`);
     }
     return { ok: true };
   },
@@ -150,7 +191,8 @@ export const assertSearchReturns = internalAction({
       .map((e) => e.metadata?.vaultDocId as Id<"vaultDocuments"> | undefined)
       .filter((id): id is Id<"vaultDocuments"> => Boolean(id));
     if (ids.length === 0) throw new Error("vault-smoke: hybrid search returned nothing");
-    if (!ids.includes(expectDocId)) throw new Error("vault-smoke: hybrid search missed the seed doc");
+    if (!ids.includes(expectDocId))
+      throw new Error("vault-smoke: hybrid search missed the seed doc");
     return { ok: true, count: ids.length };
   },
 });
@@ -195,7 +237,9 @@ export const assertGroundNeighbor = internalAction({
     });
     const { docIds } = fuse(hits, seedDocIds, neighborDocIds);
     if (!docIds.includes(neighborDocId)) {
-      throw new Error("vault-smoke: grounding did not reach the graph neighbor via the shared entity");
+      throw new Error(
+        "vault-smoke: grounding did not reach the graph neighbor via the shared entity",
+      );
     }
     return { ok: true, docIds };
   },

@@ -26,8 +26,8 @@ export default function Privacy() {
         <p className="notice">
           <strong>Draft — not yet in force.</strong> This document has not been reviewed by a
           qualified lawyer, and the controlling legal entity has not been formed. Bracketed
-          placeholders below must be resolved before publication. The production build is
-          blocked until they are.
+          placeholders below must be resolved before publication. The production build is blocked
+          until they are.
         </p>
       )}
 
@@ -61,8 +61,8 @@ export default function Privacy() {
         <li>
           <strong>Google user data.</strong> If you connect a Google account, the OAuth tokens that
           permit our agents to act on your mailbox, and the content of the messages they read in
-          order to do so. This necessarily includes personal data about the people who write to
-          you. See section 4.
+          order to do so. This necessarily includes personal data about the people who write to you.
+          See section 4.
         </li>
         <li>
           <strong>Operational records.</strong> An append-only audit log of actions taken on your
@@ -85,8 +85,10 @@ export default function Privacy() {
           (Art. 6(1)(b)).
         </li>
         <li>
-          <strong>To plan and carry out the tasks you ask for, and to send the emails you
-          approve</strong> — performance of a contract (Art. 6(1)(b)).
+          <strong>
+            To plan and carry out the tasks you ask for, and to send the emails you approve
+          </strong>{" "}
+          — performance of a contract (Art. 6(1)(b)).
         </li>
         <li>
           <strong>To connect your Google account</strong> — performance of a contract (Art.
@@ -127,9 +129,10 @@ export default function Privacy() {
       <ul>
         <li>
           <strong>You grant access once, deliberately.</strong> Nothing is accessed until you
-          connect the account through Google&rsquo;s own consent screen. We ask once, not repeatedly,
-          so that the assistant can work without interrupting you — and you can withdraw that
-          access at any time (section 10). Before connecting, our access to your mailbox is zero.
+          connect the account through Google&rsquo;s own consent screen. We ask once, not
+          repeatedly, so that the assistant can work without interrupting you — and you can withdraw
+          that access at any time (section 10). Before connecting, our access to your mailbox is
+          zero.
         </li>
         <li>
           <strong>We cannot permanently delete your email.</strong> Deletion requires the{" "}
@@ -209,9 +212,8 @@ export default function Privacy() {
         Pikar does not make decisions producing legal or similarly significant effects about you by
         automated means alone, within the meaning of Article 22 GDPR: a human — you — authorises
         each automation, and retains the ability to intervene and to obtain an explanation of what
-        was done, from the audit log. If we ever introduce processing that would fall within
-        Article 22, we will tell you before it begins and provide the safeguards that Article
-        requires.
+        was done, from the audit log. If we ever introduce processing that would fall within Article
+        22, we will tell you before it begins and provide the safeguards that Article requires.
       </p>
 
       <h2>7. Who we share data with</h2>
@@ -237,9 +239,9 @@ export default function Privacy() {
         </li>
         <li>
           <strong>OpenAI</strong> — generation of plans, summaries, and drafts. Reached through
-          Vercel&rsquo;s AI Gateway (above), OpenAI receives the content of messages our agents
-          read in order to produce them. We use it only under API terms that forbid retention and
-          forbid training on your data, as Google&rsquo;s restricted-scope policy requires.
+          Vercel&rsquo;s AI Gateway (above), OpenAI receives the content of messages our agents read
+          in order to produce them. We use it only under API terms that forbid retention and forbid
+          training on your data, as Google&rsquo;s restricted-scope policy requires.
         </li>
       </ul>
       <p>
@@ -263,14 +265,16 @@ export default function Privacy() {
         required by Article 12(3) GDPR.
       </p>
       <p>
-        Audit records are retained as an immutable compliance log, and are exported to
-        write-once storage that <strong>cannot be modified or deleted</strong>, including by us.
-        That is the point of the log: the system that writes it must not be able to rewrite it.
+        Audit records are retained as an immutable compliance log, and are exported to write-once
+        storage that <strong>cannot be modified or deleted</strong>, including by us. That is the
+        point of the log: the system that writes it must not be able to rewrite it.
       </p>
       <p>
         For this reason the audit log is designed to hold{" "}
-        <strong>references, identifiers, hashes, and counts only — never the content of your
-        messages, and no personal data.</strong>{" "}
+        <strong>
+          references, identifiers, hashes, and counts only — never the content of your messages, and
+          no personal data.
+        </strong>{" "}
         This is what allows an immutable log and your right to erasure to coexist: there is nothing
         in the archive to erase. Deleting your account removes your account data and content; the
         audit archive retains only the non-personal record that actions occurred.

@@ -15,13 +15,7 @@ export type AuditRef = string;
 export type AuditHash = string;
 
 /** Values permitted in a redaction-safe audit payload. */
-export type AuditPayloadValue =
-  | AuditRef
-  | AuditHash
-  | number
-  | boolean
-  | null
-  | readonly string[];
+export type AuditPayloadValue = AuditRef | AuditHash | number | boolean | null | readonly string[];
 
 /**
  * Redaction-safe audit payload: a flat map of refs / hashes / ids / counts /

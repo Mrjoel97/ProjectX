@@ -398,6 +398,15 @@ test("recordUsage accumulates the counters and prices the delta onto spend; a ba
   });
   expect((await get(t, sessionId))?.inAudioTok).toBe(150);
 
+  // FIN-01: two folds are two REAL charges — the limiter consumed both, so the ledger must carry
+  // two rows. The pre-patch counter offset in the correlation is what keeps them apart; a
+  // session-only correlation would replay-suppress the second and put the ledger below the limiter.
+  const spend = (await t.run((ctx) => ctx.db.query("spendEvents").collect())).filter(
+    (r) => r.kind === "realtime",
+  );
+  expect(spend).toHaveLength(2);
+  expect(new Set(spend.map((r) => r.correlationId)).size).toBe(2);
+
   // Fail closed: a negative (priceRealtime Err) delta patches NOTHING and records no spend.
   const before = await get(t, sessionId);
   const bad = await asT.mutation(api.voice.recordUsage, {
@@ -443,8 +452,16 @@ test("a doc-scoped session leaves exactly ONE brief artifact, across repeat stor
     { speaker: "user", text: "SMOKE::route=direct_llm:: what does the report say about churn?" },
     { speaker: "assistant", text: "Churn concentrates in month two." },
   ];
-  const first = await t.action(internal.voice.storeBrief, { sessionId, transcript, language: "en" });
-  const second = await t.action(internal.voice.storeBrief, { sessionId, transcript, language: "en" });
+  const first = await t.action(internal.voice.storeBrief, {
+    sessionId,
+    transcript,
+    language: "en",
+  });
+  const second = await t.action(internal.voice.storeBrief, {
+    sessionId,
+    transcript,
+    language: "en",
+  });
 
   // Same doc back both times — `briefRef` is the idempotence key, so a re-store (a re-click, or a
   // race between this and the watchdog's auto-store) can never mint a second artifact.

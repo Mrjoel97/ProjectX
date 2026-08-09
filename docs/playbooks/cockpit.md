@@ -1,5 +1,349 @@
 # Playbook: Email Chat Cockpit
 
+> **THE `agentSteps.tool` CLOSED UNION IS NOW GUARDED STRUCTURALLY (2026-08-08).** `schema.ts`
+> warned about this trap twice in PROSE — a tool whose name has no literal makes `agentSteps:record`
+> throw `ArgumentValidationError`, and the AI SDK SWALLOWS callback throws, so the step vanishes in
+> PROD while the whole suite stays green. It happened anyway, twice more: `recordScorecardAnswer`
+> (found in eval logs) and **`resetPlan`, which nobody knew about — the new guard test found it the
+> first time it ran.** Every "cancel and start over" turn had been losing its trace step silently.
+> `cockpitTools.test.ts` now scans every `<name>: tool(` key in `buildCockpitTools` and fails if any
+> lacks a literal, with non-vacuity floors on both lists so a restructure fails loudly instead of
+> passing on an empty scan. **Add the literal in the SAME commit as a new tool.** Prose in a schema
+> comment is not a guard; a test is.
+
+> Last verified: 2026-08-09 (Plan cash-business-finance Task 10 — the watched
+> `apps/web/e2e/finance.spec.ts` gained the three-tab/Business-figure/owner-Operator-tab tests and a
+> `test.describe.configure({ mode: "serial" })` to keep the non-owner-first/owner-last order real
+> under `playwright.config.ts`'s `fullyParallel: true`; no cockpit behaviour, tool, gate or stored row
+> changed. Attempted `pnpm --filter @pikar/web test:e2e` again — still NOT EXECUTED, no
+> `E2E_USER_EMAIL`/`E2E_USER_PASSWORD` and no local `convex dev`/Next stack running in this worktree.
+> See `docs/playbooks/dashboard-pages.md`'s Task 10 entry for the full account.)
+>
+> Last verified: 2026-08-09 (Phase 26 Plan 10 — **the watched `apps/web/e2e/` path gained
+> `finance.spec.ts`, and the Finance rail item went LIVE on owner direction; no cockpit behaviour,
+> tool, gate or stored row changed.**) The Cost Console route is `/dashboard/finance` and its nav
+> item now carries an `href`. The rail branch keys off `href`, not `soon`, so rollback is deleting
+> that one property — and it does NOT stop ledger instrumentation, which must keep running whatever
+> the UI does. Two things in the new spec are worth
+> copying rather than rediscovering: it asserts the NON-OWNER boundary **before** calling
+> `owner:bootstrapOwner`, because that grant has no inverse and the boundary becomes unobservable
+> from the account once it is the owner; and it seeds through the real `spendLedger:record` writer,
+> so a green run proves the projection and the role gate and proves **nothing** about a provider —
+> no model call, fal job or invoice is involved, and no seeded `actual` row may be cited as evidence
+> that money reached OpenAI or fal.
+>
+> The same pass changed `apps/web/vitest.config.mts` to `esbuild: { jsx: "automatic" }`, matching
+> Next's transform. Before it, esbuild's classic runtime meant any `.tsx` reached from a test
+> compiled to `React.createElement` and threw `React is not defined` unless the component carried a
+> default `React` import it never otherwise used. `ApprovalsView.tsx` still carries that dead import;
+> it is now unnecessary and can go whenever that file is next touched.
+
+> Last verified: 2026-08-09 (26-07 follow-up, `llm.ts` — **the agent loop's eight spend sites now
+> carry correlations, and every one of them needed a discriminator beyond the obvious ref.**)
+> `recordModelSpend` gained REQUIRED `kind` and `correlationId` parameters — required at the HELPER
+> even though `recordSpend`'s own arg is optional, because seven call sites reach it and the
+> compiler is the only thing that can enumerate them. The agent loop uses
+> `agentloop:<loopId>:a<attempt>` where `loopId = turnId ?? crypto.randomUUID()`: **`attempt`
+> separates the primary model from the CHEAP_MODEL fallback, which is a SECOND fully-billed call
+> and not a retry of the first** — without it the fallback's charge returns the primary's row and
+> vanishes. The web-search fee is a separate payment inside the SAME turn, so it appends `:search`
+> rather than sharing the turn's token-cost correlation. The digest, reply and voice-brief helpers
+> each mint a per-execution `runId` and suffix `:a0` / `:a1` across their try/catch pair for the
+> same reason. **Deliberately NOT used as a discriminator: the AI SDK's `toolCallId`** — it is
+> provider-supplied and unvalidated, so interpolating it could throw the ledger's charset check
+> AFTER the money was spent, and on at least one path it degenerates to a hardcoded literal. A
+> minted nonce is both shorter and safer. Policy and the full per-site table:
+> `docs/playbooks/guardrails.md` §"Phase 26".
+>
+> Last verified: 2026-08-08 (26-07 follow-up — **the pipeline's LLM charges now carry a DERIVED
+> spend correlation, and adding it needed a deploy guard.**) `recordLlm` passes
+> `correlationId: req:<requestId>:<stage>:<seq>` (exported as `llmSpendCorrelation` so a collision
+> is testable rather than inlined), plus `model`, `kind: pipeline.<stage>` and the `requestId` ref.
+>
+> **DERIVED, never minted.** `recordSpend` runs here as a JOURNALED WORKFLOW STEP, so a workflow
+> replay re-runs it WITHOUT re-spending; a `crypto.randomUUID()` would mint a second `actual` row
+> for money that moved once. The opposite rule applies at every action call site — see
+> `docs/playbooks/guardrails.md` §"Phase 26" for why the policy splits on that one question.
+>
+> **`requestId`, NOT the handler's `correlationId`.** The latter is a bare `v.string()` that the
+> smoke seeder supplies freely, so it could carry whitespace or exceed 128 chars and would throw
+> the ledger's charset check AFTER the model call was billed. A Convex id is regex-safe by
+> construction.
+>
+> **`seq` is the discriminator that matters.** It is `usages.length` read BEFORE the push — the
+> array is append-only and appended only there, so it is 0 for route, 1 for the first draft, 2 for
+> the first regenerate: deterministic on replay, distinct for every real charge. `stage` alone
+> would collapse every regenerate onto the first draft's row, and each regenerate IS a real second
+> model call.
+>
+> **`{ unstableArgs: true }` IS MANDATORY HERE AND IS NOT COSMETIC.** These step args grew, and this
+> pipeline parks for up to `SEVEN_DAYS` at the review gate. A workflow already mid-flight replays
+> the step against a journal entry recorded with the OLD args and dies on `Journal entry mismatch`
+> — killing an in-flight request whose money is already spent. The option is present in the pinned
+> `@convex-dev/workflow` (verified in `dist/client/step.d.ts`). It is droppable only once nothing
+> started before that deploy can still be parked, i.e. `SEVEN_DAYS` after it ships. **Any future
+> change to a journaled step's args carries the same hazard.**
+>
+> Last verified: 2026-08-08 — **A MODEL-SUPPLIED ARGUMENT IS NOT CONTROL FLOW: `createDocument`'s
+> `replace`.** The live model sends `replace` on EVERY call, including the FIRST, when the
+> conversation holds no created documents at all. The tool obeyed it, routed a create down
+> `patchCreatedDoc`, and that mutation refused CORRECTLY ("there's no document #1") — so nothing was
+> ever created, the agent read the honest refusal as "try again", and looped: **thirteen tool calls
+> in a two-turn fixture, every one recorded `done`, zero documents.** Every component was behaving
+> perfectly in isolation; the whole defect was trusting one model-supplied integer. Fix:
+> `effectiveReplace = docIds.length === 0 ? undefined : replace` — with ZERO created documents
+> `replace` cannot denote anything, so it is NOISE, not a refusal case. **Do not widen this to every
+> out-of-range index:** once documents exist, an out-of-range `replace` keeps its honest refusal,
+> because there the user may genuinely mean a document numbered differently, and creating a second
+> document when a revision was asked for is the failure the paired tests exist to keep apart. Both
+> directions are pinned in `cockpitTools.test.ts` and mutation-verified RED.
+>
+> **This is the `confirmed`-flag principle, and it was already written down.** 18-08 gave
+> `createDocument` no `confirmed` argument precisely because "a model-supplied confirmation flag is
+> the model grading its own trigger" — but `replace` predated that reasoning and never inherited the
+> distrust. When a tool takes an optional argument that SELECTS A CODE PATH, assume the model will
+> populate it whether or not it means to; validate it against server-held state before branching.
+>
+> **The concealment is the lesson for debugging.** Two things hid this for a whole paid gate: a bare
+> `catch` (now logs its reason, per the rule `ErrorBoundary.tsx` already states), and a failure path
+> that RETURNS A PLAUSIBLE SENTENCE — so the tool "succeeded", `agentSteps` said `done`, and the
+> feature looked like it merely hadn't managed it. What settled it was the OFFLINE `SMOKE::agent::`
+> op proving the whole chain worked with no model involved, which relocated the fault from "the code
+> is broken" to "the arguments are wrong". Reach for that op FIRST next time. Also found and NOT
+> fixed here: `agentSteps:record` throws `ArgumentValidationError` on `recordScorecardAnswer` — that
+> name is missing from the `agentSteps.tool` union, so every scorecard tool call fails to record a
+> step; the SDK swallows callback throws, so it is invisible outside the logs.
+
+> Last verified: 2026-08-08 — **`listThreadMessages` guards AUTHORIZATION, so it must not then
+> assume EXISTENCE.** `plans.threadId` is a plain `v.string()` and is NOT guaranteed to name an
+> agent-component thread: `smoke:seedCockpitPlan` writes `smoke-attach-<uuid>`, and legacy rows can
+> predate the thread they point at. The handler returned an empty page for an UNOWNED thread and
+> then passed the raw string to `listMessages`, whose validator is `v.id("threads")` — so an
+> OWNED-but-nonexistent thread THREW where an unowned one degraded. That asymmetry was the bug:
+> the throw is uncaught in the browser, kills the whole React tree, and takes the ENTIRE cockpit
+> page down — and it is reachable from the `?thread=` URL parameter, i.e. from user input. Found in
+> the 26-05 Approvals UAT via "Open in cockpit" on a seeded plan. Both cases now return the SAME
+> empty page. The catch is deliberately NARROW — `isNonAgentThreadIdError` — so a real component
+> fault is never masked; do not widen it to a bare `catch`, and do not let it match a validator
+> rejection on a DIFFERENT table (that is somebody else's bug and must still throw).
+>
+> **THE HARNESS IS NOT PRODUCTION, AND THIS IS THE FILE THAT PROVES IT.** The first fix matched only
+> `Expected ID for table "threads"` — `convex-test`'s wording. It passed the integration test and
+> the live cockpit CRASHED ANYWAY, because the deployed runtime words the same rejection completely
+> differently: `ArgumentValidationError: Value does not match validator. / Path: .threadId /
+> Validator: v.id("threads")`. A test whose ERROR TEXT is generated by the harness proves the
+> harness, not the product — the same class as 15.3-09's stubbed-request lesson in vault.md. Both
+> messages are now pinned VERBATIM in `cockpitThreadDegrade.test.ts` (the live one captured from a
+> real browser console), alongside negative cases. **Rule: when behaviour keys off an error MESSAGE
+> crossing a component or service boundary, pin the real one from a live capture — never only the
+> one your test harness happens to raise.** Anything reading a thread id off a `plans` row owes the
+> same treatment.
+
+> Last verified: 2026-08-07 (**`resolveModel` is now a two-vendor seam.** `llm.ts:144` mapped every
+> model id through `openai()`; it now branches on the id prefix, so `google/gemini-2.5-flash` routes
+> to Vertex AI while `openai/*` is untouched. The prefix scheme was ALREADY there — model ids have
+> always been `openai/…` for pricing/audit — so this cost no new id format and no call-site changes.
+>
+> **REVISED AGAIN — GEMINI HAS TWO DOORS, AND THE FREE ONE IS PREFERRED.** `resolveModel`'s `google/`
+> branch now picks **AI Studio** (`@ai-sdk/google`, `GOOGLE_GENERATIVE_AI_API_KEY`, free rate-limited
+> tier) when that key is set, and falls back to **Vertex** (`@ai-sdk/google-vertex`, service account)
+> otherwise. Identical model names, so the `google/…` namespace and every `PRICING` row are unchanged.
+>
+> **This was learned the hard way and is the reason the preference order is what it is: VERTEX AI HAS
+> NO FREE TIER.** Two separate GCP projects were tried with a real service account on 2026-08-07
+> (`project-c3a75795-f866-4b37-8ec`, then `gen-lang-client-0695333543`) and BOTH returned
+> `BILLING_DISABLED` before generating a token — confirmed by a raw REST call with our whole stack
+> bypassed, so it was never an integration bug. A service account authenticates fine and still cannot
+> call the model without a LINKED billing account. Do not "simplify" this back to Vertex-only.
+> Vertex stays wired because it is the only door to Imagen/Veo (ADR-016).
+>
+> The grounding tool follows the TRANSPORT, not just the vendor: `google.tools.googleSearch` under AI
+> Studio, `vertex.tools.googleSearch` under Vertex, both gated on the SAME env check as
+> `resolveModel` so the tool and the model can never disagree.
+>
+> **REVISED SAME DAY — this is CROSS-VENDOR FAILOVER, not a migration.** The owner's aim is that both
+> vendors alternate so work continues when either runs out of credit. `DEFAULT_MODEL` is Gemini and
+> `CHEAP_MODEL` is OpenAI, which makes `runAgentLoop`'s existing primary → fallback step a provider
+> failover for free. See `guardrails.md` for the rail/pricing half and the eligibility limit.
+>
+> **RESEARCH IS THE ONE PAIR THAT STAYS SINGLE-VENDOR, and the reason is structural — do not "fix" it
+> by pointing `RESEARCH_FALLBACK_MODEL` at OpenAI.** `buildWebResearchTool` selects OpenAI's
+> `webSearch` or Vertex's `googleSearch` ONCE from `RESEARCH_MODEL`'s prefix, and `runAgentLoop`
+> reuses that single tools record for BOTH attempts. A cross-vendor research fallback would therefore
+> hand Gemini a tool only OpenAI can execute — a guaranteed 400 on every fallback, which is precisely
+> the failure mode the original "the fallback was probed TOO" comment exists to prevent. Crossing
+> vendors here first requires the tools record to become a function of the model actually running.
+>
+> **The Vertex provider is built lazily and memoized, and the laziness is load-bearing, not tidiness:**
+> constructing it at module scope would read the GCP env on IMPORT, so a deployment with no Google
+> credentials would fail every OpenAI call too. Gemini was added ALONGSIDE OpenAI (owner decision
+> 2026-08-07 — `DEFAULT_MODEL`/`CHEAP_MODEL` are NOT repointed), so a tenant that never names a
+> `google/` model must never be able to notice the credential is absent. The throw can only fire on
+> a request that asked for Gemini.
+>
+> **Credentials come from `GOOGLE_SERVICE_ACCOUNT_JSON`, an env var holding the whole JSON — NOT a
+> file path.** `GOOGLE_APPLICATION_CREDENTIALS` is a path and **Convex has no filesystem**, so a key
+> file on a developer's disk is unreachable from the deployed backend. `project` is read from the
+> credential's own `project_id` so it cannot drift from the key. The parse failure message never
+> echoes the raw value — it holds a private key.
+>
+> Dependency: `@ai-sdk/google-vertex@5.0.44`, chosen because its `@ai-sdk/provider@4.x` +
+> `@ai-sdk/provider-utils@5.x` generation matches the pinned `@ai-sdk/openai@4.0.11` / `ai@7.0.20`
+> pairing. It drags in `google-auth-library`, `@ai-sdk/anthropic` and `@ai-sdk/openai-compatible`;
+> the lighter `@ai-sdk/google` was NOT chosen because it takes an AI Studio API key, not the service
+> account, and cannot reach Imagen/Veo. Installing it moved the resolved `provider-utils` 5.0.7 →
+> 5.0.23 under `@convex-dev/agent`, whose peer range was already unmet — **verified after the bump:
+> backend typecheck 0 errors, backend suite 1211 tests with only a pre-existing unrelated failure**
+> (see below), cost 56/56.
+>
+> **LIVE-VERIFIED 2026-08-07 — both pins answered through AI Studio.** `pnpm probe:gemini` exit 0 on
+> `google/gemini-3.5-flash` (8 in / 78 out, $0.000197) and on `google/gemini-3.5-flash-lite`
+> (8 in / 1 out, $0.000001). The `google/` branch of `resolveModel` works end to end.
+>
+> **THE PINS ARE 3.5, NOT 2.5, AND THAT WAS NOT OPTIONAL.** `gemini-2.5-flash` still APPEARS in the
+> AI Studio model listing but refuses with "no longer available to new users" — so a listing is not
+> proof of access, only a call is. Both 3.5 ids also appear in `@ai-sdk/google-vertex`'s model union,
+> so the same ids serve both doors.
+>
+> **GEMINI 3.x REASONS BY DEFAULT AND ITS THINKING TOKENS COME OUT OF `maxOutputTokens`.** At a
+> 16-token cap the probe got HTTP 200, 12 output tokens and **empty text** — no error at all. That is
+> the failure shape most likely to be mistaken for success by anything downstream expecting prose, so
+> `empty_text` is now a FAILING probe verdict rather than a footnote. The cost consequence is real:
+> `flash` spent **78 output tokens to answer "OK"**, while `flash-lite` spent **1** — flash-lite does
+> not run the reasoning pass. Any call site that caps output tightly must either raise the cap or
+> disable thinking via `providerOptions`.
+>
+> **Still NOT proven:** the price rows (pinned unverified — the probe proves priceABLE, not priceD
+> correctly), and `googleSearch` grounding, which no probe has exercised yet. Do not close 16-09 on
+> the strength of this.
+>
+> **The probe that changes that: `pnpm --filter @pikar/backend probe:gemini`** (or
+> `node scripts/probe-gemini.mjs` from `packages/backend` — the Convex CLI only resolves the
+> deployment from there). It calls a new `llm:probeGemini` internalAction, so the work happens INSIDE
+> the deployment: a credential that works on a laptop proves nothing about a backend that has no
+> filesystem to read it from. Three exit codes, following `check-fal-catalog.mjs` rather than
+> `skillopt.yml` — **0 PASS / 1 REFUSED / 2 UNREACHABLE**, and 2 never collapses into 0, because a
+> probe that reports green when it never asked is the vacuous-gate defect `ci-gate.md` documents.
+> There is no `|| true` in the file, deliberately.
+>
+> `unpriced` is a FAILING verdict, not a warning: a model that answers but has no `PRICING` row bills
+> $0 against `DAILY_BUDGET_CENTS`, and a free-looking model is worse than a broken one.
+>
+> **Exit 2 is verified — exit 0 and 1 are NOT.** Running it 2026-08-07 produced a real exit 2 with the
+> local backend up and the function merely unpushed; that observation is now the first hint in the
+> script's own error text. The PASS and REFUSED branches have never executed, because
+> `GOOGLE_SERVICE_ACCOUNT_JSON` has never been set on any deployment.
+>
+> Unrelated fix in the same pass: `llmRedaction.test.ts`'s pinned `audit.log` count for `cockpit.ts`
+> was **red at HEAD** — 26-03 added `plan.discarded` and a second `plan.rescheduled` site while the
+> pin still said 2. All four payloads were hand-checked and ARE refs-only, so this was a stale pin,
+> not a §4 breach. It was strengthened rather than bumped: the old scan looped a hardcoded eventType
+> list (so `plan.discarded` slipped in unchecked) and used a non-global `match` (so the second
+> `plan.rescheduled` was never read). Sites are now derived from source — an unnamed new call site
+> fails loudly instead of passing silently.)
+
+> Last verified: 2026-08-07 (connect-gmail bounded-unavailable state — **a missing OAuth
+> deployment config is now an operational STATE, not a thrown query.** `gmailAuth.gmailConnectUrl`
+> used to return `string` by calling `buildAuthorizeUrl`, which `requireEnv`-throws when
+> `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` / `GMAIL_OAUTH_REDIRECT_URI` are absent. A
+> throwing Convex query never resolves its React subscription, so an unconfigured deployment left
+> `connect-gmail/page.tsx` on "Preparing consent link…" forever — the same eternal-spinner class the
+> `(app)` layout's `<Authenticated>` gate exists to kill, arrived at from the env side instead of the
+> token side. The query now returns `{ configured: boolean; url: string | null }` and the page
+> renders a `role="alert"` panel telling the user OAuth is unconfigured and to ask an administrator.
+> **`buildAuthorizeUrl` stays strict and unchanged** — the callback and token-exchange paths must
+> never proceed on partial OAuth config, so the leniency lives ONLY in the client-facing read.
+> Two `calendar.test.ts` cases pin both branches (incomplete env → `{configured:false,url:null}`;
+> complete env → a URL whose `state` matches `^${userId}\.[a-f0-9]{64}$`, so the tenant binding is
+> still asserted on the lenient path). DIFF-REVIEWED ONLY — I did not execute the backend suite, the
+> web typecheck or any Playwright run in this pass; the change was authored by the
+> `fix/ci-commit-errors` lane and reviewed here to keep this playbook true. Anyone citing it as
+> green must run `pnpm --filter @pikar/backend test -- calendar` first.)
+>
+> Same pass closes a gap this playbook has been carrying since 22.1: `apps/web/e2e/connect-gmail.spec.ts`
+> now asserts the copy the page actually ships ("Connect Google" / `/connect google/i` /
+> "Google connected") plus the new `role="alert"` branch, instead of the pre-17-02 "Connect Gmail"
+> strings. See "Known gaps" — the entry is updated, not deleted, because the spec still has no gate.
+
+> Last verified: 2026-08-05 (Phase 26 Plan 05 owner preview — **the connected Approvals route is
+> accessible from navigation while authenticated browser evidence and owner UAT remain pending.**)
+> The owner rejected the disabled `Soon` item because it prevented in-product access to the page;
+> activating `/dashboard/approvals` is an access correction, not an approval claim. The route reuses
+> the one `executePlan` gate plus the
+> shipped discard/schedule/cancel/move mutations; it does not add a fan-out starter. Initial email
+> scheduling resolves browser-local `datetime-local` to an absolute instant, displays the resolved
+> IANA timezone for confirmation, writes `setPlanSendTime`, and only then calls `executePlan`.
+> Revise/change-time links reopen the originating cockpit thread. Attachment URLs remain on-demand.
+>
+> Automated evidence currently green: `pnpm --filter @pikar/web test -- approvals` (13/13) and web
+> typecheck. The authenticated `approvals.spec.ts` is authored and actually entered its Convex-backed
+> run, but the canonical setup stopped because this shell lacks `E2E_USER_EMAIL` and
+> `E2E_USER_PASSWORD`; reuse of the saved state reached Sign in because that token is expired. Do not
+> cite the browser gate as passed. With local Convex plus Next on `:3111` and the two credentials set,
+> resume exactly: `pnpm --filter @pikar/web test:e2e -- e2e/approvals.spec.ts`.
+>
+> The browser fixture boundary is strict: internally seeded plan rows prove page states only; public
+> mutations prove CAS/idempotency/races. No seeded row proves Gmail delivery, Calendar creation or
+> media generation. Roll back by disabling the hidden Approvals route and retaining workspace,
+> `/review`, `/requests`, `/ops`, all plan provenance/counters and the existing cockpit terminals.
+> Authenticated browser evidence and owner UAT remain blocking; the preview link can be disabled
+> independently if rollback is needed.
+
+> Last verified: 2026-08-05 (Phase 26 Plan 03 — Approvals write semantics). The existing human
+> `executePlan` gate remains the only email fan-out starter. This change adds guarded discard,
+> current-schedule movement and exact new-plan delivery progress without creating a second send
+> path.
+>
+> | Current state | Control | Result | Stored transition |
+> |---|---|---|---|
+> | `proposed` | Discard | `{ok:true, discarded:true}` | `canceled`, `cancelKind:"discarded"`, `canceledAt`; one refs-only `plan.discarded` |
+> | any other state | Discard | `{ok:true, alreadyResolved:true}` | no write, no audit |
+> | `scheduled` + current handle | Move | `{result:"moved"}` | old callback canceled; `sendAt` + handle replaced atomically; one refs-only `plan.rescheduled` |
+> | `delivering` / `done` | Move | `{result:"already_fired"}` | no write; the scheduler won and the UI must show In Flight, never “Rescheduled” |
+> | canceled, proposed, or otherwise unscheduled | Move | `{result:"not_scheduled"}` | no write |
+> | `scheduled` | Cancel | `{ok:true, canceled:true}` | `canceled`, `cancelKind:"scheduled_cancel"`, `canceledAt`, handle cleared |
+>
+> **Discard never re-arms.** `reschedulePlan` accepts only an explicit `scheduled_cancel` or a
+> legacy canceled row with missing provenance. A newly written `discarded` row always no-ops there.
+> Missing provenance remains the backward-compatible historical scheduled-cancel case; new writers
+> must never omit `cancelKind`.
+>
+> **The scheduler race has one truthful winner.** Every new callback carries `scheduledFor`; the
+> callback reads the row and starts fan-out only while status is `scheduled` and `sendAt` still
+> equals that token. A moved callback therefore no-ops even if it was already dequeued. Legacy
+> callbacks have no token and may proceed only when the row is still due (`sendAt <= now`). Because
+> cancel, move and fire all read/write the same plan row, Convex serializability yields canceled,
+> moved, or already-fired — never a successful move after delivery started. Replaying the same move
+> returns `moved` without adding a second callback or audit row.
+>
+> **Progress is exact only when the row says it is.** New email approvals seed
+> `recipientTotal`, `queuedCount`, `sentCount`, `failedCount` and `counterComplete:true` from the
+> frozen request targets. `plans.recordDeliveryTerminal` owns the request terminal and plan counters
+> in one transaction. Request status is the replay key: a `sent`/`failed` row cannot increment again
+> or flip terminal. Held `awaiting_reauth` rows remain queued. Legacy plans carry no completeness bit
+> and keep their counters absent, so the later Approvals reader must use only its bounded partial
+> fallback and must never present a fabricated exact zero.
+>
+> Focused verification:
+> `pnpm --filter @pikar/backend test -- cockpit plans`,
+> `pnpm --filter @pikar/backend typecheck`, and `node scripts/check-playbooks.mjs`.
+>
+> **Rollback boundary:** hide/disable the Approvals route and its mutations while retaining the
+> existing workspace, `/review`, `/requests`, `executePlan`, stored cancellation provenance and
+> progress fields. Do not erase provenance, reopen discarded rows, remove the stale-callback guard,
+> or stop terminal instrumentation during UI rollback.
+
+> Last verified: 2026-08-05 (15.4-04 watch-map acknowledgement — **no cockpit behavior changed;
+> the watched `apps/web/e2e/` path gained an actually executed Vault regression spec.**)
+> `vault-redesign.spec.ts` passed 2/2 against the authenticated local stack and covers the connected
+> Vault route from root/category browse through folder-scoped search, preview and confirmed removal.
+> It reuses `auth.setup.ts` storage state, seeds onboarding through the repository's internal E2E
+> seam, and deliberately does not fake Drive import or folder-digest AI success. Run it with
+> `pnpm --filter @pikar/web test:e2e -- e2e/vault-redesign.spec.ts`; the full close also runs both
+> package test suites/typechecks, the web production build and `node scripts/check-playbooks.mjs`.
+> Rollback is limited to the Vault E2E/playbook commit plus its isolated SMOKE-delete backend fix;
+> no cockpit route, tool, plan, send gate or stored cockpit row changes.
+
 > Last verified: 2026-08-04 (ADR-014 — **the cockpit can now propose a standalone image and still
 > cannot generate one.** The executive-only `proposeImage` tool stages `mediaMode:"image"` plus the
 > reviewed prompt on the unique plan row. It returns copy that explicitly says nothing was generated
@@ -1212,7 +1556,7 @@ refactor: the arms are the existing code paths and no behavior changed.**
 - `rejected` is transient, not a plan column; cross-turn per-address re-ask needs a schema change
 - Divider persistence ceiling: localStorage → Convex userPrefs if cross-device matters
 - **A disconnect strands rows on purpose (22.1)**: requests held at `awaiting_reauth`, unread `gmail_reconnect` notifications, and armed future-`sendAt` schedulers are all left in place. Each degrades to a non-throwing hold (`gmail.send` routes a missing token to `awaiting_reauth` without throwing), and the cron creates no new expiry notifications once the row is gone, so the leak is bounded to what already exists. Cleaning them up means building the reconnect-RESUME sweep — which does not exist today either, despite `connect-gmail/page.tsx`'s comment claiming reconnect "resumes any awaiting_reauth delivery". That resume is the real missing feature; the disconnect adds no new breakage.
-- **`apps/web/e2e/connect-gmail.spec.ts` is PRE-EXISTING red**: it still asserts a "Connect Gmail" heading and a `/connect gmail/i` link, but the page has said "Connect Google" since the 17-02 calendar widening. Not touched by 22.1-01 — recorded here so a reviewer does not attribute it to the disconnect change.
+- **`apps/web/e2e/connect-gmail.spec.ts` — the stale-copy assertions are FIXED (2026-08-07), but the spec still has no gate.** It asserted a "Connect Gmail" heading and a `/connect gmail/i` link from 17-02 (when the page became "Connect Google") until the `fix/ci-commit-errors` lane retargeted it at the shipped copy plus the new `role="alert"` unconfigured-OAuth branch. **Do not read that as green**: Playwright is deliberately outside the CI gate (`ci-gate.md` — it needs a live deployment and a seeded tenant), and this shell has never had `E2E_USER_EMAIL`/`E2E_USER_PASSWORD`, so the corrected spec has still never been observed passing. A spec that is merely *no longer wrong* is not a spec that has run.
 
 ## Voice-doc reuse of the evaluation card (14-08)
 

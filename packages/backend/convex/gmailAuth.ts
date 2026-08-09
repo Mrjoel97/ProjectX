@@ -43,6 +43,14 @@ function requireEnv(name: string): string {
   return val;
 }
 
+function googleOAuthConfigured(): boolean {
+  return Boolean(
+    process.env.GOOGLE_OAUTH_CLIENT_ID &&
+      process.env.GOOGLE_OAUTH_CLIENT_SECRET &&
+      process.env.GMAIL_OAUTH_REDIRECT_URI,
+  );
+}
+
 /** Google authorize URL requesting offline access + forced consent (Research Pitfall 3).
  *  `gmailTokens` deliberately keeps its shipped name: this is now one Google grant covering mail
  *  and calendar, and renaming a Convex table would be a migration for cosmetic gain. */
@@ -163,7 +171,8 @@ export const getForDelivery = internalQuery({
     const attachments = [];
     for (const ref of r.attachmentRefs) {
       const a = await ctx.db.get(ref);
-      if (a) attachments.push({ filename: a.filename, mimeType: a.mimeType, storageId: a.storageId });
+      if (a)
+        attachments.push({ filename: a.filename, mimeType: a.mimeType, storageId: a.storageId });
     }
     return {
       tenantId: r.tenantId,
@@ -250,10 +259,20 @@ export const gmailStatus = tenantQuery({
   },
 });
 
-/** Signed connect URL for the authenticated tenant (state binds this identity). */
+/**
+ * Signed connect URL for the authenticated tenant (state binds this identity).
+ *
+ * Missing deployment configuration is an operational state, not a client-query failure. Return a
+ * bounded result so the consent page can explain that Google connection is unavailable instead of
+ * crashing while React subscribes to the query. `buildAuthorizeUrl` remains strict so callback and
+ * token-exchange code can never proceed with partial OAuth configuration.
+ */
 export const gmailConnectUrl = tenantQuery({
   args: {},
-  handler: async (ctx): Promise<string> => buildAuthorizeUrl(ctx.tenantId),
+  handler: async (ctx): Promise<{ configured: boolean; url: string | null }> => {
+    if (!googleOAuthConfigured()) return { configured: false, url: null };
+    return { configured: true, url: await buildAuthorizeUrl(ctx.tenantId) };
+  },
 });
 
 /**

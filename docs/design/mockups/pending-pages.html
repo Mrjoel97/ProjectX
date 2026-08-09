@@ -1,0 +1,995 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pikar AI — Pending Page Mockups</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* tokens copied verbatim from apps/web/app/globals.css */
+  --ink:#0e1419; --ink-soft:#55606c; --glass:#16202b; --glass-line:#2b3a4a;
+  --held:#f0a22e; --held-text:#8f5406; --released:#3e9e75; --rule:#d8dbe0;
+  --teal-900:#0b4f4a; --teal-600:#009689; --teal-400:#40cad0;
+  --canvas:#f8fafc; --card:#ffffff;
+  --danger:#dc2626; --danger-text:#991b1b;
+  --font-display:'Bricolage Grotesque'; --font-body:'Public Sans'; --font-mono:'JetBrains Mono';
+  --shadow:0 14px 40px -30px rgb(14 20 25 / 40%);
+  --shadow-lift:0 20px 50px -28px rgb(14 20 25 / 34%);
+  /* ONE spacing scale — every gap, pad and margin on the page comes from here */
+  --sp-1:.5rem; --sp-2:.75rem; --sp-3:1rem; --sp-4:1.25rem;
+  --sp-5:1.5rem; --sp-6:2rem; --sp-7:2.75rem;
+  --mockbar-h:46px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--canvas);color:var(--ink);
+  font-family:var(--font-body),system-ui,sans-serif;font-size:15px;line-height:1.55;
+  -webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:var(--font-display),system-ui,sans-serif;letter-spacing:-.03em;margin:0}
+code,.mono{font-family:var(--font-mono),ui-monospace,monospace}
+
+/* ── mockup chrome (NOT part of the product) ───────────────────────── */
+.mockbar{position:sticky;top:0;z-index:50;background:#0e1419;color:#fff;min-height:var(--mockbar-h);
+  display:flex;align-items:center;gap:.5rem;padding:.55rem var(--sp-3);flex-wrap:wrap;
+  font-size:.8rem;border-bottom:1px solid #2b3a4a}
+.mockbar strong{font-family:var(--font-display);letter-spacing:-.02em;margin-right:.5rem}
+.mockbar .spacer{flex:1}
+.tab{border:1px solid #2b3a4a;background:transparent;color:#c8d0d8;border-radius:999px;
+  padding:.32rem .85rem;font:inherit;font-size:.78rem;cursor:pointer}
+.tab:hover{border-color:var(--teal-400);color:#fff}
+.tab[aria-selected="true"]{background:var(--teal-600);border-color:var(--teal-600);color:#fff;font-weight:600}
+.srctoggle{display:inline-flex;align-items:center;gap:.4rem;color:#8c96a3;font-size:.75rem;cursor:pointer}
+
+/* data-source annotation chips */
+.src{display:none;font-family:var(--font-mono);font-size:.66rem;line-height:1.5;color:#0b4f4a;
+  background:#e6f4f2;border:1px dashed #7fc4bd;border-radius:.35rem;padding:.1rem .4rem;
+  vertical-align:middle;margin-left:.4rem;max-width:100%;overflow-wrap:anywhere}
+.src.new{background:#fff4e2;border-color:#e0ac63;color:#8f5406}
+body.show-src .src{display:inline-block}
+.srckey{display:none;gap:1rem;font-size:.72rem;color:var(--ink-soft);padding:.4rem 0}
+body.show-src .srckey{display:flex}
+
+/* ── app shell ─────────────────────────────────────────────────────── */
+.frame{display:grid;grid-template-columns:244px minmax(0,1fr);min-height:100vh}
+.rail{background:var(--teal-900);color:#dff2f0;padding:var(--sp-4) var(--sp-2);display:flex;flex-direction:column;gap:.15rem;
+  position:sticky;top:var(--mockbar-h);height:calc(100vh - var(--mockbar-h));overflow-y:auto;overscroll-behavior:contain}
+.rail-brand{display:flex;align-items:center;gap:.6rem;padding:.3rem .5rem var(--sp-4)}
+.rail-logo{width:34px;height:34px;border-radius:11px;background:linear-gradient(140deg,var(--teal-400),var(--teal-600));
+  display:grid;place-items:center;color:#03302d;font-weight:800;font-size:1rem;font-family:var(--font-display)}
+.rail-word{font-family:var(--font-display);font-weight:700;color:#fff;font-size:1.08rem;letter-spacing:-.02em}
+.rail-item{display:flex;align-items:center;gap:.7rem;padding:.58rem .7rem;border-radius:.65rem;
+  color:#bfe0dc;font-size:.87rem;cursor:pointer;border:none;background:none;font-family:inherit;width:100%;text-align:left}
+.rail-item:hover{background:rgba(255,255,255,.07);color:#fff}
+.rail-item.is-active{background:var(--teal-600);color:#fff;font-weight:600}
+.rail-item.is-soon{color:#6f9d98;cursor:default}
+.rail-item.is-soon:hover{background:none;color:#6f9d98}
+.rail-soon{margin-left:auto;font-size:.6rem;text-transform:uppercase;letter-spacing:.08em;
+  background:rgba(255,255,255,.1);padding:.1rem .34rem;border-radius:.3rem}
+.rail-badge{margin-left:auto;background:var(--danger);color:#fff;font-size:.65rem;font-weight:700;
+  min-width:1.15rem;height:1.15rem;border-radius:999px;display:grid;place-items:center;padding:0 .3rem}
+.rail-foot{margin-top:auto;border-top:1px solid rgba(255,255,255,.1);padding-top:.5rem}
+.ico{width:17px;height:17px;flex:none;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+.canvas{padding:var(--sp-6) var(--sp-6) 5rem;max-width:1220px;width:100%;min-width:0}
+.page{display:none}
+.page.is-on{display:block}
+
+/* ── shared product patterns ───────────────────────────────────────── */
+.caps{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.14em;color:var(--ink-soft);margin:0}
+.display{font-size:clamp(1.9rem,1.4rem + 1.8vw,2.6rem);font-weight:800}
+.lede{color:var(--ink-soft);margin:.45rem 0 0;max-width:52ch}
+.pagehead{display:flex;justify-content:space-between;align-items:flex-end;gap:var(--sp-5);flex-wrap:wrap;margin-bottom:var(--sp-7)}
+.card{background:var(--card);border-radius:1rem;box-shadow:var(--shadow);padding:var(--sp-5)}
+/* ONE rhythm: every section is a stack of --sp-4, separated from the next by --sp-7 */
+.sec{display:grid;gap:var(--sp-4);margin-bottom:var(--sp-7)}
+.sec:last-child{margin-bottom:0}
+.sec-head{display:flex;align-items:baseline;gap:var(--sp-2);flex-wrap:wrap;margin-bottom:calc(var(--sp-2) * -1)}
+.count-pill{font-size:.7rem;font-weight:700;background:#eef1f4;color:var(--ink-soft);border-radius:999px;padding:.1rem .5rem}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(212px,1fr));gap:var(--sp-4)}
+.stat-tile{background:var(--card);border-radius:1rem;box-shadow:var(--shadow);padding:var(--sp-5);
+  display:grid;gap:var(--sp-2);align-content:start}
+.stat-head{display:flex;align-items:center;gap:.55rem}
+.stat-badge{width:30px;height:30px;border-radius:.55rem;background:linear-gradient(140deg,var(--teal-400),var(--teal-600));
+  display:grid;place-items:center;color:#fff;flex:none;font-size:.88rem;font-weight:700;line-height:1}
+.stat-value{font-family:var(--font-display);font-size:2rem;font-weight:800;letter-spacing:-.03em;line-height:1}
+.stat-value.is-text{font-size:1.05rem;font-weight:700;letter-spacing:-.01em}
+.stat-cap{font-size:.76rem;color:var(--ink-soft);line-height:1.4}
+
+.btn{border:none;border-radius:999px;padding:.5rem 1.1rem;font:inherit;font-size:.86rem;font-weight:600;cursor:pointer}
+.btn-primary{background:var(--teal-600);color:#fff}
+.btn-dark{background:var(--ink);color:#fff}
+.btn-ghost{background:transparent;color:var(--ink);border:1px solid var(--rule)}
+.btn-danger{background:transparent;color:var(--danger-text);border:1px solid #f0c2c2}
+.btn-sm{padding:.32rem .75rem;font-size:.78rem}
+
+.pill{display:inline-flex;align-items:center;gap:.3rem;font-size:.68rem;font-weight:700;
+  text-transform:uppercase;letter-spacing:.08em;border-radius:999px;padding:.16rem .55rem}
+.pill-held{background:#fdf1dd;color:var(--held-text)}
+.pill-live{background:#e6f4f2;color:#0b4f4a}
+.pill-done{background:#e7f4ed;color:#256d4e}
+.pill-off{background:#eef1f4;color:var(--ink-soft)}
+.pill-bad{background:#fdecec;color:var(--danger-text)}
+.pill-type{background:#111a22;color:#fff}
+
+/* approval gate card — the ONE amber surface (BRAND §2) */
+.gate{border-left:3px solid var(--held);display:grid;gap:var(--sp-3)}
+.gate-top{display:flex;justify-content:space-between;gap:var(--sp-3);align-items:flex-start;flex-wrap:wrap}
+.gate-title{font-family:var(--font-display);font-size:1.15rem;font-weight:700;letter-spacing:-.02em;margin-bottom:.3rem}
+.gate-meta{display:flex;gap:.4rem 1.2rem;flex-wrap:wrap;font-size:.79rem;color:var(--ink-soft)}
+.gate-meta b{color:var(--ink);font-weight:600}
+.gate-body{background:var(--canvas);border:1px solid var(--rule);border-radius:.65rem;padding:var(--sp-3);
+  font-size:.85rem;color:var(--ink-soft);line-height:1.65}
+.gate-acts{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;padding-top:.15rem}
+.chiprow{display:flex;gap:.4rem;flex-wrap:wrap}
+.chip{font-size:.72rem;background:var(--canvas);border:1px solid var(--rule);border-radius:.4rem;padding:.15rem .5rem;color:var(--ink-soft)}
+
+/* ledger — structured report, no gridlines (BRAND §5 executive report card).
+   A wide table scrolls INSIDE its card; the page body never scrolls sideways. */
+.card:has(.ledger),.card-headed .body:has(.ledger){overflow-x:auto}
+.ledger{width:100%;border-collapse:collapse;font-size:.85rem;min-width:480px}
+.ledger th{text-align:left;font-size:.68rem;text-transform:uppercase;letter-spacing:.12em;
+  color:var(--ink-soft);font-weight:700;padding:0 var(--sp-3) .6rem 0;border-bottom:1px solid var(--rule)}
+.ledger td{padding:.7rem var(--sp-3) .7rem 0;border-bottom:1px solid #eef1f4;vertical-align:top}
+.ledger th:last-child,.ledger td:last-child{padding-right:0}
+.ledger tr:last-child td{border-bottom:none}
+.ledger .num{text-align:right;font-family:var(--font-mono);font-size:.8rem;white-space:nowrap}
+.ledger .muted{color:var(--ink-soft)}
+
+/* budget rail meter */
+.meter{height:8px;border-radius:999px;background:#eef1f4;overflow:hidden;margin:.5rem 0 .35rem}
+.meter i{display:block;height:100%;border-radius:999px;background:var(--teal-600)}
+.meter i.warn{background:var(--held)}
+.meter i.bad{background:var(--danger)}
+
+/* masthead band (BriefingCard pattern) */
+.masthead{background:var(--teal-900);color:#fff;border-radius:1rem 1rem 0 0;padding:var(--sp-4) var(--sp-5);
+  display:flex;justify-content:space-between;gap:var(--sp-4);flex-wrap:wrap;align-items:center}
+.masthead .caps{color:#8fd6cf;margin-bottom:.3rem}
+.kpis{display:flex;gap:var(--sp-6);flex-wrap:wrap}
+.kpi{display:grid;gap:.15rem}
+.kpi b{font-family:var(--font-display);font-size:1.35rem;font-weight:800;line-height:1}
+.kpi span{font-size:.66rem;text-transform:uppercase;letter-spacing:.1em;color:#8fd6cf}
+.card-headed{padding:0;overflow:hidden}
+.card-headed>.body{padding:var(--sp-5)}
+
+/* content grid — cards are equal height; the action row always sits on the floor */
+.artgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(236px,1fr));gap:var(--sp-4)}
+.art{background:var(--card);border-radius:1rem;box-shadow:var(--shadow);overflow:hidden;display:grid;
+  grid-template-rows:120px 1fr auto}
+.art .thumb{background:linear-gradient(150deg,#0b4f4a,#16202b);display:grid;place-items:center;position:relative}
+.art .thumb.doc{background:linear-gradient(150deg,#eef3f7,#dde6ee)}
+.art .thumb.res{background:linear-gradient(150deg,#e9f2ff,#dbe7f7)}
+.art .thumb .badge{position:absolute;top:.6rem;left:.6rem}
+.art .meta{padding:var(--sp-3) var(--sp-3) var(--sp-2);display:grid;gap:.35rem;align-content:start}
+.art .meta h4{margin:0;font-size:.9rem;font-weight:650;font-family:var(--font-body);line-height:1.4}
+.art .meta p{margin:0;font-size:.73rem;color:var(--ink-soft);line-height:1.5}
+.art .acts{display:flex;gap:.4rem;flex-wrap:wrap;padding:0 var(--sp-3) var(--sp-3)}
+
+.filters{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
+.filt{border:1px solid var(--rule);background:var(--card);border-radius:999px;padding:.35rem .9rem;
+  font:inherit;font-size:.8rem;cursor:pointer;color:var(--ink-soft)}
+.filt[aria-pressed="true"]{background:var(--teal-600);border-color:var(--teal-600);color:#fff;font-weight:600}
+
+/* sparkline / bars */
+.bars{display:flex;align-items:flex-end;gap:4px;height:82px;margin-top:var(--sp-2)}
+.bars i{flex:1;background:var(--teal-600);border-radius:3px 3px 0 0;opacity:.85;min-height:2px}
+.bars i.alt{background:var(--teal-400)}
+.axis{display:flex;justify-content:space-between;font-size:.65rem;color:var(--ink-soft);margin-top:.45rem}
+
+.split{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--sp-4);align-items:stretch}
+.split>*{min-width:0}
+.split>.card,.split>.stat-tile{height:100%}
+@media(max-width:1000px){.split{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:900px){.frame{grid-template-columns:minmax(0,1fr)}.rail{display:none}
+  .canvas{padding:var(--sp-5) var(--sp-4) 4rem}}
+
+.note{background:#eef7f6;border:1px solid #cbe6e2;border-left:3px solid var(--teal-600);
+  border-radius:.7rem;padding:var(--sp-3) var(--sp-4);font-size:.83rem;line-height:1.6;color:#0b4f4a}
+.note.warn{background:#fdf7ec;border-color:#efdcb9;border-left-color:var(--held);color:var(--held-text)}
+.note.dead{background:#f4f6f8;border-color:var(--rule);border-left-color:var(--ink-soft);color:var(--ink-soft)}
+
+.future{position:relative}
+.future .card,.future .stat-tile{opacity:.55;filter:grayscale(.35)}
+.futurestamp{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;z-index:2}
+.futurestamp span{background:var(--ink);color:#fff;font-family:var(--font-display);font-weight:700;
+  padding:.7rem 1.5rem;border-radius:.8rem;font-size:.95rem;box-shadow:var(--shadow-lift)}
+
+.gradbanner{background:linear-gradient(90deg,#009689,#40cad0,#3b82f6);color:#fff;border-radius:1rem;
+  padding:var(--sp-4) var(--sp-5);display:flex;justify-content:space-between;align-items:center;gap:var(--sp-4);flex-wrap:wrap}
+.gradbanner .btn{background:#fff;color:#007066}
+.empty{color:var(--ink-soft);font-size:.88rem;padding:var(--sp-4) 0}
+/* every ad-hoc inline margin in the markup normalises onto the one scale */
+[style*="margin-bottom:1.5rem"]{margin-bottom:var(--sp-7) !important}
+[style*="margin-bottom:1.25rem"]{margin-bottom:var(--sp-6) !important}
+.srckey{margin-bottom:var(--sp-2)}
+</style>
+</head>
+<body class="show-src">
+
+<div class="mockbar">
+  <strong>Pikar AI · pending-page mockups</strong>
+  <button class="tab" aria-selected="true" data-p="approvals">Approvals</button>
+  <button class="tab" data-p="finance">Cost</button>
+  <button class="tab" data-p="cash">Cash</button>
+  <button class="tab" data-p="content">Content</button>
+  <button class="tab" data-p="reports">Reports</button>
+  <button class="tab" data-p="pipeline">Sales Pipeline</button>
+  <button class="tab" data-p="cc">Command Center v2</button>
+  <span class="spacer"></span>
+  <label class="srctoggle"><input type="checkbox" id="srcbox" checked> show data sources</label>
+</div>
+
+<div class="frame">
+  <!-- ── nav rail (mirrors apps/web/app/(app)/layout.tsx) ── -->
+  <nav class="rail">
+    <div class="rail-brand"><span class="rail-logo">◕</span><span class="rail-word">Pikar AI</span></div>
+    <button class="rail-item" data-p="cc"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Command Center</button>
+    <button class="rail-item is-active" data-p="approvals"><svg class="ico" viewBox="0 0 24 24"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>Approvals<span class="rail-badge">4</span></button>
+    <button class="rail-item" data-p="finance"><svg class="ico" viewBox="0 0 24 24"><path d="M20 12V8H6a2 2 0 0 1 0-4h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/></svg>Cost</button>
+    <button class="rail-item" data-p="cash"><svg class="ico" viewBox="0 0 24 24"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Cash<span class="rail-soon">Ph 28</span></button>
+    <button class="rail-item" data-p="content"><svg class="ico" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Content</button>
+    <button class="rail-item" data-p="pipeline"><svg class="ico" viewBox="0 0 24 24"><path d="M22 7l-8.5 8.5-5-5L2 17"/><path d="M16 7h6v6"/></svg>Sales Pipeline</button>
+    <button class="rail-item"><svg class="ico" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/></svg>Compliance<span class="rail-badge">2</span></button>
+    <button class="rail-item"><svg class="ico" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9z"/></svg>My Workspace</button>
+    <button class="rail-item"><svg class="ico" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 18v4"/></svg>Live Voice</button>
+    <button class="rail-item" data-p="reports"><svg class="ico" viewBox="0 0 24 24"><path d="M21.2 15.9A10 10 0 1 1 8.1 2.8"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>Reports</button>
+    <button class="rail-item"><svg class="ico" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.7 4 3 9 3s9-1.3 9-3V5"/><path d="M3 12c0 1.7 4 3 9 3s9-1.3 9-3"/></svg>Knowledge Vault</button>
+    <span class="rail-item is-soon"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20"/></svg>Join Community<span class="rail-soon">Soon</span></span>
+    <div class="rail-foot">
+      <button class="rail-item"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Business Profile</button>
+      <button class="rail-item"><svg class="ico" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="m2 7 10 6 10-6"/></svg>Connections</button>
+    </div>
+  </nav>
+
+  <div class="canvas">
+
+  <!-- ═══════════════════ APPROVALS ═══════════════════ -->
+  <section class="page is-on" id="p-approvals">
+    <div class="pagehead">
+      <div>
+        <p class="caps">Governance gate • Thursday, August 6</p>
+        <h1 class="display">Clear the gate</h1>
+        <p class="lede">Everything Pikar has staged and cannot do without you. Approve once — delivery, audit and cost accounting follow automatically.</p>
+      </div>
+      <div class="stat-tile" style="min-width:210px">
+        <div class="stat-head"><span class="stat-badge"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><p class="caps">Oldest waiting</p></div>
+        <div class="stat-value is-text">2 days</div>
+        <div class="stat-cap">Nothing expires — but a stale plan drafts against stale context.</div>
+      </div>
+    </div>
+
+    <div class="srckey">
+      <span><span class="src">exists</span> already in the backend, no new code</span>
+      <span><span class="src new">new</span> needs a new query / index / wrapper</span>
+    </div>
+
+    <!-- Awaiting you -->
+    <section class="sec">
+      <div class="sec-head"><p class="caps">Awaiting you</p><span class="count-pill">4</span>
+        <span class="src new">plans.awaitingApproval — new tenantQuery + by_tenant_status index</span></div>
+
+      <!-- email plan -->
+      <div class="card gate">
+        <div class="gate-top">
+          <div>
+            <div class="chiprow" style="margin-bottom:.4rem">
+              <span class="pill pill-held">Held · awaiting release</span>
+              <span class="pill pill-type">Email · 3 recipients</span>
+            </div>
+            <div class="gate-title">Q3 pricing update to retained clients</div>
+            <div class="gate-meta">
+              <span>Thread <b>Client comms</b></span><span>Staged <b>2 days ago</b></span>
+              <span>Attachments <b>1</b></span><span>Est. cost <b>$0.004</b></span>
+            </div>
+          </div>
+          <button class="btn btn-ghost btn-sm">Open in cockpit ↗</button>
+        </div>
+        <div class="gate-body">
+          <b style="color:var(--ink)">Subject:</b> A small change to your Q3 retainer<br>
+          Hi Dana — a short note before the invoice lands. From 1 September the retainer moves…
+          <span class="muted">(2 of 3 recipients carry a tailored body)</span>
+        </div>
+        <div class="chiprow">
+          <span class="chip">dana@northfield.co</span><span class="chip">m.ross@lumen.io</span>
+          <span class="chip">accounts@brightpath.dev</span>
+          <span class="chip">📎 Q3-pricing-note.pdf · 84 KB</span>
+        </div>
+        <div class="gate-acts">
+          <button class="btn btn-primary">Approve &amp; send</button>
+          <button class="btn btn-ghost">Schedule…</button>
+          <button class="btn btn-ghost">Revise in cockpit</button>
+          <button class="btn btn-danger btn-sm">Discard</button>
+          <span class="src">cockpit.executePlan · plans.setPlanSendTime · plans.attachmentUrls</span>
+        </div>
+      </div>
+
+      <!-- media plan -->
+      <div class="card gate">
+        <div class="gate-top">
+          <div>
+            <div class="chiprow" style="margin-bottom:.4rem">
+              <span class="pill pill-held">Held · paid generation</span>
+              <span class="pill pill-type">Reel · 6 blocks</span>
+            </div>
+            <div class="gate-title">30s launch reel — "Ship faster, bill sooner"</div>
+            <div class="gate-meta">
+              <span>Thread <b>Launch week</b></span><span>Staged <b>4 hours ago</b></span>
+              <span>Runtime <b>~28s</b></span>
+            </div>
+          </div>
+        </div>
+        <div class="gate-body" style="display:grid;gap:var(--sp-2)">
+          <div style="display:flex;justify-content:space-between"><span>6 × video clip (wan-2.5)</span><span class="mono">$4.20</span></div>
+          <div style="display:flex;justify-content:space-between"><span>6 × voiceover take (tts)</span><span class="mono">$0.36</span></div>
+          <div style="display:flex;justify-content:space-between"><span>1 × caption pass (stt)</span><span class="mono">$0.06</span></div>
+          <div style="display:flex;justify-content:space-between;border-top:1px solid var(--rule);padding-top:.5rem;color:var(--ink);font-weight:700">
+            <span>Reserved on approve</span><span class="mono">$4.62</span></div>
+          <div style="font-size:.78rem">Media budget after this reel: <b>$5.38 of $10.00 left today</b></div>
+        </div>
+        <div class="gate-acts">
+          <button class="btn btn-primary">Approve &amp; spend $4.62</button>
+          <button class="btn btn-ghost">Edit blocks</button>
+          <button class="btn btn-danger btn-sm">Discard</button>
+          <span class="src">media.jobEstimate · cockpit.executePlan · guardrails.mediaRemainingCents</span>
+        </div>
+      </div>
+
+      <!-- calendar plan -->
+      <div class="card gate">
+        <div class="gate-top">
+          <div>
+            <div class="chiprow" style="margin-bottom:.4rem">
+              <span class="pill pill-held">Held · writes to your calendar</span>
+              <span class="pill pill-type">Calendar event</span>
+            </div>
+            <div class="gate-title">Discovery call — Brightpath</div>
+            <div class="gate-meta">
+              <span>Tue 12 Aug, <b>14:00–14:45 SAST</b></span><span>Availability <b>checked, free</b></span>
+            </div>
+          </div>
+        </div>
+        <div class="gate-acts">
+          <button class="btn btn-primary">Approve &amp; create</button>
+          <button class="btn btn-ghost">Change time</button>
+          <button class="btn btn-danger btn-sm">Discard</button>
+          <span class="src">plans.kind="calendar_event" · calendar.createEvent</span>
+        </div>
+      </div>
+
+      <!-- memo / gap -->
+      <div class="card gate">
+        <div class="gate-top">
+          <div>
+            <div class="chiprow" style="margin-bottom:.4rem">
+              <span class="pill pill-held">Held</span><span class="pill pill-type">Next-step memo</span>
+            </div>
+            <div class="gate-title">Close the Offer gate before spending on leads</div>
+            <div class="gate-meta"><span>From <b>growth-os diagnosis</b></span><span>Leverage rank <b>2 of 5</b></span></div>
+          </div>
+        </div>
+        <div class="gate-body">Your offer has no risk-reversal and no named outcome, so lead spend converts at the offer's ceiling, not the traffic's. Proof it is fixed: reply rate on cold outreach above 8% for two consecutive weeks.</div>
+        <div class="gate-acts">
+          <button class="btn btn-primary">Approve &amp; file to vault</button>
+          <button class="btn btn-ghost">Discard</button>
+          <span class="src">evaluations.actOnGap · plans.kind="memo"</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Scheduled -->
+    <section class="sec">
+      <div class="sec-head"><p class="caps">Scheduled — approved, not yet fired</p><span class="count-pill">2</span>
+        <span class="src">plans.status="scheduled" · cockpit.reschedulePlan / cancelScheduledPlan</span></div>
+      <div class="card">
+        <table class="ledger">
+          <thead><tr><th>Plan</th><th>Kind</th><th>Fires</th><th>Recipients</th><th></th></tr></thead>
+          <tbody>
+            <tr>
+              <td><b>Monday nudge — dormant trials</b><div class="muted" style="font-size:.78rem">Thread: Reactivation</div></td>
+              <td><span class="pill pill-live">Email</span></td>
+              <td>Mon 11 Aug, 04:00 SAST<div class="muted" style="font-size:.78rem">in 4 days</div></td>
+              <td class="num">17</td>
+              <td style="text-align:right;white-space:nowrap"><button class="btn btn-ghost btn-sm">Reschedule</button> <button class="btn btn-danger btn-sm">Cancel</button></td>
+            </tr>
+            <tr>
+              <td><b>Invoice reminder — Lumen</b><div class="muted" style="font-size:.78rem">Thread: Receivables</div></td>
+              <td><span class="pill pill-live">Email</span></td>
+              <td>Fri 8 Aug, 09:00 SAST<div class="muted" style="font-size:.78rem">in 22 hours</div></td>
+              <td class="num">1</td>
+              <td style="text-align:right;white-space:nowrap"><button class="btn btn-ghost btn-sm">Reschedule</button> <button class="btn btn-danger btn-sm">Cancel</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- In flight -->
+    <section class="sec">
+      <div class="sec-head"><p class="caps">In flight</p><span class="count-pill">1</span>
+        <span class="src">plans.reportForPlan · requests.list</span></div>
+      <div class="card" style="display:grid;gap:var(--sp-2)">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.6rem">
+          <div><b>Welcome sequence — August cohort</b>
+            <div class="muted" style="font-size:.8rem;color:var(--ink-soft)">Approved 6 minutes ago · fan-out running</div></div>
+          <span class="pill pill-live">Delivering · 9 of 14</span>
+        </div>
+        <div class="meter"><i style="width:64%"></i></div>
+        <div class="chiprow">
+          <span class="chip" style="color:#256d4e">✓ 9 sent</span>
+          <span class="chip">◷ 4 queued</span>
+          <span class="chip" style="color:var(--danger-text)">✕ 1 failed — bounced</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Other decisions -->
+    <section class="sec">
+      <div class="sec-head"><p class="caps">Other decisions waiting on you</p>
+        <span class="src new">notifications.list (all, not just unread) + evaluations open-question read</span></div>
+      <div class="split">
+        <div class="card" style="display:grid;gap:var(--sp-2)">
+          <span class="pill pill-off">Diagnostic question</span>
+          <b>What is your current monthly recurring revenue?</b>
+          <p style="margin:0;font-size:.83rem;color:var(--ink-soft)">The growth-os scorecard cannot rank the Money gate without it. Answering here beats re-opening the thread.</p>
+          <div style="display:flex;gap:.5rem"><input placeholder="e.g. 4200" style="flex:1;padding:.5rem .8rem;border:1px solid var(--rule);border-radius:.5rem;font:inherit"><button class="btn btn-primary btn-sm">Save</button></div>
+          <span class="src">evaluations.recordScorecardAnswer — <b>built, zero callers today</b></span>
+        </div>
+        <div class="card" style="display:grid;gap:var(--sp-2)">
+          <span class="pill pill-bad">Blocked</span>
+          <b>1 send blocked by the PII guard</b>
+          <p style="margin:0;font-size:.83rem;color:var(--ink-soft)">A draft contained an unredactable identifier and was stopped before the model call. Nothing was sent and nothing was spent.</p>
+          <button class="btn btn-ghost btn-sm" style="justify-self:start">Review in Compliance ↗</button>
+          <span class="src">deadLetters.listNew · notifications.list</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Cleared -->
+    <section class="sec">
+      <div class="sec-head"><p class="caps">Cleared — last 7 days</p>
+        <span class="src new">plans by status done/canceled, windowed</span></div>
+      <div class="card">
+        <table class="ledger">
+          <thead><tr><th>Plan</th><th>Outcome</th><th>When</th><th class="num">Cost</th></tr></thead>
+          <tbody>
+            <tr><td>Proposal follow-up — Northfield</td><td><span class="pill pill-done">Delivered 1/1</span></td><td class="muted">Yesterday 16:40</td><td class="num">$0.002</td></tr>
+            <tr><td>Onboarding pack — 6 new clients</td><td><span class="pill pill-done">Delivered 6/6</span></td><td class="muted">Tue 09:12</td><td class="num">$0.011</td></tr>
+            <tr><td>Teaser reel — beta waitlist</td><td><span class="pill pill-done">Rendered · published</span></td><td class="muted">Mon 20:03</td><td class="num">$3.84</td></tr>
+            <tr><td>Price-rise notice — all clients</td><td><span class="pill pill-off">Canceled before send</span></td><td class="muted">Mon 11:55</td><td class="num">$0.000</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+
+  <!-- ═══════════════════ FINANCE ═══════════════════ -->
+  <section class="page" id="p-finance">
+    <div class="pagehead">
+      <div>
+        <p class="caps">Spend control • August</p>
+        <h1 class="display">Know what it costs</h1>
+        <p class="lede">Every dollar Pikar can spend runs through three hard budget rails. This is what is left, what it went on, and the switch that stops it.</p>
+      </div>
+    </div>
+
+    <div class="note warn" style="margin-bottom:1.5rem">
+      <b>Renamed Finance → Cost, 2026-08-07 (owner decision).</b> This page was always a cost console — it reads what <i>Pikar</i> spends on models, media and ingest. Business money (revenue, invoices, runway) is a genuinely different surface and is now <b>Cash</b>, owned by <b>Phase&nbsp;28</b>'s connector rails. Splitting them is what lets each one ship when its data actually exists instead of one page waiting on the other.
+      <br><br>
+      <b>Honest scope.</b> Pikar sees <b>spend</b>, not income. There is no revenue, invoice or cash-position data anywhere in the system today — a "Revenue this month" tile would be a fabricated number, and BRAND §5 forbids that. <b>Currency is USD</b> (26-CONTEXT: "Costs are USD"; estimated / reserved / actual / refunded stay distinct).
+      <br><br>
+      Plans <b>26-06 → 26-10 are unchanged in substance</b> by the rename: append-only spend ledger + coverage start, reasoning/ingest instrumentation, media reserve/actual/refund/unlanded, tenant projections + owner-only controls, then the connected route. Only the name and the nav entry move.
+    </div>
+
+    <section class="sec">
+      <div class="sec-head"><p class="caps">Budget rails — live</p>
+        <span class="src new">3 internalQueries → tenantQuery wrappers (guardrails.remainingDailyCents / mediaRemainingCents / ingestRemainingCents)</span></div>
+      <div class="stat-grid">
+        <div class="stat-tile">
+          <div class="stat-head"><span class="stat-badge"><svg class="ico" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg></span><p class="caps">Reasoning &amp; drafting</p></div>
+          <div class="stat-value">$1.86</div>
+          <div class="meter"><i style="width:37%"></i></div>
+          <div class="stat-cap">left of $5.00 today · 37% used · resets 00:00 UTC</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-head"><span class="stat-badge" style="background:linear-gradient(140deg,#f0a22e,#e07b39)"><svg class="ico" viewBox="0 0 24 24"><path d="m23 7-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></span><p class="caps">Media generation</p></div>
+          <div class="stat-value">$5.38</div>
+          <div class="meter"><i class="warn" style="width:46%"></i></div>
+          <div class="stat-cap">left of $10.00 today · one 30s reel ≈ $4.60</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-head"><span class="stat-badge" style="background:linear-gradient(140deg,#3b82f6,#40cad0)"><svg class="ico" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.7 4 3 9 3s9-1.3 9-3V5"/></svg></span><p class="caps">Vault ingest</p></div>
+          <div class="stat-value">$0.94</div>
+          <div class="meter"><i style="width:6%"></i></div>
+          <div class="stat-cap">left of $1.00 today · embeddings + extraction</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-head"><span class="stat-badge" style="background:linear-gradient(140deg,#55606c,#0e1419)"><svg class="ico" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/></svg></span><p class="caps">Deployment ceiling</p></div>
+          <div class="stat-value is-text">$76.20 / $100</div>
+          <div class="meter"><i style="width:76%"></i></div>
+          <div class="stat-cap">Keyless global cap across all tenants. Not yours alone — shown for honesty.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec">
+      <div class="sec-head"><p class="caps">Where it went — 30 days</p>
+        <span class="src new">media.spendForPeriod → tenantQuery (tenant-scoped already, drop the arg)</span></div>
+      <div class="split">
+        <div class="card card-headed">
+          <div class="masthead">
+            <div><p class="caps">Media spend</p><div style="font-family:var(--font-display);font-size:1.5rem;font-weight:800">$18.44</div></div>
+            <div class="kpis">
+              <div class="kpi"><b>32</b><span>jobs</span></div>
+              <div class="kpi"><b>3</b><span>unlanded</span></div>
+              <div class="kpi"><b>+4%</b><span>vs estimate</span></div>
+            </div>
+          </div>
+          <div class="body">
+            <table class="ledger">
+              <thead><tr><th>Kind</th><th class="num">Jobs</th><th class="num">Estimated</th><th class="num">Actual</th><th class="num">Drift</th></tr></thead>
+              <tbody>
+                <tr><td>Video clip</td><td class="num">18</td><td class="num">$14.40</td><td class="num">$15.12</td><td class="num" style="color:var(--held-text)">+5.0%</td></tr>
+                <tr><td>Voiceover (tts)</td><td class="num">11</td><td class="num">$0.66</td><td class="num">$0.61</td><td class="num" style="color:#256d4e">−7.6%</td></tr>
+                <tr><td>Captions (stt)</td><td class="num">2</td><td class="num">$0.12</td><td class="num">$0.12</td><td class="num muted">exact</td></tr>
+                <tr><td>Image</td><td class="num">1</td><td class="num">$0.04</td><td class="num muted">— unlanded</td><td class="num muted">—</td></tr>
+              </tbody>
+            </table>
+            <p style="font-size:.76rem;color:var(--ink-soft);margin:.8rem 0 0">
+              An <b>unlanded</b> job is in flight or failed — it is <b>not free</b>. Voiceover is reserved at 2× and refunded on land.</p>
+          </div>
+        </div>
+
+        <div style="display:grid;gap:var(--sp-4);align-content:start">
+          <div class="card">
+            <p class="caps" style="margin-bottom:.5rem">Daily spend — all rails</p>
+            <div class="bars">
+              <i style="height:22%"></i><i style="height:9%"></i><i style="height:64%" class="alt"></i><i style="height:31%"></i>
+              <i style="height:12%"></i><i style="height:0%"></i><i style="height:0%"></i><i style="height:47%"></i>
+              <i style="height:88%" class="alt"></i><i style="height:26%"></i><i style="height:18%"></i><i style="height:55%"></i>
+              <i style="height:41%"></i><i style="height:7%"></i>
+            </div>
+            <div class="axis"><span>24 Jul</span><span>teal = media day</span><span>6 Aug</span></div>
+            <span class="src new">telemetry.costUsd series + mediaJobs by day</span>
+          </div>
+          <div class="stat-grid" style="grid-template-columns:1fr 1fr">
+            <div class="stat-tile"><div class="stat-head"><span class="stat-badge"><svg class="ico" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="m2 7 10 6 10-6"/></svg></span><p class="caps">Cost per send</p></div>
+              <div class="stat-value">$0.0031</div><div class="stat-cap">$0.14 over 45 delivered</div>
+              <span class="src">opsSignals.evalSignals</span></div>
+            <div class="stat-tile"><div class="stat-head"><span class="stat-badge"><svg class="ico" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg></span><p class="caps">Cheap-model fallbacks</p></div>
+              <div class="stat-value">6</div><div class="stat-cap">primary failed, retry ran cheaper</div>
+              <span class="src">opsSignals.evalSignals</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec">
+      <div class="sec-head"><p class="caps">Job ledger</p>
+        <span class="src new">media.listJobs → widen from per-plan to per-tenant window</span></div>
+      <div class="card">
+        <table class="ledger">
+          <thead><tr><th>Job</th><th>Model</th><th>Status</th><th class="num">Est.</th><th class="num">Actual</th><th>Reconciliation</th></tr></thead>
+          <tbody>
+            <tr><td>Launch reel · block 3 · video</td><td class="mono muted">wan-2.5</td><td><span class="pill pill-done">landed</span></td><td class="num">$0.80</td><td class="num">$0.84</td><td><span class="pill pill-off">drift +5%</span></td></tr>
+            <tr><td>Launch reel · block 3 · tts</td><td class="mono muted">tts-1</td><td><span class="pill pill-done">landed</span></td><td class="num">$0.06</td><td class="num">$0.03</td><td><span class="pill pill-done">exact (2× reserve refunded)</span></td></tr>
+            <tr><td>Teaser · block 1 · video</td><td class="mono muted">wan-2.5</td><td><span class="pill pill-live">in flight</span></td><td class="num">$0.80</td><td class="num muted">—</td><td><span class="pill pill-live">unlanded</span></td></tr>
+            <tr><td>Hero image · thumbnail</td><td class="mono muted">flux-1.1</td><td><span class="pill pill-bad">failed</span></td><td class="num">$0.04</td><td class="num muted">—</td><td><span class="pill pill-bad">vendor 5xx · reserve held</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="sec">
+      <div class="sec-head"><p class="caps">Controls</p><span class="pill pill-off">Owner only</span>
+        <span class="src new">guardrails.setKillSwitch / setMediaKillSwitch → ownerMutation wrappers</span></div>
+      <div class="split">
+        <div class="card" style="display:flex;gap:var(--sp-4);align-items:center;flex-wrap:wrap">
+          <span class="stat-badge" style="background:linear-gradient(140deg,#dc2626,#f0a22e)"><svg class="ico" viewBox="0 0 24 24"><path d="M18.4 5.6a9 9 0 1 1-12.8 0"/><path d="M12 2v10"/></svg></span>
+          <div style="flex:1 1 12rem"><p class="caps" style="margin:0">Master kill switch</p>
+            <div style="font-size:.83rem;color:var(--ink-soft)">Off — model calls permitted within budget.</div></div>
+          <button class="btn btn-ghost">Off</button>
+        </div>
+        <div class="card" style="display:flex;gap:var(--sp-4);align-items:center;flex-wrap:wrap">
+          <span class="stat-badge" style="background:linear-gradient(140deg,#f0a22e,#e07b39)"><svg class="ico" viewBox="0 0 24 24"><path d="m23 7-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></span>
+          <div style="flex:1 1 12rem"><p class="caps" style="margin:0">Media kill switch</p>
+            <div style="font-size:.83rem;color:var(--ink-soft)">Off — paid generation permitted. Pausing this does not pause email.</div></div>
+          <button class="btn btn-ghost">Off</button>
+        </div>
+      </div>
+      <div class="card" style="display:flex;gap:var(--sp-4);align-items:center;flex-wrap:wrap">
+        <div style="flex:1 1 16rem"><p class="caps" style="margin:0">Per-request budget ceiling</p>
+          <div style="font-size:.83rem;color:var(--ink-soft)">A single request may never cost more than this, whatever the model picks.</div></div>
+        <div style="display:flex;gap:.5rem;align-items:center"><span class="mono">$</span>
+          <input value="0.05" style="width:6rem;padding:.45rem .7rem;border:1px solid var(--rule);border-radius:.5rem;font:inherit" class="mono">
+          <button class="btn btn-primary btn-sm">Save</button></div>
+        <span class="src">guardrailConfig.budgetUsdPerRequest</span>
+      </div>
+    </section>
+  </section>
+
+  <!-- ═══════════════════ CONTENT ═══════════════════ -->
+  <!-- ═══════════════════ CASH (Phase 28) ═══════════════════ -->
+  <section class="page" id="p-cash">
+    <div class="pagehead">
+      <div>
+        <p class="caps">Business money • Phase 28</p>
+        <h1 class="display">Can I make payroll?</h1>
+        <p class="lede">The other half of the 2026-08-07 Finance split. Cost is what Pikar spends; Cash is what the business has, is owed, and can survive on.</p>
+      </div>
+    </div>
+
+    <div class="note warn" style="margin-bottom:1.5rem">
+      <b>Deliberately not drawn in detail.</b> Every tile here reads a connector that does not exist yet, so a full mockup would be inventing both the layout and the numbers. What IS decided: the arithmetic is <b>deterministic pure TypeScript with fixtures — never LLM arithmetic</b> (REVN-05), every figure carries provenance plus a coverage window and confidence, and an unconnected rail renders as <b>unavailable</b>, never as zero.
+      <br><br>
+      <b>Phase 28 has a gap this split exposes:</b> its 29 plans build the finance core (28-02) and the cash-flow / payroll-confidence composition (28-11), but <b>not one of them renders a page</b>. This surface needs a new "connected Cash route" plan shaped like 26-10 (route → browser gate → owner UAT → nav activation).
+    </div>
+
+    <section class="sec">
+      <div class="sec-head"><p class="caps">What it will read</p>
+        <span class="src new">Phase 28 rails — each behind its own independent suitability gate</span></div>
+      <div class="stat-grid">
+        <div class="stat-tile"><div class="stat-head"><span class="stat-badge">◔</span><p class="caps">In bank</p></div><div class="stat-value">—</div><div class="stat-cap">QuickBooks / Stripe balance · REVN-02/03</div></div>
+        <div class="stat-tile"><div class="stat-head"><span class="stat-badge">◔</span><p class="caps">Owed to you</p></div><div class="stat-value">—</div><div class="stat-cap">Open + overdue invoices · REVN-02</div></div>
+        <div class="stat-tile"><div class="stat-head"><span class="stat-badge">◔</span><p class="caps">Runway</p></div><div class="stat-value">—</div><div class="stat-cap">Deterministic, fixture-tested · REVN-05</div></div>
+        <div class="stat-tile"><div class="stat-head"><span class="stat-badge">◔</span><p class="caps">Payroll confidence</p></div><div class="stat-value">—</div><div class="stat-cap">Coverage window + confidence, never a bare number</div></div>
+      </div>
+    </section>
+
+    <div class="note" style="margin-top:1.5rem">
+      <b>Invoice reminders stay behind the plan gate.</b> REVN-06: a revenue specialist can read, draft and stage — it cannot send, refund, credit or mutate accounting state. The reminder is a draft until a human approves it, exactly like every other outbound action in the product.
+    </div>
+  </section>
+
+  <section class="page" id="p-content">
+    <div class="pagehead">
+      <div>
+        <p class="caps">Everything Pikar has made</p>
+        <h1 class="display">Your content library</h1>
+        <p class="lede">Documents, reels and memos — currently findable only inside the thread that produced them. This is one shelf for the things you'd reuse.</p>
+      </div>
+      <button class="btn btn-dark">Draft something new →</button>
+    </div>
+
+    <div class="note warn" style="margin-bottom:1.5rem">
+      <b>Narrowed 2026-08-07 (owner decision).</b> Two categories moved off this page, because a shelf of things you <i>reuse</i> is a different object from a record of things that <i>happened</i>:
+      <br>• <b>Sent email → Reports.</b> It is a record, not an artifact. Reports already owns sends-per-day and review outcomes, and Approvals' "Cleared" already covers the recent window.
+      <br>• <b>Research briefs → Knowledge Vault.</b> They are cited grounding material that goes stale — which is exactly what the Vault is for, and the Vault already renders staleness.
+      <br><br>
+      <b>The channel / funnel / metrics scope that was proposed for this page moved to the Marketing milestone</b> (Phases 31-32, <span class="mono">ADR-015</span>). Note that a <b>content calendar is not a distinct surface until Marketing tranche B lands</b>: email is the only outbound channel today, and scheduled email already has a home in Approvals' "Scheduled — approved, not yet fired". A second scheduling surface over one channel would duplicate it.
+    </div>
+
+    <div class="filters" style="margin-bottom:1.25rem">
+      <button class="filt" aria-pressed="true">All <span class="mono">15</span></button>
+      <button class="filt">Documents <span class="mono">11</span></button>
+      <button class="filt">Reels <span class="mono">3</span></button>
+      <button class="filt">Memos <span class="mono">1</span></button>
+      <span style="flex:1"></span>
+      <input placeholder="Search titles…" style="padding:.42rem .9rem;border:1px solid var(--rule);border-radius:999px;font:inherit;font-size:.82rem;width:210px">
+      <span class="src new">vault.listCreatedDocs (origin filter over by_tenant_kind) + media reels + requests</span>
+    </div>
+
+    <section class="sec">
+      <div class="sec-head"><p class="caps">Recent artifacts</p></div>
+      <div class="artgrid">
+        <div class="art">
+          <div class="thumb"><span class="badge pill pill-type">Reel · MP4</span>
+            <svg class="ico" style="width:34px;height:34px;stroke:#40cad0" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m10 8 6 4-6 4z"/></svg></div>
+          <div class="meta"><h4>Launch reel — Ship faster, bill sooner</h4>
+            <p>28s · 6 blocks · captions burned<br>3 Aug · $4.62</p></div>
+          <div class="acts"><button class="btn btn-primary btn-sm">Play</button><button class="btn btn-ghost btn-sm">Download</button></div>
+        </div>
+
+        <div class="art">
+          <div class="thumb doc"><span class="badge pill pill-type">Doc · HTML</span>
+            <svg class="ico" style="width:34px;height:34px;stroke:#55606c" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+          <div class="meta"><h4>Northfield — Q3 scope &amp; pricing one-pager</h4>
+            <p><span class="pill pill-live" style="font-size:.6rem">Agent-authored</span><br>2 Aug · v3 · from "Client comms"</p></div>
+          <div class="acts"><button class="btn btn-ghost btn-sm">Open</button><button class="btn btn-ghost btn-sm">Promote to reference</button></div>
+        </div>
+
+        <div class="art">
+          <div class="thumb doc"><span class="badge pill pill-type">Doc · PDF</span>
+            <svg class="ico" style="width:34px;height:34px;stroke:#55606c" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+          <div class="meta"><h4>Q3-pricing-note.pdf</h4>
+            <p>Attached to a send · 84 KB<br>4 Aug · 3 recipients</p></div>
+          <div class="acts"><button class="btn btn-ghost btn-sm">Open</button><button class="btn btn-ghost btn-sm">Reuse</button></div>
+        </div>
+
+        <div class="art">
+          <div class="thumb"><span class="badge pill pill-type">Reel · draft</span>
+            <svg class="ico" style="width:34px;height:34px;stroke:#8fd6cf" viewBox="0 0 24 24"><path d="M12 6v6l4 2"/><circle cx="12" cy="12" r="10"/></svg></div>
+          <div class="meta"><h4>Teaser — beta waitlist</h4>
+            <p>Rendering · 4 of 6 blocks landed<br>Started 11 min ago</p></div>
+          <div class="acts"><button class="btn btn-ghost btn-sm">Open canvas</button></div>
+        </div>
+
+        <div class="art">
+          <div class="thumb doc"><span class="badge pill pill-type">Memo</span>
+            <svg class="ico" style="width:34px;height:34px;stroke:#55606c" viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h6"/></svg></div>
+          <div class="meta"><h4>Next step — close the Offer gate</h4>
+            <p>From growth-os diagnosis<br>5 Aug · filed to vault</p></div>
+          <div class="acts"><button class="btn btn-ghost btn-sm">Read</button></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="note" style="margin-bottom:1.5rem">
+      <b>Sent mail lived here and has moved to Reports.</b> <code>requests.list</code> already exists (currently only on the orphan <code>/requests</code> route) — the reader is not lost, it just lands on the page that owns "what happened" rather than the page that owns "what you can reuse".
+      <span class="src">requests.list → Reports · Operations</span>
+    </div>
+
+    <div class="note">
+      <b>Why "Promote to reference" matters.</b> Agent-authored documents are deliberately excluded from retrieval — the agent must never ground on its own output. The <code>agent_promoted</code> value already exists in the schema and was left without a control on purpose. That button is the control.
+      <span class="src">vaultDocuments.origin — literal declared, UI deferred</span>
+    </div>
+  </section>
+
+  <!-- ═══════════════════ REPORTS ═══════════════════ -->
+  <section class="page" id="p-reports">
+    <div class="pagehead">
+      <div>
+        <p class="caps">Evidence • rolling 30 days</p>
+        <h1 class="display">Show me the trail</h1>
+        <p class="lede">Three readings in one place: how the business is scoring, how the machine is running, and the governance record that proves both.</p>
+      </div>
+      <div class="filters"><button class="filt">7d</button><button class="filt" aria-pressed="true">30d</button><button class="filt">90d</button></div>
+    </div>
+
+    <!-- BUSINESS -->
+    <section class="sec">
+      <div class="sec-head"><p class="caps">Business — diagnosis over time</p>
+        <span class="src new">evaluations.history (by_tenant, windowed) — byThread exists, cross-thread does not</span></div>
+      <div class="card card-headed">
+        <div class="masthead">
+          <div><p class="caps">Growth-OS scorecard</p>
+            <div style="font-family:var(--font-display);font-size:1.35rem;font-weight:800">Offer is your binding constraint</div></div>
+          <div class="kpis">
+            <div class="kpi"><b>2</b><span>gaps closed</span></div>
+            <div class="kpi"><b>1</b><span>gap opened</span></div>
+            <div class="kpi"><b>14</b><span>cited findings</span></div>
+            <div class="kpi"><b>3</b><span>thin sections</span></div>
+          </div>
+        </div>
+        <div class="body">
+          <table class="ledger">
+            <thead><tr><th>Gate</th><th>Status</th><th>Movement this period</th><th>Proof metric</th></tr></thead>
+            <tbody>
+              <tr><td><b>Market</b></td><td><span class="pill pill-done">Cleared</span></td><td class="muted">Closed 22 Jul — ICP named &amp; evidenced</td><td class="muted">3 named reference customers</td></tr>
+              <tr><td><b>Offer</b></td><td><span class="pill pill-bad">Binding</span></td><td class="muted">Still open · rank 2 of 5</td><td class="muted">Cold-outreach reply rate &gt; 8% for 2 weeks</td></tr>
+              <tr><td><b>Money</b></td><td><span class="pill pill-off">Insufficient data</span></td><td class="muted">Needs MRR — asked, unanswered</td><td class="muted">—</td></tr>
+              <tr><td><b>Leads</b></td><td><span class="pill pill-bad">Opened 1 Aug</span></td><td class="muted">New — no repeatable channel</td><td class="muted">30 qualified conversations / month</td></tr>
+              <tr><td><b>Scale</b></td><td><span class="pill pill-off">Not yet assessed</span></td><td class="muted">Gated behind Leads</td><td class="muted">—</td></tr>
+            </tbody>
+          </table>
+          <p style="font-size:.76rem;color:var(--ink-soft);margin:.9rem 0 0">
+            Every finding above carries a document citation and a confidence. A section the vault cannot ground shows as <b>insufficient</b> — never as a guess.</p>
+        </div>
+      </div>
+      <div class="split">
+        <div class="card"><p class="caps" style="margin-bottom:.4rem">Business blueprint</p>
+          <div style="display:flex;align-items:center;gap:.7rem;flex-wrap:wrap">
+            <span class="pill pill-done">Confirmed 27 Jul</span><span class="muted" style="font-size:.82rem">18 of 22 fields stated · 4 blank</span></div>
+          <div class="meter"><i style="width:82%"></i></div>
+          <div class="stat-cap">Drift signal: 3 vault documents added since confirmation that contradict nothing.</div>
+          <span class="src">blueprint.blueprintState</span></div>
+        <div class="card"><p class="caps" style="margin-bottom:.4rem">Vault coverage</p>
+          <div class="chiprow" style="margin:.4rem 0">
+            <span class="chip">Identity 6</span><span class="chip">Financials 2</span><span class="chip">Offers 4</span>
+            <span class="chip">Customers 9</span><span class="chip">Operations 1</span><span class="chip" style="color:var(--held-text)">Legal 0</span></div>
+          <div class="stat-cap">Legal is empty — the one category with no grounding at all.</div>
+          <span class="src">vault.vaultStats</span></div>
+      </div>
+    </section>
+
+    <!-- OPERATIONS -->
+    <section class="sec">
+      <div class="sec-head"><p class="caps">Operations — the machine</p>
+        <span class="src new">telemetry series (by_tenant_created exists; the series read does not)</span></div>
+      <div class="split">
+        <div class="card"><p class="caps">Sends per day</p>
+          <div class="bars"><i style="height:20%"></i><i style="height:45%"></i><i style="height:12%"></i><i style="height:70%"></i><i style="height:33%"></i><i style="height:0%"></i><i style="height:0%"></i><i style="height:58%"></i><i style="height:92%"></i><i style="height:40%"></i><i style="height:25%"></i><i style="height:66%"></i><i style="height:48%"></i><i style="height:15%"></i></div>
+          <div class="axis"><span>24 Jul</span><span>45 delivered</span><span>6 Aug</span></div></div>
+        <div class="card"><p class="caps">Review outcomes</p>
+          <table class="ledger" style="margin-top:.5rem">
+            <tbody>
+              <tr><td>Sent</td><td class="num">45</td><td style="width:55%"><div class="meter" style="margin:0"><i style="width:88%"></i></div></td></tr>
+              <tr><td>Rejected</td><td class="num">3</td><td><div class="meter" style="margin:0"><i class="warn" style="width:6%"></i></div></td></tr>
+              <tr><td>Blocked</td><td class="num">2</td><td><div class="meter" style="margin:0"><i class="bad" style="width:4%"></i></div></td></tr>
+              <tr><td>Failed</td><td class="num">1</td><td><div class="meter" style="margin:0"><i class="bad" style="width:2%"></i></div></td></tr>
+              <tr><td>Expired</td><td class="num">0</td><td class="muted">—</td></tr>
+            </tbody>
+          </table>
+          <span class="src">opsSignals.evalSignals</span></div>
+      </div>
+      <div class="stat-grid">
+        <div class="stat-tile"><div class="stat-head"><span class="stat-badge"><svg class="ico" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span><p class="caps">Agent approval rate</p></div>
+          <div class="stat-value">89%</div><div class="stat-cap">45 approved of 51 proposed</div></div>
+        <div class="stat-tile"><div class="stat-head"><span class="stat-badge"><svg class="ico" viewBox="0 0 24 24"><path d="M7 10v12M15 5.9 14 10h5.8a2 2 0 0 1 2 2.4l-1.4 7a2 2 0 0 1-2 1.6H7"/></svg></span><p class="caps">Feedback</p></div>
+          <div class="stat-value is-text">👍 12 · 👎 2</div><div class="stat-cap">cockpit-agent v14 · negative rate 14%</div>
+          <span class="src">feedback by_skill index</span></div>
+        <div class="stat-tile"><div class="stat-head"><span class="stat-badge"><svg class="ico" viewBox="0 0 24 24"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg></span><p class="caps">Median turn</p></div>
+          <div class="stat-value is-text">11.4s</div><div class="stat-cap">tool-loop, p95 34s</div></div>
+        <div class="stat-tile"><div class="stat-head"><span class="stat-badge"><svg class="ico" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></span><p class="caps">Dead letters</p></div>
+          <div class="stat-value is-text">2 new / 9 total</div><div class="stat-cap">4% of 51 requests</div></div>
+      </div>
+    </section>
+
+    <!-- GOVERNANCE -->
+    <section class="sec">
+      <div class="sec-head"><p class="caps">Governance record</p><span class="pill pill-live">The differentiator — currently 0% surfaced</span>
+        <span class="src new">audit.listForTenant — a READ on the insert-only module (§3 bans mutations, not queries)</span></div>
+      <div class="card">
+        <table class="ledger">
+          <thead><tr><th>When</th><th>Event</th><th>Actor</th><th>Correlation</th><th>Refs</th></tr></thead>
+          <tbody>
+            <tr><td class="muted mono">06 Aug 08:04:11</td><td><b>plan.approved</b></td><td>you</td><td class="mono muted">c_7f3a…d21</td><td class="mono muted">planId, 14 recipients</td></tr>
+            <tr><td class="muted mono">06 Aug 08:04:12</td><td><b>delivery.started</b></td><td>system</td><td class="mono muted">c_7f3a…d21</td><td class="mono muted">14 requests seeded</td></tr>
+            <tr><td class="muted mono">06 Aug 08:04:19</td><td><b>guard.scanned</b></td><td>system</td><td class="mono muted">c_7f3a…d21</td><td class="mono muted">safeTextHash 9ab2…, 0 findings</td></tr>
+            <tr><td class="muted mono">06 Aug 08:04:31</td><td><b>gmail.sent</b></td><td>system</td><td class="mono muted">c_7f3a…d21</td><td class="mono muted">messageId ref × 13</td></tr>
+            <tr><td class="muted mono">06 Aug 08:04:33</td><td><b>delivery.failed</b></td><td>system</td><td class="mono muted">c_7f3a…d21</td><td class="mono muted">smtp 550, deadLetterId</td></tr>
+          </tbody>
+        </table>
+        <p style="font-size:.76rem;color:var(--ink-soft);margin:.9rem 0 0">
+          Rows carry <b>refs, hashes, ids and counts only</b> — never message bodies, addresses or PII. That is a schema property, so this viewer is safe by construction, not by filtering.</p>
+      </div>
+      <div class="split">
+        <div class="card"><p class="caps" style="margin-bottom:.5rem">WORM export</p>
+          <div style="display:flex;align-items:center;gap:.7rem;flex-wrap:wrap">
+            <span class="pill pill-done">Healthy</span><span class="muted" style="font-size:.83rem">Last export 06 Aug 03:00 · 412 rows · lag 5h</span></div>
+          <div class="stat-cap" style="margin-top:.4rem">Immutability lives outside Convex — S3 Object Lock. This is the only place you can see it is actually running.</div>
+          <span class="src new">exportCursors read — table exists, no UI</span></div>
+        <div class="card"><p class="caps" style="margin-bottom:.5rem">Active skill versions</p>
+          <table class="ledger"><tbody>
+            <tr><td>cockpit-agent</td><td class="num">v14</td><td><span class="pill pill-live">gated</span></td></tr>
+            <tr><td>content-drafter</td><td class="num">v1</td><td><span class="pill pill-off">ungated</span></td></tr>
+            <tr><td>media-director</td><td class="num">v2</td><td><span class="pill pill-off">ungated</span></td></tr>
+            <tr><td>business-blueprint</td><td class="num">v1</td><td><span class="pill pill-off">ungated</span></td></tr>
+          </tbody></table>
+          <span class="src new">skills read — only the owner candidate panel exists today</span></div>
+      </div>
+    </section>
+
+    <div class="gradbanner">
+      <div><b style="font-family:var(--font-display);font-size:1.05rem">Export this as a board pack</b>
+        <div style="font-size:.85rem;opacity:.92">One PDF: scorecard, spend, delivery record and audit summary — through the same governed render path as every other document.</div></div>
+      <button class="btn">Generate report →</button>
+      <span class="src new">reuses renderHtmlDocument / markdownToPdf — no new engine</span>
+    </div>
+  </section>
+
+  <!-- ═══════════════════ SALES PIPELINE ═══════════════════ -->
+  <section class="page" id="p-pipeline">
+    <div class="pagehead">
+      <div>
+        <p class="caps">Phase 19 • substrate first</p>
+        <h1 class="display">Sales Pipeline</h1>
+        <p class="lede">There is no contacts table, no leads, no consent or suppression list anywhere in the backend today. The owner's answer to that (2026-08-07) was to build the substrate rather than the picture.</p>
+      </div>
+    </div>
+
+    <div class="note warn" style="margin-bottom:1.5rem">
+      <b>Decided 2026-08-07: build the backing data first.</b> The earlier recommendation here was "leave this one Soon". The owner chose instead to pull <b>Phase&nbsp;19</b> forward — which is a genuine unblock rather than a reorder, because Phase 19 gates <b>26-18</b> (this nav item), <b>Phase&nbsp;28</b> twice (28-17 readiness, 28-10 CRM projections) and now <b>Phase&nbsp;31</b> (Marketing needs the one person store for lead capture).
+      <br><br>
+      <b>Phase 19 SC#8 already owns this route</b> — 26-18 remains nav integration only. Phase 19 is <b>0/TBD: no plans exist yet</b>, so it needs planning before any work.
+    </div>
+
+    <div class="note dead" style="margin-bottom:1.5rem">
+      <b>TWO TILES WERE REMOVED FROM THIS MOCKUP, and the "Stage" column with them.</b> The mockup showed <b>"Open opportunities"</b> and <b>"Pipeline value"</b>. Both PIPE-01 and Phase 19 SC#8 explicitly forbid them — <i>"does not invent opportunities, deal stages or monetary pipeline values."</i> Two of the four tiles were things the requirement bans.
+      <br><br>
+      <b>The written requirement wins over an unbuilt mockup</b>, so they are gone here. If you want a deal-stage CRM instead, that is an amendment to PIPE-01 and it must be made <b>before Phase 19 is planned</b> — the contacts schema follows from that answer, and retrofitting stages onto a committed schema is the expensive order.
+    </div>
+
+    <div class="future">
+      <div class="futurestamp"><span>Phase 19 — needs a contacts schema first</span></div>
+      <div class="stat-grid" style="margin-bottom:1rem">
+        <div class="stat-tile"><div class="stat-head"><span class="stat-badge">◔</span><p class="caps">Contacts needing attention</p></div><div class="stat-value">—</div><div class="stat-cap">PIPE-01 · "contacts needing attention"</div></div>
+        <div class="stat-tile"><div class="stat-head"><span class="stat-badge">◔</span><p class="caps">Follow-ups due</p></div><div class="stat-value">—</div><div class="stat-cap">Phase 19 SC#8</div></div>
+        <div class="stat-tile"><div class="stat-head"><span class="stat-badge">◔</span><p class="caps">Consent on record</p></div><div class="stat-value">—</div><div class="stat-cap">consentAt + consentSource, reproducible</div></div>
+        <div class="stat-tile"><div class="stat-head"><span class="stat-badge">◔</span><p class="caps">Suppressed contacts</p></div><div class="stat-value">—</div><div class="stat-cap">guard lives in the SEND path, not here</div></div>
+      </div>
+      <div class="card">
+        <table class="ledger">
+          <thead><tr><th>Contact</th><th>Origin</th><th>Last touch</th><th>Next step</th><th>Consent</th></tr></thead>
+          <tbody>
+            <tr><td class="muted">—</td><td class="muted">—</td><td class="muted">—</td><td class="muted">—</td><td class="muted">—</td></tr>
+            <tr><td class="muted">—</td><td class="muted">—</td><td class="muted">—</td><td class="muted">—</td><td class="muted">—</td></tr>
+            <tr><td class="muted">—</td><td class="muted">—</td><td class="muted">—</td><td class="muted">—</td><td class="muted">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════ COMMAND CENTER v2 ═══════════════════ -->
+  <section class="page" id="p-cc">
+    <div class="pagehead">
+      <div>
+        <p class="caps">Solopreneur • Thursday, August 6</p>
+        <h1 class="display">Run the next revenue move</h1>
+        <p class="lede">Once the source pages exist, the home page stops being four flat counters and becomes the roll-up of them. After the 2026-08-07 split that means <b>Approvals, Cost, Content and Reports</b> — Cash arrives with Phase&nbsp;28 and Pipeline with Phase&nbsp;19, and Command Center v2 (26-19/26-20) lands last precisely so it composes finished summaries rather than re-reading raw tables.</p>
+      </div>
+    </div>
+
+    <div class="split" style="margin-bottom:1.5rem">
+      <div class="card" style="display:grid;gap:var(--sp-2);background:linear-gradient(140deg,#ffffff,#f2f8f8)">
+        <p class="caps">Recommended next move</p>
+        <h2 style="font-size:1.35rem">Clear 4 held approvals</h2>
+        <p style="margin:0;color:var(--ink-soft);font-size:.9rem">One has been waiting two days — its draft was written against context that has since changed.</p>
+        <button class="btn btn-dark" style="justify-self:start">Open Approvals →</button>
+      </div>
+      <div class="card" style="display:grid;gap:var(--sp-2)">
+        <p class="caps">Your binding constraint</p>
+        <h2 style="font-size:1.35rem">Offer</h2>
+        <p style="margin:0;color:var(--ink-soft);font-size:.9rem">No risk-reversal, no named outcome. Lead spend converts at the offer's ceiling.</p>
+        <button class="btn btn-ghost" style="justify-self:start">See the diagnosis →</button>
+      </div>
+    </div>
+
+    <div class="stat-grid" style="margin-bottom:1.5rem">
+      <div class="stat-tile"><div class="stat-head"><span class="stat-badge">✓</span><p class="caps">Held for approval</p></div>
+        <div class="stat-value">4</div><div class="stat-cap">oldest 2 days</div></div>
+      <div class="stat-tile"><div class="stat-head"><span class="stat-badge">$</span><p class="caps">Spend today</p></div>
+        <div class="stat-value">$3.14</div><div class="stat-cap">$6.86 of $10 rails left</div></div>
+      <div class="stat-tile"><div class="stat-head"><span class="stat-badge">✉</span><p class="caps">Delivered · 30d</p></div>
+        <div class="stat-value">45</div><div class="stat-cap">89% approval rate</div></div>
+      <div class="stat-tile"><div class="stat-head"><span class="stat-badge">◈</span><p class="caps">Artifacts made</p></div>
+        <div class="stat-value">38</div><div class="stat-cap">11 docs · 3 reels · 7 briefs</div></div>
+    </div>
+
+    <div class="card card-headed" style="margin-bottom:1.5rem">
+      <div class="masthead">
+        <div><p class="caps">Inbox briefing · last 24h</p>
+          <div style="font-family:var(--font-display);font-size:1.2rem;font-weight:800">Two threads need you; the rest can wait</div></div>
+        <div class="kpis"><div class="kpi"><b>2</b><span>needs you</span></div><div class="kpi"><b>11</b><span>quiet</span></div><div class="kpi"><b>1</b><span>invoice</span></div></div>
+      </div>
+      <div class="body">
+        <p style="margin:0 0 .8rem;color:var(--ink-soft);font-size:.88rem">The briefing card already exists and already renders exactly this shape — but only inside the thread that generated it. On the home page it becomes the standing brief it was designed to be.
+          <span class="src">briefings.byThread — needs a latest-for-tenant read</span></p>
+        <table class="ledger">
+          <tbody>
+            <tr><td style="border-left:3px solid var(--ink);padding-left:.8rem"><b>Dana · Northfield</b><div class="muted" style="font-size:.8rem">Asked to move the Q3 call — no date proposed yet</div></td>
+              <td style="text-align:right"><button class="btn btn-ghost btn-sm">Propose 3 times →</button></td></tr>
+            <tr><td style="border-left:3px solid var(--ink);padding-left:.8rem"><b>Brightpath accounts</b><div class="muted" style="font-size:.8rem">Invoice 1142 overdue 9 days</div></td>
+              <td style="text-align:right"><button class="btn btn-ghost btn-sm">Draft reminder →</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="gradbanner">
+      <div><b style="font-family:var(--font-display);font-size:1.05rem">Nothing is blocked</b>
+        <div style="font-size:.85rem;opacity:.92">Mailbox connected · Drive connected · vault healthy · no unresolved dead letters</div></div>
+      <button class="btn">Open workspace →</button>
+    </div>
+  </section>
+
+  </div>
+</div>
+
+<script>
+const pages = document.querySelectorAll('.page');
+const tabs  = document.querySelectorAll('.mockbar .tab');
+const rails = document.querySelectorAll('.rail-item[data-p]');
+function go(p){
+  pages.forEach(s=>s.classList.toggle('is-on', s.id === 'p'+'-'+p));
+  tabs.forEach(t=>t.setAttribute('aria-selected', String(t.dataset.p===p)));
+  document.querySelectorAll('.rail-item').forEach(r=>r.classList.remove('is-active'));
+  rails.forEach(r=>{ if(r.dataset.p===p) r.classList.add('is-active'); });
+  window.scrollTo({top:0});
+}
+tabs.forEach(t=>t.onclick=()=>go(t.dataset.p));
+rails.forEach(r=>r.onclick=()=>go(r.dataset.p));
+document.getElementById('srcbox').onchange = e =>
+  document.body.classList.toggle('show-src', e.target.checked);
+document.querySelectorAll('.filt, .art .btn, .filters .filt').forEach(b=>{
+  if(b.classList.contains('filt')) b.onclick = () => {
+    b.parentElement.querySelectorAll('.filt').forEach(x=>x.setAttribute('aria-pressed','false'));
+    b.setAttribute('aria-pressed','true');
+  };
+});
+</script>
+</body>
+</html>

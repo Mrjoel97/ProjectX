@@ -26,7 +26,12 @@ describe("buildTelemetry (OPSG-01 terminal row builder)", () => {
       decisionCounts: { approve: 1, regenerate: 2 },
       regenerateCount: 2,
       // route + draft + two regenerate drafts
-      usages: [usage(100, 20, 0.001), usage(200, 80, 0.004), usage(150, 60, 0.003), usage(150, 40, 0.002)],
+      usages: [
+        usage(100, 20, 0.001),
+        usage(200, 80, 0.004),
+        usage(150, 60, 0.003),
+        usage(150, 40, 0.002),
+      ],
     };
     const row = buildTelemetry(outcome);
     expect(row.tokensIn).toBe(600);

@@ -250,7 +250,7 @@ const TIER_BOUNDARY_TABLE: readonly { facts: TierFacts; expected: DerivedTier; w
   },
   {
     facts: {
-      headcount: 1,
+      headcount: 2,
       paidStaff: 1,
       revenueStage: "steady-revenue",
       funding: "bootstrapped",
@@ -258,6 +258,17 @@ const TIER_BOUNDARY_TABLE: readonly { facts: TierFacts; expected: DerivedTier; w
     },
     expected: "sme",
     why: "paidStaff 1 is the OTHER solo boundary — one employee is not a solo operation",
+  },
+  {
+    facts: {
+      headcount: 1,
+      paidStaff: 0,
+      revenueStage: "steady-revenue",
+      funding: "bootstrapped",
+      yearsOperating: 6,
+    },
+    expected: "solopreneur",
+    why: "a solopreneur ON THEIR OWN PAYROLL still answers paidStaff 0 — the question excludes the founder, so putting yourself on salary no longer reclassifies you as sme",
   },
   {
     facts: {

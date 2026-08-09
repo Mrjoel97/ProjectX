@@ -131,7 +131,9 @@ export async function scheduleExtraction(
   // with byte-identical arg validators, not a single `extractDoc`.
   await vaultIngestPool.enqueueAction(
     ctx,
-    rail === "transcribe" ? internal.vaultTranscribe.transcribeDoc : internal.vaultExtract.extractDoc,
+    rail === "transcribe"
+      ? internal.vaultTranscribe.transcribeDoc
+      : internal.vaultExtract.extractDoc,
     { vaultDocId, tenantId, spendRail, reserved },
   );
 }
@@ -337,10 +339,7 @@ export const vaultUploadFolderFile = tenantAction({
     size: v.number(),
     text: v.optional(v.string()),
   },
-  handler: async (
-    ctx,
-    args,
-  ): Promise<{ vaultDocId: Id<"vaultDocuments">; deduped: boolean }> => {
+  handler: async (ctx, args): Promise<{ vaultDocId: Id<"vaultDocuments">; deduped: boolean }> => {
     const blob = await ctx.storage.get(args.storageId);
     if (!blob) throw new Error("vault: uploaded bytes not found");
     const hash = await contentHash(new Uint8Array(await blob.arrayBuffer()));
@@ -369,8 +368,13 @@ export const deleteVaultDoc = tenantMutation({
     const doc = await ctx.db.get(vaultDocId);
     if (!doc || doc.tenantId !== ctx.tenantId) return { ok: false }; // tenant guard / already gone
 
-    // rag chunks (only if embedded) — mutation-safe background delete.
-    if (doc.ragEntryId) await rag.deleteAsync(ctx, { entryId: doc.ragEntryId as EntryId });
+    // rag chunks (only if embedded) — mutation-safe background delete. The offline SMOKE embed
+    // seam deliberately stores `smoke::<contentHash>` as proof that ingest reached markReady; it
+    // never creates a RAG component entry, so passing that sentinel to deleteAsync violates the
+    // component's branded-id validator and would make the document impossible to remove.
+    if (doc.ragEntryId && !doc.ragEntryId.startsWith("smoke::")) {
+      await rag.deleteAsync(ctx, { entryId: doc.ragEntryId as EntryId });
+    }
 
     // This doc's graph edges → delete + decrement each incident endpoint's degree, GC orphans.
     const edges = await ctx.db
@@ -470,9 +474,7 @@ async function readVaultPage(
   const stream = folderId
     ? ctx.db
         .query("vaultDocuments")
-        .withIndex("by_tenant_folder", (q) =>
-          q.eq("tenantId", tenantId).eq("folderId", folderId),
-        )
+        .withIndex("by_tenant_folder", (q) => q.eq("tenantId", tenantId).eq("folderId", folderId))
         .order("desc")
     : ctx.db
         .query("vaultDocuments")
@@ -556,10 +558,7 @@ export const listVaultDocs = tenantQuery({
  */
 export const vaultDocText = tenantQuery({
   args: { vaultDocId: v.id("vaultDocuments") },
-  handler: async (
-    ctx,
-    { vaultDocId },
-  ): Promise<{ text: string | null; status: string } | null> => {
+  handler: async (ctx, { vaultDocId }): Promise<{ text: string | null; status: string } | null> => {
     const doc = await ctx.db.get(vaultDocId);
     if (!doc || doc.tenantId !== ctx.tenantId) return null;
     return { text: doc.text ?? null, status: doc.status };
@@ -664,16 +663,20 @@ export const docEntities = tenantQuery({
 
 /**
  * The browse search box — the SAME `rag.search` hybrid primitive vaultGround uses, post-filtered to
- * the active category tab (Open-Q1: post-filter on the joined vaultDocuments.category). Tenant-scoped
- * via `namespace = tenantId` + the tenant-scoped `ownedDocsMeta` resolve, so another tenant's doc
- * never appears. `rag.search` is action-only (Pitfall 1) → `tenantAction`. The SMOKE:: seam bypasses
- * the embedding network exactly as vaultGround's does.
+ * the active folder and category tab. Tenant-scoped via `namespace = tenantId` plus the dedicated
+ * `ownedSearchDocsMeta` resolve, so another tenant's doc never appears and a foreign/missing folder
+ * silently matches nothing. `rag.search` is action-only (Pitfall 1) → `tenantAction`. The SMOKE::
+ * seam bypasses the embedding network exactly as vaultGround's does.
  */
 export const vaultSearch = tenantAction({
-  args: { query: v.string(), category: v.optional(v.string()) },
+  args: {
+    query: v.string(),
+    category: v.optional(v.string()),
+    folderId: v.optional(v.id("vaultFolders")),
+  },
   handler: async (
     ctx,
-    { query, category },
+    { query, category, folderId },
   ): Promise<{ _id: Id<"vaultDocuments">; title: string; category: string }[]> => {
     let candidateIds: Id<"vaultDocuments">[];
     if (query.startsWith("SMOKE::")) {
@@ -693,10 +696,13 @@ export const vaultSearch = tenantAction({
         .map((e) => e.metadata?.vaultDocId as Id<"vaultDocuments"> | undefined)
         .filter((id): id is Id<"vaultDocuments"> => Boolean(id));
     }
-    // Resolve tenant-owned metadata, then post-filter to the active category tab.
-    const owned = await ctx.runQuery(internal.vault.ownedDocsMeta, {
+    // Resolve tenant-owned metadata and validate an optional folder scope without exposing whether
+    // that folder exists. The shared grounding resolver stays byte-for-byte unchanged because its
+    // results are consumed index-parallel with titles.
+    const owned = await ctx.runQuery(internal.vault.ownedSearchDocsMeta, {
       tenantId: ctx.tenantId,
       docIds: candidateIds,
+      folderId,
     });
     // SEALING (VALT-07), site 2 of 3. The same predicate the agent's grounding applies — without it
     // the browse search surfaces documents the agent cannot see, which reads as a bug in whichever
@@ -710,7 +716,14 @@ export const vaultSearch = tenantAction({
       }),
     );
     const visible = owned.filter((d) => !sealed.has(d._id));
-    return category ? visible.filter((d) => d.category === category) : visible;
+    const scoped = folderId ? visible.filter((d) => d.folderId === folderId) : visible;
+    const matching = category ? scoped.filter((d) => d.category === category) : scoped;
+    // `folderId` is resolver-only metadata; preserve the public refs-only return shape exactly.
+    return matching.map(({ _id, title, category: resultCategory }) => ({
+      _id,
+      title,
+      category: resultCategory,
+    }));
   },
 });
 
@@ -750,6 +763,56 @@ export const ownedDocsMeta = internalQuery({
       const doc = await ctx.db.get(id);
       if (doc && doc.tenantId === tenantId) {
         out.push({ _id: doc._id, title: doc.title, category: doc.category });
+      }
+    }
+    return out;
+  },
+});
+
+/**
+ * Search-only candidate metadata. Unlike `ownedDocsMeta`, this carries folder identity so the
+ * action can intersect its bounded hybrid candidates after tenant ownership and sealing. When a
+ * folder scope is supplied, validate it against the tenant first and return the same empty result
+ * for both a missing row and another tenant's row (no ownership oracle). Candidate order and
+ * duplicates are preserved exactly.
+ */
+export const ownedSearchDocsMeta = internalQuery({
+  args: {
+    tenantId: v.string(),
+    docIds: v.array(v.id("vaultDocuments")),
+    folderId: v.optional(v.id("vaultFolders")),
+  },
+  handler: async (
+    ctx,
+    { tenantId, docIds, folderId },
+  ): Promise<
+    {
+      _id: Id<"vaultDocuments">;
+      title: string;
+      category: string;
+      folderId?: Id<"vaultFolders">;
+    }[]
+  > => {
+    if (folderId) {
+      const folder = await ctx.db.get(folderId);
+      if (!folder || folder.tenantId !== tenantId) return [];
+    }
+
+    const out: {
+      _id: Id<"vaultDocuments">;
+      title: string;
+      category: string;
+      folderId?: Id<"vaultFolders">;
+    }[] = [];
+    for (const id of docIds) {
+      const doc = await ctx.db.get(id);
+      if (doc && doc.tenantId === tenantId) {
+        out.push({
+          _id: doc._id,
+          title: doc.title,
+          category: doc.category,
+          folderId: doc.folderId,
+        });
       }
     }
     return out;
@@ -958,10 +1021,7 @@ const PROFILE_SEED_CHAR_CAP = 4000;
  */
 export const profileSeedDocs = internalQuery({
   args: { tenantId: v.string() },
-  handler: async (
-    ctx,
-    { tenantId },
-  ): Promise<{ docId: string; title: string; text: string }[]> => {
+  handler: async (ctx, { tenantId }): Promise<{ docId: string; title: string; text: string }[]> => {
     const rows = await ctx.db
       .query("vaultDocuments")
       .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))

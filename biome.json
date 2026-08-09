@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.0.0/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.3/schema.json",
   "vcs": {
     "enabled": true,
     "clientKind": "git",
@@ -7,7 +7,17 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!**/_generated/**", "!**/.next/**", "!**/dist/**"]
+    "includes": [
+      "**",
+      "!**/_generated",
+      "!**/.next",
+      "!**/dist",
+      "!.planning",
+      "!docs/design/mockups",
+      "!graphify-out",
+      "!packages/core/src/__fixtures__/assembly/empty.json",
+      "!packages/core/src/__fixtures__/assembly/malformed.json"
+    ]
   },
   "formatter": {
     "enabled": true,
@@ -18,7 +28,7 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
+      "preset": "recommended",
       "style": {
         "noRestrictedImports": {
           "level": "error",

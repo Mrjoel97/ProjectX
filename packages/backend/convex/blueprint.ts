@@ -6,11 +6,14 @@
  */
 import { openai } from "@ai-sdk/openai";
 import { BUSINESS_BLUEPRINT_SKILL } from "@pikar/contracts/skill";
-import { DEFAULT_MODEL, priceUsage } from "@pikar/cost";
 import {
   aggregatePulse,
   BLUEPRINT_FIELDS,
   BLUEPRINT_SEGMENTS,
+  type BlueprintDiffRow,
+  type BlueprintField,
+  type BusinessBlueprint,
+  type DerivedCandidate,
   deserializeBlueprint,
   deserializeProfile,
   dispatchToolFor,
@@ -25,11 +28,8 @@ import {
   serializeBlueprint,
   statedFromProfile,
   validateCandidates,
-  type BlueprintDiffRow,
-  type BlueprintField,
-  type BusinessBlueprint,
-  type DerivedCandidate,
 } from "@pikar/core";
+import { DEFAULT_MODEL, priceUsage } from "@pikar/cost";
 import { scanText } from "@pikar/pii";
 import { categoryFor } from "@pikar/vault";
 import { generateObject, jsonSchema, type LanguageModel } from "ai";
@@ -55,14 +55,28 @@ const SMOKE_BLUEPRINT_PREFIX = "SMOKE::blueprint::";
 const resolveModel = (id: string): LanguageModel => openai(id.replace(/^openai\//, ""));
 
 type DeriveCandidatesResult =
-  | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted" | "deployment_budget_exhausted" }
+  | {
+      ok: false;
+      reason:
+        | "kill_switch"
+        | "daily_budget_exhausted"
+        | "deployment_budget_exhausted"
+        | "deployment_budget_exhausted";
+    }
   | { ok: true; candidates: DerivedCandidate[] };
 
 type GroundedSource = { docId: string; title: string; text: string };
 type HydratedGround = { docIds: string[]; titles: string[]; chunks: string[] };
 type Probe = { field: BlueprintField; query: string };
 type BuildBlueprintDraftResult =
-  | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted" | "deployment_budget_exhausted" }
+  | {
+      ok: false;
+      reason:
+        | "kill_switch"
+        | "daily_budget_exhausted"
+        | "deployment_budget_exhausted"
+        | "deployment_budget_exhausted";
+    }
   | {
       ok: true;
       additions: number;
@@ -193,10 +207,7 @@ type LiveBlueprint = {
   confirmedAt: number | null;
 };
 
-async function readLiveForTenant(
-  ctx: QueryCtx,
-  tenantId: string,
-): Promise<LiveBlueprint | null> {
+async function readLiveForTenant(ctx: QueryCtx, tenantId: string): Promise<LiveBlueprint | null> {
   try {
     const profile = await ctx.db
       .query("tenantProfiles")
@@ -223,10 +234,8 @@ async function readLiveForTenant(
  *  INCLUDING the `text` blob, and this runs on every grounding call. */
 export const liveForTenant = internalQuery({
   args: { tenantId: v.string() },
-  handler: async (
-    ctx,
-    { tenantId },
-  ): Promise<LiveBlueprint | null> => await readLiveForTenant(ctx, tenantId),
+  handler: async (ctx, { tenantId }): Promise<LiveBlueprint | null> =>
+    await readLiveForTenant(ctx, tenantId),
 });
 
 /** Top graph entities by degree — a free DB read, one of the blueprint's three inputs (D4). */
@@ -260,6 +269,14 @@ export const deriveCandidates = internalAction({
     sources: v.array(v.object({ title: v.string(), text: v.string() })),
   },
   handler: async (ctx, { tenantId, fields, sources }): Promise<DeriveCandidatesResult> => {
+    // FIN-01 replay identity, MINTED not derived. Nothing journaled reaches here: the only ref in
+    // scope is `tenantId`, and `buildBlueprintDraft` (a plain tenantAction) can be re-run — or
+    // re-entered on action retry — as often as the user presses "Build blueprint". Each re-entry
+    // re-runs the generateObject below, so the second charge is REAL; a tenant-scoped constant
+    // would collapse every rebuild after the first onto one `actual` row and put the ledger below
+    // the limiter, the unrecoverable direction. There is exactly one model call per run, so the
+    // runId alone separates run N from run N+1.
+    const runId = crypto.randomUUID();
     const skill: { body: string; version: number } = await ctx.runQuery(
       internal.skills.getActiveSkill,
       { name: BUSINESS_BLUEPRINT_SKILL },
@@ -286,7 +303,13 @@ export const deriveCandidates = internalAction({
     });
     const priced = priceUsage(DEFAULT_MODEL, usage);
     if (priced.ok) {
-      await ctx.runMutation(internal.guardrails.recordSpend, { tenantId, costUsd: priced.value });
+      await ctx.runMutation(internal.guardrails.recordSpend, {
+        tenantId,
+        costUsd: priced.value,
+        correlationId: `blueprint:derive:${runId}`,
+        model: DEFAULT_MODEL,
+        kind: "blueprint.derive", // code-owned token, refs only (§4)
+      });
     }
     return { ok: true, candidates: object.candidates };
   },
@@ -318,10 +341,7 @@ export const writeDraft = internalMutation({
  */
 export const confirmBlueprint = tenantMutation({
   args: { acceptedContradictions: v.array(v.string()) },
-  handler: async (
-    ctx,
-    { acceptedContradictions },
-  ): Promise<ConfirmBlueprintResult> => {
+  handler: async (ctx, { acceptedContradictions }): Promise<ConfirmBlueprintResult> => {
     const row = await ctx.db
       .query("tenantProfiles")
       .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
@@ -350,10 +370,7 @@ export const confirmBlueprint = tenantMutation({
     const pointedDoc = row.blueprintDocId ? await ctx.db.get(row.blueprintDocId) : null;
 
     let docId: Id<"vaultDocuments">;
-    if (
-      pointedDoc?.tenantId === ctx.tenantId &&
-      pointedDoc.kind === BLUEPRINT_KIND
-    ) {
+    if (pointedDoc?.tenantId === ctx.tenantId && pointedDoc.kind === BLUEPRINT_KIND) {
       await ctx.db.patch(pointedDoc._id, {
         title: BLUEPRINT_TITLE,
         text,
@@ -387,12 +404,9 @@ export const confirmBlueprint = tenantMutation({
     });
     const sourceDocCount = draft.sourceDocIds.length;
     const fieldCount = BLUEPRINT_FIELDS.filter((field) => final[field] !== null).length;
-    const additionsApplied = draft.diff.filter(
-      (diffRow) => diffRow.kind === "addition",
-    ).length;
+    const additionsApplied = draft.diff.filter((diffRow) => diffRow.kind === "addition").length;
     const contradictionsAccepted = draft.diff.filter(
-      (diffRow) =>
-        diffRow.kind === "contradiction" && accepted.has(diffRow.field),
+      (diffRow) => diffRow.kind === "contradiction" && accepted.has(diffRow.field),
     ).length;
     await ctx.runMutation(internal.audit.log, {
       tenantId: ctx.tenantId,
@@ -482,10 +496,9 @@ export const buildBlueprintDraft = tenantAction({
   args: {},
   handler: async (ctx): Promise<BuildBlueprintDraftResult> => {
     const tenantId = ctx.tenantId;
-    const row: Doc<"tenantProfiles"> | null = await ctx.runQuery(
-      internal.tenantProfile.forTenant,
-      { tenantId },
-    );
+    const row: Doc<"tenantProfiles"> | null = await ctx.runQuery(internal.tenantProfile.forTenant, {
+      tenantId,
+    });
     if (!row) throw new ConvexError({ code: "NO_TENANT_PROFILE" });
 
     const profileDocs: { docId: string; title: string; text: string }[] = await ctx.runQuery(
@@ -658,8 +671,7 @@ async function unincorporatedFor(
   const sealed = await sealedIn(ctx, ready);
   const docIds = ready
     .filter(
-      (doc) =>
-        doc.kind !== "business_blueprint" && !sourceSet.has(doc._id) && !sealed.has(doc._id),
+      (doc) => doc.kind !== "business_blueprint" && !sourceSet.has(doc._id) && !sealed.has(doc._id),
     )
     .map((doc) => doc._id);
   return { count: docIds.length, docIds };

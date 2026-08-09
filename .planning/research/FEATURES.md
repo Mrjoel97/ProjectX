@@ -176,7 +176,7 @@ PROJECT explicitly says **leverage the connected Pikar-Ai service — do not reb
 | **Building a generation pipeline / hosting models** | "Own the stack" | Directly contradicts PROJECT ("do not rebuild"); enormous cost/scope | Thin MCP integration with the connected service |
 | Full timeline/NLE video editor UI | "Real creators need it" | Months of frontend for a COS side-feature; app has no component library | Brief→generate→edit-tool loop; no timeline |
 | Unbounded video length / resolution | "Longer is better" | Cost blowup; ≤3-min cap is the stated scope | Enforce ≤3 min + sane resolution defaults at wrapper |
-| Auto-publishing generated media to social | "Close the loop" | Publishing = content leaving the building without a channel/governance story | Generate + store; user downloads/routes manually in v2 |
+| ~~Auto-publishing generated media to social~~ **SUPERSEDED 2026-08-07** | "Close the loop" | ~~Publishing = content leaving the building without a channel/governance story~~ — the governance story now exists: a post stages into the same plan gate as an email (agent proposes → human approves once → executor acts), per `docs/decisions/015-marketing-milestone-pulled-pre-beta.md` §1. **"Auto-" is still refused**: ADR-004's approve-once-for-many and standing pre-authorized rules remain deferred, so no post leaves without a human approval. | Admitted as scoped product work in the Marketing milestone, **tranche B** — structurally blocked until the legal entity exists (ADR-015 §3) |
 
 ---
 

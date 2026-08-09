@@ -6,6 +6,140 @@
 > mid-change at the time of writing. Not this session's work, not verified here, and the entry
 > below stands unchanged. That lane owns the §9 entry when it lands.
 
+> Last verified: 2026-08-08 (**OPEN DEFECT — `citesVaultDoc` on fixtures 29/30/31. READ THIS BEFORE
+> FORMING A FIFTH THEORY.**) Four hypotheses were proposed and each was killed by measurement, so
+> the value here is the ELIMINATION, not a fix. The fixture asserts that the seeded vault needle
+> reaches the growth specialist's memo. It does not.
+>
+> **THE OBSERVATION, from five memos across three runs:** `needle: false, northwind: false,
+> noVault: false, len: 1116–1455`. The specialist writes a full, substantial memo that NEVER
+> references the seeded vault content — it does not cite it, does not paraphrase it, and does not
+> say the vault was empty. It answers from the evaluation/gap context as though the search never
+> happened. `searchVault:done` IS in `agentSteps`, so the tool ran.
+>
+> **WHAT IS ELIMINATED, with the measurement that did it:**
+> 1. **Embedding provider.** Re-ran with embeddings flipped OpenAI↔Gemini: 0/3 both ways, failures
+>    reproducing to the penny. (Holding models constant.)
+> 2. **Rare-token / retrieval divergence.** Plausible story about `evalgrd` being meaningless to an
+>    embedder; died with (1).
+> 3. **Model rendering** (`gpt-4o-mini` paraphrases `Northwind-<needle>` → `Northwind`). Looked
+>    strong — one memo DID discuss Northwind without the suffix — but pinning the growth trio to
+>    Gemini scored 1/3 with the one pass retried. Reverted; tombstone at `RESEARCH_FALLBACK_MODEL`
+>    in @pikar/cost.
+> 4. **Run-to-run query variance.** Killed by repetition: fixture 31 failed 4/4 CONSISTENTLY, and a
+>    specialist that searched and found nothing would say so (an earlier memo did exactly that).
+>
+> **NOT a regression from the 2026-08-08 Tavily work.** `git diff` on `llm.ts` touches ZERO lines
+> containing `searchVault`, and its retrieved chunk reaches the model through the AI SDK's own
+> tool-return path, which none of that change goes near. This predates tonight.
+>
+> **WHERE TO LOOK NEXT — a code read, not another paid run.** The fault lies between `searchVault`
+> returning its fenced chunk (llm.ts, the VGND-01 tool) and the specialist actually consuming it.
+> Worth checking: whether the chunk survives into the specialist's message history at all, whether
+> the growth skill bodies instruct the model to use it, and whether the dispatch boundary drops it.
+> Four paid runs bought the eliminations above; the next step should cost nothing until there is a
+> hypothesis the code supports.
+>
+> **CONSEQUENCE:** `EVAL_GATE` needs a 34/34 unfiltered pinned run to write an evidence row, so
+> these three fixtures block activating `cockpit-agent@17`. Research does NOT need v17 — 32/33/34
+> pass on active @15 — so v17's only remaining argument is fixture 35's `createDocument`.
+
+> Last verified: 2026-08-08 (**RESEARCH WORKS. 32/33/34 ALL GREEN, 3/3, $0.1040** — the first time
+> Phase 16's research plane has run end to end). `webResearch` is no longer a vendor-hosted tool; it
+> is a LOCAL Tavily-backed tool in `llm.ts`. That change retired the whole class of blocker: OpenAI
+> hosted search needed OpenAI credit, Google grounding has ZERO free-tier entitlement, and
+> `buildWebResearchTool` had to vendor-match `RESEARCH_MODEL` or 400. A plain HTTP API we call
+> ourselves has none of those properties, so **research now works on any model** and the
+> vendor-matching constraint documented at `RESEARCH_MODEL` is retired by construction.
+>
+> **FOUR THINGS HAD TO MOVE TOGETHER — three of them fail SILENTLY if missed.**
+> **(1) Counting is BY NAME, not by `providerExecuted`.** That flag is false for a local tool, so
+> the old filter would count zero searches forever and bill $0 of search fee — the silent under-draw
+> `packages/cost/src/cost.ts` exists to prevent. The name literal is safe now precisely BECAUSE we
+> own the tool; the old comment warned against it only because the PROVIDER chose the emitted name.
+> **(2) Sources come from the tool's own RESULT parts.** `res.sources` is populated from provider
+> `url_citation` annotations, which only a hosted tool emits — with a local tool it is permanently
+> empty, and an empty `sources` makes `declaredUnsupported` fire on EVERY run. **(3) `agentSteps.tool`
+> needed the `webResearch` literal.** schema.ts said its absence was deliberate because hosted tools
+> never fire `onToolExecutionStart`; that reasoning INVERTED. Without it the insert throws inside a
+> callback the AI SDK swallows. **(4) A RELEVANCE FLOOR**, below.
+>
+> **THE RELEVANCE FLOOR (`WEB_RESULT_MIN_SCORE = 0.55`) IS MEASURED, NOT GUESSED — and the reason it
+> is needed is subtler than it looks.** Live Tavily scores: real research queries (fixture 32)
+> return 0.8145/0.8052/0.7879/0.7730/0.7376 and 0.7409/…/0.6022; the invented entity in fixture 33
+> returns **NOTHING AT ALL** (n=0) for exact-name searches, and only a loose query mixing real words
+> returns anything — topping out at 0.5100 before a cliff to 0.0962, 0.0466, 0.0446, 0.0409. 0.55
+> sits in that gap. **The naive reading — 'Tavily always returns top-k so the verdict can never
+> fire' — is WRONG and was corrected by measurement.** The real mechanism: `sources` AGGREGATES
+> ACROSS EVERY SEARCH IN A RUN, and the specialist is told to search once per sub-question, so ONE
+> loose sub-question drags near-misses into the aggregate and `declaredQuestionScope &&
+> sources.length === 0` becomes unfireable. Hosted OpenAI search hid this by returning no sources at
+> all for an unanswerable query; that property had to be RECONSTRUCTED. **Fixtures 32 and 33 are the
+> calibration set — they pull in opposite directions**, which is what makes them a pair rather than
+> two unrelated cases. The margin (0.51 → 0.60) is real but THIN and rests on five sampled queries:
+> if a genuine result ever lands below the floor, raise `max_results` or split the query rather than
+> lowering it. A MISSING score is KEPT, deliberately — absence means the provider did not rank the
+> response, and discarding unscored rows would turn a provider change into an empty evidence list.
+>
+> **A LATENT BUG WAS FOUND AND FIXED WHILE DOING THIS.** `runAgentLoop` was running the
+> API-RESPONSE parser (`parseWebResults`) over our own TOOL-OUTPUT shape. They differ — the API says
+> `content`, our output says `snippet`, and the stored output carries no `score` (already filtered at
+> execute time). It worked only because the call site reads `url`/`title`; one field rename from
+> silently emptying every source list. `sourcesFromToolOutput` now owns that shape and has its own
+> test.
+>
+> §4: the model-authored query is scanned with `scanText` before egress — Tavily is a NEW
+> third-party boundary, so the same redact-before-send rule that governs every other outbound call
+> governs it. A missing key, a 429 or a 5xx returns an EMPTY result set with a note rather than
+> throwing: a throw inside a tool ends the specialist's whole run, and `sources: []` makes the
+> verdict honest downstream instead of crashing it.
+>
+> Backend 1223/1223, typecheck 0. 15 tests failed first and every one was legitimately encoding the
+> hosted contract; they were rewritten to stub at the NETWORK edge so `execute` and
+> `parseWebResults` actually run (the 15.3 'a stub answers with whatever it was told to answer'
+> lesson) rather than loosened.
+
+> Last verified: 2026-08-07 (**GOLDEN GATE 31/34 — THE FIRST RUN TO COMPLETE SINCE THE OPENAI
+> BALANCE HIT $0, AND IT COST NOTHING**). Run `3b286c58`/rerun, tenant `eval-<run>`, active skills,
+> unfiltered (no `--only`, no `--skill` pins). `[eval:golden] 31/34 passed — total cost $0.1574 exec
+> + $0.0015 specialist = $0.1589`. **That $0.1589 is ACCOUNTED rail spend, not an invoice: every
+> call ran on the Gemini free tier and Google billed $0.00.** Prior best was 32/33 on 2026-07-30,
+> paid for with OpenAI credit.
+>
+> **The 3 reds are grounding, and ONLY grounding** — 32/33/34, each failing identically with
+> `researchDocPresent: expected "scheduled research landed", got "no research document before
+> timeout"`. The free tier has zero Google Search grounding entitlement, so `dispatchResearch`
+> never lands a document. Known Phase-16 blocker, tracked in its `deferred-items.md`; NOT a
+> regression. Everything else passed, including both vault-grounded cases (25, 27), all three
+> gap-dispatch specialists (29/30/31) and `35-create-document`. Runner exited 1, correctly — the
+> gate is not green and must not report otherwise while three cases fail.
+>
+> **TWO REAL BUGS HAD TO BE FIXED TO GET HERE. Both were shipped defects, not configuration.**
+>
+> **(1) The vault was the last OpenAI dependency in a cockpit turn.** `vaultRag.ts` embedded via
+> `text-embedding-3-small`, so every run died at `vaultSmoke:seedCorpus` BEFORE case one no matter
+> which chat model was pinned. Swapped to `gemini-embedding-001` @1536 — see `vault.md` for the
+> three provider differences, two of which fail silently.
+>
+> **(2) `CHEAP_MODEL` pointed the fallback at an account with no credit.** This is the subtle one
+> and the reason it is recorded here rather than only in `cost.ts`. The cross-vendor pairing was a
+> good design with ONE unstated precondition — the other vendor must have money. With OpenAI at $0,
+> `runAgentLoop`'s eligible-error fallback turned every RECOVERABLE Gemini hiccup into a HARD
+> failure. The Gemini primary genuinely does hiccup on the free tier; the fallback is what absorbs
+> it, so it has to point somewhere alive. **It also made the failures undiagnosable**: the surfaced
+> error was always OpenAI's billing message, so the primary's real error never reached a log — a
+> fallback into a dead account hides the very bug it causes.
+>
+> **Bisected, not guessed.** Fixture `02-happy-multi-individual` failed DETERMINISTICALLY (twice,
+> including in isolation via `--only`) with the OpenAI fallback, and PASSED at $0.0044 with the
+> fallback repointed to `GEMINI_CHEAP_MODEL`, nothing else changed. Determinism is what ruled out
+> the rate-limit theory: a rate-limit fallback would have been flaky.
+>
+> **RESTORE THE CROSS-VENDOR PAIRING THE DAY OPENAI HAS CREDIT** — `CHEAP_MODEL` back to
+> `OPENAI_CHEAP_MODEL` and free provider failover returns. One line, and `cost.ts` carries the note.
+
+> Last verified: 2026-08-07 (Phase 16 — **THE GEMINI RESEARCH PINS CANNOT GROUND: plain PASS, grounded 429, on BOTH pins**). `probeGemini` gained `grounded: true` and `probe:gemini --grounded`, which attaches `buildWebResearchTool()` — THE PRODUCTION RECORD, now extracted to module scope in `llm.ts` so the probe and `buildCockpitTools` cannot build different tools — and adds three FAILING verdicts for 200-OK responses that read as success: `no_search_call` (no part flagged `providerExecuted`, so `runAgentLoop` would bill $0 of search fee against the daily rail), `no_sources` (searched but `res.sources` empty, which would make the specialist honesty verdict `declaredQuestionScope && sources.length === 0` fire on EVERY research run and redden fixtures 32/34 for a reason unrelated to the skill body), and `tool_vendor_mismatch`. **None of the three fired, because grounding never executed** — the run settled a different and harder blocker; see the Phase-16 grounded-probe section below for the 2x2. Offline guard added in `cockpitTools.test.ts` (record key + provider-match to `RESEARCH_MODEL`), mutation-verified RED by returning OpenAI's `webSearch` unconditionally. Backend typecheck 0 errors; cockpitTools+dispatch+research 173/173.
+
 > Last verified: 2026-08-01 (22.1-02 — **THE SPEND RAIL IS NOW PER TENANT, WITH A CEILING BEHIND IT**). The spend rail is now TWO windows (`guardrails.ts`): `dailySpendCents` keyed PER TENANT (`{ key: tenantId }` on every check/limit/getValue) and `deploymentSpendCents`, a deliberately KEYLESS ceiling. `prepare`/`preCall` check both — tenant first, so a tenant that is personally out is told so rather than blamed for a global pause — and `recordSpend` consumes both. Two distinct refusals now exist: `daily_budget_exhausted` (this tenant is done today) and `deployment_budget_exhausted` (everyone is paused). Why it mattered: the old window was keyless, so it capped the DEPLOYMENT, not the tenant — one tenant's agent loop drained everyone else's day and every other tenant saw governed refusals it could not explain. That is a blocking bug for Phase 25 multi-user. Keying it alone would have traded a noisy-neighbour bug for a cost bug (exposure N × DAILY_BUDGET_CENTS, unbounded in N, with only the manual all-or-nothing kill switch as a global stop), so the ceiling stays and the TIGHTER rail wins. `remainingDailyCents` takes a tenantId and returns `min(tenant, deployment)`, each clamped to >= 0 BEFORE the min — `recordSpend` uses `reserve: true`, so either rail can go negative and an unclamped negative ceiling would silently zero every tenant's envelope. `smoke:drainDailySpend` / `resetDailySpend` now take a tenantId and exercise ONE tenant; draining the ceiling is deliberately not offered, because that would block every tenant — exactly the blast radius this removed. Unit-proven in `guardrails.test.ts` against the REAL rate-limiter component (the old "convex-test does not load components" caveat was wrong; `dispatch.test.ts` had already registered it). The two-tenant test is mutation-verified: drop the key and it goes RED. Backend 865/866, typecheck at the exact 150 baseline. LIVE-VERIFIED 2026-08-01: `pnpm smoke:guardrails` 7/7 against the real deployment, case 5/6 reading "B blocked at prepare, A blocked mid-flight (preCall), **C (other tenant) unaffected**, none dead-lettered" — the per-tenant SC proven end-to-end, not just at the unit. **SMOKE LANDMINE FIXED IN THE SAME RUN (know this before writing another smoke assertion):** case 2/6 asserted an ABSOLUTE `llm.called` count via `assertLlmCalledCount`, which counts rows in `audit` — INSERT-ONLY by design (CLAUDE.md §3), never resettable — keyed on a safeTextHash derived from a CONSTANT goal string. The count therefore accumulated across runs: 1 on the first ever run, then 2, 3, 4… The two offending rows were timestamped 2026-07-31 and 2026-07-12, i.e. the script had been structurally unrunnable for nineteen days and nobody noticed, because a smoke nobody runs reports nothing. Fixed by giving the goal a per-RUN uid: the hash is fresh each run while staying identical WITHIN the run, which is what the cross-tenant isolation and same-tenant cache-hit assertions actually depend on. **Rule: never assert an absolute count against an append-only table from a repeatable script — assert a delta, or make the key unique per run.** **CONVENTION FOR ANY NEW SPEND WINDOW
 (read this before adding one — Phase 20's media cap is the next):** a per-USER cost rail is KEYED
 by tenantId, and if it needs a global bound it gets its OWN keyless ceiling beside it — never one
@@ -416,6 +550,160 @@ probe: PASS model=gpt-4.1-mini
   control query with a definitely-citable answer returned `sources: 1` with a parseable URL. So the
   field populates correctly, and D11's zero-results contract rests on a signal that genuinely
   discriminates — it is not an artefact of the SDK never filling `sources`.
+
+## Phase 16 — the GROUNDED probe (`probe:gemini --grounded`), 2026-08-07
+
+The OQ-2 probe above settled the **OpenAI** hosted-search question in July. The research pins were
+then repointed to Gemini (2026-08-07, the two-vendor alternation in `packages/cost/src/cost.ts`)
+and that repoint inherited NO evidence: `vertex.tools.googleSearch` lines up with OpenAI's
+`webSearch` *in the type system*, which is not the same as a model accepting it. This section is
+the Gemini half, and it exists because the eval cannot be trusted on an unproven grounding path.
+
+### What the probe now measures, and why each is a FAILING verdict
+
+`grounded: true` attaches `buildWebResearchTool()` — **the production record**, not a re-derived
+one. That builder was a closure inside `buildCockpitTools` and is now module-scope and exported,
+for exactly the reason 15.3 extracted `classifyOne`: a probe that constructs its own descriptor
+proves a fiction. `cockpitTools.test.ts` pins the record key and the provider-match offline.
+
+| verdict | the 200-OK failure it catches | why it is silent in production |
+|---|---|---|
+| `no_search_call` | answered with no `providerExecuted: true` part | `runAgentLoop` counts hosted calls on that flag ALONE, then multiplies by `searchFeeUsd`. A missing flag bills **$0** of search fee on every research run — a research plane that looks FREE, the failure OQ-2 exists to prevent. |
+| `no_sources` | searched, but `res.sources` had no `sourceType: "url"` entry | the honesty verdict is `declaredQuestionScope && sources.length === 0`, so this makes EVERY Gemini research run claim it found nothing, reddening fixtures 32/34 for a reason unrelated to the skill body. |
+| `tool_vendor_mismatch` | `RESEARCH_MODEL` is OpenAI while a `google/` id is probed | the builder picks its vendor from the pin, so this would send OpenAI's search to Gemini and report a 400 that says nothing about Gemini. Reachable after a two-line revert of the pins. |
+
+### THE RESULT — grounding is quota-refused on the AI Studio door
+
+Four runs, one deployment, `GOOGLE_GENERATIVE_AI_API_KEY` set (so `resolveModel` took **AI
+Studio**, not Vertex). The only variable between the columns is the attached tool:
+
+| model | plain | with `googleSearch` |
+|---|---|---|
+| `google/gemini-3.5-flash` (`RESEARCH_MODEL`) | **PASS** — `"OK"`, in=8 out=93, $0.000235 | **`provider_refused`** — 429 |
+| `google/gemini-3.5-flash-lite` (`RESEARCH_FALLBACK_MODEL`) | **PASS** — `"OK"`, in=8 out=1, $0.000001 | **`provider_refused`** — 429 |
+
+Verbatim refusal (identical on both pins):
+
+```
+REFUSED — verdict: provider_refused
+  model : google/gemini-3.5-flash
+  detail: AI_RetryError: Failed after 3 attempts. Last error: AI_APICallError: You exceeded your
+          current quota, please check your plan and billing details. For more information on this
+          error, head to: https://ai.google.dev/gemini-api/docs/rate-limits.
+```
+
+### Interpretation — read the control before concluding anything
+
+1. **The key is NOT exhausted, and it is an ENTITLEMENT rather than a spent allowance — waiting
+   for a reset does nothing.** Both pins answered a
+   plain prompt on the same key, same deployment, seconds apart. A grounded call with the SAME
+   prompt was refused. **THE TWO 429s ARE DISTINGUISHABLE AND THAT IS THE PROOF.** An ordinary
+   free-tier rate limit — reproduced on `gemini-2.0-flash`, which 429s on the PLAIN call too —
+   carries `QuotaFailure.violations` naming the exhausted bucket
+   (`GenerateRequestsPerMinutePerProjectPerModel-FreeTier`) and a `RetryInfo.retryDelay: 26s`: it
+   tells you what to wait for. The grounded refusal on `gemini-3.5-flash` carries a bare `Help`
+   link — no violation, no bucket, no retry delay — while a plain call to the same model returns
+   200 in the same second. Nothing is counting down. The free tier's Google Search grounding
+   entitlement is ZERO, and the
+   only lever is billing. No code change makes a free key
+   grounded — this needs billing on the AI Studio project, or a billed Vertex door (Vertex was
+   already refused for billing on the same day; **Vertex has no free tier**).
+
+2. **None of the three new verdicts fired, so the three real unknowns are STILL OPEN.** Whether
+   Gemini accepts the tool shape, whether the SDK flags the hosted call `providerExecuted`, and
+   whether Google's grounding metadata reaches `res.sources` are all unmeasured — the request never
+   got past quota. **Do not read a 429 as "the wiring works".** The first grounded PASS is what
+   closes them, and it is the gate on trusting a Phase-16 eval run.
+
+3. **The fallback cannot rescue this, by design.** A 429 is `isRetryable`, so `isFallbackEligible`
+   is true and production WOULD roll `flash` -> `flash-lite`. Both share the vendor and therefore
+   the quota, so it fails twice. That is the documented price of research being the one pair that
+   does not cross vendors (`buildWebResearchTool` picks one vendor's tool for both attempts).
+
+4. **The `provider_refused` fix text was Vertex-only and therefore wrong for this run**; it now
+   leads with the quota case and says to check which door `resolveModel` took first.
+
+### What unblocks Phase 16 from here — three doors, and they are not equivalent
+
+- **Bill the AI Studio project** — smallest change, keeps the current pins, and is the only door
+  that leaves `resolveModel` untouched. Then re-run `probe:gemini --grounded` on BOTH pins and
+  record the result here before any eval spend.
+- **Bill the Vertex project** — also unblocks Imagen/Veo, and is the door already refused once for
+  billing. Same probe, same recording requirement.
+- **Revert the research pins to OpenAI** (`OPENAI_RESEARCH_MODEL` / `OPENAI_RESEARCH_FALLBACK_MODEL`
+  are retained priced for exactly this, a two-line edit) and fund that account instead. This is the
+  only door with PROVEN grounding evidence — the OQ-2 section above — but it re-inherits the $0
+  balance that caused the repoint.
+
+Whichever is taken, the Phase-16 close still owes ONE unfiltered golden gate; a grounded PASS is a
+precondition for it, not a substitute.
+
+## Gemma 4 on the Gemini API — measured 2026-08-07, and why it is NOT the research answer
+
+Investigated because Gemma 4 is the only thing on this key that is genuinely free while both paid
+doors are shut (OpenAI `credit_balance_exhausted`, Gemini grounding un-entitled). Two ids are
+visible to the AI Studio key: `gemma-4-26b-a4b-it` and `gemma-4-31b-it`, both 262,144 input /
+32,768 output, `supportedGenerationMethods: generateContent, countTokens`.
+
+**Google's own pricing page is explicit: Gemma 4 is `Free of charge` on the free tier and `Not
+available` on the paid tier — and Google Search grounding for Gemma is `Not available`.**
+
+### What works (measured against the live key, and through `probe:gemini`)
+
+| capability | result |
+|---|---|
+| plain generation | works; clean text through the SDK |
+| **function calling** | **works** — returned `{"name":"get_weather","args":{"city":"Nairobi"}}` on the first try. Gemma CAN drive a tool loop. |
+| `responseSchema` / JSON | works — emitted `{"route":"email_service","confidence":1.0}`, `JSON.parse` OK |
+| `systemInstruction` | accepted (200); the skill-body delivery mechanism is available |
+| embeddings | **absent** — `generateContent, countTokens` only. Embeddings still need `gemini-embedding-001` or OpenAI. |
+
+### The grounding trap — a 200 that means nothing
+
+A raw REST call with `tools:[{google_search:{}}]` returns **200 with `groundingMetadata` PRESENT**
+(`webSearchQueries:["Google Gemini API news last 30 days"]`, 1 `groundingChunk`), where the same
+call on `gemini-3.5-flash` is refused 429. That looks like a free research plane. **It is not, and
+this is exactly the failure `probe:gemini --grounded` was built to catch.** Through the PRODUCTION
+stack (`@ai-sdk/google` + `buildWebResearchTool`) the same request yields:
+
+```
+  search: 0 provider-executed call(s)
+  tools : []
+  srcs  : 0
+  fee   : $0.0000
+```
+
+So in production it would be `no_search_call` AND `no_sources` together: `webSearchCalls` 0 means
+the search bills **nothing** against the daily rail, and `sources` empty means
+`declaredQuestionScope && sources.length === 0` fires on EVERY run — the research plane reports
+"I found nothing" while appearing free. The model's answer was stale on all three attempts
+("Gemini 1.5 Flash … May 14, 2024" for a question that asked for the last 30 days), consistent
+with it reasoning from weights rather than from retrieved chunks.
+
+**Conclusion: do NOT route research at Gemma.** Google documents grounding as unavailable for it,
+the SDK surfaces neither the call nor the sources, and the answer quality matches "not grounded".
+
+### Where Gemma DOES fit
+
+The toolless paths and the cheap tier — never research, never embeddings:
+
+- The untrusted-content ingestion firewall (`digestInbox` / `draftReply` / `draftCockpit`), which
+  invariant 10 already keeps toolless. Pure text in, text out, high volume, $0.
+- A `CHEAP_MODEL` candidate: it is the budget downgrade AND the fallback target, and function
+  calling works, so it can carry a degraded turn at no cost.
+
+**Adopting it forces one decision that must be made deliberately, not by default.** A model with no
+`PRICING` row bills $0 and the fail-closed rule in `packages/cost/src/cost.ts` treats that as the
+dangerous case. For Gemma the $0 is TRUE — which means the daily rail genuinely cannot throttle it,
+and the real scarcity becomes Google's per-minute/per-day request quota, which this codebase does
+not track at all. Either add a `$0` row and accept that the cost rail is absent for that model (and
+handle 429s as the limit instead), or price it nominally to keep the rail meaningful. Do not add
+the row without picking one — `probe:gemini` returns `unpriced` for both Gemma ids today, which is
+the rail working as designed.
+
+`probeGemini` was reordered the same day so the grounded evidence is returned WITH an `unpriced`
+verdict: `unpriced` is the verdict a model gets on the run where it is being evaluated for
+adoption, which is exactly the run whose grounding evidence decides whether to add the row.
 
 ## Phase 22.1 — the evidence verdict (`not_researched` vs `insufficient_evidence`)
 

@@ -17,6 +17,13 @@ import { defineConfig } from "vitest/config";
 // Component-level guarantees that cannot move into a pure module still belong in
 // `packages/core/src/vaultSurface.test.ts`, which reads the surface as SOURCE TEXT.
 export default defineConfig({
+  // Match Next's JSX transform. esbuild defaults to the CLASSIC runtime, so a `.tsx` imported by a
+  // test compiled to `React.createElement` and died with `React is not defined` unless the
+  // component file carried a default `React` import it never used — a dead import that biome then
+  // flags, added to every component forever. Next builds with the automatic runtime
+  // (`"jsx": "preserve"` + SWC), so this makes the runner agree with the app rather than making
+  // each source file carry a workaround.
+  esbuild: { jsx: "automatic" },
   test: {
     environment: "node",
     // `.ts` only — a `.tsx` file here would silently need a DOM and fail confusingly.

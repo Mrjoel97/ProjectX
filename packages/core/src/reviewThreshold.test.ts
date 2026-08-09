@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { MAX_REGENERATE, classifyReviewDecision } from "./reviewThreshold";
+import { classifyReviewDecision, MAX_REGENERATE } from "./reviewThreshold";
 
 describe("classifyReviewDecision (REVW-02 fail-closed review gate)", () => {
   test("approve → proceed", () => {

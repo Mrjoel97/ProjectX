@@ -48,8 +48,7 @@ export const exportAudit = internalAction({
   handler: async (
     ctx,
   ): Promise<
-    | { skipped: true; reason: string }
-    | { exported: number; maxTs?: number; key?: string }
+    { skipped: true; reason: string } | { exported: number; maxTs?: number; key?: string }
   > => {
     const since = await ctx.runQuery(internal.wormCursor.getCursor, {});
 

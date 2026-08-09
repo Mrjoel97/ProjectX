@@ -13,9 +13,9 @@ import { validateSubmit } from "@pikar/core/validateSubmit";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { rateLimiter } from "./guardrails";
-import { contentHash } from "./lib/hash";
-import { tenantMutation, tenantQuery } from "./lib/functions";
 import { workflow } from "./index";
+import { tenantMutation, tenantQuery } from "./lib/functions";
+import { contentHash } from "./lib/hash";
 import { MAX_REGENERATE, REQUEST_STATUS } from "./pipeline";
 import { reviewDecisionValidator } from "./review";
 
@@ -150,9 +150,7 @@ export const list = tenantQuery({
     const rows = status
       ? await ctx.db
           .query("requests")
-          .withIndex("by_tenant_status", (q) =>
-            q.eq("tenantId", ctx.tenantId).eq("status", status),
-          )
+          .withIndex("by_tenant_status", (q) => q.eq("tenantId", ctx.tenantId).eq("status", status))
           .collect()
       : await ctx.db
           .query("requests")

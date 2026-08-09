@@ -85,7 +85,11 @@ export function applyRecipientEdit(
   // keeping the current recipients — so an empty or all-garbage setRecipients can never silently
   // wipe already-resolved contacts (the model emitting `setRecipients([])` did exactly that).
   if (edit.op === "set" && next.length === 0) {
-    return { ok: false, recipients: [...recipients], rejected: rejected.length > 0 ? rejected : ["(empty)"] };
+    return {
+      ok: false,
+      recipients: [...recipients],
+      rejected: rejected.length > 0 ? rejected : ["(empty)"],
+    };
   }
   if (rejected.length > 0) return { ok: false, recipients: next, rejected };
   return { ok: true, recipients: next };
@@ -190,7 +194,10 @@ export function rankCandidates(name: string, records: readonly HeaderRecord[]): 
   // liability, so "I couldn't find them, what's their email?" beats a confident wrong guess.
   const named = [...byAddr.values()].filter((c) => score(c) > 0);
   return named
-    .sort((a, b) => score(b) - score(a) || b.count - a.count || (b.lastDateMs ?? 0) - (a.lastDateMs ?? 0))
+    .sort(
+      (a, b) =>
+        score(b) - score(a) || b.count - a.count || (b.lastDateMs ?? 0) - (a.lastDateMs ?? 0),
+    )
     .slice(0, 5);
 }
 

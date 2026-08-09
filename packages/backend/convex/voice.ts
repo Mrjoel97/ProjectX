@@ -10,7 +10,7 @@
 // client secret (CLAUDE.md §4). The brief BODY keeps PII (it is vault content, not a log).
 import { priceRealtime } from "@pikar/cost";
 import { categoryFor } from "@pikar/vault";
-import { capEndsAt, isEnded } from "@pikar/voice";
+import { capEndsAt, DEFAULT_REALTIME_MODEL, isEnded } from "@pikar/voice";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
@@ -304,13 +304,29 @@ export const recordUsage = tenantMutation({
     // Fail closed BEFORE any write — a bad delta never mutates a counter (no negative/NaN spend).
     const priced = priceRealtime(inAudioTok, outAudioTok, textInTok, textOutTok);
     if (!priced.ok) return { ok: false };
+    // FIN-01 correlation, read BEFORE the patch: the session's cumulative token count is the
+    // offset of this fold in the session's token stream, and it is the discriminator. `sessionId`
+    // alone would collapse EVERY response.done fold of one call into a single ledger row while the
+    // limiter consumed each one — the ledger would sit below the limiter, the unrecoverable
+    // direction. The counters only ever rise (priceRealtime refuses a negative), so a chargeable
+    // second fold always lands on a different correlation; two consecutive zero-token folds share
+    // one, and they cost nothing.
+    const offset = s.inAudioTok + s.outAudioTok + s.textInTok + s.textOutTok;
     await ctx.db.patch(sessionId, {
       inAudioTok: s.inAudioTok + inAudioTok,
       outAudioTok: s.outAudioTok + outAudioTok,
       textInTok: s.textInTok + textInTok,
       textOutTok: s.textOutTok + textOutTok,
     });
-    await ctx.runMutation(internal.guardrails.recordSpend, { tenantId: ctx.tenantId, costUsd: priced.value });
+    await ctx.runMutation(internal.guardrails.recordSpend, {
+      tenantId: ctx.tenantId,
+      costUsd: priced.value,
+      // Derived, not a nonce: this is a MUTATION, so a re-run re-reads the counters inside the same
+      // transaction and re-derives the same key — there is no re-entry that spends twice under it.
+      correlationId: `voice:usage:${sessionId}:${offset}`,
+      model: DEFAULT_REALTIME_MODEL,
+      kind: "realtime",
+    });
     return { ok: true };
   },
 });

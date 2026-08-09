@@ -51,23 +51,47 @@ console.log("[smoke:guardrails] 1/6 redaction + no-raw-PII (GRDL-01/02)");
   const cid = `grd-pii-${uid()}`;
   await seedThroughReview("smokeA", PII_GOAL, cid);
   const { safeTextHash } = parse(
-    must("smokeAssert:assertRedacted", { correlationId: cid, placeholders: ["[EMAIL_1]", "[SSN_1]"] }),
+    must("smokeAssert:assertRedacted", {
+      correlationId: cid,
+      placeholders: ["[EMAIL_1]", "[SSN_1]"],
+    }),
   );
-  must("smokeAssert:assertNoRawPii", { correlationId: cid, safeTextHash, needles: [RAW_EMAIL, RAW_SSN] });
+  must("smokeAssert:assertNoRawPii", {
+    correlationId: cid,
+    safeTextHash,
+    needles: [RAW_EMAIL, RAW_SSN],
+  });
   console.log(`  ok — redacted, hash=${safeTextHash.slice(0, 8)}, zero raw PII in any log plane`);
 
   console.log("[smoke:guardrails] 2/6 cache isolation (two tenants) + model-free hit (GRDL-04)");
   // Second tenant, identical goal → its OWN cache entry → a second real draft run.
   const cidB = `grd-cacheB-${uid()}`;
   await seedThroughReview("smokeB", PII_GOAL, cidB);
-  must("smokeAssert:assertLlmCalledCount", { safeTextHash, tenantId: "smokeA", stage: "draft", expected: 1 });
-  must("smokeAssert:assertLlmCalledCount", { safeTextHash, tenantId: "smokeB", stage: "draft", expected: 1 });
+  must("smokeAssert:assertLlmCalledCount", {
+    safeTextHash,
+    tenantId: "smokeA",
+    stage: "draft",
+    expected: 1,
+  });
+  must("smokeAssert:assertLlmCalledCount", {
+    safeTextHash,
+    tenantId: "smokeB",
+    stage: "draft",
+    expected: 1,
+  });
 
   // Same tenant repeats the identical goal → served from cache, NO new model call.
   const cidRepeat = `grd-cacheHit-${uid()}`;
   await seedThroughReview("smokeA", PII_GOAL, cidRepeat);
-  must("smokeAssert:assertLlmCalledCount", { safeTextHash, tenantId: "smokeA", stage: "draft", expected: 1 });
-  console.log("  ok — smokeA=1, smokeB=1 (isolated), smokeA repeat still 1 (cache hit, no model call)");
+  must("smokeAssert:assertLlmCalledCount", {
+    safeTextHash,
+    tenantId: "smokeA",
+    stage: "draft",
+    expected: 1,
+  });
+  console.log(
+    "  ok — smokeA=1, smokeB=1 (isolated), smokeA repeat still 1 (cache hit, no model call)",
+  );
 }
 
 console.log("[smoke:guardrails] 3/6 real primary-failure fallback (GRDL-05)");
@@ -77,14 +101,21 @@ console.log("[smoke:guardrails] 3/6 real primary-failure fallback (GRDL-05)");
   await seedThroughReview("smokeFb", goal, cid);
   const { safeTextHash } = parse(must("smokeAssert:assertRedacted", { correlationId: cid }));
   must("smokeAssert:assertFallback", { safeTextHash });
-  console.log(`  ok — llm.fallback audited for hash=${safeTextHash.slice(0, 8)}, request still reached review`);
+  console.log(
+    `  ok — llm.fallback audited for hash=${safeTextHash.slice(0, 8)}, request still reached review`,
+  );
 }
 
 console.log("[smoke:guardrails] 4/6 kill switch blocks at the governed terminal (GRDL-06)");
 try {
   must("guardrails:setKillSwitch", { on: true });
   const cid = `grd-kill-${uid()}`;
-  must("smoke:seedPipeline", { correlationId: cid, route: "direct_llm", tenant: "smokeKill", goal: PII_GOAL });
+  must("smoke:seedPipeline", {
+    correlationId: cid,
+    route: "direct_llm",
+    tenant: "smokeKill",
+    goal: PII_GOAL,
+  });
   await pollPass("smokeAssert:assertBlocked", { correlationId: cid, reason: "kill_switch" });
   console.log("  ok — blocked (kill_switch), no dead letter");
 } finally {
@@ -96,20 +127,40 @@ try {
   // A parks at review BEFORE the drain, so its regenerate hits preCall (not prepare).
   const cidA = `grd-budgetA-${uid()}`;
   const goalA = `SMOKE::route=direct_llm::cache=1:: budget probe ${uid()}`;
-  must("smoke:seedPipeline", { correlationId: cidA, route: "direct_llm", tenant: "smokeBudget", goal: goalA });
+  must("smoke:seedPipeline", {
+    correlationId: cidA,
+    route: "direct_llm",
+    tenant: "smokeBudget",
+    goal: goalA,
+  });
   await pollPass("smokeAssert:assertAtReview", { correlationId: cidA });
 
   must("smoke:drainDailySpend", { tenantId: "smokeBudget" });
 
   // B is fresh → blocked at prepare's daily-spend check.
   const cidB = `grd-budgetB-${uid()}`;
-  must("smoke:seedPipeline", { correlationId: cidB, route: "direct_llm", tenant: "smokeBudget", goal: PII_GOAL });
-  await pollPass("smokeAssert:assertBlocked", { correlationId: cidB, reason: "daily_budget_exhausted" });
+  must("smoke:seedPipeline", {
+    correlationId: cidB,
+    route: "direct_llm",
+    tenant: "smokeBudget",
+    goal: PII_GOAL,
+  });
+  await pollPass("smokeAssert:assertBlocked", {
+    correlationId: cidB,
+    reason: "daily_budget_exhausted",
+  });
 
   // A regenerates mid-flight → llm.draft preCall re-checks the drained window → blocked
   // (NOT failed; assertBlocked's no-deadLetters check proves it never touched the DLQ).
-  await pollPass("review:sendDecision", { correlationId: cidA, attempt: 0, decision: "regenerate" });
-  await pollPass("smokeAssert:assertBlocked", { correlationId: cidA, reason: "daily_budget_exhausted" });
+  await pollPass("review:sendDecision", {
+    correlationId: cidA,
+    attempt: 0,
+    decision: "regenerate",
+  });
+  await pollPass("smokeAssert:assertBlocked", {
+    correlationId: cidA,
+    reason: "daily_budget_exhausted",
+  });
 
   // C is a DIFFERENT tenant and must sail straight past the drain — this is 22.1-02's whole
   // point, proven end-to-end through the real pipeline rather than only at the preCall unit.
@@ -117,7 +168,12 @@ try {
   // too. If this line ever goes red, the { key: tenantId } has been dropped somewhere.
   const cidC = `grd-budgetC-${uid()}`;
   const goalC = `SMOKE::route=direct_llm::cache=1:: budget probe ${uid()}`;
-  must("smoke:seedPipeline", { correlationId: cidC, route: "direct_llm", tenant: "smokeBudgetOther", goal: goalC });
+  must("smoke:seedPipeline", {
+    correlationId: cidC,
+    route: "direct_llm",
+    tenant: "smokeBudgetOther",
+    goal: goalC,
+  });
   await pollPass("smokeAssert:assertAtReview", { correlationId: cidC });
 
   console.log(
@@ -131,7 +187,9 @@ console.log("[smoke:guardrails] 6/7 submit rate limiter rejects the 6th consume 
 must("smoke:assertSubmitRateLimited", {});
 console.log("  ok — token bucket capacity 5 enforced");
 
-console.log("[smoke:guardrails] 7/7 attachment generation pauses under a governed stop (V8, CKPT-02)");
+console.log(
+  "[smoke:guardrails] 7/7 attachment generation pauses under a governed stop (V8, CKPT-02)",
+);
 try {
   // A generation turn under the kill switch: runCockpitAgent.preCall returns the paused reply
   // BEFORE the generateAttachment tool runs → NO attachment stored, NO DLQ, plan unapprovable.
@@ -147,7 +205,9 @@ try {
     }),
   );
   if (res.blocked !== "kill_switch") {
-    throw new Error(`generation turn not paused: blocked=${res.blocked ?? "none"}, expected kill_switch`);
+    throw new Error(
+      `generation turn not paused: blocked=${res.blocked ?? "none"}, expected kill_switch`,
+    );
   }
   must("smokeAssert:assertNoAttachmentStored", { planId, tenantId: tenant });
   console.log("  ok — paused as data (kill_switch), no attachment stored, no dead letter");

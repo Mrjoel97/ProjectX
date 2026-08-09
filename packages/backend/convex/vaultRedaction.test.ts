@@ -34,7 +34,8 @@ test("the graph plane stores NO raw document text — only vaultDocuments.text h
   // graphNodes/graphEdges rows carry type/name/normalizedName/rel/ids/degree — surface forms derived
   // from ALREADY-REDACTED text (extractGraph scans first). No graph insert may carry a `text:` field.
   const graphSrc = readSource("vaultGraph.ts");
-  const graphInserts = graphSrc.match(/\.insert\(\s*["'](graphNodes|graphEdges)["'][\s\S]*?\}\)/g) ?? [];
+  const graphInserts =
+    graphSrc.match(/\.insert\(\s*["'](graphNodes|graphEdges)["'][\s\S]*?\}\)/g) ?? [];
   expect(graphInserts.length, "no graphNodes/graphEdges insert found").toBeGreaterThan(0);
   for (const ins of graphInserts) {
     expect(ins, `a graph insert carries a raw text field: ${ins}`).not.toMatch(/\btext\s*:/);
@@ -55,7 +56,10 @@ test("extract + embed steps redact (scanText) BEFORE any model / embedding call 
   );
   // embedDoc: scanText must precede rag.add (redact-then-embed — the vault embeds the redacted text).
   const ragSrc = readSource("vaultRag.ts");
-  expect(ragSrc.indexOf("scanText("), "vaultRag embedDoc does not call scanText").toBeGreaterThanOrEqual(0);
+  expect(
+    ragSrc.indexOf("scanText("),
+    "vaultRag embedDoc does not call scanText",
+  ).toBeGreaterThanOrEqual(0);
   expect(ragSrc.indexOf("scanText("), "scanText must run before rag.add").toBeLessThan(
     ragSrc.indexOf("rag.add("),
   );
@@ -72,7 +76,8 @@ test("the RAG instance is built with a v2-spec embedding model (ai@6 compat, NOT
     /specificationVersion:\s*["']v2["']/,
   );
   // The v4 trap: never pass the raw provider embedding model straight into the RAG constructor again.
-  expect(ragSrc, "vaultRag passes a raw openai.embedding(...) model to RAG (spec v4 — breaks ingest)").not.toMatch(
-    /textEmbeddingModel:\s*openai\.embedding\(/,
-  );
+  expect(
+    ragSrc,
+    "vaultRag passes a raw openai.embedding(...) model to RAG (spec v4 — breaks ingest)",
+  ).not.toMatch(/textEmbeddingModel:\s*openai\.embedding\(/);
 });

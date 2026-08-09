@@ -379,7 +379,9 @@ function applyOnly(fixtures, filters) {
   if (!filters.length) return fixtures;
   for (const s of filters) {
     if (!fixtures.some((f) => f.id.includes(s))) {
-      throw new Error(`--only "${s}" matched no fixture (ids: ${fixtures.map((f) => f.id).join(", ")})`);
+      throw new Error(
+        `--only "${s}" matched no fixture (ids: ${fixtures.map((f) => f.id).join(", ")})`,
+      );
     }
   }
   return fixtures.filter((f) => filters.some((s) => f.id.includes(s)));
@@ -667,20 +669,12 @@ function selfCheck() {
     "a paired executive-dispatched research fixture is accepted without actOnGap",
   );
   assert.throws(
-    () =>
-      validateFixture(
-        { ...base, expect: { insufficientEvidence: true } },
-        "<synthetic>",
-      ),
+    () => validateFixture({ ...base, expect: { insufficientEvidence: true } }, "<synthetic>"),
     /requires researchDocPresent:true/,
     "the verdict without a persisted research document is vacuous",
   );
   assert.throws(
-    () =>
-      validateFixture(
-        { ...base, expect: { webSearchCallsAtLeast: 2 } },
-        "<synthetic>",
-      ),
+    () => validateFixture({ ...base, expect: { webSearchCallsAtLeast: 2 } }, "<synthetic>"),
     /requires researchDocPresent:true/,
     "the hosted-search floor without a persisted research document is vacuous",
   );
@@ -718,14 +712,12 @@ function selfCheck() {
     "a turn cannot supply the phrase the durable verdict probe reads",
   );
   assert.equal(
-    evaluateExpect(researchExpect, collecting, 0, false, 0, 0, 0, "", 1, false, 3)
-      .length,
+    evaluateExpect(researchExpect, collecting, 0, false, 0, 0, 0, "", 1, false, 3).length,
     0,
     "a stored grounded run with three searches satisfies the paired observables",
   );
   assert.equal(
-    evaluateExpect(researchExpect, collecting, 0, false, 0, 0, 0, "", 0, false, 3)
-      .length,
+    evaluateExpect(researchExpect, collecting, 0, false, 0, 0, 0, "", 0, false, 3).length,
     1,
     "researchDocPresent:true MUST FAIL when no research document was stored",
   );
@@ -747,8 +739,7 @@ function selfCheck() {
     "the durable insufficient-evidence label is observable",
   );
   assert.equal(
-    evaluateExpect(researchExpect, collecting, 0, false, 0, 0, 0, "", 1, false, 1)
-      .length,
+    evaluateExpect(researchExpect, collecting, 0, false, 0, 0, 0, "", 1, false, 1).length,
     1,
     "webSearchCallsAtLeast:2 MUST FAIL on a one-shot search",
   );
@@ -1238,7 +1229,9 @@ function attemptCase(fixture, tenant, pins) {
   // read, hung off the EXISTING poll — no second loop). Same skip-unless-asked discipline as every
   // other read below: a non-dispatch case pays no extra hop and its numbers are unchanged.
   if (dispatched) {
-    specialistCost = parse(must("smoke:specialistCostForThread", { tenantId: tenant, threadId }, RETRY_READ));
+    specialistCost = parse(
+      must("smoke:specialistCostForThread", { tenantId: tenant, threadId }, RETRY_READ),
+    );
     caseCost += specialistCost;
     totalCost += specialistCost;
     // The cap is a governed stop and outranks a case failure — check BEFORE returning one.
@@ -1444,7 +1437,9 @@ async function runLive(pins, filters = []) {
   // indistinguishable from a full gate, silently certifying a skill on a tenth of the coverage.
   // A partial run may never produce an EVAL_GATE input.
   if (allGreen && pins.length && filters.length) {
-    console.log(`[eval:golden] evidence SUPPRESSED — partial run (--only). Re-run unfiltered to gate.`);
+    console.log(
+      `[eval:golden] evidence SUPPRESSED — partial run (--only). Re-run unfiltered to gate.`,
+    );
   }
   if (allGreen && pins.length && !filters.length) {
     const skillVersions = skillVersionsOf(pins);

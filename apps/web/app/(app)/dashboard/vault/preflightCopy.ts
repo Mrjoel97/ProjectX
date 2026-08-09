@@ -53,14 +53,23 @@ export function refusalCopy(a: {
   )} left today.`;
   switch (a.reason) {
     case "over_folder_cap":
-      return { title, remedy: "It's over one day's limit on its own. Remove some files and start again." };
+      return {
+        title,
+        remedy: "It's over one day's limit on its own. Remove some files and start again.",
+      };
     case "over_deployment_cap":
-      return { title, remedy: "It's over the limit for everyone today. Remove some files and start again." };
+      return {
+        title,
+        remedy: "It's over the limit for everyone today. Remove some files and start again.",
+      };
     case "deployment_ingest_exhausted":
       return { title, remedy: "Reading is paused for everyone today. Start again tomorrow." };
     default:
       // `ingest_daily_exhausted` and any code added later.
-      return { title, remedy: "Remove some files, or start again tomorrow when your allowance resets." };
+      return {
+        title,
+        remedy: "Remove some files, or start again tomorrow when your allowance resets.",
+      };
   }
 }
 

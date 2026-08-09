@@ -3,10 +3,10 @@
 // THE PRE-FLIGHT — AN INLINE `clay-card` PANEL IN THE DROPZONE'S SLOT, DELIBERATELY NOT A MODAL.
 //
 // This is an a11y decision, not a layout preference. The app has exactly two `aria-modal` blocks,
-// neither is shared, `PreviewModal` ships Esc + scroll-lock but NO FOCUS TRAP, and
-// `DisconnectGoogle.tsx:25-27` documents that missing dialog pattern as deliberate. A modal here
-// would inherit that gap and owe a focus trap, a scroll lock and a portal to close it. An INLINE
-// step owes none of them: focus order is the document's, Esc has nothing to close, and the page
+// neither is shared. `PreviewModal` now owns its complete dialog behaviour (trap, Escape, scroll
+// lock and focus restoration); duplicating that machinery for a non-overlay confirmation would
+// add a second pattern for no user benefit. An INLINE step keeps the document's natural focus
+// order, owes no Escape gesture, and the page
 // scrolls normally (BRAND §6 — keyboard operability is a requirement, not a suggestion). It is also
 // why this renders inside `.vault-scroll`: `.clay-card`'s backdrop-filter only frosts correctly on
 // the `.pane-canvas` aura, so a portal would look wrong even before the a11y argument.
@@ -208,7 +208,11 @@ export function PreFlight({
       } catch (e) {
         // The loop CONTINUES — one bad file must not abandon the rest, and every result is kept so
         // the user is told exactly which files landed (BRAND §1).
-        results.push({ name: file.name, ok: false, note: e instanceof Error ? e.message : "upload failed" });
+        results.push({
+          name: file.name,
+          ok: false,
+          note: e instanceof Error ? e.message : "upload failed",
+        });
       }
       setOutcomes([...results]);
       onPhase({ kind: "uploading", folderId, done: results.length, total: ingestible.length });
@@ -270,7 +274,15 @@ export function PreFlight({
     });
   }
 
-  const copy = refused ? refusalCopy(phase) : est?.refusal ? refusalCopy({ reason: est.refusal.reason, estimateCents: est.totalCents, remainingCents: est.remainingCents }) : null;
+  const copy = refused
+    ? refusalCopy(phase)
+    : est?.refusal
+      ? refusalCopy({
+          reason: est.refusal.reason,
+          estimateCents: est.totalCents,
+          remainingCents: est.remainingCents,
+        })
+      : null;
   // `not_reserving` and `manifest_short` come back with NO `estCents`, so the refusal arm fills 0.
   // `preflightCopy` already suppresses both numbers in the PROSE for those codes; the tile has to
   // agree, or the panel says "your folder didn't match what reached us" beside a confident $0.00
@@ -281,9 +293,18 @@ export function PreFlight({
   return (
     <section
       className="clay-card"
-      style={{ borderRadius: "1rem", padding: "1.25rem 1.5rem", display: "grid", gap: "1rem" }}
+      aria-labelledby="vault-preflight-heading"
+      style={{
+        border: "1px solid var(--vault-border)",
+        borderRadius: "1rem",
+        padding: "clamp(1rem, 2.5vw, 1.5rem)",
+        display: "grid",
+        gap: "1rem",
+        background: "var(--vault-paper)",
+        boxShadow: "var(--vault-shadow)",
+      }}
     >
-      <div className="caps-label">FOLDER UPLOAD</div>
+      <div id="vault-preflight-heading" className="caps-label">FOLDER UPLOAD · REVIEW BEFORE START</div>
 
       <p style={{ margin: 0, color: "var(--ink)", fontWeight: 700 }}>{picked.name}</p>
 
@@ -306,7 +327,14 @@ export function PreFlight({
           <div className="caps-label">
             {skipped.length} file{skipped.length === 1 ? "" : "s"} won&rsquo;t be read
           </div>
-          <ul style={{ margin: "0.4rem 0 0", paddingLeft: "1.1rem", color: "var(--ink-soft)", fontSize: "0.85rem" }}>
+          <ul
+            style={{
+              margin: "0.4rem 0 0",
+              paddingLeft: "1.1rem",
+              color: "var(--ink-soft)",
+              fontSize: "0.85rem",
+            }}
+          >
             {skipped.map((i) => (
               <li key={picked.files[i]?.name ?? i}>
                 {picked.files[i]?.name} — {skipCopy(perFile[i]?.reason ?? "")}
@@ -329,10 +357,16 @@ export function PreFlight({
             padding: "0.85rem 1rem",
           }}
         >
-          <p style={{ margin: 0, fontSize: "0.85rem", color: "#991b1b", fontWeight: 600 }}>{copy.title}</p>
-          <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem", color: "#991b1b" }}>{copy.remedy}</p>
+          <p style={{ margin: 0, fontSize: "0.85rem", color: "#991b1b", fontWeight: 600 }}>
+            {copy.title}
+          </p>
+          <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem", color: "#991b1b" }}>
+            {copy.remedy}
+          </p>
           {refused && (
-            <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem", color: "#991b1b" }}>Nothing was read.</p>
+            <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem", color: "#991b1b" }}>
+              Nothing was read.
+            </p>
           )}
         </div>
       )}
@@ -341,7 +375,11 @@ export function PreFlight({
         // The arm that only renders on a PARTIAL success — a clean run has already called
         // `onClear()` and unmounted this panel. Announced, because it is a terminal outcome the
         // user did not watch happen (the per-file counter above is deliberately not announced).
-        <p role="status" aria-live="polite" style={{ margin: 0, color: "var(--ink)", fontSize: "0.88rem" }}>
+        <p
+          role="status"
+          aria-live="polite"
+          style={{ margin: 0, color: "var(--ink)", fontSize: "0.88rem" }}
+        >
           Reading {phase.docCount} file{phase.docCount === 1 ? "" : "s"}. The rest are listed below
           and were not sent.
         </p>
@@ -356,7 +394,14 @@ export function PreFlight({
       {uploading && (
         // No aria-live on a counter that ticks once per file — the workspace ActivityCard sets that
         // precedent (ChatPane.tsx:208). The terminal outcome above is the announced one.
-        <p style={{ margin: 0, color: "var(--ink-soft)", fontSize: "0.88rem", fontVariantNumeric: "tabular-nums" }}>
+        <p
+          style={{
+            margin: 0,
+            color: "var(--ink-soft)",
+            fontSize: "0.88rem",
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
           Sending {phase.done} of {phase.total}…
         </p>
       )}
@@ -374,20 +419,21 @@ export function PreFlight({
 
       <div style={{ display: "flex", gap: "0.5rem" }}>
         {refused ? (
-          <button type="button" onClick={onClear} style={pillSecondary(false)}>
+          <button type="button" className="vault-button" onClick={onClear} style={pillSecondary(false)}>
             Start over
           </button>
         ) : phase.kind === "started" ? (
           // Started AND partial: the panel is held open only to name the files that did not make
           // it, so the one control left is an acknowledgement. Start must NOT come back — the
           // folder is past `reserving` and a second press could only ever answer `not_reserving`.
-          <button type="button" onClick={onClear} style={pillSecondary(false)}>
+          <button type="button" className="vault-button" onClick={onClear} style={pillSecondary(false)}>
             Done
           </button>
         ) : (
           <>
             <button
               type="button"
+              className="vault-button vault-button-primary"
               disabled={uploading || blocked || est === undefined}
               onClick={() => void start()}
               style={pillPrimary(uploading || blocked || est === undefined)}
@@ -396,6 +442,7 @@ export function PreFlight({
             </button>
             <button
               type="button"
+              className="vault-button"
               disabled={cancelling}
               aria-disabled={cancelling}
               onClick={() => {

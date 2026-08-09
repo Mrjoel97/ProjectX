@@ -46,11 +46,15 @@ async function resolveTenantId(page: Page): Promise<string> {
     const key = Object.keys(window.localStorage).find((k) => k.startsWith("__convexAuthJWT"));
     return key ? window.localStorage.getItem(key) : null;
   });
-  if (!jwt) throw new Error("No Convex Auth JWT in localStorage — is the storageState session still valid?");
+  if (!jwt)
+    throw new Error(
+      "No Convex Auth JWT in localStorage — is the storageState session still valid?",
+    );
   const payload = jwt.split(".")[1];
   if (!payload) throw new Error("Malformed Convex Auth JWT (no payload segment).");
   const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { sub?: string };
-  if (!claims.sub) throw new Error("Convex Auth JWT carries no `sub` claim — cannot resolve the tenant.");
+  if (!claims.sub)
+    throw new Error("Convex Auth JWT carries no `sub` claim — cannot resolve the tenant.");
   return claims.sub;
 }
 
@@ -94,7 +98,10 @@ test("SC3: seeded voice-doc review renders quoted + quote-less findings → gap 
   expect(await citations.count()).toBeGreaterThan(1);
 
   // SC3 — the user chooses. Acting on a gap stages a plan.
-  await page.getByRole("button", { name: /act on this/i }).first().click();
+  await page
+    .getByRole("button", { name: /act on this/i })
+    .first()
+    .click();
 
   // …and it lands at the EXISTING single Approve gate. Nothing has been sent, and nothing can be
   // until a human presses this.

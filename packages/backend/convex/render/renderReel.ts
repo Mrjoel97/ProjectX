@@ -24,8 +24,8 @@ import type { Doc, Id } from "./../_generated/dataModel";
 import type { MutationCtx } from "./../_generated/server";
 import { internalAction, internalMutation, internalQuery } from "./../_generated/server";
 import { contentHash } from "./../lib/hash";
-import { maybeBurnCaptions } from "./../mediaComplete";
 import { requireEnvMedia } from "./../media";
+import { maybeBurnCaptions } from "./../mediaComplete";
 
 /** Every way a render can be refused or can fail, as a CODE. `renderReason` on the plan row is a
  *  reasonCode field and never ffmpeg's prose — the schema comment says so and this union is what

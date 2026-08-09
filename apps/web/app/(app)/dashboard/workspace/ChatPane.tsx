@@ -61,7 +61,11 @@ function messageText(content: unknown): string {
   if (typeof content === "string") return content;
   if (Array.isArray(content)) {
     return content
-      .map((p) => (p && typeof p === "object" && "text" in p ? String((p as { text?: unknown }).text ?? "") : ""))
+      .map((p) =>
+        p && typeof p === "object" && "text" in p
+          ? String((p as { text?: unknown }).text ?? "")
+          : "",
+      )
       .join("");
   }
   return "";
@@ -116,7 +120,9 @@ export function ChatPane({
   // trace + a phantom "Thought process" bubble. `sending` stays true for the whole first turn (it
   // is the send-button busy flag), so this does NOT regress the first-turn trap it protects.
   const steps =
-    activity && (threadId !== undefined ? activity.threadId === threadId : sending) ? activity.steps : [];
+    activity && (threadId !== undefined ? activity.threadId === threadId : sending)
+      ? activity.steps
+      : [];
   // `latestTurn` returns steps ascending by startedAt, so the LAST running row is the current one.
   const current = [...steps].reverse().find((s) => s.phase === "running");
   // null = follow the turn (expanded while running, collapsed once settled — research Open
@@ -145,17 +151,32 @@ export function ChatPane({
     }
   }
 
-  const empty = !threadId || (messages.results.length === 0 && messages.status !== "LoadingFirstPage");
-  const loading = Boolean(threadId) && messages.results.length === 0 && messages.status === "LoadingFirstPage";
+  const empty =
+    !threadId || (messages.results.length === 0 && messages.status !== "LoadingFirstPage");
+  const loading =
+    Boolean(threadId) && messages.results.length === 0 && messages.status === "LoadingFirstPage";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: "0.75rem" }}>
+    <div
+      style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: "0.75rem" }}
+    >
       {/* Message list */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.7rem" }}>
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: "auto",
+          display: "flex",
+          flexDirection: "column",
+          gap: "0.7rem",
+        }}
+      >
         {loading ? (
           <p style={{ color: "var(--ink-soft)", margin: 0 }}>Loading…</p>
         ) : empty ? (
-          <p style={{ color: "var(--ink-soft)", margin: 0 }}>Tell me who to email and what to say.</p>
+          <p style={{ color: "var(--ink-soft)", margin: 0 }}>
+            Tell me who to email and what to say.
+          </p>
         ) : (
           messages.results.map((m) => {
             const mine = m.message?.role === "user";
@@ -217,7 +238,9 @@ export function ChatPane({
                   ) : (
                     <div className="trace-line">
                       <span style={traceText}>
-                        {current ? stepText(current) : `Thought process · ${steps.length} step${steps.length === 1 ? "" : "s"}`}
+                        {current
+                          ? stepText(current)
+                          : `Thought process · ${steps.length} step${steps.length === 1 ? "" : "s"}`}
                       </span>
                     </div>
                   )}
@@ -265,7 +288,12 @@ export function ChatPane({
             }}
           />
           <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flexWrap: "wrap" }}>
-            <button type="button" className="composer-pill" disabled title="Model routing is automatic">
+            <button
+              type="button"
+              className="composer-pill"
+              disabled
+              title="Model routing is automatic"
+            >
               <BoltIcon size={13} /> Auto <ChevronDownIcon size={12} />
             </button>
             <span style={{ flex: 1 }} />
@@ -295,10 +323,20 @@ export function ChatPane({
               <IntakeControls threadId={threadId} />
             ) : (
               <>
-                <button type="button" className="icon-btn" disabled title="Send a message first — then attach files">
+                <button
+                  type="button"
+                  className="icon-btn"
+                  disabled
+                  title="Send a message first — then attach files"
+                >
                   <PaperclipIcon size={17} />
                 </button>
-                <button type="button" className="icon-btn" disabled title="Send a message first — then dictate">
+                <button
+                  type="button"
+                  className="icon-btn"
+                  disabled
+                  title="Send a message first — then dictate"
+                >
                   <MicIcon size={17} />
                 </button>
               </>
@@ -326,7 +364,8 @@ export function ChatPane({
                 placeItems: "center",
                 cursor: busy || text.trim() === "" ? "default" : "pointer",
                 opacity: busy || text.trim() === "" ? 0.5 : 1,
-                boxShadow: "0 8px 18px -8px rgb(0 150 137 / 70%), inset 0 1px 1px rgb(255 255 255 / 35%)",
+                boxShadow:
+                  "0 8px 18px -8px rgb(0 150 137 / 70%), inset 0 1px 1px rgb(255 255 255 / 35%)",
               }}
             >
               {busy ? <span className="btn-spinner" aria-hidden="true" /> : <SendIcon size={16} />}
@@ -334,8 +373,11 @@ export function ChatPane({
           </div>
         </div>
         {/* Brand-mandated honesty line (BRAND.md §1) */}
-        <p style={{ margin: 0, textAlign: "center", fontSize: "0.72rem", color: "var(--ink-soft)" }}>
-          Pikar AI can make mistakes. Consider checking important information. Press Shift+Enter for a new line.
+        <p
+          style={{ margin: 0, textAlign: "center", fontSize: "0.72rem", color: "var(--ink-soft)" }}
+        >
+          Pikar AI can make mistakes. Consider checking important information. Press Shift+Enter for
+          a new line.
         </p>
       </div>
     </div>

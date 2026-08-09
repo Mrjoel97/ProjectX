@@ -91,6 +91,10 @@ export function PreFlight({
 
   const bars = 12;
   const lit = Math.round(level * bars);
+  const meterBars = Array.from({ length: bars }, (_, index) => ({
+    id: `meter-bar-${index + 1}`,
+    index,
+  }));
 
   return (
     <section
@@ -136,11 +140,7 @@ export function PreFlight({
       {/* Mic check */}
       <div style={{ display: "grid", gap: "0.75rem", justifyItems: "center", width: "100%" }}>
         {mic === "idle" && (
-          <button
-            type="button"
-            onClick={() => void requestMic()}
-            style={primaryBtn}
-          >
+          <button type="button" onClick={() => void requestMic()} style={primaryBtn}>
             <MicIcon size={16} /> Check microphone
           </button>
         )}
@@ -164,14 +164,14 @@ export function PreFlight({
               aria-hidden="true"
               style={{ display: "flex", gap: "3px", alignItems: "flex-end", height: "2rem" }}
             >
-              {Array.from({ length: bars }, (_, i) => (
+              {meterBars.map(({ id, index }) => (
                 <span
-                  key={i}
+                  key={id}
                   style={{
                     width: "6px",
-                    height: `${20 + i * 6}%`,
+                    height: `${20 + index * 6}%`,
                     borderRadius: "3px",
-                    background: i < lit ? "var(--teal-600)" : "var(--rule)",
+                    background: index < lit ? "var(--teal-600)" : "var(--rule)",
                     transition: "background 80ms linear",
                   }}
                 />
@@ -202,8 +202,8 @@ export function PreFlight({
           maxWidth: "26rem",
         }}
       >
-        This conversation is transcribed and saved to your vault. Your microphone audio streams to the
-        assistant and is not stored — only the transcript and the brief are kept.
+        This conversation is transcribed and saved to your vault. Your microphone audio streams to
+        the assistant and is not stored — only the transcript and the brief are kept.
       </p>
 
       {error && (

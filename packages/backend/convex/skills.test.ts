@@ -174,7 +174,11 @@ describe("eval gate on activateSkill (EVAL-01)", () => {
     fields: { name: string; version: number; body: string; status: SkillStatus; evidence?: string },
   ) => t.run((ctx) => ctx.db.insert("skills", { createdAt: 0, ...fields }));
 
-  const passingEvidence = (name: string, version: number, overrides: Record<string, unknown> = {}) =>
+  const passingEvidence = (
+    name: string,
+    version: number,
+    overrides: Record<string, unknown> = {},
+  ) =>
     JSON.stringify({
       runner: "eval:golden",
       runId: "r1",
@@ -341,15 +345,31 @@ describe("eval gate on activateSkill (EVAL-01)", () => {
 
   test("getSkillVersion returns {body, version, skillId} regardless of status; throws NO_SUCH_SKILL_VERSION when missing", async () => {
     const t = convexTest(schema, modules);
-    await insertSkill(t, { name: "cockpit-agent", version: 1, body: "archived body", status: "archived" });
-    await insertSkill(t, { name: "cockpit-agent", version: 2, body: "candidate body", status: "candidate" });
+    await insertSkill(t, {
+      name: "cockpit-agent",
+      version: 1,
+      body: "archived body",
+      status: "archived",
+    });
+    await insertSkill(t, {
+      name: "cockpit-agent",
+      version: 2,
+      body: "candidate body",
+      status: "candidate",
+    });
 
-    const v1 = await t.query(internal.skills.getSkillVersion, { name: "cockpit-agent", version: 1 });
+    const v1 = await t.query(internal.skills.getSkillVersion, {
+      name: "cockpit-agent",
+      version: 1,
+    });
     expect(v1.body).toBe("archived body");
     expect(v1.version).toBe(1);
     expect(typeof v1.skillId).toBe("string");
 
-    const v2 = await t.query(internal.skills.getSkillVersion, { name: "cockpit-agent", version: 2 });
+    const v2 = await t.query(internal.skills.getSkillVersion, {
+      name: "cockpit-agent",
+      version: 2,
+    });
     expect(v2.body).toBe("candidate body");
 
     await expect(
@@ -469,7 +489,12 @@ describe("seedSkills gated candidate-publish + classifier archival (EVAL-01)", (
 describe("insertCandidate — SkillOpt write-back seam (IMPR-02/03)", () => {
   const insert = (
     t: TestConvex<typeof schema>,
-    fields: { name: string; version: number; body: string; status: "active" | "candidate" | "archived" },
+    fields: {
+      name: string;
+      version: number;
+      body: string;
+      status: "active" | "candidate" | "archived";
+    },
   ) => t.run((ctx) => ctx.db.insert("skills", { createdAt: 0, ...fields }));
 
   const rowsOf = (t: TestConvex<typeof schema>, name: string) =>
@@ -520,7 +545,12 @@ describe("insertCandidate — SkillOpt write-back seam (IMPR-02/03)", () => {
   test("a byte-identical NEWEST body is idempotent — inserts nothing, returns the existing version", async () => {
     const t = convexTest(schema, modules);
     await insert(t, { name: "cockpit-agent", version: 11, body: "v11 ACTIVE", status: "active" });
-    await insert(t, { name: "cockpit-agent", version: 12, body: "CANDIDATE BODY", status: "candidate" });
+    await insert(t, {
+      name: "cockpit-agent",
+      version: 12,
+      body: "CANDIDATE BODY",
+      status: "candidate",
+    });
 
     const res = await t.mutation(internal.skills.insertCandidate, {
       name: "cockpit-agent",
@@ -600,7 +630,10 @@ describe("activateCandidate + candidatesForReview — ops panel (IMPR-02/03)", (
     });
     const { asOwner } = await identities(t);
 
-    const res = await asOwner.mutation(api.skills.activateCandidate, { name: "cockpit-agent", version: 2 });
+    const res = await asOwner.mutation(api.skills.activateCandidate, {
+      name: "cockpit-agent",
+      version: 2,
+    });
     expect(res).toEqual({ ok: true, name: "cockpit-agent", version: 2 });
     expect(await statusOf(t, "cockpit-agent", 1)).toBe("archived");
     expect(await statusOf(t, "cockpit-agent", 2)).toBe("active");
@@ -645,6 +678,52 @@ describe("activateCandidate + candidatesForReview — ops panel (IMPR-02/03)", (
     expect(doc).toMatchObject({ fromVersion: 1, toVersion: 2, gatePassed: false });
     // Only skills WITH a candidate appear — inbox-digest (active-only) is absent.
     expect(list.find((c) => c.name === "inbox-digest")).toBeUndefined();
+  });
+
+  test("a candidate BEHIND the active version is never offered for review", async () => {
+    const t = convexTest(schema, modules);
+    // The live shape observed 2026-08-09: an upgrade landed at v17 and the optimizer's older
+    // dry-run candidate stayed behind at v16. The panel kept offering `v17 -> v16`, whose only
+    // outcomes are an EVAL_GATE refusal or — with evidence — a SILENT ROLLBACK of a live agent.
+    await insert(t, { name: "cockpit-agent", version: 16, body: "stale", status: "candidate" });
+    await insert(t, { name: "cockpit-agent", version: 17, body: "live", status: "active" });
+    // Same version as active is also not an upgrade.
+    await insert(t, { name: "document-drafter", version: 3, body: "d3", status: "active" });
+    await insert(t, { name: "document-drafter", version: 3, body: "d3c", status: "candidate" });
+    // A genuine forward candidate still appears, so this is not vacuously empty.
+    await insert(t, { name: "inbox-digest", version: 1, body: "i1", status: "active" });
+    await insert(t, { name: "inbox-digest", version: 2, body: "i2", status: "candidate" });
+    const { asOwner } = await identities(t);
+
+    const list = await asOwner.query(api.skills.candidatesForReview, {});
+
+    expect(list.find((c) => c.name === "cockpit-agent")).toBeUndefined();
+    expect(list.find((c) => c.name === "document-drafter")).toBeUndefined();
+    expect(list.find((c) => c.name === "inbox-digest")).toMatchObject({
+      fromVersion: 1,
+      toVersion: 2,
+    });
+    // Anti-vacuity: the stale rows really are in the table and really are candidates.
+    const stale = await t.run((ctx) =>
+      ctx.db
+        .query("skills")
+        .withIndex("by_name_version", (q) => q.eq("name", "cockpit-agent").eq("version", 16))
+        .unique(),
+    );
+    expect(stale?.status).toBe("candidate");
+  });
+
+  test("a candidate with no active row at all is still offered", async () => {
+    const t = convexTest(schema, modules);
+    // First-ever candidate for a skill: `active` is null, so there is nothing to be behind.
+    await insert(t, { name: "cockpit-agent", version: 1, body: "first", status: "candidate" });
+    const { asOwner } = await identities(t);
+
+    const list = await asOwner.query(api.skills.candidatesForReview, {});
+    expect(list.find((c) => c.name === "cockpit-agent")).toMatchObject({
+      fromVersion: null,
+      toVersion: 1,
+    });
   });
 
   // GOVN-01 — authentication is NOT authorization. Skill rows are a GLOBAL registry, so

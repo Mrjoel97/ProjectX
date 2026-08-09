@@ -3,11 +3,11 @@ import {
   CALLS_URL,
   CLIENT_SECRETS_URL,
   DEFAULT_REALTIME_MODEL,
+  hangupUrl,
   RESPONSE_DONE_USAGE_FIELDS,
+  readUsage,
   SESSION_CONFIG_KEYS,
   TURN_DETECTION_TYPE,
-  hangupUrl,
-  readUsage,
 } from "./realtime";
 
 // Self-check: fails if a pinned endpoint/model/config/usage name is dropped or renamed.
@@ -15,9 +15,7 @@ describe("realtime pinned shapes", () => {
   it("pins the GA endpoints", () => {
     expect(CLIENT_SECRETS_URL).toBe("https://api.openai.com/v1/realtime/client_secrets");
     expect(CALLS_URL).toBe("https://api.openai.com/v1/realtime/calls");
-    expect(hangupUrl("call_123")).toBe(
-      "https://api.openai.com/v1/realtime/calls/call_123/hangup",
-    );
+    expect(hangupUrl("call_123")).toBe("https://api.openai.com/v1/realtime/calls/call_123/hangup");
   });
 
   it("pins the current default model snapshot", () => {

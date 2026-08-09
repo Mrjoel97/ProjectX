@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  BLUEPRINT_FIELDS,
-  type BlueprintField,
-  type BusinessBlueprint,
-} from "./blueprint";
+import { BLUEPRINT_FIELDS, type BlueprintField, type BusinessBlueprint } from "./blueprint";
 import {
   BLUEPRINT_SEGMENTS,
   firstGap,

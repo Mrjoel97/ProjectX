@@ -209,10 +209,19 @@ export const candidatesForReview = ownerQuery({
         .query("skills")
         .withIndex("by_name_status", (q) => q.eq("name", name))
         .collect();
-      const candidates = rows.filter((r) => r.status === "candidate");
+      const active = rows.find((r) => r.status === "active") ?? null;
+      // ONLY candidates AHEAD of what is live. `reduce(max)` over every candidate answers "newest
+      // candidate", which reads like "next version" and is not: optimizer dry-runs leave candidate
+      // rows behind at lower versions, and once a real upgrade lands those stale rows keep being
+      // offered forever. Observed 2026-08-09 — the page showed `v17 -> v16` for cockpit-agent and
+      // `v4 -> v3` for two others, and every Activate click could only either hit EVAL_GATE (they
+      // carry no evidence) or, if evidence ever existed, silently ROLL A LIVE AGENT BACK.
+      // Rollback is a deliberate operator act through `activateSkill`, never a review-queue button.
+      const candidates = rows.filter(
+        (r) => r.status === "candidate" && (active === null || r.version > active.version),
+      );
       if (candidates.length === 0) continue;
       const candidate = candidates.reduce((a, b) => (b.version > a.version ? b : a));
-      const active = rows.find((r) => r.status === "active") ?? null;
       out.push({
         name,
         fromVersion: active?.version ?? null,

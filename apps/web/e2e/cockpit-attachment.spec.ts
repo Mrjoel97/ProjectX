@@ -19,7 +19,9 @@ import { expect, test } from "@playwright/test";
 // The attach topic: the SMOKE:: sentinel keeps draftDocument offline + pins the filename date.
 const ATTACH = "SMOKE::agent::attach=SMOKE::route=direct_llm:: Quarterly proposal";
 
-test("chat → attach → PLAN(filename+download) → Approve → REPORT(delivered-with-attachment)", async ({ page }) => {
+test("chat → attach → PLAN(filename+download) → Approve → REPORT(delivered-with-attachment)", async ({
+  page,
+}) => {
   await page.goto("/dashboard/workspace");
 
   const composer = page.getByPlaceholder("Describe your goal…");
@@ -65,7 +67,9 @@ test("chat → attach → PLAN(filename+download) → Approve → REPORT(deliver
   await expect(approve).toHaveCount(0);
 });
 
-test("remove-attachment variant: the attachment row disappears pre-approval (regenerate/remove)", async ({ page }) => {
+test("remove-attachment variant: the attachment row disappears pre-approval (regenerate/remove)", async ({
+  page,
+}) => {
   await page.goto("/dashboard/workspace");
 
   const composer = page.getByPlaceholder("Describe your goal…");
@@ -84,11 +88,15 @@ test("remove-attachment variant: the attachment row disappears pre-approval (reg
   await say(ATTACH);
   await say("SMOKE::agent::propose");
 
-  await expect(workspace.getByText("ATTACHMENTS", { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(workspace.getByText("ATTACHMENTS", { exact: true })).toBeVisible({
+    timeout: 15_000,
+  });
   await expect(workspace.getByRole("link", { name: /\.pdf$/i }).first()).toBeVisible();
 
   // Remove the 1st attachment (pre-approval control) → the ATTACHMENTS section reactively disappears.
   await say("SMOKE::agent::removeAttachment=1");
-  await expect(workspace.getByText("ATTACHMENTS", { exact: true })).toHaveCount(0, { timeout: 15_000 });
+  await expect(workspace.getByText("ATTACHMENTS", { exact: true })).toHaveCount(0, {
+    timeout: 15_000,
+  });
   await expect(workspace.getByRole("link", { name: /\.pdf$/i })).toHaveCount(0);
 });

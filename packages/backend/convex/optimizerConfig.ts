@@ -20,7 +20,12 @@ export const DEFAULT_OPTIMIZER_CONFIG = {
   cooldownMs: 604800000, // 7d between runs
 };
 
-async function getConfig(ctx: QueryCtx) {
+type OptimizerConfigView = typeof DEFAULT_OPTIMIZER_CONFIG & {
+  lastRunAt?: number;
+  updatedAt?: number;
+};
+
+async function getConfig(ctx: QueryCtx): Promise<OptimizerConfigView> {
   return (await ctx.db.query("optimizerConfig").first()) ?? DEFAULT_OPTIMIZER_CONFIG;
 }
 

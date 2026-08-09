@@ -12,7 +12,7 @@ import { useAction, useMutation, useQuery } from "convex/react";
 import type { FunctionArgs } from "convex/server";
 import { ConvexError } from "convex/values";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { BrainIcon, MicIcon, PaperclipIcon, SendIcon } from "../../../(auth)/icons";
 
 // ONBD-01/02 first-run onboarding — the forced-but-resumable gate's destination (layout.tsx redirects
@@ -82,7 +82,9 @@ const PRESET_TITLE = {
 const SLOT_LABEL = {
   oneLineDescription: "what your business does",
   headcount: "how many people work on this",
-  paidStaff: "how many of them are paid staff",
+  // "besides you" is load-bearing — see TierFacts.paidStaff. "how many of THEM" counted the
+  // founder, so a solopreneur on their own payroll answered 1 and derived as `startup`.
+  paidStaff: "how many paid staff you have besides yourself",
   revenueStage: "where you are on revenue",
   funding: "how it's funded",
   yearsOperating: "how long it's been running",
@@ -252,45 +254,10 @@ export default function OnboardingPage() {
   // ONE document, by id — deliberately not `listVaultDocs`, which no longer carries `text` at all
   // (15.3-02: the grid projection dropped it, because collecting every row's blob to read one
   // document's text is what blew the 16 MiB read cap).
-  const doc = useQuery(api.vault.vaultDocText, pendingDocId ? { vaultDocId: pendingDocId } : "skip");
-  useEffect(() => {
-    if (!pendingDocId || !doc) return;
-    if (doc.status === "failed") {
-      setPendingDocId(null);
-      setBusy(false);
-      setError("We couldn't read that file. Try pasting or recording your brief instead.");
-      return;
-    }
-    if (doc.text && doc.text.trim() !== "") {
-      const extracted = doc.text;
-      setPendingDocId(null);
-      void openingTurn(extracted);
-    }
-  }, [pendingDocId, doc]);
-
-  /**
-   * Step 2 + the first pass of step 3. `extractProfile` runs ONCE, on the intake text; the same text
-   * is then the first user message of the fact conversation.
-   */
-  async function openingTurn(intakeText: string) {
-    setBusy(true);
-    setError(null);
-    setGaps(null);
-    setWaitMsg("Understanding your business…");
-    try {
-      const p = await extract({ intakeText });
-      setProfile(p);
-      const seeded: OnboardingSlots =
-        p.oneLineDescription.trim() === "" ? {} : { oneLineDescription: p.oneLineDescription };
-      setWaitMsg("Thinking…");
-      await runTurn(intakeText, seeded, []);
-    } catch {
-      setError("Something went wrong reading that. Please try again.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
+  const doc = useQuery(
+    api.vault.vaultDocText,
+    pendingDocId ? { vaultDocId: pendingDocId } : "skip",
+  );
   /**
    * ONE user turn of the fact conversation.
    *
@@ -306,25 +273,69 @@ export default function OnboardingPage() {
    * the PRE-merge slots. Upgrade path: have it also report a post-merge closing instruction, so one
    * call covers the last turn; that is a backend change this plan does not own.
    */
-  async function runTurn(userMessage: string, fromSlots: OnboardingSlots, history: Turn[]) {
-    const withUser: Turn[] = [...history, { role: "user", text: userMessage }];
-    setTranscript(withUser);
-    const turn = await converse({ slots: fromSlots, userMessage, history });
-    setSlots(turn.slots);
-    setRemaining(turn.missing.length);
-    if (!turn.done) {
-      setTranscript([...withUser, { role: "agent", text: turn.reply }]);
+  const runTurn = useCallback(
+    async (userMessage: string, fromSlots: OnboardingSlots, history: Turn[]) => {
+      const withUser: Turn[] = [...history, { role: "user", text: userMessage }];
+      setTranscript(withUser);
+      const turn = await converse({ slots: fromSlots, userMessage, history });
+      setSlots(turn.slots);
+      setRemaining(turn.missing.length);
+      if (!turn.done) {
+        setTranscript([...withUser, { role: "agent", text: turn.reply }]);
+        return;
+      }
+      try {
+        const closing = await converse({ slots: turn.slots, userMessage, history });
+        setTranscript([...withUser, { role: "agent", text: closing.reply }]);
+      } catch {
+        // The facts ARE complete; losing the closing beat must not strand the user mid-onboarding.
+        setTranscript([...withUser, { role: "agent", text: turn.reply }]);
+      }
+      setClosed(true);
+    },
+    [converse],
+  );
+
+  /**
+   * Step 2 + the first pass of step 3. `extractProfile` runs ONCE, on the intake text; the same text
+   * is then the first user message of the fact conversation.
+   */
+  const openingTurn = useCallback(
+    async (intakeText: string) => {
+      setBusy(true);
+      setError(null);
+      setGaps(null);
+      setWaitMsg("Understanding your business…");
+      try {
+        const p = await extract({ intakeText });
+        setProfile(p);
+        const seeded: OnboardingSlots =
+          p.oneLineDescription.trim() === "" ? {} : { oneLineDescription: p.oneLineDescription };
+        setWaitMsg("Thinking…");
+        await runTurn(intakeText, seeded, []);
+      } catch {
+        setError("Something went wrong reading that. Please try again.");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [extract, runTurn],
+  );
+
+  useEffect(() => {
+    if (!pendingDocId || !doc) return;
+    if (doc.status === "failed") {
+      setPendingDocId(null);
+      setBusy(false);
+      setError("We couldn't read that file. Try pasting or recording your brief instead.");
       return;
     }
-    try {
-      const closing = await converse({ slots: turn.slots, userMessage, history });
-      setTranscript([...withUser, { role: "agent", text: closing.reply }]);
-    } catch {
-      // The facts ARE complete; losing the closing beat must not strand the user mid-onboarding.
-      setTranscript([...withUser, { role: "agent", text: turn.reply }]);
+    if (doc.text && doc.text.trim() !== "") {
+      const extracted = doc.text;
+      setPendingDocId(null);
+      void openingTurn(extracted);
     }
-    setClosed(true);
-  }
+  }, [pendingDocId, doc, openingTurn]);
 
   function onSend() {
     const t = text.trim();
@@ -682,15 +693,17 @@ export default function OnboardingPage() {
             </p>
           </div>
 
-          <LabeledField label="Business name (optional)">
+          <LabeledField id="business-name" label="Business name (optional)">
             <input
+              id="business-name"
               style={field}
               value={profile?.name ?? ""}
               onChange={(e) => set("name", e.target.value)}
             />
           </LabeledField>
-          <LabeledField label="One-line description">
+          <LabeledField id="business-description" label="One-line description">
             <input
+              id="business-description"
               style={field}
               value={description}
               onChange={(e) => {
@@ -699,39 +712,44 @@ export default function OnboardingPage() {
               }}
             />
           </LabeledField>
-          <LabeledField label="Stage (optional)">
+          <LabeledField id="business-stage" label="Stage (optional)">
             <input
+              id="business-stage"
               style={field}
               value={profile?.stage ?? ""}
               onChange={(e) => set("stage", e.target.value)}
             />
           </LabeledField>
-          <LabeledField label="Offering (optional)">
+          <LabeledField id="business-offering" label="Offering (optional)">
             <textarea
+              id="business-offering"
               style={field}
               rows={2}
               value={profile?.offering ?? ""}
               onChange={(e) => set("offering", e.target.value)}
             />
           </LabeledField>
-          <LabeledField label="Target customer (optional)">
+          <LabeledField id="business-customer" label="Target customer (optional)">
             <textarea
+              id="business-customer"
               style={field}
               rows={2}
               value={profile?.targetCustomer ?? ""}
               onChange={(e) => set("targetCustomer", e.target.value)}
             />
           </LabeledField>
-          <LabeledField label="Primary goals (one per line)">
+          <LabeledField id="business-goals" label="Primary goals (one per line)">
             <textarea
+              id="business-goals"
               style={field}
               rows={3}
               value={(profile?.primaryGoals ?? []).join("\n")}
               onChange={(e) => set("primaryGoals", e.target.value.split("\n"))}
             />
           </LabeledField>
-          <LabeledField label="Known constraints (one per line)">
+          <LabeledField id="business-constraints" label="Known constraints (one per line)">
             <textarea
+              id="business-constraints"
               style={field}
               rows={2}
               value={(profile?.knownConstraints ?? []).join("\n")}
@@ -742,8 +760,9 @@ export default function OnboardingPage() {
           {/* Agent identity (D4, design §7) */}
           <div style={{ display: "grid", gap: "0.75rem", paddingTop: "0.25rem" }}>
             <span style={label}>Your agent</span>
-            <LabeledField label="What should I go by?">
+            <LabeledField id="agent-name" label="What should I go by?">
               <input
+                id="agent-name"
                 style={field}
                 value={agentName}
                 maxLength={AGENT_NAME_MAX}
@@ -927,9 +946,17 @@ function PresetGroup({
   );
 }
 
-function LabeledField({ label: text, children }: { label: string; children: React.ReactNode }) {
+function LabeledField({
+  id,
+  label: text,
+  children,
+}: {
+  id: string;
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
-    <label style={{ display: "grid", gap: "0.35rem" }}>
+    <label htmlFor={id} style={{ display: "grid", gap: "0.35rem" }}>
       <span style={label}>{text}</span>
       {children}
     </label>

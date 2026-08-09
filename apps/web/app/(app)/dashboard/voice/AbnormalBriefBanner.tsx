@@ -1,11 +1,11 @@
 "use client";
 
 import { api } from "@pikar/backend/api";
+import { planSeedFromBrief } from "@pikar/voice";
 import { useAction, useConvex, useQuery } from "convex/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { planSeedFromBrief } from "@pikar/voice";
 
 // VOIC-03 (dropped-session half): a session whose tab closed is force-ended + auto-stored by the
 // server watchdog with NO human present to review it. This banner is the review surface those briefs
@@ -90,8 +90,7 @@ export function AbnormalBriefBanner() {
   };
 
   return (
-    <div
-      role="region"
+    <section
       aria-label="Voice brief ready to review"
       style={{
         display: "flex",
@@ -158,6 +157,6 @@ export function AbnormalBriefBanner() {
       >
         Dismiss
       </button>
-    </div>
+    </section>
   );
 }

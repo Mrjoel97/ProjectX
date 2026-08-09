@@ -23,11 +23,15 @@ import { expect, test } from "@playwright/test";
 // A single-line SMOKE::graph:: brain dump → one edge Alice —works_at→ Acme (two `other` nodes).
 const BRAIN_DUMP = "SMOKE::graph::Alice|Acme|works_at";
 
-test("honest-zero → paste → processing→ready → search → preview(entities) → delete → empty", async ({ page }) => {
+test("honest-zero → paste → processing→ready → search → preview(entities) → delete → empty", async ({
+  page,
+}) => {
   await page.goto("/dashboard/vault");
 
   // ── Honest-zero start (brand-024242/024258): headline, 4 tiles, 6 tabs, dropzone copy ──────────
-  await expect(page.getByRole("heading", { name: "Knowledge Vault" })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("heading", { name: "Knowledge Vault" })).toBeVisible({
+    timeout: 15_000,
+  });
 
   // The 4 stat tiles with their honest zeros (0 files / 0 MB match the empty-vault screenshots).
   for (const label of ["TOTAL FILES", "PROCESSED", "STORAGE USED", "CATEGORIES"]) {
@@ -38,14 +42,26 @@ test("honest-zero → paste → processing→ready → search → preview(entiti
 
   // The 6 category tabs, in screenshot order; "My Uploads" is the active teal pill.
   const tablist = page.getByRole("tablist", { name: "Vault categories" });
-  for (const name of ["My Uploads", "Workspace Docs", "Images", "Videos", "Google Docs", "Brain Dumps"]) {
+  for (const name of [
+    "My Uploads",
+    "Workspace Docs",
+    "Images",
+    "Videos",
+    "Google Docs",
+    "Brain Dumps",
+  ]) {
     await expect(tablist.getByRole("tab", { name })).toBeVisible();
   }
-  await expect(tablist.getByRole("tab", { name: "My Uploads" })).toHaveAttribute("aria-selected", "true");
+  await expect(tablist.getByRole("tab", { name: "My Uploads" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
 
   // Dropzone copy.
   await expect(page.getByText("Click to upload")).toBeVisible();
-  await expect(page.getByText(/Searchable: PDF, DOCX, XLSX, PPTX, CSV, TXT, Markdown/)).toBeVisible();
+  await expect(
+    page.getByText(/Searchable: PDF, DOCX, XLSX, PPTX, CSV, TXT, Markdown/),
+  ).toBeVisible();
 
   // Empty grid on the default tab.
   await expect(page.getByText(/No documents yet/)).toBeVisible();
@@ -146,7 +162,9 @@ async function extractionWalk(
   await expect(dialog).toBeHidden();
 }
 
-test("EXTR-H: a SMOKE::extract:: pdf upload walks pending → ready → searchable", async ({ page }) => {
+test("EXTR-H: a SMOKE::extract:: pdf upload walks pending → ready → searchable", async ({
+  page,
+}) => {
   await extractionWalk(page, {
     filename: "smoke-extract.pdf",
     mimeType: "application/pdf",
@@ -156,7 +174,9 @@ test("EXTR-H: a SMOKE::extract:: pdf upload walks pending → ready → searchab
   });
 });
 
-test("EXTR-H: a SMOKE::transcribe:: mp4 upload walks pending → ready → searchable", async ({ page }) => {
+test("EXTR-H: a SMOKE::transcribe:: mp4 upload walks pending → ready → searchable", async ({
+  page,
+}) => {
   await extractionWalk(page, {
     filename: "smoke-transcribe.mp4",
     mimeType: "video/mp4",

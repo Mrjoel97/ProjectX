@@ -1,8 +1,8 @@
 "use client";
 
 import { api } from "@pikar/backend/api";
-import type { FunctionArgs } from "convex/server";
 import { useAction, useMutation } from "convex/react";
+import type { FunctionArgs } from "convex/server";
 import { useRef, useState } from "react";
 import { MicIcon, PaperclipIcon } from "../../../(auth)/icons";
 
@@ -29,8 +29,7 @@ const CAP_LABEL = `${Math.floor(INTAKE_UPLOAD_CAP_BYTES / (1024 * 1024))}MB`;
 // to extensions via the OS registry, and Windows has no entry for text/markdown — so a MIME-only
 // list makes .md files invisible in the picker (the folder just looks empty). classify() already
 // routes both text/markdown and a .md filename to the "document" path.
-const ATTACH_ACCEPT =
-  "image/*,application/pdf,audio/*,text/plain,text/markdown,.txt,.md,.markdown";
+const ATTACH_ACCEPT = "image/*,application/pdf,audio/*,text/plain,text/markdown,.txt,.md,.markdown";
 
 type StorageId = FunctionArgs<typeof api.intake.attachToThread>["storageId"];
 
@@ -56,7 +55,11 @@ export function IntakeControls({ threadId }: { threadId: string }) {
 
   async function upload(file: Blob, mimeType: string): Promise<StorageId | null> {
     const url = await generateUploadUrl();
-    const res = await fetch(url, { method: "POST", headers: { "Content-Type": mimeType }, body: file });
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": mimeType },
+      body: file,
+    });
     if (!res.ok) return null;
     const { storageId } = (await res.json()) as { storageId: StorageId };
     return storageId;
@@ -188,10 +191,17 @@ export function IntakeControls({ threadId }: { threadId: string }) {
       >
         <MicIcon size={17} />
       </button>
-      {recording && <span style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>Recording…</span>}
-      {busy && !recording && <span style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>Extracting…</span>}
+      {recording && (
+        <span style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>Recording…</span>
+      )}
+      {busy && !recording && (
+        <span style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>Extracting…</span>
+      )}
       {error && (
-        <p role="alert" style={{ color: "#dc2626", fontSize: "0.8rem", margin: 0, flexBasis: "100%" }}>
+        <p
+          role="alert"
+          style={{ color: "#dc2626", fontSize: "0.8rem", margin: 0, flexBasis: "100%" }}
+        >
           {error}
         </p>
       )}

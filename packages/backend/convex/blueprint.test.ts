@@ -1,21 +1,21 @@
-import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
 import { BUSINESS_BLUEPRINT_SKILL } from "@pikar/contracts/skill";
 import {
+  type BlueprintDiffRow,
+  type BusinessBlueprint,
+  type BusinessProfile,
   deserializeBlueprint,
   probesFor,
-  serializeProfile,
   SPINE_CHAR_CAP,
-  statedFromProfile,
   serializeBlueprint,
-  type BlueprintDiffRow,
-  type BusinessProfile,
-  type BusinessBlueprint,
+  serializeProfile,
+  statedFromProfile,
 } from "@pikar/core";
+import { convexTest } from "convex-test";
+import { describe, expect, test } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
-import type { Id } from "./_generated/dataModel";
 import { api, internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { __collectGroundedSources } from "./blueprint";
 import schema from "./schema";
 
@@ -66,11 +66,7 @@ async function insertVaultDocument(
     status?: "processing" | "ready";
   },
 ): Promise<Id<"vaultDocuments">> {
-  const {
-    tenantId,
-    kind = "business_blueprint",
-    status = "ready",
-  } = options;
+  const { tenantId, kind = "business_blueprint", status = "ready" } = options;
   const text = Object.hasOwn(options, "text") ? options.text : "# Business Blueprint";
   return await t.run(async (ctx) => {
     return await ctx.db.insert("vaultDocuments", {
@@ -417,9 +413,7 @@ describe("blueprint top entities", () => {
       tenantId: "tenant_a",
     });
 
-    expect(names).toEqual(
-      Array.from({ length: 20 }, (_, index) => `Entity ${24 - index}`),
-    );
+    expect(names).toEqual(Array.from({ length: 20 }, (_, index) => `Entity ${24 - index}`));
     expect(names).not.toContain("Tenant B secret");
   });
 
@@ -618,9 +612,9 @@ describe("blueprint candidate synthesis", () => {
   test("fails closed before the offline seam when the registry skill is unseeded", async () => {
     const t = makeTest();
 
-    await expect(
-      t.action(internal.blueprint.deriveCandidates, smokeDeriveArgs),
-    ).rejects.toThrow(/NO_ACTIVE_SKILL/);
+    await expect(t.action(internal.blueprint.deriveCandidates, smokeDeriveArgs)).rejects.toThrow(
+      /NO_ACTIVE_SKILL/,
+    );
   });
 
   test("returns both guardrail refusals as governed stops", async () => {
@@ -634,7 +628,10 @@ describe("blueprint candidate synthesis", () => {
 
     const budgetTest = makeTest();
     await seedBlueprintSkill(budgetTest);
-    await budgetTest.mutation(internal.guardrails.recordSpend, { tenantId: "tenant_a", costUsd: 10 });
+    await budgetTest.mutation(internal.guardrails.recordSpend, {
+      tenantId: "tenant_a",
+      costUsd: 10,
+    });
 
     await expect(
       budgetTest.action(internal.blueprint.deriveCandidates, smokeDeriveArgs),
@@ -646,9 +643,7 @@ describe("blueprint candidate synthesis", () => {
     await seedBlueprintSkill(t);
     const before = await t.query(internal.guardrails.remainingDailyCents, { tenantId: "tenant_a" });
 
-    await expect(
-      t.action(internal.blueprint.deriveCandidates, smokeDeriveArgs),
-    ).resolves.toEqual({
+    await expect(t.action(internal.blueprint.deriveCandidates, smokeDeriveArgs)).resolves.toEqual({
       ok: true,
       candidates: [
         {
@@ -670,7 +665,9 @@ describe("blueprint draft build", () => {
     const t = makeTest();
     await insertBusinessProfile(t, "tenant_missing", TYPED_PROFILE);
     const rowsBefore = await tenantRows(t, "tenant_missing");
-    const spendBefore = await t.query(internal.guardrails.remainingDailyCents, { tenantId: "tenant_a" });
+    const spendBefore = await t.query(internal.guardrails.remainingDailyCents, {
+      tenantId: "tenant_a",
+    });
 
     const refused = await rejectionData(
       t.withIdentity({ subject: "tenant_missing" }).action(api.blueprint.buildBlueprintDraft, {}),
@@ -685,7 +682,9 @@ describe("blueprint draft build", () => {
     expect(refused.code).toBe("NO_TENANT_PROFILE");
     expect(directWriteRefused.code).toBe("NO_TENANT_PROFILE");
     expect(await tenantRows(t, "tenant_missing")).toEqual(rowsBefore);
-    expect(await t.query(internal.guardrails.remainingDailyCents, { tenantId: "tenant_a" })).toBe(spendBefore);
+    expect(await t.query(internal.guardrails.remainingDailyCents, { tenantId: "tenant_a" })).toBe(
+      spendBefore,
+    );
   });
 
   test("a fully typed profile edit reuses live derived fields with no probe, model call, or vault write", async () => {
@@ -705,7 +704,9 @@ describe("blueprint draft build", () => {
       }),
     );
     const vaultCountBefore = (await tenantVaultDocs(t, "tenant_a")).length;
-    const spendBefore = await t.query(internal.guardrails.remainingDailyCents, { tenantId: "tenant_a" });
+    const spendBefore = await t.query(internal.guardrails.remainingDailyCents, {
+      tenantId: "tenant_a",
+    });
 
     await expect(
       t.withIdentity({ subject: "tenant_a" }).action(api.blueprint.buildBlueprintDraft, {}),
@@ -721,7 +722,9 @@ describe("blueprint draft build", () => {
     expect(firstRow?.blueprintDraft).toBeTruthy();
     expect(firstRow?.blueprintSourceDocIds).toEqual([profileDocId]);
     expect((await tenantVaultDocs(t, "tenant_a")).length).toBe(vaultCountBefore);
-    expect(await t.query(internal.guardrails.remainingDailyCents, { tenantId: "tenant_a" })).toBe(spendBefore);
+    expect(await t.query(internal.guardrails.remainingDailyCents, { tenantId: "tenant_a" })).toBe(
+      spendBefore,
+    );
 
     const firstDraft = firstRow?.blueprintDraft;
     await t.run((ctx) =>
@@ -823,6 +826,7 @@ describe("blueprint confirmation gate", () => {
       acceptedContradictions: [],
     });
     expect(first.ok).toBe(true);
+    if (!first.ok) throw new Error(`Expected blueprint confirmation, got ${first.reason}`);
 
     const rowsAfterFirst = await tenantRows(t, "tenant_a");
     const rowAfterFirst = rowsAfterFirst[0];
@@ -856,9 +860,7 @@ describe("blueprint confirmation gate", () => {
     );
     expect(blueprintDocsAfterSecond).toHaveLength(1);
     expect(blueprintDocsAfterSecond[0]?._id).toBe(firstBlueprintDoc?._id);
-    expect(
-      deserializeBlueprint(blueprintDocsAfterSecond[0]?.text ?? "").targetCustomer,
-    ).toEqual({
+    expect(deserializeBlueprint(blueprintDocsAfterSecond[0]?.text ?? "").targetCustomer).toEqual({
       values: ["Boutique consultancies"],
       origin: "derived",
       source: "market-research.md",
@@ -912,9 +914,7 @@ describe("blueprint confirmation gate", () => {
 
     expect((await tenantRows(t, "tenant_a"))[0]?.blueprintDraft).toBe(tenantABefore);
     expect(
-      (await tenantVaultDocs(t, "tenant_a")).filter(
-        (doc) => doc.kind === "business_blueprint",
-      ),
+      (await tenantVaultDocs(t, "tenant_a")).filter((doc) => doc.kind === "business_blueprint"),
     ).toHaveLength(0);
     const tenantBDoc = (await tenantVaultDocs(t, "tenant_b")).find(
       (doc) => doc.kind === "business_blueprint",
@@ -950,6 +950,8 @@ describe("blueprint confirmation audit", () => {
       .mutation(api.blueprint.confirmBlueprint, {
         acceptedContradictions: ["targetCustomer"],
       });
+    expect(confirmed.ok).toBe(true);
+    if (!confirmed.ok) throw new Error(`Expected blueprint confirmation, got ${confirmed.reason}`);
 
     const rows = await blueprintConfirmedRows(t);
     expect(rows).toHaveLength(1);
@@ -1069,11 +1071,7 @@ describe("blueprint state and draft discard", () => {
   test("tenant B state never contains tenant A's live or draft content", async () => {
     const t = makeTest();
     await insertLiveBlueprint(t, "tenant_a");
-    await writeDraftFixture(
-      t,
-      "tenant_a",
-      confirmationDraft([], "Tenant A confidential audience"),
-    );
+    await writeDraftFixture(t, "tenant_a", confirmationDraft([], "Tenant A confidential audience"));
 
     const tenantB = await t
       .withIdentity({ subject: "tenant_b" })

@@ -198,3 +198,65 @@ make DELIBERATELY rather than by drift:
 
 Recommendation: **(b) with fixtures**, because it converts two paid gate runs into one. Do not take
 (b) without the fixtures.
+
+---
+
+## UPDATE 2026-08-07 — THE BILLING BLOCKER MOVED VENDORS. GROUNDING IS QUOTA-REFUSED ON GEMINI.
+
+**Read this before acting on the resume recipe above — that recipe is for the OpenAI pins, and the
+pins are no longer OpenAI.** The research pins were repointed to Gemini on 2026-08-07 (the
+two-vendor alternation in `packages/cost/src/cost.ts`), which was supposed to route around the $0
+OpenAI balance. It does not, yet.
+
+### What was built
+
+`probeGemini` (llm.ts) gained `grounded: true`, exposed as `pnpm probe:gemini:grounded` /
+`node scripts/probe-gemini.mjs [model] --grounded`. It attaches `buildWebResearchTool()` — the
+PRODUCTION tool record, extracted from inside `buildCockpitTools` to module scope for this, so the
+probe and the research loop cannot build different tools — and adds three FAILING verdicts for
+200-OK responses that read as success: `no_search_call`, `no_sources`, `tool_vendor_mismatch`.
+Rationale for each is in `docs/playbooks/agent-runtime.md`; an offline guard in
+`cockpitTools.test.ts` pins the record key and the provider-match, mutation-verified RED.
+
+### What it measured — and the control is the point
+
+| model | plain | with `googleSearch` |
+|---|---|---|
+| `google/gemini-3.5-flash` (`RESEARCH_MODEL`) | **PASS** (in=8 out=93, $0.000235) | **429 quota** |
+| `google/gemini-3.5-flash-lite` (`RESEARCH_FALLBACK_MODEL`) | **PASS** (in=8 out=1, $0.000001) | **429 quota** |
+
+Same AI Studio key (`GOOGLE_GENERATIVE_AI_API_KEY`, so Vertex was never reached), same deployment,
+seconds apart. **The key is not exhausted, and this is an ENTITLEMENT not a spent allowance:
+waiting for a daily reset does nothing.** An ordinary free-tier rate limit (reproduced on
+`gemini-2.0-flash`, which 429s on the plain call too) names the exhausted bucket in
+`QuotaFailure.violations` and carries a `retryDelay`; the grounded refusal carries neither, while
+a plain call to the same model returns 200 in the same second. Google Search grounding on
+the free tier is entitled to ZERO. A 429 is `isRetryable`, so the
+`flash` -> `flash-lite` fallback fires and hits the same quota, failing twice.
+
+### What is STILL unknown — do not read a 429 as "the wiring works"
+
+The request never got past quota, so none of the three new verdicts fired and all three original
+unknowns stand: whether Gemini accepts the tool SHAPE (the cast in `buildWebResearchTool` is an SDK
+typing gap no compiler checks), whether the SDK flags the hosted call `providerExecuted` (the sole
+input to `webSearchCalls` -> `searchFeeUsd`; a missing flag bills $0 on every research run), and
+whether Google's grounding metadata reaches `res.sources` (an empty array makes
+`declaredQuestionScope && sources.length === 0` fire on every run and reddens fixtures 32/34 for a
+reason unrelated to the skill body).
+
+### Status and the three doors
+
+**Phase 16 stays 8/9 and ACTN-03 stays Pending.** The blocker is unchanged in KIND (billing) and
+changed in VENDOR. Ranked:
+
+1. **Bill the AI Studio project.** Smallest change, keeps the pins, `resolveModel` untouched.
+2. **Bill the Vertex project.** Also opens Imagen/Veo; already refused once for billing the same
+   day. Vertex has no free tier.
+3. **Revert the research pins to OpenAI** and fund that account — `OPENAI_RESEARCH_MODEL` /
+   `OPENAI_RESEARCH_FALLBACK_MODEL` are retained priced for exactly this two-line edit. It is the
+   only door with PROVEN grounding (the 16-02 probe), but it re-inherits the $0 balance that caused
+   the repoint.
+
+**Whichever door is taken: `probe:gemini --grounded` must return PASS on BOTH pins (or the OpenAI
+probe must be re-run) BEFORE any paid gate.** A green gate on an unproven grounding path certifies
+nothing, and that is the mistake that already cost two paid runs on this phase.

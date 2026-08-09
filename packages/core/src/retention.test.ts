@@ -1,10 +1,5 @@
 import { describe, expect, test } from "vitest";
-import {
-  RETENTION_MS,
-  retainUntilDate,
-  serializeAuditNdjson,
-  wormObjectKey,
-} from "./retention";
+import { RETENTION_MS, retainUntilDate, serializeAuditNdjson, wormObjectKey } from "./retention";
 
 describe("serializeAuditNdjson (WORM export body)", () => {
   test("empty rows serialize to the empty string (nothing to PutObject)", () => {

@@ -14,10 +14,6 @@ export {
   VAULT_VIDEO_CAP_BYTES,
 } from "./constants";
 export type { ExtractionKind, SchedulingRail } from "./extractKind";
-// Dep-free at runtime apart from @pikar/cost (itself pure TS), so a V8-runtime Convex module may
-// import the estimator from this barrel — which `guardrails.ts` does.
-export type { EstimateInput, FileEstimate, FolderEstimate } from "./ingestEstimate";
-export { clampRefundCents, EMBED_USD_PER_MTOK, estimateFolderCents } from "./ingestEstimate";
 export {
   extractionKindFor,
   MIN_CHARS_PER_PAGE,
@@ -28,6 +24,10 @@ export {
 } from "./extractKind";
 export type { FusionResult, VectorHit } from "./fusion";
 export { fuse } from "./fusion";
+// Dep-free at runtime apart from @pikar/cost (itself pure TS), so a V8-runtime Convex module may
+// import the estimator from this barrel — which `guardrails.ts` does.
+export type { EstimateInput, FileEstimate, FolderEstimate } from "./ingestEstimate";
+export { clampRefundCents, EMBED_USD_PER_MTOK, estimateFolderCents } from "./ingestEstimate";
 // NOTE: ./officeText is deliberately NOT re-exported here (V8-bundle hygiene — import it via
 // the subpath `@pikar/vault/officeText` from "use node" modules only). The SAME RULE, and for a
 // much bigger number, applies to ./xlsText: SheetJS is ~1 MB and must enter ONLY the one node

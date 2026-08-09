@@ -8,28 +8,35 @@
 //   #3 a kill-switch stop yields a paused reply and writes NO deadLetters row (never a DLQ),
 //   #5 recordSpend consumes the daily-spend window on non-zero usage + an eligible failure falls
 //      back to CHEAP_MODEL.
+
+import { RESEARCH_SPECIALIST_SKILL } from "@pikar/contracts/skill";
 import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
-import { api, internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
-import schema from "./schema";
-// A node-env vitest file can import this "use node" module directly — the cockpitTools.test.ts
-// precedent. Importing the CHOOSER is what makes the 45s default assertable rather than assumed.
-import { callTimeoutMsFor } from "./llm";
-import { RESEARCH_SPECIALIST_SKILL } from "@pikar/contracts/skill";
-// recordSpend drives the rate-limiter component (reserve into the daily-spend window); register it
-// (relative import — the package blocks the deep specifier) so the REAL guardrail path runs under
-// convex-test instead of throwing "component not registered".
-import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 // The cockpit DRIVERS (sendCockpitMessage / resolveRecipients) additionally touch the agent thread
 // store and the audit aggregate — the intake.test.ts registration set, reused verbatim.
 import agentSchema from "../node_modules/@convex-dev/agent/src/component/schema.js";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
+// recordSpend drives the rate-limiter component (reserve into the daily-spend window); register it
+// (relative import — the package blocks the deep specifier) so the REAL guardrail path runs under
+// convex-test instead of throwing "component not registered".
+import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
+import { api, internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
+// A node-env vitest file can import this "use node" module directly — the cockpitTools.test.ts
+// precedent. Importing the CHOOSER is what makes the 45s default assertable rather than assumed.
+import { callTimeoutMsFor } from "./llm";
+import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
-const rateLimiterModules = import.meta.glob("../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts");
-const agentModules = import.meta.glob("../node_modules/@convex-dev/agent/src/component/**/!(*.test).ts");
-const aggregateModules = import.meta.glob("../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts");
+const rateLimiterModules = import.meta.glob(
+  "../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts",
+);
+const agentModules = import.meta.glob(
+  "../node_modules/@convex-dev/agent/src/component/**/!(*.test).ts",
+);
+const aggregateModules = import.meta.glob(
+  "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
+);
 
 // A SMOKE:: body-intent survives redaction and short-circuits draftCockpit offline (no gateway).
 const SMOKE_BODY = "SMOKE::route=direct_llm:: say a friendly hello";
@@ -39,7 +46,10 @@ async function setup(): Promise<{ t: T; planId: Id<"plans"> }> {
   const t = convexTest(schema, modules);
   t.registerComponent("rateLimiter", rateLimiterSchema, rateLimiterModules);
   await t.mutation(internal.skills.seedSkills, {}); // cockpit-agent + email-drafter active seeds
-  const planId = await t.mutation(internal.plans.insertPlan, { tenantId: "t1", threadId: "thread1" });
+  const planId = await t.mutation(internal.plans.insertPlan, {
+    tenantId: "t1",
+    threadId: "thread1",
+  });
   return { t, planId };
 }
 
@@ -51,7 +61,9 @@ const provUsage = (input: number, output: number) => ({
   outputTokens: { total: output, text: output, reasoning: 0 },
 });
 const toolStep = (toolName: string, input: unknown) => ({
-  content: [{ type: "tool-call", toolCallId: `c-${toolName}`, toolName, input: JSON.stringify(input) }],
+  content: [
+    { type: "tool-call", toolCallId: `c-${toolName}`, toolName, input: JSON.stringify(input) },
+  ],
   finishReason: { unified: "tool-calls", raw: "tool-calls" },
   usage: provUsage(0, 0),
   warnings: [],
@@ -116,7 +128,11 @@ test("mock loop: a remove edit resolves the 1-based index (the right recipient r
 test("kill-switch: runCockpitAgent returns a paused reply + blocked, and writes NO deadLetters", async () => {
   const { t, planId } = await setup();
   await t.run(async (ctx) => {
-    await ctx.db.insert("guardrailConfig", { killSwitch: true, budgetUsdPerRequest: 0.05, updatedAt: Date.now() });
+    await ctx.db.insert("guardrailConfig", {
+      killSwitch: true,
+      budgetUsdPerRequest: 0.05,
+      updatedAt: Date.now(),
+    });
   });
 
   const res = await t.action(internal.llm.runCockpitAgent, {
@@ -272,7 +288,10 @@ test("activity trace: a scripted 2-tool run leaves 2 terminal rows with duration
   });
 
   const steps = await readSteps(t);
-  expect(steps, "the emitter wrote no rows — a swallowed callback throw looks exactly like this").toHaveLength(2);
+  expect(
+    steps,
+    "the emitter wrote no rows — a swallowed callback throw looks exactly like this",
+  ).toHaveLength(2);
   expect(steps.map((s) => s.tool).sort()).toEqual(["addRecipients", "setSubject"]);
   for (const s of steps) {
     expect(s.phase, `${s.tool} never terminalized`).toBe("done");
@@ -352,7 +371,10 @@ test("activity trace: a SMOKE op leaves ONE terminal row (the offline E2E path �
   expect(res.reply).toBeTruthy();
 
   const steps = await readSteps(t);
-  expect(steps, "the SMOKE path emitted nothing — the offline E2E would see an empty surface").toHaveLength(1);
+  expect(
+    steps,
+    "the SMOKE path emitted nothing — the offline E2E would see an empty surface",
+  ).toHaveLength(1);
   expect(steps[0]!.tool).toBe("setSubject"); // the op kind mapped to its real tool name
   expect(steps[0]!.phase).toBe("done");
   expect(steps[0]!.turnId).toBe("turn-smoke");
@@ -534,7 +556,10 @@ test("toolNames ABSENT: the full tool record — every existing caller is byte-i
   await runTolerant(t, { tenantId: "t1", planId, ...TURN, primary: EDIT_SCRIPT });
 
   const plan = await readPlan(t, planId);
-  expect(plan?.subject, "an absent toolNames changed the tool set — existing callers regressed").toBe("Kept");
+  expect(
+    plan?.subject,
+    "an absent toolNames changed the tool set — existing callers regressed",
+  ).toBe("Kept");
   expect(plan?.recipients).toEqual(["bob@example.com"]);
   expect((await readSteps(t)).map((s) => s.tool).sort()).toEqual(["addRecipients", "setSubject"]);
 });
@@ -568,7 +593,9 @@ test("toolNames: a NAMED tool still runs; only the unnamed ones are withheld", a
 
   const plan = await readPlan(t, planId);
   // Non-vacuity: without this the two tests above would pass against a filter that returns {}.
-  expect(plan?.subject, "the ALLOWED tool was filtered out too — the allow-list is inverted").toBe("Kept");
+  expect(plan?.subject, "the ALLOWED tool was filtered out too — the allow-list is inverted").toBe(
+    "Kept",
+  );
   expect(plan?.recipients ?? [], "addRecipients was not in toolNames but still ran").toEqual([]);
   expect((await readSteps(t)).map((s) => s.tool)).toEqual(["setSubject"]);
 });
@@ -604,7 +631,6 @@ test("draftDocument pin: loads the pinned drafter version, fails closed on a mis
   const doc = await t.action(internal.llm.draftDocument, { ...args, skillVersion: 2 });
   expect(doc.title).toBe("Smoke Document");
 });
-
 
 // ── Phase 16 (16-05) — the research exception, and the floors that keep it an EXCEPTION ────────
 
@@ -646,4 +672,44 @@ test("a NON-research scripted turn runs all four tool steps and is NOT truncated
   // before, so this change cannot silently re-price every existing cockpit turn.
   expect(res.webSearchCalls).toBe(0);
   expect(res.sources).toEqual([]);
+});
+
+// ── FIN-01: every llm.ts spend correlation is DISTINCT ───────────────────────
+// A SOURCE check, for the same reason guardrails.test.ts's sibling scan is one: llm.ts spends at
+// eight places and no runtime test can observe a call site nobody scripted. Six of the eight are
+// one of three PRIMARY/FALLBACK pairs and a seventh is the web-search FEE that fires in the SAME
+// attempt as the loop's token cost — all of them fully billed, none of them replays. The ledger
+// identity is (tenantId, correlationId, phase), so a copy-pasted template makes the second charge
+// return the first row and vanish, leaving the ledger BELOW the limiter. That is the direction
+// that cannot be reconstructed, and a duplicated literal is exactly how it would happen.
+test("every llm.ts spend correlation template is distinct and charset-legal", () => {
+  // `Object.values(...).join` rather than indexing the glob by key: the key shape is a bundler
+  // detail, and an index that missed would hand this scan an empty string it would pass on.
+  const raw = Object.values(
+    import.meta.glob("./llm.ts", { query: "?raw", import: "default", eager: true }) as Record<
+      string,
+      string
+    >,
+  ).join("\n");
+  // Comments first — this block DISCUSSES the templates in prose, and a scan that read its own
+  // documentation would report a collision that does not exist (the importGuard.test.ts trap).
+  const code = raw.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, "");
+  const templates = [
+    // The helper's 6th argument. `[^`]*?` up to the FIRST backtick works for the single-line
+    // callers and the wrapped one alike: no other backtick appears inside these arg lists.
+    ...[...code.matchAll(/recordModelSpend\([^`]*?`([^`]+)`/g)].map((m) => m[1] ?? ""),
+    // ...and the fee, which calls recordSpend directly rather than through the helper.
+    ...[...code.matchAll(/correlationId:\s*`([^`]+)`/g)].map((m) => m[1] ?? ""),
+  ];
+  // Anti-vacuity: a renamed helper would otherwise make an empty list pass for free.
+  expect(templates.length).toBe(8);
+  expect(new Set(templates).size, `duplicate spend correlation: ${templates.join(", ")}`).toBe(
+    templates.length,
+  );
+  for (const t of templates) {
+    // The interpolations are all crypto.randomUUID()s / a 0|1 attempt index, so a base32 stand-in
+    // is faithful. This catches a future template that reaches for something with whitespace in it.
+    const sample = t.replace(/\$\{[^}]+\}/g, "abc123");
+    expect(sample, `illegal correlation charset: ${t}`).toMatch(/^[A-Za-z0-9._:@/-]{1,128}$/);
+  }
 });

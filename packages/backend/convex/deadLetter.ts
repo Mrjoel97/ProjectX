@@ -10,8 +10,8 @@
 import { vResultValidator, vWorkflowId } from "@convex-dev/workflow";
 import { buildTelemetry, notificationMessage } from "@pikar/core";
 import { v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { internalMutation } from "./_generated/server";
 
 export const onPipelineComplete = internalMutation({

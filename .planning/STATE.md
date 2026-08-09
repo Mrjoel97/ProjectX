@@ -2,9 +2,25 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
+current_phase: 19
+current_plan: 1 (done)
+status: in_progress
+stopped_at: "MULTI-LANE — per-lane position lives in '## Lane Status'; this block is the single tool-readable summary. Phase 19 is 1/10: 19-01 landed the contacts substrate (0abc73b, 38ac3d2, a78a169) — the ONE `normalizeAddress`, three pure predicates, the contacts/followUps/suppressions tables, `tenantProfiles.postalAddress`, and `docs/playbooks/contacts-crm.md` registered in `watch.json`. Backend typecheck baseline RE-MEASURED at 0 (exit 0, zero output); the 13 and the 150 quoted elsewhere in this file are both STALE. Next is 19-02. NOTE: `gsd-tools state record-session` CLOBBERED this block once during 19-01 (dropped `current_phase`, reverted `current_plan` to a stale `7 (done)`) and was hand-restored — verify this block after ANY gsd-tools state call. Do NOT re-add a second frontmatter block on merge."
+last_updated: "2026-08-09T10:24:40.821Z"
+progress:
+  total_phases: 51
+  completed_phases: 30
+  total_plans: 343
+  completed_plans: 251
+---
+
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: - Platform -> Private Beta
 current_phase: 15.3
 current_plan: 9 (done)
-status: in_progress
+status: Phase complete — ready for verification
 stopped_at: "**PHASE 15.3 IS 9/9 AND OWNER-APPROVED. THE LIVE GATE IS PARTIAL — READ THE SECOND HALF OF THIS BEFORE CLAIMING VALT-13.** 15.3-09 shipped the Google Drive rail (commit cf675c7) plus TWO owner-directed follow-ups. **(1) d677d84 — WE RENDER THE DRIVE PICKER OURSELVES.** The plan shipped a paste-a-Drive-link field; the owner rejected it on sight and was right — if the user must open Drive, navigate and copy a URL, they are already in Drive and may as well drag the files in. DriveBrowser.tsx is a breadcrumb + one-level-at-a-time folder list over a new listDriveFolders. **Google's Picker SDK is deliberately NOT mounted and that is not a compromise:** the Picker exists to make the NARROW drive.file scope usable, and we took drive.readonly, so files.list already returns the folders and we draw them with our own tokens — no external apis.google.com script, no API key, no app id, no CSP hole. THE SCOPE CHOICE IS WHAT MADE THE PICKER CHEAP; do not restore the Picker without re-opening the scope decision. **THE ROOT LEVEL IS THREE LISTS, NOT ONE** (drives.list + 'root' in parents + sharedWithMe) — collapse them and a user whose company runs on a shared drive is told they have no folders; drives.list 403s on a personal account and degrades to empty, which is an ordinary shape of this feature. dispatchGuard now LOOPS over BOTH Drive actions for scope-before-refresh, because the browse is what a pre-widening tenant hits FIRST. **(2) 39522a1 — THE PICKER SHOWS THE FILES, FROM THE SAME SINGLE REQUEST.** Folder-only browsing meant an empty folder and one holding 200 documents looked identical until you pressed Import; TWO REAL FOLDERS WERE PROBED THAT WAY DURING THE GATE. The fix is CHEAPER than what it replaced — drop the mimeType folder filter, keep ONE files.list per level, split server-side. Files are shown but NEVER clickable (the unit of import is the folder), each carrying a readable verdict from classifyOne — THE SAME FUNCTION THE IMPORT RUNS, extracted for this reuse so the picker and the import cannot disagree; a test pins classifyOne at 3+ call sites. The count is the LEVEL and the import is the TREE, and the copy says so. **A MUTATION CAUGHT MY OWN TEST BEING VACUOUS TWICE IN THIS PLAN.** (a) the audit name-leak scan tested for `name:` and the SHORTHAND `name,` walked straight through; (b) restoring the folder-only filter left all 13 tests GREEN, because a stub answers with whatever it was told to answer, so asserting on the RESPONSE cannot see a QUERY that changed. **RULE, now in vault.md: when a stubbed test covers behaviour that lives in the REQUEST, assert on the request** — same class as the shared-drive params, which is why those are a source scan. **WHAT THE LIVE RUN PROVED (real Google account, local deployment, 2026-08-05):** the scope widening reaches a real consent; **the reauth gate fired against a genuinely pre-widening token** (the vault said 'your Google connection was made before Drive access existed' while Gmail and Calendar kept working — driveReady distinguishing connected from Drive-ready, live); files.list returned TEN REAL ROOT FOLDERS; drill-down and the breadcrumb work against real subfolders; the empty_folder guard refused rather than creating an empty folder and calling it complete; the file listing reads 'No files at this level, plus everything inside 18 subfolders' and 'Nothing here — no folders and no files', WHICH IS WHAT SETTLED THAT THE EARLIER empty_folder RETURNS WERE CORRECT AND NOT AN ENUMERATION BUG. **WHAT HAS NEVER RUN, AND IS STILL OWED — DO NOT READ OWNER APPROVAL AS THESE BEING DONE:** (1) **THE IMPORT PATH ITSELF.** No document has ever been exported from Drive and landed in the vault; every folder opened during the gate was empty, so exportOne -> landFile -> the fan-in -> walkFolderMembers -> the digest has NEVER executed against real bytes, and ZERO CENTS have been spent on this rail. The reservation, the dedup branch, the re-import diff and folder completion are unit-proven and live-UNproven. (2) **THE SHARED-DRIVE HALF.** No shared drive surfaced for that account, so supportsAllDrives/includeItemsFromAllDrives have still never been exercised against a real one — the failure whose live symptom is a SILENTLY EMPTY FOLDER, and the reason the source scan exists. A stub proves we SEND them; only a real shared drive proves Google honours them. **VALT-13 and the Phase-15.3 checkbox stay UNTICKED** (the Phase-17 human_needed convention): one import of a POPULATED folder closes item 1, access to ANY shared drive closes item 2. Full suite 9/9 packages (backend 1177/1177), backend typecheck at the exact 15-error baseline with zero non-test, apps/web typecheck 0, web build green, check-playbooks exit 0. Servers left running during the session: convex dev on :3210 and next start on :3000."
 last_updated: "2026-08-05T02:55:00.000Z"
 progress:
@@ -42,6 +58,9 @@ read only the first frontmatter block.
 
 | Lane | Phase | Position | Next | Notes |
 |------|-------|----------|------|-------|
+| C19 | **19** Contacts, CRM & Follow-ups | 1/10 plans (wave 1 of 9) | 19-02 (wave 2 — the person store: tenant-scoped write surface, suppression/footer/unsubscribe-token internals, the asA/asB isolation block) | **19-01 COMPLETE** (`0abc73b`, `38ac3d2`, `a78a169`). The substrate: `packages/core/src/contacts.ts` (`normalizeAddress` = trim+lowercase and NOTHING more, `needsAttention`, `followUpIsDue`, `renderFooter`), THREE tables (`contacts`, `followUps`, `suppressions`), `tenantProfiles.postalAddress` optional, and `docs/playbooks/contacts-crm.md` registered in `watch.json`. **EVERY later plan MUST import `normalizeAddress` — never write `.toLowerCase()` at a call site**; that single function is what makes "the guard and the contact row agree by construction" true. **`suppressions` is address-keyed and SEPARATE from `contacts` on purpose**: the send guard reads it and never `contacts`, so `contacts.unsubscribedAt` is a display mirror only and suppression outlives the contact. **THE BACKEND TYPECHECK BASELINE IS 0, RE-MEASURED — `npx tsc --noEmit` from `packages/backend` exits 0 with zero output.** Both the `13` in `19-VALIDATION.md` and the `150` elsewhere in this file are STALE; re-measure before quoting either. Full `pnpm test` 9/9 packages (backend 71 files / 1310 tests), `check-playbooks` exit 0, delta 0. **Schema-only changes need NO `npx convex codegen`** — `_generated/dataModel.d.ts` derives table types generically from `schema.ts`; codegen is only needed for a new MODULE. **A FOREIGN LANE'S WORK LANDED IN `38ac3d2`**: `git commit -m` commits the whole shared index, and the `cash-business-finance` lane had five files staged. NOT rewritten (a `reset --soft` while another agent commits to this branch risks losing their work). **From 19-03 on, use the pathspec form `git commit -m "…" -- <paths>`, which ignores the index** — `a78a169` is clean at exactly 2 files because of it. VALIDATION rows 2, 3 and 22 are green; ACTN-05/PIPE-01 stay Pending (nothing ticked — the 17.1-01 early-flip trap). |
+| P26 | **26** Connected Product Pages | 4/20 complete; 26-05 at Task 2 checkpoint | Valid authenticated Approvals E2E + blocking owner UAT | **CHECKPOINT 2026-08-05.** The connected Approvals route is committed (`65b1159`) and its owner-preview navigation link is active after the owner rejected the disabled `Soon` entry as inaccessible. This is an access correction, not UAT approval: component contracts 13/13 and web typecheck pass, but authenticated Playwright still needs valid credentials and owner UAT remains blocking. No browser/provider pass was fabricated. Rollback can disable the one link without removing plan state or provenance. Pipeline remains Phase 19 ownership and is consumed only by 26-18. |
+| V4 | **15.4** Vault Redesign | 4/4 plans complete | Complete — Phase 26 pending-pages planning is separate | **OWNER-APPROVED 2026-08-05.** Connected Playwright 2/2, both full package suites, both typechecks, production build and playbook watcher passed. Folder-scoped search is server-enforced; Nord Edge root/folder/preview/empty states retain upload, Drive, digest, correction, citations, download and confirmation-gated delete. The executed browser gate caught and fixed synthetic `smoke::<hash>` deletion without weakening real RAG cleanup (`4df7ac0`); evidence/playbooks committed in `c4c041b`. VALT-16 Complete. |
 | F | **15.3** Vault Folders | 4/9 plans (wave 4 of 9) | 15.3-05 (wave 5 — sealing: a folder's members are excluded from retrieval until it is `complete`) | **15.3-02 COMPLETE** (`fefb9e4`, `034e28a`, `36d2944`, `e0a2c5e`, `bc72c41`, `8f3ec57`) — the B1 read-cap blocker is closed and the phase's acceptance demo can now render. **THE BOUND IS ROWS AND BYTES, AND THE BYTE HALF IS THE ONE THAT MATTERS:** the plan specified `.take(200)`, which does NOT bound the read (200 rows × 400k chars ≈ 80 MB against a 16 MiB cap), so `readVaultPage` streams `by_tenant`/`by_tenant_folder` and breaks on `VAULT_GRID_PAGE` (200) rows OR `VAULT_GRID_READ_BUDGET_BYTES` (8 MiB) of text, whichever bites first — `constants.test.ts` asserts BOTH directions, so deleting the byte budget as a 'simplification' fails. **NEVER put `text` back on `listVaultDocs`**: it now returns a projection (no `text`, no `tenantId`, no `contentHash`) and one document's words come from the new `vault.vaultDocText`. Three shipped consumers were repaired onto it — `PreviewModal`, the onboarding intake poll, and voice `AbnormalBriefBanner`; **the banner is the cautionary one, it CAST the query result to a local type so the break would NOT have typechecked and would have seeded an empty cockpit plan** (the cast is deleted, the row type now comes from the query). `vaultStats` shares the same window and returns `capped`, rendered as `200+` plus one plain sentence (a '+' alone encodes meaning in a glyph, BRAND §6). **THE CAP IS 200 MB AND IS DECLARED ONCE** — five literal sites deleted; `Dropzone.tsx` imports `@pikar/vault/constants` (the SUBPATH — verified via a prod build that SheetJS does NOT enter the client bundle, chunks 1.7 MB), `apps/web` gained `@pikar/vault`, and copy is derived through `capMB()` because `DocGrid`'s binary `fmtSize` would print '190.7 MB' for the 200 MB constant. **`VAULT_VIDEO_CAP_BYTES` IS UNCHANGED AT 25 MB** — the transcription API's number, pinned with the strict `video < file` relationship. 200 MB is reachable only on a fast link (Convex's upload POST times out at 2 min ⇒ ~13.3 Mbit/s); plan 04 owns the manifest outcome. **KNOWN CEILING, ACCEPTED:** the `category` filter runs over the bounded window (no `by_tenant_category` index, `schema.ts` closed) so a narrow tab can under-report at scale. `packages/core/src/vaultSurface.test.ts` is the FIRST test ever to read the vault UI — 6 tests, non-vacuity anchors first, **mutation-verified RED** (reintroducing `100 * 1024 * 1024` + `max 100 MB` failed 2 of 6). Verified: `pnpm test` 8/8 green (backend 1109/1109), `pnpm typecheck` delta ZERO against the 15-error all-test baseline, `pnpm --filter @pikar/web build` succeeds, `check-playbooks` exit 0. **`gsd-tools state advance-plan` CLOBBERED the first frontmatter block AGAIN** — it dropped `current_phase` entirely and rewrote `current_plan`/`stopped_at` from a stale pre-15.3-01 source (`current_plan: 7 (done)`, `stopped_at: Phase 15.3 context gathered`); hand-restored. `update-progress` worked (229 from disk). VALT-05/VALT-14 deliberately left Pending |
 | — | **17.1** Business Blueprint | 9/10 plans, waves 1-7 through the profile confirmation surface done | 17.1-10 (wave 8, playbooks + live gate) | 17.1-09 is complete, core 360/360 and web build green, D5-safe confirmation UI landed |
 | V | **15.2** Vault Formats | 8/8 plans complete, owner-approved LIVE | Complete | Final 15.2-08 false-ready/PPTX fan-out closure is committed and pushed |
@@ -1655,6 +1674,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 
 | Phase | Plan | Duration | Tasks | Files |
 |-------|------|----------|-------|-------|
+| 15.4 | 01 | 35 min | 2 | 3 |
 | 10 | 01 | 5 min | 2 | 3 |
 | 10 | 02 | 20 min | 3 | 7 |
 | 10 | 03 | 12 min | 2 | 2 |
@@ -1707,11 +1727,20 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 | Phase 17.1 P08 | 11h 49m | 2 tasks | 4 files |
 | Phase 17 P04 | 12h 1m | 3 tasks | 5 files |
 | Phase 17.1 P09 | 25 min | 2 tasks | 5 files |
+| Phase 15.4 P02 | 40min | 4 tasks | 11 files |
+| Phase 15.4 P03 | 23 min | 3 tasks | 9 files |
+| Phase 19 P01 | 35m | 3 tasks | 6 files |
 
 ## Accumulated Context
 
 ### Roadmap Evolution
 
+- Phase 27 added: Curated Knowledge-Work Pack Pilot
+- Phase 28 added: Connector-Backed Revenue Pack
+- Phase 29 added: Unified Knowledge and Routines
+- Phase 30 added: Optional Vertical Workflow Packs
+- Phase 15.4 inserted after Phase 15: Vault redesign and scoped browse correctness (URGENT)
+- Phase 26 added: Pending product pages and Vault redesign integration
 - Phase 15.3 inserted after Phase 15.2: Vault Folders — Folder Ingest, Synthesis & Drill-In
   (2026-08-02). **Not new scope — a slot for scope that already existed and was homeless.** Phase
   15.2 carved this out as "Phase 2 of this line of work" at `15.2-CONTEXT.md:170-184` and sequenced
@@ -1754,6 +1783,9 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 
 Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
+- [Phase 15.4 / 15.4-01]: Vault search uses a dedicated search-only metadata resolver so grounding's order-sensitive `ownedDocsMeta` remains byte-identical.
+- [Phase 15.4 / 15.4-01]: Foreign and missing folder scopes return the same empty result; optional `folderId` is not an ownership oracle.
+- [Phase 15.4 / 15.4-01]: VALT-16 stays Pending after plan 1/4 because its requirement text includes the full redesign and retained-control UAT.
 - [Phase 17 / 17-03]: **Calendar tools stop at the staging boundary.** `checkAvailability` returns content-free busy ranges from the trusted client clock; `proposeCalendarEvent` atomically patches all four event fields at `status: "proposed"` and cannot create an event. ACTN-02 stays pending for 17-04 and the recorded deferred-manage scope.
 - [Phase 17 / 17-02]: **Calendar uses one widened Google grant and a two-module terminal split.** `calendar.ts` is a Node actions-only adapter; `calendarComplete.ts` is non-Node and the sole writer of Calendar plan status, audit, reconnect notifications, and dead letters. Stored scope is checked before refresh, and deterministic event IDs make Google 409 duplicate an idempotent success. ACTN-02 stays pending until the later Phase-17 plans wire the complete action surface.
 - [Phase 17.1 / 17.1-01]: **The blueprint field set is closed and bound by ONE `as const satisfies Record<BlueprintField, FieldSpec>` table** carrying `label`/`list`/`cap`/`derivable`/`probe`. Deliberately NOT a switch — a `default` branch makes a new field silently inherit another's behaviour and makes the coverage test vacuous forever. Mutation-verified: a 12th field with no spec entry ⇒ `TS2741`. Every later 17.1 plan (diff, serializer, spine caps, candidate gate) indexes this one table rather than re-enumerating the fields.
@@ -1884,6 +1916,15 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 17.1]: BlueprintPanel owns its Blueprint query and build action, leaving both existing profile writers untouched.
 - [Phase 17.1]: Turning the all-additions group off blocks confirmation; discard is the backend-supported all-or-nothing rejection path.
 - [Phase 17.1]: Contradiction selections update only the confirmed Blueprint and never rewrite the narrative profile.
+- [Phase 15.4]: Folder browse sends folderId without root category context so search matches the complete member list.
+- [Phase 15.4]: Browse content, partial ingest, and stale digest remain independent view-state axes.
+- [Phase 15.4]: Nord Edge styling stays beneath the Vault root and does not change shared pane or clay semantics.
+- [Phase 15.4]: Preview content state and action capability are derived independently so unavailable data cannot arm a governed control.
+- [Phase 15.4]: The destructive Vault delete adapter exists only after explicit confirmation is visible.
+- [Phase 15.4]: Preview and import styling reuses Vault-scoped Plan-02 tokens without widening global CSS, Drive scope, budget, reservation, or backend contracts.
+- [Phase 19]: normalizeAddress is trim+lowercase ONLY - plus-addressing and dot-folding stay deferred so the suppressions key is byte-stable
+- [Phase 19]: THREE tables (contacts, followUps, suppressions) - suppressions is address-keyed and separate so suppression outlives the contact; the send guard never reads contacts
+- [Phase 19]: Backend typecheck baseline RE-MEASURED at 0 errors exit 0 - the 13 in 19-VALIDATION and the 150 in STATE are both stale
 
 ### Pending Todos
 
@@ -1915,6 +1956,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
+Last session: 2026-08-09T10:24:40.749Z
+Stopped at: Completed 19-01-PLAN.md
 Last session: 2026-08-03T06:20:00.000Z
 Stopped at: Completed 15.3-04-PLAN.md
 Last session: 2026-08-03T01:10:00.000Z
@@ -1925,4 +1968,4 @@ Last session: 2026-07-27T01:04:16.127Z
 Stopped at: Completed 15.2-02-PLAN.md
 Last session: 2026-07-25T22:23:43.857Z
 Stopped at: Completed 14-04-PLAN.md (the doc-grounded mint, Lane C)
-Resume file: .planning/phases/15.3-vault-folders-folder-ingest-synthesis-and-drill-in/15.3-CONTEXT.md
+Resume file: None

@@ -2,10 +2,21 @@
 //
 // Every vault module (ingest, ground, delete-cascade) imports THIS `rag` — it is
 // constructed exactly once, mirroring how `index.ts` constructs `workflow`/`retrier`
-// once. Pinned to `text-embedding-3-small` @ 1536 dims: the dimension MUST equal the
+// once. Pinned to `gemini-embedding-001` @ 1536 dims: the dimension MUST equal the
 // model output AND stay under Convex's 2048 vector-index cap (Pitfall 2) — never change
 // one without the other, or entries silently stop matching. Plans 04/05 append the
 // embed/search action steps here.
+//
+// PROVIDER SWAPPED 2026-08-07: `text-embedding-3-small` (OpenAI) → `gemini-embedding-001`.
+// WHY: the OpenAI balance is $0 (`credit_balance_exhausted` on chat AND embeddings, verified
+// directly), and THIS FILE was the last OpenAI dependency in the cockpit turn — every vault-touching
+// turn and every golden-gate run died here, before case one, regardless of which chat model was
+// pinned. Gemini embeddings are free-tier eligible on the key the deployment already holds, so the
+// swap is what makes the whole test loop cost $0.
+//
+// The dimension did NOT change (1536 both sides), so the Convex vector index and the schema are
+// untouched. What DID change is subtler and is pinned in `vaultRag.test.ts` — read that file before
+// editing this one.
 
 import { RAG } from "@convex-dev/rag";
 import { priceUsage } from "@pikar/cost";
@@ -14,22 +25,101 @@ import { v } from "convex/values";
 import { components, internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
 
-const EMBEDDING_MODEL = "text-embedding-3-small";
-const EMBEDDING_DIM = 1536; // MUST equal the model output AND stay ≤ Convex's 2048 cap (Pitfall 2)
+// TWO EMBEDDING PROVIDERS, SELECTED BY ONE CONSTANT — the same shape `resolveModel` (llm.ts) uses
+// to route chat, reused here rather than invented. Flipping providers is a one-line change to
+// `EMBEDDING_MODEL`, and `embeddingContentHash` below turns that flip into an automatic re-embed.
+//
+// WHY BOTH EXIST. OpenAI was the original; it was swapped to Gemini on 2026-08-07 while the OpenAI
+// balance was $0, and swapped back on 2026-08-08 when it was funded. Neither is dead code: this is a
+// live A/B, because the 2026-08-08 gate failed `citesVaultDoc` on fixtures 29/30/31 — the seeded
+// vault needle stopped reaching the specialist's memo — in the OpenAI-model + GEMINI-embeddings
+// combination that had never run before. The needle is a meaningless token (`evalgrd`), and a
+// meaningless token is exactly where two embedding models diverge most, so which provider embeds the
+// corpus is a measurable question, not a preference. Keep both until the fixtures answer it.
+const OPENAI_EMBEDDING_MODEL = "text-embedding-3-small";
+const GEMINI_EMBEDDING_MODEL = "gemini-embedding-001";
+/** The ACTIVE provider. One line — everything below routes off it. */
+const EMBEDDING_MODEL: string = OPENAI_EMBEDDING_MODEL;
+export const EMBEDDING_DIM = 1536; // MUST equal the model output AND stay ≤ Convex's 2048 cap (Pitfall 2)
+
+const usingGemini = (): boolean => EMBEDDING_MODEL === GEMINI_EMBEDDING_MODEL;
+
+// Per-request input caps, and they differ by 20x. Google refuses 101+ with
+// `BatchEmbedContentsRequest.requests: at most 100 requests can be in one batch` (measured
+// 2026-08-07); OpenAI's cap is 2048. The RAG component READS this to size its batches, so
+// overstating it turns a large ingest into a 400 rather than into slower progress — which is why it
+// has to move WITH the provider rather than being pinned to the smaller of the two.
+const MAX_EMBEDDINGS_PER_CALL = usingGemini() ? 100 : 2048;
+
+/**
+ * Scale a vector to unit length. Pure; exported for the offline test.
+ *
+ * **REQUIRED for Gemini, a NO-OP for OpenAI** — applied unconditionally because a no-op costs one
+ * pass over 1536 floats and a missing normalisation costs silent retrieval decay. Measured
+ * 2026-08-07: `gemini-embedding-001` returns a unit vector at its native 3072 dims (L2 = 1.000000)
+ * but L2 ≈ 0.6976 at `outputDimensionality: 1536` — Matryoshka truncation drops the tail and does
+ * not re-scale what remains. OpenAI's embeddings are already unit length.
+ *
+ * A zero vector is returned unchanged: it has no direction to preserve, and dividing by its norm
+ * would emit NaN into the index, poisoning every later comparison instead of merely being useless.
+ */
+export const l2Normalize = (values: number[]): number[] => {
+  let sumSquares = 0;
+  for (const x of values) sumSquares += x * x;
+  const norm = Math.sqrt(sumSquares);
+  return norm === 0 ? values : values.map((x) => x / norm);
+};
+
+/** Gemini's `batchEmbedContents` payload. Pure; exported so the test can assert the shape with no
+ *  key. `outputDimensionality` is load-bearing — omit it and Gemini returns 3072 floats into a
+ *  vector index declared at 1536, which fails only at ingest time on a real deployment. */
+export const buildGeminiEmbedRequest = (values: string[]) => ({
+  requests: values.map((text) => ({
+    model: `models/${GEMINI_EMBEDDING_MODEL}`,
+    content: { parts: [{ text }] },
+    outputDimensionality: EMBEDDING_DIM,
+  })),
+});
+
+/** OpenAI's `/v1/embeddings` payload. `dimensions` is the same load-bearing field under a different
+ *  name — text-embedding-3-small is 1536 natively, but passing it explicitly keeps the width pinned
+ *  to EMBEDDING_DIM rather than to a default that could move. */
+export const buildOpenAIEmbedRequest = (values: string[]) => ({
+  model: OPENAI_EMBEDDING_MODEL,
+  input: values,
+  dimensions: EMBEDDING_DIM,
+});
+
+/**
+ * The dedup identity for a piece of vault text, SCOPED TO THE EMBEDDING MODEL.
+ *
+ * `rag.add` REPLACES an entry with the same `key` but DEDUPLICATES on `contentHash` (its own
+ * contract). The document text does not change when the PROVIDER does — so a bare text hash makes
+ * every already-embedded document look up-to-date and it keeps a vector from the OTHER model
+ * forever, invisible to searches run against the new one because the two live in different embedding
+ * spaces. There is no error in that world, only worse answers.
+ *
+ * Scoping the hash to the model makes a provider change invalidate dedup automatically — for both
+ * directions of this A/B and every future swap — while leaving same-model dedup (the thing that
+ * saves real money on re-ingest) exactly as it was. The `key` stays the bare content hash, so the
+ * re-embed REPLACES the stale entry in place instead of orphaning it.
+ */
+export const embeddingContentHash = (contentHash: string): string =>
+  `${EMBEDDING_MODEL}:${contentHash}`;
 
 // ponytail: `@convex-dev/rag@0.7.5` bundles ai@6, whose `embedMany` accepts ONLY an
-// EmbeddingModelV2 (`specificationVersion: "v2"`). The backend's `@ai-sdk/openai@4`
-// (paired with ai@7, which llm.ts needs) produces a spec-"v4" model that ai@6 REJECTS at
+// EmbeddingModelV2 (`specificationVersion: "v2"`). The backend's `@ai-sdk/*@4` providers
+// (paired with ai@7, which llm.ts needs) produce a spec-"v4" model that ai@6 REJECTS at
 // runtime — `AI_UnsupportedModelVersionError`. A prior `openai.embedding(...) as unknown as`
 // cast silenced only the compile error; the runtime object was still v4 and every ingest
-// embed threw. This ~25-line adapter implements the tiny v2 contract ai@6 checks by calling
-// OpenAI's embeddings REST API directly, decoupling RAG from the provider-major skew (no new
-// dep, no §6 bump). Drop when the pinned RAG realigns to ai@7.
-const openaiEmbeddingV2 = {
+// embed threw. This adapter implements the tiny v2 contract ai@6 checks by calling the
+// provider's REST API directly, decoupling RAG from the provider-major skew (no new dep, no §6
+// bump). Drop when the pinned RAG realigns to ai@7.
+const embeddingV2 = {
   specificationVersion: "v2" as const,
-  provider: "openai.embedding",
+  provider: usingGemini() ? "google.embedding" : "openai.embedding",
   modelId: EMBEDDING_MODEL,
-  maxEmbeddingsPerCall: 2048, // OpenAI's per-request input cap
+  maxEmbeddingsPerCall: MAX_EMBEDDINGS_PER_CALL,
   supportsParallelCalls: true,
   async doEmbed({
     values,
@@ -40,27 +130,57 @@ const openaiEmbeddingV2 = {
     abortSignal?: AbortSignal;
     headers?: Record<string, string | undefined>;
   }): Promise<{ embeddings: number[][]; usage: { tokens: number } }> {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) throw new Error("vault: OPENAI_API_KEY unset for embeddings");
-    const res = await fetch("https://api.openai.com/v1/embeddings", {
+    const gemini = usingGemini();
+    const apiKey = gemini ? process.env.GOOGLE_GENERATIVE_AI_API_KEY : process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error(
+        `vault: ${gemini ? "GOOGLE_GENERATIVE_AI_API_KEY" : "OPENAI_API_KEY"} unset for embeddings`,
+      );
+    }
+    const url = gemini
+      ? `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_EMBEDDING_MODEL}:batchEmbedContents`
+      : "https://api.openai.com/v1/embeddings";
+    const res = await fetch(url, {
       method: "POST",
-      // `...headers` FIRST: these two are TRANSPORT-level and must win over anything the caller
-      // injects. With the spread last, a caller-supplied `Authorization` key — including
+      // `...headers` FIRST: the auth and content-type below are TRANSPORT-level and must win over
+      // anything the caller injects. With the spread last, a caller-supplied auth key — including
       // present-but-undefined — silently replaces or blanks our key, and the call 401s from a line
       // that reads as though it set the auth header. `headers` is the optional bag from the
       // @convex-dev/rag `doEmbed` contract, so nothing populates it today; this is the same
       // spread-after-explicit shape that cost a paid eval fixture at dispatch.ts (5460a81).
-      headers: { ...headers, "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: EMBEDDING_MODEL, input: values, dimensions: EMBEDDING_DIM }),
+      headers: {
+        ...headers,
+        "Content-Type": "application/json",
+        ...(gemini ? { "x-goog-api-key": apiKey } : { Authorization: `Bearer ${apiKey}` }),
+      },
+      body: JSON.stringify(
+        gemini ? buildGeminiEmbedRequest(values) : buildOpenAIEmbedRequest(values),
+      ),
       signal: abortSignal,
     });
     if (!res.ok) throw new Error(`vault: embeddings API ${res.status} ${await res.text()}`);
     const json = (await res.json()) as {
-      data: Array<{ embedding: number[] }>;
+      embeddings?: Array<{ values: number[] }>;
+      data?: Array<{ embedding: number[] }>;
       usage?: { prompt_tokens?: number };
     };
+    const embeddings = gemini
+      ? (json.embeddings ?? []).map((e) => e.values)
+      : (json.data ?? []).map((d) => d.embedding);
+    // FAIL CLOSED on a length mismatch. The component pairs these positionally with the chunks it
+    // sent, so a short or reordered response would attach the WRONG vector to a chunk — a silent
+    // corruption of the index that no later query could distinguish from bad retrieval.
+    if (embeddings.length !== values.length) {
+      throw new Error(
+        `vault: embeddings API returned ${embeddings.length} vectors for ${values.length} inputs`,
+      );
+    }
     return {
-      embeddings: json.data.map((d) => d.embedding),
+      embeddings: embeddings.map(l2Normalize),
+      // Google's `batchEmbedContents` reports NO usage at all (measured: the response carries only
+      // `embeddings`); OpenAI reports `prompt_tokens`. Reporting whatever the provider gives is
+      // honest rather than invented — and it costs nothing downstream, because `priceUsage` has no
+      // row for embeddings either way (see the note at the call site in embedDoc).
       usage: { tokens: json.usage?.prompt_tokens ?? 0 },
     };
   },
@@ -72,7 +192,7 @@ const openaiEmbeddingV2 = {
 type RagEmbeddingModel = ConstructorParameters<typeof RAG>[1]["textEmbeddingModel"];
 
 export const rag = new RAG(components.rag, {
-  textEmbeddingModel: openaiEmbeddingV2 as unknown as RagEmbeddingModel,
+  textEmbeddingModel: embeddingV2 as unknown as RagEmbeddingModel,
   embeddingDimension: EMBEDDING_DIM,
 });
 
@@ -102,13 +222,20 @@ export const embedDoc = internalAction({
     const safeText = scan.value.safeText;
 
     // Offline deterministic path: NO network call, a fixed fake entryId keyed to the content hash.
-    if (safeText.startsWith(SMOKE_PREFIX)) return { entryId: `smoke::${doc.contentHash}`, costUsd: 0 };
+    if (safeText.startsWith(SMOKE_PREFIX))
+      return { entryId: `smoke::${doc.contentHash}`, costUsd: 0 };
 
     // Dedup precheck (query-safe): a second ingest of identical content reuses the existing entry.
+    // The hash is MODEL-SCOPED (see `embeddingContentHash`) — a document embedded by the previous
+    // provider does NOT match here, so it re-embeds rather than keeping a vector from a different
+    // embedding space. `key` stays the bare content hash, so that re-embed REPLACES the stale entry
+    // in place (`rag.add`: "if you provide a key, it will replace an existing entry with the same
+    // key") instead of leaving an orphan to pollute future searches.
+    const contentHash = embeddingContentHash(doc.contentHash);
     const existing = await rag.findEntryByContentHash(ctx, {
       namespace: tenantId,
       key: doc.contentHash,
-      contentHash: doc.contentHash,
+      contentHash,
     });
     if (existing) return { entryId: existing.entryId, costUsd: 0 };
 
@@ -116,14 +243,17 @@ export const embedDoc = internalAction({
       namespace: tenantId,
       text: safeText,
       key: doc.contentHash,
-      contentHash: doc.contentHash,
+      contentHash,
       title: doc.title,
       metadata: { vaultDocId },
     });
-    // ponytail: text-embedding-3-small is not in @pikar/cost PRICING (embeddings are ~$0.02/MTok —
-    // negligible vs the graph-extract call that dominates ingest spend), so priceUsage returns 0
-    // here. Add a pricing row if embedding spend ever becomes material.
-    const priced = priceUsage("text-embedding-3-small", { inputTokens: usage.tokens });
+    // ponytail: gemini-embedding-001 is not in @pikar/cost PRICING (it is free-tier eligible, and
+    // billed embeddings are ~$0.02/MTok — negligible vs the graph-extract call that dominates
+    // ingest spend), so priceUsage returns 0 here. It would report 0 regardless today: Google's
+    // batchEmbedContents returns no usage, so `usage.tokens` is 0. Add a pricing row AND a token
+    // count together if embedding spend ever becomes material — one without the other is the silent
+    // under-draw that packages/cost/src/cost.ts exists to prevent.
+    const priced = priceUsage(EMBEDDING_MODEL, { inputTokens: usage.tokens });
     return { entryId, costUsd: priced.ok ? priced.value : 0 };
   },
 });

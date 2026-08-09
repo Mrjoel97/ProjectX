@@ -9,10 +9,15 @@
 import type { WorkflowId } from "@convex-dev/workflow";
 import type { EvidenceVerdict } from "@pikar/core";
 import { categoryFor } from "@pikar/vault";
-import { DOC_GAP_PLAYBOOK, DOC_GAP_ROUTE, DOC_REVIEW_FRAMEWORK, voiceDocThreadId } from "@pikar/voice";
+import {
+  DOC_GAP_PLAYBOOK,
+  DOC_GAP_ROUTE,
+  DOC_REVIEW_FRAMEWORK,
+  voiceDocThreadId,
+} from "@pikar/voice";
 import { v } from "convex/values";
-import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
+import type { Doc, Id } from "./_generated/dataModel";
 import {
   internalAction,
   internalMutation,
@@ -49,7 +54,10 @@ export const runFailingPipeline = internalMutation({
   // internal.smoke.*) otherwise makes this module's api type self-referential →
   // TS7022 the moment a typechecked consumer (apps/web) imports the generated api
   // (Convex guidelines §96). WorkflowId widens to string.
-  handler: async (ctx, { correlationId }): Promise<{ correlationId: string; workflowId: string }> => {
+  handler: async (
+    ctx,
+    { correlationId },
+  ): Promise<{ correlationId: string; workflowId: string }> => {
     const cid = correlationId ?? `smoke-dlq-${crypto.randomUUID()}`;
     const workflowId = await workflow.start(
       ctx,
@@ -207,7 +215,11 @@ export const fireReviewTimeout = internalMutation({
 export const drainDailySpend = internalMutation({
   args: { tenantId: v.string() },
   handler: async (ctx, { tenantId }) => {
-    await rateLimiter.limit(ctx, "dailySpendCents", { key: tenantId, count: DAILY_BUDGET_CENTS, reserve: true });
+    await rateLimiter.limit(ctx, "dailySpendCents", {
+      key: tenantId,
+      count: DAILY_BUDGET_CENTS,
+      reserve: true,
+    });
   },
 });
 
@@ -264,7 +276,15 @@ export const seedFanout = internalMutation({
   },
   handler: async (
     ctx,
-    { correlationIds, recipients, failIndex, subjectNeedle, bodyNeedle, recipientBodies, attachment },
+    {
+      correlationIds,
+      recipients,
+      failIndex,
+      subjectNeedle,
+      bodyNeedle,
+      recipientBodies,
+      attachment,
+    },
   ): Promise<{ planId: Id<"plans">; attachmentId?: Id<"attachments"> }> => {
     if (recipients.length !== correlationIds.length) {
       throw new Error("seedFanout: recipients/correlationIds length mismatch");
@@ -788,7 +808,10 @@ const SEED_VOICE_BRIEF_MD = [
 
 export const seedVoiceBrief = internalMutation({
   args: { tenantId: v.string(), markdown: v.optional(v.string()), baseMs: v.optional(v.number()) },
-  handler: async (ctx, { tenantId, markdown, baseMs }): Promise<{ vaultDocId: Id<"vaultDocuments"> }> => {
+  handler: async (
+    ctx,
+    { tenantId, markdown, baseMs },
+  ): Promise<{ vaultDocId: Id<"vaultDocuments"> }> => {
     const prior = await ctx.db
       .query("vaultDocuments")
       .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
@@ -939,7 +962,9 @@ export const assertSubmitRateLimited = internalMutation({
         const { ok } = await rateLimiter.limit(ctx, "submitRequest", { key });
         const expectOk = i <= 5; // capacity 5: attempts 1–5 ok, the 6th rejected
         if (ok !== expectOk) {
-          throw new Error(`submitRequest attempt ${i}: ok=${ok}, expected ${expectOk} (capacity 5)`);
+          throw new Error(
+            `submitRequest attempt ${i}: ok=${ok}, expected ${expectOk} (capacity 5)`,
+          );
         }
       }
     } finally {

@@ -7,15 +7,25 @@
 // internalMutation/internalQuery from ./_generated/server are NOT banned by the
 // import guard (telemetry.ts precedent — no allowlist entry needed). This module
 // touches ctx.db, so it must stay on the default runtime (no "use node").
-import { calculateRateLimit, HOUR, type RateLimitConfig, RateLimiter } from "@convex-dev/rate-limiter";
+import {
+  calculateRateLimit,
+  HOUR,
+  type RateLimitConfig,
+  RateLimiter,
+} from "@convex-dev/rate-limiter";
 import { chooseModel } from "@pikar/cost";
 import { scanText } from "@pikar/pii";
 import { clampRefundCents, type EstimateInput, estimateFolderCents } from "@pikar/vault";
 import { v } from "convex/values";
 import { components } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { contentHash } from "./lib/hash";
+// The PLAIN-FUNCTION half of the ledger writer, not `ctx.runMutation`: the limiter movement and
+// its ledger row must commit or fail TOGETHER (FIN-01). A second transaction could leave the
+// window moved with no record, and an append-only table has no backfill to repair that.
+import { ensureCoverage, recordMovement } from "./spendLedger";
 
 // TWO spend rails, and the difference between them is the whole point (22.1-02).
 //
@@ -176,7 +186,13 @@ export const prepare = internalMutation({
     ctx,
     { requestId },
   ): Promise<
-    | { ok: true; model: string; safeTextHash: string; piiCounts: Record<string, number>; estCents: number }
+    | {
+        ok: true;
+        model: string;
+        safeTextHash: string;
+        piiCounts: Record<string, number>;
+        estCents: number;
+      }
     | {
         ok: false;
         reason:
@@ -190,6 +206,10 @@ export const prepare = internalMutation({
   > => {
     const req = await ctx.db.get(requestId);
     if (!req) throw new Error("guardrails.prepare: request not found"); // bug, not a governed stop
+
+    // FIN-01 coverage opens HERE, before any refusal can return. Reaching this gate is what makes
+    // the tenant observable; a kill-switch stop is a CONFIDENT nothing, not an unknown.
+    await ensureCoverage(ctx, req.tenantId, Date.now());
 
     const cfg = await getGuardrailConfig(ctx);
     if (cfg.killSwitch) return { ok: false, reason: "kill_switch" };
@@ -222,6 +242,24 @@ export const prepare = internalMutation({
     if (!spend.ok) return { ok: false, reason: "daily_budget_exhausted" };
     const deployment = await rateLimiter.check(ctx, "deploymentSpendCents", { count: estCents });
     if (!deployment.ok) return { ok: false, reason: "deployment_budget_exhausted" };
+
+    // FIN-01: the ESTIMATE, on the OK path only — a governed stop is not a spend, and a refusal
+    // that wrote a row would make every blocked request look like committed money.
+    // The correlation is DERIVED, not minted: `prepare` is genuinely re-entered (the pipeline's
+    // regenerate loop), and re-estimating one request is the same estimate, not a second one.
+    if (estCents > 0) {
+      await recordMovement(ctx, {
+        tenantId: req.tenantId,
+        rail: "reasoning",
+        phase: "estimated",
+        amountCents: estCents,
+        correlationId: `req:${requestId}:prepare`,
+        createdAt: Date.now(),
+        requestId,
+        model,
+        kind: "prepare",
+      });
+    }
 
     await ctx.db.patch(requestId, { safeText, safeTextHash });
     return { ok: true, model, safeTextHash, piiCounts: counts, estCents };
@@ -286,8 +324,13 @@ export const preCall = internalMutation({
     { tenantId, rail, reserved },
   ): Promise<
     | { ok: true }
-    | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted" }
+    | {
+        ok: false;
+        reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted";
+      }
   > => {
+    // FIN-01: the gate itself is the moment we start watching this tenant (see ensureCoverage).
+    await ensureCoverage(ctx, tenantId, Date.now());
     const cfg = await getGuardrailConfig(ctx);
     if (cfg.killSwitch) return { ok: false, reason: "kill_switch" };
 
@@ -321,8 +364,29 @@ export const preCall = internalMutation({
  *  under-counting — the NEXT prepare/preCall check then fails closed. Zero-cost
  *  runs (ZERO_USAGE smoke) skip, so they never drain the budget. */
 export const recordSpend = internalMutation({
-  args: { tenantId: v.string(), costUsd: v.number(), rail: vRail },
-  handler: async (ctx, { tenantId, costUsd, rail }) => {
+  args: {
+    tenantId: v.string(),
+    costUsd: v.number(),
+    rail: vRail,
+    // FIN-01, ALL OPTIONAL — this mutation has ~15 call sites and a required argument would ripple
+    // through every one of them (the same reasoning that made `rail` optional, five lines up).
+    //
+    // ABSENT `correlationId` ⇒ a per-execution nonce, and that is the SAFE default here rather
+    // than a gap. Every one of these callers is an ACTION: re-entering it re-runs the model call,
+    // so the second charge is real money and MUST get its own row. A correlation derived from refs
+    // would collapse a retry, a fallback model or a per-page fan-out into one row — the ledger
+    // would then sit BELOW the limiter, which is the unrecoverable direction (a duplicate is
+    // findable by reconciling against the limiter; a missing movement is indistinguishable from
+    // money never spent). A caller that is genuinely REPLAYABLE — a journaled workflow step, a
+    // webhook landing — passes its own stable correlation and gets replay suppression.
+    correlationId: v.optional(v.string()),
+    model: v.optional(v.string()),
+    kind: v.optional(v.string()),
+    requestId: v.optional(v.id("requests")),
+    planId: v.optional(v.id("plans")),
+    folderId: v.optional(v.id("vaultFolders")),
+  },
+  handler: async (ctx, { tenantId, costUsd, rail, ...ref }) => {
     const cents = Math.ceil(costUsd * 100);
     if (cents <= 0) return;
     // The rail selector applies HERE regardless of `reserved`: folder work skips the ingest CHECK
@@ -336,6 +400,23 @@ export const recordSpend = internalMutation({
     // the tenant window would stop policing real spend, or the ceiling would never bind.
     await rateLimiter.limit(ctx, tenantRail, { key: tenantId, count: cents, reserve: true });
     await rateLimiter.limit(ctx, deploymentRail, { count: cents, reserve: true });
+
+    // SAME TRANSACTION, SAME `cents`. The two planes are arithmetically incapable of disagreeing
+    // about the amount because there is one variable and one commit — a re-derived `Math.round`
+    // here would drift below the limiter on every sub-cent call and, at 0, be refused outright.
+    await recordMovement(ctx, {
+      tenantId,
+      rail: rail === "ingest" ? "ingest" : "reasoning",
+      phase: "actual",
+      amountCents: cents,
+      correlationId: ref.correlationId ?? `auto:${crypto.randomUUID()}`,
+      createdAt: Date.now(),
+      requestId: ref.requestId,
+      planId: ref.planId,
+      folderId: ref.folderId,
+      model: ref.model,
+      kind: ref.kind,
+    });
   },
 });
 
@@ -355,7 +436,10 @@ export const recordSpend = internalMutation({
 export const remainingDailyCents = internalQuery({
   args: { tenantId: v.string() },
   handler: async (ctx, { tenantId }): Promise<number> => {
-    const tenant = Math.max(0, (await rateLimiter.getValue(ctx, "dailySpendCents", { key: tenantId })).value);
+    const tenant = Math.max(
+      0,
+      (await rateLimiter.getValue(ctx, "dailySpendCents", { key: tenantId })).value,
+    );
     const deployment = Math.max(0, (await rateLimiter.getValue(ctx, "deploymentSpendCents")).value);
     return Math.min(tenant, deployment);
   },
@@ -375,10 +459,7 @@ export const remainingDailyCents = internalQuery({
 /** The plain-function face, so a `tenantQuery` can read it — a Convex query cannot `runQuery`, and
  *  plan 20-09's `jobEstimate` must show today's remaining budget beside the estimate. The
  *  `reserveJobInner` / `reserveJob` split, for the same reason. */
-export async function mediaRemainingCentsInner(
-  ctx: QueryCtx,
-  tenantId: string,
-): Promise<number> {
+export async function mediaRemainingCentsInner(ctx: QueryCtx, tenantId: string): Promise<number> {
   const tenant = Math.max(
     0,
     (await rateLimiter.getValue(ctx, "mediaSpendCents", { key: tenantId })).value,
@@ -450,7 +531,14 @@ export type FolderReserveRefusal =
  * refusal copy interpolates: *"this folder needs ~$3.40; you have $1.10 left today."*
  */
 export type FolderReserveResult =
-  | { ok: true; estCents: number; remainingCents: number; reservedAt: number; fileCount: number; totalBytes: number }
+  | {
+      ok: true;
+      estCents: number;
+      remainingCents: number;
+      reservedAt: number;
+      fileCount: number;
+      totalBytes: number;
+    }
   | {
       ok: false;
       reason: FolderReserveRefusal;
@@ -501,16 +589,31 @@ export const vFileManifest = v.array(
  */
 export async function reserveFolderInner(
   ctx: MutationCtx,
-  a: { tenantId: string; files: EstimateInput[] },
+  // `folderId` is OPTIONAL and is used ONLY for the ledger row's correlation and typed ref. Absent
+  // ⇒ no ledger row, the `vRail` convention in this file — a reservation whose folder we cannot
+  // name is one settle can never match, and an unmatchable reserved row would sit as permanent
+  // phantom `unlanded` money on the Finance page.
+  a: { tenantId: string; files: EstimateInput[]; folderId?: Id<"vaultFolders"> },
 ): Promise<FolderReserveResult> {
   const fileCount = a.files.length;
   const totalBytes = a.files.reduce((s, f) => s + Math.max(0, f.size), 0);
+
+  // FIN-01: watching starts at the gate, not at the money (see ensureCoverage).
+  await ensureCoverage(ctx, a.tenantId, Date.now());
 
   const cfg = await getGuardrailConfig(ctx);
   // estCents/remainingCents are 0 here because the kill switch stops BEFORE pricing. The reason
   // discriminates, and kill-switch copy never names a figure.
   if (cfg.killSwitch) {
-    return { ok: false, reason: "kill_switch", estCents: 0, remainingCents: 0, shortfallCents: 0, fileCount, totalBytes };
+    return {
+      ok: false,
+      reason: "kill_switch",
+      estCents: 0,
+      remainingCents: 0,
+      shortfallCents: 0,
+      fileCount,
+      totalBytes,
+    };
   }
 
   const { estCents } = estimateFolderCents(a.files);
@@ -551,13 +654,34 @@ export async function reserveFolderInner(
   });
   await rateLimiter.limit(ctx, "deploymentIngestSpendCents", { count: estCents, reserve: true });
 
-  return { ok: true, estCents, remainingCents, reservedAt: Date.now(), fileCount, totalBytes };
+  // ONE instant, used for BOTH the returned stamp and the correlation. `settleFolder` rebuilds
+  // this exact string from `folder.reservedAt` to find its own reservation, so a second
+  // `Date.now()` here would silently orphan every refund.
+  const reservedAt = Date.now();
+  if (a.folderId !== undefined && estCents > 0) {
+    await recordMovement(ctx, {
+      tenantId: a.tenantId,
+      rail: "ingest",
+      phase: "reserved",
+      amountCents: estCents,
+      correlationId: `f:${a.folderId}:${reservedAt}`,
+      createdAt: reservedAt,
+      folderId: a.folderId,
+      kind: "folder_reserve",
+    });
+  }
+
+  return { ok: true, estCents, remainingCents, reservedAt, fileCount, totalBytes };
 }
 
 /** The `internalMutation` face of `reserveFolderInner`, for tests and for any caller that is not
  *  already inside a mutation. 15.3-04's folder-create path calls the Inner directly. */
 export const reserveFolder = internalMutation({
-  args: { tenantId: v.string(), files: vFileManifest },
+  args: {
+    tenantId: v.string(),
+    files: vFileManifest,
+    folderId: v.optional(v.id("vaultFolders")),
+  },
   handler: async (ctx, a): Promise<FolderReserveResult> => reserveFolderInner(ctx, a),
 });
 
@@ -647,10 +771,33 @@ export const settleFolder = internalMutation({
         count: -refundedCents,
         reserve: true,
       });
+      // INSIDE the `> 0` branch, deliberately. `validateSpendMovement` rejects `amountCents <= 0`,
+      // and this runs inside `tryComplete`'s transaction — a zero row would fail FOLDER COMPLETION
+      // for an accounting reason. Recording nothing is also the honest answer: nothing came back.
+      // The correlation is rebuilt from the SAME `reservedAt` the reservation was stamped with, so
+      // a re-entered settle finds the stored row instead of writing a second refund. The CAS above
+      // protects the MONEY; this correlation protects the RECORD.
+      await recordMovement(ctx, {
+        tenantId: folder.tenantId,
+        rail: "ingest",
+        phase: "refunded",
+        amountCents: refundedCents,
+        correlationId: `f:${folderId}:${folder.reservedAt}`,
+        createdAt: Date.now(),
+        folderId,
+        kind: "folder_settle",
+      });
     }
 
     // The deployment window rolls on its OWN randomised offset, so it gets its own read, its own
     // rollover check and its own clamp — never the tenant window's numbers.
+    //
+    // THE DEPLOYMENT REFUND IS DELIBERATELY NOT LEDGERED. `spendEvents` is a PER-TENANT statement,
+    // and this credit is not this tenant's money coming back — the two clamps return DIFFERENT
+    // amounts, so a second tenant-scoped row would tell a tenant that ~800¢ returned on a 400¢
+    // credit and drive `unlanded` to a false zero. The reserve side already carries this asymmetry:
+    // both windows are debited, one row is written. The deployment figure keeps the observability
+    // it already has — this function's return value and `ingestRemainingCents`.
     const deploymentWindow = await rateLimiter.getValue(ctx, "deploymentIngestSpendCents");
     const deploymentRefundedCents = refundableCents(deploymentWindow, unspent, folder.reservedAt);
     if (deploymentRefundedCents > 0) {
@@ -661,6 +808,15 @@ export const settleFolder = internalMutation({
     }
 
     await ctx.db.patch(folderId, { reservedCents: 0 });
-    return { refundedCents, deploymentRefundedCents, reason: "settled" };
+    // TWO success reasons, because `unlanded` money says the money is STUCK but not WHY. A rolled
+    // window is the one settle that returns nothing while everything worked exactly as designed;
+    // without a distinct reason it is indistinguishable from a clamp that happened to hit zero.
+    // ponytail: a returned string — the caller (`tryComplete`) currently drops it. Upgrade path is
+    // one refs-only `audit.log` row on this branch when the Finance page needs to explain it (§4).
+    return {
+      refundedCents,
+      deploymentRefundedCents,
+      reason: refundedCents > 0 ? "settled" : "settled_window_rolled",
+    };
   },
 });

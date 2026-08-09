@@ -19,6 +19,8 @@ import { createHash } from "node:crypto";
 // uncached actions carry the model id in their args (guardrails.prepare chose it), fall back
 // to CHEAP_MODEL on eligible failure, and are wrapped by the tenant-namespaced action cache
 // (Task 2). `usage` (inputTokens/outputTokens) drives OPSG-01 telemetry.
+import { createGoogleGenerativeAI, google } from "@ai-sdk/google";
+import { createVertex, vertex } from "@ai-sdk/google-vertex";
 import { openai } from "@ai-sdk/openai";
 import { ActionCache } from "@convex-dev/action-cache";
 import { draftSchema } from "@pikar/contracts/drafting";
@@ -35,16 +37,16 @@ import {
   VOICE_BRIEF_SKILL,
 } from "@pikar/contracts/skill";
 import {
-  applyRecipientEdit,
   type AvailabilityRange,
-  type BriefingItem,
+  actionTypeOf,
+  applyRecipientEdit,
   BODY_TRUNCATE_CHARS,
   BRIEFING_BODY_CAP,
-  CALENDAR_HORIZON_MS,
-  actionTypeOf,
+  type BriefingItem,
   bucket,
   buildDocFilename,
   buildRecipientView,
+  CALENDAR_HORIZON_MS,
   type DigestBatch,
   type DigestItem,
   type DocFormat,
@@ -68,10 +70,11 @@ import {
 import {
   CHEAP_MODEL,
   DEFAULT_MODEL,
+  GEMINI_MODEL,
   priceUsage,
   RESEARCH_FALLBACK_MODEL,
   RESEARCH_MODEL,
-  WEB_SEARCH_CALL_USD,
+  searchFeeUsd,
 } from "@pikar/cost";
 import { scanText } from "@pikar/pii";
 import { type BriefSections, buildBriefMarkdown } from "@pikar/voice";
@@ -82,6 +85,7 @@ import {
   type LanguageModel,
   RetryError,
   stepCountIs,
+  type ToolSet,
   tool,
 } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
@@ -138,10 +142,526 @@ export function callTimeoutMsFor(skillName: string): number {
   return skillName === RESEARCH_SPECIALIST_SKILL ? RESEARCH_CALL_TIMEOUT_MS : CALL_TIMEOUT_MS;
 }
 
-// Map a pricing/audit model id ("openai/gpt-4o-mini") to a direct-OpenAI LanguageModel.
-// The `openai/` prefix is the gateway namespace; the @ai-sdk/openai provider wants the bare
-// name and reads OPENAI_API_KEY from the deployment env. Pricing/audit keep the full id.
-const resolveModel = (id: string): LanguageModel => openai(id.replace(/^openai\//, ""));
+// Google Gemini via Vertex AI (2026-08-07). LAZY AND MEMOIZED, and both properties are
+// load-bearing rather than tidiness:
+//
+// LAZY — building the provider at module scope would read the GCP env on IMPORT, so a deployment
+// with no Google credentials would fail every OpenAI call too. Gemini was added ALONGSIDE OpenAI,
+// not in front of it; a tenant that never asks for a `google/` model must never be able to notice
+// that the credential is absent. The throw below can only fire on a request that named Gemini.
+//
+// CREDENTIALS COME FROM AN ENV VAR, NOT A FILE. `GOOGLE_APPLICATION_CREDENTIALS` is a FILE PATH and
+// Convex has no filesystem — the service-account JSON on a developer's disk is unreachable from the
+// deployed backend. Set the whole JSON as one deployment secret instead:
+//   npx convex env set GOOGLE_SERVICE_ACCOUNT_JSON "$(cat <key>.json)"
+// `project` is read from the credential's own `project_id`, so it cannot drift from the key.
+// TWO DOORS TO THE SAME MODELS, AND THE CHEAP ONE WINS.
+//
+// Google serves `gemini-2.5-flash` through BOTH Vertex AI (service account, GCP project, **requires
+// a linked billing account — there is no free tier**) and AI Studio (a plain API key, with a free
+// rate-limited tier). The model NAMES are identical, so only the transport differs and `google/…`
+// stays one namespace either way.
+//
+// `GOOGLE_GENERATIVE_AI_API_KEY` is checked FIRST because it is the door that works on no budget.
+// Proven the hard way on 2026-08-07: two separate GCP projects were tried with a service account
+// and BOTH refused with BILLING_DISABLED before generating a single token. Vertex remains wired and
+// takes over the moment a billing account exists — it is the only door to Imagen/Veo (ADR-016).
+let genaiProvider: ReturnType<typeof createGoogleGenerativeAI> | undefined;
+const googleAiStudio = (): ReturnType<typeof createGoogleGenerativeAI> | undefined => {
+  const key = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+  if (!key) return undefined;
+  genaiProvider ??= createGoogleGenerativeAI({ apiKey: key });
+  return genaiProvider;
+};
+
+let vertexProvider: ReturnType<typeof createVertex> | undefined;
+const googleVertex = (): ReturnType<typeof createVertex> => {
+  if (vertexProvider) return vertexProvider;
+  const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+  if (!raw) {
+    throw new Error(
+      "No Google credential on this deployment. Set GOOGLE_GENERATIVE_AI_API_KEY (AI Studio, free tier) or GOOGLE_SERVICE_ACCOUNT_JSON (Vertex, needs billing).",
+    );
+  }
+  // BASE64 IS ACCEPTED AND IS THE RECOMMENDED FORM. A service-account key is multi-line JSON whose
+  // `private_key` is full of escapes, and `convex env set` on Windows mangles that — observed
+  // 2026-08-07, and the quirk is already on record for this repo. Base64 is alphanumeric, so no
+  // shell can corrupt it. Detect rather than configure: real JSON always starts with `{`.
+  //   npx convex env set GOOGLE_SERVICE_ACCOUNT_JSON "$(node -e "console.log(Buffer.from(require('fs').readFileSync(process.argv[1])).toString('base64'))" <key>.json)"
+  const trimmed = raw.trim();
+  const decoded = trimmed.startsWith("{")
+    ? trimmed
+    : Buffer.from(trimmed, "base64").toString("utf8");
+  let credentials: { project_id?: string; client_email?: string; private_key?: string };
+  try {
+    credentials = JSON.parse(decoded);
+  } catch {
+    // Never echo `raw` or `decoded` — they hold a private key. The SHAPE is the diagnosis; the
+    // value never is. Length is safe and is the one clue that separates "truncated by the shell"
+    // from "pasted the wrong thing entirely".
+    // Kept under skills.test.ts's 200-char inline-literal ceiling (the no-hardcoded-prompts guard,
+    // CLAUDE.md §5) — it fired on the longer first draft of this message.
+    const form = trimmed.startsWith("{") ? "raw" : "base64";
+    throw new Error(
+      `GOOGLE_SERVICE_ACCOUNT_JSON did not parse (${trimmed.length} chars, ${form}). A real key is ~2300; shorter means the shell truncated it — set it base64-encoded.`,
+    );
+  }
+  const project = credentials.project_id;
+  if (!project || !credentials.client_email || !credentials.private_key) {
+    throw new Error(
+      "GOOGLE_SERVICE_ACCOUNT_JSON is missing project_id, client_email or private_key — it is not a service-account key.",
+    );
+  }
+  vertexProvider = createVertex({
+    project,
+    location: process.env.GOOGLE_VERTEX_LOCATION ?? "us-central1",
+    googleAuthOptions: { credentials },
+  });
+  return vertexProvider;
+};
+
+// Map a pricing/audit model id to a LanguageModel. Two vendors, one id scheme: the prefix
+// ("openai/gpt-4o-mini", "google/gemini-2.5-flash") selects the provider and the bare name goes to
+// it. The FULL id stays the pricing/audit key in both cases — `PRICING` is keyed on it, so a model
+// that resolves here but is missing from that table would run and bill NOTHING against the daily
+// rail (see the fail-closed note in packages/cost/src/cost.ts). Resolve and price move together.
+// The @ai-sdk/openai provider reads OPENAI_API_KEY from the deployment env.
+const resolveModel = (id: string): LanguageModel => {
+  if (!id.startsWith("google/")) return openai(id.replace(/^openai\//, ""));
+  const bare = id.replace(/^google\//, "");
+  // AI Studio if a key is set, else Vertex. `googleVertex()` still throws its own worded error when
+  // NEITHER credential exists, so "no Google config at all" stays one clear message rather than two.
+  return (googleAiStudio() ?? googleVertex())(bare);
+};
+
+/** One retrieved web result. `snippet` is Tavily's extracted page text, NOT model prose. */
+export type WebResult = { url: string; title: string; snippet: string };
+
+/** How many results one search returns to the model. Small on purpose: each snippet is ~1.4k chars
+ *  and they all ride `inputTokens` on the NEXT step, so this is the main lever on research cost. */
+export const WEB_RESULTS_PER_SEARCH = 5;
+
+/**
+ * The relevance floor a Tavily result must clear to count as EVIDENCE.
+ *
+ * **MEASURED, not guessed (2026-08-07).** Real research queries and the deliberately-invented entity
+ * from fixture 33 separate cleanly on Tavily's own `score`:
+ *   real (fixture 32, two queries):  0.8145 0.8052 0.7879 0.7730 0.7376 / 0.7409 … 0.6022
+ *   invented (fixture 33):           exact-name searches return NOTHING AT ALL (n=0); only a loose
+ *                                    query mixing real words returns anything, topping out at 0.5100
+ *                                    before a cliff to 0.0962, 0.0466, 0.0446, 0.0409.
+ * 0.55 sits in the gap: above every near-miss, below every genuine result.
+ *
+ * WHY A FLOOR IS NEEDED AT ALL, given exact-name searches already return zero. `sources` is
+ * AGGREGATED ACROSS EVERY SEARCH IN A RUN, and the specialist is instructed to search once per
+ * sub-question. One loose sub-question drags near-misses into the aggregate, and the honesty verdict
+ * (`declaredQuestionScope && sources.length === 0`) then can never fire — a run that found nothing
+ * reports itself as sourced. The hosted OpenAI search never exposed this because it returned no
+ * sources for an unanswerable query; that property has to be reconstructed here.
+ *
+ * ponytail: one flat threshold. The margin (0.51 → 0.60) is real but THIN and rests on five sampled
+ * queries — fixtures 32 and 33 are its regression test, and they pull in opposite directions, which
+ * is what makes them a calibration set rather than two unrelated cases. If a genuine result ever
+ * lands below this, prefer raising `max_results` or splitting the query over lowering the floor.
+ */
+export const WEB_RESULT_MIN_SCORE = 0.55;
+
+/**
+ * Map Tavily's `/search` response to our result shape. Pure and exported for the offline test —
+ * the network half is untestable without a key, this half is where the mistakes live.
+ *
+ * Two things are DROPPED rather than passed through, both because a source list is the evidence half
+ * of the research verdict: anything without a parseable absolute URL (the reader cannot open it), and
+ * anything below `WEB_RESULT_MIN_SCORE` (a near-miss is not evidence, however topical it looks).
+ */
+export const parseWebResults = (payload: unknown): WebResult[] => {
+  const rows = (payload as { results?: unknown })?.results;
+  if (!Array.isArray(rows)) return [];
+  const out: WebResult[] = [];
+  for (const r of rows) {
+    const url = (r as { url?: unknown })?.url;
+    if (typeof url !== "string") continue;
+    try {
+      new URL(url); // absolute + parseable, or it is not a citation
+    } catch {
+      continue;
+    }
+    // A MISSING score is kept, deliberately: absence means the provider did not rank this response,
+    // and silently discarding everything would turn a provider change into an empty evidence list —
+    // the same silent-zero failure this whole path is built to avoid. Only an EXPLICIT low score
+    // drops a row.
+    const score = (r as { score?: unknown })?.score;
+    if (typeof score === "number" && score < WEB_RESULT_MIN_SCORE) continue;
+    out.push({
+      url,
+      title: String((r as { title?: unknown })?.title ?? ""),
+      snippet: String((r as { content?: unknown })?.content ?? ""),
+    });
+  }
+  return out;
+};
+
+/**
+ * The sources carried by ONE `webResearch` tool-result part.
+ *
+ * Separate from `parseWebResults` because the shapes differ and conflating them hid a latent bug:
+ * the API response calls the text `content` while our own tool output calls it `snippet`, and the
+ * stored output has no `score` at all (already filtered at execute time). Re-running the API parser
+ * over our own output happened to work only because the call site reads url/title — one field rename
+ * away from silently emptying every source list.
+ */
+export const sourcesFromToolOutput = (output: unknown): { url: string; title: string }[] => {
+  const rows = (output as { results?: unknown })?.results;
+  if (!Array.isArray(rows)) return [];
+  const out: { url: string; title: string }[] = [];
+  for (const r of rows) {
+    const url = (r as { url?: unknown })?.url;
+    if (typeof url !== "string") continue;
+    try {
+      new URL(url);
+    } catch {
+      continue;
+    }
+    out.push({ url, title: String((r as { title?: unknown })?.title ?? "") });
+  }
+  return out;
+};
+
+/**
+ * ACTN-03. The web-research tool record.
+ *
+ * **LOCAL AND PROVIDER-EXECUTED ARE DIFFERENT ANIMALS, AND THIS ONE IS NOW LOCAL (2026-08-07).**
+ * It used to be `openai.tools.webSearch` / `vertex.tools.googleSearch` — a hosted tool the VENDOR
+ * ran. That coupled research to whichever vendor `RESEARCH_MODEL` named (sending one vendor's
+ * hosted tool to the other is a 400), and it died outright when the only funded vendor ran out:
+ * OpenAI hit $0 and Gemini's free tier grants ZERO Google Search entitlement, so fixtures
+ * 32/33/34 could not pass on either door. Tavily is a plain HTTP API we call ourselves, so
+ * research now works on ANY model — the vendor-matching constraint documented at `RESEARCH_MODEL`
+ * in @pikar/cost is retired by construction, not worked around.
+ *
+ * **THREE CONSEQUENCES AT THE CALL SITE, all of which had to change together:**
+ *   1. `providerExecuted` is FALSE for a local tool, so `runAgentLoop` can no longer count searches
+ *      by that flag. It counts `toolName === "webResearch"` instead — and the literal is safe now
+ *      precisely BECAUSE we own the tool: the old comment warned against a name literal because the
+ *      PROVIDER chose the emitted name (`web_search`) and could rename it. Nobody renames this one.
+ *   2. `res.sources` is empty — that array is populated from provider `url_citation` annotations,
+ *      which only a hosted tool emits. Sources are now read from this tool's own RESULT parts,
+ *      which is strictly better evidence: still structured, still provider-supplied (Tavily's JSON),
+ *      still never parsed out of model prose.
+ *   3. `onToolExecutionStart` DOES fire for a local tool, so `agentSteps.tool` needs the
+ *      `webResearch` literal — schema.ts said "deliberately NO webResearch companion" and that
+ *      reasoning inverted with this change. Without the literal the step insert throws inside a
+ *      callback the AI SDK SWALLOWS: no trace in prod, every offline test still green.
+ *
+ * Module scope and exported so `probeGemini` and `cockpitTools.test.ts` use THE SAME record the
+ * research loop does — a probe that builds its own tool proves a fiction (the 15.3 `classifyOne`
+ * lesson).
+ */
+export const buildWebResearchTool = (): ToolSet => ({
+  webResearch: tool({
+    description:
+      "Search the live web and get back real pages with their URLs. Use it for anything you " +
+      "cannot answer from the conversation or the vault — recent events, external companies, " +
+      "prices, published figures. Search ONCE PER SUB-QUESTION rather than once per run: each " +
+      "call is a fresh independent query. Every claim you make from a result must cite that " +
+      "result's URL.",
+    inputSchema: jsonSchema<{ query: string }>({
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "A focused natural-language search query for ONE sub-question.",
+        },
+      },
+      required: ["query"],
+      additionalProperties: false,
+    }),
+    execute: async ({ query }): Promise<{ results: WebResult[]; note?: string }> => {
+      const apiKey = process.env.TAVILY_API_KEY;
+      // Structural absence beats a thrown error here: a missing key is an OPERATOR fault, and a
+      // throw inside a tool ends the specialist's whole run. Returning an empty result set lets the
+      // model finish and say it found nothing — which the evidence verdict then reports honestly.
+      if (!apiKey) return { results: [], note: "web search unavailable: TAVILY_API_KEY unset" };
+      // §4 REDACT-BEFORE-EGRESS. This is a NEW third-party boundary — the query is model-authored
+      // and could echo tenant content from the prompt. The hosted tools had the same exposure to
+      // their own vendor; Tavily is one more party, so the same rule that governs every other
+      // outbound call governs this one. Fail CLOSED: an unscannable query is not sent.
+      const scan = scanText(query);
+      if (!scan.ok) return { results: [], note: "web search skipped: query failed redaction scan" };
+      const res = await fetch("https://api.tavily.com/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          query: scan.value.safeText,
+          max_results: WEB_RESULTS_PER_SEARCH,
+          search_depth: "basic",
+        }),
+        signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+      });
+      // Same reasoning as the missing key: a 429 (monthly credits gone) or a 5xx must not kill the
+      // run. The model is told plainly, and `sources: []` makes the verdict honest downstream.
+      if (!res.ok) return { results: [], note: `web search failed: HTTP ${res.status}` };
+      return { results: parseWebResults(await res.json()) };
+    },
+  }),
+});
+
+/**
+ * probeGemini — prove the `google/` half of `resolveModel` end to end before anything routes to it.
+ *
+ * Gemini was added ALONGSIDE OpenAI (owner decision 2026-08-07): `DEFAULT_MODEL`/`CHEAP_MODEL` still
+ * point at OpenAI, so NO product path reaches Vertex. That is the safe order, but it means the
+ * wiring is unexercised — typechecking proves the code compiles, not that a request returns. This
+ * action is the smallest thing that can fail if the path is broken.
+ *
+ * It runs INSIDE the deployment on purpose. A standalone node script proves a credential works on a
+ * laptop; only this proves the DEPLOYMENT can use it — the env var Convex actually holds, the real
+ * `resolveModel`, the installed provider version, the deployment's own network egress.
+ *
+ * **It never throws.** Every failure is classified and returned, so the caller can distinguish
+ * "Gemini refused us" from "we never asked" — the distinction `docs/playbooks/ci-gate.md` records
+ * `skillopt.yml` losing, where `|| true` turned a call that never happened into a green check.
+ *
+ * `unpriced` is the subtlest verdict and the reason pricing is asserted here at all: a model that
+ * ANSWERS but is missing from `PRICING` makes `priceUsage` return `unknown_model` → `recordSpend`
+ * records 0 → the model bills NOTHING against `DAILY_BUDGET_CENTS`. A free-looking model is worse
+ * than a broken one, so a working call with no price is a FAILED probe, not a passing one.
+ *
+ * Deliberately does NOT draw down the guardrail rails: this is an operator tool, not tenant work,
+ * and it reports the cost it WOULD have drawn instead of silently spending someone's daily budget.
+ * The prompt is a fixed constant carrying no tenant text, so nothing here can leak PII (§4).
+ *
+ * ── `grounded: true` (2026-08-07) — THE RESEARCH HALF, AND THE REASON THIS ACTION EXISTS NOW ──
+ *
+ * The plain probe proves the model ANSWERS. It says nothing about the path Phase 16 actually runs,
+ * and the Gemini research pins were repointed having been proven to accept NOTHING (see the debt
+ * paragraph at `RESEARCH_MODEL` in packages/cost/src/cost.ts). `grounded: true` attaches
+ * `buildWebResearchTool()` — THE SAME RECORD `buildCockpitTools` hands the specialist, never a
+ * re-derived one — and measures the three things the eval silently depends on. Each is a FAILING
+ * verdict, because each fails QUIETLY in production:
+ *
+ *   `provider_refused`  the model rejected the tool. The cast in `buildWebResearchTool` is an SDK
+ *                       typing gap the compiler cannot check, so a 400 on tool shape can only be
+ *                       found by sending one. This is that send.
+ *   `no_search_call`    it answered from memory without searching, OR the SDK never surfaced the
+ *                       hosted call with `providerExecuted: true`. `runAgentLoop` counts hosted
+ *                       calls on that flag ALONE and multiplies by `searchFeeUsd`, so a missing
+ *                       flag makes every research run bill $0 of search fee against a $5/day rail —
+ *                       a research plane that looks FREE, the failure 16-02's probe was written to
+ *                       prevent for OpenAI and which is unproven for Google.
+ *   `no_sources`        it searched but `res.sources` carried no `sourceType: "url"` entry. This is
+ *                       the sharpest one: the specialist's honesty verdict is
+ *                       `declaredQuestionScope && sources.length === 0`, so if Google returns its
+ *                       citations in a shape the SDK does not map to `sources`, EVERY Gemini
+ *                       research run reports "I found nothing" and fixtures 32/34 redden for a
+ *                       reason that has nothing to do with the skill body.
+ *
+ * Run it against BOTH research pins before trusting a gate — `RESEARCH_FALLBACK_MODEL` is exercised
+ * by `isFallbackEligible` and has never been probed either.
+ */
+export const probeGemini = internalAction({
+  args: { model: v.optional(v.string()), grounded: v.optional(v.boolean()) },
+  handler: async (
+    _ctx,
+    { model, grounded },
+  ): Promise<{
+    verdict:
+      | "ok"
+      | "no_credential"
+      | "bad_credential"
+      | "provider_refused"
+      | "unpriced"
+      | "empty_text"
+      | "tool_vendor_mismatch"
+      | "no_search_call"
+      | "no_sources";
+    model: string;
+    detail: string;
+    text?: string;
+    usage?: { inputTokens?: number; outputTokens?: number };
+    costUsd?: number;
+    /** Grounded runs only. Hosted calls counted EXACTLY as `runAgentLoop` counts them. */
+    searchCalls?: number;
+    /** Grounded runs only. Verbatim, because the record KEY is ours (`webResearch`) and the emitted
+     *  name is the PROVIDER's — 16-02 observed `web_search` for OpenAI, and every offline mock
+     *  fixture has to match whatever Google actually emits or we ship tests that pass on a fiction. */
+    toolCalls?: { toolName: string; providerExecuted: boolean }[];
+    /** Grounded runs only. Content-plane URLs (§4): printed to an operator terminal, NEVER audited. */
+    sources?: { url: string; title: string }[];
+    /** Grounded runs only. What the rail WOULD have been charged on top of tokens. */
+    feeUsd?: number;
+  }> => {
+    const id = model ?? (grounded ? RESEARCH_MODEL : GEMINI_MODEL);
+    if (!id.startsWith("google/")) {
+      return { verdict: "bad_credential", model: id, detail: `not a google/ model id: ${id}` };
+    }
+    // `buildWebResearchTool` picks its vendor from `RESEARCH_MODEL`, not from the id being probed —
+    // that is deliberate in production (the tool must match the pin, and the research fallback
+    // shares its vendor), but it means probing a Gemini id while the pin sits on OpenAI would send
+    // `openai.tools.webSearch` to Gemini and report a 400 that says nothing about Gemini. Refuse
+    // instead of manufacturing a misleading FAIL. Reachable after a two-line revert of the pins.
+    if (grounded && !RESEARCH_MODEL.startsWith("google/")) {
+      return {
+        verdict: "tool_vendor_mismatch",
+        model: id,
+        detail: `RESEARCH_MODEL is "${RESEARCH_MODEL}", so buildWebResearchTool yields OpenAI's hosted search — it cannot be sent to ${id}`,
+      };
+    }
+
+    let resolved: LanguageModel;
+    try {
+      resolved = resolveModel(id);
+    } catch (e) {
+      // The two credential errors are raised by googleVertex() above and are the only ones that can
+      // reach here — they are already worded for an operator and carry no key material.
+      const detail = e instanceof Error ? e.message : String(e);
+      return {
+        verdict: detail.includes("is not set") ? "no_credential" : "bad_credential",
+        model: id,
+        detail,
+      };
+    }
+
+    let result: Awaited<ReturnType<typeof generateText>>;
+    try {
+      result = await generateText({
+        model: resolved,
+        // Fixed, tiny, and verifiable: a wrong answer is as diagnostic as an error, and the token
+        // count stays small enough that a probe is never a meaningful cost.
+        //
+        // The grounded prompt is DATED ON PURPOSE (the 16-02 probe's design, kept): the answer
+        // cannot come from model memory, so an empty `sources` array is a real signal rather than
+        // an artefact of an easy question. Still a fixed constant with no tenant text (§4).
+        prompt: grounded
+          ? "Using web search, name one specific news item published in the last 30 days about" +
+            " Google's Gemini API pricing or model lineup. Give the headline, the publication and" +
+            " the date. If you cannot find one, say exactly: NO RESULTS."
+          : "Reply with exactly one word: OK",
+        // 512, not 16. **Gemini 3.x REASONS BY DEFAULT and its thinking tokens are drawn from this
+        // same budget**, so a tight cap returns 200-OK with EMPTY text and a nonzero output-token
+        // count — observed here 2026-08-07 at 16 (12 output tokens, `text: ""`). A probe that
+        // reported "ok" on an empty answer would be exactly the vacuous green this script exists to
+        // avoid, which is why `emptyText` below is a FAILING verdict rather than a footnote.
+        // Grounded runs get 4x: search results land IN the context and are reasoned over, so the
+        // same cap that suffices for one word would produce an `empty_text` FAIL that is an artefact
+        // of the budget rather than a fact about grounding.
+        maxOutputTokens: grounded ? 2048 : 512,
+        // Only when grounded — an unused tools record still ships a tool declaration to the
+        // provider, and the plain probe's job is to isolate "can it answer at all".
+        ...(grounded ? { tools: buildWebResearchTool(), stopWhen: stepCountIs(4) } : {}),
+      });
+    } catch (e) {
+      // NAME only, matching the llm.fallback audit convention — a provider error body can echo
+      // request content, and this string is printed to a terminal and may be pasted into a ticket.
+      const name = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+      return { verdict: "provider_refused", model: id, detail: name };
+    }
+
+    const usage = {
+      inputTokens: result.usage?.inputTokens,
+      outputTokens: result.usage?.outputTokens,
+    };
+    // Extracted with the SAME two expressions `runAgentLoop` uses (the `providerExecuted` filter and
+    // the `sourceType === "url"` narrowing). Copied rather than shared because the loop's versions
+    // are welded into a 200-line handler; if either ever changes, THIS is the probe that must change
+    // with it — the whole point is that the probe measures what production counts, not what looks
+    // equivalent. Empty on a plain run, which is why every grounded field below is optional.
+    const toolCalls = result.steps
+      .flatMap((st) => st.content)
+      .filter((p) => p.type === "tool-call")
+      .map((p) => ({ toolName: p.toolName, providerExecuted: p.providerExecuted === true }));
+    const searchCalls = toolCalls.filter((c) => c.providerExecuted).length;
+    const sources = (result.sources ?? [])
+      .filter(
+        (src): src is typeof src & { sourceType: "url"; url: string } => src.sourceType === "url",
+      )
+      .map((src) => ({ url: src.url, title: (src as { title?: string }).title ?? "" }));
+    const feeUsd = searchCalls * searchFeeUsd(id);
+    const groundedFields = grounded ? { searchCalls, toolCalls, sources, feeUsd } : {};
+
+    // Priced AFTER the grounded extraction, deliberately (reordered 2026-08-07). `unpriced` is the
+    // verdict a model gets on the run where it is being EVALUATED for adoption — which is exactly
+    // the run whose grounding evidence you need in order to decide whether to add the PRICING row
+    // at all. Returning early on `unpriced` threw that evidence away and forced a second paid run.
+    const priced = priceUsage(id, usage);
+    if (!priced.ok) {
+      return {
+        verdict: "unpriced",
+        model: id,
+        detail: `answered, but PRICING has no row for "${id}" — this model would bill $0 against the daily rail`,
+        text: result.text,
+        usage,
+        ...groundedFields,
+      };
+    }
+
+    // A 200 with no text is NOT a pass. Gemini 3.x spends thinking tokens from the output budget, so
+    // an exhausted cap yields empty text, a nonzero output count and no error at all — the failure
+    // shape most likely to be mistaken for success by anything downstream that expects prose.
+    if (result.text.trim() === "") {
+      return {
+        verdict: "empty_text",
+        model: id,
+        detail: `answered with ${usage.outputTokens ?? 0} output tokens but EMPTY text — Gemini 3.x reasoning likely consumed maxOutputTokens`,
+        text: result.text,
+        usage,
+        costUsd: priced.value,
+        ...groundedFields,
+      };
+    }
+
+    // ── The two grounded verdicts. Both are 200-OK responses that READ as success. ──
+    //
+    // Checked AFTER `empty_text` on purpose: an exhausted output budget is the more specific cause
+    // and would otherwise be reported as "it never searched".
+    if (grounded && searchCalls === 0) {
+      return {
+        verdict: "no_search_call",
+        model: id,
+        // The distinction is not decidable from here and the operator needs both branches, because
+        // the fixes are unrelated: a model that chose not to search is a PROMPT problem, while a
+        // hosted call the SDK failed to flag is a PROVIDER-MAPPING problem that silently zeroes the
+        // search fee for every research run.
+        detail:
+          `answered without any provider-executed call (${toolCalls.length} tool-call part(s) total). ` +
+          "Either the model declined to search, or @ai-sdk/google does not set providerExecuted on " +
+          "the grounded call — and runAgentLoop counts hosted calls on that flag ALONE, so the " +
+          "second case bills $0 of search fee on every research run.",
+        text: result.text,
+        usage,
+        costUsd: priced.value,
+        ...groundedFields,
+      };
+    }
+    if (grounded && sources.length === 0) {
+      return {
+        verdict: "no_sources",
+        model: id,
+        detail:
+          `searched ${searchCalls}x but res.sources carried no sourceType:"url" entry. ` +
+          "The specialist's honesty verdict is `declaredQuestionScope && sources.length === 0`, so " +
+          "this shape makes EVERY Gemini research run report that it found nothing — fixtures 32 " +
+          "and 34 would redden for a reason unrelated to the skill body.",
+        text: result.text,
+        usage,
+        costUsd: priced.value,
+        ...groundedFields,
+      };
+    }
+
+    return {
+      verdict: "ok",
+      model: id,
+      detail: grounded
+        ? `the model searched ${searchCalls}x, returned ${sources.length} source(s), and the response is priceable`
+        : "the model answered and the response is priceable",
+      text: result.text,
+      usage,
+      costUsd: priced.value,
+      ...groundedFields,
+    };
+  },
+});
 
 // ── Smoke seam ──────────────────────────────────────────────────────────────
 // A dev-deployment smoke must drive the REAL spine deterministically and offline
@@ -524,7 +1044,9 @@ type PlanRow = {
 // One formatter for the resolved send instant — shared by buildAgentContext's Send-time line
 // and setSendTime's confirmation string (same zone rules, one place to change them).
 const fmtSendInstant = (ms: number, tz?: string) =>
-  new Intl.DateTimeFormat("en-US", { timeZone: tz, dateStyle: "full", timeStyle: "short" }).format(ms);
+  new Intl.DateTimeFormat("en-US", { timeZone: tz, dateStyle: "full", timeStyle: "short" }).format(
+    ms,
+  );
 
 /**
  * Format the current plan state for the model (Plan 04 feeds this into the loop each turn).
@@ -809,8 +1331,7 @@ export function buildCockpitTools(
     rootRequestId?: string;
   },
 ) {
-  // ACTN-03. Constructed once so the conditional spread below can keep ONE stable type.
-  const webResearchTool = { webResearch: openai.tools.webSearch({ searchContextSize: "medium" }) };
+  const webResearchTool = buildWebResearchTool();
 
   // 22.1b: the specialist's ONE structured channel for a SEMANTIC judgement — "I searched, and what
   // I found does not SUPPORT the claim". THE SIGNAL IS THE CALL: `runAgentLoop` reads the SDK's own
@@ -1415,11 +1936,15 @@ export function buildCockpitTools(
       inputSchema: jsonSchema<{ topic: string; format?: DocFormat }>({
         type: "object",
         properties: {
-          topic: { type: "string", description: "What the document should be about, in plain language." },
+          topic: {
+            type: "string",
+            description: "What the document should be about, in plain language.",
+          },
           format: {
             type: "string",
             enum: ["pdf", "html"],
-            description: "Output format. Omit for a PDF; use html only when the user asks for a web page.",
+            description:
+              "Output format. Omit for a PDF; use html only when the user asks for a web page.",
           },
         },
         required: ["topic"],
@@ -1705,7 +2230,7 @@ export function buildCockpitTools(
     briefInbox: tool({
       // Split literal keeps each chunk under the §5 no-hardcoded-prompt scan ceiling (200 chars).
       description:
-        'Summarize the user\'s inbox into a briefing for "what happened in my inbox / brief me / ' +
+        "Summarize the user's inbox into a briefing for \"what happened in my inbox / brief me / " +
         'catch me up" style asks. The briefing renders in the workspace panel — you get counts ' +
         "back, NOT the contents, so do not try to recite it. " +
         "Read-only: it cannot reply, forward, label, or send.",
@@ -1950,8 +2475,16 @@ export function buildCockpitTools(
         const scan = scanText(topic);
         // Fail-closed, but as a SENTENCE: a governed stop is a paused conversation, never a throw
         // out of the loop (the mailboxUnavailable / dispatch-refusal precedent).
-        if (!scan.ok)
+        if (!scan.ok) {
+          // scanText REDACTS PII; it only fails on non-string input. So this branch means the model
+          // supplied no/!string `topic` despite the schema's `required` — a routing fault, not a
+          // privacy stop, and the copy above misattributes it. Refs-only: types and lengths, never
+          // the topic itself (§4).
+          console.error(
+            `[createDocument] scan refused — topicType=${typeof topic} topicLen=${typeof topic === "string" ? topic.length : "n/a"} form=${String(form)} replace=${String(replace)} code=${scan.error.code}`,
+          );
           return "I couldn't write that — the topic couldn't be checked for personal data. Tell the user plainly and ask them to rephrase it.";
+        }
         const safeText = scan.value.safeText;
         // The ONE thing that reaches the content-drafter body. `skillVersions` is name-keyed, so
         // the eval runner's pin rides through with no new plumbing; `undefined` for content-drafter
@@ -1973,7 +2506,18 @@ export function buildCockpitTools(
             const bytes = (await markdownToPdf(draft.title, draft.markdown)) as BlobPart;
             storageId = await ctx.storage.store(new Blob([bytes], { type: "application/pdf" }));
           }
-        } catch {
+        } catch (error) {
+          // LOG THE REASON. A bare `catch` here returns a plausible sentence, the tool step records
+          // `done`, and the agent politely retries — so a hard failure reads as a working feature
+          // that "just didn't manage it". That cost a whole eval fixture (35-create-document,
+          // createdDocCount 0 with FIVE successful-looking calls per thread) before anyone could see
+          // why. Same class as the 03.2.1 bare catch that masked NO_ACTIVE_SKILL as "Something went
+          // wrong", and the same rule ErrorBoundary.tsx already states: degrade, but never silently.
+          // The message is refs-only — a draft/render error carries no user content (§4).
+          console.error(
+            `[createDocument] draft/render failed (form=${form}, skill=${skillName}):`,
+            error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+          );
           return "I couldn't create that document — drafting or rendering it failed. Tell the user and offer to try again.";
         }
         const hash = await contentHash(draft.markdown);
@@ -1994,7 +2538,19 @@ export function buildCockpitTools(
         });
         let docIds = card?.docIds ?? [];
         let titles = card?.titles ?? [];
-        if (replace === undefined) {
+        // **`replace` IS MODEL-SUPPLIED AND MUST NOT BE TRUSTED AS CONTROL FLOW.** Observed live in
+        // eval fixture 35: EVERY call arrives with `replaceType=number`, including the FIRST, when
+        // the conversation holds no created documents at all. Obeying it sent a create down the
+        // patch branch, which refused correctly ("there's no document #N") — so nothing was ever
+        // created, the agent read the refusal as "try again", and looped: 13 tool calls, all
+        // recorded `done`, zero documents. This is the `confirmed`-flag principle from 18-08
+        // ("a model-supplied flag is the model grading its own decision") applied to the one
+        // model-supplied field that already existed. With ZERO created documents, `replace` cannot
+        // denote anything, so it is not a refusal case — it is noise, and creating is the only
+        // coherent reading. An out-of-range index WITH documents present keeps its honest refusal,
+        // because there the user may genuinely mean a document that is simply numbered differently.
+        const effectiveReplace = docIds.length === 0 ? undefined : replace;
+        if (effectiveReplace === undefined) {
           const docId = await ctx.runMutation(internal.vault.insertCreatedDoc, docArgs);
           docIds = [...docIds, docId];
           titles = [...titles, draft.title];
@@ -2002,19 +2558,20 @@ export function buildCockpitTools(
           const res = await ctx.runMutation(internal.vault.patchCreatedDoc, {
             ...docArgs,
             threadId: plan.threadId,
-            index: replace,
+            index: effectiveReplace,
           });
           // A refusal (no such #index, foreign tenant, a user upload) is a SENTENCE — the mutation
           // never throws, and neither does this.
           if (!res.ok)
-            return `There's no document #${replace} I can rewrite in this conversation — nothing was changed. Tell the user which documents are here and ask which one they mean.`;
+            return `There's no document #${effectiveReplace} I can rewrite in this conversation — nothing was changed. Tell the user which documents are here and ask which one they mean.`;
           // Drop the SUPERSEDED bytes only AFTER the patch persists, and only when they really were
           // superseded (the regenerateAttachment ordering — never orphan a live ref).
           if (res.oldStorageId && res.oldStorageId !== storageId)
             await ctx.storage.delete(res.oldStorageId);
-          titles = titles.map((t, j) => (j === replace - 1 ? draft.title : t));
+          titles = titles.map((t, j) => (j === effectiveReplace - 1 ? draft.title : t));
         }
-        const vaultDocId = docIds[replace === undefined ? docIds.length - 1 : replace - 1];
+        const vaultDocId =
+          docIds[effectiveReplace === undefined ? docIds.length - 1 : effectiveReplace - 1];
         // ONE refs-only audit, from the TOOL (cockpit.ts emits exactly two events and a test pins
         // that count). Hashes, ids, a closed enum and a boolean — never the topic, never the prose.
         await ctx.runMutation(internal.audit.log, {
@@ -2045,7 +2602,10 @@ export function buildCockpitTools(
         });
         // A ref-only sentence: the title and what the user can do with it. Never bytes, never a
         // URL, never an _id.
-        const saved = replace === undefined ? "saved to your vault" : `rewritten as #${replace}`;
+        const saved =
+          effectiveReplace === undefined
+            ? "saved to your vault"
+            : `rewritten as #${effectiveReplace}`;
         return `Created "${draft.title}" — ${saved}${storageId ? " with a PDF download" : ""}.`;
       },
     }),
@@ -2107,9 +2667,13 @@ export function buildCockpitTools(
         properties: {
           field: {
             type: "string",
-            description: "The scorecard field, e.g. financials.cac, financials.ltgp, identity.headlinePrice.",
+            description:
+              "The scorecard field, e.g. financials.cac, financials.ltgp, identity.headlinePrice.",
           },
-          value: { type: "string", description: "The value the user stated (a number or short fact)." },
+          value: {
+            type: "string",
+            description: "The value the user stated (a number or short fact).",
+          },
         },
         required: ["field", "value"],
         additionalProperties: false,
@@ -2145,8 +2709,8 @@ export function buildCockpitTools(
     // body. `range` is an ENUM (§4 — it flows into gmail.listInbox's refs-only mailbox.listed payload).
     replyToMessage: tool({
       description:
-        'Reply to a specific message the user points to by sender, subject, or timeframe (e.g. ' +
-        '"reply to Sarah\'s email about Q3 saying I\'ll send the figures Friday"). Resolves the ' +
+        "Reply to a specific message the user points to by sender, subject, or timeframe (e.g. " +
+        "\"reply to Sarah's email about Q3 saying I'll send the figures Friday\"). Resolves the " +
         "message server-side, sets the recipient and threads the reply — you never see the address " +
         "or message id. Drafts the reply body from the user's intent. Clarifies if 0 or 2+ match.",
       inputSchema: jsonSchema<{
@@ -2161,7 +2725,10 @@ export function buildCockpitTools(
             type: "string",
             description: "What the reply should say, in plain language (the user's reply intent).",
           },
-          sender: { type: "string", description: "The sender to reply to, as the user named them." },
+          sender: {
+            type: "string",
+            description: "The sender to reply to, as the user named them.",
+          },
           subject: { type: "string", description: "A word or phrase from the subject to match." },
           range: {
             type: "string",
@@ -2198,7 +2765,10 @@ export function buildCockpitTools(
         if (matches.length > 1) {
           const labels = matches
             .slice(0, REPLY_CANDIDATE_CAP)
-            .map((m, i) => `#${i + 1} ${parseAddress(m.from)?.displayName ?? "(no name)"} — ${m.subject}`)
+            .map(
+              (m, i) =>
+                `#${i + 1} ${parseAddress(m.from)?.displayName ?? "(no name)"} — ${m.subject}`,
+            )
             .join(", ");
           return `I found ${matches.length} messages that could match: ${labels}. Ask the user which one to reply to.`;
         }
@@ -2302,15 +2872,31 @@ function invokeTool(
 // cost skip; recordSpend itself also no-ops at cents<=0, so a ZERO_USAGE turn never drains budget).
 // Returns the priced USD (0 on the guarded paths) so the loop can surface per-turn cost (EVAL-01
 // Pattern 4 — the rate-limiter window is global and unreadable from the eval runner).
+// FIN-01: `kind` and `correlationId` are REQUIRED, deliberately — this helper has seven call sites
+// and six of them are one of three PRIMARY/FALLBACK PAIRS that are BOTH fully billed. A default
+// would let a new site inherit its neighbour's correlation, and the ledger identity is
+// (tenantId, correlationId, phase): the second charge would return the first row and be dropped,
+// leaving the ledger BELOW the limiter — the unrecoverable direction. Making the caller type the
+// discriminator is the only way the compiler can ask the question.
+// `model` is `id` — the model that ACTUALLY ran (the fallback on a retried call), never the
+// DEFAULT_MODEL constant the call site names, for the same reason searchFeeUsd keys on `m.id`.
 async function recordModelSpend(
   ctx: GenericActionCtx<DataModel>,
   tenantId: string,
   id: string,
   usage: { inputTokens?: number; outputTokens?: number },
+  kind: string,
+  correlationId: string,
 ): Promise<number> {
   const priced = priceUsage(id, usage);
   if (!priced.ok) return 0;
-  await ctx.runMutation(internal.guardrails.recordSpend, { tenantId, costUsd: priced.value });
+  await ctx.runMutation(internal.guardrails.recordSpend, {
+    tenantId,
+    costUsd: priced.value,
+    correlationId,
+    model: id,
+    kind,
+  });
   return priced.value;
 }
 
@@ -2453,12 +3039,25 @@ async function runAgentLoop(
   // evaluation and truncate every executive turn, every Growth OS specialist turn and the scripted
   // cockpit shim at step 1.
   const softMs =
-    softCutoffMs ?? (budgetMs > RESEARCH_STEP_SLACK_MS ? budgetMs - RESEARCH_STEP_SLACK_MS : undefined);
+    softCutoffMs ??
+    (budgetMs > RESEARCH_STEP_SLACK_MS ? budgetMs - RESEARCH_STEP_SLACK_MS : undefined);
   const startedAt = Date.now();
   const outOfClock = (): boolean => softMs !== undefined && Date.now() - startedAt >= softMs;
+  // FIN-01: the ledger correlation for everything this loop spends. `turnId` is ALREADY a
+  // per-execution nonce — cockpit.ts:121/278 and dispatch.ts:378 each mint it with
+  // crypto.randomUUID() inside the driver action — so reusing it costs nothing and makes the
+  // spendEvents row joinable to the same turn's agentSteps trace. The shims (and any caller that
+  // wants no trace) pass none, and they get a fresh nonce rather than a shared constant: this
+  // function ALWAYS re-runs generateText when it is re-entered, so a re-entry is real money and
+  // must never be suppressed as a replay.
+  const loopId = turnId ?? crypto.randomUUID();
   const run = async (
     m: PricedModel,
     maxRetries: number,
+    // The PRIMARY/FALLBACK discriminator. NOT `m.id`: the two PricedModel bags may carry the SAME
+    // pricing id (16-05's RESEARCH_MODEL can be DEFAULT_MODEL — see modelId in the FREEZE below),
+    // and then both attempts would correlate identically and the fallback's charge would vanish.
+    attempt: 0 | 1,
   ): Promise<{
     reply: string;
     costUsd: number;
@@ -2525,7 +3124,14 @@ async function runAgentLoop(
         });
       },
     });
-    costUsd += await recordModelSpend(ctx, tenantId, m.id, res.usage);
+    costUsd += await recordModelSpend(
+      ctx,
+      tenantId,
+      m.id,
+      res.usage,
+      "agent_loop",
+      `agentloop:${loopId}:a${attempt}`,
+    );
     // R3: OpenAI bills the hosted search PER CALL on top of tokens, and priceUsage prices tokens
     // ONLY — so without this the shared envelope under-counts exactly the capability this phase
     // adds. NOT res.sources.length: one search yields many sources.
@@ -2535,7 +3141,13 @@ async function runAgentLoop(
     // loop declares exactly ONE provider-executed tool, so the flag is one source of truth and
     // cannot drift when the provider renames anything.
     const toolCalls = res.steps.flatMap((st) => st.content).filter((p) => p.type === "tool-call");
-    const webSearchCalls = toolCalls.filter((p) => p.providerExecuted === true).length;
+    // COUNTED BY NAME, not by `providerExecuted` (changed 2026-08-07 with the move to Tavily).
+    // The old comment above was right FOR A HOSTED TOOL: the provider chose the emitted name
+    // (`web_search`, not our key `webResearch`) and could rename it, so the flag was the stable
+    // signal. `webResearch` is now a LOCAL tool we define, so `providerExecuted` is false on every
+    // part and the flag would count ZERO — billing $0 of search fee forever, the exact silent
+    // under-draw @pikar/cost exists to prevent. The name is now the stable signal because we own it.
+    const webSearchCalls = toolCalls.filter((p) => p.toolName === "webResearch").length;
     // 22.1b: the STRUCTURAL declaration (the semantic half of the evidence verdict). `ai` throws
     // NoSuchToolError before `execute` on a name that is not a key of our `tools` record, so this
     // literal can only ever match a tool we actually built. `.some()`, deliberately not a count — a
@@ -2585,19 +3197,46 @@ async function runAgentLoop(
       }
       return (args as { scope?: unknown } | null)?.scope === "question";
     });
-    const feeUsd = webSearchCalls * WEB_SEARCH_CALL_USD;
-    if (feeUsd > 0) await ctx.runMutation(internal.guardrails.recordSpend, { tenantId, costUsd: feeUsd });
+    // Fee is keyed on the model that ACTUALLY ran (`m.id`), not on RESEARCH_MODEL: `runAgentLoop`
+    // may be executing the fallback, and Google Search grounding is ~3.5x OpenAI's hosted-search
+    // rate. Charging the wrong vendor's rate under-draws the rail — the silent failure this file
+    // guards against everywhere else. `searchFeeUsd` fails safe to the higher rate on any id it
+    // does not recognise.
+    const feeUsd = webSearchCalls * searchFeeUsd(m.id);
+    // FIN-01: `:search` is not decoration. This is a SECOND, INDEPENDENT money movement in the
+    // SAME attempt as the token cost recorded above — bare `agentloop:${loopId}:a${attempt}` would
+    // be that row's identity, so the fee would return the token row and be silently dropped,
+    // under-drawing the ledger by exactly the per-call fee this block exists to charge.
+    if (feeUsd > 0)
+      await ctx.runMutation(internal.guardrails.recordSpend, {
+        tenantId,
+        costUsd: feeUsd,
+        correlationId: `agentloop:${loopId}:a${attempt}:search`,
+        model: m.id,
+        kind: "web_search_fee",
+      });
     costUsd += feeUsd;
-    // ai@7: res.sources IS content.filter(p => p.type === "source"); @ai-sdk/openai maps every
-    // url_citation annotation to {type:"source", sourceType:"url", id, url, title}. Structured and
-    // provider-supplied — NEVER parse URLs out of the model's prose.
+    // READ FROM THE TOOL'S OWN RESULTS, not `res.sources` (changed 2026-08-07 with Tavily).
+    // `res.sources` is populated from provider `url_citation` annotations, which ONLY a hosted tool
+    // emits — with a local tool it is permanently empty, and an empty `sources` array silently makes
+    // `declaredUnsupported` below true on every single run. Reading the tool-RESULT parts keeps the
+    // property that mattered about `res.sources`: still structured, still supplied by the search
+    // provider's own JSON, still NEVER parsed out of the model's prose.
+    // De-duplicated by URL — the specialist is instructed to search once per sub-question, so the
+    // same page legitimately comes back from several searches and would otherwise inflate the count
+    // that the honesty verdict reads.
     // §4 BOUNDARY: these URLs are CONTENT-PLANE data. They may reach the vault document body and a
     // tool's return string; they may NEVER reach an `audit` or `telemetry` payload. `AuditPayload`
     // permits `readonly string[]`, so an array of URLs would TYPE-CHECK — that is the trap. Audit
     // gets a COUNT.
-    const sources = (res.sources ?? [])
-      .filter((src): src is typeof src & { sourceType: "url"; url: string } => src.sourceType === "url")
-      .map((src) => ({ url: src.url, title: (src as { title?: string }).title ?? "" }));
+    const byUrl = new Map<string, { url: string; title: string }>();
+    for (const part of res.steps.flatMap((st) => st.content)) {
+      if (part.type !== "tool-result" || part.toolName !== "webResearch") continue;
+      for (const r of sourcesFromToolOutput((part as { output?: unknown }).output)) {
+        if (!byUrl.has(r.url)) byUrl.set(r.url, r);
+      }
+    }
+    const sources = [...byUrl.values()];
     // The AND described above. It has to live HERE rather than beside `declaredQuestionScope`
     // because `sources` is only built two lines up — and `sources`, not the model, is the half
     // of this conjunction that cannot be talked into anything.
@@ -2625,11 +3264,11 @@ async function runAgentLoop(
     };
   };
   try {
-    return await run(primary, 1);
+    return await run(primary, 1, 0);
   } catch (e) {
     if (!isFallbackEligible(e)) throw e; // our bug / config → propagate (the driver saves an error turn)
     try {
-      return await run(fallback, 0);
+      return await run(fallback, 0, 1);
     } catch (e2) {
       // AGNT-04: BOTH the primary AND the CHEAP_MODEL fallback failed. If the exhausted failure is a
       // timeout/abort class, re-throw a CONTENT-FREE ConvexError marker so the cockpit driver can fire
@@ -2723,8 +3362,12 @@ export async function runSpecialistTurn(
   // resolved; a `models?` / `maxSteps?` arg would be a second mechanism for a decision with exactly
   // one owner, and would drag dispatch.ts into model selection for no gain.
   const isResearch = skillName === RESEARCH_SPECIALIST_SKILL;
-  const primaryId = isResearch ? RESEARCH_MODEL : DEFAULT_MODEL;
-  const fallbackId = isResearch ? RESEARCH_FALLBACK_MODEL : CHEAP_MODEL;
+  // A TWO-TIER LOOKUP rather than a ternary: research has its own pair, everything else takes the
+  // repo defaults. A growth-specialist third tier was tried and reverted on 2026-08-08 — see the
+  // tombstone at RESEARCH_FALLBACK_MODEL in @pikar/cost for the measurements, so nobody re-derives it.
+  const [primaryId, fallbackId] = isResearch
+    ? [RESEARCH_MODEL, RESEARCH_FALLBACK_MODEL]
+    : [DEFAULT_MODEL, CHEAP_MODEL];
   const res = await runAgentLoop(ctx, {
     tenantId,
     planId,
@@ -2732,7 +3375,9 @@ export async function runSpecialistTurn(
     prompt,
     primary: {
       model: mock
-        ? (new MockLanguageModelV4({ doGenerate: mock.primary as never }) as unknown as LanguageModel)
+        ? (new MockLanguageModelV4({
+            doGenerate: mock.primary as never,
+          }) as unknown as LanguageModel)
         : resolveModel(primaryId),
       // The `id` is what priceUsage charges against AND — since 16-01 — what travels out as
       // modelId/fallbackModelId for 16-06 to assert. Leaving a literal here while the ternary picks
@@ -2845,7 +3490,9 @@ export function parseAgentSmoke(text: string): AgentSmokeOp | null {
       return {
         kind: "evaluate",
         framework:
-          val === "swot" || val === "lean" || val === "bmc" || val === "growth-os" ? val : undefined,
+          val === "swot" || val === "lean" || val === "bmc" || val === "growth-os"
+            ? val
+            : undefined,
       };
     case "brief":
       // Same enum the tool's inputSchema enforces — an unknown range defaults to today rather
@@ -2858,7 +3505,11 @@ export function parseAgentSmoke(text: string): AgentSmokeOp | null {
       // <1-based index>:<intent> — split on the FIRST colon (the intent may carry a SMOKE:: prefix).
       const c = val.indexOf(":");
       if (c < 0) return null;
-      return { kind: "personalize", index: Number(val.slice(0, c)), instructions: val.slice(c + 1) };
+      return {
+        kind: "personalize",
+        index: Number(val.slice(0, c)),
+        instructions: val.slice(c + 1),
+      };
     }
     case "create": {
       // <short|long>:<topic> — split on the FIRST colon. The topic MUST keep its own nested
@@ -3003,8 +3654,12 @@ export const runCockpitAgent = internalAction({
     costUsd?: number;
   }> => {
     // 1. Governed gate BEFORE any reasoning call — a governed stop is a paused reply, never a DLQ.
-    const pre: { ok: true } | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted" } =
-      await ctx.runMutation(internal.guardrails.preCall, { tenantId });
+    const pre:
+      | { ok: true }
+      | {
+          ok: false;
+          reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted";
+        } = await ctx.runMutation(internal.guardrails.preCall, { tenantId });
     if (!pre.ok) return { reply: PAUSED_REPLY, blocked: pre.reason };
 
     // 2. System = the cockpit-agent skill body (no hardcoded prompt — §5; fails closed unseeded).
@@ -3100,7 +3755,10 @@ export const runCockpitAgent = internalAction({
       // History ABOVE the plan context; "The user says:" stays the FINAL line (the current turn).
       prompt: buildTurnPrompt({ spine, history, plan, tz: clientContext?.tz, text }),
       primary: { model: forceTimeout ? timeoutModel() : resolveModel(primaryId), id: primaryId },
-      fallback: { model: forceTimeout ? timeoutModel() : resolveModel(CHEAP_MODEL), id: CHEAP_MODEL },
+      fallback: {
+        model: forceTimeout ? timeoutModel() : resolveModel(CHEAP_MODEL),
+        id: CHEAP_MODEL,
+      },
       skillVersions, // the loop builds its OWN tools — the drafter pin must ride there too
       turnId, // activity trace (CKPT-05) — undefined ⇒ the loop emits nothing
       threadId,
@@ -3195,8 +3853,29 @@ export const __runCockpitAgentWithScript = internalAction({
   },
   handler: async (
     ctx,
-    { tenantId, planId, primary, fallback, failPrimary, skillVersions, turnId, threadId, toolNames },
-  ): Promise<{ reply: string; costUsd: number; skillVersion: number }> => {
+    {
+      tenantId,
+      planId,
+      primary,
+      fallback,
+      failPrimary,
+      skillVersions,
+      turnId,
+      threadId,
+      toolNames,
+    },
+  ): Promise<{
+    reply: string;
+    costUsd: number;
+    skillVersion: number;
+    webSearchCalls: number;
+    declaredUnsupported: boolean;
+    truncated: boolean;
+    truncatedReason?: "steps" | "clock";
+    sources: readonly { url: string; title: string }[];
+    modelId: string;
+    fallbackModelId: string;
+  }> => {
     const pin = skillVersions?.[COCKPIT_AGENT_SKILL];
     const skill: { body: string; version: number } =
       pin !== undefined
@@ -3270,8 +3949,12 @@ export const route = internalAction({
     const skill: { version: number } = await ctx.runQuery(internal.skills.getActiveSkill, {
       name: EXECUTIVE_ROUTER_SKILL,
     });
-    const pre: { ok: true } | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted" } =
-      await ctx.runMutation(internal.guardrails.preCall, { tenantId });
+    const pre:
+      | { ok: true }
+      | {
+          ok: false;
+          reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted";
+        } = await ctx.runMutation(internal.guardrails.preCall, { tenantId });
     if (!pre.ok) return { blocked: pre.reason };
 
     const tStart = Date.now();
@@ -3323,8 +4006,12 @@ export const draft = internalAction({
     const skill: { version: number } = await ctx.runQuery(internal.skills.getActiveSkill, {
       name: EMAIL_DRAFTER_SKILL,
     });
-    const pre: { ok: true } | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted" } =
-      await ctx.runMutation(internal.guardrails.preCall, { tenantId });
+    const pre:
+      | { ok: true }
+      | {
+          ok: false;
+          reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted";
+        } = await ctx.runMutation(internal.guardrails.preCall, { tenantId });
     if (!pre.ok) return { blocked: pre.reason };
 
     const args: {
@@ -3525,6 +4212,10 @@ export const digestInbox = internalAction({
   // EXPLICIT return type is mandatory (Pitfall 1: an inferred type here re-trips the "use node"
   // circular-inference cliff). DigestBatch = { items, synopsis } from @pikar/core.
   handler: async (ctx, { tenantId, messages, skillVersion, smoke }): Promise<DigestBatch> => {
+    // FIN-01: this action has NO stable ref to correlate on — no requestId, no planId, and the
+    // message list is content-plane (§4). A nonce is the RIGHT answer anyway: re-entering this
+    // action re-runs generateObject, so the second digest is real money and must get its own row.
+    const runId = crypto.randomUUID();
     // Load the digest skill FIRST (no hardcoded prompt — §5); fails closed, and the pinned lookup
     // runs BEFORE the smoke short-circuit so it is exercised offline (draftDocument precedent).
     const skill: { body: string; version: number } =
@@ -3591,7 +4282,17 @@ export const digestInbox = internalAction({
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 1,
       });
-      await recordModelSpend(ctx, tenantId, DEFAULT_MODEL, usage);
+      // `:a0` / `:a1` below — the CHEAP_MODEL retry in the catch is a SECOND fully-billed call, not
+      // a replay of this one. Sharing `digest:${runId}` would make the ledger record whichever
+      // landed first and drop the other.
+      await recordModelSpend(
+        ctx,
+        tenantId,
+        DEFAULT_MODEL,
+        usage,
+        "inbox_digest",
+        `digest:${runId}:a0`,
+      );
       return { items: inRange(object.items), synopsis: (object.synopsis ?? "").trim() };
     } catch (e) {
       if (!isFallbackEligible(e)) throw e;
@@ -3603,7 +4304,14 @@ export const digestInbox = internalAction({
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 0,
       });
-      await recordModelSpend(ctx, tenantId, CHEAP_MODEL, usage);
+      await recordModelSpend(
+        ctx,
+        tenantId,
+        CHEAP_MODEL,
+        usage,
+        "inbox_digest",
+        `digest:${runId}:a1`,
+      );
       return { items: inRange(object.items), synopsis: (object.synopsis ?? "").trim() };
     }
   },
@@ -3631,7 +4339,14 @@ export const draftReply = internalAction({
   },
   // EXPLICIT return type is mandatory (Pitfall 1: an inferred type re-trips the "use node"
   // circular-inference cliff — the digestInbox/draftCockpit precedent).
-  handler: async (ctx, { tenantId, safeText, originalBody, skillVersion }): Promise<{ body: string }> => {
+  handler: async (
+    ctx,
+    { tenantId, safeText, originalBody, skillVersion },
+  ): Promise<{ body: string }> => {
+    // FIN-01: no stable ref here either (the caller owns correlation, as the header says), and
+    // `safeText`/`originalBody` are content-plane — a nonce is both the safe and the correct
+    // choice: a re-entry re-drafts and is billed again. digestInbox precedent.
+    const runId = crypto.randomUUID();
     // Load the reply-drafter FIRST (no hardcoded prompt — §5); fails closed, and the pinned lookup
     // runs BEFORE the smoke short-circuit so it is exercised offline (digestInbox precedent).
     const skill: { body: string; version: number } =
@@ -3646,11 +4361,7 @@ export const draftReply = internalAction({
     // digest's per-body cap). The intent is the trusted instruction; the original is fenced as inert
     // context below so the model treats it as DATA, never a directive (skill body is defense in depth).
     const original = originalBody.slice(0, BODY_TRUNCATE_CHARS);
-    const prompt = [
-      safeText,
-      "--- ORIGINAL MESSAGE (context only) ---",
-      original,
-    ].join("\n\n");
+    const prompt = [safeText, "--- ORIGINAL MESSAGE (context only) ---", original].join("\n\n");
 
     const smoke = parseSmoke(safeText);
     if (smoke) {
@@ -3670,7 +4381,15 @@ export const draftReply = internalAction({
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 1,
       });
-      await recordModelSpend(ctx, tenantId, DEFAULT_MODEL, usage);
+      // `:a0` / `:a1` — the fallback below is a second billed draft, not a replay of this one.
+      await recordModelSpend(
+        ctx,
+        tenantId,
+        DEFAULT_MODEL,
+        usage,
+        "reply_draft",
+        `reply:${runId}:a0`,
+      );
       return { body: text.trim() };
     } catch (e) {
       if (!isFallbackEligible(e)) throw e;
@@ -3681,7 +4400,7 @@ export const draftReply = internalAction({
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 0,
       });
-      await recordModelSpend(ctx, tenantId, CHEAP_MODEL, usage);
+      await recordModelSpend(ctx, tenantId, CHEAP_MODEL, usage, "reply_draft", `reply:${runId}:a1`);
       return { body: text.trim() };
     }
   },
@@ -3740,6 +4459,9 @@ export const draftVoiceBrief = internalAction({
   // EXPLICIT return type is mandatory (Pitfall 1 — an inferred type re-trips the circular-inference
   // cliff; the digestInbox/draftReply precedent). Final brief markdown, ready to ingest.
   handler: async (ctx, { tenantId, transcript, language }): Promise<string> => {
+    // FIN-01: no stable ref (the transcript is content-plane), and a re-entry re-writes the brief
+    // for real money — nonce, same as digestInbox and draftReply.
+    const runId = crypto.randomUUID();
     // Load the voice-brief skill FIRST (no hardcoded prompt — §5); fails closed (NO_ACTIVE_SKILL
     // unseeded), and the load runs BEFORE the smoke short-circuit so it is exercised offline.
     const skill: { body: string; version: number } = await ctx.runQuery(
@@ -3769,7 +4491,15 @@ export const draftVoiceBrief = internalAction({
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 1,
       });
-      await recordModelSpend(ctx, tenantId, DEFAULT_MODEL, usage);
+      // `:a0` / `:a1` — the fallback below is a second billed brief, not a replay of this one.
+      await recordModelSpend(
+        ctx,
+        tenantId,
+        DEFAULT_MODEL,
+        usage,
+        "voice_brief",
+        `brief:${runId}:a0`,
+      );
       return buildBriefMarkdown(object, transcript, language);
     } catch (e) {
       if (!isFallbackEligible(e)) throw e;
@@ -3781,7 +4511,7 @@ export const draftVoiceBrief = internalAction({
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 0,
       });
-      await recordModelSpend(ctx, tenantId, CHEAP_MODEL, usage);
+      await recordModelSpend(ctx, tenantId, CHEAP_MODEL, usage, "voice_brief", `brief:${runId}:a1`);
       return buildBriefMarkdown(object, transcript, language);
     }
   },

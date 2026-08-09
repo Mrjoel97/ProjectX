@@ -281,7 +281,19 @@ export function isTier(x: unknown): x is Tier {
 export type TierFacts = {
   /** Everyone working on the business, paid or not (founders included). */
   headcount: number;
-  /** Of those, how many are PAID staff. `0` is the solo signal. */
+  /**
+   * Paid staff **OTHER THAN THE FOUNDER**. `0` is the solo signal, and that only holds if the
+   * founder is excluded.
+   *
+   * The question used to read "how many of THEM are paid staff", counting the founder, so a
+   * solopreneur who put themselves on payroll answered `1` and derived as `startup` — or as `sme`
+   * with steady revenue, making a ONE-PERSON business an "established business with paid staff".
+   * Putting yourself on payroll is an ordinary thing to do, and the tier now selects which finance
+   * metrics a tenant sees, so the misread would have shown a solo consultant MRR and ARR that the
+   * spec explicitly marks not-applicable for them.
+   *
+   * `deriveTier` never needed changing — the rule was right and the input meant the wrong thing.
+   */
   paidStaff: number;
   revenueStage: RevenueStage;
   funding: Funding;

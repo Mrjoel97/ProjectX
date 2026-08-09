@@ -23,22 +23,27 @@
 // over one third of itself. A status CAS does not help — it only stops a SECOND completion.
 // `reserveFolder` is therefore also the CLOSE SIGNAL: after it, `memberCount` is fixed.
 import {
+  type EstimateInput,
   estimateFolderCents,
   isSearchable,
   VAULT_FOLDER_MEMBER_BATCH,
-  type EstimateInput,
 } from "@pikar/vault";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import { internalMutation, internalQuery, type MutationCtx, type QueryCtx } from "./_generated/server";
+import {
+  internalMutation,
+  internalQuery,
+  type MutationCtx,
+  type QueryCtx,
+} from "./_generated/server";
 import {
   DEPLOYMENT_INGEST_BUDGET_CENTS,
   type FolderReserveRefusal,
   type FolderReserveResult,
   getGuardrailConfig,
-  ingestRemainingCentsInner,
   INGEST_DAILY_BUDGET_CENTS,
+  ingestRemainingCentsInner,
   rateLimiter,
   reserveFolderInner,
   vFileManifest,
@@ -145,6 +150,10 @@ export const reserveFolder = tenantMutation({
     const result = await reserveFolderInner(ctx, {
       tenantId: ctx.tenantId,
       files: files as EstimateInput[],
+      // FIN-01: names the reservation in the spend ledger. The row below stamps `reservedAt` with
+      // the SAME instant the ledger correlation was built from, which is what lets `settleFolder`
+      // find this reservation again instead of orphaning its refund.
+      folderId,
     });
 
     if (!result.ok) {
@@ -344,7 +353,10 @@ export async function unbumpFolder(
  * which a folder is complete while still holding a live reservation, and there is no folder-level
  * watchdog to notice.
  */
-export async function tryComplete(ctx: MutationCtx, folderId: Id<"vaultFolders">): Promise<boolean> {
+export async function tryComplete(
+  ctx: MutationCtx,
+  folderId: Id<"vaultFolders">,
+): Promise<boolean> {
   const folder = await ctx.db.get(folderId);
   if (!folder || folder.status !== "ingesting") return false;
   if (folder.terminalCount < folder.memberCount) return false;
@@ -552,8 +564,17 @@ export const folderEstimate = tenantQuery({
     const { estCents, perFile } = estimateFolderCents(files as EstimateInput[]);
     const remainingCents = await ingestRemainingCentsInner(ctx, ctx.tenantId);
     const shortfallCents = Math.max(0, estCents - remainingCents);
-    const priced = { lines: linesOf(perFile), perFile, totalCents: estCents, capCents, remainingCents };
-    const refuse = (reason: FolderReserveRefusal) => ({ ...priced, refusal: { reason, shortfallCents } });
+    const priced = {
+      lines: linesOf(perFile),
+      perFile,
+      totalCents: estCents,
+      capCents,
+      remainingCents,
+    };
+    const refuse = (reason: FolderReserveRefusal) => ({
+      ...priced,
+      refusal: { reason, shortfallCents },
+    });
 
     // 3. THE CEILINGS, BEFORE THE LIMITER.
     if (estCents > INGEST_DAILY_BUDGET_CENTS) return refuse("over_folder_cap");

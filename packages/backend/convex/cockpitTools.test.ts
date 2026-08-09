@@ -5,36 +5,50 @@
 // __invokeCockpitTool shim, since convex-test cannot fabricate one) against the REAL primitives,
 // offline via SMOKE::. Nyquist truths #2/#3 sampled at 100%: validation bounce, index
 // substitution, redaction-before-draft, and refs-only resolve summary each get an assertion.
-import { CONTENT_DRAFTER_SKILL } from "@pikar/contracts/skill";
-import {
-  CALENDAR_HORIZON_MS,
-  parseSendTime,
-  PLAN_ATTACHMENT_CAP_BYTES,
-  SPECIALISTS,
-} from "@pikar/core";
-import { convexTest } from "convex-test";
+
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { CONTENT_DRAFTER_SKILL } from "@pikar/contracts/skill";
+import {
+  CALENDAR_HORIZON_MS,
+  PLAN_ATTACHMENT_CAP_BYTES,
+  parseSendTime,
+  SPECIALISTS,
+} from "@pikar/core";
+import { convexTest } from "convex-test";
 import { expect, test, vi } from "vitest";
-import { internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
-import { contentHash } from "./lib/hash";
-import { buildAgentContext, buildCockpitTools, buildHistoryBlock, parseAgentSmoke } from "./llm";
-import schema from "./schema";
 // resolveContacts drives gmail.search, whose refs-only mailbox.searched audit hits the auditCounts
 // aggregate; register the component (relative import — the package blocks the deep specifier) so the
 // REAL audit path runs under convex-test instead of throwing "component not registered".
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 // runCockpitAgent's preCall/recordSpend drive the rate-limiter component (the daily-spend window).
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
+import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
+import { contentHash } from "./lib/hash";
+import {
+  buildAgentContext,
+  buildCockpitTools,
+  buildHistoryBlock,
+  buildWebResearchTool,
+  parseAgentSmoke,
+  parseWebResults,
+  sourcesFromToolOutput,
+  WEB_RESULT_MIN_SCORE,
+} from "./llm";
+import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
-const aggregateModules = import.meta.glob("../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts");
+const aggregateModules = import.meta.glob(
+  "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
+);
 // NO @ts-expect-error on this one, unlike the three above: tsconfig.json includes vitest.config.mts,
 // which pulls Vite's global types in, so import.meta.glob typechecks and the directive is DEAD
 // (TS2578 — a real +1 on the backend's error count). Do not "restore" the sibling idiom here.
-const rateLimiterModules = import.meta.glob("../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts");
+const rateLimiterModules = import.meta.glob(
+  "../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts",
+);
 
 const SMOKE = "SMOKE::route=direct_llm::";
 type T = ReturnType<typeof convexTest>;
@@ -43,7 +57,10 @@ async function setup(): Promise<{ t: T; planId: Id<"plans"> }> {
   const t = convexTest(schema, modules);
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
   await t.mutation(internal.skills.seedSkills, {});
-  const planId = await t.mutation(internal.plans.insertPlan, { tenantId: "t1", threadId: "thread1" });
+  const planId = await t.mutation(internal.plans.insertPlan, {
+    tenantId: "t1",
+    threadId: "thread1",
+  });
   return { t, planId };
 }
 
@@ -54,7 +71,10 @@ async function setupWithLimiter(): Promise<{ t: T; planId: Id<"plans"> }> {
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
   t.registerComponent("rateLimiter", rateLimiterSchema, rateLimiterModules);
   await t.mutation(internal.skills.seedSkills, {});
-  const planId = await t.mutation(internal.plans.insertPlan, { tenantId: "t1", threadId: "thread1" });
+  const planId = await t.mutation(internal.plans.insertPlan, {
+    tenantId: "t1",
+    threadId: "thread1",
+  });
   return { t, planId };
 }
 
@@ -154,7 +174,9 @@ test("resolveContacts re-search of the SAME name REPLACES that name's matches (u
   await call(t, planId, "resolveContacts", { name: "SMOKE::Sarah" }); // re-resolve the same name
 
   const plan = await readPlan(t, planId);
-  const sarahEntries = (plan?.candidates ?? []).filter((c: { name: string }) => c.name === "SMOKE::Sarah");
+  const sarahEntries = (plan?.candidates ?? []).filter(
+    (c: { name: string }) => c.name === "SMOKE::Sarah",
+  );
   expect(sarahEntries.length).toBe(1); // upsert by name — never a duplicate section for one name
 });
 
@@ -220,7 +242,12 @@ test("the html branch shares the render-fail seam and the byte cap (one governed
   await t.mutation(internal.plans.recordAttachments, {
     planId,
     attachments: [
-      { storageId: sid, filename: "big.pdf", mimeType: "application/pdf", size: PLAN_ATTACHMENT_CAP_BYTES },
+      {
+        storageId: sid,
+        filename: "big.pdf",
+        mimeType: "application/pdf",
+        size: PLAN_ATTACHMENT_CAP_BYTES,
+      },
     ],
   });
   const capped = await call(t, planId, "generateAttachment", {
@@ -236,7 +263,10 @@ test("regenerateAttachment supersedes in place and deletes the OLD bytes (O3, no
   await call(t, planId, "generateAttachment", { topic: `${ATTACH} first` });
   const oldId = (await readPlan(t, planId))!.attachments![0]!.storageId;
 
-  const res = await call(t, planId, "regenerateAttachment", { index: 1, topic: `${ATTACH} second` });
+  const res = await call(t, planId, "regenerateAttachment", {
+    index: 1,
+    topic: `${ATTACH} second`,
+  });
   expect(res).not.toMatch(/reject/i);
   const after = await readPlan(t, planId);
   expect(after?.attachments?.length).toBe(1);
@@ -283,7 +313,12 @@ test("generateAttachment over the byte cap sets attachmentError and stores NO ne
   await t.mutation(internal.plans.recordAttachments, {
     planId,
     attachments: [
-      { storageId: sid, filename: "big.pdf", mimeType: "application/pdf", size: PLAN_ATTACHMENT_CAP_BYTES },
+      {
+        storageId: sid,
+        filename: "big.pdf",
+        mimeType: "application/pdf",
+        size: PLAN_ATTACHMENT_CAP_BYTES,
+      },
     ],
   });
 
@@ -307,7 +342,9 @@ async function fillProposable(t: T, planId: Id<"plans">): Promise<void> {
 test("proposePlan refuses when attachmentError is set (render-fail/over-cap → not approvable, V7)", async () => {
   const { t, planId } = await setup();
   await fillProposable(t, planId);
-  await call(t, planId, "generateAttachment", { topic: "SMOKE::route=direct_llm::render=fail:: x" });
+  await call(t, planId, "generateAttachment", {
+    topic: "SMOKE::route=direct_llm::render=fail:: x",
+  });
 
   const res = await call(t, planId, "proposePlan", {});
   expect(res).toMatch(/attachment|cannot propose/i);
@@ -321,7 +358,12 @@ test("proposePlan refuses when attachments exceed the byte cap (defense-in-depth
   await t.mutation(internal.plans.recordAttachments, {
     planId,
     attachments: [
-      { storageId: sid, filename: "big.pdf", mimeType: "application/pdf", size: PLAN_ATTACHMENT_CAP_BYTES + 1 },
+      {
+        storageId: sid,
+        filename: "big.pdf",
+        mimeType: "application/pdf",
+        size: PLAN_ATTACHMENT_CAP_BYTES + 1,
+      },
     ],
   }); // no attachmentError — the cap re-check must catch it on its own
 
@@ -484,9 +526,12 @@ test("buildCockpitTools withholds addRecipients/setRecipients/removeRecipient ON
   const RECIPIENT_TOOLS = ["addRecipients", "setRecipients", "removeRecipient"];
 
   const full = Object.keys(buildCockpitTools(stubCtx, "t1", planId));
-  for (const name of RECIPIENT_TOOLS) expect(full, `${name} missing from the normal set`).toContain(name);
+  for (const name of RECIPIENT_TOOLS)
+    expect(full, `${name} missing from the normal set`).toContain(name);
 
-  const withheld = Object.keys(buildCockpitTools(stubCtx, "t1", planId, undefined, undefined, true));
+  const withheld = Object.keys(
+    buildCockpitTools(stubCtx, "t1", planId, undefined, undefined, true),
+  );
   for (const name of RECIPIENT_TOOLS)
     expect(withheld, `${name} present on the post-pick continue turn`).not.toContain(name);
   // resolveContacts stays — it writes candidates, not recipients (proposePlan's pending-pick gate covers it).
@@ -530,6 +575,105 @@ test("every tool the research specialist is granted is actually built under its 
   // …and it stays OFF the executive's set: `grantWebResearch` is false whenever `toolNames` is
   // undefined, so the cockpit agent can never reach the specialist's refusal channel.
   expect(Object.keys(buildCockpitTools(stubCtx, "t1", planId))).not.toContain("declareUnsupported");
+});
+
+// ── `webResearch` is a LOCAL tool now, and the whole plane depends on that ────────────────────
+//
+// Rewritten 2026-08-07: this test asserted the PROVIDER-EXECUTED contract (a `{type:
+// "provider-defined"}` marker with no `execute`, vendor-matched to RESEARCH_MODEL). That contract
+// is gone — `webResearch` is a local Tavily-backed tool — and three call-site behaviours hang off
+// the difference, each of which fails SILENTLY if this regresses:
+//   • `runAgentLoop` counts searches by NAME (a local tool has providerExecuted false, so the old
+//     flag-based count would be 0 forever and the search fee would never draw the rail);
+//   • sources come from this tool's RESULT parts (`res.sources` only fills for hosted tools);
+//   • `onToolExecutionStart` fires, so `agentSteps.tool` needs the `webResearch` literal.
+//
+// MUTATION that turns this RED: drop `execute` from the tool in llm.ts — it silently reverts to a
+// non-executable descriptor and every web search returns nothing.
+test("buildWebResearchTool exposes exactly `webResearch`, and it is LOCALLY executable", () => {
+  const built = buildWebResearchTool();
+  // The key is OURS and `SPECIALISTS.research.tools` filters on it. Unlike the hosted era, it is
+  // ALSO the name the SDK emits on the tool-call part — which is what makes the by-name count safe.
+  expect(Object.keys(built)).toEqual(["webResearch"]);
+  // The load-bearing bit: a local tool HAS an execute. Without it nothing is called, and the tool
+  // silently degrades to a no-op the model still believes it invoked.
+  expect(typeof (built.webResearch as { execute?: unknown }).execute).toBe("function");
+  // No provider-defined marker: it is not any vendor's tool, which is exactly why research is no
+  // longer pinned to RESEARCH_MODEL's vendor.
+  expect((built.webResearch as { id?: string }).id).toBeUndefined();
+});
+
+// The pure mapper is where the mistakes live — the network half needs a key, this half does not.
+// Anything without a parseable absolute URL is dropped: a source the reader cannot open is not
+// evidence, and `sources.length` is half of the honesty verdict.
+test("parseWebResults keeps parseable URLs, drops the rest, and never invents fields", () => {
+  const rows = parseWebResults({
+    results: [
+      { url: "https://example.com/a", title: "A", content: "alpha" },
+      { url: "not a url", title: "B", content: "beta" }, // unparseable → dropped
+      { title: "C", content: "gamma" }, // no url at all → dropped
+      { url: "https://example.com/d" }, // missing title/content → kept, empty strings
+    ],
+  });
+  expect(rows.map((r) => r.url)).toEqual(["https://example.com/a", "https://example.com/d"]);
+  expect(rows[0]).toEqual({ url: "https://example.com/a", title: "A", snippet: "alpha" });
+  expect(rows[1]).toEqual({ url: "https://example.com/d", title: "", snippet: "" });
+});
+
+// ── The relevance floor — what restores the honesty verdict ──────────────────
+//
+// MEASURED against live Tavily: real research results score 0.60–0.81; the invented entity in
+// fixture 33 returns NOTHING for exact-name searches and tops out at 0.51 for a loose one. The floor
+// sits in that gap. It matters because `sources` aggregates across every search in a run, so one
+// loose sub-question would otherwise drag near-misses in and make
+// `declaredQuestionScope && sources.length === 0` unfireable — a run that found nothing reporting
+// itself as sourced.
+//
+// MUTATION that turns this RED: drop the score check in parseWebResults.
+test("parseWebResults drops near-miss results below the measured relevance floor", () => {
+  const rows = parseWebResults({
+    results: [
+      { url: "https://example.com/real", title: "R", content: "x", score: 0.6022 }, // lowest real
+      { url: "https://example.com/edge", title: "E", content: "x", score: WEB_RESULT_MIN_SCORE },
+      { url: "https://example.com/near", title: "N", content: "x", score: 0.51 }, // fixture 33's best
+      { url: "https://example.com/junk", title: "J", content: "x", score: 0.0409 },
+    ],
+  });
+  expect(rows.map((r) => r.url)).toEqual([
+    "https://example.com/real",
+    "https://example.com/edge", // the floor is inclusive — only strictly-below is dropped
+  ]);
+});
+
+test("parseWebResults keeps a result with NO score — absence is not low relevance", () => {
+  // Discarding unscored rows would turn a provider change into an empty evidence list, which is the
+  // silent-zero failure this path exists to avoid. Only an explicit low score drops a row.
+  const rows = parseWebResults({ results: [{ url: "https://example.com/a", title: "A" }] });
+  expect(rows).toHaveLength(1);
+});
+
+// The tool-result shape is NOT the API shape: `snippet` vs `content`, and no `score` (already
+// filtered at execute time). Conflating them is one field rename away from emptying every source
+// list, which is why this has its own mapper and its own test.
+test("sourcesFromToolOutput reads our own tool output shape and drops unusable URLs", () => {
+  expect(
+    sourcesFromToolOutput({
+      results: [
+        { url: "https://example.com/a", title: "A", snippet: "alpha" },
+        { url: "not a url", title: "B", snippet: "beta" },
+        { title: "C", snippet: "gamma" },
+      ],
+    }),
+  ).toEqual([{ url: "https://example.com/a", title: "A" }]);
+  expect(sourcesFromToolOutput(undefined)).toEqual([]);
+});
+
+test("parseWebResults returns [] for junk rather than throwing into the agent loop", () => {
+  // A tool that throws ends the specialist's whole run, so a malformed provider response must
+  // degrade to "found nothing" — which the evidence verdict then reports honestly.
+  for (const junk of [undefined, null, {}, { results: null }, { results: "nope" }, 42]) {
+    expect(parseWebResults(junk)).toEqual([]);
+  }
 });
 
 // ── 03.10-06 (UAT-E): buildHistoryBlock — the bounded conversation-so-far window ──────────────
@@ -582,7 +726,10 @@ test("proposePlan refuses a GROUP plan that carries personalization (individual 
   const { t, planId } = await setup();
   await fillTwoProposable(t, planId);
   await call(t, planId, "setMode", { mode: "group" });
-  await call(t, planId, "personalizeRecipient", { index: 1, instructions: `${PERS} warmer for bob` });
+  await call(t, planId, "personalizeRecipient", {
+    index: 1,
+    instructions: `${PERS} warmer for bob`,
+  });
 
   const res = await call(t, planId, "proposePlan", {});
   expect(res).toMatch(/individual/i); // tells the agent to switch to individual
@@ -593,7 +740,10 @@ test("proposePlan PROCEEDS for an INDIVIDUAL plan that carries personalization",
   const { t, planId } = await setup();
   await fillTwoProposable(t, planId);
   await call(t, planId, "setMode", { mode: "individual" });
-  await call(t, planId, "personalizeRecipient", { index: 1, instructions: `${PERS} warmer for bob` });
+  await call(t, planId, "personalizeRecipient", {
+    index: 1,
+    instructions: `${PERS} warmer for bob`,
+  });
 
   const res = await call(t, planId, "proposePlan", {});
   expect(res).toMatch(/proposed/i);
@@ -782,7 +932,10 @@ test("digestInbox (smoke) emits a non-empty cross-message synopsis + a collapse-
 
   // A non-empty synopsis string — the lede the briefings row will carry (never a count/sender/date).
   expect(typeof batch.synopsis).toBe("string");
-  expect(batch.synopsis.length, "digestInbox produced an empty synopsis on the smoke path").toBeGreaterThan(0);
+  expect(
+    batch.synopsis.length,
+    "digestInbox produced an empty synopsis on the smoke path",
+  ).toBeGreaterThan(0);
   // Exactly one newsletter row (the non-needsReply item #1) so collapseNoise has something to fold,
   // while item #0 stays the needsReply action row.
   expect(batch.items.filter((i) => i.category === "newsletter").length).toBe(1);
@@ -840,7 +993,10 @@ test("replyToMessage resolves ONE match by ref: recipient-by-ref + Re: subject +
   // Recipient set BY REF, no panel round-trip.
   expect(plan?.recipients).toEqual(["sarah.chen@example.com"]);
   expect(plan?.recipientNames?.["sarah.chen@example.com"]).toBe("Sarah Chen");
-  expect(plan?.candidates ?? [], "replyToMessage wrote candidates — it must NOT round-trip a panel").toEqual([]);
+  expect(
+    plan?.candidates ?? [],
+    "replyToMessage wrote candidates — it must NOT round-trip a panel",
+  ).toEqual([]);
   // Re: subject (not doubled) + the four threading fields, server-side.
   expect(plan?.subject).toBe("Re: Q3 numbers");
   expect(plan?.replyToMessageId).toBe("fix-reply");
@@ -1004,7 +1160,10 @@ test("searchVault writes a refs-only vault.searched audit — queryHash + result
 test("searchVault gives tenant B NOTHING of tenant A's corpus (BETA-05)", async () => {
   const { t } = await setup();
   const t1Doc = await seedVaultDoc(t, "t1", `Tenant A private: ${VAULT_NEEDLE}.`);
-  const t2Plan = await t.mutation(internal.plans.insertPlan, { tenantId: "t2", threadId: "thread2" });
+  const t2Plan = await t.mutation(internal.plans.insertPlan, {
+    tenantId: "t2",
+    threadId: "thread2",
+  });
 
   const reply = await t.action(internal.llm.__invokeCockpitTool, {
     tenantId: "t2",
@@ -1058,7 +1217,9 @@ const CALENDAR_ATTENDEE_NEEDLE = "private-attendee@example.com";
 const CALENDAR_DESCRIPTION_NEEDLE = "ZZQX private event description";
 const DAY_MS = 24 * 60 * 60 * 1000;
 const fmtCalendarInstant = (ms: number, tz = "UTC") =>
-  new Intl.DateTimeFormat("en-US", { timeZone: tz, dateStyle: "full", timeStyle: "short" }).format(ms);
+  new Intl.DateTimeFormat("en-US", { timeZone: tz, dateStyle: "full", timeStyle: "short" }).format(
+    ms,
+  );
 
 test("checkAvailability returns the busy-block count and every displayed block time, never event content", async () => {
   const { t, planId } = await setup();
@@ -1354,11 +1515,75 @@ test("N createDocument calls share ONE Output card carrying ALL N docIds (#index
   expect(latest.form).toBe("short"); // the newest artifact's badge
 });
 
+// THE BUG EVAL FIXTURE 35 CAUGHT, and it cost a paid gate to find. `replace` is MODEL-SUPPLIED and
+// the live model sends it on EVERY call — including the first, when the conversation holds no
+// created documents at all. Obeying it routed a create down patchCreatedDoc, which refused
+// correctly ("there's no document #1"), so nothing was ever created, the agent read the refusal as
+// "try again", and looped: thirteen tool calls, all recorded `done`, zero documents. With ZERO
+// created documents `replace` cannot denote anything, so it is noise, not a refusal case.
+// This is the `confirmed`-flag principle (18-08: a model-supplied flag is the model grading its own
+// decision) applied to the one model-supplied field that already existed.
+test("a first createDocument CREATES even when the model supplies a bogus `replace`", async () => {
+  const { t, planId } = await setup();
+
+  const reply = await call(t, planId, "createDocument", {
+    topic: CREATE_TOPIC,
+    form: "long",
+    replace: 1, // nothing exists to rewrite — the exact shape observed live
+  });
+
+  expect(reply).toContain(SMOKE_TITLE);
+  expect(reply).toMatch(/saved to your vault/i); // created, NOT "rewritten as #1"
+  expect(reply).not.toMatch(/there's no document/i);
+  expect(await vaultDocs(t)).toHaveLength(1);
+  const card = (await cardRows(t)).filter((r) => r.role === "created").at(-1)!;
+  expect(card.docIds).toHaveLength(1);
+});
+
+// The other half of the rule: once documents EXIST, an out-of-range index keeps its honest refusal,
+// because there the user may genuinely mean a document numbered differently. Widening the fallback
+// to every out-of-range `replace` would silently create a second document when a revision was asked
+// for — the failure this pair exists to keep apart.
+test("with documents present, an out-of-range `replace` still refuses and creates nothing", async () => {
+  const { t, planId } = await setup();
+
+  await call(t, planId, "createDocument", { topic: `${SMOKE} first`, form: "long" });
+  const refused = await call(t, planId, "createDocument", {
+    topic: `${SMOKE} second`,
+    form: "long",
+    replace: 7,
+  });
+
+  expect(refused).toMatch(/no document #7/i);
+  expect(await vaultDocs(t)).toHaveLength(1); // the refusal wrote nothing
+});
+
 // ── Static scans over the tool body ───────────────────────────────────────────
 
 const convexSrcDir = dirname(fileURLToPath(import.meta.url));
 const readLlmSource = (): string =>
   readFileSync(join(convexSrcDir, "llm.ts"), "utf8").replace(/\r\n/g, "\n");
+
+// THE CLOSED-UNION TRAP, CLOSED STRUCTURALLY. `agentSteps.tool` is a closed union, and
+// `onToolExecutionStart` records EVERY tool the model calls. A tool whose name has no literal makes
+// `agentSteps:record` throw `ArgumentValidationError` — and the AI SDK SWALLOWS callback throws, so
+// the step vanishes in PROD while the entire suite stays green. schema.ts warns about this twice in
+// prose; it still happened a third time (`recordScorecardAnswer`, found 2026-08-08 in eval logs).
+// Prose is not a guard. This is: every `<name>: tool(` key in buildCockpitTools must have a literal.
+test("every cockpit tool name has an agentSteps.tool literal (the swallowed-step trap)", () => {
+  const toolNames = [...readLlmSource().matchAll(/\n {4}([A-Za-z_]\w*): tool\(/g)].map((m) => m[1]);
+  // Non-vacuity floor: if the record is ever restructured this scan must fail LOUDLY, not pass on
+  // an empty list — the exact way a static scan rots into decoration.
+  expect(toolNames.length, "found no `<name>: tool(` keys — did buildCockpitTools move?").toBeGreaterThan(20);
+
+  const schemaSrc = readFileSync(join(convexSrcDir, "schema.ts"), "utf8").replace(/\r\n/g, "\n");
+  const agentSteps = schemaSrc.slice(schemaSrc.indexOf("agentSteps: defineTable"));
+  const unionBlock = agentSteps.slice(0, agentSteps.indexOf(").index("));
+  const literals = new Set([...unionBlock.matchAll(/v\.literal\("([^"]+)"\)/g)].map((m) => m[1]));
+  expect(literals.size, "no literals parsed from the agentSteps.tool union").toBeGreaterThan(20);
+
+  expect([...new Set(toolNames)].filter((n) => !literals.has(n))).toEqual([]);
+});
 
 /** Slice the createDocument tool body: `createDocument: tool(` → the NEXT tool key in the record. */
 function createDocumentBlock(): string {
@@ -1501,13 +1726,18 @@ test("SC2: the createDocument tool body has NO external side effect", () => {
   );
   expect(block, "createDocument reaches a mail surface").not.toMatch(/gmail/i);
   expect(block, "createDocument starts a workflow").not.toMatch(/workflow\.start/);
-  expect(block, "createDocument dispatches back into cockpit.ts").not.toMatch(/internal\.cockpit\./);
+  expect(block, "createDocument dispatches back into cockpit.ts").not.toMatch(
+    /internal\.cockpit\./,
+  );
 });
 
 test("renderAndStore's html branch renders through renderHtmlDocument — never raw markdown bytes", () => {
   const src = readLlmSource();
   const start = src.indexOf("const renderAndStore = async (");
-  expect(start, "renderAndStore not found — did it get renamed or extracted?").toBeGreaterThanOrEqual(0);
+  expect(
+    start,
+    "renderAndStore not found — did it get renamed or extracted?",
+  ).toBeGreaterThanOrEqual(0);
   const rest = src.slice(start);
   const end = rest.indexOf("\n  };\n");
   expect(end, "the renderAndStore close was not found — the slice is unbounded").toBeGreaterThan(0);

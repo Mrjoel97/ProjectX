@@ -11,8 +11,5 @@
     "insufficientEvidence": true,
     "status": "proposed"
   },
-  "needles": [
-    "QZ-91 Marula-Tesseract",
-    "31 February 2026"
-  ]
+  "needles": ["QZ-91 Marula-Tesseract", "31 February 2026"]
 }

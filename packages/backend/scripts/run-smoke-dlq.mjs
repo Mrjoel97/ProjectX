@@ -17,14 +17,14 @@ await pollPass("smokeAssert:assertDeadLetter", { correlationId: cid });
 // implemented route (draft → review → send), so unknown_route is the mis-route case.
 // OPSG-05 (07-05): assertDeadLetterReason now also asserts the `deadletter` USER notification
 // fired beside the audit (this seedPipeline path carries a requestId ref, so notify runs).
-for (const [route, reason] of [
-  ["unknown", "unknown_route"],
-]) {
+for (const [route, reason] of [["unknown", "unknown_route"]]) {
   const c = `smoke-agnt03-${route}-${randomUUID()}`;
   console.log(`[smoke:dlq] AGNT-03 ${route} -> ${reason} (cid=${c})`);
   must("smoke:seedPipeline", { correlationId: c, route });
   await pollPass("smokeAssert:assertDeadLetterReason", { correlationId: c, reason });
-  console.log(`[smoke:dlq] AGNT-03 ${route} PASSED (distinct reason + failed terminal + deadletter notify)`);
+  console.log(
+    `[smoke:dlq] AGNT-03 ${route} PASSED (distinct reason + failed terminal + deadletter notify)`,
+  );
 }
 
 console.log("[smoke:dlq] PASSED");

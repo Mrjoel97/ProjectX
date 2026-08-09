@@ -1,5 +1,6 @@
 "use node";
 
+import { NOTIFICATION_KINDS, type NotificationKind, notificationMessage } from "@pikar/core";
 // OPSG-05 external notification channel — best-effort, fail-closed, loop-guarded.
 //
 // `notifications.notify` inserts the in-app row (the fail-closed floor) and THEN schedules this
@@ -13,9 +14,8 @@
 // (the same sanctioned send, not a new write verb). A dead/absent token → return silently (the
 // already-inserted in-app row is the guarantee; email is a bonus channel).
 import { v } from "convex/values";
-import { NOTIFICATION_KINDS, notificationMessage, type NotificationKind } from "@pikar/core";
 import { internalAction } from "./_generated/server";
-import { SEND_ENDPOINT, base64Url, buildMime, freshAccessToken } from "./gmail";
+import { base64Url, buildMime, freshAccessToken, SEND_ENDPOINT } from "./gmail";
 
 // The user's own mailbox address (send-to-self). A GET, never a write — so the read-only-mailbox
 // invariant holds and gmail.ts's POST-target scan is untouched (the only POST here is the send).

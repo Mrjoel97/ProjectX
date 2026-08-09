@@ -7,8 +7,8 @@ import {
   MIME_ALLOWLIST,
   resolveMimeType,
 } from "@pikar/core/validateSubmit";
-import type { FunctionArgs } from "convex/server";
 import { useMutation } from "convex/react";
+import type { FunctionArgs } from "convex/server";
 import { useRef, useState } from "react";
 import { PaperclipIcon } from "../../(auth)/icons";
 
@@ -106,7 +106,10 @@ export function AttachmentPicker({
       </button>
       {busy && <span style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>Uploading…</span>}
       {error && (
-        <p role="alert" style={{ color: "#dc2626", fontSize: "0.85rem", margin: "0.4rem 0 0", flexBasis: "100%" }}>
+        <p
+          role="alert"
+          style={{ color: "#dc2626", fontSize: "0.85rem", margin: "0.4rem 0 0", flexBasis: "100%" }}
+        >
           {error}
         </p>
       )}

@@ -327,42 +327,57 @@ const UNSEARCHED_STEP = {
   warnings: [],
 };
 
-/** The exact provider-executed part shape observed by the 16-02 live probe (the `searchedStep`
- *  helper in `dispatch.test.ts`, kept in sync by hand — there is no shared test barrel). This is
- *  what a REAL research run looks like, and the default for every positive case here: before
- *  16-09 these tests ran on a step that made no search at all, which the floor now correctly
- *  refuses to persist. */
-const REPLY_STEP = {
+/** A REAL research run, as a LOCAL tool (rewritten 2026-08-07 — this used to fake the
+ *  provider-executed `web_search` shape the 16-02 probe observed; the `searchedSteps` helper in
+ *  `dispatch.test.ts` is the sibling, kept in sync by hand since there is no shared test barrel).
+ *
+ *  TWO STEPS, because a local tool cannot be faked in one: the model emits a tool-call, the SDK runs
+ *  OUR `execute` against the stubbed Tavily endpoint below, and only then does the model speak. So
+ *  the sources these tests assert on come from `parseWebResults` for real rather than from a
+ *  fixture asserting on itself. This is the default for every positive case here: before 16-09 these
+ *  tests ran on a step that made no search at all, which the floor now correctly refuses to
+ *  persist. */
+const SEARCH_STEP = {
   content: [
     {
       type: "tool-call",
       toolCallId: "ws-1",
-      toolName: "web_search",
-      input: "{}",
-      providerExecuted: true,
+      toolName: "webResearch",
+      input: JSON.stringify({ query: "ziggurat metro session pricing" }),
     },
-    {
-      type: "tool-result",
-      toolCallId: "ws-1",
-      toolName: "web_search",
-      result: {
-        action: { type: "search", queries: ["ziggurat metro session pricing"] },
-        sources: [{ type: "url", url: "https://example.test/pricing" }],
-      },
-    },
-    {
-      type: "source",
-      sourceType: "url",
-      id: "s-0",
-      url: "https://example.test/pricing",
-      title: "Source 0",
-    },
-    { type: "text", text: FINDINGS },
   ],
+  finishReason: { unified: "tool-calls", raw: "tool-calls" },
+  usage: provUsage(0, 0),
+  warnings: [],
+};
+const ANSWER_STEP = {
+  content: [{ type: "text", text: FINDINGS }],
   finishReason: { unified: "stop", raw: "stop" },
   usage: provUsage(100_000, 100_000), // ≈ 8 cents on DEFAULT_MODEL — inside the envelope
   warnings: [],
 };
+/** The searched pair. Call sites spread it where a single REPLY_STEP used to sit. */
+const REPLY_STEP_PAIR = [SEARCH_STEP, ANSWER_STEP];
+
+// The Tavily edge, stubbed; everything else falls through to the real fetch so no other outbound
+// path changes. One source, matching what these tests assert on.
+const realFetch = globalThis.fetch;
+beforeEach(() => {
+  vi.stubEnv("TAVILY_API_KEY", "test-key");
+  vi.stubGlobal("fetch", async (input: unknown, init?: unknown) => {
+    if (String(input).includes("api.tavily.com")) {
+      return new Response(
+        JSON.stringify({
+          results: [
+            { url: "https://example.test/pricing", title: "Source 0", content: "retrieved snippet" },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+    return (realFetch as (a: unknown, b?: unknown) => Promise<Response>)(input, init);
+  });
+});
 
 /** The row a research dispatch actually runs against: staged through 16-06's `stageResearchPlan`,
  *  not a bare `insertPlan`. `landSpecialistResult`'s CAS refuses anything that is not
@@ -392,7 +407,7 @@ const dispatchArgs = (planId: Id<"plans">, over: Record<string, unknown> = {}) =
   spentCents: 0,
   question: QUESTION,
   research: true,
-  primary: [REPLY_STEP],
+  primary: REPLY_STEP_PAIR,
   ...over,
 });
 
