@@ -1,11 +1,12 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-08-09 (Plan cash-business-finance Task 3 REVIEW FIX — scorecard-field
-> staleness now reads `evaluations.userProvidedAt`, never the row's `createdAt`. See the Cash
-> section's staleness bullet below and `docs/playbooks/business-evaluation.md` for the write side.)
+> Last verified: 2026-08-09 (Plan cash-business-finance Task 4 — `statedFigure`/`requireInputs`/
+> `valueOf` resolve the four truths, provenance and the suppression rule ONCE, in `cash.ts`. See the
+> "Cash — the suppression rule" section below.)
 >
-> Prior: 2026-08-09 (Plan cash-business-finance Task 3 — the six-input collection panel,
-> `financeInputs`, and one writer per number)
+> Prior: 2026-08-09 (Plan cash-business-finance Task 3 REVIEW FIX — scorecard-field staleness now
+> reads `evaluations.userProvidedAt`, never the row's `createdAt`. See the Cash section's staleness
+> bullet below and `docs/playbooks/business-evaluation.md` for the write side.)
 > Build history: `.planning/phases/26-pending-product-pages-and-vault-redesign-integration/` · Related ADRs: [ADR-001](../decisions/001-convex-data-orchestration-plane.md)
 
 ## Purpose
@@ -143,6 +144,37 @@ split by WHICH kind of figure they are, never by which screen wrote them:
   saveInput` through the same busy/refusal `run`-style pattern as `OperatorTab` in `FinanceView.tsx`.
   No arithmetic lives in this component beyond formatting (CLAUDE.md §1) — a `.reduce()` in a
   component already failed review once on this plan.
+
+### Cash — the suppression rule (Task 4)
+
+**Every later task (5, 6, 7, 9) routes derived figures through these four functions instead of
+reimplementing the unknown-check per metric.**
+
+- **`CashInputs = Partial<Record<CashInputField, CashInputState>>`** and **`toCashInputs(states)`**
+  turn the `CashInputState[]` the `inputs` query already returns into the keyed shape the rest of
+  this section reads. No new store, no new query — a reshape of what Task 3 produces.
+- **`statedFigure(input, spec, nowMs)`** turns ONE stated input into a `CashFigure`. `undefined` or
+  `value: null` → `unknown`, naming the field's `label`. **A real `0` is `known`, never `unknown`** —
+  measured nothing is an answer, and this is the single most important behaviour in the module: a
+  metric that reads "unknown" for a business that genuinely spent $0 on acquisition is lying in the
+  opposite direction from a fabricated number. `statedAt: null` (legacy scorecard value, no
+  `userProvidedAt` entry — see the Task 3 staleness bullet above) carries through as UNKNOWN age,
+  which `isStale` already treats as needing confirmation; `statedFigure` does not paper over that by
+  inventing a date.
+- **`derived(args)`** wraps an already-computed number as a `known`/`derived` figure with its `from`
+  provenance string and optional `sampleSize` — it does no arithmetic itself (that stays in
+  `growth/financialSpine.ts`), it only carries the figure vocabulary the view renders.
+- **`requireInputs(inputs, fields)` is THE suppression rule, in exactly one place.** Returns the
+  blocking `unknown` figure for the FIRST missing field, or `null` once every field in the list is
+  present. **The first, not all of them** — a metric that answers a missing-CAC prompt with a
+  three-item checklist gets ignored; naming one input is one ask. A caller computing a derived metric
+  (CFA, LTGP:CAC, runway, …) calls `requireInputs` first and renders its result verbatim instead of
+  the computed figure when it is non-null.
+- **`valueOf(inputs, field)`** reads a present input's plain number, for use only after
+  `requireInputs` has returned `null` for a field list containing `field`. It throws if the field is
+  still absent — a programming-error tripwire, never a runtime path reachable from user input, and
+  deliberately NOT softened to `?? 0`: that would fabricate a figure and defeat the suppression rule
+  above it.
 
 ### Frontend and connected browser evidence
 

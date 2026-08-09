@@ -1,5 +1,13 @@
 import { describe, expect, test } from "vitest";
-import { activityFromSends, CASH_INPUTS, validateCashInput } from "./cash";
+import {
+  activityFromSends,
+  CASH_INPUTS,
+  cashInputSpec,
+  requireInputs,
+  statedFigure,
+  toCashInputs,
+  validateCashInput,
+} from "./cash";
 
 const DAY = 24 * 60 * 60 * 1000;
 // A fixed UTC instant, so the test never depends on the machine's clock or zone.
@@ -121,5 +129,63 @@ describe("input validation at the trust boundary", () => {
   test("no input is stored in two places", () => {
     const fields = CASH_INPUTS.map((spec) => spec.field);
     expect(new Set(fields).size).toBe(fields.length);
+  });
+});
+
+const state = (field: string, over: Record<string, unknown> = {}) =>
+  ({
+    field,
+    value: 100,
+    statedAt: NOW - DAY,
+    stale: false,
+    ...over,
+  }) as never;
+
+describe("the four truths", () => {
+  test("an unanswered input is unknown and NAMES what is missing", () => {
+    const figure = statedFigure(undefined, cashInputSpec("cac"), NOW);
+    expect(figure).toEqual({
+      state: "unknown",
+      needs: expect.stringContaining("Customer acquisition cost"),
+    });
+  });
+
+  test("a real zero is KNOWN, not unknown — measured nothing is an answer", () => {
+    const figure = statedFigure(state("cac", { value: 0 }), cashInputSpec("cac"), NOW);
+    expect(figure).toMatchObject({ state: "known", origin: "stated", value: 0 });
+  });
+
+  test("a stated input carries when it was said", () => {
+    const figure = statedFigure(state("cac"), cashInputSpec("cac"), NOW);
+    expect(figure).toMatchObject({
+      state: "known",
+      origin: "stated",
+      statedAt: NOW - DAY,
+      stale: false,
+    });
+  });
+
+  test("past 90 days it is flagged stale rather than silently used", () => {
+    const old = state("cac", { statedAt: NOW - 91 * DAY, stale: true });
+    expect(statedFigure(old, cashInputSpec("cac"), NOW)).toMatchObject({ stale: true });
+  });
+
+  test("a derived figure is SUPPRESSED when any input is unknown, and names the missing one", () => {
+    const inputs = toCashInputs([state("cac")]);
+    const blocked = requireInputs(inputs, ["cac", "thirtyDayCashPerCustomer"]);
+    expect(blocked).toEqual({
+      state: "unknown",
+      needs: expect.stringContaining("30-day cash per customer"),
+    });
+  });
+
+  test("with every input present nothing is suppressed", () => {
+    const inputs = toCashInputs([state("cac"), state("thirtyDayCashPerCustomer")]);
+    expect(requireInputs(inputs, ["cac", "thirtyDayCashPerCustomer"])).toBeNull();
+  });
+
+  test("the FIRST missing input is named, so the prompt is one ask and not a list", () => {
+    const blocked = requireInputs(toCashInputs([]), ["cac", "thirtyDayCashPerCustomer"]);
+    expect(blocked).toMatchObject({ needs: expect.stringContaining("Customer acquisition cost") });
   });
 });

@@ -282,6 +282,80 @@ export type CashInputState = {
 export const isStale = (statedAt: number | null, nowMs: number): boolean =>
   statedAt !== null && nowMs - statedAt > STALE_AFTER_MS;
 
+// ── The four truths, resolved once: a stated input becomes a figure, and a derived figure is
+// suppressed until every input it rests on is known. ──────────────────────────────────────
+
+/** Every collected input, keyed by field. The shape `requireInputs`/`valueOf`/`statedFigure` read. */
+export type CashInputs = Partial<Record<CashInputField, CashInputState>>;
+
+export const toCashInputs = (states: readonly CashInputState[]): CashInputs =>
+  Object.fromEntries(states.map((s) => [s.field, s])) as CashInputs;
+
+/**
+ * One STATED input as a figure. A real zero is `known` — measured nothing is an answer, so only a
+ * missing/null value (never asked, or unanswered) produces `unknown`.
+ */
+export function statedFigure(
+  input: CashInputState | undefined,
+  spec: CashInputSpec,
+  nowMs: number,
+): CashFigure {
+  if (input === undefined || input.value === null) {
+    return unknownFigure(`Needs your ${spec.label}.`);
+  }
+  return knownFigure("stated", input.value, spec.unit, {
+    ...(input.statedAt === null ? {} : { statedAt: input.statedAt }),
+    stale: isStale(input.statedAt, nowMs),
+  });
+}
+
+export const derived = (args: {
+  value: number;
+  unit: CashUnit;
+  from: string;
+  sampleSize?: number | null;
+}): CashFigure =>
+  knownFigure("derived", args.value, args.unit, {
+    from: args.from,
+    ...(args.sampleSize === undefined ? {} : { sampleSize: args.sampleSize }),
+  });
+
+/**
+ * THE suppression rule: a derived figure is never rendered when any of its inputs is unknown, and
+ * it names the missing one. This is `scorecard.ts`'s null-means-ask contract applied at the display
+ * boundary — the alternative is a confident number resting on a value nobody supplied.
+ *
+ * Returns the blocking figure, or `null` when everything is present. Names the FIRST missing input
+ * rather than all of them: a metric that answers with a checklist gets ignored.
+ */
+export function requireInputs(
+  inputs: CashInputs,
+  fields: readonly CashInputField[],
+): CashFigure | null {
+  for (const field of fields) {
+    const state = inputs[field];
+    if (state === undefined || state.value === null) {
+      return unknownFigure(`Needs your ${cashInputSpec(field).label}.`);
+    }
+  }
+  return null;
+}
+
+/**
+ * A present input's number, for use once `requireInputs` has returned `null` for a field list
+ * containing `field`. Throws if the field is still absent — a programming-error tripwire, never a
+ * runtime path, so it must not be softened into `?? 0`: that would fabricate a figure and defeat
+ * the suppression rule above.
+ */
+// biome-ignore lint/suspicious/noShadowRestrictedNames: `valueOf` is the plan's contracted name; a top-level export is never called by JS's implicit coercion protocol.
+export const valueOf = (inputs: CashInputs, field: CashInputField): number => {
+  const value = inputs[field]?.value;
+  if (value === null || value === undefined) {
+    throw new Error(`cash input "${field}" read before requireInputs proved it present`);
+  }
+  return value;
+};
+
 // ── Activity: the row that costs nothing ────────────────────────────────────────────────
 //
 // Pikar already delivers the emails, so `requests` rows in status `sent` ARE the reach-out count.
