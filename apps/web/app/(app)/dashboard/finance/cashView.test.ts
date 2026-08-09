@@ -7,7 +7,7 @@
 import { type ComponentType, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
-import { ActivitySection, NumbersPanel } from "./CashView";
+import { ActivitySection, FigureTile, NumbersPanel } from "./CashView";
 
 const render = (component: unknown, props: Record<string, unknown>): string =>
   renderToStaticMarkup(createElement(component as ComponentType<Record<string, unknown>>, props));
@@ -132,5 +132,92 @@ describe("your numbers panel", () => {
     });
     expect(html).toMatch(/receivables/i);
     expect(html).toMatch(/payables/i);
+  });
+});
+
+describe("figure rendering — the four truths, on screen", () => {
+  test("unknown names the missing input and shows no number", () => {
+    const html = render(FigureTile, {
+      label: "CFA",
+      figure: { state: "unknown", needs: "needs your 30-day cash per customer" },
+    });
+    expect(html).toContain("30-day cash");
+    expect(html).not.toMatch(/\$\d/);
+    expect(html).not.toContain(">0<");
+  });
+
+  test("not-applicable says the metric does not exist here, and is NOT the word Unknown", () => {
+    const html = render(FigureTile, {
+      label: "MRR",
+      figure: { state: "not-applicable", because: "Project revenue has no monthly recurring figure." },
+    });
+    expect(html).toContain("no monthly recurring figure");
+    expect(html).not.toMatch(/unknown/i);
+    expect(html).not.toMatch(/\$0/);
+  });
+
+  test("not-computable states the reason and never renders infinity", () => {
+    const html = render(FigureTile, {
+      label: "CFA",
+      figure: { state: "not-computable", because: "No acquisition cost recorded, so there is nothing to pay back." },
+    });
+    expect(html).toContain("No acquisition cost recorded");
+    expect(html).not.toContain("Infinity");
+    expect(html).not.toMatch(/unknown/i);
+  });
+
+  test("a real zero renders as zero", () => {
+    const html = render(FigureTile, {
+      label: "Runway",
+      figure: { state: "known", origin: "derived", value: 0, unit: "months", from: "no cash left" },
+    });
+    expect(html).toContain("0");
+  });
+
+  test("a derived figure always shows what it came from", () => {
+    const html = render(FigureTile, {
+      label: "LTGP:CAC",
+      figure: {
+        state: "known",
+        origin: "derived",
+        value: 3.2,
+        unit: "ratio",
+        from: "$4,500 lifetime gross profit and $1,400 to acquire",
+        sampleSize: 4,
+      },
+    });
+    expect(html).toContain("3.2");
+    expect(html).toContain("$4,500");
+    expect(html).toContain("4 customers");
+  });
+
+  test("a ratio with no recorded sample size SAYS so rather than dropping the caveat", () => {
+    const html = render(FigureTile, {
+      label: "LTGP:CAC",
+      figure: {
+        state: "known",
+        origin: "derived",
+        value: 3.2,
+        unit: "ratio",
+        from: "x",
+        sampleSize: null,
+      },
+    });
+    expect(html).toMatch(/sample size not recorded/i);
+  });
+
+  test("a stale stated figure asks for a confirm-or-update", () => {
+    const html = render(FigureTile, {
+      label: "Cash on hand",
+      figure: {
+        state: "known",
+        origin: "stated",
+        value: 5000,
+        unit: "usd",
+        statedAt: Date.UTC(2026, 1, 1),
+        stale: true,
+      },
+    });
+    expect(html).toMatch(/still right|confirm/i);
   });
 });

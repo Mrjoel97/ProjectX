@@ -1,6 +1,14 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-08-09 (Plan cash-business-finance Task 5 REVIEW FIX — `referralPct` now
+> Last verified: 2026-08-09 (Plan cash-business-finance Task 6 — `unitEconomics` wired to the
+> Business tab. `convex/cash.ts`'s `inputs` query body was extracted into one shared
+> `inputStatesFor(ctx, tenantId, nowMs)`; the new `unitEconomics` tenantQuery calls the SAME
+> function rather than re-reading `financeInputs`/the scorecard a second way, so the panel and the
+> metrics can never disagree about what the tenant has entered. `FigureTile` is the one renderer
+> for every `CashFigure` on the tab — four branches, one per truth, each with its own test that
+> fails if two states collapse. See the "Cash — FigureTile and the connected page" section below.)
+>
+> Prior: 2026-08-09 (Plan cash-business-finance Task 5 REVIEW FIX — `referralPct` now
 > routes through `statedFigure`/`needsConfirmation` like every other stated cash input, instead of
 > reading the scorecard directly with no staleness check. `nowMs` was destructured out of
 > `unitEconomics`'s args and never read — the tell that a "staleness-aware" figure was not stale-
@@ -277,6 +285,45 @@ is in, what it was derived from, and how many customers it rests on.
   unknown-not-stale, and a minimal known/null pair each for `grossMargin`/`cohortChurn`.
   `pnpm --filter @pikar/core test cash` — 41/41 (26 pre-existing + 10 from the original Task 5 pass
   + 5 from the review fix). `pnpm typecheck` — 10/10 packages green.
+
+### Cash — FigureTile and the connected page (Task 6)
+
+- **One read path, enforced by extraction, not convention.** `convex/cash.ts`'s `inputs` query body
+  moved verbatim into `async function inputStatesFor(ctx, tenantId, nowMs)`; `inputs` now calls it
+  with `(ctx, ctx.tenantId, Date.now())` and the new `unitEconomics` query calls it a second time
+  with the same three arguments before passing the result through `toCashInputs` into `@pikar/core`'s
+  `unitEconomics` (imported as `coreUnitEconomics` so the export and the query keep distinct names).
+  A tenant's `financeInputs` rows and scorecard fields are therefore read exactly once per query, by
+  exactly one function — the panel and the metric tiles cannot drift into disagreeing about what was
+  entered, because there is only one place that decides.
+- **`cash.unitEconomics` is a `tenantQuery` with no args**, returning `CashUnitEconomics` verbatim
+  from core. It reads the tenant's OWN `latestScorecardRow` twice (once inside `inputStatesFor`, once
+  directly for the `scorecard` argument `coreUnitEconomics` needs) — both calls are tenant-scoped, so
+  a foreign tenant's scorecard is never reachable, the same guarantee `cash.inputs` already had.
+- **`FigureTile({ label, figure, note })` in `CashView.tsx` is the ONLY renderer for a `CashFigure`**
+  on the Business tab. Four branches, matching the four states `cash.ts`'s vocabulary defines:
+  `unknown` renders an em dash and the `needs` prompt, never a number; `not-applicable`/
+  `not-computable` share a branch (an em dash plus `because`) since both are "the reason, no number";
+  `known` renders `formatFigureValue` on `value`/`unit` plus provenance — `from` (and, for a ratio,
+  the sample size, rendered even when `null` as "sample size not recorded" rather than omitted) for
+  `origin: "derived"`, a confirm-or-update line for `origin: "stated"` when `stale`, and "Measured by
+  Pikar." for `origin: "observed"`. **`formatUsdAmount` takes DOLLARS.** `FinanceView.tsx`'s
+  `formatUsdCents` is the Cost console's formatter and takes CENTS — the two must never be swapped;
+  passing one plane's number through the other's formatter is off by 100×.
+- **`UnitEconomicsSection({ economics, keys })`** renders one `FigureTile` per key present in both
+  `keys` and `economics`, skipping (not inventing) a key `economics` doesn't have. `ConnectedUnitEconomics`
+  (module-private, like every other `Connected*` on this page) passes `Object.keys(economics)` as
+  `keys` until Task 8 supplies the tier-scoped metric set — `ponytail:` comment names that ceiling.
+  `SolvencySection` (Task 9) is the same shape with its own label map; it is built by copying this
+  component, not by generalising both into a configurable renderer nobody asked for.
+- **No arithmetic in the view.** `formatFigureValue` only switches on `unit` to pick a display string;
+  every number it prints already arrived as a `CashFigure.value` from `@pikar/core`.
+- Test evidence: `cashView.test.ts`'s `describe("figure rendering — the four truths, on screen", ...)`
+  (7 tests, one per collapse this component exists to prevent) plus the pre-existing 8 — 15/15.
+  `cash.test.ts`'s `describe("cash.unitEconomics", ...)` (3 tests: unauthenticated rejection, a
+  foreign tenant's scorecard staying unread, and a `cac`+`thirtyDayCashPerCustomer` happy path
+  landing `cfa.state === "known"`/`origin === "derived"`) — 16/16 in the file. `pnpm typecheck` — 10/10
+  packages green.
 
 ### Frontend and connected browser evidence
 

@@ -6,7 +6,14 @@
 // Every figure on this tab is a `CashFigure` from `@pikar/core` — this file renders, it never
 // derives. A derived figure is suppressed whenever any input is unknown, and names the missing one.
 import { api } from "@pikar/backend/api";
-import type { CashActivity, CashInputField, CashInputSpec, CashInputState, Tier } from "@pikar/core";
+import type {
+  CashActivity,
+  CashFigure,
+  CashInputField,
+  CashInputSpec,
+  CashInputState,
+  Tier,
+} from "@pikar/core";
 import { cashInputsForTier, validateCashInput } from "@pikar/core";
 import { useMutation, useQuery } from "convex/react";
 import { type CSSProperties, useMemo, useState } from "react";
@@ -60,6 +67,158 @@ const saveButton: CSSProperties = {
   fontWeight: 600,
   cursor: "pointer",
 };
+
+/**
+ * The business plane's formatter. USD DOLLARS — never hand it cents. `formatUsdCents` in
+ * FinanceView.tsx is the other plane's formatter and the two must never be swapped.
+ */
+export function formatUsdAmount(dollars: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(dollars);
+}
+
+function formatFigureValue(value: number, unit: string): string {
+  if (unit === "usd") return formatUsdAmount(value);
+  if (unit === "ratio") return `${value}:1`;
+  if (unit === "months") return `${value} ${value === 1 ? "month" : "months"}`;
+  if (unit === "percent") return `${value}%`;
+  return String(value);
+}
+
+const shortDay = (epochMs: number): string =>
+  new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeZone: "UTC" }).format(
+    new Date(epochMs),
+  );
+
+/**
+ * ONE figure, in whichever of the four truths it is in. FOUR BRANCHES, and collapsing any two of
+ * them is the failure this component exists to prevent:
+ *
+ *   • unknown        — the prompt, and NO number. Not even a zero: a zero here is indistinguishable
+ *                      from a measured nothing, which is the whole reason the state exists.
+ *   • not-applicable — the reason. Never the word "Unknown", never "$0". "MRR $0" shown to a
+ *                      project-based consultant describes a failing subscription business that
+ *                      does not exist.
+ *   • not-computable — the reason. A real input made the arithmetic undefined; "needs your CAC" is
+ *                      a lie to someone who told us it was zero.
+ *   • known          — the number, including a real measured zero, plus its provenance.
+ *
+ * A DERIVED figure always shows what it came from, and a ratio always shows its sample size —
+ * including when that sample size is not recorded, which it says rather than quietly omitting.
+ * Hiding a number the reader could judge for themselves is its own dishonesty.
+ */
+export function FigureTile({
+  label,
+  figure,
+  note,
+}: {
+  label: string;
+  figure: CashFigure;
+  note?: string;
+}) {
+  const body = (() => {
+    if (figure.state === "unknown") {
+      return (
+        <>
+          <div className="stat-value" style={{ color: "var(--ink-soft)" }}>
+            —
+          </div>
+          <p style={{ ...muted, fontSize: "0.8rem" }}>{figure.needs}</p>
+        </>
+      );
+    }
+    if (figure.state === "not-applicable" || figure.state === "not-computable") {
+      return (
+        <>
+          <div className="stat-value" style={{ color: "var(--ink-soft)" }}>
+            —
+          </div>
+          <p style={{ ...muted, fontSize: "0.8rem" }}>{figure.because}</p>
+        </>
+      );
+    }
+    return (
+      <>
+        <div className="stat-value">{formatFigureValue(figure.value, figure.unit)}</div>
+        {figure.origin === "derived" && figure.from ? (
+          <p style={{ ...muted, fontSize: "0.8rem" }}>
+            from {figure.from}
+            {figure.unit === "ratio" || figure.sampleSize !== undefined
+              ? figure.sampleSize === null || figure.sampleSize === undefined
+                ? " · sample size not recorded"
+                : ` · from ${figure.sampleSize} ${figure.sampleSize === 1 ? "customer" : "customers"}`
+              : null}
+          </p>
+        ) : null}
+        {figure.origin === "stated" ? (
+          <p style={{ ...muted, fontSize: "0.8rem" }}>
+            {figure.statedAt === undefined
+              ? "You told us this."
+              : `You told us this on ${shortDay(figure.statedAt)}.`}
+            {figure.stale ? " Is this still right?" : ""}
+          </p>
+        ) : null}
+        {figure.origin === "observed" ? (
+          <p style={{ ...muted, fontSize: "0.8rem" }}>Measured by Pikar.</p>
+        ) : null}
+      </>
+    );
+  })();
+
+  return (
+    <div className="stat-tile" data-figure-state={figure.state} data-figure={label}>
+      <div className="stat-head">
+        <p className="caps-label">{label}</p>
+      </div>
+      {body}
+      {note ? <p style={{ ...muted, fontSize: "0.78rem" }}>{note}</p> : null}
+    </div>
+  );
+}
+
+const UNIT_ECONOMICS_LABELS: Record<string, string> = {
+  cfa: "Does a customer pay for itself in 30 days?",
+  ltgp: "Lifetime gross profit",
+  ltgpCac: "LTGP:CAC",
+  cacPayback: "CAC payback",
+  cacVsIndustry: "CAC vs industry average",
+  grossMargin: "Gross margin",
+  cohortChurn: "Monthly churn",
+  referralPct: "Referral share",
+};
+
+/**
+ * The Hormozi spine. `keys` comes from the tenant's tier set, so a solopreneur is never shown the
+ * ratio stack the source material says is unreadable at their sample size.
+ */
+export function UnitEconomicsSection({
+  economics,
+  keys,
+}: {
+  economics: Record<string, CashFigure>;
+  keys: readonly string[];
+}) {
+  if (keys.length === 0) return null;
+  return (
+    <section style={stack} aria-labelledby="cash-unit-heading">
+      <h2 id="cash-unit-heading" style={cardTitle}>
+        Does each customer pay for itself?
+      </h2>
+      <section className="stat-grid" aria-label="Unit economics">
+        {keys.map((key) => {
+          const figure = economics[key];
+          if (!figure) return null;
+          return (
+            <FigureTile key={key} label={UNIT_ECONOMICS_LABELS[key] ?? key} figure={figure} />
+          );
+        })}
+      </section>
+    </section>
+  );
+}
 
 export function CashStateNotice({
   state,
@@ -309,10 +468,20 @@ function ConnectedActivity() {
   return <ActivitySection activity={result.activity} partial={result.bound.partial} />;
 }
 
+function ConnectedUnitEconomics() {
+  const economics = useQuery(api.cash.unitEconomics, {});
+  if (economics === undefined)
+    return <CashStateNotice state="loading">Loading unit economics…</CashStateNotice>;
+  // ponytail: Task 8 supplies the per-tier metric set; until then every figure the query returns
+  // is shown. `Object.keys` is safe here — `CashUnitEconomics` is a plain, fully-populated record.
+  return <UnitEconomicsSection economics={economics} keys={Object.keys(economics)} />;
+}
+
 export function CashTab() {
   return (
     <div style={{ display: "grid", gap: "1.75rem" }}>
       <ConnectedActivity />
+      <ConnectedUnitEconomics />
       <ConnectedNumbers />
     </div>
   );

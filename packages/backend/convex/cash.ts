@@ -16,13 +16,16 @@ import {
   type CashInputField,
   type CashInputState,
   cashInputSpec,
+  unitEconomics as coreUnitEconomics,
   createDashboardBound,
   needsConfirmation,
+  toCashInputs,
   validateCashInput,
 } from "@pikar/core";
 import type { Scorecard } from "@pikar/core/growth/index";
 import { emptyScorecard } from "@pikar/core/growth/index";
 import { v } from "convex/values";
+import type { QueryCtx } from "./_generated/server";
 import { applyScorecardAnswer, latestScorecardRow } from "./evaluations";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 
@@ -100,50 +103,82 @@ function scorecardValue(scorecard: Scorecard, path: string): number | null {
   return typeof value === "number" ? value : null;
 }
 
-export const inputs = tenantQuery({
-  args: {},
-  handler: async (ctx): Promise<{ inputs: CashInputState[] }> => {
-    const now = Date.now();
-    const rows = await ctx.db
-      .query("financeInputs")
-      .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
-      .collect();
-    const byField = new Map(rows.map((row) => [row.field, row]));
-    const evaluation = await latestScorecardRow(ctx.db, ctx.tenantId);
-    const scorecard = (evaluation?.scorecard as Scorecard | undefined) ?? emptyScorecard;
+/**
+ * The ONE read path over a tenant's cash inputs — `financeInputs` rows plus the scorecard's
+ * Hormozi fields, merged into `CashInputState[]`. Both the `inputs` query (the panel) and the
+ * `unitEconomics` query (the metrics) call this, so the two can never disagree about what the
+ * tenant has entered.
+ */
+async function inputStatesFor(
+  ctx: { db: QueryCtx["db"] },
+  tenantId: string,
+  nowMs: number,
+): Promise<{ inputs: CashInputState[] }> {
+  const rows = await ctx.db
+    .query("financeInputs")
+    .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+    .collect();
+  const byField = new Map(rows.map((row) => [row.field, row]));
+  const evaluation = await latestScorecardRow(ctx.db, tenantId);
+  const scorecard = (evaluation?.scorecard as Scorecard | undefined) ?? emptyScorecard;
 
-    return {
-      inputs: CASH_INPUTS.map((spec): CashInputState => {
-        if (spec.store === "financeInputs") {
-          const row = byField.get(spec.field as (typeof rows)[number]["field"]);
-          const value = row?.valueUsd ?? null;
-          const statedAt = row?.statedAt ?? null;
-          return {
-            field: spec.field,
-            value,
-            statedAt,
-            stale: needsConfirmation(value, statedAt, now),
-          };
-        }
-        const value = spec.path === undefined ? null : scorecardValue(scorecard, spec.path);
-        // `userProvidedAt` is a dot-path → epoch-ms map, stamped by `applyScorecardAnswer` and
-        // carried forward UNCHANGED across every re-evaluation (`runEvaluation`) — unlike the
-        // evaluation ROW's own `createdAt`, which is fresh on every carry-forward and is never a
-        // field's stated time. A legacy row can hold a real value with no recorded stated time
-        // (this field predates `userProvidedAt`, or a carried row's writer never stamped it);
-        // `needsConfirmation` (the SAME predicate the `financeInputs` branch above and `cash.ts`'s
-        // `statedFigure` both call — one definition, not three) treats that as needing confirmation,
-        // never as fresh, and never fabricates a date.
-        const statedAt =
-          value === null ? null : (evaluation?.userProvidedAt?.[spec.path as string] ?? null);
+  return {
+    inputs: CASH_INPUTS.map((spec): CashInputState => {
+      if (spec.store === "financeInputs") {
+        const row = byField.get(spec.field as (typeof rows)[number]["field"]);
+        const value = row?.valueUsd ?? null;
+        const statedAt = row?.statedAt ?? null;
         return {
           field: spec.field,
           value,
           statedAt,
-          stale: needsConfirmation(value, statedAt, now),
+          stale: needsConfirmation(value, statedAt, nowMs),
         };
-      }),
-    };
+      }
+      const value = spec.path === undefined ? null : scorecardValue(scorecard, spec.path);
+      // `userProvidedAt` is a dot-path → epoch-ms map, stamped by `applyScorecardAnswer` and
+      // carried forward UNCHANGED across every re-evaluation (`runEvaluation`) — unlike the
+      // evaluation ROW's own `createdAt`, which is fresh on every carry-forward and is never a
+      // field's stated time. A legacy row can hold a real value with no recorded stated time
+      // (this field predates `userProvidedAt`, or a carried row's writer never stamped it);
+      // `needsConfirmation` (the SAME predicate the `financeInputs` branch above and `cash.ts`'s
+      // `statedFigure` both call — one definition, not three) treats that as needing confirmation,
+      // never as fresh, and never fabricates a date.
+      const statedAt =
+        value === null ? null : (evaluation?.userProvidedAt?.[spec.path as string] ?? null);
+      return {
+        field: spec.field,
+        value,
+        statedAt,
+        stale: needsConfirmation(value, statedAt, nowMs),
+      };
+    }),
+  };
+}
+
+export const inputs = tenantQuery({
+  args: {},
+  handler: async (ctx): Promise<{ inputs: CashInputState[] }> =>
+    inputStatesFor(ctx, ctx.tenantId, Date.now()),
+});
+
+/**
+ * The Hormozi spine (CLAUDE.md §1: `@pikar/core`'s `unitEconomics` does every derivation; this
+ * only reads the same inputs `inputs` reads, plus the tenant's own scorecard, and hands them over).
+ * A foreign tenant's scorecard is never read — `latestScorecardRow` is tenant-scoped, same as
+ * `inputStatesFor`'s call to it above.
+ */
+export const unitEconomics = tenantQuery({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    const states = (await inputStatesFor(ctx, ctx.tenantId, now)).inputs;
+    const evaluation = await latestScorecardRow(ctx.db, ctx.tenantId);
+    return coreUnitEconomics({
+      inputs: toCashInputs(states),
+      scorecard: (evaluation?.scorecard as Scorecard | undefined) ?? emptyScorecard,
+      nowMs: now,
+    });
   },
 });
 

@@ -219,3 +219,36 @@ describe("cash.inputs", () => {
     expect(cac?.stale).toBe(true); // unknown age needs confirmation, never reads as fresh
   });
 });
+
+describe("cash.unitEconomics", () => {
+  test("an unauthenticated caller is rejected before anything is read", async () => {
+    const t = convexTest(schema, modules);
+    await expect(t.query(api.cash.unitEconomics, {})).rejects.toThrow(/UNAUTHENTICATED/);
+  });
+
+  // Same read path as `cash.inputs` (`inputStatesFor`), so a foreign tenant's scorecard is exactly
+  // as unreachable here as it is there: `latestScorecardRow` is tenant-scoped, and `tenant-a` has
+  // entered nothing, so its CFA stays `unknown` no matter what `tenant-b` has on file.
+  test("a foreign tenant's scorecard is not read — CFA stays unknown", async () => {
+    const t = convexTest(schema, modules);
+    await asTenant(t, "tenant-b").mutation(api.cash.saveInput, { field: "cac", value: 1400 });
+    await asTenant(t, "tenant-b").mutation(api.cash.saveInput, {
+      field: "thirtyDayCashPerCustomer",
+      value: 2000,
+    });
+
+    const result = await asTenant(t, "tenant-a").query(api.cash.unitEconomics, {});
+    expect(result.cfa.state).toBe("unknown");
+  });
+
+  test("cac and 30-day cash per customer, both entered, derive a known CFA", async () => {
+    const t = convexTest(schema, modules);
+    const as = asTenant(t, "tenant-a");
+    await as.mutation(api.cash.saveInput, { field: "cac", value: 1400 });
+    await as.mutation(api.cash.saveInput, { field: "thirtyDayCashPerCustomer", value: 2000 });
+
+    const result = await as.query(api.cash.unitEconomics, {});
+    expect(result.cfa.state).toBe("known");
+    expect(result.cfa.state === "known" && result.cfa.origin).toBe("derived");
+  });
+});
