@@ -20,6 +20,7 @@ import {
   armFor,
   assertNever,
   classifyReviewDecision,
+  normalizeAddress,
   notificationMessage,
   SEND_TIME_HORIZON_MS,
 } from "@pikar/core";
@@ -647,7 +648,15 @@ export const executePlan = tenantMutation({
     ctx,
     { planId },
   ): Promise<
-    | { ok: true; workflowId?: string; alreadyStarted?: true; scheduled?: true }
+    // 19-05: `withheld` names the suppressed addresses this approve DROPPED. A partial send is
+    // still `ok: true` — the user must be told who was left out, not stopped from mailing the rest.
+    | {
+        ok: true;
+        workflowId?: string;
+        alreadyStarted?: true;
+        scheduled?: true;
+        withheld?: string[];
+      }
     | {
         ok: false;
         reason:
@@ -658,6 +667,10 @@ export const executePlan = tenantMutation({
           // pull — rewrite a line, cut blocks, drop a tier, wait for tomorrow, or call the operator.
           // Plan 20-10's canvas renders them. Only BUGS throw; a refusal returns.
           | "no_deck"
+          // 19-05 PIPE-01, the two CAN-SPAM stops. Both name a lever too: fill in the postal
+          // address on /dashboard/profile, or pick recipients who have not unsubscribed.
+          | "no_postal_address"
+          | "all_recipients_suppressed"
           | ReserveRefusal;
       }
   > => {
@@ -781,6 +794,17 @@ export const executePlan = tenantMutation({
     const tokens = await ctx.runQuery(internal.gmailAuth.getTokens, { tenantId: ctx.tenantId });
     if (!tokens) return { ok: false, reason: "gmail_not_connected" };
 
+    // 19-05 SC#6 (CAN-SPAM): every product email must carry the tenant's physical postal address,
+    // and `gmail.send` refuses to build a footer without one. Refuse HERE — at the human gate,
+    // where the missing field is nameable and fixable — instead of letting every recipient's send
+    // throw at delivery time. The sibling of the `gmail_not_connected` fail-before-mutate guard.
+    const profile = await ctx.db
+      .query("tenantProfiles")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
+      .unique();
+    if ((profile?.postalAddress ?? "").trim() === "")
+      return { ok: false, reason: "no_postal_address" };
+
     // Far-future cap (SCHD-01): the AUTHORITATIVE gate. A beyond-horizon sendAt would fire past the
     // Gmail token's life (design/scheduled-send.md) → dead token. Refuse HERE — the one place the
     // schedule-vs-immediate decision is made — so every write path (NL setSendTime, picker
@@ -790,10 +814,29 @@ export const executePlan = tenantMutation({
     if (plan.sendAt !== undefined && plan.sendAt > Date.now() + SEND_TIME_HORIZON_MS)
       return { ok: false, reason: "send_time_too_far" };
 
+    // 19-05 SC#5, THE PER-ADDRESS DROP — and it has to be HERE, before the join below:
+    // `mode === "group"` collapses every recipient into ONE comma-joined string, after which a
+    // suppressed member is baked into that string and cannot be removed by anything downstream
+    // (`isSuppressed` can only refuse the WHOLE row — see the ponytail note in contacts.ts).
+    //
+    // It reads `suppressions` ONLY (never `contacts`), which is what makes a contacts bug unable
+    // to un-suppress anyone. One indexed read per address, no scan.
+    //
+    // EVERY refusal above and below runs BEFORE the CAS patch. A refusal after it would leave the
+    // plan `approved` with zero `requests` rows and no workflow — a half-approved state nothing
+    // can resume (the 20-07 lesson).
+    const allRecipients = plan.recipients ?? [];
+    const withheld = await ctx.runQuery(internal.contacts.suppressedAmong, {
+      tenantId: ctx.tenantId,
+      addresses: allRecipients,
+    });
+    const suppressed = new Set(withheld);
+    const recipients = allRecipients.filter((r) => !suppressed.has(normalizeAddress(r)));
+    if (recipients.length === 0) return { ok: false, reason: "all_recipients_suppressed" };
+
     // CAS: flip first. A second concurrent tx re-reads "approved" above and no-ops.
     await ctx.db.patch(planId, { status: "approved" });
 
-    const recipients = plan.recipients ?? [];
     const mode = plan.mode ?? "individual";
     const subject = plan.subject ?? "";
     const body = plan.body ?? "";
@@ -886,11 +929,11 @@ export const executePlan = tenantMutation({
         args,
       );
       await ctx.db.patch(planId, { status: "scheduled", scheduledFunctionId });
-      return { ok: true, scheduled: true };
+      return { ok: true, scheduled: true, ...(withheld.length > 0 ? { withheld } : {}) };
     }
 
     const workflowId = await startFanout(ctx, args);
-    return { ok: true, workflowId };
+    return { ok: true, workflowId, ...(withheld.length > 0 ? { withheld } : {}) };
   },
 });
 

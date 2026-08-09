@@ -58,9 +58,29 @@ function withDelivery() {
   return t;
 }
 
-/** A mailbox has to exist for executePlan to proceed past the gmail pre-check. */
-const seedMailbox = (t: ReturnType<typeof convexTest>, tenantId = TENANT) =>
+/** The tenant's CAN-SPAM postal address (19-05). Its own helper because "no postal address" is a
+ *  refusal path with its own test — the sendable tenant gets it through `seedMailbox`. */
+const POSTAL = "Pikar AI, 12 Samora Ave, Dar es Salaam, TZ";
+const seedPostalAddress = (
+  t: ReturnType<typeof convexTest>,
+  tenantId = TENANT,
+  postalAddress = POSTAL,
+) =>
   t.run((ctx) =>
+    ctx.db.insert("tenantProfiles", {
+      tenantId,
+      tier: "solopreneur",
+      tierSource: "derived",
+      derivedAt: Date.now(),
+      postalAddress,
+    }),
+  );
+
+/** executePlan's two pre-CAS gates on the EMAIL arm: a connected mailbox, and (19-05) a postal
+ *  address for the CAN-SPAM footer. Both are seeded here because every email-arm test needs to get
+ *  past both; the tests that assert each refusal seed only the other one. */
+const seedMailbox = async (t: ReturnType<typeof convexTest>, tenantId = TENANT) => {
+  const id = await t.run((ctx) =>
     ctx.db.insert("gmailTokens", {
       tenantId,
       refreshToken: "r",
@@ -68,6 +88,9 @@ const seedMailbox = (t: ReturnType<typeof convexTest>, tenantId = TENANT) =>
       updatedAt: Date.now(),
     }),
   );
+  await seedPostalAddress(t, tenantId);
+  return id;
+};
 
 /** Seed a plans row at a given status (raw insert — bypasses the guided conversation). */
 async function seedPlan(
@@ -898,10 +921,14 @@ describe("executePlan deferred send (SCHD-01 — arm on a future sendAt, fire at
       const asT = t.withIdentity({ subject: TENANT });
       await asT.mutation(api.cockpit.executePlan, { planId });
 
-      expect(await asT.mutation(api.cockpit.moveScheduledPlan, { planId, sendAt: movedAt })).toEqual({
+      expect(
+        await asT.mutation(api.cockpit.moveScheduledPlan, { planId, sendAt: movedAt }),
+      ).toEqual({
         result: "moved",
       });
-      expect(await asT.mutation(api.cockpit.moveScheduledPlan, { planId, sendAt: movedAt })).toEqual({
+      expect(
+        await asT.mutation(api.cockpit.moveScheduledPlan, { planId, sendAt: movedAt }),
+      ).toEqual({
         result: "moved",
       });
 
@@ -1299,5 +1326,241 @@ describe("skill-version attribution (IMPR-01 — propose stamps, executePlan cop
     const plan = await t.run((ctx) => ctx.db.get(planId));
     expect(plan?.status).toBe("proposed"); // still proposes
     expect(plan?.skillVersion).toBeUndefined(); // unattributable, but not a failure
+  });
+});
+
+// ── 19-05 PIPE-01: the pre-CAS refusals and the pre-join per-address suppression drop ─────────
+//
+// Both new refusals run BEFORE the `proposed → approved` CAS patch. A refusal AFTER it would leave
+// the plan `approved` with zero `requests` rows and no workflow — a half-approved state nothing can
+// resume (the 20-07 lesson), which is why every test here asserts `status === "proposed"` as well
+// as the returned reason. The suppression filter runs before `targets` is computed: `mode: "group"`
+// collapses recipients into ONE comma-joined string, after which a per-address drop is impossible.
+
+/** The DELIVERY components only. `withDelivery` additionally registers the audit aggregate and
+ *  the action-retrier, and loading that tree into every extra in-memory backend is precisely what
+ *  crashed the shared vitest fork in 19-02 — nothing below audits or runs a retrier. */
+function withFanoutOnly() {
+  const t = convexTest(schema, modules);
+  t.registerComponent("workflow", workflowSchema, workflowModules);
+  t.registerComponent("workflow/workpool", workpoolSchema, workpoolModules);
+  return t;
+}
+
+describe("executePlan suppression + postal-address gates (19-05, PIPE-01)", () => {
+  /** A suppressions row written straight to the table — the guard reads `suppressions` and NEVER
+   *  `contacts` (contacts-crm invariant 2), so a contact row would prove nothing here. */
+  const suppress = (t: ReturnType<typeof convexTest>, address: string, tenantId = TENANT) =>
+    t.run((ctx) =>
+      ctx.db.insert("suppressions", {
+        tenantId,
+        address, // already normalized by the caller, exactly as the write boundary would store it
+        suppressedAt: Date.now(),
+        source: "user-marked" as const,
+      }),
+    );
+
+  /** `sendAt` in the future ARMS the scheduler instead of starting the fan-out, which reaches every
+   *  assertion here (the filter, the counters and the request rows all land before that branch)
+   *  without registering the workflow components in yet another in-memory backend. Row 11 below
+   *  deliberately takes the immediate path so the drop is proven on BOTH arms. */
+  const seedEmailPlan = (
+    t: ReturnType<typeof convexTest>,
+    recipients: string[],
+    mode: "individual" | "group" = "individual",
+    deferred = true,
+  ) =>
+    t.run((ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: `thread_${crypto.randomUUID()}`,
+        status: "proposed",
+        recipients,
+        mode,
+        subject: "Q3 update",
+        body: "Here is the Q3 update.",
+        ...(deferred ? { sendAt: Date.now() + 3_600_000 } : {}),
+        createdAt: Date.now(),
+      }),
+    );
+
+  const seedTokensOnly = (t: ReturnType<typeof convexTest>) =>
+    t.run((ctx) =>
+      ctx.db.insert("gmailTokens", {
+        tenantId: TENANT,
+        refreshToken: "r",
+        scope: "s",
+        updatedAt: Date.now(),
+      }),
+    );
+
+  const FIVE = [
+    "one@example.com",
+    "two@example.com",
+    "three@example.com",
+    "four@example.com",
+    "five@example.com",
+  ];
+
+  // Row 16a. The tenant, not the deployment, is missing configuration — so the refusal names the
+  // field and leaves the plan exactly where the user can fix it and press Approve again.
+  test("no postalAddress: the plan refuses, stays proposed, and seeds ZERO request rows", async () => {
+    const t = convexTest(schema, modules);
+    await seedTokensOnly(t); // a mailbox but NO tenantProfiles row
+    const planId = await seedEmailPlan(t, FIVE, "individual", false);
+
+    const res = await t
+      .withIdentity({ subject: TENANT })
+      .mutation(api.cockpit.executePlan, { planId });
+
+    expect(res).toEqual({ ok: false, reason: "no_postal_address" });
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("proposed");
+    expect(await countRequests(t)).toHaveLength(0);
+    expect(await listScheduled(t)).toHaveLength(0);
+
+    // ...and a profile row carrying only whitespace is the same as no profile at all. Asserted in
+    // the SAME backend deliberately: an in-memory backend per assertion is what tips this fork over
+    // (19-02), and the second act only adds the row the first act proved was missing.
+    await seedPostalAddress(t, TENANT, "   ");
+    expect(
+      await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId }),
+    ).toEqual({ ok: false, reason: "no_postal_address" });
+    expect(await countRequests(t)).toHaveLength(0);
+  });
+
+  // Row 11. The counters are computed from the ALLOWED list, not the original one — otherwise the
+  // Approvals progress bar promises a fifth delivery that structurally cannot happen.
+  test("5 recipients, 1 suppressed: sends to four, names the withheld one, counters follow the ALLOWED set", async () => {
+    const t = withFanoutOnly();
+    await seedMailbox(t);
+    await suppress(t, "three@example.com");
+    const planId = await seedEmailPlan(t, FIVE, "individual", false); // the IMMEDIATE arm
+
+    const res = await t
+      .withIdentity({ subject: TENANT })
+      .mutation(api.cockpit.executePlan, { planId });
+
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.withheld).toEqual(["three@example.com"]);
+
+    const reqs = await countRequests(t);
+    expect(reqs).toHaveLength(4);
+    expect(reqs.map((r) => r.recipient).sort()).toEqual(
+      FIVE.filter((a) => a !== "three@example.com").sort(),
+    );
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan?.recipientTotal).toBe(4);
+    expect(plan?.queuedCount).toBe(4);
+  });
+
+  test("nobody suppressed: no `withheld` key rides along on the ordinary send", async () => {
+    const t = convexTest(schema, modules);
+    await seedMailbox(t);
+    const planId = await seedEmailPlan(t, FIVE);
+
+    const res = await t
+      .withIdentity({ subject: TENANT })
+      .mutation(api.cockpit.executePlan, { planId });
+
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.withheld).toBeUndefined();
+    expect(await countRequests(t)).toHaveLength(5);
+  });
+
+  // Row 12. THREE recipients, not two: a group whose only survivor is one address passes vacuously
+  // — the joined string would contain that survivor whether or not a drop ever happened.
+  test("group mode: the suppressed member is gone from the JOINED string before the row exists", async () => {
+    const t = convexTest(schema, modules);
+    await seedMailbox(t);
+    await suppress(t, "two@example.com");
+    const planId = await seedEmailPlan(
+      t,
+      ["one@example.com", "two@example.com", "three@example.com"],
+      "group",
+    );
+
+    const res = await t
+      .withIdentity({ subject: TENANT })
+      .mutation(api.cockpit.executePlan, { planId });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.withheld).toEqual(["two@example.com"]);
+
+    const reqs = await countRequests(t);
+    expect(reqs).toHaveLength(1); // group mode is ONE row, whatever the drop did
+    const joined = reqs[0]!.recipient;
+    expect(joined).toContain("one@example.com");
+    expect(joined).toContain("three@example.com");
+    expect(joined).not.toContain("two@example.com");
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.recipientTotal).toBe(1);
+  });
+
+  // Row 13. Every recipient suppressed is a governed STOP, not a zero-recipient send.
+  test("all recipients suppressed: refuses, stays proposed, seeds nothing, schedules nothing", async () => {
+    const t = convexTest(schema, modules);
+    await seedMailbox(t);
+    for (const a of ["one@example.com", "two@example.com"]) await suppress(t, a);
+    const planId = await seedEmailPlan(
+      t,
+      ["one@example.com", "two@example.com"],
+      "individual",
+      false,
+    );
+
+    const res = await t
+      .withIdentity({ subject: TENANT })
+      .mutation(api.cockpit.executePlan, { planId });
+
+    expect(res).toEqual({ ok: false, reason: "all_recipients_suppressed" });
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan?.status).toBe("proposed");
+    expect(plan?.scheduledFunctionId).toBeUndefined();
+    expect(await countRequests(t)).toHaveLength(0);
+    expect(await listScheduled(t)).toHaveLength(0);
+  });
+
+  // The `normalizeAddress` agreement, proven AT the guard rather than assumed from 19-01's unit
+  // test: a suppression stored for the normalized address blocks a differently-cased, padded
+  // recipient string sitting on the plan row.
+  test("matching is case- and whitespace-insensitive on BOTH sides of the guard", async () => {
+    const t = convexTest(schema, modules);
+    await seedMailbox(t);
+    await suppress(t, "bob@x.com"); // stored normalized, as the write boundary always stores it
+    const planId = await seedEmailPlan(t, [" Bob@X.com ", "keep@example.com"]);
+
+    const res = await t
+      .withIdentity({ subject: TENANT })
+      .mutation(api.cockpit.executePlan, { planId });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.withheld).toEqual(["bob@x.com"]);
+
+    const reqs = await countRequests(t);
+    expect(reqs).toHaveLength(1);
+    expect(reqs[0]!.recipient).toBe("keep@example.com");
+  });
+
+  // Row 7 regression, stated as a boundary rather than as a parallel copy of the arm suites above:
+  // the two new gates belong to the EMAIL arm alone. A memo has no mailbox and no footer, and
+  // requiring either of them would break a save that sends to nobody.
+  test("the memo arm approves with NO mailbox and NO postal address (the gates are email-only)", async () => {
+    const t = withFanoutOnly(); // persistNextStepMemo starts the vault-ingest workflow
+    const planId = await t.run((ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: "thread_memo_19_05",
+        kind: "memo",
+        status: "proposed",
+        body: "Call the supplier on Monday.",
+        createdAt: Date.now(),
+      }),
+    );
+
+    expect(
+      await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId }),
+    ).toEqual({ ok: true });
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("done");
   });
 });
