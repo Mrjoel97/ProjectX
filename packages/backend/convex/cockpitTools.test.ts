@@ -1899,6 +1899,60 @@ test("stageCrmWrite REFUSES a follow-up that names no contact — a sentence, ne
   expect(plan?.status).toBe("collecting");
 });
 
+// ── 19-11 (ACTN-05 defect): a dated CONTACT is a follow-up that lost its op ───────────────────
+// 19-10 measured the live body staging `{op:"addContact", …}` with no `dueAt` for "remind me on
+// Thursday to chase Rhea". The tool USED to accept `due`/`note` on an addContact — they were
+// optional on every item in one permissive object — and then SILENTLY DROP them, so a model that
+// supplied the whole follow-up got a bare contact staged and the date destroyed with no signal.
+// A silent drop at a trust boundary cannot be answered; a returned refusal must be.
+test("stageCrmWrite REFUSES a contact carrying a date — the follow-up half is never silently dropped", async () => {
+  const { t, planId } = await setup();
+
+  const dated = await callClock(t, planId, "stageCrmWrite", {
+    operations: [
+      { op: "addContact", email: "rhea@example.com", name: "Rhea", due: "Thursday" },
+    ],
+  });
+  expect(dated).toMatch(/addFollowUp/);
+  // Nothing staged: the plan row is untouched, so the model cannot mistake the drop for a save.
+  expect((await readPlan(t, planId))?.kind).toBeUndefined();
+
+  // `note` is the other half of a follow-up and was dropped just as silently.
+  const noted = await callClock(t, planId, "stageCrmWrite", {
+    operations: [
+      { op: "addContact", email: "rhea@example.com", name: "Rhea", note: "chase the renewal" },
+    ],
+  });
+  expect(noted).toMatch(/addFollowUp/);
+  expect((await readPlan(t, planId))?.kind).toBeUndefined();
+});
+
+// The union arm the model must actively choose. `addContact` used to be the enum's FIRST member
+// and the schema's minimum valid emission (`required: ["op","email"]`), so it was reachable
+// without the model having chosen it at all. A follow-up's date is now structurally required.
+test("stageCrmWrite's schema puts the follow-up arm FIRST and requires its date", async () => {
+  const tools = buildCockpitTools(
+    {} as never,
+    "t1",
+    "plan1" as unknown as Id<"plans">,
+    PIN_CLOCK,
+  );
+  const schema = (
+    tools.stageCrmWrite.inputSchema as unknown as {
+      jsonSchema: {
+        properties: {
+          operations: { items: { anyOf: Array<{ properties: { op: { enum: string[] } }; required: string[] }> } };
+        };
+      };
+    }
+  ).jsonSchema;
+  const arms = schema.properties.operations.items.anyOf;
+  expect(arms.map((a) => a.properties.op.enum[0])).toEqual(["addFollowUp", "addContact"]);
+  expect(arms[0].required).toEqual(["op", "email", "note", "due"]);
+  // …and a contact structurally cannot carry the follow-up fields at all.
+  expect(Object.keys(arms[1].properties)).toEqual(["op", "email", "name"]);
+});
+
 test("stageCrmWrite REFUSES an empty operation list — a sentence, never a throw", async () => {
   const { t, planId } = await setup();
   const reply = await callClock(t, planId, "stageCrmWrite", { operations: [] });
