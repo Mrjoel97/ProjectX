@@ -25,8 +25,14 @@ created: 2026-08-09
 | **Full suite command** | `pnpm test` (turbo, all packages) + `pnpm typecheck` + `node scripts/check-playbooks.mjs` |
 | **Estimated runtime** | ~90 s filtered per package; full turbo run several minutes |
 
-**Typecheck baseline:** backend is **13 errors, all in `convex/*.test.ts`, zero non-test**.
-**Re-measure at Wave 0 — do not quote a stale number.** A non-test error is a regression.
+**Typecheck baseline: backend is ZERO.** Measured foreground from `packages/backend` on
+2026-08-09 during 19-01 and independently re-confirmed by the orchestrator: `npx tsc --noEmit`
+exits 0 with no output. **The "13" this file previously claimed and the "150" in STATE.md are
+BOTH stale — do not quote either.** Any error at all is now a regression.
+
+Also established by 19-01: a **schema-only** change needs no `npx convex codegen` —
+`_generated/dataModel.d.ts` derives table types generically from `schema.ts`. Codegen is only
+required when a new Convex *module* appears.
 
 **Browser gate:** `pnpm --filter @pikar/web test:e2e -- e2e/pipeline.spec.ts` needs a live
 `convex dev` (not `--once`), Next on :3111, and `E2E_USER_EMAIL` / `E2E_USER_PASSWORD`.
