@@ -89,6 +89,37 @@ const definedOnly = <T extends object>(o: T): T =>
 const FACT_KEYS = ["headcount", "paidStaff", "revenueStage", "funding", "yearsOperating"] as const;
 
 /**
+ * The CAN-SPAM postal address (19-03, PIPE-01 SC#6).
+ *
+ * **It is NOT an onboarding slot and must never become one.** It is deliberately absent from
+ * `missingSlots` / `canComplete` and from every onboarding gate: Phase 11 admits idea-stage users
+ * with almost nothing filled in (19-CONTEXT) and that decision is not reopened. The SEND path fails
+ * closed on the missing field instead (19-05) — enforcement lives there, enrichment lives here.
+ * `tenantProfile.test.ts` pins the completeness result as byte-identical with and without it.
+ *
+ * ponytail: free-text block, not a parsed address. CAN-SPAM requires a valid physical postal
+ * address, not a structured one; a structured object invites a country/state enum this phase does
+ * not need. Upgrade path: parse at render time if a per-country format is ever required.
+ */
+const POSTAL_ADDRESS_MAX = 500;
+
+/**
+ * The ONE write boundary for the postal address (this file, nowhere else).
+ *
+ * Blank-after-trim is REFUSED rather than stored: a footer rendering an empty address looks
+ * compliant and is not — worse than no footer. The ceiling is a ceiling, not a truncation: a
+ * silently-cut address is also a wrong one.
+ */
+function validPostalAddress(raw: string): string {
+  const trimmed = raw.trim();
+  if (trimmed === "") throw new ConvexError({ code: "EMPTY_POSTAL_ADDRESS" });
+  if (trimmed.length > POSTAL_ADDRESS_MAX) {
+    throw new ConvexError({ code: "POSTAL_ADDRESS_TOO_LONG", max: POSTAL_ADDRESS_MAX });
+  }
+  return trimmed;
+}
+
+/**
  * Design §9's *"a tier change is a MOMENT, not a setting"* on the LOG plane. It rides the existing
  * insert-only `internal.audit.log` — there is deliberately NO `tierHistory` table: the audit table
  * already IS the append-only log, and a second one is a second thing to keep honest (the 15-03
@@ -169,8 +200,13 @@ export const saveFacts = tenantMutation({
     yearsOperating: tpFields.yearsOperating,
     agentName: tpFields.agentName,
     behaviorPreset: tpFields.behaviorPreset,
+    postalAddress: tpFields.postalAddress,
   },
   handler: async (ctx, args): Promise<SaveFactsResult> => {
+    // Validate BEFORE any DB work: a refusal takes the whole write with it, facts included.
+    const postalAddress =
+      args.postalAddress === undefined ? undefined : validPostalAddress(args.postalAddress);
+
     const existing = await byTenant(ctx.db, ctx.tenantId);
 
     // Merge provided-over-stored with `??` (NULLISH, never `||`): `headcount: 0` is an ANSWER.
@@ -187,6 +223,9 @@ export const saveFacts = tenantMutation({
       // A trust boundary, not a cosmetic field — this string rides into a model system prompt.
       agentName: args.agentName === undefined ? undefined : sanitizeAgentName(args.agentName),
       behaviorPreset: args.behaviorPreset,
+      // Enrichment, NOT a fact: it rides the same write but is deliberately outside `missingSlots`
+      // below, so an address neither completes nor blocks the tier derivation.
+      postalAddress,
     });
 
     const missing = missingSlots({ ...facts, oneLineDescription: NARRATIVE_PLACEHOLDER });
