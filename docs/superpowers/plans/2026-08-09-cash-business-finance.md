@@ -503,6 +503,28 @@ describe("activityFromSends", () => {
     expect(result.streakDays).toBe(0);
   });
 
+  test("the 7-day total is derived HERE, not in the view, and is not the same as today's count", () => {
+    // Distinct from todayCount and from a whole-window sum, so a wrong slice direction or window
+    // length fails here rather than passing a substring match in the rendered HTML.
+    const result = activityFromSends({
+      sentAtMs: [day(0), day(1), day(3), day(6), day(8)],
+      sinceMs: NOW - 10 * DAY,
+      nowMs: NOW,
+    });
+    expect(result.todayCount).toBe(1);
+    expect(result.last7Count).toBe(4);
+    expect(result.perDay.reduce((sum, d) => sum + d.count, 0)).toBe(5);
+  });
+
+  test("a window shorter than 7 days totals what it has, not a padded week", () => {
+    const result = activityFromSends({
+      sentAtMs: [day(0), day(1)],
+      sinceMs: NOW - 2 * DAY,
+      nowMs: NOW,
+    });
+    expect(result.last7Count).toBe(2);
+  });
+
   test("no sends at all is a real measured zero, not unknown", () => {
     const result = activityFromSends({ sentAtMs: [], sinceMs: NOW - 2 * DAY, nowMs: NOW });
     expect(result.todayCount).toBe(0);
@@ -628,6 +650,8 @@ export type CashActivity = {
   todayCount: number;
   /** Consecutive UTC days with at least one send, ENDING TODAY. Zero if nothing went out today. */
   streakDays: number;
+  /** Today plus the six preceding UTC days. DERIVED HERE, never in the view (CLAUDE.md §1). */
+  last7Count: number;
 };
 
 const utcDayStart = (ms: number): number => Math.floor(ms / DAY_MS) * DAY_MS;
@@ -667,7 +691,9 @@ export function activityFromSends(input: {
     streakDays += 1;
   }
 
-  return { perDay, todayCount: counts.get(today) ?? 0, streakDays };
+  const last7Count = perDay.slice(0, 7).reduce((sum, bucket) => sum + bucket.count, 0);
+
+  return { perDay, todayCount: counts.get(today) ?? 0, streakDays, last7Count };
 }
 ```
 
@@ -978,8 +1004,6 @@ export function ActivitySection({
   activity: CashActivity;
   partial: boolean;
 }) {
-  const last7 = activity.perDay.slice(0, 7);
-  const total7 = last7.reduce((sum, day) => sum + day.count, 0);
   return (
     <section style={stack} aria-labelledby="cash-activity-heading">
       <h2 id="cash-activity-heading" style={cardTitle}>
@@ -1000,7 +1024,9 @@ export function ActivitySection({
             <p className="caps-label">Reach-outs today</p>
           </div>
           <div className="stat-value">{activity.todayCount}</div>
-          <p style={{ ...muted, fontSize: "0.8rem" }}>{total7} in the last 7 days</p>
+          {/* Formatting only. The 7-day sum is derived in `activityFromSends` — a `.reduce()`
+              here would be domain arithmetic in the view, which Global Constraint 1 forbids. */}
+          <p style={{ ...muted, fontSize: "0.8rem" }}>{activity.last7Count} in the last 7 days</p>
         </div>
         <div className="stat-tile">
           <div className="stat-head">
