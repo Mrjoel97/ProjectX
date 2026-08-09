@@ -3,7 +3,9 @@
 > Last verified: 2026-08-09 (`tenantProfile.saveFacts` gained `postalAddress` — a 500-char-capped,
 > trim-validated write-boundary field for the CAN-SPAM footer (Phase 19 contacts/CRM), recorded from
 > another lane. It is deliberately absent from `missingSlots`/`canComplete`: enrichment, not an
-> onboarding slot, so onboarding completeness is unaffected.)
+> onboarding slot, so onboarding completeness is unaffected. 19-03 added its typing
+> surface — a "Postal address" textarea on the profile page (`ShapePanel.tsx`), never a question in
+> the onboarding conversation.)
 >
 > Previously verified: 2026-08-09 (**`paidStaff` now EXCLUDES the founder** — the solo signal depended on
 > it, and a solopreneur on their own payroll was deriving as `startup`/`sme`.)
@@ -922,6 +924,15 @@ cannot see:
   idea; it does not demand a finished business. Enforced by `businessProfile.test.ts` (sparse-start +
   empty-name cases) and `onboarding.test.ts` (empty-description rejected). The FIVE tier fact slots
   are a separate, non-optional gate — see "the completion gate" below.
+- **`postalAddress` is ENRICHMENT, never an onboarding slot (Phase 19, PIPE-01 SC#6)** — the
+  CAN-SPAM postal address lives on `tenantProfiles` and is written through `saveFacts` (trimmed,
+  500-char ceiling, blank-after-trim REFUSED at the write boundary so a footer can never render an
+  empty address). It is deliberately absent from `missingSlots`/`canComplete` and from every
+  onboarding gate — Phase 11 admits idea-stage users with almost nothing filled in and that is not
+  reopened. Its ABSENCE is enforced in the SEND path instead (19-05 refuses the approve;
+  `contacts.footerFor` returns null without it), never here. Pinned by `tenantProfile.test.ts`
+  "the onboarding-completeness result is BYTE-IDENTICAL with and without a postal address". The
+  typing surface is the profile page's `ShapePanel.tsx`, not the onboarding conversation.
 - **No caller can supply a tier (SC#1b)** — `vProfile` has no `persona` field, so an extra key is a
   hard Convex validation error; `ProfileInput` has none either, so nothing can construct one; and
   `saveFacts` has no `tier` argument. Three layers, one property: the tier is an OUTPUT. Enforced by

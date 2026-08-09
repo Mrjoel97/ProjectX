@@ -86,6 +86,30 @@ export function readMissing(err: unknown): SlotName[] | null {
   return data.missing as SlotName[];
 }
 
+/** The bare `code` off a ConvexError. `readMissing` above handles the two slot-gap codes. */
+function readCode(err: unknown): string | null {
+  if (!(err instanceof ConvexError)) return null;
+  const code = (err.data as { code?: unknown } | undefined)?.code;
+  return typeof code === "string" ? code : null;
+}
+
+/**
+ * The postal-address write boundary's refusals, in the user's language (19-03).
+ *
+ * Shown INLINE through the panel's existing error affordance — never `window.alert`, and never a
+ * `window.confirm` anywhere in this tree: a browser modal blocks the Playwright specs.
+ */
+const POSTAL_REFUSAL: Record<string, string> = {
+  EMPTY_POSTAL_ADDRESS:
+    "A postal address can't be blank — it goes in the footer of every email you send.",
+  POSTAL_ADDRESS_TOO_LONG: "That postal address is too long. Keep it under 500 characters.",
+};
+
+const FACTS_FALLBACK_ERROR = "Couldn't save that. Check the numbers and try again.";
+
+/** Mirrors `POSTAL_ADDRESS_MAX` in `tenantProfile.ts`. A courtesy cap — the refusal is server-side. */
+const POSTAL_ADDRESS_MAXLENGTH = 500;
+
 export function ShapePanel({ oneLineDescription }: { oneLineDescription: string }) {
   const tierRow = useQuery(api.tenantProfile.get);
   const saveFacts = useMutation(api.tenantProfile.saveFacts);
@@ -99,6 +123,7 @@ export function ShapePanel({ oneLineDescription }: { oneLineDescription: string 
   const [funding, setFunding] = useState<Funding | "">("");
   const [agentName, setAgentName] = useState("");
   const [behaviorPreset, setBehaviorPreset] = useState<BehaviorPreset | "">("");
+  const [postalAddress, setPostalAddress] = useState("");
 
   const [savingFacts, setSavingFacts] = useState(false);
   const [factsSaved, setFactsSaved] = useState(false);
@@ -120,6 +145,7 @@ export function ShapePanel({ oneLineDescription }: { oneLineDescription: string 
     setFunding(tierRow.funding ?? "");
     setAgentName(tierRow.agentName ?? "");
     setBehaviorPreset(tierRow.behaviorPreset ?? "");
+    setPostalAddress(tierRow.postalAddress ?? "");
   }, [tierRow]);
 
   /**
@@ -142,6 +168,12 @@ export function ShapePanel({ oneLineDescription }: { oneLineDescription: string 
         funding: funding === "" ? undefined : funding,
         agentName: agentName.trim() === "" ? undefined : agentName,
         behaviorPreset: behaviorPreset === "" ? undefined : behaviorPreset,
+        // Empty box + nothing stored = the user simply hasn't filled it in yet, so send nothing.
+        // Anything else is a real write — INCLUDING blanking a stored address, which the write
+        // boundary REFUSES and which is surfaced inline below. There is deliberately no "delete my
+        // address" path: an empty CAN-SPAM footer looks compliant and is not.
+        postalAddress:
+          postalAddress.trim() === "" && !tierRow?.postalAddress ? undefined : postalAddress,
       });
       setFactsSaved(true);
       // Design §9 — a tier change is a MOMENT, not a silent field update. `changed` is the server's
@@ -150,7 +182,7 @@ export function ShapePanel({ oneLineDescription }: { oneLineDescription: string 
     } catch (err) {
       const missing = readMissing(err);
       if (missing) setFactGaps(missing);
-      else setFactsError("Couldn't save that. Check the numbers and try again.");
+      else setFactsError(POSTAL_REFUSAL[readCode(err) ?? ""] ?? FACTS_FALLBACK_ERROR);
     } finally {
       setSavingFacts(false);
     }
@@ -328,6 +360,39 @@ export function ShapePanel({ oneLineDescription }: { oneLineDescription: string 
           />
         </LabeledField>
         <PresetGroup value={behaviorPreset} onChange={setBehaviorPreset} />
+      </div>
+
+      {/* The CAN-SPAM postal address (19-03, PIPE-01 SC#6). An ENRICHMENT field on this page, never
+          an onboarding gate — Phase 11 admits idea-stage users with almost nothing filled in. The
+          helper line is the entire user-facing explanation of why a send can be refused, so it says
+          so plainly rather than describing the field. A free-text block, not a parsed address: a
+          postal address is 2-3 lines and CAN-SPAM wants a valid one, not a structured one. */}
+      <div
+        style={{
+          display: "grid",
+          gap: "0.5rem",
+          paddingTop: "0.5rem",
+          borderTop: "1px solid var(--rule)",
+        }}
+      >
+        <LabeledField label="Postal address">
+          <textarea
+            style={field}
+            rows={3}
+            maxLength={POSTAL_ADDRESS_MAXLENGTH}
+            value={postalAddress}
+            aria-describedby="postal-address-help"
+            placeholder={"Acme Ltd\n123 Main St\nSpringfield IL 62704, USA"}
+            onChange={(e) => setPostalAddress(e.target.value)}
+          />
+        </LabeledField>
+        <p
+          id="postal-address-help"
+          style={{ margin: 0, color: "var(--ink-soft)", fontSize: "0.85rem" }}
+        >
+          Required by law in the footer of every email you send. Sending is blocked until this is
+          set.
+        </p>
       </div>
 
       {factGaps && factGaps.length > 0 && (
