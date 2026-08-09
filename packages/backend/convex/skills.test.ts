@@ -680,6 +680,52 @@ describe("activateCandidate + candidatesForReview — ops panel (IMPR-02/03)", (
     expect(list.find((c) => c.name === "inbox-digest")).toBeUndefined();
   });
 
+  test("a candidate BEHIND the active version is never offered for review", async () => {
+    const t = convexTest(schema, modules);
+    // The live shape observed 2026-08-09: an upgrade landed at v17 and the optimizer's older
+    // dry-run candidate stayed behind at v16. The panel kept offering `v17 -> v16`, whose only
+    // outcomes are an EVAL_GATE refusal or — with evidence — a SILENT ROLLBACK of a live agent.
+    await insert(t, { name: "cockpit-agent", version: 16, body: "stale", status: "candidate" });
+    await insert(t, { name: "cockpit-agent", version: 17, body: "live", status: "active" });
+    // Same version as active is also not an upgrade.
+    await insert(t, { name: "document-drafter", version: 3, body: "d3", status: "active" });
+    await insert(t, { name: "document-drafter", version: 3, body: "d3c", status: "candidate" });
+    // A genuine forward candidate still appears, so this is not vacuously empty.
+    await insert(t, { name: "inbox-digest", version: 1, body: "i1", status: "active" });
+    await insert(t, { name: "inbox-digest", version: 2, body: "i2", status: "candidate" });
+    const { asOwner } = await identities(t);
+
+    const list = await asOwner.query(api.skills.candidatesForReview, {});
+
+    expect(list.find((c) => c.name === "cockpit-agent")).toBeUndefined();
+    expect(list.find((c) => c.name === "document-drafter")).toBeUndefined();
+    expect(list.find((c) => c.name === "inbox-digest")).toMatchObject({
+      fromVersion: 1,
+      toVersion: 2,
+    });
+    // Anti-vacuity: the stale rows really are in the table and really are candidates.
+    const stale = await t.run((ctx) =>
+      ctx.db
+        .query("skills")
+        .withIndex("by_name_version", (q) => q.eq("name", "cockpit-agent").eq("version", 16))
+        .unique(),
+    );
+    expect(stale?.status).toBe("candidate");
+  });
+
+  test("a candidate with no active row at all is still offered", async () => {
+    const t = convexTest(schema, modules);
+    // First-ever candidate for a skill: `active` is null, so there is nothing to be behind.
+    await insert(t, { name: "cockpit-agent", version: 1, body: "first", status: "candidate" });
+    const { asOwner } = await identities(t);
+
+    const list = await asOwner.query(api.skills.candidatesForReview, {});
+    expect(list.find((c) => c.name === "cockpit-agent")).toMatchObject({
+      fromVersion: null,
+      toVersion: 1,
+    });
+  });
+
   // GOVN-01 — authentication is NOT authorization. Skill rows are a GLOBAL registry, so
   // before this gate any signed-in tenant could read every candidate prompt body in the
   // deployment and flip any skill live.
