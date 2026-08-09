@@ -1,6 +1,11 @@
 # Playbook: Contacts, CRM & follow-ups
 
-> Last verified: 2026-08-09 (Plan 19-05 — the send path consumes this module: invariant 12 below,
+> Last verified: 2026-08-09 (Plan 19-06 — **the agent WRITE path exists: `crm_write` is the fifth
+> `ACTION_TYPES` member, on the `inline` arm.** Invariant 11's ACTOR rule stopped being prose and
+> became enforced code, and invariant 13 below is new. `contacts.ts` was refactored so the write
+> rule has exactly ONE implementation.)
+>
+> Previously verified: 2026-08-09 (Plan 19-05 — the send path consumes this module: invariant 12 below,
 > and the "Touching the send path" note is now describing shipped code rather than a plan)
 >
 > Previously verified: 2026-08-09 (Plan 19-04 — the public unsubscribe route)
@@ -28,7 +33,10 @@ about them — and there was nowhere to record that someone had asked to stop be
 
 **Pure packages (framework-agnostic, CLAUDE.md §1)**
 - `packages/core/src/contacts.ts` — `normalizeAddress` (the identity function), `needsAttention`,
-  `followUpIsDue`, `renderFooter`. No Convex import, plain `string` ids.
+  `followUpIsDue`, `renderFooter`, and (19-06) `CrmOperation` + `parseCrmOperations` — the pure
+  contract of a `crm_write` plan's operation list, run at BOTH the write and the apply boundary and
+  idempotent over its own output so the second parse cannot refuse what the first accepted.
+  No Convex import, plain `string` ids and refs.
 - `packages/core/src/contacts.test.ts` — boundary tests for all four, including the idempotence
   table that keeps the suppressions key byte-stable.
 
@@ -39,8 +47,10 @@ about them — and there was nowhere to record that someone had asked to stop be
   CLAUDE.md §2). Six public writes: `upsertContact`, `assertConsent`, `markSuppressed`,
   `unsuppress`, `createFollowUp`, `setFollowUpStatus`. Five internals the rest of the phase
   consumes: `isSuppressed`, `suppressedAmong`, `footerFor`, `resolveUnsubToken`,
-  `suppressFromUnsubscribe`. There are deliberately NO public reads here yet — the Pipeline page's
-  reads land with the page. (No line numbers: they rot.)
+  `suppressFromUnsubscribe`. Plus (19-06) the three SHARED write helpers `upsertContactRow` /
+  `createFollowUpRow` / `setFollowUpStatusRow` and the `applyCrmOperations` terminal that
+  `cockpit.ts`'s `inline` arm calls — invariant 13. There are deliberately NO public reads here yet
+  — the Pipeline page's reads land with the page. (No line numbers: they rot.)
 - `packages/backend/convex/contacts.test.ts` — the BETA-05 isolation block over every public
   function by name, the runtime audit key-set assertion, and the no-opportunities structural scan.
   Its last two tests pin the EXPORT SETS, so a seventh public write added without an isolation
@@ -224,6 +234,27 @@ user edits on the Pipeline page are ungated: a human marking their own follow-up
 agent act. Relatedly, the AGENT must always name a contact on a follow-up; contactless follow-ups
 are a USER-only capability, and that is the structural brake against this CRM quietly becoming a
 general task generator.
+*Enforcement (19-06 — this stopped being prose):* the agent's only write path is a `crm_write` plan,
+and `executePlan` is the only caller of `applyCrmOperations`. The contactless brake is structural in
+the TYPE: `CrmOperation`'s `addFollowUp` arm carries a REQUIRED `email`, while
+`contacts.createFollowUp`'s `contactId` stays optional for the human. `parseCrmOperations` throws
+`CRM_FOLLOWUP_CONTACT_REQUIRED` on absent/blank/unnormalizable, pinned in `core/contacts.test.ts`.
+
+**13. ONE implementation of the write rule, shared by both actors (19-06).**
+`upsertContactRow`, `createFollowUpRow` and `setFollowUpStatusRow` are plain async functions over an
+explicit `tenantId`. The public `tenantMutation`s are one-line delegations to them, and
+`applyCrmOperations` calls the same three. **Three copies of the identity/upsert rule would be three
+chances to disagree about who someone is** (invariant 4; CLAUDE.md §8 rung 2). The `tenantId` is
+INJECTED by the wrapper at every public call site and read off the APPROVED PLAN ROW at the applier
+— never model-supplied, so the refactor does not widen the tenant boundary. `applyCrmOperations`
+resolves a `followUpRef` with `db.normalizeId` (`db.get` THROWS on a non-id string; `normalizeId`
+returns null, so a malformed ref refuses the same way a foreign one does) and UPSERTS the contact a
+follow-up names rather than refusing an unknown address — the human approved a card naming it, so
+the row is a deliberate human act (invariant 1) and refusing after Approve would error on a plan the
+user already agreed to.
+*Enforcement:* `contacts.test.ts`'s existing isolation block still runs over every public write
+(they delegate, so it still covers them), plus `cockpit.test.ts` "executePlan crm_write arm" —
+including the cross-tenant approve and the foreign-`followUpRef` refusal.
 
 ## How to change safely
 
@@ -253,6 +284,9 @@ almost the same fact. That is why "needing attention" means *unowned* rather tha
 | `pnpm --filter @pikar/core test -- contacts` | The four pure functions at their boundaries, incl. idempotence and the fail-closed footer |
 | `pnpm --filter @pikar/backend test -- contacts` | Tenant isolation over every new public function, the unsubscribe token round-trip, bounded reads, the no-opportunities structural scan |
 | `pnpm --filter @pikar/backend test -- cockpitTools` + `-- gmail` | The per-address suppression drop, the group-mode join, all-suppressed refusal, the post-approve suppression, MIME-byte footer presence |
+| `pnpm --filter @pikar/backend test -- cockpit` | The `crm_write` arm: all-or-none, double-approve, no requests rows, no Gmail token, cross-tenant and foreign-ref refusals |
+| `pnpm --filter @pikar/backend test -- plans` | Pitfall 1 — `patchPlan`'s hand-maintained `kind` mirror accepts `crm_write` through the RUNTIME validator, and `resetPlan` clears `crmOperations` |
+| `pnpm --filter @pikar/web test -- crmCard` | The plan card's line list, read through the same validator the applier runs |
 | `pnpm --filter @pikar/web test -- pipelineView` | The empty-state `0` assertions (never `—`, never `Unknown`) |
 | `node scripts/check-playbooks.mjs` | This playbook is registered and bumped alongside the code it watches |
 | `pnpm --filter @pikar/web test:e2e -- e2e/pipeline.spec.ts` | **Needs a live deployment.** A `--list` is NOT a run; a blank result means NOT RUN, never that it passed |

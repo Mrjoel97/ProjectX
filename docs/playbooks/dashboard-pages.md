@@ -1,6 +1,20 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-08-09 (Plan 19-05 — the Approvals refusal map gained the two CAN-SPAM stops.)
+> Last verified: 2026-08-09 (Plan 19-06 — the Approvals page learned a FIFTH plan kind, `crm_write`.)
+> SCOPE: `approvals.ts` `planKind` + `ApprovalsView.tsx`'s badge/title/action-label trio; no page,
+> query, pagination or empty state changed. **This surface is dragged in by a COMPILE error and that
+> is deliberate:** `planKind`'s return union is the Approvals page's own enum (`media` splits into
+> `reel`/`image`), and `PlanKind` is derived from it, so widening `plans.kind` breaks
+> `ApprovalKindBadge`'s `Record<PlanKind, string>` before anything ships. `titleFor` reads the staged
+> operation COUNT ("3 changes to your records") rather than an email subject, and `actionLabel`
+> returns "Approve & save to records" — every label here must name what Approve DOES, or the page
+> promises an email the `inline` arm structurally cannot produce. `crm_write` is deliberately NOT
+> given the "Schedule…" button (`item.kind === "email"` gates it) and falls to the generic "Edit in
+> cockpit" link. Pinned in `approvalsView.test.ts`'s two `test.each` tables.
+> **When a new `ACTION_TYPES` member lands, the badge map, `titleFor` and `actionLabel` all need an
+> entry in the same commit — see `cockpit.md`'s registration checklist.**
+>
+> Previously verified: 2026-08-09 (Plan 19-05 — the Approvals refusal map gained the two CAN-SPAM stops.)
 > SCOPE: `ApprovalsView.tsx` only; no page, query, pagination or empty state changed.
 > `refusalMessage` now has real copy for `no_postal_address` and `all_recipients_suppressed` — this
 > page is the SECOND approve surface (the cockpit plan card is the other), and without an entry the

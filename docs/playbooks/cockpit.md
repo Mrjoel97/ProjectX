@@ -11,6 +11,73 @@
 > passing on an empty scan. **Add the literal in the SAME commit as a new tool.** Prose in a schema
 > comment is not a guard; a test is.
 
+> Last verified: 2026-08-09 (Plan 19-06 — **`ACTION_TYPES` has a FIFTH member, `crm_write`, and it
+> is the `inline` arm's SECOND occupant.** `actionType.ts`, `cockpit.ts`, `schema.ts`, `plans.ts`,
+> `approvals.ts`, `llm.ts`, `cards.tsx` and `ApprovalsView.tsx` changed, in ONE commit.)
+>
+> **1. `crm_write` is `inline`, not `externalAction`, and the reason is the definition.** `inline`
+> means "a single transactional write"; a CRM write targets our OWN `contacts` / `followUps` tables,
+> so there is no `fetch`, no third-party API and nothing for the retrier to retry. Routing it
+> through the retrier would buy at-least-once delivery of a write that is already exactly-once.
+> The arm sits ABOVE the Gmail pre-check and above the postal-address gate on purpose, so a CRM
+> write approves on a tenant that could not send at all — the memo arm's property, inherited.
+> An `inline` member needs NO `EXTERNAL_TARGETS` entry and must not be given one: `ExternalActionType`
+> is DERIVED from `_ARM_TABLE`, so adding a target for `crm_write` would not compile.
+>
+> **2. ALL-OR-NONE IS FREE, AND SO IS DOUBLE-APPROVE.** A Convex mutation is one serializable
+> transaction, so a throw on the third operation discards the first two — no saga, no compensation,
+> no idempotency key beyond `executePlan`'s existing `proposed → approved` CAS, which is also what
+> makes a second approve apply nothing. `applyCrmOperations` is called DIRECTLY (not through
+> `runMutation`) precisely so it shares that transaction. *Enforcement:* `cockpit.test.ts`
+> "executePlan crm_write arm" — the invalid-third-operation test asserts zero rows AND
+> `status === "proposed"`, and the double-approve test asserts the row counts are unchanged.
+>
+> **3. THE REGISTRATION CHECKLIST — a new `ACTION_TYPES` member visits ALL of these, in ONE commit.**
+> A partially-registered action type is worse than an unregistered one: the discriminated union goes
+> non-exhaustive and the failure surfaces somewhere unrelated. Only the first four are compile
+> errors; the rest are silent.
+> - [ ] `packages/core/src/actionType.ts` — `ACTION_TYPES` (the array)
+> - [ ] `packages/core/src/actionType.ts` — `actionTypeOf`'s parameter union (mirrors `plans.kind`)
+> - [ ] `packages/core/src/actionType.ts` — `ARMS` (**compile error** — `satisfies Record<ActionType, Arm>`)
+> - [ ] `packages/core/src/actionType.test.ts` — `_COMPLETE_ARMS` (**compile error**, the same bind
+>       re-stated as a test backstop) and the EXACT-array assertion on `ACTION_TYPES`
+> - [ ] `packages/backend/convex/cockpit.ts` — `_ARM_TABLE` (**compile error** — the second, separate bind)
+> - [ ] `packages/backend/convex/cockpit.ts` — the arm body in `executePlan`'s `switch`
+> - [ ] `packages/backend/convex/schema.ts` — the `plans.kind` union (+ any new content-plane field)
+> - [ ] `packages/backend/convex/plans.ts` — `patchPlan`'s HAND-MAINTAINED mirror of that union
+> - [ ] `packages/backend/convex/plans.ts` — `resetPlan`, which must clear any new staged field
+> - [ ] `packages/backend/convex/approvals.ts` — `planKind`'s return union (**compile error**:
+>       widening `plans.kind` fails here first, which is what drags the Approvals surface in)
+> - [ ] `packages/backend/convex/llm.ts` — `buildAgentContext`'s model-facing branch (**NOT** a
+>       compile error — see invariant 4)
+> - [ ] `apps/web/.../workspace/cards.tsx` — the card branch, placed BEFORE the email chrome
+> - [ ] `apps/web/.../workspace/cards.tsx` — the `hasDraft` exclusion, or a DRAFT card prints an
+>       email body beside it
+> - [ ] `apps/web/.../approvals/ApprovalsView.tsx` — `ApprovalKindBadge`'s `Record<PlanKind, string>`
+>       (**compile error**, via `approvals.ts`), `titleFor`, and `actionLabel`
+>
+> **PITFALL 1, the one with no compile error: `patchPlan`'s `kind` union is a HAND-MAINTAINED mirror
+> of `schema.ts`'s.** Widen the schema and not the mirror and every typecheck in the repo still
+> passes — `Doc<"plans">` comes from the schema — while the RUNTIME arg validator rejects the new
+> kind at the first real propose. Only a call THROUGH the real validator can see it.
+> *Enforcement:* `plans.test.ts` "patchPlan accepts kind: crm_write (19-06 — the hand-maintained
+> union mirror)", plus a second test that `resetPlan` clears `crmOperations` (the Pitfall-6 class: a
+> staged list surviving a reset would be applied by the NEXT approve in the thread).
+>
+> **4. `buildAgentContext` is NOT a compile-error site, and the comment that said it was is now
+> corrected in place.** It claimed branching on `actionTypeOf` rather than on `plan.kind` made a new
+> member surface as a compile error. It does not: `PlanRow`, the type every caller passes, does not
+> declare `kind` at all, so widening `ACTION_TYPES` never breaks the call. `media` proved it —
+> it shipped in Phase 20 without ever reaching that parameter union. The runtime field IS present,
+> so the branches fire; the type merely under-declares. **A new action type must be added there BY
+> HAND, and one that is not gets announced to the model as an email.**
+>
+> **5. The plan card's line list is read through the SAME validator the applier runs.**
+> `describeCrmOperations` (`cards.tsx`) calls `parseCrmOperations` (`@pikar/core`), which
+> `applyCrmOperations` also calls at the apply boundary, so the card cannot promise something the
+> server would refuse. An unparseable list renders "nothing to approve" with NO Approve button
+> rather than a partial promise. *Enforcement:* `crmCard.test.ts`.
+
 > Last verified: 2026-08-09 (Plan 19-05 — **the send path is now GUARDED AT TWO POINTS and every
 > product email carries a CAN-SPAM footer.** `executePlan`, `gmail.send`, `plans.recordDeliveryTerminal`,
 > `deliverApprovedPlan`, `pipeline.ts` and the cockpit plan card changed.)
