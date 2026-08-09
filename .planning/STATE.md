@@ -2,16 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
-current_phase: 26
-current_plan: 10
-status: in_progress
-stopped_at: "Phase 26 Plan 26-10 Task 1 + owner UAT IN PROGRESS (commits 91462d2, 1a63992; plus 75fe550 an out-of-plan skills fix). **THE UAT FOUND A REAL DEFECT AND IT IS FIXED (1a63992).** The page asked for a fixed 30 days, coverage began the day before, and `aggregateSpend`'s verdict is BINARY — so the totals rendered `Unknown` while the per-day series DIRECTLY BENEATH THEM showed $1.52 on a covered day. Self-contradictory, and it would have suppressed every real figure for a MONTH after any tenant starts, taking the per-rail unlanded table (and with it the ingest 'still expected to land' wording) off the page entirely. Fix: new `finance.coverage` tenantQuery returns just the coverage start so the page SIZES ITS WINDOW BEFORE asking for totals; when coverage falls inside the window it requests from there and renders `CoverageClampNotice` NAMING the truncation. **THE CLAMP IS ONLY HONEST BECAUSE IT ANNOUNCES ITSELF** — 26-09's note argued against clamping and was right about SILENCE, wrong that blanking known data was the alternative. Unclamped still: no coverage row at all (full Unknown), and a coverage start >= untilMs (would invert the window into a resolveDashboardWindow throw). **LIVE-VERIFIED IN THE BROWSER as owner:** three rails with THREE DIFFERENT UTC reset instants (9:50 PM / 12:00 AM / 6:28 PM — real proof the mockup's 'resets 00:00 UTC' is false; a fixed window anchors to its first spend); both unlanded sentences on one page; blended unlanded $6.90 = 5.00+1.90 where re-derivation from blended sums would give $6.44 — **26-08's per-rail decision visible on screen**; two-step arm/confirm; write + effective-state readback; master switch INDEPENDENT of media switch; reverted with exactly 2 audit rows, keys exactly control/from/to, actor owner. Seeded evidence rows are permanent and greppable by correlation prefix `uat-26-10:` (5 rows). **STILL NOT VERIFIED:** (a) the LIVE non-owner view — the owner grant has NO INVERSE so it is unobservable from this account; plan is an incognito sign-in as e2e@pikar.test (exists, non-owner); (b) responsive breakpoints — the Chrome extension's resize_window would not change the rendered viewport (stuck 1045x516), belongs to the Playwright spec's setViewportSize; (c) `e2e/finance.spec.ts` still never ran — no E2E_USER_EMAIL/PASSWORD. **TASK 2 IS NOT SIGNED OFF AND TASK 3 (nav activation) IS NOT DONE** — Finance correctly still reads `Soon`. **OUT-OF-PLAN FIX 75fe550:** `candidatesForReview` offered DOWNGRADES — it picked the highest-versioned CANDIDATE without comparing to the active row, so stale optimizer dry-run rows were offered forever (`cockpit-agent v17->v16`, `offer-architect v4->v3`, `money-model-designer v4->v3`), every click returning EVAL_GATE. **DO NOT run `pnpm eval:golden` on a version named in that error without checking the arrow — it spends real money to bless a rollback.** Filtered to `version > active.version`; ops page now reads 'No optimized candidates awaiting review'. **ENV NOTES FROM THIS SESSION:** `next build` overwrites the SAME `.next` a running `next start` serves — it 404s the old chunks and throws ChunkLoadError; STOP the server before building. Two `convex dev` instances were running and NEITHER pushed; recovery was kill-all-convex, clear the orphaned `convex-local-backend` binary, then one clean dev with CONVEX_LOCAL_BACKEND_STARTUP_TIMEOUT_SECS=180. OAuth needs :3000 (SITE_URL), not :3111. Gates: backend 1306/1306, web 88/88 (30 finance), both typechecks clean, web build clean, check-playbooks exit 0."
-last_updated: "2026-08-09T00:55:00Z"
+current_plan: 7 (done)
+status: verifying
+stopped_at: Phase 19 context gathered
+last_updated: "2026-08-09T05:06:42.271Z"
 progress:
-  total_phases: 45
+  total_phases: 51
   completed_phases: 30
-  total_plans: 272
-  completed_plans: 248
+  total_plans: 333
+  completed_plans: 250
 ---
 
 ---
@@ -1951,8 +1950,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
-Last session: 2026-08-04T19:25:30.713Z
-Stopped at: Completed 15.4-03-PLAN.md
+Last session: 2026-08-09T05:06:42.231Z
+Stopped at: Phase 19 context gathered
 Last session: 2026-08-03T06:20:00.000Z
 Stopped at: Completed 15.3-04-PLAN.md
 Last session: 2026-08-03T01:10:00.000Z
@@ -1963,4 +1962,4 @@ Last session: 2026-07-27T01:04:16.127Z
 Stopped at: Completed 15.2-02-PLAN.md
 Last session: 2026-07-25T22:23:43.857Z
 Stopped at: Completed 14-04-PLAN.md (the doc-grounded mint, Lane C)
-Resume file: None
+Resume file: .planning/phases/19-contacts-crm-follow-ups/19-CONTEXT.md
