@@ -146,6 +146,7 @@ export const insertEvaluation = internalMutation({
     notEnoughData: evalFields.notEnoughData,
     scorecard: evalFields.scorecard,
     userProvided: evalFields.userProvided,
+    userProvidedAt: evalFields.userProvidedAt,
     verdict: evalFields.verdict,
     delta: evalFields.delta,
   },
@@ -205,6 +206,10 @@ export const runEvaluation = internalAction({
       // validated arg through the internal query — the `vaultGroundHydrated` convention.
       const tp = await ctx.runQuery(internal.tenantProfile.forTenant, { tenantId });
       const userProvided: string[] = [...(last?.userProvided ?? [])];
+      // Carried UNCHANGED, same as `userProvided` above — this is what lets a per-field stated time
+      // survive the weekly re-evaluation that stamps a fresh `createdAt` on the new ROW (cash-
+      // business-finance Task 3 fix). `createdAt` is the ROW's timestamp, never a field's.
+      const userProvidedAt: Record<string, number> = { ...(last?.userProvidedAt ?? {}) };
       let scorecard: Scorecard = JSON.parse(
         JSON.stringify((last?.scorecard as Scorecard | undefined) ?? emptyScorecard),
       );
@@ -459,6 +464,7 @@ export const runEvaluation = internalAction({
         notEnoughData,
         scorecard,
         userProvided,
+        userProvidedAt,
         verdict,
         delta,
       });
@@ -574,12 +580,17 @@ export async function applyScorecardAnswer(
     .order("desc")
     .first();
 
+  // `userProvidedAt` is stamped on EVERY answer, including a re-answer of an already-provided
+  // field — a confirm-or-update IS a fresh stated time, not a no-op (cash-business-finance Task 3
+  // fix). This is the one writer every surface (panel, Approvals, cockpit) routes through, so the
+  // stated time can never drift out of step with the value it describes.
   if (last) {
     const scorecard = setPath(last.scorecard, field, coerced);
     const userProvided = last.userProvided.includes(field)
       ? last.userProvided
       : [...last.userProvided, field];
-    await db.patch(last._id, { scorecard, userProvided });
+    const userProvidedAt = { ...(last.userProvidedAt ?? {}), [field]: Date.now() };
+    await db.patch(last._id, { scorecard, userProvided, userProvidedAt });
     return { recorded: true };
   }
 
@@ -593,6 +604,7 @@ export async function applyScorecardAnswer(
     notEnoughData: [],
     scorecard: setPath(emptyScorecard, field, coerced),
     userProvided: [field],
+    userProvidedAt: { [field]: Date.now() },
     verdict: "insufficient",
     createdAt: Date.now(),
   });

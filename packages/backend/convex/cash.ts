@@ -125,12 +125,18 @@ export const inputs = tenantQuery({
           };
         }
         const value = spec.path === undefined ? null : scorecardValue(scorecard, spec.path);
-        // ponytail: the scorecard has no per-field statedAt, so the evaluation row's createdAt
-        // stands in. It is a FLOOR on the true stated-time (a later patch does not move it), so the
-        // 90-day prompt can fire early but never late — the safe direction. Upgrade path: a
-        // per-field statedAt map on the Scorecard, written by applyScorecardAnswer.
-        const statedAt = value === null ? null : (evaluation?.createdAt ?? null);
-        return { field: spec.field, value, statedAt, stale: isStale(statedAt, now) };
+        // `userProvidedAt` is a dot-path → epoch-ms map, stamped by `applyScorecardAnswer` and
+        // carried forward UNCHANGED across every re-evaluation (`runEvaluation`) — unlike the
+        // evaluation ROW's own `createdAt`, which is fresh on every carry-forward and is never a
+        // field's stated time.
+        const statedAt =
+          value === null ? null : (evaluation?.userProvidedAt?.[spec.path as string] ?? null);
+        // A legacy row can hold a real value with no recorded stated time (this field predates
+        // `userProvidedAt`, or a carried row's writer never stamped it). Unknown age is NOT fresh —
+        // the SAFE direction is to treat it as needing confirmation, never to fabricate a date or
+        // silently suppress the prompt.
+        const stale = value !== null && (statedAt === null || isStale(statedAt, now));
+        return { field: spec.field, value, statedAt, stale };
       }),
     };
   },

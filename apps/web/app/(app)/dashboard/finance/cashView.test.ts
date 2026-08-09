@@ -85,6 +85,21 @@ describe("your numbers panel", () => {
     expect(html).not.toContain("$0");
   });
 
+  // A legacy scorecard value (answered before `userProvidedAt` existed) has NO recorded stated
+  // time — unknown age, never fabricated as fresh (cash-business-finance Task 3 review fix). This
+  // also pins that the row does not crash formatting a null date.
+  test("a value with no recorded stated time asks for confirmation, honestly, without a date", () => {
+    const html = render(NumbersPanel, {
+      inputs: [input({ value: 900, statedAt: null, stale: true })],
+      tier: "solopreneur",
+      busy: false,
+      error: null,
+      onSave: noop,
+    });
+    expect(html).toMatch(/no confirmation date on file/i);
+    expect(html).toMatch(/still right|confirm/i);
+  });
+
   test("a stale input asks for a confirm-or-update", () => {
     const html = render(NumbersPanel, {
       inputs: [input({ value: 5000, statedAt: Date.now() - 100 * 24 * 60 * 60 * 1000, stale: true })],

@@ -1,3 +1,4 @@
+import { emptyScorecard } from "@pikar/core/growth/index";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api } from "./_generated/api";
@@ -159,5 +160,62 @@ describe("cash.inputs", () => {
     await asTenant(t, "tenant-a").mutation(api.cash.saveInput, { field: "cashOnHand", value: 1 });
     const result = await asTenant(t, "tenant-a").query(api.cash.inputs, {});
     expect(result.inputs.find((i) => i.field === "cashOnHand")?.stale).toBe(false);
+  });
+
+  // Bug found in Task 3 review: `runEvaluation` carries `scorecard`/`userProvided` FORWARD verbatim
+  // into a NEW row stamped `createdAt: Date.now()` on every weekly re-evaluation. Reading the ROW's
+  // `createdAt` as a stand-in for a FIELD's stated time reported a 91-day-old CAC as "confirmed
+  // today" the moment a re-evaluation carried it into a fresh row — silently suppressing the exact
+  // confirm-or-update prompt the 90-day rule exists for. `userProvidedAt` (a dot-path → epoch-ms map,
+  // stamped by `applyScorecardAnswer`, carried forward unchanged by `runEvaluation`) fixes this.
+  test("a scorecard field answered 91 days ago and carried into a fresh row still reports stale", async () => {
+    const t = convexTest(schema, modules);
+    const oldAnswer = Date.now() - 91 * DAY;
+    await t.run(async (ctx) => {
+      await ctx.db.insert("evaluations", {
+        tenantId: "tenant-a",
+        threadId: "thread-a",
+        framework: "growth-os",
+        findings: [],
+        gaps: [],
+        notEnoughData: [],
+        scorecard: { ...emptyScorecard, financials: { ...emptyScorecard.financials, cac: 1200 } },
+        userProvided: ["financials.cac"],
+        userProvidedAt: { "financials.cac": oldAnswer },
+        // The CARRIED-FORWARD row's own timestamp — fresh, on purpose. This is exactly what a
+        // weekly re-evaluation produces: a new row, an old answer.
+        createdAt: Date.now(),
+        verdict: "insufficient",
+      });
+    });
+    const result = await asTenant(t, "tenant-a").query(api.cash.inputs, {});
+    const cac = result.inputs.find((i) => i.field === "cac");
+    expect(cac?.value).toBe(1200);
+    expect(cac?.statedAt).toBe(oldAnswer);
+    expect(cac?.stale).toBe(true);
+  });
+
+  test("a scorecard value with no recorded stated time (a legacy row) needs confirmation, never reads as fresh", async () => {
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("evaluations", {
+        tenantId: "tenant-a",
+        threadId: "thread-a",
+        framework: "growth-os",
+        findings: [],
+        gaps: [],
+        notEnoughData: [],
+        scorecard: { ...emptyScorecard, financials: { ...emptyScorecard.financials, cac: 900 } },
+        userProvided: ["financials.cac"],
+        // NO userProvidedAt — the shape every scorecard-stored figure has before this fix.
+        createdAt: Date.now(),
+        verdict: "insufficient",
+      });
+    });
+    const result = await asTenant(t, "tenant-a").query(api.cash.inputs, {});
+    const cac = result.inputs.find((i) => i.field === "cac");
+    expect(cac?.value).toBe(900);
+    expect(cac?.statedAt).toBeNull(); // honest — we do not know when this was stated
+    expect(cac?.stale).toBe(true); // unknown age needs confirmation, never reads as fresh
   });
 });

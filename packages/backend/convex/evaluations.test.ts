@@ -397,6 +397,59 @@ describe("carry-forward / anti-re-ask (LOCKED store half)", () => {
     const cacFinding = row?.findings.find((f) => f.label.startsWith("CAC:"));
     expect(cacFinding?.source).toBe("user-provided");
   });
+
+  // Bug found in Task 3 review: a re-evaluation writes a NEW row stamped `createdAt: Date.now()`,
+  // and `userProvided`/`scorecard` carry forward verbatim. `userProvidedAt` must carry forward the
+  // SAME way — a field's stated time is a fact about the FIELD, not about which row it currently
+  // lives on. Backdating the stored map (rather than faking the wall clock) keeps this test cheap
+  // and safe while still exercising the real carry-forward line in `runEvaluation`.
+  test("a field's stated time survives a re-evaluation UNCHANGED, even though the row's createdAt is fresh", async () => {
+    const t = newTest();
+    await t.mutation(internal.skills.seedSkills, {});
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const docId = await seedDoc(t, TENANT, profileDocText(false));
+    const answeredAt = Date.now() - 91 * DAY_MS;
+
+    await t.action(internal.evaluations.runEvaluation, {
+      tenantId: TENANT,
+      threadId: THREAD,
+      query: `SMOKE::${docId}`,
+    });
+    await t.withIdentity({ subject: TENANT }).mutation(api.evaluations.recordScorecardAnswer, {
+      threadId: THREAD,
+      field: "financials.cac",
+      value: 150,
+    });
+    // Backdate the stated time directly, simulating an answer given 91 days ago — the re-evaluation
+    // below still stamps a REAL, current `createdAt` on its new row.
+    await t.run(async (ctx) => {
+      const row = await ctx.db
+        .query("evaluations")
+        .withIndex("by_tenant_thread", (q) => q.eq("tenantId", TENANT).eq("threadId", THREAD))
+        .order("desc")
+        .first();
+      if (!row) throw new Error("expected a row after recordScorecardAnswer");
+      await ctx.db.patch(row._id, { userProvidedAt: { "financials.cac": answeredAt } });
+    });
+
+    // The re-evaluation — this is the exact operation the weekly cron runs.
+    await t.action(internal.evaluations.runEvaluation, {
+      tenantId: TENANT,
+      threadId: THREAD,
+      query: `SMOKE::${docId}`,
+    });
+
+    const row = await t.withIdentity({ subject: TENANT }).query(api.evaluations.byThread, {
+      threadId: THREAD,
+    });
+    // The ROW is fresh — this re-evaluation just ran …
+    expect(row?.createdAt).toBeGreaterThan(answeredAt + 90 * DAY_MS);
+    // … but the FIELD's stated time is still the original answer, not bumped to match. Reading
+    // `row.createdAt` as a stand-in for this (the pre-fix bug) would report a 91-day-old CAC as
+    // confirmed today the moment a re-evaluation merely carried it forward.
+    expect(row?.userProvidedAt?.["financials.cac"]).toBe(answeredAt);
+    expect(row?.userProvidedAt?.["financials.cac"]).not.toBe(row?.createdAt);
+  });
 });
 
 describe("two-tenant isolation (SC #5)", () => {

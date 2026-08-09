@@ -200,9 +200,13 @@ function InputRow({
       <p style={{ ...muted, fontSize: "0.8rem", width: "100%", margin: 0 }}>
         {state.value === null
           ? `Unlocks ${spec.unlocks}.`
-          : state.stale
-            ? `Last confirmed ${formatUtcDay(state.statedAt as number)}. Still right? Confirm or update it.`
-            : `Last confirmed ${formatUtcDay(state.statedAt as number)}.`}
+          : state.statedAt === null
+            ? // A legacy value with no recorded date (it predates confirm-or-update tracking).
+              // Unknown age is never rendered as fresh — honest about not knowing, not silent.
+              "No confirmation date on file. Still right? Confirm or update it."
+            : state.stale
+              ? `Last confirmed ${formatUtcDay(state.statedAt)}. Still right? Confirm or update it.`
+              : `Last confirmed ${formatUtcDay(state.statedAt)}.`}
       </p>
       {check && !check.ok ? (
         <p role="alert" style={{ ...muted, fontSize: "0.8rem", width: "100%", margin: 0 }}>

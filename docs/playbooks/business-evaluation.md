@@ -1,5 +1,18 @@
 # Playbook: Business Evaluation Engine
 
+> Last verified: 2026-08-09 (cash-business-finance Task 3 review fix — **`userProvidedAt` closes
+> the "a carried-forward answer reads as freshly confirmed" bug.** `runEvaluation`'s carry-forward
+> stamps every new row with a fresh `createdAt` while copying `scorecard`/`userProvided` verbatim —
+> that is by design, for the field VALUES. The Business tab's Task-3 reader wrongly treated the same
+> `createdAt` as a stand-in for a FIELD's stated time, so a 91-day-old CAC survived a weekly
+> re-evaluation and read back as "confirmed today", silently suppressing the 90-day confirm-or-update
+> prompt. Fix: `applyScorecardAnswer` stamps a dot-path → epoch-ms `userProvidedAt` map on every
+> answer, `runEvaluation` carries it forward unchanged (the same shape as `userProvided`), and
+> `cash.ts` reads it instead of `createdAt` — with a legacy value that predates this field (no
+> recorded time) read as needing confirmation, never as fresh. See the new invariant below and
+> `docs/playbooks/dashboard-pages.md`'s Cash section. Zero change to grounding, diagnosis, carry-
+> forward of VALUES, citations or any existing engine behaviour — `evaluations.test.ts` 26/26.)
+>
 > Last verified: 2026-08-03 (15.3-05 — **`unincorporatedFor` now excludes SEALED folder members.**
 > A vault folder's members are unretrievable until the folder is `complete` (VALT-07), but they
 > reach `status: "ready"` at ingest step 6 *during* that window — and `unincorporatedFor` reads
@@ -84,8 +97,12 @@ Backend (`packages/backend/convex/`):
 - `schema.ts` — the append-only `evaluations` table (`by_tenant` / `by_tenant_thread`) + the
   `"evaluateBusiness"` literal in the closed `agentSteps.tool` union + (12-05) the optional
   `plans.kind: "memo"` discriminator and the optional `gaps[].reason`/`gaps[].proofMetric`.
+  **cash-business-finance Task 3 review fix:** `userProvidedAt: v.optional(v.record(v.string(),
+  v.number()))` — a dot-path → epoch-ms map, the ONE place a scorecard field's true stated time
+  lives. Optional ⇒ no migration; a pre-existing row simply has no entries.
 - `evaluations.test.ts` — convex-test over the `SMOKE::` seam: grounded cited row, refs-only audit,
-  carry-forward/anti-re-ask, two-tenant isolation (SC #5), thin-data honesty.
+  carry-forward/anti-re-ask, two-tenant isolation (SC #5), thin-data honesty, and (Task 3 fix) a
+  field's `userProvidedAt` surviving a re-evaluation's fresh `createdAt` unchanged.
 - `proactiveReview.ts` (13-02, BEVL-03) — the weekly cron's three functions: `runWeekly`
   (internalMutation — enumerate onboarded tenants over `vaultDocuments.by_kind`, dedupe, fan out),
   `reviewOne` (internalAction — the engine on the stable `REVIEW_THREAD_ID`, notify-on-change),
@@ -200,6 +217,23 @@ in the serialized spine.
 - **Vault-first, then ask, then store (LOCKED)** — the durable scorecard is UPDATED each run
   (carry-forward), not rebuilt from null; a user-provided figure survives forward and is cited
   "user-provided". Enforced by the carry-forward/anti-re-ask test.
+- **A field's STATED TIME is a fact about the field, never about the row (cash-business-finance
+  Task 3 review fix).** `userProvidedAt` (dot-path → epoch-ms) is stamped by `applyScorecardAnswer`
+  on every answer — including a re-answer of an already-provided field, since a confirm-or-update
+  IS a fresh stated time — and `runEvaluation` carries it forward UNCHANGED into every new row,
+  exactly like `userProvided`. **A row's own `createdAt` is NEVER a stand-in for a field's stated
+  time.** The bug this closes: `runEvaluation` re-runs weekly on one pinned thread and persists a
+  NEW row stamped `createdAt: Date.now()` on every run, carrying `scorecard`/`userProvided`
+  verbatim. Before `userProvidedAt` existed, `packages/backend/convex/cash.ts`'s Business-tab
+  reader used the carrying row's `createdAt` as a floor on a field's stated time — so a CAC answered
+  91 days ago, merely carried into this week's fresh row, read back as "confirmed today" and
+  silently suppressed the 90-day confirm-or-update prompt the rule exists for. A legacy row (no
+  `userProvidedAt` entry for a field that has a value) has UNKNOWN age — `cash.ts` treats that as
+  needing confirmation, never as fresh, and never fabricates a date. Enforced by
+  `evaluations.test.ts`'s carry-forward describe block (a field's stated time survives a
+  re-evaluation unchanged, even though the row's `createdAt` is fresh) and by `cash.test.ts`'s two
+  `cash.inputs` staleness tests (a carried-forward stale answer, and the legacy-no-timestamp path).
+  See `docs/playbooks/dashboard-pages.md`'s Cash section for the read side.
 - **No fabricated metrics (SC #1)** — a financial field fills ONLY from a direct labeled statement;
   no grounding → the field stays null → not-enough-data. With zero grounded findings the engine
   suppresses gaps (no basis for a prescription) and returns "insufficient". Enforced by the

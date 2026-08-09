@@ -569,6 +569,16 @@ export default defineSchema({
     notEnoughData: v.array(v.object({ section: v.string(), needs: v.string() })),
     scorecard: v.any(), // the parsed + carried-forward @pikar/core Scorecard snapshot
     userProvided: v.array(v.string()), // scorecard dot-path keys the user supplied in-conversation
+    // Dot-path → epoch-ms the user stated/confirmed it (cash-business-finance Task 3 fix).
+    // `applyScorecardAnswer` is the ONE writer, stamping `Date.now()` on every answer, and
+    // `runEvaluation`'s carry-forward copies this map UNCHANGED into every new row — the whole
+    // point is that it survives the weekly re-evaluation that stamps a fresh `createdAt` on the
+    // ROW. Without this, `createdAt` was read as a stand-in stated-time and a re-evaluation that
+    // merely carries a field forward silently reported it "confirmed today", which suppresses the
+    // 90-day confirm-or-update prompt for a number that may be months stale — the unsafe direction.
+    // Optional ⇒ no migration; a legacy row with a value but no entry here has UNKNOWN age, which
+    // `cash.ts` reads as needing confirmation, never as fresh.
+    userProvidedAt: v.optional(v.record(v.string(), v.number())),
     verdict: v.union(v.literal("gaps"), v.literal("healthy"), v.literal("insufficient")),
     // BEVL-03 "what changed" line. Written ONLY by a cron-driven run (runEvaluation withDelta) —
     // an on-demand row has none and the card simply hides the line. Optional → no migration.

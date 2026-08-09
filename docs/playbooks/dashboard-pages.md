@@ -1,6 +1,10 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-08-09 (Plan cash-business-finance Task 3 — the six-input collection panel,
+> Last verified: 2026-08-09 (Plan cash-business-finance Task 3 REVIEW FIX — scorecard-field
+> staleness now reads `evaluations.userProvidedAt`, never the row's `createdAt`. See the Cash
+> section's staleness bullet below and `docs/playbooks/business-evaluation.md` for the write side.)
+>
+> Prior: 2026-08-09 (Plan cash-business-finance Task 3 — the six-input collection panel,
 > `financeInputs`, and one writer per number)
 > Build history: `.planning/phases/26-pending-product-pages-and-vault-redesign-integration/` · Related ADRs: [ADR-001](../decisions/001-convex-data-orchestration-plane.md)
 
@@ -88,8 +92,20 @@ split by WHICH kind of figure they are, never by which screen wrote them:
   asked; `validateCashInput(field, value)` is the trust-boundary check (money ≥ 0/finite, a percent
   ≤ 100, a count a whole number, and `purchasesPerLifetime < 1` REJECTED rather than silently
   multiplied into a plausible-looking wrong LTGP). `STALE_AFTER_MS` (90 days) + `isStale` are the
-  confirm-or-update threshold; `financeInputs.statedAt` and the scorecard's carried `createdAt` are
-  both fed through the same function so the two stores share one staleness rule.
+  confirm-or-update threshold.
+  **Staleness reads a per-FIELD stated time, never the evaluation row's `createdAt` (review fix).**
+  A finance-ops field's `statedAt` is its own `financeInputs` row's `statedAt`, always present
+  alongside a value. A scorecard field's `statedAt` is read from `evaluations.userProvidedAt[path]`
+  — a dot-path → epoch-ms map stamped by `applyScorecardAnswer` on every answer and carried forward
+  UNCHANGED by `runEvaluation` (see `docs/playbooks/business-evaluation.md`). **The row's own
+  `createdAt` was tried first and was wrong**: `runEvaluation` re-runs weekly on one pinned thread
+  and persists a fresh row every time, stamping a NEW `createdAt` while copying `scorecard`/
+  `userProvided` verbatim — so a CAC answered 91 days ago, merely carried into this week's row, read
+  back as "confirmed today" and silently suppressed the exact 90-day prompt the rule exists for. A
+  legacy value with no `userProvidedAt` entry (every scorecard-stored figure written before this fix)
+  has UNKNOWN age; `cash.ts` treats that as needing confirmation — `stale: true`, `statedAt: null` —
+  never as fresh, and never fabricates a date. `CashView.tsx`'s `InputRow` renders this case as "No
+  confirmation date on file. Still right? Confirm or update it." rather than formatting a null date.
 - **One mutation, `convex/cash.ts`'s `saveInput`, routes by field to the store that owns it — there
   is exactly one writer per number.** A finance-ops field patches/inserts its `financeInputs` row. A
   scorecard field calls `applyScorecardAnswer` (`convex/evaluations.ts`, exported in this task) —
