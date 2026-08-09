@@ -173,13 +173,17 @@ suppressions, calendar, goals, the spend ledger, and the Phase 26 dashboard read
   refresh-token lifetime are accepted; the 7-day lifetime is already why
   `SEND_TIME_HORIZON_MS` is 7 days.
 - **Custom domain (roadmap SC#6) is a BLOCKING OWNER DECISION inside this phase**, not a
-  planning input. It is genuinely binary and both branches are acceptable, so it belongs in a
-  `checkpoint:decision` task, not in this document. The reasoning the owner must decide against:
+  planning input. The decision is binary, but only Branch A is completion-capable: **Branch A**
+  provides a durable custom domain, DNS and TLS and releases deployment/live sends; **Branch B**
+  records that no user-shareable URL ships and BLOCKS Phase 25 because mandatory BETA-03 self-send
+  and DLVR-02 Outlook-send acceptance cannot run. It belongs in a `checkpoint:decision` task. The
+  reasoning the owner must decide against:
   serving from `*.convex.site` **shares a host with the OAuth callback** (`http.ts:15`), so a
   reputation flag on that host breaks **SIGN-IN**, not merely a page; and a Convex deployment
   URL is deployment-scoped, so a link a user sent a client does **not** survive a prod
-  migration. **Outcome required:** either the domain, its DNS and its TLS are decided and
-  recorded, **or** it is recorded in writing that no user-shareable URL ships until they exist.
+  migration. **Outcome required for completion:** Branch A is implemented and evidenced. Branch B
+  is a valid recorded decision only as an unresolved phase blocker; it cannot release deployment,
+  live sends, requirement closure, or Phase 25 completion.
 - **Production secrets are part of go-live and are NOT all in place.** At minimum,
   `UNSUBSCRIBE_SECRET` is currently set on the **local** deployment only — a hosted deployment
   without its own causes **every unsubscribe link to 404 and every send to be refused** (19-04).

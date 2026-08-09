@@ -1103,7 +1103,7 @@ Plans:
 - [x] 19-03-PLAN.md — The CAN-SPAM postal address: write-boundary validation on `tenantProfile.saveFacts` and the `/dashboard/profile` field, deliberately NOT an onboarding slot (Wave 2)
 - [x] 19-04-PLAN.md — The public unsubscribe route on `convex/http.ts`: an inert signed GET landing page and a confirm-only idempotent POST (Wave 3)
 - [x] 19-05-PLAN.md — The send-path trust boundary: the pre-CAS refusals and the per-address drop BEFORE the group join, the unbypassable `gmail.send` backstop, the footer at the `buildMime` call site, and an honest terminal for a post-approve suppression (Wave 4)
-- [ ] 19-06-PLAN.md — `crm_write` joins `ACTION_TYPES` on the `inline` arm across all eleven registration sites in one commit, with the stale `actionType.ts` Phase-19 prediction corrected by the commit that falsifies it (Wave 5)
+- [x] 19-06-PLAN.md — `crm_write` joins `ACTION_TYPES` on the `inline` arm across all eleven registration sites in one commit, with the stale `actionType.ts` Phase-19 prediction corrected by the commit that falsifies it (Wave 5)
 - [ ] 19-07-PLAN.md — The connected Pipeline route: three bounded read models, four always-known tiles that render a real zero as `0`, the five-column table, the unassigned-follow-ups section, and the authored e2e spec (Wave 6)
 - [ ] 19-08-PLAN.md — Contacts-first in-loop resolution and the ONE `stageCrmWrite` tool, landed at all three registration surfaces with both guards proven red-able, plus the offline SMOKE driver (Wave 7)
 - [ ] 19-09-PLAN.md — Teach `cockpit-agent` the capability and pay the 18-08 override debt: `eval-cases/36-*.json`, a $0 observable and the 34 → 35 fixture floor bump (Wave 8, has a blocking checkpoint)
@@ -1261,8 +1261,24 @@ Plans:
   3. A two-user cross-tenant isolation test (BETA-05) covers every table and index added across S1-S3 and asserts a non-owner cannot reach the three owner-gated functions; grounded-prose export stays owner-gated until the `packages/pii` names-in-prose scrub ceiling is closed.
   4. A new user reaches a first real delivered result (a governed email to their own address) within minutes via the scripted first-run cockpit onboarding.
   5. An approved plan can deliver via Microsoft Graph (Outlook) (connect-both, choose-per-send). **Phase 25 BUILDS the provider-agnostic adapter — it does not exist today**: `gmailTokens` (`schema.ts:625-632`) has no `provider` column and is indexed `by_tenant` only, `gmail.ts:45-46` hardcodes `GOOGLE_OAUTH_CLIENT_ID`/`GOOGLE_OAUTH_CLIENT_SECRET`, and `gmail.ts:19` hardcodes the Google token endpoint. The widening — a `provider` column, a `by_tenant_provider` index, and a provider lookup — is written in the SAME commit as the Microsoft Graph adapter and NOT before; an abstraction with one implementation is what CLAUDE.md §8 forbids. Deployed to a live Vercel domain on Gmail Testing mode + unverified Azure app (verification off the critical path).
-  6. The custom-domain decision is MADE here, because every user-shareable URL depends on it. Serving from `*.convex.site` shares a host with the OAuth callback (`http.ts:15`), so a reputation flag on that host breaks SIGN-IN, not just the page; and a Convex deployment URL is deployment-scoped, so a link a user sent a client does not survive a prod migration. Either the domain, its DNS and its TLS are decided and recorded, or it is recorded in writing that no user-shareable URL ships until they exist.
-**Plans**: TBD
+  6. The custom-domain decision is MADE here, because every user-shareable URL depends on it. Serving from `*.convex.site` shares a host with the OAuth callback (`http.ts:15`), so a reputation flag on that host breaks SIGN-IN, not just the page; and a Convex deployment URL is deployment-scoped, so a link a user sent a client does not survive a prod migration. Branch A (durable domain + DNS + TLS) is required to complete the mandatory BETA-03 and DLVR-02 live sends. Branch B records that no user-shareable URL ships and explicitly BLOCKS Phase 25 until Branch A becomes available.
+**Plans**: 14 plans across 13 waves (execution is blocked on Plan 25-00's prerequisite gate; Plan 25-10 Branch B also blocks completion)
+
+Plans:
+- [ ] 25-00-PLAN.md — Blocking completion/stable-baseline gate for every pre-beta prerequisite lane; Phase 32 explicitly excluded (Wave 1)
+- [ ] 25-01-PLAN.md — Atomic invite admission, owner issuance backend, and beta-admission playbook (Wave 2)
+- [ ] 25-02-PLAN.md — Public signup/waitlist UX and consolidated owner-admin surface (Wave 3)
+- [ ] 25-03-PLAN.md — Schema-derived two-user isolation matrix, owner API assertions, and prose-export gate (Wave 4)
+- [ ] 25-04-PLAN.md — Existing-onboarding extension to an inline-recoverable first governed self-send (Wave 3)
+- [ ] 25-05-PLAN.md — Red-to-green contracts plus same-commit provider widening, Graph send, migration, and two-arm adapter (Wave 5)
+- [ ] 25-06-PLAN.md — Outlook OAuth lifecycle/UI and explicit Microsoft remote-invalidation posture (Wave 6)
+- [ ] 25-07-PLAN.md — Hosted provider migration, automatic schema/fallback narrow deploy, and fresh Gmail proof (Wave 7)
+- [ ] 25-08-PLAN.md — Threading-first live Outlook gate on the narrowed deployment (Wave 8)
+- [ ] 25-09-PLAN.md — Full Outlook read-plane parity and live consent-capable provider matrix (Wave 9)
+- [ ] 25-10-PLAN.md — Runtime environment manifest, domain decision, Branch-A enforcement; Branch B blocks phase (Wave 10)
+- [ ] 25-11-PLAN.md — Durable-domain Vercel/Convex deployment, seed/readiness, and hosted OAuth admission (Wave 11)
+- [ ] 25-12-PLAN.md — Exact-SHA automated/authenticated-E2E/boot/hosted-env production qualification (Wave 12)
+- [ ] 25-13-PLAN.md — Fresh live Outlook/two-user/timed-first-result acceptance and evidence-only bookkeeping closure (Wave 13)
 
 ## Progress
 
@@ -1322,7 +1338,7 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | 22.1 Beta Admission Readiness (INSERTED) | 2/3 | In Progress (22.1-01 disconnect owner live-verified; 22.1-02 per-tenant budget keying complete + smoke 7/7 live-verified 2026-08-01; CI/typecheck gate open) | - |
 | 23. Agent-Authored Skills | 0/TBD | Not started | - |
 | 24. ISO 9001 Conformance Map | 0/TBD | Not started | - |
-| 25. Private Beta Productionization | 0/TBD | Not started — **slips**; two lanes (19, 31) now run ahead of it | - |
+| 25. Private Beta Productionization | 0/14 | Planned — execution blocked on 25-00 prerequisite evidence; two lanes (19, 31) run ahead of it | - |
 | 26. Connected Product Pages | 8/20 | In Progress|  |
 | **Milestone: Marketing (pulled pre-beta 2026-08-07, ADR-015)** | | | |
 | 31. Marketing Surface & Funnel v0 (tranche A) | 0/TBD | Not started — schedulable; depends on Phase 19 | - |

@@ -41,7 +41,7 @@
 
 **Go-live posture**
 - **Launch on Gmail Testing mode + an unverified Azure app + a live Vercel deploy.** Verification stays OFF the critical path.
-- **Custom domain (roadmap SC#6) is a BLOCKING OWNER DECISION inside this phase** — a `checkpoint:decision` task. **Outcome required:** either the domain, its DNS and its TLS are decided and recorded, **or** it is recorded in writing that no user-shareable URL ships until they exist.
+- **Custom domain (roadmap SC#6) is a BLOCKING OWNER DECISION inside this phase** — a `checkpoint:decision` task. **Only Branch A completes the phase:** durable custom domain + DNS + TLS releases deployment and the mandatory BETA-03/DLVR-02 live sends. Branch B records that no user-shareable URL ships and explicitly BLOCKS deployment, live qualification, requirement closure, and Phase 25 completion.
 - **Production secrets are part of go-live and are NOT all in place.** The deploy plan must enumerate every required secret and fail closed on a missing one.
 
 **Inherited deltas that WIN over `09-CONTEXT.md`**
@@ -778,7 +778,9 @@ Hand the owner these four, then let them choose:
 3. **Deployment-scoped URLs do not survive a migration.** A link a beta user emailed a client dies if the deployment changes.
 4. **Convex supports custom domains** on both the `.convex.cloud` (API) and `.convex.site` (HTTP action) origins — **on paid plans**. *(MEDIUM confidence: confirm the account's current plan tier before the checkpoint, since it decides whether "yes" is even available today.)*
 
-Either outcome is acceptable per CONTEXT. What is **not** acceptable is closing the phase with neither recorded.
+Both outcomes may be recorded, but only Branch A is completion-capable. Branch B is an explicit
+phase blocker: disabling user-shareable URLs also disables the governed BETA-03 self-send and
+DLVR-02 Outlook-send evidence, so no deploy/live gate or bookkeeping closure may proceed.
 
 ## Playbook Obligations (CLAUDE.md §9 — Stop-hook enforced)
 
@@ -880,7 +882,7 @@ Touching a watched path without updating its playbook **in the same commit** blo
 | Go-live | `ops:envCheck` returns `missing: []` on the hosted deployment | smoke | `npx convex run ops:envCheck` | ❌ Wave 0 |
 | Go-live | Skill registry seeded post-deploy (`executive-router` active) | smoke | `pnpm --filter @pikar/backend seed` | ✅ exists |
 | Go-live | Phase 22's outstanding `/ops` DOM UAT half, closed on the new admin page | e2e | `pnpm test:e2e -- e2e/admin.spec.ts` | ❌ Wave 0 |
-| SC#6 | The custom-domain decision is recorded (either branch) | **checkpoint:decision** | — | n/a |
+| SC#6 | Branch A durable domain/DNS/TLS is implemented and evidenced; Branch B is recorded only as a phase blocker and releases no deploy/live/closure task | **checkpoint:decision + live** | — | n/a |
 
 **Automatable vs live** — stated plainly so no plan pretends otherwise:
 - **Automatable offline:** every invite-callback rule (drive `createOrUpdateUser` directly with synthetic Google- and Entra-shaped subjects — no network), the entire isolation matrix, the postal-address/thin-profile onboarding paths, every `graph.ts` unit including MIME byte-parity and the error taxonomy, the routing seam and its static scans, the migration.
