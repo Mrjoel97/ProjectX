@@ -164,21 +164,32 @@ test("connected cost console: coverage, rails, unlanded meaning and the owner bo
   const suffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
   const now = Date.now();
 
-  // ── 1. The route is reachable directly while its nav item is still "Soon" ────────────
-  await expect(page.getByRole("heading", { name: "Know what it costs" })).toBeVisible({
-    timeout: 20_000,
-  });
-  // Task 1 ships the route with navigation still disabled — activation is Task 3, after UAT.
-  await expect(page.getByRole("link", { name: "Finance" })).toHaveCount(0);
+  // ── 1. The route is reachable directly while its nav item is now LIVE ────────────────
+  // Task 1 shipped the shell with the heading "Know what it costs" and navigation disabled;
+  // Task 3 (26-10, on owner direction) renamed the heading to "Your money, and what Pikar costs"
+  // (FinanceTabs.tsx) and activated the nav link (apps/web/app/(app)/layout.tsx). Both are page-
+  // chrome, unaffected by which tab is active.
+  await expect(page.getByRole("heading", { name: "Your money, and what Pikar costs" })).toBeVisible(
+    { timeout: 20_000 },
+  );
+  await expect(page.getByRole("link", { name: "Finance" })).toBeVisible();
+
+  // The page opens on Business by default (a separate test above already covers that). Everything
+  // below through section 6 is Pikar-spend content, which `FinanceTabs.tsx` mounts but keeps
+  // `hidden` while another tab is active — click through to it ONCE; `selectTab` persists the
+  // choice as `?tab=spend` via `history.replaceState`, so it survives every `page.reload()` below
+  // without re-clicking (whole-branch review B5 — the pre-existing spec never clicked any tab and
+  // asserted Pikar-spend visibility while the page opened on the now-default Business tab).
+  await page.getByRole("tab", { name: "Pikar spend" }).click();
 
   // ── 2. NON-OWNER FIRST — the boundary is unobservable once this account is promoted ──
-  const deployment = page
-    .getByRole("region", { name: "Deployment controls" })
-    .or(
-      page.locator("section", { has: page.getByRole("heading", { name: "Deployment controls" }) }),
-    );
-  await expect(page.getByText("managed by the operator")).toBeVisible();
-  await expect(deployment.getByRole("button")).toHaveCount(0);
+  // The Operator tab — and everything inside it, including `DeploymentSection` — is not merely
+  // hidden for a non-owner, it is not MOUNTED at all (`FinanceTabs.tsx`:
+  // `{isOwner ? (<div>...<OperatorTab /></div>) : null}`), so "managed by the operator" and a
+  // `region`/`section` locator for "Deployment controls" can never resolve here regardless of which
+  // tab is active — that markup simply is not on the page. The earlier "no Operator tab" test
+  // already covers the tab button; this proves no ceiling number leaks in via the raw HTML either.
+  await expect(page.getByRole("tab", { name: "Operator" })).toHaveCount(0);
   // Not a single deployment ceiling may be in the DOM of a caller who is not the owner.
   const nonOwnerHtml = await page.content();
   for (const ceiling of ["$50.00", "$100.00", "$250.00"]) {
@@ -255,10 +266,12 @@ test("connected cost console: coverage, rails, unlanded meaning and the owner bo
     kind: "video",
   });
 
+  // `?tab=spend` rides the URL from the click in section 1, so this reload lands back on Pikar
+  // spend without re-clicking — see that section's comment.
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Know what it costs" })).toBeVisible({
-    timeout: 20_000,
-  });
+  await expect(page.getByRole("heading", { name: "Your money, and what Pikar costs" })).toBeVisible(
+    { timeout: 20_000 },
+  );
 
   // Each movement appears exactly ONCE in its rail/phase — the replay above added no second row.
   await expect(page.getByRole("row", { name: /Media generation/ })).toHaveCount(1);
@@ -282,7 +295,11 @@ test("connected cost console: coverage, rails, unlanded meaning and the owner bo
   // ── 7. OWNER LAST — promote, then prove the controls return effective state ─────────
   const granted = convexRun<{ changed: boolean }>("owner:bootstrapOwner", { userId: tenantId });
   expect(typeof granted.changed).toBe("boolean");
+  // `?tab=spend` still rides the URL (it does not un-set itself), so the reload lands back on
+  // Pikar spend even though this account is an owner now — the Operator tab exists in the DOM for
+  // the first time this run, but is not the ACTIVE one until clicked.
   await page.reload();
+  await page.getByRole("tab", { name: "Operator" }).click();
 
   await expect(page.getByText("there is no single combined limit")).toBeVisible({
     timeout: 20_000,
@@ -315,7 +332,9 @@ test("connected cost console: coverage, rails, unlanded meaning and the owner bo
     { width: 390, height: 844 },
   ]) {
     await page.setViewportSize(viewport);
-    await expect(page.getByRole("heading", { name: "Know what it costs" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Your money, and what Pikar costs" }),
+    ).toBeVisible();
     // A wide table must scroll inside its own container, never make the page scroll sideways.
     const overflows = await page.evaluate(
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,

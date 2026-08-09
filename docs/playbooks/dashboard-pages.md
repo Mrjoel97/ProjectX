@@ -1,6 +1,70 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-08-09 (Plan cash-business-finance Task 10 — FINAL task of the plan. Added
+> Last verified: 2026-08-09 (Whole-branch review fix wave, AFTER Task 10 — the 10-task plan's own
+> per-task reviews all passed, but a whole-branch review found FOUR blocking defects a task-scoped
+> review structurally could not see, plus a statically-RED pre-existing e2e spec. Fixed all five:
+> **B1** — `evaluations.latestScorecardRow` (`by_tenant`, `.first()`) could select the tenant's newest
+> row EVEN WHEN it carried no usable Growth-OS Scorecard: a `voiceDoc.ts` document-review row's
+> LITERAL `scorecard: {}`, or a brand-new conversation thread's carrier before `runEvaluation` ever
+> filled one in. `cash.ts`'s `scorecard.financials.ltgp` access on `{}` threw
+> (`Cannot read properties of undefined (reading 'ltgp')`), and since `CashTab` is always mounted,
+> the crash took down the WHOLE Finance page (both tabs) via the one shared error boundary — see the
+> isolation bullet below, also fixed this wave. Three-layer fix: (1) `latestScorecardRow` now skips
+> `framework === "document-review"` rows and any row whose `scorecard.financials` is absent — see the
+> "Cash — the Business tab, assembled" section's isolation bullet, corrected below. (2) every
+> `scorecard.financials.*` read in `unitEconomics` (`packages/core/src/cash.ts`) is now optional-
+> chained — see the "Cash — unit economics" section below. (3) `evaluations.ts`'s `setPath` now
+> CREATES intermediate objects instead of throwing on a missing one — chosen over the alternative
+> (making `cash.ts`'s `saveInput` guarantee a well-formed carrier first) because `setPath` has other
+> callers (`runEvaluation`'s `fillVault`) that would need the same guard repeated at each site;
+> fixing the shared function once is the CLAUDE.md §8 root-cause fix. **B2** — `CashView.tsx`'s
+> headline caption was keyed on `funding === "bootstrapped"` ALONE, so an SME/enterprise (whose
+> ACTUAL headline, `metricSetFor` clause 2, is `workingCapital`) still read the CFA-framed sentence
+> "whether each customer pays for itself matters most right now" — the FIFTH document on this plan to
+> certify something the code did not do, and the first to render to a user. `headlineReason` now
+> takes the same `metric` `metricSetFor` already computed, so the two cannot drift again — see the
+> "Cash — the Business tab, assembled" section's `HeadlineCard` bullet, corrected below. **B3** —
+> `solvency()`'s `netBurn` read an UNANSWERED `mrr` as a real zero, so a funded startup with real MRR
+> they had not entered saw net burn equal to the full operating cost and a runway shorter than the
+> truth, under a headline captioned "the date it runs out matters most right now" — violating the
+> module's own suppression contract (`requireInputs`: a derived figure is suppressed while any input
+> it rests on is unknown). `mrr` is now REQUIRED alongside `monthlyOperatingCost` whenever
+> `recurringApplies`; a solopreneur (`mrr` is `not-applicable`, never unknown, for them) is
+> unaffected — see the "Cash — solvency" section below, corrected. **B4** — `CASH_INPUTS` asks
+> startup/sme/enterprise for "Referral share", promising it "unlocks the 25% referral gate", and
+> `unitEconomics.referralPct`/`REFERRAL_GATE_PCT` already computed and named that gate, but
+> `ActivitySection` never rendered `TIER_SETS`' `activity` row at all — breaking the module's own "an
+> input with no payoff should not be asked for" rule. `ActivitySection` now takes an optional
+> `referralPct` figure and renders it against the 25% gate when the tenant's tier carries it. **B5**
+> — `apps/web/e2e/finance.spec.ts`'s one "connected cost console" test was statically RED against
+> HEAD: it asserted the pre-Task-1 heading ("Know what it costs" — the shipped one is "Your money,
+> and what Pikar costs"), asserted the Finance nav link had count 0 (it is live), and asserted
+> Pikar-spend content visible while the page opens on Business with that tab `hidden`. Also found and
+> fixed past what the review named: its non-owner "Deployment controls" assertions targeted markup
+> that `FinanceTabs.tsx` does not MOUNT at all for a non-owner (not merely hide) — rewritten to assert
+> the Operator tab's absence and that no ceiling value leaks into the raw HTML, the same boundary the
+> old assertions meant to prove. Fixed by clicking through to the Pikar-spend tab ONCE (persisted via
+> `?tab=` through every `page.reload()` in the test) and to Operator after the owner promotion.
+> **STILL NOT EXECUTED** — no Convex deployment, no built Next app in this worktree; verified
+> statically only, same as Task 10. **Cleanup, same wave:** `ConnectedNumbers` migrated from
+> `api.tenantProfile.get` to `api.cash.shape` (one reader per fact) and now gates its loading state on
+> BOTH `cash.inputs` and `cash.shape` (an SME used to flash the 6-row solopreneur panel before the
+> real tier arrived); the `needs` copy across `cash.ts` unified to sentence case with a trailing
+> period (it mixed "Needs your X." with "needs your gross margin"); core's `usd()` provenance
+> formatter now matches `CashView.tsx`'s `formatUsdAmount` at `maximumFractionDigits: 0` (a CAC of
+> 1234.56 used to show "$1,235" above "from $1,234.56 to acquire" — two numbers for one figure); the
+> two tabs now render behind SEPARATE `FinanceView` error boundaries (`FinanceTabs.tsx`) instead of
+> one shared one, so a thrown query error degrades one tab, not the whole page — see the isolation
+> bullet below. `metricSetFor`'s dead `else set.activity` branch (cash.ts, the orphan-headline guard)
+> was NOT removed: B4 does not change its reachability — `metricSetFor`'s headline is only ever
+> `cfa`/`runway`/`workingCapital`, never an activity-only key, both before and after this wave — it
+> stays as already-documented defensive completion of a three-way routing (Task 9's deferred note,
+> restated in "Known gaps & deferred work" below).
+> `pnpm --filter @pikar/core test cash` 69/69, `pnpm --filter @pikar/backend test cash` 21/21,
+> `pnpm --filter @pikar/backend test evaluations` 29/29, `pnpm --filter @pikar/web test cashView`
+> 27/27, `pnpm typecheck` 10/10 packages green.)
+>
+> Prior: 2026-08-09 (Plan cash-business-finance Task 10 — FINAL task of the plan. Added
 > `finance.spec.ts` browser coverage for the three-tab shell (Business default-selected, no Operator
 > tab for a non-owner, the Cost console intact behind Pikar spend, a panel entry landing as a rendered
 > business figure, and — placed AFTER the existing `owner:bootstrapOwner` step, because that grant has
@@ -188,6 +252,19 @@ both halves of the page:
   reach-out count — the row needs no data entry and is the first thing rendered on the Business tab.
   "Posts per day" has no data source yet (Pikar delivers email, not social posts) and renders an
   explicit "not tracked yet", never a fabricated `0`.
+- **`ActivitySection` now renders the tier's referral figure, against the 25% gate (whole-branch
+  review B4 fix).** `CASH_INPUTS` asks startup/sme/enterprise for "Referral share", promising
+  `unlocks: "the 25% referral gate"`, and `unitEconomics.referralPct`/`REFERRAL_GATE_PCT` already
+  computed and named that gate — but `TIER_SETS` put the key in `activity` and nothing read `set.
+  activity` at all, breaking the module's own "an input with no payoff should not be asked for" rule
+  (`cash.ts:118`). `ActivitySection` now takes an optional `referralPct: CashFigure` prop and renders
+  it as a `FigureTile` alongside the three measured tiles when present; `ConnectedActivity`
+  (`CashView.tsx`) supplies it by also reading `cash.shape` + `cash.unitEconomics` (both already
+  subscribed elsewhere on the tab — the `RailsSection`/`TrackedSection` precedent) and checking
+  `metricSetFor(tier, funding).activity.includes("referralPct")`, so a solopreneur (whose tier's
+  `activity` set has no `referralPct`) sees no extra tile. The measured counts (today/streak/posts)
+  do not wait on the two extra queries — they render as soon as `cash.activity` resolves; the
+  referral tile joins once its own reads do.
 
 ### Cash — the collection surface and `financeInputs` (Task 3)
 
@@ -260,9 +337,16 @@ split by WHICH kind of figure they are, never by which screen wrote them:
   explicit word "confirm"** — BRAND §2/CLAUDE.md §10 reserve amber (`--held`) for the approval gate
   only. Validated on change with the same `validateCashInput` the mutation enforces (Save disables
   on an invalid draft, the reason renders in a `role="alert"`) — this is convenience, not the trust
-  boundary, which stays server-side. `ConnectedNumbers` reads `api.cash.inputs` + `api.tenantProfile
-  .get` (for `tier`, defaulting to `"solopreneur"` while loading/absent) and wires `api.cash.
-  saveInput` through the same busy/refusal `run`-style pattern as `OperatorTab` in `FinanceView.tsx`.
+  boundary, which stays server-side. `ConnectedNumbers` reads `api.cash.inputs` + `api.cash.shape`
+  (for `tier`, defaulting to `"solopreneur"` via the shared `fallbackTier` helper while loading/
+  absent) and wires `api.cash.saveInput` through the same busy/refusal `run`-style pattern as
+  `OperatorTab` in `FinanceView.tsx`. **`api.cash.shape`, not `api.tenantProfile.get` (whole-branch
+  review cleanup).** The first version read `api.tenantProfile.get` — a second reader of the same
+  tier fact every sibling `Connected*` on this tab already reads through `cash.shape`, the query
+  built for exactly this; two readers for one fact is how they drift. Also gated on BOTH `cash.
+  inputs` AND `cash.shape` resolving before rendering — an un-gated `shapeResult` used to let this
+  panel render `fallbackTier`'s solopreneur default (6 rows) for a beat before the real tier (e.g.
+  an SME's 9 rows) arrived.
   No arithmetic lives in this component beyond formatting (CLAUDE.md §1) — a `.reduce()` in a
   component already failed review once on this plan.
 
@@ -367,6 +451,18 @@ is in, what it was derived from, and how many customers it rests on.
   timestamp, which is worse than no staleness signal. The asymmetry is intentional, not an
   oversight — if staleness on those two is ever wanted, the fix is adding them to `CASH_INPUTS`
   (both already have Scorecard dot-paths), not inventing a date here.
+- **Every `scorecard.financials.*` read is optional-chained, defensively (whole-branch review B1
+  layer 2).** `scorecard` arrives typed as `Scorecard` but is stored as the DB's `v.any()` column, so
+  the type does not guarantee the runtime shape — a `document-review` row (`voiceDoc.ts`) carries a
+  LITERAL `scorecard: {}`. The unfixed `scorecard.financials.ltgp !== null` threw
+  (`Cannot read properties of undefined (reading 'ltgp')`) on that shape; every read in this function
+  (`ltgp`, `costToServicePerCustomer`, `churnByCadence.monthly`, `industryAvgCac`, `grossMarginPct`)
+  now reads `scorecard.financials?.<field> ?? null` and reports `unknown` rather than throwing or
+  rendering a fabricated `$NaN` (`FigureTile` would have rendered `knownFigure("stated", undefined,
+  "usd")`'s `undefined` value as literal "$NaN"). This is layer 2 of the B1 fix — layer 1 is
+  `latestScorecardRow` no longer selecting such a row in the first place (see the "Cash — the
+  Business tab, assembled" section's isolation bullet); this layer exists because a pure function
+  should not throw on a shape the DB can actually hold, regardless of what its caller does.
 - **No word "ROAS" anywhere** in this function, its comments, or its rendered strings (CLAUDE.md
   ambient rule for this plan) — absent from all three source books, and the framework's own
   guidance is to stop optimising CAC once inside 3× the industry average, which ROAS as a lever
@@ -432,6 +528,24 @@ for whom the constraint is the date the money ends.
     receivables is a real, common state, and `knownFigure`/`derived` carry no non-negative guard
     (confirmed by reading both functions: neither clamps or rejects a negative `value`). A test
     pins `receivables: 30_000, payables: 45_000` landing at `value: -15_000`.
+- **`netBurn` REQUIRES `mrr` whenever `recurringApplies`, not just `monthlyOperatingCost` (whole-
+  branch review B3 fix).** The first version's `requireInputs(inputs, ["monthlyOperatingCost"])` let
+  an UNANSWERED `mrr` silently read as `0` recurring (`mrrFigure.state === "known" ? mrrFigure.value
+  : 0`), so a funded startup with real MRR they had not entered saw net burn equal to the FULL
+  operating cost and a runway shorter than the truth — under a headline captioned "the date it runs
+  out matters most right now." This violated the module's own suppression contract stated at the
+  top of this file (`requireInputs`: a derived figure is suppressed while any input it rests on is
+  unknown, and names the missing one) — `netBurn`/`runway` were the one derived pair in this module
+  that did not follow their own rule. Fixed by adding `mrr` to `netBurn`'s required-fields list ONLY
+  when `recurringApplies` is true; a tier where MRR does not apply (`!recurringApplies`, i.e. a
+  solopreneur) is NOT held to this — their `mrr` is `not-applicable`, never unknown, and requiring it
+  would wrongly suppress a runway they are entitled to see. `cash.test.ts` pins both directions: a
+  startup/sme/enterprise with `mrr` unanswered now gets `netBurn`/`runway` as `unknown` naming
+  "Monthly recurring revenue", and a solopreneur with no `mrr` ever asked still gets a real runway.
+  The plan's own pinned test (`tier: "startup"`, no `mrr`, expecting `runway = 6 months`) was WRONG
+  by the owner's standing ruling across this plan (correctness governs the plan's literal text,
+  precedent from Task 2's `last7Count` and Task 3's `userProvidedAt`) — it now answers `mrr: 0`
+  explicitly instead.
 - **mrr is the ONE field this function surfaces directly as a figure**, and it is the one field
   that routes through `statedFigure(inputs.mrr, cashInputSpec("mrr"), nowMs)` — the same shared
   staleness function `referralPct` uses in `unitEconomics` above, not a hand-rolled branch.
@@ -452,9 +566,11 @@ for whom the constraint is the date the money ends.
   spreadsheet-simple, and `runway`/`netBurn` reuse the same `Math.max(0, …)` clamp-and-round-to-one-
   decimal shape `unitEconomics`'s `cacPayback` already established, not a second rounding
   convention.
-- Test evidence: `cash.test.ts`'s `describe("solvency — the finance-ops layer", ...)` (13 tests: the
-  brief's original 10, the staleness pin, and the REVIEW FIX's catalogue-agreement test looping every
-  `Tier`) — `pnpm --filter @pikar/core test cash` — 53/53. `pnpm typecheck` — 10/10 packages green.
+- Test evidence: `cash.test.ts`'s `describe("solvency — the finance-ops layer", ...)` (15 tests: the
+  brief's original 10, the staleness pin, the REVIEW FIX's catalogue-agreement test looping every
+  `Tier`, and the whole-branch review B3 fix's two: the suppression case and the solopreneur-still-
+  gets-a-runway case) — see the top-of-file "Last verified" entry for the current whole-file total
+  (`pnpm --filter @pikar/core test cash` — 69/69). `pnpm typecheck` — 10/10 packages green.
 
 ### Cash — which metrics a tenant sees (Task 8)
 
@@ -590,14 +706,23 @@ raising watches the date the money ends exactly like a funded one does.
   entry overstated it):** each section's `useQuery` returning `undefined` (loading) or an empty
   result is independent of every other section's — `ConnectedUnitEconomics`'s `cash.unitEconomics`
   read having nothing to show does not blank `ConnectedSolvency`/`ConnectedActivity`, because each
-  is its own hook call with its own subscription. **What is NOT isolated: a `useQuery` call
-  THROWING.** `FinanceTabs.tsx` mounts `CashTab` under `FinanceView.tsx`'s single
-  `FinanceErrorBoundary`, shared with the always-mounted `PikarSpendTab` — a genuinely thrown query
-  exception from ANY section would unwind to that one shared boundary and take the whole tab tree
-  down with it, not stop at a section edge. Fixing that would be a `FinanceView.tsx` change, outside
-  this task's scope; `cashView.test.ts`'s `describe("section isolation — what is proven and what is
-  not", ...)` pins the undefined/empty-independence claim at the pure-component level and states the
-  exception caveat in its own comment, rather than claiming more than the architecture provides.
+  is its own hook call with its own subscription.
+  **A thrown `useQuery` exception is ALSO isolated now, at the TAB level (whole-branch review
+  cleanup, superseding the "NOT isolated" claim below).** `FinanceTabs.tsx` used to mount `CashTab`
+  under `FinanceView.tsx`'s single, page-wide `FinanceErrorBoundary`, shared with the always-mounted
+  `PikarSpendTab` (and the owner-only `OperatorTab`) — a genuinely thrown query exception from ANY
+  section unwound to that one shared boundary and took the WHOLE tab tree down with it, which is
+  exactly what happened when B1's malformed-scorecard crash reached `unitEconomics`: the Business
+  tab's crash also killed the always-mounted Pikar-spend tab. Each of the three tab panels
+  (`finance-panel-business`/`-spend`/`-operator` in `FinanceTabs.tsx`) now wraps its own content in
+  its OWN `<FinanceView>` boundary instead of one shared outer wrap — a thrown exception in `CashTab`
+  now degrades only the Business panel; Pikar spend (and Operator, for an owner) keep rendering.
+  **What is still NOT proven by a test, only by reading the composition:** an error boundary needs a
+  real React tree with `componentDidCatch` to exercise, and `cashView.test.ts`'s
+  `describe("section isolation — what is proven and what is not", ...)` renders pure components with
+  `renderToStaticMarkup`, which has no error-boundary machinery — so the exception-isolation claim is
+  verified by reading `FinanceTabs.tsx`'s structure, not by a DOM-free unit test; that test's own
+  comment says so.
 - **`metricSetFor(tier, funding)` is computed once per `Connected*` wrapper** (not hoisted into a
   shared context/provider — nothing here asked for one) from `cash.shape`'s tier, falling back to
   `"solopreneur"` via the same `fallbackTier` helper wherever `tier` is `null` — matching
@@ -622,6 +747,17 @@ raising watches the date the money ends exactly like a funded one does.
   which is what frames the headline as the question it answers. `tier`/`funding` drive one line of
   posture context text; they never re-decide WHICH metric leads (`metricSetFor` already decided that
   in the caller) — this component only explains the choice, it does not make it.
+  **The caption is keyed on `metric` itself, not re-derived from `tier`/`funding` alone (whole-branch
+  review B2 fix).** The first version's `headlineReason(tier, funding)` returned "Bootstrapped:
+  whether each customer pays for itself matters most right now" for EVERY `funding ===
+  "bootstrapped"` tenant — but `metricSetFor`'s clause 2 overrides a bootstrapped `sme`/`enterprise`'s
+  headline to `workingCapital`, so that sentence rendered under a working-capital FIGURE for every
+  bootstrapped SME, describing a metric the tile was not showing. `headlineReason` now switches on
+  `metric` — the SAME value `metricSetFor` already computed and passed in — so the caption cannot
+  drift from the headline again: `runway` → the outside-money sentence, `workingCapital` → the cash-
+  conversion-cycle sentence, `cfa` (the only remaining case) → the pays-for-itself sentence.
+  `cashView.test.ts` pins a bootstrapped SME and a bootstrapped enterprise each showing the
+  working-capital caption, not the CFA one.
 - **`ShapeMissingNotice()` is a non-blocking invitation, never a gate** — the profile page's
   legacy-tenant precedent. It links to `/dashboard/profile?tab=shape` and its copy avoids "required"/
   "must"; `ConnectedShapeNotice` renders it only once `cash.shape` has resolved and `tier === null`,
@@ -1190,3 +1326,30 @@ node scripts/check-playbooks.mjs
 - Pipeline remains a narrow contacts/follow-up/consent/suppression surface. Opportunities, stages
   and monetary pipeline value are out of scope.
 - Exact Vault category counters and any new Drive write scope/vendor/data plane remain deferred.
+- **`apps/web/e2e/finance.spec.ts` remains NOT EXECUTED** (whole-branch review, same status as Task
+  10). No Convex deployment and no built Next app exist in this worktree; `auth.setup.ts` throws on
+  missing `E2E_USER_EMAIL`/`E2E_USER_PASSWORD` before a single feature test runs. The whole-branch
+  review fixed every statically-provable defect in the spec (the stale heading, the inverted
+  nav-disabled assertion, the un-clicked Pikar-spend/Operator tabs, the non-owner Operator-tab
+  assertions that targeted unmounted markup) and re-verified the two source-scan guards and the
+  `describe.serial` ordering, but none of it has been run in a real browser against a real backend.
+- **`latestScorecardRow`'s framework/shape filter (B1 layer 1) does not close every path to
+  `setPath` throwing on a malformed carrier** — `applyScorecardAnswer` re-queries by
+  `(tenantId, threadId)`, and if a THREAD's own newest row is malformed while an OLDER row on that
+  same thread was the tenant's globally-newest usable one, `existing.threadId` could still route into
+  a malformed row. Believed unreachable in practice (a `document-review` row's `threadId` comes from
+  `voiceDoc.ts`'s own generation, not a conversational thread id), but not proven impossible by a
+  type or an index — layer 3 (`setPath` creating intermediate objects) is the real backstop, kept
+  deliberately even though layer 1 closes the common case.
+- **`metricSetFor`'s `else set.activity` branch (the orphan-headline guard's three-way routing,
+  `packages/core/src/cash.ts`) stays unreachable, deliberately left in.** B4 (rendering the referral
+  tile) does not change what `metricSetFor`'s `headline` can BE — it is still only ever
+  `cfa`/`runway`/`workingCapital`, never an activity-only key, so the branch remains dead defensive
+  completion of the three-way `if`/`else if`/`else`. Recorded here (Task 9 first flagged it) so it is
+  not mistaken for new dead code from this wave.
+- **`TIER_SETS.solopreneur.activity` lists `"engagedLeads"` as a `CashMetricKey`, but nothing computes
+  it and nothing renders it** — unlike `referralPct` before B4 (which WAS computed by `unitEconomics`
+  and only missing its render), `engagedLeads` has no backing figure anywhere: no `CASH_INPUTS` entry,
+  no field on `CashUnitEconomics`/`CashSolvency`, no tile. A deeper gap than B4's, never raised by any
+  review on this plan and out of scope for this wave. Flagged here rather than silently left for a
+  future reviewer to re-discover.
