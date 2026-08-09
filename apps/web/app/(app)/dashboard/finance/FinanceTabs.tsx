@@ -67,8 +67,7 @@ export function FinanceTabs() {
   }, []);
 
   // A non-owner who lands on ?tab=operator gets the default tab, not an empty panel.
-  const active: FinanceTabId =
-    tab !== null && tabs.some((t) => t.id === tab) ? tab : "business";
+  const active: FinanceTabId = tab !== null && tabs.some((t) => t.id === tab) ? tab : "business";
 
   const tabRefs = useRef<Partial<Record<FinanceTabId, HTMLButtonElement>>>({});
 
@@ -82,118 +81,127 @@ export function FinanceTabs() {
   const current = FINANCE_TABS.find((t) => t.id === active);
 
   return (
-    <FinanceView>
-      <div style={{ display: "grid", gap: "1.5rem", padding: "1.5rem 0" }}>
-        <header style={{ display: "grid", gap: "0.65rem" }}>
-          <p
-            style={{
-              color: "var(--ink-soft)",
-              fontSize: "0.7rem",
-              fontWeight: 700,
-              letterSpacing: "0.14em",
-              textTransform: "uppercase",
-              margin: 0,
-            }}
-          >
-            Finance · USD
-          </p>
-          <h1
-            style={{
-              margin: 0,
-              fontFamily: "var(--font-display)",
-              fontWeight: 800,
-              letterSpacing: "-0.03em",
-              fontSize: "clamp(1.9rem, 1.4rem + 1.8vw, 2.6rem)",
-            }}
-          >
-            Your money, and what Pikar costs
-          </h1>
-          <p style={{ color: "var(--ink-soft)", margin: 0, lineHeight: 1.55 }}>
-            {current?.subheading}
-          </p>
-        </header>
-
-        <div
-          role="tablist"
-          aria-label="Finance sections"
-          style={{ display: "flex", gap: "0.35rem", borderBottom: "1px solid var(--rule)" }}
-          onKeyDown={(event) => {
-            const delta = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
-            if (delta === 0) return;
-            event.preventDefault();
-            const index = tabs.findIndex((t) => t.id === active);
-            const next = tabs[(index + delta + tabs.length) % tabs.length];
-            if (!next) return;
-            selectTab(next.id);
-            tabRefs.current[next.id]?.focus();
+    <div style={{ display: "grid", gap: "1.5rem", padding: "1.5rem 0" }}>
+      <header style={{ display: "grid", gap: "0.65rem" }}>
+        <p
+          style={{
+            color: "var(--ink-soft)",
+            fontSize: "0.7rem",
+            fontWeight: 700,
+            letterSpacing: "0.14em",
+            textTransform: "uppercase",
+            margin: 0,
           }}
         >
-          {tabs.map((t) => {
-            const selected = t.id === active;
-            return (
-              <button
-                key={t.id}
-                ref={(el) => {
-                  if (el) tabRefs.current[t.id] = el;
-                }}
-                type="button"
-                role="tab"
-                id={`finance-tab-${t.id}`}
-                aria-selected={selected}
-                aria-controls={`finance-panel-${t.id}`}
-                tabIndex={selected ? 0 : -1}
-                onClick={() => selectTab(t.id)}
-                style={{
-                  appearance: "none",
-                  border: "none",
-                  background: "none",
-                  font: "inherit",
-                  cursor: "pointer",
-                  padding: "0.55rem 0.9rem",
-                  marginBottom: "-1px",
-                  fontWeight: 600,
-                  fontSize: "0.92rem",
-                  color: selected ? "var(--ink)" : "var(--ink-soft)",
-                  borderBottom: `2px solid ${selected ? "var(--teal-600)" : "transparent"}`,
-                }}
-              >
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
+          Finance · USD
+        </p>
+        <h1
+          style={{
+            margin: 0,
+            fontFamily: "var(--font-display)",
+            fontWeight: 800,
+            letterSpacing: "-0.03em",
+            fontSize: "clamp(1.9rem, 1.4rem + 1.8vw, 2.6rem)",
+          }}
+        >
+          Your money, and what Pikar costs
+        </h1>
+        <p style={{ color: "var(--ink-soft)", margin: 0, lineHeight: 1.55 }}>
+          {current?.subheading}
+        </p>
+      </header>
 
-        {/* Business and Pikar spend stay MOUNTED and toggle with `hidden`, so a half-typed number
+      <div
+        role="tablist"
+        aria-label="Finance sections"
+        style={{ display: "flex", gap: "0.35rem", borderBottom: "1px solid var(--rule)" }}
+        onKeyDown={(event) => {
+          const delta = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+          if (delta === 0) return;
+          event.preventDefault();
+          const index = tabs.findIndex((t) => t.id === active);
+          const next = tabs[(index + delta + tabs.length) % tabs.length];
+          if (!next) return;
+          selectTab(next.id);
+          tabRefs.current[next.id]?.focus();
+        }}
+      >
+        {tabs.map((t) => {
+          const selected = t.id === active;
+          return (
+            <button
+              key={t.id}
+              ref={(el) => {
+                if (el) tabRefs.current[t.id] = el;
+              }}
+              type="button"
+              role="tab"
+              id={`finance-tab-${t.id}`}
+              aria-selected={selected}
+              aria-controls={`finance-panel-${t.id}`}
+              tabIndex={selected ? 0 : -1}
+              onClick={() => selectTab(t.id)}
+              style={{
+                appearance: "none",
+                border: "none",
+                background: "none",
+                font: "inherit",
+                cursor: "pointer",
+                padding: "0.55rem 0.9rem",
+                marginBottom: "-1px",
+                fontWeight: 600,
+                fontSize: "0.92rem",
+                color: selected ? "var(--ink)" : "var(--ink-soft)",
+                borderBottom: `2px solid ${selected ? "var(--teal-600)" : "transparent"}`,
+              }}
+            >
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Business and Pikar spend stay MOUNTED and toggle with `hidden`, so a half-typed number
             in the your-numbers panel survives a trip to the spend tab (the profile-page idiom).
             Operator is mounted ONLY for an owner — a hidden-but-mounted owner panel would fire the
-            owner queries for a non-owner and put OWNER_REQUIRED into the error boundary. */}
-        <div
-          role="tabpanel"
-          id="finance-panel-business"
-          aria-labelledby="finance-tab-business"
-          hidden={active !== "business"}
-        >
+            owner queries for a non-owner and put OWNER_REQUIRED into the error boundary.
+
+            EACH panel carries its OWN `FinanceView` error boundary (whole-branch review cleanup) —
+            a single shared boundary used to wrap all three, so a thrown query error in ANY one tab
+            took the whole tab tree down, not just that tab. Three separate boundaries turn that into
+            "one tab degrades": Business staying up while Pikar spend fails, or vice versa. */}
+      <div
+        role="tabpanel"
+        id="finance-panel-business"
+        aria-labelledby="finance-tab-business"
+        hidden={active !== "business"}
+      >
+        <FinanceView>
           <CashTab />
-        </div>
+        </FinanceView>
+      </div>
+      <div
+        role="tabpanel"
+        id="finance-panel-spend"
+        aria-labelledby="finance-tab-spend"
+        hidden={active !== "spend"}
+      >
+        <FinanceView>
+          <PikarSpendTab />
+        </FinanceView>
+      </div>
+      {isOwner ? (
         <div
           role="tabpanel"
-          id="finance-panel-spend"
-          aria-labelledby="finance-tab-spend"
-          hidden={active !== "spend"}
+          id="finance-panel-operator"
+          aria-labelledby="finance-tab-operator"
+          hidden={active !== "operator"}
         >
-          <PikarSpendTab />
-        </div>
-        {isOwner ? (
-          <div
-            role="tabpanel"
-            id="finance-panel-operator"
-            aria-labelledby="finance-tab-operator"
-            hidden={active !== "operator"}
-          >
+          <FinanceView>
             <OperatorTab />
-          </div>
-        ) : null}
-      </div>
-    </FinanceView>
+          </FinanceView>
+        </div>
+      ) : null}
+    </div>
   );
 }

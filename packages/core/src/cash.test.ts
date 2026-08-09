@@ -17,6 +17,7 @@ import {
   unitEconomics,
   validateCashInput,
 } from "./cash";
+import type { Scorecard } from "./growth/scorecard";
 import { emptyScorecard } from "./growth/scorecard";
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -431,6 +432,49 @@ describe("unit economics", () => {
     expect(result.grossMargin).toMatchObject({ state: "unknown" });
     expect(result.cohortChurn).toMatchObject({ state: "unknown" });
   });
+
+  // Whole-branch review B1: `scorecard` arrives from the DB's `v.any()` column and is not
+  // guaranteed to match the `Scorecard` type at runtime — a `document-review` row (`voiceDoc.ts`)
+  // carries a LITERAL `scorecard: {}`. The unfixed function threw reaching for
+  // `scorecard.financials.ltgp` (`Cannot read properties of undefined (reading 'ltgp')`), which
+  // took down the whole Finance page via its one shared error boundary. Every `scorecard.financials.*`
+  // read must be defensive and report `unknown`, never throw and never a fabricated `$NaN`.
+  test("does not throw on a malformed ({}) scorecard, and reports unknown rather than $NaN", () => {
+    const run = () =>
+      unitEconomics({
+        inputs: withInputs({
+          cac: 1400,
+          thirtyDayCashPerCustomer: 2000,
+          grossProfitPerPurchase: 1500,
+          purchasesPerLifetime: 3,
+        }),
+        scorecard: {} as Scorecard,
+        nowMs: NOW,
+      });
+    expect(run).not.toThrow();
+    const result = run();
+    // LTGP still derives from the two present components — a malformed `financials` only blocks
+    // the stated-total FALLBACK, never the derived path.
+    expect(result.ltgp).toMatchObject({ state: "known", origin: "derived", value: 4500 });
+    // CFA reads `scorecard.financials.costToServicePerCustomer`, defaulted to 0 rather than thrown.
+    expect(result.cfa.state).toBe("known");
+    // Everything that reads `scorecard.financials.*` with nothing else to fall back on reports
+    // unknown, never a fabricated figure.
+    expect(result.cacPayback).toMatchObject({ state: "unknown" });
+    expect(result.cacVsIndustry).toMatchObject({ state: "unknown" });
+    expect(result.grossMargin).toMatchObject({ state: "unknown" });
+    expect(result.cohortChurn).toMatchObject({ state: "unknown" });
+    expect(JSON.stringify(result)).not.toMatch(/NaN/);
+  });
+
+  test("with no ltgp components at all, a malformed scorecard is unknown, never $NaN", () => {
+    const run = () =>
+      unitEconomics({ inputs: withInputs({}), scorecard: {} as Scorecard, nowMs: NOW });
+    expect(run).not.toThrow();
+    const result = run();
+    expect(result.ltgp).toMatchObject({ state: "unknown" });
+    expect(JSON.stringify(result)).not.toMatch(/NaN/);
+  });
 });
 
 const sol = (values: Record<string, number>, tier = "startup" as const) =>
@@ -438,7 +482,34 @@ const sol = (values: Record<string, number>, tier = "startup" as const) =>
 
 describe("solvency — the finance-ops layer", () => {
   test("runway is cash over monthly burn, in months", () => {
+    // `sol`'s default tier is "startup", where MRR applies (B3 fix) — answered here as a real
+    // zero so this stays the plain happy-path test the plan intended, not a suppressed figure.
+    const result = sol({ cashOnHand: 60_000, monthlyOperatingCost: 10_000, mrr: 0 });
+    expect(result.runway).toMatchObject({ state: "known", value: 6, unit: "months" });
+  });
+
+  // Whole-branch review B3: `netBurn`/`runway` used to read an UNANSWERED `mrr` as a real zero,
+  // so a funded startup with real MRR they had not entered saw net burn equal to the full
+  // operating cost and a runway shorter than the truth — violating the module's own suppression
+  // contract (`requireInputs`'s doc comment: a derived figure is suppressed while any input it
+  // rests on is unknown, and names the missing one).
+  test("for a tier where MRR applies, an unanswered MRR suppresses net burn and runway, and names it", () => {
     const result = sol({ cashOnHand: 60_000, monthlyOperatingCost: 10_000 });
+    expect(result.netBurn).toMatchObject({
+      state: "unknown",
+      needs: expect.stringContaining("Monthly recurring revenue"),
+    });
+    expect(result.runway).toMatchObject({ state: "unknown" });
+  });
+
+  // A solopreneur's `mrr` is `not-applicable`, not unknown — demanding it before computing burn
+  // would wrongly suppress a runway they are entitled to see (B3 fix must not regress this).
+  test("a solopreneur (MRR not-applicable) still gets a runway with no MRR ever asked", () => {
+    const result = solvency({
+      inputs: withInputs({ cashOnHand: 60_000, monthlyOperatingCost: 10_000 }),
+      tier: "solopreneur",
+      nowMs: NOW,
+    });
     expect(result.runway).toMatchObject({ state: "known", value: 6, unit: "months" });
   });
 
@@ -452,7 +523,8 @@ describe("solvency — the finance-ops layer", () => {
   });
 
   test("zero cash with a real burn is 0 months, never negative", () => {
-    const result = sol({ cashOnHand: 0, monthlyOperatingCost: 5_000 });
+    // mrr: 0 — see the "runway is cash over monthly burn" test above for why (B3 fix).
+    const result = sol({ cashOnHand: 0, monthlyOperatingCost: 5_000, mrr: 0 });
     expect(result.runway).toMatchObject({ state: "known", value: 0 });
   });
 

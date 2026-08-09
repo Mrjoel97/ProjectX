@@ -16,7 +16,7 @@ import type {
   Funding,
   Tier,
 } from "@pikar/core";
-import { cashInputsForTier, metricSetFor, validateCashInput } from "@pikar/core";
+import { cashInputsForTier, metricSetFor, REFERRAL_GATE_PCT, validateCashInput } from "@pikar/core";
 import { useMutation, useQuery } from "convex/react";
 import Link from "next/link";
 import { type CSSProperties, useMemo, useState } from "react";
@@ -277,14 +277,27 @@ export function SolvencySection({
  * looked up in the SAME vocabulary the row it belongs to already uses (`UNIT_ECONOMICS_LABELS` or
  * `SOLVENCY_LABELS`) — one label per metric, not a third copy invented here — which is what frames
  * it as the question it answers rather than a bare stat.
+ *
+ * Keyed on `metric` — the SAME value `metricSetFor` already computed and handed to this component —
+ * not re-derived from `tier`/`funding` alone (whole-branch review B2). `metricSetFor` has TWO
+ * clauses: posture picks `runway` for outside money, and a SECOND clause overrides a bootstrapped
+ * `sme`/`enterprise`'s `cfa` with `workingCapital` (`cash.ts`'s `metricSetFor` JSDoc has the full
+ * rule). A caption keyed on `funding === "bootstrapped"` alone said "whether each customer pays for
+ * itself" for every bootstrapped tenant, including an SME whose actual headline is working capital —
+ * the fifth document on this plan to certify something the code did not do. Switching on `metric`
+ * itself means the two can never drift again: whatever `metricSetFor` picks is what this describes.
  */
-function headlineReason(tier: Tier | null, funding: Funding | null): string {
+function headlineReason(metric: CashMetricKey, tier: Tier | null, funding: Funding | null): string {
   if (tier === null || funding === null) {
     return "Based on what we know about your business so far.";
   }
-  return funding === "bootstrapped"
-    ? "Bootstrapped: whether each customer pays for itself matters most right now."
-    : "Outside money changes the constraint — the date it runs out matters most right now.";
+  if (metric === "runway") {
+    return "Outside money changes the constraint — the date it runs out matters most right now.";
+  }
+  if (metric === "workingCapital") {
+    return "An established business's survival question is the cash conversion cycle, not one customer's 30-day payback.";
+  }
+  return "Whether each customer pays for itself matters most right now.";
 }
 
 export function HeadlineCard({
@@ -306,7 +319,7 @@ export function HeadlineCard({
         {label}
       </h2>
       <FigureTile label={label} figure={figure} />
-      <p style={{ ...muted, fontSize: "0.8rem" }}>{headlineReason(tier, funding)}</p>
+      <p style={{ ...muted, fontSize: "0.8rem" }}>{headlineReason(metric, tier, funding)}</p>
     </section>
   );
 }
@@ -367,13 +380,23 @@ export function CashStateNotice({
  * ponytail: "posts per day" has no source yet — Pikar delivers email, not social posts. It renders
  * as an explicit "not tracked yet" rather than as a zero. Upgrade path: a social rail feeds the same
  * shape.
+ *
+ * `referralPct` renders the tier's `set.activity` figure (whole-branch review B4) — `CASH_INPUTS`
+ * asks startup/sme/enterprise tenants for "Referral share" and promises it "unlocks the 25% referral
+ * gate", and `unitEconomics.referralPct`/`REFERRAL_GATE_PCT` already compute and name that gate; only
+ * the render was missing, breaking the module's own "an input with no payoff should not be asked
+ * for" rule. Absent (a solopreneur, whose tier set has no `referralPct`, or the figure not yet
+ * loaded) renders nothing extra — this is an addition to the row, not a new gate on it.
  */
 export function ActivitySection({
   activity,
   partial,
+  referralPct,
 }: {
   activity: CashActivity;
   partial: boolean;
+  /** The tier's `set.activity` figure, when this tenant's tier is asked for it. */
+  referralPct?: CashFigure;
 }) {
   return (
     <section style={stack} aria-labelledby="cash-activity-heading">
@@ -415,6 +438,13 @@ export function ActivitySection({
             Not tracked yet — Pikar delivers email, not posts.
           </p>
         </div>
+        {referralPct ? (
+          <FigureTile
+            label={UNIT_ECONOMICS_LABELS.referralPct ?? "Referral share"}
+            figure={referralPct}
+            note={`The gate is ${REFERRAL_GATE_PCT}% of new customers arriving by referral.`}
+          />
+        ) : null}
       </section>
     </section>
   );
@@ -533,15 +563,21 @@ export function NumbersPanel({
 
 function ConnectedNumbers() {
   const inputsResult = useQuery(api.cash.inputs, {});
-  const tierRow = useQuery(api.tenantProfile.get);
+  // `api.cash.shape` — the query built for exactly this (whole-branch review cleanup). This used to
+  // read `api.tenantProfile.get`, a second reader of the same tier fact every sibling `Connected*`
+  // on this tab already reads through `cash.shape`; two readers for one fact is how they drift.
+  const shapeResult = useQuery(api.cash.shape, {});
   const saveInput = useMutation(api.cash.saveInput);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (inputsResult === undefined) {
+  // Gated on BOTH queries — an un-gated `shapeResult` used to let an SME briefly render the
+  // 6-row solopreneur panel (the `fallbackTier` default) before the real tier arrived, then swap to
+  // 9 rows a moment later (whole-branch review cleanup).
+  if (inputsResult === undefined || shapeResult === undefined) {
     return <CashStateNotice state="loading">Loading your numbers…</CashStateNotice>;
   }
-  const tier: Tier = tierRow?.tier ?? "solopreneur";
+  const tier: Tier = fallbackTier(shapeResult.tier);
 
   const save = async (field: CashInputField, value: number) => {
     setBusy(true);
@@ -575,9 +611,27 @@ function ConnectedActivity() {
     return { sinceMs: untilMs - WINDOW_DAYS * DAY_MS, untilMs };
   }, []);
   const result = useQuery(api.cash.activity, window);
+  // Referral share is additive to this row (B4) — it rides `cash.shape` + `cash.unitEconomics`,
+  // both already subscribed elsewhere on the tab (the `RailsSection`/`TrackedSection` precedent), so
+  // this does not block the measured counts above on a slower tier/scorecard read: they render as
+  // soon as `result` resolves, and the referral tile joins once its own two queries do.
+  const shapeResult = useQuery(api.cash.shape, {});
+  const economics = useQuery(api.cash.unitEconomics, {});
   if (result === undefined)
     return <CashStateNotice state="loading">Loading activity…</CashStateNotice>;
-  return <ActivitySection activity={result.activity} partial={result.bound.partial} />;
+  const showReferral =
+    shapeResult !== undefined &&
+    economics !== undefined &&
+    metricSetFor(fallbackTier(shapeResult.tier), shapeResult.funding).activity.includes(
+      "referralPct",
+    );
+  return (
+    <ActivitySection
+      activity={result.activity}
+      partial={result.bound.partial}
+      referralPct={showReferral ? economics.referralPct : undefined}
+    />
+  );
 }
 
 /**

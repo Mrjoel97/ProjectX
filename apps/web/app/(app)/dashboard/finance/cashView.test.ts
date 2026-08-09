@@ -68,6 +68,25 @@ describe("activity section", () => {
     const html = render(ActivitySection, { activity: activity(), partial: true });
     expect(html).toMatch(/floor/i);
   });
+
+  // Whole-branch review B4: `CASH_INPUTS` asks startup/sme/enterprise for "Referral share",
+  // promising it "unlocks the 25% referral gate", and `unitEconomics.referralPct`/
+  // `REFERRAL_GATE_PCT` already compute and name that gate — but nothing rendered it. This pins
+  // that the tile now appears, against the 25% gate, when the caller has a figure to show.
+  test("a referralPct figure renders against the 25% gate", () => {
+    const html = render(ActivitySection, {
+      activity: activity(),
+      partial: false,
+      referralPct: { state: "known", origin: "stated", value: 30, unit: "percent" },
+    });
+    expect(html).toContain("Referral share");
+    expect(html).toMatch(/25%/);
+  });
+
+  test("no referralPct figure (e.g. a solopreneur's tier) renders no referral tile", () => {
+    const html = render(ActivitySection, { activity: activity(), partial: false });
+    expect(html).not.toContain("Referral share");
+  });
 });
 
 const input = (over: Record<string, unknown> = {}) => ({
@@ -272,6 +291,33 @@ describe("the headline", () => {
     expect(html).toMatch(/business profile|business shape/i);
     expect(html).not.toMatch(/required|must/i);
   });
+
+  // Whole-branch review B2: the caption used to be keyed on `funding === "bootstrapped"` ALONE,
+  // so EVERY bootstrapped tenant read "whether each customer pays for itself matters most right
+  // now" — including an SME or enterprise, whose actual headline (`metricSetFor`'s clause 2) is
+  // `workingCapital`, not `cfa`. The caption must derive from the same `metric` the headline itself
+  // is keyed on, so the two cannot drift again.
+  test("a bootstrapped SME's caption matches its ACTUAL headline (working capital), not the CFA line", () => {
+    const html = render(HeadlineCard, {
+      metric: "workingCapital",
+      figure: { state: "known", origin: "derived", value: 1000, unit: "usd", from: "x" },
+      tier: "sme",
+      funding: "bootstrapped",
+    });
+    expect(html).toMatch(/cash conversion cycle/i);
+    expect(html).not.toMatch(/pays for itself/i);
+  });
+
+  test("a bootstrapped enterprise's caption also matches working capital, not the CFA line", () => {
+    const html = render(HeadlineCard, {
+      metric: "workingCapital",
+      figure: { state: "known", origin: "derived", value: 2000, unit: "usd", from: "x" },
+      tier: "enterprise",
+      funding: "bootstrapped",
+    });
+    expect(html).toMatch(/cash conversion cycle/i);
+    expect(html).not.toMatch(/pays for itself/i);
+  });
 });
 
 const knownFigure = (value: number, unit = "usd") => ({
@@ -333,7 +379,8 @@ describe("solvency section", () => {
 
 /**
  * What this proves and what it does NOT (Task 9 review — the report/playbook asserted isolation in
- * prose only, with no test behind it):
+ * prose only, with no test behind it; whole-branch review B-cleanup fixed the exception gap this
+ * comment used to document as NOT true — corrected below):
  *
  * PROVEN here: each section component is a pure function of its OWN props — no shared module state,
  * no prop threading between sections — so one section given empty/degraded data (the render-layer
@@ -343,12 +390,18 @@ describe("solvency section", () => {
  * return data leaves `ConnectedSolvency`/`ConnectedActivity`'s OWN independent `useQuery` calls
  * completely unaffected.
  *
- * NOT proven, and NOT true: that a `useQuery` call THROWING (a real Convex query error, as opposed
- * to returning `undefined` while loading) stays contained to one section. `FinanceTabs.tsx` mounts
- * `CashTab` under `FinanceView.tsx`'s single `FinanceErrorBoundary`, shared with the
- * always-mounted `PikarSpendTab` — a thrown exception from ANY section's query would unwind to that
- * one shared boundary and take the whole tab tree down with it. Fixing that is a `FinanceView.tsx`
- * change, outside this task's scope; this test does not claim otherwise.
+ * NOT proven HERE (this file renders pure components with `renderToStaticMarkup`, never a real React
+ * tree with error boundaries), but now TRUE at the composition level: a `useQuery` call THROWING (a
+ * real Convex query error, as opposed to returning `undefined` while loading) stays contained to one
+ * TAB. `FinanceTabs.tsx` used to mount `CashTab` under `FinanceView.tsx`'s single, page-wide
+ * `FinanceErrorBoundary`, shared with the always-mounted `PikarSpendTab` — a thrown exception from
+ * ANY section's query unwound to that one shared boundary and took the whole tab tree down with it.
+ * Each of the three tab panels (`finance-panel-business`/`-spend`/`-operator`) now carries its OWN
+ * `<FinanceView>` boundary, so a thrown exception inside `CashTab` degrades ONLY the Business panel —
+ * Pikar spend (and Operator, for an owner) keep rendering. This remains a component-composition fact
+ * verified by reading `FinanceTabs.tsx`, not by a DOM-free test here: an error boundary needs a real
+ * React tree (`componentDidCatch`) to exercise, which this file's `renderToStaticMarkup` runner
+ * cannot do.
  */
 describe("section isolation — what is proven and what is not", () => {
   test("a section given empty/degraded data renders independently of a sibling given full data", () => {

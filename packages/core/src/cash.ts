@@ -453,7 +453,11 @@ export type CashUnitEconomics = {
 /** The referral share the source material treats as the gate worth clearing. */
 export const REFERRAL_GATE_PCT = 25;
 
-const usd = (n: number) => `$${n.toLocaleString("en-US")}`;
+// `maximumFractionDigits: 0` matches `CashView.tsx`'s `formatUsdAmount` exactly (whole-branch review
+// cleanup) — the two used to disagree: this dropped no digits, so a CAC of 1234.56 rendered as the
+// main figure "$1,235" (the view's own rounding) sitting above a `from:` provenance line reading
+// "$1,234.56", two different numbers describing one figure on one tile.
+const usd = (n: number) => `$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 
 /**
  * The Hormozi spine, as figures a page can render.
@@ -497,8 +501,13 @@ export function unitEconomics(args: {
         from: `${usd(perPurchase)} gross profit × ${purchases} purchases`,
       });
     }
-    if (scorecard.financials.ltgp !== null) {
-      return knownFigure("stated", scorecard.financials.ltgp, "usd");
+    // Optional chaining, deliberately: `scorecard` arrives from the DB's `v.any()` column, so a
+    // malformed row (whole-branch review B1 — a document-review row's literal `scorecard: {}`, or
+    // any other shape the schema does not enforce at runtime) can reach here with no `financials`
+    // object at all. A pure function must not throw on a shape the DB can actually hold.
+    const statedLtgp = scorecard.financials?.ltgp ?? null;
+    if (statedLtgp !== null) {
+      return knownFigure("stated", statedLtgp, "usd");
     }
     return missingComponents;
   })();
@@ -511,7 +520,7 @@ export function unitEconomics(args: {
       return notComputable("No acquisition cost recorded, so there is nothing to pay back.");
     const cac = valueOf(inputs, "cac");
     const thirtyDayCash = valueOf(inputs, "thirtyDayCashPerCustomer");
-    const serviceCost = scorecard.financials.costToServicePerCustomer ?? 0;
+    const serviceCost = scorecard.financials?.costToServicePerCustomer ?? 0;
     const result = cfa({ thirtyDayCash, cac, serviceCost });
     return derived({
       value: result.ratio,
@@ -556,9 +565,9 @@ export function unitEconomics(args: {
     if (missing) return missing;
     if (zeroCac)
       return notComputable("No acquisition cost recorded, so there is nothing to pay back.");
-    const monthlyChurnPct = scorecard.financials.churnByCadence.monthly;
+    const monthlyChurnPct = scorecard.financials?.churnByCadence?.monthly ?? null;
     if (monthlyChurnPct === null || monthlyChurnPct <= 0) {
-      return unknownFigure("needs your monthly churn, to know how long a customer lasts");
+      return unknownFigure("Needs your monthly churn, to know how long a customer lasts.");
     }
     // Average lifetime in months from monthly churn, then gross profit spread across it.
     const lifetimeMonths = 100 / monthlyChurnPct;
@@ -582,10 +591,10 @@ export function unitEconomics(args: {
   // cannot run until the user provides that figure. A default "within range" would tell someone to
   // stop optimising a CAC nobody has measured against anything.
   const industryFigure: CashFigure = (() => {
-    const average = scorecard.financials.industryAvgCac;
+    const average = scorecard.financials?.industryAvgCac ?? null;
     if (average === null || average <= 0) {
       return unknownFigure(
-        "needs the industry-average CAC for your market — there is no table to look it up in",
+        "Needs the industry-average CAC for your market — there is no table to look it up in.",
       );
     }
     const missing = requireInputs(inputs, ["cac"]);
@@ -599,6 +608,11 @@ export function unitEconomics(args: {
     });
   })();
 
+  // Same defensive optional-chaining as every other `scorecard.financials.*` read above — a
+  // malformed row can arrive with no `financials` object at all (B1).
+  const grossMarginPct = scorecard.financials?.grossMarginPct ?? null;
+  const cohortChurnPct = scorecard.financials?.churnByCadence?.monthly ?? null;
+
   return {
     cfa: cfaFigure,
     ltgp: ltgpFigure,
@@ -611,13 +625,13 @@ export function unitEconomics(args: {
     // through `statedFigure` would need a fabricated timestamp; upgrade path is adding both to
     // `CASH_INPUTS` (they already have Scorecard dot-paths) if staleness on them is ever wanted.
     grossMargin:
-      scorecard.financials.grossMarginPct === null
-        ? unknownFigure("needs your gross margin")
-        : knownFigure("stated", scorecard.financials.grossMarginPct, "percent"),
+      grossMarginPct === null
+        ? unknownFigure("Needs your gross margin.")
+        : knownFigure("stated", grossMarginPct, "percent"),
     cohortChurn:
-      scorecard.financials.churnByCadence.monthly === null
-        ? unknownFigure("needs your monthly churn")
-        : knownFigure("stated", scorecard.financials.churnByCadence.monthly, "percent"),
+      cohortChurnPct === null
+        ? unknownFigure("Needs your monthly churn.")
+        : knownFigure("stated", cohortChurnPct, "percent"),
     // referralPct IS a CashInputField (CASH_INPUTS) with a real CashInputState — it gets the same
     // staleness treatment every other stated cash input gets, through the one shared function.
     referralPct: statedFigure(inputs.referralPct, cashInputSpec("referralPct"), nowMs),
@@ -687,8 +701,20 @@ export function solvency(args: { inputs: CashInputs; tier: Tier; nowMs: number }
 
   // Net burn: what leaves, minus what recurs. Clamped at zero — a profitable month is "not
   // burning", and a negative burn rendered as a number reads as a deeper hole than reality.
+  //
+  // `mrr` is REQUIRED here whenever `recurringApplies` (whole-branch review B3 — the module's own
+  // suppression contract, `requireInputs`'s doc comment above: a derived figure is suppressed while
+  // any input it rests on is unknown). The unfixed version silently read an unanswered `mrr` as `0`
+  // recurring — a funded startup who has real MRR but has not entered it saw net burn equal to the
+  // FULL operating cost and a runway shorter than the truth, under a headline captioned "the date it
+  // runs out matters most right now." A tier where MRR does not apply (`!recurringApplies`, e.g. a
+  // solopreneur) is NOT held to this: `mrr` is `not-applicable` for them, not unknown, and demanding
+  // it here would wrongly suppress a runway they are entitled to see.
   const netBurnFigure: CashFigure = (() => {
-    const missing = requireInputs(inputs, ["monthlyOperatingCost"]);
+    const requiredFields: CashInputField[] = recurringApplies
+      ? ["monthlyOperatingCost", "mrr"]
+      : ["monthlyOperatingCost"];
+    const missing = requireInputs(inputs, requiredFields);
     if (missing) return missing;
     const cost = valueOf(inputs, "monthlyOperatingCost");
     const recurring = mrrFigure.state === "known" ? mrrFigure.value : 0;
