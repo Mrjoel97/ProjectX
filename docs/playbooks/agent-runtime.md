@@ -6,6 +6,59 @@
 > mid-change at the time of writing. Not this session's work, not verified here, and the entry
 > below stands unchanged. That lane owns the §9 entry when it lands.
 
+> Last verified: 2026-08-09 (Plan 19-09 — **THE GOLDEN GATE IS UNRUN. Fixture 36 FAILED its first
+> live execution, twice, identically, for $0.0115, and the full 35-case gate was never started.**
+> `cockpit-agent@18` is SEEDED as a `candidate` (28,368 chars, sha256 `6ca4d937639c…`, minted by
+> `seedSkills` as `maxVersion + 1` from a clean 17-max). **`cockpit-agent@17` REMAINS ACTIVE.
+> NOTHING WAS ACTIVATED.**)
+>
+> **The new observable: `crmOperationCount`.** How many changes to the user's own records
+> `stageCrmWrite` staged on the thread. Graded off `plan.crmOperations` — the content-plane field
+> 19-06 put on the plan row — exactly like `attachmentCount` and `recipientCount`, and therefore
+> NOT a `smoke:` read. That asymmetry with `createdDocCount` is deliberate: a created document
+> lives in `vaultSources` and never touches the plan, so it needs its own query, whereas a staged
+> CRM operation IS the plan row that `plans:getById` already returned. Still $0 — no model call,
+> no extra hop. The failure it exists to catch is the agent replying "I've saved them to your
+> contacts" while never calling the tool, which no reply assertion can tell apart from success.
+>
+> **Its anti-vacuity rule, the same one that governs `createdDocCount` and the hosted-search
+> floor:** `crmOperationCount: 0` passes on all 34 fixtures that never mention a contact, so it
+> asserts nothing and `validateFixture` REJECTS it before the first spawn. A fixture that means
+> "the agent must NOT stage a record change" needs its own key, not a zero that reads as absent —
+> fixture 36's second turn gets that property from the count staying at **1** instead of rising
+> to 2. And a non-zero count is never evidence anything was saved: the apply lives behind an
+> Approve the harness never clicks.
+>
+> **WHAT THE DIAGNOSTIC MEASURED, and read it as signal, not flake.**
+> `--only 36` against `cockpit-agent@18`, two attempts, same verdict both times:
+> ```
+> crmOperationCount: expected 1, got 0
+> recipientCount:    expected 0, got 1
+> ```
+> Both attempt plan rows, inspected directly at $0, are IDENTICAL in shape: `status: "collecting"`,
+> `recipients: ["eval-rhea-6q@golden.example"]`, a composed `subject`, and **no `crmOperations`
+> field at all**. The agent did not stage a follow-up and then also email — it never called
+> `stageCrmWrite` once. Turn 1 became an outbound email draft.
+>
+> **The teaching is present and was OUTGUNNED — this is not a missing instruction.** The body's
+> "Keeping track of people" section already says, verbatim, *"This is not a compose: do not add the
+> person as a recipient to get at their address."* The model did it anyway, on 2/2 runs. Per the
+> reflex-vs-judgement rule: behaviour uniform across every run regardless of input is not fixable
+> by another sentence in the body, and a third instruction is the wrong next move.
+>
+> **The likeliest root cause is the FIXTURE, and it is the exact trap the fixture's own
+> `description` names.** Turn 1 hands the agent an email address inline ("her address is
+> eval-rhea-6q@golden.example") because the address is also the non-vacuity NEEDLE. But a supplied
+> address is the cockpit's strongest recipient-collection cue, and "Remind me … to chase <person>"
+> reads as compose. The fixture needs the address in the turn and forbids it becoming a recipient
+> — it fights itself. Whoever picks this up: change the FIXTURE first (get the needle from
+> something that is not an address, or make turn 1 unambiguously a records act), not the body.
+> Distinguishing fixture-defect from body-defect costs one more paid diagnostic, not a gate run.
+>
+> **Do not run `run-eval-golden.mjs --list`.** There is no such flag; unknown argv is ignored and
+> execution falls straight through to `runLive` — a full PAID run. `19-09-PLAN.md` names it twice
+> as an offline check and is WRONG both times. The offline command is `--self-check`.
+
 > Last verified: 2026-08-09 (Plan 19-08 — **a FIFTEENTH `SMOKE::agent::` op, `crm=`, drives the new
 > `stageCrmWrite` tool offline at $0.** No `smoke.ts` change was needed: unlike `brief=`, this op
 > seeds no fixture, and unlike `create=` it makes NO model call, so nothing in the turn can reach a

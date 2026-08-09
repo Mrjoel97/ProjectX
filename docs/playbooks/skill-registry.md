@@ -1,18 +1,38 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
-> Last verified: 2026-08-09 (**19-09 took the `cockpit-agent` override lane. THE GATE IS UNRUN.**)
+> Last verified: 2026-08-09 (**19-09 took the `cockpit-agent` override lane. v18 IS SEEDED. THE
+> GATE IS UNRUN — fixture 36 FAILED its $0.0115 diagnostic, so the 35-case gate was never started.**)
 > Phase 19 (ACTN-05) edited the `cockpit-agent` body to teach `stageCrmWrite` and contacts-first
 > resolution, and discharged 18-08's binding *"teach a tool, owe a fixture"* override condition with
-> `eval-cases/36-crm-follow-up.json` and the 34 → 35 fixture-floor bump. **Nothing was seeded,
-> evaluated or activated: no eval run has happened, no evidence row was written, and
+> `eval-cases/36-crm-follow-up.json` and the 34 → 35 fixture-floor bump. **`cockpit-agent@18` was
+> SEEDED as a candidate, and fixture 36 was then run as a `--only 36` DIAGNOSTIC where it FAILED
+> for $0.0115. The unfiltered gate was never started, no evidence row was written, and
 > `cockpit-agent@17` is still ACTIVE.** Record this as UNRUN, never as passed.
+>
+> **Why the unfiltered gate was NOT run after the diagnostic failed, and why that was the point.**
+> The diagnostic exists so a dead fixture costs one case, not thirty-five. With 36 red the gate can
+> score 34/35 at best, cannot certify anything, and would have to be paid for AGAIN after any fix —
+> so running it would spend ~$0.12 to learn nothing about the decision at hand. It remains worth
+> running for ONE narrower reason: to prove the body edit (27 313 → 28 368 chars) did not regress
+> the other 34. That is a separate question and a separate owner call:
+> `pnpm eval:golden --skill cockpit-agent@18`.
+>
+> **What failed, in one line:** the agent never called `stageCrmWrite` at all — it composed an
+> email to the contact instead (`recipients: ["eval-rhea-6q@golden.example"]`, a `subject`, no
+> `crmOperations` field), identically on both attempts. The body already forbids exactly this in
+> words; see `agent-runtime.md`'s 19-09 entry for the plan-row evidence and why the FIXTURE, not
+> the body, is the thing to change first.
 >
 > The state a resumer needs, read off the live deployment (`local:`) on 2026-08-09 at $0: ACTIVE
 > `cockpit-agent` is **v17** (body 27 313 chars, sha256 `b5c8b6a50aed` — byte-identical,
 > LF-normalized, to the pre-19-09 canonical `.md`), and **v18/v19/v20 are ABSENT**, so no optimizer
 > dry-run candidate is squatting above the active row and `seedSkills` will mint **v18**: a FORWARD
 > arrow, not the rollback the block below warns about. The body it will carry is 28 368 chars,
-> sha256 `6ca4d937639c`. Verify that hash after seeding — never trust a plan's version number.
+> sha256 `6ca4d937639c`. **All of that was CONFIRMED after seeding** — `seedSkills` minted v18,
+> `status: "candidate"`, body 28 368 chars, sha256
+> `6ca4d937639cc6b97a90f4f4ca54315f6c39ae9c818b9c94c1ec3d72a17510ad`, read back off the deployment
+> at $0 before a cent was spent. Verify that hash after seeding — never trust a plan's version
+> number.
 >
 > **20-12 and 20.1-01 must now rebase on this body** before seeding a candidate of their own. One
 > candidate stream, one gate: a candidate carrying two lanes' prose is precisely what the override
