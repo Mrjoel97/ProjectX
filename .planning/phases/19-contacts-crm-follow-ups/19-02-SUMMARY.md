@@ -140,6 +140,8 @@ the symptom is "sending stopped working", not "the secret is missing".
 `npx convex codegen` WAS required here (19-01's "no codegen needed" note applies to schema changes
 only — a new *module* must be added to `_generated/api.d.ts`). The local backend needs
 `CONVEX_LOCAL_BACKEND_STARTUP_TIMEOUT_SECS=180`; the default 30s is not enough on this machine.
+**`_generated/api.d.ts` is TRACKED in this repo** — CLAUDE.md §7 says it is git-ignored and that is
+no longer true, so the codegen output is committed (`85ad661`) rather than left dirty.
 
 `graphify update .` + `node scripts/extract-convex-edges.mjs`: 14289 nodes / 16317 edges,
 +402 convex edges, +62 table edges over 36 tables.
@@ -212,4 +214,5 @@ schema field and the plan text pre-dates that choice.
 - `packages/backend/convex/contacts.test.ts` — FOUND (730 lines, 40 tests)
 - `packages/backend/convex/llmRedaction.test.ts` — FOUND (60 tests, +2)
 - `docs/playbooks/contacts-crm.md` — FOUND (256 lines, `19-02` + `UNSUBSCRIBE_SECRET` present)
-- commits `5939f08`, `55fd303`, `62428db`, `7448205` — all FOUND in `git log`
+- `packages/backend/convex/_generated/api.d.ts` — FOUND (`contacts` registered; the file is tracked)
+- commits `5939f08`, `55fd303`, `62428db`, `7448205`, `85ad661` — all FOUND in `git log`
