@@ -465,6 +465,14 @@ test("turn lifecycle: resolveRecipients (the OTHER agent entry point) terminaliz
     picks: [{ name: "Bob", address: "bob@example.com", displayName: "Bob" }],
   });
 
+  // 19-08: wipe-on-pick is UNCHANGED by the contacts-first precedence. `resolveContacts` now has
+  // two SOURCES for its candidates (a saved contact, else the Gmail headers) but exactly one
+  // content-plane home, and the pick still clears it — "no contacts cache at rest" (SC#7) applies
+  // to the transient parking spot as much as to the contacts table.
+  const picked = await t.run((ctx) => ctx.db.query("plans").collect());
+  expect(picked[0]?.candidates).toBeUndefined();
+  expect(picked[0]?.pendingValid).toBeUndefined();
+
   const steps = await readSteps(t);
   expect(steps, "resolveRecipients minted no thinking row").toHaveLength(2);
   expect(steps.every((s) => s.tool === "thinking")).toBe(true);

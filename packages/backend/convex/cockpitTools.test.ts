@@ -151,6 +151,10 @@ test("resolveContacts writes candidates and returns a refs-only summary (NO addr
   expect(summary).not.toContain("@"); // no address ever crosses to the model (§2-D)
   const plan = await readPlan(t, planId);
   expect(plan?.candidates?.length).toBeGreaterThan(0); // held on the content plane for the card
+  // 19-08: with NOTHING saved, the Gmail-header fallback is byte-unchanged and DID run. This is
+  // the non-vacuous half of the contacts-first pair below — without it, "zero header searches"
+  // could pass because the search never runs for anybody.
+  expect(await headerSearches(t)).toHaveLength(1);
 });
 
 test("resolveContacts is ADDITIVE — two names in ONE turn both survive (the 'Sarah and Zach' drop bug)", async () => {
@@ -1750,4 +1754,224 @@ test("renderAndStore's html branch renders through renderHtmlDocument — never 
   expect(src, "raw markdown is being encoded as document bytes somewhere in llm.ts").not.toMatch(
     /encode\(draft\.markdown\)/,
   );
+});
+
+// ── 19-08 (ACTN-05): contacts-first resolution + the ONE CRM staging tool ─────
+//
+// SC#1's first half. Two properties, and NEITHER is provable by reading a reply string:
+//   • CONTACTS FIRST. A saved contact is a deliberate human statement about who someone is; a
+//     Gmail-header match is an inference. The proof is a ROW COUNT on `audit`: `gmail.search`
+//     ALWAYS writes exactly one refs-only `mailbox.searched` row (gmail.ts, shared by the SMOKE
+//     and live paths), so zero rows means the header search never ran. A reply-string check would
+//     pass on a header search that happened to return the same labels — the 19-04 inert-GET lesson.
+//   • NO CONTACTS CACHE AT REST (SC#7). `resolveContacts` must write NO `contacts` row, on a
+//     resolution that matched nothing, one, or several. Counted before and after, same reason.
+
+const contactRows = (t: T) => t.run((ctx) => ctx.db.query("contacts").collect());
+const followUpRows = (t: T) => t.run((ctx) => ctx.db.query("followUps").collect());
+/** Every refs-only `mailbox.searched` audit row — one per gmail.search call, SMOKE path included. */
+const headerSearches = async (t: T) =>
+  (await t.run((ctx) => ctx.db.query("audit").collect())).filter(
+    (r) => r.eventType === "mailbox.searched",
+  );
+
+const seedContact = (t: T, email: string, name?: string) =>
+  t.run((ctx) =>
+    ctx.db.insert("contacts", {
+      tenantId: "t1",
+      email,
+      ...(name ? { name } : {}),
+      origin: "user-entered" as const,
+      createdAt: 1,
+      updatedAt: 1,
+    }),
+  );
+
+test("resolveContacts prefers a SAVED contact and never searches Gmail headers", async () => {
+  const { t, planId } = await setup();
+  await seedContact(t, "sarah@saved.example", "Sarah Saved");
+
+  const summary = await call(t, planId, "resolveContacts", { name: "SMOKE::Sarah" });
+
+  // THE assertion: the header search did not run. Counted, not read off the reply.
+  expect(await headerSearches(t)).toHaveLength(0);
+  expect(summary).toContain("Sarah Saved");
+  expect(summary).toContain("saved"); // the model is told WHY this beat the mailbox
+  expect(summary).not.toContain("@"); // §2-D: the address still never crosses to the model
+  // The saved row is parked as the candidate the human picks — same content plane, same card.
+  const plan = await readPlan(t, planId);
+  expect(plan?.candidates?.[0]?.matches?.map((m) => m.address)).toEqual(["sarah@saved.example"]);
+});
+
+test("a saved match brings that contact's OPEN follow-ups into the SAME turn", async () => {
+  const { t, planId } = await setup();
+  const contactId = await seedContact(t, "sarah@saved.example", "Sarah Saved");
+  await t.run(async (ctx) => {
+    await ctx.db.insert("followUps", {
+      tenantId: "t1",
+      contactId,
+      note: "chase the signed quote",
+      dueAt: 2_000,
+      status: "open",
+      createdAt: 1,
+    });
+    await ctx.db.insert("followUps", {
+      tenantId: "t1",
+      contactId,
+      note: "already handled last week",
+      dueAt: 1_000,
+      status: "done",
+      createdAt: 1,
+    });
+  });
+
+  const summary = await call(t, planId, "resolveContacts", { name: "SMOKE::Sarah" });
+
+  expect(summary).toContain("chase the signed quote"); // no second tool call needed
+  expect(summary).not.toContain("already handled last week"); // OPEN only
+  expect(await headerSearches(t)).toHaveLength(0);
+});
+
+test("resolveContacts writes NOTHING to contacts — matched none, one, or several (SC#7)", async () => {
+  const { t, planId } = await setup();
+  await seedContact(t, "sarah@saved.example", "Sarah Saved");
+  await seedContact(t, "sara@saved.example", "Sara Saved");
+  expect(await contactRows(t)).toHaveLength(2);
+
+  // Matched NOTHING saved ⇒ falls through to the Gmail-header path, which resolves two SMOKE
+  // header records — and still mints no contact row. Header resolution NEVER writes a contact.
+  await call(t, planId, "resolveContacts", { name: "SMOKE::Nobody Here" });
+  expect(await contactRows(t)).toHaveLength(2);
+  expect(await headerSearches(t)).toHaveLength(1); // the fallback really did run
+
+  await call(t, planId, "resolveContacts", { name: "SMOKE::Sarah Saved" }); // matched ONE
+  expect(await contactRows(t)).toHaveLength(2);
+
+  await call(t, planId, "resolveContacts", { name: "SMOKE::Sar" }); // matched SEVERAL
+  const plan = await readPlan(t, planId);
+  expect(plan?.candidates?.at(-1)?.matches?.length).toBe(2);
+  expect(await contactRows(t)).toHaveLength(2);
+  // …and the two saved-contact resolutions added no further header searches.
+  expect(await headerSearches(t)).toHaveLength(1);
+});
+
+test("stageCrmWrite PROPOSES a crm_write plan and applies NOTHING (the Approve gate is the only path)", async () => {
+  const { t, planId } = await setup();
+
+  const reply = await callClock(t, planId, "stageCrmWrite", {
+    operations: [
+      { op: "addContact", email: "New.Person@Example.com", name: "New Person" },
+      { op: "addFollowUp", email: "new.person@example.com", note: "send the quote", due: "tomorrow" },
+    ],
+  });
+
+  expect(reply).toMatch(/approve/i);
+  const plan = await readPlan(t, planId);
+  expect(plan?.kind).toBe("crm_write");
+  expect(plan?.status).toBe("proposed");
+  expect(plan?.crmOperations).toHaveLength(2);
+  // parseCrmOperations ran at the WRITE boundary too (19-06's note), not only at the apply
+  // boundary: the address is stored NORMALIZED, which is the visible trace of that second parse.
+  expect((plan?.crmOperations?.[0] as { email: string }).email).toBe("new.person@example.com");
+  // §2-D: the model supplies the user's WORDS, never an instant. "tomorrow" off the pinned clock.
+  expect((plan?.crmOperations?.[1] as { dueAt: number }).dueAt).toBe(
+    Date.UTC(2020, 0, 2, 9, 0, 0),
+  );
+  // Nothing applied. The gate is the only application path.
+  expect(await contactRows(t)).toHaveLength(0);
+  expect(await followUpRows(t)).toHaveLength(0);
+});
+
+test("stageCrmWrite REFUSES a follow-up that names no contact — a sentence, never a throw", async () => {
+  const { t, planId } = await setup();
+  // The structural brake against the CRM becoming a general task generator (invariant 11):
+  // contactless follow-ups are a USER-only capability.
+  const reply = await callClock(t, planId, "stageCrmWrite", {
+    operations: [{ op: "addFollowUp", note: "call someone", due: "tomorrow" }],
+  });
+
+  expect(reply).toMatch(/who|contact/i);
+  const plan = await readPlan(t, planId);
+  expect(plan?.kind).toBeUndefined();
+  expect(plan?.crmOperations).toBeUndefined();
+  expect(plan?.status).toBe("collecting");
+});
+
+test("stageCrmWrite REFUSES an empty operation list — a sentence, never a throw", async () => {
+  const { t, planId } = await setup();
+  const reply = await callClock(t, planId, "stageCrmWrite", { operations: [] });
+  expect(reply).toMatch(/nothing|no changes/i);
+  expect((await readPlan(t, planId))?.kind).toBeUndefined();
+});
+
+test("stageCrmWrite REFUSES over a half-composed email rather than hijacking the plan row", async () => {
+  const { t, planId } = await setup();
+  await call(t, planId, "addRecipients", { addresses: ["bob@example.com"] });
+  await call(t, planId, "setSubject", { subject: "Quarterly update" });
+
+  const reply = await callClock(t, planId, "stageCrmWrite", {
+    operations: [{ op: "addContact", email: "new@example.com" }],
+  });
+
+  expect(reply).toMatch(/draft/i);
+  const plan = await readPlan(t, planId);
+  expect(plan?.kind).toBeUndefined(); // the email draft survives intact
+  expect(plan?.subject).toBe("Quarterly update");
+  expect(plan?.recipients).toEqual(["bob@example.com"]);
+});
+
+test("stageCrmWrite cannot complete or cancel a follow-up — only the human closes one", async () => {
+  const { t, planId } = await setup();
+  const contactId = await seedContact(t, "sarah@saved.example", "Sarah Saved");
+  const followUpId = await t.run((ctx) =>
+    ctx.db.insert("followUps", {
+      tenantId: "t1",
+      contactId,
+      note: "chase the quote",
+      dueAt: 2_000,
+      status: "open" as const,
+      createdAt: 1,
+    }),
+  );
+
+  const reply = await callClock(t, planId, "stageCrmWrite", {
+    operations: [{ op: "completeFollowUp", followUpRef: followUpId }],
+  });
+
+  expect(reply).toMatch(/can only|Pipeline/i);
+  expect((await readPlan(t, planId))?.kind).toBeUndefined();
+});
+
+test("parseAgentSmoke: crm=<email>[:<note>] and its op→tool mapping", () => {
+  expect(parseAgentSmoke("SMOKE::agent::crm=new@example.com")).toEqual({
+    kind: "crm",
+    email: "new@example.com",
+    note: undefined,
+  });
+  expect(parseAgentSmoke("SMOKE::agent::crm=new@example.com:send the quote")).toEqual({
+    kind: "crm",
+    email: "new@example.com",
+    note: "send the quote",
+  });
+  expect(parseAgentSmoke("SMOKE::agent::crm=")).toBeNull(); // no address drives nothing
+});
+
+test("SMOKE::agent::crm drives ONE governed stageCrmWrite OFFLINE at $0 and traces it", async () => {
+  const { t, planId } = await setupWithLimiter();
+
+  const res = await t.action(internal.llm.runCockpitAgent, {
+    tenantId: "t1",
+    threadId: "thread1",
+    planId,
+    turnId: "turn1",
+    text: "SMOKE::agent::crm=new@example.com:send the quote",
+  });
+
+  expect(res.costUsd).toBe(0); // no gateway key, no model call
+  const steps = await t.run((ctx) => ctx.db.query("agentSteps").collect());
+  expect(steps.map((s) => s.tool)).toEqual(["stageCrmWrite"]);
+  const plan = await readPlan(t, planId);
+  expect(plan?.kind).toBe("crm_write");
+  expect(plan?.crmOperations).toHaveLength(2); // the contact + its follow-up
+  expect(await contactRows(t)).toHaveLength(0); // still staged, still not applied
 });
