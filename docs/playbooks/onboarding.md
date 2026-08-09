@@ -1,5 +1,11 @@
 # Playbook: Persona Onboarding & Business Profile
 
+> Last verified: 2026-08-09 (17.1-10 Task 2 live citation gate). One Blueprint rebuild against the
+> owner's real Vault returned **2 candidates** and the gate dropped **0** (`bad_citation: 0`,
+> `unknown_field: 0`, `not_derivable: 0`, `empty: 0`) across **8 source documents**. Both accepted
+> candidates were additions; there were **0 contradictions**. The draft was persisted for review
+> and the confirmed Blueprint was not changed.
+>
 > Last verified: 2026-08-09 (`tenantProfile.saveFacts` gained `postalAddress` — a 500-char-capped,
 > trim-validated write-boundary field for the CAN-SPAM footer (Phase 19 contacts/CRM), recorded from
 > another lane. It is deliberately absent from `missingSlots`/`canComplete`: enrichment, not an

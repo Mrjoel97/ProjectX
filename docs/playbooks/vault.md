@@ -1,5 +1,19 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Last verified: 2026-08-09 (17.1-10 Task 2 live gate — **L2-L4 ran once; L6 did not
+> start.**) The owner-tenant Blueprint rebuild returned **2 candidates**, both additions, with
+> **0 contradictions and 0 citation-gate drops** (`bad_citation: 0`, `unknown_field: 0`,
+> `not_derivable: 0`, `empty: 0`) across **8 source documents**. The governed model call cost
+> **$0.01** on `openai/gpt-4o-mini`. Retrieval quality was mixed: the revenue probe returned
+> **4 mostly generic/irrelevant hits and missed the Northwind profile**, while the binding-
+> constraint probe returned **5 hits**, including the profile and **2 directly relevant constraint
+> memos**. The draft was persisted at `1786289786676`; the confirmed Blueprint stayed unchanged.
+> L6's one clean, network-enabled `convex dev` attempt used the 180-second local-backend timeout and
+> never became ready: it remained at `Preparing Convex functions...`, and read-only checks never
+> observed a listener on port 3210. The golden runner was therefore **not invoked: 0 cases run,
+> $0.00 evaluation spend, and 0 evaluation fixture/evidence rows written**. The attempt-owned
+> process tree was stopped and port 3210 was verified free; no startup or evaluation retry followed.
+>
 > Last verified: 2026-08-08 (26-07 follow-up — **all four vault spend sites now name themselves in
 > the ledger, and the PDF one is the reason this mattered.**)
 > `vaultExtract` uses `vault:extract:<vaultDocId>:<attemptId>` **plus `:p<i>` on the per-page PDF
@@ -1820,6 +1834,29 @@ tier/profile row therefore does not block this gate. Offline immediately before 
 **697/697**, contracts **27/27**, backend full suite **exit 0**, backend typecheck **exit 0**, and web
 typecheck **exit 0**. The repository-wide playbook checker was temporarily blocked only by
 uncommitted Phase 19/Approvals files owned by concurrent lanes; no foreign playbook was modified.
+
+### 17.1-10 — live gate, Task 2 (L2, L3, L4, and L6)
+
+The owner's real-vault rebuild ran exactly once. The model returned **2 candidates**; the merge
+classified both as additions and produced **0 contradictions**. The citation gate dropped **0**:
+`bad_citation: 0`, `unknown_field: 0`, `not_derivable: 0`, and `empty: 0`. The run used **8 source
+documents**, persisted a draft at `1786289786676`, and deliberately did not promote it over the
+confirmed Blueprint. The priced ledger delta was **$0.01** using `openai/gpt-4o-mini`.
+
+The live `rag.search` inspection was not uniformly good. The revenue probe returned **4** hits that
+were mostly generic or irrelevant and missed the Northwind profile a human would have selected.
+The binding-constraint probe returned **5** hits, including the profile and **2** directly relevant
+constraint memos. This is a measured retrieval defect, not a citation-gate failure: candidate
+validation can reject an unsupported claim, but it cannot make the upstream probe retrieve the
+best document.
+
+L6 did not reach evaluation. Port 3210 was read-only verified free, then exactly one hidden,
+network-enabled `convex dev` process was launched with
+`CONVEX_LOCAL_BACKEND_STARTUP_TIMEOUT_SECS=180`. Its final log state was
+`Preparing Convex functions...`; no listener appeared on port 3210, so the spend/evidence baseline
+query and `eval:golden` were never launched. Observable evaluation delta: **0 cases, $0.00 spend,
+0 throwaway fixture rows, and 0 eval-evidence rows**. Only the validated process tree created by
+this attempt was terminated, port 3210 was re-verified free, and there was no second attempt.
 
 ## Phase 15.3 — vault folders
 
