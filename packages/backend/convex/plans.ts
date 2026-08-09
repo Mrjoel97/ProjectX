@@ -498,21 +498,26 @@ export const recordDeliveryTerminal = internalMutation({
   args: {
     planId: v.id("plans"),
     requestId: v.id("requests"),
-    outcome: v.union(v.literal("sent"), v.literal("failed")),
+    // 19-05: `suppressed` is a THIRD terminal, not a flavour of `failed`. Nothing went wrong — the
+    // recipient asked to stop being emailed after this plan was approved, so the row terminates as
+    // `blocked` and leaves the plan's sent/failed tallies honest.
+    outcome: v.union(v.literal("sent"), v.literal("failed"), v.literal("suppressed")),
   },
   handler: async (ctx, { planId, requestId, outcome }): Promise<{ applied: boolean }> => {
     const [plan, request] = await Promise.all([ctx.db.get(planId), ctx.db.get(requestId)]);
-    if (
-      !plan ||
-      !request ||
-      request.planId !== planId ||
-      request.tenantId !== plan.tenantId
-    ) {
+    if (!plan || !request || request.planId !== planId || request.tenantId !== plan.tenantId) {
       throw new Error("delivery request not found");
     }
-    if (request.status === "sent" || request.status === "failed") return { applied: false };
+    if (
+      request.status === "sent" ||
+      request.status === "failed" ||
+      request.status === "blocked" // the suppressed terminal, replayed
+    ) {
+      return { applied: false };
+    }
 
-    await ctx.db.patch(requestId, { status: outcome });
+    // `blocked` is an EXISTING requests.status member — the suppressed terminal invents no state.
+    await ctx.db.patch(requestId, { status: outcome === "suppressed" ? "blocked" : outcome });
     if (
       plan.counterComplete !== true ||
       plan.recipientTotal === undefined ||
@@ -523,13 +528,20 @@ export const recordDeliveryTerminal = internalMutation({
       return { applied: true };
     }
 
-    const total = Math.max(0, Math.floor(plan.recipientTotal));
+    // 19-05: a suppression REMOVES a recipient rather than resolving one — the plan now has one
+    // fewer person to reach, which is exactly what `executePlan`'s approve-time filter produces
+    // (there the address never entered `recipientTotal` at all). Booking it as `failed` would
+    // report a delivery problem that did not happen; leaving the total alone would strand
+    // `queuedCount` above zero forever. The idempotency guard above is what keeps this decrement
+    // once-only under workflow/action retries.
+    const total = Math.max(0, Math.floor(plan.recipientTotal) - (outcome === "suppressed" ? 1 : 0));
     const sentCount = Math.min(total, plan.sentCount + (outcome === "sent" ? 1 : 0));
     const failedCount = Math.min(
       total - sentCount,
       plan.failedCount + (outcome === "failed" ? 1 : 0),
     );
     await ctx.db.patch(planId, {
+      recipientTotal: total,
       sentCount,
       failedCount,
       queuedCount: Math.max(0, total - sentCount - failedCount),

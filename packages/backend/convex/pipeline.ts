@@ -377,7 +377,16 @@ export const pipelineWorkflow = workflow.define({
     //    retries (workpool default), then onComplete → failed terminal.
     await setStatusStep("delivering");
     const result = await step.runAction(internal.gmail.send, { requestId });
-    if (!result.delivered) return null; // hold at awaiting_reauth (already set by gmail.send)
+    if (!result.delivered) {
+      // 19-05: this lane is the SECOND caller of gmail.send (the cockpit's deliverApprovedPlan is
+      // the other), so the new `suppressed` refusal reaches it too. It is PERMANENT, unlike the
+      // awaiting_reauth hold gmail.send has already set for the reauth reasons — terminate the row
+      // as `blocked` rather than stranding it at `delivering` forever. No plan counters here: a
+      // pipeline request carries no planId, which is why this is a status patch and not
+      // recordDeliveryTerminal.
+      if (result.reason === "suppressed") await setStatusStep("blocked");
+      return null; // otherwise hold at awaiting_reauth (already set by gmail.send)
+    }
 
     await setStatusStep("sent");
     await writeTelemetry("sent");

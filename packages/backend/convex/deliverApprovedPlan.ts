@@ -35,7 +35,21 @@ export const deliverApprovedPlan = workflow.define({
       await step.runMutation(internal.pipeline.setStatus, { requestId, status: "delivering" });
       try {
         const result = await step.runAction(internal.gmail.send, { requestId }); // workpool retries
-        if (!result.delivered) continue; // held at awaiting_reauth — a hold, not a failure
+        if (!result.delivered) {
+          // 19-05: a suppression is PERMANENT, unlike awaiting_reauth (which resumes the moment the
+          // user reconnects). Left on the bare `continue` below, the row would sit at `delivering`
+          // forever and the plan's queuedCount would never reach 0. Terminating it as `blocked`
+          // also decrements recipientTotal, which is the truthful statement — this plan now has one
+          // fewer recipient, exactly as executePlan's approve-time filter would have produced.
+          if (result.reason === "suppressed") {
+            await step.runMutation(internal.plans.recordDeliveryTerminal, {
+              planId,
+              requestId,
+              outcome: "suppressed",
+            });
+          }
+          continue; // every other reason is a HOLD, not a failure — do not change awaiting_reauth
+        }
         await step.runMutation(internal.plans.recordDeliveryTerminal, {
           planId,
           requestId,

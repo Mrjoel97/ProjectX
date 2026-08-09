@@ -1169,14 +1169,17 @@ describe("executePlan deferred send (SCHD-01 — arm on a future sendAt, fire at
     }
   });
 
-  test("the delivery workflow routes both sent and failed terminals through the idempotent plan progress helper", () => {
+  test("the delivery workflow routes sent, failed AND suppressed terminals through the idempotent plan progress helper", () => {
     const src = readFileSync(
       join(dirname(fileURLToPath(import.meta.url)), "deliverApprovedPlan.ts"),
       "utf8",
     );
-    expect(src.match(/internal\.plans\.recordDeliveryTerminal/g)).toHaveLength(2);
+    // Three, since 19-05: a suppression discovered at send time is a PERMANENT terminal, not the
+    // resumable hold `awaiting_reauth` is — a bare `continue` would strand the row at `delivering`.
+    expect(src.match(/internal\.plans\.recordDeliveryTerminal/g)).toHaveLength(3);
     expect(src).toContain('outcome: "sent"');
     expect(src).toContain('outcome: "failed"');
+    expect(src).toContain('outcome: "suppressed"');
   });
 });
 

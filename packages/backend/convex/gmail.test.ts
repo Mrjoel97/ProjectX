@@ -4,13 +4,13 @@
 
 import { BODY_TRUNCATE_CHARS } from "@pikar/core";
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 // listInbox's refs-only mailbox.listed audit hits the auditCounts aggregate; register the
 // component (relative import — the package blocks the deep specifier) so the REAL audit path runs
 // under convex-test instead of throwing "component not registered" (cockpitTools.test.ts precedent).
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import { internal } from "./_generated/api";
-import { buildMime, pickPlainText } from "./gmail";
+import { buildMime, pickPlainText, SEND_ENDPOINT } from "./gmail";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
@@ -574,5 +574,218 @@ describe("seedInboxFixture (deterministic + idempotent)", () => {
       range: "today",
     });
     expect(res).toEqual({ ok: false, reason: "not_connected" });
+  });
+});
+
+// ── 19-05 PIPE-01: the send-path suppression backstop and the CAN-SPAM footer ─────────────────
+//
+// `gmail.send` is the ONE place every product send converges (`deliverApprovedPlan.ts` is its sole
+// production caller). The `executePlan` filter is better UX; THIS is what makes it unbypassable —
+// a suppression created after approve but before a scheduled fire is caught only here. The footer
+// sits at the `buildMime` CALL SITE rather than inside `buildMime`, because `notifyExternal` is a
+// second caller sending a service notice to the user's OWN mailbox and the V4 tests above pin
+// `buildMime`'s bytes.
+
+describe("gmail.send — the suppression backstop + the CAN-SPAM footer (19-05)", () => {
+  const SEND_TENANT = "tenant_send";
+  const SECRET = "0123456789abcdef0123456789abcdef";
+  const SITE = "https://example.convex.site";
+  const POSTAL = "Pikar AI, 12 Samora Ave, Dar es Salaam, TZ";
+  const RECIPIENT = "dest@example.com";
+  // notifyExternal reads the user's own address here first (a GET, never a write).
+  const PROFILE_ENDPOINT = "https://gmail.googleapis.com/gmail/v1/users/me/profile";
+
+  /** Every fetch the action makes, in order. The token refresh POSTs form-encoded bodies and the
+   *  send POSTs JSON, so the raw body string is kept and parsed per assertion. */
+  function mockGoogle() {
+    const calls: { url: string; body: string }[] = [];
+    const fetchMock = vi.fn(async (url: unknown, init?: RequestInit) => {
+      calls.push({ url: String(url), body: init?.body ? String(init.body) : "" });
+      if (String(url).startsWith("https://oauth2.googleapis.com/token")) {
+        return new Response(JSON.stringify({ access_token: "at", expires_in: 3600 }), {
+          status: 200,
+        });
+      }
+      if (String(url) === PROFILE_ENDPOINT) {
+        return new Response(JSON.stringify({ emailAddress: "owner@example.com" }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ id: "gmail-msg-1" }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return {
+      calls,
+      posted: () => calls.filter((c) => c.url === SEND_ENDPOINT),
+      /** The decoded RFC-2822 bytes actually handed to Gmail — never `req.body`. */
+      mime: () => {
+        const sent = calls.filter((c) => c.url === SEND_ENDPOINT);
+        expect(sent).toHaveLength(1);
+        const { raw } = JSON.parse(sent[0]!.body) as { raw: string };
+        return Buffer.from(raw, "base64url").toString("utf8");
+      },
+    };
+  }
+
+  const seedTokens = (t: ReturnType<typeof harness>, tenantId = SEND_TENANT) =>
+    t.run((ctx) =>
+      ctx.db.insert("gmailTokens", { tenantId, refreshToken: "r", scope: "s", updatedAt: BASE_MS }),
+    );
+
+  const seedProfile = (t: ReturnType<typeof harness>, postalAddress: string | null = POSTAL) =>
+    t.run((ctx) =>
+      ctx.db.insert("tenantProfiles", {
+        tenantId: SEND_TENANT,
+        tier: "solopreneur",
+        tierSource: "derived",
+        derivedAt: BASE_MS,
+        ...(postalAddress === null ? {} : { postalAddress }),
+      }),
+    );
+
+  const seedRequest = (t: ReturnType<typeof harness>, recipient = RECIPIENT) =>
+    t.run((ctx) =>
+      ctx.db.insert("requests", {
+        tenantId: SEND_TENANT,
+        correlationId: `send_${crypto.randomUUID()}`,
+        goal: SUBJECT,
+        recipient,
+        draft: BODY,
+        status: "approved",
+        attachmentRefs: [],
+        createdAt: BASE_MS,
+      }),
+    );
+
+  beforeEach(() => {
+    vi.stubEnv("UNSUBSCRIBE_SECRET", SECRET);
+    vi.stubEnv("CONVEX_SITE_URL", SITE);
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  // Row 15. Asserted on the BYTES handed to the send endpoint, not on `req.body` — every stage
+  // before this call site (plans.body → plans.recipientBodies → requests.draft → editedBody) is a
+  // bypass, so a footer that only exists in a stored field proves nothing.
+  test("a normal send carries the postal address AND an /unsubscribe/ URL in its MIME bytes", async () => {
+    const t = harness();
+    await seedTokens(t);
+    await seedProfile(t);
+    const requestId = await seedRequest(t);
+    const g = mockGoogle();
+
+    expect(await t.action(internal.gmail.send, { requestId })).toEqual({
+      delivered: true,
+      messageId: "gmail-msg-1",
+    });
+
+    const mime = g.mime();
+    expect(mime).toContain(BODY); // the drafted body is intact...
+    expect(mime).toContain(POSTAL); // ...and the footer rides in the same bytes
+    expect(mime).toContain(`${SITE}/unsubscribe/`);
+    // The footer is appended at the send boundary, never written back onto the stored draft.
+    expect((await t.run((ctx) => ctx.db.get(requestId)))?.draft).toBe(BODY);
+  });
+
+  // Row 14 — THE test that proves the guard is in the SEND path. The approve-time filter ran while
+  // this recipient was clean; the suppression is created afterwards, exactly as it would be during
+  // a scheduled send's wait. Only the backstop can see it.
+  test("a suppression created AFTER approve is refused at send, and nothing is POSTed", async () => {
+    const t = harness();
+    await seedTokens(t);
+    await seedProfile(t);
+    const requestId = await seedRequest(t); // frozen at approve time, recipient clean
+    // ...then the recipient unsubscribes.
+    await t.run((ctx) =>
+      ctx.db.insert("suppressions", {
+        tenantId: SEND_TENANT,
+        address: RECIPIENT,
+        suppressedAt: BASE_MS,
+        source: "unsubscribe-link" as const,
+      }),
+    );
+    const g = mockGoogle();
+
+    expect(await t.action(internal.gmail.send, { requestId })).toEqual({
+      delivered: false,
+      reason: "suppressed",
+    });
+    // Not one call — the refusal lands before the token refresh, so no credential is even minted.
+    expect(g.calls).toHaveLength(0);
+  });
+
+  test("a suppressed MEMBER of a group recipient string refuses the whole row (the join's ceiling)", async () => {
+    const t = harness();
+    await seedTokens(t);
+    await seedProfile(t);
+    const requestId = await seedRequest(t, "a@example.com, b@example.com");
+    await t.run((ctx) =>
+      ctx.db.insert("suppressions", {
+        tenantId: SEND_TENANT,
+        address: "b@example.com",
+        suppressedAt: BASE_MS,
+        source: "user-marked" as const,
+      }),
+    );
+    const g = mockGoogle();
+
+    // This is WHY the per-address drop lives in executePlan: by the time a joined string reaches
+    // here the only honest answer is to refuse all of it.
+    expect(await t.action(internal.gmail.send, { requestId })).toEqual({
+      delivered: false,
+      reason: "suppressed",
+    });
+    expect(g.posted()).toHaveLength(0);
+  });
+
+  // Row 16b. The postal address was present at approve and gone at fire. Fail CLOSED — the same
+  // precedent as the missing attachment blob: never silently send without the promised part.
+  test("a tenant whose postalAddress vanished between approve and fire makes the send THROW", async () => {
+    const t = harness();
+    await seedTokens(t);
+    await seedProfile(t, null); // a profile row, but the field is gone
+    const requestId = await seedRequest(t);
+    const g = mockGoogle();
+
+    await expect(t.action(internal.gmail.send, { requestId })).rejects.toThrow(
+      /postal address|UNSUBSCRIBE_SECRET/,
+    );
+    expect(g.posted()).toHaveLength(0);
+  });
+
+  test("an unset UNSUBSCRIBE_SECRET also refuses the send, and the error says so", async () => {
+    const t = harness();
+    vi.stubEnv("UNSUBSCRIBE_SECRET", "");
+    await seedTokens(t);
+    await seedProfile(t);
+    const requestId = await seedRequest(t);
+    const g = mockGoogle();
+
+    // The deployment, not the tenant, is misconfigured — the message must name both possibilities
+    // or the operator hunts a postal address that is already set (19-02's "sending stopped
+    // working" symptom).
+    await expect(t.action(internal.gmail.send, { requestId })).rejects.toThrow(
+      /UNSUBSCRIBE_SECRET/,
+    );
+    expect(g.posted()).toHaveLength(0);
+  });
+
+  // Row 17, second half. The service notice goes to the user's OWN mailbox: it is not commercial
+  // mail, it has no recipient to unsubscribe, and a footer on it would be a lie.
+  test("notifyExternal's service notice carries NO postal address and NO unsubscribe URL", async () => {
+    const t = harness();
+    await seedTokens(t);
+    await seedProfile(t);
+    const g = mockGoogle();
+
+    await t.action(internal.notifyExternal.dispatch, {
+      tenantId: SEND_TENANT,
+      kind: "agent.timeout",
+    });
+
+    const mime = g.mime();
+    expect(mime).toContain("owner@example.com"); // it really did send (non-vacuity)
+    expect(mime).not.toContain(POSTAL);
+    expect(mime).not.toContain("/unsubscribe/");
   });
 });

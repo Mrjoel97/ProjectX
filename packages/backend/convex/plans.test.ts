@@ -5,6 +5,7 @@
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api, internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
@@ -228,22 +229,26 @@ describe("patchPlan sendAt + scheduled/canceled status (03.5 — deferred-send c
 });
 
 describe("recordDeliveryTerminal (Phase 26 — exact bounded plan progress)", () => {
-  async function seedCounterPlan(t: ReturnType<typeof convexTest>, complete = true) {
+  async function seedCounterPlan(
+    t: ReturnType<typeof convexTest>,
+    complete = true,
+    recipients = ["a@example.com", "b@example.com"],
+  ) {
     return t.run(async (ctx) => {
       const planId = await ctx.db.insert("plans", {
         tenantId: TENANT,
         threadId: `thread_progress_${crypto.randomUUID()}`,
         status: "delivering",
-        recipients: ["a@example.com", "b@example.com"],
-        recipientTotal: complete ? 2 : undefined,
-        queuedCount: complete ? 2 : undefined,
+        recipients,
+        recipientTotal: complete ? recipients.length : undefined,
+        queuedCount: complete ? recipients.length : undefined,
         sentCount: complete ? 0 : undefined,
         failedCount: complete ? 0 : undefined,
         counterComplete: complete ? true : undefined,
         createdAt: Date.now(),
       });
       const requestIds = await Promise.all(
-        ["a@example.com", "b@example.com"].map((recipient, index) =>
+        recipients.map((recipient, index) =>
           ctx.db.insert("requests", {
             tenantId: TENANT,
             correlationId: `progress_${index}_${crypto.randomUUID()}`,
@@ -346,6 +351,95 @@ describe("recordDeliveryTerminal (Phase 26 — exact bounded plan progress)", ()
 
     expect(await t.run((ctx) => ctx.db.get(a.planId))).toMatchObject({
       queuedCount: 2,
+      sentCount: 0,
+      failedCount: 0,
+    });
+  });
+
+  // 19-05 (Open Question 3, resolved). A suppression discovered at SEND time — created after the
+  // approve-time filter had already run — is PERMANENT, unlike `awaiting_reauth`, which resumes on
+  // reconnect. Left on the fan-out's bare `continue`, the row would sit at `delivering` forever and
+  // `queuedCount` would never reach 0. Decrementing recipientTotal is the truthful statement: the
+  // plan now has one fewer recipient, exactly the semantics of the executePlan filter (where a
+  // suppressed address never entered the total at all).
+  test("a suppressed terminal blocks the row, decrements recipientTotal, and the counters BALANCE", async () => {
+    const t = convexTest(schema, modules);
+    const { planId, requestIds } = await seedCounterPlan(t, true, [
+      "a@example.com",
+      "b@example.com",
+      "c@example.com",
+    ]);
+    const [first, second, third] = requestIds as [Id<"requests">, Id<"requests">, Id<"requests">];
+
+    expect(
+      await t.mutation(internal.plans.recordDeliveryTerminal, {
+        planId,
+        requestId: third,
+        outcome: "suppressed",
+      }),
+    ).toEqual({ applied: true });
+
+    // `blocked` is an EXISTING requests.status member — no new state was invented for this.
+    expect((await t.run((ctx) => ctx.db.get(third)))?.status).toBe("blocked");
+    const afterDrop = await t.run((ctx) => ctx.db.get(planId));
+    expect(afterDrop).toMatchObject({
+      recipientTotal: 2,
+      queuedCount: 2,
+      sentCount: 0,
+      failedCount: 0,
+    });
+
+    await t.mutation(internal.plans.recordDeliveryTerminal, {
+      planId,
+      requestId: first,
+      outcome: "sent",
+    });
+    await t.mutation(internal.plans.recordDeliveryTerminal, {
+      planId,
+      requestId: second,
+      outcome: "sent",
+    });
+
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    // The whole point: queued reaches ZERO and the three numbers still add up to the total.
+    expect(plan).toMatchObject({ recipientTotal: 2, queuedCount: 0, sentCount: 2, failedCount: 0 });
+    expect((plan?.sentCount ?? 0) + (plan?.failedCount ?? 0) + (plan?.queuedCount ?? 0)).toBe(
+      plan?.recipientTotal,
+    );
+  });
+
+  test("the suppressed terminal is idempotent — a replay applies once and moves no counter", async () => {
+    const t = convexTest(schema, modules);
+    const { planId, requestIds } = await seedCounterPlan(t);
+    const requestId = requestIds[0]!;
+
+    expect(
+      await t.mutation(internal.plans.recordDeliveryTerminal, {
+        planId,
+        requestId,
+        outcome: "suppressed",
+      }),
+    ).toEqual({ applied: true });
+    // A workflow/action retry replaying the same terminal must not decrement the total twice.
+    expect(
+      await t.mutation(internal.plans.recordDeliveryTerminal, {
+        planId,
+        requestId,
+        outcome: "suppressed",
+      }),
+    ).toEqual({ applied: false });
+    // ...and a `blocked` row can never be re-terminated as sent or failed either.
+    expect(
+      await t.mutation(internal.plans.recordDeliveryTerminal, {
+        planId,
+        requestId,
+        outcome: "sent",
+      }),
+    ).toEqual({ applied: false });
+
+    expect(await t.run((ctx) => ctx.db.get(planId))).toMatchObject({
+      recipientTotal: 1,
+      queuedCount: 1,
       sentCount: 0,
       failedCount: 0,
     });

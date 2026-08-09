@@ -651,6 +651,11 @@ export const __seedOnboardedTenant = internalMutation({
     // deriveTier is the ONLY writer of the tier (design §5) — never hardcode "solopreneur" here,
     // which is defect 1d in a new costume.
     const tier = deriveTier(facts);
+    // 19-05: an onboarded tenant that cannot send is not an onboarded tenant. `executePlan` refuses
+    // an email plan with `no_postal_address` and `gmail.send` refuses to build the CAN-SPAM footer
+    // without one, so every e2e spec that approves an email plan needs this field on the harness
+    // tenant. Seeded HERE, at the one tenant seeder, rather than in each spec.
+    const postalAddress = "Pikar AI, 12 Samora Avenue, Dar es Salaam, Tanzania";
 
     const existingRow = await ctx.db
       .query("tenantProfiles")
@@ -662,6 +667,7 @@ export const __seedOnboardedTenant = internalMutation({
         tier,
         tierSource: "derived",
         derivedAt: Date.now(),
+        postalAddress: existingRow.postalAddress ?? postalAddress, // never clobber a real one
       });
     } else {
       await ctx.db.insert("tenantProfiles", {
@@ -670,6 +676,7 @@ export const __seedOnboardedTenant = internalMutation({
         tier,
         tierSource: "derived",
         derivedAt: Date.now(),
+        postalAddress,
       });
     }
 
