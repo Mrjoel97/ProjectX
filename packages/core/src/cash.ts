@@ -279,8 +279,27 @@ export type CashInputState = {
   stale: boolean;
 };
 
-export const isStale = (statedAt: number | null, nowMs: number): boolean =>
-  statedAt !== null && nowMs - statedAt > STALE_AFTER_MS;
+/**
+ * Does this input need a confirm-or-update prompt? THE single definition of staleness — every
+ * caller (this module's `statedFigure` below, and `convex/cash.ts`'s `inputs` query, for BOTH the
+ * `financeInputs` and the scorecard branch) routes through this one predicate rather than
+ * re-deriving the rule. A prior version had `cash.ts` re-derive it from a bare `statedAt`+`nowMs`
+ * check while `convex/cash.ts` already had the full three-way rule inline — two definitions of one
+ * rule, disagreeing, exactly the drift CLAUDE.md §1 exists to prevent.
+ *
+ *   • `value === null`  (absent)        → NOT stale. Staleness is a property of an ANSWERED input;
+ *                                          a missing one is `unknown`, a different truth entirely.
+ *   • `value` present, `statedAt: null` → STALE. An unstamped legacy value (every scorecard figure
+ *                                          written before `userProvidedAt` existed) does not get to
+ *                                          read as fresh just because its age was never recorded —
+ *                                          the safe direction is "needs confirmation".
+ *   • `value` present, older than 90d   → STALE.
+ */
+export const needsConfirmation = (
+  value: number | null,
+  statedAt: number | null,
+  nowMs: number,
+): boolean => value !== null && (statedAt === null || nowMs - statedAt > STALE_AFTER_MS);
 
 // ── The four truths, resolved once: a stated input becomes a figure, and a derived figure is
 // suppressed until every input it rests on is known. ──────────────────────────────────────
@@ -305,7 +324,7 @@ export function statedFigure(
   }
   return knownFigure("stated", input.value, spec.unit, {
     ...(input.statedAt === null ? {} : { statedAt: input.statedAt }),
-    stale: isStale(input.statedAt, nowMs),
+    stale: needsConfirmation(input.value, input.statedAt, nowMs),
   });
 }
 

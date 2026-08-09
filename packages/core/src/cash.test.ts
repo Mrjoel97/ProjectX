@@ -3,6 +3,7 @@ import {
   activityFromSends,
   CASH_INPUTS,
   cashInputSpec,
+  needsConfirmation,
   requireInputs,
   statedFigure,
   toCashInputs,
@@ -170,6 +171,17 @@ describe("the four truths", () => {
     expect(statedFigure(old, cashInputSpec("cac"), NOW)).toMatchObject({ stale: true });
   });
 
+  test("a fresh statedAt is NOT stale", () => {
+    const figure = statedFigure(state("cac", { statedAt: NOW - DAY }), cashInputSpec("cac"), NOW);
+    expect(figure).toMatchObject({ stale: false });
+  });
+
+  test("an answered input with UNKNOWN age needs confirmation — not fresh, and no fabricated date", () => {
+    const figure = statedFigure(state("cac", { statedAt: null }), cashInputSpec("cac"), NOW);
+    expect(figure).toMatchObject({ state: "known", origin: "stated", stale: true });
+    expect(figure).not.toHaveProperty("statedAt");
+  });
+
   test("a derived figure is SUPPRESSED when any input is unknown, and names the missing one", () => {
     const inputs = toCashInputs([state("cac")]);
     const blocked = requireInputs(inputs, ["cac", "thirtyDayCashPerCustomer"]);
@@ -187,5 +199,28 @@ describe("the four truths", () => {
   test("the FIRST missing input is named, so the prompt is one ask and not a list", () => {
     const blocked = requireInputs(toCashInputs([]), ["cac", "thirtyDayCashPerCustomer"]);
     expect(blocked).toMatchObject({ needs: expect.stringContaining("Customer acquisition cost") });
+  });
+});
+
+// `needsConfirmation` is THE single staleness rule — `statedFigure` above and `convex/cash.ts`'s
+// `inputs` query (both its `financeInputs` and its scorecard branch) all call this one function
+// rather than re-deriving it. Pinned directly so a future edit to either caller can't reintroduce
+// a second, disagreeing definition.
+describe("needsConfirmation — the one staleness rule every caller routes through", () => {
+  test("an absent value is not stale — it is unknown, a different truth entirely", () => {
+    expect(needsConfirmation(null, null, NOW)).toBe(false);
+    expect(needsConfirmation(null, NOW - 91 * DAY, NOW)).toBe(false);
+  });
+
+  test("a present value with unknown age (statedAt: null) needs confirmation", () => {
+    expect(needsConfirmation(100, null, NOW)).toBe(true);
+  });
+
+  test("a present value older than 90 days needs confirmation", () => {
+    expect(needsConfirmation(100, NOW - 91 * DAY, NOW)).toBe(true);
+  });
+
+  test("a present value within 90 days does not need confirmation", () => {
+    expect(needsConfirmation(100, NOW - DAY, NOW)).toBe(false);
   });
 });

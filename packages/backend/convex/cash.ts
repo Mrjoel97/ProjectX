@@ -17,7 +17,7 @@ import {
   type CashInputState,
   cashInputSpec,
   createDashboardBound,
-  isStale,
+  needsConfirmation,
   validateCashInput,
 } from "@pikar/core";
 import type { Scorecard } from "@pikar/core/growth/index";
@@ -116,27 +116,32 @@ export const inputs = tenantQuery({
       inputs: CASH_INPUTS.map((spec): CashInputState => {
         if (spec.store === "financeInputs") {
           const row = byField.get(spec.field as (typeof rows)[number]["field"]);
+          const value = row?.valueUsd ?? null;
           const statedAt = row?.statedAt ?? null;
           return {
             field: spec.field,
-            value: row?.valueUsd ?? null,
+            value,
             statedAt,
-            stale: isStale(statedAt, now),
+            stale: needsConfirmation(value, statedAt, now),
           };
         }
         const value = spec.path === undefined ? null : scorecardValue(scorecard, spec.path);
         // `userProvidedAt` is a dot-path → epoch-ms map, stamped by `applyScorecardAnswer` and
         // carried forward UNCHANGED across every re-evaluation (`runEvaluation`) — unlike the
         // evaluation ROW's own `createdAt`, which is fresh on every carry-forward and is never a
-        // field's stated time.
+        // field's stated time. A legacy row can hold a real value with no recorded stated time
+        // (this field predates `userProvidedAt`, or a carried row's writer never stamped it);
+        // `needsConfirmation` (the SAME predicate the `financeInputs` branch above and `cash.ts`'s
+        // `statedFigure` both call — one definition, not three) treats that as needing confirmation,
+        // never as fresh, and never fabricates a date.
         const statedAt =
           value === null ? null : (evaluation?.userProvidedAt?.[spec.path as string] ?? null);
-        // A legacy row can hold a real value with no recorded stated time (this field predates
-        // `userProvidedAt`, or a carried row's writer never stamped it). Unknown age is NOT fresh —
-        // the SAFE direction is to treat it as needing confirmation, never to fabricate a date or
-        // silently suppress the prompt.
-        const stale = value !== null && (statedAt === null || isStale(statedAt, now));
-        return { field: spec.field, value, statedAt, stale };
+        return {
+          field: spec.field,
+          value,
+          statedAt,
+          stale: needsConfirmation(value, statedAt, now),
+        };
       }),
     };
   },

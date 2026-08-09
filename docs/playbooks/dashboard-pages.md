@@ -1,8 +1,13 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-08-09 (Plan cash-business-finance Task 4 — `statedFigure`/`requireInputs`/
-> `valueOf` resolve the four truths, provenance and the suppression rule ONCE, in `cash.ts`. See the
-> "Cash — the suppression rule" section below.)
+> Last verified: 2026-08-09 (Plan cash-business-finance Task 4 REVIEW FIX — staleness collapsed to
+> ONE predicate, `needsConfirmation(value, statedAt, nowMs)`; the two-argument `isStale` is deleted.
+> `statedFigure` had re-derived staleness on its own and reached `stale: false` for an unknown-age
+> value, disagreeing with `convex/cash.ts`'s already-correct adapter logic. See the "Cash — the
+> suppression rule" section below.)
+>
+> Prior: 2026-08-09 (Plan cash-business-finance Task 4 — `statedFigure`/`requireInputs`/`valueOf`
+> resolve the four truths, provenance and the suppression rule ONCE, in `cash.ts`.)
 >
 > Prior: 2026-08-09 (Plan cash-business-finance Task 3 REVIEW FIX — scorecard-field staleness now
 > reads `evaluations.userProvidedAt`, never the row's `createdAt`. See the Cash section's staleness
@@ -92,8 +97,9 @@ split by WHICH kind of figure they are, never by which screen wrote them:
   payoff can never be asked for. `cashInputsForTier(tier)` filters it to what a tier is actually
   asked; `validateCashInput(field, value)` is the trust-boundary check (money ≥ 0/finite, a percent
   ≤ 100, a count a whole number, and `purchasesPerLifetime < 1` REJECTED rather than silently
-  multiplied into a plausible-looking wrong LTGP). `STALE_AFTER_MS` (90 days) + `isStale` are the
-  confirm-or-update threshold.
+  multiplied into a plausible-looking wrong LTGP). `STALE_AFTER_MS` (90 days) + `needsConfirmation`
+  (Task 4 — see the "Cash — the suppression rule" section below) are the confirm-or-update
+  threshold.
   **Staleness reads a per-FIELD stated time, never the evaluation row's `createdAt` (review fix).**
   A finance-ops field's `statedAt` is its own `financeInputs` row's `statedAt`, always present
   alongside a value. A scorecard field's `statedAt` is read from `evaluations.userProvidedAt[path]`
@@ -158,9 +164,21 @@ reimplementing the unknown-check per metric.**
   measured nothing is an answer, and this is the single most important behaviour in the module: a
   metric that reads "unknown" for a business that genuinely spent $0 on acquisition is lying in the
   opposite direction from a fabricated number. `statedAt: null` (legacy scorecard value, no
-  `userProvidedAt` entry — see the Task 3 staleness bullet above) carries through as UNKNOWN age,
-  which `isStale` already treats as needing confirmation; `statedFigure` does not paper over that by
-  inventing a date.
+  `userProvidedAt` entry — see the Task 3 staleness bullet above) carries through as UNKNOWN age;
+  `statedFigure` does not paper over that by inventing a date.
+  **`needsConfirmation(value, statedAt, nowMs)` is THE single staleness rule (review fix).** The
+  first version of `statedFigure` re-derived staleness from the old two-argument `isStale(statedAt,
+  nowMs)` alone, which short-circuits to `false` for `statedAt: null` — so a legacy value with no
+  recorded age rendered `stale: false`, "confirmed," and its confirm-or-update prompt never fired.
+  `isStale` is DELETED (no other caller needed the raw two-argument form). `needsConfirmation` folds
+  in the value: absent (`value === null`) is never stale — that is `unknown`, a different truth
+  entirely; a present value with `statedAt: null` (unknown age) or older than `STALE_AFTER_MS` is
+  stale. `statedFigure` **and** `convex/cash.ts`'s `inputs` query — both its `financeInputs` branch
+  and its scorecard branch — all call this ONE function; none re-derives the rule. Before this fix,
+  `cash.ts` and `convex/cash.ts` disagreed (the adapter's scorecard branch already had the correct
+  three-way check inline, pinned by its own test since Task 3 — see `convex/cash.test.ts`'s "a
+  scorecard value with no recorded stated time... needs confirmation" — while `cash.ts` had the
+  simpler, wrong one), which is exactly the two-definitions drift CLAUDE.md §1 exists to prevent.
 - **`derived(args)`** wraps an already-computed number as a `known`/`derived` figure with its `from`
   provenance string and optional `sampleSize` — it does no arithmetic itself (that stays in
   `growth/financialSpine.ts`), it only carries the figure vocabulary the view renders.
