@@ -1,6 +1,31 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
-> Last verified: 2026-08-09 (**the review queue offered DOWNGRADES, and EVAL_GATE is what caught
+> Last verified: 2026-08-09 (**19-09 took the `cockpit-agent` override lane. THE GATE IS UNRUN.**)
+> Phase 19 (ACTN-05) edited the `cockpit-agent` body to teach `stageCrmWrite` and contacts-first
+> resolution, and discharged 18-08's binding *"teach a tool, owe a fixture"* override condition with
+> `eval-cases/36-crm-follow-up.json` and the 34 → 35 fixture-floor bump. **Nothing was seeded,
+> evaluated or activated: no eval run has happened, no evidence row was written, and
+> `cockpit-agent@17` is still ACTIVE.** Record this as UNRUN, never as passed.
+>
+> The state a resumer needs, read off the live deployment (`local:`) on 2026-08-09 at $0: ACTIVE
+> `cockpit-agent` is **v17** (body 27 313 chars, sha256 `b5c8b6a50aed` — byte-identical,
+> LF-normalized, to the pre-19-09 canonical `.md`), and **v18/v19/v20 are ABSENT**, so no optimizer
+> dry-run candidate is squatting above the active row and `seedSkills` will mint **v18**: a FORWARD
+> arrow, not the rollback the block below warns about. The body it will carry is 28 368 chars,
+> sha256 `6ca4d937639c`. Verify that hash after seeding — never trust a plan's version number.
+>
+> **20-12 and 20.1-01 must now rebase on this body** before seeding a candidate of their own. One
+> candidate stream, one gate: a candidate carrying two lanes' prose is precisely what the override
+> condition exists to prevent.
+>
+> Found while verifying the fixture and deliberately NOT fixed here: **`eval:golden --self-check` has
+> been red on `main` since Phase 20**, invisibly, because `runLive()` never calls `selfCheck()` — the
+> one check that stops a bad fixture before it costs a cent was itself unrunnable. Its stale
+> `SPECIALIST_ROUTES` snapshot is fixed; the second failure (`media` is a dispatchable route whose
+> skill `media-director` is NOT in `GATED_SKILLS`, so a media body edit rides no gate) is an owner
+> decision, written up in `.planning/phases/19-contacts-crm-follow-ups/deferred-items.md`.
+
+> Prior: Last verified: 2026-08-09 (**the review queue offered DOWNGRADES, and EVAL_GATE is what caught
 > it.**) `candidatesForReview` picked the highest-versioned CANDIDATE and never compared it to the
 > active row. Optimizer dry-runs leave candidate rows behind at lower versions, so once a real
 > upgrade lands those stale rows are offered forever. Observed live: the ops panel showed
