@@ -51,7 +51,9 @@ The spec left four things unstated that the code cannot leave unstated. Each is 
 1. **`customerCount` is a new scorecard leaf.** The spec mandates "ratios carry their sample size" and shows `3.2:1 — from 4 customers`, but nothing in the system stores a customer count. Without it the rule is unexecutable. Added as `financials.customerCount`, collected in the numbers panel. When null, a ratio renders `— sample size not recorded`, never a bare ratio.
 2. **`referralPct` is a new scorecard leaf.** The Activity row for Startup/SME is "Referral % vs the 25% gate"; no input existed. Added as `leadCard.referralPct` (a Hormozi lead metric, so it belongs in `leadCard`, not in the finance-ops table the spec restricts to five fields).
 3. **`funding: "seeking"` counts as outside-money posture**, alongside `"funded"`. Precedent: `deriveTier` already groups them ("seeking and funded both read as startup-shaped", `businessProfile.ts:231`). A company raising watches the date the money ends exactly like a funded one.
-4. **Staleness for scorecard-sourced inputs uses the evaluation row's `createdAt`.** The scorecard has no per-field timestamp and adding one would disturb the carry-forward path. `createdAt` is a **floor** on the true stated-time, so the 90-day prompt can fire early but never late — the safe direction. Marked with a `ponytail:` comment naming the upgrade path (a per-field `statedAt` map on the scorecard).
+4. **Scorecard-sourced inputs carry a real per-field `statedAt`, written by the one scorecard writer and carried forward verbatim.** `evaluations.userProvidedAt` maps each scorecard dot-path to the epoch-ms it was answered; `applyScorecardAnswer` writes it beside `userProvided`, and `runEvaluation` carries it into each new row unchanged. A field with a value but no recorded timestamp (a pre-existing row) has genuinely unknown age and is treated as **needing confirmation**, never as fresh.
+
+   > **Corrected 2026-08-09, after Task 3's review.** This assumption originally read: *"the evaluation row's `createdAt` is a floor on the true stated-time, so the 90-day prompt can fire early but never late — the safe direction."* **That was false, and it failed in the unsafe direction.** `runEvaluation` carries a thread's scorecard forward verbatim into a *new* row stamped `createdAt: Date.now()` (`evaluations.ts:153`, `:207-222`), and the design re-runs weekly on one pinned thread — so a `cac` answered on day 0 is carried into a fresh row on day 91, reported as "confirmed today", with its confirm-or-update prompt suppressed for a number that is three months stale. That is exactly the failure the spec names as the reason the 90-day rule exists, and it reached 6 of the 11 inputs. Recorded rather than quietly rewritten: the original reasoning was plausible and wrong, and the next person reaching for a convenient nearby timestamp should see why this one didn't work.
 
 ---
 
@@ -1636,11 +1638,13 @@ export const inputs = tenantQuery({
           };
         }
         const value = spec.path === undefined ? null : scorecardValue(scorecard, spec.path);
-        // ponytail: the scorecard has no per-field statedAt, so the evaluation row's createdAt
-        // stands in. It is a FLOOR on the true stated-time (a later patch does not move it), so the
-        // 90-day prompt can fire early but never late — the safe direction. Upgrade path: a
-        // per-field statedAt map on the Scorecard, written by applyScorecardAnswer.
-        const statedAt = value === null ? null : (evaluation?.createdAt ?? null);
+        // The REAL per-field stated-time, carried forward verbatim by `runEvaluation` alongside
+        // `userProvided`. Do NOT substitute the row's `createdAt`: re-evaluation inserts a NEW row
+        // stamped with a fresh `createdAt` while carrying the same answers, so a figure nobody has
+        // re-confirmed would read as stated today and its 90-day prompt would never fire. A present
+        // value with NO recorded timestamp has unknown age and is treated as needing confirmation.
+        const statedAt =
+          value === null ? null : (evaluation?.userProvidedAt?.[spec.path ?? ""] ?? null);
         return { field: spec.field, value, statedAt, stale: isStale(statedAt, now) };
       }),
     };
