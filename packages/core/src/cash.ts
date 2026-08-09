@@ -19,12 +19,11 @@
  * from the source material, with the divide-by-zero guards. This module adds what a *screen* needs
  * on top: which truth a figure is in, where it came from, whether it is stale, and which set of
  * metrics this tenant should see at all.
- *
- * ponytail: `ltgpCac` from `./growth/financialSpine` is not imported here — this task (Task 2) has
- * no caller for it yet, and an unused import fails lint. Task 5 imports it where it is first used.
  */
 
 import type { Tier } from "./businessProfile";
+import { cfa, INDUSTRY_MULTIPLE, ltgpCac } from "./growth/financialSpine";
+import type { Scorecard } from "./growth/scorecard";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -436,4 +435,187 @@ export function activityFromSends(input: {
   const last7Count = perDay.slice(0, 7).reduce((sum, bucket) => sum + bucket.count, 0);
 
   return { perDay, todayCount: counts.get(today) ?? 0, streakDays, last7Count };
+}
+
+// ── Unit economics: the Hormozi spine, as figures a page can render ────────────────────────
+
+export type CashUnitEconomics = {
+  cfa: CashFigure;
+  ltgp: CashFigure;
+  ltgpCac: CashFigure;
+  cacPayback: CashFigure;
+  cacVsIndustry: CashFigure;
+  grossMargin: CashFigure;
+  cohortChurn: CashFigure;
+  referralPct: CashFigure;
+};
+
+/** The referral share the source material treats as the gate worth clearing. */
+export const REFERRAL_GATE_PCT = 25;
+
+const usd = (n: number) => `$${n.toLocaleString("en-US")}`;
+
+/**
+ * The Hormozi spine, as figures a page can render.
+ *
+ * The ARITHMETIC is `financialSpine.ts`'s — `ltgpCac` and `cfa` are ports of the source scripts and
+ * already guard every divisor. What this adds is the part a screen needs: which truth each result
+ * is in, what it was derived from, and how many customers it rests on.
+ *
+ * CAC = 0 is intercepted BEFORE `cfa`, which would answer `{ratio: 0, achieved: false}` for a
+ * zero denominator — conservative and correct as a routing signal, but as a rendered figure it
+ * reads as "your acquisition does not pay for itself" to someone who spent nothing acquiring.
+ */
+export function unitEconomics(args: {
+  inputs: CashInputs;
+  scorecard: Scorecard;
+  nowMs: number;
+}): CashUnitEconomics {
+  const { inputs, scorecard } = args;
+  const sampleSize = inputs.customerCount?.value ?? null;
+  const cacValue = inputs.cac?.value ?? null;
+  const zeroCac = cacValue === 0;
+
+  // ── LTGP: the two components WIN over a stated total, and the figure says which it used.
+  const missingComponents = requireInputs(inputs, [
+    "grossProfitPerPurchase",
+    "purchasesPerLifetime",
+  ]);
+  const ltgpFigure: CashFigure = (() => {
+    if (missingComponents === null) {
+      const perPurchase = valueOf(inputs, "grossProfitPerPurchase");
+      const purchases = valueOf(inputs, "purchasesPerLifetime");
+      const spine = ltgpCac({
+        grossProfitPerPurchase: perPurchase,
+        purchases,
+        acqSpend: 0,
+        customers: 1,
+      });
+      return derived({
+        value: spine.ltgp,
+        unit: "usd",
+        from: `${usd(perPurchase)} gross profit × ${purchases} purchases`,
+      });
+    }
+    if (scorecard.financials.ltgp !== null) {
+      return knownFigure("stated", scorecard.financials.ltgp, "usd");
+    }
+    return missingComponents;
+  })();
+
+  // ── CFA: does a customer pay for itself inside 30 days?
+  const cfaFigure: CashFigure = (() => {
+    const missing = requireInputs(inputs, ["cac", "thirtyDayCashPerCustomer"]);
+    if (missing) return missing;
+    if (zeroCac)
+      return notComputable("No acquisition cost recorded, so there is nothing to pay back.");
+    const cac = valueOf(inputs, "cac");
+    const thirtyDayCash = valueOf(inputs, "thirtyDayCashPerCustomer");
+    const serviceCost = scorecard.financials.costToServicePerCustomer ?? 0;
+    const result = cfa({ thirtyDayCash, cac, serviceCost });
+    return derived({
+      value: result.ratio,
+      unit: "ratio",
+      from: `${usd(thirtyDayCash)} in the first 30 days against ${usd(cac + serviceCost)} to get and serve them`,
+      sampleSize,
+    });
+  })();
+
+  // ── LTGP:CAC, with its sample size beside it.
+  const ratioFigure: CashFigure = (() => {
+    if (ltgpFigure.state !== "known") return ltgpFigure;
+    const missing = requireInputs(inputs, ["cac"]);
+    if (missing) return missing;
+    if (zeroCac)
+      return notComputable("No acquisition cost recorded, so there is no ratio to take.");
+    const cac = valueOf(inputs, "cac");
+    const spine = ltgpCac({
+      grossProfitPerPurchase: ltgpFigure.value,
+      purchases: 1,
+      acqSpend: cac,
+      customers: 1,
+    });
+    if (spine.ratio === null) return notComputable("No acquisition cost recorded.");
+    return derived({
+      value: spine.ratio,
+      unit: "ratio",
+      from: `${usd(ltgpFigure.value)} lifetime gross profit and ${usd(cac)} to acquire`,
+      sampleSize,
+    });
+  })();
+
+  // ── CAC payback, in months: CAC ÷ monthly gross profit per customer.
+  // ponytail: deriving lifetime-months from monthly churn is a judgement call the spec didn't make
+  // explicit; absent churn is `unknown` rather than a guessed lifetime — the honest fallback.
+  const paybackFigure: CashFigure = (() => {
+    const missing = requireInputs(inputs, [
+      "cac",
+      "grossProfitPerPurchase",
+      "purchasesPerLifetime",
+    ]);
+    if (missing) return missing;
+    if (zeroCac)
+      return notComputable("No acquisition cost recorded, so there is nothing to pay back.");
+    const monthlyChurnPct = scorecard.financials.churnByCadence.monthly;
+    if (monthlyChurnPct === null || monthlyChurnPct <= 0) {
+      return unknownFigure("needs your monthly churn, to know how long a customer lasts");
+    }
+    // Average lifetime in months from monthly churn, then gross profit spread across it.
+    const lifetimeMonths = 100 / monthlyChurnPct;
+    const lifetimeGrossProfit =
+      valueOf(inputs, "grossProfitPerPurchase") * valueOf(inputs, "purchasesPerLifetime");
+    const monthlyGrossProfit = lifetimeGrossProfit / lifetimeMonths;
+    if (monthlyGrossProfit <= 0) {
+      return notComputable("No monthly gross profit recorded, so payback has no month count.");
+    }
+    const months = Math.round((valueOf(inputs, "cac") / monthlyGrossProfit) * 10) / 10;
+    return derived({
+      value: months,
+      unit: "months",
+      from: `${usd(valueOf(inputs, "cac"))} to acquire against ${usd(Math.round(monthlyGrossProfit))} gross profit a month`,
+      sampleSize,
+    });
+  })();
+
+  // ── The industry-average switch. OFF by default, and it renders the REASON, never a pass.
+  // The source supplies no industry table and says to research the average yourself, so this
+  // cannot run until the user provides that figure. A default "within range" would tell someone to
+  // stop optimising a CAC nobody has measured against anything.
+  const industryFigure: CashFigure = (() => {
+    const average = scorecard.financials.industryAvgCac;
+    if (average === null || average <= 0) {
+      return unknownFigure(
+        "needs the industry-average CAC for your market — there is no table to look it up in",
+      );
+    }
+    const missing = requireInputs(inputs, ["cac"]);
+    if (missing) return missing;
+    const cac = valueOf(inputs, "cac");
+    return derived({
+      value: Math.round((cac / average) * 100) / 100,
+      unit: "ratio",
+      from: `${usd(cac)} against a ${usd(average)} industry average — the threshold is ${INDUSTRY_MULTIPLE}×`,
+      sampleSize,
+    });
+  })();
+
+  return {
+    cfa: cfaFigure,
+    ltgp: ltgpFigure,
+    ltgpCac: ratioFigure,
+    cacPayback: paybackFigure,
+    cacVsIndustry: industryFigure,
+    grossMargin:
+      scorecard.financials.grossMarginPct === null
+        ? unknownFigure("needs your gross margin")
+        : knownFigure("stated", scorecard.financials.grossMarginPct, "percent"),
+    cohortChurn:
+      scorecard.financials.churnByCadence.monthly === null
+        ? unknownFigure("needs your monthly churn")
+        : knownFigure("stated", scorecard.financials.churnByCadence.monthly, "percent"),
+    referralPct:
+      scorecard.leadCard.referralPct === null
+        ? unknownFigure("needs your referral share")
+        : knownFigure("stated", scorecard.leadCard.referralPct, "percent"),
+  };
 }

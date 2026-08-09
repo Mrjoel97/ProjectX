@@ -1,6 +1,11 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-08-09 (Plan cash-business-finance Task 4 REVIEW FIX — staleness collapsed to
+> Last verified: 2026-08-09 (Plan cash-business-finance Task 5 — `unitEconomics()` composes CFA,
+> LTGP:CAC with its sample size, CAC payback and the industry-CAC switch from Task 4's suppression
+> rule and `growth/financialSpine.ts`'s guarded arithmetic — no arithmetic reimplemented. See the
+> "Cash — unit economics" section below.)
+>
+> Prior: 2026-08-09 (Plan cash-business-finance Task 4 REVIEW FIX — staleness collapsed to
 > ONE predicate, `needsConfirmation(value, statedAt, nowMs)`; the two-argument `isStale` is deleted.
 > `statedFigure` had re-derived staleness on its own and reached `stale: false` for an unknown-age
 > value, disagreeing with `convex/cash.ts`'s already-correct adapter logic. See the "Cash — the
@@ -193,6 +198,54 @@ reimplementing the unknown-check per metric.**
   still absent — a programming-error tripwire, never a runtime path reachable from user input, and
   deliberately NOT softened to `?? 0`: that would fabricate a figure and defeat the suppression rule
   above it.
+
+### Cash — unit economics (Task 5)
+
+`unitEconomics(args: { inputs: CashInputs; scorecard: Scorecard; nowMs: number })` composes the
+Hormozi spine as figures a page can render. **The arithmetic is not reimplemented.**
+`growth/financialSpine.ts`'s `ltgpCac` and `cfa` — ports of the source scripts, already guarding
+every divisor — are called as-is; this function's own job is which of the four truths each result
+is in, what it was derived from, and how many customers it rests on.
+
+- **CAC = 0 is intercepted BEFORE calling `cfa`/`ltgpCac`**, on every metric that divides by it
+  (`cfa`, `ltgpCac`, `cacPayback`). `financialSpine.ts`'s `cfa` answers `{ratio: 0, achieved:
+  false}` for a non-positive denominator — a correct, conservative ROUTING signal — but rendered
+  verbatim it reads as "your acquisition does not pay for itself" to someone who told the form
+  their CAC was a real, measured zero. `unitEconomics` returns `not-computable` with the reason
+  instead, and never emits `Infinity` or falls back to `unknown` (which would ask again for a
+  number already given).
+- **LTGP has two possible producers and exactly one stored value; the precedence is resolved HERE,
+  at read time, never at write time.** `scorecard.financials.ltgp` (Task 3) is never itself
+  computed and stored — the two components (`grossProfitPerPurchase` × `purchasesPerLifetime`)
+  WIN when both are present, via `ltgpCac`, and the figure's `origin: "derived"` + `from` string
+  say so; only when a component is missing does it fall back to the stated total, `origin:
+  "stated"`. Storing a computed `ltgp` back onto the scorecard would create a second, driftable
+  copy of the same number — the two-store split Task 3 already fought to keep out.
+- **A ratio never omits its sample size.** `sampleSize` is `inputs.customerCount?.value ?? null`,
+  passed to every ratio's `derived()` call explicitly (including as `null`) so the field is always
+  present, never absent-when-unrecorded — `derived()` only omits it when the caller passes
+  `undefined`.
+- **The industry-CAC comparison is OFF until the user supplies the average, and says why, never a
+  pass.** The source material supplies no industry table and instructs researching the average
+  yourself; `scorecard.financials.industryAvgCac === null` (or `<= 0`) returns `unknown` naming
+  the missing input, never a default "within range" — a business that has never measured its
+  market average is not "healthy" by omission. Once supplied, the comparison is against
+  `INDUSTRY_MULTIPLE` (financialSpine's `3.0`, the ceiling the source books tell you to stop
+  optimising CAC inside).
+- **CAC payback (months) derives lifetime-months from monthly churn** (`100 / monthlyChurnPct`)
+  to spread lifetime gross profit across it — a judgement call the source material's scripts do
+  not make explicit (marked `ponytail:` in `cash.ts`, naming the call). Absent or non-positive
+  churn is `unknown`, never a guessed lifetime — the honest fallback the whole module is built
+  around.
+- **No word "ROAS" anywhere** in this function, its comments, or its rendered strings (CLAUDE.md
+  ambient rule for this plan) — absent from all three source books, and the framework's own
+  guidance is to stop optimising CAC once inside 3× the industry average, which ROAS as a lever
+  contradicts.
+- Test evidence: `cash.test.ts`'s `describe("unit economics", ...)` (10 tests) pins every
+  degenerate case above — zero-CAC not-computable-never-Infinity, LTGP's two-producer precedence
+  both directions, sample size present-as-`null`, the industry switch OFF-with-reason and ON, and
+  the CFA/payback derivations' `from` provenance strings. `pnpm --filter @pikar/core test cash` —
+  36/36 (26 pre-existing + 10 new). `pnpm typecheck` — 10/10 packages green.
 
 ### Frontend and connected browser evidence
 

@@ -7,8 +7,10 @@ import {
   requireInputs,
   statedFigure,
   toCashInputs,
+  unitEconomics,
   validateCashInput,
 } from "./cash";
+import { emptyScorecard } from "./growth/scorecard";
 
 const DAY = 24 * 60 * 60 * 1000;
 // A fixed UTC instant, so the test never depends on the machine's clock or zone.
@@ -222,5 +224,141 @@ describe("needsConfirmation — the one staleness rule every caller routes throu
 
   test("a present value within 90 days does not need confirmation", () => {
     expect(needsConfirmation(100, NOW - DAY, NOW)).toBe(false);
+  });
+});
+
+const withInputs = (values: Record<string, number>) =>
+  toCashInputs(
+    Object.entries(values).map(([field, value]) => ({
+      field,
+      value,
+      statedAt: NOW - DAY,
+      stale: false,
+    })) as never,
+  );
+
+const scorecardWith = (over: Record<string, unknown> = {}) => ({
+  ...emptyScorecard,
+  financials: { ...emptyScorecard.financials, ...over },
+});
+
+describe("unit economics", () => {
+  test("CFA is derived from 30-day cash against CAC, and says so", () => {
+    const result = unitEconomics({
+      inputs: withInputs({ cac: 100, thirtyDayCashPerCustomer: 250 }),
+      scorecard: scorecardWith(),
+      nowMs: NOW,
+    });
+    expect(result.cfa).toMatchObject({ state: "known", origin: "derived", value: 2.5 });
+    expect((result.cfa as { from: string }).from).toMatch(/250/);
+    expect((result.cfa as { from: string }).from).toMatch(/100/);
+  });
+
+  test("LTGP:CAC carries its sample size", () => {
+    const result = unitEconomics({
+      inputs: withInputs({
+        cac: 1400,
+        grossProfitPerPurchase: 1500,
+        purchasesPerLifetime: 3,
+        customerCount: 4,
+      }),
+      scorecard: scorecardWith(),
+      nowMs: NOW,
+    });
+    expect(result.ltgpCac).toMatchObject({ state: "known", value: 3.21, sampleSize: 4 });
+  });
+
+  test("an unrecorded sample size is null and never omitted", () => {
+    const result = unitEconomics({
+      inputs: withInputs({ cac: 1400, grossProfitPerPurchase: 1500, purchasesPerLifetime: 3 }),
+      scorecard: scorecardWith(),
+      nowMs: NOW,
+    });
+    expect(result.ltgpCac).toMatchObject({ state: "known", sampleSize: null });
+  });
+
+  test("CAC of zero is NOT-COMPUTABLE, never infinity and never unknown", () => {
+    const result = unitEconomics({
+      inputs: withInputs({
+        cac: 0,
+        thirtyDayCashPerCustomer: 250,
+        grossProfitPerPurchase: 10,
+        purchasesPerLifetime: 2,
+      }),
+      scorecard: scorecardWith(),
+      nowMs: NOW,
+    });
+    expect(result.cfa).toEqual({
+      state: "not-computable",
+      because: expect.stringMatching(/no acquisition cost recorded/i),
+    });
+    expect(result.ltgpCac).toMatchObject({ state: "not-computable" });
+    expect(JSON.stringify(result)).not.toContain("Infinity");
+  });
+
+  test("a missing input suppresses the derived figure and names it", () => {
+    const result = unitEconomics({
+      inputs: withInputs({ cac: 100 }),
+      scorecard: scorecardWith(),
+      nowMs: NOW,
+    });
+    expect(result.cfa).toMatchObject({
+      state: "unknown",
+      needs: expect.stringContaining("30-day cash"),
+    });
+  });
+
+  test("LTGP prefers the two components and says what it came from", () => {
+    const result = unitEconomics({
+      inputs: withInputs({ grossProfitPerPurchase: 1500, purchasesPerLifetime: 3 }),
+      scorecard: scorecardWith({ ltgp: 9999 }),
+      nowMs: NOW,
+    });
+    expect(result.ltgp).toMatchObject({ state: "known", origin: "derived", value: 4500 });
+  });
+
+  test("with no components it falls back to a stated LTGP", () => {
+    const result = unitEconomics({
+      inputs: withInputs({}),
+      scorecard: scorecardWith({ ltgp: 4500 }),
+      nowMs: NOW,
+    });
+    expect(result.ltgp).toMatchObject({ state: "known", origin: "stated", value: 4500 });
+  });
+
+  test("CAC payback is months, from CAC over monthly gross profit per customer", () => {
+    const result = unitEconomics({
+      inputs: withInputs({
+        cac: 1200,
+        grossProfitPerPurchase: 300,
+        purchasesPerLifetime: 4,
+        customerCount: 10,
+      }),
+      scorecard: scorecardWith({ churnByCadence: { monthly: 5, quarterly: null, annual: null } }),
+      nowMs: NOW,
+    });
+    expect(result.cacPayback).toMatchObject({ state: "known", unit: "months" });
+  });
+
+  test("the industry-CAC switch is OFF until the user supplies the average — never a pass", () => {
+    const result = unitEconomics({
+      inputs: withInputs({ cac: 1400 }),
+      scorecard: scorecardWith(),
+      nowMs: NOW,
+    });
+    expect(result.cacVsIndustry).toMatchObject({
+      state: "unknown",
+      needs: expect.stringMatching(/industry/i),
+    });
+    expect(JSON.stringify(result.cacVsIndustry)).not.toMatch(/pass|within|healthy/i);
+  });
+
+  test("with an industry average supplied it compares against 3x", () => {
+    const result = unitEconomics({
+      inputs: withInputs({ cac: 1400 }),
+      scorecard: scorecardWith({ industryAvgCac: 600 }),
+      nowMs: NOW,
+    });
+    expect(result.cacVsIndustry).toMatchObject({ state: "known", origin: "derived" });
   });
 });
