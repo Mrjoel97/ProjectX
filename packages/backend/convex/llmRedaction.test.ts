@@ -1620,3 +1620,61 @@ test("storage.delete has exactly ONE site in the media subsystem — the retenti
   );
   expect(capFailureArm, "the caption failure arm deletes something").not.toMatch(/storage\.delete/);
 });
+
+// ── Phase 19 (ACTN-05): the contacts substrate's audit discipline ─────────────────────────────
+// `contacts.ts` is the module MOST likely to leak PII into `audit`: every value it handles is an
+// email address, a person's name or the free-text wording of a consent claim. The RUNTIME key-set
+// equality assertion lives in `contacts.test.ts` (it needs convex-test, and this file is
+// `@vitest-environment node`); what is pinned HERE is the structural half a runtime test cannot
+// see — that there is exactly ONE audit site in the module, and that no content-plane identifier
+// is anywhere near it.
+
+test("contacts.ts writes exactly ONE audit row, with the key set {contactId, addressHash}", () => {
+  const src = stripCode(readSource("contacts.ts"));
+  expect(src.length, "contacts.ts was not read").toBeGreaterThan(500);
+
+  const sites = [...src.matchAll(/internal\.audit\.log/g)];
+  // ONE. A second site is how a consent-asserted or contact-created event gets added later with
+  // a payload nobody re-reviewed — the count is the review trigger.
+  expect(sites.length, "contacts.ts gained a second audit site").toBe(1);
+
+  // The payload object literal at that site, keys only.
+  const at = src.indexOf("internal.audit.log");
+  const call = src.slice(at, src.indexOf("});", at));
+  const payloadAt = call.indexOf("payload:");
+  expect(payloadAt, "no payload on the audit call").toBeGreaterThan(-1);
+  // Depth-aware split rather than a `(\w+):` scan: `addressHash` ships as SHORTHAND, and a
+  // colon-anchored scan would silently not see it — the exact way a key-set pin goes vacuous.
+  const inner = call.slice(call.indexOf("{", payloadAt) + 1, call.indexOf("}", payloadAt));
+  const items: string[] = [];
+  let depth = 0;
+  let item = "";
+  for (const ch of inner) {
+    if ("({[".includes(ch)) depth += 1;
+    else if (")}]".includes(ch)) depth -= 1;
+    if (ch === "," && depth === 0) {
+      items.push(item);
+      item = "";
+    } else item += ch;
+  }
+  items.push(item);
+  const keys = items.map((k) => (k.split(":")[0] ?? "").trim()).filter(Boolean);
+  expect(keys.sort()).toEqual(["addressHash", "contactId"]);
+});
+
+test("no content-plane value from the contacts substrate can reach an audit row", () => {
+  const src = stripCode(readSource("contacts.ts"));
+  const at = src.indexOf("internal.audit.log");
+  const call = src.slice(at, src.indexOf("});", at));
+
+  // CLAUDE.md §4. `addressHash` is the ONLY form the address may take, so the bare identifiers
+  // are banned and the hash is not: a `\b` before `address` would match inside `addressHash`,
+  // hence the negative lookahead.
+  for (const banned of [/\baddress\b(?!Hash)/, /normalized\b/, /\bemail\b/, /wording/i, /\bnote\b/])
+    expect(call, `the audit call references ${banned}`).not.toMatch(banned);
+
+  // …and the same for `correlationId`, which is a field of the row like any other.
+  const correlation = call.match(/correlationId:\s*([^,\n]+)/)?.[1]?.trim();
+  expect(correlation, "no correlationId on the audit call").toBeTruthy();
+  expect(correlation).toBe("addressHash");
+});
