@@ -22,6 +22,10 @@ const activity = (over: Record<string, unknown> = {}) => ({
   ],
   todayCount: 4,
   streakDays: 2,
+  // Deliberately distinct from todayCount, so a rendered figure that actually reads last7Count
+  // can't be mistaken for one that (bugfully) reads todayCount twice — a plain `toContain("4")`
+  // would pass either way.
+  last7Count: 6,
   ...over,
 });
 
@@ -33,6 +37,9 @@ describe("activity section", () => {
     });
     expect(html).toContain("4");
     expect(html).toContain("2-day streak");
+    // Pins the 7-day figure to its OWN value (6), distinct from todayCount (4) — a substring match
+    // on "4" alone would also pass if last7Count were wrongly wired to todayCount.
+    expect(html).toContain("6 in the last 7 days");
   });
 
   test("a zero day is a real measured zero, never Unknown", () => {
@@ -41,6 +48,7 @@ describe("activity section", () => {
         perDay: [{ dayStartMs: today, count: 0 }],
         todayCount: 0,
         streakDays: 0,
+        last7Count: 0,
       }),
       partial: false,
     });

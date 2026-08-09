@@ -1249,6 +1249,16 @@ export default defineSchema({
      *  on every grounding call and every cockpit turn. One indexed row + one `ctx.db.get`. */
     blueprintDocId: v.optional(v.id("vaultDocuments")),
     blueprintConfirmedAt: v.optional(v.number()),
+    // ── Phase-19 CAN-SPAM postal address (PIPE-01 SC#6) ───────────────────────
+    // ALL optional ⇒ NO migration (convex-migration-helper: "Safe Changes → Adding Optional
+    // Field"), and the table's own comment above already blesses optionality.
+    /** A SINGLE free-text block, deliberately NOT a structured object: CAN-SPAM requires "a valid
+     *  physical postal address", not a parsed one, and a structured object invites a country/state
+     *  enum this phase does not need. Completeness is enforced at the WRITE boundary (this table's
+     *  own rule) and at SEND (`renderFooter` throws on a blank address — fail closed). Optional
+     *  here on purpose: Phase 11 deliberately admits idea-stage users, so this must never become a
+     *  required onboarding field; `/dashboard/profile` is the enrichment surface. */
+    postalAddress: v.optional(v.string()),
   }).index("by_tenant", ["tenantId"]),
 
   // Living-map slice 3 (§5.1). The intention plane: what the business is driving toward and by
@@ -1378,4 +1388,84 @@ export default defineSchema({
     .index("by_plan", ["tenantId", "planId"])
     .index("by_batch", ["tenantId", "batchId"])
     .index("by_tenant_createdAt", ["tenantId", "createdAt"]),
+
+  // ── Phase-19 contacts, follow-ups & suppression (ACTN-05 / PIPE-01) ────────
+  // THREE tables. As a set: there is NO `opportunities` table, NO stage enum and NO `amountCents`
+  // anywhere below — PIPE-01 and Phase 19 SC#8. Real money arrives with Phase 28's
+  // connector-backed Cash surface, from observed provider data rather than typed guesses.
+  // Retrofitting stages onto a committed schema is the expensive order; do not pre-empt it.
+
+  // The ONE person store. A row exists ONLY because a human deliberately made it — typed it, or
+  // approved a staged add. Gmail header resolution NEVER writes here, which is what preserves the
+  // "no contacts cache at rest" invariant (`plans.candidates`, above): nothing accretes as a side
+  // effect of reading the mailbox. See `docs/playbooks/contacts-crm.md`.
+  // New table ⇒ NO migration (prior-phase discipline, the `tenantProfiles` comment above).
+  contacts: defineTable({
+    tenantId: v.string(),
+    /** Identity. ALREADY normalized by the write boundary (`normalizeAddress` from @pikar/core —
+     *  trim + lowercase). One row per address; a person with two addresses is two contacts.
+     *  The send-path guard keys `suppressions` on the SAME function, so the guard and the contact
+     *  row agree by construction rather than by convention. */
+    email: v.string(),
+    name: v.optional(v.string()), // no name-only contacts; the table falls back to the address
+    /** The PROVENANCE OF THE DATA, not who triggered the write. `mailbox-resolved` = the address
+     *  came out of Gmail headers and a human pressed save; `user-entered` = typed from scratch;
+     *  `inbound` = a Phase 31 lead form (not written in this phase). */
+    origin: v.union(v.literal("mailbox-resolved"), v.literal("user-entered"), v.literal("inbound")),
+    /** Consent stays EMPTY when no consent event occurred — the Pipeline cell then reads "none on
+     *  record", the truth. NOTHING is defaulted to consented. */
+    consentAt: v.optional(v.number()),
+    consentSource: v.optional(v.union(v.literal("asserted-by-user"), v.literal("inbound-form"))),
+    /** Content plane. CLAUDE.md §4 — this text MUST NEVER reach `audit.payload`, which carries
+     *  refs/ids/counts only. `consentWording` is the exact wording shown; `consentContext` is the
+     *  user's free-text capture context ("they signed up at the trade show"). */
+    consentWording: v.optional(v.string()),
+    consentContext: v.optional(v.string()),
+    /** DISPLAY MIRROR ONLY. The send-path guard reads `suppressions` and NEVER this field or this
+     *  table — that is what makes a contacts bug unable to un-suppress anyone, and contact
+     *  deletion a non-event for the guard (SC#5). */
+    unsubscribedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant_email", ["tenantId", "email"])
+    .index("by_tenant_createdAt", ["tenantId", "createdAt"]),
+
+  // What is owed, and when. Bound to a contact OPTIONALLY — free-standing follow-ups are allowed
+  // ("chase the supplier quote"), but the AGENT must always name a contact; contactless follow-ups
+  // are a USER-only capability. That is the structural brake against the CRM quietly becoming a
+  // general task generator. New table ⇒ NO migration (prior-phase discipline).
+  followUps: defineTable({
+    tenantId: v.string(),
+    contactId: v.optional(v.id("contacts")),
+    note: v.string(), // user/agent content — content plane ONLY, never audited (CLAUDE.md §4)
+    /** REQUIRED. No date, no follow-up: "Follow-ups due" is a headline tile and an undated
+     *  follow-up could never appear in it. Moving this date IS the snooze, which is why there is
+     *  no snooze state — the date stays the single source of truth for "due". */
+    dueAt: v.number(),
+    /** `canceled` is distinct from `done` because "I decided not to" and "I did it" are different
+     *  facts. Three states, closed. */
+    status: v.union(v.literal("open"), v.literal("done"), v.literal("canceled")),
+    completedAt: v.optional(v.number()),
+    /** Provenance ref so "why is this here" stays answerable. An id — refs-only, audit-safe by
+     *  construction. Optional ⇒ no migration. */
+    sourcePlanId: v.optional(v.id("plans")),
+    createdAt: v.number(),
+  })
+    .index("by_tenant_status_dueAt", ["tenantId", "status", "dueAt"])
+    .index("by_tenant_contact", ["tenantId", "contactId"]),
+
+  // The send-path trust boundary, kept ADDRESS-KEYED and separate from `contacts` on purpose:
+  // suppression OUTLIVES the contact, so deleting a contact can never restore the ability to email
+  // someone who asked you to stop. Un-suppressing is behind an explicit confirm plus a refs-only
+  // audit row, never a plain toggle. New table ⇒ NO migration (prior-phase discipline).
+  suppressions: defineTable({
+    tenantId: v.string(),
+    address: v.string(), // normalized by `normalizeAddress` at the write boundary
+    suppressedAt: v.number(),
+    source: v.union(v.literal("unsubscribe-link"), v.literal("user-marked")),
+  })
+    // The ONE index the send guard reads — per-address, so a 5-recipient fan-out drops exactly the
+    // suppressed address and still sends to the other four.
+    .index("by_tenant_address", ["tenantId", "address"]),
 });

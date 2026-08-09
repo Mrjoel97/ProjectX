@@ -99,6 +99,12 @@ export type CashActivity = {
   todayCount: number;
   /** Consecutive UTC days with at least one send, ENDING TODAY. Zero if nothing went out today. */
   streakDays: number;
+  /**
+   * Sum of today plus the six preceding UTC days (the newest 7 entries of `perDay`, or fewer if
+   * the window is shorter). Derived HERE, not in the view — CLAUDE.md §1: a view renders, it never
+   * sums. `perDay` alone still carries the raw per-day counts for anything that needs the series.
+   */
+  last7Count: number;
 };
 
 const utcDayStart = (ms: number): number => Math.floor(ms / DAY_MS) * DAY_MS;
@@ -138,5 +144,7 @@ export function activityFromSends(input: {
     streakDays += 1;
   }
 
-  return { perDay, todayCount: counts.get(today) ?? 0, streakDays };
+  const last7Count = perDay.slice(0, 7).reduce((sum, bucket) => sum + bucket.count, 0);
+
+  return { perDay, todayCount: counts.get(today) ?? 0, streakDays, last7Count };
 }

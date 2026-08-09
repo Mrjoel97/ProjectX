@@ -1,6 +1,6 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-08-09 (Plan cash-business-finance Task 2 — the activity row, counted from delivered sends)
+> Last verified: 2026-08-09 (Plan cash-business-finance Task 2 fix — `last7Count` moved into `activityFromSends`, out of the view)
 > Build history: `.planning/phases/26-pending-product-pages-and-vault-redesign-integration/` · Related ADRs: [ADR-001](../decisions/001-convex-data-orchestration-plane.md)
 
 ## Purpose
@@ -47,9 +47,13 @@ both halves of the page:
   fabricated "$0 MRR"), `not-computable` (inputs are present but make the arithmetic undefined, e.g.
   CAC = 0 — deliberately not folded into `unknown`, because "needs your CAC" is a lie to someone who
   told us it was zero), and `known` (a real number, including a real measured zero). `activityFromSends`
-  buckets delivered sends into UTC days and derives `todayCount` and `streakDays`; the streak ENDS
-  TODAY by definition — a streak that keeps counting yesterday's run for someone who has not sent
-  today is the flattering lie the row exists to avoid.
+  buckets delivered sends into UTC days and derives `todayCount`, `streakDays` and `last7Count`; the
+  streak ENDS TODAY by definition — a streak that keeps counting yesterday's run for someone who has
+  not sent today is the flattering lie the row exists to avoid. **`last7Count` (today plus the six
+  preceding UTC days) is computed HERE, in the pure module, never in `CashView.tsx`.** A Task-2
+  review caught the first version summing `perDay.slice(0, 7)` inside `ActivitySection` itself —
+  domain arithmetic, not formatting, breaching CLAUDE.md §1's "the view renders, it never derives."
+  The view now reads `activity.last7Count` as a plain field.
 - **`convex/cash.ts` (adapter) is a reader only.** `activity` is a `tenantQuery` that scans `requests`
   rows in status `sent` through `by_tenant_status_createdAt`, bounded at 1000 rows with
   `bound.partial` + `partialReason: "row-cap"` when the cap is hit — the same `readWindow` honesty

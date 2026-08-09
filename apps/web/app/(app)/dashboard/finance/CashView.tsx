@@ -66,8 +66,6 @@ export function ActivitySection({
   activity: CashActivity;
   partial: boolean;
 }) {
-  const last7 = activity.perDay.slice(0, 7);
-  const total7 = last7.reduce((sum, day) => sum + day.count, 0);
   return (
     <section style={stack} aria-labelledby="cash-activity-heading">
       <h2 id="cash-activity-heading" style={cardTitle}>
@@ -88,7 +86,7 @@ export function ActivitySection({
             <p className="caps-label">Reach-outs today</p>
           </div>
           <div className="stat-value">{activity.todayCount}</div>
-          <p style={{ ...muted, fontSize: "0.8rem" }}>{total7} in the last 7 days</p>
+          <p style={{ ...muted, fontSize: "0.8rem" }}>{activity.last7Count} in the last 7 days</p>
         </div>
         <div className="stat-tile">
           <div className="stat-head">
