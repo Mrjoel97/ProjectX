@@ -423,4 +423,128 @@ http.route({
   }),
 });
 
+// ── The public unsubscribe route (PIPE-01, plan 19-04) ────────────────────────────────────────
+//
+// The phase's ONLY public unauthenticated route. It lives HERE and not in `apps/web` because
+// `apps/web/middleware.ts` is default-deny (`isPublic` = `/`, `/privacy`, `/terms`, `/signin`,
+// `/signup`): a page there costs a security-sensitive matcher edit PLUS a bearer-secret hop back
+// into Convex to write the suppression. The Convex site origin is untouched by that middleware,
+// which is why the fal webhook above works at all.
+//
+// NO ENV GUARD HERE, deliberately. `verifyUnsubToken` (`contacts.ts`) holds the single fail-closed
+// `if (!secret) return null` on the verify path, and both entry points go through it. A second copy
+// at this route would make that one vacuous — `contacts-crm.md` invariant 8.
+//
+// NO RATE LIMITER, deliberately. A valid segment requires the deployment secret and brute-forcing
+// an HMAC-SHA-256 digest is infeasible; a per-address ceiling is meaningless when the operation is
+// an idempotent upsert, so a replayed link re-suppresses the same row and shows the same
+// confirmation. That idempotency IS the abuse mitigation. `@convex-dev/rate-limiter` is already a
+// pinned component if that ever stops being true.
+//
+// Only 200 and 404 leave this route. One bare 404 for every rejection — a stale-but-well-formed
+// token and a malformed one must be indistinguishable from outside.
+//
+// ponytail: inline styles mirroring the BRAND tokens. An httpAction cannot import globals.css, and
+// moving this page to apps/web costs a default-deny middleware edit (isPublic in
+// apps/web/middleware.ts) plus a bearer-secret hop back into Convex to write the suppression.
+// Upgrade path: make that trade when this page needs to be more than one paragraph.
+
+/** `<base64url(tenantId|recipient)>.<hmacHex>` — `gmailAuth.verifyState`'s idiom, verbatim. */
+function unsubSegment(pathname: string): { raw: string; digest: string } | null {
+  const segment = pathname.split("/").pop() ?? "";
+  const dot = segment.lastIndexOf(".");
+  if (dot <= 0) return null;
+  return { raw: segment.slice(0, dot), digest: segment.slice(dot + 1) };
+}
+
+const unsubNotFound = () => new Response("not found", { status: 404 });
+
+/** The recipient string is signed by US, but it is still tenant-authored text being echoed into
+ *  markup — escape it rather than trust the signature to also mean "safe to interpolate". */
+const esc = (s: string) =>
+  s.replace(
+    /[&<>"]/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string,
+  );
+
+/** BRAND §2 hex, copied (not imported — see the ponytail note): `--canvas` #f8fafc, `--card`
+ *  #ffffff, `--ink` #0e1419, `--ink-soft` #55606c, `--rule` #d8dbe0, `--teal-900` #0b4f4a,
+ *  `--teal-600` #009689 as a FILL under white text (BRAND §2: never small teal text). */
+function unsubPage(heading: string, body: string): Response {
+  return new Response(
+    `<!doctype html><html lang="en"><head><meta charset="utf-8">` +
+      `<meta name="viewport" content="width=device-width,initial-scale=1">` +
+      `<title>${heading} · Pikar AI</title></head>` +
+      `<body style="margin:0;padding:48px 16px;background:#f8fafc;color:#0e1419;` +
+      `font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;">` +
+      `<main style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #d8dbe0;` +
+      `border-radius:12px;padding:32px;">` +
+      `<p style="margin:0 0 24px;font-size:13px;font-weight:600;letter-spacing:.08em;` +
+      `text-transform:uppercase;color:#0b4f4a;">Pikar AI</p>` +
+      `<h1 style="margin:0 0 20px;font-size:22px;line-height:1.3;font-weight:600;">${heading}</h1>` +
+      body +
+      `</main></body></html>`,
+    { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } },
+  );
+}
+
+/** The addresses, echoed so the recipient can see WHICH mailbox they are about to unsubscribe. */
+const unsubAddresses = (addresses: string[]) =>
+  `<p style="margin:0 0 20px;font-size:16px;font-weight:600;word-break:break-all;">` +
+  `${addresses.map(esc).join("<br>")}</p>`;
+
+http.route({
+  // `pathPrefix`, not a glob: Convex's router has no `*` syntax (the 20-06 lesson).
+  pathPrefix: "/unsubscribe/",
+  method: "GET",
+  // THE GET NEVER WRITES. Corporate mail scanners and link prefetchers fire every URL in a
+  // message, so a GET-suppresses design silently unsubscribes people who never clicked. The
+  // confirm button below is what stops the feature firing itself; POST is the only mutating verb.
+  handler: httpAction(async (ctx, req) => {
+    const pathname = new URL(req.url).pathname;
+    const parts = unsubSegment(pathname);
+    if (!parts) return unsubNotFound();
+    const resolved = await ctx.runQuery(internal.contacts.resolveUnsubToken, parts);
+    if (!resolved) return unsubNotFound();
+
+    const many = resolved.addresses.length > 1;
+    return unsubPage(
+      "Stop receiving these emails",
+      `<p style="margin:0 0 8px;font-size:14px;color:#55606c;">This will stop email to:</p>` +
+        unsubAddresses(resolved.addresses) +
+        `<p style="margin:0 0 28px;font-size:15px;line-height:1.6;color:#55606c;">` +
+        `Nothing has changed yet — opening this page does not unsubscribe anyone. Press the button ` +
+        `and we will stop sending to ${many ? "those addresses" : "that address"}.</p>` +
+        // Same-origin form POST, no JS: a fetch() from a Next page would need CORS on this origin.
+        `<form method="POST" action="${esc(pathname)}">` +
+        `<button type="submit" style="display:block;width:100%;padding:14px 20px;border:0;` +
+        `border-radius:8px;background:#009689;color:#ffffff;font-size:16px;font-weight:600;` +
+        `font-family:inherit;cursor:pointer;">Unsubscribe</button></form>`,
+    );
+  }),
+});
+
+http.route({
+  pathPrefix: "/unsubscribe/",
+  method: "POST",
+  handler: httpAction(async (ctx, req) => {
+    const parts = unsubSegment(new URL(req.url).pathname);
+    if (!parts) return unsubNotFound();
+    // Resolved for the confirmation's address list; the mutation re-verifies from scratch and
+    // never trusts this decode (contacts.ts — the POST cannot trust a decode its caller supplied).
+    const resolved = await ctx.runQuery(internal.contacts.resolveUnsubToken, parts);
+    if (!resolved) return unsubNotFound();
+    await ctx.runMutation(internal.contacts.suppressFromUnsubscribe, parts);
+
+    return unsubPage(
+      "You have been unsubscribed",
+      `<p style="margin:0 0 8px;font-size:14px;color:#55606c;">We will no longer email:</p>` +
+        unsubAddresses(resolved.addresses) +
+        `<p style="margin:0;font-size:15px;line-height:1.6;color:#55606c;">` +
+        `You can close this page. If you receive another message from us, reply and tell us — ` +
+        `pressing this button again is harmless but will not change anything.</p>`,
+    );
+  }),
+});
+
 export default http;
