@@ -109,6 +109,24 @@ function gatedSkillNames() {
 
 const SKILL_NAMES = gatedSkillNames();
 
+// 19-10: the DELIBERATELY UNGATED exemption set, derived from the SAME file for the same reason.
+// `skill.ts` maintains a written, dated justification above every skill it refuses to gate (the
+// `content-drafter` precedent, six rows and counting) — the decision already exists at the
+// canonical site; this runner just could not see it, which is why the dispatchable-route assertion
+// below has been red on main since Phase 20 registered `media`. Deriving rather than re-listing
+// means a new exemption registers itself the day it is written, and — the part that matters — it
+// can ONLY register by writing the justification, which is the enforcement actually wanted here.
+function ungatedSkillNames() {
+  const src = readFileSync(skillSrcPath, "utf8");
+  return [
+    ...src.matchAll(
+      /DELIBERATELY UNGATED[\s\S]*?\*\/\s*export const [A-Z0-9_]+\s*=\s*"([a-z0-9.-]+)"/g,
+    ),
+  ].map((m) => m[1]);
+}
+
+const UNGATED_SKILL_NAMES = ungatedSkillNames();
+
 // The DISPATCHABLE routes, read off @pikar/core's registry for the same reason as above: a fixture
 // asserting `attributionRoute: "swot"` names a real GATED skill that no gap can ever dispatch to,
 // and would fail live for a reason that has nothing to do with the model. Gated ⊃ dispatchable.
@@ -128,7 +146,26 @@ function specialistRoutes() {
   return [...block[1].matchAll(/"([a-z0-9-]+)"/g)].map((m) => m[1]);
 }
 
+// 19-10: route -> registry skill name, read off `SPECIALISTS[route].skillName`. This replaced a
+// hand-maintained ternary (`route === "research" ? "research-specialist" : route`) that was a
+// second copy of a mapping the registry already carries — and whose drift is why the gating
+// assertion below named the ROUTE `media` rather than the real skill `media-director`, sending
+// whoever read the failure looking for a skill by that name that does not exist.
+function specialistSkillNames() {
+  const src = readFileSync(specialistSrcPath, "utf8");
+  const block = /export const SPECIALISTS[^=]*=\s*\{([\s\S]*?)\n\};/.exec(src);
+  if (!block) throw new Error(`SPECIALISTS not found in ${specialistSrcPath}`);
+  const byRoute = {};
+  for (const m of block[1].matchAll(
+    /(?:"([a-z0-9-]+)"|([a-z][a-z0-9-]*))\s*:\s*\{[\s\S]*?skillName:\s*"([a-z0-9.-]+)"/g,
+  )) {
+    byRoute[m[1] ?? m[2]] = m[3];
+  }
+  return byRoute;
+}
+
 const SPECIALIST_ROUTES = specialistRoutes();
+const SPECIALIST_SKILLS = specialistSkillNames();
 
 // CLOSED expect vocabulary. The runner rejects any fixture using anything else
 // BEFORE the first spawn — a bad fixture must never cost a cent.
@@ -204,6 +241,20 @@ const EXPECT_KEYS = new Set([
   // `stageCrmWrite` STAGES only, a non-zero count is never evidence that anything was written:
   // the apply happens behind a human Approve the harness never clicks.
   "crmOperationCount",
+  // Phase 19 (ACTN-05), added 19-10 to close a gap 19-09 found ON ITS OWN PASSING RUN:
+  // `datedFollowUpCount` — how many of the staged operations are an `addFollowUp` carrying a
+  // finite `dueAt`. `crmOperationCount` is a COUNT and cannot tell op TYPES apart, so fixture 36
+  // was passing on a staged `addContact` with no `due` while its prose described a dated
+  // follow-up. That is two separate untruths in one green tick: the dated follow-up the fixture
+  // claims to prove was never created, and the agent saved a contact the user never asked it to
+  // save — which is in tension with SC#7's "contacts are created by EXPLICIT ACTS only".
+  // A count rather than a boolean, for `createdDocCount`'s reason: it also pins that a second
+  // turn naming nobody did not quietly add a second dated row.
+  // The `dueAt` half is not decoration — `stageCrmWrite` resolves the user's WORDS through
+  // `parseSendTime` against the trusted clock, so a finite `dueAt` is the observable end of that
+  // whole §2-D chain, and an undated follow-up is one the `by_tenant_status_dueAt` range read
+  // (and therefore the "Follow-ups due" tile) can never surface.
+  "datedFollowUpCount",
   // 15-06 (DISP-01): the dispatched-specialist observables. They are only meaningful on a fixture
   // that also carries `actOnGap` — validateFixture enforces the pairing, because all three read a
   // plan row that a non-dispatching case never stages.
@@ -302,6 +353,24 @@ function validateFixture(fx, source) {
     (!Number.isInteger(fx.expect.crmOperationCount) || fx.expect.crmOperationCount < 1)
   ) {
     fail("expect.crmOperationCount must be an integer >= 1 (a zero count is vacuous)");
+  }
+  // 19-10: same anti-vacuity rule, and one PAIRING rule. `datedFollowUpCount` is a subset count of
+  // `crmOperationCount`, so a fixture asserting the subset without the total would let an agent
+  // stage the right follow-up plus three unrequested contacts and still pass.
+  if (
+    fx.expect.datedFollowUpCount !== undefined &&
+    (!Number.isInteger(fx.expect.datedFollowUpCount) || fx.expect.datedFollowUpCount < 1)
+  ) {
+    fail("expect.datedFollowUpCount must be an integer >= 1 (a zero count is vacuous)");
+  }
+  if (fx.expect.datedFollowUpCount !== undefined && fx.expect.crmOperationCount === undefined) {
+    fail("expect.datedFollowUpCount requires crmOperationCount (it is a SUBSET of the total)");
+  }
+  if (
+    fx.expect.datedFollowUpCount !== undefined &&
+    fx.expect.datedFollowUpCount > fx.expect.crmOperationCount
+  ) {
+    fail("expect.datedFollowUpCount cannot exceed crmOperationCount");
   }
   // Phase 19 (ACTN-05): `clock: true` gives ONE fixture a `clientContext` (tz + nowMs) — which
   // every production driver always supplies and this harness never has. OPT-IN, so all 34 certified
@@ -535,6 +604,17 @@ function evaluateExpect(
         if ((plan.crmOperations ?? []).length !== expected)
           miss(key, expected, (plan.crmOperations ?? []).length);
         break;
+      case "datedFollowUpCount": {
+        // 19-10. `op` and `dueAt` are `CrmOperation`'s own field names (@pikar/core contacts.ts),
+        // and `parseCrmOperations` already ran at BOTH the write and apply boundaries, so a row
+        // reaching here has a finite `dueAt` or is not an addFollowUp at all. The Number.isFinite
+        // re-check is the cheap belt: a plan row is content plane and this reads it raw.
+        const dated = (plan.crmOperations ?? []).filter(
+          (o) => o?.op === "addFollowUp" && Number.isFinite(o?.dueAt),
+        ).length;
+        if (dated !== expected) miss(key, expected, dated);
+        break;
+      }
       case "planKind":
         if (plan.kind !== expected) miss(key, expected, plan.kind ?? "absent");
         break;
@@ -883,6 +963,72 @@ function selfCheck() {
     "crmOperationCount:1 MUST FAIL when a contactless follow-up was invented instead of asked about",
   );
 
+  // 2h. 19-10: `datedFollowUpCount` — the op-TYPE key that closes the gap 19-09 found on fixture
+  // 36's PASSING run. Every assertion here is $0 and runs with zero convex and zero model calls.
+  const ops = (...list) => ({ status: "collecting", crmOperations: list });
+  const followUp = { op: "addFollowUp", email: "a@b.test", note: "n", dueAt: 1_700_000_000_000 };
+  const contact = { op: "addContact", email: "a@b.test", name: "A" };
+  assert.ok(
+    validateFixture(
+      { ...base, expect: { crmOperationCount: 1, datedFollowUpCount: 1 } },
+      "<synthetic>",
+    ),
+    "datedFollowUpCount must be an accepted expect key",
+  );
+  assert.throws(
+    () =>
+      validateFixture(
+        { ...base, expect: { crmOperationCount: 1, datedFollowUpCount: 0 } },
+        "<synthetic>",
+      ),
+    /integer >= 1/,
+    "a zero dated-follow-up count asserts nothing",
+  );
+  assert.throws(
+    () => validateFixture({ ...base, expect: { datedFollowUpCount: 1 } }, "<synthetic>"),
+    /requires crmOperationCount/,
+    "the subset key without the total would admit unrequested extra operations",
+  );
+  assert.throws(
+    () =>
+      validateFixture(
+        { ...base, expect: { crmOperationCount: 1, datedFollowUpCount: 2 } },
+        "<synthetic>",
+      ),
+    /cannot exceed/,
+    "a subset larger than the total is unsatisfiable and must be rejected before the first spawn",
+  );
+  assert.equal(
+    evaluateExpect({ datedFollowUpCount: 1 }, ops(followUp)).length,
+    0,
+    "datedFollowUpCount:1 passes on a real dated addFollowUp",
+  );
+  // THE load-bearing negative, and the exact shape fixture 36 was silently passing on: ONE staged
+  // operation, so `crmOperationCount: 1` is satisfied — but it is an addContact, not the dated
+  // follow-up the fixture's prose claims to prove.
+  assert.equal(
+    evaluateExpect({ crmOperationCount: 1 }, ops(contact)).length,
+    0,
+    "crmOperationCount ALONE cannot tell an addContact from an addFollowUp (this is the gap)",
+  );
+  assert.equal(
+    evaluateExpect({ datedFollowUpCount: 1 }, ops(contact)).length,
+    1,
+    "datedFollowUpCount:1 MUST FAIL when the agent staged a contact instead of a dated follow-up",
+  );
+  // An addFollowUp with no resolvable due date is the OTHER half: it never reaches the
+  // by_tenant_status_dueAt range read, so the "Follow-ups due" tile can never surface it.
+  assert.equal(
+    evaluateExpect({ datedFollowUpCount: 1 }, ops({ op: "addFollowUp", email: "a@b.test" })).length,
+    1,
+    "datedFollowUpCount:1 MUST FAIL on an UNDATED follow-up",
+  );
+  assert.equal(
+    evaluateExpect({ datedFollowUpCount: 1 }, ops(followUp, { ...followUp, note: "m" })).length,
+    1,
+    "datedFollowUpCount:1 MUST FAIL when a second dated follow-up was invented",
+  );
+
   // 3. Cost summation + cap logic on synthetic per-turn costs.
   // 16-09: stated as FRACTIONS OF THE CAP, never literal dollars. These previously hardcoded
   // $1.10/$1.00, which asserted the cap's VALUE rather than its LOGIC — so raising COST_CAP_USD
@@ -1035,14 +1181,40 @@ function selfCheck() {
     "all dispatchable routes, including research, are read off the core registry",
   );
   for (const route of SPECIALIST_ROUTES) {
-    // The three Phase-12 route names equal their skill names; Phase 16 deliberately names the
-    // route `research` and the registry body `research-specialist`.
-    const skillName = route === "research" ? "research-specialist" : route;
+    // 19-10: the skill name comes from the registry (`SPECIALISTS[route].skillName`), not from a
+    // ternary. The three Phase-12 route names equal their skill names; `research` maps to
+    // `research-specialist` and `media` to `media-director`, and only the registry knows that.
+    const skillName = SPECIALIST_SKILLS[route];
     assert.ok(
-      SKILL_NAMES.includes(skillName),
-      `${skillName} must also be GATED — a body edit rides the gate`,
+      skillName,
+      `${route} is dispatchable but has no skillName in the SPECIALISTS registry`,
+    );
+    // A dispatchable specialist's body must ride the gate — UNLESS `skill.ts` carries a written
+    // DELIBERATELY UNGATED justification for it, which is a decision recorded at the canonical
+    // site and derived here rather than re-litigated. `media-director` is exactly that case
+    // (Phase 20: the runner drives TEXT fixtures and structurally cannot drive a script /
+    // art-direction / storyboard turn, so gating it would deadlock the row at v1 on its first
+    // body edit). The residual risk is real and named there: a `media-director` body edit
+    // activates with no eval evidence. What is NOT tolerated is silence — a dispatchable route
+    // whose skill is neither gated nor justified fails right here.
+    assert.ok(
+      SKILL_NAMES.includes(skillName) || UNGATED_SKILL_NAMES.includes(skillName),
+      `${skillName} (route "${route}") must either be in GATED_SKILLS — a body edit rides the gate —` +
+        ` or carry a written DELIBERATELY UNGATED justification in packages/contracts/src/skill.ts`,
     );
   }
+  // Non-vacuity: the exemption must be DERIVED and non-empty, or the assertion above degrades into
+  // "anything goes" the moment the regex stops matching.
+  assert.ok(
+    UNGATED_SKILL_NAMES.includes("media-director") &&
+      UNGATED_SKILL_NAMES.includes("content-drafter"),
+    "the DELIBERATELY UNGATED derivation must actually resolve skill.ts's written exemptions",
+  );
+  assert.equal(
+    SPECIALIST_SKILLS.research,
+    "research-specialist",
+    "the route->skillName mapping must come from the registry, not from a ternary",
+  );
   assert.throws(
     () => validateFixture({ ...base, turns: [`tell me about ${VAULT_NEEDLE}`] }, "<synthetic>"),
     /vacuous/,

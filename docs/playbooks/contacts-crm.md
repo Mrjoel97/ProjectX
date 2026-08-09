@@ -1,6 +1,15 @@
 # Playbook: Contacts, CRM & follow-ups
 
-> Last verified: 2026-08-09 (Plan 19-08 — **the agent now READS this store in-loop.**
+> Last verified: 2026-08-09 @ `12bde78` (Plan 19-10 — **phase close-out. The offline surface is
+> verified; the OWNER BROWSER UAT IS STILL PENDING and this line will be re-bumped to the sha it is
+> driven against when it passes.** What IS newly verified here, in a browser, for the first time:
+> `apps/web/e2e/pipeline.spec.ts` **RAN and PASSED 2/2** against a live deployment — invariant 3's
+> four real zeroes are now browser-observed, not just component-tested. **And one thing is newly
+> DISPROVEN: ACTN-05's headline capability does not work on the live body** — see the open defect at
+> the top of Known gaps. Nothing in this file should be read as owner-approved until the UAT line
+> lands above this one.)
+>
+> Previously verified: 2026-08-09 (Plan 19-08 — **the agent now READS this store in-loop.**
 > `internal.contacts.savedForName` is the module's first COCKPIT read: a name lookup against
 > `contacts` plus each match's open follow-ups, with NO write anywhere in it. Invariant 16 below is
 > new and records that the write-absence is now mutation-proven rather than argued. The staging tool
@@ -345,20 +354,42 @@ almost the same fact. That is why "needing attention" means *unowned* rather tha
 
 ## How to verify
 
+Split by what actually runs where. **An executor shell can run everything in the first two groups
+and nothing in the last two** — say NOT RUN when you have not run one, never infer a pass.
+
+**Group 1 — unit / component (offline, no deployment, no cost)**
+
 | Command | What it proves |
 |---|---|
-| `pnpm --filter @pikar/core test -- contacts` | The four pure functions at their boundaries, incl. idempotence and the fail-closed footer |
-| `pnpm --filter @pikar/backend test -- contacts` | Tenant isolation over every new public function, the unsubscribe token round-trip, bounded reads, the no-opportunities structural scan |
+| `pnpm --filter @pikar/core test -- contacts` | The pure functions at their boundaries, incl. `normalizeAddress` idempotence, the fail-closed footer and `parseCrmOperations`' contactless refusal |
+| `pnpm --filter @pikar/backend test -- contacts` | Tenant isolation over every public function, the unsubscribe token round-trip, the inert GET, bounded reads, the export-set pins |
 | `pnpm --filter @pikar/backend test -- cockpitTools` + `-- gmail` | The per-address suppression drop, the group-mode join, all-suppressed refusal, the post-approve suppression, MIME-byte footer presence |
 | `pnpm --filter @pikar/backend test -- cockpit` | The `crm_write` arm: all-or-none, double-approve, no requests rows, no Gmail token, cross-tenant and foreign-ref refusals |
 | `pnpm --filter @pikar/backend test -- plans` | Pitfall 1 — `patchPlan`'s hand-maintained `kind` mirror accepts `crm_write` through the RUNTIME validator, and `resetPlan` clears `crmOperations` |
-| `pnpm --filter @pikar/web test -- crmCard` | The plan card's line list, read through the same validator the applier runs |
-| `pnpm --filter @pikar/web test -- pipelineView` | The empty-state `0` assertions (never `—`, never `Unknown`) |
-| `node scripts/check-playbooks.mjs` | This playbook is registered and bumped alongside the code it watches |
-| `pnpm --filter @pikar/web test:e2e -- e2e/pipeline.spec.ts` | **Needs a live deployment.** A `--list` is NOT a run; a blank result means NOT RUN, never that it passed |
+| `pnpm --filter @pikar/backend test -- llmRedaction` | The audit key set, structurally: ONE `internal.audit.log` site in this module and no content-plane identifier in the call |
+| `pnpm --filter @pikar/web test -- crmCard` · `-- pipelineView` | The plan card's line list; the empty-state `0` assertions (never `—`, never `Unknown`) |
+| `pnpm test` · `pnpm typecheck` | The whole spine. **Any plan touching `cockpit.ts` / `gmail.ts` / the approve path takes the WHOLE suite as its gate, not a filtered run** (the 20-07 rule) |
 
-Manual-only: BRAND conformance of the Pipeline page and the rendered unsubscribe landing page, and
-the un-suppress confirm flow. No assertion encodes a human judgement about how a page looks.
+**Group 2 — static scans (offline)**
+
+| Command | What it proves |
+|---|---|
+| `node scripts/check-playbooks.mjs` | This playbook is registered in `watch.json` and bumped alongside the code it watches |
+| `node packages/backend/scripts/run-eval-golden.mjs --self-check` | The eval fixtures, the CLOSED expect vocabulary and the gating assertions — **`$0`, no model call.** **There is NO `--list` flag**: unknown argv is ignored and execution falls through to `runLive`, a full PAID run. This is the offline command; anything else that looks offline is not |
+
+**Group 3 — needs a live deployment (an executor CAN run these, with setup)**
+
+| Command | What it proves, and what it needs |
+|---|---|
+| `npx playwright test e2e/pipeline.spec.ts` from `apps/web` | The four tiles, the add/suppress/un-suppress flow and the still-`soon` nav, in a real browser. Needs a live `convex dev` (NOT `--once`), a PRODUCTION build of the web app on `:3111` (`next dev` OOMs on heavy dashboard pages), and `E2E_USER_EMAIL`/`E2E_USER_PASSWORD`. **A fresh `/signup` mints those locally** — the Convex Auth `Password` provider is wired, so 19-07's "an executor cannot mint them" was wrong for a local deployment. A new signup is also how you get the EMPTY tenant test 1 requires without a reset seam. **Do NOT use `pnpm --filter @pikar/web test:e2e -- <file>`: the `--` is swallowed and the entire e2e suite runs (~8 min, mostly unrelated tenant-precondition failures).** |
+| `pnpm eval:golden --skill cockpit-agent@N --only 36` | What the LIVE body actually stages for a follow-up request. **~$0.01.** A full unfiltered gate is **~$0.35** — read `skills.evidence` on the active row at `$0` before budgeting one, and never trust a plan's estimate |
+
+**Group 4 — manual only (no assertion encodes these)**
+
+BRAND conformance of the Pipeline page; how the unsubscribe landing page reads to a RECIPIENT (who
+is not a user and has no other contact with the product); the three send-refusal notes and the
+withheld report as *information rather than failure*; the CAN-SPAM footer in a real inbox; and
+responsive behaviour at phone width. These are the owner UAT, and a blank row is NOT RUN.
 
 ## Operational notes
 
@@ -381,8 +412,78 @@ the un-suppress confirm flow. No assertion encodes a human judgement about how a
 - Teaching `cockpit-agent` the contacts/follow-up tools edits a **`GATED_SKILLS` body with ONE
   candidate stream**. Serialize against the other lanes contending for it, and verify which skill
   version carries your body before any eval — optimizer dry-run candidates occupy versions.
+- **A full `eval:golden` gate costs ~$0.35, NOT the ~$0.12–0.15 quoted throughout this phase's
+  plans and summaries.** The number is recorded, free, on the ACTIVE skill row: read
+  `skills.evidence[].costUsd` at `$0` before budgeting one. A gate is a single uninterruptible
+  command, so the only decision point is BEFORE launching it — there is no "approach the ceiling
+  and stop". `--only <id>` is the ~$0.01 diagnostic; use it on any new or changed fixture, because
+  a fixture must never execute for the first time inside a paid gate.
+- **`cockpit-agent@18` is the ACTIVE body as of 2026-08-09** (activated on owner authorization
+  after gate `086f8267`, 35/35). Any document describing v18 as a "candidate", or ACTN-05 as
+  "certified but not live", is stale — but see the open defect above before reading "live" as
+  "working".
 
 ## Known gaps & deferred work
+
+### OPEN DEFECT — ACTN-05's headline capability does not work on the live body (19-10, 2026-08-09)
+
+**Asked in plain language to add a dated follow-up for a named person, `cockpit-agent@18` — the
+ACTIVE body — stages an `addContact` and NO follow-up at all.** Measured, not inferred: eval run
+`309b1c3d`, `--only 36`, $0.0142, and the plan row read back at $0 carries exactly
+`[{op:"addContact", email:…, name:"Rhea Calloway", origin:"mailbox-resolved"}]` — no `addFollowUp`,
+no `dueAt`. On the other attempt of the same run it staged nothing at all and the plan stayed
+`collecting`, so the behaviour is not even uniform.
+
+**Why the 35/35 gate was green over it.** 19-09's `crmOperationCount` is a COUNT. One staged
+operation satisfies it whatever that operation is. 19-10 added **`datedFollowUpCount`** to the
+closed `EXPECT_KEYS` vocabulary — it counts staged ops that are an `addFollowUp` carrying a finite
+`dueAt`, is a SUBSET key the runner refuses without `crmOperationCount` (so it cannot be satisfied
+alongside unrequested extras), and both halves are mutation-proven red-able in `--self-check`.
+
+**Consequences, stated plainly:**
+- Fixture 36 is now **RED against the active body**, so a full gate is **34/35** until this is fixed.
+  The assertion was deliberately NOT weakened to restore green — that would be the third time this
+  phase a measurement was trimmed to fit a model's behaviour.
+- **ACTN-05 must not be ticked.** The tool is registered, the plan gate works, the apply is
+  transactional, and the body still does not reach it for the one request the requirement names.
+- Two separate wrongs, not one: the dated follow-up is missing, AND a contact the user never asked
+  to save is being created, which is in tension with invariant 1's explicit-acts-only rule.
+
+**Do not fix this with another prohibition in the body.** 19-09 already established the pattern:
+the body forbids the adjacent failure verbatim and the model did it anyway on 2/2 runs. Behaviour
+uniform across every run is not fixable by another sentence. The likely real fix is the tool's
+SHAPE — `stageCrmWrite` accepting a `due` on the same call that names a person, and the body being
+taught one grammar rather than two ops — or an explicit refusal when a follow-up request produces
+a contact-only operation list.
+
+### The `ponytail:` ceilings this phase left, each with its upgrade path
+
+- **The unsubscribe landing page is styled with INLINE hex literals** mirroring the BRAND tokens,
+  because a Convex `httpAction` cannot import `globals.css`. It therefore does not track a token
+  change: edit `globals.css` and this page silently keeps the old palette. *Upgrade path:* move the
+  page into `apps/web`, which costs a default-deny `middleware.ts` matcher edit plus a
+  bearer-secret hop back into Convex to do the write. Judged not worth it for one screen; that
+  judgement is the owner's to overturn at UAT.
+- **"Last touch" is an in-memory fold over a bounded `requests` read** (invariant 14), capped at
+  1 000 rows per call, after which the page reports `partial` / `"row-cap"`. *Upgrade path:*
+  denormalize `contacts.lastTouchAt`, written by `recordDeliveryTerminal` **and**
+  `setFollowUpStatus` — both, or the field lies.
+- **Address identity is `trim().toLowerCase()` and nothing more** (invariant 4) — no plus-address
+  stripping, no dot-folding, no validation. *Upgrade path:* a second `canonicalise()` BESIDE
+  `normalizeAddress`, never a change to it: the `suppressions` key must stay byte-stable or
+  previously suppressed people become emailable again.
+- **`isSuppressed` can only refuse a WHOLE comma-joined recipient row.** In group mode a `requests`
+  row is one joined string, so the per-address drop must happen at `executePlan` before the join —
+  which is why invariant 12 has two guards and deleting either leaves a real hole. *Upgrade path:*
+  store recipients structurally on the request row instead of a joined string, at which point one
+  guard could do both jobs.
+- **The saved-contact lookup is a bounded scan** (`SCAN_LIMIT` 1 000 contacts over
+  `by_tenant_createdAt`) feeding the in-memory `rankCandidates`. *Upgrade path:* a `searchIndex` on
+  `contacts.name`; the ranker still decides, only the shortlist changes.
+- **`listContacts` runs one `by_tenant_contact` query per page row** (≤ 25) plus the `requests`
+  fold. If the Pipeline ever feels slow, the fold is the first suspect.
+
+### Deferred scope
 
 - **Person-level merging** — one person holding N addresses. Ships as one-row-per-address; the
   `ponytail:` note in `contacts.ts` names the upgrade path (a second `canonicalise()` beside

@@ -6,7 +6,34 @@
 > mid-change at the time of writing. Not this session's work, not verified here, and the entry
 > below stands unchanged. That lane owns the §9 entry when it lands.
 
-> Last verified: 2026-08-09 (Plan 19-09 — **GATE `086f8267`: 35/35, zero retries, $0.3505, on
+> Last verified: 2026-08-09 (Plan 19-10 — **THE OFFLINE GATE CAN RUN AGAIN, AND IT IMMEDIATELY
+> CAUGHT A REAL DEFECT.** Three things landed in `run-eval-golden.mjs`.
+> **(1) `--self-check` is GREEN for the first time since Phase 20.** It had been red because `media`
+> is a dispatchable route whose skill `media-director` is not in `GATED_SKILLS` — but `skill.ts`
+> ALREADY carries a written, dated DELIBERATELY UNGATED justification for it (as it does for five
+> other rows). The decision existed at the canonical site; the assertion just could not see it. It
+> now DERIVES that exemption set from `skill.ts` the same way it already derives `GATED_SKILLS`, so
+> a new exemption registers itself the day it is written — and can only register BY writing the
+> justification. A dispatchable route whose skill is neither gated nor justified still fails hard.
+> The residual risk is unchanged and named in `skill.ts`: a `media-director` body edit activates
+> with no eval evidence. **This was invisible for a whole phase because `runLive()` never calls
+> `selfCheck()`** — the one check that stops a bad fixture before it costs a cent was itself
+> unrunnable. That is still true and is the next thing to fix here.
+> **(2) The route→skill ternary is gone.** `route === "research" ? "research-specialist" : route`
+> was a second copy of a mapping `SPECIALISTS[route].skillName` already carries, which is why the
+> failure named the route `media` rather than the real skill `media-director` and sent its reader
+> hunting a skill by that name that does not exist. It reads the registry now.
+> **(3) `datedFollowUpCount` joined the CLOSED `EXPECT_KEYS` vocabulary**, and fixture 36 asserts it.
+> `crmOperationCount` is a COUNT and cannot tell op TYPES apart, so 36 was passing on a staged
+> `addContact` while its prose described a dated follow-up. The new key counts `addFollowUp` ops
+> with a finite `dueAt`, is a SUBSET key the runner REFUSES without `crmOperationCount` (so it
+> cannot be satisfied alongside unrequested extras), and both halves are mutation-proven red-able
+> in `--self-check`. **Fixture 36 is now RED against the ACTIVE body** — `--only 36`, run
+> `309b1c3d`, $0.0142, `expected 1, got 0`, plan row read back at $0 holding one `addContact` and
+> no `dueAt`. A full gate is 34/35 until that is fixed. **The assertion was NOT weakened to restore
+> green.** **A full gate costs ~$0.35, not the ~$0.12–0.15 this file's history quotes.**)
+>
+> Previously verified: 2026-08-09 (Plan 19-09 — **GATE `086f8267`: 35/35, zero retries, $0.3505, on
 > `cockpit-agent@18`.** Evidence is recorded on the v18 row. **NOTHING WAS ACTIVATED —
 > `cockpit-agent@17` IS STILL ACTIVE**, so in production the model still cannot see
 > `stageCrmWrite`: the tool is registered, taught and certified, but not live.)
