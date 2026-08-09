@@ -21,5 +21,8 @@
     "noEmit": true
   },
   "include": ["./**/*"],
-  "exclude": ["./_generated"]
+  // Convex runs this project check while preparing a deployment. Tests are
+  // checked by the package-level tsconfig instead, so test-only edits must not
+  // invalidate an in-flight function push.
+  "exclude": ["./_generated", "./**/*.test.ts"]
 }
