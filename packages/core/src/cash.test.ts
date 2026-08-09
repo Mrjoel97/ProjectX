@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { TIERS } from "./businessProfile";
+import { FUNDING_STATES, TIERS } from "./businessProfile";
 import {
   activityFromSends,
   CASH_INPUTS,
@@ -589,7 +589,7 @@ describe("which metrics a tenant sees", () => {
   });
 
   test("ROAS is not a metric key anywhere", () => {
-    for (const tier of ["solopreneur", "startup", "sme", "enterprise"] as const) {
+    for (const tier of TIERS) {
       const set = metricSetFor(tier, "bootstrapped");
       expect(JSON.stringify(set).toLowerCase()).not.toContain("roas");
     }
@@ -601,8 +601,8 @@ describe("which metrics a tenant sees", () => {
   });
 
   test("every set's headline also appears in one of its rows, so the page never orphans it", () => {
-    for (const tier of ["solopreneur", "startup", "sme", "enterprise"] as const) {
-      for (const funding of ["bootstrapped", "seeking", "funded", null] as const) {
+    for (const tier of TIERS) {
+      for (const funding of [...FUNDING_STATES, null] as const) {
         const set = metricSetFor(tier, funding);
         const all = [...set.unitEconomics, ...set.solvency, ...set.activity];
         expect(all).toContain(set.headline);

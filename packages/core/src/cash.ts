@@ -839,23 +839,35 @@ const TIER_SETS = {
 >;
 
 /**
- * THE selection rule, and it has exactly one exception clause.
+ * THE headline-selection rule. It has TWO clauses, not one — spelled out plainly here because an
+ * earlier draft of this comment claimed "one rule, no exceptions" and the code disagreed with it.
  *
- * Capital posture decides the HEADLINE — the one segmentation axis the source material argues for:
- * without outside money, a customer paying for itself inside 30 days IS survival, so CFA leads;
- * with outside money (`funded` or `seeking` — see `hasOutsideMoney`), the constraint is the date
- * the money ends, so runway leads. The TIER decides the sets below it. When posture and tier
- * disagree, posture wins the headline and the tier keeps its rows — one rule, no per-cell
- * exceptions.
+ * Clause 1 — POSTURE decides WHETHER a survival metric or a unit-economics metric leads. Outside
+ * money (`funded` or `seeking` — see `hasOutsideMoney`) means the constraint is the date the money
+ * ends, so a survival metric leads (`runway`). No outside money (`bootstrapped`) means the live
+ * question is a unit-economics one — for most tiers, "does one customer pay for itself inside 30
+ * days" — so `cfa` leads.
  *
- * An `sme`/`enterprise` bootstrapped headline is `workingCapital`, not `cfa`: an established
- * business without outside money is not asking "does one customer pay for itself" the way a
- * solopreneur or startup is — its survival question is the cash conversion cycle. This still
- * follows the one rule: posture (`bootstrapped`, no outside money) selects between the tier's OWN
- * candidates, it never invents a metric the tier doesn't already carry.
+ * Clause 2 — among a BOOTSTRAPPED, ESTABLISHED tier's (`sme`/`enterprise`) own survival-vs-unit-
+ * economics choice, the TIER overrides clause 1's `cfa` answer with `workingCapital`: an
+ * established business's survival question is the cash conversion cycle, not one customer's 30-day
+ * payback. This never invents a metric the tier's own set doesn't already carry — it only picks
+ * `workingCapital` over `cfa` within the tier's rows — but it IS a second, tier-driven exception
+ * layered on top of clause 1, not a restatement of it. A bootstrapped `solopreneur`/`startup` still
+ * gets `cfa`, because they have no `workingCapital` row to prefer.
  *
- * When posture is unknown (`null`), the tier's `typicalHeadline` is the fallback — what its typical
- * posture would produce — so an incomplete profile still gets a sensible lead rather than a blank.
+ * All 16 cells this produces:
+ *   bootstrapped  → solopreneur/startup: `cfa`  ·  sme/enterprise: `workingCapital`
+ *   seeking/funded (outside money) → every tier: `runway`
+ *   null (unknown posture) → the tier's own `typicalHeadline` fallback, never a blank
+ *
+ * Clause 2 reads as posture-sensitive but is NEAR-VACUOUS for `sme` specifically: `deriveTier`
+ * (`businessProfile.ts`) only ever derives `sme` when `funding === "bootstrapped"`, so an SME tenant
+ * is bootstrapped by construction and this branch is "always `workingCapital`" for that tier in
+ * practice. Do not read that near-constancy as dead code and delete the clause — `enterprise` is
+ * operator-granted (D6) and can carry ANY funding value, which is where the clause actually varies:
+ * a bootstrapped enterprise gets `workingCapital`, while a funded or seeking one falls through to
+ * clause 1's `runway` like every other tier.
  */
 export function metricSetFor(tier: Tier, funding: Funding | null): CashMetricSet {
   const base = TIER_SETS[tier];

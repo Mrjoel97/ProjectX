@@ -1,14 +1,22 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-08-09 (Plan cash-business-finance Task 8 — `metricSetFor(tier, funding)` adds
-> `CashMetricKey`/`CashMetricSet`: which metrics a tenant sees, and which one leads. ONE rule, one
-> exception clause — capital posture (`hasOutsideMoney`: `funded` or `seeking`) decides the
-> HEADLINE, the tier's `TIER_SETS` table decides the rows below it, and when they disagree posture
-> wins the headline while the tier keeps its rows. `TIER_SETS` is a `satisfies Record<Tier, …>`
-> table (the `TIER_REASON` precedent), never a switch, so an added tier without an entry is a
-> compile error. A no-orphan-headline check prepends the headline into `solvency` when the tier's
-> own rows don't already carry it (fires for a bootstrapped `startup` leading with `cfa`). See the
-> "Cash — which metrics a tenant sees" section below.)
+> Last verified: 2026-08-09 (Plan cash-business-finance Task 8 REVIEW FIX — the headline-selection
+> rule's prose overstated itself as "one rule, no exceptions" when the code has TWO clauses: posture
+> decides whether a survival or unit-economics metric leads, and a SECOND, tier-driven clause then
+> overrides a bootstrapped `sme`/`enterprise`'s `cfa` answer with `workingCapital`. Code was already
+> correct (confirmed against the design spec's own SME headline and against `deriveTier`, which only
+> ever produces `sme` for a bootstrapped business); only the comment and this entry were wrong. Fixed
+> by rewriting `metricSetFor`'s JSDoc to state both clauses and all 16 tier×funding cells explicitly,
+> and noting clause 2 is near-vacuous for `sme` (bootstrapped by construction) but earns its keep on
+> `enterprise`, which is operator-granted and can carry any funding. See the "Cash — which metrics a
+> tenant sees" section below.)
+>
+> Prior: 2026-08-09 (Plan cash-business-finance Task 8 — `metricSetFor(tier, funding)` adds
+> `CashMetricKey`/`CashMetricSet`: which metrics a tenant sees, and which one leads. `TIER_SETS` is a
+> `satisfies Record<Tier, …>` table (the `TIER_REASON` precedent), never a switch, so an added tier
+> without an entry is a compile error. A no-orphan-headline check prepends the headline into
+> `solvency` when the tier's own rows don't already carry it (fires for a bootstrapped `startup`
+> leading with `cfa`).)
 >
 > Prior: 2026-08-09 (Plan cash-business-finance Task 7 REVIEW FIX — `revenueStage` deleted
 > from `solvency()`'s signature. It was threaded through as `Tier`'s natural pairing but never
@@ -394,20 +402,32 @@ for whom the constraint is the date the money ends.
 ### Cash — which metrics a tenant sees (Task 8)
 
 `metricSetFor(tier: Tier, funding: Funding | null): CashMetricSet` decides which `CashMetricKey`s
-render in each of the three rows, and which one is the HEADLINE. **One rule, exactly one exception
-clause: capital posture decides the headline, the tier decides the sets below it, and when they
-disagree posture wins the headline while the tier keeps its rows.** `hasOutsideMoney(funding)` is
-`funding === "funded" || funding === "seeking"` — `seeking` reads as outside money for the same
-reason `deriveTier` already groups it with `funded` (`businessProfile.ts`): a company raising
-watches the date the money ends exactly like a funded one does.
+render in each of the three rows, and which one is the HEADLINE. **The headline rule has TWO
+clauses, not one — an earlier draft of this playbook and the code's own comment claimed "one rule,
+no exceptions," and the code disagreed with its own comment (review-caught).** `hasOutsideMoney
+(funding)` is `funding === "funded" || funding === "seeking"` — `seeking` reads as outside money for
+the same reason `deriveTier` already groups it with `funded` (`businessProfile.ts`): a company
+raising watches the date the money ends exactly like a funded one does.
 
-- **Why posture, not tier, picks the headline.** It is the one segmentation axis the source
-  material argues for: without outside money, a customer paying for itself inside 30 days IS
-  survival, so CFA leads; with outside money the constraint is the date it ends, so runway leads.
-  An `sme`/`enterprise` tenant that is bootstrapped leads with `workingCapital` instead of `cfa` —
-  an established business's survival question is the cash conversion cycle, not one customer's
-  30-day payback — but this still resolves through the SAME rule: posture selects among the tier's
-  own candidates, it never invents a metric the tier's set doesn't already carry.
+- **Clause 1 — posture decides WHETHER a survival or a unit-economics metric leads.** Outside money
+  means the constraint is the date it ends, so `runway` (a survival metric) leads. No outside money
+  (`bootstrapped`) means the live question is a unit-economics one, so `cfa` leads.
+- **Clause 2 — for a bootstrapped, ESTABLISHED tier (`sme`/`enterprise`), the tier overrides clause
+  1's `cfa` with `workingCapital`.** An established business's survival question is the cash
+  conversion cycle, not one customer's 30-day payback. This is a genuine second exception layered on
+  top of clause 1, not a restatement of it: a bootstrapped `solopreneur`/`startup` still gets `cfa`,
+  because they have no `workingCapital` row to prefer it over. All 16 tier×funding cells: bootstrapped
+  → `cfa` for `solopreneur`/`startup`, `workingCapital` for `sme`/`enterprise`; `seeking`/`funded` →
+  `runway` for every tier; `funding: null` → the tier's own `typicalHeadline` fallback, never a
+  blank. Neither clause invents a metric a tier's own set doesn't already carry — clause 2 only
+  picks between two rows the tier already has.
+- **Clause 2 is near-vacuous for `sme` specifically, and that is expected, not dead code.**
+  `deriveTier` (`businessProfile.ts`) only ever derives `sme` when `funding === "bootstrapped"`, so
+  an SME tenant is bootstrapped by construction and this branch is "always `workingCapital`" for
+  that tier in practice. `enterprise` is the tier where the clause actually varies: it is
+  operator-granted (D6) and can carry any funding value, so a bootstrapped enterprise gets
+  `workingCapital` while a funded or seeking one falls through to clause 1's `runway` like every
+  other tier.
 - **`TIER_SETS` is a TABLE (`as const satisfies Record<Tier, …>`), deliberately not a switch or a
   ternary** — the `TIER_REASON` precedent (`businessProfile.ts:342`): a ternary is total by
   construction, so a tier added to the union without an entry here would silently inherit the
