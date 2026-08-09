@@ -1,6 +1,8 @@
 # Playbook: Contacts, CRM & follow-ups
 
-> Last verified: 2026-08-09 (Plan 19-02 — the person store, isolation assertion, audit key-set pin)
+> Last verified: 2026-08-09 (Plan 19-04 — the public unsubscribe route)
+>
+> Previously verified: 2026-08-09 (Plan 19-02 — the person store, isolation assertion, audit key-set pin)
 >
 > Previously verified: 2026-08-09 (a foreign lane's watch-gate bump over this file's in-progress
 > state — not a content review; superseded by the line above)
@@ -40,7 +42,9 @@ about them — and there was nowhere to record that someone had asked to stop be
   function by name, the runtime audit key-set assertion, and the no-opportunities structural scan.
   Its last two tests pin the EXPORT SETS, so a seventh public write added without an isolation
   test fails there rather than shipping unasserted.
-- `packages/backend/convex/http.ts` — the unsubscribe HTTP route. Landing in 19-04.
+- `packages/backend/convex/http.ts` — the two unsubscribe routes (19-04): the inert GET landing page
+  and the confirm-only POST, both on `pathPrefix: "/unsubscribe/"`. Invariants 9 and 10 below;
+  `cockpit.md` owns the file and carries the route-level entry.
 
 **Frontend**
 - `apps/web/app/(app)/dashboard/pipeline/` — the Pipeline page: four tiles, the contact table, the
@@ -172,7 +176,29 @@ different paths: `hmacHex(raw, "")` still yields a digest anyone can compute.)
 *Enforcement:* `contacts.test.ts` — "an UNSET UNSUBSCRIBE_SECRET returns null", which also asserts
 `suppressFromUnsubscribe` writes nothing.
 
-**9. The ACTOR decides gating, not the operation.**
+**9. A GET on `/unsubscribe/` writes NOTHING — the POST is the only mutating verb.**
+Corporate mail scanners and link prefetchers fire every URL in a message, so a GET-suppresses design
+silently unsubscribes people who never clicked; the confirm button is what stops the feature firing
+itself. The two routes live on `convex/http.ts` under `pathPrefix: "/unsubscribe/"` (Convex's router
+has no `*` glob) and return ONLY 200 or 404 — one bare 404 for every rejection, so a
+stale-but-well-formed token and a malformed one are indistinguishable from outside.
+*Enforcement:* `contacts.test.ts` — "GET with a VALID segment renders the address and writes
+NOTHING", which asserts the `suppressions` ROW COUNT before and after, not the response. That
+distinction is the whole test: a handler that suppressed and then returned the very same HTML passes
+a status-only check. Mutation-verified (adding the `runMutation` to the GET turns it red).
+
+**10. A replayed unsubscribe link is honoured, and that idempotency IS the abuse mitigation.**
+`suppressFromUnsubscribe` is an upsert that returns `ok: true` with `suppressed: 0` on a replay, and
+the route shows the same confirmation both times — the recipient's request WAS honoured. This is why
+the route carries **no rate limiter**: a valid segment requires the deployment secret, brute-forcing
+an HMAC-SHA-256 digest is infeasible, and a per-address ceiling is meaningless against an idempotent
+operation. Adding one would rate-limit only the people legitimately pressing the button.
+(`@convex-dev/rate-limiter` is already a pinned component if that ever stops being true.)
+*Enforcement:* `contacts.test.ts` — "POSTing the SAME segment twice is 200 twice and leaves exactly
+ONE row", which also pins `suppressedAt` as unchanged across the replay (invariant 2's fact of
+record).
+
+**11. The ACTOR decides gating, not the operation.**
 Agent-proposed writes — create, complete or cancel — ALWAYS stage through the plan gate. Direct
 user edits on the Pipeline page are ungated: a human marking their own follow-up done is not an
 agent act. Relatedly, the AGENT must always name a contact on a follow-up; contactless follow-ups

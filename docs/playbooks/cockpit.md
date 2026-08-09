@@ -11,6 +11,38 @@
 > passing on an empty scan. **Add the literal in the SAME commit as a new tool.** Prose in a schema
 > comment is not a guard; a test is.
 
+> Last verified: 2026-08-09 (Plan 19-04 — the public unsubscribe route — **`http.ts` gained a SIXTH
+> and SEVENTH route, and they are the first PUBLIC UNAUTHENTICATED ones in this file.**)
+> SCOPE: this entry covers `http.ts` alone, as changed by plan 19-04. No cockpit turn, tool, gate or
+> stored row changed; the send path that will mint these links lands in 19-05. Full detail lives in
+> `contacts-crm.md`.
+>
+> `GET /unsubscribe/<raw>.<hmac>` and `POST` on the same `pathPrefix`. Four things about it that are
+> decisions, not incidentals:
+>
+> 1. **The GET is inert by CONTRACT and the POST is the only mutating verb.** Corporate mail scanners
+>    and link prefetchers fire every URL in a message, so a GET-suppresses design silently
+>    unsubscribes people who never clicked. The confirm button is what stops the feature firing
+>    itself. `contacts.test.ts` proves inertness by counting `suppressions` rows before and after the
+>    GET — a status-only check passes on a handler that writes and returns the same HTML.
+> 2. **It lives here and not in `apps/web`.** `apps/web/middleware.ts` is default-deny (`isPublic` =
+>    `/`, `/privacy`, `/terms`, `/signin`, `/signup`), so a public page there costs a
+>    security-sensitive matcher edit PLUS a bearer-secret hop back into Convex to write the
+>    suppression. The Convex site origin is untouched by that middleware — the same reason the fal
+>    webhook works. The page is therefore inline-styled from the BRAND §2 hex values, with a
+>    `ponytail:` note naming that trade as the upgrade path.
+> 3. **`pathPrefix`, not `path`** — Convex's router has no `*` glob, so `path: "/unsubscribe/*"`
+>    matches nothing at all. The 20-06 lesson, now on its third route.
+> 4. **`UNSUBSCRIBE_SECRET` is its own deployment secret, SEPARATE from
+>    `GOOGLE_OAUTH_CLIENT_SECRET`.** A link that lives forever in a recipient's inbox must not share
+>    the OAuth signing key. There is deliberately **no env guard at this route**: `verifyUnsubToken`
+>    in `contacts.ts` holds the single fail-closed check and a second copy here would make that one
+>    vacuous (`contacts-crm.md` invariant 8). Same reasoning rejects a rate limiter — the operation
+>    is an idempotent upsert behind an HMAC-SHA-256 digest.
+>
+> Only 200 and 404 leave the route; a stale-but-well-formed token and a malformed one are
+> indistinguishable from outside.
+
 > Last verified: 2026-08-09 (Phase 26 Plan 10 — **the watched `apps/web/e2e/` path gained
 > `finance.spec.ts`, and the Finance rail item went LIVE on owner direction; no cockpit behaviour,
 > tool, gate or stored row changed.**) The Cost Console route is `/dashboard/finance` and its nav
