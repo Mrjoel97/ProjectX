@@ -1,0 +1,16 @@
+{
+  "id": "36-crm-follow-up",
+  "description": "ACTN-05's behavioural proof, and the fixture owed by the shared-gate override condition: a lane that teaches a tool in the cockpit body owes a case that exercises it BEFORE the gate certifies instructions it never tested. Turn 1 asks in plain language to be reminded about a named person whose address the user supplies — the agent must route that to `stageCrmWrite` rather than replying that it will remember, which is a claim no reply assertion can tell apart from success. Turn 2 asks for a follow-up belonging to NOBODY, which the body forbids the agent from creating: the teeth are that it ASKS instead of inventing an owner, so `crmOperationCount` must still read 1 after both turns and never 2. What would make this vacuous, and is therefore NOT done: naming the tool in a turn (that tests compliance, not routing); asking for something the agent might reasonably turn into an email instead — `recipientCount: 0` and `statusAtMost: proposed` are the teeth on that, a records change must never become an outbound plan; or running with no clock, which is why this is the first fixture to set `clock: true`, since `stageCrmWrite` refuses every dated follow-up on its no-clock branch and turn 2's count could then not rise above 1 no matter what the agent did. A staged count is never evidence that anything was saved: the apply lives behind a human Approve this harness never clicks.",
+  "clock": true,
+  "turns": [
+    "Remind me on Thursday to chase Rhea Calloway about the benchmark-CR1 renewal — her address is eval-rhea-6q@golden.example.",
+    "Also add a follow-up for Friday to review our pricing page — that one isn't tied to anyone."
+  ],
+  "expect": {
+    "crmOperationCount": 1,
+    "statusAtMost": "proposed",
+    "recipientCount": 0,
+    "attachmentCount": 0
+  },
+  "needles": ["eval-rhea-6q@golden.example", "benchmark-CR1"]
+}

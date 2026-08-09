@@ -192,6 +192,18 @@ const EXPECT_KEYS = new Set([
   // asserting 1 therefore proves the tool ran AND that `replace` revised instead of duplicating —
   // the locked revision semantic, which has no code branch to test offline.
   "createdDocCount",
+  // Phase 19 (ACTN-05): `crmOperationCount` — how many changes to the user's OWN records
+  // `stageCrmWrite` staged on this thread. Graded off `plan.crmOperations`, the content-plane field
+  // 19-06 put on the plan row, exactly like `attachmentCount` and `recipientCount`.
+  // Deliberately NOT a `smoke:` read: `createdDocCount` needs its own query only because a created
+  // document lives in `vaultSources` and never touches the plan, whereas a STAGED crm operation IS
+  // the plan row — a smoke op would fetch the row `plans:getById` already returned. Still a $0
+  // observable: no model call, no extra hop.
+  // The failure it exists to catch is the agent replying "I've saved them to your contacts" while
+  // never calling the tool, which no reply assertion can tell apart from success. And because
+  // `stageCrmWrite` STAGES only, a non-zero count is never evidence that anything was written:
+  // the apply happens behind a human Approve the harness never clicks.
+  "crmOperationCount",
   // 15-06 (DISP-01): the dispatched-specialist observables. They are only meaningful on a fixture
   // that also carries `actOnGap` — validateFixture enforces the pairing, because all three read a
   // plan row that a non-dispatching case never stages.
@@ -281,6 +293,24 @@ function validateFixture(fx, source) {
   ) {
     fail("expect.createdDocCount must be an integer >= 1 (a zero count is vacuous)");
   }
+  // Phase 19 (ACTN-05): the same anti-vacuity rule, for the same reason. `crmOperationCount: 0`
+  // passes on all 34 fixtures that never mention a contact, so it asserts nothing. A fixture that
+  // means "the agent must NOT stage a record change" needs its own key, not a zero that reads as
+  // absent — fixture 36's second turn gets that property from the count staying at 1 instead.
+  if (
+    fx.expect.crmOperationCount !== undefined &&
+    (!Number.isInteger(fx.expect.crmOperationCount) || fx.expect.crmOperationCount < 1)
+  ) {
+    fail("expect.crmOperationCount must be an integer >= 1 (a zero count is vacuous)");
+  }
+  // Phase 19 (ACTN-05): `clock: true` gives ONE fixture a `clientContext` (tz + nowMs) — which
+  // every production driver always supplies and this harness never has. OPT-IN, so all 34 certified
+  // fixtures keep sending a byte-identical request and nothing about the gate they passed moves.
+  // It is required, not cosmetic: `stageCrmWrite` returns its `no_clock` refusal for ANY dated
+  // follow-up when `clientContext` is absent (llm.ts — the proposeCalendarEvent rule), so without a
+  // clock a follow-up fixture measures the missing clock rather than the body, and its second turn
+  // could not rise above 1 no matter what the agent did. That is the definition of vacuous.
+  if (fx.clock !== undefined && fx.clock !== true) fail("clock must be true when present");
   if (
     fx.expect.attributionRoute !== undefined &&
     !SPECIALIST_ROUTES.includes(fx.expect.attributionRoute)
@@ -500,6 +530,11 @@ function evaluateExpect(
       case "createdDocCount":
         if (createdDocCount !== expected) miss(key, expected, createdDocCount);
         break;
+      case "crmOperationCount":
+        // Plan-row key (19-06's `plans.crmOperations`), graded like `attachmentCount`.
+        if ((plan.crmOperations ?? []).length !== expected)
+          miss(key, expected, (plan.crmOperations ?? []).length);
+        break;
       case "planKind":
         if (plan.kind !== expected) miss(key, expected, plan.kind ?? "absent");
         break;
@@ -548,7 +583,9 @@ function selfCheck() {
   // Floor bumped 18 → 27 (the two BEVL-01 assessment fixtures) → 30 (the three DISP-01
   // gap→tap→dispatch fixtures) → 33 (the three Phase-16 research fixtures). The floor is a deletion
   // tripwire: a fixture quietly dropped must not quietly shrink the gate. 34 adds 18-08's createDocument case (ACTN-04).
-  assert.ok(fixtures.length >= 34, `expected >= 34 fixtures, found ${fixtures.length}`);
+  // 35 adds 19-09's crm-follow-up case (ACTN-05) — the fixture owed by the shared-gate override
+  // condition: a lane that teaches a tool in the body owes a case that exercises it.
+  assert.ok(fixtures.length >= 35, `expected >= 35 fixtures, found ${fixtures.length}`);
   const ids = new Set(fixtures.map((f) => f.id));
   assert.equal(ids.size, fixtures.length, "fixture ids must be unique");
 
@@ -804,6 +841,48 @@ function selfCheck() {
     "createdDocCount:1 MUST FAIL when a `replace` appended a second document instead of revising",
   );
 
+  // 2g. Phase 19 (ACTN-05): `crmOperationCount` is in the vocabulary, is graded off the PLAN ROW
+  // (`plans.crmOperations`, 19-06) rather than a smoke read, and rejects the vacuous zero. This
+  // block IS the $0 observable's check — it runs with zero convex calls and zero model calls.
+  const staged = (n) => ({
+    status: "collecting",
+    crmOperations: Array.from({ length: n }, () => ({ op: "addFollowUp" })),
+  });
+  assert.ok(
+    validateFixture({ ...base, expect: { crmOperationCount: 1 } }, "<synthetic>"),
+    "crmOperationCount must be an accepted expect key",
+  );
+  assert.throws(
+    () => validateFixture({ ...base, expect: { crmOperationCount: 0 } }, "<synthetic>"),
+    /integer >= 1/,
+    "a zero crm-operation count passes on every fixture in the set and asserts nothing",
+  );
+  assert.ok(validateFixture({ ...base, clock: true }, "<synthetic>"), "clock:true is accepted");
+  assert.throws(
+    () => validateFixture({ ...base, clock: "yes" }, "<synthetic>"),
+    /clock must be true/,
+    "a non-true clock must be rejected before the first spawn",
+  );
+  assert.equal(
+    evaluateExpect({ crmOperationCount: 1 }, staged(1)).length,
+    0,
+    "crmOperationCount:1 passes when the plan really carries one staged record change",
+  );
+  // The load-bearing negative: the agent said "I've saved them to your contacts" and never called
+  // the tool. No reply assertion can tell that apart from success.
+  assert.equal(
+    evaluateExpect({ crmOperationCount: 1 }, staged(0)).length,
+    1,
+    "crmOperationCount:1 MUST FAIL when stageCrmWrite never ran (a prose-only claim)",
+  );
+  // And the follow-up brake: a second turn naming nobody must ASK, not invent an owner. An agent
+  // that staged one anyway reads 2 and fails here — which is the whole point of fixture 36's turn 2.
+  assert.equal(
+    evaluateExpect({ crmOperationCount: 1 }, staged(2)).length,
+    1,
+    "crmOperationCount:1 MUST FAIL when a contactless follow-up was invented instead of asked about",
+  );
+
   // 3. Cost summation + cap logic on synthetic per-turn costs.
   // 16-09: stated as FRACTIONS OF THE CAP, never literal dollars. These previously hardcoded
   // $1.10/$1.00, which asserted the cap's VALUE rather than its LOGIC — so raising COST_CAP_USD
@@ -948,7 +1027,11 @@ function selfCheck() {
   );
   assert.deepEqual(
     SPECIALIST_ROUTES,
-    ["offer-architect", "money-model-designer", "lead-engine", "research"],
+    // 19-09: `media` added. This snapshot went STALE when Phase 20 registered the media route, and
+    // the whole `--self-check` gate has been red on main ever since — invisibly, because `runLive`
+    // never calls `selfCheck()`, so the one check that stops a bad fixture BEFORE it costs a cent
+    // was itself unrunnable. Re-snapshot here when a route is added; that is the drift signal.
+    ["offer-architect", "money-model-designer", "lead-engine", "research", "media"],
     "all dispatchable routes, including research, are read off the core registry",
   );
   for (const route of SPECIALIST_ROUTES) {
@@ -1131,6 +1214,12 @@ function attemptCase(fixture, tenant, pins) {
         // failure was invisible because the arg is optional and its documented effect ("undefined
         // ⇒ the loop emits nothing") sounds harmless. Per TURN, like production — not per case.
         turnId: randomUUID(),
+        // Phase 19 (ACTN-05): the OPT-IN clock. Spread away entirely unless the fixture sets
+        // `clock: true`, so every pre-19 case's request is byte-identical to the one that passed
+        // the last gate. `nowMs` is the real clock, not a pinned instant: "tomorrow" and a weekday
+        // name must resolve FORWARD (parseSendTime returns `past` otherwise), and the assertion is
+        // a COUNT, so nothing here depends on which instant it lands on.
+        ...(fixture.clock ? { clientContext: { tz: "UTC", nowMs: Date.now() } } : {}),
         ...(history.length ? { history } : {}),
         ...(pins.length ? { skillVersions: skillVersionsOf(pins) } : {}),
       }),
