@@ -1804,6 +1804,23 @@ retrieval document. Those tests are intended to fail if anyone later "simplifies
 back into the parallel arrays; the required mutation proof moves it there temporarily and confirms
 that the no-match, count, budget, full-object shape, and array-invariance guards all turn red.
 
+### 17.1-10 — live gate, Task 1 (L5 and prerequisites)
+
+**Live deployment checked 2026-08-09:** `local-joel_feruzi-pikar_ai_50c69-1`. Running
+`skills:seedSkills` and then reading the active row back — rather than trusting the seed report —
+proved that **`business-blueprint@1` is ACTIVE**. The live body SHA-256 is
+`0a1ecdd5c65b22c0a3ae4bc511fc9900e9567150beeef55d8ec04547220e4aa2`, exactly equal to the
+LF-normalized canonical `packages/contracts/skills/business-blueprint.md`; the read-back also
+contained the distinctive citation-contract line *"A source index that does not exist causes the
+whole claim to be DROPPED."*
+
+The owner/live tenant has a `tenantProfiles` row (`tier: solopreneur`), **25 `ready` Vault
+documents**, and one existing `business_blueprint` Vault row. The synthesis refusal for a missing
+tier/profile row therefore does not block this gate. Offline immediately before the seed: core
+**697/697**, contracts **27/27**, backend full suite **exit 0**, backend typecheck **exit 0**, and web
+typecheck **exit 0**. The repository-wide playbook checker was temporarily blocked only by
+uncommitted Phase 19/Approvals files owned by concurrent lanes; no foreign playbook was modified.
+
 ## Phase 15.3 — vault folders
 
 One container section for the phase. Each plan appends ONLY its own `### 15.3-0N` subsection
