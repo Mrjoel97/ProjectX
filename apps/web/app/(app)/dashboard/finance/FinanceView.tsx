@@ -217,12 +217,34 @@ const STATE_COPY = {
   partial:
     "More rows exist than this bounded page shows. Totals here are a floor, not the period's spend.",
   unknown: "This period is Unknown.",
+  clamped: "Showing only the period cost tracking covers.",
   busy: "Applying…",
   error: "Couldn’t load cost. Retry when the connection is ready.",
   refusal: "That control is not available to this account. Nothing changed.",
 } as const;
 
 export type FinanceState = keyof typeof STATE_COPY;
+
+/**
+ * The window was shortened to where instrumentation begins, and this says so.
+ *
+ * Found by the 26-10 UAT: a fixed 30-day window over a tenant covered since yesterday made
+ * `aggregateSpend` return `unknown` for the WHOLE period — so the totals read "Unknown" while the
+ * per-day series directly beneath them showed real money on a covered day. One uncovered day at the
+ * start suppressed every day we did observe, for a month after any tenant starts.
+ *
+ * Clamping is only safe because it is ANNOUNCED. A silent clamp reports a confident total for a
+ * narrower period than the reader asked for, which is the failure the coverage field exists to
+ * prevent. A tenant with NO coverage at all is never clamped — that stays the full Unknown state.
+ */
+export function CoverageClampNotice({ startedAt }: { startedAt: number }) {
+  return (
+    <FinanceStateNotice state="clamped">
+      Showing since <strong>{formatUtcDay(startedAt)}</strong>, when cost tracking began. Earlier
+      days are Unknown rather than zero, and cannot be reconstructed.
+    </FinanceStateNotice>
+  );
+}
 
 /** One accessible, screen-reader-announced notice per page state. */
 export function FinanceStateNotice({
@@ -758,10 +780,30 @@ export function BudgetControl({
 
 // ── connected sections ────────────────────────────────────────────────────────────────
 
-function useReportWindow() {
+type ReportWindow = {
+  window: { sinceMs: number; untilMs: number; browserTimeZone: string };
+  /** Non-null when the window was shortened to the coverage start — the page MUST announce it. */
+  clampedTo: number | null;
+  ready: boolean;
+};
+
+/**
+ * The reported window, shortened to where instrumentation begins.
+ *
+ * `finance.coverage` is read FIRST so the window can be sized before any total is requested. The
+ * alternative — ask for 30 days, learn the period predates coverage, and blank every figure — is
+ * what the 26-10 UAT found on a real tenant: "Unknown" above a table showing $1.52 on a covered
+ * day. One uncovered day must not suppress the days we did observe.
+ *
+ * Two cases are deliberately NOT clamped. A tenant with no coverage row keeps the full Unknown
+ * state, because there is genuinely nothing to show. And a coverage start at or after `untilMs`
+ * leaves the window alone rather than inverting it — `resolveDashboardWindow` would throw, and a
+ * crash is a worse answer than Unknown.
+ */
+function useReportWindow(): ReportWindow {
   // Frozen once per mount: a window that slides on every render would make each subscription a new
   // query and the totals would flicker against a moving boundary.
-  return useMemo(() => {
+  const base = useMemo(() => {
     const untilMs = Date.now();
     return {
       sinceMs: untilMs - WINDOW_DAYS * DAY_MS,
@@ -769,10 +811,21 @@ function useReportWindow() {
       browserTimeZone: browserTimeZone(),
     };
   }, []);
+  const coverage = useQuery(api.finance.coverage, {});
+  if (coverage === undefined) return { window: base, clampedTo: null, ready: false };
+  const startedAt = coverage.coverageStartedAt;
+  const clamp = startedAt !== null && startedAt > base.sinceMs && startedAt < base.untilMs;
+  return {
+    window: clamp ? { ...base, sinceMs: startedAt as number } : base,
+    clampedTo: clamp ? (startedAt as number) : null,
+    ready: true,
+  };
 }
 
-function RailsSection({ window }: { window: ReturnType<typeof useReportWindow> }) {
-  const summary = useQuery(api.finance.summary, window);
+function RailsSection({ report }: { report: ReportWindow }) {
+  // The rails are limiter state and do not depend on the window, but `summary` carries both — so
+  // this waits for the resolved window rather than firing a second subscription on a throwaway one.
+  const summary = useQuery(api.finance.summary, report.ready ? report.window : "skip");
   return (
     <section style={stack} aria-labelledby="rails-heading">
       <h2 id="rails-heading" style={cardTitle}>
@@ -795,9 +848,10 @@ function RailsSection({ window }: { window: ReturnType<typeof useReportWindow> }
   );
 }
 
-function TrackedSection({ window }: { window: ReturnType<typeof useReportWindow> }) {
-  const summary = useQuery(api.finance.summary, window);
-  const series = useQuery(api.finance.spendSeries, window);
+function TrackedSection({ report }: { report: ReportWindow }) {
+  const args = report.ready ? report.window : "skip";
+  const summary = useQuery(api.finance.summary, args);
+  const series = useQuery(api.finance.spendSeries, args);
   return (
     <section style={stack} aria-labelledby="tracked-heading">
       <h2 id="tracked-heading" style={cardTitle}>
@@ -807,6 +861,7 @@ function TrackedSection({ window }: { window: ReturnType<typeof useReportWindow>
         Recorded history from the spend ledger. This is a different plane from the rails above: it
         says what happened, not what is allowed next.
       </p>
+      {report.clampedTo === null ? null : <CoverageClampNotice startedAt={report.clampedTo} />}
       <div style={card}>
         {summary === undefined ? (
           <FinanceStateNotice state="loading" />
@@ -832,13 +887,18 @@ function TrackedSection({ window }: { window: ReturnType<typeof useReportWindow>
   );
 }
 
-function LedgerSection({ window }: { window: ReturnType<typeof useReportWindow> }) {
+function LedgerSection({ report }: { report: ReportWindow }) {
   const [cursor, setCursor] = useState<string | null>(null);
-  const page = useQuery(api.finance.mediaLedger, {
-    sinceMs: window.sinceMs,
-    untilMs: window.untilMs,
-    paginationOpts: { numItems: LEDGER_PAGE_SIZE, cursor },
-  });
+  const page = useQuery(
+    api.finance.mediaLedger,
+    report.ready
+      ? {
+          sinceMs: report.window.sinceMs,
+          untilMs: report.window.untilMs,
+          paginationOpts: { numItems: LEDGER_PAGE_SIZE, cursor },
+        }
+      : "skip",
+  );
   return (
     <section style={stack} aria-labelledby="ledger-heading">
       <h2 id="ledger-heading" style={cardTitle}>
@@ -928,7 +988,7 @@ function ConnectedDeployment() {
 }
 
 function ConnectedFinance() {
-  const window = useReportWindow();
+  const report = useReportWindow();
   return (
     <div style={{ display: "grid", gap: "1.75rem", padding: "1.5rem 0" }}>
       <header style={stack}>
@@ -949,9 +1009,9 @@ function ConnectedFinance() {
           — it has no revenue, invoice or cash data, and it never estimates any.
         </p>
       </header>
-      <RailsSection window={window} />
-      <TrackedSection window={window} />
-      <LedgerSection window={window} />
+      <RailsSection report={report} />
+      <TrackedSection report={report} />
+      <LedgerSection report={report} />
       <ConnectedDeployment />
     </div>
   );

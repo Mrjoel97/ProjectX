@@ -129,6 +129,26 @@ const windowArgs = {
 };
 
 /**
+ * Just the coverage start, so a page can SIZE ITS WINDOW before asking for totals.
+ *
+ * Without this a console has to guess a window, discover from the answer that it began before
+ * instrumentation, and then either re-ask or blank every real figure it already has. The 26-10 UAT
+ * hit the second: a fixed 30-day window over a tenant covered since yesterday reported the whole
+ * period `unknown` while the per-day series underneath it showed real money on a covered day. One
+ * uncovered day at the start must not suppress the days we did observe.
+ *
+ * A caller that clamps its window to this value MUST say so on the page. The unclamped path stays
+ * the default and stays correct: `aggregateSpend` still answers `unknown` for a window that really
+ * does reach back before coverage, and a tenant with no coverage row at all still gets
+ * `not-started`. What is forbidden is a SILENT clamp, which reports a confident total for a
+ * narrower period than the one the reader asked for.
+ */
+export const coverage = tenantQuery({
+  args: {},
+  handler: async (ctx) => ({ coverageStartedAt: await coverageFor(ctx, ctx.tenantId) }),
+});
+
+/**
  * Live personal rails + the tracked history for one window.
  *
  * The two halves are returned SEPARATELY and are never combined: `rails` is what the limiter will

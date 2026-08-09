@@ -349,6 +349,17 @@ boundary, per-section `useQuery` so a ledger failure cannot erase the live rails
   renders NO currency mark at all (a zero is indistinguishable from a watched-and-empty period);
   media's `unlanded` gets different copy from the other two rails (`unlandedResolves.media` is
   `false`, so it is permanent, not pending); and `bound.partial` says the totals are a FLOOR.
+- **The window is clamped to the coverage start, and the clamp ANNOUNCES ITSELF.** `finance.coverage`
+  is read first so the page can size its window before asking for totals. Found by the 26-10 UAT on
+  a real tenant: a fixed 30-day window over a workspace covered since the previous day made
+  `aggregateSpend` return `unknown` for the whole period, so the totals read "Unknown" while the
+  per-day series directly beneath them showed **$1.52** on a covered day — self-contradictory, and it
+  suppressed every real figure for a month after any tenant starts. `CoverageClampNotice` names the
+  truncation ("Showing since 8 Aug 2026, when cost tracking began"). **A SILENT clamp is still
+  forbidden** — that reports a confident total for a narrower period than the reader asked for,
+  which is the failure the coverage field exists to prevent. Two cases are deliberately not clamped:
+  a tenant with no coverage row keeps the full Unknown state, and a coverage start at or after
+  `untilMs` is left alone rather than inverting the window into a `resolveDashboardWindow` throw.
 - **`requiresConfirmation` is honoured as a backend fact.** Each control arms, then commits, and the
   confirm step is in-component — never `window.confirm`, which blocks the page and cannot be driven
   by the spec that has to prove the boundary.

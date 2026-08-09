@@ -11,11 +11,13 @@ import { describe, expect, test } from "vitest";
 import {
   BudgetControl,
   ControlRow,
+  CoverageClampNotice,
   coverageCopy,
   DeploymentSection,
   FinanceStateNotice,
   formatUsd,
   formatUsdCents,
+  formatUtcDay,
   MediaLedgerTable,
   RailTile,
   SpendSeriesTable,
@@ -101,6 +103,24 @@ describe("unknown history is never a number", () => {
     expect(html).not.toContain("$");
     expect(html).toContain("Unknown");
     expect(html).toContain("cannot be reconstructed");
+  });
+
+  test("a shortened window NAMES its own truncation", () => {
+    // Found by the 26-10 UAT: a fixed 30-day window over a tenant covered since yesterday reported
+    // the whole period Unknown while the series below it showed real money on a covered day. The
+    // page now clamps to the coverage start — which is only honest because it says so. A clamp that
+    // renders nothing is the silent-narrower-window failure the coverage field exists to prevent.
+    const startedAt = Date.UTC(2026, 7, 8);
+    const html = render(CoverageClampNotice, { startedAt });
+    expect(html).toContain("Showing since");
+    // Via the same formatter, not a hardcoded string: Node's default locale renders "8 Aug 2026"
+    // where the browser renders "Aug 8, 2026", and pinning either one makes this fail on a machine
+    // whose locale differs rather than on a real regression.
+    expect(html).toContain(formatUtcDay(startedAt));
+    expect(html).toContain("when cost tracking began");
+    expect(html).toContain("cannot be reconstructed");
+    expect(html).toContain('role="status"');
+    expect(html).toContain('data-finance-state="clamped"');
   });
 
   test("a covered but empty window DOES state a confident zero", () => {
