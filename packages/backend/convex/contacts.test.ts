@@ -727,3 +727,140 @@ describe("PIPE-01/BETA-05: the public surface is exactly what the isolation bloc
     ]);
   });
 });
+
+// ── The public /unsubscribe/ route (plan 19-04, VALIDATION row 18) ────────────────────────────
+//
+// Driven through `convex-test`'s HTTP surface — the SAME shape `media.test.ts` uses for the fal
+// webhook, so these exercise the real router, the real path split and the real handlers.
+
+const unsubPath = (raw: string, digest: string) => `/unsubscribe/${raw}.${digest}`;
+
+describe("PIPE-01: the /unsubscribe/ route — the GET is inert, the POST is the only mutating verb", () => {
+  test("GET with a VALID segment renders the address and writes NOTHING", async () => {
+    vi.stubEnv("UNSUBSCRIBE_SECRET", SECRET);
+    const h = await harness();
+    const { raw, digest } = await signed(h.tenantA, "Bob@X.com");
+    expect(await suppressionRows(h)).toHaveLength(0);
+
+    const res = await h.t.fetch(unsubPath(raw, digest), { method: "GET" });
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    // The recipient must be able to see WHICH mailbox they are unsubscribing.
+    expect(body).toContain("bob@x.com");
+    // …and the confirm control that makes the write explicit.
+    expect(body).toContain('method="POST"');
+
+    // THE assertion of this whole file's row 18: count the rows, do not read the response. A
+    // handler that suppressed and then returned the very same HTML passes a status-only check.
+    // Mail scanners and link prefetchers fire GETs; this is what keeps them harmless.
+    expect(await suppressionRows(h)).toHaveLength(0);
+  });
+
+  test("GET with a TAMPERED digest 404s", async () => {
+    vi.stubEnv("UNSUBSCRIBE_SECRET", SECRET);
+    const h = await harness();
+    const { raw, digest } = await signed(h.tenantA, "a@x.com");
+
+    const res = await h.t.fetch(unsubPath(raw, `${digest.slice(0, -1)}0`), { method: "GET" });
+    expect(res.status).toBe(404);
+    expect(await suppressionRows(h)).toHaveLength(0);
+  });
+
+  test("GET with NO dot in the segment 404s", async () => {
+    vi.stubEnv("UNSUBSCRIBE_SECRET", SECRET);
+    const h = await harness();
+
+    expect((await h.t.fetch("/unsubscribe/nodothere", { method: "GET" })).status).toBe(404);
+    // A leading dot is `dot <= 0`, not a zero-length raw that happens to verify.
+    expect((await h.t.fetch("/unsubscribe/.abc", { method: "GET" })).status).toBe(404);
+  });
+
+  test("an UNSET UNSUBSCRIBE_SECRET 404s a previously-valid segment on BOTH verbs", async () => {
+    const h = await harness();
+    vi.stubEnv("UNSUBSCRIBE_SECRET", SECRET);
+    const { raw, digest } = await signed(h.tenantA, "a@x.com");
+    try {
+      vi.stubEnv("UNSUBSCRIBE_SECRET", "");
+      const path = unsubPath(raw, digest);
+      expect((await h.t.fetch(path, { method: "GET" })).status).toBe(404);
+      expect((await h.t.fetch(path, { method: "POST" })).status).toBe(404);
+      expect(await suppressionRows(h)).toHaveLength(0);
+    } finally {
+      // Restore so an unset secret cannot leak into a neighbouring test and pass it vacuously.
+      vi.stubEnv("UNSUBSCRIBE_SECRET", SECRET);
+    }
+  });
+
+  test("POST with a valid segment suppresses exactly ONE address", async () => {
+    vi.stubEnv("UNSUBSCRIBE_SECRET", SECRET);
+    const h = await harness();
+    const { raw, digest } = await signed(h.tenantA, "Bob@X.com");
+
+    const res = await h.t.fetch(unsubPath(raw, digest), { method: "POST" });
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("bob@x.com");
+
+    const rows = await suppressionRows(h);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.address).toBe("bob@x.com");
+    expect(rows[0]?.tenantId).toBe(h.tenantA);
+    expect(rows[0]?.source).toBe("unsubscribe-link");
+  });
+
+  test("POSTing the SAME segment twice is 200 twice and leaves exactly ONE row", async () => {
+    vi.stubEnv("UNSUBSCRIBE_SECRET", SECRET);
+    const h = await harness();
+    const { raw, digest } = await signed(h.tenantA, "a@x.com");
+    const path = unsubPath(raw, digest);
+
+    expect((await h.t.fetch(path, { method: "POST" })).status).toBe(200);
+    const first = (await suppressionRows(h))[0];
+    // A replay is honoured, not refused — that idempotency IS the abuse mitigation, which is why
+    // this route carries no rate limiter.
+    expect((await h.t.fetch(path, { method: "POST" })).status).toBe(200);
+
+    const rows = await suppressionRows(h);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.suppressedAt).toBe(first?.suppressedAt);
+  });
+
+  test("POST for a GROUP token suppresses every decoded member, normalized", async () => {
+    vi.stubEnv("UNSUBSCRIBE_SECRET", SECRET);
+    const h = await harness();
+    const { raw, digest } = await signed(h.tenantA, "A@x.com, b@x.com");
+
+    const res = await h.t.fetch(unsubPath(raw, digest), { method: "POST" });
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toContain("a@x.com");
+    expect(body).toContain("b@x.com");
+
+    const rows = await suppressionRows(h);
+    expect(rows.map((r) => r.address).sort()).toEqual(["a@x.com", "b@x.com"]);
+    expect(rows.every((r) => r.tenantId === h.tenantA)).toBe(true);
+  });
+
+  test("a token minted for tenant A cannot be aimed at tenant B", async () => {
+    vi.stubEnv("UNSUBSCRIBE_SECRET", SECRET);
+    const h = await harness();
+    const a = await signed(h.tenantA, "a@x.com");
+    const b = await signed(h.tenantB, "a@x.com");
+
+    // The tenant is INSIDE the signed payload, so swapping it means re-signing. Keeping A's digest
+    // over B's payload is a mismatch…
+    expect((await h.t.fetch(unsubPath(b.raw, a.digest), { method: "POST" })).status).toBe(404);
+    // …and re-signing without the deployment secret is a forgery.
+    const forged = await signed(h.tenantB, "a@x.com", "not-the-secret");
+    expect((await h.t.fetch(unsubPath(forged.raw, forged.digest), { method: "POST" })).status).toBe(
+      404,
+    );
+    expect(await suppressionRows(h)).toHaveLength(0);
+
+    // The complement, so the claim above is not vacuous: the write lands under the tenant the
+    // signed payload names, and nowhere else.
+    expect((await h.t.fetch(unsubPath(b.raw, b.digest), { method: "POST" })).status).toBe(200);
+    const rows = await suppressionRows(h);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.tenantId).toBe(h.tenantB);
+  });
+});
