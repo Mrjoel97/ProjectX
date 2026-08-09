@@ -2,15 +2,17 @@
 
 Out-of-scope discoveries. Logged, NOT fixed (executor scope boundary).
 
-> **RESOLUTION PASS — 2026-08-10, plan 19-10.** The owner directed that all three open items be
-> folded into 19-10 rather than carried out of the phase. **All three are now closed** — outcomes
-> are recorded inline under each item below. Nothing here is left as an undated note.
+> **RESOLUTION PASS — 2026-08-10, plans 19-10 and 19-11.** The owner directed that every open item
+> be folded into the phase rather than carried out of it. **All four are now closed** — outcomes are
+> recorded inline under each item below. Nothing here is left as an undated note.
 >
 > | # | Item | Outcome |
 > |---|---|---|
-> | 1 | `eval:golden --self-check` red on `main` since Phase 20 | **RESOLVED** — green again; exemption DERIVED from `skill.ts` |
+> | 1 | `eval:golden --self-check` red on `main` since Phase 20 | **RESOLVED** — green again; exemption DERIVED from `skill.ts`. Two residual risks named in-place under the item. |
 > | 2 | `run-eval-golden.mjs --list` does not exist | **RESOLVED** — corrected in the playbook and in `19-VALIDATION.md`; root cause turned out to be broader than this one flag |
-> | 3 | `STATE.md`'s `stopped_at` holds unescaped `"` | **RESOLVED** — fixed in commit `12bde78` before this plan started; a parse assertion now runs |
+> | 3 | `STATE.md`'s `stopped_at` holds unescaped `"` | **RESOLVED** — fixed in commit `12bde78`; a parse assertion now runs |
+> | 4 | a follow-up could name a FABRICATED address (`no-email`) | **RESOLVED (19-11)** — `parseCrmOperations` reuses the send path's `isValidEmail`; fixture 36 re-verified green for the right reason at $0.0057 |
+
 
 ## 1. `eval:golden --self-check` has been RED on `main` since Phase 20 — the offline gate was unrunnable
 
@@ -138,11 +140,11 @@ and avoid raw double quotes entirely.** 19-10 verified the block parses after it
 
 ---
 
-## 19-11 — a follow-up can name a FABRICATED address (`no-email`). OPEN, pre-existing.
+## 4. A follow-up could name a FABRICATED address (`no-email`). **RESOLVED 2026-08-10 (19-11).**
 
-`parseCrmOperations` (`packages/core/src/contacts.ts`) accepts **any non-empty string** as an
-email. `normalizeAddress` is `s.trim().toLowerCase()` and the only check is `email === ""`, so
-there is no address-shape validation at either CRM boundary.
+`parseCrmOperations` (`packages/core/src/contacts.ts`) accepted **any non-empty string** as an
+email. `normalizeAddress` is `s.trim().toLowerCase()` and the only check was `email === ""`, so
+there was no address-shape validation at either CRM boundary.
 
 Observed on eval run `266ef8f4` (the run that turned fixture 36 green). Turn 2 asks for a follow-up
 that "isn't tied to anyone" — which the cockpit body forbids the agent from creating. The agent
@@ -152,20 +154,35 @@ satisfied the required-`email` brake by inventing one, and the plan row was stag
 {"op":"addFollowUp","email":"no-email","note":"to review our pricing page","dueAt":1786698000000}
 ```
 
-Why it matters: the required `email` on `addFollowUp` is 19-08's structural brake against the CRM
-becoming a general task generator, and a pseudo-address defeats it. On Approve,
-`applyCrmOperations` would upsert a contact row keyed `no-email`.
+It mattered twice: the required `email` on `addFollowUp` is 19-08's structural brake against the
+CRM becoming a general task generator, and a pseudo-address defeats it; and because `patchPlan`
+REPLACES `crmOperations` wholesale, turn 2's invented row overwrote turn 1's legitimate Rhea
+follow-up, making fixture 36's count assertions satisfiable by replacement rather than by turn 2
+correctly declining.
 
-It also means fixture 36's green is currently green for a slightly wrong reason: `patchPlan`
-REPLACES `crmOperations` wholesale, so turn 2's op overwrote turn 1's Rhea follow-up, and the count
-assertions are satisfied by replacement as readily as by turn 2 correctly declining. The ACTN-05
-clock fix is independently proven by the offline tests in `runCockpitAgent.test.ts`; this is a
-separate hole that fix made visible.
+### RESOLVED 2026-08-10 (19-11) — reused the send path's rule; the replace was left alone on purpose
 
-**NOT fixed in 19-11 deliberately:** pre-existing (shipped 19-06), outside the executor scope
-boundary (not caused by this plan's changes), and the paid-verification allowance was spent.
+**Address validation.** `parseCrmOperations` now applies **`isValidEmail`** to both `addContact` and
+`addFollowUp`. No new validator was written: `isValidEmail` is the repo's ONE email regex
+(`packages/core/src/validateSubmit.ts`, promoted to a shared export in 03.1-03) and is already what
+the send path bounces a bad recipient with via `applyRecipientEdit` — so the CRM cannot accept an
+address a later send would refuse, by construction rather than by two regexes agreeing today. Two
+named refusals wired into `CRM_PARSE_REFUSAL`: `CRM_FOLLOWUP_CONTACT_INVALID` and
+`CRM_CONTACT_EMAIL_INVALID`. The follow-up wording is load-bearing — the model reached `no-email`
+BECAUSE an address was required, so the sentence forbids substituting a placeholder and names the
+correct exit (tell the user this CRM cannot hold a follow-up about nobody).
 
-**The fix:** an address-shape check in `parseCrmOperations`. Reuse whatever `addRecipients` already
-bounces invalid addresses with rather than authoring a second rule. Expect turn 2 to be refused and
-the model to ASK — which the body already tells it to do — leaving turn 1's follow-up standing.
-Budget one `--only 36` re-verify at roughly $0.006.
+**The wholesale replace was NOT changed, and that is the decision.** A plan row is the CURRENT
+STAGED STATE, not a log; an appending patch would make a model correcting its own list double it.
+The data-loss half was never the replace — it was that a REFUSAL reached `patchPlan` at all. It
+cannot: every `stageCrmWrite` refusal is an early `return` above the mutation. Now asserted on the
+STORED `crmOperations` rather than on reply text.
+
+**Verified.** Both guards mutation-proven red-able; full `pnpm test` 9/9 tasks green (backend 72
+files / 1446 tests, core 761) and `pnpm typecheck` 10/10 exit 0; `--self-check` still PASSES;
+`--only 36` re-run against `cockpit-agent@18` — run `0b2b6b22`, **$0.0057, PASS**, body
+byte-unchanged. Green for the RIGHT reason this time: `agentSteps` shows turn 2 making two
+`stageCrmWrite` calls, both refused, and the plan row still holding turn 1's Rhea follow-up
+(`eval-rhea-6q@golden.example` / "about the benchmark-CR1 renewal") instead of `no-email`.
+
+Full account and **invariant 18** in `docs/playbooks/contacts-crm.md`.

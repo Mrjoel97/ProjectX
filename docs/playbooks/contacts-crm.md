@@ -1,14 +1,17 @@
 # Playbook: Contacts, CRM & follow-ups
 
-> Last verified: 2026-08-10 (Plan 19-11 — **ACTN-05's follow-up capability WORKS. The cause was
-> never the model: `runAgentLoop` dropped the trusted clock on the way to `buildCockpitTools`, so
-> `stageCrmWrite` refused every dated follow-up with `no_clock`.** Fixture 36 GREEN at `--only 36`,
-> run `266ef8f4`, $0.0056, first attempt, skill body byte-unchanged (no re-gate owed). See
-> "RESOLVED — ACTN-05" under Known gaps for the full account, the two shape defects fixed with it,
-> and invariant 17. **The owner browser UAT still has not run**, and a NEW open defect was found
-> while verifying: a follow-up can name a fabricated address (`"no-email"`) because
-> `parseCrmOperations` does no address-shape check — read that entry before trusting the CRM with
-> a contactless request. Nothing here is owner-verified yet.)
+> Last verified: 2026-08-10 (Plan 19-11 — **ACTN-05's follow-up capability WORKS, and the phase's
+> last open defect is CLOSED.** Two fixes, both live-verified against `cockpit-agent@18` with the
+> body BYTE-UNCHANGED (gate `086f8267`'s 35/35 stands, no re-gate owed):
+> **(1)** the capability itself — the cause was never the model, `runAgentLoop` dropped the trusted
+> clock on the way to `buildCockpitTools`, so `stageCrmWrite` refused every dated follow-up with
+> `no_clock` (fixture 36 green, run `266ef8f4`, $0.0056); see "RESOLVED — ACTN-05" under Known gaps
+> for that account, the two shape defects fixed with it, and invariant 17.
+> **(2)** the fabricated address — `parseCrmOperations` accepted ANY non-empty string as an email,
+> so the agent satisfied the required-`email` brake by inventing `"no-email"`. It now applies
+> `isValidEmail`, the send path's OWN rule (**invariant 18**), and fixture 36 re-verified green for
+> the RIGHT reason — turn 2 refused, turn 1's follow-up intact (run `0b2b6b22`, $0.0057).
+> **The owner browser UAT still has not run; nothing here is owner-verified yet.**)
 >
 > Previously verified: 2026-08-09 @ `12bde78` (Plan 19-10 — **phase close-out. The offline surface is
 > verified; the OWNER BROWSER UAT IS STILL PENDING and this line will be re-bumped to the sha it is
@@ -334,6 +337,22 @@ would not have caught it, because a header search returning the same labels read
 **Do not "warm the cache" by upserting what resolution found.** That single line would re-open
 invariant 1, and the count is what would stop you.
 
+**18. The CRM's address rule IS the send path's address rule (19-11).**
+`parseCrmOperations` validates every `email` with `isValidEmail` — the repo's ONE email regex,
+imported from `./validateSubmit`, the same rule `applyRecipientEdit` bounces a bad recipient with.
+Before this, `normalizeAddress` (trim+lowercase) was the only treatment and the only check was
+`=== ""`, so ANY non-empty string was an address and a live agent duly staged `email: "no-email"`
+to satisfy the required-`email` brake. A brake the caller can satisfy with a placeholder is not a
+brake. **Do NOT add a second validator here.** A CRM accepting addresses the send path later
+refuses builds a contact book that cannot be emailed, and two disagreeing address rules is a worse
+defect than one loose one — if they ever must differ, the divergence gets written down here first.
+The check is deliberately structural, not RFC-5322: local part, `@`, domain with a dot.
+*Enforcement:* MUTATION-VERIFIED at both boundaries — `contacts.test.ts` reddens on the parse
+(`expected [Function] to throw an error`) and `cockpitTools.test.ts` reddens on the wiring
+(`expected 'Those record changes were incomplete,…' to match /never invent/i`) when the refusal
+entry is dropped and the generic `malformed` fallback takes over.
+
+
 **15. The Pipeline nav item stays `soon: true` in Phase 19 (19-07).**
 `apps/web/app/(app)/layout.tsx` keys the rail off `href`, not `soon`, so **adding the href IS the
 activation** and 26-18 owns that decision. Phase 19 ships the route reachable BY URL only, exactly
@@ -469,39 +488,65 @@ PRESERVED: add-only, `due` as the user's words through `parseSendTime`, server-h
 and the draft-in-progress refusal. `CrmOperation`'s required `email` on `addFollowUp` was not
 relaxed.
 
-### OPEN DEFECT — a follow-up can name a FAKE address, and the CRM accepts it (found 19-11, NOT fixed)
+### RESOLVED — a follow-up could name a FAKE address (found 19-11, FIXED 19-11, 2026-08-10)
 
-**`parseCrmOperations` accepts any non-empty string as an email.** `normalizeAddress` is
-`s.trim().toLowerCase()` and the only check is `email === ""`, so there is no address-shape
-validation at either CRM boundary.
+**`parseCrmOperations` now rejects an address that is not structurally an address, at both CRM
+boundaries.** Before this, `normalizeAddress` was `s.trim().toLowerCase()` and the only check was
+`email === ""`, so ANY non-empty string passed.
 
-**Observed, not hypothesised.** On the run that turned fixture 36 green (`266ef8f4`), turn 2 asks
-for a follow-up that "isn't tied to anyone" — which the body forbids the agent from creating. The
-agent satisfied the required-`email` brake by **inventing `email: "no-email"`**, and the plan row
-was staged:
+**It was observed, not hypothesised.** On run `266ef8f4`, turn 2 asked for a follow-up that "isn't
+tied to anyone" — which the body forbids the agent from creating. The agent satisfied the
+required-`email` brake by **inventing `email: "no-email"`**, and the row was staged:
 
 ```json
 {"op":"addFollowUp","email":"no-email","note":"to review our pricing page","dueAt":1786698000000}
 ```
 
-Two consequences, both real:
+**INVARIANT 18: the CRM's address rule IS the send path's address rule — `isValidEmail`, imported,
+never re-derived.** `packages/core/src/contacts.ts` imports it from `./validateSubmit`; it is the
+repo's ONE email regex (`/^[^\s@]+@[^\s@]+\.[^\s@]+$/`, promoted to a shared export in 03.1-03) and
+the same rule `applyRecipientEdit` bounces a bad recipient with on the send path. **Do not write a
+second validator here.** A CRM that accepted addresses the send path later refuses would quietly
+build a contact book that cannot be emailed — and two disagreeing address rules is a worse defect
+than one loose one. It is deliberately structural, not RFC-5322: local part, `@`, domain with a
+dot. That is enough to stop `no-email` and cheap to keep correct.
 
-1. **The structural brake in 19-08 is bypassable.** The required `email` on `addFollowUp` is what
-   stops the CRM becoming a general task generator. A pseudo-address defeats it, and on Approve
-   `applyCrmOperations` would upsert a contact row keyed `no-email`.
-2. **Fixture 36's green is currently green for a slightly wrong reason.** `patchPlan` REPLACES
-   `crmOperations` wholesale, so turn 2's contactless follow-up overwrote turn 1's Rhea follow-up.
-   The count assertions (`crmOperationCount: 1`, `datedFollowUpCount: 1`) are satisfied by
-   replacement just as well as by turn 2 correctly declining. **The ACTN-05 fix above is real and
-   independently proven by the offline tests; this is a separate pre-existing hole that the fix
-   made visible.**
+Two named refusals, both RETURNED SENTENCES (18-06's rule), both wired into `CRM_PARSE_REFUSAL`:
+`CRM_FOLLOWUP_CONTACT_INVALID` and `CRM_CONTACT_EMAIL_INVALID`. The follow-up wording is
+load-bearing and was written deliberately: the model reached `no-email` **because** it was told an
+address is required, so a refusal that only says "invalid" leaves inventing a better-formed fake as
+the cheapest next move. It therefore names placeholders as the error, forbids substituting one, and
+spells out the correct exit — *a follow-up about nobody in particular is a thing this CRM cannot
+hold, and saying so is the right answer.* (Same shape as invariant 17's degrade-gradient fix: close
+the downhill path, don't just block the current one.)
 
-**Deliberately not fixed in 19-11:** pre-existing (shipped 19-06), outside the executor scope
-boundary, and the paid-verification allowance was exhausted. The fix is an address-shape check in
-`parseCrmOperations` — reuse whatever `addRecipients` already bounces invalid addresses with rather
-than writing a second rule. Expect it to make turn 2 refuse and the model ASK, which is what the
-body already tells it to do, and to leave turn 1's Rhea follow-up standing. Budget one `--only 36`
-re-verify (~$0.006) after the change.
+**The wholesale replace in `patchPlan` was LEFT ALONE, and that is the decision, not an omission.**
+A plan row is the CURRENT STAGED STATE, not a log — an appending patch would make a model
+correcting its own list double it instead. The data-loss half was never the replace; it was that a
+**refusal** reached `patchPlan` at all. It cannot: every refusal in `stageCrmWrite` is an early
+`return` above the mutation, so a rejected turn leaves the previous turn's staging untouched. That
+is now asserted on the STORED `crmOperations` (not on reply text) in `cockpitTools.test.ts`.
+
+**Re-verified live, and the fixture is green for the RIGHT reason now.** `--only 36` against
+`cockpit-agent@18`, run `0b2b6b22`, **$0.0057, PASS**, skill body BYTE-UNCHANGED (gate `086f8267`'s
+35/35 stands; no re-gate owed). `agentSteps` shows turn 2 making **two** `stageCrmWrite` calls and
+the plan row still holding turn 1's op — both attempts were refused and nothing overwrote Rhea:
+
+```
+run 0b2b6b22 (fixed):  [{ "op":"addFollowUp", "email":"eval-rhea-6q@golden.example",
+                          "note":"about the benchmark-CR1 renewal", "dueAt":1786611600000 }]
+run 266ef8f4 (defect): [{ "op":"addFollowUp", "email":"no-email",
+                          "note":"to review our pricing page",     "dueAt":1786698000000 }]
+```
+
+**Residual, and named so nobody mistakes it for covered:** a WELL-FORMED fabrication
+(`nobody@example.com`) still parses, and fixture 36's counts alone could not tell it from turn 1
+surviving. What stops it is the refusal wording plus the body, not a validator — structural
+validation cannot decide whether an address belongs to a real person. Only an existence check
+against `contacts` could, and that would break the legitimate "add someone new" path this tool
+exists for. If it ever shows up in a live run, the fix is a fixture assertion on the staged
+ADDRESS, not a stricter regex.
+
 
 ### SUPERSEDED (19-10, 2026-08-09) — the original defect report, kept for the reasoning trail
 

@@ -28,7 +28,29 @@
 > failure explains itself; run `7e375c3c` produced seven identical `no_clock` lines that turned a
 > two-phase guessing game into a one-line diagnosis. Fixture 36 then passed at `--only 36`, run
 > `266ef8f4`, **$0.0056, first attempt, body byte-unchanged** — so no re-gate is owed.
-> SCOPE: `llm.ts` only. No fixture, no runner, no gate changed.)
+> **A SECOND 19-11 pass then closed the phase's last defect, and it touched a FIXTURE — read this
+> before assuming fixture 36's history is settled.** `parseCrmOperations` accepted any non-empty
+> string as an email, so on run `266ef8f4` the agent invented `email: "no-email"` to satisfy the
+> required-`email` brake; because `patchPlan` REPLACES `crmOperations` wholesale, that row
+> overwrote turn 1's, and **fixture 36's `crmOperationCount: 1` was therefore being satisfied by
+> REPLACEMENT as readily as by turn 2 declining — a partly vacuous green.**
+> **The lesson for this runner, and it generalises past this fixture: a COUNT assertion over a
+> field that is REPLACED rather than accumulated cannot distinguish "the right thing survived"
+> from "the wrong thing overwrote it".** `datedFollowUpCount` (19-10) fixed the op-TYPE half of
+> exactly this blindness and still could not see this one. When a fixture's teeth depend on an
+> earlier turn's work SURVIVING, assert on the surviving VALUE, not on how many rows there are.
+> **The fixture's assertions and their strictness were NOT changed** — only its `description`, to
+> record why the counts now hold. The fix is in `@pikar/core` (`isValidEmail` at the CRM parse
+> boundary) plus two refusal strings; `run-eval-golden.mjs` is untouched and `--self-check` still
+> PASSES. Re-verified: `--only 36`, run `0b2b6b22`, **$0.0057, PASS**, body byte-unchanged, so no
+> re-gate is owed here either.
+> **`npx convex data <table> --limit N` is the cheap post-run forensic** and it is what proved the
+> difference: the `plans` rows for `eval-0b2b6b22` and `eval-266ef8f4` sit side by side, one
+> holding Rhea's follow-up and one holding `no-email`. `agentSteps --limit N` gives the per-turn
+> tool-call counts that show turn 2 was refused twice rather than declining. Both are read-only,
+> cost nothing, and beat re-running a paid fixture to find out what happened.
+> SCOPE of the second pass: `@pikar/core` `contacts.ts` (+ test), `llm.ts` refusal strings,
+> `cockpitTools.test.ts`, and `eval-cases/36-crm-follow-up.json` (description only).)
 >
 > Previously verified: 2026-08-09 (Plan 19-10 — **THE OFFLINE GATE CAN RUN AGAIN, AND IT IMMEDIATELY
 > CAUGHT A REAL DEFECT.** Three things landed in `run-eval-golden.mjs`.

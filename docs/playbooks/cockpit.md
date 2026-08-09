@@ -43,8 +43,31 @@
 > (`{"event":"stageCrmWrite.refused","reason",...}` — op TYPES and booleans, no addresses, no notes,
 > no due strings: §4-clean by construction). It is what turned this from guesswork into a
 > measurement, and it is the first place to look if a CRM turn misbehaves again.
-> SCOPE of this entry: `llm.ts` (`stageCrmWrite` + the `runAgentLoop` clock arg),
-> `cockpitTools.test.ts`, `runCockpitAgent.test.ts`. No UI, no schema, no new tool.)
+> **A THIRD shape fix landed after the above, closing the phase's last open defect: `stageCrmWrite`
+> could be handed a FABRICATED address.** `parseCrmOperations` accepted any non-empty string, so on
+> run `266ef8f4` the agent — asked for a follow-up "not tied to anyone", which the body forbids —
+> satisfied the required-`email` brake by inventing `email: "no-email"` and the row staged. The
+> parse now applies **`isValidEmail`, the send path's OWN rule** (`@pikar/core`, the same one
+> `applyRecipientEdit` bounces a bad recipient with) — NOT a second validator, because a CRM that
+> accepts what the send path refuses builds an unemailable contact book. Two new
+> `CRM_PARSE_REFUSAL` entries carry it. **The follow-up sentence is load-bearing and was written
+> deliberately:** the model reached `no-email` BECAUSE an address was required, so a bare "invalid,
+> retry" leaves inventing a better-formed fake as the cheapest next move — it instead forbids
+> placeholders by name and states the correct exit (tell the user this CRM cannot hold a follow-up
+> about nobody). Same shape as the degrade-gradient fix above: close the downhill path, don't just
+> block the current step.
+> **The related data-loss half needed NO code change, and `patchPlan`'s wholesale
+> `crmOperations` replace was deliberately LEFT ALONE.** A plan row is the CURRENT STAGED STATE, not
+> a log; appending would make a model correcting its own list double it. The loss came from a
+> REFUSAL reaching `patchPlan`, which cannot happen — every refusal here is an early `return` above
+> the mutation. That is now asserted on the STORED `crmOperations`, never on reply text.
+> Re-verified live: `--only 36`, run `0b2b6b22`, **$0.0057, PASS**, body still byte-unchanged.
+> `agentSteps` shows turn 2 making TWO `stageCrmWrite` calls with the plan row still holding turn
+> 1's op — both refused, nothing overwritten.
+> SCOPE of this entry: `llm.ts` (`stageCrmWrite` + the `runAgentLoop` clock arg + two refusal
+> strings), `cockpitTools.test.ts`, `runCockpitAgent.test.ts`, `@pikar/core` `contacts.ts`
+> (+ its test), and `eval-cases/36-crm-follow-up.json` (description only — assertions untouched).
+> No UI, no schema, no new tool.)
 >
 > Previously verified: 2026-08-09 (Plan 19-10 — **`cockpit-agent@18` IS NOW THE ACTIVE BODY** (activated
 > on owner authorization after gate `086f8267`, 35/35), so `stageCrmWrite` and contacts-first
