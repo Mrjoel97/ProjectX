@@ -285,7 +285,25 @@ export default defineSchema({
     // Phase-20 (20-07, MEDIA-01) widened it a THIRD time: "media" = a reel staged as a BLOCK DECK,
     // reserved and started on Approve by the same `externalAction` arm. Still optional, still
     // closed, still no migration.
-    kind: v.optional(v.union(v.literal("memo"), v.literal("calendar_event"), v.literal("media"))),
+    // Phase-19 (19-06, ACTN-05) widened it a FOURTH time: "crm_write" = a list of contact and
+    // follow-up operations, applied on Approve by the `inline` arm (one transactional write on our
+    // OWN tables — no fetch, so not `externalAction`). Still optional, still closed, still no
+    // migration and no backfill: ABSENT still means email.
+    kind: v.optional(
+      v.union(
+        v.literal("memo"),
+        v.literal("calendar_event"),
+        v.literal("media"),
+        v.literal("crm_write"),
+      ),
+    ),
+    /** 19-06 ACTN-05: the staged CRM operation list a `crm_write` plan applies on Approve.
+     *  CONTENT PLANE — it carries names and note text and must NEVER reach `audit.payload`
+     *  (CLAUDE.md §4), the `eventTitle`/`shots` rule verbatim. `v.any()` elements because the
+     *  SHAPE is owned by `parseCrmOperations` (@pikar/core), which validates at BOTH the write
+     *  boundary and the apply boundary; a hand-mirrored validator here would be a third copy of
+     *  the same union to keep in step. `resetPlan` clears it explicitly. */
+    crmOperations: v.optional(v.array(v.any())),
     // Phase-17 (ACTN-02) staged calendar event. CONTENT-PLANE ONLY, NEVER audited (§4).
     // `resetPlan` wipes all six — a staged event surviving a reset would re-stage onto the NEXT
     // plan. All optional → no migration (the sendAt precedent).

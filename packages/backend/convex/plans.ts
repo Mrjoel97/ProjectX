@@ -438,7 +438,23 @@ export const patchPlan = internalMutation({
     // 20-07 MEDIA-01: widened to the same closed union as schema.ts. Widening ONE of the two and
     // not the other is Pitfall 9 — every typecheck passes and the runtime validator rejects the new
     // kind (the PLAN_STATUS Pitfall-5 lesson at the top of this file).
-    kind: v.optional(v.union(v.literal("memo"), v.literal("calendar_event"), v.literal("media"))),
+    // 19-06 ACTN-05: widened a FOURTH time, in the SAME edit as schema.ts for the reason the line
+    // above gives — this mirror and the schema union must move together.
+    kind: v.optional(
+      v.union(
+        v.literal("memo"),
+        v.literal("calendar_event"),
+        v.literal("media"),
+        v.literal("crm_write"),
+      ),
+    ),
+    // 19-06 ACTN-05: the staged CRM operation list. UNLIKE the deck and the staged event, this IS
+    // a patchPlan arg — the whole point of `crm_write` is that the model proposes the operations
+    // and the human approves them, so the staging tool (19-08) must be able to write it. That is
+    // safe only because it is INERT until Approve: `executePlan` re-validates it through
+    // `parseCrmOperations` and applies it in one transaction. Nothing here spends money, mints a
+    // ref or claims something happened. Drop-undefined means a non-CRM patch never touches it.
+    crmOperations: v.optional(v.array(v.any())),
     // 17-01 ACTN-02: the four STAGED event slots a cockpit tool may write. Drop-undefined means a
     // non-calendar patch never touches them; resetPlan clears them explicitly.
     // `calendarEventId` and `calendarRunId` are deliberately NOT args here: they are written only
@@ -645,6 +661,9 @@ export const resetPlan = internalMutation({
       eventTz: undefined,
       calendarEventId: undefined,
       calendarRunId: undefined,
+      // 19-06 ACTN-05: same Pitfall-6 class — a staged operation list surviving a reset would be
+      // applied by the NEXT approve in this thread, writing contacts nobody just agreed to.
+      crmOperations: undefined,
       mediaRunId: undefined, // 20-07: same Pitfall-6 class — a stale run id would let a media
       // retrier terminal fail rows on a plan that has since been reset to a fresh compose.
       // 20-02 MEDIA-01: the block deck AND the render plane, explicitly. Same Pitfall-6 class as

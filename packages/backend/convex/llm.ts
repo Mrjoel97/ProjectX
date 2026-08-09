@@ -1056,7 +1056,7 @@ const fmtSendInstant = (ms: number, tz?: string) =>
 export function buildAgentContext(
   plan: {
     /** ACTN-01 action type. ABSENT ⇒ email (actionTypeOf), so every pre-Phase-15 row is unchanged. */
-    kind?: "memo" | "calendar_event";
+    kind?: "memo" | "calendar_event" | "media" | "crm_write";
     recipients?: string[];
     subject?: string;
     body?: string;
@@ -1087,6 +1087,20 @@ export function buildAgentContext(
   // offered to send it to recipients. Branch on the SHARED reader, never on `plan.kind` directly, so
   // a new ACTION_TYPES member surfaces here as a compile error rather than silently rendering as
   // email. Verified live 2026-07-26.
+  //
+  // **CORRECTED 19-06: (*) is FALSE — this is NOT a compile-error site.** `PlanRow`, the type every
+  // caller passes, does not declare `kind` at all, so widening `ACTION_TYPES` never breaks the
+  // call: `media` proved it, shipping in Phase 20 without ever reaching the param union above.
+  // `getById` returns the field at runtime, so the branches below DO fire; the type merely
+  // under-declares. A new action type must therefore be added here BY HAND, and one that is not
+  // gets announced to the model as an email.
+  if (actionTypeOf(plan.kind) === "crm_write") {
+    return (
+      "Current CRM plan. This is NOT an email: it has no recipients, no send mode and no send" +
+      " time, and approving it writes contacts and follow-ups into the user's own records rather" +
+      " than sending anything to anyone. Do not offer to add recipients or to send it."
+    );
+  }
   if (actionTypeOf(plan.kind) === "memo") {
     return [
       "Current memo plan. A memo is NOT an email: it has no recipients, no send mode and no send" +

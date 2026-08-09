@@ -34,6 +34,10 @@ import { ConvexError, v } from "convex/values";
 import { api, components, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { type ActionCtx, internalMutation, type MutationCtx } from "./_generated/server";
+// 19-06 ACTN-05: the CRM terminal. Called DIRECTLY (not via runMutation) so the whole operation
+// list lands in the same serializable transaction as the proposed -> approved CAS, which is what
+// makes approve-all-or-none and double-approve-applies-once true without a saga.
+import { applyCrmOperations } from "./contacts";
 // The memo terminal (12-05): a memo-plan's Approve saves a vault doc instead of fanning out email.
 import { persistNextStepMemo } from "./evaluations";
 import { retrier, workflow } from "./index";
@@ -570,6 +574,10 @@ const _ARM_TABLE = {
   // 20-07 MEDIA-01: the arm's SECOND occupant. Research Open Question 1, answered GENERALIZE — see
   // the `Arm` doc comment in @pikar/core/actionType.
   media: "externalAction",
+  // 19-06 ACTN-05: an `inline` member needs NO `EXTERNAL_TARGETS` entry, and must not be given
+  // one. `ExternalActionType` below is DERIVED from this table, so `crm_write` is excluded by
+  // construction — adding a target for it would not compile.
+  crm_write: "inline",
 } as const satisfies Record<ActionType, Arm>;
 
 /** The action types whose arm is `externalAction`, DERIVED from the table above rather than
@@ -694,10 +702,24 @@ export const executePlan = tenantMutation({
     const armType = armFor(actionTypeOf(plan.kind));
     switch (armType) {
       case "inline": {
-        // memo (12-05 BEVL-02): Approve means SAVE, not send — one transactional write, so a
-        // workflow would add rows and latency for nothing. Nothing below (seed requests →
-        // startFanout → gmail.send) is reachable from here; the double-approve CAS above already
-        // makes it exactly-once. See evaluations.ts.
+        // Approve means APPLY or SAVE, never send — one transactional write, so a workflow would
+        // add rows and latency for nothing. Nothing below (seed requests → startFanout →
+        // gmail.send) is reachable from here; the double-approve CAS above already makes it
+        // exactly-once. The arm sits ABOVE the Gmail pre-check on purpose, so neither occupant
+        // requires a connected mailbox.
+        //
+        // 19-06 ACTN-05: the arm's SECOND occupant. `applyCrmOperations` re-validates
+        // `plan.crmOperations` through `parseCrmOperations` (the plan row is content plane and
+        // could have been revised after staging) and performs every write through the SAME
+        // helpers `contacts.ts`'s public mutations use — one copy of the identity/upsert rule.
+        // A Convex mutation is serializable, so a throw part-way through discards the whole list:
+        // approve-all-or-none with no saga and no compensation.
+        if (actionTypeOf(plan.kind) === "crm_write") {
+          await applyCrmOperations(ctx, plan.tenantId, plan.crmOperations);
+          await ctx.db.patch(planId, { status: "done" });
+          return { ok: true };
+        }
+        // memo (12-05 BEVL-02): Approve means SAVE. See evaluations.ts.
         await ctx.db.patch(planId, { status: "done" });
         await persistNextStepMemo(ctx, plan);
         return { ok: true };

@@ -1567,3 +1567,199 @@ describe("executePlan suppression + postal-address gates (19-05, PIPE-01)", () =
     expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("done");
   });
 });
+
+// ── executePlan crm_write arm (19-06, ACTN-05 — VALIDATION rows 5 and 6) ──────────────────────
+//
+// Deliberately a PLAIN `convexTest`: the CRM arm registers no component and needs none. That is
+// itself an assertion — `workflow.start` throws without the workflow component registered, so a
+// regression that routed a CRM plan into the fan-out would fail here loudly rather than quietly
+// seeding rows. (19-02/19-05 lesson: every registerComponent loads a whole module tree into
+// another in-memory backend and crashes the shared vitest fork.)
+
+describe("executePlan crm_write arm (19-06, ACTN-05)", () => {
+  const OPS = [
+    { op: "addContact", email: "Bob@X.com", name: "Bob", origin: "user-entered" },
+    { op: "addContact", email: "ann@y.com", origin: "mailbox-resolved" },
+    {
+      op: "addFollowUp",
+      email: "bob@x.com",
+      note: "chase the quote",
+      dueAt: Date.now() + 86_400_000,
+    },
+    {
+      op: "addFollowUp",
+      email: "ann@y.com",
+      note: "send the deck",
+      dueAt: Date.now() + 172_800_000,
+    },
+    { op: "addFollowUp", email: "new@z.com", note: "intro call", dueAt: Date.now() + 259_200_000 },
+  ];
+
+  /** NO gmailTokens row and NO tenantProfiles row on purpose: the inline arm runs ABOVE both
+   *  pre-CAS email gates, so a CRM write must approve on a tenant that could not send at all. */
+  const seedCrmPlan = (t: ReturnType<typeof convexTest>, crmOperations: unknown[]) =>
+    t.run((ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: `crm_thread_${crypto.randomUUID()}`,
+        kind: "crm_write" as const,
+        status: "proposed" as const,
+        crmOperations,
+        createdAt: Date.now(),
+      }),
+    );
+
+  const rows = async (t: ReturnType<typeof convexTest>) =>
+    await t.run(async (ctx) => ({
+      contacts: await ctx.db.query("contacts").collect(),
+      followUps: await ctx.db.query("followUps").collect(),
+    }));
+
+  test("approving applies EVERY operation, sets done, seeds ZERO requests and sends nothing", async () => {
+    const t = convexTest(schema, modules);
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const planId = await seedCrmPlan(t, OPS);
+
+    expect(
+      await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId }),
+    ).toEqual({ ok: true });
+
+    const { contacts, followUps } = await rows(t);
+    // THREE contacts, not two: a follow-up upserts the contact it names, so `new@z.com` lands too.
+    expect(contacts.map((c) => c.email).sort()).toEqual(["ann@y.com", "bob@x.com", "new@z.com"]);
+    // The identity function ran — "Bob@X.com" and "bob@x.com" are ONE row, not two.
+    expect(contacts.filter((c) => c.email === "bob@x.com")).toHaveLength(1);
+    expect(contacts.find((c) => c.email === "bob@x.com")?.name).toBe("Bob");
+    expect(followUps).toHaveLength(3);
+    expect(followUps.every((f) => f.status === "open" && f.contactId !== undefined)).toBe(true);
+
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("done");
+    // The whole email spine is unreachable from this arm: no rows to fan out, no send.
+    expect(await countRequests(t)).toHaveLength(0);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+
+  test("a SECOND approve applies nothing — the CAS above the arm is the idempotency", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await seedCrmPlan(t, OPS);
+    const asUser = t.withIdentity({ subject: TENANT });
+
+    await asUser.mutation(api.cockpit.executePlan, { planId });
+    const first = await rows(t);
+    // The plan is `done`, so the second call returns before the switch ever runs.
+    expect(await asUser.mutation(api.cockpit.executePlan, { planId })).toEqual({
+      ok: true,
+      alreadyStarted: true,
+    });
+
+    const second = await rows(t);
+    expect(second.contacts).toHaveLength(first.contacts.length);
+    expect(second.followUps).toHaveLength(first.followUps.length);
+    expect(second.contacts).toHaveLength(3);
+    expect(second.followUps).toHaveLength(3);
+  });
+
+  // ATOMICITY, asserted rather than assumed. A Convex mutation is ONE serializable transaction, so
+  // a throw on operation 3 must discard operations 1 and 2 — that is what makes approve-all-or-none
+  // true with no saga and no compensation.
+  test("an invalid THIRD operation applies NONE of the first two, and the plan stays proposed", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await seedCrmPlan(t, [
+      OPS[0],
+      OPS[1],
+      { op: "addFollowUp", email: "bob@x.com", note: "no due date" },
+    ]);
+
+    await expect(
+      t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId }),
+    ).rejects.toThrow(/CRM_FOLLOWUP_DUEAT_REQUIRED/);
+
+    const { contacts, followUps } = await rows(t);
+    expect(contacts).toHaveLength(0);
+    expect(followUps).toHaveLength(0);
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("proposed");
+  });
+
+  // The apply boundary re-validates: `plans.crmOperations` is CONTENT PLANE and the row could have
+  // been revised after it was staged. An empty list reaching `done` would read to the user as
+  // "applied" while having written nothing.
+  test("an EMPTY operation list is refused at the apply boundary and the plan stays proposed", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await seedCrmPlan(t, []);
+
+    await expect(
+      t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId }),
+    ).rejects.toThrow(/CRM_OPERATIONS_EMPTY/);
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("proposed");
+  });
+
+  test("completeFollowUp and cancelFollowUp move existing rows, and a foreign ref is refused", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const contactId = await ctx.db.insert("contacts", {
+        tenantId: TENANT,
+        email: "bob@x.com",
+        origin: "user-entered" as const,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+      const mine = async (note: string) =>
+        await ctx.db.insert("followUps", {
+          tenantId: TENANT,
+          contactId,
+          note,
+          dueAt: Date.now(),
+          status: "open" as const,
+          createdAt: Date.now(),
+        });
+      return {
+        done: await mine("finish"),
+        cancel: await mine("drop"),
+        foreign: await ctx.db.insert("followUps", {
+          tenantId: "tenant_b",
+          note: "not yours",
+          dueAt: Date.now(),
+          status: "open" as const,
+          createdAt: Date.now(),
+        }),
+      };
+    });
+
+    const planId = await seedCrmPlan(t, [
+      { op: "completeFollowUp", followUpRef: seeded.done },
+      { op: "cancelFollowUp", followUpRef: seeded.cancel },
+    ]);
+    await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId });
+
+    const after = await t.run(async (ctx) => ({
+      done: await ctx.db.get(seeded.done),
+      cancel: await ctx.db.get(seeded.cancel),
+    }));
+    expect(after.done?.status).toBe("done");
+    expect(after.done?.completedAt).toBeTypeOf("number");
+    // "I decided not to" is not a touch — canceling must not stamp a completion.
+    expect(after.cancel?.status).toBe("canceled");
+    expect(after.cancel?.completedAt).toBeUndefined();
+
+    // A follow-up belonging to ANOTHER tenant is not reachable through an approved plan, and a ref
+    // that is not an id of this table refuses the same way rather than throwing out of db.get.
+    for (const followUpRef of [seeded.foreign, "not-an-id"]) {
+      const bad = await seedCrmPlan(t, [{ op: "completeFollowUp", followUpRef }]);
+      await expect(
+        t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId: bad }),
+      ).rejects.toThrow(/FOLLOWUP_NOT_FOUND/);
+    }
+    expect((await t.run((ctx) => ctx.db.get(seeded.foreign)))?.status).toBe("open");
+  });
+
+  test("a cross-tenant approve of a CRM plan writes nothing", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await seedCrmPlan(t, OPS);
+
+    await expect(
+      t.withIdentity({ subject: "tenant_b" }).mutation(api.cockpit.executePlan, { planId }),
+    ).rejects.toThrow(/plan not found/);
+    expect((await rows(t)).contacts).toHaveLength(0);
+  });
+});

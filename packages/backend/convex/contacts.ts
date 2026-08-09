@@ -19,7 +19,7 @@
 //
 // There is no opportunity concept, no pipeline-value field and no monetary type in this module,
 // and `contacts.test.ts` scans this file to keep it that way (PIPE-01, SC#8).
-import { normalizeAddress, renderFooter } from "@pikar/core";
+import { normalizeAddress, parseCrmOperations, renderFooter } from "@pikar/core";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -68,6 +68,150 @@ function recipientMembers(recipient: string): string[] {
     .filter((a) => a !== "");
 }
 
+// ── The shared write helpers (19-06) ──────────────────────────────────────────
+// Plain async functions over an explicit `tenantId`, NOT Convex functions — so the public
+// tenant-scoped mutations below AND `cockpit.ts`'s `crm_write` applier perform the SAME writes.
+// Three copies of the identity/upsert rule would be three chances to disagree about who someone
+// is (invariant 4, CLAUDE.md §8 rung 2). The tenantId is INJECTED by the wrapper at every public
+// call site and read off the approved plan row at the applier; neither is model-supplied.
+
+/** Create or update ONE contact, keyed on the normalized address. Returns the row id. */
+export async function upsertContactRow(
+  ctx: MutationCtx,
+  tenantId: string,
+  { email, name, origin }: { email: string; name?: string; origin: ContactOrigin },
+): Promise<Id<"contacts">> {
+  const address = normalizeAddress(email);
+  // Trust boundary: `normalizeAddress` deliberately does not validate, so the refusal is here.
+  // An empty key would collapse every nameless save onto one row.
+  if (address === "") throw new Error("CONTACT_EMAIL_REQUIRED");
+
+  const now = Date.now();
+  const existing = await contactByEmail(ctx, tenantId, address);
+  if (existing) {
+    // A blank/absent name must not erase a name already on record.
+    const trimmed = name?.trim();
+    await ctx.db.patch(existing._id, { ...(trimmed ? { name: trimmed } : {}), updatedAt: now });
+    return existing._id;
+  }
+  return await ctx.db.insert("contacts", {
+    tenantId,
+    email: address,
+    ...(name?.trim() ? { name: name.trim() } : {}),
+    origin,
+    createdAt: now,
+    updatedAt: now,
+  });
+}
+
+/** Insert ONE follow-up. `contactId` is optional here because a USER may file a contactless one;
+ *  the AGENT may not, and that refusal lives in `parseCrmOperations` (@pikar/core). */
+export async function createFollowUpRow(
+  ctx: MutationCtx,
+  tenantId: string,
+  { contactId, note, dueAt }: { contactId?: Id<"contacts">; note: string; dueAt: number },
+): Promise<Id<"followUps">> {
+  // `v.number()` is a float64 and admits NaN/Infinity, either of which would produce a follow-up
+  // that can never be due and can never be found by the `by_tenant_status_dueAt` range read.
+  if (!Number.isFinite(dueAt)) throw new Error("FOLLOWUP_DUEAT_REQUIRED");
+  if (note.trim() === "") throw new Error("FOLLOWUP_NOTE_REQUIRED");
+
+  if (contactId) {
+    const contact = await ctx.db.get(contactId);
+    // Without this a second tenant could hang a follow-up off a foreign contact id.
+    if (!contact || contact.tenantId !== tenantId) throw new Error("CONTACT_NOT_FOUND");
+  }
+
+  return await ctx.db.insert("followUps", {
+    tenantId,
+    ...(contactId ? { contactId } : {}),
+    note: note.trim(),
+    dueAt,
+    status: "open",
+    createdAt: Date.now(),
+  });
+}
+
+/** Move ONE follow-up between its three states, tenant-checked. */
+export async function setFollowUpStatusRow(
+  ctx: MutationCtx,
+  tenantId: string,
+  followUpId: Id<"followUps">,
+  status: "open" | "done" | "canceled",
+): Promise<void> {
+  const row = await ctx.db.get(followUpId);
+  if (!row || row.tenantId !== tenantId) throw new Error("FOLLOWUP_NOT_FOUND");
+  await ctx.db.patch(followUpId, {
+    // Re-opening clears the stamp, so "last touch" cannot count a completion that was undone.
+    status,
+    completedAt: status === "done" ? Date.now() : undefined,
+  });
+}
+
+/** Provenance of the DATA on a contact row, set once on creation. Mirrors the schema union. */
+export type ContactOrigin = "mailbox-resolved" | "user-entered" | "inbound";
+
+/**
+ * Apply an APPROVED `crm_write` plan's operation list (19-06, ACTN-05). Called from `executePlan`'s
+ * `inline` arm and from nowhere else — the human Approve gate is the only trigger.
+ *
+ * `raw` is `plans.crmOperations`, which is CONTENT PLANE: it was validated when the plan was
+ * staged, but the row could have been revised since, so it is re-parsed HERE. `parseCrmOperations`
+ * is idempotent over its own output, so the second parse cannot refuse what the first accepted.
+ *
+ * ALL-OR-NONE FOR FREE: a Convex mutation is one serializable transaction, so a throw on the third
+ * operation discards the first two. There is no saga, no compensation and no idempotency key
+ * beyond `executePlan`'s existing `proposed → approved` CAS — which is also what makes a
+ * double-approve apply nothing a second time.
+ *
+ * A follow-up UPSERTS its contact rather than refusing when the address is unknown: the human
+ * approved a card naming that address, so the row is a deliberate human act (invariant 1), and
+ * refusing after Approve would surface an error on a plan the user already agreed to.
+ */
+export async function applyCrmOperations(
+  ctx: MutationCtx,
+  tenantId: string,
+  raw: unknown,
+): Promise<number> {
+  const operations = parseCrmOperations(raw);
+  for (const operation of operations) {
+    switch (operation.op) {
+      case "addContact":
+        await upsertContactRow(ctx, tenantId, {
+          email: operation.email,
+          name: operation.name,
+          origin: operation.origin,
+        });
+        break;
+      case "addFollowUp": {
+        const contactId = await upsertContactRow(ctx, tenantId, {
+          email: operation.email,
+          origin: "mailbox-resolved",
+        });
+        await createFollowUpRow(ctx, tenantId, {
+          contactId,
+          note: operation.note,
+          dueAt: operation.dueAt,
+        });
+        break;
+      }
+      default: {
+        // `db.get` THROWS on a string that is not an id of this table; normalizeId returns null,
+        // which turns a malformed ref into the same named refusal as a foreign one.
+        const followUpId = ctx.db.normalizeId("followUps", operation.followUpRef);
+        if (!followUpId) throw new Error("FOLLOWUP_NOT_FOUND");
+        await setFollowUpStatusRow(
+          ctx,
+          tenantId,
+          followUpId,
+          operation.op === "completeFollowUp" ? "done" : "canceled",
+        );
+      }
+    }
+  }
+  return operations.length;
+}
+
 // ── Public writes (tenant-scoped; CLAUDE.md §2 — no raw builders) ─────────────
 
 /**
@@ -84,33 +228,8 @@ export const upsertContact = tenantMutation({
     name: v.optional(v.string()),
     origin: v.union(v.literal("mailbox-resolved"), v.literal("user-entered"), v.literal("inbound")),
   },
-  handler: async (ctx, { email, name, origin }): Promise<Id<"contacts">> => {
-    const address = normalizeAddress(email);
-    // Trust boundary: `normalizeAddress` deliberately does not validate, so the refusal is here.
-    // An empty key would collapse every nameless save onto one row.
-    if (address === "") throw new Error("CONTACT_EMAIL_REQUIRED");
-
-    const now = Date.now();
-    const existing = await contactByEmail(ctx, ctx.tenantId, address);
-    if (existing) {
-      // A blank/absent name must not erase a name already on record.
-      const trimmed = name?.trim();
-      await ctx.db.patch(existing._id, {
-        ...(trimmed ? { name: trimmed } : {}),
-        updatedAt: now,
-      });
-      return existing._id;
-    }
-
-    return await ctx.db.insert("contacts", {
-      tenantId: ctx.tenantId,
-      email: address,
-      ...(name?.trim() ? { name: name.trim() } : {}),
-      origin,
-      createdAt: now,
-      updatedAt: now,
-    });
-  },
+  handler: async (ctx, args): Promise<Id<"contacts">> =>
+    await upsertContactRow(ctx, ctx.tenantId, args),
 });
 
 /**
@@ -240,27 +359,8 @@ export const createFollowUp = tenantMutation({
     note: v.string(),
     dueAt: v.number(),
   },
-  handler: async (ctx, { contactId, note, dueAt }): Promise<Id<"followUps">> => {
-    // `v.number()` is a float64 and admits NaN/Infinity, either of which would produce a follow-up
-    // that can never be due and can never be found by the `by_tenant_status_dueAt` range read.
-    if (!Number.isFinite(dueAt)) throw new Error("FOLLOWUP_DUEAT_REQUIRED");
-    if (note.trim() === "") throw new Error("FOLLOWUP_NOTE_REQUIRED");
-
-    if (contactId) {
-      const contact = await ctx.db.get(contactId);
-      // Without this a second tenant could hang a follow-up off a foreign contact id.
-      if (!contact || contact.tenantId !== ctx.tenantId) throw new Error("CONTACT_NOT_FOUND");
-    }
-
-    return await ctx.db.insert("followUps", {
-      tenantId: ctx.tenantId,
-      ...(contactId ? { contactId } : {}),
-      note: note.trim(),
-      dueAt,
-      status: "open",
-      createdAt: Date.now(),
-    });
-  },
+  handler: async (ctx, args): Promise<Id<"followUps">> =>
+    await createFollowUpRow(ctx, ctx.tenantId, args),
 });
 
 /**
@@ -273,13 +373,7 @@ export const setFollowUpStatus = tenantMutation({
     status: v.union(v.literal("open"), v.literal("done"), v.literal("canceled")),
   },
   handler: async (ctx, { followUpId, status }): Promise<null> => {
-    const row = await ctx.db.get(followUpId);
-    if (!row || row.tenantId !== ctx.tenantId) throw new Error("FOLLOWUP_NOT_FOUND");
-    await ctx.db.patch(followUpId, {
-      status,
-      // Re-opening clears the stamp, so "last touch" cannot count a completion that was undone.
-      completedAt: status === "done" ? Date.now() : undefined,
-    });
+    await setFollowUpStatusRow(ctx, ctx.tenantId, followUpId, status);
     return null;
   },
 });

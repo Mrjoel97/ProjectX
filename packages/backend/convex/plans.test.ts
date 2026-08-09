@@ -632,3 +632,57 @@ describe("reportForPlan attachment extension (per-recipient delivered attachment
     expect(b.attachments).toEqual([]);
   });
 });
+
+// ── patchPlan crm_write + resetPlan (19-06, ACTN-05 — VALIDATION row 4) ───────────────────────
+//
+// PITFALL 1, and the only kind of test that can catch it: `patchPlan`'s `kind` union is a
+// HAND-MAINTAINED mirror of `schema.ts`'s. Widen the schema and not the mirror and every typecheck
+// in the repo still passes — `Doc<"plans">` comes from the schema — while the RUNTIME arg validator
+// rejects the new kind at the first real propose. Only a call through the real validator sees it.
+describe("patchPlan accepts kind: crm_write (19-06 — the hand-maintained union mirror)", () => {
+  const seed = (t: ReturnType<typeof convexTest>) =>
+    t.run((ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: `thread_crm_${crypto.randomUUID()}`,
+        status: "collecting" as const,
+        recipients: [],
+        createdAt: Date.now(),
+      }),
+    );
+
+  test("the RUNTIME validator accepts the fourth kind and its operation list", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await seed(t);
+
+    await t.mutation(internal.plans.patchPlan, {
+      planId,
+      kind: "crm_write",
+      status: "proposed",
+      crmOperations: [{ op: "addContact", email: "bob@x.com", origin: "user-entered" }],
+    });
+
+    const row = await t.run((ctx) => ctx.db.get(planId));
+    expect(row?.kind).toBe("crm_write");
+    expect(row?.crmOperations).toHaveLength(1);
+  });
+
+  // Same Pitfall-6 class as the staged event and the media deck: a list surviving a reset would be
+  // applied by the NEXT approve in this thread, writing contacts nobody just agreed to.
+  test("resetPlan clears crmOperations AND the kind", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await seed(t);
+    await t.mutation(internal.plans.patchPlan, {
+      planId,
+      kind: "crm_write",
+      crmOperations: [{ op: "addContact", email: "bob@x.com", origin: "user-entered" }],
+    });
+
+    await t.mutation(internal.plans.resetPlan, { planId });
+
+    const row = await t.run((ctx) => ctx.db.get(planId));
+    expect(row?.crmOperations).toBeUndefined();
+    expect(row?.kind).toBeUndefined();
+    expect(row?.status).toBe("collecting");
+  });
+});

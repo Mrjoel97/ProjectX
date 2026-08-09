@@ -150,6 +150,7 @@ export function ApprovalKindBadge({ kind }: { kind: PlanKind }) {
     image: "Image",
     calendar_event: "Calendar event",
     memo: "Next-step memo",
+    crm_write: "CRM update",
   };
   return (
     <span
@@ -220,6 +221,10 @@ function ageLabel(epoch: number): string {
 function titleFor(plan: Plan): string {
   if (plan.kind === "calendar_event") return plan.eventTitle || "Calendar plan";
   if (plan.kind === "memo") return plan.body?.split("\n")[0] || "Next-step memo";
+  if (plan.kind === "crm_write") {
+    const count = Array.isArray(plan.crmOperations) ? plan.crmOperations.length : 0;
+    return `${count} change${count === 1 ? "" : "s"} to your records`;
+  }
   if (plan.kind === "media") {
     const artDirection =
       typeof plan.artDirection === "string" ? plan.artDirection : plan.artDirection?.mood;
@@ -228,9 +233,12 @@ function titleFor(plan: Plan): string {
   return plan.subject || "Email plan";
 }
 
-function actionLabel(kind: PlanKind): string {
+export function actionLabel(kind: PlanKind): string {
   if (kind === "memo") return "Approve & file to vault";
   if (kind === "calendar_event") return "Approve & create event";
+  // 19-06 ACTN-05: every label on this surface must name what Approve DOES. "Approve & send" on a
+  // CRM write would promise an email the inline arm structurally cannot produce.
+  if (kind === "crm_write") return "Approve & save to records";
   if (kind === "reel" || kind === "image") return "Approve governed generation";
   return "Approve & send";
 }

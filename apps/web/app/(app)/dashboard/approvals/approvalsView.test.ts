@@ -4,6 +4,7 @@ import { describe, expect, test } from "vitest";
 import {
   ApprovalKindBadge,
   ApprovalsStateNotice,
+  actionLabel,
   formatAbsoluteInstant,
   parseScheduleInput,
   refusalMessage,
@@ -29,8 +30,20 @@ describe("Approvals connected state contracts", () => {
     ["image", "Image"],
     ["calendar_event", "Calendar event"],
     ["memo", "Next-step memo"],
+    ["crm_write", "CRM update"],
   ] as const)("labels the real %s plan kind", (kind, label) => {
     expect(renderToStaticMarkup(createElement(ApprovalKindBadge, { kind }))).toContain(label);
+  });
+
+  // 19-06: every label on this surface must name what Approve DOES. "Approve & send" on a CRM
+  // write would promise an email the `inline` arm structurally cannot produce.
+  test.each([
+    ["email", "Approve & send"],
+    ["memo", "Approve & file to vault"],
+    ["calendar_event", "Approve & create event"],
+    ["crm_write", "Approve & save to records"],
+  ] as const)("the %s approve button names its own outcome", (kind, copy) => {
+    expect(actionLabel(kind)).toBe(copy);
   });
 
   test("resolves a local wall time to one absolute instant and rejects invalid or past input", () => {

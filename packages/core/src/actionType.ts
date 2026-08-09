@@ -5,13 +5,14 @@
 
 /** The closed set of action types an approved plan can execute (ACTN-01). Adding a member
  *  without an arm is a COMPILE error at the arm table in cockpit.ts (15-05). */
-export const ACTION_TYPES = ["email", "memo", "calendar_event", "media"] as const;
+export const ACTION_TYPES = ["email", "memo", "calendar_event", "media", "crm_write"] as const;
 export type ActionType = (typeof ACTION_TYPES)[number];
 
 /** plans.kind is `v.optional(v.literal("memo"))` — ABSENT means the email plan every prior
  *  phase built, so this needs no migration and no backfill. */
-export const actionTypeOf = (kind: "memo" | "calendar_event" | "media" | undefined): ActionType =>
-  kind ?? "email";
+export const actionTypeOf = (
+  kind: "memo" | "calendar_event" | "media" | "crm_write" | undefined,
+): ActionType => kind ?? "email";
 
 /** How an arm executes. `workflow` = durable multi-step orchestration (email). `inline` = a single
  *  transactional write (memo). `externalAction` = ONE governed external side effect, executed by
@@ -38,7 +39,23 @@ export const actionTypeOf = (kind: "memo" | "calendar_event" | "media" | undefin
  *      external write as `workflow` would silently inherit the EMAIL terminal.
  *  Phases 18 (document creation) and 19 (CRM writes) are the same mechanism — one governed
  *  external side effect driven by the retrier, not a DB write and not a fan-out — so they reuse
- *  this arm rather than adding a fourth. */
+ *  this arm rather than adding a fourth.
+ *
+ *  CORRECTED A THIRD TIME in Phase 19 (19-06), by the commit that falsified the sentence above.
+ *  That prediction was wrong about BOTH phases it named, and the second half of the sentence is
+ *  what made it wrong: it assumed the side effect was EXTERNAL.
+ *    - **Phase 18 never took this arm at all.** It shipped with `ACTION_TYPES` still four members
+ *      and `plans.kind` still `memo | calendar_event | media`; document creation landed as a
+ *      cockpit TOOL (`createDocument`) writing a vault row inside the turn, not as an action type
+ *      behind Approve. The prediction described a registration that never happened.
+ *    - **Phase 19 is `inline`, not `externalAction`.** A CRM write targets OUR OWN `contacts` /
+ *      `followUps` tables, so applying an approved operation list is "a single transactional
+ *      write" — this file's own definition of the `inline` arm, three lines up. There is no
+ *      `fetch`, no third-party API and nothing for the retrier to retry; a Convex mutation is
+ *      serializable, so approve-all-or-none falls out for free. Routing it through the retrier
+ *      would buy at-least-once delivery of a write that is already exactly-once.
+ *  The standing lesson, since this comment has now been wrong twice: a future phase's arm is a
+ *  PREDICTION until its member is in `ARMS` below. Read the table, not the prose. */
 export type Arm = "workflow" | "inline" | "externalAction";
 
 /** THE arm table. A `satisfies Record<ActionType, Arm>` bind, not a ternary: a ternary is total by
@@ -50,6 +67,9 @@ const ARMS = {
   memo: "inline",
   calendar_event: "externalAction",
   media: "externalAction",
+  // 19-06 ACTN-05: the `inline` arm's SECOND occupant. A CRM write is one transactional write on
+  // our own tables — see the third correction in the `Arm` comment for why it is not `externalAction`.
+  crm_write: "inline",
 } as const satisfies Record<ActionType, Arm>;
 
 export const armFor = (t: ActionType): Arm => ARMS[t];

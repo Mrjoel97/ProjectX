@@ -25,8 +25,14 @@ describe("actionTypeOf (ACTN-01 closed action-type union)", () => {
     expect(actionTypeOf("media")).toBe("media");
   });
 
-  test("the union is exactly email + memo + calendar_event + media after Phase 20", () => {
-    expect(ACTION_TYPES).toEqual(["email", "memo", "calendar_event", "media"]);
+  test("crm_write maps to crm_write", () => {
+    expect(actionTypeOf("crm_write")).toBe("crm_write");
+  });
+
+  // EXACT equality, never `.includes` — a member added without visiting every registration site
+  // must fail HERE, at the one assertion that reads the whole union.
+  test("the union is exactly email + memo + calendar_event + media + crm_write after Phase 19", () => {
+    expect(ACTION_TYPES).toEqual(["email", "memo", "calendar_event", "media", "crm_write"]);
   });
 });
 
@@ -55,6 +61,16 @@ describe("armFor (ACTN-01 — the arm table executePlan dispatches over)", () =>
   test("media also executes as an externalAction — the arm has TWO occupants", () => {
     expect(armFor("media")).toBe("externalAction");
     expect(armFor("media")).toBe(armFor("calendar_event"));
+  });
+
+  // 19-06 ACTN-05: the `inline` arm's SECOND occupant, and the correction of a prediction this
+  // file's own doc comment carried for two phases (it said Phase 19 would reuse `externalAction`).
+  // A CRM write is one transactional write on OUR tables, which is `inline`'s definition — there is
+  // no fetch and nothing for the retrier to retry. The four arms above are UNCHANGED by it.
+  test("crm_write executes inline — the arm memo already occupies", () => {
+    expect(armFor("crm_write")).toBe("inline");
+    expect(armFor("crm_write")).toBe(armFor("memo"));
+    expect(armFor("crm_write")).not.toBe("externalAction");
   });
 
   // Totality at RUNTIME as well as at compile time: a member added to the union without an arm
@@ -86,6 +102,7 @@ const _COMPLETE_ARMS = {
   memo: "inline",
   calendar_event: "externalAction",
   media: "externalAction",
+  crm_write: "inline",
 } as const satisfies Record<ActionType, Arm>;
 
 // @ts-expect-error — omitting an ActionType's arm MUST NOT compile (`memo` and

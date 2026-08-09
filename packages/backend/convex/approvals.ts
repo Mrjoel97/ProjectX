@@ -28,7 +28,12 @@ function listLimit(value: number, maximum: number): number {
   return Math.max(1, Math.min(maximum, Math.floor(value)));
 }
 
-function planKind(plan: Doc<"plans">): "email" | "memo" | "calendar_event" | "reel" | "image" {
+/** The Approvals page's plan-kind enum. NOT `plans.kind` verbatim: `media` splits into `reel` and
+ *  `image` for the badge. Widening `plans.kind` fails to compile HERE first (19-06 added
+ *  `crm_write`), which is what drags the second approve surface into the same commit. */
+function planKind(
+  plan: Doc<"plans">,
+): "email" | "memo" | "calendar_event" | "crm_write" | "reel" | "image" {
   if (plan.kind !== "media") return plan.kind ?? "email";
   return plan.mediaMode === "image" ? "image" : "reel";
 }

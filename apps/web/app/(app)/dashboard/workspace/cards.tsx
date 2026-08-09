@@ -5,7 +5,7 @@ import { api } from "@pikar/backend/api";
 // one shared horizon, so the picker can't offer a time the server will reject.
 // REVIEW_THREAD_ID (BEVL-03): the ONE deterministic thread the weekly cron writes to, so the card
 // can tell "this is the weekly review" from "someone asked for an evaluation in a chat".
-import { REVIEW_THREAD_ID, SEND_TIME_HORIZON_MS } from "@pikar/core";
+import { parseCrmOperations, REVIEW_THREAD_ID, SEND_TIME_HORIZON_MS } from "@pikar/core";
 // The pure view model (Gap 1): lede + action-first needs-you + time-grouped fyi remainder +
 // collapsed-noise count. ALL the ordering/collapse/lede intelligence lives in @pikar/core — this
 // card is a dumb renderer over it, never re-deriving any of it (ADR-004 / cockpit.md).
@@ -63,6 +63,29 @@ function toLocalInputValue(epoch: number): string {
 function formatAbsolute(epoch: number): string {
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   return `${new Date(epoch).toLocaleString()} (${tz})`;
+}
+
+/**
+ * A staged `crm_write` list, in plain language — one sentence per operation, exactly what Approve
+ * will write. Parsed through `parseCrmOperations`, the SAME validator `executePlan` runs at the
+ * apply boundary, so the card cannot promise something the server would refuse. THROWS on an
+ * unparseable list; the caller renders that as "nothing to approve" rather than a partial promise.
+ */
+export function describeCrmOperations(raw: unknown): string[] {
+  const day = (ms: number) =>
+    new Date(ms).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+  return parseCrmOperations(raw).map((op) => {
+    switch (op.op) {
+      case "addContact":
+        return `Add contact: ${op.email}${op.name ? ` (${op.name})` : ""}`;
+      case "addFollowUp":
+        return `Follow up with ${op.email} by ${day(op.dueAt)} — ${op.note}`;
+      case "completeFollowUp":
+        return "Mark a follow-up done";
+      default:
+        return "Cancel a follow-up";
+    }
+  });
 }
 
 // Live REPORT status → badge colour. Fan-out rows seed at "approved" and move
@@ -377,6 +400,84 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
         >
           {busy ? "Saving…" : "Approve & save"}
         </button>
+      </div>
+    );
+  }
+
+  // CRM plan (19-06, ACTN-05): same single Approve gate, a different promise again. Approving
+  // applies EVERY operation below or none of them (one serializable mutation); nothing is emailed
+  // and no Gmail connection is needed. Ahead of the email chrome for the memo/calendar reason —
+  // recipients, mode, the send-time picker and "Send to N recipients" are all lies on a CRM write.
+  if (plan.kind === "crm_write") {
+    // Read through the SAME validator the applier runs (@pikar/core). An unparseable list is
+    // unapprovable, so the card must not offer an Approve button for it — a card that renders a
+    // list the server will refuse is worse than one that says so.
+    let lines: string[] | null;
+    try {
+      lines = describeCrmOperations(plan.crmOperations);
+    } catch {
+      lines = null;
+    }
+    return (
+      <div style={box} data-testid="crm-plan-card">
+        <div style={label}>CRM UPDATE</div>
+        {lines === null ? (
+          <p role="alert" style={{ color: "#dc2626", margin: "0.5rem 0 0" }}>
+            This plan's records list is incomplete, so there is nothing to approve. Ask for it again.
+          </p>
+        ) : (
+          <>
+            <ul
+              style={{
+                listStyle: "none",
+                margin: "0.5rem 0 0.75rem",
+                padding: 0,
+                display: "grid",
+                gap: "0.35rem",
+              }}
+            >
+              {lines.map((line, i) => (
+                <li
+                  // Two operations can legitimately render the SAME sentence (the same contact
+                  // named twice), so the line alone is not unique. The list is frozen at stage
+                  // time and this card never reorders, filters or inserts into it.
+                  // biome-ignore lint/suspicious/noArrayIndexKey: the index IS the identity here
+                  key={`${i}-${line}`}
+                  style={{
+                    ...chip,
+                    // BRAND §6: the teal goes in the FILL, never in 0.85rem text (`--teal-600` on
+                    // white is ~2.9:1). Zero `--held` — amber is the approval gate's alone (§2).
+                    background: "color-mix(in srgb, var(--teal-400) 30%, var(--card))",
+                    borderColor: "var(--rule)",
+                    color: "var(--ink)",
+                    display: "block",
+                    borderRadius: "0.5rem",
+                  }}
+                >
+                  {line}
+                </li>
+              ))}
+            </ul>
+            <p style={{ ...dim, margin: "0 0 0.75rem" }}>
+              Approving saves all {lines.length} {lines.length === 1 ? "change" : "changes"} to your
+              records. Nothing is sent to anyone.
+            </p>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void approve()}
+              style={{
+                ...btn,
+                background: "var(--teal-600)",
+                color: "#fff",
+                border: "none",
+                fontWeight: 600,
+              }}
+            >
+              {busy ? "Saving…" : "Approve & save to records"}
+            </button>
+          </>
+        )}
       </div>
     );
   }
@@ -2328,12 +2429,15 @@ function PlanCards({
   const halted = plan.status === "scheduled" || plan.status === "canceled";
   // A memo's body IS the card above it — a DRAFT card would just print the same memo twice.
   // `media` excluded for the same reason `memo` is: a DRAFT card printing an email body beside the
-  // canvas would be email chrome on a reel.
+  // canvas would be email chrome on a reel. `crm_write` likewise (19-06): a plan row can carry a
+  // leftover subject/body from an earlier compose in the same thread, and a DRAFT card would print
+  // an email beside a card that promises nothing is sent.
   const hasDraft =
     (Boolean(plan.body) || Boolean(plan.subject)) &&
     !halted &&
     plan.kind !== "memo" &&
-    plan.kind !== "media";
+    plan.kind !== "media" &&
+    plan.kind !== "crm_write";
   // Resolution happens BEFORE the PLAN — render the pick card whenever the cockpit has parked
   // candidates. UAT-C (03.10-04): the old `status !== "proposed"` clause is DROPPED so the picker
   // SURVIVES a plan that got proposed with a pick still open (the propose-while-pending deadlock);
