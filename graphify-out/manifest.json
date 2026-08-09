@@ -7150,8 +7150,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/dashboard-pages.md": {
-    "mtime": 1786295056.2808576,
-    "ast_hash": "123c2f935362bfe64e9a3d256b136a25",
+    "mtime": 1786296509.3755999,
+    "ast_hash": "b05a5618bb26d19bd4f05be689f9a475",
     "semantic_hash": ""
   },
   ".planning/phases/26-pending-product-pages-and-vault-redesign-integration/26-01-SUMMARY.md": {
@@ -7755,8 +7755,8 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/finance/CashView.tsx": {
-    "mtime": 1786295648.5731952,
-    "ast_hash": "1033b042551c999c0c5d47a94a91d262",
+    "mtime": 1786296320.4021866,
+    "ast_hash": "127ebf27468bf1d254147ebadb1783e0",
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/finance/FinanceTabs.tsx": {

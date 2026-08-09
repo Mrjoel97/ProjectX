@@ -237,6 +237,16 @@ const SOLVENCY_LABELS: Record<string, string> = {
  * Carries its own one-line frame because none of runway/burn/MRR/ARR/working capital appears in the
  * three Hormozi source books (`@pikar/core`'s `cash.ts` header) — the spec requires this section to
  * be marked as OUTSIDE that framework wherever it renders, never presented as part of the spine.
+ *
+ * ponytail: `metricSetFor`'s "no orphan headline" rule can put a UNIT-ECONOMICS key (`cfa`, for a
+ * bootstrapped `startup`) into the `solvency` key list — it belongs to `CashUnitEconomics`, not
+ * `CashSolvency`, so `solvency[key]` is `undefined` here and, matching `UnitEconomicsSection`'s own
+ * "skip, don't invent" contract, the tile is silently omitted from THIS row. The reader still sees
+ * the figure — `HeadlineCard` renders it from `economics` regardless — so nothing is lost, only
+ * de-duplicated. Wiring `ConnectedSolvency` to also read `cash.unitEconomics` would resolve the row
+ * duplication, but a failing scorecard read would then take Solvency down with it, which the spec
+ * explicitly forbids (failure isolation over row completeness). Upgrade path if ever wanted: pass
+ * BOTH query results into `SolvencySection` and look a key up in whichever object has it.
  */
 export function SolvencySection({
   solvency,

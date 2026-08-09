@@ -1,6 +1,15 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-08-09 (Plan cash-business-finance Task 9 — the Business tab is ASSEMBLED.
+> Last verified: 2026-08-09 (Plan cash-business-finance Task 9 SELF-REVIEW FOLLOW-UP — a
+> `ponytail:` comment records a known, harmless edge case: `metricSetFor`'s "no orphan headline" rule
+> can list a unit-economics key, `cfa`, inside `SolvencySection`'s own `set` for a bootstrapped
+> `startup`; `cash.solvency`'s `CashSolvency` return has no `cfa` field, so that tile is silently
+> skipped there — `HeadlineCard` already renders it from `economics`, so nothing is lost. Fixing the
+> row duplication would require `ConnectedSolvency` to also read `cash.unitEconomics`, which would
+> let a scorecard failure take Solvency down with it — the failure-isolation requirement outranks
+> this row-completeness nicety.)
+>
+> Prior: 2026-08-09 (Plan cash-business-finance Task 9 — the Business tab is ASSEMBLED.
 > `cash.shape`/`cash.solvency` adapters land, and `CashView.tsx` composes `HeadlineCard` →
 > `UnitEconomicsSection` → `SolvencySection` → `ActivitySection` → `NumbersPanel`, with
 > `ShapeMissingNotice` above the headline for a tenant with no `tenantProfiles` row. See the "Cash —
@@ -539,6 +548,14 @@ raising watches the date the money ends exactly like a funded one does.
   of the growth framework. These are the figures investors and accountants ask for." — marking the
   finance-ops layer as OUTSIDE the Hormozi framework wherever it renders, per Task 7's own module
   comment. A `set` with zero keys renders nothing, matching `UnitEconomicsSection`'s existing contract.
+  **Known, harmless edge case (`ponytail:` comment at the site):** `metricSetFor`'s "no orphan
+  headline" rule can put a UNIT-ECONOMICS key (`cfa`, for a bootstrapped `startup`) into the
+  `solvency` array — `cash.solvency`'s actual `CashSolvency` return has no `cfa` field, so that tile
+  is silently skipped in THIS row (same "skip, don't invent" contract as a missing key anywhere
+  else). Nothing is lost to the reader: `HeadlineCard` renders `cfa` from `economics` regardless.
+  Wiring `ConnectedSolvency` to also read `cash.unitEconomics` would de-duplicate the row, but a
+  failing scorecard read would then take Solvency down with it — the failure-isolation requirement
+  outranks this row-completeness nicety.
 - **`HeadlineCard({ metric, figure, tier, funding })`** looks its label up in the SAME two label maps
   the two rows already use (`UNIT_ECONOMICS_LABELS`, `SOLVENCY_LABELS`) rather than inventing a third
   copy — CFA's label is already phrased as a question ("Does a customer pay for itself in 30 days?"),
