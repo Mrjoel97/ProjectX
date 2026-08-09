@@ -555,6 +555,12 @@ export function BlueprintCanvas({
               >
                 <span
                   style={{
+                    // Pinned, not measured: this row is an "auto" grid track (`gridTemplateRows:
+                    // "auto 1fr"`), so nothing else forces its height to HEADER_H — nodeHeight's
+                    // arithmetic depends on it, so it's fixed here rather than left to hope that
+                    // the font-size/letter-spacing/padding above never change.
+                    height: HEADER_H,
+                    boxSizing: "border-box",
                     display: "flex",
                     alignItems: "center",
                     gap: "0.35rem",
@@ -744,7 +750,7 @@ export function BlueprintCanvas({
                         {flight}
                       </span>
                       {segDocs.length > 0 && (
-                        <span style={{ flex: "none" }}>
+                        <span style={{ ...nowrap, flex: "none" }}>
                           {segDocs.length} doc{segDocs.length === 1 ? "" : "s"}
                         </span>
                       )}
