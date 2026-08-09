@@ -53,20 +53,26 @@ describe("activityFromSends", () => {
     expect(result.perDay.reduce((sum, d) => sum + d.count, 0)).toBe(1);
   });
 
-  test("last7Count sums the newest 7 days — distinct from todayCount and from the whole window", () => {
-    // 11-day window (offsets 0..10). Sends land on offsets 0,1,1,2,6,6,8, so the newest-7-days
-    // slice (offsets 0-6) sums to 6, todayCount (offset 0 alone) is 1, and the whole 11-day window
-    // sums to 7 — three different numbers, so a wrong slice direction or window length shows up.
+  test("last7Count sums exactly the newest 7 days — pinned against both an 8-day and an 11-day sum", () => {
+    // 11-day window (offsets 0..10). Sends land on offsets 0,1,1,2,6,6,7,8 — one send on offset 7,
+    // the day RIGHT AFTER the 7-day cutoff, so an off-by-one that includes it (slice(0, 8)) is
+    // caught: the 7-day sum (offsets 0-6) is 6, the 8-day sum (offsets 0-7) is 7, and the whole
+    // 11-day window is 8. Three different numbers pin both the lower edge (todayCount, below) and
+    // the upper edge of the 7-day window, so a wrong slice direction OR a wrong window length (7
+    // vs 8 vs the whole window) all show up as a failure here.
     const result = activityFromSends({
-      sentAtMs: [day(0), day(1), day(1), day(2), day(6), day(6), day(8)],
+      sentAtMs: [day(0), day(1), day(1), day(2), day(6), day(6), day(7), day(8)],
       sinceMs: NOW - 10 * DAY,
       nowMs: NOW,
     });
     expect(result.todayCount).toBe(1);
+    const eightDaySum = result.perDay.slice(0, 8).reduce((sum, d) => sum + d.count, 0);
+    expect(eightDaySum).toBe(7);
     const wholeWindowSum = result.perDay.reduce((sum, d) => sum + d.count, 0);
-    expect(wholeWindowSum).toBe(7);
+    expect(wholeWindowSum).toBe(8);
     expect(result.last7Count).toBe(6);
     expect(result.last7Count).not.toBe(result.todayCount);
+    expect(result.last7Count).not.toBe(eightDaySum);
     expect(result.last7Count).not.toBe(wholeWindowSum);
   });
 
