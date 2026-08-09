@@ -1,6 +1,6 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-08-09 (Plan 26-09 tenant/owner Cost Console projections and controls)
+> Last verified: 2026-08-09 (Plan 26-10 Task 1 — the connected Cost route, nav still `Soon`, owner UAT pending)
 > Build history: `.planning/phases/26-pending-product-pages-and-vault-redesign-integration/` · Related ADRs: [ADR-001](../decisions/001-convex-data-orchestration-plane.md)
 
 ## Purpose
@@ -322,6 +322,62 @@ perfectly known — that is not an inconsistency, it is the difference between a
   control name, nothing identifying (§4).
 - **Every mutation returns the re-read effective state**, not the argument it was given, so a write
   a concurrent transaction overwrote cannot be reported as success.
+
+### The connected Cost route (26-10)
+
+`apps/web/app/(app)/dashboard/finance/` — `page.tsx` is a five-line server component; everything
+lives in `FinanceView.tsx`, which follows the ApprovalsView shape exactly: `"use client"`, one error
+boundary, per-section `useQuery` so a ledger failure cannot erase the live rails, and inline
+`CSSProperties` rather than class names.
+
+- **The page is named Cost and reads spend only.** Owner rename decision 2026-08-07: business money
+  (revenue, invoices, runway) is Phase 28's separate **Cash** surface. There is no revenue data in
+  the system, so a revenue tile would be fabricated (BRAND §5). The route path stays
+  `/dashboard/finance` because that is what the plan and the watch map name.
+- **Almost none of the mockup's classes exist.** `globals.css` really has `stat-grid`, `stat-tile`,
+  `stat-head`, `stat-badge`, `stat-value` and `caps-label`. `.card`, `.meter`, `.pill`, `.btn`,
+  `.sec`, `.split`, `.bars`, `.kpi`, `.note`, `.mono`, `.num` are **mockup-only**, and `.ledger` IS
+  defined but is the DARK marketing audit block from the landing page — applying it here renders the
+  console on a navy panel. Check `globals.css` before reusing a class name from
+  `docs/design/mockups/pending-pages.html`.
+- **The budget meter is a native `<progress>`, and the percentage is also written in words.** That
+  is the in-app precedent (ApprovalsView delivery progress), it needs no new CSS, and it satisfies
+  BRAND §6's no-meaning-in-color-alone rule for free. The mockup's `.meter.warn` paints `--held`;
+  BRAND §2 reserves amber for the approval gate ("spend amber in exactly one place"), so a budget
+  warning must not borrow it.
+- **Three page rules, each with a component test that goes red without it.** An `unknown` window
+  renders NO currency mark at all (a zero is indistinguishable from a watched-and-empty period);
+  media's `unlanded` gets different copy from the other two rails (`unlandedResolves.media` is
+  `false`, so it is permanent, not pending); and `bound.partial` says the totals are a FLOOR.
+- **`requiresConfirmation` is honoured as a backend fact.** Each control arms, then commits, and the
+  confirm step is in-component — never `window.confirm`, which blocks the page and cannot be driven
+  by the spec that has to prove the boundary.
+- **A non-owner's DOM carries no deployment VALUE and no switch POSITION.** Naming that the controls
+  exist is product copy; a ceiling amount or an on/off state is a global fact. `ConnectedDeployment`
+  passes `"skip"` to the owner queries for a non-owner — firing them would throw `OWNER_REQUIRED`
+  and drop the whole page into the error boundary for someone who is simply not the owner.
+- **Component tests are `.test.ts`, never `.test.tsx`.** `apps/web/vitest.config.mts` includes
+  `app/**/*.test.ts` only, so a `.tsx` is silently skipped. Components are built with
+  `createElement` and rendered to a string with `renderToStaticMarkup`; only the hook-free exports
+  are importable, which is why the connected pieces stay module-private. The same config now sets
+  `esbuild: { jsx: "automatic" }` to match Next; before that, esbuild's classic runtime made every
+  `.tsx` reached from a test need a dead default `React` import or die with `React is not defined`.
+
+**Evidence status, 2026-08-09 — the browser gate is NOT green.** Currently passing:
+`pnpm --filter @pikar/web test` (88/88, of which 29 are Cost Console), web typecheck, and the
+production build, in which `/dashboard/finance` appears in the route table. `e2e/finance.spec.ts` is
+authored and was **executed**; it stopped in the canonical `auth.setup.ts` because this shell has no
+`E2E_USER_EMAIL`/`E2E_USER_PASSWORD`, so 27 assertions did not run. Do not cite the browser gate as
+passed. With local `convex dev` (not `--once`) plus Next on `:3111` and both credentials exported,
+resume exactly:
+
+```text
+pnpm --filter @pikar/web test:e2e -- e2e/finance.spec.ts
+```
+
+The nav item stays `Soon` until that run and the blocking owner UAT both pass; the route is reachable
+directly at `/dashboard/finance` in the meantime, and the spec asserts the absence of the nav link so
+activation cannot happen by accident.
 
 ## How to change safely
 

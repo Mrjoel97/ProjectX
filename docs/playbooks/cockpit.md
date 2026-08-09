@@ -11,6 +11,23 @@
 > passing on an empty scan. **Add the literal in the SAME commit as a new tool.** Prose in a schema
 > comment is not a guard; a test is.
 
+> Last verified: 2026-08-09 (Phase 26 Plan 10 — **the watched `apps/web/e2e/` path gained
+> `finance.spec.ts`; no cockpit behaviour, tool, gate or stored row changed.**) The Cost Console
+> route ships at `/dashboard/finance` with its rail item still `Soon`, so nothing in the cockpit's
+> navigation moves until that plan's blocking owner UAT passes. Two things in the new spec are worth
+> copying rather than rediscovering: it asserts the NON-OWNER boundary **before** calling
+> `owner:bootstrapOwner`, because that grant has no inverse and the boundary becomes unobservable
+> from the account once it is the owner; and it seeds through the real `spendLedger:record` writer,
+> so a green run proves the projection and the role gate and proves **nothing** about a provider —
+> no model call, fal job or invoice is involved, and no seeded `actual` row may be cited as evidence
+> that money reached OpenAI or fal.
+>
+> The same pass changed `apps/web/vitest.config.mts` to `esbuild: { jsx: "automatic" }`, matching
+> Next's transform. Before it, esbuild's classic runtime meant any `.tsx` reached from a test
+> compiled to `React.createElement` and threw `React is not defined` unless the component carried a
+> default `React` import it never otherwise used. `ApprovalsView.tsx` still carries that dead import;
+> it is now unnecessary and can go whenever that file is next touched.
+
 > Last verified: 2026-08-09 (26-07 follow-up, `llm.ts` — **the agent loop's eight spend sites now
 > carry correlations, and every one of them needed a discriminator beyond the obvious ref.**)
 > `recordModelSpend` gained REQUIRED `kind` and `correlationId` parameters — required at the HELPER
