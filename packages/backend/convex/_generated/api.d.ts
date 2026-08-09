@@ -17,6 +17,7 @@ import type * as blueprint from "../blueprint.js";
 import type * as briefings from "../briefings.js";
 import type * as calendar from "../calendar.js";
 import type * as calendarComplete from "../calendarComplete.js";
+import type * as cash from "../cash.js";
 import type * as cockpit from "../cockpit.js";
 import type * as crons from "../crons.js";
 import type * as deadLetter from "../deadLetter.js";
@@ -101,6 +102,7 @@ declare const fullApi: ApiFromModules<{
   briefings: typeof briefings;
   calendar: typeof calendar;
   calendarComplete: typeof calendarComplete;
+  cash: typeof cash;
   cockpit: typeof cockpit;
   crons: typeof crons;
   deadLetter: typeof deadLetter;

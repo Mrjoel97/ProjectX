@@ -1,6 +1,6 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-08-09 (Plan cash-business-finance Task 1 — Finance became a three-tab shell: Business/Pikar spend/Operator, Operator owner-only)
+> Last verified: 2026-08-09 (Plan cash-business-finance Task 2 — the activity row, counted from delivered sends)
 > Build history: `.planning/phases/26-pending-product-pages-and-vault-redesign-integration/` · Related ADRs: [ADR-001](../decisions/001-convex-data-orchestration-plane.md)
 
 ## Purpose
@@ -33,6 +33,31 @@ additive data, safety instrumentation or provenance.
 
 Every module has a colocated `.test.ts`; `dashboardSchema.test.ts` protects the additive schema and
 index foundation. Existing action terminals remain owned by their subsystem playbooks.
+
+### Cash — business finance
+
+`packages/core/src/cash.ts` / `packages/backend/convex/cash.ts` are the Business tab's own pure/
+adapter split, mirroring the Cost console's `spend.ts`/`finance.ts` pair so one mental model serves
+both halves of the page:
+
+- **`cash.ts` (pure) owns the `CashFigure` vocabulary and the activity derivation.** Every business
+  figure is exactly one of FOUR states, never collapsed into three: `unknown` (never asked/answered,
+  names the missing input), `not-applicable` (the metric does not exist for this business — decided
+  by tier/stage, NEVER inferred from absent data, so a project-based consultant is never shown a
+  fabricated "$0 MRR"), `not-computable` (inputs are present but make the arithmetic undefined, e.g.
+  CAC = 0 — deliberately not folded into `unknown`, because "needs your CAC" is a lie to someone who
+  told us it was zero), and `known` (a real number, including a real measured zero). `activityFromSends`
+  buckets delivered sends into UTC days and derives `todayCount` and `streakDays`; the streak ENDS
+  TODAY by definition — a streak that keeps counting yesterday's run for someone who has not sent
+  today is the flattering lie the row exists to avoid.
+- **`convex/cash.ts` (adapter) is a reader only.** `activity` is a `tenantQuery` that scans `requests`
+  rows in status `sent` through `by_tenant_status_createdAt`, bounded at 1000 rows with
+  `bound.partial` + `partialReason: "row-cap"` when the cap is hit — the same `readWindow` honesty
+  contract `finance.ts` uses, so a capped count reads as a floor, never the truth.
+- **The activity row is free.** Pikar already delivers the emails, so a `sent` request row IS the
+  reach-out count — the row needs no data entry and is the first thing rendered on the Business tab.
+  "Posts per day" has no data source yet (Pikar delivers email, not social posts) and renders an
+  explicit "not tracked yet", never a fabricated `0`.
 
 ### Frontend and connected browser evidence
 

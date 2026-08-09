@@ -6,6 +6,7 @@ export * from "./briefing";
 export * from "./buildTelemetry";
 export * from "./businessProfile";
 export * from "./calendar";
+export * from "./cash";
 export * from "./dashboard";
 export * from "./docType";
 export * from "./documentGen";
