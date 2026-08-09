@@ -164,6 +164,8 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_tenant_status", ["tenantId", "status"])
+    // Pulse layer (living-map §3.1): windowed status reads for the tenant-wide outcome counts.
+    .index("by_tenant_status_createdAt", ["tenantId", "status", "createdAt"])
     .index("by_correlation", ["correlationId"])
     // Deterministic hash→text recovery for the cached action (03-RESEARCH Pattern 3).
     .index("by_tenant_safeTextHash", ["tenantId", "safeTextHash"])
@@ -404,6 +406,8 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_thread", ["tenantId", "threadId"])
+    // Pulse layer (living-map §3.1): windowed status reads for the tenant-wide outcome counts.
+    .index("by_tenant_status_createdAt", ["tenantId", "status", "createdAt"])
     // Phase-17 (ACTN-02). The action-retrier's `onComplete` receives ONLY `{runId, result}` — no
     // context bag — so the run id is the sole correlation handle back to the plan that started it.
     // This index is what makes that resolvable; without it the terminal cannot find its own plan.
