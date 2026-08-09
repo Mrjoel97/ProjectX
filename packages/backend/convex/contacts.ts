@@ -28,6 +28,7 @@ import {
   normalizeAddress,
   parseCrmOperations,
   parseDashboardCursor,
+  rankCandidates,
   renderFooter,
 } from "@pikar/core";
 import { v } from "convex/values";
@@ -834,5 +835,69 @@ export const listUnassignedFollowUps = tenantQuery({
       followUps: page.map(({ followUpId, note, dueAt }) => ({ followUpId, note, dueAt })),
       bound,
     };
+  },
+});
+
+// ── The cockpit's saved-contact read (19-08, ACTN-05) ─────────────────────────
+
+/**
+ * Look a NAME up against the saved contacts, with each match's OPEN follow-ups.
+ *
+ * `tenantId` is an EXPLICIT arg, not `ctx.tenantId`: the caller is a cockpit TOOL running inside
+ * an action that carries no auth identity and passes the tenant it was built for (the
+ * `internal.vaultSources.latestCreated` precedent).
+ *
+ * **This is a READ and there is deliberately no write anywhere in it.** Resolving a name must
+ * never mint a contact row — that absence is invariant 1 / SC#7 ("no contacts cache at rest")
+ * enforced at its one enforcement point, and `cockpitTools.test.ts` counts the rows to prove it.
+ *
+ * Matching is `rankCandidates` (@pikar/core) — the SAME ranker the Gmail-header path runs, fed the
+ * saved rows shaped as header records. ONE definition of "does this name mean this person", so the
+ * saved plane and the header plane can never disagree about who Sarah is (CLAUDE.md §8 rung 2).
+ *
+ * ponytail: bounded scan + the in-memory ranker, because `contacts` has no name index and a saved
+ * book past SCAN_LIMIT is not this phase's problem. Upgrade path: a `searchIndex` on
+ * `contacts.name` — at which point the ranker still decides, only the shortlist changes.
+ */
+export const savedForName = internalQuery({
+  args: { tenantId: v.string(), name: v.string() },
+  handler: async (
+    ctx,
+    { tenantId, name },
+  ): Promise<{
+    matches: ReturnType<typeof rankCandidates>;
+    followUps: Array<{ note: string; dueAt: number }>;
+  }> => {
+    const rows = await ctx.db
+      .query("contacts")
+      .withIndex("by_tenant_createdAt", (q) => q.eq("tenantId", tenantId))
+      .take(SCAN_LIMIT);
+
+    const matches = rankCandidates(
+      name,
+      // A saved row rendered as the header value the ranker already parses. `name` is optional on
+      // a contact, so a nameless row still matches on its address, exactly as a bare header would.
+      rows.map((row) => ({ from: row.name ? `${row.name} <${row.email}>` : row.email })),
+    );
+    if (matches.length === 0) return { matches: [], followUps: [] };
+
+    const byEmail = new Map(rows.map((row) => [row.email, row._id]));
+    const followUps: Array<{ note: string; dueAt: number }> = [];
+    for (const match of matches) {
+      const contactId = byEmail.get(match.address);
+      if (!contactId) continue;
+      const hers = await ctx.db
+        .query("followUps")
+        .withIndex("by_tenant_contact", (q) =>
+          q.eq("tenantId", tenantId).eq("contactId", contactId),
+        )
+        .take(PER_CONTACT_FOLLOWUP_LIMIT);
+      // OPEN only: a done or canceled follow-up is history, and surfacing it would have the agent
+      // re-raise something the user already closed.
+      for (const row of hers) {
+        if (row.status === "open") followUps.push({ note: row.note, dueAt: row.dueAt });
+      }
+    }
+    return { matches, followUps };
   },
 });

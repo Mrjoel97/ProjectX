@@ -47,6 +47,7 @@ import {
   buildDocFilename,
   buildRecipientView,
   CALENDAR_HORIZON_MS,
+  type CrmOperation,
   type DigestBatch,
   type DigestItem,
   type DocFormat,
@@ -59,6 +60,7 @@ import {
   isNeedsYou,
   joinDigest,
   parseAddress,
+  parseCrmOperations,
   parseSendTime,
   type RecipientEdit,
   rankCandidates,
@@ -1296,6 +1298,52 @@ const IMAGE_REFUSAL_REPLY: Record<
   invalid_prompt:
     "The image prompt was empty or too long, so no proposal was staged. Ask the user for a concise visual description.",
 };
+// 19-08 (ACTN-05). Every one of these is RETURNED, never thrown: `execute` always hands the model
+// a sentence it can say to the user (18-06's rule). None of them stages anything.
+const CRM_REFUSAL_REPLY: Record<
+  "draft_in_progress" | "add_only" | "no_clock" | "malformed",
+  string
+> = {
+  draft_in_progress:
+    "There is an email draft on this conversation's plan card, and staging record changes would " +
+    "replace it. Nothing was staged. Tell the user plainly, and offer to update their records " +
+    "once the draft is sent or discarded.",
+  add_only:
+    "You can only ADD contacts and follow-ups. Marking a follow-up done or cancelling one is the " +
+    "user's own call, on the Pipeline page. Nothing was staged — tell them where to do it.",
+  no_clock:
+    "I couldn't read the user's local date, so a dated follow-up can't be staged. Nothing was " +
+    "staged. Offer to add the contact without a follow-up.",
+  malformed:
+    "Those record changes were incomplete, so nothing was staged. Ask the user for what is " +
+    "missing and try once more.",
+};
+/** `parseCrmOperations`'s NAMED errors, each turned into the question the model should ask. */
+const CRM_PARSE_REFUSAL: Record<string, string> = {
+  CRM_OPERATIONS_EMPTY:
+    "There were no changes to stage, so nothing happened. Ask the user what they want recorded.",
+  CRM_OPERATIONS_TOO_MANY:
+    "That is too many record changes for one approval. Nothing was staged. Ask the user which " +
+    "ones matter now and stage those.",
+  CRM_FOLLOWUP_CONTACT_REQUIRED:
+    "A follow-up has to say WHO it is about, and that one named nobody. Nothing was staged. Ask " +
+    "the user whose follow-up it is and use that person's email address.",
+  CRM_FOLLOWUP_NOTE_REQUIRED:
+    "A follow-up needs to say what needs doing, and that one was blank. Nothing was staged. Ask " +
+    "the user what the follow-up is for.",
+  CRM_CONTACT_EMAIL_REQUIRED:
+    "A contact needs an email address, and that one had none. Nothing was staged. Ask the user " +
+    "for the address.",
+};
+/** The three non-resolved `parseSendTime` outcomes, worded for a follow-up date. */
+const CRM_DUE_REFUSAL: Record<"ambiguous" | "past" | "tooFar" | "none", string> = {
+  ambiguous:
+    "That follow-up date is ambiguous — ask which day they meant (never guess). Nothing was staged.",
+  past: "That follow-up date has already passed — ask for a future date. Nothing was staged.",
+  tooFar:
+    "That follow-up date is too far out to stage. Ask the user for a nearer date. Nothing was staged.",
+  none: "I didn't catch when that follow-up is due — ask the user for a date. Nothing was staged.",
+};
 const DECLARED_UNSUPPORTED_REPLY =
   "Recorded. This does NOT end the run and discards nothing you found. Continue: produce the full " +
   "findings document — what you searched, what you did establish, the near-misses and why each is " +
@@ -1684,8 +1732,11 @@ export function buildCockpitTools(
 
   return {
     resolveContacts: tool({
+      // Split literals keep each chunk under the §5 no-hardcoded-prompt scan ceiling (200 chars).
       description:
-        "Look up a named person in the user's mailbox to find their email address. Use for a NAME (not a typed address). Returns matching contacts by label for the user to pick — you never see the address.",
+        "Look up a named person to find their email address. Use for a NAME (not a typed address). " +
+        "Checks the user's saved contacts first, then their mailbox. " +
+        "Returns matches by label for the user to pick — you never see the address.",
       inputSchema: jsonSchema<{ name: string }>({
         type: "object",
         properties: { name: { type: "string", description: "The person's name to look up." } },
@@ -1693,6 +1744,57 @@ export function buildCockpitTools(
         additionalProperties: false,
       }),
       execute: async ({ name }): Promise<string> => {
+        // The SMOKE:: search sentinel (offline fixture trigger) must not pollute name-matching —
+        // strip it so ranking scores against the real name. Production names never carry it (no-op).
+        // Hoisted above BOTH planes (19-08) so the saved lookup and the header lookup rank the same
+        // string; leaving it below would make the sentinel match saved contacts differently.
+        const rankName = name.replace(/^SMOKE::(?:[^:]*::)*/, "").trim() || name;
+
+        // ── CONTACTS FIRST (19-08, SC#1) ──────────────────────────────────────
+        // A saved contact is a DELIBERATE HUMAN STATEMENT about who someone is; a Gmail-header
+        // match is an INFERENCE drawn from who happened to share a thread. Preferring the saved
+        // record is also the reason a user would bother saving one — it visibly makes the agent
+        // faster, because a hit costs one indexed read instead of a mailbox round trip.
+        //
+        // THIS TOOL NEVER WRITES A CONTACT ROW, on either plane. That absence is the enforcement
+        // point of the "no contacts cache at rest" invariant (SC#7, contacts-crm.md invariant 1):
+        // a row exists only because a human deliberately acted, and resolving a name is not that
+        // act. `cockpitTools.test.ts` counts `contacts` rows across a resolution that matched
+        // nothing, one and several, because prose is not a guard.
+        const saved = await ctx.runQuery(internal.contacts.savedForName, {
+          tenantId,
+          name: rankName,
+        });
+        if (saved.matches.length > 0) {
+          await ctx.runMutation(internal.plans.writeCandidates, {
+            planId,
+            candidates: [{ name, matches: saved.matches }],
+            pendingValid: [],
+          });
+          const labels = saved.matches
+            .map((m, i) => `#${i + 1} ${m.displayName ?? "(no name)"}`)
+            .join(", ");
+          // The open follow-ups ride along, so "what do I owe them?" costs no second tool call.
+          // scanText because a NOTE is user/agent prose that could hold an address, and this
+          // tool's contract is that no address crosses to the model (§2-D).
+          const owed = saved.followUps
+            .map((f) => {
+              const scan = scanText(f.note);
+              return `"${scan.ok ? scan.value.safeText : "(note withheld)"}"`;
+            })
+            .join(", ");
+          const followUpLine =
+            saved.followUps.length === 0
+              ? " No open follow-ups are on record for them."
+              : ` Open follow-ups on record: ${owed}.`;
+          return (
+            `Found ${saved.matches.length} saved contact(s) for "${name}": ${labels}. ` +
+            "These are saved records the user entered, not mailbox guesses, so the mailbox was " +
+            `not searched.${followUpLine} The user will pick one — do not guess the address.`
+          );
+        }
+
+        // ── Fallback: the Gmail-header search, byte-unchanged ─────────────────
         // correlationId = planId: a stable ref for the refs-only mailbox.searched audit (§4).
         const res = await ctx.runAction(internal.gmail.search, {
           tenantId,
@@ -1708,9 +1810,6 @@ export function buildCockpitTools(
           });
           return `I couldn't read the mailbox to look up "${name}". Ask the user for the email address directly.`;
         }
-        // The SMOKE:: search sentinel (offline fixture trigger) must not pollute name-matching —
-        // strip it so ranking scores against the real name. Production names never carry it (no-op).
-        const rankName = name.replace(/^SMOKE::(?:[^:]*::)*/, "").trim() || name;
         const matches = rankCandidates(rankName, res.records);
         if (matches.length === 0)
           // Accuracy: no confident match → say so plainly and ask. NEVER substitute a different
@@ -2196,6 +2295,120 @@ export function buildCockpitTools(
           case "none": // exhaustive: a new SendTimeParse variant must become a TS error, never a guessed calendar instant
             return "I didn't detect a specific event time — ask the user for the day and time. Nothing was staged.";
         }
+      },
+    }),
+    // ── The CRM staging tool (19-08, ACTN-05) ─────────────────────────────────────────────────
+    //
+    // ONE tool, carrying a LIST. A `saveContact` tool and a `logFollowUp` tool would be two
+    // registration surfaces, two `agentSteps.tool` literals, two VERB entries and two fixtures for
+    // ONE governed act — and 19-CONTEXT locks "one plan carries a list of operations, applied
+    // atomically", which two tools could not express anyway.
+    //
+    // It STAGES and applies NOTHING. `executePlan`'s `inline` arm applies the list after Approve
+    // (19-06), in one serializable transaction. Everything below is inert until a human clicks it.
+    //
+    // The list is validated HERE as well as at the apply boundary, deliberately: the plan row is
+    // CONTENT PLANE and could be revised in between, and `parseCrmOperations` is idempotent over
+    // its own output (there is a test for exactly that), so the double parse is safe by
+    // construction and stores NORMALIZED addresses the applier never re-derives.
+    stageCrmWrite: tool({
+      // Split literals keep each chunk under the §5 no-hardcoded-prompt scan ceiling (200 chars).
+      description:
+        "Stage changes to the user's own contact records for them to approve. " +
+        "This saves nothing yet and emails nobody. " +
+        "Every follow-up must name the contact's email address. " +
+        "Pass the user's own words for when a follow-up is due; the app supplies the current date.",
+      inputSchema: jsonSchema<{
+        operations: Array<{
+          op: "addContact" | "addFollowUp";
+          email: string;
+          name?: string;
+          note?: string;
+          due?: string;
+        }>;
+      }>({
+        type: "object",
+        properties: {
+          operations: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                op: { type: "string", enum: ["addContact", "addFollowUp"] },
+                email: { type: "string", description: "The contact's email address. Required." },
+                name: { type: "string", description: "The contact's name, if known." },
+                note: { type: "string", description: "addFollowUp: what needs doing." },
+                due: { type: "string", description: "addFollowUp: the user's words for when." },
+              },
+              required: ["op", "email"],
+              additionalProperties: false,
+            },
+          },
+        },
+        required: ["operations"],
+        additionalProperties: false,
+      }),
+      execute: async ({ operations }): Promise<string> => {
+        // A CRM staging would overwrite `kind`/`status` on the ONE plan row this thread has, so a
+        // half-composed email would silently become a CRM card and the draft would be stranded.
+        // The `stageResearchPlan`/`stageMediaPlan` refusal, applied to the same hazard.
+        const plan = await readPlan();
+        const hasDraft =
+          (plan.recipients?.length ?? 0) > 0 ||
+          Boolean(plan.subject) ||
+          Boolean(plan.body) ||
+          (plan.attachments?.length ?? 0) > 0;
+        if (hasDraft) return CRM_REFUSAL_REPLY.draft_in_progress;
+
+        // The AGENT may only ADD. Closing someone's follow-up is a judgement about work being
+        // finished, and the Pipeline page is where a human makes it — the same asymmetry that
+        // keeps a contactless follow-up user-only (contacts-crm.md invariant 11).
+        if (operations.some((o) => o.op !== "addContact" && o.op !== "addFollowUp")) {
+          return CRM_REFUSAL_REPLY.add_only;
+        }
+
+        // §2-D: the model supplies the user's WORDS, never an instant. Without a trusted clock a
+        // dated follow-up cannot be staged at all (the proposeCalendarEvent rule).
+        const staged: unknown[] = [];
+        for (const o of operations) {
+          if (o.op === "addContact") {
+            // `origin` is the provenance of the DATA and is NOT a model input: an agent-staged
+            // contact came out of a mailbox resolution or the user's own words in this thread,
+            // and letting the model label provenance would make the field unreliable. The same
+            // literal `applyCrmOperations` uses when a follow-up upserts its contact.
+            staged.push({ op: "addContact", email: o.email, name: o.name, origin: "mailbox-resolved" });
+            continue;
+          }
+          if (!clientContext) return CRM_REFUSAL_REPLY.no_clock;
+          const parsed = parseSendTime(
+            o.due ?? "",
+            clientContext.nowMs,
+            clientContext.tz,
+            CALENDAR_HORIZON_MS,
+          );
+          if (parsed.kind !== "resolved") return CRM_DUE_REFUSAL[parsed.kind];
+          staged.push({ op: "addFollowUp", email: o.email, note: o.note, dueAt: parsed.epochMs });
+        }
+
+        let validated: CrmOperation[];
+        try {
+          validated = parseCrmOperations(staged);
+        } catch (e) {
+          // Every refusal is a RETURNED SENTENCE, never a throw out of the governed loop (18-06).
+          return CRM_PARSE_REFUSAL[(e as Error).message] ?? CRM_REFUSAL_REPLY.malformed;
+        }
+
+        await ctx.runMutation(internal.plans.patchPlan, {
+          planId,
+          kind: "crm_write",
+          status: "proposed",
+          crmOperations: validated,
+        });
+        return (
+          `${validated.length} change(s) to the user's records are staged on a plan card for ` +
+          "them to review. NOTHING has been saved and nothing was emailed to anyone; the changes " +
+          "are written only when the user clicks Approve. Tell them what is on the card."
+        );
       },
     }),
     // ── The briefing tools (CKPT-04) — READ-ONLY, panel-driven ────────────────────────────────
@@ -3434,6 +3647,7 @@ export async function runSpecialistTurn(
 //                | attach=<topic> | regenerate=<1-based index>:<topic> | removeAttachment=<1-based index>
 //                | personalize=<1-based index>:<intent> | sendTime=<natural-language time>
 //                | brief=today|yesterday|week | create=<short|long>:<topic>
+//                | crm=<email>[:<follow-up note>]
 // SMOKE_NOW_MS pins the clock so a `sendTime=in N hours` op resolves deterministically offline (the
 // model never supplies "now"/tz, §2-D) — the send-time analogue of the 1970-01-01 attachment pinning.
 // It is ALSO the baseMs the inbox fixture is seeded at (smoke.seedInboxFixture), so a `brief=today`
@@ -3454,7 +3668,8 @@ type AgentSmokeOp =
   | { kind: "sendTime"; text: string }
   | { kind: "brief"; range: "today" | "yesterday" | "week" }
   | { kind: "evaluate"; framework?: "swot" | "lean" | "bmc" | "growth-os" }
-  | { kind: "create"; form: "short" | "long"; topic: string };
+  | { kind: "create"; form: "short" | "long"; topic: string }
+  | { kind: "crm"; email: string; note?: string };
 
 // Exported for the round-trip test only (the callTimeoutMsFor precedent): the `create=` grammar is
 // what plan 18-07's e2e depends on, and asserting it against the real parser beats re-typing it.
@@ -3535,6 +3750,16 @@ export function parseAgentSmoke(text: string): AgentSmokeOp | null {
       if (f !== "short" && f !== "long") return null; // the SAME closed enum the inputSchema enforces
       return { kind: "create", form: f, topic: val.slice(c + 1) };
     }
+    case "crm": {
+      // <email>[:<note>] — split on the FIRST colon; an address never contains one. UNLIKE
+      // `create=`, this op needs NO nested `SMOKE::route=direct_llm::` prefix: `stageCrmWrite`
+      // calls no model at all, so the turn is already offline once parseAgentSmoke matches.
+      const c = val.indexOf(":");
+      const email = (c < 0 ? val : val.slice(0, c)).trim();
+      if (email === "") return null;
+      const note = c < 0 ? undefined : val.slice(c + 1).trim() || undefined;
+      return { kind: "crm", email, note };
+    }
     default:
       return null;
   }
@@ -3560,6 +3785,7 @@ const SMOKE_OP_TOOL: Record<AgentSmokeOp["kind"], StepTool> = {
   personalize: "personalizeRecipient",
   evaluate: "evaluateBusiness",
   create: "createDocument",
+  crm: "stageCrmWrite",
 };
 
 function runAgentSmokeOp(
@@ -3599,6 +3825,18 @@ function runAgentSmokeOp(
       return invokeTool(tools, name, { framework: op.framework });
     case "create":
       return invokeTool(tools, name, { topic: op.topic, form: op.form });
+    case "crm":
+      // A deterministic list: the contact, plus its follow-up when a note was given. `due` is the
+      // user's WORDS — the SMOKE path pins the clock (SMOKE_NOW_MS/UTC), so "tomorrow" resolves to
+      // 2020-01-02 09:00 UTC every run.
+      return invokeTool(tools, name, {
+        operations: [
+          { op: "addContact", email: op.email, name: "Smoke Contact" },
+          ...(op.note
+            ? [{ op: "addFollowUp", email: op.email, note: op.note, due: "tomorrow" }]
+            : []),
+        ],
+      });
   }
 }
 

@@ -1800,7 +1800,9 @@ test("resolveContacts prefers a SAVED contact and never searches Gmail headers",
   expect(summary).not.toContain("@"); // §2-D: the address still never crosses to the model
   // The saved row is parked as the candidate the human picks — same content plane, same card.
   const plan = await readPlan(t, planId);
-  expect(plan?.candidates?.[0]?.matches?.map((m) => m.address)).toEqual(["sarah@saved.example"]);
+  expect(plan?.candidates?.[0]?.matches?.map((m: { address: string }) => m.address)).toEqual([
+    "sarah@saved.example",
+  ]);
 });
 
 test("a saved match brings that contact's OPEN follow-ups into the SAME turn", async () => {

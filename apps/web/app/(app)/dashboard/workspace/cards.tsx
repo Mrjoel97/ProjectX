@@ -1675,6 +1675,12 @@ const VERB: Record<string, [running: string, done: string]> = {
   // must never read "Generated" or "Reel ready".
   dispatchMedia: ["Writing the script and art direction…", "Storyboard ready"],
   proposeImage: ["Composing the image prompt…", "Image proposal ready"],
+  // Phase-19 (ACTN-05): MANDATORY beside the schema literal — traceParity.test.ts asserts set
+  // equality BOTH ways, so either half alone is RED. The done state is the PROMISE the tool keeps:
+  // it STAGES a card and applies nothing, so this must never read "Saved" or "Updated your
+  // records" — the write happens on Approve, and BRAND §1 forbids claiming an action that did not
+  // happen. "Records", not "CRM", matches the card's own "changes to your records" voice.
+  stageCrmWrite: ["Preparing a records update…", "Records update ready to approve"],
 };
 const FALLBACK: [string, string] = ["Working…", "Done"];
 

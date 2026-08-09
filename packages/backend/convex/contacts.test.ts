@@ -1077,6 +1077,9 @@ describe("PIPE-01/BETA-05: the public surface is exactly what the isolation bloc
       "footerFor",
       "isSuppressed",
       "resolveUnsubToken",
+      // 19-08: the cockpit's saved-contact READ. Its zero-write property is pinned in
+      // cockpitTools.test.ts by counting `contacts` rows across a resolution (SC#7).
+      "savedForName",
       "suppressFromUnsubscribe",
       "suppressedAmong",
     ]);
