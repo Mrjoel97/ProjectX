@@ -1,0 +1,451 @@
+// The person store — the THIN Convex adapter over the Phase-19 substrate (CLAUDE.md §1).
+//
+// Every tenant-scoped write on `contacts`, `followUps` and `suppressions` lives here, plus the
+// internals the rest of the phase consumes: the send-path suppression backstop, the CAN-SPAM
+// footer, and the unsubscribe token pair. PIPE-01's central worry is a SECOND CRM data plane, so
+// this is the one substrate no later plan may duplicate — the Pipeline page, the send guard, the
+// unsubscribe route and the cockpit tools all read or write through this module.
+//
+// Three invariants this file is responsible for keeping true (docs/playbooks/contacts-crm.md):
+//   1. A row exists ONLY because a human deliberately acted. There is NO auto-upsert from mailbox
+//      or Gmail-header resolution anywhere below — that absence IS the "no contacts cache at rest"
+//      argument (SC#7). Adding one re-opens the invariant.
+//   2. `normalizeAddress` (@pikar/core) is the identity function, imported, never re-implemented.
+//      A local `.toLowerCase()` here would be a second chance for the guard and the contact row to
+//      disagree about who someone is.
+//   3. The ONLY audit row written here is on `unsuppress`, and its payload is an id and a hash —
+//      CLAUDE.md §3 (insert-only) and §4 (refs/ids/counts only). No address, no consent wording,
+//      no note text ever reaches `audit`.
+//
+// There is no opportunity concept, no pipeline-value field and no monetary type in this module,
+// and `contacts.test.ts` scans this file to keep it that way (PIPE-01, SC#8).
+import { normalizeAddress, renderFooter } from "@pikar/core";
+import { v } from "convex/values";
+import { internal } from "./_generated/api";
+import type { Doc, Id } from "./_generated/dataModel";
+import {
+  internalMutation,
+  internalQuery,
+  type MutationCtx,
+  type QueryCtx,
+} from "./_generated/server";
+import { hmacHex } from "./gmailAuth";
+import { tenantMutation } from "./lib/functions";
+import { contentHash } from "./lib/hash";
+
+// ── Shared readers ────────────────────────────────────────────────────────────
+// One indexed lookup each, both keyed on `normalizeAddress` output. Every write below routes
+// through these rather than re-deriving the key at the call site.
+
+async function contactByEmail(
+  ctx: QueryCtx,
+  tenantId: string,
+  address: string,
+): Promise<Doc<"contacts"> | null> {
+  return await ctx.db
+    .query("contacts")
+    .withIndex("by_tenant_email", (q) => q.eq("tenantId", tenantId).eq("email", address))
+    .unique();
+}
+
+async function suppressionByAddress(
+  ctx: QueryCtx,
+  tenantId: string,
+  address: string,
+): Promise<Doc<"suppressions"> | null> {
+  return await ctx.db
+    .query("suppressions")
+    .withIndex("by_tenant_address", (q) => q.eq("tenantId", tenantId).eq("address", address))
+    .unique();
+}
+
+/** The comma-joined group recipient string, exploded into normalized members. Empty members are
+ *  dropped so a trailing comma cannot produce a `""` lookup that matches nothing meaningful. */
+function recipientMembers(recipient: string): string[] {
+  return recipient
+    .split(",")
+    .map(normalizeAddress)
+    .filter((a) => a !== "");
+}
+
+// ── Public writes (tenant-scoped; CLAUDE.md §2 — no raw builders) ─────────────
+
+/**
+ * Create or update ONE contact, keyed on the normalized address. Email is REQUIRED, name is
+ * OPTIONAL (the Pipeline table falls back to the address), so saving from an agent resolution card
+ * never blocks on data Gmail did not provide.
+ *
+ * `origin` is the provenance of the DATA and is set once, on creation: a later save from a
+ * different surface does not rewrite where the address originally came from.
+ */
+export const upsertContact = tenantMutation({
+  args: {
+    email: v.string(),
+    name: v.optional(v.string()),
+    origin: v.union(v.literal("mailbox-resolved"), v.literal("user-entered"), v.literal("inbound")),
+  },
+  handler: async (ctx, { email, name, origin }): Promise<Id<"contacts">> => {
+    const address = normalizeAddress(email);
+    // Trust boundary: `normalizeAddress` deliberately does not validate, so the refusal is here.
+    // An empty key would collapse every nameless save onto one row.
+    if (address === "") throw new Error("CONTACT_EMAIL_REQUIRED");
+
+    const now = Date.now();
+    const existing = await contactByEmail(ctx, ctx.tenantId, address);
+    if (existing) {
+      // A blank/absent name must not erase a name already on record.
+      const trimmed = name?.trim();
+      await ctx.db.patch(existing._id, {
+        ...(trimmed ? { name: trimmed } : {}),
+        updatedAt: now,
+      });
+      return existing._id;
+    }
+
+    return await ctx.db.insert("contacts", {
+      tenantId: ctx.tenantId,
+      email: address,
+      ...(name?.trim() ? { name: name.trim() } : {}),
+      origin,
+      createdAt: now,
+      updatedAt: now,
+    });
+  },
+});
+
+/**
+ * Record that the USER asserts consent for this contact ("they signed up at the trade show").
+ *
+ * NOTHING is ever defaulted to consented — absent stays absent, and the Pipeline cell then reads
+ * "none on record", which is the truth. This is also the reproducible-wording machinery Phase 31
+ * will later write real captured wording into, exercised now rather than shipped unused.
+ *
+ * `wording` and `context` are CONTENT PLANE (CLAUDE.md §4). They are stored on the contact row and
+ * never audited — this function writes no audit row at all.
+ */
+export const assertConsent = tenantMutation({
+  args: {
+    contactId: v.id("contacts"),
+    wording: v.string(),
+    context: v.optional(v.string()),
+  },
+  handler: async (ctx, { contactId, wording, context }): Promise<null> => {
+    const row = await ctx.db.get(contactId);
+    // ONE message for "gone" and "not yours": a distinct error would confirm the id exists.
+    if (!row || row.tenantId !== ctx.tenantId) throw new Error("CONTACT_NOT_FOUND");
+    // A consent record with no wording is a defaulted consent wearing a timestamp.
+    if (wording.trim() === "") throw new Error("CONSENT_WORDING_REQUIRED");
+
+    const now = Date.now();
+    await ctx.db.patch(contactId, {
+      consentAt: now,
+      consentSource: "asserted-by-user",
+      consentWording: wording.trim(),
+      ...(context?.trim() ? { consentContext: context.trim() } : {}),
+      updatedAt: now,
+    });
+    return null;
+  },
+});
+
+/**
+ * Suppress an address. IDEMPOTENT: the suppressions row is the trust boundary, so being asked
+ * twice must leave exactly one row rather than racing two.
+ *
+ * The `contacts.unsubscribedAt` write is a DISPLAY MIRROR and is best-effort by design — no
+ * contact row is created here, and its absence never blocks the suppression (suppression outlives
+ * the contact, and can exist without one).
+ */
+export const markSuppressed = tenantMutation({
+  args: { address: v.string() },
+  handler: async (ctx, { address }): Promise<null> => {
+    await suppress(ctx, ctx.tenantId, address, "user-marked");
+    return null;
+  },
+});
+
+/** The shared suppression write. One implementation for the user-marked and unsubscribe-link
+ *  paths so the two can never disagree about what a suppression is. */
+async function suppress(
+  ctx: MutationCtx,
+  tenantId: string,
+  rawAddress: string,
+  source: "user-marked" | "unsubscribe-link",
+): Promise<boolean> {
+  const address = normalizeAddress(rawAddress);
+  if (address === "") return false;
+
+  const now = Date.now();
+  const existing = await suppressionByAddress(ctx, tenantId, address);
+  if (existing) {
+    // Already suppressed. Do NOT bump `suppressedAt` — the fact of record is WHEN they asked to
+    // stop, and a replayed unsubscribe link must not rewrite it.
+    return false;
+  }
+  await ctx.db.insert("suppressions", { tenantId, address, suppressedAt: now, source });
+
+  const contact = await contactByEmail(ctx, tenantId, address);
+  if (contact) await ctx.db.patch(contact._id, { unsubscribedAt: now, updatedAt: now });
+  return true;
+}
+
+/**
+ * Reverse a suppression. Deliberately NOT a plain toggle: `acknowledged` must be exactly `true`,
+ * which is the UI's explicit confirm that re-subscribing without fresh consent is the user's
+ * responsibility. This is the ONLY audit row this module writes.
+ */
+export const unsuppress = tenantMutation({
+  args: { address: v.string(), acknowledged: v.boolean() },
+  handler: async (ctx, { address, acknowledged }): Promise<null> => {
+    // Exact `true` only, and BEFORE any read — a truthy non-boolean must not un-suppress anyone.
+    if (acknowledged !== true) throw new Error("UNSUPPRESS_NOT_ACKNOWLEDGED");
+
+    const normalized = normalizeAddress(address);
+    if (normalized === "") throw new Error("CONTACT_EMAIL_REQUIRED");
+
+    const row = await suppressionByAddress(ctx, ctx.tenantId, normalized);
+    if (!row) throw new Error("SUPPRESSION_NOT_FOUND");
+    await ctx.db.delete(row._id);
+
+    const contact = await contactByEmail(ctx, ctx.tenantId, normalized);
+    if (contact)
+      await ctx.db.patch(contact._id, { unsubscribedAt: undefined, updatedAt: Date.now() });
+
+    // CLAUDE.md §4: an id and a hash. The key set is EXACTLY {contactId, addressHash} and
+    // `contacts.test.ts` / `llmRedaction.test.ts` pin it by key-set EQUALITY — adding a key here
+    // fails those tests on purpose. `contactId` is null (never absent) when no contact row exists,
+    // so the key set does not depend on the data. The address itself never appears, here or in
+    // `correlationId`.
+    const addressHash = await contentHash(normalized);
+    await ctx.runMutation(internal.audit.log, {
+      tenantId: ctx.tenantId,
+      correlationId: addressHash,
+      eventType: "contact.unsuppressed",
+      actor: "user",
+      payload: { contactId: contact ? String(contact._id) : null, addressHash },
+    });
+    return null;
+  },
+});
+
+/**
+ * Create a follow-up. `contactId` is OPTIONAL — free-standing follow-ups are allowed ("chase the
+ * supplier quote"). `dueAt` is REQUIRED: "Follow-ups due" is a headline tile and an undated
+ * follow-up could never appear in it. Moving the date IS the snooze, which is why there is no
+ * snooze state.
+ */
+export const createFollowUp = tenantMutation({
+  args: {
+    contactId: v.optional(v.id("contacts")),
+    note: v.string(),
+    dueAt: v.number(),
+  },
+  handler: async (ctx, { contactId, note, dueAt }): Promise<Id<"followUps">> => {
+    // `v.number()` is a float64 and admits NaN/Infinity, either of which would produce a follow-up
+    // that can never be due and can never be found by the `by_tenant_status_dueAt` range read.
+    if (!Number.isFinite(dueAt)) throw new Error("FOLLOWUP_DUEAT_REQUIRED");
+    if (note.trim() === "") throw new Error("FOLLOWUP_NOTE_REQUIRED");
+
+    if (contactId) {
+      const contact = await ctx.db.get(contactId);
+      // Without this a second tenant could hang a follow-up off a foreign contact id.
+      if (!contact || contact.tenantId !== ctx.tenantId) throw new Error("CONTACT_NOT_FOUND");
+    }
+
+    return await ctx.db.insert("followUps", {
+      tenantId: ctx.tenantId,
+      ...(contactId ? { contactId } : {}),
+      note: note.trim(),
+      dueAt,
+      status: "open",
+      createdAt: Date.now(),
+    });
+  },
+});
+
+/**
+ * Move a follow-up between its three states. `done` stamps `completedAt`; `canceled` does NOT —
+ * "I decided not to" and "I did it" are different facts, and only the second is a touch.
+ */
+export const setFollowUpStatus = tenantMutation({
+  args: {
+    followUpId: v.id("followUps"),
+    status: v.union(v.literal("open"), v.literal("done"), v.literal("canceled")),
+  },
+  handler: async (ctx, { followUpId, status }): Promise<null> => {
+    const row = await ctx.db.get(followUpId);
+    if (!row || row.tenantId !== ctx.tenantId) throw new Error("FOLLOWUP_NOT_FOUND");
+    await ctx.db.patch(followUpId, {
+      status,
+      // Re-opening clears the stamp, so "last touch" cannot count a completion that was undone.
+      completedAt: status === "done" ? Date.now() : undefined,
+    });
+    return null;
+  },
+});
+
+// ── The unsubscribe token ─────────────────────────────────────────────────────
+// ONE opaque key over the recipient string AS STORED (in group mode that is the comma-joined
+// string), so the footer of a group send carries a single link. Stateless: no token table, no
+// expiry bookkeeping, nothing to clean up — the `convex/http.ts` fal-webhook pattern (20-06).
+
+/** The signing secret. A link that lives forever in a recipient's inbox must NOT share the OAuth
+ *  signing key, so this is its own deployment env var. Absent ⇒ null ⇒ every path fails CLOSED. */
+function unsubscribeSecret(): string | null {
+  return process.env.UNSUBSCRIBE_SECRET || null;
+}
+
+function base64urlEncode(s: string): string {
+  const bytes = new TextEncoder().encode(s);
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function base64urlDecode(s: string): string | null {
+  try {
+    const binary = atob(s.replace(/-/g, "+").replace(/_/g, "/"));
+    return new TextDecoder().decode(Uint8Array.from(binary, (c) => c.charCodeAt(0)));
+  } catch {
+    return null; // malformed input is a forged link, not an exception
+  }
+}
+
+/** `<base64url(tenantId|recipient)>.<hmacHex>` — or null when the secret is unset. */
+async function mintUnsubToken(tenantId: string, recipient: string): Promise<string | null> {
+  const secret = unsubscribeSecret();
+  // Minting with an empty secret yields a digest ANYONE can recompute, so this is a fail-closed
+  // refusal, not a duplicate of the verify-side guard below: mint and verify are different paths.
+  if (!secret) return null;
+  const raw = base64urlEncode(`${tenantId}|${recipient}`);
+  return `${raw}.${await hmacHex(raw, secret)}`;
+}
+
+export type ResolvedUnsub = { tenantId: string; addresses: string[] };
+
+/** The ONE verifier. Both `resolveUnsubToken` (the landing page's GET) and
+ *  `suppressFromUnsubscribe` (the confirm POST) call this, so the POST can never trust a decode
+ *  the caller supplied. Copies `mediaComplete.resolveJob`'s rules, including the plain `===`. */
+async function verifyUnsubToken(raw: string, digest: string): Promise<ResolvedUnsub | null> {
+  // FAIL CLOSED on the env, and this is the ONLY copy of that guard on the verify path. A second
+  // one at the HTTP route would make this one vacuous, and this is the place that matters:
+  // without it `hmacHex(raw, "")` still yields a digest, which anyone can compute.
+  const secret = unsubscribeSecret();
+  if (!secret) return null;
+  if (raw === "" || digest === "") return null;
+  if (digest !== (await hmacHex(raw, secret))) return null;
+
+  const decoded = base64urlDecode(raw);
+  if (decoded === null) return null;
+  // `tenantId` is the auth userId segment and contains no `|`, so the FIRST separator splits it.
+  const bar = decoded.indexOf("|");
+  if (bar <= 0) return null;
+
+  const tenantId = decoded.slice(0, bar);
+  const addresses = recipientMembers(decoded.slice(bar + 1));
+  if (addresses.length === 0) return null;
+  return { tenantId, addresses };
+}
+
+/** Read-only resolution for the landing page. A GET must write NOTHING — corporate mail scanners
+ *  and link prefetchers fire GETs, and a GET-suppresses design unsubscribes people who never
+ *  clicked. The confirm button is what stops the feature firing itself. */
+export const resolveUnsubToken = internalQuery({
+  args: { raw: v.string(), digest: v.string() },
+  handler: async (_ctx, { raw, digest }): Promise<ResolvedUnsub | null> =>
+    await verifyUnsubToken(raw, digest),
+});
+
+/**
+ * The confirm POST. Re-verifies from scratch, then suppresses EVERY address in the comma-joined
+ * string as an UPSERT — idempotency is the whole abuse mitigation for a replayed link.
+ *
+ * Writes NO audit row: there is no authenticated actor on this route, and an audit row keyed to
+ * an anonymous request is a claim the log cannot support. Returns counts only.
+ */
+export const suppressFromUnsubscribe = internalMutation({
+  args: { raw: v.string(), digest: v.string() },
+  handler: async (ctx, { raw, digest }): Promise<{ ok: boolean; suppressed: number }> => {
+    const resolved = await verifyUnsubToken(raw, digest);
+    if (!resolved) return { ok: false, suppressed: 0 };
+
+    let suppressed = 0;
+    for (const address of resolved.addresses) {
+      if (await suppress(ctx, resolved.tenantId, address, "unsubscribe-link")) suppressed += 1;
+    }
+    // `ok` is true on a replay even when `suppressed` is 0 — the recipient's request WAS honoured.
+    return { ok: true, suppressed };
+  },
+});
+
+// ── The send-path internals ───────────────────────────────────────────────────
+// Explicit `tenantId` arg, filtered here (internal functions get no wrapper injection). These read
+// `suppressions` and NEVER `contacts`: that split is what makes a contacts bug unable to
+// un-suppress anyone, and contact deletion a non-event for the guard (SC#5).
+
+/**
+ * The send-path backstop: is this recipient suppressed?
+ *
+ * ponytail: the comma-split is the CEILING of this function. Group mode is ONE `requests` row
+ * holding a joined recipient string, so a `true` here can only refuse the WHOLE row — it cannot
+ * drop one member and send to the rest. The per-address drop that makes partial group sends work
+ * lives at `executePlan`/`startFanout` (19-05), which sees the recipient LIST before the join.
+ * Upgrade path is there, not here; widening this function would just move the same limitation.
+ */
+export const isSuppressed = internalQuery({
+  args: { tenantId: v.string(), recipient: v.string() },
+  handler: async (ctx, { tenantId, recipient }): Promise<boolean> => {
+    for (const address of recipientMembers(recipient)) {
+      if (await suppressionByAddress(ctx, tenantId, address)) return true;
+    }
+    return false;
+  },
+});
+
+/** The suppressed SUBSET of a recipient list, normalized — what 19-05 drops and then names back to
+ *  the user ("withheld from …"). One indexed read per address, no scan. */
+export const suppressedAmong = internalQuery({
+  args: { tenantId: v.string(), addresses: v.array(v.string()) },
+  handler: async (ctx, { tenantId, addresses }): Promise<string[]> => {
+    const out: string[] = [];
+    for (const raw of addresses) {
+      const address = normalizeAddress(raw);
+      if (address === "") continue;
+      if (out.includes(address)) continue; // a duplicated recipient is named once
+      if (await suppressionByAddress(ctx, tenantId, address)) out.push(address);
+    }
+    return out;
+  },
+});
+
+/**
+ * The CAN-SPAM footer for ONE recipient, or `null` when it cannot be built — in which case the
+ * CALLER fails closed and refuses the send. A footer rendering an empty address or a dead link
+ * looks compliant and is not, which is worse than no footer at all.
+ *
+ * Null happens when: the tenant has no `postalAddress`, `UNSUBSCRIBE_SECRET` is unset, or the
+ * Convex site origin is unset. All three are configuration, and all three refuse the send.
+ */
+export const footerFor = internalQuery({
+  args: { tenantId: v.string(), recipient: v.string() },
+  handler: async (ctx, { tenantId, recipient }): Promise<{ text: string } | null> => {
+    const profile = await ctx.db
+      .query("tenantProfiles")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .unique();
+    const postalAddress = profile?.postalAddress?.trim() ?? "";
+    if (postalAddress === "") return null;
+
+    // The CONVEX SITE origin, the same origin `http.ts` serves — NOT `SITE_URL`, which is the Next
+    // app and cannot serve this route (19-04 mounts it here).
+    const siteUrl = process.env.CONVEX_SITE_URL?.replace(/\/+$/, "") ?? "";
+    if (siteUrl === "") return null;
+
+    const token = await mintUnsubToken(tenantId, recipient);
+    if (!token) return null;
+
+    return {
+      text: renderFooter({ postalAddress, unsubscribeUrl: `${siteUrl}/unsubscribe/${token}` }),
+    };
+  },
+});
