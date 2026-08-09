@@ -1,6 +1,16 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-08-09 (Plan cash-business-finance Task 7 REVIEW FIX — `revenueStage` deleted
+> Last verified: 2026-08-09 (Plan cash-business-finance Task 8 — `metricSetFor(tier, funding)` adds
+> `CashMetricKey`/`CashMetricSet`: which metrics a tenant sees, and which one leads. ONE rule, one
+> exception clause — capital posture (`hasOutsideMoney`: `funded` or `seeking`) decides the
+> HEADLINE, the tier's `TIER_SETS` table decides the rows below it, and when they disagree posture
+> wins the headline while the tier keeps its rows. `TIER_SETS` is a `satisfies Record<Tier, …>`
+> table (the `TIER_REASON` precedent), never a switch, so an added tier without an entry is a
+> compile error. A no-orphan-headline check prepends the headline into `solvency` when the tier's
+> own rows don't already carry it (fires for a bootstrapped `startup` leading with `cfa`). See the
+> "Cash — which metrics a tenant sees" section below.)
+>
+> Prior: 2026-08-09 (Plan cash-business-finance Task 7 REVIEW FIX — `revenueStage` deleted
 > from `solvency()`'s signature. It was threaded through as `Tier`'s natural pairing but never
 > consulted by a single conditional; the reviewer traced it forward and found wiring it would have
 > been WRONG anyway — inferring a pre-revenue startup's MRR as `not-applicable` from its stage is
@@ -380,6 +390,49 @@ for whom the constraint is the date the money ends.
 - Test evidence: `cash.test.ts`'s `describe("solvency — the finance-ops layer", ...)` (13 tests: the
   brief's original 10, the staleness pin, and the REVIEW FIX's catalogue-agreement test looping every
   `Tier`) — `pnpm --filter @pikar/core test cash` — 53/53. `pnpm typecheck` — 10/10 packages green.
+
+### Cash — which metrics a tenant sees (Task 8)
+
+`metricSetFor(tier: Tier, funding: Funding | null): CashMetricSet` decides which `CashMetricKey`s
+render in each of the three rows, and which one is the HEADLINE. **One rule, exactly one exception
+clause: capital posture decides the headline, the tier decides the sets below it, and when they
+disagree posture wins the headline while the tier keeps its rows.** `hasOutsideMoney(funding)` is
+`funding === "funded" || funding === "seeking"` — `seeking` reads as outside money for the same
+reason `deriveTier` already groups it with `funded` (`businessProfile.ts`): a company raising
+watches the date the money ends exactly like a funded one does.
+
+- **Why posture, not tier, picks the headline.** It is the one segmentation axis the source
+  material argues for: without outside money, a customer paying for itself inside 30 days IS
+  survival, so CFA leads; with outside money the constraint is the date it ends, so runway leads.
+  An `sme`/`enterprise` tenant that is bootstrapped leads with `workingCapital` instead of `cfa` —
+  an established business's survival question is the cash conversion cycle, not one customer's
+  30-day payback — but this still resolves through the SAME rule: posture selects among the tier's
+  own candidates, it never invents a metric the tier's set doesn't already carry.
+- **`TIER_SETS` is a TABLE (`as const satisfies Record<Tier, …>`), deliberately not a switch or a
+  ternary** — the `TIER_REASON` precedent (`businessProfile.ts:342`): a ternary is total by
+  construction, so a tier added to the union without an entry here would silently inherit the
+  else-branch's rows instead of failing to compile. Each tier's `typicalHeadline` is the `funding:
+  null` fallback — what that tier's typical posture would produce — so an incomplete profile still
+  gets a sensible lead, never a blank.
+- **No orphan headline.** After composing the tier's three rows and picking the headline, the
+  function checks the headline appears somewhere in `[...unitEconomics, ...solvency, ...activity]`
+  and prepends it to `solvency` if not — the only case this fires is a bootstrapped `startup`,
+  whose own rows don't otherwise carry `cfa`. A test loops every tier × posture combination
+  (including `funding: null`) and asserts the headline is always in the concatenated rows.
+- **Agreement with `CASH_INPUTS` checked by hand, not re-derived.** Every row in `TIER_SETS` is
+  backed by an input `cashInputsForTier(tier)` actually collects for that tier: `mrr`/`arr` appear
+  only where the catalogue's `mrr` spec lists the tier (`startup`/`sme`/`enterprise`, never
+  `solopreneur`), `workingCapital` only where it lists `receivables`/`payables` (`sme`/`enterprise`
+  only), `referralPct` only where it lists `referralPct` (never `solopreneur`) — matching the
+  panel's own tier gating exactly, so no set implies a field the panel never asks that tier for.
+  The reverse asymmetry is intentional and not a contradiction: `solopreneur`'s `cac` and
+  `thirtyDayCashPerCustomer` ARE collected (unrestricted `tiers`), but `cacPayback`/`cacVsIndustry`
+  are not shown to them — a display curation choice, since `CASH_INPUTS` governs what is asked and
+  `TIER_SETS` governs what is shown, and the brief allows the two to differ in that direction.
+- **No word "ROAS" anywhere** — same ambient rule as `unitEconomics` above; a dedicated test
+  stringifies every tier's set and asserts the lowercase string never appears.
+- Test evidence: `cash.test.ts`'s `describe("which metrics a tenant sees", ...)` (9 tests) —
+  `pnpm --filter @pikar/core test cash` — 62/62. `pnpm typecheck` — 10/10 packages green.
 
 ### Cash — FigureTile and the connected page (Task 6)
 

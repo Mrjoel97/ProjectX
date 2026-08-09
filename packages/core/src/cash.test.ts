@@ -1,9 +1,11 @@
 import { describe, expect, test } from "vitest";
+import { TIERS } from "./businessProfile";
 import {
   activityFromSends,
   CASH_INPUTS,
   cashInputSpec,
   cashInputsForTier,
+  metricSetFor,
   needsConfirmation,
   requireInputs,
   solvency,
@@ -12,7 +14,6 @@ import {
   unitEconomics,
   validateCashInput,
 } from "./cash";
-import { TIERS } from "./businessProfile";
 import { emptyScorecard } from "./growth/scorecard";
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -539,6 +540,73 @@ describe("solvency — the finance-ops layer", () => {
         (spec) => spec.field === "receivables",
       );
       expect(result.workingCapital.state === "not-applicable").toBe(!offersWorkingCapital);
+    }
+  });
+});
+
+describe("which metrics a tenant sees", () => {
+  test("a bootstrapped solopreneur leads with CFA — a customer paying for itself IS survival", () => {
+    expect(metricSetFor("solopreneur", "bootstrapped").headline).toBe("cfa");
+  });
+
+  test("a funded startup leads with runway — the constraint is the date the money ends", () => {
+    expect(metricSetFor("startup", "funded").headline).toBe("runway");
+  });
+
+  test("capital posture WINS the headline when it disagrees with the tier", () => {
+    // A funded solopreneur leads with runway...
+    const fundedSolo = metricSetFor("solopreneur", "funded");
+    expect(fundedSolo.headline).toBe("runway");
+    // ...and still keeps the solopreneur sets underneath it.
+    expect(fundedSolo.activity).toContain("streak");
+    expect(fundedSolo.solvency).not.toContain("mrr");
+
+    // A bootstrapped startup leads with CFA and still sees MRR/ARR/burn/runway underneath.
+    const bootstrappedStartup = metricSetFor("startup", "bootstrapped");
+    expect(bootstrappedStartup.headline).toBe("cfa");
+    expect(bootstrappedStartup.solvency).toEqual(
+      expect.arrayContaining(["mrr", "arr", "netBurn", "runway"]),
+    );
+  });
+
+  test("seeking outside money reads as outside money, like the tier rule already treats it", () => {
+    expect(metricSetFor("startup", "seeking").headline).toBe("runway");
+  });
+
+  test("a solopreneur is shown activity counts, not ratios they cannot read", () => {
+    const set = metricSetFor("solopreneur", "bootstrapped");
+    expect(set.activity).toEqual(expect.arrayContaining(["reachOutsPerDay", "streak"]));
+    expect(set.solvency).not.toContain("mrr");
+    expect(set.solvency).not.toContain("arr");
+  });
+
+  test("an SME leads with working capital and sees per-channel unit economics", () => {
+    const set = metricSetFor("sme", "bootstrapped");
+    expect(set.headline).toBe("workingCapital");
+    expect(set.unitEconomics).toEqual(
+      expect.arrayContaining(["ltgpCac", "grossMargin", "cohortChurn"]),
+    );
+  });
+
+  test("ROAS is not a metric key anywhere", () => {
+    for (const tier of ["solopreneur", "startup", "sme", "enterprise"] as const) {
+      const set = metricSetFor(tier, "bootstrapped");
+      expect(JSON.stringify(set).toLowerCase()).not.toContain("roas");
+    }
+  });
+
+  test("an unknown funding posture falls back to the tier's typical headline, never to a blank", () => {
+    expect(metricSetFor("startup", null).headline).toBe("runway");
+    expect(metricSetFor("solopreneur", null).headline).toBe("cfa");
+  });
+
+  test("every set's headline also appears in one of its rows, so the page never orphans it", () => {
+    for (const tier of ["solopreneur", "startup", "sme", "enterprise"] as const) {
+      for (const funding of ["bootstrapped", "seeking", "funded", null] as const) {
+        const set = metricSetFor(tier, funding);
+        const all = [...set.unitEconomics, ...set.solvency, ...set.activity];
+        expect(all).toContain(set.headline);
+      }
     }
   });
 });

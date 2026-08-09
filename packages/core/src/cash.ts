@@ -21,7 +21,7 @@
  * metrics this tenant should see at all.
  */
 
-import type { Tier } from "./businessProfile";
+import type { Funding, Tier } from "./businessProfile";
 import { cfa, INDUSTRY_MULTIPLE, ltgpCac, round2 } from "./growth/financialSpine";
 import type { Scorecard } from "./growth/scorecard";
 
@@ -746,4 +746,142 @@ export function solvency(args: { inputs: CashInputs; tier: Tier; nowMs: number }
     arr: arrFigure,
     workingCapital: workingCapitalFigure,
   };
+}
+
+// ── Which metrics this tenant sees: tier sets, and the capital-posture headline ───────────────
+
+/** The closed union of every metric this page can render, across all three rows. */
+export type CashMetricKey =
+  | "cfa"
+  | "ltgp"
+  | "ltgpCac"
+  | "cacPayback"
+  | "cacVsIndustry"
+  | "grossMargin"
+  | "cohortChurn"
+  | "runway"
+  | "netBurn"
+  | "mrr"
+  | "arr"
+  | "workingCapital"
+  | "reachOutsPerDay"
+  | "postsPerDay"
+  | "streak"
+  | "engagedLeads"
+  | "referralPct";
+
+/** Which metrics a tenant sees, and which one leads. */
+export type CashMetricSet = {
+  headline: CashMetricKey;
+  unitEconomics: CashMetricKey[];
+  solvency: CashMetricKey[];
+  activity: CashMetricKey[];
+};
+
+/**
+ * `seeking` counts as outside money alongside `funded`. Precedent: `deriveTier` in
+ * `businessProfile.ts` already groups them ("seeking and funded both read as startup-shaped"), and
+ * a company raising watches the date the money ends exactly like a funded one does.
+ */
+export const hasOutsideMoney = (funding: Funding | null): boolean =>
+  funding === "funded" || funding === "seeking";
+
+/**
+ * The sets below the headline, by tier. A TABLE, deliberately not a switch or a ternary: a ternary
+ * is total by construction, so a tier added to the union without a set here would silently inherit
+ * the else-branch's rows instead of failing to compile (the `TIER_REASON` precedent,
+ * businessProfile.ts:342). `satisfies Record<Tier, …>` makes the omission a compile error.
+ *
+ * Every row below is backed by an input `CASH_INPUTS` actually collects for that tier — `mrr`/`arr`
+ * only where the catalogue's `mrr` spec lists the tier, `workingCapital` only where it lists
+ * `receivables`/`payables`, `referralPct` only where it lists `referralPct`. Checked by hand against
+ * `cashInputsForTier`, not re-derived from it here: this table is about what the page SHOWS, the
+ * catalogue about what it ASKS, and the two are allowed to differ in the other direction (a
+ * solopreneur's `cac` is collected but `cacPayback`/`cacVsIndustry` are not shown to them — a
+ * display simplification, not a missing input).
+ */
+const TIER_SETS = {
+  solopreneur: {
+    typicalHeadline: "cfa",
+    unitEconomics: ["cfa", "ltgpCac"],
+    solvency: ["runway"],
+    activity: ["reachOutsPerDay", "postsPerDay", "streak", "engagedLeads"],
+  },
+  startup: {
+    typicalHeadline: "runway",
+    unitEconomics: ["ltgpCac", "cacPayback", "cacVsIndustry"],
+    solvency: ["mrr", "arr", "netBurn", "runway"],
+    activity: ["referralPct"],
+  },
+  sme: {
+    typicalHeadline: "workingCapital",
+    unitEconomics: ["ltgpCac", "grossMargin", "cohortChurn"],
+    solvency: ["workingCapital", "netBurn", "runway", "mrr", "arr"],
+    activity: ["referralPct"],
+  },
+  enterprise: {
+    typicalHeadline: "workingCapital",
+    unitEconomics: [
+      "cfa",
+      "ltgp",
+      "ltgpCac",
+      "cacPayback",
+      "cacVsIndustry",
+      "grossMargin",
+      "cohortChurn",
+    ],
+    solvency: ["workingCapital", "netBurn", "runway", "mrr", "arr"],
+    activity: ["referralPct"],
+  },
+} as const satisfies Record<
+  Tier,
+  { typicalHeadline: CashMetricKey } & Omit<CashMetricSet, "headline">
+>;
+
+/**
+ * THE selection rule, and it has exactly one exception clause.
+ *
+ * Capital posture decides the HEADLINE — the one segmentation axis the source material argues for:
+ * without outside money, a customer paying for itself inside 30 days IS survival, so CFA leads;
+ * with outside money (`funded` or `seeking` — see `hasOutsideMoney`), the constraint is the date
+ * the money ends, so runway leads. The TIER decides the sets below it. When posture and tier
+ * disagree, posture wins the headline and the tier keeps its rows — one rule, no per-cell
+ * exceptions.
+ *
+ * An `sme`/`enterprise` bootstrapped headline is `workingCapital`, not `cfa`: an established
+ * business without outside money is not asking "does one customer pay for itself" the way a
+ * solopreneur or startup is — its survival question is the cash conversion cycle. This still
+ * follows the one rule: posture (`bootstrapped`, no outside money) selects between the tier's OWN
+ * candidates, it never invents a metric the tier doesn't already carry.
+ *
+ * When posture is unknown (`null`), the tier's `typicalHeadline` is the fallback — what its typical
+ * posture would produce — so an incomplete profile still gets a sensible lead rather than a blank.
+ */
+export function metricSetFor(tier: Tier, funding: Funding | null): CashMetricSet {
+  const base = TIER_SETS[tier];
+  const establishedTier = tier === "sme" || tier === "enterprise";
+  const headline: CashMetricKey =
+    funding === null
+      ? base.typicalHeadline
+      : hasOutsideMoney(funding)
+        ? "runway"
+        : establishedTier
+          ? "workingCapital"
+          : "cfa";
+
+  const set: CashMetricSet = {
+    headline,
+    unitEconomics: [...base.unitEconomics],
+    solvency: [...base.solvency],
+    activity: [...base.activity],
+  };
+
+  // No orphan headline: the headline must also appear in one of the rendered rows, or the page
+  // names a figure it never shows. This only fires when posture overrides the tier's usual
+  // headline into a metric that tier's rows don't already carry (e.g. a bootstrapped startup led
+  // by CFA, which its own rows don't list) — added to solvency, the row every headline candidate
+  // here belongs to.
+  const rendered = [...set.unitEconomics, ...set.solvency, ...set.activity];
+  if (!rendered.includes(headline)) set.solvency = [headline, ...set.solvency];
+  return set;
 }
