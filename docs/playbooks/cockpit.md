@@ -1,5 +1,56 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-10 (21-02 — **the specialist loader and a new workspace card. No cockpit
+> tool, arm, trace literal, guardrail or skill BODY moved; no model call was made and $0 was
+> spent.**)
+>
+> **`llm.runSpecialistTurn`'s ordinary active-body read is now `internal.skills.getEffectiveSkill`
+> (tenant active overlay -> global active -> `NO_ACTIVE_SKILL`).** `tenantId` there is trusted
+> server state off the dispatcher's authenticated envelope, never model-supplied. Only the three
+> `USER_AUTHORABLE_SKILLS` can have an overlay row at all, so `research-specialist` and
+> `media-director` resolve exactly as before. **The exact-VERSION pin branch stays GLOBAL** — moving
+> it would silently re-point the eval runner's `--skill name@version` at a tenant row; tenant pins
+> are 21-03's. **Deliberately NOT threaded** into `runCockpitAgent`, voice, inbox, reply,
+> extraction, blueprint or vault loaders: those names are not authorable in v0, and every one of
+> them still calls `getActiveSkill`.
+>
+> The proof is in `runCockpitAgent.test.ts` and it reads the prompt the MODEL was handed, not the
+> reply: `MockLanguageModelV4` accepts a `doGenerate` FUNCTION as well as the usual scripted array
+> (`ai/dist/test`), so the test passes a capture through the existing `mockScript` seam and asserts
+> the `system` message byte for byte. Tenant A gets its overlay, tenant B gets the global body with
+> no trace of A's needle or of B's own candidate, and **`SPECIALISTS[route].tools` is identical for
+> both** — ADR-007: a prompt row advises behaviour, it never grants capability. Removing the
+> loader's tenant predicate and removing the global fallback were both mutation-checked red.
+>
+> **`SkillAuthoringPanel.tsx` is a card in the chat pane, opened from the existing Chat options
+> menu.** No route, no nav entry, no component library, no new dependency. It calls exactly two
+> functions — `api.skills.publishUserCandidate({name, authoredBody})` and `api.skills.myUserSkills`
+> — and it renders above the conversation regardless of mailbox state, because adapting a skill has
+> nothing to do with a connected inbox.
+>
+> **THIS IS NOT PLAN 05's PINNED PROMPTS, and the two must not be merged.** A pinned prompt (21-05,
+> `savedPrompts`, the block below) is inert user TEXT that a Run button replays as an ordinary fresh
+> cockpit turn through `useSendCockpitMessage`. A skill adaptation is registry PROSE that changes a
+> specialist's system prompt for the whole tenant, and it is gated behind a paid evaluation and an
+> owner activation that do not exist yet. Same workspace, opposite risk profiles: one is a shortcut,
+> the other is governance. The authoring panel deliberately does not import
+> `useSendCockpitMessage`, and pinned prompts must never call `publishUserCandidate`.
+>
+> **What the panel must never grow, each pinned by `skillAuthoring.test.ts`:** an Activate control
+> or any activation API import; the base or composed body (raw registry bodies are an owner-only
+> disclosure boundary — the user sees only their own words back); raw evidence or eval-fixture
+> content (the golden corpus is held out from the authoring actor); a tool selector, schedule,
+> trigger, recurrence or routine builder; a raw `tenantId` / `authorUserId` / `rollbackEligible` /
+> row id. `skillStateLabel` keeps a candidate from ever reading as live — a passing candidate says
+> "Evaluation passed — waiting for Pikar to approve it", and a fresh one says "Nothing has changed
+> yet." Making a candidate claim it is live was mutation-checked red.
+>
+> That test STRIPS COMMENTS before scanning, on purpose: without it the panel's own note explaining
+> that there is no Activate control fails the no-Activate scan, and the only way to green it would
+> be to delete the explanation. It is also a SOURCE scan, not a render — `apps/web`'s vitest config
+> is node-only with no jsdom. The browser proof is 21-06's Playwright spec and this is not a
+> substitute for it.
+
 > Last verified: 2026-08-10 (21-01 — **SCHEMA AND OWNERSHIP ONLY: the `savedPrompts` table exists,
 > nothing reads or writes it.** No cockpit behaviour, tool, arm, trace literal or skill body moved.)
 >

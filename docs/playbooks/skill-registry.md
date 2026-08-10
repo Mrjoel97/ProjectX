@@ -1,5 +1,72 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-10 (21-02 — **THE OVERLAY IS NOW LIVE CODE: a signed-in user can publish
+> an immutable tenant candidate, and an ACTIVE tenant row now reaches the real specialist model
+> call. NOTHING was evaluated, activated or spent — publishing costs $0 and cannot change what any
+> model runs today, because no activation path to a tenant row exists yet.**)
+>
+> **ONE immutable-version rule for both scopes.** `allocateImmutableVersion(newest, duplicate)` in
+> `skills.ts` is the whole allocation contract: a body that byte-matches the newest row in scope
+> mints nothing, anything else becomes `newest.version + 1`, and a prior row is never patched. The
+> global `insertCandidate` (SkillOpt write-back) now routes through it and is behaviour-identical —
+> `rows` is non-empty by its own guard, so `newest.version + 1` is the `maxVersion + 1` it replaced.
+> The helper takes the newest ROW rather than reading it, because the two scopes are indexed
+> differently: global reads `by_name_status` and collects (a bounded registry), tenant reads
+> `by_tenant_name_version` with `.order("desc").take(1)`. **A tenant's authoring history is
+> open-ended and must never be collected** — `skills.test.ts` scans the publisher's source region
+> for `by_tenant_name_version` + `.order("desc")` + `.take(1)` and for the absence of an unbounded
+> read, because the 200-version behaviour test passes either way. Keep that literal out of the
+> region's COMMENTS too, or the scan false-positives on prose.
+>
+> **`publishUserCandidate` takes `{name, authoredBody}` and nothing else.** Tenant, author,
+> `authorUserId`, status, version, evidence, `rollbackEligible`, the base body and the composed body
+> are all derived server-side, so Convex's arg validator is the refusal boundary: a caller cannot
+> even NAME a field it does not own. Mutation-checked — adding `authorUserId` as an optional arg
+> turned the provenance test red.
+>
+> **TWO DIFFERENT BASES, and collapsing them is a real defect.** The COMPOSITION core is the
+> **global active body** (`loadSkill`): it is the only body in the system that provably carries no
+> tenant adaptation, because nothing can write one into the `skills` table. The LINEAGE base is the
+> tenant's **effective** row (`loadEffectiveSkill`) — the row this candidate supersedes, and what
+> 21-03 pins evidence to. Composing against the tenant's ACTIVE body instead appends the previous
+> draft to the new one on every re-edit, forever; this plan's own non-recursion test caught exactly
+> that before the code shipped. **Consequence 21-03 must know: a candidate based on a tenant row
+> records the SUPERSEDED tenant version in `basedOnVersion`, not the core version.** Read the core
+> from the global active row at eval time; do not infer it from `basedOnVersion`.
+>
+> **The first customization writes TWO rows in one transaction.** A `system` / `authoredBody: ""` /
+> `archived` / `rollbackEligible: true` baseline that is a byte copy of the core, then the user
+> candidate at version 2. Removing the baseline insert turns the first-customization test red.
+> A tenant that already has history gets NO new baseline — it is a first-customization artifact.
+>
+> **Idempotence is bytes AND lineage.** A republication matches only when the newest row is a
+> `user` `candidate` whose TRIMMED `authoredBody` and whose `basedOnScope`/`basedOnVersion` all
+> match. The same words against a NEW base are a real new candidate, not a repost. An idempotent
+> repost mints no version and writes NO second audit event.
+>
+> **The audit row is `skill.user_candidate_published` and its key set is pinned by EQUALITY:**
+> `skillName, tenantSkillId, version, baseScope, baseSkillId, baseVersion, author, bodyHash,
+> authoredBytes`. Adding `authoredBody` or `body` fails `skills.test.ts` on purpose (mutation-
+> checked), and a needle scan covers `audit` + `deadLetters`. Candidate text is content-plane data.
+>
+> **`loadEffectiveSkill(ctx, tenantId, name)` is the load order: tenant ACTIVE row -> the existing
+> global `loadSkill` -> `NO_ACTIVE_SKILL`.** A `candidate` row is invisible by construction (the
+> index pins `status: "active"`), which is what makes publishing a runtime no-op. The global branch
+> delegates to `loadSkill` rather than re-querying, so the fail-closed contract has one home.
+> `getEffectiveSkill` is the internalQuery wrapper; its `tenantId` is trusted server state.
+>
+> **`myUserSkills` is the disclosure boundary.** It takes NO arguments — there is no id to point at
+> another tenant — and returns exactly `name, label, authoredBody, version, status, baseScope,
+> baseVersion, gatePassed, createdAt`. No base or composed body, no raw evidence, no row id, no
+> foreign tenant. `gatePassed` is a boolean derived from `hasPassingEvidence`, which fails closed.
+>
+> **STILL OWED, and 21-02 claims none of it.** 21-03: an eval pin EXACT on the tenant candidate id
+> (`offer-architect@2` is ambiguous the moment two tenants hold it — this plan's two-tenant test
+> creates that collision deliberately) plus tenant evidence. 21-04: owner activation and rollback
+> through the one shared transition helper; **there is currently NO way for a tenant row to become
+> `active` other than a direct DB write, which is why every 21-02 test that needs an active overlay
+> patches the row itself.** SKILL-01 stays open.
+
 > Last verified: 2026-08-10 (21-01 — **CONTRACTS AND SCHEMA ONLY. Nothing here is reachable yet:
 > there is no public function, no UI, no model call, no eval path and no activation. No registry row,
 > global or tenant, exists or changed.**)
