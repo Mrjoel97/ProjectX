@@ -33,6 +33,10 @@ metrics:
   deletions: 0
   spend_usd: 0.00
   completed: 2026-08-10
+  follow_up_commits:
+    - "44bcd0d — this summary"
+    - "9bef3ec — agent-runtime.md Last-verified bump, foreign-lane false positive (see Deviations)"
+    - "98af255 — one-clause accuracy fix to 9bef3ec"
 ---
 
 # Phase 21 Plan 01: Contracts and Schema Foundation Summary
@@ -229,7 +233,29 @@ staged content. Verified: `git diff --cached docs/playbooks/cockpit.md | grep -c
 23 insertions. **No `git add -A` or `git add .` was ever run. `.git/MERGE_HEAD` was checked before
 each commit and was absent both times. `.planning/REQUIREMENTS.md` was not modified.**
 
-**No Rule 1, 2 or 4 deviations.** Nothing was found broken, nothing architectural was in question.
+**Rule 3 (blocking issue) — the Stop hook blocked on a foreign lane's file, and the fix claims
+nothing.** After both 21-01 commits landed, `check-playbooks.mjs` began blocking on
+`docs/playbooks/agent-runtime.md (changed: packages/backend/scripts/run-eval-golden.mjs)`. That file
+is not in either 21-01 commit — `git diff 8642858 44bcd0d` lists only the seven 21-01 paths — and the
+change was another lane's then-uncommitted `RETRY_TURN` (`retryOnEmpty: true`) on the **paid**
+`attemptCase` turn, reversing the deliberate note above `RETRY_READ` that had confined empty-stdout
+retries to free reads. The hook builds its changed-set from the whole working tree, not the session's
+diff, so it attributed that lane's edit to this plan.
+
+Cleared with a **date-bump-only** entry (`9bef3ec`), the shape `skill-registry.md` already uses twice
+for this exact false positive: it states in its first sentence that nothing was re-verified and that
+it documents no change of its own, names the seven paths 21-01 actually touched, and hands the real
+entry back to the lane that wrote the change — while flagging the load-bearing assumption for
+whoever picks it up (that an empty stdout with no failure banner can *only* be the
+`UV_HANDLE_CLOSING` teardown crash; if that is ever false, a real refusal gets silently re-billed).
+**I did not run, re-measure, endorse, revert or restage that lane's change.** Committed with an
+explicit pathspec (`git commit -- <path>`), which is immune to the shared-index race described
+above. `98af255` then corrected one clause: the entry said "it is not committed", and that lane
+committed it as `4ea300c` minutes later — a stale claim in a durable record about a paid-spend
+policy, so it now points at the commit instead.
+
+**No Rule 1, 2 or 4 deviations.** Nothing of this plan's was found broken, and nothing architectural
+was in question.
 
 ---
 
