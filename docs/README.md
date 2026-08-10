@@ -45,3 +45,9 @@ reversal is a new ADR that supersedes the old one (update the old ADR's Status l
 only). This is what makes them rot-proof.
 
 Numbering: `NNN-<slug>.md`, next free number.
+
+## `governance/` — pointer-only cross-system evidence indexes
+
+Governance indexes connect existing controls and evidence across subsystems. They are not another
+family of runbooks and do not hold mutable runtime records. The canonical ISO evidence-alignment
+index is [`governance/iso-9001-conformance-map.md`](governance/iso-9001-conformance-map.md).
