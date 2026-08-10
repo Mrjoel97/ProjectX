@@ -289,6 +289,33 @@ registration checklist in `cockpit.md`, not faith in `tsc`.
 
 ---
 
+## Amendments after research (2026-08-10)
+
+Phase research (`.planning/phases/19.1-bulk-contact-import-csv/19.1-RESEARCH.md`) found three
+things this spec got wrong or omitted. All are now binding.
+
+**Consent must never be downgraded — omitted from this spec.** If a contact already carries
+`consentSource: "asserted-by-user"`, the batch attestation must not replace it. Bulk data may
+never destroy stronger hand-recorded data — the same principle as fill-empty-only, which this
+spec applied to fields but failed to apply to consent.
+
+**`upsertContactRow`'s current rule is "don't erase", not "fill empty only".** A non-blank name
+overwrites today, and only the blank case is tested. Fill-empty-only is therefore a genuine
+behaviour change and must arrive as a flag on the shared helper so hand-add behaviour and
+playbook invariant 13 are preserved.
+
+**The batch numbers are right; the reasoning in this spec is not.** 100 rows and 500 addresses
+sit at roughly 1% of every hard Convex limit — every limit would permit the whole 1,000-row file
+in a single call. The real justification is retry blast radius, progress granularity and the OCC
+window, and it should be stated that way rather than citing a limit the design never approaches.
+
+Three smaller decisions, now locked: preview counts are defined over the four mappable fields
+only (otherwise a consent write makes everything "enriched" and `unchanged` is always 0); a
+rejected row reports its physical file line rather than the record index (they diverge on a
+quoted newline); and two owner decisions taken 2026-08-10 — the Pipeline consent chip renders
+`consent.source` rather than flattening it to `Consented {date}`, and `pipelineTiles` reports its
+scan bound like its siblings instead of silently under-counting past 1,000 contacts.
+
 ## Out of scope
 
 - vCard, XLSX, or any format other than CSV
