@@ -4059,11 +4059,20 @@ export async function runSpecialistTurn(
   const { tenantId, planId, skillName, toolNames, prompt, turnId, threadId, skillVersions } = args;
   // The §5 loader, fail-closed on both branches (a missing pin throws NO_SUCH_SKILL_VERSION, a
   // never-seeded skill throws NO_ACTIVE_SKILL) — a specialist NEVER runs on a hardcoded prompt.
+  //
+  // 21-02 (SKILL-01): the ORDINARY branch resolves the TENANT overlay first and falls back to the
+  // global active row (skills.loadEffectiveSkill). `tenantId` here is trusted server state from the
+  // dispatcher's authenticated envelope — never model-supplied — and only the three
+  // USER_AUTHORABLE_SKILLS can have an overlay row at all, so every other specialist name resolves
+  // exactly as before. Deliberately NOT threaded into the cockpit, voice, inbox, reply, extraction
+  // or vault loaders: those names are not authorable in v0.
+  // The exact-VERSION pin stays GLOBAL until 21-03 adds tenant-candidate pins; changing it here
+  // would silently re-point the eval runner's `--skill name@version` at a tenant row.
   const pin = skillVersions?.[skillName];
   const skill: { body: string; version: number } =
     pin !== undefined
       ? await ctx.runQuery(internal.skills.getSkillVersion, { name: skillName, version: pin })
-      : await ctx.runQuery(internal.skills.getActiveSkill, { name: skillName });
+      : await ctx.runQuery(internal.skills.getEffectiveSkill, { tenantId, name: skillName });
   const mock = args.mockScript;
   // The research specialist runs on its OWN pin: only these two models were PROVEN to accept
   // `openai.tools.webSearch` (the 16-02 probe, recorded in docs/playbooks/agent-runtime.md), and an

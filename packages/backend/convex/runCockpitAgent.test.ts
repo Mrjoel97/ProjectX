@@ -9,7 +9,8 @@
 //   #5 recordSpend consumes the daily-spend window on non-zero usage + an eligible failure falls
 //      back to CHEAP_MODEL.
 
-import { RESEARCH_SPECIALIST_SKILL } from "@pikar/contracts/skill";
+import { OFFER_ARCHITECT_SKILL, RESEARCH_SPECIALIST_SKILL } from "@pikar/contracts/skill";
+import { SPECIALISTS } from "@pikar/core";
 import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
 // The cockpit DRIVERS (sendCockpitMessage / resolveRecipients) additionally touch the agent thread
@@ -24,7 +25,7 @@ import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 // A node-env vitest file can import this "use node" module directly — the cockpitTools.test.ts
 // precedent. Importing the CHOOSER is what makes the 45s default assertable rather than assumed.
-import { callTimeoutMsFor } from "./llm";
+import { callTimeoutMsFor, runSpecialistTurn } from "./llm";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
@@ -272,6 +273,9 @@ test("skillVersions pin: a missing (name, version) fails CLOSED — never silent
 const readSteps = (t: T) => t.run((ctx) => ctx.db.query("agentSteps").collect());
 /** The turn identity the driver mints in production (cockpit.ts); supplied here so we can assert on it. */
 const TURN = { turnId: "turn-1", threadId: "thread1" };
+/** Two tenants for the 21-02 overlay-isolation cases at the bottom of this file. */
+const TENANT_A = "tenant_overlay_a";
+const TENANT_B = "tenant_overlay_b";
 
 test("activity trace: a scripted 2-tool run leaves 2 terminal rows with durations", async () => {
   const { t, planId } = await setup();
@@ -815,4 +819,145 @@ test("19-11: the trusted clock reaches the tools runAgentLoop builds (§2-D)", a
   // A FINITE dueAt is the observable end of the whole §2-D chain: the user's words, parsed against
   // the trusted clock. "tomorrow" off the pinned instant is the 09:00 default the next day.
   expect(ops?.[0]?.dueAt).toBe(Date.UTC(2020, 0, 2, 9, 0, 0));
+});
+
+// ── 21-02 (SKILL-01): a tenant's adaptation reaches the REAL specialist system prompt ─────────
+//
+// THE test this phase exists for. 21-01's own summary is blunt about it: a tested contract with no
+// caller is invisible to every green suite here, and a `tenantSkills` row that never reaches a
+// model call is not a skill capability. So this drives the SHIPPED `runSpecialistTurn` — the same
+// function `dispatch.runSpecialist` calls in production — and reads the system prompt the model
+// actually received.
+//
+// The mock's `doGenerate` is a FUNCTION here rather than the usual scripted array: the array form
+// returns canned results and can only ever tell us what came back, never what went in. ai@7's
+// MockLanguageModelV4 accepts either (`typeof doGenerate === "function"` branch, ai/dist/test),
+// so this is the existing seam used the other way round, not a new one.
+test("21-02: tenant A's active adaptation reaches A's specialist prompt and NEVER B's", async () => {
+  const { t } = await setup(); // seedSkills → offer-architect v1 ACTIVE (the global base)
+  const NEEDLE = "ZQ7RUNTIMEd41d8cd9";
+  const planFor = (tenantId: string) =>
+    t.mutation(internal.plans.insertPlan, { tenantId, threadId: `thread-${tenantId}` });
+  const planA = await planFor(TENANT_A);
+  const planB = await planFor(TENANT_B);
+
+  // A has an ACTIVE overlay. 21-04 owns the real activation transition; inserting the row directly
+  // keeps this test about the LOADER rather than about activation authority.
+  await t.run((ctx) =>
+    ctx.db.insert("tenantSkills", {
+      tenantId: TENANT_A,
+      name: OFFER_ARCHITECT_SKILL,
+      version: 2,
+      body: `OFFER ARCHITECT CORE plus adaptation ${NEEDLE}`,
+      authoredBody: `adaptation ${NEEDLE}`,
+      status: "active",
+      author: "user",
+      basedOnScope: "global",
+      basedOnName: OFFER_ARCHITECT_SKILL,
+      basedOnVersion: 1,
+      rollbackEligible: false,
+      createdAt: 0,
+    }),
+  );
+  // …and B has a CANDIDATE carrying the SAME needle. If a candidate ever resolved at runtime, B's
+  // prompt would carry the needle for a reason that has nothing to do with tenancy — so this row
+  // is what makes B's clean prompt evidence about `status`, not just about `tenantId`.
+  await t.run((ctx) =>
+    ctx.db.insert("tenantSkills", {
+      tenantId: TENANT_B,
+      name: OFFER_ARCHITECT_SKILL,
+      version: 2,
+      body: `B DRAFT ${NEEDLE}`,
+      authoredBody: `b draft ${NEEDLE}`,
+      status: "candidate",
+      author: "user",
+      basedOnScope: "global",
+      basedOnName: OFFER_ARCHITECT_SKILL,
+      basedOnVersion: 1,
+      rollbackEligible: false,
+      createdAt: 0,
+    }),
+  );
+
+  const turn = async (tenantId: string, planId: Id<"plans">) => {
+    let system = "";
+    let grantedTools: string[] = [];
+    const capture = async (opts: {
+      prompt: ReadonlyArray<{ role: string; content: unknown }>;
+      tools?: ReadonlyArray<{ name?: string }>;
+    }) => {
+      // The `system` role message is the skill body runAgentLoop handed the provider — read out of
+      // the provider-level call options, so this is the prompt the MODEL saw, not a re-derivation.
+      system = String(opts.prompt.find((m) => m.role === "system")?.content ?? "");
+      grantedTools = (opts.tools ?? []).map((x) => String(x?.name)).sort();
+      return textStep("noted", 0, 0);
+    };
+    const ctx = {
+      runQuery: t.query.bind(t),
+      runMutation: t.mutation.bind(t),
+      runAction: t.action.bind(t),
+    } as unknown as Parameters<typeof runSpecialistTurn>[0];
+    const res = await runSpecialistTurn(ctx, {
+      tenantId,
+      planId,
+      skillName: OFFER_ARCHITECT_SKILL,
+      // The CODE-OWNED grant, read from the shared spec — not a literal retyped here.
+      toolNames: SPECIALISTS["offer-architect"].tools,
+      prompt: "shape my offer",
+      mockScript: { primary: capture as never },
+    });
+    return { system, grantedTools, res };
+  };
+
+  const a = await turn(TENANT_A, planA);
+  const b = await turn(TENANT_B, planB);
+
+  const globalBody = (
+    await t.query(internal.skills.getActiveSkill, { name: OFFER_ARCHITECT_SKILL })
+  ).body;
+
+  // A got the OVERLAY, byte for byte, and the reported skillVersion is the tenant-local 2.
+  expect(a.system).toBe(`OFFER ARCHITECT CORE plus adaptation ${NEEDLE}`);
+  expect(a.system).toContain(NEEDLE);
+  expect(a.res.skillVersion).toBe(2);
+  // B got the GLOBAL body, byte for byte — a real prompt (the positive witness), with no trace of
+  // the needle from A's ACTIVE row or from B's own CANDIDATE.
+  expect(b.system).toBe(globalBody);
+  expect(b.system.length).toBeGreaterThan(200);
+  expect(b.system).not.toContain(NEEDLE);
+  expect(b.res.skillVersion).toBe(1);
+  // …and the two prompts really did differ, so neither equality above is trivially the other's.
+  expect(a.system).not.toBe(b.system);
+
+  // ADR-007: a prompt row ADVISES behaviour, it never GRANTS capability. The overlay changed A's
+  // system prompt and left the tool grant byte-identical to B's and to the code-owned spec.
+  expect(a.grantedTools).toEqual(b.grantedTools);
+  expect(a.grantedTools).toEqual([...SPECIALISTS["offer-architect"].tools].sort());
+});
+
+test("21-02: a tenant with no overlay still loads the global row; an unseeded skill fails CLOSED", async () => {
+  const { t } = await setup();
+  const planId = await t.mutation(internal.plans.insertPlan, {
+    tenantId: TENANT_A,
+    threadId: "thread-fallback",
+  });
+  const ctx = {
+    runQuery: t.query.bind(t),
+    runMutation: t.mutation.bind(t),
+    runAction: t.action.bind(t),
+  } as unknown as Parameters<typeof runSpecialistTurn>[0];
+  const run = (skillName: string) =>
+    runSpecialistTurn(ctx, {
+      tenantId: TENANT_A,
+      planId,
+      skillName,
+      toolNames: SPECIALISTS["offer-architect"].tools,
+      prompt: "shape my offer",
+      mockScript: { primary: [textStep("noted", 0, 0)] },
+    });
+
+  // Mutation 8 (remove the global fallback) turns THIS assertion red.
+  expect((await run(OFFER_ARCHITECT_SKILL)).skillVersion).toBe(1);
+  // …and the fallback did not soften the fail-closed contract for a name with no row at all.
+  await expect(run("never-seeded-skill")).rejects.toThrow(/NO_ACTIVE_SKILL/);
 });
