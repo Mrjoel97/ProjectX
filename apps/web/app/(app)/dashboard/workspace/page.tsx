@@ -11,6 +11,7 @@ import { ChatPane } from "./ChatPane";
 import { CardList } from "./cards";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { CanvasPane } from "./MediaCanvas";
+import { SkillAuthoringPanel } from "./SkillAuthoringPanel";
 import { SplitPane } from "./SplitPane";
 
 // The cockpit, wired (plan 08 over the plan-05 shell). LEFT = the live chat pane (guided
@@ -194,6 +195,9 @@ export default function WorkspacePage() {
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("view") === "canvas") setView("canvas");
   }, []);
+  // SKILL-01: the skill-authoring card, opened from the existing Chat options menu. Session state,
+  // not a route — the thread, the tabs and every open subscription survive the toggle.
+  const [authoring, setAuthoring] = useState(false);
   const newChat = () => setThreadId(undefined);
   // Close a session tab. The tab strip is view state, so this only stops SHOWING the chat — the
   // thread and its messages are untouched and stay reopenable from the "Past chats" menu, which
@@ -278,6 +282,17 @@ export default function WorkspacePage() {
                       >
                         + New chat
                       </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="head-menu-item"
+                        onClick={() => {
+                          setAuthoring((a) => !a);
+                          close();
+                        }}
+                      >
+                        Adapt a business skill
+                      </button>
                     </div>
                   )}
                 </HeaderMenu>
@@ -329,6 +344,11 @@ export default function WorkspacePage() {
                 +
               </button>
             </div>
+
+            {/* SKILL-01. Above the conversation and inside the SAME pane: the card is part of the
+                cockpit, not a destination. It renders regardless of mailbox state — adapting a
+                skill has nothing to do with a connected inbox. */}
+            {authoring && <SkillAuthoringPanel onClose={() => setAuthoring(false)} />}
 
             {/* The review thread is synthetic — it has no `plans` row, and sendCockpitMessage throws
                 "cockpit: plan row missing for thread" (cockpit.ts:93) on any send. Reading degrades
