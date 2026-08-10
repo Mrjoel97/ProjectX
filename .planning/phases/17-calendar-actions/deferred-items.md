@@ -20,3 +20,20 @@
   code. The seven diagnostics in touched Calendar/cockpit tests are the existing unused
   `@ts-expect-error` import-meta guards already present before 17-04; no new non-test diagnostic
   was introduced.
+
+## 17-05 out-of-scope discoveries (logged, deliberately NOT fixed)
+
+- **`buildAgentContext` (`llm.ts`) has no `calendar_event` branch, and now none for
+  `calendar_manage` either.** A staged Calendar plan is therefore described to the model under
+  "Current email plan:" with Recipients / Send-mode / Send-time slots — the exact defect the
+  2026-07-26 playbook entry fixed for `memo`, never extended to Calendar. PRE-EXISTING since 17-01
+  and out of 17-05's write set. `calendar_manage` is unreachable today (no tool stages it), so the
+  new half is inert; Plan 17-09 owns the staging tool and must add the branch in the same commit.
+- **`ApprovalsView.tsx` renders no detail line for a `calendar_manage` plan** (the
+  `plan.kind === "calendar_event"` block at `:484` has no sibling). 17-05 added only the badge
+  label, the honest `actionLabel` and the honest `titleFor`, because the compiler forced the first
+  and honesty forced the other two. The detail line needs the registry read that 17-09-03 owns.
+- **The 2026-08-10 verifier's Calendar timeouts (G4) did not reproduce at HEAD.** 39/39 in
+  9.6-14.5s across cold and warm caches, and a planted never-resolving promise fails by the
+  per-test timeout with the test NAMED. Recorded as environmental. No test-lifecycle defect was
+  found, so per the plan's own instruction no timeout regression test was added.
