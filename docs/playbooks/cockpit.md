@@ -11,6 +11,27 @@
 > passing on an empty scan. **Add the literal in the SAME commit as a new tool.** Prose in a schema
 > comment is not a guard; a test is.
 
+> Last verified: 2026-08-10 (Task 7, live-finance-inputs — **`readFinance`, the on-demand DERIVED
+> half of the finance spine.** A new read-only cockpit tool, beside `stageCrmWrite` in
+> `buildCockpitTools`: EMPTY input schema (the tenant rides the RUN's closure-captured `tenantId`,
+> never a model-suppliable argument — same shape as `recordScorecardAnswer`'s explicit-tenantId
+> door), and its `execute` calls two new `internalQuery` readers in `cash.ts` —
+> `unitEconomicsFor`/`solvencyFor` — added on the §2 allow-list, the `vaultGroundHydrated`/
+> `plans.getById` convention for identity-less engine paths. Those readers do NOT duplicate the
+> existing `unitEconomics`/`solvency` `tenantQuery` handlers' logic: both call the SAME new
+> module-private `unitEconomicsForTenant`/`solvencyForTenant` helpers (explicit `tenantId` instead
+> of `ctx.tenantId`), so the tenant-scoped page query and the tool-loop reader can never silently
+> drift apart on what a tenant's money is — the exact hazard the module banner already warns about.
+> **Never computes a ratio itself** — `@pikar/core`'s `unitEconomics()`/`solvency()` are PURE and
+> return tagged `"unknown"`/`"not-computable"`/`"not-applicable"`/`"known"` states rather than
+> throwing, so a brand-new tenant with zero `financeInputs` rows and no scorecard is the NORMAL
+> case, not an error — `cockpitTools.test.ts` drives this exact tenant through the tool and asserts
+> every returned figure is a non-`"known"` state. Registering a new tool key needs TWO more edits in
+> the SAME commit or the closed-union traps this file already warns about above bite again:
+> `schema.ts`'s `agentSteps.tool` literal (missing → `ArgumentValidationError`, SWALLOWED by the AI
+> SDK) and `cards.tsx`'s `VERB` entry (missing → silent "Working…"/"Done" fallback), both
+> structurally enforced by `cockpitTools.test.ts`/`traceParity.test.ts`.)
+
 > Last verified: 2026-08-10 (Task 5, live-finance-inputs — **THE FINANCE REFUSAL NOW REACHES THE
 > CARD.** `applyFinanceClaims` (`cash.ts`) no longer throws `INVALID_INPUT: …` for its two
 > refusals — a malformed plan-row claim and a scorecard-field claim an agent may not write — it

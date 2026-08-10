@@ -2073,3 +2073,28 @@ test("SMOKE::agent::crm drives ONE governed stageCrmWrite OFFLINE at $0 and trac
   expect(plan?.crmOperations).toHaveLength(2); // the contact + its follow-up
   expect(await contactRows(t)).toHaveLength(0); // still staged, still not applied
 });
+
+test("readFinance takes no arguments — the tenant is never model-supplied", async () => {
+  const tools = buildCockpitTools({} as never, "t1", "plan1" as unknown as Id<"plans">, PIN_CLOCK);
+  const schema = (
+    tools.readFinance.inputSchema as unknown as { jsonSchema: { properties: Record<string, unknown> } }
+  ).jsonSchema;
+  expect(Object.keys(schema.properties)).toEqual([]);
+});
+
+// A brand-new tenant has NO financeInputs rows and NO scorecard evaluation at all — the normal
+// case for the Finance page, not an error. This must not throw; every derived figure must come
+// back as an honest "unknown"/"not-computable" state (never "known") for the agent to describe.
+test("readFinance on a tenant with no figures at all returns honest unknown/not-computable states, never throws", async () => {
+  const { t, planId } = await setup(); // fresh "t1", zero financeInputs rows, zero scorecard rows
+  const reply = await call(t, planId, "readFinance", {});
+  const parsed = JSON.parse(reply) as {
+    unitEconomics: Record<string, { state: string }>;
+    solvency: Record<string, { state: string }>;
+  };
+  const allFigures = [...Object.values(parsed.unitEconomics), ...Object.values(parsed.solvency)];
+  expect(allFigures.length).toBeGreaterThan(5); // non-vacuity: both records actually populated
+  for (const figure of allFigures) {
+    expect(["unknown", "not-computable", "not-applicable"]).toContain(figure.state);
+  }
+});

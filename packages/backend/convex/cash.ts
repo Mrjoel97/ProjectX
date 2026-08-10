@@ -30,7 +30,7 @@ import type { Scorecard } from "@pikar/core/growth/index";
 import { emptyScorecard } from "@pikar/core/growth/index";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import type { MutationCtx, QueryCtx } from "./_generated/server";
+import { internalQuery, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { applyScorecardAnswer, latestScorecardRow } from "./evaluations";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 
@@ -181,19 +181,24 @@ export const inputs = tenantQuery({
  * only reads the same inputs `inputs` reads, plus the tenant's own scorecard, and hands them over).
  * A foreign tenant's scorecard is never read — `latestScorecardRow` is tenant-scoped, same as
  * `inputStatesFor`'s call to it above.
+ *
+ * Takes an EXPLICIT tenantId (not `ctx.tenantId`) so both the tenant-scoped `unitEconomics` query
+ * below and the tool-loop's `unitEconomicsFor` internal reader call the SAME derivation — one
+ * definition, not two silently-drifting copies of the business's money (see the module banner).
  */
+async function unitEconomicsForTenant(ctx: { db: QueryCtx["db"] }, tenantId: string, nowMs: number) {
+  const states = (await inputStatesFor(ctx, tenantId, nowMs)).inputs;
+  const evaluation = await latestScorecardRow(ctx.db, tenantId);
+  return coreUnitEconomics({
+    inputs: toCashInputs(states),
+    scorecard: (evaluation?.scorecard as Scorecard | undefined) ?? emptyScorecard,
+    nowMs,
+  });
+}
+
 export const unitEconomics = tenantQuery({
   args: {},
-  handler: async (ctx) => {
-    const now = Date.now();
-    const states = (await inputStatesFor(ctx, ctx.tenantId, now)).inputs;
-    const evaluation = await latestScorecardRow(ctx.db, ctx.tenantId);
-    return coreUnitEconomics({
-      inputs: toCashInputs(states),
-      scorecard: (evaluation?.scorecard as Scorecard | undefined) ?? emptyScorecard,
-      nowMs: now,
-    });
-  },
+  handler: async (ctx) => unitEconomicsForTenant(ctx, ctx.tenantId, Date.now()),
 });
 
 /**
@@ -222,24 +227,43 @@ export const shape = tenantQuery({
   },
 });
 
+/**
+ * Explicit-tenantId twin of `unitEconomicsForTenant` above, for the same reason: `solvency` below
+ * and the tool-loop's `solvencyFor` internal reader must share ONE derivation.
+ */
+async function solvencyForTenant(ctx: { db: QueryCtx["db"] }, tenantId: string, nowMs: number) {
+  const row = await ctx.db
+    .query("tenantProfiles")
+    .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+    .unique();
+  const states = (await inputStatesFor(ctx, tenantId, nowMs)).inputs;
+  return coreSolvency({
+    inputs: toCashInputs(states),
+    // No profile row: treat as solopreneur for not-applicable resolution, which is the most
+    // conservative set — it hides MRR/ARR rather than inventing them. The page separately shows
+    // the complete-your-shape invitation, so this is never the whole story a user sees.
+    tier: row?.tier ?? "solopreneur",
+    nowMs,
+  });
+}
+
 export const solvency = tenantQuery({
   args: {},
-  handler: async (ctx) => {
-    const now = Date.now();
-    const row = await ctx.db
-      .query("tenantProfiles")
-      .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
-      .unique();
-    const states = (await inputStatesFor(ctx, ctx.tenantId, now)).inputs;
-    return coreSolvency({
-      inputs: toCashInputs(states),
-      // No profile row: treat as solopreneur for not-applicable resolution, which is the most
-      // conservative set — it hides MRR/ARR rather than inventing them. The page separately shows
-      // the complete-your-shape invitation, so this is never the whole story a user sees.
-      tier: row?.tier ?? "solopreneur",
-      nowMs: now,
-    });
-  },
+  handler: async (ctx) => solvencyForTenant(ctx, ctx.tenantId, Date.now()),
+});
+
+// Explicit-tenantId internal readers for the tool loop (§2 allow-list, the `vaultGroundHydrated`
+// convention `plans.ts` and `vaultGround.ts` already use). The tenant comes from the RUN, never
+// from the model: `readFinance` in `llm.ts` has an empty input schema precisely so there is no
+// argument to forge.
+export const unitEconomicsFor = internalQuery({
+  args: { tenantId: v.string() },
+  handler: async (ctx, { tenantId }) => unitEconomicsForTenant(ctx, tenantId, Date.now()),
+});
+
+export const solvencyFor = internalQuery({
+  args: { tenantId: v.string() },
+  handler: async (ctx, { tenantId }) => solvencyForTenant(ctx, tenantId, Date.now()),
 });
 
 /**

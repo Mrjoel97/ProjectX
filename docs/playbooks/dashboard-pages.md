@@ -1,5 +1,16 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-10 (Task 7, live-finance-inputs — **`cash.ts` gains two `internalQuery`
+> readers, `unitEconomicsFor`/`solvencyFor`, taking an EXPLICIT `tenantId` for `llm.ts`'s new
+> `readFinance` cockpit tool** (the tool loop has no `ctx.tenantId`). Both the existing
+> `unitEconomics`/`solvency` `tenantQuery` handlers AND these new readers now call the SAME
+> module-private `unitEconomicsForTenant`/`solvencyForTenant` helper functions — a refactor, not a
+> second copy: the module's own banner ("re-deriving anything here would create a second,
+> silently-drifting definition of the business's money") applies just as much to two Convex
+> functions computing the same figure as to a hand-rolled formula, so the explicit-tenant readers
+> share the derivation rather than re-implementing it. No behavioural change to the two existing
+> tenant-scoped queries — same inputs, same `Date.now()` per-call clock, same output shape.)
+
 > Last verified: 2026-08-10 (Task 5 REVIEW FIX, live-finance-inputs — **pass 1 validated only TWO
 > of `validateFigureClaim`'s six rules; the other four still threw, straight past the return
 > contract the entry below built.** Review's trace: `{basis: "   ", observedAt: <tomorrow>}`

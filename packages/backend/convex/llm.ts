@@ -2527,6 +2527,34 @@ export function buildCockpitTools(
         );
       },
     }),
+    // ── readFinance (Task 7) — the derived half of the finance spine, on demand ─────────────────
+    // The agent NEVER computes a financial ratio. LTGP:CAC, CFA, payback and runway are defined in
+    // `financialSpine.ts` / `cash.ts` with their degenerate guards and the suppression rule; a
+    // model re-deriving them in prose produces a confident wrong number on the figure that drives
+    // the headline of the whole Finance page. This tool exists so the correct value is always
+    // cheaper to fetch than to invent. Empty input schema: the tenant comes from the RUN, never
+    // the model, so there is no argument to forge. A brand-new tenant with no figures at all is
+    // the NORMAL case, not an error — `unitEconomics`/`solvency` are pure and return "missing"/
+    // "not computable" states rather than throwing, so this never needs to fail loudly.
+    readFinance: tool({
+      // Split literal keeps each chunk under the §5 no-hardcoded-prompt scan ceiling (200 chars).
+      description:
+        "Read the user's current financial picture: their figures, " +
+        "which are missing or out of date, and the metrics computed from them. " +
+        "Never calculate these ratios yourself — read them here.",
+      inputSchema: jsonSchema<Record<string, never>>({
+        type: "object",
+        properties: {},
+        additionalProperties: false,
+      }),
+      execute: async (): Promise<string> => {
+        const [unit, sol] = await Promise.all([
+          ctx.runQuery(internal.cash.unitEconomicsFor, { tenantId }),
+          ctx.runQuery(internal.cash.solvencyFor, { tenantId }),
+        ]);
+        return JSON.stringify({ unitEconomics: unit, solvency: sol });
+      },
+    }),
     // ── The briefing tools (CKPT-04) — READ-ONLY, panel-driven ────────────────────────────────
     // `range` is an ENUM, never a free string: it flows into gmail.listInbox's refs-only
     // mailbox.listed audit payload, so user/model prose reaching it would be a §4 leak.

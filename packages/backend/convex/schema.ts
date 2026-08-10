@@ -755,6 +755,10 @@ export default defineSchema({
       // suite stays green. Landed in the SAME commit as its `cards.tsx` VERB entry, because
       // traceParity.test.ts asserts the two sets equal BOTH ways and either half alone is RED.
       v.literal("stageCrmWrite"),
+      // Task 7 (live-finance-inputs): the on-demand derived-metrics read. Same swallow trap as
+      // every literal above, and the same traceParity.test.ts requirement — its cards.tsx VERB
+      // entry lands in the same commit.
+      v.literal("readFinance"),
     ),
     phase: v.union(v.literal("running"), v.literal("done"), v.literal("error")),
     startedAt: v.number(),

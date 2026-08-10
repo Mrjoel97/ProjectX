@@ -1681,6 +1681,9 @@ const VERB: Record<string, [running: string, done: string]> = {
   // records" — the write happens on Approve, and BRAND §1 forbids claiming an action that did not
   // happen. "Records", not "CRM", matches the card's own "changes to your records" voice.
   stageCrmWrite: ["Preparing a records update…", "Records update ready to approve"],
+  // Task 7 (live-finance-inputs): MANDATORY beside the schema literal — traceParity.test.ts
+  // asserts set equality both ways. Read-only, matches the evaluateBusiness voice above.
+  readFinance: ["Reading your finances…", "Read your finances"],
 };
 const FALLBACK: [string, string] = ["Working…", "Done"];
 
