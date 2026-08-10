@@ -343,7 +343,8 @@ export const saveInput = tenantMutation({
  * The ONLY path an agent-proposed figure reaches a store, and `executePlan` is its only caller
  * (invariant 11 — the ACTOR decides gating: the human's identical edit above stages no plan).
  * Re-validates every claim: the plan row is content plane and could have been revised between
- * staging and Approve. All-or-nothing falls out of Convex's serializable mutation for free.
+ * staging and Approve. `actor` is the one field it does not re-validate but OVERWRITES — see the
+ * stamp in the loop. All-or-nothing falls out of Convex's serializable mutation for free.
  *
  * Takes the whole `MutationCtx` rather than just `db` — mirroring `contacts.applyCrmOperations` —
  * because the audit insert goes through `internal.audit.log`, the module's SOLE write surface for
@@ -364,6 +365,17 @@ export async function applyFinanceClaims(
     if (!CASH_INPUTS.some((s) => s.field === claim.field) || typeof claim.basis !== "string") {
       throw new Error("INVALID_INPUT: malformed claim on plan row");
     }
+    // `actor` is NOT data to be read off the row — it is a fact about which DOOR the write came
+    // through, and this function IS the agent door (`saveInput` hardcodes `actor: "user"` and never
+    // routes here). So it is STAMPED, not trusted. `validateFigureClaim` cannot catch a lie here:
+    // its actor rule only bites when `confidence !== "high"`, and confidence is model-controlled,
+    // so `{actor: "user", confidence: "high"}` is a legal claim by that function's contract and
+    // would store the agent's figure under the OWNER's authority — rendering through
+    // `inputStatesFor`/`statedFigure` as the owner's own statement (the exact leak Tasks 2 and 3
+    // closed) and recording `actors: ["user"]` in the APPEND-ONLY audit log, which cannot be
+    // corrected later. Stamped rather than refused because it cannot fail: a staging bug must not
+    // become an error on a plan the human already approved.
+    const stamped = { ...claim, actor: "agent" as const };
     // The scorecard store cannot carry provenance: `applyScorecardAnswer` takes only
     // (db, tenantId, threadId, path, value), so origin/actor/basis/observedAt are all discarded,
     // and it appends the dot-path to `userProvided` — which `runEvaluation` rebuilds its citation
@@ -388,9 +400,10 @@ export async function applyFinanceClaims(
         q.eq("tenantId", tenantId).eq("field", claim.field as "cashOnHand"),
       )
       .unique();
-    if (!isNewerThan(claim, stored?.statedAt ?? null)) continue;
-    await writeFigureRow(ctx.db, tenantId, claim);
-    written.push(claim);
+    if (!isNewerThan(stamped, stored?.statedAt ?? null)) continue;
+    await writeFigureRow(ctx.db, tenantId, stamped);
+    // The STAMPED claim, so `payload.actors` reports the door, not the row's own claim about it.
+    written.push(stamped);
   }
   // The WRITTEN claims, not the staged ones: an event called `claims_applied` that counts a claim
   // the isNewerThan guard skipped would report an apply that did not happen.

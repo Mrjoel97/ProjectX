@@ -517,6 +517,50 @@ describe("applyFinanceClaims (the finance_write inline arm)", () => {
     expect(JSON.stringify(row)).not.toContain("38500");
   });
 
+  // `actor` is a fact about which DOOR the write came through, not data. `validateFigureClaim`
+  // cannot catch a lie about it — its actor rule only bites when `confidence !== "high"`, and
+  // confidence is model-controlled, so `{actor: "user", confidence: "high"}` is a LEGAL claim by
+  // that function's contract and passes every other guard here. The audit assertion is the half
+  // that matters most: that log is append-only, so a wrong attribution cannot be corrected later.
+  test("a plan row claiming actor 'user' is stored as the AGENT's write, in the row AND the audit", async () => {
+    const t = withAudit();
+    await t.run((ctx) =>
+      applyFinanceClaims(ctx, "u1", [{ ...agentClaim, actor: "user" as const }]),
+    );
+
+    const rows = await t.run((ctx) => ctx.db.query("financeInputs").collect());
+    expect(rows[0]?.valueUsd).toBe(38_500);
+    expect(rows[0]?.actor).toBe("agent");
+
+    const audit = await t.run((ctx) => ctx.db.query("audit").collect());
+    const payload = audit.find((r) => r.eventType === "finance.claims_applied")?.payload as {
+      actors: string[];
+    };
+    expect(payload.actors).toEqual(["agent"]);
+
+    // And it reads back to the owner as the agent's number, not as their own statement.
+    const { inputs } = await t.withIdentity({ subject: "u1|s1" }).query(api.cash.inputs, {});
+    expect(inputs.find((i) => i.field === "cashOnHand")?.actor).toBe("agent");
+  });
+
+  // ALL-OR-NOTHING, asserted rather than assumed — three comments claim it and nothing exercised
+  // it, because every other refusal test passes a single claim that throws before any write. Two
+  // claims, good FIRST: the enclosing serializable mutation must discard the write that already
+  // succeeded.
+  test("a bad SECOND claim discards the good FIRST one — approve-all-or-none", async () => {
+    const t = convexTest(schema, modules);
+    await expect(
+      t.run((ctx) =>
+        applyFinanceClaims(ctx, "u1", [
+          agentClaim,
+          // The realistic pairing: the agent heard cash on hand AND a CAC in the same turn.
+          { ...agentClaim, field: "cac" as const, value: 1_400 },
+        ]),
+      ),
+    ).rejects.toThrow(/INVALID_INPUT: that figure cannot be updated by an agent yet/);
+    expect(await t.run((ctx) => ctx.db.query("financeInputs").collect())).toHaveLength(0);
+  });
+
   test("an empty claim list writes no audit row — nothing happened", async () => {
     const t = convexTest(schema, modules);
     await t.run((ctx) => applyFinanceClaims(ctx, "u1", undefined));
