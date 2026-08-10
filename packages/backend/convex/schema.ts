@@ -1525,7 +1525,16 @@ export default defineSchema({
       v.literal("payables"),
     ),
     valueUsd: v.number(),
+    // WHEN THE FIGURE WAS TRUE, not when the row was written — `FigureClaim.observedAt` lands here.
+    // A P&L dated six weeks ago is already six weeks into its 90-day staleness clock. Keeps its name
+    // rather than being renamed to `observedAt`: a rename needs a migration for no behavioural gain.
     statedAt: v.number(),
+    // Provenance, added 2026-08-10. All optional: existing rows carry none, and a row without
+    // provenance IS a user statement — which is exactly what every pre-existing row is. No
+    // backfill, no migration.
+    origin: v.optional(v.union(v.literal("stated"), v.literal("observed"))),
+    actor: v.optional(v.union(v.literal("user"), v.literal("agent"))),
+    basis: v.optional(v.string()),
   })
     .index("by_tenant", ["tenantId"])
     .index("by_tenant_field", ["tenantId", "field"]),

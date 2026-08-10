@@ -255,6 +255,36 @@ describe("figure rendering — the four truths, on screen", () => {
     });
     expect(html).toMatch(/still right|confirm/i);
   });
+
+  // `observed` figures became REACHABLE with the provenance columns (convex/cash.ts's read boundary
+  // now reports a grounded scorecard fill as observed). The observed branch used to render a bare
+  // "Measured by Pikar." — discarding both `statedAt` and `stale`, so a 200-day-old machine-extracted
+  // figure got LESS scrutiny than one the owner typed yesterday. Nothing else in either package fails
+  // when that regresses, so it is pinned here.
+  test("a stale OBSERVED figure says when it was measured and asks for a confirm-or-update", () => {
+    const html = render(FigureTile, {
+      label: "Cash on hand",
+      figure: {
+        state: "known",
+        origin: "observed",
+        value: 5000,
+        unit: "usd",
+        statedAt: Date.UTC(2026, 1, 1),
+        stale: true,
+      },
+    });
+    expect(html).toMatch(/measured by pikar on/i);
+    expect(html).toMatch(/still right|confirm/i);
+  });
+
+  test("an observed figure with no measured date still renders, without inventing one", () => {
+    const html = render(FigureTile, {
+      label: "Cash on hand",
+      figure: { state: "known", origin: "observed", value: 5000, unit: "usd", stale: false },
+    });
+    expect(html).toContain("Measured by Pikar.");
+    expect(html).not.toMatch(/still right|confirm/i);
+  });
 });
 
 describe("the headline", () => {

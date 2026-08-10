@@ -2,6 +2,7 @@ import { emptyScorecard } from "@pikar/core/growth/index";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api } from "./_generated/api";
+import { writeFigureRow } from "./cash";
 import schema from "./schema";
 
 // convex-test discovers Convex function modules via import.meta.glob. Exclude
@@ -353,4 +354,39 @@ describe("tier change", () => {
     // A newly visible metric shows unknown with its prompt, never back-filled.
     expect(inputs.inputs.find((i) => i.field === "mrr")?.value).toBeNull();
   });
+});
+
+test("an agent-written figure reads back with agent provenance, not as a user statement", async () => {
+  const t = convexTest(schema, modules);
+  const asUser = t.withIdentity({ subject: "u1|s1" });
+
+  await t.run(async (ctx) => {
+    await writeFigureRow(ctx.db, "u1", {
+      field: "cashOnHand",
+      value: 38_500,
+      origin: "stated",
+      actor: "agent",
+      basis: "user statement, turn 4",
+      observedAt: 1_754_000_000_000,
+      confidence: "high",
+    });
+  });
+
+  const { inputs } = await asUser.query(api.cash.inputs, {});
+  const cash = inputs.find((i) => i.field === "cashOnHand");
+  expect(cash?.value).toBe(38_500);
+  expect(cash?.actor).toBe("agent");
+  expect(cash?.basis).toBe("user statement, turn 4");
+  expect(cash?.statedAt).toBe(1_754_000_000_000);
+});
+
+test("saveInput stamps the human as the actor and observedAt as now", async () => {
+  const t = convexTest(schema, modules);
+  const asUser = t.withIdentity({ subject: "u1|s1" });
+  await asUser.mutation(api.cash.saveInput, { field: "cashOnHand", value: 1_000 });
+
+  const { inputs } = await asUser.query(api.cash.inputs, {});
+  const cash = inputs.find((i) => i.field === "cashOnHand");
+  expect(cash?.actor).toBe("user");
+  expect(cash?.origin).toBe("stated");
 });

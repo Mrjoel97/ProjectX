@@ -1,5 +1,7 @@
 # Playbook: Contacts, CRM & follow-ups
 
+> Last verified: 2026-08-10 (Task 3, live-finance-inputs — NO code in this playbook's watched paths changed; recorded here because invariants 11 and 13 now govern a SECOND subsystem. The finance write path copied the shape this playbook established: `convex/cash.ts`'s `writeFigureRow(db, tenantId, claim)` is the finance analogue of `upsertContactRow`/`createFollowUpRow` — one row-writer over an explicit tenantId (invariant 13), with the ungated human `saveInput` and the Approve-gated applier as its two callers, because the ACTOR decides gating, not the operation (invariant 11). If either invariant is ever restated or relaxed here, `packages/backend/convex/cash.ts` is now a second site that has to move with it.)
+>
 > Last verified: 2026-08-10 (Plan 19-11 — **ACTN-05's follow-up capability WORKS, and the phase's
 > last open defect is CLOSED.** Two fixes, both live-verified against `cockpit-agent@18` with the
 > body BYTE-UNCHANGED (gate `086f8267`'s 35/35 stands, no re-gate owed):

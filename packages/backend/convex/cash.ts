@@ -19,14 +19,15 @@ import {
   solvency as coreSolvency,
   unitEconomics as coreUnitEconomics,
   createDashboardBound,
+  type FigureClaim,
   needsConfirmation,
   toCashInputs,
-  validateCashInput,
+  validateFigureClaim,
 } from "@pikar/core";
 import type { Scorecard } from "@pikar/core/growth/index";
 import { emptyScorecard } from "@pikar/core/growth/index";
 import { v } from "convex/values";
-import type { QueryCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { applyScorecardAnswer, latestScorecardRow } from "./evaluations";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 
@@ -134,6 +135,9 @@ async function inputStatesFor(
           value,
           statedAt,
           stale: needsConfirmation(value, statedAt, nowMs),
+          origin: row?.origin ?? "stated",
+          actor: row?.actor ?? "user",
+          basis: row?.basis ?? null,
         };
       }
       const value = spec.path === undefined ? null : scorecardValue(scorecard, spec.path);
@@ -147,11 +151,17 @@ async function inputStatesFor(
       // never as fresh, and never fabricates a date.
       const statedAt =
         value === null ? null : (evaluation?.userProvidedAt?.[spec.path as string] ?? null);
+      const userStated = (evaluation?.userProvided ?? []).includes(spec.path as string);
       return {
         field: spec.field,
         value,
         statedAt,
         stale: needsConfirmation(value, statedAt, nowMs),
+        // The leak fix: a grounded fill is NOT a user statement. It reads as `observed` with no
+        // actor claim rather than borrowing the owner's authority.
+        origin: userStated ? "stated" : "observed",
+        actor: userStated ? "user" : "agent",
+        basis: userStated ? null : "business evaluation grounding",
       };
     }),
   };
@@ -230,52 +240,86 @@ export const solvency = tenantQuery({
 });
 
 /**
- * ONE writer, routing by field to the store that owns the value.
+ * THE writer, routing by field to the store that owns the value. Both actors route through this one
+ * function (contacts-crm invariant 13): the ungated human edit below, and the Approve-gated applier.
+ * Two copies of the store-routing rule would be two chances to disagree about where a figure lives.
+ *
+ * A plain async function over an EXPLICIT tenantId — never `ctx.tenantId` — so the applier can
+ * pass the tenant read off the approved plan row.
  *
  * The Hormozi inputs go to the SCORECARD through `applyScorecardAnswer` — the same function
  * `recordScorecardAnswer` and the cockpit tool use, so a number entered in the panel and a number
  * given in conversation land in the same place and carry forward the same way. The finance-ops
  * inputs go to `financeInputs`. Nothing is written twice.
  *
- * The value is validated HERE and not only in the form: a form is a convenience, and this mutation
- * is the trust boundary. Nothing about it is logged (CLAUDE.md §4) — the value IS the sensitive part.
+ * The claim is validated HERE and not only in the form: a form is a convenience, and this is the
+ * trust boundary. Nothing about it is logged (CLAUDE.md §4) — the value IS the sensitive part.
  */
+export async function writeFigureRow(
+  db: MutationCtx["db"],
+  tenantId: string,
+  claim: FigureClaim,
+): Promise<void> {
+  const check = validateFigureClaim(claim);
+  if (!check.ok) throw new Error(`INVALID_INPUT: ${check.reason}`);
+  const spec = cashInputSpec(claim.field);
+
+  if (spec.store === "scorecard") {
+    if (spec.path === undefined) throw new Error("INVALID_INPUT: no scorecard path");
+    // No evaluation yet: seed under a stable, non-conversational thread id so the panel's answers
+    // survive into the tenant's first real evaluation (the applyScorecardAnswer carrier path).
+    //
+    // ponytail: the scorecard store has NO provenance columns, so an agent-written scorecard figure
+    // reads back as user-stated (`applyScorecardAnswer` adds the dot-path to `userProvided`, which
+    // is what the read boundary keys origin/actor on). Upgrade path if the applier is ever pointed
+    // at a scorecard field: a per-dot-path provenance map on `evaluations` beside `userProvidedAt`.
+    const existing = await latestScorecardRow(db, tenantId);
+    await applyScorecardAnswer(
+      db,
+      tenantId,
+      existing?.threadId ?? "finance-panel",
+      spec.path,
+      claim.value,
+    );
+    return;
+  }
+
+  const row = await db
+    .query("financeInputs")
+    .withIndex("by_tenant_field", (q) =>
+      q.eq("tenantId", tenantId).eq("field", claim.field as "cashOnHand"),
+    )
+    .unique();
+  const write = {
+    valueUsd: claim.value,
+    statedAt: claim.observedAt,
+    origin: claim.origin,
+    actor: claim.actor,
+    basis: claim.basis,
+  };
+  if (row) await db.patch(row._id, write);
+  else
+    await db.insert("financeInputs", {
+      tenantId,
+      field: claim.field as "cashOnHand",
+      ...write,
+    });
+}
+
 export const saveInput = tenantMutation({
   args: { field: vCashField, value: v.number() },
   handler: async (ctx, { field, value }): Promise<{ saved: true }> => {
-    const check = validateCashInput(field, value);
-    if (!check.ok) throw new Error(`INVALID_INPUT: ${check.reason}`);
-    const spec = cashInputSpec(field);
-
-    if (spec.store === "scorecard") {
-      if (spec.path === undefined) throw new Error("INVALID_INPUT: no scorecard path");
-      const existing = await latestScorecardRow(ctx.db, ctx.tenantId);
-      // No evaluation yet: seed under a stable, non-conversational thread id so the panel's answers
-      // survive into the tenant's first real evaluation (the applyScorecardAnswer carrier path).
-      await applyScorecardAnswer(
-        ctx.db,
-        ctx.tenantId,
-        existing?.threadId ?? "finance-panel",
-        spec.path,
-        value,
-      );
-      return { saved: true };
-    }
-
-    const row = await ctx.db
-      .query("financeInputs")
-      .withIndex("by_tenant_field", (q) =>
-        q.eq("tenantId", ctx.tenantId).eq("field", field as "cashOnHand"),
-      )
-      .unique();
-    const write = { valueUsd: value, statedAt: Date.now() };
-    if (row) await ctx.db.patch(row._id, write);
-    else
-      await ctx.db.insert("financeInputs", {
-        tenantId: ctx.tenantId,
-        field: field as "cashOnHand",
-        ...write,
-      });
+    // The human editing their own number is UNGATED — invariant 11: the ACTOR decides gating, not
+    // the operation. Same writer, no plan, no approval.
+    await writeFigureRow(ctx.db, ctx.tenantId, {
+      field,
+      value,
+      origin: "stated",
+      actor: "user",
+      basis: "finance panel",
+      observedAt: Date.now(),
+      confidence: "high",
+    });
     return { saved: true };
   },
 });

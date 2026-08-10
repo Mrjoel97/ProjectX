@@ -164,8 +164,17 @@ export function FigureTile({
             {figure.stale ? " Is this still right?" : ""}
           </p>
         ) : null}
+        {/* The SAME two affordances the stated branch gets. A machine-extracted figure that is 200
+            days old used to render a bare "Measured by Pikar." — no date, no confirm prompt — while a
+            figure the owner typed yesterday got one: `needsConfirmation` computed `stale` and this
+            branch dropped it, for exactly the figures that deserve the most scrutiny. */}
         {figure.origin === "observed" ? (
-          <p style={{ ...muted, fontSize: "0.8rem" }}>Measured by Pikar.</p>
+          <p style={{ ...muted, fontSize: "0.8rem" }}>
+            {figure.statedAt === undefined
+              ? "Measured by Pikar."
+              : `Measured by Pikar on ${shortDay(figure.statedAt)}.`}
+            {figure.stale ? " Is this still right?" : ""}
+          </p>
         ) : null}
       </>
     );
