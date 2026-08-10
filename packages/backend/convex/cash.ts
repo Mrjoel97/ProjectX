@@ -21,6 +21,7 @@ import {
   unitEconomics as coreUnitEconomics,
   createDashboardBound,
   type FigureClaim,
+  financeSpineLine,
   isNewerThan,
   needsConfirmation,
   type Tier,
@@ -113,14 +114,11 @@ function scorecardValue(scorecard: Scorecard, path: string): number | null {
  * The ONE read path over a tenant's cash inputs — `financeInputs` rows plus the scorecard's
  * Hormozi fields, merged into `CashInputState[]`. Both the `inputs` query (the panel) and the
  * `unitEconomics` query (the metrics) call this, so the two can never disagree about what the
- * tenant has entered.
- *
- * EXPORTED for one more caller, `blueprint.ts`'s `spineForTenant` — the always-on finance line on
- * every cockpit turn (spec §2). A plain async function over an explicit `tenantId`, so a query can
- * call it directly (a Convex query cannot `runQuery` the `inputsFor` reader below), and the spine
- * reads the SAME merged state the page and the tools do rather than a fourth copy of the rule.
+ * tenant has entered — and, since the review fix, the always-on spine line reads it too, so all
+ * four surfaces answer the provenance question identically rather than from three copies of the
+ * merge rule.
  */
-export async function inputStatesFor(
+async function inputStatesFor(
   ctx: { db: QueryCtx["db"] },
   tenantId: string,
   nowMs: number,
@@ -311,6 +309,29 @@ export const inputsFor = internalQuery({
   args: { tenantId: v.string() },
   handler: async (ctx, { tenantId }): Promise<{ inputs: CashInputState[] }> =>
     inputStatesFor(ctx, tenantId, Date.now()),
+});
+
+/**
+ * The ALWAYS-ON finance line for the cockpit turn prompt (spec §2), assembled on every turn. STATE,
+ * never analysis — values, ages, `?` for a missing input, `STALE` past `needsConfirmation`, and a
+ * `PIKAR` marker on any figure the agent recorded rather than heard from the owner. Derived metrics
+ * stay behind the on-demand `readFinance` tool, which is what keeps this line affordable per turn.
+ *
+ * `null` when the tenant has collected nothing: a line saying the agent knows nothing spends budget
+ * on every turn to say what its absence already says.
+ *
+ * ITS OWN QUERY, deliberately NOT appended to `blueprint.spineForTenant` — that is a grounding
+ * chunk as well as prompt context, and `evaluations.ts`'s `FINANCIAL_PATTERNS` would capture these
+ * figures as the value of a label mentioned in the blueprint (see the long comment on
+ * `spineForTenant`). The two channels are joined in `buildTurnPrompt` and nowhere else, so the
+ * separation is structural rather than a rule someone has to remember.
+ */
+export const financeSpineFor = internalQuery({
+  args: { tenantId: v.string() },
+  handler: async (ctx, { tenantId }): Promise<string | null> => {
+    const nowMs = Date.now();
+    return financeSpineLine((await inputStatesFor(ctx, tenantId, nowMs)).inputs, nowMs);
+  },
 });
 
 /**

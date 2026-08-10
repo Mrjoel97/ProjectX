@@ -6,7 +6,7 @@ import { describe, expect, test } from "vitest";
 // or the applier's audit insert throws `Component "auditCounts" is not registered`. Relative
 // import — the package blocks the deep specifier. Same idiom as audit.test.ts / contacts.test.ts.
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import { applyFinanceClaims, writeFigureRow } from "./cash";
 import schema from "./schema";
 
@@ -704,4 +704,66 @@ test("an agent claim on a scorecard field is REFUSED — that store cannot recor
   // also have marked the dot-path user-provided and fed it to the citation map at high confidence.
   const evaluations = await t.run((ctx) => ctx.db.query("evaluations").collect());
   expect(evaluations).toHaveLength(0);
+});
+
+// ── cash.financeSpineFor: the always-on cockpit line (spec §2) ───────────────────────────────────
+//
+// ITS OWN QUERY, and that is load-bearing rather than tidy. The first C1 fix appended this line to
+// `blueprint.spineForTenant`, whose return value `evaluations.ts` uses as the "Business blueprint"
+// GROUNDING CHUNK — `FINANCIAL_PATTERNS` then captured a figure from it as the value of a label the
+// blueprint merely mentioned, fabricating `financials.cac`. `evaluations.test.ts` pins that; these
+// pin the line itself. `buildTurnPrompt` is the only place the two channels meet.
+describe("cash.financeSpineFor", () => {
+  const saveFigure = (t: ReturnType<typeof convexTest>, tenantId: string, over = {}) =>
+    t.run(async (ctx) => {
+      await ctx.db.insert("financeInputs", {
+        tenantId,
+        field: "cashOnHand" as const,
+        valueUsd: 38_500,
+        statedAt: Date.now() - 2 * DAY,
+        origin: "stated" as const,
+        actor: "user" as const,
+        basis: "finance panel",
+        ...over,
+      });
+    });
+
+  test("renders the tenant's figures with their ages", async () => {
+    const t = convexTest(schema, modules);
+    await saveFigure(t, "u1");
+    const line = await t.query(internal.cash.financeSpineFor, { tenantId: "u1" });
+    expect(line).toContain("Finance: cashOnHand 38500(2d)");
+  });
+
+  // A tenant with figures and NO confirmed blueprint is the ordinary state of a new account. The
+  // blueprint spine returns null for them; this line must not.
+  test("does not depend on a blueprint existing", async () => {
+    const t = convexTest(schema, modules);
+    await saveFigure(t, "u1");
+    expect(await t.query(internal.blueprint.spineForTenant, { tenantId: "u1" })).toBeNull();
+    expect(await t.query(internal.cash.financeSpineFor, { tenantId: "u1" })).toContain("Finance:");
+  });
+
+  test("a tenant with nothing collected gets no line at all", async () => {
+    const t = convexTest(schema, modules);
+    expect(await t.query(internal.cash.financeSpineFor, { tenantId: "u1" })).toBeNull();
+  });
+
+  test("never carries another tenant's figures", async () => {
+    const t = convexTest(schema, modules);
+    await saveFigure(t, "u2");
+    expect(await t.query(internal.cash.financeSpineFor, { tenantId: "u1" })).toBeNull();
+  });
+
+  // The invariant at the MODEL surface, mirroring the tile copy: a figure the agent recorded is
+  // marked so it can never be cited back as the user's own statement.
+  test("an agent-written figure is marked PIKAR; the owner's own is not", async () => {
+    const t = convexTest(schema, modules);
+    await saveFigure(t, "u1");
+    await saveFigure(t, "u1", { field: "mrr" as const, valueUsd: 9_000, actor: "agent" as const });
+    const line = (await t.query(internal.cash.financeSpineFor, { tenantId: "u1" })) as string;
+    expect(line).toContain("mrr 9000(2d PIKAR)");
+    expect(line).toContain("cashOnHand 38500(2d)");
+    expect(line).not.toContain("cashOnHand 38500(2d PIKAR)");
+  });
 });

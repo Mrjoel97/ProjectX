@@ -18,7 +18,6 @@ import {
   deserializeProfile,
   dispatchToolFor,
   FIELD_SPEC,
-  financeSpineLine,
   mergeBlueprint,
   PULSE_WINDOW_MS,
   type PulseGlobals,
@@ -43,7 +42,6 @@ import {
   internalQuery,
   type QueryCtx,
 } from "./_generated/server";
-import { inputStatesFor } from "./cash";
 import { toGoal } from "./goals";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
@@ -680,55 +678,37 @@ async function unincorporatedFor(
 }
 
 /** The ONE function both seams call (BLPR-02). Returns the rendered standing-context block, or
- *  null when the tenant has neither a live blueprint NOR a collected figure — in which case every
- *  caller's output is byte-identical to today.
+ *  null when the tenant has no live blueprint — in which case every caller's output is
+ *  byte-identical to today.
  *
- *  TWO INDEPENDENT BLOCKS, assembled here (finance line added 2026-08-10, whole-branch review C1).
- *  The blueprint block and the finance line fail open SEPARATELY and neither gates the other: the
- *  blueprint's own early return (`live === null`) is the ordinary state of a new account, and a
- *  tenant who has typed figures but never confirmed a blueprint must still get the `Finance:` line
- *  the skill body promises the model on every turn.
- *
- *  The finance line is assembled OUTSIDE `renderSpine` on purpose. `renderSpine` is a pure function
- *  of a `BusinessBlueprint` with an arithmetic `SPINE_CHAR_CAP` tripwire (the sum of the per-field
- *  caps plus the goals block); folding a 437-char finance line into it would blow that budget,
- *  force it to be re-derived, and put finance state into `vaultGroundHydrated`'s spine too. The
- *  finance line carries its own measured budget (`FINANCE_SPINE_BUDGET`) instead. */
+ *  BLUEPRINT ONLY, and it must stay that way. This string is not just prompt context: `vaultGround`
+ *  calls this query (`vaultGround.ts:225`) and `evaluations.ts` pushes the WHOLE return value in as
+ *  the "Business blueprint" grounding chunk, where `FINANCIAL_PATTERNS` scans it. Those patterns
+ *  are `/\bCAC\b[^\d$]*\$?\s*([\d,]+…)/i` and siblings — `[^\d$]` matches newlines and is
+ *  unbounded, so ANY text appended here can be captured as the number belonging to a label
+ *  mentioned earlier in the blueprint. A blueprint saying "Constraint: CAC is too high" with no
+ *  digits plus one appended figure line is enough to fabricate `financials.cac` at
+ *  `{source: "vault", confidence: "high"}`. The cockpit's always-on finance line is therefore a
+ *  SEPARATE query (`internal.cash.financeSpineFor`) joined only in `buildTurnPrompt`, never here.
+ *  Verified by `evaluations.test.ts`'s "the finance line never reaches the grounding corpus". */
 export const spineForTenant = internalQuery({
   args: { tenantId: v.string() },
   handler: async (ctx, { tenantId }): Promise<string | null> => {
-    const nowMs = Date.now();
-    let block: string | null = null;
     try {
       const live = await readLiveForTenant(ctx, tenantId);
-      if (live !== null) {
-        const blueprint = deserializeBlueprint(live.text);
-        const { count } = await unincorporatedFor(ctx, tenantId, live.sourceDocIds);
-        const goalRows = await ctx.db
-          .query("goals")
-          .withIndex("by_tenant_status", (q) => q.eq("tenantId", tenantId).eq("status", "active"))
-          .collect();
-        block = renderSpine(blueprint, {
-          unincorporatedCount: count,
-          goals: goalRows.map(toGoal),
-        });
-      }
+      if (live === null) return null;
+      const blueprint = deserializeBlueprint(live.text);
+      const { count } = await unincorporatedFor(ctx, tenantId, live.sourceDocIds);
+      const goalRows = await ctx.db
+        .query("goals")
+        .withIndex("by_tenant_status", (q) => q.eq("tenantId", tenantId).eq("status", "active"))
+        .collect();
+      return renderSpine(blueprint, {
+        unincorporatedCount: count,
+        goals: goalRows.map(toGoal),
+      });
     } catch {
-      block = null;
+      return null;
     }
-    // STATE, never analysis: values, ages, `?` for unknown, `STALE` past `needsConfirmation`. The
-    // derived metrics stay behind the on-demand `readFinance` tool, which is what keeps this line
-    // affordable on every turn. `null` when the tenant has collected nothing — a line saying the
-    // agent knows nothing spends budget to say what its absence already says.
-    let finance: string | null = null;
-    try {
-      finance = financeSpineLine((await inputStatesFor(ctx, tenantId, nowMs)).inputs, nowMs);
-    } catch {
-      finance = null;
-    }
-    // `renderSpine` already ends with a newline after `</business_blueprint>`, so the join puts the
-    // finance line on its own line under the block.
-    const parts = [block, finance].filter((p): p is string => p !== null);
-    return parts.length === 0 ? null : parts.join("\n");
   },
 });

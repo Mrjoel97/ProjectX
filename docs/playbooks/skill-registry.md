@@ -1,5 +1,17 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-10 (WHOLE-BRANCH RE-REVIEW, live-finance-inputs — **CODE ONLY, still not
+> seeded or evaluated. The body's `Finance:` sentence called every figure in that line "the user's
+> own figures", and once C1 made the line live that was a false statement to the model on every
+> turn** — the same invariant C2 had just fixed at the page surface, at the surface that actually
+> talks. `cashSpine.ts` now emits a `PIKAR` marker on any figure the owner did not supply (agent
+> write, or evaluation-grounded scorecard fill), mirroring the blueprint spine's `[stated]` /
+> `[source: X]` one token wide, and the body reads "the figures on file" plus a bullet: a `PIKAR`
+> figure is never "you told us", say it is the figure on file and ask them to confirm. Unmarked
+> means theirs — a marker on everything would say nothing. `FINANCE_SPINE_BUDGET` re-measured
+> 437 → 503. `cockpitAgent.ts` regenerated; `skills.test.ts` green. The eval-gate debt from the
+> entry below now covers both body edits.)
+
 > Last verified: 2026-08-10 (WHOLE-BRANCH REVIEW FIX I1, live-finance-inputs — **CODE ONLY, body
 > edit not yet seeded or evaluated. The `cockpit-agent` body's OLD `recordScorecardAnswer` section
 > was the live back door around everything the new finance section governs.** That tool is ungated,

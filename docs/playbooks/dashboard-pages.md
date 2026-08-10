@@ -6,14 +6,19 @@
 > the existing spine assembler"; neither was true — Task 7 built `readFinance`, which reads
 > `unitEconomics`/`solvency`/`inputsFor` and never touches it, and no task ever wired the assembler,
 > while the shipped skill body told the model "your context carries a `Finance:` line". It is wired
-> now: `blueprint.ts`'s `spineForTenant` (the ONE assembler both cockpit seams call) appends the
-> line, and `convex/cash.ts` exports `inputStatesFor` to feed it. Assembled OUTSIDE `renderSpine` —
-> that function is pure over a `BusinessBlueprint` and its `SPINE_CHAR_CAP` tripwire is the
-> arithmetic sum of the per-field caps plus the goals block, which a 437-char finance line would
-> blow — and it survives `spineForTenant`'s `live === null` early return, so a tenant with figures
-> and no confirmed blueprint (the ordinary state of a new account) still gets the line. The two
-> blocks fail open independently; neither gates the other, and a tenant with neither still gets
-> `null`, byte-identical to before.
+> now — **as its own query, `internal.cash.financeSpineFor`, joined to the blueprint spine only in
+> `llm.ts`'s `buildTurnPrompt`.** (The first attempt appended it inside
+> `blueprint.spineForTenant`; the re-review caught that this is also `evaluations.ts`'s grounding
+> chunk and the appended figures got captured as `financials.cac` — see the onboarding playbook's
+> entry and `evaluations.test.ts`'s pin. `vaultGround.ts:225` calls `spineForTenant`, NOT
+> `renderSpine`, which is what made the first rationale wrong.) Both channels are read
+> independently and fail open independently, so a tenant with figures and no confirmed blueprint —
+> the ordinary state of a new account — still gets the line, and a tenant with neither gets the
+> byte-identical legacy prompt. The line also carries a `PIKAR` marker on any figure the owner did
+> not supply, mirroring the blueprint spine's `[stated]`/`[source: X]` and the tile copy in C2
+> below; `FINANCE_SPINE_BUDGET` was re-measured 437 → **503** for it (11 fields × 6 chars),
+> confirmed by the existing `not.toContain("…")` assertion, which caught the truncation when the
+> marker first landed at the old budget.
 > **(C2/I3) An agent-written figure rendered as the owner's own statement.** EVERY claim this slice
 > stores is `origin: "stated"` (spec §1), so origin alone could not separate the owner's typed
 > figure from the agent's approved one — `statedFigure` dropped `actor` and `FigureTile` branched on

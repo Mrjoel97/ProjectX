@@ -11,6 +11,17 @@
 > passing on an empty scan. **Add the literal in the SAME commit as a new tool.** Prose in a schema
 > comment is not a guard; a test is.
 
+> Last verified: 2026-08-10 (WHOLE-BRANCH RE-REVIEW, live-finance-inputs — **`buildTurnPrompt` now
+> takes TWO standing-context channels, `spine` and `finance`, and joining them here is the whole
+> point.** `internal.blueprint.spineForTenant` doubles as `evaluations.ts`'s grounding chunk, so a
+> finance line appended upstream gets its first number captured by `FINANCIAL_PATTERNS` as the value
+> of any `CAC`/`LTGP`/`price` label the blueprint mentions (see business-evaluation.md). Both
+> `runCockpitAgent` and the `__cockpitTurnPrompt` shim now read `internal.cash.financeSpineFor` in
+> its own fail-open try/catch beside the spine read, and `cockpitBlueprint.test.ts`'s call-site pin
+> was extended to require BOTH reads on BOTH sites — a future "tidy-up" that merges the queries
+> fails there before it can reach the grounding corpus. A tenant with figures and no blueprint gets
+> the finance line alone; a tenant with neither gets the byte-identical legacy prompt, still pinned.)
+
 > Last verified: 2026-08-10 (WHOLE-BRANCH REVIEW FIX, live-finance-inputs — two cockpit-side
 > corrections. **(I2) `proposeCalendarEvent` was the third staging tool on the one shared plan row
 > and the only one with no cross-kind interlock.** `otherKindStaged` guarded `stageCrmWrite` and

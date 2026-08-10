@@ -1227,17 +1227,27 @@ export function buildHistoryBlock(history: HistoryMessage[] | undefined): string
  * version stop describing what the model actually saw.
  *
  * Spine FIRST, then history, then the plan context, then the current turn — `The user says:` must
- * stay the final line. `spine === null` returns the pre-17.1 string byte-for-byte.
+ * stay the final line. `spine === null` and `finance === null` returns the pre-17.1 string
+ * byte-for-byte.
+ *
+ * THIS IS THE ONLY PLACE the blueprint spine and the finance line meet, and that is the whole point
+ * (whole-branch re-review, C1 regression). They arrive from two separate queries because
+ * `spineForTenant`'s output doubles as `evaluations.ts`'s "Business blueprint" GROUNDING CHUNK,
+ * which `FINANCIAL_PATTERNS` scans with unbounded `[^\d$]*` gaps — a finance line concatenated
+ * upstream gets its first number captured as the value of any `CAC`/`LTGP`/`price` label the
+ * blueprint happens to mention. Joining here reaches the model and nothing else.
  */
 function buildTurnPrompt(a: {
   spine: string | null;
+  finance: string | null;
   history: { role: "user" | "assistant"; content: string }[] | undefined;
   plan: PlanRow | null;
   tz: string | undefined;
   text: string;
 }): string {
-  const { spine, history, plan, tz, text } = a;
-  return `${spine === null ? "" : `${spine}\n\n`}${buildHistoryBlock(history)}${buildAgentContext(plan ?? {}, tz)}\n\nThe user says: ${text}`;
+  const { spine, finance, history, plan, tz, text } = a;
+  const standing = [spine, finance].filter((p) => p !== null).join("\n");
+  return `${standing === "" ? "" : `${standing}\n\n`}${buildHistoryBlock(history)}${buildAgentContext(plan ?? {}, tz)}\n\nThe user says: ${text}`;
 }
 
 /** Max header lines listInbox returns to the loop — a peek, not a briefing (briefInbox is that). */
@@ -4394,12 +4404,22 @@ export const runCockpitAgent = internalAction({
     } catch {
       spine = null;
     }
+    // The finance line (spec §2), a SEPARATE query and a separate fail-open: it must survive a
+    // tenant with figures and no confirmed blueprint (the ordinary state of a new account), and it
+    // must never be concatenated upstream of `evaluations.ts`'s grounding chunk. See
+    // `buildTurnPrompt`.
+    let finance: string | null = null;
+    try {
+      finance = await ctx.runQuery(internal.cash.financeSpineFor, { tenantId });
+    } catch {
+      finance = null;
+    }
     const { reply, costUsd } = await runAgentLoop(ctx, {
       tenantId,
       planId,
       system: skill.body,
       // History ABOVE the plan context; "The user says:" stays the FINAL line (the current turn).
-      prompt: buildTurnPrompt({ spine, history, plan, tz: clientContext?.tz, text }),
+      prompt: buildTurnPrompt({ spine, finance, history, plan, tz: clientContext?.tz, text }),
       primary: { model: forceTimeout ? timeoutModel() : resolveModel(primaryId), id: primaryId },
       fallback: {
         model: forceTimeout ? timeoutModel() : resolveModel(CHEAP_MODEL),
@@ -4465,8 +4485,15 @@ export const __cockpitTurnPrompt = internalAction({
     } catch {
       spine = null;
     }
+    let finance: string | null = null;
+    try {
+      finance = await ctx.runQuery(internal.cash.financeSpineFor, { tenantId });
+    } catch {
+      finance = null;
+    }
     return buildTurnPrompt({
       spine,
+      finance,
       history: undefined,
       plan,
       tz: undefined,

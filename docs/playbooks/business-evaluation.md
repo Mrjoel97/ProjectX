@@ -1,5 +1,25 @@
 # Playbook: Business Evaluation Engine
 
+> Last verified: 2026-08-10 (WHOLE-BRANCH RE-REVIEW, live-finance-inputs — **the grounding corpus
+> will fabricate a financial figure out of anything appended to the blueprint chunk, and now has a
+> test saying so.** `FINANCIAL_PATTERNS` (`evaluations.ts:79-87`) is described as a "labeled-number
+> scan… only a DIRECT statement fills a financial field", but its gaps are `[^\d$]*` — unbounded,
+> and `.` is not involved so newlines match. A label and its "value" can therefore be hundreds of
+> characters and several lines apart, in different documents' worth of text, as long as no digit or
+> `$` intervenes. The `"Business blueprint"` chunk is `internal.blueprint.spineForTenant`'s WHOLE
+> return value (`vaultGround.ts:225` → `evaluations.ts:264-272`), so anything appended to that query
+> donates its first number to any `CAC`/`LTGP`/`price` the blueprint merely MENTIONS. A live attempt
+> to append the cockpit's finance line there turned a blueprint reading "Constraint: CAC is too high"
+> plus a stored cash-on-hand figure into `financials.cac = 38500`, cited `{source: "vault",
+> confidence: "high"}` — which then flipped `financialsPresent` to growth-os and suppressed the
+> honest "we need your CAC" gap. Fixed by keeping the finance line in its own query
+> (`internal.cash.financeSpineFor`, joined only in `buildTurnPrompt`); pinned by
+> `evaluations.test.ts`'s "the cockpit finance line never reaches the grounding corpus", verified RED
+> against the concatenating version. **Before adding ANY text to the blueprint chunk, re-read this:
+> the existing `ponytail: PROVENANCE CEILING` note at `evaluations.ts:274` warns about attribution;
+> this is the sharper hazard — FABRICATION — and the only real fix for it is narrowing the patterns,
+> which was deliberately not attempted here.**)
+
 > Last verified: 2026-08-09 (cash-business-finance whole-branch review B1 — **`latestScorecardRow`
 > can select a row with no usable Scorecard, and `setPath` used to throw on one.** Two reachable
 > producers write a row this Finance-page reader must not hand back as "the tenant's financial
