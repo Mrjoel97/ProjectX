@@ -1,5 +1,10 @@
 # Playbook: Contacts, CRM & follow-ups
 
+> Last verified: 2026-08-10 (Plan 19-13 @ `6a2d23e` — the consent record is now reproducible on request).
+> `contacts.consentRecord` is the bounded, tenant-scoped content-plane reader for the exact
+> wording, timestamp, source and capture context written by `assertConsent`. The focused backend
+> suite passed 64/64. Owner browser UAT/sign-off remains a separate outstanding judgement gate.
+>
 > Last verified: 2026-08-10 (Plan 19-12 — the phase-19 UAT clock defect). **ACTN-05 IS NOW REACHABLE FROM THE PRODUCT, and the
 > withheld report is a fact on the plan row.** 19-11 fixed the agent loop; the BROWSER still never
 > sent `clientContext`, so `stageCrmWrite` took `no_clock` on every human turn. Fixed at the one
@@ -101,8 +106,9 @@ about them — and there was nowhere to record that someone had asked to stop be
   `suppressFromUnsubscribe`. Plus (19-06) the three SHARED write helpers `upsertContactRow` /
   `createFollowUpRow` / `setFollowUpStatusRow` and the `applyCrmOperations` terminal that
   `cockpit.ts`'s `inline` arm calls — invariant 13. There are deliberately NO public reads here yet
-  — CORRECTED in 19-07: the reads landed WITH THE PAGE, in this same module. Three public
-  `tenantQuery` reads now sit at the bottom of the file — `pipelineTiles` (the four counts),
+  — CORRECTED in 19-07: the reads landed WITH THE PAGE, in this same module. Four public
+  `tenantQuery` reads now live here — `consentRecord` (19-13's one-contact compliance request),
+  `pipelineTiles` (the four counts),
   `listContacts` (newest-first rows carrying `nextStep`, `consent`, `lastTouchAt` and the
   suppression mirror) and `listUnassignedFollowUps` — every one bounded by the 26-01
   `createDashboardBound` / `dashboardCursorFor` contract from `@pikar/core`, never a hand-rolled
@@ -233,8 +239,16 @@ typed guesses. *Enforcement:* the structural scan in `packages/backend/convex/co
 "none on record" — the truth. `consentWording` and `consentContext` are content plane: CLAUDE.md §4
 means they MUST NEVER reach `audit.payload`, which carries refs/ids/counts only. `assertConsent`
 also refuses blank wording: a consent record with no wording is a defaulted consent wearing a
-timestamp. *Enforcement:* `contacts.test.ts` ("consent is never defaulted", "assertConsent refuses
-blank wording").
+timestamp. `consentRecord({ contactId })` is the request path for the whole stored record. It is a
+single `ctx.db.get` behind `tenantQuery`: bounded to one id, authenticated, and followed by an
+explicit tenant comparison that uses the same `CONTACT_NOT_FOUND` refusal for missing and foreign
+rows. No consent returns `null`; an unrecorded wording/context field returns an explicit `null`,
+never an invented string. It writes no audit row. *Enforcement:* `contacts.test.ts` ("consent is
+never defaulted", "assertConsent refuses blank wording", "consentRecord reproduces the EXACT
+wording, timestamp and capture context", the asA/asB and unauthenticated cases, and the audit-table
+absence check). **ponytail:** this is deliberately id-at-a-time. A regulator request is per person;
+the upgrade path for a whole-book export is `listContacts` pagination plus this projection, taken
+only when that product surface is actually required.
 
 **7. The ONE audit row this module writes has the key set `{contactId, addressHash}` — exactly.**
 `unsuppress` is the only audit site in `contacts.ts`. `contactId` is `null` (never absent) when no
