@@ -103,13 +103,18 @@ and capture context without widening the CRM into a bulk export or leaking conte
   — **PASS**, 2 files clean.
 - `git diff --check` over all Phase 19-owned plan paths — **PASS**.
 - Plan checker — **PASS**, zero issues.
-- `pnpm --filter @pikar/backend typecheck` — **qualified shared-tree failure**: the consent change
-  emitted no diagnostic; the command exits 2 only on the existing Finance-lane
-  `convex/cash.ts:132,150` TS2739 errors (missing `origin`, `actor`, `basis`).
-- `node scripts/check-playbooks.mjs` — **qualified shared-tree block**: `contacts-crm.md` is updated,
-  but the gate also demands `dashboard-pages.md`/`cockpit.md` for the unrelated staged deletion of
-  `apps/web/e2e/pipeline.spec.ts` and the pre-existing `gmail.ts` edit. Those lanes were not
-  absorbed.
+- `pnpm typecheck` (full turbo) — **8/10, exit 2. The ONLY errors are the concurrent Finance lane's
+  `convex/cash.ts(132,9)` and `(150,7)` TS2739** (missing `origin`, `actor`, `basis`), surfaced once
+  by `@pikar/backend:typecheck` and once by `@pikar/web:typecheck`. Nothing in this plan is red.
+- `pnpm --filter @pikar/backend test` (whole package) — **72 files / 1448 passed, exit 0.** Recorded
+  honestly: the first attempt died with `FATAL ERROR: Zone Allocation failed - process out of
+  memory` and a second reported 8 spurious failures. That is the shared-vitest-fork memory hazard
+  the harness comment in `contacts.test.ts` already documents; the third run is clean and is the one
+  quoted.
+- `node scripts/check-playbooks.mjs` — **exit 0.** ~~qualified shared-tree block~~ — the block was
+  real at the time it was written and is now resolved: `dashboard-pages.md` and `cockpit.md` were
+  bumped for the `e2e/pipeline.spec.ts` deletion and the `gmail.ts` comment fix respectively, both
+  of which are now IN scope (see the continuation below).
 
 ## Deviations from Plan
 
@@ -126,9 +131,10 @@ and capture context without widening the CRM into a bulk export or leaking conte
 ### Out-of-Scope Findings
 
 - `packages/backend/convex/cash.ts` remains the sole backend typecheck blocker and belongs to the
-  concurrent Finance lane.
-- The repository-wide playbook gate remains blocked by the unrelated Pipeline spec deletion and
-  Gmail comment edit; this plan changed neither file nor their owning playbooks.
+  concurrent Finance lane. Untouched, per the standing instruction.
+- ~~The repository-wide playbook gate remains blocked by the unrelated Pipeline spec deletion and
+  Gmail comment edit; this plan changed neither file nor their owning playbooks.~~ **Both were then
+  pulled IN scope by the owner (see the continuation below) and are done.**
 
 ## Authentication Gates
 
@@ -154,3 +160,116 @@ code work is required for this verification finding.
 - The unrelated staged Pipeline spec deletion remains staged and was not included.
 - A concurrent post-commit edit to `contacts-crm.md` remains in the working tree; it was not
   reverted or folded into this plan's metadata commit.
+
+---
+
+# 19-13 CONTINUATION — the paperwork the owner would not let stand
+
+Everything above covers the CODE gap only. The owner then widened 19-13 to close the rest of what
+the phase-19 verifier found, on the standing instruction: **"no leftovers, actually complete, not
+paperwork-complete."** Spend ceiling **$0.00**, met — nothing here needed a model call.
+
+## The one real gap, finished properly
+
+`consentRecord` shipped at `6a2d23e`. Three things the narrow pass did not report:
+
+**Both guards are MUTATION-PROVEN red-able, with the exact failing text:**
+
+- Drop `|| row.tenantId !== ctx.tenantId` from the handler →
+  `AssertionError: promise resolved "{ at: 1786328761895, …(3) }" instead of rejecting`
+  (`contacts: tenant isolation … > consentRecord — B cannot reproduce A's consent record`).
+- Drop `"consentRecord"` from the test's `COVERED` list →
+  `AssertionError: expected [ 'assertConsent', …(9) ] to deeply equal [ 'assertConsent', …(8) ]`
+  (`PIPE-01/BETA-05: the public surface is exactly what the isolation block covers`).
+
+Both mutations were applied, observed red, and reverted. The export-set pin was **not** merely
+bumped — a real asA/asB isolation case landed beside it, and the unauthenticated block gained the
+query too (a REAL id tenant A created, so the arg validator cannot reject it and pass for the wrong
+reason).
+
+**CLAUDE.md §4 checked, not assumed.** `tenantQuery` is `customQuery(query, customCtx(requireScope))`
+— no logging, no audit hop — and a Convex query cannot write at all. The existing
+"no audit row from this module carries the address or the consent wording, anywhere" test was
+strengthened to run `consentRecord` **before** it serializes the audit table, so the assertion now
+covers the read path rather than only the write path.
+
+**Decision: NO UI surface.** Stated plainly rather than left implicit. The Pipeline table already
+shows *whether* consent is on record; the wording is per-person evidence you hand a regulator, not
+something to render on every row of a scanning table. A public `tenantQuery` IS the request path an
+authenticated tenant can call. A disclosure row would cost per-row state, a second `useQuery`, and
+long-lived free text on a page whose job is scanability. Build it when someone actually has to
+produce the evidence through the UI. Recorded in the playbook's Known gaps.
+
+## The five falsified documents
+
+1. **`19-VALIDATION.md`** — the phase's worst document. It asserted the OPPOSITE of reality on three
+   counts: "ACTN-05 is still not met" (it is met), "fixture 36 is now RED … a full gate is 34/35"
+   (green at run `0b2b6b22`), and the manual-verification row reading NOT RUN (the UAT ran, 15/15).
+   All three corrected, plus the frontmatter status, the typecheck baseline (now 8/10 with `cash.ts`
+   named), the browser-gate paragraph, five stale 62/62 test counts, the Wave-0 items, the sign-off
+   box, and a new row 23 for SC#4. A correction notice at the top says what was wrong and why it
+   matters. **No assertion was weakened.**
+2. **The playbook `Last verified` shas** — 19-12 now names `d575b3f` (the tree the 15/15 UAT ran
+   against), 19-11 names `b73bff8`, 19-13 names `6a2d23e`. 19-11's stale
+   "The owner browser UAT still has not run" is struck through with an explicit SUPERSEDED marker
+   rather than being corrected only by ordering.
+3. **`gmail.ts:167`** — the comment claimed `deliverApprovedPlan` was "the sole caller". There are
+   TWO (`deliverApprovedPlan.ts:37` and `pipeline.ts:379`), verified by grep. The comment now names
+   both and tells the next reader to grep rather than trust it. This is the class of defect that
+   cost the phase the most: three separate times a claim in a comment stopped someone checking.
+4. **`.planning/ROADMAP.md`** — `19-10-PLAN.md` ticked; the progress row moved off
+   "9/10 | In Progress — 19-10 is AT its blocking owner browser UAT; nothing here is owner-verified
+   yet" to 10/10 with the UAT result; the stale ACTN-05-is-broken and 34/35 narratives corrected;
+   19-11/12/13 added to the plan list. **Committed this time** — the phase-25 lane's edits had
+   landed, so the file was clean.
+5. **`apps/web/e2e/pipeline.spec.ts`** — **DELETED**, with its `watch.json` entry. Its empty-tenant
+   precondition can never hold again (the verifier ran it: 1 failed, 1 did not run), so it was a
+   one-shot receipt, not a guard. `pipeline-uat.spec.ts` steps 1+2 and 3 supersede it over throwaway
+   tenants; `pipelineView.test.ts` already covers the two-click un-suppress arming and the
+   no-mailbox-suggestions empty state. Recorded in `contacts-crm.md`, `dashboard-pages.md` and
+   `cockpit.md`.
+
+Also corrected, unprompted but the same class of leftover: the playbook's "How to verify" table
+still used `pnpm --filter … test -- <name>`, a form this very phase measured as NOT filtering, and
+named `cockpitTools` for tests that live in `cockpit.test.ts`. Both fixed.
+
+`.planning/STATE.md` was hand-edited (never `gsd-tools state *`), every `"` inside `stopped_at`
+escaped as `\"` and verified by a guard script — bare quotes made this frontmatter unparseable
+earlier in the phase (`12bde78`). The C19 lane row's stale head (9/10, "cockpit-agent@17 IS STILL
+ACTIVE") was replaced with a current statement and the historical tail explicitly marked as a
+reasoning trail.
+
+## The two caveats — recorded, deliberately NOT closed
+
+Both are written plainly into `19-VALIDATION.md` under "Two things that are NOT clean":
+
+1. **The 35/35 is a splice of two runs.** Gate `086f8267` ran at 19-09, before `datedFollowUpCount`
+   (19-10) and before the 19-11 fix; fixture 36 was re-verified alone afterwards (`0b2b6b22`). The
+   body is byte-unchanged so the body's certification stands — but **no single run has ever been
+   green across all 35 with the strengthened key.** Closing it costs ~$0.35; the ceiling was $0.00.
+2. **`__seedOnboardedTenant`'s "nine specs" is an inference**, not an observation — only five specs
+   call the seeder, and no run of the others is recorded.
+
+## Measured, this session
+
+| Check | Result |
+|---|---|
+| `pnpm --filter @pikar/backend test` | **72 files / 1448 passed, exit 0** (1446 before this plan) |
+| `npx vitest run convex/contacts.test.ts` | **64 passed** |
+| `pnpm typecheck` | **8/10, exit 2** — `cash.ts(132,9)` + `(150,7)` TS2739 only, the concurrent lane's |
+| `node scripts/check-playbooks.mjs` | **exit 0** |
+| Mutation proof, tenant guard | RED, text quoted above |
+| Mutation proof, export-set pin | RED, text quoted above |
+| Spend | **$0.00** |
+
+## What is STILL outstanding after 19-13
+
+**One thing, and it is not code.** The owner has to LOOK at the seven UAT PNGs under
+`.planning/phases/19-contacts-crm-follow-ups/uat/` and judge BRAND conformance, whether the
+withheld-recipients note reads as information rather than failure, and whether the three
+send-refusal notes are honest and actionable. Then tick ACTN-05 and PIPE-01.
+
+`.planning/REQUIREMENTS.md` was **not touched** — the phase-25 lane owns it and the owner said they
+would handle both ticks at phase close. Also untouched: `packages/backend/convex/cash.ts`,
+`.planning/phases/25-*`, `graphify-out/*`, and the `cockpit-agent@18` skill body (still 28,368 chars
+/ sha `6ca4d937639c`, byte-identical, so gate `086f8267` still stands).

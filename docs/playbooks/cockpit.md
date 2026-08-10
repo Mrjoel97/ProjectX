@@ -1,5 +1,15 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-10 (Plan 19-13 — **two comment/file corrections, NO behaviour change.**
+> **(1) `gmail.ts:167` asserted a lie.** It said `deliverApprovedPlan.ts is the sole caller of this
+> action`; 19-05 proved there are **TWO** (`deliverApprovedPlan.ts:37` and `pipeline.ts:379`), both
+> handling the `suppressed` terminal explicitly. A comment claiming false convergence is the exact
+> defect class that cost this phase the most — three separate times a claim in a comment stopped
+> someone checking. The comment now names both callers and says plainly: grep the callers, do not
+> trust the sentence. **(2) `apps/web/e2e/pipeline.spec.ts` DELETED** (permanently red by
+> construction; superseded by `e2e/pipeline-uat.spec.ts`) — see `dashboard-pages.md` and
+> `contacts-crm.md` Known gaps. The guard itself is untouched and still inside the action.)
+> 
 > Last verified: 2026-08-10 (Plan 19-12 — **BOTH PHASE-19 UAT DEFECTS ARE CLOSED, BROWSER-VERIFIED
 > ON A REBUILT `:3111`: `e2e/pipeline-uat.spec.ts` is 15/15 with both `test.fail()` markers DELETED,
 > measured spend $0.0400.**
@@ -253,7 +263,9 @@
 >
 > Previously verified: 2026-08-09 (Plan 19-07 — WATCH-GATE BUMP ONLY, no cockpit behaviour changed.
 > This playbook watches `apps/web/e2e/`, and 19-07 authored `e2e/pipeline.spec.ts` — two tests,
-> discoverable, **never executed**. Nothing in `cockpit.ts`, the tool set or the arm table moved.)
+> discoverable, **never executed**. Nothing in `cockpit.ts`, the tool set or the arm table moved.
+> *(That spec ran once at 19-10 and was DELETED at 19-13 — it could only ever pass once. See
+> `contacts-crm.md` Known gaps.)*)
 >
 > Previously verified: 2026-08-09 (Plan 19-06 — **`ACTION_TYPES` has a FIFTH member, `crm_write`, and it
 > is the `inline` arm's SECOND occupant.** `actionType.ts`, `cockpit.ts`, `schema.ts`, `plans.ts`,

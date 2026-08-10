@@ -3,9 +3,18 @@
 > Last verified: 2026-08-10 (Plan 19-13 @ `6a2d23e` — the consent record is now reproducible on request).
 > `contacts.consentRecord` is the bounded, tenant-scoped content-plane reader for the exact
 > wording, timestamp, source and capture context written by `assertConsent`. The focused backend
-> suite passed 64/64. Owner browser UAT/sign-off remains a separate outstanding judgement gate.
+> suite passed 64/64 (`pnpm --filter @pikar/backend test contacts`), full backend 72 files / **1448
+> passed**, `pnpm typecheck` **8/10** with the concurrent finance lane's `cash.ts` as the ONLY red.
+> Both new guards are mutation-proven red-able — the exact failing text is under Known gaps.
+> 19-13 also closed the phase's paperwork debt: the `gmail.ts:167` "sole caller" lie, the
+> permanently-red `e2e/pipeline.spec.ts` (DELETED), the `--`-broken verify commands in the table
+> below, and the five falsified documents the phase-19 verifier found.
+> Owner browser UAT/sign-off remains a separate outstanding judgement gate — 19-13 does not touch
+> `REQUIREMENTS.md` and does not self-approve it.
 >
-> Last verified: 2026-08-10 (Plan 19-12 — the phase-19 UAT clock defect). **ACTN-05 IS NOW REACHABLE FROM THE PRODUCT, and the
+> Last verified: 2026-08-10 @ `d575b3f` (Plan 19-12 — the phase-19 UAT clock defect; that sha is the
+> last 19-12 commit and the tree the **15/15** `e2e/pipeline-uat.spec.ts` run was driven against).
+> **ACTN-05 IS NOW REACHABLE FROM THE PRODUCT, and the
 > withheld report is a fact on the plan row.** 19-11 fixed the agent loop; the BROWSER still never
 > sent `clientContext`, so `stageCrmWrite` took `no_clock` on every human turn. Fixed at the one
 > shared seam (`useSendCockpitMessage`), verified by a browser turn: UAT step 7 stages an
@@ -22,7 +31,7 @@
 > in-flight row. It reads `plans.withheldRecipients` (written by `executePlan` beside the counters,
 > absent when nobody was dropped). Do NOT rebuild that sentence at a call site.
 
-> Last verified: 2026-08-10 (Plan 19-11 — **ACTN-05's follow-up capability WORKS, and the phase's
+> Last verified: 2026-08-10 @ `b73bff8` (Plan 19-11 — **ACTN-05's follow-up capability WORKS, and the phase's
 > last open defect is CLOSED.** Two fixes, both live-verified against `cockpit-agent@18` with the
 > body BYTE-UNCHANGED (gate `086f8267`'s 35/35 stands, no re-gate owed):
 > **(1)** the capability itself — the cause was never the model, `runAgentLoop` dropped the trusted
@@ -33,12 +42,16 @@
 > so the agent satisfied the required-`email` brake by inventing `"no-email"`. It now applies
 > `isValidEmail`, the send path's OWN rule (**invariant 18**), and fixture 36 re-verified green for
 > the RIGHT reason — turn 2 refused, turn 1's follow-up intact (run `0b2b6b22`, $0.0057).
-> **The owner browser UAT still has not run; nothing here is owner-verified yet.**)
+> ~~**The owner browser UAT still has not run; nothing here is owner-verified yet.**~~
+> **SUPERSEDED at 19-12 (`d575b3f`): the UAT RAN and is 15/15.** What remains outstanding is the
+> owner's *judgement* sign-off on the seven PNGs, not the run. Do not read the struck sentence as
+> current — it is kept only so the reasoning trail stays intact.)
 >
 > Previously verified: 2026-08-09 @ `12bde78` (Plan 19-10 — **phase close-out. The offline surface is
 > verified; the OWNER BROWSER UAT IS STILL PENDING and this line will be re-bumped to the sha it is
 > driven against when it passes.** What IS newly verified here, in a browser, for the first time:
-> `apps/web/e2e/pipeline.spec.ts` **RAN and PASSED 2/2** against a live deployment — invariant 3's
+> `apps/web/e2e/pipeline.spec.ts` **RAN and PASSED 2/2** against a live deployment (that spec was
+> DELETED in 19-13 — it could only ever pass once; see Known gaps) — invariant 3's
 > four real zeroes are now browser-observed, not just component-tested. **And one thing is newly
 > DISPROVEN: ACTN-05's headline capability does not work on the live body** — see the open defect at
 > the top of Known gaps. Nothing in this file should be read as owner-approved until the UAT line
@@ -128,9 +141,11 @@ about them — and there was nowhere to record that someone had asked to stop be
   single failing read cannot erase the rest; `pipelineView.test.ts` (**`.test.ts`, never `.test.tsx`
   — `apps/web/vitest.config.mts` includes `app/**/*.test.ts` ONLY and a `.tsx` is silently skipped**)
   is the executable half of invariants 3 and 6.
-- `apps/web/e2e/pipeline.spec.ts` — **owned by `dashboard-pages.md`**, not by this playbook.
+- `apps/web/e2e/pipeline-uat.spec.ts` — **owned by `dashboard-pages.md`**, not by this playbook.
   It is registered there and additionally covered by `cockpit.md`'s `apps/web/e2e/` prefix;
   registering it a third time here would make three playbooks claim one file.
+  **`apps/web/e2e/pipeline.spec.ts` was DELETED in 19-13** — see "The deleted `pipeline.spec.ts`"
+  under Known gaps for why a one-shot receipt is worse than no spec.
 
 ## Dependencies & blast radius
 
@@ -388,8 +403,10 @@ entry is dropped and the generic `malformed` fallback takes over.
 `apps/web/app/(app)/layout.tsx` keys the rail off `href`, not `soon`, so **adding the href IS the
 activation** and 26-18 owns that decision. Phase 19 ships the route reachable BY URL only, exactly
 as 26-10 Task 1 shipped Finance. *Enforcement:* the plan's verify step greps `layout.tsx` for
-`/dashboard/pipeline` and expects NO hit, and `e2e/pipeline.spec.ts` asserts the rail carries no
-such link so activation cannot happen by accident.
+`/dashboard/pipeline` and expects NO hit, and `e2e/pipeline-uat.spec.ts` step 2 asserts the rail
+carries no such link AND that the item renders `aria-disabled="true"` and is not an `<a>`, so
+activation cannot happen by accident. (Before 19-13 this cited `e2e/pipeline.spec.ts`, which
+asserted only the href absence and has been deleted.)
 
 ## How to change safely
 
@@ -421,13 +438,18 @@ and nothing in the last two** — say NOT RUN when you have not run one, never i
 
 | Command | What it proves |
 |---|---|
-| `pnpm --filter @pikar/core test -- contacts` | The pure functions at their boundaries, incl. `normalizeAddress` idempotence, the fail-closed footer and `parseCrmOperations`' contactless refusal |
-| `pnpm --filter @pikar/backend test -- contacts` | Tenant isolation over every public function, the unsubscribe token round-trip, the inert GET, bounded reads, the export-set pins |
-| `pnpm --filter @pikar/backend test -- cockpitTools` + `-- gmail` | The per-address suppression drop, the group-mode join, all-suppressed refusal, the post-approve suppression, MIME-byte footer presence |
-| `pnpm --filter @pikar/backend test -- cockpit` | The `crm_write` arm: all-or-none, double-approve, no requests rows, no Gmail token, cross-tenant and foreign-ref refusals |
-| `pnpm --filter @pikar/backend test -- plans` | Pitfall 1 — `patchPlan`'s hand-maintained `kind` mirror accepts `crm_write` through the RUNTIME validator, and `resetPlan` clears `crmOperations` |
-| `pnpm --filter @pikar/backend test -- llmRedaction` | The audit key set, structurally: ONE `internal.audit.log` site in this module and no content-plane identifier in the call |
-| `pnpm --filter @pikar/web test -- crmCard` · `-- pipelineView` | The plan card's line list; the empty-state `0` assertions (never `—`, never `Unknown`) |
+**NO `--` IN ANY OF THESE.** 19-10 measured it: pnpm forwards the literal `--` to vitest, which
+matches nothing and falls back to the WHOLE package suite. Every row below is written without it.
+
+| Command | What it proves |
+|---|---|
+| `pnpm --filter @pikar/core test contacts` | The pure functions at their boundaries, incl. `normalizeAddress` idempotence, the fail-closed footer and `parseCrmOperations`' contactless refusal |
+| `pnpm --filter @pikar/backend test contacts` | Tenant isolation over every public function (incl. `consentRecord`), the consent-record round-trip, the unsubscribe token, the inert GET, bounded reads, the export-set pins |
+| `npx vitest run convex/cockpit.test.ts convex/gmail.test.ts` from `packages/backend` | The per-address suppression drop, the group-mode join, all-suppressed refusal, the post-approve suppression, MIME-byte footer presence. **`cockpitTools.test.ts` contains ZERO `executePlan` tests** — 19-10 found six VALIDATION rows naming it that only passed because the broken `--` ran everything |
+| `npx vitest run convex/cockpit.test.ts` from `packages/backend` | The `crm_write` arm: all-or-none, double-approve, no requests rows, no Gmail token, cross-tenant and foreign-ref refusals |
+| `npx vitest run convex/plans.test.ts` from `packages/backend` | Pitfall 1 — `patchPlan`'s hand-maintained `kind` mirror accepts `crm_write` through the RUNTIME validator, and `resetPlan` clears `crmOperations` |
+| `npx vitest run convex/llmRedaction.test.ts` from `packages/backend` | The audit key set, structurally: ONE `internal.audit.log` site in this module and no content-plane identifier in the call |
+| `pnpm --filter @pikar/web test crmCard` · `test pipelineView` | The plan card's line list; the empty-state `0` assertions (never `—`, never `Unknown`); the two-click un-suppress arming |
 | `pnpm test` · `pnpm typecheck` | The whole spine. **Any plan touching `cockpit.ts` / `gmail.ts` / the approve path takes the WHOLE suite as its gate, not a filtered run** (the 20-07 rule) |
 
 **Group 2 — static scans (offline)**
@@ -441,7 +463,7 @@ and nothing in the last two** — say NOT RUN when you have not run one, never i
 
 | Command | What it proves, and what it needs |
 |---|---|
-| `npx playwright test e2e/pipeline.spec.ts` from `apps/web` | The four tiles, the add/suppress/un-suppress flow and the still-`soon` nav, in a real browser. Needs a live `convex dev` (NOT `--once`), a PRODUCTION build of the web app on `:3111` (`next dev` OOMs on heavy dashboard pages), and `E2E_USER_EMAIL`/`E2E_USER_PASSWORD`. **A fresh `/signup` mints those locally** — the Convex Auth `Password` provider is wired, so 19-07's "an executor cannot mint them" was wrong for a local deployment. A new signup is also how you get the EMPTY tenant test 1 requires without a reset seam. **Do NOT use `pnpm --filter @pikar/web test:e2e -- <file>`: the `--` is swallowed and the entire e2e suite runs (~8 min, mostly unrelated tenant-precondition failures).** |
+| `npx playwright test e2e/pipeline-uat.spec.ts` from `apps/web` | The four tiles, the add/suppress/un-suppress flow, the still-`soon` nav, the CRM plan card and the withheld report, in a real browser — 15 steps, last measured 15/15. Needs a live `convex dev` (NOT `--once`) and a PRODUCTION build of the web app on `:3111` (`next dev` OOMs on heavy dashboard pages). It **signs up its own throwaway tenants through the real `/signup` form**, so it needs no `E2E_USER_EMAIL`/`E2E_USER_PASSWORD` and is re-runnable indefinitely. **Do NOT use `pnpm --filter @pikar/web test:e2e -- <file>`: the `--` is swallowed and the entire e2e suite runs (~8 min, mostly unrelated tenant-precondition failures).** |
 | `pnpm eval:golden --skill cockpit-agent@N --only 36` | What the LIVE body actually stages for a follow-up request. **~$0.01.** A full unfiltered gate is **~$0.35** — read `skills.evidence` on the active row at `$0` before budgeting one, and never trust a plan's estimate |
 
 **Group 4 — manual only (no assertion encodes these)**
@@ -609,6 +631,47 @@ uniform across every run is not fixable by another sentence. The likely real fix
 SHAPE — `stageCrmWrite` accepting a `due` on the same call that names a person, and the body being
 taught one grammar rather than two ops — or an explicit refusal when a follow-up request produces
 a contact-only operation list.
+
+### RESOLVED — the consent record was write-only (found by the 19 verifier, FIXED 19-13, 2026-08-10)
+
+`assertConsent` stored `consentWording` and `consentContext` and **nothing in the repo read them
+back.** A repo-wide grep found reads only inside `contacts.test.ts`, and `listContacts` projects
+`consent: { at, source }` and drops both text fields. SC#4 does not merely require the fields to
+exist — it requires the record to be *reproducible on request*, which is the whole point of storing
+the exact wording. There was no request that reproduced it. This is the same write-only-field shape
+the repo already named once for `mediaJobs.actualCents` (closed by 20-18), and it was in neither
+this playbook's ceilings nor its deferred scope, so it was **unlogged debt rather than an accepted
+simplification** — which is how a compliance obligation quietly becomes untrue.
+
+Closed by `consentRecord` (invariant 6). Proven three ways, all `$0`: exact byte-for-byte
+reproduction through the PUBLIC query, an asA/asB isolation case, and the audit-table absence check
+extended to run the read before it serializes. Both guards are mutation-proven red-able:
+
+- Drop `|| row.tenantId !== ctx.tenantId` from the handler ⇒
+  `AssertionError: promise resolved "{ at: 1786328761895, …(3) }" instead of rejecting`.
+- Drop `"consentRecord"` from the test's `COVERED` list ⇒
+  `AssertionError: expected [ 'assertConsent', …(9) ] to deeply equal [ 'assertConsent', …(8) ]`.
+
+**Decision: NO UI surface, deliberately.** The Pipeline table already shows *whether* consent is on
+record; the wording is durable evidence you hand a regulator for one named person, not something to
+render on every row of a scanning table. A public `tenantQuery` IS the request path — an
+authenticated tenant can call it. Adding a disclosure row would mean per-row state, a second
+`useQuery`, and putting long-lived free text on a page whose whole job is scanability. Build it when
+someone actually has to produce the evidence through the UI, not before.
+
+### The deleted `pipeline.spec.ts` (19-13)
+
+`apps/web/e2e/pipeline.spec.ts` was **deleted**, not fixed. Its own header documented that test 1
+pins an EMPTY-tenant precondition that can never hold again once test 2 creates a contact, and the
+19 verifier ran it and got **1 failed / 1 did not run**. It was a one-shot receipt, not a regression
+guard, and a permanently-red spec is worse than no spec — it trains people to ignore red.
+
+Everything it asserted is covered, and by re-runnable things: `pipeline-uat.spec.ts` steps 1+2 and 3
+provision **throwaway tenants through the real `/signup` form** (so the empty-tenant precondition is
+re-establishable by construction) and assert strictly more, including the `soon: true` nav pins;
+`pipelineView.test.ts` covers the two-click un-suppress arming and the "no mailbox suggestions"
+empty state at component level. Its `watch.json` entry under `dashboard-pages.md` was removed with
+it.
 
 ### The `ponytail:` ceilings this phase left, each with its upgrade path
 

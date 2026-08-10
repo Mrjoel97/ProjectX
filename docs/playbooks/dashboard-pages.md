@@ -1,5 +1,13 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-10 (Plan 19-13 — **`apps/web/e2e/pipeline.spec.ts` DELETED.** It was a
+> one-shot receipt, not a regression guard: its own header documented that test 1 pins an
+> EMPTY-tenant precondition that can never hold again once test 2 creates a contact, and the
+> phase-19 verifier ran it and got **1 failed / 1 did not run**. `e2e/pipeline-uat.spec.ts` steps
+> 1+2 and 3 supersede it and assert strictly more, over **throwaway tenants signed up through the
+> real `/signup` form**, so their empty-tenant precondition is re-establishable by construction.
+> Its `watch.json` entry here was removed with it. No page, query or component changed.)
+> 
 > Last verified: 2026-08-10 (Plan 19-12 — the phase-19 UAT clock defect). **Approvals gained ONE durable surface and lost no
 > behaviour.** `InFlightRow` now renders SC#5's withheld report —
 > `Sent to N. Withheld M who unsubscribed: …` — from `plan.withheldRecipients` on the plan row via
@@ -1324,7 +1332,9 @@ adapter module of its own**, because PIPE-01's whole worry is a second CRM data 
 - **Un-suppressing is an in-component arm/commit, never `window.confirm`** — the same rule as the
   Finance owner controls, and for the same reason: a browser modal blocks the page and cannot be
   driven by the spec that has to prove the boundary.
-- **Evidence status, 2026-08-09 — the browser gate is NOT green.** `pipelineView.test.ts` passes
+- **Evidence status, 2026-08-09 — the browser gate is NOT green.** *(SUPERSEDED: it went green
+  2026-08-09 at 2/2, and the spec was then DELETED at 19-13 — see the top of this file. Kept for
+  the reasoning trail; do not read it as current.)* `pipelineView.test.ts` passes
   17/17, web typecheck and the production build are green and `/dashboard/pipeline` appears in the
   route table. `e2e/pipeline.spec.ts` is authored and `--list`-discoverable with two tests, and has
   **never executed** — a `--list` is not a run, and a blank result means NOT RUN. The spec's own
@@ -1386,7 +1396,6 @@ pnpm --filter @pikar/web test -- content
 pnpm --filter @pikar/web test:e2e -- e2e/content.spec.ts
 pnpm --filter @pikar/web test -- reports
 pnpm --filter @pikar/web test:e2e -- e2e/reports.spec.ts
-pnpm --filter @pikar/web test:e2e -- e2e/pipeline.spec.ts
 pnpm --filter @pikar/web test:e2e -- e2e/command-center.spec.ts
 ```
 
