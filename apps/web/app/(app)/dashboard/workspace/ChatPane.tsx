@@ -2,7 +2,7 @@
 
 import { useThreadMessages } from "@convex-dev/agent/react";
 import { api } from "@pikar/backend/api";
-import { useAction, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { useState } from "react";
 import {
   BoltIcon,
@@ -17,6 +17,7 @@ import {
 // stepText — a second copy WILL drift, and a drifted verb is a surface disagreeing with itself.
 import { stepText, traceText } from "./cards";
 import { IntakeControls } from "./IntakeControls";
+import { useSendCockpitMessage } from "./useSendCockpitMessage";
 
 // SC2 render: the left-pane conversation. The guided questions and the "review and Approve"
 // copy are saved assistant turns on the agent thread (cockpit.ts is deterministic — the thread
@@ -84,7 +85,8 @@ export function ChatPane({
   sending: boolean;
   onSending: (v: boolean) => void;
 }) {
-  const send = useAction(api.cockpit.sendCockpitMessage);
+  // Carries the browser's trusted clock on every turn (§2-D) — see useSendCockpitMessage.
+  const send = useSendCockpitMessage();
   const [text, setText] = useState("");
   const busy = sending;
   const setBusy = onSending;

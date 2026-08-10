@@ -18,6 +18,7 @@ import { useEffect, useRef, useState } from "react";
 // outcome free of a new card idiom AND free of a route jump (Pitfall 7: the synthetic voice-doc
 // thread is not a Convex Agent thread, so a workspace composer on it would throw).
 import { CardList } from "../workspace/cards";
+import { useSendCockpitMessage } from "../workspace/useSendCockpitMessage";
 import { markVoiceBriefSeen } from "./AbnormalBriefBanner";
 import type { VoiceSession } from "./useVoiceSession";
 
@@ -50,7 +51,7 @@ export function PostCall({ session, docId }: { session: VoiceSession; docId?: st
   const { sessionId, transcript } = session;
   const router = useRouter();
   const endSessionClean = useMutation(api.voice.endSessionClean);
-  const sendCockpitMessage = useAction(api.cockpit.sendCockpitMessage);
+  const sendCockpitMessage = useSendCockpitMessage(); // trusted clock on every turn (§2-D)
 
   const [markdown, setMarkdown] = useState(() => composeBrief(transcript, today()));
   const [phase, setPhase] = useState<Phase>("review");

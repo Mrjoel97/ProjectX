@@ -11,10 +11,11 @@ import {
   type SegmentPulse,
   SPECIALISTS,
 } from "@pikar/core";
-import { useAction, useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import type { FunctionArgs } from "convex/server";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useSendCockpitMessage } from "../workspace/useSendCockpitMessage";
 import { BLOCKED } from "./connections";
 import { joinPhrases, SEGMENT_BLOCKED, SEGMENT_COPY } from "./segmentCopy";
 import { label } from "./styles";
@@ -514,7 +515,7 @@ export function SegmentAnatomy({
  * new concept. On failure it stays put and says so rather than navigating to nothing.
  */
 export function AskSpecialist({ segment }: { segment: BlueprintSegment }) {
-  const sendCockpitMessage = useAction(api.cockpit.sendCockpitMessage);
+  const sendCockpitMessage = useSendCockpitMessage(); // trusted clock on every turn (§2-D)
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);

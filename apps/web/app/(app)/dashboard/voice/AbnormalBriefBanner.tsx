@@ -2,10 +2,11 @@
 
 import { api } from "@pikar/backend/api";
 import { planSeedFromBrief } from "@pikar/voice";
-import { useAction, useConvex, useQuery } from "convex/react";
+import { useConvex, useQuery } from "convex/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useSendCockpitMessage } from "../workspace/useSendCockpitMessage";
 
 // VOIC-03 (dropped-session half): a session whose tab closed is force-ended + auto-stored by the
 // server watchdog with NO human present to review it. This banner is the review surface those briefs
@@ -44,7 +45,7 @@ export function markVoiceBriefSeen(id: string): void {
 
 export function AbnormalBriefBanner() {
   const docs = useQuery(api.vault.listVaultDocs, {});
-  const sendCockpitMessage = useAction(api.cockpit.sendCockpitMessage);
+  const sendCockpitMessage = useSendCockpitMessage(); // trusted clock on every turn (§2-D)
   const convex = useConvex();
   const router = useRouter();
 
