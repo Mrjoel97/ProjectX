@@ -188,12 +188,20 @@ export function PipelineStateNotice({
 
 // ── the four tiles ────────────────────────────────────────────────────────────
 
+// EXACTLY the four COUNT keys. `pipelineTiles` also returns `partial`, which is a bound signal and
+// not a tile — adding it here would render the word "row-cap" in a stat cell.
 const TILES = [
   { id: "needing-attention", key: "needingAttention", label: "Contacts needing attention" },
   { id: "followups-due", key: "followUpsDue", label: "Follow-ups due" },
   { id: "consent", key: "consentOnRecord", label: "Consent on record" },
   { id: "suppressed", key: "suppressed", label: "Suppressed contacts" },
-] as const satisfies ReadonlyArray<{ id: string; key: keyof Tiles; label: string }>;
+] as const satisfies ReadonlyArray<{ id: string; key: TileCountKey; label: string }>;
+
+/** The keys of `Tiles` whose value is a `number` — i.e. everything except `partial`. Derived, so a
+ *  new count on the backend is usable here and a new NON-count can never become a tile. */
+type TileCountKey = {
+  [K in keyof Tiles]: Tiles[K] extends number ? K : never;
+}[keyof Tiles];
 
 /**
  * The four headline counts, in the mockup's order.
@@ -210,8 +218,13 @@ export function PipelineTiles({ tiles }: { tiles: Tiles }) {
           <div className="stat-head">
             <p className="caps-label">{tile.label}</p>
           </div>
-          {/* A real zero is `0`. There is no Unknown state on this page. */}
-          <div className="stat-value">{tiles[tile.key]}</div>
+          {/* A real zero is `0`. There is no Unknown state on this page.
+              `1000+` past the backend's scan bound is a FLOOR STATED HONESTLY, which is NOT the
+              hedge invariant 3 bans: the page still knows a number, it just knows there are at
+              least that many. `Number.parseInt("1000+", 10)` is still `1000`, so the e2e
+              integer-parse assertion keeps working. One template literal, so the value stays ONE
+              text node and the `">0<"` count assertion still sees it. */}
+          <div className="stat-value">{`${tiles[tile.key]}${tiles.partial === "row-cap" ? "+" : ""}`}</div>
         </div>
       ))}
     </section>

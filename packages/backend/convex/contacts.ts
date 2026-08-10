@@ -793,6 +793,10 @@ async function newestSendByAddress(
  * `needingAttention` is deliberately COMPLEMENTARY to `followUpsDue` rather than a restatement of
  * it: it counts contacts with NO open follow-up, so a contact whose only follow-up is `done` or
  * `canceled` is back in the tile. Both derivations are `@pikar/core`'s, not re-implemented here.
+ *
+ * PAST the scan bound "always known" becomes a FLOOR, not a hedge (19.1-05): `partial: "row-cap"`
+ * and the tile reads `1000+`. Nothing caps a tenant's contact count — the 1 000-row import ceiling
+ * is per FILE — so one max-size import into a book that already held a single contact reaches this.
  */
 export const pipelineTiles = tenantQuery({
   args: {},
@@ -803,22 +807,39 @@ export const pipelineTiles = tenantQuery({
     followUpsDue: number;
     consentOnRecord: number;
     suppressed: number;
+    /** `"row-cap"` when ANY of the three scans hit its bound: the four counts are then a floor, not
+     *  a total, and the tile renders `1000+` rather than a confidently wrong integer. `null` is the
+     *  ordinary case and means the counts are exact — invariant 3's ALWAYS-KNOWN promise, kept
+     *  honestly. Sibling pattern: `listContacts` / `listUnassignedFollowUps` already take
+     *  `SCAN_LIMIT + 1` and report their bound; this read model was the one that did not. */
+    partial: "row-cap" | null;
   }> => {
     const now = Date.now();
-    const contacts = await ctx.db
+    // `SCAN_LIMIT + 1` (never a raised SCAN_LIMIT — five readers share it, including `savedForName`
+    // which the cockpit calls on every resolution): the extra row is the BOUND PROBE, and the
+    // counts below are computed over the first SCAN_LIMIT only so no count can exceed the bound.
+    const scannedContacts = await ctx.db
       .query("contacts")
       .withIndex("by_tenant_createdAt", (q) => q.eq("tenantId", ctx.tenantId))
-      .take(SCAN_LIMIT);
-    const open = await ctx.db
+      .take(SCAN_LIMIT + 1);
+    const scannedOpen = await ctx.db
       .query("followUps")
       .withIndex("by_tenant_status_dueAt", (q) =>
         q.eq("tenantId", ctx.tenantId).eq("status", "open"),
       )
-      .take(SCAN_LIMIT);
-    const suppressions = await ctx.db
+      .take(SCAN_LIMIT + 1);
+    const scannedSuppressions = await ctx.db
       .query("suppressions")
       .withIndex("by_tenant_address", (q) => q.eq("tenantId", ctx.tenantId))
-      .take(SCAN_LIMIT);
+      .take(SCAN_LIMIT + 1);
+
+    const contacts = scannedContacts.slice(0, SCAN_LIMIT);
+    const open = scannedOpen.slice(0, SCAN_LIMIT);
+    const suppressions = scannedSuppressions.slice(0, SCAN_LIMIT);
+    const capped =
+      scannedContacts.length > SCAN_LIMIT ||
+      scannedOpen.length > SCAN_LIMIT ||
+      scannedSuppressions.length > SCAN_LIMIT;
 
     const openContactIds = new Set(
       open.flatMap((row) => (row.contactId ? [String(row.contactId)] : [])),
@@ -830,6 +851,7 @@ export const pipelineTiles = tenantQuery({
       followUpsDue: open.filter((row) => followUpIsDue(row.dueAt, now)).length,
       consentOnRecord: contacts.filter((c) => c.consentAt !== undefined).length,
       suppressed: suppressions.length,
+      partial: capped ? "row-cap" : null,
     };
   },
 });

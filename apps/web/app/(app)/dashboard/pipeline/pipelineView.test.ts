@@ -71,7 +71,13 @@ const table = (rows: Array<Record<string, unknown>>, over: Record<string, unknow
 describe("the four tiles are ALWAYS-KNOWN counts (invariant 3)", () => {
   test("a brand-new empty tenant reads FOUR real zeroes, and no hedge anywhere", () => {
     const html = render(PipelineTiles, {
-      tiles: { needingAttention: 0, followUpsDue: 0, consentOnRecord: 0, suppressed: 0 },
+      tiles: {
+        needingAttention: 0,
+        followUpsDue: 0,
+        consentOnRecord: 0,
+        suppressed: 0,
+        partial: null,
+      },
     });
     // Four rendered values, each an actual `0`. `split` counts occurrences of the VALUE cell, so a
     // label that happened to contain a zero could not fake this.
@@ -86,12 +92,46 @@ describe("the four tiles are ALWAYS-KNOWN counts (invariant 3)", () => {
 
   test("real counts render as themselves and each tile is separately addressable", () => {
     const html = render(PipelineTiles, {
-      tiles: { needingAttention: 3, followUpsDue: 7, consentOnRecord: 2, suppressed: 1 },
+      tiles: {
+        needingAttention: 3,
+        followUpsDue: 7,
+        consentOnRecord: 2,
+        suppressed: 1,
+        partial: null,
+      },
     });
     for (const value of [">3<", ">7<", ">2<", ">1<"]) expect(html).toContain(value);
     for (const id of ["needing-attention", "followups-due", "consent", "suppressed"]) {
       expect(html).toContain(`data-testid="pipeline-tile-${id}"`);
     }
+    // Under the bound the counts are EXACT totals, so nothing may suggest "at least". This is the
+    // non-vacuity floor for the `row-cap` case below.
+    expect(html).not.toContain("+");
+  });
+
+  test("PAST the backend's scan bound every value reads as a FLOOR — `1000+`, still never Unknown", () => {
+    // `partial: "row-cap"` is what `pipelineTiles` returns once any of its three scans hits
+    // SCAN_LIMIT (19.1-05) — reachable with ONE max-size CSV import into a non-empty book.
+    const html = render(PipelineTiles, {
+      tiles: {
+        needingAttention: 1000,
+        followUpsDue: 12,
+        consentOnRecord: 1000,
+        suppressed: 4,
+        partial: "row-cap",
+      },
+    });
+    for (const value of [">1000+<", ">12+<", ">4+<"]) expect(html).toContain(value);
+    // A floor is still a NUMBER the page knows. Invariant 3 bans hedging ("we can't say"), not
+    // honesty about a bound — so the same absences must still hold here.
+    expect(html).not.toContain("—");
+    expect(html).not.toContain("Unknown");
+    expect(html).not.toMatch(/not tracked|no data/i);
+    // And `partial` itself must never leak into a stat cell as a fifth tile.
+    expect(html).not.toContain("row-cap");
+    expect(html.split('data-testid="pipeline-tile-').length - 1).toBe(4);
+    // The e2e integer-parse assertion still works on this markup.
+    expect(Number.parseInt("1000+", 10)).toBe(1000);
   });
 });
 

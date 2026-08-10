@@ -1,5 +1,24 @@
 # Playbook: Contacts, CRM & follow-ups
 
+> Last verified: 2026-08-10 (Plan 19.1-05 -- `pipelineTiles` REPORTS ITS SCAN BOUND. It took
+> exactly `SCAN_LIMIT` (1 000) with no probe row and returned four bare integers, so a max-size CSV
+> import into a book that already held ONE contact silently UNDER-COUNTED all four ALWAYS-KNOWN
+> tiles -- while the e2e integer-parse assertion kept passing, because a wrong integer is still an
+> integer. It now takes `SCAN_LIMIT + 1` on all THREE scans (contacts, open follow-ups,
+> suppressions), counts over `slice(0, SCAN_LIMIT)` so no count can exceed the bound, and returns
+> `partial: "row-cap" | null` -- the pattern `listContacts` and `listUnassignedFollowUps` already
+> used; this read model was the one that did not. The tile renders `1000+`. **OWNER DECISION
+> 2026-08-10: FIX THE HONESTY BUG AT ITS ROOT, DO NOT MERELY RAISE THE CAP.** `SCAN_LIMIT` is shared
+> by FIVE readers including `savedForName`, which the cockpit calls on EVERY contact resolution;
+> raising it changes four other read models' cost to treat one symptom, and the next book past the
+> new number is wrong again in exactly the same way. `partial` is a BOUND SIGNAL, NOT A TILE: `TILES`
+> in `PipelineView.tsx` is keyed on a derived `TileCountKey` (the keys whose value is a `number`), so
+> a future non-count field on the return can never render as a fifth stat cell. TWO MUTATION-PROOFS,
+> each observed red and reverted: reverting the contacts scan to `.take(SCAN_LIMIT)` gives `expected
+> null to be 'row-cap' // Object.is equality`; dropping the `+` suffix from the value cell gives
+> `expected '<section class="stat-grid" aria-label...' to contain '>1000+<'`. MEASURED:
+> `contacts.test.ts` 89/89 (was 87, +2), `pipelineView.test.ts` 22/22 (was 21, +1).)
+
 > Last verified: 2026-08-10 (Plan 19.1-04 -- `matchExisting` and `importContacts`, the two public
 > functions the CSV import panel talks to. **BOTH LIVE IN `convex/contacts.ts`; THERE IS STILL NO
 > SECOND CRM STORE** (PIPE-01, invariant 5) -- `matchExisting` is an indexed read over
@@ -377,6 +396,18 @@ at zero and asserts `">0<"` appears EXACTLY four times **and** that neither `—
 appears anywhere in the tile markup (19-VALIDATION row 19). The absence is asserted explicitly
 because a tile that hedges still renders and still looks fine. The backend half is
 `contacts.test.ts` — an EMPTY tenant returns `{0,0,0,0}` as real numbers, never null, never absent.
+
+*Past the scan bound, the honest form of "always known" is a FLOOR (19.1-05).* `pipelineTiles`
+scans `SCAN_LIMIT + 1` and returns `partial: "row-cap"`; the tile then reads `1000+`. That is NOT
+the hedge this invariant bans -- the page still knows a number, it just knows there are AT LEAST
+that many, and `Number.parseInt("1000+", 10)` is still `1000` for the e2e assertion. What the
+invariant forbids is a silently truncated TOTAL stated as if it were exact. Owner decision
+2026-08-10: `SCAN_LIMIT` was deliberately NOT raised -- five readers share it, `savedForName`
+among them, and a bigger cap only moves the lie further out.
+*Enforcement:* `contacts.test.ts` seeds `SCAN_LIMIT + 1` contacts and asserts `partial` is
+`"row-cap"` with every count `<= 1 000` (and `partial: null` with three contacts, the non-vacuity
+floor); `pipelineView.test.ts` asserts the `+` suffix on every value AND that `—`/`Unknown`/
+`row-cap` still appear nowhere.
 
 **4. Identity is `normalizeAddress`, and there is exactly one of it.**
 Contacts, suppressions and the per-address send guard all key on the same function's output, which
@@ -845,9 +876,11 @@ it.
 - **NOTHING CAPS A TENANT'S CONTACT COUNT.** The 1 000-row ceiling is PER IMPORT (`IMPORT_ROW_MAX`)
   and 100/500 are per CALL; a user may import the same file, or ten different ones, without limit.
   What is bounded is the READ side -- `listContacts` and `savedForName` scan `SCAN_LIMIT` (1 000)
-  rows and `pipelineTiles` currently takes exactly `SCAN_LIMIT` and reports NO bound, so a book
-  grown past it under-counts silently. Plan 19.1-05 is what makes that tile report `partial` /
-  `"row-cap"` instead of a confidently wrong number; raising the cap is not the fix.
+  rows. `pipelineTiles` now scans `SCAN_LIMIT + 1` and REPORTS its bound as `partial: "row-cap"`
+  (19.1-05), so a book grown past it reads `1000+` rather than under-counting silently.
+  *Upgrade path when a tenant genuinely outgrows the tiles:* a counter or an aggregate component,
+  NOT a bigger `SCAN_LIMIT` -- five readers share that constant and a bigger cap only moves the
+  same lie further out.
 - **`listContacts` runs one `by_tenant_contact` query per page row** (≤ 25) plus the `requests`
   fold. If the Pipeline ever feels slow, the fold is the first suspect.
 

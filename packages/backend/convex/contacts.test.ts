@@ -228,6 +228,7 @@ describe("contacts: tenant isolation across every public function (BETA-05 / SC#
       followUpsDue: 0,
       consentOnRecord: 0,
       suppressed: 0,
+      partial: null,
     });
     // Non-vacuity: A, over the SAME database, sees the rows.
     const forA = await h.asA.query(api.contacts.pipelineTiles, {});
@@ -1251,6 +1252,10 @@ async function seedSend(h: Harness, tenantId: string, recipient: string, created
 }
 
 describe("contacts: pipelineTiles are ALWAYS-KNOWN counts (invariant 3)", () => {
+  /** The four TILE keys. `partial` is a bound signal, not a count, and must never be treated as
+   *  one — on either side of the wire (`TILES` in `PipelineView.tsx` excludes it too). */
+  const COUNT_KEYS = ["needingAttention", "followUpsDue", "consentOnRecord", "suppressed"] as const;
+
   test("an EMPTY tenant reads four real zeroes — never null, never undefined", async () => {
     const h = await harness();
     const tiles = await h.asA.query(api.contacts.pipelineTiles, {});
@@ -1262,8 +1267,10 @@ describe("contacts: pipelineTiles are ALWAYS-KNOWN counts (invariant 3)", () => 
       followUpsDue: 0,
       consentOnRecord: 0,
       suppressed: 0,
+      // Under the scan bound the four counts are EXACT totals, not floors (19.1-05).
+      partial: null,
     });
-    for (const value of Object.values(tiles)) expect(typeof value).toBe("number");
+    for (const key of COUNT_KEYS) expect(typeof tiles[key]).toBe("number");
   });
 
   test("needingAttention counts contacts with NO OPEN follow-up — done/canceled still needs you", async () => {
@@ -1338,6 +1345,55 @@ describe("contacts: pipelineTiles are ALWAYS-KNOWN counts (invariant 3)", () => 
 
     await h.asA.mutation(api.contacts.assertConsent, { contactId: consented, wording: WORDING });
     expect((await h.asA.query(api.contacts.pipelineTiles, {})).consentOnRecord).toBe(1);
+  });
+
+  test("UNDER the scan bound the counts are EXACT totals — partial is null, never a floor", async () => {
+    const h = await harness();
+    for (const email of ["one@x.com", "two@x.com", "three@x.com"]) {
+      await h.asA.mutation(api.contacts.upsertContact, { email, origin: "user-entered" });
+    }
+    // The ordinary case, and the non-vacuity floor for the row-cap test below: `partial` is only
+    // meaningful if it is `null` when the scan did NOT hit its bound.
+    expect(await h.asA.query(api.contacts.pipelineTiles, {})).toEqual({
+      needingAttention: 3,
+      followUpsDue: 0,
+      consentOnRecord: 0,
+      suppressed: 0,
+      partial: null,
+    });
+  });
+
+  test("PAST the scan bound the tiles report `row-cap` — a floor, never a confidently wrong total", async () => {
+    const h = await harness();
+    // SCAN_LIMIT + 1 rows: exactly what ONE max-size import into a book that already held a single
+    // contact produces. `IMPORT_ROW_MAX` is 1 000 PER IMPORT and nothing caps a tenant's contact
+    // count, so this is a reachable state, not a synthetic one. Inserted directly and split across
+    // four `t.run` calls to stay inside the 20s testTimeout — the THRESHOLD is deliberately not
+    // lowered, because the point of this test is that it fails on the code that shipped before
+    // 19.1-05, where `pipelineTiles` took exactly SCAN_LIMIT and reported no bound at all.
+    const TOTAL = 1_001;
+    const PER_RUN = 260;
+    for (let start = 0; start < TOTAL; start += PER_RUN) {
+      await h.t.run(async (ctx) => {
+        for (let i = start; i < Math.min(start + PER_RUN, TOTAL); i++) {
+          await ctx.db.insert("contacts", {
+            tenantId: h.tenantA,
+            email: `c${i}@x.com`,
+            origin: "imported",
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          });
+        }
+      });
+    }
+    expect(await contactRows(h)).toHaveLength(TOTAL);
+
+    const tiles = await h.asA.query(api.contacts.pipelineTiles, {});
+    expect(tiles.partial).toBe("row-cap");
+    // The counts stay BOUNDED by the scan — 1 000, not 1 001 — which is precisely why they must be
+    // read as a floor. `1000+` is honest; a bare `1000` is a wrong total stated confidently.
+    expect(tiles.needingAttention).toBe(1_000);
+    for (const key of COUNT_KEYS) expect(tiles[key]).toBeLessThanOrEqual(1_000);
   });
 });
 
