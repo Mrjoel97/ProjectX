@@ -1,5 +1,94 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-11 (21-04 — **A TENANT ROW CAN NOW BECOME `active`.** 21-02 and 21-03 both
+> closed with "no tenant row can become active through any code path"; that sentence is now false.
+> **Nothing was activated live, no tenant candidate has ever passed a real eval run, and NO PAID
+> EVAL WAS RUN BY THIS PLAN — $0.00.** The green 36/36 gate recorded in the entry below is a
+> **GLOBAL `cockpit-agent v1`** run by another lane; it certifies no tenant row and grants no tenant
+> activation. Every result here is `convex-test` in memory plus source scans.
+> **This entry supersedes that one's "does NOT cover" clause**: `packages/backend/convex/skills.ts`
+> was dirty from the 21-03 lane when that session ran, and 21-03 has since committed; 21-04's own
+> changes to the same file are committed in `18d8bca`.)
+>
+> **TWO INDEPENDENT GATES, and neither is sufficient.** Evaluation asks *has this body earned
+> activation?*; owner authorization asks *may this caller change live runtime?*.
+>
+> ```text
+> tenant candidate goes live  ⟺  ownerMutation(requireOwner)  AND  hasPassingTenantEvidence(row)
+> tenant rollback goes live   ⟺  ownerMutation(requireOwner)  AND  rollbackEligible === true
+> ```
+>
+> The load-bearing test cell is *non-owner WITH valid exact evidence*: EVAL_GATE would let that
+> through, so the refusal proves authorization is doing the work. Downgrading the wrapper to
+> `tenantMutation` lets the candidate's **own author** activate it (measured: `changed: true`).
+>
+> **ONE STATUS TRANSITION FOR BOTH SCOPES.** `transitionSkillActivation(ctx, target)` where target
+> is exactly `{scope:"global",name,version}` or `{scope:"tenant",candidateId,mode}`. It owns target
+> resolution, the scope-LOCAL current-active lookup, the evidence/exemption decision, idempotence,
+> and **the only `ctx.db.patch(..., {status:"active"})` in the module** — `skills.test.ts` counts
+> that patch and fails at two. `activateSkillVersion(ctx,name,version)` survives as a thin wrapper,
+> so `activateSkill` and `activateCandidate` are behaviour-identical (all 72 prior tests green
+> through the refactor, unchanged).
+>
+> **GLOBAL AND TENANT ROLLBACK DIFFER, and the difference is not cosmetic.**
+>
+> | | Global `skills` | Tenant `tenantSkills` |
+> |---|---|---|
+> | Identity | `name@version` | the ROW ID |
+> | Evidence predicate | `hasPassingEvidence` (name + version) | `hasPassingTenantEvidence` (candidateId + registryTenantId + name + version) |
+> | Rollback exemption | **status alone** (`archived`/`rolled_back`) | **`rollbackEligible === true` AND an archived/rolled_back status** |
+> | Who may activate | `internal.skills.activateSkill` (identity-free) or `activateCandidate` (owner) | `activateTenantCandidate` (owner) ONLY |
+>
+> Status alone is sufficient globally because nothing else in the `skills` table can produce those
+> statuses — an archived global row was live. In `tenantSkills` a **superseded draft is also
+> archived and was never live**, so status-only would launder a pending candidate straight around
+> the eval gate. `rollbackEligible` is written in exactly two places: the shared patch block, when a
+> row actually goes live, and the `system` baseline `publishUserCandidate` mints as a byte copy of
+> the code-owned core on a tenant's first customization. Measured: deleting the `rollbackEligible`
+> predicate makes a never-active candidate restorable (`changed: true`).
+>
+> **Activation is tenant/name-LOCAL.** It archives only the active row at this tenant + this name,
+> and patches no body, authoredBody, name, version, author, lineage or evidence. A colliding row in
+> another tenant and the global registry row are both outside the index range. *A single-tenant test
+> cannot prove this*: with only one tenant ever live, an unscoped "find the active row for this
+> name" read returns the same row, and all 86 tests stayed green under that mutation. The test that
+> bites puts BOTH tenants live at the same name and version and then supersedes the **younger**
+> one's row.
+>
+> **THE OWNER REVIEW QUEUE.** `skills.tenantCandidatesForReview` (ownerQuery) — `by_status_createdAt`
+> with a fixed `.take(25)`, newest first, never a deployment-wide `.collect()`. It returns the exact
+> row id, tenant/user refs, `authoredBody` + `candidateBody` + `baseBody` (the diff pair), status,
+> `gatePassed`, an `absent|passing|failing` evidence state, a refs-only evidence summary
+> (runId/counts/cost/model — **never the raw evidence string**), and the bounded list of eligible
+> rollback targets. Its returned key set is pinned by EQUALITY in the test, because the next field
+> somebody adds to this queue is the next field a raw prompt leaks through.
+>
+> **AUDIT KEY SETS**, refs only (CLAUDE.md §4), one row per REAL transition — an idempotent
+> re-activation and a refused attempt write nothing:
+>
+> | Event | actor | payload keys (exact) |
+> |---|---|---|
+> | `skill.user_candidate_activated` | `owner` | `author, evalRunId, fromTenantSkillId, fromVersion, ownerUserId, skillName, tenantSkillId, version` |
+> | `skill.user_skill_rolled_back` | `owner` | the same eight; `evalRunId` is `null` because rollback is evidence-exempt |
+>
+> The row belongs to the TENANT whose runtime changed and rides that candidate's own
+> `correlationId`, so it joins the `skill.user_candidate_published` row from 21-02.
+>
+> **OPERATOR STEPS.** Review and act at `/ops` → Optimizer → *User-authored candidates* (owner only;
+> the whole section is mount-gated, and the server wrappers are the actual boundary). Activate is
+> disabled until `gatePassed`. `Roll back` lists only rows that have genuinely been live, plus the
+> server baseline. Read a candidate's situation at $0 with
+> `npx convex run skills:inspectTenantSkill '{"candidateId":"<id>"}'` — refs only, no body.
+> **There is deliberately no `convex run` path to tenant activation or rollback**: their authority is
+> a human, and a CLI door would be a door around `requireOwner`.
+>
+> **STILL UNPAID AND UNOBSERVED.** No tenant candidate has passing evidence anywhere except in a
+> test; `--tenant-skill` has never executed end to end against a real deployment; nothing has been
+> activated or rolled back in a browser. The browser proof is 21-06's and the first paid tenant gate
+> run is 21-07's. **Phase 22's internal identity-free eval path is intact** —
+> `internal.skills.activateSkill`, `recordEvalEvidence` and `recordTenantEvalEvidence` still take no
+> identity, and `requireOwner` is deliberately NOT inside the shared transition.
+
 > Last verified: 2026-08-11 (THE GATE IS GREEN — run `107ee875`, **36/36**, evidence recorded on
 > `cockpit-agent v1` of the CLOUD DEV deployment `woozy-wren-368`. $0.2944 exec + $0.1103
 > specialist = **$0.4047**; one fixture retried (`21-fragment-answer-absorbed`). Not a splice —

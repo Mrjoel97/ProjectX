@@ -1,6 +1,23 @@
 # Playbook: Authorization (tenancy + ownership)
 
-> Last verified: 2026-08-11 (HOOK ARTIFACT, eval-gate session — not an attestation.
+> Last verified: 2026-08-11 (21-04) — the owner boundary now gates the TENANT skill overlay. Three
+> new owner-wrapped endpoints in `skills.ts`: `tenantCandidatesForReview` (ownerQuery),
+> `activateTenantCandidate` and `rollbackTenantSkill` (ownerMutation), all pinned by name in
+> `importGuard.test.ts`. **Nothing was activated live and NO paid eval was run — $0.00.** Everything
+> below is `convex-test` behaviour plus source scans; the two-identity live `/ops` check remains the
+> blocking checkpoint it has been since 22-03. **The artifact entry below refers to MY uncommitted
+> `importGuard.test.ts` change — it is now committed in `18d8bca`, and this is its real entry.**
+>
+> **A KNOWN-STALE BULLET WAS FIXED IN THIS PASS.** The mutation-check list used to end with *"Move
+> the owner check below a write → the zero-mutation/immutability test must turn RED."* That directly
+> contradicted the section above it, which records that the check WAS tried and all 11 optimizer
+> tests correctly stayed **green**: Convex mutations are atomic, so a post-write throw rolls the
+> transaction back and the resulting DB state is byte-identical to the refusal case. Anyone
+> following the old bullet would have chased an unsatisfiable red and been tempted to weaken a
+> fixture until it went. It is replaced below by the checks that ARE satisfiable, all of which were
+> executed this session.
+>
+> PREVIOUS: 2026-08-11 (HOOK ARTIFACT, eval-gate session — not an attestation.
 > §9 fired on an UNCOMMITTED change to `packages/backend/convex/importGuard.test.ts` that this
 > session did not author and did not read. Bumping the line as a real `Last verified` would sign
 > off on unseen code, so this records the artifact instead. **Nothing here is verified.**)
@@ -54,9 +71,14 @@ disagrees with itself fails open.
 - `packages/backend/convex/owner.ts` — `viewer` (non-disclosing boolean for presentation) and
   `bootstrapOwner` (operator-only, idempotent, audited grant).
 - `packages/backend/convex/schema.ts` — the `users` table override carrying `owner`.
+- `packages/backend/convex/skills.ts` — the seven owner-wrapped endpoints, and
+  `transitionSkillActivation`, the ONE identity-free status transition they all route through.
 
 **Tests**
 - `packages/backend/convex/owner.test.ts` — viewer states, bootstrap idempotence, audit key set.
+- `packages/backend/convex/skills.test.ts` — the owner/eval truth table, rollback eligibility, the
+  bounded review queue, and the source contract that there is exactly one activating patch.
+- `apps/web/app/(app)/ops/tenantSkillReview.test.ts` — the ops surface, as a SOURCE SCAN.
 - `packages/backend/convex/tenant.test.ts` — stable-per-user scope, cross-user isolation.
 - `packages/backend/convex/importGuard.test.ts` — raw-builder scan + the static identity guard.
 
@@ -117,8 +139,49 @@ patch `owner:true` → ONE `owner.granted` audit event → return `{changed:true
    break them while conflating two orthogonal questions. Pinned by two tests: an owner still gets
    `EVAL_GATE` on an unevaluated candidate, and a non-owner still gets `OWNER_REQUIRED` on an
    evidence-exempt rollback.
-10. **The four protected endpoints are pinned BY NAME** in `importGuard.test.ts`
-    (`owner-gated endpoints stay owner-gated`). Adding a fifth admin endpoint means adding a row.
+10. **The protected endpoints are pinned BY NAME** in `importGuard.test.ts`
+    (`owner-gated endpoints stay owner-gated`). Adding an admin endpoint means adding a row. There
+    are **seven** as of 21-04: `getOptimizerStatus`, `setOptimizerEnabled`, `activateCandidate`,
+    `candidatesForReview`, `tenantCandidatesForReview`, `activateTenantCandidate`,
+    `rollbackTenantSkill`.
+11. **A TENANT skill row goes live only through the owner boundary** (21-04, SKILL-01). A user can
+    publish a `candidate` and an eval run can certify it; neither changes what any model runs.
+    `activateTenantCandidate` is the only door, and it needs BOTH gates. Proven by a four-cell truth
+    table whose load-bearing cell is *non-owner WITH valid exact evidence* — EVAL_GATE would let
+    that through, so the refusal is provably about authorization. Measured: downgrading the wrapper
+    to `tenantMutation` lets the candidate's **own author** activate it (`changed: true`).
+12. **`requireOwner` is never inside `transitionSkillActivation`.** That helper is also the
+    identity-free path for the eval runner and seeding. The wrapper is the authority; the helper is
+    the transition. This is invariant 9 restated for the tenant scope, and it is why the helper
+    takes no user id and the audit write lives in the public wrapper.
+
+### The tenant overlay's owner surface (21-04)
+
+| Endpoint | Wrapper | Args | Second gate |
+|---|---|---|---|
+| `skills.tenantCandidatesForReview` | `ownerQuery` | none | — (read) |
+| `skills.activateTenantCandidate` | `ownerMutation` | `{candidateId}` | exact passing tenant evidence |
+| `skills.rollbackTenantSkill` | `ownerMutation` | `{targetId}` | `rollbackEligible === true` + archived/rolled_back |
+
+**All three take a ROW ID, never `(name, version)`.** Two tenants can each own `offer-architect@2`,
+so a name/version activation is a coin flip between going live for the right tenant and going live
+for a stranger's draft.
+
+**The review query is the sharpest disclosure boundary added since 22-02.** It returns another
+tenant's `authoredBody` (their business writing) beside `candidateBody`/`baseBody` (raw registry
+prompts), across every tenant on the deployment. The `ownerQuery` refusal happens in the wrapper's
+ctx factory, **before the handler reads a single row**. It is bounded — `by_status_createdAt` with a
+fixed `.take()`, newest first — because the deployment's candidate history is open-ended.
+
+**Ordinary tenant APIs are unchanged.** `myUserSkills` still returns no row id, no base body and no
+raw evidence, and the workspace authoring panel still has no activation control. A user cannot even
+name the row they would want activated.
+
+**Audit.** One refs-only row per REAL transition (idempotent and failed attempts write nothing):
+`skill.user_candidate_activated` / `skill.user_skill_rolled_back`, `actor: "owner"`, payload key set
+exactly `author, evalRunId, fromTenantSkillId, fromVersion, ownerUserId, skillName, tenantSkillId,
+version`. The row belongs to the TENANT whose runtime changed, on that candidate's own
+`correlationId` lineage — not to the owner. No body, no adaptation, no prose (CLAUDE.md §4).
 
 ### Why there is no "check happens before the write" test
 
@@ -157,6 +220,13 @@ already multi-owner; nothing assumes exactly one.
 pnpm --filter @pikar/backend exec vitest run \
   convex/owner.test.ts convex/tenant.test.ts convex/importGuard.test.ts --maxWorkers=1
 
+# The tenant overlay's owner boundary (21-04): truth table, rollback eligibility, review queue
+pnpm --filter @pikar/backend exec vitest run \
+  convex/skills.test.ts convex/importGuard.test.ts --maxWorkers=1
+
+# The /ops surface (SOURCE SCAN — apps/web has no jsdom; this proves text, not pixels)
+pnpm --filter web exec vitest run 'app/(app)/ops/tenantSkillReview.test.ts'
+
 # Typecheck — ALWAYS with --force; turbo's cache restores a stale pass (see PARALLELIZATION.md)
 pnpm exec turbo run typecheck --filter=@pikar/backend --force
 
@@ -170,8 +240,26 @@ node scripts/check-playbooks.mjs
   stays green under this particular mutation — a deleted row reads null either way; it is
   sensitive to a different mutation (dropping the null check).
 - Move a protected endpoint back to a tenant wrapper → its static guard AND its behavioural
-  non-owner test must both turn RED.
-- Move the owner check below a write → the zero-mutation/immutability test must turn RED.
+  non-owner test must both turn RED. *Verified 2026-08-11 on `activateTenantCandidate`: 2 failed /
+  162 passed — the static name guard plus the truth table. With the truth table's owner-side cells
+  temporarily removed so the catastrophic cell is reached first, the candidate's own author
+  activates it: `promise resolved "{ changed: true, …(9) }" instead of rejecting`.*
+- ~~Move the owner check below a write → the immutability test must turn RED.~~ **DELETED
+  2026-08-11 — this check is unsatisfiable on Convex and always was.** See "Why there is no 'check
+  happens before the write' test" above: the transaction rolls back, so the DB state is identical
+  either way and the tests correctly stay green. Do not re-add it, and do not weaken a fixture to
+  make it go red.
+- Drop the exact tenant evidence comparison in `planTenantActivation` → the truth table and the
+  stale/foreign/forged-evidence test must both turn RED. *Verified 2026-08-11: 2 failed / 83 passed.*
+- Drop the `rollbackEligible` predicate → a never-active candidate becomes restorable.
+  *Verified 2026-08-11: 1 failed / 84 passed — `promise resolved "{ changed: true, … }" instead of
+  rejecting`.*
+- Add a direct `ctx.db.patch(id, {status: "active"})` beside the shared transition → the
+  one-patch-block source assertion must turn RED. *Verified 2026-08-11: 1 failed / 163 passed.*
+  **The behavioural tests stay green under this mutation** — that is exactly why the source
+  assertion exists, and why deleting it as "redundant" would be a real regression.
+- Move the `<UserCandidatesPanel />` mount outside the `isOwner` branch → the ops source scan must
+  turn RED. *Verified 2026-08-11: 1 failed / 14 passed.*
 
 **Live only** (no offline substitute): the bootstrap returning `changed:true` then `changed:false`
 on the intended deployment, and the two-identity `/ops` check.
@@ -201,11 +289,37 @@ Run on the INTENDED deployment — never a lane deployment, whose user set and o
 3. As a **controlled non-owner** (`owner` absent or false): no Optimizer heading, switch, candidate
    name/body/evidence, Activate button, optimizer loading state, or owner-only error. Eval signals,
    Dead letters, Compliance nav and the DLQ badge remain.
-4. **As that same non-owner, call all four APIs directly** via the authenticated client/dev harness.
-   All must reject `OWNER_REQUIRED` with no state change. *The DOM check alone is insufficient —
-   this step is the actual trust-boundary proof.*
+4. **As that same non-owner, call all SEVEN APIs directly** via the authenticated client/dev
+   harness. All must reject `OWNER_REQUIRED` with no state change. *The DOM check alone is
+   insufficient — this step is the actual trust-boundary proof.*
 5. UI mutation: remove the `isOwner` mount branch, rebuild, confirm the non-owner now SEES the
    Optimizer heading (RED), then restore, rebuild, and confirm it is absent again.
+6. **(21-04) As a non-owner, confirm the `User-authored candidates` heading, any tenant id, any
+   authored adaptation, the Activate button and the rollback select are all absent** — and that
+   `skills:tenantCandidatesForReview` called directly returns `OWNER_REQUIRED` rather than a body.
+7. **(21-04) As owner, exercise the tenant gate on a disposable candidate only.** Activate must
+   refuse with `EVAL_GATE` while `gatePassed` is false, and `Roll back` must refuse with
+   `ROLLBACK_NOT_ELIGIBLE` on a row that has never been live. **Do not activate a real user's
+   candidate to test this** — it changes what their agent runs.
+
+### Operator commands (21-04)
+
+Read-only, $0, no model call:
+
+```
+# What is this candidate's situation? Refs only — no body ever leaves this read.
+npx convex run skills:inspectTenantSkill '{"candidateId":"<tenantSkills id>"}'
+```
+
+Activation and rollback are **UI-only, owner-only**, by design: they are the two operations whose
+authority is a human being, and there is deliberately no `npx convex run` path that skips the owner
+check. (`internal.skills.activateSkill` remains the identity-free path for the GLOBAL registry only
+— it cannot name a `tenantSkills` row.)
+
+**NOT PAID, NOT LIVE, AS OF 21-04.** No tenant candidate has ever passed a real eval run, none has
+been activated, and none has been rolled back outside `convex-test`. The first paid `--tenant-skill`
+run and the browser proof are outstanding (21-06 / 21-07). Treat every claim on this page about the
+tenant scope as *offline-proven*, not *observed*.
 
 ## Operational notes
 

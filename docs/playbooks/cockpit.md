@@ -1,6 +1,32 @@
 # Playbook: Email Chat Cockpit
 
-> Last verified: 2026-08-11 (COVERAGE ONLY, eval-gate session — not an attestation.
+> Last verified: 2026-08-11 (17-05, the ACTN-02 GAP-CLOSURE SUBSTRATE — **NO PROVIDER CALL WAS
+> ADDED. Google create is still the only executable Calendar target, and ACTN-02 is still not
+> satisfied.**) `calendar_manage` is the SEVENTH `ACTION_TYPES` member and the `externalAction`
+> arm's THIRD occupant, and its `EXTERNAL_TARGETS` entry is a stub that throws
+> `calendar manage not wired (17-08)`. `schema.ts` gained the `calendarEvents` registry and the
+> `microsoftCalendarTokens` store (nothing writes either yet), plus five `plans` proposal fields.
+> `plans.ts` stages provider/operation/managed-event-id only. `cards.tsx` gained a
+> `calendar-manage-plan-card` and two RESERVED trace verbs. See
+> "Phase 17 gap closure — the calendar_manage substrate" below for the invariants.)
+>
+> This SUPERSEDES the COVERAGE-ONLY entry below it, which registered
+> `packages/core/src/calendarManagement.ts` without reading it.
+> Touched 2026-08-11 by 21-04 to clear the §9 Stop hook. **NOTHING HERE WAS RE-VERIFIED AND THIS
+> ENTRY DOCUMENTS NO CHANGE OF ITS OWN.** The hook builds its changed-set from the WHOLE working
+> tree, and it fired on `apps/web/app/(app)/dashboard/workspace/cards.tsx`,
+> `packages/backend/convex/traceParity.test.ts` and `scripts/run-calendar-test-gate.mjs` — three
+> files of the **concurrent 17-05 Calendar lane**, all named in that lane's own file list. None of
+> them is in any 21-04 commit: 21-04 touched only `packages/backend/convex/skills.ts`,
+> `skills.test.ts`, `importGuard.test.ts`, `apps/web/app/(app)/ops/page.tsx`,
+> `apps/web/app/(app)/ops/tenantSkillReview.test.ts`, `docs/playbooks/skill-registry.md` and
+> `docs/playbooks/authorization.md` (commits `18d8bca`, `70d54e3` and the docs commit alongside
+> this one). I did not run, read, re-measure, endorse, revert or restage that lane's change and I
+> make no claim about whether it is correct. **Do not treat this bump as coverage** — the real §9
+> entry for `cards.tsx` / `traceParity.test.ts` / `run-calendar-test-gate.mjs` is still owed by
+> 17-05.
+>
+> PREVIOUS: 2026-08-11 (COVERAGE ONLY, eval-gate session — not an attestation.
 > `packages/core/src/calendarManagement.ts` and its test tripped §9 as uncovered new code.
 > Registered here because this playbook already owns `core/src/calendar.ts`. They are the 17-05
 > Calendar lane's files, unread by this session. **Nothing here is verified** — that lane
@@ -2951,3 +2977,93 @@ Mutation-verification ledger (each mutation was applied, observed RED, and rever
 This is the CODE proof: scripted models prove deterministic degradation and containment. Plan
 16-09 is the PROMPT proof: the eval gate measures grounded, useful, injection-resistant research
 answers. Neither proof substitutes for the other.
+
+## Phase 17 gap closure — the `calendar_manage` substrate (17-05)
+
+*Added 2026-08-11 by Plan 17-05. Plans 17-06 … 17-11 build on this and must not re-litigate it.*
+
+### What this plan did NOT do
+
+`17-VERIFICATION.md` (2026-08-10) records Phase 17 as `gaps_found`: ACTN-02 says *schedule and
+manage* events for *Google / Microsoft*, and the shipped slice is **Google-only and create-only**.
+17-05 closes neither gap. It adds no Microsoft endpoint, no OAuth grant, no update, no delete, no
+`If-Match` and no 412 handling. Everything below is compile-time and persistence groundwork whose
+only job is to make 17-06 … 17-09 additive.
+
+**The shipped Google create path is byte-unchanged and stays the positive regression anchor.**
+
+### Invariants
+
+1. **`calendar_event` is CREATE. `calendar_manage` is UPDATE/DELETE. They are two action types on
+   purpose.** Create has no concurrency problem; management does (etag / `If-Match` / 412), and the
+   two cards promise different things. Do not repurpose `calendar_event`, and do not add a type per
+   provider — the provider is a closed FIELD (`plans.calendarProvider`), so both providers and both
+   operations share one arm.
+2. **`CalendarManageOperation` is `update | delete`, and it is closed.** "Move"/"reschedule" map to
+   `update`; "cancel"/"remove" map to `delete` (`@pikar/core/calendarManagement`). A verb outside
+   the alias map is REFUSED, never guessed.
+3. **`delete` means delete — never the provider's cancellation flow.** Google's `sendUpdates` and
+   Graph's `/cancel` email the attendees on the app's behalf: an outbound external communication
+   with no plan, no audit, no dead letter and no redaction pass. They are out of the vocabulary
+   entirely rather than guarded by a parameter default.
+4. **Management is limited to Pikar-created, attendee-free, etag-bearing rows in `calendarEvents`.**
+   `manageability()` is the single gate and it returns a CODE (`not_found` / `attendees_present` /
+   `needs_inspection`). Arbitrary mailbox event discovery stays out of reach because 17-09's
+   listing reads the registry, not the provider.
+5. **An absent `calendarProvider` MEANS GOOGLE.** Every Phase-17 create row predates this plan and
+   is a Google row, so there is no migration and no backfill. `parseCalendarProvider(undefined)`
+   is the one place that decision lives; an UNKNOWN value throws rather than falling back, because
+   a silent fallback would aim a Microsoft-shaped operation at a Google calendar.
+6. **The registry is the FACT plane; the plan row is the PROPOSAL plane.** `resetPlan` clears all
+   five proposal fields and touches no `calendarEvents` row. That asymmetry is the whole reason the
+   registry is a table rather than more `plans` columns: a user typing "start over" in a thread
+   must not erase our record of events that still exist on a real calendar.
+7. **`patchPlan` stages `calendarProvider`, `calendarOperation` and `calendarManagedEventId` — and
+   NOTHING else.** `calendarExpectedEtag` (the `If-Match` value) and `calendarFailureCode` are
+   deliberately not args, and the ABSENCE is the guarantee: a model-suppliable etag is precisely the
+   stale-overwrite path G2 exists to close, and a model-writable failure code would let the loop
+   claim an operation failed — or that it did not. 17-09 copies a FRESH etag server-side through its
+   own internal mutation (the `persistStoryboard` precedent); 17-08's terminal writes the code.
+8. **`calendarEvents`' composite index is TENANT-FIRST** (`by_tenant_provider_external`). Two
+   tenants can legitimately hold the same provider event id, and a Convex index query must eq its
+   prefix in order — so the tenant predicate is unwritable-to-forget, not merely conventional.
+9. **Failure reaches the user as a CODE, never provider prose.** `CALENDAR_FAILURE_CODES` has seven
+   members. A Google 400 or a Graph 412 body can echo the event summary straight back (§4).
+
+### The inert seam, and who replaces it
+
+| Seam | State today | Owner |
+|---|---|---|
+| `EXTERNAL_TARGETS.calendar_manage` (`cockpit.ts`) | throws `calendar manage not wired (17-08)` | **17-08** replaces this exact member with the real `retrier.run` thunk + terminal |
+| `microsoftCalendarTokens` | table exists, nothing writes it | **17-06** (OAuth flow) |
+| `calendarEvents` | table exists, nothing writes it | **17-08** (create landing + legacy migration) |
+| `listManagedCalendarEvents` / `proposeCalendarChange` trace literals + VERBs | reserved, no tool emits them | **17-09** (the tools) |
+| `calendar-manage-plan-card` | renders provider, operation, managed-event REFERENCE and desired fields | **17-09-03** (registry-backed original event) |
+
+A throw inside `executePlan` aborts the whole Convex mutation, so the `status: "approved"` patch
+that runs before the target thunk rolls back with it. That rollback — not statement ordering — is
+what makes "no run id and no plan-state patch" true, and `cockpit.test.ts` asserts it against a
+manually seeded row.
+
+### The card cannot name the original event yet, and says so
+
+`PlanCard` receives the plan row only. The original event's title and time live in the registry,
+so the card renders the managed-event **reference** and labels the staged values "New title" /
+"New time" / "New length". Reconstructing an "original" from the desired state would be the
+provenance-laundering failure this codebase has already had three times. 17-09-03 adds the
+registry read; until then the reference is the honest maximum.
+
+### How to verify
+
+```
+node scripts/run-calendar-test-gate.mjs --timeout-ms 45000 --test-timeout-ms 20000 \
+  --hook-timeout-ms 10000 -- convex/calendar.test.ts
+cd packages/backend && npx vitest run convex/plans.test.ts convex/cockpit.test.ts convex/traceParity.test.ts
+pnpm --filter @pikar/core typecheck && pnpm --filter @pikar/web typecheck
+```
+
+`run-calendar-test-gate.mjs` exists because the 2026-08-10 verifier saw three Calendar runs emit no
+result at all (66.2s / 71.8s / 55.3s). It gives the run a hard wall clock, kills it, and asserts
+exit 0, `numTotalTests > 0` and `numPassedTests === numTotalTests`. **A timeout is diagnosed, never
+converted into a pass.** At HEAD on 2026-08-11 the file passes 39/39 in 9.6–14.5s cold and warm, so
+those verifier timeouts are recorded as environmental, not as a Calendar defect.
