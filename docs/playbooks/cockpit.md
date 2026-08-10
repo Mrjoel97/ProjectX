@@ -1,5 +1,16 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-10 (20.1-01 — **Drive reads are registered but intentionally not yet
+> taught to the active agent**). `buildCockpitTools` now exposes `listDriveFolders({parentId?})` and
+> `findInDrive({query})`; neither accepts `tenantId`, and both call the existing tenant-derived
+> Drive boundary. Closed `agentSteps.tool` literals and workspace verbs keep start/done traces
+> truthful. `SMOKE::agent::drive=list:<folderId>` and `drive=find:<query>` traverse the real parser,
+> op-to-tool map, executor, and trace recorder offline at **$0**. The structural guard excludes
+> import/ingest/export/reservation calls and keeps both tools out of every specialist grant. This
+> plan deliberately does not edit or activate the versioned `cockpit-agent` skill; Plan 20.1-02 is
+> the visibility/activation/UAT boundary. Focused evidence: trace parity 2/2, Drive registration
+> 1/1, Drive guards 4/4, and Drive cockpit smoke 3/3.
+>
 > Last verified: 2026-08-10 (Plan 19-13 — **two comment/file corrections, NO behaviour change.**
 > **(1) `gmail.ts:167` asserted a lie.** It said `deliverApprovedPlan.ts is the sole caller of this
 > action`; 19-05 proved there are **TWO** (`deliverApprovedPlan.ts:37` and `pipeline.ts:379`), both

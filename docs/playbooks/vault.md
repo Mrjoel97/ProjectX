@@ -1,5 +1,16 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Last verified: 2026-08-10 (20.1-01 — **offline Drive discovery substrate only; not yet user
+> visible**). `vaultDrive.findInDrive` reuses the existing stored-scope check and shared Drive token
+> refresh boundary, then performs exactly one bounded `files.list` (`pageSize=20`, no pagination)
+> across name and full text. Query literals escape backslashes and apostrophes before URL encoding;
+> shared-drive flags remain mandatory. Results are metadata only (`id`, name, kind, optional parent,
+> readability). This path never calls folder import, download, reservation, export, landing, ingest,
+> embedding, graph extraction, or any hosted model. The cockpit wrappers list one level or search,
+> but remain unreachable in normal conversation until Plan 20.1-02 activates the matching
+> `cockpit-agent` skill body. Offline evidence: `vaultDrive.test.ts` 16/16; Drive guard mutation
+> inserted an import reference, failed exactly the new guard, was reverted, and returned green.
+>
 > Last verified: 2026-08-10 (17.1-10 L6 failed live gate — **do not claim a golden
 > pass**). The owner authorized and launched exactly one top-level, unpinned 35-case command
 > against the configured local deployment. The shell timed out after **1808.1 seconds** with exit
