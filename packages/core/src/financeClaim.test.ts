@@ -40,6 +40,21 @@ test("observedAt in the future is refused — a figure cannot be true before it 
   expect(r).toEqual({ ok: false, reason: "A figure cannot be observed in the future." });
 });
 
+test("a NaN observedAt is refused — it would freeze isNewerThan and staleness forever", () => {
+  const r = validateFigureClaim(claim({ observedAt: Number.NaN }));
+  expect(r).toEqual({ ok: false, reason: "A figure must have a valid observed date." });
+});
+
+test("an infinite observedAt is refused", () => {
+  const r = validateFigureClaim(claim({ observedAt: Number.POSITIVE_INFINITY }));
+  expect(r).toEqual({ ok: false, reason: "A figure must have a valid observed date." });
+});
+
+test("a negative observedAt (before the epoch) is refused", () => {
+  const r = validateFigureClaim(claim({ observedAt: -1 }));
+  expect(r).toEqual({ ok: false, reason: "A figure must have a valid observed date." });
+});
+
 test("isNewerThan is true when nothing is stored", () => {
   expect(isNewerThan(claim(), null)).toBe(true);
 });

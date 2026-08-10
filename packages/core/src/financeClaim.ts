@@ -42,6 +42,15 @@ export function validateFigureClaim(
   if (claim.actor === "user" && claim.confidence !== "high") {
     return { ok: false, reason: "A user-entered figure is always high confidence." };
   }
+  // A date phrase parsed with `Date.parse`/`new Date(x).getTime()` (later tasks) yields NaN on
+  // failure, and Convex's float64 columns accept it silently. Left unchecked, a NaN observedAt
+  // freezes the field forever: `isNewerThan` and `needsConfirmation` (cash.ts) both compare
+  // against it with `>`, which is always false against NaN — never newer, never stale. A
+  // before-the-epoch value is refused for the same reason: it is not a real "when this was
+  // true" and must not reach a store either.
+  if (!Number.isFinite(claim.observedAt) || claim.observedAt < 0) {
+    return { ok: false, reason: "A figure must have a valid observed date." };
+  }
   if (claim.observedAt > nowMs) {
     return { ok: false, reason: "A figure cannot be observed in the future." };
   }
