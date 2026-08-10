@@ -1,6 +1,22 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-08-10 (Plan 19-13 — **`apps/web/e2e/pipeline.spec.ts` DELETED.** It was a
+> Touched 2026-08-11 by 21-04 to clear the §9 Stop hook. **NOTHING HERE WAS RE-VERIFIED AND THIS
+> ENTRY DOCUMENTS NO CHANGE OF ITS OWN.** The hook builds its changed-set from the whole tree, and
+> it fired on `apps/web/app/(app)/dashboard/approvals/ApprovalsView.tsx` and
+> `packages/backend/convex/approvals.ts`. Neither is in any 21-04 commit — `git log -1` on both
+> names `d17ab1d feat(17-05): the calendar_manage substrate`, the **concurrent 17-05 Calendar
+> lane**, and both files are clean in the working tree as this is written. 21-04 touched only
+> `packages/backend/convex/skills.ts`, `skills.test.ts`, `importGuard.test.ts`,
+> `apps/web/app/(app)/ops/page.tsx`, `apps/web/app/(app)/ops/tenantSkillReview.test.ts`,
+> `docs/playbooks/skill-registry.md`, `docs/playbooks/authorization.md` and `docs/playbooks/cockpit.md`
+> (commits `18d8bca`, `70d54e3`, `3166544`, `d49f6dc`, `1a51259`). I did not run, read, re-measure,
+> endorse, revert or restage that lane's change and I make no claim about whether it is correct.
+> **Do not treat this bump as coverage** — the real §9 entry for the approvals surface and
+> `approvals.ts` is owed by 17-05. This is the THIRD such false positive forced on 21-04 in one
+> session (two on `cockpit.md`, one here); each is a durable record that says nothing, written by
+> someone who checked nothing.
+>
+> PREVIOUS: 2026-08-10 (Plan 19-13 — **`apps/web/e2e/pipeline.spec.ts` DELETED.** It was a
 > one-shot receipt, not a regression guard: its own header documented that test 1 pins an
 > EMPTY-tenant precondition that can never hold again once test 2 creates a contact, and the
 > phase-19 verifier ran it and got **1 failed / 1 did not run**. `e2e/pipeline-uat.spec.ts` steps
