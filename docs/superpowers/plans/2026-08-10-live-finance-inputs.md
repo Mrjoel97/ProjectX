@@ -242,14 +242,14 @@ test("statedFigure carries the stored origin rather than assuming 'stated'", () 
     spec,
     1_754_000_100_000,
   );
-  expect(figure.kind).toBe("known");
-  if (figure.kind === "known") expect(figure.origin).toBe("observed");
+  expect(figure.state).toBe("known");
+  if (figure.state === "known") expect(figure.origin).toBe("observed");
 });
 
 test("an absent input is unknown regardless of provenance", () => {
   const spec = cashInputSpec("cashOnHand");
   const figure = statedFigure(undefined, spec, 1_754_000_000_000);
-  expect(figure.kind).toBe("unknown");
+  expect(figure.state).toBe("unknown");
 });
 ```
 
@@ -505,15 +505,45 @@ And the scorecard branch — where the leak lives. A scorecard field is user-pro
       };
 ```
 
-- [ ] **Step 6: Run the tests**
+- [ ] **Step 6: Close the renderer gap this task opens**
 
-Run: `cd packages/backend && npx vitest run convex/cash.test.ts`
-Expected: PASS.
+**This step is not optional and must land in the same commit as step 5.** Step 5 is the first code that ever produces `origin: "observed"`, and `CashView.tsx:159-169` currently gates the whole staleness affordance on `origin === "stated"`:
 
-- [ ] **Step 7: Commit**
+```tsx
+{figure.origin === "stated" ? (
+  <p …>{…`You told us this on ${shortDay(figure.statedAt)}.`}{figure.stale ? " Is this still right?" : ""}</p>
+) : null}
+{figure.origin === "observed" ? (
+  <p …>Measured by Pikar.</p>
+) : null}
+```
+
+So a machine-extracted figure that is 200 days old renders as a bare "Measured by Pikar." — no date, no confirm prompt. `needsConfirmation` computes `stale: true`, attaches it to the figure, and the renderer drops it on the floor **for exactly the figures that deserve the most scrutiny**. Before this plan, that could not happen, because every `statedFigure` result was `"stated"`. Give the observed branch the same two affordances:
+
+```tsx
+{figure.origin === "observed" ? (
+  <p style={{ ...muted, fontSize: "0.8rem" }}>
+    {figure.statedAt === undefined
+      ? "Measured by Pikar."
+      : `Measured by Pikar on ${shortDay(figure.statedAt)}.`}
+    {figure.stale ? " Is this still right?" : ""}
+  </p>
+) : null}
+```
+
+Pin it in `cashView.test.ts`: a stale `observed` figure must render the confirm prompt. Without that test nothing in either package fails when this regresses.
+
+- [ ] **Step 7: Run the tests**
+
+Run: `cd packages/backend && npx vitest run convex/cash.test.ts`, then `cd apps/web && npx vitest run "app/(app)/dashboard/finance/cashView.test.ts"`
+Expected: PASS both.
+
+Then confirm the branch-wide typecheck is green again: `cd packages/backend && npx tsc --noEmit -p .`. It has been **red since Task 2** — `convex/cash.ts:132` and `:150` build `CashInputState` literals without `origin`/`actor`/`basis`. Those two literals are this task's to fill; the errors disappearing is how you know step 5 is complete.
+
+- [ ] **Step 8: Commit**
 
 ```bash
-git add packages/backend/convex/schema.ts packages/backend/convex/cash.ts packages/backend/convex/cash.test.ts
+git add packages/backend/convex/schema.ts packages/backend/convex/cash.ts packages/backend/convex/cash.test.ts "apps/web/app/(app)/dashboard/finance/CashView.tsx" "apps/web/app/(app)/dashboard/finance/cashView.test.ts"
 git commit -m "feat(finance): one writeFigureRow for both actors, and provenance on every figure"
 ```
 
@@ -879,6 +909,13 @@ test("the WORST case fits the budget — every input collected, longest values, 
   const line = financeSpineLine(worst, NOW);
   expect(line).not.toBeNull();
   expect((line as string).length).toBeLessThanOrEqual(FINANCE_SPINE_BUDGET);
+  // The load-bearing assertion. Without it this test is TAUTOLOGICAL: financeSpineLine truncates
+  // to the budget, so the length check alone passes for ANY budget value — including one so small
+  // that mrr/receivables/payables silently never reach the agent, which reads their absence as
+  // "not collected" and re-asks for figures the owner already gave. The ellipsis is the observable
+  // signal that the guard fired, so adding a twelfth CASH_INPUTS member without re-measuring the
+  // budget turns this red instead of silently dropping a figure.
+  expect(line as string).not.toMatch(/…$/);
 });
 ```
 
@@ -897,9 +934,11 @@ Create `packages/core/src/cashSpine.ts`:
 // never analysis. Derived metrics cost a `readFinance` call, on the turns that need them.
 import type { CashInputState } from "./cash";
 
-/** Hard ceiling, proven by the worst-case test. Sits inside the existing spine budget the goals
- *  line already shares. */
-export const FINANCE_SPINE_BUDGET = 320;
+/** The MEASURED worst case: all 11 CASH_INPUTS collected, longest renderable value, longest age,
+ *  every one stale. Computed, not guessed — 9 for the prefix, 145 of field names, 253 for eleven
+ *  " 999999999(9999d STALE)" bodies, 30 for ten joiners. RE-MEASURE when a member is added to
+ *  CASH_INPUTS; the worst-case test goes red if you don't. */
+export const FINANCE_SPINE_BUDGET = 437;
 
 const DAY_MS = 86_400_000;
 
@@ -932,7 +971,9 @@ In `packages/core/src/index.ts`: `export * from "./cashSpine";`
 - [ ] **Step 5: Run the tests**
 
 Run: `cd packages/core && npx vitest run src/cashSpine.test.ts`
-Expected: PASS — 5 tests. If the worst case exceeds 320, raise `FINANCE_SPINE_BUDGET` to the measured value and re-run; do not shorten the test.
+Expected: PASS — 5 tests.
+
+Prove the worst-case test is not tautological before you commit: temporarily lower `FINANCE_SPINE_BUDGET` below 437 and confirm the test goes **red** on the ellipsis assertion, then restore it. A budget that cannot be violated is not a budget.
 
 - [ ] **Step 6: Commit**
 
