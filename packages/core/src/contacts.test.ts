@@ -226,6 +226,14 @@ describe("parseCrmOperations", () => {
     expect(() => parseCrmOperations([{ ...ADD_CONTACT, origin: "guessed" }])).toThrow(
       /CRM_CONTACT_ORIGIN_INVALID/,
     );
+    // SILENT SITE 2 (19.1-02). Human-only import is LOCKED: the agent may not stage an imported
+    // contact, because the attestation is a legal statement a person makes about a file the agent
+    // cannot see. `ORIGINS` is typed `readonly string[]`, NOT `readonly CrmContactOrigin[]`, so it
+    // is structurally decoupled from the type above — widening one never touches the other and tsc
+    // reports nothing. This assertion is the only thing holding them together.
+    expect(() => parseCrmOperations([{ ...ADD_CONTACT, origin: "imported" }])).toThrow(
+      /CRM_CONTACT_ORIGIN_INVALID/,
+    );
     expect(() => parseCrmOperations([{ op: "deleteContact", email: "bob@x.com" }])).toThrow(
       /CRM_OPERATION_UNKNOWN/,
     );

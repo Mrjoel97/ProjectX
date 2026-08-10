@@ -1486,14 +1486,37 @@ export default defineSchema({
      *  row agree by construction rather than by convention. */
     email: v.string(),
     name: v.optional(v.string()), // no name-only contacts; the table falls back to the address
+    /** Content plane, the `consentWording` rule below (CLAUDE.md §4): these MUST NEVER reach
+     *  `audit.payload`, which carries refs/ids/counts only. THREE fields and no more — no custom
+     *  fields, no tags, no arbitrary key-value (19.1 CONTEXT, LOCKED). Optional ⇒ NO migration. */
+    company: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    title: v.optional(v.string()),
     /** The PROVENANCE OF THE DATA, not who triggered the write. `mailbox-resolved` = the address
      *  came out of Gmail headers and a human pressed save; `user-entered` = typed from scratch;
      *  `inbound` = a Phase 31 lead form (not written in this phase). */
-    origin: v.union(v.literal("mailbox-resolved"), v.literal("user-entered"), v.literal("inbound")),
+    // `imported` = a row that came out of a CSV the user uploaded (19.1). WIDENING a union is
+    // backward-compatible for every row at rest, so this needs NO migration; NARROWING it later
+    // WOULD need one, because rows carrying the dropped literal would fail validation on read.
+    origin: v.union(
+      v.literal("mailbox-resolved"),
+      v.literal("user-entered"),
+      v.literal("inbound"),
+      v.literal("imported"),
+    ),
     /** Consent stays EMPTY when no consent event occurred — the Pipeline cell then reads "none on
      *  record", the truth. NOTHING is defaulted to consented. */
     consentAt: v.optional(v.number()),
-    consentSource: v.optional(v.union(v.literal("asserted-by-user"), v.literal("inbound-form"))),
+    // `imported-attested` is deliberately DISTINCT from `asserted-by-user`: one attestation over
+    // 500 rows is weaker evidence than consent recorded for one person, and the schema must not
+    // flatten that difference. Widening ⇒ NO migration; narrowing later would need one.
+    consentSource: v.optional(
+      v.union(
+        v.literal("asserted-by-user"),
+        v.literal("inbound-form"),
+        v.literal("imported-attested"),
+      ),
+    ),
     /** Content plane. CLAUDE.md §4 — this text MUST NEVER reach `audit.payload`, which carries
      *  refs/ids/counts only. `consentWording` is the exact wording shown; `consentContext` is the
      *  user's free-text capture context ("they signed up at the trade show"). */

@@ -129,12 +129,21 @@ const quietChip: CSSProperties = {
 
 // ── pure helpers ──────────────────────────────────────────────────────────────
 
-/** Where the DATA on a contact row came from — provenance, not who triggered the write. */
+/**
+ * Where the DATA on a contact row came from — provenance, not who triggered the write.
+ *
+ * `satisfies Record<ContactRow["origin"], string>` is a COMPILE-TIME BIND to the read model, added
+ * by 19.1-02. Before it, widening `contacts.origin` in the schema left this map silently short and
+ * `ORIGIN_LABELS[row.origin]` resolved to `undefined` inside the JSX — a BLANK chip, no error, and
+ * nothing for tsc to say. The next new origin now fails HERE, at the declaration. Keep the
+ * `satisfies` (not an annotation): the annotation would widen the values back to `string`.
+ */
 export const ORIGIN_LABELS = {
   "mailbox-resolved": "From your mail",
   "user-entered": "You added them",
   inbound: "Inbound",
-} as const;
+  imported: "Imported from a file",
+} as const satisfies Record<ContactRow["origin"], string>;
 
 /** An absolute day. No relative "3 days ago": this column is a fact, not a feeling. */
 export function formatDay(epochMs: number): string {
@@ -279,7 +288,16 @@ export function ContactTable({
                 {row.consent === null ? (
                   <span style={quietChip}>none on record</span>
                 ) : (
-                  <span style={chip}>Consented {formatDay(row.consent.at)}</span>
+                  // The chip renders its SOURCE, not just its date (owner decision 2026-08-10).
+                  // The schema keeps `imported-attested` DISTINCT from `asserted-by-user` because
+                  // one attestation over a whole file is weaker evidence than consent recorded for
+                  // one person — and this cell, the only surface anyone looks at, was throwing
+                  // that distinction away invisibly to tsc. Still `chip`/`quietChip`: teal is a
+                  // FILL and amber belongs to the approval gate alone (BRAND §2/§6).
+                  <span style={chip}>
+                    Consented {formatDay(row.consent.at)}
+                    {row.consent.source === "imported-attested" ? " · imported" : ""}
+                  </span>
                 )}
               </td>
               <td style={td}>

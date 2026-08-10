@@ -329,6 +329,24 @@ describe("contacts: the write surface", () => {
     expect(await contactRows(h)).toHaveLength(0);
   });
 
+  // SILENT SITE 1 (19.1-02). `upsertContact`'s arg validator is DELIBERATELY NARROWER than the
+  // schema union it writes into: the hand-add form must not be able to claim imported provenance,
+  // because "this came out of a file the user uploaded" is a claim only the import path can make.
+  // Nothing binds that hand-maintained `v.union` to the schema — widening the schema does NOT
+  // widen it, and tsc says nothing either way. THIS TEST IS THE ONLY THING HOLDING THEM APART.
+  test("upsertContact REFUSES origin 'imported' — the hand-add form cannot claim a file", async () => {
+    const h = await harness();
+    await expect(
+      h.asA.mutation(api.contacts.upsertContact, {
+        email: "a@b.co",
+        // `as never` because the arg type already excludes this — the refusal under test is the
+        // RUNTIME validator, which is what an untyped caller (the browser) actually meets.
+        origin: "imported" as never,
+      }),
+    ).rejects.toThrow();
+    expect(await contactRows(h)).toHaveLength(0);
+  });
+
   test("consent is never defaulted — absent stays absent until asserted", async () => {
     const h = await harness();
     const id = await h.asA.mutation(api.contacts.upsertContact, {

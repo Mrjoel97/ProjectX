@@ -1,12 +1,39 @@
 # Playbook: Contacts, CRM & follow-ups
 
-> Last verified: 2026-08-10 (HOOK ARTIFACT, not an attestation — supersede and delete this entry.
-> The §9 Stop hook fired on the finance-lane session for watched paths it did not author and had
-> not reviewed: `contacts.ts`, `contacts.test.ts`, `schema.ts`, `PipelineView.tsx`,
-> `pipelineView.test.ts`, `core/contacts.test.ts` — all UNCOMMITTED 19.1 work in the shared tree at
-> the time. Bumping the line as a real `Last verified` would have signed off on code that session
-> never read, so it recorded this instead. **Nothing here is verified.** The 19.1 lane replaces this
-> with its own entry when that work commits, exactly as it did for the COVERAGE-ONLY entry below.)
+> Last verified: 2026-08-10 (Plan 19.1-02 -- the two schema union extensions and every
+> registration site, in ONE commit. This supersedes and DELETES the HOOK ARTIFACT entry that stood
+> here: the files it named as unreviewed and uncommitted are exactly the files this entry attests
+> to.) **`contacts.origin` gains `imported` and `contacts.consentSource` gains
+> `imported-attested`**, plus three optional content-plane columns `company` / `phone` / `title` --
+> THREE and no more: no custom fields, no tags, no arbitrary key-value. WIDENING a union and adding
+> optional fields are both NO-MIGRATION changes; NARROWING either later WOULD need one, because
+> rows at rest carrying the dropped literal would fail validation on read. `imported-attested` is
+> deliberately DISTINCT from `asserted-by-user` -- one attestation over 500 rows is weaker evidence
+> than consent recorded for one person, and the schema must not flatten that difference.
+> **THREE SITES ARE DELIBERATELY NOT WIDENED, and each is held ONLY by a test**, because tsc is
+> silent at all three -- the 19-06 `media`/`llm.ts` failure class. (1) `upsertContact`'s arg
+> validator stays narrow so the HAND-ADD FORM cannot claim imported provenance; mutation-proven by
+> adding `v.literal("imported")` to it: `promise resolved
+> "'000000000000000000010002contacts'" instead of rejecting`. (2) `packages/core/src/contacts.ts`'s
+> `ORIGINS` stays narrow so the AGENT cannot stage an imported contact -- human-only import is
+> LOCKED, and `ORIGINS` is typed `readonly string[]`, structurally decoupled from
+> `CrmContactOrigin`; mutation-proven by adding `"imported"` to it: `expected [Function] to throw
+> an error`. (3) The Pipeline consent chip now RENDERS `row.consent.source` (OWNER DECISION
+> 2026-08-10): it previously showed `Consented {date}` and discarded the source, so the distinction
+> the schema preserves was invisible at the only surface anyone looks at; mutation-proven by
+> dropping the suffix: `expected '<div style="overflow-x:auto">...' not to be '<div
+> style="overflow-x:auto">...' // Object.is equality`. The chip test asserts BOTH renders and that
+> they DIFFER, so appending the suffix to every chip would not pass it.
+> **`ORIGIN_LABELS` is now bound to the read model AT ITS DECLARATION**
+> (`as const satisfies Record<ContactRow["origin"], string>`) -- before this a missing label
+> resolved to `undefined` inside a JSX index expression and rendered a BLANK chip with no error.
+> One `export type ConsentSource` in `contacts.ts` replaces the two independent inline literal
+> pairs `ConsentRecord` and `PipelineContactRow` each carried, so the pair now exists once.
+> Unchanged on purpose: `assertConsent`'s hardcoded `"asserted-by-user"`, the two hardcoded
+> `"mailbox-resolved"` sites, and the `?? "asserted-by-user"` read fallbacks -- the import always
+> writes both consent fields, so a defaulted source in new code would be an invented fact.
+> MEASURED: backend typecheck delta 0 against a 0-error baseline; backend `contacts.test.ts` 65/65,
+> `@pikar/core` contacts 29/29, `@pikar/web` 170/170.
 
 > Last verified: 2026-08-10 (Plan 19.1-01 — the CSV import brain, PURE half only. This supersedes
 > the COVERAGE-ONLY entry below, which was filed by the concurrent finance lane when it tripped the

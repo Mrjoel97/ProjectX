@@ -160,7 +160,14 @@ export async function setFollowUpStatusRow(
 }
 
 /** Provenance of the DATA on a contact row, set once on creation. Mirrors the schema union. */
-export type ContactOrigin = "mailbox-resolved" | "user-entered" | "inbound";
+export type ContactOrigin = "mailbox-resolved" | "user-entered" | "inbound" | "imported";
+
+/** Where a consent record CAME FROM. Mirrors `contacts.consentSource` in the schema and exists
+ *  exactly ONCE so its two consumers — `ConsentRecord` and `PipelineContactRow` — cannot drift:
+ *  they were two independent inline literal pairs before 19.1-02, which is two places to forget.
+ *  `imported-attested` is NOT a flavour of `asserted-by-user`: one attestation covering a whole
+ *  file is weaker evidence than consent recorded for one person, and the difference is the point. */
+export type ConsentSource = "asserted-by-user" | "inbound-form" | "imported-attested";
 
 /**
  * Apply an APPROVED `crm_write` plan's operation list (19-06, ACTN-05). Called from `executePlan`'s
@@ -281,7 +288,7 @@ export const assertConsent = tenantMutation({
 /** What `assertConsent` wrote, read back whole. `null` fields are "not recorded", never "". */
 export type ConsentRecord = {
   at: number;
-  source: "asserted-by-user" | "inbound-form";
+  source: ConsentSource;
   /** The EXACT wording shown at capture — the thing you hand a regulator. */
   wording: string | null;
   /** The user's free-text capture context ("Trade show, March"). */
@@ -761,7 +768,7 @@ export type PipelineContactRow = {
   lastTouchAt: number | null;
   nextStep: { followUpId: Id<"followUps">; note: string; dueAt: number } | null;
   /** `null` = none on record. Nothing is ever defaulted to consented (invariant 6). */
-  consent: { at: number; source: "asserted-by-user" | "inbound-form" } | null;
+  consent: { at: number; source: ConsentSource } | null;
   /** The DISPLAY MIRROR (`contacts.unsubscribedAt`), never the send-path guard — that reads
    *  `suppressions` and only `suppressions` (invariant 2). It decides which row action to offer. */
   suppressed: boolean;

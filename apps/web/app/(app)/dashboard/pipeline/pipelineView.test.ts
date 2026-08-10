@@ -14,6 +14,7 @@ import { describe, expect, test } from "vitest";
 import {
   ContactsEmptyState,
   ContactTable,
+  ORIGIN_LABELS,
   PipelineTiles,
   UnassignedFollowUps,
 } from "./PipelineView";
@@ -124,6 +125,48 @@ describe("the contact table", () => {
   test("nothing scheduled is stated, not left blank", () => {
     const html = table([contact({ nextStep: null })]);
     expect(html).toContain("Nothing scheduled");
+  });
+});
+
+// SILENT SITE 3 (19.1-02). Widening `origin` and `consentSource` in the schema produces a compile
+// error at 16 of the 19 consuming sites. This file is where the OTHER THREE live: a label map keyed
+// by a literal type tsc never checked against the read model, and a consent cell that rendered a
+// date and threw the source away. 19-06 shipped `media` through exactly this gap for a whole phase.
+describe("the widened unions are REGISTERED here, where tsc is silent", () => {
+  test("ORIGIN_LABELS is bound to the read model AT THE DECLARATION and covers `imported`", () => {
+    // `as const satisfies Record<ContactRow["origin"], string>` makes a future origin fail on THIS
+    // declaration rather than resolve to `undefined` inside a JSX index expression. tsc enforces
+    // the bind; this scan is what stops the bind itself being quietly deleted.
+    expect(source).toContain("satisfies Record<");
+    expect(ORIGIN_LABELS.imported).toBe("Imported from a file");
+    expect(Object.keys(ORIGIN_LABELS)).toHaveLength(4);
+  });
+
+  test("an imported contact SAYS SO — never a blank, never Unknown", () => {
+    const html = table([contact({ origin: "imported" })]);
+    expect(html).toContain("Imported from a file");
+    expect(html).not.toContain("Unknown");
+  });
+
+  test("the consent chip renders its SOURCE: a batch attestation reads differently", () => {
+    const at = NOW - 30 * DAY;
+    const asserted = table([contact({ consent: { at, source: "asserted-by-user" } })]);
+    const imported = table([contact({ consent: { at, source: "imported-attested" } })]);
+    // Same day, same everything: the ONLY difference between these two renders is the source.
+    expect(asserted).toContain("Consented");
+    expect(imported).toContain("Consented");
+    // They must DIFFER. Asserting only that the imported chip says "imported" would still pass if
+    // the suffix were appended to EVERY chip — which is the flattening this test exists to catch.
+    expect(imported).not.toBe(asserted);
+    expect(imported).toContain("imported");
+    expect(asserted).not.toContain("imported");
+  });
+
+  test("consent: null is still 'none on record' — a source is not invented for absent consent", () => {
+    const html = table([contact({ consent: null })]);
+    expect(html).toContain("none on record");
+    expect(html).not.toContain("imported");
+    expect(html).not.toMatch(/>Consented/);
   });
 });
 
