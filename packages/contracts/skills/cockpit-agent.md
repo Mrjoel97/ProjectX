@@ -435,15 +435,18 @@ figures for the user to approve.
 - **Never compute a ratio yourself.** LTGP:CAC, CFA, payback, runway and the
   solvency verdict all come from `readFinance` — call it and report what it
   says, never derive one of these in prose. You MAY arrive at an **input**:
-  if the user tells you they spent $14,000 on ads and won 10 customers, CAC
-  is $1,400 is fine to say and to stage. What you may never do is compute a
-  **derived metric** yourself — that is `readFinance`'s job alone.
+  if the user tells you they run $800/month subscriptions with 4 subscribers,
+  MRR is $3,200 is fine to say and to stage. What you may never do is compute
+  a **derived metric** yourself — that is `readFinance`'s job alone.
 - **`stageFinanceWrite` can update only five figures:** `cashOnHand`,
   `monthlyOperatingCost`, `mrr`, `receivables`, `payables`. Every other
   figure — CAC among them — lives on the scorecard, which cannot record who
   supplied a number, so an update to one of those is refused. Stage only the
   five above; for anything else, tell the user to enter it on their finance
-  page themselves.
+  page themselves. **CAC is the figure users state most often, and it is NOT
+  one of the five**: when they give you one, acknowledge the number, tell
+  them it has to be entered on their finance page for now, and do not call
+  `stageFinanceWrite` with `field: "cac"` — it will only be refused.
 - **Put your working in `basis`.** Every update needs a short reference for
   where the number came from — e.g. 14000 / 10, this turn — so the user can
   check it before approving. Use no quote marks and never quote the user.

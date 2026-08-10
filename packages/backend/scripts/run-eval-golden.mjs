@@ -1057,6 +1057,43 @@ function selfCheck() {
     "datedFollowUpCount:1 MUST FAIL when a second dated follow-up was invented",
   );
 
+  // 2i. Task 9 (live-finance-inputs): `financeClaimCount` is in the vocabulary, is graded off the
+  // PLAN ROW (`plans.financeClaims`, Task 8) rather than a smoke read, and rejects the vacuous
+  // zero — the exact `crmOperationCount` shape (2g above), same reason: this block IS the $0
+  // observable's check, zero convex calls, zero model calls. Added on review: the grading branch
+  // had no dedicated offline coverage, so a typo in the `financeClaims` field name would only
+  // surface on the fixture's first LIVE (paid) run instead of failing here for free.
+  const financeStaged = (n) => ({
+    status: "collecting",
+    financeClaims: Array.from({ length: n }, () => ({ field: "cashOnHand", value: 1 })),
+  });
+  assert.ok(
+    validateFixture({ ...base, expect: { financeClaimCount: 1 } }, "<synthetic>"),
+    "financeClaimCount must be an accepted expect key",
+  );
+  assert.throws(
+    () => validateFixture({ ...base, expect: { financeClaimCount: 0 } }, "<synthetic>"),
+    /integer >= 1/,
+    "a zero finance-claim count passes on every fixture in the set and asserts nothing",
+  );
+  assert.equal(
+    evaluateExpect({ financeClaimCount: 1 }, financeStaged(1)).length,
+    0,
+    "financeClaimCount:1 passes when the plan really carries one staged figure claim",
+  );
+  // The load-bearing negative: the agent said "I've updated your cash on hand" and never called
+  // stageFinanceWrite. No reply assertion can tell that apart from success.
+  assert.equal(
+    evaluateExpect({ financeClaimCount: 1 }, financeStaged(0)).length,
+    1,
+    "financeClaimCount:1 MUST FAIL when stageFinanceWrite never ran (a prose-only claim)",
+  );
+  assert.equal(
+    evaluateExpect({ financeClaimCount: 1 }, financeStaged(2)).length,
+    1,
+    "financeClaimCount:1 MUST FAIL when a second, unrequested figure claim was staged",
+  );
+
   // 3. Cost summation + cap logic on synthetic per-turn costs.
   // 16-09: stated as FRACTIONS OF THE CAP, never literal dollars. These previously hardcoded
   // $1.10/$1.00, which asserted the cap's VALUE rather than its LOGIC — so raising COST_CAP_USD
