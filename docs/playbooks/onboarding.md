@@ -1,5 +1,12 @@
 # Playbook: Persona Onboarding & Business Profile
 
+> Last verified: 2026-08-10 (17.1-10 golden-eval non-vacuity repair). The throwaway golden tenant
+> now receives one deterministic confirmed Blueprint linked to its two owned `ready` RAG seed
+> documents. The eval-only mutation refuses non-`eval-<8 hex>` tenants, foreign/not-ready sources,
+> and a second seed. Before any model turn, the runner reads the production `spineForTenant` seam
+> and requires the `evalblpr` marker; focused Blueprint tests prove the same stored-row-to-rendered-
+> spine chain and the runner self-check pins the seed/assert-before-paid-loop order.
+
 > Last verified: 2026-08-10 (Plan 19-12 — the phase-19 UAT clock defect). **No onboarding or profile BEHAVIOUR changed.**
 > `SegmentAnatomy.tsx`'s `AskSpecialist` was one of five web callers of
 > `api.cockpit.sendCockpitMessage` that never sent the browser's `clientContext`, so every cockpit

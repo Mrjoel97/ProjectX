@@ -7,7 +7,11 @@
 //
 // All payloads are synthetic (`{ note: "synthetic" }`) — never raw content.
 import type { WorkflowId } from "@convex-dev/workflow";
-import type { EvidenceVerdict } from "@pikar/core";
+import {
+  type BusinessBlueprint,
+  type EvidenceVerdict,
+  serializeBlueprint,
+} from "@pikar/core";
 import { categoryFor } from "@pikar/vault";
 import {
   DOC_GAP_PLAYBOOK,
@@ -26,6 +30,7 @@ import {
 } from "./_generated/server";
 import { DAILY_BUDGET_CENTS, rateLimiter } from "./guardrails";
 import { workflow } from "./index";
+import { contentHash } from "./lib/hash";
 import { reviewEventValidator } from "./review";
 
 // --- Pattern 1: dead-letter via onComplete ---------------------------------
@@ -371,6 +376,81 @@ export const seedCockpitPlan = internalMutation({
       createdAt: Date.now(),
     });
     return { planId, threadId };
+  },
+});
+
+// --- 17.1-10: Blueprint-bearing golden-eval tenant --------------------------
+
+const GOLDEN_BLUEPRINT_NEEDLE = "evalblpr";
+const GOLDEN_EVAL_TENANT = /^eval-[0-9a-f]{8}$/;
+
+/**
+ * Seed ONE confirmed Blueprint for the runner's random throwaway tenant before its first model
+ * call. This is deliberately narrower than a generic test writer: non-eval tenants, existing
+ * profile state, and foreign/not-ready source ids all fail closed.
+ */
+export const seedGoldenEvalBlueprint = internalMutation({
+  args: {
+    tenantId: v.string(),
+    sourceDocIds: v.array(v.id("vaultDocuments")),
+  },
+  handler: async (ctx, { tenantId, sourceDocIds }) => {
+    if (!GOLDEN_EVAL_TENANT.test(tenantId)) throw new Error("EVAL_TENANT_REQUIRED");
+
+    const existingProfile = await ctx.db
+      .query("tenantProfiles")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .unique();
+    if (existingProfile !== null) throw new Error("EVAL_BLUEPRINT_ALREADY_SEEDED");
+
+    for (const sourceDocId of sourceDocIds) {
+      const source = await ctx.db.get(sourceDocId);
+      if (source?.tenantId !== tenantId || source.status !== "ready") {
+        throw new Error("EVAL_BLUEPRINT_SOURCE_INVALID");
+      }
+    }
+
+    const blueprint: BusinessBlueprint = {
+      name: { values: [`Northwind ${GOLDEN_BLUEPRINT_NEEDLE} Logistics`], origin: "stated" },
+      oneLineDescription: {
+        values: ["A logistics operations business used by the golden evaluation."],
+        origin: "stated",
+      },
+      stage: { values: ["growing"], origin: "stated" },
+      tier: { values: ["solopreneur"], origin: "stated" },
+      offering: null,
+      targetCustomer: null,
+      revenueModel: null,
+      bindingConstraint: null,
+      primaryGoals: null,
+      knownConstraints: null,
+      entities: null,
+    };
+    const text = serializeBlueprint(blueprint);
+    const now = Date.now();
+    const docId = await ctx.db.insert("vaultDocuments", {
+      tenantId,
+      title: "Business blueprint",
+      kind: "business_blueprint",
+      category: categoryFor({ source: "agent" }),
+      source: "agent",
+      mimeType: "text/markdown",
+      size: new TextEncoder().encode(text).length,
+      contentHash: await contentHash(text),
+      text,
+      status: "ready",
+      createdAt: now,
+    });
+    await ctx.db.insert("tenantProfiles", {
+      tenantId,
+      tier: "solopreneur",
+      tierSource: "confirmed",
+      derivedAt: now,
+      blueprintSourceDocIds: sourceDocIds,
+      blueprintDocId: docId,
+      blueprintConfirmedAt: now,
+    });
+    return { docId, sourceDocCount: sourceDocIds.length, needle: GOLDEN_BLUEPRINT_NEEDLE };
   },
 });
 

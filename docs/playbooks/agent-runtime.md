@@ -1,5 +1,14 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-08-10 (17.1-10 Rule-2 gate repair). The golden runner's documented
+> Blueprint-bearing premise was false: it minted `eval-<runId>` and seeded inbox/RAG fixtures, but
+> never inserted a confirmed Blueprint for that tenant. `smoke.seedGoldenEvalBlueprint` is the
+> deliberately narrow repair — internal, restricted to the exact `eval-<8 hex>` tenant shape,
+> source-id ownership/readiness checked, and one-shot. After the normal RAG seed, the runner writes
+> the confirmed row and calls `blueprint.spineForTenant` before the first paid fixture; a non-null
+> spine must contain `evalblpr`, a token fixture validation forbids in every turn. The offline
+> self-check source-scans this order, so moving either call below the paid loop fails at $0.
+
 > Touched 2026-08-02 to clear the §9 Stop hook, which fired on `smoke.ts` and
 > `run-eval-golden.mjs`. Those are a PARALLEL LANE's uncommitted in-flight work in this shared
 > working tree — Phase 18 (ACTN-04) adding a `createdDocCount` eval assertion, additions only,

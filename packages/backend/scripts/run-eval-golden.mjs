@@ -66,6 +66,7 @@ const DISPATCH_POLL_MS = 3_000;
 // makes `citesVaultDoc` NON-VACUOUS: this token exists nowhere in any fixture's turns (asserted in
 // --self-check), so it can only reach a specialist's memo through a live `searchVault` result.
 const VAULT_NEEDLE = "evalgrd";
+const BLUEPRINT_NEEDLE = "evalblpr";
 const INSUFFICIENT_EVIDENCE_PHRASE = "insufficient evidence";
 // 22.1b. A turn that NAMES the tool turns the probe into a compliance test — "did the model do the
 // thing the prompt told it to do" — which is exactly the vacuity fixture 33 exists to avoid. The
@@ -391,6 +392,11 @@ function validateFixture(fx, source) {
       `a turn contains the vault corpus needle "${VAULT_NEEDLE}" — that makes citesVaultDoc vacuous`,
     );
   }
+  if (fx.turns.some((t) => t.includes(BLUEPRINT_NEEDLE))) {
+    fail(
+      `a turn contains the Blueprint needle "${BLUEPRINT_NEEDLE}" — that makes the standing-spine proof vacuous`,
+    );
+  }
   if (fx.turns.some((t) => t.toLowerCase().includes(INSUFFICIENT_EVIDENCE_PHRASE))) {
     fail(
       `a turn contains "${INSUFFICIENT_EVIDENCE_PHRASE}" — that makes the stored verdict probe vacuous`,
@@ -668,6 +674,23 @@ function selfCheck() {
   assert.ok(fixtures.length >= 35, `expected >= 35 fixtures, found ${fixtures.length}`);
   const ids = new Set(fixtures.map((f) => f.id));
   assert.equal(ids.size, fixtures.length, "fixture ids must be unique");
+
+  // 17.1-10: the live gate must prove the runner's THROWAWAY tenant is Blueprint-bearing before
+  // the first paid turn. Source order is load-bearing: seeding/asserting after the fixture loop
+  // would let a fully green run measure the old no-spine prompt.
+  const runnerSource = readFileSync(fileURLToPath(import.meta.url), "utf8");
+  const blueprintSeedAt = runnerSource.indexOf('must("smoke:seedGoldenEvalBlueprint"');
+  const blueprintAssertAt = runnerSource.indexOf('must("blueprint:spineForTenant"');
+  const paidLoopAt = runnerSource.indexOf("for (const fixture of fixtures)", blueprintSeedAt);
+  assert.ok(blueprintSeedAt > 0, "golden runner must seed a confirmed Blueprint");
+  assert.ok(
+    blueprintAssertAt > blueprintSeedAt,
+    "golden runner must read the rendered spine after seeding",
+  );
+  assert.ok(
+    paidLoopAt > blueprintAssertAt,
+    "Blueprint seed and non-null spine assertion must precede the first paid fixture",
+  );
 
   // 2. Synthetic bad fixtures (in-memory, never on disk) are rejected.
   const base = { id: "x", turns: ["hello there"], expect: { status: "proposed" }, needles: ["n"] };
@@ -1220,6 +1243,12 @@ function selfCheck() {
     /vacuous/,
     "a turn carrying the vault needle would make citesVaultDoc pass without searchVault",
   );
+  assert.throws(
+    () =>
+      validateFixture({ ...base, turns: [`tell me about ${BLUEPRINT_NEEDLE}`] }, "<synthetic>"),
+    /standing-spine proof vacuous/,
+    "a turn carrying the Blueprint needle would make the pre-model assertion vacuous",
+  );
 
   // 6b. The three observables evaluate against the LANDED plan row.
   const landedBody = [
@@ -1628,6 +1657,31 @@ async function runLive(pins, filters = []) {
     must("vaultSmoke:seedCorpus", { tenantId: tenant, needle: VAULT_NEEDLE }),
   );
   console.log(`[eval:golden] seeded vault corpus: ${vaultDocIds.length} doc(s), live embed`);
+
+  // 17.1-10: the original L6 premise was false — the runner minted an eval tenant but never gave
+  // it a confirmed Blueprint. Seed the narrow eval-only row from the just-created source ids, then
+  // prove the REAL rendered spine carries a token no fixture turn contains. Both calls happen
+  // before the first runCockpitAgent model turn; failure aborts at $0 rather than producing a
+  // misleading green no-spine gate.
+  const seededBlueprint = parse(
+    must("smoke:seedGoldenEvalBlueprint", {
+      tenantId: tenant,
+      sourceDocIds: vaultDocIds,
+    }),
+  );
+  const blueprintSpine = parse(
+    must("blueprint:spineForTenant", { tenantId: tenant }, RETRY_READ),
+  );
+  assert.equal(typeof blueprintSpine, "string", "confirmed eval Blueprint must render a spine");
+  assert.ok(
+    blueprintSpine.includes(BLUEPRINT_NEEDLE),
+    `eval spine must carry the non-vacuity needle ${BLUEPRINT_NEEDLE}`,
+  );
+  console.log(
+    `[eval:golden] seeded confirmed Blueprint: doc ${seededBlueprint.docId}, ` +
+      `${seededBlueprint.sourceDocCount} source(s), spine ${blueprintSpine.length} chars, ` +
+      `needle ${BLUEPRINT_NEEDLE}`,
+  );
 
   for (const fixture of fixtures) {
     let outcome;
