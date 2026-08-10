@@ -28,6 +28,13 @@ export const NO_ACTIVE_SKILL_ERROR = "NO_ACTIVE_SKILL" as const;
 /** Error prefix thrown by activateSkill when the target version row is absent. */
 export const NO_SUCH_SKILL_VERSION_ERROR = "NO_SUCH_SKILL_VERSION" as const;
 
+/**
+ * 21-03: the ONE error an exact tenant-candidate read throws for absence. Deliberately a NON-ORACLE
+ * — it carries no id, no tenant and no name, so a caller cannot distinguish "no such row" from
+ * "a row that is not yours". Absence and refusal must be the same sentence.
+ */
+export const NO_SUCH_TENANT_CANDIDATE_ERROR = "NO_SUCH_TENANT_CANDIDATE" as const;
+
 /** Registry name of the seed Executive Agent classifier skill (seeds AGNT-01). */
 export const EXECUTIVE_AGENT_CLASSIFIER_SKILL = "executive-agent.classifier" as const;
 
@@ -378,8 +385,29 @@ export type EvalEvidence = {
   model: string;
   /** Exact skill versions the run executed with — the gate pins on these. */
   skillVersions: Record<string, number>;
+  /**
+   * 21-03 (SKILL-01): the EXACT tenant candidate row this run certified, when it certified one.
+   * OPTIONAL and purely ADDITIVE — every global evidence row written before Phase 21 parses
+   * unchanged and `hasPassingEvidence` never reads this field.
+   */
+  tenantTarget?: EvalEvidenceTenantTarget;
   /** Epoch ms the evidence was recorded. */
   ts: number;
+};
+
+/**
+ * 21-03: WHICH tenant candidate a run certified. `<name>@<version>` stopped being an identity the
+ * moment two tenants could each own `offer-architect@2` — 21-02's two-tenant test builds exactly
+ * that collision on purpose. Every field is a ref/id/count (CLAUDE.md §4); no body, no authored
+ * text, and no hash of either travels here.
+ */
+export type EvalEvidenceTenantTarget = {
+  /** The `tenantSkills` row id. The identity — everything else is a cross-check on it. */
+  candidateId: string;
+  /** The tenant that OWNS the registry row (never the throwaway eval-data tenant). */
+  registryTenantId: string;
+  name: string;
+  version: number;
 };
 
 /**
@@ -397,6 +425,39 @@ export function hasPassingEvidence(
   try {
     const parsed = JSON.parse(evidence) as Partial<EvalEvidence>;
     return parsed.pass === true && parsed.skillVersions?.[name] === version;
+  } catch {
+    return false; // unparseable → fail closed
+  }
+}
+
+/**
+ * 21-03: the TENANT half of the same question — does this evidence prove a passing run for EXACTLY
+ * this candidate ROW? Every field of the identity is compared, not just the id: a row that agreed on
+ * the id but disagreed on tenant/name/version would mean the evidence and the row it sits on are
+ * describing different things, and the only safe reading of that is "no".
+ *
+ * Deliberately a SEPARATE predicate rather than a widening of `hasPassingEvidence`: the global gate
+ * asks "was this NAME at this VERSION certified", which is the question that stopped being
+ * sufficient once tenants could collide. Weakening the global one to accept a tenant target would
+ * let `<name>@<version>` evidence certify a tenant row, which is the exact confusion this exists to
+ * end. Fails closed on absent, unparseable, pass!==true, or ANY field mismatch.
+ */
+export function hasPassingTenantEvidence(
+  evidence: string | undefined,
+  target: EvalEvidenceTenantTarget,
+): boolean {
+  if (evidence === undefined) return false;
+  try {
+    const parsed = JSON.parse(evidence) as Partial<EvalEvidence>;
+    const t = parsed.tenantTarget;
+    return (
+      parsed.pass === true &&
+      t !== undefined &&
+      t.candidateId === target.candidateId &&
+      t.registryTenantId === target.registryTenantId &&
+      t.name === target.name &&
+      t.version === target.version
+    );
   } catch {
     return false; // unparseable → fail closed
   }

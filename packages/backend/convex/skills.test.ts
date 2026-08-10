@@ -4,6 +4,9 @@ import {
   COCKPIT_AGENT_SKILL,
   CONTENT_DRAFTER_SKILL,
   composeUserSkillBody,
+  type EvalEvidenceTenantTarget,
+  hasPassingEvidence,
+  hasPassingTenantEvidence,
   isGatedSkill,
   LEAD_ENGINE_SKILL,
   OFFER_ARCHITECT_SKILL,
@@ -32,6 +35,8 @@ import { describe, expect, test } from "vitest";
 // "component not registered". The dispatch.test.ts / contacts.test.ts idiom, verbatim.
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import { api, internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
+import { contentHash } from "./lib/hash";
 import schema from "./schema";
 import { loadSkill } from "./skills";
 
@@ -1475,5 +1480,378 @@ describe("getEffectiveSkill — tenant overlay resolution (21-02)", () => {
         })
       ).version,
     ).toBe(3);
+  });
+});
+
+// ── 21-03 (SKILL-01): EXACT tenant candidate identity ────────────────────────────────────────
+//
+// The question this whole block answers: 21-02 left two tenants each owning `offer-architect@2`
+// (its own two-tenant test builds that collision deliberately). `<name>@<version>` therefore cannot
+// say WHICH body a paid eval run certified. These tests are about the id being load-bearing —
+// not about a field existing.
+describe("exact tenant candidate reads + evidence (21-03)", () => {
+  const NEEDLE_A = "ZQ7EXACTA9c4e17b3";
+  const NEEDLE_B = "ZQ7EXACTB2f8d05a6";
+  const AUTHORED_A = `Always quote in AUD. ${NEEDLE_A}`;
+  const AUTHORED_B = `Always bundle onboarding. ${NEEDLE_B}`;
+  const GLOBAL_BODY = "GLOBAL OFFER ARCHITECT BODY v7 — the code-owned core";
+
+  /** Two real tenants who each PUBLISH through the shipped mutation, so the collision is produced
+   *  by the product path rather than hand-inserted into existence. */
+  const collision = async () => {
+    const t = convexTest(schema, modules);
+    t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+    const globalId = await t.run((ctx) =>
+      ctx.db.insert("skills", {
+        name: OFFER_ARCHITECT_SKILL,
+        version: 7,
+        body: GLOBAL_BODY,
+        status: "active",
+        createdAt: 0,
+      }),
+    );
+    const userA = await t.run((ctx) => ctx.db.insert("users", {}));
+    const userB = await t.run((ctx) => ctx.db.insert("users", {}));
+    const asA = t.withIdentity({ subject: `${userA}|session_a` });
+    const asB = t.withIdentity({ subject: `${userB}|session_b` });
+    const a = await asA.mutation(api.skills.publishUserCandidate, {
+      name: OFFER_ARCHITECT_SKILL,
+      authoredBody: AUTHORED_A,
+    });
+    const b = await asB.mutation(api.skills.publishUserCandidate, {
+      name: OFFER_ARCHITECT_SKILL,
+      authoredBody: AUTHORED_B,
+    });
+    // The collision, asserted rather than assumed: same name, same version, two different rows.
+    expect(a.version).toBe(b.version);
+    expect(String(a.tenantSkillId)).not.toBe(String(b.tenantSkillId));
+    return {
+      t,
+      globalId,
+      asA,
+      asB,
+      idA: a.tenantSkillId as Id<"tenantSkills">,
+      idB: b.tenantSkillId as Id<"tenantSkills">,
+      tenantA: String(userA),
+      tenantB: String(userB),
+      version: a.version,
+    };
+  };
+
+  const targetOf = (
+    id: Id<"tenantSkills">,
+    tenantId: string,
+    version: number,
+  ): EvalEvidenceTenantTarget => ({
+    candidateId: String(id),
+    registryTenantId: tenantId,
+    name: OFFER_ARCHITECT_SKILL,
+    version,
+  });
+
+  const passing = (target: EvalEvidenceTenantTarget) =>
+    JSON.stringify({
+      runner: "eval:golden",
+      runId: "run-exact-1",
+      pass: true,
+      casesPassed: 36,
+      casesTotal: 36,
+      retriedCases: [],
+      costUsd: 0.42,
+      model: "openai/gpt-4o-mini",
+      skillVersions: {},
+      tenantTarget: target,
+      ts: 1_700_000_000_000,
+    });
+
+  const rowOf = (t: TestConvex<typeof schema>, id: Id<"tenantSkills">) =>
+    t.run((ctx) => ctx.db.get(id));
+
+  test("getTenantSkillVersion reads ONE exact row whatever its status; absence is a non-oracle throw", async () => {
+    const { t, idA, idB, tenantA, tenantB, version } = await collision();
+
+    const a = await t.query(internal.skills.getTenantSkillVersion, { candidateId: idA });
+    expect(a).toMatchObject({
+      skillId: idA,
+      name: OFFER_ARCHITECT_SKILL,
+      tenantId: tenantA,
+      version,
+      status: "candidate",
+      author: "user",
+    });
+    expect(a.body).toContain(NEEDLE_A);
+    // …and the SAME name at the SAME version in the other tenant is a different body. This is the
+    // whole reason the read takes an id: `(name, version)` cannot separate these two.
+    const b = await t.query(internal.skills.getTenantSkillVersion, { candidateId: idB });
+    expect(b.tenantId).toBe(tenantB);
+    expect(b.version).toBe(version);
+    expect(b.body).toContain(NEEDLE_B);
+    expect(b.body).not.toContain(NEEDLE_A);
+
+    // An `active` row is still readable — the read is diagnostic, the refusal is the runner's.
+    await t.run((ctx) => ctx.db.patch(idA, { status: "active" }));
+    const active = await t.query(internal.skills.getTenantSkillVersion, { candidateId: idA });
+    expect(active.status).toBe("active");
+
+    // Absence: the error names NOTHING. A message carrying the id/tenant/name would make this read
+    // an existence oracle for rows the caller does not own.
+    await t.run((ctx) => ctx.db.delete(idB));
+    await expect(
+      t.query(internal.skills.getTenantSkillVersion, { candidateId: idB }),
+    ).rejects.toThrow(/NO_SUCH_TENANT_CANDIDATE/);
+    const err = await t
+      .query(internal.skills.getTenantSkillVersion, { candidateId: idB })
+      .catch((e: Error) => e.message);
+    expect(String(err)).not.toContain(String(idB));
+    expect(String(err)).not.toContain(tenantB);
+    expect(String(err)).not.toContain(OFFER_ARCHITECT_SKILL);
+  });
+
+  test("evidence lands on the EXACT row: the colliding same-name same-version row stays uncertified", async () => {
+    const { t, idA, idB, tenantA, tenantB, version } = await collision();
+    const targetA = targetOf(idA, tenantA, version);
+    const targetB = targetOf(idB, tenantB, version);
+
+    // Nothing is certified before the write — the positive witness for the zeros below is the
+    // `true` further down, not an empty fixture.
+    expect(hasPassingTenantEvidence((await rowOf(t, idA))?.evidence, targetA)).toBe(false);
+
+    // Certify the SECOND-published row. Direction matters: a name/version write resolves to
+    // whichever colliding row it finds first, which here is A — so writing for B is what makes the
+    // wrong-row failure observable rather than accidentally correct.
+    const wrote = await t.mutation(internal.skills.recordTenantEvalEvidence, {
+      candidateId: idB,
+      evidence: passing(targetB),
+    });
+
+    // MUTATION 4 (candidate-id selection → name/version selection) turns THESE red.
+    expect(hasPassingTenantEvidence((await rowOf(t, idB))?.evidence, targetB)).toBe(true);
+    expect((await rowOf(t, idA))?.evidence).toBeUndefined();
+    expect(hasPassingTenantEvidence((await rowOf(t, idA))?.evidence, targetA)).toBe(false);
+    expect(wrote).toEqual(targetB);
+
+    // And the other direction, so neither row is privileged by insertion order.
+    await t.mutation(internal.skills.recordTenantEvalEvidence, {
+      candidateId: idA,
+      evidence: passing(targetA),
+    });
+    expect(hasPassingTenantEvidence((await rowOf(t, idA))?.evidence, targetA)).toBe(true);
+    // …and the two rows carry DIFFERENT evidence: one write did not overwrite the other.
+    expect((await rowOf(t, idA))?.evidence).not.toBe((await rowOf(t, idB))?.evidence);
+  });
+
+  test("A's passing evidence COPIED onto B's colliding row still cannot certify B", async () => {
+    const { t, idA, idB, tenantA, tenantB, version } = await collision();
+    const targetA = targetOf(idA, tenantA, version);
+    const targetB = targetOf(idB, tenantB, version);
+    const evidence = passing(targetA);
+
+    // The forgery: byte-identical passing evidence, carrying A's candidate id, written onto B. It
+    // agrees with B on name AND version — every field `hasPassingEvidence` looks at.
+    await t.run((ctx) => ctx.db.patch(idB, { evidence }));
+
+    // The GLOBAL predicate is deliberately shown to be no help here: it never looks at the id.
+    expect(hasPassingEvidence(evidence, OFFER_ARCHITECT_SKILL, version)).toBe(false);
+    expect(hasPassingTenantEvidence(evidence, targetB)).toBe(false);
+    // …and the ROW ID alone is load-bearing. This forgery agrees with B on tenant, name AND
+    // version and disagrees only on which row ran — the exact shape a name/version-keyed gate
+    // cannot see. MUTATION 6 (drop the candidateId comparison) turns THIS red.
+    const forged = passing({ ...targetB, candidateId: targetA.candidateId });
+    expect(hasPassingTenantEvidence(forged, targetB)).toBe(false);
+    // Non-vacuity: the same JSON with B's own id DOES certify B, so the refusal above is the id.
+    expect(hasPassingTenantEvidence(passing(targetB), targetB)).toBe(true);
+    // …and the same bytes on A's own row DO certify it, so the refusal above is about identity,
+    // not about the evidence being malformed.
+    expect(hasPassingTenantEvidence(evidence, targetA)).toBe(true);
+
+    // Each remaining identity field is load-bearing on its own.
+    expect(hasPassingTenantEvidence(evidence, { ...targetA, version: version + 1 })).toBe(false);
+    expect(hasPassingTenantEvidence(evidence, { ...targetA, registryTenantId: tenantB })).toBe(
+      false,
+    );
+    expect(hasPassingTenantEvidence(evidence, { ...targetA, name: LEAD_ENGINE_SKILL })).toBe(false);
+    // Failed, unparseable and absent all fail CLOSED.
+    expect(
+      hasPassingTenantEvidence(JSON.stringify({ pass: false, tenantTarget: targetA }), targetA),
+    ).toBe(false);
+    expect(hasPassingTenantEvidence("{not json", targetA)).toBe(false);
+    expect(hasPassingTenantEvidence(undefined, targetA)).toBe(false);
+    // Evidence with NO tenant target (a pre-21-03 global row) cannot certify a tenant candidate.
+    expect(
+      hasPassingTenantEvidence(
+        JSON.stringify({ pass: true, skillVersions: { [OFFER_ARCHITECT_SKILL]: version } }),
+        targetA,
+      ),
+    ).toBe(false);
+  });
+
+  test("recordTenantEvalEvidence patches evidence and NOTHING else", async () => {
+    const { t, idA, tenantA, version } = await collision();
+    // `?? {}` rather than `!`: a null row would otherwise blow up as a TypeError instead of as the
+    // equality assertion below, which reads like an infrastructure crash, not a broken invariant.
+    const { evidence: _dropped, ...beforeRest } = (await rowOf(t, idA)) ?? {};
+
+    await t.mutation(internal.skills.recordTenantEvalEvidence, {
+      candidateId: idA,
+      evidence: passing(targetOf(idA, tenantA, version)),
+    });
+
+    const { evidence: written, ...afterRest } = (await rowOf(t, idA)) ?? {};
+    // EVERY non-evidence field, compared by equality — body, authoredBody, status, author,
+    // authorUserId, version, name, tenantId, lineage, rollbackEligible, createdAt, _id, _creationTime.
+    expect(afterRest).toEqual(beforeRest);
+    expect(written).toBeDefined();
+    expect(beforeRest.status).toBe("candidate"); // the field an activation would have moved
+  });
+
+  test("inspectTenantSkill is refs-only: no body, no adaptation, no global prompt", async () => {
+    const { t, globalId, idA, idB, tenantA, tenantB, version } = await collision();
+    await t.mutation(internal.skills.recordTenantEvalEvidence, {
+      candidateId: idA,
+      evidence: passing(targetOf(idA, tenantA, version)),
+    });
+
+    const snap = await t.query(internal.skills.inspectTenantSkill, {
+      candidateId: idA,
+      foreignTenantId: tenantB,
+    });
+
+    expect(snap.candidate).toMatchObject({
+      id: String(idA),
+      tenantId: tenantA,
+      name: OFFER_ARCHITECT_SKILL,
+      version,
+      author: "user",
+      status: "candidate",
+      rollbackEligible: false,
+      evidenceState: "passing",
+      gatePassed: true,
+    });
+    expect(snap.candidate.lineage).toMatchObject({
+      basedOnScope: "global",
+      basedOnName: OFFER_ARCHITECT_SKILL,
+      basedOnVersion: 7,
+      basedOnGlobalSkillId: String(globalId),
+      basedOnTenantSkillId: null,
+    });
+    expect(snap.candidate.evidenceTarget).toEqual(targetOf(idA, tenantA, version));
+    expect(snap.candidate.evidenceSummary).toEqual({
+      runId: "run-exact-1",
+      caseCount: 36,
+      retryCount: 0,
+      costUsd: 0.42,
+      model: "openai/gpt-4o-mini",
+    });
+
+    // The HASH is the candidate's own body — a real value, not a placeholder.
+    const candidateBody = (await rowOf(t, idA))?.body ?? "";
+    expect(snap.candidate.bodyHash).toBe(await contentHash(candidateBody));
+    expect(snap.candidate.bodyHash).not.toBe(await contentHash(GLOBAL_BODY));
+
+    // The initial rollback baseline is the tenant's frozen copy of the PRE-ACTIVATION global core,
+    // so its hash equals the global hash exactly (research pitfall 8's evidence-exempt target).
+    expect(snap.rollbackBaseline).toMatchObject({
+      scope: "tenant",
+      tenantId: tenantA,
+      author: "system",
+      status: "archived",
+      rollbackEligible: true,
+      version: 1,
+    });
+    expect(snap.rollbackBaseline?.bodyHash).toBe(await contentHash(GLOBAL_BODY));
+    expect(snap.globalCurrent).toMatchObject({ scope: "global", id: String(globalId), version: 7 });
+    expect(snap.globalCurrent.bodyHash).toBe(await contentHash(GLOBAL_BODY));
+    // Nothing is active for this tenant (21-04 owns activation), so effective IS the global row.
+    expect(snap.currentEffective).toMatchObject({ scope: "global", id: String(globalId) });
+    expect(snap.currentEffective.bodyHash).not.toBe(snap.candidate.bodyHash);
+
+    // The FOREIGN tenant's snapshot: a different tenant's effective row, never this candidate.
+    expect(snap.foreignCurrent).toMatchObject({ tenantId: tenantB, candidateIdVisible: false });
+    expect(snap.foreignCurrent?.effective.id).not.toBe(String(idA));
+    expect(snap.foreignCurrent?.effective.id).not.toBe(String(idB));
+    expect(snap.foreignCurrent?.effective.bodyHash).not.toBe(snap.candidate.bodyHash);
+
+    // THE disclosure assertion: serialize the WHOLE snapshot and scan it. No composed body, no
+    // authored adaptation, no global prompt, no section marker — from either tenant.
+    const serialized = JSON.stringify(snap);
+    expect(serialized).not.toContain(NEEDLE_A);
+    expect(serialized).not.toContain(NEEDLE_B);
+    expect(serialized).not.toContain(GLOBAL_BODY);
+    expect(serialized).not.toContain(USER_SKILL_ADAPTATION_SECTION);
+    expect(serialized).not.toContain(AUTHORED_A);
+    // Non-vacuity: the scan really did read the payload it is asserting about.
+    expect(serialized).toContain(snap.candidate.bodyHash);
+    expect(serialized).toContain(String(idA));
+
+    // An `internalQuery` cannot write, but state the outcome anyway: inspecting changed nothing.
+    expect(await rowOf(t, idA)).toEqual(await rowOf(t, idA));
+    expect((await rowOf(t, idA))?.status).toBe("candidate");
+  });
+
+  test("inspect: a tenant-based candidate's baseline comes from LINEAGE, and evidence state is honest", async () => {
+    const { t, idA, tenantA, asA } = await collision();
+    // Make A's first candidate the tenant's ACTIVE row (21-04 owns the real transition; this is a
+    // direct patch so the test is about lineage resolution, not activation authority), then publish
+    // a SECOND adaptation on top of it.
+    await t.run((ctx) => ctx.db.patch(idA, { status: "active" }));
+    const second = await asA.mutation(api.skills.publishUserCandidate, {
+      name: OFFER_ARCHITECT_SKILL,
+      authoredBody: "Third revision of the offer rules.",
+    });
+    const idA3 = second.tenantSkillId as Id<"tenantSkills">;
+
+    const snap = await t.query(internal.skills.inspectTenantSkill, { candidateId: idA3 });
+    // Lineage points at the row it SUPERSEDES (21-02: the lineage base is the tenant effective row,
+    // NOT the composition core) …
+    expect(snap.candidate.lineage).toMatchObject({
+      basedOnScope: "tenant",
+      basedOnTenantSkillId: String(idA),
+      basedOnVersion: 2,
+      basedOnGlobalSkillId: null,
+    });
+    // …and the rollback baseline is still the v1 system row, reached by walking that lineage past
+    // the non-eligible v2 — never "the newest archived row".
+    expect(snap.rollbackBaseline).toMatchObject({ version: 1, author: "system" });
+    expect(snap.rollbackBaseline?.bodyHash).toBe(await contentHash(GLOBAL_BODY));
+    // A's v2 is now what the tenant runs, so `currentEffective` is the TENANT row.
+    expect(snap.currentEffective).toMatchObject({ scope: "tenant", id: String(idA), version: 2 });
+
+    // Evidence state, all three values, on the same row.
+    expect(snap.candidate.evidenceState).toBe("absent");
+    expect(snap.candidate.gatePassed).toBe(false);
+    await t.run((ctx) => ctx.db.patch(idA3, { evidence: "{not json" }));
+    const broken = await t.query(internal.skills.inspectTenantSkill, { candidateId: idA3 });
+    // Unparseable is `failing`, not `absent`: "there is a pin and it does not hold" is a different
+    // operator situation from "there is none", and collapsing them hides a stale pin.
+    expect(broken.candidate.evidenceState).toBe("failing");
+    expect(broken.candidate.evidenceTarget).toBeNull();
+    await t.mutation(internal.skills.recordTenantEvalEvidence, {
+      candidateId: idA3,
+      evidence: passing(targetOf(idA3, tenantA, 3)),
+    });
+    const green = await t.query(internal.skills.inspectTenantSkill, { candidateId: idA3 });
+    expect(green.candidate.evidenceState).toBe("passing");
+    expect(green.candidate.gatePassed).toBe(true);
+  });
+
+  test("myUserSkills.gatePassed reflects EXACT tenant evidence (and not the global predicate)", async () => {
+    const { t, idA, asA, tenantA, version } = await collision();
+    expect((await asA.query(api.skills.myUserSkills, {}))[0]?.gatePassed).toBe(false);
+
+    await t.mutation(internal.skills.recordTenantEvalEvidence, {
+      candidateId: idA,
+      evidence: passing(targetOf(idA, tenantA, version)),
+    });
+    // Before the 21-03 fix this stayed FALSE forever: a tenant-only run's `skillVersions` is `{}`,
+    // so the global predicate could never see a pin, and the panel's "Evaluation passed" state was
+    // unreachable in production.
+    expect((await asA.query(api.skills.myUserSkills, {}))[0]?.gatePassed).toBe(true);
+    // …and evidence naming a DIFFERENT row on this row does not flip it.
+    await t.run((ctx) =>
+      ctx.db.patch(idA, {
+        evidence: passing({ ...targetOf(idA, tenantA, version), candidateId: "not-this-row" }),
+      }),
+    );
+    expect((await asA.query(api.skills.myUserSkills, {}))[0]?.gatePassed).toBe(false);
   });
 });

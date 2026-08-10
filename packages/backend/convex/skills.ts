@@ -6,6 +6,7 @@
 // is a new version row plus an activateSkill flip; body/name/version are never
 // patched (only `status` and `evidence` may change).
 
+import type { EvalEvidence, EvalEvidenceTenantTarget } from "@pikar/contracts/skill";
 import {
   ATTACHMENT_EXTRACTOR_SKILL,
   BMC_SKILL,
@@ -24,6 +25,7 @@ import {
   GRAPH_EXTRACTOR_SKILL,
   GROWTH_OS_DIAGNOSTIC_SKILL,
   hasPassingEvidence,
+  hasPassingTenantEvidence,
   INBOX_DIGEST_SKILL,
   isGatedSkill,
   isUserAuthorableSkill,
@@ -34,6 +36,7 @@ import {
   MONEY_MODEL_DESIGNER_SKILL,
   NO_ACTIVE_SKILL_ERROR,
   NO_SUCH_SKILL_VERSION_ERROR,
+  NO_SUCH_TENANT_CANDIDATE_ERROR,
   OFFER_ARCHITECT_SKILL,
   ONBOARDING_AGENT_SKILL,
   REPLY_DRAFTER_SKILL,
@@ -77,7 +80,7 @@ import { voiceBriefSkillBody } from "@pikar/contracts/skills/voiceBrief";
 import { voiceSessionSkillBody } from "@pikar/contracts/skills/voiceSession";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import {
   internalMutation,
   internalQuery,
@@ -781,8 +784,280 @@ export const myUserSkills = tenantQuery({
         baseScope: r.basedOnScope,
         baseVersion: r.basedOnVersion,
         // A BOOLEAN, not the evidence. Fails closed on an absent or mismatched pin.
-        gatePassed: hasPassingEvidence(r.evidence, r.name, r.version),
+        // 21-03 FIX: this asked the GLOBAL question (`skillVersions[name] === version`) of a TENANT
+        // row. Tenant evidence pins the exact row id in `tenantTarget` and carries `skillVersions`
+        // for the run's GLOBAL pins only — which for a tenant-only run is `{}` — so a genuinely
+        // certified candidate read `false` here forever and the panel's "Evaluation passed" state
+        // was unreachable for the same reason "Live" is. Now it asks the tenant question.
+        gatePassed: hasPassingTenantEvidence(r.evidence, tenantTargetOf(r)),
         createdAt: r.createdAt,
       }));
+  },
+});
+
+// ── EXACT TENANT CANDIDATE IDENTITY (Phase 21-03, SKILL-01) ──────────────────────────────────
+//
+// `<name>@<version>` is NOT an identity in the tenant scope: 21-02's two-tenant test deliberately
+// leaves both tenants owning `offer-architect@2`. Everything below therefore names the ROW.
+//
+// Nothing here activates anything, and nothing here returns a body. `recordTenantEvalEvidence`
+// patches ONE field.
+
+/** The exact identity of a tenant candidate row, derived from the row itself — never from an
+ *  argument, so a caller cannot describe a row as something it is not. */
+const tenantTargetOf = (row: Doc<"tenantSkills">): EvalEvidenceTenantTarget => ({
+  candidateId: String(row._id),
+  registryTenantId: row.tenantId,
+  name: row.name,
+  version: row.version,
+});
+
+/**
+ * The ONE exact-row read. `ctx.db.get` by id — never a name/version lookup, which is precisely the
+ * ambiguity this whole seam exists to remove. Absence throws the NON-ORACLE error (no id, no tenant,
+ * no name in the message).
+ */
+async function loadTenantCandidate(
+  ctx: QueryCtx,
+  candidateId: Id<"tenantSkills">,
+): Promise<Doc<"tenantSkills">> {
+  const row = await ctx.db.get(candidateId);
+  if (row === null) throw new Error(NO_SUCH_TENANT_CANDIDATE_ERROR);
+  return row;
+}
+
+/**
+ * Load a tenant candidate body pinned to an EXACT ROW — the tenant twin of `getSkillVersion`, and
+ * the read `runSpecialistTurn` uses when the eval runner pinned a candidate.
+ *
+ * Returns `status` and `author` alongside the body because the RUNNER must refuse a non-candidate /
+ * non-user-authored id at $0, before the first paid turn, and it has no other read to ask with. The
+ * read itself deliberately serves ANY status (an `active` row is a legitimate diagnostic target);
+ * the refusal is the caller's, at the boundary where money starts.
+ */
+export const getTenantSkillVersion = internalQuery({
+  args: { candidateId: v.id("tenantSkills") },
+  handler: async (
+    ctx,
+    { candidateId },
+  ): Promise<{
+    body: string;
+    version: number;
+    skillId: Id<"tenantSkills">;
+    name: string;
+    tenantId: string;
+    status: string;
+    author: string;
+  }> => {
+    const row = await loadTenantCandidate(ctx, candidateId);
+    return {
+      body: row.body,
+      version: row.version,
+      skillId: row._id,
+      name: row.name,
+      tenantId: row.tenantId,
+      status: row.status,
+      author: row.author,
+    };
+  },
+});
+
+/**
+ * Record eval evidence on ONE EXACT candidate row. The tenant twin of `recordEvalEvidence`, and the
+ * reason it takes an id rather than `(name, version)`: two tenants can hold the same name AND the
+ * same version, so a name/version write is a coin flip between certifying the row that ran and
+ * certifying a stranger's draft.
+ *
+ * Patches `evidence` and NOTHING else — not status, not body, not name/version, not provenance.
+ * Immutability is the point: this is the one field (with `status`, which 21-04 owns) that may move.
+ */
+export const recordTenantEvalEvidence = internalMutation({
+  args: { candidateId: v.id("tenantSkills"), evidence: v.string() },
+  handler: async (ctx, { candidateId, evidence }) => {
+    const row = await loadTenantCandidate(ctx, candidateId);
+    await ctx.db.patch(row._id, { evidence });
+    // Refs only — the caller (the runner) prints this to confirm WHICH row it wrote.
+    return tenantTargetOf(row);
+  },
+});
+
+/** Evidence, parsed for its REFS. Returns null on absent/unparseable — the same fail-closed
+ *  direction the two `hasPassing*` predicates take. */
+function evidenceRefs(evidence: string | undefined): Partial<EvalEvidence> | null {
+  if (evidence === undefined) return null;
+  try {
+    return JSON.parse(evidence) as Partial<EvalEvidence>;
+  } catch {
+    return null;
+  }
+}
+
+/** A lineage chain is short by construction; the cap is a runaway guard, not a policy. */
+const LINEAGE_MAX_HOPS = 8;
+
+/**
+ * The rollback target, resolved through the STORED LINEAGE — never "the newest archived row", which
+ * is the guess that made `candidatesForReview` offer `v17 -> v16` in production (see that function).
+ *
+ * A candidate based on a TENANT row names the row it supersedes, so the chain is walked to the first
+ * `rollbackEligible` row. A candidate based on a GLOBAL row is a tenant's FIRST customization, whose
+ * baseline was written in the SAME transaction at version 1 — read by that EXACT version, so this is
+ * still an identity, not a recency heuristic. Returns null when no eligible baseline exists.
+ */
+async function rollbackBaselineOf(
+  ctx: QueryCtx,
+  row: Doc<"tenantSkills">,
+): Promise<Doc<"tenantSkills"> | null> {
+  let cur = row;
+  for (let hop = 0; hop < LINEAGE_MAX_HOPS; hop++) {
+    if (cur.basedOnScope !== "tenant" || cur.basedOnTenantSkillId === undefined) break;
+    const base = await ctx.db.get(cur.basedOnTenantSkillId);
+    if (base === null) return null;
+    if (base.rollbackEligible) return base;
+    cur = base;
+  }
+  const first = await ctx.db
+    .query("tenantSkills")
+    .withIndex("by_tenant_name_version", (q) =>
+      q.eq("tenantId", row.tenantId).eq("name", row.name).eq("version", 1),
+    )
+    .unique();
+  return first?.rollbackEligible ? first : null;
+}
+
+/** One registry row, described in REFS ONLY. There is no `body` field on this type, which is how
+ *  "the inspector never returns a body" survives a later edit. */
+type SkillRefs = {
+  scope: "global" | "tenant";
+  id: string;
+  name: string;
+  version: number;
+  bodyHash: string;
+  status: string;
+};
+
+/** The rollback target carries three fields the effective/global snapshots do not: it is the row an
+ *  operator would restore, so WHO wrote it and WHETHER it is eligible are the whole question. */
+const baselineRefs = async (
+  row: Doc<"tenantSkills">,
+): Promise<SkillRefs & { tenantId: string; author: string; rollbackEligible: boolean }> => ({
+  scope: "tenant",
+  id: String(row._id),
+  tenantId: row.tenantId,
+  name: row.name,
+  version: row.version,
+  bodyHash: await contentHash(row.body),
+  author: row.author,
+  status: row.status,
+  rollbackEligible: row.rollbackEligible,
+});
+
+/**
+ * The refs-only state snapshot Plan 06 reads before and after the live gate, and the ONLY read that
+ * answers "what is this candidate's situation" without disclosing a prompt.
+ *
+ * READ-ONLY: an `internalQuery` cannot write, so "it performs no write" is a property of the
+ * function KIND, not of a reviewer's care. BODY-FREE: every registry row leaves here as `SkillRefs`,
+ * which has no body field — the candidate's composed body, the user's authored adaptation, and the
+ * global prompt (an owner-only boundary, research pitfall 4) are all absent by construction.
+ *
+ * `foreignTenantId` exists for ONE assertion: that another tenant's effective row is a different row
+ * with a different hash. It returns that tenant's EFFECTIVE refs and `candidateIdVisible: false` —
+ * there is no argument by which a foreign tenant's candidate list can be reached from here.
+ */
+export const inspectTenantSkill = internalQuery({
+  args: { candidateId: v.id("tenantSkills"), foreignTenantId: v.optional(v.string()) },
+  handler: async (ctx, { candidateId, foreignTenantId }) => {
+    const row = await loadTenantCandidate(ctx, candidateId);
+    const target = tenantTargetOf(row);
+    const gatePassed = hasPassingTenantEvidence(row.evidence, target);
+    const refs = evidenceRefs(row.evidence);
+    const baseline = await rollbackBaselineOf(ctx, row);
+
+    // The tenant's effective body and the global core, as refs. `loadEffectiveSkill` returns the
+    // row that is ACTIVE for this tenant (else the global active row), so `status` is "active" by
+    // definition of "effective" — it is stated rather than read so the shape matches SkillRefs.
+    const effective = await loadEffectiveSkill(ctx, row.tenantId, row.name);
+    const global = await loadSkill(ctx, row.name);
+
+    const foreign =
+      foreignTenantId === undefined
+        ? null
+        : await loadEffectiveSkill(ctx, foreignTenantId, row.name);
+
+    return {
+      candidate: {
+        id: target.candidateId,
+        tenantId: row.tenantId,
+        name: row.name,
+        version: row.version,
+        bodyHash: await contentHash(row.body),
+        author: row.author,
+        authorUserId: row.authorUserId === undefined ? null : String(row.authorUserId),
+        status: row.status,
+        rollbackEligible: row.rollbackEligible,
+        lineage: {
+          basedOnScope: row.basedOnScope,
+          basedOnName: row.basedOnName,
+          basedOnVersion: row.basedOnVersion,
+          basedOnGlobalSkillId:
+            row.basedOnGlobalSkillId === undefined ? null : String(row.basedOnGlobalSkillId),
+          basedOnTenantSkillId:
+            row.basedOnTenantSkillId === undefined ? null : String(row.basedOnTenantSkillId),
+        },
+        // absent | passing | failing — an unparseable or stale row reads `failing`, never `absent`:
+        // "there is evidence and it does not hold" is a different operator situation from "there is
+        // none", and collapsing them hides a stale pin.
+        evidenceState: row.evidence === undefined ? "absent" : gatePassed ? "passing" : "failing",
+        gatePassed,
+        // The identity the evidence CLAIMS, echoed verbatim so a mismatch is visible rather than
+        // merely booleaned away by `gatePassed`.
+        evidenceTarget: refs?.tenantTarget ?? null,
+        evidenceSummary:
+          refs === null
+            ? null
+            : {
+                runId: refs.runId ?? null,
+                caseCount: refs.casesTotal ?? null,
+                retryCount: refs.retriedCases?.length ?? null,
+                costUsd: refs.costUsd ?? null,
+                model: refs.model ?? null,
+              },
+      },
+      rollbackBaseline: baseline === null ? null : await baselineRefs(baseline),
+      currentEffective: {
+        scope: effective.scope,
+        id: String(effective.skillId),
+        name: row.name,
+        version: effective.version,
+        bodyHash: await contentHash(effective.body),
+        status: "active",
+      } satisfies SkillRefs,
+      globalCurrent: {
+        scope: "global",
+        id: String(global.skillId),
+        name: row.name,
+        version: global.version,
+        bodyHash: await contentHash(global.body),
+        status: "active",
+      } satisfies SkillRefs,
+      foreignCurrent:
+        foreign === null || foreignTenantId === undefined
+          ? null
+          : {
+              tenantId: foreignTenantId,
+              // There is no code path from this argument to a foreign candidate id. Stated in the
+              // payload so the runner can assert the boundary rather than assume it.
+              candidateIdVisible: false,
+              effective: {
+                scope: foreign.scope,
+                id: String(foreign.skillId),
+                name: row.name,
+                version: foreign.version,
+                bodyHash: await contentHash(foreign.body),
+                status: "active",
+              } satisfies SkillRefs,
+            },
+    };
   },
 });
