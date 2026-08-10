@@ -4016,6 +4016,11 @@ export async function runSpecialistTurn(
     turnId?: string;
     threadId?: string;
     skillVersions?: Record<string, number>;
+    /** 21-03 (SKILL-01): the eval runner's EXACT tenant-candidate pins, name → `tenantSkills` row
+     *  id. ORTHOGONAL to `skillVersions`, not a replacement: `<name>@<version>` cannot name a row
+     *  once two tenants each own version 2 (21-02's two-tenant test builds that collision). Trusted
+     *  server state — an `internalAction` carries it, so no model-supplied id reaches here. */
+    tenantSkillIds?: Record<string, Id<"tenantSkills">>;
     /** test-support: a MockLanguageModelV4 doGenerate script (the __runCockpitAgentWithScript
      *  shim's mechanism). Absent ⇒ the real gateway models.
      *  `softCutoffMs` drives ONLY the soft wall-clock stop (D11). It is deliberately NOT a hard-
@@ -4042,6 +4047,14 @@ export async function runSpecialistTurn(
   // SPECIALIST is running, so 16-05 derives them from `args.skillName` right here, where the
   // models are already resolved. A `models?` / `maxSteps?` arg would be a second mechanism for a
   // decision with exactly one owner, and would drag dispatch.ts into model selection for no gain.
+  /** 21-03: WHICH registry row was the system prompt, in refs only. `governedDispatch` puts these
+   *  on the EXISTING `subagent.completed` audit row — attribution on the shipped lineage, not a
+   *  second trace plane. `skillBodyHash` is SHA-256 of the resolved body; the body itself never
+   *  travels (CLAUDE.md §4). */
+  skillScope: "global" | "tenant";
+  skillId: string;
+  skillName: string;
+  skillBodyHash: string;
   webSearchCalls: number;
   /** 22.1b: the SAME `truncatedReason` seam — the `{ ...res, skillVersion }` spread below ALREADY
    *  forwards the value, so only this type widens. Without the widening `governedDispatch` cannot
@@ -4057,6 +4070,7 @@ export async function runSpecialistTurn(
   fallbackModelId: string;
 }> {
   const { tenantId, planId, skillName, toolNames, prompt, turnId, threadId, skillVersions } = args;
+  const tenantSkillIds = args.tenantSkillIds;
   // The §5 loader, fail-closed on both branches (a missing pin throws NO_SUCH_SKILL_VERSION, a
   // never-seeded skill throws NO_ACTIVE_SKILL) — a specialist NEVER runs on a hardcoded prompt.
   //
@@ -4066,13 +4080,48 @@ export async function runSpecialistTurn(
   // USER_AUTHORABLE_SKILLS can have an overlay row at all, so every other specialist name resolves
   // exactly as before. Deliberately NOT threaded into the cockpit, voice, inbox, reply, extraction
   // or vault loaders: those names are not authorable in v0.
-  // The exact-VERSION pin stays GLOBAL until 21-03 adds tenant-candidate pins; changing it here
-  // would silently re-point the eval runner's `--skill name@version` at a tenant row.
+  // The exact-VERSION pin stays GLOBAL: `--skill name@version` names a `skills` row and must keep
+  // doing so. 21-03's tenant pin is a SEPARATE argument (`tenantSkillIds`) for exactly that reason.
   const pin = skillVersions?.[skillName];
-  const skill: { body: string; version: number } =
-    pin !== undefined
-      ? await ctx.runQuery(internal.skills.getSkillVersion, { name: skillName, version: pin })
-      : await ctx.runQuery(internal.skills.getEffectiveSkill, { tenantId, name: skillName });
+  // 21-03 (SKILL-01): an EXACT tenant candidate id wins — but ONLY for its own skill name. A pin
+  // whose row turns out to name a different skill is a mis-wired harness, and running it would
+  // certify `offer-architect` with a `lead-engine` body. Refused BEFORE `generateText`, so the
+  // mistake costs $0 rather than a model call plus a false evidence row.
+  const tenantPin = tenantSkillIds?.[skillName];
+  const skill: { body: string; version: number; scope: "global" | "tenant"; id: string } =
+    tenantPin !== undefined
+      ? await ctx
+          .runQuery(internal.skills.getTenantSkillVersion, { candidateId: tenantPin })
+          .then((row) => {
+            if (row.name !== skillName) {
+              throw new Error(
+                `TENANT_SKILL_PIN_MISMATCH: pinned candidate is not a ${skillName} row`,
+              );
+            }
+            return {
+              body: row.body,
+              version: row.version,
+              scope: "tenant" as const,
+              id: row.skillId,
+            };
+          })
+      : pin !== undefined
+        ? await ctx
+            .runQuery(internal.skills.getSkillVersion, { name: skillName, version: pin })
+            .then((row) => ({
+              body: row.body,
+              version: row.version,
+              scope: "global" as const,
+              id: String(row.skillId),
+            }))
+        : await ctx
+            .runQuery(internal.skills.getEffectiveSkill, { tenantId, name: skillName })
+            .then((row) => ({
+              body: row.body,
+              version: row.version,
+              scope: row.scope,
+              id: String(row.skillId),
+            }));
   const mock = args.mockScript;
   // The research specialist runs on its OWN pin: only these two models were PROVEN to accept
   // `openai.tools.webSearch` (the 16-02 probe, recorded in docs/playbooks/agent-runtime.md), and an
@@ -4125,8 +4174,18 @@ export async function runSpecialistTurn(
     softCutoffMs: mock?.softCutoffMs,
   });
   // The version rides the return so the caller can put {name, version} on the lineage audit row
-  // (closing the §5 / IMPR-03 "record the skill version for every use" loop).
-  return { ...res, skillVersion: skill.version };
+  // (closing the §5 / IMPR-03 "record the skill version for every use" loop). 21-03 widens that to
+  // the FULL identity — scope + row id + name + body hash — because a version alone stopped being
+  // an identity once two tenants could each own version 2. Hashed from `skill.body`, the exact
+  // string handed to the provider above, so the attribution cannot describe a body that never ran.
+  return {
+    ...res,
+    skillVersion: skill.version,
+    skillScope: skill.scope,
+    skillId: skill.id,
+    skillName,
+    skillBodyHash: await contentHash(skill.body),
+  };
 }
 
 // ── SMOKE:: agent sentinel (the Plan 05 offline E2E path) ────────────────────

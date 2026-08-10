@@ -756,6 +756,68 @@ export const specialistCostForThread = internalQuery({
     (await researchTrailForThread(ctx, tenantId, threadId, null)).costUsd,
 });
 
+/** A correlation carries at most a handful of lineage rows (dispatched / completed / refused). The
+ *  cap is a runaway guard on a deliberately cross-tenant index, not a page size. */
+const RUNTIME_ATTRIBUTION_MAX_ROWS = 50;
+
+/**
+ * 21-03 (SKILL-01): "which registry row did this specialist actually run?", answered off the
+ * EXISTING `subagent.completed` lineage — no new table, no new index, no new event type.
+ *
+ * BOUNDED and READ-ONLY by construction: an `internalQuery` cannot write, `by_correlation` is
+ * `.take(RUNTIME_ATTRIBUTION_MAX_ROWS)`, and the tenant equality is re-checked in the loop because
+ * that index is deliberately cross-tenant (`researchTrailForThread` above carries the same guard
+ * and the same reason — a synthetic correlation collision must not join another tenant's trace).
+ *
+ * Returns REFS ONLY: scope, row id, name, version, body hash. There is deliberately no branch that
+ * can return a body, an authored adaptation, the prompt, the reply, or a source URL — the audit
+ * payload it reads carries none of those either (CLAUDE.md §4), and this is the read an operator
+ * runs, so it must not become the one place the boundary leaks.
+ */
+export const userSkillRuntimeAttribution = internalQuery({
+  args: { tenantId: v.string(), correlationId: v.string() },
+  handler: async (
+    ctx,
+    { tenantId, correlationId },
+  ): Promise<{
+    skillScope: string;
+    skillId: string;
+    skillName: string;
+    skillVersion: number;
+    skillBodyHash: string;
+  } | null> => {
+    const rows = await ctx.db
+      .query("audit")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId))
+      .take(RUNTIME_ATTRIBUTION_MAX_ROWS);
+
+    for (const row of rows) {
+      if (row.tenantId !== tenantId) continue;
+      if (row.eventType !== "subagent.completed") continue;
+      const p = row.payload ?? {};
+      // Every field is read with its expected type or the row is skipped: a `subagent.completed`
+      // written before this plan carries no attribution, and reporting a partial identity would be
+      // worse than reporting none.
+      if (
+        typeof p.skillScope === "string" &&
+        typeof p.skillId === "string" &&
+        typeof p.skillName === "string" &&
+        typeof p.skillVersion === "number" &&
+        typeof p.skillBodyHash === "string"
+      ) {
+        return {
+          skillScope: p.skillScope,
+          skillId: p.skillId,
+          skillName: p.skillName,
+          skillVersion: p.skillVersion,
+          skillBodyHash: p.skillBodyHash,
+        };
+      }
+    }
+    return null;
+  },
+});
+
 /**
  * Seed the FIXED deterministic message set for a tenant (idempotent — replaces any existing
  * rows, so re-running a smoke/eval never doubles the mailbox).

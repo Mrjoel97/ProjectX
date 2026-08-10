@@ -1689,7 +1689,9 @@ describe("exact tenant candidate reads + evidence (21-03)", () => {
     const { t, idA, tenantA, version } = await collision();
     // `?? {}` rather than `!`: a null row would otherwise blow up as a TypeError instead of as the
     // equality assertion below, which reads like an infrastructure crash, not a broken invariant.
-    const { evidence: _dropped, ...beforeRest } = (await rowOf(t, idA)) ?? {};
+    const beforeRow = await rowOf(t, idA);
+    expect(beforeRow?.status).toBe("candidate"); // the field an activation would have moved
+    const { evidence: _dropped, ...beforeRest } = beforeRow ?? {};
 
     await t.mutation(internal.skills.recordTenantEvalEvidence, {
       candidateId: idA,
@@ -1701,7 +1703,6 @@ describe("exact tenant candidate reads + evidence (21-03)", () => {
     // authorUserId, version, name, tenantId, lineage, rollbackEligible, createdAt, _id, _creationTime.
     expect(afterRest).toEqual(beforeRest);
     expect(written).toBeDefined();
-    expect(beforeRest.status).toBe("candidate"); // the field an activation would have moved
   });
 
   test("inspectTenantSkill is refs-only: no body, no adaptation, no global prompt", async () => {

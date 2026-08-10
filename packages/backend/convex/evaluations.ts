@@ -829,6 +829,11 @@ async function applyActOnGap(
   // 16-09: the eval harness's --skill pins, forwarded to the scheduled specialist. Append-only and
   // ABSENT on the production `actOnGap` path, which must keep running the ACTIVE row.
   skillVersions?: Record<string, number>,
+  // 21-03: the harness's EXACT tenant-candidate pins, same append-only rule and same absence on the
+  // production path. This is the ONLY hop between the runner's `--tenant-skill` and the scheduled
+  // specialist — drop it here and the dispatched turn silently runs the tenant's effective body
+  // while the run writes evidence onto the candidate (16-09's defect, one registry scope down).
+  tenantSkillIds?: Record<string, Id<"tenantSkills">>,
 ): Promise<ActOnGapResult> {
   const row = await ctx.db
     .query("evaluations")
@@ -903,6 +908,7 @@ async function applyActOnGap(
     spentCents: 0,
     // Without this the specialist ran the ACTIVE row while the eval evidence claimed the pin.
     skillVersions,
+    tenantSkillIds,
   });
   // The public contract does not move, so cards.tsx's existing handler + its `plan_busy` note
   // keep working untouched.
@@ -932,9 +938,14 @@ export const actOnGapInternal = internalMutation({
     // The harness's --skill pins. Only THIS twin takes them: `actOnGap` above is the production UI
     // path and has none, so it keeps running the active row.
     skillVersions: v.optional(v.record(v.string(), v.number())),
+    // 21-03: the tenant twin, on the SAME identity-less twin and for the same reason.
+    tenantSkillIds: v.optional(v.record(v.string(), v.id("tenantSkills"))),
   },
-  handler: (ctx, { tenantId, threadId, gapIndex, skillVersions }): Promise<ActOnGapResult> =>
-    applyActOnGap(ctx, tenantId, threadId, gapIndex, skillVersions),
+  handler: (
+    ctx,
+    { tenantId, threadId, gapIndex, skillVersions, tenantSkillIds },
+  ): Promise<ActOnGapResult> =>
+    applyActOnGap(ctx, tenantId, threadId, gapIndex, skillVersions, tenantSkillIds),
 });
 
 /** Both the evaluation row and the gap are gone (a fresh thread, a cleared history). Say so in one
