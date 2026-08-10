@@ -8,14 +8,29 @@
 // is the sole workflow.start site) and the eval tenant has no Gmail token — and
 // assertEvalCaseClean asserts it anyway.
 //
-// Invocation (locked): pnpm eval:golden [--skill <name>@<version>] [--only <id-substring>]
-//   --skill      pin that skill version on every turn; an all-green pinned run
-//                records refs/counts-only evidence via skills:recordEvalEvidence
+// Invocation (locked): pnpm eval:golden [--skill <name>@<version>]
+//                                       [--tenant-skill <tenantSkillsId>] [--only <id-substring>]
+//   --skill      pin that GLOBAL skill version on every turn; an all-green pinned
+//                run records refs/counts-only evidence via skills:recordEvalEvidence
 //                (the EVAL_GATE input for activateSkill).
+//   --tenant-skill 21-03: pin an EXACT `tenantSkills` ROW on every turn. Orthogonal
+//                to --skill, not a replacement: `<name>@<version>` stopped naming a
+//                body the moment two tenants could each own version 2. Evidence
+//                lands on that one row via skills:recordTenantEvalEvidence.
+//                The registry tenant is READ ONLY — every fixture plan, message and
+//                assertion still runs under the throwaway `eval-<runId>` tenant.
 //   --only       DIAGNOSTIC ONLY — run just the fixtures whose id contains this
 //                substring. A filtered run is NOT the gate and records NO evidence.
 //   --self-check offline validation (ZERO convex calls): fixture vocabulary,
 //                cap/pin/filter logic — the ponytail one-runnable-check.
+//
+// Read-only modes (no fixture seed, no model call, no write):
+//   --inspect-tenant-skill <id> [--json] [--foreign-tenant <tenantId>]
+//                               [--expect-status=…] [--expect-evidence=…]
+//                               [--expect-gate-passed=…] [--expect-rollback-eligible=…]
+//
+// NO PHASE-21 TENANT CANDIDATE HAS PASSED A LIVE GATE. Nothing in this file activates
+// anything: `--tenant-skill` records evidence, and activation is a separate owner act.
 //
 // Exit codes: 0 all green · 1 any case failure · 2 environment abort (governed
 // stop or cost cap — never an eval failure).
@@ -25,8 +40,8 @@
 // on stdout (logs go to stderr).
 
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
-import { readdirSync, readFileSync } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { must } from "./smokeRun.mjs";
@@ -68,6 +83,11 @@ const casesDir = resolve(dirname(fileURLToPath(import.meta.url)), "eval-cases");
 // retry — so the old 1.0 would abort the very run ACTN-03 needs the evidence row from, after paying
 // for most of it. 2.0 is a real ceiling for the honest total, not a licence to spend more.
 const COST_CAP_USD = 2.0;
+
+/** The model every evidence row records. ONE constant for both scopes (21-03): the global and
+ *  tenant writers used to be one block and are now two, and a hand-copied literal in the second is
+ *  exactly how a run comes to certify itself against a model it did not use. */
+const EVAL_MODEL = "openai/gpt-4o-mini";
 
 // 15-06: how long a tapped gap's SCHEDULED specialist dispatch gets to leave `collecting`.
 // `landSpecialistResult` runs in a `finally` on every outcome (success, overrun, the four governed
@@ -496,6 +516,96 @@ function parseSkillPins(argv) {
  *  did carry all of these versions, so each pin's evidence must say so. */
 const skillVersionsOf = (pins) => Object.fromEntries(pins.map((p) => [p.name, p.version]));
 
+// ── 21-03: --tenant-skill (EXACT tenant candidate rows) ──────────────────────
+
+/**
+ * A `tenantSkills` row id, syntactically. Deliberately loose — the REAL validator is Convex's
+ * `v.id("tenantSkills")` on the read below, which knows the table. This only has to catch the
+ * mistakes that would otherwise be swallowed silently: a missing value, and a following FLAG eaten
+ * as the id (the `--only requires a value` lesson — a swallowed flag turns a pinned run into an
+ * unpinned one that then writes evidence).
+ */
+function parseTenantSkillId(spec) {
+  if (typeof spec !== "string" || spec.trim() === "" || spec.startsWith("--")) {
+    throw new Error(`--tenant-skill requires a tenantSkills row id (got ${JSON.stringify(spec)})`);
+  }
+  if (/\s/.test(spec)) throw new Error(`malformed --tenant-skill id ${JSON.stringify(spec)}`);
+  return spec;
+}
+
+/** Multi-pin like `--skill`, and a repeated ID is rejected for the same reason a repeated NAME is:
+ *  it is a typo, not a request. (A repeated SKILL NAME across two different ids is caught by
+ *  `mergePinScopes` once the ids have been resolved, because only the deployment knows the names.) */
+function parseTenantSkillIds(argv) {
+  const ids = [];
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] !== "--tenant-skill") continue;
+    const id = parseTenantSkillId(argv[i + 1]);
+    if (ids.includes(id)) throw new Error(`--tenant-skill ${id} pinned twice`);
+    ids.push(id);
+  }
+  return ids;
+}
+
+/**
+ * The ONE place the two pin scopes meet. Rejects a skill NAME pinned in both scopes, and the same
+ * name reached through two different tenant rows.
+ *
+ * This is not tidiness. Both records are keyed by skill NAME on the way into `runSpecialistTurn`,
+ * and the tenant id WINS there — so a name present in both scopes means the `--skill` pin silently
+ * does nothing while its evidence row still claims the version ran. Last-one-wins must never
+ * decide which body a paid run certifies.
+ */
+function mergePinScopes(pins, tenantTargets) {
+  const scopeOf = new Map(pins.map((p) => [p.name, "global"]));
+  for (const t of tenantTargets) {
+    const existing = scopeOf.get(t.name);
+    if (existing === "global") {
+      throw new Error(
+        `${t.name} is pinned in BOTH scopes (--skill and --tenant-skill) — one run can certify one body per skill`,
+      );
+    }
+    if (existing === "tenant") {
+      throw new Error(`${t.name} is pinned by two different --tenant-skill rows`);
+    }
+    scopeOf.set(t.name, "tenant");
+  }
+  return {
+    skillVersions: skillVersionsOf(pins),
+    tenantSkillIds: Object.fromEntries(tenantTargets.map((t) => [t.name, t.candidateId])),
+  };
+}
+
+/**
+ * A resolved snapshot is only an EVALUABLE target if the row is a user-authored candidate.
+ *
+ * An `active` row is already what the tenant runs — "certifying" it is a no-op that would spend
+ * ~$0.4 to write evidence onto a body no gate will ever read. A `system` baseline is the rollback
+ * target, code-owned, and never a thing a user asked for. Both refuse HERE, before the inbox/vault/
+ * Blueprint seeds and before the first paid turn, so the mistake costs $0.
+ */
+function assertEvaluableCandidate(snapshot, id) {
+  const c = snapshot?.candidate;
+  if (!c) throw new Error(`--tenant-skill ${id}: no candidate in the inspection snapshot`);
+  if (c.author !== "user") {
+    throw new Error(
+      `--tenant-skill ${id} is a "${c.author}" row — only user-authored candidates are evaluable`,
+    );
+  }
+  if (c.status !== "candidate") {
+    throw new Error(
+      `--tenant-skill ${id} has status "${c.status}" — only a candidate is evaluable`,
+    );
+  }
+  return {
+    candidateId: c.id,
+    registryTenantId: c.tenantId,
+    name: c.name,
+    version: c.version,
+    bodyHash: c.bodyHash,
+  };
+}
+
 // ── --only fixture filter (DIAGNOSTIC; never the gate) ───────────────────────
 
 /**
@@ -531,6 +641,251 @@ function applyOnly(fixtures, filters) {
     }
   }
   return fixtures.filter((f) => filters.some((s) => f.id.includes(s)));
+}
+
+// ── 21-03: the read-only inspection mode + the evidence-suppression rule ─────
+
+/** Every flag this script understands. An argument NOT in here aborts — a typo must never fall
+ *  through into a ~$0.4 paid run whose pin was silently ignored (`--tenant-skil <id>` would
+ *  otherwise run the gate unpinned and then write no evidence, after paying for all of it). */
+const KNOWN_FLAGS = new Set([
+  "--skill",
+  "--tenant-skill",
+  "--only",
+  "--self-check",
+  "--inspect-tenant-skill",
+  "--foreign-tenant",
+  "--json",
+  "--expect-status",
+  "--expect-evidence",
+  "--expect-gate-passed",
+  "--expect-rollback-eligible",
+]);
+/** The flags that take a following value — so the value itself is not mistaken for an argument. */
+const VALUED_FLAGS = new Set([
+  "--skill",
+  "--tenant-skill",
+  "--only",
+  "--inspect-tenant-skill",
+  "--foreign-tenant",
+]);
+
+function assertKnownArgs(argv) {
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (!a.startsWith("--")) continue;
+    const [flag] = a.split("=", 1);
+    if (!KNOWN_FLAGS.has(flag)) {
+      throw new Error(`unknown argument "${a}" (known: ${[...KNOWN_FLAGS].sort().join(" ")})`);
+    }
+    if (VALUED_FLAGS.has(flag) && !a.includes("=")) i++; // skip the value
+  }
+  return true;
+}
+
+/** `--flag=value`, or undefined when absent. `--flag` with no `=` is an error rather than a
+ *  silent `true`: an EXPECTATION with no expected value asserts nothing, which is the one failure
+ *  mode a flag named `--expect-…` must never have. */
+function valueFlag(argv, flag) {
+  const hit = argv.find((a) => a === flag || a.startsWith(`${flag}=`));
+  if (hit === undefined) return undefined;
+  if (hit === flag) throw new Error(`${flag} requires a value, e.g. ${flag}=candidate`);
+  return hit.slice(flag.length + 1);
+}
+
+/** `--flag value` OR `--flag=value`, for the flags that take an opaque id rather than a small
+ *  vocabulary. Both spellings, because `--skill`/`--only` established the spaced form and typing
+ *  the other one should not silently produce a different run. */
+function spacedOrEqualsValue(argv, flag) {
+  const eq = argv.find((a) => a.startsWith(`${flag}=`));
+  if (eq !== undefined) return eq.slice(flag.length + 1);
+  const i = argv.indexOf(flag);
+  return i === -1 ? undefined : argv[i + 1];
+}
+
+const EXPECT_FLAGS = /** @type {const} */ ([
+  ["--expect-status", "status"],
+  ["--expect-evidence", "evidenceState"],
+  ["--expect-gate-passed", "gatePassed"],
+  ["--expect-rollback-eligible", "rollbackEligible"],
+]);
+
+const EVIDENCE_STATES = new Set(["absent", "passing", "failing"]);
+const CANDIDATE_STATUSES = new Set(["candidate", "active", "archived", "rolled_back"]);
+
+/**
+ * Parse the read-only inspection invocation, or return null when this is an ordinary run.
+ *
+ * MUTUALLY EXCLUSIVE with every paid argument. Not a nicety: `--inspect-tenant-skill` exits before
+ * the fixture seed, so `--inspect-tenant-skill X --skill cockpit-agent@9` would look like a gate
+ * run to whoever typed it and silently be an inspection — a "green" that never ran a case.
+ */
+function parseInspectArgs(argv) {
+  const idx = argv.findIndex(
+    (a) => a === "--inspect-tenant-skill" || a.startsWith("--inspect-tenant-skill="),
+  );
+  const expectations = {};
+  for (const [flag, key] of EXPECT_FLAGS) {
+    const raw = valueFlag(argv, flag);
+    if (raw !== undefined) expectations[key] = raw;
+  }
+  const hasForeign =
+    argv.includes("--foreign-tenant") || argv.some((a) => a.startsWith("--foreign-tenant="));
+  const foreignTenantId = spacedOrEqualsValue(argv, "--foreign-tenant");
+
+  if (idx === -1) {
+    // An expectation flag outside inspection mode is REJECTED, never ignored: ignoring it would
+    // let a run that asserts nothing report success in a script that thinks it asserted something.
+    if (Object.keys(expectations).length > 0) {
+      throw new Error(
+        `${Object.keys(expectations).join(", ")} expectation flags require --inspect-tenant-skill`,
+      );
+    }
+    if (hasForeign) {
+      throw new Error("--foreign-tenant requires --inspect-tenant-skill (it is inspection-only)");
+    }
+    return null;
+  }
+
+  const candidateId = parseTenantSkillId(spacedOrEqualsValue(argv, "--inspect-tenant-skill"));
+  for (const paid of ["--skill", "--tenant-skill", "--only"]) {
+    if (argv.includes(paid)) {
+      throw new Error(`--inspect-tenant-skill is read-only and cannot be combined with ${paid}`);
+    }
+  }
+  for (const [key, raw] of Object.entries(expectations)) {
+    if (key === "status" && !CANDIDATE_STATUSES.has(raw)) {
+      throw new Error(`--expect-status must be one of ${[...CANDIDATE_STATUSES].join("|")}`);
+    }
+    if (key === "evidenceState" && !EVIDENCE_STATES.has(raw)) {
+      throw new Error(`--expect-evidence must be one of ${[...EVIDENCE_STATES].join("|")}`);
+    }
+    if ((key === "gatePassed" || key === "rollbackEligible") && raw !== "true" && raw !== "false") {
+      throw new Error(
+        `--expect-${key === "gatePassed" ? "gate-passed" : "rollback-eligible"} must be true|false`,
+      );
+    }
+  }
+  return {
+    candidateId,
+    foreignTenantId: hasForeign ? parseTenantSkillId(foreignTenantId) : undefined,
+    json: argv.includes("--json"),
+    expectations,
+  };
+}
+
+/** Compare the refs-only snapshot against the expectation flags. Returns the MISMATCHES, so an
+ *  empty array is the pass — the `evaluateExpect` shape, deliberately. */
+function checkExpectations(snapshot, expectations) {
+  const c = snapshot?.candidate ?? {};
+  const actual = {
+    status: c.status,
+    evidenceState: c.evidenceState,
+    gatePassed: String(c.gatePassed),
+    rollbackEligible: String(c.rollbackEligible),
+  };
+  return Object.entries(expectations)
+    .filter(([key, want]) => actual[key] !== want)
+    .map(([key, want]) => ({ key, expected: want, actual: actual[key] }));
+}
+
+/**
+ * The foreign-tenant snapshot must describe a DIFFERENT row. If another tenant's effective body is
+ * this candidate's row or this candidate's bytes, then either the inspector is leaking across the
+ * boundary or the overlay is not tenant-scoped — and both are refusals, not warnings.
+ */
+function foreignCollision(snapshot) {
+  const f = snapshot?.foreignCurrent;
+  if (!f) return null;
+  if (f.candidateIdVisible !== false) return "foreign snapshot claims candidate ids are visible";
+  if (f.effective?.id === snapshot.candidate?.id) return "foreign effective row IS this candidate";
+  if (f.effective?.bodyHash === snapshot.candidate?.bodyHash) {
+    return "foreign effective body hash EQUALS this candidate's";
+  }
+  return null;
+}
+
+/**
+ * A stable fingerprint of WHICH deployment was inspected, so the Phase-21 handoff can pin that the
+ * pre-gate and post-gate inspections talked to the same one.
+ *
+ * Query string and fragment are DROPPED before hashing: a deploy URL can carry a key, and a hash of
+ * a credential is still a thing you should not print next to the id it authorizes. An unset
+ * deployment hashes to null rather than to the hash of "" — "I could not tell" and "it is empty"
+ * are different answers.
+ */
+function deploymentFingerprint(url) {
+  if (typeof url !== "string" || url.trim() === "") return null;
+  const bare = url.trim().split("#")[0].split("?")[0];
+  return createHash("sha256").update(bare).digest("hex");
+}
+
+/** The configured deployment, read from the env the convex CLI itself uses, else `.env.local`.
+ *  Reads DISK and ENV only — zero Convex calls, so `--self-check` may call it. */
+function configuredDeployment() {
+  for (const key of ["CONVEX_URL", "NEXT_PUBLIC_CONVEX_URL", "CONVEX_SELF_HOSTED_URL"]) {
+    const v = process.env[key];
+    if (typeof v === "string" && v.trim() !== "") return v;
+  }
+  const envPath = resolve(dirname(fileURLToPath(import.meta.url)), "..", ".env.local");
+  if (!existsSync(envPath)) return null;
+  const m = /^CONVEX_DEPLOYMENT\s*=\s*(.+)$/m.exec(readFileSync(envPath, "utf8"));
+  return m ? m[1].trim() : null;
+}
+
+/**
+ * The ONE evidence rule, extracted so `--self-check` can prove each clause instead of trusting a
+ * conditional at the bottom of a 200-line function.
+ *
+ *  - `allGreen`     — a failed run certifies nothing (that is the whole point).
+ *  - `casesTotal>0` — a ZERO-case run is `0 === 0`, i.e. "all green", and would have written
+ *                     `0/0 pass`. 16-09 guarded the filtered case; this guards the empty one.
+ *  - `!filters`     — a `--only` run is a tenth of the coverage and is indistinguishable from a
+ *                     full gate once it is a row (16-09's load-bearing clause, unchanged).
+ *
+ * An over-cap or governed stop never reaches here at all: `abortEnv` exits(2) from inside the case
+ * loop. `--self-check` asserts that ORDERING against the source, because a rule that is only true
+ * because of where it sits is a rule one refactor away from being false.
+ */
+function shouldRecordEvidence({ allGreen, casesTotal, filters }) {
+  return allGreen === true && casesTotal > 0 && filters.length === 0;
+}
+
+/** The exact refs/counts-only evidence body. Built HERE (pure, no I/O) so the self-check can assert
+ *  its key set and its tenant target without a deployment — a fixture prompt, a model reply or a
+ *  skill body appearing in this object is a §4 breach, and the offline check is where that is
+ *  cheapest to catch. */
+function buildTenantEvidence({
+  runId,
+  casesPassed,
+  casesTotal,
+  retriedCases,
+  costUsd,
+  model,
+  skillVersions,
+  target,
+  ts,
+}) {
+  return {
+    runner: "eval:golden",
+    runId,
+    pass: true,
+    casesPassed,
+    casesTotal,
+    retriedCases,
+    costUsd,
+    model,
+    // The run's GLOBAL pins, verbatim — the run really did carry them on every turn.
+    skillVersions,
+    // The EXACT row this run certified. Refs only: an id, a tenant id, a name, a number.
+    tenantTarget: {
+      candidateId: target.candidateId,
+      registryTenantId: target.registryTenantId,
+      name: target.name,
+      version: target.version,
+    },
+    ts,
+  };
 }
 
 // ── expect evaluation (plan/briefing STATE, never reply text) ────────────────
@@ -1414,9 +1769,440 @@ function selfCheck() {
     "five dispatch cases DO trip the cap once the specialist bill is merged in",
   );
 
+  // ── 8. 21-03: the EXACT tenant candidate pin. Every assertion here is $0 and makes ZERO convex
+  //    and ZERO model calls — which is the whole point: the branches below are the ones that decide
+  //    whether a ~$0.4 run happens at all and which row it certifies.
+
+  // 8a. `--tenant-skill` parsing. The failures worth pinning are the SILENT ones: a swallowed flag
+  //     turns a pinned run into an unpinned one that pays in full and certifies the wrong body.
+  assert.deepEqual(parseTenantSkillIds([]), [], "no --tenant-skill ⇒ no tenant pins");
+  assert.deepEqual(
+    parseTenantSkillIds(["--tenant-skill", "k57row1", "--tenant-skill", "k57row2"]),
+    ["k57row1", "k57row2"],
+    "every --tenant-skill occurrence is collected (multi-pin, like --skill)",
+  );
+  assert.throws(
+    () => parseTenantSkillIds(["--tenant-skill", "--skill"]),
+    /requires a tenantSkills row id/,
+    "a flag swallowed as an id would run the gate UNPINNED and still look pinned",
+  );
+  assert.throws(
+    () => parseTenantSkillIds(["--tenant-skill"]),
+    /requires a tenantSkills row id/,
+    "a trailing --tenant-skill with no value must abort",
+  );
+  assert.throws(
+    () => parseTenantSkillIds(["--tenant-skill", "k57row1", "--tenant-skill", "k57row1"]),
+    /pinned twice/,
+    "the same row twice is a typo, not a request",
+  );
+
+  // 8b. The two pin SCOPES cannot both claim one skill name. Load-bearing: both records are keyed
+  //     by name into runSpecialistTurn and the TENANT id wins there, so a name in both scopes means
+  //     the --skill pin silently does nothing while its evidence row still claims the version ran.
+  const tTarget = (name, version, id, tenantId = "tenant_registry") => ({
+    candidateId: id,
+    registryTenantId: tenantId,
+    name,
+    version,
+    bodyHash: `hash-${id}`,
+  });
+  assert.deepEqual(
+    mergePinScopes(parseSkillPins(["--skill", "cockpit-agent@9"]), [
+      tTarget("offer-architect", 4, "k57rowA"),
+    ]),
+    {
+      skillVersions: { "cockpit-agent": 9 },
+      tenantSkillIds: { "offer-architect": "k57rowA" },
+    },
+    "two DIFFERENT skills, one per scope, merge cleanly and stay separate records",
+  );
+  assert.throws(
+    () =>
+      mergePinScopes(parseSkillPins(["--skill", "offer-architect@4"]), [
+        tTarget("offer-architect", 4, "k57rowA"),
+      ]),
+    /pinned in BOTH scopes/,
+    "one skill cannot be pinned globally AND by row in the same run",
+  );
+  assert.throws(
+    () =>
+      mergePinScopes(
+        [],
+        [tTarget("lead-engine", 2, "k57rowA"), tTarget("lead-engine", 3, "k57rowB")],
+      ),
+    /two different --tenant-skill rows/,
+    "two rows of ONE skill is last-one-wins deciding which body gets certified",
+  );
+  assert.deepEqual(
+    mergePinScopes([], []),
+    { skillVersions: {}, tenantSkillIds: {} },
+    "no pins at all ⇒ empty records, and the caller spreads them away entirely",
+  );
+
+  // 8c. Only a USER-authored CANDIDATE is an evaluable target, and the refusal happens at $0.
+  const snapOf = (over = {}) => ({
+    candidate: {
+      id: "k57rowA",
+      tenantId: "tenant_registry",
+      name: "offer-architect",
+      version: 3,
+      bodyHash: "abc123",
+      author: "user",
+      status: "candidate",
+      evidenceState: "absent",
+      gatePassed: false,
+      rollbackEligible: false,
+      lineage: { basedOnScope: "global", basedOnVersion: 7 },
+      ...over,
+    },
+    currentEffective: { scope: "global", id: "gid", version: 7, bodyHash: "globalhash" },
+    globalCurrent: { scope: "global", id: "gid", version: 7, bodyHash: "globalhash" },
+    foreignCurrent: null,
+  });
+  assert.deepEqual(
+    assertEvaluableCandidate(snapOf(), "k57rowA"),
+    {
+      candidateId: "k57rowA",
+      registryTenantId: "tenant_registry",
+      name: "offer-architect",
+      version: 3,
+      bodyHash: "abc123",
+    },
+    "a user-authored candidate resolves to its exact identity, read off the SNAPSHOT",
+  );
+  assert.throws(
+    () => assertEvaluableCandidate(snapOf({ author: "system" }), "k57rowA"),
+    /only user-authored candidates/,
+    "the system ROLLBACK BASELINE is not a thing a user asked to certify",
+  );
+  assert.throws(
+    () => assertEvaluableCandidate(snapOf({ status: "active" }), "k57rowA"),
+    /only a candidate is evaluable/,
+    "an ACTIVE row is already what the tenant runs — certifying it spends ~$0.4 for nothing",
+  );
+  assert.throws(
+    () => assertEvaluableCandidate(snapOf({ status: "archived" }), "k57rowA"),
+    /only a candidate is evaluable/,
+    "an archived row is not evaluable either",
+  );
+  assert.throws(
+    () => assertEvaluableCandidate({}, "k57rowA"),
+    /no candidate in the inspection snapshot/,
+    "a snapshot with no candidate must abort, never resolve to undefined fields",
+  );
+
+  // 8d. THE evidence rule, clause by clause. MUTATION `filters.length === 0` REMOVED turns the
+  //     third assertion red — and the positive witness on the line above it proves the filtered run
+  //     really did execute cases, so "no evidence" is suppression rather than an empty run.
+  assert.equal(
+    shouldRecordEvidence({ allGreen: true, casesTotal: 36, filters: [] }),
+    true,
+    "a full, nonempty, unfiltered all-green run IS the gate",
+  );
+  assert.equal(
+    applyOnly(fixtures, ["research"]).length,
+    3,
+    "the filtered run below really does execute cases (the anti-vacuity witness)",
+  );
+  assert.equal(
+    shouldRecordEvidence({ allGreen: true, casesTotal: 3, filters: ["research"] }),
+    false,
+    "a --only run executes cases and records NO evidence (a tenth of the coverage is not the gate)",
+  );
+  assert.equal(
+    shouldRecordEvidence({ allGreen: true, casesTotal: 0, filters: [] }),
+    false,
+    "ZERO cases is `0 === 0`, i.e. all green — it must not write `0/0 pass` as an EVAL_GATE input",
+  );
+  assert.equal(
+    shouldRecordEvidence({ allGreen: false, casesTotal: 36, filters: [] }),
+    false,
+    "a failed run certifies nothing",
+  );
+  // …and the ORDERING that makes "an over-cap or interrupted run records none" true: `abortEnv`
+  // exits from INSIDE the case loop, so the evidence block is unreachable. A rule that holds only
+  // because of where it sits is one refactor from being false, so it is asserted against the source.
+  //     The scan is taken from `attemptCase` ONWARD, not over the whole file: every anchor below
+  //     also appears as a string literal in THIS block, and a self-matching source scan is an
+  //     assertion about its own text (the `</HeaderMenu>` vacuity 21-02 hit, in another shape).
+  //     `lastIndexOf` for the same reason: an `indexOf` finds the copy of this anchor sitting in
+  //     THIS line, and everything after it is self-check text, not the live path.
+  const liveSource = runnerSource.slice(runnerSource.lastIndexOf("function attemptCase("));
+  const abortAt = runnerSource.lastIndexOf("function abortEnv");
+  const evidenceAt = liveSource.indexOf("shouldRecordEvidence({ allGreen, casesTotal, filters })");
+  const capCheckAt = liveSource.indexOf("COST CAP EXCEEDED");
+  assert.ok(abortAt > 0 && evidenceAt > 0 && capCheckAt > 0, "the cost-cap/evidence seams exist");
+  assert.ok(
+    capCheckAt < evidenceAt,
+    "the cost cap must abort BEFORE the evidence block is ever reached",
+  );
+  assert.ok(
+    runnerSource.slice(abortAt, abortAt + 400).includes("process.exit(2)"),
+    "abortEnv must EXIT — a governed stop that returned would fall through to the evidence write",
+  );
+
+  // 8e. The evidence BODY: refs and counts only, with the exact tenant target. A fixture prompt, a
+  //     model reply or a skill body reaching this object is a §4 breach, and offline is where that
+  //     is cheapest to catch.
+  const tenantEvidence = buildTenantEvidence({
+    runId: "abc12345",
+    casesPassed: 36,
+    casesTotal: 36,
+    retriedCases: ["32-research-grounded"],
+    costUsd: 0.4213,
+    model: EVAL_MODEL,
+    skillVersions: { "cockpit-agent": 9 },
+    target: tTarget("offer-architect", 3, "k57rowA"),
+    ts: 1_700_000_000_000,
+  });
+  assert.deepEqual(
+    Object.keys(tenantEvidence).sort(),
+    [
+      "casesPassed",
+      "casesTotal",
+      "costUsd",
+      "model",
+      "pass",
+      "retriedCases",
+      "runId",
+      "runner",
+      "skillVersions",
+      "tenantTarget",
+      "ts",
+    ],
+    "the evidence key set is CLOSED — adding a body/prompt/reply key fails right here",
+  );
+  assert.deepEqual(
+    tenantEvidence.tenantTarget,
+    {
+      candidateId: "k57rowA",
+      registryTenantId: "tenant_registry",
+      name: "offer-architect",
+      version: 3,
+    },
+    "the tenant target is the EXACT row, and carries no body hash and no adaptation",
+  );
+  // The whole serialized row, scanned. `bodyHash` is deliberately NOT carried into evidence — the
+  // gate compares identity, and a hash there would invite someone to compare bytes instead of rows.
+  const serializedEvidence = JSON.stringify(tenantEvidence);
+  for (const forbidden of ["body", "authoredBody", "prompt", "reply", "adaptation", "hash"]) {
+    assert.ok(
+      !serializedEvidence.toLowerCase().includes(`"${forbidden}`),
+      `evidence must not carry a "${forbidden}…" key`,
+    );
+  }
+  assert.ok(serializedEvidence.includes("k57rowA"), "…and the scan really did read the payload");
+
+  // 8f. The read-only inspection mode. It exits before any seed/model/evidence code, so the thing
+  //     that must not happen is an inspection that LOOKS like a gate run.
+  assert.equal(parseInspectArgs([]), null, "an ordinary run is not inspection mode");
+  assert.equal(parseInspectArgs(["--skill", "cockpit-agent@9"]), null, "…nor is a pinned run");
+  assert.deepEqual(
+    parseInspectArgs(["--inspect-tenant-skill", "k57rowA"]),
+    { candidateId: "k57rowA", foreignTenantId: undefined, json: false, expectations: {} },
+    "the bare inspection invocation parses",
+  );
+  assert.deepEqual(
+    parseInspectArgs([
+      "--inspect-tenant-skill",
+      "k57rowA",
+      "--json",
+      "--foreign-tenant",
+      "tenant_other",
+      "--expect-status=candidate",
+      "--expect-evidence=passing",
+      "--expect-gate-passed=true",
+      "--expect-rollback-eligible=false",
+    ]),
+    {
+      candidateId: "k57rowA",
+      foreignTenantId: "tenant_other",
+      json: true,
+      expectations: {
+        status: "candidate",
+        evidenceState: "passing",
+        gatePassed: "true",
+        rollbackEligible: "false",
+      },
+    },
+    "every inspection flag parses together",
+  );
+  for (const paid of ["--skill", "--tenant-skill", "--only"]) {
+    assert.throws(
+      () => parseInspectArgs(["--inspect-tenant-skill", "k57rowA", paid, "x"]),
+      /read-only and cannot be combined/,
+      `${paid} alongside an inspection would look like a gate run and silently run no case`,
+    );
+  }
+  assert.throws(
+    () => parseInspectArgs(["--expect-status=candidate"]),
+    /require --inspect-tenant-skill/,
+    "an expectation flag outside inspection mode asserts nothing and must not be ignored",
+  );
+  assert.throws(
+    () => parseInspectArgs(["--foreign-tenant", "tenant_other"]),
+    /inspection-only/,
+    "--foreign-tenant outside inspection mode is rejected",
+  );
+  assert.throws(
+    () => parseInspectArgs(["--inspect-tenant-skill", "k57rowA", "--expect-status=live"]),
+    /--expect-status must be one of/,
+    "a status that is not a real row status can never match and would always exit 1",
+  );
+  assert.throws(
+    () => parseInspectArgs(["--inspect-tenant-skill", "k57rowA", "--expect-evidence=green"]),
+    /--expect-evidence must be one of/,
+    "the evidence vocabulary is absent|passing|failing",
+  );
+  assert.throws(
+    () => parseInspectArgs(["--inspect-tenant-skill", "k57rowA", "--expect-gate-passed=yes"]),
+    /must be true\|false/,
+    "a boolean expectation takes a boolean",
+  );
+  assert.throws(
+    () => parseInspectArgs(["--inspect-tenant-skill", "k57rowA", "--expect-gate-passed"]),
+    /requires a value/,
+    "a bare --expect-gate-passed asserts nothing",
+  );
+
+  // 8g. Expectation MATCHING, both directions, against a refs-only snapshot.
+  assert.deepEqual(
+    checkExpectations(snapOf(), { status: "candidate", evidenceState: "absent" }),
+    [],
+    "an empty mismatch list IS the pass",
+  );
+  assert.deepEqual(
+    checkExpectations(snapOf(), { status: "active" }),
+    [{ key: "status", expected: "active", actual: "candidate" }],
+    "a status mismatch is reported with BOTH sides, and exits nonzero at the call site",
+  );
+  assert.deepEqual(
+    checkExpectations(snapOf({ gatePassed: true }), { gatePassed: "false" }),
+    [{ key: "gatePassed", expected: "false", actual: "true" }],
+    "booleans compare as strings, so `false` is a real expectation and not a falsy skip",
+  );
+  assert.equal(
+    checkExpectations(snapOf({ evidenceState: "failing" }), { evidenceState: "failing" }).length,
+    0,
+    "a STALE pin (failing) is an expectable state, distinct from absent",
+  );
+
+  // 8h. The foreign-tenant boundary. A foreign effective row that IS this candidate — by id or by
+  //     bytes — means either the inspector leaks across tenants or the overlay is not scoped.
+  assert.equal(foreignCollision(snapOf()), null, "no --foreign-tenant ⇒ nothing to collide");
+  const withForeign = (effective) => ({
+    ...snapOf(),
+    foreignCurrent: { tenantId: "tenant_other", candidateIdVisible: false, effective },
+  });
+  assert.equal(
+    foreignCollision(
+      withForeign({ scope: "global", id: "gid", version: 7, bodyHash: "globalhash" }),
+    ),
+    null,
+    "another tenant falling back to the GLOBAL row is the healthy answer",
+  );
+  assert.match(
+    String(foreignCollision(withForeign({ id: "k57rowA", bodyHash: "other" }))),
+    /IS this candidate/,
+    "a foreign effective row equal to the candidate ROW is a refusal",
+  );
+  assert.match(
+    String(foreignCollision(withForeign({ id: "other", bodyHash: "abc123" }))),
+    /body hash EQUALS/,
+    "a foreign effective body equal to the candidate BYTES is a refusal",
+  );
+  assert.match(
+    String(
+      foreignCollision({
+        ...snapOf(),
+        foreignCurrent: { tenantId: "t", candidateIdVisible: true, effective: { id: "x" } },
+      }),
+    ),
+    /candidate ids are visible/,
+    "the inspector must never claim a foreign tenant's candidate ids are reachable",
+  );
+
+  // 8i. The deployment fingerprint. It exists so the Phase-21 handoff can pin that the pre-gate and
+  //     post-gate inspections talked to the SAME deployment — and it must not print a credential.
+  const KEYED = "https://tidy-otter-123.convex.cloud?token=SUPER_SECRET";
+  assert.equal(
+    deploymentFingerprint(KEYED),
+    deploymentFingerprint("https://tidy-otter-123.convex.cloud"),
+    "the query string is dropped BEFORE hashing — a deploy URL can carry a key",
+  );
+  assert.ok(!deploymentFingerprint(KEYED).includes("SUPER_SECRET"), "and the hash is a hash");
+  assert.match(deploymentFingerprint(KEYED), /^[0-9a-f]{64}$/, "SHA-256 hex");
+  assert.notEqual(
+    deploymentFingerprint("https://tidy-otter-123.convex.cloud"),
+    deploymentFingerprint("https://other-deployment-999.convex.cloud"),
+    "two deployments must not fingerprint the same — that is the whole guarantee",
+  );
+  assert.equal(deploymentFingerprint(""), null, "unset is null, not the hash of the empty string");
+  assert.equal(deploymentFingerprint(undefined), null, "…and so is absent");
+
+  // 8j. Unknown arguments ABORT rather than falling through to a paid run. `--tenant-skil <id>`
+  //     would otherwise run the full gate unpinned, pay for all of it, and record nothing.
+  assert.ok(assertKnownArgs(["--self-check"]), "every shipped flag is known");
+  assert.ok(assertKnownArgs(["--skill", "cockpit-agent@9", "--only", "research"]));
+  assert.ok(
+    assertKnownArgs(["--inspect-tenant-skill", "k57rowA", "--json", "--expect-status=candidate"]),
+  );
+  assert.throws(
+    () => assertKnownArgs(["--tenant-skil", "k57rowA"]),
+    /unknown argument/,
+    "a one-character typo must not buy a full unpinned gate run",
+  );
+  assert.throws(() => assertKnownArgs(["--dry-run"]), /unknown argument/);
+  // A VALUE that happens to look like a flag-ish word is not treated as an argument.
+  assert.ok(
+    assertKnownArgs(["--only", "--skill"]) === true ||
+      (() => {
+        throw new Error("unreachable");
+      })(),
+    "a valued flag consumes its value, so the value is never linted as an argument",
+  );
+
+  // 8k. This check must itself be FREE. `--self-check` is the only eval invocation a plan may make
+  //     under a do-not-rerun order, so "zero convex calls, zero model calls" is a property that has
+  //     to be checkable rather than asserted in a comment. `selfCheck`'s own body is scanned for the
+  //     one function that shells out to `npx convex run`.
+  const selfCheckBody = runnerSource.slice(
+    runnerSource.lastIndexOf("function selfCheck()"),
+    runnerSource.lastIndexOf("// ── live run"),
+  );
+  assert.ok(selfCheckBody.length > 1000, "the self-check body scan found something to scan");
+  assert.ok(
+    !/[^a-zA-Z]must\(/.test(selfCheckBody),
+    "selfCheck() must make ZERO convex calls — it is the free command",
+  );
+  //     …and the read-only inspection mode must EXIT before the paid path is even entered.
+  const entry = runnerSource.slice(runnerSource.lastIndexOf("const argv = process.argv.slice(2)"));
+  const inspectCallAt = entry.indexOf("runInspect(inspect)");
+  const liveCallAt = entry.indexOf("await runLive(");
+  assert.ok(inspectCallAt > 0 && liveCallAt > 0, "both entry branches exist");
+  assert.ok(
+    inspectCallAt < liveCallAt,
+    "--inspect-tenant-skill must be dispatched BEFORE runLive — a read-only mode that seeds fixtures is not read-only",
+  );
+  const inspectBody = runnerSource.slice(
+    runnerSource.lastIndexOf("function runInspect("),
+    runnerSource.lastIndexOf("const argv = process.argv.slice(2)"),
+  );
+  assert.ok(
+    inspectBody.includes("process.exit(") && !inspectBody.includes("seedInboxFixture"),
+    "runInspect exits and never touches a fixture seed",
+  );
+  assert.ok(
+    !/recordEvalEvidence|recordTenantEvalEvidence|runCockpitAgent/.test(inspectBody),
+    "runInspect must never write evidence or call a model",
+  );
+
   console.log(
     `[eval:golden] self-check PASSED (${fixtures.length} fixtures valid, ${SKILL_NAMES.length} gated skills` +
-      ` derived from GATED_SKILLS, vocabulary/cap/multi-pin/only-filter/dispatch/cost-merge logic proven offline)`,
+      ` derived from GATED_SKILLS, vocabulary/cap/multi-pin/only-filter/dispatch/cost-merge logic proven offline;` +
+      ` 21-03: tenant-pin parsing/scope-merge/candidate-eligibility/evidence-suppression/inspection/` +
+      `expectations/foreign-collision/deployment-fingerprint/unknown-arg proven offline)`,
   );
 }
 
@@ -1471,7 +2257,10 @@ function waitForResearchLanding(planId, tenantId, threadId) {
   }
 }
 
-function attemptCase(fixture, tenant, pins) {
+function attemptCase(fixture, tenant, pins, tenantSkillIds = {}) {
+  // 21-03: spread away entirely when empty, so every pre-21 run sends a BYTE-IDENTICAL request and
+  // nothing about the gate the 36 fixtures already passed moves (the `clock` precedent).
+  const tenantPinArg = Object.keys(tenantSkillIds).length ? { tenantSkillIds } : {};
   const { planId, threadId } = parse(must("smoke:seedCockpitPlan", { tenant }));
   // `seedCockpitPlan` mints `smoke-attach-<randomUUID>` SERVER-side, so a failure's rows cannot be
   // traced back to the fixture that wrote them unless the pairing is printed here. Without this, a
@@ -1508,6 +2297,7 @@ function attemptCase(fixture, tenant, pins) {
         ...(fixture.clock ? { clientContext: { tz: "UTC", nowMs: Date.now() } } : {}),
         ...(history.length ? { history } : {}),
         ...(pins.length ? { skillVersions: skillVersionsOf(pins) } : {}),
+        ...tenantPinArg,
       }, RETRY_TURN),
     );
     if (res.blocked) {
@@ -1559,6 +2349,11 @@ function attemptCase(fixture, tenant, pins) {
         // dispatched specialist is a SEPARATE scheduled action, so without this every `--skill
         // offer-architect@2` run ran the ACTIVE row (v1) and then wrote an evidence row for v2.
         ...(pins.length ? { skillVersions: skillVersionsOf(pins) } : {}),
+        // 21-03: the tenant pin rides the TAP for the SAME reason, one registry scope down. The
+        // dispatched specialist is a separate scheduled action — omit this and every
+        // `--tenant-skill` run evaluates the tenant's EFFECTIVE body and then certifies the
+        // candidate. That is 16-09's defect verbatim, and it is invisible in a green run.
+        ...tenantPinArg,
       }),
     );
     if (!tap.ok) {
@@ -1705,7 +2500,7 @@ function attemptCase(fixture, tenant, pins) {
   return { pass: failures.length === 0, failures, caseCost, specialistCost };
 }
 
-async function runLive(pins, filters = []) {
+async function runLive(pins, filters = [], tenantSkillIdArgs = []) {
   const allFixtures = loadFixtures(); // fail fast BEFORE the first spawn
   const fixtures = applyOnly(allFixtures, filters); // ditto — a bad --only must not cost a seed
   const runId = randomUUID().slice(0, 8);
@@ -1713,9 +2508,29 @@ async function runLive(pins, filters = []) {
   const retriedCases = [];
   const results = [];
 
+  // 21-03: resolve every `--tenant-skill` id to its exact identity BEFORE the inbox/vault/Blueprint
+  // seeds and before the first paid turn — the same source-ordered discipline 17.1-10 imposed on
+  // the Blueprint assertion, for the same reason: an unknown, deleted, non-user or already-active
+  // row must abort at $0, not after 36 cases have been paid for.
+  //
+  // The read is `inspectTenantSkill`, NOT `getTenantSkillVersion`: the inspector returns refs only,
+  // so the candidate BODY never enters this process at all. The registry tenant is used for exactly
+  // this read and for the evidence write — every plan, message, vault doc and assertion below still
+  // belongs to the throwaway `eval-<runId>` tenant.
+  const tenantTargets = tenantSkillIdArgs.map((id) =>
+    assertEvaluableCandidate(
+      parse(must("skills:inspectTenantSkill", { candidateId: id }, RETRY_READ)),
+      id,
+    ),
+  );
+  const { tenantSkillIds } = mergePinScopes(pins, tenantTargets);
+
   console.log(
     `[eval:golden] run ${runId} — ${fixtures.length} cases, tenant ${tenant}, cap $${COST_CAP_USD.toFixed(2)}` +
       (pins.length ? `, pins ${pins.map((p) => `${p.name}@${p.version}`).join(" ")}` : "") +
+      (tenantTargets.length
+        ? `, tenant pins ${tenantTargets.map((t) => `${t.name}@${t.version}#${t.candidateId}`).join(" ")}`
+        : "") +
       (filters.length
         ? `\n[eval:golden] PARTIAL RUN — --only ${filters.join(" ")} (${fixtures.length}/${allFixtures.length} fixtures). Diagnostic only: NO evidence will be recorded.`
         : ""),
@@ -1772,7 +2587,7 @@ async function runLive(pins, filters = []) {
     let outcome;
     let retried = false;
     try {
-      outcome = attemptCase(fixture, tenant, pins);
+      outcome = attemptCase(fixture, tenant, pins, tenantSkillIds);
     } catch (e) {
       outcome = {
         pass: false,
@@ -1786,7 +2601,7 @@ async function runLive(pins, filters = []) {
       retried = true;
       let second;
       try {
-        second = attemptCase(fixture, tenant, pins);
+        second = attemptCase(fixture, tenant, pins, tenantSkillIds);
       } catch (e) {
         second = {
           pass: false,
@@ -1836,12 +2651,15 @@ async function runLive(pins, filters = []) {
   // casesTotal off the row; a green 3-case `--only research` run would write `3/3 pass` and be
   // indistinguishable from a full gate, silently certifying a skill on a tenth of the coverage.
   // A partial run may never produce an EVAL_GATE input.
-  if (allGreen && pins.length && filters.length) {
+  // 21-03: ONE rule, named, for BOTH scopes — see `shouldRecordEvidence`. It also closes the
+  // zero-case hole the old inline condition had (`0 === 0` is "all green").
+  const record = shouldRecordEvidence({ allGreen, casesTotal, filters });
+  if (allGreen && (pins.length || tenantTargets.length) && !record) {
     console.log(
-      `[eval:golden] evidence SUPPRESSED — partial run (--only). Re-run unfiltered to gate.`,
+      `[eval:golden] evidence SUPPRESSED — ${filters.length ? "partial run (--only)" : "zero cases"}. Re-run unfiltered to gate.`,
     );
   }
-  if (allGreen && pins.length && !filters.length) {
+  if (record && pins.length) {
     const skillVersions = skillVersionsOf(pins);
     for (const pin of pins) {
       const evidence = JSON.stringify({
@@ -1852,7 +2670,7 @@ async function runLive(pins, filters = []) {
         casesTotal,
         retriedCases,
         costUsd: totalCost,
-        model: "openai/gpt-4o-mini",
+        model: EVAL_MODEL,
         skillVersions,
         ts: Date.now(),
       });
@@ -1860,19 +2678,101 @@ async function runLive(pins, filters = []) {
       console.log(`[eval:golden] evidence recorded on ${pin.name} v${pin.version}`);
     }
   }
+  // 21-03: one row per EXACT tenant candidate, off the same run. The write is BY ID
+  // (`recordTenantEvalEvidence`), never by name/version — two tenants can hold the same pair, and a
+  // name/version write would be a coin flip between certifying the body that ran and certifying a
+  // stranger's draft. No `retryOnEmpty` here, exactly as for the global write: a retry writes a
+  // duplicate evidence row.
+  if (record && tenantTargets.length) {
+    const skillVersions = skillVersionsOf(pins);
+    for (const target of tenantTargets) {
+      const evidence = JSON.stringify(
+        buildTenantEvidence({
+          runId,
+          casesPassed,
+          casesTotal,
+          retriedCases,
+          costUsd: totalCost,
+          model: EVAL_MODEL,
+          skillVersions,
+          target,
+          ts: Date.now(),
+        }),
+      );
+      const wrote = parse(
+        must("skills:recordTenantEvalEvidence", { candidateId: target.candidateId, evidence }),
+      );
+      console.log(
+        `[eval:golden] tenant evidence recorded on ${wrote.name} v${wrote.version} (row ${wrote.candidateId}, tenant ${wrote.registryTenantId})`,
+      );
+      console.log(
+        `[eval:golden] NOTHING IS ACTIVE. Evidence is not activation — the candidate still needs the owner's separate act.`,
+      );
+    }
+  }
 
   process.exit(allGreen ? 0 : 1);
+}
+
+// ── 21-03: the read-only inspection command (no seed, no model, no write) ─────
+
+function runInspect(inspect) {
+  const snapshot = parse(
+    must(
+      "skills:inspectTenantSkill",
+      {
+        candidateId: inspect.candidateId,
+        ...(inspect.foreignTenantId ? { foreignTenantId: inspect.foreignTenantId } : {}),
+      },
+      RETRY_READ,
+    ),
+  );
+  const collision = foreignCollision(snapshot);
+  const mismatches = checkExpectations(snapshot, inspect.expectations);
+  const out = {
+    // WHICH deployment answered — hashed, so pre/post-gate inspections can be pinned to the same
+    // one without printing a URL that may carry a key.
+    deploymentHash: deploymentFingerprint(configuredDeployment()),
+    ...snapshot,
+    expectations: inspect.expectations,
+    mismatches,
+    foreignCollision: collision,
+  };
+  if (inspect.json) console.log(JSON.stringify(out, null, 2));
+  else {
+    const c = snapshot.candidate;
+    console.log(
+      `[eval:golden] ${c.name} v${c.version} (row ${c.id}, tenant ${c.tenantId})\n` +
+        `  status=${c.status} evidence=${c.evidenceState} gatePassed=${c.gatePassed} rollbackEligible=${c.rollbackEligible}\n` +
+        `  bodyHash=${c.bodyHash}\n` +
+        `  lineage=${c.lineage.basedOnScope}@${c.lineage.basedOnVersion}  effective=${snapshot.currentEffective.scope}@${snapshot.currentEffective.version}` +
+        `  global=v${snapshot.globalCurrent.version}\n` +
+        `  deploymentHash=${out.deploymentHash}`,
+    );
+  }
+  if (collision) {
+    console.error(`[eval:golden] FOREIGN COLLISION — ${collision}`);
+    process.exit(1);
+  }
+  for (const m of mismatches) {
+    console.error(`[eval:golden] ${m.key}: expected ${m.expected}, got ${m.actual}`);
+  }
+  process.exit(mismatches.length === 0 ? 0 : 1);
 }
 
 // ── entry ────────────────────────────────────────────────────────────────────
 
 const argv = process.argv.slice(2);
 try {
+  // 21-03: a typo aborts HERE, before anything is parsed, seeded, read or billed.
+  assertKnownArgs(argv);
   if (argv.includes("--self-check")) {
     selfCheck();
     process.exit(0);
   }
-  await runLive(parseSkillPins(argv), parseOnlyFilters(argv));
+  const inspect = parseInspectArgs(argv);
+  if (inspect) runInspect(inspect); // read-only: exits before any seed/model/evidence code
+  await runLive(parseSkillPins(argv), parseOnlyFilters(argv), parseTenantSkillIds(argv));
 } catch (e) {
   console.error(`[eval:golden] ${e.message}`);
   process.exit(1);
