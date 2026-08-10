@@ -1,5 +1,45 @@
 # Playbook: Contacts, CRM & follow-ups
 
+> Last verified: 2026-08-10 (Plan 19.1-01 — the CSV import brain, PURE half only. This supersedes
+> the COVERAGE-ONLY entry below, which was filed by the concurrent finance lane when it tripped the
+> §9 hook on these files while they were still untracked; that entry deliberately deferred the
+> behaviour documentation to this one.) **The import brain is pure and lives in `@pikar/core`**
+> (`packages/core/src/contactImport.ts`, exported from the barrel): CLAUDE.md §1, so the Convex
+> adapter, the browser panel and the e2e fixture all consume the same functions instead of
+> re-deriving them. The CSV file is parsed IN THE BROWSER and is never uploaded and never stored —
+> this feature has no PII at rest by construction, which is the §4 honeypot argument applied to
+> ingestion. FOUR INVARIANTS THIS PLAN ESTABLISHES: (1) **identity comes from `normalizeAddress`
+> and validity from `isValidEmail`**, both imported, never re-derived — an import-local rule would
+> produce contacts that exist but can never be emailed. (2) **A rejected row reports its PHYSICAL
+> FILE LINE**, not its record index; the two diverge the moment a quoted field contains a newline
+> and the file line is what the user sees opening the CSV. `parseCsv` counts newlines consumed
+> INSIDE quoted fields for exactly this reason — mutation-proven: deleting that `line++` gives
+> `expected [ 1, 2, 3 ] to deeply equal [ 1, 2, 4 ]`. (3) **Within-file duplicates collapse under
+> fill-empty-only** — first non-blank value wins, later rows fill only what is still empty, never
+> overwrite; mutation-proven in BOTH directions (dropping `!row[field]` reddens the collapse test).
+> This is the same rule the write path must use, and it is what makes re-running the whole file a
+> complete recovery strategy. (4) **`IMPORT_ATTESTATION` is stored VERBATIM** and versioned beside
+> the parser, never paraphrased and never a key into a message table — it is the evidence. Changing
+> the sentence applies to FUTURE imports only; it does not restate anything already stored.
+> `IMPORT_ROW_MAX`/`IMPORT_BATCH_ROWS`/`IMPORT_MATCH_CHUNK` (1000/100/500) are single-sourced here
+> so client and server cannot drift; the batch sizes are NOT Convex limits (every limit would permit
+> the whole file in one call) — they buy retry blast radius, progress granularity and a shorter OCC
+> window. MEASURED: `pnpm --filter @pikar/core test` **35 files / 813 passed**, `typecheck` clean,
+> `check-playbooks.mjs` exit 0. **No Convex surface, no UI, no schema change yet** — later 19.1
+> plans own `matchExisting`/`importContacts`, the three new contact fields and the panel.
+
+> Last verified: 2026-08-10 (COVERAGE ONLY, live-finance-inputs session — this entry records a
+> `watch.json` decision, NOT a shipped capability. `packages/core/src/contactImport.ts` and its test
+> tripped the §9 hook as uncovered new code; they arrived UNTRACKED from the concurrent 19.1
+> bulk-CSV-import lane and were written by that lane, not by this session. Filed under this
+> playbook because contact ingestion is this subsystem — `contacts.ts` already lives here — and
+> `_unassigned` would have asserted the path needs no playbook, which is false for a file carrying
+> `IMPORT_ATTESTATION`. What is actually in it, by inspection only: a pure CSV parser (`parseCsv` →
+> `CsvRecord[]`) and four bounds (`IMPORT_ROW_MAX` 1000, `IMPORT_BATCH_ROWS` 100,
+> `IMPORT_MATCH_CHUNK` 500, plus the attestation string). **The 19.1 lane owns documenting the
+> behaviour, its invariants and its consent story when the feature lands** — do not read this entry
+> as that documentation.)
+
 > Last verified: 2026-08-10 (Task 4, live-finance-inputs — NO code in this playbook's watched paths changed; recorded because the second subsystem the entry below predicted is now SHIPPED. `finance_write` is the sixth `ACTION_TYPES` member on the `inline` arm, and `cash.applyFinanceClaims` is the finance analogue of `contacts.applyCrmOperations`: the Approve-gated caller of the one row-writer, while the human's identical edit through `cash.saveInput` stages no plan at all — invariant 11's ACTOR rule, enforced code in a second plane. TWO deliberate differences from the CRM applier, both detailed in `dashboard-pages.md`: the finance applier carries an `isNewerThan` merge guard (a CRM operation has no ordering to compare), and it REFUSES scorecard-stored fields outright because that store cannot record who supplied the number. If invariant 11 or 13 is ever restated here, `convex/cash.ts` now holds BOTH of its finance sites.)
 >
 > Last verified: 2026-08-10 (Task 3, live-finance-inputs — NO code in this playbook's watched paths changed; recorded here because invariants 11 and 13 now govern a SECOND subsystem. The finance write path copied the shape this playbook established: `convex/cash.ts`'s `writeFigureRow(db, tenantId, claim)` is the finance analogue of `upsertContactRow`/`createFollowUpRow` — one row-writer over an explicit tenantId (invariant 13), with the ungated human `saveInput` and the Approve-gated applier as its two callers, because the ACTOR decides gating, not the operation (invariant 11). If either invariant is ever restated or relaxed here, `packages/backend/convex/cash.ts` is now a second site that has to move with it.)

@@ -233,6 +233,8 @@
   "contacts-crm.md": [
     "packages/core/src/contacts.ts",
     "packages/core/src/contacts.test.ts",
+    "packages/core/src/contactImport.ts",
+    "packages/core/src/contactImport.test.ts",
     "packages/backend/convex/contacts.ts",
     "packages/backend/convex/contacts.test.ts",
     "apps/web/app/(app)/dashboard/pipeline/"
