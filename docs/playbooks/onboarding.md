@@ -15,6 +15,27 @@
 > `useAction(...)` directly — same seed text, same navigation, same failure handling. If you add
 > another profile surface that opens a cockpit thread, use the hook; `crmCard.test.ts` fails the
 > build if any `apps/web/app` file constructs that action by hand. See `cockpit.md`'s top block.
+> Last verified: 2026-08-10 (WHOLE-BRANCH RE-REVIEW, live-finance-inputs — **`spineForTenant` is
+> BLUEPRINT ONLY, and a comment on it now says why in detail.** The first C1 fix appended the
+> cockpit's always-on finance line to this query's return value. That was wrong, and the rationale
+> given for it was factually wrong too: `vaultGround.ts:225` calls **`spineForTenant`**, not
+> `renderSpine`, so keeping the line out of `renderSpine` protected nothing — and `evaluations.ts`
+> pushes this query's WHOLE output in as the "Business blueprint" grounding chunk, which
+> `FINANCIAL_PATTERNS` scans with unbounded `[^\d$]*` gaps that match newlines. A blueprint saying
+> "Constraint: CAC is too high" (no digits — the ordinary shape for a growth-diagnosed tenant) plus
+> one appended figure line was enough to capture the figure as `financials.cac` at
+> `{source: "vault", confidence: "high"}`, flip `financialsPresent` to growth-os, suppress the
+> honest CAC gap, and read straight back out of `inputStatesFor` onto the Finance page —
+> self-reinforcing. **The finance line is now its own query, `internal.cash.financeSpineFor`, joined
+> to the spine ONLY in `llm.ts`'s `buildTurnPrompt`.** So the separation is structural: no consumer
+> of `spineForTenant` can receive figures, this query's `live === null` early return is untouched
+> and correct, and a tenant with figures but no confirmed blueprint (the ordinary state of a new
+> account) still gets the line because the two channels are read independently, each fail-open.
+> `renderSpine` is UNCHANGED. `blueprint.test.ts`'s `SPINE_CHAR_CAP` assertion is therefore correct
+> again as written — this query returns `renderSpine`'s output verbatim, worst case **2495 of 2500,
+> five characters of headroom** (measured 2026-08-10, not estimated). Pinned by
+> `evaluations.test.ts`'s "the finance line never reaches the grounding corpus", verified RED
+> against the concatenating version.)
 
 > Last verified: 2026-08-09 (17.1-10 Task 2 live citation gate). One Blueprint rebuild against the
 > owner's real Vault returned **2 candidates** and the gate dropped **0** (`bad_citation: 0`,

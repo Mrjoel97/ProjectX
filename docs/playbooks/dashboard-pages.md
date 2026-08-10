@@ -20,9 +20,138 @@
 > actually sees. **Rule: any state produced BY a status transition must not live in a component
 > gated ON that status.** Measured in the browser at phase-19 UAT step 9(b).
 
+> Last verified: 2026-08-10 (WHOLE-BRANCH REVIEW FIX, live-finance-inputs — three corrections to
+> the finance plane, two of them to claims this playbook itself made.
+> **(C1) `financeSpineLine` had ZERO callers.** The entry below said it was "consumed by Task 7 and
+> the existing spine assembler"; neither was true — Task 7 built `readFinance`, which reads
+> `unitEconomics`/`solvency`/`inputsFor` and never touches it, and no task ever wired the assembler,
+> while the shipped skill body told the model "your context carries a `Finance:` line". It is wired
+> now — **as its own query, `internal.cash.financeSpineFor`, joined to the blueprint spine only in
+> `llm.ts`'s `buildTurnPrompt`.** (The first attempt appended it inside
+> `blueprint.spineForTenant`; the re-review caught that this is also `evaluations.ts`'s grounding
+> chunk and the appended figures got captured as `financials.cac` — see the onboarding playbook's
+> entry and `evaluations.test.ts`'s pin. `vaultGround.ts:225` calls `spineForTenant`, NOT
+> `renderSpine`, which is what made the first rationale wrong.) Both channels are read
+> independently and fail open independently, so a tenant with figures and no confirmed blueprint —
+> the ordinary state of a new account — still gets the line, and a tenant with neither gets the
+> byte-identical legacy prompt. The line also carries a `PIKAR` marker on any figure the owner did
+> not supply, mirroring the blueprint spine's `[stated]`/`[source: X]` and the tile copy in C2
+> below; `FINANCE_SPINE_BUDGET` was re-measured 437 → **503** for it (11 fields × 6 chars),
+> confirmed by the existing `not.toContain("…")` assertion, which caught the truncation when the
+> marker first landed at the old budget.
+> **(C2/I3) An agent-written figure rendered as the owner's own statement.** EVERY claim this slice
+> stores is `origin: "stated"` (spec §1), so origin alone could not separate the owner's typed
+> figure from the agent's approved one — `statedFigure` dropped `actor` and `FigureTile` branched on
+> origin, printing "You told us this on <date>." over the agent's own arithmetic ($800 × 4
+> subscribers → MRR 3,200, which the owner never said). `CashFigure`'s known variant gains an
+> OPTIONAL `actor`, `statedFigure` threads it, and the tile branches on the pair: `stated`+`user` →
+> "You told us this on <date>."; `stated`+anything else → "Recorded by Pikar from your own
+> information[, as of <date>]." Absence means UNKNOWN, never "the user" — attribution to the owner
+> requires positive evidence, which is what fixes the three `knownFigure("stated", …)` scorecard
+> reads in `@pikar/core` (`statedLtgp`, `grossMargin`, `cohortChurn`) that carry no provenance at
+> all. "as of", not "on": an agent write's `statedAt` is the claim's `observedAt` — when the figure
+> was TRUE, not when it was approved. In the same fix the read boundary stopped calling a grounded
+> scorecard fill `observed`: spec §1 reserves that for "Pikar measured it" and nothing measures yet,
+> so `inputStatesFor` now returns `stated` + `actor: "agent"` for a fill absent from `userProvided`,
+> which also retires the false "Measured by Pikar on <date>." on that path. `origin: "observed"` is
+> therefore UNREACHABLE again (correcting the Task-3 entry below) — the renderer branch stays for
+> the measured slice and is pinned by its own tests.
+> **(I5) An approved plan that wrote nothing left no audit trace.** `applyFinanceClaims` returned
+> early when `isNewerThan` skipped every claim, so `executePlan` patched `done`, the card claimed
+> success and the append-only log recorded nothing at all. The row is now ALWAYS written for a
+> non-empty claim list, carrying `count` (written) and `skipped` (the rest), and the applier returns
+> `{ok, applied, skipped}` — `executePlan`'s finance arm passes `applied` back so both approval
+> surfaces say "Your figures were already up to date, so nothing changed." instead of implying a
+> write. An EMPTY claim list still writes nothing: `stageFinanceWrite` refuses to stage one, so that
+> is a hand-seeded/legacy row, not the skip path.)
+
+> Last verified: 2026-08-10 (Task 7 REVIEW FIX, live-finance-inputs — **`@pikar/core`'s `solvency()`
+> now takes `tier: Tier | null`, and `null` is PERMISSIVE, not a guess.** Review found that
+> `solvencyForTenant`'s `row?.tier ?? "solopreneur"` default — correct on the Finance PAGE, which
+> shows a compensating "complete your shape" invitation beside the guess — had been reused verbatim
+> for `readFinance` (the cockpit tool, Task 7 above), which has no such invitation: an unconfirmed
+> tier made `mrr`/`arr`/`workingCapital` come back `not-applicable` with the TOOL's own authority
+> behind the guess, so a funded startup mid-onboarding asking "what's my MRR?" got told, confidently
+> and wrongly, that MRR structurally does not apply to their business. Fixed in `@pikar/core`, not
+> patched at either adapter call site: `tier === null` now falls through to the ordinary
+> missing-input handling (`requireInputs`/`statedFigure`) instead of asserting a structural fact the
+> function does not have — a REAL stated MRR still surfaces as `known`, an absent one reads `unknown`
+> ("needs your figure"), and `not-applicable` is reserved for a CONFIRMED tier that genuinely
+> excludes the metric. `solvencyForTenant` (`cash.ts`) now takes the fallback as an explicit
+> parameter so the two callers state their own policy instead of one function choosing for both: the
+> dashboard's `solvency` query is BEHAVIOURALLY UNCHANGED (`"solopreneur"`, same as before — pinned
+> by `cash.test.ts`'s existing 35 tests, none of which needed editing), and only `solvencyFor` (the
+> tool) passes `null`. `packages/core/src/cash.test.ts` gained a 4-test `tier: null` describe block;
+> `cockpitTools.test.ts` gained a dedicated test proving the SAME tenant/data reads `known` MRR
+> through the tool and `not-applicable` MRR through the dashboard query, on purpose, not by drift.)
+
+> Last verified: 2026-08-10 (Task 7, live-finance-inputs — **`cash.ts` gains two `internalQuery`
+> readers, `unitEconomicsFor`/`solvencyFor`, taking an EXPLICIT `tenantId` for `llm.ts`'s new
+> `readFinance` cockpit tool** (the tool loop has no `ctx.tenantId`). Both the existing
+> `unitEconomics`/`solvency` `tenantQuery` handlers AND these new readers now call the SAME
+> module-private `unitEconomicsForTenant`/`solvencyForTenant` helper functions — a refactor, not a
+> second copy: the module's own banner ("re-deriving anything here would create a second,
+> silently-drifting definition of the business's money") applies just as much to two Convex
+> functions computing the same figure as to a hand-rolled formula, so the explicit-tenant readers
+> share the derivation rather than re-implementing it. No behavioural change to the two existing
+> tenant-scoped queries — same inputs, same `Date.now()` per-call clock, same output shape.)
+
+> Last verified: 2026-08-10 (Task 5 REVIEW FIX, live-finance-inputs — **pass 1 validated only TWO
+> of `validateFigureClaim`'s six rules; the other four still threw, straight past the return
+> contract the entry below built.** Review's trace: `{basis: "   ", observedAt: <tomorrow>}`
+> cleared both shape-guards (a whitespace string IS a string), reached pass 2's `writeFigureRow`,
+> which called `validateFigureClaim` itself and threw — the exact production failure this task
+> exists to remove, still live on a blank basis, an out-of-range/NaN value, and a NaN/negative/
+> **future** `observedAt` (the likeliest model error once Task 8 parses date phrases). Fix: pass 1
+> now calls `validateFigureClaim` directly and returns `malformed_figure_claim` on any failure,
+> making the doc comment's claim — "every claim is validated FIRST, with zero writes" — actually
+> true. **One subtlety beyond the literal hoist:** `validateFigureClaim` refuses
+> `{actor: "user", confidence !== "high"}`, and a claim's `actor` field is untrusted input this
+> function always overwrites (see the STAMPED comment a few lines below) — validating the RAW
+> claim would have resurrected a narrower version of the same bug for that one field ("a staging
+> bug must not become an error on a plan the human already approved"), so pass 1 validates
+> `{...claim, actor: "agent"}`, matching exactly what pass 2 would have validated anyway. A side
+> effect worth recording: after this fix, `writeFigureRow`'s own `validateFigureClaim` call is
+> PROVABLY UNREACHABLE from `applyFinanceClaims` (every claim reaching pass 2 already cleared the
+> identical check in pass 1) — the "approve-all-or-none" test was rewritten to describe ORDERING
+> rather than ROLLBACK, since a genuine pass-2 failure-after-a-good-write is no longer constructible
+> from this function. `writeFigureRow`'s throw stays, unmodified, as the last-resort guard for its
+> other caller, `saveInput`. Also: `agent_cannot_update_figure`'s copy in `ApprovalsView.tsx` grew
+> "Nothing changed." — a plan defect in the original brief's copy, not an implementation gap; every
+> sibling in that map already closes by naming what did not happen.)
+>
+> Last verified: 2026-08-10 (Task 5, live-finance-inputs — **`applyFinanceClaims`'s two refusals
+> now RETURN instead of throwing, so they reach the Approvals card.** Both were
+> `throw new Error("INVALID_INPUT: …")`; Convex redacts a non-`ConvexError` message in production,
+> so the owner saw an opaque server error with no lever, and because the plan stays `proposed`
+> every retry reproduced it. `cash.ts` exports a new `FinanceApplyRefusal` union
+> (`"malformed_figure_claim" | "agent_cannot_update_figure"`) and `applyFinanceClaims` returns
+> `{ ok: false, reason }` instead — the SAME shape `media.ts`'s `reserveJobInner` already used for
+> `no_deck`. This forced a STRUCTURAL change, not just a signature one: a `return` does not roll
+> back Convex's transaction the way a throw does, so the function now validates every staged claim
+> in a FIRST pass with zero writes, and only runs the write pass once the whole list clears —
+> otherwise a bad second claim would leave a good first claim's write committed, silently breaking
+> approve-all-or-none. `executePlan`'s `finance_write` arm (`cockpit.ts`) checks `applied.ok` and
+> returns the reason rather than letting the (former) throw propagate; its return union grew the
+> two reasons. `ApprovalsView.tsx`'s `refusalMessage` map grew the matching copy, verbatim from the
+> task brief. `writeFigureRow`'s own scorecard-actor throw is UNCHANGED (last-resort invariant
+> guard for every OTHER caller of that shared writer — the applier is the layer that knows a human
+> is waiting on the refusal). Also added: a source-scan regression test pinning that the Schedule
+> button's `item.kind === "email"` gate in `ApprovalsView.tsx` never grows a `finance_write`
+> branch — no source change needed, the button was already unreachable for that plan kind, but
+> nothing had pinned it before.)
+>
+> Last verified: 2026-08-10 (Task 4 REVIEW FIX, live-finance-inputs — **the applier now STAMPS `actor: "agent"` instead of trusting the plan row.** Two of three reviewers found it independently: a row carrying `{actor: "user", confidence: "high"}` passed every guard the entry below describes, because `validateFigureClaim`’s actor rule only bites when `confidence !== "high"` and confidence is model-controlled — so that pair is a LEGAL claim by its contract, and `writeFigureRow` persisted it verbatim. The agent’s figure would then have rendered through `inputStatesFor`/`statedFigure` in the owner’s own trust language (the exact leak Tasks 2 and 3 were spent closing) and, worse, been recorded as `actors: ["user"]` in the APPEND-ONLY audit log, where it could never be corrected. `actor` is not data read off the row — it is a fact about which DOOR the write came through, and `applyFinanceClaims` IS the agent door by construction (`saveInput` hardcodes `actor: "user"` and never routes here), so it is stamped. STAMPED rather than refused because a stamp cannot fail: a staging bug must not surface as an error on a plan the human already approved. The stamped claim is what `written[]` collects, so `payload.actors` reports the door too. Also closed the untested-invariant gap the review found: approve-all-or-none was claimed in three comments and exercised by nothing, because every refusal test passed a SINGLE claim that threw before any write — there is now a two-claim test, good first and a scorecard `cac` second, asserting the enclosing serializable mutation discards the write that already succeeded.)
+>
+> Last verified: 2026-08-10 (Task 4, live-finance-inputs — **the Approve-gated agent write path exists.** `convex/cash.ts` exports `applyFinanceClaims(ctx, tenantId, claims)`, the ONLY route an agent-proposed figure reaches a store and called from `executePlan`'s `inline` arm alone; `schema.ts` widens `plans.kind` with `finance_write` and adds `plans.financeClaims` (content plane, `field` left as `v.string()` because the closed field union lives in `CASH_INPUTS` and a mirrored validator here would be a second copy). THREE refusals, all pinned by tests, and each one exists because the plan row is DB-sourced JSON cast to `FigureClaim`, NOT type-checked input: **(1)** an unknown `field` or a non-string `basis` is refused as `INVALID_INPUT: malformed claim on plan row` BEFORE `validateFigureClaim` sees it, because that function throws past its own `{ok, reason}` contract on both shapes (`cashInputSpec` throws on an unknown field; a null `basis` TypeErrors on `.trim()`), so an approved plan would crash a mutation instead of refusing cleanly; **(2)** a scorecard-store field is refused as `INVALID_INPUT: that figure cannot be updated by an agent yet` — earlier than `writeFigureRow`'s own throw, so the reason is one the approval card can show — which means **the agent can update the five `financeInputs` figures and CANNOT yet update CAC**, a real product limit whose upgrade path is the per-dot-path provenance map on `evaluations` recorded in the entry below; **(3)** a claim not `isNewerThan` the stored `statedAt` is SKIPPED, not an error — `writeFigureRow` has no ordering guard, so without this a claim observed in June would patch over a figure the human saved today, moving `statedAt` backward and flipping `actor`. §4: the ONE audit event this module writes, `finance.claims_applied`, carries field NAMES, a COUNT and enums and never a value; it counts the claims actually WRITTEN, not the ones staged, so a fully-skipped list writes no row at all. It goes through `internal.audit.log` (the sole insert surface, §3) — hence the applier takes the whole `MutationCtx`, mirroring `contacts.applyCrmOperations`. The approve surface moved with it: `approvals.ts`'s `planKind` union, and `ApprovalsView.tsx`'s badge ("Figure update"), approve label ("Approve & update the figure") and card title (a COUNT of updates — never the figure, §4 applies to a screenshot too).)
+>
+> Last verified: 2026-08-10 (Task 3 REVIEW FIX, live-finance-inputs — the ceiling recorded in the entry below is now a REFUSAL rather than a comment. `writeFigureRow` throws `INVALID_INPUT: scorecard store carries no provenance` for `actor: "agent"` on any scorecard-store field. Review found the loss is worse than first reported and not display-only: `applyScorecardAnswer` takes only `(db, tenantId, threadId, path, value)`, so FOUR claim fields are dropped — `origin`, `actor`, `basis` and **`observedAt`**, the last meaning the answer is stamped with the WRITE time rather than the time the figure was true — and the dot-path it appends to `userProvided` is what `runEvaluation` rebuilds its citation map from, stamping every member `{title: "user-provided", confidence: "high", source: "user-provided"}`. An agent figure would therefore have laundered into the Business Evaluation Engine at high confidence and suppressed the re-ask. `saveInput` is unaffected (always `actor: "user"`); the applier gets a loud failure instead of a quiet lie. Also closed the coverage gap the review found: Task 3's original two tests both used `cashOnHand`, so the `userProvided` predicate that flips the trust language for SIX of the eleven `CASH_INPUTS` fields had NO test — three now cover it (panel-answered `cac` reads stated/user/null, a grounded fill reads observed/agent/"business evaluation grounding", and the guard refuses without writing), all three verified to fail against a deliberately inverted predicate.)
+>
+> Last verified: 2026-08-10 (Task 3, live-finance-inputs — the finance WRITE path now has exactly ONE row-writer. `financeInputs` gains three OPTIONAL provenance columns (`origin`/`actor`/`basis`; absent = a user statement, which is what every pre-existing row is, so no backfill and no migration), and `statedAt` is documented as meaning "when the figure was TRUE" — `FigureClaim.observedAt` lands there, un-renamed because a rename would cost a migration for no behavioural gain. `convex/cash.ts` exports `writeFigureRow(db, tenantId, claim)`, a plain async function over an EXPLICIT tenantId, and `saveInput` is now a one-line delegation to it: the ungated human edit and the Approve-gated applier route through the same store-routing rule (contacts-crm invariant 13; invariant 11's ACTOR-decides-gating rule is what makes the human path ungated). `inputStatesFor` populates the Task-2 `CashInputState` fields at the read boundary — the `financeInputs` branch from the stored columns, the scorecard branch from `userProvided` membership, so a grounded fill reads ~~`observed`~~/`agent` instead of borrowing the owner's authority (**CORRECTED by the whole-branch review entry at the top: a grounded fill is `stated` + `agent`, because spec §1 reserves `observed` for figures PIKAR MEASURED and nothing measures yet — so `origin: "observed"` is unreachable again and the renderer branch below is kept for the measured slice, not because anything produces it**). That made `origin: "observed"` REACHABLE for the first time, which exposed a renderer gap fixed in the same commit: `CashView.tsx`'s observed branch discarded `statedAt` and `stale`, so a 200-day-old machine-extracted figure rendered a bare "Measured by Pikar." with no date and no confirm prompt — it now carries the same two affordances the stated branch does, pinned by two `cashView.test.ts` tests. KNOWN CEILING, marked `ponytail:` at the call site: the scorecard store has no provenance columns, so an agent-written SCORECARD figure still reads back as user-stated — `applyScorecardAnswer` adds the dot-path to `userProvided` unconditionally. Only reachable once the applier is pointed at a scorecard field; the upgrade path is a per-dot-path provenance map on `evaluations` beside `userProvidedAt`.)
+>
 > Last verified: 2026-08-10 (Task 6 REVIEW FIX, live-finance-inputs — owner ruling on the finding directly below: the worst-case test's length assertion was tautological (the function's own `line.length <= FINANCE_SPINE_BUDGET ? line : truncate(...)` return guarantees the check passes at ANY budget value, so it could never have caught an overflow), and truncation silently drops trailing `CASH_INPUTS` fields (`mrr`, `receivables`, `payables` at 320) which the agent then misreads as "never collected" and re-asks the owner for. Ruled a PLAN defect, not an implementation one — the brief mandated both the 320 constant and the truncating expression verbatim. Fix: `FINANCE_SPINE_BUDGET` raised to **437**, the measured true worst case (all 11 `CASH_INPUTS` fields, longest renderable value `999999999`, longest age `9999d`, all stale) — its doc comment now says it must be re-measured whenever `CASH_INPUTS` gains a member. The worst-case test gained a second assertion, `expect(line).not.toContain("…")`, so a line that silently truncated now fails the test instead of merely satisfying a length check that would have passed regardless — confirmed by temporarily lowering the budget back to 320 and observing the new assertion fail, then restoring it. Truncation itself STAYS as a last-resort guard for a future field addition that overflows before anyone re-measures — it just can no longer hide behind an assertion that could never catch it firing.)
 >
-> Prior: 2026-08-10 (Task 6, live-finance-inputs — the always-on spine finance line, `packages/core/src/cashSpine.ts`'s `financeSpineLine(inputs, nowMs)`/`FINANCE_SPINE_BUDGET`, consumed by Task 7 and the existing spine assembler. Carries STATE only (value, age in days, STALE flag, or a bare `field ?` for a missing input) — never analysis; derived metrics stay behind the on-demand `readFinance` tool. The worst case (all 11 `CASH_INPUTS` collected, longest values, all stale) measures 437 raw characters before the function's own truncate-with-ellipsis clamp; the clamp holds the returned line at the 320-char budget by construction, so the budget was not raised, and the assertion checking it is TAUTOLOGICAL — the function's own truncate branch guarantees `length <= budget` for ANY budget value, so the test could not have failed regardless. **SUPERSEDED by the review-fix entry above: the owner ruled this a plan defect (the brief mandated both the 320 value and the truncating expression verbatim) and ordered the budget raised to the true 437 measured worst case, with a second assertion that the worst-case line is never actually truncated (`not.toContain("…")`) — kept for history, do not treat as current.**)
+> Prior: 2026-08-10 (Task 6, live-finance-inputs — the always-on spine finance line, `packages/core/src/cashSpine.ts`'s `financeSpineLine(inputs, nowMs)`/`FINANCE_SPINE_BUDGET`, ~~consumed by Task 7 and the existing spine assembler~~ **— FALSE when written and CORRECTED by the whole-branch review entry at the top of this file: it had ZERO callers outside its own test until `blueprint.ts`'s `spineForTenant` was wired to it. Task 7 built `readFinance`, which never touches this function.** Carries STATE only (value, age in days, STALE flag, or a bare `field ?` for a missing input) — never analysis; derived metrics stay behind the on-demand `readFinance` tool. The worst case (all 11 `CASH_INPUTS` collected, longest values, all stale) measures 437 raw characters before the function's own truncate-with-ellipsis clamp; the clamp holds the returned line at the 320-char budget by construction, so the budget was not raised, and the assertion checking it is TAUTOLOGICAL — the function's own truncate branch guarantees `length <= budget` for ANY budget value, so the test could not have failed regardless. **SUPERSEDED by the review-fix entry above: the owner ruled this a plan defect (the brief mandated both the 320 value and the truncating expression verbatim) and ordered the budget raised to the true 437 measured worst case, with a second assertion that the worst-case line is never actually truncated (`not.toContain("…")`) — kept for history, do not treat as current.**)
 >
 > Last verified: 2026-08-10 (Task 2, live-finance-inputs — `CashInputState` gains stored `origin`/`actor`/`basis`; `statedFigure` returns `input.origin` instead of hardcoding `"stated"`. Origin was previously DEDUCED from membership of the evaluation row's `userProvided` list, so a vault-grounded fill rendered identically to a figure the owner typed — that leak is closed at the pure layer. Task 3 populates these fields at the Convex read boundary.)
 >

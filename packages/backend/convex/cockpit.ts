@@ -20,6 +20,7 @@ import {
   armFor,
   assertNever,
   classifyReviewDecision,
+  type FigureClaim,
   normalizeAddress,
   notificationMessage,
   SEND_TIME_HORIZON_MS,
@@ -34,6 +35,8 @@ import { ConvexError, v } from "convex/values";
 import { api, components, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { type ActionCtx, internalMutation, type MutationCtx } from "./_generated/server";
+// 2026-08-10: the FINANCE terminal, direct-called for exactly the reasons the CRM one below is.
+import { applyFinanceClaims, type FinanceApplyRefusal } from "./cash";
 // 19-06 ACTN-05: the CRM terminal. Called DIRECTLY (not via runMutation) so the whole operation
 // list lands in the same serializable transaction as the proposed -> approved CAS, which is what
 // makes approve-all-or-none and double-approve-applies-once true without a saga.
@@ -578,6 +581,10 @@ const _ARM_TABLE = {
   // one. `ExternalActionType` below is DERIVED from this table, so `crm_write` is excluded by
   // construction — adding a target for it would not compile.
   crm_write: "inline",
+  // 2026-08-10: the arm's THIRD occupant, and an `inline` member for the same reason `crm_write` is
+  // one — a figure update writes OUR OWN `financeInputs` rows, so there is no fetch and no
+  // `EXTERNAL_TARGETS` entry to give it.
+  finance_write: "inline",
 } as const satisfies Record<ActionType, Arm>;
 
 /** The action types whose arm is `externalAction`, DERIVED from the table above rather than
@@ -664,6 +671,10 @@ export const executePlan = tenantMutation({
         alreadyStarted?: true;
         scheduled?: true;
         withheld?: string[];
+        // finance_write only: how many figures actually moved. `0` means every claim was already
+        // superseded by a newer stored figure — the approval succeeded and changed NOTHING, and
+        // both cards say "already up to date" rather than implying a write (review I5).
+        applied?: number;
       }
     | {
         ok: false;
@@ -679,7 +690,11 @@ export const executePlan = tenantMutation({
           // address on /dashboard/profile, or pick recipients who have not unsubscribed.
           | "no_postal_address"
           | "all_recipients_suppressed"
-          | ReserveRefusal;
+          | ReserveRefusal
+          // 2026-08-10: the finance_write arm's two refusals — `applyFinanceClaims` RETURNS them
+          // rather than throwing (its own doc comment explains why), so this dispatcher's ONLY job
+          // is to pass the reason through unmodified to the card. Only bugs throw.
+          | FinanceApplyRefusal;
       }
   > => {
     const plan = await ctx.db.get(planId);
@@ -718,6 +733,27 @@ export const executePlan = tenantMutation({
           await applyCrmOperations(ctx, plan.tenantId, plan.crmOperations);
           await ctx.db.patch(planId, { status: "done" });
           return { ok: true };
+        }
+        // 2026-08-10: the arm's THIRD occupant, and the same shape as `crm_write` above —
+        // `applyFinanceClaims` re-validates every staged claim (the plan row is content plane) and
+        // writes through the SAME `writeFigureRow` the ungated human edit uses, so there is one
+        // copy of the store-routing rule. A throw part-way through discards the whole list.
+        if (actionTypeOf(plan.kind) === "finance_write") {
+          // tenantId off the APPROVED PLAN ROW, never model-supplied.
+          const applied = await applyFinanceClaims(
+            ctx,
+            plan.tenantId,
+            plan.financeClaims as FigureClaim[],
+          );
+          // A GOVERNED STOP, not a bug: the plan stays `proposed` (no patch below), so the human
+          // sees the refusal on the card and can re-approve once the lever is pulled. Nothing was
+          // written — `applyFinanceClaims` validates the whole claim list before writing any of it.
+          if (!applied.ok) return { ok: false, reason: applied.reason };
+          await ctx.db.patch(planId, { status: "done" });
+          // The COUNT, not a boolean: `applied: 0` is a real outcome (every claim older than what
+          // is stored), and a card that says "approved" over zero writes is the same dishonesty
+          // the figure tiles exist to avoid.
+          return { ok: true, applied: applied.applied };
         }
         // memo (12-05 BEVL-02): Approve means SAVE. See evaluations.ts.
         await ctx.db.patch(planId, { status: "done" });

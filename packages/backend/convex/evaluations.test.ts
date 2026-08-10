@@ -200,6 +200,68 @@ describe("runEvaluation blueprint spine ordering (BLPR-02)", () => {
     ];
     expect(distinctCitationOrder).toEqual([profileDocId, blueprintDocId, retrievalDocId]);
   });
+
+  // WHOLE-BRANCH RE-REVIEW, the C1 regression pin. `vaultGround.ts:225` grounds on
+  // `internal.blueprint.spineForTenant` and the block above shows its WHOLE output becoming the
+  // "Business blueprint" chunk that `FINANCIAL_PATTERNS` scans. Those patterns have unbounded
+  // `[^\d$]*` gaps that match newlines, so ANY line appended to that query's return value donates
+  // its first number to a label the blueprint merely MENTIONS. The first fix for C1 appended the
+  // cockpit's finance line there, and this exact fixture — a blueprint saying "CAC is too high"
+  // with no digits, plus one stored figure — fabricated `financials.cac = 38500` (the tenant's
+  // cash on hand) at `{source: "vault", confidence: "high"}`, which then flipped the framework to
+  // growth-os, suppressed the honest CAC gap, and read straight back out through `inputStatesFor`.
+  // The finance line is now its own query joined only in `buildTurnPrompt`; this proves it.
+  test("the cockpit finance line never reaches the grounding corpus, so no figure is captured as CAC", async () => {
+    const t = newTest();
+    await t.mutation(internal.skills.seedSkills, {});
+    // A blueprint that MENTIONS CAC and contains no digit after it — the ordinary shape for a
+    // growth-diagnosed tenant, not an exotic one.
+    const blueprintText = serializeBlueprint({
+      name: { values: ["Northwind Logistics"], origin: "stated" },
+      oneLineDescription: null,
+      stage: null,
+      tier: { values: ["startup"], origin: "stated" },
+      offering: null,
+      targetCustomer: null,
+      revenueModel: null,
+      bindingConstraint: {
+        values: ["CAC is too high to scale paid ads"],
+        origin: "stated",
+      },
+      primaryGoals: null,
+      knownConstraints: null,
+      entities: null,
+    } satisfies BusinessBlueprint);
+    await seedConfirmedBlueprint(t, TENANT, blueprintText);
+    // A real figure the owner typed on the finance page. It belongs in the cockpit spine line and
+    // NOWHERE near the evaluation's grounding corpus.
+    await t.run((ctx) =>
+      ctx.db.insert("financeInputs", {
+        tenantId: TENANT,
+        field: "cashOnHand",
+        valueUsd: 38_500,
+        statedAt: Date.now(),
+        origin: "stated",
+        actor: "user",
+        basis: "finance panel",
+      }),
+    );
+
+    await t.action(internal.evaluations.runEvaluation, {
+      tenantId: TENANT,
+      threadId: `${THREAD}_finance_leak`,
+      // No retrieval seeds: the blueprint chunk is the only place a number could come from.
+      query: "SMOKE::",
+    });
+
+    const row = await t.withIdentity({ subject: TENANT }).query(api.evaluations.byThread, {
+      threadId: `${THREAD}_finance_leak`,
+    });
+    expect(row?.scorecard.financials.cac).toBeNull();
+    // The whole corpus, not just the one field: the figure must be absent from every citation and
+    // finding the run produced.
+    expect(JSON.stringify(row)).not.toContain("38500");
+  });
 });
 
 describe("runEvaluation (SC#4 — web research citations retain their retrieval date)", () => {

@@ -255,6 +255,107 @@ describe("figure rendering — the four truths, on screen", () => {
     });
     expect(html).toMatch(/still right|confirm/i);
   });
+
+  // `observed` figures became REACHABLE with the provenance columns (convex/cash.ts's read boundary
+  // now reports a grounded scorecard fill as observed). The observed branch used to render a bare
+  // "Measured by Pikar." — discarding both `statedAt` and `stale`, so a 200-day-old machine-extracted
+  // figure got LESS scrutiny than one the owner typed yesterday. Nothing else in either package fails
+  // when that regresses, so it is pinned here.
+  test("a stale OBSERVED figure says when it was measured and asks for a confirm-or-update", () => {
+    const html = render(FigureTile, {
+      label: "Cash on hand",
+      figure: {
+        state: "known",
+        origin: "observed",
+        value: 5000,
+        unit: "usd",
+        statedAt: Date.UTC(2026, 1, 1),
+        stale: true,
+      },
+    });
+    expect(html).toMatch(/measured by pikar on/i);
+    expect(html).toMatch(/still right|confirm/i);
+  });
+
+  test("an observed figure with no measured date still renders, without inventing one", () => {
+    const html = render(FigureTile, {
+      label: "Cash on hand",
+      figure: { state: "known", origin: "observed", value: 5000, unit: "usd", stale: false },
+    });
+    expect(html).toContain("Measured by Pikar.");
+    expect(html).not.toMatch(/still right|confirm/i);
+  });
+
+  // WHOLE-BRANCH REVIEW C2 — the central invariant, at the last surface that can breach it: an
+  // agent-written figure must never render as the owner's own statement. EVERY claim this slice
+  // stores is `origin: "stated"` (spec §1), so this branch used to attribute the agent's own
+  // arithmetic — MRR 3,200 worked out from "$800/month × 4 subscribers" — to the owner, with a
+  // date. `actor` is the only field that separates the two. One test per rendered sentence.
+  describe("provenance is attributed to whoever actually supplied the figure", () => {
+    const base = { label: "Cash on hand", value: 5000, unit: "usd" } as const;
+
+    test("a figure the OWNER typed is theirs, with the date they typed it", () => {
+      const html = render(FigureTile, {
+        label: base.label,
+        figure: {
+          state: "known",
+          origin: "stated",
+          actor: "user",
+          value: base.value,
+          unit: base.unit,
+          statedAt: Date.UTC(2026, 7, 10),
+          stale: false,
+        },
+      });
+      expect(html).toMatch(/You told us this on /);
+    });
+
+    test("a figure the AGENT wrote is NEVER the owner's own statement", () => {
+      const html = render(FigureTile, {
+        label: base.label,
+        figure: {
+          state: "known",
+          origin: "stated",
+          actor: "agent",
+          value: base.value,
+          unit: base.unit,
+          statedAt: Date.UTC(2026, 7, 10),
+          stale: false,
+        },
+      });
+      expect(html).not.toMatch(/You told us this/);
+      expect(html).toMatch(/Recorded by Pikar from your own information, as of /);
+    });
+
+    // The three `knownFigure("stated", …)` scorecard reads in `@pikar/core` (statedLtgp,
+    // grossMargin, cohortChurn) carry no actor at all — nothing records who supplied them. The
+    // renderer must therefore require POSITIVE evidence before attributing a figure to the owner,
+    // rather than treating absence as "the user said it".
+    test("a stated figure with NO recorded actor is not attributed to the owner either", () => {
+      const html = render(FigureTile, {
+        label: "Gross margin",
+        figure: { state: "known", origin: "stated", value: 62, unit: "percent" },
+      });
+      expect(html).not.toMatch(/You told us this/);
+      expect(html).toContain("Recorded by Pikar from your own information.");
+    });
+
+    test("an agent-written figure still asks for a confirm-or-update when it is stale", () => {
+      const html = render(FigureTile, {
+        label: base.label,
+        figure: {
+          state: "known",
+          origin: "stated",
+          actor: "agent",
+          value: base.value,
+          unit: base.unit,
+          statedAt: Date.UTC(2026, 1, 1),
+          stale: true,
+        },
+      });
+      expect(html).toMatch(/still right|confirm/i);
+    });
+  });
 });
 
 describe("the headline", () => {

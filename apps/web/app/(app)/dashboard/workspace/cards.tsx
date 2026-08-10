@@ -79,7 +79,11 @@ function formatAbsolute(epoch: number): string {
  */
 export function describeCrmOperations(raw: unknown): string[] {
   const day = (ms: number) =>
-    new Date(ms).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+    new Date(ms).toLocaleDateString(undefined, {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+    });
   return parseCrmOperations(raw).map((op) => {
     switch (op.op) {
       case "addContact":
@@ -319,16 +323,55 @@ function PlanRecipientBodies({ plan }: { plan: Plan }) {
   );
 }
 
+/** One note, one optional lever. `tone` is set at the call site (a refusal is an error, the
+ *  withheld report is not), so the map below carries only what is refusal-specific. */
+type PlanNote = { text: string; tone?: "error" | "info"; link?: { href: string; label: string } };
+
+/**
+ * Every governed refusal this card can show, and the lever the user can pull for it. Module-scope
+ * and EXPORTED so the set is assertable — it used to be a local const inside `approve()`, where a
+ * missing key was undetectable: unlike the Approvals page's `refusalMessage`, which falls back to
+ * printing the raw enum, `if (refusal) setNote(...)` below renders NOTHING AT ALL for a reason
+ * that is not here. A silent no-op on the second approve surface is the worse failure mode.
+ *
+ * A reason with no entry here is one the canvas or the picker already surfaces (media/scheduling).
+ * Copy is kept WORD-FOR-WORD in step with `approvals/ApprovalsView.tsx`'s `refusalMessage` — the
+ * same stop must not read as two different rules on the two surfaces.
+ */
+export const PLAN_REFUSALS: Record<string, PlanNote> = {
+  gmail_not_connected: { text: "Connect Gmail before approving." },
+  no_postal_address: {
+    text: "Add your postal address before sending — the law requires it in every email's footer.",
+    // href and label travel TOGETHER (Task 8 review). They used to be an optional `href` beside a
+    // HARDCODED "Open your profile" label, so the first entry pointing anywhere else would have
+    // rendered the wrong words over the right link.
+    link: { href: "/dashboard/profile", label: "Open your profile" },
+  },
+  all_recipients_suppressed: {
+    text: "Nobody on this list can be emailed: every recipient has unsubscribed.",
+  },
+  // Task 8 (live-finance-inputs): `applyFinanceClaims`'s two refusals, which reach this card as a
+  // RETURN rather than a throw Convex would redact in production. Without these entries a rejected
+  // figure approval would set no note and the click would look like it simply did nothing.
+  agent_cannot_update_figure: {
+    text: "That figure can only be updated by you for now — the agent cannot vouch for where it came from. Nothing changed.",
+    link: { href: "/dashboard/finance", label: "Open your finance figures" },
+  },
+  malformed_figure_claim: {
+    text: "This figure update was malformed and was not applied. Nothing changed.",
+  },
+};
+
 function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
   const execute = useMutation(api.cockpit.executePlan);
   const setSendTime = useMutation(api.plans.setPlanSendTime);
   const [busy, setBusy] = useState(false);
-  // The governed-refusal note. A refusal LEAVES the plan `proposed`, which is the only reason a
-  // note in this component's state is visible at all — see the withheld report in `PlanCards`,
-  // which is the same information about a SUCCESS and therefore cannot live here.
-  const [note, setNote] = useState<{ text: string; tone: "error" | "info"; href?: string } | null>(
-    null,
-  );
+  // The governed-refusal note, typed off `PlanNote` so the entry's own `link.label` rides along.
+  // A refusal LEAVES the plan `proposed`, which is the only reason a note in this component's
+  // state is visible at all — see the withheld report in `PlanCards`, which is the same
+  // information about a SUCCESS and therefore cannot live here. Amber is deliberately not used:
+  // BRAND §2 reserves `--held` for the approval gate alone.
+  const [note, setNote] = useState<(PlanNote & { tone: "error" | "info" }) | null>(null);
   const recipients = plan.recipients ?? [];
   const mode = plan.mode ?? "individual";
   const body = plan.body ?? "";
@@ -343,21 +386,20 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
     try {
       const res = await execute({ planId: plan._id });
       if (!res.ok) {
-        // Every governed stop names the lever the user can pull. A reason with no entry here is a
+        // Every governed stop names the lever the user can pull; the map is module-scope so the
+        // set of stops is assertable (see PLAN_REFUSALS). A reason with no entry there is a
         // media/scheduling refusal the canvas or the picker already surfaces.
-        const refusals: Record<string, { text: string; href?: string }> = {
-          gmail_not_connected: { text: "Connect Gmail before approving." },
-          no_postal_address: {
-            text: "Add your postal address before sending — the law requires it in every email's footer.",
-            href: "/dashboard/profile",
-          },
-          all_recipients_suppressed: {
-            text: "Nobody on this list can be emailed: every recipient has unsubscribed.",
-          },
-        };
-        const refusal = refusals[res.reason];
+        const refusal = PLAN_REFUSALS[res.reason];
         if (refusal) setNote({ ...refusal, tone: "error" });
       }
+      // NO success branch here — neither `res.withheld` nor finance's `res.applied === 0`.
+      // Merge note (2026-08-10, lane/live-finance-inputs): the lane predates 19-12 and re-added
+      // both. Both are DEAD for one reason: `cockpit.ts:752` patches a successful finance apply to
+      // `done`, and `PlanCards` at :2608 renders this component only while `status === "proposed"`,
+      // so the card unmounts before `execute()` resolves and `setNote` runs on a dead component.
+      // The "already up to date" copy is NOT lost — `ApprovalsView.tsx:405` carries it word-for-word
+      // on the surface that survives the transition. Anything to say about a SUCCESS belongs on the
+      // plan row, like the withheld set below.
       // NO `res.withheld` branch here. It was one (19-05) and it was DEAD: this component only
       // renders while `plan.status === "proposed"`, and a successful approve is exactly the
       // transition off `proposed` — the reactive subscription unmounts the card before `execute()`
@@ -368,6 +410,38 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
       setBusy(false);
     }
   }
+
+  // THE note element, built ONCE and rendered by EVERY branch below (Task 8 review, finding 1).
+  // It used to live only inside the final email return, while `memo`, `crm_write`, `finance_write`
+  // and `calendar_event` all EARLY-RETURN their own JSX — so on those four cards `setNote` ran, the
+  // component re-rendered, and NOTHING was displayed. That was invisible for years because the
+  // three original reasons (`gmail_not_connected`, `no_postal_address`, `all_recipients_suppressed`)
+  // only fire on EMAIL plans, which do reach the final return; `finance_write` is the first branch
+  // whose refusals actually fire. Rendered as one shared element rather than copied into each
+  // branch, so a NEW branch that forgets it is the only way to regress — and crmCard.test.ts
+  // scans this file for exactly that.
+  const planNote = note && (
+    // `alert` interrupts for a refusal; `status` is polite for the withheld report, which
+    // reports something that already succeeded. `--teal-900`, not `--teal-600`: BRAND §6 bars
+    // teal-600 as small text on white (~2.9:1).
+    <p
+      role={note.tone === "error" ? "alert" : "status"}
+      style={{
+        color: note.tone === "error" ? "#dc2626" : "var(--ink-soft)",
+        margin: "0.5rem 0 0",
+      }}
+    >
+      {note.text}
+      {note.link && (
+        <>
+          {" "}
+          <Link href={note.link.href} style={{ color: "var(--teal-900)", fontWeight: 600 }}>
+            {note.link.label}
+          </Link>
+        </>
+      )}
+    </p>
+  );
 
   // MEMO plan (12-05, BEVL-02): same single Approve gate, a different promise. Everything below
   // this branch is email chrome — recipients, mode, a send-time picker, "Send to N recipients" —
@@ -404,6 +478,7 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
         >
           {busy ? "Saving…" : "Approve & save"}
         </button>
+        {planNote}
       </div>
     );
   }
@@ -427,7 +502,8 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
         <div style={label}>CRM UPDATE</div>
         {lines === null ? (
           <p role="alert" style={{ color: "#dc2626", margin: "0.5rem 0 0" }}>
-            This plan's records list is incomplete, so there is nothing to approve. Ask for it again.
+            This plan's records list is incomplete, so there is nothing to approve. Ask for it
+            again.
           </p>
         ) : (
           <>
@@ -482,6 +558,49 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
             </button>
           </>
         )}
+        {planNote}
+      </div>
+    );
+  }
+
+  // FINANCE plan (Task 8, live-finance-inputs): same single Approve gate, a different promise
+  // again. Approving writes the staged figures into the user's OWN numbers — the same `inline`
+  // arm the CRM branch uses, so nothing is emailed and no Gmail connection is needed. Ahead of the
+  // email chrome for the memo/CRM reason: recipients, mode, the send-time picker and "Send to N
+  // recipients" are all lies on a figure update.
+  //
+  // The COUNT, never the figures. `approvals/ApprovalsView.tsx`'s `titleFor` made this call for
+  // the primary approve surface and §4's rule about a tenant's revenue applies to a screenshot as
+  // much as to the audit log; the two surfaces must not disagree about what a figure card shows.
+  // The figures themselves are on /dashboard/finance, which is where Approve writes them.
+  if (plan.kind === "finance_write") {
+    const count = Array.isArray(plan.financeClaims) ? plan.financeClaims.length : 0;
+    return (
+      <div style={box} data-testid="finance-plan-card">
+        <div style={label}>FIGURE UPDATE</div>
+        <p style={{ margin: "0.5rem 0 0.75rem", color: "var(--ink)", fontSize: "0.9rem" }}>
+          {count} figure {count === 1 ? "update is" : "updates are"} waiting on your approval.
+        </p>
+        <p style={{ ...dim, margin: "0 0 0.75rem" }}>
+          Approving saves {count === 1 ? "it" : "them"} to your finance figures. Nothing is sent to
+          anyone.
+        </p>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void approve()}
+          style={{
+            ...btn,
+            background: "var(--teal-600)",
+            color: "#fff",
+            border: "none",
+            fontWeight: 600,
+          }}
+        >
+          {/* Word-for-word `approvals/ApprovalsView.tsx`'s actionLabel — one act, one promise. */}
+          {busy ? "Saving…" : "Approve & update the figure"}
+        </button>
+        {planNote}
       </div>
     );
   }
@@ -531,6 +650,7 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
         >
           {busy ? "Adding…" : "Approve & add to calendar"}
         </button>
+        {planNote}
       </div>
     );
   }
@@ -617,28 +737,7 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
       >
         {busy ? "Approving…" : sendAt ? "Approve & schedule" : "Approve"}
       </button>
-      {note && (
-        // `alert` interrupts for a refusal; `status` is polite for the withheld report, which
-        // reports something that already succeeded. `--teal-900`, not `--teal-600`: BRAND §6 bars
-        // teal-600 as small text on white (~2.9:1).
-        <p
-          role={note.tone === "error" ? "alert" : "status"}
-          style={{
-            color: note.tone === "error" ? "#dc2626" : "var(--ink-soft)",
-            margin: "0.5rem 0 0",
-          }}
-        >
-          {note.text}
-          {note.href && (
-            <>
-              {" "}
-              <Link href={note.href} style={{ color: "var(--teal-900)", fontWeight: 600 }}>
-                Open your profile
-              </Link>
-            </>
-          )}
-        </p>
-      )}
+      {planNote}
     </div>
   );
 }
@@ -1685,6 +1784,14 @@ const VERB: Record<string, [running: string, done: string]> = {
   // records" — the write happens on Approve, and BRAND §1 forbids claiming an action that did not
   // happen. "Records", not "CRM", matches the card's own "changes to your records" voice.
   stageCrmWrite: ["Preparing a records update…", "Records update ready to approve"],
+  // Task 7 (live-finance-inputs): MANDATORY beside the schema literal — traceParity.test.ts
+  // asserts set equality both ways. Read-only, matches the evaluateBusiness voice above.
+  readFinance: ["Reading your finances…", "Read your finances"],
+  // Task 8: MANDATORY beside the schema literal — traceParity.test.ts asserts set equality BOTH
+  // ways, so either half alone is RED. The done state is the PROMISE the tool keeps: it STAGES a
+  // card and applies nothing, so this must never read "Saved" or "Updated your figures" — the
+  // write happens on Approve, and BRAND §1 forbids claiming an action that did not happen.
+  stageFinanceWrite: ["Preparing a figure update…", "Figure update ready to approve"],
 };
 const FALLBACK: [string, string] = ["Working…", "Done"];
 
@@ -2447,7 +2554,11 @@ function PlanCards({
     !halted &&
     plan.kind !== "memo" &&
     plan.kind !== "media" &&
-    plan.kind !== "crm_write";
+    plan.kind !== "crm_write" &&
+    // Task 8: `finance_write` for the same reason as `crm_write` — a plan row can carry a leftover
+    // subject/body from an earlier compose in the same thread, and a DRAFT card would print an
+    // email beside a card that promises nothing is sent.
+    plan.kind !== "finance_write";
   // Resolution happens BEFORE the PLAN — render the pick card whenever the cockpit has parked
   // candidates. UAT-C (03.10-04): the old `status !== "proposed"` clause is DROPPED so the picker
   // SURVIVES a plan that got proposed with a pick still open (the propose-while-pending deadlock);

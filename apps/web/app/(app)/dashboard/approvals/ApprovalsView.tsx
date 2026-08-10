@@ -131,6 +131,12 @@ export function refusalMessage(reason: string): string {
     daily_budget_exhausted: "This tenant’s daily budget is exhausted. Nothing was generated.",
     deployment_budget_exhausted: "The deployment budget is paused. Nothing was generated.",
     media_budget_exhausted: "The media budget is exhausted. Nothing was generated.",
+    // 2026-08-10: `applyFinanceClaims`'s two refusals, delivered as a return instead of a throw
+    // Convex would redact in production — see the function's doc comment in cash.ts.
+    agent_cannot_update_figure:
+      "That figure can only be updated by you for now — the agent cannot vouch for where it came from. Nothing changed.",
+    malformed_figure_claim:
+      "This figure update was malformed and was not applied. Nothing changed.",
   };
   return messages[reason] ?? `The governed action refused (${reason}). Nothing was sent.`;
 }
@@ -151,6 +157,7 @@ export function ApprovalKindBadge({ kind }: { kind: PlanKind }) {
     calendar_event: "Calendar event",
     memo: "Next-step memo",
     crm_write: "CRM update",
+    finance_write: "Figure update",
   };
   return (
     <span
@@ -225,6 +232,12 @@ function titleFor(plan: Plan): string {
     const count = Array.isArray(plan.crmOperations) ? plan.crmOperations.length : 0;
     return `${count} change${count === 1 ? "" : "s"} to your records`;
   }
+  // The COUNT, never the figure: this string is the card headline and §4's rule about a tenant's
+  // revenue applies to a screenshot as much as to the audit log.
+  if (plan.kind === "finance_write") {
+    const count = Array.isArray(plan.financeClaims) ? plan.financeClaims.length : 0;
+    return `${count} figure update${count === 1 ? "" : "s"}`;
+  }
   if (plan.kind === "media") {
     const artDirection =
       typeof plan.artDirection === "string" ? plan.artDirection : plan.artDirection?.mood;
@@ -239,6 +252,9 @@ export function actionLabel(kind: PlanKind): string {
   // 19-06 ACTN-05: every label on this surface must name what Approve DOES. "Approve & send" on a
   // CRM write would promise an email the inline arm structurally cannot produce.
   if (kind === "crm_write") return "Approve & save to records";
+  // Same rule, same arm: approving a figure update writes a number into the user's own finance
+  // panel. "Approve & send" here would promise an email nothing in the inline arm can produce.
+  if (kind === "finance_write") return "Approve & update the figure";
   if (kind === "reel" || kind === "image") return "Approve governed generation";
   return "Approve & send";
 }
@@ -382,6 +398,11 @@ function AwaitingCard({ item }: { item: AwaitingItem }) {
         setResult(
           `The absolute schedule is armed. Nothing runs before it fires.${withheldSuffix(response.withheld)}`,
         );
+      // finance_write, `applied: 0`: every claim was older than the figure already stored, so the
+      // approval succeeded and NOTHING moved. "The governed action is now in flight" would imply a
+      // write that did not happen.
+      else if (response.applied === 0)
+        setResult("Your figures were already up to date, so nothing changed.");
       else
         setResult(
           `Approval accepted. The governed action is now in flight.${withheldSuffix(response.withheld)}`,

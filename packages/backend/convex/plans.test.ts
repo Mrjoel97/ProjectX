@@ -685,4 +685,41 @@ describe("patchPlan accepts kind: crm_write (19-06 — the hand-maintained union
     expect(row?.kind).toBeUndefined();
     expect(row?.status).toBe("collecting");
   });
+
+  // 2026-08-10, the sixth action type: same class again, one rung worse than the CRM one — a claim
+  // surviving a reset would be applied by the NEXT approve over a figure the owner may have typed
+  // in the meantime. Staged by a DIRECT insert, not `patchPlan`: whether `finance_write` joins
+  // patchPlan's hand-maintained kind mirror is the staging task's call, but a claim already on a
+  // row must not outlive a reset today.
+  test("resetPlan clears financeClaims", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await t.run((ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: `thread_finance_${crypto.randomUUID()}`,
+        kind: "finance_write" as const,
+        status: "proposed" as const,
+        recipients: [],
+        createdAt: Date.now(),
+        financeClaims: [
+          {
+            field: "cashOnHand",
+            value: 38_500,
+            origin: "stated" as const,
+            actor: "agent" as const,
+            basis: "user statement, turn 4",
+            observedAt: 1_754_000_000_000,
+            confidence: "high" as const,
+          },
+        ],
+      }),
+    );
+
+    await t.mutation(internal.plans.resetPlan, { planId });
+
+    const row = await t.run((ctx) => ctx.db.get(planId));
+    expect(row?.financeClaims).toBeUndefined();
+    expect(row?.kind).toBeUndefined();
+    expect(row?.status).toBe("collecting");
+  });
 });

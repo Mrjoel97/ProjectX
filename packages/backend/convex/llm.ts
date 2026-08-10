@@ -47,11 +47,15 @@ import {
   buildDocFilename,
   buildRecipientView,
   CALENDAR_HORIZON_MS,
+  CASH_INPUTS,
+  type CashInputField,
   type CrmOperation,
+  cashInputSpec,
   type DigestBatch,
   type DigestItem,
   type DocFormat,
   exceedsByteCap,
+  type FigureClaim,
   formatSpec,
   type InboxMessageMeta,
   type InlineRun,
@@ -68,6 +72,7 @@ import {
   selectForDigest,
   tokenizeMarkdown,
   toWinAnsi,
+  validateFigureClaim,
 } from "@pikar/core";
 import {
   CHEAP_MODEL,
@@ -1041,6 +1046,13 @@ type PlanRow = {
   // plan past `proposed` (a sent/scheduled plan is cancelled via the plan card, not reset). getById
   // returns it at runtime; never model-facing (the model reasons about slots, not the raw status).
   status: "collecting" | "proposed" | "approved" | "scheduled" | "delivering" | "done" | "canceled";
+  // ACTN-01 action type, ABSENT ⇒ email. Declared here as of Task 8 (live-finance-inputs) because
+  // `otherKindStaged` reads it — and the declaration has a SECOND effect worth keeping: every
+  // caller passes a `PlanRow` to `buildAgentContext`, whose own param declares the SAME union, so
+  // widening `ACTION_TYPES` and this line without widening that one is now an assignability error
+  // at the call site. That is the compile-time guard the corrected note there says does not exist;
+  // it exists for the NEXT action type. Keep the two unions identical.
+  kind?: "memo" | "calendar_event" | "media" | "crm_write" | "finance_write";
 };
 
 // One formatter for the resolved send instant — shared by buildAgentContext's Send-time line
@@ -1058,7 +1070,7 @@ const fmtSendInstant = (ms: number, tz?: string) =>
 export function buildAgentContext(
   plan: {
     /** ACTN-01 action type. ABSENT ⇒ email (actionTypeOf), so every pre-Phase-15 row is unchanged. */
-    kind?: "memo" | "calendar_event" | "media" | "crm_write";
+    kind?: "memo" | "calendar_event" | "media" | "crm_write" | "finance_write";
     recipients?: string[];
     subject?: string;
     body?: string;
@@ -1101,6 +1113,17 @@ export function buildAgentContext(
       "Current CRM plan. This is NOT an email: it has no recipients, no send mode and no send" +
       " time, and approving it writes contacts and follow-ups into the user's own records rather" +
       " than sending anything to anyone. Do not offer to add recipients or to send it."
+    );
+  }
+  // Task 8 (live-finance-inputs), added BY HAND for the reason the corrected note above gives —
+  // `finance_write` reaching ACTION_TYPES did NOT break this call, so nothing but this edit stops
+  // a staged figure plan being announced as an email with recipient slots the model then offers to
+  // fill and send. Pinned by a test in cockpitTools.test.ts, because the type system will not.
+  if (actionTypeOf(plan.kind) === "finance_write") {
+    return (
+      "Current figure-update plan. This is NOT an email: it has no recipients, no send mode and" +
+      " no send time, and approving it saves the staged figures into the user's own numbers" +
+      " rather than sending anything to anyone. Do not offer to add recipients or to send it."
     );
   }
   if (actionTypeOf(plan.kind) === "memo") {
@@ -1204,17 +1227,27 @@ export function buildHistoryBlock(history: HistoryMessage[] | undefined): string
  * version stop describing what the model actually saw.
  *
  * Spine FIRST, then history, then the plan context, then the current turn — `The user says:` must
- * stay the final line. `spine === null` returns the pre-17.1 string byte-for-byte.
+ * stay the final line. `spine === null` and `finance === null` returns the pre-17.1 string
+ * byte-for-byte.
+ *
+ * THIS IS THE ONLY PLACE the blueprint spine and the finance line meet, and that is the whole point
+ * (whole-branch re-review, C1 regression). They arrive from two separate queries because
+ * `spineForTenant`'s output doubles as `evaluations.ts`'s "Business blueprint" GROUNDING CHUNK,
+ * which `FINANCIAL_PATTERNS` scans with unbounded `[^\d$]*` gaps — a finance line concatenated
+ * upstream gets its first number captured as the value of any `CAC`/`LTGP`/`price` label the
+ * blueprint happens to mention. Joining here reaches the model and nothing else.
  */
 function buildTurnPrompt(a: {
   spine: string | null;
+  finance: string | null;
   history: { role: "user" | "assistant"; content: string }[] | undefined;
   plan: PlanRow | null;
   tz: string | undefined;
   text: string;
 }): string {
-  const { spine, history, plan, tz, text } = a;
-  return `${spine === null ? "" : `${spine}\n\n`}${buildHistoryBlock(history)}${buildAgentContext(plan ?? {}, tz)}\n\nThe user says: ${text}`;
+  const { spine, finance, history, plan, tz, text } = a;
+  const standing = [spine, finance].filter((p) => p !== null).join("\n");
+  return `${standing === "" ? "" : `${standing}\n\n`}${buildHistoryBlock(history)}${buildAgentContext(plan ?? {}, tz)}\n\nThe user says: ${text}`;
 }
 
 /** Max header lines listInbox returns to the loop — a peek, not a briefing (briefInbox is that). */
@@ -1376,6 +1409,47 @@ const CRM_DUE_REFUSAL: Record<"ambiguous" | "past" | "tooFar" | "none", string> 
     "That follow-up date is too far out to stage. Ask the user for a nearer date. Nothing was staged.",
   none: "I didn't catch when that follow-up is due — ask the user for a date. Nothing was staged.",
 };
+// The five figures an AGENT may write. DERIVED from the catalogue, never re-listed: 6 of the 11
+// collected inputs are `store: "scorecard"` and `applyFinanceClaims` refuses every one of them,
+// because the scorecard discards origin/actor/basis and would launder an agent claim into the
+// evaluation engine's citations as the owner's own statement (`cash.ts`). A hand-copy here would
+// go stale the first time a field moved store.
+const AGENT_WRITABLE_FIGURES = CASH_INPUTS.filter((s) => s.store === "financeInputs").map(
+  (s) => s.field,
+);
+
+// Statuses in which a staged plan is SPENT: nobody is still waiting on it, so another action may
+// recycle the row. Everything else — collecting, proposed, approved, scheduled, delivering — is a
+// plan a human has been told about and has not finished with.
+const SPENT_PLAN_STATUS: ReadonlySet<PlanRow["status"]> = new Set(["done", "canceled"] as const);
+
+/**
+ * ONE plan row per thread (`plans.by_thread` is `.unique()`), so a second STAGING tool overwrites
+ * `kind` and ORPHANS whatever the first one staged. `executePlan` routes on `actionTypeOf(plan.kind)`
+ * ALONE, so a surviving `crmOperations` list or `eventTitle`/`eventStartMs` pair is never applied
+ * and never rendered — after the model has already told the user it was staged. The email-slot
+ * draft guard cannot see any of it: a `crm_write` row carries no subject/body/recipients at all.
+ * Returns the kind standing in the way, or null.
+ *
+ * ONE predicate SHARED by `stageCrmWrite` and `stageFinanceWrite` rather than two more slot lists —
+ * the hazard is symmetric, so a fix on one side only is not a fix (CLAUDE.md §8: one guard where
+ * every caller routes through). Re-staging the SAME kind is a REVISION, not a clobber, and stays
+ * allowed — that is the model correcting its own list, which `stageCrmWrite` has always permitted.
+ *
+ * ponytail: `stageResearchPlan`/`stageMediaPlan` (plans.ts) keep their own narrower interlocks —
+ * they protect a RUNNING dispatch and paid `mediaJobs` rows, neither of which is readable from
+ * `plan.status`. Upgrade path if those ever converge: more than one plan row per thread.
+ */
+const otherKindStaged = (plan: PlanRow, mine: string): string | null =>
+  plan.kind && plan.kind !== mine && !SPENT_PLAN_STATUS.has(plan.status) ? plan.kind : null;
+
+/** The shared refusal. `kind` is an ENUM, never content (§4), and naming it is what lets the model
+ *  tell the user WHICH plan is in the way instead of guessing. */
+const otherKindRefusal = (kind: string): string =>
+  `A ${kind.replace(/_/g, " ")} plan is already staged on this conversation's plan card, and ` +
+  "staging over it would silently discard it. NOTHING was staged. Tell the user what is already " +
+  "on the card and ask whether to approve or discard it first.";
+
 const DECLARED_UNSUPPORTED_REPLY =
   "Recorded. This does NOT end the run and discards nothing you found. Continue: produce the full " +
   "findings document — what you searched, what you did establish, the near-misses and why each is " +
@@ -2313,6 +2387,14 @@ export function buildCockpitTools(
         );
         switch (parsed.kind) {
           case "resolved": {
+            // THE SAME cross-kind interlock `stageCrmWrite` and `stageFinanceWrite` run, on the
+            // third tool that patches `kind` on the one shared plan row. Without it a staged
+            // `finance_write` (or `crm_write`) is orphaned: its `financeClaims` survive on the row
+            // but `executePlan` routes on `actionTypeOf(plan.kind)`, so they are never applied and
+            // never rendered — after the model told the user they were staged. Checked BEFORE the
+            // patch, so the refusal costs nothing and discards nothing.
+            const blocking = otherKindStaged(await readPlan(), "calendar_event");
+            if (blocking) return otherKindRefusal(blocking);
             // ponytail: one bounded duration, rounded then clamped to 15–480 minutes. Upgrade only
             // when the product supports shorter reminders or multi-day timed events.
             const clampedMinutes = Math.min(480, Math.max(15, Math.round(durationMinutes)));
@@ -2464,6 +2546,12 @@ export function buildCockpitTools(
           (plan.attachments?.length ?? 0) > 0;
         if (hasDraft) return refuse("draft_in_progress", CRM_REFUSAL_REPLY.draft_in_progress);
 
+        // …and the guard above cannot see another STAGED ACTION at all: a `finance_write` row
+        // carries `financeClaims` and no subject/body, so it sailed through and was overwritten.
+        // Shared with `stageFinanceWrite` — the hazard is symmetric.
+        const blocking = otherKindStaged(plan, "crm_write");
+        if (blocking) return refuse("other_kind_staged", otherKindRefusal(blocking));
+
         // The AGENT may only ADD. Closing someone's follow-up is a judgement about work being
         // finished, and the Pipeline page is where a human makes it — the same asymmetry that
         // keeps a contactless follow-up user-only (contacts-crm.md invariant 11).
@@ -2489,7 +2577,12 @@ export function buildCockpitTools(
             // contact came out of a mailbox resolution or the user's own words in this thread,
             // and letting the model label provenance would make the field unreliable. The same
             // literal `applyCrmOperations` uses when a follow-up upserts its contact.
-            staged.push({ op: "addContact", email: o.email, name: o.name, origin: "mailbox-resolved" });
+            staged.push({
+              op: "addContact",
+              email: o.email,
+              name: o.name,
+              origin: "mailbox-resolved",
+            });
             continue;
           }
           if (!clientContext) return refuse("no_clock", CRM_REFUSAL_REPLY.no_clock);
@@ -2499,7 +2592,8 @@ export function buildCockpitTools(
             clientContext.tz,
             CALENDAR_HORIZON_MS,
           );
-          if (parsed.kind !== "resolved") return refuse(`due_${parsed.kind}`, CRM_DUE_REFUSAL[parsed.kind]);
+          if (parsed.kind !== "resolved")
+            return refuse(`due_${parsed.kind}`, CRM_DUE_REFUSAL[parsed.kind]);
           staged.push({ op: "addFollowUp", email: o.email, note: o.note, dueAt: parsed.epochMs });
         }
 
@@ -2524,6 +2618,190 @@ export function buildCockpitTools(
           `${validated.length} change(s) to the user's records are staged on a plan card for ` +
           "them to review. NOTHING has been saved and nothing was emailed to anyone; the changes " +
           "are written only when the user clicks Approve. Tell them what is on the card."
+        );
+      },
+    }),
+    // ── readFinance (Task 7) — the derived half of the finance spine, on demand ─────────────────
+    // The agent NEVER computes a financial ratio. LTGP:CAC, CFA, payback and runway are defined in
+    // `financialSpine.ts` / `cash.ts` with their degenerate guards and the suppression rule; a
+    // model re-deriving them in prose produces a confident wrong number on the figure that drives
+    // the headline of the whole Finance page. This tool exists so the correct value is always
+    // cheaper to fetch than to invent. Empty input schema: the tenant comes from the RUN, never
+    // the model, so there is no argument to forge. A brand-new tenant with no figures at all is
+    // the NORMAL case, not an error — `unitEconomics`/`solvency` are pure and return "missing"/
+    // "not computable" states rather than throwing, so this never needs to fail loudly.
+    //
+    // Task 7 review, Important 2: the description below promises figures that are "missing or out
+    // of date". Missing is covered by every suppressed figure's own `needs`/`because`; "out of
+    // date" needed `inputs` (per-field `stale`) added to the payload — `unitEconomics`/`solvency`
+    // alone carry NO staleness marker on nine of their thirteen figures (only `mrr`/`referralPct`
+    // route through `statedFigure`; every other `derived()` figure has none at all).
+    readFinance: tool({
+      // Split literal keeps each chunk under the §5 no-hardcoded-prompt scan ceiling (200 chars).
+      description:
+        "Read the user's current financial picture: their figures, " +
+        "which are missing or out of date, and the metrics computed from them. " +
+        "Never calculate these ratios yourself — read them here.",
+      inputSchema: jsonSchema<Record<string, never>>({
+        type: "object",
+        properties: {},
+        additionalProperties: false,
+      }),
+      execute: async (): Promise<string> => {
+        const [unit, sol, inputs] = await Promise.all([
+          ctx.runQuery(internal.cash.unitEconomicsFor, { tenantId }),
+          ctx.runQuery(internal.cash.solvencyFor, { tenantId }),
+          ctx.runQuery(internal.cash.inputsFor, { tenantId }),
+        ]);
+        return JSON.stringify({ unitEconomics: unit, solvency: sol, inputs: inputs.inputs });
+      },
+    }),
+    // ── stageFinanceWrite (Task 8) — the agent's ONLY route to a figure ───────────────────────
+    //
+    // ONE tool carrying a LIST: one plan, one approval click, however many figures moved. The
+    // `stageCrmWrite` shape above, for the same reason — two tools would be two registration
+    // surfaces, two `agentSteps.tool` literals and two VERB entries for ONE governed act.
+    //
+    // It STAGES and applies NOTHING. `executePlan`'s `inline` arm applies the list after Approve,
+    // in one serializable transaction. contacts-crm.md invariant 11 — the ACTOR decides gating:
+    // the human editing the SAME figure through `cash.saveInput` is ungated and stages no plan.
+    //
+    // Validated HERE as well as at the apply boundary, deliberately: the plan row is CONTENT PLANE
+    // and could be revised in between, and `validateFigureClaim` is idempotent over its own output.
+    stageFinanceWrite: tool({
+      // Split literals keep each chunk under the §5 no-hardcoded-prompt scan ceiling (200 chars).
+      description:
+        "Stage updates to the user's own financial figures for them to approve. " +
+        "This saves nothing yet. " +
+        "Every update must say where the number came from, as a short reference. " +
+        // DERIVED, not hand-listed. The old wording ("only the collected inputs") was WRONG by 6 of
+        // 11: the scorecard-stored figures — CAC among them — are refused, so a model told only
+        // "the collected inputs" re-proposes CAC every turn and the user pays an approval click to
+        // find out. Name the five it can actually write.
+        `You can only update these five: ${AGENT_WRITABLE_FIGURES.join(", ")}.`,
+      inputSchema: jsonSchema<{
+        updates: Array<{ field: string; value: number; basis: string }>;
+      }>({
+        type: "object",
+        properties: {
+          updates: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                field: { type: "string", description: "The input's exact name." },
+                value: { type: "number", description: "The figure, in whole units." },
+                basis: {
+                  type: "string",
+                  description:
+                    // The example is DELIBERATELY unquoted: the §4 guard in `execute` rejects a
+                    // basis containing a quote character, so a quoted example would teach the
+                    // model the exact shape that gets refused.
+                    "A short REFERENCE for where it came from, e.g. 14000 / 10, this turn. Use no quote marks and never quote the user.",
+                },
+              },
+              required: ["field", "value", "basis"],
+              additionalProperties: false,
+            },
+          },
+        },
+        required: ["updates"],
+        additionalProperties: false,
+      }),
+      execute: async ({ updates }): Promise<string> => {
+        // Every exit below is a RETURNED SENTENCE the model can act on, never a throw out of the
+        // governed loop (18-06's rule) — including the ones that exist purely to catch a
+        // malformed emission.
+        if (updates.length === 0) {
+          return "There were no changes to stage, so nothing happened. Ask the user which figure moved.";
+        }
+        // One plan row per thread (`plans.by_thread` is `.unique()`), so staging finance onto a
+        // half-composed email would turn the draft into a figure card and strand it. The
+        // `stageCrmWrite` / `stageResearchPlan` / `stageMediaPlan` refusal, on the same hazard.
+        const plan = await readPlan();
+        if (
+          (plan.recipients?.length ?? 0) > 0 ||
+          plan.subject ||
+          plan.body ||
+          (plan.attachments?.length ?? 0) > 0
+        ) {
+          return (
+            "There is an email draft on this conversation's plan card, and staging figure updates " +
+            "would replace it. Nothing was staged. Tell the user plainly, and offer to update " +
+            "their figures once the draft is sent or discarded."
+          );
+        }
+        // …and the check above cannot see another STAGED ACTION: a `crm_write` row carries
+        // `crmOperations` and no subject/body. Shared with `stageCrmWrite` — the hazard is
+        // symmetric and a one-sided fix is not one.
+        const blocking = otherKindStaged(plan, "finance_write");
+        if (blocking) return otherKindRefusal(blocking);
+        // §2-D: the trusted client's clock, never the model's. `Date.now()` is the SERVER's clock
+        // (also not the model's) and is the right fallback here — unlike `setSendTime`, nothing on
+        // this path parses a model-supplied date phrase, so there is no instant to get wrong.
+        const nowMs = clientContext?.nowMs ?? Date.now();
+        const claims: FigureClaim[] = [];
+        for (const u of updates) {
+          // The field check MUST precede claim construction. `validateFigureClaim` delegates to
+          // `cashInputSpec`, which THROWS on a field outside the union — and a hallucinated field
+          // name ("revenue", "burnRate") is the likeliest malformed emission from a model. This
+          // guard is what turns that throw into a sentence.
+          if (!CASH_INPUTS.some((s) => s.field === u.field)) {
+            return `"${u.field}" is not a figure I can update. Ask the user which one they mean.`;
+          }
+          // The scorecard store cannot carry provenance, so `applyFinanceClaims` refuses every
+          // scorecard field UNCONDITIONALLY (`agent_cannot_update_figure`). Refusing HERE means the
+          // model learns it this turn instead of the user spending an approval click on a plan that
+          // can never apply. `cash.ts:448` deliberately stays — it is still reached by its own unit
+          // tests, by a plan row revised between staging and Approve, by a row staged under an
+          // older build, and by any future writer of `financeClaims` (vault documents, connectors).
+          // Two guards, one rule; neither is dead.
+          if (cashInputSpec(u.field as CashInputField).store === "scorecard") {
+            return (
+              `I cannot update ${u.field} — it is one the user has to enter themselves for now. ` +
+              `I can only update these five: ${AGENT_WRITABLE_FIGURES.join(", ")}. ` +
+              "Tell them they can set it on their finance page."
+            );
+          }
+          // §4 is enforced HERE, at the boundary that CONSTRUCTS `basis`. `validateFigureClaim`
+          // checks only that a basis is non-empty — "refs only, never quoted content" is not
+          // mechanically decidable in pure TS, so the producer is the enforcement point. Reject a
+          // basis carrying quoted content, or long enough to be a transcript, rather than letting
+          // it reach the audit log and the approval card.
+          if (/["'“”]/.test(u.basis) || u.basis.length > 120) {
+            return `The basis for ${u.field} must name where the number came from, not quote it.`;
+          }
+          const claim: FigureClaim = {
+            field: u.field as CashInputField,
+            value: u.value,
+            // `origin` and `actor` are NOT model inputs: they are the provenance of the WRITE, and
+            // letting the model label its own claim as the user's would defeat invariant 11
+            // outright. `applyFinanceClaims` re-stamps `actor` at the gate for the same reason.
+            origin: "stated",
+            actor: "agent",
+            basis: u.basis,
+            // When the figure was TRUE. Nothing on this path parses a date, so a figure the agent
+            // heard this turn was true this turn.
+            observedAt: nowMs,
+            confidence: "high",
+          };
+          const check = validateFigureClaim(claim, nowMs);
+          if (!check.ok) return `I cannot stage ${u.field}: ${check.reason}`;
+          claims.push(claim);
+        }
+        // `status: "proposed"` is not decoration: `executePlan`'s Approve gate is a CAS that
+        // no-ops on any other status, and every approval surface lists by it. A row left at
+        // `collecting` would render nowhere and could never be approved.
+        await ctx.runMutation(internal.plans.patchPlan, {
+          planId,
+          kind: "finance_write",
+          status: "proposed",
+          financeClaims: claims,
+        });
+        return (
+          `${claims.length} figure update(s) are staged on a plan card for the user to review. ` +
+          "NOTHING has been saved and nothing was emailed to anyone; the figures change only when " +
+          "the user clicks Approve. Tell them what is on the card."
         );
       },
     }),
@@ -4126,12 +4404,22 @@ export const runCockpitAgent = internalAction({
     } catch {
       spine = null;
     }
+    // The finance line (spec §2), a SEPARATE query and a separate fail-open: it must survive a
+    // tenant with figures and no confirmed blueprint (the ordinary state of a new account), and it
+    // must never be concatenated upstream of `evaluations.ts`'s grounding chunk. See
+    // `buildTurnPrompt`.
+    let finance: string | null = null;
+    try {
+      finance = await ctx.runQuery(internal.cash.financeSpineFor, { tenantId });
+    } catch {
+      finance = null;
+    }
     const { reply, costUsd } = await runAgentLoop(ctx, {
       tenantId,
       planId,
       system: skill.body,
       // History ABOVE the plan context; "The user says:" stays the FINAL line (the current turn).
-      prompt: buildTurnPrompt({ spine, history, plan, tz: clientContext?.tz, text }),
+      prompt: buildTurnPrompt({ spine, finance, history, plan, tz: clientContext?.tz, text }),
       primary: { model: forceTimeout ? timeoutModel() : resolveModel(primaryId), id: primaryId },
       fallback: {
         model: forceTimeout ? timeoutModel() : resolveModel(CHEAP_MODEL),
@@ -4197,8 +4485,15 @@ export const __cockpitTurnPrompt = internalAction({
     } catch {
       spine = null;
     }
+    let finance: string | null = null;
+    try {
+      finance = await ctx.runQuery(internal.cash.financeSpineFor, { tenantId });
+    } catch {
+      finance = null;
+    }
     return buildTurnPrompt({
       spine,
+      finance,
       history: undefined,
       plan,
       tz: undefined,

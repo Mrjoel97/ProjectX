@@ -24,7 +24,7 @@ import { expect, test, vi } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 // runCockpitAgent's preCall/recordSpend drive the rate-limiter component (the daily-spend window).
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
-import { internal } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { contentHash } from "./lib/hash";
 import {
@@ -1578,7 +1578,10 @@ test("every cockpit tool name has an agentSteps.tool literal (the swallowed-step
   const toolNames = [...readLlmSource().matchAll(/\n {4}([A-Za-z_]\w*): tool\(/g)].map((m) => m[1]);
   // Non-vacuity floor: if the record is ever restructured this scan must fail LOUDLY, not pass on
   // an empty list — the exact way a static scan rots into decoration.
-  expect(toolNames.length, "found no `<name>: tool(` keys — did buildCockpitTools move?").toBeGreaterThan(20);
+  expect(
+    toolNames.length,
+    "found no `<name>: tool(` keys — did buildCockpitTools move?",
+  ).toBeGreaterThan(20);
 
   const schemaSrc = readFileSync(join(convexSrcDir, "schema.ts"), "utf8").replace(/\r\n/g, "\n");
   const agentSteps = schemaSrc.slice(schemaSrc.indexOf("agentSteps: defineTable"));
@@ -1863,7 +1866,12 @@ test("stageCrmWrite PROPOSES a crm_write plan and applies NOTHING (the Approve g
   const reply = await callClock(t, planId, "stageCrmWrite", {
     operations: [
       { op: "addContact", email: "New.Person@Example.com", name: "New Person" },
-      { op: "addFollowUp", email: "new.person@example.com", note: "send the quote", due: "tomorrow" },
+      {
+        op: "addFollowUp",
+        email: "new.person@example.com",
+        note: "send the quote",
+        due: "tomorrow",
+      },
     ],
   });
 
@@ -1876,9 +1884,7 @@ test("stageCrmWrite PROPOSES a crm_write plan and applies NOTHING (the Approve g
   // boundary: the address is stored NORMALIZED, which is the visible trace of that second parse.
   expect((plan?.crmOperations?.[0] as { email: string }).email).toBe("new.person@example.com");
   // §2-D: the model supplies the user's WORDS, never an instant. "tomorrow" off the pinned clock.
-  expect((plan?.crmOperations?.[1] as { dueAt: number }).dueAt).toBe(
-    Date.UTC(2020, 0, 2, 9, 0, 0),
-  );
+  expect((plan?.crmOperations?.[1] as { dueAt: number }).dueAt).toBe(Date.UTC(2020, 0, 2, 9, 0, 0));
   // Nothing applied. The gate is the only application path.
   expect(await contactRows(t)).toHaveLength(0);
   expect(await followUpRows(t)).toHaveLength(0);
@@ -1909,9 +1915,7 @@ test("stageCrmWrite REFUSES a contact carrying a date — the follow-up half is 
   const { t, planId } = await setup();
 
   const dated = await callClock(t, planId, "stageCrmWrite", {
-    operations: [
-      { op: "addContact", email: "rhea@example.com", name: "Rhea", due: "Thursday" },
-    ],
+    operations: [{ op: "addContact", email: "rhea@example.com", name: "Rhea", due: "Thursday" }],
   });
   expect(dated).toMatch(/addFollowUp/);
   // Nothing staged: the plan row is untouched, so the model cannot mistake the drop for a save.
@@ -1973,17 +1977,14 @@ test("a REFUSED turn-2 op leaves turn-1's staged follow-up intact — a refusal 
 // and the schema's minimum valid emission (`required: ["op","email"]`), so it was reachable
 // without the model having chosen it at all. A follow-up's date is now structurally required.
 test("stageCrmWrite's schema puts the follow-up arm FIRST and requires its date", async () => {
-  const tools = buildCockpitTools(
-    {} as never,
-    "t1",
-    "plan1" as unknown as Id<"plans">,
-    PIN_CLOCK,
-  );
+  const tools = buildCockpitTools({} as never, "t1", "plan1" as unknown as Id<"plans">, PIN_CLOCK);
   const schema = (
     tools.stageCrmWrite.inputSchema as unknown as {
       jsonSchema: {
         properties: {
-          operations: { items: { anyOf: Array<{ properties: { op: { enum: string[] } }; required: string[] }> } };
+          operations: {
+            items: { anyOf: Array<{ properties: { op: { enum: string[] } }; required: string[] }> };
+          };
         };
       };
     }
@@ -2072,4 +2073,355 @@ test("SMOKE::agent::crm drives ONE governed stageCrmWrite OFFLINE at $0 and trac
   expect(plan?.kind).toBe("crm_write");
   expect(plan?.crmOperations).toHaveLength(2); // the contact + its follow-up
   expect(await contactRows(t)).toHaveLength(0); // still staged, still not applied
+});
+
+test("readFinance takes no arguments — the tenant is never model-supplied", async () => {
+  const tools = buildCockpitTools({} as never, "t1", "plan1" as unknown as Id<"plans">, PIN_CLOCK);
+  const schema = (
+    tools.readFinance.inputSchema as unknown as {
+      jsonSchema: { properties: Record<string, unknown> };
+    }
+  ).jsonSchema;
+  expect(Object.keys(schema.properties)).toEqual([]);
+});
+
+type FinanceReply = {
+  unitEconomics: Record<string, { state: string; needs?: string; because?: string }>;
+  solvency: Record<string, { state: string; needs?: string; because?: string }>;
+  inputs: Array<{ field: string; value: number | null; stale: boolean }>;
+};
+
+// A brand-new tenant has NO financeInputs rows and NO scorecard evaluation at all — the normal
+// case for the Finance page, not an error. This must not throw; every derived figure must come
+// back as an honest "unknown"/"not-computable" state (never "known") for the agent to describe.
+// Tightened per Task 7 review: the exact figure count (not a floor a regression could slip under)
+// and — the one property this tool exists to hold — every suppressed figure carries ITS REASON.
+// A figure with no `needs`/`because` is exactly the "trust me" the tool must never emit.
+test("readFinance on a tenant with no figures at all returns honest unknown/not-computable states, never throws", async () => {
+  const { t, planId } = await setup(); // fresh "t1", zero financeInputs rows, zero scorecard rows
+  const reply = await call(t, planId, "readFinance", {});
+  const parsed = JSON.parse(reply) as FinanceReply;
+
+  const unitFigures = Object.values(parsed.unitEconomics);
+  const solvencyFigures = Object.values(parsed.solvency);
+  expect(unitFigures).toHaveLength(8); // cfa, ltgp, ltgpCac, cacPayback, cacVsIndustry, grossMargin, cohortChurn, referralPct
+  expect(solvencyFigures).toHaveLength(5); // runway, netBurn, mrr, arr, workingCapital
+  for (const figure of [...unitFigures, ...solvencyFigures]) {
+    expect(["unknown", "not-computable", "not-applicable"]).toContain(figure.state);
+    // Never a suppressed figure with no reason: `needs` for unknown, `because` for the other two.
+    const reason = figure.needs ?? figure.because;
+    expect(reason, `figure ${JSON.stringify(figure)} was suppressed with no reason`).toEqual(
+      expect.stringMatching(/\S/),
+    );
+  }
+
+  // Task 7 review, Important 1: an unconfirmed tier must never read as a guessed "solopreneur" —
+  // mrr/arr/workingCapital come back UNKNOWN ("needs" your figure / your business shape), never
+  // the false structural certainty of "not-applicable".
+  expect(parsed.solvency.mrr?.state).toBe("unknown");
+  expect(parsed.solvency.arr?.state).toBe("unknown");
+  expect(parsed.solvency.workingCapital?.state).toBe("unknown");
+
+  // Task 7 review, Important 2: the per-input freshness line the description promises ("out of
+  // date") is actually present — all 11 CASH_INPUTS fields, none stale (nothing was ever entered).
+  expect(parsed.inputs).toHaveLength(11);
+  expect(parsed.inputs.every((i) => i.value === null && i.stale === false)).toBe(true);
+});
+
+// Task 7 review, Important 1 (the funded-startup-mid-onboarding case, verbatim). A tenant with a
+// REAL stated MRR but no tenantProfiles row (business shape not yet confirmed) must see that MRR —
+// the old "guess solopreneur" default discarded it in favor of a false "does not apply" claim.
+test("readFinance surfaces a REAL stated MRR even when the tenant's business shape is unconfirmed", async () => {
+  const { t, planId } = await setup();
+  // "t1|session" → tenantId "t1" (requireScope splits on "|"), the SAME tenant `call` below drives
+  // the tool for — mirrors `asTenant` in cash.test.ts.
+  await t
+    .withIdentity({ subject: "t1|session", issuer: "test" })
+    .mutation(api.cash.saveInput, { field: "mrr", value: 8_000 });
+
+  const reply = await call(t, planId, "readFinance", {});
+  const parsed = JSON.parse(reply) as FinanceReply;
+  expect(parsed.solvency.mrr).toMatchObject({ state: "known", value: 8_000 });
+  expect(parsed.solvency.arr).toMatchObject({ state: "known", value: 96_000 });
+
+  // Contrast: the DASHBOARD's own `solvency` query is UNCHANGED — it still defaults an unconfirmed
+  // tier to "solopreneur" (the page's compensating "complete your shape" invitation makes that
+  // acceptable there), so it still shows mrr as not-applicable for this same tenant/data. The tool
+  // and the page are DELIBERATELY different on this one point; this pins that they stay that way.
+  const dashboard = await t
+    .withIdentity({ subject: "t1|session", issuer: "test" })
+    .query(api.cash.solvency, {});
+  expect(dashboard.mrr.state).toBe("not-applicable");
+});
+
+// ── Task 8: stageFinanceWrite — the agent's ONLY route to a figure ────────────────────────────
+// contacts-crm.md invariant 11: the ACTOR decides gating. The human editing the SAME figure
+// through `cash.saveInput` is ungated; the agent's identical write must stage a plan. The tool
+// STAGES and applies NOTHING — `executePlan`'s `inline` arm applies the list after Approve.
+// Every refusal below is a RETURNED SENTENCE, never a throw (18-06's rule): a throw out of the
+// governed loop leaves the model with nothing to say to the user.
+
+// The happy path stages `mrr` — a `financeInputs` field the agent may actually write. Staging
+// `cac` here would be a green test on a plan the Approve gate refuses unconditionally.
+test("stageFinanceWrite stages the WHOLE claim and applies NOTHING", async () => {
+  const { t, planId } = await setup();
+  const reply = await callClock(t, planId, "stageFinanceWrite", {
+    updates: [{ field: "mrr", value: 9000, basis: "14000 / 10, this turn" }],
+  });
+  expect(reply).toMatch(/approve/i);
+  const plan = await readPlan(t, planId);
+  expect(plan?.kind).toBe("finance_write");
+  // The FULL constructed claim, field by field. `toHaveLength(1)` alone would stay green while the
+  // tool dropped `basis`, wrote the wrong `field`, or let the model label its own provenance.
+  expect(plan?.financeClaims).toEqual([
+    {
+      field: "mrr",
+      value: 9000,
+      // NOT model inputs: the provenance of the WRITE. A model that could stamp `actor: "user"`
+      // would defeat invariant 11 outright.
+      origin: "stated",
+      actor: "agent",
+      basis: "14000 / 10, this turn",
+      // The CLIENT's pinned clock (§2-D), never the model's and never a fresh Date.now().
+      observedAt: PIN_CLOCK.nowMs,
+      confidence: "high",
+    },
+  ]);
+  // The Approve gate is a CAS on `proposed` (cockpit.executePlan: `status !== "proposed"` is an
+  // idempotent no-op), and every approval surface lists by that status. A row staged at
+  // `collecting` would render nowhere and could never be approved at all.
+  expect(plan?.status).toBe("proposed");
+  // APPLIES NOTHING, asserted against BOTH stores a figure can land in — `financeInputs` for the
+  // five finance-ops figures, `evaluations` for the Hormozi scorecard ones.
+  expect(await t.run((ctx) => ctx.db.query("financeInputs").first())).toBeNull();
+  expect(await t.run((ctx) => ctx.db.query("evaluations").first())).toBeNull();
+});
+
+// THE defining property of this tool — ONE tool carrying a LIST, so one plan and one approval
+// click however many figures moved. With N=1 everywhere, a bug that staged only `updates[0]` was
+// invisible. The `stageCrmWrite` test at :1863 is the precedent.
+test("stageFinanceWrite carries a LIST — one plan, one click, two figures", async () => {
+  const { t, planId } = await setup();
+  const reply = await callClock(t, planId, "stageFinanceWrite", {
+    updates: [
+      { field: "mrr", value: 9000, basis: "turn 4" },
+      { field: "cashOnHand", value: 38_500, basis: "bank balance, turn 4" },
+    ],
+  });
+  expect(reply).toMatch(/2 figure/);
+  const claims = (await readPlan(t, planId))?.financeClaims as { field: string; value: number }[];
+  expect(claims).toHaveLength(2);
+  expect(claims[1]).toMatchObject({
+    field: "cashOnHand",
+    value: 38_500,
+    basis: "bank balance, turn 4",
+  });
+});
+
+// ALL-OR-NOTHING over the list: the patch happens AFTER the loop, so a bad element stages none of
+// them. A per-element patch would leave half a list on the card and report success.
+test("stageFinanceWrite stages NOTHING when a later update in the list is bad", async () => {
+  const { t, planId } = await setup();
+  const reply = await callClock(t, planId, "stageFinanceWrite", {
+    updates: [
+      { field: "mrr", value: 9000, basis: "turn 4" },
+      { field: "vibes", value: 3, basis: "turn 4" },
+    ],
+  });
+  expect(reply).toMatch(/not a figure I can update/i);
+  const plan = await readPlan(t, planId);
+  expect(plan?.kind).toBeUndefined();
+  expect(plan?.financeClaims).toBeUndefined(); // the GOOD first element is not stranded on the row
+});
+
+// 6 of the 11 collected inputs are `store: "scorecard"` and `applyFinanceClaims` refuses every one
+// of them (`agent_cannot_update_figure`) — the scorecard cannot carry provenance. Refusing at the
+// TOOL means the model learns it this turn instead of the user spending an approval click on a
+// plan that can never apply. `cash.ts`'s guard stays as defence in depth (it is still reached by
+// its own unit tests, by a plan row revised after staging, and by any future writer of
+// `financeClaims`), so this is not a duplicate — it is the earlier of two.
+test("stageFinanceWrite REFUSES a scorecard figure and NAMES the five it can write", async () => {
+  const { t, planId } = await setup();
+  const reply = await callClock(t, planId, "stageFinanceWrite", {
+    updates: [{ field: "cac", value: 1400, basis: "14000 / 10, this turn" }],
+  });
+  expect(reply).toMatch(/can only update/i);
+  for (const writable of ["cashOnHand", "monthlyOperatingCost", "mrr", "receivables", "payables"]) {
+    expect(reply).toContain(writable);
+  }
+  expect((await readPlan(t, planId))?.kind).toBeUndefined();
+});
+
+test("stageFinanceWrite REFUSES an unknown field rather than inventing one", async () => {
+  const { t, planId } = await setup();
+  const reply = await callClock(t, planId, "stageFinanceWrite", {
+    updates: [{ field: "vibes", value: 3, basis: "turn 1" }],
+  });
+  expect(reply).toMatch(/cannot|not a/i);
+  expect((await readPlan(t, planId))?.kind).toBeUndefined();
+});
+
+test("stageFinanceWrite REFUSES an empty update list — a sentence, never a throw", async () => {
+  const { t, planId } = await setup();
+  const reply = await callClock(t, planId, "stageFinanceWrite", { updates: [] });
+  expect(reply).toMatch(/nothing|no changes/i);
+  expect((await readPlan(t, planId))?.kind).toBeUndefined();
+});
+
+// §4 at the boundary that CONSTRUCTS `basis`. `validateFigureClaim` can only check non-emptiness —
+// "refs only, never quoted content" is not mechanically decidable in pure TS — so the producer is
+// the enforcement point. `basis` reaches the audit log and the approval card.
+test("stageFinanceWrite REFUSES a basis that QUOTES the user instead of naming a reference (§4)", async () => {
+  const { t, planId } = await setup();
+  const quoted = await callClock(t, planId, "stageFinanceWrite", {
+    updates: [{ field: "mrr", value: 9000, basis: 'the user said "our MRR is nine grand now"' }],
+  });
+  expect(quoted).toMatch(/not quote it/i);
+  expect((await readPlan(t, planId))?.kind).toBeUndefined();
+
+  // Same rule, the OTHER half: a basis long enough to be a transcript rather than a reference.
+  const long = await callClock(t, planId, "stageFinanceWrite", {
+    updates: [{ field: "mrr", value: 9000, basis: `this turn ${"x".repeat(130)}` }],
+  });
+  expect(long).toMatch(/not quote it/i);
+  expect((await readPlan(t, planId))?.kind).toBeUndefined();
+});
+
+// One plan row per thread (plans.by_thread is `.unique()`): staging finance onto a half-composed
+// email would turn the draft into a figure card and strand it. The `stageCrmWrite` /
+// `stageResearchPlan` / `stageMediaPlan` refusal, on the same hazard.
+test("stageFinanceWrite REFUSES rather than replacing a half-composed email draft", async () => {
+  const { t, planId } = await setup();
+  await call(t, planId, "setSubject", { subject: "Q3 pricing" });
+
+  const reply = await callClock(t, planId, "stageFinanceWrite", {
+    updates: [{ field: "mrr", value: 9000, basis: "this turn" }],
+  });
+  expect(reply).toMatch(/draft/i);
+  const plan = await readPlan(t, planId);
+  expect(plan?.kind).toBeUndefined(); // the draft survives
+  expect(plan?.subject).toBe("Q3 pricing");
+  expect(plan?.financeClaims).toBeUndefined();
+});
+
+// ── The cross-kind clobber, BOTH directions ───────────────────────────────────────────────────
+// The email-slot draft guard above does NOT see another STAGED ACTION: a `crm_write` row carries
+// `crmOperations` and no subject/body; a `calendar_event` row carries `eventTitle`/`eventStartMs`.
+// Both used to sail through, and `patchPlan` then overwrote `kind` — `executePlan` routes on
+// `actionTypeOf(plan.kind)` alone, so the surviving list was never applied and never rendered,
+// after the model had already told the user it was staged. A silent drop at a trust boundary is
+// the class 19-11 exists to close, so ONE shared predicate now guards both staging tools.
+test("stageFinanceWrite REFUSES rather than silently discarding a staged CRM plan", async () => {
+  const { t, planId } = await setup();
+  await callClock(t, planId, "stageCrmWrite", {
+    operations: [{ op: "addContact", email: "rhea@example.com", name: "Rhea" }],
+  });
+  expect((await readPlan(t, planId))?.kind).toBe("crm_write");
+
+  const reply = await callClock(t, planId, "stageFinanceWrite", {
+    updates: [{ field: "mrr", value: 9000, basis: "this turn" }],
+  });
+  expect(reply).toMatch(/already staged|already on/i);
+  const plan = await readPlan(t, planId);
+  expect(plan?.kind).toBe("crm_write"); // the CRM plan survives intact
+  expect(plan?.crmOperations).toHaveLength(1);
+  expect(plan?.financeClaims).toBeUndefined();
+});
+
+// WHOLE-BRANCH REVIEW I2 — the THIRD staging tool on the same shared plan row. `otherKindStaged`
+// guarded `stageCrmWrite` and `stageFinanceWrite` only, while `proposeCalendarEvent` patched
+// `kind: "calendar_event"` with no interlock at all: the staged `financeClaims` survived on the row
+// but `executePlan` routes on `actionTypeOf(plan.kind)`, so they were never applied and never
+// rendered — after the model had already told the user the figures were staged. `cockpit.md`'s own
+// Task-8 entry names `calendar_event` as part of this hazard; only the calendar side was missed.
+test("proposeCalendarEvent REFUSES rather than silently discarding a staged finance plan", async () => {
+  const { t, planId } = await setup();
+  await callClock(t, planId, "stageFinanceWrite", {
+    updates: [{ field: "mrr", value: 9000, basis: "this turn" }],
+  });
+  expect((await readPlan(t, planId))?.kind).toBe("finance_write");
+
+  const reply = await callClock(t, planId, "proposeCalendarEvent", {
+    title: CALENDAR_TITLE_NEEDLE,
+    when: "in 2 hours",
+    durationMinutes: 30,
+  });
+  expect(reply).toMatch(/already staged|already on/i);
+  const plan = await readPlan(t, planId);
+  expect(plan?.kind).toBe("finance_write"); // the figure plan survives intact
+  expect(plan?.financeClaims).toHaveLength(1);
+  expect(plan?.eventTitle).toBeUndefined();
+  expect(plan?.eventStartMs).toBeUndefined();
+});
+
+test("stageCrmWrite REFUSES rather than silently discarding a staged finance plan", async () => {
+  const { t, planId } = await setup();
+  await callClock(t, planId, "stageFinanceWrite", {
+    updates: [{ field: "mrr", value: 9000, basis: "this turn" }],
+  });
+  expect((await readPlan(t, planId))?.kind).toBe("finance_write");
+
+  const reply = await callClock(t, planId, "stageCrmWrite", {
+    operations: [{ op: "addContact", email: "rhea@example.com", name: "Rhea" }],
+  });
+  expect(reply).toMatch(/already staged|already on/i);
+  const plan = await readPlan(t, planId);
+  expect(plan?.kind).toBe("finance_write"); // the figure plan survives intact
+  expect(plan?.financeClaims).toHaveLength(1);
+  expect(plan?.crmOperations).toBeUndefined();
+});
+
+// Re-staging the SAME kind is a revision, not a clobber — the model correcting its own list must
+// still work, exactly as it does for `stageCrmWrite` today.
+test("stageFinanceWrite RE-stages over its own plan (a revision is not a clobber)", async () => {
+  const { t, planId } = await setup();
+  await callClock(t, planId, "stageFinanceWrite", {
+    updates: [{ field: "mrr", value: 9000, basis: "this turn" }],
+  });
+  await callClock(t, planId, "stageFinanceWrite", {
+    updates: [{ field: "mrr", value: 9500, basis: "corrected, this turn" }],
+  });
+  const claims = (await readPlan(t, planId))?.financeClaims as { value: number }[];
+  expect(claims).toHaveLength(1);
+  expect(claims[0]?.value).toBe(9500);
+});
+
+// THE SEAM, end to end: nothing anywhere ran `executePlan` on a plan THIS TOOL staged, so
+// "stage → Approve → written" was untested as one flow. Everything before this test asserts the
+// tool's half; `cockpit.test.ts` asserts the applier's half against a hand-seeded row.
+test("stage → Approve → the figure is written (the whole seam, on a plan this tool staged)", async () => {
+  const { t, planId } = await setup();
+  await callClock(t, planId, "stageFinanceWrite", {
+    updates: [{ field: "cashOnHand", value: 38_500, basis: "bank balance, turn 4" }],
+  });
+
+  expect(
+    await t
+      .withIdentity({ subject: "t1|session", issuer: "test" })
+      .mutation(api.cockpit.executePlan, { planId }),
+  ).toEqual({ ok: true, applied: 1 });
+
+  const rows = await t.run((ctx) => ctx.db.query("financeInputs").collect());
+  expect(rows).toHaveLength(1);
+  expect(rows[0]?.valueUsd).toBe(38_500);
+  // The provenance the TOOL stamped survived the apply — the agent's write is labelled as one.
+  expect(rows[0]?.actor).toBe("agent");
+  expect(rows[0]?.statedAt).toBe(PIN_CLOCK.nowMs);
+  expect((await readPlan(t, planId))?.status).toBe("done");
+});
+
+// REQUIREMENT 1's pin, and the type system will NOT provide it: `PlanRow` does not declare `kind`,
+// so widening ACTION_TYPES never breaks the buildAgentContext call — `media` shipped in Phase 20
+// without ever reaching it. Named mutation that turns this RED: delete the `finance_write` arm
+// from buildAgentContext, and a staged figure plan falls through to the email context, which
+// announces "Current email plan:" with Recipients / Send mode / Send time slots the model then
+// offers to fill and send.
+test("buildAgentContext describes a finance_write plan as figures, NEVER as an email", () => {
+  const ctxText = buildAgentContext({ kind: "finance_write" });
+  expect(ctxText).not.toMatch(/Current email plan/);
+  expect(ctxText).not.toMatch(/Send mode|Send time|Recipients \(/);
+  expect(ctxText).toMatch(/figure/i);
+  // The same promise the crm_write arm makes: approving writes the user's OWN records, and the
+  // model must not offer to send it to anyone.
+  expect(ctxText).toMatch(/not an email/i);
 });

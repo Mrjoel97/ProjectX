@@ -67,6 +67,197 @@
 > passing on an empty scan. **Add the literal in the SAME commit as a new tool.** Prose in a schema
 > comment is not a guard; a test is.
 
+> Last verified: 2026-08-10 (WHOLE-BRANCH RE-REVIEW, live-finance-inputs — **`buildTurnPrompt` now
+> takes TWO standing-context channels, `spine` and `finance`, and joining them here is the whole
+> point.** `internal.blueprint.spineForTenant` doubles as `evaluations.ts`'s grounding chunk, so a
+> finance line appended upstream gets its first number captured by `FINANCIAL_PATTERNS` as the value
+> of any `CAC`/`LTGP`/`price` label the blueprint mentions (see business-evaluation.md). Both
+> `runCockpitAgent` and the `__cockpitTurnPrompt` shim now read `internal.cash.financeSpineFor` in
+> its own fail-open try/catch beside the spine read, and `cockpitBlueprint.test.ts`'s call-site pin
+> was extended to require BOTH reads on BOTH sites — a future "tidy-up" that merges the queries
+> fails there before it can reach the grounding corpus. A tenant with figures and no blueprint gets
+> the finance line alone; a tenant with neither gets the byte-identical legacy prompt, still pinned.)
+
+> Last verified: 2026-08-10 (WHOLE-BRANCH REVIEW FIX, live-finance-inputs — two cockpit-side
+> corrections. **(I2) `proposeCalendarEvent` was the third staging tool on the one shared plan row
+> and the only one with no cross-kind interlock.** `otherKindStaged` guarded `stageCrmWrite` and
+> `stageFinanceWrite`; the calendar tool patched `kind: "calendar_event"` straight over a staged
+> `finance_write`, whose `financeClaims` then survived on the row but were never applied and never
+> rendered, because `executePlan` routes on `actionTypeOf(plan.kind)` alone — after the model had
+> told the user the figures were staged. The Task-8 entry below already named `calendar_event` as
+> part of this hazard; only the calendar side was missed. One `otherKindStaged(await readPlan(),
+> "calendar_event")` call before the patch, plus a `cockpitTools.test.ts` test proving the figure
+> plan survives intact. (`stageResearchPlan`/`stageMediaPlan` keep their own narrower interlocks —
+> unchanged, and the `ponytail:` comment on `otherKindStaged` still explains why.)
+> **(I5) `executePlan`'s finance arm now returns `applied`.** `applyFinanceClaims` used to return
+> `{ok: true}` after skipping every claim, so the card said "the governed action is now in flight"
+> over zero writes and zero audit rows. It returns `{ok, applied, skipped}` and always writes the
+> audit row; the arm passes `applied` through, and both approval surfaces (`ApprovalsView.tsx`,
+> `workspace/cards.tsx`) say "Your figures were already up to date, so nothing changed." on
+> `applied === 0`. The finance arm is the ONLY producer of that field — every other arm leaves it
+> undefined, so no other card branch changes.)
+
+> Last verified: 2026-08-10 (Task 9, live-finance-inputs — **the body now teaches the two finance
+> tools accurately, matching what they actually refuse.** `readFinance`/`stageFinanceWrite` were
+> built by Tasks 7-8 with no body section describing them; a new "Financial figures" section closes
+> that gap: never compute LTGP:CAC/CFA/payback/runway/the solvency verdict yourself — `readFinance`
+> is the only source — though arriving at an INPUT (a stated number) from what the user says is
+> fine. `stageFinanceWrite` can write only five figures — `cashOnHand`, `monthlyOperatingCost`,
+> `mrr`, `receivables`, `payables` — named explicitly so the model learns the boundary from the
+> body rather than by being refused; the other six (CAC among them) live on the scorecard, which
+> cannot record who supplied a figure, and every agent write to one is refused. Every update
+> stages onto a plan card; nothing is written until the human clicks Approve, and a stale/missing
+> figure is raised only when relevant to what the user is asking — the clause that stops the agent
+> opening an unrelated conversation about the user's numbers. CODE-SIDE, NOTHING IN THIS PLAYBOOK'S
+> WATCHED PATHS CHANGED — no tool implementation moved; this entry exists because the tool CONTRACT
+> those files enforce is now what the body promises, matching the "the tools" ownership split this
+> playbook draws against `skill-registry.md`, which owns the body edit itself and the un-run gate.)
+>
+> Last verified: 2026-08-10 (Task 8 REVIEW FIX, live-finance-inputs — **the figure card could not
+> show a refusal at all, the tool proposed figures it can never write, and either staging tool
+> silently ate the other's plan.** Four findings. (1) **`PlanCard`'s note rendered on ONE branch.**
+> `memo`, `crm_write`, `finance_write` and `calendar_event` all EARLY-RETURN their own JSX, and the
+> `{note && …}` block lived only in the final EMAIL return — so on those four cards `setNote` ran,
+> the component re-rendered, and nothing appeared. Invisible since 12-05 because the three original
+> reasons (`gmail_not_connected`, `no_postal_address`, `all_recipients_suppressed`) fire on EMAIL
+> plans only; `finance_write` is the first early-return branch whose refusals actually fire, which
+> is what made the Task 8 entries below unreachable the moment they were added. Fixed at the root:
+> ONE `planNote` element built after `approve()` and rendered by all five branches — not copied
+> into the finance branch. `crmCard.test.ts` now SCANS `cards.tsx` (source text: `apps/web`'s
+> vitest is node-only with no jsdom, and its config documents adding one as a deliberate upgrade)
+> and asserts `{planNote}` occurs exactly as often as `void approve()`, with a non-vacuity floor of
+> 5 — mutation-checked at 4-vs-5 RED. **A map assertion is not a render assertion**; the previous
+> pin was green while the card could show neither string. Same edit paired the link with its label
+> (`link: { href, label }`): the label had been HARDCODED "Open your profile" beside an optional
+> `href`, so `agent_cannot_update_figure` -> `/dashboard/finance` would have rendered the wrong
+> words over the right link. (2) **`stageFinanceWrite` now refuses scorecard fields itself.** 6 of
+> the 11 collected inputs are `store: "scorecard"` and `applyFinanceClaims` refuses every one —
+> while the tool description said "only the collected inputs can be updated", so the model would
+> re-propose CAC every turn and the user would spend an approval click to find out. The description
+> is now DERIVED from the catalogue (`AGENT_WRITABLE_FIGURES` = the five `financeInputs` fields) so
+> it cannot go stale, and the guard sits immediately after the membership check. **`cash.ts:448`
+> stays** — it is still reached by its own unit tests, by a plan row revised between staging and
+> Approve, by a row staged under an older build, and by any future writer of `financeClaims`; two
+> guards, one rule, neither dead. (3) The staged claim is now asserted field-by-field (not just
+> `toHaveLength(1)`), the LIST property has a two-update test, all-or-nothing has one, and one test
+> drives the whole `stage -> Approve -> financeInputs row` seam on a plan the TOOL staged rather
+> than a hand-seeded row. (4) **THE CROSS-KIND CLOBBER, both directions.** `plans.by_thread` is
+> `.unique()`, and each staging tool's guard checked only the four EMAIL slots — a `crm_write` row
+> carries `crmOperations` and no subject/body, a `calendar_event` row carries `eventTitle`. Both
+> sailed through, `patchPlan` overwrote `kind`, and `executePlan` routes on `actionTypeOf(plan.kind)`
+> ALONE, so the surviving list was never applied and never rendered *after the model had told the
+> user it was staged*. Fixed as ONE shared predicate — `otherKindStaged(plan, mine)`, refusing when
+> another `kind` is present and its status is not `done`/`canceled` — used by BOTH `stageCrmWrite`
+> and `stageFinanceWrite`, with a test in each direction plus one proving a same-kind re-stage is
+> still a revision. Inherited shape, not introduced here, but Task 8 is what made it reachable.
+> `PlanRow` now DECLARES `kind`, which has a second effect worth keeping: every caller passes a
+> `PlanRow` to `buildAgentContext`, whose param declares the same union, so the next `ACTION_TYPES`
+> widening that skips that function is an assignability error at the call site — the compile-time
+> guard the corrected note there says does not exist now exists for the seventh action type.)
+
+> Last verified: 2026-08-10 (Task 8, live-finance-inputs — **`stageFinanceWrite`: the agent's only
+> route to a figure, and the two model-facing surfaces Task 4 left open are now closed.** ONE tool
+> carrying a LIST (the `stageCrmWrite` shape — one plan, one approval click, however many figures
+> moved). It STAGES and applies NOTHING: it patches `kind: "finance_write"`, `status: "proposed"`
+> and `financeClaims` through `internal.plans.patchPlan` and returns; `executePlan`'s `inline` arm
+> applies the list after Approve. contacts-crm.md invariant 11 — the ACTOR decides gating, so the
+> human editing the SAME figure through `cash.saveInput` is ungated and stages no plan at all.
+> **`status: "proposed"` is load-bearing, not decoration:** the Approve gate is a CAS that no-ops on
+> any other status and every approval surface lists by it, so a row staged at `collecting` would
+> render nowhere and could never be approved. **Reused `patchPlan` rather than adding a staging
+> mutation** (its `kind` union gained the fifth literal and a `financeClaims: v.optional(v.array(
+> v.any()))` arg beside `crmOperations`, same reasoning: the shape is owned by `schema.ts`'s own
+> validator, which Convex enforces on that very `db.patch`, and by `validateFigureClaim` at both
+> boundaries). **ORDER IS LOAD-BEARING in `execute`:** the `CASH_INPUTS` membership check must
+> precede claim construction, because `validateFigureClaim` delegates to `cashInputSpec`, which
+> THROWS on an unknown field — mutation-checked: deleting the guard turns the refusal test into
+> `Error: unknown cash input: vibes` thrown out of the governed loop. Every refusal is a RETURNED
+> SENTENCE (18-06): empty list, unknown field, a `basis` that QUOTES rather than references (§4 is
+> enforced HERE, at the producer — "refs only" is not mechanically decidable in pure TS and `basis`
+> reaches the audit log and the approval card), a failed `validateFigureClaim`, and a
+> half-composed email draft on the one plan row this thread has (the `stageCrmWrite` hazard).
+> **`buildAgentContext` gained the `finance_write` arm BY HAND** — the correction note there is
+> right that this is not a compile-error site, and the RED before the fix was verbatim the failure
+> it predicts: a staged figure plan rendered as `"Current email plan:"` with Recipients / Send mode
+> / Send time slots. Pinned by a test, because the type system will not. **`workspace/cards.tsx`
+> gained the finance card**, the `stageFinanceWrite` VERB, and `finance_write` in the DraftCard
+> exclusion list — everything below those branches is email chrome and every word of it is a lie on
+> a figure update. Its refusal map moved to a module-scope exported `PLAN_REFUSALS` and gained
+> `agent_cannot_update_figure` + `malformed_figure_claim`: unlike `ApprovalsView`'s `refusalMessage`,
+> which falls back to printing the raw enum, `if (refusal) setNote(...)` renders NOTHING for an
+> unmapped reason, so a rejected figure approval looked like a click that did nothing. A test now
+> asserts both keys exist AND that the copy is word-for-word the Approvals page's. Card shows the
+> COUNT, never the figures — the `titleFor` call §4 already made on the primary surface.)
+
+> Last verified: 2026-08-10 (Task 7 REVIEW FIX, live-finance-inputs — **`readFinance`'s payload now
+> carries per-input freshness, and no longer inherits a guessed tier's false certainty.** Two
+> Important findings. (1) The description promises figures that are "missing or out of date", but
+> only 2 of 13 derived figures (`mrr`/`referralPct`, the only two routed through `statedFigure`)
+> ever carried a `stale` marker — `execute` now ALSO calls the new `internal.cash.inputsFor` reader
+> and includes its `CashInputState[]` (the same per-field `stale`/`statedAt` `inputs` above already
+> computes) in the returned JSON under an `inputs` key, so the agent can back "out of date" with an
+> actual date rather than the tool's own unbacked promise. (2) `solvencyFor` used to reuse
+> `solvencyForTenant`'s `row?.tier ?? "solopreneur"` default — safe on the Finance PAGE (which shows
+> a compensating "complete your shape" invitation next to the guess) but not on this tool, which has
+> no such invitation: a funded startup mid-onboarding asking "what's my MRR?" got told, with the
+> tool's own authority, that MRR structurally does not apply to their business. Fixed at the root in
+> `@pikar/core`'s `solvency()` (not patched here): `tier` widened to `Tier | null`, and `null` is now
+> PERMISSIVE rather than exclusionary — `not-applicable` is a claim about business STRUCTURE the
+> function cannot make without a confirmed tier, so an unconfirmed tier falls through to the ordinary
+> missing-input handling instead (a real stated MRR still surfaces as `known`; an absent one reads
+> `unknown`, never `not-applicable`). `solvencyForTenant` (`cash.ts`) now takes the tier-unknown
+> fallback as an explicit parameter instead of choosing one for both callers: `solvency` (dashboard)
+> still passes `"solopreneur"` — UNCHANGED behavior, `cash.test.ts`'s existing 35 tests confirm it —
+> and `solvencyFor` (this tool) passes `null`. Covering tests: `packages/core/src/cash.test.ts` gained
+> a `tier: null` describe block (4 tests); `cockpitTools.test.ts`'s empty-tenant test was tightened
+> from a `> 5` floor to the exact 13-figure count plus a "every suppressed figure carries its reason"
+> assertion, and gained a dedicated stated-MRR-with-unconfirmed-tier test that also pins the
+> dashboard's `solvency` query staying at `not-applicable` for the identical data — the tool and the
+> page are now DELIBERATELY different on this one point, not accidentally.)
+
+> Last verified: 2026-08-10 (Task 7, live-finance-inputs — **`readFinance`, the on-demand DERIVED
+> half of the finance spine.** A new read-only cockpit tool, beside `stageCrmWrite` in
+> `buildCockpitTools`: EMPTY input schema (the tenant rides the RUN's closure-captured `tenantId`,
+> never a model-suppliable argument — same shape as `recordScorecardAnswer`'s explicit-tenantId
+> door), and its `execute` calls two new `internalQuery` readers in `cash.ts` —
+> `unitEconomicsFor`/`solvencyFor` — added on the §2 allow-list, the `vaultGroundHydrated`/
+> `plans.getById` convention for identity-less engine paths. Those readers do NOT duplicate the
+> existing `unitEconomics`/`solvency` `tenantQuery` handlers' logic: both call the SAME new
+> module-private `unitEconomicsForTenant`/`solvencyForTenant` helpers (explicit `tenantId` instead
+> of `ctx.tenantId`), so the tenant-scoped page query and the tool-loop reader can never silently
+> drift apart on what a tenant's money is — the exact hazard the module banner already warns about.
+> **Never computes a ratio itself** — `@pikar/core`'s `unitEconomics()`/`solvency()` are PURE and
+> return tagged `"unknown"`/`"not-computable"`/`"not-applicable"`/`"known"` states rather than
+> throwing, so a brand-new tenant with zero `financeInputs` rows and no scorecard is the NORMAL
+> case, not an error — `cockpitTools.test.ts` drives this exact tenant through the tool and asserts
+> every returned figure is a non-`"known"` state. Registering a new tool key needs TWO more edits in
+> the SAME commit or the closed-union traps this file already warns about above bite again:
+> `schema.ts`'s `agentSteps.tool` literal (missing → `ArgumentValidationError`, SWALLOWED by the AI
+> SDK) and `cards.tsx`'s `VERB` entry (missing → silent "Working…"/"Done" fallback), both
+> structurally enforced by `cockpitTools.test.ts`/`traceParity.test.ts`.)
+
+> Last verified: 2026-08-10 (Task 5, live-finance-inputs — **THE FINANCE REFUSAL NOW REACHES THE
+> CARD.** `applyFinanceClaims` (`cash.ts`) no longer throws `INVALID_INPUT: …` for its two
+> refusals — a malformed plan-row claim and a scorecard-field claim an agent may not write — it
+> RETURNS `{ ok: false, reason: "malformed_figure_claim" | "agent_cannot_update_figure" }`, the
+> SAME shape `reserveJobInner` (`media.ts`) already used for `no_deck` and the CAN-SPAM refusals.
+> A throw here was silently broken in production: **Convex redacts a non-`ConvexError` message**,
+> so the owner got an opaque server error with no lever, and because the plan stayed `proposed`
+> every retry reproduced it. `executePlan`'s `finance_write` arm (`cockpit.ts`) now checks
+> `applied.ok` and returns the reason instead of letting a throw propagate; its return union grew
+> the two reasons. `ApprovalsView.tsx`'s `refusalMessage` map grew the matching copy. **Two-pass
+> validation, not the interleaved loop the throw allowed:** a `return` does NOT roll back Convex's
+> transaction the way a throw does, so `applyFinanceClaims` now validates every staged claim
+> FIRST, with zero writes, and only runs the write pass once the whole list clears — otherwise a
+> bad SECOND claim would leave a good FIRST claim's write committed. `writeFigureRow`'s own
+> scorecard-actor throw is UNCHANGED — it stays the last-resort invariant guard for every other
+> caller; the applier is the layer that knows a human is waiting on the refusal, the writer is
+> not. Also pinned: the Schedule button's `item.kind === "email"` gate (`ApprovalsView.tsx`) now
+> has a source-scan regression test — the gate itself needed no change, `finance_write` was never
+> reachable, but nothing had pinned that a future edit couldn't add it.)
+
+> Last verified: 2026-08-10 (Task 4, live-finance-inputs — **`finance_write` is the SIXTH `ACTION_TYPES` member and the `inline` arm's THIRD occupant.** `actionType.ts` gained the member, `actionTypeOf`'s parameter union and the `ARMS` row; `cockpit.ts` gained the matching `_ARM_TABLE` row and one dispatch branch beside `crm_write`'s, calling `cash.applyFinanceClaims(ctx, plan.tenantId, plan.financeClaims)` and patching the plan `done`. Adding the member without an arm was a COMPILE error in exactly the two places this playbook promises it would be — the `satisfies Record<ActionType, Arm>` bind at `cockpit.ts:581` and the DERIVED `ExternalActionType` at `:588` — and `approvals.ts`'s `planKind` return union was the third, which is what dragged the second approve surface into the same commit. **NOT `externalAction`:** a figure update writes our own `financeInputs` rows, so there is no fetch, no `EXTERNAL_TARGETS` entry and nothing for the retrier to retry. **Two model-facing surfaces are deliberately NOT touched and are the staging task's to close:** `llm.ts`'s `buildAgentContext` has no `finance_write` branch, so a staged figure plan would be announced to the model as an email plan (the correction note there already records that this is a hand-maintained site, not a compile-error one), and `workspace/cards.tsx` has no finance card. Neither is reachable today — nothing can stage a `finance_write` plan yet.)
+>
 > **[SUPERSEDED 2026-08-10 by 19-12 — THIS DEFECT IS CLOSED. See the closure block at the top
 > of this playbook. Kept verbatim because the DIAGNOSIS is the reusable part; the "NOT applied",
 > "one line" and "regression guard is owed" clauses are now HISTORY, not open work.]**

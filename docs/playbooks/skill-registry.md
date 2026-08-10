@@ -1,5 +1,57 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-10 (WHOLE-BRANCH RE-REVIEW, live-finance-inputs — **CODE ONLY, still not
+> seeded or evaluated. The body's `Finance:` sentence called every figure in that line "the user's
+> own figures", and once C1 made the line live that was a false statement to the model on every
+> turn** — the same invariant C2 had just fixed at the page surface, at the surface that actually
+> talks. `cashSpine.ts` now emits a `PIKAR` marker on any figure the owner did not supply (agent
+> write, or evaluation-grounded scorecard fill), mirroring the blueprint spine's `[stated]` /
+> `[source: X]` one token wide, and the body reads "the figures on file" plus a bullet: a `PIKAR`
+> figure is never "you told us", say it is the figure on file and ask them to confirm. Unmarked
+> means theirs — a marker on everything would say nothing. `FINANCE_SPINE_BUDGET` re-measured
+> 437 → 503. `cockpitAgent.ts` regenerated; `skills.test.ts` green. The eval-gate debt from the
+> entry below now covers both body edits.)
+
+> Last verified: 2026-08-10 (WHOLE-BRANCH REVIEW FIX I1, live-finance-inputs — **CODE ONLY, body
+> edit not yet seeded or evaluated. The `cockpit-agent` body's OLD `recordScorecardAnswer` section
+> was the live back door around everything the new finance section governs.** That tool is ungated,
+> agent-callable, takes a free-string `field`, and `applyScorecardAnswer` appends the dot-path to
+> `userProvided` — from which `runEvaluation` rebuilds its citation map at `{source:
+> "user-provided", confidence: "high"}`. The body listed `financials.cac` / `financials.ltgp` /
+> `financials.thirtyDayCashPerCustomer` on that tool's path list, so the exact laundering
+> `applyFinanceClaims` refuses and `writeFigureRow` throws on was reachable in one turn through the
+> older instruction, and the new section's "CAC has to be entered on their finance page for now"
+> contradicted it. **The review offered two fixes and the second was taken, because the first would
+> have broken two golden fixtures**: dropping the three `financials.*` paths kills fixture 27
+> (`27-grounded-assessment.json` — the user STATES a CAC and the agent stores it, which is its whole
+> subject) and fixture 31 (`31-gap-dispatch-lead-engine.json` — needs `financials.ltgp` on the
+> scorecard to reach diagnostic gate 3). So the arithmetic boundary was carried into the old section
+> instead: a new bullet, "**The number they SAID, never one you worked out**", with the 14,000/10
+> CAC worked example, plus the CAC bullet in the finance section rewritten to route by SOURCE — a
+> STATED CAC goes to `recordScorecardAnswer` (it really is the user's own figure), a COMPUTED one
+> goes nowhere and the user is asked to enter it. Both fixtures state their figures, so both stay
+> valid. `cockpitAgent.ts` regenerated from the `.md`; `skills.test.ts`'s byte-identity table is
+> green. NOT re-evaluated: `EVAL_GATE` costs ~$0.35 of real spend and was out of scope for this
+> offline fix wave — the next cycle to touch this body must run it.)
+
+> Last verified: 2026-08-10 (Task 9, live-finance-inputs — **CODE ONLY: the `cockpit-agent` body
+> now teaches `readFinance`/`stageFinanceWrite` (a new "Financial figures" section — never compute
+> a ratio yourself, only these five figures are writable: `cashOnHand`, `monthlyOperatingCost`,
+> `mrr`, `receivables`, `payables`, and raise a stale/missing figure only when relevant to what
+> the user is asking), and the owed fixture (`37-finance-update.json`) and its
+> `financeClaimCount` observable were added, mirroring `crmOperationCount` exactly** (graded off
+> `plan.financeClaims`, the array `stageFinanceWrite` itself writes). Floor bumped 35 → 36. THE
+> 2-FILE MIRROR WAS KEPT IN SYNC: `cockpitAgent.ts` was regenerated from the edited `.md` and
+> `skills.test.ts`'s no-drift row (53/53) passed. Verified OFFLINE ONLY —
+> `node run-eval-golden.mjs --self-check` passed at zero cost (36 fixtures valid, vocabulary/
+> anti-vacuity rules hold) — because `convex dev` was NOT RUNNING for this session and this
+> worktree does not own the deployment `seedSkills` would write to (the main checkout, mid-refactor
+> by another session, does). **NOTHING WAS SEEDED. NO GATE WAS RUN. NOTHING WAS ACTIVATED.** The
+> active skill is UNCHANGED by this entry. Evidence recorded is never activation — this entry is
+> neither: it is a code change awaiting the seed+gate+activate cycle a later dispatch runs after
+> the merge. Budget that cycle at **~$0.35, not ~$0.12** per the note below, now one case heavier
+> at 36.**)
+>
 > Last verified: 2026-08-09 (**19-09 took the `cockpit-agent` override lane. GATE `086f8267` PASSED
 > 35/35 on `cockpit-agent@18`, zero retries, $0.3505. EVIDENCE IS RECORDED ON v18. NOTHING WAS
 > ACTIVATED — `cockpit-agent@17` IS STILL ACTIVE and activation was withheld by the owner.**)

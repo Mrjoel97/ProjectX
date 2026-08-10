@@ -8,7 +8,8 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
-import { describeCrmOperations } from "./cards";
+import { refusalMessage } from "../approvals/ApprovalsView";
+import { describeCrmOperations, PLAN_REFUSALS } from "./cards";
 
 const DUE = Date.parse("2026-08-14T09:00:00.000Z");
 
@@ -96,5 +97,78 @@ describe("every browser caller of sendCockpitMessage carries the trusted clock",
     expect(src).toContain("clientContext");
     // tz must never be undefined: `v.string()` would throw the whole turn away at the validator.
     expect(src).toContain('"UTC"');
+  });
+});
+
+// The SECOND approve surface's refusal map (Task 8, live-finance-inputs). Its failure mode is
+// worse than the Approvals page's: `if (refusal) setNote(...)` renders NOTHING AT ALL for an
+// unmapped reason, where `refusalMessage` at least falls back to printing the raw enum — so a
+// missing key here makes a rejected approval look like a click that simply did nothing.
+describe("PLAN_REFUSALS (the cockpit plan card's governed stops)", () => {
+  // Named mutation that turns this RED: delete either finance key from PLAN_REFUSALS in cards.tsx.
+  test.each([
+    "agent_cannot_update_figure",
+    "malformed_figure_claim",
+  ])("%s maps to copy, so a refused figure approval is never a silent no-op", (reason) => {
+    expect(PLAN_REFUSALS[reason]?.text).toBeTruthy();
+  });
+
+  // One stop must not read as two different rules on the two surfaces. `refusalMessage` appends
+  // "Nothing was sent." only on its fallback, so a mapped reason is byte-identical here.
+  test("the copy is word-for-word the Approvals page's", () => {
+    for (const reason of ["agent_cannot_update_figure", "malformed_figure_claim"]) {
+      expect(PLAN_REFUSALS[reason]?.text).toBe(refusalMessage(reason));
+    }
+  });
+
+  // The label used to be HARDCODED "Open your profile" in the render, beside an optional `href`.
+  // The first entry pointing anywhere else would have rendered the wrong words over the right link
+  // — which is exactly what `agent_cannot_update_figure` (-> /dashboard/finance) is.
+  test("every entry with a link carries its OWN label", () => {
+    const linked = Object.values(PLAN_REFUSALS).filter((r) => r.link);
+    expect(linked.length).toBeGreaterThanOrEqual(2);
+    for (const r of linked) expect(r.link?.label).toBeTruthy();
+    expect(PLAN_REFUSALS.agent_cannot_update_figure?.link?.href).toBe("/dashboard/finance");
+    expect(PLAN_REFUSALS.agent_cannot_update_figure?.link?.label).not.toMatch(/profile/i);
+  });
+});
+
+// ── The RENDER, not the map (Task 8 review, finding 1) ────────────────────────────────────────
+// Mapping a reason is worthless if the branch the user is looking at never renders the note.
+// `PlanCard` early-returns its own JSX for memo / crm_write / finance_write / calendar_event, and
+// the note block used to live ONLY in the final email return — so on those four cards `setNote`
+// ran and nothing appeared. Invisible for years because the three original reasons all fire on
+// EMAIL plans only; `finance_write` is the first branch whose refusals actually fire.
+//
+// SOURCE-TEXT scan, deliberately: `apps/web`'s vitest config is node-only with no jsdom and no
+// testing-library, and adding them is documented there as a deliberate upgrade rather than a side
+// effect. This is the `packages/core/src/vaultSurface.test.ts` idiom that config points at.
+describe("PlanCard renders its note on EVERY approve branch", () => {
+  const src = readFileSync(join(__dirname, "cards.tsx"), "utf8");
+  const body = src.slice(
+    src.indexOf("function PlanCard({"),
+    src.indexOf("function ScheduledCard({"),
+  );
+
+  test("the extractor actually found PlanCard", () => {
+    expect(body.length).toBeGreaterThan(2000);
+  });
+
+  // Named mutation that turns this RED: delete `{planNote}` from the finance branch in cards.tsx.
+  test("every Approve button in PlanCard has a note beside it", () => {
+    const approves = body.match(/void approve\(\)/g) ?? [];
+    const notes = body.match(/\{planNote\}/g) ?? [];
+    // Non-vacuity floor: memo, crm_write, finance_write, calendar_event and the email default.
+    expect(approves.length).toBeGreaterThanOrEqual(5);
+    expect(notes.length).toBe(approves.length);
+  });
+
+  // ONE element, rendered N times — not the JSX copied into each branch, which is how the next
+  // branch quietly diverges.
+  test("the note element is defined exactly once", () => {
+    expect(body.match(/const planNote =/g) ?? []).toHaveLength(1);
+    // …and it renders the entry's OWN label rather than a hardcoded one.
+    expect(body).toContain("{note.link.label}");
+    expect(body).not.toContain(">Open your profile<");
   });
 });

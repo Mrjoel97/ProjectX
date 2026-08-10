@@ -40,9 +40,44 @@ test("an unstamped figure reports unknown age rather than fabricating one", () =
   expect(line).toContain("cac 1400(?d)");
 });
 
-test("the WORST case fits the budget — every input collected, longest values, all stale", () => {
+// WHOLE-BRANCH RE-REVIEW. The line went live in the turn prompt (C1) carrying no provenance at all,
+// while the skill body called every figure in it "the user's own" — the central invariant of this
+// feature, breached at the MODEL surface exactly as C2 had breached it at the page surface. The
+// blueprint spine in the same prompt marks every fact `[stated]` or `[source: X]` for this reason
+// (`blueprint.ts`'s SPINE_INTRO); this is the same move, one token wide.
+test("a figure the AGENT recorded is marked, so the model never calls it the user's own", () => {
+  const line = financeSpineLine(
+    [
+      state({ field: "cashOnHand", value: 38_500, statedAt: NOW - 2 * DAY }),
+      state({ field: "mrr", value: 9000, statedAt: NOW - 2 * DAY, actor: "agent" }),
+    ],
+    NOW,
+  );
+  expect(line).toContain("mrr 9000(2d PIKAR)");
+  // The owner's own figure is UNMARKED — the marker means "not theirs", so marking everything
+  // would say nothing.
+  expect(line).toContain("cashOnHand 38500(2d)");
+});
+
+test("a stale AGENT figure carries both markers", () => {
+  const line = financeSpineLine(
+    [state({ field: "cac", value: 1400, statedAt: NOW - 94 * DAY, stale: true, actor: "agent" })],
+    NOW,
+  );
+  expect(line).toContain("cac 1400(94d STALE PIKAR)");
+});
+
+test("the WORST case fits the budget — every input collected, longest values, all stale, all marked", () => {
   const worst = CASH_INPUTS.map((s) =>
-    state({ field: s.field, value: 999_999_999, statedAt: NOW - 9999 * DAY, stale: true }),
+    state({
+      field: s.field,
+      value: 999_999_999,
+      statedAt: NOW - 9999 * DAY,
+      stale: true,
+      // The TRUE worst case since the marker landed: every field also agent-written. Measuring
+      // without this is what would let the budget drift under a full grounded fill.
+      actor: "agent",
+    }),
   );
   const line = financeSpineLine(worst, NOW);
   expect(line).not.toBeNull();

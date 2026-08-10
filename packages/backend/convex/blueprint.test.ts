@@ -655,6 +655,11 @@ describe("blueprint spine and Stage-1 drift", () => {
       t.query(internal.blueprint.spineForTenant, { tenantId: "tenant_b" }),
     ).resolves.toBeNull();
   });
+
+  // The cap belongs to `renderSpine` and this query returns `renderSpine`'s output UNCHANGED —
+  // see the BLUEPRINT ONLY comment on `spineForTenant`. The cockpit's finance line is a separate
+  // query with its own `FINANCE_SPINE_BUDGET`, joined only in `buildTurnPrompt`, so this assertion
+  // still measures exactly what it names. Worst case measured 2026-08-10: 2495 of 2500.
 });
 
 describe("blueprint candidate synthesis", () => {

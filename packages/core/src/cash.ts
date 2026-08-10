@@ -61,6 +61,20 @@ export type CashFigure =
   | {
       state: "known";
       origin: CashOrigin;
+      /**
+       * WHO supplied it, when that is recorded. `origin` cannot answer this on its own: every
+       * claim this slice stores is `origin: "stated"` (spec §1 — a figure read out of the owner's
+       * own P&L is still a human assertion), so the owner's typed figure and the agent's approved
+       * one are the SAME origin. A renderer that attributes on origin alone prints "You told us
+       * this" over the agent's own arithmetic — the central invariant of this feature, breached
+       * four times.
+       *
+       * OPTIONAL, and absence means UNKNOWN — never "the user". The three `knownFigure("stated",…)`
+       * scorecard reads below (`statedLtgp`, `grossMargin`, `cohortChurn`) have no provenance to
+       * carry, and the safe direction is to say Pikar recorded it rather than to put words in the
+       * owner's mouth. Attribution to the owner requires POSITIVE evidence: `actor === "user"`.
+       */
+      actor?: FigureActor;
       value: number;
       unit: CashUnit;
       /** For `derived`: what it was computed FROM, in words. Never rendered without it. */
@@ -88,7 +102,7 @@ export const knownFigure = (
   unit: CashUnit,
   extra: Pick<
     Extract<CashFigure, { state: "known" }>,
-    "from" | "sampleSize" | "statedAt" | "stale"
+    "actor" | "from" | "sampleSize" | "statedAt" | "stale"
   > = {},
 ): CashFigure => ({ state: "known", origin, value, unit, ...extra });
 
@@ -330,6 +344,9 @@ export function statedFigure(
     return unknownFigure(`Needs your ${spec.label}.`);
   }
   return knownFigure(input.origin, input.value, spec.unit, {
+    // `actor` travels with `origin`, always. Dropping it here is what let an agent-written figure
+    // render as the owner's own statement (whole-branch review C2).
+    actor: input.actor,
     ...(input.statedAt === null ? {} : { statedAt: input.statedAt }),
     stale: needsConfirmation(input.value, input.statedAt, nowMs),
   });
@@ -515,6 +532,10 @@ export function unitEconomics(args: {
     // object at all. A pure function must not throw on a shape the DB can actually hold.
     const statedLtgp = scorecard.financials?.ltgp ?? null;
     if (statedLtgp !== null) {
+      // NO actor, deliberately (whole-branch review I4): the scorecard store records no provenance
+      // at all, so nothing here knows whether the owner typed this figure or the evaluation engine
+      // grounded it out of a document. Omitting `actor` is what makes the renderer say "recorded by
+      // Pikar" instead of "you told us this" — absence means UNKNOWN, never "the user".
       return knownFigure("stated", statedLtgp, "usd");
     }
     return missingComponents;
@@ -632,6 +653,10 @@ export function unitEconomics(args: {
     // so there is no `CashInputState` carrying a per-field `statedAt` for either. Routing them
     // through `statedFigure` would need a fabricated timestamp; upgrade path is adding both to
     // `CASH_INPUTS` (they already have Scorecard dot-paths) if staleness on them is ever wanted.
+    //
+    // They carry NO `actor` for the same reason `statedLtgp` above does not (review I4): the
+    // scorecard records no provenance, so who supplied these is genuinely unknown — and unknown
+    // must not render as the owner's own statement.
     grossMargin:
       grossMarginPct === null
         ? unknownFigure("Needs your gross margin.")
@@ -674,17 +699,32 @@ export type CashSolvency = {
  * absent data" move `CashFigure`'s four states exist to forbid. Tier is a structural fact about the
  * business (does a monthly-recurring or a working-capital concept even apply to it); revenue stage
  * is a fact about the answer to a question that still needs asking. Do not thread it back in.
+ *
+ * `tier: null` means the business's SHAPE has not been confirmed at all (no `tenantProfiles` row) —
+ * distinct from every real `Tier`, and NOT defaulted to `"solopreneur"` here. A caller that wants
+ * that default (the Finance page, which shows a "complete your shape" invitation alongside it) makes
+ * that choice explicitly at its own call site; this function does not make it FOR every caller. An
+ * unconfirmed tier does not license `not-applicable` — that state asserts a structural fact this
+ * function does not yet have — so every tier-gated figure below falls through to the ordinary
+ * missing-input handling instead: a REAL stated MRR still surfaces, an absent one reads `unknown`
+ * ("needs your figure") rather than the false certainty of "this does not apply to your business."
  */
-export function solvency(args: { inputs: CashInputs; tier: Tier; nowMs: number }): CashSolvency {
+export function solvency(args: { inputs: CashInputs; tier: Tier | null; nowMs: number }): CashSolvency {
   const { inputs, tier, nowMs } = args;
   // Derived from the ONE catalogue (`CASH_INPUTS`) rather than restated as tier-comparison booleans:
   // the panel's own `tiers` list on the `mrr`/`receivables`/`payables` specs is already the single
   // source of "which tiers see this field." Two independent tier checks agreeing today is exactly
   // the drift risk CLAUDE.md §1 exists to prevent — edit `CASH_INPUTS.tiers` and a hand-rolled
   // `tier === "sme" || tier === "enterprise"` here would silently keep the old answer.
-  const tierFields = new Set(cashInputsForTier(tier).map((spec) => spec.field));
-  const recurringApplies = tierFields.has("mrr");
-  const workingCapitalApplies = tierFields.has("receivables") && tierFields.has("payables");
+  //
+  // tier === null: permissive, not exclusionary. `not-applicable` is a claim about the business's
+  // STRUCTURE ("this concept does not exist for you") which an unconfirmed tier cannot support —
+  // the field is treated as though it MIGHT apply, and `requireInputs`/`statedFigure` below answer
+  // honestly from there (`unknown` when nothing was entered, `known` when it was).
+  const tierFields = tier === null ? null : new Set(cashInputsForTier(tier).map((spec) => spec.field));
+  const recurringApplies = tierFields === null ? true : tierFields.has("mrr");
+  const workingCapitalApplies =
+    tierFields === null ? true : tierFields.has("receivables") && tierFields.has("payables");
 
   // mrr is surfaced DIRECTLY as a figure (unlike cashOnHand/monthlyOperatingCost/receivables/
   // payables below, which are only ever CONSUMED through requireInputs+valueOf on the way to a

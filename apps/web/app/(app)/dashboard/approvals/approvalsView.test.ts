@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
@@ -10,6 +13,15 @@ import {
   refusalMessage,
   withheldSuffix,
 } from "./ApprovalsView";
+
+// The Schedule button's gate (`item.kind === "email"`) lives inline in AwaitingCard's JSX, which
+// is not exported and needs live Convex hooks to render — so the pin is a SOURCE scan, the
+// `pipelineView.test.ts` pattern, rather than a rendered assertion.
+const rawSource = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "ApprovalsView.tsx"),
+  "utf8",
+);
+const source = rawSource.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
 
 describe("Approvals connected state contracts", () => {
   test.each([
@@ -31,6 +43,7 @@ describe("Approvals connected state contracts", () => {
     ["calendar_event", "Calendar event"],
     ["memo", "Next-step memo"],
     ["crm_write", "CRM update"],
+    ["finance_write", "Figure update"],
   ] as const)("labels the real %s plan kind", (kind, label) => {
     expect(renderToStaticMarkup(createElement(ApprovalKindBadge, { kind }))).toContain(label);
   });
@@ -42,6 +55,7 @@ describe("Approvals connected state contracts", () => {
     ["memo", "Approve & file to vault"],
     ["calendar_event", "Approve & create event"],
     ["crm_write", "Approve & save to records"],
+    ["finance_write", "Approve & update the figure"],
   ] as const)("the %s approve button names its own outcome", (kind, copy) => {
     expect(actionLabel(kind)).toBe(copy);
   });
@@ -73,6 +87,30 @@ describe("Approvals connected state contracts", () => {
     expect(refusalMessage("no_postal_address")).not.toContain("no_postal_address");
     expect(refusalMessage("all_recipients_suppressed")).toContain("unsubscribed");
     expect(refusalMessage("all_recipients_suppressed")).not.toContain("all_recipients_suppressed");
+  });
+
+  // 2026-08-10: `applyFinanceClaims`'s two refusals reach the card as a RETURN, not a throw Convex
+  // would redact in production — this is the delivery half of that fix. The card must show the
+  // real lever, not the raw enum.
+  test("the two finance-write refusals name the lever, not the raw enum", () => {
+    expect(refusalMessage("agent_cannot_update_figure")).toBe(
+      "That figure can only be updated by you for now — the agent cannot vouch for where it came from. Nothing changed.",
+    );
+    expect(refusalMessage("malformed_figure_claim")).toBe(
+      "This figure update was malformed and was not applied. Nothing changed.",
+    );
+    // REVIEW FIX: every sibling in this map closes by naming what did NOT happen — an owner
+    // reading only this line must be able to tell nothing partially landed.
+    expect(refusalMessage("agent_cannot_update_figure")).toContain("Nothing changed.");
+  });
+
+  // Step 1: the gate is `item.kind === "email"` and nothing else — one edited condition away from
+  // silently letting a finance_write plan (or any other kind) offer a Schedule button it cannot
+  // honor (finance_write has no sendAt concept at all).
+  test("only an email plan ever offers the Schedule button", () => {
+    const gate = source.match(/([\s\S]{0,260})Schedule…/);
+    expect(gate?.[1]).toMatch(/item\.kind === "email" &&/);
+    expect(gate?.[1]).not.toContain("finance_write");
   });
 
   // 19-05 SC#5: a partial send is a SUCCESS that still has to name who was left out and why.

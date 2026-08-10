@@ -1776,3 +1776,86 @@ describe("executePlan crm_write arm (19-06, ACTN-05)", () => {
     expect((await rows(t)).contacts).toHaveLength(0);
   });
 });
+
+// ── executePlan finance_write arm (2026-08-10, the SIXTH action type) ─────────────────────────
+//
+// `auditCounts` IS registered here (the applier writes `finance.claims_applied`) but the WORKFLOW
+// component deliberately is NOT — so a regression that routed a figure plan into the gmail fan-out
+// would throw on `workflow.start` rather than quietly seeding rows, exactly as the CRM block above
+// relies on. NO gmailTokens and NO tenantProfiles row: the inline arm sits ABOVE both email gates,
+// so a figure update must approve on a tenant that could not send at all.
+
+describe("executePlan finance_write arm", () => {
+  const CLAIM = {
+    field: "cashOnHand",
+    value: 38_500,
+    origin: "stated" as const,
+    actor: "agent" as const,
+    basis: "user statement, turn 4",
+    observedAt: 1_754_000_000_000,
+    confidence: "high" as const,
+  };
+
+  const seedFinancePlan = (t: ReturnType<typeof convexTest>, financeClaims: unknown[]) =>
+    t.run((ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: `finance_thread_${crypto.randomUUID()}`,
+        kind: "finance_write" as const,
+        status: "proposed" as const,
+        financeClaims,
+        createdAt: Date.now(),
+      } as never),
+    );
+
+  const withAudit = () => {
+    const t = convexTest(schema, modules);
+    t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+    return t;
+  };
+
+  test("approving writes the figure, sets done, seeds ZERO requests and sends nothing", async () => {
+    const t = withAudit();
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const planId = await seedFinancePlan(t, [CLAIM]);
+
+    expect(
+      await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId }),
+      // The COUNT rides back on the finance arm (review I5) so the card can tell a real write from
+      // an approval that changed nothing.
+    ).toEqual({ ok: true, applied: 1 });
+
+    const rows = await t.run((ctx) => ctx.db.query("financeInputs").collect());
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.tenantId).toBe(TENANT);
+    expect(rows[0]?.valueUsd).toBe(38_500);
+    // The tenant came off the APPROVED PLAN ROW and the provenance survived the apply.
+    expect(rows[0]?.actor).toBe("agent");
+    expect(rows[0]?.statedAt).toBe(1_754_000_000_000);
+
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("done");
+    expect(await countRequests(t)).toHaveLength(0);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+
+  // The refusal has to reach the APPROVE path, not just the applier's unit test: a plan the user
+  // already agreed to must fail loudly and stay approvable-again rather than half-applying.
+  test("a scorecard-field claim refuses at the apply boundary and the plan stays proposed", async () => {
+    const t = withAudit();
+    const planId = await seedFinancePlan(t, [{ ...CLAIM, field: "cac", value: 1_400 }]);
+
+    // The refusal is now a RETURN, not a throw (2026-08-10): a throw would be redacted by Convex
+    // in production, leaving the approval card with no lever. Both halves still matter — the
+    // reason the card renders, AND that nothing was written.
+    const result = await t
+      .withIdentity({ subject: TENANT })
+      .mutation(api.cockpit.executePlan, { planId });
+    expect(result).toEqual({ ok: false, reason: "agent_cannot_update_figure" });
+
+    // Nothing was written: no evaluation row, no status flip, no audit row.
+    expect(await t.run((ctx) => ctx.db.query("evaluations").collect())).toHaveLength(0);
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("proposed");
+    expect(await t.run((ctx) => ctx.db.query("audit").collect())).toHaveLength(0);
+  });
+});
