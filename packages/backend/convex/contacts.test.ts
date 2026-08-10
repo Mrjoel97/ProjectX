@@ -101,6 +101,29 @@ describe("contacts: tenant isolation across every public function (BETA-05 / SC#
     expect((await contactRows(h))[0]?.consentAt).toBeUndefined();
   });
 
+  test("consentRecord — B cannot reproduce A's consent record", async () => {
+    const h = await harness();
+    const aId = await h.asA.mutation(api.contacts.upsertContact, {
+      email: "a@x.com",
+      origin: "user-entered",
+    });
+    await h.asA.mutation(api.contacts.assertConsent, {
+      contactId: aId,
+      wording: WORDING,
+      context: "Trade show, March",
+    });
+
+    // A REAL id A created, so the arg validator cannot reject it and pass this for the wrong
+    // reason; the refusal has to come from the tenant check inside the handler.
+    await expect(h.asB.query(api.contacts.consentRecord, { contactId: aId })).rejects.toThrow(
+      /CONTACT_NOT_FOUND/,
+    );
+    // Non-vacuity: A, over the SAME database, gets the wording back.
+    expect((await h.asA.query(api.contacts.consentRecord, { contactId: aId }))?.wording).toBe(
+      WORDING,
+    );
+  });
+
   test("markSuppressed — B suppressing the same address does NOT suppress it for A", async () => {
     const h = await harness();
     await h.asB.mutation(api.contacts.markSuppressed, { address: "shared@x.com" });
@@ -263,6 +286,11 @@ describe("contacts: an unauthenticated caller reaches no public function", () =>
       h.t.mutation(api.contacts.setFollowUpStatus, { followUpId, status: "done" }),
     ).rejects.toThrow(/UNAUTHENTICATED/);
 
+    // The consent record is content plane, so the anonymous caller must not READ it either.
+    await expect(h.t.query(api.contacts.consentRecord, { contactId })).rejects.toThrow(
+      /UNAUTHENTICATED/,
+    );
+
     // Nothing the anonymous caller attempted landed.
     expect(await suppressionRows(h)).toHaveLength(1);
     expect((await contactRows(h))[0]?.consentAt).toBeUndefined();
@@ -332,6 +360,45 @@ describe("contacts: the write surface", () => {
       h.asA.mutation(api.contacts.assertConsent, { contactId: id, wording: "  " }),
     ).rejects.toThrow(/CONSENT_WORDING_REQUIRED/);
     expect((await contactRows(h))[0]?.consentAt).toBeUndefined();
+  });
+
+  test("consentRecord reproduces the EXACT wording, timestamp and capture context (SC#4)", async () => {
+    const h = await harness();
+    const contactId = await h.asA.mutation(api.contacts.upsertContact, {
+      email: "c@x.com",
+      origin: "user-entered",
+    });
+    // No consent yet ⇒ null, NOT a throw: "none on record" is the truth for most contacts.
+    expect(await h.asA.query(api.contacts.consentRecord, { contactId })).toBeNull();
+
+    await h.asA.mutation(api.contacts.assertConsent, {
+      contactId,
+      wording: WORDING,
+      context: "Trade show, March",
+    });
+    const record = await h.asA.query(api.contacts.consentRecord, { contactId });
+    // Byte-for-byte, not a substring: the point of storing the wording is handing back what was
+    // shown. `listContacts` deliberately drops both text fields, so THIS is the only reader.
+    expect(record?.wording).toBe(WORDING);
+    expect(record?.context).toBe("Trade show, March");
+    expect(record?.source).toBe("asserted-by-user");
+    expect(record?.at).toBe((await contactRows(h))[0]?.consentAt);
+
+    // A context that was never supplied is null, never "" — absent and empty are different facts.
+    const bare = await h.asA.mutation(api.contacts.upsertContact, {
+      email: "bare@x.com",
+      origin: "user-entered",
+    });
+    await h.asA.mutation(api.contacts.assertConsent, {
+      contactId: bare,
+      wording: "Verbal, in person",
+    });
+    expect(await h.asA.query(api.contacts.consentRecord, { contactId: bare })).toEqual({
+      at: expect.any(Number),
+      source: "asserted-by-user",
+      wording: "Verbal, in person",
+      context: null,
+    });
   });
 
   test("markSuppressed is idempotent — twice is ONE suppressions row, same timestamp", async () => {
@@ -476,6 +543,9 @@ describe("contacts: the ONE audit row this module writes carries an id and a has
       context: "Trade show, March",
     });
     await h.asA.mutation(api.contacts.markSuppressed, { address: "stop@x.com" });
+    // READING the record back must not audit it either (CLAUDE.md §4). `consentRecord` returns the
+    // wording to the caller, so this is the assertion that the return value never becomes a payload.
+    expect((await h.asA.query(api.contacts.consentRecord, { contactId }))?.wording).toBe(WORDING);
     await h.asA.mutation(api.contacts.unsuppress, { address: "stop@x.com", acknowledged: true });
 
     const serialized = JSON.stringify(await auditRows(h));
@@ -1049,6 +1119,8 @@ describe("PIPE-01: no second CRM data plane leaked an opportunity concept into t
 describe("PIPE-01/BETA-05: the public surface is exactly what the isolation block covers", () => {
   const COVERED = [
     "assertConsent",
+    // 19-13: the consent record's request path (SC#4). Isolation-tested in the block above.
+    "consentRecord",
     "createFollowUp",
     "listContacts",
     "listUnassignedFollowUps",

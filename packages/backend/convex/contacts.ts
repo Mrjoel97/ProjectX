@@ -278,6 +278,54 @@ export const assertConsent = tenantMutation({
   },
 });
 
+/** What `assertConsent` wrote, read back whole. `null` fields are "not recorded", never "". */
+export type ConsentRecord = {
+  at: number;
+  source: "asserted-by-user" | "inbound-form";
+  /** The EXACT wording shown at capture — the thing you hand a regulator. */
+  wording: string | null;
+  /** The user's free-text capture context ("Trade show, March"). */
+  context: string | null;
+};
+
+/**
+ * Reproduce ONE contact's consent record on request (SC#4's second sentence).
+ *
+ * `assertConsent` stores `consentWording` and `consentContext` and `listContacts` deliberately does
+ * NOT project them — a durable free-text record does not belong in a table cell that renders for
+ * every row. This is the request path that makes the stored record reachable, and it is the ONLY
+ * reader of those two fields: without it they are write-only, which is a compliance obligation that
+ * quietly becomes untrue (the `mediaJobs.actualCents` shape, closed by 20-18).
+ *
+ * `null` (not a throw) when there is no consent on record — "none on record" is the truth for most
+ * contacts and is not an error. The CONTACT being absent or foreign IS a throw, and carries the
+ * same single `CONTACT_NOT_FOUND` message as `assertConsent` so a distinct error cannot confirm
+ * that an id exists in another tenant.
+ *
+ * Writes NOTHING — no audit row, here or in the wrapper. CLAUDE.md §4 is why this is a query and
+ * not a "consent export" action: the wording is content plane, so the moment it is read under an
+ * audited actor it becomes a candidate for a payload. `contacts.test.ts` pins that the whole audit
+ * table still contains neither the wording nor the context AFTER this read has run.
+ *
+ * ponytail: id-at-a-time, no bulk export. A regulator request is per-person; the upgrade path (a
+ * paged whole-book export) is `listContacts`'s pagination plus this projection, and costs nothing
+ * to take later.
+ */
+export const consentRecord = tenantQuery({
+  args: { contactId: v.id("contacts") },
+  handler: async (ctx, { contactId }): Promise<ConsentRecord | null> => {
+    const row = await ctx.db.get(contactId);
+    if (!row || row.tenantId !== ctx.tenantId) throw new Error("CONTACT_NOT_FOUND");
+    if (row.consentAt === undefined) return null;
+    return {
+      at: row.consentAt,
+      source: row.consentSource ?? "asserted-by-user",
+      wording: row.consentWording ?? null,
+      context: row.consentContext ?? null,
+    };
+  },
+});
+
 /**
  * Suppress an address. IDEMPOTENT: the suppressions row is the trust boundary, so being asked
  * twice must leave exactly one row rather than racing two.
