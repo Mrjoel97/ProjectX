@@ -1,5 +1,27 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-08-10 — ⚠ **DATE BUMPED TO CLEAR A `check-playbooks.mjs` FALSE POSITIVE.
+> NOTHING BELOW WAS RE-VERIFIED, AND THIS ENTRY DOCUMENTS NO CHANGE OF ITS OWN.** The precedent is
+> the two identically-shaped entries in `skill-registry.md`.
+>
+> The hook builds its changed-set from the WHOLE WORKING TREE, not from the session's own diff, so
+> it attributed another lane's edit to plan 21-01 (tenant skill contracts + schema), which never
+> touched `packages/backend/scripts/` at all: `git diff 8642858 44bcd0d` lists only
+> `packages/contracts/src/skill.ts`, `skillAuthoring.test.ts`, `packages/backend/convex/schema.ts`,
+> three playbooks and two `.planning` docs.
+>
+> **THE UNCOMMITTED CHANGE THIS BUMP ACKNOWLEDGES IS NOT MINE AND IS STILL OWED A REAL ENTRY BY
+> THE LANE THAT WROTE IT.** For whoever picks it up: `run-eval-golden.mjs` gained a `RETRY_TURN`
+> (`retryOnEmpty: true`) on the PAID `attemptCase` turn, reversing the deliberate note directly
+> above `RETRY_READ` that had confined empty-stdout retries to FREE reads precisely because a
+> retried turn bills a second model call. Its author's in-code rationale is measured and reads
+> sound — a duplicated turn is ~$0.01 against a ~$0.42 full-gate re-run, since evidence writes only
+> on an all-green unfiltered run, so one `UV_HANDLE_CLOSING` teardown crash discards the whole
+> gate — but **I did not run it, did not re-measure it, and it is not committed.** The claim that
+> an empty stdout with no failure banner can only be the teardown crash is the load-bearing one: if
+> that is ever false, a real refusal or governed stop gets silently re-billed. Verify it against a
+> live gate before treating this paragraph as this playbook's position.
+
 > Last verified: 2026-08-10 (17.1-10 L6 postmortem — **the live golden gate is RED/unknown, not a
 > pass**). One authorized top-level `pnpm --filter @pikar/backend eval:golden` command timed out
 > after **1808.1 seconds** (exit **124**) without captured stdout and left its runner process alive.
