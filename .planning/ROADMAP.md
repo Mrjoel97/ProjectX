@@ -838,18 +838,18 @@ Plans:
   2. The agent surfaces insights/patterns/gaps each carrying a vault citation; when the document reveals no gaps it says so honestly rather than fabricating one.
   3. After the discussion the user chooses the outcome - a memo or a gap-bridging plan - and any resulting action crosses the normal plan -> Approve gate.
   4. No report content leaks into audit/telemetry/step rows (refs/counts only).
-**Plans**: 9 plans (9 waves — serialized: every plan writes docs/playbooks/voice.md, see 14-VALIDATION.md § Wave / File-Ownership Contract)
+**Plans**: 9/9 plans executed (9 waves — serialized: every plan writes docs/playbooks/voice.md, see 14-VALIDATION.md § Wave / File-Ownership Contract). Closed 2026-07-26 by owner live verification; the unrecorded tool-declaration branch and untimed retrieval latency remain documented observations, not closure blockers.
 
 Plans:
-- [ ] 14-01-PLAN.md — Wave-0 freeze contribution: schema widening + FRAMEWORK_LABEL, every Lane-C stub, the ungated document-analyst persona, playbook registration
-- [ ] 14-02-PLAN.md — Pure doc-session domain: bounded fenced digest, welded citations/routes, the honesty verdict rule, doc memo composer, pinned Realtime function-call vocabulary
-- [ ] 14-03-PLAN.md — Doc-scoped session start + the doc-filtered retrieval action with its refs-only audit and the BETA-05 isolation assertion
-- [ ] 14-04-PLAN.md — Doc-grounded mint: document-analyst persona + digest + the flat read-only tool, with the session.update fallback
-- [ ] 14-05-PLAN.md — Findings producer: transcript → cited evaluations row on the synthetic thread, honest healthy / no-fabricated-gap
-- [ ] 14-06-PLAN.md — Browser relay: ?doc= connect, the response.done function-call round trip, always-send-an-output
-- [ ] 14-07-PLAN.md — Vault "Discuss by voice" entry with status gating, plus the in-call doc context strip and partial badge
-- [ ] 14-08-PLAN.md — Post-call outcome: cited findings via CardList, memo-vs-plan choice, gap → proposed plan → the single Approve gate, SC3 e2e
-- [ ] 14-09-PLAN.md — §4 static scans (mutation-verified), playbook consolidation, and the live human-verify checkpoint
+- [x] 14-01-PLAN.md — Wave-0 freeze contribution: schema widening + FRAMEWORK_LABEL, every Lane-C stub, the ungated document-analyst persona, playbook registration
+- [x] 14-02-PLAN.md — Pure doc-session domain: bounded fenced digest, welded citations/routes, the honesty verdict rule, doc memo composer, pinned Realtime function-call vocabulary
+- [x] 14-03-PLAN.md — Doc-scoped session start + the doc-filtered retrieval action with its refs-only audit and the BETA-05 isolation assertion
+- [x] 14-04-PLAN.md — Doc-grounded mint: document-analyst persona + digest + the flat read-only tool, with the session.update fallback
+- [x] 14-05-PLAN.md — Findings producer: transcript → cited evaluations row on the synthetic thread, honest healthy / no-fabricated-gap
+- [x] 14-06-PLAN.md — Browser relay: ?doc= connect, the response.done function-call round trip, always-send-an-output
+- [x] 14-07-PLAN.md — Vault "Discuss by voice" entry with status gating, plus the in-call doc context strip and partial badge
+- [x] 14-08-PLAN.md — Post-call outcome: cited findings via CardList, memo-vs-plan choice, gap → proposed plan → the single Approve gate, SC3 e2e
+- [x] 14-09-PLAN.md — §4 static scans (mutation-verified), playbook consolidation, and the live human-verify checkpoint — completed 2026-07-26; owner verified the grounded drill-in and both outcome paths. Tool-branch attribution and retrieval latency were not captured and remain open observations by decision.
 
 ### Phase 15: Sub-Agent Dispatch & Generalized Action Executor
 **Goal**: The hollow `sub_agent` route becomes real - specialists are swappable (skill body, tool-set) pairs the ONE governed loop runs - and the approve->execute spine becomes action-agnostic, so all breadth of action rides a single governed seam instead of re-forking the loop or the executor.
@@ -979,7 +979,7 @@ Plans:
   2. The web-research tool is injection- and SSRF-hardened (retrieved page text quarantined as untrusted data; no internal/metadata endpoints reachable); findings are stored in the vault with a retrieval-date freshness stamp.
   3. Research findings and the sub-agent trace write refs/counts only to audit/telemetry (no page content, no grounded prose); an isolation assertion ships for stored findings.
   4. The evaluation engine (Phase 12) can now cite fresh web-research results with a freshness stamp for market claims instead of relying on stale model memory.
-**Plans**: 8/9 plans executed (9 plans, 6 waves). 16-09 is PARTIAL: tasks 1-2 committed, task 3's three fixtures + the self-check floor bump landed 2026-07-31, but the paid `pnpm eval:golden` gate and the task-4 owner checkpoint are UNPAID — blocked on a securely available `OPENAI_API_KEY`.
+**Plans**: 9/9 plans executed (9 plans, 6 waves). Closed 2026-08-08 by unfiltered gate `14feb4b7` (34/34, $0.3456), re-confirmed by `d17039a8` (34/34, $0.3574). All five pinned skill rows received evidence and were activated; the research path ran end to end through the local Tavily-backed tool.
 Plans:
 - [x] 16-01-PLAN.md — Wave-0 freeze: shared unions, llm.ts signature widening, watch registrations
 - [x] 16-02-PLAN.md — the OQ-2 live web-search probe (D8) and the research model + cost constants it gates
@@ -1354,7 +1354,7 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | 11. Persona Onboarding & Business Profile | 4/4 | Complete    | 2026-07-24 |
 | 12. Business Evaluation Engine | 6/6 | Complete    | 2026-07-25 |
 | 13. Proactive In-App Review | 4/4 | Complete    | 2026-07-25 |
-| 14. Flagship Voice-Doc Workflow | 8/9 | In Progress|  |
+| 14. Flagship Voice-Doc Workflow | 9/9 | Complete (owner live-verified; DOCV-01 closed, with tool-branch attribution and retrieval latency retained as unmeasured observations) | 2026-07-26 |
 | 15. Sub-Agent Dispatch & Generalized Action Executor | 6/6 | Complete    | 2026-07-25 |
 | 15.1 Fact-Derived Tier & Conversational Onboarding (INSERTED) | 7/7 | Complete (goal-verified 6/6) | 2026-07-26 |
 | 15.2 Vault Universal Format Recognition & Extraction Fan-Out (INSERTED) | 8/8 | Complete and pushed to `main` | 2026-07-30 |

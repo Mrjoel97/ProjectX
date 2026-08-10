@@ -2,11 +2,12 @@
 phase: 16-research-sub-agent-web-research
 plan: 09
 subsystem: research eval gate
-tags: [research, eval-gate, skill-registry, containment, blocked]
+tags: [research, eval-gate, skill-registry, containment, phase-close]
 requires: [16-06, 16-07, 16-08]
 provides:
   - "Structural floor: a research run that never searched writes no vault document"
-  - "Verified skill-version pins for the unpaid gate (@8/@4)"
+  - "A green unfiltered 34/34 gate with evidence recorded on all five pinned skill rows"
+  - "Activation verified for cockpit-agent@17, research-specialist@8, offer-architect@4, money-model-designer@4, and lead-engine@4"
   - "Corrected provenance in two playbooks and one production comment"
 affects:
   - packages/backend/convex/dispatch.ts
@@ -32,20 +33,26 @@ key-files:
     - docs/playbooks/cockpit.md
     - docs/playbooks/skill-registry.md
     - docs/playbooks/growth-diagnostic.md
-status: BLOCKED — tasks 1-3 complete except the paid gate; task 4 not reached
+status: complete
+completed: 2026-08-08
+requirements-completed: [DISP-02, ACTN-03]
 ---
 
 # 16-09 — the research eval gate
 
-> ⚠ **THIS PLAN IS NOT COMPLETE AND THIS FILE IS NOT EVIDENCE.**
-> `pnpm eval:golden` has NOT passed. No EVAL_GATE evidence row exists for any 33-case run —
-> the highest `casesTotal` ever recorded on this deployment is **27** (run `ed251c29`,
-> `cockpit-agent@15`). Phase 16 stays **8/9** and `ACTN-03` stays **Pending** until a run id,
-> per-case verdicts, total cost and the active skill versions are recorded in
-> `docs/playbooks/agent-runtime.md`. This is the 03.11-01 precedent: authored groundwork
-> recorded honestly, never read as a passing gate.
+> ✅ **COMPLETE — closure recorded 2026-08-08 in `caff441`.** Unfiltered gate `14feb4b7` passed
+> **34/34** for **$0.3456**, pinning `cockpit-agent@17`, `research-specialist@8`,
+> `offer-architect@4`, `money-model-designer@4`, and `lead-engine@4`. Evidence was recorded on all
+> five skill rows; all five were activated and then read back as the active versions. Gate
+> `d17039a8` re-confirmed **34/34** after the corpus correction (`$0.3574` on the v17 evidence row).
+> The three research fixtures ran end to end on the local Tavily-backed `webResearch` tool, with
+> `research.persisted` x3 and `subagent.completed` x7 in the audit trail.
 
-## Why it is blocked
+The remainder of this file is the **historical pre-closure handoff**. It is retained because it
+records the failed attempts, costs, containment work, and version-collision trap that led to the
+successful gate; its blocked-state language is superseded by the closure record above.
+
+## Historical blocker (resolved)
 
 The OpenAI account has **no credits**. Gate run `f93ef691` (33 cases, tenant `eval-f93ef691`,
 cap $2.00, all five pins correct) aborted inside `vaultSmoke:seedCorpus` before the first
@@ -201,8 +208,8 @@ Backend typecheck was 150 at handoff; a concurrent session was mid-sweep removin
 `@ts-expect-error import.meta.glob` directives (37 files), which takes it to ~50. That sweep is
 22.1-03's, not this plan's.
 
-## Task 4 was never reached
+## Historical checkpoint state (resolved)
 
-Task 4 is `checkpoint:human-verify`, `gate="blocking"` — the owner reads the recorded evidence and
-types "approved". It cannot be self-certified, and there is no evidence to present yet. **16-09
-closes only after the gate runs green AND the owner approves.**
+At this handoff, Task 4 had not yet been reached. The later green gate, evidence write-back,
+activation read-back, and phase close were recorded by the owner-authored closure commit
+`caff441`; this historical paragraph no longer describes the current phase status.

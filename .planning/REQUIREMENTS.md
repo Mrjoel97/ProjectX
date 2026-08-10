@@ -132,7 +132,7 @@ Private Beta section above and land in this milestone's **final** stage (S4) —
 - [x] **BEVL-01**: The agent produces an on-demand business assessment using persona-appropriate frameworks (SWOT / Lean / Business Model Canvas), grounded in the user's own vault data, with honest data-gap flags and no fabricated metrics or viability scores
 - [x] **BEVL-02**: The assessment surfaces gaps and turns them into governed action proposals through the approve→execute spine; a healthy business honestly returns zero gaps
 - [x] **BEVL-03**: A proactive business review is delivered in-app on a recurring cadence (weekly-style briefing) using no OAuth mailbox token
-- [ ] **DOCV-01**: The user can upload a report, have it ingested and understood in the vault, discuss it by voice with the grounded agent, and receive surfaced insights/patterns/gaps plus a memo or gap-bridging plan — with an honest "no gaps" outcome and the user deciding after the discussion
+- [x] **DOCV-01**: The user can upload a report, have it ingested and understood in the vault, discuss it by voice with the grounded agent, and receive surfaced insights/patterns/gaps plus a memo or gap-bridging plan — with an honest "no gaps" outcome and the user deciding after the discussion
 - [x] **BLPR-01**: A single cited business blueprint is synthesized from the user's typed profile, their vault documents, and the extracted entity graph. Typed values are AUTHORITATIVE and are never overwritten by derivation; derived claims carry a source citation and require explicit user confirmation before reaching any agent. Both entry routes (typing and uploading) remain permanent and compose — a one-line profile edit costs no model call and no confirmation step
 - [x] **BLPR-02**: The confirmed blueprint is standing context for the agent — present on EVERY cockpit turn via the turn prompt (not only on turns that search the vault), and available to the two grounding-driven callers (`evaluations.ts`, `voiceDoc.ts`) via an explicit `spine` field. It distinguishes user-stated from system-derived claims, carries its own staleness signal when documents are unincorporated, and — when the user rebuilds — proposes a reviewable diff rather than ever silently changing. *(Scope note 2026-07-27: unincorporated-document DETECTION is automatic and free; the rebuild is user-triggered. Automatic triggering is deferred until a bulk-ingest completion event exists — see Phase 17.1 context.)*
 
@@ -140,7 +140,7 @@ Private Beta section above and land in this milestone's **final** stage (S4) —
 
 - [x] **DISP-01**: Real sub-agent dispatch — specialized sub-agents are swappable (skill body, tool-set) pairs run by the single governed loop, with a depth cap, a shared root cost budget, cycle refusal, and recorded lineage (no nested loops, no agents-spawning-agents)
 - [x] **ACTN-01**: A generalized governed action executor lets an approved plan execute actions beyond `gmail.send` (the approve→execute spine becomes action-agnostic)
-- [ ] **DISP-02**: A first exemplar specialist sub-agent (Research) is dispatched through DISP-01
+- [x] **DISP-02**: A first exemplar specialist sub-agent (Research) is dispatched through DISP-01
 - [ ] **ACTN-02**: The agent can schedule and manage calendar events (Google / Microsoft) as governed actions
 - [x] **ACTN-03**: The agent can perform web research through a grounded, injection/SSRF-hardened tool, storing findings in the vault
 - [ ] **ACTN-04**: The agent can create standalone documents/content artifacts (beyond email attachments)
@@ -329,12 +329,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BEVL-01 | Phase 12 | Complete |
 | BEVL-02 | Phase 12 | Complete |
 | BEVL-03 | Phase 13 | Complete |
-| DOCV-01 | Phase 14 | Pending |
+| DOCV-01 | Phase 14 | Complete (2026-07-26; owner live-verified a real grounded call and both governed outcome paths; honest no-gap behavior is code/test-enforced. Tool-declaration branch and retrieval latency remain explicitly unmeasured observations, not requirement blockers) |
 | BLPR-01 | Phase 17.1 | Complete |
 | BLPR-02 | Phase 17.1 | Complete |
 | DISP-01 | Phase 15 | Complete (seams 15-01; registry + loop seam 15-02; governed dispatcher — depth cap, cycle refusal, shared envelope, refs-only lineage, SC#5 isolation — 15-03; "Act on this" runs the specialist onto the single Approve gate 15-04; action-type dispatcher 15-05; runnable specialist bodies + multi-pin eval gate 15-06. CAVEAT: the 15-06 body rewrite's eval gate is UNPAID — the candidates are parked and the ACTIVE v1 bodies stay live, so a dispatched specialist still runs the OLD body until the owner runs the gate) |
 | ACTN-01 | Phase 15 | Complete (closed action-type union + `actionTypeOf` landed 15-01; 15-05 generalized `executePlan` into an exhaustive `armFor(actionTypeOf(plan.kind))` switch with an `assertNever` backstop, retiring 12-05's ad-hoc `kind === "memo"` branch. `deliverApprovedPlan.ts` is byte-unchanged — the gmail terminal was generalized around, not widened) |
-| DISP-02 | Phase 16 | Pending |
+| DISP-02 | Phase 16 | Complete (2026-08-08; unfiltered gate `14feb4b7` 34/34, re-confirmed by `d17039a8`; `research-specialist@8` evidence recorded and activated, with end-to-end `subagent.completed` / `research.persisted` audit evidence) |
 | ACTN-03 | Phase 16 | Complete |
 | ACTN-02 | Phase 17 | Pending |
 | ACTN-04 | Phase 18 | Pending |
