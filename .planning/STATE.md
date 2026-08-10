@@ -1743,6 +1743,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 
 ### Roadmap Evolution
 
+- Phase 19.1 inserted after Phase 19 (2026-08-10): Bulk Contact Import (CSV). Design spec approved and committed at `docs/superpowers/specs/2026-08-10-contact-import-design.md` (71c512a) BEFORE planning — read it before `/gsd:plan-phase 19.1`, it settles the consent model, the merge rule, the scale cap and the rejected approaches. 1 of 4 contact-acquisition subsystems; the other three (document extraction, search-then-import, third-party CRM) are decomposed in the spec and NOT in this phase. Subsystem 4 will use REST, not MCP — ADR-011 makes the Pikar-Ai MCP unreachable from a Convex action. Carries a known schema risk: `origin` gains `imported` and `consentSource` gains `imported-attested`, and 19-06 proved a widening discriminated union slips through silently wherever a consumer is loosely typed, so both need a site walk against cockpit.md's registration checklist rather than trusting tsc.
 - Phase 27 added: Curated Knowledge-Work Pack Pilot
 - Phase 28 added: Connector-Backed Revenue Pack
 - Phase 29 added: Unified Knowledge and Routines
