@@ -86,33 +86,106 @@ function recipientMembers(recipient: string): string[] {
 // is (invariant 4, CLAUDE.md §8 rung 2). The tenantId is INJECTED by the wrapper at every public
 // call site and read off the approved plan row at the applier; neither is model-supplied.
 
-/** Create or update ONE contact, keyed on the normalized address. Returns the row id. */
+/** The four fields a caller may map onto a contact. The preview counts (`created`/`enriched`/
+ *  `unchanged`, 19.1-04) are defined over EXACTLY these — a consent write is not an enrichment, or
+ *  `unchanged` would be structurally always 0 and the preview a lie. */
+const MAPPABLE = ["name", "company", "phone", "title"] as const;
+type MappableField = (typeof MAPPABLE)[number];
+
+/**
+ * Create or update ONE contact, keyed on the normalized address.
+ *
+ * THE ONE IMPLEMENTATION OF THE WRITE RULE, shared by both actors (playbook invariant 13): the
+ * hand-add mutation, the Approve-gated agent applier and the bulk import all land here. `fillEmptyOnly`
+ * is a FLAG on this function and NOT a second writer — a second one would be a second chance to
+ * disagree about what an upsert means (CLAUDE.md §8 rung 2).
+ *
+ * Returns `filled`, the number of the FOUR MAPPABLE FIELDS this call actually changed — never
+ * counting consent, and 0 on the insert path (a new row is `created`, not `enriched`).
+ */
 export async function upsertContactRow(
   ctx: MutationCtx,
   tenantId: string,
-  { email, name, origin }: { email: string; name?: string; origin: ContactOrigin },
-): Promise<Id<"contacts">> {
+  {
+    email,
+    origin,
+    fillEmptyOnly = false,
+    consent,
+    ...incoming
+  }: {
+    email: string;
+    name?: string;
+    company?: string;
+    phone?: string;
+    title?: string;
+    origin: ContactOrigin;
+    /** Import semantics: a value may FILL an empty field and may NEVER overwrite a non-empty one.
+     *  A CRM export is usually staler than what the user has since typed by hand.
+     *  Default `false` keeps today's weaker rule — "a blank name must not ERASE a name on record",
+     *  where a non-blank one still overwrites — so hand-add and the agent applier behave exactly as
+     *  they did before phase 19.1. `contacts.test.ts` pins BOTH sides of the flag. */
+    fillEmptyOnly?: boolean;
+    /** Written ONLY onto a row carrying no consent at all. An import must never downgrade a
+     *  per-person `asserted-by-user` record to a batch attestation — fill-empty-only applied to the
+     *  field where it matters most. Folded into the SAME insert/patch as the fields, so a bulk
+     *  import costs zero extra writes (do NOT call `assertConsent` per row: it re-reads the row you
+     *  just wrote and hardcodes the wrong source). */
+    consent?: { source: ConsentSource; wording: string; context?: string };
+  },
+): Promise<{ id: Id<"contacts">; created: boolean; filled: number }> {
   const address = normalizeAddress(email);
   // Trust boundary: `normalizeAddress` deliberately does not validate, so the refusal is here.
   // An empty key would collapse every nameless save onto one row.
   if (address === "") throw new Error("CONTACT_EMAIL_REQUIRED");
+  // Same floor as `assertConsent`: a consent record with no wording is a defaulted consent wearing
+  // a timestamp. The wording is stored VERBATIM — it is the evidence, not a label.
+  if (consent && consent.wording.trim() === "") throw new Error("CONSENT_WORDING_REQUIRED");
 
   const now = Date.now();
+  // Blank-after-trim is ABSENT, on every field and on both paths.
+  const fields: Partial<Record<MappableField, string>> = {};
+  for (const key of MAPPABLE) {
+    const value = incoming[key]?.trim();
+    if (value) fields[key] = value;
+  }
+  const consentBlock = consent && {
+    consentAt: now,
+    consentSource: consent.source,
+    consentWording: consent.wording,
+    ...(consent.context?.trim() ? { consentContext: consent.context.trim() } : {}),
+  };
+
   const existing = await contactByEmail(ctx, tenantId, address);
   if (existing) {
-    // A blank/absent name must not erase a name already on record.
-    const trimmed = name?.trim();
-    await ctx.db.patch(existing._id, { ...(trimmed ? { name: trimmed } : {}), updatedAt: now });
-    return existing._id;
+    const patch: Partial<Record<MappableField, string>> = {};
+    for (const key of MAPPABLE) {
+      const value = fields[key];
+      if (value === undefined) continue;
+      // `!existing[key]` covers both "never set" and a stored "" — either is an empty field.
+      if (fillEmptyOnly && existing[key]) continue;
+      patch[key] = value;
+    }
+    // Bulk evidence may never replace per-person evidence, in either direction: consent is written
+    // only where there is none, and NEVER patched otherwise.
+    const addConsent = existing.consentAt === undefined ? consentBlock : undefined;
+    const filled = Object.keys(patch).length;
+    // Nothing to say ⇒ no write. Otherwise an `unchanged` row still moves `updatedAt` and the
+    // preview's count is a lie in the DB even when it is right on the wire.
+    if (filled === 0 && !addConsent) return { id: existing._id, created: false, filled: 0 };
+    await ctx.db.patch(existing._id, { ...patch, ...addConsent, updatedAt: now });
+    // `origin` is NOT patched — provenance is set once, on creation.
+    return { id: existing._id, created: false, filled };
   }
-  return await ctx.db.insert("contacts", {
+  const id = await ctx.db.insert("contacts", {
     tenantId,
     email: address,
-    ...(name?.trim() ? { name: name.trim() } : {}),
+    ...fields,
+    ...consentBlock,
     origin,
     createdAt: now,
     updatedAt: now,
   });
+  return { id, created: true, filled: 0 };
 }
 
 /** Insert ONE follow-up. `contactId` is optional here because a USER may file a contactless one;
@@ -202,7 +275,7 @@ export async function applyCrmOperations(
         });
         break;
       case "addFollowUp": {
-        const contactId = await upsertContactRow(ctx, tenantId, {
+        const { id: contactId } = await upsertContactRow(ctx, tenantId, {
           email: operation.email,
           origin: "mailbox-resolved",
         });
@@ -247,7 +320,9 @@ export const upsertContact = tenantMutation({
     origin: v.union(v.literal("mailbox-resolved"), v.literal("user-entered"), v.literal("inbound")),
   },
   handler: async (ctx, args): Promise<Id<"contacts">> =>
-    await upsertContactRow(ctx, ctx.tenantId, args),
+    // No `fillEmptyOnly` — hand-add keeps the "don't erase" rule it has always had: a typed name
+    // still overwrites. The mutation's contract is unchanged; only the helper's shape moved.
+    (await upsertContactRow(ctx, ctx.tenantId, args)).id,
 });
 
 /**

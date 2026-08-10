@@ -4,7 +4,7 @@
 // Subjects are built as `${userId}|session_x` over REAL `users` rows, exactly as `tenant.test.ts`
 // does: `requireScope` derives `tenantId` from the segment before the `|`, so a hand-made subject
 // that skips this shape silently tests nothing.
-import { dashboardCursorFor, parseDashboardCursor } from "@pikar/core";
+import { dashboardCursorFor, IMPORT_ATTESTATION, parseDashboardCursor } from "@pikar/core";
 import { convexTest } from "convex-test";
 import { describe, expect, test, vi } from "vitest";
 // `audit.log` maintains the auditCounts aggregate (audit.ts), so the component must be registered
@@ -13,6 +13,7 @@ import { describe, expect, test, vi } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { upsertContactRow } from "./contacts";
 import { hmacHex } from "./gmailAuth";
 import schema from "./schema";
 
@@ -521,6 +522,183 @@ describe("contacts: the write surface", () => {
     const row = (await followUpRows(h))[0];
     expect(row?.status).toBe("canceled");
     expect(row?.completedAt).toBeUndefined();
+  });
+});
+
+// ── The import write rule: fill-empty-only and the consent floor (19.1-03) ────────────────────
+// `upsertContactRow` is not a Convex function, so it is exercised in-transaction through `t.run`,
+// the same shape `contactRows` uses. EVERY assertion reads the rows back: a reply can agree with
+// itself while the write is wrong, and "don't erase" passed for "fill empty only" for a whole phase
+// precisely because only the reply-shaped half was tested.
+
+describe("upsertContactRow: fill-empty-only and the consent floor (19.1)", () => {
+  /** One seeded contact, then the helper run against it. Returns the helper's reply and the row. */
+  const run = (h: Harness, args: Parameters<typeof upsertContactRow>[2]) =>
+    h.t.run((ctx) => upsertContactRow(ctx, h.tenantA, args));
+
+  const seed = async (h: Harness, args: Parameters<typeof upsertContactRow>[2]) =>
+    (await run(h, args)).id;
+
+  test("fillEmptyOnly: a NAME on record survives a different incoming name", async () => {
+    const h = await harness();
+    await seed(h, { email: "sarah@x.com", name: "Sarah Chen", origin: "user-entered" });
+
+    const reply = await run(h, {
+      email: "sarah@x.com",
+      name: "S. CHEN (OLD CRM)",
+      origin: "imported",
+      fillEmptyOnly: true,
+    });
+
+    const rows = await contactRows(h);
+    expect(rows).toHaveLength(1);
+    // The STORED value is the oracle, never the reply.
+    expect(rows[0]?.name).toBe("Sarah Chen");
+    expect(reply.filled).toBe(0);
+    expect(reply.created).toBe(false);
+  });
+
+  test("fillEmptyOnly: an EMPTY company is filled, and counted", async () => {
+    const h = await harness();
+    await seed(h, { email: "sarah@x.com", name: "Sarah Chen", origin: "user-entered" });
+
+    const reply = await run(h, {
+      email: "sarah@x.com",
+      name: "Stale Name",
+      company: "  Acme Ltd  ",
+      phone: "+44 1234",
+      origin: "imported",
+      fillEmptyOnly: true,
+    });
+
+    const row = (await contactRows(h))[0];
+    expect(row?.company).toBe("Acme Ltd"); // trimmed
+    expect(row?.phone).toBe("+44 1234");
+    expect(row?.name).toBe("Sarah Chen"); // still not overwritten
+    expect(reply.filled).toBe(2); // company + phone, NOT the refused name
+  });
+
+  // NON-VACUITY. The other side of the flag: without it, the OLD rule stands. If this test ever goes
+  // red, fill-empty-only has leaked into hand-add and the agent applier — the thing 19.1-03 exists to
+  // prevent. Without this test, deleting the flag entirely would leave the block above green.
+  test("hand-add (NO flag) still OVERWRITES a name on record — exactly as before this phase", async () => {
+    const h = await harness();
+    await h.asA.mutation(api.contacts.upsertContact, {
+      email: "sarah@x.com",
+      name: "Sarah Chen",
+      origin: "user-entered",
+    });
+    await h.asA.mutation(api.contacts.upsertContact, {
+      email: "sarah@x.com",
+      name: "Sarah Chen-Okoro",
+      origin: "user-entered",
+    });
+
+    const rows = await contactRows(h);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.name).toBe("Sarah Chen-Okoro");
+  });
+
+  test("origin is NOT rewritten — an imported touch cannot restate where a row came from", async () => {
+    const h = await harness();
+    await seed(h, { email: "sarah@x.com", name: "Sarah", origin: "user-entered" });
+
+    await run(h, {
+      email: "sarah@x.com",
+      company: "Acme",
+      origin: "imported",
+      fillEmptyOnly: true,
+    });
+
+    expect((await contactRows(h))[0]?.origin).toBe("user-entered");
+  });
+
+  test("consent: a row with NONE gains the attestation, stored BYTE-FOR-BYTE", async () => {
+    const h = await harness();
+    await seed(h, { email: "sarah@x.com", origin: "user-entered" });
+
+    await run(h, {
+      email: "sarah@x.com",
+      origin: "imported",
+      fillEmptyOnly: true,
+      consent: {
+        source: "imported-attested",
+        wording: IMPORT_ATTESTATION,
+        context: "  Mailchimp export, March  ",
+      },
+    });
+
+    const row = (await contactRows(h))[0];
+    expect(row?.consentAt).toBeGreaterThan(0);
+    expect(row?.consentSource).toBe("imported-attested");
+    // Against the CONSTANT, not a re-typed copy — a copy would pass even if the sentence drifted.
+    expect(row?.consentWording).toBe(IMPORT_ATTESTATION);
+    expect(row?.consentContext).toBe("Mailchimp export, March");
+  });
+
+  test("consent NON-DOWNGRADE: asserted-by-user keeps its source, wording AND timestamp", async () => {
+    const h = await harness();
+    const contactId = await h.asA.mutation(api.contacts.upsertContact, {
+      email: "sarah@x.com",
+      origin: "user-entered",
+    });
+    await h.asA.mutation(api.contacts.assertConsent, {
+      contactId,
+      wording: WORDING,
+      context: "Trade show, March",
+    });
+    // A sentinel rather than a clock read: two writes inside one millisecond would make an
+    // "unchanged timestamp" assertion pass while the field was being rewritten.
+    await h.t.run((ctx) => ctx.db.patch(contactId, { consentAt: 1_234 }));
+
+    await run(h, {
+      email: "sarah@x.com",
+      origin: "imported",
+      fillEmptyOnly: true,
+      consent: { source: "imported-attested", wording: IMPORT_ATTESTATION, context: "CSV" },
+    });
+
+    const row = (await contactRows(h))[0];
+    expect(row?.consentSource).toBe("asserted-by-user");
+    expect(row?.consentWording).toBe(WORDING);
+    expect(row?.consentContext).toBe("Trade show, March");
+    expect(row?.consentAt).toBe(1_234);
+  });
+
+  test("a call that changes NOTHING does not move updatedAt — an unchanged row is untouched", async () => {
+    const h = await harness();
+    const contactId = await seed(h, {
+      email: "sarah@x.com",
+      name: "Sarah Chen",
+      origin: "user-entered",
+    });
+    await h.t.run((ctx) => ctx.db.patch(contactId, { updatedAt: 1_234 }));
+
+    const reply = await run(h, {
+      email: "sarah@x.com",
+      name: "Stale Name",
+      origin: "imported",
+      fillEmptyOnly: true,
+    });
+
+    expect(reply.filled).toBe(0);
+    expect((await contactRows(h))[0]?.updatedAt).toBe(1_234);
+  });
+
+  test("filled counts the FOUR MAPPABLE FIELDS only — a consent-only write is not an enrichment", async () => {
+    const h = await harness();
+    await seed(h, { email: "sarah@x.com", name: "Sarah Chen", origin: "user-entered" });
+
+    const reply = await run(h, {
+      email: "sarah@x.com",
+      origin: "imported",
+      fillEmptyOnly: true,
+      consent: { source: "imported-attested", wording: IMPORT_ATTESTATION },
+    });
+
+    // The consent DID land — this is not a no-op that trivially returns 0.
+    expect((await contactRows(h))[0]?.consentSource).toBe("imported-attested");
+    expect(reply.filled).toBe(0);
   });
 });
 

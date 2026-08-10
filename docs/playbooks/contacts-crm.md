@@ -1,5 +1,35 @@
 # Playbook: Contacts, CRM & follow-ups
 
+> Last verified: 2026-08-10 (Plan 19.1-03 -- fill-empty-only and the consent floor, as a FLAG on the
+> ONE writer.) **INVARIANT 13 NOW HAS A FLAG, NOT A SECOND WRITER.** `upsertContactRow` takes
+> `fillEmptyOnly` (plus `company`/`phone`/`title` and an optional `consent` block) and returns
+> `{ id, created, filled }`. There is still exactly ONE implementation of the write rule and all
+> three actors -- hand-add, the Approve-gated applier, and the import (19.1-04) -- go through it.
+> **THE DEFAULT IS THE OLD RULE AND THAT IS DELIBERATE:** `fillEmptyOnly: false` keeps "a blank name
+> must not ERASE a name on record", where a NON-BLANK one still overwrites. `upsertContact` and
+> `applyCrmOperations` pass no flag, so hand-add and the applier behave exactly as they did before
+> phase 19.1 -- and `contacts.test.ts` pins BOTH sides: the import side (a stored name survives a
+> different incoming name) AND the non-vacuity floor (hand-add STILL overwrites). Testing only the
+> import side would stay green if the flag were deleted and fill-empty-only became universal.
+> **CONSENT IS WRITTEN ONLY ONTO A ROW THAT HAS NONE** (`existing.consentAt === undefined`), never
+> patched otherwise in EITHER direction: a batch attestation may not replace a per-person
+> `asserted-by-user` record, which is fill-empty-only applied to the field where it matters most.
+> The four consent columns are folded into the SAME insert/patch as the fields, so a bulk import
+> costs ZERO extra writes -- do NOT call `assertConsent` per row from an import: it re-reads the row
+> you just wrote and HARDCODES `"asserted-by-user"`, which would be the wrong source. `consentWording`
+> is stored VERBATIM (the tests compare against `IMPORT_ATTESTATION` from `@pikar/core`, not a
+> re-typed copy), and a blank wording is refused with the same `CONSENT_WORDING_REQUIRED` as
+> `assertConsent`. **`filled` COUNTS THE FOUR MAPPABLE FIELDS ONLY** (`name`, `company`, `phone`,
+> `title`); a consent-only write returns `filled: 0`, because counting it would make 19.1-04's
+> `unchanged` structurally always 0 and the preview a lie. **A CALL THAT CHANGES NOTHING SKIPS
+> `db.patch` ENTIRELY**, so an `unchanged` row does not move its `updatedAt`. `origin` is still
+> written on INSERT only. THREE MUTATION-PROOFS, each observed red and reverted: dropping the
+> `fillEmptyOnly` guard gives `expected 'S. CHEN (OLD CRM)' to be 'Sarah Chen' // Object.is
+> equality` (3 tests red); dropping the `consentAt === undefined` condition gives `expected
+> 'imported-attested' to be 'asserted-by-user' // Object.is equality`; patching unconditionally
+> gives `expected 1786375538546 to be 1234 // Object.is equality`. MEASURED: backend typecheck
+> exit 0 (delta 0), `contacts.test.ts` 73/73 (was 65, +8).
+
 > Last verified: 2026-08-10 (Plan 19.1-02 -- the two schema union extensions and every
 > registration site, in ONE commit. This supersedes and DELETES the HOOK ARTIFACT entry that stood
 > here: the files it named as unreviewed and uncommitted are exactly the files this entry attests
