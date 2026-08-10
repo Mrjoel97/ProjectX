@@ -149,6 +149,9 @@ const state = (field: string, over: Record<string, unknown> = {}) =>
     value: 100,
     statedAt: NOW - DAY,
     stale: false,
+    origin: "stated",
+    actor: "user",
+    basis: null,
     ...over,
   }) as never;
 
@@ -242,6 +245,9 @@ const withInputs = (values: Record<string, number>) =>
       value,
       statedAt: NOW - DAY,
       stale: false,
+      origin: "stated",
+      actor: "user",
+      basis: null,
     })) as never,
   );
 
@@ -376,7 +382,15 @@ describe("unit economics", () => {
   test("referralPct older than STALE_AFTER_MS needs confirmation", () => {
     const result = unitEconomics({
       inputs: toCashInputs([
-        { field: "referralPct", value: 25, statedAt: NOW - 91 * DAY, stale: true },
+        {
+          field: "referralPct",
+          value: 25,
+          statedAt: NOW - 91 * DAY,
+          stale: true,
+          origin: "stated",
+          actor: "user",
+          basis: null,
+        },
       ] as never),
       scorecard: scorecardWith(),
       nowMs: NOW,
@@ -387,7 +401,15 @@ describe("unit economics", () => {
   test("referralPct with a present value and unknown age needs confirmation, no fabricated date", () => {
     const result = unitEconomics({
       inputs: toCashInputs([
-        { field: "referralPct", value: 25, statedAt: null, stale: true },
+        {
+          field: "referralPct",
+          value: 25,
+          statedAt: null,
+          stale: true,
+          origin: "stated",
+          actor: "user",
+          basis: null,
+        },
       ] as never),
       scorecard: scorecardWith(),
       nowMs: NOW,
@@ -589,7 +611,15 @@ describe("solvency — the finance-ops layer", () => {
   test("mrr surfaces staleness like every other stated cash input, not a hand-rolled check", () => {
     const result = solvency({
       inputs: toCashInputs([
-        { field: "mrr", value: 5_000, statedAt: NOW - 91 * DAY, stale: true },
+        {
+          field: "mrr",
+          value: 5_000,
+          statedAt: NOW - 91 * DAY,
+          stale: true,
+          origin: "stated",
+          actor: "user",
+          basis: null,
+        },
       ] as never),
       tier: "startup",
       nowMs: NOW,
@@ -728,5 +758,35 @@ describe("what this surface must never say", () => {
       expect(source).not.toMatch(/\$(99|297|597)\b/);
       expect(source).not.toMatch(/per month|\/mo\b|upgrade to/i);
     }
+  });
+});
+
+// ── Task 2: origin is stored on CashInputState, not inferred (Task 3 wires it from the vault) ──
+describe("statedFigure returns the stored origin", () => {
+  test("statedFigure carries the stored origin rather than assuming 'stated'", () => {
+    const spec = cashInputSpec("cashOnHand");
+    const figure = statedFigure(
+      {
+        field: "cashOnHand",
+        value: 38_500,
+        statedAt: 1_754_000_000_000,
+        stale: false,
+        origin: "observed",
+        actor: "agent",
+        basis: "vault:doc_7c2a#p3",
+      },
+      spec,
+      1_754_000_100_000,
+    );
+    // Brief used `figure.kind`; CashFigure's actual discriminant is `state` (cash.ts:56-92) — see
+    // task-2-report.md for the noted deviation.
+    expect(figure.state).toBe("known");
+    if (figure.state === "known") expect(figure.origin).toBe("observed");
+  });
+
+  test("an absent input is unknown regardless of provenance", () => {
+    const spec = cashInputSpec("cashOnHand");
+    const figure = statedFigure(undefined, spec, 1_754_000_000_000);
+    expect(figure.state).toBe("unknown");
   });
 });

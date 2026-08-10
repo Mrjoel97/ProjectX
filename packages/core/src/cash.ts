@@ -22,6 +22,7 @@
  */
 
 import type { Funding, Tier } from "./businessProfile";
+import type { FigureActor, FigureOrigin } from "./financeClaim";
 import { cfa, INDUSTRY_MULTIPLE, ltgpCac, round2 } from "./growth/financialSpine";
 import type { Scorecard } from "./growth/scorecard";
 
@@ -276,6 +277,13 @@ export type CashInputState = {
   value: number | null;
   statedAt: number | null;
   stale: boolean;
+  /** Stored provenance, NOT inferred. The prior version deduced origin from membership of the
+   *  evaluation row's `userProvided` list, so a vault-grounded fill rendered identically to a
+   *  figure the owner typed. Absent provenance (every pre-existing row) reads as a user statement,
+   *  which is what those rows are. */
+  origin: FigureOrigin;
+  actor: FigureActor;
+  basis: string | null;
 };
 
 /**
@@ -321,7 +329,7 @@ export function statedFigure(
   if (input === undefined || input.value === null) {
     return unknownFigure(`Needs your ${spec.label}.`);
   }
-  return knownFigure("stated", input.value, spec.unit, {
+  return knownFigure(input.origin, input.value, spec.unit, {
     ...(input.statedAt === null ? {} : { statedAt: input.statedAt }),
     stale: needsConfirmation(input.value, input.statedAt, nowMs),
   });

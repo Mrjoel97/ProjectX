@@ -1,5 +1,7 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-10 (Task 2, live-finance-inputs — `CashInputState` gains stored `origin`/`actor`/`basis`; `statedFigure` returns `input.origin` instead of hardcoding `"stated"`. Origin was previously DEDUCED from membership of the evaluation row's `userProvided` list, so a vault-grounded fill rendered identically to a figure the owner typed — that leak is closed at the pure layer. Task 3 populates these fields at the Convex read boundary.)
+>
 > Last verified: 2026-08-10 (Task 1, live-finance-inputs — `financeClaim.ts` lands the `FigureClaim` shape, `validateFigureClaim` and `isNewerThan`, reusing `cash.ts`'s value bounds.)
 >
 > Previously verified: 2026-08-09 (Plan 19-10 — **`apps/web/e2e/pipeline.spec.ts` HAS NOW ACTUALLY RUN:
