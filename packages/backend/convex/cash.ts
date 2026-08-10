@@ -266,13 +266,25 @@ export async function writeFigureRow(
 
   if (spec.store === "scorecard") {
     if (spec.path === undefined) throw new Error("INVALID_INPUT: no scorecard path");
+    // The scorecard store carries NO provenance. `applyScorecardAnswer` takes only
+    // (db, tenantId, threadId, path, value), so FOUR of a claim's seven fields — `origin`,
+    // `actor`, `basis` AND `observedAt` — are dropped on the floor here, and the answer is stamped
+    // with the WRITE time rather than the time the figure was true (the thing financeClaim.ts's
+    // `observedAt` comment forbids). Worse, the loss is not display-only: `applyScorecardAnswer`
+    // appends the dot-path to `userProvided`, from which `runEvaluation` rebuilds its citation map
+    // and stamps every member `{title: "user-provided", confidence: "high", source: "user-provided"}`
+    // — so an agent figure would launder into the Business Evaluation Engine at HIGH confidence and
+    // suppress the re-ask. An agent claim is therefore REFUSED, loudly, rather than half-written:
+    // a store that cannot record who said it must not be told by a machine.
+    //
+    // ponytail: a refusal, not a fix. Upgrade path, and what unblocks an agent-written `cac`:
+    // a per-dot-path provenance map on `evaluations` beside `userProvidedAt`, carried forward the
+    // same way. Until then the applier restricts itself to `financeInputs` fields.
+    if (claim.actor === "agent") {
+      throw new Error("INVALID_INPUT: scorecard store carries no provenance");
+    }
     // No evaluation yet: seed under a stable, non-conversational thread id so the panel's answers
     // survive into the tenant's first real evaluation (the applyScorecardAnswer carrier path).
-    //
-    // ponytail: the scorecard store has NO provenance columns, so an agent-written scorecard figure
-    // reads back as user-stated (`applyScorecardAnswer` adds the dot-path to `userProvided`, which
-    // is what the read boundary keys origin/actor on). Upgrade path if the applier is ever pointed
-    // at a scorecard field: a per-dot-path provenance map on `evaluations` beside `userProvidedAt`.
     const existing = await latestScorecardRow(db, tenantId);
     await applyScorecardAnswer(
       db,

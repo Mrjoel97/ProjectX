@@ -390,3 +390,68 @@ test("saveInput stamps the human as the actor and observedAt as now", async () =
   expect(cash?.actor).toBe("user");
   expect(cash?.origin).toBe("stated");
 });
+
+// The two branches of `inputStatesFor`'s scorecard arm, and the guard that keeps the agent out of
+// it. Task 3's first two tests both used `cashOnHand` — a `financeInputs` field — so the
+// `userProvided` predicate that flips the trust language for SIX of the eleven `CASH_INPUTS` fields
+// had no coverage at all. Its correctness rests on `applyScorecardAnswer` appending the dot-path to
+// `userProvided`, an incidental coupling to another module's array that nothing else enforces.
+test("a scorecard field answered in the panel reads back as the user's own statement", async () => {
+  const t = convexTest(schema, modules);
+  const asUser = t.withIdentity({ subject: "u1|s1" });
+  await asUser.mutation(api.cash.saveInput, { field: "cac", value: 1_400 });
+
+  const { inputs } = await asUser.query(api.cash.inputs, {});
+  const cac = inputs.find((i) => i.field === "cac");
+  expect(cac?.value).toBe(1_400);
+  expect(cac?.origin).toBe("stated");
+  expect(cac?.actor).toBe("user");
+  expect(cac?.basis).toBeNull();
+});
+
+test("a grounded scorecard fill reads as observed by an agent, never as something the owner said", async () => {
+  const t = convexTest(schema, modules);
+  await t.run(async (ctx) => {
+    await ctx.db.insert("evaluations", {
+      tenantId: "u1",
+      threadId: "thread-a",
+      framework: "growth-os",
+      findings: [],
+      gaps: [],
+      notEnoughData: [],
+      // A real value the GROUNDING put there. Absent from `userProvided` — the owner never said it.
+      scorecard: { ...emptyScorecard, financials: { ...emptyScorecard.financials, cac: 250 } },
+      userProvided: [],
+      verdict: "insufficient",
+      createdAt: Date.now(),
+    });
+  });
+
+  const { inputs } = await t.withIdentity({ subject: "u1|s1" }).query(api.cash.inputs, {});
+  const cac = inputs.find((i) => i.field === "cac");
+  expect(cac?.value).toBe(250);
+  expect(cac?.origin).toBe("observed");
+  expect(cac?.actor).toBe("agent");
+  expect(cac?.basis).toBe("business evaluation grounding");
+});
+
+test("an agent claim on a scorecard field is REFUSED — that store cannot record who said it", async () => {
+  const t = convexTest(schema, modules);
+  await expect(
+    t.run(async (ctx) => {
+      await writeFigureRow(ctx.db, "u1", {
+        field: "cac",
+        value: 250,
+        origin: "observed",
+        actor: "agent",
+        basis: "vault document ref",
+        observedAt: 1_754_000_000_000,
+        confidence: "medium",
+      });
+    }),
+  ).rejects.toThrow(/INVALID_INPUT: scorecard store carries no provenance/);
+  // Refused BEFORE the write: half-written is the failure mode, since `applyScorecardAnswer` would
+  // also have marked the dot-path user-provided and fed it to the citation map at high confidence.
+  const evaluations = await t.run((ctx) => ctx.db.query("evaluations").collect());
+  expect(evaluations).toHaveLength(0);
+});
