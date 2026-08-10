@@ -1,13 +1,32 @@
 import { emptyScorecard } from "@pikar/core/growth/index";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
+// `audit.log` maintains the auditCounts aggregate (audit.ts), so the component must be registered
+// or the applier's audit insert throws `Component "auditCounts" is not registered`. Relative
+// import — the package blocks the deep specifier. Same idiom as audit.test.ts / contacts.test.ts.
+import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import { api } from "./_generated/api";
-import { writeFigureRow } from "./cash";
+import { applyFinanceClaims, writeFigureRow } from "./cash";
 import schema from "./schema";
 
 // convex-test discovers Convex function modules via import.meta.glob. Exclude
 // *.test.ts so the harness does not try to load the test files themselves (audit.test.ts idiom).
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
+const aggregateModules = import.meta.glob(
+  "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
+);
+
+/**
+ * A backend with the auditCounts component registered — for the TWO tests whose applier reaches
+ * `internal.audit.log`, and no others. Registering it loads the whole aggregate component tree into
+ * an in-memory backend, and paying that on all 33 tests in this file is the memory budget
+ * `contacts.test.ts`'s harness comment warns about (it killed a sibling file under parallel load).
+ */
+function withAudit() {
+  const t = convexTest(schema, modules);
+  t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+  return t;
+}
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -433,6 +452,133 @@ test("a grounded scorecard fill reads as observed by an agent, never as somethin
   expect(cac?.origin).toBe("observed");
   expect(cac?.actor).toBe("agent");
   expect(cac?.basis).toBe("business evaluation grounding");
+});
+
+// ── applyFinanceClaims: the Approve-gated agent write path (the `finance_write` inline arm) ─────
+//
+// invariant 11 — the ACTOR decides gating. `saveInput` above is the SAME write, ungated, because a
+// human is editing their own figure. Everything below goes through a staged plan and Approve.
+describe("applyFinanceClaims (the finance_write inline arm)", () => {
+  const agentClaim = {
+    field: "cashOnHand" as const,
+    value: 38_500,
+    origin: "stated" as const,
+    actor: "agent" as const,
+    basis: "user statement, turn 4",
+    observedAt: 1_754_000_000_000,
+    confidence: "high" as const,
+  };
+
+  test("a staged finance plan writes NOTHING until it is approved", async () => {
+    const t = withAudit();
+    const asUser = t.withIdentity({ subject: "u1|s1" });
+
+    const planId = await t.run((ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: "u1",
+        threadId: "thread-a",
+        kind: "finance_write",
+        status: "proposed",
+        financeClaims: [agentClaim],
+        createdAt: Date.now(),
+      } as never),
+    );
+
+    // Staging alone is inert: the row exists, the store does not know about it.
+    const before = await asUser.query(api.cash.inputs, {});
+    expect(before.inputs.find((i) => i.field === "cashOnHand")?.value).toBeNull();
+
+    await t.run((ctx) => applyFinanceClaims(ctx, "u1", [agentClaim]));
+
+    const after = await asUser.query(api.cash.inputs, {});
+    expect(after.inputs.find((i) => i.field === "cashOnHand")?.value).toBe(38_500);
+    expect(after.inputs.find((i) => i.field === "cashOnHand")?.actor).toBe("agent");
+    expect(planId).toBeDefined();
+    // The tenant is the applier's explicit argument (in production: the APPROVED PLAN ROW's), so
+    // nobody else's figure moved.
+    const other = await t.withIdentity({ subject: "u2|s1" }).query(api.cash.inputs, {});
+    expect(other.inputs.find((i) => i.field === "cashOnHand")?.value).toBeNull();
+  });
+
+  test("the audit row carries names and counts, and NEVER a figure (§4)", async () => {
+    const t = withAudit();
+    await t.run((ctx) => applyFinanceClaims(ctx, "u1", [agentClaim]));
+
+    const rows = await t.run((ctx) => ctx.db.query("audit").collect());
+    const row = rows.find((r) => r.eventType === "finance.claims_applied");
+    expect(row).toBeDefined();
+    expect(Object.keys(row?.payload as object).sort()).toEqual([
+      "actors",
+      "confidences",
+      "count",
+      "fields",
+    ]);
+    // The negative assertion is the point: the figure must not be reachable anywhere in the row.
+    expect(JSON.stringify(row)).not.toContain("38500");
+  });
+
+  test("an empty claim list writes no audit row — nothing happened", async () => {
+    const t = convexTest(schema, modules);
+    await t.run((ctx) => applyFinanceClaims(ctx, "u1", undefined));
+    const rows = await t.run((ctx) => ctx.db.query("audit").collect());
+    expect(rows).toHaveLength(0);
+  });
+
+  // The plan row is DB-sourced JSON cast to FigureClaim, NOT type-checked input. Both shapes below
+  // make `validateFigureClaim` throw past its own {ok, reason} contract — an unknown field reaches
+  // `cashInputSpec`, which throws, and a null basis TypeErrors on `.trim()`. An approved plan must
+  // refuse cleanly, never crash the mutation.
+  test("a malformed claim on the plan row is refused cleanly, not crashed through", async () => {
+    const t = convexTest(schema, modules);
+    await expect(
+      t.run((ctx) =>
+        applyFinanceClaims(ctx, "u1", [{ ...agentClaim, field: "notAField" } as never]),
+      ),
+    ).rejects.toThrow(/INVALID_INPUT: malformed claim on plan row/);
+    await expect(
+      t.run((ctx) => applyFinanceClaims(ctx, "u1", [{ ...agentClaim, basis: null } as never])),
+    ).rejects.toThrow(/INVALID_INPUT: malformed claim on plan row/);
+    expect(await t.run((ctx) => ctx.db.query("financeInputs").collect())).toHaveLength(0);
+  });
+
+  // The real product limit, refused HERE with a reason the approval card can show rather than deep
+  // inside `writeFigureRow`: the scorecard store discards origin/actor/basis/observedAt and appends
+  // the dot-path to `userProvided`, which `runEvaluation` rebuilds its citation map from at HIGH
+  // confidence. The agent can update the five `financeInputs` figures and cannot yet update CAC.
+  test("an agent claim on a scorecard field is refused, and nothing is written", async () => {
+    const t = convexTest(schema, modules);
+    await expect(
+      t.run((ctx) =>
+        applyFinanceClaims(ctx, "u1", [{ ...agentClaim, field: "cac" as const, value: 1_400 }]),
+      ),
+    ).rejects.toThrow(/INVALID_INPUT: that figure cannot be updated by an agent yet/);
+    expect(await t.run((ctx) => ctx.db.query("evaluations").collect())).toHaveLength(0);
+    expect(await t.run((ctx) => ctx.db.query("audit").collect())).toHaveLength(0);
+  });
+
+  // The merge policy lives in the CALLER — `writeFigureRow` has no isNewerThan guard. Without this
+  // an approved claim observed in June patches over a figure the human saved today, moving
+  // `statedAt` backward and flipping `actor`. A stale claim is SKIPPED, never an error: the human
+  // already has the better number, which is not a failure the user needs to see.
+  test("a claim older than the stored figure is skipped, leaving the row untouched", async () => {
+    const t = convexTest(schema, modules);
+    const asUser = t.withIdentity({ subject: "u1|s1" });
+    await asUser.mutation(api.cash.saveInput, { field: "cashOnHand", value: 12_000 });
+    const saved = await t.run((ctx) => ctx.db.query("financeInputs").first());
+
+    await t.run((ctx) =>
+      applyFinanceClaims(ctx, "u1", [{ ...agentClaim, observedAt: saved?.statedAt ?? 0 }]),
+    );
+
+    const { inputs } = await asUser.query(api.cash.inputs, {});
+    const cash = inputs.find((i) => i.field === "cashOnHand");
+    expect(cash?.value).toBe(12_000);
+    expect(cash?.actor).toBe("user");
+    expect(cash?.statedAt).toBe(saved?.statedAt);
+    // Nothing was applied, so nothing is claimed to have been. This backend has NO auditCounts
+    // component registered, so an audit write here would also throw rather than pass quietly.
+    expect(await t.run((ctx) => ctx.db.query("audit").collect())).toHaveLength(0);
+  });
 });
 
 test("an agent claim on a scorecard field is REFUSED — that store cannot record who said it", async () => {

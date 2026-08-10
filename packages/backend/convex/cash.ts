@@ -7,9 +7,10 @@
 // EVERY SECTION IS ITS OWN QUERY, on purpose. A failing scorecard read must take out unit economics
 // and leave solvency, activity and the whole Pikar-spend tab standing.
 //
-// NOTHING HERE IS LOGGED. A tenant's cash on hand, CAC and MRR are precisely what CLAUDE.md §4
-// keeps out of the audit table. If you ever add an audit event to this module, log the field NAME
-// and a boolean, never the value.
+// NO FIGURE IS EVER LOGGED. A tenant's cash on hand, CAC and MRR are precisely what CLAUDE.md §4
+// keeps out of the audit table. The ONE audit event this module writes — `finance.claims_applied`,
+// from the Approve-gated applier — carries field NAMES, a COUNT and enums, never a value. Any event
+// added here must obey the same rule.
 import {
   activityFromSends,
   CASH_INPUTS,
@@ -20,6 +21,7 @@ import {
   unitEconomics as coreUnitEconomics,
   createDashboardBound,
   type FigureClaim,
+  isNewerThan,
   needsConfirmation,
   toCashInputs,
   validateFigureClaim,
@@ -27,6 +29,7 @@ import {
 import type { Scorecard } from "@pikar/core/growth/index";
 import { emptyScorecard } from "@pikar/core/growth/index";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { applyScorecardAnswer, latestScorecardRow } from "./evaluations";
 import { tenantMutation, tenantQuery } from "./lib/functions";
@@ -335,3 +338,80 @@ export const saveInput = tenantMutation({
     return { saved: true };
   },
 });
+
+/**
+ * The ONLY path an agent-proposed figure reaches a store, and `executePlan` is its only caller
+ * (invariant 11 — the ACTOR decides gating: the human's identical edit above stages no plan).
+ * Re-validates every claim: the plan row is content plane and could have been revised between
+ * staging and Approve. All-or-nothing falls out of Convex's serializable mutation for free.
+ *
+ * Takes the whole `MutationCtx` rather than just `db` — mirroring `contacts.applyCrmOperations` —
+ * because the audit insert goes through `internal.audit.log`, the module's SOLE write surface for
+ * that table (CLAUDE.md §3). A direct `db.insert("audit", …)` here would be a second one.
+ */
+export async function applyFinanceClaims(
+  ctx: MutationCtx,
+  tenantId: string,
+  claims: readonly FigureClaim[] | undefined,
+): Promise<void> {
+  const written: FigureClaim[] = [];
+  for (const claim of claims ?? []) {
+    // A claim off a plan row is DB-sourced JSON cast to FigureClaim — it is NOT type-checked
+    // input. `validateFigureClaim` throws past its own ok/reason contract on two shapes a stored
+    // row can hold: an unknown `field` reaches `cashInputSpec`, which throws, and a null `basis`
+    // TypeErrors on `.trim()`. Narrow BEFORE validating, or an approved plan crashes the mutation
+    // instead of refusing cleanly.
+    if (!CASH_INPUTS.some((s) => s.field === claim.field) || typeof claim.basis !== "string") {
+      throw new Error("INVALID_INPUT: malformed claim on plan row");
+    }
+    // The scorecard store cannot carry provenance: `applyScorecardAnswer` takes only
+    // (db, tenantId, threadId, path, value), so origin/actor/basis/observedAt are all discarded,
+    // and it appends the dot-path to `userProvided` — which `runEvaluation` rebuilds its citation
+    // map from, stamping "user-provided" at HIGH confidence. An agent claim on a scorecard field
+    // would therefore read back as the owner's own statement AND launder into the evaluation
+    // engine's citations. `writeFigureRow` throws on this; refuse earlier, with a reason the
+    // approval card can show.
+    //
+    // ponytail: a refusal, not a fix. The agent can update the five `financeInputs` figures and
+    // CANNOT yet update CAC. Upgrade path: a per-dot-path provenance map on `evaluations` beside
+    // `userProvidedAt`, so `applyScorecardAnswer` can record who supplied a figure.
+    if (cashInputSpec(claim.field).store === "scorecard") {
+      throw new Error("INVALID_INPUT: that figure cannot be updated by an agent yet");
+    }
+    // The merge policy lives in the CALLER — `writeFigureRow` has no isNewerThan guard, so without
+    // this an approved claim observed in June patches over a figure the human saved today, moving
+    // statedAt backward and flipping actor. A stale claim is SKIPPED, not an error: the store
+    // already holds the better number, which is not a failure the approver needs to see.
+    const stored = await ctx.db
+      .query("financeInputs")
+      .withIndex("by_tenant_field", (q) =>
+        q.eq("tenantId", tenantId).eq("field", claim.field as "cashOnHand"),
+      )
+      .unique();
+    if (!isNewerThan(claim, stored?.statedAt ?? null)) continue;
+    await writeFigureRow(ctx.db, tenantId, claim);
+    written.push(claim);
+  }
+  // The WRITTEN claims, not the staged ones: an event called `claims_applied` that counts a claim
+  // the isNewerThan guard skipped would report an apply that did not happen.
+  if (written.length === 0) return;
+  // §4: field NAMES, a COUNT and enums — never a figure. Tenant revenue in the append-only audit
+  // log is precisely the PII honeypot §4 exists to prevent. `cash.test.ts` pins the sorted KEY SET
+  // and asserts the figure is absent from the whole serialized row, so an added key fails there.
+  await ctx.runMutation(internal.audit.log, {
+    tenantId,
+    // No request lineage to join to — an approved figure update is its own event (the
+    // `blueprint.confirmed` idiom), so a fresh id beats a fabricated correlation.
+    correlationId: crypto.randomUUID(),
+    eventType: "finance.claims_applied",
+    // The TENANT, matching `plan.canceled`'s idiom: this row exists because a human approved the
+    // plan. Who AUTHORED each claim is `payload.actors`, and those are two different questions.
+    actor: tenantId,
+    payload: {
+      count: written.length,
+      fields: written.map((c) => c.field),
+      actors: [...new Set(written.map((c) => c.actor))],
+      confidences: [...new Set(written.map((c) => c.confidence))],
+    },
+  });
+}

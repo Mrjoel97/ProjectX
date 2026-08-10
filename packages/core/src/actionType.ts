@@ -5,13 +5,20 @@
 
 /** The closed set of action types an approved plan can execute (ACTN-01). Adding a member
  *  without an arm is a COMPILE error at the arm table in cockpit.ts (15-05). */
-export const ACTION_TYPES = ["email", "memo", "calendar_event", "media", "crm_write"] as const;
+export const ACTION_TYPES = [
+  "email",
+  "memo",
+  "calendar_event",
+  "media",
+  "crm_write",
+  "finance_write",
+] as const;
 export type ActionType = (typeof ACTION_TYPES)[number];
 
 /** plans.kind is `v.optional(v.literal("memo"))` — ABSENT means the email plan every prior
  *  phase built, so this needs no migration and no backfill. */
 export const actionTypeOf = (
-  kind: "memo" | "calendar_event" | "media" | "crm_write" | undefined,
+  kind: "memo" | "calendar_event" | "media" | "crm_write" | "finance_write" | undefined,
 ): ActionType => kind ?? "email";
 
 /** How an arm executes. `workflow` = durable multi-step orchestration (email). `inline` = a single
@@ -70,6 +77,9 @@ const ARMS = {
   // 19-06 ACTN-05: the `inline` arm's SECOND occupant. A CRM write is one transactional write on
   // our own tables — see the third correction in the `Arm` comment for why it is not `externalAction`.
   crm_write: "inline",
+  // 2026-08-10: the `inline` arm's THIRD occupant. A figure update is one transactional write on
+  // our own `financeInputs` table — no fetch, nothing for the retrier to retry.
+  finance_write: "inline",
 } as const satisfies Record<ActionType, Arm>;
 
 export const armFor = (t: ActionType): Arm => ARMS[t];

@@ -29,10 +29,21 @@ describe("actionTypeOf (ACTN-01 closed action-type union)", () => {
     expect(actionTypeOf("crm_write")).toBe("crm_write");
   });
 
+  test("actionTypeOf maps the finance_write kind", () => {
+    expect(actionTypeOf("finance_write")).toBe("finance_write");
+  });
+
   // EXACT equality, never `.includes` — a member added without visiting every registration site
   // must fail HERE, at the one assertion that reads the whole union.
-  test("the union is exactly email + memo + calendar_event + media + crm_write after Phase 19", () => {
-    expect(ACTION_TYPES).toEqual(["email", "memo", "calendar_event", "media", "crm_write"]);
+  test("the union is exactly email + memo + calendar_event + media + crm_write + finance_write", () => {
+    expect(ACTION_TYPES).toEqual([
+      "email",
+      "memo",
+      "calendar_event",
+      "media",
+      "crm_write",
+      "finance_write",
+    ]);
   });
 });
 
@@ -73,6 +84,13 @@ describe("armFor (ACTN-01 — the arm table executePlan dispatches over)", () =>
     expect(armFor("crm_write")).not.toBe("externalAction");
   });
 
+  // 2026-08-10: the `inline` arm's THIRD occupant. A figure update is one transactional write on
+  // our own `financeInputs` table — no fetch, nothing for the retrier to retry — so it takes the
+  // arm `memo` and `crm_write` already share rather than a fourth.
+  test("finance_write is an inline arm — one transactional write on our own tables", () => {
+    expect(armFor("finance_write")).toBe("inline");
+  });
+
   // Totality at RUNTIME as well as at compile time: a member added to the union without an arm
   // cannot slip through here either. armFor is a table lookup, so an unmapped member reads
   // `undefined` — this is the assertion that catches it.
@@ -103,6 +121,7 @@ const _COMPLETE_ARMS = {
   calendar_event: "externalAction",
   media: "externalAction",
   crm_write: "inline",
+  finance_write: "inline",
 } as const satisfies Record<ActionType, Arm>;
 
 // @ts-expect-error — omitting an ActionType's arm MUST NOT compile (`memo` and

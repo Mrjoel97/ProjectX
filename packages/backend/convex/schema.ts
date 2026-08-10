@@ -290,12 +290,16 @@ export default defineSchema({
     // follow-up operations, applied on Approve by the `inline` arm (one transactional write on our
     // OWN tables — no fetch, so not `externalAction`). Still optional, still closed, still no
     // migration and no backfill: ABSENT still means email.
+    // 2026-08-10 widened it a FIFTH time: "finance_write" = a list of staged figure claims, applied
+    // on Approve by the same `inline` arm. invariant 11 — the ACTOR decides gating: the human
+    // editing the same figure through `cash.saveInput` stays ungated and stages no plan at all.
     kind: v.optional(
       v.union(
         v.literal("memo"),
         v.literal("calendar_event"),
         v.literal("media"),
         v.literal("crm_write"),
+        v.literal("finance_write"),
       ),
     ),
     /** 19-06 ACTN-05: the staged CRM operation list a `crm_write` plan applies on Approve.
@@ -305,6 +309,25 @@ export default defineSchema({
      *  boundary and the apply boundary; a hand-mirrored validator here would be a third copy of
      *  the same union to keep in step. `resetPlan` clears it explicitly. */
     crmOperations: v.optional(v.array(v.any())),
+    // Staged figure claims, inert until Approve. Content plane — the applier re-validates every
+    // claim rather than trusting the row, because a plan row can be revised between staging and
+    // approval. `field` stays `v.string()` on purpose: the CLOSED field union lives in
+    // `CASH_INPUTS` (@pikar/core), and mirroring it here would be a second copy to keep in step —
+    // `applyFinanceClaims` narrows against the catalogue itself. NEVER audited (§4): `value` is a
+    // tenant's revenue.
+    financeClaims: v.optional(
+      v.array(
+        v.object({
+          field: v.string(),
+          value: v.number(),
+          origin: v.union(v.literal("stated"), v.literal("observed")),
+          actor: v.union(v.literal("user"), v.literal("agent")),
+          basis: v.string(),
+          observedAt: v.number(),
+          confidence: v.union(v.literal("high"), v.literal("medium"), v.literal("low")),
+        }),
+      ),
+    ),
     // Phase-17 (ACTN-02) staged calendar event. CONTENT-PLANE ONLY, NEVER audited (§4).
     // `resetPlan` wipes all six — a staged event surviving a reset would re-stage onto the NEXT
     // plan. All optional → no migration (the sendAt precedent).

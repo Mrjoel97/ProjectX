@@ -664,6 +664,10 @@ export const resetPlan = internalMutation({
       // 19-06 ACTN-05: same Pitfall-6 class — a staged operation list surviving a reset would be
       // applied by the NEXT approve in this thread, writing contacts nobody just agreed to.
       crmOperations: undefined,
+      // 2026-08-10: same Pitfall-6 class again — a staged figure claim surviving a reset would be
+      // applied by the NEXT approve in this thread, writing a number nobody just agreed to over a
+      // figure the owner may have typed in the meantime.
+      financeClaims: undefined,
       mediaRunId: undefined, // 20-07: same Pitfall-6 class — a stale run id would let a media
       // retrier terminal fail rows on a plan that has since been reset to a fresh compose.
       // 20-02 MEDIA-01: the block deck AND the render plane, explicitly. Same Pitfall-6 class as

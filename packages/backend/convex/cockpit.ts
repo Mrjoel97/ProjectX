@@ -20,6 +20,7 @@ import {
   armFor,
   assertNever,
   classifyReviewDecision,
+  type FigureClaim,
   normalizeAddress,
   notificationMessage,
   SEND_TIME_HORIZON_MS,
@@ -34,6 +35,8 @@ import { ConvexError, v } from "convex/values";
 import { api, components, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { type ActionCtx, internalMutation, type MutationCtx } from "./_generated/server";
+// 2026-08-10: the FINANCE terminal, direct-called for exactly the reasons the CRM one below is.
+import { applyFinanceClaims } from "./cash";
 // 19-06 ACTN-05: the CRM terminal. Called DIRECTLY (not via runMutation) so the whole operation
 // list lands in the same serializable transaction as the proposed -> approved CAS, which is what
 // makes approve-all-or-none and double-approve-applies-once true without a saga.
@@ -578,6 +581,10 @@ const _ARM_TABLE = {
   // one. `ExternalActionType` below is DERIVED from this table, so `crm_write` is excluded by
   // construction — adding a target for it would not compile.
   crm_write: "inline",
+  // 2026-08-10: the arm's THIRD occupant, and an `inline` member for the same reason `crm_write` is
+  // one — a figure update writes OUR OWN `financeInputs` rows, so there is no fetch and no
+  // `EXTERNAL_TARGETS` entry to give it.
+  finance_write: "inline",
 } as const satisfies Record<ActionType, Arm>;
 
 /** The action types whose arm is `externalAction`, DERIVED from the table above rather than
@@ -716,6 +723,16 @@ export const executePlan = tenantMutation({
         // approve-all-or-none with no saga and no compensation.
         if (actionTypeOf(plan.kind) === "crm_write") {
           await applyCrmOperations(ctx, plan.tenantId, plan.crmOperations);
+          await ctx.db.patch(planId, { status: "done" });
+          return { ok: true };
+        }
+        // 2026-08-10: the arm's THIRD occupant, and the same shape as `crm_write` above —
+        // `applyFinanceClaims` re-validates every staged claim (the plan row is content plane) and
+        // writes through the SAME `writeFigureRow` the ungated human edit uses, so there is one
+        // copy of the store-routing rule. A throw part-way through discards the whole list.
+        if (actionTypeOf(plan.kind) === "finance_write") {
+          // tenantId off the APPROVED PLAN ROW, never model-supplied.
+          await applyFinanceClaims(ctx, plan.tenantId, plan.financeClaims as FigureClaim[]);
           await ctx.db.patch(planId, { status: "done" });
           return { ok: true };
         }

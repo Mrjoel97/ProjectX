@@ -31,6 +31,7 @@ describe("Approvals connected state contracts", () => {
     ["calendar_event", "Calendar event"],
     ["memo", "Next-step memo"],
     ["crm_write", "CRM update"],
+    ["finance_write", "Figure update"],
   ] as const)("labels the real %s plan kind", (kind, label) => {
     expect(renderToStaticMarkup(createElement(ApprovalKindBadge, { kind }))).toContain(label);
   });
@@ -42,6 +43,7 @@ describe("Approvals connected state contracts", () => {
     ["memo", "Approve & file to vault"],
     ["calendar_event", "Approve & create event"],
     ["crm_write", "Approve & save to records"],
+    ["finance_write", "Approve & update the figure"],
   ] as const)("the %s approve button names its own outcome", (kind, copy) => {
     expect(actionLabel(kind)).toBe(copy);
   });
