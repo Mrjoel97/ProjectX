@@ -395,6 +395,263 @@ function OptimizerPanel() {
   );
 }
 
+// SKILL-01 (21-04): the owner's review surface for USER-authored tenant candidates. A different
+// queue from the optimizer's above and deliberately NOT merged into it — those are global registry
+// rows the optimizer wrote, these are one tenant's own business adaptation of one skill, and the
+// only correct action on them is per-row and per-tenant.
+//
+// Two gates, both server-side: `tenantCandidatesForReview` / `activateTenantCandidate` /
+// `rollbackTenantSkill` are all owner-wrapped, and activation additionally needs eval evidence
+// pinning the exact row. This component's `disabled` is a courtesy that saves a round trip — the
+// wrapper is the gate (docs/playbooks/authorization.md).
+function UserCandidatesPanel() {
+  const candidates = useQuery(api.skills.tenantCandidatesForReview, {});
+  const activate = useMutation(api.skills.activateTenantCandidate);
+  const rollback = useMutation(api.skills.rollbackTenantSkill);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  // Which prior version each card's rollback control points at. Keyed by candidate id so two open
+  // cards cannot silently share one selection.
+  const [target, setTarget] = useState<Record<string, string>>({});
+
+  async function run(key: string, op: () => Promise<unknown>) {
+    setBusy(key);
+    setErrors((e) => ({ ...e, [key]: "" }));
+    try {
+      await op();
+    } catch (err) {
+      // EVAL_GATE / OWNER_REQUIRED / ROLLBACK_NOT_ELIGIBLE surface inline, never swallowed.
+      setErrors((e) => ({ ...e, [key]: err instanceof Error ? err.message : String(err) }));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  if (candidates === undefined)
+    return <p style={{ margin: 0, color: "var(--ink-soft)" }}>Loading user-authored candidates…</p>;
+  if (candidates.length === 0)
+    return (
+      <p style={{ margin: 0, color: "var(--ink-soft)" }}>
+        No user-authored candidates awaiting review.
+      </p>
+    );
+
+  return (
+    <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: "1rem" }}>
+      {candidates.map((c) => {
+        const key = String(c.candidateId);
+        const err = errors[key];
+        const working = busy === key;
+        const choice = target[key] ?? "";
+        return (
+          <li
+            key={key}
+            style={{
+              background: "var(--card)",
+              borderRadius: "1rem",
+              boxShadow: cardShadow,
+              padding: "1.25rem",
+              display: "grid",
+              gap: "0.75rem",
+            }}
+          >
+            <div
+              style={{ display: "flex", gap: "0.6rem", alignItems: "baseline", flexWrap: "wrap" }}
+            >
+              <span style={{ fontWeight: 700, color: "var(--ink)" }}>{c.label}</span>
+              <span style={{ color: "var(--ink-soft)", fontSize: "0.85rem" }}>
+                v{c.baseVersion} → v{c.version}
+              </span>
+              {/* State is a WORD, never a colour alone (BRAND §6). */}
+              <span
+                style={{
+                  fontSize: "0.75rem",
+                  fontWeight: 700,
+                  color: c.gatePassed ? "var(--released)" : "var(--ink-soft)",
+                }}
+              >
+                {c.gatePassed
+                  ? "Evaluation passed — ready for owner activation"
+                  : "Candidate — awaiting evaluation"}
+              </span>
+            </div>
+
+            {/* Provenance in REFS. The tenant is an id, not a name or an email — this page has no
+                business rendering who somebody is, only which account authored which row. */}
+            <div
+              style={{
+                fontSize: "0.75rem",
+                color: "var(--ink-soft)",
+                fontFamily: "var(--font-mono), ui-monospace, monospace",
+              }}
+            >
+              tenant <code>{c.tenantId}</code> · user <code>{c.authorUserId ?? "—"}</code> · row{" "}
+              <code>{key}</code> · base {c.baseScope}
+            </div>
+
+            <details>
+              <summary style={{ cursor: "pointer", fontSize: "0.82rem", color: "var(--ink-soft)" }}>
+                What the user wrote
+              </summary>
+              <pre
+                style={{
+                  margin: "0.5rem 0 0",
+                  fontSize: "0.72rem",
+                  fontFamily: "var(--font-mono), ui-monospace, monospace",
+                  background: "var(--canvas)",
+                  border: "1px solid var(--rule)",
+                  borderRadius: "0.6rem",
+                  padding: "0.75rem",
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                {c.authoredBody}
+              </pre>
+            </details>
+
+            <details>
+              <summary style={{ cursor: "pointer", fontSize: "0.82rem", color: "var(--ink-soft)" }}>
+                Before / after (what this tenant runs today vs the candidate)
+              </summary>
+              <pre
+                style={{
+                  margin: "0.5rem 0 0",
+                  fontSize: "0.72rem",
+                  fontFamily: "var(--font-mono), ui-monospace, monospace",
+                  background: "var(--canvas)",
+                  border: "1px solid var(--rule)",
+                  borderRadius: "0.6rem",
+                  padding: "0.75rem",
+                  overflowX: "auto",
+                  maxHeight: "22rem",
+                  overflowY: "auto",
+                }}
+              >
+                {unifiedDiff(c.baseBody, c.candidateBody).map((line, i) => (
+                  <div
+                    // biome-ignore lint/suspicious/noArrayIndexKey: positional diff lines have no stable id
+                    key={i}
+                    style={{
+                      color:
+                        line.sign === "+"
+                          ? "var(--released)"
+                          : line.sign === "-"
+                            ? "#991b1b"
+                            : "var(--ink-soft)",
+                      whiteSpace: "pre-wrap",
+                    }}
+                  >
+                    {line.sign} {line.text}
+                  </div>
+                ))}
+              </pre>
+            </details>
+
+            {/* Evidence as REFS — run id, counts, cost, model. The eval fixtures and their expected
+                outputs are held-out data and never reach a page. */}
+            <div style={{ fontSize: "0.78rem", color: "var(--ink-soft)" }}>
+              {c.evidenceSummary === null
+                ? "No eval run recorded for this row yet."
+                : `Run ${c.evidenceSummary.runId ?? "—"} · ${c.evidenceSummary.casesPassed ?? 0}/${c.evidenceSummary.casesTotal ?? 0} cases · $${(c.evidenceSummary.costUsd ?? 0).toFixed(2)} · ${c.evidenceSummary.model ?? "—"}`}
+              {c.evidenceState === "failing"
+                ? " — recorded evidence does NOT pin this row; activation will refuse."
+                : ""}
+            </div>
+
+            <div style={{ display: "flex", gap: "0.6rem", alignItems: "center", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                disabled={!c.gatePassed || working}
+                title={
+                  c.gatePassed
+                    ? undefined
+                    : "Activation needs a passing eval run pinning this exact row."
+                }
+                onClick={() => void run(key, () => activate({ candidateId: c.candidateId }))}
+                style={{
+                  padding: "0.55rem 1.2rem",
+                  borderRadius: "999px",
+                  border: "none",
+                  cursor: !c.gatePassed || working ? "default" : "pointer",
+                  background: "var(--teal-600)",
+                  color: "#fff",
+                  fontWeight: 600,
+                  fontSize: "0.9rem",
+                  fontFamily: "inherit",
+                  opacity: !c.gatePassed || working ? 0.5 : 1,
+                }}
+              >
+                {working ? "Working…" : `Activate v${c.version}`}
+              </button>
+
+              {c.rollbackTargets.length > 0 ? (
+                <>
+                  <select
+                    aria-label={`Roll ${c.label} back to a previous version for tenant ${c.tenantId}`}
+                    value={choice}
+                    onChange={(e) => setTarget((s) => ({ ...s, [key]: e.target.value }))}
+                    style={{
+                      padding: "0.45rem 0.7rem",
+                      borderRadius: "0.6rem",
+                      border: "1px solid var(--rule)",
+                      background: "var(--card)",
+                      color: "var(--ink)",
+                      fontFamily: "inherit",
+                      fontSize: "0.85rem",
+                    }}
+                  >
+                    <option value="">Roll back to…</option>
+                    {c.rollbackTargets.map((r) => (
+                      <option key={String(r.id)} value={String(r.id)}>
+                        v{r.version} ({r.author})
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={choice === "" || working}
+                    onClick={() => {
+                      // Resolve the id from the server's OWN eligible list. A stale selection
+                      // (the queue refreshed under the open card) resolves to nothing and does
+                      // nothing — it never falls through to some other row.
+                      const pick = c.rollbackTargets.find((r) => String(r.id) === choice);
+                      if (pick) void run(key, () => rollback({ targetId: pick.id }));
+                    }}
+                    style={{
+                      padding: "0.55rem 1.2rem",
+                      borderRadius: "999px",
+                      border: "1px solid var(--rule)",
+                      cursor: choice === "" || working ? "default" : "pointer",
+                      background: "var(--card)",
+                      color: "var(--ink)",
+                      fontWeight: 600,
+                      fontSize: "0.9rem",
+                      fontFamily: "inherit",
+                      opacity: choice === "" || working ? 0.5 : 1,
+                    }}
+                  >
+                    Roll back
+                  </button>
+                </>
+              ) : (
+                <span style={{ fontSize: "0.78rem", color: "var(--ink-soft)" }}>
+                  No earlier version has ever been live for this tenant.
+                </span>
+              )}
+            </div>
+
+            {err ? (
+              <p role="alert" style={{ margin: 0, color: "#991b1b", fontSize: "0.82rem" }}>
+                {err}
+              </p>
+            ) : null}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 // OPSG-07: the operator dead-letter surface — a failure nobody sees is a failure nobody
 // fixes. Tenant-scoped (not owner-gated — CONTEXT). Rows are redaction-safe: refs, hashes,
 // ids, counts ONLY — never raw user content or PII (CLAUDE.md §4). Ships resolve only;
@@ -448,6 +705,15 @@ export default function OpsPage() {
             Optimizer
           </p>
           <OptimizerPanel />
+          {/* A SEPARATE queue under the same owner gate (21-04). Global optimizer candidates above
+              are registry-wide prompt rewrites; these are one tenant's own adaptation of one skill,
+              acted on per row. Same mounting rule as the section itself: UserCandidatesPanel owns
+              its owner-only hooks, so mounting it is what subscribes to other tenants' authored
+              text — it must never move outside this `isOwner` branch. */}
+          <p className="caps-label" style={{ margin: "0.5rem 0 0" }}>
+            User-authored candidates
+          </p>
+          <UserCandidatesPanel />
         </section>
       )}
 
