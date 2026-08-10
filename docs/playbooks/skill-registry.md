@@ -1,5 +1,23 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-10 (Task 9, live-finance-inputs — **CODE ONLY: the `cockpit-agent` body
+> now teaches `readFinance`/`stageFinanceWrite` (a new "Financial figures" section — never compute
+> a ratio yourself, only these five figures are writable: `cashOnHand`, `monthlyOperatingCost`,
+> `mrr`, `receivables`, `payables`, and raise a stale/missing figure only when relevant to what
+> the user is asking), and the owed fixture (`37-finance-update.json`) and its
+> `financeClaimCount` observable were added, mirroring `crmOperationCount` exactly** (graded off
+> `plan.financeClaims`, the array `stageFinanceWrite` itself writes). Floor bumped 35 → 36. THE
+> 2-FILE MIRROR WAS KEPT IN SYNC: `cockpitAgent.ts` was regenerated from the edited `.md` and
+> `skills.test.ts`'s no-drift row (53/53) passed. Verified OFFLINE ONLY —
+> `node run-eval-golden.mjs --self-check` passed at zero cost (36 fixtures valid, vocabulary/
+> anti-vacuity rules hold) — because `convex dev` was NOT RUNNING for this session and this
+> worktree does not own the deployment `seedSkills` would write to (the main checkout, mid-refactor
+> by another session, does). **NOTHING WAS SEEDED. NO GATE WAS RUN. NOTHING WAS ACTIVATED.** The
+> active skill is UNCHANGED by this entry. Evidence recorded is never activation — this entry is
+> neither: it is a code change awaiting the seed+gate+activate cycle a later dispatch runs after
+> the merge. Budget that cycle at **~$0.35, not ~$0.12** per the note below, now one case heavier
+> at 36.**)
+>
 > Last verified: 2026-08-09 (**19-09 took the `cockpit-agent` override lane. GATE `086f8267` PASSED
 > 35/35 on `cockpit-agent@18`, zero retries, $0.3505. EVIDENCE IS RECORDED ON v18. NOTHING WAS
 > ACTIVATED — `cockpit-agent@17` IS STILL ACTIVE and activation was withheld by the owner.**)

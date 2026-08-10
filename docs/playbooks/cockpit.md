@@ -11,6 +11,22 @@
 > passing on an empty scan. **Add the literal in the SAME commit as a new tool.** Prose in a schema
 > comment is not a guard; a test is.
 
+> Last verified: 2026-08-10 (Task 9, live-finance-inputs — **the body now teaches the two finance
+> tools accurately, matching what they actually refuse.** `readFinance`/`stageFinanceWrite` were
+> built by Tasks 7-8 with no body section describing them; a new "Financial figures" section closes
+> that gap: never compute LTGP:CAC/CFA/payback/runway/the solvency verdict yourself — `readFinance`
+> is the only source — though arriving at an INPUT (a stated number) from what the user says is
+> fine. `stageFinanceWrite` can write only five figures — `cashOnHand`, `monthlyOperatingCost`,
+> `mrr`, `receivables`, `payables` — named explicitly so the model learns the boundary from the
+> body rather than by being refused; the other six (CAC among them) live on the scorecard, which
+> cannot record who supplied a figure, and every agent write to one is refused. Every update
+> stages onto a plan card; nothing is written until the human clicks Approve, and a stale/missing
+> figure is raised only when relevant to what the user is asking — the clause that stops the agent
+> opening an unrelated conversation about the user's numbers. CODE-SIDE, NOTHING IN THIS PLAYBOOK'S
+> WATCHED PATHS CHANGED — no tool implementation moved; this entry exists because the tool CONTRACT
+> those files enforce is now what the body promises, matching the "the tools" ownership split this
+> playbook draws against `skill-registry.md`, which owns the body edit itself and the un-run gate.)
+>
 > Last verified: 2026-08-10 (Task 8 REVIEW FIX, live-finance-inputs — **the figure card could not
 > show a refusal at all, the tool proposed figures it can never write, and either staging tool
 > silently ate the other's plan.** Four findings. (1) **`PlanCard`'s note rendered on ONE branch.**

@@ -270,6 +270,18 @@ const EXPECT_KEYS = new Set([
   "planKind",
   "attributionRoute",
   "citesVaultDoc",
+  // Task 9 (live-finance-inputs): `financeClaimCount` — how many figure updates
+  // `stageFinanceWrite` staged on this thread. Graded off `plan.financeClaims`, the
+  // content-plane field Task 8 put on the plan row — the exact `crmOperationCount` /
+  // `attachmentCount` shape, one array length read off the plan row, no smoke query, no model
+  // call, no extra hop.
+  // The failure it exists to catch is the same one `crmOperationCount` exists for: the agent
+  // replying "I've updated your cash on hand" (or silently computing the ratio itself instead
+  // of calling `readFinance`) while `stageFinanceWrite` never ran, which no reply assertion can
+  // tell apart from success. And because the tool STAGES only, a non-zero count is never
+  // evidence anything was written — the apply happens behind a human Approve this harness never
+  // clicks, same as every other staging tool here.
+  "financeClaimCount",
 ]);
 
 // The pinned plans lifecycle order (schema.ts) — statusAtMost compares indices.
@@ -362,6 +374,15 @@ function validateFixture(fx, source) {
     (!Number.isInteger(fx.expect.datedFollowUpCount) || fx.expect.datedFollowUpCount < 1)
   ) {
     fail("expect.datedFollowUpCount must be an integer >= 1 (a zero count is vacuous)");
+  }
+  // Task 9: same anti-vacuity rule as crmOperationCount, for the same reason —
+  // `financeClaimCount: 0` passes on every fixture that never mentions a figure, so it asserts
+  // nothing. A fixture meaning "the agent must NOT stage a figure update" needs its own key.
+  if (
+    fx.expect.financeClaimCount !== undefined &&
+    (!Number.isInteger(fx.expect.financeClaimCount) || fx.expect.financeClaimCount < 1)
+  ) {
+    fail("expect.financeClaimCount must be an integer >= 1 (a zero count is vacuous)");
   }
   if (fx.expect.datedFollowUpCount !== undefined && fx.expect.crmOperationCount === undefined) {
     fail("expect.datedFollowUpCount requires crmOperationCount (it is a SUBSET of the total)");
@@ -618,6 +639,11 @@ function evaluateExpect(
       case "planKind":
         if (plan.kind !== expected) miss(key, expected, plan.kind ?? "absent");
         break;
+      case "financeClaimCount":
+        // Task 9. Plan-row key (Task 8's `plans.financeClaims`), graded like `crmOperationCount`.
+        if ((plan.financeClaims ?? []).length !== expected)
+          miss(key, expected, (plan.financeClaims ?? []).length);
+        break;
       case "attributionRoute": {
         // specialistMemoBody puts this FIRST, so match the prefix — a fallback memo (refusal,
         // throw, empty reply) starts with "# Next step" and fails here.
@@ -665,7 +691,9 @@ function selfCheck() {
   // tripwire: a fixture quietly dropped must not quietly shrink the gate. 34 adds 18-08's createDocument case (ACTN-04).
   // 35 adds 19-09's crm-follow-up case (ACTN-05) — the fixture owed by the shared-gate override
   // condition: a lane that teaches a tool in the body owes a case that exercises it.
-  assert.ok(fixtures.length >= 35, `expected >= 35 fixtures, found ${fixtures.length}`);
+  // 36 adds Task 9's finance-update case (live-finance-inputs) — the same owed-fixture rule for
+  // `readFinance`/`stageFinanceWrite`, taught in the body alongside it.
+  assert.ok(fixtures.length >= 36, `expected >= 36 fixtures, found ${fixtures.length}`);
   const ids = new Set(fixtures.map((f) => f.id));
   assert.equal(ids.size, fixtures.length, "fixture ids must be unique");
 

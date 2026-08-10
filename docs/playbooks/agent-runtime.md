@@ -6,6 +6,20 @@
 > mid-change at the time of writing. Not this session's work, not verified here, and the entry
 > below stands unchanged. That lane owns the §9 entry when it lands.
 
+> Last verified: 2026-08-10 (Task 9, live-finance-inputs — **the closed EXPECT vocabulary gained
+> `financeClaimCount`**, the same shape as `crmOperationCount`/`attachmentCount`: an array-length
+> read off `plan.financeClaims`, the content-plane field `stageFinanceWrite` (Task 8) writes when
+> it stages figure updates. Anti-vacuity rule added alongside it (must be an integer >= 1, same as
+> `crmOperationCount`'s). `37-finance-update.json` was added to `eval-cases/` to exercise it — the
+> owed fixture for the `readFinance`/`stageFinanceWrite` body section this same lane added — and
+> the fixture floor moved 35 → 36. It deliberately does NOT assert `planKind`: that key is paired
+> with `actOnGap` (15-06/DISP-01's gap-dispatch-only rule) and this fixture has no gap to tap;
+> `financeClaimCount` alone already proves the routing, since no path but `stageFinanceWrite` writes
+> `plan.financeClaims`. Verified with `node run-eval-golden.mjs --self-check` ONLY — offline, zero
+> Convex calls, $0 — because `convex dev` was not running this session. **NO LIVE FIXTURE RUN, NO
+> `--only 37`, NO FULL GATE.** The fixture has never executed against a real model; that falsification
+> step (one case, cents) is still owed before it can certify inside a full gate.)
+>
 > Last verified: 2026-08-10 (Plan 19-11 — **THE CLOCK NEVER REACHED THE LOOP'S TOOLS, AND THAT WAS
 > ACTN-05's ROOT CAUSE.** `runAgentLoop` builds its OWN tool set and passed `undefined` as
 > `buildCockpitTools`' 4th (`clientContext`) argument, so every clock-dependent tool —
