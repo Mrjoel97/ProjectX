@@ -1,5 +1,17 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-08-10 (17.1-10 L6 postmortem — **the live golden gate is RED/unknown, not a
+> pass**). One authorized top-level `pnpm --filter @pikar/backend eval:golden` command timed out
+> after **1808.1 seconds** (exit **124**) without captured stdout and left its runner process alive.
+> Three distinct throwaway tenants nevertheless reached confirmed Blueprint seeding during the
+> command window: `eval-bb67ebfa`, `eval-a464e1c4`, and `eval-e73d636a`; each profile row links one
+> Blueprint to exactly **5 source refs**. That proves the new seed mutation executed, but the missing
+> stdout means it does not prove the production spine returned the `evalblpr` marker before a model
+> turn. The original and later eval-owned process trees were stopped. Bounded `convex data` recovery
+> lost local-deployment connectivity after cleanup, so there is no defensible pass/fail total,
+> retry list, spend total, or evidence-row count. **Do not rerun:** retain these rows as failed-run
+> evidence and keep Phase 17.1/L1-L7 open until a separately authorized recovery plan exists.
+>
 > Last verified: 2026-08-10 (17.1-10 Rule-2 gate repair). The golden runner's documented
 > Blueprint-bearing premise was false: it minted `eval-<runId>` and seeded inbox/RAG fixtures, but
 > never inserted a confirmed Blueprint for that tenant. `smoke.seedGoldenEvalBlueprint` is the

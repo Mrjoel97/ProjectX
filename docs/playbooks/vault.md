@@ -1,5 +1,19 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Last verified: 2026-08-10 (17.1-10 L6 failed live gate — **do not claim a golden
+> pass**). The owner authorized and launched exactly one top-level, unpinned 35-case command
+> against the configured local deployment. The shell timed out after **1808.1 seconds** with exit
+> **124** and captured no runner stdout; its original `pnpm`/runner process tree was still alive and
+> had to be stopped explicitly. Read-only recovery found three distinct throwaway profile rows in
+> the command window: `eval-bb67ebfa` at `12:45:58.141Z`, `eval-a464e1c4` at `13:00:39.900Z`, and
+> `eval-e73d636a` at `13:09:28.853Z`. Each row had one confirmed Blueprint ref and exactly **5 owned
+> source-document refs**, proving the deterministic seed ran, but not that the rendered spine
+> assertion completed. A later eval-owned process tree aligned with the newest row and was also
+> stopped; all identified eval-owned processes ended at zero remaining. The local CLI then lost
+> deployment connectivity, so **case pass/fail, retry count, actual spend, plan/evaluation counts,
+> rendered `evalblpr` proof, and evidence-row counts were not recoverable**. No evaluation retry was
+> made. Phase 17.1 remains open and L1/L7 owner verification must not proceed on this evidence.
+>
 > Last verified: 2026-08-09 (17.1-10 Task 2 live gate — **L2-L4 ran once; L6 did not
 > start.**) The owner-tenant Blueprint rebuild returned **2 candidates**, both additions, with
 > **0 contradictions and 0 citation-gate drops** (`bad_citation: 0`, `unknown_field: 0`,

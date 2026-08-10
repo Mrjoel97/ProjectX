@@ -1,5 +1,13 @@
 # Playbook: Persona Onboarding & Business Profile
 
+> Last verified: 2026-08-10 (17.1-10 L6 postmortem). The live gate did not produce a certifying
+> result: its one top-level command timed out after **1808.1 seconds** with no captured stdout and
+> surviving eval-owned processes. Database recovery did verify the eval-only seed wrote confirmed
+> Blueprint profile rows for `eval-bb67ebfa`, `eval-a464e1c4`, and `eval-e73d636a`, each with one
+> Blueprint ref and **5 source refs**. It could not verify the rendered `evalblpr` spine, case
+> results, retries, spend, or evidence writes. All identified eval-owned processes were stopped and
+> no retry occurred; this is failed-run evidence, not a golden pass.
+>
 > Last verified: 2026-08-10 (17.1-10 golden-eval non-vacuity repair). The throwaway golden tenant
 > now receives one deterministic confirmed Blueprint linked to its two owned `ready` RAG seed
 > documents. The eval-only mutation refuses non-`eval-<8 hex>` tenants, foreign/not-ready sources,
