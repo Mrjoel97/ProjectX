@@ -1,5 +1,11 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-11 (COVERAGE ONLY, eval-gate session — not an attestation.
+> `packages/core/src/calendarManagement.ts` and its test tripped §9 as uncovered new code.
+> Registered here because this playbook already owns `core/src/calendar.ts`. They are the 17-05
+> Calendar lane's files, unread by this session. **Nothing here is verified** — that lane
+> supersedes this entry when the work commits.)
+
 > Last verified: 2026-08-11 (21-05 - **ROUTINE v0 SHIPPED AS PINNED PROMPTS. `savedPrompts` now has
 > its three functions and its two workspace controls. NO scheduler, cron, trigger, recurrence,
 > next-run timestamp, execution history, routine status or `routines` table was added, and none may

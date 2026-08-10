@@ -142,6 +142,8 @@
     "packages/backend/convex/traceParity.test.ts",
     "packages/core/src/calendar.ts",
     "packages/core/src/calendar.test.ts",
+    "packages/core/src/calendarManagement.test.ts",
+    "packages/core/src/calendarManagement.ts",
     "packages/backend/scripts/probe-gemini.mjs"
   ],
   "audit-dead-letter.md": [

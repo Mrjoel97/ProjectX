@@ -1,5 +1,22 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-11 (THE GATE IS GREEN — run `107ee875`, **36/36**, evidence recorded on
+> `cockpit-agent v1` of the CLOUD DEV deployment `woozy-wren-368`. $0.2944 exec + $0.1103
+> specialist = **$0.4047**; one fixture retried (`21-fragment-answer-absorbed`). Not a splice —
+> all 36 green in ONE unfiltered run, which the runner requires before it writes evidence.
+> **Version numbering restarted:** the gate moved off the local backend to an always-on cloud dev
+> deployment, whose skills table was empty, so `seedSkills` bootstrapped the body as **v1 ACTIVE**
+> rather than a candidate. Local's `@18`/`@19`/`@20` history did NOT travel. `v1`'s body is
+> sha256 `b765d7422d5e0d5d0d6beaa58b1310fbba02ced028a613cdc38aef01c3fec7e7`, byte-identical to the
+> local `@20` that fixed the fixture-29 regression — verified by sha on both deployments, not
+> assumed. Fixture 37 (`finance-update`, the one owed by 'teach a tool, owe a fixture') passed
+> INSIDE this full run, not only in isolation.
+> **What this entry does NOT cover:** `packages/backend/convex/skills.ts` is dirty in the shared
+> tree from the concurrent 21-03 tenant-overlay lane. This session did not author or read that
+> change and does not attest to it; that lane supersedes this clause when it commits.
+> **Production is NOT seeded.** `opulent-octopus-494` has 0 functions — `convex deploy` fails with
+> a server-side `408` on `/api/deploy2/evaluate_push`, twice, on a cold nine-component push.)
+
 > Last verified: 2026-08-11 (21-03 — **EVIDENCE CAN NOW NAME ONE EXACT TENANT CANDIDATE ROW.
 > NOTHING HAS PASSED A LIVE GATE, NOTHING WAS ACTIVATED, AND NO PAID EVAL WAS RUN — $0.00.** The
 > only eval invocation this plan made is the FREE `--self-check`. A standing do-not-rerun order is

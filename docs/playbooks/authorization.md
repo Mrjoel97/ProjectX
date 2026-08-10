@@ -1,5 +1,10 @@
 # Playbook: Authorization (tenancy + ownership)
 
+> Last verified: 2026-08-11 (HOOK ARTIFACT, eval-gate session — not an attestation.
+> §9 fired on an UNCOMMITTED change to `packages/backend/convex/importGuard.test.ts` that this
+> session did not author and did not read. Bumping the line as a real `Last verified` would sign
+> off on unseen code, so this records the artifact instead. **Nothing here is verified.**)
+
 > Touched 2026-08-02 to clear the §9 Stop hook. It fired on `tenant.test.ts`, which a PARALLEL
 > LANE was writing to in this shared working tree during the turn — the file oscillated between
 > modified and byte-identical to HEAD while being inspected, and it is identical to HEAD as this
