@@ -23,6 +23,7 @@ import {
   type FigureClaim,
   isNewerThan,
   needsConfirmation,
+  type Tier,
   toCashInputs,
   validateFigureClaim,
 } from "@pikar/core";
@@ -230,8 +231,22 @@ export const shape = tenantQuery({
 /**
  * Explicit-tenantId twin of `unitEconomicsForTenant` above, for the same reason: `solvency` below
  * and the tool-loop's `solvencyFor` internal reader must share ONE derivation.
+ *
+ * `unknownTierFallback` (Task 7 review, Important 1) is the ONLY thing that may differ between
+ * those two callers, and each states its own choice explicitly rather than this function picking
+ * for both: the dashboard's `solvency` below defaults an unconfirmed tier to `"solopreneur"`
+ * because the page ALSO shows a "complete your shape" invitation next to it — the guess is never
+ * the whole story a user sees there. `solvencyFor` (the cockpit tool) has no such invitation, so it
+ * passes `null` — a genuinely unconfirmed tier — straight through to `@pikar/core`'s `solvency()`,
+ * which treats `null` as permissive rather than guessing "solopreneur" and asserting `mrr`/`arr`/
+ * `workingCapital` structurally do not apply to a business that simply hasn't finished onboarding.
  */
-async function solvencyForTenant(ctx: { db: QueryCtx["db"] }, tenantId: string, nowMs: number) {
+async function solvencyForTenant(
+  ctx: { db: QueryCtx["db"] },
+  tenantId: string,
+  nowMs: number,
+  unknownTierFallback: Tier | null,
+) {
   const row = await ctx.db
     .query("tenantProfiles")
     .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
@@ -239,17 +254,17 @@ async function solvencyForTenant(ctx: { db: QueryCtx["db"] }, tenantId: string, 
   const states = (await inputStatesFor(ctx, tenantId, nowMs)).inputs;
   return coreSolvency({
     inputs: toCashInputs(states),
-    // No profile row: treat as solopreneur for not-applicable resolution, which is the most
-    // conservative set — it hides MRR/ARR rather than inventing them. The page separately shows
-    // the complete-your-shape invitation, so this is never the whole story a user sees.
-    tier: row?.tier ?? "solopreneur",
+    tier: row?.tier ?? unknownTierFallback,
     nowMs,
   });
 }
 
 export const solvency = tenantQuery({
   args: {},
-  handler: async (ctx) => solvencyForTenant(ctx, ctx.tenantId, Date.now()),
+  // No profile row: treat as solopreneur for not-applicable resolution, which is the most
+  // conservative set — it hides MRR/ARR rather than inventing them. The page separately shows
+  // the complete-your-shape invitation, so this is never the whole story a user sees.
+  handler: async (ctx) => solvencyForTenant(ctx, ctx.tenantId, Date.now(), "solopreneur"),
 });
 
 // Explicit-tenantId internal readers for the tool loop (§2 allow-list, the `vaultGroundHydrated`
@@ -263,7 +278,24 @@ export const unitEconomicsFor = internalQuery({
 
 export const solvencyFor = internalQuery({
   args: { tenantId: v.string() },
-  handler: async (ctx, { tenantId }) => solvencyForTenant(ctx, tenantId, Date.now()),
+  // `null`, not `"solopreneur"` — see solvencyForTenant's doc comment. The tool has no
+  // complete-your-shape invitation to lean on, so an unconfirmed tier stays genuinely unconfirmed.
+  handler: async (ctx, { tenantId }) => solvencyForTenant(ctx, tenantId, Date.now(), null),
+});
+
+/**
+ * Per-input freshness for the tool loop (Task 7 review, Important 2). `readFinance`'s own
+ * description promises figures that are "missing or out of date" — every SUPPRESSED derived figure
+ * already names what it needs, but a `known` DERIVED figure (runway, CFA, LTGP:CAC, …) carries no
+ * staleness marker of its own (only `statedFigure`'s two direct call sites, `mrr` and `referralPct`,
+ * ever set `stale`). This is the same `CashInputState[]` `inputs` above already computes — the tool
+ * includes it so the agent can say "this rests on a cash figure you last confirmed in February"
+ * without needing to cross-reference a different part of the turn to find that out.
+ */
+export const inputsFor = internalQuery({
+  args: { tenantId: v.string() },
+  handler: async (ctx, { tenantId }): Promise<{ inputs: CashInputState[] }> =>
+    inputStatesFor(ctx, tenantId, Date.now()),
 });
 
 /**

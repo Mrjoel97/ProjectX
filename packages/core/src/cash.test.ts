@@ -649,6 +649,46 @@ describe("solvency — the finance-ops layer", () => {
   });
 });
 
+// Task 7 review (live-finance-inputs, Important 1): `tier: null` means the business's SHAPE has
+// not been confirmed at all — NOT a guessed "solopreneur". Guessing here used to make `mrr`/`arr`/
+// `workingCapital` come back `not-applicable` with tool-loop authority behind it, so a funded
+// startup mid-onboarding asking "what's my MRR?" got told, confidently and wrongly, that MRR does
+// not apply to their business. `tier: null` must be PERMISSIVE (fall through to the ordinary
+// missing-input handling), never exclusionary.
+describe("solvency — tier: null (business shape not yet confirmed)", () => {
+  test("with no MRR entered and no tier confirmed, MRR is unknown — never not-applicable", () => {
+    const result = solvency({ inputs: withInputs({}), tier: null, nowMs: NOW });
+    expect(result.mrr).toMatchObject({ state: "unknown" });
+    expect(result.arr).toMatchObject({ state: "unknown" });
+    expect(result.workingCapital).toMatchObject({ state: "unknown" });
+  });
+
+  test("a REAL stated MRR still surfaces even though the tier is unconfirmed", () => {
+    const result = solvency({ inputs: withInputs({ mrr: 5_000 }), tier: null, nowMs: NOW });
+    expect(result.mrr).toMatchObject({ state: "known", value: 5_000 });
+    expect(result.arr).toMatchObject({ state: "known", value: 60_000 });
+  });
+
+  test("a REAL stated working capital still surfaces even though the tier is unconfirmed", () => {
+    const result = solvency({
+      inputs: withInputs({ receivables: 30_000, payables: 45_000 }),
+      tier: null,
+      nowMs: NOW,
+    });
+    expect(result.workingCapital).toMatchObject({ state: "known", value: -15_000 });
+  });
+
+  test("runway/netBurn still require MRR when the tier is unconfirmed — never silently treated as 0", () => {
+    const result = solvency({
+      inputs: withInputs({ cashOnHand: 60_000, monthlyOperatingCost: 10_000 }),
+      tier: null,
+      nowMs: NOW,
+    });
+    expect(result.netBurn).toMatchObject({ state: "unknown" });
+    expect(result.runway).toMatchObject({ state: "unknown" });
+  });
+});
+
 describe("which metrics a tenant sees", () => {
   test("a bootstrapped solopreneur leads with CFA — a customer paying for itself IS survival", () => {
     expect(metricSetFor("solopreneur", "bootstrapped").headline).toBe("cfa");

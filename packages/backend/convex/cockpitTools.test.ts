@@ -24,7 +24,7 @@ import { expect, test, vi } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 // runCockpitAgent's preCall/recordSpend drive the rate-limiter component (the daily-spend window).
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
-import { internal } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { contentHash } from "./lib/hash";
 import {
@@ -2082,19 +2082,69 @@ test("readFinance takes no arguments — the tenant is never model-supplied", as
   expect(Object.keys(schema.properties)).toEqual([]);
 });
 
+type FinanceReply = {
+  unitEconomics: Record<string, { state: string; needs?: string; because?: string }>;
+  solvency: Record<string, { state: string; needs?: string; because?: string }>;
+  inputs: Array<{ field: string; value: number | null; stale: boolean }>;
+};
+
 // A brand-new tenant has NO financeInputs rows and NO scorecard evaluation at all — the normal
 // case for the Finance page, not an error. This must not throw; every derived figure must come
 // back as an honest "unknown"/"not-computable" state (never "known") for the agent to describe.
+// Tightened per Task 7 review: the exact figure count (not a floor a regression could slip under)
+// and — the one property this tool exists to hold — every suppressed figure carries ITS REASON.
+// A figure with no `needs`/`because` is exactly the "trust me" the tool must never emit.
 test("readFinance on a tenant with no figures at all returns honest unknown/not-computable states, never throws", async () => {
   const { t, planId } = await setup(); // fresh "t1", zero financeInputs rows, zero scorecard rows
   const reply = await call(t, planId, "readFinance", {});
-  const parsed = JSON.parse(reply) as {
-    unitEconomics: Record<string, { state: string }>;
-    solvency: Record<string, { state: string }>;
-  };
-  const allFigures = [...Object.values(parsed.unitEconomics), ...Object.values(parsed.solvency)];
-  expect(allFigures.length).toBeGreaterThan(5); // non-vacuity: both records actually populated
-  for (const figure of allFigures) {
+  const parsed = JSON.parse(reply) as FinanceReply;
+
+  const unitFigures = Object.values(parsed.unitEconomics);
+  const solvencyFigures = Object.values(parsed.solvency);
+  expect(unitFigures).toHaveLength(8); // cfa, ltgp, ltgpCac, cacPayback, cacVsIndustry, grossMargin, cohortChurn, referralPct
+  expect(solvencyFigures).toHaveLength(5); // runway, netBurn, mrr, arr, workingCapital
+  for (const figure of [...unitFigures, ...solvencyFigures]) {
     expect(["unknown", "not-computable", "not-applicable"]).toContain(figure.state);
+    // Never a suppressed figure with no reason: `needs` for unknown, `because` for the other two.
+    const reason = figure.needs ?? figure.because;
+    expect(reason, `figure ${JSON.stringify(figure)} was suppressed with no reason`).toEqual(
+      expect.stringMatching(/\S/),
+    );
   }
+
+  // Task 7 review, Important 1: an unconfirmed tier must never read as a guessed "solopreneur" —
+  // mrr/arr/workingCapital come back UNKNOWN ("needs" your figure / your business shape), never
+  // the false structural certainty of "not-applicable".
+  expect(parsed.solvency.mrr?.state).toBe("unknown");
+  expect(parsed.solvency.arr?.state).toBe("unknown");
+  expect(parsed.solvency.workingCapital?.state).toBe("unknown");
+
+  // Task 7 review, Important 2: the per-input freshness line the description promises ("out of
+  // date") is actually present — all 11 CASH_INPUTS fields, none stale (nothing was ever entered).
+  expect(parsed.inputs).toHaveLength(11);
+  expect(parsed.inputs.every((i) => i.value === null && i.stale === false)).toBe(true);
+});
+
+// Task 7 review, Important 1 (the funded-startup-mid-onboarding case, verbatim). A tenant with a
+// REAL stated MRR but no tenantProfiles row (business shape not yet confirmed) must see that MRR —
+// the old "guess solopreneur" default discarded it in favor of a false "does not apply" claim.
+test("readFinance surfaces a REAL stated MRR even when the tenant's business shape is unconfirmed", async () => {
+  const { t, planId } = await setup();
+  // "t1|session" → tenantId "t1" (requireScope splits on "|"), the SAME tenant `call` below drives
+  // the tool for — mirrors `asTenant` in cash.test.ts.
+  await t
+    .withIdentity({ subject: "t1|session", issuer: "test" })
+    .mutation(api.cash.saveInput, { field: "mrr", value: 8_000 });
+
+  const reply = await call(t, planId, "readFinance", {});
+  const parsed = JSON.parse(reply) as FinanceReply;
+  expect(parsed.solvency.mrr).toMatchObject({ state: "known", value: 8_000 });
+  expect(parsed.solvency.arr).toMatchObject({ state: "known", value: 96_000 });
+
+  // Contrast: the DASHBOARD's own `solvency` query is UNCHANGED — it still defaults an unconfirmed
+  // tier to "solopreneur" (the page's compensating "complete your shape" invitation makes that
+  // acceptable there), so it still shows mrr as not-applicable for this same tenant/data. The tool
+  // and the page are DELIBERATELY different on this one point; this pins that they stay that way.
+  const dashboard = await t.withIdentity({ subject: "t1|session", issuer: "test" }).query(api.cash.solvency, {});
+  expect(dashboard.mrr.state).toBe("not-applicable");
 });

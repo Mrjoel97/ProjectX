@@ -674,17 +674,32 @@ export type CashSolvency = {
  * absent data" move `CashFigure`'s four states exist to forbid. Tier is a structural fact about the
  * business (does a monthly-recurring or a working-capital concept even apply to it); revenue stage
  * is a fact about the answer to a question that still needs asking. Do not thread it back in.
+ *
+ * `tier: null` means the business's SHAPE has not been confirmed at all (no `tenantProfiles` row) —
+ * distinct from every real `Tier`, and NOT defaulted to `"solopreneur"` here. A caller that wants
+ * that default (the Finance page, which shows a "complete your shape" invitation alongside it) makes
+ * that choice explicitly at its own call site; this function does not make it FOR every caller. An
+ * unconfirmed tier does not license `not-applicable` — that state asserts a structural fact this
+ * function does not yet have — so every tier-gated figure below falls through to the ordinary
+ * missing-input handling instead: a REAL stated MRR still surfaces, an absent one reads `unknown`
+ * ("needs your figure") rather than the false certainty of "this does not apply to your business."
  */
-export function solvency(args: { inputs: CashInputs; tier: Tier; nowMs: number }): CashSolvency {
+export function solvency(args: { inputs: CashInputs; tier: Tier | null; nowMs: number }): CashSolvency {
   const { inputs, tier, nowMs } = args;
   // Derived from the ONE catalogue (`CASH_INPUTS`) rather than restated as tier-comparison booleans:
   // the panel's own `tiers` list on the `mrr`/`receivables`/`payables` specs is already the single
   // source of "which tiers see this field." Two independent tier checks agreeing today is exactly
   // the drift risk CLAUDE.md §1 exists to prevent — edit `CASH_INPUTS.tiers` and a hand-rolled
   // `tier === "sme" || tier === "enterprise"` here would silently keep the old answer.
-  const tierFields = new Set(cashInputsForTier(tier).map((spec) => spec.field));
-  const recurringApplies = tierFields.has("mrr");
-  const workingCapitalApplies = tierFields.has("receivables") && tierFields.has("payables");
+  //
+  // tier === null: permissive, not exclusionary. `not-applicable` is a claim about the business's
+  // STRUCTURE ("this concept does not exist for you") which an unconfirmed tier cannot support —
+  // the field is treated as though it MIGHT apply, and `requireInputs`/`statedFigure` below answer
+  // honestly from there (`unknown` when nothing was entered, `known` when it was).
+  const tierFields = tier === null ? null : new Set(cashInputsForTier(tier).map((spec) => spec.field));
+  const recurringApplies = tierFields === null ? true : tierFields.has("mrr");
+  const workingCapitalApplies =
+    tierFields === null ? true : tierFields.has("receivables") && tierFields.has("payables");
 
   // mrr is surfaced DIRECTLY as a figure (unlike cashOnHand/monthlyOperatingCost/receivables/
   // payables below, which are only ever CONSUMED through requireInputs+valueOf on the way to a

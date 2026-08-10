@@ -1,5 +1,25 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-10 (Task 7 REVIEW FIX, live-finance-inputs — **`@pikar/core`'s `solvency()`
+> now takes `tier: Tier | null`, and `null` is PERMISSIVE, not a guess.** Review found that
+> `solvencyForTenant`'s `row?.tier ?? "solopreneur"` default — correct on the Finance PAGE, which
+> shows a compensating "complete your shape" invitation beside the guess — had been reused verbatim
+> for `readFinance` (the cockpit tool, Task 7 above), which has no such invitation: an unconfirmed
+> tier made `mrr`/`arr`/`workingCapital` come back `not-applicable` with the TOOL's own authority
+> behind the guess, so a funded startup mid-onboarding asking "what's my MRR?" got told, confidently
+> and wrongly, that MRR structurally does not apply to their business. Fixed in `@pikar/core`, not
+> patched at either adapter call site: `tier === null` now falls through to the ordinary
+> missing-input handling (`requireInputs`/`statedFigure`) instead of asserting a structural fact the
+> function does not have — a REAL stated MRR still surfaces as `known`, an absent one reads `unknown`
+> ("needs your figure"), and `not-applicable` is reserved for a CONFIRMED tier that genuinely
+> excludes the metric. `solvencyForTenant` (`cash.ts`) now takes the fallback as an explicit
+> parameter so the two callers state their own policy instead of one function choosing for both: the
+> dashboard's `solvency` query is BEHAVIOURALLY UNCHANGED (`"solopreneur"`, same as before — pinned
+> by `cash.test.ts`'s existing 35 tests, none of which needed editing), and only `solvencyFor` (the
+> tool) passes `null`. `packages/core/src/cash.test.ts` gained a 4-test `tier: null` describe block;
+> `cockpitTools.test.ts` gained a dedicated test proving the SAME tenant/data reads `known` MRR
+> through the tool and `not-applicable` MRR through the dashboard query, on purpose, not by drift.)
+
 > Last verified: 2026-08-10 (Task 7, live-finance-inputs — **`cash.ts` gains two `internalQuery`
 > readers, `unitEconomicsFor`/`solvencyFor`, taking an EXPLICIT `tenantId` for `llm.ts`'s new
 > `readFinance` cockpit tool** (the tool loop has no `ctx.tenantId`). Both the existing

@@ -2536,6 +2536,12 @@ export function buildCockpitTools(
     // the model, so there is no argument to forge. A brand-new tenant with no figures at all is
     // the NORMAL case, not an error — `unitEconomics`/`solvency` are pure and return "missing"/
     // "not computable" states rather than throwing, so this never needs to fail loudly.
+    //
+    // Task 7 review, Important 2: the description below promises figures that are "missing or out
+    // of date". Missing is covered by every suppressed figure's own `needs`/`because`; "out of
+    // date" needed `inputs` (per-field `stale`) added to the payload — `unitEconomics`/`solvency`
+    // alone carry NO staleness marker on nine of their thirteen figures (only `mrr`/`referralPct`
+    // route through `statedFigure`; every other `derived()` figure has none at all).
     readFinance: tool({
       // Split literal keeps each chunk under the §5 no-hardcoded-prompt scan ceiling (200 chars).
       description:
@@ -2548,11 +2554,12 @@ export function buildCockpitTools(
         additionalProperties: false,
       }),
       execute: async (): Promise<string> => {
-        const [unit, sol] = await Promise.all([
+        const [unit, sol, inputs] = await Promise.all([
           ctx.runQuery(internal.cash.unitEconomicsFor, { tenantId }),
           ctx.runQuery(internal.cash.solvencyFor, { tenantId }),
+          ctx.runQuery(internal.cash.inputsFor, { tenantId }),
         ]);
-        return JSON.stringify({ unitEconomics: unit, solvency: sol });
+        return JSON.stringify({ unitEconomics: unit, solvency: sol, inputs: inputs.inputs });
       },
     }),
     // ── The briefing tools (CKPT-04) — READ-ONLY, panel-driven ────────────────────────────────

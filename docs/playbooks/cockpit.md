@@ -11,6 +11,32 @@
 > passing on an empty scan. **Add the literal in the SAME commit as a new tool.** Prose in a schema
 > comment is not a guard; a test is.
 
+> Last verified: 2026-08-10 (Task 7 REVIEW FIX, live-finance-inputs — **`readFinance`'s payload now
+> carries per-input freshness, and no longer inherits a guessed tier's false certainty.** Two
+> Important findings. (1) The description promises figures that are "missing or out of date", but
+> only 2 of 13 derived figures (`mrr`/`referralPct`, the only two routed through `statedFigure`)
+> ever carried a `stale` marker — `execute` now ALSO calls the new `internal.cash.inputsFor` reader
+> and includes its `CashInputState[]` (the same per-field `stale`/`statedAt` `inputs` above already
+> computes) in the returned JSON under an `inputs` key, so the agent can back "out of date" with an
+> actual date rather than the tool's own unbacked promise. (2) `solvencyFor` used to reuse
+> `solvencyForTenant`'s `row?.tier ?? "solopreneur"` default — safe on the Finance PAGE (which shows
+> a compensating "complete your shape" invitation next to the guess) but not on this tool, which has
+> no such invitation: a funded startup mid-onboarding asking "what's my MRR?" got told, with the
+> tool's own authority, that MRR structurally does not apply to their business. Fixed at the root in
+> `@pikar/core`'s `solvency()` (not patched here): `tier` widened to `Tier | null`, and `null` is now
+> PERMISSIVE rather than exclusionary — `not-applicable` is a claim about business STRUCTURE the
+> function cannot make without a confirmed tier, so an unconfirmed tier falls through to the ordinary
+> missing-input handling instead (a real stated MRR still surfaces as `known`; an absent one reads
+> `unknown`, never `not-applicable`). `solvencyForTenant` (`cash.ts`) now takes the tier-unknown
+> fallback as an explicit parameter instead of choosing one for both callers: `solvency` (dashboard)
+> still passes `"solopreneur"` — UNCHANGED behavior, `cash.test.ts`'s existing 35 tests confirm it —
+> and `solvencyFor` (this tool) passes `null`. Covering tests: `packages/core/src/cash.test.ts` gained
+> a `tier: null` describe block (4 tests); `cockpitTools.test.ts`'s empty-tenant test was tightened
+> from a `> 5` floor to the exact 13-figure count plus a "every suppressed figure carries its reason"
+> assertion, and gained a dedicated stated-MRR-with-unconfirmed-tier test that also pins the
+> dashboard's `solvency` query staying at `not-applicable` for the identical data — the tool and the
+> page are now DELIBERATELY different on this one point, not accidentally.)
+
 > Last verified: 2026-08-10 (Task 7, live-finance-inputs — **`readFinance`, the on-demand DERIVED
 > half of the finance spine.** A new read-only cockpit tool, beside `stageCrmWrite` in
 > `buildCockpitTools`: EMPTY input schema (the tenant rides the RUN's closure-captured `tenantId`,
