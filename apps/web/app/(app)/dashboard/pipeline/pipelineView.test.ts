@@ -13,7 +13,7 @@ import { IMPORT_ATTESTATION } from "@pikar/core/contactImport";
 import { type ComponentType, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
-import { ImportAttest, ImportPreview } from "./ImportPanel";
+import { ImportAttest, ImportDone, ImportPreview } from "./ImportPanel";
 import {
   ContactsEmptyState,
   ContactTable,
@@ -406,5 +406,75 @@ describe("the CSV import panel", () => {
     expect(importSource).toContain("api.contacts.importContacts");
     expect(importSource).toContain("IMPORT_MATCH_CHUNK");
     expect(importSource).toContain("IMPORT_BATCH_ROWS");
+  });
+
+  // ── The two items presented at the 19.1-07 owner gate and left open there ──────────────────
+  // Both were verified as real by the phase verifier before being fixed here.
+
+  test("the disabled Confirm LOOKS disabled, not merely IS disabled", () => {
+    // Gate finding 1: the button genuinely carried `disabled`, but it is styled from `primary`,
+    // which has no disabled variant — so a closed gate rendered exactly as pressable as an open
+    // one, `cursor: pointer` and all. The values are globals.css's already-committed
+    // `.vault-button:disabled` convention (line ~994), not a new pair invented here.
+    const unticked = attest();
+    expect(unticked).toContain("cursor:not-allowed");
+    expect(unticked).toContain("opacity:0.48");
+    // Non-vacuity: ticking must restore the pressable look, so the assertion above measures the
+    // TICK and not a style that is simply always on.
+    const ticked = attest({ ticked: true });
+    expect(ticked).not.toContain("cursor:not-allowed");
+    expect(ticked).not.toContain("opacity:0.48");
+  });
+
+  test("the done screen counts EVERY rejected row, including the ones the browser dropped", () => {
+    // Gate finding 2: the preview said "1 rejected" and this screen then said "0 rejected" for the
+    // SAME file, because a row the browser refuses is never sent and so the server rejected none.
+    // Both numbers were individually true and the screen was still lying: the user imported one
+    // file and is owed one accounting of it. The sum lives INSIDE this component precisely so this
+    // assertion covers the arithmetic rather than a caller's choice of which number to hand over.
+    // Every count is a DISTINCT value and every assertion binds the number to its own label. A
+    // bare `toContain(">1<")` passes off any other count that happens to be 1 — measured: it stayed
+    // green with the sum removed, because `enriched` was also 1. The label is the anchor.
+    const html = render(ImportDone, {
+      created: 2,
+      enriched: 3,
+      unchanged: 4,
+      serverRejected: 0,
+      browserRejected: 1,
+      onAgain: noop,
+    });
+    expect(html).toContain("<strong>1</strong> rejected");
+    expect(html).toContain("<strong>2</strong> added");
+    expect(html).toContain("<strong>3</strong> filled in");
+    expect(html).toContain("<strong>4</strong> already up to date");
+    // Non-vacuity: a genuinely clean file still reports a real 0 (invariant 3 — a zero is
+    // knowledge), so the assertion above cannot be satisfied by a hardcoded 1.
+    const clean = render(ImportDone, {
+      created: 7,
+      enriched: 8,
+      unchanged: 9,
+      serverRejected: 0,
+      browserRejected: 0,
+      onAgain: noop,
+    });
+    expect(clean).toContain("<strong>0</strong> rejected");
+    // And the server's own rejections are not dropped by the fix that added the browser's.
+    const both = render(ImportDone, {
+      created: 7,
+      enriched: 8,
+      unchanged: 9,
+      serverRejected: 2,
+      browserRejected: 3,
+      onAgain: noop,
+    });
+    expect(both).toContain("<strong>5</strong> rejected");
+  });
+
+  test("the done screen is WIRED to both rejection sources", () => {
+    // The component test above proves the arithmetic; this proves the caller still supplies both
+    // operands. Splitting them is the point — a sum that is correct but fed one number is exactly
+    // the defect being fixed, and no render of `ImportDone` alone can see it.
+    expect(importSource).toContain("serverRejected={result.rejected.length}");
+    expect(importSource).toContain("browserRejected={mapped.rejected.length}");
   });
 });

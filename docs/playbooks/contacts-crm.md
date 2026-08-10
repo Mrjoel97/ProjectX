@@ -1,5 +1,44 @@
 # Playbook: Contacts, CRM & follow-ups
 
+> Last verified: 2026-08-11 (Post-19.1 verification gap closure — **BOTH ITEMS LEFT OPEN AT THE
+> 19.1-07 OWNER GATE ARE NOW CLOSED.** The phase verifier confirmed both as real before either was
+> touched; the owner then directed the fix. No plan file — this is gap closure against
+> `19.1-VERIFICATION.md`, not a planned wave.
+>
+> **(1) The done screen now counts every rejected row.** The arithmetic was deliberately moved
+> INSIDE a new exported `ImportDone` component rather than being summed at the call site, because
+> the done screen lived in the hooks-holding `ImportPanel` and was therefore unrenderable by this
+> repo's DOM-free tests — the only available "test" would have been a source scan, which is
+> mechanism coverage, not behaviour coverage. `ImportDone` takes `serverRejected` and
+> `browserRejected` as SEPARATE props and sums them itself, so a render test covers the sum and
+> `tsc` requires both operands. One source-scan assertion pins the call site still passing both.
+>
+> **A VACUOUS TEST WAS CAUGHT HERE BY MUTATION, AND THE LESSON IS GENERAL.** The first version
+> asserted `toContain(">1<")` with fixture counts `created: 2, enriched: 1, unchanged: 1`. Removing
+> the fix left it GREEN — `enriched: 1` renders `>1<` too, so the assertion was satisfied by the
+> wrong number. **When asserting a rendered number, anchor it to its label**
+> (`<strong>1</strong> rejected`) and give every count in the fixture a DISTINCT value. A bare
+> number match in a document full of numbers proves nothing. Same family as 15.3's stubbed-request
+> lesson and 19-10's green-tests-over-broken-capability.
+>
+> **(2) A disabled primary button now looks disabled.** `button` sets `cursor: pointer`
+> unconditionally, so every disabled button styled from `primary` read as pressable. `disabledLook`
+> (`cursor: not-allowed`, `opacity: 0.48`) is exported from `PipelineView.tsx` beside `primary` and
+> spread at BOTH `primary` sites that can be disabled — the gate found `import-confirm`, but
+> `import-choose` had the identical defect (CLAUDE.md §8: fix the shared thing once, grep every
+> caller). The values are NOT new: they are `globals.css`'s already-committed `.vault-button:disabled`
+> pair. Inline styles cannot express `:disabled`, which is why the pairing is chosen in TS.
+>
+> Three mutation-proofs, each red with exact text and reverted: dropping `+ browserRejected` gives
+> `expected '<div style="display:grid;gap:0.75rem"…' to contain '<strong>1</strong> rejected'`;
+> dropping the disabled spread gives `… to contain 'cursor:not-allowed'`; changing the call site to
+> `browserRejected={0}` reddens the wiring scan. MEASURED: `pipelineView.test.ts` 30/30 (was 27),
+> `@pikar/web` 12 files / 205 passed, `apps/web tsc --noEmit` exit 0, biome clean over all 4 pipeline
+> files. **Item 3 from the gate — the consent-chip comparison — is NOT closed and was NOT a defect:**
+> the verifier reclassified it as a genuine `human_verification` need, because it requires a
+> per-person `asserted-by-user` contact that no artifact in this phase ever created. Nothing was
+> seeded.)
+>
 > Last verified: 2026-08-10 (Plan 19.1-07 — **A REAL BROWSER HAS NOW IMPORTED A REAL CSV. THAT IS
 > WHAT CLOSES THIS CAPABILITY, AND NOTHING ELSE WOULD HAVE.** Plans 01–06 shipped a pure parser, two
 > widened schema unions, a `fillEmptyOnly` flag on the one contact writer, `matchExisting` +
@@ -55,7 +94,9 @@
 > project's setup notes specify and what `convex/http.ts` already falls back to. (b) and (c) are
 > separate faults with separate symptoms; fixing one does not fix the other.
 >
-> **KNOWN GAP, USER-VISIBLE, NOT FIXED HERE.** The preview says `1 rejected` and the `done` screen
+> **KNOWN GAP, USER-VISIBLE, NOT FIXED HERE — CLOSED 2026-08-11, see the top entry.** The
+> statement below was accurate when written; the fix landed after verification, not in this plan.
+> The preview says `1 rejected` and the `done` screen
 > then says `0 rejected` for the same file. Both numbers are individually true — the client filters
 > the unusable row out before the batch, so the SERVER rejected none — but the user is told a row
 > cannot be imported and is then told nothing was rejected, which reads as "it got in after all".
@@ -67,7 +108,7 @@
 > made while closing a checkpoint. It is open, and it is in a phase whose whole thesis is that the
 > counts do not lie.
 >
-> **SECOND OPEN ITEM (BRAND/a11y).** `import-confirm` genuinely carries `disabled` before the
+> **SECOND OPEN ITEM (BRAND/a11y) — CLOSED 2026-08-11, see the top entry.** `import-confirm` genuinely carries `disabled` before the
 > attestation is ticked — asserted in the DOM-free test, mutation-proven at 19.1-06, and observed in
 > the browser at 19.1-07 — but it is styled from the inline `primary` object, which has no disabled
 > variant. On screen the closed gate looks exactly as pressable as the open one. The gate is real;

@@ -42,6 +42,7 @@ import {
   button,
   caps,
   cardTitle,
+  disabledLook,
   muted,
   PipelineStateNotice,
   primary,
@@ -297,7 +298,7 @@ export function ImportAttest({
       <div>
         <button
           type="button"
-          style={primary}
+          style={!ticked || busy ? { ...primary, ...disabledLook } : primary}
           disabled={!ticked || busy}
           data-testid="import-confirm"
           onClick={onConfirm}
@@ -318,6 +319,45 @@ export function ImportAttest({
  * re-subscribes on every render unless memoized, and the preview is a one-time question
  * (`vault/PreviewModal.tsx` and `voice/AbnormalBriefBanner.tsx` are the precedents).
  */
+/** The last screen: ONE accounting of ONE file. `rejected` is deliberately two props summed HERE
+ *  rather than a single number the caller picks — a row the browser refuses is never sent, so the
+ *  server rejects none, and reporting only the server's count told a user who had just read
+ *  "1 rejected" on the preview that 0 were. Both numbers were individually true and the sentence
+ *  was still false. Keeping the sum inside the component is what lets a render test cover it.
+ *  (19.1 owner-gate finding 2, confirmed by the phase verifier.) */
+export function ImportDone({
+  created,
+  enriched,
+  unchanged,
+  serverRejected,
+  browserRejected,
+  onAgain,
+}: {
+  created: number;
+  enriched: number;
+  unchanged: number;
+  serverRejected: number;
+  browserRejected: number;
+  onAgain: () => void;
+}) {
+  return (
+    <div style={stack} data-testid="import-done">
+      <h3 style={cardTitle}>Imported</h3>
+      <p style={{ ...muted, color: "var(--ink)" }}>
+        <strong>{created}</strong> added · <strong>{enriched}</strong> filled in ·{" "}
+        <strong>{unchanged}</strong> already up to date ·{" "}
+        <strong>{serverRejected + browserRejected}</strong> rejected
+      </p>
+      <p style={muted}>The table below is now up to date.</p>
+      <div>
+        <button type="button" style={button} data-testid="import-again" onClick={onAgain}>
+          Import another file
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function ImportPanel() {
   const convex = useConvex();
   const importContacts = useMutation(api.contacts.importContacts);
@@ -503,7 +543,7 @@ export function ImportPanel() {
           <div>
             <button
               type="button"
-              style={primary}
+              style={busy ? { ...primary, ...disabledLook } : primary}
               disabled={busy}
               data-testid="import-choose"
               onClick={() => inputRef.current?.click()}
@@ -552,25 +592,14 @@ export function ImportPanel() {
       ) : null}
 
       {step === "done" && result ? (
-        <div style={stack} data-testid="import-done">
-          <h3 style={cardTitle}>Imported</h3>
-          <p style={{ ...muted, color: "var(--ink)" }}>
-            <strong>{result.created}</strong> added · <strong>{result.enriched}</strong> filled in ·{" "}
-            <strong>{result.unchanged}</strong> already up to date ·{" "}
-            <strong>{result.rejected.length}</strong> rejected
-          </p>
-          <p style={muted}>The table below is now up to date.</p>
-          <div>
-            <button
-              type="button"
-              style={button}
-              data-testid="import-again"
-              onClick={() => reset("choose")}
-            >
-              Import another file
-            </button>
-          </div>
-        </div>
+        <ImportDone
+          created={result.created}
+          enriched={result.enriched}
+          unchanged={result.unchanged}
+          serverRejected={result.rejected.length}
+          browserRejected={mapped.rejected.length}
+          onAgain={() => reset("choose")}
+        />
       ) : null}
 
       {/* Every refusal is INLINE and grey. Never a `window.alert`, never a `window.confirm`, never

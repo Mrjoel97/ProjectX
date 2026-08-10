@@ -95,6 +95,11 @@ export const primary: CSSProperties = {
   background: "var(--teal-600)",
   color: "var(--card)",
 };
+/** `button` sets `cursor: pointer` unconditionally, so a disabled button still reads as pressable —
+ *  a closed gate that looks open. Spread this alongside it whenever `disabled` can be true. The
+ *  values are globals.css's own `.vault-button:disabled` convention, not a second one: inline
+ *  styles cannot express `:disabled`, so the pairing is chosen here rather than in CSS. */
+export const disabledLook: CSSProperties = { cursor: "not-allowed", opacity: 0.48 };
 /** BRAND §5's executive report card: aligned columns, ruled sections, card-native whitespace, and
  *  no gridlines. Never a dense spreadsheet, and never the dark `.ledger` panel. */
 const table: CSSProperties = { width: "100%", borderCollapse: "collapse", fontSize: "0.88rem" };
