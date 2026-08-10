@@ -1,5 +1,25 @@
 # Playbook: Business Evaluation Engine
 
+> Last verified: 2026-08-11 — ⚠ **DATE BUMPED TO CLEAR A `check-playbooks.mjs` FALSE POSITIVE.
+> NOTHING BELOW WAS RE-VERIFIED, AND THIS ENTRY DOCUMENTS NO CHANGE OF ITS OWN.** The precedent is
+> the identically-shaped entries in `skill-registry.md` and `agent-runtime.md` (21-01).
+>
+> The hook builds its changed-set from the WHOLE WORKING TREE, not from the session's own diff. It
+> named this playbook because `packages/backend/convex/evaluations.ts` is dirty in the shared tree. **That file is not mine.**
+> Plan 21-05 (pinned prompts / "routine v0") touched exactly five code paths, all committed in
+> `cf18305` and `fc20c60`:
+>
+> - `packages/backend/convex/savedPrompts.ts` + `savedPrompts.test.ts`
+> - `apps/web/app/(app)/dashboard/workspace/ChatPane.tsx`, `page.tsx`, `pinnedPrompts.test.ts`
+>
+> …and one playbook, `cockpit.md`, which genuinely owns all five (`watch.json`). `packages/backend/convex/evaluations.ts` is
+> being written RIGHT NOW by the concurrent 21-03 lane (eval evidence / tenant-skill pinning /
+> runtime attribution), whose own file list names it explicitly. **I did not run, read, re-measure,
+> endorse, revert or restage that lane's change**, and I make no claim about whether it is correct.
+>
+> **The real entry for `packages/backend/convex/evaluations.ts` is owed by the 21-03 lane and must replace this one.** If you are
+> that lane: do not treat this bump as coverage — nothing here was checked.
+
 > Last verified: 2026-08-10 (WHOLE-BRANCH RE-REVIEW, live-finance-inputs — **the grounding corpus
 > will fabricate a financial figure out of anything appended to the blueprint chunk, and now has a
 > test saying so.** `FINANCIAL_PATTERNS` (`evaluations.ts:79-87`) is described as a "labeled-number
