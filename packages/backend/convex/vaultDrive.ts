@@ -376,6 +376,23 @@ export type DriveBrowseResult =
   | { ok: false; reason: "not_connected" | "reauth" | "refresh_failed" | "bad_folder_id" }
   | { ok: true; folders: DriveNode[]; files: DriveEntry[]; truncated: boolean };
 
+export type DriveSearchHit = {
+  id: string;
+  name: string;
+  kind: "folder" | "file";
+  parentName?: string;
+  readable: boolean;
+};
+
+export type DriveSearchResult =
+  | { ok: false; reason: "not_connected" | "reauth" | "refresh_failed" }
+  | { ok: true; hits: DriveSearchHit[] };
+
+/** Escape a value embedded inside one of Drive's single-quoted query-language literals. URL
+ * encoding happens later and does not protect this boundary: Drive decodes `q` before parsing it. */
+const escapeDriveQueryLiteral = (value: string): string =>
+  value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+
 /**
  * List the folders the user can pick, one level at a time. **THIS IS THE PICKER**, and we render it
  * ourselves rather than mounting Google's.
@@ -477,6 +494,54 @@ export const listDriveFolders = tenantAction({
     // importable (there is no folder id to import), so loose files there would be shown with no
     // action attached to them.
     return { ok: true, folders: [...byId.values()], files: [], truncated: false };
+  },
+});
+
+/** Bounded read-only search over the existing Drive grant. This returns metadata, never bytes,
+ * and performs no import, reservation, export, landing or ingest work. */
+export const findInDrive = tenantAction({
+  args: { query: v.string() },
+  handler: async (ctx, { query }): Promise<DriveSearchResult> => {
+    const token: Doc<"gmailTokens"> | null = await ctx.runQuery(internal.gmailAuth.getTokens, {
+      tenantId: ctx.tenantId,
+    });
+    if (!token) return { ok: false, reason: "not_connected" };
+    if (!hasScope(token.scope, DRIVE_READONLY_SCOPE)) return { ok: false, reason: "reauth" };
+
+    const access = await freshAccessToken(ctx, ctx.tenantId);
+    if (!access.ok)
+      return {
+        ok: false,
+        reason: access.reason === "not_connected" ? "not_connected" : "refresh_failed",
+      };
+
+    const needle = escapeDriveQueryLiteral(query.trim());
+    if (needle === "") return { ok: true, hits: [] };
+
+    const res = await driveFetch(
+      driveUrl("", {
+        q: `(name contains '${needle}' or fullText contains '${needle}') and trashed=false`,
+        fields: BROWSE_FIELDS,
+        pageSize: "20",
+        includeItemsFromAllDrives: "true",
+      }),
+      access.token,
+    );
+    if (!res.ok) throw new Error(`drive: files.list ${res.status}`);
+    const body = (await res.json()) as { files?: DriveFile[] };
+
+    return {
+      ok: true,
+      hits: (body.files ?? []).map((file): DriveSearchHit => {
+        const folder = file.mimeType === FOLDER_MIME;
+        return {
+          id: file.id,
+          name: file.name,
+          kind: folder ? "folder" : "file",
+          readable: !folder && !isSkip(classifyOne(file)),
+        };
+      }),
+    };
   },
 });
 
