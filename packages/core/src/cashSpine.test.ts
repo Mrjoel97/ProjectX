@@ -1,0 +1,50 @@
+import { expect, test } from "vitest";
+import { CASH_INPUTS, type CashInputState } from "./cash";
+import { FINANCE_SPINE_BUDGET, financeSpineLine } from "./cashSpine";
+
+const NOW = 1_754_000_000_000;
+const DAY = 86_400_000;
+
+const state = (over: Partial<CashInputState> & { field: CashInputState["field"] }): CashInputState => ({
+  value: null,
+  statedAt: null,
+  stale: false,
+  origin: "stated",
+  actor: "user",
+  basis: null,
+  ...over,
+});
+
+test("no collected inputs produces no line — an empty spine line is worse than none", () => {
+  expect(financeSpineLine(CASH_INPUTS.map((s) => state({ field: s.field })), NOW)).toBeNull();
+});
+
+test("a collected figure renders with its age in days", () => {
+  const line = financeSpineLine(
+    [state({ field: "cashOnHand", value: 38_500, statedAt: NOW - 38 * DAY })],
+    NOW,
+  );
+  expect(line).toContain("cashOnHand 38500(38d)");
+});
+
+test("a stale figure is marked so the agent can act on it", () => {
+  const line = financeSpineLine(
+    [state({ field: "cac", value: 1400, statedAt: NOW - 94 * DAY, stale: true })],
+    NOW,
+  );
+  expect(line).toContain("STALE");
+});
+
+test("an unstamped figure reports unknown age rather than fabricating one", () => {
+  const line = financeSpineLine([state({ field: "cac", value: 1400, statedAt: null })], NOW);
+  expect(line).toContain("cac 1400(?d)");
+});
+
+test("the WORST case fits the budget — every input collected, longest values, all stale", () => {
+  const worst = CASH_INPUTS.map((s) =>
+    state({ field: s.field, value: 999_999_999, statedAt: NOW - 9999 * DAY, stale: true }),
+  );
+  const line = financeSpineLine(worst, NOW);
+  expect(line).not.toBeNull();
+  expect((line as string).length).toBeLessThanOrEqual(FINANCE_SPINE_BUDGET);
+});

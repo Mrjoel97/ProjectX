@@ -72,6 +72,8 @@
     "packages/backend/convex/finance.test.ts",
     "packages/core/src/cash.ts",
     "packages/core/src/cash.test.ts",
+    "packages/core/src/cashSpine.ts",
+    "packages/core/src/cashSpine.test.ts",
     "packages/core/src/financeClaim.ts",
     "packages/core/src/financeClaim.test.ts",
     "packages/backend/convex/cash.ts",
