@@ -8,6 +8,12 @@
 // mapped rows cross the wire, which is why this feature has no PII at rest, no retention policy and
 // no cleanup path (19.1-CONTEXT, LOCKED).
 
+// `normalizeAddress` is the repo's contact identity function and `isValidEmail` its ONE email
+// regex. Importing both is what makes "import cannot disagree with the send path about who a row is
+// or whether the address is real" true by construction. Do NOT re-derive either here.
+import { normalizeAddress } from "./contacts";
+import { isValidEmail } from "./validateSubmit";
+
 /** One parsed record and the PHYSICAL file line it starts on (1-based, header included).
  *  Physical, not record index: a quoted newline makes the two diverge and the file line is what
  *  the user sees when they open the CSV. LOCKED decision (19.1-CONTEXT). */
@@ -93,3 +99,107 @@ export const IMPORT_MATCH_CHUNK = 500;
  *  Changing it applies to FUTURE imports only. */
 export const IMPORT_ATTESTATION =
   "I have a lawful basis to contact these people — they are business contacts of mine, and I am not importing a purchased or scraped list.";
+
+export type ImportField = "email" | "name" | "company" | "phone" | "title";
+/** Column indexes per field. An ARRAY so `first`+`last` needs no special case: the values are
+ *  trimmed and joined with a single space. Empty array = unmapped. Every field is overridable from
+ *  the preview by handing `mapRows` a different mapping. */
+export type ColumnMapping = Record<ImportField, number[]>;
+export type ImportRow = {
+  email: string;
+  name?: string;
+  company?: string;
+  phone?: string;
+  title?: string;
+};
+export type RejectedRow = { line: number; reason: string };
+
+/** Header cell -> field, keyed on the header stripped to lower-case alphanumerics (so "E-Mail",
+ *  "e mail" and "EMail" are all `email`). Literal aliases only — no fuzzy matching, because a
+ *  wrong guess silently writes the wrong column and the preview is the override. */
+const HEADER_ALIASES: Record<string, ImportField> = {
+  email: "email",
+  emailaddress: "email",
+  name: "name",
+  fullname: "name",
+  first: "name",
+  firstname: "name",
+  last: "name",
+  lastname: "name",
+  company: "company",
+  organization: "company",
+  organisation: "company",
+  phone: "phone",
+  phonenumber: "phone",
+  mobile: "phone",
+  title: "title",
+  jobtitle: "title",
+};
+
+/** Auto-map a header row. A column matching no alias is dropped and never reaches an `ImportRow`. */
+export function detectMapping(header: string[]): ColumnMapping {
+  const mapping: ColumnMapping = { email: [], name: [], company: [], phone: [], title: [] };
+  header.forEach((cell, i) => {
+    const field =
+      HEADER_ALIASES[
+        cell
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, "")
+      ];
+    if (field) mapping[field].push(i);
+  });
+  return mapping;
+}
+
+/**
+ * Turn parsed records (INCLUDING the header record, which is skipped) into rows to send plus the
+ * rows refused, each carrying its physical file line.
+ *
+ * Duplicates within the file collapse here, before anything is sent, under the SAME
+ * fill-empty-only rule the write path uses: the first non-blank value for a field wins and later
+ * rows fill only what is still empty. Two rows sharing an address would otherwise race on one
+ * contact inside a single batch.
+ */
+export function mapRows(
+  records: CsvRecord[],
+  mapping: ColumnMapping,
+): { rows: ImportRow[]; rejected: RejectedRow[] } {
+  if (!mapping.email?.length) throw new Error("IMPORT_NO_EMAIL_COLUMN");
+  const data = records.slice(1);
+  if (data.length > IMPORT_ROW_MAX) throw new Error("IMPORT_TOO_MANY_ROWS");
+
+  const rows: ImportRow[] = [];
+  const byEmail = new Map<string, ImportRow>();
+  const rejected: RejectedRow[] = [];
+
+  for (const record of data) {
+    const pick = (indexes: number[] | undefined) =>
+      (indexes ?? [])
+        .map((i) => (record.fields[i] ?? "").trim())
+        .filter(Boolean)
+        .join(" ");
+
+    const email = normalizeAddress(pick(mapping.email));
+    if (!email) {
+      rejected.push({ line: record.line, reason: "no email address in this row" });
+      continue;
+    }
+    if (!isValidEmail(email)) {
+      rejected.push({ line: record.line, reason: "not a usable email address" });
+      continue;
+    }
+
+    const existing = byEmail.get(email);
+    const row: ImportRow = existing ?? { email };
+    for (const field of ["name", "company", "phone", "title"] as const) {
+      const value = pick(mapping[field]);
+      if (value && !row[field]) row[field] = value;
+    }
+    if (!existing) {
+      byEmail.set(email, row);
+      rows.push(row);
+    }
+  }
+  return { rows, rejected };
+}
