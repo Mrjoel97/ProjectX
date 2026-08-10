@@ -144,6 +144,7 @@
     "packages/core/src/calendar.test.ts",
     "packages/core/src/calendarManagement.test.ts",
     "packages/core/src/calendarManagement.ts",
+    "scripts/run-calendar-test-gate.mjs",
     "packages/backend/scripts/probe-gemini.mjs"
   ],
   "audit-dead-letter.md": [

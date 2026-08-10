@@ -655,6 +655,84 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
     );
   }
 
+  // CALENDAR CHANGE (17-05, the ACTN-02 gap closure). A DIFFERENT promise from the create card
+  // above, which is the whole reason `calendar_manage` is a separate action type: approving here
+  // moves or removes an event that already exists on a real calendar. Ahead of the email chrome for
+  // the memo/CRM/calendar reason — recipients, mode, the send-time picker and "Send to N
+  // recipients" are all lies on a calendar change.
+  //
+  // NOTHING CAN STAGE THIS PLAN YET. Plan 17-09 owns the staging tool, and 17-09-03 owns the
+  // registry-backed version of this card. What is deliberately NOT rendered here is the ORIGINAL
+  // event's title and time: they live in the `calendarEvents` registry row, this component only
+  // receives the plan, and inventing them from the desired state would be exactly the
+  // provenance-laundering failure this codebase keeps having. The reference is shown instead.
+  if (plan.kind === "calendar_manage") {
+    const removing = plan.calendarOperation === "delete";
+    const providerName =
+      plan.calendarProvider === "microsoft" ? "Microsoft Outlook" : "Google Calendar";
+    // A delete carries NO desired content — @pikar/core's `buildManageIntent` refuses one that
+    // does — so the "new value" rows must not render for it, or the card would offer a change the
+    // server would refuse.
+    const changes: [string, string][] = removing
+      ? []
+      : (
+          [
+            ["New title", plan.eventTitle],
+            ["New time", plan.eventStartMs ? formatAbsolute(plan.eventStartMs) : undefined],
+            [
+              "New length",
+              plan.eventDurationMs ? `${Math.round(plan.eventDurationMs / 60000)} min` : undefined,
+            ],
+          ] as [string, string | undefined][]
+        ).filter((row): row is [string, string] => Boolean(row[1]));
+    return (
+      <div style={box} data-testid="calendar-manage-plan-card">
+        <div style={label}>CALENDAR CHANGE</div>
+        <div style={{ margin: "0.5rem 0" }}>
+          <strong>
+            {removing ? "Remove an event from your calendar" : "Update an event on your calendar"}
+          </strong>
+        </div>
+        <div style={dim}>Calendar: {providerName}</div>
+        {/* The REFERENCE, not a reconstructed title: this card cannot read the registry row, and a
+            title it made up would be worse than an id it can prove. */}
+        <div style={dim}>Event reference: {plan.calendarManagedEventId ?? "—"}</div>
+        {changes.map(([name, value]) => (
+          <div key={name} style={dim}>
+            {name}: {value}
+          </div>
+        ))}
+        {!removing && changes.length === 0 && (
+          <div style={dim}>No change has been staged yet, so there is nothing to approve.</div>
+        )}
+        <p style={{ ...dim, margin: "0.75rem 0" }}>
+          {removing
+            ? `Approving takes this event off your ${providerName}. Nothing is sent to anyone.`
+            : `Approving changes this event on your ${providerName}. Nothing is sent to anyone.`}
+        </p>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void approve()}
+          style={{
+            ...btn,
+            background: "var(--teal-600)",
+            color: "#fff",
+            border: "none",
+            fontWeight: 600,
+          }}
+        >
+          {busy
+            ? "Working…"
+            : removing
+              ? "Approve & remove from calendar"
+              : "Approve & update calendar"}
+        </button>
+        {planNote}
+      </div>
+    );
+  }
+
   return (
     <div style={box}>
       <div style={label}>PLAN</div>
@@ -1759,6 +1837,13 @@ const VERB: Record<string, [running: string, done: string]> = {
   webResearch: ["Searching the web…", "Search finished"],
   checkAvailability: ["Checking your calendar…", "Checked your calendar"],
   proposeCalendarEvent: ["Putting the event together…", "Event ready to approve"],
+  // 17-05 (ACTN-02 gap closure): the two management trace verbs, RESERVED here in the same commit
+  // as their `agentSteps.tool` literals because traceParity.test.ts asserts the two sets equal BOTH
+  // ways and either half alone is RED. The TOOLS themselves land in Plan 17-09 — the literal has to
+  // exist first, or the step insert throws inside an AI-SDK callback the SDK silently swallows and
+  // prod loses the row while every offline test stays green (Research Pitfall 4).
+  listManagedCalendarEvents: ["Finding events I can change…", "Found events I can change"],
+  proposeCalendarChange: ["Preparing the calendar change…", "Calendar change ready to approve"],
   listDriveFolders: ["Looking through your Drive…", "Looked through your Drive"],
   findInDrive: ["Searching your Drive…", "Searched your Drive"],
   // PRE-EXISTING GAP, unrelated to Phase 17 (RPLY-01, Phase 3.11): this live tool (llm.ts

@@ -10,8 +10,15 @@
 > `calendar-manage-plan-card` and two RESERVED trace verbs. See
 > "Phase 17 gap closure — the calendar_manage substrate" below for the invariants.)
 >
-> This SUPERSEDES the COVERAGE-ONLY entry below it, which registered
-> `packages/core/src/calendarManagement.ts` without reading it.
+> This is the real §9 entry the two CLAIM-NOTHING bumps below it were waiting for. The next
+> paragraph is 21-04's bump, which fired on THIS lane's `cards.tsx`, `traceParity.test.ts` and
+> `scripts/run-calendar-test-gate.mjs` and correctly verified none of them; the `PREVIOUS:` entry
+> under it registered `packages/core/src/calendarManagement.ts` without reading it. Both are now
+> superseded by this one.
+>
+> **Provenance, recorded rather than tidied:** the 17-05 paragraphs above were committed by
+> `3166544` (`docs(21-04)`), not by a 17-05 commit — a concurrent lane staged this whole file while
+> the edit was still in the shared working tree. The content is this lane's work; the commit is not.
 
 <!-- SHARED-TREE INCIDENT, 2026-08-11: the 17-05 entry above landed in this file in the working
      tree between 21-04's `git diff --stat` check and its `git commit -- <paths>`, so it was swept

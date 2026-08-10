@@ -845,6 +845,21 @@ export default defineSchema({
       // this codebase has been bitten twice already, at searchVault and evaluateBusiness).
       v.literal("checkAvailability"),
       v.literal("proposeCalendarEvent"),
+      // 17-05 (ACTN-02 gap closure): the two MANAGEMENT trace literals, RESERVED. No tool emits
+      // them yet — Plan 17-09 adds `listManagedCalendarEvents` (read-only registry listing) and
+      // `proposeCalendarChange` (inspect-then-stage). They are declared HERE, ahead of the tools,
+      // because this closed union is the swallow trap this file has now been bitten by three
+      // times: a missing literal makes `agentSteps:record` throw an ArgumentValidationError inside
+      // an AI-SDK callback the SDK SILENTLY swallows, so prod loses the step while the whole suite
+      // stays green. Their cards.tsx VERB entries land in the SAME commit — traceParity.test.ts
+      // asserts the two sets equal BOTH ways, so either half alone is RED.
+      //
+      // A declared-but-never-written literal is the ONE failure mode this pre-declaration can have
+      // (it is why `webResearch` was deliberately absent while it was provider-executed): it reads
+      // as a trace that exists. Both of these WILL be written by local, executable tools, so
+      // `onToolExecutionStart` will fire for both.
+      v.literal("listManagedCalendarEvents"),
+      v.literal("proposeCalendarChange"),
       // Phase-20.1 (VALT-15): read-only Drive discovery in the cockpit. These are local tools,
       // so both literals are required for their truthful start/done agent-step trace.
       v.literal("listDriveFolders"),
