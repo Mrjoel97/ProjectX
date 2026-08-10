@@ -759,6 +759,12 @@ export default defineSchema({
       // every literal above, and the same traceParity.test.ts requirement — its cards.tsx VERB
       // entry lands in the same commit.
       v.literal("readFinance"),
+      // Task 8 (live-finance-inputs): the figure staging tool. Same swallow trap as every literal
+      // above — a missing literal makes `agentSteps:record` throw an ArgumentValidationError
+      // inside an AI-SDK callback the SDK SILENTLY swallows, so prod loses the step while the
+      // whole suite stays green. Lands in the SAME commit as its cards.tsx VERB entry, because
+      // traceParity.test.ts asserts the two sets equal BOTH ways and either half alone is RED.
+      v.literal("stageFinanceWrite"),
     ),
     phase: v.union(v.literal("running"), v.literal("done"), v.literal("error")),
     startedAt: v.number(),

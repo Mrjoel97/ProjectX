@@ -11,6 +11,40 @@
 > passing on an empty scan. **Add the literal in the SAME commit as a new tool.** Prose in a schema
 > comment is not a guard; a test is.
 
+> Last verified: 2026-08-10 (Task 8, live-finance-inputs — **`stageFinanceWrite`: the agent's only
+> route to a figure, and the two model-facing surfaces Task 4 left open are now closed.** ONE tool
+> carrying a LIST (the `stageCrmWrite` shape — one plan, one approval click, however many figures
+> moved). It STAGES and applies NOTHING: it patches `kind: "finance_write"`, `status: "proposed"`
+> and `financeClaims` through `internal.plans.patchPlan` and returns; `executePlan`'s `inline` arm
+> applies the list after Approve. contacts-crm.md invariant 11 — the ACTOR decides gating, so the
+> human editing the SAME figure through `cash.saveInput` is ungated and stages no plan at all.
+> **`status: "proposed"` is load-bearing, not decoration:** the Approve gate is a CAS that no-ops on
+> any other status and every approval surface lists by it, so a row staged at `collecting` would
+> render nowhere and could never be approved. **Reused `patchPlan` rather than adding a staging
+> mutation** (its `kind` union gained the fifth literal and a `financeClaims: v.optional(v.array(
+> v.any()))` arg beside `crmOperations`, same reasoning: the shape is owned by `schema.ts`'s own
+> validator, which Convex enforces on that very `db.patch`, and by `validateFigureClaim` at both
+> boundaries). **ORDER IS LOAD-BEARING in `execute`:** the `CASH_INPUTS` membership check must
+> precede claim construction, because `validateFigureClaim` delegates to `cashInputSpec`, which
+> THROWS on an unknown field — mutation-checked: deleting the guard turns the refusal test into
+> `Error: unknown cash input: vibes` thrown out of the governed loop. Every refusal is a RETURNED
+> SENTENCE (18-06): empty list, unknown field, a `basis` that QUOTES rather than references (§4 is
+> enforced HERE, at the producer — "refs only" is not mechanically decidable in pure TS and `basis`
+> reaches the audit log and the approval card), a failed `validateFigureClaim`, and a
+> half-composed email draft on the one plan row this thread has (the `stageCrmWrite` hazard).
+> **`buildAgentContext` gained the `finance_write` arm BY HAND** — the correction note there is
+> right that this is not a compile-error site, and the RED before the fix was verbatim the failure
+> it predicts: a staged figure plan rendered as `"Current email plan:"` with Recipients / Send mode
+> / Send time slots. Pinned by a test, because the type system will not. **`workspace/cards.tsx`
+> gained the finance card**, the `stageFinanceWrite` VERB, and `finance_write` in the DraftCard
+> exclusion list — everything below those branches is email chrome and every word of it is a lie on
+> a figure update. Its refusal map moved to a module-scope exported `PLAN_REFUSALS` and gained
+> `agent_cannot_update_figure` + `malformed_figure_claim`: unlike `ApprovalsView`'s `refusalMessage`,
+> which falls back to printing the raw enum, `if (refusal) setNote(...)` renders NOTHING for an
+> unmapped reason, so a rejected figure approval looked like a click that did nothing. A test now
+> asserts both keys exist AND that the copy is word-for-word the Approvals page's. Card shows the
+> COUNT, never the figures — the `titleFor` call §4 already made on the primary surface.)
+
 > Last verified: 2026-08-10 (Task 7 REVIEW FIX, live-finance-inputs — **`readFinance`'s payload now
 > carries per-input freshness, and no longer inherits a guessed tier's false certainty.** Two
 > Important findings. (1) The description promises figures that are "missing or out of date", but

@@ -1578,7 +1578,10 @@ test("every cockpit tool name has an agentSteps.tool literal (the swallowed-step
   const toolNames = [...readLlmSource().matchAll(/\n {4}([A-Za-z_]\w*): tool\(/g)].map((m) => m[1]);
   // Non-vacuity floor: if the record is ever restructured this scan must fail LOUDLY, not pass on
   // an empty list — the exact way a static scan rots into decoration.
-  expect(toolNames.length, "found no `<name>: tool(` keys — did buildCockpitTools move?").toBeGreaterThan(20);
+  expect(
+    toolNames.length,
+    "found no `<name>: tool(` keys — did buildCockpitTools move?",
+  ).toBeGreaterThan(20);
 
   const schemaSrc = readFileSync(join(convexSrcDir, "schema.ts"), "utf8").replace(/\r\n/g, "\n");
   const agentSteps = schemaSrc.slice(schemaSrc.indexOf("agentSteps: defineTable"));
@@ -1863,7 +1866,12 @@ test("stageCrmWrite PROPOSES a crm_write plan and applies NOTHING (the Approve g
   const reply = await callClock(t, planId, "stageCrmWrite", {
     operations: [
       { op: "addContact", email: "New.Person@Example.com", name: "New Person" },
-      { op: "addFollowUp", email: "new.person@example.com", note: "send the quote", due: "tomorrow" },
+      {
+        op: "addFollowUp",
+        email: "new.person@example.com",
+        note: "send the quote",
+        due: "tomorrow",
+      },
     ],
   });
 
@@ -1876,9 +1884,7 @@ test("stageCrmWrite PROPOSES a crm_write plan and applies NOTHING (the Approve g
   // boundary: the address is stored NORMALIZED, which is the visible trace of that second parse.
   expect((plan?.crmOperations?.[0] as { email: string }).email).toBe("new.person@example.com");
   // §2-D: the model supplies the user's WORDS, never an instant. "tomorrow" off the pinned clock.
-  expect((plan?.crmOperations?.[1] as { dueAt: number }).dueAt).toBe(
-    Date.UTC(2020, 0, 2, 9, 0, 0),
-  );
+  expect((plan?.crmOperations?.[1] as { dueAt: number }).dueAt).toBe(Date.UTC(2020, 0, 2, 9, 0, 0));
   // Nothing applied. The gate is the only application path.
   expect(await contactRows(t)).toHaveLength(0);
   expect(await followUpRows(t)).toHaveLength(0);
@@ -1909,9 +1915,7 @@ test("stageCrmWrite REFUSES a contact carrying a date — the follow-up half is 
   const { t, planId } = await setup();
 
   const dated = await callClock(t, planId, "stageCrmWrite", {
-    operations: [
-      { op: "addContact", email: "rhea@example.com", name: "Rhea", due: "Thursday" },
-    ],
+    operations: [{ op: "addContact", email: "rhea@example.com", name: "Rhea", due: "Thursday" }],
   });
   expect(dated).toMatch(/addFollowUp/);
   // Nothing staged: the plan row is untouched, so the model cannot mistake the drop for a save.
@@ -1973,17 +1977,14 @@ test("a REFUSED turn-2 op leaves turn-1's staged follow-up intact — a refusal 
 // and the schema's minimum valid emission (`required: ["op","email"]`), so it was reachable
 // without the model having chosen it at all. A follow-up's date is now structurally required.
 test("stageCrmWrite's schema puts the follow-up arm FIRST and requires its date", async () => {
-  const tools = buildCockpitTools(
-    {} as never,
-    "t1",
-    "plan1" as unknown as Id<"plans">,
-    PIN_CLOCK,
-  );
+  const tools = buildCockpitTools({} as never, "t1", "plan1" as unknown as Id<"plans">, PIN_CLOCK);
   const schema = (
     tools.stageCrmWrite.inputSchema as unknown as {
       jsonSchema: {
         properties: {
-          operations: { items: { anyOf: Array<{ properties: { op: { enum: string[] } }; required: string[] }> } };
+          operations: {
+            items: { anyOf: Array<{ properties: { op: { enum: string[] } }; required: string[] }> };
+          };
         };
       };
     }
@@ -2077,7 +2078,9 @@ test("SMOKE::agent::crm drives ONE governed stageCrmWrite OFFLINE at $0 and trac
 test("readFinance takes no arguments — the tenant is never model-supplied", async () => {
   const tools = buildCockpitTools({} as never, "t1", "plan1" as unknown as Id<"plans">, PIN_CLOCK);
   const schema = (
-    tools.readFinance.inputSchema as unknown as { jsonSchema: { properties: Record<string, unknown> } }
+    tools.readFinance.inputSchema as unknown as {
+      jsonSchema: { properties: Record<string, unknown> };
+    }
   ).jsonSchema;
   expect(Object.keys(schema.properties)).toEqual([]);
 });
@@ -2145,6 +2148,101 @@ test("readFinance surfaces a REAL stated MRR even when the tenant's business sha
   // tier to "solopreneur" (the page's compensating "complete your shape" invitation makes that
   // acceptable there), so it still shows mrr as not-applicable for this same tenant/data. The tool
   // and the page are DELIBERATELY different on this one point; this pins that they stay that way.
-  const dashboard = await t.withIdentity({ subject: "t1|session", issuer: "test" }).query(api.cash.solvency, {});
+  const dashboard = await t
+    .withIdentity({ subject: "t1|session", issuer: "test" })
+    .query(api.cash.solvency, {});
   expect(dashboard.mrr.state).toBe("not-applicable");
+});
+
+// ── Task 8: stageFinanceWrite — the agent's ONLY route to a figure ────────────────────────────
+// contacts-crm.md invariant 11: the ACTOR decides gating. The human editing the SAME figure
+// through `cash.saveInput` is ungated; the agent's identical write must stage a plan. The tool
+// STAGES and applies NOTHING — `executePlan`'s `inline` arm applies the list after Approve.
+// Every refusal below is a RETURNED SENTENCE, never a throw (18-06's rule): a throw out of the
+// governed loop leaves the model with nothing to say to the user.
+
+test("stageFinanceWrite stages and applies NOTHING", async () => {
+  const { t, planId } = await setup();
+  const reply = await callClock(t, planId, "stageFinanceWrite", {
+    updates: [{ field: "cac", value: 1400, basis: "14000 / 10, this turn" }],
+  });
+  expect(reply).toMatch(/approve/i);
+  const plan = await readPlan(t, planId);
+  expect(plan?.kind).toBe("finance_write");
+  expect(plan?.financeClaims).toHaveLength(1);
+  // The Approve gate is a CAS on `proposed` (cockpit.executePlan: `status !== "proposed"` is an
+  // idempotent no-op), and every approval surface lists by that status. A row staged at
+  // `collecting` would render nowhere and could never be approved at all.
+  expect(plan?.status).toBe("proposed");
+  // APPLIES NOTHING, asserted against BOTH stores a figure can land in — `financeInputs` for the
+  // five finance-ops figures, `evaluations` for the Hormozi scorecard ones.
+  expect(await t.run((ctx) => ctx.db.query("financeInputs").first())).toBeNull();
+  expect(await t.run((ctx) => ctx.db.query("evaluations").first())).toBeNull();
+});
+
+test("stageFinanceWrite REFUSES an unknown field rather than inventing one", async () => {
+  const { t, planId } = await setup();
+  const reply = await callClock(t, planId, "stageFinanceWrite", {
+    updates: [{ field: "vibes", value: 3, basis: "turn 1" }],
+  });
+  expect(reply).toMatch(/cannot|not a/i);
+  expect((await readPlan(t, planId))?.kind).toBeUndefined();
+});
+
+test("stageFinanceWrite REFUSES an empty update list — a sentence, never a throw", async () => {
+  const { t, planId } = await setup();
+  const reply = await callClock(t, planId, "stageFinanceWrite", { updates: [] });
+  expect(reply).toMatch(/nothing|no changes/i);
+});
+
+// §4 at the boundary that CONSTRUCTS `basis`. `validateFigureClaim` can only check non-emptiness —
+// "refs only, never quoted content" is not mechanically decidable in pure TS — so the producer is
+// the enforcement point. `basis` reaches the audit log and the approval card.
+test("stageFinanceWrite REFUSES a basis that QUOTES the user instead of naming a reference (§4)", async () => {
+  const { t, planId } = await setup();
+  const quoted = await callClock(t, planId, "stageFinanceWrite", {
+    updates: [{ field: "mrr", value: 9000, basis: 'the user said "our MRR is nine grand now"' }],
+  });
+  expect(quoted).toMatch(/not quote it/i);
+  expect((await readPlan(t, planId))?.kind).toBeUndefined();
+
+  // Same rule, the OTHER half: a basis long enough to be a transcript rather than a reference.
+  const long = await callClock(t, planId, "stageFinanceWrite", {
+    updates: [{ field: "mrr", value: 9000, basis: `this turn ${"x".repeat(130)}` }],
+  });
+  expect(long).toMatch(/not quote it/i);
+  expect((await readPlan(t, planId))?.kind).toBeUndefined();
+});
+
+// One plan row per thread (plans.by_thread is `.unique()`): staging finance onto a half-composed
+// email would turn the draft into a figure card and strand it. The `stageCrmWrite` /
+// `stageResearchPlan` / `stageMediaPlan` refusal, on the same hazard.
+test("stageFinanceWrite REFUSES rather than replacing a half-composed email draft", async () => {
+  const { t, planId } = await setup();
+  await call(t, planId, "setSubject", { subject: "Q3 pricing" });
+
+  const reply = await callClock(t, planId, "stageFinanceWrite", {
+    updates: [{ field: "mrr", value: 9000, basis: "this turn" }],
+  });
+  expect(reply).toMatch(/draft/i);
+  const plan = await readPlan(t, planId);
+  expect(plan?.kind).toBeUndefined(); // the draft survives
+  expect(plan?.subject).toBe("Q3 pricing");
+  expect(plan?.financeClaims).toBeUndefined();
+});
+
+// REQUIREMENT 1's pin, and the type system will NOT provide it: `PlanRow` does not declare `kind`,
+// so widening ACTION_TYPES never breaks the buildAgentContext call — `media` shipped in Phase 20
+// without ever reaching it. Named mutation that turns this RED: delete the `finance_write` arm
+// from buildAgentContext, and a staged figure plan falls through to the email context, which
+// announces "Current email plan:" with Recipients / Send mode / Send time slots the model then
+// offers to fill and send.
+test("buildAgentContext describes a finance_write plan as figures, NEVER as an email", () => {
+  const ctxText = buildAgentContext({ kind: "finance_write" });
+  expect(ctxText).not.toMatch(/Current email plan/);
+  expect(ctxText).not.toMatch(/Send mode|Send time|Recipients \(/);
+  expect(ctxText).toMatch(/figure/i);
+  // The same promise the crm_write arm makes: approving writes the user's OWN records, and the
+  // model must not offer to send it to anyone.
+  expect(ctxText).toMatch(/not an email/i);
 });

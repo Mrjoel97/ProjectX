@@ -73,7 +73,11 @@ function formatAbsolute(epoch: number): string {
  */
 export function describeCrmOperations(raw: unknown): string[] {
   const day = (ms: number) =>
-    new Date(ms).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+    new Date(ms).toLocaleDateString(undefined, {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+    });
   return parseCrmOperations(raw).map((op) => {
     switch (op.op) {
       case "addContact":
@@ -313,6 +317,38 @@ function PlanRecipientBodies({ plan }: { plan: Plan }) {
   );
 }
 
+/**
+ * Every governed refusal this card can show, and the lever the user can pull for it. Module-scope
+ * and EXPORTED so the set is assertable — it used to be a local const inside `approve()`, where a
+ * missing key was undetectable: unlike the Approvals page's `refusalMessage`, which falls back to
+ * printing the raw enum, `if (refusal) setNote(...)` below renders NOTHING AT ALL for a reason
+ * that is not here. A silent no-op on the second approve surface is the worse failure mode.
+ *
+ * A reason with no entry here is one the canvas or the picker already surfaces (media/scheduling).
+ * Copy is kept WORD-FOR-WORD in step with `approvals/ApprovalsView.tsx`'s `refusalMessage` — the
+ * same stop must not read as two different rules on the two surfaces.
+ */
+export const PLAN_REFUSALS: Record<string, { text: string; href?: string }> = {
+  gmail_not_connected: { text: "Connect Gmail before approving." },
+  no_postal_address: {
+    text: "Add your postal address before sending — the law requires it in every email's footer.",
+    href: "/dashboard/profile",
+  },
+  all_recipients_suppressed: {
+    text: "Nobody on this list can be emailed: every recipient has unsubscribed.",
+  },
+  // Task 8 (live-finance-inputs): `applyFinanceClaims`'s two refusals, which reach this card as a
+  // RETURN rather than a throw Convex would redact in production. Without these entries a rejected
+  // figure approval would set no note and the click would look like it simply did nothing.
+  agent_cannot_update_figure: {
+    text: "That figure can only be updated by you for now — the agent cannot vouch for where it came from. Nothing changed.",
+    href: "/dashboard/finance",
+  },
+  malformed_figure_claim: {
+    text: "This figure update was malformed and was not applied. Nothing changed.",
+  },
+};
+
 function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
   const execute = useMutation(api.cockpit.executePlan);
   const setSendTime = useMutation(api.plans.setPlanSendTime);
@@ -337,19 +373,10 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
     try {
       const res = await execute({ planId: plan._id });
       if (!res.ok) {
-        // Every governed stop names the lever the user can pull. A reason with no entry here is a
+        // Every governed stop names the lever the user can pull; the map is module-scope so the
+        // set of stops is assertable (see PLAN_REFUSALS). A reason with no entry there is a
         // media/scheduling refusal the canvas or the picker already surfaces.
-        const refusals: Record<string, { text: string; href?: string }> = {
-          gmail_not_connected: { text: "Connect Gmail before approving." },
-          no_postal_address: {
-            text: "Add your postal address before sending — the law requires it in every email's footer.",
-            href: "/dashboard/profile",
-          },
-          all_recipients_suppressed: {
-            text: "Nobody on this list can be emailed: every recipient has unsubscribed.",
-          },
-        };
-        const refusal = refusals[res.reason];
+        const refusal = PLAN_REFUSALS[res.reason];
         if (refusal) setNote({ ...refusal, tone: "error" });
       } else if (res.withheld && res.withheld.length > 0) {
         // SC#5: a partial send must TELL the user which addresses were withheld and why. Not a
@@ -423,7 +450,8 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
         <div style={label}>CRM UPDATE</div>
         {lines === null ? (
           <p role="alert" style={{ color: "#dc2626", margin: "0.5rem 0 0" }}>
-            This plan's records list is incomplete, so there is nothing to approve. Ask for it again.
+            This plan's records list is incomplete, so there is nothing to approve. Ask for it
+            again.
           </p>
         ) : (
           <>
@@ -478,6 +506,47 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
             </button>
           </>
         )}
+      </div>
+    );
+  }
+
+  // FINANCE plan (Task 8, live-finance-inputs): same single Approve gate, a different promise
+  // again. Approving writes the staged figures into the user's OWN numbers — the same `inline`
+  // arm the CRM branch uses, so nothing is emailed and no Gmail connection is needed. Ahead of the
+  // email chrome for the memo/CRM reason: recipients, mode, the send-time picker and "Send to N
+  // recipients" are all lies on a figure update.
+  //
+  // The COUNT, never the figures. `approvals/ApprovalsView.tsx`'s `titleFor` made this call for
+  // the primary approve surface and §4's rule about a tenant's revenue applies to a screenshot as
+  // much as to the audit log; the two surfaces must not disagree about what a figure card shows.
+  // The figures themselves are on /dashboard/finance, which is where Approve writes them.
+  if (plan.kind === "finance_write") {
+    const count = Array.isArray(plan.financeClaims) ? plan.financeClaims.length : 0;
+    return (
+      <div style={box} data-testid="finance-plan-card">
+        <div style={label}>FIGURE UPDATE</div>
+        <p style={{ margin: "0.5rem 0 0.75rem", color: "var(--ink)", fontSize: "0.9rem" }}>
+          {count} figure {count === 1 ? "update is" : "updates are"} waiting on your approval.
+        </p>
+        <p style={{ ...dim, margin: "0 0 0.75rem" }}>
+          Approving saves {count === 1 ? "it" : "them"} to your finance figures. Nothing is sent to
+          anyone.
+        </p>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void approve()}
+          style={{
+            ...btn,
+            background: "var(--teal-600)",
+            color: "#fff",
+            border: "none",
+            fontWeight: 600,
+          }}
+        >
+          {/* Word-for-word `approvals/ApprovalsView.tsx`'s actionLabel — one act, one promise. */}
+          {busy ? "Saving…" : "Approve & update the figure"}
+        </button>
       </div>
     );
   }
@@ -1684,6 +1753,11 @@ const VERB: Record<string, [running: string, done: string]> = {
   // Task 7 (live-finance-inputs): MANDATORY beside the schema literal — traceParity.test.ts
   // asserts set equality both ways. Read-only, matches the evaluateBusiness voice above.
   readFinance: ["Reading your finances…", "Read your finances"],
+  // Task 8: MANDATORY beside the schema literal — traceParity.test.ts asserts set equality BOTH
+  // ways, so either half alone is RED. The done state is the PROMISE the tool keeps: it STAGES a
+  // card and applies nothing, so this must never read "Saved" or "Updated your figures" — the
+  // write happens on Approve, and BRAND §1 forbids claiming an action that did not happen.
+  stageFinanceWrite: ["Preparing a figure update…", "Figure update ready to approve"],
 };
 const FALLBACK: [string, string] = ["Working…", "Done"];
 
@@ -2446,7 +2520,11 @@ function PlanCards({
     !halted &&
     plan.kind !== "memo" &&
     plan.kind !== "media" &&
-    plan.kind !== "crm_write";
+    plan.kind !== "crm_write" &&
+    // Task 8: `finance_write` for the same reason as `crm_write` — a plan row can carry a leftover
+    // subject/body from an earlier compose in the same thread, and a DRAFT card would print an
+    // email beside a card that promises nothing is sent.
+    plan.kind !== "finance_write";
   // Resolution happens BEFORE the PLAN — render the pick card whenever the cockpit has parked
   // candidates. UAT-C (03.10-04): the old `status !== "proposed"` clause is DROPPED so the picker
   // SURVIVES a plan that got proposed with a pick still open (the propose-while-pending deadlock);

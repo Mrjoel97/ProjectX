@@ -440,12 +440,18 @@ export const patchPlan = internalMutation({
     // kind (the PLAN_STATUS Pitfall-5 lesson at the top of this file).
     // 19-06 ACTN-05: widened a FOURTH time, in the SAME edit as schema.ts for the reason the line
     // above gives — this mirror and the schema union must move together.
+    // Task 8 (live-finance-inputs): widened a FIFTH time, and DELIBERATELY — Task 4 left this
+    // decision here because widening `kind` widens what the MODEL may set through a patch.
+    // `finance_write` is safe for the same reason `crm_write` is: the row it produces is INERT
+    // until Approve, and `applyFinanceClaims` re-validates every claim at the gate. This mirror
+    // and the schema union must move together (Pitfall 9, the line above).
     kind: v.optional(
       v.union(
         v.literal("memo"),
         v.literal("calendar_event"),
         v.literal("media"),
         v.literal("crm_write"),
+        v.literal("finance_write"),
       ),
     ),
     // 19-06 ACTN-05: the staged CRM operation list. UNLIKE the deck and the staged event, this IS
@@ -455,6 +461,15 @@ export const patchPlan = internalMutation({
     // `parseCrmOperations` and applies it in one transaction. Nothing here spends money, mints a
     // ref or claims something happened. Drop-undefined means a non-CRM patch never touches it.
     crmOperations: v.optional(v.array(v.any())),
+    // Task 8: the staged figure-claim list, on the SAME reasoning as `crmOperations` above — the
+    // whole point of `finance_write` is that the model proposes figures and the human approves
+    // them, so the staging tool must be able to write it. `v.any()` elements because the SHAPE is
+    // owned by `schema.ts`'s own `financeClaims` validator (which Convex enforces on this very
+    // `db.patch`) and by `validateFigureClaim` (@pikar/core), which runs at BOTH the staging
+    // boundary and the apply boundary; a third hand-mirrored copy here would be one more thing to
+    // keep in step. Drop-undefined means a non-finance patch never touches it; `resetPlan` clears
+    // it explicitly.
+    financeClaims: v.optional(v.array(v.any())),
     // 17-01 ACTN-02: the four STAGED event slots a cockpit tool may write. Drop-undefined means a
     // non-calendar patch never touches them; resetPlan clears them explicitly.
     // `calendarEventId` and `calendarRunId` are deliberately NOT args here: they are written only

@@ -5,7 +5,8 @@
 // formatter reads the list through `parseCrmOperations` — the SAME validator `executePlan` runs at
 // the apply boundary — so the card cannot promise something the server would refuse.
 import { describe, expect, test } from "vitest";
-import { describeCrmOperations } from "./cards";
+import { refusalMessage } from "../approvals/ApprovalsView";
+import { describeCrmOperations, PLAN_REFUSALS } from "./cards";
 
 const DUE = Date.parse("2026-08-14T09:00:00.000Z");
 
@@ -38,5 +39,27 @@ describe("describeCrmOperations (the CRM plan card's line list)", () => {
     expect(() =>
       describeCrmOperations([{ op: "addFollowUp", email: "bob@x.com", note: "no date" }]),
     ).toThrow(/CRM_FOLLOWUP_DUEAT_REQUIRED/);
+  });
+});
+
+// The SECOND approve surface's refusal map (Task 8, live-finance-inputs). Its failure mode is
+// worse than the Approvals page's: `if (refusal) setNote(...)` renders NOTHING AT ALL for an
+// unmapped reason, where `refusalMessage` at least falls back to printing the raw enum — so a
+// missing key here makes a rejected approval look like a click that simply did nothing.
+describe("PLAN_REFUSALS (the cockpit plan card's governed stops)", () => {
+  // Named mutation that turns this RED: delete either finance key from PLAN_REFUSALS in cards.tsx.
+  test.each([
+    "agent_cannot_update_figure",
+    "malformed_figure_claim",
+  ])("%s maps to copy, so a refused figure approval is never a silent no-op", (reason) => {
+    expect(PLAN_REFUSALS[reason]?.text).toBeTruthy();
+  });
+
+  // One stop must not read as two different rules on the two surfaces. `refusalMessage` appends
+  // "Nothing was sent." only on its fallback, so a mapped reason is byte-identical here.
+  test("the copy is word-for-word the Approvals page's", () => {
+    for (const reason of ["agent_cannot_update_figure", "malformed_figure_claim"]) {
+      expect(PLAN_REFUSALS[reason]?.text).toBe(refusalMessage(reason));
+    }
   });
 });

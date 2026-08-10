@@ -47,11 +47,14 @@ import {
   buildDocFilename,
   buildRecipientView,
   CALENDAR_HORIZON_MS,
+  CASH_INPUTS,
+  type CashInputField,
   type CrmOperation,
   type DigestBatch,
   type DigestItem,
   type DocFormat,
   exceedsByteCap,
+  type FigureClaim,
   formatSpec,
   type InboxMessageMeta,
   type InlineRun,
@@ -68,6 +71,7 @@ import {
   selectForDigest,
   tokenizeMarkdown,
   toWinAnsi,
+  validateFigureClaim,
 } from "@pikar/core";
 import {
   CHEAP_MODEL,
@@ -1058,7 +1062,7 @@ const fmtSendInstant = (ms: number, tz?: string) =>
 export function buildAgentContext(
   plan: {
     /** ACTN-01 action type. ABSENT ⇒ email (actionTypeOf), so every pre-Phase-15 row is unchanged. */
-    kind?: "memo" | "calendar_event" | "media" | "crm_write";
+    kind?: "memo" | "calendar_event" | "media" | "crm_write" | "finance_write";
     recipients?: string[];
     subject?: string;
     body?: string;
@@ -1101,6 +1105,17 @@ export function buildAgentContext(
       "Current CRM plan. This is NOT an email: it has no recipients, no send mode and no send" +
       " time, and approving it writes contacts and follow-ups into the user's own records rather" +
       " than sending anything to anyone. Do not offer to add recipients or to send it."
+    );
+  }
+  // Task 8 (live-finance-inputs), added BY HAND for the reason the corrected note above gives —
+  // `finance_write` reaching ACTION_TYPES did NOT break this call, so nothing but this edit stops
+  // a staged figure plan being announced as an email with recipient slots the model then offers to
+  // fill and send. Pinned by a test in cockpitTools.test.ts, because the type system will not.
+  if (actionTypeOf(plan.kind) === "finance_write") {
+    return (
+      "Current figure-update plan. This is NOT an email: it has no recipients, no send mode and" +
+      " no send time, and approving it saves the staged figures into the user's own numbers" +
+      " rather than sending anything to anyone. Do not offer to add recipients or to send it."
     );
   }
   if (actionTypeOf(plan.kind) === "memo") {
@@ -2489,7 +2504,12 @@ export function buildCockpitTools(
             // contact came out of a mailbox resolution or the user's own words in this thread,
             // and letting the model label provenance would make the field unreliable. The same
             // literal `applyCrmOperations` uses when a follow-up upserts its contact.
-            staged.push({ op: "addContact", email: o.email, name: o.name, origin: "mailbox-resolved" });
+            staged.push({
+              op: "addContact",
+              email: o.email,
+              name: o.name,
+              origin: "mailbox-resolved",
+            });
             continue;
           }
           if (!clientContext) return refuse("no_clock", CRM_REFUSAL_REPLY.no_clock);
@@ -2499,7 +2519,8 @@ export function buildCockpitTools(
             clientContext.tz,
             CALENDAR_HORIZON_MS,
           );
-          if (parsed.kind !== "resolved") return refuse(`due_${parsed.kind}`, CRM_DUE_REFUSAL[parsed.kind]);
+          if (parsed.kind !== "resolved")
+            return refuse(`due_${parsed.kind}`, CRM_DUE_REFUSAL[parsed.kind]);
           staged.push({ op: "addFollowUp", email: o.email, note: o.note, dueAt: parsed.epochMs });
         }
 
@@ -2560,6 +2581,132 @@ export function buildCockpitTools(
           ctx.runQuery(internal.cash.inputsFor, { tenantId }),
         ]);
         return JSON.stringify({ unitEconomics: unit, solvency: sol, inputs: inputs.inputs });
+      },
+    }),
+    // ── stageFinanceWrite (Task 8) — the agent's ONLY route to a figure ───────────────────────
+    //
+    // ONE tool carrying a LIST: one plan, one approval click, however many figures moved. The
+    // `stageCrmWrite` shape above, for the same reason — two tools would be two registration
+    // surfaces, two `agentSteps.tool` literals and two VERB entries for ONE governed act.
+    //
+    // It STAGES and applies NOTHING. `executePlan`'s `inline` arm applies the list after Approve,
+    // in one serializable transaction. contacts-crm.md invariant 11 — the ACTOR decides gating:
+    // the human editing the SAME figure through `cash.saveInput` is ungated and stages no plan.
+    //
+    // Validated HERE as well as at the apply boundary, deliberately: the plan row is CONTENT PLANE
+    // and could be revised in between, and `validateFigureClaim` is idempotent over its own output.
+    stageFinanceWrite: tool({
+      // Split literals keep each chunk under the §5 no-hardcoded-prompt scan ceiling (200 chars).
+      description:
+        "Stage updates to the user's own financial figures for them to approve. " +
+        "This saves nothing yet. " +
+        "Every update must say where the number came from, as a short reference. " +
+        "Only the collected inputs can be updated, never a ratio you worked out yourself.",
+      inputSchema: jsonSchema<{
+        updates: Array<{ field: string; value: number; basis: string }>;
+      }>({
+        type: "object",
+        properties: {
+          updates: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                field: { type: "string", description: "The input's exact name." },
+                value: { type: "number", description: "The figure, in whole units." },
+                basis: {
+                  type: "string",
+                  description:
+                    // The example is DELIBERATELY unquoted: the §4 guard in `execute` rejects a
+                    // basis containing a quote character, so a quoted example would teach the
+                    // model the exact shape that gets refused.
+                    "A short REFERENCE for where it came from, e.g. 14000 / 10, this turn. Use no quote marks and never quote the user.",
+                },
+              },
+              required: ["field", "value", "basis"],
+              additionalProperties: false,
+            },
+          },
+        },
+        required: ["updates"],
+        additionalProperties: false,
+      }),
+      execute: async ({ updates }): Promise<string> => {
+        // Every exit below is a RETURNED SENTENCE the model can act on, never a throw out of the
+        // governed loop (18-06's rule) — including the ones that exist purely to catch a
+        // malformed emission.
+        if (updates.length === 0) {
+          return "There were no changes to stage, so nothing happened. Ask the user which figure moved.";
+        }
+        // One plan row per thread (`plans.by_thread` is `.unique()`), so staging finance onto a
+        // half-composed email would turn the draft into a figure card and strand it. The
+        // `stageCrmWrite` / `stageResearchPlan` / `stageMediaPlan` refusal, on the same hazard.
+        const plan = await readPlan();
+        if (
+          (plan.recipients?.length ?? 0) > 0 ||
+          plan.subject ||
+          plan.body ||
+          (plan.attachments?.length ?? 0) > 0
+        ) {
+          return (
+            "There is an email draft on this conversation's plan card, and staging figure updates " +
+            "would replace it. Nothing was staged. Tell the user plainly, and offer to update " +
+            "their figures once the draft is sent or discarded."
+          );
+        }
+        // §2-D: the trusted client's clock, never the model's. `Date.now()` is the SERVER's clock
+        // (also not the model's) and is the right fallback here — unlike `setSendTime`, nothing on
+        // this path parses a model-supplied date phrase, so there is no instant to get wrong.
+        const nowMs = clientContext?.nowMs ?? Date.now();
+        const claims: FigureClaim[] = [];
+        for (const u of updates) {
+          // The field check MUST precede claim construction. `validateFigureClaim` delegates to
+          // `cashInputSpec`, which THROWS on a field outside the union — and a hallucinated field
+          // name ("revenue", "burnRate") is the likeliest malformed emission from a model. This
+          // guard is what turns that throw into a sentence.
+          if (!CASH_INPUTS.some((s) => s.field === u.field)) {
+            return `"${u.field}" is not a figure I can update. Ask the user which one they mean.`;
+          }
+          // §4 is enforced HERE, at the boundary that CONSTRUCTS `basis`. `validateFigureClaim`
+          // checks only that a basis is non-empty — "refs only, never quoted content" is not
+          // mechanically decidable in pure TS, so the producer is the enforcement point. Reject a
+          // basis carrying quoted content, or long enough to be a transcript, rather than letting
+          // it reach the audit log and the approval card.
+          if (/["'“”]/.test(u.basis) || u.basis.length > 120) {
+            return `The basis for ${u.field} must name where the number came from, not quote it.`;
+          }
+          const claim: FigureClaim = {
+            field: u.field as CashInputField,
+            value: u.value,
+            // `origin` and `actor` are NOT model inputs: they are the provenance of the WRITE, and
+            // letting the model label its own claim as the user's would defeat invariant 11
+            // outright. `applyFinanceClaims` re-stamps `actor` at the gate for the same reason.
+            origin: "stated",
+            actor: "agent",
+            basis: u.basis,
+            // When the figure was TRUE. Nothing on this path parses a date, so a figure the agent
+            // heard this turn was true this turn.
+            observedAt: nowMs,
+            confidence: "high",
+          };
+          const check = validateFigureClaim(claim, nowMs);
+          if (!check.ok) return `I cannot stage ${u.field}: ${check.reason}`;
+          claims.push(claim);
+        }
+        // `status: "proposed"` is not decoration: `executePlan`'s Approve gate is a CAS that
+        // no-ops on any other status, and every approval surface lists by it. A row left at
+        // `collecting` would render nowhere and could never be approved.
+        await ctx.runMutation(internal.plans.patchPlan, {
+          planId,
+          kind: "finance_write",
+          status: "proposed",
+          financeClaims: claims,
+        });
+        return (
+          `${claims.length} figure update(s) are staged on a plan card for the user to review. ` +
+          "NOTHING has been saved and nothing was emailed to anyone; the figures change only when " +
+          "the user clicks Approve. Tell them what is on the card."
+        );
       },
     }),
     // ── The briefing tools (CKPT-04) — READ-ONLY, panel-driven ────────────────────────────────
