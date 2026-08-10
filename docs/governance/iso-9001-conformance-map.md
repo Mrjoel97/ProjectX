@@ -83,3 +83,67 @@ provides non-normative guidance rather than additional requirements.
 | 9.3 | Perform management review using required inputs and decisions. | Not assessed — organization-wide | No repository artifact establishes a complete management-review process or its inputs and outputs. | Owner checkpoints authorize changes and capture UAT decisions. | Owner checkpoints are not clause 9.3 management review and owner authorization is not a company quality policy. | Defer assessment until a real management-review process produces dated inputs, outputs, actions, and decisions. |
 | 10.2 | React to nonconformity, control effects, determine cause, take corrective action, and review effectiveness. | Partial — gap named | `repo:packages/backend/convex/deadLetters.ts`<br>`repo:packages/backend/convex/deadLetters.test.ts`<br>`repo:packages/backend/convex/notifications.ts`<br>`repo:packages/backend/convex/notifications.test.ts`<br>`repo:packages/backend/convex/audit.ts#log`<br>`repo:docs/playbooks/audit-dead-letter.md` | DLQ writing, tenant-scoped reading, resolve transition, deadletter audit event, notification choke point, and tests prove detection, containment, visibility, and operator disposition. | Disposition — close in Phase 24 Plan 24-02: resolved status alone is not cause evidence, corrective action, recurrence prevention, or effectiveness review; the pointer-only evidence index will link real complete chains. | Run the dead-letter and notification suites; until 24-02 closes the linkage, do not claim complete corrective action. |
 | 10.3 | Improve behavior using observed evidence and controlled changes. | Supporting | `repo:packages/backend/convex/skills.ts#insertCandidate`<br>`repo:packages/backend/convex/skills.ts#recordEvalEvidence`<br>`repo:packages/backend/convex/skills.ts#activateSkillVersion`<br>`repo:packages/backend/convex/skills.test.ts`<br>`repo:.planning/ROADMAP.md` | Feedback and observed failures can create immutable candidate versions; evaluation, owner activation, rollback, and roadmap gap-closure provide a controlled improvement loop. | Candidate creation may be dormant, unpaid, rejected, or intentionally ungated; this does not establish organization-wide continual-improvement effectiveness. | Trace the observation to an exact candidate version, full evidence, activation or rejection, later observation, and rollback where applicable. |
+
+## How to use this map
+
+1. Start with the relevant clause row and confirm that its status matches the claim being made.
+2. Follow the actual source, test, runtime-read, or dated verification pointers in evidence-hierarchy
+   order. A path's presence is not proof that the control currently operates.
+3. Run the row's verification against the current revision and inspect any required live readback.
+4. Treat summaries and verification reports as historical evidence only for the exact version,
+   commit, run, and date they name. Never reuse them to release or characterize a later version.
+5. If evidence and status disagree, narrow or block the claim first; update the status only after
+   stronger evidence exists.
+
+## Maintenance triggers
+
+Review this map only when one of these evidence mechanisms or claim boundaries changes:
+
+- ISO publishes a new edition or an applicable amendment;
+- the audit or WORM mechanism, retention boundary, or live preservation evidence changes;
+- skill candidate, evaluation, evidence, activation, or rollback semantics change;
+- playbook, ADR, GSD, Git, or CI change-control mechanisms change materially;
+- Pikar introduces an actual internal-audit or management-review process; or
+- a new marketing, procurement, compliance, conformity, or certification claim is proposed.
+
+Ordinary feature changes do not update this map when the mapped mechanism is unchanged. Their own
+plans, tests, summaries, verification, and playbooks remain the evidence.
+
+## Offline verification
+
+Run from the repository root. These commands validate the map's baseline and the existing controls;
+they do not establish certification, organization-wide conformity, or live infrastructure state.
+
+```powershell
+node -e "const s=require('fs').readFileSync('docs/governance/iso-9001-conformance-map.md','utf8'); if(!s.includes('ISO 9001:2015')) throw new Error('missing baseline'); console.log('map readable')"
+pnpm --filter @pikar/backend exec vitest run convex/auditImmutability.test.ts convex/worm.test.ts convex/skills.test.ts convex/deadLetters.test.ts convex/notifications.test.ts --maxWorkers=1
+node packages/backend/scripts/run-eval-golden.mjs --self-check
+node scripts/check-playbooks.mjs check
+```
+
+When the shell does not expose the package-local binary directory, repair that local execution
+environment before interpreting a wrapper failure as a control failure. Do not replace these
+bounded commands with a paid live eval or production mutation.
+
+## Manual-Only verification
+
+| Behavior | Why manual | Required disposition |
+|---|---|---|
+| Claim boundary and clause applicability | Syntax and unit tests cannot decide legal/compliance meaning or organization-wide applicability. | The owner reviews the defined scope and statuses; obtain qualified ISO review before any external conformity statement. |
+| Real S3 Object Lock durability and delete refusal | It requires configured AWS infrastructure, credentials, an actual retained object, and a refused delete. | Cite dated live evidence only when performed; otherwise keep preservation conditional and the claim blocked. |
+| Leadership, competence, internal audit, and management review | Evidence belongs to people and company processes, not repository implementation. | Keep clauses 5, 7.2–7.4, 9.2, and 9.3 not assessed until actual organization-wide evidence exists. |
+| ISO edition re-baseline | The next edition is not yet the baseline mapped here. | Review after publication; do not guess future requirements. |
+
+## Known limitations
+
+- Live WORM evidence is conditional: code, cursor ordering, checksums, and the unset-bucket skip are
+  tested, but no newer dated proof establishes real S3 COMPLIANCE retention and delete refusal.
+- Playbook freshness enforcement is hook-scoped, can fail open on Git/tool errors, and is not a
+  universal human or non-Claude merge gate.
+- The direct 8.6 release status applies only to gated candidate skill versions. Bootstrap v1,
+  explicitly ungated skills, unpaid/failed candidates, on-demand live runs, and deployment remain
+  outside that claim.
+- Clause 10.2 currently proves detection, containment, visibility, and disposition only. Plan 24-02
+  owns the corrective-action evidence linkage; resolved status alone is insufficient.
+- No repository evidence establishes a clause 9.2 internal-audit program or clause 9.3 management
+  review. Tests and owner checkpoints must not be relabelled as either.
