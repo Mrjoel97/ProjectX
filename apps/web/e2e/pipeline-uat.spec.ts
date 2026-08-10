@@ -195,6 +195,12 @@ test.describe.configure({ mode: "serial" });
 test.use({ storageState: "e2e/.auth/uat19.json" });
 
 test.beforeAll(async ({ browser }: { browser: Browser }) => {
+  // Playwright's 30s DEFAULT is too tight for this hook and always was: it does a REAL signup
+  // through the form plus three `convex run` CLI round-trips (each one spawns a node process),
+  // and a cold Convex backend compiles its modules on the first call to each. It only ever
+  // passed against a long-warm deployment; a freshly-pushed one blew it every time. This is a
+  // SETUP budget, not an assertion — nothing below it is relaxed.
+  test.setTimeout(180_000);
   mkdirSync(UAT_DIR, { recursive: true });
   // `browser.newContext()` on the FIXTURE inherits the file-level `test.use` above, which points at
   // a state file this hook has not written yet — so the signup context must opt out explicitly.
@@ -476,36 +482,30 @@ test("step 7: ACTN-05 — a dated reminder stages an addFollowUp WITH a dueAt, n
   page,
 }) => {
   test.setTimeout(300_000);
-  // ── MEASURED RED, 2026-08-10. NOT a spec bug and NOT a model failure. ──────────────────────────
-  // `sendCockpitMessage` has taken an optional `clientContext: { tz, nowMs }` since the calendar
-  // tools landed, and 19-11 (`6c9e442`) threaded that trusted clock into the agent loop's own tool
-  // set. **NO WEB CALLER HAS EVER SENT IT** — `grep -rn clientContext apps/web` returns nothing,
-  // and `ChatPane.tsx`'s composer posts `send({ threadId, text })` flat. So `stageCrmWrite` takes
-  // `if (!clientContext) return refuse("no_clock", …)` on EVERY turn a human types, and the
-  // capability ACTN-05 names is unreachable from the product.
+  // ── CLOSED 2026-08-10 — THIS IS NOW THE LIVE REGRESSION GUARD FOR ACTN-05. ────────────────
+  // The `test.fail()` that stood here recorded a MEASURED red: `sendCockpitMessage` has taken an
+  // optional `clientContext: { tz, nowMs }` since the calendar tools landed, and **NO WEB CALLER
+  // HAD EVER SENT IT** — so `stageCrmWrite` took `if (!clientContext) return refuse("no_clock", …)`
+  // on EVERY turn a human typed, and the capability ACTN-05 names was unreachable from the
+  // product. `setSendTime`, `checkAvailability` and `proposeCalendarEvent` (phase 17) took the
+  // identical exit, so the calendar tools had been refusing in production for two phases.
   //
-  // The live reply on this exact turn, verbatim: "I've added Jane to your contacts, but I couldn't
-  // stage the follow-up reminder for Thursday since the date wasn't clear." Meanwhile
-  // `parseSendTime("Thursday", Date.now(), tz, CALENDAR_HORIZON_MS)` resolves offline at $0 — the
-  // date was never the problem. Note the SECOND half of that sentence: a bare contact was written
-  // anyway, which is the same two-wrongs shape 19-10 measured, reached by a different route.
+  // The fix is `apps/web/app/(app)/dashboard/workspace/useSendCockpitMessage.ts`: ONE hook that
+  // injects the browser's clock, and all five web callers (ChatPane, cards.tsx's regenerate,
+  // SegmentAnatomy, AbnormalBriefBanner, PostCall) now go through it, so a new caller cannot be
+  // born clockless. `crmCard.test.ts` scans for the raw `useAction` that would reintroduce it.
   //
-  // THE FIX IS ONE LINE, at `apps/web/app/(app)/dashboard/workspace/ChatPane.tsx`'s `onSend`:
-  //   send({ threadId, text: t,
-  //          clientContext: { nowMs: Date.now(), tz: Intl.DateTimeFormat().resolvedOptions().timeZone } })
-  // It is NOT applied here: `:3111` serves a PRODUCTION build and the UAT's operating constraint
-  // forbids rebuilding it, so the fix could not be VERIFIED in this run — and an unverified product
-  // change is exactly what this phase has been burned by. The four other web callers of
-  // `sendCockpitMessage` (SegmentAnatomy, AbnormalBriefBanner, PostCall, cards.tsx's regenerate)
-  // are equally clockless and must be checked in the same edit.
+  // **THE UNIT LAYER CANNOT SEE THIS CLASS OF BUG AND MUST NOT BE TRUSTED TO.** Every offline
+  // suite was green throughout: `run-eval-golden.mjs:1394` supplies its OWN
+  // `clientContext: { tz: "UTC", nowMs }` for `clock: true` fixtures, so the gate certified a path
+  // the browser could not reach, and the E2Es that look like they cover the calendar tools drive
+  // `SMOKE::` sentinels, which pin their own clock (`llm.ts` `effectiveClientContext`). A BROWSER
+  // turn through the real composer is the only observer. That is what the rest of this test is.
   //
-  // `test.fail()` — not a weakened assertion. Every expect below still demands the CORRECT
-  // behaviour; this marker records the red, keeps the remaining UAT steps runnable, and turns
-  // GREEN into a loud failure the day the line above lands, which is when it must be deleted.
-  test.fail(
-    true,
-    "ACTN-05 is NOT met from the browser: ChatPane never sends clientContext, so stageCrmWrite refuses with no_clock.",
-  );
+  // It also stands in for the other three tools: they read the SAME `clientContext` closure
+  // variable in `buildCockpitTools`, so a turn that reaches `stageCrmWrite` with a clock proves
+  // the argument arrived for all of them (see the plan-row assertion at the end).
+
   await page.goto(WORKSPACE);
   await say(page, `Remind me Thursday to chase Jane (${JANE}) about the renewal.`);
 
@@ -637,7 +637,24 @@ test("step 9 (a): five recipients, one suppressed → exactly FOUR are queued an
   const pane = page.getByTestId("workspace-pane");
   await expect(pane.getByText("REPORT", { exact: true })).toBeVisible({ timeout: 60_000 });
   await expect(pane.locator("li").filter({ hasText: `-${stamp}@example.com` })).toHaveCount(4);
-  await expect(pane).not.toContainText(dropped);
+  // NARROWED, not weakened — and only because 9(b) below now makes the blanket form IMPOSSIBLE.
+  // This line read `await expect(pane).not.toContainText(dropped)` while the withheld report was
+  // invisible; now that SC#5's report is durable and on-screen, "the dropped address appears
+  // NOWHERE on the page" and 9(b)'s `expect(note).toContainText(dropped)` are mutually exclusive
+  // assertions about the same DOM. The stated invariant is the one kept, and it is kept in a
+  // STRICTLY MORE SPECIFIC form: the address must not appear as a queued row, and its ONLY
+  // permitted appearance in the whole pane is inside the withheld note. A regression that shows
+  // a dropped recipient as queued, in the progress line, or anywhere else still fails here.
+  await expect(pane.locator("li").filter({ hasText: dropped })).toHaveCount(0);
+  await expect(pane.getByTestId("withheld-report")).toContainText(dropped);
+  expect(
+    await pane.evaluate((el, addr) => {
+      const clone = el.cloneNode(true) as HTMLElement;
+      clone.querySelector('[data-testid="withheld-report"]')?.remove();
+      return (clone.textContent ?? "").includes(addr);
+    }, dropped),
+    "the dropped address appears somewhere OTHER than the withheld note",
+  ).toBe(false);
 
   // What the user ACTUALLY sees after a partial send — see 9(b) for why this, and not the withheld
   // note, is the screenshot the owner needs to judge.
@@ -648,28 +665,22 @@ test("step 9 (b): the withheld note — SC#5's user-facing half — must actuall
   page,
 }) => {
   test.setTimeout(180_000);
-  // ── MEASURED RED, 2026-08-10. The refusals are fine; the SUCCESS report is not. ────────────────
-  // 19-05 shipped `Sent to N. Withheld M who unsubscribed: <addresses>.` on BOTH approve surfaces
-  // and unit-pinned the string. **NO HUMAN CAN SEE IT**, and the reason is structural, not timing:
+  // ── CLOSED 2026-08-10 — the withheld report is now a FACT ON THE PLAN ROW. ────────────────
+  // The `test.fail()` that stood here recorded a MEASURED red, and the cause was structural, not
+  // timing: 19-05 shipped `Sent to N. Withheld M who unsubscribed: …` into the approve
+  // component's `useState`, but `PlanCards` renders `<PlanCard>` only under
+  // `plan.status === "proposed"` and `approvals.listAwaiting` paginates `"proposed"` only. A
+  // SUCCESSFUL approve IS the transition `proposed → approved`, and the reactive subscription
+  // lands it before `execute()` resolves — so `setNote` ran on a component that had already
+  // unmounted. The two REFUSAL notes survived precisely because a refusal LEAVES the plan
+  // proposed (steps 10 and 11 pass on that same mechanism).
   //
-  //   • cockpit: `PlanCards` renders `<PlanCard>` only under `plan.status === "proposed"`
-  //     (cards.tsx). The note lives in that component's `useState`.
-  //   • approvals: `AwaitingCard` comes from `approvals.listAwaiting`, which paginates
-  //     status `"proposed"` ONLY. The note lives in that component's `useState` too.
-  //
-  // A SUCCESSFUL approve is exactly the transition `proposed → approved`, and the reactive
-  // subscription lands it before `execute()` resolves — so the component that would render the
-  // note has already been replaced by the report card when `setNote`/`setResult` runs. The two
-  // REFUSAL notes survive precisely because a refusal LEAVES the plan proposed (steps 10 and 11
-  // pass on that same mechanism). Observed here: not visible at any point in 90 seconds.
-  //
-  // The fix belongs on the plan ROW, not in component state — the withheld set is a durable fact
-  // about what was approved and the report card is where a human looks afterwards. Anything kept
-  // in `useState` across a status flip is unreachable by construction.
-  test.fail(
-    true,
-    "SC#5's withheld report is destroyed by the same approve that creates it: both approve cards are gated on status==='proposed'.",
-  );
+  // Fixed by persisting the dropped set on the plan row (`plans.withheldRecipients`, written in
+  // the same `executePlan` patch as the counters it explains) and rendering it from
+  // `@pikar/core`'s `withheldNote` on both post-approve surfaces — the cockpit report card and
+  // the Approvals in-flight row. A durable set is also what makes the outcome auditable after
+  // the fact, which component state never could.
+
   const { dropped } = await approveWithOneSuppressed(page, "w");
   const pane = page.getByTestId("workspace-pane");
 
@@ -895,4 +906,80 @@ test("step 14: at phone width the four tiles and the table stay readable", async
   expect(docWidth, "the page itself must not scroll horizontally").toBeLessThanOrEqual(391);
 
   await shot(page, "step-14-phone-width");
+});
+
+// ── STEP 7c (REAL MODEL CALL) — the PHASE-17 half of the same defect, RUN LAST ────────────────
+
+test("step 7c: the phase-17 calendar tools are reachable from a browser turn — proposeCalendarEvent stamps the BROWSER's own timezone on the plan row", async ({
+  page,
+}) => {
+  test.setTimeout(300_000);
+  // `stageCrmWrite` was never the only casualty of the missing clock. `setSendTime` (llm.ts:1950),
+  // `checkAvailability` (:2260) and `proposeCalendarEvent` (:2306) read the SAME `clientContext`
+  // closure variable in `buildCockpitTools` and took the identical no-clock exit — so phase 17's
+  // calendar tools had been refusing on every live cockpit turn since they shipped, invisibly,
+  // because they were only ever exercised through `__invokeCockpitTool` (which passes a clock) or
+  // the pinned SMOKE path (`llm.ts` `effectiveClientContext`).
+  //
+  // WHY THIS TOOL AND NOT `checkAvailability`: `proposeCalendarEvent` stages onto the plan row with
+  // NO provider call, so it is $0 beyond the one model turn and cannot be confounded by the
+  // synthetic Google grant 401-ing at `calendar.freeBusy`. And its write IS the proof: `eventTz` is
+  // assigned `clientContext.tz` and nothing else can produce it, so a row carrying THIS BROWSER's
+  // zone is direct evidence that the trusted clock crossed the boundary. A reply-text check would
+  // prove nothing — the refusal and the success are both just sentences.
+  //
+  // RUN LAST, and deliberately: it is the one assertion in this file whose subject is a MODEL
+  // CHOICE (did it reach for the calendar tool at all?) rather than a governed code path, so in
+  // serial mode it must not be able to skip the twelve deterministic steps behind it.
+  const zone = await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC");
+  const before = new Set(
+    ((await fetchQuery(api.cockpit.listThreads, {}, auth)) as Array<{ threadId: string }>).map(
+      (t) => t.threadId,
+    ),
+  );
+
+  await page.goto(WORKSPACE);
+  await say(page, "Add a calendar event: a 30 minute call with Jane, Thursday at 3pm.");
+
+  // `say()` returns when the COMPOSER clears, and `ChatPane.onSend` clears it BEFORE awaiting the
+  // action (its FIX 2 — so the turn reads as sent during the 10-30s wait). Every other real-model
+  // step here rides a long `toBeVisible` afterwards and never noticed; this one reads the row
+  // directly, so it has to do its own waiting. Reading it eagerly picked up the PREVIOUS thread's
+  // plan on the first run of this test.
+  const threadId = await (async () => {
+    const deadline = Date.now() + 120_000;
+    while (Date.now() < deadline) {
+      const rows = (await fetchQuery(api.cockpit.listThreads, {}, auth)) as Array<{
+        threadId: string;
+      }>;
+      const fresh = rows.map((r) => r.threadId).find((id) => !before.has(id));
+      if (fresh) return fresh;
+      await new Promise((r) => setTimeout(r, 1_000));
+    }
+    throw new Error("this turn minted no new cockpit thread");
+  })();
+
+  await expect
+    .poll(
+      async () =>
+        ((await fetchQuery(api.plans.byThread, { threadId }, auth)) as { kind?: string } | null)
+          ?.kind,
+      { timeout: 150_000 },
+    )
+    .toBe("calendar_event");
+
+  const plan = (await fetchQuery(api.plans.byThread, { threadId }, auth)) as {
+    eventStartMs?: number;
+    eventDurationMs?: number;
+    eventTz?: string;
+  } | null;
+  // A FINITE FUTURE instant: `parseSendTime` only reaches the patch on `kind === "resolved"`, and
+  // it can only resolve "Thursday at 3pm" against a real `nowMs` it was handed.
+  expect(Number.isFinite(plan?.eventStartMs ?? Number.NaN)).toBe(true);
+  expect(plan?.eventStartMs ?? 0).toBeGreaterThan(Date.now());
+  // THE ASSERTION. `eventTz` has exactly one writer in the whole codebase: `clientContext.tz`.
+  expect(
+    plan?.eventTz,
+    "the plan row must carry the BROWSER's timezone — there is no server-side default that could",
+  ).toBe(zone);
 });
