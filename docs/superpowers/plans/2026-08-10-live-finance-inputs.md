@@ -731,6 +731,34 @@ export async function applyFinanceClaims(
 ): Promise<void> {
   const applied = claims ?? [];
   for (const claim of applied) {
+    // A claim off a plan row is DB-sourced JSON cast to FigureClaim — it is NOT type-checked
+    // input. `validateFigureClaim` throws past its own ok/reason contract on two shapes a stored
+    // row can hold: an unknown `field` reaches `cashInputSpec`, which throws, and a null `basis`
+    // TypeErrors on `.trim()`. Narrow BEFORE validating, or an approved plan crashes the mutation
+    // instead of refusing cleanly.
+    if (!CASH_INPUTS.some((s) => s.field === claim.field) || typeof claim.basis !== "string") {
+      throw new Error("INVALID_INPUT: malformed claim on plan row");
+    }
+    // The scorecard store cannot carry provenance: `applyScorecardAnswer` takes only
+    // (db, tenantId, threadId, path, value), so origin/actor/basis/observedAt are all discarded,
+    // and it appends the dot-path to `userProvided` — which `runEvaluation` rebuilds its citation
+    // map from, stamping "user-provided" at HIGH confidence. An agent claim on a scorecard field
+    // would therefore read back as the owner's own statement AND launder into the evaluation
+    // engine's citations. `writeFigureRow` throws on this; refuse earlier, with a reason the
+    // approval card can show.
+    if (cashInputSpec(claim.field).store === "scorecard") {
+      throw new Error("INVALID_INPUT: that figure cannot be updated by an agent yet");
+    }
+    // Task 1's merge policy lives in the CALLER — `writeFigureRow` has no isNewerThan guard, so
+    // without this an approved claim observed in June patches over a figure the human saved
+    // today, moving statedAt backward and flipping actor.
+    const stored = await ctx.db
+      .query("financeInputs")
+      .withIndex("by_tenant_field", (q) =>
+        q.eq("tenantId", tenantId).eq("field", claim.field as "cashOnHand"),
+      )
+      .unique();
+    if (!isNewerThan(claim, stored?.statedAt ?? null)) continue;
     await writeFigureRow(ctx.db, tenantId, claim);
   }
   if (applied.length === 0) return;
@@ -745,7 +773,11 @@ export async function applyFinanceClaims(
 }
 ```
 
-Import `insertAudit` from the audit module. The audit module is insert-only (CLAUDE.md §3) — do not add a mutating call.
+Import `insertAudit` from the audit module. The audit module is insert-only (CLAUDE.md §3) — do not add a mutating call. Also import `CASH_INPUTS`, `cashInputSpec` and `isNewerThan` from `@pikar/core`.
+
+**The scorecard restriction is a real product limit, not a technicality.** It means the agent can update the five `financeInputs` figures — cash on hand, monthly operating cost, MRR, receivables, payables — and **cannot yet update CAC**, which is the headline use case. Closing that needs a per-dot-path provenance map on `evaluations` (mirroring the `userProvidedAt` map that already exists) so `applyScorecardAnswer` can record who supplied a figure. That is a separate, well-bounded change and it is the honest next slice; shipping the agent's CAC update on top of a store that records every write as the owner's own word would be worse than not shipping it.
+
+Add tests for all three refusals: a malformed claim on the plan row, a scorecard-field claim, and a claim older than what is stored (which must leave the stored row untouched rather than throwing).
 
 - [ ] **Step 7: Dispatch it**
 
