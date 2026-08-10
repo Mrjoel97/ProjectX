@@ -17,7 +17,7 @@
 > retried turn bills a second model call. Its author's in-code rationale is measured and reads
 > sound — a duplicated turn is ~$0.01 against a ~$0.42 full-gate re-run, since evidence writes only
 > on an all-green unfiltered run, so one `UV_HANDLE_CLOSING` teardown crash discards the whole
-> gate — but **I did not run it, did not re-measure it, and it is not committed.** The claim that
+> gate — but **I did not run it and did not re-measure it.** Its lane committed it as `4ea300c` minutes after this bump (it was still uncommitted when the bump was written). The claim that
 > an empty stdout with no failure banner can only be the teardown crash is the load-bearing one: if
 > that is ever false, a real refusal or governed stop gets silently re-billed. Verify it against a
 > live gate before treating this paragraph as this playbook's position.
