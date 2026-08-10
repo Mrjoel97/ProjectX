@@ -43,8 +43,10 @@ metrics:
     - "70d54e3 — the owner review surface on /ops (2 files, +447 / -0)"
     - "3166544 — playbooks + 21-04-PLAN.md (4 files, +567 / -9; 102 of those lines are 17-05's, swept in — see Shared-tree)"
     - "d49f6dc — separate the swept-in 17-05 entry from mine (1 file, +7)"
-  files_changed: 8
-  insertions: 2104
+    - "b9ecdbd — this summary (1 file, +503)"
+    - "1a51259 — the SECOND cockpit.md Stop-hook false positive, still claiming nothing (1 file, +6)"
+  files_changed: 9
+  insertions: 2613
   deletions: 20
   spend_usd: 0.00
   completed: 2026-08-11
@@ -498,6 +500,10 @@ cannot claim a green backend typecheck until they land.
 - `docs/playbooks/authorization.md` — FOUND (+122 / −8)
 - `docs/playbooks/cockpit.md` — FOUND (claim-nothing bump + the separator in `d49f6dc`)
 - `.planning/phases/21-user-authored-skills-and-routines/21-04-PLAN.md` — FOUND (239 lines, newly tracked)
-- Commits `18d8bca`, `70d54e3`, `3166544`, `d49f6dc` — **all four** re-verified with
-  `git merge-base --is-ancestor <sha> HEAD` after this summary was written. Nothing fell out of
-  history and nothing had to be re-applied.
+- `.planning/phases/21-user-authored-skills-and-routines/21-04-SUMMARY.md` — FOUND (`b9ecdbd`,
+  amended in the follow-up below so its own commit list is not short by three)
+- Commits `18d8bca`, `70d54e3`, `3166544`, `d49f6dc`, `b9ecdbd`, `1a51259` and this amendment —
+  **all** re-verified with `git merge-base --is-ancestor <sha> HEAD` after this summary was
+  written. Nothing fell out of history and nothing had to be re-applied.
+- `node scripts/check-playbooks.mjs` — exit **0**, empty output, at the end (after `1a51259`).
+- `git status` on every path this plan owns — **clean**.
