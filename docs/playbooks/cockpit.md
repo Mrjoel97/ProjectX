@@ -40,6 +40,12 @@
 > entry for `cards.tsx` / `traceParity.test.ts` / `run-calendar-test-gate.mjs` is still owed by
 > 17-05.
 >
+> It then fired a SECOND time after 21-04's docs commit, on `scripts/run-calendar-test-gate.mjs`
+> alone — still uncommitted, still that lane's. Extending this entry rather than stacking another
+> (the 21-05 precedent). Worth naming as a process cost and not just a nuisance: **each of these is
+> a durable record that says nothing, written by someone who checked nothing**, and the real entry
+> is still owed.
+>
 > PREVIOUS: 2026-08-11 (COVERAGE ONLY, eval-gate session — not an attestation.
 > `packages/core/src/calendarManagement.ts` and its test tripped §9 as uncovered new code.
 > Registered here because this playbook already owns `core/src/calendar.ts`. They are the 17-05
