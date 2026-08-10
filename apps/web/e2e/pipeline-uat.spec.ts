@@ -3,6 +3,9 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { api } from "@pikar/backend/api";
+// The IMPORTED constants, never re-typed here (19.1-06's rule): a copied attestation sentence or a
+// literal `1000` keeps passing after the source of truth drifts, and the sentence is the evidence.
+import { IMPORT_ATTESTATION, IMPORT_ROW_MAX } from "@pikar/core/contactImport";
 import { type Browser, expect, type Page, test } from "@playwright/test";
 import { fetchMutation, fetchQuery } from "convex/nextjs";
 
@@ -361,6 +364,182 @@ test("step 3: one row per person, a nameless contact shows its ADDRESS, and a fr
   // which is the whole point of this screenshot.
   await page.setViewportSize({ width: 1280, height: 1500 });
   await shot(page, "step-03-populated-pipeline");
+});
+
+// ── STEP 3b (phase 19.1, ACTN-05) ─────────────────────────────────────────────────────────────────
+//
+// THE FIXTURE IS AN INLINE CONSTANT, NOT A COMMITTED `e2e/fixtures/*.csv`. This repo runs
+// `core.autocrlf=true` with `* text=auto`, which normalizes a committed file's CRLF on checkout and
+// can strip its BOM — two of the five parser hazards the fixture exists to prove. Written with
+// explicit `\uFEFF` / `\r\n` escapes it is byte-identical in every checkout, and Playwright's
+// `setInputFiles({ name, mimeType, buffer })` needs no file on disk (`vault.spec.ts`,
+// `intake.spec.ts` both do this).
+
+const IMPORT_NEW = `ada-${stamp}@example.com`;
+const IMPORT_QUOTED = `oneil-${stamp}@example.com`;
+const IMPORT_CONTEXT = `Export from my old CRM, ${stamp}`;
+
+/**
+ * Five rows, one per outcome, and every physical-line hazard in the parser:
+ *
+ * | file line | row                | outcome   | what it proves                                    |
+ * | 1         | header             | —         | alias auto-mapping over `email,name,company,…`    |
+ * | 2         | a new address      | created   | a comma INSIDE a quoted field (`"Acme, Inc."`)    |
+ * | 3         | JANE, respelled    | enriched  | fill-empty-only: `company` lands, "Jane Doe" does NOT become "Jane D." |
+ * | 4 + 5     | a new address      | created   | a NEWLINE inside a quoted field AND a doubled quote (`"O""Neil, Ann"`) |
+ * | 6         | NAMELESS, all blank| unchanged | a matched contact the file adds nothing to        |
+ * | 7         | `not-an-address`   | rejected  | reported at PHYSICAL line 7, not record index 6   |
+ *
+ * The last two lines are the point of the embedded newline: with record indexing the malformed row
+ * is #6, and only physical-line accounting calls it 7 — which is what the user sees on opening the
+ * file.
+ */
+const FIXTURE_CSV = `${"\uFEFF"}${[
+  "email,name,company,phone,title",
+  `${IMPORT_NEW},Ada Byron,"Acme, Inc.",+255700000001,Founder`,
+  `${JANE},Jane D.,Renewal Corp,,`,
+  `${IMPORT_QUOTED},"O""Neil, Ann","Northside Studio\r\nSecond floor",,Director`,
+  `${NAMELESS},,,,`,
+  "not-an-address,Broken Row,,,",
+].join("\r\n")}\r\n`;
+
+/** One row over the whole-file ceiling. Generated, never committed — 1,001 rows of PII-shaped text
+ *  in the repo would be absurd, and the number has to track `IMPORT_ROW_MAX` rather than a literal. */
+const OVERSIZE_CSV = `email,name\n${Array.from(
+  { length: IMPORT_ROW_MAX + 1 },
+  (_, i) => `bulk-${i}-${stamp}@example.com,Row ${i}`,
+).join("\n")}\n`;
+
+/**
+ * DEPENDS ON STEP 3 and is placed immediately after it — serial mode makes the ordering the
+ * contract. Step 3 is what creates JANE ("Jane Doe", no company) and the NAMELESS contact, so this
+ * one file can produce all four counts at once. `--grep "step 3b"` in ISOLATION therefore cannot
+ * pass: with no Jane the file is 3 new / 0 enriched / 1 unchanged. Use `--grep "step 3"`, which
+ * matches both, or run the whole spec.
+ */
+test("step 3b: a real CSV imports — preview counts, the attestation gate, and nothing typed by hand is overwritten", async ({
+  page,
+}) => {
+  // The batch loop plus the reactive re-render of the contact table is well past the 30s default.
+  test.setTimeout(180_000);
+
+  // 1. COUNTED FROM THE TOP. A `window.alert`/`confirm` would block the page; every refusal in this
+  //    flow has to be inline, and step 4 pins the same thing for the address form.
+  let dialogs = 0;
+  page.on("dialog", (d) => {
+    dialogs += 1;
+    void d.dismiss();
+  });
+
+  await page.goto(PIPELINE);
+
+  // 2. The empty state is gone by step 3, so the entry point is the panel's OWN control — the
+  //    fourth connected section, between the tiles and the contact table.
+  await expect(page.getByTestId("import-panel")).toBeVisible({ timeout: 45_000 });
+  await expect(page.getByTestId("import-choose")).toBeVisible();
+  await page.getByTestId("import-file-input").setInputFiles({
+    name: "old-crm-export.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from(FIXTURE_CSV, "utf8"),
+  });
+  await expect(page.getByTestId("import-preview")).toBeVisible({ timeout: 30_000 });
+
+  // 3. THE NUMBERS, not merely that text rendered. `matchExisting` is in flight for a moment and the
+  //    counts element does not exist while it is, so this polls to the settled projection.
+  const counts = page.getByTestId("import-counts");
+  await expect
+    .poll(async () => (await counts.innerText()).replace(/\s+/g, " ").trim(), {
+      timeout: 60_000,
+      message: "the four preview counts, over the four fillable fields",
+    })
+    .toBe("2 new · 1 enriched · 1 unchanged · 1 rejected");
+
+  // 4. The malformed row, by its PHYSICAL FILE LINE and a reason. `Line 7` is the whole assertion:
+  //    the quoted newline on line 4 is what makes record index 6 and file line 7 diverge.
+  const rejectedRows = page.getByTestId("import-rejected").locator("li");
+  await expect(rejectedRows).toHaveCount(1);
+  await expect(rejectedRows).toHaveText("Line 7: not a usable email address");
+
+  // 5. THE CONSENT CONTRACT, OBSERVED. The box starts unticked and Confirm carries `disabled` until
+  //    it is ticked — a pre-ticked box would make the stored wording a false statement about what
+  //    the user did, and the stored wording is the evidence.
+  const confirm = page.getByTestId("import-confirm");
+  const box = page.getByTestId("import-attest-box");
+  await expect(box).not.toBeChecked();
+  await expect(confirm).toBeDisabled();
+  await expect(page.getByTestId("import-attest")).toContainText(IMPORT_ATTESTATION);
+
+  // 6. The judgement call, captured BEFORE the tick so the owner sees the gate closed — the counts,
+  //    the mapping, the rejected row and a Confirm that cannot be pressed, on one screen. Taller
+  //    viewport for the same reason step 3 needs one: the shell scrolls an INNER container.
+  await page.setViewportSize({ width: 1280, height: 1500 });
+  await shot(page, "step-03b-import-preview");
+
+  // 7. Tick, say where the file came from, confirm.
+  await box.check();
+  await expect(confirm).toBeEnabled();
+  await page.getByPlaceholder("Export from my old CRM, June 2026").fill(IMPORT_CONTEXT);
+  await confirm.click();
+  await expect(page.getByTestId("import-done")).toBeVisible({ timeout: 120_000 });
+
+  // 8. The rows are in the TABLE, and the imported one is legible as imported at both chips.
+  const rows = page.getByTestId("pipeline-contact-row");
+  await expect(rows).toHaveCount(4, { timeout: 60_000 });
+  const ada = rows.filter({ hasText: IMPORT_NEW });
+  await expect(ada).toContainText("Imported from a file");
+  await expect(ada).toContainText("· imported");
+  await expect(rows.filter({ hasText: IMPORT_QUOTED }).getByTestId("contact-name")).toHaveText(
+    'O"Neil, Ann',
+  );
+  // Jane keeps the origin she was TYPED with; only her consent chip moves.
+  const jane = rows.filter({ hasText: JANE });
+  await expect(jane).toContainText("You added them");
+  await expect(jane).toContainText("· imported");
+
+  // 9. THE ORACLE IS STORED STATE, NEVER THE PREVIEW — the preview is the thing under test, so it
+  //    cannot also be the witness. `listContacts`/`matchExisting`/`consentRecord` read the rows back
+  //    through the public API as the signed-in user.
+  const stored = await fetchQuery(api.contacts.listContacts, { limit: 50 }, auth);
+  expect(stored.contacts).toHaveLength(4); // upsert-by-address: no second Jane, no second nameless
+  const janeRow = stored.contacts.find((c) => c.email === JANE);
+  if (!janeRow) throw new Error("Jane must still be exactly one stored contact after the import");
+  expect(janeRow.name, "a hand-typed name is never overwritten by a file").toBe("Jane Doe");
+  expect(janeRow.origin, "an import does not re-origin a row the user typed").toBe("user-entered");
+
+  // …and the enrichment landed: `company` was empty before this file and is not empty now, while
+  // the two columns the file left blank are still empty. `empty` is the stored emptiness of the
+  // four fillable fields, read back after the write.
+  const [janeMatch] = await fetchQuery(api.contacts.matchExisting, { emails: [JANE] }, auth);
+  expect([...(janeMatch?.empty ?? [])].sort()).toEqual(["phone", "title"]);
+
+  // The attestation, byte-for-byte, on a contact the user never named individually.
+  const janeConsent = await fetchQuery(
+    api.contacts.consentRecord,
+    { contactId: janeRow.contactId },
+    auth,
+  );
+  expect(janeConsent?.source).toBe("imported-attested");
+  expect(janeConsent?.wording).toBe(IMPORT_ATTESTATION);
+  expect(janeConsent?.context).toBe(IMPORT_CONTEXT);
+
+  // 10. OVER THE CEILING. Back to the picker first, so "it never reached the preview" is a real
+  //     assertion rather than one the `done` screen would satisfy on its own.
+  await page.getByTestId("import-again").click();
+  await expect(page.getByTestId("import-choose")).toBeVisible();
+  await page.getByTestId("import-file-input").setInputFiles({
+    name: "way-too-big.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from(OVERSIZE_CSV, "utf8"),
+  });
+  const refusal = page.getByTestId("import-refusal");
+  await expect(refusal).toBeVisible({ timeout: 60_000 });
+  await expect(refusal).toContainText(IMPORT_ROW_MAX.toLocaleString("en-US"));
+  await expect(page.getByTestId("import-preview")).toHaveCount(0);
+  await expect(page.getByTestId("import-counts")).toHaveCount(0);
+
+  const after = await fetchQuery(api.contacts.listContacts, { limit: 50 }, auth);
+  expect(after.contacts, "a refused file writes nothing").toHaveLength(4);
+  expect(dialogs, "every refusal in this flow must be inline — zero browser dialogs").toBe(0);
 });
 
 // ── STEP 4 ────────────────────────────────────────────────────────────────────────────────────────
