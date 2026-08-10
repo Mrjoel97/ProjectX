@@ -137,6 +137,8 @@
     "packages/backend/convex/calendar.ts",
     "packages/backend/convex/calendarComplete.ts",
     "packages/backend/convex/calendar.test.ts",
+    "packages/backend/convex/savedPrompts.ts",
+    "packages/backend/convex/savedPrompts.test.ts",
     "packages/backend/convex/traceParity.test.ts",
     "packages/core/src/calendar.ts",
     "packages/core/src/calendar.test.ts",
@@ -172,6 +174,7 @@
   "skill-registry.md": [
     "packages/backend/convex/skills.ts",
     "packages/contracts/src/skill.ts",
+    "packages/contracts/src/skillAuthoring.test.ts",
     "packages/contracts/src/skills/",
     "packages/contracts/skills/",
     "packages/backend/scripts/run-seed.mjs",

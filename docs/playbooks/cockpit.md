@@ -1,5 +1,28 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-10 (21-01 — **SCHEMA AND OWNERSHIP ONLY: the `savedPrompts` table exists,
+> nothing reads or writes it.** No cockpit behaviour, tool, arm, trace literal or skill body moved.)
+>
+> **A saved prompt is INERT SAVED TEXT, and "routine v0" is not a euphemism for a scheduler.**
+> `savedPrompts` is `tenantId, text, title, textHash, createdAt` with `by_tenant_createdAt` and
+> `by_tenant_textHash`. `title` is code-derived (bounded trimmed first line); `textHash` makes save
+> idempotent within one tenant. That is the entire row.
+>
+> **There is deliberately NO `routines` table, cron, trigger, recurrence, next-run timestamp,
+> execution-history table, authoring canvas or graph DSL — and none may be added on the strength of
+> the word "routine".** The prompt does nothing at rest. Its ONLY future execution path is a user
+> clicking Run, which must start an ORDINARY FRESH cockpit turn through `useSendCockpitMessage`
+> with no `threadId` — the same hook every other send uses, because it is what supplies the trusted
+> IANA timezone and clock that Phase 17/19 calendar and CRM tools depend on. A raw
+> `useAction(api.cockpit.sendCockpitMessage)` silently drops those and regresses both. A run must
+> not call an internal action, schedule a job, or clone prior plan state; plan, guardrail, spend,
+> approval and activity boundaries are therefore unchanged by construction.
+>
+> Prompt text is content-plane data: it never enters an audit or dead-letter payload (CLAUDE.md §4).
+> The CRUD adapter, the workspace Pin/List/Run/Delete surface and their tests are owed by 21-05;
+> `savedPrompts.ts`/`savedPrompts.test.ts` are registered to this playbook in `watch.json` ahead of
+> that plan.
+
 > Last verified: 2026-08-10 (20.1-01 — **Drive reads are registered but intentionally not yet
 > taught to the active agent**). `buildCockpitTools` now exposes `listDriveFolders({parentId?})` and
 > `findInDrive({query})`; neither accepts `tenantId`, and both call the existing tenant-derived

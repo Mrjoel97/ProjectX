@@ -1,5 +1,59 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-10 (21-01 — **CONTRACTS AND SCHEMA ONLY. Nothing here is reachable yet:
+> there is no public function, no UI, no model call, no eval path and no activation. No registry row,
+> global or tenant, exists or changed.**)
+>
+> **`tenantSkills` is an OVERLAY, and the separate table is the whole point.** `skills` is
+> deployment-global and its `by_name_status` reads are `.unique()`. Putting tenant rows in it makes
+> every one of those reads multi-row and breaks every agent on the deployment; encoding the tenant
+> into `name` would make authorization depend on string parsing rather than an indexed key. The
+> global `skills` definition and both its indexes are BYTE-UNCHANGED by this plan (the schema diff
+> is 71 lines, all insertions, zero deletions).
+>
+> Row shape: `tenantId, name, version, body, authoredBody, status, author, authorUserId?,
+> basedOnScope, basedOnName, basedOnVersion, basedOnGlobalSkillId?, basedOnTenantSkillId?,
+> rollbackEligible, evidence?, createdAt`. Indexes `by_tenant_name_status`,
+> `by_tenant_name_version`, `by_tenant_createdAt`, `by_status_createdAt`.
+>
+> **IMMUTABLE AFTER INSERT:** `name`, `version`, `body`, `authoredBody`, `author`, `authorUserId`
+> and the whole `basedOn*` lineage. Later code may patch ONLY `status`, `evidence`, and the
+> code-owned `rollbackEligible` transition when a row genuinely becomes active. A re-edit is a NEW
+> row composed against the CURRENT effective base — never a patched body, and never an older
+> adaptation appended to a newer one.
+>
+> **TWO ROW SHAPES, and only server code can mint the first.** A server baseline is
+> `author: "system"`, `authoredBody: ""`, `status: "archived"`, `rollbackEligible: true` — it is
+> what gives a tenant's FIRST customization a real, evidence-exempt rollback target. A user
+> candidate is `author: "user"`, a real `authorUserId` derived from authenticated identity,
+> `status: "candidate"`, `rollbackEligible: false`. `rollbackEligible` is code-owned precisely so a
+> user candidate cannot mint itself one.
+>
+> **THE v0 AUTHORABLE SET IS THREE NAMES AND IS NOT `GATED_SKILLS`.**
+> `USER_AUTHORABLE_SKILLS` = `offer-architect`, `money-model-designer`, `lead-engine`. Gating is an
+> ACTIVATION policy; authorability is a PRODUCT decision. The three are chosen because their real
+> runtime is `dispatch.runSpecialist` -> `llm.runSpecialistTurn` and held-out fixtures 29/30/31
+> drive one each — so a tenant candidate has a runner that can clear its gate. Adding a name whose
+> runner cannot drive it reproduces the `document-analyst`/`media-director` deadlock recorded
+> further down, except now once per tenant. `skillAuthoring.test.ts` pins the exact set and its
+> subset relationship to `GATED_SKILLS`; adding `cockpit-agent` to the tuple was mutation-checked
+> RED before this entry was written.
+>
+> **The user authors an ADDITION, never a replacement.** `composeUserSkillBody(base, authored)`
+> emits the base verbatim, one fixed `## Tenant-authored business adaptation` marker, and the
+> trimmed adaptation. It never parses or strips the base (raw bodies stay an owner-only disclosure
+> boundary), never accepts a tool/capability list (ADR-007 — capability is code), and throws rather
+> than returning a partial body. The cap is `USER_SKILL_ADAPTATION_MAX_BYTES = 4000` **BYTES, not
+> characters** — a character cap lets one multibyte paste carry ~4x the tokens the number implies,
+> and swapping `TextEncoder().encode(...).length` for `.length` was mutation-checked RED.
+>
+> **STILL OWED, and this plan claims none of it.** 21-02: the `tenantMutation` publisher, the
+> initial baseline write, `loadEffectiveSkill` (tenant active -> global active -> `NO_ACTIVE_SKILL`)
+> and the refs-only audit row. 21-03: an eval pin that is EXACT on the tenant candidate id —
+> `<name>@<version>` alone is ambiguous once two tenants both hold `offer-architect@2`. 21-04: owner
+> activation and rollback through the one shared transition helper. Until 21-02 lands, these tables
+> have no writer and no reader; SKILL-01 stays open.
+
 > Last verified: 2026-08-10 (WHOLE-BRANCH RE-REVIEW, live-finance-inputs — **CODE ONLY, still not
 > seeded or evaluated. The body's `Finance:` sentence called every figure in that line "the user's
 > own figures", and once C1 made the line live that was a false statement to the model on every

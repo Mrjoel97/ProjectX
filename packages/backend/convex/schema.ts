@@ -83,6 +83,77 @@ export default defineSchema({
     .index("by_name_status", ["name", "status"])
     .index("by_name_version", ["name", "version"]),
 
+  // Tenant-owned OVERLAY over the deployment-global `skills` table above (Phase 21, SKILL-01).
+  //
+  // WHY A SEPARATE TABLE, and do not "tidy" it back: `skills` is deployment-global and its
+  // `by_name_status` reads are `.unique()`. Adding tenant rows there makes every one of those
+  // reads multi-row and breaks every agent on the deployment. Encoding the tenant into `name`
+  // would make authorization depend on string parsing instead of an indexed key.
+  //
+  // IMMUTABLE AFTER INSERT: `name`, `version`, `body`, `authoredBody`, `author`, `authorUserId`
+  // and the whole `basedOn*` lineage. Later code may patch ONLY `status`, `evidence`, and the
+  // code-owned `rollbackEligible` transition when a row genuinely becomes active. A new
+  // adaptation is a NEW row composed against the current effective base — never a patched body,
+  // and never an older adaptation appended to a newer one.
+  //
+  // TWO ROW SHAPES, and only code can mint the first:
+  //   server baseline — author "system", authoredBody "", status "archived", rollbackEligible true
+  //   user candidate  — author "user", a real authorUserId, status "candidate", rollbackEligible false
+  // The baseline is what gives a tenant's FIRST customization a real, evidence-exempt rollback
+  // target; `rollbackEligible` is code-owned precisely so a user candidate cannot mint itself one.
+  tenantSkills: defineTable({
+    tenantId: v.string(),
+    name: v.string(),
+    version: v.number(),
+    // The complete runtime body (base + composed adaptation). Never model- or client-supplied.
+    body: v.string(),
+    // The user's adaptation alone — what a reviewer reads, and "" on a system baseline.
+    authoredBody: v.string(),
+    status: v.union(
+      v.literal("active"),
+      v.literal("candidate"),
+      v.literal("rolled_back"),
+      v.literal("archived"),
+    ),
+    // Phase 23 may append "agent" here without granting it activation.
+    author: v.union(v.literal("system"), v.literal("user")),
+    // Required when author === "user"; derived from authenticated identity, never from args.
+    authorUserId: v.optional(v.id("users")),
+    basedOnScope: v.union(v.literal("global"), v.literal("tenant")),
+    basedOnName: v.string(),
+    basedOnVersion: v.number(),
+    basedOnGlobalSkillId: v.optional(v.id("skills")),
+    basedOnTenantSkillId: v.optional(v.id("tenantSkills")),
+    rollbackEligible: v.boolean(),
+    evidence: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    // Effective-load and per-tenant status reads.
+    .index("by_tenant_name_status", ["tenantId", "name", "status"])
+    // Next-version allocation and the exact-version read: descending `.take(1)`, never `.collect()`.
+    .index("by_tenant_name_version", ["tenantId", "name", "version"])
+    // The tenant's own bounded authoring history.
+    .index("by_tenant_createdAt", ["tenantId", "createdAt"])
+    // The bounded owner review queue across tenants.
+    .index("by_status_createdAt", ["status", "createdAt"]),
+
+  // "Routine v0" (Phase 21, SKILL-01): saved cockpit prompt text, INERT AT REST.
+  //
+  // There is deliberately NO `routines` table, cron, trigger, recurrence, next-run timestamp,
+  // execution-history table, canvas or DSL. The only execution path is a user clicking Run, which
+  // starts an ORDINARY fresh cockpit turn through the existing governed send path — so plan,
+  // guardrail, spend, approval and activity boundaries are unchanged. `title` is code-derived
+  // (bounded trimmed first line); `textHash` makes save idempotent within one tenant.
+  savedPrompts: defineTable({
+    tenantId: v.string(),
+    text: v.string(),
+    title: v.string(),
+    textHash: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_tenant_createdAt", ["tenantId", "createdAt"])
+    .index("by_tenant_textHash", ["tenantId", "textHash"]),
+
   // Scheduled awaitEvent-timeout bookkeeping (cancel the scheduled event on real decision).
   // by_correlation added for 02-04's sendDecision (currently full-scans; unbounded now).
   pendingTimeouts: defineTable({

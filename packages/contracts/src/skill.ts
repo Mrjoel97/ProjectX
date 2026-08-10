@@ -267,6 +267,97 @@ export function isGatedSkill(name: string): boolean {
 }
 
 /**
+ * The v0 set an ordinary signed-in user may write a business adaptation for (Phase 21, SKILL-01).
+ *
+ * DELIBERATELY NARROWER THAN `GATED_SKILLS`, and the two lists must not be merged: gating is an
+ * ACTIVATION policy ("this body needs eval evidence to go live"), authorability is a PRODUCT
+ * decision ("we can honestly explain this skill to a user, and a run can certify their edit").
+ *
+ * These three are the dispatched business specialists. Their real runtime is
+ * `dispatch.runSpecialist` -> `llm.runSpecialistTurn`, and held-out golden fixtures 29/30/31 drive
+ * exactly one of them each — so a tenant candidate has a runner that can clear its gate. Adding a
+ * name whose runner cannot drive it (the `document-analyst` / `media-director` deadlock recorded
+ * above) would mint tenant candidates no eval run could ever certify. `skillAuthoring.test.ts`
+ * pins the exact set AND its subset relationship to `GATED_SKILLS`.
+ */
+export const USER_AUTHORABLE_SKILLS = [
+  OFFER_ARCHITECT_SKILL,
+  MONEY_MODEL_DESIGNER_SKILL,
+  LEAD_ENGINE_SKILL,
+] as const;
+
+/** A registry name an ordinary tenant user may author an adaptation for. */
+export type UserAuthorableSkill = (typeof USER_AUTHORABLE_SKILLS)[number];
+
+/**
+ * User-facing copy for the authorable set, exhaustive by type over `UserAuthorableSkill` so a UI
+ * never re-lists registry names (a duplicated literal is how the two lists drift apart).
+ */
+export const USER_AUTHORABLE_SKILL_METADATA: Record<
+  UserAuthorableSkill,
+  { label: string; description: string }
+> = {
+  [OFFER_ARCHITECT_SKILL]: {
+    label: "Offer architect",
+    description: "How your offers are shaped, packaged, and priced.",
+  },
+  [MONEY_MODEL_DESIGNER_SKILL]: {
+    label: "Money model designer",
+    description: "How your pricing, margins, and payment terms are proposed.",
+  },
+  [LEAD_ENGINE_SKILL]: {
+    label: "Lead engine",
+    description: "How leads are sourced, qualified, and followed up.",
+  },
+};
+
+/** Whether an ordinary tenant user may author an adaptation for this registry name. */
+export function isUserAuthorableSkill(name: string): name is UserAuthorableSkill {
+  return (USER_AUTHORABLE_SKILLS as readonly string[]).includes(name);
+}
+
+/**
+ * UTF-8 byte cap on ONE authored adaptation. Bounds both the stored row and the per-turn prompt
+ * cost the adaptation adds. BYTES, not characters: a character cap lets one multibyte paste carry
+ * ~4x the tokens the number implies.
+ */
+export const USER_SKILL_ADAPTATION_MAX_BYTES = 4000;
+
+/** The single fixed marker separating the code-owned base body from the tenant's adaptation. */
+export const USER_SKILL_ADAPTATION_SECTION = "## Tenant-authored business adaptation" as const;
+
+/** `composeUserSkillBody` refuses an adaptation that is empty after trimming. */
+export const USER_SKILL_ADAPTATION_REQUIRED_ERROR = "USER_SKILL_ADAPTATION_REQUIRED" as const;
+
+/** `composeUserSkillBody` refuses an adaptation over `USER_SKILL_ADAPTATION_MAX_BYTES`. */
+export const USER_SKILL_ADAPTATION_TOO_LARGE_ERROR = "USER_SKILL_ADAPTATION_TOO_LARGE" as const;
+
+/**
+ * Compose the complete runtime body for a tenant skill candidate: the effective base body
+ * verbatim, one fixed section marker, and the user's trimmed adaptation.
+ *
+ * The user authors an ADDITION, never a replacement — they neither receive nor can delete the base
+ * prompt (which is an owner-only disclosure boundary), and they cannot grant a capability, because
+ * tools/action kinds/budgets are code-owned (ADR-007). The base is emitted byte-for-byte and never
+ * parsed, so composing a NEW adaptation against the same base cannot carry an older one forward:
+ * callers pass the base, not the previously composed body.
+ *
+ * Throws (never returns a partial body) so no caller can persist an unvalidated adaptation. Error
+ * messages carry the cap and the measured byte count only — never the authored text (CLAUDE.md §4).
+ */
+export function composeUserSkillBody(baseBody: string, authoredBody: string): string {
+  const authored = authoredBody.trim();
+  if (authored === "") throw new Error(USER_SKILL_ADAPTATION_REQUIRED_ERROR);
+  const bytes = new TextEncoder().encode(authored).length;
+  if (bytes > USER_SKILL_ADAPTATION_MAX_BYTES) {
+    throw new Error(
+      `${USER_SKILL_ADAPTATION_TOO_LARGE_ERROR}: ${bytes} bytes exceeds ${USER_SKILL_ADAPTATION_MAX_BYTES}`,
+    );
+  }
+  return `${baseBody}\n\n${USER_SKILL_ADAPTATION_SECTION}\n\n${authored}`;
+}
+
+/**
  * Evidence recorded on a skills row by a green eval run (refs/hashes/ids/counts
  * ONLY — never raw prompts, outputs, or PII; CLAUDE.md §4). Written by the eval
  * runner (plan 04) via recordEvalEvidence, read by the activateSkill gate.
