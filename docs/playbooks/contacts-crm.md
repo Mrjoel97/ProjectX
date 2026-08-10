@@ -1,5 +1,13 @@
 # Playbook: Contacts, CRM & follow-ups
 
+> Last verified: 2026-08-10 (HOOK ARTIFACT, not an attestation — supersede and delete this entry.
+> The §9 Stop hook fired on the finance-lane session for watched paths it did not author and had
+> not reviewed: `contacts.ts`, `contacts.test.ts`, `schema.ts`, `PipelineView.tsx`,
+> `pipelineView.test.ts`, `core/contacts.test.ts` — all UNCOMMITTED 19.1 work in the shared tree at
+> the time. Bumping the line as a real `Last verified` would have signed off on code that session
+> never read, so it recorded this instead. **Nothing here is verified.** The 19.1 lane replaces this
+> with its own entry when that work commits, exactly as it did for the COVERAGE-ONLY entry below.)
+
 > Last verified: 2026-08-10 (Plan 19.1-01 — the CSV import brain, PURE half only. This supersedes
 > the COVERAGE-ONLY entry below, which was filed by the concurrent finance lane when it tripped the
 > §9 hook on these files while they were still untracked; that entry deliberately deferred the
