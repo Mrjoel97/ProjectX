@@ -840,7 +840,7 @@ Widen `executePlan`'s return union with the finance reasons and return rather th
 
 ```tsx
   agent_cannot_update_figure:
-    "That figure can only be updated by you for now — the agent cannot vouch for where it came from.",
+    "That figure can only be updated by you for now — the agent cannot vouch for where it came from. Nothing changed.",
   malformed_figure_claim:
     "This figure update was malformed and was not applied. Nothing changed.",
 ```
@@ -1190,7 +1190,14 @@ Expected: FAIL — tool does not exist.
           if (!CASH_INPUTS.some((s) => s.field === u.field)) {
             return `"${u.field}" is not a figure I can update. Ask the user which one they mean.`;
           }
-          // The model-facing half. `buildAgentContext` (llm.ts:1058) has NO `finance_write` branch, and
+          // The SECOND approve surface. `apps/web/app/(app)/dashboard/workspace/cards.tsx:348-359` has
+    // its own refusal map, and it lacks the two finance reasons. Its failure mode is worse than
+    // the Approvals page's: `if (refusal) setNote(...)` means an UNMAPPED reason renders NOTHING
+    // at all, where ApprovalsView at least falls back to the raw enum. A finance card cannot ship
+    // on that surface without both entries. (Pre-existing shape — `no_deck`, the three budget
+    // reasons and `review_escalated` are already missing there — but finance must not join them.)
+    //
+    // The model-facing half. `buildAgentContext` (llm.ts:1058) has NO `finance_write` branch, and
     // its own comment records why that matters: `PlanRow` does not declare `kind`, so widening
     // `ACTION_TYPES` is NOT a compile error here — `media` shipped in Phase 20 without ever
     // reaching it. A new action type must be added BY HAND, "and one that is not gets announced
