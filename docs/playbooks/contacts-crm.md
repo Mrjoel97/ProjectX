@@ -48,7 +48,28 @@
 > deployments every seed lands somewhere the browser cannot see and the WHOLE suite fails at the
 > onboarding gate with no clue why. That is what happened here, and the symptom is
 > `onboarding.status` returning `needsOnboarding: true` for a tenant the seeder just reported
-> writing.)
+> writing. (c) **The local deployment's `SITE_URL` must name the port you are actually serving.** It
+> was pointing at `:3000` with nothing listening there, so sign-in succeeded and only the final
+> redirect hop died — the owner saw a dead `http://localhost:3000/dashboard?code=…`. Corrected to
+> `http://localhost:3111` on `local:local-joel_feruzi-pikar_ai_50c69-1`, which is what this
+> project's setup notes specify and what `convex/http.ts` already falls back to. (b) and (c) are
+> separate faults with separate symptoms; fixing one does not fix the other.
+>
+> **KNOWN GAP, USER-VISIBLE, NOT FIXED HERE.** The preview says `1 rejected` and the `done` screen
+> then says `0 rejected` for the same file. Both numbers are individually true — the client filters
+> the unusable row out before the batch, so the SERVER rejected none — but the user is told a row
+> cannot be imported and is then told nothing was rejected, which reads as "it got in after all".
+> The fix is one expression in `ImportPanel.tsx`'s done screen: sum the server's
+> `result.rejected.length` with the client's `mapped.rejected.length`. Deliberately NOT applied at
+> 19.1-07: that file belongs to 19.1-06 and the change would have been an out-of-scope code edit
+> made while closing a checkpoint. It is open, and it is in a phase whose whole thesis is that the
+> counts do not lie.
+>
+> **SECOND OPEN ITEM (BRAND/a11y).** `import-confirm` genuinely carries `disabled` before the
+> attestation is ticked — asserted in the DOM-free test, mutation-proven at 19.1-06, and observed in
+> the browser at 19.1-07 — but it is styled from the inline `primary` object, which has no disabled
+> variant. On screen the closed gate looks exactly as pressable as the open one. The gate is real;
+> its affordance is not.)
 
 > Last verified: 2026-08-10 (Plan 19.1-06 -- THE IMPORT SURFACE EXISTS AND IS REACHABLE. Before
 > this plan `matchExisting` and `importContacts` had ZERO callers: fully tested, fully isolated,
