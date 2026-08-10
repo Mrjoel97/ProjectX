@@ -163,8 +163,11 @@ export const send = internalAction({
     const req = await ctx.runQuery(internal.gmailAuth.getForDelivery, { requestId });
     if (!req) throw new Error(`gmail.send: request ${requestId} not found`);
 
-    // 19-05 SC#5 — THE TRUST BOUNDARY. This is the ONE place every product send converges
-    // (deliverApprovedPlan.ts is the sole caller of this action). executePlan's approve-time filter
+    // 19-05 SC#5 — THE TRUST BOUNDARY. This is the ONE place every product send converges, and it
+    // has TWO production callers, not one: `deliverApprovedPlan.ts:37` and `pipeline.ts:379`. Both
+    // handle the `suppressed` terminal explicitly. An earlier version of this comment claimed a
+    // sole caller and that false convergence claim is exactly what stopped three reviewers
+    // checking — grep the callers, do not trust this sentence. executePlan's approve-time filter
     // is the better UX because it can drop ONE address out of a list and still send to the rest;
     // THIS is what makes it unbypassable. A suppression created after approve but before a
     // SCHEDULED fire is invisible to that filter — startScheduledDelivery re-fires a requestIds

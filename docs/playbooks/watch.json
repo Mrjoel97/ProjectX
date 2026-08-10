@@ -100,7 +100,6 @@
     "apps/web/e2e/finance.spec.ts",
     "apps/web/e2e/content.spec.ts",
     "apps/web/e2e/reports.spec.ts",
-    "apps/web/e2e/pipeline.spec.ts",
     "apps/web/e2e/command-center.spec.ts"
   ],
   "cockpit.md": [
