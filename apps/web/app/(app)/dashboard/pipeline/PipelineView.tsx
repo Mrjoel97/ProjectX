@@ -28,6 +28,9 @@ import { DASHBOARD_STATE_COPY } from "@pikar/core";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { type CSSProperties, type ReactNode, useState } from "react";
+// The import panel is the same page, split out only for size. The cycle back to this file's style
+// objects is deliberate — see the styles block below.
+import { ImportPanel } from "./ImportPanel";
 
 type ContactsResult = FunctionReturnType<typeof api.contacts.listContacts>;
 type ContactRow = ContactsResult["contacts"][number];
@@ -47,16 +50,19 @@ export type PipelineActions = {
 };
 
 // ── styles ────────────────────────────────────────────────────────────────────
-const stack: CSSProperties = { display: "grid", gap: "0.75rem" };
-const muted: CSSProperties = { color: "var(--ink-soft)", margin: 0, lineHeight: 1.55 };
-const cardTitle: CSSProperties = {
+// EXPORTED for `ImportPanel.tsx`, which is the same page and must not re-declare them: two copies
+// of `button` is how one half of a page drifts from the other. The resulting import cycle
+// (PipelineView ⇄ ImportPanel) is safe because every one of these is read inside a component body.
+export const stack: CSSProperties = { display: "grid", gap: "0.75rem" };
+export const muted: CSSProperties = { color: "var(--ink-soft)", margin: 0, lineHeight: 1.55 };
+export const cardTitle: CSSProperties = {
   margin: 0,
   fontSize: "1.05rem",
   fontWeight: 700,
   letterSpacing: "-0.02em",
   color: "var(--ink)",
 };
-const caps: CSSProperties = {
+export const caps: CSSProperties = {
   color: "var(--ink-soft)",
   fontSize: "0.7rem",
   fontWeight: 700,
@@ -64,14 +70,14 @@ const caps: CSSProperties = {
   textTransform: "uppercase",
   margin: 0,
 };
-const card: CSSProperties = {
+export const card: CSSProperties = {
   background: "var(--card)",
   border: "1px solid var(--rule)",
   borderRadius: "1rem",
   padding: "1rem",
   boxShadow: "0 10px 30px color-mix(in srgb, var(--ink) 7%, transparent)",
 };
-const button: CSSProperties = {
+export const button: CSSProperties = {
   minHeight: "2.5rem",
   borderRadius: "999px",
   padding: "0.45rem 1rem",
@@ -83,7 +89,7 @@ const button: CSSProperties = {
   fontWeight: 600,
   cursor: "pointer",
 };
-const primary: CSSProperties = {
+export const primary: CSSProperties = {
   ...button,
   borderColor: "var(--teal-600)",
   background: "var(--teal-600)",
@@ -92,21 +98,21 @@ const primary: CSSProperties = {
 /** BRAND §5's executive report card: aligned columns, ruled sections, card-native whitespace, and
  *  no gridlines. Never a dense spreadsheet, and never the dark `.ledger` panel. */
 const table: CSSProperties = { width: "100%", borderCollapse: "collapse", fontSize: "0.88rem" };
-const th: CSSProperties = {
+export const th: CSSProperties = {
   ...caps,
   textAlign: "left",
   padding: "0.45rem 0.55rem",
   borderBottom: "1px solid var(--rule)",
   whiteSpace: "nowrap",
 };
-const td: CSSProperties = {
+export const td: CSSProperties = {
   padding: "0.6rem 0.55rem",
   borderBottom: "1px solid color-mix(in srgb, var(--rule) 55%, transparent)",
   verticalAlign: "top",
   color: "var(--ink)",
 };
 /** A data table must never make the PAGE scroll sideways. */
-const scroller: CSSProperties = { overflowX: "auto" };
+export const scroller: CSSProperties = { overflowX: "auto" };
 /** Teal lives in the FILL, `--ink` carries the label: BRAND §6 bans `--teal-600` as small text
  *  (~2.9:1 on white). No amber anywhere — that is the approval gate's alone (BRAND §2). */
 const chip: CSSProperties = {
@@ -465,11 +471,19 @@ function FollowUpForm({
 /**
  * The zero-contacts state.
  *
- * EXACTLY ONE action. Seeded suggestions from recent mail are deliberately absent: proposing
- * contacts by reading the mailbox is how a contacts CACHE starts, and invariant 1 says a row exists
- * only because a human deliberately made it.
+ * TWO actions, and both are a DELIBERATE HUMAN ACT: type one person, or import a file you attest
+ * you have a lawful basis to hold (19.1). Neither contradicts invariant 1 — what that invariant
+ * forbids is a row appearing because software went looking, and the absent third button is still
+ * absent: seeded suggestions from recent mail. Proposing contacts by reading the mailbox is how a
+ * contacts CACHE starts, and a cache is not a book someone made.
  */
-export function ContactsEmptyState({ onAdd }: { onAdd: () => void }) {
+export function ContactsEmptyState({
+  onAdd,
+  onImport,
+}: {
+  onAdd: () => void;
+  onImport: () => void;
+}) {
   return (
     <div style={{ ...stack, textAlign: "left" }} data-testid="pipeline-empty">
       <h3 style={cardTitle}>No contacts yet</h3>
@@ -477,9 +491,12 @@ export function ContactsEmptyState({ onAdd }: { onAdd: () => void }) {
         Pikar records only the people you deliberately add. Nothing is collected in the background,
         so this list starts empty and stays exactly as long as you make it.
       </p>
-      <div>
+      <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
         <button type="button" style={primary} data-testid="add-first-contact" onClick={onAdd}>
           Add your first contact
+        </button>
+        <button type="button" style={button} data-testid="import-first-contacts" onClick={onImport}>
+          Import from a CSV
         </button>
       </div>
     </div>
@@ -568,6 +585,31 @@ function ConnectedTiles() {
     return <PipelineStateNotice state="loading">Counting your pipeline…</PipelineStateNotice>;
   }
   return <PipelineTiles tiles={tiles} />;
+}
+
+/**
+ * The CSV import surface (ACTN-05). The FOURTH connected section, and the only one that reads
+ * nothing on mount: `ImportPanel` owns its own state and asks `matchExisting` once, on demand, so
+ * this section costs nothing until a file is picked.
+ *
+ * It sits between the tiles and the contacts deliberately — the e2e document-order assertion pins
+ * that the unassigned follow-ups FOLLOW the contact table, and this must not come between them.
+ */
+function ConnectedImport() {
+  return (
+    <section id="pipeline-import" style={stack} aria-labelledby="pipeline-import-heading">
+      <h2 id="pipeline-import-heading" style={cardTitle}>
+        Bring in contacts you already have
+      </h2>
+      <p style={muted}>
+        A CSV from your old CRM, your address book or a spreadsheet. Pikar reads it in this browser
+        and never uploads it, shows you exactly what will change, and writes only once you say so.
+      </p>
+      <div style={{ ...card, ...stack }}>
+        <ImportPanel />
+      </div>
+    </section>
+  );
 }
 
 function ConnectedContacts() {
@@ -676,7 +718,17 @@ function ConnectedContacts() {
         {page === undefined ? (
           <PipelineStateNotice state="loading">Loading your contacts…</PipelineStateNotice>
         ) : page.contacts.length === 0 && !adding ? (
-          <ContactsEmptyState onAdd={() => setAdding(true)} />
+          <ContactsEmptyState
+            onAdd={() => setAdding(true)}
+            // The import surface is the section ABOVE this one, so the empty state points at it
+            // rather than owning a second copy. Focus, not just scroll: a keyboard user must end up
+            // on the control, not merely near it.
+            onImport={() => {
+              const panel = document.getElementById("pipeline-import");
+              panel?.scrollIntoView({ behavior: "smooth", block: "start" });
+              panel?.querySelector<HTMLButtonElement>('[data-testid="import-choose"]')?.focus();
+            }}
+          />
         ) : (
           <ContactTable
             rows={page.contacts}
@@ -763,6 +815,7 @@ export function PipelineView() {
         </p>
       </header>
       <ConnectedTiles />
+      <ConnectedImport />
       <ConnectedContacts />
       <ConnectedUnassigned />
     </div>

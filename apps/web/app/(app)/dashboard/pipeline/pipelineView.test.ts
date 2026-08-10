@@ -5,12 +5,15 @@
 // Components are built with `createElement` and rendered to a STRING with `renderToStaticMarkup`;
 // only hook-free / prop-driven exports are importable, which is why every `useQuery` piece stays
 // module-private in `PipelineView.tsx`.
+
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { IMPORT_ATTESTATION } from "@pikar/core/contactImport";
 import { type ComponentType, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
+import { ImportAttest, ImportPreview } from "./ImportPanel";
 import {
   ContactsEmptyState,
   ContactTable,
@@ -22,16 +25,16 @@ import {
 const render = (component: unknown, props: Record<string, unknown>): string =>
   renderToStaticMarkup(createElement(component as ComponentType<Record<string, unknown>>, props));
 
-const rawSource = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), "PipelineView.tsx"),
-  "utf8",
-);
+const here = dirname(fileURLToPath(import.meta.url));
+const rawSource = readFileSync(join(here, "PipelineView.tsx"), "utf8");
 
 /** Comments are stripped before every source scan below, the `contacts.test.ts` rule: the file
  *  carries deliberate GRAVESTONE comments naming what is absent and WHY (no `window.confirm`, no
  *  `--held`, no opportunity concept), and a scan that punished its own documentation would force
  *  the absence to go unexplained. */
-const source = rawSource.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+const stripComments = (src: string) =>
+  src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+const source = stripComments(rawSource);
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = Date.UTC(2026, 7, 9, 12, 0, 0);
@@ -211,12 +214,17 @@ describe("the widened unions are REGISTERED here, where tsc is silent", () => {
 });
 
 describe("the empty state", () => {
-  test("zero contacts replaces the table with ONE action and no mailbox suggestions", () => {
-    const html = render(ContactsEmptyState, { onAdd: noop });
+  test("zero contacts offers TWO deliberate acts and no mailbox suggestions", () => {
+    const html = render(ContactsEmptyState, { onAdd: noop, onImport: noop });
     expect(html).toContain("Add your first contact");
-    // EXACTLY one action. A second button here is the "seeded suggestions from recent mail" idea
-    // creeping back in, which reads the mailbox to propose contacts and breaks invariant 1.
-    expect(html.split("<button").length - 1).toBe(1);
+    // 19.1-06 added the second: type ONE person, or import a file under an attestation. Both are a
+    // deliberate human act, which is what invariant 1 actually requires — it forbids a row
+    // appearing because software went looking. The banned THIRD action is still asserted absent
+    // below: "seeded suggestions from recent mail" reads the mailbox to propose contacts, and that
+    // is how a contacts CACHE starts.
+    expect(html).toContain("Import from a CSV");
+    expect(html).toContain('data-testid="import-first-contacts"');
+    expect(html.split("<button").length - 1).toBe(2);
     expect(html).not.toContain("<a ");
     expect(html).not.toMatch(/suggest|recent mail|from your inbox/i);
   });
@@ -280,5 +288,123 @@ describe("the page stays inside the Phase 19 substrate", () => {
   test("the dark marketing .ledger block and the approval-gate amber are both absent", () => {
     expect(source).not.toContain('className="ledger');
     expect(source).not.toContain("--held");
+  });
+});
+
+// ── the CSV import panel (19.1-06) ────────────────────────────────────────────
+// The panel is the reason the phase exists: `matchExisting` and `importContacts` shipped in 19.1-04
+// fully tested with ZERO callers, which is exactly the phase-19 clock-plane failure — a capability
+// certified by unit tests, SMOKE and a paid eval gate while no user could reach it. These assert
+// what the user can DO (a Confirm that is disabled, the sentence they are agreeing to, the counts
+// and lines they are shown), never a component internal. `ImportPanel` itself holds hooks and is
+// unrenderable here; the browser proof is plan 07's job.
+const importSource = stripComments(readFileSync(join(here, "ImportPanel.tsx"), "utf8"));
+
+const attest = (over: Record<string, unknown> = {}) =>
+  render(ImportAttest, {
+    wording: IMPORT_ATTESTATION,
+    ticked: false,
+    busy: false,
+    context: "",
+    onTick: noop,
+    onContext: noop,
+    onConfirm: noop,
+    ...over,
+  });
+
+const preview = (over: Record<string, unknown> = {}) =>
+  render(ImportPreview, {
+    header: ["Email", "Full name", "Company"],
+    mapping: { email: [0], name: [1], company: [2], phone: [], title: [] },
+    counts: { newCount: 3, enriched: 2, unchanged: 0, rejected: 1 },
+    rejected: [],
+    matching: false,
+    refusal: null,
+    onField: noop,
+    onBack: noop,
+    ...over,
+  });
+
+describe("the CSV import panel", () => {
+  test("Confirm is DISABLED until the attestation is ticked, and the box starts unticked", () => {
+    const unticked = attest();
+    // The button exists either way — this is a gate, not a hidden control.
+    expect(unticked).toContain('data-testid="import-confirm"');
+    expect(unticked).toMatch(
+      /data-testid="import-confirm"[^>]*disabled|disabled[^>]*import-confirm/,
+    );
+    // The box's own default: an unticked checkbox renders WITHOUT `checked`. A pre-ticked box would
+    // make the stored wording — kept byte-for-byte as the evidence — a false statement about what
+    // the user did.
+    expect(unticked).not.toMatch(/import-attest-box[^>]*checked/);
+
+    const ticked = attest({ ticked: true });
+    expect(ticked).toContain('data-testid="import-confirm"');
+    // Non-vacuity: the disabled attribute is absent ENTIRELY once ticked, so the assertion above
+    // measures the tick and not merely the presence of a button.
+    expect(ticked).not.toContain("disabled");
+  });
+
+  test("the attestation is rendered BYTE-FOR-BYTE from the shared constant", () => {
+    // Compared against the imported constant, never a re-typed copy: the sentence on screen and the
+    // sentence stored on every contact must be the same string, and a paraphrase here would make
+    // the stored evidence describe something the user never read.
+    expect(attest()).toContain(IMPORT_ATTESTATION);
+    expect(importSource).toContain("IMPORT_ATTESTATION");
+  });
+
+  test("the four preview counts render as themselves, including a real 0", () => {
+    const html = preview();
+    for (const value of [">3<", ">2<", ">0<", ">1<"]) expect(html).toContain(value);
+    for (const word of ["new", "enriched", "unchanged", "rejected"]) expect(html).toContain(word);
+    // A zero is a fact here too (invariant 3's rule, one section down the page): "0 unchanged" is
+    // knowledge, and hedging it would make the preview stop promising what the write will do.
+    expect(html).not.toContain("Unknown");
+  });
+
+  test("every rejected row is named by its FILE LINE and its reason", () => {
+    const html = preview({
+      counts: { newCount: 1, enriched: 0, unchanged: 0, rejected: 2 },
+      rejected: [
+        { line: 4, reason: "not a usable email address" },
+        { line: 12, reason: "no email address in this row" },
+      ],
+    });
+    expect(html).toContain('data-testid="import-rejected"');
+    // The PHYSICAL file line, which is what the user sees opening the CSV — a quoted newline makes
+    // the line and the record index diverge, and the line is the one they can act on.
+    expect(html).toContain("Line 4");
+    expect(html).toContain("Line 12");
+    expect(html).toContain("not a usable email address");
+    expect(html).toContain("no email address in this row");
+  });
+
+  test("the panel never uploads, never opens a browser dialog, and never spends the amber", () => {
+    // Non-vacuity floor: a bad read yields "" and every `not.toContain` below would pass.
+    expect(importSource.length).toBeGreaterThan(4_000);
+    // The file is parsed in the browser and NEVER uploaded — that absence is why this feature has
+    // no retention rule and no cleanup job.
+    expect(importSource).not.toContain("generateUploadUrl");
+    expect(importSource).not.toContain("vaultUpload");
+    // Every refusal is inline. A browser modal blocks the page and cannot be driven by plan 07's
+    // Playwright spec, which counts dialogs.
+    expect(importSource).not.toContain("window.confirm");
+    expect(importSource).not.toContain("window.alert");
+    expect(importSource).not.toContain("confirm(");
+    expect(importSource).not.toContain("alert(");
+    expect(importSource).not.toContain("<dialog");
+    // Amber is the approval gate's alone (BRAND §2); a refusal here is information, not failure.
+    expect(importSource).not.toContain("--held");
+    expect(importSource).not.toContain("--amber");
+    // PIPE-01's structural ban travels with the surface: the panel's screens are `step`.
+    expect(importSource).not.toMatch(/\bstage\b/i);
+    // THE KEY LINKS. This plan exists because a tested capability with no caller is invisible to
+    // every green suite in the repo, so the wiring itself is asserted: the parser by SUBPATH (never
+    // the barrel), and both Convex functions actually named.
+    expect(importSource).toContain('from "@pikar/core/contactImport"');
+    expect(importSource).toContain("api.contacts.matchExisting");
+    expect(importSource).toContain("api.contacts.importContacts");
+    expect(importSource).toContain("IMPORT_MATCH_CHUNK");
+    expect(importSource).toContain("IMPORT_BATCH_ROWS");
   });
 });

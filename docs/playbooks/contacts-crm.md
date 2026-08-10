@@ -1,5 +1,41 @@
 # Playbook: Contacts, CRM & follow-ups
 
+> Last verified: 2026-08-10 (Plan 19.1-06 -- THE IMPORT SURFACE EXISTS AND IS REACHABLE. Before
+> this plan `matchExisting` and `importContacts` had ZERO callers: fully tested, fully isolated,
+> and invisible to every user -- the phase-19 clock-plane failure exactly. **THE PANEL LIVES ON
+> `/dashboard/pipeline` AS A FOURTH CONNECTED SECTION (`ConnectedImport`), MOUNTED BETWEEN THE
+> TILES AND THE CONTACT TABLE. THERE IS NO NEW ROUTE.** It must stay between them: the e2e
+> document-order assertion pins that `pipeline-unassigned` FOLLOWS `pipeline-contacts`.
+> `ImportPanel.tsx` holds three `step`s -- choose, preview, done (`step`, never `stage`: the
+> PIPE-01 structural scan bans that identifier and now scans this file too). **THE FILE IS PARSED
+> IN THE BROWSER AND NEVER UPLOADED, WHICH IS WHY THERE IS NO RETENTION RULE AND NO CLEANUP JOB**
+> -- `file.text()` -> `parseCsv` -> `detectMapping` -> `mapRows`, all from the `@pikar/core/contactImport`
+> SUBPATH (never the barrel, the `Dropzone.tsx` rule), and only MAPPED ROWS cross the wire. A test
+> scans the panel source for `generateUploadUrl`/`vaultUpload`; if that ever appears, the
+> no-PII-at-rest claim in this playbook is false and the retention question re-opens. **THE
+> ATTESTATION CHECKBOX STARTS UNTICKED AND CONFIRM CARRIES `disabled` UNTIL IT IS TICKED, BY
+> CONTRACT** -- a pre-ticked box would make the wording stored byte-for-byte on every contact a
+> false statement about what the user did, and `IMPORT_ATTESTATION` is rendered from the constant,
+> never re-typed. **EVERY REFUSAL IS INLINE AND GREY** (`PipelineStateNotice`, `--ink-soft`,
+> `role="status"`): no `window.alert`, no `window.confirm`, no `<dialog>` -- a browser modal blocks
+> the page and cannot be driven by the Playwright spec -- and never amber, which is the approval
+> gate's alone (BRAND 2). An over-1 000-row file is refused at the picker NAMING the limit; a
+> missing email column is refused IN the preview, beside the selects that fix it, because every
+> auto-detected column is overridable there. Rejected rows are listed by PHYSICAL FILE LINE. **THE
+> EMPTY STATE NOW OFFERS TWO ACTIONS, NOT ONE, AND THAT DOES NOT WEAKEN INVARIANT 1**: typing one
+> person and importing a file under an attestation are both a deliberate human act; what the
+> invariant forbids is a row appearing because software went looking, so the banned third button
+> -- seeded suggestions from recent mail -- is still asserted ABSENT. **STYLES ARE IMPORTED FROM
+> `PipelineView.tsx`, NOT RE-DECLARED**, so the two halves of one page cannot drift; the resulting
+> `PipelineView` <-> `ImportPanel` import cycle is safe ONLY because every imported binding is read
+> inside a component body -- do not hoist one into a top-level const. TWO MUTATION-PROOFS, each
+> observed red and reverted: dropping the `!ticked ||` from Confirm's `disabled` gives `expected
+> '<div style="display:grid;gap:0.75rem"...' to match /data-testid="import-confirm"[^>]*disa.../`;
+> dropping the line number from a rejected row gives `expected '<div style="display:grid;...' to
+> contain 'Line 4'`. MEASURED: `pipelineView.test.ts` 27/27 (was 22, +5), `@pikar/web` 176/176,
+> `apps/web` typecheck exit 0. NOT DONE HERE: no browser proof -- plan 07 owns the real-file e2e,
+> and until it runs, nothing has ever driven this panel with an actual CSV.)
+
 > Last verified: 2026-08-10 (Plan 19.1-05 -- `pipelineTiles` REPORTS ITS SCAN BOUND. It took
 > exactly `SCAN_LIMIT` (1 000) with no probe row and returned four bare integers, so a max-size CSV
 > import into a book that already held ONE contact silently UNDER-COUNTED all four ALWAYS-KNOWN
