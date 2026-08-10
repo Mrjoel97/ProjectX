@@ -29,6 +29,9 @@ tech_stack:
 key_files:
   created:
     - apps/web/app/(app)/ops/tenantSkillReview.test.ts
+  date_bumped_claiming_nothing:
+    - docs/playbooks/cockpit.md
+    - docs/playbooks/dashboard-pages.md
   modified:
     - packages/backend/convex/skills.ts
     - packages/backend/convex/skills.test.ts
@@ -45,9 +48,10 @@ metrics:
     - "d49f6dc — separate the swept-in 17-05 entry from mine (1 file, +7)"
     - "b9ecdbd — this summary (1 file, +503)"
     - "1a51259 — the SECOND cockpit.md Stop-hook false positive, still claiming nothing (1 file, +6)"
-  files_changed: 9
-  insertions: 2613
-  deletions: 20
+    - "3a93124 — a THIRD false positive, on dashboard-pages.md, claiming nothing (1 file, +17 / -1)"
+  files_changed: 10
+  insertions: 2630
+  deletions: 21
   spend_usd: 0.00
   completed: 2026-08-11
 ---
@@ -370,6 +374,21 @@ commits.** Zero diagnostics in `skills.ts`, `skills.test.ts` or `importGuard.tes
 including the first one, which was exit 0 overall. Per the scope boundary I did not touch them. **The
 phase cannot claim a green backend typecheck until 17-05 lands.**
 
+**Rule 3 (blocking) — the Stop hook blamed 21-04 for another lane THREE times, and every fix claims
+nothing.** `check-playbooks.mjs` builds its changed-set from the WHOLE working tree. It blocked on
+`cockpit.md (changed: cards.tsx, traceParity.test.ts, run-calendar-test-gate.mjs)`, then on
+`cockpit.md (changed: run-calendar-test-gate.mjs)` alone, then on
+`dashboard-pages.md (changed: ApprovalsView.tsx, approvals.ts)`. **None of those five files is in any
+21-04 commit**; `git log -1` on the two approvals files names `d17ab1d feat(17-05)`, and the other
+three are in that lane's own file list. Cleared with **date-bump-only** entries (`1a51259`,
+`3a93124`) in the shape `skill-registry.md` / `agent-runtime.md` / `cockpit.md` already use for this
+exact false positive: each states **in its first sentence** that nothing was re-verified, names the
+paths 21-04 actually touched with their commit hashes, and hands the real entry back to 17-05 with an
+explicit "do not treat this bump as coverage". The second `cockpit.md` block **extended the entry I
+already owned** rather than stacking a fourth (the 21-05 precedent). I did not run, read, re-measure,
+endorse, revert or restage that lane's change. `watch.json` was **not** touched — deciding which
+playbook owns another lane's file is an ownership call that is not mine to make.
+
 **Process — `21-04-PLAN.md` was untracked.** Committed in `3166544` alongside the playbooks (the
 21-01/21-02/21-03/21-05 precedent) so code does not land ahead of the plan authorizing it. **Only**
 `21-04-PLAN.md`; 21-06/21-07 remain untracked and untouched.
@@ -498,12 +517,14 @@ cannot claim a green backend typecheck until they land.
 - `apps/web/app/(app)/ops/tenantSkillReview.test.ts` — FOUND (created, 181 lines)
 - `docs/playbooks/skill-registry.md` — FOUND (+89, zero deletions, in `3166544`)
 - `docs/playbooks/authorization.md` — FOUND (+122 / −8)
-- `docs/playbooks/cockpit.md` — FOUND (claim-nothing bump + the separator in `d49f6dc`)
+- `docs/playbooks/cockpit.md` — FOUND (claim-nothing bump, the separator in `d49f6dc`, the second
+  false positive in `1a51259`)
+- `docs/playbooks/dashboard-pages.md` — FOUND (+17 / −1, claim-nothing bump in `3a93124`)
 - `.planning/phases/21-user-authored-skills-and-routines/21-04-PLAN.md` — FOUND (239 lines, newly tracked)
 - `.planning/phases/21-user-authored-skills-and-routines/21-04-SUMMARY.md` — FOUND (`b9ecdbd`,
   amended in the follow-up below so its own commit list is not short by three)
-- Commits `18d8bca`, `70d54e3`, `3166544`, `d49f6dc`, `b9ecdbd`, `1a51259` and this amendment —
-  **all** re-verified with `git merge-base --is-ancestor <sha> HEAD` after this summary was
-  written. Nothing fell out of history and nothing had to be re-applied.
-- `node scripts/check-playbooks.mjs` — exit **0**, empty output, at the end (after `1a51259`).
+- Commits `18d8bca`, `70d54e3`, `3166544`, `d49f6dc`, `b9ecdbd`, `1a51259`, `df54d67`, `3a93124`
+  and this amendment — **all** re-verified with `git merge-base --is-ancestor <sha> HEAD` after this
+  summary was written. Nothing fell out of history and nothing had to be re-applied.
+- `node scripts/check-playbooks.mjs` — exit **0**, empty output, at the end (after `3a93124`).
 - `git status` on every path this plan owns — **clean**.
