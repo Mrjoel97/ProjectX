@@ -59,7 +59,9 @@
 > then says `0 rejected` for the same file. Both numbers are individually true — the client filters
 > the unusable row out before the batch, so the SERVER rejected none — but the user is told a row
 > cannot be imported and is then told nothing was rejected, which reads as "it got in after all".
-> The fix is one expression in `ImportPanel.tsx`'s done screen: sum the server's
+> The fix is one expression in `ImportPanel.tsx`'s done screen —
+> `result.rejected.length + mapped.rejected.length` — because `mapped` is still in scope at `done`
+> (`reset()` only runs on "Import another file"). That is, sum the server's
 > `result.rejected.length` with the client's `mapped.rejected.length`. Deliberately NOT applied at
 > 19.1-07: that file belongs to 19.1-06 and the change would have been an out-of-scope code edit
 > made while closing a checkpoint. It is open, and it is in a phase whose whole thesis is that the
