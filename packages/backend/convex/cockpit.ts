@@ -873,6 +873,11 @@ export const executePlan = tenantMutation({
       sentCount: 0,
       failedCount: 0,
       counterComplete: true,
+      // SC#5's user-facing half, DURABLY (phase-19 UAT step 9b). The `withheld` array is also
+      // returned below, but that return value is consumed by a component this very transition
+      // unmounts — the row is the only copy a human can still read afterwards. Written in the
+      // SAME patch as the counters it explains, and omitted entirely when nobody was dropped.
+      ...(withheld.length > 0 ? { withheldRecipients: withheld } : {}),
     });
 
     // Materialize the plan's generated attachments (inline refs on the plan row → the pre-approval

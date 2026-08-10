@@ -8,6 +8,7 @@ import {
   normalizeAddress,
   parseCrmOperations,
   renderFooter,
+  withheldNote,
 } from "./index";
 
 describe("normalizeAddress", () => {
@@ -94,6 +95,33 @@ describe("renderFooter", () => {
 
   it("throws on an empty unsubscribe URL — a dead link is not an unsubscribe", () => {
     expect(() => renderFooter({ postalAddress: POSTAL, unsubscribeUrl: "  " })).toThrow();
+  });
+});
+
+describe("withheldNote (19-05 SC#5, persisted on the plan row)", () => {
+  const FIVE = ["a@x.com", "b@x.com", "c@x.com", "d@x.com", "e@x.com"];
+
+  it("names the count that WENT and every address that did not", () => {
+    // The exact sentence phase-19 UAT step 9(b) reads off the report card.
+    expect(withheldNote(FIVE, ["c@x.com"])).toBe(
+      "Sent to 4. Withheld 1 who unsubscribed: c@x.com.",
+    );
+  });
+
+  it("renders NOTHING when nobody was withheld — an ordinary send has no footnote", () => {
+    expect(withheldNote(FIVE, [])).toBeNull();
+    expect(withheldNote(FIVE, undefined)).toBeNull();
+  });
+
+  it("lists every withheld address, never a truncated summary", () => {
+    const out = withheldNote(FIVE, ["b@x.com", "d@x.com"]);
+    expect(out).toBe("Sent to 3. Withheld 2 who unsubscribed: b@x.com, d@x.com.");
+  });
+
+  it("clamps the sent count at zero rather than printing a negative", () => {
+    expect(withheldNote(["a@x.com"], ["a@x.com", "b@x.com"])).toBe(
+      "Sent to 0. Withheld 2 who unsubscribed: a@x.com, b@x.com.",
+    );
   });
 });
 

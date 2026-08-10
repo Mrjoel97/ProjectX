@@ -5,7 +5,12 @@ import { api } from "@pikar/backend/api";
 // one shared horizon, so the picker can't offer a time the server will reject.
 // REVIEW_THREAD_ID (BEVL-03): the ONE deterministic thread the weekly cron writes to, so the card
 // can tell "this is the weekly review" from "someone asked for an evaluation in a chat".
-import { parseCrmOperations, REVIEW_THREAD_ID, SEND_TIME_HORIZON_MS } from "@pikar/core";
+import {
+  parseCrmOperations,
+  REVIEW_THREAD_ID,
+  SEND_TIME_HORIZON_MS,
+  withheldNote,
+} from "@pikar/core";
 // The pure view model (Gap 1): lede + action-first needs-you + time-grouped fyi remainder +
 // collapsed-noise count. ALL the ordering/collapse/lede intelligence lives in @pikar/core — this
 // card is a dumb renderer over it, never re-deriving any of it (ADR-004 / cockpit.md).
@@ -18,6 +23,7 @@ import type { FunctionReturnType } from "convex/server";
 import Link from "next/link";
 import { useState } from "react";
 import { MediaCanvas } from "./MediaCanvas";
+import { useSendCockpitMessage } from "./useSendCockpitMessage";
 
 // SC3/SC5 render: the right-pane artifact dispatcher over the live `plans` row + REPORT
 // projection. Cards are plain inline-styled <div>s (the `box` style mirrors review/[id]).
@@ -136,7 +142,7 @@ const attRow = {
 // sentinels (Plan 04). ponytail: no per-button SMOKE flag — offline determinism is composer-driven.
 function PlanAttachments({ plan, threadId }: { plan: Plan; threadId?: string }) {
   const urls = useQuery(api.plans.attachmentUrls, { planId: plan._id });
-  const send = useAction(api.cockpit.sendCockpitMessage);
+  const send = useSendCockpitMessage(); // carries the browser's trusted clock (§2-D)
   const [busy, setBusy] = useState(false);
   const [topics, setTopics] = useState<Record<number, string>>({});
   const attachments = plan.attachments ?? [];
@@ -317,9 +323,9 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
   const execute = useMutation(api.cockpit.executePlan);
   const setSendTime = useMutation(api.plans.setPlanSendTime);
   const [busy, setBusy] = useState(false);
-  // ONE note affordance, two tones. A governed refusal is an error; the withheld report (19-05) is
-  // a NON-error — a partial send really happened — so it renders in the neutral note style. Amber
-  // is deliberately not used for either: BRAND §2 reserves `--held` for the approval gate alone.
+  // The governed-refusal note. A refusal LEAVES the plan `proposed`, which is the only reason a
+  // note in this component's state is visible at all — see the withheld report in `PlanCards`,
+  // which is the same information about a SUCCESS and therefore cannot live here.
   const [note, setNote] = useState<{ text: string; tone: "error" | "info"; href?: string } | null>(
     null,
   );
@@ -351,15 +357,13 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
         };
         const refusal = refusals[res.reason];
         if (refusal) setNote({ ...refusal, tone: "error" });
-      } else if (res.withheld && res.withheld.length > 0) {
-        // SC#5: a partial send must TELL the user which addresses were withheld and why. Not a
-        // refusal — the rest went out.
-        const sent = Math.max(0, recipients.length - res.withheld.length);
-        setNote({
-          tone: "info",
-          text: `Sent to ${sent}. Withheld ${res.withheld.length} who unsubscribed: ${res.withheld.join(", ")}.`,
-        });
       }
+      // NO `res.withheld` branch here. It was one (19-05) and it was DEAD: this component only
+      // renders while `plan.status === "proposed"`, and a successful approve is exactly the
+      // transition off `proposed` — the reactive subscription unmounts the card before `execute()`
+      // resolves, so `setNote` ran on a dead component and nobody ever saw SC#5's report. The
+      // withheld set is persisted on the plan row instead and rendered by `PlanCards` below, where
+      // it survives the transition that creates it. (Phase-19 UAT step 9b.)
     } finally {
       setBusy(false);
     }
@@ -2457,6 +2461,16 @@ function PlanCards({
   const composing =
     Boolean(plan.candidates?.length || plan.subject || plan.body || plan.recipients?.length) ||
     plan.status !== "collecting";
+  // SC#5's withheld report, read off the PLAN ROW so it survives the approve that creates it
+  // (19-05 shipped it in the approve card's `useState`, where it was unreachable — UAT step 9b).
+  // Gated to the states where "Sent to N" is TRUE: the send was accepted and the fan-out owns it.
+  // ponytail: a `scheduled` plan is deliberately excluded — nothing has been sent yet, so the
+  // sentence would be a lie; its note appears when the schedule fires and the row moves to
+  // delivering. Upgrade to a tense-aware sentence only if deferred partial sends need one.
+  const withheld =
+    plan.status === "approved" || reporting
+      ? withheldNote(plan.recipients ?? [], plan.withheldRecipients)
+      : null;
 
   return (
     // ponytail: `data-plan-id` is a render-only E2E hook (NOT a plan field/mutation/query) so the
@@ -2472,6 +2486,19 @@ function PlanCards({
       {plan.status === "scheduled" && <ScheduledCard plan={plan} />}
       {plan.status === "canceled" && <CanceledCard plan={plan} threadId={threadId} />}
       {hasDraft && <DraftCard plan={plan} />}
+      {/* INFORMATION, not failure: `status` (polite), never `alert`; `--ink-soft`, never the error
+          red and never amber — BRAND §2 reserves `--held` for the approval gate alone. Placed
+          ABOVE the report so the "and one address is missing from this list" explanation is read
+          before the list it explains. */}
+      {withheld && (
+        <p
+          role="status"
+          data-testid="withheld-report"
+          style={{ color: "var(--ink-soft)", margin: 0, fontSize: "0.9rem" }}
+        >
+          {withheld}
+        </p>
+      )}
       {reporting && <ReportCard planId={plan._id} />}
       {/* demoted: collapsed to its masthead below the work — still rendered + reachable, never destroyed */}
       {composing && briefing && <BriefingCard briefing={briefing} demoted />}

@@ -65,6 +65,34 @@ export function renderFooter(input: { postalAddress: string; unsubscribeUrl: str
   return `\n\n${postalAddress}\nUnsubscribe: ${unsubscribeUrl}`;
 }
 
+/**
+ * SC#5's user-facing half: what a PARTIAL send actually did. One sentence, built in ONE place
+ * because it renders on two surfaces (the cockpit report card and the Approvals in-flight row) and
+ * a drifted copy is a surface disagreeing with itself.
+ *
+ * It is read from the PLAN ROW (`plans.withheldRecipients`), never from component state. Phase-19
+ * UAT step 9(b) measured why: a successful approve IS the `proposed → approved` transition, both
+ * approve cards are gated on `status === "proposed"`, and the reactive subscription lands the new
+ * status before `execute()` resolves — so the component holding a `useState` note has already
+ * unmounted by the time the note exists. Anything kept in `useState` across the status flip that
+ * produces it is unreachable by construction. A persisted set is also what makes the outcome
+ * auditable after the fact.
+ *
+ * `null` (not "") when nobody was withheld: an ordinary send must render NOTHING, not an empty
+ * note element that a screen reader still announces.
+ */
+export function withheldNote(
+  recipients: readonly string[],
+  withheld: readonly string[] | undefined,
+): string | null {
+  if (!withheld || withheld.length === 0) return null;
+  // The ALLOWED set, the same subtraction `executePlan` used to build `recipientTotal` — expressed
+  // off the two persisted arrays so it cannot disagree with what was actually queued. Clamped: a
+  // hand-patched row must never render "Sent to -1".
+  const sent = Math.max(0, recipients.length - withheld.length);
+  return `Sent to ${sent}. Withheld ${withheld.length} who unsubscribed: ${withheld.join(", ")}.`;
+}
+
 // ── The crm_write operation list (19-06, ACTN-05) ─────────────────────────────
 // What an approved `crm_write` plan applies. Pure: plain `string` refs, no Convex import — the
 // Convex adapter resolves a `followUpRef` to a row id and an `email` to a contact. Validated at

@@ -1,7 +1,7 @@
 "use client";
 
 import { api } from "@pikar/backend/api";
-import { SEND_TIME_HORIZON_MS } from "@pikar/core";
+import { SEND_TIME_HORIZON_MS, withheldNote } from "@pikar/core";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import Link from "next/link";
@@ -691,6 +691,7 @@ function InFlightRow({ item }: { item: InFlightItem }) {
   const plan = useQuery(api.plans.byThread, { threadId: item.threadId });
   const progress = item.progress;
   const completed = progress.state === "exact" ? progress.sent + progress.failed : null;
+  const withheld = plan ? withheldNote(plan.recipients ?? [], plan.withheldRecipients) : null;
   return (
     <article style={{ ...card, ...stack }}>
       <div style={row}>
@@ -721,6 +722,17 @@ function InFlightRow({ item }: { item: InFlightItem }) {
         <ApprovalsStateNotice state="partial">
           Delivery is in flight. Exact counters are unavailable for this legacy plan.
         </ApprovalsStateNotice>
+      )}
+      {/* SC#5's withheld report, DURABLY. `withheldSuffix` on the approve handler above still
+          appends it to the transient result sentence, but nobody can read that: `listAwaiting`
+          paginates `proposed` only, so the AwaitingCard that set it unmounts on the very approve
+          that produced it (phase-19 UAT step 9b). This row is where the same plan lands one
+          instant later, and it reads the note off the persisted row. `status`, never `alert`;
+          `--ink-soft`, never amber — a partial send is information, not failure. */}
+      {withheld && (
+        <p role="status" data-testid="withheld-report" style={muted}>
+          {withheld}
+        </p>
       )}
     </article>
   );

@@ -257,6 +257,15 @@ export default defineSchema({
     failedCount: v.optional(v.number()),
     queuedCount: v.optional(v.number()),
     counterComplete: v.optional(v.boolean()),
+    // 19-05 SC#5, made VISIBLE (phase-19 UAT step 9b). The suppressed addresses this approve
+    // dropped before the fan-out. Written once by `executePlan` in the same patch as the counters
+    // above, and only when non-empty — an ordinary send carries no key, so there is no migration
+    // and no "withheld: []" to render. It lives on the ROW rather than in the approve component's
+    // `useState` because a successful approve IS the `proposed → approved` transition and both
+    // approve cards are gated on `proposed`: the component that would show the note has already
+    // unmounted when the note exists. Addresses only (the same content plane as `recipients`) —
+    // never audited (§4).
+    withheldRecipients: v.optional(v.array(v.string())),
     // Reply threading (03.11 RPLY-01). Set by the replyToMessage tool (Plan 04) when a plan is a
     // reply, copied to the per-recipient `requests` rows at executePlan (Plan 03). All optional →
     // no migration; a non-reply send simply carries none (append-only, like sendAt/attachments).

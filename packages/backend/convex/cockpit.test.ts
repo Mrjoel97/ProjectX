@@ -13,7 +13,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import retrierTest from "@convex-dev/action-retrier/test";
 import { COCKPIT_AGENT_SKILL } from "@pikar/contracts/skill";
-import { SEND_TIME_HORIZON_MS } from "@pikar/core";
+import { SEND_TIME_HORIZON_MS, withheldNote } from "@pikar/core";
 import { maxCharsFor } from "@pikar/core/storyboard";
 import { convexTest } from "convex-test";
 import { describe, expect, test, vi } from "vitest";
@@ -1455,6 +1455,14 @@ describe("executePlan suppression + postal-address gates (19-05, PIPE-01)", () =
     const plan = await t.run((ctx) => ctx.db.get(planId));
     expect(plan?.recipientTotal).toBe(4);
     expect(plan?.queuedCount).toBe(4);
+    // 19-05 SC#5 made DURABLE (phase-19 UAT step 9b). The returned `withheld` above is consumed by
+    // a component this very transition unmounts — the ROW is the only copy a human can still read
+    // after the approve, and `withheldNote` renders it off exactly these two arrays.
+    expect(plan?.withheldRecipients).toEqual(["three@example.com"]);
+    expect(
+      withheldNote(plan?.recipients ?? [], plan?.withheldRecipients),
+      "the sentence a human reads on the report card",
+    ).toBe("Sent to 4. Withheld 1 who unsubscribed: three@example.com.");
   });
 
   test("nobody suppressed: no `withheld` key rides along on the ordinary send", async () => {
@@ -1470,6 +1478,11 @@ describe("executePlan suppression + postal-address gates (19-05, PIPE-01)", () =
     if (!res.ok) return;
     expect(res.withheld).toBeUndefined();
     expect(await countRequests(t)).toHaveLength(5);
+    // ...and no `withheldRecipients` key on the row either: an ordinary send must render NOTHING,
+    // not an empty note element. `withheldNote` returns null for both absent and [].
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan?.withheldRecipients).toBeUndefined();
+    expect(withheldNote(plan?.recipients ?? [], plan?.withheldRecipients)).toBeNull();
   });
 
   // Row 12. THREE recipients, not two: a group whose only survivor is one address passes vacuously
