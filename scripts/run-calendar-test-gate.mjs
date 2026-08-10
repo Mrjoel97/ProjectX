@@ -53,7 +53,8 @@ for (let i = 0; i < flags.length; i++) {
   if (!(flag in opts)) die(`unknown argument: ${flag} (expected ${Object.keys(opts).join(", ")})`);
   const raw = flags[++i];
   const value = Number(raw);
-  if (!Number.isSafeInteger(value) || value <= 0) die(`${flag} needs a positive integer, got ${raw}`);
+  if (!Number.isSafeInteger(value) || value <= 0)
+    die(`${flag} needs a positive integer, got ${raw}`);
   opts[flag] = value;
 }
 // REQUIRED. A wall clock that defaults to "generous" is the failure mode this file exists to stop.
