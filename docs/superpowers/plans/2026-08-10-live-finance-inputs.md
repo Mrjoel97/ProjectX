@@ -814,66 +814,44 @@ git commit -m "feat(finance): finance_write, the sixth action type, on the inlin
 
 ---
 
-### Task 5: The Approvals surface learns the sixth kind
+### Task 5: The Approvals surface — the refusal path
+
+**REWRITTEN after Task 4.** Following the compile errors in Task 4 already landed the badge (`ApprovalsView.tsx:154`), `titleFor` (`:231`), `actionLabel` (`:251`), the widened `planKind` union (`approvals.ts:40`) and two `test.each` rows. That is the closed union working — a half-added action type was not expressible. **Do not re-add any of it.**
+
+Two things it did not land, and the second is the one that matters.
 
 **Files:**
-- Modify: `packages/backend/convex/approvals.ts:40` (`planKind` return union)
-- Modify: `apps/web/app/(app)/dashboard/approvals/ApprovalsView.tsx`
-- Test: `apps/web/app/(app)/dashboard/approvals/approvalsView.test.ts`
+- Modify: `packages/backend/convex/cash.ts` (`applyFinanceClaims` return contract)
+- Modify: `packages/backend/convex/cockpit.ts` (the `finance_write` arm's return)
+- Modify: `apps/web/app/(app)/dashboard/approvals/ApprovalsView.tsx` (`refusalMessage`)
+- Test: `approvalsView.test.ts`, `packages/backend/convex/cockpit.test.ts`
 
-**Interfaces:**
-- Consumes: the widened `plans.kind` from Task 4.
-- Produces: nothing later tasks depend on.
+- [ ] **Step 1: Pin that finance never offers the Schedule button**
 
-- [ ] **Step 1: Write the failing test**
+`crm_write`'s existing `item.kind === "email"` gate already excludes it, so this needs no source change — but nothing pins it, and the gate is one edited condition away from regressing. Add the negative assertion to `approvalsView.test.ts` alongside the two rows already there.
 
-Add rows to the two existing `test.each` tables in `approvalsView.test.ts`:
+- [ ] **Step 2: Make a refusal reach the card**
 
-```ts
-  ["finance_write", "Numbers", "Update to your numbers", "Approve & update numbers"],
-```
+Both of `applyFinanceClaims`'s refusals are `throw new Error("INVALID_INPUT: …")`. `ApprovalsView` only renders `refusalMessage(response.reason)` for an `{ok:false, reason}` **return** (`:388`, map at `:119-135`); a throw lands in `catch (error) => error.message` (`:399`), and **Convex redacts non-`ConvexError` messages in production**.
 
-And a negative assertion:
+So today the owner approves a CAC update and gets an opaque server error, with no explanation and no lever — while the plan stays `proposed`, so every retry reproduces it. The refusal itself is correct; only its delivery is broken.
 
-```ts
-test("a finance_write item never offers the Schedule button", () => {
-  expect(showsSchedule({ kind: "finance_write" } as never)).toBe(false);
-});
-```
-
-- [ ] **Step 2: Run to verify it fails**
-
-Run: `cd apps/web && npx vitest run "app/(app)/dashboard/approvals/approvalsView.test.ts"`
-Expected: FAIL — missing entry in the badge map.
-
-- [ ] **Step 3: Widen `planKind`**
-
-In `packages/backend/convex/approvals.ts`, add `"finance_write"` to the return union at line 40 and to the mapping body.
-
-- [ ] **Step 4: Add the trio**
-
-In `ApprovalsView.tsx`, add a `finance_write` entry to the `ApprovalKindBadge` record, to `titleFor`, and to `actionLabel`. Every label must name what Approve DOES:
+Widen `executePlan`'s return union with the finance reasons and return rather than throw. Two keys, matching the existing vocabulary in `refusalMessage`:
 
 ```tsx
-  finance_write: "Numbers",
+  agent_cannot_update_figure:
+    "That figure can only be updated by you for now — the agent cannot vouch for where it came from.",
+  malformed_figure_claim:
+    "This figure update was malformed and was not applied. Nothing changed.",
 ```
 
-```tsx
-  if (item.kind === "finance_write") {
-    const n = item.claimCount ?? 0;
-    return n === 1 ? "Update to your numbers" : `${n} updates to your numbers`;
-  }
-```
+**Snag to plan for:** `cockpit.test.ts`'s finance refusal test currently pins `rejects.toThrow(...)`. Converting to a return means **changing** that test, not just adding one — and the changed assertion must still prove nothing was written.
 
-```tsx
-  if (item.kind === "finance_write") return "Approve & update numbers";
-```
+Keep `writeFigureRow`'s throw as-is. It is the last-resort invariant guard on a function both actors call; the applier is the layer that knows a refusal has a human waiting on it.
 
-`crm_write`'s existing `item.kind === "email"` gate already excludes finance from the Schedule button — no change needed, and the new test pins it.
+- [ ] **Step 3: Run the tests**
 
-- [ ] **Step 5: Run the tests**
-
-Run: `cd apps/web && npx vitest run "app/(app)/dashboard/approvals/approvalsView.test.ts"`
+Run: `cd apps/web && npx vitest run "app/(app)/dashboard/approvals/approvalsView.test.ts"` and `cd packages/backend && npx vitest run convex/cockpit.test.ts convex/cash.test.ts`
 Expected: PASS.
 
 - [ ] **Step 6: Commit**
