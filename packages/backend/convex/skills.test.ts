@@ -1856,3 +1856,702 @@ describe("exact tenant candidate reads + evidence (21-03)", () => {
     expect((await asA.query(api.skills.myUserSkills, {}))[0]?.gatePassed).toBe(false);
   });
 });
+
+// ── THE OWNER BOUNDARY (Phase 21-04, SKILL-01) ────────────────────────────────────────────────
+//
+// 21-02 and 21-03 both ended with the same finding: NO tenant row could become `active` through any
+// code path, so every test that needed an active overlay patched the row directly. This block is
+// where that stops being true, which makes it the block where a mistake goes live.
+describe("owner activation + rollback of tenant candidates (21-04)", () => {
+  const NEEDLE_A = "ZQ7ACT4a19c7e2b";
+  const NEEDLE_A2 = "ZQ7ACT4a2nd30f8";
+  const NEEDLE_B = "ZQ7ACT4b6c05a8f";
+  const GLOBAL_BODY = "GLOBAL OFFER ARCHITECT BODY v7 — the code-owned core";
+
+  /**
+   * A real owner account, a real tenant author, and a SECOND tenant holding a colliding row at the
+   * same name AND version. Both candidates are published through the shipped mutation, so the
+   * collision is produced by the product path rather than hand-inserted into existence.
+   */
+  const world = async () => {
+    const t = convexTest(schema, modules);
+    t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+    const globalId = await t.run((ctx) =>
+      ctx.db.insert("skills", {
+        name: OFFER_ARCHITECT_SKILL,
+        version: 7,
+        body: GLOBAL_BODY,
+        status: "active",
+        createdAt: 0,
+      }),
+    );
+    const ownerUser = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
+    const userA = await t.run((ctx) => ctx.db.insert("users", {}));
+    const userB = await t.run((ctx) => ctx.db.insert("users", {}));
+    const asOwner = t.withIdentity({ subject: `${ownerUser}|session_o` });
+    const asA = t.withIdentity({ subject: `${userA}|session_a` });
+    const asB = t.withIdentity({ subject: `${userB}|session_b` });
+    const a = await asA.mutation(api.skills.publishUserCandidate, {
+      name: OFFER_ARCHITECT_SKILL,
+      authoredBody: `Always quote in AUD. ${NEEDLE_A}`,
+    });
+    const b = await asB.mutation(api.skills.publishUserCandidate, {
+      name: OFFER_ARCHITECT_SKILL,
+      authoredBody: `Always bundle onboarding. ${NEEDLE_B}`,
+    });
+    // The collision, asserted rather than assumed.
+    expect(a.version).toBe(b.version);
+    expect(String(a.tenantSkillId)).not.toBe(String(b.tenantSkillId));
+    return {
+      t,
+      globalId,
+      asOwner,
+      asA,
+      asB,
+      ownerUser,
+      userA,
+      userB,
+      idA: a.tenantSkillId as Id<"tenantSkills">,
+      idB: b.tenantSkillId as Id<"tenantSkills">,
+      tenantA: String(userA),
+      tenantB: String(userB),
+      version: a.version,
+    };
+  };
+
+  const targetOf = (
+    id: Id<"tenantSkills">,
+    tenantId: string,
+    version: number,
+  ): EvalEvidenceTenantTarget => ({
+    candidateId: String(id),
+    registryTenantId: tenantId,
+    name: OFFER_ARCHITECT_SKILL,
+    version,
+  });
+
+  const RUN_ID = "run-21-04-owner";
+  const evidenceFor = (target: EvalEvidenceTenantTarget, pass = true) =>
+    JSON.stringify({
+      runner: "eval:golden",
+      runId: RUN_ID,
+      pass,
+      casesPassed: pass ? 36 : 31,
+      casesTotal: 36,
+      retriedCases: [],
+      costUsd: 0.42,
+      model: "openai/gpt-4o-mini",
+      skillVersions: {},
+      tenantTarget: target,
+      ts: 1_700_000_000_000,
+    });
+
+  /** Evidence is recorded through the SHIPPED 21-03 writer, never a hand patch. */
+  const certify = (
+    t: TestConvex<typeof schema>,
+    id: Id<"tenantSkills">,
+    target: EvalEvidenceTenantTarget,
+    pass = true,
+  ) =>
+    t.mutation(internal.skills.recordTenantEvalEvidence, {
+      candidateId: id,
+      evidence: evidenceFor(target, pass),
+    });
+
+  const rowOf = (t: TestConvex<typeof schema>, id: Id<"tenantSkills">) =>
+    t.run((ctx) => ctx.db.get(id));
+  const statusOf = async (t: TestConvex<typeof schema>, id: Id<"tenantSkills">) =>
+    (await rowOf(t, id))?.status;
+  const tenantRows = (t: TestConvex<typeof schema>, tenantId: string) =>
+    t.run((ctx) =>
+      ctx.db
+        .query("tenantSkills")
+        .withIndex("by_tenant_createdAt", (q) => q.eq("tenantId", tenantId))
+        .collect(),
+    );
+  const auditRows = (t: TestConvex<typeof schema>) =>
+    t.run((ctx) => ctx.db.query("audit").collect());
+
+  /** Publish, certify and activate one more adaptation for tenant A. */
+  const publishAndActivate = async (
+    w: Awaited<ReturnType<typeof world>>,
+    authoredBody: string,
+  ): Promise<{ id: Id<"tenantSkills">; version: number }> => {
+    const pub = await w.asA.mutation(api.skills.publishUserCandidate, {
+      name: OFFER_ARCHITECT_SKILL,
+      authoredBody,
+    });
+    const id = pub.tenantSkillId as Id<"tenantSkills">;
+    await certify(w.t, id, targetOf(id, w.tenantA, pub.version));
+    await w.asOwner.mutation(api.skills.activateTenantCandidate, { candidateId: id });
+    return { id, version: pub.version };
+  };
+
+  // ── Task 1: the truth table ────────────────────────────────────────────────────────────────
+
+  test("the four-cell truth table: owner AND exact evidence, neither sufficient alone", async () => {
+    const w = await world();
+    const targetA = targetOf(w.idA, w.tenantA, w.version);
+    const call = (as: typeof w.asA) =>
+      as.mutation(api.skills.activateTenantCandidate, { candidateId: w.idA });
+
+    // CELL 1 — non-owner, no evidence. Both gates would refuse; authorization gets there first.
+    await expect(call(w.asA)).rejects.toThrow(/OWNER_REQUIRED/);
+    expect(await statusOf(w.t, w.idA)).toBe("candidate");
+
+    // CELL 3 — owner, no evidence. Authority is not a substitute for a passing run.
+    await expect(call(w.asOwner)).rejects.toThrow(/EVAL_GATE/);
+    expect(await statusOf(w.t, w.idA)).toBe("candidate");
+
+    await certify(w.t, w.idA, targetA);
+    // The evidence is REAL: the gate predicate now holds on this exact row.
+    expect(hasPassingTenantEvidence((await rowOf(w.t, w.idA))?.evidence, targetA)).toBe(true);
+
+    // CELL 2 — non-owner WITH valid exact evidence. THE anti-vacuity cell: EVAL_GATE would let this
+    // through, so the refusal is provably about authorization and not about the evidence. The
+    // candidate's own AUTHOR is refused, and so is another signed-in tenant.
+    await expect(call(w.asA)).rejects.toThrow(/OWNER_REQUIRED/);
+    await expect(call(w.asB)).rejects.toThrow(/OWNER_REQUIRED/);
+    expect(await statusOf(w.t, w.idA)).toBe("candidate");
+    // Nothing but the two publishes has been logged: a refusal is not an event.
+    expect((await auditRows(w.t)).map((r) => r.eventType)).toEqual([
+      "skill.user_candidate_published",
+      "skill.user_candidate_published",
+    ]);
+
+    // CELL 4 — owner WITH valid exact evidence. Only now does anything go live.
+    const res = await w.asOwner.mutation(api.skills.activateTenantCandidate, {
+      candidateId: w.idA,
+    });
+    expect(res).toMatchObject({
+      ok: true,
+      scope: "tenant",
+      targetId: String(w.idA),
+      name: OFFER_ARCHITECT_SKILL,
+      version: w.version,
+      tenantId: w.tenantA,
+      changed: true,
+      evalRunId: RUN_ID,
+    });
+    expect(await statusOf(w.t, w.idA)).toBe("active");
+  });
+
+  test("owner + stale / foreign / forged / failing evidence is EVAL_GATE and writes NO state", async () => {
+    const w = await world();
+    const targetA = targetOf(w.idA, w.tenantA, w.version);
+    const refuse = async (label: string) => {
+      await expect(
+        w.asOwner.mutation(api.skills.activateTenantCandidate, { candidateId: w.idA }),
+      ).rejects.toThrow(/EVAL_GATE/);
+      expect(await statusOf(w.t, w.idA), label).toBe("candidate");
+      expect(await statusOf(w.t, w.idB), label).toBe("candidate");
+    };
+
+    // (a) Evidence certifying the OTHER tenant's colliding row — same name, same version. This is
+    //     the case the global name@version predicate could not tell apart.
+    await certify(w.t, w.idA, targetOf(w.idB, w.tenantB, w.version));
+    await refuse("foreign row");
+
+    // (b) A FORGERY that agrees with A on candidateId, name AND version and differs only in which
+    //     tenant owns the row. Nothing but the full comparison refuses this.
+    await certify(w.t, w.idA, { ...targetA, registryTenantId: w.tenantB });
+    await refuse("forged tenant");
+
+    // (c) STALE: the right row and tenant at a version this row no longer is.
+    await certify(w.t, w.idA, { ...targetA, version: w.version - 1 });
+    await refuse("stale version");
+
+    // (d) A perfect target on a FAILING run.
+    await certify(w.t, w.idA, targetA, false);
+    await refuse("failed run");
+
+    // (e) Unparseable — fail closed, never "absent means fine".
+    await w.t.run((ctx) => ctx.db.patch(w.idA, { evidence: "{not json" }));
+    await refuse("unparseable");
+
+    // ANTI-VACUITY: the honest pin on the same bytes activates. Every refusal above is therefore
+    // about the evidence and not about a fixture that could never activate at all.
+    await certify(w.t, w.idA, targetA);
+    await w.asOwner.mutation(api.skills.activateTenantCandidate, { candidateId: w.idA });
+    expect(await statusOf(w.t, w.idA)).toBe("active");
+  });
+
+  test("activation is tenant/name-local: only THIS tenant's active row is archived", async () => {
+    const w = await world();
+    const globalBefore = await w.t.run((ctx) => ctx.db.get(w.globalId));
+    const bBefore = await rowOf(w.t, w.idB);
+
+    await certify(w.t, w.idA, targetOf(w.idA, w.tenantA, w.version));
+    await w.asOwner.mutation(api.skills.activateTenantCandidate, { candidateId: w.idA });
+    // A second adaptation, so the ARCHIVE half of the transition is actually exercised: the first
+    // activation has no active row to displace (the baseline is archived from birth).
+    const v3 = await publishAndActivate(w, `Bundle a 90-day guarantee. ${NEEDLE_A2}`);
+
+    const rows = await tenantRows(w.t, w.tenantA);
+    const byVersion = new Map(rows.map((r) => [r.version, r]));
+    expect(rows).toHaveLength(3);
+    expect(byVersion.get(1)?.status).toBe("archived"); // the untouched server baseline
+    expect(byVersion.get(1)?.author).toBe("system");
+    expect(byVersion.get(w.version)?.status).toBe("archived"); // displaced by v3
+    expect(byVersion.get(w.version)?.rollbackEligible).toBe(true); // …and provably WAS live
+    expect(byVersion.get(v3.version)?.status).toBe("active");
+    expect(byVersion.get(v3.version)?.rollbackEligible).toBe(true);
+    // Bodies, adaptations and lineage are never patched by an activation.
+    expect(byVersion.get(w.version)?.body).toContain(NEEDLE_A);
+    expect(byVersion.get(w.version)?.authoredBody).toContain(NEEDLE_A);
+    expect(byVersion.get(v3.version)?.body).not.toContain(NEEDLE_A);
+
+    // The OTHER tenant's colliding row is byte-unchanged, and so is the global registry row.
+    expect(await rowOf(w.t, w.idB)).toEqual(bBefore);
+    expect(await w.t.run((ctx) => ctx.db.get(w.globalId))).toEqual(globalBefore);
+    // And the runtime resolves what the owner activated, for A only.
+    const effA = await w.t.query(internal.skills.getEffectiveSkill, {
+      tenantId: w.tenantA,
+      name: OFFER_ARCHITECT_SKILL,
+    });
+    expect(effA).toMatchObject({ scope: "tenant", version: v3.version });
+    const effB = await w.t.query(internal.skills.getEffectiveSkill, {
+      tenantId: w.tenantB,
+      name: OFFER_ARCHITECT_SKILL,
+    });
+    expect(effB).toMatchObject({ scope: "global", version: 7, body: GLOBAL_BODY });
+  });
+
+  test("TWO tenants live at once: activating for one never touches the other's active row", async () => {
+    // The test above is NOT sufficient and this one exists because of it: with only ONE tenant ever
+    // holding an active row, an UNSCOPED "find the active row for this name" lookup returns the same
+    // row the scoped one does, and the whole tenant-locality claim passes vacuously. (Measured:
+    // replacing the by_tenant_name_status read with an unindexed name+status `.first()` left all 85
+    // tests green. The 21-03 lesson, one seam over.)
+    const w = await world();
+    await certify(w.t, w.idA, targetOf(w.idA, w.tenantA, w.version));
+    await w.asOwner.mutation(api.skills.activateTenantCandidate, { candidateId: w.idA });
+    await certify(w.t, w.idB, targetOf(w.idB, w.tenantB, w.version));
+    await w.asOwner.mutation(api.skills.activateTenantCandidate, { candidateId: w.idB });
+    // Both tenants are now live on the SAME skill name at the SAME version — the collision that
+    // makes an unscoped lookup ambiguous, and A's row is the OLDER of the two.
+    expect(await statusOf(w.t, w.idA)).toBe("active");
+    expect(await statusOf(w.t, w.idB)).toBe("active");
+
+    // B supersedes its own adaptation. An unscoped lookup finds A's row first (it was created
+    // first) and would archive a LIVE tenant's skill that nobody asked to change.
+    const pub = await w.asB.mutation(api.skills.publishUserCandidate, {
+      name: OFFER_ARCHITECT_SKILL,
+      authoredBody: `Bundle onboarding and a guarantee. ${NEEDLE_B}${NEEDLE_A2}`,
+    });
+    const bV3 = pub.tenantSkillId as Id<"tenantSkills">;
+    await certify(w.t, bV3, targetOf(bV3, w.tenantB, pub.version));
+    await w.asOwner.mutation(api.skills.activateTenantCandidate, { candidateId: bV3 });
+
+    // A is untouched: still live, still on its own row.
+    expect(await statusOf(w.t, w.idA)).toBe("active");
+    expect(await statusOf(w.t, w.idB)).toBe("archived");
+    expect(await statusOf(w.t, bV3)).toBe("active");
+    // EXACTLY one active row per tenant — two would also break `loadEffectiveSkill`'s `.unique()`.
+    const activeOf = async (tenantId: string) =>
+      (await tenantRows(w.t, tenantId)).filter((r) => r.status === "active");
+    expect((await activeOf(w.tenantA)).map((r) => String(r._id))).toEqual([String(w.idA)]);
+    expect((await activeOf(w.tenantB)).map((r) => String(r._id))).toEqual([String(bV3)]);
+    // …and each tenant resolves its own body at runtime.
+    const eff = (tenantId: string) =>
+      w.t.query(internal.skills.getEffectiveSkill, { tenantId, name: OFFER_ARCHITECT_SKILL });
+    expect((await eff(w.tenantA)).body).toContain(NEEDLE_A);
+    expect((await eff(w.tenantA)).body).not.toContain(NEEDLE_B);
+    expect((await eff(w.tenantB)).body).toContain(NEEDLE_A2);
+  });
+
+  test("re-activating the row that is ALREADY live is idempotent: no patch, no second audit", async () => {
+    const w = await world();
+    await certify(w.t, w.idA, targetOf(w.idA, w.tenantA, w.version));
+    await w.asOwner.mutation(api.skills.activateTenantCandidate, { candidateId: w.idA });
+
+    const rowBefore = await rowOf(w.t, w.idA);
+    const auditBefore = await auditRows(w.t);
+    expect(
+      auditBefore.filter((r) => r.eventType === "skill.user_candidate_activated"),
+    ).toHaveLength(1);
+
+    const again = await w.asOwner.mutation(api.skills.activateTenantCandidate, {
+      candidateId: w.idA,
+    });
+    expect(again).toMatchObject({ ok: true, changed: false, targetId: String(w.idA) });
+    // Deep equality on the WHOLE row: not "status is still active", but "nothing was written".
+    expect(await rowOf(w.t, w.idA)).toEqual(rowBefore);
+    expect(await auditRows(w.t)).toEqual(auditBefore);
+  });
+
+  // ── Task 2: rollback ───────────────────────────────────────────────────────────────────────
+
+  test("rollback restores a genuinely prior-active row and the server baseline, with NO evidence", async () => {
+    const w = await world();
+    await certify(w.t, w.idA, targetOf(w.idA, w.tenantA, w.version));
+    await w.asOwner.mutation(api.skills.activateTenantCandidate, { candidateId: w.idA });
+    const v3 = await publishAndActivate(w, `Bundle a 90-day guarantee. ${NEEDLE_A2}`);
+    const baseline = (await tenantRows(w.t, w.tenantA)).find((r) => r.version === 1)!;
+    // The baseline is a byte copy of the code-owned core — that is WHY it is evidence-exempt.
+    expect(baseline.body).toBe(GLOBAL_BODY);
+    expect(baseline.rollbackEligible).toBe(true);
+
+    // A broken eval harness must never block this: the target's evidence is deliberately removed
+    // first, so nothing about the restore can be reading a pin.
+    await w.t.run((ctx) => ctx.db.patch(w.idA, { evidence: undefined }));
+    const back = await w.asOwner.mutation(api.skills.rollbackTenantSkill, { targetId: w.idA });
+    expect(back).toMatchObject({ ok: true, changed: true, targetId: String(w.idA) });
+    expect(await statusOf(w.t, w.idA)).toBe("active");
+    expect(await statusOf(w.t, v3.id)).toBe("archived");
+
+    // …and all the way back to the untouched server baseline, also without evidence.
+    await w.asOwner.mutation(api.skills.rollbackTenantSkill, { targetId: baseline._id });
+    expect(await statusOf(w.t, baseline._id)).toBe("active");
+    expect(await statusOf(w.t, w.idA)).toBe("archived");
+    const eff = await w.t.query(internal.skills.getEffectiveSkill, {
+      tenantId: w.tenantA,
+      name: OFFER_ARCHITECT_SKILL,
+    });
+    expect(eff).toMatchObject({ scope: "tenant", version: 1, body: GLOBAL_BODY });
+    // Bodies and adaptations survive every hop.
+    expect((await rowOf(w.t, w.idA))?.body).toContain(NEEDLE_A);
+    expect((await rowOf(w.t, v3.id))?.body).toContain(NEEDLE_A2);
+  });
+
+  test("rollbackEligible — not status — is the proof of prior activation", async () => {
+    const w = await world();
+    // B's candidate has NEVER been active and carries no evidence at all. Archiving it by hand is
+    // exactly what a superseded draft looks like in this table, which is why the global scope's
+    // status-only exemption cannot be reused here.
+    await w.t.run((ctx) => ctx.db.patch(w.idB, { status: "archived" }));
+    expect((await rowOf(w.t, w.idB))?.rollbackEligible).toBe(false);
+
+    await expect(
+      w.asOwner.mutation(api.skills.rollbackTenantSkill, { targetId: w.idB }),
+    ).rejects.toThrow(/ROLLBACK_NOT_ELIGIBLE/);
+    expect(await statusOf(w.t, w.idB)).toBe("archived");
+
+    // A pending CANDIDATE is refused too — a rollback is never a back door to activation.
+    await expect(
+      w.asOwner.mutation(api.skills.rollbackTenantSkill, { targetId: w.idA }),
+    ).rejects.toThrow(/ROLLBACK_NOT_ELIGIBLE/);
+    expect(await statusOf(w.t, w.idA)).toBe("candidate");
+
+    // ANTI-VACUITY: flip ONLY the eligibility flag and the identical call succeeds. The refusal is
+    // therefore about that flag and not about the row, the tenant, or the missing evidence.
+    await w.t.run((ctx) => ctx.db.patch(w.idB, { rollbackEligible: true }));
+    await w.asOwner.mutation(api.skills.rollbackTenantSkill, { targetId: w.idB });
+    expect(await statusOf(w.t, w.idB)).toBe("active");
+  });
+
+  test("rollback is owner-only: evidence-exempt does not mean auth-exempt", async () => {
+    const w = await world();
+    await certify(w.t, w.idA, targetOf(w.idA, w.tenantA, w.version));
+    await w.asOwner.mutation(api.skills.activateTenantCandidate, { candidateId: w.idA });
+    const baseline = (await tenantRows(w.t, w.tenantA)).find((r) => r.version === 1)!;
+
+    // The baseline is eligible and evidence-exempt, so the eval gate is not what stands here.
+    await expect(
+      w.asA.mutation(api.skills.rollbackTenantSkill, { targetId: baseline._id }),
+    ).rejects.toThrow(/OWNER_REQUIRED/);
+    await expect(
+      w.t.mutation(api.skills.rollbackTenantSkill, { targetId: baseline._id }),
+    ).rejects.toThrow(/UNAUTHENTICATED/);
+    expect(await statusOf(w.t, baseline._id)).toBe("archived");
+    expect(await statusOf(w.t, w.idA)).toBe("active");
+
+    // ANTI-VACUITY: the owner performs the same call successfully on the same row.
+    await w.asOwner.mutation(api.skills.rollbackTenantSkill, { targetId: baseline._id });
+    expect(await statusOf(w.t, baseline._id)).toBe("active");
+  });
+
+  test("the activation and rollback audit rows are refs-only, with exact key sets", async () => {
+    const w = await world();
+    await certify(w.t, w.idA, targetOf(w.idA, w.tenantA, w.version));
+    await w.asOwner.mutation(api.skills.activateTenantCandidate, { candidateId: w.idA });
+    const baseline = (await tenantRows(w.t, w.tenantA)).find((r) => r.version === 1)!;
+    await w.asOwner.mutation(api.skills.rollbackTenantSkill, { targetId: baseline._id });
+
+    const rows = await auditRows(w.t);
+    const activated = rows.find((r) => r.eventType === "skill.user_candidate_activated")!;
+    const rolled = rows.find((r) => r.eventType === "skill.user_skill_rolled_back")!;
+
+    // THE NEEDLE SCAN GOES FIRST, deliberately. The key-set equality below is a stronger but
+    // NARROWER fact, and letting it fire first short-circuits the assertion the privacy claim
+    // actually rests on — measured: the body-leak mutation turned the key set red and the scan
+    // never ran. (21-05's row-12b lesson, applied.)
+    const serialized = JSON.stringify({
+      audit: rows,
+      deadLetters: await w.t.run((ctx) => ctx.db.query("deadLetters").collect()),
+    });
+    // Anti-vacuity first: the scan really did read these rows.
+    expect(serialized).toContain(String(w.idA));
+    expect(serialized).toContain(RUN_ID);
+    expect(serialized).not.toContain(NEEDLE_A);
+    expect(serialized).not.toContain(NEEDLE_B);
+    expect(serialized).not.toContain(GLOBAL_BODY);
+    expect(serialized).not.toContain(USER_SKILL_ADAPTATION_SECTION);
+
+    const KEYS = [
+      "author",
+      "evalRunId",
+      "fromTenantSkillId",
+      "fromVersion",
+      "ownerUserId",
+      "skillName",
+      "tenantSkillId",
+      "version",
+    ];
+    expect(Object.keys(activated.payload).sort()).toEqual(KEYS);
+    expect(Object.keys(rolled.payload).sort()).toEqual(KEYS);
+    // The row belongs to the TENANT whose runtime changed, on the candidate's own lineage.
+    expect(activated.tenantId).toBe(w.tenantA);
+    expect(activated.correlationId).toBe(String(w.idA));
+    expect(activated.actor).toBe("owner");
+    expect(activated.payload).toMatchObject({
+      tenantSkillId: String(w.idA),
+      version: w.version,
+      fromTenantSkillId: null, // nothing was live before
+      evalRunId: RUN_ID,
+      ownerUserId: String(w.ownerUser),
+    });
+    expect(rolled.payload).toMatchObject({
+      tenantSkillId: String(baseline._id),
+      version: 1,
+      fromTenantSkillId: String(w.idA),
+      fromVersion: w.version,
+      evalRunId: null, // rollback is evidence-EXEMPT; there is no run to name
+    });
+  });
+
+  // ── Task 3: the bounded owner review queue ─────────────────────────────────────────────────
+
+  test("tenantCandidatesForReview is owner-only, newest-first, and names the EXACT row", async () => {
+    const w = await world();
+    // A non-owner gets nothing — and the refusal is the no-body boundary, so it must happen before
+    // any candidate is read.
+    await expect(w.asA.query(api.skills.tenantCandidatesForReview, {})).rejects.toThrow(
+      /OWNER_REQUIRED/,
+    );
+    await expect(w.t.query(api.skills.tenantCandidatesForReview, {})).rejects.toThrow(
+      /UNAUTHENTICATED/,
+    );
+
+    const list = await w.asOwner.query(api.skills.tenantCandidatesForReview, {});
+    // Newest first: B published after A.
+    expect(list.map((c) => String(c.candidateId))).toEqual([String(w.idB), String(w.idA)]);
+    // Only `candidate` rows — the `system` baselines are archived and are not review items.
+    expect(list.every((c) => c.status === "candidate")).toBe(true);
+
+    const a = list.find((c) => String(c.candidateId) === String(w.idA))!;
+    // The DISCLOSURE SURFACE, pinned by equality. `toMatchObject` below says what must be there;
+    // this says what must NOT quietly appear — a raw `evidence` string, an authorUserId's email,
+    // an internal `_creationTime`, or the next field somebody adds without thinking about who
+    // reads this page. Named mutation that turns this red: return `row.evidence` alongside the
+    // refs summary (measured: without this line that mutation is invisible).
+    expect(Object.keys(a).sort()).toEqual([
+      "authorUserId",
+      "authoredBody",
+      "baseBody",
+      "baseScope",
+      "baseVersion",
+      "candidateBody",
+      "candidateId",
+      "createdAt",
+      "evidenceState",
+      "evidenceSummary",
+      "gatePassed",
+      "label",
+      "name",
+      "rollbackTargets",
+      "status",
+      "tenantId",
+      "version",
+    ]);
+    expect(a).toMatchObject({
+      tenantId: w.tenantA,
+      authorUserId: String(w.userA),
+      name: OFFER_ARCHITECT_SKILL,
+      label: USER_AUTHORABLE_SKILL_METADATA[OFFER_ARCHITECT_SKILL].label,
+      version: w.version,
+      status: "candidate",
+      gatePassed: false,
+      evidenceState: "absent",
+      evidenceSummary: null,
+      baseScope: "global",
+      baseVersion: 7,
+    });
+    // Provenance + the exact diff pair the owner reviews.
+    expect(a.authoredBody).toContain(NEEDLE_A);
+    expect(a.candidateBody).toContain(NEEDLE_A);
+    expect(a.baseBody).toBe(GLOBAL_BODY);
+    // …and the other tenant's needle is nowhere in A's row (the queue is cross-tenant BY DESIGN,
+    // so per-row leakage is the failure mode worth pinning).
+    expect(JSON.stringify(a)).not.toContain(NEEDLE_B);
+    expect(JSON.stringify(list.find((c) => String(c.candidateId) === String(w.idB)))).toContain(
+      NEEDLE_B,
+    );
+
+    // Rollback choices: ONLY the eligible server baseline, never the pending candidate itself.
+    const baseline = (await tenantRows(w.t, w.tenantA)).find((r) => r.version === 1)!;
+    expect(a.rollbackTargets).toEqual([
+      { id: baseline._id, version: 1, author: "system", status: "archived" },
+    ]);
+
+    // After a real activation the queue reflects it: the row leaves (no longer a candidate), the
+    // next candidate's base is the tenant's own active row, and eligible targets grow.
+    await certify(w.t, w.idA, targetOf(w.idA, w.tenantA, w.version));
+    await w.asOwner.mutation(api.skills.activateTenantCandidate, { candidateId: w.idA });
+    const after = await w.asOwner.query(api.skills.tenantCandidatesForReview, {});
+    expect(after.map((c) => String(c.candidateId))).toEqual([String(w.idB)]);
+
+    const pub = await w.asA.mutation(api.skills.publishUserCandidate, {
+      name: OFFER_ARCHITECT_SKILL,
+      authoredBody: `Bundle a 90-day guarantee. ${NEEDLE_A2}`,
+    });
+    const nextId = pub.tenantSkillId as Id<"tenantSkills">;
+    await certify(w.t, nextId, targetOf(nextId, w.tenantA, pub.version));
+    const next = (await w.asOwner.query(api.skills.tenantCandidatesForReview, {})).find(
+      (c) => String(c.candidateId) === String(nextId),
+    )!;
+    expect(next).toMatchObject({
+      baseScope: "tenant",
+      baseVersion: w.version,
+      gatePassed: true,
+      evidenceState: "passing",
+    });
+    expect(next.evidenceSummary).toEqual({
+      runId: RUN_ID,
+      casesPassed: 36,
+      casesTotal: 36,
+      costUsd: 0.42,
+      model: "openai/gpt-4o-mini",
+    });
+    expect(next.baseBody).toContain(NEEDLE_A); // the diff is against what the tenant runs TODAY
+    // The now-ACTIVE v2 is deliberately NOT offered: restoring the row that is already live is not
+    // a rollback. Its exclusion is about liveness, not eligibility — it is eligible.
+    expect(next.rollbackTargets.map((r) => r.version)).toEqual([1]);
+    expect((await rowOf(w.t, w.idA))?.rollbackEligible).toBe(true);
+
+    // …and once v2 IS displaced, it appears — so this list tracks prior-active rows and not just
+    // the server baseline.
+    await w.asOwner.mutation(api.skills.activateTenantCandidate, { candidateId: nextId });
+    const pub4 = await w.asA.mutation(api.skills.publishUserCandidate, {
+      name: OFFER_ARCHITECT_SKILL,
+      authoredBody: `Quote weekly, not monthly. ${NEEDLE_A}${NEEDLE_A2}`,
+    });
+    const fourth = (await w.asOwner.query(api.skills.tenantCandidatesForReview, {})).find(
+      (c) => String(c.candidateId) === String(pub4.tenantSkillId),
+    )!;
+    expect(fourth.rollbackTargets.map((r) => r.version)).toEqual([w.version, 1]);
+    expect(fourth.rollbackTargets.map((r) => r.author)).toEqual(["user", "system"]);
+  });
+
+  test("the review queue is bounded: more candidates than the cap returns the cap, newest first", async () => {
+    const w = await world();
+    // 40 candidates across the deployment, well past TENANT_REVIEW_LIMIT. Inserted directly: this
+    // test is about the READ's bound, and 40 real publishes would also mint 40 baselines.
+    const ids: Id<"tenantSkills">[] = [];
+    for (let i = 0; i < 40; i++) {
+      ids.push(
+        await w.t.run((ctx) =>
+          ctx.db.insert("tenantSkills", {
+            tenantId: `bulk-tenant-${i}`,
+            name: OFFER_ARCHITECT_SKILL,
+            version: 2,
+            body: `${GLOBAL_BODY}\nbulk ${i}`,
+            authoredBody: `bulk ${i}`,
+            status: "candidate",
+            author: "user",
+            basedOnScope: "global",
+            basedOnName: OFFER_ARCHITECT_SKILL,
+            basedOnVersion: 7,
+            basedOnGlobalSkillId: w.globalId,
+            rollbackEligible: false,
+            // Newer than the two real publishes above, which carry Date.now().
+            createdAt: Date.now() + 1_000 + i,
+          }),
+        ),
+      );
+    }
+    const list = await w.asOwner.query(api.skills.tenantCandidatesForReview, {});
+    expect(list).toHaveLength(25);
+    // Newest first — the last-inserted bulk row leads, and the two older real publishes are cut.
+    expect(String(list[0]?.candidateId)).toBe(String(ids[39]));
+    expect(list.map((c) => String(c.candidateId))).not.toContain(String(w.idA));
+  });
+
+  // ── Source contracts: what a behavioural test cannot see ───────────────────────────────────
+
+  const skillsSource = () =>
+    readFileSync(fileURLToPath(new URL("./skills.ts", import.meta.url)), "utf8");
+  // Strip comments before every scan. Without this the guard punishes its own documentation — the
+  // helper's doc comment describes the patch it protects, and would read as a second one.
+  const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, "");
+
+  test("ONE archive/activate transition: exactly one patch in the module sets status active", () => {
+    const code = stripComments(skillsSource());
+    const patches = [...code.matchAll(/ctx\.db\.patch\([^;]*?\);/g)].map((m) => m[0]);
+    // Anti-vacuity: the module really does patch in several places (seedSkills, archiveSkill,
+    // recordEvalEvidence, recordTenantEvalEvidence), so "exactly one" below is a filter result.
+    expect(patches.length).toBeGreaterThan(3);
+
+    const activating = patches.filter((p) => /status:\s*"active"/.test(p));
+    expect(activating).toHaveLength(1);
+
+    // …and that one lives inside the shared transition, not beside it. Named mutation that turns
+    // this red: add a direct `ctx.db.patch(candidateId, { status: "active" })` to
+    // activateTenantCandidate, bypassing transitionSkillActivation.
+    const from = code.indexOf("async function transitionSkillActivation");
+    const to = code.indexOf("async function activateSkillVersion");
+    expect(from).toBeGreaterThan(-1);
+    expect(to).toBeGreaterThan(from);
+    expect(code.slice(from, to)).toContain(activating[0]);
+  });
+
+  test("every activation export reaches transitionSkillActivation", () => {
+    const code = stripComments(skillsSource());
+    const region = (start: string, end: string) => {
+      const from = code.indexOf(start);
+      const to = code.indexOf(end, from + 1);
+      expect(from, `${start} not found`).toBeGreaterThan(-1);
+      expect(to, `${end} not found after ${start}`).toBeGreaterThan(from);
+      const slice = code.slice(from, to);
+      expect(slice.length, `${start} region is empty`).toBeGreaterThan(60);
+      return slice;
+    };
+
+    // The two GLOBAL exports still go through the thin compatibility wrapper…
+    expect(region("export const activateSkill =", "export const activateCandidate =")).toContain(
+      "activateSkillVersion(ctx, name, version)",
+    );
+    expect(
+      region("export const activateCandidate =", "export const candidatesForReview ="),
+    ).toContain("activateSkillVersion(ctx, name, version)");
+    // …which is now nothing but a call into the shared transition.
+    expect(region("async function activateSkillVersion", "export const activateSkill =")).toContain(
+      'transitionSkillActivation(ctx, { scope: "global", name, version })',
+    );
+    // …and both tenant exports call it directly with an exact row id.
+    expect(
+      region("export const activateTenantCandidate =", "export const rollbackTenantSkill ="),
+    ).toContain("transitionSkillActivation(ctx, {");
+    expect(
+      region("export const rollbackTenantSkill =", "async function logTenantActivation"),
+    ).toContain("transitionSkillActivation(ctx, {");
+  });
+
+  test("the owner review queue is a bounded indexed read, never a deployment-wide collect", () => {
+    const code = stripComments(skillsSource());
+    const from = code.indexOf("export const tenantCandidatesForReview");
+    const to = code.indexOf("export const activateTenantCandidate");
+    expect(from).toBeGreaterThan(-1);
+    expect(to).toBeGreaterThan(from);
+    const region = code.slice(from, to);
+    expect(region.length).toBeGreaterThan(800); // the real handler was found
+
+    expect(region).toContain("by_status_createdAt");
+    expect(region).toContain('.order("desc")');
+    expect(region).toContain(".take(TENANT_REVIEW_LIMIT)");
+    expect(region).toContain(".take(ROLLBACK_CHOICE_LIMIT)");
+    // The candidate queue is cross-tenant and open-ended; a full scan is a page that only gets
+    // slower. Named mutation that turns this red: replace either take with `.collect()`.
+    expect(region).not.toContain(".collect(");
+  });
+});
