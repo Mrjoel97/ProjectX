@@ -588,10 +588,14 @@ test("a staged finance plan writes NOTHING until it is approved", async () => {
       tenantId: "u1",
       kind: "finance_write",
       status: "awaiting_approval",
+      // NOTE: the happy path uses `cashOnHand`, a financeInputs field. It must NOT use `cac` —
+      // `cac` is scorecard-stored, and this task's own applier refuses scorecard fields. An
+      // earlier draft of this plan specified both, which is self-contradictory. `cac` belongs in
+      // the refusal test, and only there.
       financeClaims: [
         {
-          field: "cac",
-          value: 1400,
+          field: "cashOnHand",
+          value: 38_500,
           origin: "stated",
           actor: "agent",
           basis: "14000 / 10, turn 4",
@@ -603,12 +607,12 @@ test("a staged finance plan writes NOTHING until it is approved", async () => {
   );
 
   const before = await asUser.query(api.cash.inputs, {});
-  expect(before.inputs.find((i) => i.field === "cac")?.value).toBeNull();
+  expect(before.inputs.find((i) => i.field === "cashOnHand")?.value).toBeNull();
 
   await t.run((ctx) => applyFinanceClaims(ctx, "u1", [
     {
-      field: "cac",
-      value: 1400,
+      field: "cashOnHand",
+      value: 38_500,
       origin: "stated",
       actor: "agent",
       basis: "14000 / 10, turn 4",
@@ -618,15 +622,15 @@ test("a staged finance plan writes NOTHING until it is approved", async () => {
   ]));
 
   const after = await asUser.query(api.cash.inputs, {});
-  expect(after.inputs.find((i) => i.field === "cac")?.value).toBe(1400);
+  expect(after.inputs.find((i) => i.field === "cashOnHand")?.value).toBe(38_500);
   expect(planId).toBeDefined();
 });
 
 test("the audit row carries names and counts, and NEVER a figure (§4)", async () => {
   const t = convexTest(schema, modules);
   const claim = {
-    field: "cac" as const,
-    value: 1400,
+    field: "cashOnHand" as const,
+    value: 38_500,
     origin: "stated" as const,
     actor: "agent" as const,
     basis: "14000 / 10, turn 4",
@@ -645,7 +649,7 @@ test("the audit row carries names and counts, and NEVER a figure (§4)", async (
     "fields",
   ]);
   // The negative assertion is the point: the figure must not be reachable anywhere in the payload.
-  expect(JSON.stringify(row!.payload)).not.toContain("1400");
+  expect(JSON.stringify(row!.payload)).not.toContain("38500");
 });
 ```
 
@@ -764,16 +768,20 @@ export async function applyFinanceClaims(
   if (applied.length === 0) return;
   // §4: field NAMES, a COUNT and enums — never a figure. Tenant revenue in the append-only audit
   // log is precisely the PII honeypot §4 exists to prevent.
-  await insertAudit(ctx.db, tenantId, "finance.claims_applied", {
-    count: applied.length,
-    fields: applied.map((c) => c.field),
-    actors: [...new Set(applied.map((c) => c.actor))],
-    confidences: [...new Set(applied.map((c) => c.confidence))],
+  await ctx.runMutation(internal.audit.log, {
+    tenantId,
+    eventType: "finance.claims_applied",
+    payload: {
+      count: applied.length,
+      fields: applied.map((c) => c.field),
+      actors: [...new Set(applied.map((c) => c.actor))],
+      confidences: [...new Set(applied.map((c) => c.confidence))],
+    },
   });
 }
 ```
 
-Import `insertAudit` from the audit module. The audit module is insert-only (CLAUDE.md §3) — do not add a mutating call. Also import `CASH_INPUTS`, `cashInputSpec` and `isNewerThan` from `@pikar/core`.
+**The audit surface is `internal.audit.log`, not `insertAudit`** — an earlier draft of this plan named a function that does not exist. `audit.ts:16` exports `log` as an `internalMutation` taking `eventType` (not `event`), and it is the module's only insert surface, which is what CLAUDE.md §3's insert-only rule means in practice. Because it is a mutation rather than a direct `db` write, the applier's `ctx` must be a full `MutationCtx`, not `{ db }` — matching `applyCrmOperations`, which has the same shape for the same reason. Also import `CASH_INPUTS`, `cashInputSpec` and `isNewerThan` from `@pikar/core`.
 
 **The scorecard restriction is a real product limit, not a technicality.** It means the agent can update the five `financeInputs` figures — cash on hand, monthly operating cost, MRR, receivables, payables — and **cannot yet update CAC**, which is the headline use case. Closing that needs a per-dot-path provenance map on `evaluations` (mirroring the `userProvidedAt` map that already exists) so `applyScorecardAnswer` can record who supplied a figure. That is a separate, well-bounded change and it is the honest next slice; shipping the agent's CAC update on top of a store that records every write as the owner's own word would be worse than not shipping it.
 
@@ -1204,7 +1212,14 @@ Expected: FAIL — tool does not exist.
           if (!CASH_INPUTS.some((s) => s.field === u.field)) {
             return `"${u.field}" is not a figure I can update. Ask the user which one they mean.`;
           }
-          // §4 is enforced HERE, at the boundary that constructs `basis`. `validateFigureClaim`
+          // The model-facing half. `buildAgentContext` (llm.ts:1058) has NO `finance_write` branch, and
+    // its own comment records why that matters: `PlanRow` does not declare `kind`, so widening
+    // `ACTION_TYPES` is NOT a compile error here — `media` shipped in Phase 20 without ever
+    // reaching it. A new action type must be added BY HAND, "and one that is not gets announced
+    // to the model as an email". Add the `finance_write` arm beside the `crm_write` one, so a
+    // staged figure plan is described as figures rather than as an email with recipient slots.
+    // Pin it with a test, because the type system will not.
+    // §4 is enforced HERE, at the boundary that constructs `basis`. `validateFigureClaim`
           // checks only that a basis is non-empty — "refs only, never quoted content" is not
           // mechanically decidable in pure TS, so the producer is the enforcement point. Reject a
           // basis carrying quoted content rather than letting it reach the audit log.
