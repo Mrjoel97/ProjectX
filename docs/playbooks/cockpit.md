@@ -11,6 +11,50 @@
 > passing on an empty scan. **Add the literal in the SAME commit as a new tool.** Prose in a schema
 > comment is not a guard; a test is.
 
+> Last verified: 2026-08-10 (Plan 19-10 Task 2 — the OWNER UAT, run as `e2e/pipeline-uat.spec.ts`.
+> **19-11 FIXED THE LOOP. THE BROWSER STILL NEVER SENDS A CLOCK, SO ACTN-05 IS STILL UNREACHABLE
+> FROM THE PRODUCT.** The invariant below says every input `buildCockpitTools` takes must ride
+> `runAgentLoop`'s args. It needs ONE MORE HOP: **every input `runAgentLoop` takes must ride the
+> CLIENT's call.** `ChatPane.tsx`'s `onSend` posts `send({ threadId, text })` flat, and
+> `grep -rn clientContext apps/web` returns NOTHING — no web caller has ever sent it. Measured live
+> at UAT step 7: "Remind me Thursday to chase Jane (jane@example.com) about the renewal" came back
+> *"I couldn't stage the follow-up reminder for Thursday since the date wasn't clear"* — the
+> `no_clock` refusal — **and wrote the bare contact anyway**, the same two-wrongs shape 19-10
+> measured, reached by a different route. `parseSendTime("Thursday", …)` resolves offline at $0, so
+> the date was never the problem.
+> **Why fixture 36 is green and the product is not:** `run-eval-golden.mjs:1394` supplies
+> `clientContext: { tz: "UTC", nowMs: Date.now() }` for every `clock: true` fixture. The gate
+> certifies a code path the browser cannot reach — the same shape as the `__invokeCockpitTool`
+> blind spot 19-11 names below, one layer further out.
+> **It is not only ACTN-05.** `setSendTime` (llm.ts:1950), `checkAvailability` (:2260) and
+> `proposeCalendarEvent` (:2306) take the identical `no_clock` exit, so natural-language send-time
+> and calendar staging are equally dead from the composer. Every E2E that appears to cover them
+> drives a `SMOKE::` sentinel, which pins its own clock.
+> **The fix is one line**, in `apps/web/app/(app)/dashboard/workspace/ChatPane.tsx`'s `onSend`:
+> `clientContext: { nowMs: Date.now(), tz: Intl.DateTimeFormat().resolvedOptions().timeZone }`.
+> NOT applied at the UAT: `:3111` serves a production build the UAT was forbidden to rebuild, so it
+> could not be VERIFIED, and an unverified product change is what this phase keeps getting burned
+> by. The four other web callers (`SegmentAnatomy`, `AbnormalBriefBanner`, `PostCall`, and
+> `cards.tsx`'s regenerate/remove) are equally clockless and belong in the same edit.
+> **A REGRESSION GUARD IS OWED WITH THE FIX, and it must be a BROWSER one** — every offline layer
+> here supplies its own clock, which is precisely why this survived 19-11.)
+
+> Last verified: 2026-08-10 (Plan 19-10 Task 2 — **SC#5's WITHHELD REPORT CANNOT BE SEEN BY A
+> HUMAN.** 19-05 shipped `Sent to N. Withheld M who unsubscribed: <addresses>.` on both approve
+> surfaces and unit-pinned the string. Both render it from component `useState`, and both cards
+> are gated on `status === "proposed"` (`PlanCards` in `cards.tsx`; `approvals.listAwaiting`,
+> which paginates `"proposed"` only). A SUCCESSFUL approve IS the `proposed → approved`
+> transition, and the reactive subscription lands it before `execute()` resolves — so the
+> component that would show the note has already been replaced by the report card when
+> `setNote`/`setResult` runs. Observed: not visible at any point in 90 seconds; the user sees a
+> report listing FOUR recipients with the fifth simply absent and nothing saying it ever existed
+> (screenshot: `.planning/phases/19-contacts-crm-follow-ups/uat/step-09a-after-partial-send.png`).
+> The two REFUSAL notes survive precisely because a refusal LEAVES the plan proposed — which is
+> why UAT steps 10 and 11 pass on that same mechanism. **The withheld set belongs on the PLAN ROW,
+> not in component state**: it is a durable fact about what was approved, and the report card is
+> where a human looks afterwards. Anything kept in `useState` across a status flip is unreachable
+> by construction.)
+
 > Last verified: 2026-08-10 (Plan 19-11 — **THE ACTN-05 DEFECT IS FIXED, AND THE CAUSE WAS NOT THE
 > MODEL.** Fixture 36 is GREEN against the live `cockpit-agent@18`: `--only 36`, run `266ef8f4`,
 > $0.0056, PASS on the first attempt with `datedFollowUpCount` intact and the body BYTE-UNCHANGED.
