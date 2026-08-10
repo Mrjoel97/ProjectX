@@ -39,9 +39,11 @@ metrics:
     - "fc20c60 — Pin chip + Pinned prompts menu + fresh-thread Run (3 files, +467 / -9)"
     - "64d704c — cockpit.md routine-v0 contract + 21-05-PLAN.md (2 files, +330 / -0)"
     - "c5ed771 — two check-playbooks false-positive bumps, claiming nothing (2 files, +40 / -0)"
-  files_changed: 9
-  insertions: 1351
-  deletions: 9
+    - "b5001b1 — this summary (1 file, +442 / -0)"
+    - "05882d6 — the SECOND false positive on agent-runtime.md, still claiming nothing (1 file, +13 / -6)"
+  files_changed: 10
+  insertions: 1806
+  deletions: 15
   spend_usd: 0.00
   completed: 2026-08-11
 ---
@@ -336,7 +338,18 @@ actually touched with their commit hashes, and hands the real entry back to 21-0
 that lane's change**, and I make no claim about whether it is correct. `skill-registry.md` — theirs
 by assignment — was **not touched**.
 
-A third block then named a new uncovered file, `packages/backend/convex/__h_smoke.ts`. It is a
+**It then happened a THIRD time, after this summary was first written.** `check-playbooks.mjs`
+blocked on `agent-runtime.md (changed: packages/backend/scripts/run-eval-golden.mjs)` — the same
+sibling lane, a different file of theirs, also named in their own file list.
+`git show --name-only cf18305 fc20c60 64d704c c5ed771 b5001b1 | grep -c run-eval-golden` → **0**.
+Rather than stack a fourth entry, `05882d6` **extends the entry I already own** to name the second
+culprit, records that 21-05 never ran the eval gate (only the free `--self-check`), and repeats that
+nothing was re-verified. That the same lane's work triggered this block three times in one session
+is worth naming as a process cost, not just a nuisance: **every one of these entries is a durable
+record that says nothing, written by someone who checked nothing**, and the real entries are still
+owed by 21-03.
+
+A separate block then named a new uncovered file, `packages/backend/convex/__h_smoke.ts`. It is a
 transient harness artifact of the same sibling lane; I did **not** add it to `watch.json` or to
 `_unassigned` (that would be making an ownership decision about someone else's file). By the next
 check it had been deleted by its own lane and the gate passed. **`watch.json` needed no change from
@@ -438,5 +451,10 @@ cannot claim a green backend typecheck until it is fixed.
 - `docs/playbooks/cockpit.md` — FOUND (+133, zero deletions, in `64d704c`)
 - `.planning/phases/21-user-authored-skills-and-routines/21-05-PLAN.md` — FOUND (197 lines, newly tracked)
 - `docs/playbooks/agent-runtime.md` / `business-evaluation.md` — FOUND (+20 each, date-bump-only, `c5ed771`)
-- Commits `cf18305`, `fc20c60`, `64d704c`, `c5ed771` — all four re-verified with
-  `git merge-base --is-ancestor <sha> HEAD` **after this summary was written**
+- `.planning/phases/21-user-authored-skills-and-routines/21-05-SUMMARY.md` — FOUND (`b5001b1`,
+  amended in the follow-up commit below so its own commit list is not short by two)
+- Commits `cf18305`, `fc20c60`, `64d704c`, `c5ed771`, `b5001b1`, `05882d6` — **all six** re-verified
+  with `git merge-base --is-ancestor <sha> HEAD` after this summary was written. Nothing fell out of
+  history and nothing had to be re-applied.
+- `git status` on every path this plan owns — **clean**; the only dirty/untracked files left in the
+  phase directory are the sibling lane's (`21-03/04/06/07-PLAN.md`, `21-VALIDATION.md`).
