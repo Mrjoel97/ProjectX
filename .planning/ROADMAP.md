@@ -1125,7 +1125,7 @@ Three UNPLANNED gap-closure plans followed, each opened by a defect the previous
 
 **Requirements**: ACTN-05 (extends — the contacts substrate gains its migration path); no new requirement ID
 **Depends on:** Phase 19 (the contacts substrate, `normalizeAddress`, `upsertContact`, `assertConsent`, the `COVERED` isolation pin, and the `pipeline-uat.spec.ts` browser harness)
-**Plans:** 7 plans across 7 waves — fully sequential. Every plan touches `convex/contacts.ts`, `PipelineView.tsx` or their tests, and every plan bumps `contacts-crm.md`, so no two can share a wave (the phase-19 rule: exactly ONE plan per wave may bump a given playbook). **2/7 executed** (19.1-01 and 19.1-02 complete 2026-08-10).
+**Plans:** 7 plans across 7 waves — fully sequential. Every plan touches `convex/contacts.ts`, `PipelineView.tsx` or their tests, and every plan bumps `contacts-crm.md`, so no two can share a wave (the phase-19 rule: exactly ONE plan per wave may bump a given playbook). **3/7 executed** (19.1-01, 19.1-02 and 19.1-03 complete 2026-08-10; 19.1-03 added `fillEmptyOnly` + the consent floor to the ONE writer with hand-add proven unmoved).
 
 **Scope boundary — this is 1 of 4 contact-acquisition subsystems.** The other three are specced separately: extract contacts from documents, search-then-import from the vault, and third-party CRM migration. **Subsystem 4 will use REST, not MCP** — ADR-011 records the Pikar-Ai MCP as structurally unreachable from a Convex action, and an MCP client plus per-provider OAuth is strictly more work than the REST API every candidate CRM offers.
 
@@ -1134,7 +1134,7 @@ Three UNPLANNED gap-closure plans followed, each opened by a defect the previous
 Plans:
 - [x] 19.1-01-PLAN.md — The pure import brain in `@pikar/core`: RFC-4180 `parseCsv`, header auto-mapping, within-file dedup, rejection by PHYSICAL file line, the versioned attestation sentence, and the `watch.json` registration the Stop hook demands (Wave 1)
 - [x] 19.1-02-PLAN.md — The two union widenings and every registration site in ONE commit: 5 widened, 3 deliberately NOT widened and each pinned by a red-able test, plus the Pipeline consent chip finally rendering `source` (Wave 2)
-- [ ] 19.1-03-PLAN.md — `fillEmptyOnly` as a FLAG on the one shared contact writer, the three new fields, and the consent floor: an import may never downgrade `asserted-by-user` (Wave 3)
+- [x] 19.1-03-PLAN.md — `fillEmptyOnly` as a FLAG on the one shared contact writer, the three new fields, and the consent floor: an import may never downgrade `asserted-by-user` (Wave 3)
 - [ ] 19.1-04-PLAN.md — `matchExisting` and `importContacts` in the ONE substrate module, both on the `COVERED` pin with real asA/asB isolation, plus the §4 audit scan and the createdAt-tie paging assertion (Wave 4)
 - [ ] 19.1-05-PLAN.md — `pipelineTiles` reports its scan bound instead of silently under-counting a max-size import (Wave 5)
 - [ ] 19.1-06-PLAN.md — The three-step import panel on `/dashboard/pipeline`: no new route, no component library, the file never uploaded, Confirm disabled until the attestation is ticked (Wave 6)
