@@ -13,6 +13,7 @@ export * from "./docType";
 export * from "./documentGen";
 export * from "./emailIntent";
 export * from "./fallback";
+export * from "./financeClaim";
 export * from "./goals";
 export * from "./logger";
 export * from "./notificationTemplates";

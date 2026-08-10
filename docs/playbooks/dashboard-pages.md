@@ -1,6 +1,8 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-08-09 (Plan 19-10 — **`apps/web/e2e/pipeline.spec.ts` HAS NOW ACTUALLY RUN:
+> Last verified: 2026-08-10 (Task 1, live-finance-inputs — `financeClaim.ts` lands the `FigureClaim` shape, `validateFigureClaim` and `isNewerThan`, reusing `cash.ts`'s value bounds.)
+>
+> Previously verified: 2026-08-09 (Plan 19-10 — **`apps/web/e2e/pipeline.spec.ts` HAS NOW ACTUALLY RUN:
 > 2/2 PASSED in 12.3s** against a live `convex dev` and a PRODUCTION build on `:3111`. It was
 > authored in 19-07 and had never executed; 26-05 and 26-10 both stopped in `auth.setup.ts` for want
 > of credentials. **Two things that were believed about running these specs turn out to be false.**
