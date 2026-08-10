@@ -12,6 +12,8 @@
 
 **Scope:** Ship-order steps 1–4 of the spec. Steps 5–6 (the `docType`-gated vault source, finance-tile display) are Plan 2.
 
+**Carried into Plan 2 from Task 1's review:** `isNewerThan(claim, storedObservedAt)` treats "nothing stored" as `=== null` only, deliberately — so a stored `0` behaves correctly rather than being swallowed by a falsy check. A Convex `v.optional` column reads back as `undefined`, and `undefined === null` is false, so **the vault source must pass `doc.observedAt ?? null`**. Getting this wrong blocks the *first* write to a field — the exact inverse of the rule.
+
 **Deferred to Plan 2, deliberately:** the spec's *"a rejected claim is not re-proposed"* rule and the *fail-open on grounding* rule. Both only bind once the vault source exists — with conversation as the only source, a claim recurs only if the owner says the same thing again, which is not a loop worth building state for. Do not implement them here; do not silently drop them either.
 
 ## Global Constraints
@@ -1122,8 +1124,19 @@ Expected: FAIL — tool does not exist.
         if (updates.length === 0) return "There were no changes to stage.";
         const claims: FigureClaim[] = [];
         for (const u of updates) {
+          // The field check MUST precede claim construction. `validateFigureClaim` delegates to
+          // `cashInputSpec`, which THROWS on a field outside the union — and a hallucinated field
+          // name ("revenue", "burnRate") is the likeliest malformed emission from a model. This
+          // guard is what turns that throw into a sentence.
           if (!CASH_INPUTS.some((s) => s.field === u.field)) {
             return `"${u.field}" is not a figure I can update. Ask the user which one they mean.`;
+          }
+          // §4 is enforced HERE, at the boundary that constructs `basis`. `validateFigureClaim`
+          // checks only that a basis is non-empty — "refs only, never quoted content" is not
+          // mechanically decidable in pure TS, so the producer is the enforcement point. Reject a
+          // basis carrying quoted content rather than letting it reach the audit log.
+          if (/["'“”]/.test(u.basis) || u.basis.length > 120) {
+            return `The basis for ${u.field} must name where the number came from, not quote it.`;
           }
           const claim: FigureClaim = {
             field: u.field as CashInputField,
