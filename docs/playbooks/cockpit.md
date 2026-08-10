@@ -11,6 +11,48 @@
 > passing on an empty scan. **Add the literal in the SAME commit as a new tool.** Prose in a schema
 > comment is not a guard; a test is.
 
+> Last verified: 2026-08-10 (Task 8 REVIEW FIX, live-finance-inputs — **the figure card could not
+> show a refusal at all, the tool proposed figures it can never write, and either staging tool
+> silently ate the other's plan.** Four findings. (1) **`PlanCard`'s note rendered on ONE branch.**
+> `memo`, `crm_write`, `finance_write` and `calendar_event` all EARLY-RETURN their own JSX, and the
+> `{note && …}` block lived only in the final EMAIL return — so on those four cards `setNote` ran,
+> the component re-rendered, and nothing appeared. Invisible since 12-05 because the three original
+> reasons (`gmail_not_connected`, `no_postal_address`, `all_recipients_suppressed`) fire on EMAIL
+> plans only; `finance_write` is the first early-return branch whose refusals actually fire, which
+> is what made the Task 8 entries below unreachable the moment they were added. Fixed at the root:
+> ONE `planNote` element built after `approve()` and rendered by all five branches — not copied
+> into the finance branch. `crmCard.test.ts` now SCANS `cards.tsx` (source text: `apps/web`'s
+> vitest is node-only with no jsdom, and its config documents adding one as a deliberate upgrade)
+> and asserts `{planNote}` occurs exactly as often as `void approve()`, with a non-vacuity floor of
+> 5 — mutation-checked at 4-vs-5 RED. **A map assertion is not a render assertion**; the previous
+> pin was green while the card could show neither string. Same edit paired the link with its label
+> (`link: { href, label }`): the label had been HARDCODED "Open your profile" beside an optional
+> `href`, so `agent_cannot_update_figure` -> `/dashboard/finance` would have rendered the wrong
+> words over the right link. (2) **`stageFinanceWrite` now refuses scorecard fields itself.** 6 of
+> the 11 collected inputs are `store: "scorecard"` and `applyFinanceClaims` refuses every one —
+> while the tool description said "only the collected inputs can be updated", so the model would
+> re-propose CAC every turn and the user would spend an approval click to find out. The description
+> is now DERIVED from the catalogue (`AGENT_WRITABLE_FIGURES` = the five `financeInputs` fields) so
+> it cannot go stale, and the guard sits immediately after the membership check. **`cash.ts:448`
+> stays** — it is still reached by its own unit tests, by a plan row revised between staging and
+> Approve, by a row staged under an older build, and by any future writer of `financeClaims`; two
+> guards, one rule, neither dead. (3) The staged claim is now asserted field-by-field (not just
+> `toHaveLength(1)`), the LIST property has a two-update test, all-or-nothing has one, and one test
+> drives the whole `stage -> Approve -> financeInputs row` seam on a plan the TOOL staged rather
+> than a hand-seeded row. (4) **THE CROSS-KIND CLOBBER, both directions.** `plans.by_thread` is
+> `.unique()`, and each staging tool's guard checked only the four EMAIL slots — a `crm_write` row
+> carries `crmOperations` and no subject/body, a `calendar_event` row carries `eventTitle`. Both
+> sailed through, `patchPlan` overwrote `kind`, and `executePlan` routes on `actionTypeOf(plan.kind)`
+> ALONE, so the surviving list was never applied and never rendered *after the model had told the
+> user it was staged*. Fixed as ONE shared predicate — `otherKindStaged(plan, mine)`, refusing when
+> another `kind` is present and its status is not `done`/`canceled` — used by BOTH `stageCrmWrite`
+> and `stageFinanceWrite`, with a test in each direction plus one proving a same-kind re-stage is
+> still a revision. Inherited shape, not introduced here, but Task 8 is what made it reachable.
+> `PlanRow` now DECLARES `kind`, which has a second effect worth keeping: every caller passes a
+> `PlanRow` to `buildAgentContext`, whose param declares the same union, so the next `ACTION_TYPES`
+> widening that skips that function is an assignability error at the call site — the compile-time
+> guard the corrected note there says does not exist now exists for the seventh action type.)
+
 > Last verified: 2026-08-10 (Task 8, live-finance-inputs — **`stageFinanceWrite`: the agent's only
 > route to a figure, and the two model-facing surfaces Task 4 left open are now closed.** ONE tool
 > carrying a LIST (the `stageCrmWrite` shape — one plan, one approval click, however many figures

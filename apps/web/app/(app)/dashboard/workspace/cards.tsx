@@ -317,6 +317,10 @@ function PlanRecipientBodies({ plan }: { plan: Plan }) {
   );
 }
 
+/** One note, one optional lever. `tone` is set at the call site (a refusal is an error, the
+ *  withheld report is not), so the map below carries only what is refusal-specific. */
+type PlanNote = { text: string; tone?: "error" | "info"; link?: { href: string; label: string } };
+
 /**
  * Every governed refusal this card can show, and the lever the user can pull for it. Module-scope
  * and EXPORTED so the set is assertable — it used to be a local const inside `approve()`, where a
@@ -328,11 +332,14 @@ function PlanRecipientBodies({ plan }: { plan: Plan }) {
  * Copy is kept WORD-FOR-WORD in step with `approvals/ApprovalsView.tsx`'s `refusalMessage` — the
  * same stop must not read as two different rules on the two surfaces.
  */
-export const PLAN_REFUSALS: Record<string, { text: string; href?: string }> = {
+export const PLAN_REFUSALS: Record<string, PlanNote> = {
   gmail_not_connected: { text: "Connect Gmail before approving." },
   no_postal_address: {
     text: "Add your postal address before sending — the law requires it in every email's footer.",
-    href: "/dashboard/profile",
+    // href and label travel TOGETHER (Task 8 review). They used to be an optional `href` beside a
+    // HARDCODED "Open your profile" label, so the first entry pointing anywhere else would have
+    // rendered the wrong words over the right link.
+    link: { href: "/dashboard/profile", label: "Open your profile" },
   },
   all_recipients_suppressed: {
     text: "Nobody on this list can be emailed: every recipient has unsubscribed.",
@@ -342,7 +349,7 @@ export const PLAN_REFUSALS: Record<string, { text: string; href?: string }> = {
   // figure approval would set no note and the click would look like it simply did nothing.
   agent_cannot_update_figure: {
     text: "That figure can only be updated by you for now — the agent cannot vouch for where it came from. Nothing changed.",
-    href: "/dashboard/finance",
+    link: { href: "/dashboard/finance", label: "Open your finance figures" },
   },
   malformed_figure_claim: {
     text: "This figure update was malformed and was not applied. Nothing changed.",
@@ -356,9 +363,7 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
   // ONE note affordance, two tones. A governed refusal is an error; the withheld report (19-05) is
   // a NON-error — a partial send really happened — so it renders in the neutral note style. Amber
   // is deliberately not used for either: BRAND §2 reserves `--held` for the approval gate alone.
-  const [note, setNote] = useState<{ text: string; tone: "error" | "info"; href?: string } | null>(
-    null,
-  );
+  const [note, setNote] = useState<(PlanNote & { tone: "error" | "info" }) | null>(null);
   const recipients = plan.recipients ?? [];
   const mode = plan.mode ?? "individual";
   const body = plan.body ?? "";
@@ -391,6 +396,38 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
       setBusy(false);
     }
   }
+
+  // THE note element, built ONCE and rendered by EVERY branch below (Task 8 review, finding 1).
+  // It used to live only inside the final email return, while `memo`, `crm_write`, `finance_write`
+  // and `calendar_event` all EARLY-RETURN their own JSX — so on those four cards `setNote` ran, the
+  // component re-rendered, and NOTHING was displayed. That was invisible for years because the
+  // three original reasons (`gmail_not_connected`, `no_postal_address`, `all_recipients_suppressed`)
+  // only fire on EMAIL plans, which do reach the final return; `finance_write` is the first branch
+  // whose refusals actually fire. Rendered as one shared element rather than copied into each
+  // branch, so a NEW branch that forgets it is the only way to regress — and crmCard.test.ts
+  // scans this file for exactly that.
+  const planNote = note && (
+    // `alert` interrupts for a refusal; `status` is polite for the withheld report, which
+    // reports something that already succeeded. `--teal-900`, not `--teal-600`: BRAND §6 bars
+    // teal-600 as small text on white (~2.9:1).
+    <p
+      role={note.tone === "error" ? "alert" : "status"}
+      style={{
+        color: note.tone === "error" ? "#dc2626" : "var(--ink-soft)",
+        margin: "0.5rem 0 0",
+      }}
+    >
+      {note.text}
+      {note.link && (
+        <>
+          {" "}
+          <Link href={note.link.href} style={{ color: "var(--teal-900)", fontWeight: 600 }}>
+            {note.link.label}
+          </Link>
+        </>
+      )}
+    </p>
+  );
 
   // MEMO plan (12-05, BEVL-02): same single Approve gate, a different promise. Everything below
   // this branch is email chrome — recipients, mode, a send-time picker, "Send to N recipients" —
@@ -427,6 +464,7 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
         >
           {busy ? "Saving…" : "Approve & save"}
         </button>
+        {planNote}
       </div>
     );
   }
@@ -506,6 +544,7 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
             </button>
           </>
         )}
+        {planNote}
       </div>
     );
   }
@@ -547,6 +586,7 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
           {/* Word-for-word `approvals/ApprovalsView.tsx`'s actionLabel — one act, one promise. */}
           {busy ? "Saving…" : "Approve & update the figure"}
         </button>
+        {planNote}
       </div>
     );
   }
@@ -596,6 +636,7 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
         >
           {busy ? "Adding…" : "Approve & add to calendar"}
         </button>
+        {planNote}
       </div>
     );
   }
@@ -682,28 +723,7 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
       >
         {busy ? "Approving…" : sendAt ? "Approve & schedule" : "Approve"}
       </button>
-      {note && (
-        // `alert` interrupts for a refusal; `status` is polite for the withheld report, which
-        // reports something that already succeeded. `--teal-900`, not `--teal-600`: BRAND §6 bars
-        // teal-600 as small text on white (~2.9:1).
-        <p
-          role={note.tone === "error" ? "alert" : "status"}
-          style={{
-            color: note.tone === "error" ? "#dc2626" : "var(--ink-soft)",
-            margin: "0.5rem 0 0",
-          }}
-        >
-          {note.text}
-          {note.href && (
-            <>
-              {" "}
-              <Link href={note.href} style={{ color: "var(--teal-900)", fontWeight: 600 }}>
-                Open your profile
-              </Link>
-            </>
-          )}
-        </p>
-      )}
+      {planNote}
     </div>
   );
 }

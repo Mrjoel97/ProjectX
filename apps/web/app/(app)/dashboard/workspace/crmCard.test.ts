@@ -4,6 +4,8 @@
 // It is a pure function on purpose. The card must show EXACTLY what will be written, and the
 // formatter reads the list through `parseCrmOperations` — the SAME validator `executePlan` runs at
 // the apply boundary — so the card cannot promise something the server would refuse.
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { refusalMessage } from "../approvals/ApprovalsView";
 import { describeCrmOperations, PLAN_REFUSALS } from "./cards";
@@ -61,5 +63,56 @@ describe("PLAN_REFUSALS (the cockpit plan card's governed stops)", () => {
     for (const reason of ["agent_cannot_update_figure", "malformed_figure_claim"]) {
       expect(PLAN_REFUSALS[reason]?.text).toBe(refusalMessage(reason));
     }
+  });
+
+  // The label used to be HARDCODED "Open your profile" in the render, beside an optional `href`.
+  // The first entry pointing anywhere else would have rendered the wrong words over the right link
+  // — which is exactly what `agent_cannot_update_figure` (-> /dashboard/finance) is.
+  test("every entry with a link carries its OWN label", () => {
+    const linked = Object.values(PLAN_REFUSALS).filter((r) => r.link);
+    expect(linked.length).toBeGreaterThanOrEqual(2);
+    for (const r of linked) expect(r.link?.label).toBeTruthy();
+    expect(PLAN_REFUSALS.agent_cannot_update_figure?.link?.href).toBe("/dashboard/finance");
+    expect(PLAN_REFUSALS.agent_cannot_update_figure?.link?.label).not.toMatch(/profile/i);
+  });
+});
+
+// ── The RENDER, not the map (Task 8 review, finding 1) ────────────────────────────────────────
+// Mapping a reason is worthless if the branch the user is looking at never renders the note.
+// `PlanCard` early-returns its own JSX for memo / crm_write / finance_write / calendar_event, and
+// the note block used to live ONLY in the final email return — so on those four cards `setNote`
+// ran and nothing appeared. Invisible for years because the three original reasons all fire on
+// EMAIL plans only; `finance_write` is the first branch whose refusals actually fire.
+//
+// SOURCE-TEXT scan, deliberately: `apps/web`'s vitest config is node-only with no jsdom and no
+// testing-library, and adding them is documented there as a deliberate upgrade rather than a side
+// effect. This is the `packages/core/src/vaultSurface.test.ts` idiom that config points at.
+describe("PlanCard renders its note on EVERY approve branch", () => {
+  const src = readFileSync(join(__dirname, "cards.tsx"), "utf8");
+  const body = src.slice(
+    src.indexOf("function PlanCard({"),
+    src.indexOf("function ScheduledCard({"),
+  );
+
+  test("the extractor actually found PlanCard", () => {
+    expect(body.length).toBeGreaterThan(2000);
+  });
+
+  // Named mutation that turns this RED: delete `{planNote}` from the finance branch in cards.tsx.
+  test("every Approve button in PlanCard has a note beside it", () => {
+    const approves = body.match(/void approve\(\)/g) ?? [];
+    const notes = body.match(/\{planNote\}/g) ?? [];
+    // Non-vacuity floor: memo, crm_write, finance_write, calendar_event and the email default.
+    expect(approves.length).toBeGreaterThanOrEqual(5);
+    expect(notes.length).toBe(approves.length);
+  });
+
+  // ONE element, rendered N times — not the JSX copied into each branch, which is how the next
+  // branch quietly diverges.
+  test("the note element is defined exactly once", () => {
+    expect(body.match(/const planNote =/g) ?? []).toHaveLength(1);
+    // …and it renders the entry's OWN label rather than a hardcoded one.
+    expect(body).toContain("{note.link.label}");
+    expect(body).not.toContain(">Open your profile<");
   });
 });

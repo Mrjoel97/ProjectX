@@ -2161,15 +2161,32 @@ test("readFinance surfaces a REAL stated MRR even when the tenant's business sha
 // Every refusal below is a RETURNED SENTENCE, never a throw (18-06's rule): a throw out of the
 // governed loop leaves the model with nothing to say to the user.
 
-test("stageFinanceWrite stages and applies NOTHING", async () => {
+// The happy path stages `mrr` — a `financeInputs` field the agent may actually write. Staging
+// `cac` here would be a green test on a plan the Approve gate refuses unconditionally.
+test("stageFinanceWrite stages the WHOLE claim and applies NOTHING", async () => {
   const { t, planId } = await setup();
   const reply = await callClock(t, planId, "stageFinanceWrite", {
-    updates: [{ field: "cac", value: 1400, basis: "14000 / 10, this turn" }],
+    updates: [{ field: "mrr", value: 9000, basis: "14000 / 10, this turn" }],
   });
   expect(reply).toMatch(/approve/i);
   const plan = await readPlan(t, planId);
   expect(plan?.kind).toBe("finance_write");
-  expect(plan?.financeClaims).toHaveLength(1);
+  // The FULL constructed claim, field by field. `toHaveLength(1)` alone would stay green while the
+  // tool dropped `basis`, wrote the wrong `field`, or let the model label its own provenance.
+  expect(plan?.financeClaims).toEqual([
+    {
+      field: "mrr",
+      value: 9000,
+      // NOT model inputs: the provenance of the WRITE. A model that could stamp `actor: "user"`
+      // would defeat invariant 11 outright.
+      origin: "stated",
+      actor: "agent",
+      basis: "14000 / 10, this turn",
+      // The CLIENT's pinned clock (§2-D), never the model's and never a fresh Date.now().
+      observedAt: PIN_CLOCK.nowMs,
+      confidence: "high",
+    },
+  ]);
   // The Approve gate is a CAS on `proposed` (cockpit.executePlan: `status !== "proposed"` is an
   // idempotent no-op), and every approval surface lists by that status. A row staged at
   // `collecting` would render nowhere and could never be approved at all.
@@ -2178,6 +2195,61 @@ test("stageFinanceWrite stages and applies NOTHING", async () => {
   // five finance-ops figures, `evaluations` for the Hormozi scorecard ones.
   expect(await t.run((ctx) => ctx.db.query("financeInputs").first())).toBeNull();
   expect(await t.run((ctx) => ctx.db.query("evaluations").first())).toBeNull();
+});
+
+// THE defining property of this tool — ONE tool carrying a LIST, so one plan and one approval
+// click however many figures moved. With N=1 everywhere, a bug that staged only `updates[0]` was
+// invisible. The `stageCrmWrite` test at :1863 is the precedent.
+test("stageFinanceWrite carries a LIST — one plan, one click, two figures", async () => {
+  const { t, planId } = await setup();
+  const reply = await callClock(t, planId, "stageFinanceWrite", {
+    updates: [
+      { field: "mrr", value: 9000, basis: "turn 4" },
+      { field: "cashOnHand", value: 38_500, basis: "bank balance, turn 4" },
+    ],
+  });
+  expect(reply).toMatch(/2 figure/);
+  const claims = (await readPlan(t, planId))?.financeClaims as { field: string; value: number }[];
+  expect(claims).toHaveLength(2);
+  expect(claims[1]).toMatchObject({
+    field: "cashOnHand",
+    value: 38_500,
+    basis: "bank balance, turn 4",
+  });
+});
+
+// ALL-OR-NOTHING over the list: the patch happens AFTER the loop, so a bad element stages none of
+// them. A per-element patch would leave half a list on the card and report success.
+test("stageFinanceWrite stages NOTHING when a later update in the list is bad", async () => {
+  const { t, planId } = await setup();
+  const reply = await callClock(t, planId, "stageFinanceWrite", {
+    updates: [
+      { field: "mrr", value: 9000, basis: "turn 4" },
+      { field: "vibes", value: 3, basis: "turn 4" },
+    ],
+  });
+  expect(reply).toMatch(/not a figure I can update/i);
+  const plan = await readPlan(t, planId);
+  expect(plan?.kind).toBeUndefined();
+  expect(plan?.financeClaims).toBeUndefined(); // the GOOD first element is not stranded on the row
+});
+
+// 6 of the 11 collected inputs are `store: "scorecard"` and `applyFinanceClaims` refuses every one
+// of them (`agent_cannot_update_figure`) — the scorecard cannot carry provenance. Refusing at the
+// TOOL means the model learns it this turn instead of the user spending an approval click on a
+// plan that can never apply. `cash.ts`'s guard stays as defence in depth (it is still reached by
+// its own unit tests, by a plan row revised after staging, and by any future writer of
+// `financeClaims`), so this is not a duplicate — it is the earlier of two.
+test("stageFinanceWrite REFUSES a scorecard figure and NAMES the five it can write", async () => {
+  const { t, planId } = await setup();
+  const reply = await callClock(t, planId, "stageFinanceWrite", {
+    updates: [{ field: "cac", value: 1400, basis: "14000 / 10, this turn" }],
+  });
+  expect(reply).toMatch(/can only update/i);
+  for (const writable of ["cashOnHand", "monthlyOperatingCost", "mrr", "receivables", "payables"]) {
+    expect(reply).toContain(writable);
+  }
+  expect((await readPlan(t, planId))?.kind).toBeUndefined();
 });
 
 test("stageFinanceWrite REFUSES an unknown field rather than inventing one", async () => {
@@ -2193,6 +2265,7 @@ test("stageFinanceWrite REFUSES an empty update list — a sentence, never a thr
   const { t, planId } = await setup();
   const reply = await callClock(t, planId, "stageFinanceWrite", { updates: [] });
   expect(reply).toMatch(/nothing|no changes/i);
+  expect((await readPlan(t, planId))?.kind).toBeUndefined();
 });
 
 // §4 at the boundary that CONSTRUCTS `basis`. `validateFigureClaim` can only check non-emptiness —
@@ -2229,6 +2302,86 @@ test("stageFinanceWrite REFUSES rather than replacing a half-composed email draf
   expect(plan?.kind).toBeUndefined(); // the draft survives
   expect(plan?.subject).toBe("Q3 pricing");
   expect(plan?.financeClaims).toBeUndefined();
+});
+
+// ── The cross-kind clobber, BOTH directions ───────────────────────────────────────────────────
+// The email-slot draft guard above does NOT see another STAGED ACTION: a `crm_write` row carries
+// `crmOperations` and no subject/body; a `calendar_event` row carries `eventTitle`/`eventStartMs`.
+// Both used to sail through, and `patchPlan` then overwrote `kind` — `executePlan` routes on
+// `actionTypeOf(plan.kind)` alone, so the surviving list was never applied and never rendered,
+// after the model had already told the user it was staged. A silent drop at a trust boundary is
+// the class 19-11 exists to close, so ONE shared predicate now guards both staging tools.
+test("stageFinanceWrite REFUSES rather than silently discarding a staged CRM plan", async () => {
+  const { t, planId } = await setup();
+  await callClock(t, planId, "stageCrmWrite", {
+    operations: [{ op: "addContact", email: "rhea@example.com", name: "Rhea" }],
+  });
+  expect((await readPlan(t, planId))?.kind).toBe("crm_write");
+
+  const reply = await callClock(t, planId, "stageFinanceWrite", {
+    updates: [{ field: "mrr", value: 9000, basis: "this turn" }],
+  });
+  expect(reply).toMatch(/already staged|already on/i);
+  const plan = await readPlan(t, planId);
+  expect(plan?.kind).toBe("crm_write"); // the CRM plan survives intact
+  expect(plan?.crmOperations).toHaveLength(1);
+  expect(plan?.financeClaims).toBeUndefined();
+});
+
+test("stageCrmWrite REFUSES rather than silently discarding a staged finance plan", async () => {
+  const { t, planId } = await setup();
+  await callClock(t, planId, "stageFinanceWrite", {
+    updates: [{ field: "mrr", value: 9000, basis: "this turn" }],
+  });
+  expect((await readPlan(t, planId))?.kind).toBe("finance_write");
+
+  const reply = await callClock(t, planId, "stageCrmWrite", {
+    operations: [{ op: "addContact", email: "rhea@example.com", name: "Rhea" }],
+  });
+  expect(reply).toMatch(/already staged|already on/i);
+  const plan = await readPlan(t, planId);
+  expect(plan?.kind).toBe("finance_write"); // the figure plan survives intact
+  expect(plan?.financeClaims).toHaveLength(1);
+  expect(plan?.crmOperations).toBeUndefined();
+});
+
+// Re-staging the SAME kind is a revision, not a clobber — the model correcting its own list must
+// still work, exactly as it does for `stageCrmWrite` today.
+test("stageFinanceWrite RE-stages over its own plan (a revision is not a clobber)", async () => {
+  const { t, planId } = await setup();
+  await callClock(t, planId, "stageFinanceWrite", {
+    updates: [{ field: "mrr", value: 9000, basis: "this turn" }],
+  });
+  await callClock(t, planId, "stageFinanceWrite", {
+    updates: [{ field: "mrr", value: 9500, basis: "corrected, this turn" }],
+  });
+  const claims = (await readPlan(t, planId))?.financeClaims as { value: number }[];
+  expect(claims).toHaveLength(1);
+  expect(claims[0]?.value).toBe(9500);
+});
+
+// THE SEAM, end to end: nothing anywhere ran `executePlan` on a plan THIS TOOL staged, so
+// "stage → Approve → written" was untested as one flow. Everything before this test asserts the
+// tool's half; `cockpit.test.ts` asserts the applier's half against a hand-seeded row.
+test("stage → Approve → the figure is written (the whole seam, on a plan this tool staged)", async () => {
+  const { t, planId } = await setup();
+  await callClock(t, planId, "stageFinanceWrite", {
+    updates: [{ field: "cashOnHand", value: 38_500, basis: "bank balance, turn 4" }],
+  });
+
+  expect(
+    await t
+      .withIdentity({ subject: "t1|session", issuer: "test" })
+      .mutation(api.cockpit.executePlan, { planId }),
+  ).toEqual({ ok: true });
+
+  const rows = await t.run((ctx) => ctx.db.query("financeInputs").collect());
+  expect(rows).toHaveLength(1);
+  expect(rows[0]?.valueUsd).toBe(38_500);
+  // The provenance the TOOL stamped survived the apply — the agent's write is labelled as one.
+  expect(rows[0]?.actor).toBe("agent");
+  expect(rows[0]?.statedAt).toBe(PIN_CLOCK.nowMs);
+  expect((await readPlan(t, planId))?.status).toBe("done");
 });
 
 // REQUIREMENT 1's pin, and the type system will NOT provide it: `PlanRow` does not declare `kind`,

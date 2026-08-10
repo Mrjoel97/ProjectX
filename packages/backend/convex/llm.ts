@@ -50,6 +50,7 @@ import {
   CASH_INPUTS,
   type CashInputField,
   type CrmOperation,
+  cashInputSpec,
   type DigestBatch,
   type DigestItem,
   type DocFormat,
@@ -1045,6 +1046,13 @@ type PlanRow = {
   // plan past `proposed` (a sent/scheduled plan is cancelled via the plan card, not reset). getById
   // returns it at runtime; never model-facing (the model reasons about slots, not the raw status).
   status: "collecting" | "proposed" | "approved" | "scheduled" | "delivering" | "done" | "canceled";
+  // ACTN-01 action type, ABSENT ⇒ email. Declared here as of Task 8 (live-finance-inputs) because
+  // `otherKindStaged` reads it — and the declaration has a SECOND effect worth keeping: every
+  // caller passes a `PlanRow` to `buildAgentContext`, whose own param declares the SAME union, so
+  // widening `ACTION_TYPES` and this line without widening that one is now an assignability error
+  // at the call site. That is the compile-time guard the corrected note there says does not exist;
+  // it exists for the NEXT action type. Keep the two unions identical.
+  kind?: "memo" | "calendar_event" | "media" | "crm_write" | "finance_write";
 };
 
 // One formatter for the resolved send instant — shared by buildAgentContext's Send-time line
@@ -1391,6 +1399,47 @@ const CRM_DUE_REFUSAL: Record<"ambiguous" | "past" | "tooFar" | "none", string> 
     "That follow-up date is too far out to stage. Ask the user for a nearer date. Nothing was staged.",
   none: "I didn't catch when that follow-up is due — ask the user for a date. Nothing was staged.",
 };
+// The five figures an AGENT may write. DERIVED from the catalogue, never re-listed: 6 of the 11
+// collected inputs are `store: "scorecard"` and `applyFinanceClaims` refuses every one of them,
+// because the scorecard discards origin/actor/basis and would launder an agent claim into the
+// evaluation engine's citations as the owner's own statement (`cash.ts`). A hand-copy here would
+// go stale the first time a field moved store.
+const AGENT_WRITABLE_FIGURES = CASH_INPUTS.filter((s) => s.store === "financeInputs").map(
+  (s) => s.field,
+);
+
+// Statuses in which a staged plan is SPENT: nobody is still waiting on it, so another action may
+// recycle the row. Everything else — collecting, proposed, approved, scheduled, delivering — is a
+// plan a human has been told about and has not finished with.
+const SPENT_PLAN_STATUS: ReadonlySet<PlanRow["status"]> = new Set(["done", "canceled"] as const);
+
+/**
+ * ONE plan row per thread (`plans.by_thread` is `.unique()`), so a second STAGING tool overwrites
+ * `kind` and ORPHANS whatever the first one staged. `executePlan` routes on `actionTypeOf(plan.kind)`
+ * ALONE, so a surviving `crmOperations` list or `eventTitle`/`eventStartMs` pair is never applied
+ * and never rendered — after the model has already told the user it was staged. The email-slot
+ * draft guard cannot see any of it: a `crm_write` row carries no subject/body/recipients at all.
+ * Returns the kind standing in the way, or null.
+ *
+ * ONE predicate SHARED by `stageCrmWrite` and `stageFinanceWrite` rather than two more slot lists —
+ * the hazard is symmetric, so a fix on one side only is not a fix (CLAUDE.md §8: one guard where
+ * every caller routes through). Re-staging the SAME kind is a REVISION, not a clobber, and stays
+ * allowed — that is the model correcting its own list, which `stageCrmWrite` has always permitted.
+ *
+ * ponytail: `stageResearchPlan`/`stageMediaPlan` (plans.ts) keep their own narrower interlocks —
+ * they protect a RUNNING dispatch and paid `mediaJobs` rows, neither of which is readable from
+ * `plan.status`. Upgrade path if those ever converge: more than one plan row per thread.
+ */
+const otherKindStaged = (plan: PlanRow, mine: string): string | null =>
+  plan.kind && plan.kind !== mine && !SPENT_PLAN_STATUS.has(plan.status) ? plan.kind : null;
+
+/** The shared refusal. `kind` is an ENUM, never content (§4), and naming it is what lets the model
+ *  tell the user WHICH plan is in the way instead of guessing. */
+const otherKindRefusal = (kind: string): string =>
+  `A ${kind.replace(/_/g, " ")} plan is already staged on this conversation's plan card, and ` +
+  "staging over it would silently discard it. NOTHING was staged. Tell the user what is already " +
+  "on the card and ask whether to approve or discard it first.";
+
 const DECLARED_UNSUPPORTED_REPLY =
   "Recorded. This does NOT end the run and discards nothing you found. Continue: produce the full " +
   "findings document — what you searched, what you did establish, the near-misses and why each is " +
@@ -2479,6 +2528,12 @@ export function buildCockpitTools(
           (plan.attachments?.length ?? 0) > 0;
         if (hasDraft) return refuse("draft_in_progress", CRM_REFUSAL_REPLY.draft_in_progress);
 
+        // …and the guard above cannot see another STAGED ACTION at all: a `finance_write` row
+        // carries `financeClaims` and no subject/body, so it sailed through and was overwritten.
+        // Shared with `stageFinanceWrite` — the hazard is symmetric.
+        const blocking = otherKindStaged(plan, "crm_write");
+        if (blocking) return refuse("other_kind_staged", otherKindRefusal(blocking));
+
         // The AGENT may only ADD. Closing someone's follow-up is a judgement about work being
         // finished, and the Pipeline page is where a human makes it — the same asymmetry that
         // keeps a contactless follow-up user-only (contacts-crm.md invariant 11).
@@ -2601,7 +2656,11 @@ export function buildCockpitTools(
         "Stage updates to the user's own financial figures for them to approve. " +
         "This saves nothing yet. " +
         "Every update must say where the number came from, as a short reference. " +
-        "Only the collected inputs can be updated, never a ratio you worked out yourself.",
+        // DERIVED, not hand-listed. The old wording ("only the collected inputs") was WRONG by 6 of
+        // 11: the scorecard-stored figures — CAC among them — are refused, so a model told only
+        // "the collected inputs" re-proposes CAC every turn and the user pays an approval click to
+        // find out. Name the five it can actually write.
+        `You can only update these five: ${AGENT_WRITABLE_FIGURES.join(", ")}.`,
       inputSchema: jsonSchema<{
         updates: Array<{ field: string; value: number; basis: string }>;
       }>({
@@ -2654,6 +2713,11 @@ export function buildCockpitTools(
             "their figures once the draft is sent or discarded."
           );
         }
+        // …and the check above cannot see another STAGED ACTION: a `crm_write` row carries
+        // `crmOperations` and no subject/body. Shared with `stageCrmWrite` — the hazard is
+        // symmetric and a one-sided fix is not one.
+        const blocking = otherKindStaged(plan, "finance_write");
+        if (blocking) return otherKindRefusal(blocking);
         // §2-D: the trusted client's clock, never the model's. `Date.now()` is the SERVER's clock
         // (also not the model's) and is the right fallback here — unlike `setSendTime`, nothing on
         // this path parses a model-supplied date phrase, so there is no instant to get wrong.
@@ -2666,6 +2730,20 @@ export function buildCockpitTools(
           // guard is what turns that throw into a sentence.
           if (!CASH_INPUTS.some((s) => s.field === u.field)) {
             return `"${u.field}" is not a figure I can update. Ask the user which one they mean.`;
+          }
+          // The scorecard store cannot carry provenance, so `applyFinanceClaims` refuses every
+          // scorecard field UNCONDITIONALLY (`agent_cannot_update_figure`). Refusing HERE means the
+          // model learns it this turn instead of the user spending an approval click on a plan that
+          // can never apply. `cash.ts:448` deliberately stays — it is still reached by its own unit
+          // tests, by a plan row revised between staging and Approve, by a row staged under an
+          // older build, and by any future writer of `financeClaims` (vault documents, connectors).
+          // Two guards, one rule; neither is dead.
+          if (cashInputSpec(u.field as CashInputField).store === "scorecard") {
+            return (
+              `I cannot update ${u.field} — it is one the user has to enter themselves for now. ` +
+              `I can only update these five: ${AGENT_WRITABLE_FIGURES.join(", ")}. ` +
+              "Tell them they can set it on their finance page."
+            );
           }
           // §4 is enforced HERE, at the boundary that CONSTRUCTS `basis`. `validateFigureClaim`
           // checks only that a basis is non-empty — "refs only, never quoted content" is not
