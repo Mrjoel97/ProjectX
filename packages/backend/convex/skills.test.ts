@@ -1,6 +1,16 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { CONTENT_DRAFTER_SKILL, isGatedSkill } from "@pikar/contracts/skill";
+import {
+  COCKPIT_AGENT_SKILL,
+  CONTENT_DRAFTER_SKILL,
+  composeUserSkillBody,
+  isGatedSkill,
+  LEAD_ENGINE_SKILL,
+  OFFER_ARCHITECT_SKILL,
+  USER_AUTHORABLE_SKILL_METADATA,
+  USER_SKILL_ADAPTATION_MAX_BYTES,
+  USER_SKILL_ADAPTATION_SECTION,
+} from "@pikar/contracts/skill";
 import { attachmentExtractorSkillBody } from "@pikar/contracts/skills/attachmentExtractor";
 import { businessProfileSkillBody } from "@pikar/contracts/skills/businessProfile";
 import { cockpitAgentSkillBody } from "@pikar/contracts/skills/cockpitAgent";
@@ -16,6 +26,11 @@ import { voiceBriefSkillBody } from "@pikar/contracts/skills/voiceBrief";
 import { voiceSessionSkillBody } from "@pikar/contracts/skills/voiceSession";
 import { convexTest, type TestConvex } from "convex-test";
 import { describe, expect, test } from "vitest";
+// 21-02: `publishUserCandidate` writes ONE refs-only audit row, and `audit.log` mirrors every
+// insert into the auditCounts aggregate (OPSG-01). Register the component (relative import — the
+// package blocks the deep specifier) so the REAL audit path runs instead of throwing
+// "component not registered". The dispatch.test.ts / contacts.test.ts idiom, verbatim.
+import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import schema from "./schema";
 import { loadSkill } from "./skills";
@@ -24,6 +39,9 @@ import { loadSkill } from "./skills";
 // `import.meta.glob` is a Vite feature; its type is not in the Convex tsconfig
 // lib (shared gap across all convex/*.test.ts files), so ignore the type here.
 const modules = import.meta.glob("./**/*.*s");
+const aggregateModules = import.meta.glob(
+  "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
+);
 
 // A seeded, NON-gated skill for the generic loader/activation cases.
 const SKILL_NAME = "executive-router";
@@ -929,5 +947,533 @@ describe("no hardcoded agent prompts in convex/", () => {
 describe("content-drafter gating (18-03)", () => {
   test("is DELIBERATELY UNGATED — do not add it to GATED_SKILLS", () => {
     expect(isGatedSkill(CONTENT_DRAFTER_SKILL)).toBe(false);
+  });
+});
+
+// ── 21-02: tenant-authored candidates (SKILL-01) ───────────────────────────────────────────────
+//
+// The behaviour half of 21-01's schema. 21-01's own summary says it plainly: `composeUserSkillBody`
+// had no caller, so its 3/3 green proved the contract's SHAPE and nothing about tenant behaviour.
+// Everything below is that behaviour — candidate-only status, authenticated provenance, the first
+// customization's rollback baseline, bounded version allocation, two-tenant isolation, and a
+// refs-only audit payload.
+//
+// Every zero/absence assertion here sits beside a positive row witness, because a "B sees nothing"
+// test passes just as well when the fixture never wrote anything at all.
+describe("publishUserCandidate — tenant candidate authoring (21-02)", () => {
+  // High-entropy needles: an adaptation that leaks across a tenant boundary or into an audit
+  // payload has to be findable by an exact string, not by eyeballing a body.
+  const NEEDLE_A = "ZQ7ALPHA4f2b9c1e";
+  const NEEDLE_B = "ZQ7BRAVO8a3d5f70";
+  const AUTHORED_A = `Quote in AUD and never discount below 20%. ${NEEDLE_A}`;
+  const AUTHORED_B = `Bundle onboarding into every retainer. ${NEEDLE_B}`;
+  const GLOBAL_BODY = "GLOBAL OFFER ARCHITECT BODY v7";
+
+  const harness = async () => {
+    const t = convexTest(schema, modules);
+    t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+    // The global active base at v7, not v1 — so `basedOnVersion` proving 7 cannot be an accident
+    // of "everything in this fixture is version 1".
+    const globalId = await t.run((ctx) =>
+      ctx.db.insert("skills", {
+        name: OFFER_ARCHITECT_SKILL,
+        version: 7,
+        body: GLOBAL_BODY,
+        status: "active",
+        createdAt: 0,
+      }),
+    );
+    // GOVN-01 idiom: REAL `users` rows, because `requireScope` derives tenantId from the userId
+    // segment of the subject. A fabricated subject string is not evidence of an identity.
+    const userA = await t.run((ctx) => ctx.db.insert("users", {}));
+    const userB = await t.run((ctx) => ctx.db.insert("users", {}));
+    return {
+      t,
+      globalId,
+      userA,
+      userB,
+      asA: t.withIdentity({ subject: `${userA}|session_a` }),
+      asB: t.withIdentity({ subject: `${userB}|session_b` }),
+    };
+  };
+
+  const tenantRows = (t: TestConvex<typeof schema>, tenantId: string) =>
+    t.run((ctx) =>
+      ctx.db
+        .query("tenantSkills")
+        .withIndex("by_tenant_createdAt", (q) => q.eq("tenantId", tenantId))
+        .collect(),
+    );
+  const allTenantRows = (t: TestConvex<typeof schema>) =>
+    t.run((ctx) => ctx.db.query("tenantSkills").collect());
+  const auditRows = (t: TestConvex<typeof schema>) =>
+    t.run((ctx) => ctx.db.query("audit").collect());
+  const publishAudits = async (t: TestConvex<typeof schema>) =>
+    (await auditRows(t)).filter((r) => r.eventType === "skill.user_candidate_published");
+
+  test("first publication: ONE server baseline + ONE user candidate, and NOTHING goes live", async () => {
+    const { t, globalId, userA, asA } = await harness();
+
+    const res = await asA.mutation(api.skills.publishUserCandidate, {
+      name: OFFER_ARCHITECT_SKILL,
+      authoredBody: AUTHORED_A,
+    });
+    expect(res.inserted).toBe(true);
+    expect(res.version).toBe(2);
+    expect(res.status).toBe("candidate");
+
+    const rows = await tenantRows(t, String(userA));
+    expect(rows).toHaveLength(2);
+    const baseline = rows.find((r) => r.version === 1)!;
+    const candidate = rows.find((r) => r.version === 2)!;
+
+    // The BASELINE is the first customization's evidence-exempt rollback target (research pitfall
+    // 8): server-authored, no adaptation of its own, archived, and eligible.
+    expect(baseline.author).toBe("system");
+    expect(baseline.authoredBody).toBe("");
+    expect(baseline.status).toBe("archived");
+    expect(baseline.rollbackEligible).toBe(true);
+    expect(baseline.body).toBe(GLOBAL_BODY); // a byte copy of what was effective
+    expect(baseline.authorUserId).toBeUndefined();
+
+    // The CANDIDATE: authored addition, authenticated provenance, NOT rollback-eligible (it was
+    // never active), and never `active` — activation is 21-04's owner gate.
+    expect(candidate.author).toBe("user");
+    expect(candidate.authorUserId).toBe(userA);
+    expect(candidate.status).toBe("candidate");
+    expect(candidate.rollbackEligible).toBe(false);
+    expect(candidate.authoredBody).toBe(AUTHORED_A);
+    expect(candidate.body).toBe(composeUserSkillBody(GLOBAL_BODY, AUTHORED_A));
+    expect(candidate.evidence).toBeUndefined();
+    // Lineage: EXACTLY ONE of the two base-id fields, keyed off the scope.
+    expect(candidate.basedOnScope).toBe("global");
+    expect(candidate.basedOnName).toBe(OFFER_ARCHITECT_SKILL);
+    expect(candidate.basedOnVersion).toBe(7);
+    expect(candidate.basedOnGlobalSkillId).toBe(globalId);
+    expect(candidate.basedOnTenantSkillId).toBeUndefined();
+    expect(baseline.basedOnGlobalSkillId).toBe(globalId);
+    expect(baseline.basedOnTenantSkillId).toBeUndefined();
+
+    // CANDIDATE-ONLY (mutation 2): no tenant row is active, and the GLOBAL active row is the
+    // untouched v7 the loader still serves. The positive witness for these zeros is the two rows
+    // asserted above.
+    expect(rows.filter((r) => r.status === "active")).toHaveLength(0);
+    const stillLive = await t.run((ctx) => loadSkill(ctx, OFFER_ARCHITECT_SKILL));
+    expect(stillLive.version).toBe(7);
+    expect(stillLive.body).toBe(GLOBAL_BODY);
+    expect(stillLive.body).not.toContain(NEEDLE_A);
+  });
+
+  test("a later publication bases on the tenant ACTIVE row and does NOT append the prior draft", async () => {
+    const { t, userA, asA } = await harness();
+    await asA.mutation(api.skills.publishUserCandidate, {
+      name: OFFER_ARCHITECT_SKILL,
+      authoredBody: AUTHORED_A,
+    });
+    // 21-04 owns the real activation; here the flip is a direct patch so THIS test is about
+    // base RESOLUTION, not about activation authority.
+    const v2 = (await tenantRows(t, String(userA))).find((r) => r.version === 2)!;
+    await t.run((ctx) => ctx.db.patch(v2._id, { status: "active" }));
+
+    const res = await asA.mutation(api.skills.publishUserCandidate, {
+      name: OFFER_ARCHITECT_SKILL,
+      authoredBody: AUTHORED_B,
+    });
+    expect(res).toMatchObject({ inserted: true, version: 3, status: "candidate" });
+
+    const v3 = (await tenantRows(t, String(userA))).find((r) => r.version === 3)!;
+    expect(v3.basedOnScope).toBe("tenant");
+    expect(v3.basedOnTenantSkillId).toBe(v2._id);
+    expect(v3.basedOnGlobalSkillId).toBeUndefined();
+    expect(v3.basedOnVersion).toBe(2);
+    expect(v3.authoredBody).toBe(AUTHORED_B); // the adaptation is REPLACED, not accumulated
+    expect(v3.body).toContain(NEEDLE_B);
+    // NON-RECURSION (research pitfall 5): composing against the tenant's active body would carry
+    // A's older adaptation forward forever. Exactly one marker, and the old needle is gone.
+    expect(v3.body.split(USER_SKILL_ADAPTATION_SECTION)).toHaveLength(2);
+    expect(v3.body).not.toContain(NEEDLE_A);
+    // …and the row it was based on is untouched (immutable-per-version).
+    expect((await t.run((ctx) => ctx.db.get(v2._id)))?.authoredBody).toBe(AUTHORED_A);
+  });
+
+  test("a byte-identical republication mints NOTHING and writes no second audit event", async () => {
+    const { t, userA, asA } = await harness();
+    const first = await asA.mutation(api.skills.publishUserCandidate, {
+      name: OFFER_ARCHITECT_SKILL,
+      authoredBody: AUTHORED_A,
+    });
+    expect(first.inserted).toBe(true); // positive witness for the zeros below
+    expect(await publishAudits(t)).toHaveLength(1);
+
+    // Same bytes, same base — and a leading/trailing-whitespace variant, because the stored
+    // `authoredBody` is the TRIMMED text and idempotence must compare like with like.
+    const again = await asA.mutation(api.skills.publishUserCandidate, {
+      name: OFFER_ARCHITECT_SKILL,
+      authoredBody: `\n  ${AUTHORED_A}  \n`,
+    });
+    expect(again.inserted).toBe(false);
+    expect(again.version).toBe(2);
+    expect(again.tenantSkillId).toBe(first.tenantSkillId);
+
+    expect(await tenantRows(t, String(userA))).toHaveLength(2); // no v3 churn
+    expect(await publishAudits(t)).toHaveLength(1); // no duplicate audit event
+  });
+
+  test("provenance + authority come from the authenticated context, never from arguments", async () => {
+    const { t, userA, userB, asA } = await harness();
+
+    // The validator is the boundary (mutation 3): a caller cannot even NAME these fields.
+    for (const spoof of [
+      { tenantId: String(userB) },
+      { authorUserId: userB },
+      { author: "system" },
+      { status: "active" },
+      { version: 99 },
+      { rollbackEligible: true },
+      { evidence: "{}" },
+      { basedOnVersion: 1 },
+      { body: "REPLACEMENT" },
+    ]) {
+      await expect(
+        asA.mutation(api.skills.publishUserCandidate, {
+          name: OFFER_ARCHITECT_SKILL,
+          authoredBody: AUTHORED_A,
+          ...spoof,
+        } as never),
+        `publishUserCandidate accepted ${Object.keys(spoof)[0]} from the caller`,
+      ).rejects.toThrow();
+    }
+    expect(await allTenantRows(t)).toHaveLength(0);
+
+    // Positive witness: the same call WITHOUT a spoofed field writes A's row under A's identity.
+    await asA.mutation(api.skills.publishUserCandidate, {
+      name: OFFER_ARCHITECT_SKILL,
+      authoredBody: AUTHORED_A,
+    });
+    const candidate = (await tenantRows(t, String(userA))).find((r) => r.author === "user")!;
+    expect(candidate.authorUserId).toBe(userA);
+    expect(candidate.authorUserId).not.toBe(userB);
+    expect(candidate.tenantId).toBe(String(userA));
+
+    // And an unauthenticated caller never reaches the handler.
+    await expect(
+      t.mutation(api.skills.publishUserCandidate, {
+        name: OFFER_ARCHITECT_SKILL,
+        authoredBody: AUTHORED_A,
+      }),
+    ).rejects.toThrow(/UNAUTHENTICATED/);
+  });
+
+  test("refuses an unknown / non-authorable name and a blank or over-cap body BEFORE any write", async () => {
+    const { t, asA } = await harness();
+    const publish = (name: string, authoredBody: string) =>
+      asA.mutation(api.skills.publishUserCandidate, { name, authoredBody });
+
+    await expect(publish("no-such-skill", AUTHORED_A)).rejects.toThrow(/NOT_USER_AUTHORABLE/);
+    // `cockpit-agent` IS eval-gated — authorability is deliberately NARROWER than GATED_SKILLS.
+    expect(isGatedSkill(COCKPIT_AGENT_SKILL)).toBe(true);
+    await expect(publish(COCKPIT_AGENT_SKILL, AUTHORED_A)).rejects.toThrow(/NOT_USER_AUTHORABLE/);
+    await expect(publish(OFFER_ARCHITECT_SKILL, "   \n  ")).rejects.toThrow(
+      /USER_SKILL_ADAPTATION_REQUIRED/,
+    );
+    // The cap is BYTES: 1001 three-byte characters is 3003 bytes of a 4000-byte allowance, so the
+    // over-cap case has to be built in bytes or it silently tests nothing.
+    const overCap = "あ".repeat(Math.ceil(USER_SKILL_ADAPTATION_MAX_BYTES / 3) + 1);
+    expect(new TextEncoder().encode(overCap).length).toBeGreaterThan(
+      USER_SKILL_ADAPTATION_MAX_BYTES,
+    );
+    await expect(publish(OFFER_ARCHITECT_SKILL, overCap)).rejects.toThrow(
+      /USER_SKILL_ADAPTATION_TOO_LARGE/,
+    );
+    // A refusal writes NOTHING — no row, no baseline, no audit event.
+    expect(await allTenantRows(t)).toHaveLength(0);
+    expect(await auditRows(t)).toHaveLength(0);
+
+    // Positive witness: the at-cap boundary is ACCEPTED, so the zeros above are the refusals and
+    // not a broken fixture.
+    const atCap = "あ".repeat(Math.floor(USER_SKILL_ADAPTATION_MAX_BYTES / 3));
+    await publish(OFFER_ARCHITECT_SKILL, atCap);
+    expect(await allTenantRows(t)).toHaveLength(2);
+  });
+
+  test("two tenants: identical name and version, zero crossover in rows or in myUserSkills", async () => {
+    const { t, userA, userB, asA, asB } = await harness();
+    await asA.mutation(api.skills.publishUserCandidate, {
+      name: OFFER_ARCHITECT_SKILL,
+      authoredBody: AUTHORED_A,
+    });
+    await asB.mutation(api.skills.publishUserCandidate, {
+      name: OFFER_ARCHITECT_SKILL,
+      authoredBody: AUTHORED_B,
+    });
+
+    // Both landed at v2 of the SAME name — the collision the overlay exists to make safe, and
+    // exactly why 21-03's eval evidence must bind a candidate id rather than name@version.
+    const aRows = await tenantRows(t, String(userA));
+    const bRows = await tenantRows(t, String(userB));
+    expect(aRows).toHaveLength(2);
+    expect(bRows).toHaveLength(2);
+    const aCand = aRows.find((r) => r.author === "user")!;
+    const bCand = bRows.find((r) => r.author === "user")!;
+    expect(aCand.version).toBe(2);
+    expect(bCand.version).toBe(2);
+    expect(aCand._id).not.toBe(bCand._id);
+    expect(aCand.body).toContain(NEEDLE_A);
+    expect(aCand.body).not.toContain(NEEDLE_B);
+    expect(bCand.body).toContain(NEEDLE_B);
+    expect(bCand.body).not.toContain(NEEDLE_A);
+
+    // The tenant read (mutation 1): A sees exactly A's one adaptation, and B's needle is nowhere
+    // in the payload — with A's own row as the positive witness on the same object.
+    const mine = await asA.query(api.skills.myUserSkills, {});
+    expect(mine).toHaveLength(1);
+    expect(mine[0]).toMatchObject({
+      name: OFFER_ARCHITECT_SKILL,
+      label: USER_AUTHORABLE_SKILL_METADATA[OFFER_ARCHITECT_SKILL].label,
+      authoredBody: AUTHORED_A,
+      version: 2,
+      status: "candidate",
+      baseScope: "global",
+      baseVersion: 7,
+      gatePassed: false,
+    });
+    const serialized = JSON.stringify(mine);
+    expect(serialized).toContain(NEEDLE_A);
+    expect(serialized).not.toContain(NEEDLE_B);
+    // The DISCLOSURE boundary: the projection carries no base/composed body and no raw evidence,
+    // so an ordinary user never receives the global prompt (research pitfall 4).
+    expect(serialized).not.toContain(GLOBAL_BODY);
+    expect(serialized).not.toContain(USER_SKILL_ADAPTATION_SECTION);
+    expect(Object.keys(mine[0]!).sort()).toEqual([
+      "authoredBody",
+      "baseScope",
+      "baseVersion",
+      "createdAt",
+      "gatePassed",
+      "label",
+      "name",
+      "status",
+      "version",
+    ]);
+    // …and the system baseline is not a user adaptation, so it is not listed.
+    expect(mine.every((s) => s.authoredBody !== "")).toBe(true);
+    // B's view is the mirror image, which is what makes A's single row meaningful.
+    const theirs = await asB.query(api.skills.myUserSkills, {});
+    expect(theirs).toHaveLength(1);
+    expect(theirs[0]!.authoredBody).toBe(AUTHORED_B);
+  });
+
+  test("after 200 tenant-local versions, publication allocates exactly 201 from ONE indexed read", async () => {
+    const { t, userA, asA } = await harness();
+    // A deliberately long tenant history. `.collect()`-based allocation still returns 201 here,
+    // which is why the SOURCE contract below is the real guard on the cost.
+    await t.run(async (ctx) => {
+      for (let version = 1; version <= 200; version++) {
+        await ctx.db.insert("tenantSkills", {
+          tenantId: String(userA),
+          name: OFFER_ARCHITECT_SKILL,
+          version,
+          body: `history v${version}`,
+          authoredBody: `history adaptation v${version}`,
+          status: version === 200 ? "active" : "archived",
+          author: "user",
+          authorUserId: userA,
+          basedOnScope: "global",
+          basedOnName: OFFER_ARCHITECT_SKILL,
+          basedOnVersion: 7,
+          rollbackEligible: version !== 200,
+          createdAt: version,
+        });
+      }
+    });
+
+    const res = await asA.mutation(api.skills.publishUserCandidate, {
+      name: OFFER_ARCHITECT_SKILL,
+      authoredBody: AUTHORED_A,
+    });
+    expect(res).toMatchObject({ inserted: true, version: 201, status: "candidate" });
+    // No baseline is minted on a tenant that already has history — the baseline is a FIRST-
+    // customization artifact, so 201 rows, not 202.
+    expect(await tenantRows(t, String(userA))).toHaveLength(201);
+    const v201 = (await tenantRows(t, String(userA))).find((r) => r.version === 201)!;
+    expect(v201.basedOnScope).toBe("tenant"); // v200 was the tenant's active row
+    expect(v201.basedOnVersion).toBe(200);
+  });
+
+  test("the tenant allocation reads ONE descending indexed row — never a history .collect()", () => {
+    const src = readFileSync(fileURLToPath(new URL("./skills.ts", import.meta.url)), "utf8");
+    const from = src.indexOf("export const publishUserCandidate");
+    const to = src.indexOf("export const myUserSkills");
+    expect(from).toBeGreaterThan(-1);
+    expect(to).toBeGreaterThan(from);
+    const region = src.slice(from, to);
+    expect(region.length).toBeGreaterThan(800); // non-vacuity: the real publisher was found
+
+    // POSITIVE: the bounded read the many-version case above depends on.
+    expect(region).toContain("by_tenant_name_version");
+    expect(region).toContain('.order("desc")');
+    expect(region).toContain(".take(1)");
+    // NEGATIVE: a tenant's authoring history is open-ended (research pitfall 12). Named mutation
+    // that turns this red: replace the descending take(1) with `.collect()`.
+    expect(region).not.toContain(".collect(");
+  });
+
+  test("the publish audit row is refs-only: an exact key set, and neither body anywhere in audit", async () => {
+    const { t, userA, globalId, asA } = await harness();
+    const res = await asA.mutation(api.skills.publishUserCandidate, {
+      name: OFFER_ARCHITECT_SKILL,
+      authoredBody: AUTHORED_A,
+    });
+
+    const events = await publishAudits(t);
+    expect(events).toHaveLength(1); // the positive witness for the scan below
+    const row = events[0]!;
+    expect(row.tenantId).toBe(String(userA));
+    expect(row.actor).toBe("user");
+    const payload = row.payload as Record<string, unknown>;
+    // KEY-SET EQUALITY (mutation 12a). Adding `authoredBody` or `body` here fails on purpose.
+    expect(Object.keys(payload).sort()).toEqual([
+      "author",
+      "authoredBytes",
+      "baseScope",
+      "baseSkillId",
+      "baseVersion",
+      "bodyHash",
+      "skillName",
+      "tenantSkillId",
+      "version",
+    ]);
+    expect(payload).toMatchObject({
+      skillName: OFFER_ARCHITECT_SKILL,
+      tenantSkillId: res.tenantSkillId,
+      version: 2,
+      baseScope: "global",
+      baseSkillId: globalId,
+      baseVersion: 7,
+      author: "user",
+      authoredBytes: new TextEncoder().encode(AUTHORED_A).length,
+    });
+    expect(String(payload.bodyHash)).toMatch(/^[0-9a-f]{64}$/);
+
+    // The needle scan over EVERY audit row and EVERY dead letter — CLAUDE.md §4. The candidate
+    // text is content-plane data and must never reach either plane.
+    const everything = JSON.stringify([
+      await auditRows(t),
+      await t.run((ctx) => ctx.db.query("deadLetters").collect()),
+    ]);
+    expect(everything).not.toContain(NEEDLE_A);
+    expect(everything).not.toContain(GLOBAL_BODY);
+    expect(everything).not.toContain(USER_SKILL_ADAPTATION_SECTION);
+    // Non-vacuity: the scan really did read the row asserted above.
+    expect(everything).toContain(String(payload.bodyHash));
+  });
+});
+
+// ── 21-02 Task 2: the effective loader (tenant overlay first, global active as fallback) ────────
+describe("getEffectiveSkill — tenant overlay resolution (21-02)", () => {
+  const TENANT = "tenant_eff_a";
+  const OTHER = "tenant_eff_b";
+  const NEEDLE = "ZQ7EFFECTIVE1122ab";
+
+  const insertTenantRow = (
+    t: TestConvex<typeof schema>,
+    tenantId: string,
+    fields: { version: number; body: string; status: "active" | "candidate" | "archived" },
+  ) =>
+    t.run((ctx) =>
+      ctx.db.insert("tenantSkills", {
+        tenantId,
+        name: LEAD_ENGINE_SKILL,
+        authoredBody: "adaptation",
+        author: "user",
+        basedOnScope: "global",
+        basedOnName: LEAD_ENGINE_SKILL,
+        basedOnVersion: 1,
+        rollbackEligible: false,
+        createdAt: fields.version,
+        ...fields,
+      }),
+    );
+
+  const seedGlobal = (t: TestConvex<typeof schema>) =>
+    t.run((ctx) =>
+      ctx.db.insert("skills", {
+        name: LEAD_ENGINE_SKILL,
+        version: 3,
+        body: "GLOBAL LEAD ENGINE v3",
+        status: "active",
+        createdAt: 0,
+      }),
+    );
+
+  test("a tenant ACTIVE row wins; every other tenant still gets the global active row", async () => {
+    const t = convexTest(schema, modules);
+    const globalId = await seedGlobal(t);
+    const overlayId = await insertTenantRow(t, TENANT, {
+      version: 2,
+      body: `OVERLAY ${NEEDLE}`,
+      status: "active",
+    });
+
+    expect(
+      await t.query(internal.skills.getEffectiveSkill, {
+        tenantId: TENANT,
+        name: LEAD_ENGINE_SKILL,
+      }),
+    ).toEqual({ scope: "tenant", skillId: overlayId, version: 2, body: `OVERLAY ${NEEDLE}` });
+
+    // Mutation 7 (remove the loader's tenant predicate) turns THIS assertion red.
+    const foreign = await t.query(internal.skills.getEffectiveSkill, {
+      tenantId: OTHER,
+      name: LEAD_ENGINE_SKILL,
+    });
+    expect(foreign).toEqual({
+      scope: "global",
+      skillId: globalId,
+      version: 3,
+      body: "GLOBAL LEAD ENGINE v3",
+    });
+    expect(foreign.body).not.toContain(NEEDLE);
+  });
+
+  test("a CANDIDATE overlay never resolves — publishing changes nothing at runtime", async () => {
+    const t = convexTest(schema, modules);
+    const globalId = await seedGlobal(t);
+    await insertTenantRow(t, TENANT, {
+      version: 2,
+      body: `CANDIDATE ${NEEDLE}`,
+      status: "candidate",
+    });
+    await insertTenantRow(t, TENANT, { version: 1, body: "ARCHIVED BASELINE", status: "archived" });
+
+    const eff = await t.query(internal.skills.getEffectiveSkill, {
+      tenantId: TENANT,
+      name: LEAD_ENGINE_SKILL,
+    });
+    expect(eff).toEqual({
+      scope: "global",
+      skillId: globalId,
+      version: 3,
+      body: "GLOBAL LEAD ENGINE v3",
+    });
+    expect(eff.body).not.toContain(NEEDLE);
+  });
+
+  test("no overlay and no global row → still fails CLOSED with NO_ACTIVE_SKILL", async () => {
+    const t = convexTest(schema, modules);
+    // Mutation 8 (remove the global fallback) turns the FIRST half red; this half proves the
+    // fallback did not swallow the fail-closed contract.
+    await expect(
+      t.query(internal.skills.getEffectiveSkill, { tenantId: TENANT, name: LEAD_ENGINE_SKILL }),
+    ).rejects.toThrow(/NO_ACTIVE_SKILL/);
+    await seedGlobal(t);
+    expect(
+      (
+        await t.query(internal.skills.getEffectiveSkill, {
+          tenantId: TENANT,
+          name: LEAD_ENGINE_SKILL,
+        })
+      ).version,
+    ).toBe(3);
   });
 });
