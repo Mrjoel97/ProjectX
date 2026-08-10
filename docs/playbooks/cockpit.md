@@ -1,5 +1,138 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-11 (21-05 - **ROUTINE v0 SHIPPED AS PINNED PROMPTS. `savedPrompts` now has
+> its three functions and its two workspace controls. NO scheduler, cron, trigger, recurrence,
+> next-run timestamp, execution history, routine status or `routines` table was added, and none may
+> be.** No cockpit tool, arm, trace literal, guardrail or skill body moved; no model call was made
+> and **$0.00** was spent.)
+>
+> **A pinned prompt is inert tenant-owned TEXT.** `packages/backend/convex/savedPrompts.ts` is a thin
+> adapter over the 21-01 table and exposes exactly `save`, `list`, `remove` - all three through
+> `tenantMutation`/`tenantQuery`, never a raw builder (CLAUDE.md section 2).
+>
+> | Function | Args | Bound | Refusal |
+> |---|---|---|---|
+> | `save` | `{text}` **only** | `SAVED_PROMPT_MAX_BYTES = 4000` **UTF-8 bytes** | blank => `SAVED_PROMPT_EMPTY`; over cap => `SAVED_PROMPT_TOO_LONG: <bytes> > <cap> bytes` |
+> | `list` | none | `.withIndex("by_tenant_createdAt").order("desc").take(20)` | - |
+> | `remove` | `{id: v.id("savedPrompts")}` | one exact-row read | missing **and** foreign => the same `{removed: false}` |
+>
+> `tenantId`, `title`, `textHash` and `createdAt` are all derived server-side, so Convex's arg
+> validator is the refusal boundary: a caller cannot even NAME a field it does not own, and there is
+> no `schedule`, `trigger`, `status` or `nextRunAt` to name in the first place. `title` is the
+> bounded (80-char) first nonblank line; the TEXT is never truncated, because a shortened prompt
+> would replay a different instruction than the one the user pinned. `textHash` is
+> `lib/hash.contentHash` over the NORMALIZED text (CRLF folded, outer whitespace trimmed, interior
+> blank lines preserved), which is what makes a re-pin idempotent **within one tenant** - two tenants
+> pinning byte-identical text still get two rows.
+>
+> **The cap is BYTES, measured with `TextEncoder`, not characters.** A character cap lets one
+> multibyte paste carry ~3x the tokens the number implies. The test pins an at-cap 4000-byte
+> multibyte value as the positive witness beside the blank and over-cap refusals.
+>
+> **Prompt text is CONTENT PLANE and never reaches a log plane.** `savedPrompts.ts` writes no audit
+> event at all - a reversible UI preference is not a governance event, and an audit row carrying the
+> prompt would be exactly the PII honeypot section 4 exists to prevent. The privacy test plants a
+> **refs-only control audit row** (a `savedPromptRef` plus the `textHash`) purely so the needle scan
+> is proven to read something: an empty-table scan "passes" for the trivial reason that there is
+> nothing to read. Do not delete that control row thinking it is noise - without it the assertion is
+> vacuous. The scan is asserted BEFORE the row counts for the same reason; a count on the line above
+> would short-circuit the assertion the ledger actually names.
+>
+> **RUN IS AN ORDINARY FRESH COCKPIT TURN, AND THAT IS THE WHOLE DESIGN.** `WorkspacePage.runPinned`
+> calls `useSendCockpitMessage()` with `{text}` and **no `threadId`**, then hands the returned id to
+> the existing `registerThread`. Consequences, all by construction rather than by promise:
+>
+> - the hook supplies the trusted IANA timezone and the CALL-TIME clock. A raw
+>   `useAction(api.cockpit.sendCockpitMessage)` drops both and silently re-breaks every phase-17
+>   calendar and phase-19 CRM tool (`no_clock`). **Never construct the raw action in a component.**
+> - no `threadId` means `sendCockpitMessage` mints a new thread exactly as a first typed message
+>   does. The prompt does not land in whatever conversation happens to be open, and no prior plan is
+>   cloned.
+> - guardrails, spend, activity trace, plan lifecycle and the Approve gate are therefore
+>   **unchanged** - this is the same door, not a second one. There is nothing new to re-verify on
+>   those paths.
+> - `setSending(true/false)` wraps the call, so the ChatPane bubble and the workspace ActivityCard
+>   light up for a pinned run exactly as they do for a typed one (the one shared in-flight signal).
+>
+> **The surface.** `ChatPane.tsx` renders `Copy` plus a Pin chip inside ONE `{mine && (...)}` block,
+> so an assistant bubble has no Pin by construction. The two chips sit in a `.bubble-actions` wrapper
+> that takes the absolute position `.msg-copy` used to own - two `.msg-copy` buttons would otherwise
+> stack on each other. **No CSS file was touched**; the chips reuse the existing class and go
+> `position: static` inside the wrapper. A pin that has a state is forced to `opacity: 1`, because a
+> "Pin failed" chip that vanishes when the pointer leaves has told the user nothing. `pinLabel()` is
+> the exported pure labeller and is the only place the four state sentences live -
+> `Pin prompt` / `Pinning…` / `Pinned ✓` / `Pin failed — try again`. **A failed pin sets a label and
+> does NOT rethrow** (unlike `onSend`, which rethrows after restoring the user's text): a convenience
+> must never take the conversation with it.
+>
+> `page.tsx` adds `PinnedPrompts` and `PinnedPromptsFallback` beside `PastChats`, using the existing
+> `HeaderMenu`/scrim/`head-menu-item`/`head-menu-empty` idiom and the existing `StarIcon` - no new
+> route, no nav entry, no component library, no new dependency, no new icon. It owns its own
+> `useQuery` inside `<ErrorBoundary label="pinned-prompts">` for the same reason `PastChats` does: a
+> failing read degrades THIS MENU, not the cockpit. Honest states: `Loading…`, "No pinned prompts
+> yet. Pin one from a message you have sent.", `Running…`, `Deleting…`, and an inline announced
+> `role="status"` notice - never `window.alert`/`confirm`, never a dialog, never amber (BRAND
+> section 2 spends `--held` on the approval gate alone). The accessible names carry the VERB
+> (`Run pinned prompt: <title>` / `Delete pinned prompt: <title>`) because twenty rows of prompt
+> titles are otherwise indistinguishable to a screen reader. Run closes the menu on SUCCESS only -
+> closing on failure would dismiss its own error notice.
+>
+> **Delete deletes the pin and only the pin.** A saved prompt has no `threadId` and owns no
+> conversation; `remove` performs exactly one `ctx.db.delete` and the menu's `del` handler touches no
+> `setThreadId`/`setTabs`/`closeTab`. The backend test proves it by planting a `plans` row and
+> asserting it survives.
+>
+> ### The evidence gate for anything more than this
+>
+> **Cron, recurrence, trigger rows, execution history, routine status, an authoring canvas and a
+> graph DSL are all POST-BETA and evidence-gated on ONE observation: a real user manually re-running
+> a pinned prompt twice.** That is the entire point of shipping v0 this thin - to find out whether
+> people repeat prompts before building a substrate for it. Until that evidence exists, do not add: a
+> `routines` table, `ctx.scheduler` anywhere in this path, a `nextRunAt` column, a status machine, or
+> a "run every Monday" control. The word "routine" is not authorization.
+>
+> Both guards are mechanical, and both strip comments before scanning so the code's own explanation
+> of why it schedules nothing cannot be what trips them: `convex/savedPrompts.test.ts` scans
+> `savedPrompts.ts`, and `app/(app)/dashboard/workspace/pinnedPrompts.test.ts` scans `ChatPane.tsx`
+> plus `page.tsx`, for `cron`, `schedule`, `recurrence`, `routine`, `trigger`, `nextRunAt`,
+> `setInterval`, `setTimeout` and `scheduler`; the web one also pins the set of saved-prompt
+> functions the UI may call to exactly `{list, remove, save}`.
+>
+> ### How to verify (measured at 21-05, $0.00 - no model call, no eval run)
+>
+> ```
+> pnpm --filter @pikar/backend exec vitest run convex/savedPrompts.test.ts --maxWorkers=1   # 13/13
+> pnpm --filter web exec vitest run 'app/(app)/dashboard/workspace/pinnedPrompts.test.ts'   # 14/14
+> pnpm --filter web typecheck                                                               # exit 0
+> ```
+>
+> Browser check (21-06 owns the automated version; this is the manual one): sign in, send a message,
+> hover your own bubble, press **Pin prompt** (the chip reads `Pinned ✓`), open the **star** icon in
+> the chat header, press the prompt. A NEW tab must appear - not the one you were in - and the
+> workspace must stream the same plan/approval flow a typed message produces. Press **Delete**: the
+> pin disappears, and the chat it came from is still in **Past chats**.
+>
+> **Mutation-verification ledger (each applied, observed RED, reverted; 21-VALIDATION.md rows):**
+>
+> | Row | Mutation | RED observed |
+> |---|---|---|
+> | 11 | drop the exact-row `tenantId` comparison in `remove` | `expected { removed: true } to deeply equal { removed: false }` - tenant B deleted A's positively-witnessed pin |
+> | 12b | add the prompt text to an audit payload in `save` | the needle scan: `expected '{"audit":[...' not to contain 'ZP5ALPHA9c4e2b71'` |
+> | 10a | swap the hook for `useAction(api.cockpit.sendCockpitMessage)` | `expected ... not to contain 'api.cockpit.sendCockpitMessage'` |
+> | 10b | pass the current `threadId` to Run | `expected [ 'threadId, text' ] to deeply equal [ 'text' ]` |
+>
+> **`pinnedPrompts.test.ts` is a SOURCE SCAN, not a render.** `apps/web`'s vitest config is node-only
+> with no jsdom and no testing-library. It proves the shipped source contains and lacks exact things.
+> **It proves nothing about pixels, layout, keyboard focus order, whether the menu opens, or that any
+> of this renders at all.** The browser proof is 21-06's Playwright spec and this is not a substitute
+> for it.
+>
+> **Pinned prompts and the 21-02 skill-authoring panel must not be merged.** Same workspace, opposite
+> risk profiles: a pin is a shortcut over inert text, a skill adaptation is registry prose that
+> changes a specialist's system prompt for the whole tenant behind a paid evaluation and an owner
+> activation. `SkillAuthoringPanel` deliberately does not import `useSendCockpitMessage`, and the
+> pinned-prompt path never calls `publishUserCandidate`.
+
 > Last verified: 2026-08-10 (21-02 — **the specialist loader and a new workspace card. No cockpit
 > tool, arm, trace literal, guardrail or skill BODY moved; no model call was made and $0 was
 > spent.**)
