@@ -495,6 +495,10 @@ test("step 3b: a real CSV imports — preview counts, the attestation gate, and 
   const jane = rows.filter({ hasText: JANE });
   await expect(jane).toContainText("You added them");
   await expect(jane).toContainText("· imported");
+  // The SECOND judgement call, and it needs a picture: whether an imported row is legible as
+  // imported next to a hand-added one is a tone question, and the UAT tenant is a throwaway the
+  // owner cannot log into. This frame carries all four rows and both chip columns.
+  await shot(page, "step-03b-import-chips");
 
   // 9. THE ORACLE IS STORED STATE, NEVER THE PREVIEW — the preview is the thing under test, so it
   //    cannot also be the witness. `listContacts`/`matchExisting`/`consentRecord` read the rows back
