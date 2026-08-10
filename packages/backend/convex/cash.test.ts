@@ -1,3 +1,4 @@
+import type { FigureClaim } from "@pikar/core";
 import { emptyScorecard } from "@pikar/core/growth/index";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
@@ -543,11 +544,14 @@ describe("applyFinanceClaims (the finance_write inline arm)", () => {
     expect(inputs.find((i) => i.field === "cashOnHand")?.actor).toBe("agent");
   });
 
-  // ALL-OR-NOTHING, asserted rather than assumed — three comments claim it and nothing exercised
-  // it, because every other refusal test passes a single claim that throws before any write. Two
-  // claims, good FIRST: the enclosing serializable mutation must discard the write that already
-  // succeeded.
-  test("a bad SECOND claim discards the good FIRST one — approve-all-or-none", async () => {
+  // ALL-OR-NOTHING, asserted rather than assumed — but not by ROLLBACK anymore. REVIEW FIX (Task
+  // 5 follow-up): after the pass-1 hoist above, every `validateFigureClaim` rule is checked in
+  // pass 1, so pass 2's `writeFigureRow` can never fail for a claim that reached it — a genuine
+  // "good write, then a THROW mid-batch that Convex rolls back" case is provably unreachable from
+  // this function now. All-or-nothing is enforced by ORDERING instead: nothing in pass 2 runs
+  // until every claim in the whole list has cleared pass 1, so a good FIRST claim never gets the
+  // chance to write before a bad SECOND one is seen.
+  test("a bad SECOND claim blocks the good FIRST one — approve-all-or-none", async () => {
     const t = convexTest(schema, modules);
     const result = await t.run((ctx) =>
       applyFinanceClaims(ctx, "u1", [
@@ -581,6 +585,32 @@ describe("applyFinanceClaims (the finance_write inline arm)", () => {
     expect(
       await t.run((ctx) => applyFinanceClaims(ctx, "u1", [{ ...agentClaim, basis: null } as never])),
     ).toEqual({ ok: false, reason: "malformed_figure_claim" });
+    expect(await t.run((ctx) => ctx.db.query("financeInputs").collect())).toHaveLength(0);
+  });
+
+  // REVIEW FIX (Task 5 follow-up): the two shape-guards above are NOT `validateFigureClaim`'s
+  // whole contract. Before this test, a claim that cleared them still reached `writeFigureRow` in
+  // pass 2, which called `validateFigureClaim` itself and THREW past this function's own return
+  // contract — the exact bug this task exists to remove, still live on four of its six rules. A
+  // whitespace-only basis, an out-of-range/NaN value, and a future `observedAt` (the likeliest
+  // model error once Task 8 parses date phrases) must all refuse as a RETURN, before pass 2 ever
+  // runs, same as the two shape-guards.
+  test("every validateFigureClaim rule refuses as a return, not just the two shape-guards", async () => {
+    const t = convexTest(schema, modules);
+    const cases: FigureClaim[] = [
+      { ...agentClaim, basis: "   " },
+      { ...agentClaim, value: -1 },
+      { ...agentClaim, value: Number.NaN },
+      { ...agentClaim, observedAt: Number.NaN },
+      { ...agentClaim, observedAt: -1 },
+      { ...agentClaim, observedAt: Date.now() + 86_400_000 },
+    ];
+    for (const claim of cases) {
+      expect(await t.run((ctx) => applyFinanceClaims(ctx, "u1", [claim]))).toEqual({
+        ok: false,
+        reason: "malformed_figure_claim",
+      });
+    }
     expect(await t.run((ctx) => ctx.db.query("financeInputs").collect())).toHaveLength(0);
   });
 

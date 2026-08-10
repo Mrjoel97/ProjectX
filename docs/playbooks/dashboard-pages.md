@@ -1,5 +1,29 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-10 (Task 5 REVIEW FIX, live-finance-inputs — **pass 1 validated only TWO
+> of `validateFigureClaim`'s six rules; the other four still threw, straight past the return
+> contract the entry below built.** Review's trace: `{basis: "   ", observedAt: <tomorrow>}`
+> cleared both shape-guards (a whitespace string IS a string), reached pass 2's `writeFigureRow`,
+> which called `validateFigureClaim` itself and threw — the exact production failure this task
+> exists to remove, still live on a blank basis, an out-of-range/NaN value, and a NaN/negative/
+> **future** `observedAt` (the likeliest model error once Task 8 parses date phrases). Fix: pass 1
+> now calls `validateFigureClaim` directly and returns `malformed_figure_claim` on any failure,
+> making the doc comment's claim — "every claim is validated FIRST, with zero writes" — actually
+> true. **One subtlety beyond the literal hoist:** `validateFigureClaim` refuses
+> `{actor: "user", confidence !== "high"}`, and a claim's `actor` field is untrusted input this
+> function always overwrites (see the STAMPED comment a few lines below) — validating the RAW
+> claim would have resurrected a narrower version of the same bug for that one field ("a staging
+> bug must not become an error on a plan the human already approved"), so pass 1 validates
+> `{...claim, actor: "agent"}`, matching exactly what pass 2 would have validated anyway. A side
+> effect worth recording: after this fix, `writeFigureRow`'s own `validateFigureClaim` call is
+> PROVABLY UNREACHABLE from `applyFinanceClaims` (every claim reaching pass 2 already cleared the
+> identical check in pass 1) — the "approve-all-or-none" test was rewritten to describe ORDERING
+> rather than ROLLBACK, since a genuine pass-2 failure-after-a-good-write is no longer constructible
+> from this function. `writeFigureRow`'s throw stays, unmodified, as the last-resort guard for its
+> other caller, `saveInput`. Also: `agent_cannot_update_figure`'s copy in `ApprovalsView.tsx` grew
+> "Nothing changed." — a plan defect in the original brief's copy, not an implementation gap; every
+> sibling in that map already closes by naming what did not happen.)
+>
 > Last verified: 2026-08-10 (Task 5, live-finance-inputs — **`applyFinanceClaims`'s two refusals
 > now RETURN instead of throwing, so they reach the Approvals card.** Both were
 > `throw new Error("INVALID_INPUT: …")`; Convex redacts a non-`ConvexError` message in production,

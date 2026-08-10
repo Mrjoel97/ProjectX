@@ -134,7 +134,7 @@ export function refusalMessage(reason: string): string {
     // 2026-08-10: `applyFinanceClaims`'s two refusals, delivered as a return instead of a throw
     // Convex would redact in production — see the function's doc comment in cash.ts.
     agent_cannot_update_figure:
-      "That figure can only be updated by you for now — the agent cannot vouch for where it came from.",
+      "That figure can only be updated by you for now — the agent cannot vouch for where it came from. Nothing changed.",
     malformed_figure_claim:
       "This figure update was malformed and was not applied. Nothing changed.",
   };

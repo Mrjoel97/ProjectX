@@ -392,6 +392,25 @@ export async function applyFinanceClaims(
     if (cashInputSpec(claim.field).store === "scorecard") {
       return { ok: false, reason: "agent_cannot_update_figure" };
     }
+    // THE FULL RULE, not just the two shape-guards above: a blank basis (whitespace-only, not
+    // just non-string), an out-of-range or NaN value, a NaN/negative/future observedAt. This is
+    // the SAME check `writeFigureRow` runs and used to throw past this function's own return
+    // contract — the plan row is content plane and may have been revised after staging, so a
+    // future `observedAt` (the likeliest model error once Task 8 parses date phrases) or a
+    // whitespace `basis` must refuse HERE, before pass 2 ever calls `writeFigureRow`, not inside
+    // it. `writeFigureRow` keeps its own call to this as the last-resort guard for its OTHER
+    // caller, `saveInput` — this one is now redundant for every claim reached from here, and
+    // stays unreachable from this path by construction, not by convention.
+    //
+    // Validated on the STAMPED actor, not the raw one: `validateFigureClaim` refuses
+    // `{actor: "user", confidence !== "high"}`, and the row's own `actor` is untrusted input this
+    // function overwrites below regardless of what it says (see the stamp comment in pass 2).
+    // Checking the raw value would resurrect exactly the failure mode that stamp exists to
+    // prevent — "a staging bug must not become an error on a plan the human already approved" —
+    // for the one field this function deliberately never trusts.
+    if (!validateFigureClaim({ ...claim, actor: "agent" }).ok) {
+      return { ok: false, reason: "malformed_figure_claim" };
+    }
   }
 
   // PASS 2 — every claim cleared validation; now stamp, merge-check and write.

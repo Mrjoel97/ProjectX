@@ -94,11 +94,14 @@ describe("Approvals connected state contracts", () => {
   // real lever, not the raw enum.
   test("the two finance-write refusals name the lever, not the raw enum", () => {
     expect(refusalMessage("agent_cannot_update_figure")).toBe(
-      "That figure can only be updated by you for now — the agent cannot vouch for where it came from.",
+      "That figure can only be updated by you for now — the agent cannot vouch for where it came from. Nothing changed.",
     );
     expect(refusalMessage("malformed_figure_claim")).toBe(
       "This figure update was malformed and was not applied. Nothing changed.",
     );
+    // REVIEW FIX: every sibling in this map closes by naming what did NOT happen — an owner
+    // reading only this line must be able to tell nothing partially landed.
+    expect(refusalMessage("agent_cannot_update_figure")).toContain("Nothing changed.");
   });
 
   // Step 1: the gate is `item.kind === "email"` and nothing else — one edited condition away from
