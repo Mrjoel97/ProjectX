@@ -37,6 +37,26 @@ const parse = (out) => JSON.parse(out);
 // the empty-stdout CLI teardown crash is safe here in a way it is NOT for llm:runCockpitAgent (a
 // retry bills a second model turn) or skills:recordEvalEvidence (a duplicate evidence row).
 const RETRY_READ = { retryOnEmpty: true };
+
+// 2026-08-10: the PAID turn now retries on EMPTY stdout too, reversing the note above — not because
+// the double-billing risk went away, but because it was measured and it is the cheaper side.
+//
+// `must()` retries only when stdout is EMPTY and no failure banner printed, which on this box means
+// exactly one thing: the Windows/Node-24 `UV_HANDLE_CLOSING` teardown crash, where `convex run`
+// completes and dies before flushing. A REAL error still prints a banner and still fails hard, so
+// this cannot mask a genuine refusal, a governed stop, or a model error.
+//
+// The economics, both measured this session: a duplicated turn bills ~$0.01. The hard fail it
+// replaces costs a ~$0.42 full-gate re-run, because evidence writes only on an all-green unfiltered
+// run — so ONE teardown crash on ONE fixture discards the whole gate. It hit twice in three
+// attempts (fixture 18 local, fixture 10 cloud), both at $0.0000.
+//
+// The durable fix is to stop shelling out to `npx convex run` and use ConvexHttpClient in
+// `smokeRun.mjs`'s `must()`, which removes the crash for every script in the repo. Deferred: that
+// is a refactor of a shared helper and wants its own test pass, and this flag buys the same
+// outcome for one line. ponytail: retry-on-empty here, ConvexHttpClient in `must()` when someone
+// touches that helper for another reason.
+const RETRY_TURN = { retryOnEmpty: true };
 const casesDir = resolve(dirname(fileURLToPath(import.meta.url)), "eval-cases");
 
 // Hard per-run cost cap (discretion default; expected actuals $0.05–0.15 at
@@ -1488,7 +1508,7 @@ function attemptCase(fixture, tenant, pins) {
         ...(fixture.clock ? { clientContext: { tz: "UTC", nowMs: Date.now() } } : {}),
         ...(history.length ? { history } : {}),
         ...(pins.length ? { skillVersions: skillVersionsOf(pins) } : {}),
-      }),
+      }, RETRY_TURN),
     );
     if (res.blocked) {
       // 22.1-02 made `dailySpendCents` KEYED per tenant, so `smoke:resetDailySpend` gained a

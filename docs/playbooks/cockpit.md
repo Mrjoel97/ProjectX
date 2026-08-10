@@ -23,6 +23,18 @@
 > `savedPrompts.ts`/`savedPrompts.test.ts` are registered to this playbook in `watch.json` ahead of
 > that plan.
 
+> Last verified: 2026-08-10 (Plan 19.1-07 — **WATCH-GATE BUMP ONLY, no cockpit behaviour changed.**
+> This playbook watches `apps/web/e2e/` (`watch.json`), and 19.1-07 extended
+> `e2e/pipeline-uat.spec.ts` with a contacts-IMPORT step (`step 3b`) and a phone-width assertion on
+> the import panel. Nothing in `cockpit.ts`, `buildCockpitTools`, the tool set, the arm table or any
+> skill body moved, and **the agent still cannot initiate an import** — the attestation is a legal
+> statement a person makes, so the panel is human-only and no registration site was touched.
+> The precedent for this kind of entry is the 19-07 block further down. One thing the next person
+> running the suite needs: **`--grep "step 3b"` alone cannot pass** — the step depends on the
+> contacts step 3 creates, so `--grep "step 3"` (which matches both) or the whole file is the
+> command. Measured at this plan: `step 3`/`step 3b`/`step 14` green against a real
+> `:3210` + `:3111` stack at **$0.00** — no model call is made by any of them.)
+
 > Last verified: 2026-08-10 (20.1-01 — **Drive reads are registered but intentionally not yet
 > taught to the active agent**). `buildCockpitTools` now exposes `listDriveFolders({parentId?})` and
 > `findInDrive({query})`; neither accepts `tenantId`, and both call the existing tenant-derived

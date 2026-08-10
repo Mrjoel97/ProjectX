@@ -1081,10 +1081,40 @@ test("step 14: at phone width the four tiles and the table stay readable", async
 
   // BRAND §4 forbids a dense table on white bleeding off screen: the table gets its own scroller
   // rather than pushing the PAGE wider than the viewport.
-  const docWidth = await page.evaluate(() => document.documentElement.scrollWidth);
-  expect(docWidth, "the page itself must not scroll horizontally").toBeLessThanOrEqual(391);
+  const pageWidth = () => page.evaluate(() => document.documentElement.scrollWidth);
+  expect(await pageWidth(), "the page itself must not scroll horizontally").toBeLessThanOrEqual(
+    391,
+  );
 
   await shot(page, "step-14-phone-width");
+
+  // ── 19.1: the import panel is a FIFTH thing on this page and has to survive the same width ──────
+  // A file-picker panel is exactly the shape that breaks a phone: a fixed-width control, or a
+  // preview table that lays out at its natural width instead of scrolling inside its own box. So the
+  // check is run with the panel OPEN and its widest state — the mapping table — on screen. Nothing
+  // is confirmed here: reaching the preview writes nothing.
+  await expect(page.getByTestId("import-panel")).toBeVisible();
+  await page.getByTestId("import-file-input").setInputFiles({
+    name: "old-crm-export.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from(FIXTURE_CSV, "utf8"),
+  });
+  await expect(page.getByTestId("import-mapping")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("import-counts")).toBeVisible({ timeout: 60_000 });
+
+  expect(
+    await pageWidth(),
+    "the import preview must scroll inside its own box, not widen the page",
+  ).toBeLessThanOrEqual(391);
+  for (const id of ["needing-attention", "followups-due", "consent", "suppressed"]) {
+    const box = await page.getByTestId(`pipeline-tile-${id}`).boundingBox();
+    expect(box?.width ?? 0, `tile ${id} width with the import preview open`).toBeGreaterThan(80);
+  }
+  const confirmBox = await page.getByTestId("import-confirm").boundingBox();
+  expect(
+    (confirmBox?.x ?? 0) + (confirmBox?.width ?? 0),
+    "the Confirm control must be reachable inside a 390px viewport",
+  ).toBeLessThanOrEqual(391);
 });
 
 // ── STEP 7c (REAL MODEL CALL) — the PHASE-17 half of the same defect, RUN LAST ────────────────

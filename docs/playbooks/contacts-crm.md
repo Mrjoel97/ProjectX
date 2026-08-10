@@ -1,5 +1,55 @@
 # Playbook: Contacts, CRM & follow-ups
 
+> Last verified: 2026-08-10 (Plan 19.1-07 — **A REAL BROWSER HAS NOW IMPORTED A REAL CSV. THAT IS
+> WHAT CLOSES THIS CAPABILITY, AND NOTHING ELSE WOULD HAVE.** Plans 01–06 shipped a pure parser, two
+> widened schema unions, a `fillEmptyOnly` flag on the one contact writer, `matchExisting` +
+> `importContacts`, an honest `pipelineTiles` bound and a three-step panel — every one of them green
+> under unit and integration tests, and none of them evidence that a user can import a file. Phase 19
+> shipped exactly that shape and was wrong (`runAgentLoop` dropped the clock; unit tests, SMOKE and a
+> paid eval gate all certified a capability no browser could reach). `e2e/pipeline-uat.spec.ts`
+> `step 3b` is the answer: it picks a file through the panel's own `<input type="file">`, reads the
+> four counts, is refused a Confirm until the box is ticked, writes, and finds the rows in the table.
+>
+> **THE THREE CLOSING INVARIANTS OF THIS SUBSYSTEM'S IMPORT PATH.**
+> 1. **An import fills blanks and destroys nothing — fields OR consent.** `fillEmptyOnly: true` means
+>    a non-empty `name`/`company`/`phone`/`title` is never overwritten, and an existing
+>    `asserted-by-user` consent record is never replaced by a batch attestation. Bulk data may not
+>    destroy hand-recorded data, in either plane. Browser-proven on STORED state, not on the reply:
+>    the file says `Jane D.` with a company, and the read-back says `Jane Doe` with the company
+>    filled and `origin` still `user-entered`.
+> 2. **Provenance is set once and is legible.** `origin: "imported"` is written when the row is
+>    CREATED and an import never re-origins a row somebody typed; `consentSource:
+>    "imported-attested"` stays DISTINCT from `asserted-by-user` all the way to the chip on
+>    `/dashboard/pipeline`, which renders `Consented <day> · imported`. `consentWording` holds
+>    `IMPORT_ATTESTATION` byte-for-byte — the browser step reads it back through
+>    `contacts.consentRecord` and compares against the imported constant, so a re-typed copy cannot
+>    keep the test green after the sentence drifts. The sentence IS the evidence.
+> 3. **The browser step is the proof of reachability, and it is a requirement.** Do not delete or
+>    weaken `step 3b`. If the panel is ever unmounted, renamed or moved, this step goes red and that
+>    is the point.
+>
+> **THE CEILINGS, ALL OF THEM, IN ONE PLACE.** `IMPORT_ROW_MAX` = **1,000 rows per import file**
+> (refused at the picker, naming the number). `IMPORT_BATCH_ROWS` = **100 rows per `importContacts`
+> call**. `IMPORT_MATCH_CHUNK` = **500 addresses per `matchExisting` call**, refused rather than
+> sliced. The two batch numbers are **not** Convex limits — every hard limit (arg 16 MiB, array 8192,
+> 32,000 docs scanned, 16,000 written) would permit the whole file in one call; the reasons are retry
+> blast radius, progress granularity and a shorter OCC window, and they must never be justified by a
+> limit they never approach. **NOTHING CAPS A TENANT'S TOTAL CONTACT COUNT** — 1,000 is per import,
+> not per book, and re-running the same file is a complete recovery strategy (upsert-by-address +
+> fill-empty-only converge), which is what buys the right to have no job queue at all.
+>
+> **HOW TO RUN THE BROWSER PROOF (it is fiddly, and two things bit this plan).** From `apps/web`
+> against an ALREADY-RUNNING stack — `convex dev` on `:3210` (not `--once`, not
+> `--typecheck=disable`) and a PRODUCTION build on `:3111` (`next dev` OOMs on `/workspace`):
+> `npx playwright test e2e/pipeline-uat.spec.ts --no-deps --workers=1`. (a) **`--grep "step 3b"` in
+> isolation CANNOT pass** — the step depends on the contacts step 3 creates; use `--grep "step 3"`.
+> (b) **Check `packages/backend/.env.local` before believing a red run.** The harness seeds through
+> the `convex run` CLI while the browser talks to `NEXT_PUBLIC_CONVEX_URL`; if those name different
+> deployments every seed lands somewhere the browser cannot see and the WHOLE suite fails at the
+> onboarding gate with no clue why. That is what happened here, and the symptom is
+> `onboarding.status` returning `needsOnboarding: true` for a tenant the seeder just reported
+> writing.)
+
 > Last verified: 2026-08-10 (Plan 19.1-06 -- THE IMPORT SURFACE EXISTS AND IS REACHABLE. Before
 > this plan `matchExisting` and `importContacts` had ZERO callers: fully tested, fully isolated,
 > and invisible to every user -- the phase-19 clock-plane failure exactly. **THE PANEL LIVES ON
