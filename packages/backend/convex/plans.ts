@@ -445,6 +445,9 @@ export const patchPlan = internalMutation({
     // `finance_write` is safe for the same reason `crm_write` is: the row it produces is INERT
     // until Approve, and `applyFinanceClaims` re-validates every claim at the gate. This mirror
     // and the schema union must move together (Pitfall 9, the line above).
+    // 17-05 ACTN-02 gap closure: widened a SIXTH time, in the SAME edit as schema.ts for the
+    // reason the 20-07 line above gives — this mirror and the schema union must move together,
+    // or every typecheck passes while the RUNTIME validator rejects the new kind (Pitfall 9).
     kind: v.optional(
       v.union(
         v.literal("memo"),
@@ -452,6 +455,7 @@ export const patchPlan = internalMutation({
         v.literal("media"),
         v.literal("crm_write"),
         v.literal("finance_write"),
+        v.literal("calendar_manage"),
       ),
     ),
     // 19-06 ACTN-05: the staged CRM operation list. UNLIKE the deck and the staged event, this IS
@@ -480,6 +484,26 @@ export const patchPlan = internalMutation({
     eventStartMs: v.optional(v.number()),
     eventDurationMs: v.optional(v.number()),
     eventTz: v.optional(v.string()),
+    // 17-05 ACTN-02 gap closure — the calendar_manage PROPOSAL fields, split down the SAME line
+    // the four slots above are split along, and for the same reason.
+    //
+    // STAGEABLE (here): which calendar, which operation, and which of the tenant's OWN registry
+    // rows. All three are things a human is about to read on a card and approve, and all three
+    // are re-validated at the gate — `calendarManagedEventId` is an `Id<"calendarEvents">`, so a
+    // forged value is a validator error, and a foreign-tenant row is refused by the terminal.
+    //
+    // NOT STAGEABLE (deliberately absent, and the ABSENCE is the guarantee — the
+    // `calendarEventId`/`calendarRunId` rule above, verbatim):
+    //   - `calendarExpectedEtag` is the If-Match value. Letting anything reachable from the model
+    //     supply it would let a STALE plan overwrite a newer calendar edit — the precise
+    //     data-loss path 17-VERIFICATION.md's G2 says a management surface must not have. Plan
+    //     17-09 copies a FRESH etag server-side from a provider inspection, through its own
+    //     internal mutation (the `persistStoryboard` precedent), never through this door.
+    //   - `calendarFailureCode` is written by the retrier terminal (17-08). Nothing reachable
+    //     from the model may claim an operation failed — or, worse, that it did not.
+    calendarProvider: v.optional(v.union(v.literal("google"), v.literal("microsoft"))),
+    calendarOperation: v.optional(v.union(v.literal("update"), v.literal("delete"))),
+    calendarManagedEventId: v.optional(v.id("calendarEvents")),
     // 20-02 MEDIA-01: `shots`, `artDirection`, `script`, `clipSeconds` and the six render-plane
     // fields are deliberately NOT args here, and that ABSENCE is the guarantee — the
     // `calendarEventId`/`calendarRunId` rule above, verbatim. The deck is written only by 20-08's
@@ -676,6 +700,21 @@ export const resetPlan = internalMutation({
       eventTz: undefined,
       calendarEventId: undefined,
       calendarRunId: undefined,
+      // 17-05 ACTN-02 gap closure: all FIVE calendar_manage proposal fields, explicitly. Same
+      // Pitfall-6 class as the staged event above and one rung worse — a surviving
+      // `calendarManagedEventId` + `calendarOperation` would point the NEXT approve in this
+      // thread at a REAL event on a REAL calendar that nobody just agreed to touch, and a
+      // surviving `calendarExpectedEtag` would carry a stale If-Match into it. patchPlan drops
+      // undefined, so each must be named to clear.
+      //
+      // THE REGISTRY IS NOT TOUCHED. `resetPlan` is a COMPOSITION reset of the proposal plane;
+      // `calendarEvents` rows are facts about real calendars and survive it. That asymmetry is
+      // the whole reason the registry is a table rather than more `plans` columns.
+      calendarProvider: undefined,
+      calendarOperation: undefined,
+      calendarManagedEventId: undefined,
+      calendarExpectedEtag: undefined,
+      calendarFailureCode: undefined,
       // 19-06 ACTN-05: same Pitfall-6 class — a staged operation list surviving a reset would be
       // applied by the NEXT approve in this thread, writing contacts nobody just agreed to.
       crmOperations: undefined,

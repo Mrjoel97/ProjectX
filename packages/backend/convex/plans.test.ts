@@ -723,3 +723,172 @@ describe("patchPlan accepts kind: crm_write (19-06 — the hand-maintained union
     expect(row?.status).toBe("collecting");
   });
 });
+
+// ── patchPlan / resetPlan for calendar_manage (17-05, the ACTN-02 gap closure) ────────────────
+//
+// Two separate claims live here and they must not be confused:
+//   1. the PROPOSAL plane (five `plans` fields) is reset-safe, and
+//   2. the DURABLE registry (`calendarEvents`) is NOT touched by a reset.
+// A test that only proved (1) would pass just as happily against a resetPlan that deleted the
+// user's real calendar events out of our records, which is the failure this table exists to make
+// impossible.
+describe("calendar_manage proposal fields (17-05 — stage, reset, and the ref-plane boundary)", () => {
+  const seedPlan = (t: ReturnType<typeof convexTest>) =>
+    t.run((ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: `thread_manage_${crypto.randomUUID()}`,
+        status: "collecting" as const,
+        recipients: [],
+        createdAt: Date.now(),
+      }),
+    );
+
+  const seedRegistryRow = (t: ReturnType<typeof convexTest>, sourcePlanId: Id<"plans">) =>
+    t.run((ctx) =>
+      ctx.db.insert("calendarEvents", {
+        tenantId: TENANT,
+        provider: "google" as const,
+        externalEventId: "0123456789abc",
+        etag: 'W/"3"',
+        title: "Governed planning review",
+        startMs: Date.UTC(2026, 7, 3, 13, 0),
+        durationMs: 30 * 60_000,
+        tz: "Africa/Dar_es_Salaam",
+        sourcePlanId,
+        attendeeFree: true,
+        status: "active" as const,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      }),
+    );
+
+  // PITFALL 9, the hand-maintained mirror: widening `schema.ts`'s `kind` union without widening
+  // `patchPlan`'s leaves every typecheck green while the RUNTIME validator rejects the new kind.
+  // Only a call through the real validator sees it.
+  test("the RUNTIME validator accepts the seventh kind and the three STAGEABLE proposal fields", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await seedPlan(t);
+    const managedId = await seedRegistryRow(t, planId);
+
+    await t.mutation(internal.plans.patchPlan, {
+      planId,
+      kind: "calendar_manage",
+      status: "proposed",
+      calendarProvider: "microsoft",
+      calendarOperation: "delete",
+      calendarManagedEventId: managedId,
+    });
+
+    const row = await t.run((ctx) => ctx.db.get(planId));
+    expect(row?.kind).toBe("calendar_manage");
+    expect(row?.calendarProvider).toBe("microsoft");
+    expect(row?.calendarOperation).toBe("delete");
+    expect(row?.calendarManagedEventId).toBe(managedId);
+  });
+
+  // THE CONTENT/REF BOUNDARY. `calendarExpectedEtag` is the If-Match value: anything reachable
+  // from the model that could supply it could make a STALE plan overwrite a newer calendar edit,
+  // which is the exact data-loss path 17-VERIFICATION.md's G2 says a management surface must not
+  // have. `calendarFailureCode` would let the model claim an operation failed — or that it did
+  // not. The provider id and the run id are the 17-01 rule, unchanged.
+  //
+  // Named mutation that turns this RED: add any of the four as a `patchPlan` arg in plans.ts.
+  //
+  // Written as four LITERAL keys rather than a `test.each` over field names, and that is not
+  // style: a computed key (`{ planId, [field]: value }`) widens the object type, so TypeScript
+  // raises no error, the `@ts-expect-error` reports itself unused, and the compile half of the
+  // assertion silently evaporates. Caught by `tsc` on the first run of this block (2026-08-11).
+  test("patchPlan REFUSES the etag, the failure code, the provider id and the run id", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await seedPlan(t);
+
+    await expect(
+      // @ts-expect-error — the If-Match etag is NOT a patchPlan arg. A model-suppliable etag is
+      // the stale-overwrite path G2 exists to close.
+      t.mutation(internal.plans.patchPlan, { planId, calendarExpectedEtag: 'W/"forged"' }),
+    ).rejects.toThrow();
+    await expect(
+      // @ts-expect-error — nothing reachable from the model may claim an operation failed.
+      t.mutation(internal.plans.patchPlan, { planId, calendarFailureCode: "conflict" }),
+    ).rejects.toThrow();
+    await expect(
+      // @ts-expect-error — the 17-01 rule, unchanged: no model-reachable write of a provider ref.
+      t.mutation(internal.plans.patchPlan, { planId, calendarEventId: "evt_forged" }),
+    ).rejects.toThrow();
+    await expect(
+      // @ts-expect-error — the 17-01 rule, unchanged: no model-reachable write of a run id.
+      t.mutation(internal.plans.patchPlan, { planId, calendarRunId: "run_forged" }),
+    ).rejects.toThrow();
+
+    const row = await t.run((ctx) => ctx.db.get(planId));
+    expect(row?.calendarExpectedEtag).toBeUndefined();
+    expect(row?.calendarFailureCode).toBeUndefined();
+    expect(row?.calendarEventId).toBeUndefined();
+    expect(row?.calendarRunId).toBeUndefined();
+  });
+
+  // Same Pitfall-6 class as the staged event, one rung worse: a surviving managed-event id plus
+  // operation would point the NEXT approve in this thread at a REAL event on a REAL calendar.
+  // Named mutation that turns this RED: delete `calendarExpectedEtag: undefined` from resetPlan.
+  test("resetPlan clears ALL FIVE proposal fields and the kind", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await seedPlan(t);
+    const managedId = await seedRegistryRow(t, planId);
+    // The two non-stageable fields are written by a DIRECT patch, exactly as the 17-08 terminal
+    // will — a reset must clear them however they arrived.
+    await t.mutation(internal.plans.patchPlan, {
+      planId,
+      kind: "calendar_manage",
+      calendarProvider: "google",
+      calendarOperation: "update",
+      calendarManagedEventId: managedId,
+    });
+    await t.run((ctx) =>
+      ctx.db.patch(planId, {
+        calendarExpectedEtag: 'W/"3"',
+        calendarFailureCode: "conflict" as const,
+      }),
+    );
+    const staged = await t.run((ctx) => ctx.db.get(planId));
+    // Anti-vacuity floor: prove all five were really set before asserting they are gone.
+    for (const field of [
+      "calendarProvider",
+      "calendarOperation",
+      "calendarManagedEventId",
+      "calendarExpectedEtag",
+      "calendarFailureCode",
+    ] as const) {
+      expect(staged?.[field], `${field} was never staged — the reset assertion would be vacuous`)
+        .toBeDefined();
+    }
+
+    await t.mutation(internal.plans.resetPlan, { planId });
+
+    const row = await t.run((ctx) => ctx.db.get(planId));
+    expect(row?.calendarProvider).toBeUndefined();
+    expect(row?.calendarOperation).toBeUndefined();
+    expect(row?.calendarManagedEventId).toBeUndefined();
+    expect(row?.calendarExpectedEtag).toBeUndefined();
+    expect(row?.calendarFailureCode).toBeUndefined();
+    expect(row?.kind).toBeUndefined();
+    expect(row?.status).toBe("collecting");
+  });
+
+  // THE ASYMMETRY, asserted. `resetPlan` is a COMPOSITION reset of the proposal plane; a
+  // `calendarEvents` row is a FACT about a real calendar and must outlive it. If this ever fails,
+  // a user typing "start over" in a thread has lost our record of events that still exist.
+  test("resetPlan leaves the durable registry row untouched, byte for byte", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await seedPlan(t);
+    const managedId = await seedRegistryRow(t, planId);
+    const before = await t.run((ctx) => ctx.db.get(managedId));
+
+    await t.mutation(internal.plans.resetPlan, { planId });
+
+    const after = await t.run((ctx) => ctx.db.get(managedId));
+    expect(after).not.toBeNull();
+    expect(after).toEqual(before);
+    expect(await t.run((ctx) => ctx.db.query("calendarEvents").collect())).toHaveLength(1);
+  });
+});

@@ -12,13 +12,27 @@ export const ACTION_TYPES = [
   "media",
   "crm_write",
   "finance_write",
+  // 17-05 (ACTN-02 gap closure, G2): the SEVENTH member. `calendar_event` stays CREATE-only;
+  // managing an event Pikar already made is a different governed act with its own concurrency
+  // rule (etag / If-Match / 412), so it is a NEW type rather than a repurposing of the shipped
+  // one. ONE type for both providers and both operations — not one per provider and not one per
+  // verb: the provider and the operation are closed FIELDS on the plan row (@pikar/core
+  // calendarManagement), which is what stops the arm table growing a member per combination.
+  "calendar_manage",
 ] as const;
 export type ActionType = (typeof ACTION_TYPES)[number];
 
 /** plans.kind is `v.optional(v.literal("memo"))` — ABSENT means the email plan every prior
  *  phase built, so this needs no migration and no backfill. */
 export const actionTypeOf = (
-  kind: "memo" | "calendar_event" | "media" | "crm_write" | "finance_write" | undefined,
+  kind:
+    | "memo"
+    | "calendar_event"
+    | "media"
+    | "crm_write"
+    | "finance_write"
+    | "calendar_manage"
+    | undefined,
 ): ActionType => kind ?? "email";
 
 /** How an arm executes. `workflow` = durable multi-step orchestration (email). `inline` = a single
@@ -62,7 +76,15 @@ export const actionTypeOf = (
  *      serializable, so approve-all-or-none falls out for free. Routing it through the retrier
  *      would buy at-least-once delivery of a write that is already exactly-once.
  *  The standing lesson, since this comment has now been wrong twice: a future phase's arm is a
- *  PREDICTION until its member is in `ARMS` below. Read the table, not the prose. */
+ *  PREDICTION until its member is in `ARMS` below. Read the table, not the prose.
+ *
+ *  CORRECTED A FOURTH TIME in 17-05 (the ACTN-02 gap closure). `externalAction` now has THREE
+ *  occupants: `calendar_event`, `media` and `calendar_manage`. The sentence above that says
+ *  "TWO occupants" was true on 2026-08-10 and is not any more — which is the same failure this
+ *  comment keeps having, so it is corrected rather than rewritten. `calendar_manage` is the
+ *  only one that is NOT EXECUTABLE: its `EXTERNAL_TARGETS` entry in cockpit.ts throws until
+ *  Plan 17-08 lands the real thunk. An arm bind is a COMPILE contract, not a promise that a
+ *  provider call exists — read `EXTERNAL_TARGETS`, not this line, for what actually runs. */
 export type Arm = "workflow" | "inline" | "externalAction";
 
 /** THE arm table. A `satisfies Record<ActionType, Arm>` bind, not a ternary: a ternary is total by
@@ -80,6 +102,12 @@ const ARMS = {
   // 2026-08-10: the `inline` arm's THIRD occupant. A figure update is one transactional write on
   // our own `financeInputs` table — no fetch, nothing for the retrier to retry.
   finance_write: "inline",
+  // 17-05 ACTN-02 gap closure: the `externalAction` arm's THIRD occupant, for the same
+  // structural reason `calendar_event` was its first — an update or a delete is a provider HTTP
+  // call, and `executePlan` is a `tenantMutation` that cannot fetch. NOT EXECUTABLE YET:
+  // `EXTERNAL_TARGETS` in cockpit.ts carries a loudly-throwing stub until Plan 17-08 replaces it
+  // with the real retrier thunk. This bind is what makes that replacement one line in one place.
+  calendar_manage: "externalAction",
 } as const satisfies Record<ActionType, Arm>;
 
 export const armFor = (t: ActionType): Arm => ARMS[t];

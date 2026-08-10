@@ -158,6 +158,9 @@ export function ApprovalKindBadge({ kind }: { kind: PlanKind }) {
     memo: "Next-step memo",
     crm_write: "CRM update",
     finance_write: "Figure update",
+    // 17-05 (ACTN-02 gap closure). The `Record<PlanKind, string>` bind is exhaustive on purpose,
+    // so the seventh action type could not be added without visiting this badge.
+    calendar_manage: "Calendar change",
   };
   return (
     <span
@@ -227,6 +230,10 @@ function ageLabel(epoch: number): string {
 
 function titleFor(plan: Plan): string {
   if (plan.kind === "calendar_event") return plan.eventTitle || "Calendar plan";
+  if (plan.kind === "calendar_manage")
+    return plan.calendarOperation === "delete"
+      ? "Remove an event from your calendar"
+      : "Update an event on your calendar";
   if (plan.kind === "memo") return plan.body?.split("\n")[0] || "Next-step memo";
   if (plan.kind === "crm_write") {
     const count = Array.isArray(plan.crmOperations) ? plan.crmOperations.length : 0;
@@ -249,6 +256,9 @@ function titleFor(plan: Plan): string {
 export function actionLabel(kind: PlanKind): string {
   if (kind === "memo") return "Approve & file to vault";
   if (kind === "calendar_event") return "Approve & create event";
+  // 17-05: kind-only, so it cannot name update vs delete — the cockpit card can (it reads
+  // `plan.calendarOperation`) and does. What matters here is that it never says "send".
+  if (kind === "calendar_manage") return "Approve calendar change";
   // 19-06 ACTN-05: every label on this surface must name what Approve DOES. "Approve & send" on a
   // CRM write would promise an email the inline arm structurally cannot produce.
   if (kind === "crm_write") return "Approve & save to records";

@@ -373,6 +373,12 @@ export default defineSchema({
     // 2026-08-10 widened it a FIFTH time: "finance_write" = a list of staged figure claims, applied
     // on Approve by the same `inline` arm. invariant 11 — the ACTOR decides gating: the human
     // editing the same figure through `cash.saveInput` stays ungated and stages no plan at all.
+    // 17-05 widened it a SIXTH time (the ACTN-02 gap closure): "calendar_manage" = an UPDATE or a
+    // DELETE of an event Pikar already created, staged for the same human Approve gate and
+    // executed by the same `externalAction` arm. A NEW member rather than a reuse of
+    // "calendar_event": create has no concurrency problem, management does (etag / If-Match / 412),
+    // and the two cards must promise different things. Still optional, still closed, still no
+    // migration and no backfill — ABSENT still means email.
     kind: v.optional(
       v.union(
         v.literal("memo"),
@@ -380,6 +386,7 @@ export default defineSchema({
         v.literal("media"),
         v.literal("crm_write"),
         v.literal("finance_write"),
+        v.literal("calendar_manage"),
       ),
     ),
     /** 19-06 ACTN-05: the staged CRM operation list a `crm_write` plan applies on Approve.
@@ -423,6 +430,38 @@ export default defineSchema({
     mediaRunId: v.optional(v.string()), // 20-07: the media submit run — see by_media_run below
     calendarRunId: v.optional(v.string()), // the action-retrier RunId — the ONLY correlation the
     // retrier's onComplete gets on a FAILED run (it carries {runId, result} and no context).
+    // ── 17-05 (ACTN-02 gap closure) the calendar_manage PROPOSAL plane ───────────────────────
+    // All optional → no migration, no backfill: a Phase-17 create row has none of them, and an
+    // ABSENT `calendarProvider` MEANS GOOGLE (@pikar/core `parseCalendarProvider`), because the
+    // shipped slice was Google-only. `resetPlan` wipes all five — the `eventTitle` rule verbatim.
+    /** Which calendar the operation targets. Closed union; absent = google (legacy create rows). */
+    calendarProvider: v.optional(v.union(v.literal("google"), v.literal("microsoft"))),
+    /** update | delete. "Move"/"reschedule" are an update and "cancel"/"remove" a delete — the
+     *  user words are mapped in @pikar/core, so this column stays two literals wide. */
+    calendarOperation: v.optional(v.union(v.literal("update"), v.literal("delete"))),
+    /** The REGISTRY row this operation manages. A ref to OUR OWN table, never a provider id:
+     *  management is limited to Pikar-created, attendee-free events, and this is the link that
+     *  makes that enforceable rather than aspirational. */
+    calendarManagedEventId: v.optional(v.id("calendarEvents")),
+    /** The provider etag the human approved AGAINST — the If-Match value 17-08 will send. It is
+     *  deliberately NOT a `patchPlan` arg (see plans.ts): a model-supplied etag would let a stale
+     *  plan overwrite a newer calendar edit, which is the exact data-loss path G2 exists to close. */
+    calendarExpectedEtag: v.optional(v.string()),
+    /** A BOUNDED failure CODE from @pikar/core's `CALENDAR_FAILURE_CODES` — never provider prose.
+     *  A Google 400 or a Graph 412 body can echo the event summary straight back (§4), so the
+     *  terminal writes a code here and the card renders copy keyed off it. Also not a patchPlan
+     *  arg: nothing reachable from the model may claim an operation failed, or that it did not. */
+    calendarFailureCode: v.optional(
+      v.union(
+        v.literal("conflict"),
+        v.literal("not_found"),
+        v.literal("reauth"),
+        v.literal("attendees_present"),
+        v.literal("needs_inspection"),
+        v.literal("not_managed"),
+        v.literal("provider_error"),
+      ),
+    ),
     // ── Phase-20 (MEDIA-01) media canvas: the BLOCK DECK and the RENDER PLANE ──────────────
     // All optional → no migration, no backfill (the sendAt/attachments precedent). CONTENT-PLANE
     // ONLY: the block prompts and the narration lines are user-facing creative text and are NEVER
@@ -891,6 +930,51 @@ export default defineSchema({
     busy: v.array(v.object({ startMs: v.number(), endMs: v.number() })),
   }).index("by_tenant", ["tenantId"]),
 
+  // ── 17-05 (ACTN-02 gap closure, G2): the DURABLE managed-event registry ────────────────────
+  //
+  // WHY A TABLE AND NOT MORE `plans` COLUMNS. 17-RESEARCH's Open Question 4 recommended optional
+  // plan fields, and for CREATE that was right — one row per plan, no lifecycle. Management
+  // inverts it: `resetPlan` exists to wipe a plan's staged content, and an event that Pikar
+  // really put on a real calendar MUST NOT disappear because the user typed "start over" in the
+  // thread. The plan is the PROPOSAL plane and is reset-able; this is the FACT plane and is not.
+  // It is also what bounds management: 17-09's listing reads THIS table, so an arbitrary mailbox
+  // event is unreachable by construction rather than by a filter someone has to remember.
+  //
+  // §4: refs, ids, times and one boolean. `title` is the only content-plane field and it is here
+  // because the card must show the human WHICH event is about to move — it is never audited.
+  calendarEvents: defineTable({
+    tenantId: v.string(),
+    provider: v.union(v.literal("google"), v.literal("microsoft")),
+    /** The provider's own event id — an opaque REF (the workflowId/storageId precedent). */
+    externalEventId: v.string(),
+    /** The provider ETag. OPTIONAL only for rows a later plan explicitly backfills from the
+     *  pre-17-05 create path, and such a row is NOT manageable until provider inspection supplies
+     *  one — @pikar/core `manageability` returns `needs_inspection` for exactly this case. A
+     *  missing etag must never be read as "no concurrency check needed". */
+    etag: v.optional(v.string()),
+    title: v.string(),
+    startMs: v.number(), // ONE absolute epoch ms — the plans.sendAt rule verbatim
+    durationMs: v.number(), // duration as ms, NOT an end wall-clock string
+    tz: v.string(), // the TRUSTED client's IANA zone (§2-D). Never the model's.
+    /** The plan that created it. Provenance: which approved act put this on a real calendar. */
+    sourcePlanId: v.id("plans"),
+    /** Asserted at CREATE time, when we know the body we sent carried no `attendees`. A false
+     *  row is refused by `manageability` before any provider call, because touching an
+     *  attendee-bearing event can make the provider email people outside plan/audit/DLQ. */
+    attendeeFree: v.boolean(),
+    status: v.union(v.literal("active"), v.literal("deleted")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    // The listing index (17-09): a tenant's live managed events, bounded, never a table scan.
+    .index("by_tenant_status", ["tenantId", "status"])
+    // The composite identity lookup. `tenantId` is the FIRST field and that is load-bearing:
+    // two tenants can legitimately hold the same provider event id (a shared calendar, a
+    // restored backup, a test fixture), so an index without it would let one tenant's update
+    // resolve to another tenant's row. Convex index queries must eq the prefix in order, so the
+    // tenant predicate cannot be forgotten at a call site — it is unwritable, not just wrong.
+    .index("by_tenant_provider_external", ["tenantId", "provider", "externalEventId"]),
+
   inboxFixtures: defineTable({
     tenantId: v.string(),
     offlineDigest: v.boolean(), // true = E2E (the digest short-circuits offline); false = eval (a LIVE digest runs, so the injection probe is real)
@@ -961,6 +1045,24 @@ export default defineSchema({
     refreshToken: v.string(),
     accessToken: v.optional(v.string()),
     expiresAt: v.optional(v.number()),
+    scope: v.string(),
+    updatedAt: v.number(),
+  }).index("by_tenant", ["tenantId"]),
+
+  // 17-05 (ACTN-02 gap closure, G1): the Microsoft Graph grant. THE SAME CROWN-JEWEL RULE as
+  // `gmailTokens` above — read by internal functions ONLY, never returned to a client query,
+  // never in the browser, never in an audit or dead-letter payload.
+  //
+  // A SECOND table rather than a `provider` column on `gmailTokens`: that row is the GOOGLE grant
+  // and `freshAccessToken` is documented as "the ONE token-refresh root" over it. Adding a
+  // discriminator would make every existing `by_tenant` `.unique()` read ambiguous, and the two
+  // grants have genuinely different refresh endpoints, scope strings and expiry behaviour.
+  // NOTHING WRITES THIS TABLE YET — Plan 17-06 owns the OAuth flow that fills it.
+  microsoftCalendarTokens: defineTable({
+    tenantId: v.string(),
+    refreshToken: v.string(),
+    accessToken: v.string(),
+    expiresAt: v.number(),
     scope: v.string(),
     updatedAt: v.number(),
   }).index("by_tenant", ["tenantId"]),

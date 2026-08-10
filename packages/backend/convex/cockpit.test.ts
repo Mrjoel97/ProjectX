@@ -256,6 +256,82 @@ describe("executePlan calendar arm (ACTN-02)", () => {
     expect(await t.run((ctx) => ctx.db.query("mediaJobs").collect())).toHaveLength(0);
   });
 
+  // ── 17-05: THE INERT calendar_manage TARGET ────────────────────────────────────────────────
+  //
+  // `calendar_manage` is bound to the `externalAction` arm so the four gap-closure waves after
+  // this one compile, but its `EXTERNAL_TARGETS` member is a stub that throws until Plan 17-08.
+  // Nothing can stage such a plan (no tool writes the kind until 17-09), so this is reached only
+  // by a MANUALLY seeded row — which is precisely what makes it worth asserting: the claim is
+  // that if it is ever reached, it fails LOUDLY and leaves nothing behind.
+  //
+  // Named mutation that turns this RED: replace the stub's `throw` with `Promise.resolve("run_x")`.
+  test("a manually seeded calendar_manage plan throws loudly and starts nothing", async () => {
+    const t = withDelivery();
+    const planId = await t.run((ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: `calendar_manage_thread_${crypto.randomUUID()}`,
+        kind: "calendar_manage" as const,
+        status: "proposed" as const,
+        calendarProvider: "google" as const,
+        calendarOperation: "delete" as const,
+        createdAt: Date.now(),
+      }),
+    );
+
+    await expect(
+      t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId }),
+    ).rejects.toThrow(/calendar manage not wired \(17-08\)/);
+    await t.finishInProgressScheduledFunctions();
+
+    // A throw aborts the whole Convex mutation, so the `status: "approved"` patch that runs BEFORE
+    // the target thunk rolls back with it. That rollback — not an ordering guess — is what makes
+    // "no plan-state patch" true, and this is the assertion that holds it.
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan?.status).toBe("proposed");
+    expect(plan?.correlationId).toBeUndefined();
+    expect(plan?.calendarRunId).toBeUndefined();
+    expect(plan?.mediaRunId).toBeUndefined();
+    expect(plan?.calendarEventId).toBeUndefined();
+    // No provider action, no gmail fan-out, no media reservation, no registry row.
+    expect(await countRequests(t)).toHaveLength(0);
+    expect(plan?.workflowId).toBeUndefined();
+    expect(await t.run((ctx) => ctx.db.query("mediaJobs").collect())).toHaveLength(0);
+    expect(await t.run((ctx) => ctx.db.query("calendarEvents").collect())).toHaveLength(0);
+  });
+
+  // The shipped CREATE path must be untouched by the gap closure — 17-VERIFICATION.md uses it as
+  // the positive regression anchor for every plan from 17-05 to 17-11. A `calendar_manage` row
+  // that could reach `internal.calendar.createEvent` would be the worst possible version of this
+  // change: a management proposal quietly creating a NEW event.
+  test("the inert manage target cannot reach the shipped calendar_event create path", async () => {
+    const t = withDelivery();
+    const createId = await seedCalendarPlan(t, "proposed");
+    const manageId = await t.run((ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: `calendar_manage_thread_${crypto.randomUUID()}`,
+        kind: "calendar_manage" as const,
+        status: "proposed" as const,
+        createdAt: Date.now(),
+      }),
+    );
+
+    await expect(
+      t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId: manageId }),
+    ).rejects.toThrow(/17-08/);
+    // …and the create plan on the SAME tenant still approves normally. Anti-vacuity floor: without
+    // this the test above would pass just as well against an arm that broke calendar entirely.
+    expect(
+      await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, {
+        planId: createId,
+      }),
+    ).toEqual({ ok: true });
+    await t.finishInProgressScheduledFunctions();
+
+    expect((await t.run((ctx) => ctx.db.get(createId)))?.calendarRunId).toEqual(expect.any(String));
+    expect((await t.run((ctx) => ctx.db.get(manageId)))?.calendarRunId).toBeUndefined();
+  });
   test("deliverApprovedPlan.ts is byte-unchanged — it is the EMAIL entry point, not a dispatcher", async () => {
     // Routing an external action through it would make the gmail fan-out reachable from calendar
     // AND from media. The file is asserted by content hash against the value 12-05 shipped, so a

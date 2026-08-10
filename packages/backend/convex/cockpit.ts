@@ -585,6 +585,12 @@ const _ARM_TABLE = {
   // one — a figure update writes OUR OWN `financeInputs` rows, so there is no fetch and no
   // `EXTERNAL_TARGETS` entry to give it.
   finance_write: "inline",
+  // 17-05 (ACTN-02 gap closure): the `externalAction` arm's THIRD occupant. An update or a
+  // delete against Google/Graph is a provider HTTP call, so it is the same arm `calendar_event`
+  // takes — and it therefore NEEDS an `EXTERNAL_TARGETS` entry below, which is exactly the
+  // compile error the DERIVED `ExternalActionType` exists to produce. That entry is an
+  // intentionally inert stub until Plan 17-08.
+  calendar_manage: "externalAction",
 } as const satisfies Record<ActionType, Arm>;
 
 /** The action types whose arm is `externalAction`, DERIVED from the table above rather than
@@ -637,6 +643,28 @@ const EXTERNAL_TARGETS = {
       { tenantId: a.tenantId, batchId: a.batchId ?? "" },
       { onComplete: internal.mediaComplete.onSubmitComplete },
     ),
+  /**
+   * 17-05 — AN INTENTIONALLY UNREACHABLE STUB, and the 17-01 inert-arm precedent verbatim.
+   *
+   * `calendar_manage` is bound to `externalAction` in `_ARM_TABLE` above, so the DERIVED
+   * `ExternalActionType` makes this table incomplete without a member here — a COMPILE error,
+   * which is the whole point of deriving it. The alternative was to leave the arm bind out until
+   * 17-08, which would have meant four waves of code that does not compile.
+   *
+   * It is unreachable TODAY because nothing can stage a `calendar_manage` plan: no tool writes
+   * `kind: "calendar_manage"` until Plan 17-09. If it is ever reached it THROWS, and a throw
+   * inside `executePlan` aborts the whole Convex mutation — so the `status: "approved"` patch a
+   * few lines below rolls back with it and the plan is left exactly as the human found it. That
+   * rollback is the mechanism behind "no run id and no plan-state patch", and `cockpit.test.ts`
+   * asserts it against a manually seeded row rather than trusting the sentence.
+   *
+   * **PLAN 17-08 REPLACES THIS EXACT MEMBER** with the real `retrier.run(ctx,
+   * internal.calendar.manageEvent, ...)` thunk plus its `onComplete` terminal. One member, one
+   * edit, one place — the same hand-off 17-01 made to 17-04 for `calendar_event`.
+   */
+  calendar_manage: () => {
+    throw new Error("calendar manage not wired (17-08)");
+  },
 } satisfies Record<ExternalActionType, (ctx: MutationCtx, a: ExternalArgs) => Promise<unknown>>;
 
 type ExternalArgs = {

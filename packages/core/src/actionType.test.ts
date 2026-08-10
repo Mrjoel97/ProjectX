@@ -35,7 +35,9 @@ describe("actionTypeOf (ACTN-01 closed action-type union)", () => {
 
   // EXACT equality, never `.includes` — a member added without visiting every registration site
   // must fail HERE, at the one assertion that reads the whole union.
-  test("the union is exactly email + memo + calendar_event + media + crm_write + finance_write", () => {
+  // 17-05 added the SEVENTH member. The name in this test title is deliberately long: it is the
+  // one place a reader can see the whole union without opening the source.
+  test("the union is exactly email + memo + calendar_event + media + crm_write + finance_write + calendar_manage", () => {
     expect(ACTION_TYPES).toEqual([
       "email",
       "memo",
@@ -43,7 +45,13 @@ describe("actionTypeOf (ACTN-01 closed action-type union)", () => {
       "media",
       "crm_write",
       "finance_write",
+      "calendar_manage",
     ]);
+  });
+
+  test("calendar_manage maps to calendar_manage — it does NOT collapse into calendar_event", () => {
+    expect(actionTypeOf("calendar_manage")).toBe("calendar_manage");
+    expect(actionTypeOf("calendar_manage")).not.toBe("calendar_event");
   });
 });
 
@@ -91,6 +99,20 @@ describe("armFor (ACTN-01 — the arm table executePlan dispatches over)", () =>
     expect(armFor("finance_write")).toBe("inline");
   });
 
+  // 17-05 (ACTN-02 gap closure): the `externalAction` arm's THIRD occupant. Named mutation that
+  // turns this RED: change `calendar_manage` to "inline" in the ARMS table. It is NOT inline for
+  // the same reason `calendar_event` is not — a provider update/delete is an HTTP call and
+  // `executePlan` is a `tenantMutation`, which cannot fetch.
+  test("calendar_manage executes as an externalAction — the arm now has THREE occupants", () => {
+    expect(armFor("calendar_manage")).toBe("externalAction");
+    expect(armFor("calendar_manage")).toBe(armFor("calendar_event"));
+    expect(armFor("calendar_manage")).not.toBe("inline");
+  });
+
+  // The arm is bound, and that is ALL it is: 17-05 ships no provider call. The proof that it is
+  // inert lives where the target does — `cockpit.test.ts` drives a seeded `calendar_manage` plan
+  // through `executePlan` and asserts the stub throws and nothing is patched.
+
   // Totality at RUNTIME as well as at compile time: a member added to the union without an arm
   // cannot slip through here either. armFor is a table lookup, so an unmapped member reads
   // `undefined` — this is the assertion that catches it.
@@ -122,6 +144,7 @@ const _COMPLETE_ARMS = {
   media: "externalAction",
   crm_write: "inline",
   finance_write: "inline",
+  calendar_manage: "externalAction",
 } as const satisfies Record<ActionType, Arm>;
 
 // @ts-expect-error — omitting an ActionType's arm MUST NOT compile (`memo` and

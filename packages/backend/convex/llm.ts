@@ -1052,7 +1052,15 @@ type PlanRow = {
   // widening `ACTION_TYPES` and this line without widening that one is now an assignability error
   // at the call site. That is the compile-time guard the corrected note there says does not exist;
   // it exists for the NEXT action type. Keep the two unions identical.
-  kind?: "memo" | "calendar_event" | "media" | "crm_write" | "finance_write";
+  // 17-05: the NEXT action type arrived (`calendar_manage`) and the guard worked exactly as
+  // described — widening `plans.kind` alone stopped compiling at four `readPlan()` call sites.
+  kind?:
+    | "memo"
+    | "calendar_event"
+    | "media"
+    | "crm_write"
+    | "finance_write"
+    | "calendar_manage";
 };
 
 // One formatter for the resolved send instant — shared by buildAgentContext's Send-time line
@@ -1070,7 +1078,18 @@ const fmtSendInstant = (ms: number, tz?: string) =>
 export function buildAgentContext(
   plan: {
     /** ACTN-01 action type. ABSENT ⇒ email (actionTypeOf), so every pre-Phase-15 row is unchanged. */
-    kind?: "memo" | "calendar_event" | "media" | "crm_write" | "finance_write";
+    kind?:
+      | "memo"
+      | "calendar_event"
+      | "media"
+      | "crm_write"
+      | "finance_write"
+      // 17-05: declared so a `calendar_manage` row is ASSIGNABLE here. There is deliberately no
+      // `calendar_manage` BRANCH below — nothing can stage such a plan until Plan 17-09, which
+      // owns the staging tool and must add the branch in the same commit. Note the SAME gap
+      // already exists for `calendar_event`: this function is the hand-maintained, model-facing
+      // half of the executor, and only `memo`/`crm_write`/`finance_write` have branches.
+      | "calendar_manage";
     recipients?: string[];
     subject?: string;
     body?: string;

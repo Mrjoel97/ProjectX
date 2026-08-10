@@ -962,3 +962,145 @@ describe("calendar tenant isolation (SC#3)", () => {
     });
   });
 });
+
+// ── The durable managed-event registry (17-05, the ACTN-02 G2 substrate) ─────────────────────
+//
+// 17-05 adds NO provider call. What it adds is the table 17-08's create landing and 17-09's
+// read-only listing will use, and the only thing worth asserting today is the property that
+// makes those two safe: the composite identity lookup is TENANT-FIRST, so one tenant's
+// managed-event id can never resolve to another tenant's row.
+//
+// Two tenants holding the SAME provider event id is not a contrived case — a shared calendar, a
+// restored backup, or (as here) a seeded fixture all produce it, and it is exactly the input an
+// index without `tenantId` would get wrong.
+describe("calendarEvents registry (17-05 — tenant-scoped identity, reset-proof)", () => {
+  const TENANT_A = "tenant_registry_a";
+  const TENANT_B = "tenant_registry_b";
+  const SHARED_EXTERNAL_ID = "0123456789abc"; // base32hex, the eventIdFor grammar
+
+  async function seedRow(
+    t: ReturnType<typeof convexTest>,
+    tenantId: string,
+    overrides: Partial<{
+      provider: "google" | "microsoft";
+      externalEventId: string;
+      etag: string | undefined;
+      title: string;
+      status: "active" | "deleted";
+      attendeeFree: boolean;
+    }> = {},
+  ) {
+    return t.run(async (ctx) => {
+      const sourcePlanId = await ctx.db.insert("plans", {
+        tenantId,
+        threadId: `registry_thread_${crypto.randomUUID()}`,
+        kind: "calendar_event" as const,
+        status: "done" as const,
+        createdAt: BASE_MS,
+      });
+      return ctx.db.insert("calendarEvents", {
+        tenantId,
+        provider: overrides.provider ?? "google",
+        externalEventId: overrides.externalEventId ?? SHARED_EXTERNAL_ID,
+        etag: "etag" in overrides ? overrides.etag : 'W/"1"',
+        title: overrides.title ?? `${tenantId} planning review`,
+        startMs: BASE_MS + 3_600_000,
+        durationMs: 30 * 60_000,
+        tz: "Africa/Dar_es_Salaam",
+        sourcePlanId,
+        attendeeFree: overrides.attendeeFree ?? true,
+        status: overrides.status ?? "active",
+        createdAt: BASE_MS,
+        updatedAt: BASE_MS,
+      });
+    });
+  }
+
+  /** THE composite lookup, exactly as 17-08/17-09 must perform it. */
+  const lookup = (
+    t: ReturnType<typeof convexTest>,
+    tenantId: string,
+    provider: "google" | "microsoft",
+    externalEventId: string,
+  ) =>
+    t.run((ctx) =>
+      ctx.db
+        .query("calendarEvents")
+        .withIndex("by_tenant_provider_external", (q) =>
+          q
+            .eq("tenantId", tenantId)
+            .eq("provider", provider)
+            .eq("externalEventId", externalEventId),
+        )
+        .unique(),
+    );
+
+  // Named mutation that turns this RED: drop `tenantId` from the `by_tenant_provider_external`
+  // index in schema.ts (and the matching `.eq("tenantId", …)` above — a Convex index query must
+  // eq its prefix in order, so the two are one edit). The lookup then matches BOTH rows and
+  // `.unique()` throws.
+  test("two tenants may hold the SAME provider event id and neither lookup crosses", async () => {
+    const t = harness();
+    const a = await seedRow(t, TENANT_A);
+    const b = await seedRow(t, TENANT_B);
+
+    // Anti-vacuity floor: both sides really wrote a row, and they really share the identity that
+    // a tenant-less index would collide on.
+    expect(a).not.toBe(b);
+    expect(await t.run((ctx) => ctx.db.query("calendarEvents").collect())).toHaveLength(2);
+
+    const foundA = await lookup(t, TENANT_A, "google", SHARED_EXTERNAL_ID);
+    const foundB = await lookup(t, TENANT_B, "google", SHARED_EXTERNAL_ID);
+    expect(foundA?._id).toBe(a);
+    expect(foundB?._id).toBe(b);
+    expect(foundA?.tenantId).toBe(TENANT_A);
+    expect(foundB?.tenantId).toBe(TENANT_B);
+    expect(foundA?.title).not.toBe(foundB?.title);
+  });
+
+  // The provider is part of the identity too: Google and Graph mint ids in different grammars,
+  // but nothing stops them colliding, and an update aimed at one must not resolve to the other.
+  test("the same tenant may hold the same id on BOTH providers without collision", async () => {
+    const t = harness();
+    const google = await seedRow(t, TENANT_A, { provider: "google" });
+    const microsoft = await seedRow(t, TENANT_A, { provider: "microsoft" });
+
+    expect((await lookup(t, TENANT_A, "google", SHARED_EXTERNAL_ID))?._id).toBe(google);
+    expect((await lookup(t, TENANT_A, "microsoft", SHARED_EXTERNAL_ID))?._id).toBe(microsoft);
+  });
+
+  // The listing index 17-09 reads. Tenant-scoped and status-scoped, so a deleted event never
+  // appears in "what can I change?" and a foreign tenant's events never appear at all.
+  test("by_tenant_status lists only THIS tenant's active rows", async () => {
+    const t = harness();
+    await seedRow(t, TENANT_A, { externalEventId: "aaaaaaaaaaaa1" });
+    await seedRow(t, TENANT_A, { externalEventId: "aaaaaaaaaaaa2", status: "deleted" });
+    await seedRow(t, TENANT_B, { externalEventId: "bbbbbbbbbbbb1" });
+
+    const active = await t.run((ctx) =>
+      ctx.db
+        .query("calendarEvents")
+        .withIndex("by_tenant_status", (q) => q.eq("tenantId", TENANT_A).eq("status", "active"))
+        .collect(),
+    );
+
+    expect(active).toHaveLength(1);
+    expect(active[0]?.externalEventId).toBe("aaaaaaaaaaaa1");
+    // Anti-vacuity floor: the other two rows exist, they are simply not in this tenant's window.
+    expect(await t.run((ctx) => ctx.db.query("calendarEvents").collect())).toHaveLength(3);
+  });
+
+  // The manageability gate is pure (@pikar/core) and unit-tested there; what this proves is that
+  // the SCHEMA can actually hold each of the three refusable shapes — an etag-less legacy row, an
+  // attendee-bearing row and a deleted row — so 17-08/17-09 have something real to refuse.
+  test("the registry can store every shape `manageability` refuses", async () => {
+    const t = harness();
+    const legacy = await seedRow(t, TENANT_A, { externalEventId: "l1", etag: undefined });
+    const guests = await seedRow(t, TENANT_A, { externalEventId: "g1", attendeeFree: false });
+    const gone = await seedRow(t, TENANT_A, { externalEventId: "d1", status: "deleted" });
+
+    expect((await t.run((ctx) => ctx.db.get(legacy)))?.etag).toBeUndefined();
+    expect((await t.run((ctx) => ctx.db.get(guests)))?.attendeeFree).toBe(false);
+    expect((await t.run((ctx) => ctx.db.get(gone)))?.status).toBe("deleted");
+  });
+});
