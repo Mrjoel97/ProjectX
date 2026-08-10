@@ -14,6 +14,12 @@ progress:
   completed_plans: 257
 ---
 
+> **Phase 19 final closure — 2026-08-10.** This note supersedes the stale pending-sign-off text in
+> the historical lane narrative below. The owner approved all seven UAT screenshot judgements and
+> attested that the authorized product email to `joel.feruzi@gmail.com` arrived with the configured
+> postal footer and a working unsubscribe landing-page link. ACTN-05 and PIPE-01 are Complete;
+> Phase 19 has no remaining gate. The inbox observation is owner-attested, not automation-inspected.
+
 ---
 gsd_state_version: 1.0
 milestone: v2.0

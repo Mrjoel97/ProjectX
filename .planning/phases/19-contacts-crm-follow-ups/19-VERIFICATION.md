@@ -1,22 +1,13 @@
 ---
 phase: 19-contacts-crm-follow-ups
 verified: 2026-08-10T05:45:00Z
-status: human_needed
+status: passed
 score: 8/8 must-haves verified
 requirements:
-  ACTN-05: satisfied (code + live browser evidence); NOT ticked in REQUIREMENTS.md — deliberate, owner sign-off outstanding
-  PIPE-01: satisfied on every clause of its own wording; NOT ticked — same deliberate hold
+  ACTN-05: complete (code + live browser evidence + owner sign-off)
+  PIPE-01: complete (all clauses verified + owner sign-off)
 gaps: []
-human_verification:
-  - test: "Owner sign-off on the seven judgement calls the UAT captured as PNGs under .planning/phases/19-contacts-crm-follow-ups/uat/"
-    expected: "BRAND conformance of the Pipeline page and the unsubscribe landing page; the withheld-recipients note reads as information, not as a failure; the three send-refusal notes are honest and actionable"
-    why_human: "BRAND conformance and 'does this read as information or as an error' are judgements no assertion encodes. This is the phase's own declared blocking gate and the only unchecked box in 19-VALIDATION.md's sign-off."
-  - test: "Tick ACTN-05 and PIPE-01 in .planning/REQUIREMENTS.md once sign-off lands"
-    expected: "Checkbox at L147/L174 and the status table at L341/L354 both move off Pending, in agreement"
-    why_human: "Deliberately withheld by every plan in this phase ('a requirement is met because someone verified it, not because the code exists'). The evidence is now in place; the tick is an owner act."
-  - test: "Real Gmail delivery of a product email"
-    expected: "The CAN-SPAM footer and the working unsubscribe link arrive in a real inbox"
-    why_human: "pipeline-uat.spec.ts seeds a synthetic gmailTokens row and asserts only at the approve boundary; the fan-out that follows gets a 401 from Google. Nothing in this phase is evidence that a byte reached anyone's inbox. The MIME-byte assertion in gmail.test.ts is the closest offline proxy."
+human_verification: complete
 ---
 
 # Phase 19: Contacts, CRM & Follow-ups — Verification Report
@@ -26,8 +17,19 @@ to resolve people and surface context in-loop, write staged through the plan gat
 absorb LEADS and CONSENT: the one person store, where suppression, CAN-SPAM and lawful-basis-at-
 capture get a home.
 **Verified:** 2026-08-10
-**Status:** human_needed (all eight code truths verified; owner judgement/sign-off remains pending)
+**Status:** passed (all eight code truths verified; owner judgement and real-inbox delivery signed off)
 **Re-verification:** Yes — Plan 19-13 closed the consent-record request-path gap.
+
+## Owner sign-off and live-inbox evidence
+
+On 2026-08-10 the owner approved all seven recorded UAT screenshots for BRAND conformance and
+message tone. The owner then authorized and approved one product-email delivery to
+`joel.feruzi@gmail.com`, reporting that it arrived with the configured postal address in the
+footer and an Unsubscribe link that opened the correct landing page. The final Unsubscribe button
+was deliberately not pressed. This inbox result is owner-attested evidence; the automation did
+not inspect the owner's mailbox or credentials.
+
+ACTN-05 and PIPE-01 are now checked and marked Complete in `REQUIREMENTS.md`.
 
 ## What I verified first-hand
 
@@ -61,7 +63,7 @@ Not read from a SUMMARY. Run or queried in this session:
 | 7 | The phase states IN WRITING why a contacts table does not violate "no contacts cache at rest" | ✓ VERIFIED | `docs/playbooks/contacts-crm.md` invariant 1 (L177) plus a gravestone comment on the schema block; registered in `watch.json`; `check-playbooks.mjs` exit 0. The playbook itself states that invariant 1's structural half has no automated enforcement and lists that as a gap — honest. |
 | 8 | A narrow connected Pipeline route over this one store; no opportunities, stages, money or second data plane | ✓ VERIFIED | `PipelineView.tsx` (739 lines) over three bounded reads, one `useQuery` per section. Structural scan for `amountCents`/`opportunit`/`\bstage\b` across `convex/contacts.ts`, `core/src/contacts.ts` and the three schema blocks, comment-stripped, **with an explicit non-vacuity floor** (sources must load above a size threshold AND the regex is shown to match a real violation). Nav stays `soon: true`; the route is URL-only, so 26-18 still owns the flip. |
 
-**Score: 8/8 verified. The remaining gate is owner judgement/sign-off, not a code truth.**
+**Score: 8/8 verified. Owner judgement and the real-inbox delivery gate are complete.**
 
 ### Key Link Verification
 
@@ -151,15 +153,10 @@ refusals, and the absence of any new audit payload. The point-read ceiling and w
 upgrade path are now written in `contacts-crm.md`, so the compliance record is reachable without
 quietly widening this gap closure into an export feature.
 
-What remains is explicitly human: the owner must judge the seven UAT screenshots, then sign off
-and tick ACTN-05/PIPE-01. A real Gmail inbox delivery also remains unobserved. Plan 19-13 does not
-self-approve either gate and does not touch REQUIREMENTS.md.
-
-**On the requirement ticks:** ACTN-05 and PIPE-01 remain unchecked at `REQUIREMENTS.md` L147/L174
-and Pending at L341/L354, checkbox and table in agreement. This is deliberate and consistent across
-every plan in the phase — the standing rule is that a requirement is met because someone verified
-it, not because the code exists. The evidence is now in place; the tick is the owner's act, and it
-is the right last step.
+The human gates are complete: the owner approved the seven UAT judgements and attested that the
+authorized product email arrived with its postal footer and working unsubscribe landing-page link.
+ACTN-05 and PIPE-01 are checked and marked Complete in `REQUIREMENTS.md`; Phase 19 has no remaining
+implementation, verification, or owner-sign-off gap.
 
 ---
 
