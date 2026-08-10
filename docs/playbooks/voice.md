@@ -1,5 +1,15 @@
 # Playbook: Live Voice Sessions
 
+> Last verified: 2026-08-10 (Plan 19-12 — the phase-19 UAT clock defect). **No voice BEHAVIOUR changed.** `PostCall`'s
+> "Turn into a plan" (VOIC-04) and `AbnormalBriefBanner`'s dropped-brief handoff were two of the
+> five web callers of `api.cockpit.sendCockpitMessage` that never sent `clientContext`, so the
+> cockpit thread a voice brief opened arrived clockless and its FIRST turn could not stage a dated
+> follow-up or a calendar event — exactly the actions a call brief produces. Both now call the
+> shared `useSendCockpitMessage()` hook (`dashboard/workspace/`); same seed text, same navigation,
+> same failure handling, one extra argument. Use the hook for any future voice→cockpit handoff —
+> `crmCard.test.ts` fails the build on a raw `useAction(api.cockpit.sendCockpitMessage)` anywhere
+> under `apps/web/app`. See `cockpit.md`'s top block for the full defect.
+
 > Last verified: 2026-08-09 (26-07 follow-up — **both voice spend sites now name themselves in the
 > ledger, and the metering one needed a discriminator that is not the session.**)
 > `voice.ts`'s realtime metering uses `voice:usage:<sessionId>:<offset>` — **the cumulative token

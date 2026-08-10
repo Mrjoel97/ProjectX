@@ -1,5 +1,14 @@
 # Playbook: Persona Onboarding & Business Profile
 
+> Last verified: 2026-08-10 (Plan 19-12 — the phase-19 UAT clock defect). **No onboarding or profile BEHAVIOUR changed.**
+> `SegmentAnatomy.tsx`'s `AskSpecialist` was one of five web callers of
+> `api.cockpit.sendCockpitMessage` that never sent the browser's `clientContext`, so every cockpit
+> thread it opened reached the agent loop clockless and every time-bearing tool refused. It now
+> calls the shared `useSendCockpitMessage()` hook (`dashboard/workspace/`) instead of
+> `useAction(...)` directly — same seed text, same navigation, same failure handling. If you add
+> another profile surface that opens a cockpit thread, use the hook; `crmCard.test.ts` fails the
+> build if any `apps/web/app` file constructs that action by hand. See `cockpit.md`'s top block.
+
 > Last verified: 2026-08-09 (17.1-10 Task 2 live citation gate). One Blueprint rebuild against the
 > owner's real Vault returned **2 candidates** and the gate dropped **0** (`bad_citation: 0`,
 > `unknown_field: 0`, `not_derivable: 0`, `empty: 0`) across **8 source documents**. Both accepted

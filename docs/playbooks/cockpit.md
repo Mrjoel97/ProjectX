@@ -1,5 +1,51 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-10 (Plan 19-12 — **BOTH PHASE-19 UAT DEFECTS ARE CLOSED, BROWSER-VERIFIED
+> ON A REBUILT `:3111`: `e2e/pipeline-uat.spec.ts` is 15/15 with both `test.fail()` markers DELETED,
+> measured spend $0.0400.**
+> **(1) THE BROWSER NOW CARRIES A CLOCK, AND IT IS STRUCTURALLY IMPOSSIBLE TO FORGET.** The fix is
+> NOT the one-line call-site literal the 19-10 block below proposes — that is five copies of the
+> field whose omission WAS the defect. It is one hook,
+> `apps/web/app/(app)/dashboard/workspace/useSendCockpitMessage.ts`, and ALL FIVE web callers
+> (`ChatPane`, `cards.tsx`'s regenerate/remove, `SegmentAnatomy`, `AbnormalBriefBanner`, `PostCall`)
+> now go through it; raw `useAction(api.cockpit.sendCockpitMessage)` no longer exists in
+> `apps/web/app`. `tz` degrades to `"UTC"` inside a try/catch — an `Intl` that resolves nothing
+> would otherwise send `undefined` into a `v.string()` and throw the ENTIRE turn away, which is
+> worse than the refusal it replaces. `nowMs` is read inside the callback, never at render: a chat
+> pane can sit mounted for hours.
+> **The phase-17 calendar tools came back with it, and that is PROVEN, not assumed** — new UAT step
+> 7c drives a browser turn and asserts the plan row carries `eventTz === Africa/Dar_es_Salaam`, the
+> browser's OWN zone. `clientContext.tz` is the only writer of that field in the codebase, so the
+> row is direct evidence the trusted clock crossed the boundary into `proposeCalendarEvent`.
+> `setSendTime`/`checkAvailability` read the same closure variable and are unblocked by the same
+> argument (not separately driven — `checkAvailability` needs a real Google grant this harness
+> does not have).
+> **The guard is the BROWSER test, deliberately.** `crmCard.test.ts` also scans `apps/web/app` for
+> the raw `useAction` — but that is a SECOND-INSTANCE guard (a NEW clockless caller), NOT the
+> regression guard: no unit test can observe that the shipped browser omits an optional argument,
+> which is exactly why this survived 17, 18, 19-11 and a green eval gate.
+> **(2) THE WITHHELD REPORT IS A ROW FIELD NOW.** `plans.withheldRecipients` (optional array,
+> written by `executePlan` in the SAME patch as the counters it explains, omitted entirely when
+> nobody was dropped — no migration). Rendered by `@pikar/core`'s `withheldNote(recipients,
+> withheld)` — ONE builder, two surfaces: the cockpit `PlanCards` (above the REPORT card) and the
+> Approvals `InFlightRow`. `role="status"`, `--ink-soft`, never `alert` and never amber. The dead
+> `res.withheld` → `setNote` branch in `PlanCard.approve` is DELETED; the refusal notes stay in
+> `useState` because a refusal leaves the plan `proposed` and the component alive.
+> **THE RULE THIS LEAVES BEHIND: any UI state produced BY a status transition must not live in a
+> component gated ON that status.** It is unreachable by construction, and every offline test will
+> still pass.
+> **A COLLATERAL FINDING WORTH MORE THAN EITHER FIX: `convex dev` TYPECHECKS BEFORE IT PUSHES.** A
+> type error in ANY `convex/*.ts` file — here `convex/cash.ts` from a concurrent lane, untouched by
+> this plan — makes the watcher silently keep serving the LAST GOOD BUILD. Two UAT runs measured a
+> defect that was already fixed in source. If a change you just made is not visible at :3210, run
+> `pnpm typecheck` on `@pikar/backend` BEFORE debugging your own code.
+> **19-05's guarantees are intact and re-measured:** the per-address drop still runs BEFORE the
+> group join, the `gmail.send` backstop is untouched, `recipientTotal` is 4 of 5 and `queuedCount`
+> still drains. UAT step 9(a)'s blanket "the dropped address appears NOWHERE on the page" was
+> NARROWED — not weakened — to "nowhere EXCEPT inside the withheld note", because 9(b) now makes
+> the blanket form logically impossible; it is asserted by cloning the pane, removing the note, and
+> requiring the address to be absent from what remains.)
+
 > **THE `agentSteps.tool` CLOSED UNION IS NOW GUARDED STRUCTURALLY (2026-08-08).** `schema.ts`
 > warned about this trap twice in PROSE — a tool whose name has no literal makes `agentSteps:record`
 > throw `ArgumentValidationError`, and the AI SDK SWALLOWS callback throws, so the step vanishes in
@@ -11,6 +57,9 @@
 > passing on an empty scan. **Add the literal in the SAME commit as a new tool.** Prose in a schema
 > comment is not a guard; a test is.
 
+> **[SUPERSEDED 2026-08-10 by 19-12 — THIS DEFECT IS CLOSED. See the closure block at the top
+> of this playbook. Kept verbatim because the DIAGNOSIS is the reusable part; the "NOT applied",
+> "one line" and "regression guard is owed" clauses are now HISTORY, not open work.]**
 > Last verified: 2026-08-10 (Plan 19-10 Task 2 — the OWNER UAT, run as `e2e/pipeline-uat.spec.ts`.
 > **19-11 FIXED THE LOOP. THE BROWSER STILL NEVER SENDS A CLOCK, SO ACTN-05 IS STILL UNREACHABLE
 > FROM THE PRODUCT.** The invariant below says every input `buildCockpitTools` takes must ride
@@ -39,6 +88,8 @@
 > **A REGRESSION GUARD IS OWED WITH THE FIX, and it must be a BROWSER one** — every offline layer
 > here supplies its own clock, which is precisely why this survived 19-11.)
 
+> **[SUPERSEDED 2026-08-10 by 19-12 — THIS DEFECT IS CLOSED. The diagnosis in this block was
+> correct and is exactly what was implemented; only its tense is stale.]**
 > Last verified: 2026-08-10 (Plan 19-10 Task 2 — **SC#5's WITHHELD REPORT CANNOT BE SEEN BY A
 > HUMAN.** 19-05 shipped `Sent to N. Withheld M who unsubscribed: <addresses>.` on both approve
 > surfaces and unit-pinned the string. Both render it from component `useState`, and both cards

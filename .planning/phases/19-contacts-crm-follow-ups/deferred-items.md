@@ -186,3 +186,36 @@ byte-unchanged. Green for the RIGHT reason this time: `agentSteps` shows turn 2 
 (`eval-rhea-6q@golden.example` / "about the benchmark-CR1 renewal") instead of `no-email`.
 
 Full account and **invariant 18** in `docs/playbooks/contacts-crm.md`.
+
+---
+
+## 19-12 — OUT OF SCOPE, ANOTHER LANE'S FILE: `convex/cash.ts` breaks typecheck, the Next build, AND every Convex push
+
+`packages/backend/convex/cash.ts:132` and `:150` fail `tsc` with
+`TS2739: … is missing the following properties from type 'CashInputState': origin, actor, basis`.
+Introduced by the concurrent finance lane at commit **`f36cb8b`** ("fix(finance): origin is stored
+and returned, never inferred from userProvided"), which changed `CashInputState` in
+`packages/core/src/cash.ts` without updating the Convex adapter that constructs it. Both files are
+byte-identical to HEAD and untouched by 19-12; nothing in this plan's diff can produce a
+`CashInputState` error.
+
+**NOT FIXED HERE ON PURPOSE.** The lane is actively editing those files in this shared working
+tree (its `CashView.tsx` / `cashSpine.ts` edits appeared and disappeared mid-session), and a
+drive-by fix by another lane is a merge conflict waiting to happen.
+
+**But know what it costs, because 19-12 paid all three tolls:**
+
+1. `pnpm typecheck` is RED at 2 errors (`@pikar/backend` and `@pikar/web` both surface the same
+   file). Everything else is green.
+2. `pnpm --filter @pikar/web build` FAILS at the "Running TypeScript" step. Worked around for the
+   UAT with a TEMPORARY `typescript: { ignoreBuildErrors: true }` in `apps/web/next.config.ts`,
+   restored immediately and never committed — verify with `git diff apps/web/next.config.ts`.
+3. **`convex dev` TYPECHECKS BEFORE IT PUSHES, and this is the expensive one.** The watcher had
+   been refusing to deploy since `f36cb8b` landed and was silently serving the LAST GOOD BUILD, so
+   two full UAT runs measured a defect that was already fixed in source. Recovered with
+   `CONVEX_LOCAL_BACKEND_STARTUP_TIMEOUT_SECS=180 npx convex dev --typecheck=disable` from
+   `packages/backend`. **If a backend change is not visible at :3210, run `pnpm typecheck` on
+   `@pikar/backend` before debugging your own code** — the watcher does not shout about it.
+
+The `:3210` watcher is currently running with `--typecheck=disable`. Restart it without that flag
+once the cash lane's adapter is caught up.

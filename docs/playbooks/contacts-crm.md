@@ -1,5 +1,22 @@
 # Playbook: Contacts, CRM & follow-ups
 
+> Last verified: 2026-08-10 (Plan 19-12 — the phase-19 UAT clock defect). **ACTN-05 IS NOW REACHABLE FROM THE PRODUCT, and the
+> withheld report is a fact on the plan row.** 19-11 fixed the agent loop; the BROWSER still never
+> sent `clientContext`, so `stageCrmWrite` took `no_clock` on every human turn. Fixed at the one
+> shared seam (`useSendCockpitMessage`), verified by a browser turn: UAT step 7 stages an
+> `addFollowUp` carrying a finite `dueAt`.
+> **Decision recorded — the "partial write" the UAT reply implied does NOT need a new refusal.**
+> `stageCrmWrite` is already all-or-nothing WITHIN a call (`staged` is local; every refusal
+> `return`s above the single `patchPlan`), and 19-11's `followUpRefusedThisTurn` already refuses a
+> contact-only RETRY after a rejected follow-up. The live sentence *"I've added Jane to your
+> contacts, but I couldn't stage the follow-up…"* was the model reporting the contact UAT step 5
+> had already approved, not a fresh partial write — the plan row for that turn carried no ops at
+> all. Adding a fourth guard would be a redundant one; the two that exist cover both shapes.
+> **New pure helper: `withheldNote(recipients, withheld)`** — the ONE builder of
+> `Sent to N. Withheld M who unsubscribed: …`, used by the cockpit report card and the Approvals
+> in-flight row. It reads `plans.withheldRecipients` (written by `executePlan` beside the counters,
+> absent when nobody was dropped). Do NOT rebuild that sentence at a call site.
+
 > Last verified: 2026-08-10 (Plan 19-11 — **ACTN-05's follow-up capability WORKS, and the phase's
 > last open defect is CLOSED.** Two fixes, both live-verified against `cockpit-agent@18` with the
 > body BYTE-UNCHANGED (gate `086f8267`'s 35/35 stands, no re-gate owed):
