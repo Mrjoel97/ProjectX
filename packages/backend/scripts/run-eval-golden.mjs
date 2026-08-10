@@ -670,9 +670,22 @@ const VALUED_FLAGS = new Set([
   "--foreign-tenant",
 ]);
 
+/**
+ * `pnpm --filter @pikar/backend eval:golden -- --self-check` forwards the SEPARATOR itself, so
+ * `process.argv` really does contain a bare `"--"`. Stripped once, at the entry, so every parser
+ * below sees the same clean argv — and so the documented pnpm invocation is not rejected by the
+ * unknown-argument guard. (Caught by this plan's own verify command: the guard's first version
+ * aborted `-- --self-check` with `unknown argument "--"`.)
+ *
+ * No legitimate VALUE is `"--"`: `parseTenantSkillId` and `parseOnlyFilters` both refuse a value
+ * starting with `--`, so stripping cannot swallow one.
+ */
+const stripSeparator = (argv) => argv.filter((a) => a !== "--");
+
 function assertKnownArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
+    if (a === "--") continue; // belt: the entry already strips it
     if (!a.startsWith("--")) continue;
     const [flag] = a.split("=", 1);
     if (!KNOWN_FLAGS.has(flag)) {
@@ -2154,6 +2167,26 @@ function selfCheck() {
     "a one-character typo must not buy a full unpinned gate run",
   );
   assert.throws(() => assertKnownArgs(["--dry-run"]), /unknown argument/);
+  // THE regression this guard shipped with, caught by this plan's own verify command: pnpm forwards
+  // the `--` SEPARATOR into argv, so `pnpm … eval:golden -- --self-check` arrives as
+  // `["--", "--self-check"]` and the first version of the guard rejected the documented invocation.
+  assert.deepEqual(
+    stripSeparator(["--", "--skill", "cockpit-agent@9"]),
+    ["--skill", "cockpit-agent@9"],
+    "the pnpm `--` separator is stripped before anything parses it",
+  );
+  assert.ok(
+    assertKnownArgs(stripSeparator(["--", "--self-check"])),
+    "the DOCUMENTED pnpm invocation must survive the unknown-argument guard",
+  );
+  assert.ok(assertKnownArgs(["--", "--self-check"]), "…and the guard tolerates it directly too");
+  // Stripping must not swallow a real VALUE: no valid value is `--`, and both value parsers refuse
+  // one that starts with `--`, so the two rules agree rather than papering over each other.
+  assert.throws(
+    () => parseOnlyFilters(stripSeparator(["--only", "--"])),
+    /--only requires a value/,
+    "a swallowed separator must not become an --only filter",
+  );
   // A VALUE that happens to look like a flag-ish word is not treated as an argument.
   assert.ok(
     assertKnownArgs(["--only", "--skill"]) === true ||
@@ -2167,9 +2200,14 @@ function selfCheck() {
   //     under a do-not-rerun order, so "zero convex calls, zero model calls" is a property that has
   //     to be checkable rather than asserted in a comment. `selfCheck`'s own body is scanned for the
   //     one function that shells out to `npx convex run`.
+  //     Every anchor here is a SECTION MARKER assembled at runtime, never a literal: a literal
+  //     appears in this very block, and `lastIndexOf` would then find the copy sitting in the
+  //     self-check's own text and slice a region that is self-check prose rather than live code.
+  //     (Observed: the first version of these probes reported an EMPTY `runInspect` body.)
+  const marker = (name) => `// ${"─".repeat(2)} ${name}`;
   const selfCheckBody = runnerSource.slice(
     runnerSource.lastIndexOf("function selfCheck()"),
-    runnerSource.lastIndexOf("// ── live run"),
+    runnerSource.lastIndexOf(marker("live run")),
   );
   assert.ok(selfCheckBody.length > 1000, "the self-check body scan found something to scan");
   assert.ok(
@@ -2177,7 +2215,7 @@ function selfCheck() {
     "selfCheck() must make ZERO convex calls — it is the free command",
   );
   //     …and the read-only inspection mode must EXIT before the paid path is even entered.
-  const entry = runnerSource.slice(runnerSource.lastIndexOf("const argv = process.argv.slice(2)"));
+  const entry = runnerSource.slice(runnerSource.lastIndexOf(marker("entry")));
   const inspectCallAt = entry.indexOf("runInspect(inspect)");
   const liveCallAt = entry.indexOf("await runLive(");
   assert.ok(inspectCallAt > 0 && liveCallAt > 0, "both entry branches exist");
@@ -2186,8 +2224,8 @@ function selfCheck() {
     "--inspect-tenant-skill must be dispatched BEFORE runLive — a read-only mode that seeds fixtures is not read-only",
   );
   const inspectBody = runnerSource.slice(
-    runnerSource.lastIndexOf("function runInspect("),
-    runnerSource.lastIndexOf("const argv = process.argv.slice(2)"),
+    runnerSource.lastIndexOf(marker("21-03: the read-only inspection command")),
+    runnerSource.lastIndexOf(marker("entry")),
   );
   assert.ok(
     inspectBody.includes("process.exit(") && !inspectBody.includes("seedInboxFixture"),
@@ -2762,7 +2800,7 @@ function runInspect(inspect) {
 
 // ── entry ────────────────────────────────────────────────────────────────────
 
-const argv = process.argv.slice(2);
+const argv = stripSeparator(process.argv.slice(2));
 try {
   // 21-03: a typo aborts HERE, before anything is parsed, seeded, read or billed.
   assertKnownArgs(argv);
