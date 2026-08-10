@@ -4152,7 +4152,9 @@ type AgentSmokeOp =
   | { kind: "brief"; range: "today" | "yesterday" | "week" }
   | { kind: "evaluate"; framework?: "swot" | "lean" | "bmc" | "growth-os" }
   | { kind: "create"; form: "short" | "long"; topic: string }
-  | { kind: "crm"; email: string; note?: string };
+  | { kind: "crm"; email: string; note?: string }
+  | { kind: "driveList"; parentId?: string }
+  | { kind: "driveFind"; query: string };
 
 // Exported for the round-trip test only (the callTimeoutMsFor precedent): the `create=` grammar is
 // what plan 18-07's e2e depends on, and asserting it against the real parser beats re-typing it.
@@ -4243,6 +4245,15 @@ export function parseAgentSmoke(text: string): AgentSmokeOp | null {
       const note = c < 0 ? undefined : val.slice(c + 1).trim() || undefined;
       return { kind: "crm", email, note };
     }
+    case "drive": {
+      const c = val.indexOf(":");
+      if (c < 0) return null;
+      const operation = val.slice(0, c).trim();
+      const input = val.slice(c + 1).trim();
+      if (operation === "list") return { kind: "driveList", parentId: input || undefined };
+      if (operation === "find" && input !== "") return { kind: "driveFind", query: input };
+      return null;
+    }
     default:
       return null;
   }
@@ -4269,6 +4280,8 @@ const SMOKE_OP_TOOL: Record<AgentSmokeOp["kind"], StepTool> = {
   evaluate: "evaluateBusiness",
   create: "createDocument",
   crm: "stageCrmWrite",
+  driveList: "listDriveFolders",
+  driveFind: "findInDrive",
 };
 
 function runAgentSmokeOp(
@@ -4320,6 +4333,10 @@ function runAgentSmokeOp(
             : []),
         ],
       });
+    case "driveList":
+      return invokeTool(tools, name, { parentId: op.parentId });
+    case "driveFind":
+      return invokeTool(tools, name, { query: op.query });
   }
 }
 

@@ -1671,6 +1671,39 @@ test("SMOKE::agent::create drives ONE governed createDocument OFFLINE and record
   expect(await vaultDocs(t)).toHaveLength(1);
 });
 
+test("parseAgentSmoke accepts only the closed Drive list/find grammar", () => {
+  expect(parseAgentSmoke("SMOKE::agent::drive=list:SMOKE::folder-1")).toEqual({
+    kind: "driveList",
+    parentId: "SMOKE::folder-1",
+  });
+  expect(parseAgentSmoke("SMOKE::agent::drive=find:SMOKE::quarterly plan")).toEqual({
+    kind: "driveFind",
+    query: "SMOKE::quarterly plan",
+  });
+  expect(parseAgentSmoke("SMOKE::agent::drive=import:folder-1")).toBeNull();
+  expect(parseAgentSmoke("SMOKE::agent::drive=find:")).toBeNull();
+});
+
+test("SMOKE Drive list/find round-trip offline at $0 with truthful tool traces", async () => {
+  for (const [text, tool, reply] of [
+    ["SMOKE::agent::drive=list:SMOKE::folder-1", "listDriveFolders", "Smoke folder"],
+    ["SMOKE::agent::drive=find:SMOKE::quarterly", "findInDrive", "Smoke result"],
+  ] as const) {
+    const { t, planId } = await setupWithLimiter();
+    const result = await t.action(internal.llm.runCockpitAgent, {
+      tenantId: "t1",
+      threadId: "thread1",
+      planId,
+      turnId: "turn1",
+      text,
+    });
+    expect(result.costUsd).toBe(0);
+    expect(result.reply).toContain(reply);
+    const steps = await t.run((ctx) => ctx.db.query("agentSteps").collect());
+    expect(steps.map((step) => step.tool)).toEqual([tool]);
+  }
+});
+
 // ── SC7: the replace #index revision path ─────────────────────────────────────
 
 test("createDocument(replace: 1) rewrites the SAME row in place and drops the superseded PDF", async () => {
