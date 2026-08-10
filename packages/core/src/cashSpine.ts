@@ -3,9 +3,16 @@
 // never analysis. Derived metrics cost a `readFinance` call, on the turns that need them.
 import type { CashInputState } from "./cash";
 
-/** Hard ceiling, proven by the worst-case test. Sits inside the existing spine budget the goals
- *  line already shares. */
-export const FINANCE_SPINE_BUDGET = 320;
+/**
+ * The MEASURED worst case: every `CASH_INPUTS` field collected, at its longest renderable value
+ * (`999999999`) and age (`9999d`), all stale. Not a round number picked in advance — it is what
+ * the worst-case test in `cashSpine.test.ts` actually computes, with a `.not.toContain("…")`
+ * assertion pinning that the line at this budget is never truncated. Add a member to
+ * `CASH_INPUTS` and this MUST be re-measured (re-run the worst-case test, read the new length,
+ * update this constant) — the truncation branch below silently drops trailing fields otherwise,
+ * which is the exact failure this constant exists to prevent.
+ */
+export const FINANCE_SPINE_BUDGET = 437;
 
 const DAY_MS = 86_400_000;
 

@@ -47,4 +47,10 @@ test("the WORST case fits the budget — every input collected, longest values, 
   const line = financeSpineLine(worst, NOW);
   expect(line).not.toBeNull();
   expect((line as string).length).toBeLessThanOrEqual(FINANCE_SPINE_BUDGET);
+  // The length check alone is tautological — the function's own truncation branch guarantees it
+  // for ANY budget value. This is the assertion that actually proves 437 is enough: the worst
+  // case must survive whole, not merely end up short because it got cut off with "…". If a
+  // twelfth `CASH_INPUTS` field is ever added without re-measuring `FINANCE_SPINE_BUDGET`, this
+  // is what turns red instead of silently dropping trailing fields.
+  expect(line).not.toContain("…");
 });
