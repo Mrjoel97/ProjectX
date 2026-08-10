@@ -1759,6 +1759,8 @@ const VERB: Record<string, [running: string, done: string]> = {
   webResearch: ["Searching the web…", "Search finished"],
   checkAvailability: ["Checking your calendar…", "Checked your calendar"],
   proposeCalendarEvent: ["Putting the event together…", "Event ready to approve"],
+  listDriveFolders: ["Looking through your Drive…", "Looked through your Drive"],
+  findInDrive: ["Searching your Drive…", "Searched your Drive"],
   // PRE-EXISTING GAP, unrelated to Phase 17 (RPLY-01, Phase 3.11): this live tool (llm.ts
   // `replyToMessage: tool({`) has been in the agentSteps.tool union with no VERB entry since it
   // shipped, so every inbox-reply trace row rendered the generic "Working…"/"Done" FALLBACK.

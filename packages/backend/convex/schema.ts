@@ -735,6 +735,10 @@ export default defineSchema({
       // this codebase has been bitten twice already, at searchVault and evaluateBusiness).
       v.literal("checkAvailability"),
       v.literal("proposeCalendarEvent"),
+      // Phase-20.1 (VALT-15): read-only Drive discovery in the cockpit. These are local tools,
+      // so both literals are required for their truthful start/done agent-step trace.
+      v.literal("listDriveFolders"),
+      v.literal("findInDrive"),
       // 22.1b (declareUnsupported): the research specialist's structured evidence-gap declaration.
       // A LOCAL executable tool, unlike `webResearch` above — so `onToolExecutionStart` DOES fire
       // and the insert DOES need this literal. Without it the insert throws inside a callback the

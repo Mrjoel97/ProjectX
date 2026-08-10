@@ -99,7 +99,7 @@ import { MockLanguageModelV4 } from "ai/test";
 import type { GenericActionCtx } from "convex/server";
 import { ConvexError, v } from "convex/values";
 import { type Color, PDFDocument, type PDFFont, rgb, StandardFonts } from "pdf-lib";
-import { components, internal } from "./_generated/api";
+import { api, components, internal } from "./_generated/api";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
 import { contentHash } from "./lib/hash";
@@ -2958,6 +2958,85 @@ export function buildCockpitTools(
           `(${items.length} summarized) — it is shown in the workspace panel. ` +
           "Do not repeat its contents; point the user at the panel."
         );
+      },
+    }),
+    // ── Google Drive reads (VALT-15) — metadata only; never import/reserve/export/ingest ───────────
+    listDriveFolders: tool({
+      description:
+        "List one level of the user's Google Drive so you can help them locate a folder or file. " +
+        "Read-only: this cannot import, download, reserve budget, or change the vault.",
+      inputSchema: jsonSchema<{ parentId?: string }>({
+        type: "object",
+        properties: {
+          parentId: {
+            type: "string",
+            description: "Drive folder id to open. Omit it to list the Drive roots.",
+          },
+        },
+        additionalProperties: false,
+      }),
+      execute: async ({ parentId }): Promise<string> => {
+        if (parentId?.startsWith("SMOKE::"))
+          return "Drive folder: Smoke folder [id: smoke-folder]. No files at this level.";
+        try {
+          const result = await ctx.runAction(api.vaultDrive.listDriveFolders, { parentId });
+          if (!result.ok) {
+            if (result.reason === "not_connected")
+              return "Google is not connected. Ask the user to connect Google before reading Drive.";
+            if (result.reason === "reauth")
+              return "Google is connected without Drive access. Ask the user to reconnect Google.";
+            if (result.reason === "bad_folder_id")
+              return "That Drive folder reference is invalid. Ask the user to choose it again.";
+            return "The Google connection could not be refreshed. Ask the user to reconnect Google.";
+          }
+          const folders = result.folders.map((f) => `${f.name} [id: ${f.id}]`).join("; ");
+          const files = result.files
+            .map((f) => `${f.name} [id: ${f.id}; ${f.readable ? "readable" : "unreadable"}]`)
+            .join("; ");
+          return (
+            `Drive folders (${result.folders.length}): ${folders || "none"}. ` +
+            `Files at this level (${result.files.length}): ${files || "none"}.` +
+            (result.truncated ? " This level was truncated." : "")
+          );
+        } catch {
+          return "I couldn't read Google Drive right now. Tell the user plainly and try again later.";
+        }
+      },
+    }),
+    findInDrive: tool({
+      description:
+        "Search the user's Google Drive by file or folder name and document text. " +
+        "Read-only: this returns metadata and never imports, downloads, or changes the vault.",
+      inputSchema: jsonSchema<{ query: string }>({
+        type: "object",
+        properties: { query: { type: "string", description: "What to find in Google Drive." } },
+        required: ["query"],
+        additionalProperties: false,
+      }),
+      execute: async ({ query }): Promise<string> => {
+        if (query.startsWith("SMOKE::"))
+          return "Drive search found 1 item: Smoke result (file, readable) [id: smoke-file].";
+        try {
+          const result = await ctx.runAction(api.vaultDrive.findInDrive, { query });
+          if (!result.ok) {
+            if (result.reason === "not_connected")
+              return "Google is not connected. Ask the user to connect Google before searching Drive.";
+            if (result.reason === "reauth")
+              return "Google is connected without Drive access. Ask the user to reconnect Google.";
+            return "The Google connection could not be refreshed. Ask the user to reconnect Google.";
+          }
+          if (result.hits.length === 0) return "No matching Drive files or folders were found.";
+          const hits = result.hits
+            .map(
+              (hit) =>
+                `${hit.name} (${hit.kind}, ${hit.readable ? "readable" : "unreadable"}) ` +
+                `[id: ${hit.id}]`,
+            )
+            .join("; ");
+          return `Drive search found ${result.hits.length} item(s): ${hits}.`;
+        } catch {
+          return "I couldn't search Google Drive right now. Tell the user plainly and try again later.";
+        }
       },
     }),
     // ── searchVault (VGND-01) — the read-only knowledge-vault grounding tool ───────────────────────

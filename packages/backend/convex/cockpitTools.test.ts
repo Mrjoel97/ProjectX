@@ -555,6 +555,21 @@ test("buildCockpitTools registers BOTH evaluateBusiness (read) and recordScoreca
   expect(keys).toContain("recordScorecardAnswer");
 });
 
+test("buildCockpitTools registers tenant-derived Drive reads without a tenantId input", () => {
+  const tools = buildCockpitTools(
+    {} as Parameters<typeof buildCockpitTools>[0],
+    "t1",
+    "plan-stub" as Id<"plans">,
+  );
+  for (const name of ["listDriveFolders", "findInDrive"] as const) {
+    expect(Object.keys(tools)).toContain(name);
+    const schema = tools[name].inputSchema as unknown as {
+      jsonSchema: { properties: Record<string, unknown> };
+    };
+    expect(schema.jsonSchema.properties).not.toHaveProperty("tenantId");
+  }
+});
+
 // ── 22.1b: every tool the research grant NAMES is actually BUILT ──────────────────────────────
 //
 // The runtime-record assertion nobody wrote for `dispatchResearch`. That tool was built only under
