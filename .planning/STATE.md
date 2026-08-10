@@ -2,9 +2,25 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
+current_phase: 19.1-bulk-contact-import-csv
+current_plan: 1 (of 7 — 19.1-01 complete)
+status: in_progress
+stopped_at: "19.1-01 COMPLETE (5 commits, `cd589f9`..`9f231b5`). The PURE import brain ships in `@pikar/core`: `parseCsv` (hand-rolled RFC-4180 — quoted commas, quoted newlines, doubled quotes, BOM, CRLF/LF, and the PHYSICAL file line each record starts on), `detectMapping`/`mapRows` (literal alias table; `first`+`last` both land on `name`; unmapped columns dropped), within-file dedup under FILL-EMPTY-ONLY, rejections carrying the physical line, and `IMPORT_ATTESTATION` byte-identical to the design spec beside `IMPORT_ROW_MAX`/`IMPORT_BATCH_ROWS`/`IMPORT_MATCH_CHUNK` (1000/100/500). Identity is the imported `normalizeAddress` and validity the imported `isValidEmail` — NOT re-derived — so import cannot disagree with the send path. MEASURED: `@pikar/core` **35 files / 813 passed**, typecheck clean, `check-playbooks.mjs` exit 0, biome clean, zero `stage` identifiers (PIPE-01 scan). BOTH load-bearing guards mutation-proven red: deleting the in-quote `line++` gives `expected [ 1, 2, 3 ] to deeply equal [ 1, 2, 4 ]`; weakening fill-empty-only to always-overwrite reddens the collapse test in the OTHER direction (the staler name wins). $0.00 spent, no Convex, no DOM, no new dependency. **NOT DONE AND NOT CLAIMED:** no `matchExisting`/`importContacts`, no schema change (the three new contact fields and the two union extensions are untouched), no UI, no e2e — plans 02-07 own those, and ACTN-05 stays Pending. NOTE: the concurrent finance lane had already registered `contactImport.ts` in `watch.json` and filed a COVERAGE-ONLY playbook entry against my still-untracked file; both were committed here alongside the substantive 19.1-01 Last-verified entry. `gsd-tools state advance-plan` CLOBBERED this block AGAIN — it PREPENDED a fresh LF frontmatter block above the CRLF phase-20 one and wrote `current_plan: 7 (done)` / `stopped_at: Completed 19-02-PLAN.md` from a stale source; hand-restored. `update-progress` worked (262/365 from disk)."
+last_updated: "2026-08-10T14:32:58.057Z"
+progress:
+  total_phases: 52
+  completed_phases: 31
+  total_plans: 365
+  completed_plans: 262
+---
+
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: - Platform -> Private Beta
 current_phase: 20
 current_plan: 0 (phase 19 complete 2026-08-10; phase 20 not started)
-status: phase_complete
+status: Phase complete — ready for verification
 stopped_at: "PHASE 19 IS 13/13 ON DISK AND CODE-COMPLETE. The ONLY thing outstanding is the owner LOOKING at seven UAT screenshots and judging BRAND conformance and tone — a human act, not a run. **THE OLD HEADLINE IN THIS FIELD (\"ACTN-05 DOES NOT WORK\") IS FALSE AND HAS BEEN REPLACED. ACTN-05 WORKS.** 19-10 measured it broken and was right at the time; 19-11 found the cause was never the model — `runAgentLoop` dropped the trusted clock on the way to `buildCockpitTools`, so `stageCrmWrite` refused every dated follow-up with `no_clock` — and 19-12 found the BROWSER never sent `clientContext` at all, fixed at the one shared seam (`useSendCockpitMessage`). Fixture 36 is GREEN for the RIGHT reason (run `0b2b6b22`, $0.0057, skill body BYTE-UNCHANGED), and UAT step 7 observes a dated `addFollowUp` with a finite `dueAt` off the PLAN ROW from a real browser turn. **OWNER BROWSER UAT RAN at 19-12 (`d575b3f`): `apps/web/e2e/pipeline-uat.spec.ts` 15/15, both `test.fail()` markers deleted, measured spend $0.0400, 7 PNGs + `spend.json` + `tenant.txt` on disk under `.planning/phases/19-contacts-crm-follow-ups/uat/`.** **19-13 (`6a2d23e` + this commit) closed the phase-19 verifier's ONE remaining code gap: `consentWording`/`consentContext` were WRITE-ONLY** — `assertConsent` stored them and nothing in the repo read them back, so SC#4's \"reproducible on request\" had no request. `contacts.consentRecord({contactId})` is now that path: one `ctx.db.get` behind `tenantQuery`, `null` for no consent, explicit `null` for unrecorded fields, no audit write (CLAUDE.md §4 checked — a query writes nothing and the audit-absence test now runs the read before serializing). BOTH guards mutation-proven red-able: dropping the tenant comparison gives `promise resolved \"{ at: 1786328761895, …(3) }\" instead of rejecting`; dropping `consentRecord` from the export-set pin gives `expected [ 'assertConsent', …(9) ] to deeply equal [ 'assertConsent', …(8) ]`. **No UI surface, deliberately** — the wording is per-person regulator evidence, not a table cell. 19-13 also corrected the five falsified documents (`19-VALIDATION.md`, which asserted the OPPOSITE of reality on three counts; the playbook `Last verified` shas; the `gmail.ts:167` \"sole caller\" lie — there are TWO callers, `deliverApprovedPlan.ts:37` and `pipeline.ts:379`; the ROADMAP tick and progress row) and DELETED the permanently-red `apps/web/e2e/pipeline.spec.ts`, which could only ever pass once. MEASURED AT 19-13: backend 72 files / **1448 passed** exit 0 (the first attempt OOM'd and a second showed 8 spurious failures — the known shared-fork memory hazard; re-run before believing red here). `pnpm typecheck` **8/10**, exit 2, the ONLY errors being the concurrent finance lane's `convex/cash.ts(132,9)` and `(150,7)` TS2739. `node scripts/check-playbooks.mjs` exit 0. **$0.00 spent.** TWO CAVEATS RECORDED, NOT PAID FOR: (1) the 35/35 eval gate is a SPLICE — gate `086f8267` ran at 19-09 before `datedFollowUpCount` and before the 19-11 fix, and fixture 36 was re-verified ALONE afterwards, so no single run has ever been green across all 35 with the strengthened key; (2) `__seedOnboardedTenant`'s \"nine specs\" figure is an INFERENCE — only five specs call the seeder and no run of the others is recorded. **ACTN-05 AND PIPE-01 STAY PENDING; `.planning/REQUIREMENTS.md` WAS NOT TOUCHED** — the phase-25 lane owns that file and the owner will tick both at phase close."
 last_updated: "2026-08-10T03:08:35.782Z"
 progress:
@@ -1738,6 +1754,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 | Phase 19 P01 | 35m | 3 tasks | 6 files |
 | Phase 19 P03 | 20 min | 2 tasks | 4 files |
 | Phase 19 P02 | 55 min | 3 tasks | 4 files |
+| Phase 19.1 P01 | 35 | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -1938,6 +1955,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 19]: 19-03: blank-after-trim postal address is REFUSED, not stored (an empty footer looks compliant and is not); the UI SENDS a blanked address so the refusal is visible, and there is no delete-my-address path
 - [Phase 19]: 19-02: the runtime audit key-set equality test lives in contacts.test.ts, not llmRedaction.test.ts — that file is @vitest-environment node and convex-test needs edge-runtime; llmRedaction got the structural half (one audit site, depth-aware key parse)
 - [Phase 19]: 19-02: contacts.ts ships NO public tenantQuery — writes and internals only; an export-set pin makes that provable rather than writing a vacuous foreign-tenant read test
+- [Phase 19.1]: 19.1-01: parseCsv reports the PHYSICAL file line (newlines inside quoted fields counted), not the record index — mutation-proven
+- [Phase 19.1]: 19.1-01: import identity/validity are the IMPORTED normalizeAddress/isValidEmail — an import-local rule would create contacts the send path refuses
 
 ### Pending Todos
 
