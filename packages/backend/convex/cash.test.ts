@@ -549,15 +549,14 @@ describe("applyFinanceClaims (the finance_write inline arm)", () => {
   // succeeded.
   test("a bad SECOND claim discards the good FIRST one — approve-all-or-none", async () => {
     const t = convexTest(schema, modules);
-    await expect(
-      t.run((ctx) =>
-        applyFinanceClaims(ctx, "u1", [
-          agentClaim,
-          // The realistic pairing: the agent heard cash on hand AND a CAC in the same turn.
-          { ...agentClaim, field: "cac" as const, value: 1_400 },
-        ]),
-      ),
-    ).rejects.toThrow(/INVALID_INPUT: that figure cannot be updated by an agent yet/);
+    const result = await t.run((ctx) =>
+      applyFinanceClaims(ctx, "u1", [
+        agentClaim,
+        // The realistic pairing: the agent heard cash on hand AND a CAC in the same turn.
+        { ...agentClaim, field: "cac" as const, value: 1_400 },
+      ]),
+    );
+    expect(result).toEqual({ ok: false, reason: "agent_cannot_update_figure" });
     expect(await t.run((ctx) => ctx.db.query("financeInputs").collect())).toHaveLength(0);
   });
 
@@ -574,14 +573,14 @@ describe("applyFinanceClaims (the finance_write inline arm)", () => {
   // refuse cleanly, never crash the mutation.
   test("a malformed claim on the plan row is refused cleanly, not crashed through", async () => {
     const t = convexTest(schema, modules);
-    await expect(
-      t.run((ctx) =>
+    expect(
+      await t.run((ctx) =>
         applyFinanceClaims(ctx, "u1", [{ ...agentClaim, field: "notAField" } as never]),
       ),
-    ).rejects.toThrow(/INVALID_INPUT: malformed claim on plan row/);
-    await expect(
-      t.run((ctx) => applyFinanceClaims(ctx, "u1", [{ ...agentClaim, basis: null } as never])),
-    ).rejects.toThrow(/INVALID_INPUT: malformed claim on plan row/);
+    ).toEqual({ ok: false, reason: "malformed_figure_claim" });
+    expect(
+      await t.run((ctx) => applyFinanceClaims(ctx, "u1", [{ ...agentClaim, basis: null } as never])),
+    ).toEqual({ ok: false, reason: "malformed_figure_claim" });
     expect(await t.run((ctx) => ctx.db.query("financeInputs").collect())).toHaveLength(0);
   });
 
@@ -591,11 +590,10 @@ describe("applyFinanceClaims (the finance_write inline arm)", () => {
   // confidence. The agent can update the five `financeInputs` figures and cannot yet update CAC.
   test("an agent claim on a scorecard field is refused, and nothing is written", async () => {
     const t = convexTest(schema, modules);
-    await expect(
-      t.run((ctx) =>
-        applyFinanceClaims(ctx, "u1", [{ ...agentClaim, field: "cac" as const, value: 1_400 }]),
-      ),
-    ).rejects.toThrow(/INVALID_INPUT: that figure cannot be updated by an agent yet/);
+    const result = await t.run((ctx) =>
+      applyFinanceClaims(ctx, "u1", [{ ...agentClaim, field: "cac" as const, value: 1_400 }]),
+    );
+    expect(result).toEqual({ ok: false, reason: "agent_cannot_update_figure" });
     expect(await t.run((ctx) => ctx.db.query("evaluations").collect())).toHaveLength(0);
     expect(await t.run((ctx) => ctx.db.query("audit").collect())).toHaveLength(0);
   });

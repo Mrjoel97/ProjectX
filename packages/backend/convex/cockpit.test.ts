@@ -1830,11 +1830,15 @@ describe("executePlan finance_write arm", () => {
     const t = withAudit();
     const planId = await seedFinancePlan(t, [{ ...CLAIM, field: "cac", value: 1_400 }]);
 
-    await expect(
-      t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId }),
-    ).rejects.toThrow(/INVALID_INPUT: that figure cannot be updated by an agent yet/);
+    // The refusal is now a RETURN, not a throw (2026-08-10): a throw would be redacted by Convex
+    // in production, leaving the approval card with no lever. Both halves still matter — the
+    // reason the card renders, AND that nothing was written.
+    const result = await t
+      .withIdentity({ subject: TENANT })
+      .mutation(api.cockpit.executePlan, { planId });
+    expect(result).toEqual({ ok: false, reason: "agent_cannot_update_figure" });
 
-    // The whole transaction rolled back: no evaluation row, no status flip, no audit row.
+    // Nothing was written: no evaluation row, no status flip, no audit row.
     expect(await t.run((ctx) => ctx.db.query("evaluations").collect())).toHaveLength(0);
     expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("proposed");
     expect(await t.run((ctx) => ctx.db.query("audit").collect())).toHaveLength(0);

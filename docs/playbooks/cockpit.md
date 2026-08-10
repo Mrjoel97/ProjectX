@@ -11,6 +11,26 @@
 > passing on an empty scan. **Add the literal in the SAME commit as a new tool.** Prose in a schema
 > comment is not a guard; a test is.
 
+> Last verified: 2026-08-10 (Task 5, live-finance-inputs — **THE FINANCE REFUSAL NOW REACHES THE
+> CARD.** `applyFinanceClaims` (`cash.ts`) no longer throws `INVALID_INPUT: …` for its two
+> refusals — a malformed plan-row claim and a scorecard-field claim an agent may not write — it
+> RETURNS `{ ok: false, reason: "malformed_figure_claim" | "agent_cannot_update_figure" }`, the
+> SAME shape `reserveJobInner` (`media.ts`) already used for `no_deck` and the CAN-SPAM refusals.
+> A throw here was silently broken in production: **Convex redacts a non-`ConvexError` message**,
+> so the owner got an opaque server error with no lever, and because the plan stayed `proposed`
+> every retry reproduced it. `executePlan`'s `finance_write` arm (`cockpit.ts`) now checks
+> `applied.ok` and returns the reason instead of letting a throw propagate; its return union grew
+> the two reasons. `ApprovalsView.tsx`'s `refusalMessage` map grew the matching copy. **Two-pass
+> validation, not the interleaved loop the throw allowed:** a `return` does NOT roll back Convex's
+> transaction the way a throw does, so `applyFinanceClaims` now validates every staged claim
+> FIRST, with zero writes, and only runs the write pass once the whole list clears — otherwise a
+> bad SECOND claim would leave a good FIRST claim's write committed. `writeFigureRow`'s own
+> scorecard-actor throw is UNCHANGED — it stays the last-resort invariant guard for every other
+> caller; the applier is the layer that knows a human is waiting on the refusal, the writer is
+> not. Also pinned: the Schedule button's `item.kind === "email"` gate (`ApprovalsView.tsx`) now
+> has a source-scan regression test — the gate itself needed no change, `finance_write` was never
+> reachable, but nothing had pinned that a future edit couldn't add it.)
+
 > Last verified: 2026-08-10 (Task 4, live-finance-inputs — **`finance_write` is the SIXTH `ACTION_TYPES` member and the `inline` arm's THIRD occupant.** `actionType.ts` gained the member, `actionTypeOf`'s parameter union and the `ARMS` row; `cockpit.ts` gained the matching `_ARM_TABLE` row and one dispatch branch beside `crm_write`'s, calling `cash.applyFinanceClaims(ctx, plan.tenantId, plan.financeClaims)` and patching the plan `done`. Adding the member without an arm was a COMPILE error in exactly the two places this playbook promises it would be — the `satisfies Record<ActionType, Arm>` bind at `cockpit.ts:581` and the DERIVED `ExternalActionType` at `:588` — and `approvals.ts`'s `planKind` return union was the third, which is what dragged the second approve surface into the same commit. **NOT `externalAction`:** a figure update writes our own `financeInputs` rows, so there is no fetch, no `EXTERNAL_TARGETS` entry and nothing for the retrier to retry. **Two model-facing surfaces are deliberately NOT touched and are the staging task's to close:** `llm.ts`'s `buildAgentContext` has no `finance_write` branch, so a staged figure plan would be announced to the model as an email plan (the correction note there already records that this is a hand-maintained site, not a compile-error one), and `workspace/cards.tsx` has no finance card. Neither is reachable today — nothing can stage a `finance_write` plan yet.)
 >
 > Last verified: 2026-08-10 (Plan 19-10 Task 2 — the OWNER UAT, run as `e2e/pipeline-uat.spec.ts`.

@@ -131,6 +131,12 @@ export function refusalMessage(reason: string): string {
     daily_budget_exhausted: "This tenant’s daily budget is exhausted. Nothing was generated.",
     deployment_budget_exhausted: "The deployment budget is paused. Nothing was generated.",
     media_budget_exhausted: "The media budget is exhausted. Nothing was generated.",
+    // 2026-08-10: `applyFinanceClaims`'s two refusals, delivered as a return instead of a throw
+    // Convex would redact in production — see the function's doc comment in cash.ts.
+    agent_cannot_update_figure:
+      "That figure can only be updated by you for now — the agent cannot vouch for where it came from.",
+    malformed_figure_claim:
+      "This figure update was malformed and was not applied. Nothing changed.",
   };
   return messages[reason] ?? `The governed action refused (${reason}). Nothing was sent.`;
 }

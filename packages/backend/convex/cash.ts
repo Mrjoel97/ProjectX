@@ -339,12 +339,23 @@ export const saveInput = tenantMutation({
   },
 });
 
+/** Every way a staged finance claim can be refused at Approve time. Distinct from a throw
+ *  (2026-08-10): `executePlan`'s finance_write arm returns these to the approval card via
+ *  `refusalMessage` — the SAME delivery path `no_deck` and the CAN-SPAM refusals use — rather
+ *  than a raw `Error` that Convex redacts in production and the card cannot render. */
+export type FinanceApplyRefusal = "malformed_figure_claim" | "agent_cannot_update_figure";
+
 /**
  * The ONLY path an agent-proposed figure reaches a store, and `executePlan` is its only caller
  * (invariant 11 — the ACTOR decides gating: the human's identical edit above stages no plan).
  * Re-validates every claim: the plan row is content plane and could have been revised between
  * staging and Approve. `actor` is the one field it does not re-validate but OVERWRITES — see the
- * stamp in the loop. All-or-nothing falls out of Convex's serializable mutation for free.
+ * stamp in the write loop below.
+ *
+ * TWO PASSES, not one interleaved loop. A `return` (unlike the throw this replaced) does NOT roll
+ * back Convex's transaction — only a throw does that — so a refusal discovered mid-write would
+ * leave the mutation half-applied instead of all-or-nothing. Every claim is therefore validated
+ * FIRST, with zero writes, and only once the whole list clears does the write pass run.
  *
  * Takes the whole `MutationCtx` rather than just `db` — mirroring `contacts.applyCrmOperations` —
  * because the audit insert goes through `internal.audit.log`, the module's SOLE write surface for
@@ -354,28 +365,19 @@ export async function applyFinanceClaims(
   ctx: MutationCtx,
   tenantId: string,
   claims: readonly FigureClaim[] | undefined,
-): Promise<void> {
-  const written: FigureClaim[] = [];
-  for (const claim of claims ?? []) {
+): Promise<{ ok: true } | { ok: false; reason: FinanceApplyRefusal }> {
+  const list = claims ?? [];
+
+  // PASS 1 — validate everything, write nothing.
+  for (const claim of list) {
     // A claim off a plan row is DB-sourced JSON cast to FigureClaim — it is NOT type-checked
     // input. `validateFigureClaim` throws past its own ok/reason contract on two shapes a stored
     // row can hold: an unknown `field` reaches `cashInputSpec`, which throws, and a null `basis`
     // TypeErrors on `.trim()`. Narrow BEFORE validating, or an approved plan crashes the mutation
     // instead of refusing cleanly.
     if (!CASH_INPUTS.some((s) => s.field === claim.field) || typeof claim.basis !== "string") {
-      throw new Error("INVALID_INPUT: malformed claim on plan row");
+      return { ok: false, reason: "malformed_figure_claim" };
     }
-    // `actor` is NOT data to be read off the row — it is a fact about which DOOR the write came
-    // through, and this function IS the agent door (`saveInput` hardcodes `actor: "user"` and never
-    // routes here). So it is STAMPED, not trusted. `validateFigureClaim` cannot catch a lie here:
-    // its actor rule only bites when `confidence !== "high"`, and confidence is model-controlled,
-    // so `{actor: "user", confidence: "high"}` is a legal claim by that function's contract and
-    // would store the agent's figure under the OWNER's authority — rendering through
-    // `inputStatesFor`/`statedFigure` as the owner's own statement (the exact leak Tasks 2 and 3
-    // closed) and recording `actors: ["user"]` in the APPEND-ONLY audit log, which cannot be
-    // corrected later. Stamped rather than refused because it cannot fail: a staging bug must not
-    // become an error on a plan the human already approved.
-    const stamped = { ...claim, actor: "agent" as const };
     // The scorecard store cannot carry provenance: `applyScorecardAnswer` takes only
     // (db, tenantId, threadId, path, value), so origin/actor/basis/observedAt are all discarded,
     // and it appends the dot-path to `userProvided` — which `runEvaluation` rebuilds its citation
@@ -388,8 +390,24 @@ export async function applyFinanceClaims(
     // CANNOT yet update CAC. Upgrade path: a per-dot-path provenance map on `evaluations` beside
     // `userProvidedAt`, so `applyScorecardAnswer` can record who supplied a figure.
     if (cashInputSpec(claim.field).store === "scorecard") {
-      throw new Error("INVALID_INPUT: that figure cannot be updated by an agent yet");
+      return { ok: false, reason: "agent_cannot_update_figure" };
     }
+  }
+
+  // PASS 2 — every claim cleared validation; now stamp, merge-check and write.
+  const written: FigureClaim[] = [];
+  for (const claim of list) {
+    // `actor` is NOT data to be read off the row — it is a fact about which DOOR the write came
+    // through, and this function IS the agent door (`saveInput` hardcodes `actor: "user"` and never
+    // routes here). So it is STAMPED, not trusted. `validateFigureClaim` cannot catch a lie here:
+    // its actor rule only bites when `confidence !== "high"`, and confidence is model-controlled,
+    // so `{actor: "user", confidence: "high"}` is a legal claim by that function's contract and
+    // would store the agent's figure under the OWNER's authority — rendering through
+    // `inputStatesFor`/`statedFigure` as the owner's own statement (the exact leak Tasks 2 and 3
+    // closed) and recording `actors: ["user"]` in the APPEND-ONLY audit log, which cannot be
+    // corrected later. Stamped rather than refused because it cannot fail: a staging bug must not
+    // become an error on a plan the human already approved.
+    const stamped = { ...claim, actor: "agent" as const };
     // The merge policy lives in the CALLER — `writeFigureRow` has no isNewerThan guard, so without
     // this an approved claim observed in June patches over a figure the human saved today, moving
     // statedAt backward and flipping actor. A stale claim is SKIPPED, not an error: the store
@@ -407,7 +425,7 @@ export async function applyFinanceClaims(
   }
   // The WRITTEN claims, not the staged ones: an event called `claims_applied` that counts a claim
   // the isNewerThan guard skipped would report an apply that did not happen.
-  if (written.length === 0) return;
+  if (written.length === 0) return { ok: true };
   // §4: field NAMES, a COUNT and enums — never a figure. Tenant revenue in the append-only audit
   // log is precisely the PII honeypot §4 exists to prevent. `cash.test.ts` pins the sorted KEY SET
   // and asserts the figure is absent from the whole serialized row, so an added key fails there.
@@ -427,4 +445,5 @@ export async function applyFinanceClaims(
       confidences: [...new Set(written.map((c) => c.confidence))],
     },
   });
+  return { ok: true };
 }

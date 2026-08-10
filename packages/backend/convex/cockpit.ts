@@ -36,7 +36,7 @@ import { api, components, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { type ActionCtx, internalMutation, type MutationCtx } from "./_generated/server";
 // 2026-08-10: the FINANCE terminal, direct-called for exactly the reasons the CRM one below is.
-import { applyFinanceClaims } from "./cash";
+import { applyFinanceClaims, type FinanceApplyRefusal } from "./cash";
 // 19-06 ACTN-05: the CRM terminal. Called DIRECTLY (not via runMutation) so the whole operation
 // list lands in the same serializable transaction as the proposed -> approved CAS, which is what
 // makes approve-all-or-none and double-approve-applies-once true without a saga.
@@ -686,7 +686,11 @@ export const executePlan = tenantMutation({
           // address on /dashboard/profile, or pick recipients who have not unsubscribed.
           | "no_postal_address"
           | "all_recipients_suppressed"
-          | ReserveRefusal;
+          | ReserveRefusal
+          // 2026-08-10: the finance_write arm's two refusals — `applyFinanceClaims` RETURNS them
+          // rather than throwing (its own doc comment explains why), so this dispatcher's ONLY job
+          // is to pass the reason through unmodified to the card. Only bugs throw.
+          | FinanceApplyRefusal;
       }
   > => {
     const plan = await ctx.db.get(planId);
@@ -732,7 +736,15 @@ export const executePlan = tenantMutation({
         // copy of the store-routing rule. A throw part-way through discards the whole list.
         if (actionTypeOf(plan.kind) === "finance_write") {
           // tenantId off the APPROVED PLAN ROW, never model-supplied.
-          await applyFinanceClaims(ctx, plan.tenantId, plan.financeClaims as FigureClaim[]);
+          const applied = await applyFinanceClaims(
+            ctx,
+            plan.tenantId,
+            plan.financeClaims as FigureClaim[],
+          );
+          // A GOVERNED STOP, not a bug: the plan stays `proposed` (no patch below), so the human
+          // sees the refusal on the card and can re-approve once the lever is pulled. Nothing was
+          // written — `applyFinanceClaims` validates the whole claim list before writing any of it.
+          if (!applied.ok) return { ok: false, reason: applied.reason };
           await ctx.db.patch(planId, { status: "done" });
           return { ok: true };
         }
