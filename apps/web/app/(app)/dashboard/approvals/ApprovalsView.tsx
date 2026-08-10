@@ -398,6 +398,11 @@ function AwaitingCard({ item }: { item: AwaitingItem }) {
         setResult(
           `The absolute schedule is armed. Nothing runs before it fires.${withheldSuffix(response.withheld)}`,
         );
+      // finance_write, `applied: 0`: every claim was older than the figure already stored, so the
+      // approval succeeded and NOTHING moved. "The governed action is now in flight" would imply a
+      // write that did not happen.
+      else if (response.applied === 0)
+        setResult("Your figures were already up to date, so nothing changed.");
       else
         setResult(
           `Approval accepted. The governed action is now in flight.${withheldSuffix(response.withheld)}`,

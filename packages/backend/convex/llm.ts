@@ -2377,6 +2377,14 @@ export function buildCockpitTools(
         );
         switch (parsed.kind) {
           case "resolved": {
+            // THE SAME cross-kind interlock `stageCrmWrite` and `stageFinanceWrite` run, on the
+            // third tool that patches `kind` on the one shared plan row. Without it a staged
+            // `finance_write` (or `crm_write`) is orphaned: its `financeClaims` survive on the row
+            // but `executePlan` routes on `actionTypeOf(plan.kind)`, so they are never applied and
+            // never rendered — after the model told the user they were staged. Checked BEFORE the
+            // patch, so the refusal costs nothing and discards nothing.
+            const blocking = otherKindStaged(await readPlan(), "calendar_event");
+            if (blocking) return otherKindRefusal(blocking);
             // ponytail: one bounded duration, rounded then clamped to 15–480 minutes. Upgrade only
             // when the product supports shorter reminders or multi-day timed events.
             const clampedMinutes = Math.min(480, Math.max(15, Math.round(durationMinutes)));

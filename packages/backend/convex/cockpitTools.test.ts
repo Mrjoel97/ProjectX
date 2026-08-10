@@ -2328,6 +2328,32 @@ test("stageFinanceWrite REFUSES rather than silently discarding a staged CRM pla
   expect(plan?.financeClaims).toBeUndefined();
 });
 
+// WHOLE-BRANCH REVIEW I2 — the THIRD staging tool on the same shared plan row. `otherKindStaged`
+// guarded `stageCrmWrite` and `stageFinanceWrite` only, while `proposeCalendarEvent` patched
+// `kind: "calendar_event"` with no interlock at all: the staged `financeClaims` survived on the row
+// but `executePlan` routes on `actionTypeOf(plan.kind)`, so they were never applied and never
+// rendered — after the model had already told the user the figures were staged. `cockpit.md`'s own
+// Task-8 entry names `calendar_event` as part of this hazard; only the calendar side was missed.
+test("proposeCalendarEvent REFUSES rather than silently discarding a staged finance plan", async () => {
+  const { t, planId } = await setup();
+  await callClock(t, planId, "stageFinanceWrite", {
+    updates: [{ field: "mrr", value: 9000, basis: "this turn" }],
+  });
+  expect((await readPlan(t, planId))?.kind).toBe("finance_write");
+
+  const reply = await callClock(t, planId, "proposeCalendarEvent", {
+    title: CALENDAR_TITLE_NEEDLE,
+    when: "in 2 hours",
+    durationMinutes: 30,
+  });
+  expect(reply).toMatch(/already staged|already on/i);
+  const plan = await readPlan(t, planId);
+  expect(plan?.kind).toBe("finance_write"); // the figure plan survives intact
+  expect(plan?.financeClaims).toHaveLength(1);
+  expect(plan?.eventTitle).toBeUndefined();
+  expect(plan?.eventStartMs).toBeUndefined();
+});
+
 test("stageCrmWrite REFUSES rather than silently discarding a staged finance plan", async () => {
   const { t, planId } = await setup();
   await callClock(t, planId, "stageFinanceWrite", {
@@ -2373,7 +2399,7 @@ test("stage → Approve → the figure is written (the whole seam, on a plan thi
     await t
       .withIdentity({ subject: "t1|session", issuer: "test" })
       .mutation(api.cockpit.executePlan, { planId }),
-  ).toEqual({ ok: true });
+  ).toEqual({ ok: true, applied: 1 });
 
   const rows = await t.run((ctx) => ctx.db.query("financeInputs").collect());
   expect(rows).toHaveLength(1);

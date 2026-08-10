@@ -11,6 +11,25 @@
 > passing on an empty scan. **Add the literal in the SAME commit as a new tool.** Prose in a schema
 > comment is not a guard; a test is.
 
+> Last verified: 2026-08-10 (WHOLE-BRANCH REVIEW FIX, live-finance-inputs — two cockpit-side
+> corrections. **(I2) `proposeCalendarEvent` was the third staging tool on the one shared plan row
+> and the only one with no cross-kind interlock.** `otherKindStaged` guarded `stageCrmWrite` and
+> `stageFinanceWrite`; the calendar tool patched `kind: "calendar_event"` straight over a staged
+> `finance_write`, whose `financeClaims` then survived on the row but were never applied and never
+> rendered, because `executePlan` routes on `actionTypeOf(plan.kind)` alone — after the model had
+> told the user the figures were staged. The Task-8 entry below already named `calendar_event` as
+> part of this hazard; only the calendar side was missed. One `otherKindStaged(await readPlan(),
+> "calendar_event")` call before the patch, plus a `cockpitTools.test.ts` test proving the figure
+> plan survives intact. (`stageResearchPlan`/`stageMediaPlan` keep their own narrower interlocks —
+> unchanged, and the `ponytail:` comment on `otherKindStaged` still explains why.)
+> **(I5) `executePlan`'s finance arm now returns `applied`.** `applyFinanceClaims` used to return
+> `{ok: true}` after skipping every claim, so the card said "the governed action is now in flight"
+> over zero writes and zero audit rows. It returns `{ok, applied, skipped}` and always writes the
+> audit row; the arm passes `applied` through, and both approval surfaces (`ApprovalsView.tsx`,
+> `workspace/cards.tsx`) say "Your figures were already up to date, so nothing changed." on
+> `applied === 0`. The finance arm is the ONLY producer of that field — every other arm leaves it
+> undefined, so no other card branch changes.)
+
 > Last verified: 2026-08-10 (Task 9, live-finance-inputs — **the body now teaches the two finance
 > tools accurately, matching what they actually refuse.** `readFinance`/`stageFinanceWrite` were
 > built by Tasks 7-8 with no body section describing them; a new "Financial figures" section closes

@@ -671,6 +671,10 @@ export const executePlan = tenantMutation({
         alreadyStarted?: true;
         scheduled?: true;
         withheld?: string[];
+        // finance_write only: how many figures actually moved. `0` means every claim was already
+        // superseded by a newer stored figure — the approval succeeded and changed NOTHING, and
+        // both cards say "already up to date" rather than implying a write (review I5).
+        applied?: number;
       }
     | {
         ok: false;
@@ -746,7 +750,10 @@ export const executePlan = tenantMutation({
           // written — `applyFinanceClaims` validates the whole claim list before writing any of it.
           if (!applied.ok) return { ok: false, reason: applied.reason };
           await ctx.db.patch(planId, { status: "done" });
-          return { ok: true };
+          // The COUNT, not a boolean: `applied: 0` is a real outcome (every claim older than what
+          // is stored), and a card that says "approved" over zero writes is the same dishonesty
+          // the figure tiles exist to avoid.
+          return { ok: true, applied: applied.applied };
         }
         // memo (12-05 BEVL-02): Approve means SAVE. See evaluations.ts.
         await ctx.db.patch(planId, { status: "done" });

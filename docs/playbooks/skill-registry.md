@@ -1,5 +1,27 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-10 (WHOLE-BRANCH REVIEW FIX I1, live-finance-inputs — **CODE ONLY, body
+> edit not yet seeded or evaluated. The `cockpit-agent` body's OLD `recordScorecardAnswer` section
+> was the live back door around everything the new finance section governs.** That tool is ungated,
+> agent-callable, takes a free-string `field`, and `applyScorecardAnswer` appends the dot-path to
+> `userProvided` — from which `runEvaluation` rebuilds its citation map at `{source:
+> "user-provided", confidence: "high"}`. The body listed `financials.cac` / `financials.ltgp` /
+> `financials.thirtyDayCashPerCustomer` on that tool's path list, so the exact laundering
+> `applyFinanceClaims` refuses and `writeFigureRow` throws on was reachable in one turn through the
+> older instruction, and the new section's "CAC has to be entered on their finance page for now"
+> contradicted it. **The review offered two fixes and the second was taken, because the first would
+> have broken two golden fixtures**: dropping the three `financials.*` paths kills fixture 27
+> (`27-grounded-assessment.json` — the user STATES a CAC and the agent stores it, which is its whole
+> subject) and fixture 31 (`31-gap-dispatch-lead-engine.json` — needs `financials.ltgp` on the
+> scorecard to reach diagnostic gate 3). So the arithmetic boundary was carried into the old section
+> instead: a new bullet, "**The number they SAID, never one you worked out**", with the 14,000/10
+> CAC worked example, plus the CAC bullet in the finance section rewritten to route by SOURCE — a
+> STATED CAC goes to `recordScorecardAnswer` (it really is the user's own figure), a COMPUTED one
+> goes nowhere and the user is asked to enter it. Both fixtures state their figures, so both stay
+> valid. `cockpitAgent.ts` regenerated from the `.md`; `skills.test.ts`'s byte-identity table is
+> green. NOT re-evaluated: `EVAL_GATE` costs ~$0.35 of real spend and was out of scope for this
+> offline fix wave — the next cycle to touch this body must run it.)
+
 > Last verified: 2026-08-10 (Task 9, live-finance-inputs — **CODE ONLY: the `cockpit-agent` body
 > now teaches `readFinance`/`stageFinanceWrite` (a new "Financial figures" section — never compute
 > a ratio yourself, only these five figures are writable: `cashOnHand`, `monthlyOperatingCost`,

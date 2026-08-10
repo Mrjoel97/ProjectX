@@ -1808,7 +1808,9 @@ describe("executePlan finance_write arm", () => {
 
     expect(
       await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId }),
-    ).toEqual({ ok: true });
+      // The COUNT rides back on the finance arm (review I5) so the card can tell a real write from
+      // an approval that changed nothing.
+    ).toEqual({ ok: true, applied: 1 });
 
     const rows = await t.run((ctx) => ctx.db.query("financeInputs").collect());
     expect(rows).toHaveLength(1);

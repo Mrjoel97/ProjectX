@@ -383,6 +383,10 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
         // media/scheduling refusal the canvas or the picker already surfaces.
         const refusal = PLAN_REFUSALS[res.reason];
         if (refusal) setNote({ ...refusal, tone: "error" });
+      } else if (res.applied === 0) {
+        // finance_write only, and NOT a refusal: every claim was older than the figure already
+        // stored, so the approval succeeded and nothing moved. Silence here reads as a write.
+        setNote({ tone: "info", text: "Your figures were already up to date, so nothing changed." });
       } else if (res.withheld && res.withheld.length > 0) {
         // SC#5: a partial send must TELL the user which addresses were withheld and why. Not a
         // refusal — the rest went out.
