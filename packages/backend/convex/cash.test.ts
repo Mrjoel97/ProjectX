@@ -429,7 +429,12 @@ test("a scorecard field answered in the panel reads back as the user's own state
   expect(cac?.basis).toBeNull();
 });
 
-test("a grounded scorecard fill reads as observed by an agent, never as something the owner said", async () => {
+// WHOLE-BRANCH REVIEW I3. This used to assert `origin: "observed"`, which the spec forbids:
+// `observed` means PIKAR MEASURED IT, and nothing measures yet — "a figure read out of the owner's
+// own P&L is still an assertion by a human, made in a document" (spec §1). The page rendered that
+// as "Measured by Pikar on <date>.", which is false about a grounded fill. The honest pair is
+// `stated` (a human asserted it, somewhere) + `agent` (Pikar, not the owner, put it here).
+test("a grounded scorecard fill is a human's assertion recorded by the AGENT — never measured, never the owner's own", async () => {
   const t = convexTest(schema, modules);
   await t.run(async (ctx) => {
     await ctx.db.insert("evaluations", {
@@ -450,7 +455,7 @@ test("a grounded scorecard fill reads as observed by an agent, never as somethin
   const { inputs } = await t.withIdentity({ subject: "u1|s1" }).query(api.cash.inputs, {});
   const cac = inputs.find((i) => i.field === "cac");
   expect(cac?.value).toBe(250);
-  expect(cac?.origin).toBe("observed");
+  expect(cac?.origin).toBe("stated");
   expect(cac?.actor).toBe("agent");
   expect(cac?.basis).toBe("business evaluation grounding");
 });
@@ -513,6 +518,7 @@ describe("applyFinanceClaims (the finance_write inline arm)", () => {
       "confidences",
       "count",
       "fields",
+      "skipped",
     ]);
     // The negative assertion is the point: the figure must not be reachable anywhere in the row.
     expect(JSON.stringify(row)).not.toContain("38500");
@@ -632,24 +638,50 @@ describe("applyFinanceClaims (the finance_write inline arm)", () => {
   // an approved claim observed in June patches over a figure the human saved today, moving
   // `statedAt` backward and flipping `actor`. A stale claim is SKIPPED, never an error: the human
   // already has the better number, which is not a failure the user needs to see.
-  test("a claim older than the stored figure is skipped, leaving the row untouched", async () => {
-    const t = convexTest(schema, modules);
+  // WHOLE-BRANCH REVIEW I5. This used to assert the OPPOSITE — that a fully-skipped apply writes
+  // NO audit row. An approved governed action with no audit record is a governance hole whatever
+  // its frequency, and the vault source (next slice) turns this rare case into the common one:
+  // every re-proposal of a figure the owner has since typed lands here. The row is now always
+  // written and reports BOTH counts, so the log distinguishes "nothing needed changing" from
+  // "nothing happened" — and the applier returns the counts so the card can say which.
+  test("an approved plan whose claims are all skipped is still audited, and says so", async () => {
+    const t = withAudit();
     const asUser = t.withIdentity({ subject: "u1|s1" });
     await asUser.mutation(api.cash.saveInput, { field: "cashOnHand", value: 12_000 });
     const saved = await t.run((ctx) => ctx.db.query("financeInputs").first());
 
-    await t.run((ctx) =>
+    const result = await t.run((ctx) =>
       applyFinanceClaims(ctx, "u1", [{ ...agentClaim, observedAt: saved?.statedAt ?? 0 }]),
     );
+    expect(result).toEqual({ ok: true, applied: 0, skipped: 1 });
 
     const { inputs } = await asUser.query(api.cash.inputs, {});
     const cash = inputs.find((i) => i.field === "cashOnHand");
     expect(cash?.value).toBe(12_000);
     expect(cash?.actor).toBe("user");
     expect(cash?.statedAt).toBe(saved?.statedAt);
-    // Nothing was applied, so nothing is claimed to have been. This backend has NO auditCounts
-    // component registered, so an audit write here would also throw rather than pass quietly.
-    expect(await t.run((ctx) => ctx.db.query("audit").collect())).toHaveLength(0);
+
+    const row = await t.run(async (ctx) =>
+      (await ctx.db.query("audit").collect()).find((r) => r.eventType === "finance.claims_applied"),
+    );
+    expect(row?.payload).toMatchObject({ count: 0, skipped: 1, fields: [] });
+    // §4 still holds on the path that writes nothing: no figure anywhere in the row.
+    expect(JSON.stringify(row)).not.toContain("38500");
+  });
+
+  test("a mixed batch reports what was written and what was already up to date", async () => {
+    const t = withAudit();
+    const asUser = t.withIdentity({ subject: "u1|s1" });
+    await asUser.mutation(api.cash.saveInput, { field: "cashOnHand", value: 12_000 });
+    const saved = await t.run((ctx) => ctx.db.query("financeInputs").first());
+
+    const result = await t.run((ctx) =>
+      applyFinanceClaims(ctx, "u1", [
+        { ...agentClaim, observedAt: saved?.statedAt ?? 0 },
+        { ...agentClaim, field: "mrr" as const, value: 9_000 },
+      ]),
+    );
+    expect(result).toEqual({ ok: true, applied: 1, skipped: 1 });
   });
 });
 

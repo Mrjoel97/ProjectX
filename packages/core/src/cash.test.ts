@@ -829,4 +829,45 @@ describe("statedFigure returns the stored origin", () => {
     const figure = statedFigure(undefined, spec, 1_754_000_000_000);
     expect(figure.state).toBe("unknown");
   });
+
+  // WHOLE-BRANCH REVIEW C2. `origin` alone cannot answer "did the owner say this?" — every claim
+  // this slice stores is `origin: "stated"`, so a figure the AGENT wrote (approved through
+  // `stageFinanceWrite`) was indistinguishable from one the owner typed, and the tile printed
+  // "You told us this on <date>." over the agent's own arithmetic. `actor` is the field that
+  // separates them and it was being dropped here.
+  test("statedFigure carries the stored ACTOR, not just the origin", () => {
+    const spec = cashInputSpec("cashOnHand");
+    const figure = statedFigure(
+      {
+        field: "cashOnHand",
+        value: 3_200,
+        statedAt: 1_754_000_000_000,
+        stale: false,
+        origin: "stated",
+        actor: "agent",
+        basis: "800 x 4 subscribers, this turn",
+      },
+      spec,
+      1_754_000_100_000,
+    );
+    expect(figure).toMatchObject({ state: "known", origin: "stated", actor: "agent" });
+  });
+
+  test("a figure the owner typed still reads as the owner's own", () => {
+    const spec = cashInputSpec("cashOnHand");
+    const figure = statedFigure(
+      {
+        field: "cashOnHand",
+        value: 38_500,
+        statedAt: 1_754_000_000_000,
+        stale: false,
+        origin: "stated",
+        actor: "user",
+        basis: "finance panel",
+      },
+      spec,
+      1_754_000_100_000,
+    );
+    expect(figure).toMatchObject({ state: "known", origin: "stated", actor: "user" });
+  });
 });

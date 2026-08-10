@@ -61,6 +61,20 @@ export type CashFigure =
   | {
       state: "known";
       origin: CashOrigin;
+      /**
+       * WHO supplied it, when that is recorded. `origin` cannot answer this on its own: every
+       * claim this slice stores is `origin: "stated"` (spec §1 — a figure read out of the owner's
+       * own P&L is still a human assertion), so the owner's typed figure and the agent's approved
+       * one are the SAME origin. A renderer that attributes on origin alone prints "You told us
+       * this" over the agent's own arithmetic — the central invariant of this feature, breached
+       * four times.
+       *
+       * OPTIONAL, and absence means UNKNOWN — never "the user". The three `knownFigure("stated",…)`
+       * scorecard reads below (`statedLtgp`, `grossMargin`, `cohortChurn`) have no provenance to
+       * carry, and the safe direction is to say Pikar recorded it rather than to put words in the
+       * owner's mouth. Attribution to the owner requires POSITIVE evidence: `actor === "user"`.
+       */
+      actor?: FigureActor;
       value: number;
       unit: CashUnit;
       /** For `derived`: what it was computed FROM, in words. Never rendered without it. */
@@ -88,7 +102,7 @@ export const knownFigure = (
   unit: CashUnit,
   extra: Pick<
     Extract<CashFigure, { state: "known" }>,
-    "from" | "sampleSize" | "statedAt" | "stale"
+    "actor" | "from" | "sampleSize" | "statedAt" | "stale"
   > = {},
 ): CashFigure => ({ state: "known", origin, value, unit, ...extra });
 
@@ -330,6 +344,9 @@ export function statedFigure(
     return unknownFigure(`Needs your ${spec.label}.`);
   }
   return knownFigure(input.origin, input.value, spec.unit, {
+    // `actor` travels with `origin`, always. Dropping it here is what let an agent-written figure
+    // render as the owner's own statement (whole-branch review C2).
+    actor: input.actor,
     ...(input.statedAt === null ? {} : { statedAt: input.statedAt }),
     stale: needsConfirmation(input.value, input.statedAt, nowMs),
   });
@@ -515,6 +532,10 @@ export function unitEconomics(args: {
     // object at all. A pure function must not throw on a shape the DB can actually hold.
     const statedLtgp = scorecard.financials?.ltgp ?? null;
     if (statedLtgp !== null) {
+      // NO actor, deliberately (whole-branch review I4): the scorecard store records no provenance
+      // at all, so nothing here knows whether the owner typed this figure or the evaluation engine
+      // grounded it out of a document. Omitting `actor` is what makes the renderer say "recorded by
+      // Pikar" instead of "you told us this" — absence means UNKNOWN, never "the user".
       return knownFigure("stated", statedLtgp, "usd");
     }
     return missingComponents;
@@ -632,6 +653,10 @@ export function unitEconomics(args: {
     // so there is no `CashInputState` carrying a per-field `statedAt` for either. Routing them
     // through `statedFigure` would need a fabricated timestamp; upgrade path is adding both to
     // `CASH_INPUTS` (they already have Scorecard dot-paths) if staleness on them is ever wanted.
+    //
+    // They carry NO `actor` for the same reason `statedLtgp` above does not (review I4): the
+    // scorecard records no provenance, so who supplied these is genuinely unknown — and unknown
+    // must not render as the owner's own statement.
     grossMargin:
       grossMarginPct === null
         ? unknownFigure("Needs your gross margin.")

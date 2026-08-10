@@ -1,5 +1,20 @@
 # Playbook: Persona Onboarding & Business Profile
 
+> Last verified: 2026-08-10 (WHOLE-BRANCH REVIEW FIX C1, live-finance-inputs — **`spineForTenant`
+> now assembles TWO independent blocks: the blueprint spine, and the always-on finance line.** It
+> used to `return null` outright when a tenant had no live blueprint; with the finance line added
+> that early return would have hidden the figures of exactly the population that has them first —
+> a new account that has typed numbers but never confirmed a blueprint. Each block is built in its
+> own try/catch and neither gates the other; `null` is returned only when BOTH are absent, so a
+> tenant with neither gets the byte-identical pre-2026-08-10 output. `renderSpine` itself is
+> UNCHANGED and stays a pure function of a `BusinessBlueprint` — the finance line is assembled by
+> the Convex query, outside it, because `SPINE_CHAR_CAP`'s tripwire is the arithmetic sum of the
+> per-field caps plus the goals block and a 437-char finance line would blow it, and because
+> `renderSpine` is also what `vaultGroundHydrated` returns as its `spine`. The figures come from
+> `convex/cash.ts`'s now-exported `inputStatesFor` — the SAME merged read the Finance page and the
+> `readFinance` tool use, not a fourth copy of the rule. Four tests in `blueprint.test.ts`: with a
+> blueprint, without one, neither, and tenant isolation.)
+
 > Last verified: 2026-08-09 (17.1-10 Task 2 live citation gate). One Blueprint rebuild against the
 > owner's real Vault returned **2 candidates** and the gate dropped **0** (`bad_citation: 0`,
 > `unknown_field: 0`, `not_derivable: 0`, `empty: 0`) across **8 source documents**. Both accepted

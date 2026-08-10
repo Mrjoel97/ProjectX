@@ -114,8 +114,13 @@ function scorecardValue(scorecard: Scorecard, path: string): number | null {
  * Hormozi fields, merged into `CashInputState[]`. Both the `inputs` query (the panel) and the
  * `unitEconomics` query (the metrics) call this, so the two can never disagree about what the
  * tenant has entered.
+ *
+ * EXPORTED for one more caller, `blueprint.ts`'s `spineForTenant` — the always-on finance line on
+ * every cockpit turn (spec §2). A plain async function over an explicit `tenantId`, so a query can
+ * call it directly (a Convex query cannot `runQuery` the `inputsFor` reader below), and the spine
+ * reads the SAME merged state the page and the tools do rather than a fourth copy of the rule.
  */
-async function inputStatesFor(
+export async function inputStatesFor(
   ctx: { db: QueryCtx["db"] },
   tenantId: string,
   nowMs: number,
@@ -155,15 +160,25 @@ async function inputStatesFor(
       // never as fresh, and never fabricates a date.
       const statedAt =
         value === null ? null : (evaluation?.userProvidedAt?.[spec.path as string] ?? null);
+      // `userProvided` is an OVER-BROAD provenance proxy, and this is the only signal the scorecard
+      // store has: it is appended by `applyScorecardAnswer` for the panel, the Approvals question
+      // catalogue AND the agent's `recordScorecardAnswer` alike, and every figure written before it
+      // existed is absent from it. So membership means "somebody answered, probably the owner" and
+      // absence means "we do not know" — not "Pikar measured it". Both directions are resolved in
+      // the SAFE direction below. Upgrade path (also named at `writeFigureRow`): a per-dot-path
+      // provenance map on `evaluations` beside `userProvidedAt`.
       const userStated = (evaluation?.userProvided ?? []).includes(spec.path as string);
       return {
         field: spec.field,
         value,
         statedAt,
         stale: needsConfirmation(value, statedAt, nowMs),
-        // The leak fix: a grounded fill is NOT a user statement. It reads as `observed` with no
-        // actor claim rather than borrowing the owner's authority.
-        origin: userStated ? "stated" : "observed",
+        // The leak fix: a grounded fill is NOT a user statement, so it never borrows the owner's
+        // authority. But it is NOT `observed` either — spec §1 reserves that for "Pikar measured
+        // it", and nothing measures yet: a figure read out of the owner's own P&L is still an
+        // assertion by a human, made in a document. `stated` + `agent` says exactly that, and is
+        // what stops the page printing "Measured by Pikar on <date>." over a grounded fill.
+        origin: "stated",
         actor: userStated ? "user" : "agent",
         basis: userStated ? null : "business evaluation grounding",
       };
@@ -421,8 +436,14 @@ export async function applyFinanceClaims(
   ctx: MutationCtx,
   tenantId: string,
   claims: readonly FigureClaim[] | undefined,
-): Promise<{ ok: true } | { ok: false; reason: FinanceApplyRefusal }> {
+): Promise<
+  { ok: true; applied: number; skipped: number } | { ok: false; reason: FinanceApplyRefusal }
+> {
   const list = claims ?? [];
+  // Nothing was proposed, so there is no governed action to report. Not reachable from the product
+  // — `stageFinanceWrite` refuses an empty `updates` list before it patches the plan — so this is
+  // the degenerate case of a hand-seeded or legacy row, not the skip path review I5 is about.
+  if (list.length === 0) return { ok: true, applied: 0, skipped: 0 };
 
   // PASS 1 — validate everything, write nothing.
   for (const claim of list) {
@@ -498,9 +519,14 @@ export async function applyFinanceClaims(
     // The STAMPED claim, so `payload.actors` reports the door, not the row's own claim about it.
     written.push(stamped);
   }
-  // The WRITTEN claims, not the staged ones: an event called `claims_applied` that counts a claim
-  // the isNewerThan guard skipped would report an apply that did not happen.
-  if (written.length === 0) return { ok: true };
+  // ALWAYS written, including when every claim was skipped (whole-branch review I5). The previous
+  // `if (written.length === 0) return` left an APPROVED governed action with zero audit trace —
+  // the card reported success, the log said nothing happened at all. `count` still reports only
+  // what was WRITTEN (an event called `claims_applied` must not count an apply that did not
+  // happen); `skipped` carries the rest, so the two are distinguishable in the log rather than
+  // collapsed into silence. The vault source turns this from the rare case into the common one:
+  // every re-proposal of a figure the owner has since typed lands here.
+  //
   // §4: field NAMES, a COUNT and enums — never a figure. Tenant revenue in the append-only audit
   // log is precisely the PII honeypot §4 exists to prevent. `cash.test.ts` pins the sorted KEY SET
   // and asserts the figure is absent from the whole serialized row, so an added key fails there.
@@ -515,10 +541,11 @@ export async function applyFinanceClaims(
     actor: tenantId,
     payload: {
       count: written.length,
+      skipped: list.length - written.length,
       fields: written.map((c) => c.field),
       actors: [...new Set(written.map((c) => c.actor))],
       confidences: [...new Set(written.map((c) => c.confidence))],
     },
   });
-  return { ok: true };
+  return { ok: true, applied: written.length, skipped: list.length - written.length };
 }

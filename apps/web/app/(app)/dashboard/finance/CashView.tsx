@@ -156,11 +156,24 @@ export function FigureTile({
               : null}
           </p>
         ) : null}
+        {/* (origin, actor), never origin alone — the central invariant of the live-finance slice.
+            EVERY claim it stores is `origin: "stated"` (spec §1: a figure read out of the owner's
+            own P&L is still a human assertion), so the owner's typed figure and the agent's
+            approved one share an origin and this branch used to print "You told us this on <date>."
+            over the agent's own arithmetic — MRR 3,200 worked out from "$800/month × 4
+            subscribers", which the owner never said. Attribution to the owner now requires POSITIVE
+            evidence (`actor === "user"`); an agent write and an unrecorded actor both get the
+            honest sentence. `statedAt` on an agent write is the claim's `observedAt` — when the
+            figure was TRUE, not when it was approved — so the wording is "as of", never "on". */}
         {figure.origin === "stated" ? (
           <p style={{ ...muted, fontSize: "0.8rem" }}>
-            {figure.statedAt === undefined
-              ? "You told us this."
-              : `You told us this on ${shortDay(figure.statedAt)}.`}
+            {figure.actor === "user"
+              ? figure.statedAt === undefined
+                ? "You told us this."
+                : `You told us this on ${shortDay(figure.statedAt)}.`
+              : figure.statedAt === undefined
+                ? "Recorded by Pikar from your own information."
+                : `Recorded by Pikar from your own information, as of ${shortDay(figure.statedAt)}.`}
             {figure.stale ? " Is this still right?" : ""}
           </p>
         ) : null}

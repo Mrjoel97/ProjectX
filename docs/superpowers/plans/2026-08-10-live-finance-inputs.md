@@ -853,7 +853,9 @@ git commit -m "feat(finance): the sixth approval kind, labelled for what Approve
 
 **Interfaces:**
 - Consumes: `CashInputState` (Task 2), `CASH_INPUTS`, `cashInputSpec`.
-- Produces: `financeSpineLine(inputs, nowMs)` returning `string | null`, and `FINANCE_SPINE_BUDGET`. Task 7 and the existing spine assembler consume it.
+- Produces: `financeSpineLine(inputs, nowMs)` returning `string | null`, and `FINANCE_SPINE_BUDGET`.
+
+> **CORRECTED 2026-08-10 (whole-branch review, C1).** This block claimed "Task 7 and the existing spine assembler consume it". Neither did: Task 7 built the `readFinance` tool, which reads `unitEconomics`/`solvency`/`inputsFor` and never touches this function, and no task ever wired the spine assembler — `financeSpineLine` shipped with ZERO callers outside its own test while the skill body told the model its context carries a `Finance:` line. The wiring is real as of the review fix: `blueprint.ts`'s `spineForTenant` (the ONE assembler both cockpit seams call) appends the line, assembled outside `renderSpine` and surviving the no-live-blueprint early return, and `convex/cash.ts` exports `inputStatesFor` to feed it.
 
 - [ ] **Step 1: Write the failing test**
 

@@ -606,6 +606,63 @@ describe("blueprint spine and Stage-1 drift", () => {
       t.query(internal.blueprint.spineForTenant, { tenantId: "tenant_b" }),
     ).resolves.toBeNull();
   });
+
+  // WHOLE-BRANCH REVIEW C1. `financeSpineLine` had ZERO callers while the shipped skill body told
+  // the model "your context carries a `Finance:` line" — a false statement at runtime, and the
+  // always-on finance channel (spec §2) with it. This is the ONE spine assembler both cockpit
+  // seams call, so the line goes here.
+  describe("the always-on finance line (spec §2)", () => {
+    const saveFigure = (t: ReturnType<typeof makeTest>, tenantId: string) =>
+      t.run(async (ctx) => {
+        await ctx.db.insert("financeInputs", {
+          tenantId,
+          field: "cashOnHand",
+          valueUsd: 38_500,
+          statedAt: Date.now() - 2 * 24 * 60 * 60 * 1000,
+          origin: "stated",
+          actor: "user",
+          basis: "finance panel",
+        });
+      });
+
+    test("rides along with the blueprint block, values and ages and all", async () => {
+      const t = makeTest();
+      await insertLiveBlueprint(t, "tenant_a");
+      await saveFigure(t, "tenant_a");
+
+      const spine = await t.query(internal.blueprint.spineForTenant, { tenantId: "tenant_a" });
+      expect(spine).toContain("</business_blueprint>");
+      expect(spine).toContain("Finance: cashOnHand 38500(2d)");
+    });
+
+    // THE early return this fix exists for: `spineForTenant` returns `null` outright when there is
+    // no live blueprint, so a tenant with figures and no blueprint — the ordinary state of a new
+    // account — would still get no finance line at all.
+    test("survives a tenant with figures and NO blueprint", async () => {
+      const t = makeTest();
+      await saveFigure(t, "tenant_a");
+
+      const spine = await t.query(internal.blueprint.spineForTenant, { tenantId: "tenant_a" });
+      expect(spine).toContain("Finance: cashOnHand 38500(2d)");
+      expect(spine).not.toContain("<business_blueprint>");
+    });
+
+    test("a tenant with neither is still null — byte-identical to before this existed", async () => {
+      const t = makeTest();
+      await expect(
+        t.query(internal.blueprint.spineForTenant, { tenantId: "tenant_a" }),
+      ).resolves.toBeNull();
+    });
+
+    test("never carries another tenant's figures", async () => {
+      const t = makeTest();
+      await saveFigure(t, "tenant_b");
+      await insertLiveBlueprint(t, "tenant_a");
+
+      const spine = await t.query(internal.blueprint.spineForTenant, { tenantId: "tenant_a" });
+      expect(spine).not.toContain("38500");
+    });
+  });
 });
 
 describe("blueprint candidate synthesis", () => {
