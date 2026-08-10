@@ -46,6 +46,8 @@ metrics:
     - "d2374bf — tenant ids through the scheduled dispatch + audit attribution (6 files, +419 / -12)"
     - "6cd236b — the golden runner (1 file, +915 / -15)"
     - "490d5a0 — playbooks + 21-03-PLAN.md (3 files, +487 / -0)"
+    - "bb3c6e5 — FIX: the unknown-arg guard rejected the documented pnpm invocation"
+    - "c5f80e2 / (this file) — the summary"
   files_changed: 12
   insertions: 2537
   deletions: 29
@@ -73,7 +75,7 @@ Every number below was read off a command run in this session. Nothing is estima
 | Contracts suite | `pnpm --filter @pikar/contracts exec vitest run` | **31/31 passed**, 3 files |
 | Backend typecheck | `pnpm typecheck` (packages/backend) | exit **0** (twice; see the TS2339 note) |
 | Contracts typecheck | `pnpm typecheck` (packages/contracts) | exit **0** |
-| Task 3 verify (exact plan command) | `node scripts/run-eval-golden.mjs --self-check` | **PASSED**, exit **0**, 36 fixtures, 12 gated skills |
+| Task 3 verify (exact plan command) | `pnpm --filter @pikar/backend eval:golden -- --self-check` | **PASSED**, exit **0**, 36 fixtures, 12 gated skills (**RED first — see below**) |
 | Task 4 verify | `node scripts/check-playbooks.mjs check` | exit **0** |
 | Whitespace | `git diff --check` | exit **0** |
 | **Model spend** | — | **$0.00 — no model call, no paid eval, no `--skill` or `--tenant-skill` run, no activation** |
@@ -87,6 +89,37 @@ Three `$0` argument-guard smokes were also run against the real script (each exi
 Convex call): `--tenant-skil x` → `unknown argument "--tenant-skil"`; `--expect-status=candidate`
 → `status expectation flags require --inspect-tenant-skill`; `--inspect-tenant-skill` with no value
 → `--tenant-skill requires a tenantSkills row id (got undefined)`.
+
+### The Task-3 verify command was RED, and it caught a real bug I shipped
+
+I had been running `node scripts/run-eval-golden.mjs --self-check`. Running the plan's **exact**
+command exposed a defect in my own new guard:
+
+```
+[eval:golden] unknown argument "--" (known: --expect-evidence … --tenant-skill)
+ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL @pikar/backend@0.0.0 eval:golden:
+  `node ./scripts/run-eval-golden.mjs "--" "--self-check"`   Exit status 1
+```
+
+**pnpm forwards the `--` separator itself into `process.argv`.** My `assertKnownArgs` therefore
+rejected *every documented invocation of this script*, including the one this plan's own
+verification names and the two `pnpm eval:golden --skill …` forms in the playbooks. Fixed with
+`stripSeparator` at the entry (Rule 1, commit `bb3c6e5`), with self-check coverage that also proves
+stripping cannot swallow a real value (`--only --` still throws `--only requires a value`).
+
+**The lesson is the one this repo keeps re-learning: run the plan's command, not your paraphrase of
+it.** A guard that makes a run cheaper is worthless if it makes the run impossible, and nothing
+short of the literal invocation would have shown it.
+
+That fix then turned a SECOND self-check assertion red — `runInspect exits and never touches a
+fixture seed` — because my source-order probes anchored on `"const argv = process.argv.slice(2)"`,
+a string that **appears in the probe's own line**, so `lastIndexOf` found the self-check's copy and
+sliced self-check prose instead of live code (reporting an EMPTY `runInspect` body). All three
+probes now anchor on section markers **assembled at runtime** (`marker("entry")` etc.) so no anchor
+exists as a literal anywhere. Both probes were then mutation-proven: adding a `seedInboxFixture`
+call to `runInspect` → `runInspect exits and never touches a fixture seed`, exit 1; adding a
+`recordTenantEvalEvidence` call → `runInspect must never write evidence or call a model`, exit 1;
+both restored, `diff` against the pre-mutation copy IDENTICAL, exit 0.
 
 ### Biome, measured against HEAD rather than asserted
 
@@ -236,6 +269,8 @@ pre-mutation copy; `diff` against the copy confirmed no residue, and the suite w
 | Both-scope pin collision | runner: delete the `existing === "global"` throw in `mergePinScopes` | `Missing expected exception: one skill cannot be pinned globally AND by row in the same run`; **exit 1** | yes — exit 0 |
 | Deployment-hash credential leak | runner: `url.split("#")[0].split("?")[0]` → `url.trim()` | `the query string is dropped BEFORE hashing — a deploy URL can carry a key` + a full hex diff (`cfb6692…` vs `c79fb34…`); **exit 1** | yes — exit 0 |
 | Unknown-argument guard | runner: delete the `KNOWN_FLAGS` throw | `Missing expected exception: a one-character typo must not buy a full unpinned gate run`; **exit 1** | yes — exit 0 |
+| Inspection is seed-free | add a `must("smoke:seedInboxFixture", …)` to `runInspect` | `runInspect exits and never touches a fixture seed`; **exit 1** | yes — exit 0, `diff` IDENTICAL |
+| Inspection is write-free | add a `must("skills:recordTenantEvalEvidence", …)` to `runInspect` | `runInspect must never write evidence or call a model`; **exit 1** | yes — exit 0, `diff` IDENTICAL |
 
 ### Two mutations that were GREEN on first attempt — and what that exposed
 
@@ -341,6 +376,25 @@ candidate would have read `false` forever and the panel's "Evaluation passed" co
 for the same reason "Live" is. One line, plus a test asserting both directions (it flips true on a
 correct write, and back to false when the evidence names another row). Files:
 `packages/backend/convex/skills.ts`. Commit `ce04642`.
+
+**Rule 1 (bug) — my own unknown-argument guard broke every documented invocation.** pnpm forwards
+the `--` separator into `process.argv`, so `pnpm … eval:golden -- --self-check` aborted with
+`unknown argument "--"`. Found by running the plan's EXACT verify command rather than my paraphrase
+of it. Fixed with `stripSeparator` at the entry plus self-check coverage. Files:
+`packages/backend/scripts/run-eval-golden.mjs`. Commit `bb3c6e5`. **This was shipped in `6cd236b`
+and lived for four commits** — recorded here rather than folded silently into the guard's own
+deviation entry below, because "the safety guard made the command unrunnable" is exactly the class
+of defect a summary is meant to surface.
+
+**Rule 1 (bug) — my own self-check source probes matched their own text, a second time.** Anchoring
+on `"const argv = process.argv.slice(2)"` made `lastIndexOf` find the copy inside the probe's own
+line and slice self-check prose instead of live code, so `inspectBody` was EMPTY and the assertion
+about it was vacuous — it only surfaced because the `stripSeparator` edit changed that line. All
+three probes now anchor on section markers assembled at runtime, and both `runInspect` probes are
+mutation-proven above. **The same latent shape exists in the SHIPPED `blueprintSeedAt` probe
+(17.1-10) directly above mine** — its anchor `'must("smoke:seedGoldenEvalBlueprint"'` also appears
+in its own line. I did not touch it; it is not mine and fixing it is a behavioural change to another
+plan's guard. Flagged for whoever owns it.
 
 **Rule 2 (missing critical functionality) — the runner ignored unknown arguments.** `agent-runtime.md`
 documents this as a known hazard ("Do not run `--list`. There is no such flag; unknown argv is
@@ -474,5 +528,5 @@ and note that a filtered or zero-case run will now correctly refuse to record an
 - `docs/playbooks/skill-registry.md` — FOUND (+114, zero deletions)
 - `docs/playbooks/agent-runtime.md` — FOUND (+63, zero deletions)
 - `.planning/phases/21-user-authored-skills-and-routines/21-03-PLAN.md` — FOUND (310 lines, newly tracked)
-- Commits `ce04642`, `d2374bf`, `6cd236b`, `490d5a0` — all four verified with
-  `git merge-base --is-ancestor <sha> HEAD` **after this summary was written**
+- Commits `ce04642`, `d2374bf`, `6cd236b`, `490d5a0`, `bb3c6e5` and the summary commit — all
+  verified with `git merge-base --is-ancestor <sha> HEAD` **after this summary was written**
