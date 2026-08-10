@@ -2,7 +2,7 @@
 
 - **Owner:** _TBD_
 - **Reviewer:** _TBD_
-- **Last reviewed:** 2026-08-10
+- **Last reviewed: 2026-08-10**
 
 **Baseline:** ISO 9001:2015 including Amendment 1:2024
 
