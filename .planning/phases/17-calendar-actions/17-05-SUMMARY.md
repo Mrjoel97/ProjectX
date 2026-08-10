@@ -301,9 +301,11 @@ keep the diff to two lines.
 | 1 | `185802c` | `test(17-05): bound the Calendar behavior gate so a hang is named, not silent` |
 | 2 | `d17ab1d` | `feat(17-05): the calendar_manage substrate — closed contracts, registry, inert target` |
 | 3 | `a14e5aa` | `feat(17-05): the calendar-management review card, trace parity and playbook` |
+| 4 | `77ab742` | `docs(17-05): the calendar_manage substrate plan, summary and deferred items` |
+| 5 | `e4f9aab` | `style(17-05): biome-format the calendar test gate` (formatting only; re-verified 39/39) |
 | — | `3166544` | **Foreign.** `docs(21-04)` — carries this plan's `cockpit.md` section; see above |
 
-All three owned commits verified with `git merge-base --is-ancestor <sha> HEAD` immediately after
+All owned commits verified with `git merge-base --is-ancestor <sha> HEAD` immediately after
 each commit and again at the end of the plan. None fell out.
 
 ## NOT DONE AND NOT CLAIMED
