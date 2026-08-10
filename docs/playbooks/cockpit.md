@@ -12,6 +12,13 @@
 >
 > This SUPERSEDES the COVERAGE-ONLY entry below it, which registered
 > `packages/core/src/calendarManagement.ts` without reading it.
+
+<!-- SHARED-TREE INCIDENT, 2026-08-11: the 17-05 entry above landed in this file in the working
+     tree between 21-04's `git diff --stat` check and its `git commit -- <paths>`, so it was swept
+     into 21-04's docs commit `3166544` under the wrong authorship. The text is 17-05's, byte
+     unchanged, and history was NOT rewritten to "fix" it — a rewrite in this tree is the more
+     destructive act. This separator was added afterwards so the two entries read as two. -->
+
 > Touched 2026-08-11 by 21-04 to clear the §9 Stop hook. **NOTHING HERE WAS RE-VERIFIED AND THIS
 > ENTRY DOCUMENTS NO CHANGE OF ITS OWN.** The hook builds its changed-set from the WHOLE working
 > tree, and it fired on `apps/web/app/(app)/dashboard/workspace/cards.tsx`,
