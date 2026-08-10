@@ -71,6 +71,14 @@ const table = (rows: Array<Record<string, unknown>>, over: Record<string, unknow
     ...over,
   });
 
+/** A tile's value cell, addressed BY ITS OWN TILE. A bare `toContain(">3<")` is satisfied by ANY
+ *  tile holding 3, so it cannot see two values swapped between their labels — measured during the
+ *  19.1 gap-closure audit: transposing `needingAttention` and `followUpsDue` in the component left
+ *  this entire suite green. Anchor a rendered number to the thing it names, never to the document.
+ *  Same defect the import done-screen test was caught by (`enriched: 1` satisfying `">1<"`). */
+const tileValue = (html: string, id: string) =>
+  html.match(new RegExp(`pipeline-tile-${id}"[\\s\\S]*?stat-value">([^<]*)<`))?.[1];
+
 describe("the four tiles are ALWAYS-KNOWN counts (invariant 3)", () => {
   test("a brand-new empty tenant reads FOUR real zeroes, and no hedge anywhere", () => {
     const html = render(PipelineTiles, {
@@ -103,7 +111,11 @@ describe("the four tiles are ALWAYS-KNOWN counts (invariant 3)", () => {
         partial: null,
       },
     });
-    for (const value of [">3<", ">7<", ">2<", ">1<"]) expect(html).toContain(value);
+    // Each value read out of ITS OWN tile, so a transposition between two tiles fails here.
+    expect(tileValue(html, "needing-attention")).toBe("3");
+    expect(tileValue(html, "followups-due")).toBe("7");
+    expect(tileValue(html, "consent")).toBe("2");
+    expect(tileValue(html, "suppressed")).toBe("1");
     for (const id of ["needing-attention", "followups-due", "consent", "suppressed"]) {
       expect(html).toContain(`data-testid="pipeline-tile-${id}"`);
     }
@@ -124,7 +136,12 @@ describe("the four tiles are ALWAYS-KNOWN counts (invariant 3)", () => {
         partial: "row-cap",
       },
     });
-    for (const value of [">1000+<", ">12+<", ">4+<"]) expect(html).toContain(value);
+    // Third instance of the same weakness, fixed with the rest: `>12+<` and `>4+<` were both
+    // document-wide, so swapping `followUpsDue` and `suppressed` was invisible here too.
+    expect(tileValue(html, "needing-attention")).toBe("1000+");
+    expect(tileValue(html, "followups-due")).toBe("12+");
+    expect(tileValue(html, "consent")).toBe("1000+");
+    expect(tileValue(html, "suppressed")).toBe("4+");
     // A floor is still a NUMBER the page knows. Invariant 3 bans hedging ("we can't say"), not
     // honesty about a bound — so the same absences must still hold here.
     expect(html).not.toContain("—");
@@ -355,8 +372,12 @@ describe("the CSV import panel", () => {
 
   test("the four preview counts render as themselves, including a real 0", () => {
     const html = preview();
-    for (const value of [">3<", ">2<", ">0<", ">1<"]) expect(html).toContain(value);
-    for (const word of ["new", "enriched", "unchanged", "rejected"]) expect(html).toContain(word);
+    // Each count anchored to the word it qualifies. The bare `">3<"`/`">2<"` form these replace was
+    // satisfied by any of the four counts, so `enriched` and `rejected` could swap unnoticed.
+    expect(html).toContain("<strong>3</strong> new");
+    expect(html).toContain("<strong>2</strong> enriched");
+    expect(html).toContain("<strong>0</strong> unchanged");
+    expect(html).toContain("<strong>1</strong> rejected");
     // A zero is a fact here too (invariant 3's rule, one section down the page): "0 unchanged" is
     // knowledge, and hedging it would make the preview stop promising what the write will do.
     expect(html).not.toContain("Unknown");

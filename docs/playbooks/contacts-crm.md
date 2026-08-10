@@ -37,7 +37,26 @@
 > files. **Item 3 from the gate — the consent-chip comparison — is NOT closed and was NOT a defect:**
 > the verifier reclassified it as a genuine `human_verification` need, because it requires a
 > per-person `asserted-by-user` contact that no artifact in this phase ever created. Nothing was
-> seeded.)
+> seeded. **Closed 2026-08-11 by owner decision on the `Origin` column** — a decision about what
+> evidence is worth buying, NOT a finding that the comparison was made. The data-layer facts are
+> asserted (`consentRecord` read-back, the non-downgrade floor); the two chips have still never
+> been seen side by side. `19.1-VERIFICATION.md` says so in those terms.
+>
+> **THE VACUOUS-ASSERTION SWEEP THAT FOLLOWED IS THE MOST REUSABLE PART OF THIS.** After the
+> `>1<` catch above, the verifier was asked to hunt the same weakness elsewhere in
+> `pipelineView.test.ts` and found TWO more, each proven by a transposition mutation that left the
+> whole suite GREEN: swapping `enriched`/`rejected` in `ImportPreview`'s JSX, and swapping
+> `needingAttention`/`followUpsDue` in `PipelineTiles`' key mapping. A third instance (the
+> `row-cap` floor test) was found while fixing those. All three are now anchored — counts via
+> `<strong>N</strong> label`, tiles via a `tileValue(html, id)` helper that reads a value out of
+> ITS OWN tile — and re-proven: the tile transposition now fails TWO tests
+> (`expected '7' to be '3'`, `expected '12+' to be '1000+'`) and the preview swap fails with
+> `expected … to contain '<strong>2</strong> enriched'`.
+>
+> **THE MUTATION THAT FINDS THIS CLASS IS TRANSPOSITION, NOT DELETION.** Deleting a value makes it
+> absent and almost any assertion notices. SWAPPING two values keeps every number present and only
+> moves it under a different label — invisible to any document-wide `toContain`. When a component
+> renders several numbers, mutate by swapping them, not by removing one.)
 >
 > Last verified: 2026-08-10 (Plan 19.1-07 — **A REAL BROWSER HAS NOW IMPORTED A REAL CSV. THAT IS
 > WHAT CLOSES THIS CAPABILITY, AND NOTHING ELSE WOULD HAVE.** Plans 01–06 shipped a pure parser, two
