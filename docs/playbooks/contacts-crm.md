@@ -1,5 +1,41 @@
 # Playbook: Contacts, CRM & follow-ups
 
+> Last verified: 2026-08-10 (Plan 19.1-04 -- `matchExisting` and `importContacts`, the two public
+> functions the CSV import panel talks to. **BOTH LIVE IN `convex/contacts.ts`; THERE IS STILL NO
+> SECOND CRM STORE** (PIPE-01, invariant 5) -- `matchExisting` is an indexed read over
+> `by_tenant_email` and `importContacts` routes every row through `upsertContactRow`, so invariant
+> 13 holds with a THIRD caller and no third writer. The structural scan now also covers
+> `packages/core/src/contactImport.ts`. **THE COUNTS ARE DEFINED OVER THE FOUR MAPPABLE FIELDS
+> ONLY** (`name`, `company`, `phone`, `title`): a contact that gained a consent record but no field
+> values counts as `unchanged`, because counting the consent write would make `unchanged`
+> structurally always 0 and the preview -- which promises these exact numbers BEFORE the write -- a
+> lie. `matchExisting` returns per address `{ email, exists, empty }` where `empty` is exactly those
+> four fields, so the preview projects the counts from a fact rather than guessing. **THE WRITE
+> BOUNDARY RE-NORMALIZES AND RE-VALIDATES** with `normalizeAddress` + `isValidEmail`, the
+> `parseCrmOperations` discipline: the browser already did both, and a client is an input, not an
+> authority. A bad address becomes a `rejected` ENTRY, never a throw -- one hand-crafted row must
+> not discard the 99 good ones sharing its transaction. **THE BATCH NUMBERS ARE NOT CONVEX LIMITS
+> AND MUST NEVER BE JUSTIFIED AS ONE.** `IMPORT_BATCH_ROWS` (100) and `IMPORT_MATCH_CHUNK` (500)
+> sit at ~1% of every hard limit (arg 16 MiB, array 8 192, docs scanned 32 000, docs written
+> 16 000, 1s of user code) -- every one of them would permit the whole 1 000-row file in a single
+> call. The REAL reasons are retry blast radius, progress granularity and a shorter OCC window. An
+> over-long array is REFUSED (`IMPORT_MATCH_TOO_MANY` / `IMPORT_BATCH_TOO_LARGE`) and never
+> sliced: an implicit slice would silently under-report and the preview would promise a write it
+> never makes. **AN IMPORT WRITES NO AUDIT ROW, DELIBERATELY.** `assertConsent` writes none either,
+> and this module's whole audit surface is still ONE event (`contact.unsuppressed`) under a key-set
+> EQUALITY test. CLAUDE.md §4 governs what a payload may CARRY, not that every write must have one;
+> the strongest available guarantee that an address or the attestation wording never becomes a
+> payload is that the path emits no payload at all, and the §4 test asserts that as a ROW COUNT over
+> a real import run before falling back to the substring scan. FOUR MUTATION-PROOFS, each observed
+> red and reverted: dropping the `IMPORT_MATCH_TOO_MANY` refusal gives `promise resolved "[ { email:
+> 'p0@x.com', ...(2) }, ...(500) ]" instead of rejecting`; dropping the server-side `isValidEmail`
+> re-validation gives `CONTACT_EMAIL_REQUIRED` (the whole batch throws -- exactly the blast radius
+> the guard prevents); flipping `fillEmptyOnly` to `false` gives `expected 'S. CHEN (OLD CRM)' to be
+> 'Sarah Chen' // Object.is equality` plus `expected { created: +0, enriched: 1, ...(2) } to deeply
+> equal { created: +0, enriched: +0, ...(2) }`; removing `importContacts` from `COVERED` gives
+> `expected [ 'assertConsent', ...(11) ] to deeply equal [ 'assertConsent', ...(10) ]`. MEASURED:
+> `contacts.test.ts` 87/87 (was 73, +14), `COVERED` now 12 entries.)
+
 > Last verified: 2026-08-10 (Plan 19.1-03 -- fill-empty-only and the consent floor, as a FLAG on the
 > ONE writer.) **INVARIANT 13 NOW HAS A FLAG, NOT A SECOND WRITER.** `upsertContactRow` takes
 > `fillEmptyOnly` (plus `company`/`phone`/`title` and an optional `consent` block) and returns
@@ -806,6 +842,12 @@ it.
 - **The saved-contact lookup is a bounded scan** (`SCAN_LIMIT` 1 000 contacts over
   `by_tenant_createdAt`) feeding the in-memory `rankCandidates`. *Upgrade path:* a `searchIndex` on
   `contacts.name`; the ranker still decides, only the shortlist changes.
+- **NOTHING CAPS A TENANT'S CONTACT COUNT.** The 1 000-row ceiling is PER IMPORT (`IMPORT_ROW_MAX`)
+  and 100/500 are per CALL; a user may import the same file, or ten different ones, without limit.
+  What is bounded is the READ side -- `listContacts` and `savedForName` scan `SCAN_LIMIT` (1 000)
+  rows and `pipelineTiles` currently takes exactly `SCAN_LIMIT` and reports NO bound, so a book
+  grown past it under-counts silently. Plan 19.1-05 is what makes that tile report `partial` /
+  `"row-cap"` instead of a confidently wrong number; raising the cap is not the fix.
 - **`listContacts` runs one `by_tenant_contact` query per page row** (≤ 25) plus the `requests`
   fold. If the Pipeline ever feels slow, the fold is the first suspect.
 

@@ -4,7 +4,13 @@
 // Subjects are built as `${userId}|session_x` over REAL `users` rows, exactly as `tenant.test.ts`
 // does: `requireScope` derives `tenantId` from the segment before the `|`, so a hand-made subject
 // that skips this shape silently tests nothing.
-import { dashboardCursorFor, IMPORT_ATTESTATION, parseDashboardCursor } from "@pikar/core";
+import {
+  dashboardCursorFor,
+  IMPORT_ATTESTATION,
+  IMPORT_BATCH_ROWS,
+  IMPORT_MATCH_CHUNK,
+  parseDashboardCursor,
+} from "@pikar/core";
 import { convexTest } from "convex-test";
 import { describe, expect, test, vi } from "vitest";
 // `audit.log` maintains the auditCounts aggregate (audit.ts), so the component must be registered
@@ -249,6 +255,50 @@ describe("contacts: tenant isolation across every public function (BETA-05 / SC#
     });
     expect((await h.asB.query(api.contacts.listUnassignedFollowUps, {})).followUps).toEqual([]);
     expect((await h.asA.query(api.contacts.listUnassignedFollowUps, {})).followUps).toHaveLength(1);
+  });
+
+  // The bulk import surface (19.1-04). Both are tenant-scoped like everything above them; these
+  // are the two rows that keep the export-set pin honest for this phase.
+  test("matchExisting — B is told A's address does not exist, and A is told it does", async () => {
+    const h = await harness();
+    await h.asA.mutation(api.contacts.upsertContact, {
+      email: "a-only@x.com",
+      name: "A's Name",
+      origin: "user-entered",
+    });
+    expect(await h.asB.query(api.contacts.matchExisting, { emails: ["a-only@x.com"] })).toEqual([
+      { email: "a-only@x.com", exists: false, empty: ["name", "company", "phone", "title"] },
+    ]);
+    // Non-vacuity: A, over the SAME database, is told the truth.
+    const forA = await h.asA.query(api.contacts.matchExisting, { emails: ["a-only@x.com"] });
+    expect(forA[0]?.exists).toBe(true);
+    expect(forA[0]?.empty).toEqual(["company", "phone", "title"]);
+  });
+
+  test("importContacts — B's import creates B-SCOPED rows and does not touch A's", async () => {
+    const h = await harness();
+    await h.asA.mutation(api.contacts.upsertContact, {
+      email: "shared@x.com",
+      name: "A's Typed Name",
+      origin: "user-entered",
+    });
+    const result = await h.asB.mutation(api.contacts.importContacts, {
+      rows: [{ email: "shared@x.com", name: "B's Imported Name", company: "B Corp" }],
+      attestation: { wording: IMPORT_ATTESTATION },
+    });
+    // B saw no existing row, so this is a CREATE for B even though the address exists for A.
+    expect(result).toEqual({ created: 1, enriched: 0, unchanged: 0, rejected: [] });
+
+    const rows = await contactRows(h);
+    expect(rows).toHaveLength(2);
+    const aRow = rows.find((r) => r.tenantId === h.tenantA);
+    const bRow = rows.find((r) => r.tenantId === h.tenantB);
+    expect(aRow?.name).toBe("A's Typed Name");
+    expect(aRow?.origin).toBe("user-entered");
+    expect(aRow?.company).toBeUndefined();
+    expect(aRow?.consentAt).toBeUndefined();
+    expect(bRow?.name).toBe("B's Imported Name");
+    expect(bRow?.origin).toBe("imported");
   });
 });
 
@@ -702,6 +752,220 @@ describe("upsertContactRow: fill-empty-only and the consent floor (19.1)", () =>
   });
 });
 
+// ── The bulk import surface (19.1-04) ─────────────────────────────────────────────────────────
+// `matchExisting` is what lets the preview state `N new · M enriched · K unchanged` BEFORE any
+// write; `importContacts` is the write. Every assertion about what LANDED reads `contactRows(h)`
+// back rather than trusting the reply — a reply agrees with itself, which is how "don't erase"
+// passed as "fill empty only" for a whole phase.
+
+describe("contacts: matchExisting states what is already on record, before any write (19.1)", () => {
+  test("one entry per REQUESTED address, in request order, naming the empty fields", async () => {
+    const h = await harness();
+    await h.t.run((ctx) =>
+      upsertContactRow(ctx, h.tenantA, {
+        email: "known@x.com",
+        name: "Known Person",
+        company: "Acme",
+        origin: "user-entered",
+      }),
+    );
+
+    const out = await h.asA.query(api.contacts.matchExisting, {
+      emails: ["unknown@x.com", "  Known@X.com  "],
+    });
+    expect(out).toHaveLength(2);
+    // An unknown address is `exists: false` with all FOUR fields listed — the preview needs the
+    // same shape for both cases or a new row has nothing to count.
+    expect(out[0]).toEqual({
+      email: "unknown@x.com",
+      exists: false,
+      empty: ["name", "company", "phone", "title"],
+    });
+    // Normalized SERVER-side: the padded, mixed-case form found the stored `known@x.com`.
+    expect(out[1]?.email).toBe("known@x.com");
+    expect(out[1]?.exists).toBe(true);
+    expect(out[1]?.empty).toEqual(["phone", "title"]);
+  });
+
+  test("an array longer than IMPORT_MATCH_CHUNK is REFUSED, never silently sliced", async () => {
+    const h = await harness();
+    const emails = Array.from({ length: IMPORT_MATCH_CHUNK + 1 }, (_, i) => `p${i}@x.com`);
+    await expect(h.asA.query(api.contacts.matchExisting, { emails })).rejects.toThrow(
+      "IMPORT_MATCH_TOO_MANY",
+    );
+    // Non-vacuity: exactly AT the chunk size it answers, so the refusal is the length rule and not
+    // a broken function. A silent slice would under-report and the preview would promise a write
+    // it never makes.
+    expect(
+      await h.asA.query(api.contacts.matchExisting, {
+        emails: emails.slice(0, IMPORT_MATCH_CHUNK),
+      }),
+    ).toHaveLength(IMPORT_MATCH_CHUNK);
+  });
+});
+
+describe("contacts: importContacts is the write boundary (19.1)", () => {
+  const ATTEST = { wording: IMPORT_ATTESTATION, context: "HubSpot export, August 2026" };
+
+  test("a batch of new addresses is CREATED, with origin `imported` on every row", async () => {
+    const h = await harness();
+    const result = await h.asA.mutation(api.contacts.importContacts, {
+      rows: [
+        { email: "one@x.com", name: "One", company: "Acme" },
+        { email: "TWO@X.com", title: "Head of Two" },
+      ],
+      attestation: ATTEST,
+    });
+    expect(result).toEqual({ created: 2, enriched: 0, unchanged: 0, rejected: [] });
+
+    const rows = await contactRows(h);
+    expect(rows.map((r) => r.email).sort()).toEqual(["one@x.com", "two@x.com"]);
+    for (const row of rows) expect(row.origin).toBe("imported");
+    expect(rows.find((r) => r.email === "one@x.com")?.company).toBe("Acme");
+    expect(rows.find((r) => r.email === "two@x.com")?.title).toBe("Head of Two");
+  });
+
+  test("an existing contact's EMPTY company is filled and counts as enriched — the typed name is not", async () => {
+    const h = await harness();
+    await h.asA.mutation(api.contacts.upsertContact, {
+      email: "sarah@x.com",
+      name: "Sarah Chen",
+      origin: "user-entered",
+    });
+    const result = await h.asA.mutation(api.contacts.importContacts, {
+      rows: [{ email: "sarah@x.com", name: "S. CHEN (OLD CRM)", company: "Acme", phone: "555" }],
+      attestation: ATTEST,
+    });
+    expect(result).toEqual({ created: 0, enriched: 1, unchanged: 0, rejected: [] });
+
+    const [row] = await contactRows(h);
+    // Read BACK: fill-empty-only means the file filled two blanks and left the typed name alone.
+    expect(row?.name).toBe("Sarah Chen");
+    expect(row?.company).toBe("Acme");
+    expect(row?.phone).toBe("555");
+    // Provenance is set once, on creation — a file does not restate where a hand-typed row came from.
+    expect(row?.origin).toBe("user-entered");
+  });
+
+  test("a contact whose four fields are ALL set counts as unchanged — even though it gained consent", async () => {
+    const h = await harness();
+    await h.t.run((ctx) =>
+      upsertContactRow(ctx, h.tenantA, {
+        email: "full@x.com",
+        name: "Full Row",
+        company: "Acme",
+        phone: "555",
+        title: "CEO",
+        origin: "user-entered",
+      }),
+    );
+    const result = await h.asA.mutation(api.contacts.importContacts, {
+      rows: [{ email: "full@x.com", name: "Stale", company: "Stale Co", phone: "1", title: "X" }],
+      attestation: ATTEST,
+    });
+    // The counts are over the FOUR MAPPABLE FIELDS ONLY. Counting the consent write as an
+    // enrichment would make `unchanged` structurally always 0 and the preview a lie.
+    expect(result).toEqual({ created: 0, enriched: 0, unchanged: 1, rejected: [] });
+
+    const [row] = await contactRows(h);
+    expect(row?.name).toBe("Full Row");
+    // …and the consent record DID land on the row this call reported as unchanged.
+    expect(row?.consentSource).toBe("imported-attested");
+    expect(row?.consentWording).toBe(IMPORT_ATTESTATION);
+  });
+
+  test("a hand-crafted BAD address is refused SERVER-side, and the good rows in the same call still land", async () => {
+    const h = await harness();
+    const result = await h.asA.mutation(api.contacts.importContacts, {
+      rows: [
+        { email: "good@x.com", name: "Good" },
+        // The browser would never send these — this is a client that skipped the browser.
+        { email: "not-an-address", name: "Bad" },
+        { email: "   ", name: "Blank" },
+        { email: "also-good@x.com" },
+      ],
+      attestation: ATTEST,
+    });
+    // One bad row must not discard the good ones in the same transaction: a rejection is data,
+    // not a throw.
+    expect(result.created).toBe(2);
+    expect(result.rejected).toEqual([
+      { email: "not-an-address", reason: "not a usable email address" },
+      { email: "   ", reason: "not a usable email address" },
+    ]);
+    expect((await contactRows(h)).map((r) => r.email).sort()).toEqual([
+      "also-good@x.com",
+      "good@x.com",
+    ]);
+  });
+
+  test("a batch longer than IMPORT_BATCH_ROWS is refused, and writes NOTHING", async () => {
+    const h = await harness();
+    const rows = Array.from({ length: IMPORT_BATCH_ROWS + 1 }, (_, i) => ({
+      email: `p${i}@x.com`,
+    }));
+    await expect(
+      h.asA.mutation(api.contacts.importContacts, { rows, attestation: ATTEST }),
+    ).rejects.toThrow("IMPORT_BATCH_TOO_LARGE");
+    expect(await contactRows(h)).toHaveLength(0);
+    // Non-vacuity: exactly AT the batch size it writes, so the refusal is the length rule.
+    await h.asA.mutation(api.contacts.importContacts, {
+      rows: rows.slice(0, IMPORT_BATCH_ROWS),
+      attestation: ATTEST,
+    });
+    expect(await contactRows(h)).toHaveLength(IMPORT_BATCH_ROWS);
+  });
+
+  test("a blank-after-trim attestation is refused, and writes NOTHING", async () => {
+    const h = await harness();
+    await expect(
+      h.asA.mutation(api.contacts.importContacts, {
+        rows: [{ email: "one@x.com" }],
+        attestation: { wording: "   " },
+      }),
+    ).rejects.toThrow("CONSENT_WORDING_REQUIRED");
+    // Refused BEFORE the loop: a consent record with no wording is a defaulted consent wearing a
+    // timestamp, and a half-written batch of them is worse.
+    expect(await contactRows(h)).toHaveLength(0);
+  });
+
+  test("every written contact carries `imported-attested` and the wording BYTE-FOR-BYTE", async () => {
+    const h = await harness();
+    await h.asA.mutation(api.contacts.importContacts, {
+      rows: [{ email: "one@x.com" }, { email: "two@x.com" }],
+      attestation: ATTEST,
+    });
+    for (const row of await contactRows(h)) {
+      expect(row.consentSource).toBe("imported-attested");
+      // Compared against the constant from @pikar/core, never a re-typed copy: a paraphrase would
+      // pass a hand-written literal even after the attestation drifted. It is the evidence.
+      expect(row.consentWording).toBe(IMPORT_ATTESTATION);
+      expect(row.consentContext).toBe("HubSpot export, August 2026");
+      expect(row.consentAt).toBeGreaterThan(0);
+    }
+  });
+
+  test("an import does NOT downgrade a per-person `asserted-by-user` consent record", async () => {
+    const h = await harness();
+    const contactId = await h.asA.mutation(api.contacts.upsertContact, {
+      email: "spoken-to@x.com",
+      origin: "user-entered",
+    });
+    await h.asA.mutation(api.contacts.assertConsent, { contactId, wording: WORDING });
+    await h.asA.mutation(api.contacts.importContacts, {
+      rows: [{ email: "spoken-to@x.com", company: "Acme" }],
+      attestation: ATTEST,
+    });
+
+    const [row] = await contactRows(h);
+    // Bulk evidence may never replace evidence recorded for ONE person the user spoke to.
+    expect(row?.consentSource).toBe("asserted-by-user");
+    expect(row?.consentWording).toBe(WORDING);
+    // …while the empty field was still filled by the same call.
+    expect(row?.company).toBe("Acme");
+  });
+});
+
 // ── The audit key-set pin (VALIDATION row 10) ─────────────────────────────────────────────────
 
 describe("contacts: the ONE audit row this module writes carries an id and a hash only", () => {
@@ -744,11 +1008,25 @@ describe("contacts: the ONE audit row this module writes carries an id and a has
     expect((await h.asA.query(api.contacts.consentRecord, { contactId }))?.wording).toBe(WORDING);
     await h.asA.mutation(api.contacts.unsuppress, { address: "stop@x.com", acknowledged: true });
 
+    // A REAL import run inside the same scan (19.1-04). The strongest guarantee that an imported
+    // address or the attestation wording never becomes a payload is that the path emits no payload
+    // at all — so this asserts a ROW COUNT first, and only then falls back to the substring scan.
+    const before = (await auditRows(h)).length;
+    await h.asA.mutation(api.contacts.importContacts, {
+      rows: [{ email: "imported-person@x.com", name: "Importa McRowface", company: "Acme" }],
+      attestation: { wording: IMPORT_ATTESTATION, context: "HubSpot export, August 2026" },
+    });
+    expect((await auditRows(h)).length).toBe(before);
+
     const serialized = JSON.stringify(await auditRows(h));
     expect(serialized).not.toContain("stop@x.com");
     expect(serialized).not.toContain(WORDING);
     expect(serialized).not.toContain("Trade show");
     expect(serialized).not.toContain("Stoppy");
+    expect(serialized).not.toContain("imported-person@x.com");
+    expect(serialized).not.toContain("Importa");
+    expect(serialized).not.toContain(IMPORT_ATTESTATION);
+    expect(serialized).not.toContain("HubSpot export, August 2026");
   });
 
   test("the unsuppress payload key set does NOT depend on whether a contact row exists", async () => {
@@ -1112,6 +1390,39 @@ describe("contacts: listContacts is bounded by the 26-01 contract (VALIDATION ro
     expect(second.bound.partial).toBe(false);
   });
 
+  test("a many-way createdAt TIE pages EXACTLY — every row reached once, none twice (19.1)", async () => {
+    const h = await harness();
+    const COUNT = 30;
+    await h.asA.mutation(api.contacts.importContacts, {
+      rows: Array.from({ length: COUNT }, (_, i) => ({ email: `tie${i}@x.com` })),
+      attestation: { wording: IMPORT_ATTESTATION },
+    });
+    // A bulk import is the first thing in this repo that can produce a many-way tie: on the real
+    // backend 30 rows inserted in ONE transaction share one frozen `Date.now()`. convex-test's
+    // clock ADVANCES mid-transaction (measured: 30 inserts produced 19 distinct values), so the
+    // tie is set with a SENTINEL rather than hoped for — the same discipline 19.1-03 used for
+    // `updatedAt`. Asserted, not assumed: without this the test silently stops covering its case.
+    const inserted = await contactRows(h);
+    expect(inserted).toHaveLength(COUNT);
+    await h.t.run(async (ctx) => {
+      for (const row of inserted) await ctx.db.patch(row._id, { createdAt: 1_234 });
+    });
+    expect(new Set((await contactRows(h)).map((r) => r.createdAt)).size).toBe(1);
+
+    const seen: string[] = [];
+    let cursor: string | undefined;
+    for (let page = 0; page < COUNT; page++) {
+      const result = await h.asA.query(api.contacts.listContacts, { limit: 10, cursor });
+      seen.push(...result.contacts.map((c) => String(c.contactId)));
+      if (result.bound.nextCursor === null) break;
+      cursor = result.bound.nextCursor;
+    }
+    // `compareDashboardOrder`'s id-descending tie-break is what makes this exact rather than
+    // approximate: with a createdAt-only comparison a 30-way tie drops rows or repeats them.
+    expect(seen).toHaveLength(COUNT);
+    expect(new Set(seen).size).toBe(COUNT);
+  });
+
   test("lastTouchAt is the NEWER of the newest delivered send and the newest completed follow-up", async () => {
     const h = await harness();
     const now = Date.now();
@@ -1274,6 +1585,8 @@ describe("PIPE-01: no second CRM data plane leaked an opportunity concept into t
   const scanned: Array<[string, string]> = [
     ["convex/contacts.ts", rawSources["./contacts.ts"] ?? ""],
     ["core/src/contacts.ts", coreSources["../../core/src/contacts.ts"] ?? ""],
+    // 19.1-01: the import parser/mapper is a CRM-shaped module and is covered by the same ban.
+    ["core/src/contactImport.ts", coreSources["../../core/src/contactImport.ts"] ?? ""],
   ];
 
   // Non-vacuity floor: a bad glob key yields "" and every `not.toMatch` below would pass.
@@ -1318,9 +1631,13 @@ describe("PIPE-01/BETA-05: the public surface is exactly what the isolation bloc
     // 19-13: the consent record's request path (SC#4). Isolation-tested in the block above.
     "consentRecord",
     "createFollowUp",
+    // 19.1-04: the CSV import's write. Isolation-tested in the block above.
+    "importContacts",
     "listContacts",
     "listUnassignedFollowUps",
     "markSuppressed",
+    // 19.1-04: the import preview's read. Isolation-tested in the block above.
+    "matchExisting",
     "pipelineTiles",
     "setFollowUpStatus",
     "unsuppress",

@@ -24,6 +24,9 @@ import {
   createDashboardBound,
   dashboardCursorFor,
   followUpIsDue,
+  IMPORT_BATCH_ROWS,
+  IMPORT_MATCH_CHUNK,
+  isValidEmail,
   needsAttention,
   normalizeAddress,
   parseCrmOperations,
@@ -1029,5 +1032,158 @@ export const savedForName = internalQuery({
       }
     }
     return { matches, followUps };
+  },
+});
+
+// ── The bulk import surface (19.1-04) ─────────────────────────────────────────
+// The two functions the CSV import panel talks to, and they add NO store: `matchExisting` is an
+// indexed read over `by_tenant_email` and `importContacts` routes every row through
+// `upsertContactRow`, the ONE writer (invariant 13). PIPE-01 forbids a second CRM data plane and
+// the structural scan in this file's test covers these lines too.
+//
+// The file itself never arrives here. It is parsed, mapped and de-duplicated in the BROWSER
+// (@pikar/core `contactImport.ts`) so no CSV is ever uploaded or stored — the same reasoning that
+// keeps addresses out of `audit.payload`. What crosses the wire is already-mapped rows, and this
+// boundary RE-DOES the normalization and the validation anyway (the `parseCrmOperations`
+// discipline): a client is an input, not an authority.
+
+/** What `matchExisting` reports for ONE requested address. Typed facts only, no display prose —
+ *  the `PipelineContactRow` rule. `empty` is exactly the four MAPPABLE fields, which is also
+ *  exactly what the preview's counts are defined over, so `exists && empty.length > 0` IS
+ *  "this row would be enriched". */
+export type ExistingMatch = {
+  /** The NORMALIZED address, so the panel can key its preview on the same string the write uses. */
+  email: string;
+  exists: boolean;
+  empty: MappableField[];
+};
+
+/**
+ * Which of these addresses are already on record, and which of their four mappable fields are empty.
+ *
+ * This is what lets the preview state `N new · M enriched · K unchanged` BEFORE anything is
+ * written — the counts are a projection of this answer, not a guess, and the confirm step then
+ * writes what the preview promised.
+ *
+ * One entry per REQUESTED address, in request order (an unknown one is `exists: false` with all
+ * four fields listed), one indexed read each — the `suppressedAmong` shape. An array longer than
+ * `IMPORT_MATCH_CHUNK` is REFUSED rather than sliced: an implicit slice would silently under-report
+ * and the preview would promise a write it never makes.
+ */
+export const matchExisting = tenantQuery({
+  args: { emails: v.array(v.string()) },
+  handler: async (ctx, { emails }): Promise<ExistingMatch[]> => {
+    // Before any read — the client chunks, the boundary enforces.
+    if (emails.length > IMPORT_MATCH_CHUNK) throw new Error("IMPORT_MATCH_TOO_MANY");
+    const out: ExistingMatch[] = [];
+    for (const raw of emails) {
+      // Normalized HERE rather than trusted from the client, or the preview and the write could
+      // disagree about who a row is.
+      const address = normalizeAddress(raw);
+      const row = address === "" ? null : await contactByEmail(ctx, ctx.tenantId, address);
+      out.push({
+        email: address,
+        exists: row !== null,
+        // `!row?.[key]` covers absent, stored-"" and no-row-at-all — each is an empty field.
+        empty: MAPPABLE.filter((key) => !row?.[key]),
+      });
+    }
+    return out;
+  },
+});
+
+/** What one `importContacts` batch did.
+ *
+ *  `created`, `enriched` and `unchanged` are defined over the FOUR MAPPABLE FIELDS ONLY. A contact
+ *  that gained a consent record but no field values counts as `unchanged`, deliberately: counting
+ *  the consent write as an enrichment would make `unchanged` structurally always 0 and the
+ *  preview — which promises these exact three numbers before the write — a lie. */
+export type ImportResult = {
+  created: number;
+  enriched: number;
+  unchanged: number;
+  /** The rows this boundary refused, carrying the address AS SENT so the panel can point at the
+   *  line in the user's file. A rejection is data, never a throw: one bad row must not discard the
+   *  99 good ones sharing its transaction. */
+  rejected: Array<{ email: string; reason: string }>;
+};
+
+/**
+ * Write ONE batch of mapped CSV rows under ONE attestation, recorded per contact.
+ *
+ * Every row goes through `upsertContactRow` with `fillEmptyOnly: true` — a CRM export is usually
+ * staler than what the user has since typed, so a value may FILL an empty field and may never
+ * overwrite one. Re-running the same file is therefore safe and converges, which is what buys the
+ * right to have no job queue, no reservation row and no resumable cursor: retry-the-whole-thing IS
+ * the recovery strategy at this size.
+ *
+ * The address is re-normalized and re-validated HERE, with `isValidEmail` — the repo's single
+ * email rule, already the send path's and already `parseCrmOperations`'s. The browser checked both
+ * already; this is the `parseCrmOperations` discipline, because a client is an input and not an
+ * authority, and an import-local rule would produce contacts that exist but can never be emailed.
+ *
+ * WRITES NO AUDIT ROW, deliberately. `assertConsent` — the other consent-recording path — writes
+ * none either, and this module's entire audit surface is ONE event (`contact.unsuppressed`) pinned
+ * by a key-set EQUALITY test. CLAUDE.md §4 governs what a payload may carry, not that every write
+ * must have one; the strongest available guarantee that an address or the attestation wording never
+ * becomes a payload is that this path emits no payload at all. `contacts.test.ts` asserts that as a
+ * ROW COUNT over a real import run, not as a substring scan.
+ */
+export const importContacts = tenantMutation({
+  args: {
+    rows: v.array(
+      v.object({
+        email: v.string(),
+        name: v.optional(v.string()),
+        company: v.optional(v.string()),
+        phone: v.optional(v.string()),
+        title: v.optional(v.string()),
+      }),
+    ),
+    attestation: v.object({ wording: v.string(), context: v.optional(v.string()) }),
+  },
+  handler: async (ctx, { rows, attestation }): Promise<ImportResult> => {
+    // The client batches at `IMPORT_BATCH_ROWS`; the boundary ENFORCES it. The number is NOT a
+    // Convex limit and must never be justified as one — 100 rows is ~1% of every hard limit (arg
+    // 16 MiB, array 8,192, docs scanned 32,000, docs written 16,000, 1s of user code), and every
+    // one of them would permit the whole 1,000-row file in a single call. The real reasons are
+    // retry blast radius (a failure re-does 100 rows, not 1,000), progress granularity (the panel
+    // has something honest to show ten times instead of once) and a shorter OCC window.
+    if (rows.length > IMPORT_BATCH_ROWS) throw new Error("IMPORT_BATCH_TOO_LARGE");
+    // Before the loop: the same floor `assertConsent` carries. A consent record with no wording is
+    // a defaulted consent wearing a timestamp, and a half-written batch of them is worse.
+    if (attestation.wording.trim() === "") throw new Error("CONSENT_WORDING_REQUIRED");
+
+    let created = 0;
+    let enriched = 0;
+    let unchanged = 0;
+    const rejected: ImportResult["rejected"] = [];
+    for (const row of rows) {
+      const address = normalizeAddress(row.email);
+      if (!isValidEmail(address)) {
+        // The same words `mapRows` uses client-side, so the user is told the same thing twice
+        // rather than two different things about one row.
+        rejected.push({ email: row.email, reason: "not a usable email address" });
+        continue;
+      }
+      const result = await upsertContactRow(ctx, ctx.tenantId, {
+        ...row,
+        email: address,
+        origin: "imported",
+        fillEmptyOnly: true,
+        consent: {
+          // DISTINCT from `asserted-by-user`: one attestation over 500 rows is weaker evidence
+          // than consent recorded for one person, and the schema must not flatten that.
+          source: "imported-attested",
+          // Stored VERBATIM — it is the evidence, not a label, and never a key into a message table.
+          wording: attestation.wording,
+          context: attestation.context,
+        },
+      });
+      if (result.created) created += 1;
+      else if (result.filled > 0) enriched += 1;
+      else unchanged += 1;
+    }
+    return { created, enriched, unchanged, rejected };
   },
 });
