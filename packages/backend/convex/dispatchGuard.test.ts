@@ -343,7 +343,11 @@ test("llm.ts holds NO reference to the Approve gate or the fan-out at all (not e
 // the 403 on the very first click.
 test("every Drive action checks stored scope before the shared token refresh", () => {
   const src = readCode("vaultDrive.ts");
-  for (const fn of ["export const importDriveFolder", "export const listDriveFolders"]) {
+  for (const fn of [
+    "export const importDriveFolder",
+    "export const listDriveFolders",
+    "export const findInDrive",
+  ]) {
     const start = src.indexOf(fn);
     expect(start, `${fn} not found`).toBeGreaterThanOrEqual(0);
     const rest = src.slice(start);
@@ -363,6 +367,38 @@ test("every Drive action checks stored scope before the shared token refresh", (
         `failure.`,
     ).toBeLessThan(tokenAt);
   }
+});
+
+test("cockpit Drive reads cannot import, ingest, export, or enter specialist grants", () => {
+  const src = readExecutableCode("llm.ts");
+  const listStart = src.indexOf("listDriveFolders: tool(");
+  const findStart = src.indexOf("findInDrive: tool(");
+  const end = src.indexOf("searchVault: tool(", findStart);
+  expect(listStart).toBeGreaterThanOrEqual(0);
+  expect(findStart).toBeGreaterThan(listStart);
+  expect(end).toBeGreaterThan(findStart);
+  const driveTools = src.slice(listStart, end);
+
+  expect(driveTools).toContain("api.vaultDrive.listDriveFolders");
+  expect(driveTools).toContain("api.vaultDrive.findInDrive");
+  for (const forbidden of [
+    "importDriveFolder",
+    "reserveFolder",
+    "openRun",
+    "exportOne",
+    "landFile",
+    "ingest",
+  ]) {
+    expect(driveTools, `Drive cockpit reads contain forbidden ${forbidden}`).not.toContain(forbidden);
+  }
+
+  const specialists = readFileSync(join(convexDir, "../../core/src/specialists.ts"), "utf8");
+  const grant = specialists.slice(
+    specialists.indexOf("const SPECIALIST_TOOLS"),
+    specialists.indexOf("export const SPECIALISTS"),
+  );
+  expect(grant).not.toContain("listDriveFolders");
+  expect(grant).not.toContain("findInDrive");
 });
 
 test("every Drive request carries the shared-drive parameters", () => {
