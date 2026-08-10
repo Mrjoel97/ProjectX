@@ -5,7 +5,13 @@
 // multi-line template literal: `core.autocrlf=true` makes a literal CRLF in a source file
 // unstable, so a template literal would test whatever git last checked out.
 import { describe, expect, it } from "vitest";
-import { IMPORT_ATTESTATION, IMPORT_BATCH_ROWS, IMPORT_MATCH_CHUNK, IMPORT_ROW_MAX, parseCsv } from "./index";
+import {
+  IMPORT_ATTESTATION,
+  IMPORT_BATCH_ROWS,
+  IMPORT_MATCH_CHUNK,
+  IMPORT_ROW_MAX,
+  parseCsv,
+} from "./index";
 
 describe("parseCsv", () => {
   it("splits CRLF records into fields with 1-based physical line numbers", () => {

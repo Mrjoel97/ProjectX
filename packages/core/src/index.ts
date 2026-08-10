@@ -8,6 +8,7 @@ export * from "./businessProfile";
 export * from "./calendar";
 export * from "./cash";
 export * from "./cashSpine";
+export * from "./contactImport";
 export * from "./contacts";
 export * from "./dashboard";
 export * from "./docType";
