@@ -1,5 +1,68 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-08-11 (21-03 — **THE REAL ENTRY the 21-05 lane's date-bump below hands over
+> for `run-eval-golden.mjs` and `smoke.ts`. NO PAID EVAL WAS RUN: $0.00.** The only eval invocation
+> this plan made is the free `--self-check`, which PASSED. A standing do-not-rerun order is in force
+> on the paid gate; the last full attempt timed out at 1808.1s / exit 124 and nothing here re-tried
+> it. **No Phase-21 tenant candidate has passed a live gate, and this plan authorizes no paid run.**)
+>
+> **`run-eval-golden.mjs` gained a SECOND pin scope.** `--tenant-skill <tenantSkillsId>` pins an
+> EXACT `tenantSkills` row on every turn AND on the `actOnGap` tap, beside the unchanged global
+> `--skill <name>@<version>`. Full semantics, the exact identity rule, the registry-tenant vs
+> throwaway-data-tenant split, every no-evidence condition and both read-only commands live in
+> **`skill-registry.md`** (this plan's other playbook) — they are registry semantics, and duplicating
+> them here would be the second mechanism this repo forbids. What belongs HERE is the runtime:
+>
+> - **`llm.runSpecialistTurn` load order is now: exact tenant row (for its own skill name) → global
+>   version pin → `getEffectiveSkill`.** A pin whose resolved row names a DIFFERENT skill throws
+>   `TENANT_SKILL_PIN_MISMATCH` **before `generateText`**, so a mis-wired harness costs $0 instead of
+>   a model call plus an evidence row certifying the wrong skill.
+> - **It now returns `{skillScope, skillId, skillName, skillVersion, skillBodyHash}`.** The hash is
+>   SHA-256 of the exact string handed to the provider, so the attribution cannot describe a body
+>   that never ran.
+> - **`governedDispatch` puts those refs on the EXISTING `subagent.completed` audit row.** Not a new
+>   event type, not a new table, not a second trace plane: "which body did this specialist run" is a
+>   property of a run that is already logged, and `audit.by_correlation` already reconstructs the
+>   tree. REFS ONLY — CLAUDE.md §4. Mutation-checked three ways: dropping the tenant handoff, dropping
+>   `skillId` from the payload, and adding the resolved body to the payload each turn `dispatch.test.ts`
+>   red (the last one on a high-entropy body-needle scan over every payload on the lineage).
+> - **`smoke.userSkillRuntimeAttribution({tenantId, correlationId})`** is the bounded read-only
+>   readback: `audit.by_correlation`, a fixed `.take()`, tenant equality re-checked in the loop
+>   (the index is deliberately cross-tenant — `researchTrailForThread` carries the same guard for the
+>   same reason), the `subagent.completed` row, and scope / id / name / version / body hash only.
+>   There is no branch that can return a body, adaptation, prompt, reply or source URL.
+>   ```powershell
+>   npx convex run smoke:userSkillRuntimeAttribution '{"tenantId":"<tenantId>","correlationId":"<rootRequestId>"}'
+>   ```
+> - **`dispatchArgs` and `evaluations.applyActOnGap` gained an OPTIONAL `tenantSkillIds`**, validated
+>   as `v.record(v.string(), v.id("tenantSkills"))` — the validator itself refuses anything that is
+>   not a real row id of that table, and it arrives on an `internalAction` (ADR-008), so no
+>   model-supplied id reaches it. Absent on the production `actOnGap` path, which keeps running the
+>   effective row. Every pre-21 request is byte-identical: the arg is spread away entirely when empty.
+>
+> **⚠ A BEHAVIOUR CHANGE THAT AFFECTS EVERY OPERATOR: unknown arguments now ABORT.** The `--list`
+> warning below stays true (there is still no such flag) but its stated mechanism does not: unknown
+> argv is **no longer ignored**. `--tenant-skil <id>` used to buy a full UNPINNED ~$0.4 gate run and
+> record nothing; it now exits 1 at $0 before anything is parsed, seeded, read or billed.
+>
+> **`--inspect-tenant-skill <id>` is dispatched BEFORE `runLive` and exits**, so it seeds no fixture,
+> calls no model and writes nothing. `--self-check` asserts that ordering, asserts `runInspect`
+> contains no evidence/model call, and asserts that `selfCheck()`'s own body contains no `must(` —
+> i.e. that the free command really is free. `--self-check` PASSED: **36 fixtures valid, 12 gated
+> skills derived, exit 0, $0.00.**
+>
+> **I did not run, re-measure, endorse, revert or restage the `RETRY_TURN` (`retryOnEmpty: true`)
+> change on the PAID `attemptCase` turn.** It was in the tree when this plan started and is another
+> lane's (committed as `4ea300c`; its own entry is below). My edits touch the same file and, at the
+> `must("llm:runCockpitAgent", …, RETRY_TURN)` call specifically, the same statement — I added
+> `...tenantPinArg` to that call's argument object and left `RETRY_TURN` and its rationale
+> byte-unchanged. Its load-bearing assumption is theirs and still stands unexamined here: that an
+> empty stdout with no failure banner can ONLY be the `UV_HANDLE_CLOSING` teardown crash.
+>
+> Cost accounting warnings below are UNCHANGED and still apply: the reported cost understates a
+> research fixture until `subagent.completed` lands, a "killed" background run cannot be assumed to
+> have stopped spending, and the printed total is a FLOOR.
+
 > Last verified: 2026-08-11 — ⚠ **DATE BUMPED TO CLEAR A `check-playbooks.mjs` FALSE POSITIVE.
 > NOTHING BELOW WAS RE-VERIFIED, AND THIS ENTRY DOCUMENTS NO CHANGE OF ITS OWN.** The precedent is
 > the identically-shaped entries in `skill-registry.md` and `agent-runtime.md` (21-01).

@@ -1,5 +1,119 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-11 (21-03 — **EVIDENCE CAN NOW NAME ONE EXACT TENANT CANDIDATE ROW.
+> NOTHING HAS PASSED A LIVE GATE, NOTHING WAS ACTIVATED, AND NO PAID EVAL WAS RUN — $0.00.** The
+> only eval invocation this plan made is the FREE `--self-check`. A standing do-not-rerun order is
+> in force on the paid gate and this plan did not need one.)
+>
+> **`<name>@<version>` IS NOT AN IDENTITY IN THE TENANT SCOPE.** 21-02's two-tenant test creates the
+> collision on purpose: two tenants can each own `offer-architect@2`. Everything below therefore
+> names the ROW.
+>
+> **TWO PIN SCOPES, orthogonal, never overlapping.**
+>
+> | Flag | Names | Read | Evidence lands via |
+> |---|---|---|---|
+> | `--skill <name>@<version>` | a GLOBAL `skills` row | `skills.getSkillVersion` | `skills.recordEvalEvidence` (name+version) |
+> | `--tenant-skill <tenantSkillsId>` | an EXACT `tenantSkills` row | `skills.getTenantSkillVersion` | `skills.recordTenantEvalEvidence` (row id) |
+>
+> Both are multi-pin and may be combined **for different skills**. One skill NAME in both scopes is
+> refused at $0 by `mergePinScopes`: both records are keyed by name into `runSpecialistTurn` and the
+> TENANT id wins there, so a name in both scopes would leave the `--skill` pin doing nothing while
+> its evidence row still claimed the version ran. Two `--tenant-skill` rows of one skill are refused
+> for the same reason — last-one-wins must never decide which body a paid run certifies.
+>
+> **The exact identity is `{candidateId, registryTenantId, name, version}`**, and
+> `hasPassingTenantEvidence` (contracts) compares EVERY field. `hasPassingEvidence` is deliberately
+> NOT widened — the global gate asks "was this NAME at this VERSION certified", which is exactly the
+> question that stopped being sufficient. Mutation-checked both ways: dropping the `candidateId`
+> comparison turns a forgery test red (evidence agreeing with row B on tenant, name AND version and
+> disagreeing only on which row ran), and a name/version write in `recordTenantEvalEvidence` turns
+> the two-tenant collision test red.
+>
+> **REGISTRY TENANT vs THROWAWAY DATA TENANT.** The registry tenant (the one that owns the candidate
+> row) is used for exactly two things: the pre-run inspection read, and the post-run evidence write.
+> Every fixture plan, message, vault doc, Blueprint and assertion still belongs to the throwaway
+> `eval-<runId>` tenant, unchanged. The resolution read is `skills.inspectTenantSkill`, **not**
+> `getTenantSkillVersion`, precisely so the candidate BODY never enters the runner process at all.
+>
+> **EVERY no-evidence condition, in one predicate** (`shouldRecordEvidence`):
+> `allGreen && casesTotal > 0 && filters.length === 0`.
+>
+> - a FAILED run certifies nothing;
+> - a `--only` run is a tenth of the coverage and is indistinguishable from a full gate once it is a
+>   row (16-09's clause, unchanged, and still mutation-checked);
+> - a ZERO-case run is `0 === 0`, i.e. "all green", and would have written `0/0 pass` — **this hole
+>   was open before 21-03**;
+> - an OVER-CAP or governed stop never reaches the block at all, because `abortEnv` `process.exit(2)`s
+>   from inside the case loop. That ORDERING is asserted against the source in `--self-check`, because
+>   a rule that holds only because of where it sits is one refactor from being false.
+>
+> **The dispatched handoff is the part that is easy to get silently wrong.** The tenant id must ride
+> BOTH the turn (`llm:runCockpitAgent`) and the tap (`evaluations:actOnGapInternal` → scheduled
+> `dispatch.runSpecialist` → `llm.runSpecialistTurn`). Drop it at the tap and the specialist runs the
+> tenant's EFFECTIVE body while the run certifies the candidate — 16-09's defect, one registry scope
+> down, and invisible in a green run. `dispatch.test.ts` drives the scheduled seam with the tenant's
+> ACTIVE overlay, the pinned CANDIDATE and ANOTHER tenant's same-name/version row all present, and
+> asserts the audit `skillBodyHash` against `contentHash(candidateBody)`; dropping the handoff turns
+> it red.
+>
+> **A pin whose row names a different skill REFUSES before `generateText`** (`TENANT_SKILL_PIN_MISMATCH`).
+> A mis-wired harness costs $0 rather than a model call plus an evidence row certifying the wrong
+> skill. Tool names stay the code-owned `SPECIALISTS` record and are never read from a tenant row
+> (ADR-007).
+>
+> **Only a USER-authored CANDIDATE is evaluable.** `active` (already what the tenant runs — a ~$0.4
+> no-op), `archived`, and `system` baselines all abort before the inbox/vault/Blueprint seeds.
+>
+> **`skills.inspectTenantSkill` is BODY-FREE by construction**, not by care: every registry row leaves
+> it as a `SkillRefs` shape that has no body field, so the candidate's composed body, the user's
+> authored adaptation and the global prompt (an owner-only boundary, research pitfall 4) are all
+> absent. `evidenceState` is `absent | passing | failing` — an unparseable or stale pin reads
+> `failing`, never `absent`, because "there is a pin and it does not hold" is a different operator
+> situation from "there is none". `rollbackBaseline` is resolved through the **stored lineage**
+> (bounded walk to the first `rollbackEligible` row; a global-based candidate reads its tenant's
+> version 1, written in the same transaction) — never "the newest archived row", which is the guess
+> that made `candidatesForReview` offer `v17 -> v16` in production.
+>
+> **The two READ-ONLY operator commands (no seed, no model, no write):**
+>
+> ```powershell
+> pnpm --filter @pikar/backend eval:golden -- --inspect-tenant-skill <tenantSkillsId>
+> npx convex run smoke:userSkillRuntimeAttribution '{"tenantId":"<tenantId>","correlationId":"<rootRequestId>"}'
+> ```
+>
+> The first reports status / evidence state / lineage / rollback baseline / effective + global refs
+> and SHA-256 body hashes, with **no bodies**; add `--json`, `--foreign-tenant <tenantId>`, and the
+> inspection-only `--expect-status=`, `--expect-evidence=`, `--expect-gate-passed=`,
+> `--expect-rollback-eligible=` flags (nonzero exit on mismatch, no write). The JSON carries a
+> `deploymentHash` — SHA-256 of the configured deployment URL with query string and fragment dropped
+> BEFORE hashing, because a deploy URL can carry a key — so the Phase-21 handoff can pin that the
+> pre-gate and post-gate inspections talked to the same deployment. `--foreign-tenant` REFUSES a
+> result whose effective row is the candidate's id or its bytes. The second command reads the
+> EXISTING `subagent.completed` lineage through `audit.by_correlation` (bounded `take`, tenant
+> equality re-checked because that index is deliberately cross-tenant) and returns scope / row id /
+> name / version / body hash only.
+>
+> **The free command, and the only one this plan ran:**
+> `pnpm --filter @pikar/backend eval:golden -- --self-check` — ZERO Convex calls, ZERO model calls,
+> **$0.00**. `--self-check` now asserts that too, by scanning its own body for `must(`.
+>
+> **Runner behaviour change worth knowing: unknown arguments now ABORT.** The prior note that
+> "unknown argv is ignored" is no longer true (see `agent-runtime.md`, which keeps the `--list`
+> warning): `--tenant-skil <id>` used to buy a full UNPINNED gate run at ~$0.4 and record nothing.
+>
+> **Fixed in passing (Rule 1): `myUserSkills.gatePassed` asked the GLOBAL predicate of a TENANT row.**
+> A tenant-only run's `skillVersions` is `{}`, so a genuinely certified candidate read `false`
+> forever and the panel's "Evaluation passed" copy was unreachable for the same reason "Live" is. It
+> now asks `hasPassingTenantEvidence` against the row's own identity.
+>
+> **STILL OWED, and 21-03 claims none of it.** **NO tenant row can become `active` through any code
+> path** — 21-02's finding is unchanged, and every test here that needs an active overlay still
+> patches the row directly. 21-04 owns activation and rollback. **No candidate has been evaluated
+> live**: `--tenant-skill` has never been run against a model, no `tenantSkills.evidence` row exists
+> outside a test, and `gatePassed` has only ever been observed as `false` in production. The live
+> paid proof is 21-07's. SKILL-01 stays open.
+
 > Last verified: 2026-08-10 (21-02 — **THE OVERLAY IS NOW LIVE CODE: a signed-in user can publish
 > an immutable tenant candidate, and an ACTIVE tenant row now reaches the real specialist model
 > call. NOTHING was evaluated, activated or spent — publishing costs $0 and cannot change what any
