@@ -195,9 +195,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --location \
-            --retry 5 --retry-all-errors --retry-delay 5 \
-            --connect-timeout 10 --max-time 60 \
-            "$PRODUCTION_URL" > /dev/null
+          vercel curl "$PRODUCTION_URL" > /dev/null
           echo "url=$PRODUCTION_URL" >> "$GITHUB_OUTPUT"
           echo "Deployed $DEPLOY_SHA to $PRODUCTION_URL"
