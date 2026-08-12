@@ -60,6 +60,7 @@ import type * as render_renderReel from "../render/renderReel.js";
 import type * as requests from "../requests.js";
 import type * as research from "../research.js";
 import type * as review from "../review.js";
+import type * as savedPrompts from "../savedPrompts.js";
 import type * as skilloptExport from "../skilloptExport.js";
 import type * as skills from "../skills.js";
 import type * as smoke from "../smoke.js";
@@ -146,6 +147,7 @@ declare const fullApi: ApiFromModules<{
   requests: typeof requests;
   research: typeof research;
   review: typeof review;
+  savedPrompts: typeof savedPrompts;
   skilloptExport: typeof skilloptExport;
   skills: typeof skills;
   smoke: typeof smoke;

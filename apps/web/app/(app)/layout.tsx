@@ -46,7 +46,7 @@ const NAV: Array<{ label: string; icon: ReactNode; href?: string; soon?: boolean
   // rule in docs/playbooks/dashboard-pages.md: a dark window is a permanent hole in the record).
   { label: "Finance", href: "/dashboard/finance", icon: <WalletIcon /> },
   { label: "Content", icon: <FileIcon />, soon: true },
-  { label: "Sales Pipeline", icon: <TrendIcon />, soon: true },
+  { label: "Sales Pipeline", href: "/dashboard/pipeline", icon: <TrendIcon /> },
   { label: "Compliance", href: "/ops", icon: <ShieldIcon size={18} /> },
   { label: "My Workspace", href: "/dashboard/workspace", icon: <BoltIcon size={18} /> },
   { label: "Live Voice", href: "/dashboard/voice", icon: <MicIcon size={18} /> },
@@ -136,7 +136,7 @@ function Shell({ children }: { children: ReactNode }) {
   // this off the actual selected tab instead of the path prefix.
   const isActive = (href: string) => {
     // String.split always returns at least one element, so this index is never undefined.
-    const path = href.split("?")[0]!;
+    const path = href.split("?")[0] ?? "";
     return path === "/dashboard" ? pathname === path : pathname.startsWith(path);
   };
 
