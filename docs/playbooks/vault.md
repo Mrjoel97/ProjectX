@@ -1,5 +1,26 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Last verified: 2026-08-12 (17.1-10 authorized L6 recovery — **Blueprint proven, gate still
+> RED/inconclusive; do not claim a golden pass**). Attempt `aba002b1` announced 36 cases and seeded
+> its 5-message inbox, then the first OpenAI embedding failed with Windows socket error 10013. The
+> repeated stderr text carries one request id, so it is not counted as a second call. The runner
+> exited 1 before the Blueprint assertion or first fixture; read-only stopped-database
+> inspection found one `processing` Vault document, 0 plans, 0 reasoning spend movements, and no
+> Blueprint/profile or evidence attributable to the run. Attempt `dafc544c` progressed farther: it
+> seeded 5 ready Vault sources and confirmed Blueprint `mx77ggrzqfygaf1gkeep2my8y18cbc82`, and
+> the real 401-character rendered spine contained `evalblpr`. It then recorded **4 passes, 3
+> failures, case 8 started twice without a verdict, and cases 9-36 never started** before OpenAI
+> connect timeout, DNS `ENOTFOUND`, `agent_timeout`, backend wait, and `InternalServerError` made the
+> environment non-certifying. The exact eval process was stopped to prevent further spend.
+> Read-only database reconciliation found **9 plans, 10 one-cent reasoning-ledger movements
+> ($0.10 limiter consumption: 9 `openai/gpt-4o-mini`, 1 `openai/gpt-4.1-nano` fallback), and 0
+> certifying eval-evidence records** attributable to `dafc544c`. The completed verdict lines total
+> only **$0.0269**; that is a lower bound, not the exact provider bill, because thrown failures print
+> `$0.0000` and the abrupt exit omitted the runner summary. The exact provider/runner total is
+> unrecoverable. The prior authorization is consumed. The residual L6 blocker is zero-cost proof of
+> a stable current backend plus working outbound DNS/TCP, then fresh authorization for one bounded
+> full run. L1/L7 and `17.1-10-SUMMARY.md` remain blocked behind a conclusive L6 pass.
+>
 > Last verified: 2026-08-10 (20.1-01 — **offline Drive discovery substrate only; not yet user
 > visible**). `vaultDrive.findInDrive` reuses the existing stored-scope check and shared Drive token
 > refresh boundary, then performs exactly one bounded `files.list` (`pageSize=20`, no pagination)
