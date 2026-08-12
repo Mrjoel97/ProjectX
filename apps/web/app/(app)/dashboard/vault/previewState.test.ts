@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { PREVIEW_SNIPPET_CHARS, derivePreviewState, previewCapabilities } from "./previewState";
+import { derivePreviewState, PREVIEW_SNIPPET_CHARS, previewCapabilities } from "./previewState";
 
 const ready = {
   status: "ready" as const,

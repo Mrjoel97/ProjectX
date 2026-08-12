@@ -9,9 +9,9 @@ import { docLabel, fmtSize, type VaultDoc } from "./DocGrid";
 import { failureCopy } from "./failureCopy";
 import { XIcon } from "./icons";
 import {
-  PreviewControls,
   type PreviewActionId,
   type PreviewControlHandlers,
+  PreviewControls,
 } from "./PreviewControls";
 import { derivePreviewState } from "./previewState";
 
@@ -67,7 +67,8 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
   });
 
   useEffect(() => {
-    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const priorOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     closeRef.current?.focus({ preventScroll: true });
@@ -104,9 +105,10 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
       document.body.style.overflow = priorOverflow;
       previouslyFocused?.focus({ preventScroll: true });
     };
-  }, [doc._id]);
+  }, []);
 
   useEffect(() => {
+    void doc._id;
     setExpanded(false);
     setDeleteConfirmation(false);
     setIdentitySaved(false);
@@ -202,6 +204,7 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
   ];
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: Backdrop dismissal supplements the dialog's close button and Escape handler.
     <div
       className="vault-preview-scrim"
       onMouseDown={(event) => {
@@ -278,7 +281,8 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
               )}
               {preview.content.extractionTruncated && (
                 <p className="vault-preview-note" role="note">
-                  Extracted the first part of this file. The original is longer than the extraction limit.
+                  Extracted the first part of this file. The original is longer than the extraction
+                  limit.
                 </p>
               )}
             </>
@@ -286,15 +290,28 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
             // The media itself leads; its description/transcript rides beneath it. The media is
             // capped rather than stretched to the pane so the text below is reachable without
             // scrolling past a full-height picture.
-            <div style={{ display: "grid", gap: "1.25rem", height: preview.content.text ? undefined : "100%" }}>
+            <div
+              style={{
+                display: "grid",
+                gap: "1.25rem",
+                height: preview.content.text ? undefined : "100%",
+              }}
+            >
               {preview.content.media === "image" ? (
-                <div style={{ display: "grid", placeItems: "center", gap: "0.75rem", minHeight: 0 }}>
+                <div
+                  style={{ display: "grid", placeItems: "center", gap: "0.75rem", minHeight: 0 }}
+                >
                   {/* biome-ignore lint/performance/noImgElement: signed blob URL cannot be handled by next/image */}
                   <img
                     ref={imgRef}
                     src={mediaUrl}
                     alt={doc.title}
-                    style={{ display: "block", maxWidth: "100%", maxHeight: "60vh", objectFit: "contain" }}
+                    style={{
+                      display: "block",
+                      maxWidth: "100%",
+                      maxHeight: "60vh",
+                      objectFit: "contain",
+                    }}
                   />
                   <button
                     type="button"
@@ -309,13 +326,20 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
                 <video
                   src={mediaUrl}
                   controls
-                  style={{ display: "block", width: "100%", maxHeight: "60vh", objectFit: "contain" }}
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    maxHeight: "60vh",
+                    objectFit: "contain",
+                  }}
                 />
               )}
               {preview.content.text && (
                 <section style={{ borderTop: "1px solid var(--vault-border)", paddingTop: "1rem" }}>
                   <p className="caps-label" style={{ marginBottom: "0.5rem" }}>
-                    {preview.content.media === "image" ? "What Pikar read in this image" : "Transcript"}
+                    {preview.content.media === "image"
+                      ? "What Pikar read in this image"
+                      : "Transcript"}
                   </p>
                   <pre
                     style={{
@@ -353,7 +377,11 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
             </div>
           ) : (
             <div
-              className={preview.content.kind === "processing" || preview.content.kind === "loading" ? "vault-state" : "vault-state vault-state-empty"}
+              className={
+                preview.content.kind === "processing" || preview.content.kind === "loading"
+                  ? "vault-state"
+                  : "vault-state vault-state-empty"
+              }
               role="status"
             >
               <h3>{preview.content.title}</h3>
@@ -362,7 +390,9 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
           )}
         </div>
 
-        <aside style={{ display: "flex", minHeight: 0, flexDirection: "column", overflow: "hidden" }}>
+        <aside
+          style={{ display: "flex", minHeight: 0, flexDirection: "column", overflow: "hidden" }}
+        >
           <header
             style={{
               display: "flex",
@@ -376,14 +406,27 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
               <p className="caps-label" style={{ marginBottom: "0.35rem" }}>
                 Document detail
               </p>
-              <h2 id="vault-preview-title" title={doc.title} style={{ margin: 0, overflowWrap: "anywhere" }}>
+              <h2
+                id="vault-preview-title"
+                title={doc.title}
+                style={{ margin: 0, overflowWrap: "anywhere" }}
+              >
                 {docLabel(doc)}
               </h2>
-              <p id="vault-preview-description" style={{ margin: "0.3rem 0 0", color: "var(--ink-soft)", fontSize: "0.82rem" }}>
+              <p
+                id="vault-preview-description"
+                style={{ margin: "0.3rem 0 0", color: "var(--ink-soft)", fontSize: "0.82rem" }}
+              >
                 {preview.content.title}. {doc.mimeType} · {fmtSize(doc.size)}
               </p>
             </div>
-            <button ref={closeRef} type="button" className="vault-button" onClick={onClose} aria-label="Close preview">
+            <button
+              ref={closeRef}
+              type="button"
+              className="vault-button"
+              onClick={onClose}
+              aria-label="Close preview"
+            >
               <XIcon />
             </button>
           </header>
@@ -400,7 +443,14 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
               {metaRows.map(([label, value]) => (
                 <div key={label} style={{ display: "contents" }}>
                   <dt style={{ color: "var(--ink-soft)", fontSize: "0.8rem" }}>{label}</dt>
-                  <dd style={{ margin: 0, overflowWrap: "anywhere", color: "var(--ink)", fontSize: "0.85rem" }}>
+                  <dd
+                    style={{
+                      margin: 0,
+                      overflowWrap: "anywhere",
+                      color: "var(--ink)",
+                      fontSize: "0.85rem",
+                    }}
+                  >
                     {value}
                   </dd>
                 </div>
@@ -435,7 +485,11 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
                   Still reading your document…
                 </button>
               ) : null}
-              <Link href="/dashboard/workspace" className="vault-button" style={{ textDecoration: "none" }}>
+              <Link
+                href="/dashboard/workspace"
+                className="vault-button"
+                style={{ textDecoration: "none" }}
+              >
                 Open in workspace
               </Link>
             </div>

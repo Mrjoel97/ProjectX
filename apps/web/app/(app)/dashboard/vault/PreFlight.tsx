@@ -304,7 +304,9 @@ export function PreFlight({
         boxShadow: "var(--vault-shadow)",
       }}
     >
-      <div id="vault-preflight-heading" className="caps-label">FOLDER UPLOAD · REVIEW BEFORE START</div>
+      <div id="vault-preflight-heading" className="caps-label">
+        FOLDER UPLOAD · REVIEW BEFORE START
+      </div>
 
       <p style={{ margin: 0, color: "var(--ink)", fontWeight: 700 }}>{picked.name}</p>
 
@@ -419,14 +421,24 @@ export function PreFlight({
 
       <div style={{ display: "flex", gap: "0.5rem" }}>
         {refused ? (
-          <button type="button" className="vault-button" onClick={onClear} style={pillSecondary(false)}>
+          <button
+            type="button"
+            className="vault-button"
+            onClick={onClear}
+            style={pillSecondary(false)}
+          >
             Start over
           </button>
         ) : phase.kind === "started" ? (
           // Started AND partial: the panel is held open only to name the files that did not make
           // it, so the one control left is an acknowledgement. Start must NOT come back — the
           // folder is past `reserving` and a second press could only ever answer `not_reserving`.
-          <button type="button" className="vault-button" onClick={onClear} style={pillSecondary(false)}>
+          <button
+            type="button"
+            className="vault-button"
+            onClick={onClear}
+            style={pillSecondary(false)}
+          >
             Done
           </button>
         ) : (

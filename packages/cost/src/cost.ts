@@ -129,7 +129,6 @@ export const RESEARCH_FALLBACK_MODEL = OPENAI_RESEARCH_FALLBACK_MODEL;
 // SELF-AUTHORED query, which varies per run. Treat this as retrieval variance in the fixture until
 // a repeated-run measurement says otherwise.
 
-
 // The hosted search fee is per CALL and is charged ON TOP of tokens (published $10 / 1k calls).
 // Omitting it under-reports every research run against the envelope. Separate from PRICING because
 // PRICING is per-MTok and this is not a token cost at all.

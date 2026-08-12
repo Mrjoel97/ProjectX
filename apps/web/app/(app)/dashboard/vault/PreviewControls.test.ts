@@ -2,10 +2,10 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test, vi } from "vitest";
 import {
-  PreviewControls,
   confirmedDelete,
-  previewActionDescriptors,
   type PreviewControlHandlers,
+  PreviewControls,
+  previewActionDescriptors,
 } from "./PreviewControls";
 import type { PreviewCapabilities } from "./previewState";
 

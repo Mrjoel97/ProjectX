@@ -25,8 +25,8 @@ import { internalMutation } from "./_generated/server";
 import { tenantMutation } from "./lib/functions";
 import { migrations } from "./migrations";
 import { scheduleExtraction } from "./vault";
-import { startIngest } from "./vaultIngest";
 import { unbumpFolder } from "./vaultFolders";
+import { startIngest } from "./vaultIngest";
 
 /** Sweep every eligible pending_extraction row onto its extraction rail (EXTR-G). */
 export const sweepPendingExtraction = migrations.define({

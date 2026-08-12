@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
+import type { DashboardResult } from "./dashboard";
 import {
-  DASHBOARD_STATE_COPY,
   compareDashboardOrder,
   createDashboardBound,
   createDashboardMoney,
+  DASHBOARD_STATE_COPY,
   dashboardCursorFor,
   parseDashboardCursor,
   resolveDashboardWindow,
 } from "./dashboard";
-import type { DashboardResult } from "./dashboard";
 
 const DAY_MS = 86_400_000;
 
@@ -76,12 +76,19 @@ describe("dashboard page contracts", () => {
   });
 
   describe("money", () => {
-    it.each(["estimated", "reserved", "actual", "refunded", "unlanded"] as const)(
-      "keeps %s distinct in integer USD cents",
-      (phase) => {
-        expect(createDashboardMoney(phase, 123)).toEqual({ phase, amountCents: 123, currency: "USD" });
-      },
-    );
+    it.each([
+      "estimated",
+      "reserved",
+      "actual",
+      "refunded",
+      "unlanded",
+    ] as const)("keeps %s distinct in integer USD cents", (phase) => {
+      expect(createDashboardMoney(phase, 123)).toEqual({
+        phase,
+        amountCents: 123,
+        currency: "USD",
+      });
+    });
 
     it.each([-1, 1.5, Number.POSITIVE_INFINITY])("rejects invalid cents %s", (amountCents) => {
       expect(() => createDashboardMoney("actual", amountCents)).toThrow("cents");

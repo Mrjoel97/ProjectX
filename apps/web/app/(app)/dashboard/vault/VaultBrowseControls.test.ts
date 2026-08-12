@@ -5,8 +5,8 @@ import {
   DigestRebuildControl,
   FolderOpenControl,
   VaultBrowseControls,
-  vaultBrowseActions,
   type VaultBrowseHandlers,
+  vaultBrowseActions,
 } from "./VaultBrowseControls";
 
 function handlers(): VaultBrowseHandlers {
@@ -65,14 +65,12 @@ describe("folder and digest controls", () => {
   test("renders a labelled folder-open control and keeps its callback live", () => {
     const onOpen = vi.fn();
     const html = renderToStaticMarkup(
-      createElement(
-        FolderOpenControl,
-        {
-          name: "Client contracts",
-          onOpen,
-          children: createElement("span", null, "Client contracts"),
-        },
-      ),
+      createElement(FolderOpenControl, {
+        name: "Client contracts",
+        onOpen,
+        // biome-ignore lint/correctness/noChildrenProp: createElement's props overload requires this component's non-optional children field.
+        children: createElement("span", null, "Client contracts"),
+      }),
     );
 
     expect(html).toContain('aria-label="Open folder: Client contracts"');

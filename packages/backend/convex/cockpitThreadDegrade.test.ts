@@ -12,9 +12,9 @@
 // The asymmetry is the bug: an UNOWNED thread returns an empty page, an OWNED-but-nonexistent one
 // exploded. Both are "there are no messages to show".
 
-import agentSchema from "../node_modules/@convex-dev/agent/src/component/schema.js";
 import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
+import agentSchema from "../node_modules/@convex-dev/agent/src/component/schema.js";
 import { api } from "./_generated/api";
 import { isNonAgentThreadIdError } from "./cockpit";
 import schema from "./schema";
@@ -86,11 +86,9 @@ test("an owned plan whose threadId is not an agent thread degrades instead of th
 test("a thread the tenant does not own still degrades the same way", async () => {
   const t = setup();
   await expect(
-    t
-      .withIdentity({ subject: TENANT })
-      .query(api.cockpit.listThreadMessages, {
-        threadId: "smoke-attach-not-mine",
-        paginationOpts: PAGE,
-      }),
+    t.withIdentity({ subject: TENANT }).query(api.cockpit.listThreadMessages, {
+      threadId: "smoke-attach-not-mine",
+      paginationOpts: PAGE,
+    }),
   ).resolves.toEqual(EMPTY);
 });

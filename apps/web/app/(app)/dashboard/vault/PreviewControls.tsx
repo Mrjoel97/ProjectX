@@ -83,7 +83,11 @@ export function previewActionDescriptors(
 ): readonly PreviewActionDescriptor[] {
   const actions: PreviewActionDescriptor[] = [];
   if (capabilities.identityCorrection) {
-    actions.push({ id: "save-identity", label: "Save identity", onSelect: handlers.onSaveIdentity });
+    actions.push({
+      id: "save-identity",
+      label: "Save identity",
+      onSelect: handlers.onSaveIdentity,
+    });
   }
   if (capabilities.retryExtraction) {
     actions.push({
@@ -152,11 +156,27 @@ export function PreviewControls({
   return (
     <>
       {capabilities.identityCorrection && save && (
-        <section className="vault-preview-section" style={sectionStyle} aria-labelledby="vault-preview-identity-heading">
-          <h3 id="vault-preview-identity-heading" className="vault-preview-section-title" style={sectionTitleStyle}>
+        <section
+          className="vault-preview-section"
+          style={sectionStyle}
+          aria-labelledby="vault-preview-identity-heading"
+        >
+          <h3
+            id="vault-preview-identity-heading"
+            className="vault-preview-section-title"
+            style={sectionTitleStyle}
+          >
             Document identity
           </h3>
-          <label className="vault-preview-field" style={{ display: "grid", gap: "0.35rem", color: "var(--ink-soft)", fontSize: "0.8rem" }}>
+          <label
+            className="vault-preview-field"
+            style={{
+              display: "grid",
+              gap: "0.35rem",
+              color: "var(--ink-soft)",
+              fontSize: "0.8rem",
+            }}
+          >
             <span>Type</span>
             <select
               style={fieldStyle}
@@ -171,7 +191,15 @@ export function PreviewControls({
               ))}
             </select>
           </label>
-          <label className="vault-preview-field" style={{ display: "grid", gap: "0.35rem", color: "var(--ink-soft)", fontSize: "0.8rem" }}>
+          <label
+            className="vault-preview-field"
+            style={{
+              display: "grid",
+              gap: "0.35rem",
+              color: "var(--ink-soft)",
+              fontSize: "0.8rem",
+            }}
+          >
             <span>What this is</span>
             <input
               style={fieldStyle}
@@ -180,7 +208,10 @@ export function PreviewControls({
               onChange={(event) => handlers.onIdentityLineChange(event.target.value)}
             />
           </label>
-          <div className="vault-preview-inline-actions" style={{ display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap" }}>
+          <div
+            className="vault-preview-inline-actions"
+            style={{ display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap" }}
+          >
             <button
               type="button"
               className="vault-button vault-button-primary"
@@ -196,13 +227,28 @@ export function PreviewControls({
             )}
           </div>
           {identityUserSet && (
-            <p className="vault-preview-note" style={{ margin: 0, color: "var(--ink-soft)", fontSize: "0.8rem" }}>You set this. Re-reading this document will never change it.</p>
+            <p
+              className="vault-preview-note"
+              style={{ margin: 0, color: "var(--ink-soft)", fontSize: "0.8rem" }}
+            >
+              You set this. Re-reading this document will never change it.
+            </p>
           )}
         </section>
       )}
 
       {retry && (
-        <section className="vault-preview-alert" style={{ ...sectionStyle, padding: "0.9rem", border: "1px solid color-mix(in srgb, var(--vault-danger) 22%, var(--vault-border))", borderRadius: "0.75rem", background: "var(--vault-danger-bg)" }} aria-labelledby="vault-preview-retry-heading">
+        <section
+          className="vault-preview-alert"
+          style={{
+            ...sectionStyle,
+            padding: "0.9rem",
+            border: "1px solid color-mix(in srgb, var(--vault-danger) 22%, var(--vault-border))",
+            borderRadius: "0.75rem",
+            background: "var(--vault-danger-bg)",
+          }}
+          aria-labelledby="vault-preview-retry-heading"
+        >
           <h3 id="vault-preview-retry-heading">Extraction needs attention</h3>
           <p>It can&rsquo;t be discussed by voice until it reads successfully.</p>
           <button
@@ -217,25 +263,71 @@ export function PreviewControls({
       )}
 
       {capabilities.citations && (
-        <section className="vault-preview-section" style={sectionStyle} aria-labelledby="vault-preview-citations-heading">
-          <h3 id="vault-preview-citations-heading" className="vault-preview-section-title" style={sectionTitleStyle}>
+        <section
+          className="vault-preview-section"
+          style={sectionStyle}
+          aria-labelledby="vault-preview-citations-heading"
+        >
+          <h3
+            id="vault-preview-citations-heading"
+            className="vault-preview-section-title"
+            style={sectionTitleStyle}
+          >
             Entities &amp; citations
           </h3>
           {entities === undefined ? (
-            <p className="vault-preview-note" style={{ margin: 0, color: "var(--ink-soft)", fontSize: "0.85rem" }}>Loading provenance…</p>
+            <p
+              className="vault-preview-note"
+              style={{ margin: 0, color: "var(--ink-soft)", fontSize: "0.85rem" }}
+            >
+              Loading provenance…
+            </p>
           ) : entities.length === 0 ? (
-            <p className="vault-preview-note" style={{ margin: 0, color: "var(--ink-soft)", fontSize: "0.85rem" }}>No entities or relationships were extracted from this document.</p>
+            <p
+              className="vault-preview-note"
+              style={{ margin: 0, color: "var(--ink-soft)", fontSize: "0.85rem" }}
+            >
+              No entities or relationships were extracted from this document.
+            </p>
           ) : (
             <>
-              <div className="vault-preview-entities" aria-label="Entities found" style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
+              <div
+                className="vault-preview-entities"
+                style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}
+              >
                 {entities.map((entity) => (
-                  <span key={entity._id} title={entity.type} style={{ display: "inline-flex", gap: "0.3rem", alignItems: "center", padding: "0.25rem 0.55rem", border: "1px solid var(--vault-border)", borderRadius: "999px", background: "var(--vault-slate-bg)", color: "var(--ink)", fontSize: "0.78rem" }}>
+                  <span
+                    key={entity._id}
+                    title={entity.type}
+                    style={{
+                      display: "inline-flex",
+                      gap: "0.3rem",
+                      alignItems: "center",
+                      padding: "0.25rem 0.55rem",
+                      border: "1px solid var(--vault-border)",
+                      borderRadius: "999px",
+                      background: "var(--vault-slate-bg)",
+                      color: "var(--ink)",
+                      fontSize: "0.78rem",
+                    }}
+                  >
                     {entity.name} <small>{entity.type}</small>
                   </span>
                 ))}
               </div>
               {(relationships ?? []).length > 0 && (
-                <ul className="vault-preview-relationships" aria-label="Cited relationships" style={{ display: "grid", gap: "0.35rem", margin: "0.75rem 0 0", paddingLeft: "1.1rem", color: "var(--ink-soft)", fontSize: "0.8rem" }}>
+                <ul
+                  className="vault-preview-relationships"
+                  aria-label="Cited relationships"
+                  style={{
+                    display: "grid",
+                    gap: "0.35rem",
+                    margin: "0.75rem 0 0",
+                    paddingLeft: "1.1rem",
+                    color: "var(--ink-soft)",
+                    fontSize: "0.8rem",
+                  }}
+                >
                   {(relationships ?? []).map((relationship) => (
                     <li key={relationship._id}>
                       {nodeName.get(relationship.fromNodeId) ?? "Unknown"}{" "}
@@ -250,9 +342,23 @@ export function PreviewControls({
         </section>
       )}
 
-      <div className="vault-preview-actions" aria-label="Document actions" style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", paddingTop: "1rem", borderTop: "1px solid var(--vault-border)" }}>
+      <div
+        className="vault-preview-actions"
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "0.5rem",
+          paddingTop: "1rem",
+          borderTop: "1px solid var(--vault-border)",
+        }}
+      >
         {download && (
-          <button type="button" className="vault-button" disabled={busy !== null} onClick={download.onSelect}>
+          <button
+            type="button"
+            className="vault-button"
+            disabled={busy !== null}
+            onClick={download.onSelect}
+          >
             {busy === "download" ? "Preparing download…" : download.label}
           </button>
         )}
@@ -268,9 +374,39 @@ export function PreviewControls({
           </button>
         )}
         {cancelDelete && confirmDelete && (
-          <div className="vault-preview-confirm" role="group" aria-label="Confirm document removal" style={{ display: "flex", flex: "1 1 100%", flexWrap: "wrap", alignItems: "center", gap: "0.5rem", padding: "0.75rem", borderRadius: "0.75rem", background: "var(--vault-danger-bg)" }}>
-            <p style={{ flex: "1 1 100%", margin: 0, color: "var(--vault-danger)", fontSize: "0.85rem" }}>Remove this document from the vault? This cannot be undone.</p>
-            <button type="button" className="vault-button" disabled={busy !== null} onClick={cancelDelete.onSelect}>
+          <fieldset
+            className="vault-preview-confirm"
+            aria-label="Confirm document removal"
+            style={{
+              display: "flex",
+              flex: "1 1 100%",
+              flexWrap: "wrap",
+              alignItems: "center",
+              gap: "0.5rem",
+              padding: "0.75rem",
+              border: 0,
+              margin: 0,
+              minWidth: 0,
+              borderRadius: "0.75rem",
+              background: "var(--vault-danger-bg)",
+            }}
+          >
+            <p
+              style={{
+                flex: "1 1 100%",
+                margin: 0,
+                color: "var(--vault-danger)",
+                fontSize: "0.85rem",
+              }}
+            >
+              Remove this document from the vault? This cannot be undone.
+            </p>
+            <button
+              type="button"
+              className="vault-button"
+              disabled={busy !== null}
+              onClick={cancelDelete.onSelect}
+            >
               {cancelDelete.label}
             </button>
             <button
@@ -282,7 +418,7 @@ export function PreviewControls({
             >
               {busy === "confirm-delete" ? "Removing…" : confirmDelete.label}
             </button>
-          </div>
+          </fieldset>
         )}
       </div>
     </>

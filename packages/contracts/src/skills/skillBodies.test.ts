@@ -9,8 +9,8 @@ import {
   MEDIA_DIRECTOR_SKILL,
 } from "../skill";
 import { bmcSkillBody } from "./bmc";
-import { cockpitAgentSkillBody } from "./cockpitAgent";
 import { businessBlueprintSkillBody } from "./businessBlueprint";
+import { cockpitAgentSkillBody } from "./cockpitAgent";
 import { documentAnalystSkillBody } from "./documentAnalyst";
 import { documentClassifierSkillBody } from "./documentClassifier";
 import { folderDigestSkillBody } from "./folderDigest";
