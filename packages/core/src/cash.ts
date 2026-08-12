@@ -709,7 +709,11 @@ export type CashSolvency = {
  * missing-input handling instead: a REAL stated MRR still surfaces, an absent one reads `unknown`
  * ("needs your figure") rather than the false certainty of "this does not apply to your business."
  */
-export function solvency(args: { inputs: CashInputs; tier: Tier | null; nowMs: number }): CashSolvency {
+export function solvency(args: {
+  inputs: CashInputs;
+  tier: Tier | null;
+  nowMs: number;
+}): CashSolvency {
   const { inputs, tier, nowMs } = args;
   // Derived from the ONE catalogue (`CASH_INPUTS`) rather than restated as tier-comparison booleans:
   // the panel's own `tiers` list on the `mrr`/`receivables`/`payables` specs is already the single
@@ -721,7 +725,8 @@ export function solvency(args: { inputs: CashInputs; tier: Tier | null; nowMs: n
   // STRUCTURE ("this concept does not exist for you") which an unconfirmed tier cannot support —
   // the field is treated as though it MIGHT apply, and `requireInputs`/`statedFigure` below answer
   // honestly from there (`unknown` when nothing was entered, `known` when it was).
-  const tierFields = tier === null ? null : new Set(cashInputsForTier(tier).map((spec) => spec.field));
+  const tierFields =
+    tier === null ? null : new Set(cashInputsForTier(tier).map((spec) => spec.field));
   const recurringApplies = tierFields === null ? true : tierFields.has("mrr");
   const workingCapitalApplies =
     tierFields === null ? true : tierFields.has("receivables") && tierFields.has("payables");

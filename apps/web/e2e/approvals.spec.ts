@@ -93,9 +93,14 @@ test("connected approvals: four kinds, schedule/cancel/discard/idempotency and s
   if (appOrigin !== defaultAppOrigin) {
     const state = JSON.parse(
       readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), ".auth/user.json"), "utf8"),
-    ) as { origins?: Array<{ origin: string; localStorage: Array<{ name: string; value: string }> }> };
-    const entries = state.origins?.find((origin) => origin.origin === defaultAppOrigin)?.localStorage;
-    if (!entries) throw new Error("Saved Approvals auth state has no canonical localStorage origin.");
+    ) as {
+      origins?: Array<{ origin: string; localStorage: Array<{ name: string; value: string }> }>;
+    };
+    const entries = state.origins?.find(
+      (origin) => origin.origin === defaultAppOrigin,
+    )?.localStorage;
+    if (!entries)
+      throw new Error("Saved Approvals auth state has no canonical localStorage origin.");
     await page.addInitScript((seed) => {
       for (const entry of seed) window.localStorage.setItem(entry.name, entry.value);
     }, entries);
@@ -154,7 +159,9 @@ test("connected approvals: four kinds, schedule/cancel/discard/idempotency and s
   seedPlan(tenant, { status: "canceled", subject: `Seeded legacy cancel ${suffix}` });
 
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Clear the gate" })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("heading", { name: "Clear the gate" })).toBeVisible({
+    timeout: 20_000,
+  });
 
   // Owner-preview gate: the route must be discoverable from the product while acceptance remains
   // a separate manual checkpoint. Enabling this link does not claim provider or UAT success.
@@ -174,7 +181,9 @@ test("connected approvals: four kinds, schedule/cancel/discard/idempotency and s
     "href",
     "/ops",
   );
-  await expect(page.getByText(/Exact counters are unavailable for this legacy plan/i)).toBeVisible();
+  await expect(
+    page.getByText(/Exact counters are unavailable for this legacy plan/i),
+  ).toBeVisible();
 
   // Initial scheduling requires a separate absolute-time review. Past input refuses before any
   // mutation; a valid local input names the browser IANA zone before setPlanSendTime + executePlan.
@@ -222,14 +231,21 @@ test("connected approvals: four kinds, schedule/cancel/discard/idempotency and s
   ).toEqual({ result: "moved" });
 
   const scheduledCard = page.locator(`[data-plan-id="${email.planId}"]`);
-  await expect(scheduledCard.getByRole("button", { name: "Cancel" })).toBeVisible({ timeout: 15_000 });
+  await expect(scheduledCard.getByRole("button", { name: "Cancel" })).toBeVisible({
+    timeout: 15_000,
+  });
   const beforeCancel = await fetchQuery(api.plans.reportForPlan, { planId: email.planId }, auth);
   await scheduledCard.getByRole("button", { name: "Cancel" }).click();
   await scheduledCard.getByRole("button", { name: "Yes, cancel it" }).click();
   await expect
-    .poll(async () => (await fetchQuery(api.plans.byThread, { threadId: email.threadId }, auth))?.status)
+    .poll(
+      async () =>
+        (await fetchQuery(api.plans.byThread, { threadId: email.threadId }, auth))?.status,
+    )
     .toBe("canceled");
-  expect(await fetchMutation(api.cockpit.cancelScheduledPlan, { planId: email.planId }, auth)).toEqual({
+  expect(
+    await fetchMutation(api.cockpit.cancelScheduledPlan, { planId: email.planId }, auth),
+  ).toEqual({
     ok: true,
     alreadyResolved: true,
   });
@@ -247,7 +263,9 @@ test("connected approvals: four kinds, schedule/cancel/discard/idempotency and s
   const armed = await fetchMutation(api.cockpit.executePlan, { planId: race.planId }, auth);
   expect(armed).toMatchObject({ ok: true, scheduled: true });
   convexRun("plans:setPlanStatus", { planId: race.planId, status: "delivering" });
-  expect(await fetchMutation(api.cockpit.cancelScheduledPlan, { planId: race.planId }, auth)).toEqual({
+  expect(
+    await fetchMutation(api.cockpit.cancelScheduledPlan, { planId: race.planId }, auth),
+  ).toEqual({
     ok: true,
     alreadyResolved: true,
   });
@@ -258,21 +276,29 @@ test("connected approvals: four kinds, schedule/cancel/discard/idempotency and s
       auth,
     ),
   ).toEqual({ result: "already_fired" });
-  await expect(page.locator(`[data-plan-id="${race.planId}"]`)).toContainText(/in flight|exact counters/i, {
-    timeout: 15_000,
-  });
+  await expect(page.locator(`[data-plan-id="${race.planId}"]`)).toContainText(
+    /in flight|exact counters/i,
+    {
+      timeout: 15_000,
+    },
+  );
 
   // Destructive discard is permanent; reschedule replay cannot re-arm it.
   const discardCard = page.locator(`[data-plan-id="${discard.planId}"]`);
   await discardCard.getByRole("button", { name: "Discard" }).click();
   await discardCard.getByRole("button", { name: "Yes, discard it" }).click();
   await expect
-    .poll(async () => (await fetchQuery(api.plans.byThread, { threadId: discard.threadId }, auth))?.status)
+    .poll(
+      async () =>
+        (await fetchQuery(api.plans.byThread, { threadId: discard.threadId }, auth))?.status,
+    )
     .toBe("canceled");
-  expect(await fetchMutation(api.cockpit.reschedulePlan, { planId: discard.planId }, auth)).toEqual({
-    ok: true,
-    alreadyResolved: true,
-  });
+  expect(await fetchMutation(api.cockpit.reschedulePlan, { planId: discard.planId }, auth)).toEqual(
+    {
+      ok: true,
+      alreadyResolved: true,
+    },
+  );
 
   // Memo gives a provider-free double-approve proof: exactly one inline vault terminal, second is
   // the server CAS no-op. Calendar/media remain rendered, and media reaches the no-deck refusal.
@@ -283,6 +309,12 @@ test("connected approvals: four kinds, schedule/cancel/discard/idempotency and s
 
   const mediaCard = page.locator(`[data-plan-id="${media.planId}"]`);
   await mediaCard.getByRole("button", { name: "Approve governed generation" }).click();
-  await expect(mediaCard.getByRole("status")).toContainText(/no generation-ready deck|Nothing was generated/i);
-  await expect(page.locator(`[data-plan-id="${calendar.planId}"]`).getByRole("link", { name: "Change time in cockpit" })).toBeVisible();
+  await expect(mediaCard.getByRole("status")).toContainText(
+    /no generation-ready deck|Nothing was generated/i,
+  );
+  await expect(
+    page
+      .locator(`[data-plan-id="${calendar.planId}"]`)
+      .getByRole("link", { name: "Change time in cockpit" }),
+  ).toBeVisible();
 });

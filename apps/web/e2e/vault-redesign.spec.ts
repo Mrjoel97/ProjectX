@@ -157,7 +157,11 @@ test("root/category search → folder-scoped search → preview → empty/no-res
     const rootDoc = await expect
       .poll(
         async () => {
-          const rows = await fetchQuery(api.vault.listVaultDocs, { category: "brain-dumps" }, auth!);
+          const rows = await fetchQuery(
+            api.vault.listVaultDocs,
+            { category: "brain-dumps" },
+            auth!,
+          );
           return rows.find((row) => row.title === rootDump && row.status === "ready") ?? null;
         },
         { timeout: 30_000 },

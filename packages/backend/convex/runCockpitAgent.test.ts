@@ -756,7 +756,12 @@ test("19-11: dropping a refused follow-up is not an exit — the contact-only re
     primary: [
       // No clientContext on this shim, so §2-D refuses the dated follow-up outright (no_clock).
       crmStep("c-1", [
-        { op: "addFollowUp", email: "rhea@example.com", note: "chase the renewal", due: "Thursday" },
+        {
+          op: "addFollowUp",
+          email: "rhea@example.com",
+          note: "chase the renewal",
+          due: "Thursday",
+        },
       ]),
       // The downhill move. Before 19-11 this staged a bare contact and reported SUCCESS — the
       // exact plan row 19-10 measured against the live body.
@@ -805,7 +810,12 @@ test("19-11: the trusted clock reaches the tools runAgentLoop builds (§2-D)", a
     clientContext: { tz: "UTC", nowMs: Date.UTC(2020, 0, 1, 12, 0, 0) },
     primary: [
       crmStep("c-1", [
-        { op: "addFollowUp", email: "rhea@example.com", note: "chase the renewal", due: "tomorrow" },
+        {
+          op: "addFollowUp",
+          email: "rhea@example.com",
+          note: "chase the renewal",
+          due: "tomorrow",
+        },
       ]),
       textStep("Staged the follow-up."),
     ],

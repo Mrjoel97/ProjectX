@@ -1930,9 +1930,13 @@ test("stageCrmWrite PROPOSES a crm_write plan and applies NOTHING (the Approve g
   expect(plan?.crmOperations).toHaveLength(2);
   // parseCrmOperations ran at the WRITE boundary too (19-06's note), not only at the apply
   // boundary: the address is stored NORMALIZED, which is the visible trace of that second parse.
-  expect((plan?.crmOperations?.[0] as { email: string }).email).toBe("new.person@example.com");
+  expect((plan?.crmOperations?.[0] as { email: string } | undefined)?.email).toBe(
+    "new.person@example.com",
+  );
   // §2-D: the model supplies the user's WORDS, never an instant. "tomorrow" off the pinned clock.
-  expect((plan?.crmOperations?.[1] as { dueAt: number }).dueAt).toBe(Date.UTC(2020, 0, 2, 9, 0, 0));
+  expect((plan?.crmOperations?.[1] as { dueAt: number } | undefined)?.dueAt).toBe(
+    Date.UTC(2020, 0, 2, 9, 0, 0),
+  );
   // Nothing applied. The gate is the only application path.
   expect(await contactRows(t)).toHaveLength(0);
   expect(await followUpRows(t)).toHaveLength(0);
@@ -2013,7 +2017,9 @@ test("a REFUSED turn-2 op leaves turn-1's staged follow-up intact — a refusal 
 
   const afterTurn2 = await readPlan(t, planId);
   expect(afterTurn2?.crmOperations).toEqual(afterTurn1?.crmOperations);
-  expect((afterTurn2?.crmOperations?.[0] as { email: string }).email).toBe("rhea@example.com");
+  expect((afterTurn2?.crmOperations?.[0] as { email: string } | undefined)?.email).toBe(
+    "rhea@example.com",
+  );
   expect(afterTurn2?.kind).toBe("crm_write");
   expect(afterTurn2?.status).toBe("proposed");
   // And nothing was applied by either turn — the Approve gate is still the only write path.

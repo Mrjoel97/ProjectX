@@ -35,9 +35,7 @@ function listLimit(value: number, maximum: number): number {
 /** The Approvals page's plan-kind enum. NOT `plans.kind` verbatim: `media` splits into `reel` and
  *  `image` for the badge. Widening `plans.kind` fails to compile HERE first (19-06 added
  *  `crm_write`), which is what drags the second approve surface into the same commit. */
-function planKind(
-  plan: Doc<"plans">,
-):
+function planKind(plan: Doc<"plans">):
   | "email"
   | "memo"
   | "calendar_event"
@@ -84,7 +82,11 @@ function planRef(plan: Doc<"plans">) {
   };
 }
 
-function paginationBound(returned: number, limit: number, nextCursor: string | null): DashboardBound {
+function paginationBound(
+  returned: number,
+  limit: number,
+  nextCursor: string | null,
+): DashboardBound {
   return createDashboardBound({
     returned,
     limit,
@@ -174,10 +176,7 @@ export const listCleared = tenantQuery({
           ctx.db
             .query("plans")
             .withIndex("by_tenant_status_createdAt", (q) =>
-              q
-                .eq("tenantId", ctx.tenantId)
-                .eq("status", status)
-                .gte("createdAt", sinceMs),
+              q.eq("tenantId", ctx.tenantId).eq("status", status).gte("createdAt", sinceMs),
             )
             .order("desc")
             .take(limit + 1),
@@ -199,8 +198,12 @@ export const listCleared = tenantQuery({
         plan.status !== "canceled"
           ? null
           : plan.cancelKind === undefined
-            ? ({ state: "legacy-unknown" as const })
-            : ({ state: "known" as const, kind: plan.cancelKind, canceledAt: plan.canceledAt ?? null }),
+            ? { state: "legacy-unknown" as const }
+            : {
+                state: "known" as const,
+                kind: plan.cancelKind,
+                canceledAt: plan.canceledAt ?? null,
+              },
     }));
     return {
       items,
@@ -361,9 +364,7 @@ export const answerDecision = tenantMutation({
   handler: async (ctx, { threadId, answer }) => {
     const row = await ctx.db
       .query("evaluations")
-      .withIndex("by_tenant_thread", (q) =>
-        q.eq("tenantId", ctx.tenantId).eq("threadId", threadId),
-      )
+      .withIndex("by_tenant_thread", (q) => q.eq("tenantId", ctx.tenantId).eq("threadId", threadId))
       .order("desc")
       .first();
     if (!row) throw new Error("NOT_FOUND");
@@ -399,9 +400,7 @@ export const blockedSummary = tenantQuery({
     const base = () =>
       ctx.db
         .query("deadLetters")
-        .withIndex("by_tenant_status", (q) =>
-          q.eq("tenantId", ctx.tenantId).eq("status", "new"),
-        );
+        .withIndex("by_tenant_status", (q) => q.eq("tenantId", ctx.tenantId).eq("status", "new"));
     const [countWindow, oldest, newest] = await Promise.all([
       base().take(BLOCKED_LIMIT + 1),
       base().order("asc").first(),

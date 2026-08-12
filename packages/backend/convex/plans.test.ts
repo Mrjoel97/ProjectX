@@ -859,8 +859,10 @@ describe("calendar_manage proposal fields (17-05 — stage, reset, and the ref-p
       "calendarExpectedEtag",
       "calendarFailureCode",
     ] as const) {
-      expect(staged?.[field], `${field} was never staged — the reset assertion would be vacuous`)
-        .toBeDefined();
+      expect(
+        staged?.[field],
+        `${field} was never staged — the reset assertion would be vacuous`,
+      ).toBeDefined();
     }
 
     await t.mutation(internal.plans.resetPlan, { planId });

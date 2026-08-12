@@ -13,8 +13,5 @@
     "recipientCount": 0,
     "attachmentCount": 0
   },
-  "needles": [
-    "eval-rhea-6q@golden.example",
-    "benchmark-CR1"
-  ]
+  "needles": ["eval-rhea-6q@golden.example", "benchmark-CR1"]
 }

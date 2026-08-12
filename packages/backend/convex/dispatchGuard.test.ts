@@ -389,7 +389,9 @@ test("cockpit Drive reads cannot import, ingest, export, or enter specialist gra
     "landFile",
     "ingest",
   ]) {
-    expect(driveTools, `Drive cockpit reads contain forbidden ${forbidden}`).not.toContain(forbidden);
+    expect(driveTools, `Drive cockpit reads contain forbidden ${forbidden}`).not.toContain(
+      forbidden,
+    );
   }
 
   const specialists = readFileSync(join(convexDir, "../../core/src/specialists.ts"), "utf8");

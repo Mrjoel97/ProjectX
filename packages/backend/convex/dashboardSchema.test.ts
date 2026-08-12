@@ -4,10 +4,7 @@ import { describe, expect, test } from "vitest";
 import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.ts");
-const SCHEMA = readFileSync(new URL("./schema.ts", import.meta.url), "utf8").replace(
-  /\r\n/g,
-  "\n",
-);
+const SCHEMA = readFileSync(new URL("./schema.ts", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 
 function tableBlock(name: string): string {
   const marker = `\n  ${name}: defineTable(`;
@@ -45,7 +42,9 @@ describe("Phase 26 additive dashboard schema", () => {
     const plans = compact(tableBlock("plans"));
 
     expect(dense(plans)).toContain(
-      dense('cancelKind: v.optional(v.union(v.literal("scheduled_cancel"), v.literal("discarded")))'),
+      dense(
+        'cancelKind: v.optional(v.union(v.literal("scheduled_cancel"), v.literal("discarded")))',
+      ),
     );
     for (const field of [
       "canceledAt",
@@ -94,9 +93,7 @@ describe("Phase 26 additive dashboard schema", () => {
     ]) {
       expect(events).toContain(optional);
     }
-    expect(events).toContain(
-      '.index("by_tenant_createdAt", ["tenantId", "createdAt"])',
-    );
+    expect(events).toContain('.index("by_tenant_createdAt", ["tenantId", "createdAt"])');
     expect(events).toContain(
       '.index("by_tenant_rail_createdAt", ["tenantId", "rail", "createdAt"])',
     );

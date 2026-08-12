@@ -7,11 +7,7 @@
 //
 // All payloads are synthetic (`{ note: "synthetic" }`) — never raw content.
 import type { WorkflowId } from "@convex-dev/workflow";
-import {
-  type BusinessBlueprint,
-  type EvidenceVerdict,
-  serializeBlueprint,
-} from "@pikar/core";
+import { type BusinessBlueprint, type EvidenceVerdict, serializeBlueprint } from "@pikar/core";
 import { categoryFor } from "@pikar/vault";
 import {
   DOC_GAP_PLAYBOOK,

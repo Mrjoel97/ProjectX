@@ -5,7 +5,9 @@ import { FINANCE_SPINE_BUDGET, financeSpineLine } from "./cashSpine";
 const NOW = 1_754_000_000_000;
 const DAY = 86_400_000;
 
-const state = (over: Partial<CashInputState> & { field: CashInputState["field"] }): CashInputState => ({
+const state = (
+  over: Partial<CashInputState> & { field: CashInputState["field"] },
+): CashInputState => ({
   value: null,
   statedAt: null,
   stale: false,
@@ -16,7 +18,12 @@ const state = (over: Partial<CashInputState> & { field: CashInputState["field"] 
 });
 
 test("no collected inputs produces no line — an empty spine line is worse than none", () => {
-  expect(financeSpineLine(CASH_INPUTS.map((s) => state({ field: s.field })), NOW)).toBeNull();
+  expect(
+    financeSpineLine(
+      CASH_INPUTS.map((s) => state({ field: s.field })),
+      NOW,
+    ),
+  ).toBeNull();
 });
 
 test("a collected figure renders with its age in days", () => {

@@ -1054,13 +1054,7 @@ type PlanRow = {
   // it exists for the NEXT action type. Keep the two unions identical.
   // 17-05: the NEXT action type arrived (`calendar_manage`) and the guard worked exactly as
   // described — widening `plans.kind` alone stopped compiling at four `readPlan()` call sites.
-  kind?:
-    | "memo"
-    | "calendar_event"
-    | "media"
-    | "crm_write"
-    | "finance_write"
-    | "calendar_manage";
+  kind?: "memo" | "calendar_event" | "media" | "crm_write" | "finance_write" | "calendar_manage";
 };
 
 // One formatter for the resolved send instant — shared by buildAgentContext's Send-time line

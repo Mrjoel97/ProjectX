@@ -589,7 +589,9 @@ describe("applyFinanceClaims (the finance_write inline arm)", () => {
       ),
     ).toEqual({ ok: false, reason: "malformed_figure_claim" });
     expect(
-      await t.run((ctx) => applyFinanceClaims(ctx, "u1", [{ ...agentClaim, basis: null } as never])),
+      await t.run((ctx) =>
+        applyFinanceClaims(ctx, "u1", [{ ...agentClaim, basis: null } as never]),
+      ),
     ).toEqual({ ok: false, reason: "malformed_figure_claim" });
     expect(await t.run((ctx) => ctx.db.query("financeInputs").collect())).toHaveLength(0);
   });

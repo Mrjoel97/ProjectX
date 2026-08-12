@@ -1697,8 +1697,7 @@ function selfCheck() {
     "a turn carrying the vault needle would make citesVaultDoc pass without searchVault",
   );
   assert.throws(
-    () =>
-      validateFixture({ ...base, turns: [`tell me about ${BLUEPRINT_NEEDLE}`] }, "<synthetic>"),
+    () => validateFixture({ ...base, turns: [`tell me about ${BLUEPRINT_NEEDLE}`] }, "<synthetic>"),
     /standing-spine proof vacuous/,
     "a turn carrying the Blueprint needle would make the pre-model assertion vacuous",
   );
@@ -2314,29 +2313,33 @@ function attemptCase(fixture, tenant, pins, tenantSkillIds = {}) {
   const history = [];
   for (const text of fixture.turns) {
     const res = parse(
-      must("llm:runCockpitAgent", {
-        tenantId: tenant,
-        threadId,
-        planId,
-        text,
-        // 16-09: MINT A TURN ID, exactly as the production driver does (`cockpit.ts` — "the driver
-        // mints the turnId"). This is not just trace plumbing. `dispatchResearch` is built only
-        // under `grantDispatch && threadId && rootRequestId`, and `rootRequestId` IS this value
-        // (llm.ts:2069) — so omitting it silently REMOVED the research tool from the record for
-        // every fixture. Cases 32-34 could not pass no matter what the skill body said, and the
-        // failure was invisible because the arg is optional and its documented effect ("undefined
-        // ⇒ the loop emits nothing") sounds harmless. Per TURN, like production — not per case.
-        turnId: randomUUID(),
-        // Phase 19 (ACTN-05): the OPT-IN clock. Spread away entirely unless the fixture sets
-        // `clock: true`, so every pre-19 case's request is byte-identical to the one that passed
-        // the last gate. `nowMs` is the real clock, not a pinned instant: "tomorrow" and a weekday
-        // name must resolve FORWARD (parseSendTime returns `past` otherwise), and the assertion is
-        // a COUNT, so nothing here depends on which instant it lands on.
-        ...(fixture.clock ? { clientContext: { tz: "UTC", nowMs: Date.now() } } : {}),
-        ...(history.length ? { history } : {}),
-        ...(pins.length ? { skillVersions: skillVersionsOf(pins) } : {}),
-        ...tenantPinArg,
-      }, RETRY_TURN),
+      must(
+        "llm:runCockpitAgent",
+        {
+          tenantId: tenant,
+          threadId,
+          planId,
+          text,
+          // 16-09: MINT A TURN ID, exactly as the production driver does (`cockpit.ts` — "the driver
+          // mints the turnId"). This is not just trace plumbing. `dispatchResearch` is built only
+          // under `grantDispatch && threadId && rootRequestId`, and `rootRequestId` IS this value
+          // (llm.ts:2069) — so omitting it silently REMOVED the research tool from the record for
+          // every fixture. Cases 32-34 could not pass no matter what the skill body said, and the
+          // failure was invisible because the arg is optional and its documented effect ("undefined
+          // ⇒ the loop emits nothing") sounds harmless. Per TURN, like production — not per case.
+          turnId: randomUUID(),
+          // Phase 19 (ACTN-05): the OPT-IN clock. Spread away entirely unless the fixture sets
+          // `clock: true`, so every pre-19 case's request is byte-identical to the one that passed
+          // the last gate. `nowMs` is the real clock, not a pinned instant: "tomorrow" and a weekday
+          // name must resolve FORWARD (parseSendTime returns `past` otherwise), and the assertion is
+          // a COUNT, so nothing here depends on which instant it lands on.
+          ...(fixture.clock ? { clientContext: { tz: "UTC", nowMs: Date.now() } } : {}),
+          ...(history.length ? { history } : {}),
+          ...(pins.length ? { skillVersions: skillVersionsOf(pins) } : {}),
+          ...tenantPinArg,
+        },
+        RETRY_TURN,
+      ),
     );
     if (res.blocked) {
       // 22.1-02 made `dailySpendCents` KEYED per tenant, so `smoke:resetDailySpend` gained a
@@ -2607,9 +2610,7 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = []) {
       sourceDocIds: vaultDocIds,
     }),
   );
-  const blueprintSpine = parse(
-    must("blueprint:spineForTenant", { tenantId: tenant }, RETRY_READ),
-  );
+  const blueprintSpine = parse(must("blueprint:spineForTenant", { tenantId: tenant }, RETRY_READ));
   assert.equal(typeof blueprintSpine, "string", "confirmed eval Blueprint must render a spine");
   assert.ok(
     blueprintSpine.includes(BLUEPRINT_NEEDLE),

@@ -369,7 +369,11 @@ beforeEach(() => {
       return new Response(
         JSON.stringify({
           results: [
-            { url: "https://example.test/pricing", title: "Source 0", content: "retrieved snippet" },
+            {
+              url: "https://example.test/pricing",
+              title: "Source 0",
+              content: "retrieved snippet",
+            },
           ],
         }),
         { status: 200, headers: { "content-type": "application/json" } },

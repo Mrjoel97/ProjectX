@@ -79,12 +79,7 @@ export function resolveDashboardWindow(input: DashboardWindowInput): DashboardWi
   };
 }
 
-export type DashboardMoneyPhase =
-  | "estimated"
-  | "reserved"
-  | "actual"
-  | "refunded"
-  | "unlanded";
+export type DashboardMoneyPhase = "estimated" | "reserved" | "actual" | "refunded" | "unlanded";
 
 export type DashboardMoney = {
   [Phase in DashboardMoneyPhase]: {
@@ -102,10 +97,7 @@ export function createDashboardMoney<Phase extends DashboardMoneyPhase>(
   if (!Number.isSafeInteger(amountCents) || amountCents < 0) {
     throw new Error("dashboard money must use non-negative integer USD cents");
   }
-  return { phase, amountCents, currency: "USD" } as Extract<
-    DashboardMoney,
-    { phase: Phase }
-  >;
+  return { phase, amountCents, currency: "USD" } as Extract<DashboardMoney, { phase: Phase }>;
 }
 
 export type DashboardPartialReason =

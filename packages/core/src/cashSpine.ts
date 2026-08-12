@@ -37,10 +37,7 @@ const PIKAR_MARK = " PIKAR";
  * `null` when the tenant has collected nothing — a line reading "Finance: all unknown" spends
  * budget on every turn to say the agent knows nothing, which the absence of the line says for free.
  */
-export function financeSpineLine(
-  inputs: readonly CashInputState[],
-  nowMs: number,
-): string | null {
+export function financeSpineLine(inputs: readonly CashInputState[], nowMs: number): string | null {
   const known = inputs.filter((i) => i.value !== null);
   if (known.length === 0) return null;
   const parts = known.map(

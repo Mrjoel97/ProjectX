@@ -375,7 +375,9 @@ describe("Approvals decisions and blocked summary", () => {
       });
     });
 
-    const blocked = await t.withIdentity({ subject: TENANT }).query(api.approvals.blockedSummary, {});
+    const blocked = await t
+      .withIdentity({ subject: TENANT })
+      .query(api.approvals.blockedSummary, {});
     expect(blocked).toEqual({
       count: 20,
       countCapped: true,
@@ -383,6 +385,8 @@ describe("Approvals decisions and blocked summary", () => {
       newestCreatedAt: 1_020,
       href: "/ops",
     });
-    expect(JSON.stringify(blocked)).not.toMatch(/secret|payload|error|correlation|workflow|foreign/i);
+    expect(JSON.stringify(blocked)).not.toMatch(
+      /secret|payload|error|correlation|workflow|foreign/i,
+    );
   });
 });

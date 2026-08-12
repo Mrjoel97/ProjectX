@@ -200,7 +200,11 @@ export const inputs = tenantQuery({
  * below and the tool-loop's `unitEconomicsFor` internal reader call the SAME derivation — one
  * definition, not two silently-drifting copies of the business's money (see the module banner).
  */
-async function unitEconomicsForTenant(ctx: { db: QueryCtx["db"] }, tenantId: string, nowMs: number) {
+async function unitEconomicsForTenant(
+  ctx: { db: QueryCtx["db"] },
+  tenantId: string,
+  nowMs: number,
+) {
   const states = (await inputStatesFor(ctx, tenantId, nowMs)).inputs;
   const evaluation = await latestScorecardRow(ctx.db, tenantId);
   return coreUnitEconomics({

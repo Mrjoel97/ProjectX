@@ -12,12 +12,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { INCOMPLETE_MARKER, serializeProfile } from "@pikar/core";
-import {
-  CHEAP_MODEL,
-  DEFAULT_MODEL,
-  RESEARCH_FALLBACK_MODEL,
-  RESEARCH_MODEL,
-} from "@pikar/cost";
+import { CHEAP_MODEL, DEFAULT_MODEL, RESEARCH_FALLBACK_MODEL, RESEARCH_MODEL } from "@pikar/cost";
 import { APICallError } from "ai";
 import { convexTest, type TestConvex } from "convex-test";
 import { beforeEach, describe, expect, test, vi } from "vitest";
@@ -2207,7 +2202,11 @@ describe("21-03 — an exact tenant candidate id survives the scheduled dispatch
    */
   async function threeWayCollision() {
     const { t, planId } = await setup();
-    const activeId = await insertRow(t, TENANT, { version: 2, body: ACTIVE_BODY, status: "active" });
+    const activeId = await insertRow(t, TENANT, {
+      version: 2,
+      body: ACTIVE_BODY,
+      status: "active",
+    });
     const candidateId = await insertRow(t, TENANT, {
       version: 3,
       body: CANDIDATE_BODY,
@@ -2330,7 +2329,9 @@ describe("21-03 — an exact tenant candidate id survives the scheduled dispatch
     );
     expect(res.skillVersion).toBe(3);
 
-    const completed = (await readLineage(t, root)).find((r) => r.eventType === "subagent.completed");
+    const completed = (await readLineage(t, root)).find(
+      (r) => r.eventType === "subagent.completed",
+    );
     // MUTATION "drop tenantSkillIds at one handoff" turns THESE red: the fallback body is the
     // tenant's ACTIVE overlay, whose row id and body hash are both different.
     expect(completed?.payload).toMatchObject({
@@ -2376,9 +2377,7 @@ describe("21-03 — an exact tenant candidate id survives the scheduled dispatch
     // §4 PRIVACY: serialize EVERY audit payload on this lineage and scan it. No composed body and
     // no needle from any of the three colliding rows. MUTATION "add the resolved body to the
     // subagent.completed payload" turns these four red.
-    const serialized = JSON.stringify(
-      (await readLineage(t, root)).map((r) => r.payload ?? {}),
-    );
+    const serialized = JSON.stringify((await readLineage(t, root)).map((r) => r.payload ?? {}));
     expect(serialized).not.toContain(CANDIDATE_NEEDLE);
     expect(serialized).not.toContain(ACTIVE_NEEDLE);
     expect(serialized).not.toContain(OTHER_TENANT_NEEDLE);
@@ -2402,7 +2401,9 @@ describe("21-03 — an exact tenant candidate id survives the scheduled dispatch
       }),
     );
     const active = await t.query(internal.skills.getActiveSkill, { name: "offer-architect" });
-    const completed = (await readLineage(t, root)).find((r) => r.eventType === "subagent.completed");
+    const completed = (await readLineage(t, root)).find(
+      (r) => r.eventType === "subagent.completed",
+    );
     expect(completed?.payload).toMatchObject({
       skillScope: "global",
       skillId: String(active.skillId),
