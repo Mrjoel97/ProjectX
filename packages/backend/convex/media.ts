@@ -49,6 +49,9 @@ import { hmacHex } from "./gmailAuth";
 import { getGuardrailConfig, mediaRemainingCentsInner, rateLimiter } from "./guardrails";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+// The plain-function half of the ledger writer: the limiter movement and its row must commit
+// or fail together (FIN-01). A separate ctx.runMutation would be a second transaction.
+import { ensureCoverage, recordMovement } from "./spendLedger";
 
 /** Every way a job can be refused BEFORE a cent moves. Distinct codes because they send the user
  *  to distinct levers: rewrite a line, cut blocks, wait for tomorrow, or call the operator. */
@@ -93,6 +96,10 @@ async function reserveProviderLinesInner(
   lines: readonly ProviderLine[],
   specs: readonly MediaSpec[],
 ): Promise<ReserveResult> {
+  // FIN-01: watching starts at the gate, not at the money (see ensureCoverage). A media job that
+  // is refused for price or budget is still a tenant we can report a confident zero for.
+  await ensureCoverage(ctx, tenantId, Date.now());
+
   // The cap, and the ONE flooring of cents (D12a). `chooseMediaBatch` floors the TOTAL exactly
   // once; the per-line `estUsd` values stay unfloored on their rows.
   const est = chooseMediaBatch(specs, MEDIA_JOB_CAP_USD);
@@ -119,6 +126,31 @@ async function reserveProviderLinesInner(
     reserve: true,
   });
   await rateLimiter.limit(ctx, "deploymentMediaSpendCents", { count: estCents, reserve: true });
+
+  // FIN-01: ONE `reserved` movement for the WHOLE job, in this same transaction. Per-line rows
+  // would not sum back to this number — `chooseMediaBatch` floors the TOTAL exactly once (D12a),
+  // so the batch estimate is not the sum of the line estimates.
+  //
+  // DERIVED from `batchId`, not minted: `batchId` is server-minted per reservation and the approve
+  // arm reserves inside the plan's proposed→approved CAS, so approve-once IS reserve-once. A
+  // genuine second reservation gets a new batch and therefore its own row.
+  // Guarded for the same reason the landing is: a batch that prices under a cent (a lone short
+  // voice line) floors to 0, and a zero-cent movement is rejected — it would abort the reservation.
+  if (estCents > 0) {
+    await recordMovement(ctx, {
+      tenantId,
+      rail: "media",
+      phase: "reserved",
+      amountCents: estCents,
+      correlationId: `mediabatch:${batchId}`,
+      createdAt: Date.now(),
+      // Every line of one batch belongs to one plan, so the first line names it. Read off the rows
+      // rather than added as a parameter: a standalone image reaches this same function, and giving
+      // it a planId argument it does not otherwise need would be a wider signature for no gain.
+      planId: lines[0]?.row.planId,
+      kind: "media_reserve",
+    });
+  }
 
   // Only now do rows exist. Every refusal above returned with zero inserts.
   for (const line of lines) await ctx.db.insert("mediaJobs", line.row);
@@ -148,6 +180,12 @@ export async function reserveJobInner(
     withCaptions: boolean;
   },
 ): Promise<ReserveResult> {
+  // 0. FIN-01 coverage, ABOVE every refusal below — including the kill switch. This is the
+  //    outermost media gate, and `reserveProviderLinesInner` (which also opens coverage, for the
+  //    standalone-image entry point) is never reached once any check here returns. A tenant paused
+  //    by the media kill switch must still report a CONFIDENT zero rather than `unknown`.
+  await ensureCoverage(ctx, a.tenantId, Date.now());
+
   // 1. BOTH switches. They are independent by construction (a media pause must not stop the email
   //    cockpit) but an all-stop is an all-stop, so either one refuses here.
   const cfg = await getGuardrailConfig(ctx);

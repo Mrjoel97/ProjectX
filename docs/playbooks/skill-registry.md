@@ -1,6 +1,528 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
-> Last verified: 2026-08-03 (15.3-08 task 2 — **`document-classifier` added, DELIBERATELY UNGATED.**
+> Last verified: 2026-08-12 (20-20 owner closure — exact response:
+> **`ratify cloud-dev finance predecessor`**. This ratifies `woozy-wren-368`'s already-active,
+> already-evidenced `cockpit-agent v1` as Phase 20-12's **cloud-dev predecessor**. It does not
+> recast bootstrap as an owner-triggered candidate activation, does not authorize production, and
+> does not authorize a seed, deploy, evidence write or paid rerun. A read-only closeout check found
+> the same v1/hash/evidence in cloud dev and no `skills` documents in production. Closure spend:
+> **$0.00**.)
+
+> Last verified: 2026-08-12 (20-20 zero-spend reconciliation — **CLOUD DEV IS CLEARED;
+> PRODUCTION IS NOT.** Read-only registry inspection of `woozy-wren-368` returned exactly one
+> `cockpit-agent` row: **v1, `active`**, sha256
+> `b765d7422d5e0d5d0d6beaa58b1310fbba02ced028a613cdc38aef01c3fec7e7`, with passing evidence
+> for run `107ee875`: **36/36**, one retry (`21-fragment-answer-absorbed`), `$0.4047304`, model
+> `openai/gpt-4o-mini`, and `skillVersions: {"cockpit-agent":1}`. The complete run includes
+> fixture 37. A separate read-only inspection of production `opulent-octopus-494` returned no
+> documents in `skills`. No seed, deploy, eval, evidence write or activation ran: **$0.00**.)
+>
+> **Fingerprint convention:** the registry body and generated TypeScript mirror use LF. The local
+> canonical markdown hashes to the value above after CRLF→LF normalization; its raw Windows
+> worktree bytes hash differently and are not the registry fingerprint. The contracts mirror test
+> is green (22/22), so the generated body is the normalized canonical source.
+>
+> **This was bootstrap, not a candidate activation.** Cloud dev's table was empty when
+> `seedSkills` first inserted v1, and the empty-registry branch writes `status: "active"` before any
+> eval evidence exists. The later green run records evidence on that already-active row. On every
+> later boot, `seedSkills` compares the current body with the **newest** row and inserts nothing
+> when they match. Therefore rerunning the seed cannot mint the “finance candidate” the stale
+> 20-20 plan demanded, and inventing a no-op seed/eval/activation cycle would falsify provenance.
+>
+> **Authority boundary:** the cloud-dev gate is evidence, not production activation authority and
+> not proof of a separately owner-triggered candidate flip. Before 20-12 relies on v1 as its
+> development predecessor, the owner must explicitly ratify that deployment-scoped boundary. If
+> production clearance is required instead, deploy/bootstrap/evidence provenance needs its own
+> authorized plan; nothing in this entry authorizes or claims it.
+
+> Last verified: 2026-08-11 (21-04 — **A TENANT ROW CAN NOW BECOME `active`.** 21-02 and 21-03 both
+> closed with "no tenant row can become active through any code path"; that sentence is now false.
+> **Nothing was activated live, no tenant candidate has ever passed a real eval run, and NO PAID
+> EVAL WAS RUN BY THIS PLAN — $0.00.** The green 36/36 gate recorded in the entry below is a
+> **GLOBAL `cockpit-agent v1`** run by another lane; it certifies no tenant row and grants no tenant
+> activation. Every result here is `convex-test` in memory plus source scans.
+> **This entry supersedes that one's "does NOT cover" clause**: `packages/backend/convex/skills.ts`
+> was dirty from the 21-03 lane when that session ran, and 21-03 has since committed; 21-04's own
+> changes to the same file are committed in `18d8bca`.)
+>
+> **TWO INDEPENDENT GATES, and neither is sufficient.** Evaluation asks *has this body earned
+> activation?*; owner authorization asks *may this caller change live runtime?*.
+>
+> ```text
+> tenant candidate goes live  ⟺  ownerMutation(requireOwner)  AND  hasPassingTenantEvidence(row)
+> tenant rollback goes live   ⟺  ownerMutation(requireOwner)  AND  rollbackEligible === true
+> ```
+>
+> The load-bearing test cell is *non-owner WITH valid exact evidence*: EVAL_GATE would let that
+> through, so the refusal proves authorization is doing the work. Downgrading the wrapper to
+> `tenantMutation` lets the candidate's **own author** activate it (measured: `changed: true`).
+>
+> **ONE STATUS TRANSITION FOR BOTH SCOPES.** `transitionSkillActivation(ctx, target)` where target
+> is exactly `{scope:"global",name,version}` or `{scope:"tenant",candidateId,mode}`. It owns target
+> resolution, the scope-LOCAL current-active lookup, the evidence/exemption decision, idempotence,
+> and **the only `ctx.db.patch(..., {status:"active"})` in the module** — `skills.test.ts` counts
+> that patch and fails at two. `activateSkillVersion(ctx,name,version)` survives as a thin wrapper,
+> so `activateSkill` and `activateCandidate` are behaviour-identical (all 72 prior tests green
+> through the refactor, unchanged).
+>
+> **GLOBAL AND TENANT ROLLBACK DIFFER, and the difference is not cosmetic.**
+>
+> | | Global `skills` | Tenant `tenantSkills` |
+> |---|---|---|
+> | Identity | `name@version` | the ROW ID |
+> | Evidence predicate | `hasPassingEvidence` (name + version) | `hasPassingTenantEvidence` (candidateId + registryTenantId + name + version) |
+> | Rollback exemption | **status alone** (`archived`/`rolled_back`) | **`rollbackEligible === true` AND an archived/rolled_back status** |
+> | Who may activate | `internal.skills.activateSkill` (identity-free) or `activateCandidate` (owner) | `activateTenantCandidate` (owner) ONLY |
+>
+> Status alone is sufficient globally because nothing else in the `skills` table can produce those
+> statuses — an archived global row was live. In `tenantSkills` a **superseded draft is also
+> archived and was never live**, so status-only would launder a pending candidate straight around
+> the eval gate. `rollbackEligible` is written in exactly two places: the shared patch block, when a
+> row actually goes live, and the `system` baseline `publishUserCandidate` mints as a byte copy of
+> the code-owned core on a tenant's first customization. Measured: deleting the `rollbackEligible`
+> predicate makes a never-active candidate restorable (`changed: true`).
+>
+> **Activation is tenant/name-LOCAL.** It archives only the active row at this tenant + this name,
+> and patches no body, authoredBody, name, version, author, lineage or evidence. A colliding row in
+> another tenant and the global registry row are both outside the index range. *A single-tenant test
+> cannot prove this*: with only one tenant ever live, an unscoped "find the active row for this
+> name" read returns the same row, and all 86 tests stayed green under that mutation. The test that
+> bites puts BOTH tenants live at the same name and version and then supersedes the **younger**
+> one's row.
+>
+> **THE OWNER REVIEW QUEUE.** `skills.tenantCandidatesForReview` (ownerQuery) — `by_status_createdAt`
+> with a fixed `.take(25)`, newest first, never a deployment-wide `.collect()`. It returns the exact
+> row id, tenant/user refs, `authoredBody` + `candidateBody` + `baseBody` (the diff pair), status,
+> `gatePassed`, an `absent|passing|failing` evidence state, a refs-only evidence summary
+> (runId/counts/cost/model — **never the raw evidence string**), and the bounded list of eligible
+> rollback targets. Its returned key set is pinned by EQUALITY in the test, because the next field
+> somebody adds to this queue is the next field a raw prompt leaks through.
+>
+> **AUDIT KEY SETS**, refs only (CLAUDE.md §4), one row per REAL transition — an idempotent
+> re-activation and a refused attempt write nothing:
+>
+> | Event | actor | payload keys (exact) |
+> |---|---|---|
+> | `skill.user_candidate_activated` | `owner` | `author, evalRunId, fromTenantSkillId, fromVersion, ownerUserId, skillName, tenantSkillId, version` |
+> | `skill.user_skill_rolled_back` | `owner` | the same eight; `evalRunId` is `null` because rollback is evidence-exempt |
+>
+> The row belongs to the TENANT whose runtime changed and rides that candidate's own
+> `correlationId`, so it joins the `skill.user_candidate_published` row from 21-02.
+>
+> **OPERATOR STEPS.** Review and act at `/ops` → Optimizer → *User-authored candidates* (owner only;
+> the whole section is mount-gated, and the server wrappers are the actual boundary). Activate is
+> disabled until `gatePassed`. `Roll back` lists only rows that have genuinely been live, plus the
+> server baseline. Read a candidate's situation at $0 with
+> `npx convex run skills:inspectTenantSkill '{"candidateId":"<id>"}'` — refs only, no body.
+> **There is deliberately no `convex run` path to tenant activation or rollback**: their authority is
+> a human, and a CLI door would be a door around `requireOwner`.
+>
+> **STILL UNPAID AND UNOBSERVED.** No tenant candidate has passing evidence anywhere except in a
+> test; `--tenant-skill` has never executed end to end against a real deployment; nothing has been
+> activated or rolled back in a browser. The browser proof is 21-06's and the first paid tenant gate
+> run is 21-07's. **Phase 22's internal identity-free eval path is intact** —
+> `internal.skills.activateSkill`, `recordEvalEvidence` and `recordTenantEvalEvidence` still take no
+> identity, and `requireOwner` is deliberately NOT inside the shared transition.
+
+> Last verified: 2026-08-11 (THE GATE IS GREEN — run `107ee875`, **36/36**, evidence recorded on
+> `cockpit-agent v1` of the CLOUD DEV deployment `woozy-wren-368`. $0.2944 exec + $0.1103
+> specialist = **$0.4047**; one fixture retried (`21-fragment-answer-absorbed`). Not a splice —
+> all 36 green in ONE unfiltered run, which the runner requires before it writes evidence.
+> **Version numbering restarted:** the gate moved off the local backend to an always-on cloud dev
+> deployment, whose skills table was empty, so `seedSkills` bootstrapped the body as **v1 ACTIVE**
+> rather than a candidate. Local's `@18`/`@19`/`@20` history did NOT travel. `v1`'s body is
+> sha256 `b765d7422d5e0d5d0d6beaa58b1310fbba02ced028a613cdc38aef01c3fec7e7`, byte-identical to the
+> local `@20` that fixed the fixture-29 regression — verified by sha on both deployments, not
+> assumed. Fixture 37 (`finance-update`, the one owed by 'teach a tool, owe a fixture') passed
+> INSIDE this full run, not only in isolation.
+> **What this entry does NOT cover:** `packages/backend/convex/skills.ts` is dirty in the shared
+> tree from the concurrent 21-03 tenant-overlay lane. This session did not author or read that
+> change and does not attest to it; that lane supersedes this clause when it commits.
+> **Production is NOT seeded.** `opulent-octopus-494` has 0 functions — `convex deploy` fails with
+> a server-side `408` on `/api/deploy2/evaluate_push`, twice, on a cold nine-component push.)
+
+> Last verified: 2026-08-11 (21-03 — **EVIDENCE CAN NOW NAME ONE EXACT TENANT CANDIDATE ROW.
+> NOTHING HAS PASSED A LIVE GATE, NOTHING WAS ACTIVATED, AND NO PAID EVAL WAS RUN — $0.00.** The
+> only eval invocation this plan made is the FREE `--self-check`. A standing do-not-rerun order is
+> in force on the paid gate and this plan did not need one.)
+>
+> **`<name>@<version>` IS NOT AN IDENTITY IN THE TENANT SCOPE.** 21-02's two-tenant test creates the
+> collision on purpose: two tenants can each own `offer-architect@2`. Everything below therefore
+> names the ROW.
+>
+> **TWO PIN SCOPES, orthogonal, never overlapping.**
+>
+> | Flag | Names | Read | Evidence lands via |
+> |---|---|---|---|
+> | `--skill <name>@<version>` | a GLOBAL `skills` row | `skills.getSkillVersion` | `skills.recordEvalEvidence` (name+version) |
+> | `--tenant-skill <tenantSkillsId>` | an EXACT `tenantSkills` row | `skills.getTenantSkillVersion` | `skills.recordTenantEvalEvidence` (row id) |
+>
+> Both are multi-pin and may be combined **for different skills**. One skill NAME in both scopes is
+> refused at $0 by `mergePinScopes`: both records are keyed by name into `runSpecialistTurn` and the
+> TENANT id wins there, so a name in both scopes would leave the `--skill` pin doing nothing while
+> its evidence row still claimed the version ran. Two `--tenant-skill` rows of one skill are refused
+> for the same reason — last-one-wins must never decide which body a paid run certifies.
+>
+> **The exact identity is `{candidateId, registryTenantId, name, version}`**, and
+> `hasPassingTenantEvidence` (contracts) compares EVERY field. `hasPassingEvidence` is deliberately
+> NOT widened — the global gate asks "was this NAME at this VERSION certified", which is exactly the
+> question that stopped being sufficient. Mutation-checked both ways: dropping the `candidateId`
+> comparison turns a forgery test red (evidence agreeing with row B on tenant, name AND version and
+> disagreeing only on which row ran), and a name/version write in `recordTenantEvalEvidence` turns
+> the two-tenant collision test red.
+>
+> **REGISTRY TENANT vs THROWAWAY DATA TENANT.** The registry tenant (the one that owns the candidate
+> row) is used for exactly two things: the pre-run inspection read, and the post-run evidence write.
+> Every fixture plan, message, vault doc, Blueprint and assertion still belongs to the throwaway
+> `eval-<runId>` tenant, unchanged. The resolution read is `skills.inspectTenantSkill`, **not**
+> `getTenantSkillVersion`, precisely so the candidate BODY never enters the runner process at all.
+>
+> **EVERY no-evidence condition, in one predicate** (`shouldRecordEvidence`):
+> `allGreen && casesTotal > 0 && filters.length === 0`.
+>
+> - a FAILED run certifies nothing;
+> - a `--only` run is a tenth of the coverage and is indistinguishable from a full gate once it is a
+>   row (16-09's clause, unchanged, and still mutation-checked);
+> - a ZERO-case run is `0 === 0`, i.e. "all green", and would have written `0/0 pass` — **this hole
+>   was open before 21-03**;
+> - an OVER-CAP or governed stop never reaches the block at all, because `abortEnv` `process.exit(2)`s
+>   from inside the case loop. That ORDERING is asserted against the source in `--self-check`, because
+>   a rule that holds only because of where it sits is one refactor from being false.
+>
+> **The dispatched handoff is the part that is easy to get silently wrong.** The tenant id must ride
+> BOTH the turn (`llm:runCockpitAgent`) and the tap (`evaluations:actOnGapInternal` → scheduled
+> `dispatch.runSpecialist` → `llm.runSpecialistTurn`). Drop it at the tap and the specialist runs the
+> tenant's EFFECTIVE body while the run certifies the candidate — 16-09's defect, one registry scope
+> down, and invisible in a green run. `dispatch.test.ts` drives the scheduled seam with the tenant's
+> ACTIVE overlay, the pinned CANDIDATE and ANOTHER tenant's same-name/version row all present, and
+> asserts the audit `skillBodyHash` against `contentHash(candidateBody)`; dropping the handoff turns
+> it red.
+>
+> **A pin whose row names a different skill REFUSES before `generateText`** (`TENANT_SKILL_PIN_MISMATCH`).
+> A mis-wired harness costs $0 rather than a model call plus an evidence row certifying the wrong
+> skill. Tool names stay the code-owned `SPECIALISTS` record and are never read from a tenant row
+> (ADR-007).
+>
+> **Only a USER-authored CANDIDATE is evaluable.** `active` (already what the tenant runs — a ~$0.4
+> no-op), `archived`, and `system` baselines all abort before the inbox/vault/Blueprint seeds.
+>
+> **`skills.inspectTenantSkill` is BODY-FREE by construction**, not by care: every registry row leaves
+> it as a `SkillRefs` shape that has no body field, so the candidate's composed body, the user's
+> authored adaptation and the global prompt (an owner-only boundary, research pitfall 4) are all
+> absent. `evidenceState` is `absent | passing | failing` — an unparseable or stale pin reads
+> `failing`, never `absent`, because "there is a pin and it does not hold" is a different operator
+> situation from "there is none". `rollbackBaseline` is resolved through the **stored lineage**
+> (bounded walk to the first `rollbackEligible` row; a global-based candidate reads its tenant's
+> version 1, written in the same transaction) — never "the newest archived row", which is the guess
+> that made `candidatesForReview` offer `v17 -> v16` in production.
+>
+> **The two READ-ONLY operator commands (no seed, no model, no write):**
+>
+> ```powershell
+> pnpm --filter @pikar/backend eval:golden -- --inspect-tenant-skill <tenantSkillsId>
+> npx convex run smoke:userSkillRuntimeAttribution '{"tenantId":"<tenantId>","correlationId":"<rootRequestId>"}'
+> ```
+>
+> The first reports status / evidence state / lineage / rollback baseline / effective + global refs
+> and SHA-256 body hashes, with **no bodies**; add `--json`, `--foreign-tenant <tenantId>`, and the
+> inspection-only `--expect-status=`, `--expect-evidence=`, `--expect-gate-passed=`,
+> `--expect-rollback-eligible=` flags (nonzero exit on mismatch, no write). The JSON carries a
+> `deploymentHash` — SHA-256 of the configured deployment URL with query string and fragment dropped
+> BEFORE hashing, because a deploy URL can carry a key — so the Phase-21 handoff can pin that the
+> pre-gate and post-gate inspections talked to the same deployment. `--foreign-tenant` REFUSES a
+> result whose effective row is the candidate's id or its bytes. The second command reads the
+> EXISTING `subagent.completed` lineage through `audit.by_correlation` (bounded `take`, tenant
+> equality re-checked because that index is deliberately cross-tenant) and returns scope / row id /
+> name / version / body hash only.
+>
+> **The free command, and the only one this plan ran:**
+> `pnpm --filter @pikar/backend eval:golden -- --self-check` — ZERO Convex calls, ZERO model calls,
+> **$0.00**. `--self-check` now asserts that too, by scanning its own body for `must(`.
+>
+> **Runner behaviour change worth knowing: unknown arguments now ABORT.** The prior note that
+> "unknown argv is ignored" is no longer true (see `agent-runtime.md`, which keeps the `--list`
+> warning): `--tenant-skil <id>` used to buy a full UNPINNED gate run at ~$0.4 and record nothing.
+>
+> **Fixed in passing (Rule 1): `myUserSkills.gatePassed` asked the GLOBAL predicate of a TENANT row.**
+> A tenant-only run's `skillVersions` is `{}`, so a genuinely certified candidate read `false`
+> forever and the panel's "Evaluation passed" copy was unreachable for the same reason "Live" is. It
+> now asks `hasPassingTenantEvidence` against the row's own identity.
+>
+> **STILL OWED, and 21-03 claims none of it.** **NO tenant row can become `active` through any code
+> path** — 21-02's finding is unchanged, and every test here that needs an active overlay still
+> patches the row directly. 21-04 owns activation and rollback. **No candidate has been evaluated
+> live**: `--tenant-skill` has never been run against a model, no `tenantSkills.evidence` row exists
+> outside a test, and `gatePassed` has only ever been observed as `false` in production. The live
+> paid proof is 21-07's. SKILL-01 stays open.
+
+> Last verified: 2026-08-10 (21-02 — **THE OVERLAY IS NOW LIVE CODE: a signed-in user can publish
+> an immutable tenant candidate, and an ACTIVE tenant row now reaches the real specialist model
+> call. NOTHING was evaluated, activated or spent — publishing costs $0 and cannot change what any
+> model runs today, because no activation path to a tenant row exists yet.**)
+>
+> **ONE immutable-version rule for both scopes.** `allocateImmutableVersion(newest, duplicate)` in
+> `skills.ts` is the whole allocation contract: a body that byte-matches the newest row in scope
+> mints nothing, anything else becomes `newest.version + 1`, and a prior row is never patched. The
+> global `insertCandidate` (SkillOpt write-back) now routes through it and is behaviour-identical —
+> `rows` is non-empty by its own guard, so `newest.version + 1` is the `maxVersion + 1` it replaced.
+> The helper takes the newest ROW rather than reading it, because the two scopes are indexed
+> differently: global reads `by_name_status` and collects (a bounded registry), tenant reads
+> `by_tenant_name_version` with `.order("desc").take(1)`. **A tenant's authoring history is
+> open-ended and must never be collected** — `skills.test.ts` scans the publisher's source region
+> for `by_tenant_name_version` + `.order("desc")` + `.take(1)` and for the absence of an unbounded
+> read, because the 200-version behaviour test passes either way. Keep that literal out of the
+> region's COMMENTS too, or the scan false-positives on prose.
+>
+> **`publishUserCandidate` takes `{name, authoredBody}` and nothing else.** Tenant, author,
+> `authorUserId`, status, version, evidence, `rollbackEligible`, the base body and the composed body
+> are all derived server-side, so Convex's arg validator is the refusal boundary: a caller cannot
+> even NAME a field it does not own. Mutation-checked — adding `authorUserId` as an optional arg
+> turned the provenance test red.
+>
+> **TWO DIFFERENT BASES, and collapsing them is a real defect.** The COMPOSITION core is the
+> **global active body** (`loadSkill`): it is the only body in the system that provably carries no
+> tenant adaptation, because nothing can write one into the `skills` table. The LINEAGE base is the
+> tenant's **effective** row (`loadEffectiveSkill`) — the row this candidate supersedes, and what
+> 21-03 pins evidence to. Composing against the tenant's ACTIVE body instead appends the previous
+> draft to the new one on every re-edit, forever; this plan's own non-recursion test caught exactly
+> that before the code shipped. **Consequence 21-03 must know: a candidate based on a tenant row
+> records the SUPERSEDED tenant version in `basedOnVersion`, not the core version.** Read the core
+> from the global active row at eval time; do not infer it from `basedOnVersion`.
+>
+> **The first customization writes TWO rows in one transaction.** A `system` / `authoredBody: ""` /
+> `archived` / `rollbackEligible: true` baseline that is a byte copy of the core, then the user
+> candidate at version 2. Removing the baseline insert turns the first-customization test red.
+> A tenant that already has history gets NO new baseline — it is a first-customization artifact.
+>
+> **Idempotence is bytes AND lineage.** A republication matches only when the newest row is a
+> `user` `candidate` whose TRIMMED `authoredBody` and whose `basedOnScope`/`basedOnVersion` all
+> match. The same words against a NEW base are a real new candidate, not a repost. An idempotent
+> repost mints no version and writes NO second audit event.
+>
+> **The audit row is `skill.user_candidate_published` and its key set is pinned by EQUALITY:**
+> `skillName, tenantSkillId, version, baseScope, baseSkillId, baseVersion, author, bodyHash,
+> authoredBytes`. Adding `authoredBody` or `body` fails `skills.test.ts` on purpose (mutation-
+> checked), and a needle scan covers `audit` + `deadLetters`. Candidate text is content-plane data.
+>
+> **`loadEffectiveSkill(ctx, tenantId, name)` is the load order: tenant ACTIVE row -> the existing
+> global `loadSkill` -> `NO_ACTIVE_SKILL`.** A `candidate` row is invisible by construction (the
+> index pins `status: "active"`), which is what makes publishing a runtime no-op. The global branch
+> delegates to `loadSkill` rather than re-querying, so the fail-closed contract has one home.
+> `getEffectiveSkill` is the internalQuery wrapper; its `tenantId` is trusted server state.
+>
+> **`myUserSkills` is the disclosure boundary.** It takes NO arguments — there is no id to point at
+> another tenant — and returns exactly `name, label, authoredBody, version, status, baseScope,
+> baseVersion, gatePassed, createdAt`. No base or composed body, no raw evidence, no row id, no
+> foreign tenant. `gatePassed` is a boolean derived from `hasPassingEvidence`, which fails closed.
+>
+> **STILL OWED, and 21-02 claims none of it.** 21-03: an eval pin EXACT on the tenant candidate id
+> (`offer-architect@2` is ambiguous the moment two tenants hold it — this plan's two-tenant test
+> creates that collision deliberately) plus tenant evidence. 21-04: owner activation and rollback
+> through the one shared transition helper; **there is currently NO way for a tenant row to become
+> `active` other than a direct DB write, which is why every 21-02 test that needs an active overlay
+> patches the row itself.** SKILL-01 stays open.
+
+> Last verified: 2026-08-10 (21-01 — **CONTRACTS AND SCHEMA ONLY. Nothing here is reachable yet:
+> there is no public function, no UI, no model call, no eval path and no activation. No registry row,
+> global or tenant, exists or changed.**)
+>
+> **`tenantSkills` is an OVERLAY, and the separate table is the whole point.** `skills` is
+> deployment-global and its `by_name_status` reads are `.unique()`. Putting tenant rows in it makes
+> every one of those reads multi-row and breaks every agent on the deployment; encoding the tenant
+> into `name` would make authorization depend on string parsing rather than an indexed key. The
+> global `skills` definition and both its indexes are BYTE-UNCHANGED by this plan (the schema diff
+> is 71 lines, all insertions, zero deletions).
+>
+> Row shape: `tenantId, name, version, body, authoredBody, status, author, authorUserId?,
+> basedOnScope, basedOnName, basedOnVersion, basedOnGlobalSkillId?, basedOnTenantSkillId?,
+> rollbackEligible, evidence?, createdAt`. Indexes `by_tenant_name_status`,
+> `by_tenant_name_version`, `by_tenant_createdAt`, `by_status_createdAt`.
+>
+> **IMMUTABLE AFTER INSERT:** `name`, `version`, `body`, `authoredBody`, `author`, `authorUserId`
+> and the whole `basedOn*` lineage. Later code may patch ONLY `status`, `evidence`, and the
+> code-owned `rollbackEligible` transition when a row genuinely becomes active. A re-edit is a NEW
+> row composed against the CURRENT effective base — never a patched body, and never an older
+> adaptation appended to a newer one.
+>
+> **TWO ROW SHAPES, and only server code can mint the first.** A server baseline is
+> `author: "system"`, `authoredBody: ""`, `status: "archived"`, `rollbackEligible: true` — it is
+> what gives a tenant's FIRST customization a real, evidence-exempt rollback target. A user
+> candidate is `author: "user"`, a real `authorUserId` derived from authenticated identity,
+> `status: "candidate"`, `rollbackEligible: false`. `rollbackEligible` is code-owned precisely so a
+> user candidate cannot mint itself one.
+>
+> **THE v0 AUTHORABLE SET IS THREE NAMES AND IS NOT `GATED_SKILLS`.**
+> `USER_AUTHORABLE_SKILLS` = `offer-architect`, `money-model-designer`, `lead-engine`. Gating is an
+> ACTIVATION policy; authorability is a PRODUCT decision. The three are chosen because their real
+> runtime is `dispatch.runSpecialist` -> `llm.runSpecialistTurn` and held-out fixtures 29/30/31
+> drive one each — so a tenant candidate has a runner that can clear its gate. Adding a name whose
+> runner cannot drive it reproduces the `document-analyst`/`media-director` deadlock recorded
+> further down, except now once per tenant. `skillAuthoring.test.ts` pins the exact set and its
+> subset relationship to `GATED_SKILLS`; adding `cockpit-agent` to the tuple was mutation-checked
+> RED before this entry was written.
+>
+> **The user authors an ADDITION, never a replacement.** `composeUserSkillBody(base, authored)`
+> emits the base verbatim, one fixed `## Tenant-authored business adaptation` marker, and the
+> trimmed adaptation. It never parses or strips the base (raw bodies stay an owner-only disclosure
+> boundary), never accepts a tool/capability list (ADR-007 — capability is code), and throws rather
+> than returning a partial body. The cap is `USER_SKILL_ADAPTATION_MAX_BYTES = 4000` **BYTES, not
+> characters** — a character cap lets one multibyte paste carry ~4x the tokens the number implies,
+> and swapping `TextEncoder().encode(...).length` for `.length` was mutation-checked RED.
+>
+> **STILL OWED, and this plan claims none of it.** 21-02: the `tenantMutation` publisher, the
+> initial baseline write, `loadEffectiveSkill` (tenant active -> global active -> `NO_ACTIVE_SKILL`)
+> and the refs-only audit row. 21-03: an eval pin that is EXACT on the tenant candidate id —
+> `<name>@<version>` alone is ambiguous once two tenants both hold `offer-architect@2`. 21-04: owner
+> activation and rollback through the one shared transition helper. Until 21-02 lands, these tables
+> have no writer and no reader; SKILL-01 stays open.
+
+> Last verified: 2026-08-10 (WHOLE-BRANCH RE-REVIEW, live-finance-inputs — **CODE ONLY, still not
+> seeded or evaluated. The body's `Finance:` sentence called every figure in that line "the user's
+> own figures", and once C1 made the line live that was a false statement to the model on every
+> turn** — the same invariant C2 had just fixed at the page surface, at the surface that actually
+> talks. `cashSpine.ts` now emits a `PIKAR` marker on any figure the owner did not supply (agent
+> write, or evaluation-grounded scorecard fill), mirroring the blueprint spine's `[stated]` /
+> `[source: X]` one token wide, and the body reads "the figures on file" plus a bullet: a `PIKAR`
+> figure is never "you told us", say it is the figure on file and ask them to confirm. Unmarked
+> means theirs — a marker on everything would say nothing. `FINANCE_SPINE_BUDGET` re-measured
+> 437 → 503. `cockpitAgent.ts` regenerated; `skills.test.ts` green. The eval-gate debt from the
+> entry below now covers both body edits.)
+
+> Last verified: 2026-08-10 (WHOLE-BRANCH REVIEW FIX I1, live-finance-inputs — **CODE ONLY, body
+> edit not yet seeded or evaluated. The `cockpit-agent` body's OLD `recordScorecardAnswer` section
+> was the live back door around everything the new finance section governs.** That tool is ungated,
+> agent-callable, takes a free-string `field`, and `applyScorecardAnswer` appends the dot-path to
+> `userProvided` — from which `runEvaluation` rebuilds its citation map at `{source:
+> "user-provided", confidence: "high"}`. The body listed `financials.cac` / `financials.ltgp` /
+> `financials.thirtyDayCashPerCustomer` on that tool's path list, so the exact laundering
+> `applyFinanceClaims` refuses and `writeFigureRow` throws on was reachable in one turn through the
+> older instruction, and the new section's "CAC has to be entered on their finance page for now"
+> contradicted it. **The review offered two fixes and the second was taken, because the first would
+> have broken two golden fixtures**: dropping the three `financials.*` paths kills fixture 27
+> (`27-grounded-assessment.json` — the user STATES a CAC and the agent stores it, which is its whole
+> subject) and fixture 31 (`31-gap-dispatch-lead-engine.json` — needs `financials.ltgp` on the
+> scorecard to reach diagnostic gate 3). So the arithmetic boundary was carried into the old section
+> instead: a new bullet, "**The number they SAID, never one you worked out**", with the 14,000/10
+> CAC worked example, plus the CAC bullet in the finance section rewritten to route by SOURCE — a
+> STATED CAC goes to `recordScorecardAnswer` (it really is the user's own figure), a COMPUTED one
+> goes nowhere and the user is asked to enter it. Both fixtures state their figures, so both stay
+> valid. `cockpitAgent.ts` regenerated from the `.md`; `skills.test.ts`'s byte-identity table is
+> green. NOT re-evaluated: `EVAL_GATE` costs ~$0.35 of real spend and was out of scope for this
+> offline fix wave — the next cycle to touch this body must run it.)
+
+> Last verified: 2026-08-10 (Task 9, live-finance-inputs — **CODE ONLY: the `cockpit-agent` body
+> now teaches `readFinance`/`stageFinanceWrite` (a new "Financial figures" section — never compute
+> a ratio yourself, only these five figures are writable: `cashOnHand`, `monthlyOperatingCost`,
+> `mrr`, `receivables`, `payables`, and raise a stale/missing figure only when relevant to what
+> the user is asking), and the owed fixture (`37-finance-update.json`) and its
+> `financeClaimCount` observable were added, mirroring `crmOperationCount` exactly** (graded off
+> `plan.financeClaims`, the array `stageFinanceWrite` itself writes). Floor bumped 35 → 36. THE
+> 2-FILE MIRROR WAS KEPT IN SYNC: `cockpitAgent.ts` was regenerated from the edited `.md` and
+> `skills.test.ts`'s no-drift row (53/53) passed. Verified OFFLINE ONLY —
+> `node run-eval-golden.mjs --self-check` passed at zero cost (36 fixtures valid, vocabulary/
+> anti-vacuity rules hold) — because `convex dev` was NOT RUNNING for this session and this
+> worktree does not own the deployment `seedSkills` would write to (the main checkout, mid-refactor
+> by another session, does). **NOTHING WAS SEEDED. NO GATE WAS RUN. NOTHING WAS ACTIVATED.** The
+> active skill is UNCHANGED by this entry. Evidence recorded is never activation — this entry is
+> neither: it is a code change awaiting the seed+gate+activate cycle a later dispatch runs after
+> the merge. Budget that cycle at **~$0.35, not ~$0.12** per the note below, now one case heavier
+> at 36.**)
+>
+> Last verified: 2026-08-09 (**19-09 took the `cockpit-agent` override lane. GATE `086f8267` PASSED
+> 35/35 on `cockpit-agent@18`, zero retries, $0.3505. EVIDENCE IS RECORDED ON v18. NOTHING WAS
+> ACTIVATED — `cockpit-agent@17` IS STILL ACTIVE and activation was withheld by the owner.**)
+>
+> **THE GATE COSTS ~$0.35, NOT ~$0.12. Read v17's own evidence row before budgeting one.** The
+> previous gate (`d17039a8`, 34/34) is stamped `costUsd: 0.357` on the v17 skill row, and this one
+> came in at `0.3505` for 35. Any plan or checkpoint quoting $0.12–0.15 for a full gate is STALE by
+> roughly 3x — the three research fixtures (32/33/34) alone are ~$0.11 of specialist spend. The
+> figure is free to check at $0: read `skills.evidence` on the active row.
+>
+> **A ONE-LINE FIXTURE REPAIR, NOT A BODY EDIT, IS WHAT TURNED 36 GREEN.** Its first live execution
+> failed twice, identically, for $0.0115: the agent composed an EMAIL instead of ever calling
+> `stageCrmWrite`. Turn 1 read *"Remind me on Thursday to chase Rhea Calloway … her address is
+> \<addr\>"* — an outreach verb plus an inline address, which is the cockpit's strongest
+> recipient-collection cue. Rewriting turn 1 in the records grammar turn 2 already used (*"Add a
+> follow-up for Thursday with …"*) passed first try for $0.0071. **The body was deliberately NOT
+> touched** — it already forbids the behaviour verbatim, so the instruction was outgunned, not
+> missing, and a third prohibition would have been the reflex move that produces a third identical
+> failure. **The address deliberately STAYED in the turn**: it is the temptation that gives
+> `recipientCount: 0` its teeth, and a needle absent from every turn is a vacuous canary.
+>
+> **OPEN, AND THE ONE THING TO FIX BEFORE TRUSTING 36:** on the passing run the staged operation is
+> `addContact` with no `due`, **not the `addFollowUp` the fixture's prose describes**.
+> `crmOperationCount` is a COUNT and cannot tell the two apart, so 36 currently proves *"exactly one
+> CRM op was staged, it never became an outbound plan, and turn 2 did not add a second"* — all real
+> ACTN-05 teeth — but NOT that a dated follow-up was created. Closing that needs a new key in the
+> closed EXPECT vocabulary (an op-type/`due` assertion), which is a code change, not a fixture edit.
+>
+> Phase 19 (ACTN-05) edited the `cockpit-agent` body to teach `stageCrmWrite` and contacts-first
+> resolution, and discharged 18-08's binding *"teach a tool, owe a fixture"* override condition with
+> `eval-cases/36-crm-follow-up.json` and the 34 → 35 fixture-floor bump. **`cockpit-agent@18` was
+> SEEDED, GATED and left as a CANDIDATE. Gate `086f8267` passed **35/35**, zero retries, $0.3505,
+> and `recordEvalEvidence` stamped that run onto the v18 row — so v18 now SATISFIES `EVAL_GATE`
+> and is one `activateCandidate` click from live. **It was deliberately not clicked:
+> `cockpit-agent@17` is still ACTIVE.** Evidence recorded is NOT activation; do not conflate them.
+>
+> **The gate was reached in two steps, and the order is the reusable part.** `--only 36` first
+> ($0.0115, FAILED — see the repair above), then the one-line fixture repair, then `--only 36`
+> again ($0.0071, PASS), and only then the unfiltered run. A brand-new fixture costs one case to
+> falsify and thirty-five to certify — never let a new fixture execute for the first time inside
+> the gate.
+>
+> The pre-seed reading that made the FORWARD arrow safe to trust, kept because the PROCEDURE is the
+> point — read off the live deployment (`local:`) on 2026-08-09 at $0 BEFORE seeding: ACTIVE
+> `cockpit-agent` is **v17** (body 27 313 chars, sha256 `b5c8b6a50aed` — byte-identical,
+> LF-normalized, to the pre-19-09 canonical `.md`), and **v18/v19/v20 are ABSENT**, so no optimizer
+> dry-run candidate is squatting above the active row and `seedSkills` will mint **v18**: a FORWARD
+> arrow, not the rollback the block below warns about. The body it will carry is 28 368 chars,
+> sha256 `6ca4d937639c`. **All of that was CONFIRMED after seeding** — `seedSkills` minted v18,
+> `status: "candidate"`, body 28 368 chars, sha256
+> `6ca4d937639cc6b97a90f4f4ca54315f6c39ae9c818b9c94c1ec3d72a17510ad`, read back off the deployment
+> at $0 before a cent was spent. Verify that hash after seeding — never trust a plan's version
+> number.
+>
+> **20-12 and 20.1-01 must now rebase on this body** before seeding a candidate of their own. One
+> candidate stream, one gate: a candidate carrying two lanes' prose is precisely what the override
+> condition exists to prevent.
+>
+> Found while verifying the fixture and deliberately NOT fixed here: **`eval:golden --self-check` has
+> been red on `main` since Phase 20**, invisibly, because `runLive()` never calls `selfCheck()` — the
+> one check that stops a bad fixture before it costs a cent was itself unrunnable. Its stale
+> `SPECIALIST_ROUTES` snapshot is fixed; the second failure (`media` is a dispatchable route whose
+> skill `media-director` is NOT in `GATED_SKILLS`, so a media body edit rides no gate) is an owner
+> decision, written up in `.planning/phases/19-contacts-crm-follow-ups/deferred-items.md`.
+
+> Last verified: 2026-08-09 (Stop-hook pass, unrelated to any in-flight plan — **acknowledging
+> `packages/contracts/skills/cockpit-agent.md` and `packages/contracts/src/skills/cockpitAgent.ts`,
+> flagged as changed-since-baseline with no matching playbook touch.**) Traced both: `cockpit-agent.md`
+> was last substantively changed by `cb48d11` (2026-08-02, "teach createDocument in cockpit-agent"),
+> a new-tool skill-body edit from an earlier, unrelated plan; `cockpitAgent.ts` was last touched by
+> `cf1c5fd` (2026-08-04, "make repository verification hermetic"), a 2-line CI-hermeticity fix to how
+> the seed body is emitted, no prompt-content change. Neither commit is part of the
+> cash-business-finance plan and neither touches this playbook's actual guarantees (skill versioning,
+> the review-queue/EVAL_GATE ordering, activation flow) — this is a straight `git diff`-since-an-older-
+> baseline artifact the Stop hook surfaced, not a real content gap. Bumping this line only, per
+> CLAUDE.md §9's own escape hatch, to close it out.
+>
+> Last verified: 2026-08-09 (**the review queue offered DOWNGRADES, and EVAL_GATE is what caught
+> it.**) `candidatesForReview` picked the highest-versioned CANDIDATE and never compared it to the
+> active row. Optimizer dry-runs leave candidate rows behind at lower versions, so once a real
+> upgrade lands those stale rows are offered forever. Observed live: the ops panel showed
+> `cockpit-agent v17 → v16`, `offer-architect v4 → v3` and `money-model-designer v4 → v3`, and every
+> Activate click returned `EVAL_GATE: … has no recorded passing eval run`.
+>
+> **Do NOT respond to that error by running `pnpm eval:golden` on the named version.** It spends real
+> model money to bless a rollback nobody asked for. Read the arrow first: if the target version is
+> below the active one, the queue is wrong, not the gate. Fixed by filtering candidates to
+> `version > active.version` (a skill with no active row at all is still offered, since there is
+> nothing to be behind), with a mutation-checked test that goes red if a downgrade is ever listed.
+>
+> The wider lesson: `reduce(max)` over a filtered set answers *"newest candidate"*, which reads like
+> *"next version"* and silently stops being the same thing the moment a sibling advances. Rollback
+> stays a deliberate operator act through `activateSkill` — never a button in a review queue.
+
+> Prior: Last verified: 2026-08-03 (15.3-08 task 2 — **`document-classifier` added, DELIBERATELY UNGATED.**
 >
 > **`document-classifier`** gives every vault document a machine-derived type and a short
 > human-readable identity line — *"2025 P&L"*, not *"a spreadsheet"*. It runs on ONE workflow step

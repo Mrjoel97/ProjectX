@@ -13,7 +13,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import retrierTest from "@convex-dev/action-retrier/test";
 import { COCKPIT_AGENT_SKILL } from "@pikar/contracts/skill";
-import { SEND_TIME_HORIZON_MS } from "@pikar/core";
+import { SEND_TIME_HORIZON_MS, withheldNote } from "@pikar/core";
 import { maxCharsFor } from "@pikar/core/storyboard";
 import { convexTest } from "convex-test";
 import { describe, expect, test, vi } from "vitest";
@@ -58,9 +58,29 @@ function withDelivery() {
   return t;
 }
 
-/** A mailbox has to exist for executePlan to proceed past the gmail pre-check. */
-const seedMailbox = (t: ReturnType<typeof convexTest>, tenantId = TENANT) =>
+/** The tenant's CAN-SPAM postal address (19-05). Its own helper because "no postal address" is a
+ *  refusal path with its own test — the sendable tenant gets it through `seedMailbox`. */
+const POSTAL = "Pikar AI, 12 Samora Ave, Dar es Salaam, TZ";
+const seedPostalAddress = (
+  t: ReturnType<typeof convexTest>,
+  tenantId = TENANT,
+  postalAddress = POSTAL,
+) =>
   t.run((ctx) =>
+    ctx.db.insert("tenantProfiles", {
+      tenantId,
+      tier: "solopreneur",
+      tierSource: "derived",
+      derivedAt: Date.now(),
+      postalAddress,
+    }),
+  );
+
+/** executePlan's two pre-CAS gates on the EMAIL arm: a connected mailbox, and (19-05) a postal
+ *  address for the CAN-SPAM footer. Both are seeded here because every email-arm test needs to get
+ *  past both; the tests that assert each refusal seed only the other one. */
+const seedMailbox = async (t: ReturnType<typeof convexTest>, tenantId = TENANT) => {
+  const id = await t.run((ctx) =>
     ctx.db.insert("gmailTokens", {
       tenantId,
       refreshToken: "r",
@@ -68,6 +88,9 @@ const seedMailbox = (t: ReturnType<typeof convexTest>, tenantId = TENANT) =>
       updatedAt: Date.now(),
     }),
   );
+  await seedPostalAddress(t, tenantId);
+  return id;
+};
 
 /** Seed a plans row at a given status (raw insert — bypasses the guided conversation). */
 async function seedPlan(
@@ -233,6 +256,82 @@ describe("executePlan calendar arm (ACTN-02)", () => {
     expect(await t.run((ctx) => ctx.db.query("mediaJobs").collect())).toHaveLength(0);
   });
 
+  // ── 17-05: THE INERT calendar_manage TARGET ────────────────────────────────────────────────
+  //
+  // `calendar_manage` is bound to the `externalAction` arm so the four gap-closure waves after
+  // this one compile, but its `EXTERNAL_TARGETS` member is a stub that throws until Plan 17-08.
+  // Nothing can stage such a plan (no tool writes the kind until 17-09), so this is reached only
+  // by a MANUALLY seeded row — which is precisely what makes it worth asserting: the claim is
+  // that if it is ever reached, it fails LOUDLY and leaves nothing behind.
+  //
+  // Named mutation that turns this RED: replace the stub's `throw` with `Promise.resolve("run_x")`.
+  test("a manually seeded calendar_manage plan throws loudly and starts nothing", async () => {
+    const t = withDelivery();
+    const planId = await t.run((ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: `calendar_manage_thread_${crypto.randomUUID()}`,
+        kind: "calendar_manage" as const,
+        status: "proposed" as const,
+        calendarProvider: "google" as const,
+        calendarOperation: "delete" as const,
+        createdAt: Date.now(),
+      }),
+    );
+
+    await expect(
+      t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId }),
+    ).rejects.toThrow(/calendar manage not wired \(17-08\)/);
+    await t.finishInProgressScheduledFunctions();
+
+    // A throw aborts the whole Convex mutation, so the `status: "approved"` patch that runs BEFORE
+    // the target thunk rolls back with it. That rollback — not an ordering guess — is what makes
+    // "no plan-state patch" true, and this is the assertion that holds it.
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan?.status).toBe("proposed");
+    expect(plan?.correlationId).toBeUndefined();
+    expect(plan?.calendarRunId).toBeUndefined();
+    expect(plan?.mediaRunId).toBeUndefined();
+    expect(plan?.calendarEventId).toBeUndefined();
+    // No provider action, no gmail fan-out, no media reservation, no registry row.
+    expect(await countRequests(t)).toHaveLength(0);
+    expect(plan?.workflowId).toBeUndefined();
+    expect(await t.run((ctx) => ctx.db.query("mediaJobs").collect())).toHaveLength(0);
+    expect(await t.run((ctx) => ctx.db.query("calendarEvents").collect())).toHaveLength(0);
+  });
+
+  // The shipped CREATE path must be untouched by the gap closure — 17-VERIFICATION.md uses it as
+  // the positive regression anchor for every plan from 17-05 to 17-11. A `calendar_manage` row
+  // that could reach `internal.calendar.createEvent` would be the worst possible version of this
+  // change: a management proposal quietly creating a NEW event.
+  test("the inert manage target cannot reach the shipped calendar_event create path", async () => {
+    const t = withDelivery();
+    const createId = await seedCalendarPlan(t, "proposed");
+    const manageId = await t.run((ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: `calendar_manage_thread_${crypto.randomUUID()}`,
+        kind: "calendar_manage" as const,
+        status: "proposed" as const,
+        createdAt: Date.now(),
+      }),
+    );
+
+    await expect(
+      t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId: manageId }),
+    ).rejects.toThrow(/17-08/);
+    // …and the create plan on the SAME tenant still approves normally. Anti-vacuity floor: without
+    // this the test above would pass just as well against an arm that broke calendar entirely.
+    expect(
+      await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, {
+        planId: createId,
+      }),
+    ).toEqual({ ok: true });
+    await t.finishInProgressScheduledFunctions();
+
+    expect((await t.run((ctx) => ctx.db.get(createId)))?.calendarRunId).toEqual(expect.any(String));
+    expect((await t.run((ctx) => ctx.db.get(manageId)))?.calendarRunId).toBeUndefined();
+  });
   test("deliverApprovedPlan.ts is byte-unchanged — it is the EMAIL entry point, not a dispatcher", async () => {
     // Routing an external action through it would make the gmail fan-out reachable from calendar
     // AND from media. The file is asserted by content hash against the value 12-05 shipped, so a
@@ -681,6 +780,83 @@ const listScheduled = (t: ReturnType<typeof convexTest>) =>
   t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect());
 
 describe("executePlan deferred send (SCHD-01 — arm on a future sendAt, fire at the moment)", () => {
+  test("discardPlan is an idempotent proposed→canceled terminal with refs-only provenance and can never enter the scheduled re-arm path", async () => {
+    const t = withDelivery();
+    const planId = await seedPlan(t, "proposed");
+    const asT = t.withIdentity({ subject: TENANT });
+
+    expect(await asT.mutation(api.cockpit.discardPlan, { planId })).toEqual({
+      ok: true,
+      discarded: true,
+    });
+
+    const discarded = await t.run((ctx) => ctx.db.get(planId));
+    expect(discarded).toMatchObject({
+      status: "canceled",
+      cancelKind: "discarded",
+    });
+    expect(discarded?.canceledAt).toEqual(expect.any(Number));
+    expect(discarded?.scheduledFunctionId).toBeUndefined();
+
+    const audits = await t.run((ctx) =>
+      ctx.db
+        .query("audit")
+        .filter((q) => q.eq(q.field("eventType"), "plan.discarded"))
+        .collect(),
+    );
+    expect(audits).toHaveLength(1);
+    expect(audits[0]?.payload).toEqual({ planId, kind: "discarded" });
+
+    expect(await asT.mutation(api.cockpit.discardPlan, { planId })).toEqual({
+      ok: true,
+      alreadyResolved: true,
+    });
+    expect(
+      await t.run((ctx) =>
+        ctx.db
+          .query("audit")
+          .filter((q) => q.eq(q.field("eventType"), "plan.discarded"))
+          .collect(),
+      ),
+    ).toHaveLength(1);
+
+    await asT.mutation(api.plans.setPlanSendTime, {
+      planId,
+      sendAt: Date.now() + 60_000,
+    });
+    expect(await asT.mutation(api.cockpit.reschedulePlan, { planId })).toEqual({
+      ok: true,
+      alreadyResolved: true,
+    });
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("canceled");
+  });
+
+  test("discardPlan refuses foreign IDs and no-ops after execution has started", async () => {
+    const t = withDelivery();
+    const foreignId = await seedPlan(t, "proposed", "tenant_b");
+    await expect(
+      t.withIdentity({ subject: TENANT }).mutation(api.cockpit.discardPlan, {
+        planId: foreignId,
+      }),
+    ).rejects.toThrow(/plan not found/);
+
+    const startedId = await seedPlan(t, "delivering");
+    expect(
+      await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.discardPlan, {
+        planId: startedId,
+      }),
+    ).toEqual({ ok: true, alreadyResolved: true });
+    expect((await t.run((ctx) => ctx.db.get(startedId)))?.status).toBe("delivering");
+    expect(
+      await t.run((ctx) =>
+        ctx.db
+          .query("audit")
+          .filter((q) => q.eq(q.field("eventType"), "plan.discarded"))
+          .collect(),
+      ),
+    ).toHaveLength(0);
+  });
+
   test("future sendAt: freezes the requests rows, arms the scheduler, sends nothing before fire; fires the same fan-out at the send time", async () => {
     vi.useFakeTimers();
     try {
@@ -700,7 +876,14 @@ describe("executePlan deferred send (SCHD-01 — arm on a future sendAt, fire at
       for (const r of reqs) expect(r.status).toBe("approved");
 
       const plan = await t.run((ctx) => ctx.db.get(planId));
-      expect(plan?.status).toBe("scheduled");
+      expect(plan).toMatchObject({
+        status: "scheduled",
+        recipientTotal: 2,
+        queuedCount: 2,
+        sentCount: 0,
+        failedCount: 0,
+        counterComplete: true,
+      });
       expect(plan?.scheduledFunctionId).toBeDefined();
 
       // A live scheduled-function system row exists (the scheduler is armed).
@@ -762,7 +945,12 @@ describe("executePlan deferred send (SCHD-01 — arm on a future sendAt, fire at
       expect(res).toEqual({ ok: true, canceled: true });
 
       const plan = await t.run((ctx) => ctx.db.get(planId));
-      expect(plan?.status).toBe("canceled");
+      expect(plan).toMatchObject({
+        status: "canceled",
+        cancelKind: "scheduled_cancel",
+      });
+      expect(plan?.canceledAt).toEqual(expect.any(Number));
+      expect(plan?.scheduledFunctionId).toBeUndefined();
 
       // No live (pending) scheduled callback remains — the send was canceled before fire.
       const pending = (await listScheduled(t)).filter((s) => s.state.kind === "pending");
@@ -793,6 +981,125 @@ describe("executePlan deferred send (SCHD-01 — arm on a future sendAt, fire at
         ok: true,
         alreadyResolved: true,
       });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("moveScheduledPlan atomically replaces only the current callback; replay is idempotent and the stale callback cannot fire", async () => {
+    vi.useFakeTimers();
+    try {
+      const t = withDelivery();
+      await seedMailbox(t);
+      const originalAt = Date.now() + 60_000;
+      const movedAt = Date.now() + 120_000;
+      const planId = await seedSchedulable(t, originalAt);
+      const asT = t.withIdentity({ subject: TENANT });
+      await asT.mutation(api.cockpit.executePlan, { planId });
+
+      expect(
+        await asT.mutation(api.cockpit.moveScheduledPlan, { planId, sendAt: movedAt }),
+      ).toEqual({
+        result: "moved",
+      });
+      expect(
+        await asT.mutation(api.cockpit.moveScheduledPlan, { planId, sendAt: movedAt }),
+      ).toEqual({
+        result: "moved",
+      });
+
+      const moved = await t.run((ctx) => ctx.db.get(planId));
+      expect(moved?.status).toBe("scheduled");
+      expect(moved?.sendAt).toBe(movedAt);
+      const pending = (await listScheduled(t)).filter(
+        (s) => s.state.kind === "pending" && String(s.name).includes("startScheduledDelivery"),
+      );
+      expect(pending).toHaveLength(1);
+
+      vi.advanceTimersByTime(60_001);
+      await t.finishInProgressScheduledFunctions();
+      expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("scheduled");
+
+      vi.advanceTimersByTime(60_000);
+      await t.finishInProgressScheduledFunctions();
+      expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("delivering");
+
+      const audits = await t.run((ctx) =>
+        ctx.db
+          .query("audit")
+          .filter((q) => q.eq(q.field("eventType"), "plan.rescheduled"))
+          .collect(),
+      );
+      expect(audits).toHaveLength(1);
+      expect(audits[0]?.payload).toEqual({ planId });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("moveScheduledPlan reports already_fired after the scheduler wins and not_scheduled after cancel wins", async () => {
+    vi.useFakeTimers();
+    try {
+      const t = withDelivery();
+      await seedMailbox(t);
+      const asT = t.withIdentity({ subject: TENANT });
+
+      const firedId = await seedSchedulable(t, Date.now() + 60_000);
+      await asT.mutation(api.cockpit.executePlan, { planId: firedId });
+      vi.advanceTimersByTime(60_001);
+      await t.finishInProgressScheduledFunctions();
+      expect(
+        await asT.mutation(api.cockpit.moveScheduledPlan, {
+          planId: firedId,
+          sendAt: Date.now() + 60_000,
+        }),
+      ).toEqual({ result: "already_fired" });
+
+      const canceledId = await seedSchedulable(t, Date.now() + 60_000);
+      await asT.mutation(api.cockpit.executePlan, { planId: canceledId });
+      await asT.mutation(api.cockpit.cancelScheduledPlan, { planId: canceledId });
+      expect(
+        await asT.mutation(api.cockpit.moveScheduledPlan, {
+          planId: canceledId,
+          sendAt: Date.now() + 120_000,
+        }),
+      ).toEqual({ result: "not_scheduled" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("cancel/move concurrency resolves to one truthful schedule state without duplicate callbacks", async () => {
+    vi.useFakeTimers();
+    try {
+      const t = withDelivery();
+      await seedMailbox(t);
+      const planId = await seedSchedulable(t, Date.now() + 60_000);
+      const asT = t.withIdentity({ subject: TENANT });
+      await asT.mutation(api.cockpit.executePlan, { planId });
+
+      const [cancel, move] = await Promise.all([
+        asT.mutation(api.cockpit.cancelScheduledPlan, { planId }),
+        asT.mutation(api.cockpit.moveScheduledPlan, {
+          planId,
+          sendAt: Date.now() + 120_000,
+        }),
+      ]);
+      const row = await t.run((ctx) => ctx.db.get(planId));
+      const pending = (await listScheduled(t)).filter(
+        (s) => s.state.kind === "pending" && String(s.name).includes("startScheduledDelivery"),
+      );
+
+      if (row?.status === "canceled") {
+        expect(cancel).toEqual({ ok: true, canceled: true });
+        expect(["moved", "not_scheduled"]).toContain(move.result);
+        expect(pending).toHaveLength(0);
+      } else {
+        expect(row?.status).toBe("scheduled");
+        expect(move).toEqual({ result: "moved" });
+        expect(cancel).toEqual({ ok: true, alreadyResolved: true });
+        expect(pending).toHaveLength(1);
+      }
     } finally {
       vi.useRealTimers();
     }
@@ -936,6 +1243,19 @@ describe("executePlan deferred send (SCHD-01 — arm on a future sendAt, fire at
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  test("the delivery workflow routes sent, failed AND suppressed terminals through the idempotent plan progress helper", () => {
+    const src = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "deliverApprovedPlan.ts"),
+      "utf8",
+    );
+    // Three, since 19-05: a suppression discovered at send time is a PERMANENT terminal, not the
+    // resumable hold `awaiting_reauth` is — a bare `continue` would strand the row at `delivering`.
+    expect(src.match(/internal\.plans\.recordDeliveryTerminal/g)).toHaveLength(3);
+    expect(src).toContain('outcome: "sent"');
+    expect(src).toContain('outcome: "failed"');
+    expect(src).toContain('outcome: "suppressed"');
   });
 });
 
@@ -1085,5 +1405,533 @@ describe("skill-version attribution (IMPR-01 — propose stamps, executePlan cop
     const plan = await t.run((ctx) => ctx.db.get(planId));
     expect(plan?.status).toBe("proposed"); // still proposes
     expect(plan?.skillVersion).toBeUndefined(); // unattributable, but not a failure
+  });
+});
+
+// ── 19-05 PIPE-01: the pre-CAS refusals and the pre-join per-address suppression drop ─────────
+//
+// Both new refusals run BEFORE the `proposed → approved` CAS patch. A refusal AFTER it would leave
+// the plan `approved` with zero `requests` rows and no workflow — a half-approved state nothing can
+// resume (the 20-07 lesson), which is why every test here asserts `status === "proposed"` as well
+// as the returned reason. The suppression filter runs before `targets` is computed: `mode: "group"`
+// collapses recipients into ONE comma-joined string, after which a per-address drop is impossible.
+
+/** The DELIVERY components only. `withDelivery` additionally registers the audit aggregate and
+ *  the action-retrier, and loading that tree into every extra in-memory backend is precisely what
+ *  crashed the shared vitest fork in 19-02 — nothing below audits or runs a retrier. */
+function withFanoutOnly() {
+  const t = convexTest(schema, modules);
+  t.registerComponent("workflow", workflowSchema, workflowModules);
+  t.registerComponent("workflow/workpool", workpoolSchema, workpoolModules);
+  return t;
+}
+
+describe("executePlan suppression + postal-address gates (19-05, PIPE-01)", () => {
+  /** A suppressions row written straight to the table — the guard reads `suppressions` and NEVER
+   *  `contacts` (contacts-crm invariant 2), so a contact row would prove nothing here. */
+  const suppress = (t: ReturnType<typeof convexTest>, address: string, tenantId = TENANT) =>
+    t.run((ctx) =>
+      ctx.db.insert("suppressions", {
+        tenantId,
+        address, // already normalized by the caller, exactly as the write boundary would store it
+        suppressedAt: Date.now(),
+        source: "user-marked" as const,
+      }),
+    );
+
+  /** `sendAt` in the future ARMS the scheduler instead of starting the fan-out, which reaches every
+   *  assertion here (the filter, the counters and the request rows all land before that branch)
+   *  without registering the workflow components in yet another in-memory backend. Row 11 below
+   *  deliberately takes the immediate path so the drop is proven on BOTH arms. */
+  const seedEmailPlan = (
+    t: ReturnType<typeof convexTest>,
+    recipients: string[],
+    mode: "individual" | "group" = "individual",
+    deferred = true,
+  ) =>
+    t.run((ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: `thread_${crypto.randomUUID()}`,
+        status: "proposed",
+        recipients,
+        mode,
+        subject: "Q3 update",
+        body: "Here is the Q3 update.",
+        ...(deferred ? { sendAt: Date.now() + 3_600_000 } : {}),
+        createdAt: Date.now(),
+      }),
+    );
+
+  const seedTokensOnly = (t: ReturnType<typeof convexTest>) =>
+    t.run((ctx) =>
+      ctx.db.insert("gmailTokens", {
+        tenantId: TENANT,
+        refreshToken: "r",
+        scope: "s",
+        updatedAt: Date.now(),
+      }),
+    );
+
+  const FIVE = [
+    "one@example.com",
+    "two@example.com",
+    "three@example.com",
+    "four@example.com",
+    "five@example.com",
+  ];
+
+  // Row 16a. The tenant, not the deployment, is missing configuration — so the refusal names the
+  // field and leaves the plan exactly where the user can fix it and press Approve again.
+  test("no postalAddress: the plan refuses, stays proposed, and seeds ZERO request rows", async () => {
+    const t = convexTest(schema, modules);
+    await seedTokensOnly(t); // a mailbox but NO tenantProfiles row
+    const planId = await seedEmailPlan(t, FIVE, "individual", false);
+
+    const res = await t
+      .withIdentity({ subject: TENANT })
+      .mutation(api.cockpit.executePlan, { planId });
+
+    expect(res).toEqual({ ok: false, reason: "no_postal_address" });
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("proposed");
+    expect(await countRequests(t)).toHaveLength(0);
+    expect(await listScheduled(t)).toHaveLength(0);
+
+    // ...and a profile row carrying only whitespace is the same as no profile at all. Asserted in
+    // the SAME backend deliberately: an in-memory backend per assertion is what tips this fork over
+    // (19-02), and the second act only adds the row the first act proved was missing.
+    await seedPostalAddress(t, TENANT, "   ");
+    expect(
+      await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId }),
+    ).toEqual({ ok: false, reason: "no_postal_address" });
+    expect(await countRequests(t)).toHaveLength(0);
+  });
+
+  // Row 11. The counters are computed from the ALLOWED list, not the original one — otherwise the
+  // Approvals progress bar promises a fifth delivery that structurally cannot happen.
+  test("5 recipients, 1 suppressed: sends to four, names the withheld one, counters follow the ALLOWED set", async () => {
+    const t = withFanoutOnly();
+    await seedMailbox(t);
+    await suppress(t, "three@example.com");
+    const planId = await seedEmailPlan(t, FIVE, "individual", false); // the IMMEDIATE arm
+
+    const res = await t
+      .withIdentity({ subject: TENANT })
+      .mutation(api.cockpit.executePlan, { planId });
+
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.withheld).toEqual(["three@example.com"]);
+
+    const reqs = await countRequests(t);
+    expect(reqs).toHaveLength(4);
+    expect(reqs.map((r) => r.recipient).sort()).toEqual(
+      FIVE.filter((a) => a !== "three@example.com").sort(),
+    );
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan?.recipientTotal).toBe(4);
+    expect(plan?.queuedCount).toBe(4);
+    // 19-05 SC#5 made DURABLE (phase-19 UAT step 9b). The returned `withheld` above is consumed by
+    // a component this very transition unmounts — the ROW is the only copy a human can still read
+    // after the approve, and `withheldNote` renders it off exactly these two arrays.
+    expect(plan?.withheldRecipients).toEqual(["three@example.com"]);
+    expect(
+      withheldNote(plan?.recipients ?? [], plan?.withheldRecipients),
+      "the sentence a human reads on the report card",
+    ).toBe("Sent to 4. Withheld 1 who unsubscribed: three@example.com.");
+  });
+
+  test("nobody suppressed: no `withheld` key rides along on the ordinary send", async () => {
+    const t = convexTest(schema, modules);
+    await seedMailbox(t);
+    const planId = await seedEmailPlan(t, FIVE);
+
+    const res = await t
+      .withIdentity({ subject: TENANT })
+      .mutation(api.cockpit.executePlan, { planId });
+
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.withheld).toBeUndefined();
+    expect(await countRequests(t)).toHaveLength(5);
+    // ...and no `withheldRecipients` key on the row either: an ordinary send must render NOTHING,
+    // not an empty note element. `withheldNote` returns null for both absent and [].
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan?.withheldRecipients).toBeUndefined();
+    expect(withheldNote(plan?.recipients ?? [], plan?.withheldRecipients)).toBeNull();
+  });
+
+  // Row 12. THREE recipients, not two: a group whose only survivor is one address passes vacuously
+  // — the joined string would contain that survivor whether or not a drop ever happened.
+  test("group mode: the suppressed member is gone from the JOINED string before the row exists", async () => {
+    const t = convexTest(schema, modules);
+    await seedMailbox(t);
+    await suppress(t, "two@example.com");
+    const planId = await seedEmailPlan(
+      t,
+      ["one@example.com", "two@example.com", "three@example.com"],
+      "group",
+    );
+
+    const res = await t
+      .withIdentity({ subject: TENANT })
+      .mutation(api.cockpit.executePlan, { planId });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.withheld).toEqual(["two@example.com"]);
+
+    const reqs = await countRequests(t);
+    expect(reqs).toHaveLength(1); // group mode is ONE row, whatever the drop did
+    const joined = reqs[0]!.recipient;
+    expect(joined).toContain("one@example.com");
+    expect(joined).toContain("three@example.com");
+    expect(joined).not.toContain("two@example.com");
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.recipientTotal).toBe(1);
+  });
+
+  // Row 13. Every recipient suppressed is a governed STOP, not a zero-recipient send.
+  test("all recipients suppressed: refuses, stays proposed, seeds nothing, schedules nothing", async () => {
+    const t = convexTest(schema, modules);
+    await seedMailbox(t);
+    for (const a of ["one@example.com", "two@example.com"]) await suppress(t, a);
+    const planId = await seedEmailPlan(
+      t,
+      ["one@example.com", "two@example.com"],
+      "individual",
+      false,
+    );
+
+    const res = await t
+      .withIdentity({ subject: TENANT })
+      .mutation(api.cockpit.executePlan, { planId });
+
+    expect(res).toEqual({ ok: false, reason: "all_recipients_suppressed" });
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan?.status).toBe("proposed");
+    expect(plan?.scheduledFunctionId).toBeUndefined();
+    expect(await countRequests(t)).toHaveLength(0);
+    expect(await listScheduled(t)).toHaveLength(0);
+  });
+
+  // The `normalizeAddress` agreement, proven AT the guard rather than assumed from 19-01's unit
+  // test: a suppression stored for the normalized address blocks a differently-cased, padded
+  // recipient string sitting on the plan row.
+  test("matching is case- and whitespace-insensitive on BOTH sides of the guard", async () => {
+    const t = convexTest(schema, modules);
+    await seedMailbox(t);
+    await suppress(t, "bob@x.com"); // stored normalized, as the write boundary always stores it
+    const planId = await seedEmailPlan(t, [" Bob@X.com ", "keep@example.com"]);
+
+    const res = await t
+      .withIdentity({ subject: TENANT })
+      .mutation(api.cockpit.executePlan, { planId });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.withheld).toEqual(["bob@x.com"]);
+
+    const reqs = await countRequests(t);
+    expect(reqs).toHaveLength(1);
+    expect(reqs[0]!.recipient).toBe("keep@example.com");
+  });
+
+  // Row 7 regression, stated as a boundary rather than as a parallel copy of the arm suites above:
+  // the two new gates belong to the EMAIL arm alone. A memo has no mailbox and no footer, and
+  // requiring either of them would break a save that sends to nobody.
+  test("the memo arm approves with NO mailbox and NO postal address (the gates are email-only)", async () => {
+    const t = withFanoutOnly(); // persistNextStepMemo starts the vault-ingest workflow
+    const planId = await t.run((ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: "thread_memo_19_05",
+        kind: "memo",
+        status: "proposed",
+        body: "Call the supplier on Monday.",
+        createdAt: Date.now(),
+      }),
+    );
+
+    expect(
+      await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId }),
+    ).toEqual({ ok: true });
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("done");
+  });
+});
+
+// ── executePlan crm_write arm (19-06, ACTN-05 — VALIDATION rows 5 and 6) ──────────────────────
+//
+// Deliberately a PLAIN `convexTest`: the CRM arm registers no component and needs none. That is
+// itself an assertion — `workflow.start` throws without the workflow component registered, so a
+// regression that routed a CRM plan into the fan-out would fail here loudly rather than quietly
+// seeding rows. (19-02/19-05 lesson: every registerComponent loads a whole module tree into
+// another in-memory backend and crashes the shared vitest fork.)
+
+describe("executePlan crm_write arm (19-06, ACTN-05)", () => {
+  const OPS = [
+    { op: "addContact", email: "Bob@X.com", name: "Bob", origin: "user-entered" },
+    { op: "addContact", email: "ann@y.com", origin: "mailbox-resolved" },
+    {
+      op: "addFollowUp",
+      email: "bob@x.com",
+      note: "chase the quote",
+      dueAt: Date.now() + 86_400_000,
+    },
+    {
+      op: "addFollowUp",
+      email: "ann@y.com",
+      note: "send the deck",
+      dueAt: Date.now() + 172_800_000,
+    },
+    { op: "addFollowUp", email: "new@z.com", note: "intro call", dueAt: Date.now() + 259_200_000 },
+  ];
+
+  /** NO gmailTokens row and NO tenantProfiles row on purpose: the inline arm runs ABOVE both
+   *  pre-CAS email gates, so a CRM write must approve on a tenant that could not send at all. */
+  const seedCrmPlan = (t: ReturnType<typeof convexTest>, crmOperations: unknown[]) =>
+    t.run((ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: `crm_thread_${crypto.randomUUID()}`,
+        kind: "crm_write" as const,
+        status: "proposed" as const,
+        crmOperations,
+        createdAt: Date.now(),
+      }),
+    );
+
+  const rows = async (t: ReturnType<typeof convexTest>) =>
+    await t.run(async (ctx) => ({
+      contacts: await ctx.db.query("contacts").collect(),
+      followUps: await ctx.db.query("followUps").collect(),
+    }));
+
+  test("approving applies EVERY operation, sets done, seeds ZERO requests and sends nothing", async () => {
+    const t = convexTest(schema, modules);
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const planId = await seedCrmPlan(t, OPS);
+
+    expect(
+      await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId }),
+    ).toEqual({ ok: true });
+
+    const { contacts, followUps } = await rows(t);
+    // THREE contacts, not two: a follow-up upserts the contact it names, so `new@z.com` lands too.
+    expect(contacts.map((c) => c.email).sort()).toEqual(["ann@y.com", "bob@x.com", "new@z.com"]);
+    // The identity function ran — "Bob@X.com" and "bob@x.com" are ONE row, not two.
+    expect(contacts.filter((c) => c.email === "bob@x.com")).toHaveLength(1);
+    expect(contacts.find((c) => c.email === "bob@x.com")?.name).toBe("Bob");
+    expect(followUps).toHaveLength(3);
+    expect(followUps.every((f) => f.status === "open" && f.contactId !== undefined)).toBe(true);
+
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("done");
+    // The whole email spine is unreachable from this arm: no rows to fan out, no send.
+    expect(await countRequests(t)).toHaveLength(0);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+
+  test("a SECOND approve applies nothing — the CAS above the arm is the idempotency", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await seedCrmPlan(t, OPS);
+    const asUser = t.withIdentity({ subject: TENANT });
+
+    await asUser.mutation(api.cockpit.executePlan, { planId });
+    const first = await rows(t);
+    // The plan is `done`, so the second call returns before the switch ever runs.
+    expect(await asUser.mutation(api.cockpit.executePlan, { planId })).toEqual({
+      ok: true,
+      alreadyStarted: true,
+    });
+
+    const second = await rows(t);
+    expect(second.contacts).toHaveLength(first.contacts.length);
+    expect(second.followUps).toHaveLength(first.followUps.length);
+    expect(second.contacts).toHaveLength(3);
+    expect(second.followUps).toHaveLength(3);
+  });
+
+  // ATOMICITY, asserted rather than assumed. A Convex mutation is ONE serializable transaction, so
+  // a throw on operation 3 must discard operations 1 and 2 — that is what makes approve-all-or-none
+  // true with no saga and no compensation.
+  test("an invalid THIRD operation applies NONE of the first two, and the plan stays proposed", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await seedCrmPlan(t, [
+      OPS[0],
+      OPS[1],
+      { op: "addFollowUp", email: "bob@x.com", note: "no due date" },
+    ]);
+
+    await expect(
+      t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId }),
+    ).rejects.toThrow(/CRM_FOLLOWUP_DUEAT_REQUIRED/);
+
+    const { contacts, followUps } = await rows(t);
+    expect(contacts).toHaveLength(0);
+    expect(followUps).toHaveLength(0);
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("proposed");
+  });
+
+  // The apply boundary re-validates: `plans.crmOperations` is CONTENT PLANE and the row could have
+  // been revised after it was staged. An empty list reaching `done` would read to the user as
+  // "applied" while having written nothing.
+  test("an EMPTY operation list is refused at the apply boundary and the plan stays proposed", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await seedCrmPlan(t, []);
+
+    await expect(
+      t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId }),
+    ).rejects.toThrow(/CRM_OPERATIONS_EMPTY/);
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("proposed");
+  });
+
+  test("completeFollowUp and cancelFollowUp move existing rows, and a foreign ref is refused", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const contactId = await ctx.db.insert("contacts", {
+        tenantId: TENANT,
+        email: "bob@x.com",
+        origin: "user-entered" as const,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+      const mine = async (note: string) =>
+        await ctx.db.insert("followUps", {
+          tenantId: TENANT,
+          contactId,
+          note,
+          dueAt: Date.now(),
+          status: "open" as const,
+          createdAt: Date.now(),
+        });
+      return {
+        done: await mine("finish"),
+        cancel: await mine("drop"),
+        foreign: await ctx.db.insert("followUps", {
+          tenantId: "tenant_b",
+          note: "not yours",
+          dueAt: Date.now(),
+          status: "open" as const,
+          createdAt: Date.now(),
+        }),
+      };
+    });
+
+    const planId = await seedCrmPlan(t, [
+      { op: "completeFollowUp", followUpRef: seeded.done },
+      { op: "cancelFollowUp", followUpRef: seeded.cancel },
+    ]);
+    await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId });
+
+    const after = await t.run(async (ctx) => ({
+      done: await ctx.db.get(seeded.done),
+      cancel: await ctx.db.get(seeded.cancel),
+    }));
+    expect(after.done?.status).toBe("done");
+    expect(after.done?.completedAt).toBeTypeOf("number");
+    // "I decided not to" is not a touch — canceling must not stamp a completion.
+    expect(after.cancel?.status).toBe("canceled");
+    expect(after.cancel?.completedAt).toBeUndefined();
+
+    // A follow-up belonging to ANOTHER tenant is not reachable through an approved plan, and a ref
+    // that is not an id of this table refuses the same way rather than throwing out of db.get.
+    for (const followUpRef of [seeded.foreign, "not-an-id"]) {
+      const bad = await seedCrmPlan(t, [{ op: "completeFollowUp", followUpRef }]);
+      await expect(
+        t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId: bad }),
+      ).rejects.toThrow(/FOLLOWUP_NOT_FOUND/);
+    }
+    expect((await t.run((ctx) => ctx.db.get(seeded.foreign)))?.status).toBe("open");
+  });
+
+  test("a cross-tenant approve of a CRM plan writes nothing", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await seedCrmPlan(t, OPS);
+
+    await expect(
+      t.withIdentity({ subject: "tenant_b" }).mutation(api.cockpit.executePlan, { planId }),
+    ).rejects.toThrow(/plan not found/);
+    expect((await rows(t)).contacts).toHaveLength(0);
+  });
+});
+
+// ── executePlan finance_write arm (2026-08-10, the SIXTH action type) ─────────────────────────
+//
+// `auditCounts` IS registered here (the applier writes `finance.claims_applied`) but the WORKFLOW
+// component deliberately is NOT — so a regression that routed a figure plan into the gmail fan-out
+// would throw on `workflow.start` rather than quietly seeding rows, exactly as the CRM block above
+// relies on. NO gmailTokens and NO tenantProfiles row: the inline arm sits ABOVE both email gates,
+// so a figure update must approve on a tenant that could not send at all.
+
+describe("executePlan finance_write arm", () => {
+  const CLAIM = {
+    field: "cashOnHand",
+    value: 38_500,
+    origin: "stated" as const,
+    actor: "agent" as const,
+    basis: "user statement, turn 4",
+    observedAt: 1_754_000_000_000,
+    confidence: "high" as const,
+  };
+
+  const seedFinancePlan = (t: ReturnType<typeof convexTest>, financeClaims: unknown[]) =>
+    t.run((ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: `finance_thread_${crypto.randomUUID()}`,
+        kind: "finance_write" as const,
+        status: "proposed" as const,
+        financeClaims,
+        createdAt: Date.now(),
+      } as never),
+    );
+
+  const withAudit = () => {
+    const t = convexTest(schema, modules);
+    t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+    return t;
+  };
+
+  test("approving writes the figure, sets done, seeds ZERO requests and sends nothing", async () => {
+    const t = withAudit();
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const planId = await seedFinancePlan(t, [CLAIM]);
+
+    expect(
+      await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId }),
+      // The COUNT rides back on the finance arm (review I5) so the card can tell a real write from
+      // an approval that changed nothing.
+    ).toEqual({ ok: true, applied: 1 });
+
+    const rows = await t.run((ctx) => ctx.db.query("financeInputs").collect());
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.tenantId).toBe(TENANT);
+    expect(rows[0]?.valueUsd).toBe(38_500);
+    // The tenant came off the APPROVED PLAN ROW and the provenance survived the apply.
+    expect(rows[0]?.actor).toBe("agent");
+    expect(rows[0]?.statedAt).toBe(1_754_000_000_000);
+
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("done");
+    expect(await countRequests(t)).toHaveLength(0);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+
+  // The refusal has to reach the APPROVE path, not just the applier's unit test: a plan the user
+  // already agreed to must fail loudly and stay approvable-again rather than half-applying.
+  test("a scorecard-field claim refuses at the apply boundary and the plan stays proposed", async () => {
+    const t = withAudit();
+    const planId = await seedFinancePlan(t, [{ ...CLAIM, field: "cac", value: 1_400 }]);
+
+    // The refusal is now a RETURN, not a throw (2026-08-10): a throw would be redacted by Convex
+    // in production, leaving the approval card with no lever. Both halves still matter — the
+    // reason the card renders, AND that nothing was written.
+    const result = await t
+      .withIdentity({ subject: TENANT })
+      .mutation(api.cockpit.executePlan, { planId });
+    expect(result).toEqual({ ok: false, reason: "agent_cannot_update_figure" });
+
+    // Nothing was written: no evaluation row, no status flip, no audit row.
+    expect(await t.run((ctx) => ctx.db.query("evaluations").collect())).toHaveLength(0);
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("proposed");
+    expect(await t.run((ctx) => ctx.db.query("audit").collect())).toHaveLength(0);
   });
 });

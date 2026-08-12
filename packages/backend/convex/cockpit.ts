@@ -20,6 +20,8 @@ import {
   armFor,
   assertNever,
   classifyReviewDecision,
+  type FigureClaim,
+  normalizeAddress,
   notificationMessage,
   SEND_TIME_HORIZON_MS,
 } from "@pikar/core";
@@ -33,6 +35,12 @@ import { ConvexError, v } from "convex/values";
 import { api, components, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { type ActionCtx, internalMutation, type MutationCtx } from "./_generated/server";
+// 2026-08-10: the FINANCE terminal, direct-called for exactly the reasons the CRM one below is.
+import { applyFinanceClaims, type FinanceApplyRefusal } from "./cash";
+// 19-06 ACTN-05: the CRM terminal. Called DIRECTLY (not via runMutation) so the whole operation
+// list lands in the same serializable transaction as the proposed -> approved CAS, which is what
+// makes approve-all-or-none and double-approve-applies-once true without a saga.
+import { applyCrmOperations } from "./contacts";
 // The memo terminal (12-05): a memo-plan's Approve saves a vault doc instead of fanning out email.
 import { persistNextStepMemo } from "./evaluations";
 import { retrier, workflow } from "./index";
@@ -341,6 +349,28 @@ export const resolveRecipients = tenantAction({
  * phase ships (agentSteps) is the tool-step half of progress; assistant-token streaming is the
  * blocked half.
  */
+/**
+ * Is this the agent component rejecting a threadId that is not one of ITS `v.id("threads")`?
+ *
+ * TWO wordings, and BOTH must match or the fix is a no-op where it counts. `convex-test` raises
+ * `Validator error: Expected ID for table "threads", got \`…\``; the LIVE deployment raises
+ * `ArgumentValidationError: Value does not match validator. Path: .threadId … Validator:
+ * v.id("threads")`. Matching only the harness's wording is how the first attempt at this fix
+ * shipped GREEN and still crashed the real cockpit — the test proved the harness, not production.
+ * Any change here must keep `cockpitThreadDegrade.test.ts`'s verbatim-message assertions passing.
+ *
+ * ponytail: matched on the message because the host cannot normalize a COMPONENT's table id
+ * (`ctx.db.normalizeId` only sees app tables) and every agent-side lookup takes the same
+ * `v.id("threads")` that is doing the rejecting. Upgrade path: if @convex-dev/agent ever exposes a
+ * non-throwing thread lookup, call it instead of catching.
+ */
+export function isNonAgentThreadIdError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const message = error.message;
+  if (/Expected ID for table "threads"/.test(message)) return true;
+  return /ArgumentValidationError/.test(message) && /Validator:\s*v\.id\("threads"\)/.test(message);
+}
+
 export const listThreadMessages = tenantQuery({
   args: { threadId: v.string(), paginationOpts: paginationOptsValidator },
   handler: async (ctx, { threadId, paginationOpts }) => {
@@ -349,7 +379,21 @@ export const listThreadMessages = tenantQuery({
       .withIndex("by_thread", (q) => q.eq("tenantId", ctx.tenantId).eq("threadId", threadId))
       .unique();
     if (!owns) return { page: [], isDone: true, continueCursor: "" };
-    return await listMessages(ctx, components.agent, { threadId, paginationOpts });
+    // The guard above answers AUTHORIZATION; it does not answer EXISTENCE. `plans.threadId` is a
+    // plain string and is NOT guaranteed to name an agent-component thread: `smoke:seedCockpitPlan`
+    // writes `smoke-attach-<uuid>`, and legacy rows predate the thread they point at. The component
+    // validates `v.id("threads")` and THROWS on anything else — uncaught in the browser, that takes
+    // the ENTIRE cockpit page down, and it is reachable from the `?thread=` URL parameter (found in
+    // the 26-05 UAT). Owning a plan whose thread was never minted means exactly what owning no
+    // thread means: there are no messages to show. Both must degrade to the SAME empty page.
+    try {
+      return await listMessages(ctx, components.agent, { threadId, paginationOpts });
+    } catch (error) {
+      // Deliberately NARROW: only the id-shape rejection degrades. Every other failure still
+      // throws, so a real component fault is never masked by this catch.
+      if (isNonAgentThreadIdError(error)) return { page: [], isDone: true, continueCursor: "" };
+      throw error;
+    }
   },
 });
 
@@ -458,6 +502,8 @@ type FanoutArgs = {
   requestIds: Id<"requests">[];
   correlationIds: string[];
   planCid: string;
+  /** Stale-callback token: a moved schedule changes sendAt, so the old callback must no-op. */
+  scheduledFor?: number;
 };
 
 /**
@@ -496,8 +542,23 @@ export const startScheduledDelivery = internalMutation({
     requestIds: v.array(v.id("requests")),
     correlationIds: v.array(v.string()),
     planCid: v.string(),
+    scheduledFor: v.optional(v.number()),
   },
-  handler: (ctx, args) => startFanout(ctx, args),
+  handler: async (ctx, args): Promise<string | null> => {
+    const plan = await ctx.db.get(args.planId);
+    if (!plan || plan.tenantId !== args.tenantId || plan.status !== "scheduled") return null;
+    // Current callbacks carry their exact scheduled instant. Legacy callbacks do not, so their
+    // safe fallback is "the row is still due now". After a move the row's sendAt is in the future,
+    // which also makes an already-running legacy callback lose the transaction race honestly.
+    if (
+      args.scheduledFor !== undefined
+        ? plan.sendAt !== args.scheduledFor
+        : plan.sendAt === undefined || plan.sendAt > Date.now()
+    ) {
+      return null;
+    }
+    return startFanout(ctx, args);
+  },
 });
 
 /**
@@ -516,6 +577,20 @@ const _ARM_TABLE = {
   // 20-07 MEDIA-01: the arm's SECOND occupant. Research Open Question 1, answered GENERALIZE — see
   // the `Arm` doc comment in @pikar/core/actionType.
   media: "externalAction",
+  // 19-06 ACTN-05: an `inline` member needs NO `EXTERNAL_TARGETS` entry, and must not be given
+  // one. `ExternalActionType` below is DERIVED from this table, so `crm_write` is excluded by
+  // construction — adding a target for it would not compile.
+  crm_write: "inline",
+  // 2026-08-10: the arm's THIRD occupant, and an `inline` member for the same reason `crm_write` is
+  // one — a figure update writes OUR OWN `financeInputs` rows, so there is no fetch and no
+  // `EXTERNAL_TARGETS` entry to give it.
+  finance_write: "inline",
+  // 17-05 (ACTN-02 gap closure): the `externalAction` arm's THIRD occupant. An update or a
+  // delete against Google/Graph is a provider HTTP call, so it is the same arm `calendar_event`
+  // takes — and it therefore NEEDS an `EXTERNAL_TARGETS` entry below, which is exactly the
+  // compile error the DERIVED `ExternalActionType` exists to produce. That entry is an
+  // intentionally inert stub until Plan 17-08.
+  calendar_manage: "externalAction",
 } as const satisfies Record<ActionType, Arm>;
 
 /** The action types whose arm is `externalAction`, DERIVED from the table above rather than
@@ -568,6 +643,28 @@ const EXTERNAL_TARGETS = {
       { tenantId: a.tenantId, batchId: a.batchId ?? "" },
       { onComplete: internal.mediaComplete.onSubmitComplete },
     ),
+  /**
+   * 17-05 — AN INTENTIONALLY UNREACHABLE STUB, and the 17-01 inert-arm precedent verbatim.
+   *
+   * `calendar_manage` is bound to `externalAction` in `_ARM_TABLE` above, so the DERIVED
+   * `ExternalActionType` makes this table incomplete without a member here — a COMPILE error,
+   * which is the whole point of deriving it. The alternative was to leave the arm bind out until
+   * 17-08, which would have meant four waves of code that does not compile.
+   *
+   * It is unreachable TODAY because nothing can stage a `calendar_manage` plan: no tool writes
+   * `kind: "calendar_manage"` until Plan 17-09. If it is ever reached it THROWS, and a throw
+   * inside `executePlan` aborts the whole Convex mutation — so the `status: "approved"` patch a
+   * few lines below rolls back with it and the plan is left exactly as the human found it. That
+   * rollback is the mechanism behind "no run id and no plan-state patch", and `cockpit.test.ts`
+   * asserts it against a manually seeded row rather than trusting the sentence.
+   *
+   * **PLAN 17-08 REPLACES THIS EXACT MEMBER** with the real `retrier.run(ctx,
+   * internal.calendar.manageEvent, ...)` thunk plus its `onComplete` terminal. One member, one
+   * edit, one place — the same hand-off 17-01 made to 17-04 for `calendar_event`.
+   */
+  calendar_manage: () => {
+    throw new Error("calendar manage not wired (17-08)");
+  },
 } satisfies Record<ExternalActionType, (ctx: MutationCtx, a: ExternalArgs) => Promise<unknown>>;
 
 type ExternalArgs = {
@@ -594,7 +691,19 @@ export const executePlan = tenantMutation({
     ctx,
     { planId },
   ): Promise<
-    | { ok: true; workflowId?: string; alreadyStarted?: true; scheduled?: true }
+    // 19-05: `withheld` names the suppressed addresses this approve DROPPED. A partial send is
+    // still `ok: true` — the user must be told who was left out, not stopped from mailing the rest.
+    | {
+        ok: true;
+        workflowId?: string;
+        alreadyStarted?: true;
+        scheduled?: true;
+        withheld?: string[];
+        // finance_write only: how many figures actually moved. `0` means every claim was already
+        // superseded by a newer stored figure — the approval succeeded and changed NOTHING, and
+        // both cards say "already up to date" rather than implying a write (review I5).
+        applied?: number;
+      }
     | {
         ok: false;
         reason:
@@ -605,7 +714,15 @@ export const executePlan = tenantMutation({
           // pull — rewrite a line, cut blocks, drop a tier, wait for tomorrow, or call the operator.
           // Plan 20-10's canvas renders them. Only BUGS throw; a refusal returns.
           | "no_deck"
-          | ReserveRefusal;
+          // 19-05 PIPE-01, the two CAN-SPAM stops. Both name a lever too: fill in the postal
+          // address on /dashboard/profile, or pick recipients who have not unsubscribed.
+          | "no_postal_address"
+          | "all_recipients_suppressed"
+          | ReserveRefusal
+          // 2026-08-10: the finance_write arm's two refusals — `applyFinanceClaims` RETURNS them
+          // rather than throwing (its own doc comment explains why), so this dispatcher's ONLY job
+          // is to pass the reason through unmodified to the card. Only bugs throw.
+          | FinanceApplyRefusal;
       }
   > => {
     const plan = await ctx.db.get(planId);
@@ -628,10 +745,45 @@ export const executePlan = tenantMutation({
     const armType = armFor(actionTypeOf(plan.kind));
     switch (armType) {
       case "inline": {
-        // memo (12-05 BEVL-02): Approve means SAVE, not send — one transactional write, so a
-        // workflow would add rows and latency for nothing. Nothing below (seed requests →
-        // startFanout → gmail.send) is reachable from here; the double-approve CAS above already
-        // makes it exactly-once. See evaluations.ts.
+        // Approve means APPLY or SAVE, never send — one transactional write, so a workflow would
+        // add rows and latency for nothing. Nothing below (seed requests → startFanout →
+        // gmail.send) is reachable from here; the double-approve CAS above already makes it
+        // exactly-once. The arm sits ABOVE the Gmail pre-check on purpose, so neither occupant
+        // requires a connected mailbox.
+        //
+        // 19-06 ACTN-05: the arm's SECOND occupant. `applyCrmOperations` re-validates
+        // `plan.crmOperations` through `parseCrmOperations` (the plan row is content plane and
+        // could have been revised after staging) and performs every write through the SAME
+        // helpers `contacts.ts`'s public mutations use — one copy of the identity/upsert rule.
+        // A Convex mutation is serializable, so a throw part-way through discards the whole list:
+        // approve-all-or-none with no saga and no compensation.
+        if (actionTypeOf(plan.kind) === "crm_write") {
+          await applyCrmOperations(ctx, plan.tenantId, plan.crmOperations);
+          await ctx.db.patch(planId, { status: "done" });
+          return { ok: true };
+        }
+        // 2026-08-10: the arm's THIRD occupant, and the same shape as `crm_write` above —
+        // `applyFinanceClaims` re-validates every staged claim (the plan row is content plane) and
+        // writes through the SAME `writeFigureRow` the ungated human edit uses, so there is one
+        // copy of the store-routing rule. A throw part-way through discards the whole list.
+        if (actionTypeOf(plan.kind) === "finance_write") {
+          // tenantId off the APPROVED PLAN ROW, never model-supplied.
+          const applied = await applyFinanceClaims(
+            ctx,
+            plan.tenantId,
+            plan.financeClaims as FigureClaim[],
+          );
+          // A GOVERNED STOP, not a bug: the plan stays `proposed` (no patch below), so the human
+          // sees the refusal on the card and can re-approve once the lever is pulled. Nothing was
+          // written — `applyFinanceClaims` validates the whole claim list before writing any of it.
+          if (!applied.ok) return { ok: false, reason: applied.reason };
+          await ctx.db.patch(planId, { status: "done" });
+          // The COUNT, not a boolean: `applied: 0` is a real outcome (every claim older than what
+          // is stored), and a card that says "approved" over zero writes is the same dishonesty
+          // the figure tiles exist to avoid.
+          return { ok: true, applied: applied.applied };
+        }
+        // memo (12-05 BEVL-02): Approve means SAVE. See evaluations.ts.
         await ctx.db.patch(planId, { status: "done" });
         await persistNextStepMemo(ctx, plan);
         return { ok: true };
@@ -728,6 +880,17 @@ export const executePlan = tenantMutation({
     const tokens = await ctx.runQuery(internal.gmailAuth.getTokens, { tenantId: ctx.tenantId });
     if (!tokens) return { ok: false, reason: "gmail_not_connected" };
 
+    // 19-05 SC#6 (CAN-SPAM): every product email must carry the tenant's physical postal address,
+    // and `gmail.send` refuses to build a footer without one. Refuse HERE — at the human gate,
+    // where the missing field is nameable and fixable — instead of letting every recipient's send
+    // throw at delivery time. The sibling of the `gmail_not_connected` fail-before-mutate guard.
+    const profile = await ctx.db
+      .query("tenantProfiles")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
+      .unique();
+    if ((profile?.postalAddress ?? "").trim() === "")
+      return { ok: false, reason: "no_postal_address" };
+
     // Far-future cap (SCHD-01): the AUTHORITATIVE gate. A beyond-horizon sendAt would fire past the
     // Gmail token's life (design/scheduled-send.md) → dead token. Refuse HERE — the one place the
     // schedule-vs-immediate decision is made — so every write path (NL setSendTime, picker
@@ -737,14 +900,49 @@ export const executePlan = tenantMutation({
     if (plan.sendAt !== undefined && plan.sendAt > Date.now() + SEND_TIME_HORIZON_MS)
       return { ok: false, reason: "send_time_too_far" };
 
+    // 19-05 SC#5, THE PER-ADDRESS DROP — and it has to be HERE, before the join below:
+    // `mode === "group"` collapses every recipient into ONE comma-joined string, after which a
+    // suppressed member is baked into that string and cannot be removed by anything downstream
+    // (`isSuppressed` can only refuse the WHOLE row — see the ponytail note in contacts.ts).
+    //
+    // It reads `suppressions` ONLY (never `contacts`), which is what makes a contacts bug unable
+    // to un-suppress anyone. One indexed read per address, no scan.
+    //
+    // EVERY refusal above and below runs BEFORE the CAS patch. A refusal after it would leave the
+    // plan `approved` with zero `requests` rows and no workflow — a half-approved state nothing
+    // can resume (the 20-07 lesson).
+    const allRecipients = plan.recipients ?? [];
+    const withheld = await ctx.runQuery(internal.contacts.suppressedAmong, {
+      tenantId: ctx.tenantId,
+      addresses: allRecipients,
+    });
+    const suppressed = new Set(withheld);
+    const recipients = allRecipients.filter((r) => !suppressed.has(normalizeAddress(r)));
+    if (recipients.length === 0) return { ok: false, reason: "all_recipients_suppressed" };
+
     // CAS: flip first. A second concurrent tx re-reads "approved" above and no-ops.
     await ctx.db.patch(planId, { status: "approved" });
 
-    const recipients = plan.recipients ?? [];
     const mode = plan.mode ?? "individual";
     const subject = plan.subject ?? "";
     const body = plan.body ?? "";
     const targets = mode === "group" ? [recipients.join(", ")] : recipients;
+
+    // Phase 26 exact-progress baseline. These counters describe frozen delivery work units (one
+    // request row per target), not raw addresses. Their presence plus counterComplete=true is what
+    // lets Approvals distinguish new exact rows from bounded legacy fallback.
+    await ctx.db.patch(planId, {
+      recipientTotal: targets.length,
+      queuedCount: targets.length,
+      sentCount: 0,
+      failedCount: 0,
+      counterComplete: true,
+      // SC#5's user-facing half, DURABLY (phase-19 UAT step 9b). The `withheld` array is also
+      // returned below, but that return value is consumed by a component this very transition
+      // unmounts — the row is the only copy a human can still read afterwards. Written in the
+      // SAME patch as the counters it explains, and omitted entirely when nobody was dropped.
+      ...(withheld.length > 0 ? { withheldRecipients: withheld } : {}),
+    });
 
     // Materialize the plan's generated attachments (inline refs on the plan row → the pre-approval
     // source of truth) into `attachments` table rows ONCE, then share their ids across EVERY
@@ -815,17 +1013,18 @@ export const executePlan = tenantMutation({
     // (seeded above) but nothing starts. sendAt unset OR already past ⇒ start immediately (today's
     // behavior, RESEARCH Open Question 2). At fire, startScheduledDelivery runs the SAME startFanout.
     if (plan.sendAt !== undefined && plan.sendAt > Date.now()) {
+      args.scheduledFor = plan.sendAt;
       const scheduledFunctionId = await ctx.scheduler.runAt(
         plan.sendAt,
         internal.cockpit.startScheduledDelivery,
         args,
       );
       await ctx.db.patch(planId, { status: "scheduled", scheduledFunctionId });
-      return { ok: true, scheduled: true };
+      return { ok: true, scheduled: true, ...(withheld.length > 0 ? { withheld } : {}) };
     }
 
     const workflowId = await startFanout(ctx, args);
-    return { ok: true, workflowId };
+    return { ok: true, workflowId, ...(withheld.length > 0 ? { withheld } : {}) };
   },
 });
 
@@ -847,7 +1046,12 @@ export const cancelScheduledPlan = tenantMutation({
     if (!plan || plan.tenantId !== ctx.tenantId) throw new Error("plan not found"); // no cross-tenant cancel
     if (plan.status !== "scheduled") return { ok: true, alreadyResolved: true }; // CAS: cancel() would throw on a fired id
     if (plan.scheduledFunctionId) await ctx.scheduler.cancel(plan.scheduledFunctionId);
-    await ctx.db.patch(planId, { status: "canceled" });
+    await ctx.db.patch(planId, {
+      status: "canceled",
+      cancelKind: "scheduled_cancel",
+      canceledAt: Date.now(),
+      scheduledFunctionId: undefined,
+    });
     await ctx.runMutation(internal.audit.log, {
       tenantId: ctx.tenantId,
       correlationId: plan.correlationId ?? String(planId),
@@ -856,6 +1060,97 @@ export const cancelScheduledPlan = tenantMutation({
       payload: { planId }, // refs only (§4) — never subject/body/recipients/sendAt
     });
     return { ok: true, canceled: true };
+  },
+});
+
+/**
+ * Discard an awaiting approval. This is the only proposed→canceled transition and its provenance
+ * is permanent: reschedulePlan explicitly excludes `cancelKind:"discarded"`. A stale scheduler
+ * handle is canceled defensively before it is cleared, although a valid proposed row has none.
+ */
+export const discardPlan = tenantMutation({
+  args: { planId: v.id("plans") },
+  handler: async (
+    ctx,
+    { planId },
+  ): Promise<{ ok: true; discarded?: true; alreadyResolved?: true }> => {
+    const plan = await ctx.db.get(planId);
+    if (!plan || plan.tenantId !== ctx.tenantId) throw new Error("plan not found");
+    if (plan.status !== "proposed") return { ok: true, alreadyResolved: true };
+
+    if (plan.scheduledFunctionId) await ctx.scheduler.cancel(plan.scheduledFunctionId);
+    await ctx.db.patch(planId, {
+      status: "canceled",
+      cancelKind: "discarded",
+      canceledAt: Date.now(),
+      scheduledFunctionId: undefined,
+    });
+    await ctx.runMutation(internal.audit.log, {
+      tenantId: ctx.tenantId,
+      correlationId: plan.correlationId ?? String(planId),
+      eventType: "plan.discarded",
+      actor: ctx.tenantId,
+      payload: { planId, kind: "discarded" },
+    });
+    return { ok: true, discarded: true };
+  },
+});
+
+/**
+ * Atomically replace the callback for the current live schedule. Both this mutation and the
+ * callback read/write the plan row, so Convex serializability chooses one winner: if the callback
+ * wins the caller sees `already_fired`; if this mutation wins the old callback is canceled and its
+ * `scheduledFor` token can no longer match. Replaying the same instant is a no-write success.
+ */
+export const moveScheduledPlan = tenantMutation({
+  args: { planId: v.id("plans"), sendAt: v.number() },
+  handler: async (
+    ctx,
+    { planId, sendAt },
+  ): Promise<{ result: "moved" | "already_fired" | "not_scheduled" }> => {
+    const plan = await ctx.db.get(planId);
+    if (!plan || plan.tenantId !== ctx.tenantId) throw new Error("plan not found");
+    if (plan.status === "delivering" || plan.status === "done") {
+      return { result: "already_fired" };
+    }
+    if (plan.status !== "scheduled" || !plan.scheduledFunctionId) {
+      return { result: "not_scheduled" };
+    }
+    const now = Date.now();
+    if (sendAt <= now || sendAt > now + SEND_TIME_HORIZON_MS) {
+      throw new Error("move requires a future time within the send horizon");
+    }
+    if (plan.sendAt === sendAt) return { result: "moved" };
+
+    const requests = await ctx.db
+      .query("requests")
+      .withIndex("by_plan", (q) => q.eq("planId", planId))
+      .collect();
+    if (requests.length === 0) return { result: "not_scheduled" };
+
+    await ctx.scheduler.cancel(plan.scheduledFunctionId);
+    const planCid = crypto.randomUUID();
+    const scheduledFunctionId = await ctx.scheduler.runAt(
+      sendAt,
+      internal.cockpit.startScheduledDelivery,
+      {
+        planId,
+        tenantId: ctx.tenantId,
+        requestIds: requests.map((request) => request._id),
+        correlationIds: requests.map((request) => request.correlationId),
+        planCid,
+        scheduledFor: sendAt,
+      },
+    );
+    await ctx.db.patch(planId, { sendAt, scheduledFunctionId });
+    await ctx.runMutation(internal.audit.log, {
+      tenantId: ctx.tenantId,
+      correlationId: plan.correlationId ?? String(planId),
+      eventType: "plan.rescheduled",
+      actor: ctx.tenantId,
+      payload: { planId },
+    });
+    return { result: "moved" };
   },
 });
 
@@ -882,7 +1177,9 @@ export const reschedulePlan = tenantMutation({
   > => {
     const plan = await ctx.db.get(planId);
     if (!plan || plan.tenantId !== ctx.tenantId) throw new Error("plan not found"); // no cross-tenant reschedule
-    if (plan.status !== "canceled") return { ok: true, alreadyResolved: true }; // canceled stays terminal unless re-scheduled; double-click no-ops
+    if (plan.status !== "canceled" || plan.cancelKind === "discarded") {
+      return { ok: true, alreadyResolved: true };
+    }
     // The re-ask: a reschedule OUT of canceled requires a future time — write NOTHING on a past/absent
     // sendAt (no orphan delete, no status flip, no audit) so a stale time can never drive a silent send.
     if (plan.sendAt === undefined || plan.sendAt <= Date.now()) {
@@ -896,7 +1193,12 @@ export const reschedulePlan = tenantMutation({
       .collect();
     for (const r of orphans) await ctx.db.delete(r._id);
     // Flip to "proposed" — the EXISTING executePlan re-approve path re-seeds + re-arms (no new arm site).
-    await ctx.db.patch(planId, { status: "proposed" });
+    await ctx.db.patch(planId, {
+      status: "proposed",
+      cancelKind: undefined,
+      canceledAt: undefined,
+      scheduledFunctionId: undefined,
+    });
     await ctx.runMutation(internal.audit.log, {
       tenantId: ctx.tenantId,
       correlationId: plan.correlationId ?? String(planId),

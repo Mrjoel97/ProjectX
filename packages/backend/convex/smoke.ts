@@ -7,7 +7,7 @@
 //
 // All payloads are synthetic (`{ note: "synthetic" }`) — never raw content.
 import type { WorkflowId } from "@convex-dev/workflow";
-import type { EvidenceVerdict } from "@pikar/core";
+import { type BusinessBlueprint, type EvidenceVerdict, serializeBlueprint } from "@pikar/core";
 import { categoryFor } from "@pikar/vault";
 import {
   DOC_GAP_PLAYBOOK,
@@ -26,6 +26,7 @@ import {
 } from "./_generated/server";
 import { DAILY_BUDGET_CENTS, rateLimiter } from "./guardrails";
 import { workflow } from "./index";
+import { contentHash } from "./lib/hash";
 import { reviewEventValidator } from "./review";
 
 // --- Pattern 1: dead-letter via onComplete ---------------------------------
@@ -374,6 +375,81 @@ export const seedCockpitPlan = internalMutation({
   },
 });
 
+// --- 17.1-10: Blueprint-bearing golden-eval tenant --------------------------
+
+const GOLDEN_BLUEPRINT_NEEDLE = "evalblpr";
+const GOLDEN_EVAL_TENANT = /^eval-[0-9a-f]{8}$/;
+
+/**
+ * Seed ONE confirmed Blueprint for the runner's random throwaway tenant before its first model
+ * call. This is deliberately narrower than a generic test writer: non-eval tenants, existing
+ * profile state, and foreign/not-ready source ids all fail closed.
+ */
+export const seedGoldenEvalBlueprint = internalMutation({
+  args: {
+    tenantId: v.string(),
+    sourceDocIds: v.array(v.id("vaultDocuments")),
+  },
+  handler: async (ctx, { tenantId, sourceDocIds }) => {
+    if (!GOLDEN_EVAL_TENANT.test(tenantId)) throw new Error("EVAL_TENANT_REQUIRED");
+
+    const existingProfile = await ctx.db
+      .query("tenantProfiles")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .unique();
+    if (existingProfile !== null) throw new Error("EVAL_BLUEPRINT_ALREADY_SEEDED");
+
+    for (const sourceDocId of sourceDocIds) {
+      const source = await ctx.db.get(sourceDocId);
+      if (source?.tenantId !== tenantId || source.status !== "ready") {
+        throw new Error("EVAL_BLUEPRINT_SOURCE_INVALID");
+      }
+    }
+
+    const blueprint: BusinessBlueprint = {
+      name: { values: [`Northwind ${GOLDEN_BLUEPRINT_NEEDLE} Logistics`], origin: "stated" },
+      oneLineDescription: {
+        values: ["A logistics operations business used by the golden evaluation."],
+        origin: "stated",
+      },
+      stage: { values: ["growing"], origin: "stated" },
+      tier: { values: ["solopreneur"], origin: "stated" },
+      offering: null,
+      targetCustomer: null,
+      revenueModel: null,
+      bindingConstraint: null,
+      primaryGoals: null,
+      knownConstraints: null,
+      entities: null,
+    };
+    const text = serializeBlueprint(blueprint);
+    const now = Date.now();
+    const docId = await ctx.db.insert("vaultDocuments", {
+      tenantId,
+      title: "Business blueprint",
+      kind: "business_blueprint",
+      category: categoryFor({ source: "agent" }),
+      source: "agent",
+      mimeType: "text/markdown",
+      size: new TextEncoder().encode(text).length,
+      contentHash: await contentHash(text),
+      text,
+      status: "ready",
+      createdAt: now,
+    });
+    await ctx.db.insert("tenantProfiles", {
+      tenantId,
+      tier: "solopreneur",
+      tierSource: "confirmed",
+      derivedAt: now,
+      blueprintSourceDocIds: sourceDocIds,
+      blueprintDocId: docId,
+      blueprintConfirmedAt: now,
+    });
+    return { docId, sourceDocCount: sourceDocIds.length, needle: GOLDEN_BLUEPRINT_NEEDLE };
+  },
+});
+
 // --- 03.7-02: the inbox fixture seam (CKPT-04) -------------------------------
 // gmail.listInbox / fetchInboxBodies check `inboxFixtures` BEFORE freshAccessToken, so a
 // seeded row makes the whole briefing path run with NO Gmail token and no network. This is
@@ -674,6 +750,68 @@ export const specialistCostForThread = internalQuery({
   args: { tenantId: v.string(), threadId: v.string() },
   handler: async (ctx, { tenantId, threadId }): Promise<number> =>
     (await researchTrailForThread(ctx, tenantId, threadId, null)).costUsd,
+});
+
+/** A correlation carries at most a handful of lineage rows (dispatched / completed / refused). The
+ *  cap is a runaway guard on a deliberately cross-tenant index, not a page size. */
+const RUNTIME_ATTRIBUTION_MAX_ROWS = 50;
+
+/**
+ * 21-03 (SKILL-01): "which registry row did this specialist actually run?", answered off the
+ * EXISTING `subagent.completed` lineage — no new table, no new index, no new event type.
+ *
+ * BOUNDED and READ-ONLY by construction: an `internalQuery` cannot write, `by_correlation` is
+ * `.take(RUNTIME_ATTRIBUTION_MAX_ROWS)`, and the tenant equality is re-checked in the loop because
+ * that index is deliberately cross-tenant (`researchTrailForThread` above carries the same guard
+ * and the same reason — a synthetic correlation collision must not join another tenant's trace).
+ *
+ * Returns REFS ONLY: scope, row id, name, version, body hash. There is deliberately no branch that
+ * can return a body, an authored adaptation, the prompt, the reply, or a source URL — the audit
+ * payload it reads carries none of those either (CLAUDE.md §4), and this is the read an operator
+ * runs, so it must not become the one place the boundary leaks.
+ */
+export const userSkillRuntimeAttribution = internalQuery({
+  args: { tenantId: v.string(), correlationId: v.string() },
+  handler: async (
+    ctx,
+    { tenantId, correlationId },
+  ): Promise<{
+    skillScope: string;
+    skillId: string;
+    skillName: string;
+    skillVersion: number;
+    skillBodyHash: string;
+  } | null> => {
+    const rows = await ctx.db
+      .query("audit")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId))
+      .take(RUNTIME_ATTRIBUTION_MAX_ROWS);
+
+    for (const row of rows) {
+      if (row.tenantId !== tenantId) continue;
+      if (row.eventType !== "subagent.completed") continue;
+      const p = row.payload ?? {};
+      // Every field is read with its expected type or the row is skipped: a `subagent.completed`
+      // written before this plan carries no attribution, and reporting a partial identity would be
+      // worse than reporting none.
+      if (
+        typeof p.skillScope === "string" &&
+        typeof p.skillId === "string" &&
+        typeof p.skillName === "string" &&
+        typeof p.skillVersion === "number" &&
+        typeof p.skillBodyHash === "string"
+      ) {
+        return {
+          skillScope: p.skillScope,
+          skillId: p.skillId,
+          skillName: p.skillName,
+          skillVersion: p.skillVersion,
+          skillBodyHash: p.skillBodyHash,
+        };
+      }
+    }
+    return null;
+  },
 });
 
 /**

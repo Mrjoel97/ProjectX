@@ -82,7 +82,9 @@ const PRESET_TITLE = {
 const SLOT_LABEL = {
   oneLineDescription: "what your business does",
   headcount: "how many people work on this",
-  paidStaff: "how many of them are paid staff",
+  // "besides you" is load-bearing — see TierFacts.paidStaff. "how many of THEM" counted the
+  // founder, so a solopreneur on their own payroll answered 1 and derived as `startup`.
+  paidStaff: "how many paid staff you have besides yourself",
   revenueStage: "where you are on revenue",
   funding: "how it's funded",
   yearsOperating: "how long it's been running",

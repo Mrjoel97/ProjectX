@@ -426,6 +426,55 @@ describe("blueprint top entities", () => {
   });
 });
 
+describe("golden-eval confirmed Blueprint seed", () => {
+  test("is eval-only, source-owned, one-shot, and renders a non-vacuous standing spine", async () => {
+    const t = makeTest();
+    const sourceDocId = await insertVaultDocument(t, {
+      tenantId: "eval-1234abcd",
+      kind: "brief",
+      text: "Northwind logistics source",
+    });
+
+    await expect(
+      t.mutation(internal.smoke.seedGoldenEvalBlueprint, {
+        tenantId: "owner-tenant",
+        sourceDocIds: [sourceDocId],
+      }),
+    ).rejects.toThrow("EVAL_TENANT_REQUIRED");
+    await expect(
+      t.mutation(internal.smoke.seedGoldenEvalBlueprint, {
+        tenantId: "eval-1234abcd",
+        sourceDocIds: [
+          await insertVaultDocument(t, {
+            tenantId: "foreign-tenant",
+            kind: "brief",
+            text: "foreign source",
+          }),
+        ],
+      }),
+    ).rejects.toThrow("EVAL_BLUEPRINT_SOURCE_INVALID");
+
+    const seeded = await t.mutation(internal.smoke.seedGoldenEvalBlueprint, {
+      tenantId: "eval-1234abcd",
+      sourceDocIds: [sourceDocId],
+    });
+    const spine = await t.query(internal.blueprint.spineForTenant, {
+      tenantId: "eval-1234abcd",
+    });
+    expect(seeded.sourceDocCount).toBe(1);
+    expect(seeded.needle).toBe("evalblpr");
+    expect(spine).toContain("evalblpr");
+    expect(spine).not.toContain("documents added since this was confirmed");
+
+    await expect(
+      t.mutation(internal.smoke.seedGoldenEvalBlueprint, {
+        tenantId: "eval-1234abcd",
+        sourceDocIds: [sourceDocId],
+      }),
+    ).rejects.toThrow("EVAL_BLUEPRINT_ALREADY_SEEDED");
+  });
+});
+
 describe("blueprint spine and Stage-1 drift", () => {
   test("reports exactly one unincorporated ready document, then removes it when processing", async () => {
     const t = makeTest();
@@ -606,6 +655,11 @@ describe("blueprint spine and Stage-1 drift", () => {
       t.query(internal.blueprint.spineForTenant, { tenantId: "tenant_b" }),
     ).resolves.toBeNull();
   });
+
+  // The cap belongs to `renderSpine` and this query returns `renderSpine`'s output UNCHANGED —
+  // see the BLUEPRINT ONLY comment on `spineForTenant`. The cockpit's finance line is a separate
+  // query with its own `FINANCE_SPINE_BUDGET`, joined only in `buildTurnPrompt`, so this assertion
+  // still measures exactly what it names. Worst case measured 2026-08-10: 2495 of 2500.
 });
 
 describe("blueprint candidate synthesis", () => {

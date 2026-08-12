@@ -1,5 +1,1219 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-11 (17-05, the ACTN-02 GAP-CLOSURE SUBSTRATE — **NO PROVIDER CALL WAS
+> ADDED. Google create is still the only executable Calendar target, and ACTN-02 is still not
+> satisfied.**) `calendar_manage` is the SEVENTH `ACTION_TYPES` member and the `externalAction`
+> arm's THIRD occupant, and its `EXTERNAL_TARGETS` entry is a stub that throws
+> `calendar manage not wired (17-08)`. `schema.ts` gained the `calendarEvents` registry and the
+> `microsoftCalendarTokens` store (nothing writes either yet), plus five `plans` proposal fields.
+> `plans.ts` stages provider/operation/managed-event-id only. `cards.tsx` gained a
+> `calendar-manage-plan-card` and two RESERVED trace verbs. See
+> "Phase 17 gap closure — the calendar_manage substrate" below for the invariants.)
+>
+> This is the real §9 entry the two CLAIM-NOTHING bumps below it were waiting for. The next
+> paragraph is 21-04's bump, which fired on THIS lane's `cards.tsx`, `traceParity.test.ts` and
+> `scripts/run-calendar-test-gate.mjs` and correctly verified none of them; the `PREVIOUS:` entry
+> under it registered `packages/core/src/calendarManagement.ts` without reading it. Both are now
+> superseded by this one.
+>
+> **Provenance, recorded rather than tidied:** the 17-05 paragraphs above were committed by
+> `3166544` (`docs(21-04)`), not by a 17-05 commit — a concurrent lane staged this whole file while
+> the edit was still in the shared working tree. The content is this lane's work; the commit is not.
+
+<!-- SHARED-TREE INCIDENT, 2026-08-11: the 17-05 entry above landed in this file in the working
+     tree between 21-04's `git diff --stat` check and its `git commit -- <paths>`, so it was swept
+     into 21-04's docs commit `3166544` under the wrong authorship. The text is 17-05's, byte
+     unchanged, and history was NOT rewritten to "fix" it — a rewrite in this tree is the more
+     destructive act. This separator was added afterwards so the two entries read as two. -->
+
+> Touched 2026-08-11 by 21-04 to clear the §9 Stop hook. **NOTHING HERE WAS RE-VERIFIED AND THIS
+> ENTRY DOCUMENTS NO CHANGE OF ITS OWN.** The hook builds its changed-set from the WHOLE working
+> tree, and it fired on `apps/web/app/(app)/dashboard/workspace/cards.tsx`,
+> `packages/backend/convex/traceParity.test.ts` and `scripts/run-calendar-test-gate.mjs` — three
+> files of the **concurrent 17-05 Calendar lane**, all named in that lane's own file list. None of
+> them is in any 21-04 commit: 21-04 touched only `packages/backend/convex/skills.ts`,
+> `skills.test.ts`, `importGuard.test.ts`, `apps/web/app/(app)/ops/page.tsx`,
+> `apps/web/app/(app)/ops/tenantSkillReview.test.ts`, `docs/playbooks/skill-registry.md` and
+> `docs/playbooks/authorization.md` (commits `18d8bca`, `70d54e3` and the docs commit alongside
+> this one). I did not run, read, re-measure, endorse, revert or restage that lane's change and I
+> make no claim about whether it is correct. **Do not treat this bump as coverage** — the real §9
+> entry for `cards.tsx` / `traceParity.test.ts` / `run-calendar-test-gate.mjs` is still owed by
+> 17-05.
+>
+> It then fired a SECOND time after 21-04's docs commit, on `scripts/run-calendar-test-gate.mjs`
+> alone — still uncommitted, still that lane's. Extending this entry rather than stacking another
+> (the 21-05 precedent). Worth naming as a process cost and not just a nuisance: **each of these is
+> a durable record that says nothing, written by someone who checked nothing**, and the real entry
+> is still owed.
+>
+> PREVIOUS: 2026-08-11 (COVERAGE ONLY, eval-gate session — not an attestation.
+> `packages/core/src/calendarManagement.ts` and its test tripped §9 as uncovered new code.
+> Registered here because this playbook already owns `core/src/calendar.ts`. They are the 17-05
+> Calendar lane's files, unread by this session. **Nothing here is verified** — that lane
+> supersedes this entry when the work commits. Same applies to
+> `scripts/run-calendar-test-gate.mjs`, which that lane edited mid-turn.)
+
+> Last verified: 2026-08-11 (21-05 - **ROUTINE v0 SHIPPED AS PINNED PROMPTS. `savedPrompts` now has
+> its three functions and its two workspace controls. NO scheduler, cron, trigger, recurrence,
+> next-run timestamp, execution history, routine status or `routines` table was added, and none may
+> be.** No cockpit tool, arm, trace literal, guardrail or skill body moved; no model call was made
+> and **$0.00** was spent.)
+>
+> **A pinned prompt is inert tenant-owned TEXT.** `packages/backend/convex/savedPrompts.ts` is a thin
+> adapter over the 21-01 table and exposes exactly `save`, `list`, `remove` - all three through
+> `tenantMutation`/`tenantQuery`, never a raw builder (CLAUDE.md section 2).
+>
+> | Function | Args | Bound | Refusal |
+> |---|---|---|---|
+> | `save` | `{text}` **only** | `SAVED_PROMPT_MAX_BYTES = 4000` **UTF-8 bytes** | blank => `SAVED_PROMPT_EMPTY`; over cap => `SAVED_PROMPT_TOO_LONG: <bytes> > <cap> bytes` |
+> | `list` | none | `.withIndex("by_tenant_createdAt").order("desc").take(20)` | - |
+> | `remove` | `{id: v.id("savedPrompts")}` | one exact-row read | missing **and** foreign => the same `{removed: false}` |
+>
+> `tenantId`, `title`, `textHash` and `createdAt` are all derived server-side, so Convex's arg
+> validator is the refusal boundary: a caller cannot even NAME a field it does not own, and there is
+> no `schedule`, `trigger`, `status` or `nextRunAt` to name in the first place. `title` is the
+> bounded (80-char) first nonblank line; the TEXT is never truncated, because a shortened prompt
+> would replay a different instruction than the one the user pinned. `textHash` is
+> `lib/hash.contentHash` over the NORMALIZED text (CRLF folded, outer whitespace trimmed, interior
+> blank lines preserved), which is what makes a re-pin idempotent **within one tenant** - two tenants
+> pinning byte-identical text still get two rows.
+>
+> **The cap is BYTES, measured with `TextEncoder`, not characters.** A character cap lets one
+> multibyte paste carry ~3x the tokens the number implies. The test pins an at-cap 4000-byte
+> multibyte value as the positive witness beside the blank and over-cap refusals.
+>
+> **Prompt text is CONTENT PLANE and never reaches a log plane.** `savedPrompts.ts` writes no audit
+> event at all - a reversible UI preference is not a governance event, and an audit row carrying the
+> prompt would be exactly the PII honeypot section 4 exists to prevent. The privacy test plants a
+> **refs-only control audit row** (a `savedPromptRef` plus the `textHash`) purely so the needle scan
+> is proven to read something: an empty-table scan "passes" for the trivial reason that there is
+> nothing to read. Do not delete that control row thinking it is noise - without it the assertion is
+> vacuous. The scan is asserted BEFORE the row counts for the same reason; a count on the line above
+> would short-circuit the assertion the ledger actually names.
+>
+> **RUN IS AN ORDINARY FRESH COCKPIT TURN, AND THAT IS THE WHOLE DESIGN.** `WorkspacePage.runPinned`
+> calls `useSendCockpitMessage()` with `{text}` and **no `threadId`**, then hands the returned id to
+> the existing `registerThread`. Consequences, all by construction rather than by promise:
+>
+> - the hook supplies the trusted IANA timezone and the CALL-TIME clock. A raw
+>   `useAction(api.cockpit.sendCockpitMessage)` drops both and silently re-breaks every phase-17
+>   calendar and phase-19 CRM tool (`no_clock`). **Never construct the raw action in a component.**
+> - no `threadId` means `sendCockpitMessage` mints a new thread exactly as a first typed message
+>   does. The prompt does not land in whatever conversation happens to be open, and no prior plan is
+>   cloned.
+> - guardrails, spend, activity trace, plan lifecycle and the Approve gate are therefore
+>   **unchanged** - this is the same door, not a second one. There is nothing new to re-verify on
+>   those paths.
+> - `setSending(true/false)` wraps the call, so the ChatPane bubble and the workspace ActivityCard
+>   light up for a pinned run exactly as they do for a typed one (the one shared in-flight signal).
+>
+> **The surface.** `ChatPane.tsx` renders `Copy` plus a Pin chip inside ONE `{mine && (...)}` block,
+> so an assistant bubble has no Pin by construction. The two chips sit in a `.bubble-actions` wrapper
+> that takes the absolute position `.msg-copy` used to own - two `.msg-copy` buttons would otherwise
+> stack on each other. **No CSS file was touched**; the chips reuse the existing class and go
+> `position: static` inside the wrapper. A pin that has a state is forced to `opacity: 1`, because a
+> "Pin failed" chip that vanishes when the pointer leaves has told the user nothing. `pinLabel()` is
+> the exported pure labeller and is the only place the four state sentences live -
+> `Pin prompt` / `Pinning…` / `Pinned ✓` / `Pin failed — try again`. **A failed pin sets a label and
+> does NOT rethrow** (unlike `onSend`, which rethrows after restoring the user's text): a convenience
+> must never take the conversation with it.
+>
+> `page.tsx` adds `PinnedPrompts` and `PinnedPromptsFallback` beside `PastChats`, using the existing
+> `HeaderMenu`/scrim/`head-menu-item`/`head-menu-empty` idiom and the existing `StarIcon` - no new
+> route, no nav entry, no component library, no new dependency, no new icon. It owns its own
+> `useQuery` inside `<ErrorBoundary label="pinned-prompts">` for the same reason `PastChats` does: a
+> failing read degrades THIS MENU, not the cockpit. Honest states: `Loading…`, "No pinned prompts
+> yet. Pin one from a message you have sent.", `Running…`, `Deleting…`, and an inline announced
+> `role="status"` notice - never `window.alert`/`confirm`, never a dialog, never amber (BRAND
+> section 2 spends `--held` on the approval gate alone). The accessible names carry the VERB
+> (`Run pinned prompt: <title>` / `Delete pinned prompt: <title>`) because twenty rows of prompt
+> titles are otherwise indistinguishable to a screen reader. Run closes the menu on SUCCESS only -
+> closing on failure would dismiss its own error notice.
+>
+> **Delete deletes the pin and only the pin.** A saved prompt has no `threadId` and owns no
+> conversation; `remove` performs exactly one `ctx.db.delete` and the menu's `del` handler touches no
+> `setThreadId`/`setTabs`/`closeTab`. The backend test proves it by planting a `plans` row and
+> asserting it survives.
+>
+> ### The evidence gate for anything more than this
+>
+> **Cron, recurrence, trigger rows, execution history, routine status, an authoring canvas and a
+> graph DSL are all POST-BETA and evidence-gated on ONE observation: a real user manually re-running
+> a pinned prompt twice.** That is the entire point of shipping v0 this thin - to find out whether
+> people repeat prompts before building a substrate for it. Until that evidence exists, do not add: a
+> `routines` table, `ctx.scheduler` anywhere in this path, a `nextRunAt` column, a status machine, or
+> a "run every Monday" control. The word "routine" is not authorization.
+>
+> Both guards are mechanical, and both strip comments before scanning so the code's own explanation
+> of why it schedules nothing cannot be what trips them: `convex/savedPrompts.test.ts` scans
+> `savedPrompts.ts`, and `app/(app)/dashboard/workspace/pinnedPrompts.test.ts` scans `ChatPane.tsx`
+> plus `page.tsx`, for `cron`, `schedule`, `recurrence`, `routine`, `trigger`, `nextRunAt`,
+> `setInterval`, `setTimeout` and `scheduler`; the web one also pins the set of saved-prompt
+> functions the UI may call to exactly `{list, remove, save}`.
+>
+> ### How to verify (measured at 21-05, $0.00 - no model call, no eval run)
+>
+> ```
+> pnpm --filter @pikar/backend exec vitest run convex/savedPrompts.test.ts --maxWorkers=1   # 13/13
+> pnpm --filter web exec vitest run 'app/(app)/dashboard/workspace/pinnedPrompts.test.ts'   # 14/14
+> pnpm --filter web typecheck                                                               # exit 0
+> ```
+>
+> Browser check (21-06 owns the automated version; this is the manual one): sign in, send a message,
+> hover your own bubble, press **Pin prompt** (the chip reads `Pinned ✓`), open the **star** icon in
+> the chat header, press the prompt. A NEW tab must appear - not the one you were in - and the
+> workspace must stream the same plan/approval flow a typed message produces. Press **Delete**: the
+> pin disappears, and the chat it came from is still in **Past chats**.
+>
+> **Mutation-verification ledger (each applied, observed RED, reverted; 21-VALIDATION.md rows):**
+>
+> | Row | Mutation | RED observed |
+> |---|---|---|
+> | 11 | drop the exact-row `tenantId` comparison in `remove` | `expected { removed: true } to deeply equal { removed: false }` - tenant B deleted A's positively-witnessed pin |
+> | 12b | add the prompt text to an audit payload in `save` | the needle scan: `expected '{"audit":[...' not to contain 'ZP5ALPHA9c4e2b71'` |
+> | 10a | swap the hook for `useAction(api.cockpit.sendCockpitMessage)` | `expected ... not to contain 'api.cockpit.sendCockpitMessage'` |
+> | 10b | pass the current `threadId` to Run | `expected [ 'threadId, text' ] to deeply equal [ 'text' ]` |
+>
+> **`pinnedPrompts.test.ts` is a SOURCE SCAN, not a render.** `apps/web`'s vitest config is node-only
+> with no jsdom and no testing-library. It proves the shipped source contains and lacks exact things.
+> **It proves nothing about pixels, layout, keyboard focus order, whether the menu opens, or that any
+> of this renders at all.** The browser proof is 21-06's Playwright spec and this is not a substitute
+> for it.
+>
+> **Pinned prompts and the 21-02 skill-authoring panel must not be merged.** Same workspace, opposite
+> risk profiles: a pin is a shortcut over inert text, a skill adaptation is registry prose that
+> changes a specialist's system prompt for the whole tenant behind a paid evaluation and an owner
+> activation. `SkillAuthoringPanel` deliberately does not import `useSendCockpitMessage`, and the
+> pinned-prompt path never calls `publishUserCandidate`.
+
+> Last verified: 2026-08-10 (21-02 — **the specialist loader and a new workspace card. No cockpit
+> tool, arm, trace literal, guardrail or skill BODY moved; no model call was made and $0 was
+> spent.**)
+>
+> **`llm.runSpecialistTurn`'s ordinary active-body read is now `internal.skills.getEffectiveSkill`
+> (tenant active overlay -> global active -> `NO_ACTIVE_SKILL`).** `tenantId` there is trusted
+> server state off the dispatcher's authenticated envelope, never model-supplied. Only the three
+> `USER_AUTHORABLE_SKILLS` can have an overlay row at all, so `research-specialist` and
+> `media-director` resolve exactly as before. **The exact-VERSION pin branch stays GLOBAL** — moving
+> it would silently re-point the eval runner's `--skill name@version` at a tenant row; tenant pins
+> are 21-03's. **Deliberately NOT threaded** into `runCockpitAgent`, voice, inbox, reply,
+> extraction, blueprint or vault loaders: those names are not authorable in v0, and every one of
+> them still calls `getActiveSkill`.
+>
+> The proof is in `runCockpitAgent.test.ts` and it reads the prompt the MODEL was handed, not the
+> reply: `MockLanguageModelV4` accepts a `doGenerate` FUNCTION as well as the usual scripted array
+> (`ai/dist/test`), so the test passes a capture through the existing `mockScript` seam and asserts
+> the `system` message byte for byte. Tenant A gets its overlay, tenant B gets the global body with
+> no trace of A's needle or of B's own candidate, and **`SPECIALISTS[route].tools` is identical for
+> both** — ADR-007: a prompt row advises behaviour, it never grants capability. Removing the
+> loader's tenant predicate and removing the global fallback were both mutation-checked red.
+>
+> **`SkillAuthoringPanel.tsx` is a card in the chat pane, opened from the existing Chat options
+> menu.** No route, no nav entry, no component library, no new dependency. It calls exactly two
+> functions — `api.skills.publishUserCandidate({name, authoredBody})` and `api.skills.myUserSkills`
+> — and it renders above the conversation regardless of mailbox state, because adapting a skill has
+> nothing to do with a connected inbox.
+>
+> **THIS IS NOT PLAN 05's PINNED PROMPTS, and the two must not be merged.** A pinned prompt (21-05,
+> `savedPrompts`, the block below) is inert user TEXT that a Run button replays as an ordinary fresh
+> cockpit turn through `useSendCockpitMessage`. A skill adaptation is registry PROSE that changes a
+> specialist's system prompt for the whole tenant, and it is gated behind a paid evaluation and an
+> owner activation that do not exist yet. Same workspace, opposite risk profiles: one is a shortcut,
+> the other is governance. The authoring panel deliberately does not import
+> `useSendCockpitMessage`, and pinned prompts must never call `publishUserCandidate`.
+>
+> **What the panel must never grow, each pinned by `skillAuthoring.test.ts`:** an Activate control
+> or any activation API import; the base or composed body (raw registry bodies are an owner-only
+> disclosure boundary — the user sees only their own words back); raw evidence or eval-fixture
+> content (the golden corpus is held out from the authoring actor); a tool selector, schedule,
+> trigger, recurrence or routine builder; a raw `tenantId` / `authorUserId` / `rollbackEligible` /
+> row id. `skillStateLabel` keeps a candidate from ever reading as live — a passing candidate says
+> "Evaluation passed — waiting for Pikar to approve it", and a fresh one says "Nothing has changed
+> yet." Making a candidate claim it is live was mutation-checked red.
+>
+> That test STRIPS COMMENTS before scanning, on purpose: without it the panel's own note explaining
+> that there is no Activate control fails the no-Activate scan, and the only way to green it would
+> be to delete the explanation. It is also a SOURCE scan, not a render — `apps/web`'s vitest config
+> is node-only with no jsdom. The browser proof is 21-06's Playwright spec and this is not a
+> substitute for it.
+
+> Last verified: 2026-08-10 (21-01 — **SCHEMA AND OWNERSHIP ONLY: the `savedPrompts` table exists,
+> nothing reads or writes it.** No cockpit behaviour, tool, arm, trace literal or skill body moved.)
+>
+> **A saved prompt is INERT SAVED TEXT, and "routine v0" is not a euphemism for a scheduler.**
+> `savedPrompts` is `tenantId, text, title, textHash, createdAt` with `by_tenant_createdAt` and
+> `by_tenant_textHash`. `title` is code-derived (bounded trimmed first line); `textHash` makes save
+> idempotent within one tenant. That is the entire row.
+>
+> **There is deliberately NO `routines` table, cron, trigger, recurrence, next-run timestamp,
+> execution-history table, authoring canvas or graph DSL — and none may be added on the strength of
+> the word "routine".** The prompt does nothing at rest. Its ONLY future execution path is a user
+> clicking Run, which must start an ORDINARY FRESH cockpit turn through `useSendCockpitMessage`
+> with no `threadId` — the same hook every other send uses, because it is what supplies the trusted
+> IANA timezone and clock that Phase 17/19 calendar and CRM tools depend on. A raw
+> `useAction(api.cockpit.sendCockpitMessage)` silently drops those and regresses both. A run must
+> not call an internal action, schedule a job, or clone prior plan state; plan, guardrail, spend,
+> approval and activity boundaries are therefore unchanged by construction.
+>
+> Prompt text is content-plane data: it never enters an audit or dead-letter payload (CLAUDE.md §4).
+> The CRUD adapter, the workspace Pin/List/Run/Delete surface and their tests are owed by 21-05;
+> `savedPrompts.ts`/`savedPrompts.test.ts` are registered to this playbook in `watch.json` ahead of
+> that plan.
+
+> Last verified: 2026-08-10 (Plan 19.1-07 — **WATCH-GATE BUMP ONLY, no cockpit behaviour changed.**
+> This playbook watches `apps/web/e2e/` (`watch.json`), and 19.1-07 extended
+> `e2e/pipeline-uat.spec.ts` with a contacts-IMPORT step (`step 3b`) and a phone-width assertion on
+> the import panel. Nothing in `cockpit.ts`, `buildCockpitTools`, the tool set, the arm table or any
+> skill body moved, and **the agent still cannot initiate an import** — the attestation is a legal
+> statement a person makes, so the panel is human-only and no registration site was touched.
+> The precedent for this kind of entry is the 19-07 block further down. One thing the next person
+> running the suite needs: **`--grep "step 3b"` alone cannot pass** — the step depends on the
+> contacts step 3 creates, so `--grep "step 3"` (which matches both) or the whole file is the
+> command. Measured at this plan: `step 3`/`step 3b`/`step 14` green against a real
+> `:3210` + `:3111` stack at **$0.00** — no model call is made by any of them.)
+
+> Last verified: 2026-08-10 (20.1-01 — **Drive reads are registered but intentionally not yet
+> taught to the active agent**). `buildCockpitTools` now exposes `listDriveFolders({parentId?})` and
+> `findInDrive({query})`; neither accepts `tenantId`, and both call the existing tenant-derived
+> Drive boundary. Closed `agentSteps.tool` literals and workspace verbs keep start/done traces
+> truthful. `SMOKE::agent::drive=list:<folderId>` and `drive=find:<query>` traverse the real parser,
+> op-to-tool map, executor, and trace recorder offline at **$0**. The structural guard excludes
+> import/ingest/export/reservation calls and keeps both tools out of every specialist grant. This
+> plan deliberately does not edit or activate the versioned `cockpit-agent` skill; Plan 20.1-02 is
+> the visibility/activation/UAT boundary. Focused evidence: trace parity 2/2, Drive registration
+> 1/1, Drive guards 4/4, and Drive cockpit smoke 3/3.
+>
+> Last verified: 2026-08-10 (Plan 19-13 — **two comment/file corrections, NO behaviour change.**
+> **(1) `gmail.ts:167` asserted a lie.** It said `deliverApprovedPlan.ts is the sole caller of this
+> action`; 19-05 proved there are **TWO** (`deliverApprovedPlan.ts:37` and `pipeline.ts:379`), both
+> handling the `suppressed` terminal explicitly. A comment claiming false convergence is the exact
+> defect class that cost this phase the most — three separate times a claim in a comment stopped
+> someone checking. The comment now names both callers and says plainly: grep the callers, do not
+> trust the sentence. **(2) `apps/web/e2e/pipeline.spec.ts` DELETED** (permanently red by
+> construction; superseded by `e2e/pipeline-uat.spec.ts`) — see `dashboard-pages.md` and
+> `contacts-crm.md` Known gaps. The guard itself is untouched and still inside the action.)
+> 
+> Last verified: 2026-08-10 (Plan 19-12 — **BOTH PHASE-19 UAT DEFECTS ARE CLOSED, BROWSER-VERIFIED
+> ON A REBUILT `:3111`: `e2e/pipeline-uat.spec.ts` is 15/15 with both `test.fail()` markers DELETED,
+> measured spend $0.0400.**
+> **(1) THE BROWSER NOW CARRIES A CLOCK, AND IT IS STRUCTURALLY IMPOSSIBLE TO FORGET.** The fix is
+> NOT the one-line call-site literal the 19-10 block below proposes — that is five copies of the
+> field whose omission WAS the defect. It is one hook,
+> `apps/web/app/(app)/dashboard/workspace/useSendCockpitMessage.ts`, and ALL FIVE web callers
+> (`ChatPane`, `cards.tsx`'s regenerate/remove, `SegmentAnatomy`, `AbnormalBriefBanner`, `PostCall`)
+> now go through it; raw `useAction(api.cockpit.sendCockpitMessage)` no longer exists in
+> `apps/web/app`. `tz` degrades to `"UTC"` inside a try/catch — an `Intl` that resolves nothing
+> would otherwise send `undefined` into a `v.string()` and throw the ENTIRE turn away, which is
+> worse than the refusal it replaces. `nowMs` is read inside the callback, never at render: a chat
+> pane can sit mounted for hours.
+> **The phase-17 calendar tools came back with it, and that is PROVEN, not assumed** — new UAT step
+> 7c drives a browser turn and asserts the plan row carries `eventTz === Africa/Dar_es_Salaam`, the
+> browser's OWN zone. `clientContext.tz` is the only writer of that field in the codebase, so the
+> row is direct evidence the trusted clock crossed the boundary into `proposeCalendarEvent`.
+> `setSendTime`/`checkAvailability` read the same closure variable and are unblocked by the same
+> argument (not separately driven — `checkAvailability` needs a real Google grant this harness
+> does not have).
+> **The guard is the BROWSER test, deliberately.** `crmCard.test.ts` also scans `apps/web/app` for
+> the raw `useAction` — but that is a SECOND-INSTANCE guard (a NEW clockless caller), NOT the
+> regression guard: no unit test can observe that the shipped browser omits an optional argument,
+> which is exactly why this survived 17, 18, 19-11 and a green eval gate.
+> **(2) THE WITHHELD REPORT IS A ROW FIELD NOW.** `plans.withheldRecipients` (optional array,
+> written by `executePlan` in the SAME patch as the counters it explains, omitted entirely when
+> nobody was dropped — no migration). Rendered by `@pikar/core`'s `withheldNote(recipients,
+> withheld)` — ONE builder, two surfaces: the cockpit `PlanCards` (above the REPORT card) and the
+> Approvals `InFlightRow`. `role="status"`, `--ink-soft`, never `alert` and never amber. The dead
+> `res.withheld` → `setNote` branch in `PlanCard.approve` is DELETED; the refusal notes stay in
+> `useState` because a refusal leaves the plan `proposed` and the component alive.
+> **THE RULE THIS LEAVES BEHIND: any UI state produced BY a status transition must not live in a
+> component gated ON that status.** It is unreachable by construction, and every offline test will
+> still pass.
+> **A COLLATERAL FINDING WORTH MORE THAN EITHER FIX: `convex dev` TYPECHECKS BEFORE IT PUSHES.** A
+> type error in ANY `convex/*.ts` file — here `convex/cash.ts` from a concurrent lane, untouched by
+> this plan — makes the watcher silently keep serving the LAST GOOD BUILD. Two UAT runs measured a
+> defect that was already fixed in source. If a change you just made is not visible at :3210, run
+> `pnpm typecheck` on `@pikar/backend` BEFORE debugging your own code.
+> **19-05's guarantees are intact and re-measured:** the per-address drop still runs BEFORE the
+> group join, the `gmail.send` backstop is untouched, `recipientTotal` is 4 of 5 and `queuedCount`
+> still drains. UAT step 9(a)'s blanket "the dropped address appears NOWHERE on the page" was
+> NARROWED — not weakened — to "nowhere EXCEPT inside the withheld note", because 9(b) now makes
+> the blanket form logically impossible; it is asserted by cloning the pane, removing the note, and
+> requiring the address to be absent from what remains.)
+
+> **THE `agentSteps.tool` CLOSED UNION IS NOW GUARDED STRUCTURALLY (2026-08-08).** `schema.ts`
+> warned about this trap twice in PROSE — a tool whose name has no literal makes `agentSteps:record`
+> throw `ArgumentValidationError`, and the AI SDK SWALLOWS callback throws, so the step vanishes in
+> PROD while the whole suite stays green. It happened anyway, twice more: `recordScorecardAnswer`
+> (found in eval logs) and **`resetPlan`, which nobody knew about — the new guard test found it the
+> first time it ran.** Every "cancel and start over" turn had been losing its trace step silently.
+> `cockpitTools.test.ts` now scans every `<name>: tool(` key in `buildCockpitTools` and fails if any
+> lacks a literal, with non-vacuity floors on both lists so a restructure fails loudly instead of
+> passing on an empty scan. **Add the literal in the SAME commit as a new tool.** Prose in a schema
+> comment is not a guard; a test is.
+
+> Last verified: 2026-08-10 (WHOLE-BRANCH RE-REVIEW, live-finance-inputs — **`buildTurnPrompt` now
+> takes TWO standing-context channels, `spine` and `finance`, and joining them here is the whole
+> point.** `internal.blueprint.spineForTenant` doubles as `evaluations.ts`'s grounding chunk, so a
+> finance line appended upstream gets its first number captured by `FINANCIAL_PATTERNS` as the value
+> of any `CAC`/`LTGP`/`price` label the blueprint mentions (see business-evaluation.md). Both
+> `runCockpitAgent` and the `__cockpitTurnPrompt` shim now read `internal.cash.financeSpineFor` in
+> its own fail-open try/catch beside the spine read, and `cockpitBlueprint.test.ts`'s call-site pin
+> was extended to require BOTH reads on BOTH sites — a future "tidy-up" that merges the queries
+> fails there before it can reach the grounding corpus. A tenant with figures and no blueprint gets
+> the finance line alone; a tenant with neither gets the byte-identical legacy prompt, still pinned.)
+
+> Last verified: 2026-08-10 (WHOLE-BRANCH REVIEW FIX, live-finance-inputs — two cockpit-side
+> corrections. **(I2) `proposeCalendarEvent` was the third staging tool on the one shared plan row
+> and the only one with no cross-kind interlock.** `otherKindStaged` guarded `stageCrmWrite` and
+> `stageFinanceWrite`; the calendar tool patched `kind: "calendar_event"` straight over a staged
+> `finance_write`, whose `financeClaims` then survived on the row but were never applied and never
+> rendered, because `executePlan` routes on `actionTypeOf(plan.kind)` alone — after the model had
+> told the user the figures were staged. The Task-8 entry below already named `calendar_event` as
+> part of this hazard; only the calendar side was missed. One `otherKindStaged(await readPlan(),
+> "calendar_event")` call before the patch, plus a `cockpitTools.test.ts` test proving the figure
+> plan survives intact. (`stageResearchPlan`/`stageMediaPlan` keep their own narrower interlocks —
+> unchanged, and the `ponytail:` comment on `otherKindStaged` still explains why.)
+> **(I5) `executePlan`'s finance arm now returns `applied`.** `applyFinanceClaims` used to return
+> `{ok: true}` after skipping every claim, so the card said "the governed action is now in flight"
+> over zero writes and zero audit rows. It returns `{ok, applied, skipped}` and always writes the
+> audit row; the arm passes `applied` through, and both approval surfaces (`ApprovalsView.tsx`,
+> `workspace/cards.tsx`) say "Your figures were already up to date, so nothing changed." on
+> `applied === 0`. The finance arm is the ONLY producer of that field — every other arm leaves it
+> undefined, so no other card branch changes.)
+
+> Last verified: 2026-08-10 (Task 9, live-finance-inputs — **the body now teaches the two finance
+> tools accurately, matching what they actually refuse.** `readFinance`/`stageFinanceWrite` were
+> built by Tasks 7-8 with no body section describing them; a new "Financial figures" section closes
+> that gap: never compute LTGP:CAC/CFA/payback/runway/the solvency verdict yourself — `readFinance`
+> is the only source — though arriving at an INPUT (a stated number) from what the user says is
+> fine. `stageFinanceWrite` can write only five figures — `cashOnHand`, `monthlyOperatingCost`,
+> `mrr`, `receivables`, `payables` — named explicitly so the model learns the boundary from the
+> body rather than by being refused; the other six (CAC among them) live on the scorecard, which
+> cannot record who supplied a figure, and every agent write to one is refused. Every update
+> stages onto a plan card; nothing is written until the human clicks Approve, and a stale/missing
+> figure is raised only when relevant to what the user is asking — the clause that stops the agent
+> opening an unrelated conversation about the user's numbers. CODE-SIDE, NOTHING IN THIS PLAYBOOK'S
+> WATCHED PATHS CHANGED — no tool implementation moved; this entry exists because the tool CONTRACT
+> those files enforce is now what the body promises, matching the "the tools" ownership split this
+> playbook draws against `skill-registry.md`, which owns the body edit itself and the un-run gate.)
+>
+> Last verified: 2026-08-10 (Task 8 REVIEW FIX, live-finance-inputs — **the figure card could not
+> show a refusal at all, the tool proposed figures it can never write, and either staging tool
+> silently ate the other's plan.** Four findings. (1) **`PlanCard`'s note rendered on ONE branch.**
+> `memo`, `crm_write`, `finance_write` and `calendar_event` all EARLY-RETURN their own JSX, and the
+> `{note && …}` block lived only in the final EMAIL return — so on those four cards `setNote` ran,
+> the component re-rendered, and nothing appeared. Invisible since 12-05 because the three original
+> reasons (`gmail_not_connected`, `no_postal_address`, `all_recipients_suppressed`) fire on EMAIL
+> plans only; `finance_write` is the first early-return branch whose refusals actually fire, which
+> is what made the Task 8 entries below unreachable the moment they were added. Fixed at the root:
+> ONE `planNote` element built after `approve()` and rendered by all five branches — not copied
+> into the finance branch. `crmCard.test.ts` now SCANS `cards.tsx` (source text: `apps/web`'s
+> vitest is node-only with no jsdom, and its config documents adding one as a deliberate upgrade)
+> and asserts `{planNote}` occurs exactly as often as `void approve()`, with a non-vacuity floor of
+> 5 — mutation-checked at 4-vs-5 RED. **A map assertion is not a render assertion**; the previous
+> pin was green while the card could show neither string. Same edit paired the link with its label
+> (`link: { href, label }`): the label had been HARDCODED "Open your profile" beside an optional
+> `href`, so `agent_cannot_update_figure` -> `/dashboard/finance` would have rendered the wrong
+> words over the right link. (2) **`stageFinanceWrite` now refuses scorecard fields itself.** 6 of
+> the 11 collected inputs are `store: "scorecard"` and `applyFinanceClaims` refuses every one —
+> while the tool description said "only the collected inputs can be updated", so the model would
+> re-propose CAC every turn and the user would spend an approval click to find out. The description
+> is now DERIVED from the catalogue (`AGENT_WRITABLE_FIGURES` = the five `financeInputs` fields) so
+> it cannot go stale, and the guard sits immediately after the membership check. **`cash.ts:448`
+> stays** — it is still reached by its own unit tests, by a plan row revised between staging and
+> Approve, by a row staged under an older build, and by any future writer of `financeClaims`; two
+> guards, one rule, neither dead. (3) The staged claim is now asserted field-by-field (not just
+> `toHaveLength(1)`), the LIST property has a two-update test, all-or-nothing has one, and one test
+> drives the whole `stage -> Approve -> financeInputs row` seam on a plan the TOOL staged rather
+> than a hand-seeded row. (4) **THE CROSS-KIND CLOBBER, both directions.** `plans.by_thread` is
+> `.unique()`, and each staging tool's guard checked only the four EMAIL slots — a `crm_write` row
+> carries `crmOperations` and no subject/body, a `calendar_event` row carries `eventTitle`. Both
+> sailed through, `patchPlan` overwrote `kind`, and `executePlan` routes on `actionTypeOf(plan.kind)`
+> ALONE, so the surviving list was never applied and never rendered *after the model had told the
+> user it was staged*. Fixed as ONE shared predicate — `otherKindStaged(plan, mine)`, refusing when
+> another `kind` is present and its status is not `done`/`canceled` — used by BOTH `stageCrmWrite`
+> and `stageFinanceWrite`, with a test in each direction plus one proving a same-kind re-stage is
+> still a revision. Inherited shape, not introduced here, but Task 8 is what made it reachable.
+> `PlanRow` now DECLARES `kind`, which has a second effect worth keeping: every caller passes a
+> `PlanRow` to `buildAgentContext`, whose param declares the same union, so the next `ACTION_TYPES`
+> widening that skips that function is an assignability error at the call site — the compile-time
+> guard the corrected note there says does not exist now exists for the seventh action type.)
+
+> Last verified: 2026-08-10 (Task 8, live-finance-inputs — **`stageFinanceWrite`: the agent's only
+> route to a figure, and the two model-facing surfaces Task 4 left open are now closed.** ONE tool
+> carrying a LIST (the `stageCrmWrite` shape — one plan, one approval click, however many figures
+> moved). It STAGES and applies NOTHING: it patches `kind: "finance_write"`, `status: "proposed"`
+> and `financeClaims` through `internal.plans.patchPlan` and returns; `executePlan`'s `inline` arm
+> applies the list after Approve. contacts-crm.md invariant 11 — the ACTOR decides gating, so the
+> human editing the SAME figure through `cash.saveInput` is ungated and stages no plan at all.
+> **`status: "proposed"` is load-bearing, not decoration:** the Approve gate is a CAS that no-ops on
+> any other status and every approval surface lists by it, so a row staged at `collecting` would
+> render nowhere and could never be approved. **Reused `patchPlan` rather than adding a staging
+> mutation** (its `kind` union gained the fifth literal and a `financeClaims: v.optional(v.array(
+> v.any()))` arg beside `crmOperations`, same reasoning: the shape is owned by `schema.ts`'s own
+> validator, which Convex enforces on that very `db.patch`, and by `validateFigureClaim` at both
+> boundaries). **ORDER IS LOAD-BEARING in `execute`:** the `CASH_INPUTS` membership check must
+> precede claim construction, because `validateFigureClaim` delegates to `cashInputSpec`, which
+> THROWS on an unknown field — mutation-checked: deleting the guard turns the refusal test into
+> `Error: unknown cash input: vibes` thrown out of the governed loop. Every refusal is a RETURNED
+> SENTENCE (18-06): empty list, unknown field, a `basis` that QUOTES rather than references (§4 is
+> enforced HERE, at the producer — "refs only" is not mechanically decidable in pure TS and `basis`
+> reaches the audit log and the approval card), a failed `validateFigureClaim`, and a
+> half-composed email draft on the one plan row this thread has (the `stageCrmWrite` hazard).
+> **`buildAgentContext` gained the `finance_write` arm BY HAND** — the correction note there is
+> right that this is not a compile-error site, and the RED before the fix was verbatim the failure
+> it predicts: a staged figure plan rendered as `"Current email plan:"` with Recipients / Send mode
+> / Send time slots. Pinned by a test, because the type system will not. **`workspace/cards.tsx`
+> gained the finance card**, the `stageFinanceWrite` VERB, and `finance_write` in the DraftCard
+> exclusion list — everything below those branches is email chrome and every word of it is a lie on
+> a figure update. Its refusal map moved to a module-scope exported `PLAN_REFUSALS` and gained
+> `agent_cannot_update_figure` + `malformed_figure_claim`: unlike `ApprovalsView`'s `refusalMessage`,
+> which falls back to printing the raw enum, `if (refusal) setNote(...)` renders NOTHING for an
+> unmapped reason, so a rejected figure approval looked like a click that did nothing. A test now
+> asserts both keys exist AND that the copy is word-for-word the Approvals page's. Card shows the
+> COUNT, never the figures — the `titleFor` call §4 already made on the primary surface.)
+
+> Last verified: 2026-08-10 (Task 7 REVIEW FIX, live-finance-inputs — **`readFinance`'s payload now
+> carries per-input freshness, and no longer inherits a guessed tier's false certainty.** Two
+> Important findings. (1) The description promises figures that are "missing or out of date", but
+> only 2 of 13 derived figures (`mrr`/`referralPct`, the only two routed through `statedFigure`)
+> ever carried a `stale` marker — `execute` now ALSO calls the new `internal.cash.inputsFor` reader
+> and includes its `CashInputState[]` (the same per-field `stale`/`statedAt` `inputs` above already
+> computes) in the returned JSON under an `inputs` key, so the agent can back "out of date" with an
+> actual date rather than the tool's own unbacked promise. (2) `solvencyFor` used to reuse
+> `solvencyForTenant`'s `row?.tier ?? "solopreneur"` default — safe on the Finance PAGE (which shows
+> a compensating "complete your shape" invitation next to the guess) but not on this tool, which has
+> no such invitation: a funded startup mid-onboarding asking "what's my MRR?" got told, with the
+> tool's own authority, that MRR structurally does not apply to their business. Fixed at the root in
+> `@pikar/core`'s `solvency()` (not patched here): `tier` widened to `Tier | null`, and `null` is now
+> PERMISSIVE rather than exclusionary — `not-applicable` is a claim about business STRUCTURE the
+> function cannot make without a confirmed tier, so an unconfirmed tier falls through to the ordinary
+> missing-input handling instead (a real stated MRR still surfaces as `known`; an absent one reads
+> `unknown`, never `not-applicable`). `solvencyForTenant` (`cash.ts`) now takes the tier-unknown
+> fallback as an explicit parameter instead of choosing one for both callers: `solvency` (dashboard)
+> still passes `"solopreneur"` — UNCHANGED behavior, `cash.test.ts`'s existing 35 tests confirm it —
+> and `solvencyFor` (this tool) passes `null`. Covering tests: `packages/core/src/cash.test.ts` gained
+> a `tier: null` describe block (4 tests); `cockpitTools.test.ts`'s empty-tenant test was tightened
+> from a `> 5` floor to the exact 13-figure count plus a "every suppressed figure carries its reason"
+> assertion, and gained a dedicated stated-MRR-with-unconfirmed-tier test that also pins the
+> dashboard's `solvency` query staying at `not-applicable` for the identical data — the tool and the
+> page are now DELIBERATELY different on this one point, not accidentally.)
+
+> Last verified: 2026-08-10 (Task 7, live-finance-inputs — **`readFinance`, the on-demand DERIVED
+> half of the finance spine.** A new read-only cockpit tool, beside `stageCrmWrite` in
+> `buildCockpitTools`: EMPTY input schema (the tenant rides the RUN's closure-captured `tenantId`,
+> never a model-suppliable argument — same shape as `recordScorecardAnswer`'s explicit-tenantId
+> door), and its `execute` calls two new `internalQuery` readers in `cash.ts` —
+> `unitEconomicsFor`/`solvencyFor` — added on the §2 allow-list, the `vaultGroundHydrated`/
+> `plans.getById` convention for identity-less engine paths. Those readers do NOT duplicate the
+> existing `unitEconomics`/`solvency` `tenantQuery` handlers' logic: both call the SAME new
+> module-private `unitEconomicsForTenant`/`solvencyForTenant` helpers (explicit `tenantId` instead
+> of `ctx.tenantId`), so the tenant-scoped page query and the tool-loop reader can never silently
+> drift apart on what a tenant's money is — the exact hazard the module banner already warns about.
+> **Never computes a ratio itself** — `@pikar/core`'s `unitEconomics()`/`solvency()` are PURE and
+> return tagged `"unknown"`/`"not-computable"`/`"not-applicable"`/`"known"` states rather than
+> throwing, so a brand-new tenant with zero `financeInputs` rows and no scorecard is the NORMAL
+> case, not an error — `cockpitTools.test.ts` drives this exact tenant through the tool and asserts
+> every returned figure is a non-`"known"` state. Registering a new tool key needs TWO more edits in
+> the SAME commit or the closed-union traps this file already warns about above bite again:
+> `schema.ts`'s `agentSteps.tool` literal (missing → `ArgumentValidationError`, SWALLOWED by the AI
+> SDK) and `cards.tsx`'s `VERB` entry (missing → silent "Working…"/"Done" fallback), both
+> structurally enforced by `cockpitTools.test.ts`/`traceParity.test.ts`.)
+
+> Last verified: 2026-08-10 (Task 5, live-finance-inputs — **THE FINANCE REFUSAL NOW REACHES THE
+> CARD.** `applyFinanceClaims` (`cash.ts`) no longer throws `INVALID_INPUT: …` for its two
+> refusals — a malformed plan-row claim and a scorecard-field claim an agent may not write — it
+> RETURNS `{ ok: false, reason: "malformed_figure_claim" | "agent_cannot_update_figure" }`, the
+> SAME shape `reserveJobInner` (`media.ts`) already used for `no_deck` and the CAN-SPAM refusals.
+> A throw here was silently broken in production: **Convex redacts a non-`ConvexError` message**,
+> so the owner got an opaque server error with no lever, and because the plan stayed `proposed`
+> every retry reproduced it. `executePlan`'s `finance_write` arm (`cockpit.ts`) now checks
+> `applied.ok` and returns the reason instead of letting a throw propagate; its return union grew
+> the two reasons. `ApprovalsView.tsx`'s `refusalMessage` map grew the matching copy. **Two-pass
+> validation, not the interleaved loop the throw allowed:** a `return` does NOT roll back Convex's
+> transaction the way a throw does, so `applyFinanceClaims` now validates every staged claim
+> FIRST, with zero writes, and only runs the write pass once the whole list clears — otherwise a
+> bad SECOND claim would leave a good FIRST claim's write committed. `writeFigureRow`'s own
+> scorecard-actor throw is UNCHANGED — it stays the last-resort invariant guard for every other
+> caller; the applier is the layer that knows a human is waiting on the refusal, the writer is
+> not. Also pinned: the Schedule button's `item.kind === "email"` gate (`ApprovalsView.tsx`) now
+> has a source-scan regression test — the gate itself needed no change, `finance_write` was never
+> reachable, but nothing had pinned that a future edit couldn't add it.)
+
+> Last verified: 2026-08-10 (Task 4, live-finance-inputs — **`finance_write` is the SIXTH `ACTION_TYPES` member and the `inline` arm's THIRD occupant.** `actionType.ts` gained the member, `actionTypeOf`'s parameter union and the `ARMS` row; `cockpit.ts` gained the matching `_ARM_TABLE` row and one dispatch branch beside `crm_write`'s, calling `cash.applyFinanceClaims(ctx, plan.tenantId, plan.financeClaims)` and patching the plan `done`. Adding the member without an arm was a COMPILE error in exactly the two places this playbook promises it would be — the `satisfies Record<ActionType, Arm>` bind at `cockpit.ts:581` and the DERIVED `ExternalActionType` at `:588` — and `approvals.ts`'s `planKind` return union was the third, which is what dragged the second approve surface into the same commit. **NOT `externalAction`:** a figure update writes our own `financeInputs` rows, so there is no fetch, no `EXTERNAL_TARGETS` entry and nothing for the retrier to retry. **Two model-facing surfaces are deliberately NOT touched and are the staging task's to close:** `llm.ts`'s `buildAgentContext` has no `finance_write` branch, so a staged figure plan would be announced to the model as an email plan (the correction note there already records that this is a hand-maintained site, not a compile-error one), and `workspace/cards.tsx` has no finance card. Neither is reachable today — nothing can stage a `finance_write` plan yet.)
+>
+> **[SUPERSEDED 2026-08-10 by 19-12 — THIS DEFECT IS CLOSED. See the closure block at the top
+> of this playbook. Kept verbatim because the DIAGNOSIS is the reusable part; the "NOT applied",
+> "one line" and "regression guard is owed" clauses are now HISTORY, not open work.]**
+> Last verified: 2026-08-10 (Plan 19-10 Task 2 — the OWNER UAT, run as `e2e/pipeline-uat.spec.ts`.
+> **19-11 FIXED THE LOOP. THE BROWSER STILL NEVER SENDS A CLOCK, SO ACTN-05 IS STILL UNREACHABLE
+> FROM THE PRODUCT.** The invariant below says every input `buildCockpitTools` takes must ride
+> `runAgentLoop`'s args. It needs ONE MORE HOP: **every input `runAgentLoop` takes must ride the
+> CLIENT's call.** `ChatPane.tsx`'s `onSend` posts `send({ threadId, text })` flat, and
+> `grep -rn clientContext apps/web` returns NOTHING — no web caller has ever sent it. Measured live
+> at UAT step 7: "Remind me Thursday to chase Jane (jane@example.com) about the renewal" came back
+> *"I couldn't stage the follow-up reminder for Thursday since the date wasn't clear"* — the
+> `no_clock` refusal — **and wrote the bare contact anyway**, the same two-wrongs shape 19-10
+> measured, reached by a different route. `parseSendTime("Thursday", …)` resolves offline at $0, so
+> the date was never the problem.
+> **Why fixture 36 is green and the product is not:** `run-eval-golden.mjs:1394` supplies
+> `clientContext: { tz: "UTC", nowMs: Date.now() }` for every `clock: true` fixture. The gate
+> certifies a code path the browser cannot reach — the same shape as the `__invokeCockpitTool`
+> blind spot 19-11 names below, one layer further out.
+> **It is not only ACTN-05.** `setSendTime` (llm.ts:1950), `checkAvailability` (:2260) and
+> `proposeCalendarEvent` (:2306) take the identical `no_clock` exit, so natural-language send-time
+> and calendar staging are equally dead from the composer. Every E2E that appears to cover them
+> drives a `SMOKE::` sentinel, which pins its own clock.
+> **The fix is one line**, in `apps/web/app/(app)/dashboard/workspace/ChatPane.tsx`'s `onSend`:
+> `clientContext: { nowMs: Date.now(), tz: Intl.DateTimeFormat().resolvedOptions().timeZone }`.
+> NOT applied at the UAT: `:3111` serves a production build the UAT was forbidden to rebuild, so it
+> could not be VERIFIED, and an unverified product change is what this phase keeps getting burned
+> by. The four other web callers (`SegmentAnatomy`, `AbnormalBriefBanner`, `PostCall`, and
+> `cards.tsx`'s regenerate/remove) are equally clockless and belong in the same edit.
+> **A REGRESSION GUARD IS OWED WITH THE FIX, and it must be a BROWSER one** — every offline layer
+> here supplies its own clock, which is precisely why this survived 19-11.)
+
+> **[SUPERSEDED 2026-08-10 by 19-12 — THIS DEFECT IS CLOSED. The diagnosis in this block was
+> correct and is exactly what was implemented; only its tense is stale.]**
+> Last verified: 2026-08-10 (Plan 19-10 Task 2 — **SC#5's WITHHELD REPORT CANNOT BE SEEN BY A
+> HUMAN.** 19-05 shipped `Sent to N. Withheld M who unsubscribed: <addresses>.` on both approve
+> surfaces and unit-pinned the string. Both render it from component `useState`, and both cards
+> are gated on `status === "proposed"` (`PlanCards` in `cards.tsx`; `approvals.listAwaiting`,
+> which paginates `"proposed"` only). A SUCCESSFUL approve IS the `proposed → approved`
+> transition, and the reactive subscription lands it before `execute()` resolves — so the
+> component that would show the note has already been replaced by the report card when
+> `setNote`/`setResult` runs. Observed: not visible at any point in 90 seconds; the user sees a
+> report listing FOUR recipients with the fifth simply absent and nothing saying it ever existed
+> (screenshot: `.planning/phases/19-contacts-crm-follow-ups/uat/step-09a-after-partial-send.png`).
+> The two REFUSAL notes survive precisely because a refusal LEAVES the plan proposed — which is
+> why UAT steps 10 and 11 pass on that same mechanism. **The withheld set belongs on the PLAN ROW,
+> not in component state**: it is a durable fact about what was approved, and the report card is
+> where a human looks afterwards. Anything kept in `useState` across a status flip is unreachable
+> by construction.)
+
+> Last verified: 2026-08-10 (Plan 19-11 — **THE ACTN-05 DEFECT IS FIXED, AND THE CAUSE WAS NOT THE
+> MODEL.** Fixture 36 is GREEN against the live `cockpit-agent@18`: `--only 36`, run `266ef8f4`,
+> $0.0056, PASS on the first attempt with `datedFollowUpCount` intact and the body BYTE-UNCHANGED.
+> **The root cause: `runAgentLoop` builds its OWN tool set and passed `undefined` for
+> `buildCockpitTools`' 4th argument — the trusted clock.** So `stageCrmWrite`'s dated follow-up took
+> its `no_clock` refusal on EVERY live cockpit turn, and so did `setSendTime`, `checkAvailability`
+> and `proposeCalendarEvent`. The model had been supplying the whole follow-up all along: seven
+> refusals were logged on eval run `7e375c3c`, every one
+> `{"reason":"no_clock","ops":["addFollowUp"],"dueProvided":[true],"noteProvided":[true]}`.
+> **Why nobody could see it.** The clock plane was only ever exercised through
+> `__invokeCockpitTool` (which bypasses the loop and passes a clock directly) or the SMOKE path
+> (which pins its own), so every offline test passed against tools built the way production never
+> builds them. `runCockpitAgent` DOES build a clocked tool set — but only the SMOKE branch uses it.
+> **THE INVARIANT: every input `buildCockpitTools` takes must ride `runAgentLoop`'s args.**
+> `skillVersions` and `omitRecipientEdits` were both threaded when someone hit this; the clock never
+> was. A new `buildCockpitTools` parameter that is not also a `runAgentLoop` parameter is silently
+> dead in production. `runCockpitAgent.test.ts` now pins the clock end-to-end through the loop
+> (mutation-proven: restoring `undefined` gives `expected undefined to be 'crm_write'`).
+> Two further shape fixes landed with it, both mutation-proven and neither a body edit:
+> a contact carrying `due`/`note` is now REFUSED rather than silently stripped and reported as
+> "1 change(s) … staged"; and the DEGRADE GRADIENT is closed — all-or-nothing refusal made a
+> simpler list the model's cheapest retry, and the simplest list that succeeds is a bare
+> `addContact`, so once a follow-up is refused in a turn a contact-only retry is refused too.
+> **NO registration surface was added** — no new tool, no `agentSteps.tool` literal, no VERB entry,
+> so the 14-site checklist below is unchanged and needs no walk. The fix is entirely inside
+> `stageCrmWrite`'s schema/boundary plus one `runAgentLoop` argument.
+> **A full gate was NOT run and is NOT owed for this change**: the skill body is byte-identical, so
+> gate `086f8267`'s 35/35 evidence still stands and only fixture 36 needed re-proving.
+> Every `stageCrmWrite` refusal now emits one enum-only structured log
+> (`{"event":"stageCrmWrite.refused","reason",...}` — op TYPES and booleans, no addresses, no notes,
+> no due strings: §4-clean by construction). It is what turned this from guesswork into a
+> measurement, and it is the first place to look if a CRM turn misbehaves again.
+> **A THIRD shape fix landed after the above, closing the phase's last open defect: `stageCrmWrite`
+> could be handed a FABRICATED address.** `parseCrmOperations` accepted any non-empty string, so on
+> run `266ef8f4` the agent — asked for a follow-up "not tied to anyone", which the body forbids —
+> satisfied the required-`email` brake by inventing `email: "no-email"` and the row staged. The
+> parse now applies **`isValidEmail`, the send path's OWN rule** (`@pikar/core`, the same one
+> `applyRecipientEdit` bounces a bad recipient with) — NOT a second validator, because a CRM that
+> accepts what the send path refuses builds an unemailable contact book. Two new
+> `CRM_PARSE_REFUSAL` entries carry it. **The follow-up sentence is load-bearing and was written
+> deliberately:** the model reached `no-email` BECAUSE an address was required, so a bare "invalid,
+> retry" leaves inventing a better-formed fake as the cheapest next move — it instead forbids
+> placeholders by name and states the correct exit (tell the user this CRM cannot hold a follow-up
+> about nobody). Same shape as the degrade-gradient fix above: close the downhill path, don't just
+> block the current step.
+> **The related data-loss half needed NO code change, and `patchPlan`'s wholesale
+> `crmOperations` replace was deliberately LEFT ALONE.** A plan row is the CURRENT STAGED STATE, not
+> a log; appending would make a model correcting its own list double it. The loss came from a
+> REFUSAL reaching `patchPlan`, which cannot happen — every refusal here is an early `return` above
+> the mutation. That is now asserted on the STORED `crmOperations`, never on reply text.
+> Re-verified live: `--only 36`, run `0b2b6b22`, **$0.0057, PASS**, body still byte-unchanged.
+> `agentSteps` shows turn 2 making TWO `stageCrmWrite` calls with the plan row still holding turn
+> 1's op — both refused, nothing overwritten.
+> SCOPE of this entry: `llm.ts` (`stageCrmWrite` + the `runAgentLoop` clock arg + two refusal
+> strings), `cockpitTools.test.ts`, `runCockpitAgent.test.ts`, `@pikar/core` `contacts.ts`
+> (+ its test), and `eval-cases/36-crm-follow-up.json` (description only — assertions untouched).
+> No UI, no schema, no new tool.)
+>
+> Previously verified: 2026-08-09 (Plan 19-10 — **`cockpit-agent@18` IS NOW THE ACTIVE BODY** (activated
+> on owner authorization after gate `086f8267`, 35/35), so `stageCrmWrite` and contacts-first
+> resolution are reachable in production. Any note below describing v18 as a candidate or ACTN-05
+> as "certified but not live" is STALE.
+> **BUT THE CAPABILITY DOES NOT ACTUALLY WORK, and this is the important half.** Asked in plain
+> language to add a dated follow-up for a named person, the live v18 body stages an `addContact`
+> and no follow-up at all — measured at `--only 36`, run `309b1c3d`, $0.0142, with the plan row read
+> back at $0 holding exactly one `addContact` and no `dueAt`; on the run's other attempt it staged
+> nothing and the plan stayed `collecting`. The 35/35 was green over this because 19-09's
+> `crmOperationCount` is a COUNT and cannot tell op types apart. 19-10 added `datedFollowUpCount`
+> to the closed expect vocabulary, so fixture 36 went RED (**FIXED in 19-11 above — it is
+> now GREEN and the cause was a dropped clock, not the body**) until the
+> body reaches the tool. **Do not fix this by adding another prohibition to the body** — 19-09
+> already proved that road: the body forbids the adjacent failure VERBATIM and the model did it
+> anyway on 2/2 runs. The candidate fix is the TOOL'S SHAPE or an explicit refusal when a follow-up
+> request yields a contact-only operation list. See `contacts-crm.md` → Known gaps.
+> SCOPE of this entry: the activation fact, the defect, and `apps/web/e2e/` (whose Pipeline spec ran
+> for the first time — `dashboard-pages.md` carries that detail). No cockpit turn, tool, gate or
+> row changed here.)
+>
+> Previously verified: 2026-08-09 (Plan 19-08 — **the cockpit now READS the person store in-loop and
+> STAGES its writes through the plan gate.** `llm.ts`, `schema.ts` and `cards.tsx` changed, in ONE
+> commit, plus a new `internal.contacts.savedForName`.)
+>
+> **1. CONTACTS FIRST, mailbox second, inside the EXISTING `resolveContacts`.** A saved contact is a
+> DELIBERATE HUMAN STATEMENT about who someone is; a Gmail-header match is an INFERENCE drawn from
+> who happened to share a thread. So `resolveContacts` looks the name up against `contacts` first and
+> only falls through to `internal.gmail.search` on a miss. There is deliberately NO second resolution
+> tool — that would be a second registration surface for one job. Both planes rank with the SAME
+> `rankCandidates` (@pikar/core), fed saved rows shaped as header records, so the two can never
+> disagree about who Sarah is. On a hit the match's OPEN follow-ups ride back in the same return, so
+> "what do I owe them?" costs no second tool call; each note goes through `scanText` first, because a
+> note is prose that could hold an address and this tool's contract is that no address reaches the
+> model (§2-D).
+>
+> **2. `resolveContacts` NEVER WRITES A CONTACT ROW, and that absence is the SC#7 enforcement point.**
+> "No contacts cache at rest" (contacts-crm.md invariant 1) means a row exists only because a human
+> deliberately acted, and resolving a name is not that act. `savedForName` is an `internalQuery` with
+> no write in it and the header plane writes nothing either. **Proven by ROW COUNT, not by reading
+> code**: `cockpitTools.test.ts` counts `contacts` before and after a resolution that matched nothing,
+> one and several. The contacts-first ORDERING is proven the same way — `gmail.search` always writes
+> exactly one refs-only `mailbox.searched` audit row, so zero rows means the header search never ran.
+> A reply-string check would pass on a header search that returned the same labels.
+> MUTATION-VERIFIED: adding an unconditional `gmail.search` call above the saved branch turns that
+> assertion RED (`expected [ { …(8) } ] to have a length of +0 but got 1`).
+>
+> **3. `stageCrmWrite` is ONE tool carrying a LIST, and it applies NOTHING.** A `saveContact` tool and
+> a `logFollowUp` tool would be two registration surfaces, two literals, two VERB entries and two
+> fixtures for one governed act — and 19-CONTEXT locks "one plan carries a list of operations, applied
+> atomically", which two tools cannot express. It patches `kind: "crm_write"`, `status: "proposed"`
+> and `crmOperations`, and `executePlan`'s `inline` arm (19-06) is the only thing that ever writes a
+> row. Four properties are load-bearing:
+> - **`parseCrmOperations` runs at the WRITE boundary too**, not only at the apply-boundary re-parse.
+>   It is idempotent over its own output, so the double parse is safe by construction, and the plan
+>   row therefore stores NORMALIZED addresses the applier never re-derives.
+> - **The AGENT may only ADD.** `completeFollowUp`/`cancelFollowUp` are refused at this boundary even
+>   though `CrmOperation` carries them: closing someone's follow-up is a judgement about work being
+>   finished and the Pipeline page is where a human makes it. Same asymmetry as invariant 11.
+> - **§2-D on the due date.** The model passes the user's WORDS (`due`), never an instant; the tool
+>   resolves them with `parseSendTime` against the TRUSTED `clientContext` clock and refuses without
+>   one. A model-supplied epoch would be a fabricated date rendered on an approvable card.
+> - **`origin` is not a model input.** It is hardcoded `mailbox-resolved`, the same literal
+>   `applyCrmOperations` uses when a follow-up upserts its contact. Letting the model label
+>   provenance would make the field unreliable for everyone downstream.
+>
+> **4. It REFUSES over a half-composed email rather than hijacking the plan row.** A thread has ONE
+> plan row, so patching `kind`/`status` onto a row holding recipients/subject/body/attachments would
+> turn a live email draft into a CRM card and strand the work. The `stageResearchPlan` /
+> `stageMediaPlan` refusal, applied to the same hazard. Every refusal — draft in progress, add-only,
+> no clock, an unparseable list, an undated or contactless follow-up — is a RETURNED SENTENCE, never a
+> throw out of the governed loop (18-06's rule).
+>
+> **5. THREE registration surfaces, and the plan's count was right this time.** `llm.ts`'s tool key,
+> `schema.ts`'s `agentSteps.tool` literal and `cards.tsx`'s VERB entry, all in one commit. BOTH guards
+> were mutation-proven: dropping the schema literal turns `cockpitTools.test.ts`'s key-scan RED
+> (`expected [ 'stageCrmWrite' ] to deeply equal []`) **and** `traceParity.test.ts` red on the orphan
+> side; dropping the VERB entry turns `traceParity.test.ts` RED on the missing-verb side
+> (`agentSteps.tool literals with no VERB entry …: stageCrmWrite`). NEW this plan: because
+> `SMOKE_OP_TOOL` is `Record<AgentSmokeOp["kind"], StepTool>` and `StepTool` derives from the schema
+> union, a SMOKE-registered tool ALSO breaks `tsc` when its literal is dropped. That is a stronger
+> guard than the 14-site checklist below has for any other surface — but it only exists for tools
+> with a SMOKE op, so do not generalise it.
+>
+> **6. The tool key is NOT yet visible to the model.** Registering a tool does not put it in the
+> model's context; the active `cockpit-agent` skill body must teach it (the 18-06 → 18-08 lesson).
+> Until then only the `SMOKE::agent::crm=` op reaches it. 19-09 owns the body edit and the eval.
+>
+> Previously verified: 2026-08-09 (Plan 19-07 — WATCH-GATE BUMP ONLY, no cockpit behaviour changed.
+> This playbook watches `apps/web/e2e/`, and 19-07 authored `e2e/pipeline.spec.ts` — two tests,
+> discoverable, **never executed**. Nothing in `cockpit.ts`, the tool set or the arm table moved.
+> *(That spec ran once at 19-10 and was DELETED at 19-13 — it could only ever pass once. See
+> `contacts-crm.md` Known gaps.)*)
+>
+> Previously verified: 2026-08-09 (Plan 19-06 — **`ACTION_TYPES` has a FIFTH member, `crm_write`, and it
+> is the `inline` arm's SECOND occupant.** `actionType.ts`, `cockpit.ts`, `schema.ts`, `plans.ts`,
+> `approvals.ts`, `llm.ts`, `cards.tsx` and `ApprovalsView.tsx` changed, in ONE commit.)
+>
+> **1. `crm_write` is `inline`, not `externalAction`, and the reason is the definition.** `inline`
+> means "a single transactional write"; a CRM write targets our OWN `contacts` / `followUps` tables,
+> so there is no `fetch`, no third-party API and nothing for the retrier to retry. Routing it
+> through the retrier would buy at-least-once delivery of a write that is already exactly-once.
+> The arm sits ABOVE the Gmail pre-check and above the postal-address gate on purpose, so a CRM
+> write approves on a tenant that could not send at all — the memo arm's property, inherited.
+> An `inline` member needs NO `EXTERNAL_TARGETS` entry and must not be given one: `ExternalActionType`
+> is DERIVED from `_ARM_TABLE`, so adding a target for `crm_write` would not compile.
+>
+> **2. ALL-OR-NONE IS FREE, AND SO IS DOUBLE-APPROVE.** A Convex mutation is one serializable
+> transaction, so a throw on the third operation discards the first two — no saga, no compensation,
+> no idempotency key beyond `executePlan`'s existing `proposed → approved` CAS, which is also what
+> makes a second approve apply nothing. `applyCrmOperations` is called DIRECTLY (not through
+> `runMutation`) precisely so it shares that transaction. *Enforcement:* `cockpit.test.ts`
+> "executePlan crm_write arm" — the invalid-third-operation test asserts zero rows AND
+> `status === "proposed"`, and the double-approve test asserts the row counts are unchanged.
+>
+> **3. THE REGISTRATION CHECKLIST — a new `ACTION_TYPES` member visits ALL of these, in ONE commit.**
+> A partially-registered action type is worse than an unregistered one: the discriminated union goes
+> non-exhaustive and the failure surfaces somewhere unrelated. Only the first four are compile
+> errors; the rest are silent.
+> - [ ] `packages/core/src/actionType.ts` — `ACTION_TYPES` (the array)
+> - [ ] `packages/core/src/actionType.ts` — `actionTypeOf`'s parameter union (mirrors `plans.kind`)
+> - [ ] `packages/core/src/actionType.ts` — `ARMS` (**compile error** — `satisfies Record<ActionType, Arm>`)
+> - [ ] `packages/core/src/actionType.test.ts` — `_COMPLETE_ARMS` (**compile error**, the same bind
+>       re-stated as a test backstop) and the EXACT-array assertion on `ACTION_TYPES`
+> - [ ] `packages/backend/convex/cockpit.ts` — `_ARM_TABLE` (**compile error** — the second, separate bind)
+> - [ ] `packages/backend/convex/cockpit.ts` — the arm body in `executePlan`'s `switch`
+> - [ ] `packages/backend/convex/schema.ts` — the `plans.kind` union (+ any new content-plane field)
+> - [ ] `packages/backend/convex/plans.ts` — `patchPlan`'s HAND-MAINTAINED mirror of that union
+> - [ ] `packages/backend/convex/plans.ts` — `resetPlan`, which must clear any new staged field
+> - [ ] `packages/backend/convex/approvals.ts` — `planKind`'s return union (**compile error**:
+>       widening `plans.kind` fails here first, which is what drags the Approvals surface in)
+> - [ ] `packages/backend/convex/llm.ts` — `buildAgentContext`'s model-facing branch (**NOT** a
+>       compile error — see invariant 4)
+> - [ ] `apps/web/.../workspace/cards.tsx` — the card branch, placed BEFORE the email chrome
+> - [ ] `apps/web/.../workspace/cards.tsx` — the `hasDraft` exclusion, or a DRAFT card prints an
+>       email body beside it
+> - [ ] `apps/web/.../approvals/ApprovalsView.tsx` — `ApprovalKindBadge`'s `Record<PlanKind, string>`
+>       (**compile error**, via `approvals.ts`), `titleFor`, and `actionLabel`
+>
+> **PITFALL 1, the one with no compile error: `patchPlan`'s `kind` union is a HAND-MAINTAINED mirror
+> of `schema.ts`'s.** Widen the schema and not the mirror and every typecheck in the repo still
+> passes — `Doc<"plans">` comes from the schema — while the RUNTIME arg validator rejects the new
+> kind at the first real propose. Only a call THROUGH the real validator can see it.
+> *Enforcement:* `plans.test.ts` "patchPlan accepts kind: crm_write (19-06 — the hand-maintained
+> union mirror)", plus a second test that `resetPlan` clears `crmOperations` (the Pitfall-6 class: a
+> staged list surviving a reset would be applied by the NEXT approve in the thread).
+>
+> **4. `buildAgentContext` is NOT a compile-error site, and the comment that said it was is now
+> corrected in place.** It claimed branching on `actionTypeOf` rather than on `plan.kind` made a new
+> member surface as a compile error. It does not: `PlanRow`, the type every caller passes, does not
+> declare `kind` at all, so widening `ACTION_TYPES` never breaks the call. `media` proved it —
+> it shipped in Phase 20 without ever reaching that parameter union. The runtime field IS present,
+> so the branches fire; the type merely under-declares. **A new action type must be added there BY
+> HAND, and one that is not gets announced to the model as an email.**
+>
+> **5. The plan card's line list is read through the SAME validator the applier runs.**
+> `describeCrmOperations` (`cards.tsx`) calls `parseCrmOperations` (`@pikar/core`), which
+> `applyCrmOperations` also calls at the apply boundary, so the card cannot promise something the
+> server would refuse. An unparseable list renders "nothing to approve" with NO Approve button
+> rather than a partial promise. *Enforcement:* `crmCard.test.ts`.
+
+> Last verified: 2026-08-09 (Plan 19-05 — **the send path is now GUARDED AT TWO POINTS and every
+> product email carries a CAN-SPAM footer.** `executePlan`, `gmail.send`, `plans.recordDeliveryTerminal`,
+> `deliverApprovedPlan`, `pipeline.ts` and the cockpit plan card changed.)
+>
+> **1. The send path converges TWICE, and both points are guarded. Neither is redundant.**
+> `executePlan` drops suppressed addresses PER ADDRESS; `gmail.send` refuses a suppressed recipient
+> per send. The approve-time filter is the one that can drop ONE address out of five and still send
+> to the other four — `gmail.send` sees group mode as ONE comma-joined string and can only refuse
+> the whole row. The send-time backstop is the one that catches a suppression created AFTER approve:
+> `startScheduledDelivery` re-fires a `requestIds` list frozen at approve time, so a filter alone
+> cannot see it. Deleting either leaves a real hole. *Enforcement:* `cockpit.test.ts` "executePlan
+> suppression + postal-address gates" and `gmail.test.ts` "a suppression created AFTER approve is
+> refused at send", which asserts ZERO fetches — the refusal lands before a credential is minted.
+>
+> **2. EVERY refusal in `executePlan` runs BEFORE the CAS patch.** A refusal after
+> `patch(planId, { status: "approved" })` leaves the plan `approved` with zero `requests` rows and
+> no workflow — a half-approved state nothing can resume (the 20-07 lesson). The two new refusals,
+> `no_postal_address` and `all_recipients_suppressed`, sit above it beside `gmail_not_connected`.
+> The per-address partition must ALSO stay above it for a second reason: `mode === "group"`
+> collapses recipients into one comma-joined string right below, after which a per-address drop is
+> impossible. *Enforcement:* every test in that block asserts `status === "proposed"`; moving the
+> filter below the CAS was mutation-verified RED and reverted.
+>
+> **3. The footer lives at the `buildMime` CALL SITE and must never move inside `buildMime`.**
+> Two reasons, both load-bearing: `notifyExternal.ts` is a SECOND `buildMime` caller sending a
+> static service notice to the user's OWN mailbox (no recipient to unsubscribe, so a footer there
+> would be a lie), and `gmail.test.ts`'s V4 tests pin `buildMime`'s zero-attachment bytes. It cannot
+> move EARLIER either — the model's output flows `plans.body → plans.recipientBodies →
+> requests.draft` and `getForDelivery` reads `editedBody ?? draft`, so every earlier stage is a
+> bypass. `footerFor` returning null is a hard THROW (the missing-attachment-blob precedent), and
+> the message names the tenant's postal address AND `UNSUBSCRIBE_SECRET`/`CONVEX_SITE_URL` because
+> the query collapses all three causes into one null.
+>
+> **4. A post-approve suppression terminates as `blocked`.** `recordDeliveryTerminal` gained a
+> `"suppressed"` outcome that patches `requests.status = "blocked"` (an EXISTING member — no new
+> state) and DECREMENTS `recipientTotal`, so the counters balance and `queuedCount` reaches 0. A
+> bare `continue` (correct for the RESUMABLE `awaiting_reauth`) would strand the row at `delivering`
+> forever. **Correction to plan 19-05's premise: `gmail.send` has TWO production callers, not one** —
+> `deliverApprovedPlan.ts` and `pipeline.ts`. The pipeline lane carries no `planId`, so it patches
+> `blocked` directly instead of calling `recordDeliveryTerminal`. Re-grep before assuming one.
+
+> Last verified: 2026-08-09 (Plan 19-04 — the public unsubscribe route — **`http.ts` gained a SIXTH
+> and SEVENTH route, and they are the first PUBLIC UNAUTHENTICATED ones in this file.**)
+> SCOPE: this entry covers `http.ts` alone, as changed by plan 19-04. No cockpit turn, tool, gate or
+> stored row changed; the send path that will mint these links lands in 19-05. Full detail lives in
+> `contacts-crm.md`.
+>
+> `GET /unsubscribe/<raw>.<hmac>` and `POST` on the same `pathPrefix`. Four things about it that are
+> decisions, not incidentals:
+>
+> 1. **The GET is inert by CONTRACT and the POST is the only mutating verb.** Corporate mail scanners
+>    and link prefetchers fire every URL in a message, so a GET-suppresses design silently
+>    unsubscribes people who never clicked. The confirm button is what stops the feature firing
+>    itself. `contacts.test.ts` proves inertness by counting `suppressions` rows before and after the
+>    GET — a status-only check passes on a handler that writes and returns the same HTML.
+> 2. **It lives here and not in `apps/web`.** `apps/web/middleware.ts` is default-deny (`isPublic` =
+>    `/`, `/privacy`, `/terms`, `/signin`, `/signup`), so a public page there costs a
+>    security-sensitive matcher edit PLUS a bearer-secret hop back into Convex to write the
+>    suppression. The Convex site origin is untouched by that middleware — the same reason the fal
+>    webhook works. The page is therefore inline-styled from the BRAND §2 hex values, with a
+>    `ponytail:` note naming that trade as the upgrade path.
+> 3. **`pathPrefix`, not `path`** — Convex's router has no `*` glob, so `path: "/unsubscribe/*"`
+>    matches nothing at all. The 20-06 lesson, now on its third route.
+> 4. **`UNSUBSCRIBE_SECRET` is its own deployment secret, SEPARATE from
+>    `GOOGLE_OAUTH_CLIENT_SECRET`.** A link that lives forever in a recipient's inbox must not share
+>    the OAuth signing key. There is deliberately **no env guard at this route**: `verifyUnsubToken`
+>    in `contacts.ts` holds the single fail-closed check and a second copy here would make that one
+>    vacuous (`contacts-crm.md` invariant 8). Same reasoning rejects a rate limiter — the operation
+>    is an idempotent upsert behind an HMAC-SHA-256 digest.
+>
+> Only 200 and 404 leave the route; a stale-but-well-formed token and a malformed one are
+> indistinguishable from outside.
+
+> Last verified: 2026-08-09 (Plan cash-business-finance Task 10 — the watched
+> `apps/web/e2e/finance.spec.ts` gained the three-tab/Business-figure/owner-Operator-tab tests and a
+> `test.describe.configure({ mode: "serial" })` to keep the non-owner-first/owner-last order real
+> under `playwright.config.ts`'s `fullyParallel: true`; no cockpit behaviour, tool, gate or stored row
+> changed. Attempted `pnpm --filter @pikar/web test:e2e` again — still NOT EXECUTED, no
+> `E2E_USER_EMAIL`/`E2E_USER_PASSWORD` and no local `convex dev`/Next stack running in this worktree.
+> See `docs/playbooks/dashboard-pages.md`'s Task 10 entry for the full account.)
+>
+> Last verified: 2026-08-09 (Phase 26 Plan 10 — **the watched `apps/web/e2e/` path gained
+> `finance.spec.ts`, and the Finance rail item went LIVE on owner direction; no cockpit behaviour,
+> tool, gate or stored row changed.**) The Cost Console route is `/dashboard/finance` and its nav
+> item now carries an `href`. The rail branch keys off `href`, not `soon`, so rollback is deleting
+> that one property — and it does NOT stop ledger instrumentation, which must keep running whatever
+> the UI does. Two things in the new spec are worth
+> copying rather than rediscovering: it asserts the NON-OWNER boundary **before** calling
+> `owner:bootstrapOwner`, because that grant has no inverse and the boundary becomes unobservable
+> from the account once it is the owner; and it seeds through the real `spendLedger:record` writer,
+> so a green run proves the projection and the role gate and proves **nothing** about a provider —
+> no model call, fal job or invoice is involved, and no seeded `actual` row may be cited as evidence
+> that money reached OpenAI or fal.
+>
+> The same pass changed `apps/web/vitest.config.mts` to `esbuild: { jsx: "automatic" }`, matching
+> Next's transform. Before it, esbuild's classic runtime meant any `.tsx` reached from a test
+> compiled to `React.createElement` and threw `React is not defined` unless the component carried a
+> default `React` import it never otherwise used. `ApprovalsView.tsx` still carries that dead import;
+> it is now unnecessary and can go whenever that file is next touched.
+
+> Last verified: 2026-08-09 (26-07 follow-up, `llm.ts` — **the agent loop's eight spend sites now
+> carry correlations, and every one of them needed a discriminator beyond the obvious ref.**)
+> `recordModelSpend` gained REQUIRED `kind` and `correlationId` parameters — required at the HELPER
+> even though `recordSpend`'s own arg is optional, because seven call sites reach it and the
+> compiler is the only thing that can enumerate them. The agent loop uses
+> `agentloop:<loopId>:a<attempt>` where `loopId = turnId ?? crypto.randomUUID()`: **`attempt`
+> separates the primary model from the CHEAP_MODEL fallback, which is a SECOND fully-billed call
+> and not a retry of the first** — without it the fallback's charge returns the primary's row and
+> vanishes. The web-search fee is a separate payment inside the SAME turn, so it appends `:search`
+> rather than sharing the turn's token-cost correlation. The digest, reply and voice-brief helpers
+> each mint a per-execution `runId` and suffix `:a0` / `:a1` across their try/catch pair for the
+> same reason. **Deliberately NOT used as a discriminator: the AI SDK's `toolCallId`** — it is
+> provider-supplied and unvalidated, so interpolating it could throw the ledger's charset check
+> AFTER the money was spent, and on at least one path it degenerates to a hardcoded literal. A
+> minted nonce is both shorter and safer. Policy and the full per-site table:
+> `docs/playbooks/guardrails.md` §"Phase 26".
+>
+> Last verified: 2026-08-08 (26-07 follow-up — **the pipeline's LLM charges now carry a DERIVED
+> spend correlation, and adding it needed a deploy guard.**) `recordLlm` passes
+> `correlationId: req:<requestId>:<stage>:<seq>` (exported as `llmSpendCorrelation` so a collision
+> is testable rather than inlined), plus `model`, `kind: pipeline.<stage>` and the `requestId` ref.
+>
+> **DERIVED, never minted.** `recordSpend` runs here as a JOURNALED WORKFLOW STEP, so a workflow
+> replay re-runs it WITHOUT re-spending; a `crypto.randomUUID()` would mint a second `actual` row
+> for money that moved once. The opposite rule applies at every action call site — see
+> `docs/playbooks/guardrails.md` §"Phase 26" for why the policy splits on that one question.
+>
+> **`requestId`, NOT the handler's `correlationId`.** The latter is a bare `v.string()` that the
+> smoke seeder supplies freely, so it could carry whitespace or exceed 128 chars and would throw
+> the ledger's charset check AFTER the model call was billed. A Convex id is regex-safe by
+> construction.
+>
+> **`seq` is the discriminator that matters.** It is `usages.length` read BEFORE the push — the
+> array is append-only and appended only there, so it is 0 for route, 1 for the first draft, 2 for
+> the first regenerate: deterministic on replay, distinct for every real charge. `stage` alone
+> would collapse every regenerate onto the first draft's row, and each regenerate IS a real second
+> model call.
+>
+> **`{ unstableArgs: true }` IS MANDATORY HERE AND IS NOT COSMETIC.** These step args grew, and this
+> pipeline parks for up to `SEVEN_DAYS` at the review gate. A workflow already mid-flight replays
+> the step against a journal entry recorded with the OLD args and dies on `Journal entry mismatch`
+> — killing an in-flight request whose money is already spent. The option is present in the pinned
+> `@convex-dev/workflow` (verified in `dist/client/step.d.ts`). It is droppable only once nothing
+> started before that deploy can still be parked, i.e. `SEVEN_DAYS` after it ships. **Any future
+> change to a journaled step's args carries the same hazard.**
+>
+> Last verified: 2026-08-08 — **A MODEL-SUPPLIED ARGUMENT IS NOT CONTROL FLOW: `createDocument`'s
+> `replace`.** The live model sends `replace` on EVERY call, including the FIRST, when the
+> conversation holds no created documents at all. The tool obeyed it, routed a create down
+> `patchCreatedDoc`, and that mutation refused CORRECTLY ("there's no document #1") — so nothing was
+> ever created, the agent read the honest refusal as "try again", and looped: **thirteen tool calls
+> in a two-turn fixture, every one recorded `done`, zero documents.** Every component was behaving
+> perfectly in isolation; the whole defect was trusting one model-supplied integer. Fix:
+> `effectiveReplace = docIds.length === 0 ? undefined : replace` — with ZERO created documents
+> `replace` cannot denote anything, so it is NOISE, not a refusal case. **Do not widen this to every
+> out-of-range index:** once documents exist, an out-of-range `replace` keeps its honest refusal,
+> because there the user may genuinely mean a document numbered differently, and creating a second
+> document when a revision was asked for is the failure the paired tests exist to keep apart. Both
+> directions are pinned in `cockpitTools.test.ts` and mutation-verified RED.
+>
+> **This is the `confirmed`-flag principle, and it was already written down.** 18-08 gave
+> `createDocument` no `confirmed` argument precisely because "a model-supplied confirmation flag is
+> the model grading its own trigger" — but `replace` predated that reasoning and never inherited the
+> distrust. When a tool takes an optional argument that SELECTS A CODE PATH, assume the model will
+> populate it whether or not it means to; validate it against server-held state before branching.
+>
+> **The concealment is the lesson for debugging.** Two things hid this for a whole paid gate: a bare
+> `catch` (now logs its reason, per the rule `ErrorBoundary.tsx` already states), and a failure path
+> that RETURNS A PLAUSIBLE SENTENCE — so the tool "succeeded", `agentSteps` said `done`, and the
+> feature looked like it merely hadn't managed it. What settled it was the OFFLINE `SMOKE::agent::`
+> op proving the whole chain worked with no model involved, which relocated the fault from "the code
+> is broken" to "the arguments are wrong". Reach for that op FIRST next time. Also found and NOT
+> fixed here: `agentSteps:record` throws `ArgumentValidationError` on `recordScorecardAnswer` — that
+> name is missing from the `agentSteps.tool` union, so every scorecard tool call fails to record a
+> step; the SDK swallows callback throws, so it is invisible outside the logs.
+
+> Last verified: 2026-08-08 — **`listThreadMessages` guards AUTHORIZATION, so it must not then
+> assume EXISTENCE.** `plans.threadId` is a plain `v.string()` and is NOT guaranteed to name an
+> agent-component thread: `smoke:seedCockpitPlan` writes `smoke-attach-<uuid>`, and legacy rows can
+> predate the thread they point at. The handler returned an empty page for an UNOWNED thread and
+> then passed the raw string to `listMessages`, whose validator is `v.id("threads")` — so an
+> OWNED-but-nonexistent thread THREW where an unowned one degraded. That asymmetry was the bug:
+> the throw is uncaught in the browser, kills the whole React tree, and takes the ENTIRE cockpit
+> page down — and it is reachable from the `?thread=` URL parameter, i.e. from user input. Found in
+> the 26-05 Approvals UAT via "Open in cockpit" on a seeded plan. Both cases now return the SAME
+> empty page. The catch is deliberately NARROW — `isNonAgentThreadIdError` — so a real component
+> fault is never masked; do not widen it to a bare `catch`, and do not let it match a validator
+> rejection on a DIFFERENT table (that is somebody else's bug and must still throw).
+>
+> **THE HARNESS IS NOT PRODUCTION, AND THIS IS THE FILE THAT PROVES IT.** The first fix matched only
+> `Expected ID for table "threads"` — `convex-test`'s wording. It passed the integration test and
+> the live cockpit CRASHED ANYWAY, because the deployed runtime words the same rejection completely
+> differently: `ArgumentValidationError: Value does not match validator. / Path: .threadId /
+> Validator: v.id("threads")`. A test whose ERROR TEXT is generated by the harness proves the
+> harness, not the product — the same class as 15.3-09's stubbed-request lesson in vault.md. Both
+> messages are now pinned VERBATIM in `cockpitThreadDegrade.test.ts` (the live one captured from a
+> real browser console), alongside negative cases. **Rule: when behaviour keys off an error MESSAGE
+> crossing a component or service boundary, pin the real one from a live capture — never only the
+> one your test harness happens to raise.** Anything reading a thread id off a `plans` row owes the
+> same treatment.
+
+> Last verified: 2026-08-07 (**`resolveModel` is now a two-vendor seam.** `llm.ts:144` mapped every
+> model id through `openai()`; it now branches on the id prefix, so `google/gemini-2.5-flash` routes
+> to Vertex AI while `openai/*` is untouched. The prefix scheme was ALREADY there — model ids have
+> always been `openai/…` for pricing/audit — so this cost no new id format and no call-site changes.
+>
+> **REVISED AGAIN — GEMINI HAS TWO DOORS, AND THE FREE ONE IS PREFERRED.** `resolveModel`'s `google/`
+> branch now picks **AI Studio** (`@ai-sdk/google`, `GOOGLE_GENERATIVE_AI_API_KEY`, free rate-limited
+> tier) when that key is set, and falls back to **Vertex** (`@ai-sdk/google-vertex`, service account)
+> otherwise. Identical model names, so the `google/…` namespace and every `PRICING` row are unchanged.
+>
+> **This was learned the hard way and is the reason the preference order is what it is: VERTEX AI HAS
+> NO FREE TIER.** Two separate GCP projects were tried with a real service account on 2026-08-07
+> (`project-c3a75795-f866-4b37-8ec`, then `gen-lang-client-0695333543`) and BOTH returned
+> `BILLING_DISABLED` before generating a token — confirmed by a raw REST call with our whole stack
+> bypassed, so it was never an integration bug. A service account authenticates fine and still cannot
+> call the model without a LINKED billing account. Do not "simplify" this back to Vertex-only.
+> Vertex stays wired because it is the only door to Imagen/Veo (ADR-016).
+>
+> The grounding tool follows the TRANSPORT, not just the vendor: `google.tools.googleSearch` under AI
+> Studio, `vertex.tools.googleSearch` under Vertex, both gated on the SAME env check as
+> `resolveModel` so the tool and the model can never disagree.
+>
+> **REVISED SAME DAY — this is CROSS-VENDOR FAILOVER, not a migration.** The owner's aim is that both
+> vendors alternate so work continues when either runs out of credit. `DEFAULT_MODEL` is Gemini and
+> `CHEAP_MODEL` is OpenAI, which makes `runAgentLoop`'s existing primary → fallback step a provider
+> failover for free. See `guardrails.md` for the rail/pricing half and the eligibility limit.
+>
+> **RESEARCH IS THE ONE PAIR THAT STAYS SINGLE-VENDOR, and the reason is structural — do not "fix" it
+> by pointing `RESEARCH_FALLBACK_MODEL` at OpenAI.** `buildWebResearchTool` selects OpenAI's
+> `webSearch` or Vertex's `googleSearch` ONCE from `RESEARCH_MODEL`'s prefix, and `runAgentLoop`
+> reuses that single tools record for BOTH attempts. A cross-vendor research fallback would therefore
+> hand Gemini a tool only OpenAI can execute — a guaranteed 400 on every fallback, which is precisely
+> the failure mode the original "the fallback was probed TOO" comment exists to prevent. Crossing
+> vendors here first requires the tools record to become a function of the model actually running.
+>
+> **The Vertex provider is built lazily and memoized, and the laziness is load-bearing, not tidiness:**
+> constructing it at module scope would read the GCP env on IMPORT, so a deployment with no Google
+> credentials would fail every OpenAI call too. Gemini was added ALONGSIDE OpenAI (owner decision
+> 2026-08-07 — `DEFAULT_MODEL`/`CHEAP_MODEL` are NOT repointed), so a tenant that never names a
+> `google/` model must never be able to notice the credential is absent. The throw can only fire on
+> a request that asked for Gemini.
+>
+> **Credentials come from `GOOGLE_SERVICE_ACCOUNT_JSON`, an env var holding the whole JSON — NOT a
+> file path.** `GOOGLE_APPLICATION_CREDENTIALS` is a path and **Convex has no filesystem**, so a key
+> file on a developer's disk is unreachable from the deployed backend. `project` is read from the
+> credential's own `project_id` so it cannot drift from the key. The parse failure message never
+> echoes the raw value — it holds a private key.
+>
+> Dependency: `@ai-sdk/google-vertex@5.0.44`, chosen because its `@ai-sdk/provider@4.x` +
+> `@ai-sdk/provider-utils@5.x` generation matches the pinned `@ai-sdk/openai@4.0.11` / `ai@7.0.20`
+> pairing. It drags in `google-auth-library`, `@ai-sdk/anthropic` and `@ai-sdk/openai-compatible`;
+> the lighter `@ai-sdk/google` was NOT chosen because it takes an AI Studio API key, not the service
+> account, and cannot reach Imagen/Veo. Installing it moved the resolved `provider-utils` 5.0.7 →
+> 5.0.23 under `@convex-dev/agent`, whose peer range was already unmet — **verified after the bump:
+> backend typecheck 0 errors, backend suite 1211 tests with only a pre-existing unrelated failure**
+> (see below), cost 56/56.
+>
+> **LIVE-VERIFIED 2026-08-07 — both pins answered through AI Studio.** `pnpm probe:gemini` exit 0 on
+> `google/gemini-3.5-flash` (8 in / 78 out, $0.000197) and on `google/gemini-3.5-flash-lite`
+> (8 in / 1 out, $0.000001). The `google/` branch of `resolveModel` works end to end.
+>
+> **THE PINS ARE 3.5, NOT 2.5, AND THAT WAS NOT OPTIONAL.** `gemini-2.5-flash` still APPEARS in the
+> AI Studio model listing but refuses with "no longer available to new users" — so a listing is not
+> proof of access, only a call is. Both 3.5 ids also appear in `@ai-sdk/google-vertex`'s model union,
+> so the same ids serve both doors.
+>
+> **GEMINI 3.x REASONS BY DEFAULT AND ITS THINKING TOKENS COME OUT OF `maxOutputTokens`.** At a
+> 16-token cap the probe got HTTP 200, 12 output tokens and **empty text** — no error at all. That is
+> the failure shape most likely to be mistaken for success by anything downstream expecting prose, so
+> `empty_text` is now a FAILING probe verdict rather than a footnote. The cost consequence is real:
+> `flash` spent **78 output tokens to answer "OK"**, while `flash-lite` spent **1** — flash-lite does
+> not run the reasoning pass. Any call site that caps output tightly must either raise the cap or
+> disable thinking via `providerOptions`.
+>
+> **Still NOT proven:** the price rows (pinned unverified — the probe proves priceABLE, not priceD
+> correctly), and `googleSearch` grounding, which no probe has exercised yet. Do not close 16-09 on
+> the strength of this.
+>
+> **The probe that changes that: `pnpm --filter @pikar/backend probe:gemini`** (or
+> `node scripts/probe-gemini.mjs` from `packages/backend` — the Convex CLI only resolves the
+> deployment from there). It calls a new `llm:probeGemini` internalAction, so the work happens INSIDE
+> the deployment: a credential that works on a laptop proves nothing about a backend that has no
+> filesystem to read it from. Three exit codes, following `check-fal-catalog.mjs` rather than
+> `skillopt.yml` — **0 PASS / 1 REFUSED / 2 UNREACHABLE**, and 2 never collapses into 0, because a
+> probe that reports green when it never asked is the vacuous-gate defect `ci-gate.md` documents.
+> There is no `|| true` in the file, deliberately.
+>
+> `unpriced` is a FAILING verdict, not a warning: a model that answers but has no `PRICING` row bills
+> $0 against `DAILY_BUDGET_CENTS`, and a free-looking model is worse than a broken one.
+>
+> **Exit 2 is verified — exit 0 and 1 are NOT.** Running it 2026-08-07 produced a real exit 2 with the
+> local backend up and the function merely unpushed; that observation is now the first hint in the
+> script's own error text. The PASS and REFUSED branches have never executed, because
+> `GOOGLE_SERVICE_ACCOUNT_JSON` has never been set on any deployment.
+>
+> Unrelated fix in the same pass: `llmRedaction.test.ts`'s pinned `audit.log` count for `cockpit.ts`
+> was **red at HEAD** — 26-03 added `plan.discarded` and a second `plan.rescheduled` site while the
+> pin still said 2. All four payloads were hand-checked and ARE refs-only, so this was a stale pin,
+> not a §4 breach. It was strengthened rather than bumped: the old scan looped a hardcoded eventType
+> list (so `plan.discarded` slipped in unchecked) and used a non-global `match` (so the second
+> `plan.rescheduled` was never read). Sites are now derived from source — an unnamed new call site
+> fails loudly instead of passing silently.)
+
+> Last verified: 2026-08-07 (connect-gmail bounded-unavailable state — **a missing OAuth
+> deployment config is now an operational STATE, not a thrown query.** `gmailAuth.gmailConnectUrl`
+> used to return `string` by calling `buildAuthorizeUrl`, which `requireEnv`-throws when
+> `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` / `GMAIL_OAUTH_REDIRECT_URI` are absent. A
+> throwing Convex query never resolves its React subscription, so an unconfigured deployment left
+> `connect-gmail/page.tsx` on "Preparing consent link…" forever — the same eternal-spinner class the
+> `(app)` layout's `<Authenticated>` gate exists to kill, arrived at from the env side instead of the
+> token side. The query now returns `{ configured: boolean; url: string | null }` and the page
+> renders a `role="alert"` panel telling the user OAuth is unconfigured and to ask an administrator.
+> **`buildAuthorizeUrl` stays strict and unchanged** — the callback and token-exchange paths must
+> never proceed on partial OAuth config, so the leniency lives ONLY in the client-facing read.
+> Two `calendar.test.ts` cases pin both branches (incomplete env → `{configured:false,url:null}`;
+> complete env → a URL whose `state` matches `^${userId}\.[a-f0-9]{64}$`, so the tenant binding is
+> still asserted on the lenient path). DIFF-REVIEWED ONLY — I did not execute the backend suite, the
+> web typecheck or any Playwright run in this pass; the change was authored by the
+> `fix/ci-commit-errors` lane and reviewed here to keep this playbook true. Anyone citing it as
+> green must run `pnpm --filter @pikar/backend test -- calendar` first.)
+>
+> Same pass closes a gap this playbook has been carrying since 22.1: `apps/web/e2e/connect-gmail.spec.ts`
+> now asserts the copy the page actually ships ("Connect Google" / `/connect google/i` /
+> "Google connected") plus the new `role="alert"` branch, instead of the pre-17-02 "Connect Gmail"
+> strings. See "Known gaps" — the entry is updated, not deleted, because the spec still has no gate.
+
+> Last verified: 2026-08-05 (Phase 26 Plan 05 owner preview — **the connected Approvals route is
+> accessible from navigation while authenticated browser evidence and owner UAT remain pending.**)
+> The owner rejected the disabled `Soon` item because it prevented in-product access to the page;
+> activating `/dashboard/approvals` is an access correction, not an approval claim. The route reuses
+> the one `executePlan` gate plus the
+> shipped discard/schedule/cancel/move mutations; it does not add a fan-out starter. Initial email
+> scheduling resolves browser-local `datetime-local` to an absolute instant, displays the resolved
+> IANA timezone for confirmation, writes `setPlanSendTime`, and only then calls `executePlan`.
+> Revise/change-time links reopen the originating cockpit thread. Attachment URLs remain on-demand.
+>
+> Automated evidence currently green: `pnpm --filter @pikar/web test -- approvals` (13/13) and web
+> typecheck. The authenticated `approvals.spec.ts` is authored and actually entered its Convex-backed
+> run, but the canonical setup stopped because this shell lacks `E2E_USER_EMAIL` and
+> `E2E_USER_PASSWORD`; reuse of the saved state reached Sign in because that token is expired. Do not
+> cite the browser gate as passed. With local Convex plus Next on `:3111` and the two credentials set,
+> resume exactly: `pnpm --filter @pikar/web test:e2e -- e2e/approvals.spec.ts`.
+>
+> The browser fixture boundary is strict: internally seeded plan rows prove page states only; public
+> mutations prove CAS/idempotency/races. No seeded row proves Gmail delivery, Calendar creation or
+> media generation. Roll back by disabling the hidden Approvals route and retaining workspace,
+> `/review`, `/requests`, `/ops`, all plan provenance/counters and the existing cockpit terminals.
+> Authenticated browser evidence and owner UAT remain blocking; the preview link can be disabled
+> independently if rollback is needed.
+
+> Last verified: 2026-08-05 (Phase 26 Plan 03 — Approvals write semantics). The existing human
+> `executePlan` gate remains the only email fan-out starter. This change adds guarded discard,
+> current-schedule movement and exact new-plan delivery progress without creating a second send
+> path.
+>
+> | Current state | Control | Result | Stored transition |
+> |---|---|---|---|
+> | `proposed` | Discard | `{ok:true, discarded:true}` | `canceled`, `cancelKind:"discarded"`, `canceledAt`; one refs-only `plan.discarded` |
+> | any other state | Discard | `{ok:true, alreadyResolved:true}` | no write, no audit |
+> | `scheduled` + current handle | Move | `{result:"moved"}` | old callback canceled; `sendAt` + handle replaced atomically; one refs-only `plan.rescheduled` |
+> | `delivering` / `done` | Move | `{result:"already_fired"}` | no write; the scheduler won and the UI must show In Flight, never “Rescheduled” |
+> | canceled, proposed, or otherwise unscheduled | Move | `{result:"not_scheduled"}` | no write |
+> | `scheduled` | Cancel | `{ok:true, canceled:true}` | `canceled`, `cancelKind:"scheduled_cancel"`, `canceledAt`, handle cleared |
+>
+> **Discard never re-arms.** `reschedulePlan` accepts only an explicit `scheduled_cancel` or a
+> legacy canceled row with missing provenance. A newly written `discarded` row always no-ops there.
+> Missing provenance remains the backward-compatible historical scheduled-cancel case; new writers
+> must never omit `cancelKind`.
+>
+> **The scheduler race has one truthful winner.** Every new callback carries `scheduledFor`; the
+> callback reads the row and starts fan-out only while status is `scheduled` and `sendAt` still
+> equals that token. A moved callback therefore no-ops even if it was already dequeued. Legacy
+> callbacks have no token and may proceed only when the row is still due (`sendAt <= now`). Because
+> cancel, move and fire all read/write the same plan row, Convex serializability yields canceled,
+> moved, or already-fired — never a successful move after delivery started. Replaying the same move
+> returns `moved` without adding a second callback or audit row.
+>
+> **Progress is exact only when the row says it is.** New email approvals seed
+> `recipientTotal`, `queuedCount`, `sentCount`, `failedCount` and `counterComplete:true` from the
+> frozen request targets. `plans.recordDeliveryTerminal` owns the request terminal and plan counters
+> in one transaction. Request status is the replay key: a `sent`/`failed` row cannot increment again
+> or flip terminal. Held `awaiting_reauth` rows remain queued. Legacy plans carry no completeness bit
+> and keep their counters absent, so the later Approvals reader must use only its bounded partial
+> fallback and must never present a fabricated exact zero.
+>
+> Focused verification:
+> `pnpm --filter @pikar/backend test -- cockpit plans`,
+> `pnpm --filter @pikar/backend typecheck`, and `node scripts/check-playbooks.mjs`.
+>
+> **Rollback boundary:** hide/disable the Approvals route and its mutations while retaining the
+> existing workspace, `/review`, `/requests`, `executePlan`, stored cancellation provenance and
+> progress fields. Do not erase provenance, reopen discarded rows, remove the stale-callback guard,
+> or stop terminal instrumentation during UI rollback.
+
+> Last verified: 2026-08-05 (15.4-04 watch-map acknowledgement — **no cockpit behavior changed;
+> the watched `apps/web/e2e/` path gained an actually executed Vault regression spec.**)
+> `vault-redesign.spec.ts` passed 2/2 against the authenticated local stack and covers the connected
+> Vault route from root/category browse through folder-scoped search, preview and confirmed removal.
+> It reuses `auth.setup.ts` storage state, seeds onboarding through the repository's internal E2E
+> seam, and deliberately does not fake Drive import or folder-digest AI success. Run it with
+> `pnpm --filter @pikar/web test:e2e -- e2e/vault-redesign.spec.ts`; the full close also runs both
+> package test suites/typechecks, the web production build and `node scripts/check-playbooks.mjs`.
+> Rollback is limited to the Vault E2E/playbook commit plus its isolated SMOKE-delete backend fix;
+> no cockpit route, tool, plan, send gate or stored cockpit row changes.
+
 > Last verified: 2026-08-04 (ADR-014 — **the cockpit can now propose a standalone image and still
 > cannot generate one.** The executive-only `proposeImage` tool stages `mediaMode:"image"` plus the
 > reviewed prompt on the unique plan row. It returns copy that explicitly says nothing was generated
@@ -1212,7 +2426,7 @@ refactor: the arms are the existing code paths and no behavior changed.**
 - `rejected` is transient, not a plan column; cross-turn per-address re-ask needs a schema change
 - Divider persistence ceiling: localStorage → Convex userPrefs if cross-device matters
 - **A disconnect strands rows on purpose (22.1)**: requests held at `awaiting_reauth`, unread `gmail_reconnect` notifications, and armed future-`sendAt` schedulers are all left in place. Each degrades to a non-throwing hold (`gmail.send` routes a missing token to `awaiting_reauth` without throwing), and the cron creates no new expiry notifications once the row is gone, so the leak is bounded to what already exists. Cleaning them up means building the reconnect-RESUME sweep — which does not exist today either, despite `connect-gmail/page.tsx`'s comment claiming reconnect "resumes any awaiting_reauth delivery". That resume is the real missing feature; the disconnect adds no new breakage.
-- **`apps/web/e2e/connect-gmail.spec.ts` is PRE-EXISTING red**: it still asserts a "Connect Gmail" heading and a `/connect gmail/i` link, but the page has said "Connect Google" since the 17-02 calendar widening. Not touched by 22.1-01 — recorded here so a reviewer does not attribute it to the disconnect change.
+- **`apps/web/e2e/connect-gmail.spec.ts` — the stale-copy assertions are FIXED (2026-08-07), but the spec still has no gate.** It asserted a "Connect Gmail" heading and a `/connect gmail/i` link from 17-02 (when the page became "Connect Google") until the `fix/ci-commit-errors` lane retargeted it at the shipped copy plus the new `role="alert"` unconfigured-OAuth branch. **Do not read that as green**: Playwright is deliberately outside the CI gate (`ci-gate.md` — it needs a live deployment and a seeded tenant), and this shell has never had `E2E_USER_EMAIL`/`E2E_USER_PASSWORD`, so the corrected spec has still never been observed passing. A spec that is merely *no longer wrong* is not a spec that has run.
 
 ## Voice-doc reuse of the evaluation card (14-08)
 
@@ -1784,3 +2998,93 @@ Mutation-verification ledger (each mutation was applied, observed RED, and rever
 This is the CODE proof: scripted models prove deterministic degradation and containment. Plan
 16-09 is the PROMPT proof: the eval gate measures grounded, useful, injection-resistant research
 answers. Neither proof substitutes for the other.
+
+## Phase 17 gap closure — the `calendar_manage` substrate (17-05)
+
+*Added 2026-08-11 by Plan 17-05. Plans 17-06 … 17-11 build on this and must not re-litigate it.*
+
+### What this plan did NOT do
+
+`17-VERIFICATION.md` (2026-08-10) records Phase 17 as `gaps_found`: ACTN-02 says *schedule and
+manage* events for *Google / Microsoft*, and the shipped slice is **Google-only and create-only**.
+17-05 closes neither gap. It adds no Microsoft endpoint, no OAuth grant, no update, no delete, no
+`If-Match` and no 412 handling. Everything below is compile-time and persistence groundwork whose
+only job is to make 17-06 … 17-09 additive.
+
+**The shipped Google create path is byte-unchanged and stays the positive regression anchor.**
+
+### Invariants
+
+1. **`calendar_event` is CREATE. `calendar_manage` is UPDATE/DELETE. They are two action types on
+   purpose.** Create has no concurrency problem; management does (etag / `If-Match` / 412), and the
+   two cards promise different things. Do not repurpose `calendar_event`, and do not add a type per
+   provider — the provider is a closed FIELD (`plans.calendarProvider`), so both providers and both
+   operations share one arm.
+2. **`CalendarManageOperation` is `update | delete`, and it is closed.** "Move"/"reschedule" map to
+   `update`; "cancel"/"remove" map to `delete` (`@pikar/core/calendarManagement`). A verb outside
+   the alias map is REFUSED, never guessed.
+3. **`delete` means delete — never the provider's cancellation flow.** Google's `sendUpdates` and
+   Graph's `/cancel` email the attendees on the app's behalf: an outbound external communication
+   with no plan, no audit, no dead letter and no redaction pass. They are out of the vocabulary
+   entirely rather than guarded by a parameter default.
+4. **Management is limited to Pikar-created, attendee-free, etag-bearing rows in `calendarEvents`.**
+   `manageability()` is the single gate and it returns a CODE (`not_found` / `attendees_present` /
+   `needs_inspection`). Arbitrary mailbox event discovery stays out of reach because 17-09's
+   listing reads the registry, not the provider.
+5. **An absent `calendarProvider` MEANS GOOGLE.** Every Phase-17 create row predates this plan and
+   is a Google row, so there is no migration and no backfill. `parseCalendarProvider(undefined)`
+   is the one place that decision lives; an UNKNOWN value throws rather than falling back, because
+   a silent fallback would aim a Microsoft-shaped operation at a Google calendar.
+6. **The registry is the FACT plane; the plan row is the PROPOSAL plane.** `resetPlan` clears all
+   five proposal fields and touches no `calendarEvents` row. That asymmetry is the whole reason the
+   registry is a table rather than more `plans` columns: a user typing "start over" in a thread
+   must not erase our record of events that still exist on a real calendar.
+7. **`patchPlan` stages `calendarProvider`, `calendarOperation` and `calendarManagedEventId` — and
+   NOTHING else.** `calendarExpectedEtag` (the `If-Match` value) and `calendarFailureCode` are
+   deliberately not args, and the ABSENCE is the guarantee: a model-suppliable etag is precisely the
+   stale-overwrite path G2 exists to close, and a model-writable failure code would let the loop
+   claim an operation failed — or that it did not. 17-09 copies a FRESH etag server-side through its
+   own internal mutation (the `persistStoryboard` precedent); 17-08's terminal writes the code.
+8. **`calendarEvents`' composite index is TENANT-FIRST** (`by_tenant_provider_external`). Two
+   tenants can legitimately hold the same provider event id, and a Convex index query must eq its
+   prefix in order — so the tenant predicate is unwritable-to-forget, not merely conventional.
+9. **Failure reaches the user as a CODE, never provider prose.** `CALENDAR_FAILURE_CODES` has seven
+   members. A Google 400 or a Graph 412 body can echo the event summary straight back (§4).
+
+### The inert seam, and who replaces it
+
+| Seam | State today | Owner |
+|---|---|---|
+| `EXTERNAL_TARGETS.calendar_manage` (`cockpit.ts`) | throws `calendar manage not wired (17-08)` | **17-08** replaces this exact member with the real `retrier.run` thunk + terminal |
+| `microsoftCalendarTokens` | table exists, nothing writes it | **17-06** (OAuth flow) |
+| `calendarEvents` | table exists, nothing writes it | **17-08** (create landing + legacy migration) |
+| `listManagedCalendarEvents` / `proposeCalendarChange` trace literals + VERBs | reserved, no tool emits them | **17-09** (the tools) |
+| `calendar-manage-plan-card` | renders provider, operation, managed-event REFERENCE and desired fields | **17-09-03** (registry-backed original event) |
+
+A throw inside `executePlan` aborts the whole Convex mutation, so the `status: "approved"` patch
+that runs before the target thunk rolls back with it. That rollback — not statement ordering — is
+what makes "no run id and no plan-state patch" true, and `cockpit.test.ts` asserts it against a
+manually seeded row.
+
+### The card cannot name the original event yet, and says so
+
+`PlanCard` receives the plan row only. The original event's title and time live in the registry,
+so the card renders the managed-event **reference** and labels the staged values "New title" /
+"New time" / "New length". Reconstructing an "original" from the desired state would be the
+provenance-laundering failure this codebase has already had three times. 17-09-03 adds the
+registry read; until then the reference is the honest maximum.
+
+### How to verify
+
+```
+node scripts/run-calendar-test-gate.mjs --timeout-ms 45000 --test-timeout-ms 20000 \
+  --hook-timeout-ms 10000 -- convex/calendar.test.ts
+cd packages/backend && npx vitest run convex/plans.test.ts convex/cockpit.test.ts convex/traceParity.test.ts
+pnpm --filter @pikar/core typecheck && pnpm --filter @pikar/web typecheck
+```
+
+`run-calendar-test-gate.mjs` exists because the 2026-08-10 verifier saw three Calendar runs emit no
+result at all (66.2s / 71.8s / 55.3s). It gives the run a hard wall clock, kills it, and asserts
+exit 0, `numTotalTests > 0` and `numPassedTests === numTotalTests`. **A timeout is diagnosed, never
+converted into a pass.** At HEAD on 2026-08-11 the file passes 39/39 in 9.6–14.5s cold and warm, so
+those verifier timeouts are recorded as environmental, not as a Calendar defect.

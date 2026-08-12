@@ -1,6 +1,29 @@
 # Playbook: Live Voice Sessions
 
-> Last verified: 2026-08-02 (22.1-03 — ⚠ **date bumped for a BEHAVIOUR-FREE sweep; the
+> Last verified: 2026-08-10 (Plan 19-12 — the phase-19 UAT clock defect). **No voice BEHAVIOUR changed.** `PostCall`'s
+> "Turn into a plan" (VOIC-04) and `AbnormalBriefBanner`'s dropped-brief handoff were two of the
+> five web callers of `api.cockpit.sendCockpitMessage` that never sent `clientContext`, so the
+> cockpit thread a voice brief opened arrived clockless and its FIRST turn could not stage a dated
+> follow-up or a calendar event — exactly the actions a call brief produces. Both now call the
+> shared `useSendCockpitMessage()` hook (`dashboard/workspace/`); same seed text, same navigation,
+> same failure handling, one extra argument. Use the hook for any future voice→cockpit handoff —
+> `crmCard.test.ts` fails the build on a raw `useAction(api.cockpit.sendCockpitMessage)` anywhere
+> under `apps/web/app`. See `cockpit.md`'s top block for the full defect.
+
+> Last verified: 2026-08-09 (26-07 follow-up — **both voice spend sites now name themselves in the
+> ledger, and the metering one needed a discriminator that is not the session.**)
+> `voice.ts`'s realtime metering uses `voice:usage:<sessionId>:<offset>` — **the cumulative token
+> offset, NOT the session id alone.** One live session meters REPEATEDLY as audio flows, so a
+> session-scoped correlation would have recorded only the first slice and silently dropped every
+> later one, leaving the ledger far below the limiter for exactly the sessions that cost the most.
+> The offset advances monotonically per metering call, so each slice gets its own row while a
+> genuine replay of the same slice is still suppressed. `voiceDoc.ts`'s review draft uses
+> `voicedoc:review:<sessionId>:<nonce>` with a per-execution nonce, because re-reviewing a document
+> re-spends for real. Both are ACTION sites, which is why they mint rather than derive — the policy
+> and the full per-site table live in `docs/playbooks/guardrails.md` §"Phase 26". A static scan in
+> `guardrails.test.ts` fails the build if either site ever loses its correlation.
+>
+> Previously verified: 2026-08-02 (22.1-03 — ⚠ **date bumped for a BEHAVIOUR-FREE sweep; the
 > subsystem below was NOT re-verified.**) The dead-directive sweep (`72dd652`) deleted one line
 > — `// @ts-expect-error import.meta.glob …` — from watched test files (voice.test.ts, voiceDoc.test.ts, voiceToken.test.ts).
 > It suppressed nothing: `tsconfig.json` includes `vitest.config.mts`, which pulls Vite's global

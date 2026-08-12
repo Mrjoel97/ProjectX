@@ -2,7 +2,7 @@
 
 import { useThreadMessages } from "@convex-dev/agent/react";
 import { api } from "@pikar/backend/api";
-import { useAction, useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import {
   BoltIcon,
@@ -17,6 +17,7 @@ import {
 // stepText — a second copy WILL drift, and a drifted verb is a surface disagreeing with itself.
 import { stepText, traceText } from "./cards";
 import { IntakeControls } from "./IntakeControls";
+import { useSendCockpitMessage } from "./useSendCockpitMessage";
 
 // SC2 render: the left-pane conversation. The guided questions and the "review and Approve"
 // copy are saved assistant turns on the agent thread (cockpit.ts is deterministic — the thread
@@ -56,6 +57,20 @@ const bubble = (mine: boolean) => ({
   whiteSpace: "pre-wrap" as const,
 });
 
+// SKILL-01 "routine v0": pinning a prompt saves the message TEXT and nothing else. The state lives
+// in words on the button itself, never in colour alone (BRAND §6) — the chip is a translucent
+// overlay on a teal bubble, and a colour-coded one would be unreadable there anyway.
+export type PinState = "busy" | "saved" | "error";
+
+export function pinLabel(state?: PinState): string {
+  if (state === "busy") return "Pinning…";
+  if (state === "saved") return "Pinned ✓";
+  // Says what happened AND what to do. A failed save that still reads "Pinned" is the small
+  // dishonesty BRAND §1 forbids: the user would go looking for a prompt that was never stored.
+  if (state === "error") return "Pin failed — try again";
+  return "Pin prompt";
+}
+
 // MessageDoc.content is a string or an array of typed parts — flatten to the text parts only.
 function messageText(content: unknown): string {
   if (typeof content === "string") return content;
@@ -84,7 +99,13 @@ export function ChatPane({
   sending: boolean;
   onSending: (v: boolean) => void;
 }) {
-  const send = useAction(api.cockpit.sendCockpitMessage);
+  // Carries the browser's trusted clock on every turn (§2-D) — see useSendCockpitMessage.
+  const send = useSendCockpitMessage();
+  // SKILL-01: pinning is a tenant-owned preference write, not a turn. It takes no thread, mints no
+  // plan and spends nothing, so it is a plain mutation and deliberately NOT routed through the
+  // send hook. Keyed by message key so two bubbles never share one chip's state.
+  const savePrompt = useMutation(api.savedPrompts.save);
+  const [pinned, setPinned] = useState<Record<string, PinState>>({});
   const [text, setText] = useState("");
   const busy = sending;
   const setBusy = onSending;
@@ -151,6 +172,22 @@ export function ChatPane({
     }
   }
 
+  // Deliberately swallows the failure into a label instead of rethrowing (unlike `onSend`, which
+  // rethrows after restoring the user's text). A pin is a convenience: a failed one must cost the
+  // user a chip that says so, never the conversation they are in the middle of.
+  async function pin(key: string, body: string) {
+    if (pinned[key] === "busy") return;
+    setPinned((p) => ({ ...p, [key]: "busy" }));
+    try {
+      await savePrompt({ text: body });
+      setPinned((p) => ({ ...p, [key]: "saved" }));
+    } catch {
+      // The user's own words never reach an error string or a log (CLAUDE.md §4). The server's
+      // refusals here are "empty" and "too long", and the message is already on screen above.
+      setPinned((p) => ({ ...p, [key]: "error" }));
+    }
+  }
+
   const empty =
     !threadId || (messages.results.length === 0 && messages.status !== "LoadingFirstPage");
   const loading =
@@ -194,14 +231,43 @@ export function ChatPane({
                     <div data-testid="chat-message" style={bubble(mine)}>
                       {body}
                     </div>
+                    {/* The hover chips. `.msg-copy` is absolutely positioned on its own, so two of
+                        them would stack — this wrapper takes the position and the chips go static
+                        inside it, reusing the existing chip look rather than adding a class. A pin
+                        that has a state is forced visible: a "Pin failed" chip that vanishes when
+                        the pointer leaves has not told the user anything. */}
                     {mine && (
-                      <button
-                        type="button"
-                        className="msg-copy"
-                        onClick={() => void navigator.clipboard?.writeText(body)}
+                      <div
+                        className="bubble-actions"
+                        style={{
+                          position: "absolute",
+                          top: "0.35rem",
+                          right: "0.45rem",
+                          display: "flex",
+                          gap: "0.25rem",
+                        }}
                       >
-                        Copy
-                      </button>
+                        <button
+                          type="button"
+                          className="msg-copy"
+                          style={{ position: "static" }}
+                          onClick={() => void navigator.clipboard?.writeText(body)}
+                        >
+                          Copy
+                        </button>
+                        <button
+                          type="button"
+                          className="msg-copy"
+                          style={{ position: "static", opacity: pinned[m.key] ? 1 : undefined }}
+                          aria-label={pinLabel(pinned[m.key])}
+                          aria-busy={pinned[m.key] === "busy"}
+                          disabled={pinned[m.key] === "busy"}
+                          title="Save this prompt so you can run it again from Pinned prompts"
+                          onClick={() => void pin(m.key, body)}
+                        >
+                          {pinLabel(pinned[m.key])}
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>

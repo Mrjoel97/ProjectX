@@ -3,10 +3,10 @@
 // THE PRE-FLIGHT — AN INLINE `clay-card` PANEL IN THE DROPZONE'S SLOT, DELIBERATELY NOT A MODAL.
 //
 // This is an a11y decision, not a layout preference. The app has exactly two `aria-modal` blocks,
-// neither is shared, `PreviewModal` ships Esc + scroll-lock but NO FOCUS TRAP, and
-// `DisconnectGoogle.tsx:25-27` documents that missing dialog pattern as deliberate. A modal here
-// would inherit that gap and owe a focus trap, a scroll lock and a portal to close it. An INLINE
-// step owes none of them: focus order is the document's, Esc has nothing to close, and the page
+// neither is shared. `PreviewModal` now owns its complete dialog behaviour (trap, Escape, scroll
+// lock and focus restoration); duplicating that machinery for a non-overlay confirmation would
+// add a second pattern for no user benefit. An INLINE step keeps the document's natural focus
+// order, owes no Escape gesture, and the page
 // scrolls normally (BRAND §6 — keyboard operability is a requirement, not a suggestion). It is also
 // why this renders inside `.vault-scroll`: `.clay-card`'s backdrop-filter only frosts correctly on
 // the `.pane-canvas` aura, so a portal would look wrong even before the a11y argument.
@@ -293,9 +293,20 @@ export function PreFlight({
   return (
     <section
       className="clay-card"
-      style={{ borderRadius: "1rem", padding: "1.25rem 1.5rem", display: "grid", gap: "1rem" }}
+      aria-labelledby="vault-preflight-heading"
+      style={{
+        border: "1px solid var(--vault-border)",
+        borderRadius: "1rem",
+        padding: "clamp(1rem, 2.5vw, 1.5rem)",
+        display: "grid",
+        gap: "1rem",
+        background: "var(--vault-paper)",
+        boxShadow: "var(--vault-shadow)",
+      }}
     >
-      <div className="caps-label">FOLDER UPLOAD</div>
+      <div id="vault-preflight-heading" className="caps-label">
+        FOLDER UPLOAD · REVIEW BEFORE START
+      </div>
 
       <p style={{ margin: 0, color: "var(--ink)", fontWeight: 700 }}>{picked.name}</p>
 
@@ -410,20 +421,31 @@ export function PreFlight({
 
       <div style={{ display: "flex", gap: "0.5rem" }}>
         {refused ? (
-          <button type="button" onClick={onClear} style={pillSecondary(false)}>
+          <button
+            type="button"
+            className="vault-button"
+            onClick={onClear}
+            style={pillSecondary(false)}
+          >
             Start over
           </button>
         ) : phase.kind === "started" ? (
           // Started AND partial: the panel is held open only to name the files that did not make
           // it, so the one control left is an acknowledgement. Start must NOT come back — the
           // folder is past `reserving` and a second press could only ever answer `not_reserving`.
-          <button type="button" onClick={onClear} style={pillSecondary(false)}>
+          <button
+            type="button"
+            className="vault-button"
+            onClick={onClear}
+            style={pillSecondary(false)}
+          >
             Done
           </button>
         ) : (
           <>
             <button
               type="button"
+              className="vault-button vault-button-primary"
               disabled={uploading || blocked || est === undefined}
               onClick={() => void start()}
               style={pillPrimary(uploading || blocked || est === undefined)}
@@ -432,6 +454,7 @@ export function PreFlight({
             </button>
             <button
               type="button"
+              className="vault-button"
               disabled={cancelling}
               aria-disabled={cancelling}
               onClick={() => {

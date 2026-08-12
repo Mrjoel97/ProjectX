@@ -62,6 +62,7 @@ async function transcribeAudio(
   ctx: GenericActionCtx<DataModel>,
   tenantId: string,
   bytes: Uint8Array,
+  artifactId: Id<"intakeArtifacts">,
 ): Promise<string> {
   const sniffed = decodeUtf8(bytes);
   if (sniffed.startsWith(SMOKE_TRANSCRIBE_PREFIX))
@@ -74,7 +75,20 @@ async function transcribeAudio(
   });
   const priced = priceTranscription(result.durationInSeconds ?? 0);
   if (priced.ok) {
-    await ctx.runMutation(internal.guardrails.recordSpend, { tenantId, costUsd: priced.value });
+    // FIN-01 correlation. `artifactId` is the discriminator: runIntake inserts a FRESH
+    // intakeArtifacts row per attempt (step 4, unconditional), so an action re-entry — which
+    // re-runs the transcription above for real money — mints a new id and therefore a new row,
+    // while a correlation derived from tenant/thread/storageId would collapse that second charge
+    // into the first and leave the ledger BELOW the limiter. The `transcribe` token separates this
+    // rail from extractVisual's: one artifact carrying both (a video's audio track plus its frames)
+    // would otherwise be two real charges under one correlation.
+    await ctx.runMutation(internal.guardrails.recordSpend, {
+      tenantId,
+      costUsd: priced.value,
+      correlationId: `intake:transcribe:${artifactId}`,
+      model: "gpt-4o-transcribe",
+      kind: "transcribe",
+    });
   }
   return result.text;
 }
@@ -90,6 +104,7 @@ async function extractVisual(
   tenantId: string,
   bytes: Uint8Array,
   mimeType: string,
+  artifactId: Id<"intakeArtifacts">,
 ): Promise<string> {
   const sniffed = decodeUtf8(bytes);
   if (sniffed.startsWith(SMOKE_EXTRACT_PREFIX)) return sniffed.slice(SMOKE_EXTRACT_PREFIX.length);
@@ -106,7 +121,16 @@ async function extractVisual(
   });
   const priced = priceUsage("openai/gpt-4o-mini", usage);
   if (priced.ok) {
-    await ctx.runMutation(internal.guardrails.recordSpend, { tenantId, costUsd: priced.value });
+    // FIN-01 correlation — same reasoning as transcribeAudio above: the per-attempt `artifactId`
+    // is what keeps a re-entered action's second (real) vision call on its own ledger row, and the
+    // `extract` token keeps it off the transcription rail's correlation.
+    await ctx.runMutation(internal.guardrails.recordSpend, {
+      tenantId,
+      costUsd: priced.value,
+      correlationId: `intake:extract:${artifactId}`,
+      model: "gpt-4o-mini",
+      kind: "extract",
+    });
   }
   return text;
 }
@@ -182,9 +206,9 @@ async function runIntake(
   // 5. EXTRACTION MODEL CALL (the bounded GRDL-01 exception) -> rawText.
   let rawText: string;
   if (kind === "audio") {
-    rawText = await transcribeAudio(ctx, tenantId, bytes);
+    rawText = await transcribeAudio(ctx, tenantId, bytes, artifactId);
   } else if (kind === "image" || kind === "pdf") {
-    rawText = await extractVisual(ctx, tenantId, bytes, mimeType);
+    rawText = await extractVisual(ctx, tenantId, bytes, mimeType, artifactId);
   } else if (kind === "document") {
     rawText = decodeUtf8(bytes); // NO model, NO spend — the bytes already ARE the text.
   } else {

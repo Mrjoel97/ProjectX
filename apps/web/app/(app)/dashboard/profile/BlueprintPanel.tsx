@@ -6,16 +6,21 @@ import {
   BLUEPRINT_SEGMENTS,
   type BlueprintSegment,
   type BusinessBlueprint,
-  FIELD_SPEC,
+  composeReadout,
   firstGap,
+  type Goal,
+  goalsForSegment,
+  type PulseGlobals,
+  type SegmentPulse,
   segmentFill,
   segmentHeadline,
 } from "@pikar/core";
 import { useAction, useQuery } from "convex/react";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BlueprintCanvas } from "./BlueprintCanvas";
 import { BlueprintDiff } from "./BlueprintDiff";
+import { AskSpecialist, SegmentAnatomy } from "./SegmentAnatomy";
+import { joinPhrases, SEGMENT_COPY } from "./segmentCopy";
 import { card, label, primaryButton } from "./styles";
 
 const secondaryButton = (disabled: boolean): React.CSSProperties => ({
@@ -42,67 +47,22 @@ const EMPTY_BLUEPRINT = Object.fromEntries(
   BLUEPRINT_FIELDS.map((blueprintField) => [blueprintField, null]),
 ) as unknown as BusinessBlueprint;
 
-/**
- * Per-segment copy. Lives here, not in `@pikar/core`: it is presentation language, and core owns
- * the structure and the maths only.
- *
- * `known` and `gap` are written to slot into the lede sentence ("I know X. I don't know Y."), so
- * they are noun phrases, never sentences. `seed` is the message the specialist handoff opens with —
- * phrased as the USER asking, because that is who appears to have sent it in the thread.
- */
-const SEGMENT_COPY: Record<
-  string,
-  { short: string; known: string; gap: string; from: string; seed: string }
-> = {
-  foundation: {
-    short: "the basics",
-    known: "what the business is",
-    gap: "the basics — what this business is and what stage it's at",
-    from: "from your profile",
-    seed: "Help me describe what my business actually is, in one clear line.",
-  },
-  offer: {
-    short: "your offer",
-    known: "what you sell and who it's for",
-    gap: "what you sell, or who it's for",
-    from: "from your profile",
-    seed: "Help me pin down my offer — what I sell, and exactly who it's for.",
-  },
-  "money-model": {
-    short: "how you make money",
-    known: "how you make money",
-    gap: "how you price it or what it earns",
-    from: "from your documents",
-    seed: "Help me define how this business makes money — pricing, packages and margins.",
-  },
-  leads: {
-    short: "where leads come from",
-    known: "where leads come from",
-    gap: "where leads come from",
-    from: "not tracked yet",
-    seed: "Help me work out where my leads should come from.",
-  },
-  direction: {
-    short: "where you're heading",
-    known: "where you're heading",
-    gap: "where you're heading, or what's holding you back",
-    from: "from your documents",
-    seed: "Help me set the goals for this business and name the constraint holding it back.",
-  },
-  evidence: {
-    short: "the evidence",
-    known: "the documents behind this",
-    gap: "which documents back this up",
-    from: "from your vault",
-    seed: "What do my vault documents say about this business that I haven't told you?",
-  },
-};
-
 export function BlueprintPanel() {
   const blueprintState = useQuery(api.blueprint.blueprintState);
   const buildDraft = useAction(api.blueprint.buildBlueprintDraft);
   const [building, setBuilding] = useState(false);
   const [buildStatus, setBuildStatus] = useState<string | null>(null);
+
+  // One clock per TICK, not per render: a per-render arg would resubscribe the query constantly,
+  // but a mount-frozen clock is worse — the STALE_RUN_MS guard compares against it, so an orphaned
+  // `running` step (the swallowed end-patch case the guard exists for) would breathe forever.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 5 * 60_000);
+    return () => clearInterval(t);
+  }, []);
+  const pulse = useQuery(api.blueprint.blueprintPulse, { now });
+  const goals = useQuery(api.goals.listGoals);
 
   async function onBuild() {
     setBuilding(true);
@@ -177,6 +137,8 @@ export function BlueprintPanel() {
           rebuild={null}
           built={false}
           action={buildButton("Build blueprint", true)}
+          pulse={pulse}
+          goals={goals}
         />
       ) : (
         <BlueprintReport
@@ -187,6 +149,8 @@ export function BlueprintPanel() {
           }
           rebuild={buildButton("Rebuild", blueprintState.state === "live_stale")}
           built={true}
+          pulse={pulse}
+          goals={goals}
         />
       )}
 
@@ -221,6 +185,8 @@ function BlueprintReport({
   rebuild,
   built,
   action,
+  pulse,
+  goals,
 }: {
   blueprint: BusinessBlueprint;
   confirmedAt: number | null;
@@ -231,9 +197,24 @@ function BlueprintReport({
   built: boolean;
   /** The primary call to action for this state, rendered under the lede. */
   action?: React.ReactNode;
+  pulse?: { segments: Record<string, SegmentPulse>; globals: PulseGlobals };
+  /** undefined while `listGoals` is loading; SegmentAnatomy tells "Checking…" apart from "none". */
+  goals?: readonly Goal[];
 }) {
   const [open, setOpen] = useState<string | null>(null);
   const openSegment = BLUEPRINT_SEGMENTS.find((s) => s.id === open) ?? null;
+
+  // A click that visibly selects a node but renders its detail off-screen (below the canvas AND
+  // the ledger) reads as a broken control on a tall page. Runs after the anatomy's own render
+  // (this effect is keyed on `open`, which only changes once SegmentAnatomy is already in the
+  // tree), so the section is guaranteed to exist by the time we look it up.
+  useEffect(() => {
+    if (open === null) return;
+    const el = document.getElementById(`segment-detail-${open}`);
+    if (el === null) return;
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ block: "start", behavior: reduceMotion ? "auto" : "smooth" });
+  }, [open]);
 
   const known = BLUEPRINT_SEGMENTS.filter((s) => {
     const { filled, total } = segmentFill(blueprint, s);
@@ -316,12 +297,32 @@ function BlueprintReport({
 
       {action !== undefined && <div>{action}</div>}
 
+      {pulse !== undefined &&
+        (() => {
+          const readout = composeReadout(pulse.segments, pulse.globals, Date.now());
+          return readout === null ? null : (
+            <p
+              role="status"
+              style={{
+                margin: 0,
+                fontSize: "0.82rem",
+                fontWeight: 600,
+                color: "var(--teal-900)",
+              }}
+            >
+              {readout}
+            </p>
+          );
+        })()}
+
       <BlueprintCanvas
         blueprint={blueprint}
         built={built}
         gapId={gap?.id ?? null}
         selectedId={open}
         onSelect={(id) => setOpen(open === id ? null : id)}
+        pulse={pulse?.segments}
+        goals={goals}
       />
 
       {built && gap !== null && <NeedsYou segment={gap} />}
@@ -334,7 +335,22 @@ function BlueprintReport({
         />
       )}
 
-      {openSegment && <SegmentDetail segment={openSegment} blueprint={blueprint} />}
+      {openSegment && (
+        <SegmentAnatomy
+          segment={openSegment}
+          blueprint={blueprint}
+          pulse={pulse?.segments[openSegment.id]}
+          goals={
+            goals === undefined
+              ? undefined
+              : goalsForSegment(
+                  goals,
+                  openSegment.id,
+                  BLUEPRINT_SEGMENTS.map((s) => s.id),
+                )
+          }
+        />
+      )}
 
       {rebuild !== null && (
         <div style={{ display: "flex", justifyContent: "flex-end" }}>{rebuild}</div>
@@ -369,12 +385,6 @@ function Kpi({ n, k }: { n: number; k: string }) {
       </div>
     </div>
   );
-}
-
-/** "a, b and c" — the lede reads as a sentence, so the list has to as well. */
-function joinPhrases(parts: string[]): string {
-  if (parts.length <= 1) return parts[0] ?? "";
-  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
 }
 
 function NeedsYou({ segment }: { segment: BlueprintSegment }) {
@@ -426,63 +436,6 @@ function NeedsYou({ segment }: { segment: BlueprintSegment }) {
         {segment.specialist !== null && <AskSpecialist segment={segment} />}
       </div>
     </div>
-  );
-}
-
-/**
- * The segment → specialist handoff. Opens a cockpit thread seeded with the user's own question and
- * routes there — the same two-step `AbnormalBriefBanner` uses for its plan handoff, so this adds no
- * new concept. On failure it stays put and says so rather than navigating to nothing.
- */
-function AskSpecialist({ segment }: { segment: BlueprintSegment }) {
-  const sendCockpitMessage = useAction(api.cockpit.sendCockpitMessage);
-  const router = useRouter();
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
-
-  const ask = async () => {
-    if (busy) return;
-    setBusy(true);
-    setFailed(false);
-    try {
-      const { threadId } = await sendCockpitMessage({
-        text:
-          SEGMENT_COPY[segment.id]?.seed ?? `Help me work out my ${segment.label.toLowerCase()}.`,
-      });
-      router.push(`/dashboard/workspace?thread=${encodeURIComponent(threadId)}`);
-    } catch {
-      setBusy(false);
-      setFailed(true);
-    }
-  };
-
-  return (
-    <span style={{ flex: "none", display: "grid", gap: "0.2rem", justifyItems: "end" }}>
-      <button
-        type="button"
-        onClick={() => void ask()}
-        disabled={busy}
-        style={{
-          fontSize: "0.76rem",
-          fontWeight: 700,
-          color: "#fff",
-          background: "var(--teal-600)",
-          border: "none",
-          padding: "0.42rem 0.85rem",
-          borderRadius: "999px",
-          cursor: busy ? "default" : "pointer",
-          opacity: busy ? 0.6 : 1,
-          whiteSpace: "nowrap",
-        }}
-      >
-        {busy ? "Opening…" : `Ask ${segment.specialist} →`}
-      </button>
-      {failed && (
-        <span role="alert" style={{ fontSize: "0.72rem", color: "var(--ink-soft)" }}>
-          Couldn't open that. Try again.
-        </span>
-      )}
-    </span>
   );
 }
 
@@ -599,73 +552,5 @@ function ProvenancePill({ entry }: { entry: { origin: string; source?: string } 
     >
       {stated ? "your words" : (entry.source ?? "a document")}
     </span>
-  );
-}
-
-function SegmentDetail({
-  segment,
-  blueprint,
-}: {
-  segment: BlueprintSegment;
-  blueprint: BusinessBlueprint;
-}) {
-  const populated = segment.fields.filter((f) => blueprint[f] !== null);
-
-  return (
-    <section
-      id={`segment-detail-${segment.id}`}
-      style={{
-        display: "grid",
-        gap: "0.65rem",
-        paddingTop: "0.85rem",
-        borderTop: "1px solid var(--rule)",
-      }}
-    >
-      <h3 style={{ ...label, margin: 0 }}>{segment.label}</h3>
-
-      {segment.fields.length === 0 ? (
-        <p style={{ margin: 0, color: "var(--ink-soft)", fontSize: "0.9rem" }}>
-          Not tracked yet. This part of the business isn't wired into the blueprint, so rebuilding
-          won't change what's shown here.
-        </p>
-      ) : (
-        populated.length === 0 && (
-          <p style={{ margin: 0, color: "var(--ink-soft)", fontSize: "0.9rem" }}>
-            Nothing here yet. Add documents to your vault and rebuild, and anything they say about
-            this part of the business will land here.
-          </p>
-        )
-      )}
-
-      {populated.map((blueprintField) => {
-        const entry = blueprint[blueprintField];
-        if (entry === null) return null;
-        return (
-          <div
-            key={blueprintField}
-            style={{
-              display: "grid",
-              gridTemplateColumns: "minmax(8rem, 0.75fr) minmax(0, 1.5fr)",
-              gap: "0.75rem",
-              alignItems: "start",
-            }}
-          >
-            <span style={{ color: "var(--ink-soft)", fontSize: "0.85rem", fontWeight: 600 }}>
-              {FIELD_SPEC[blueprintField].label}
-            </span>
-            <div style={{ display: "grid", gap: "0.2rem", minWidth: 0 }}>
-              <span style={{ color: "var(--ink)", fontSize: "0.92rem" }}>
-                {entry.values.join(" · ")}
-              </span>
-              <span style={{ color: "var(--ink-soft)", fontSize: "0.78rem" }}>
-                {entry.origin === "stated"
-                  ? "Your own words"
-                  : `From ${entry.source ?? "a vault document"}`}
-              </span>
-            </div>
-          </div>
-        );
-      })}
-    </section>
   );
 }

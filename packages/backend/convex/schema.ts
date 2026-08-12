@@ -83,6 +83,77 @@ export default defineSchema({
     .index("by_name_status", ["name", "status"])
     .index("by_name_version", ["name", "version"]),
 
+  // Tenant-owned OVERLAY over the deployment-global `skills` table above (Phase 21, SKILL-01).
+  //
+  // WHY A SEPARATE TABLE, and do not "tidy" it back: `skills` is deployment-global and its
+  // `by_name_status` reads are `.unique()`. Adding tenant rows there makes every one of those
+  // reads multi-row and breaks every agent on the deployment. Encoding the tenant into `name`
+  // would make authorization depend on string parsing instead of an indexed key.
+  //
+  // IMMUTABLE AFTER INSERT: `name`, `version`, `body`, `authoredBody`, `author`, `authorUserId`
+  // and the whole `basedOn*` lineage. Later code may patch ONLY `status`, `evidence`, and the
+  // code-owned `rollbackEligible` transition when a row genuinely becomes active. A new
+  // adaptation is a NEW row composed against the current effective base — never a patched body,
+  // and never an older adaptation appended to a newer one.
+  //
+  // TWO ROW SHAPES, and only code can mint the first:
+  //   server baseline — author "system", authoredBody "", status "archived", rollbackEligible true
+  //   user candidate  — author "user", a real authorUserId, status "candidate", rollbackEligible false
+  // The baseline is what gives a tenant's FIRST customization a real, evidence-exempt rollback
+  // target; `rollbackEligible` is code-owned precisely so a user candidate cannot mint itself one.
+  tenantSkills: defineTable({
+    tenantId: v.string(),
+    name: v.string(),
+    version: v.number(),
+    // The complete runtime body (base + composed adaptation). Never model- or client-supplied.
+    body: v.string(),
+    // The user's adaptation alone — what a reviewer reads, and "" on a system baseline.
+    authoredBody: v.string(),
+    status: v.union(
+      v.literal("active"),
+      v.literal("candidate"),
+      v.literal("rolled_back"),
+      v.literal("archived"),
+    ),
+    // Phase 23 may append "agent" here without granting it activation.
+    author: v.union(v.literal("system"), v.literal("user")),
+    // Required when author === "user"; derived from authenticated identity, never from args.
+    authorUserId: v.optional(v.id("users")),
+    basedOnScope: v.union(v.literal("global"), v.literal("tenant")),
+    basedOnName: v.string(),
+    basedOnVersion: v.number(),
+    basedOnGlobalSkillId: v.optional(v.id("skills")),
+    basedOnTenantSkillId: v.optional(v.id("tenantSkills")),
+    rollbackEligible: v.boolean(),
+    evidence: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    // Effective-load and per-tenant status reads.
+    .index("by_tenant_name_status", ["tenantId", "name", "status"])
+    // Next-version allocation and the exact-version read: descending `.take(1)`, never `.collect()`.
+    .index("by_tenant_name_version", ["tenantId", "name", "version"])
+    // The tenant's own bounded authoring history.
+    .index("by_tenant_createdAt", ["tenantId", "createdAt"])
+    // The bounded owner review queue across tenants.
+    .index("by_status_createdAt", ["status", "createdAt"]),
+
+  // "Routine v0" (Phase 21, SKILL-01): saved cockpit prompt text, INERT AT REST.
+  //
+  // There is deliberately NO `routines` table, cron, trigger, recurrence, next-run timestamp,
+  // execution-history table, canvas or DSL. The only execution path is a user clicking Run, which
+  // starts an ORDINARY fresh cockpit turn through the existing governed send path — so plan,
+  // guardrail, spend, approval and activity boundaries are unchanged. `title` is code-derived
+  // (bounded trimmed first line); `textHash` makes save idempotent within one tenant.
+  savedPrompts: defineTable({
+    tenantId: v.string(),
+    text: v.string(),
+    title: v.string(),
+    textHash: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_tenant_createdAt", ["tenantId", "createdAt"])
+    .index("by_tenant_textHash", ["tenantId", "textHash"]),
+
   // Scheduled awaitEvent-timeout bookkeeping (cancel the scheduled event on real decision).
   // by_correlation added for 02-04's sendDecision (currently full-scans; unbounded now).
   pendingTimeouts: defineTable({
@@ -164,6 +235,8 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_tenant_status", ["tenantId", "status"])
+    // Pulse layer (living-map §3.1): windowed status reads for the tenant-wide outcome counts.
+    .index("by_tenant_status_createdAt", ["tenantId", "status", "createdAt"])
     .index("by_correlation", ["correlationId"])
     // Deterministic hash→text recovery for the cached action (03-RESEARCH Pattern 3).
     .index("by_tenant_safeTextHash", ["tenantId", "safeTextHash"])
@@ -244,6 +317,26 @@ export default defineSchema({
     // optional → no migration (append-only, like recipientBodies/attachments). Content-plane only.
     sendAt: v.optional(v.number()),
     scheduledFunctionId: v.optional(v.id("_scheduled_functions")),
+    // Phase-26 Approvals. Missing provenance on a legacy canceled row means a historical
+    // scheduled cancellation; every new cancel writes the discriminator explicitly.
+    cancelKind: v.optional(v.union(v.literal("scheduled_cancel"), v.literal("discarded"))),
+    canceledAt: v.optional(v.number()),
+    // Delivery terminals own these counters. `counterComplete` is the honesty bit: absent/false
+    // keeps legacy reads on the bounded partial projection instead of inventing exact progress.
+    recipientTotal: v.optional(v.number()),
+    sentCount: v.optional(v.number()),
+    failedCount: v.optional(v.number()),
+    queuedCount: v.optional(v.number()),
+    counterComplete: v.optional(v.boolean()),
+    // 19-05 SC#5, made VISIBLE (phase-19 UAT step 9b). The suppressed addresses this approve
+    // dropped before the fan-out. Written once by `executePlan` in the same patch as the counters
+    // above, and only when non-empty — an ordinary send carries no key, so there is no migration
+    // and no "withheld: []" to render. It lives on the ROW rather than in the approve component's
+    // `useState` because a successful approve IS the `proposed → approved` transition and both
+    // approve cards are gated on `proposed`: the component that would show the note has already
+    // unmounted when the note exists. Addresses only (the same content plane as `recipients`) —
+    // never audited (§4).
+    withheldRecipients: v.optional(v.array(v.string())),
     // Reply threading (03.11 RPLY-01). Set by the replyToMessage tool (Plan 04) when a plan is a
     // reply, copied to the per-recipient `requests` rows at executePlan (Plan 03). All optional →
     // no migration; a non-reply send simply carries none (append-only, like sendAt/attachments).
@@ -273,7 +366,55 @@ export default defineSchema({
     // Phase-20 (20-07, MEDIA-01) widened it a THIRD time: "media" = a reel staged as a BLOCK DECK,
     // reserved and started on Approve by the same `externalAction` arm. Still optional, still
     // closed, still no migration.
-    kind: v.optional(v.union(v.literal("memo"), v.literal("calendar_event"), v.literal("media"))),
+    // Phase-19 (19-06, ACTN-05) widened it a FOURTH time: "crm_write" = a list of contact and
+    // follow-up operations, applied on Approve by the `inline` arm (one transactional write on our
+    // OWN tables — no fetch, so not `externalAction`). Still optional, still closed, still no
+    // migration and no backfill: ABSENT still means email.
+    // 2026-08-10 widened it a FIFTH time: "finance_write" = a list of staged figure claims, applied
+    // on Approve by the same `inline` arm. invariant 11 — the ACTOR decides gating: the human
+    // editing the same figure through `cash.saveInput` stays ungated and stages no plan at all.
+    // 17-05 widened it a SIXTH time (the ACTN-02 gap closure): "calendar_manage" = an UPDATE or a
+    // DELETE of an event Pikar already created, staged for the same human Approve gate and
+    // executed by the same `externalAction` arm. A NEW member rather than a reuse of
+    // "calendar_event": create has no concurrency problem, management does (etag / If-Match / 412),
+    // and the two cards must promise different things. Still optional, still closed, still no
+    // migration and no backfill — ABSENT still means email.
+    kind: v.optional(
+      v.union(
+        v.literal("memo"),
+        v.literal("calendar_event"),
+        v.literal("media"),
+        v.literal("crm_write"),
+        v.literal("finance_write"),
+        v.literal("calendar_manage"),
+      ),
+    ),
+    /** 19-06 ACTN-05: the staged CRM operation list a `crm_write` plan applies on Approve.
+     *  CONTENT PLANE — it carries names and note text and must NEVER reach `audit.payload`
+     *  (CLAUDE.md §4), the `eventTitle`/`shots` rule verbatim. `v.any()` elements because the
+     *  SHAPE is owned by `parseCrmOperations` (@pikar/core), which validates at BOTH the write
+     *  boundary and the apply boundary; a hand-mirrored validator here would be a third copy of
+     *  the same union to keep in step. `resetPlan` clears it explicitly. */
+    crmOperations: v.optional(v.array(v.any())),
+    // Staged figure claims, inert until Approve. Content plane — the applier re-validates every
+    // claim rather than trusting the row, because a plan row can be revised between staging and
+    // approval. `field` stays `v.string()` on purpose: the CLOSED field union lives in
+    // `CASH_INPUTS` (@pikar/core), and mirroring it here would be a second copy to keep in step —
+    // `applyFinanceClaims` narrows against the catalogue itself. NEVER audited (§4): `value` is a
+    // tenant's revenue.
+    financeClaims: v.optional(
+      v.array(
+        v.object({
+          field: v.string(),
+          value: v.number(),
+          origin: v.union(v.literal("stated"), v.literal("observed")),
+          actor: v.union(v.literal("user"), v.literal("agent")),
+          basis: v.string(),
+          observedAt: v.number(),
+          confidence: v.union(v.literal("high"), v.literal("medium"), v.literal("low")),
+        }),
+      ),
+    ),
     // Phase-17 (ACTN-02) staged calendar event. CONTENT-PLANE ONLY, NEVER audited (§4).
     // `resetPlan` wipes all six — a staged event surviving a reset would re-stage onto the NEXT
     // plan. All optional → no migration (the sendAt precedent).
@@ -289,6 +430,38 @@ export default defineSchema({
     mediaRunId: v.optional(v.string()), // 20-07: the media submit run — see by_media_run below
     calendarRunId: v.optional(v.string()), // the action-retrier RunId — the ONLY correlation the
     // retrier's onComplete gets on a FAILED run (it carries {runId, result} and no context).
+    // ── 17-05 (ACTN-02 gap closure) the calendar_manage PROPOSAL plane ───────────────────────
+    // All optional → no migration, no backfill: a Phase-17 create row has none of them, and an
+    // ABSENT `calendarProvider` MEANS GOOGLE (@pikar/core `parseCalendarProvider`), because the
+    // shipped slice was Google-only. `resetPlan` wipes all five — the `eventTitle` rule verbatim.
+    /** Which calendar the operation targets. Closed union; absent = google (legacy create rows). */
+    calendarProvider: v.optional(v.union(v.literal("google"), v.literal("microsoft"))),
+    /** update | delete. "Move"/"reschedule" are an update and "cancel"/"remove" a delete — the
+     *  user words are mapped in @pikar/core, so this column stays two literals wide. */
+    calendarOperation: v.optional(v.union(v.literal("update"), v.literal("delete"))),
+    /** The REGISTRY row this operation manages. A ref to OUR OWN table, never a provider id:
+     *  management is limited to Pikar-created, attendee-free events, and this is the link that
+     *  makes that enforceable rather than aspirational. */
+    calendarManagedEventId: v.optional(v.id("calendarEvents")),
+    /** The provider etag the human approved AGAINST — the If-Match value 17-08 will send. It is
+     *  deliberately NOT a `patchPlan` arg (see plans.ts): a model-supplied etag would let a stale
+     *  plan overwrite a newer calendar edit, which is the exact data-loss path G2 exists to close. */
+    calendarExpectedEtag: v.optional(v.string()),
+    /** A BOUNDED failure CODE from @pikar/core's `CALENDAR_FAILURE_CODES` — never provider prose.
+     *  A Google 400 or a Graph 412 body can echo the event summary straight back (§4), so the
+     *  terminal writes a code here and the card renders copy keyed off it. Also not a patchPlan
+     *  arg: nothing reachable from the model may claim an operation failed, or that it did not. */
+    calendarFailureCode: v.optional(
+      v.union(
+        v.literal("conflict"),
+        v.literal("not_found"),
+        v.literal("reauth"),
+        v.literal("attendees_present"),
+        v.literal("needs_inspection"),
+        v.literal("not_managed"),
+        v.literal("provider_error"),
+      ),
+    ),
     // ── Phase-20 (MEDIA-01) media canvas: the BLOCK DECK and the RENDER PLANE ──────────────
     // All optional → no migration, no backfill (the sendAt/attachments precedent). CONTENT-PLANE
     // ONLY: the block prompts and the narration lines are user-facing creative text and are NEVER
@@ -402,6 +575,8 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_thread", ["tenantId", "threadId"])
+    // Pulse layer (living-map §3.1): windowed status reads for the tenant-wide outcome counts.
+    .index("by_tenant_status_createdAt", ["tenantId", "status", "createdAt"])
     // Phase-17 (ACTN-02). The action-retrier's `onComplete` receives ONLY `{runId, result}` — no
     // context bag — so the run id is the sole correlation handle back to the plan that started it.
     // This index is what makes that resolvable; without it the terminal cannot find its own plan.
@@ -448,7 +623,9 @@ export default defineSchema({
     // lede degrades to counts-only (@pikar/core composeLede handles the absent case).
     synopsis: v.optional(v.string()),
     createdAt: v.number(),
-  }).index("by_thread", ["tenantId", "threadId"]),
+  })
+    .index("by_thread", ["tenantId", "threadId"])
+    .index("by_tenant_createdAt", ["tenantId", "createdAt"]),
 
   // ── Phase-10 vault-grounding content plane (VGND-01) ──────────────────────
   // The read-only sibling of `briefings`: holds the labels the SOURCE card renders for a
@@ -554,6 +731,16 @@ export default defineSchema({
     notEnoughData: v.array(v.object({ section: v.string(), needs: v.string() })),
     scorecard: v.any(), // the parsed + carried-forward @pikar/core Scorecard snapshot
     userProvided: v.array(v.string()), // scorecard dot-path keys the user supplied in-conversation
+    // Dot-path → epoch-ms the user stated/confirmed it (cash-business-finance Task 3 fix).
+    // `applyScorecardAnswer` is the ONE writer, stamping `Date.now()` on every answer, and
+    // `runEvaluation`'s carry-forward copies this map UNCHANGED into every new row — the whole
+    // point is that it survives the weekly re-evaluation that stamps a fresh `createdAt` on the
+    // ROW. Without this, `createdAt` was read as a stand-in stated-time and a re-evaluation that
+    // merely carries a field forward silently reported it "confirmed today", which suppresses the
+    // 90-day confirm-or-update prompt for a number that may be months stale — the unsafe direction.
+    // Optional ⇒ no migration; a legacy row with a value but no entry here has UNKNOWN age, which
+    // `cash.ts` reads as needing confirmation, never as fresh.
+    userProvidedAt: v.optional(v.record(v.string(), v.number())),
     verdict: v.union(v.literal("gaps"), v.literal("healthy"), v.literal("insufficient")),
     // BEVL-03 "what changed" line. Written ONLY by a cron-driven run (runEvaluation withDelta) —
     // an on-demand row has none and the card simply hides the line. Optional → no migration.
@@ -619,6 +806,18 @@ export default defineSchema({
       // engine's "Assessing…" step insert throws and is silently swallowed in prod while tests
       // pass (Pitfall 2 — the same closed-union trap as searchVault above).
       v.literal("evaluateBusiness"),
+      // Phase-12 (BEVL-01) again: the "store" half of vault-first→ask→store. MISSING until
+      // 2026-08-08, and it cost exactly what the two comments above predict — every scorecard tool
+      // call threw `ArgumentValidationError` inside `agentSteps:record`, the SDK swallowed it, and
+      // the trace silently lost a step in prod while the whole suite stayed green. That is the
+      // THIRD time this closed union has been the trap, so the omission is now guarded
+      // STRUCTURALLY: cockpitTools.test.ts scans every `<name>: tool(` key in buildCockpitTools and
+      // fails if any lacks a literal here. Add the literal in the SAME commit as a new tool.
+      v.literal("recordScorecardAnswer"),
+      // `resetPlan` — the cancel-and-start-over tool. ALSO missing, and nobody knew: the guard test
+      // found it the first time it ran, which is the argument for the guard existing at all. Every
+      // "cancel and begin again" turn has been losing its trace step the same silent way.
+      v.literal("resetPlan"),
       // Phase-15 (DISP-01): the sub-agent dispatch steps. N literals, NOT a `specialist: v.string()`
       // field — §4 on this path is enforced by the ABSENCE of anywhere to put text ("a
       // `count: v.number()` literally cannot hold a subject line", :435-439). Adding a text field
@@ -627,14 +826,18 @@ export default defineSchema({
       v.literal("dispatchOfferArchitect"),
       v.literal("dispatchMoneyModelDesigner"),
       v.literal("dispatchLeadEngine"),
-      // Phase-16 (DISP-02): the research sub-agent's dispatch step. ONE literal — there is
-      // deliberately NO `webResearch` companion. `openai.tools.webSearch()` is a
-      // PROVIDER-EXECUTED tool, and ai@7.0.20's `executeToolCall` returns early at
-      // `if (!isExecutableTool(tool)) return undefined;` BEFORE it fires `onToolExecutionStart`,
-      // so a hosted search emits no step row at all. A declared-and-never-written literal is
-      // worse than none: it reads as a trace that exists and would send the next reader hunting
-      // for the insert that writes it.
+      // Phase-16 (DISP-02): the research sub-agent's dispatch step.
       v.literal("dispatchResearch"),
+      // ...and `webResearch`, whose ABSENCE used to be deliberate — THAT REASONING INVERTED on
+      // 2026-08-07. It was a PROVIDER-EXECUTED hosted tool, and ai@7.0.20's `executeToolCall`
+      // returns early at `if (!isExecutableTool(tool)) return undefined;` BEFORE firing
+      // `onToolExecutionStart`, so it emitted no step row and a declared-but-never-written literal
+      // would have read as a trace that exists. It is now a LOCAL Tavily-backed tool (llm.ts), so
+      // `onToolExecutionStart` DOES fire and the insert DOES need this literal — the same swallow
+      // trap as every literal above, which this codebase has already been bitten by at searchVault
+      // and evaluateBusiness. Still no text field: §4 on this path stays enforced by the ABSENCE of
+      // anywhere to put a query string or a retrieved URL.
+      v.literal("webResearch"),
       // Phase-17 (ACTN-02): the in-loop availability READ and the plan-staging WRITE. Two literals,
       // no text field — §4 on this path stays enforced by the ABSENCE of anywhere to put an event
       // title or an attendee address. Without these literals the step insert throws and the AI SDK
@@ -642,6 +845,25 @@ export default defineSchema({
       // this codebase has been bitten twice already, at searchVault and evaluateBusiness).
       v.literal("checkAvailability"),
       v.literal("proposeCalendarEvent"),
+      // 17-05 (ACTN-02 gap closure): the two MANAGEMENT trace literals, RESERVED. No tool emits
+      // them yet — Plan 17-09 adds `listManagedCalendarEvents` (read-only registry listing) and
+      // `proposeCalendarChange` (inspect-then-stage). They are declared HERE, ahead of the tools,
+      // because this closed union is the swallow trap this file has now been bitten by three
+      // times: a missing literal makes `agentSteps:record` throw an ArgumentValidationError inside
+      // an AI-SDK callback the SDK SILENTLY swallows, so prod loses the step while the whole suite
+      // stays green. Their cards.tsx VERB entries land in the SAME commit — traceParity.test.ts
+      // asserts the two sets equal BOTH ways, so either half alone is RED.
+      //
+      // A declared-but-never-written literal is the ONE failure mode this pre-declaration can have
+      // (it is why `webResearch` was deliberately absent while it was provider-executed): it reads
+      // as a trace that exists. Both of these WILL be written by local, executable tools, so
+      // `onToolExecutionStart` will fire for both.
+      v.literal("listManagedCalendarEvents"),
+      v.literal("proposeCalendarChange"),
+      // Phase-20.1 (VALT-15): read-only Drive discovery in the cockpit. These are local tools,
+      // so both literals are required for their truthful start/done agent-step trace.
+      v.literal("listDriveFolders"),
+      v.literal("findInDrive"),
       // 22.1b (declareUnsupported): the research specialist's structured evidence-gap declaration.
       // A LOCAL executable tool, unlike `webResearch` above — so `onToolExecutionStart` DOES fire
       // and the insert DOES need this literal. Without it the insert throws inside a callback the
@@ -665,6 +887,22 @@ export default defineSchema({
       // click, but the local tool still needs a trace literal because AI-SDK callback failures are
       // otherwise swallowed (the dispatchMedia rule immediately above).
       v.literal("proposeImage"),
+      // Phase-19 (ACTN-05): the CRM staging tool. Same swallow trap as every literal above — a
+      // missing literal makes `agentSteps:record` throw an ArgumentValidationError inside an
+      // AI-SDK callback, which the SDK SILENTLY swallows, so prod loses the step while the whole
+      // suite stays green. Landed in the SAME commit as its `cards.tsx` VERB entry, because
+      // traceParity.test.ts asserts the two sets equal BOTH ways and either half alone is RED.
+      v.literal("stageCrmWrite"),
+      // Task 7 (live-finance-inputs): the on-demand derived-metrics read. Same swallow trap as
+      // every literal above, and the same traceParity.test.ts requirement — its cards.tsx VERB
+      // entry lands in the same commit.
+      v.literal("readFinance"),
+      // Task 8 (live-finance-inputs): the figure staging tool. Same swallow trap as every literal
+      // above — a missing literal makes `agentSteps:record` throw an ArgumentValidationError
+      // inside an AI-SDK callback the SDK SILENTLY swallows, so prod loses the step while the
+      // whole suite stays green. Lands in the SAME commit as its cards.tsx VERB entry, because
+      // traceParity.test.ts asserts the two sets equal BOTH ways and either half alone is RED.
+      v.literal("stageFinanceWrite"),
     ),
     phase: v.union(v.literal("running"), v.literal("done"), v.literal("error")),
     startedAt: v.number(),
@@ -686,7 +924,11 @@ export default defineSchema({
     // NOT generalize to a partial prefix. There is no by_thread index because nothing reads by
     // thread: the UI subscribes to latestTurn (no threadId — the first-turn window) and filters
     // client-side on the returned threadId.
-    .index("by_tenant", ["tenantId"]),
+    .index("by_tenant", ["tenantId"])
+    // Pulse layer (living-map §3): per-specialist range read — 4 indexed queries (segments with a
+    // specialist; media has a dispatch tool but no segment) instead of a
+    // tenant-wide scan that grows with every cockpit turn.
+    .index("by_tenant_tool_startedAt", ["tenantId", "tool", "startedAt"]),
 
   // The test seam that lets a briefing run with NO Gmail token: gmail.listInbox /
   // fetchInboxBodies check this table BEFORE freshAccessToken and serve these messages when a
@@ -702,6 +944,51 @@ export default defineSchema({
     tenantId: v.string(),
     busy: v.array(v.object({ startMs: v.number(), endMs: v.number() })),
   }).index("by_tenant", ["tenantId"]),
+
+  // ── 17-05 (ACTN-02 gap closure, G2): the DURABLE managed-event registry ────────────────────
+  //
+  // WHY A TABLE AND NOT MORE `plans` COLUMNS. 17-RESEARCH's Open Question 4 recommended optional
+  // plan fields, and for CREATE that was right — one row per plan, no lifecycle. Management
+  // inverts it: `resetPlan` exists to wipe a plan's staged content, and an event that Pikar
+  // really put on a real calendar MUST NOT disappear because the user typed "start over" in the
+  // thread. The plan is the PROPOSAL plane and is reset-able; this is the FACT plane and is not.
+  // It is also what bounds management: 17-09's listing reads THIS table, so an arbitrary mailbox
+  // event is unreachable by construction rather than by a filter someone has to remember.
+  //
+  // §4: refs, ids, times and one boolean. `title` is the only content-plane field and it is here
+  // because the card must show the human WHICH event is about to move — it is never audited.
+  calendarEvents: defineTable({
+    tenantId: v.string(),
+    provider: v.union(v.literal("google"), v.literal("microsoft")),
+    /** The provider's own event id — an opaque REF (the workflowId/storageId precedent). */
+    externalEventId: v.string(),
+    /** The provider ETag. OPTIONAL only for rows a later plan explicitly backfills from the
+     *  pre-17-05 create path, and such a row is NOT manageable until provider inspection supplies
+     *  one — @pikar/core `manageability` returns `needs_inspection` for exactly this case. A
+     *  missing etag must never be read as "no concurrency check needed". */
+    etag: v.optional(v.string()),
+    title: v.string(),
+    startMs: v.number(), // ONE absolute epoch ms — the plans.sendAt rule verbatim
+    durationMs: v.number(), // duration as ms, NOT an end wall-clock string
+    tz: v.string(), // the TRUSTED client's IANA zone (§2-D). Never the model's.
+    /** The plan that created it. Provenance: which approved act put this on a real calendar. */
+    sourcePlanId: v.id("plans"),
+    /** Asserted at CREATE time, when we know the body we sent carried no `attendees`. A false
+     *  row is refused by `manageability` before any provider call, because touching an
+     *  attendee-bearing event can make the provider email people outside plan/audit/DLQ. */
+    attendeeFree: v.boolean(),
+    status: v.union(v.literal("active"), v.literal("deleted")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    // The listing index (17-09): a tenant's live managed events, bounded, never a table scan.
+    .index("by_tenant_status", ["tenantId", "status"])
+    // The composite identity lookup. `tenantId` is the FIRST field and that is load-bearing:
+    // two tenants can legitimately hold the same provider event id (a shared calendar, a
+    // restored backup, a test fixture), so an index without it would let one tenant's update
+    // resolve to another tenant's row. Convex index queries must eq the prefix in order, so the
+    // tenant predicate cannot be forgotten at a call site — it is unwritable, not just wrong.
+    .index("by_tenant_provider_external", ["tenantId", "provider", "externalEventId"]),
 
   inboxFixtures: defineTable({
     tenantId: v.string(),
@@ -773,6 +1060,24 @@ export default defineSchema({
     refreshToken: v.string(),
     accessToken: v.optional(v.string()),
     expiresAt: v.optional(v.number()),
+    scope: v.string(),
+    updatedAt: v.number(),
+  }).index("by_tenant", ["tenantId"]),
+
+  // 17-05 (ACTN-02 gap closure, G1): the Microsoft Graph grant. THE SAME CROWN-JEWEL RULE as
+  // `gmailTokens` above — read by internal functions ONLY, never returned to a client query,
+  // never in the browser, never in an audit or dead-letter payload.
+  //
+  // A SECOND table rather than a `provider` column on `gmailTokens`: that row is the GOOGLE grant
+  // and `freshAccessToken` is documented as "the ONE token-refresh root" over it. Adding a
+  // discriminator would make every existing `by_tenant` `.unique()` read ambiguous, and the two
+  // grants have genuinely different refresh endpoints, scope strings and expiry behaviour.
+  // NOTHING WRITES THIS TABLE YET — Plan 17-06 owns the OAuth flow that fills it.
+  microsoftCalendarTokens: defineTable({
+    tenantId: v.string(),
+    refreshToken: v.string(),
+    accessToken: v.string(),
+    expiresAt: v.number(),
     scope: v.string(),
     updatedAt: v.number(),
   }).index("by_tenant", ["tenantId"]),
@@ -866,6 +1171,10 @@ export default defineSchema({
     // read. The `by_tenant_kind` index named as the upgrade path now exists (added for the
     // onboarding profile read); this field may move onto it if freshness ever needs ranking.
     retrievedAt: v.optional(v.number()),
+    // Phase-26 Content provenance. Only authoritative write sites populate these; absence on
+    // existing artifacts remains an explicit unknown and is never inferred by reverse scans.
+    sourceThreadId: v.optional(v.string()),
+    sourcePlanId: v.optional(v.id("plans")),
     // Phase-18 (ACTN-04). ABSENT ⇒ user-supplied (every row that exists today; ZERO backfill).
     // "agent" ⇒ agent-authored: excluded from vault retrieval (structurally — it is never
     // ingested) and from the blueprint drift signal. "agent_promoted" ⇒ the user promoted it to
@@ -960,6 +1269,7 @@ export default defineSchema({
     // Phase-15.3. The Drive re-import primary key: "have I already imported this Drive file for
     // this tenant?" — answered without scanning the partition.
     .index("by_tenant_driveFileId", ["tenantId", "driveFileId"])
+    .index("by_tenant_origin_createdAt", ["tenantId", "origin", "createdAt"])
     .index("by_kind", ["kind"]), // BEVL-03 cron: enumerate onboarded tenants without reading every
   // document's `text` blob (this table holds book-sized uploads; a .collect() would walk into the
   // 16 MiB / 32k-doc read cap). The ONE deliberately cross-tenant index in the repo — read by a
@@ -1119,6 +1429,7 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_tenant_request", ["tenantId", "requestId"]) // one editable row per (tenant, request)
+    .index("by_tenant_createdAt", ["tenantId", "createdAt"])
     .index("by_skill", ["skillName", "skillVersion"]), // eligibility rolls the negative-rate over this
 
   // The optimizer kill switch + tunable thresholds (IMPR-02). SINGLE row, upserted by
@@ -1208,6 +1519,67 @@ export default defineSchema({
      *  on every grounding call and every cockpit turn. One indexed row + one `ctx.db.get`. */
     blueprintDocId: v.optional(v.id("vaultDocuments")),
     blueprintConfirmedAt: v.optional(v.number()),
+    // ── Phase-19 CAN-SPAM postal address (PIPE-01 SC#6) ───────────────────────
+    // ALL optional ⇒ NO migration (convex-migration-helper: "Safe Changes → Adding Optional
+    // Field"), and the table's own comment above already blesses optionality.
+    /** A SINGLE free-text block, deliberately NOT a structured object: CAN-SPAM requires "a valid
+     *  physical postal address", not a parsed one, and a structured object invites a country/state
+     *  enum this phase does not need. Completeness is enforced at the WRITE boundary (this table's
+     *  own rule) and at SEND (`renderFooter` throws on a blank address — fail closed). Optional
+     *  here on purpose: Phase 11 deliberately admits idea-stage users, so this must never become a
+     *  required onboarding field; `/dashboard/profile` is the enrichment surface. */
+    postalAddress: v.optional(v.string()),
+  }).index("by_tenant", ["tenantId"]),
+
+  // Living-map slice 3 (§5.1). The intention plane: what the business is driving toward and by
+  // when. Deliberately NOT blueprint fields — the 11-field set is closed (D3), and a goal is a
+  // claim with a lifecycle, not a fact about the business.
+  goals: defineTable({
+    tenantId: v.string(),
+    segmentId: v.string(), // a BLUEPRINT_SEGMENTS id, validated at write
+    text: v.string(), // user content — content plane ONLY, never audited (CLAUDE.md §4)
+    targetDate: v.optional(v.number()),
+    // One level only, enforced at write: a parent may not itself have a parent.
+    parentId: v.optional(v.id("goals")),
+    status: v.union(v.literal("active"), v.literal("achieved"), v.literal("dropped")),
+    createdAt: v.number(),
+    // Stamped on every transition. `statusChangedAt - createdAt` on an achieved goal IS the cycle
+    // time — no history table until something needs more than the last transition.
+    statusChangedAt: v.number(),
+  }).index("by_tenant_status", ["tenantId", "status"]),
+
+  // ── Phase-26 connected dashboard accounting foundation ────────────────────
+  // Append-only reporting facts. Enforcement remains in the rate limiter; these rows retain
+  // refs, code-owned identifiers and integer cents only — never prompts, provider prose or URLs.
+  spendEvents: defineTable({
+    tenantId: v.string(),
+    rail: v.union(v.literal("reasoning"), v.literal("media"), v.literal("ingest")),
+    phase: v.union(
+      v.literal("estimated"),
+      v.literal("reserved"),
+      v.literal("actual"),
+      v.literal("refunded"),
+      v.literal("adjustment"),
+    ),
+    amountCents: v.number(),
+    correlationId: v.string(),
+    planId: v.optional(v.id("plans")),
+    requestId: v.optional(v.id("requests")),
+    folderId: v.optional(v.id("vaultFolders")),
+    mediaJobId: v.optional(v.id("mediaJobs")),
+    model: v.optional(v.string()),
+    kind: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_tenant_createdAt", ["tenantId", "createdAt"])
+    .index("by_tenant_rail_createdAt", ["tenantId", "rail", "createdAt"])
+    .index("by_correlation", ["correlationId"]),
+
+  // One durable start per tenant, created before the first paid movement. A missing row means
+  // coverage has not begun; it never means historical spend was zero.
+  spendCoverage: defineTable({
+    tenantId: v.string(),
+    coverageStartedAt: v.number(),
   }).index("by_tenant", ["tenantId"]),
 
   // ── Phase-20 media plane (MEDIA-01) ────────────────────────────────────────
@@ -1284,5 +1656,143 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_plan", ["tenantId", "planId"])
-    .index("by_batch", ["tenantId", "batchId"]),
+    .index("by_batch", ["tenantId", "batchId"])
+    .index("by_tenant_createdAt", ["tenantId", "createdAt"]),
+
+  // ── Phase-19 contacts, follow-ups & suppression (ACTN-05 / PIPE-01) ────────
+  // THREE tables. As a set: there is NO `opportunities` table, NO stage enum and NO `amountCents`
+  // anywhere below — PIPE-01 and Phase 19 SC#8. Real money arrives with Phase 28's
+  // connector-backed Cash surface, from observed provider data rather than typed guesses.
+  // Retrofitting stages onto a committed schema is the expensive order; do not pre-empt it.
+
+  // The ONE person store. A row exists ONLY because a human deliberately made it — typed it, or
+  // approved a staged add. Gmail header resolution NEVER writes here, which is what preserves the
+  // "no contacts cache at rest" invariant (`plans.candidates`, above): nothing accretes as a side
+  // effect of reading the mailbox. See `docs/playbooks/contacts-crm.md`.
+  // New table ⇒ NO migration (prior-phase discipline, the `tenantProfiles` comment above).
+  contacts: defineTable({
+    tenantId: v.string(),
+    /** Identity. ALREADY normalized by the write boundary (`normalizeAddress` from @pikar/core —
+     *  trim + lowercase). One row per address; a person with two addresses is two contacts.
+     *  The send-path guard keys `suppressions` on the SAME function, so the guard and the contact
+     *  row agree by construction rather than by convention. */
+    email: v.string(),
+    name: v.optional(v.string()), // no name-only contacts; the table falls back to the address
+    /** Content plane, the `consentWording` rule below (CLAUDE.md §4): these MUST NEVER reach
+     *  `audit.payload`, which carries refs/ids/counts only. THREE fields and no more — no custom
+     *  fields, no tags, no arbitrary key-value (19.1 CONTEXT, LOCKED). Optional ⇒ NO migration. */
+    company: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    title: v.optional(v.string()),
+    /** The PROVENANCE OF THE DATA, not who triggered the write. `mailbox-resolved` = the address
+     *  came out of Gmail headers and a human pressed save; `user-entered` = typed from scratch;
+     *  `inbound` = a Phase 31 lead form (not written in this phase). */
+    // `imported` = a row that came out of a CSV the user uploaded (19.1). WIDENING a union is
+    // backward-compatible for every row at rest, so this needs NO migration; NARROWING it later
+    // WOULD need one, because rows carrying the dropped literal would fail validation on read.
+    origin: v.union(
+      v.literal("mailbox-resolved"),
+      v.literal("user-entered"),
+      v.literal("inbound"),
+      v.literal("imported"),
+    ),
+    /** Consent stays EMPTY when no consent event occurred — the Pipeline cell then reads "none on
+     *  record", the truth. NOTHING is defaulted to consented. */
+    consentAt: v.optional(v.number()),
+    // `imported-attested` is deliberately DISTINCT from `asserted-by-user`: one attestation over
+    // 500 rows is weaker evidence than consent recorded for one person, and the schema must not
+    // flatten that difference. Widening ⇒ NO migration; narrowing later would need one.
+    consentSource: v.optional(
+      v.union(
+        v.literal("asserted-by-user"),
+        v.literal("inbound-form"),
+        v.literal("imported-attested"),
+      ),
+    ),
+    /** Content plane. CLAUDE.md §4 — this text MUST NEVER reach `audit.payload`, which carries
+     *  refs/ids/counts only. `consentWording` is the exact wording shown; `consentContext` is the
+     *  user's free-text capture context ("they signed up at the trade show"). */
+    consentWording: v.optional(v.string()),
+    consentContext: v.optional(v.string()),
+    /** DISPLAY MIRROR ONLY. The send-path guard reads `suppressions` and NEVER this field or this
+     *  table — that is what makes a contacts bug unable to un-suppress anyone, and contact
+     *  deletion a non-event for the guard (SC#5). */
+    unsubscribedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant_email", ["tenantId", "email"])
+    .index("by_tenant_createdAt", ["tenantId", "createdAt"]),
+
+  // What is owed, and when. Bound to a contact OPTIONALLY — free-standing follow-ups are allowed
+  // ("chase the supplier quote"), but the AGENT must always name a contact; contactless follow-ups
+  // are a USER-only capability. That is the structural brake against the CRM quietly becoming a
+  // general task generator. New table ⇒ NO migration (prior-phase discipline).
+  followUps: defineTable({
+    tenantId: v.string(),
+    contactId: v.optional(v.id("contacts")),
+    note: v.string(), // user/agent content — content plane ONLY, never audited (CLAUDE.md §4)
+    /** REQUIRED. No date, no follow-up: "Follow-ups due" is a headline tile and an undated
+     *  follow-up could never appear in it. Moving this date IS the snooze, which is why there is
+     *  no snooze state — the date stays the single source of truth for "due". */
+    dueAt: v.number(),
+    /** `canceled` is distinct from `done` because "I decided not to" and "I did it" are different
+     *  facts. Three states, closed. */
+    status: v.union(v.literal("open"), v.literal("done"), v.literal("canceled")),
+    completedAt: v.optional(v.number()),
+    /** Provenance ref so "why is this here" stays answerable. An id — refs-only, audit-safe by
+     *  construction. Optional ⇒ no migration. */
+    sourcePlanId: v.optional(v.id("plans")),
+    createdAt: v.number(),
+  })
+    .index("by_tenant_status_dueAt", ["tenantId", "status", "dueAt"])
+    .index("by_tenant_contact", ["tenantId", "contactId"]),
+
+  // The send-path trust boundary, kept ADDRESS-KEYED and separate from `contacts` on purpose:
+  // suppression OUTLIVES the contact, so deleting a contact can never restore the ability to email
+  // someone who asked you to stop. Un-suppressing is behind an explicit confirm plus a refs-only
+  // audit row, never a plain toggle. New table ⇒ NO migration (prior-phase discipline).
+  suppressions: defineTable({
+    tenantId: v.string(),
+    address: v.string(), // normalized by `normalizeAddress` at the write boundary
+    suppressedAt: v.number(),
+    source: v.union(v.literal("unsubscribe-link"), v.literal("user-marked")),
+  })
+    // The ONE index the send guard reads — per-address, so a 5-recipient fan-out drops exactly the
+    // suppressed address and still sends to the other four.
+    .index("by_tenant_address", ["tenantId", "address"]),
+
+  // The FINANCE-OPS inputs, and only those (design §5). The Hormozi inputs stay on the scorecard —
+  // duplicating CAC into a second table is what produced two separate selector bugs on 2026-08-09.
+  //
+  // One row per (tenant, field), read with `.unique()` so a duplicate is LOUD rather than silently
+  // shadowed (the tenantProfiles precedent). `statedAt` is per FIELD, not per row-set: cash on hand
+  // goes stale far faster than payables, and one shared timestamp would make the 90-day
+  // confirm-or-update prompt fire on the wrong number.
+  //
+  // Values are USD DOLLARS as a plain number, matching `scorecard.financials.cac`. The Pikar-spend
+  // plane's integer cents never appear here.
+  financeInputs: defineTable({
+    tenantId: v.string(),
+    field: v.union(
+      v.literal("cashOnHand"),
+      v.literal("monthlyOperatingCost"),
+      v.literal("mrr"),
+      v.literal("receivables"),
+      v.literal("payables"),
+    ),
+    valueUsd: v.number(),
+    // WHEN THE FIGURE WAS TRUE, not when the row was written — `FigureClaim.observedAt` lands here.
+    // A P&L dated six weeks ago is already six weeks into its 90-day staleness clock. Keeps its name
+    // rather than being renamed to `observedAt`: a rename needs a migration for no behavioural gain.
+    statedAt: v.number(),
+    // Provenance, added 2026-08-10. All optional: existing rows carry none, and a row without
+    // provenance IS a user statement — which is exactly what every pre-existing row is. No
+    // backfill, no migration.
+    origin: v.optional(v.union(v.literal("stated"), v.literal("observed"))),
+    actor: v.optional(v.union(v.literal("user"), v.literal("agent"))),
+    basis: v.optional(v.string()),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_field", ["tenantId", "field"]),
 });

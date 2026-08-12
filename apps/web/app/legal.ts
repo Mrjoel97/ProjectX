@@ -16,14 +16,25 @@ const PLACEHOLDERS = [ENTITY, ENTITY_ADDRESS, GOVERNING_LAW, VENUE, LEAD_AUTHORI
 
 export const HAS_PLACEHOLDERS = PLACEHOLDERS.some((p) => p.startsWith("["));
 
+// Owner-approved production deferral, 2026-08-12. Keep this explicit and visible so the
+// unresolved legal work cannot be mistaken for completion. The public pages continue to render
+// the placeholders verbatim; this flag only permits a production build while formation details
+// are pending.
+export const LEGAL_REVIEW_DEFERRED = true;
+
 // A Terms of Service naming "[LEGAL ENTITY — NOT YET FORMED]" is unenforceable, and a
 // privacy policy with no named controller fails GDPR Art. 13 and Google's OAuth review.
-// Fail the production build rather than publish either. VERCEL_ENV is set only on Vercel
-// deploys, so local `pnpm build` and preview builds are unaffected and drafting continues.
+// The owner explicitly deferred this production gate on 2026-08-12. Emit a production-build
+// warning instead of failing, but do not hide or replace any placeholder. Remove the deferral and
+// fill every value above before representing the legal surface as complete.
 if (HAS_PLACEHOLDERS && process.env.VERCEL_ENV === "production") {
-  throw new Error(
-    `Refusing to build for production: unresolved legal placeholders in app/legal.ts — ${PLACEHOLDERS.filter(
-      (p) => p.startsWith("["),
-    ).join(", ")}. Form the entity, fill these in, then deploy.`,
+  const unresolved = PLACEHOLDERS.filter((p) => p.startsWith("[")).join(", ");
+  if (!LEGAL_REVIEW_DEFERRED) {
+    throw new Error(
+      `Refusing to build for production: unresolved legal placeholders in app/legal.ts — ${unresolved}.`,
+    );
+  }
+  console.warn(
+    `LEGAL REVIEW DEFERRED: production contains unresolved placeholders in app/legal.ts — ${unresolved}. Owner-approved deferral recorded 2026-08-12.`,
   );
 }

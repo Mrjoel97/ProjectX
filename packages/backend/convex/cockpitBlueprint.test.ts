@@ -94,6 +94,19 @@ async function insertConfirmedProfile(
   });
 }
 
+const insertFigure = (t: ReturnType<typeof convexTest>, tenantId: string) =>
+  t.run(async (ctx) => {
+    await ctx.db.insert("financeInputs", {
+      tenantId,
+      field: "cashOnHand" as const,
+      valueUsd: 38_500,
+      statedAt: Date.now() - 2 * 24 * 60 * 60 * 1000,
+      origin: "stated" as const,
+      actor: "user" as const,
+      basis: "finance panel",
+    });
+  });
+
 describe("cockpit business-blueprint turn prompt (BLPR-02, VALIDATION item 24)", () => {
   test("a no-tool turn carries the confirmed tenant blueprint through the real read chain", async () => {
     const t = convexTest(schema, modules);
@@ -162,6 +175,62 @@ describe("cockpit business-blueprint turn prompt (BLPR-02, VALIDATION item 24)",
     expect(prompt).not.toContain("<business_blueprint>");
   });
 
+  // WHOLE-BRANCH REVIEW C1 (and its re-review). The skill body tells the model its context carries
+  // a `Finance:` line; before this it did not, because `financeSpineLine` had no callers. It rides
+  // the TURN PROMPT — joined here and nowhere else, because the blueprint spine's own query doubles
+  // as `evaluations.ts`'s grounding chunk and would capture these figures (see
+  // `evaluations.test.ts`'s "the finance line never reaches the grounding corpus").
+  test("the finance line rides the turn prompt beside the blueprint", async () => {
+    const t = convexTest(schema, modules);
+    const docId = await insertBlueprintDocument(t, TENANT_A);
+    await insertConfirmedProfile(t, TENANT_A, docId);
+    await insertFigure(t, TENANT_A);
+    const planId = await insertPlan(t, TENANT_A);
+
+    const prompt = await t.action(internal.llm.__cockpitTurnPrompt, {
+      tenantId: TENANT_A,
+      planId,
+      text: TURN_TEXT,
+    });
+
+    expect(prompt).toMatch(/^<business_blueprint>/);
+    expect(prompt).toContain("Acme Water");
+    expect(prompt).toContain("Finance: cashOnHand 38500(");
+    expect(prompt.endsWith(`The user says: ${TURN_TEXT}`)).toBe(true);
+  });
+
+  // The early-return case the whole two-channel split exists to serve: figures but no confirmed
+  // blueprint — the ordinary state of a new account. A single `spineForTenant` string could not
+  // express this without also leaking into the grounding corpus.
+  test("a tenant with figures and NO blueprint still gets the finance line", async () => {
+    const t = convexTest(schema, modules);
+    await insertFigure(t, TENANT_B);
+    const planId = await insertPlan(t, TENANT_B);
+
+    const prompt = await t.action(internal.llm.__cockpitTurnPrompt, {
+      tenantId: TENANT_B,
+      planId,
+      text: TURN_TEXT,
+    });
+
+    expect(prompt).not.toContain("<business_blueprint>");
+    expect(prompt).toContain("Finance: cashOnHand 38500(");
+    expect(prompt.endsWith(`The user says: ${TURN_TEXT}`)).toBe(true);
+  });
+
+  test("a tenant with neither is still byte-identical to the legacy prompt", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await insertPlan(t, TENANT_B);
+
+    expect(
+      await t.action(internal.llm.__cockpitTurnPrompt, {
+        tenantId: TENANT_B,
+        planId,
+        text: TURN_TEXT,
+      }),
+    ).toBe(noSpinePrompt(TURN_TEXT));
+  });
+
   test("production and the shim are pinned to exactly two shared-helper call sites", () => {
     expect(src.length).toBeGreaterThan(10_000);
     expect(code.match(/buildTurnPrompt\(\{/g) ?? []).toHaveLength(2);
@@ -178,7 +247,13 @@ describe("cockpit business-blueprint turn prompt (BLPR-02, VALIDATION item 24)",
       /spine\s*=\s*await ctx\.runQuery\(internal\.blueprint\.spineForTenant,\s*\{\s*tenantId\s*\}\)/;
     expect(production).toMatch(spineRead);
     expect(shim).toMatch(spineRead);
-    expect(production).toMatch(/prompt:\s*buildTurnPrompt\(\{\s*spine,/);
-    expect(shim).toMatch(/return buildTurnPrompt\(\{\s*spine,/);
+    // The SECOND channel, read separately on both sites. A future edit that "tidies" this by
+    // appending the finance line to `spineForTenant` instead re-opens the grounding-corpus leak.
+    const financeRead =
+      /finance\s*=\s*await ctx\.runQuery\(internal\.cash\.financeSpineFor,\s*\{\s*tenantId\s*\}\)/;
+    expect(production).toMatch(financeRead);
+    expect(shim).toMatch(financeRead);
+    expect(production).toMatch(/prompt:\s*buildTurnPrompt\(\{\s*spine,\s*finance,/);
+    expect(shim).toMatch(/return buildTurnPrompt\(\{\s*spine,\s*finance,/);
   });
 });

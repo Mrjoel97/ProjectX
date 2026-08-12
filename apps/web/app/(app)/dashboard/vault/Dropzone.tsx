@@ -216,7 +216,26 @@ export function Dropzone({
   }
 
   return (
-    <div style={{ margin: "1.5rem 0" }}>
+    <section
+      className="clay-card"
+      aria-labelledby="vault-upload-heading"
+      style={{
+        display: "grid",
+        gap: "0.85rem",
+        margin: "1.5rem 0 0",
+        padding: "clamp(1rem, 2.5vw, 1.5rem)",
+        border: "1px solid var(--vault-border)",
+        borderRadius: "1rem",
+        background: "var(--vault-paper)",
+        boxShadow: "var(--vault-shadow)",
+      }}
+    >
+      <div>
+        <p className="caps-label">Add to your vault</p>
+        <h2 id="vault-upload-heading" style={{ margin: "0.25rem 0 0", fontSize: "1.1rem" }}>
+          Upload source material
+        </h2>
+      </div>
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
@@ -241,7 +260,7 @@ export function Dropzone({
           void handleFiles(e.dataTransfer.files);
         }}
         aria-label="Click to upload or drag and drop"
-        className="clay-dropzone"
+        className="vault-button clay-dropzone"
         style={{
           width: "100%",
           display: "flex",
@@ -273,8 +292,8 @@ export function Dropzone({
           <UploadCloudIcon size={28} />
         </span>
         <span style={{ fontSize: "1.05rem", color: "var(--ink-soft)" }}>
-          <span style={{ color: "var(--teal-600)", fontWeight: 700 }}>Click to upload</span> or drag
-          and drop
+          <span style={{ color: "var(--ink)", fontWeight: 700 }}>Click to upload</span> or drag and
+          drop
         </span>
         <span style={{ fontSize: "0.85rem", color: "var(--ink-soft)", textAlign: "center" }}>
           Searchable: PDF, DOCX, XLSX, PPTX, CSV, TXT, Markdown
@@ -338,6 +357,7 @@ export function Dropzone({
           <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
             <button
               type="button"
+              className="vault-button"
               disabled={busy}
               onClick={() => dirRef.current?.click()}
               style={pillSecondary(busy)}
@@ -346,6 +366,7 @@ export function Dropzone({
             </button>
             <button
               type="button"
+              className="vault-button"
               onClick={() => setPasteOpen(true)}
               style={{
                 background: "none",
@@ -381,6 +402,7 @@ export function Dropzone({
             <div style={{ display: "flex", gap: "0.5rem" }}>
               <button
                 type="button"
+                className="vault-button vault-button-primary"
                 disabled={busy || !paste.trim()}
                 onClick={() => void submitPaste()}
                 style={pillPrimary(busy || !paste.trim())}
@@ -389,6 +411,7 @@ export function Dropzone({
               </button>
               <button
                 type="button"
+                className="vault-button"
                 onClick={() => {
                   setPasteOpen(false);
                   setPaste("");
@@ -401,6 +424,6 @@ export function Dropzone({
           </div>
         )}
       </div>
-    </div>
+    </section>
   );
 }

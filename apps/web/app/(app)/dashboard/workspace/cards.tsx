@@ -5,7 +5,12 @@ import { api } from "@pikar/backend/api";
 // one shared horizon, so the picker can't offer a time the server will reject.
 // REVIEW_THREAD_ID (BEVL-03): the ONE deterministic thread the weekly cron writes to, so the card
 // can tell "this is the weekly review" from "someone asked for an evaluation in a chat".
-import { REVIEW_THREAD_ID, SEND_TIME_HORIZON_MS } from "@pikar/core";
+import {
+  parseCrmOperations,
+  REVIEW_THREAD_ID,
+  SEND_TIME_HORIZON_MS,
+  withheldNote,
+} from "@pikar/core";
 // The pure view model (Gap 1): lede + action-first needs-you + time-grouped fyi remainder +
 // collapsed-noise count. ALL the ordering/collapse/lede intelligence lives in @pikar/core — this
 // card is a dumb renderer over it, never re-deriving any of it (ADR-004 / cockpit.md).
@@ -18,6 +23,7 @@ import type { FunctionReturnType } from "convex/server";
 import Link from "next/link";
 import { useState } from "react";
 import { MediaCanvas } from "./MediaCanvas";
+import { useSendCockpitMessage } from "./useSendCockpitMessage";
 
 // SC3/SC5 render: the right-pane artifact dispatcher over the live `plans` row + REPORT
 // projection. Cards are plain inline-styled <div>s (the `box` style mirrors review/[id]).
@@ -63,6 +69,33 @@ function toLocalInputValue(epoch: number): string {
 function formatAbsolute(epoch: number): string {
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   return `${new Date(epoch).toLocaleString()} (${tz})`;
+}
+
+/**
+ * A staged `crm_write` list, in plain language — one sentence per operation, exactly what Approve
+ * will write. Parsed through `parseCrmOperations`, the SAME validator `executePlan` runs at the
+ * apply boundary, so the card cannot promise something the server would refuse. THROWS on an
+ * unparseable list; the caller renders that as "nothing to approve" rather than a partial promise.
+ */
+export function describeCrmOperations(raw: unknown): string[] {
+  const day = (ms: number) =>
+    new Date(ms).toLocaleDateString(undefined, {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+    });
+  return parseCrmOperations(raw).map((op) => {
+    switch (op.op) {
+      case "addContact":
+        return `Add contact: ${op.email}${op.name ? ` (${op.name})` : ""}`;
+      case "addFollowUp":
+        return `Follow up with ${op.email} by ${day(op.dueAt)} — ${op.note}`;
+      case "completeFollowUp":
+        return "Mark a follow-up done";
+      default:
+        return "Cancel a follow-up";
+    }
+  });
 }
 
 // Live REPORT status → badge colour. Fan-out rows seed at "approved" and move
@@ -113,7 +146,7 @@ const attRow = {
 // sentinels (Plan 04). ponytail: no per-button SMOKE flag — offline determinism is composer-driven.
 function PlanAttachments({ plan, threadId }: { plan: Plan; threadId?: string }) {
   const urls = useQuery(api.plans.attachmentUrls, { planId: plan._id });
-  const send = useAction(api.cockpit.sendCockpitMessage);
+  const send = useSendCockpitMessage(); // carries the browser's trusted clock (§2-D)
   const [busy, setBusy] = useState(false);
   const [topics, setTopics] = useState<Record<number, string>>({});
   const attachments = plan.attachments ?? [];
@@ -290,11 +323,55 @@ function PlanRecipientBodies({ plan }: { plan: Plan }) {
   );
 }
 
+/** One note, one optional lever. `tone` is set at the call site (a refusal is an error, the
+ *  withheld report is not), so the map below carries only what is refusal-specific. */
+type PlanNote = { text: string; tone?: "error" | "info"; link?: { href: string; label: string } };
+
+/**
+ * Every governed refusal this card can show, and the lever the user can pull for it. Module-scope
+ * and EXPORTED so the set is assertable — it used to be a local const inside `approve()`, where a
+ * missing key was undetectable: unlike the Approvals page's `refusalMessage`, which falls back to
+ * printing the raw enum, `if (refusal) setNote(...)` below renders NOTHING AT ALL for a reason
+ * that is not here. A silent no-op on the second approve surface is the worse failure mode.
+ *
+ * A reason with no entry here is one the canvas or the picker already surfaces (media/scheduling).
+ * Copy is kept WORD-FOR-WORD in step with `approvals/ApprovalsView.tsx`'s `refusalMessage` — the
+ * same stop must not read as two different rules on the two surfaces.
+ */
+export const PLAN_REFUSALS: Record<string, PlanNote> = {
+  gmail_not_connected: { text: "Connect Gmail before approving." },
+  no_postal_address: {
+    text: "Add your postal address before sending — the law requires it in every email's footer.",
+    // href and label travel TOGETHER (Task 8 review). They used to be an optional `href` beside a
+    // HARDCODED "Open your profile" label, so the first entry pointing anywhere else would have
+    // rendered the wrong words over the right link.
+    link: { href: "/dashboard/profile", label: "Open your profile" },
+  },
+  all_recipients_suppressed: {
+    text: "Nobody on this list can be emailed: every recipient has unsubscribed.",
+  },
+  // Task 8 (live-finance-inputs): `applyFinanceClaims`'s two refusals, which reach this card as a
+  // RETURN rather than a throw Convex would redact in production. Without these entries a rejected
+  // figure approval would set no note and the click would look like it simply did nothing.
+  agent_cannot_update_figure: {
+    text: "That figure can only be updated by you for now — the agent cannot vouch for where it came from. Nothing changed.",
+    link: { href: "/dashboard/finance", label: "Open your finance figures" },
+  },
+  malformed_figure_claim: {
+    text: "This figure update was malformed and was not applied. Nothing changed.",
+  },
+};
+
 function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
   const execute = useMutation(api.cockpit.executePlan);
   const setSendTime = useMutation(api.plans.setPlanSendTime);
   const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
+  // The governed-refusal note, typed off `PlanNote` so the entry's own `link.label` rides along.
+  // A refusal LEAVES the plan `proposed`, which is the only reason a note in this component's
+  // state is visible at all — see the withheld report in `PlanCards`, which is the same
+  // information about a SUCCESS and therefore cannot live here. Amber is deliberately not used:
+  // BRAND §2 reserves `--held` for the approval gate alone.
+  const [note, setNote] = useState<(PlanNote & { tone: "error" | "info" }) | null>(null);
   const recipients = plan.recipients ?? [];
   const mode = plan.mode ?? "individual";
   const body = plan.body ?? "";
@@ -308,12 +385,63 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
     setNote(null);
     try {
       const res = await execute({ planId: plan._id });
-      if (!res.ok && res.reason === "gmail_not_connected")
-        setNote("Connect Gmail before approving.");
+      if (!res.ok) {
+        // Every governed stop names the lever the user can pull; the map is module-scope so the
+        // set of stops is assertable (see PLAN_REFUSALS). A reason with no entry there is a
+        // media/scheduling refusal the canvas or the picker already surfaces.
+        const refusal = PLAN_REFUSALS[res.reason];
+        if (refusal) setNote({ ...refusal, tone: "error" });
+      }
+      // NO success branch here — neither `res.withheld` nor finance's `res.applied === 0`.
+      // Merge note (2026-08-10, lane/live-finance-inputs): the lane predates 19-12 and re-added
+      // both. Both are DEAD for one reason: `cockpit.ts:752` patches a successful finance apply to
+      // `done`, and `PlanCards` at :2608 renders this component only while `status === "proposed"`,
+      // so the card unmounts before `execute()` resolves and `setNote` runs on a dead component.
+      // The "already up to date" copy is NOT lost — `ApprovalsView.tsx:405` carries it word-for-word
+      // on the surface that survives the transition. Anything to say about a SUCCESS belongs on the
+      // plan row, like the withheld set below.
+      // NO `res.withheld` branch here. It was one (19-05) and it was DEAD: this component only
+      // renders while `plan.status === "proposed"`, and a successful approve is exactly the
+      // transition off `proposed` — the reactive subscription unmounts the card before `execute()`
+      // resolves, so `setNote` ran on a dead component and nobody ever saw SC#5's report. The
+      // withheld set is persisted on the plan row instead and rendered by `PlanCards` below, where
+      // it survives the transition that creates it. (Phase-19 UAT step 9b.)
     } finally {
       setBusy(false);
     }
   }
+
+  // THE note element, built ONCE and rendered by EVERY branch below (Task 8 review, finding 1).
+  // It used to live only inside the final email return, while `memo`, `crm_write`, `finance_write`
+  // and `calendar_event` all EARLY-RETURN their own JSX — so on those four cards `setNote` ran, the
+  // component re-rendered, and NOTHING was displayed. That was invisible for years because the
+  // three original reasons (`gmail_not_connected`, `no_postal_address`, `all_recipients_suppressed`)
+  // only fire on EMAIL plans, which do reach the final return; `finance_write` is the first branch
+  // whose refusals actually fire. Rendered as one shared element rather than copied into each
+  // branch, so a NEW branch that forgets it is the only way to regress — and crmCard.test.ts
+  // scans this file for exactly that.
+  const planNote = note && (
+    // `alert` interrupts for a refusal; `status` is polite for the withheld report, which
+    // reports something that already succeeded. `--teal-900`, not `--teal-600`: BRAND §6 bars
+    // teal-600 as small text on white (~2.9:1).
+    <p
+      role={note.tone === "error" ? "alert" : "status"}
+      style={{
+        color: note.tone === "error" ? "#dc2626" : "var(--ink-soft)",
+        margin: "0.5rem 0 0",
+      }}
+    >
+      {note.text}
+      {note.link && (
+        <>
+          {" "}
+          <Link href={note.link.href} style={{ color: "var(--teal-900)", fontWeight: 600 }}>
+            {note.link.label}
+          </Link>
+        </>
+      )}
+    </p>
+  );
 
   // MEMO plan (12-05, BEVL-02): same single Approve gate, a different promise. Everything below
   // this branch is email chrome — recipients, mode, a send-time picker, "Send to N recipients" —
@@ -350,6 +478,129 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
         >
           {busy ? "Saving…" : "Approve & save"}
         </button>
+        {planNote}
+      </div>
+    );
+  }
+
+  // CRM plan (19-06, ACTN-05): same single Approve gate, a different promise again. Approving
+  // applies EVERY operation below or none of them (one serializable mutation); nothing is emailed
+  // and no Gmail connection is needed. Ahead of the email chrome for the memo/calendar reason —
+  // recipients, mode, the send-time picker and "Send to N recipients" are all lies on a CRM write.
+  if (plan.kind === "crm_write") {
+    // Read through the SAME validator the applier runs (@pikar/core). An unparseable list is
+    // unapprovable, so the card must not offer an Approve button for it — a card that renders a
+    // list the server will refuse is worse than one that says so.
+    let lines: string[] | null;
+    try {
+      lines = describeCrmOperations(plan.crmOperations);
+    } catch {
+      lines = null;
+    }
+    return (
+      <div style={box} data-testid="crm-plan-card">
+        <div style={label}>CRM UPDATE</div>
+        {lines === null ? (
+          <p role="alert" style={{ color: "#dc2626", margin: "0.5rem 0 0" }}>
+            This plan's records list is incomplete, so there is nothing to approve. Ask for it
+            again.
+          </p>
+        ) : (
+          <>
+            <ul
+              style={{
+                listStyle: "none",
+                margin: "0.5rem 0 0.75rem",
+                padding: 0,
+                display: "grid",
+                gap: "0.35rem",
+              }}
+            >
+              {lines.map((line, i) => (
+                <li
+                  // Two operations can legitimately render the SAME sentence (the same contact
+                  // named twice), so the line alone is not unique. The list is frozen at stage
+                  // time and this card never reorders, filters or inserts into it.
+                  // biome-ignore lint/suspicious/noArrayIndexKey: the index IS the identity here
+                  key={`${i}-${line}`}
+                  style={{
+                    ...chip,
+                    // BRAND §6: the teal goes in the FILL, never in 0.85rem text (`--teal-600` on
+                    // white is ~2.9:1). Zero `--held` — amber is the approval gate's alone (§2).
+                    background: "color-mix(in srgb, var(--teal-400) 30%, var(--card))",
+                    borderColor: "var(--rule)",
+                    color: "var(--ink)",
+                    display: "block",
+                    borderRadius: "0.5rem",
+                  }}
+                >
+                  {line}
+                </li>
+              ))}
+            </ul>
+            <p style={{ ...dim, margin: "0 0 0.75rem" }}>
+              Approving saves all {lines.length} {lines.length === 1 ? "change" : "changes"} to your
+              records. Nothing is sent to anyone.
+            </p>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void approve()}
+              style={{
+                ...btn,
+                background: "var(--teal-600)",
+                color: "#fff",
+                border: "none",
+                fontWeight: 600,
+              }}
+            >
+              {busy ? "Saving…" : "Approve & save to records"}
+            </button>
+          </>
+        )}
+        {planNote}
+      </div>
+    );
+  }
+
+  // FINANCE plan (Task 8, live-finance-inputs): same single Approve gate, a different promise
+  // again. Approving writes the staged figures into the user's OWN numbers — the same `inline`
+  // arm the CRM branch uses, so nothing is emailed and no Gmail connection is needed. Ahead of the
+  // email chrome for the memo/CRM reason: recipients, mode, the send-time picker and "Send to N
+  // recipients" are all lies on a figure update.
+  //
+  // The COUNT, never the figures. `approvals/ApprovalsView.tsx`'s `titleFor` made this call for
+  // the primary approve surface and §4's rule about a tenant's revenue applies to a screenshot as
+  // much as to the audit log; the two surfaces must not disagree about what a figure card shows.
+  // The figures themselves are on /dashboard/finance, which is where Approve writes them.
+  if (plan.kind === "finance_write") {
+    const count = Array.isArray(plan.financeClaims) ? plan.financeClaims.length : 0;
+    return (
+      <div style={box} data-testid="finance-plan-card">
+        <div style={label}>FIGURE UPDATE</div>
+        <p style={{ margin: "0.5rem 0 0.75rem", color: "var(--ink)", fontSize: "0.9rem" }}>
+          {count} figure {count === 1 ? "update is" : "updates are"} waiting on your approval.
+        </p>
+        <p style={{ ...dim, margin: "0 0 0.75rem" }}>
+          Approving saves {count === 1 ? "it" : "them"} to your finance figures. Nothing is sent to
+          anyone.
+        </p>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void approve()}
+          style={{
+            ...btn,
+            background: "var(--teal-600)",
+            color: "#fff",
+            border: "none",
+            fontWeight: 600,
+          }}
+        >
+          {/* Word-for-word `approvals/ApprovalsView.tsx`'s actionLabel — one act, one promise. */}
+          {busy ? "Saving…" : "Approve & update the figure"}
+        </button>
+        {planNote}
       </div>
     );
   }
@@ -399,6 +650,85 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
         >
           {busy ? "Adding…" : "Approve & add to calendar"}
         </button>
+        {planNote}
+      </div>
+    );
+  }
+
+  // CALENDAR CHANGE (17-05, the ACTN-02 gap closure). A DIFFERENT promise from the create card
+  // above, which is the whole reason `calendar_manage` is a separate action type: approving here
+  // moves or removes an event that already exists on a real calendar. Ahead of the email chrome for
+  // the memo/CRM/calendar reason — recipients, mode, the send-time picker and "Send to N
+  // recipients" are all lies on a calendar change.
+  //
+  // NOTHING CAN STAGE THIS PLAN YET. Plan 17-09 owns the staging tool, and 17-09-03 owns the
+  // registry-backed version of this card. What is deliberately NOT rendered here is the ORIGINAL
+  // event's title and time: they live in the `calendarEvents` registry row, this component only
+  // receives the plan, and inventing them from the desired state would be exactly the
+  // provenance-laundering failure this codebase keeps having. The reference is shown instead.
+  if (plan.kind === "calendar_manage") {
+    const removing = plan.calendarOperation === "delete";
+    const providerName =
+      plan.calendarProvider === "microsoft" ? "Microsoft Outlook" : "Google Calendar";
+    // A delete carries NO desired content — @pikar/core's `buildManageIntent` refuses one that
+    // does — so the "new value" rows must not render for it, or the card would offer a change the
+    // server would refuse.
+    const changes: [string, string][] = removing
+      ? []
+      : (
+          [
+            ["New title", plan.eventTitle],
+            ["New time", plan.eventStartMs ? formatAbsolute(plan.eventStartMs) : undefined],
+            [
+              "New length",
+              plan.eventDurationMs ? `${Math.round(plan.eventDurationMs / 60000)} min` : undefined,
+            ],
+          ] as [string, string | undefined][]
+        ).filter((row): row is [string, string] => Boolean(row[1]));
+    return (
+      <div style={box} data-testid="calendar-manage-plan-card">
+        <div style={label}>CALENDAR CHANGE</div>
+        <div style={{ margin: "0.5rem 0" }}>
+          <strong>
+            {removing ? "Remove an event from your calendar" : "Update an event on your calendar"}
+          </strong>
+        </div>
+        <div style={dim}>Calendar: {providerName}</div>
+        {/* The REFERENCE, not a reconstructed title: this card cannot read the registry row, and a
+            title it made up would be worse than an id it can prove. */}
+        <div style={dim}>Event reference: {plan.calendarManagedEventId ?? "—"}</div>
+        {changes.map(([name, value]) => (
+          <div key={name} style={dim}>
+            {name}: {value}
+          </div>
+        ))}
+        {!removing && changes.length === 0 && (
+          <div style={dim}>No change has been staged yet, so there is nothing to approve.</div>
+        )}
+        <p style={{ ...dim, margin: "0.75rem 0" }}>
+          {removing
+            ? `Approving takes this event off your ${providerName}. Nothing is sent to anyone.`
+            : `Approving changes this event on your ${providerName}. Nothing is sent to anyone.`}
+        </p>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void approve()}
+          style={{
+            ...btn,
+            background: "var(--teal-600)",
+            color: "#fff",
+            border: "none",
+            fontWeight: 600,
+          }}
+        >
+          {busy
+            ? "Working…"
+            : removing
+              ? "Approve & remove from calendar"
+              : "Approve & update calendar"}
+        </button>
+        {planNote}
       </div>
     );
   }
@@ -485,11 +815,7 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
       >
         {busy ? "Approving…" : sendAt ? "Approve & schedule" : "Approve"}
       </button>
-      {note && (
-        <p role="alert" style={{ color: "#dc2626", margin: "0.5rem 0 0" }}>
-          {note}
-        </p>
-      )}
+      {planNote}
     </div>
   );
 }
@@ -1493,6 +1819,11 @@ const VERB: Record<string, [running: string, done: string]> = {
   briefInbox: ["Reading and summarizing your inbox…", "Briefed your inbox"],
   searchVault: ["Searching your knowledge vault…", "Grounded in the vault"],
   evaluateBusiness: ["Assessing your business…", "Assessed your business"],
+  // Both literals were MISSING from agentSteps.tool until 2026-08-08, so neither step could record
+  // at all — the trace never showed them and the parity test never saw them. Now that the union
+  // carries them, they need real verbs or they render the generic "Working…"/"Done" fallback.
+  recordScorecardAnswer: ["Noting that figure…", "Noted that figure"],
+  resetPlan: ["Clearing the draft…", "Cleared the draft"],
   dispatchOfferArchitect: ["Working with the offer architect…", "Offer architect finished"],
   dispatchMoneyModelDesigner: [
     "Working with the money-model designer…",
@@ -1500,8 +1831,21 @@ const VERB: Record<string, [running: string, done: string]> = {
   ],
   dispatchLeadEngine: ["Working with the lead engine…", "Lead engine finished"],
   dispatchResearch: ["Researching…", "Research finished"],
+  // The individual web search INSIDE a research run (llm.ts `webResearch`). It emits step rows only
+  // since 2026-08-07, when it stopped being a provider-executed hosted tool and became a local
+  // Tavily call — a hosted tool never fired onToolExecutionStart, so there was nothing to label.
+  webResearch: ["Searching the web…", "Search finished"],
   checkAvailability: ["Checking your calendar…", "Checked your calendar"],
   proposeCalendarEvent: ["Putting the event together…", "Event ready to approve"],
+  // 17-05 (ACTN-02 gap closure): the two management trace verbs, RESERVED here in the same commit
+  // as their `agentSteps.tool` literals because traceParity.test.ts asserts the two sets equal BOTH
+  // ways and either half alone is RED. The TOOLS themselves land in Plan 17-09 — the literal has to
+  // exist first, or the step insert throws inside an AI-SDK callback the SDK silently swallows and
+  // prod loses the row while every offline test stays green (Research Pitfall 4).
+  listManagedCalendarEvents: ["Finding events I can change…", "Found events I can change"],
+  proposeCalendarChange: ["Preparing the calendar change…", "Calendar change ready to approve"],
+  listDriveFolders: ["Looking through your Drive…", "Looked through your Drive"],
+  findInDrive: ["Searching your Drive…", "Searched your Drive"],
   // PRE-EXISTING GAP, unrelated to Phase 17 (RPLY-01, Phase 3.11): this live tool (llm.ts
   // `replyToMessage: tool({`) has been in the agentSteps.tool union with no VERB entry since it
   // shipped, so every inbox-reply trace row rendered the generic "Working…"/"Done" FALLBACK.
@@ -1521,6 +1865,20 @@ const VERB: Record<string, [running: string, done: string]> = {
   // must never read "Generated" or "Reel ready".
   dispatchMedia: ["Writing the script and art direction…", "Storyboard ready"],
   proposeImage: ["Composing the image prompt…", "Image proposal ready"],
+  // Phase-19 (ACTN-05): MANDATORY beside the schema literal — traceParity.test.ts asserts set
+  // equality BOTH ways, so either half alone is RED. The done state is the PROMISE the tool keeps:
+  // it STAGES a card and applies nothing, so this must never read "Saved" or "Updated your
+  // records" — the write happens on Approve, and BRAND §1 forbids claiming an action that did not
+  // happen. "Records", not "CRM", matches the card's own "changes to your records" voice.
+  stageCrmWrite: ["Preparing a records update…", "Records update ready to approve"],
+  // Task 7 (live-finance-inputs): MANDATORY beside the schema literal — traceParity.test.ts
+  // asserts set equality both ways. Read-only, matches the evaluateBusiness voice above.
+  readFinance: ["Reading your finances…", "Read your finances"],
+  // Task 8: MANDATORY beside the schema literal — traceParity.test.ts asserts set equality BOTH
+  // ways, so either half alone is RED. The done state is the PROMISE the tool keeps: it STAGES a
+  // card and applies nothing, so this must never read "Saved" or "Updated your figures" — the
+  // write happens on Approve, and BRAND §1 forbids claiming an action that did not happen.
+  stageFinanceWrite: ["Preparing a figure update…", "Figure update ready to approve"],
 };
 const FALLBACK: [string, string] = ["Working…", "Done"];
 
@@ -2275,12 +2633,19 @@ function PlanCards({
   const halted = plan.status === "scheduled" || plan.status === "canceled";
   // A memo's body IS the card above it — a DRAFT card would just print the same memo twice.
   // `media` excluded for the same reason `memo` is: a DRAFT card printing an email body beside the
-  // canvas would be email chrome on a reel.
+  // canvas would be email chrome on a reel. `crm_write` likewise (19-06): a plan row can carry a
+  // leftover subject/body from an earlier compose in the same thread, and a DRAFT card would print
+  // an email beside a card that promises nothing is sent.
   const hasDraft =
     (Boolean(plan.body) || Boolean(plan.subject)) &&
     !halted &&
     plan.kind !== "memo" &&
-    plan.kind !== "media";
+    plan.kind !== "media" &&
+    plan.kind !== "crm_write" &&
+    // Task 8: `finance_write` for the same reason as `crm_write` — a plan row can carry a leftover
+    // subject/body from an earlier compose in the same thread, and a DRAFT card would print an
+    // email beside a card that promises nothing is sent.
+    plan.kind !== "finance_write";
   // Resolution happens BEFORE the PLAN — render the pick card whenever the cockpit has parked
   // candidates. UAT-C (03.10-04): the old `status !== "proposed"` clause is DROPPED so the picker
   // SURVIVES a plan that got proposed with a pick still open (the propose-while-pending deadlock);
@@ -2294,6 +2659,16 @@ function PlanCards({
   const composing =
     Boolean(plan.candidates?.length || plan.subject || plan.body || plan.recipients?.length) ||
     plan.status !== "collecting";
+  // SC#5's withheld report, read off the PLAN ROW so it survives the approve that creates it
+  // (19-05 shipped it in the approve card's `useState`, where it was unreachable — UAT step 9b).
+  // Gated to the states where "Sent to N" is TRUE: the send was accepted and the fan-out owns it.
+  // ponytail: a `scheduled` plan is deliberately excluded — nothing has been sent yet, so the
+  // sentence would be a lie; its note appears when the schedule fires and the row moves to
+  // delivering. Upgrade to a tense-aware sentence only if deferred partial sends need one.
+  const withheld =
+    plan.status === "approved" || reporting
+      ? withheldNote(plan.recipients ?? [], plan.withheldRecipients)
+      : null;
 
   return (
     // ponytail: `data-plan-id` is a render-only E2E hook (NOT a plan field/mutation/query) so the
@@ -2309,6 +2684,19 @@ function PlanCards({
       {plan.status === "scheduled" && <ScheduledCard plan={plan} />}
       {plan.status === "canceled" && <CanceledCard plan={plan} threadId={threadId} />}
       {hasDraft && <DraftCard plan={plan} />}
+      {/* INFORMATION, not failure: `status` (polite), never `alert`; `--ink-soft`, never the error
+          red and never amber — BRAND §2 reserves `--held` for the approval gate alone. Placed
+          ABOVE the report so the "and one address is missing from this list" explanation is read
+          before the list it explains. */}
+      {withheld && (
+        <p
+          role="status"
+          data-testid="withheld-report"
+          style={{ color: "var(--ink-soft)", margin: 0, fontSize: "0.9rem" }}
+        >
+          {withheld}
+        </p>
+      )}
       {reporting && <ReportCard planId={plan._id} />}
       {/* demoted: collapsed to its masthead below the work — still rendered + reachable, never destroyed */}
       {composing && briefing && <BriefingCard briefing={briefing} demoted />}

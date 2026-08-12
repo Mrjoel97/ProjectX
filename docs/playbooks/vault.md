@@ -1,5 +1,298 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Last verified: 2026-08-12 (17.1-10 authorized L6 recovery — **Blueprint proven, gate still
+> RED/inconclusive; do not claim a golden pass**). Attempt `aba002b1` announced 36 cases and seeded
+> its 5-message inbox, then the first OpenAI embedding failed with Windows socket error 10013. The
+> repeated stderr text carries one request id, so it is not counted as a second call. The runner
+> exited 1 before the Blueprint assertion or first fixture; read-only stopped-database
+> inspection found one `processing` Vault document, 0 plans, 0 reasoning spend movements, and no
+> Blueprint/profile or evidence attributable to the run. Attempt `dafc544c` progressed farther: it
+> seeded 5 ready Vault sources and confirmed Blueprint `mx77ggrzqfygaf1gkeep2my8y18cbc82`, and
+> the real 401-character rendered spine contained `evalblpr`. It then recorded **4 passes, 3
+> failures, case 8 started twice without a verdict, and cases 9-36 never started** before OpenAI
+> connect timeout, DNS `ENOTFOUND`, `agent_timeout`, backend wait, and `InternalServerError` made the
+> environment non-certifying. The exact eval process was stopped to prevent further spend.
+> Read-only database reconciliation found **9 plans, 10 one-cent reasoning-ledger movements
+> ($0.10 limiter consumption: 9 `openai/gpt-4o-mini`, 1 `openai/gpt-4.1-nano` fallback), and 0
+> certifying eval-evidence records** attributable to `dafc544c`. The completed verdict lines total
+> only **$0.0269**; that is a lower bound, not the exact provider bill, because thrown failures print
+> `$0.0000` and the abrupt exit omitted the runner summary. The exact provider/runner total is
+> unrecoverable. The prior authorization is consumed. The residual L6 blocker is zero-cost proof of
+> a stable current backend plus working outbound DNS/TCP, then fresh authorization for one bounded
+> full run. L1/L7 and `17.1-10-SUMMARY.md` remain blocked behind a conclusive L6 pass.
+>
+> Last verified: 2026-08-10 (20.1-01 — **offline Drive discovery substrate only; not yet user
+> visible**). `vaultDrive.findInDrive` reuses the existing stored-scope check and shared Drive token
+> refresh boundary, then performs exactly one bounded `files.list` (`pageSize=20`, no pagination)
+> across name and full text. Query literals escape backslashes and apostrophes before URL encoding;
+> shared-drive flags remain mandatory. Results are metadata only (`id`, name, kind, optional parent,
+> readability). This path never calls folder import, download, reservation, export, landing, ingest,
+> embedding, graph extraction, or any hosted model. The cockpit wrappers list one level or search,
+> but remain unreachable in normal conversation until Plan 20.1-02 activates the matching
+> `cockpit-agent` skill body. Offline evidence: `vaultDrive.test.ts` 16/16; Drive guard mutation
+> inserted an import reference, failed exactly the new guard, was reverted, and returned green.
+>
+> Last verified: 2026-08-10 (17.1-10 L6 failed live gate — **do not claim a golden
+> pass**). The owner authorized and launched exactly one top-level, unpinned 35-case command
+> against the configured local deployment. The shell timed out after **1808.1 seconds** with exit
+> **124** and captured no runner stdout; its original `pnpm`/runner process tree was still alive and
+> had to be stopped explicitly. Read-only recovery found three distinct throwaway profile rows in
+> the command window: `eval-bb67ebfa` at `12:45:58.141Z`, `eval-a464e1c4` at `13:00:39.900Z`, and
+> `eval-e73d636a` at `13:09:28.853Z`. Each row had one confirmed Blueprint ref and exactly **5 owned
+> source-document refs**, proving the deterministic seed ran, but not that the rendered spine
+> assertion completed. A later eval-owned process tree aligned with the newest row and was also
+> stopped; all identified eval-owned processes ended at zero remaining. The local CLI then lost
+> deployment connectivity, so **case pass/fail, retry count, actual spend, plan/evaluation counts,
+> rendered `evalblpr` proof, and evidence-row counts were not recoverable**. No evaluation retry was
+> made. Phase 17.1 remains open and L1/L7 owner verification must not proceed on this evidence.
+>
+> Last verified: 2026-08-09 (17.1-10 Task 2 live gate — **L2-L4 ran once; L6 did not
+> start.**) The owner-tenant Blueprint rebuild returned **2 candidates**, both additions, with
+> **0 contradictions and 0 citation-gate drops** (`bad_citation: 0`, `unknown_field: 0`,
+> `not_derivable: 0`, `empty: 0`) across **8 source documents**. The governed model call cost
+> **$0.01** on `openai/gpt-4o-mini`. Retrieval quality was mixed: the revenue probe returned
+> **4 mostly generic/irrelevant hits and missed the Northwind profile**, while the binding-
+> constraint probe returned **5 hits**, including the profile and **2 directly relevant constraint
+> memos**. The draft was persisted at `1786289786676`; the confirmed Blueprint stayed unchanged.
+> L6's one clean, network-enabled `convex dev` attempt used the 180-second local-backend timeout and
+> never became ready: it remained at `Preparing Convex functions...`, and read-only checks never
+> observed a listener on port 3210. The golden runner was therefore **not invoked: 0 cases run,
+> $0.00 evaluation spend, and 0 evaluation fixture/evidence rows written**. The attempt-owned
+> process tree was stopped and port 3210 was verified free; no startup or evaluation retry followed.
+>
+> Last verified: 2026-08-08 (26-07 follow-up — **all four vault spend sites now name themselves in
+> the ledger, and the PDF one is the reason this mattered.**)
+> `vaultExtract` uses `vault:extract:<vaultDocId>:<attemptId>` **plus `:p<i>` on the per-page PDF
+> fan-out** — a document-level correlation would have recorded ONE page's cost for a 50-page scan
+> and left the ledger far below the limiter. The image branch omits the `:p` segment entirely
+> rather than faking `:p0`; never emit `:pundefined`. `vaultTranscribe` uses
+> `vault:transcribe:<vaultDocId>:<attemptId>` and `vaultDigest` uses
+> `vault:digest:<folderId>:<runId>`, both with a per-execution `attemptId`/`runId` nonce, because a
+> daily-sweep retry or a digest rebuild is a REAL second charge, not a replay.
+> **`vaultIngest` is the exception and must stay one:** it is a JOURNALED WORKFLOW STEP, so it
+> DERIVES `vault:ingest:<vaultDocId>:<step.workflowId>` — a nonce there would mint a second row for
+> money that moved once. It deliberately does NOT reuse the handler's own `correlationId` argument,
+> because `vaultSweep.retryExtraction` passes that as a CONSTANT and every retry would collide.
+> That step also carries `{ unstableArgs: true }`: its args grew, and an ingest already in flight
+> would otherwise die on `Journal entry mismatch` at deploy. The policy and the full per-site table
+> live in `docs/playbooks/guardrails.md` §"Phase 26".
+>
+> Last verified: 2026-08-08 (26-07 — **the folder rail's money is now double-entered.**
+> `vaultFolders.reserveFolder` passes its `folderId` down to `reserveFolderInner`, which writes a
+> `reserved` spend movement correlated `f:<folderId>:<reservedAt>`; `settleFolder` writes the
+> matching `refunded` movement by REBUILDING that same string from `folder.reservedAt`. The row's
+> `reservedAt` and the ledger's correlation are therefore the SAME instant by construction — stamp
+> them separately and every refund becomes an orphan row while the money stays perfectly correct,
+> which is a defect nothing else in this subsystem would notice. A rolled window refunds nothing and
+> writes NO movement (a zero-cent row is rejected, and that throw would run inside `tryComplete`'s
+> transaction, failing folder completion for an accounting reason); the reservation then reads as
+> `unlanded`, which is the literal truth. The mechanism, the correlation policy and the
+> non-negotiable rollback rule live in `docs/playbooks/guardrails.md` §"Phase 26 — the spend ledger
+> rides alongside the limiter"; this subsystem owns only the wiring and the `vaultFolders.test.ts`
+> parity test that proves the two stamps have not drifted apart.)
+>
+> Previously verified: 2026-08-07 (embedding provider swap — **THE VAULT NO LONGER DEPENDS ON OPENAI**).
+> `vaultRag.ts` moved from `text-embedding-3-small` to `gemini-embedding-001`, both at 1536 dims, so
+> the Convex vector index and `schema.ts` are UNCHANGED. WHY: the OpenAI balance is $0
+> (`credit_balance_exhausted` on chat AND embeddings, verified directly), and this file was the LAST
+> OpenAI dependency in a cockpit turn — every vault-touching turn and every golden-gate run died
+> here, before case one, no matter which chat model was pinned. Gemini embeddings are free-tier
+> eligible on the key the deployment already holds, so this is what makes the test loop cost $0.
+>
+> **THREE PROVIDER DIFFERENCES, TWO OF WHICH FAIL SILENTLY — read `vaultRag.test.ts` before editing:**
+> **(1) Vectors arrive UNNORMALISED and must be scaled.** Measured live: `gemini-embedding-001`
+> returns a unit vector at its native 3072 dims (L2 = 1.000000) but **L2 ≈ 0.6976 at
+> `outputDimensionality: 1536`** — Matryoshka truncation drops the tail and does not re-scale the
+> remainder. OpenAI always returned unit vectors, so nothing here ever had to care. An unnormalised
+> vector does not error; ranking just quietly degrades. `l2Normalize` at the adapter boundary is the
+> fix, and a zero vector is passed through untouched because dividing by its norm emits NaN into the
+> index and poisons every later comparison. **(2) Dedup identity is now MODEL-SCOPED.** `rag.add`
+> replaces on `key` but deduplicates on `contentHash`; the document TEXT did not change when the
+> provider did, so a bare text hash would mark every existing document already-embedded and it would
+> keep its OpenAI vector forever — invisible to searches against Gemini vectors, since the two are
+> different embedding spaces. `embeddingContentHash` prefixes the model id, so this swap and every
+> future one invalidate dedup automatically while same-model dedup still saves the re-ingest cost.
+> `key` stays the bare hash so the re-embed REPLACES the stale entry rather than orphaning it.
+> **(3) Batch cap is 100, not 2048.** Google refuses 101+ with `at most 100 requests can be in one
+> batch`, so `maxEmbeddingsPerCall` is a hard API limit the RAG component reads — overstating it
+> turns a large ingest into a 400. A length-mismatch guard now fails closed too: the component pairs
+> vectors to chunks POSITIONALLY, so a short response would attach the wrong vector to a chunk, a
+> corruption no later query could tell apart from bad retrieval.
+>
+> `batchEmbedContents` reports NO usage at all, so `usage.tokens` is 0 — honest rather than invented,
+> and inert because `priceUsage` has no embeddings row either way. Add a pricing row and a token
+> count TOGETHER if embedding spend ever matters; one without the other is the silent under-draw
+> `packages/cost/src/cost.ts` exists to prevent.
+>
+> **LIVE-VERIFIED, not just unit-green.** `vaultSmoke:seedCorpus` embedded 2 docs for real (the exact
+> call the golden gate died on), and `pnpm smoke:vault` PASSED end to end against the live
+> deployment: real embed, REAL hybrid search returning the seed doc ranked, `vaultGround` merging the
+> graph neighbour, and the §4 no-raw-text audit scan clean. A full 2-turn cockpit fixture
+> (01-happy-single) also reached `status: proposed` with correct recipient/subject/body on free-tier
+> Gemini with ZERO OpenAI credit. Backend 1217/1217, typecheck 0.
+>
+> **MIGRATION STILL OWED FOR EXISTING DOCUMENTS.** Docs embedded before this change keep their OpenAI
+> vectors until they are re-ingested; the model-scoped hash guarantees a re-ingest re-embeds and
+> REPLACES in place, but nothing re-ingests them spontaneously. Until then those rows return noise
+> scores against Gemini queries. There are no real users yet, so the cheap fix is to delete and
+> re-upload dev content; a `reembed` action over `vaultDocuments.ragEntryId` is the real fix and is
+> NOT written. Note the `@convex-dev/migrations` harness is the WRONG tool for it — `migrateOne` runs
+> in a mutation ctx and embedding needs an action.
+
+> Last verified: 2026-08-05 (15.4-04 automated close — **the connected Nord Edge Vault route ran
+> in Playwright, not only in component tests.**) `apps/web/e2e/vault-redesign.spec.ts` passed 2/2
+> against the real authenticated `/dashboard/vault` route and a live local Convex deployment. It
+> proves root/category browse, brain-dump ingest, directory pre-flight/upload, folder completion,
+> folder-scoped search exclusion, no-results recovery, preview identity/provenance/download,
+> close/Escape/focus restoration, confirmed removal and empty-folder recovery. Drive success and
+> folder-digest AI success remain honest external/live capabilities; the spec asserts the Drive
+> entry point but does not fake either one.
+>
+> **Harness contract:** run persistent `convex dev` plus Next on `127.0.0.1:3111`, seed the
+> committed skill registry, and provide a real local password user. The spec calls the internal,
+> idempotent `onboarding:__seedOnboardedTenant` seam for the JWT's stable user-id segment before
+> revisiting the Vault route. `PIKAR_E2E_BACKEND_DIR` is an optional isolated-worktree override;
+> ordinary runs resolve `packages/backend` from the repository. Do not seed the whole JWT `sub`:
+> its session suffix changes on each login, while `tenantQuery` uses `getAuthUserId`.
+>
+> **Defect caught by the executed gate:** offline ingest records `smoke::<contentHash>` as a
+> synthetic `ragEntryId`, but `deleteVaultDoc` passed it to the RAG component's branded ID
+> validator. Confirmed removal therefore left the dialog open. Deletion now skips RAG cleanup only
+> for that explicit sentinel and still removes the Vault row/graph ownership; real entry IDs retain
+> the existing `rag.deleteAsync` cascade. `vault.test.ts` and `vaultDigest.test.ts` pin direct delete
+> and complete-folder cancellation without clearing the sentinel (43/43 focused backend tests).
+>
+> **Verification commands:**
+> `pnpm --filter @pikar/web test:e2e -- e2e/vault-redesign.spec.ts`;
+> `pnpm --filter @pikar/backend test`; `pnpm --filter @pikar/web test`;
+> `pnpm --filter @pikar/backend typecheck`; `pnpm --filter @pikar/web typecheck`;
+> `pnpm --filter @pikar/web build`; `node scripts/check-playbooks.mjs`.
+>
+> **Rollback:** revert the 15.4-04 E2E/playbook commit and the isolated
+> `fix(vault): delete smoke-ingested documents safely` commit together. No schema, index, migration,
+> backfill, stored production row, Drive scope or dependency rollback is required.
+
+> **AN AGENT-AUTHORED DOCUMENT'S RETRY IS A RE-INGEST, NOT A RE-EXTRACTION (2026-08-08).**
+> `evaluation`/`agent`/`voice` rows carry their text DIRECTLY and have **no `storageId`** — nothing
+> was ever stored, so there is nothing to extract. When such a row fails at INGEST (chunk + embed) it
+> ends up with text but **no `ragEntryId`**, i.e. present in the vault and NOT groundable — and
+> `retryExtraction`'s old `!doc.storageId` refusal made that state PERMANENT: the user pressed Retry
+> and nothing observable happened, for ever. Found live on two `ingest_failed` memos whose ingest
+> workflow died during a machine-level disk/RAM exhaustion. **This is the same objection the function
+> had already accepted for unrecognized mime types** (":98-101 — the user PRESSED A BUTTON and
+> nothing observable happened"), so it gets the same answer: do the work the doc actually needs —
+> `startIngest`, status → `processing`. A row with NO bytes and NO text is still refused, because
+> that genuinely is nothing to redo. Read the failure by SHAPE, never by source: text + no
+> `ragEntryId` ⇒ re-ingest; bytes ⇒ re-extract. `vaultSweep.test.ts` pins both arms and registers the
+> `workflow`/`workflow/workpool` components, because reaching `startIngest` needs them.
+>
+> **THE EVAL VAULT CORPUS MUST CARRY GROUND FOR EVERY SPECIALIST THAT SEARCHES IT (2026-08-08).**
+> `vaultSmoke:seedCorpus` seeded exactly two briefs — a LAUNCH note and a STAFFING plan — while
+> fixtures 29/30/31 assert `citesVaultDoc`: the needle must reach a specialist's memo, which it can
+> only do through a live `searchVault`. But `offer-architect` and `lead-engine` search their OWN
+> domains, and the corpus said nothing about offers, pricing or lead channels, so retrieval honestly
+> returned nothing, the memo correctly said so ("the vault does not contain information on lead
+> channels"), and the fixture reddened. Pass/fail was a coin flip on whether the specialist happened
+> to author a query near "launch"/"staffing" — recorded in `cost.ts` as suspected "retrieval
+> variance" and misread for a while as MODEL-dependence (a Gemini-vs-OpenAI pin was tried and
+> reverted chasing it). The corpus now carries one brief per specialist domain: offer, money model,
+> lead channels. **This does NOT weaken the assertion** — the needle still appears in no fixture turn
+> (`--self-check` pins that), so it can still only arrive via a real retrieval; what changed is that
+> each specialist now has ground to find. **Keep one brief per specialist**; deleting one re-opens
+> that specialist's flake. `seedDocId`/`neighborDocId` remain `docIds[0]`/`[1]`, so the graph smoke
+> is unaffected — APPEND new briefs, never prepend.
+>
+> Last verified: 2026-08-08 (15.4-03, the media-preview ordering fix below, plus the surface-scan
+> repair described at the end of this subsection — **connected Nord Edge preview and import surfaces with
+> governed controls intact.**) `PreviewModal` still loads `vaultDocText`, `docEntities` and media
+> URLs lazily, mints a fresh signed URL only when Download is pressed, and writes identity through
+> `setDocIdentity`. Removal is now a two-step presenter state: the destructive `deleteVaultDoc`
+> adapter is absent until the user opens the explicit irreversible-action confirmation.
+>
+> **Preview state matrix:** ready extracted text, expandable long text, server-truncated extraction,
+> ready image/video, unsupported/no-inline-preview, missing stored bytes, lazy loading, each
+> processing stage and extraction failure are explicit pure states. A missing/foreign projection
+> fails closed with no identity, citation, download, delete, retry or voice capability. Failure
+> retains the reason-specific copy and retry; ready text and binary documents retain Download when
+> `storageId` exists, provenance/entities, workspace navigation and identity correction.
+>
+> **MEDIA BEATS TEXT IN `derivePreviewState`, AND THE ORDER IS THE FEATURE.** The hosted vision rail
+> describes EVERY image (`vaultExtract.ts` `rail === "image"`) and `vaultTranscribe.transcribeDoc`
+> transcribes EVERY video, so a READY media document ALWAYS carries `text`. 15.4-03 decided on
+> `text` before `mimeType`, which made `ready-binary` unreachable in production and silently
+> replaced the picture with a paragraph ABOUT the picture — shipped green, because the only media
+> tests passed `text: null`, an input the pipeline cannot produce. The image/video branches now sit
+> ABOVE both the text branch and the lazy-text gate, so the signed bytes paint without waiting on a
+> second query, and the description/transcript renders BENEATH the media instead of replacing it.
+> Do not reorder these branches, and **never assert a media preview state with `text: null` alone** —
+> a media fixture must carry text or the regression is invisible again. `ready-binary` therefore
+> carries `text`/`excerpt`/`canExpand`; `snippet()` is the ONE truncation rule shared with
+> `ready-text`. A media document whose bytes are gone falls through to its text, not to a binary
+> state promising bytes that no longer exist.
+>
+> **Dialog and import invariants:** the labelled modal traps Tab, closes on Escape/backdrop/X,
+> locks background scroll and restores the invoking grid control on unmount. Upload, directory
+> pre-flight and the custom Drive breadcrumb browser use the existing Plan-02 Vault-scoped tokens.
+> Do not replace the Drive browser with Google's Picker SDK, and do not reorder folder pricing:
+> estimate from the pick, upload sequentially, then reserve using the original manifest; Drive
+> remains scope-check → enumerate metadata → reserve → download.
+>
+> **Focused verification:** `pnpm --filter @pikar/web test -- vault` (43/43),
+> `pnpm --filter @pikar/web typecheck`, `pnpm --filter @pikar/web build`, then
+> `node scripts/check-playbooks.mjs`. `PreviewControls.test.ts` deliberately uses
+> `React.createElement` plus `renderToStaticMarkup`: the web Vitest include remains `.test.ts`-only,
+> with no DOM dependency or shared runner widening.
+>
+> **Rollback:** revert the three 15.4-03 task commits together. No schema, stored-document,
+> dependency, Drive scope, budget/reservation or backend rollback is required.
+>
+> **THE REDESIGN LEFT TWO SURFACE-SCAN ASSERTIONS POINTING AT DELETED SPELLINGS, AND NOBODY SAW IT**
+> — `packages/core/src/vaultSurface.test.ts` was red on `main` for three days because the 15.4 work
+> and the media-preview fix were gated with `pnpm --filter @pikar/web test`, which does not run the
+> `@pikar/core` scan that watches the web surface. Repaired 2026-08-08 (Plan 26-06 session, an
+> out-of-lane fix): the download guard bound to the local name `a` and 15.4 renamed it to `anchor`,
+> so it now matches `/\.download\s*=\s*doc\.title/` — **the guarantee is the assigned VALUE, never
+> the variable holding the anchor.** The stale-digest guard read one `FolderBreadcrumb` block, but
+> 15.4 split derivation (`FolderBreadcrumb`) from the emphasis flip (`DigestRebuildControl` in
+> `VaultBrowseControls.tsx`); the RENDERED flip is now owned by
+> `apps/web/.../VaultBrowseControls.test.ts`, exactly the migration `preflightCopy.test.ts` made,
+> and the scan keeps only what a whole-surface scan can uniquely prove — that staleness is DERIVED
+> (`viewState.digest.kind === "stale"`), that there is exactly ONE definition, ONE mount and ONE
+> label across every `.tsx`, and that no dismissible banner exists. **The banner assertion strips
+> comments first:** the only `localStorage` on the surface is inside the comment BANNING it, so a
+> raw scan punishes its own explanation (`importGuard.test.ts` strips comments for this reason).
+> Both repaired assertions were mutation-checked — constant-folding the derived flag and adding a
+> second control each turn the test red. **Rule this leaves behind: when a UI change moves a
+> guarded spelling, gate it with `pnpm --filter @pikar/core test` too — a scan that lives in
+> another package is invisible to that package's own gate.**
+
+> Last verified: 2026-08-04 (15.4-02 — **connected Nord Edge root/folder browse with honest
+> state handling and retained real actions.**) `/dashboard/vault` now uses a Vault-scoped plain
+> canvas, paper cards, semantic stat accents, responsive category/action rails and explicit
+> focus/disabled/reduced-motion states. The global `.pane-canvas` and `.clay-card` contracts were
+> not changed; every visual override is below `.vault-nord-edge` or uses a `vault-*` class.
+>
+> **Browse state matrix:** initial list loading, list failure, root empty, category empty, folder
+> empty, search loading, search failure and no search results are separate content states.
+> Processing/failed members are an independent partial-ingest axis, and unincorporated folder
+> members independently produce a stale-digest state, so warnings remain visible beside content.
+>
+> **Retained live controls:** single-file upload, folder upload, Google Drive browse/import, folder
+> open/cancel, failed-document retry, digest rebuild, Refresh, preview and load-bound copy remain
+> connected to the existing handlers. Folder search sends `folderId`; its request identity also
+> includes the folder so an older folder/query response cannot repaint the current scope. Category
+> tabs intentionally carry no counts because the backend exposes only bounded root statistics.
+>
+> **Focused verification:** `pnpm --filter @pikar/web test -- vault` (28/28),
+> `pnpm --filter @pikar/web typecheck`, `pnpm --filter @pikar/web build`, then
+> `node scripts/check-playbooks.mjs`. The retained-controls test is
+> `VaultBrowseControls.test.ts` (not `.tsx`) because the web Vitest include is intentionally
+> `.ts`-only; it uses `React.createElement` and `renderToStaticMarkup` with no new DOM dependency.
+>
+> **Rollback:** revert the 15.4-02 UI composition and scoped-style commits together. No schema,
+> stored-document, dependency or backend rollback is required; the Phase 15.4-01 optional
+> `folderId` search contract remains backward-compatible for older callers.
+
 > Last verified: 2026-08-04 (15.4-01 — **Vault search now honors the folder being browsed without
 > changing root search or the schema.**) `vaultSearch` accepts an optional `folderId`; its bounded
 > hybrid candidates resolve through search-only metadata, then pass tenant ownership, ingesting-folder
@@ -209,7 +502,7 @@
 > migration, no test result changed. See `## Phase 15.3 — vault folders` at the END of this file
 > — in particular the INERT-LITERAL warning, which is the single most misreadable fact in the
 > phase.)
-
+
 > Last verified: 2026-08-02 (18-07 — **agent-authored documents carry provenance in the grid, and
 > the vault-search ceiling on them is REAL.** Documenting shipped surface that landed WITHOUT a
 > playbook bump; `check-playbooks` was green only because a foreign lane had bumped this file.)
@@ -1570,6 +1863,46 @@ the honest Blueprint-bearing no-match at count 0 plus a matched card containing 
 retrieval document. Those tests are intended to fail if anyone later "simplifies" the Blueprint
 back into the parallel arrays; the required mutation proof moves it there temporarily and confirms
 that the no-match, count, budget, full-object shape, and array-invariance guards all turn red.
+
+### 17.1-10 — live gate, Task 1 (L5 and prerequisites)
+
+**Live deployment checked 2026-08-09:** `local-joel_feruzi-pikar_ai_50c69-1`. Running
+`skills:seedSkills` and then reading the active row back — rather than trusting the seed report —
+proved that **`business-blueprint@1` is ACTIVE**. The live body SHA-256 is
+`0a1ecdd5c65b22c0a3ae4bc511fc9900e9567150beeef55d8ec04547220e4aa2`, exactly equal to the
+LF-normalized canonical `packages/contracts/skills/business-blueprint.md`; the read-back also
+contained the distinctive citation-contract line *"A source index that does not exist causes the
+whole claim to be DROPPED."*
+
+The owner/live tenant has a `tenantProfiles` row (`tier: solopreneur`), **25 `ready` Vault
+documents**, and one existing `business_blueprint` Vault row. The synthesis refusal for a missing
+tier/profile row therefore does not block this gate. Offline immediately before the seed: core
+**697/697**, contracts **27/27**, backend full suite **exit 0**, backend typecheck **exit 0**, and web
+typecheck **exit 0**. The repository-wide playbook checker was temporarily blocked only by
+uncommitted Phase 19/Approvals files owned by concurrent lanes; no foreign playbook was modified.
+
+### 17.1-10 — live gate, Task 2 (L2, L3, L4, and L6)
+
+The owner's real-vault rebuild ran exactly once. The model returned **2 candidates**; the merge
+classified both as additions and produced **0 contradictions**. The citation gate dropped **0**:
+`bad_citation: 0`, `unknown_field: 0`, `not_derivable: 0`, and `empty: 0`. The run used **8 source
+documents**, persisted a draft at `1786289786676`, and deliberately did not promote it over the
+confirmed Blueprint. The priced ledger delta was **$0.01** using `openai/gpt-4o-mini`.
+
+The live `rag.search` inspection was not uniformly good. The revenue probe returned **4** hits that
+were mostly generic or irrelevant and missed the Northwind profile a human would have selected.
+The binding-constraint probe returned **5** hits, including the profile and **2** directly relevant
+constraint memos. This is a measured retrieval defect, not a citation-gate failure: candidate
+validation can reject an unsupported claim, but it cannot make the upstream probe retrieve the
+best document.
+
+L6 did not reach evaluation. Port 3210 was read-only verified free, then exactly one hidden,
+network-enabled `convex dev` process was launched with
+`CONVEX_LOCAL_BACKEND_STARTUP_TIMEOUT_SECS=180`. Its final log state was
+`Preparing Convex functions...`; no listener appeared on port 3210, so the spend/evidence baseline
+query and `eval:golden` were never launched. Observable evaluation delta: **0 cases, $0.00 spend,
+0 throwaway fixture rows, and 0 eval-evidence rows**. Only the validated process tree created by
+this attempt was terminated, port 3210 was re-verified free, and there was no second attempt.
 
 ## Phase 15.3 — vault folders
 

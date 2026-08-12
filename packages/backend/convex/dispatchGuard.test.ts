@@ -34,10 +34,11 @@ test("dispatch.ts contains ZERO generateText call sites (the dispatcher never ru
   ).toHaveLength(0);
 });
 
-/** The argument text of every `generateText(...)` call in a file, balanced-paren sliced. */
-function generateTextCalls(file: string): string[] {
+/** Every `generateText(...)` call in a file, balanced-paren sliced, with its source offset (the
+ *  offset is what lets a call be attributed to the function it sits in). */
+function generateTextCalls(file: string): { text: string; index: number }[] {
   const src = readCode(file);
-  const out: string[] = [];
+  const out: { text: string; index: number }[] = [];
   for (const m of src.matchAll(/generateText\(/g)) {
     let depth = 1;
     let i = m.index + m[0].length;
@@ -45,7 +46,7 @@ function generateTextCalls(file: string): string[] {
       if (src[i] === "(") depth++;
       else if (src[i] === ")") depth--;
     }
-    out.push(src.slice(m.index, i));
+    out.push({ text: src.slice(m.index, i), index: m.index });
   }
   return out;
 }
@@ -65,12 +66,44 @@ test("llm.ts has EXACTLY ONE TOOL-BEARING generateText call site (one agent loop
   // time the firewall grew a legitimate member, while still missing a second loop hidden inside a
   // tool. Equality, not `<=`: a second loop must fail the day it appears.
   // `[,:]` — runAgentLoop passes the tool set by SHORTHAND (`tools,`), not `tools:`.
-  const toolBearing = calls.filter((c) => /\btools\s*[,:]/.test(c));
+  const toolBearing = calls.filter((c) => /\btools\s*[,:]/.test(c.text));
+
+  // `probeGemini` is the ONE deliberate exception (2026-08-07), excluded BY POSITION rather than by
+  // relaxing the count to 2 — a bare `.toBe(2)` would silently admit a real second tenant loop the
+  // day someone adds one, which is the entire failure this test exists to catch.
+  //
+  // Why it is genuinely exempt rather than grandfathered: it is an operator `internalAction`, never
+  // nested inside `runAgentLoop` and never reached by a tenant request. It draws NO rail (it REPORTS
+  // the cost it would have drawn), so it cannot double-bill the spend window, and it carries its own
+  // `stopWhen`. It bears tools because that IS its job — sending the production hosted-search
+  // descriptor is the only way to learn whether the vendor accepts it.
+  const src = readCode("llm.ts");
+  const probeStart = src.indexOf("export const probeGemini");
   expect(
-    toolBearing.length,
-    `llm.ts has ${toolBearing.length} tool-bearing generateText call sites — runAgentLoop must ` +
-      `remain THE one loop. A second one double-bills the daily spend window (preCall only ever ` +
-      `sees the outer call) and voids stopWhen: stepCountIs(8).`,
+    probeStart,
+    "probeGemini is gone — DELETE this exclusion rather than leaving it dangling, or the next " +
+      "tool-bearing loop added to llm.ts inherits its exemption",
+  ).toBeGreaterThan(-1);
+  // The next top-level `export` bounds the handler; slicing to end-of-file would exempt everything
+  // written after it.
+  const probeEnd = src.indexOf("\nexport ", probeStart + 1);
+  const inProbe = toolBearing.filter(
+    (c) => c.index > probeStart && (probeEnd < 0 || c.index < probeEnd),
+  );
+  // Non-vacuity in the OTHER direction, and it is the one that matters for Phase 16: if the probe
+  // stops sending a tool, `probe:gemini --grounded` measures nothing while still printing PASS —
+  // the vacuous green this whole probe was written to avoid.
+  expect(
+    inProbe.length,
+    "probeGemini no longer passes `tools` — `--grounded` would report PASS having never asked the " +
+      "vendor to search",
+  ).toBe(1);
+
+  expect(
+    toolBearing.length - inProbe.length,
+    `llm.ts has ${toolBearing.length - inProbe.length} tool-bearing generateText call sites ` +
+      `outside probeGemini — runAgentLoop must remain THE one loop. A second one double-bills the ` +
+      `daily spend window (preCall only ever sees the outer call) and voids stopWhen: stepCountIs(8).`,
   ).toBe(1);
 });
 
@@ -310,7 +343,11 @@ test("llm.ts holds NO reference to the Approve gate or the fan-out at all (not e
 // the 403 on the very first click.
 test("every Drive action checks stored scope before the shared token refresh", () => {
   const src = readCode("vaultDrive.ts");
-  for (const fn of ["export const importDriveFolder", "export const listDriveFolders"]) {
+  for (const fn of [
+    "export const importDriveFolder",
+    "export const listDriveFolders",
+    "export const findInDrive",
+  ]) {
     const start = src.indexOf(fn);
     expect(start, `${fn} not found`).toBeGreaterThanOrEqual(0);
     const rest = src.slice(start);
@@ -330,6 +367,40 @@ test("every Drive action checks stored scope before the shared token refresh", (
         `failure.`,
     ).toBeLessThan(tokenAt);
   }
+});
+
+test("cockpit Drive reads cannot import, ingest, export, or enter specialist grants", () => {
+  const src = readExecutableCode("llm.ts");
+  const listStart = src.indexOf("listDriveFolders: tool(");
+  const findStart = src.indexOf("findInDrive: tool(");
+  const end = src.indexOf("searchVault: tool(", findStart);
+  expect(listStart).toBeGreaterThanOrEqual(0);
+  expect(findStart).toBeGreaterThan(listStart);
+  expect(end).toBeGreaterThan(findStart);
+  const driveTools = src.slice(listStart, end);
+
+  expect(driveTools).toContain("api.vaultDrive.listDriveFolders");
+  expect(driveTools).toContain("api.vaultDrive.findInDrive");
+  for (const forbidden of [
+    "importDriveFolder",
+    "reserveFolder",
+    "openRun",
+    "exportOne",
+    "landFile",
+    "ingest",
+  ]) {
+    expect(driveTools, `Drive cockpit reads contain forbidden ${forbidden}`).not.toContain(
+      forbidden,
+    );
+  }
+
+  const specialists = readFileSync(join(convexDir, "../../core/src/specialists.ts"), "utf8");
+  const grant = specialists.slice(
+    specialists.indexOf("const SPECIALIST_TOOLS"),
+    specialists.indexOf("export const SPECIALISTS"),
+  );
+  expect(grant).not.toContain("listDriveFolders");
+  expect(grant).not.toContain("findInDrive");
 });
 
 test("every Drive request carries the shared-drive parameters", () => {

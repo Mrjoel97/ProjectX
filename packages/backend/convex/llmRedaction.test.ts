@@ -74,17 +74,22 @@ test("runCockpitAgent has one spine-first turn-prompt assembly with the exact le
   );
 
   expect(handler).toMatch(
-    /prompt:\s*buildTurnPrompt\(\{\s*spine,\s*history,\s*plan,\s*tz:\s*clientContext\?\.tz,\s*text\s*\}\)/,
+    /prompt:\s*buildTurnPrompt\(\{\s*spine,\s*finance,\s*history,\s*plan,\s*tz:\s*clientContext\?\.tz,\s*text\s*\}\)/,
   );
   expect(handler.match(/\bprompt:/g) ?? []).toHaveLength(1);
   expect(src).not.toContain(
     "prompt: `${buildHistoryBlock(history)}${buildAgentContext(plan ?? {}, clientContext?.tz)}\\n\\nThe user says: ${text}`",
   );
 
-  // The helper is deliberately one expression: null contributes zero bytes, while a present spine
-  // is the first block and the current user turn remains the final line.
+  // TWO standing-context channels since 2026-08-10, joined HERE and nowhere else: the blueprint
+  // spine (`internal.blueprint.spineForTenant`, which is also `evaluations.ts`'s grounding chunk)
+  // and the finance line (`internal.cash.financeSpineFor`). Still one expression, still
+  // zero bytes when both are null, still the current user turn as the final line.
   expect(code).toMatch(
-    /return `\$\{spine === null \? "" : `\$\{spine\}\\n\\n`\}\$\{buildHistoryBlock\(history\)\}\$\{buildAgentContext\(plan \?\? \{\}, tz\)\}\\n\\nThe user says: \$\{text\}`;/,
+    /const standing = \[spine, finance\]\.filter\(\(p\) => p !== null\)\.join\("\\n"\);/,
+  );
+  expect(code).toMatch(
+    /return `\$\{standing === "" \? "" : `\$\{standing\}\\n\\n`\}\$\{buildHistoryBlock\(history\)\}\$\{buildAgentContext\(plan \?\? \{\}, tz\)\}\\n\\nThe user says: \$\{text\}`;/,
   );
 });
 
@@ -110,20 +115,34 @@ test("cockpit content-plane modules emit NO audit/DLQ/telemetry write (redaction
   }
   expect(readSource("plans.ts"), "plans.ts calls audit.log").not.toMatch(/audit\.log\b/);
   const cockpit = readSource("cockpit.ts");
-  // cockpit.ts's allowed crossings are the TWO refs-only cancel/reschedule audits (03.5-03 +
-  // 03.5-05), each payload {planId} only. A THIRD audit.log here would be a new content-plane leak
-  // surface, so the count is pinned — and BOTH payloads are asserted refs-only (a strengthen over the
-  // old count-1 scan, which predated plan.rescheduled; NOT a weaken — every eventType is checked).
-  expect(cockpit.match(/audit\.log\b/g) ?? [], "cockpit.ts audit.log call sites").toHaveLength(2);
-  for (const eventType of ["plan.canceled", "plan.rescheduled"]) {
-    const m = cockpit.match(
-      new RegExp(
-        `eventType:\\s*["']${eventType.replace(".", "\\.")}["'][\\s\\S]*?payload:\\s*(\\{[^}]*\\})`,
-      ),
-    );
-    expect(m, `${eventType} audit payload not found`).not.toBeNull();
-    const payload = m![1]!.replace(/\/\/[^\n]*/g, "");
-    expect(payload, `${eventType} payload must be refs-only: ${m![1]}`).not.toMatch(
+  // cockpit.ts's allowed crossings are FOUR refs-only plan-lifecycle audits: cancel (03.5-03),
+  // reschedule (03.5-05), and 26-03's discard + schedule-move. A FIFTH audit.log here would be a
+  // new content-plane leak surface, so the count stays pinned.
+  //
+  // UPDATED 2026-08-07 — it had drifted to red at HEAD: 26-03 added `plan.discarded` and a SECOND
+  // `plan.rescheduled` site while the pin still said 2. All four payloads were checked by hand at
+  // that point and are refs-only, so this is a stale-pin correction, NOT a relaxed invariant.
+  //
+  // Two holes closed rather than just bumping 2 → 4, because a bare count bump would have WEAKENED
+  // this test: (a) the old scan looped over a hardcoded eventType list, so 26-03's new
+  // `plan.discarded` slipped in unchecked, and (b) it used a non-global `match`, which reads only
+  // the FIRST site per eventType — with two `plan.rescheduled` sites the second was never read.
+  // Derive the sites from the source instead, so a new call site cannot pass by being unnamed.
+  expect(cockpit.match(/audit\.log\b/g) ?? [], "cockpit.ts audit.log call sites").toHaveLength(4);
+  const sites = [
+    ...cockpit.matchAll(/eventType:\s*["'](plan\.[a-zA-Z]+)["'][\s\S]*?payload:\s*(\{[^}]*\})/g),
+  ];
+  // Every audit.log call site is accounted for — an unnamed new one fails here, not silently.
+  expect(sites, "every cockpit.ts audit.log site is scanned").toHaveLength(4);
+  expect(sites.map((s) => s[1]).sort(), "cockpit.ts audited plan events").toEqual([
+    "plan.canceled",
+    "plan.discarded",
+    "plan.rescheduled",
+    "plan.rescheduled",
+  ]);
+  for (const s of sites) {
+    const payload = s[2]!.replace(/\/\/[^\n]*/g, "");
+    expect(payload, `${s[1]} payload must be refs-only: ${s[2]}`).not.toMatch(
       /\b(subject|body|recipients|sendAt|greetingName|recipientBodies)\b/,
     );
   }
@@ -1605,4 +1624,62 @@ test("storage.delete has exactly ONE site in the media subsystem — the retenti
     src.indexOf("const uncaptioned"),
   );
   expect(capFailureArm, "the caption failure arm deletes something").not.toMatch(/storage\.delete/);
+});
+
+// ── Phase 19 (ACTN-05): the contacts substrate's audit discipline ─────────────────────────────
+// `contacts.ts` is the module MOST likely to leak PII into `audit`: every value it handles is an
+// email address, a person's name or the free-text wording of a consent claim. The RUNTIME key-set
+// equality assertion lives in `contacts.test.ts` (it needs convex-test, and this file is
+// `@vitest-environment node`); what is pinned HERE is the structural half a runtime test cannot
+// see — that there is exactly ONE audit site in the module, and that no content-plane identifier
+// is anywhere near it.
+
+test("contacts.ts writes exactly ONE audit row, with the key set {contactId, addressHash}", () => {
+  const src = stripCode(readSource("contacts.ts"));
+  expect(src.length, "contacts.ts was not read").toBeGreaterThan(500);
+
+  const sites = [...src.matchAll(/internal\.audit\.log/g)];
+  // ONE. A second site is how a consent-asserted or contact-created event gets added later with
+  // a payload nobody re-reviewed — the count is the review trigger.
+  expect(sites.length, "contacts.ts gained a second audit site").toBe(1);
+
+  // The payload object literal at that site, keys only.
+  const at = src.indexOf("internal.audit.log");
+  const call = src.slice(at, src.indexOf("});", at));
+  const payloadAt = call.indexOf("payload:");
+  expect(payloadAt, "no payload on the audit call").toBeGreaterThan(-1);
+  // Depth-aware split rather than a `(\w+):` scan: `addressHash` ships as SHORTHAND, and a
+  // colon-anchored scan would silently not see it — the exact way a key-set pin goes vacuous.
+  const inner = call.slice(call.indexOf("{", payloadAt) + 1, call.indexOf("}", payloadAt));
+  const items: string[] = [];
+  let depth = 0;
+  let item = "";
+  for (const ch of inner) {
+    if ("({[".includes(ch)) depth += 1;
+    else if (")}]".includes(ch)) depth -= 1;
+    if (ch === "," && depth === 0) {
+      items.push(item);
+      item = "";
+    } else item += ch;
+  }
+  items.push(item);
+  const keys = items.map((k) => (k.split(":")[0] ?? "").trim()).filter(Boolean);
+  expect(keys.sort()).toEqual(["addressHash", "contactId"]);
+});
+
+test("no content-plane value from the contacts substrate can reach an audit row", () => {
+  const src = stripCode(readSource("contacts.ts"));
+  const at = src.indexOf("internal.audit.log");
+  const call = src.slice(at, src.indexOf("});", at));
+
+  // CLAUDE.md §4. `addressHash` is the ONLY form the address may take, so the bare identifiers
+  // are banned and the hash is not: a `\b` before `address` would match inside `addressHash`,
+  // hence the negative lookahead.
+  for (const banned of [/\baddress\b(?!Hash)/, /normalized\b/, /\bemail\b/, /wording/i, /\bnote\b/])
+    expect(call, `the audit call references ${banned}`).not.toMatch(banned);
+
+  // …and the same for `correlationId`, which is a field of the row like any other.
+  const correlation = call.match(/correlationId:\s*([^,\n]+)/)?.[1]?.trim();
+  expect(correlation, "no correlationId on the audit call").toBeTruthy();
+  expect(correlation).toBe("addressHash");
 });

@@ -368,8 +368,13 @@ export const deleteVaultDoc = tenantMutation({
     const doc = await ctx.db.get(vaultDocId);
     if (!doc || doc.tenantId !== ctx.tenantId) return { ok: false }; // tenant guard / already gone
 
-    // rag chunks (only if embedded) — mutation-safe background delete.
-    if (doc.ragEntryId) await rag.deleteAsync(ctx, { entryId: doc.ragEntryId as EntryId });
+    // rag chunks (only if embedded) — mutation-safe background delete. The offline SMOKE embed
+    // seam deliberately stores `smoke::<contentHash>` as proof that ingest reached markReady; it
+    // never creates a RAG component entry, so passing that sentinel to deleteAsync violates the
+    // component's branded-id validator and would make the document impossible to remove.
+    if (doc.ragEntryId && !doc.ragEntryId.startsWith("smoke::")) {
+      await rag.deleteAsync(ctx, { entryId: doc.ragEntryId as EntryId });
+    }
 
     // This doc's graph edges → delete + decrement each incident endpoint's degree, GC orphans.
     const edges = await ctx.db

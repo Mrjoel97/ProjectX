@@ -877,6 +877,427 @@ button.rail-item:hover {
   padding: clamp(1.5rem, 2.5vw, 2.25rem) clamp(1.5rem, 3vw, 2.75rem);
 }
 
+/* ---------- Knowledge Vault: Nord Edge composition ----------
+   Deliberately scoped. The workspace still depends on the global .pane-canvas aura and the
+   glass-over-clay rules below; the Vault uses solid paper on a quiet canvas instead. */
+.vault-nord-edge {
+  --vault-paper: var(--card);
+  --vault-border: var(--rule);
+  --vault-shadow: 0 14px 40px -30px rgb(14 20 25 / 40%);
+  --vault-slate: #5b6b7c;
+  --vault-slate-bg: #eef2f6;
+  --vault-blue: #3b82f6;
+  --vault-blue-bg: #e8f1fe;
+  --vault-violet: #6366f1;
+  --vault-violet-bg: #eceefe;
+  --vault-green: var(--released);
+  --vault-green-bg: #e7f4ed;
+  --vault-danger: #991b1b;
+  --vault-danger-bg: #fdecec;
+  background: var(--canvas);
+  color: var(--ink);
+}
+
+.vault-nord-edge .vault-scroll {
+  display: block;
+  padding-bottom: 4rem;
+}
+
+.vault-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.vault-header h1 {
+  margin: 0.2rem 0 0;
+  color: var(--ink);
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-size: clamp(1.9rem, 1.4rem + 1.8vw, 2.6rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.vault-header-copy {
+  max-width: 42rem;
+  margin: 0.45rem 0 0;
+  color: var(--ink-soft);
+}
+
+.vault-nord-edge .caps-label {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.vault-header-actions,
+.vault-action-cluster,
+.vault-state-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.vault-status-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.35rem;
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--card);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.vault-button {
+  display: inline-flex;
+  min-height: 2.55rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.58rem 1rem;
+  border: 1px solid var(--vault-border);
+  border-radius: 999px;
+  background: var(--vault-paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    transform 120ms ease;
+}
+
+.vault-button-primary {
+  border-color: var(--teal-600);
+  background: var(--teal-600);
+  color: var(--card);
+}
+
+.vault-button:hover:not(:disabled),
+.vault-category-tab:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--teal-600) 54%, var(--vault-border));
+  box-shadow: 0 8px 24px -18px rgb(14 20 25 / 55%);
+  transform: translateY(-1px);
+}
+
+.vault-button:disabled,
+.vault-category-tab:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.vault-button:focus-visible,
+.vault-category-tab:focus-visible,
+.vault-nord-edge button.clay-card:focus-visible,
+.vault-nord-edge input:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--teal-600) 34%, transparent);
+  outline-offset: 3px;
+}
+
+.vault-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 0 0 1.5rem;
+}
+
+.vault-stat-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  min-width: 0;
+  padding: 1.2rem;
+  border: 1px solid var(--vault-border);
+  border-radius: 1rem;
+  background: var(--vault-paper);
+  box-shadow: var(--vault-shadow);
+}
+
+.vault-stat-label {
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.vault-stat-value {
+  margin-top: 0.45rem;
+  color: var(--ink);
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.vault-stat-badge {
+  display: grid;
+  width: 2.65rem;
+  height: 2.65rem;
+  flex: none;
+  place-items: center;
+  border-radius: 0.8rem;
+}
+
+.vault-stat-badge.is-neutral {
+  background: var(--vault-slate-bg);
+  color: var(--vault-slate);
+}
+
+.vault-stat-badge.is-ready {
+  background: var(--vault-green-bg);
+  color: var(--vault-green);
+}
+
+.vault-stat-badge.is-storage {
+  background: var(--vault-blue-bg);
+  color: var(--vault-blue);
+}
+
+.vault-stat-badge.is-structure {
+  background: var(--vault-violet-bg);
+  color: var(--vault-violet);
+}
+
+.vault-bounded-copy {
+  margin: -0.75rem 0 1.5rem;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+.vault-category-tabs {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+  padding: 0.4rem;
+  border: 1px solid var(--vault-border);
+  border-radius: 1rem;
+  background: var(--vault-paper);
+  box-shadow: var(--vault-shadow);
+}
+
+.vault-category-tab {
+  display: inline-flex;
+  min-height: 2.5rem;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.95rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 550;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease,
+    transform 120ms ease;
+}
+
+.vault-category-tab.is-active {
+  border-color: var(--teal-600);
+  background: var(--teal-600);
+  color: var(--card);
+  font-weight: 700;
+}
+
+.vault-folder-context,
+.vault-state {
+  margin: 0 0 1.25rem;
+  padding: 1rem 1.15rem;
+  border: 1px solid var(--vault-border);
+  border-radius: 1rem;
+  background: var(--vault-paper);
+  box-shadow: var(--vault-shadow);
+}
+
+.vault-folder-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.vault-folder-count,
+.vault-folder-outcome {
+  color: var(--ink-soft);
+  font-size: 0.86rem;
+}
+
+.vault-folder-outcome {
+  margin: 0.65rem 0 0;
+}
+
+.vault-state {
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  padding-block: 2rem;
+  text-align: center;
+}
+
+.vault-state h2,
+.vault-state p {
+  margin: 0;
+}
+
+.vault-state h2 {
+  color: var(--ink);
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-size: clamp(1.2rem, 1rem + 0.6vw, 1.6rem);
+}
+
+.vault-state p {
+  max-width: 42rem;
+  color: var(--ink-soft);
+}
+
+.vault-state-compact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  justify-items: initial;
+  gap: 1rem;
+  padding-block: 0.9rem;
+  text-align: left;
+}
+
+.vault-state-error {
+  border-color: color-mix(in srgb, var(--vault-danger) 34%, var(--vault-border));
+  background: var(--vault-danger-bg);
+}
+
+.vault-state-warning {
+  border-color: color-mix(in srgb, var(--vault-slate) 30%, var(--vault-border));
+  background: var(--vault-slate-bg);
+}
+
+.vault-nord-edge .clay-card {
+  border-color: var(--vault-border);
+  background: var(--vault-paper);
+  box-shadow: var(--vault-shadow);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.vault-nord-edge button.clay-card:hover {
+  box-shadow: 0 18px 44px -26px rgb(14 20 25 / 46%);
+}
+
+.vault-nord-edge .clay-dropzone {
+  border-color: color-mix(in srgb, var(--vault-slate) 34%, var(--vault-border));
+  background: color-mix(in srgb, var(--vault-paper) 94%, var(--vault-slate-bg));
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+#vault-upload-source,
+#vault-drive-source {
+  scroll-margin-block: 1.5rem;
+}
+
+#vault-drive-source:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--teal-600) 34%, transparent);
+  outline-offset: 4px;
+  border-radius: 1rem;
+}
+
+@media (max-width: 64rem) {
+  .vault-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .vault-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .vault-header-actions,
+  .vault-action-cluster {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 48rem) {
+  .vault-nord-edge .vault-scroll {
+    padding: 1.25rem 1rem 3rem;
+  }
+
+  .vault-header-actions,
+  .vault-action-cluster,
+  .vault-state-actions {
+    align-items: stretch;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .vault-status-pill {
+    justify-content: center;
+  }
+
+  .vault-category-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+  }
+
+  .vault-category-tab {
+    flex: none;
+  }
+
+  .vault-state-compact {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 34rem) {
+  .vault-stats,
+  .vault-header-actions,
+  .vault-action-cluster,
+  .vault-state-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .vault-stat-card {
+    padding: 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vault-button,
+  .vault-category-tab,
+  .vault-nord-edge button.clay-card {
+    scroll-behavior: auto;
+    transition: none;
+  }
+
+  .vault-button:hover:not(:disabled),
+  .vault-category-tab:hover:not(:disabled),
+  .vault-nord-edge button.clay-card:hover {
+    transform: none;
+  }
+}
+
 /* ---------- glass-over-clay tiles (shared: vault board, and any card that should read
    as extruded frosted glass against the .pane-canvas aura) ---------- */
 
@@ -1574,5 +1995,28 @@ button.clay-card:hover {
 @media (prefers-reduced-motion: reduce) {
   .bp-wire-flow {
     animation: none;
+  }
+}
+
+/* Node status dot while that section's specialist is running RIGHT NOW (living-map §3.2).
+   State, not decoration: the class is applied only while a fresh `running` dispatch step
+   exists, so the breath stops when the run does. */
+@keyframes bp-node-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.bp-node-pulse {
+  animation: bp-node-pulse 1.8s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bp-node-pulse {
+    animation: none;
+    outline: 2px solid var(--teal-400);
+    outline-offset: 1px;
   }
 }

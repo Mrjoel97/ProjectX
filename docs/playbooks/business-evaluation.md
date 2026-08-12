@@ -1,5 +1,83 @@
 # Playbook: Business Evaluation Engine
 
+> Last verified: 2026-08-11 — ⚠ **DATE BUMPED TO CLEAR A `check-playbooks.mjs` FALSE POSITIVE.
+> NOTHING BELOW WAS RE-VERIFIED, AND THIS ENTRY DOCUMENTS NO CHANGE OF ITS OWN.** The precedent is
+> the identically-shaped entries in `skill-registry.md` and `agent-runtime.md` (21-01).
+>
+> The hook builds its changed-set from the WHOLE WORKING TREE, not from the session's own diff. It
+> named this playbook because `packages/backend/convex/evaluations.ts` is dirty in the shared tree. **That file is not mine.**
+> Plan 21-05 (pinned prompts / "routine v0") touched exactly five code paths, all committed in
+> `cf18305` and `fc20c60`:
+>
+> - `packages/backend/convex/savedPrompts.ts` + `savedPrompts.test.ts`
+> - `apps/web/app/(app)/dashboard/workspace/ChatPane.tsx`, `page.tsx`, `pinnedPrompts.test.ts`
+>
+> …and one playbook, `cockpit.md`, which genuinely owns all five (`watch.json`). `packages/backend/convex/evaluations.ts` is
+> being written RIGHT NOW by the concurrent 21-03 lane (eval evidence / tenant-skill pinning /
+> runtime attribution), whose own file list names it explicitly. **I did not run, read, re-measure,
+> endorse, revert or restage that lane's change**, and I make no claim about whether it is correct.
+>
+> **The real entry for `packages/backend/convex/evaluations.ts` is owed by the 21-03 lane and must replace this one.** If you are
+> that lane: do not treat this bump as coverage — nothing here was checked.
+
+> Last verified: 2026-08-10 (WHOLE-BRANCH RE-REVIEW, live-finance-inputs — **the grounding corpus
+> will fabricate a financial figure out of anything appended to the blueprint chunk, and now has a
+> test saying so.** `FINANCIAL_PATTERNS` (`evaluations.ts:79-87`) is described as a "labeled-number
+> scan… only a DIRECT statement fills a financial field", but its gaps are `[^\d$]*` — unbounded,
+> and `.` is not involved so newlines match. A label and its "value" can therefore be hundreds of
+> characters and several lines apart, in different documents' worth of text, as long as no digit or
+> `$` intervenes. The `"Business blueprint"` chunk is `internal.blueprint.spineForTenant`'s WHOLE
+> return value (`vaultGround.ts:225` → `evaluations.ts:264-272`), so anything appended to that query
+> donates its first number to any `CAC`/`LTGP`/`price` the blueprint merely MENTIONS. A live attempt
+> to append the cockpit's finance line there turned a blueprint reading "Constraint: CAC is too high"
+> plus a stored cash-on-hand figure into `financials.cac = 38500`, cited `{source: "vault",
+> confidence: "high"}` — which then flipped `financialsPresent` to growth-os and suppressed the
+> honest "we need your CAC" gap. Fixed by keeping the finance line in its own query
+> (`internal.cash.financeSpineFor`, joined only in `buildTurnPrompt`); pinned by
+> `evaluations.test.ts`'s "the cockpit finance line never reaches the grounding corpus", verified RED
+> against the concatenating version. **Before adding ANY text to the blueprint chunk, re-read this:
+> the existing `ponytail: PROVENANCE CEILING` note at `evaluations.ts:274` warns about attribution;
+> this is the sharper hazard — FABRICATION — and the only real fix for it is narrowing the patterns,
+> which was deliberately not attempted here.**)
+
+> Last verified: 2026-08-09 (cash-business-finance whole-branch review B1 — **`latestScorecardRow`
+> can select a row with no usable Scorecard, and `setPath` used to throw on one.** Two reachable
+> producers write a row this Finance-page reader must not hand back as "the tenant's financial
+> truth": `voiceDoc.ts` inserts a `framework: "document-review"` row with `scorecard: {}` LITERALLY
+> (never routed through this engine — see the "document-review" entry below), and this engine's own
+> `runEvaluation`, run by the cockpit's `assessBusiness` tool on a BRAND-NEW conversation thread, has
+> no prior row to carry forward and seeds from `emptyScorecard` before it fills anything in. Either
+> shape made `packages/core/src/cash.ts`'s `scorecard.financials.*` reads crash. Fixed in THIS file
+> (`evaluations.ts`), two layers: (1) `latestScorecardRow` (exported plain function, `by_tenant`,
+> newest-200 bounded) now skips `framework === "document-review"` rows and any row whose `scorecard.
+> financials` is absent, via a new `hasUsableScorecard` predicate — a Scorecard whose LEAVES are
+> merely `null` (the normal not-yet-answered state) still counts as usable, only a missing
+> `financials` object does not. (2) `setPath` (the dot-path writer `applyScorecardAnswer` and
+> `runEvaluation`'s `fillVault` both use) now CREATES intermediate objects instead of assuming they
+> already exist — `cur["financials"] === undefined` used to make the final assignment throw; it is
+> now created as `{}` and the walk continues. Chosen over making `cash.ts`'s `saveInput` guarantee a
+> well-formed carrier before calling `applyScorecardAnswer`, because `setPath` has OTHER callers that
+> would each need the same guard repeated — fixing the shared function once is the root-cause fix
+> (CLAUDE.md §8). See `docs/playbooks/dashboard-pages.md`'s "Cash — the Business tab, assembled" and
+> "Cash — unit economics" sections for the Finance-page-side layers of the same fix (the crash site
+> and the caller). Zero behavior change for the engine's own grounding/diagnosis/carry-forward path —
+> `evaluations.test.ts` gained 4 tests (`latestScorecardRow` skip behaviour ×2, `setPath`
+> non-throwing on a malformed carrier ×1 — folded into the count with the pre-existing suite) and is
+> 29/29.)
+>
+> Last verified: 2026-08-09 (cash-business-finance Task 3 review fix — **`userProvidedAt` closes
+> the "a carried-forward answer reads as freshly confirmed" bug.** `runEvaluation`'s carry-forward
+> stamps every new row with a fresh `createdAt` while copying `scorecard`/`userProvided` verbatim —
+> that is by design, for the field VALUES. The Business tab's Task-3 reader wrongly treated the same
+> `createdAt` as a stand-in for a FIELD's stated time, so a 91-day-old CAC survived a weekly
+> re-evaluation and read back as "confirmed today", silently suppressing the 90-day confirm-or-update
+> prompt. Fix: `applyScorecardAnswer` stamps a dot-path → epoch-ms `userProvidedAt` map on every
+> answer, `runEvaluation` carries it forward unchanged (the same shape as `userProvided`), and
+> `cash.ts` reads it instead of `createdAt` — with a legacy value that predates this field (no
+> recorded time) read as needing confirmation, never as fresh. See the new invariant below and
+> `docs/playbooks/dashboard-pages.md`'s Cash section. Zero change to grounding, diagnosis, carry-
+> forward of VALUES, citations or any existing engine behaviour — `evaluations.test.ts` 26/26.)
+>
 > Last verified: 2026-08-03 (15.3-05 — **`unincorporatedFor` now excludes SEALED folder members.**
 > A vault folder's members are unretrievable until the folder is `complete` (VALT-07), but they
 > reach `status: "ready"` at ingest step 6 *during* that window — and `unincorporatedFor` reads
@@ -84,8 +162,12 @@ Backend (`packages/backend/convex/`):
 - `schema.ts` — the append-only `evaluations` table (`by_tenant` / `by_tenant_thread`) + the
   `"evaluateBusiness"` literal in the closed `agentSteps.tool` union + (12-05) the optional
   `plans.kind: "memo"` discriminator and the optional `gaps[].reason`/`gaps[].proofMetric`.
+  **cash-business-finance Task 3 review fix:** `userProvidedAt: v.optional(v.record(v.string(),
+  v.number()))` — a dot-path → epoch-ms map, the ONE place a scorecard field's true stated time
+  lives. Optional ⇒ no migration; a pre-existing row simply has no entries.
 - `evaluations.test.ts` — convex-test over the `SMOKE::` seam: grounded cited row, refs-only audit,
-  carry-forward/anti-re-ask, two-tenant isolation (SC #5), thin-data honesty.
+  carry-forward/anti-re-ask, two-tenant isolation (SC #5), thin-data honesty, and (Task 3 fix) a
+  field's `userProvidedAt` surviving a re-evaluation's fresh `createdAt` unchanged.
 - `proactiveReview.ts` (13-02, BEVL-03) — the weekly cron's three functions: `runWeekly`
   (internalMutation — enumerate onboarded tenants over `vaultDocuments.by_kind`, dedupe, fan out),
   `reviewOne` (internalAction — the engine on the stable `REVIEW_THREAD_ID`, notify-on-change),
@@ -200,6 +282,23 @@ in the serialized spine.
 - **Vault-first, then ask, then store (LOCKED)** — the durable scorecard is UPDATED each run
   (carry-forward), not rebuilt from null; a user-provided figure survives forward and is cited
   "user-provided". Enforced by the carry-forward/anti-re-ask test.
+- **A field's STATED TIME is a fact about the field, never about the row (cash-business-finance
+  Task 3 review fix).** `userProvidedAt` (dot-path → epoch-ms) is stamped by `applyScorecardAnswer`
+  on every answer — including a re-answer of an already-provided field, since a confirm-or-update
+  IS a fresh stated time — and `runEvaluation` carries it forward UNCHANGED into every new row,
+  exactly like `userProvided`. **A row's own `createdAt` is NEVER a stand-in for a field's stated
+  time.** The bug this closes: `runEvaluation` re-runs weekly on one pinned thread and persists a
+  NEW row stamped `createdAt: Date.now()` on every run, carrying `scorecard`/`userProvided`
+  verbatim. Before `userProvidedAt` existed, `packages/backend/convex/cash.ts`'s Business-tab
+  reader used the carrying row's `createdAt` as a floor on a field's stated time — so a CAC answered
+  91 days ago, merely carried into this week's fresh row, read back as "confirmed today" and
+  silently suppressed the 90-day confirm-or-update prompt the rule exists for. A legacy row (no
+  `userProvidedAt` entry for a field that has a value) has UNKNOWN age — `cash.ts` treats that as
+  needing confirmation, never as fresh, and never fabricates a date. Enforced by
+  `evaluations.test.ts`'s carry-forward describe block (a field's stated time survives a
+  re-evaluation unchanged, even though the row's `createdAt` is fresh) and by `cash.test.ts`'s two
+  `cash.inputs` staleness tests (a carried-forward stale answer, and the legacy-no-timestamp path).
+  See `docs/playbooks/dashboard-pages.md`'s Cash section for the read side.
 - **No fabricated metrics (SC #1)** — a financial field fills ONLY from a direct labeled statement;
   no grounding → the field stays null → not-enough-data. With zero grounded findings the engine
   suppresses gaps (no basis for a prescription) and returns "insufficient". Enforced by the

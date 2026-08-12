@@ -19,6 +19,8 @@ import { createHash } from "node:crypto";
 // uncached actions carry the model id in their args (guardrails.prepare chose it), fall back
 // to CHEAP_MODEL on eligible failure, and are wrapped by the tenant-namespaced action cache
 // (Task 2). `usage` (inputTokens/outputTokens) drives OPSG-01 telemetry.
+import { createGoogleGenerativeAI, google } from "@ai-sdk/google";
+import { createVertex, vertex } from "@ai-sdk/google-vertex";
 import { openai } from "@ai-sdk/openai";
 import { ActionCache } from "@convex-dev/action-cache";
 import { draftSchema } from "@pikar/contracts/drafting";
@@ -45,10 +47,15 @@ import {
   buildDocFilename,
   buildRecipientView,
   CALENDAR_HORIZON_MS,
+  CASH_INPUTS,
+  type CashInputField,
+  type CrmOperation,
+  cashInputSpec,
   type DigestBatch,
   type DigestItem,
   type DocFormat,
   exceedsByteCap,
+  type FigureClaim,
   formatSpec,
   type InboxMessageMeta,
   type InlineRun,
@@ -57,6 +64,7 @@ import {
   isNeedsYou,
   joinDigest,
   parseAddress,
+  parseCrmOperations,
   parseSendTime,
   type RecipientEdit,
   rankCandidates,
@@ -64,14 +72,16 @@ import {
   selectForDigest,
   tokenizeMarkdown,
   toWinAnsi,
+  validateFigureClaim,
 } from "@pikar/core";
 import {
   CHEAP_MODEL,
   DEFAULT_MODEL,
+  GEMINI_MODEL,
   priceUsage,
   RESEARCH_FALLBACK_MODEL,
   RESEARCH_MODEL,
-  WEB_SEARCH_CALL_USD,
+  searchFeeUsd,
 } from "@pikar/cost";
 import { scanText } from "@pikar/pii";
 import { type BriefSections, buildBriefMarkdown } from "@pikar/voice";
@@ -82,13 +92,14 @@ import {
   type LanguageModel,
   RetryError,
   stepCountIs,
+  type ToolSet,
   tool,
 } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import type { GenericActionCtx } from "convex/server";
 import { ConvexError, v } from "convex/values";
 import { type Color, PDFDocument, type PDFFont, rgb, StandardFonts } from "pdf-lib";
-import { components, internal } from "./_generated/api";
+import { api, components, internal } from "./_generated/api";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
 import { contentHash } from "./lib/hash";
@@ -138,10 +149,526 @@ export function callTimeoutMsFor(skillName: string): number {
   return skillName === RESEARCH_SPECIALIST_SKILL ? RESEARCH_CALL_TIMEOUT_MS : CALL_TIMEOUT_MS;
 }
 
-// Map a pricing/audit model id ("openai/gpt-4o-mini") to a direct-OpenAI LanguageModel.
-// The `openai/` prefix is the gateway namespace; the @ai-sdk/openai provider wants the bare
-// name and reads OPENAI_API_KEY from the deployment env. Pricing/audit keep the full id.
-const resolveModel = (id: string): LanguageModel => openai(id.replace(/^openai\//, ""));
+// Google Gemini via Vertex AI (2026-08-07). LAZY AND MEMOIZED, and both properties are
+// load-bearing rather than tidiness:
+//
+// LAZY — building the provider at module scope would read the GCP env on IMPORT, so a deployment
+// with no Google credentials would fail every OpenAI call too. Gemini was added ALONGSIDE OpenAI,
+// not in front of it; a tenant that never asks for a `google/` model must never be able to notice
+// that the credential is absent. The throw below can only fire on a request that named Gemini.
+//
+// CREDENTIALS COME FROM AN ENV VAR, NOT A FILE. `GOOGLE_APPLICATION_CREDENTIALS` is a FILE PATH and
+// Convex has no filesystem — the service-account JSON on a developer's disk is unreachable from the
+// deployed backend. Set the whole JSON as one deployment secret instead:
+//   npx convex env set GOOGLE_SERVICE_ACCOUNT_JSON "$(cat <key>.json)"
+// `project` is read from the credential's own `project_id`, so it cannot drift from the key.
+// TWO DOORS TO THE SAME MODELS, AND THE CHEAP ONE WINS.
+//
+// Google serves `gemini-2.5-flash` through BOTH Vertex AI (service account, GCP project, **requires
+// a linked billing account — there is no free tier**) and AI Studio (a plain API key, with a free
+// rate-limited tier). The model NAMES are identical, so only the transport differs and `google/…`
+// stays one namespace either way.
+//
+// `GOOGLE_GENERATIVE_AI_API_KEY` is checked FIRST because it is the door that works on no budget.
+// Proven the hard way on 2026-08-07: two separate GCP projects were tried with a service account
+// and BOTH refused with BILLING_DISABLED before generating a single token. Vertex remains wired and
+// takes over the moment a billing account exists — it is the only door to Imagen/Veo (ADR-016).
+let genaiProvider: ReturnType<typeof createGoogleGenerativeAI> | undefined;
+const googleAiStudio = (): ReturnType<typeof createGoogleGenerativeAI> | undefined => {
+  const key = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+  if (!key) return undefined;
+  genaiProvider ??= createGoogleGenerativeAI({ apiKey: key });
+  return genaiProvider;
+};
+
+let vertexProvider: ReturnType<typeof createVertex> | undefined;
+const googleVertex = (): ReturnType<typeof createVertex> => {
+  if (vertexProvider) return vertexProvider;
+  const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+  if (!raw) {
+    throw new Error(
+      "No Google credential on this deployment. Set GOOGLE_GENERATIVE_AI_API_KEY (AI Studio, free tier) or GOOGLE_SERVICE_ACCOUNT_JSON (Vertex, needs billing).",
+    );
+  }
+  // BASE64 IS ACCEPTED AND IS THE RECOMMENDED FORM. A service-account key is multi-line JSON whose
+  // `private_key` is full of escapes, and `convex env set` on Windows mangles that — observed
+  // 2026-08-07, and the quirk is already on record for this repo. Base64 is alphanumeric, so no
+  // shell can corrupt it. Detect rather than configure: real JSON always starts with `{`.
+  //   npx convex env set GOOGLE_SERVICE_ACCOUNT_JSON "$(node -e "console.log(Buffer.from(require('fs').readFileSync(process.argv[1])).toString('base64'))" <key>.json)"
+  const trimmed = raw.trim();
+  const decoded = trimmed.startsWith("{")
+    ? trimmed
+    : Buffer.from(trimmed, "base64").toString("utf8");
+  let credentials: { project_id?: string; client_email?: string; private_key?: string };
+  try {
+    credentials = JSON.parse(decoded);
+  } catch {
+    // Never echo `raw` or `decoded` — they hold a private key. The SHAPE is the diagnosis; the
+    // value never is. Length is safe and is the one clue that separates "truncated by the shell"
+    // from "pasted the wrong thing entirely".
+    // Kept under skills.test.ts's 200-char inline-literal ceiling (the no-hardcoded-prompts guard,
+    // CLAUDE.md §5) — it fired on the longer first draft of this message.
+    const form = trimmed.startsWith("{") ? "raw" : "base64";
+    throw new Error(
+      `GOOGLE_SERVICE_ACCOUNT_JSON did not parse (${trimmed.length} chars, ${form}). A real key is ~2300; shorter means the shell truncated it — set it base64-encoded.`,
+    );
+  }
+  const project = credentials.project_id;
+  if (!project || !credentials.client_email || !credentials.private_key) {
+    throw new Error(
+      "GOOGLE_SERVICE_ACCOUNT_JSON is missing project_id, client_email or private_key — it is not a service-account key.",
+    );
+  }
+  vertexProvider = createVertex({
+    project,
+    location: process.env.GOOGLE_VERTEX_LOCATION ?? "us-central1",
+    googleAuthOptions: { credentials },
+  });
+  return vertexProvider;
+};
+
+// Map a pricing/audit model id to a LanguageModel. Two vendors, one id scheme: the prefix
+// ("openai/gpt-4o-mini", "google/gemini-2.5-flash") selects the provider and the bare name goes to
+// it. The FULL id stays the pricing/audit key in both cases — `PRICING` is keyed on it, so a model
+// that resolves here but is missing from that table would run and bill NOTHING against the daily
+// rail (see the fail-closed note in packages/cost/src/cost.ts). Resolve and price move together.
+// The @ai-sdk/openai provider reads OPENAI_API_KEY from the deployment env.
+const resolveModel = (id: string): LanguageModel => {
+  if (!id.startsWith("google/")) return openai(id.replace(/^openai\//, ""));
+  const bare = id.replace(/^google\//, "");
+  // AI Studio if a key is set, else Vertex. `googleVertex()` still throws its own worded error when
+  // NEITHER credential exists, so "no Google config at all" stays one clear message rather than two.
+  return (googleAiStudio() ?? googleVertex())(bare);
+};
+
+/** One retrieved web result. `snippet` is Tavily's extracted page text, NOT model prose. */
+export type WebResult = { url: string; title: string; snippet: string };
+
+/** How many results one search returns to the model. Small on purpose: each snippet is ~1.4k chars
+ *  and they all ride `inputTokens` on the NEXT step, so this is the main lever on research cost. */
+export const WEB_RESULTS_PER_SEARCH = 5;
+
+/**
+ * The relevance floor a Tavily result must clear to count as EVIDENCE.
+ *
+ * **MEASURED, not guessed (2026-08-07).** Real research queries and the deliberately-invented entity
+ * from fixture 33 separate cleanly on Tavily's own `score`:
+ *   real (fixture 32, two queries):  0.8145 0.8052 0.7879 0.7730 0.7376 / 0.7409 … 0.6022
+ *   invented (fixture 33):           exact-name searches return NOTHING AT ALL (n=0); only a loose
+ *                                    query mixing real words returns anything, topping out at 0.5100
+ *                                    before a cliff to 0.0962, 0.0466, 0.0446, 0.0409.
+ * 0.55 sits in the gap: above every near-miss, below every genuine result.
+ *
+ * WHY A FLOOR IS NEEDED AT ALL, given exact-name searches already return zero. `sources` is
+ * AGGREGATED ACROSS EVERY SEARCH IN A RUN, and the specialist is instructed to search once per
+ * sub-question. One loose sub-question drags near-misses into the aggregate, and the honesty verdict
+ * (`declaredQuestionScope && sources.length === 0`) then can never fire — a run that found nothing
+ * reports itself as sourced. The hosted OpenAI search never exposed this because it returned no
+ * sources for an unanswerable query; that property has to be reconstructed here.
+ *
+ * ponytail: one flat threshold. The margin (0.51 → 0.60) is real but THIN and rests on five sampled
+ * queries — fixtures 32 and 33 are its regression test, and they pull in opposite directions, which
+ * is what makes them a calibration set rather than two unrelated cases. If a genuine result ever
+ * lands below this, prefer raising `max_results` or splitting the query over lowering the floor.
+ */
+export const WEB_RESULT_MIN_SCORE = 0.55;
+
+/**
+ * Map Tavily's `/search` response to our result shape. Pure and exported for the offline test —
+ * the network half is untestable without a key, this half is where the mistakes live.
+ *
+ * Two things are DROPPED rather than passed through, both because a source list is the evidence half
+ * of the research verdict: anything without a parseable absolute URL (the reader cannot open it), and
+ * anything below `WEB_RESULT_MIN_SCORE` (a near-miss is not evidence, however topical it looks).
+ */
+export const parseWebResults = (payload: unknown): WebResult[] => {
+  const rows = (payload as { results?: unknown })?.results;
+  if (!Array.isArray(rows)) return [];
+  const out: WebResult[] = [];
+  for (const r of rows) {
+    const url = (r as { url?: unknown })?.url;
+    if (typeof url !== "string") continue;
+    try {
+      new URL(url); // absolute + parseable, or it is not a citation
+    } catch {
+      continue;
+    }
+    // A MISSING score is kept, deliberately: absence means the provider did not rank this response,
+    // and silently discarding everything would turn a provider change into an empty evidence list —
+    // the same silent-zero failure this whole path is built to avoid. Only an EXPLICIT low score
+    // drops a row.
+    const score = (r as { score?: unknown })?.score;
+    if (typeof score === "number" && score < WEB_RESULT_MIN_SCORE) continue;
+    out.push({
+      url,
+      title: String((r as { title?: unknown })?.title ?? ""),
+      snippet: String((r as { content?: unknown })?.content ?? ""),
+    });
+  }
+  return out;
+};
+
+/**
+ * The sources carried by ONE `webResearch` tool-result part.
+ *
+ * Separate from `parseWebResults` because the shapes differ and conflating them hid a latent bug:
+ * the API response calls the text `content` while our own tool output calls it `snippet`, and the
+ * stored output has no `score` at all (already filtered at execute time). Re-running the API parser
+ * over our own output happened to work only because the call site reads url/title — one field rename
+ * away from silently emptying every source list.
+ */
+export const sourcesFromToolOutput = (output: unknown): { url: string; title: string }[] => {
+  const rows = (output as { results?: unknown })?.results;
+  if (!Array.isArray(rows)) return [];
+  const out: { url: string; title: string }[] = [];
+  for (const r of rows) {
+    const url = (r as { url?: unknown })?.url;
+    if (typeof url !== "string") continue;
+    try {
+      new URL(url);
+    } catch {
+      continue;
+    }
+    out.push({ url, title: String((r as { title?: unknown })?.title ?? "") });
+  }
+  return out;
+};
+
+/**
+ * ACTN-03. The web-research tool record.
+ *
+ * **LOCAL AND PROVIDER-EXECUTED ARE DIFFERENT ANIMALS, AND THIS ONE IS NOW LOCAL (2026-08-07).**
+ * It used to be `openai.tools.webSearch` / `vertex.tools.googleSearch` — a hosted tool the VENDOR
+ * ran. That coupled research to whichever vendor `RESEARCH_MODEL` named (sending one vendor's
+ * hosted tool to the other is a 400), and it died outright when the only funded vendor ran out:
+ * OpenAI hit $0 and Gemini's free tier grants ZERO Google Search entitlement, so fixtures
+ * 32/33/34 could not pass on either door. Tavily is a plain HTTP API we call ourselves, so
+ * research now works on ANY model — the vendor-matching constraint documented at `RESEARCH_MODEL`
+ * in @pikar/cost is retired by construction, not worked around.
+ *
+ * **THREE CONSEQUENCES AT THE CALL SITE, all of which had to change together:**
+ *   1. `providerExecuted` is FALSE for a local tool, so `runAgentLoop` can no longer count searches
+ *      by that flag. It counts `toolName === "webResearch"` instead — and the literal is safe now
+ *      precisely BECAUSE we own the tool: the old comment warned against a name literal because the
+ *      PROVIDER chose the emitted name (`web_search`) and could rename it. Nobody renames this one.
+ *   2. `res.sources` is empty — that array is populated from provider `url_citation` annotations,
+ *      which only a hosted tool emits. Sources are now read from this tool's own RESULT parts,
+ *      which is strictly better evidence: still structured, still provider-supplied (Tavily's JSON),
+ *      still never parsed out of model prose.
+ *   3. `onToolExecutionStart` DOES fire for a local tool, so `agentSteps.tool` needs the
+ *      `webResearch` literal — schema.ts said "deliberately NO webResearch companion" and that
+ *      reasoning inverted with this change. Without the literal the step insert throws inside a
+ *      callback the AI SDK SWALLOWS: no trace in prod, every offline test still green.
+ *
+ * Module scope and exported so `probeGemini` and `cockpitTools.test.ts` use THE SAME record the
+ * research loop does — a probe that builds its own tool proves a fiction (the 15.3 `classifyOne`
+ * lesson).
+ */
+export const buildWebResearchTool = (): ToolSet => ({
+  webResearch: tool({
+    description:
+      "Search the live web and get back real pages with their URLs. Use it for anything you " +
+      "cannot answer from the conversation or the vault — recent events, external companies, " +
+      "prices, published figures. Search ONCE PER SUB-QUESTION rather than once per run: each " +
+      "call is a fresh independent query. Every claim you make from a result must cite that " +
+      "result's URL.",
+    inputSchema: jsonSchema<{ query: string }>({
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "A focused natural-language search query for ONE sub-question.",
+        },
+      },
+      required: ["query"],
+      additionalProperties: false,
+    }),
+    execute: async ({ query }): Promise<{ results: WebResult[]; note?: string }> => {
+      const apiKey = process.env.TAVILY_API_KEY;
+      // Structural absence beats a thrown error here: a missing key is an OPERATOR fault, and a
+      // throw inside a tool ends the specialist's whole run. Returning an empty result set lets the
+      // model finish and say it found nothing — which the evidence verdict then reports honestly.
+      if (!apiKey) return { results: [], note: "web search unavailable: TAVILY_API_KEY unset" };
+      // §4 REDACT-BEFORE-EGRESS. This is a NEW third-party boundary — the query is model-authored
+      // and could echo tenant content from the prompt. The hosted tools had the same exposure to
+      // their own vendor; Tavily is one more party, so the same rule that governs every other
+      // outbound call governs this one. Fail CLOSED: an unscannable query is not sent.
+      const scan = scanText(query);
+      if (!scan.ok) return { results: [], note: "web search skipped: query failed redaction scan" };
+      const res = await fetch("https://api.tavily.com/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          query: scan.value.safeText,
+          max_results: WEB_RESULTS_PER_SEARCH,
+          search_depth: "basic",
+        }),
+        signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+      });
+      // Same reasoning as the missing key: a 429 (monthly credits gone) or a 5xx must not kill the
+      // run. The model is told plainly, and `sources: []` makes the verdict honest downstream.
+      if (!res.ok) return { results: [], note: `web search failed: HTTP ${res.status}` };
+      return { results: parseWebResults(await res.json()) };
+    },
+  }),
+});
+
+/**
+ * probeGemini — prove the `google/` half of `resolveModel` end to end before anything routes to it.
+ *
+ * Gemini was added ALONGSIDE OpenAI (owner decision 2026-08-07): `DEFAULT_MODEL`/`CHEAP_MODEL` still
+ * point at OpenAI, so NO product path reaches Vertex. That is the safe order, but it means the
+ * wiring is unexercised — typechecking proves the code compiles, not that a request returns. This
+ * action is the smallest thing that can fail if the path is broken.
+ *
+ * It runs INSIDE the deployment on purpose. A standalone node script proves a credential works on a
+ * laptop; only this proves the DEPLOYMENT can use it — the env var Convex actually holds, the real
+ * `resolveModel`, the installed provider version, the deployment's own network egress.
+ *
+ * **It never throws.** Every failure is classified and returned, so the caller can distinguish
+ * "Gemini refused us" from "we never asked" — the distinction `docs/playbooks/ci-gate.md` records
+ * `skillopt.yml` losing, where `|| true` turned a call that never happened into a green check.
+ *
+ * `unpriced` is the subtlest verdict and the reason pricing is asserted here at all: a model that
+ * ANSWERS but is missing from `PRICING` makes `priceUsage` return `unknown_model` → `recordSpend`
+ * records 0 → the model bills NOTHING against `DAILY_BUDGET_CENTS`. A free-looking model is worse
+ * than a broken one, so a working call with no price is a FAILED probe, not a passing one.
+ *
+ * Deliberately does NOT draw down the guardrail rails: this is an operator tool, not tenant work,
+ * and it reports the cost it WOULD have drawn instead of silently spending someone's daily budget.
+ * The prompt is a fixed constant carrying no tenant text, so nothing here can leak PII (§4).
+ *
+ * ── `grounded: true` (2026-08-07) — THE RESEARCH HALF, AND THE REASON THIS ACTION EXISTS NOW ──
+ *
+ * The plain probe proves the model ANSWERS. It says nothing about the path Phase 16 actually runs,
+ * and the Gemini research pins were repointed having been proven to accept NOTHING (see the debt
+ * paragraph at `RESEARCH_MODEL` in packages/cost/src/cost.ts). `grounded: true` attaches
+ * `buildWebResearchTool()` — THE SAME RECORD `buildCockpitTools` hands the specialist, never a
+ * re-derived one — and measures the three things the eval silently depends on. Each is a FAILING
+ * verdict, because each fails QUIETLY in production:
+ *
+ *   `provider_refused`  the model rejected the tool. The cast in `buildWebResearchTool` is an SDK
+ *                       typing gap the compiler cannot check, so a 400 on tool shape can only be
+ *                       found by sending one. This is that send.
+ *   `no_search_call`    it answered from memory without searching, OR the SDK never surfaced the
+ *                       hosted call with `providerExecuted: true`. `runAgentLoop` counts hosted
+ *                       calls on that flag ALONE and multiplies by `searchFeeUsd`, so a missing
+ *                       flag makes every research run bill $0 of search fee against a $5/day rail —
+ *                       a research plane that looks FREE, the failure 16-02's probe was written to
+ *                       prevent for OpenAI and which is unproven for Google.
+ *   `no_sources`        it searched but `res.sources` carried no `sourceType: "url"` entry. This is
+ *                       the sharpest one: the specialist's honesty verdict is
+ *                       `declaredQuestionScope && sources.length === 0`, so if Google returns its
+ *                       citations in a shape the SDK does not map to `sources`, EVERY Gemini
+ *                       research run reports "I found nothing" and fixtures 32/34 redden for a
+ *                       reason that has nothing to do with the skill body.
+ *
+ * Run it against BOTH research pins before trusting a gate — `RESEARCH_FALLBACK_MODEL` is exercised
+ * by `isFallbackEligible` and has never been probed either.
+ */
+export const probeGemini = internalAction({
+  args: { model: v.optional(v.string()), grounded: v.optional(v.boolean()) },
+  handler: async (
+    _ctx,
+    { model, grounded },
+  ): Promise<{
+    verdict:
+      | "ok"
+      | "no_credential"
+      | "bad_credential"
+      | "provider_refused"
+      | "unpriced"
+      | "empty_text"
+      | "tool_vendor_mismatch"
+      | "no_search_call"
+      | "no_sources";
+    model: string;
+    detail: string;
+    text?: string;
+    usage?: { inputTokens?: number; outputTokens?: number };
+    costUsd?: number;
+    /** Grounded runs only. Hosted calls counted EXACTLY as `runAgentLoop` counts them. */
+    searchCalls?: number;
+    /** Grounded runs only. Verbatim, because the record KEY is ours (`webResearch`) and the emitted
+     *  name is the PROVIDER's — 16-02 observed `web_search` for OpenAI, and every offline mock
+     *  fixture has to match whatever Google actually emits or we ship tests that pass on a fiction. */
+    toolCalls?: { toolName: string; providerExecuted: boolean }[];
+    /** Grounded runs only. Content-plane URLs (§4): printed to an operator terminal, NEVER audited. */
+    sources?: { url: string; title: string }[];
+    /** Grounded runs only. What the rail WOULD have been charged on top of tokens. */
+    feeUsd?: number;
+  }> => {
+    const id = model ?? (grounded ? RESEARCH_MODEL : GEMINI_MODEL);
+    if (!id.startsWith("google/")) {
+      return { verdict: "bad_credential", model: id, detail: `not a google/ model id: ${id}` };
+    }
+    // `buildWebResearchTool` picks its vendor from `RESEARCH_MODEL`, not from the id being probed —
+    // that is deliberate in production (the tool must match the pin, and the research fallback
+    // shares its vendor), but it means probing a Gemini id while the pin sits on OpenAI would send
+    // `openai.tools.webSearch` to Gemini and report a 400 that says nothing about Gemini. Refuse
+    // instead of manufacturing a misleading FAIL. Reachable after a two-line revert of the pins.
+    if (grounded && !RESEARCH_MODEL.startsWith("google/")) {
+      return {
+        verdict: "tool_vendor_mismatch",
+        model: id,
+        detail: `RESEARCH_MODEL is "${RESEARCH_MODEL}", so buildWebResearchTool yields OpenAI's hosted search — it cannot be sent to ${id}`,
+      };
+    }
+
+    let resolved: LanguageModel;
+    try {
+      resolved = resolveModel(id);
+    } catch (e) {
+      // The two credential errors are raised by googleVertex() above and are the only ones that can
+      // reach here — they are already worded for an operator and carry no key material.
+      const detail = e instanceof Error ? e.message : String(e);
+      return {
+        verdict: detail.includes("is not set") ? "no_credential" : "bad_credential",
+        model: id,
+        detail,
+      };
+    }
+
+    let result: Awaited<ReturnType<typeof generateText>>;
+    try {
+      result = await generateText({
+        model: resolved,
+        // Fixed, tiny, and verifiable: a wrong answer is as diagnostic as an error, and the token
+        // count stays small enough that a probe is never a meaningful cost.
+        //
+        // The grounded prompt is DATED ON PURPOSE (the 16-02 probe's design, kept): the answer
+        // cannot come from model memory, so an empty `sources` array is a real signal rather than
+        // an artefact of an easy question. Still a fixed constant with no tenant text (§4).
+        prompt: grounded
+          ? "Using web search, name one specific news item published in the last 30 days about" +
+            " Google's Gemini API pricing or model lineup. Give the headline, the publication and" +
+            " the date. If you cannot find one, say exactly: NO RESULTS."
+          : "Reply with exactly one word: OK",
+        // 512, not 16. **Gemini 3.x REASONS BY DEFAULT and its thinking tokens are drawn from this
+        // same budget**, so a tight cap returns 200-OK with EMPTY text and a nonzero output-token
+        // count — observed here 2026-08-07 at 16 (12 output tokens, `text: ""`). A probe that
+        // reported "ok" on an empty answer would be exactly the vacuous green this script exists to
+        // avoid, which is why `emptyText` below is a FAILING verdict rather than a footnote.
+        // Grounded runs get 4x: search results land IN the context and are reasoned over, so the
+        // same cap that suffices for one word would produce an `empty_text` FAIL that is an artefact
+        // of the budget rather than a fact about grounding.
+        maxOutputTokens: grounded ? 2048 : 512,
+        // Only when grounded — an unused tools record still ships a tool declaration to the
+        // provider, and the plain probe's job is to isolate "can it answer at all".
+        ...(grounded ? { tools: buildWebResearchTool(), stopWhen: stepCountIs(4) } : {}),
+      });
+    } catch (e) {
+      // NAME only, matching the llm.fallback audit convention — a provider error body can echo
+      // request content, and this string is printed to a terminal and may be pasted into a ticket.
+      const name = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+      return { verdict: "provider_refused", model: id, detail: name };
+    }
+
+    const usage = {
+      inputTokens: result.usage?.inputTokens,
+      outputTokens: result.usage?.outputTokens,
+    };
+    // Extracted with the SAME two expressions `runAgentLoop` uses (the `providerExecuted` filter and
+    // the `sourceType === "url"` narrowing). Copied rather than shared because the loop's versions
+    // are welded into a 200-line handler; if either ever changes, THIS is the probe that must change
+    // with it — the whole point is that the probe measures what production counts, not what looks
+    // equivalent. Empty on a plain run, which is why every grounded field below is optional.
+    const toolCalls = result.steps
+      .flatMap((st) => st.content)
+      .filter((p) => p.type === "tool-call")
+      .map((p) => ({ toolName: p.toolName, providerExecuted: p.providerExecuted === true }));
+    const searchCalls = toolCalls.filter((c) => c.providerExecuted).length;
+    const sources = (result.sources ?? [])
+      .filter(
+        (src): src is typeof src & { sourceType: "url"; url: string } => src.sourceType === "url",
+      )
+      .map((src) => ({ url: src.url, title: (src as { title?: string }).title ?? "" }));
+    const feeUsd = searchCalls * searchFeeUsd(id);
+    const groundedFields = grounded ? { searchCalls, toolCalls, sources, feeUsd } : {};
+
+    // Priced AFTER the grounded extraction, deliberately (reordered 2026-08-07). `unpriced` is the
+    // verdict a model gets on the run where it is being EVALUATED for adoption — which is exactly
+    // the run whose grounding evidence you need in order to decide whether to add the PRICING row
+    // at all. Returning early on `unpriced` threw that evidence away and forced a second paid run.
+    const priced = priceUsage(id, usage);
+    if (!priced.ok) {
+      return {
+        verdict: "unpriced",
+        model: id,
+        detail: `answered, but PRICING has no row for "${id}" — this model would bill $0 against the daily rail`,
+        text: result.text,
+        usage,
+        ...groundedFields,
+      };
+    }
+
+    // A 200 with no text is NOT a pass. Gemini 3.x spends thinking tokens from the output budget, so
+    // an exhausted cap yields empty text, a nonzero output count and no error at all — the failure
+    // shape most likely to be mistaken for success by anything downstream that expects prose.
+    if (result.text.trim() === "") {
+      return {
+        verdict: "empty_text",
+        model: id,
+        detail: `answered with ${usage.outputTokens ?? 0} output tokens but EMPTY text — Gemini 3.x reasoning likely consumed maxOutputTokens`,
+        text: result.text,
+        usage,
+        costUsd: priced.value,
+        ...groundedFields,
+      };
+    }
+
+    // ── The two grounded verdicts. Both are 200-OK responses that READ as success. ──
+    //
+    // Checked AFTER `empty_text` on purpose: an exhausted output budget is the more specific cause
+    // and would otherwise be reported as "it never searched".
+    if (grounded && searchCalls === 0) {
+      return {
+        verdict: "no_search_call",
+        model: id,
+        // The distinction is not decidable from here and the operator needs both branches, because
+        // the fixes are unrelated: a model that chose not to search is a PROMPT problem, while a
+        // hosted call the SDK failed to flag is a PROVIDER-MAPPING problem that silently zeroes the
+        // search fee for every research run.
+        detail:
+          `answered without any provider-executed call (${toolCalls.length} tool-call part(s) total). ` +
+          "Either the model declined to search, or @ai-sdk/google does not set providerExecuted on " +
+          "the grounded call — and runAgentLoop counts hosted calls on that flag ALONE, so the " +
+          "second case bills $0 of search fee on every research run.",
+        text: result.text,
+        usage,
+        costUsd: priced.value,
+        ...groundedFields,
+      };
+    }
+    if (grounded && sources.length === 0) {
+      return {
+        verdict: "no_sources",
+        model: id,
+        detail:
+          `searched ${searchCalls}x but res.sources carried no sourceType:"url" entry. ` +
+          "The specialist's honesty verdict is `declaredQuestionScope && sources.length === 0`, so " +
+          "this shape makes EVERY Gemini research run report that it found nothing — fixtures 32 " +
+          "and 34 would redden for a reason unrelated to the skill body.",
+        text: result.text,
+        usage,
+        costUsd: priced.value,
+        ...groundedFields,
+      };
+    }
+
+    return {
+      verdict: "ok",
+      model: id,
+      detail: grounded
+        ? `the model searched ${searchCalls}x, returned ${sources.length} source(s), and the response is priceable`
+        : "the model answered and the response is priceable",
+      text: result.text,
+      usage,
+      costUsd: priced.value,
+      ...groundedFields,
+    };
+  },
+});
 
 // ── Smoke seam ──────────────────────────────────────────────────────────────
 // A dev-deployment smoke must drive the REAL spine deterministically and offline
@@ -519,6 +1046,15 @@ type PlanRow = {
   // plan past `proposed` (a sent/scheduled plan is cancelled via the plan card, not reset). getById
   // returns it at runtime; never model-facing (the model reasons about slots, not the raw status).
   status: "collecting" | "proposed" | "approved" | "scheduled" | "delivering" | "done" | "canceled";
+  // ACTN-01 action type, ABSENT ⇒ email. Declared here as of Task 8 (live-finance-inputs) because
+  // `otherKindStaged` reads it — and the declaration has a SECOND effect worth keeping: every
+  // caller passes a `PlanRow` to `buildAgentContext`, whose own param declares the SAME union, so
+  // widening `ACTION_TYPES` and this line without widening that one is now an assignability error
+  // at the call site. That is the compile-time guard the corrected note there says does not exist;
+  // it exists for the NEXT action type. Keep the two unions identical.
+  // 17-05: the NEXT action type arrived (`calendar_manage`) and the guard worked exactly as
+  // described — widening `plans.kind` alone stopped compiling at four `readPlan()` call sites.
+  kind?: "memo" | "calendar_event" | "media" | "crm_write" | "finance_write" | "calendar_manage";
 };
 
 // One formatter for the resolved send instant — shared by buildAgentContext's Send-time line
@@ -536,7 +1072,18 @@ const fmtSendInstant = (ms: number, tz?: string) =>
 export function buildAgentContext(
   plan: {
     /** ACTN-01 action type. ABSENT ⇒ email (actionTypeOf), so every pre-Phase-15 row is unchanged. */
-    kind?: "memo" | "calendar_event";
+    kind?:
+      | "memo"
+      | "calendar_event"
+      | "media"
+      | "crm_write"
+      | "finance_write"
+      // 17-05: declared so a `calendar_manage` row is ASSIGNABLE here. There is deliberately no
+      // `calendar_manage` BRANCH below — nothing can stage such a plan until Plan 17-09, which
+      // owns the staging tool and must add the branch in the same commit. Note the SAME gap
+      // already exists for `calendar_event`: this function is the hand-maintained, model-facing
+      // half of the executor, and only `memo`/`crm_write`/`finance_write` have branches.
+      | "calendar_manage";
     recipients?: string[];
     subject?: string;
     body?: string;
@@ -567,6 +1114,31 @@ export function buildAgentContext(
   // offered to send it to recipients. Branch on the SHARED reader, never on `plan.kind` directly, so
   // a new ACTION_TYPES member surfaces here as a compile error rather than silently rendering as
   // email. Verified live 2026-07-26.
+  //
+  // **CORRECTED 19-06: (*) is FALSE — this is NOT a compile-error site.** `PlanRow`, the type every
+  // caller passes, does not declare `kind` at all, so widening `ACTION_TYPES` never breaks the
+  // call: `media` proved it, shipping in Phase 20 without ever reaching the param union above.
+  // `getById` returns the field at runtime, so the branches below DO fire; the type merely
+  // under-declares. A new action type must therefore be added here BY HAND, and one that is not
+  // gets announced to the model as an email.
+  if (actionTypeOf(plan.kind) === "crm_write") {
+    return (
+      "Current CRM plan. This is NOT an email: it has no recipients, no send mode and no send" +
+      " time, and approving it writes contacts and follow-ups into the user's own records rather" +
+      " than sending anything to anyone. Do not offer to add recipients or to send it."
+    );
+  }
+  // Task 8 (live-finance-inputs), added BY HAND for the reason the corrected note above gives —
+  // `finance_write` reaching ACTION_TYPES did NOT break this call, so nothing but this edit stops
+  // a staged figure plan being announced as an email with recipient slots the model then offers to
+  // fill and send. Pinned by a test in cockpitTools.test.ts, because the type system will not.
+  if (actionTypeOf(plan.kind) === "finance_write") {
+    return (
+      "Current figure-update plan. This is NOT an email: it has no recipients, no send mode and" +
+      " no send time, and approving it saves the staged figures into the user's own numbers" +
+      " rather than sending anything to anyone. Do not offer to add recipients or to send it."
+    );
+  }
   if (actionTypeOf(plan.kind) === "memo") {
     return [
       "Current memo plan. A memo is NOT an email: it has no recipients, no send mode and no send" +
@@ -668,17 +1240,27 @@ export function buildHistoryBlock(history: HistoryMessage[] | undefined): string
  * version stop describing what the model actually saw.
  *
  * Spine FIRST, then history, then the plan context, then the current turn — `The user says:` must
- * stay the final line. `spine === null` returns the pre-17.1 string byte-for-byte.
+ * stay the final line. `spine === null` and `finance === null` returns the pre-17.1 string
+ * byte-for-byte.
+ *
+ * THIS IS THE ONLY PLACE the blueprint spine and the finance line meet, and that is the whole point
+ * (whole-branch re-review, C1 regression). They arrive from two separate queries because
+ * `spineForTenant`'s output doubles as `evaluations.ts`'s "Business blueprint" GROUNDING CHUNK,
+ * which `FINANCIAL_PATTERNS` scans with unbounded `[^\d$]*` gaps — a finance line concatenated
+ * upstream gets its first number captured as the value of any `CAC`/`LTGP`/`price` label the
+ * blueprint happens to mention. Joining here reaches the model and nothing else.
  */
 function buildTurnPrompt(a: {
   spine: string | null;
+  finance: string | null;
   history: { role: "user" | "assistant"; content: string }[] | undefined;
   plan: PlanRow | null;
   tz: string | undefined;
   text: string;
 }): string {
-  const { spine, history, plan, tz, text } = a;
-  return `${spine === null ? "" : `${spine}\n\n`}${buildHistoryBlock(history)}${buildAgentContext(plan ?? {}, tz)}\n\nThe user says: ${text}`;
+  const { spine, finance, history, plan, tz, text } = a;
+  const standing = [spine, finance].filter((p) => p !== null).join("\n");
+  return `${standing === "" ? "" : `${standing}\n\n`}${buildHistoryBlock(history)}${buildAgentContext(plan ?? {}, tz)}\n\nThe user says: ${text}`;
 }
 
 /** Max header lines listInbox returns to the loop — a peek, not a briefing (briefInbox is that). */
@@ -762,6 +1344,125 @@ const IMAGE_REFUSAL_REPLY: Record<
   invalid_prompt:
     "The image prompt was empty or too long, so no proposal was staged. Ask the user for a concise visual description.",
 };
+// 19-08 (ACTN-05). Every one of these is RETURNED, never thrown: `execute` always hands the model
+// a sentence it can say to the user (18-06's rule). None of them stages anything.
+const CRM_REFUSAL_REPLY: Record<
+  | "draft_in_progress"
+  | "add_only"
+  | "no_clock"
+  | "malformed"
+  | "contact_carries_followup"
+  | "followup_dropped",
+  string
+> = {
+  // 19-11: the one that closes the degrade gradient. It must name the follow-up as the thing to
+  // FIX, because the model's alternative reading — "records changes are blocked, give up" — loses
+  // the user's request just as completely as staging the contact did.
+  followup_dropped:
+    "You already tried to add a follow-up this turn and it was rejected, so staging only the " +
+    "contact would silently drop what the user actually asked for. NOTHING was staged. Fix the " +
+    "follow-up and send it again as addFollowUp, or ask the user the one question you need.",
+  // 19-11: names the op the model must use. Saying only "that was wrong" would leave the cheapest
+  // recovery as dropping the date, which is the defect this refusal exists to stop.
+  contact_carries_followup:
+    "That change was sent as an addContact but carries a date or a task, so NOTHING was staged. " +
+    "A dated reminder is a separate addFollowUp operation. Send it again as addFollowUp with " +
+    "the person's email address, what needs doing, and the user's OWN WORDS for when it is due.",
+  draft_in_progress:
+    "There is an email draft on this conversation's plan card, and staging record changes would " +
+    "replace it. Nothing was staged. Tell the user plainly, and offer to update their records " +
+    "once the draft is sent or discarded.",
+  add_only:
+    "You can only ADD contacts and follow-ups. Marking a follow-up done or cancelling one is the " +
+    "user's own call, on the Pipeline page. Nothing was staged — tell them where to do it.",
+  no_clock:
+    "I couldn't read the user's local date, so a dated follow-up can't be staged. Nothing was " +
+    "staged. Offer to add the contact without a follow-up.",
+  malformed:
+    "Those record changes were incomplete, so nothing was staged. Ask the user for what is " +
+    "missing and try once more.",
+};
+/** `parseCrmOperations`'s NAMED errors, each turned into the question the model should ask. */
+const CRM_PARSE_REFUSAL: Record<string, string> = {
+  CRM_OPERATIONS_EMPTY:
+    "There were no changes to stage, so nothing happened. Ask the user what they want recorded.",
+  CRM_OPERATIONS_TOO_MANY:
+    "That is too many record changes for one approval. Nothing was staged. Ask the user which " +
+    "ones matter now and stage those.",
+  CRM_FOLLOWUP_CONTACT_REQUIRED:
+    "A follow-up has to say WHO it is about, and that one named nobody. Nothing was staged. Ask " +
+    "the user whose follow-up it is and use that person's email address.",
+  CRM_FOLLOWUP_NOTE_REQUIRED:
+    "A follow-up needs to say what needs doing, and that one was blank. Nothing was staged. Ask " +
+    "the user what the follow-up is for.",
+  CRM_CONTACT_EMAIL_REQUIRED:
+    "A contact needs an email address, and that one had none. Nothing was staged. Ask the user " +
+    "for the address.",
+  // 19-11. The wording matters more than the check does. The model reached `no-email` BECAUSE it
+  // was told an address is required, so a refusal that only says "invalid, try again" leaves
+  // inventing a better-formed fake as the cheapest next move. This names the placeholder as the
+  // error, forbids substituting one, and spells out the correct exit — a follow-up about nobody in
+  // particular is a thing this CRM cannot hold, and saying so IS the right answer.
+  CRM_FOLLOWUP_CONTACT_INVALID:
+    "That follow-up's email address is not a real address, so nothing was staged. NEVER invent or " +
+    "substitute an address — no placeholder like 'no-email', 'none' or 'unknown' is acceptable. " +
+    "If the user named a person, ask for their email address. If the follow-up is not about a " +
+    "specific person, tell the user plainly that you can only attach follow-ups to a contact, and " +
+    "that they can add a standalone reminder themselves on the Pipeline page.",
+  CRM_CONTACT_EMAIL_INVALID:
+    "That contact's email address is not a real address, so nothing was staged. Do not invent or " +
+    "guess one — ask the user for the person's actual email address.",
+};
+/** The three non-resolved `parseSendTime` outcomes, worded for a follow-up date. */
+const CRM_DUE_REFUSAL: Record<"ambiguous" | "past" | "tooFar" | "none", string> = {
+  ambiguous:
+    "That follow-up date is ambiguous — ask which day they meant (never guess). Nothing was staged.",
+  past: "That follow-up date has already passed — ask for a future date. Nothing was staged.",
+  tooFar:
+    "That follow-up date is too far out to stage. Ask the user for a nearer date. Nothing was staged.",
+  none: "I didn't catch when that follow-up is due — ask the user for a date. Nothing was staged.",
+};
+// The five figures an AGENT may write. DERIVED from the catalogue, never re-listed: 6 of the 11
+// collected inputs are `store: "scorecard"` and `applyFinanceClaims` refuses every one of them,
+// because the scorecard discards origin/actor/basis and would launder an agent claim into the
+// evaluation engine's citations as the owner's own statement (`cash.ts`). A hand-copy here would
+// go stale the first time a field moved store.
+const AGENT_WRITABLE_FIGURES = CASH_INPUTS.filter((s) => s.store === "financeInputs").map(
+  (s) => s.field,
+);
+
+// Statuses in which a staged plan is SPENT: nobody is still waiting on it, so another action may
+// recycle the row. Everything else — collecting, proposed, approved, scheduled, delivering — is a
+// plan a human has been told about and has not finished with.
+const SPENT_PLAN_STATUS: ReadonlySet<PlanRow["status"]> = new Set(["done", "canceled"] as const);
+
+/**
+ * ONE plan row per thread (`plans.by_thread` is `.unique()`), so a second STAGING tool overwrites
+ * `kind` and ORPHANS whatever the first one staged. `executePlan` routes on `actionTypeOf(plan.kind)`
+ * ALONE, so a surviving `crmOperations` list or `eventTitle`/`eventStartMs` pair is never applied
+ * and never rendered — after the model has already told the user it was staged. The email-slot
+ * draft guard cannot see any of it: a `crm_write` row carries no subject/body/recipients at all.
+ * Returns the kind standing in the way, or null.
+ *
+ * ONE predicate SHARED by `stageCrmWrite` and `stageFinanceWrite` rather than two more slot lists —
+ * the hazard is symmetric, so a fix on one side only is not a fix (CLAUDE.md §8: one guard where
+ * every caller routes through). Re-staging the SAME kind is a REVISION, not a clobber, and stays
+ * allowed — that is the model correcting its own list, which `stageCrmWrite` has always permitted.
+ *
+ * ponytail: `stageResearchPlan`/`stageMediaPlan` (plans.ts) keep their own narrower interlocks —
+ * they protect a RUNNING dispatch and paid `mediaJobs` rows, neither of which is readable from
+ * `plan.status`. Upgrade path if those ever converge: more than one plan row per thread.
+ */
+const otherKindStaged = (plan: PlanRow, mine: string): string | null =>
+  plan.kind && plan.kind !== mine && !SPENT_PLAN_STATUS.has(plan.status) ? plan.kind : null;
+
+/** The shared refusal. `kind` is an ENUM, never content (§4), and naming it is what lets the model
+ *  tell the user WHICH plan is in the way instead of guessing. */
+const otherKindRefusal = (kind: string): string =>
+  `A ${kind.replace(/_/g, " ")} plan is already staged on this conversation's plan card, and ` +
+  "staging over it would silently discard it. NOTHING was staged. Tell the user what is already " +
+  "on the card and ask whether to approve or discard it first.";
+
 const DECLARED_UNSUPPORTED_REPLY =
   "Recorded. This does NOT end the run and discards nothing you found. Continue: produce the full " +
   "findings document — what you searched, what you did establish, the near-misses and why each is " +
@@ -811,8 +1512,19 @@ export function buildCockpitTools(
     rootRequestId?: string;
   },
 ) {
-  // ACTN-03. Constructed once so the conditional spread below can keep ONE stable type.
-  const webResearchTool = { webResearch: openai.tools.webSearch({ searchContextSize: "medium" }) };
+  const webResearchTool = buildWebResearchTool();
+
+  // 19-11 (ACTN-05). THE DEGRADE GRADIENT, and the actual root cause of the measured defect.
+  // `stageCrmWrite` refuses ALL-OR-NOTHING over its list, so whenever any element is imperfect the
+  // model's cheapest next move is to re-send a SIMPLER list — and the simplest list that succeeds
+  // is a bare `addContact`. That is how "remind me on Thursday to chase Rhea" ends as a contact
+  // with no date: not a model reflex, a downhill path the tool boundary built. 19-10's traces show
+  // the model calling this tool 2-4 times per turn and settling at the bottom of it.
+  //
+  // This closure is rebuilt for every turn, so the flag is TURN-scoped — which is exactly the
+  // window the degrade happens in. Once a follow-up has been refused this turn, dropping it is no
+  // longer an exit: the contact-only retry is refused too and the model must fix the follow-up.
+  let followUpRefusedThisTurn = false;
 
   // 22.1b: the specialist's ONE structured channel for a SEMANTIC judgement — "I searched, and what
   // I found does not SUPPORT the claim". THE SIGNAL IS THE CALL: `runAgentLoop` reads the SDK's own
@@ -1151,8 +1863,11 @@ export function buildCockpitTools(
 
   return {
     resolveContacts: tool({
+      // Split literals keep each chunk under the §5 no-hardcoded-prompt scan ceiling (200 chars).
       description:
-        "Look up a named person in the user's mailbox to find their email address. Use for a NAME (not a typed address). Returns matching contacts by label for the user to pick — you never see the address.",
+        "Look up a named person to find their email address. Use for a NAME (not a typed address). " +
+        "Checks the user's saved contacts first, then their mailbox. " +
+        "Returns matches by label for the user to pick — you never see the address.",
       inputSchema: jsonSchema<{ name: string }>({
         type: "object",
         properties: { name: { type: "string", description: "The person's name to look up." } },
@@ -1160,6 +1875,57 @@ export function buildCockpitTools(
         additionalProperties: false,
       }),
       execute: async ({ name }): Promise<string> => {
+        // The SMOKE:: search sentinel (offline fixture trigger) must not pollute name-matching —
+        // strip it so ranking scores against the real name. Production names never carry it (no-op).
+        // Hoisted above BOTH planes (19-08) so the saved lookup and the header lookup rank the same
+        // string; leaving it below would make the sentinel match saved contacts differently.
+        const rankName = name.replace(/^SMOKE::(?:[^:]*::)*/, "").trim() || name;
+
+        // ── CONTACTS FIRST (19-08, SC#1) ──────────────────────────────────────
+        // A saved contact is a DELIBERATE HUMAN STATEMENT about who someone is; a Gmail-header
+        // match is an INFERENCE drawn from who happened to share a thread. Preferring the saved
+        // record is also the reason a user would bother saving one — it visibly makes the agent
+        // faster, because a hit costs one indexed read instead of a mailbox round trip.
+        //
+        // THIS TOOL NEVER WRITES A CONTACT ROW, on either plane. That absence is the enforcement
+        // point of the "no contacts cache at rest" invariant (SC#7, contacts-crm.md invariant 1):
+        // a row exists only because a human deliberately acted, and resolving a name is not that
+        // act. `cockpitTools.test.ts` counts `contacts` rows across a resolution that matched
+        // nothing, one and several, because prose is not a guard.
+        const saved = await ctx.runQuery(internal.contacts.savedForName, {
+          tenantId,
+          name: rankName,
+        });
+        if (saved.matches.length > 0) {
+          await ctx.runMutation(internal.plans.writeCandidates, {
+            planId,
+            candidates: [{ name, matches: saved.matches }],
+            pendingValid: [],
+          });
+          const labels = saved.matches
+            .map((m, i) => `#${i + 1} ${m.displayName ?? "(no name)"}`)
+            .join(", ");
+          // The open follow-ups ride along, so "what do I owe them?" costs no second tool call.
+          // scanText because a NOTE is user/agent prose that could hold an address, and this
+          // tool's contract is that no address crosses to the model (§2-D).
+          const owed = saved.followUps
+            .map((f) => {
+              const scan = scanText(f.note);
+              return `"${scan.ok ? scan.value.safeText : "(note withheld)"}"`;
+            })
+            .join(", ");
+          const followUpLine =
+            saved.followUps.length === 0
+              ? " No open follow-ups are on record for them."
+              : ` Open follow-ups on record: ${owed}.`;
+          return (
+            `Found ${saved.matches.length} saved contact(s) for "${name}": ${labels}. ` +
+            "These are saved records the user entered, not mailbox guesses, so the mailbox was " +
+            `not searched.${followUpLine} The user will pick one — do not guess the address.`
+          );
+        }
+
+        // ── Fallback: the Gmail-header search, byte-unchanged ─────────────────
         // correlationId = planId: a stable ref for the refs-only mailbox.searched audit (§4).
         const res = await ctx.runAction(internal.gmail.search, {
           tenantId,
@@ -1175,9 +1941,6 @@ export function buildCockpitTools(
           });
           return `I couldn't read the mailbox to look up "${name}". Ask the user for the email address directly.`;
         }
-        // The SMOKE:: search sentinel (offline fixture trigger) must not pollute name-matching —
-        // strip it so ranking scores against the real name. Production names never carry it (no-op).
-        const rankName = name.replace(/^SMOKE::(?:[^:]*::)*/, "").trim() || name;
         const matches = rankCandidates(rankName, res.records);
         if (matches.length === 0)
           // Accuracy: no confident match → say so plainly and ask. NEVER substitute a different
@@ -1637,6 +2400,14 @@ export function buildCockpitTools(
         );
         switch (parsed.kind) {
           case "resolved": {
+            // THE SAME cross-kind interlock `stageCrmWrite` and `stageFinanceWrite` run, on the
+            // third tool that patches `kind` on the one shared plan row. Without it a staged
+            // `finance_write` (or `crm_write`) is orphaned: its `financeClaims` survive on the row
+            // but `executePlan` routes on `actionTypeOf(plan.kind)`, so they are never applied and
+            // never rendered — after the model told the user they were staged. Checked BEFORE the
+            // patch, so the refusal costs nothing and discards nothing.
+            const blocking = otherKindStaged(await readPlan(), "calendar_event");
+            if (blocking) return otherKindRefusal(blocking);
             // ponytail: one bounded duration, rounded then clamped to 15–480 minutes. Upgrade only
             // when the product supports shorter reminders or multi-day timed events.
             const clampedMinutes = Math.min(480, Math.max(15, Math.round(durationMinutes)));
@@ -1663,6 +2434,388 @@ export function buildCockpitTools(
           case "none": // exhaustive: a new SendTimeParse variant must become a TS error, never a guessed calendar instant
             return "I didn't detect a specific event time — ask the user for the day and time. Nothing was staged.";
         }
+      },
+    }),
+    // ── The CRM staging tool (19-08, ACTN-05) ─────────────────────────────────────────────────
+    //
+    // ONE tool, carrying a LIST. A `saveContact` tool and a `logFollowUp` tool would be two
+    // registration surfaces, two `agentSteps.tool` literals, two VERB entries and two fixtures for
+    // ONE governed act — and 19-CONTEXT locks "one plan carries a list of operations, applied
+    // atomically", which two tools could not express anyway.
+    //
+    // It STAGES and applies NOTHING. `executePlan`'s `inline` arm applies the list after Approve
+    // (19-06), in one serializable transaction. Everything below is inert until a human clicks it.
+    //
+    // The list is validated HERE as well as at the apply boundary, deliberately: the plan row is
+    // CONTENT PLANE and could be revised in between, and `parseCrmOperations` is idempotent over
+    // its own output (there is a test for exactly that), so the double parse is safe by
+    // construction and stores NORMALIZED addresses the applier never re-derives.
+    stageCrmWrite: tool({
+      // Split literals keep each chunk under the §5 no-hardcoded-prompt scan ceiling (200 chars).
+      description:
+        "Stage changes to the user's own contact records for them to approve. " +
+        "This saves nothing yet and emails nobody. " +
+        "Every follow-up must name the contact's email address. " +
+        "Pass the user's own words for when a follow-up is due; the app supplies the current date.",
+      // The TS type stays FLAT and permissive on purpose: it models what can ARRIVE, not what we
+      // ask for. `jsonSchema()` carries no `validate`, so the SDK never checks the payload — the
+      // schema below is a signal to the provider and `execute` is the enforcement. A narrow TS
+      // union here would hide `o.due` on a contact, which is precisely the case we must inspect.
+      inputSchema: jsonSchema<{
+        operations: Array<{
+          op: "addContact" | "addFollowUp";
+          email: string;
+          name?: string;
+          note?: string;
+          due?: string;
+        }>;
+      }>({
+        type: "object",
+        properties: {
+          operations: {
+            type: "array",
+            // 19-11 (ACTN-05): a DISCRIMINATED union, follow-up arm FIRST. This used to be one
+            // permissive object with `enum: ["addContact","addFollowUp"]` and
+            // `required: ["op","email"]`, which made `{op:"addContact", email}` both the union's
+            // leading arm AND the whole schema's minimum valid emission — so a contact was
+            // reachable without the model having actively chosen it, and `note`/`due` were
+            // optional on BOTH ops. A follow-up's date is now structurally required, and a
+            // contact structurally cannot carry one.
+            items: {
+              anyOf: [
+                {
+                  type: "object",
+                  properties: {
+                    op: { type: "string", enum: ["addFollowUp"] },
+                    email: {
+                      type: "string",
+                      description: "The contact's email address. Required.",
+                    },
+                    note: { type: "string", description: "What needs doing." },
+                    due: {
+                      type: "string",
+                      description: "The user's OWN WORDS for when it is due, e.g. 'Thursday'.",
+                    },
+                  },
+                  required: ["op", "email", "note", "due"],
+                  additionalProperties: false,
+                },
+                {
+                  type: "object",
+                  properties: {
+                    op: { type: "string", enum: ["addContact"] },
+                    email: {
+                      type: "string",
+                      description: "The contact's email address. Required.",
+                    },
+                    name: { type: "string", description: "The contact's name, if known." },
+                  },
+                  required: ["op", "email"],
+                  additionalProperties: false,
+                },
+              ],
+            },
+          },
+        },
+        required: ["operations"],
+        additionalProperties: false,
+      }),
+      execute: async ({ operations }): Promise<string> => {
+        // 19-11: every refusal below routes through `refuse`, which remembers that a follow-up was
+        // on the list that failed. That memory is what removes the downhill path — see the flag's
+        // declaration in buildCockpitTools. `reason` is an ENUM and the op list is TYPES only, so
+        // the structured log carries refs/counts/enums and no user content (§4).
+        const wantsFollowUp = operations.some((o) => o.op === "addFollowUp");
+        const refuse = (reason: string, sentence: string): string => {
+          if (wantsFollowUp) followUpRefusedThisTurn = true;
+          console.log(
+            JSON.stringify({
+              event: "stageCrmWrite.refused",
+              reason,
+              ops: operations.map((o) => o.op),
+              wantsFollowUp,
+              dueProvided: operations.map((o) => (o.due ?? "").trim().length > 0),
+              noteProvided: operations.map((o) => (o.note ?? "").trim().length > 0),
+            }),
+          );
+          return sentence;
+        };
+
+        // Dropping the follow-up is no longer an exit (19-11). Checked FIRST: the model has
+        // already been told what to fix, and letting a contact-only retry succeed here is exactly
+        // the measured defect.
+        if (followUpRefusedThisTurn && !wantsFollowUp) {
+          return refuse("followup_dropped", CRM_REFUSAL_REPLY.followup_dropped);
+        }
+
+        // A CRM staging would overwrite `kind`/`status` on the ONE plan row this thread has, so a
+        // half-composed email would silently become a CRM card and the draft would be stranded.
+        // The `stageResearchPlan`/`stageMediaPlan` refusal, applied to the same hazard.
+        const plan = await readPlan();
+        const hasDraft =
+          (plan.recipients?.length ?? 0) > 0 ||
+          Boolean(plan.subject) ||
+          Boolean(plan.body) ||
+          (plan.attachments?.length ?? 0) > 0;
+        if (hasDraft) return refuse("draft_in_progress", CRM_REFUSAL_REPLY.draft_in_progress);
+
+        // …and the guard above cannot see another STAGED ACTION at all: a `finance_write` row
+        // carries `financeClaims` and no subject/body, so it sailed through and was overwritten.
+        // Shared with `stageFinanceWrite` — the hazard is symmetric.
+        const blocking = otherKindStaged(plan, "crm_write");
+        if (blocking) return refuse("other_kind_staged", otherKindRefusal(blocking));
+
+        // The AGENT may only ADD. Closing someone's follow-up is a judgement about work being
+        // finished, and the Pipeline page is where a human makes it — the same asymmetry that
+        // keeps a contactless follow-up user-only (contacts-crm.md invariant 11).
+        if (operations.some((o) => o.op !== "addContact" && o.op !== "addFollowUp")) {
+          return refuse("add_only", CRM_REFUSAL_REPLY.add_only);
+        }
+
+        // §2-D: the model supplies the user's WORDS, never an instant. Without a trusted clock a
+        // dated follow-up cannot be staged at all (the proposeCalendarEvent rule).
+        const staged: unknown[] = [];
+        for (const o of operations) {
+          if (o.op === "addContact") {
+            // 19-11 (ACTN-05, the defect 19-10 measured). `due`/`note` on a CONTACT used to be
+            // SILENTLY DROPPED by the push below, and the tool then reported "1 change(s) …
+            // staged" — so a model that supplied the whole dated follow-up got a bare contact
+            // written and was told it had succeeded. The date was destroyed with no signal to
+            // anyone. A silent drop at a trust boundary cannot be answered; a returned refusal
+            // must be, and the governed loop lets the model re-send the right op immediately.
+            if ((o.due ?? "").trim() || (o.note ?? "").trim()) {
+              return refuse("contact_carries_followup", CRM_REFUSAL_REPLY.contact_carries_followup);
+            }
+            // `origin` is the provenance of the DATA and is NOT a model input: an agent-staged
+            // contact came out of a mailbox resolution or the user's own words in this thread,
+            // and letting the model label provenance would make the field unreliable. The same
+            // literal `applyCrmOperations` uses when a follow-up upserts its contact.
+            staged.push({
+              op: "addContact",
+              email: o.email,
+              name: o.name,
+              origin: "mailbox-resolved",
+            });
+            continue;
+          }
+          if (!clientContext) return refuse("no_clock", CRM_REFUSAL_REPLY.no_clock);
+          const parsed = parseSendTime(
+            o.due ?? "",
+            clientContext.nowMs,
+            clientContext.tz,
+            CALENDAR_HORIZON_MS,
+          );
+          if (parsed.kind !== "resolved")
+            return refuse(`due_${parsed.kind}`, CRM_DUE_REFUSAL[parsed.kind]);
+          staged.push({ op: "addFollowUp", email: o.email, note: o.note, dueAt: parsed.epochMs });
+        }
+
+        let validated: CrmOperation[];
+        try {
+          validated = parseCrmOperations(staged);
+        } catch (e) {
+          // Every refusal is a RETURNED SENTENCE, never a throw out of the governed loop (18-06).
+          return refuse(
+            (e as Error).message,
+            CRM_PARSE_REFUSAL[(e as Error).message] ?? CRM_REFUSAL_REPLY.malformed,
+          );
+        }
+
+        await ctx.runMutation(internal.plans.patchPlan, {
+          planId,
+          kind: "crm_write",
+          status: "proposed",
+          crmOperations: validated,
+        });
+        return (
+          `${validated.length} change(s) to the user's records are staged on a plan card for ` +
+          "them to review. NOTHING has been saved and nothing was emailed to anyone; the changes " +
+          "are written only when the user clicks Approve. Tell them what is on the card."
+        );
+      },
+    }),
+    // ── readFinance (Task 7) — the derived half of the finance spine, on demand ─────────────────
+    // The agent NEVER computes a financial ratio. LTGP:CAC, CFA, payback and runway are defined in
+    // `financialSpine.ts` / `cash.ts` with their degenerate guards and the suppression rule; a
+    // model re-deriving them in prose produces a confident wrong number on the figure that drives
+    // the headline of the whole Finance page. This tool exists so the correct value is always
+    // cheaper to fetch than to invent. Empty input schema: the tenant comes from the RUN, never
+    // the model, so there is no argument to forge. A brand-new tenant with no figures at all is
+    // the NORMAL case, not an error — `unitEconomics`/`solvency` are pure and return "missing"/
+    // "not computable" states rather than throwing, so this never needs to fail loudly.
+    //
+    // Task 7 review, Important 2: the description below promises figures that are "missing or out
+    // of date". Missing is covered by every suppressed figure's own `needs`/`because`; "out of
+    // date" needed `inputs` (per-field `stale`) added to the payload — `unitEconomics`/`solvency`
+    // alone carry NO staleness marker on nine of their thirteen figures (only `mrr`/`referralPct`
+    // route through `statedFigure`; every other `derived()` figure has none at all).
+    readFinance: tool({
+      // Split literal keeps each chunk under the §5 no-hardcoded-prompt scan ceiling (200 chars).
+      description:
+        "Read the user's current financial picture: their figures, " +
+        "which are missing or out of date, and the metrics computed from them. " +
+        "Never calculate these ratios yourself — read them here.",
+      inputSchema: jsonSchema<Record<string, never>>({
+        type: "object",
+        properties: {},
+        additionalProperties: false,
+      }),
+      execute: async (): Promise<string> => {
+        const [unit, sol, inputs] = await Promise.all([
+          ctx.runQuery(internal.cash.unitEconomicsFor, { tenantId }),
+          ctx.runQuery(internal.cash.solvencyFor, { tenantId }),
+          ctx.runQuery(internal.cash.inputsFor, { tenantId }),
+        ]);
+        return JSON.stringify({ unitEconomics: unit, solvency: sol, inputs: inputs.inputs });
+      },
+    }),
+    // ── stageFinanceWrite (Task 8) — the agent's ONLY route to a figure ───────────────────────
+    //
+    // ONE tool carrying a LIST: one plan, one approval click, however many figures moved. The
+    // `stageCrmWrite` shape above, for the same reason — two tools would be two registration
+    // surfaces, two `agentSteps.tool` literals and two VERB entries for ONE governed act.
+    //
+    // It STAGES and applies NOTHING. `executePlan`'s `inline` arm applies the list after Approve,
+    // in one serializable transaction. contacts-crm.md invariant 11 — the ACTOR decides gating:
+    // the human editing the SAME figure through `cash.saveInput` is ungated and stages no plan.
+    //
+    // Validated HERE as well as at the apply boundary, deliberately: the plan row is CONTENT PLANE
+    // and could be revised in between, and `validateFigureClaim` is idempotent over its own output.
+    stageFinanceWrite: tool({
+      // Split literals keep each chunk under the §5 no-hardcoded-prompt scan ceiling (200 chars).
+      description:
+        "Stage updates to the user's own financial figures for them to approve. " +
+        "This saves nothing yet. " +
+        "Every update must say where the number came from, as a short reference. " +
+        // DERIVED, not hand-listed. The old wording ("only the collected inputs") was WRONG by 6 of
+        // 11: the scorecard-stored figures — CAC among them — are refused, so a model told only
+        // "the collected inputs" re-proposes CAC every turn and the user pays an approval click to
+        // find out. Name the five it can actually write.
+        `You can only update these five: ${AGENT_WRITABLE_FIGURES.join(", ")}.`,
+      inputSchema: jsonSchema<{
+        updates: Array<{ field: string; value: number; basis: string }>;
+      }>({
+        type: "object",
+        properties: {
+          updates: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                field: { type: "string", description: "The input's exact name." },
+                value: { type: "number", description: "The figure, in whole units." },
+                basis: {
+                  type: "string",
+                  description:
+                    // The example is DELIBERATELY unquoted: the §4 guard in `execute` rejects a
+                    // basis containing a quote character, so a quoted example would teach the
+                    // model the exact shape that gets refused.
+                    "A short REFERENCE for where it came from, e.g. 14000 / 10, this turn. Use no quote marks and never quote the user.",
+                },
+              },
+              required: ["field", "value", "basis"],
+              additionalProperties: false,
+            },
+          },
+        },
+        required: ["updates"],
+        additionalProperties: false,
+      }),
+      execute: async ({ updates }): Promise<string> => {
+        // Every exit below is a RETURNED SENTENCE the model can act on, never a throw out of the
+        // governed loop (18-06's rule) — including the ones that exist purely to catch a
+        // malformed emission.
+        if (updates.length === 0) {
+          return "There were no changes to stage, so nothing happened. Ask the user which figure moved.";
+        }
+        // One plan row per thread (`plans.by_thread` is `.unique()`), so staging finance onto a
+        // half-composed email would turn the draft into a figure card and strand it. The
+        // `stageCrmWrite` / `stageResearchPlan` / `stageMediaPlan` refusal, on the same hazard.
+        const plan = await readPlan();
+        if (
+          (plan.recipients?.length ?? 0) > 0 ||
+          plan.subject ||
+          plan.body ||
+          (plan.attachments?.length ?? 0) > 0
+        ) {
+          return (
+            "There is an email draft on this conversation's plan card, and staging figure updates " +
+            "would replace it. Nothing was staged. Tell the user plainly, and offer to update " +
+            "their figures once the draft is sent or discarded."
+          );
+        }
+        // …and the check above cannot see another STAGED ACTION: a `crm_write` row carries
+        // `crmOperations` and no subject/body. Shared with `stageCrmWrite` — the hazard is
+        // symmetric and a one-sided fix is not one.
+        const blocking = otherKindStaged(plan, "finance_write");
+        if (blocking) return otherKindRefusal(blocking);
+        // §2-D: the trusted client's clock, never the model's. `Date.now()` is the SERVER's clock
+        // (also not the model's) and is the right fallback here — unlike `setSendTime`, nothing on
+        // this path parses a model-supplied date phrase, so there is no instant to get wrong.
+        const nowMs = clientContext?.nowMs ?? Date.now();
+        const claims: FigureClaim[] = [];
+        for (const u of updates) {
+          // The field check MUST precede claim construction. `validateFigureClaim` delegates to
+          // `cashInputSpec`, which THROWS on a field outside the union — and a hallucinated field
+          // name ("revenue", "burnRate") is the likeliest malformed emission from a model. This
+          // guard is what turns that throw into a sentence.
+          if (!CASH_INPUTS.some((s) => s.field === u.field)) {
+            return `"${u.field}" is not a figure I can update. Ask the user which one they mean.`;
+          }
+          // The scorecard store cannot carry provenance, so `applyFinanceClaims` refuses every
+          // scorecard field UNCONDITIONALLY (`agent_cannot_update_figure`). Refusing HERE means the
+          // model learns it this turn instead of the user spending an approval click on a plan that
+          // can never apply. `cash.ts:448` deliberately stays — it is still reached by its own unit
+          // tests, by a plan row revised between staging and Approve, by a row staged under an
+          // older build, and by any future writer of `financeClaims` (vault documents, connectors).
+          // Two guards, one rule; neither is dead.
+          if (cashInputSpec(u.field as CashInputField).store === "scorecard") {
+            return (
+              `I cannot update ${u.field} — it is one the user has to enter themselves for now. ` +
+              `I can only update these five: ${AGENT_WRITABLE_FIGURES.join(", ")}. ` +
+              "Tell them they can set it on their finance page."
+            );
+          }
+          // §4 is enforced HERE, at the boundary that CONSTRUCTS `basis`. `validateFigureClaim`
+          // checks only that a basis is non-empty — "refs only, never quoted content" is not
+          // mechanically decidable in pure TS, so the producer is the enforcement point. Reject a
+          // basis carrying quoted content, or long enough to be a transcript, rather than letting
+          // it reach the audit log and the approval card.
+          if (/["'“”]/.test(u.basis) || u.basis.length > 120) {
+            return `The basis for ${u.field} must name where the number came from, not quote it.`;
+          }
+          const claim: FigureClaim = {
+            field: u.field as CashInputField,
+            value: u.value,
+            // `origin` and `actor` are NOT model inputs: they are the provenance of the WRITE, and
+            // letting the model label its own claim as the user's would defeat invariant 11
+            // outright. `applyFinanceClaims` re-stamps `actor` at the gate for the same reason.
+            origin: "stated",
+            actor: "agent",
+            basis: u.basis,
+            // When the figure was TRUE. Nothing on this path parses a date, so a figure the agent
+            // heard this turn was true this turn.
+            observedAt: nowMs,
+            confidence: "high",
+          };
+          const check = validateFigureClaim(claim, nowMs);
+          if (!check.ok) return `I cannot stage ${u.field}: ${check.reason}`;
+          claims.push(claim);
+        }
+        // `status: "proposed"` is not decoration: `executePlan`'s Approve gate is a CAS that
+        // no-ops on any other status, and every approval surface lists by it. A row left at
+        // `collecting` would render nowhere and could never be approved.
+        await ctx.runMutation(internal.plans.patchPlan, {
+          planId,
+          kind: "finance_write",
+          status: "proposed",
+          financeClaims: claims,
+        });
+        return (
+          `${claims.length} figure update(s) are staged on a plan card for the user to review. ` +
+          "NOTHING has been saved and nothing was emailed to anyone; the figures change only when " +
+          "the user clicks Approve. Tell them what is on the card."
+        );
       },
     }),
     // ── The briefing tools (CKPT-04) — READ-ONLY, panel-driven ────────────────────────────────
@@ -1820,6 +2973,85 @@ export function buildCockpitTools(
         );
       },
     }),
+    // ── Google Drive reads (VALT-15) — metadata only; never import/reserve/export/ingest ───────────
+    listDriveFolders: tool({
+      description:
+        "List one level of the user's Google Drive so you can help them locate a folder or file. " +
+        "Read-only: this cannot import, download, reserve budget, or change the vault.",
+      inputSchema: jsonSchema<{ parentId?: string }>({
+        type: "object",
+        properties: {
+          parentId: {
+            type: "string",
+            description: "Drive folder id to open. Omit it to list the Drive roots.",
+          },
+        },
+        additionalProperties: false,
+      }),
+      execute: async ({ parentId }): Promise<string> => {
+        if (parentId?.startsWith("SMOKE::"))
+          return "Drive folder: Smoke folder [id: smoke-folder]. No files at this level.";
+        try {
+          const result = await ctx.runAction(api.vaultDrive.listDriveFolders, { parentId });
+          if (!result.ok) {
+            if (result.reason === "not_connected")
+              return "Google is not connected. Ask the user to connect Google before reading Drive.";
+            if (result.reason === "reauth")
+              return "Google is connected without Drive access. Ask the user to reconnect Google.";
+            if (result.reason === "bad_folder_id")
+              return "That Drive folder reference is invalid. Ask the user to choose it again.";
+            return "The Google connection could not be refreshed. Ask the user to reconnect Google.";
+          }
+          const folders = result.folders.map((f) => `${f.name} [id: ${f.id}]`).join("; ");
+          const files = result.files
+            .map((f) => `${f.name} [id: ${f.id}; ${f.readable ? "readable" : "unreadable"}]`)
+            .join("; ");
+          return (
+            `Drive folders (${result.folders.length}): ${folders || "none"}. ` +
+            `Files at this level (${result.files.length}): ${files || "none"}.` +
+            (result.truncated ? " This level was truncated." : "")
+          );
+        } catch {
+          return "I couldn't read Google Drive right now. Tell the user plainly and try again later.";
+        }
+      },
+    }),
+    findInDrive: tool({
+      description:
+        "Search the user's Google Drive by file or folder name and document text. " +
+        "Read-only: this returns metadata and never imports, downloads, or changes the vault.",
+      inputSchema: jsonSchema<{ query: string }>({
+        type: "object",
+        properties: { query: { type: "string", description: "What to find in Google Drive." } },
+        required: ["query"],
+        additionalProperties: false,
+      }),
+      execute: async ({ query }): Promise<string> => {
+        if (query.startsWith("SMOKE::"))
+          return "Drive search found 1 item: Smoke result (file, readable) [id: smoke-file].";
+        try {
+          const result = await ctx.runAction(api.vaultDrive.findInDrive, { query });
+          if (!result.ok) {
+            if (result.reason === "not_connected")
+              return "Google is not connected. Ask the user to connect Google before searching Drive.";
+            if (result.reason === "reauth")
+              return "Google is connected without Drive access. Ask the user to reconnect Google.";
+            return "The Google connection could not be refreshed. Ask the user to reconnect Google.";
+          }
+          if (result.hits.length === 0) return "No matching Drive files or folders were found.";
+          const hits = result.hits
+            .map(
+              (hit) =>
+                `${hit.name} (${hit.kind}, ${hit.readable ? "readable" : "unreadable"}) ` +
+                `[id: ${hit.id}]`,
+            )
+            .join("; ");
+          return `Drive search found ${result.hits.length} item(s): ${hits}.`;
+        } catch {
+          return "I couldn't search Google Drive right now. Tell the user plainly and try again later.";
+        }
+      },
+    }),
     // ── searchVault (VGND-01) — the read-only knowledge-vault grounding tool ───────────────────────
     // Copies briefInbox's three-plane split verbatim: a refs-only vault.searched audit (§4), a
     // vaultSources content-plane card (titles=labels-to-UI), and the retrieved chunk text fenced
@@ -1956,8 +3188,16 @@ export function buildCockpitTools(
         const scan = scanText(topic);
         // Fail-closed, but as a SENTENCE: a governed stop is a paused conversation, never a throw
         // out of the loop (the mailboxUnavailable / dispatch-refusal precedent).
-        if (!scan.ok)
+        if (!scan.ok) {
+          // scanText REDACTS PII; it only fails on non-string input. So this branch means the model
+          // supplied no/!string `topic` despite the schema's `required` — a routing fault, not a
+          // privacy stop, and the copy above misattributes it. Refs-only: types and lengths, never
+          // the topic itself (§4).
+          console.error(
+            `[createDocument] scan refused — topicType=${typeof topic} topicLen=${typeof topic === "string" ? topic.length : "n/a"} form=${String(form)} replace=${String(replace)} code=${scan.error.code}`,
+          );
           return "I couldn't write that — the topic couldn't be checked for personal data. Tell the user plainly and ask them to rephrase it.";
+        }
         const safeText = scan.value.safeText;
         // The ONE thing that reaches the content-drafter body. `skillVersions` is name-keyed, so
         // the eval runner's pin rides through with no new plumbing; `undefined` for content-drafter
@@ -1979,7 +3219,18 @@ export function buildCockpitTools(
             const bytes = (await markdownToPdf(draft.title, draft.markdown)) as BlobPart;
             storageId = await ctx.storage.store(new Blob([bytes], { type: "application/pdf" }));
           }
-        } catch {
+        } catch (error) {
+          // LOG THE REASON. A bare `catch` here returns a plausible sentence, the tool step records
+          // `done`, and the agent politely retries — so a hard failure reads as a working feature
+          // that "just didn't manage it". That cost a whole eval fixture (35-create-document,
+          // createdDocCount 0 with FIVE successful-looking calls per thread) before anyone could see
+          // why. Same class as the 03.2.1 bare catch that masked NO_ACTIVE_SKILL as "Something went
+          // wrong", and the same rule ErrorBoundary.tsx already states: degrade, but never silently.
+          // The message is refs-only — a draft/render error carries no user content (§4).
+          console.error(
+            `[createDocument] draft/render failed (form=${form}, skill=${skillName}):`,
+            error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+          );
           return "I couldn't create that document — drafting or rendering it failed. Tell the user and offer to try again.";
         }
         const hash = await contentHash(draft.markdown);
@@ -2000,7 +3251,19 @@ export function buildCockpitTools(
         });
         let docIds = card?.docIds ?? [];
         let titles = card?.titles ?? [];
-        if (replace === undefined) {
+        // **`replace` IS MODEL-SUPPLIED AND MUST NOT BE TRUSTED AS CONTROL FLOW.** Observed live in
+        // eval fixture 35: EVERY call arrives with `replaceType=number`, including the FIRST, when
+        // the conversation holds no created documents at all. Obeying it sent a create down the
+        // patch branch, which refused correctly ("there's no document #N") — so nothing was ever
+        // created, the agent read the refusal as "try again", and looped: 13 tool calls, all
+        // recorded `done`, zero documents. This is the `confirmed`-flag principle from 18-08
+        // ("a model-supplied flag is the model grading its own decision") applied to the one
+        // model-supplied field that already existed. With ZERO created documents, `replace` cannot
+        // denote anything, so it is not a refusal case — it is noise, and creating is the only
+        // coherent reading. An out-of-range index WITH documents present keeps its honest refusal,
+        // because there the user may genuinely mean a document that is simply numbered differently.
+        const effectiveReplace = docIds.length === 0 ? undefined : replace;
+        if (effectiveReplace === undefined) {
           const docId = await ctx.runMutation(internal.vault.insertCreatedDoc, docArgs);
           docIds = [...docIds, docId];
           titles = [...titles, draft.title];
@@ -2008,19 +3271,20 @@ export function buildCockpitTools(
           const res = await ctx.runMutation(internal.vault.patchCreatedDoc, {
             ...docArgs,
             threadId: plan.threadId,
-            index: replace,
+            index: effectiveReplace,
           });
           // A refusal (no such #index, foreign tenant, a user upload) is a SENTENCE — the mutation
           // never throws, and neither does this.
           if (!res.ok)
-            return `There's no document #${replace} I can rewrite in this conversation — nothing was changed. Tell the user which documents are here and ask which one they mean.`;
+            return `There's no document #${effectiveReplace} I can rewrite in this conversation — nothing was changed. Tell the user which documents are here and ask which one they mean.`;
           // Drop the SUPERSEDED bytes only AFTER the patch persists, and only when they really were
           // superseded (the regenerateAttachment ordering — never orphan a live ref).
           if (res.oldStorageId && res.oldStorageId !== storageId)
             await ctx.storage.delete(res.oldStorageId);
-          titles = titles.map((t, j) => (j === replace - 1 ? draft.title : t));
+          titles = titles.map((t, j) => (j === effectiveReplace - 1 ? draft.title : t));
         }
-        const vaultDocId = docIds[replace === undefined ? docIds.length - 1 : replace - 1];
+        const vaultDocId =
+          docIds[effectiveReplace === undefined ? docIds.length - 1 : effectiveReplace - 1];
         // ONE refs-only audit, from the TOOL (cockpit.ts emits exactly two events and a test pins
         // that count). Hashes, ids, a closed enum and a boolean — never the topic, never the prose.
         await ctx.runMutation(internal.audit.log, {
@@ -2051,7 +3315,10 @@ export function buildCockpitTools(
         });
         // A ref-only sentence: the title and what the user can do with it. Never bytes, never a
         // URL, never an _id.
-        const saved = replace === undefined ? "saved to your vault" : `rewritten as #${replace}`;
+        const saved =
+          effectiveReplace === undefined
+            ? "saved to your vault"
+            : `rewritten as #${effectiveReplace}`;
         return `Created "${draft.title}" — ${saved}${storageId ? " with a PDF download" : ""}.`;
       },
     }),
@@ -2318,15 +3585,31 @@ function invokeTool(
 // cost skip; recordSpend itself also no-ops at cents<=0, so a ZERO_USAGE turn never drains budget).
 // Returns the priced USD (0 on the guarded paths) so the loop can surface per-turn cost (EVAL-01
 // Pattern 4 — the rate-limiter window is global and unreadable from the eval runner).
+// FIN-01: `kind` and `correlationId` are REQUIRED, deliberately — this helper has seven call sites
+// and six of them are one of three PRIMARY/FALLBACK PAIRS that are BOTH fully billed. A default
+// would let a new site inherit its neighbour's correlation, and the ledger identity is
+// (tenantId, correlationId, phase): the second charge would return the first row and be dropped,
+// leaving the ledger BELOW the limiter — the unrecoverable direction. Making the caller type the
+// discriminator is the only way the compiler can ask the question.
+// `model` is `id` — the model that ACTUALLY ran (the fallback on a retried call), never the
+// DEFAULT_MODEL constant the call site names, for the same reason searchFeeUsd keys on `m.id`.
 async function recordModelSpend(
   ctx: GenericActionCtx<DataModel>,
   tenantId: string,
   id: string,
   usage: { inputTokens?: number; outputTokens?: number },
+  kind: string,
+  correlationId: string,
 ): Promise<number> {
   const priced = priceUsage(id, usage);
   if (!priced.ok) return 0;
-  await ctx.runMutation(internal.guardrails.recordSpend, { tenantId, costUsd: priced.value });
+  await ctx.runMutation(internal.guardrails.recordSpend, {
+    tenantId,
+    costUsd: priced.value,
+    correlationId,
+    model: id,
+    kind,
+  });
   return priced.value;
 }
 
@@ -2369,6 +3652,15 @@ async function runAgentLoop(
     // violates.
     turnId?: string;
     threadId?: string;
+    // 19-11 (§2-D, the ACTN-05 root cause). THE LOOP BUILDS ITS OWN TOOL SET, so every input
+    // `buildCockpitTools` takes must ride these args or it is silently lost. `skillVersions` and
+    // `omitRecipientEdits` were both threaded when someone hit that; the CLOCK never was, and the
+    // 4th positional arg sat hardcoded `undefined` below. Consequence: `setSendTime`,
+    // `checkAvailability`, `proposeCalendarEvent` and `stageCrmWrite`'s dated follow-up ALL took
+    // their no-clock refusal on every live cockpit turn — the tools were only ever exercised
+    // through `__invokeCockpitTool` (which passes a clock) or the pinned SMOKE path, so no test
+    // could see it. Absent ⇒ byte-identical to today for the specialist/dispatch callers.
+    clientContext?: { tz: string; nowMs: number };
     // UAT-F2: the loop builds its OWN tool set below, so the withholding flag must ride these args
     // too (append-only optional — every existing caller keeps working; absent = full set).
     omitRecipientEdits?: boolean;
@@ -2414,6 +3706,7 @@ async function runAgentLoop(
     skillVersions,
     turnId,
     threadId,
+    clientContext,
     omitRecipientEdits,
     toolNames,
     maxSteps,
@@ -2424,7 +3717,7 @@ async function runAgentLoop(
     ctx,
     tenantId,
     planId,
-    undefined,
+    clientContext,
     skillVersions,
     omitRecipientEdits,
     // ACTN-03: the hosted-search key is BUILT only for an agent whose grant names it. A
@@ -2473,9 +3766,21 @@ async function runAgentLoop(
     (budgetMs > RESEARCH_STEP_SLACK_MS ? budgetMs - RESEARCH_STEP_SLACK_MS : undefined);
   const startedAt = Date.now();
   const outOfClock = (): boolean => softMs !== undefined && Date.now() - startedAt >= softMs;
+  // FIN-01: the ledger correlation for everything this loop spends. `turnId` is ALREADY a
+  // per-execution nonce — cockpit.ts:121/278 and dispatch.ts:378 each mint it with
+  // crypto.randomUUID() inside the driver action — so reusing it costs nothing and makes the
+  // spendEvents row joinable to the same turn's agentSteps trace. The shims (and any caller that
+  // wants no trace) pass none, and they get a fresh nonce rather than a shared constant: this
+  // function ALWAYS re-runs generateText when it is re-entered, so a re-entry is real money and
+  // must never be suppressed as a replay.
+  const loopId = turnId ?? crypto.randomUUID();
   const run = async (
     m: PricedModel,
     maxRetries: number,
+    // The PRIMARY/FALLBACK discriminator. NOT `m.id`: the two PricedModel bags may carry the SAME
+    // pricing id (16-05's RESEARCH_MODEL can be DEFAULT_MODEL — see modelId in the FREEZE below),
+    // and then both attempts would correlate identically and the fallback's charge would vanish.
+    attempt: 0 | 1,
   ): Promise<{
     reply: string;
     costUsd: number;
@@ -2542,7 +3847,14 @@ async function runAgentLoop(
         });
       },
     });
-    costUsd += await recordModelSpend(ctx, tenantId, m.id, res.usage);
+    costUsd += await recordModelSpend(
+      ctx,
+      tenantId,
+      m.id,
+      res.usage,
+      "agent_loop",
+      `agentloop:${loopId}:a${attempt}`,
+    );
     // R3: OpenAI bills the hosted search PER CALL on top of tokens, and priceUsage prices tokens
     // ONLY — so without this the shared envelope under-counts exactly the capability this phase
     // adds. NOT res.sources.length: one search yields many sources.
@@ -2552,7 +3864,13 @@ async function runAgentLoop(
     // loop declares exactly ONE provider-executed tool, so the flag is one source of truth and
     // cannot drift when the provider renames anything.
     const toolCalls = res.steps.flatMap((st) => st.content).filter((p) => p.type === "tool-call");
-    const webSearchCalls = toolCalls.filter((p) => p.providerExecuted === true).length;
+    // COUNTED BY NAME, not by `providerExecuted` (changed 2026-08-07 with the move to Tavily).
+    // The old comment above was right FOR A HOSTED TOOL: the provider chose the emitted name
+    // (`web_search`, not our key `webResearch`) and could rename it, so the flag was the stable
+    // signal. `webResearch` is now a LOCAL tool we define, so `providerExecuted` is false on every
+    // part and the flag would count ZERO — billing $0 of search fee forever, the exact silent
+    // under-draw @pikar/cost exists to prevent. The name is now the stable signal because we own it.
+    const webSearchCalls = toolCalls.filter((p) => p.toolName === "webResearch").length;
     // 22.1b: the STRUCTURAL declaration (the semantic half of the evidence verdict). `ai` throws
     // NoSuchToolError before `execute` on a name that is not a key of our `tools` record, so this
     // literal can only ever match a tool we actually built. `.some()`, deliberately not a count — a
@@ -2602,22 +3920,46 @@ async function runAgentLoop(
       }
       return (args as { scope?: unknown } | null)?.scope === "question";
     });
-    const feeUsd = webSearchCalls * WEB_SEARCH_CALL_USD;
+    // Fee is keyed on the model that ACTUALLY ran (`m.id`), not on RESEARCH_MODEL: `runAgentLoop`
+    // may be executing the fallback, and Google Search grounding is ~3.5x OpenAI's hosted-search
+    // rate. Charging the wrong vendor's rate under-draws the rail — the silent failure this file
+    // guards against everywhere else. `searchFeeUsd` fails safe to the higher rate on any id it
+    // does not recognise.
+    const feeUsd = webSearchCalls * searchFeeUsd(m.id);
+    // FIN-01: `:search` is not decoration. This is a SECOND, INDEPENDENT money movement in the
+    // SAME attempt as the token cost recorded above — bare `agentloop:${loopId}:a${attempt}` would
+    // be that row's identity, so the fee would return the token row and be silently dropped,
+    // under-drawing the ledger by exactly the per-call fee this block exists to charge.
     if (feeUsd > 0)
-      await ctx.runMutation(internal.guardrails.recordSpend, { tenantId, costUsd: feeUsd });
+      await ctx.runMutation(internal.guardrails.recordSpend, {
+        tenantId,
+        costUsd: feeUsd,
+        correlationId: `agentloop:${loopId}:a${attempt}:search`,
+        model: m.id,
+        kind: "web_search_fee",
+      });
     costUsd += feeUsd;
-    // ai@7: res.sources IS content.filter(p => p.type === "source"); @ai-sdk/openai maps every
-    // url_citation annotation to {type:"source", sourceType:"url", id, url, title}. Structured and
-    // provider-supplied — NEVER parse URLs out of the model's prose.
+    // READ FROM THE TOOL'S OWN RESULTS, not `res.sources` (changed 2026-08-07 with Tavily).
+    // `res.sources` is populated from provider `url_citation` annotations, which ONLY a hosted tool
+    // emits — with a local tool it is permanently empty, and an empty `sources` array silently makes
+    // `declaredUnsupported` below true on every single run. Reading the tool-RESULT parts keeps the
+    // property that mattered about `res.sources`: still structured, still supplied by the search
+    // provider's own JSON, still NEVER parsed out of the model's prose.
+    // De-duplicated by URL — the specialist is instructed to search once per sub-question, so the
+    // same page legitimately comes back from several searches and would otherwise inflate the count
+    // that the honesty verdict reads.
     // §4 BOUNDARY: these URLs are CONTENT-PLANE data. They may reach the vault document body and a
     // tool's return string; they may NEVER reach an `audit` or `telemetry` payload. `AuditPayload`
     // permits `readonly string[]`, so an array of URLs would TYPE-CHECK — that is the trap. Audit
     // gets a COUNT.
-    const sources = (res.sources ?? [])
-      .filter(
-        (src): src is typeof src & { sourceType: "url"; url: string } => src.sourceType === "url",
-      )
-      .map((src) => ({ url: src.url, title: (src as { title?: string }).title ?? "" }));
+    const byUrl = new Map<string, { url: string; title: string }>();
+    for (const part of res.steps.flatMap((st) => st.content)) {
+      if (part.type !== "tool-result" || part.toolName !== "webResearch") continue;
+      for (const r of sourcesFromToolOutput((part as { output?: unknown }).output)) {
+        if (!byUrl.has(r.url)) byUrl.set(r.url, r);
+      }
+    }
+    const sources = [...byUrl.values()];
     // The AND described above. It has to live HERE rather than beside `declaredQuestionScope`
     // because `sources` is only built two lines up — and `sources`, not the model, is the half
     // of this conjunction that cannot be talked into anything.
@@ -2645,11 +3987,11 @@ async function runAgentLoop(
     };
   };
   try {
-    return await run(primary, 1);
+    return await run(primary, 1, 0);
   } catch (e) {
     if (!isFallbackEligible(e)) throw e; // our bug / config → propagate (the driver saves an error turn)
     try {
-      return await run(fallback, 0);
+      return await run(fallback, 0, 1);
     } catch (e2) {
       // AGNT-04: BOTH the primary AND the CHEAP_MODEL fallback failed. If the exhausted failure is a
       // timeout/abort class, re-throw a CONTENT-FREE ConvexError marker so the cockpit driver can fire
@@ -2687,6 +4029,11 @@ export async function runSpecialistTurn(
     turnId?: string;
     threadId?: string;
     skillVersions?: Record<string, number>;
+    /** 21-03 (SKILL-01): the eval runner's EXACT tenant-candidate pins, name → `tenantSkills` row
+     *  id. ORTHOGONAL to `skillVersions`, not a replacement: `<name>@<version>` cannot name a row
+     *  once two tenants each own version 2 (21-02's two-tenant test builds that collision). Trusted
+     *  server state — an `internalAction` carries it, so no model-supplied id reaches here. */
+    tenantSkillIds?: Record<string, Id<"tenantSkills">>;
     /** test-support: a MockLanguageModelV4 doGenerate script (the __runCockpitAgentWithScript
      *  shim's mechanism). Absent ⇒ the real gateway models.
      *  `softCutoffMs` drives ONLY the soft wall-clock stop (D11). It is deliberately NOT a hard-
@@ -2713,6 +4060,14 @@ export async function runSpecialistTurn(
   // SPECIALIST is running, so 16-05 derives them from `args.skillName` right here, where the
   // models are already resolved. A `models?` / `maxSteps?` arg would be a second mechanism for a
   // decision with exactly one owner, and would drag dispatch.ts into model selection for no gain.
+  /** 21-03: WHICH registry row was the system prompt, in refs only. `governedDispatch` puts these
+   *  on the EXISTING `subagent.completed` audit row — attribution on the shipped lineage, not a
+   *  second trace plane. `skillBodyHash` is SHA-256 of the resolved body; the body itself never
+   *  travels (CLAUDE.md §4). */
+  skillScope: "global" | "tenant";
+  skillId: string;
+  skillName: string;
+  skillBodyHash: string;
   webSearchCalls: number;
   /** 22.1b: the SAME `truncatedReason` seam — the `{ ...res, skillVersion }` spread below ALREADY
    *  forwards the value, so only this type widens. Without the widening `governedDispatch` cannot
@@ -2728,13 +4083,58 @@ export async function runSpecialistTurn(
   fallbackModelId: string;
 }> {
   const { tenantId, planId, skillName, toolNames, prompt, turnId, threadId, skillVersions } = args;
+  const tenantSkillIds = args.tenantSkillIds;
   // The §5 loader, fail-closed on both branches (a missing pin throws NO_SUCH_SKILL_VERSION, a
   // never-seeded skill throws NO_ACTIVE_SKILL) — a specialist NEVER runs on a hardcoded prompt.
+  //
+  // 21-02 (SKILL-01): the ORDINARY branch resolves the TENANT overlay first and falls back to the
+  // global active row (skills.loadEffectiveSkill). `tenantId` here is trusted server state from the
+  // dispatcher's authenticated envelope — never model-supplied — and only the three
+  // USER_AUTHORABLE_SKILLS can have an overlay row at all, so every other specialist name resolves
+  // exactly as before. Deliberately NOT threaded into the cockpit, voice, inbox, reply, extraction
+  // or vault loaders: those names are not authorable in v0.
+  // The exact-VERSION pin stays GLOBAL: `--skill name@version` names a `skills` row and must keep
+  // doing so. 21-03's tenant pin is a SEPARATE argument (`tenantSkillIds`) for exactly that reason.
   const pin = skillVersions?.[skillName];
-  const skill: { body: string; version: number } =
-    pin !== undefined
-      ? await ctx.runQuery(internal.skills.getSkillVersion, { name: skillName, version: pin })
-      : await ctx.runQuery(internal.skills.getActiveSkill, { name: skillName });
+  // 21-03 (SKILL-01): an EXACT tenant candidate id wins — but ONLY for its own skill name. A pin
+  // whose row turns out to name a different skill is a mis-wired harness, and running it would
+  // certify `offer-architect` with a `lead-engine` body. Refused BEFORE `generateText`, so the
+  // mistake costs $0 rather than a model call plus a false evidence row.
+  const tenantPin = tenantSkillIds?.[skillName];
+  const skill: { body: string; version: number; scope: "global" | "tenant"; id: string } =
+    tenantPin !== undefined
+      ? await ctx
+          .runQuery(internal.skills.getTenantSkillVersion, { candidateId: tenantPin })
+          .then((row) => {
+            if (row.name !== skillName) {
+              throw new Error(
+                `TENANT_SKILL_PIN_MISMATCH: pinned candidate is not a ${skillName} row`,
+              );
+            }
+            return {
+              body: row.body,
+              version: row.version,
+              scope: "tenant" as const,
+              id: row.skillId,
+            };
+          })
+      : pin !== undefined
+        ? await ctx
+            .runQuery(internal.skills.getSkillVersion, { name: skillName, version: pin })
+            .then((row) => ({
+              body: row.body,
+              version: row.version,
+              scope: "global" as const,
+              id: String(row.skillId),
+            }))
+        : await ctx
+            .runQuery(internal.skills.getEffectiveSkill, { tenantId, name: skillName })
+            .then((row) => ({
+              body: row.body,
+              version: row.version,
+              scope: row.scope,
+              id: String(row.skillId),
+            }));
   const mock = args.mockScript;
   // The research specialist runs on its OWN pin: only these two models were PROVEN to accept
   // `openai.tools.webSearch` (the 16-02 probe, recorded in docs/playbooks/agent-runtime.md), and an
@@ -2743,8 +4143,12 @@ export async function runSpecialistTurn(
   // resolved; a `models?` / `maxSteps?` arg would be a second mechanism for a decision with exactly
   // one owner, and would drag dispatch.ts into model selection for no gain.
   const isResearch = skillName === RESEARCH_SPECIALIST_SKILL;
-  const primaryId = isResearch ? RESEARCH_MODEL : DEFAULT_MODEL;
-  const fallbackId = isResearch ? RESEARCH_FALLBACK_MODEL : CHEAP_MODEL;
+  // A TWO-TIER LOOKUP rather than a ternary: research has its own pair, everything else takes the
+  // repo defaults. A growth-specialist third tier was tried and reverted on 2026-08-08 — see the
+  // tombstone at RESEARCH_FALLBACK_MODEL in @pikar/cost for the measurements, so nobody re-derives it.
+  const [primaryId, fallbackId] = isResearch
+    ? [RESEARCH_MODEL, RESEARCH_FALLBACK_MODEL]
+    : [DEFAULT_MODEL, CHEAP_MODEL];
   const res = await runAgentLoop(ctx, {
     tenantId,
     planId,
@@ -2783,8 +4187,18 @@ export async function runSpecialistTurn(
     softCutoffMs: mock?.softCutoffMs,
   });
   // The version rides the return so the caller can put {name, version} on the lineage audit row
-  // (closing the §5 / IMPR-03 "record the skill version for every use" loop).
-  return { ...res, skillVersion: skill.version };
+  // (closing the §5 / IMPR-03 "record the skill version for every use" loop). 21-03 widens that to
+  // the FULL identity — scope + row id + name + body hash — because a version alone stopped being
+  // an identity once two tenants could each own version 2. Hashed from `skill.body`, the exact
+  // string handed to the provider above, so the attribution cannot describe a body that never ran.
+  return {
+    ...res,
+    skillVersion: skill.version,
+    skillScope: skill.scope,
+    skillId: skill.id,
+    skillName,
+    skillBodyHash: await contentHash(skill.body),
+  };
 }
 
 // ── SMOKE:: agent sentinel (the Plan 05 offline E2E path) ────────────────────
@@ -2797,6 +4211,7 @@ export async function runSpecialistTurn(
 //                | attach=<topic> | regenerate=<1-based index>:<topic> | removeAttachment=<1-based index>
 //                | personalize=<1-based index>:<intent> | sendTime=<natural-language time>
 //                | brief=today|yesterday|week | create=<short|long>:<topic>
+//                | crm=<email>[:<follow-up note>]
 // SMOKE_NOW_MS pins the clock so a `sendTime=in N hours` op resolves deterministically offline (the
 // model never supplies "now"/tz, §2-D) — the send-time analogue of the 1970-01-01 attachment pinning.
 // It is ALSO the baseMs the inbox fixture is seeded at (smoke.seedInboxFixture), so a `brief=today`
@@ -2817,7 +4232,10 @@ type AgentSmokeOp =
   | { kind: "sendTime"; text: string }
   | { kind: "brief"; range: "today" | "yesterday" | "week" }
   | { kind: "evaluate"; framework?: "swot" | "lean" | "bmc" | "growth-os" }
-  | { kind: "create"; form: "short" | "long"; topic: string };
+  | { kind: "create"; form: "short" | "long"; topic: string }
+  | { kind: "crm"; email: string; note?: string }
+  | { kind: "driveList"; parentId?: string }
+  | { kind: "driveFind"; query: string };
 
 // Exported for the round-trip test only (the callTimeoutMsFor precedent): the `create=` grammar is
 // what plan 18-07's e2e depends on, and asserting it against the real parser beats re-typing it.
@@ -2898,6 +4316,25 @@ export function parseAgentSmoke(text: string): AgentSmokeOp | null {
       if (f !== "short" && f !== "long") return null; // the SAME closed enum the inputSchema enforces
       return { kind: "create", form: f, topic: val.slice(c + 1) };
     }
+    case "crm": {
+      // <email>[:<note>] — split on the FIRST colon; an address never contains one. UNLIKE
+      // `create=`, this op needs NO nested `SMOKE::route=direct_llm::` prefix: `stageCrmWrite`
+      // calls no model at all, so the turn is already offline once parseAgentSmoke matches.
+      const c = val.indexOf(":");
+      const email = (c < 0 ? val : val.slice(0, c)).trim();
+      if (email === "") return null;
+      const note = c < 0 ? undefined : val.slice(c + 1).trim() || undefined;
+      return { kind: "crm", email, note };
+    }
+    case "drive": {
+      const c = val.indexOf(":");
+      if (c < 0) return null;
+      const operation = val.slice(0, c).trim();
+      const input = val.slice(c + 1).trim();
+      if (operation === "list") return { kind: "driveList", parentId: input || undefined };
+      if (operation === "find" && input !== "") return { kind: "driveFind", query: input };
+      return null;
+    }
     default:
       return null;
   }
@@ -2923,6 +4360,9 @@ const SMOKE_OP_TOOL: Record<AgentSmokeOp["kind"], StepTool> = {
   personalize: "personalizeRecipient",
   evaluate: "evaluateBusiness",
   create: "createDocument",
+  crm: "stageCrmWrite",
+  driveList: "listDriveFolders",
+  driveFind: "findInDrive",
 };
 
 function runAgentSmokeOp(
@@ -2962,6 +4402,22 @@ function runAgentSmokeOp(
       return invokeTool(tools, name, { framework: op.framework });
     case "create":
       return invokeTool(tools, name, { topic: op.topic, form: op.form });
+    case "crm":
+      // A deterministic list: the contact, plus its follow-up when a note was given. `due` is the
+      // user's WORDS — the SMOKE path pins the clock (SMOKE_NOW_MS/UTC), so "tomorrow" resolves to
+      // 2020-01-02 09:00 UTC every run.
+      return invokeTool(tools, name, {
+        operations: [
+          { op: "addContact", email: op.email, name: "Smoke Contact" },
+          ...(op.note
+            ? [{ op: "addFollowUp", email: op.email, note: op.note, due: "tomorrow" }]
+            : []),
+        ],
+      });
+    case "driveList":
+      return invokeTool(tools, name, { parentId: op.parentId });
+    case "driveFind":
+      return invokeTool(tools, name, { query: op.query });
   }
 }
 
@@ -3125,12 +4581,22 @@ export const runCockpitAgent = internalAction({
     } catch {
       spine = null;
     }
+    // The finance line (spec §2), a SEPARATE query and a separate fail-open: it must survive a
+    // tenant with figures and no confirmed blueprint (the ordinary state of a new account), and it
+    // must never be concatenated upstream of `evaluations.ts`'s grounding chunk. See
+    // `buildTurnPrompt`.
+    let finance: string | null = null;
+    try {
+      finance = await ctx.runQuery(internal.cash.financeSpineFor, { tenantId });
+    } catch {
+      finance = null;
+    }
     const { reply, costUsd } = await runAgentLoop(ctx, {
       tenantId,
       planId,
       system: skill.body,
       // History ABOVE the plan context; "The user says:" stays the FINAL line (the current turn).
-      prompt: buildTurnPrompt({ spine, history, plan, tz: clientContext?.tz, text }),
+      prompt: buildTurnPrompt({ spine, finance, history, plan, tz: clientContext?.tz, text }),
       primary: { model: forceTimeout ? timeoutModel() : resolveModel(primaryId), id: primaryId },
       fallback: {
         model: forceTimeout ? timeoutModel() : resolveModel(CHEAP_MODEL),
@@ -3139,6 +4605,10 @@ export const runCockpitAgent = internalAction({
       skillVersions, // the loop builds its OWN tools — the drafter pin must ride there too
       turnId, // activity trace (CKPT-05) — undefined ⇒ the loop emits nothing
       threadId,
+      // 19-11: the trusted clock (§2-D). `effectiveClientContext`, not `clientContext`, so the
+      // loop and the SMOKE path above agree on the instant rather than diverging by which branch
+      // ran. Without this the tools the loop builds refuse every dated request.
+      clientContext: effectiveClientContext,
       omitRecipientEdits, // UAT-F2 — the loop's own tool build must honor the withholding
     });
     return { reply, costUsd };
@@ -3192,8 +4662,15 @@ export const __cockpitTurnPrompt = internalAction({
     } catch {
       spine = null;
     }
+    let finance: string | null = null;
+    try {
+      finance = await ctx.runQuery(internal.cash.financeSpineFor, { tenantId });
+    } catch {
+      finance = null;
+    }
     return buildTurnPrompt({
       spine,
+      finance,
       history: undefined,
       plan,
       tz: undefined,
@@ -3227,6 +4704,11 @@ export const __runCockpitAgentWithScript = internalAction({
     // DISP-01 (15-02): drive the loop's tool-set filter offline. Append-only test-support arg —
     // ABSENT is the pre-existing full-record behaviour, `[]` is an empty record (not the full one).
     toolNames: v.optional(v.array(v.string())),
+    // 19-11 (§2-D): the trusted clock, so the loop's OWN tool build is observable offline. This is
+    // the only test surface that can catch the clock being dropped between runAgentLoop and
+    // buildCockpitTools — `__invokeCockpitTool` bypasses the loop and passes a clock directly,
+    // which is exactly why that whole plane looked healthy while it was disconnected.
+    clientContext: v.optional(v.object({ tz: v.string(), nowMs: v.number() })),
   },
   handler: async (
     ctx,
@@ -3240,6 +4722,7 @@ export const __runCockpitAgentWithScript = internalAction({
       turnId,
       threadId,
       toolNames,
+      clientContext,
     },
   ): Promise<{
     reply: string;
@@ -3281,6 +4764,7 @@ export const __runCockpitAgentWithScript = internalAction({
       turnId,
       threadId,
       toolNames,
+      clientContext,
     });
     return { ...res, skillVersion: skill.version };
   },
@@ -3589,6 +5073,10 @@ export const digestInbox = internalAction({
   // EXPLICIT return type is mandatory (Pitfall 1: an inferred type here re-trips the "use node"
   // circular-inference cliff). DigestBatch = { items, synopsis } from @pikar/core.
   handler: async (ctx, { tenantId, messages, skillVersion, smoke }): Promise<DigestBatch> => {
+    // FIN-01: this action has NO stable ref to correlate on — no requestId, no planId, and the
+    // message list is content-plane (§4). A nonce is the RIGHT answer anyway: re-entering this
+    // action re-runs generateObject, so the second digest is real money and must get its own row.
+    const runId = crypto.randomUUID();
     // Load the digest skill FIRST (no hardcoded prompt — §5); fails closed, and the pinned lookup
     // runs BEFORE the smoke short-circuit so it is exercised offline (draftDocument precedent).
     const skill: { body: string; version: number } =
@@ -3655,7 +5143,17 @@ export const digestInbox = internalAction({
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 1,
       });
-      await recordModelSpend(ctx, tenantId, DEFAULT_MODEL, usage);
+      // `:a0` / `:a1` below — the CHEAP_MODEL retry in the catch is a SECOND fully-billed call, not
+      // a replay of this one. Sharing `digest:${runId}` would make the ledger record whichever
+      // landed first and drop the other.
+      await recordModelSpend(
+        ctx,
+        tenantId,
+        DEFAULT_MODEL,
+        usage,
+        "inbox_digest",
+        `digest:${runId}:a0`,
+      );
       return { items: inRange(object.items), synopsis: (object.synopsis ?? "").trim() };
     } catch (e) {
       if (!isFallbackEligible(e)) throw e;
@@ -3667,7 +5165,14 @@ export const digestInbox = internalAction({
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 0,
       });
-      await recordModelSpend(ctx, tenantId, CHEAP_MODEL, usage);
+      await recordModelSpend(
+        ctx,
+        tenantId,
+        CHEAP_MODEL,
+        usage,
+        "inbox_digest",
+        `digest:${runId}:a1`,
+      );
       return { items: inRange(object.items), synopsis: (object.synopsis ?? "").trim() };
     }
   },
@@ -3699,6 +5204,10 @@ export const draftReply = internalAction({
     ctx,
     { tenantId, safeText, originalBody, skillVersion },
   ): Promise<{ body: string }> => {
+    // FIN-01: no stable ref here either (the caller owns correlation, as the header says), and
+    // `safeText`/`originalBody` are content-plane — a nonce is both the safe and the correct
+    // choice: a re-entry re-drafts and is billed again. digestInbox precedent.
+    const runId = crypto.randomUUID();
     // Load the reply-drafter FIRST (no hardcoded prompt — §5); fails closed, and the pinned lookup
     // runs BEFORE the smoke short-circuit so it is exercised offline (digestInbox precedent).
     const skill: { body: string; version: number } =
@@ -3733,7 +5242,15 @@ export const draftReply = internalAction({
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 1,
       });
-      await recordModelSpend(ctx, tenantId, DEFAULT_MODEL, usage);
+      // `:a0` / `:a1` — the fallback below is a second billed draft, not a replay of this one.
+      await recordModelSpend(
+        ctx,
+        tenantId,
+        DEFAULT_MODEL,
+        usage,
+        "reply_draft",
+        `reply:${runId}:a0`,
+      );
       return { body: text.trim() };
     } catch (e) {
       if (!isFallbackEligible(e)) throw e;
@@ -3744,7 +5261,7 @@ export const draftReply = internalAction({
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 0,
       });
-      await recordModelSpend(ctx, tenantId, CHEAP_MODEL, usage);
+      await recordModelSpend(ctx, tenantId, CHEAP_MODEL, usage, "reply_draft", `reply:${runId}:a1`);
       return { body: text.trim() };
     }
   },
@@ -3803,6 +5320,9 @@ export const draftVoiceBrief = internalAction({
   // EXPLICIT return type is mandatory (Pitfall 1 — an inferred type re-trips the circular-inference
   // cliff; the digestInbox/draftReply precedent). Final brief markdown, ready to ingest.
   handler: async (ctx, { tenantId, transcript, language }): Promise<string> => {
+    // FIN-01: no stable ref (the transcript is content-plane), and a re-entry re-writes the brief
+    // for real money — nonce, same as digestInbox and draftReply.
+    const runId = crypto.randomUUID();
     // Load the voice-brief skill FIRST (no hardcoded prompt — §5); fails closed (NO_ACTIVE_SKILL
     // unseeded), and the load runs BEFORE the smoke short-circuit so it is exercised offline.
     const skill: { body: string; version: number } = await ctx.runQuery(
@@ -3832,7 +5352,15 @@ export const draftVoiceBrief = internalAction({
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 1,
       });
-      await recordModelSpend(ctx, tenantId, DEFAULT_MODEL, usage);
+      // `:a0` / `:a1` — the fallback below is a second billed brief, not a replay of this one.
+      await recordModelSpend(
+        ctx,
+        tenantId,
+        DEFAULT_MODEL,
+        usage,
+        "voice_brief",
+        `brief:${runId}:a0`,
+      );
       return buildBriefMarkdown(object, transcript, language);
     } catch (e) {
       if (!isFallbackEligible(e)) throw e;
@@ -3844,7 +5372,7 @@ export const draftVoiceBrief = internalAction({
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 0,
       });
-      await recordModelSpend(ctx, tenantId, CHEAP_MODEL, usage);
+      await recordModelSpend(ctx, tenantId, CHEAP_MODEL, usage, "voice_brief", `brief:${runId}:a1`);
       return buildBriefMarkdown(object, transcript, language);
     }
   },

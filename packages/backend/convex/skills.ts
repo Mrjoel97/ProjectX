@@ -6,6 +6,7 @@
 // is a new version row plus an activateSkill flip; body/name/version are never
 // patched (only `status` and `evidence` may change).
 
+import type { EvalEvidence, EvalEvidenceTenantTarget } from "@pikar/contracts/skill";
 import {
   ATTACHMENT_EXTRACTOR_SKILL,
   BMC_SKILL,
@@ -13,6 +14,7 @@ import {
   BUSINESS_PROFILE_SKILL,
   COCKPIT_AGENT_SKILL,
   CONTENT_DRAFTER_SKILL,
+  composeUserSkillBody,
   DOCUMENT_ANALYST_SKILL,
   DOCUMENT_CLASSIFIER_SKILL,
   DOCUMENT_DRAFTER_SKILL,
@@ -23,8 +25,10 @@ import {
   GRAPH_EXTRACTOR_SKILL,
   GROWTH_OS_DIAGNOSTIC_SKILL,
   hasPassingEvidence,
+  hasPassingTenantEvidence,
   INBOX_DIGEST_SKILL,
   isGatedSkill,
+  isUserAuthorableSkill,
   LEAD_ENGINE_SKILL,
   LEAN_CANVAS_SKILL,
   type LoadedSkill,
@@ -32,6 +36,7 @@ import {
   MONEY_MODEL_DESIGNER_SKILL,
   NO_ACTIVE_SKILL_ERROR,
   NO_SUCH_SKILL_VERSION_ERROR,
+  NO_SUCH_TENANT_CANDIDATE_ERROR,
   OFFER_ARCHITECT_SKILL,
   ONBOARDING_AGENT_SKILL,
   REPLY_DRAFTER_SKILL,
@@ -40,6 +45,7 @@ import {
   STYLE_CONCISE_SKILL,
   STYLE_DIRECT_SKILL,
   SWOT_SKILL,
+  USER_AUTHORABLE_SKILL_METADATA,
   VOICE_BRIEF_SKILL,
   VOICE_SESSION_SKILL,
 } from "@pikar/contracts/skill";
@@ -73,13 +79,16 @@ import { swotSkillBody } from "@pikar/contracts/skills/swot";
 import { voiceBriefSkillBody } from "@pikar/contracts/skills/voiceBrief";
 import { voiceSessionSkillBody } from "@pikar/contracts/skills/voiceSession";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
+import type { Doc, Id } from "./_generated/dataModel";
 import {
   internalMutation,
   internalQuery,
   type MutationCtx,
   type QueryCtx,
 } from "./_generated/server";
-import { ownerMutation, ownerQuery } from "./lib/functions";
+import { ownerMutation, ownerQuery, tenantMutation, tenantQuery } from "./lib/functions";
+import { contentHash } from "./lib/hash";
 
 /**
  * Load the currently active skill by name. Reads the single status==="active"
@@ -109,17 +118,61 @@ export const getActiveSkill = internalQuery({
 });
 
 /**
- * The single gated candidate→active flip, defined ONCE (CLAUDE.md §8 root-cause):
- * both the internal `activateSkill` and the owner-facing `activateCandidate` (Plan 06
- * ops panel) route through this so the EVAL_GATE can never be bypassed or duplicated.
- * Within one mutation it archives the current active row and activates the target
- * version — never patching body/name/version. Re-activating a prior version is rollback.
+ * THE activation target, scope-discriminated. There are exactly three shapes a caller can ask for,
+ * and no fourth: a global `skills` (name, version); a tenant candidate going live; a tenant row
+ * being restored. Anything else is not expressible.
  */
-async function activateSkillVersion(
+type ActivationTarget =
+  | { scope: "global"; name: string; version: number }
+  | { scope: "tenant"; candidateId: Id<"tenantSkills">; mode: "activate" | "rollback" };
+
+/**
+ * The resolved, gate-cleared transition — everything the ONE patch block needs and nothing it can
+ * decide for itself. Producing this is where a scope's target lookup, current-active lookup and
+ * evidence/exemption decision live; applying it is shared.
+ */
+type ActivationPlan = {
+  targetId: Id<"skills"> | Id<"tenantSkills">;
+  name: string;
+  version: number;
+  /** null for the global registry, which is not tenant-scoped at all. */
+  tenantId: string | null;
+  /** Idempotence: the exact row is ALREADY live, so the transition is a no-op, not a violation. */
+  alreadyActive: boolean;
+  currentId: Id<"skills"> | Id<"tenantSkills"> | null;
+  currentVersion: number | null;
+  /** Refs-only: which eval run authorized this, for the audit payload. */
+  evalRunId: string | null;
+  /**
+   * `rollbackEligible` is a `tenantSkills` COLUMN — the global registry has no such field, and its
+   * rollback exemption is status-only (see below). Empty for the global scope by construction.
+   */
+  provenActive: { rollbackEligible: true } | Record<string, never>;
+};
+
+/** The result the public wrappers audit and return. Refs, ids, versions and one boolean. */
+type ActivationResult = {
+  scope: "global" | "tenant";
+  targetId: string;
+  name: string;
+  version: number;
+  tenantId: string | null;
+  /** false = the row was already live. Nothing was patched and nothing must be audited. */
+  changed: boolean;
+  fromId: string | null;
+  fromVersion: number | null;
+  evalRunId: string | null;
+};
+
+/**
+ * The GLOBAL registry's plan — byte-for-byte the gate `activateSkillVersion` has always applied,
+ * moved behind the shared transition rather than reimplemented beside it.
+ */
+async function planGlobalActivation(
   ctx: MutationCtx,
   name: string,
   version: number,
-): Promise<void> {
+): Promise<ActivationPlan> {
   const target = await ctx.db
     .query("skills")
     .withIndex("by_name_version", (q) => q.eq("name", name).eq("version", version))
@@ -149,13 +202,148 @@ async function activateSkillVersion(
     .withIndex("by_name_status", (q) => q.eq("name", name).eq("status", "active"))
     .unique();
 
-  if (current !== null && current._id !== target._id) {
-    await ctx.db.patch(current._id, { status: "archived" });
+  return {
+    targetId: target._id,
+    name,
+    version,
+    tenantId: null,
+    alreadyActive: target.status === "active",
+    currentId: current?._id ?? null,
+    currentVersion: current?.version ?? null,
+    evalRunId: evidenceRefs(target.evidence)?.runId ?? null,
+    provenActive: {},
+  };
+}
+
+/**
+ * The TENANT overlay's plan (21-04). Two things differ from the global scope and only two:
+ *
+ *  1. **The exemption is a COLUMN, not a status.** Globally, `archived`/`rolled_back` prove prior
+ *     activation because nothing else can produce those statuses in the `skills` table. In
+ *     `tenantSkills` a never-active candidate can be archived (a superseded draft, or a fixture),
+ *     so status alone would launder a pending candidate straight around the eval gate. The proof is
+ *     `rollbackEligible === true`, which is written ONLY by the shared patch block below when a row
+ *     actually goes live, plus the server baseline `publishUserCandidate` mints as a byte copy of
+ *     the code-owned core.
+ *  2. **Evidence names the ROW.** `hasPassingTenantEvidence` compares candidateId, registryTenantId,
+ *     name AND version, because two tenants can each own `offer-architect@2` (21-02/21-03).
+ *
+ * Owner authorization is deliberately NOT here. This helper is also the identity-free path for
+ * internal callers, and `requireOwner` lives on the public wrapper — two independent gates
+ * (docs/playbooks/authorization.md invariant 9).
+ */
+async function planTenantActivation(
+  ctx: MutationCtx,
+  candidateId: Id<"tenantSkills">,
+  mode: "activate" | "rollback",
+): Promise<ActivationPlan> {
+  const row = await loadTenantCandidate(ctx, candidateId);
+
+  // Idempotence is decided FIRST: re-activating the exact row that is already live is a no-op, and
+  // must not trip the `status === "candidate"` requirement below.
+  if (row.status !== "active") {
+    if (mode === "activate") {
+      // Phase 23 may append `author: "agent"`; it must not inherit activation by doing so.
+      if (row.author !== "user") {
+        throw new Error(`NOT_USER_AUTHORED: ${candidateId} was written by ${row.author}`);
+      }
+      if (row.status !== "candidate") {
+        throw new Error(`NOT_A_CANDIDATE: ${candidateId} is ${row.status}`);
+      }
+      if (!hasPassingTenantEvidence(row.evidence, tenantTargetOf(row))) {
+        throw new Error(
+          `EVAL_GATE: tenant candidate ${candidateId} has no recorded passing eval run pinning this EXACT row (run pnpm eval:golden --tenant-skill ${candidateId})`,
+        );
+      }
+    } else {
+      // Rollback is evidence-EXEMPT and must survive a broken eval harness mid-incident — but
+      // exemption is not a hole: only a row that was genuinely live (or the server baseline) is
+      // eligible, and the flag is the proof. Status is checked too, never instead.
+      if (row.rollbackEligible !== true) {
+        throw new Error(`ROLLBACK_NOT_ELIGIBLE: ${candidateId} was never active`);
+      }
+      if (row.status !== "archived" && row.status !== "rolled_back") {
+        throw new Error(
+          `ROLLBACK_NOT_ELIGIBLE: ${candidateId} is ${row.status}, not a prior state`,
+        );
+      }
+    }
   }
 
-  if (target.status !== "active") {
-    await ctx.db.patch(target._id, { status: "active" });
+  // Scope-LOCAL: this tenant, this skill name. Another tenant's colliding row and the global
+  // registry are outside the index range and cannot be reached from here.
+  const current = await ctx.db
+    .query("tenantSkills")
+    .withIndex("by_tenant_name_status", (q) =>
+      q.eq("tenantId", row.tenantId).eq("name", row.name).eq("status", "active"),
+    )
+    .unique();
+
+  return {
+    targetId: row._id,
+    name: row.name,
+    version: row.version,
+    tenantId: row.tenantId,
+    alreadyActive: row.status === "active",
+    currentId: current?._id ?? null,
+    currentVersion: current?.version ?? null,
+    evalRunId: evidenceRefs(row.evidence)?.runId ?? null,
+    provenActive: { rollbackEligible: true },
+  };
+}
+
+/**
+ * The single gated candidate→active flip, defined ONCE (CLAUDE.md §8 root-cause) for BOTH registry
+ * scopes: the internal `activateSkill`, the owner-facing `activateCandidate`, `activateTenantCandidate`
+ * and `rollbackTenantSkill` all route through this, so no gate can be bypassed or duplicated.
+ * Within one mutation it archives the current active row and activates the target — never patching
+ * body/name/version/author/lineage/evidence. Re-activating a prior version is rollback.
+ *
+ * There is exactly ONE `ctx.db.patch(..., { status: "active" ... })` in this module and it is below;
+ * `skills.test.ts` counts it. A second one is a second gate.
+ */
+async function transitionSkillActivation(
+  ctx: MutationCtx,
+  target: ActivationTarget,
+): Promise<ActivationResult> {
+  const plan =
+    target.scope === "global"
+      ? await planGlobalActivation(ctx, target.name, target.version)
+      : await planTenantActivation(ctx, target.candidateId, target.mode);
+
+  // ── THE archive/activate patch block. One transaction, two patches, no third. ────────────────
+  if (plan.currentId !== null && plan.currentId !== plan.targetId) {
+    // The displaced row was live, so it is provably rollback-eligible from here on (tenant scope).
+    await ctx.db.patch(plan.currentId, { status: "archived", ...plan.provenActive });
   }
+  if (!plan.alreadyActive) {
+    await ctx.db.patch(plan.targetId, { status: "active", ...plan.provenActive });
+  }
+
+  return {
+    scope: target.scope,
+    targetId: String(plan.targetId),
+    name: plan.name,
+    version: plan.version,
+    tenantId: plan.tenantId,
+    changed: !plan.alreadyActive,
+    fromId: plan.currentId === null ? null : String(plan.currentId),
+    fromVersion: plan.currentVersion,
+    evalRunId: plan.evalRunId,
+  };
+}
+
+/**
+ * Thin compatibility wrapper: the global (name, version) call shape every existing caller and test
+ * uses, routed through the one shared transition. Kept so the global exports below are byte-unchanged
+ * in behaviour and in signature.
+ */
+async function activateSkillVersion(
+  ctx: MutationCtx,
+  name: string,
+  version: number,
+): Promise<void> {
+  await transitionSkillActivation(ctx, { scope: "global", name, version });
 }
 
 /**
@@ -209,10 +397,19 @@ export const candidatesForReview = ownerQuery({
         .query("skills")
         .withIndex("by_name_status", (q) => q.eq("name", name))
         .collect();
-      const candidates = rows.filter((r) => r.status === "candidate");
+      const active = rows.find((r) => r.status === "active") ?? null;
+      // ONLY candidates AHEAD of what is live. `reduce(max)` over every candidate answers "newest
+      // candidate", which reads like "next version" and is not: optimizer dry-runs leave candidate
+      // rows behind at lower versions, and once a real upgrade lands those stale rows keep being
+      // offered forever. Observed 2026-08-09 — the page showed `v17 -> v16` for cockpit-agent and
+      // `v4 -> v3` for two others, and every Activate click could only either hit EVAL_GATE (they
+      // carry no evidence) or, if evidence ever existed, silently ROLL A LIVE AGENT BACK.
+      // Rollback is a deliberate operator act through `activateSkill`, never a review-queue button.
+      const candidates = rows.filter(
+        (r) => r.status === "candidate" && (active === null || r.version > active.version),
+      );
       if (candidates.length === 0) continue;
       const candidate = candidates.reduce((a, b) => (b.version > a.version ? b : a));
-      const active = rows.find((r) => r.status === "active") ?? null;
       out.push({
         name,
         fromVersion: active?.version ?? null,
@@ -435,6 +632,25 @@ export const seedSkills = internalMutation({
  * — the before/after the optimization audit records; `inserted` lets the caller skip a
  * duplicate audit/notify on an idempotent repost (no churn).
  */
+/**
+ * THE immutable-version allocation rule, defined ONCE for both registry scopes — the
+ * deployment-global `skills` table and the per-tenant `tenantSkills` overlay (CLAUDE.md §8
+ * root-cause): a body that byte-matches the NEWEST row in scope mints nothing, anything else
+ * becomes `newest.version + 1`, and a prior row is NEVER patched.
+ *
+ * It takes the newest row rather than reading it, because the two scopes are indexed differently
+ * and the tenant scope must NOT `.collect()` an open-ended history (research pitfall 12). The
+ * shared thing is the RULE; the query stays with its scope.
+ */
+function allocateImmutableVersion(
+  newest: { version: number } | null,
+  duplicate: boolean,
+): { version: number; inserted: boolean } {
+  if (newest === null) return { version: 1, inserted: true };
+  if (duplicate) return { version: newest.version, inserted: false };
+  return { version: newest.version + 1, inserted: true };
+}
+
 export const insertCandidate = internalMutation({
   args: { name: v.string(), body: v.string() },
   handler: async (ctx, { name, body }) => {
@@ -455,17 +671,17 @@ export const insertCandidate = internalMutation({
       );
     }
 
-    const maxVersion = Math.max(...rows.map((r) => r.version));
     const newest = rows.reduce((a, b) => (b.version > a.version ? b : a));
-    // fromVersion pins the LIVE version (the before); degenerate no-active registries fall back to max.
-    const fromVersion = rows.find((r) => r.status === "active")?.version ?? maxVersion;
+    // fromVersion pins the LIVE version (the before); degenerate no-active registries fall back to
+    // the newest (== max) version.
+    const fromVersion = rows.find((r) => r.status === "active")?.version ?? newest.version;
 
-    // Idempotent vs the NEWEST row (Pitfall 1): an identical body inserts nothing.
-    if (newest.body === body) {
-      return { name, fromVersion, toVersion: newest.version, inserted: false };
-    }
+    // Idempotent vs the NEWEST row (Pitfall 1): an identical body inserts nothing. The allocation
+    // itself is the SHARED rule — `rows` is never empty here (guarded above), so this is
+    // byte-compatible with the hand-rolled `maxVersion + 1` it replaced.
+    const { version: toVersion, inserted } = allocateImmutableVersion(newest, newest.body === body);
+    if (!inserted) return { name, fromVersion, toVersion, inserted: false };
 
-    const toVersion = maxVersion + 1;
     await ctx.db.insert("skills", {
       name,
       version: toVersion,
@@ -498,3 +714,715 @@ export const archiveSkill = internalMutation({
     return { archived: true };
   },
 });
+
+// ── THE TENANT OVERLAY (Phase 21, SKILL-01) ──────────────────────────────────────────────────
+//
+// `tenantSkills` is an OVERLAY over the deployment-global registry above, never a second prompt
+// system: runtime resolves the tenant's active row first and falls back to the global active row.
+// The global `skills` reads, indexes and semantics above are byte-unchanged.
+//
+// What a USER may do here is exactly one thing: mint an immutable `candidate` carrying their own
+// bounded adaptation. Evaluation (21-03) and activation (21-04) are separate, owner-gated, and NOT
+// implemented — publishing costs $0 and cannot change what any model runs.
+
+/**
+ * The body that is effective for one tenant, plus WHICH registry it came from. The scope is a
+ * discriminant, not a label: it decides which lineage id field a derived row may populate, and it
+ * is what lets 21-03 attribute an exact runtime use.
+ */
+export type EffectiveSkill =
+  | { scope: "global"; body: string; version: number; skillId: Id<"skills"> }
+  | { scope: "tenant"; body: string; version: number; skillId: Id<"tenantSkills"> };
+
+/**
+ * Resolve the body one tenant actually runs: the tenant's single active overlay row, else the
+ * existing global active row, else FAIL CLOSED. A `candidate` row is invisible here by
+ * construction (the index pins `status: "active"`), which is what makes publishing a no-op at
+ * runtime.
+ *
+ * The global branch delegates to `loadSkill` rather than re-querying `by_name_status`: a second
+ * copy of that read is a second place for the fail-closed contract to drift.
+ */
+export async function loadEffectiveSkill(
+  ctx: QueryCtx,
+  tenantId: string,
+  name: string,
+): Promise<EffectiveSkill> {
+  const overlay = await ctx.db
+    .query("tenantSkills")
+    .withIndex("by_tenant_name_status", (q) =>
+      q.eq("tenantId", tenantId).eq("name", name).eq("status", "active"),
+    )
+    .unique();
+
+  if (overlay !== null)
+    return { scope: "tenant", body: overlay.body, version: overlay.version, skillId: overlay._id };
+
+  const global = await loadSkill(ctx, name);
+  // `LoadedSkill.skillId` is a plain string: the pure contract in @pikar/contracts cannot name a
+  // Convex table. It is `skills._id` at every call site of `loadSkill`.
+  return {
+    scope: "global",
+    body: global.body,
+    version: global.version,
+    skillId: global.skillId as Id<"skills">,
+  };
+}
+
+/**
+ * internalQuery wrapper over loadEffectiveSkill, for `"use node"` actions (which have no ctx.db).
+ * `tenantId` is supplied by TRUSTED server code — `runSpecialistTurn` already receives it from the
+ * dispatcher's authenticated envelope. No model-supplied tenant reaches this.
+ */
+export const getEffectiveSkill = internalQuery({
+  args: { tenantId: v.string(), name: v.string() },
+  handler: (ctx, { tenantId, name }) => loadEffectiveSkill(ctx, tenantId, name),
+});
+
+/**
+ * The cross-field lineage invariant, made STRUCTURAL: exactly one of `basedOnGlobalSkillId` /
+ * `basedOnTenantSkillId` is populated, keyed off the base's own scope discriminant. Built in one
+ * place so no call site can write a row whose scope and lineage id disagree.
+ */
+function lineageOf(base: EffectiveSkill) {
+  return base.scope === "tenant"
+    ? { basedOnScope: "tenant" as const, basedOnTenantSkillId: base.skillId }
+    : { basedOnScope: "global" as const, basedOnGlobalSkillId: base.skillId };
+}
+
+/**
+ * Publish a user's business adaptation as an immutable tenant CANDIDATE (SKILL-01).
+ *
+ * The args are the whole authorization story: `name` and `authoredBody`, nothing else. Tenant,
+ * author, authorUserId, status, version, evidence, rollback eligibility, the base body and the
+ * composed body are ALL derived server-side, so there is no field a caller could set to promote
+ * their own row, claim another tenant's, or forge provenance. Convex's arg validator rejects an
+ * extra key outright, which is why the refusal is at the boundary rather than in a check.
+ *
+ * On a tenant's FIRST customization this writes TWO rows in one transaction: a server-owned
+ * `system`/`archived`/`rollbackEligible` baseline that is a byte copy of what was effective, then
+ * the user candidate. Without that baseline the first activation would have nothing
+ * evidence-exempt to roll back to (research pitfall 8).
+ *
+ * Idempotent against the newest candidate's authored bytes AND its base lineage: re-publishing the
+ * same adaptation against the same base mints no version and writes no second audit event.
+ *
+ * TWO DIFFERENT BASES, deliberately — collapsing them re-opens research pitfall 5:
+ *  - the COMPOSITION core is the global active body. It is code-owned, and it is the only body in
+ *    the system that provably carries no tenant adaptation, because nothing in this module can
+ *    write an adaptation into the `skills` table. Composing against the tenant's ACTIVE body
+ *    instead would append the previous draft to the new one on every re-edit, forever (a defect
+ *    this plan's own test caught before the code shipped).
+ *  - the LINEAGE base is the tenant's effective row — the row this candidate supersedes. It is
+ *    what 21-03 pins evidence to and what 21-04 archives on activation.
+ *  A candidate based on a tenant row therefore records the SUPERSEDED tenant version, not the core
+ *  version. 21-03 must read the core from the global active row at eval time rather than inferring
+ *  it from `basedOnVersion`.
+ */
+export const publishUserCandidate = tenantMutation({
+  args: { name: v.string(), authoredBody: v.string() },
+  handler: async (ctx, { name, authoredBody }) => {
+    // The closed v0 product set — deliberately NARROWER than GATED_SKILLS. Refused before any read.
+    if (!isUserAuthorableSkill(name)) throw new Error(`NOT_USER_AUTHORABLE: ${name}`);
+
+    const core = await loadSkill(ctx, name); // fails closed on an unseeded skill
+    const base = await loadEffectiveSkill(ctx, ctx.tenantId, name);
+    // Blank / over-cap THROWS here, before any write: the composer never returns a partial body.
+    const body = composeUserSkillBody(core.body, authoredBody);
+    const authored = authoredBody.trim();
+
+    // ONE descending indexed read for BOTH next-version allocation and idempotence. A tenant's
+    // authoring history is open-ended, so it is never read wholesale (research pitfall 12) — and
+    // `skills.test.ts` scans this exact region for an unbounded read, so keep it out of the
+    // comments too.
+    const newestRows = await ctx.db
+      .query("tenantSkills")
+      .withIndex("by_tenant_name_version", (q) => q.eq("tenantId", ctx.tenantId).eq("name", name))
+      .order("desc")
+      .take(1);
+    const newest = newestRows[0] ?? null;
+    // Idempotence compares the TRIMMED stored text and the exact base lineage — the same
+    // adaptation against a NEW base is a real new candidate, not a repost.
+    const duplicate =
+      newest !== null &&
+      newest.status === "candidate" &&
+      newest.author === "user" &&
+      newest.authoredBody === authored &&
+      newest.basedOnScope === base.scope &&
+      newest.basedOnVersion === base.version;
+
+    let prior: { version: number } | null = newest;
+    if (newest === null) {
+      const baseline = allocateImmutableVersion(null, false);
+      await ctx.db.insert("tenantSkills", {
+        tenantId: ctx.tenantId,
+        name,
+        version: baseline.version,
+        // The tenant's frozen copy of the code-owned core — the evidence-exempt rollback target.
+        body: core.body,
+        authoredBody: "",
+        status: "archived",
+        author: "system",
+        basedOnName: name,
+        basedOnVersion: base.version,
+        ...lineageOf(base),
+        rollbackEligible: true,
+        createdAt: Date.now(),
+      });
+      prior = baseline;
+    }
+
+    const { version, inserted } = allocateImmutableVersion(prior, duplicate);
+    // `duplicate` already implies `newest !== null`; the re-test is what narrows it for the
+    // compiler without a non-null assertion.
+    if (!inserted && newest !== null)
+      return {
+        name,
+        version,
+        status: "candidate" as const,
+        inserted: false,
+        tenantSkillId: newest._id,
+      };
+
+    const tenantSkillId = await ctx.db.insert("tenantSkills", {
+      tenantId: ctx.tenantId,
+      name,
+      version,
+      body,
+      authoredBody: authored,
+      // CANDIDATE, always. There is no code path from this mutation to an activation function.
+      status: "candidate",
+      author: "user",
+      // Provenance from the AUTHENTICATED context, never from an argument.
+      authorUserId: ctx.userId,
+      basedOnName: name,
+      basedOnVersion: base.version,
+      ...lineageOf(base),
+      // Code-owned: a candidate that was never active has nothing to roll back to.
+      rollbackEligible: false,
+      createdAt: Date.now(),
+    });
+
+    // CLAUDE.md §4: refs, hashes, ids and counts ONLY. The adaptation and the composed body are
+    // content-plane data and never reach this payload — `skills.test.ts` pins the key set by
+    // EQUALITY and needle-scans audit + deadLetters, so adding a body field fails on purpose.
+    await ctx.runMutation(internal.audit.log, {
+      tenantId: ctx.tenantId,
+      correlationId: String(tenantSkillId),
+      eventType: "skill.user_candidate_published",
+      actor: "user",
+      payload: {
+        skillName: name,
+        tenantSkillId: String(tenantSkillId),
+        version,
+        baseScope: base.scope,
+        baseSkillId: String(base.skillId),
+        baseVersion: base.version,
+        author: "user",
+        bodyHash: await contentHash(body),
+        authoredBytes: new TextEncoder().encode(authored).length,
+      },
+    });
+
+    return { name, version, status: "candidate" as const, inserted: true, tenantSkillId };
+  },
+});
+
+/** A tenant's authoring history is open-ended; the panel only ever shows the recent end of it. */
+const MY_USER_SKILLS_LIMIT = 50;
+
+/**
+ * The user's own adaptations and their honest states. Takes NO arguments — there is no id a caller
+ * could pass to reach another tenant's row.
+ *
+ * THE DISCLOSURE BOUNDARY: this returns the label, the user's OWN adaptation, and status/lineage
+ * numbers. It never returns the base or composed body (raw registry prompts are an owner-only
+ * boundary, research pitfall 4), raw evidence, an eval fixture, another tenant's id, or a row id —
+ * there is no activation control for one to feed.
+ */
+export const myUserSkills = tenantQuery({
+  args: {},
+  handler: async (ctx) => {
+    const rows = await ctx.db
+      .query("tenantSkills")
+      .withIndex("by_tenant_createdAt", (q) => q.eq("tenantId", ctx.tenantId))
+      .order("desc")
+      .take(MY_USER_SKILLS_LIMIT);
+
+    return rows
+      .filter((r) => r.author === "user")
+      .map((r) => ({
+        name: r.name,
+        // Labels come from the ONE shared metadata record, so a UI never re-lists registry names.
+        label: isUserAuthorableSkill(r.name)
+          ? USER_AUTHORABLE_SKILL_METADATA[r.name].label
+          : r.name,
+        authoredBody: r.authoredBody,
+        version: r.version,
+        status: r.status,
+        baseScope: r.basedOnScope,
+        baseVersion: r.basedOnVersion,
+        // A BOOLEAN, not the evidence. Fails closed on an absent or mismatched pin.
+        // 21-03 FIX: this asked the GLOBAL question (`skillVersions[name] === version`) of a TENANT
+        // row. Tenant evidence pins the exact row id in `tenantTarget` and carries `skillVersions`
+        // for the run's GLOBAL pins only — which for a tenant-only run is `{}` — so a genuinely
+        // certified candidate read `false` here forever and the panel's "Evaluation passed" state
+        // was unreachable for the same reason "Live" is. Now it asks the tenant question.
+        gatePassed: hasPassingTenantEvidence(r.evidence, tenantTargetOf(r)),
+        createdAt: r.createdAt,
+      }));
+  },
+});
+
+// ── EXACT TENANT CANDIDATE IDENTITY (Phase 21-03, SKILL-01) ──────────────────────────────────
+//
+// `<name>@<version>` is NOT an identity in the tenant scope: 21-02's two-tenant test deliberately
+// leaves both tenants owning `offer-architect@2`. Everything below therefore names the ROW.
+//
+// Nothing here activates anything, and nothing here returns a body. `recordTenantEvalEvidence`
+// patches ONE field.
+
+/** The exact identity of a tenant candidate row, derived from the row itself — never from an
+ *  argument, so a caller cannot describe a row as something it is not. */
+const tenantTargetOf = (row: Doc<"tenantSkills">): EvalEvidenceTenantTarget => ({
+  candidateId: String(row._id),
+  registryTenantId: row.tenantId,
+  name: row.name,
+  version: row.version,
+});
+
+/**
+ * The ONE exact-row read. `ctx.db.get` by id — never a name/version lookup, which is precisely the
+ * ambiguity this whole seam exists to remove. Absence throws the NON-ORACLE error (no id, no tenant,
+ * no name in the message).
+ */
+async function loadTenantCandidate(
+  ctx: QueryCtx,
+  candidateId: Id<"tenantSkills">,
+): Promise<Doc<"tenantSkills">> {
+  const row = await ctx.db.get(candidateId);
+  if (row === null) throw new Error(NO_SUCH_TENANT_CANDIDATE_ERROR);
+  return row;
+}
+
+/**
+ * Load a tenant candidate body pinned to an EXACT ROW — the tenant twin of `getSkillVersion`, and
+ * the read `runSpecialistTurn` uses when the eval runner pinned a candidate.
+ *
+ * Returns `status` and `author` alongside the body because the RUNNER must refuse a non-candidate /
+ * non-user-authored id at $0, before the first paid turn, and it has no other read to ask with. The
+ * read itself deliberately serves ANY status (an `active` row is a legitimate diagnostic target);
+ * the refusal is the caller's, at the boundary where money starts.
+ */
+export const getTenantSkillVersion = internalQuery({
+  args: { candidateId: v.id("tenantSkills") },
+  handler: async (
+    ctx,
+    { candidateId },
+  ): Promise<{
+    body: string;
+    version: number;
+    skillId: Id<"tenantSkills">;
+    name: string;
+    tenantId: string;
+    status: string;
+    author: string;
+  }> => {
+    const row = await loadTenantCandidate(ctx, candidateId);
+    return {
+      body: row.body,
+      version: row.version,
+      skillId: row._id,
+      name: row.name,
+      tenantId: row.tenantId,
+      status: row.status,
+      author: row.author,
+    };
+  },
+});
+
+/**
+ * Record eval evidence on ONE EXACT candidate row. The tenant twin of `recordEvalEvidence`, and the
+ * reason it takes an id rather than `(name, version)`: two tenants can hold the same name AND the
+ * same version, so a name/version write is a coin flip between certifying the row that ran and
+ * certifying a stranger's draft.
+ *
+ * Patches `evidence` and NOTHING else — not status, not body, not name/version, not provenance.
+ * Immutability is the point: this is the one field (with `status`, which 21-04 owns) that may move.
+ */
+export const recordTenantEvalEvidence = internalMutation({
+  args: { candidateId: v.id("tenantSkills"), evidence: v.string() },
+  handler: async (ctx, { candidateId, evidence }) => {
+    const row = await loadTenantCandidate(ctx, candidateId);
+    await ctx.db.patch(row._id, { evidence });
+    // Refs only — the caller (the runner) prints this to confirm WHICH row it wrote.
+    return tenantTargetOf(row);
+  },
+});
+
+/** Evidence, parsed for its REFS. Returns null on absent/unparseable — the same fail-closed
+ *  direction the two `hasPassing*` predicates take. */
+function evidenceRefs(evidence: string | undefined): Partial<EvalEvidence> | null {
+  if (evidence === undefined) return null;
+  try {
+    return JSON.parse(evidence) as Partial<EvalEvidence>;
+  } catch {
+    return null;
+  }
+}
+
+/** A lineage chain is short by construction; the cap is a runaway guard, not a policy. */
+const LINEAGE_MAX_HOPS = 8;
+
+/**
+ * The rollback target, resolved through the STORED LINEAGE — never "the newest archived row", which
+ * is the guess that made `candidatesForReview` offer `v17 -> v16` in production (see that function).
+ *
+ * A candidate based on a TENANT row names the row it supersedes, so the chain is walked to the first
+ * `rollbackEligible` row. A candidate based on a GLOBAL row is a tenant's FIRST customization, whose
+ * baseline was written in the SAME transaction at version 1 — read by that EXACT version, so this is
+ * still an identity, not a recency heuristic. Returns null when no eligible baseline exists.
+ */
+async function rollbackBaselineOf(
+  ctx: QueryCtx,
+  row: Doc<"tenantSkills">,
+): Promise<Doc<"tenantSkills"> | null> {
+  let cur = row;
+  for (let hop = 0; hop < LINEAGE_MAX_HOPS; hop++) {
+    if (cur.basedOnScope !== "tenant" || cur.basedOnTenantSkillId === undefined) break;
+    const base = await ctx.db.get(cur.basedOnTenantSkillId);
+    if (base === null) return null;
+    if (base.rollbackEligible) return base;
+    cur = base;
+  }
+  const first = await ctx.db
+    .query("tenantSkills")
+    .withIndex("by_tenant_name_version", (q) =>
+      q.eq("tenantId", row.tenantId).eq("name", row.name).eq("version", 1),
+    )
+    .unique();
+  return first?.rollbackEligible ? first : null;
+}
+
+/** One registry row, described in REFS ONLY. There is no `body` field on this type, which is how
+ *  "the inspector never returns a body" survives a later edit. */
+type SkillRefs = {
+  scope: "global" | "tenant";
+  id: string;
+  name: string;
+  version: number;
+  bodyHash: string;
+  status: string;
+};
+
+/** The rollback target carries three fields the effective/global snapshots do not: it is the row an
+ *  operator would restore, so WHO wrote it and WHETHER it is eligible are the whole question. */
+const baselineRefs = async (
+  row: Doc<"tenantSkills">,
+): Promise<SkillRefs & { tenantId: string; author: string; rollbackEligible: boolean }> => ({
+  scope: "tenant",
+  id: String(row._id),
+  tenantId: row.tenantId,
+  name: row.name,
+  version: row.version,
+  bodyHash: await contentHash(row.body),
+  author: row.author,
+  status: row.status,
+  rollbackEligible: row.rollbackEligible,
+});
+
+/**
+ * The refs-only state snapshot Plan 06 reads before and after the live gate, and the ONLY read that
+ * answers "what is this candidate's situation" without disclosing a prompt.
+ *
+ * READ-ONLY: an `internalQuery` cannot write, so "it performs no write" is a property of the
+ * function KIND, not of a reviewer's care. BODY-FREE: every registry row leaves here as `SkillRefs`,
+ * which has no body field — the candidate's composed body, the user's authored adaptation, and the
+ * global prompt (an owner-only boundary, research pitfall 4) are all absent by construction.
+ *
+ * `foreignTenantId` exists for ONE assertion: that another tenant's effective row is a different row
+ * with a different hash. It returns that tenant's EFFECTIVE refs and `candidateIdVisible: false` —
+ * there is no argument by which a foreign tenant's candidate list can be reached from here.
+ */
+export const inspectTenantSkill = internalQuery({
+  args: { candidateId: v.id("tenantSkills"), foreignTenantId: v.optional(v.string()) },
+  handler: async (ctx, { candidateId, foreignTenantId }) => {
+    const row = await loadTenantCandidate(ctx, candidateId);
+    const target = tenantTargetOf(row);
+    const gatePassed = hasPassingTenantEvidence(row.evidence, target);
+    const refs = evidenceRefs(row.evidence);
+    const baseline = await rollbackBaselineOf(ctx, row);
+
+    // The tenant's effective body and the global core, as refs. `loadEffectiveSkill` returns the
+    // row that is ACTIVE for this tenant (else the global active row), so `status` is "active" by
+    // definition of "effective" — it is stated rather than read so the shape matches SkillRefs.
+    const effective = await loadEffectiveSkill(ctx, row.tenantId, row.name);
+    const global = await loadSkill(ctx, row.name);
+
+    const foreign =
+      foreignTenantId === undefined
+        ? null
+        : await loadEffectiveSkill(ctx, foreignTenantId, row.name);
+
+    return {
+      candidate: {
+        id: target.candidateId,
+        tenantId: row.tenantId,
+        name: row.name,
+        version: row.version,
+        bodyHash: await contentHash(row.body),
+        author: row.author,
+        authorUserId: row.authorUserId === undefined ? null : String(row.authorUserId),
+        status: row.status,
+        rollbackEligible: row.rollbackEligible,
+        lineage: {
+          basedOnScope: row.basedOnScope,
+          basedOnName: row.basedOnName,
+          basedOnVersion: row.basedOnVersion,
+          basedOnGlobalSkillId:
+            row.basedOnGlobalSkillId === undefined ? null : String(row.basedOnGlobalSkillId),
+          basedOnTenantSkillId:
+            row.basedOnTenantSkillId === undefined ? null : String(row.basedOnTenantSkillId),
+        },
+        // absent | passing | failing — an unparseable or stale row reads `failing`, never `absent`:
+        // "there is evidence and it does not hold" is a different operator situation from "there is
+        // none", and collapsing them hides a stale pin.
+        evidenceState: row.evidence === undefined ? "absent" : gatePassed ? "passing" : "failing",
+        gatePassed,
+        // The identity the evidence CLAIMS, echoed verbatim so a mismatch is visible rather than
+        // merely booleaned away by `gatePassed`.
+        evidenceTarget: refs?.tenantTarget ?? null,
+        evidenceSummary:
+          refs === null
+            ? null
+            : {
+                runId: refs.runId ?? null,
+                caseCount: refs.casesTotal ?? null,
+                retryCount: refs.retriedCases?.length ?? null,
+                costUsd: refs.costUsd ?? null,
+                model: refs.model ?? null,
+              },
+      },
+      rollbackBaseline: baseline === null ? null : await baselineRefs(baseline),
+      currentEffective: {
+        scope: effective.scope,
+        id: String(effective.skillId),
+        name: row.name,
+        version: effective.version,
+        bodyHash: await contentHash(effective.body),
+        status: "active",
+      } satisfies SkillRefs,
+      globalCurrent: {
+        scope: "global",
+        id: String(global.skillId),
+        name: row.name,
+        version: global.version,
+        bodyHash: await contentHash(global.body),
+        status: "active",
+      } satisfies SkillRefs,
+      foreignCurrent:
+        foreign === null || foreignTenantId === undefined
+          ? null
+          : {
+              tenantId: foreignTenantId,
+              // There is no code path from this argument to a foreign candidate id. Stated in the
+              // payload so the runner can assert the boundary rather than assume it.
+              candidateIdVisible: false,
+              effective: {
+                scope: foreign.scope,
+                id: String(foreign.skillId),
+                name: row.name,
+                version: foreign.version,
+                bodyHash: await contentHash(foreign.body),
+                status: "active",
+              } satisfies SkillRefs,
+            },
+    };
+  },
+});
+
+// ── THE OWNER BOUNDARY: tenant review, activation, rollback (Phase 21-04, SKILL-01) ───────────
+//
+// Evaluation answers *has this body earned activation?*. Owner authorization answers *may this
+// caller change live runtime?*. They are INDEPENDENT and both are required — the four-cell truth
+// table in `skills.test.ts` is the proof, and the non-owner-WITH-passing-evidence cell is the one
+// that makes it about authorization rather than about evidence.
+//
+// Every write below goes through `transitionSkillActivation`. Nothing here patches a body, an
+// authored adaptation, a name, a version, an author, a lineage field or evidence.
+
+/** The owner's review queue is a recency window, never a deployment-wide history scan. */
+const TENANT_REVIEW_LIMIT = 25;
+/** How far back the per-candidate rollback choices reach. A tenant's chain is short by design. */
+const ROLLBACK_CHOICE_LIMIT = 10;
+
+/** The refs the panel shows about an eval run. Counts, ids and a model name — never a case, a
+ *  fixture, a prompt or a reply. */
+const evidenceSummaryOf = (evidence: string | undefined) => {
+  const refs = evidenceRefs(evidence);
+  return refs === null
+    ? null
+    : {
+        runId: refs.runId ?? null,
+        casesPassed: refs.casesPassed ?? null,
+        casesTotal: refs.casesTotal ?? null,
+        costUsd: refs.costUsd ?? null,
+        model: refs.model ?? null,
+      };
+};
+
+/**
+ * The bounded owner review queue for USER-authored tenant candidates (21-04).
+ *
+ * OWNER-ONLY, and the refusal is the disclosure boundary: `candidateBody` and `baseBody` are raw
+ * prompts and `authoredBody` is another tenant's business writing, so a non-owner must be rejected
+ * BEFORE the handler reads a single row. `ownerQuery` does exactly that — the check runs in the
+ * wrapper's ctx factory, ahead of the handler.
+ *
+ * BOUNDED: `by_status_createdAt` with a fixed `.take()`, newest first. This index is deliberately
+ * cross-tenant (that is what makes one owner queue possible), so it is never `.collect()`ed — the
+ * deployment's candidate history is open-ended and a full scan is a page that gets slower forever.
+ *
+ * Ordinary tenant APIs are unchanged: `myUserSkills` still returns no row id, no base body and no
+ * raw evidence, so nothing here widens what a user can see about their own skill.
+ */
+export const tenantCandidatesForReview = ownerQuery({
+  args: {},
+  handler: async (ctx) => {
+    const rows = await ctx.db
+      .query("tenantSkills")
+      .withIndex("by_status_createdAt", (q) => q.eq("status", "candidate"))
+      .order("desc")
+      .take(TENANT_REVIEW_LIMIT);
+
+    const out = [];
+    for (const row of rows) {
+      // Only a HUMAN tenant author's row is reviewable here. A `system` baseline is never a
+      // candidate, and Phase 23's agent author must arrive through its own deliberate surface.
+      if (row.author !== "user") continue;
+
+      // The diff context: what this tenant runs TODAY (their active overlay, else the global core).
+      const effective = await loadEffectiveSkill(ctx, row.tenantId, row.name);
+      // Bounded rollback choices for this exact tenant+name. `rollbackEligible` is the only proof
+      // of prior activation (see planTenantActivation) — status is not offered as a substitute.
+      const priors = await ctx.db
+        .query("tenantSkills")
+        .withIndex("by_tenant_name_version", (q) =>
+          q.eq("tenantId", row.tenantId).eq("name", row.name),
+        )
+        .order("desc")
+        .take(ROLLBACK_CHOICE_LIMIT);
+      const gatePassed = hasPassingTenantEvidence(row.evidence, tenantTargetOf(row));
+
+      out.push({
+        // The EXACT row. Every mutation below takes this and nothing derived from it.
+        candidateId: row._id,
+        tenantId: row.tenantId,
+        authorUserId: row.authorUserId === undefined ? null : String(row.authorUserId),
+        name: row.name,
+        label: isUserAuthorableSkill(row.name)
+          ? USER_AUTHORABLE_SKILL_METADATA[row.name].label
+          : row.name,
+        version: row.version,
+        status: row.status,
+        authoredBody: row.authoredBody,
+        candidateBody: row.body,
+        baseScope: effective.scope,
+        baseVersion: effective.version,
+        baseBody: effective.body,
+        gatePassed,
+        // absent | passing | failing — a stale or unparseable pin reads `failing`, never `absent`.
+        evidenceState: row.evidence === undefined ? "absent" : gatePassed ? "passing" : "failing",
+        evidenceSummary: evidenceSummaryOf(row.evidence),
+        rollbackTargets: priors
+          .filter((p) => p.rollbackEligible === true && p.status !== "active")
+          .map((p) => ({
+            id: p._id,
+            version: p.version,
+            author: p.author,
+            status: p.status,
+          })),
+        createdAt: row.createdAt,
+      });
+    }
+    return out;
+  },
+});
+
+/**
+ * The owner's activation of ONE exact tenant candidate (21-04). BOTH gates apply and neither is
+ * sufficient alone: `ownerMutation` supplies the authority, and the shared transition demands exact
+ * passing evidence pinning this row.
+ *
+ * It takes a row id, never `(name, version)` — two tenants can hold the same pair, so a name/version
+ * activation is a coin flip between going live for the right tenant and going live for a stranger.
+ */
+export const activateTenantCandidate = ownerMutation({
+  args: { candidateId: v.id("tenantSkills") },
+  handler: async (ctx, { candidateId }) => {
+    const res = await transitionSkillActivation(ctx, {
+      scope: "tenant",
+      candidateId,
+      mode: "activate",
+    });
+
+    // Only a REAL transition is an event. An idempotent re-activation changed nothing, and a
+    // refusal threw before reaching here — neither may leave a governance row saying otherwise.
+    if (res.changed) await logTenantActivation(ctx, "skill.user_candidate_activated", res);
+    return { ok: true as const, ...res };
+  },
+});
+
+/**
+ * The owner's incident rollback (21-04): restore a tenant row that was genuinely live before, or the
+ * server baseline. Evidence-EXEMPT by design — a broken eval harness must never block this path —
+ * and owner-only, because evidence-exempt is not auth-exempt.
+ *
+ * The exemption is `rollbackEligible === true` plus an archived/rolled_back status, never status
+ * alone: a superseded draft is also archived and has never been live.
+ */
+export const rollbackTenantSkill = ownerMutation({
+  args: { targetId: v.id("tenantSkills") },
+  handler: async (ctx, { targetId }) => {
+    const res = await transitionSkillActivation(ctx, {
+      scope: "tenant",
+      candidateId: targetId,
+      mode: "rollback",
+    });
+
+    if (res.changed) await logTenantActivation(ctx, "skill.user_skill_rolled_back", res);
+    return { ok: true as const, ...res };
+  },
+});
+
+/**
+ * The one refs-only audit write for both owner transitions (CLAUDE.md §4): ids, tenant/name/version,
+ * the author enum, the eval run id and the owner's user id. No body, no adaptation, no prose, no
+ * hash of user text. `skills.test.ts` pins this key set by EQUALITY and needle-scans audit +
+ * deadLetters, so adding a body field fails on purpose.
+ *
+ * The row belongs to the TENANT whose runtime changed — not to the owner — so it lands on the same
+ * `correlationId` lineage as that candidate's `skill.user_candidate_published` row.
+ */
+async function logTenantActivation(
+  ctx: MutationCtx & { userId: Id<"users"> },
+  eventType: "skill.user_candidate_activated" | "skill.user_skill_rolled_back",
+  res: ActivationResult,
+): Promise<void> {
+  await ctx.runMutation(internal.audit.log, {
+    tenantId: res.tenantId ?? "",
+    correlationId: res.targetId,
+    eventType,
+    actor: "owner",
+    payload: {
+      skillName: res.name,
+      tenantSkillId: res.targetId,
+      version: res.version,
+      author: "user",
+      fromTenantSkillId: res.fromId,
+      fromVersion: res.fromVersion,
+      evalRunId: res.evalRunId,
+      ownerUserId: String(ctx.userId),
+    },
+  });
+}

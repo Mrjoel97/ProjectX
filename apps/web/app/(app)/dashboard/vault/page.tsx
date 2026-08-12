@@ -2,7 +2,7 @@
 
 import { api } from "@pikar/backend/api";
 import { useQuery } from "convex/react";
-import { useState } from "react";
+import { Component, type ErrorInfo, type ReactNode, useRef, useState } from "react";
 import { CategoryTabs } from "./CategoryTabs";
 import { DocGrid, type VaultDoc, type VaultFolder } from "./DocGrid";
 import { DriveBrowser } from "./DriveBrowser";
@@ -11,7 +11,9 @@ import { FolderBreadcrumb } from "./FolderBreadcrumb";
 import { RefreshIcon } from "./icons";
 import { PreFlight, type StartPhase } from "./PreFlight";
 import { PreviewModal } from "./PreviewModal";
+import { VaultBrowseControls } from "./VaultBrowseControls";
 import { VaultStats } from "./VaultStats";
+import { deriveVaultViewState } from "./vaultViewState";
 
 // The Knowledge Vault route (VALT-04) — matches brand-024242 / brand-024258 1:1: the "Knowledge
 // Vault" headline, a teal Refresh + a dark "Loading" pill while the live queries settle, the 4 stat
@@ -39,28 +41,68 @@ export default function VaultPage() {
   const [picked, setPicked] = useState<PickedFolder | null>(null);
   const [phase, setPhase] = useState<StartPhase>({ kind: "idle" });
 
-  // Fused full-bleed to the shell (layout.tsx is-bleed), sharing the workspace canvas's teal
-  // aura (.pane-canvas) so the vault reads as one surface with the cockpit — its stat tiles and
-  // doc cards do the floating, matching the command center / workspace glass-over-clay look.
-  // Owns its own scroll because is-bleed locks the outer <main>.
   return (
-    <div className="vault-surface pane-canvas">
+    <div className="vault-surface vault-nord-edge">
       <div className="vault-scroll">
-        <VaultBody
-          key={nonce}
-          category={category}
-          onCategory={setCategory}
-          onRefresh={() => setNonce((n) => n + 1)}
-          currentFolderId={currentFolderId}
-          onFolder={setCurrentFolderId}
-          picked={picked}
-          onPicked={setPicked}
-          phase={phase}
-          onPhase={setPhase}
-        />
+        <VaultErrorBoundary key={nonce} onRetry={() => setNonce((n) => n + 1)}>
+          <VaultBody
+            category={category}
+            onCategory={setCategory}
+            onRefresh={() => setNonce((n) => n + 1)}
+            currentFolderId={currentFolderId}
+            onFolder={setCurrentFolderId}
+            picked={picked}
+            onPicked={setPicked}
+            phase={phase}
+            onPhase={setPhase}
+          />
+        </VaultErrorBoundary>
       </div>
     </div>
   );
+}
+
+class VaultErrorBoundary extends Component<
+  { children: ReactNode; onRetry: () => void },
+  { error: Error | null }
+> {
+  state: { error: Error | null } = { error: null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("Vault browse query failed", {
+      error: error.message,
+      componentStack: info.componentStack,
+    });
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+    const viewState = deriveVaultViewState({
+      scope: "root",
+      list: { kind: "error", message: "Your vault could not be loaded." },
+      search: { kind: "idle" },
+    });
+    if (viewState.content.kind !== "list-error") return null;
+
+    return (
+      <section className="vault-state vault-state-error" role="alert">
+        <p className="caps-label">Vault unavailable</p>
+        <h2>We couldn&rsquo;t load your documents.</h2>
+        <p>{viewState.content.message} Nothing has been removed.</p>
+        <button
+          type="button"
+          className="vault-button vault-button-primary"
+          onClick={this.props.onRetry}
+        >
+          Try again
+        </button>
+      </section>
+    );
+  }
 }
 
 function VaultBody({
@@ -93,6 +135,8 @@ function VaultBody({
   );
   const folders = useQuery(api.vaultFolders.listFolders, currentFolderId ? "skip" : {});
   const loading = stats === undefined || docs === undefined;
+  const uploadSourceRef = useRef<HTMLDivElement>(null);
+  const driveSourceRef = useRef<HTMLDivElement>(null);
 
   // The selected doc opens the in-place preview modal (Task 3) — not a route change.
   const [selected, setSelected] = useState<VaultDoc | null>(null);
@@ -102,72 +146,48 @@ function VaultBody({
 
   return (
     <>
-      {loading && (
-        <span
-          style={{
-            position: "absolute",
-            top: "0.25rem",
-            right: "0.5rem",
-            padding: "0.3rem 0.9rem",
-            borderRadius: "999px",
-            background: "var(--ink)",
-            color: "#fff",
-            fontSize: "0.8rem",
-            fontWeight: 600,
-          }}
-        >
-          Loading
-        </span>
-      )}
-
-      <header
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "1rem",
-        }}
-      >
-        <h1
-          style={{
-            margin: 0,
-            fontFamily: "var(--font-display), system-ui, sans-serif",
-            fontWeight: 800,
-            fontSize: "clamp(1.9rem, 1.4rem + 1.8vw, 2.75rem)",
-            letterSpacing: "-0.03em",
-            color: "var(--ink)",
-          }}
-        >
-          Knowledge Vault
-        </h1>
-        {/* Belt AND braces with lifting `phase`: the upload loop RUNS inside PreFlight, which is
+      <header className="vault-header">
+        <div>
+          <p className="caps-label">Grounding for every agent</p>
+          <h1>Knowledge Vault</h1>
+          <p className="vault-header-copy">
+            Keep the source material your team can search, cite, and act on.
+          </p>
+        </div>
+        <div className="vault-header-actions">
+          {loading && <span className="vault-status-pill">Loading</span>}
+          <VaultBrowseControls
+            visible={!currentFolderId && !picked}
+            disabled={phase.kind === "uploading"}
+            handlers={{
+              onUpload: () =>
+                uploadSourceRef.current?.querySelector<HTMLButtonElement>("button")?.click(),
+              onFolderUpload: () =>
+                uploadSourceRef.current
+                  ?.querySelector<HTMLInputElement>("input[webkitdirectory]")
+                  ?.click(),
+              onDriveImport: () => {
+                driveSourceRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                driveSourceRef.current?.focus({ preventScroll: true });
+              },
+            }}
+          />
+          {/* Belt AND braces with lifting `phase`: the upload loop RUNS inside PreFlight, which is
             inside VaultBody, so a remount mid-loop orphans it (setState on an unmounted tree, a
             half-created folder). Disabling the only remount trigger is the guard that makes that
             impossible — and Refresh is meaningless mid-upload anyway, since every vault query is
             already live (BRAND §1: say why, honestly). */}
-        <button
-          type="button"
-          onClick={onRefresh}
-          disabled={phase.kind === "uploading"}
-          title={phase.kind === "uploading" ? "Finishing your folder upload…" : undefined}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "0.5rem",
-            padding: "0.7rem 1.4rem",
-            borderRadius: "999px",
-            border: "none",
-            cursor: phase.kind === "uploading" ? "default" : "pointer",
-            background: "var(--teal-600)",
-            color: "#fff",
-            fontWeight: 600,
-            fontSize: "0.95rem",
-            opacity: phase.kind === "uploading" ? 0.5 : 1,
-          }}
-        >
-          <RefreshIcon />
-          Refresh
-        </button>
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={phase.kind === "uploading"}
+            title={phase.kind === "uploading" ? "Finishing your folder upload…" : undefined}
+            className="vault-button vault-button-primary"
+          >
+            <RefreshIcon />
+            Refresh
+          </button>
+        </div>
       </header>
 
       <VaultStats stats={stats} />
@@ -196,8 +216,13 @@ function VaultBody({
           />
         ) : (
           <>
-            <Dropzone onPickFolder={onPicked} />
-            <DriveBrowser />
+            <div id="vault-upload-source" ref={uploadSourceRef}>
+              <span id="vault-folder-source" />
+              <Dropzone onPickFolder={onPicked} />
+            </div>
+            <div id="vault-drive-source" ref={driveSourceRef} tabIndex={-1}>
+              <DriveBrowser />
+            </div>
           </>
         ))}
 
@@ -207,6 +232,9 @@ function VaultBody({
       <DocGrid
         docs={docs ?? []}
         category={category}
+        folderId={currentFolderId ?? undefined}
+        loading={docs === undefined}
+        totalCount={stats?.totalFiles ?? 0}
         folders={currentFolderId ? undefined : (folders ?? [])}
         onOpen={setSelected}
         onOpenFolder={onFolder}

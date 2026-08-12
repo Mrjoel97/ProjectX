@@ -3,15 +3,17 @@
 import { api } from "@pikar/backend/api";
 // BEVL-03: the ONE deterministic thread the weekly review writes to, per tenant.
 import { REVIEW_THREAD_ID } from "@pikar/core";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import Link from "next/link";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
-import { BrainIcon, ClockIcon, DotsIcon, TrashIcon } from "../../../(auth)/icons";
+import { BrainIcon, ClockIcon, DotsIcon, StarIcon, TrashIcon } from "../../../(auth)/icons";
 import { ChatPane } from "./ChatPane";
 import { CardList } from "./cards";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { CanvasPane } from "./MediaCanvas";
+import { SkillAuthoringPanel } from "./SkillAuthoringPanel";
 import { SplitPane } from "./SplitPane";
+import { useSendCockpitMessage } from "./useSendCockpitMessage";
 
 // The cockpit, wired (plan 08 over the plan-05 shell). LEFT = the live chat pane (guided
 // questions + drafted-plan copy via the agent thread); RIGHT = the PLAN/DRAFT/REPORT card
@@ -151,6 +153,122 @@ function PastChatsFallback() {
   );
 }
 
+// SKILL-01 "routine v0" — the pinned-prompt menu. A pinned prompt is INERT SAVED TEXT: it does
+// nothing at rest, and pressing Run starts an ORDINARY FRESH cockpit turn through the same hook a
+// typed message uses. There is no schedule here and none may be added — see cockpit.md.
+//
+// It owns its own `useQuery` for the same reason `PastChats` does: a failing saved-prompt read must
+// degrade this menu, not the cockpit around it (WorkspacePage renders it inside an ErrorBoundary).
+// `onRun` belongs to the page because the page owns the tab strip and the shared in-flight signal.
+function PinnedPrompts({ onRun, busy }: { onRun: (text: string) => Promise<void>; busy: boolean }) {
+  const pins = useQuery(api.savedPrompts.list);
+  const unpin = useMutation(api.savedPrompts.remove);
+  type Pin = NonNullable<typeof pins>[number];
+  const [running, setRunning] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  // Returns whether the run started a thread, so the caller can close the menu on success and
+  // leave it OPEN on failure — a menu that closes on error dismisses its own notice.
+  const run = async (p: Pin): Promise<boolean> => {
+    setNotice(null);
+    setRunning(p.id);
+    try {
+      await onRun(p.text);
+      return true;
+    } catch {
+      setNotice("That prompt could not be run. Nothing was sent — try again.");
+      return false;
+    } finally {
+      setRunning(null);
+    }
+  };
+  // Deletes the SAVED ROW and only the saved row. The chat the prompt was pinned from, its tab and
+  // its plan are all untouched — a pin has no thread to own in the first place.
+  const del = async (p: Pin) => {
+    setNotice(null);
+    setDeleting(p.id);
+    try {
+      await unpin({ id: p.id });
+    } catch {
+      setNotice("That pinned prompt could not be deleted. Try again.");
+    } finally {
+      setDeleting(null);
+    }
+  };
+  // One turn at a time: `busy` is the page's shared in-flight signal, so a pinned run cannot race
+  // a typed one, and a second Run cannot fire while the first is still resolving its thread.
+  const disabled = busy || running !== null || deleting !== null;
+
+  return (
+    <HeaderMenu label="Pinned prompts" icon={<StarIcon size={16} />}>
+      {(close) => (
+        <div role="menu" aria-label="Pinned prompts">
+          {pins === undefined ? (
+            <p className="head-menu-empty">Loading…</p>
+          ) : pins.length === 0 ? (
+            <p className="head-menu-empty" style={{ whiteSpace: "normal" }}>
+              No pinned prompts yet. Pin one from a message you have sent.
+            </p>
+          ) : (
+            pins.map((p) => (
+              <div key={p.id} style={{ display: "flex", alignItems: "center", gap: "0.2rem" }}>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="head-menu-item"
+                  style={{ flex: 1, minWidth: 0 }}
+                  aria-label={`Run pinned prompt: ${p.title}`}
+                  aria-busy={running === p.id}
+                  title={p.text}
+                  disabled={disabled}
+                  onClick={() => void run(p).then((ok) => ok && close())}
+                >
+                  {running === p.id ? "Running…" : p.title}
+                </button>
+                <button
+                  type="button"
+                  className="head-menu-item"
+                  style={{ width: "auto", flex: "none", color: "var(--ink-soft)" }}
+                  aria-label={`Delete pinned prompt: ${p.title}`}
+                  aria-busy={deleting === p.id}
+                  title="Removes the saved prompt only — your chats are untouched"
+                  disabled={disabled}
+                  onClick={() => void del(p)}
+                >
+                  {deleting === p.id ? "Deleting…" : "Delete"}
+                </button>
+              </div>
+            ))
+          )}
+          {/* Announced and inline, in the menu the user is looking at. Grey `--ink-soft`, never
+              amber: BRAND §2 spends `--held` on the approval gate alone. */}
+          {notice !== null && (
+            <p role="status" className="head-menu-empty" style={{ whiteSpace: "normal" }}>
+              {notice}
+            </p>
+          )}
+        </div>
+      )}
+    </HeaderMenu>
+  );
+}
+
+// The fallback when the saved-prompt query throws: keep the control (stable layout) and say the
+// menu is unavailable, rather than vanishing it or taking the cockpit down. The `PastChats`
+// precedent, verbatim.
+function PinnedPromptsFallback() {
+  return (
+    <HeaderMenu label="Pinned prompts" icon={<StarIcon size={16} />}>
+      {() => (
+        <div role="menu" aria-label="Pinned prompts">
+          <p className="head-menu-empty">Pinned prompts unavailable.</p>
+        </div>
+      )}
+    </HeaderMenu>
+  );
+}
+
 export default function WorkspacePage() {
   const status = useQuery(api.gmailAuth.gmailStatus);
   const [tabs, setTabs] = useState<Tab[]>([REVIEW_TAB]);
@@ -194,6 +312,32 @@ export default function WorkspacePage() {
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("view") === "canvas") setView("canvas");
   }, []);
+  // SKILL-01: the skill-authoring card, opened from the existing Chat options menu. Session state,
+  // not a route — the thread, the tabs and every open subscription survive the toggle.
+  const [authoring, setAuthoring] = useState(false);
+
+  // SKILL-01 "routine v0": replay a pinned prompt as an ORDINARY FRESH cockpit turn.
+  //
+  // No `threadId` is passed, so `sendCockpitMessage` mints a new thread exactly as a first typed
+  // message does — the prompt does not land in whatever conversation happens to be open, and no
+  // prior plan is cloned. It goes through `useSendCockpitMessage`, never the raw action: the hook
+  // supplies the trusted IANA timezone and the call-time clock that every phase-17 calendar and
+  // phase-19 CRM tool refuses to act without. Guardrails, spend, activity, plan and approval
+  // behaviour are therefore unchanged by construction — this is the same door, not a second one.
+  //
+  // It throws on failure on purpose: the menu catches and renders the notice next to the control
+  // the user pressed, which is closer to their attention than anything this component could show.
+  const send = useSendCockpitMessage();
+  const runPinned = async (text: string) => {
+    setSending(true);
+    try {
+      const res = await send({ text });
+      registerThread(res.threadId, text);
+    } finally {
+      setSending(false);
+    }
+  };
+
   const newChat = () => setThreadId(undefined);
   // Close a session tab. The tab strip is view state, so this only stops SHOWING the chat — the
   // thread and its messages are untouched and stay reopenable from the "Past chats" menu, which
@@ -264,6 +408,11 @@ export default function WorkspacePage() {
                 <ErrorBoundary label="past-chats" fallback={<PastChatsFallback />}>
                   <PastChats threadId={threadId} onOpen={openThread} />
                 </ErrorBoundary>
+                {/* SKILL-01: pinned prompts, boundaried for the same reason as the history menu —
+                    a failing saved-prompt read degrades this control, never the cockpit. */}
+                <ErrorBoundary label="pinned-prompts" fallback={<PinnedPromptsFallback />}>
+                  <PinnedPrompts onRun={runPinned} busy={sending} />
+                </ErrorBoundary>
                 <HeaderMenu label="Chat options" icon={<DotsIcon size={16} />}>
                   {(close) => (
                     <div role="menu" aria-label="Chat options">
@@ -277,6 +426,17 @@ export default function WorkspacePage() {
                         }}
                       >
                         + New chat
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="head-menu-item"
+                        onClick={() => {
+                          setAuthoring((a) => !a);
+                          close();
+                        }}
+                      >
+                        Adapt a business skill
                       </button>
                     </div>
                   )}
@@ -329,6 +489,11 @@ export default function WorkspacePage() {
                 +
               </button>
             </div>
+
+            {/* SKILL-01. Above the conversation and inside the SAME pane: the card is part of the
+                cockpit, not a destination. It renders regardless of mailbox state — adapting a
+                skill has nothing to do with a connected inbox. */}
+            {authoring && <SkillAuthoringPanel onClose={() => setAuthoring(false)} />}
 
             {/* The review thread is synthetic — it has no `plans` row, and sendCockpitMessage throws
                 "cockpit: plan row missing for thread" (cockpit.ts:93) on any send. Reading degrades

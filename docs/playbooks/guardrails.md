@@ -1,6 +1,53 @@
 # Playbook: Guardrails (the spend rails, the kill switches, the redaction choke point)
 
-> Last verified: 2026-08-03 (15.3-03 - **the THIRD rail: folder ingest.** Two new windows
+> Last verified: 2026-08-08 (26-07 + its follow-up sweep — the spend ledger rides alongside every
+> reasoning and ingest limiter movement, and **all twelve `recordSpend` call sites now pass a
+> stable correlation**; see the Phase 26 section below for the per-site table and the discriminator
+> each one needs.)
+>
+> Previously verified: 2026-08-07 (**a second LLM vendor entered the price table, and this playbook
+> started watching that table.** `packages/cost/src/cost.ts` was watched by NO playbook until now —
+> a gap worth naming, because that file is where a model becomes billable: `PRICING` is keyed on the
+> full model id, an id missing from it makes `priceUsage` return `unknown_model`, `recordModelSpend`
+> then records 0, and the run draws down NOTHING against `DAILY_BUDGET_CENTS`. **A free-looking model
+> is the failure mode this rail exists to prevent**, so the table is now under the same watch as the
+> rails it feeds. Added to `watch.json` under this playbook.
+>
+> Gemini rows landed with their constants (`GEMINI_MODEL`, `GEMINI_CHEAP_MODEL`), obeying the file's
+> own standing rule that a model constant and its `PRICING` row ship in the same commit.
+>
+> **THE PINS ARE NOW CROSS-VENDOR, AND THAT IS THE WHOLE FEATURE.** Owner decision 2026-08-07: the
+> aim is NOT to replace OpenAI but for both vendors to alternate, so work continues when either runs
+> out of credit. `DEFAULT_MODEL` = `google/gemini-2.5-flash`, `CHEAP_MODEL` = `openai/gpt-4.1-nano`.
+> Because `CHEAP_MODEL` is already the failure-fallback target and `runAgentLoop` already runs
+> primary → fallback, pointing it at the OTHER vendor turns the shipped mechanism into provider
+> failover with **no new retry layer, no router and no config**. A same-vendor fallback structurally
+> cannot do this — an exhausted key just fails twice.
+>
+> **The honest limit: failover only fires on a FALLBACK-ELIGIBLE error.** `isFallbackEligible`
+> returns `APICallError.isRetryable`, so an out-of-credits 429 rolls to the other vendor, but a 403
+> (Vertex billing not enabled) does NOT — a config error stays a config error rather than silently
+> spending the other vendor's money. Gemini leads only because the OpenAI account is the one at $0;
+> the pair is symmetric and swapping the leader is a two-line edit.
+>
+> **`GOOGLE_SEARCH_CALL_USD` (0.035) is a THIRD-hand estimate and ~3.5x OpenAI's hosted-search fee.**
+> `searchFeeUsd(model)` picks the rate from the model that ACTUALLY ran (`m.id`, not the pin — the
+> fallback may be executing) and fails safe to the higher rate on an unrecognised prefix.
+>
+> **Cost went UP, not down.** `gemini-2.5-flash` is 2x `gpt-4o-mini` on input and 4.2x on output.
+> This surfaced as five red tests: the folder-ingest fixtures had treated files and cents as the same
+> number because one 1 KB file cost exactly 1 cent. It now costs 2, so `CENTS_PER_FILE` is pinned as
+> a literal in both `guardrails.test.ts` and `vaultFolders.test.ts` (a future rate change SHOULD
+> redden them). Deriving it from `PRICING` would make those tests agree with themselves.
+>
+> **THE GEMINI RATES ARE UNVERIFIED AGAINST A LIVE PRICE PAGE** and are pinned from published-rate
+> knowledge, rounded UP where uncertain. The direction is deliberate and asymmetric: over-pricing
+> throttles a tenant early (fail-safe), under-pricing silently under-draws the rail (the failure
+> above). Verify against Google's Vertex pricing page and correct the two rows before real spend.
+> DIFF-REVIEWED ONLY: `pnpm --filter @pikar/cost test` 56/56 and backend typecheck 0 errors were
+> run; no live Gemini call has ever been made from this repo.
+>
+> PREVIOUSLY: 2026-08-03 (15.3-03 - **the THIRD rail: folder ingest.** Two new windows
 > (`ingestSpendCents` $25/tenant, `deploymentIngestSpendCents` $250 keyless), a whole-folder
 > `reserveFolder`/`settleFolder` pair whose refund is a CLAMPED negative `count`, and an
 > OPTIONAL `rail` selector on `preCall`/`recordSpend`. Every pre-15.3 call site is unchanged:
@@ -157,7 +204,7 @@ because the agent then grounds on it confidently without knowing what is missing
 **$25/day per tenant**, deliberately the largest of the three per-tenant windows: a folder upload
 is a bursty one-off onboarding-shaped event, not a daily habit. Owner decision; accepted
 consequence is $40 worst-case per-tenant daily exposure. The number is calibrated to the
-**scanned-PDF OCR path and to nothing else** — ~$0.005/page � a 50-page cap – which is the only
+**scanned-PDF OCR path and to nothing else** — ~$0.005/page � a 50-page cap – which is the only
 work in the pipeline that costs real money at folder scale. Extraction of text/office/text-layer
 PDF is free, embedding is free today, graph extraction is ~$0.006/doc.
 
@@ -234,8 +281,152 @@ npx convex run guardrails:ingestRemainingCents '{"tenantId":"<id>"}'   # after
 The number after the roll must be **at most `INGEST_DAILY_BUDGET_CENTS` (2500)**. Anything above it
 means the clamp or the rollover skip regressed, and the tenant is minting budget.
 
+## Phase 26 — the spend ledger rides alongside the limiter (FIN-01)
+
+> Last verified: 2026-08-08 (26-07 — **every reasoning and ingest limiter movement now writes a
+> matching `spendEvents` row, in the SAME transaction.**)
+
+**TWO PLANES, AND THE ORDER OF AUTHORITY IS FIXED.** The limiter stays ENFORCEMENT truth: it decides
+whether a spend may happen, and nothing in this section may be relaxed to make a report easier.
+`spendEvents` is REPORTING/RECONCILIATION truth: it remembers what happened. A limiter is a gauge of
+the present and structurally cannot answer "what did this tenant spend last Tuesday on the media
+rail" — that is the whole reason for the second plane.
+
+**The ledger write is a PLAIN FUNCTION CALL (`spendLedger.recordMovement`), never
+`ctx.runMutation`.** The limiter movement and its row must commit or fail together; a second
+transaction could leave the window moved with no record, and an append-only table has no backfill to
+repair that. It writes the SAME `cents` variable the limiter consumed — a re-derived `Math.round`
+would drift below the limiter on every sub-cent call and, at zero, be refused outright.
+
+### Where each movement is written
+
+| site | phase | rail | correlation | note |
+|---|---|---|---|---|
+| `prepare`, OK path only | `estimated` | reasoning | `req:<requestId>:prepare` | a governed stop is NOT a spend and writes nothing |
+| `recordSpend` | `actual` | selector | caller's, else a per-execution nonce | see below |
+| `reserveFolderInner`, success path | `reserved` | ingest | `f:<folderId>:<reservedAt>` | only when a `folderId` is supplied |
+| `settleFolder`, inside `refundedCents > 0` | `refunded` | ingest | `f:<folderId>:<reservedAt>` | rebuilt from `folder.reservedAt` |
+
+### The correlation policy, and why it is split in two
+
+**A correlation that is too COARSE is worse than none.** It collapses a genuine second charge into
+one row, so the ledger sits BELOW the limiter — and a missing movement is indistinguishable from
+money that was never spent. A duplicate, by contrast, is findable by reconciling the two planes.
+Under-count is therefore the unrecoverable direction, and every choice here breaks that way.
+
+- **Replayable sites derive.** `prepare`, `reserveFolderInner` and `settleFolder` can each be
+  re-entered without new money changing hands (the pipeline's regenerate loop; a re-entered workflow
+  `onComplete`). They build a deterministic correlation from refs, so a second entry finds the
+  stored row. **`settleFolder`'s CAS protects the MONEY; the correlation protects the RECORD** —
+  they are two guards on two different things, and neither substitutes for the other.
+- **`recordSpend` mints a nonce.** Its ~15 callers are all ACTIONS, where re-entry re-runs the model
+  call, so the second charge is real money that MUST get its own row. A ref-derived correlation
+  there would swallow a retry, a fallback model or a per-page OCR fan-out. A caller that genuinely
+  IS replayable — a journaled workflow step, a webhook landing — passes its own stable
+  `correlationId` and gets replay suppression.
+
+**`reservedAt` is stamped ONCE** and used for both the returned value and the correlation. A second
+`Date.now()` in `reserveFolderInner` would silently orphan every refund: settle rebuilds the string
+from `folder.reservedAt` and would never match.
+
+### What is deliberately NOT recorded
+
+- **The deployment-window refund.** `spendEvents` is a per-tenant statement and the two clamps
+  return DIFFERENT amounts, so a second tenant-scoped row would claim ~800¢ returned on a 400¢
+  credit and drive `unlanded` to a false zero. The reserve side already carries this asymmetry:
+  both windows debited, one row written. The deployment figure keeps `settleFolder`'s return value
+  and `ingestRemainingCents`.
+- **A zero refund.** `validateSpendMovement` rejects `amountCents <= 0`, and that throw would run
+  inside `tryComplete`'s transaction — folder completion would fail for an accounting reason. The
+  write lives strictly inside the existing `refundedCents > 0` branch. Recording nothing is also
+  the honest answer, and the arithmetic already ships: reserved 900, actual 500, refunded 0 →
+  `aggregateSpend` reports **400 unlanded**, which is the literal truth. `settleFolder` returns
+  `settled_window_rolled` rather than `settled` so the reason is distinguishable from a clamp that
+  happened to land on zero.
+
+### Every call site, and the discriminator that keeps it honest
+
+All twelve `recordSpend` call sites now pass a correlation. **The discriminator column is the point
+of this table** — it names the second real charge that would have been swallowed without it.
+
+| call site | correlation | discriminator earns its place because… |
+|---|---|---|
+| `pipeline.ts` `recordLlm` | `req:<requestId>:<stage>:<seq>` | `seq` (= `usages.length` read BEFORE the push): `stage` alone collapses every regenerate onto the first draft, and each regenerate is a real second model call. **Derived, not minted — journaled step.** |
+| `intake.ts` transcribe / extract | `intake:transcribe:<artifactId>` / `intake:extract:<artifactId>` | `runIntake` inserts a FRESH `intakeArtifacts` row per attempt, so a re-entry gets a new id; the verb token keeps a video's audio and frame charges apart |
+| `llm.ts` agent loop | `agentloop:<loopId>:a<attempt>` | `loopId = turnId ?? randomUUID()`; `attempt` separates the primary from the fully-billed CHEAP_MODEL fallback |
+| `llm.ts` web-search fee | `agentloop:<loopId>:a<attempt>:search` | a SEPARATE payment in the SAME turn — bare would collide with that turn's token cost |
+| `llm.ts` digest / reply / voice-brief | `digest\|reply\|brief:<runId>:a0` / `:a1` | each is a try/catch pair of TWO fully-billed calls, not a retry of one |
+| `blueprint.ts` `deriveCandidates` | `blueprint:derive:<runId>` | re-running the action is a genuine re-spend; a tenant-scoped constant would record only the first run of the day |
+| `vaultExtract.ts` | `vault:extract:<vaultDocId>:<attemptId>[:p<i>]` | the PDF fan-out bills PER PAGE — a document-level correlation records one page's cost for a 50-page scan. The image branch omits `:p` entirely rather than faking `:p0` |
+| `vaultIngest.ts` | `vault:ingest:<vaultDocId>:<step.workflowId>` | **Derived, not minted — journaled step.** Deliberately NOT the handler's `correlationId` arg, which a sweep retry passes as a constant |
+| `vaultDigest.ts` | `vault:digest:<folderId>:<runId>` | a rebuild is a real second charge |
+| `vaultTranscribe.ts` | `vault:transcribe:<vaultDocId>:<attemptId>` | a sweep retry re-transcribes for real |
+| `voice.ts` metering | `voice:usage:<sessionId>:<offset>` | the cumulative token offset — one session meters repeatedly, and `sessionId` alone would record only the first slice |
+| `voiceDoc.ts` review | `voicedoc:review:<sessionId>:<nonce>` | re-reviewing a doc re-spends |
+
+**`{ unstableArgs: true }` IS LOAD-BEARING at the two journaled sites** (`pipeline.ts`,
+`vaultIngest.ts`). Their step args GREW, and a workflow already mid-flight replays the step against
+a journal entry recorded with the old args and dies on `Journal entry mismatch` — killing in-flight
+work that is already paid for. Confirmed on the public `RunOptions` type in
+`@convex-dev/workflow@0.4.4` (`dist/client/workflowContext.d.ts`), not merely on an internal type.
+Droppable only once nothing started before that deploy can still be parked. **Any future change to
+a journaled step's args carries the same hazard.**
+
+### Coverage opens at the GATE, not at the money
+
+`spendCoverage` answers "from when does this ledger see everything for this tenant". The answer is
+**from when we started watching**, not from when money first moved — so `ensureCoverage` is called
+at the top of every spend gate: `prepare`, `preCall`, `reserveFolderInner` and `reserveJobInner`.
+**Above every refusal, including the kill switches.**
+
+Opening it only on the first recorded movement inverts the very lie the field exists to prevent:
+instead of a fake zero it reports fake *ignorance*. A tenant we have been gating all week, who
+simply has not spent, would read as `unknown` when the truth is a confident nothing — and a tenant
+paused by the kill switch would read as `unknown` for the whole pause, which is the period we know
+most about.
+
+A refused gate is **positive knowledge that no money moved**, so it opens coverage and writes no
+movement. Those are two different statements and both are needed.
+
+Placement is load-bearing and a test caught it being wrong: `reserveJobInner`'s kill-switch check
+returns *above* `reserveProviderLinesInner`, so a gate placed in the inner function missed exactly
+the refusal it most needed to cover. `ensureCoverage` is insert-if-absent and never moves an
+existing start forward, so calling it at both an outer and an inner gate is free.
+
+`recordSpend` deliberately does NOT open coverage — it runs *after* a gate, so coverage is already
+open by the time it is reached, and a zero-cost call stays a complete no-op on both planes.
+
+**A NEW CALL SITE CANNOT SHIP UNINSTRUMENTED.** `correlationId` is optional, so the compiler will
+not catch a missing one — a static scan in `guardrails.test.ts` ("every recordSpend call site passes
+a correlation") balances braces from each call's argument object and fails the build instead. It
+carries a non-vacuity floor (≥10 sites) because a per-site loop over an empty list passes for free.
+
+### How to verify
+
+```text
+pnpm --filter @pikar/backend test -- guardrails vaultFolders spendLedger
+pnpm --filter @pikar/backend typecheck
+```
+
+Mutation checks actually run for this section: (1) write `Math.round(costUsd * 100)` into the ledger
+instead of the limiter's `cents`; (2) correlate settle on `Date.now()` instead of
+`folder.reservedAt`; (3) replace the nonce with a per-tenant constant; (4) drop `folderId` from the
+`reserveFolderInner` call in `vaultFolders.ts`. Each turns a DIFFERENT test red.
+
+### Rollback
+
+Non-negotiable, and it is the same rule `dashboard-pages.md` states from the Finance side: the
+Finance UI may be disabled; **these writers may not be.** An append-only history has no backfill, so
+a dark window is a permanent hole in the record.
+
 ## Known gaps & deferred work
 
+- **Charges the pricer never sees are invisible to BOTH planes.** `draftUncached` runs
+  `maxRetries: 1` and then a whole CHEAP_MODEL fallback but returns only the surviving attempt's
+  usage; `!priced.ok` (an id missing from `PRICING`) records nothing anywhere. Ledger and limiter
+  still AGREE, so reconciliation cannot see the hole — only an invoice can.
+- **`folder.spentCents` is permanently 0.** Nothing increments it, and a zero money field sitting
+  beside a real ledger is how someone reads 0 and believes it. Feed it or delete it.
 - **No media equivalent of `recordSpend`.** The media rail reserves and never reconciles: if 3 of 6
   blocks fail, the reserved cents stay consumed. Over-reservation is the deliberate fail-closed
   bias; refunding would turn a rate-limiter window into a ledger. The upgrade path, if drift ever

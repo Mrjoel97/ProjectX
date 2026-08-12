@@ -150,6 +150,10 @@ export const reserveFolder = tenantMutation({
     const result = await reserveFolderInner(ctx, {
       tenantId: ctx.tenantId,
       files: files as EstimateInput[],
+      // FIN-01: names the reservation in the spend ledger. The row below stamps `reservedAt` with
+      // the SAME instant the ledger correlation was built from, which is what lets `settleFolder`
+      // find this reservation again instead of orphaning its refund.
+      folderId,
     });
 
     if (!result.ok) {

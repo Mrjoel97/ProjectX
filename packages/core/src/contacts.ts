@@ -1,0 +1,207 @@
+// Contacts, follow-ups and outreach compliance — the PURE half (Phase 19, ACTN-05 / PIPE-01).
+// Framework-agnostic: plain `string` ids, no Convex import, so the Convex adapter, the send-path
+// guard and the Pipeline component all call the SAME functions rather than each re-deriving them.
+//
+// `normalizeAddress` is the phase's identity function. It is the ONE reason "the guard and the
+// contact row agree by construction" is true rather than hoped for: contacts, suppressions and the
+// per-address send guard all key on its output.
+
+/**
+ * The contact/suppression identity key: a lowercased, trimmed email address. One row per address.
+ *
+ * Does NOT validate — an empty or whitespace-only input normalizes to `""` and the CALLER rejects
+ * it. Validation here would make the key function throw on a path whose job is only to canonicalise.
+ */
+// ponytail: trim+lowercase only. Plus-addressing and dot-folding are person-level merging
+// (deferred, 19-CONTEXT Deferred Ideas); upgrade path is a second canonicalise() beside this,
+// never a change to this one — the suppressions key must stay byte-stable.
+// `isValidEmail` is the repo's ONE email regex (03.1-03 promoted it out of `validateSubmit` for
+// exactly this reason). The send path bounces a bad recipient with it via `applyRecipientEdit`, so
+// importing it here is what makes "the CRM cannot accept an address the send path would refuse"
+// true by construction rather than by two regexes agreeing today. Do NOT add a second one.
+import { isValidEmail } from "./validateSubmit";
+
+export function normalizeAddress(s: string): string {
+  return s.trim().toLowerCase();
+}
+
+/**
+ * "Contacts needing attention" = contacts with NO open follow-up (19-CONTEXT: deliberately
+ * COMPLEMENTARY to the "follow-ups due" tile, so two adjacent tiles cannot report the same fact).
+ *
+ * The caller passes ONLY contact ids carrying an `open` follow-up; `done`/`canceled` ones never
+ * reach this set, which is why an empty set means every contact needs attention.
+ */
+export function needsAttention(
+  contactId: string,
+  openFollowUpContactIds: ReadonlySet<string>,
+): boolean {
+  return !openFollowUpContactIds.has(contactId);
+}
+
+/** Due AT the instant counts as due — the tile counts `dueAt <= now`, never `<`. */
+export function followUpIsDue(dueAt: number, now: number): boolean {
+  return dueAt <= now;
+}
+
+/**
+ * The CAN-SPAM footer appended to EVERY send (19-CONTEXT: one code path, no "is this commercial?"
+ * branch to get wrong — SC#6's "the drafter cannot omit it" becomes true by construction).
+ *
+ * Plain text: the body is `text/plain` in both `buildMime` branches. Fails CLOSED on a blank
+ * postal address or unsubscribe URL — a footer rendering an empty address looks compliant and is
+ * not, which is worse than no footer at all.
+ */
+export function renderFooter(input: { postalAddress: string; unsubscribeUrl: string }): string {
+  const postalAddress = input.postalAddress.trim();
+  if (postalAddress === "") {
+    throw new Error("renderFooter: postalAddress is required (CAN-SPAM physical address)");
+  }
+  const unsubscribeUrl = input.unsubscribeUrl.trim();
+  if (unsubscribeUrl === "") {
+    throw new Error("renderFooter: unsubscribeUrl is required");
+  }
+  // Leading blank line: appended to any body, the footer must never run into the last sentence.
+  return `\n\n${postalAddress}\nUnsubscribe: ${unsubscribeUrl}`;
+}
+
+/**
+ * SC#5's user-facing half: what a PARTIAL send actually did. One sentence, built in ONE place
+ * because it renders on two surfaces (the cockpit report card and the Approvals in-flight row) and
+ * a drifted copy is a surface disagreeing with itself.
+ *
+ * It is read from the PLAN ROW (`plans.withheldRecipients`), never from component state. Phase-19
+ * UAT step 9(b) measured why: a successful approve IS the `proposed → approved` transition, both
+ * approve cards are gated on `status === "proposed"`, and the reactive subscription lands the new
+ * status before `execute()` resolves — so the component holding a `useState` note has already
+ * unmounted by the time the note exists. Anything kept in `useState` across the status flip that
+ * produces it is unreachable by construction. A persisted set is also what makes the outcome
+ * auditable after the fact.
+ *
+ * `null` (not "") when nobody was withheld: an ordinary send must render NOTHING, not an empty
+ * note element that a screen reader still announces.
+ */
+export function withheldNote(
+  recipients: readonly string[],
+  withheld: readonly string[] | undefined,
+): string | null {
+  if (!withheld || withheld.length === 0) return null;
+  // The ALLOWED set, the same subtraction `executePlan` used to build `recipientTotal` — expressed
+  // off the two persisted arrays so it cannot disagree with what was actually queued. Clamped: a
+  // hand-patched row must never render "Sent to -1".
+  const sent = Math.max(0, recipients.length - withheld.length);
+  return `Sent to ${sent}. Withheld ${withheld.length} who unsubscribed: ${withheld.join(", ")}.`;
+}
+
+// ── The crm_write operation list (19-06, ACTN-05) ─────────────────────────────
+// What an approved `crm_write` plan applies. Pure: plain `string` refs, no Convex import — the
+// Convex adapter resolves a `followUpRef` to a row id and an `email` to a contact. Validated at
+// BOTH boundaries (the write that stages the plan, and the apply that executes it) by this one
+// function, because the plan row is CONTENT PLANE and could have been revised in between.
+
+/** A staged list this long is a bug or a runaway loop, not an intention. */
+export const CRM_OPERATION_MAX = 25;
+/** Ceiling on model-authored text landing in a DB row (the `postalAddress` precedent, 19-03). */
+export const CRM_TEXT_MAX = 500;
+
+export type CrmContactOrigin = "mailbox-resolved" | "user-entered" | "inbound";
+
+/**
+ * ONE governed CRM operation. `addFollowUp` carries an `email` and NOT an optional contact ref:
+ * the AGENT must always name a contact. Contactless follow-ups exist (`createFollowUp` takes an
+ * optional `contactId`) but are a USER-only capability, and that asymmetry is the structural brake
+ * against this CRM quietly becoming a general task generator. The address must also be STRUCTURALLY
+ * REAL (`isValidEmail`, 19-11) — "required" alone was satisfiable with a placeholder, and a live
+ * run duly satisfied it with `no-email`.
+ *
+ * The follow-up's text field is `note`, matching `followUps.note` in the schema — 19-01 shipped
+ * `note` and the plan text that says `title` pre-dates it (19-02 recorded the same correction).
+ */
+export type CrmOperation =
+  | { op: "addContact"; email: string; name?: string; origin: CrmContactOrigin }
+  | { op: "addFollowUp"; email: string; note: string; dueAt: number }
+  | { op: "completeFollowUp"; followUpRef: string }
+  | { op: "cancelFollowUp"; followUpRef: string };
+
+const ORIGINS: readonly string[] = ["mailbox-resolved", "user-entered", "inbound"];
+
+function text(value: unknown, error: string, max = CRM_TEXT_MAX): string {
+  if (typeof value !== "string") throw new Error(error);
+  const trimmed = value.trim();
+  if (trimmed === "" || trimmed.length > max) throw new Error(error);
+  return trimmed;
+}
+
+/**
+ * Validate and normalize a staged operation list, or throw a NAMED error.
+ *
+ * Every email goes through `normalizeAddress` here, so the applier never re-derives the identity
+ * key (invariant 4 — one copy of the identity rule). Refusals, each deliberate:
+ *   - an EMPTY list — a CRM plan with nothing to apply is a bug, not a no-op. It would otherwise
+ *     reach `done` having written nothing, which reads to the user as "applied".
+ *   - a list over `CRM_OPERATION_MAX`.
+ *   - `addFollowUp` with no due date — "Follow-ups due" is a headline tile and an undated
+ *     follow-up could never appear in it (`createFollowUp`'s rule, enforced one layer earlier).
+ *   - `addFollowUp` naming no contact — see the `CrmOperation` doc comment.
+ *   - either op naming a FABRICATED address (19-11). `isValidEmail` is the send path's own rule,
+ *     imported, so the CRM cannot accept an address a later send would bounce.
+ */
+export function parseCrmOperations(raw: unknown): CrmOperation[] {
+  if (!Array.isArray(raw)) throw new Error("CRM_OPERATIONS_NOT_A_LIST");
+  if (raw.length === 0) throw new Error("CRM_OPERATIONS_EMPTY");
+  if (raw.length > CRM_OPERATION_MAX) throw new Error("CRM_OPERATIONS_TOO_MANY");
+
+  return raw.map((entry): CrmOperation => {
+    if (typeof entry !== "object" || entry === null) throw new Error("CRM_OPERATION_MALFORMED");
+    const o = entry as Record<string, unknown>;
+    switch (o.op) {
+      case "addContact": {
+        const email = normalizeAddress(text(o.email, "CRM_CONTACT_EMAIL_REQUIRED"));
+        if (email === "") throw new Error("CRM_CONTACT_EMAIL_REQUIRED");
+        // A contact row is keyed on this address and `applyCrmOperations` UPSERTS it, so a
+        // fabricated one mints a permanent row nothing can ever email.
+        if (!isValidEmail(email)) throw new Error("CRM_CONTACT_EMAIL_INVALID");
+        if (typeof o.origin !== "string" || !ORIGINS.includes(o.origin)) {
+          throw new Error("CRM_CONTACT_ORIGIN_INVALID");
+        }
+        const name = o.name === undefined ? undefined : text(o.name, "CRM_CONTACT_NAME_INVALID");
+        return {
+          op: "addContact",
+          email,
+          ...(name ? { name } : {}),
+          origin: o.origin as CrmContactOrigin,
+        };
+      }
+      case "addFollowUp": {
+        // Absent, blank or unnormalizable all mean the same thing: the agent named nobody.
+        if (typeof o.email !== "string") throw new Error("CRM_FOLLOWUP_CONTACT_REQUIRED");
+        const email = normalizeAddress(o.email);
+        if (email === "") throw new Error("CRM_FOLLOWUP_CONTACT_REQUIRED");
+        // 19-11: the brake, actually engaged. "Required" was satisfiable with ANY non-empty
+        // string, so a model told it must name a contact could invent `no-email` and keep going —
+        // which is what a live run did. A brake the caller can satisfy with a placeholder is not a
+        // brake; this is the check that makes "the agent must name a REAL person" enforceable.
+        if (!isValidEmail(email)) throw new Error("CRM_FOLLOWUP_CONTACT_INVALID");
+        // `typeof NaN === "number"` and `Infinity` is finite-typed too — either produces a
+        // follow-up the `by_tenant_status_dueAt` range read can never find.
+        if (typeof o.dueAt !== "number" || !Number.isFinite(o.dueAt)) {
+          throw new Error("CRM_FOLLOWUP_DUEAT_REQUIRED");
+        }
+        return {
+          op: "addFollowUp",
+          email,
+          note: text(o.note, "CRM_FOLLOWUP_NOTE_REQUIRED"),
+          dueAt: o.dueAt,
+        };
+      }
+      case "completeFollowUp":
+      case "cancelFollowUp":
+        return {
+          op: o.op,
+          followUpRef: text(o.followUpRef, "CRM_FOLLOWUP_REF_REQUIRED"),
+        };
+      default:
+        throw new Error("CRM_OPERATION_UNKNOWN");
+    }
+  });
+}

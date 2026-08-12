@@ -152,7 +152,9 @@ export function base64Url(s: string): string {
 // which (with llm.ts's actions doing the same) tips TS past its circular-inference limit
 // and collapses sibling actions to `any` (Convex guidelines §96).
 type SendResult =
-  | { delivered: false; reason: "not_connected" | "refresh_failed" }
+  // 19-05: `suppressed` is a PERMANENT refusal, unlike the two reauth reasons beside it — see the
+  // `deliverApprovedPlan` branch that terminates the row rather than holding it.
+  | { delivered: false; reason: "not_connected" | "refresh_failed" | "suppressed" }
   | { delivered: true; messageId: string };
 
 export const send = internalAction({
@@ -160,6 +162,26 @@ export const send = internalAction({
   handler: async (ctx, { requestId }): Promise<SendResult> => {
     const req = await ctx.runQuery(internal.gmailAuth.getForDelivery, { requestId });
     if (!req) throw new Error(`gmail.send: request ${requestId} not found`);
+
+    // 19-05 SC#5 — THE TRUST BOUNDARY. This is the ONE place every product send converges, and it
+    // has TWO production callers, not one: `deliverApprovedPlan.ts:37` and `pipeline.ts:379`. Both
+    // handle the `suppressed` terminal explicitly. An earlier version of this comment claimed a
+    // sole caller and that false convergence claim is exactly what stopped three reviewers
+    // checking — grep the callers, do not trust this sentence. executePlan's approve-time filter
+    // is the better UX because it can drop ONE address out of a list and still send to the rest;
+    // THIS is what makes it unbypassable. A suppression created after approve but before a
+    // SCHEDULED fire is invisible to that filter — startScheduledDelivery re-fires a requestIds
+    // list frozen at approve time — and is caught only here. Both are needed; neither is redundant.
+    //
+    // Reads `suppressions` and never `contacts`, so a contacts bug cannot un-suppress anyone.
+    if (
+      await ctx.runQuery(internal.contacts.isSuppressed, {
+        tenantId: req.tenantId,
+        recipient: req.recipient,
+      })
+    ) {
+      return { delivered: false, reason: "suppressed" };
+    }
 
     // ponytail: SMOKE::fail sentinel — deterministic offline terminal throw for the fan-out
     // isolation smoke (mirrors llm.ts's fail=primary). The message carries no PII, and real
@@ -198,7 +220,34 @@ export const send = internalAction({
     const threading = req.inReplyTo
       ? { inReplyTo: req.inReplyTo, references: req.references ?? req.inReplyTo }
       : undefined;
-    const raw = base64Url(buildMime(req.recipient, req.subject, req.body, parts, threading));
+    // 19-05 SC#6 — the CAN-SPAM footer, at the buildMime CALL SITE and deliberately NOT inside
+    // buildMime. Two reasons, both load-bearing: `notifyExternal.ts` is a SECOND buildMime caller
+    // sending a static service notice to the user's OWN mailbox (which must carry no footer and
+    // has nobody to unsubscribe), and `gmail.test.ts`'s V4 tests pin buildMime's zero-attachment
+    // bytes. It cannot live any earlier either: the model's output flows
+    // plans.body → plans.recipientBodies → requests.draft, and getForDelivery reads
+    // `editedBody ?? draft`, so EVERY earlier stage is a bypass. A prompt instruction would be the
+    // "classifier being right" failure mode, and CLAUDE.md §5 forbids hardcoding it in one anyway.
+    //
+    // `req.body` is ALREADY the resolved per-recipient body, so personalization is covered for
+    // free, and buildMime does its own multipart branching, so attachments need no special case.
+    const footer = await ctx.runQuery(internal.contacts.footerFor, {
+      tenantId: req.tenantId,
+      recipient: req.recipient,
+    });
+    // Fail CLOSED, mirroring the missing-attachment-blob throw above: never silently send without
+    // the promised part. The message names BOTH causes because footerFor collapses them into one
+    // null — an operator told only "no postal address" would hunt a field that is already set
+    // while the real fault is an unset deployment secret (19-02's "sending stopped working").
+    if (!footer) {
+      throw new Error(
+        "gmail.send: no unsubscribe footer could be built — set the tenant's postal address on " +
+          "/dashboard/profile, and check the deployment's UNSUBSCRIBE_SECRET and CONVEX_SITE_URL",
+      );
+    }
+    const raw = base64Url(
+      buildMime(req.recipient, req.subject, req.body + footer.text, parts, threading),
+    );
     const sendRes = await fetch(SEND_ENDPOINT, {
       method: "POST",
       headers: {

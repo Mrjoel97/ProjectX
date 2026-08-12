@@ -10,6 +10,7 @@ import {
 } from "../skill";
 import { bmcSkillBody } from "./bmc";
 import { businessBlueprintSkillBody } from "./businessBlueprint";
+import { cockpitAgentSkillBody } from "./cockpitAgent";
 import { documentAnalystSkillBody } from "./documentAnalyst";
 import { documentClassifierSkillBody } from "./documentClassifier";
 import { folderDigestSkillBody } from "./folderDigest";
@@ -73,6 +74,10 @@ const bodies: [string, string][] = [
   // `DOC_TYPES` literals VERBATIM, so this row is what turns "the seeded prompt still names the
   // union the schema accepts" into a failure rather than a silent mismatch the coercion layer
   // absorbs as `unclassified`.
+  // cockpit-agent was NOT in this list, so its .md and .ts silently drifted (2026-08-10:
+  // a body edit landed in the .md, seedSkills published nothing, and the gate would have
+  // measured the OLD body). It is the most-edited body in the repo; it belongs here most.
+  ["cockpit-agent", cockpitAgentSkillBody],
   ["document-classifier", documentClassifierSkillBody],
 ];
 

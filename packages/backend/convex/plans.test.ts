@@ -5,6 +5,7 @@
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api, internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
@@ -227,6 +228,224 @@ describe("patchPlan sendAt + scheduled/canceled status (03.5 — deferred-send c
   });
 });
 
+describe("recordDeliveryTerminal (Phase 26 — exact bounded plan progress)", () => {
+  async function seedCounterPlan(
+    t: ReturnType<typeof convexTest>,
+    complete = true,
+    recipients = ["a@example.com", "b@example.com"],
+  ) {
+    return t.run(async (ctx) => {
+      const planId = await ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: `thread_progress_${crypto.randomUUID()}`,
+        status: "delivering",
+        recipients,
+        recipientTotal: complete ? recipients.length : undefined,
+        queuedCount: complete ? recipients.length : undefined,
+        sentCount: complete ? 0 : undefined,
+        failedCount: complete ? 0 : undefined,
+        counterComplete: complete ? true : undefined,
+        createdAt: Date.now(),
+      });
+      const requestIds = await Promise.all(
+        recipients.map((recipient, index) =>
+          ctx.db.insert("requests", {
+            tenantId: TENANT,
+            correlationId: `progress_${index}_${crypto.randomUUID()}`,
+            goal: "Progress test",
+            recipient,
+            status: "delivering",
+            attachmentRefs: [],
+            planId,
+            createdAt: Date.now(),
+          }),
+        ),
+      );
+      return { planId, requestIds };
+    });
+  }
+
+  test("sent and failed terminals decrement queued and increment exactly once under replay", async () => {
+    const t = convexTest(schema, modules);
+    const { planId, requestIds } = await seedCounterPlan(t);
+    const first = requestIds[0]!;
+    const second = requestIds[1]!;
+
+    expect(
+      await t.mutation(internal.plans.recordDeliveryTerminal, {
+        planId,
+        requestId: first,
+        outcome: "sent",
+      }),
+    ).toEqual({ applied: true });
+    expect(
+      await t.mutation(internal.plans.recordDeliveryTerminal, {
+        planId,
+        requestId: first,
+        outcome: "sent",
+      }),
+    ).toEqual({ applied: false });
+    expect(
+      await t.mutation(internal.plans.recordDeliveryTerminal, {
+        planId,
+        requestId: first,
+        outcome: "failed",
+      }),
+    ).toEqual({ applied: false });
+
+    await t.mutation(internal.plans.recordDeliveryTerminal, {
+      planId,
+      requestId: second,
+      outcome: "failed",
+    });
+
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan).toMatchObject({
+      recipientTotal: 2,
+      queuedCount: 0,
+      sentCount: 1,
+      failedCount: 1,
+      counterComplete: true,
+    });
+    expect((plan?.sentCount ?? 0) + (plan?.failedCount ?? 0) + (plan?.queuedCount ?? 0)).toBe(
+      plan?.recipientTotal,
+    );
+    expect((await t.run((ctx) => ctx.db.get(first)))?.status).toBe("sent");
+    expect((await t.run((ctx) => ctx.db.get(second)))?.status).toBe("failed");
+  });
+
+  test("legacy plans transition request status but remain explicitly counter-partial", async () => {
+    const t = convexTest(schema, modules);
+    const { planId, requestIds } = await seedCounterPlan(t, false);
+    const requestId = requestIds[0]!;
+
+    expect(
+      await t.mutation(internal.plans.recordDeliveryTerminal, {
+        planId,
+        requestId,
+        outcome: "sent",
+      }),
+    ).toEqual({ applied: true });
+
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan?.counterComplete).toBeUndefined();
+    expect(plan?.recipientTotal).toBeUndefined();
+    expect(plan?.queuedCount).toBeUndefined();
+    expect(plan?.sentCount).toBeUndefined();
+    expect(plan?.failedCount).toBeUndefined();
+    expect((await t.run((ctx) => ctx.db.get(requestId)))?.status).toBe("sent");
+  });
+
+  test("foreign or mismatched request refs cannot move plan counters", async () => {
+    const t = convexTest(schema, modules);
+    const a = await seedCounterPlan(t);
+    const b = await seedCounterPlan(t);
+
+    await expect(
+      t.mutation(internal.plans.recordDeliveryTerminal, {
+        planId: a.planId,
+        requestId: b.requestIds[0]!,
+        outcome: "failed",
+      }),
+    ).rejects.toThrow(/delivery request not found/);
+
+    expect(await t.run((ctx) => ctx.db.get(a.planId))).toMatchObject({
+      queuedCount: 2,
+      sentCount: 0,
+      failedCount: 0,
+    });
+  });
+
+  // 19-05 (Open Question 3, resolved). A suppression discovered at SEND time — created after the
+  // approve-time filter had already run — is PERMANENT, unlike `awaiting_reauth`, which resumes on
+  // reconnect. Left on the fan-out's bare `continue`, the row would sit at `delivering` forever and
+  // `queuedCount` would never reach 0. Decrementing recipientTotal is the truthful statement: the
+  // plan now has one fewer recipient, exactly the semantics of the executePlan filter (where a
+  // suppressed address never entered the total at all).
+  test("a suppressed terminal blocks the row, decrements recipientTotal, and the counters BALANCE", async () => {
+    const t = convexTest(schema, modules);
+    const { planId, requestIds } = await seedCounterPlan(t, true, [
+      "a@example.com",
+      "b@example.com",
+      "c@example.com",
+    ]);
+    const [first, second, third] = requestIds as [Id<"requests">, Id<"requests">, Id<"requests">];
+
+    expect(
+      await t.mutation(internal.plans.recordDeliveryTerminal, {
+        planId,
+        requestId: third,
+        outcome: "suppressed",
+      }),
+    ).toEqual({ applied: true });
+
+    // `blocked` is an EXISTING requests.status member — no new state was invented for this.
+    expect((await t.run((ctx) => ctx.db.get(third)))?.status).toBe("blocked");
+    const afterDrop = await t.run((ctx) => ctx.db.get(planId));
+    expect(afterDrop).toMatchObject({
+      recipientTotal: 2,
+      queuedCount: 2,
+      sentCount: 0,
+      failedCount: 0,
+    });
+
+    await t.mutation(internal.plans.recordDeliveryTerminal, {
+      planId,
+      requestId: first,
+      outcome: "sent",
+    });
+    await t.mutation(internal.plans.recordDeliveryTerminal, {
+      planId,
+      requestId: second,
+      outcome: "sent",
+    });
+
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    // The whole point: queued reaches ZERO and the three numbers still add up to the total.
+    expect(plan).toMatchObject({ recipientTotal: 2, queuedCount: 0, sentCount: 2, failedCount: 0 });
+    expect((plan?.sentCount ?? 0) + (plan?.failedCount ?? 0) + (plan?.queuedCount ?? 0)).toBe(
+      plan?.recipientTotal,
+    );
+  });
+
+  test("the suppressed terminal is idempotent — a replay applies once and moves no counter", async () => {
+    const t = convexTest(schema, modules);
+    const { planId, requestIds } = await seedCounterPlan(t);
+    const requestId = requestIds[0]!;
+
+    expect(
+      await t.mutation(internal.plans.recordDeliveryTerminal, {
+        planId,
+        requestId,
+        outcome: "suppressed",
+      }),
+    ).toEqual({ applied: true });
+    // A workflow/action retry replaying the same terminal must not decrement the total twice.
+    expect(
+      await t.mutation(internal.plans.recordDeliveryTerminal, {
+        planId,
+        requestId,
+        outcome: "suppressed",
+      }),
+    ).toEqual({ applied: false });
+    // ...and a `blocked` row can never be re-terminated as sent or failed either.
+    expect(
+      await t.mutation(internal.plans.recordDeliveryTerminal, {
+        planId,
+        requestId,
+        outcome: "sent",
+      }),
+    ).toEqual({ applied: false });
+
+    expect(await t.run((ctx) => ctx.db.get(planId))).toMatchObject({
+      recipientTotal: 1,
+      queuedCount: 1,
+      sentCount: 0,
+      failedCount: 0,
+    });
+  });
+});
+
 describe("patchPlan reply threading + resetPlan clears it (03.11 RPLY-01, Pitfall 6)", () => {
   /** Seed a collecting plan; return its id. */
   async function seedPlan(t: ReturnType<typeof convexTest>) {
@@ -411,5 +630,267 @@ describe("reportForPlan attachment extension (per-recipient delivered attachment
     expect(a.attachments[0]!.url).toBeTruthy();
     // no-attachment recipient → empty array
     expect(b.attachments).toEqual([]);
+  });
+});
+
+// ── patchPlan crm_write + resetPlan (19-06, ACTN-05 — VALIDATION row 4) ───────────────────────
+//
+// PITFALL 1, and the only kind of test that can catch it: `patchPlan`'s `kind` union is a
+// HAND-MAINTAINED mirror of `schema.ts`'s. Widen the schema and not the mirror and every typecheck
+// in the repo still passes — `Doc<"plans">` comes from the schema — while the RUNTIME arg validator
+// rejects the new kind at the first real propose. Only a call through the real validator sees it.
+describe("patchPlan accepts kind: crm_write (19-06 — the hand-maintained union mirror)", () => {
+  const seed = (t: ReturnType<typeof convexTest>) =>
+    t.run((ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: `thread_crm_${crypto.randomUUID()}`,
+        status: "collecting" as const,
+        recipients: [],
+        createdAt: Date.now(),
+      }),
+    );
+
+  test("the RUNTIME validator accepts the fourth kind and its operation list", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await seed(t);
+
+    await t.mutation(internal.plans.patchPlan, {
+      planId,
+      kind: "crm_write",
+      status: "proposed",
+      crmOperations: [{ op: "addContact", email: "bob@x.com", origin: "user-entered" }],
+    });
+
+    const row = await t.run((ctx) => ctx.db.get(planId));
+    expect(row?.kind).toBe("crm_write");
+    expect(row?.crmOperations).toHaveLength(1);
+  });
+
+  // Same Pitfall-6 class as the staged event and the media deck: a list surviving a reset would be
+  // applied by the NEXT approve in this thread, writing contacts nobody just agreed to.
+  test("resetPlan clears crmOperations AND the kind", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await seed(t);
+    await t.mutation(internal.plans.patchPlan, {
+      planId,
+      kind: "crm_write",
+      crmOperations: [{ op: "addContact", email: "bob@x.com", origin: "user-entered" }],
+    });
+
+    await t.mutation(internal.plans.resetPlan, { planId });
+
+    const row = await t.run((ctx) => ctx.db.get(planId));
+    expect(row?.crmOperations).toBeUndefined();
+    expect(row?.kind).toBeUndefined();
+    expect(row?.status).toBe("collecting");
+  });
+
+  // 2026-08-10, the sixth action type: same class again, one rung worse than the CRM one — a claim
+  // surviving a reset would be applied by the NEXT approve over a figure the owner may have typed
+  // in the meantime. Staged by a DIRECT insert, not `patchPlan`: whether `finance_write` joins
+  // patchPlan's hand-maintained kind mirror is the staging task's call, but a claim already on a
+  // row must not outlive a reset today.
+  test("resetPlan clears financeClaims", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await t.run((ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: `thread_finance_${crypto.randomUUID()}`,
+        kind: "finance_write" as const,
+        status: "proposed" as const,
+        recipients: [],
+        createdAt: Date.now(),
+        financeClaims: [
+          {
+            field: "cashOnHand",
+            value: 38_500,
+            origin: "stated" as const,
+            actor: "agent" as const,
+            basis: "user statement, turn 4",
+            observedAt: 1_754_000_000_000,
+            confidence: "high" as const,
+          },
+        ],
+      }),
+    );
+
+    await t.mutation(internal.plans.resetPlan, { planId });
+
+    const row = await t.run((ctx) => ctx.db.get(planId));
+    expect(row?.financeClaims).toBeUndefined();
+    expect(row?.kind).toBeUndefined();
+    expect(row?.status).toBe("collecting");
+  });
+});
+
+// ── patchPlan / resetPlan for calendar_manage (17-05, the ACTN-02 gap closure) ────────────────
+//
+// Two separate claims live here and they must not be confused:
+//   1. the PROPOSAL plane (five `plans` fields) is reset-safe, and
+//   2. the DURABLE registry (`calendarEvents`) is NOT touched by a reset.
+// A test that only proved (1) would pass just as happily against a resetPlan that deleted the
+// user's real calendar events out of our records, which is the failure this table exists to make
+// impossible.
+describe("calendar_manage proposal fields (17-05 — stage, reset, and the ref-plane boundary)", () => {
+  const seedPlan = (t: ReturnType<typeof convexTest>) =>
+    t.run((ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: `thread_manage_${crypto.randomUUID()}`,
+        status: "collecting" as const,
+        recipients: [],
+        createdAt: Date.now(),
+      }),
+    );
+
+  const seedRegistryRow = (t: ReturnType<typeof convexTest>, sourcePlanId: Id<"plans">) =>
+    t.run((ctx) =>
+      ctx.db.insert("calendarEvents", {
+        tenantId: TENANT,
+        provider: "google" as const,
+        externalEventId: "0123456789abc",
+        etag: 'W/"3"',
+        title: "Governed planning review",
+        startMs: Date.UTC(2026, 7, 3, 13, 0),
+        durationMs: 30 * 60_000,
+        tz: "Africa/Dar_es_Salaam",
+        sourcePlanId,
+        attendeeFree: true,
+        status: "active" as const,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      }),
+    );
+
+  // PITFALL 9, the hand-maintained mirror: widening `schema.ts`'s `kind` union without widening
+  // `patchPlan`'s leaves every typecheck green while the RUNTIME validator rejects the new kind.
+  // Only a call through the real validator sees it.
+  test("the RUNTIME validator accepts the seventh kind and the three STAGEABLE proposal fields", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await seedPlan(t);
+    const managedId = await seedRegistryRow(t, planId);
+
+    await t.mutation(internal.plans.patchPlan, {
+      planId,
+      kind: "calendar_manage",
+      status: "proposed",
+      calendarProvider: "microsoft",
+      calendarOperation: "delete",
+      calendarManagedEventId: managedId,
+    });
+
+    const row = await t.run((ctx) => ctx.db.get(planId));
+    expect(row?.kind).toBe("calendar_manage");
+    expect(row?.calendarProvider).toBe("microsoft");
+    expect(row?.calendarOperation).toBe("delete");
+    expect(row?.calendarManagedEventId).toBe(managedId);
+  });
+
+  // THE CONTENT/REF BOUNDARY. `calendarExpectedEtag` is the If-Match value: anything reachable
+  // from the model that could supply it could make a STALE plan overwrite a newer calendar edit,
+  // which is the exact data-loss path 17-VERIFICATION.md's G2 says a management surface must not
+  // have. `calendarFailureCode` would let the model claim an operation failed — or that it did
+  // not. The provider id and the run id are the 17-01 rule, unchanged.
+  //
+  // Named mutation that turns this RED: add any of the four as a `patchPlan` arg in plans.ts.
+  //
+  // Written as four LITERAL keys rather than a `test.each` over field names, and that is not
+  // style: a computed key (`{ planId, [field]: value }`) widens the object type, so TypeScript
+  // raises no error, the `@ts-expect-error` reports itself unused, and the compile half of the
+  // assertion silently evaporates. Caught by `tsc` on the first run of this block (2026-08-11).
+  test("patchPlan REFUSES the etag, the failure code, the provider id and the run id", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await seedPlan(t);
+
+    await expect(
+      // @ts-expect-error — the If-Match etag is NOT a patchPlan arg. A model-suppliable etag is
+      // the stale-overwrite path G2 exists to close.
+      t.mutation(internal.plans.patchPlan, { planId, calendarExpectedEtag: 'W/"forged"' }),
+    ).rejects.toThrow();
+    await expect(
+      // @ts-expect-error — nothing reachable from the model may claim an operation failed.
+      t.mutation(internal.plans.patchPlan, { planId, calendarFailureCode: "conflict" }),
+    ).rejects.toThrow();
+    await expect(
+      // @ts-expect-error — the 17-01 rule, unchanged: no model-reachable write of a provider ref.
+      t.mutation(internal.plans.patchPlan, { planId, calendarEventId: "evt_forged" }),
+    ).rejects.toThrow();
+    await expect(
+      // @ts-expect-error — the 17-01 rule, unchanged: no model-reachable write of a run id.
+      t.mutation(internal.plans.patchPlan, { planId, calendarRunId: "run_forged" }),
+    ).rejects.toThrow();
+
+    const row = await t.run((ctx) => ctx.db.get(planId));
+    expect(row?.calendarExpectedEtag).toBeUndefined();
+    expect(row?.calendarFailureCode).toBeUndefined();
+    expect(row?.calendarEventId).toBeUndefined();
+    expect(row?.calendarRunId).toBeUndefined();
+  });
+
+  // Same Pitfall-6 class as the staged event, one rung worse: a surviving managed-event id plus
+  // operation would point the NEXT approve in this thread at a REAL event on a REAL calendar.
+  // Named mutation that turns this RED: delete `calendarExpectedEtag: undefined` from resetPlan.
+  test("resetPlan clears ALL FIVE proposal fields and the kind", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await seedPlan(t);
+    const managedId = await seedRegistryRow(t, planId);
+    // The two non-stageable fields are written by a DIRECT patch, exactly as the 17-08 terminal
+    // will — a reset must clear them however they arrived.
+    await t.mutation(internal.plans.patchPlan, {
+      planId,
+      kind: "calendar_manage",
+      calendarProvider: "google",
+      calendarOperation: "update",
+      calendarManagedEventId: managedId,
+    });
+    await t.run((ctx) =>
+      ctx.db.patch(planId, {
+        calendarExpectedEtag: 'W/"3"',
+        calendarFailureCode: "conflict" as const,
+      }),
+    );
+    const staged = await t.run((ctx) => ctx.db.get(planId));
+    // Anti-vacuity floor: prove all five were really set before asserting they are gone.
+    for (const field of [
+      "calendarProvider",
+      "calendarOperation",
+      "calendarManagedEventId",
+      "calendarExpectedEtag",
+      "calendarFailureCode",
+    ] as const) {
+      expect(
+        staged?.[field],
+        `${field} was never staged — the reset assertion would be vacuous`,
+      ).toBeDefined();
+    }
+
+    await t.mutation(internal.plans.resetPlan, { planId });
+
+    const row = await t.run((ctx) => ctx.db.get(planId));
+    expect(row?.calendarProvider).toBeUndefined();
+    expect(row?.calendarOperation).toBeUndefined();
+    expect(row?.calendarManagedEventId).toBeUndefined();
+    expect(row?.calendarExpectedEtag).toBeUndefined();
+    expect(row?.calendarFailureCode).toBeUndefined();
+    expect(row?.kind).toBeUndefined();
+    expect(row?.status).toBe("collecting");
+  });
+
+  // THE ASYMMETRY, asserted. `resetPlan` is a COMPOSITION reset of the proposal plane; a
+  // `calendarEvents` row is a FACT about a real calendar and must outlive it. If this ever fails,
+  // a user typing "start over" in a thread has lost our record of events that still exist.
+  test("resetPlan leaves the durable registry row untouched, byte for byte", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await seedPlan(t);
+    const managedId = await seedRegistryRow(t, planId);
+    const before = await t.run((ctx) => ctx.db.get(managedId));
+
+    await t.mutation(internal.plans.resetPlan, { planId });
+
+    const after = await t.run((ctx) => ctx.db.get(managedId));
+    expect(after).not.toBeNull();
+    expect(after).toEqual(before);
+    expect(await t.run((ctx) => ctx.db.query("calendarEvents").collect())).toHaveLength(1);
   });
 });

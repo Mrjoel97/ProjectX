@@ -90,6 +90,14 @@ describe("owner-gated endpoints stay owner-gated", () => {
     ["./optimizerConfig.ts", "setOptimizerEnabled", "ownerMutation"],
     ["./skills.ts", "activateCandidate", "ownerMutation"],
     ["./skills.ts", "candidatesForReview", "ownerQuery"],
+    // 21-04 — the TENANT overlay's owner boundary. These three are the only way a tenant row can
+    // become `active`, and `tenantCandidatesForReview` is the only surface that discloses another
+    // tenant's authored adaptation beside a raw registry body. Downgrading any of them to a tenant
+    // wrapper would hand every signed-in user the deployment's candidate queue and the ability to
+    // put a body in front of a model.
+    ["./skills.ts", "tenantCandidatesForReview", "ownerQuery"],
+    ["./skills.ts", "activateTenantCandidate", "ownerMutation"],
+    ["./skills.ts", "rollbackTenantSkill", "ownerMutation"],
   ];
 
   for (const [path, name, wrapper] of PROTECTED) {

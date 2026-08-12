@@ -9,7 +9,8 @@
 //   #5 recordSpend consumes the daily-spend window on non-zero usage + an eligible failure falls
 //      back to CHEAP_MODEL.
 
-import { RESEARCH_SPECIALIST_SKILL } from "@pikar/contracts/skill";
+import { OFFER_ARCHITECT_SKILL, RESEARCH_SPECIALIST_SKILL } from "@pikar/contracts/skill";
+import { SPECIALISTS } from "@pikar/core";
 import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
 // The cockpit DRIVERS (sendCockpitMessage / resolveRecipients) additionally touch the agent thread
@@ -24,7 +25,7 @@ import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 // A node-env vitest file can import this "use node" module directly — the cockpitTools.test.ts
 // precedent. Importing the CHOOSER is what makes the 45s default assertable rather than assumed.
-import { callTimeoutMsFor } from "./llm";
+import { callTimeoutMsFor, runSpecialistTurn } from "./llm";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
@@ -272,6 +273,9 @@ test("skillVersions pin: a missing (name, version) fails CLOSED — never silent
 const readSteps = (t: T) => t.run((ctx) => ctx.db.query("agentSteps").collect());
 /** The turn identity the driver mints in production (cockpit.ts); supplied here so we can assert on it. */
 const TURN = { turnId: "turn-1", threadId: "thread1" };
+/** Two tenants for the 21-02 overlay-isolation cases at the bottom of this file. */
+const TENANT_A = "tenant_overlay_a";
+const TENANT_B = "tenant_overlay_b";
 
 test("activity trace: a scripted 2-tool run leaves 2 terminal rows with durations", async () => {
   const { t, planId } = await setup();
@@ -464,6 +468,14 @@ test("turn lifecycle: resolveRecipients (the OTHER agent entry point) terminaliz
     threadId,
     picks: [{ name: "Bob", address: "bob@example.com", displayName: "Bob" }],
   });
+
+  // 19-08: wipe-on-pick is UNCHANGED by the contacts-first precedence. `resolveContacts` now has
+  // two SOURCES for its candidates (a saved contact, else the Gmail headers) but exactly one
+  // content-plane home, and the pick still clears it — "no contacts cache at rest" (SC#7) applies
+  // to the transient parking spot as much as to the contacts table.
+  const picked = await t.run((ctx) => ctx.db.query("plans").collect());
+  expect(picked[0]?.candidates).toBeUndefined();
+  expect(picked[0]?.pendingValid).toBeUndefined();
 
   const steps = await readSteps(t);
   expect(steps, "resolveRecipients minted no thinking row").toHaveLength(2);
@@ -672,4 +684,290 @@ test("a NON-research scripted turn runs all four tool steps and is NOT truncated
   // before, so this change cannot silently re-price every existing cockpit turn.
   expect(res.webSearchCalls).toBe(0);
   expect(res.sources).toEqual([]);
+});
+
+// ── FIN-01: every llm.ts spend correlation is DISTINCT ───────────────────────
+// A SOURCE check, for the same reason guardrails.test.ts's sibling scan is one: llm.ts spends at
+// eight places and no runtime test can observe a call site nobody scripted. Six of the eight are
+// one of three PRIMARY/FALLBACK pairs and a seventh is the web-search FEE that fires in the SAME
+// attempt as the loop's token cost — all of them fully billed, none of them replays. The ledger
+// identity is (tenantId, correlationId, phase), so a copy-pasted template makes the second charge
+// return the first row and vanish, leaving the ledger BELOW the limiter. That is the direction
+// that cannot be reconstructed, and a duplicated literal is exactly how it would happen.
+test("every llm.ts spend correlation template is distinct and charset-legal", () => {
+  // `Object.values(...).join` rather than indexing the glob by key: the key shape is a bundler
+  // detail, and an index that missed would hand this scan an empty string it would pass on.
+  const raw = Object.values(
+    import.meta.glob("./llm.ts", { query: "?raw", import: "default", eager: true }) as Record<
+      string,
+      string
+    >,
+  ).join("\n");
+  // Comments first — this block DISCUSSES the templates in prose, and a scan that read its own
+  // documentation would report a collision that does not exist (the importGuard.test.ts trap).
+  const code = raw.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, "");
+  const templates = [
+    // The helper's 6th argument. `[^`]*?` up to the FIRST backtick works for the single-line
+    // callers and the wrapped one alike: no other backtick appears inside these arg lists.
+    ...[...code.matchAll(/recordModelSpend\([^`]*?`([^`]+)`/g)].map((m) => m[1] ?? ""),
+    // ...and the fee, which calls recordSpend directly rather than through the helper.
+    ...[...code.matchAll(/correlationId:\s*`([^`]+)`/g)].map((m) => m[1] ?? ""),
+  ];
+  // Anti-vacuity: a renamed helper would otherwise make an empty list pass for free.
+  expect(templates.length).toBe(8);
+  expect(new Set(templates).size, `duplicate spend correlation: ${templates.join(", ")}`).toBe(
+    templates.length,
+  );
+  for (const t of templates) {
+    // The interpolations are all crypto.randomUUID()s / a 0|1 attempt index, so a base32 stand-in
+    // is faithful. This catches a future template that reaches for something with whitespace in it.
+    const sample = t.replace(/\$\{[^}]+\}/g, "abc123");
+    expect(sample, `illegal correlation charset: ${t}`).toMatch(/^[A-Za-z0-9._:@/-]{1,128}$/);
+  }
+});
+
+// ── 19-11 (ACTN-05): the DEGRADE GRADIENT ────────────────────────────────────
+// `stageCrmWrite` refuses ALL-OR-NOTHING over its operations list, so whenever any element is
+// imperfect the model's cheapest retry is a SIMPLER list — and the simplest list that succeeds is
+// a bare `addContact`. That is how "remind me on Thursday to chase Rhea" was measured landing as
+// an undated contact (19-10, run 309b1c3d): not a model reflex, a downhill path the tool boundary
+// built. The flag is TURN-scoped, which is why this test lives here and not in cockpitTools.test.ts
+// — `__invokeCockpitTool` rebuilds the closure per call and structurally cannot see it.
+const crmStep = (id: string, operations: unknown[]) => ({
+  content: [
+    {
+      type: "tool-call",
+      toolCallId: id,
+      toolName: "stageCrmWrite",
+      input: JSON.stringify({ operations }),
+    },
+  ],
+  finishReason: { unified: "tool-calls", raw: "tool-calls" },
+  usage: provUsage(0, 0),
+  warnings: [],
+});
+
+test("19-11: dropping a refused follow-up is not an exit — the contact-only retry is refused too", async () => {
+  const { t, planId } = await setup();
+
+  await t.action(internal.llm.__runCockpitAgentWithScript, {
+    tenantId: "t1",
+    planId,
+    primary: [
+      // No clientContext on this shim, so §2-D refuses the dated follow-up outright (no_clock).
+      crmStep("c-1", [
+        {
+          op: "addFollowUp",
+          email: "rhea@example.com",
+          note: "chase the renewal",
+          due: "Thursday",
+        },
+      ]),
+      // The downhill move. Before 19-11 this staged a bare contact and reported SUCCESS — the
+      // exact plan row 19-10 measured against the live body.
+      crmStep("c-2", [{ op: "addContact", email: "rhea@example.com", name: "Rhea Calloway" }]),
+      textStep("Told the user what is on the card."),
+    ],
+  });
+
+  const plan = await readPlan(t, planId);
+  expect(plan?.kind).toBeUndefined();
+  expect(plan?.crmOperations).toBeUndefined();
+  expect(plan?.status).toBe("collecting");
+});
+
+test("19-11 anti-vacuity: a contact-only list with NO refused follow-up still stages normally", async () => {
+  const { t, planId } = await setup();
+
+  await t.action(internal.llm.__runCockpitAgentWithScript, {
+    tenantId: "t1",
+    planId,
+    primary: [
+      crmStep("c-1", [{ op: "addContact", email: "rhea@example.com", name: "Rhea Calloway" }]),
+      textStep("Told the user what is on the card."),
+    ],
+  });
+
+  const plan = await readPlan(t, planId);
+  expect(plan?.kind).toBe("crm_write");
+  expect(plan?.crmOperations).toHaveLength(1);
+});
+
+// ── 19-11 (§2-D): the CLOCK must survive into the loop's OWN tool set ─────────
+// THE ACTN-05 ROOT CAUSE. `runAgentLoop` builds its own tools and passed `undefined` for
+// `buildCockpitTools`' 4th (clientContext) argument, so `setSendTime`, `checkAvailability`,
+// `proposeCalendarEvent` and `stageCrmWrite`'s dated follow-up all took their no-clock refusal on
+// every live turn. Invisible because the only offline callers were `__invokeCockpitTool` (bypasses
+// the loop, passes a clock directly) and the SMOKE path (pins its own). Measured on eval run
+// 7e375c3c: seven refusals, every one `{"reason":"no_clock","ops":["addFollowUp"],
+// "dueProvided":[true]}` — the model had supplied the whole follow-up all along.
+test("19-11: the trusted clock reaches the tools runAgentLoop builds (§2-D)", async () => {
+  const { t, planId } = await setup();
+
+  await t.action(internal.llm.__runCockpitAgentWithScript, {
+    tenantId: "t1",
+    planId,
+    clientContext: { tz: "UTC", nowMs: Date.UTC(2020, 0, 1, 12, 0, 0) },
+    primary: [
+      crmStep("c-1", [
+        {
+          op: "addFollowUp",
+          email: "rhea@example.com",
+          note: "chase the renewal",
+          due: "tomorrow",
+        },
+      ]),
+      textStep("Staged the follow-up."),
+    ],
+  });
+
+  const plan = await readPlan(t, planId);
+  expect(plan?.kind).toBe("crm_write");
+  const ops = plan?.crmOperations as Array<{ op: string; dueAt: number }> | undefined;
+  expect(ops).toHaveLength(1);
+  expect(ops?.[0]?.op).toBe("addFollowUp");
+  // A FINITE dueAt is the observable end of the whole §2-D chain: the user's words, parsed against
+  // the trusted clock. "tomorrow" off the pinned instant is the 09:00 default the next day.
+  expect(ops?.[0]?.dueAt).toBe(Date.UTC(2020, 0, 2, 9, 0, 0));
+});
+
+// ── 21-02 (SKILL-01): a tenant's adaptation reaches the REAL specialist system prompt ─────────
+//
+// THE test this phase exists for. 21-01's own summary is blunt about it: a tested contract with no
+// caller is invisible to every green suite here, and a `tenantSkills` row that never reaches a
+// model call is not a skill capability. So this drives the SHIPPED `runSpecialistTurn` — the same
+// function `dispatch.runSpecialist` calls in production — and reads the system prompt the model
+// actually received.
+//
+// The mock's `doGenerate` is a FUNCTION here rather than the usual scripted array: the array form
+// returns canned results and can only ever tell us what came back, never what went in. ai@7's
+// MockLanguageModelV4 accepts either (`typeof doGenerate === "function"` branch, ai/dist/test),
+// so this is the existing seam used the other way round, not a new one.
+test("21-02: tenant A's active adaptation reaches A's specialist prompt and NEVER B's", async () => {
+  const { t } = await setup(); // seedSkills → offer-architect v1 ACTIVE (the global base)
+  const NEEDLE = "ZQ7RUNTIMEd41d8cd9";
+  const planFor = (tenantId: string) =>
+    t.mutation(internal.plans.insertPlan, { tenantId, threadId: `thread-${tenantId}` });
+  const planA = await planFor(TENANT_A);
+  const planB = await planFor(TENANT_B);
+
+  // A has an ACTIVE overlay. 21-04 owns the real activation transition; inserting the row directly
+  // keeps this test about the LOADER rather than about activation authority.
+  await t.run((ctx) =>
+    ctx.db.insert("tenantSkills", {
+      tenantId: TENANT_A,
+      name: OFFER_ARCHITECT_SKILL,
+      version: 2,
+      body: `OFFER ARCHITECT CORE plus adaptation ${NEEDLE}`,
+      authoredBody: `adaptation ${NEEDLE}`,
+      status: "active",
+      author: "user",
+      basedOnScope: "global",
+      basedOnName: OFFER_ARCHITECT_SKILL,
+      basedOnVersion: 1,
+      rollbackEligible: false,
+      createdAt: 0,
+    }),
+  );
+  // …and B has a CANDIDATE carrying the SAME needle. If a candidate ever resolved at runtime, B's
+  // prompt would carry the needle for a reason that has nothing to do with tenancy — so this row
+  // is what makes B's clean prompt evidence about `status`, not just about `tenantId`.
+  await t.run((ctx) =>
+    ctx.db.insert("tenantSkills", {
+      tenantId: TENANT_B,
+      name: OFFER_ARCHITECT_SKILL,
+      version: 2,
+      body: `B DRAFT ${NEEDLE}`,
+      authoredBody: `b draft ${NEEDLE}`,
+      status: "candidate",
+      author: "user",
+      basedOnScope: "global",
+      basedOnName: OFFER_ARCHITECT_SKILL,
+      basedOnVersion: 1,
+      rollbackEligible: false,
+      createdAt: 0,
+    }),
+  );
+
+  const turn = async (tenantId: string, planId: Id<"plans">) => {
+    let system = "";
+    let grantedTools: string[] = [];
+    const capture = async (opts: {
+      prompt: ReadonlyArray<{ role: string; content: unknown }>;
+      tools?: ReadonlyArray<{ name?: string }>;
+    }) => {
+      // The `system` role message is the skill body runAgentLoop handed the provider — read out of
+      // the provider-level call options, so this is the prompt the MODEL saw, not a re-derivation.
+      system = String(opts.prompt.find((m) => m.role === "system")?.content ?? "");
+      grantedTools = (opts.tools ?? []).map((x) => String(x?.name)).sort();
+      return textStep("noted", 0, 0);
+    };
+    const ctx = {
+      runQuery: t.query.bind(t),
+      runMutation: t.mutation.bind(t),
+      runAction: t.action.bind(t),
+    } as unknown as Parameters<typeof runSpecialistTurn>[0];
+    const res = await runSpecialistTurn(ctx, {
+      tenantId,
+      planId,
+      skillName: OFFER_ARCHITECT_SKILL,
+      // The CODE-OWNED grant, read from the shared spec — not a literal retyped here.
+      toolNames: SPECIALISTS["offer-architect"].tools,
+      prompt: "shape my offer",
+      mockScript: { primary: capture as never },
+    });
+    return { system, grantedTools, res };
+  };
+
+  const a = await turn(TENANT_A, planA);
+  const b = await turn(TENANT_B, planB);
+
+  const globalBody = (
+    await t.query(internal.skills.getActiveSkill, { name: OFFER_ARCHITECT_SKILL })
+  ).body;
+
+  // A got the OVERLAY, byte for byte, and the reported skillVersion is the tenant-local 2.
+  expect(a.system).toBe(`OFFER ARCHITECT CORE plus adaptation ${NEEDLE}`);
+  expect(a.system).toContain(NEEDLE);
+  expect(a.res.skillVersion).toBe(2);
+  // B got the GLOBAL body, byte for byte — a real prompt (the positive witness), with no trace of
+  // the needle from A's ACTIVE row or from B's own CANDIDATE.
+  expect(b.system).toBe(globalBody);
+  expect(b.system.length).toBeGreaterThan(200);
+  expect(b.system).not.toContain(NEEDLE);
+  expect(b.res.skillVersion).toBe(1);
+  // …and the two prompts really did differ, so neither equality above is trivially the other's.
+  expect(a.system).not.toBe(b.system);
+
+  // ADR-007: a prompt row ADVISES behaviour, it never GRANTS capability. The overlay changed A's
+  // system prompt and left the tool grant byte-identical to B's and to the code-owned spec.
+  expect(a.grantedTools).toEqual(b.grantedTools);
+  expect(a.grantedTools).toEqual([...SPECIALISTS["offer-architect"].tools].sort());
+});
+
+test("21-02: a tenant with no overlay still loads the global row; an unseeded skill fails CLOSED", async () => {
+  const { t } = await setup();
+  const planId = await t.mutation(internal.plans.insertPlan, {
+    tenantId: TENANT_A,
+    threadId: "thread-fallback",
+  });
+  const ctx = {
+    runQuery: t.query.bind(t),
+    runMutation: t.mutation.bind(t),
+    runAction: t.action.bind(t),
+  } as unknown as Parameters<typeof runSpecialistTurn>[0];
+  const run = (skillName: string) =>
+    runSpecialistTurn(ctx, {
+      tenantId: TENANT_A,
+      planId,
+      skillName,
+      toolNames: SPECIALISTS["offer-architect"].tools,
+      prompt: "shape my offer",
+      mockScript: { primary: [textStep("noted", 0, 0)] },
+    });
+
+  // Mutation 8 (remove the global fallback) turns THIS assertion red.
+  expect((await run(OFFER_ARCHITECT_SKILL)).skillVersion).toBe(1);
+  // …and the fallback did not soften the fail-closed contract for a name with no row at all.
+  await expect(run("never-seeded-skill")).rejects.toThrow(/NO_ACTIVE_SKILL/);
 });

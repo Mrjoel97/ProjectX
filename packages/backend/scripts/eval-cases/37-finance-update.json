@@ -1,0 +1,14 @@
+{
+  "id": "37-finance-update",
+  "description": "Task 9's behavioural proof for the finance body section added alongside it, and the fixture owed by CLAUDE.md's playbook rule 'teach a tool, owe a fixture' now that `readFinance`/`stageFinanceWrite` are in the body. Turn 1 states a figure in plain language — the agent must route it to `stageFinanceWrite`, never answer in prose ('got it, I've noted your cash position') while never calling the tool, which no reply assertion can tell apart from success. `cashOnHand` is used DELIBERATELY, not `cac`: CAC is scorecard-stored and every `stageFinanceWrite` call naming it is refused (cash.ts's `agent_cannot_update_figure`), so a fixture built on it would encode a call that can never succeed and prove nothing about the routing this fixture exists to check. `financeClaimCount: 1` is graded off `plan.financeClaims`, the exact `crmOperationCount`/`attachmentCount` shape — an array length read off the plan row the tool itself writes, so a staged-then-never-approved claim can never be confused with an applied one (the tool STAGES only; nothing here ever clicks Approve). `planKind` is deliberately NOT asserted: validateFixture pairs `planKind`/`attributionRoute`/`citesVaultDoc` with `actOnGap` (15-06/DISP-01's gap-dispatch-only rule), which this fixture has no reason to carry — `financeClaimCount` alone already proves the routing, since `plan.financeClaims` is written by no path other than `stageFinanceWrite`. `recipientCount: 0` and `attachmentCount: 0` are the same anti-drift teeth 35/36 use: a figure statement must never turn into an outbound email plan. `statusAtMost: proposed` pins that staging never silently applies past the human Approve gate.",
+  "turns": [
+    "Quick number for you — Foxglove Bookkeeping's cash on hand right now is $42,000, that's the whole position, nothing else in reserve."
+  ],
+  "expect": {
+    "financeClaimCount": 1,
+    "statusAtMost": "proposed",
+    "recipientCount": 0,
+    "attachmentCount": 0
+  },
+  "needles": ["Foxglove Bookkeeping", "Foxglove"]
+}

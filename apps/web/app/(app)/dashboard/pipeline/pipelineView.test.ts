@@ -1,0 +1,501 @@
+// The Pipeline page's component contracts, in the DOM-free runner (19-VALIDATION row 19).
+//
+// `.test.ts`, NOT `.test.tsx` — `apps/web/vitest.config.mts` includes `app/**/*.test.ts` ONLY, so a
+// `.tsx` here is SILENTLY SKIPPED and reads as coverage in the diff while asserting nothing.
+// Components are built with `createElement` and rendered to a STRING with `renderToStaticMarkup`;
+// only hook-free / prop-driven exports are importable, which is why every `useQuery` piece stays
+// module-private in `PipelineView.tsx`.
+
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { IMPORT_ATTESTATION } from "@pikar/core/contactImport";
+import { type ComponentType, createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, test } from "vitest";
+import { ImportAttest, ImportDone, ImportPreview } from "./ImportPanel";
+import {
+  ContactsEmptyState,
+  ContactTable,
+  ORIGIN_LABELS,
+  PipelineTiles,
+  UnassignedFollowUps,
+} from "./PipelineView";
+
+const render = (component: unknown, props: Record<string, unknown>): string =>
+  renderToStaticMarkup(createElement(component as ComponentType<Record<string, unknown>>, props));
+
+const here = dirname(fileURLToPath(import.meta.url));
+const rawSource = readFileSync(join(here, "PipelineView.tsx"), "utf8");
+
+/** Comments are stripped before every source scan below, the `contacts.test.ts` rule: the file
+ *  carries deliberate GRAVESTONE comments naming what is absent and WHY (no `window.confirm`, no
+ *  `--held`, no opportunity concept), and a scan that punished its own documentation would force
+ *  the absence to go unexplained. */
+const stripComments = (src: string) =>
+  src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+const source = stripComments(rawSource);
+
+const DAY = 24 * 60 * 60 * 1000;
+const NOW = Date.UTC(2026, 7, 9, 12, 0, 0);
+
+const noop = () => {};
+const handlers = {
+  suppress: noop,
+  arm: noop,
+  cancelArm: noop,
+  unsuppress: noop,
+  toggleFollowUp: noop,
+  createFollowUp: noop,
+};
+
+const contact = (over: Record<string, unknown> = {}) => ({
+  contactId: "c1",
+  email: "dana@example.com",
+  name: "Dana Reeve",
+  origin: "user-entered",
+  lastTouchAt: NOW - DAY,
+  nextStep: { followUpId: "f1", note: "Send the revised quote", dueAt: NOW + DAY },
+  consent: { at: NOW - 30 * DAY, source: "asserted-by-user" },
+  suppressed: false,
+  ...over,
+});
+
+const table = (rows: Array<Record<string, unknown>>, over: Record<string, unknown> = {}) =>
+  render(ContactTable, {
+    rows,
+    armed: null,
+    followUpFor: null,
+    busy: false,
+    on: handlers,
+    ...over,
+  });
+
+/** A tile's value cell, addressed BY ITS OWN TILE. A bare `toContain(">3<")` is satisfied by ANY
+ *  tile holding 3, so it cannot see two values swapped between their labels — measured during the
+ *  19.1 gap-closure audit: transposing `needingAttention` and `followUpsDue` in the component left
+ *  this entire suite green. Anchor a rendered number to the thing it names, never to the document.
+ *  Same defect the import done-screen test was caught by (`enriched: 1` satisfying `">1<"`). */
+const tileValue = (html: string, id: string) =>
+  html.match(new RegExp(`pipeline-tile-${id}"[\\s\\S]*?stat-value">([^<]*)<`))?.[1];
+
+describe("the four tiles are ALWAYS-KNOWN counts (invariant 3)", () => {
+  test("a brand-new empty tenant reads FOUR real zeroes, and no hedge anywhere", () => {
+    const html = render(PipelineTiles, {
+      tiles: {
+        needingAttention: 0,
+        followUpsDue: 0,
+        consentOnRecord: 0,
+        suppressed: 0,
+        partial: null,
+      },
+    });
+    // Four rendered values, each an actual `0`. `split` counts occurrences of the VALUE cell, so a
+    // label that happened to contain a zero could not fake this.
+    expect(html.split(">0<").length - 1).toBe(4);
+    // The 26-10 defect (commit 1a63992) stated from the other side: there the fix was to stop
+    // printing a number the system did not know; here it is to stop HEDGING one it does know.
+    // Asserted as an ABSENCE, because a tile that reads "—" still renders and still looks fine.
+    expect(html).not.toContain("—");
+    expect(html).not.toContain("Unknown");
+    expect(html).not.toMatch(/not tracked|no data/i);
+  });
+
+  test("real counts render as themselves and each tile is separately addressable", () => {
+    const html = render(PipelineTiles, {
+      tiles: {
+        needingAttention: 3,
+        followUpsDue: 7,
+        consentOnRecord: 2,
+        suppressed: 1,
+        partial: null,
+      },
+    });
+    // Each value read out of ITS OWN tile, so a transposition between two tiles fails here.
+    expect(tileValue(html, "needing-attention")).toBe("3");
+    expect(tileValue(html, "followups-due")).toBe("7");
+    expect(tileValue(html, "consent")).toBe("2");
+    expect(tileValue(html, "suppressed")).toBe("1");
+    for (const id of ["needing-attention", "followups-due", "consent", "suppressed"]) {
+      expect(html).toContain(`data-testid="pipeline-tile-${id}"`);
+    }
+    // Under the bound the counts are EXACT totals, so nothing may suggest "at least". This is the
+    // non-vacuity floor for the `row-cap` case below.
+    expect(html).not.toContain("+");
+  });
+
+  test("PAST the backend's scan bound every value reads as a FLOOR — `1000+`, still never Unknown", () => {
+    // `partial: "row-cap"` is what `pipelineTiles` returns once any of its three scans hits
+    // SCAN_LIMIT (19.1-05) — reachable with ONE max-size CSV import into a non-empty book.
+    const html = render(PipelineTiles, {
+      tiles: {
+        needingAttention: 1000,
+        followUpsDue: 12,
+        consentOnRecord: 1000,
+        suppressed: 4,
+        partial: "row-cap",
+      },
+    });
+    // Third instance of the same weakness, fixed with the rest: `>12+<` and `>4+<` were both
+    // document-wide, so swapping `followUpsDue` and `suppressed` was invisible here too.
+    expect(tileValue(html, "needing-attention")).toBe("1000+");
+    expect(tileValue(html, "followups-due")).toBe("12+");
+    expect(tileValue(html, "consent")).toBe("1000+");
+    expect(tileValue(html, "suppressed")).toBe("4+");
+    // A floor is still a NUMBER the page knows. Invariant 3 bans hedging ("we can't say"), not
+    // honesty about a bound — so the same absences must still hold here.
+    expect(html).not.toContain("—");
+    expect(html).not.toContain("Unknown");
+    expect(html).not.toMatch(/not tracked|no data/i);
+    // And `partial` itself must never leak into a stat cell as a fifth tile.
+    expect(html).not.toContain("row-cap");
+    expect(html.split('data-testid="pipeline-tile-').length - 1).toBe(4);
+    // The e2e integer-parse assertion still works on this markup.
+    expect(Number.parseInt("1000+", 10)).toBe(1000);
+  });
+});
+
+describe("the contact table", () => {
+  test("a contact with NO NAME shows its address, never a blank and never Unknown", () => {
+    const html = table([contact({ name: null })]);
+    expect(html).toContain("dana@example.com");
+    expect(html).not.toContain("Unknown");
+    // The Contact cell is not empty: the address is inside it, not only in a later column.
+    expect(html).toMatch(/data-testid="contact-name"[^>]*>dana@example\.com</);
+  });
+
+  test("consent: null reads 'none on record' — the truth, never 'consented'", () => {
+    const html = table([contact({ consent: null })]);
+    expect(html).toContain("none on record");
+    expect(html).not.toMatch(/>Consented/);
+  });
+
+  test("lastTouchAt: null is an explicit no-contact-yet, distinct from 0", () => {
+    const html = table([contact({ lastTouchAt: null })]);
+    expect(html).toContain("No contact yet");
+    expect(html).not.toContain(">0<");
+  });
+
+  test("the table carries no em-dash row: one row per PERSON, contactless work lives elsewhere", () => {
+    const html = table([contact(), contact({ contactId: "c2", email: "sam@example.com" })]);
+    expect(html.split('data-testid="pipeline-contact-row"').length - 1).toBe(2);
+    expect(html).not.toContain("—");
+  });
+
+  test("nothing scheduled is stated, not left blank", () => {
+    const html = table([contact({ nextStep: null })]);
+    expect(html).toContain("Nothing scheduled");
+  });
+});
+
+// SILENT SITE 3 (19.1-02). Widening `origin` and `consentSource` in the schema produces a compile
+// error at 16 of the 19 consuming sites. This file is where the OTHER THREE live: a label map keyed
+// by a literal type tsc never checked against the read model, and a consent cell that rendered a
+// date and threw the source away. 19-06 shipped `media` through exactly this gap for a whole phase.
+describe("the widened unions are REGISTERED here, where tsc is silent", () => {
+  test("ORIGIN_LABELS is bound to the read model AT THE DECLARATION and covers `imported`", () => {
+    // `as const satisfies Record<ContactRow["origin"], string>` makes a future origin fail on THIS
+    // declaration rather than resolve to `undefined` inside a JSX index expression. tsc enforces
+    // the bind; this scan is what stops the bind itself being quietly deleted.
+    expect(source).toContain("satisfies Record<");
+    expect(ORIGIN_LABELS.imported).toBe("Imported from a file");
+    expect(Object.keys(ORIGIN_LABELS)).toHaveLength(4);
+  });
+
+  test("an imported contact SAYS SO — never a blank, never Unknown", () => {
+    const html = table([contact({ origin: "imported" })]);
+    expect(html).toContain("Imported from a file");
+    expect(html).not.toContain("Unknown");
+  });
+
+  test("the consent chip renders its SOURCE: a batch attestation reads differently", () => {
+    const at = NOW - 30 * DAY;
+    const asserted = table([contact({ consent: { at, source: "asserted-by-user" } })]);
+    const imported = table([contact({ consent: { at, source: "imported-attested" } })]);
+    // Same day, same everything: the ONLY difference between these two renders is the source.
+    expect(asserted).toContain("Consented");
+    expect(imported).toContain("Consented");
+    // They must DIFFER. Asserting only that the imported chip says "imported" would still pass if
+    // the suffix were appended to EVERY chip — which is the flattening this test exists to catch.
+    expect(imported).not.toBe(asserted);
+    expect(imported).toContain("imported");
+    expect(asserted).not.toContain("imported");
+  });
+
+  test("consent: null is still 'none on record' — a source is not invented for absent consent", () => {
+    const html = table([contact({ consent: null })]);
+    expect(html).toContain("none on record");
+    expect(html).not.toContain("imported");
+    expect(html).not.toMatch(/>Consented/);
+  });
+});
+
+describe("the empty state", () => {
+  test("zero contacts offers TWO deliberate acts and no mailbox suggestions", () => {
+    const html = render(ContactsEmptyState, { onAdd: noop, onImport: noop });
+    expect(html).toContain("Add your first contact");
+    // 19.1-06 added the second: type ONE person, or import a file under an attestation. Both are a
+    // deliberate human act, which is what invariant 1 actually requires — it forbids a row
+    // appearing because software went looking. The banned THIRD action is still asserted absent
+    // below: "seeded suggestions from recent mail" reads the mailbox to propose contacts, and that
+    // is how a contacts CACHE starts.
+    expect(html).toContain("Import from a CSV");
+    expect(html).toContain('data-testid="import-first-contacts"');
+    expect(html.split("<button").length - 1).toBe(2);
+    expect(html).not.toContain("<a ");
+    expect(html).not.toMatch(/suggest|recent mail|from your inbox/i);
+  });
+});
+
+describe("contactless follow-ups own their section", () => {
+  test("they render their notes beneath the table, not inside it", () => {
+    const html = render(UnassignedFollowUps, {
+      followUps: [{ followUpId: "f9", note: "Chase the supplier quote", dueAt: NOW + DAY }],
+    });
+    expect(html).toContain("Chase the supplier quote");
+    expect(html).toContain('data-testid="pipeline-unassigned"');
+  });
+
+  test("the section is rendered BELOW the contact table on the page", () => {
+    const contactsAt = source.indexOf("<ConnectedContacts");
+    const unassignedAt = source.indexOf("<ConnectedUnassigned");
+    expect(contactsAt).toBeGreaterThan(-1);
+    expect(unassignedAt).toBeGreaterThan(contactsAt);
+  });
+});
+
+describe("un-suppressing is a two-step arm/commit", () => {
+  test("a suppressed row offers ONE arming control and no confirm until it is armed", () => {
+    const html = table([contact({ suppressed: true })]);
+    expect(html).toContain('data-testid="contact-unsuppress-arm"');
+    expect(html).not.toContain('data-testid="contact-unsuppress-confirm"');
+    // A suppressed contact must not also be offered "mark suppressed".
+    expect(html).not.toContain('data-testid="contact-suppress"');
+  });
+
+  test("armed, it states that re-subscribing without fresh consent is the user's responsibility", () => {
+    const html = table([contact({ suppressed: true })], { armed: "dana@example.com" });
+    expect(html).toContain('data-testid="contact-unsuppress-confirm"');
+    expect(html).toMatch(/your responsibility/i);
+  });
+
+  test("NO window.confirm anywhere on this page — a browser modal blocks the Playwright spec", () => {
+    expect(source).not.toContain("window.confirm");
+    expect(source).not.toContain("confirm(");
+  });
+});
+
+describe("the page stays inside the Phase 19 substrate", () => {
+  test("no opportunity, no deal state, no monetary value (PIPE-01 / SC#8)", () => {
+    // Non-vacuity floor: a bad read yields "" and every `not.toMatch` here would pass.
+    expect(source.length).toBeGreaterThan(4_000);
+    expect(/amountCents|opportunit|\bstage\b/i.test("amountCents")).toBe(true);
+    expect(source).not.toMatch(/amountCents|opportunit|\bstage\b/i);
+    expect(source).not.toContain("DashboardMoney");
+  });
+
+  test("page state prose comes from the code-owned DASHBOARD_STATE_COPY, not the backend", () => {
+    expect(source).toContain("DASHBOARD_STATE_COPY");
+  });
+
+  test("every section owns its own useQuery, so one failing read cannot erase the page", () => {
+    expect(source.split("useQuery(api.contacts.").length - 1).toBe(3);
+  });
+
+  test("the dark marketing .ledger block and the approval-gate amber are both absent", () => {
+    expect(source).not.toContain('className="ledger');
+    expect(source).not.toContain("--held");
+  });
+});
+
+// ── the CSV import panel (19.1-06) ────────────────────────────────────────────
+// The panel is the reason the phase exists: `matchExisting` and `importContacts` shipped in 19.1-04
+// fully tested with ZERO callers, which is exactly the phase-19 clock-plane failure — a capability
+// certified by unit tests, SMOKE and a paid eval gate while no user could reach it. These assert
+// what the user can DO (a Confirm that is disabled, the sentence they are agreeing to, the counts
+// and lines they are shown), never a component internal. `ImportPanel` itself holds hooks and is
+// unrenderable here; the browser proof is plan 07's job.
+const importSource = stripComments(readFileSync(join(here, "ImportPanel.tsx"), "utf8"));
+
+const attest = (over: Record<string, unknown> = {}) =>
+  render(ImportAttest, {
+    wording: IMPORT_ATTESTATION,
+    ticked: false,
+    busy: false,
+    context: "",
+    onTick: noop,
+    onContext: noop,
+    onConfirm: noop,
+    ...over,
+  });
+
+const preview = (over: Record<string, unknown> = {}) =>
+  render(ImportPreview, {
+    header: ["Email", "Full name", "Company"],
+    mapping: { email: [0], name: [1], company: [2], phone: [], title: [] },
+    counts: { newCount: 3, enriched: 2, unchanged: 0, rejected: 1 },
+    rejected: [],
+    matching: false,
+    refusal: null,
+    onField: noop,
+    onBack: noop,
+    ...over,
+  });
+
+describe("the CSV import panel", () => {
+  test("Confirm is DISABLED until the attestation is ticked, and the box starts unticked", () => {
+    const unticked = attest();
+    // The button exists either way — this is a gate, not a hidden control.
+    expect(unticked).toContain('data-testid="import-confirm"');
+    expect(unticked).toMatch(
+      /data-testid="import-confirm"[^>]*disabled|disabled[^>]*import-confirm/,
+    );
+    // The box's own default: an unticked checkbox renders WITHOUT `checked`. A pre-ticked box would
+    // make the stored wording — kept byte-for-byte as the evidence — a false statement about what
+    // the user did.
+    expect(unticked).not.toMatch(/import-attest-box[^>]*checked/);
+
+    const ticked = attest({ ticked: true });
+    expect(ticked).toContain('data-testid="import-confirm"');
+    // Non-vacuity: the disabled attribute is absent ENTIRELY once ticked, so the assertion above
+    // measures the tick and not merely the presence of a button.
+    expect(ticked).not.toContain("disabled");
+  });
+
+  test("the attestation is rendered BYTE-FOR-BYTE from the shared constant", () => {
+    // Compared against the imported constant, never a re-typed copy: the sentence on screen and the
+    // sentence stored on every contact must be the same string, and a paraphrase here would make
+    // the stored evidence describe something the user never read.
+    expect(attest()).toContain(IMPORT_ATTESTATION);
+    expect(importSource).toContain("IMPORT_ATTESTATION");
+  });
+
+  test("the four preview counts render as themselves, including a real 0", () => {
+    const html = preview();
+    // Each count anchored to the word it qualifies. The bare `">3<"`/`">2<"` form these replace was
+    // satisfied by any of the four counts, so `enriched` and `rejected` could swap unnoticed.
+    expect(html).toContain("<strong>3</strong> new");
+    expect(html).toContain("<strong>2</strong> enriched");
+    expect(html).toContain("<strong>0</strong> unchanged");
+    expect(html).toContain("<strong>1</strong> rejected");
+    // A zero is a fact here too (invariant 3's rule, one section down the page): "0 unchanged" is
+    // knowledge, and hedging it would make the preview stop promising what the write will do.
+    expect(html).not.toContain("Unknown");
+  });
+
+  test("every rejected row is named by its FILE LINE and its reason", () => {
+    const html = preview({
+      counts: { newCount: 1, enriched: 0, unchanged: 0, rejected: 2 },
+      rejected: [
+        { line: 4, reason: "not a usable email address" },
+        { line: 12, reason: "no email address in this row" },
+      ],
+    });
+    expect(html).toContain('data-testid="import-rejected"');
+    // The PHYSICAL file line, which is what the user sees opening the CSV — a quoted newline makes
+    // the line and the record index diverge, and the line is the one they can act on.
+    expect(html).toContain("Line 4");
+    expect(html).toContain("Line 12");
+    expect(html).toContain("not a usable email address");
+    expect(html).toContain("no email address in this row");
+  });
+
+  test("the panel never uploads, never opens a browser dialog, and never spends the amber", () => {
+    // Non-vacuity floor: a bad read yields "" and every `not.toContain` below would pass.
+    expect(importSource.length).toBeGreaterThan(4_000);
+    // The file is parsed in the browser and NEVER uploaded — that absence is why this feature has
+    // no retention rule and no cleanup job.
+    expect(importSource).not.toContain("generateUploadUrl");
+    expect(importSource).not.toContain("vaultUpload");
+    // Every refusal is inline. A browser modal blocks the page and cannot be driven by plan 07's
+    // Playwright spec, which counts dialogs.
+    expect(importSource).not.toContain("window.confirm");
+    expect(importSource).not.toContain("window.alert");
+    expect(importSource).not.toContain("confirm(");
+    expect(importSource).not.toContain("alert(");
+    expect(importSource).not.toContain("<dialog");
+    // Amber is the approval gate's alone (BRAND §2); a refusal here is information, not failure.
+    expect(importSource).not.toContain("--held");
+    expect(importSource).not.toContain("--amber");
+    // PIPE-01's structural ban travels with the surface: the panel's screens are `step`.
+    expect(importSource).not.toMatch(/\bstage\b/i);
+    // THE KEY LINKS. This plan exists because a tested capability with no caller is invisible to
+    // every green suite in the repo, so the wiring itself is asserted: the parser by SUBPATH (never
+    // the barrel), and both Convex functions actually named.
+    expect(importSource).toContain('from "@pikar/core/contactImport"');
+    expect(importSource).toContain("api.contacts.matchExisting");
+    expect(importSource).toContain("api.contacts.importContacts");
+    expect(importSource).toContain("IMPORT_MATCH_CHUNK");
+    expect(importSource).toContain("IMPORT_BATCH_ROWS");
+  });
+
+  // ── The two items presented at the 19.1-07 owner gate and left open there ──────────────────
+  // Both were verified as real by the phase verifier before being fixed here.
+
+  test("the disabled Confirm LOOKS disabled, not merely IS disabled", () => {
+    // Gate finding 1: the button genuinely carried `disabled`, but it is styled from `primary`,
+    // which has no disabled variant — so a closed gate rendered exactly as pressable as an open
+    // one, `cursor: pointer` and all. The values are globals.css's already-committed
+    // `.vault-button:disabled` convention (line ~994), not a new pair invented here.
+    const unticked = attest();
+    expect(unticked).toContain("cursor:not-allowed");
+    expect(unticked).toContain("opacity:0.48");
+    // Non-vacuity: ticking must restore the pressable look, so the assertion above measures the
+    // TICK and not a style that is simply always on.
+    const ticked = attest({ ticked: true });
+    expect(ticked).not.toContain("cursor:not-allowed");
+    expect(ticked).not.toContain("opacity:0.48");
+  });
+
+  test("the done screen counts EVERY rejected row, including the ones the browser dropped", () => {
+    // Gate finding 2: the preview said "1 rejected" and this screen then said "0 rejected" for the
+    // SAME file, because a row the browser refuses is never sent and so the server rejected none.
+    // Both numbers were individually true and the screen was still lying: the user imported one
+    // file and is owed one accounting of it. The sum lives INSIDE this component precisely so this
+    // assertion covers the arithmetic rather than a caller's choice of which number to hand over.
+    // Every count is a DISTINCT value and every assertion binds the number to its own label. A
+    // bare `toContain(">1<")` passes off any other count that happens to be 1 — measured: it stayed
+    // green with the sum removed, because `enriched` was also 1. The label is the anchor.
+    const html = render(ImportDone, {
+      created: 2,
+      enriched: 3,
+      unchanged: 4,
+      serverRejected: 0,
+      browserRejected: 1,
+      onAgain: noop,
+    });
+    expect(html).toContain("<strong>1</strong> rejected");
+    expect(html).toContain("<strong>2</strong> added");
+    expect(html).toContain("<strong>3</strong> filled in");
+    expect(html).toContain("<strong>4</strong> already up to date");
+    // Non-vacuity: a genuinely clean file still reports a real 0 (invariant 3 — a zero is
+    // knowledge), so the assertion above cannot be satisfied by a hardcoded 1.
+    const clean = render(ImportDone, {
+      created: 7,
+      enriched: 8,
+      unchanged: 9,
+      serverRejected: 0,
+      browserRejected: 0,
+      onAgain: noop,
+    });
+    expect(clean).toContain("<strong>0</strong> rejected");
+    // And the server's own rejections are not dropped by the fix that added the browser's.
+    const both = render(ImportDone, {
+      created: 7,
+      enriched: 8,
+      unchanged: 9,
+      serverRejected: 2,
+      browserRejected: 3,
+      onAgain: noop,
+    });
+    expect(both).toContain("<strong>5</strong> rejected");
+  });
+
+  test("the done screen is WIRED to both rejection sources", () => {
+    // The component test above proves the arithmetic; this proves the caller still supplies both
+    // operands. Splitting them is the point — a sum that is correct but fed one number is exactly
+    // the defect being fixed, and no render of `ImportDone` alone can see it.
+    expect(importSource).toContain("serverRejected={result.rejected.length}");
+    expect(importSource).toContain("browserRejected={mapped.rejected.length}");
+  });
+});

@@ -9,8 +9,14 @@
 // Component registration mirrors profileRedaction.test.ts (auditCounts + workflow + workpool — the
 // audit insert feeds the aggregate) plus vaultSweep.test.ts's migrations registration, which the
 // backfill needs.
-import type { BusinessProfile, Persona } from "@pikar/core";
-import { deriveTier, sanitizeAgentName, serializeProfile } from "@pikar/core";
+import type { BusinessProfile, OnboardingSlots, Persona } from "@pikar/core";
+import {
+  canComplete,
+  deriveTier,
+  missingSlots,
+  sanitizeAgentName,
+  serializeProfile,
+} from "@pikar/core";
 import { convexTest, type TestConvex } from "convex-test";
 import { describe, expect, test } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
@@ -502,5 +508,148 @@ describe("the legacy backfill (SC#6a / SC#6b)", () => {
     expect((await rowFor(t, TENANT_TWO_DOCS))?.tier).toBe("startup");
 
     await cancelQueued(t);
+  });
+});
+
+// ── 19-03: the CAN-SPAM postal address (PIPE-01 SC#6) ───────────────────────────────────────────
+//
+// The field is ENRICHMENT, never an onboarding slot. The load-bearing test in this block is
+// "the completeness result is byte-identical with and without it" — Phase 11 deliberately admits
+// idea-stage users with almost nothing filled in, and 19-05 fails the SEND closed instead.
+
+const ADDRESS = "Northwind Ltd\n123 Main St\nSpringfield, IL 62704, USA";
+
+/** A legacy row with a tier but NO facts — so `missingSlots` over it is NON-EMPTY (non-vacuity). */
+const seedFactlessRow = (t: TestConvex<typeof schema>, tenantId: string) =>
+  t.run((ctx) =>
+    ctx.db.insert("tenantProfiles", {
+      tenantId,
+      tier: "startup",
+      tierSource: "legacy",
+      derivedAt: 1_700_000_000_000,
+    }),
+  );
+
+/** The onboarding-completeness input, built off a row exactly as `saveFacts` and `ShapePanel` build
+ *  it. `oneLineDescription` lives on the vault doc, so it gets the same placeholder both sides. */
+const slotsOf = (row: Doc<"tenantProfiles"> | null): OnboardingSlots => ({
+  headcount: row?.headcount,
+  paidStaff: row?.paidStaff,
+  revenueStage: row?.revenueStage,
+  funding: row?.funding,
+  yearsOperating: row?.yearsOperating,
+  oneLineDescription: "x",
+});
+
+describe("postalAddress (PIPE-01 SC#6 — enrichment, never an onboarding gate)", () => {
+  test("a postal address round-trips through saveFacts/get VERBATIM (no reformatting, no parsing)", async () => {
+    const t = setup();
+    await asTenant(t).mutation(api.tenantProfile.saveFacts, {
+      ...SOLO_FACTS,
+      postalAddress: ADDRESS,
+    });
+
+    expect((await asTenant(t).query(api.tenantProfile.get, {}))?.postalAddress).toBe(ADDRESS);
+    // The identity-less internal read (the send path's reader) sees it too — one reader, not two.
+    expect(
+      (await t.query(internal.tenantProfile.forTenant, { tenantId: TENANT_A }))?.postalAddress,
+    ).toBe(ADDRESS);
+  });
+
+  test("surrounding whitespace is trimmed on write", async () => {
+    const t = setup();
+    await asTenant(t).mutation(api.tenantProfile.saveFacts, {
+      ...SOLO_FACTS,
+      postalAddress: `  ${ADDRESS}\n `,
+    });
+    expect((await rowFor(t, TENANT_A))?.postalAddress).toBe(ADDRESS);
+  });
+
+  test("an empty-after-trim address is REFUSED at the write boundary and writes nothing", async () => {
+    const t = setup();
+    await seedRow(t, TENANT_A, { postalAddress: ADDRESS });
+
+    await expect(
+      asTenant(t).mutation(api.tenantProfile.saveFacts, { headcount: 4, postalAddress: "   " }),
+    ).rejects.toThrow(/EMPTY_POSTAL_ADDRESS/);
+
+    // Fail CLOSED: the refusal takes the whole write with it, facts included.
+    const row = await rowFor(t, TENANT_A);
+    expect(row?.postalAddress).toBe(ADDRESS);
+    expect(row?.headcount).toBe(SOLO_FACTS.headcount);
+  });
+
+  test("an address over the length ceiling is REFUSED", async () => {
+    const t = setup();
+    await seedRow(t, TENANT_A);
+
+    await expect(
+      asTenant(t).mutation(api.tenantProfile.saveFacts, { postalAddress: "x".repeat(501) }),
+    ).rejects.toThrow(/POSTAL_ADDRESS_TOO_LONG/);
+    expect((await rowFor(t, TENANT_A))?.postalAddress).toBeUndefined();
+
+    // The ceiling itself is not off-by-one: exactly at the limit is ACCEPTED.
+    await asTenant(t).mutation(api.tenantProfile.saveFacts, { postalAddress: "x".repeat(500) });
+    expect((await rowFor(t, TENANT_A))?.postalAddress).toHaveLength(500);
+  });
+
+  test("saveFacts WITHOUT postalAddress neither throws nor clears an already-set value", async () => {
+    const t = setup();
+    await asTenant(t).mutation(api.tenantProfile.saveFacts, {
+      ...SOLO_FACTS,
+      postalAddress: ADDRESS,
+    });
+
+    await asTenant(t).mutation(api.tenantProfile.saveFacts, { headcount: 2 });
+
+    const row = await rowFor(t, TENANT_A);
+    expect(row?.postalAddress).toBe(ADDRESS);
+    expect(row?.headcount).toBe(2);
+  });
+
+  test("the onboarding-completeness result is BYTE-IDENTICAL with and without a postal address", async () => {
+    const t = setup();
+    await seedFactlessRow(t, TENANT_A);
+    await seedFactlessRow(t, TENANT_B);
+
+    // Identical partial facts; only B also sets a postal address.
+    await asTenant(t, TENANT_A).mutation(api.tenantProfile.saveFacts, { headcount: 3 });
+    await asTenant(t, TENANT_B).mutation(api.tenantProfile.saveFacts, {
+      headcount: 3,
+      postalAddress: ADDRESS,
+    });
+
+    const a = await rowFor(t, TENANT_A);
+    const b = await rowFor(t, TENANT_B);
+    // Non-vacuity, both directions: the field really is set on ONE side and absent on the other…
+    expect(a?.postalAddress).toBeUndefined();
+    expect(b?.postalAddress).toBe(ADDRESS);
+    // …and the completeness answer is genuinely non-empty, so "identical" is not "both empty".
+    expect(missingSlots(slotsOf(b)).length).toBeGreaterThan(0);
+
+    expect(JSON.stringify(missingSlots(slotsOf(b)))).toBe(JSON.stringify(missingSlots(slotsOf(a))));
+    expect(canComplete(slotsOf(b))).toBe(canComplete(slotsOf(a)));
+
+    // And a tenant with a COMPLETE fact set is complete whether or not the address is there.
+    await asTenant(t, TENANT_A).mutation(api.tenantProfile.saveFacts, { ...SOLO_FACTS });
+    expect(canComplete(slotsOf(await rowFor(t, TENANT_A)))).toBe(true);
+  });
+
+  test("tenant B never sees tenant A's postal address (both partitions non-empty)", async () => {
+    const t = setup();
+    await asTenant(t, TENANT_A).mutation(api.tenantProfile.saveFacts, {
+      ...SOLO_FACTS,
+      postalAddress: ADDRESS,
+    });
+    await asTenant(t, TENANT_B).mutation(api.tenantProfile.saveFacts, {
+      ...SME_FACTS,
+      postalAddress: "Contoso GmbH, Hauptstr. 1, 10115 Berlin, DE",
+    });
+
+    const a = await asTenant(t, TENANT_A).query(api.tenantProfile.get, {});
+    const b = await asTenant(t, TENANT_B).query(api.tenantProfile.get, {});
+    expect(a?.postalAddress).toBe(ADDRESS);
+    expect(b?.postalAddress).toContain("Berlin");
+    expect(b?.postalAddress).not.toContain("Springfield");
   });
 });

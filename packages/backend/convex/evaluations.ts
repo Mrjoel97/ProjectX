@@ -30,7 +30,7 @@ import { categoryFor } from "@pikar/vault";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import type { DatabaseWriter, MutationCtx } from "./_generated/server";
+import type { DatabaseReader, DatabaseWriter, MutationCtx } from "./_generated/server";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
@@ -97,12 +97,29 @@ function getPath(obj: unknown, path: string): unknown {
     .reduce<unknown>((o, k) => (o == null ? undefined : (o as Record<string, unknown>)[k]), obj);
 }
 
-/** Return a CLONE with the dot-path set (JSON-clone — the Scorecard is JSON-safe). */
+/**
+ * Return a CLONE with the dot-path set (JSON-clone — the Scorecard is JSON-safe).
+ *
+ * CREATES INTERMEDIATE OBJECTS rather than trusting the carrier is already well-formed (whole-branch
+ * review B1, layer 3). `applyScorecardAnswer` can be handed ANY row's `scorecard` as its carrier —
+ * including a `document-review` row's literal `scorecard: {}` (`voiceDoc.ts`) reached through a
+ * thread whose per-thread newest row is not the tenant's globally-newest usable one, which
+ * `latestScorecardRow`'s framework/shape filter (B1 layer 1) does not fully close off for every
+ * caller. A missing or non-object intermediate (`cur["financials"] === undefined`) used to make the
+ * final assignment throw; here it is created as `{}` and the walk continues. Fixed HERE, not by
+ * making `cash.ts`'s `saveInput` guarantee a well-formed carrier first, because `setPath` has other
+ * callers (`runEvaluation`'s `fillVault`, `coerceScorecardValue`'s siblings) that would need the same
+ * guard repeated at every call site — one root-cause fix here covers all of them (CLAUDE.md §8).
+ */
 function setPath<T>(obj: T, path: string, value: unknown): T {
   const clone = JSON.parse(JSON.stringify(obj)) as Record<string, unknown>;
   const keys = path.split(".");
   let cur = clone;
-  for (let i = 0; i < keys.length - 1; i++) cur = cur[keys[i] as string] as Record<string, unknown>;
+  for (let i = 0; i < keys.length - 1; i++) {
+    const key = keys[i] as string;
+    if (typeof cur[key] !== "object" || cur[key] === null) cur[key] = {};
+    cur = cur[key] as Record<string, unknown>;
+  }
   cur[keys[keys.length - 1] as string] = value;
   return clone as T;
 }
@@ -146,6 +163,7 @@ export const insertEvaluation = internalMutation({
     notEnoughData: evalFields.notEnoughData,
     scorecard: evalFields.scorecard,
     userProvided: evalFields.userProvided,
+    userProvidedAt: evalFields.userProvidedAt,
     verdict: evalFields.verdict,
     delta: evalFields.delta,
   },
@@ -205,6 +223,10 @@ export const runEvaluation = internalAction({
       // validated arg through the internal query — the `vaultGroundHydrated` convention.
       const tp = await ctx.runQuery(internal.tenantProfile.forTenant, { tenantId });
       const userProvided: string[] = [...(last?.userProvided ?? [])];
+      // Carried UNCHANGED, same as `userProvided` above — this is what lets a per-field stated time
+      // survive the weekly re-evaluation that stamps a fresh `createdAt` on the new ROW (cash-
+      // business-finance Task 3 fix). `createdAt` is the ROW's timestamp, never a field's.
+      const userProvidedAt: Record<string, number> = { ...(last?.userProvidedAt ?? {}) };
       let scorecard: Scorecard = JSON.parse(
         JSON.stringify((last?.scorecard as Scorecard | undefined) ?? emptyScorecard),
       );
@@ -459,6 +481,7 @@ export const runEvaluation = internalAction({
         notEnoughData,
         scorecard,
         userProvided,
+        userProvidedAt,
         verdict,
         delta,
       });
@@ -559,7 +582,7 @@ function coerceScorecardValue(
  * `tenantId` so BOTH the auth-scoped tenantMutation (client path) and the internal mutation (the
  * identity-free cockpit tool loop, plan 04) route through ONE implementation — no drift.
  */
-async function applyScorecardAnswer(
+export async function applyScorecardAnswer(
   db: DatabaseWriter,
   tenantId: string,
   threadId: string,
@@ -574,12 +597,17 @@ async function applyScorecardAnswer(
     .order("desc")
     .first();
 
+  // `userProvidedAt` is stamped on EVERY answer, including a re-answer of an already-provided
+  // field — a confirm-or-update IS a fresh stated time, not a no-op (cash-business-finance Task 3
+  // fix). This is the one writer every surface (panel, Approvals, cockpit) routes through, so the
+  // stated time can never drift out of step with the value it describes.
   if (last) {
     const scorecard = setPath(last.scorecard, field, coerced);
     const userProvided = last.userProvided.includes(field)
       ? last.userProvided
       : [...last.userProvided, field];
-    await db.patch(last._id, { scorecard, userProvided });
+    const userProvidedAt = { ...(last.userProvidedAt ?? {}), [field]: Date.now() };
+    await db.patch(last._id, { scorecard, userProvided, userProvidedAt });
     return { recorded: true };
   }
 
@@ -593,10 +621,55 @@ async function applyScorecardAnswer(
     notEnoughData: [],
     scorecard: setPath(emptyScorecard, field, coerced),
     userProvided: [field],
+    userProvidedAt: { [field]: Date.now() },
     verdict: "insufficient",
     createdAt: Date.now(),
   });
   return { recorded: true };
+}
+
+/**
+ * A row this function may hand back as "the tenant's financial truth" — one that actually carries a
+ * Growth-OS Scorecard. Two reachable producers write rows that fail this: `voiceDoc.ts` inserts a
+ * `framework: "document-review"` row with `scorecard: {}` LITERALLY, and the cockpit's
+ * `assessBusiness` tool runs `runEvaluation` on the conversation thread — a brand-new thread has no
+ * prior row, so it seeds from `emptyScorecard` under a `growth-os` framework but with no financials
+ * object attached until the engine actually fills one in. Either shape makes `cash.ts`'s
+ * `scorecard.financials.*` reads crash or silently read `undefined` as a real figure (whole-branch
+ * review B1). `document-review` is excluded by its literal framework tag (`voiceDoc.ts` never routes
+ * through `runEvaluation`, so it can never gain a real `financials` object); any other row is
+ * excluded only when `scorecard.financials` itself is absent — a Scorecard whose leaves are merely
+ * `null` (the normal not-yet-answered state) still counts as usable.
+ */
+function hasUsableScorecard(row: Doc<"evaluations">): boolean {
+  if (row.framework === "document-review") return false;
+  const scorecard = row.scorecard as Partial<Scorecard> | undefined;
+  return scorecard?.financials !== undefined;
+}
+
+/**
+ * The tenant's latest evaluation row across ALL threads THAT CARRIES A USABLE SCORECARD — the row
+ * whose Scorecard is the tenant's current financial truth.
+ *
+ * `byThread` and `answerDecision` are thread-scoped because they answer a question asked inside one
+ * conversation. The Finance page belongs to no thread, so it needs this. Exported as a plain
+ * function rather than a query: `cash.ts` calls it with its own `ctx.db` inside an already
+ * tenant-scoped handler, which adds no public API surface.
+ *
+ * ponytail: bounded to the newest 200 rows rather than an unbounded `.collect()` — a tenant's real
+ * row count is weekly-cron-sized (dozens a year), so 200 is a generous cap, not a tight one. Upgrade
+ * path if it is ever hit: a compound index keyed on a "has scorecard" flag written at insert time.
+ */
+export async function latestScorecardRow(
+  db: DatabaseReader,
+  tenantId: string,
+): Promise<Doc<"evaluations"> | null> {
+  const rows = await db
+    .query("evaluations")
+    .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+    .order("desc")
+    .take(200);
+  return rows.find(hasUsableScorecard) ?? null;
 }
 
 export const recordScorecardAnswer = tenantMutation({
@@ -756,6 +829,11 @@ async function applyActOnGap(
   // 16-09: the eval harness's --skill pins, forwarded to the scheduled specialist. Append-only and
   // ABSENT on the production `actOnGap` path, which must keep running the ACTIVE row.
   skillVersions?: Record<string, number>,
+  // 21-03: the harness's EXACT tenant-candidate pins, same append-only rule and same absence on the
+  // production path. This is the ONLY hop between the runner's `--tenant-skill` and the scheduled
+  // specialist — drop it here and the dispatched turn silently runs the tenant's effective body
+  // while the run writes evidence onto the candidate (16-09's defect, one registry scope down).
+  tenantSkillIds?: Record<string, Id<"tenantSkills">>,
 ): Promise<ActOnGapResult> {
   const row = await ctx.db
     .query("evaluations")
@@ -830,6 +908,7 @@ async function applyActOnGap(
     spentCents: 0,
     // Without this the specialist ran the ACTIVE row while the eval evidence claimed the pin.
     skillVersions,
+    tenantSkillIds,
   });
   // The public contract does not move, so cards.tsx's existing handler + its `plan_busy` note
   // keep working untouched.
@@ -859,9 +938,14 @@ export const actOnGapInternal = internalMutation({
     // The harness's --skill pins. Only THIS twin takes them: `actOnGap` above is the production UI
     // path and has none, so it keeps running the active row.
     skillVersions: v.optional(v.record(v.string(), v.number())),
+    // 21-03: the tenant twin, on the SAME identity-less twin and for the same reason.
+    tenantSkillIds: v.optional(v.record(v.string(), v.id("tenantSkills"))),
   },
-  handler: (ctx, { tenantId, threadId, gapIndex, skillVersions }): Promise<ActOnGapResult> =>
-    applyActOnGap(ctx, tenantId, threadId, gapIndex, skillVersions),
+  handler: (
+    ctx,
+    { tenantId, threadId, gapIndex, skillVersions, tenantSkillIds },
+  ): Promise<ActOnGapResult> =>
+    applyActOnGap(ctx, tenantId, threadId, gapIndex, skillVersions, tenantSkillIds),
 });
 
 /** Both the evaluation row and the gap are gone (a fresh thread, a cleared history). Say so in one

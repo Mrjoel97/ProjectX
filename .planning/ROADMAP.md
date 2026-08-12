@@ -34,15 +34,297 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 8: Self-Improvement** - Feedback capture â eval-gated autonomous prompt optimization with versioning + rollback + kill switch (completed 2026-07-23)
 - [~] **Phase 9: Private Beta Productionization** - **SUPERSEDED (2026-07-24) -> absorbed into Phase 25.** Productionization moves to the END of milestone v2.0 (executes LAST, after all Phase 10+ platform work). `09-CONTEXT.md` remains the spec for that final phase.
 
-### Phase 26: Pending product pages and Vault redesign integration
+### Phase 26: Connected product pages
 
-**Goal:** [To be planned]
-**Requirements**: TBD
-**Depends on:** Phase 25
-**Plans:** 0 plans
+> **AMENDED 2026-08-07 (owner decisions on the unbuilt mockups). Three surfaces changed shape.**
+>
+> **(1) Finance SPLITS into Cost and Cash.** The mockup was a cost console — AI spend, not business
+> money — and said so in its own copy. It becomes **Cost** (`/dashboard/cost`), and plans 26-06→26-10
+> are **unchanged in substance**: the append-only spend ledger, reasoning/ingest instrumentation,
+> media reserve/actual/refund/unlanded, tenant projections + owner-only controls, and the connected
+> route. Rename and retitle only. **Cash** — revenue, invoices, runway — is a NEW surface owned by
+> **Phase 28**, which currently has 29 plans and **not one that renders a page**; it needs a new
+> "connected Cash route" plan shaped like 26-10. Neither page fabricates the other's numbers.
+>
+> **(2) Content NARROWS to an artifact shelf** — documents, reels, memos. **Sent mail moves to
+> Reports** (which already owns sends-per-day and review outcomes; Approvals' "Cleared" covers the
+> recent window). **Research briefs move to the Knowledge Vault** — they are cited grounding
+> material that goes stale, which is what the Vault is for. The channel/funnel/metrics scope the
+> mockup had put on Content moves to the **Marketing milestone** (ADR-015). Affects 26-11→26-13.
+>
+> **(3) Pipeline: the backing data gets built first.** Phase 19 is pulled forward (below). Note that
+> **Phase 19 SC#8 already owns the Pipeline route** — 26-18 remains nav integration only.
+>
+> **RESOLVED 2026-08-09 (owner decision).** The mockup's Pipeline tiles included **"Open
+> opportunities"** and **"Pipeline value"**, which both PIPE-01 and Phase 19 SC#8 forbid —
+> *"does not invent opportunities, deal stages or monetary pipeline values."* **The tiles come off
+> the mockup; PIPE-01 stands as written and is NOT amended.** Pipeline reads contacts needing
+> attention, follow-ups due, consented and suppressed — every tile derived from the one person
+> store. **No `opportunities` table, no stage enum, no `amountCents` anywhere in Phase 19.** Real
+> money arrives with Phase 28's connector-backed Cash surface, from observed provider data rather
+> than typed guesses. **CORRECTED 2026-08-09 (plan 19-10, against what shipped):** the schema that followed is **three** new tables — `contacts`, `followUps` and **`suppressions`** — and the third is not an accident of implementation. The send-path guard reads `suppressions` and ONLY `suppressions`, never `contacts`, so a contacts bug structurally cannot un-suppress anyone and deleting a contact is a non-event for the guard: the fact that someone asked to stop hearing from us outlives the record of who they are. That split is what makes SC#5 clean rather than merely implemented; `contacts.unsubscribedAt` exists as a DISPLAY MIRROR only.
+
+**Goal:** Replace every remaining `pending-pages.html` placeholder with a tenant-safe, bounded and fully connected product surface, enabling each navigation entry only after its read model, governed actions, failure states, audit boundary and production verification path are real.
+**Requirements**: DASH-01, APRV-01, FIN-01, CONT-01, RPRT-01, HOME-01
+**External gate**: Phase 19 owns ACTN-05 and PIPE-01; Phase 26 consumes its approved Pipeline route/contracts only at the Pipeline integration wave.
+**Depends on:** Phase 15.4 for the connected product-shell/design baseline. There is **no blanket Phase 25 dependency**. Plan-specific dependencies remain explicit: Pipeline pairs with Phase 19; Content consumes landed Phase 18/20 artifacts without blocking their unrelated work; Command Center follows the Phase 26 source surfaces.
+**Execution position:** Pulled forward 2026-08-05. Start after Phase 15.4; run independent plans alongside existing lanes where file ownership does not overlap. Phase 25 consumes these finished surfaces rather than blocking them.
+**Success Criteria** (what must be TRUE):
+  1. Shared dashboard contracts enforce tenant/owner authorization, bounded pagination/time windows, honest loading/empty/partial/error states, IANA time, USD cost semantics and refs/counts-only audit before any new route is enabled.
+  2. Approvals exposes a tenant-wide, indexed queue whose approve/schedule/cancel/discard/revise paths are state-guarded, idempotent and race-tested; unsupported inline calendar edits route back to the cockpit.
+  3. Finance reports only durable estimated/reserved/actual/refunded spend recorded after an explicit coverage start, exposes tenant versus owner-global rails correctly, and never fabricates historical zeroes.
+  4. Content unifies bounded projections over Vault artifacts, rendered media and sent mail with provenance, ownership-checked signed URLs and cockpit-prefill reuse; it does not duplicate content silently.
+  5. Reports provides bounded business, operations and governance projections, a server-sanitized audit view, owner-only WORM/skill/deployment facts, and a governed board-pack artifact path.
+  6. Pipeline ships with — and never duplicates — Phase 19's tenant-scoped contacts/follow-up/consent/suppression substrate; the send-path suppression guard remains the trust boundary.
+  7. Command Center v2 composes stable page summaries and deterministic next-move/health logic after the source pages land; every page passes package tests, typechecks, production build, playbook watchers and authenticated responsive UAT before its nav item becomes live.
+**Plans:** 8/20 plans executed
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 26 to break down)
+- [x] 26-01-PLAN.md — Shared result/window/money contracts and dashboard playbook ownership (Wave 1)
+- [x] 26-02-PLAN.md — Single-owner additive schema and index foundation (Wave 1)
+- [x] 26-03-PLAN.md — Approvals discard, schedule move and progress state machines (Wave 2)
+- [x] 26-04-PLAN.md — Bounded tenant-safe Approvals read models (Wave 2)
+- [ ] 26-05-PLAN.md — Connected Approvals route, executed browser gate, owner UAT, then nav activation (Wave 3)
+- [ ] 26-06-PLAN.md — Append-only spend ledger and coverage-start core (Wave 4)
+- [ ] 26-07-PLAN.md — Reasoning and ingest ledger instrumentation (Wave 5)
+- [ ] 26-08-PLAN.md — Media reserve/actual/refund/unlanded instrumentation (Wave 5)
+- [ ] 26-09-PLAN.md — Tenant Finance projections and owner-only controls (Wave 6)
+- [ ] 26-10-PLAN.md — Connected Finance route, executed browser gate, owner UAT, then nav activation (Wave 7)
+- [ ] 26-11-PLAN.md — Artifact provenance and idempotent promotion (Wave 8)
+- [ ] 26-12-PLAN.md — Bounded Content union, safe URLs, reuse and Refresh Research terminals (Wave 9)
+- [ ] 26-13-PLAN.md — Connected Content route, executed browser gate, owner UAT, then nav activation (Wave 10)
+- [ ] 26-14-PLAN.md — Business/operations reporting semantics and bounded projections (Wave 11)
+- [ ] 26-15-PLAN.md — Sanitized governance projection and owner-only operational facts (Wave 11)
+- [ ] 26-16-PLAN.md — Immutable board-pack snapshot/render artifact (Wave 12)
+- [ ] 26-17-PLAN.md — Connected Reports route, privacy gate, owner UAT, then nav activation (Wave 13)
+- [ ] 26-18-PLAN.md — External Phase 19 Pipeline safety/UAT gate and nav integration only (Wave 14)
+- [ ] 26-19-PLAN.md — Deterministic home priority, health, briefing and source-summary composition (Wave 15)
+- [ ] 26-20-PLAN.md — Command Center v2, full repository gates and blocking owner UAT (Wave 16)
+
+## Post-Beta Knowledge-Work Expansion (Phases 27-30)
+
+These phases are the reviewed expansion queue after Phase 25 opens the private beta. They do not
+become new beta-admission blockers, and they extend the same Executive Agent, business memory,
+approval model, tenant boundary and outcome-measurement philosophy rather than adding a plugin
+catalogue or parallel runtime.
+
+### Phase 27: Curated Knowledge-Work Pack Pilot
+
+**Goal:** Prove that six high-value external workflow patterns can become native, governed Pikar packs without importing a second plugin runtime, router, memory plane or capability boundary.
+**Requirements**: PACK-01, PACK-02, PACK-03, PACK-04
+**Depends on:** Phase 25 for the live private-beta identity/connector baseline; consumes landed Phase 16 research, Phase 17 calendar, Phase 18 content, Phase 19 contacts and Phase 26 source summaries. This is queued post-beta work and does not block Phase 25.
+**Success Criteria** (what must be TRUE):
+  1. An exact upstream commit/file manifest and Apache-2.0 attribution/modification record exist for every adapted source; updates require a reviewed diff and cannot auto-activate.
+  2. Business Pulse, Campaign Plan, Customer Complaint Response, Sales Call Prep, Process/SOP Builder and Brand Review are native Pikar skills/workflows using one Executive Agent, one Business Blueprint/Vault memory and existing artifact/plan surfaces.
+  3. Every operation is classified as existing, explicitly missing or forbidden; code-owned grants and structural tool absence enforce the matrix, untrusted connector content cannot reach writes, and no workflow bypasses the plan gate.
+  4. All six candidates pass outcome-state/adversarial evals and authenticated responsive browser gates before becoming discoverable, with honest missing-source and partial-result states.
+  5. The shared refs/counts-only measurement layer reports time-to-first-outcome, recommendation acceptance, plan decisions, missing-connector surprises, evidence quality, completion, cost and latency per workflow.
+**Plans:** 9 plans across 5 waves
+
+Plans:
+- [ ] 27-01-PLAN.md — Pin upstream sources, Apache-2.0 provenance and reviewed-update controls (Wave 1)
+- [ ] 27-02-PLAN.md — Native pack contracts, code-owned grants, candidate lifecycle and fixture runner (Wave 1)
+- [ ] 27-03-PLAN.md — Privacy-bounded workflow outcome measurement (Wave 2)
+- [ ] 27-04-PLAN.md — Business Pulse and Campaign Plan adaptations/evals (Wave 2)
+- [ ] 27-05-PLAN.md — Complaint Response and Sales Call Prep adaptations/evals (Wave 2)
+- [ ] 27-06-PLAN.md — Process/SOP and Brand Review adaptations/evals (Wave 2)
+- [ ] 27-07-PLAN.md — Executive Agent runtime and real terminal-event integration (Wave 3)
+- [ ] 27-08-PLAN.md — Final provenance/parity, candidate publication and exact-version evals (Wave 4)
+- [ ] 27-09-PLAN.md — Authenticated browser evidence, owner gate, activation and rollback (Wave 5)
+
+### Phase 28: Connector-Backed Revenue Pack
+
+**Goal:** Add the read-only business-data rails that turn the pilot into measurable revenue and cash outcomes, while keeping mutations structurally behind Pikar's approved-plan executor.
+**Requirements**: REVN-01, REVN-02, REVN-03, REVN-04, REVN-05, REVN-06
+**Depends on:** Phase 27 and completed Phase 19 ACTN-05/PIPE-01. Provider adapters additionally require Phase 25's production secret/OAuth posture. No MCP endpoint is assumed suitable until its execution-time review passes.
+**Success Criteria** (what must be TRUE):
+  1. HubSpot, QuickBooks, Stripe and PayPal each pass server-side endpoint/OAuth/security/data-processing/rate-limit/terms review and expose tenant-scoped read-only projections with encrypted, revocable credentials and honest re-auth/error states.
+  2. Lead triage, call lists, pipeline reviews and customer pulse consume Phase 19's one person/consent/suppression store and never invent or duplicate CRM state.
+  3. Cash-flow and payroll-confidence calculations are deterministic pure-TypeScript domain logic with fixtures, normalized-input validation, provenance, coverage/confidence semantics and no LLM arithmetic.
+  4. Invoice reminders stage drafts into the existing plan gate; no revenue specialist can send, refund, credit or mutate CRM/accounting state directly.
+  5. Authenticated two-tenant tests, provider replay/rate-limit tests and live read-only smoke gates pass before each connector-backed workflow is exposed; outcome telemetry can measure follow-up completion, overdue-item recovery and handling time without raw content.
+**Plans:** 29 plans across 20 waves
+
+Plans:
+- [ ] 28-17-PLAN.md — Hard Phase 19/25/27 readiness gate before connector work (Wave 1)
+- [ ] 28-01-PLAN.md — Independent provider suitability, OAuth, security and terms decisions (Wave 2)
+- [ ] 28-18-PLAN.md — Operational playbook and watch ownership (Wave 2)
+- [ ] 28-02-PLAN.md — Normalized deterministic finance core (Wave 2)
+- [ ] 28-03-PLAN.md — Encrypted credentials and additive connector schema (Wave 3)
+- [ ] 28-04-PLAN.md — Shared OAuth/revocation/security mechanics without a generic runtime (Wave 4)
+- [ ] 28-26-PLAN.md — Durable machine-readable provider eligibility gate (Wave 5)
+- [ ] 28-05-PLAN.md — Independent read-only HubSpot rail (Wave 6)
+- [ ] 28-06-PLAN.md — Independent read-only QuickBooks rail (Wave 6)
+- [ ] 28-07-PLAN.md — Independent read-only Stripe rail (Wave 6)
+- [ ] 28-08-PLAN.md — Independent read-only PayPal rail (Wave 6)
+- [ ] 28-22-PLAN.md — HubSpot judgment and machine gate sealing (Wave 7)
+- [ ] 28-23-PLAN.md — QuickBooks judgment and machine gate sealing (Wave 7)
+- [ ] 28-24-PLAN.md — Stripe judgment and machine gate sealing (Wave 7)
+- [ ] 28-25-PLAN.md — PayPal judgment and machine gate sealing (Wave 7)
+- [ ] 28-09-PLAN.md — Eligible-provider callback, status and connection integration (Wave 8)
+- [ ] 28-10-PLAN.md — Phase 19-native CRM outcome projections (Wave 9)
+- [ ] 28-11-PLAN.md — Available-rail cash-flow and payroll-confidence composition (Wave 9)
+- [ ] 28-12-PLAN.md — Minimal read-only revenue specialist grant (Wave 10)
+- [ ] 28-13-PLAN.md — Invoice reminders behind existing approval and suppression (Wave 11)
+- [ ] 28-14-PLAN.md — Provider-neutral revenue body authoring (Wave 12)
+- [ ] 28-28-PLAN.md — Reviewed-body publication as byte-pinned dark candidates (Wave 13)
+- [ ] 28-19-PLAN.md — State-based golden outcome and adversarial eval suite (Wave 14)
+- [ ] 28-20-PLAN.md — Version-specific activation after evidence and owner judgment (Wave 15)
+- [ ] 28-15-PLAN.md — Privacy-safe revenue outcome measurement (Wave 16)
+- [ ] 28-21-PLAN.md — Provider/workflow terminal telemetry wiring (Wave 17)
+- [ ] 28-29-PLAN.md — Plan-decision and observed-recovery telemetry wiring (Wave 18)
+- [ ] 28-16-PLAN.md — Automated live/browser/repository exposure evidence (Wave 19)
+- [ ] 28-27-PLAN.md — Owner subset decision and strict named-provider phase sealing (Wave 20)
+
+### Phase 29: Unified Knowledge and Routines
+
+**Goal:** Turn connected Pikar knowledge into one cited cross-source search experience and turn Phase 21 from a generic prompt editor into safe workflow-pack customization and repeatable routines.
+**Requirements**: KNOW-01, ROUT-01, ROUT-02
+**Depends on:** Phase 28 and Phase 21's tenant-scoped candidate/eval authoring seam. Recurrence remains gated on an explicit standing-instruction/OAuth decision and is not implied by this phase's existence.
+**Success Criteria** (what must be TRUE):
+  1. One bounded tenant-scoped query decomposes across available native adapters, synthesizes cited/deduplicated answers, scores authority/freshness/confidence and identifies unavailable/partial sources without an arbitrary MCP client.
+  2. Users customize approved workflow-pack templates as immutable tenant-scoped candidates; templates can change instructions/preferences but cannot widen code-owned tools or publish executable code.
+  3. Candidate activation uses outcome-based held-out evals and authenticated UAT; provenance identifies upstream template, user edits, version, evidence and rollback target.
+  4. The manually re-runnable pinned workflow remains the safe baseline. Recurrence ships only if approval-template semantics, token expiry/re-auth, timezone/DST, missed runs, idempotency, pause/revoke and audit behavior are all decided and proven.
+  5. Search and routine telemetry reports evidence coverage, unsupported claims, repeat use, completion, cost and latency through refs/counts-only events.
+**Plans:** 13 plans across 9 waves
+
+Plans:
+- [ ] 29-01-PLAN.md — Dependency audit, pure contracts, schema and playbook boundary (Wave 1)
+- [ ] 29-02-PLAN.md — Vault and Drive native knowledge adapters (Wave 2)
+- [ ] 29-03-PLAN.md — Gmail and landed CRM/support adapters behind toolless ingestion (Wave 2)
+- [ ] 29-04-PLAN.md — Registry-owned toolless query planning and cited synthesis (Wave 2)
+- [ ] 29-05-PLAN.md — Schema-driven tenant pack candidates through Phase 21 (Wave 3)
+- [ ] 29-06-PLAN.md — Bounded cited cross-source search coordinator (Wave 3)
+- [ ] 29-09-PLAN.md — Unified knowledge workspace UI and browser gate (Wave 4)
+- [ ] 29-07-PLAN.md — Pack customization UI and held-out eval corpus (Wave 4)
+- [ ] 29-08-PLAN.md — Version-pinned manual workflow reruns (Wave 5)
+- [ ] 29-10-PLAN.md — Authenticated customization/manual-rerun release gate (Wave 6)
+- [ ] 29-11-PLAN.md — Fail-closed recurrence governance and live-evidence decision (Wave 7)
+- [ ] 29-12-PLAN.md — Deferred-absence proof or approved recurrence backend (Wave 8)
+- [ ] 29-13-PLAN.md — Branch-correct routine UI, live evidence and final owner gate (Wave 9)
+
+### Phase 30: Optional Vertical Workflow Packs
+
+**Goal:** Offer selectively relevant Legal, HR, Product, Design, Engineering and Data workflow packs without turning the core solopreneur product into a catalogue or weakening high-stakes safeguards.
+**Requirements**: VERT-01, VERT-02, VERT-03, VERT-04
+**Depends on:** Phase 29's native pack authoring/search substrate and behavioral evidence from Phases 27-29. Each external connector has an independent suitability gate.
+**Success Criteria** (what must be TRUE):
+  1. Tier/profile/capability rules recommend at most the relevant packs and never alter tool authority; users can inspect why a pack is available or blocked.
+  2. Legal, HR, Product, Design, Engineering and Data each have separately versioned native templates, provenance, outcome contracts, disclaimers, adversarial evals and authenticated UAT before exposure.
+  3. High-stakes Legal/HR/Data outputs are explicitly assistive, grounded and review-required; Data begins file-first/read-only and external system execution is absent until a dedicated adapter gate passes.
+  4. Vertical metrics prove useful outcomes and repeat use rather than install count; a pack can be disabled independently without damaging shared memory or artifacts.
+  5. Bio Research remains excluded until behavioral demand and a separate scientific, licensing, data and regulated-risk plan exist.
+**Plans:** 10 plans across 6 waves
+
+Plans:
+- [ ] 30-01-PLAN.md — Shared vertical safety/relevance contracts and structural Bio exclusion (Wave 1)
+- [ ] 30-02-PLAN.md — Tenant discovery, evidence, telemetry and independent controls (Wave 2)
+- [ ] 30-03-PLAN.md — Deterministic file-first Data pack (Wave 3)
+- [ ] 30-04-PLAN.md — Product and Design artifact-only candidates (Wave 3)
+- [ ] 30-05-PLAN.md — Legal issue-spotting candidate and high-stakes boundary (Wave 3)
+- [ ] 30-06-PLAN.md — HR hiring/onboarding candidate and employment-decision boundary (Wave 3)
+- [ ] 30-07-PLAN.md — Engineering architecture/runbook candidate without production authority (Wave 3)
+- [ ] 30-08-PLAN.md — Shared candidate publication, provenance and eval integration (Wave 4)
+- [ ] 30-09-PLAN.md — Authenticated UAT and evidence-based exposure of at most two packs (Wave 5)
+- [ ] 30-10-PLAN.md — Six-pack activation/rollback drills, Bio scan and final owner gate (Wave 6)
+
+---
+
+## EXTERNAL BLOCKER (non-code, unscheduled): the legal entity
+
+**Status as of 2026-08-07: NOT STARTED.** Recorded here as a first-class roadmap item because it is
+not a coding task and therefore has never had a phase, yet it gates more product surface than any
+single phase does. `.planning/design/growth-surfaces-canvas-funnels-connections.md` §5.8 calls it
+"the highest-leverage non-code task in the project."
+
+What it blocks, simultaneously:
+
+| Dependent | Where |
+|---|---|
+| Google OAuth verification (privacy policy must name a real data controller) | already-deferred; caps Gmail Testing mode at a **7-day refresh-token lifetime**, which is why `SEND_TIME_HORIZON_MS` is 7 days |
+| Custom domain registrant + TLS | Phase 25 SC#6 |
+| Meta Business Verification, LinkedIn Marketing Developer Platform | Marketing **tranche B** (Phase 32) |
+| CASA assessment | Phase 25 posture |
+| Billing | post-beta commercialization |
+
+**Nothing downstream of this row can be scheduled by deciding it is important.** A plan that dates
+tranche B before the entity exists is wrong on its face.
+
+---
+
+## Milestone: Marketing (Phases 31-32) — PULLED PRE-BETA 2026-08-07
+
+*Owner decision 2026-08-07, recorded as `docs/decisions/015-marketing-milestone-pulled-pre-beta.md`.
+The Content page's channel/funnel/metrics scope moves here; Content narrows to an artifact shelf.*
+
+**This milestone is an explicit override of `PROJECT.md:51-53`'s admission rule** (no idea → phase
+without an evidence-backed Validated line; `PROJECT.md:49` still records `Validated: (None yet)`).
+The rule is not repealed and continues to govern every other idea. ADR-015 is the override record.
+
+**It also supersedes the 2026-07-31 refusals** of the funnel phase and of social publishing
+(`FEATURES.md:179`). ADR-015 §2 is load-bearing and is NOT superseded by the same stroke: a social
+post stages into the existing plan gate exactly as an email does. **Approve-once-for-many and
+standing pre-authorized rules stay deferred** (ADR-004 §56-58) — "auto-publishing" remains refused;
+what is admitted is human-approved publishing.
+
+**Execution position:** runs before Phase 25, alongside Phase 19 (which it depends on) and the
+remaining Phase 26 work where file ownership does not overlap. **Phase 25 slips by the duration of
+tranche A** — taken knowingly.
+
+### Phase 31: Marketing surface and funnel v0 (TRANCHE A — buildable now)
+
+**Goal:** A Marketing surface where the user manages outbound channels with Executive Agent
+assistance, honest about every channel not yet connectable, plus the link-only funnel that produces
+the first real click evidence this milestone was admitted without.
+**Requirements**: MKTG-01, MKTG-02, MKTG-03
+**Depends on:** Phase 19 (the one person store — contacts, `origin`, consent, `unsubscribedAt`, and
+the SEND-path suppression guard). **No dependency on the legal entity.**
+**Success Criteria** (what must be TRUE):
+  1. The Marketing route renders every planned channel with an honest state — connected, connectable,
+     or **blocked-with-reason** (naming the legal entity for tranche B channels). An unconnectable
+     channel never renders as a zero; BRAND §5's no-fabricated-numbers rule governs this page.
+  2. Funnel v0 is link-only and lives on the Convex `httpAction` plane, never a Next route: one
+     unguessable token → increment three integer counters (visits / claims / downloads) → 302 to
+     `ctx.storage.getUrl(...)`, with `?s=` source attribution. **This is the product's first
+     unauthenticated read** and ships with the review weight that deserves; `apps/web/middleware.ts`
+     is NOT widened.
+  3. A captured lead writes into Phase 19's single person store with `origin`, `consentAt` and
+     `consentSource` — never a second CRM plane, never a `contacts` bypass.
+  4. Agent assistance on this surface proposes; it does not publish. Every outbound action stages
+     into the existing plan gate.
+  5. No `funnelEvents`-style event table ships in this phase — three integer columns only
+     (`growth-surfaces...md` §4 item 8, relaxed by ADR-015 §4 for tranche B metrics ONLY).
+**Plans**: TBD
+
+### Phase 32: Channel connection, publishing and metrics (TRANCHE B — GATED)
+
+**Goal:** Connect real social channels, publish to them through the plan gate, and report per-post
+engagement — the half of the owner's 2026-08-07 request that external providers gate.
+**Requirements**: MKTG-04, MKTG-05, MKTG-06
+**Depends on:** **THE LEGAL ENTITY (see the blocker section above) — hard, external, not started.**
+Also Phase 31. Meta Business Verification and LinkedIn's Marketing Developer Platform both require a
+verified legal business before issuing API access; this phase cannot start at any priority until
+that clears. Each provider additionally carries its own suitability gate in the Phase 28 pattern
+(endpoint/OAuth/security/data-processing/rate-limit/terms review) — none is assumed eligible.
+**Success Criteria** (what must be TRUE):
+  1. Each social channel passes an independent suitability review and exposes tenant-scoped,
+     encrypted, revocable credentials with honest re-auth and error states.
+  2. Publishing and scheduling stage into the **existing** plan gate; deferred posts reuse the
+     shipped Phase 3.5 deferred-send machinery (one approved plan, one future instant, cancellable).
+     No new unattended authority is minted.
+  3. Per-post engagement metrics store **provider ids, counts and timestamps ONLY** — never post
+     text, never recipient identity. The refs-and-counts contract (CLAUDE.md §4) governs this table
+     as it governs audit. The table arrives WITH a connected channel, never empty and ahead of one.
+  4. A tenant can disconnect any channel with revocation at the provider, not merely a local token
+     delete (GOVN-03's standard, applied to every new provider).
+**Plans**: TBD (do not plan before the blocker clears)
+
+**Known sequencing gap — lead-to-sale conversion.** The owner's request included conversion from
+lead to sale. That attribution needs a payment/CRM rail, and those live in **Phase 28**, which is
+post-beta and depends on Phase 27 → Phase 25. So pre-beta Marketing delivers funnels and leads;
+**conversion-to-sale arrives with Phase 28 unless a read-only Stripe slice is separately pulled
+forward.** Recorded rather than silently assumed — it is an open owner decision.
 
 ---
 
@@ -68,12 +350,14 @@ Plans:
 - [x] **Phase 15.2: Vault Universal Format Recognition & Extraction Fan-Out** (INSERTED 2026-07-27) - Content-based (magic-byte) format recognition replacing the MIME allow-list, full common-format coverage incl. legacy Office, never-silent extraction failure, and per-page fan-out so scanned PDFs transcribe verbatim. Consumes `docs/superpowers/specs/2026-07-27-vault-format-coverage-and-extraction-fanout-design.md`. Runs as a third concurrent lane alongside 16/17
  (completed 2026-07-27)
 - [ ] **Phase 15.3: Vault Folders - Folder Ingest, Synthesis & Drill-In** (INSERTED 2026-08-02) - The deliberately-deferred "Phase 2" of the 15.2 line, carved out at `15.2-CONTEXT.md:170-184` and never given a slot: a `vaultFolders` table + optional `folderId`, folder upload at 1-1.5 GB with the per-file cap raise to 200 MB (safe now that 15.2's fan-out bounds per-action memory), folder-level synthesis where the digest IS ITSELF a vault document so it embeds for free, a folder-scoped drill-in reusing `PreviewModal`, and a per-folder budget estimate + reservation. **The reservation is load-bearing, not polish:** every ingest opens with `guardrails.preCall`, so a large folder can trip the daily budget mid-run and leave half its documents `failed` - and a half-ingested folder is WORSE than a refused one, because the agent grounds on it confidently. SCOPE EXPANDED 2026-08-02 to SEVEN items: the owner put the two remaining carve-out deferrals back in scope — document identity classification as a first-class classifier (it applies to single-file uploads too) and the Google Drive export rail (one-time 1:1 import, re-import on demand, same budget window). Unblocks Phase 17.1's Stage-2 drift trigger, which fires on bulk/folder-ingest completion and degrades to a one-click rebuild banner until this exists (`17.1-RESEARCH.md:114`)
-- [ ] **Phase 16: Research Sub-Agent & Web Research** - First exemplar specialist + injection/SSRF-hardened web research stored in the vault
+- [x] **Phase 16: Research Sub-Agent & Web Research** - First exemplar specialist + injection/SSRF-hardened web research stored in the vault
 - [x] **Phase 17: Calendar Actions** - Governed Google/Microsoft calendar events (read in-loop, write plan-gated)
  (completed 2026-07-30)
 - [ ] **Phase 17.1: Business Blueprint - Corpus Synthesis & Agent Spine** (INSERTED 2026-07-27) - One cited artifact (typed profile + document-derived gaps + graph entities) prepended in `vaultGroundHydrated`, so every agent surface has standing business context instead of query-scoped retrieval only. Draft -> user confirms -> live; typing is never overwritten. Consumes `docs/superpowers/specs/2026-07-27-business-blueprint-design.md`. NOT a concurrent lane - sequenced after 15.2/16/17 merge (shares `vaultGround.ts` with Lane R)
 - [ ] **Phase 18: Document & Content Creation** - Standalone documents/content artifacts beyond email attachments - a second output format (self-contained HTML) through the SAME governed render path; no sites table, no ActionType, no public route
-- [ ] **Phase 19: Contacts, CRM & Follow-ups** - Scoped contact/CRM state + follow-ups (read in-loop, write plan-gated) + leads/consent/unsubscribe, with the suppression check in the SEND path and the CAN-SPAM postal address on the tenant profile
+- [x] **Phase 19: Contacts, CRM & Follow-ups** - Scoped contact/CRM state + follow-ups (read in-loop, write plan-gated) + leads/consent/unsubscribe, with the suppression check in the SEND path and the CAN-SPAM postal address on the tenant profile — completed 2026-08-10 (13 plans: 10 planned + 3 defect-closure passes; verification 8/8 after 19-13 closed SC#4's consent-reproducibility gap; browser UAT `e2e/pipeline-uat.spec.ts` 15/15; `cockpit-agent@18` ACTIVE, gate `086f8267` 35/35; ACTN-05 and PIPE-01 met)
+
+- [x] **Phase 19.1: Bulk Contact Import (CSV)** (INSERTED 2026-08-10) - CSV migration into the phase-19 contacts substrate: browser-side RFC-4180 parse with the file never stored, ≤1000 rows, fill-empty-only merge, and one consent attestation recorded per contact as `consentSource: "imported-attested"`. Design spec approved 2026-08-10; 1 of 4 contact-acquisition subsystems — **completed 2026-08-10** (7 plans across 7 waves, fully sequential; browser UAT `e2e/pipeline-uat.spec.ts` **16/16** with the new `step 3b` uploading a real CSV end to end, measured spend $0.0500; owner gate closed with the verbatim one-word verdict `approved`. THREE ITEMS WERE OPEN AT THE GATE AND ALL ARE NOW RESOLVED (2026-08-11): the disabled Confirm has no disabled styling, the preview's `1 rejected` becomes `0 rejected` on the done screen, and the consent-chip comparison was not performable. **ALL THREE RESOLVED 2026-08-11, AFTER VERIFICATION.** gsd-verifier returned gaps_found 9/11 confirming items 1 and 2 as real; the owner directed a direct fix over a --gaps cycle. `5746523` fixed both -- the done screen sums server + browser rejections via a new exported `ImportDone` (the arithmetic moved INSIDE the component so a render test covers it, since a source scan would only be mechanism coverage), and `disabledLook` reusing globals.css's `.vault-button:disabled` values now applies at BOTH disable-able `primary` sites including `import-choose`, which the gate never flagged. Re-verification: **11/11 `passed`**, both closures confirmed by revert-and-observe. **Item 3 was closed by OWNER DECISION on the `Origin` column, not by observation** -- the two consent chips have still never been seen side by side, and `19.1-VERIFICATION.md` records it in exactly those terms. `921cc5d` then hardened three assertions the verifier proved blind: a vacuous `toContain(">1<")` in the gap-closure test itself (green with the fix removed, because another count was also 1), plus `enriched`/`rejected` and `needingAttention`/`followUpsDue` transpositions that both left the suite fully green. Rule now in `contacts-crm.md`: **hunt this class by SWAPPING two rendered values, not by deleting one.** NOTE: `gsd-tools phase complete 19.1` was run and its writes REVERTED -- it replaced this row and the 7-wave rationale with stubs and rewrote STATE.md from a stale source. Do not re-run it; this row is hand-maintained. ACTN-05 was already ticked at phase-19 closure)
 
 **S3 - Creation & Self-Extension**
 - [ ] **Phase 20: Media Canvas** - A finished short-form reel (clips + voiceover, assembled to one mp4) via fal.ai as async governed jobs with a separate cost cap
@@ -554,18 +838,18 @@ Plans:
   2. The agent surfaces insights/patterns/gaps each carrying a vault citation; when the document reveals no gaps it says so honestly rather than fabricating one.
   3. After the discussion the user chooses the outcome - a memo or a gap-bridging plan - and any resulting action crosses the normal plan -> Approve gate.
   4. No report content leaks into audit/telemetry/step rows (refs/counts only).
-**Plans**: 9 plans (9 waves — serialized: every plan writes docs/playbooks/voice.md, see 14-VALIDATION.md § Wave / File-Ownership Contract)
+**Plans**: 9/9 plans executed (9 waves — serialized: every plan writes docs/playbooks/voice.md, see 14-VALIDATION.md § Wave / File-Ownership Contract). Closed 2026-07-26 by owner live verification; the unrecorded tool-declaration branch and untimed retrieval latency remain documented observations, not closure blockers.
 
 Plans:
-- [ ] 14-01-PLAN.md — Wave-0 freeze contribution: schema widening + FRAMEWORK_LABEL, every Lane-C stub, the ungated document-analyst persona, playbook registration
-- [ ] 14-02-PLAN.md — Pure doc-session domain: bounded fenced digest, welded citations/routes, the honesty verdict rule, doc memo composer, pinned Realtime function-call vocabulary
-- [ ] 14-03-PLAN.md — Doc-scoped session start + the doc-filtered retrieval action with its refs-only audit and the BETA-05 isolation assertion
-- [ ] 14-04-PLAN.md — Doc-grounded mint: document-analyst persona + digest + the flat read-only tool, with the session.update fallback
-- [ ] 14-05-PLAN.md — Findings producer: transcript → cited evaluations row on the synthetic thread, honest healthy / no-fabricated-gap
-- [ ] 14-06-PLAN.md — Browser relay: ?doc= connect, the response.done function-call round trip, always-send-an-output
-- [ ] 14-07-PLAN.md — Vault "Discuss by voice" entry with status gating, plus the in-call doc context strip and partial badge
-- [ ] 14-08-PLAN.md — Post-call outcome: cited findings via CardList, memo-vs-plan choice, gap → proposed plan → the single Approve gate, SC3 e2e
-- [ ] 14-09-PLAN.md — §4 static scans (mutation-verified), playbook consolidation, and the live human-verify checkpoint
+- [x] 14-01-PLAN.md — Wave-0 freeze contribution: schema widening + FRAMEWORK_LABEL, every Lane-C stub, the ungated document-analyst persona, playbook registration
+- [x] 14-02-PLAN.md — Pure doc-session domain: bounded fenced digest, welded citations/routes, the honesty verdict rule, doc memo composer, pinned Realtime function-call vocabulary
+- [x] 14-03-PLAN.md — Doc-scoped session start + the doc-filtered retrieval action with its refs-only audit and the BETA-05 isolation assertion
+- [x] 14-04-PLAN.md — Doc-grounded mint: document-analyst persona + digest + the flat read-only tool, with the session.update fallback
+- [x] 14-05-PLAN.md — Findings producer: transcript → cited evaluations row on the synthetic thread, honest healthy / no-fabricated-gap
+- [x] 14-06-PLAN.md — Browser relay: ?doc= connect, the response.done function-call round trip, always-send-an-output
+- [x] 14-07-PLAN.md — Vault "Discuss by voice" entry with status gating, plus the in-call doc context strip and partial badge
+- [x] 14-08-PLAN.md — Post-call outcome: cited findings via CardList, memo-vs-plan choice, gap → proposed plan → the single Approve gate, SC3 e2e
+- [x] 14-09-PLAN.md — §4 static scans (mutation-verified), playbook consolidation, and the live human-verify checkpoint — completed 2026-07-26; owner verified the grounded drill-in and both outcome paths. Tool-branch attribution and retrieval latency were not captured and remain open observations by decision.
 
 ### Phase 15: Sub-Agent Dispatch & Generalized Action Executor
 **Goal**: The hollow `sub_agent` route becomes real - specialists are swappable (skill body, tool-set) pairs the ONE governed loop runs - and the approve->execute spine becomes action-agnostic, so all breadth of action rides a single governed seam instead of re-forking the loop or the executor.
@@ -596,13 +880,13 @@ Plans:
   3. Search within an open folder cannot return documents from another folder; root/category search retains its current tenant-scoped behavior.
   4. Category tabs do not claim exact counts until a bounded counter contract exists, and all loading, error, empty, partial-ingest and stale-digest states remain honest.
   5. Backend/component tests, production build and browser UAT cover the redesigned states and scoped-search boundary.
-**Plans:** 1/4 plans executed
+**Plans:** 4/4 plans executed — complete 2026-08-05
 
 Plans:
 - [x] 15.4-01-PLAN.md — Server-scoped folder search contract with isolation/sealing regression tests (Wave 1)
-- [ ] 15.4-02-PLAN.md — Nord Edge root/folder browse, honest state model, retained-action component tests and scoped styles (Wave 2)
-- [ ] 15.4-03-PLAN.md — Nord Edge preview/import surfaces with lifecycle and control-retention tests (Wave 3)
-- [ ] 15.4-04-PLAN.md — Executed Playwright/full gates, watched playbooks and authenticated owner UAT (Wave 4)
+- [x] 15.4-02-PLAN.md — Nord Edge root/folder browse, honest state model, retained-action component tests and scoped styles (Wave 2)
+- [x] 15.4-03-PLAN.md — Nord Edge preview/import surfaces with lifecycle and control-retention tests (Wave 3)
+- [x] 15.4-04-PLAN.md — Executed Playwright/full gates, watched playbooks and authenticated owner UAT (Wave 4)
 
 ### Phase 15.3: Vault Folders - Folder Ingest, Synthesis and Drill-In (INSERTED)
 
@@ -695,7 +979,7 @@ Plans:
   2. The web-research tool is injection- and SSRF-hardened (retrieved page text quarantined as untrusted data; no internal/metadata endpoints reachable); findings are stored in the vault with a retrieval-date freshness stamp.
   3. Research findings and the sub-agent trace write refs/counts only to audit/telemetry (no page content, no grounded prose); an isolation assertion ships for stored findings.
   4. The evaluation engine (Phase 12) can now cite fresh web-research results with a freshness stamp for market claims instead of relying on stale model memory.
-**Plans**: 8/9 plans executed (9 plans, 6 waves). 16-09 is PARTIAL: tasks 1-2 committed, task 3's three fixtures + the self-check floor bump landed 2026-07-31, but the paid `pnpm eval:golden` gate and the task-4 owner checkpoint are UNPAID — blocked on a securely available `OPENAI_API_KEY`.
+**Plans**: 9/9 plans executed (9 plans, 6 waves). Closed 2026-08-08 by unfiltered gate `14feb4b7` (34/34, $0.3456), re-confirmed by `d17039a8` (34/34, $0.3574). All five pinned skill rows received evidence and were activated; the research path ran end to end through the local Tavily-backed tool.
 Plans:
 - [x] 16-01-PLAN.md — Wave-0 freeze: shared unions, llm.ts signature widening, watch registrations
 - [x] 16-02-PLAN.md — the OQ-2 live web-search probe (D8) and the research model + cost constants it gates
@@ -705,7 +989,7 @@ Plans:
 - [x] 16-06-PLAN.md — the ASYNC dispatch seam (D9-REVISED: stage -> schedule -> land), the persisted `collecting` interlock, the relocated model pin. NOT the superseded D9 in-loop seam: no per-turn envelope closure (the interlock replaces it) and NO guard-comment amendment (dispatchGuard.test.ts:16-24 predicted this shape and is left untouched, deliberately)
 - [x] 16-07-PLAN.md — the vault terminal: research.ts, the freshness stamp, cross-tenant isolation — completed 2026-07-27 (one `kind: "web_research"` vault document per successful run, written by the DISPATCHER after `dispatchAndLand` returns — so the approvable card already holds the findings and a persist failure costs groundability, not the work: audited as `research.persist_failed` with a reason CODE, swallowed, no retry/DLQ. Stored text is provenance header → 16-03's `<research_findings …>` fence → the D10 limits footer; the zero-source "insufficient evidence" verdict is CODE's, not the model's, and sits ahead of the fence. `retrievedAt` is a stored, queryable number; ingest starts through `startIngest` with `rootRequestId` as the correlation id. Honest boundary recorded in the playbook: only the FIRST chunk carries the header + inner fence — per-chunk containment is `searchVault`'s outer `<vault_context …>` fence. research.test.ts 12/12; backend 723/723 across 48 files; tsc ZERO non-test errors; 3 mutation-checks RED-then-green. 4 auto-fixed deviations, two of which make the plan's own done-criteria checkable: `INCOMPLETE_MARKER` exported from `@pikar/core` (one phrasing per stop cause) and a `research` flag on `__runSpecialistWithScript` — `runResearch` cannot be driven offline. `llmRedaction.test.ts`'s pinned audit-payload count 4→5, discharged by REVIEWING the new §4 site. NOT live-verified — offline only)
 - [x] 16-08-PLAN.md — D11 offline: containment proven positively + the failure-mode matrix + the mutation ledger — completed 2026-07-29
-- [ ] 16-09-PLAN.md — SC#4 citation + the eval:golden gate (D11's second proof) + the phase checkpoint
+- [x] 16-09-PLAN.md — SC#4 citation + the eval:golden gate (D11's second proof) + the phase checkpoint — completed 2026-08-08 (gate run `14feb4b7` **34/34, $0.3456**, unfiltered, pins cockpit-agent@17 research-specialist@8 offer-architect@4 money-model-designer@4 lead-engine@4; all five evidence rows recorded and all five ACTIVATED with the active row verified to equal the pin. The research plane is proven END TO END on the LOCAL Tavily tool — `research.persisted` x3 and `subagent.completed` x7 in the audit trail — NOT on a hosted vendor search: the 2026-08-07 Gemini grounding excursion is dead history, since `webResearch` needs no vendor entitlement. Fixture 29's `citesVaultDoc` retrieval variance passed this run; it remains variance, not a guarantee)
 
 ### Phase 17: Calendar Actions
 **Goal**: The agent can schedule and manage calendar events (Google / Microsoft) as governed actions - a read tool that surfaces availability in-loop and a write that stages an event into the plan for human approval.
@@ -787,14 +1071,23 @@ Plans:
 - [x] 18-05-PLAN.md — `llm.ts` parameterization: `draftDocument`'s closed `skillName` (the reach that makes `content-drafter` live) and `renderAndStore`'s `format`, defaulted so Phase 3.3 stays byte-identical (Wave 3) — completed 2026-08-01 (**Registration Checklist row 4 CLOSED — `content-drafter` is REACHABLE and 18-03's row is no longer dead weight.** `draftDocument`'s args are now `{ tenantId, safeText, safeTextHash, skillVersion?, skillName? }` where `skillName` is a CLOSED `v.union` of the two literals — a wrong name is a validator error, not a silently-wrong prompt body — and ONE `const name = skillName ?? DOCUMENT_DRAFTER_SKILL` feeds BOTH lookup branches. `skills.ts` unchanged (both queries already took `name: v.string()`); `document-drafter`'s BODY byte-unchanged, so no gated candidate was minted. `renderAndStore` gained a 4th DEFAULTED `format`; both `"application/pdf"` literals replaced by one `formatSpec(format).mimeType` hoist, `buildDocFilename` takes the format, and `generateAttachment` exposes it as an OPTIONAL input property — `regenerateAttachment` stays three-arg, `gmail.ts` needs zero changes, no second size constant. **HTML is reachable on the ATTACHMENT path ONLY, by design** — 18-06's `createDocument` will find no HTML in its flow and must NOT "fix" it. Two mutation checks, each exactly 1 RED and reverted green: hardcoding `name` back ⇒ the discriminator test (seeds both rows, archives only `content-drafter`); encoding `draft.markdown` instead of `renderHtmlDocument(...)` ⇒ the SC4 row. Gates: 142/142 across documentDraft + cockpitTools + llmRedaction + runCockpitAgent, backend typecheck **150 — delta 0, zero non-test**, biome byte-identical to HEAD on all three edited files, `renderAndStore` occurrences still 5 (closure NOT extracted). **The SC4 html test lives in `cockpitTools.test.ts`, not `documentDraft.test.ts`** — `renderAndStore` is only reachable through the `__invokeCockpitTool` shim, which needs the node pragma + the registered aggregate that file already has. `cockpit.md` is owed under §9 and deliberately NOT bumped — 18-09 owns it, and the hook's exit 0 is again a possible FALSE NEGATIVE)
 - [x] 18-06-PLAN.md — The `createDocument` tool: closed `form` enum, optional `replace` #index for replace-in-place revision, refs-only audit, the `create=` SMOKE op that is the ONLY offline e2e driver, and the SC#2 no-external-side-effect scan (Wave 4) — completed 2026-08-01 (**Registration Checklist rows 3 and 16 CLOSED.** ONE key in `buildCockpitTools`, a closed `form` enum selecting BOTH the skill row and the PDF branch, and `replace` as an OPTIONAL property on the SAME schema — the revision path costs **zero** registration surface. `execute` always returns a sentence: a PII refusal, a drafter failure and a bad `#index` are all returned strings, never throws out of the governed loop. The `document.created` audit is `{ topicHash, form, vaultDocId, hasPdf }` — four keys, asserted by exact key-set equality — and it is emitted from the TOOL, so `cockpit.ts` still has exactly **2** audit call sites and `llmRedaction.test.ts` is 43/43. `create=<short|long>:<topic>` registered at all four SMOKE sites; **18-07's spec MUST send `SMOKE::agent::create=long:SMOKE::route=direct_llm:: Quarterly one-pager`** — the NESTED route prefix is part of the topic and without it the turn is not offline. **The card ACCUMULATES:** there is no turn identity inside a tool closure, so the tool reads the thread's latest `role: "created"` row and appends, keeping `#2`/`#3` addressable across turns; that needed one additive `internal.vaultSources.latestCreated` because `byThread` is a `tenantQuery` and the tool plane passes `tenantId` explicitly. Two mutation checks, each reverted green: an injected `internal.cockpit.` reference ⇒ exactly **1 RED** (the SC2 scan, which has a non-vacuity floor); dropping `form` from the card write ⇒ **5 RED**. Gates: cockpitTools **82/82** (was 71), **268/268 across 10 suites**, backend typecheck **150 — delta 0, zero non-test**, locked-file diffs empty. ⚠ **The tool is INVISIBLE to the model until 18-08 teaches it in the active `cockpit-agent` body** — a tool the body does not teach is a tool that does not exist)
 - [x] 18-07-PLAN.md — The artifact is SEEN: the BRAND-conformant Output card, the vault-grid AGENT chip, and the SC#6 e2e spec (authored here; RUN at 18-09's gate, which owns the live stack) (Wave 5) — completed 2026-08-01 (**SC#6's AUTOMATED half only.** `OutputCard` is `SourceCard`'s dumb self-querying shape with ONE extra arg on the SAME `byThread` query (`role: "created"`) — zero new tables, zero new queries, zero new routes, zero new deps, no component library. It returns `null` on a turn that created nothing, and the shipped grounding `useQuery` call is byte-unchanged (the diff on `cards.tsx` is **91 added lines and zero removed**; `traceParity` 2/2). Copy: `✍️ Created` / `✍️ Created · N`, an UPPERCASE `DOCUMENT`/`POST` badge read off the row's own `form` (absent ⇒ DOCUMENT), the titles as `/dashboard/vault` links, the subline **`Saved to your vault. Nothing was sent.`**, and `snippet` as the artifact preview. **The plan's `titles[0]` heading was NOT implementable and was replaced by the `#index` title list:** the row ACCUMULATES and on a `replace: 2` revise the newest title lands in slot 2 — nothing on the row records which slot moved, so any single-title heading is wrong after the first revision; the `#N` prefixes double as the affordance for the `replace` grammar. **Tokens only, zero hex added, ZERO `--held`** (its 3 occurrences are comments forbidding it). **BRAND §6 beat the in-file precedent:** `ConfChip` sets `--teal-600` as 0.62rem TEXT (~2.9:1, §6-banned), so the badge and the vault `AGENT` chip put the teal in the FILL (`color-mix` on `--teal-400`) and keep `--ink` for the label. The vault chip gates on `origin !== undefined`, not `=== "agent"`, so a promoted doc keeps its provenance. `DocGrid`'s filter carries a `ponytail:` ceiling note: created docs BROWSE for free but never match `vaultSearch` (same rag primitive; they are deliberately never ingested — that absence IS the exclusion), upgrade = a ~3-line title-substring fallback right there; **do not close it by ingesting** — open owner question at 18-09. ⚠ **TWO THINGS ARE STILL OWED AND BOTH ARE 18-09's: (a) the Playwright run itself** — the spec is authored and `--list`-discoverable but has NEVER executed (`playwright.config.ts` pins `:3111` with NO `webServer` block, so it needs a live `convex dev` + the app pinned to `:3111` + `E2E_USER_EMAIL`/`E2E_USER_PASSWORD` an executor cannot mint); **(b) the BRAND conformance judgement** — the card has never been rendered in a browser. The spec's own header states both. It sends the verbatim `SMOKE::agent::create=long:SMOKE::route=direct_llm:: Quarterly one-pager` and asserts the testid, the offline title `Smoke Document`, the `DOCUMENT` badge and the subline; a SECOND test pins the null case, which is what makes the first non-vacuous. Gates: web `tsc --noEmit` exit 0, production build green, `--list` 3 tests in 2 files, Biome diagnostic sets **identical to `git show HEAD:<path>`** on both edited files (baselines taken via throwaway siblings — `git stash` is banned in this tree), the new spec Biome-clean, all locked-file diffs empty)
-- [ ] 18-08-PLAN.md — Teach `cockpit-agent` the tool + regenerate its one-line mirror, gated on Phase 16 closing the shared candidate stream (Wave 6, has a blocking checkpoint)
+- [x] 18-08-PLAN.md — Teach `cockpit-agent` the tool + regenerate its one-line mirror (Wave 6) — completed 2026-08-08 (body edit + fixture landed `cb48d11` 2026-08-02 under an OWNER OVERRIDE of the Phase-16 gate: one shared candidate stream, one multi-pin gate run, two paid runs become one. CERTIFIED LIVE 2026-08-08 by gate `14feb4b7` 34/34 with `cockpit-agent@17` activated. Fixture 35 FAILED its first live execution and was right to — it caught `createDocument` obeying a model-supplied `replace` on a first create, a defect no reply-text assertion could see; fixed in `0094ac0`)
 - [ ] 18-10-PLAN.md — The blueprint drift exclusion (one conjunct + the `BLUEPRINT_KIND` tidy), split out and PARKED because landing it before `17.1-10`'s live gate corrupts the number that gate measures (Wave 6, has a blocking checkpoint)
 - [ ] 18-09-PLAN.md — Playbooks, the two ROADMAP contradictions, and the NON-NEGOTIABLE live gate: 4 turns proving the surfaces no offline test can see (Wave 7, has a blocking checkpoint)
 
 ### Phase 19: Contacts, CRM & Follow-ups
+
+> **PULLED FORWARD 2026-08-07 (owner decision).** Asked how to handle a Pipeline page with no
+> backing data, the owner chose to build the substrate first. This is a genuine unblock rather than
+> a reorder: Phase 19 gates **26-18** (Pipeline nav), **Phase 28** twice (28-17 readiness gate,
+> 28-10 CRM projections), and now **Phase 31** (Marketing tranche A needs the one person store for
+> lead capture). **PLANNED 2026-08-09: 10 plans across 9 waves.** **The PIPE-01 "opportunities / pipeline value" contradiction was RESOLVED 2026-08-09** in
+> favour of the requirement as written (see Phase 26 above): the two tiles come off the mockup, no
+> `opportunities` table and no monetary column ship in this phase.
+
 **Goal**: The agent can track contacts / CRM state and follow-ups scoped to the user - read to resolve people and surface context in-loop, write staged through the plan gate. Scoped follow-up tracking, not a full pipeline/deal-stage CRM. Widened 2026-07-31 to absorb LEADS and CONSENT: this is the one person store, built once, and it is where the outreach legal obligations (suppression, CAN-SPAM, lawful basis at capture) get a home before anything needs them.
 **Depends on**: Phase 15 (dispatch + executor)
-**Requirements**: ACTN-05
+**Requirements**: ACTN-05, PIPE-01
 **Success Criteria** (what must be TRUE):
   1. The agent reads contact/CRM state in-loop to resolve people and surface follow-up context; a CRM write (add contact, log a follow-up) stages into the plan and executes only via the human Approve gate.
   2. Contact/CRM data is tenant-scoped and unreachable across tenants (isolation assertion ships with the surface).
@@ -803,7 +1096,49 @@ Plans:
   5. **The suppression check lives in the SEND path, not in the contacts module.** `executePlan`/`startFanout` refuses every suppressed target address, checked address-by-address against `plans.recipients` (`schema.ts:189`) — a raw address array resolved from Gmail headers that never touches the contacts table. A contacts-row-only check is defeated by a user typing an unsubscribed person's name in chat, so the guard goes in the one place all sends converge, with a test that proves it there.
   6. `tenantProfiles` gains a physical postal address field (CAN-SPAM requires one in the body of every commercial email) and the drafter cannot omit the footer that renders it.
   7. The phase states IN WRITING — in the playbook, not only in a plan summary — why a contacts table does not violate the "no contacts cache at rest" invariant at `schema.ts:210-211`.
-**Plans**: TBD
+  8. A narrow connected Pipeline route shows contacts needing attention, follow-ups due, consent and suppression states from this one store; it does not invent opportunities, stages, monetary value or a second CRM data plane.
+**Plans**: **10 planned across 9 waves; 13 on disk** — 19-11, 19-12 and 19-13 are unplanned gap-closure plans, each opened by a defect the one before it could not have seen. Waves are longer than the dependency graph alone requires because exactly ONE plan per wave may bump a given playbook, and `convex/contacts.ts`, `cockpit.ts`, `gmail.ts`, `schema.ts` and `cards.tsx` are each touched by several plans. **26-18 still owns the nav flip** — Phase 19 ships `/dashboard/pipeline` URL-reachable with `soon: true` intact.
+
+Plans:
+- [x] 19-01-PLAN.md — Pure contacts core (normalizeAddress + the three predicates + renderFooter), the THREE new tables, `tenantProfiles.postalAddress`, and the new `contacts-crm.md` playbook with its `watch.json` registration (Wave 1)
+- [x] 19-02-PLAN.md — The person store: the tenant-scoped write surface, the suppression/footer/unsubscribe-token internals, the BETA-05 asA/asB isolation assertion and the no-opportunities structural scan (Wave 2)
+- [x] 19-03-PLAN.md — The CAN-SPAM postal address: write-boundary validation on `tenantProfile.saveFacts` and the `/dashboard/profile` field, deliberately NOT an onboarding slot (Wave 2)
+- [x] 19-04-PLAN.md — The public unsubscribe route on `convex/http.ts`: an inert signed GET landing page and a confirm-only idempotent POST (Wave 3)
+- [x] 19-05-PLAN.md — The send-path trust boundary: the pre-CAS refusals and the per-address drop BEFORE the group join, the unbypassable `gmail.send` backstop, the footer at the `buildMime` call site, and an honest terminal for a post-approve suppression (Wave 4)
+- [x] 19-06-PLAN.md — `crm_write` joins `ACTION_TYPES` on the `inline` arm across all eleven registration sites in one commit, with the stale `actionType.ts` Phase-19 prediction corrected by the commit that falsifies it (Wave 5)
+- [x] 19-07-PLAN.md — The connected Pipeline route: three bounded read models, four always-known tiles that render a real zero as `0`, the five-column table, the unassigned-follow-ups section, and the authored e2e spec (Wave 6)
+- [x] 19-08-PLAN.md — Contacts-first in-loop resolution and the ONE `stageCrmWrite` tool, landed at all three registration surfaces with both guards proven red-able, plus the offline SMOKE driver (Wave 7)
+- [x] 19-09-PLAN.md — Teach `cockpit-agent` the capability and pay the 18-08 override debt: `eval-cases/36-*.json`, a $0 observable and the 34 → 35 fixture floor bump (Wave 8, has a blocking checkpoint)
+- [x] 19-10-PLAN.md — Correct the two documents this phase falsified, fill in all 22 verification rows, close the playbook against a real sha, and the blocking owner browser UAT (Wave 9, has a blocking checkpoint) — **UAT RAN at 19-12: `e2e/pipeline-uat.spec.ts` 15/15, spend $0.0400, seven PNGs on disk. Owner judgement sign-off landed 2026-08-10; the owner also attested that the authorized real-inbox message arrived with its postal footer and working unsubscribe landing-page link.**
+
+Three UNPLANNED gap-closure plans followed, each opened by a defect the previous one could not have seen. They are recorded here because the phase is 13 plans on disk, not 10:
+- [x] 19-11-PLAN.md — The dropped trusted clock in `runAgentLoop` (the real cause of the ACTN-05 defect 19-10 measured) and the fabricated address `parseCrmOperations` accepted; fixture 36 green again for the RIGHT reason at run `0b2b6b22`, body byte-unchanged
+- [x] 19-12-PLAN.md — The BROWSER never sent `clientContext` at all; fixed at the one shared seam (`useSendCockpitMessage`), plus the withheld-recipients report made a fact on the plan row. **The owner UAT ran here: `e2e/pipeline-uat.spec.ts` 15/15**
+- [x] 19-13-PLAN.md — The last code gap the verifier found: `consentWording`/`consentContext` were WRITE-ONLY, closed by `contacts.consentRecord` (SC#4's second sentence). Plus the five falsified documents, the `gmail.ts` "sole caller" lie, and the permanently-red `e2e/pipeline.spec.ts` (deleted)
+
+
+### Phase 19.1: Bulk Contact Import (CSV) (INSERTED)
+
+**Goal:** A user with an existing business can migrate their contacts into Pikar from a CSV export in one pass — parsed in the browser so the file is never stored, previewed as `N new · M enriched · K unchanged · R rejected` before any write, and committed under a single consent attestation recorded verbatim on every contact. Fill-empty-only, so nothing the user typed by hand can be destroyed by a stale export.
+
+**Design spec:** `docs/superpowers/specs/2026-08-10-contact-import-design.md` (approved 2026-08-10)
+
+**Requirements**: ACTN-05 (extends — the contacts substrate gains its migration path); no new requirement ID
+**Depends on:** Phase 19 (the contacts substrate, `normalizeAddress`, `upsertContact`, `assertConsent`, the `COVERED` isolation pin, and the `pipeline-uat.spec.ts` browser harness)
+**Plans:** 7 plans across 7 waves — fully sequential. Every plan touches `convex/contacts.ts`, `PipelineView.tsx` or their tests, and every plan bumps `contacts-crm.md`, so no two can share a wave (the phase-19 rule: exactly ONE plan per wave may bump a given playbook). **7/7 executed** (19.1-01 through 19.1-06 complete 2026-08-10; 19.1-03 added `fillEmptyOnly` + the consent floor to the ONE writer with hand-add proven unmoved, and 19.1-04 added the two public functions the panel drives — both isolation-tested and on the `COVERED` pin, which is now 12 entries — and 19.1-05 made `pipelineTiles` report its scan bound (`partial: "row-cap"`, the tile reads `1000+`) rather than a confidently wrong integer, without raising the five-reader `SCAN_LIMIT`, and 19.1-06 finally CONNECTED the surface — the three-step panel on `/dashboard/pipeline`, the first caller either public function has ever had). **19.1-07 closed the phase: a REAL browser uploaded a real CSV, saw the four counts, was refused a Confirm until the attestation was ticked, wrote the rows, and left a hand-typed name byte-for-byte intact — asserted by reading stored state back through `listContacts`/`matchExisting`/`consentRecord`, because the preview is the thing under test and cannot also be its own oracle.**
+
+**Scope boundary — this is 1 of 4 contact-acquisition subsystems.** The other three are specced separately: extract contacts from documents, search-then-import from the vault, and third-party CRM migration. **Subsystem 4 will use REST, not MCP** — ADR-011 records the Pikar-Ai MCP as structurally unreachable from a Convex action, and an MCP client plus per-provider OAuth is strictly more work than the REST API every candidate CRM offers.
+
+**Carries a schema risk worth naming up front:** two discriminated unions widen (`origin` gains `"imported"`, `consentSource` gains `"imported-attested"`). Phase 19 proved a widening union errors at *most* call sites but slips through silently wherever a consumer is loosely typed. This needs a deliberate site walk against `cockpit.md`'s registration checklist, not faith in `tsc`.
+
+Plans:
+- [x] 19.1-01-PLAN.md — The pure import brain in `@pikar/core`: RFC-4180 `parseCsv`, header auto-mapping, within-file dedup, rejection by PHYSICAL file line, the versioned attestation sentence, and the `watch.json` registration the Stop hook demands (Wave 1)
+- [x] 19.1-02-PLAN.md — The two union widenings and every registration site in ONE commit: 5 widened, 3 deliberately NOT widened and each pinned by a red-able test, plus the Pipeline consent chip finally rendering `source` (Wave 2)
+- [x] 19.1-03-PLAN.md — `fillEmptyOnly` as a FLAG on the one shared contact writer, the three new fields, and the consent floor: an import may never downgrade `asserted-by-user` (Wave 3)
+- [x] 19.1-04-PLAN.md — `matchExisting` and `importContacts` in the ONE substrate module, both on the `COVERED` pin with real asA/asB isolation, plus the §4 audit scan and the createdAt-tie paging assertion (Wave 4)
+- [x] 19.1-05-PLAN.md — `pipelineTiles` reports its scan bound instead of silently under-counting a max-size import (Wave 5) — completed 2026-08-10 (`e860094`, 5 files, ONE commit, $0.00): all three scans take `SCAN_LIMIT + 1`, every count is computed over `slice(0, SCAN_LIMIT)` so none can exceed the bound, and the return carries `partial: "row-cap" | null` so the tile renders `1000+`. `SCAN_LIMIT` was deliberately NOT raised — five readers share it, `savedForName` among them. Two mutation-proofs red and reverted; `contacts.test.ts` 89/89, `pipelineView.test.ts` 22/22, `pnpm typecheck` 10/10, `check-playbooks` exit 0
+- [x] 19.1-06-PLAN.md — The three-step import panel on `/dashboard/pipeline`: no new route, no component library, the file never uploaded, Confirm disabled until the attestation is ticked (Wave 6) — completed 2026-08-10 (`4b78f5f`, 4 files, ONE commit, $0.00): **THE FIRST CALLER `matchExisting`/`importContacts` HAVE EVER HAD.** `ImportPanel.tsx` (599 lines) holds three `step`s — choose, preview, done — reads the file with `file.text()` and never uploads it (a test scans for `generateUploadUrl`/`vaultUpload`), asks `matchExisting` ONCE via `useConvex().query` chunked at `IMPORT_MATCH_CHUNK`, and loops `IMPORT_BATCH_ROWS` slices through `importContacts` with honest per-batch progress. `ConnectedImport` is the FOURTH section, between the tiles and the contact table so the e2e unassigned-follows-contacts order still holds; the empty state gains a second button and its invariant-1 test was REWRITTEN to two (both are deliberate human acts; the banned mailbox-suggestions third is still asserted absent). Two mutation-proofs red and reverted; `pipelineView.test.ts` 27/27, `@pikar/web` 176/176, `pnpm typecheck` 10/10, `next build` green, `check-playbooks` exit 0. **No browser has ever driven it with a real CSV — 19.1-07 owns that.**
+- [x] 19.1-07-PLAN.md — The REAL browser: a fixture CSV uploaded end to end, the un-overwritten name asserted from stored state, both playbook gates, and the owner judgement checkpoint (Wave 7, has a blocking checkpoint) — completed 2026-08-10 (`8642858` + task 2's four files inside the foreign `f919dfe` + `b8a4a3c` + `a6bb354`): `step 3b` sits immediately after step 3 (serial mode makes ordering the contract, and step 3 is what creates JANE and the NAMELESS contact so ONE file yields all four counts). The fixture is an **inline TS constant, not a committed `.csv`** — `core.autocrlf=true` + `* text=auto` would normalize its CRLF and can strip its BOM, two of the five hazards it exists to prove. Counts asserted as an exact string; the malformed row asserted at **physical file line 7**, not record index 6 (the quoted newline above it is what makes them diverge); Confirm observed `disabled` before the tick and enabled after. Step 14 now also opens the import preview at 390px. Both playbook gates bumped (`cockpit.md` WATCH-GATE ONLY). Two mutation-proofs red and reverted (`Line 6` gave `Received: "Line 7: not a usable email address"`; `Jane D.` gave `Received: "Jane Doe"` FROM STORED STATE). Full suite **16/16**, spend **$0.0500**, all UAT artifacts from ONE run; core 813/813, web 176/176, contracts 31/31, backend 72 files/1525 passed, `tsc --noEmit` exit 0 in both packages, `check-playbooks` exit 0. **Two environment faults found and documented, not silently worked around:** `packages/backend/.env.local` names the CLOUD deployment while the browser talks to LOCAL `:3210` (every seed lands unseen and the WHOLE spec fails at the onboarding gate), and the local `SITE_URL` pointed at a dead `:3000` so sign-in succeeded and only the redirect hop died
 
 ### Phase 20: Media Canvas
 **Goal**: A media-creation canvas produces a FINISHED SHORT-FORM REEL - one mp4 assembled from N generated clips with a voiceover over them - as async governed jobs drawing a separate capped media budget. Generation is wrapped, not rebuilt (PROJECT.md mandate).
@@ -956,13 +1291,43 @@ Plans:
   3. A two-user cross-tenant isolation test (BETA-05) covers every table and index added across S1-S3 and asserts a non-owner cannot reach the three owner-gated functions; grounded-prose export stays owner-gated until the `packages/pii` names-in-prose scrub ceiling is closed.
   4. A new user reaches a first real delivered result (a governed email to their own address) within minutes via the scripted first-run cockpit onboarding.
   5. An approved plan can deliver via Microsoft Graph (Outlook) (connect-both, choose-per-send). **Phase 25 BUILDS the provider-agnostic adapter — it does not exist today**: `gmailTokens` (`schema.ts:625-632`) has no `provider` column and is indexed `by_tenant` only, `gmail.ts:45-46` hardcodes `GOOGLE_OAUTH_CLIENT_ID`/`GOOGLE_OAUTH_CLIENT_SECRET`, and `gmail.ts:19` hardcodes the Google token endpoint. The widening — a `provider` column, a `by_tenant_provider` index, and a provider lookup — is written in the SAME commit as the Microsoft Graph adapter and NOT before; an abstraction with one implementation is what CLAUDE.md §8 forbids. Deployed to a live Vercel domain on Gmail Testing mode + unverified Azure app (verification off the critical path).
-  6. The custom-domain decision is MADE here, because every user-shareable URL depends on it. Serving from `*.convex.site` shares a host with the OAuth callback (`http.ts:15`), so a reputation flag on that host breaks SIGN-IN, not just the page; and a Convex deployment URL is deployment-scoped, so a link a user sent a client does not survive a prod migration. Either the domain, its DNS and its TLS are decided and recorded, or it is recorded in writing that no user-shareable URL ships until they exist.
-**Plans**: TBD
+  6. The custom-domain decision is MADE here, because every user-shareable URL depends on it. Serving from `*.convex.site` shares a host with the OAuth callback (`http.ts:15`), so a reputation flag on that host breaks SIGN-IN, not just the page; and a Convex deployment URL is deployment-scoped, so a link a user sent a client does not survive a prod migration. Branch A (durable domain + DNS + TLS) is required to complete the mandatory BETA-03 and DLVR-02 live sends. Branch B records that no user-shareable URL ships and explicitly BLOCKS Phase 25 until Branch A becomes available.
+**Plans**: 14 plans across 13 waves (execution is blocked on Plan 25-00's prerequisite gate; Plan 25-10 Branch B also blocks completion)
+
+Plans:
+- [ ] 25-00-PLAN.md — Blocking completion/stable-baseline gate for every pre-beta prerequisite lane; Phase 32 explicitly excluded (Wave 1)
+- [ ] 25-01-PLAN.md — Atomic invite admission, owner issuance backend, and beta-admission playbook (Wave 2)
+- [ ] 25-02-PLAN.md — Public signup/waitlist UX and consolidated owner-admin surface (Wave 3)
+- [ ] 25-03-PLAN.md — Schema-derived two-user isolation matrix, owner API assertions, and prose-export gate (Wave 4)
+- [ ] 25-04-PLAN.md — Existing-onboarding extension to an inline-recoverable first governed self-send (Wave 3)
+- [ ] 25-05-PLAN.md — Red-to-green contracts plus same-commit provider widening, Graph send, migration, and two-arm adapter (Wave 5)
+- [ ] 25-06-PLAN.md — Outlook OAuth lifecycle/UI and explicit Microsoft remote-invalidation posture (Wave 6)
+- [ ] 25-07-PLAN.md — Hosted provider migration, automatic schema/fallback narrow deploy, and fresh Gmail proof (Wave 7)
+- [ ] 25-08-PLAN.md — Threading-first live Outlook gate on the narrowed deployment (Wave 8)
+- [ ] 25-09-PLAN.md — Full Outlook read-plane parity and live consent-capable provider matrix (Wave 9)
+- [ ] 25-10-PLAN.md — Runtime environment manifest, domain decision, Branch-A enforcement; Branch B blocks phase (Wave 10)
+- [ ] 25-11-PLAN.md — Durable-domain Vercel/Convex deployment, seed/readiness, and hosted OAuth admission (Wave 11)
+- [ ] 25-12-PLAN.md — Exact-SHA automated/authenticated-E2E/boot/hosted-env production qualification (Wave 12)
+- [ ] 25-13-PLAN.md — Fresh live Outlook/two-user/timed-first-result acceptance and evidence-only bookkeeping closure (Wave 13)
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.4 -> 3.5 -> 3.6 -> 3.7 -> 3.8 -> 3.9 -> 3.10 -> 3.11 -> 4 -> 5 -> 6 -> 7 -> 8 -> [9 SUPERSEDED -> Phase 25] -> 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16 -> 17 -> 18 -> 19 -> 20 -> 21 -> 22 -> 22.1 -> 23 -> 24 -> 25
+Base phases retain numeric dependency order, with Phase 25 remaining the final beta-opening phase. Phase 26 is an explicitly pulled-forward product-surface lane: it begins after completed Phase 15.4, may run alongside non-overlapping Phase 16–20 work, pauses at 26-18 until Phase 19's ACTN-05/PIPE-01 gate is approved, then finishes Command Center before Phase 25.
+
+**Amended 2026-08-07 (owner).** Two more lanes now run before Phase 25, and Phase 25 slips by their
+duration — taken knowingly:
+- **Phase 19 is pulled forward** (contacts/leads/consent/suppression). It unblocks 26-18, Phase 28
+  (twice) and Phase 31. **Planned and executed 2026-08-09: 10 plans across 9 waves, 9/10 complete;
+  19-10 is at its blocking owner browser UAT.** (Until 19-10 corrected it, this bullet still claimed
+  the phase was unplanned at 0 of an unknown total — the ROADMAP tracks Phase 19 in THREE places and
+  two of them went stale while the third already said the plans were complete.)
+- **Phases 31-32 (Marketing) are pulled pre-beta** via ADR-015, overriding `PROJECT.md:51-53`'s
+  admission rule. **Phase 31 (tranche A) is schedulable; Phase 32 (tranche B) is NOT** — it is gated
+  on the legal entity, which is not started. See the EXTERNAL BLOCKER section above.
+
+Numeric order is not execution order and has not been for some time (Phase 26 established the
+precedent). Phases 31-32 are numbered after 30 and execute before 25.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -989,20 +1354,26 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 3.2 -> 3.2.1 -> 3.3 -> 3.
 | 11. Persona Onboarding & Business Profile | 4/4 | Complete    | 2026-07-24 |
 | 12. Business Evaluation Engine | 6/6 | Complete    | 2026-07-25 |
 | 13. Proactive In-App Review | 4/4 | Complete    | 2026-07-25 |
-| 14. Flagship Voice-Doc Workflow | 8/9 | In Progress|  |
+| 14. Flagship Voice-Doc Workflow | 9/9 | Complete (owner live-verified; DOCV-01 closed, with tool-branch attribution and retrieval latency retained as unmeasured observations) | 2026-07-26 |
 | 15. Sub-Agent Dispatch & Generalized Action Executor | 6/6 | Complete    | 2026-07-25 |
 | 15.1 Fact-Derived Tier & Conversational Onboarding (INSERTED) | 7/7 | Complete (goal-verified 6/6) | 2026-07-26 |
 | 15.2 Vault Universal Format Recognition & Extraction Fan-Out (INSERTED) | 8/8 | Complete and pushed to `main` | 2026-07-30 |
 | 15.3 Vault Folders - Folder Ingest, Synthesis & Drill-In (INSERTED) | 9/9 | Implementation complete + OWNER-APPROVED 2026-08-05. Drive rail shipped, plus a picker we render OURSELVES (the paste-a-link entry point is deleted; Google's Picker SDK is deliberately not mounted because drive.readonly already returns the folders). **LIVE GATE IS PARTIAL** — the scope widening, the reauth gate against a real pre-widening token, real folder listing/drill-in and the empty_folder guard are all live-verified; **the IMPORT PATH and the SHARED-DRIVE half have never run** ($0 spent on this rail). VALT-13 stays Pending | - |
-| 16. Research Sub-Agent & Web Research | 8/9 | In Progress (16-09 live model-backed eval awaits a securely available `OPENAI_API_KEY`) | 2026-07-30 |
+| 15.4 Vault Redesign & Scoped Browse Correctness (INSERTED) | 4/4 | Complete (full gates + connected Playwright 2/2 + owner-approved UAT) | 2026-08-05 |
+| 16. Research Sub-Agent & Web Research | 9/9 | Complete (gate `14feb4b7` 34/34, $0.3456; five skills activated) | 2026-08-08 |
 | 17. Calendar Actions | 4/4 | Complete offline; goal verification is `human_needed` for owner UAT M1-M5 | 2026-07-30 |
 | 17.1 Business Blueprint - Corpus Synthesis & Agent Spine (INSERTED) | 9/10 | In Progress (17.1-01..09 complete; profile confirmation surface landed; next 17.1-10 live gate) | 2026-07-30 |
-| 18. Document & Content Creation | 7/10 | In Progress (waves 1-5 complete: 18-01 pure-core format parameterization + `renderHtmlDocument`, 18-02 schema/trace registration surfaces, 18-03 ungated `content-drafter` v1, 18-04 vault write plane, 18-05 the `skillName`/`format` threading that makes `content-drafter` reachable, 18-06 the `createDocument` tool + the `create=` SMOKE op, 18-07 the Output card + the vault AGENT chip + the authored-not-run SC#6 spec; wave 6 next at 18-08, which is GATED on Phase 16 closing the shared `cockpit-agent` candidate stream) | 2026-08-01 |
-| 19. Contacts, CRM & Follow-ups | 0/TBD | Not started | - |
+| 18. Document & Content Creation | 8/10 | In Progress (waves 1-6 complete through 18-08, whose `cockpit-agent` teaching is CERTIFIED LIVE at v17 by gate `14feb4b7` 34/34 on 2026-08-08; 18-09 and 18-10 remain) | 2026-08-08 |
+| 19. Contacts, CRM & Follow-ups | 10/10 | Code complete and BROWSER-VERIFIED — the owner UAT RAN at 19-12 (`e2e/pipeline-uat.spec.ts`, **15/15**, spend $0.0400, 7 PNGs on disk); three unplanned gap-closure plans followed 19-10 (19-11 the dropped clock + the fabricated address, 19-12 the browser clock + the withheld report, 19-13 the consent request path + five falsified documents). **What is left is the owner LOOKING at the screenshots and judging BRAND/tone — a human act, not a run — after which ACTN-05 and PIPE-01 get ticked.** (19-01 complete — pure contacts core, the THREE tables, `tenantProfiles.postalAddress`, and `contacts-crm.md` registered in `watch.json`. 19-03 complete — the CAN-SPAM postal address end to end: refused blank-after-trim at the `saveFacts` write boundary, a `Postal address` textarea on `/dashboard/profile`, and provably NOT an onboarding slot. 19-02 complete — `convex/contacts.ts`, the person store: six tenant-scoped writes, five send-path/unsubscribe internals, the `UNSUBSCRIBE_SECRET`-signed opaque token fail-closed in ONE place, and a 40-test BETA-05 isolation block carrying the exact `{contactId, addressHash}` audit key set and the no-opportunities structural scan. 19-04 complete — the phase's ONLY public unauthenticated route: `GET/POST /unsubscribe/<raw>.<hmac>` on `convex/http.ts`, the GET inert by contract and mutation-proven by row count, the POST the only mutating verb and idempotent on replay, one bare 404 for every rejection, no second env guard and no rate limiter (both argued in source). 19-05 complete — THE TRUST BOUNDARY: the send path converges TWICE and both points are now guarded. `executePlan` drops suppressed addresses PER ADDRESS before the group join and before the CAS patch (a refusal after it leaves a half-approved plan nothing can resume), refuses `no_postal_address` and `all_recipients_suppressed`, and returns `withheld[]` on a partial send; `gmail.send` refuses a suppressed recipient before a credential is even minted and appends the CAN-SPAM footer at the `buildMime` CALL SITE (never inside it — `notifyExternal`'s service notice and the V4 byte-identity tests are the two reasons); a post-approve suppression terminates as `blocked` via `recordDeliveryTerminal`'s third outcome, decrementing `recipientTotal` so the counters balance. **`gmail.send` has TWO production callers, not the one the plan asserted — `pipeline.ts` is the other and is guarded too.** **`UNSUBSCRIBE_SECRET` is now set on the LOCAL deployment; a hosted deployment still needs its own or every link 404s and every send is refused.** 19-06 complete — `crm_write` is the FIFTH action type, on the `inline` arm, landed across FOURTEEN registration sites in one commit (the plan named eleven; the three it missed included `llm.ts` `buildAgentContext`, which is SILENT and would have told the model a CRM plan was an email). 19-07 complete — the connected `/dashboard/pipeline` route: three bounded read models in the SUBSTRATE module (no second store, PIPE-01 by construction), four always-known tiles where a real zero renders `0`, and `e2e/pipeline.spec.ts` AUTHORED (**deleted at 19-13** — it could only ever pass once; superseded by `e2e/pipeline-uat.spec.ts`, which signs up throwaway tenants and is re-runnable). 19-08 complete — contacts-first resolution (a saved record beats a Gmail-header inference, proven by an audit ROW COUNT of zero, not by reading the reply) and the `stageCrmWrite` staging tool, which applies nothing. 19-09 complete — `cockpit-agent@18` teaches both, gated 35/35 by run `086f8267`. **ACTIVATED 2026-08-09 on owner authorization: `cockpit-agent@18` IS the live body, so ACTN-05 is LIVE, not merely certified.** 19-10 then MEASURED an ACTN-05 defect — asked in plain language to add a dated follow-up, the live v18 body staged an `addContact` and no follow-up at all. **CAUSE FOUND AND FIXED, NOT IN THE MODEL: `runAgentLoop` dropped the trusted clock (19-11) and the browser never sent `clientContext` at all (19-12).** 19-09's `crmOperationCount` is a COUNT and could not tell op types apart, so the 35/35 was green over it; 19-10 added `datedFollowUpCount` to the closed expect vocabulary, which turned fixture 36 red against the active body (`expected 1, got 0`, run `309b1c3d`, $0.0142). **The CODE was fixed, not the fixture: fixture 36 is GREEN again for the RIGHT reason at run `0b2b6b22`, $0.0057, skill body BYTE-UNCHANGED — the assertion was never weakened.** CAVEAT, recorded rather than paid for: the 35/35 is a SPLICE — gate `086f8267` ran at 19-09 before the strengthened key existed, and fixture 36 was re-verified alone afterwards, so no single run has ever been green across all 35 with the post-19-11 code. **A full eval gate costs ~$0.35, NOT the ~$0.12-0.15 quoted throughout this phase's documents.**). 19-11/19-12 closed the clock and withheld-report defects; **19-13 closed the last code gap the phase-19 verifier found — `consentWording`/`consentContext` were WRITE-ONLY, and `contacts.consentRecord` is now the bounded tenant-scoped request path that makes SC#4's second sentence true (64/64, both guards mutation-proven red-able)** — plus the five falsified documents and the permanently-red `e2e/pipeline.spec.ts`. PIPE-01 contradiction resolved 2026-08-09 in favour of the requirement: no opportunities, no stage, no money. Unblocks 26-18, Phase 28 (×2) and Phase 31 | 2026-08-10 |
+| 19.1 Bulk Contact Import (CSV) | 7/7 | **Complete 2026-08-10 — BROWSER-VERIFIED AND OWNER-GATED.** A real Chromium picked a real CSV off the panel's own file input, read `2 new · 1 enriched · 1 unchanged · 1 rejected`, was refused a Confirm until the attestation was ticked, wrote four contacts, and left the hand-typed `Jane Doe` byte-for-byte intact — proven by reading stored state back through `listContacts` (name + `origin` still `user-entered`), `matchExisting` (post-write emptiness exactly `[phone, title]`, so the company was filled and nothing was invented) and `consentRecord` (`imported-attested`, the wording compared against the IMPORTED `IMPORT_ATTESTATION` constant, and the context the browser typed). The preview is the thing under test, so it is never its own oracle. Owner verdict at the blocking checkpoint, verbatim and complete: `approved`. Full suite **16/16**, measured spend **$0.0500**, every UAT artifact regenerated from ONE run. **THREE ITEMS WERE PRESENTED AT THE GATE AND NOT INDIVIDUALLY ADJUDICATED THERE; ALL THREE ARE NOW RESOLVED (2026-08-11, see the end of this row):** (1) `import-confirm` really carries `disabled` before the tick but is styled from the inline `primary` object which has NO disabled variant, so the closed gate looks exactly as pressable as the open one; (2) **USER-VISIBLE — the preview says `1 rejected` and the done screen then says `0 rejected` for the same file** (both individually true: the client drops the bad row before batching so the SERVER rejected none), which reads as "it got in after all" in a phase whose whole thesis is that the counts do not lie — the fix is one expression, `result.rejected.length + mapped.rejected.length` in `ImportPanel.tsx`'s done branch, deliberately NOT applied because that file belongs to 19.1-06 and an out-of-scope product edit made while closing a checkpoint is how a gate stops meaning anything; (3) the consent-chip comparison could NOT be performed — all four UAT rows read `Consented … · imported` because none carried consent before the import and one attestation covered the file (correct behaviour), so ORIGIN is the column that actually distinguishes them, and nothing was seeded. **TWO ENVIRONMENT FAULTS, SEPARATE SYMPTOMS, both now in `contacts-crm.md`:** `packages/backend/.env.local` names the CLOUD `dev:woozy-wren-368` while the browser talks to LOCAL `:3210`, so every harness seed lands where the browser cannot see it and the ENTIRE spec — including all 15 pre-existing steps — fails at the onboarding gate with nothing naming the cause (worked around per-run with `CONVEX_DEPLOYMENT=local:…`; the file was NOT edited, a foreign lane owns it); and the local deployment's `SITE_URL` pointed at `:3000` with nothing listening, so sign-in SUCCEEDED and only the final redirect hop died — corrected to `http://localhost:3111`. Also recorded: `pnpm test`/`pnpm typecheck` as single commands OOM at 0.43 GB free (re-run per package with `--maxWorkers=1` and a raised heap, all green), one intervening full run flaked at step 7 with two 16/16 runs bracketing it, and the plan's own `--grep "step 3b"` verify CANNOT pass alone — use `--grep "step 3"`. Prior plans: 19.1-01 the pure import brain; 19.1-02 the two union widenings across 19 sites in ONE commit (the silent UI site failed exactly as feared, rendering a BLANK chip); 19.1-03 `fillEmptyOnly` as a default-off flag on the ONE writer; 19.1-04 `matchExisting`/`importContacts` writing NO audit row, asserted as a row count; 19.1-05 `pipelineTiles` reporting `partial: "row-cap"` instead of a confidently wrong integer; 19.1-06 the panel that gave both functions their FIRST caller. **ALL THREE RESOLVED 2026-08-11, AFTER VERIFICATION.** gsd-verifier returned gaps_found 9/11 confirming items 1 and 2 as real; the owner directed a direct fix over a --gaps cycle. `5746523` fixed both -- the done screen sums server + browser rejections via a new exported `ImportDone` (the arithmetic moved INSIDE the component so a render test covers it, since a source scan would only be mechanism coverage), and `disabledLook` reusing globals.css's `.vault-button:disabled` values now applies at BOTH disable-able `primary` sites including `import-choose`, which the gate never flagged. Re-verification: **11/11 `passed`**, both closures confirmed by revert-and-observe. **Item 3 was closed by OWNER DECISION on the `Origin` column, not by observation** -- the two consent chips have still never been seen side by side, and `19.1-VERIFICATION.md` records it in exactly those terms. `921cc5d` then hardened three assertions the verifier proved blind: a vacuous `toContain(">1<")` in the gap-closure test itself (green with the fix removed, because another count was also 1), plus `enriched`/`rejected` and `needingAttention`/`followUpsDue` transpositions that both left the suite fully green. Rule now in `contacts-crm.md`: **hunt this class by SWAPPING two rendered values, not by deleting one.** NOTE: `gsd-tools phase complete 19.1` was run and its writes REVERTED -- it replaced this row and the 7-wave rationale with stubs and rewrote STATE.md from a stale source. Do not re-run it; this row is hand-maintained. | 2026-08-10 |
 | 20. Media Canvas | 12/19 | In Progress (Waves 1-7 complete: 20-01 pure media core + price table, 20-02 schema/trace freeze, 20-13 the assemble contract, 20-03 the `media-director` skill row, 20-04 the media budget rail + the transactional job reservation, 20-18 the D5 reconciliation readers, 20-19 the scheduled vendor-drift detector, 20-05 the fal submit adapter, 20-06 the HMAC webhook + landing plane, 20-07 the `externalAction` arm, 20-08 the dispatch surface, 20-14 the voiceover stage; next is Wave 8 — 20-15 the token-free renderer, which carries a BLOCKING owner checkpoint on the Vercel tier and max sandbox duration) | 2026-08-02 |
 | 21. User-Authored Skills & Routines | 0/TBD | Not started | - |
 | 22. Owner Authorization Primitive | 3/3 | UAT: server boundary PROVEN live; DOM half outstanding | - |
 | 22.1 Beta Admission Readiness (INSERTED) | 2/3 | In Progress (22.1-01 disconnect owner live-verified; 22.1-02 per-tenant budget keying complete + smoke 7/7 live-verified 2026-08-01; CI/typecheck gate open) | - |
 | 23. Agent-Authored Skills | 0/TBD | Not started | - |
 | 24. ISO 9001 Conformance Map | 0/TBD | Not started | - |
-| 25. Private Beta Productionization | 0/TBD | Not started | - |
+| 25. Private Beta Productionization | 0/14 | Planned — execution blocked on 25-00 prerequisite evidence; two lanes (19, 31) run ahead of it | - |
+| 26. Connected Product Pages | 8/20 | In Progress|  |
+| **Milestone: Marketing (pulled pre-beta 2026-08-07, ADR-015)** | | | |
+| 31. Marketing Surface & Funnel v0 (tranche A) | 0/TBD | Not started — schedulable; depends on Phase 19 | - |
+| 32. Channel Connection, Publishing & Metrics (tranche B) | 0/TBD | **BLOCKED — legal entity not started.** Do not plan | - |

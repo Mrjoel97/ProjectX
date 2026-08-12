@@ -1,0 +1,203 @@
+# Production release pipeline.
+#
+# The existing `ci` workflow is the pull-request and main-branch verification gate. This workflow
+# starts only after that gate succeeds for a push to main, then checks out the exact verified SHA.
+# Put the required secrets in GitHub's `production` environment and configure required reviewers
+# there when an explicit human promotion gate is desired.
+#
+# GitHub production-environment secrets:
+#   CONVEX_DEPLOY_KEY  - deployment-scoped production key with deployment:deploy permission
+#   VERCEL_TOKEN       - team-scoped Vercel access token; protect and rotate it accordingly
+#   VERCEL_ORG_ID      - Vercel team/account id
+#   VERCEL_PROJECT_ID  - Vercel project id
+# GitHub production-environment variable:
+#   PRODUCTION_URL     - durable, absolute app URL (for example https://app.example.com)
+#
+# Vercel's production environment must contain NEXT_PUBLIC_CONVEX_URL. The production Convex
+# deploy key stays only in GitHub's protected environment; it is never exposed to the web host.
+# All Convex runtime secrets stay in the hosted Convex deployment, never in this workflow or Vercel.
+# Disable Vercel's automatic Git production deploys so this verified pipeline is the only process
+# that can promote main to the production domains.
+
+name: deploy-production
+
+"on":
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    # `workflow_run` can expose environment secrets even when the triggering workflow came from a
+    # fork. Restrict deployment to a successful push whose verified head branch is exactly main.
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    environment:
+      name: production
+      url: ${{ steps.release.outputs.url }}
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
+    env:
+      CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+      VERCEL_CLI_VERSION: "54.2.0"
+
+    steps:
+      - name: Validate release configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in CONVEX_DEPLOY_KEY VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID PRODUCTION_URL; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Required production configuration is missing: $name"
+              exit 1
+            fi
+          done
+          case "$PRODUCTION_URL" in
+            https://*) ;;
+            *)
+              echo "::error::PRODUCTION_URL must be an absolute HTTPS URL"
+              exit 1
+              ;;
+          esac
+
+      - name: Check out verified main SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Verify checked-out SHA
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
+
+      - name: Enable corepack (pins pnpm from packageManager)
+        run: corepack enable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - name: Install workspace
+        run: pnpm install --frozen-lockfile
+
+      - name: Install pinned Vercel CLI
+        run: npm install --global "vercel@${VERCEL_CLI_VERSION}"
+
+      - name: Pull Vercel production settings
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Validate Vercel client/deploy environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          env_file=.vercel/.env.production.local
+          test -f "$env_file"
+          for name in NEXT_PUBLIC_CONVEX_URL MEDIA_RENDER_SECRET MEDIA_SANDBOX_SNAPSHOT_ID; do
+            if ! grep -q "^${name}=" "$env_file"; then
+              echo "::error::Vercel production environment is missing: $name"
+              exit 1
+            fi
+          done
+          node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            const project = JSON.parse(readFileSync(".vercel/project.json", "utf8"));
+            const commands = [];
+            const visit = (value) => {
+              if (!value || typeof value !== "object") return;
+              for (const [key, child] of Object.entries(value)) {
+                if (key === "buildCommand" && typeof child === "string") commands.push(child);
+                visit(child);
+              }
+            };
+            visit(project);
+            if (commands.some((command) => /convex\s+deploy/.test(command))) {
+              console.error("::error::Vercel Build Command must not deploy Convex; GitHub Actions owns the ordered backend release");
+              process.exit(1);
+            }
+          '
+
+      # Build and upload first, but do not move production domains yet. A later Convex failure
+      # therefore leaves the currently promoted web deployment untouched.
+      - name: Build staged Vercel production artifact
+        run: vercel build --prod --token="$VERCEL_TOKEN"
+
+      - name: Upload staged Vercel production artifact
+        id: stage
+        shell: bash
+        run: |
+          set -euo pipefail
+          url=$(vercel deploy --prebuilt --prod --skip-domain --archive=tgz \
+            --meta githubCommitSha="$DEPLOY_SHA" \
+            --meta githubCommitRef=main \
+            --token="$VERCEL_TOKEN")
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Dry-run Convex production bundle
+        working-directory: packages/backend
+        # The repository-wide CI typecheck has already qualified this exact SHA. Convex's CLI
+        # cannot discover the workspace-hoisted tsc binary under pnpm from this package directory.
+        run: node node_modules/convex/bin/main.js deploy --dry-run --typecheck disable
+
+      - name: Require committed Convex generated types
+        run: git diff --exit-code -- packages/backend/convex/_generated
+
+      # Convex Auth expands OAuth `redirectTo` paths against SITE_URL. Keep that value tied to the
+      # durable custom domain, never a generated Vercel deployment URL, or host-only auth cookies
+      # will be minted on one origin while middleware checks another (the "second login works"
+      # failure observed on 2026-08-12).
+      - name: Pin Convex Auth to the durable production origin
+        working-directory: packages/backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          node node_modules/convex/bin/main.js env set SITE_URL "$PRODUCTION_URL"
+          actual=$(node node_modules/convex/bin/main.js env get SITE_URL)
+          if [ "$actual" != "$PRODUCTION_URL" ]; then
+            echo "::error::Convex SITE_URL mismatch: expected $PRODUCTION_URL, got $actual"
+            exit 1
+          fi
+
+      - name: Deploy Convex production backend
+        working-directory: packages/backend
+        run: >-
+          node node_modules/convex/bin/main.js deploy
+          --typecheck disable
+          --message "GitHub Actions ${DEPLOY_SHA}"
+
+      # A fresh deployment without active skills dead-letters every governed request. The seed
+      # script is idempotent and reads executive-router back before it reports success.
+      - name: Seed and verify production skill registry
+        run: pnpm --filter @pikar/backend seed
+
+      - name: Probe staged Vercel deployment
+        run: vercel curl / --deployment="${{ steps.stage.outputs.url }}" --token="$VERCEL_TOKEN"
+
+      - name: Promote staged Vercel deployment
+        run: vercel promote "${{ steps.stage.outputs.url }}" --yes --timeout=5m --token="$VERCEL_TOKEN"
+
+      - name: Verify durable production URL
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location \
+            --retry 5 --retry-all-errors --retry-delay 5 \
+            --connect-timeout 10 --max-time 60 \
+            "$PRODUCTION_URL" > /dev/null
+          echo "url=$PRODUCTION_URL" >> "$GITHUB_OUTPUT"
+          echo "Deployed $DEPLOY_SHA to $PRODUCTION_URL"

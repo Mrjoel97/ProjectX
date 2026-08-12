@@ -28,6 +28,13 @@ export const NO_ACTIVE_SKILL_ERROR = "NO_ACTIVE_SKILL" as const;
 /** Error prefix thrown by activateSkill when the target version row is absent. */
 export const NO_SUCH_SKILL_VERSION_ERROR = "NO_SUCH_SKILL_VERSION" as const;
 
+/**
+ * 21-03: the ONE error an exact tenant-candidate read throws for absence. Deliberately a NON-ORACLE
+ * — it carries no id, no tenant and no name, so a caller cannot distinguish "no such row" from
+ * "a row that is not yours". Absence and refusal must be the same sentence.
+ */
+export const NO_SUCH_TENANT_CANDIDATE_ERROR = "NO_SUCH_TENANT_CANDIDATE" as const;
+
 /** Registry name of the seed Executive Agent classifier skill (seeds AGNT-01). */
 export const EXECUTIVE_AGENT_CLASSIFIER_SKILL = "executive-agent.classifier" as const;
 
@@ -267,6 +274,97 @@ export function isGatedSkill(name: string): boolean {
 }
 
 /**
+ * The v0 set an ordinary signed-in user may write a business adaptation for (Phase 21, SKILL-01).
+ *
+ * DELIBERATELY NARROWER THAN `GATED_SKILLS`, and the two lists must not be merged: gating is an
+ * ACTIVATION policy ("this body needs eval evidence to go live"), authorability is a PRODUCT
+ * decision ("we can honestly explain this skill to a user, and a run can certify their edit").
+ *
+ * These three are the dispatched business specialists. Their real runtime is
+ * `dispatch.runSpecialist` -> `llm.runSpecialistTurn`, and held-out golden fixtures 29/30/31 drive
+ * exactly one of them each — so a tenant candidate has a runner that can clear its gate. Adding a
+ * name whose runner cannot drive it (the `document-analyst` / `media-director` deadlock recorded
+ * above) would mint tenant candidates no eval run could ever certify. `skillAuthoring.test.ts`
+ * pins the exact set AND its subset relationship to `GATED_SKILLS`.
+ */
+export const USER_AUTHORABLE_SKILLS = [
+  OFFER_ARCHITECT_SKILL,
+  MONEY_MODEL_DESIGNER_SKILL,
+  LEAD_ENGINE_SKILL,
+] as const;
+
+/** A registry name an ordinary tenant user may author an adaptation for. */
+export type UserAuthorableSkill = (typeof USER_AUTHORABLE_SKILLS)[number];
+
+/**
+ * User-facing copy for the authorable set, exhaustive by type over `UserAuthorableSkill` so a UI
+ * never re-lists registry names (a duplicated literal is how the two lists drift apart).
+ */
+export const USER_AUTHORABLE_SKILL_METADATA: Record<
+  UserAuthorableSkill,
+  { label: string; description: string }
+> = {
+  [OFFER_ARCHITECT_SKILL]: {
+    label: "Offer architect",
+    description: "How your offers are shaped, packaged, and priced.",
+  },
+  [MONEY_MODEL_DESIGNER_SKILL]: {
+    label: "Money model designer",
+    description: "How your pricing, margins, and payment terms are proposed.",
+  },
+  [LEAD_ENGINE_SKILL]: {
+    label: "Lead engine",
+    description: "How leads are sourced, qualified, and followed up.",
+  },
+};
+
+/** Whether an ordinary tenant user may author an adaptation for this registry name. */
+export function isUserAuthorableSkill(name: string): name is UserAuthorableSkill {
+  return (USER_AUTHORABLE_SKILLS as readonly string[]).includes(name);
+}
+
+/**
+ * UTF-8 byte cap on ONE authored adaptation. Bounds both the stored row and the per-turn prompt
+ * cost the adaptation adds. BYTES, not characters: a character cap lets one multibyte paste carry
+ * ~4x the tokens the number implies.
+ */
+export const USER_SKILL_ADAPTATION_MAX_BYTES = 4000;
+
+/** The single fixed marker separating the code-owned base body from the tenant's adaptation. */
+export const USER_SKILL_ADAPTATION_SECTION = "## Tenant-authored business adaptation" as const;
+
+/** `composeUserSkillBody` refuses an adaptation that is empty after trimming. */
+export const USER_SKILL_ADAPTATION_REQUIRED_ERROR = "USER_SKILL_ADAPTATION_REQUIRED" as const;
+
+/** `composeUserSkillBody` refuses an adaptation over `USER_SKILL_ADAPTATION_MAX_BYTES`. */
+export const USER_SKILL_ADAPTATION_TOO_LARGE_ERROR = "USER_SKILL_ADAPTATION_TOO_LARGE" as const;
+
+/**
+ * Compose the complete runtime body for a tenant skill candidate: the effective base body
+ * verbatim, one fixed section marker, and the user's trimmed adaptation.
+ *
+ * The user authors an ADDITION, never a replacement — they neither receive nor can delete the base
+ * prompt (which is an owner-only disclosure boundary), and they cannot grant a capability, because
+ * tools/action kinds/budgets are code-owned (ADR-007). The base is emitted byte-for-byte and never
+ * parsed, so composing a NEW adaptation against the same base cannot carry an older one forward:
+ * callers pass the base, not the previously composed body.
+ *
+ * Throws (never returns a partial body) so no caller can persist an unvalidated adaptation. Error
+ * messages carry the cap and the measured byte count only — never the authored text (CLAUDE.md §4).
+ */
+export function composeUserSkillBody(baseBody: string, authoredBody: string): string {
+  const authored = authoredBody.trim();
+  if (authored === "") throw new Error(USER_SKILL_ADAPTATION_REQUIRED_ERROR);
+  const bytes = new TextEncoder().encode(authored).length;
+  if (bytes > USER_SKILL_ADAPTATION_MAX_BYTES) {
+    throw new Error(
+      `${USER_SKILL_ADAPTATION_TOO_LARGE_ERROR}: ${bytes} bytes exceeds ${USER_SKILL_ADAPTATION_MAX_BYTES}`,
+    );
+  }
+  return `${baseBody}\n\n${USER_SKILL_ADAPTATION_SECTION}\n\n${authored}`;
+}
+
+/**
  * Evidence recorded on a skills row by a green eval run (refs/hashes/ids/counts
  * ONLY — never raw prompts, outputs, or PII; CLAUDE.md §4). Written by the eval
  * runner (plan 04) via recordEvalEvidence, read by the activateSkill gate.
@@ -287,8 +385,29 @@ export type EvalEvidence = {
   model: string;
   /** Exact skill versions the run executed with — the gate pins on these. */
   skillVersions: Record<string, number>;
+  /**
+   * 21-03 (SKILL-01): the EXACT tenant candidate row this run certified, when it certified one.
+   * OPTIONAL and purely ADDITIVE — every global evidence row written before Phase 21 parses
+   * unchanged and `hasPassingEvidence` never reads this field.
+   */
+  tenantTarget?: EvalEvidenceTenantTarget;
   /** Epoch ms the evidence was recorded. */
   ts: number;
+};
+
+/**
+ * 21-03: WHICH tenant candidate a run certified. `<name>@<version>` stopped being an identity the
+ * moment two tenants could each own `offer-architect@2` — 21-02's two-tenant test builds exactly
+ * that collision on purpose. Every field is a ref/id/count (CLAUDE.md §4); no body, no authored
+ * text, and no hash of either travels here.
+ */
+export type EvalEvidenceTenantTarget = {
+  /** The `tenantSkills` row id. The identity — everything else is a cross-check on it. */
+  candidateId: string;
+  /** The tenant that OWNS the registry row (never the throwaway eval-data tenant). */
+  registryTenantId: string;
+  name: string;
+  version: number;
 };
 
 /**
@@ -306,6 +425,39 @@ export function hasPassingEvidence(
   try {
     const parsed = JSON.parse(evidence) as Partial<EvalEvidence>;
     return parsed.pass === true && parsed.skillVersions?.[name] === version;
+  } catch {
+    return false; // unparseable → fail closed
+  }
+}
+
+/**
+ * 21-03: the TENANT half of the same question — does this evidence prove a passing run for EXACTLY
+ * this candidate ROW? Every field of the identity is compared, not just the id: a row that agreed on
+ * the id but disagreed on tenant/name/version would mean the evidence and the row it sits on are
+ * describing different things, and the only safe reading of that is "no".
+ *
+ * Deliberately a SEPARATE predicate rather than a widening of `hasPassingEvidence`: the global gate
+ * asks "was this NAME at this VERSION certified", which is the question that stopped being
+ * sufficient once tenants could collide. Weakening the global one to accept a tenant target would
+ * let `<name>@<version>` evidence certify a tenant row, which is the exact confusion this exists to
+ * end. Fails closed on absent, unparseable, pass!==true, or ANY field mismatch.
+ */
+export function hasPassingTenantEvidence(
+  evidence: string | undefined,
+  target: EvalEvidenceTenantTarget,
+): boolean {
+  if (evidence === undefined) return false;
+  try {
+    const parsed = JSON.parse(evidence) as Partial<EvalEvidence>;
+    const t = parsed.tenantTarget;
+    return (
+      parsed.pass === true &&
+      t !== undefined &&
+      t.candidateId === target.candidateId &&
+      t.registryTenantId === target.registryTenantId &&
+      t.name === target.name &&
+      t.version === target.version
+    );
   } catch {
     return false; // unparseable → fail closed
   }

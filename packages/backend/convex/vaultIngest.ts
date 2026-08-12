@@ -191,11 +191,33 @@ export const ingestDoc = workflow.define({
     // does `Math.ceil(costUsd * 100)`, so a second call would round $0.00034 up to a whole cent
     // for every document — $3.00 charged against the ingest window for $0.10 of real spend over a
     // 300-document folder. Inside this sum it rides along in the same ceil.
-    await step.runMutation(internal.guardrails.recordSpend, {
-      tenantId,
-      costUsd: embed.costUsd + graph.costUsd + identity.costUsd,
-      rail,
-    });
+    //
+    // FIN-01 correlation, DERIVED and never minted: this is a JOURNALED step, so a workflow
+    // replay re-runs it from the journal WITHOUT re-running the three actions above — a nonce
+    // here would mint a second `actual` row for money that moved once. `step.workflowId` is the
+    // discriminator: ONE ingest run = one folded charge, while a re-ingest of the SAME doc
+    // (`retryStuckIngests` above, or the vault's retry seam) really does pay embed+extract+classify
+    // a second time and arrives under a new workflow id, so it gets its own row. `vaultDocId`
+    // alone would collapse those two genuine charges into one and put the ledger below the limiter.
+    // ⚠ NOT the `correlationId` ARG: `research.ts` passes `rootRequestId` there — one request that
+    // persists two findings docs hands two ingest runs the SAME string, so it is too coarse here.
+    // No `model` — this one row folds an embedding, an extraction and a classification call, so no
+    // single model id would be honest. No `folderId` either: the workflow never loads the doc row,
+    // and a read purely to label the ledger is a transaction the ingest spine does not need.
+    await step.runMutation(
+      internal.guardrails.recordSpend,
+      {
+        tenantId,
+        costUsd: embed.costUsd + graph.costUsd + identity.costUsd,
+        rail,
+        correlationId: `vault:ingest:${vaultDocId}:${step.workflowId}`,
+        kind: "vault.ingest", // code-owned token, refs only (§4)
+      },
+      // A journaled step validates its args on replay, so ADDING a field throws "Journal entry
+      // mismatch" for every ingest already in flight at deploy. `unstableArgs` waives that check
+      // for this step only — the args stay deterministic, they are just no longer compared.
+      { unstableArgs: true },
+    );
 
     // (7) Terminal: the doc is embedded + extracted → groundable.
     await step.runMutation(internal.vault.markReady, { vaultDocId, ragEntryId: embed.entryId });

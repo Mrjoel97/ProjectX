@@ -335,6 +335,88 @@ describe("an exported file lands as an ordinary vault document", () => {
 
 // ── 3. Dedup attaches identity, never membership ──────────────────────────────
 
+describe("findInDrive uses the existing bounded, shared-drive-aware boundary", () => {
+  test("a pre-widening grant returns reauth before fetch", async () => {
+    const t = harness();
+    await seedGrant(t, PRE_WIDENING_SCOPE);
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+
+    expect(
+      await t.withIdentity({ subject: TENANT }).action(api.vaultDrive.findInDrive, {
+        query: "quarterly plan",
+      }),
+    ).toEqual({ ok: false, reason: "reauth" });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  test("searches name plus fullText with a 20-hit cap and both shared-drive flags", async () => {
+    const t = harness();
+    await seedGrant(t, FULL_SCOPE);
+    const fetchSpy = vi.fn(async (url: string) => {
+      if (!String(url).includes("/drive/v3/"))
+        return Response.json({ access_token: "fresh", expires_in: 3600 });
+      return Response.json({
+        files: [
+          {
+            id: "doc-1",
+            name: "Quarterly plan",
+            mimeType: "text/plain",
+            size: "42",
+            modifiedTime: new Date(NOW).toISOString(),
+            capabilities: { canDownload: true },
+          },
+          { id: "folder-1", name: "Plans", mimeType: "application/vnd.google-apps.folder" },
+        ],
+      });
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const result = await t.withIdentity({ subject: TENANT }).action(api.vaultDrive.findInDrive, {
+      query: "quarterly plan",
+    });
+    expect(result).toEqual({
+      ok: true,
+      hits: [
+        { id: "doc-1", name: "Quarterly plan", kind: "file", readable: true },
+        { id: "folder-1", name: "Plans", kind: "folder", readable: false },
+      ],
+    });
+
+    const driveCall = fetchSpy.mock.calls.find(([url]) => String(url).includes("/drive/v3/"));
+    expect(driveCall).toBeDefined();
+    const url = new URL(String(driveCall?.[0]));
+    expect(url.searchParams.get("q")).toBe(
+      "(name contains 'quarterly plan' or fullText contains 'quarterly plan') and trashed=false",
+    );
+    expect(url.searchParams.get("pageSize")).toBe("20");
+    expect(url.searchParams.get("supportsAllDrives")).toBe("true");
+    expect(url.searchParams.get("includeItemsFromAllDrives")).toBe("true");
+  });
+
+  test("escapes quotes inside both Drive query-language literals", async () => {
+    const t = harness();
+    await seedGrant(t, FULL_SCOPE);
+    const fetchSpy = vi.fn(async (url: string) => {
+      if (!String(url).includes("/drive/v3/"))
+        return Response.json({ access_token: "fresh", expires_in: 3600 });
+      return Response.json({ files: [] });
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await t.withIdentity({ subject: TENANT }).action(api.vaultDrive.findInDrive, {
+      query: "O'Brien' or trashed=true or name contains '",
+    });
+    const driveCall = fetchSpy.mock.calls.find(([url]) => String(url).includes("/drive/v3/"));
+    expect(driveCall).toBeDefined();
+    const q = new URL(String(driveCall?.[0])).searchParams.get("q");
+    expect(q).toContain("O\\'Brien\\' or trashed=true or name contains \\'");
+    expect(q).toBe(
+      "(name contains 'O\\'Brien\\' or trashed=true or name contains \\'' or fullText contains 'O\\'Brien\\' or trashed=true or name contains \\'') and trashed=false",
+    );
+  });
+});
+
 describe("a content dedup hit is not annexed into the folder", () => {
   // `vault.vaultUpload`'s dedup branch returns and does nothing else — correct there, WRONG here:
   // the row would carry no driveFileId, so every future refresh would re-export it forever. But

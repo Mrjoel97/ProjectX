@@ -54,6 +54,14 @@ final productionization phase.*
 evidence-backed Validated line — see `.planning/design/moat-strategy.md` for the
 evidence hierarchy (behavioral > verbal-specific; verbal-general is noise).*
 
+> **OVERRIDDEN ONCE, DELIBERATELY — 2026-08-07.** The Marketing milestone (Phases 31-32) was
+> admitted to the roadmap by owner decision with **no Validated line**, recorded as
+> `docs/decisions/015-marketing-milestone-pulled-pre-beta.md`. **The rule above is NOT repealed**
+> and continues to govern every other idea; this is one named exception, taken with the rule in
+> view. `Validated:` still reads `(None yet)` because nothing has actually been validated — the
+> override changed what was admitted, not what is known. Do not cite this precedent to admit a
+> second feature; cite it only to explain why Phases 31-32 exist without evidence.
+
 ### Active
 
 - [ ] Request intake via text, file attachments, and voice (recorded dictation → transcription)

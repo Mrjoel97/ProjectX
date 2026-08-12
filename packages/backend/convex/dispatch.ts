@@ -172,6 +172,11 @@ type DispatchArgs = {
   /** 16-09: the eval harness's --skill pins. Without this the specialist silently ran the ACTIVE
    *  row (v1) while the evidence row claimed v2 — a pin that certifies a body that never executed. */
   skillVersions?: Record<string, number>;
+  /** 21-03 (SKILL-01): the harness's EXACT tenant-candidate pins, name → `tenantSkills` row id.
+   *  The same defect 16-09 fixed, one scope down: without it a `--tenant-skill <id>` run would
+   *  evaluate the tenant's ACTIVE (or the global) body and then write evidence onto the candidate.
+   *  Absent on the production `actOnGap` path, which must keep running the effective row. */
+  tenantSkillIds?: Record<string, Id<"tenantSkills">>;
 };
 
 /** The Convex validators for the above — shared by BOTH entry points so neither can drift. */
@@ -191,6 +196,10 @@ const dispatchArgs = {
   spentCents: v.number(),
   question: v.optional(v.string()),
   skillVersions: v.optional(v.record(v.string(), v.number())),
+  // 21-03: `v.id("tenantSkills")`, never a string — the validator itself refuses anything that is
+  // not a real row id of that table. And deliberately NOT a body or a registry tenant: the only
+  // thing a caller may name is WHICH ROW, and even that arrives on an internalAction (ADR-008).
+  tenantSkillIds: v.optional(v.record(v.string(), v.id("tenantSkills"))),
 };
 
 /** Compile-time bind: every registered specialist's `stepTool` is a real agentSteps.tool literal.
@@ -425,6 +434,17 @@ async function governedDispatch(
       payload: {
         ...refs,
         skillVersion: turn.skillVersion,
+        // 21-03 (SKILL-01): the FULL registry attribution for this use, on the EXISTING
+        // `subagent.completed` row. Deliberately not a new event type and not a new table: the
+        // question "which body did this specialist actually run" is a property of the run that is
+        // already logged here, and `audit.by_correlation` already reconstructs the tree.
+        // REFS ONLY — scope, row id, name and a SHA-256 of the body. The body, the tenant's
+        // authored adaptation and the global prompt never enter an audit payload (CLAUDE.md §4);
+        // the hash is what makes "this exact body ran" checkable without storing it.
+        skillScope: turn.skillScope,
+        skillId: turn.skillId,
+        skillName: turn.skillName,
+        skillBodyHash: turn.skillBodyHash,
         costUsd: turn.costUsd,
         spentCents: spentAfter,
         envelopeCents,
@@ -564,6 +584,7 @@ export const runSpecialist = internalAction({
         tenantId: args.tenantId,
         planId: args.planId,
         skillVersions: args.skillVersions,
+        tenantSkillIds: args.tenantSkillIds,
       }),
     ),
 });
@@ -813,6 +834,7 @@ export const runResearch = internalAction({
             tenantId: args.tenantId,
             planId: args.planId,
             skillVersions: args.skillVersions,
+            tenantSkillIds: args.tenantSkillIds,
           }),
         RESEARCH_FAILED_MEMO,
       ),
@@ -844,6 +866,7 @@ export const runMedia = internalAction({
             tenantId: args.tenantId,
             planId: args.planId,
             skillVersions: args.skillVersions,
+            tenantSkillIds: args.tenantSkillIds,
           }),
         MEDIA_FAILED_MEMO,
       ),
@@ -891,6 +914,7 @@ export const __runSpecialistWithScript = internalAction({
           tenantId: args.tenantId,
           planId: args.planId,
           skillVersions: args.skillVersions,
+          tenantSkillIds: args.tenantSkillIds,
           mockScript: {
             primary: args.primary,
             fallback: args.fallback,

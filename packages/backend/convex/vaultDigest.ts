@@ -279,6 +279,14 @@ export const buildFolderDigest = internalAction({
     rebuild: v.optional(v.boolean()),
   },
   handler: async (ctx, { tenantId, folderId, rebuild }): Promise<BuildDigestResult> => {
+    // FIN-01 replay identity, MINTED not derived. `folderId` alone is TOO COARSE by design:
+    // Rebuild is deliberately "the only way to spend twice" (the `already_built` belt below waves
+    // `rebuild: true` through), so two clicks on one folder are two real `generateText` calls —
+    // and an action re-entry after a mid-flight failure is a third. A folder-scoped constant would
+    // collapse every rebuild after the first onto one `actual` row and leave the ledger BELOW the
+    // limiter, the unrecoverable direction. Exactly one model call per run, so `runId` alone
+    // separates run N from run N+1; `folderId` rides along as a typed ref instead.
+    const runId = crypto.randomUUID();
     // Load the digest prompt FIRST — before the offline seam, deliberately (blueprint.ts:245-246):
     // an unseeded deployment must never synthesise from a hardcoded fallback, and the SMOKE path
     // has to exercise the registry too or the seam hides an unseeded backend. Throws
@@ -374,6 +382,10 @@ export const buildFolderDigest = internalAction({
           // `recordSpend` has NO `reserved` param — the rail selector applies regardless, and the
           // digest's real cost must move the ingest window it was priced against.
           rail: "ingest",
+          correlationId: `vault:digest:${folderId}:${runId}`,
+          model: DEFAULT_MODEL,
+          kind: "vault.folder_digest", // code-owned token, refs only (§4)
+          folderId,
         });
       }
       markdown = text;

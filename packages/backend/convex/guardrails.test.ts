@@ -202,14 +202,30 @@ describe("spend rails: per-tenant window + keyless deployment ceiling", () => {
 //
 // Every test below names the mutation that turns it red, and every one of those mutations was
 // actually run — a guarantee whose mutation does not break its test is not being sampled.
+// One 1 KB text file estimates this many cents at the CURRENT `DEFAULT_MODEL` input rate. It was 1
+// under `gpt-4o-mini` ($0.15/MTok), and the 2026-08-07 Gemini repoint doubled the rate to $0.30, so
+// the same file now costs 2. Until then files and cents were interchangeable numbers, and several
+// tests treated them as such — which is why the repoint reddened five of them at once.
+//
+// PINNED AS A LITERAL, DELIBERATELY. Deriving it from `PRICING` would make every assertion below
+// agree with itself and stop testing the rail's arithmetic at all — the vacuous-test failure this
+// repo has already been bitten by twice (docs/playbooks/vault.md). A future rate change SHOULD
+// redden these tests and force this constant to be re-read. It did exactly that TWICE: 2 when
+// DEFAULT_MODEL was gemini-3.5-flash (2026-08-07), back to 1 when the pin returned to gpt-4o-mini
+// on 2026-08-08 — a 1 KB text file costs half as much on the cheaper rate.
+//
+// MODULE SCOPE, not per-describe: `drainBothRails` in the cross-rail block builds its own manifest
+// and needs the same number. Two copies of a rate constant is exactly how one gets updated and the
+// other does not.
+const CENTS_PER_FILE = 1;
+/** A manifest of `files` 1 KB text files. Its estimate is `files * CENTS_PER_FILE`. */
+const manifestOf = (files: number) =>
+  Array.from({ length: files }, () => ({ size: 1_000, mimeType: "text/plain" }));
+/** Fewest whole files whose estimate reaches `cents` (estimates land on multiples of the rate). */
+const filesCosting = (cents: number) => Math.ceil(cents / CENTS_PER_FILE);
+
 describe("folder-ingest rail: reserve, refund, and never starving the cockpit", () => {
   const T = "tenant_folder";
-
-  /** A manifest that estimates to EXACTLY `cents`. One plain-text document costs one cent —
-   *  `recordSpend` charges `Math.ceil(costUsd * 100)` per call and graph extraction is sub-cent —
-   *  so N text files is N cents. The tests assert that, so this helper cannot go silently wrong. */
-  const manifestOf = (cents: number) =>
-    Array.from({ length: cents }, () => ({ size: 1_000, mimeType: "text/plain" }));
 
   const remaining = (t: ReturnType<typeof budgetHarness>, tenantId = T) =>
     t.query(internal.guardrails.ingestRemainingCents, { tenantId });
@@ -245,7 +261,7 @@ describe("folder-ingest rail: reserve, refund, and never starving the cockpit", 
 
     const res = await t.mutation(internal.guardrails.reserveFolder, {
       tenantId: T,
-      files: manifestOf(900),
+      files: manifestOf(filesCosting(900)),
     });
     expect(res.ok).toBe(true);
     expect(res.estCents).toBe(900); // the helper really does estimate what it claims
@@ -264,20 +280,23 @@ describe("folder-ingest rail: reserve, refund, and never starving the cockpit", 
   // REJECTS with `count 2501 exceeds 2500` instead of resolving.
   test("a folder over the cap RESOLVES to a governed refusal — it does not throw", async () => {
     const t = budgetHarness();
-    const over = INGEST_DAILY_BUDGET_CENTS + 1;
+    // The smallest folder that still exceeds the cap. Files and cents are no longer the same
+    // number (CENTS_PER_FILE = 2), so the overshoot is one FILE — two cents — not one cent.
+    const overFiles = filesCosting(INGEST_DAILY_BUDGET_CENTS + 1);
+    const overCents = overFiles * CENTS_PER_FILE;
 
     const res = await t.mutation(internal.guardrails.reserveFolder, {
       tenantId: T,
-      files: manifestOf(over),
+      files: manifestOf(overFiles),
     });
 
     expect(res).toMatchObject({
       ok: false,
       reason: "over_folder_cap",
-      estCents: over,
+      estCents: overCents,
       remainingCents: INGEST_DAILY_BUDGET_CENTS,
-      shortfallCents: 1,
-      fileCount: over,
+      shortfallCents: overCents - INGEST_DAILY_BUDGET_CENTS,
+      fileCount: overFiles,
     });
     // NOTHING was consumed — a refusal is intact by construction, not by cleanup.
     expect(await remaining(t)).toBe(INGEST_DAILY_BUDGET_CENTS);
@@ -305,7 +324,10 @@ describe("folder-ingest rail: reserve, refund, and never starving the cockpit", 
   // line -> RED, the second call refunds another 400 and the window reads 2400.
   test("settling twice does not credit twice", async () => {
     const t = budgetHarness();
-    await t.mutation(internal.guardrails.reserveFolder, { tenantId: T, files: manifestOf(900) });
+    await t.mutation(internal.guardrails.reserveFolder, {
+      tenantId: T,
+      files: manifestOf(filesCosting(900)),
+    });
     const folderId = await seedFolder(t, 400);
 
     const first = await t.mutation(internal.guardrails.settleFolder, { folderId });
@@ -329,7 +351,7 @@ describe("folder-ingest rail: reserve, refund, and never starving the cockpit", 
   test("two folders that cannot both fit: one is reserved, one is refused truthfully", async () => {
     const t = budgetHarness();
     const half = Math.floor(INGEST_DAILY_BUDGET_CENTS * 0.6); // 1500 — two of these do not fit
-    const files = manifestOf(half);
+    const files = manifestOf(filesCosting(half));
 
     const [a, b] = await Promise.all([
       t.mutation(internal.guardrails.reserveFolder, { tenantId: T, files }),
@@ -418,12 +440,13 @@ describe("cross-rail isolation: a drained cockpit budget cannot refuse reserved 
    */
   async function drainBothRails(t: ReturnType<typeof ingestHarness>): Promise<void> {
     await drainCockpit(t);
+    // Drain the ingest window to EXACTLY 0. This used to be `length: INGEST_DAILY_BUDGET_CENTS`,
+    // which worked only while one file cost one cent; at CENTS_PER_FILE = 2 that manifest costs
+    // double the cap and the reserve is REFUSED, so the fixture stopped draining anything and both
+    // tests below went red for the wrong reason.
     const res = await t.mutation(internal.guardrails.reserveFolder, {
       tenantId: TENANT,
-      files: Array.from({ length: INGEST_DAILY_BUDGET_CENTS }, () => ({
-        size: 1_000,
-        mimeType: "text/plain",
-      })),
+      files: manifestOf(filesCosting(INGEST_DAILY_BUDGET_CENTS)),
     });
     expect(res.ok).toBe(true);
     expect(await t.query(internal.guardrails.ingestRemainingCents, { tenantId: TENANT })).toBe(0);
@@ -484,4 +507,351 @@ describe("cross-rail isolation: a drained cockpit budget cannot refuse reserved 
     expect(doc?.failureReason).toBeUndefined();
     expect(doc?.text).toBe("folder member text");
   }, 30000);
+});
+
+// ── 26-07: LEDGER PARITY ───────────────────────────────────────────────────────────────
+//
+// The limiter is ENFORCEMENT truth; `spendEvents` is REPORTING truth. These tests pin the one
+// property that makes the second plane worth having: **every limiter movement has exactly one
+// ledger movement, carrying the SAME cents.** They drive the real rate-limiter component, because
+// asserting against a stub would prove the stub.
+//
+// The correlation policy under test, and why it is split in two:
+//   - REPLAYABLE sites (prepare, reserve, settle) derive a DETERMINISTIC correlation from refs, so
+//     re-entering them writes no second row.
+//   - `recordSpend` is reached from ACTIONS, where a re-entry re-spends for real. It mints a
+//     per-execution nonce when no correlation is supplied, which CANNOT under-count. Under-count is
+//     the unrecoverable direction: a duplicate is findable by reconciling against the limiter, a
+//     missing movement is indistinguishable from money that was never spent.
+describe("ledger parity: reasoning and ingest movements", () => {
+  const T = "tenant_ledger";
+  const events = (t: ReturnType<typeof budgetHarness>) =>
+    t.run((ctx) => ctx.db.query("spendEvents").collect());
+
+  test("prepare writes ONE estimated movement; re-preparing the same request writes no second", async () => {
+    const t = budgetHarness();
+    await seedConfig(t, { killSwitch: false, budgetUsdPerRequest: 0.05 });
+    const requestId = await t.run((ctx) => ctx.db.insert("requests", { ...REQ, tenantId: T }));
+
+    const first = await t.mutation(internal.guardrails.prepare, { requestId });
+    expect(first.ok).toBe(true);
+    if (!first.ok) throw new Error("expected ok");
+    expect(first.estCents).toBeGreaterThan(0); // the amount assertion below is not vacuous
+
+    const after = await events(t);
+    expect(after).toHaveLength(1);
+    expect(after[0]).toMatchObject({
+      tenantId: T,
+      rail: "reasoning",
+      phase: "estimated",
+      amountCents: first.estCents,
+      correlationId: `req:${requestId}:prepare`,
+      requestId,
+    });
+
+    // The pipeline re-enters prepare on a regenerate; the estimate is the SAME estimate.
+    await t.mutation(internal.guardrails.prepare, { requestId });
+    expect(await events(t)).toHaveLength(1);
+  });
+
+  test("a refused prepare writes no movement at all — a governed stop is not a spend", async () => {
+    const t = budgetHarness();
+    await seedConfig(t, { killSwitch: true, budgetUsdPerRequest: 0.05 });
+    const requestId = await t.run((ctx) => ctx.db.insert("requests", { ...REQ, tenantId: T }));
+
+    expect(await t.mutation(internal.guardrails.prepare, { requestId })).toMatchObject({
+      ok: false,
+    });
+    expect(await events(t)).toHaveLength(0);
+
+    // BUT COVERAGE IS OPEN, and that distinction is the point. Reaching the gate is what makes a
+    // tenant observable, so from this instant a zero is a CONFIDENT zero rather than ignorance —
+    // a kill-switch stop is positive knowledge that no money moved. Opening coverage only on the
+    // first recorded movement would invert the lie this field exists to prevent: instead of a fake
+    // zero it would report fake ignorance for a tenant we had been gating all along.
+    expect(await t.query(internal.spendLedger.coverage, { tenantId: T })).toBeGreaterThan(0);
+  });
+
+  test("a tenant that is gated but never spends reports a CONFIDENT zero, not unknown", async () => {
+    const t = budgetHarness();
+    await seedConfig(t, { killSwitch: false, budgetUsdPerRequest: 0.05 });
+
+    // One gate call, no spend. This is the ordinary shape of a new tenant's first day.
+    expect(await t.mutation(internal.guardrails.preCall, { tenantId: T })).toEqual({ ok: true });
+
+    const startedAt = await t.query(internal.spendLedger.coverage, { tenantId: T });
+    expect(startedAt).toBeGreaterThan(0);
+    expect(await events(t)).toHaveLength(0);
+
+    // Coverage + zero movements is exactly what `aggregateSpend` needs to say "covered, $0"
+    // instead of "unknown". A tenant who has never been gated still, correctly, reports null.
+    expect(await t.query(internal.spendLedger.coverage, { tenantId: "never_seen" })).toBeNull();
+  });
+
+  test("a second gate call never moves the coverage start forward", async () => {
+    const t = budgetHarness();
+    await seedConfig(t, { killSwitch: false, budgetUsdPerRequest: 0.05 });
+
+    await t.mutation(internal.guardrails.preCall, { tenantId: T });
+    const first = await t.query(internal.spendLedger.coverage, { tenantId: T });
+    await t.mutation(internal.guardrails.preCall, { tenantId: T });
+    await t.mutation(internal.guardrails.recordSpend, { tenantId: T, costUsd: 0.5 });
+
+    // A later start would silently turn every already-covered window into `unknown`.
+    expect(await t.query(internal.spendLedger.coverage, { tenantId: T })).toBe(first);
+  });
+
+  test("recordSpend writes ONE actual movement carrying the cents the limiter consumed", async () => {
+    const t = budgetHarness();
+    // $0.0015 -> Math.ceil -> 1 cent. The ledger must write the cents the LIMITER took, never a
+    // re-derived rounding: Math.round(0.15) is 0, which the ledger then refuses outright.
+    await t.mutation(internal.guardrails.recordSpend, { tenantId: T, costUsd: 0.0015 });
+
+    const rows = await events(t);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ rail: "reasoning", phase: "actual", amountCents: 1 });
+    expect(await t.query(internal.guardrails.remainingDailyCents, { tenantId: T })).toBe(
+      DAILY_BUDGET_CENTS - 1,
+    );
+  });
+
+  test("a second identical charge is a SECOND movement — a real re-spend is never suppressed", async () => {
+    const t = budgetHarness();
+    await t.mutation(internal.guardrails.recordSpend, { tenantId: T, costUsd: 0.5 });
+    await t.mutation(internal.guardrails.recordSpend, { tenantId: T, costUsd: 0.5 });
+
+    // THE nonce property. Two real charges moved the limiter twice; the ledger must agree.
+    const rows = await events(t);
+    expect(rows).toHaveLength(2);
+    expect(new Set(rows.map((r) => r.correlationId)).size).toBe(2);
+    expect(rows.reduce((sum, r) => sum + r.amountCents, 0)).toBe(100);
+  });
+
+  test("a caller-supplied correlation makes a replay a no-op", async () => {
+    const t = budgetHarness();
+    const correlationId = "req:abc123:llm:draft:0";
+    await t.mutation(internal.guardrails.recordSpend, {
+      tenantId: T,
+      costUsd: 0.25,
+      correlationId,
+    });
+    await t.mutation(internal.guardrails.recordSpend, {
+      tenantId: T,
+      costUsd: 0.25,
+      correlationId,
+    });
+
+    expect(await events(t)).toHaveLength(1);
+    // The LIMITER still moved twice — it has no replay suppression and must not grow one here.
+    // That divergence is what reconciliation is FOR; it is not a defect to paper over.
+    expect(await t.query(internal.guardrails.remainingDailyCents, { tenantId: T })).toBe(
+      DAILY_BUDGET_CENTS - 50,
+    );
+  });
+
+  test("a zero-cost run moves neither plane", async () => {
+    const t = budgetHarness();
+    await t.mutation(internal.guardrails.recordSpend, { tenantId: T, costUsd: 0 });
+
+    expect(await events(t)).toHaveLength(0);
+    // `recordSpend` is NOT a gate — it runs AFTER one, so in production coverage is already open
+    // by the time it is reached and it deliberately does not open coverage itself. Driven in
+    // isolation here, a zero-cost call is therefore a complete no-op on both planes.
+    expect(await t.query(internal.spendLedger.coverage, { tenantId: T })).toBeNull();
+  });
+
+  test("the ingest rail records ingest, not reasoning", async () => {
+    const t = budgetHarness();
+    await t.mutation(internal.guardrails.recordSpend, {
+      tenantId: T,
+      costUsd: 0.4,
+      rail: "ingest",
+      kind: "ingest_fold",
+    });
+
+    expect((await events(t))[0]).toMatchObject({
+      rail: "ingest",
+      phase: "actual",
+      amountCents: 40,
+    });
+  });
+});
+
+describe("ledger parity: folder reservation, refund and the rolled window", () => {
+  const T = "tenant_folder_ledger";
+  const events = (t: ReturnType<typeof budgetHarness>) =>
+    t.run((ctx) => ctx.db.query("spendEvents").collect());
+
+  const seedFolderRow = (
+    t: ReturnType<typeof budgetHarness>,
+    reservedCents: number,
+    reservedAt: number,
+  ): Promise<Id<"vaultFolders">> =>
+    t.run((ctx) =>
+      ctx.db.insert("vaultFolders", {
+        tenantId: T,
+        name: "folder",
+        source: "upload" as const,
+        status: "ingesting" as const,
+        memberCount: 0,
+        terminalCount: 0,
+        failedCount: 0,
+        reservedCents,
+        spentCents: 0,
+        reservedAt,
+        createdAt: Date.now(),
+      }),
+    );
+
+  test("reserve writes ONE reserved movement stamped with the reservedAt it returned", async () => {
+    const t = budgetHarness();
+    const folderId = await seedFolderRow(t, 0, Date.now());
+
+    const res = await t.mutation(internal.guardrails.reserveFolder, {
+      tenantId: T,
+      files: manifestOf(filesCosting(900)),
+      folderId,
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) throw new Error("expected ok");
+
+    const rows = await events(t);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      rail: "ingest",
+      phase: "reserved",
+      amountCents: 900,
+      folderId,
+      // THE stamp settle rebuilds its correlation from. If reserve stamps a different instant than
+      // the one it returns, settle can never match it and every refund writes an orphan row.
+      correlationId: `f:${folderId}:${res.reservedAt}`,
+    });
+  });
+
+  test("settle writes ONE refunded movement, and settling twice writes no second", async () => {
+    const t = budgetHarness();
+    const reservedAt = Date.now();
+    const folderId = await seedFolderRow(t, 400, reservedAt);
+    await t.mutation(internal.guardrails.reserveFolder, {
+      tenantId: T,
+      files: manifestOf(filesCosting(900)),
+    });
+
+    const first = await t.mutation(internal.guardrails.settleFolder, { folderId });
+    const second = await t.mutation(internal.guardrails.settleFolder, { folderId });
+
+    expect(first.refundedCents).toBe(400);
+    expect(second).toMatchObject({ reason: "already_settled" });
+    const refunds = (await events(t)).filter((r) => r.phase === "refunded");
+    expect(refunds).toHaveLength(1);
+    expect(refunds[0]).toMatchObject({
+      rail: "ingest",
+      amountCents: 400,
+      folderId,
+      correlationId: `f:${folderId}:${reservedAt}`,
+    });
+  });
+
+  test("a rolled window refunds nothing, writes NO movement, and leaves the money unlanded", async () => {
+    const t = budgetHarness();
+    await t.mutation(internal.guardrails.reserveFolder, {
+      tenantId: T,
+      files: manifestOf(filesCosting(900)),
+    });
+    // A reservation stamped at the epoch is unambiguously before the current window start, which
+    // is exactly what refundableCents refuses to credit — the window it would refund into never
+    // took the money.
+    const folderId = await seedFolderRow(t, 400, 0);
+
+    const res = await t.mutation(internal.guardrails.settleFolder, { folderId });
+
+    expect(res.refundedCents).toBe(0);
+    // A zero-cent movement is REJECTED by validateSpendMovement, and that throw would run inside
+    // tryComplete's transaction — folder completion would fail for an accounting reason. So the
+    // ledger write lives strictly inside the existing `refundedCents > 0` branch.
+    expect((await events(t)).filter((r) => r.phase === "refunded")).toHaveLength(0);
+    // The truth is still tellable: reserved 900, refunded 0 -> aggregateSpend reports 900 unlanded.
+    expect(res.reason).toBe("settled_window_rolled");
+  });
+});
+
+// ── 26-07 follow-up: NO CALL SITE MAY SHIP UNINSTRUMENTED ──────────────────────────────
+//
+// `recordSpend`'s `correlationId` is deliberately OPTIONAL (owner decision, 2026-08-08 — a required
+// arg would have rippled through ~10 source files and ~6 playbooks in a plan that owned six files).
+// The cost of that choice is that the COMPILER no longer enumerates the call sites for us, and a
+// site added later would silently fall back to the nonce: recorded, but with no replay suppression,
+// and nobody would ever notice.
+//
+// This scan is what buys that enforcement back, for the price of one regex and a brace counter. It
+// is a SOURCE check rather than a behavioural one on purpose: no runtime test can observe a call
+// site that nobody wrote a test for, which is precisely the case being defended against.
+describe("every recordSpend call site passes a correlation", () => {
+  const sources = import.meta.glob("./**/*.ts", {
+    query: "?raw",
+    import: "default",
+    eager: true,
+  }) as Record<string, string>;
+
+  const CALL = "internal.guardrails.recordSpend";
+
+  /**
+   * The ARGUMENT OBJECT of the call, found by balancing BRACES from the `{` that follows the callee
+   * name — not by a fixed character window, which would read a LATER call's `correlationId` and
+   * pass for the wrong reason on any file with two adjacent sites (llm.ts and intake.ts both have
+   * exactly that).
+   *
+   * BRACES, NOT PARENS, and the first draft of this helper got it wrong in a way that passed:
+   * the call is `ctx.runMutation(internal.guardrails.recordSpend, { ... })`, so the enclosing
+   * paren opens BEFORE the callee name. Scanning for the next `(` AFTER the name therefore found
+   * some unrelated call further down the file and returned a garbage span — which for `voice.ts`
+   * contained the word `correlationId` by coincidence and reported an uninstrumented site as
+   * green. A scan that can pass for a reason unrelated to its subject is worse than no scan.
+   */
+  function argsOf(code: string, from: number): string | null {
+    const open = code.indexOf("{", from);
+    const close = code.indexOf(")", from);
+    if (open === -1 || (close !== -1 && close < open)) return null; // not an object literal
+    let depth = 0;
+    for (let i = open; i < code.length; i += 1) {
+      if (code[i] === "{") depth += 1;
+      else if (code[i] === "}") {
+        depth -= 1;
+        if (depth === 0) return code.slice(open, i + 1);
+      }
+    }
+    return null;
+  }
+
+  const callSites = Object.entries(sources)
+    .filter(([path]) => !path.endsWith(".test.ts") && !path.includes("/_generated/"))
+    .flatMap(([path, raw]) => {
+      // Strip comments first: three files DISCUSS `guardrails.recordSpend` in prose, and a scan
+      // that counted those would demand a correlation inside a sentence (the importGuard.test.ts
+      // trap — a guard must not punish its own documentation).
+      const code = raw.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, "");
+      const found: { path: string; args: string | null }[] = [];
+      for (let i = code.indexOf(CALL); i !== -1; i = code.indexOf(CALL, i + 1)) {
+        found.push({ path, args: argsOf(code, i + CALL.length) });
+      }
+      return found;
+    });
+
+  test("the scan found the call sites it is supposed to guard", () => {
+    // Anti-vacuity: every assertion below is a per-site loop, so an empty list passes for free —
+    // exactly what happens if the glob key shape or the callee name ever changes.
+    expect(callSites.length).toBeGreaterThanOrEqual(10);
+  });
+
+  for (const [index, site] of callSites.entries()) {
+    test(`${site.path} site ${index} passes a correlationId`, () => {
+      // A call that does not spread an object literal cannot be read by this scan; spelling the
+      // args inline is the house style at all 12 sites, and a caller that changes that must say so.
+      expect(
+        site.args,
+        `${site.path}: recordSpend args are not an inline object literal`,
+      ).not.toBeNull();
+      expect(site.args).toContain("correlationId");
+    });
+  }
 });

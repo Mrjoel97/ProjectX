@@ -99,10 +99,13 @@ describe("the vault surface", () => {
   // The whole surface now shows `identityLine` where it used to show `title`, which makes a
   // find-and-replace of `doc.title` → `docLabel(doc)` a two-character mutation that silently
   // renames every downloaded file to its identity line and rewrites every image's alt text. That
-  // is a shipped guarantee with NO other observer anywhere in the repo — `apps/web` has no test
-  // runner — so it is asserted here.
+  // is a shipped guarantee, so it is asserted here.
+  //
+  // The anchor variable was renamed `a` → `anchor` by the 15.4 preview rework, which is exactly
+  // why the assertion binds to the ASSIGNMENT TARGET and the assigned value rather than the whole
+  // statement — the guarantee is "the download name is `doc.title`", not "the local is called a".
   test("the download and the alt text still carry the real filename", () => {
-    expect(src).toContain("a.download = doc.title");
+    expect(src).toMatch(/\.download\s*=\s*doc\.title/);
     expect(src).toContain("alt={doc.title}");
   });
 
@@ -209,6 +212,12 @@ describe("the vault surface", () => {
   // the SAME button flipping secondary→primary — one label, one handler, only the emphasis moves.
   // The alternative the plan bans by name is `ReconnectBanner`: a dismissible localStorage notice
   // would let a user permanently hide a digest that is genuinely out of date, on one browser.
+  //
+  // 15.4 SPLIT THIS ACROSS TWO FILES: `FolderBreadcrumb` derives `stale` and mounts exactly one
+  // `DigestRebuildControl`, and the control (in `VaultBrowseControls.tsx`) owns the class flip.
+  // The RENDERED flip therefore moved to `apps/web/.../VaultBrowseControls.test.ts`, which renders
+  // the markup — the same migration `preflightCopy.test.ts` made once `apps/web` had a runner.
+  // What only a whole-surface scan can prove stays here: derivation, single control, no banner.
   test("the stale digest flips emphasis on one control rather than adding a second", () => {
     const start = src.indexOf("export function FolderBreadcrumb");
     expect(
@@ -219,10 +228,19 @@ describe("the vault surface", () => {
     const block = src.slice(start, src.indexOf('"use client"', start));
     expect(block.length).toBeGreaterThan(500);
 
-    expect(block).toContain('state === "stale"');
-    expect(block).toMatch(/style=\{\s*stale\s*\?\s*pillPrimary\(/);
-    expect(block.match(/Rebuild digest/g)?.length).toBe(1);
-    expect(block).not.toContain("localStorage");
+    // DERIVED from the reducer over the unincorporated count, never read off a stored flag.
+    expect(block).toContain('viewState.digest.kind === "stale"');
+    expect(block).toMatch(/<DigestRebuildControl[\s\S]{0,400}stale=\{stale\}/);
+
+    // ONE control on the whole surface: one definition, one mount, one label.
+    expect(src.match(/export function DigestRebuildControl/g)?.length).toBe(1);
+    expect(src.match(/<DigestRebuildControl/g)?.length).toBe(1);
+    expect(src.match(/Rebuild digest/g)?.length).toBe(1);
+
+    // No dismissible banner. Comments are stripped first because the surface DOCUMENTS this ban
+    // in prose — a raw scan would punish its own explanation (importGuard.test.ts:54 hit exactly
+    // this trap and strips comments for the same reason).
+    expect(src.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, "")).not.toContain("localStorage");
   });
 
   // The BEHAVIOURAL half of "the refusal names both numbers" moved OUT of this file on 2026-08-04,

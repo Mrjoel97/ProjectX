@@ -8,11 +8,14 @@
 //
 // `node` environment (the runCockpitAgent.test.ts idiom): `dispatch.ts` imports
 // `runSpecialistTurn` from the `"use node"` llm.ts, and the mock-model loop wants the node runtime.
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { INCOMPLETE_MARKER, serializeProfile } from "@pikar/core";
 import { CHEAP_MODEL, DEFAULT_MODEL, RESEARCH_FALLBACK_MODEL, RESEARCH_MODEL } from "@pikar/cost";
 import { APICallError } from "ai";
 import { convexTest, type TestConvex } from "convex-test";
-import { describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 // The dispatcher's lineage audits hit the auditCounts aggregate and its envelope reads/spends hit
 // the rate-limiter's daily-spend window. Register both (relative imports — the packages block the
 // deep specifier) so the REAL paths run under convex-test instead of throwing "component not
@@ -130,37 +133,62 @@ const textStep = (text: string, input = 0, output = 0) => ({
   usage: provUsage(input, output),
   warnings: [],
 });
-/** The exact provider-executed part shape observed by the 16-02 live probe. */
-const searchedStep = (text: string, urls: readonly string[]) => ({
-  content: [
+/** URLs the stubbed Tavily endpoint returns for the next run. Set by `searchedSteps`. */
+let stubbedSearchUrls: readonly string[] = [];
+
+/**
+ * A web search, as a LOCAL tool (rewritten 2026-08-07 — it used to fake the provider-executed
+ * `web_search` shape the 16-02 probe observed).
+ *
+ * TWO STEPS, and that is the point rather than an inconvenience. A hosted search happened INSIDE one
+ * model step, so the old helper could fabricate the tool-call, the tool-result and the `source`
+ * parts together. A local tool cannot be faked that way: the model emits a tool-call, the SDK runs
+ * OUR `execute`, and only then does the model speak. So these tests now drive the real
+ * `buildWebResearchTool` execute path against a stubbed HTTP endpoint — the tool-result part and
+ * every source come from `parseWebResults` for real, not from a fixture asserting on itself.
+ * That is the anti-vacuity rule this repo learned twice in 15.3: a stub answers with whatever it was
+ * told to answer, so put the stub at the NETWORK edge and let our own code run.
+ */
+const searchedSteps = (text: string, urls: readonly string[]) => {
+  stubbedSearchUrls = urls;
+  return [
     {
-      type: "tool-call",
-      toolCallId: "ws-1",
-      toolName: "web_search",
-      input: "{}",
-      providerExecuted: true,
+      content: [
+        {
+          type: "tool-call",
+          toolCallId: "ws-1",
+          toolName: "webResearch",
+          input: JSON.stringify({ query: "urban dog training pricing" }),
+        },
+      ],
+      finishReason: { unified: "tool-calls", raw: "tool-calls" },
+      usage: provUsage(12_000, 800),
+      warnings: [],
     },
-    {
-      type: "tool-result",
-      toolCallId: "ws-1",
-      toolName: "web_search",
-      result: {
-        action: { type: "search", queries: ["urban dog training pricing"] },
-        sources: urls.map((url) => ({ type: "url", url })),
-      },
-    },
-    ...urls.map((url, i) => ({
-      type: "source",
-      sourceType: "url",
-      id: `s-${i}`,
-      url,
-      title: `Source ${i}`,
-    })),
-    { type: "text", text },
-  ],
-  finishReason: { unified: "stop", raw: "stop" },
-  usage: provUsage(12_000, 800),
-  warnings: [],
+    textStep(text),
+  ];
+};
+
+// The Tavily edge, stubbed. Anything that is not Tavily falls through to the real fetch so no other
+// outbound path is silently changed by this file.
+const realFetch = globalThis.fetch;
+beforeEach(() => {
+  vi.stubEnv("TAVILY_API_KEY", "test-key");
+  vi.stubGlobal("fetch", async (input: unknown, init?: unknown) => {
+    if (String(input).includes("api.tavily.com")) {
+      return new Response(
+        JSON.stringify({
+          results: stubbedSearchUrls.map((url, i) => ({
+            url,
+            title: `Source ${i}`,
+            content: "retrieved snippet",
+          })),
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+    return (realFetch as (a: unknown, b?: unknown) => Promise<Response>)(input, init);
+  });
 });
 const textToolStep = (text: string, toolName: string, input: unknown, callId: string) => ({
   ...toolStep(toolName, input, callId),
@@ -187,6 +215,8 @@ const BASE = {
   envelopeCents: 0,
   spentCents: 0,
 };
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const readPlan = (t: T, planId: Id<"plans">) => t.run((ctx) => ctx.db.get(planId));
 const readSteps = (t: T) => t.run((ctx) => ctx.db.query("agentSteps").collect());
@@ -292,7 +322,7 @@ describe("SC#1 — a named specialist runs in THE governed loop", () => {
           // non-inert: `webResearch` is provider-executed and deliberately emits no step row.
           toolStep("declareUnsupported", { claim: "the harness needs one local tool to run" }),
           toolStep(withheld, input),
-          searchedStep(REPLY, urls),
+          ...searchedSteps(REPLY, urls),
         ],
       }),
     );
@@ -534,7 +564,7 @@ describe("SC#3 — the call tree reconstructs from audit.by_correlation(rootRequ
       await t.action(internal.dispatch.__runSpecialistWithScript, {
         ...RESEARCH,
         planId,
-        primary: [searchedStep(REPLY, urls)],
+        primary: searchedSteps(REPLY, urls),
       }),
     );
     const hop2 = ok(
@@ -604,7 +634,7 @@ describe("SC#3 — the call tree reconstructs from audit.by_correlation(rootRequ
     await t.action(internal.dispatch.__runSpecialistWithScript, {
       ...RESEARCH,
       planId,
-      primary: [searchedStep(REPLY, urls)],
+      primary: searchedSteps(REPLY, urls),
       research: true,
     });
 
@@ -1250,7 +1280,7 @@ describe("runResearch — the scheduled entry point inherits every guard (16-06 
       await t.action(internal.dispatch.__runSpecialistWithScript, {
         ...RESEARCH,
         planId,
-        primary: [searchedStep(REPLY, ["https://example.com/a"])],
+        primary: searchedSteps(REPLY, ["https://example.com/a"]),
         research: true,
       }),
     );
@@ -1337,7 +1367,7 @@ describe("runResearch — the scheduled entry point inherits every guard (16-06 
           }),
           // A run that searched and genuinely retrieved NOTHING — fixture 33's measured shape
           // (every one of its dispatches across v2-v7 came back with sourceCount 0).
-          searchedStep(REPLY, []),
+          ...searchedSteps(REPLY, []),
         ],
         research: true,
       }),
@@ -1373,7 +1403,7 @@ describe("runResearch — the scheduled entry point inherits every guard (16-06 
         planId,
         primary: [
           toolStep("declareUnsupported", { claim: "reflex", scope: "question" }),
-          searchedStep(REPLY, ["https://example.com/a", "https://example.com/b"]),
+          ...searchedSteps(REPLY, ["https://example.com/a", "https://example.com/b"]),
         ],
         research: true,
       }),
@@ -1409,7 +1439,7 @@ describe("runResearch — the scheduled entry point inherits every guard (16-06 
             claim: "one vendor's freshness-filter behaviour was not documented anywhere",
             scope: "sub-question",
           }),
-          searchedStep(REPLY, ["https://example.com/answered"]),
+          ...searchedSteps(REPLY, ["https://example.com/answered"]),
         ],
         research: true,
       }),
@@ -1554,7 +1584,7 @@ describe("runResearch — the scheduled entry point inherits every guard (16-06 
         planId,
         primary: [
           toolStep("declareUnsupported", { claim: "local" }, "one-literal-local"),
-          searchedStep(REPLY, ["https://example.com/hosted"]),
+          ...searchedSteps(REPLY, ["https://example.com/hosted"]),
         ],
       }),
     );
@@ -1747,8 +1777,10 @@ describe("the dispatchResearch tool — stage, schedule, return (16-06 Task 3)",
     expect(build({ grantDispatch: true })).not.toContain("dispatchResearch");
   });
 
-  test("THE MODEL PIN (relocated from 16-05): research bills its own pair, every other route the default", async () => {
+  test("THE MODEL PIN: research bills its own pair, every other route the default", async () => {
     const { t, planId } = await setup();
+
+    // 1. RESEARCH — its own pair since 16-05.
     const research = ok(
       await t.action(internal.dispatch.__runSpecialistWithScript, {
         ...RESEARCH,
@@ -1759,9 +1791,12 @@ describe("the dispatchResearch tool — stage, schedule, return (16-06 Task 3)",
     expect(research.modelId).toBe(RESEARCH_MODEL);
     expect(research.fallbackModelId).toBe(RESEARCH_FALLBACK_MODEL);
 
+    // 2. EVERYTHING ELSE — `media` must take the repo defaults byte-identically. Without a genuine
+    // default case the lookup could pin EVERY route and stay green.
     const other = ok(
       await t.action(internal.dispatch.__runSpecialistWithScript, {
         ...BASE,
+        route: "media",
         planId,
         primary: [REPLY_STEP],
       }),
@@ -1769,10 +1804,21 @@ describe("the dispatchResearch tool — stage, schedule, return (16-06 Task 3)",
     expect(other.modelId).toBe(DEFAULT_MODEL);
     expect(other.fallbackModelId).toBe(CHEAP_MODEL);
 
-    // The non-vacuity anchor. The 16-02 probe ladder deliberately EXCLUDES gpt-4.1-nano and that IS
-    // CHEAP_MODEL, so the two FALLBACKS can never coincide — deleting 16-05's route ternary turns
-    // this red even in the case where RESEARCH_MODEL happens to equal DEFAULT_MODEL (it does today).
-    expect(RESEARCH_FALLBACK_MODEL).not.toBe(CHEAP_MODEL);
+    // ── The non-vacuity anchor ──
+    //
+    // History, because it has been rebuilt twice and the reasoning matters more than the line:
+    // it began as `expect(RESEARCH_FALLBACK_MODEL).not.toBe(CHEAP_MODEL)`, which PROVED the route
+    // branch ran only while those constants could never coincide. They coincided the moment
+    // CHEAP_MODEL moved vendors, making every value comparison above satisfiable with the branch
+    // deleted. Restoring inequality by moving a pin would be inventing behaviour to satisfy a test.
+    //
+    // It is now STRUCTURAL — assert the branch exists in the source (the dispatchGuard.test.ts idiom
+    // for when runtime values stop discriminating). The three runtime cases above are the semantic
+    // half; this is the guard against all three collapsing to one constant that happens to match.
+    // MUTATION that turns this RED: collapse the route lookup in llm.ts to a single pair.
+    const llmSrc = readFileSync(join(__dirname, "llm.ts"), "utf8");
+    expect(llmSrc).toContain("[RESEARCH_MODEL, RESEARCH_FALLBACK_MODEL]");
+    expect(llmSrc).toContain("[DEFAULT_MODEL, CHEAP_MODEL]");
   });
 });
 
@@ -2111,5 +2157,261 @@ describe("20-08 — stageMediaPlan refuses rather than destroying an in-flight r
     });
     expect(staged.ok).toBe(false);
     if (!staged.ok) expect(staged.reason).toBe("draft_in_progress");
+  });
+});
+
+// ── 21-03 (SKILL-01): the EXACT tenant candidate reaches the DISPATCHED specialist ────────────
+//
+// THE question this plan exists to answer, and the one a green suite could easily fake: does the
+// body the runner PINNED equal the body the model RAN? A `skillVersion` cannot answer it — two
+// tenants can each own version 2 (21-02's collision), and this tenant's own ACTIVE overlay is also
+// a version of the same name. So every assertion below is against the ROW ID or the SHA-256 of
+// the body that was handed to the provider.
+describe("21-03 — an exact tenant candidate id survives the scheduled dispatch", () => {
+  const CANDIDATE_NEEDLE = "ZQ7CANDb51f3a0d9";
+  const ACTIVE_NEEDLE = "ZQ7ACTIVE8e2c7f14";
+  const OTHER_TENANT_NEEDLE = "ZQ7OTHERd0a6b93c";
+  const CANDIDATE_BODY = `OFFER ARCHITECT — pinned candidate. ${CANDIDATE_NEEDLE}`;
+  const ACTIVE_BODY = `OFFER ARCHITECT — the tenant's live overlay. ${ACTIVE_NEEDLE}`;
+  const OTHER_BODY = `OFFER ARCHITECT — another tenant's draft. ${OTHER_TENANT_NEEDLE}`;
+
+  const insertRow = (
+    t: T,
+    tenantId: string,
+    fields: { version: number; body: string; status: "active" | "candidate" | "archived" },
+  ) =>
+    t.run((ctx) =>
+      ctx.db.insert("tenantSkills", {
+        tenantId,
+        name: "offer-architect",
+        authoredBody: "adaptation",
+        author: "user",
+        basedOnScope: "global",
+        basedOnName: "offer-architect",
+        basedOnVersion: 1,
+        rollbackEligible: false,
+        createdAt: fields.version,
+        ...fields,
+      }),
+    );
+
+  /**
+   * Three rows that all answer to `offer-architect`, so NOTHING short of the exact id can pick the
+   * right one: the tenant's ACTIVE overlay (what an unpinned run loads), the CANDIDATE we pin, and
+   * ANOTHER tenant's row at the SAME name and version as the candidate.
+   */
+  async function threeWayCollision() {
+    const { t, planId } = await setup();
+    const activeId = await insertRow(t, TENANT, {
+      version: 2,
+      body: ACTIVE_BODY,
+      status: "active",
+    });
+    const candidateId = await insertRow(t, TENANT, {
+      version: 3,
+      body: CANDIDATE_BODY,
+      status: "candidate",
+    });
+    const otherId = await insertRow(t, TENANT_B, {
+      version: 3,
+      body: OTHER_BODY,
+      status: "candidate",
+    });
+    return { t, planId, activeId, candidateId, otherId };
+  }
+
+  const actionCtx = (t: T) =>
+    ({
+      runQuery: t.query.bind(t),
+      runMutation: t.mutation.bind(t),
+      runAction: t.action.bind(t),
+    }) as unknown as Parameters<typeof runSpecialistTurn>[0];
+
+  test("the pinned candidate's body — not the tenant's ACTIVE overlay — is what the model receives", async () => {
+    const { t, planId, activeId, candidateId } = await threeWayCollision();
+
+    // The mock's `doGenerate` is a FUNCTION, so the assertion is about what went IN (the system
+    // prompt the provider was handed), not about the canned reply that came back — the 21-02
+    // idiom. A LanguageModel is not Convex-serializable, so this reads the loop directly; the
+    // scheduled seam's own proof is the audit hash in the third test below.
+    const captureTurn = async (pins?: Record<string, unknown>) => {
+      let system = "";
+      const capture = async (opts: {
+        prompt: ReadonlyArray<{ role: string; content: unknown }>;
+      }) => {
+        system = String(opts.prompt.find((m) => m.role === "system")?.content ?? "");
+        return textStep("noted", 0, 0);
+      };
+      const res = await runSpecialistTurn(actionCtx(t), {
+        tenantId: TENANT,
+        planId,
+        skillName: "offer-architect",
+        toolNames: [],
+        prompt: "shape my offer",
+        mockScript: { primary: capture as never },
+        ...pins,
+      });
+      return { system, res };
+    };
+
+    // UNPINNED: the effective (ACTIVE overlay) body. This is the positive witness that makes the
+    // pinned assertion below meaningful — and it is exactly what a DROPPED `tenantSkillIds` would
+    // silently fall back to.
+    const unpinned = await captureTurn();
+    expect(unpinned.system).toBe(ACTIVE_BODY);
+    expect(unpinned.res.skillScope).toBe("tenant");
+    expect(unpinned.res.skillId).toBe(String(activeId));
+
+    // PINNED by exact row id: the candidate body, byte for byte.
+    const pinned = await captureTurn({ tenantSkillIds: { "offer-architect": candidateId } });
+    expect(pinned.system).toBe(CANDIDATE_BODY);
+    expect(pinned.system).toContain(CANDIDATE_NEEDLE);
+    expect(pinned.system).not.toContain(ACTIVE_NEEDLE);
+    expect(pinned.system).not.toContain(OTHER_TENANT_NEEDLE);
+    expect(pinned.res.skillId).toBe(String(candidateId));
+    expect(pinned.res.skillVersion).toBe(3);
+    expect(pinned.res.skillBodyHash).toBe(await contentHash(CANDIDATE_BODY));
+    // …and the two prompts really did differ, so neither equality is trivially the other.
+    expect(pinned.system).not.toBe(unpinned.system);
+  });
+
+  test("a pin naming a DIFFERENT skill's row refuses before the model is called", async () => {
+    const { t, planId } = await threeWayCollision();
+    const wrongSkillRow = await t.run((ctx) =>
+      ctx.db.insert("tenantSkills", {
+        tenantId: TENANT,
+        name: "lead-engine",
+        version: 2,
+        body: "LEAD ENGINE candidate body",
+        authoredBody: "adaptation",
+        status: "candidate",
+        author: "user",
+        basedOnScope: "global",
+        basedOnName: "lead-engine",
+        basedOnVersion: 1,
+        rollbackEligible: false,
+        createdAt: 0,
+      }),
+    );
+    const before = await remaining(t);
+    // A mock that THROWS if reached: the refusal must happen BEFORE generateText, so a mis-wired
+    // harness costs $0 rather than a model call plus an evidence row certifying the wrong skill.
+    const never = async () => {
+      throw new Error("the model was called despite a mismatched pin");
+    };
+    await expect(
+      runSpecialistTurn(actionCtx(t), {
+        tenantId: TENANT,
+        planId,
+        skillName: "offer-architect",
+        toolNames: [],
+        prompt: "shape my offer",
+        tenantSkillIds: { "offer-architect": wrongSkillRow },
+        mockScript: { primary: never as never },
+      }),
+    ).rejects.toThrow(/TENANT_SKILL_PIN_MISMATCH/);
+    // Nothing was billed — the refusal really did precede the model call.
+    expect(await remaining(t)).toBe(before);
+  });
+
+  test("subagent.completed carries EXACT refs-only attribution, readable back through by_correlation", async () => {
+    const { t, planId, candidateId, activeId, otherId } = await threeWayCollision();
+    const root = `${ROOT}-tenant-pin`;
+
+    const res = ok(
+      await t.action(internal.dispatch.__runSpecialistWithScript, {
+        ...BASE,
+        planId,
+        rootRequestId: root,
+        primary: [REPLY_STEP],
+        tenantSkillIds: { "offer-architect": candidateId },
+      }),
+    );
+    expect(res.skillVersion).toBe(3);
+
+    const completed = (await readLineage(t, root)).find(
+      (r) => r.eventType === "subagent.completed",
+    );
+    // MUTATION "drop tenantSkillIds at one handoff" turns THESE red: the fallback body is the
+    // tenant's ACTIVE overlay, whose row id and body hash are both different.
+    expect(completed?.payload).toMatchObject({
+      skillScope: "tenant",
+      skillId: String(candidateId),
+      skillName: "offer-architect",
+      skillVersion: 3,
+      skillBodyHash: await contentHash(CANDIDATE_BODY),
+    });
+    // …and it is neither the live overlay nor the other tenant's row at the same name+version.
+    expect(completed?.payload.skillId).not.toBe(String(activeId));
+    expect(completed?.payload.skillId).not.toBe(String(otherId));
+    expect(completed?.payload.skillBodyHash).not.toBe(await contentHash(ACTIVE_BODY));
+    expect(completed?.payload.skillBodyHash).not.toBe(await contentHash(OTHER_BODY));
+
+    // The BOUNDED read-only readback an operator actually runs. Same answer, off the same row.
+    const attribution = await t.query(internal.smoke.userSkillRuntimeAttribution, {
+      tenantId: TENANT,
+      correlationId: root,
+    });
+    expect(attribution).toEqual({
+      skillScope: "tenant",
+      skillId: String(candidateId),
+      skillName: "offer-architect",
+      skillVersion: 3,
+      skillBodyHash: await contentHash(CANDIDATE_BODY),
+    });
+    // The tenant guard on a deliberately CROSS-TENANT index: same correlation, another tenant.
+    expect(
+      await t.query(internal.smoke.userSkillRuntimeAttribution, {
+        tenantId: TENANT_B,
+        correlationId: root,
+      }),
+    ).toBeNull();
+    // …and an unknown correlation reads null rather than "the newest dispatch".
+    expect(
+      await t.query(internal.smoke.userSkillRuntimeAttribution, {
+        tenantId: TENANT,
+        correlationId: "no-such-correlation",
+      }),
+    ).toBeNull();
+
+    // §4 PRIVACY: serialize EVERY audit payload on this lineage and scan it. No composed body and
+    // no needle from any of the three colliding rows. MUTATION "add the resolved body to the
+    // subagent.completed payload" turns these four red.
+    const serialized = JSON.stringify((await readLineage(t, root)).map((r) => r.payload ?? {}));
+    expect(serialized).not.toContain(CANDIDATE_NEEDLE);
+    expect(serialized).not.toContain(ACTIVE_NEEDLE);
+    expect(serialized).not.toContain(OTHER_TENANT_NEEDLE);
+    expect(serialized).not.toContain(CANDIDATE_BODY);
+    // Non-vacuity: the scan really did read the row it is asserting about.
+    expect(serialized).toContain(await contentHash(CANDIDATE_BODY));
+    expect(serialized).toContain(String(candidateId));
+    // The dead-letter plane too — a body must not have escaped sideways.
+    expect(JSON.stringify(await readDeadLetters(t))).not.toContain(CANDIDATE_NEEDLE);
+  });
+
+  test("an UNPINNED dispatch still attributes itself — the GLOBAL row, by id and hash", async () => {
+    const { t, planId } = await setup(); // no tenant overlay at all
+    const root = `${ROOT}-global-attr`;
+    ok(
+      await t.action(internal.dispatch.__runSpecialistWithScript, {
+        ...BASE,
+        planId,
+        rootRequestId: root,
+        primary: [REPLY_STEP],
+      }),
+    );
+    const active = await t.query(internal.skills.getActiveSkill, { name: "offer-architect" });
+    const completed = (await readLineage(t, root)).find(
+      (r) => r.eventType === "subagent.completed",
+    );
+    expect(completed?.payload).toMatchObject({
+      skillScope: "global",
+      skillId: String(active.skillId),
+      skillName: "offer-architect",
+      skillVersion: active.version,
+      skillBodyHash: await contentHash(active.body),
+    });
+    // The attribution is not tenant-shaped just because the fields exist.
+    expect(completed?.payload.skillScope).not.toBe("tenant");
   });
 });

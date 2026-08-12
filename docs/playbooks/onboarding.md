@@ -1,6 +1,140 @@
 # Playbook: Persona Onboarding & Business Profile
 
-> Last verified: 2026-08-05 (15.3-09 follow-up 3 — **THE SCOPE COPY HAD NOT CAUGHT UP WITH THE
+> Last verified: 2026-08-10 (17.1-10 L6 postmortem). The live gate did not produce a certifying
+> result: its one top-level command timed out after **1808.1 seconds** with no captured stdout and
+> surviving eval-owned processes. Database recovery did verify the eval-only seed wrote confirmed
+> Blueprint profile rows for `eval-bb67ebfa`, `eval-a464e1c4`, and `eval-e73d636a`, each with one
+> Blueprint ref and **5 source refs**. It could not verify the rendered `evalblpr` spine, case
+> results, retries, spend, or evidence writes. All identified eval-owned processes were stopped and
+> no retry occurred; this is failed-run evidence, not a golden pass.
+>
+> Last verified: 2026-08-10 (17.1-10 golden-eval non-vacuity repair). The throwaway golden tenant
+> now receives one deterministic confirmed Blueprint linked to its two owned `ready` RAG seed
+> documents. The eval-only mutation refuses non-`eval-<8 hex>` tenants, foreign/not-ready sources,
+> and a second seed. Before any model turn, the runner reads the production `spineForTenant` seam
+> and requires the `evalblpr` marker; focused Blueprint tests prove the same stored-row-to-rendered-
+> spine chain and the runner self-check pins the seed/assert-before-paid-loop order.
+
+> Last verified: 2026-08-10 (Plan 19-12 — the phase-19 UAT clock defect). **No onboarding or profile BEHAVIOUR changed.**
+> `SegmentAnatomy.tsx`'s `AskSpecialist` was one of five web callers of
+> `api.cockpit.sendCockpitMessage` that never sent the browser's `clientContext`, so every cockpit
+> thread it opened reached the agent loop clockless and every time-bearing tool refused. It now
+> calls the shared `useSendCockpitMessage()` hook (`dashboard/workspace/`) instead of
+> `useAction(...)` directly — same seed text, same navigation, same failure handling. If you add
+> another profile surface that opens a cockpit thread, use the hook; `crmCard.test.ts` fails the
+> build if any `apps/web/app` file constructs that action by hand. See `cockpit.md`'s top block.
+> Last verified: 2026-08-10 (WHOLE-BRANCH RE-REVIEW, live-finance-inputs — **`spineForTenant` is
+> BLUEPRINT ONLY, and a comment on it now says why in detail.** The first C1 fix appended the
+> cockpit's always-on finance line to this query's return value. That was wrong, and the rationale
+> given for it was factually wrong too: `vaultGround.ts:225` calls **`spineForTenant`**, not
+> `renderSpine`, so keeping the line out of `renderSpine` protected nothing — and `evaluations.ts`
+> pushes this query's WHOLE output in as the "Business blueprint" grounding chunk, which
+> `FINANCIAL_PATTERNS` scans with unbounded `[^\d$]*` gaps that match newlines. A blueprint saying
+> "Constraint: CAC is too high" (no digits — the ordinary shape for a growth-diagnosed tenant) plus
+> one appended figure line was enough to capture the figure as `financials.cac` at
+> `{source: "vault", confidence: "high"}`, flip `financialsPresent` to growth-os, suppress the
+> honest CAC gap, and read straight back out of `inputStatesFor` onto the Finance page —
+> self-reinforcing. **The finance line is now its own query, `internal.cash.financeSpineFor`, joined
+> to the spine ONLY in `llm.ts`'s `buildTurnPrompt`.** So the separation is structural: no consumer
+> of `spineForTenant` can receive figures, this query's `live === null` early return is untouched
+> and correct, and a tenant with figures but no confirmed blueprint (the ordinary state of a new
+> account) still gets the line because the two channels are read independently, each fail-open.
+> `renderSpine` is UNCHANGED. `blueprint.test.ts`'s `SPINE_CHAR_CAP` assertion is therefore correct
+> again as written — this query returns `renderSpine`'s output verbatim, worst case **2495 of 2500,
+> five characters of headroom** (measured 2026-08-10, not estimated). Pinned by
+> `evaluations.test.ts`'s "the finance line never reaches the grounding corpus", verified RED
+> against the concatenating version.)
+
+> Last verified: 2026-08-09 (17.1-10 Task 2 live citation gate). One Blueprint rebuild against the
+> owner's real Vault returned **2 candidates** and the gate dropped **0** (`bad_citation: 0`,
+> `unknown_field: 0`, `not_derivable: 0`, `empty: 0`) across **8 source documents**. Both accepted
+> candidates were additions; there were **0 contradictions**. The draft was persisted for review
+> and the confirmed Blueprint was not changed.
+>
+> Last verified: 2026-08-09 (`tenantProfile.saveFacts` gained `postalAddress` — a 500-char-capped,
+> trim-validated write-boundary field for the CAN-SPAM footer (Phase 19 contacts/CRM), recorded from
+> another lane. It is deliberately absent from `missingSlots`/`canComplete`: enrichment, not an
+> onboarding slot, so onboarding completeness is unaffected. 19-03 added its typing
+> surface — a "Postal address" textarea on the profile page (`ShapePanel.tsx`), never a question in
+> the onboarding conversation.)
+>
+> Previously verified: 2026-08-09 (**`paidStaff` now EXCLUDES the founder** — the solo signal depended on
+> it, and a solopreneur on their own payroll was deriving as `startup`/`sme`.)
+>
+> Previously verified: 2026-08-09 (`BlueprintPanel.tsx` — selecting a segment, from the canvas or the
+> ledger, now scrolls its detail into view, honouring `prefers-reduced-motion`.)
+>
+> Previously verified: 2026-08-09 (goal spine-safety invariants from `60dfcae`, recorded from another lane.)
+> Goals are a SEPARATE `goals` table, never a twelfth blueprint field — the eleven-field set stays
+> closed (D3), so a goal is a claim about the future rather than a fact about the business. All
+> selection, countdown and cycle-time arithmetic is pure `@pikar/core/goals.ts` (`nearestActive`,
+> `renderGoalLines`, `countdown`, `cycleTimeDays`, `goalsForSegment`); the Convex adapter
+> (`convex/goals.ts`: `listGoals`/`addGoal`/`setGoalStatus`) only scopes, validates (unknown segment
+> and 1-500-char text both throw, never a silent no-op) and audits — goal `text` is content-plane and
+> never enters an audit payload, which carries only ids/enums/counts (§4). `renderSpine` gained an
+> optional trailing `Goals:` block for the `GOALS_SPINE_MAX` (3) nearest active deadlines, and its
+> size is ARITHMETIC, not hopeful: `GOALS_BLOCK_CAP` (header + `GOALS_SPINE_MAX × GOAL_LINE_CAP`,
+> 203 chars) has to fit the headroom the eleven `FIELD_SPEC` caps leave under `SPINE_CHAR_CAP`
+> (2500), and `renderSpine` THROWS above that cap — `blueprint.test.ts`'s `HUGE` fixture (every
+> field maxed, max staleness, an oversized goals list) measures the true worst case at 2495/2500,
+> a five-character margin. Widen a `FIELD_SPEC` cap, `GOAL_LINE_CAP` or `GOALS_SPINE_MAX` and that
+> arithmetic must be redone or the next cockpit turn or grounding call throws. `spineForTenant`
+> reads active goals inside its existing try/catch, so a goals read failure degrades the spine to
+> `null` rather than breaking the caller. Parentage (one level, enforced at write time) is UI-only —
+> deliberately dropped from the spine, there is no room for it in a 64-char goal line. Canvas nodes
+> (`BlueprintCanvas.tsx`) now carry a descriptor line (`SEGMENT_COPY[id].known`) plus up to three
+> single-line fact bullets per segment instead of meta-information alone; document filenames
+> collapsed to a per-segment count (provenance detail stays on the anatomy panel's Knowledge band);
+> and every conditional node row (bullets, milestone flag, footer, draft summary + YOURS/DOC split)
+> must stay mirrored in `nodeHeight`'s row list or the wires drift under zoom.
+>
+> Previously verified: 2026-08-08 (blueprint-pulse task 6 — the pulse layer is now fully wired
+> end-to-end.) Canvas: the node's breathing animation is gated on a fresh `running` step
+> (`STALE_RUN_MS`, with a reduced-motion fallback that swaps the breath for a static indicator),
+> recency dims in the same stepped fresh/recent/quiet bands `aggregatePulse` already computes, and
+> the readout line renders `composeReadout` verbatim rather than re-deriving it in the UI. Anatomy:
+> the Outcomes band now shows `runs30d`, last-run time and median duration instead of the "Not
+> measured yet" placeholder, and Process gains a Running-right-now / Last-ran line per specialist
+> segment. The interactive walkthrough (watching the dot breathe during a live dispatch) stays a
+> human verification step, not an automated one.
+>
+> Last verified: 2026-08-08 (blueprint-pulse task 3 — `packages/backend/convex/blueprint.ts`
+> `blueprintPulse` + the `agentSteps.by_tenant_tool_startedAt` index, TDD, 2/2 green.) The Convex
+> wiring task 2's header forward-referenced: a `tenantQuery` with one arg (`now`) that reads
+> `agentSteps` per specialist segment through the NEW compound index
+> (`["tenantId", "tool", "startedAt"]` — one indexed range read per dispatch-owning segment,
+> never a tenant-wide scan), narrows each row into a `PulseStep` (tool/phase/startedAt/endedAt/
+> durationMs — counts and timestamps only, the D6 redaction-safe boundary enforced at the query's
+> own return type), and folds them through `@pikar/core`'s `aggregatePulse`. Globals
+> (`sent30d`/`plansDone30d`/`plansInFlight`) reuse the EXISTING `requests.by_tenant_status_createdAt`
+> and `plans.by_tenant_status_createdAt` indexes — no new index needed on either table.
+> `plansInFlight` sums three status buckets (`collecting`/`proposed`/`delivering`) rather than a
+> single indexed range, since "in flight" is not one status. Both tests assert cross-tenant
+> isolation (a sibling tenant's steps/requests/plans never bleed into the caller's counts) and the
+> window/status math (`inFlight` only counts a `running` step; `runs30d` and `plansDone30d` are
+> exact bounded counts, not `.collect().length` over an unbounded scan — every read here goes
+> through an index). UI consumption (the Outcomes band on `SegmentAnatomy.tsx`) is still NOT wired
+> — this task lands the Convex read only.
+>
+> Last verified: 2026-08-08 (blueprint-pulse task 2 — `packages/core/src/blueprintPulse.ts`, TDD,
+> 8/8 green.) The ACTIVITY layer the blueprint-anatomy note above forward-referenced ("Outcomes
+> stays an honest 'Not measured yet' placeholder until slice 2's pulse aggregates land"). Pure
+> aggregation over narrowed `agentSteps`-shaped rows (`PulseStep`: tool/phase/startedAt/endedAt/
+> durationMs — counts and timestamps only, never content): `dispatchToolFor(segment)` maps a
+> specialist-owned segment to its `stepTool` dispatch-trace literal (null for Foundation/Direction,
+> which have no agent); `aggregatePulse(steps, now)` returns one `SegmentPulse` (inFlight,
+> lastActivityAt, runs30d, medianRunMs) per specialist segment over a 30-day window
+> (`PULSE_WINDOW_MS`), with a 15-minute staleness cutoff (`STALE_RUN_MS`) so a `running` step whose
+> end-patch was swallowed does not pulse forever; `recencyLevel` steps lastActivityAt into
+> fresh/recent/quiet at 7/30 days; `composeReadout` is the deterministic one-sentence summary
+> (in-flight runs, then plans in motion, then emails sent, then the single quietest ≥7-day-idle
+> section), returning `null` when nothing has ever moved rather than a fake sentence. Attribution is
+> the dispatch trace (`tool` literal), never `requests.route`. No Convex import — pure `@pikar/core`
+> per CLAUDE.md §1. Backend wiring (Task 3: a Convex query narrowing `agentSteps` rows into
+> `PulseStep`s) and UI consumption (Outcomes band) are NOT yet done — this task lands the core
+> aggregation module only.
+>
+> Last verified: 2026-08-08 (blueprint-anatomy task 1 — behaviour-free extraction of `SegmentAnatomy.tsx`/`segmentCopy.ts` from `BlueprintPanel.tsx`; carries forward 15.3-09 follow-up 3 — **THE SCOPE COPY HAD NOT CAUGHT UP WITH THE
 > GRANT, AND THAT IS A CONSENT DEFECT, NOT A WORDING ONE.**)
 >
 > 15.3-09 appended `drive.readonly` to `GOOGLE_SCOPES` and updated **none** of the three surfaces
@@ -30,6 +164,22 @@
 > Drive from the actual sentence left all 16 tests GREEN. The scan now strips comments first.
 > **Prose that NAMES the thing is documentation, not evidence.** Same idiom and same reason as
 > `readExecutableCode` in `dispatchGuard.test.ts`, whose header says exactly this.
+
+> **blueprint-anatomy tasks 2-4 (same day, on top of task 1's extraction).** A segment's detail is
+> now the four-band anatomy `SegmentAnatomy.tsx` renders for every segment, in the same fixed
+> order — Knowledge / Process / Tools / Outcomes — never a per-segment layout: Knowledge lists the
+> segment's populated `BLUEPRINT_FIELD`s with their origin ("Your own words" vs. "From <source>");
+> Process names the owning specialist and hosts `AskSpecialist`, which now renders for every
+> specialist-owned segment (Foundation and Direction have no specialist, so they render "No agent
+> owns this section — it's yours." instead); Tools mirrors the code-owned capability grant —
+> `SPECIALISTS[route].tools` from `@pikar/core` — through a `TOOL_LABELS` allowlist, so a grant
+> change shows up here with no UI edit, and an internal tool id with no user-facing label (e.g.
+> `declareUnsupported`) renders nothing rather than leaking an internal name; the same band adds
+> the live Gmail/Calendar/Drive row (`gmailAuth.gmailStatus`, "Checking…" while loading — never a
+> false "Not connected" flash on a connected account) and, for segments `SEGMENT_BLOCKED` names,
+> the still-blocked connections (Leads' social accounts row shows the legal-entity blocker text)
+> from `connections.ts`; Outcomes stays an honest "Not measured yet" placeholder until slice 2's
+> pulse aggregates land. No blueprint field, specialist grant or Convex function changed.
 
 > Last verified: 2026-08-03 (15.3-05 — **incidental for this subsystem; nothing in the onboarding
 > or profile flow changed.** `blueprint.ts`'s private `unincorporatedFor` helper gained one filter
@@ -176,6 +326,18 @@ TS in `businessProfile.ts`, unit-tested in `businessProfile.test.ts`:
   Thresholds are the design doc's defaults and are a **product call** — retune by editing
   `TIER_BOUNDARY_TABLE` in the test plus the two comparisons, **never** by adding a config row (a
   DB-tunable threshold makes the tier DB-writable by proxy, which D2 forbids).
+- **`paidStaff` EXCLUDES the founder, and the whole solo signal depends on it.** The question read
+  "how many of THEM are paid staff" until 2026-08-09, counting the founder — so a solopreneur who
+  put themselves on payroll answered `1`, failed `paidStaff === 0`, and derived as `startup`, or as
+  **`sme` with steady revenue, making a one-person business an "established business with paid
+  staff"**. Putting yourself on salary is an ordinary thing to do. The rule was never wrong; the
+  input meant the wrong thing, so the fix is the wording in `SLOT_LABEL` (both the onboarding page
+  and `ShapePanel`) plus the `LabeledField` on the profile form. If you reword these, keep "besides
+  yourself" or the solo signal silently breaks again.
+  **Known gap:** nothing validates `paidStaff <= headcount - 1`, so an inconsistent pair typed by
+  hand (e.g. `headcount 1, paidStaff 1`) still derives a one-person `sme`. Unreachable for a truthful
+  answer, and left open deliberately — closing it changes `deriveTier`, which is governance-critical
+  (D2), so it is a product call rather than a drive-by fix.
 - **`yearsOperating` is captured but unused by the rule** — design §4.1 names it a tier fact and the
   conversation asks it; a test pins the current contract so nobody "fixes" the omission by accident.
 - **`TIER_REASON`** — the read-only reason the profile page renders next to the tier (design §9). A
@@ -813,6 +975,15 @@ cannot see:
   idea; it does not demand a finished business. Enforced by `businessProfile.test.ts` (sparse-start +
   empty-name cases) and `onboarding.test.ts` (empty-description rejected). The FIVE tier fact slots
   are a separate, non-optional gate — see "the completion gate" below.
+- **`postalAddress` is ENRICHMENT, never an onboarding slot (Phase 19, PIPE-01 SC#6)** — the
+  CAN-SPAM postal address lives on `tenantProfiles` and is written through `saveFacts` (trimmed,
+  500-char ceiling, blank-after-trim REFUSED at the write boundary so a footer can never render an
+  empty address). It is deliberately absent from `missingSlots`/`canComplete` and from every
+  onboarding gate — Phase 11 admits idea-stage users with almost nothing filled in and that is not
+  reopened. Its ABSENCE is enforced in the SEND path instead (19-05 refuses the approve;
+  `contacts.footerFor` returns null without it), never here. Pinned by `tenantProfile.test.ts`
+  "the onboarding-completeness result is BYTE-IDENTICAL with and without a postal address". The
+  typing surface is the profile page's `ShapePanel.tsx`, not the onboarding conversation.
 - **No caller can supply a tier (SC#1b)** — `vProfile` has no `persona` field, so an extra key is a
   hard Convex validation error; `ProfileInput` has none either, so nothing can construct one; and
   `saveFacts` has no `tier` argument. Three layers, one property: the tier is an OUTPUT. Enforced by
@@ -887,6 +1058,15 @@ cannot see:
 - **First-run gate lives in the client `AppShell`, never `middleware.ts`** — the redirect into
   `/dashboard/onboarding` is client-side `<Authenticated>` + `useQuery` routing. Adding it to
   `middleware.ts` would run it on the edge without the tenant/profile query and break resumability.
+- **A goal's `targetDate` must be a RENDERABLE instant, rejected at `addGoal`** — Convex `v.number()`
+  is float64, so `NaN`/`Infinity` and any finite `|ms| > 8.64e15` pass the validator and then make
+  `isoDay`'s `new Date(ms).toISOString()` THROW. That throw lands in `spineForTenant`'s catch-all and
+  blanks the **whole** blueprint spine — every field, not just goals — for every cockpit turn and
+  vault-grounding call. `addGoal` therefore rejects with `INVALID_TARGET_DATE` before the row exists.
+- **One goal renders as exactly ONE spine line** — `renderGoalLines` collapses whitespace runs at
+  RENDER time, not only at write time, so rows stored before the fix are covered too. `addGoal` only
+  trims, so raw `\n` in goal text would otherwise emit multiple physical lines inside the
+  `<business_blueprint>` fence and let keyboard input forge spine structure.
 
 ## How to change safely
 

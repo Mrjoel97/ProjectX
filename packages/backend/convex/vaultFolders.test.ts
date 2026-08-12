@@ -67,10 +67,18 @@ const asTenant = (t: ReturnType<typeof convexTest>, tenantId = TENANT) =>
 const remaining = (t: ReturnType<typeof convexTest>, tenantId = TENANT) =>
   t.query(internal.guardrails.ingestRemainingCents, { tenantId });
 
-/** The estimator prices a 1 KB text file at exactly 1 cent (guardrails.test.ts pins this), so a
- *  manifest of N files reserves N cents and the arithmetic below stays readable. */
+/** Cents the estimator charges for one 1 KB text file at the CURRENT `DEFAULT_MODEL` input rate —
+ *  the same constant `guardrails.test.ts` pins, and it must be read together with that one. It was
+ *  1 under `gpt-4o-mini` ($0.15/MTok); the 2026-08-07 Gemini repoint doubled the rate to $0.30; the
+ *  2026-08-08 revert to `gpt-4o-mini` (OpenAI balance topped up) halved it BACK, so a manifest of N
+ *  files reserves N cents again. Kept a literal on purpose: derived from
+ *  `PRICING` it would agree with itself and stop testing the arithmetic. */
+const CENTS_PER_FILE = 1;
+/** A manifest of N 1 KB text files. Its reservation is `N * CENTS_PER_FILE`. */
 const manifestOf = (files: number) =>
   Array.from({ length: files }, () => ({ size: 1_000, mimeType: "text/plain" }));
+/** Cents a manifest of `files` files reserves — use this instead of writing the number twice. */
+const costOf = (files: number) => files * CENTS_PER_FILE;
 
 /** The per-attempt watchdogs armed so far. */
 const watchdogs = (t: ReturnType<typeof convexTest>) =>
@@ -205,8 +213,8 @@ describe("a folder completes exactly once, and only after its last member goes t
       folderId,
       files: manifestOf(3),
     });
-    expect(reserved).toMatchObject({ ok: true, estCents: 3 });
-    expect(await remaining(t)).toBe(INGEST_DAILY_BUDGET_CENTS - 3);
+    expect(reserved).toMatchObject({ ok: true, estCents: costOf(3) });
+    expect(await remaining(t)).toBe(INGEST_DAILY_BUDGET_CENTS - costOf(3));
     expect(await folderRow(t, folderId)).toMatchObject({
       status: "ingesting",
       memberCount: 3,
@@ -442,7 +450,7 @@ describe("cancelFolder", () => {
     await upload(t, { folderId, hash: "c-b" });
     await asTenant(t).mutation(api.vaultFolders.reserveFolder, { folderId, files: manifestOf(2) });
     await t.mutation(internal.vault.markReady, { vaultDocId: a, ragEntryId: "entry_a" });
-    expect(await remaining(t)).toBe(INGEST_DAILY_BUDGET_CENTS - 2);
+    expect(await remaining(t)).toBe(INGEST_DAILY_BUDGET_CENTS - costOf(2));
 
     const docsBefore = await t.run((ctx) => ctx.db.query("vaultDocuments").collect());
 
@@ -556,7 +564,10 @@ describe("cancelFolder", () => {
     ).toEqual({ ok: false });
     // `settleFolder` takes a bare folderId and has no tenant guard of its own, so this assertion is
     // the whole protection: the reservation is untouched and the row is still there.
-    expect(await folderRow(t, folderId)).toMatchObject({ status: "ingesting", reservedCents: 1 });
+    expect(await folderRow(t, folderId)).toMatchObject({
+      status: "ingesting",
+      reservedCents: costOf(1),
+    });
   });
 });
 
@@ -709,7 +720,7 @@ describe("a member reached from outside the walk", () => {
     // does not need the `rag` component registered — a ready row carries a ragEntryId and
     // `deleteVaultDoc` cascades into rag.
     await t.mutation(internal.vault.markFailed, { vaultDocId: a, reason: "unsupported_format" });
-    expect(await remaining(t, T)).toBe(INGEST_DAILY_BUDGET_CENTS - 2);
+    expect(await remaining(t, T)).toBe(INGEST_DAILY_BUDGET_CENTS - costOf(2));
 
     expect(await asTenant(t, T).mutation(api.vault.deleteVaultDoc, { vaultDocId: b })).toEqual({
       ok: true,
@@ -835,5 +846,59 @@ describe("folderEstimate is the number the reserve actually takes", () => {
     expect(reserved).toMatchObject({ ok: false, reason: est.refusal?.reason });
     // And it cost nothing more: a refusal never moves the window.
     expect(await remaining(t)).toBe(drained);
+  });
+});
+
+// ── 26-07: the ingest rail's ledger parity, through the REAL public path ────────────────────
+//
+// `guardrails.test.ts` proves the movements against `reserveFolder`/`settleFolder` directly. This
+// block proves the WIRING: that the public `vaultFolders.reserveFolder` actually hands its
+// `folderId` down, and that the stamp it writes to the row is the stamp the ledger correlated on.
+// Those are two different values in two different files, and nothing else notices if they drift —
+// the money would still be right, and every refund would silently become an orphan row.
+describe("ledger parity: the folder rail names its folder and refunds it exactly once", () => {
+  const events = (t: ReturnType<typeof convexTest>) =>
+    t.run((ctx) => ctx.db.query("spendEvents").collect());
+
+  // Mutation RUN: delete `folderId` from the `reserveFolderInner` call in `vaultFolders.ts` -> RED,
+  // the reserved row disappears entirely. Mutation RUN: stamp `reservedAt: Date.now()` in the
+  // `ctx.db.patch` instead of `result.reservedAt` -> RED, the refund's correlation stops matching.
+  test("reserve names the folder, and cancelling writes exactly one matching refund", async () => {
+    const t = budgetHarness();
+    const folderId = await newFolder(t);
+    // Real members, or `tryComplete` fires at 0 === 0 and settles inside the reserve itself.
+    for (const hash of ["l-a", "l-b", "l-c"]) await upload(t, { folderId, hash });
+
+    const reserved = await asTenant(t).mutation(api.vaultFolders.reserveFolder, {
+      folderId,
+      files: manifestOf(3),
+    });
+    expect(reserved).toMatchObject({ ok: true, estCents: costOf(3) });
+
+    const stamp = await t.run(async (ctx) => (await ctx.db.get(folderId))?.reservedAt);
+    const correlationId = `f:${folderId}:${stamp}`;
+
+    const afterReserve = await events(t);
+    expect(afterReserve).toHaveLength(1);
+    expect(afterReserve[0]).toMatchObject({
+      tenantId: TENANT,
+      rail: "ingest",
+      phase: "reserved",
+      amountCents: costOf(3),
+      folderId,
+      correlationId,
+    });
+
+    // Cancel settles BEFORE deleting the row — the one terminal that can prove the refund lands
+    // while its folder still exists.
+    expect(await asTenant(t).mutation(api.vaultFolders.cancelFolder, { folderId })).toEqual({
+      ok: true,
+    });
+
+    const refunds = (await events(t)).filter((r) => r.phase === "refunded");
+    expect(refunds).toHaveLength(1);
+    // THE JOIN: the refund carries the reservation's own correlation, so the two movements are one
+    // reconcilable pair rather than two unrelated rows that happen to share a folder.
+    expect(refunds[0]).toMatchObject({ correlationId, folderId, amountCents: costOf(3) });
   });
 });

@@ -3,6 +3,8 @@ phase: 14-flagship-voice-doc-workflow
 plan: 09
 subsystem: voice-doc
 tags: [wave-9, sc4, static-scan, mutation-verification, playbook, human-verify, phase-close]
+status: complete
+completed: 2026-07-26
 requires:
   - phase: 14-05
     provides: "the two voicedoc.* audit call sites + docReviewSchema being scanned"
@@ -17,6 +19,7 @@ provides:
 affects:
   - "any future voice-doc payload: a third audit.log or a new content key in one fails llmRedaction"
 tech-stack: [vitest, node-environment-static-scan]
+requirements-completed: [DOCV-01]
 ---
 
 # 14-09 — SC4 proven statically, then verified by voice
@@ -56,7 +59,9 @@ duplex audio: the agent discussed the uploaded report itself; a mid-call **drill
 grounded answer from that document (which is what proves the `search_document` relay reached the
 model and was invoked); and **both outcome paths** landed — the memo saved as a markdown artifact in
 the vault, and a gap turned into a plan that produced an email through the ordinary Approve gate.
-SC1, SC2 and SC3 exercised end to end.
+SC1, SC2 and SC3 exercised end to end. Together with the mutation-verified SC4 guards and the
+automated honest-no-gap contract, this was accepted as the Phase-14 / DOCV-01 closure evidence in
+commit `d19c729`.
 
 ## Deliberately left open
 

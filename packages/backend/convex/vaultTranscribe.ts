@@ -53,6 +53,13 @@ export const transcribeDoc = internalAction({
     reserved: v.optional(v.boolean()),
   },
   handler: async (ctx, { vaultDocId, tenantId, spendRail, reserved }): Promise<null> => {
+    // FIN-01 replay identity, MINTED not derived — an ATTEMPT nonce. `vaultDocId` alone is TOO
+    // COARSE: `vaultSweep`'s retry re-schedules this exact action for the same doc, and a re-entry
+    // after a mid-flight failure re-uploads the bytes to whisper — both are real second charges.
+    // A doc-scoped constant would collapse them onto the first attempt's `actual` row and leave
+    // the ledger BELOW the limiter, the unrecoverable direction. One transcription call per
+    // execution, so the nonce alone separates attempt N from attempt N+1.
+    const runId = crypto.randomUUID();
     const fail = (reason: string): Promise<null> =>
       ctx.runMutation(internal.vault.markFailed, { vaultDocId, reason }).then(() => null);
 
@@ -112,6 +119,9 @@ export const transcribeDoc = internalAction({
             tenantId,
             costUsd: priced.value,
             rail: spendRail,
+            correlationId: `vault:transcribe:${vaultDocId}:${runId}`,
+            model: "whisper-1",
+            kind: "vault.transcribe", // code-owned token, refs only (§4)
           });
         }
         rawText = result.text;

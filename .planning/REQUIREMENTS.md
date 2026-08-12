@@ -73,7 +73,7 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 - [ ] **VALT-13**: User can import a Google Drive folder once and re-import on demand, bounded by the same budget rail
 - [ ] **VALT-14**: The vault read surfaces remain within Convex's per-transaction read cap at folder-scale document counts
 - [ ] **VALT-15**: The Executive Agent can browse and search the user's Google Drive to answer "which folder has X", WITHOUT any path to importing it or to the ingest budget
-- [ ] **VALT-16**: The Knowledge Vault matches the approved Nord Edge browse, folder, preview, and empty-state designs without regressing upload, Drive import, synthesis, metadata correction, citations, download, or delete; search is scoped to the current folder and the UI never fabricates exact counts the backend does not provide
+- [x] **VALT-16**: The Knowledge Vault matches the approved Nord Edge browse, folder, preview, and empty-state designs without regressing upload, Drive import, synthesis, metadata correction, citations, download, or delete; search is scoped to the current folder and the UI never fabricates exact counts the backend does not provide
 
 ### Live Voice Sessions
 
@@ -132,7 +132,7 @@ Private Beta section above and land in this milestone's **final** stage (S4) —
 - [x] **BEVL-01**: The agent produces an on-demand business assessment using persona-appropriate frameworks (SWOT / Lean / Business Model Canvas), grounded in the user's own vault data, with honest data-gap flags and no fabricated metrics or viability scores
 - [x] **BEVL-02**: The assessment surfaces gaps and turns them into governed action proposals through the approve→execute spine; a healthy business honestly returns zero gaps
 - [x] **BEVL-03**: A proactive business review is delivered in-app on a recurring cadence (weekly-style briefing) using no OAuth mailbox token
-- [ ] **DOCV-01**: The user can upload a report, have it ingested and understood in the vault, discuss it by voice with the grounded agent, and receive surfaced insights/patterns/gaps plus a memo or gap-bridging plan — with an honest "no gaps" outcome and the user deciding after the discussion
+- [x] **DOCV-01**: The user can upload a report, have it ingested and understood in the vault, discuss it by voice with the grounded agent, and receive surfaced insights/patterns/gaps plus a memo or gap-bridging plan — with an honest "no gaps" outcome and the user deciding after the discussion
 - [x] **BLPR-01**: A single cited business blueprint is synthesized from the user's typed profile, their vault documents, and the extracted entity graph. Typed values are AUTHORITATIVE and are never overwritten by derivation; derived claims carry a source citation and require explicit user confirmation before reaching any agent. Both entry routes (typing and uploading) remain permanent and compose — a one-line profile edit costs no model call and no confirmation step
 - [x] **BLPR-02**: The confirmed blueprint is standing context for the agent — present on EVERY cockpit turn via the turn prompt (not only on turns that search the vault), and available to the two grounding-driven callers (`evaluations.ts`, `voiceDoc.ts`) via an explicit `spine` field. It distinguishes user-stated from system-derived claims, carries its own staleness signal when documents are unincorporated, and — when the user rebuilds — proposes a reviewable diff rather than ever silently changing. *(Scope note 2026-07-27: unincorporated-document DETECTION is automatic and free; the rebuild is user-triggered. Automatic triggering is deferred until a bulk-ingest completion event exists — see Phase 17.1 context.)*
 
@@ -140,11 +140,11 @@ Private Beta section above and land in this milestone's **final** stage (S4) —
 
 - [x] **DISP-01**: Real sub-agent dispatch — specialized sub-agents are swappable (skill body, tool-set) pairs run by the single governed loop, with a depth cap, a shared root cost budget, cycle refusal, and recorded lineage (no nested loops, no agents-spawning-agents)
 - [x] **ACTN-01**: A generalized governed action executor lets an approved plan execute actions beyond `gmail.send` (the approve→execute spine becomes action-agnostic)
-- [ ] **DISP-02**: A first exemplar specialist sub-agent (Research) is dispatched through DISP-01
+- [x] **DISP-02**: A first exemplar specialist sub-agent (Research) is dispatched through DISP-01
 - [ ] **ACTN-02**: The agent can schedule and manage calendar events (Google / Microsoft) as governed actions
-- [ ] **ACTN-03**: The agent can perform web research through a grounded, injection/SSRF-hardened tool, storing findings in the vault
+- [x] **ACTN-03**: The agent can perform web research through a grounded, injection/SSRF-hardened tool, storing findings in the vault
 - [ ] **ACTN-04**: The agent can create standalone documents/content artifacts (beyond email attachments)
-- [ ] **ACTN-05**: The agent can track contacts / CRM state and follow-ups scoped to the user
+- [x] **ACTN-05**: The agent can track contacts / CRM state and follow-ups scoped to the user
 
 ### S3 — Creation & Self-Extension
 
@@ -157,9 +157,71 @@ Private Beta section above and land in this milestone's **final** stage (S4) —
 - [ ] **GOVN-01**: A `requireOwner` primitive gates the three Phase-8 functions (`setOptimizerEnabled`, `activateCandidate`, `candidatesForReview`) and the admin surface so non-owners cannot reach them — pulled early, since it gates S3 agent-authored skills and S4 multi-user
 - [ ] **GOVN-02**: An ISO 9001:2015 QMS conformance foundation maps the existing audit / skill-versioning / GSD-playbook change-control to the relevant clauses and fills the gaps — a conformance map, not process theater
 - [ ] **GOVN-03**: Every user-exercisable data and connection control the published privacy policy promises actually exists in the product and does what the policy says — the policy is the specification, not the marketing. Covers in-app disconnection of a connected account WITH revocation at the provider (not merely a local token delete), and tenant data deletion and export. Minted 2026-08-01 after `apps/web/app/privacy/page.tsx:312` was found promising an in-app Google disconnect that had no implementation anywhere in the repo.
-- [x] **BETA-05**: Cross-tenant isolation assertions are written as each new surface ships (S1–S3), culminating in a two-user test covering every new table and index
+- [ ] **BETA-05**: Cross-tenant isolation assertions are written as each new surface ships (S1–S3), culminating in a two-user test covering every new table and index
 
 *(S4 also consumes the carried-in BETA-01 invite/waitlist, BETA-02 isolation, BETA-03 fast onboarding, and DLVR-02 Outlook — the productionization detailed in `09-CONTEXT.md`, executed as the milestone's final phase.)*
+
+### Connected Product Surfaces — Pulled Before Private Beta
+
+*Added 2026-08-05 from the approved `pending-pages.html` integration map. Phase 26 is no longer
+blanket-blocked by Phase 25; each surface carries only its real dependency.*
+
+- [ ] **DASH-01**: Every new dashboard route uses tenant-safe or owner-safe public projections, bounded pagination/time windows, honest loading/empty/partial/error/refusal states, named IANA timezone formatting, USD cost semantics, refs/counts-only audit for mutations, and remains disabled in navigation until connected browser verification passes
+- [ ] **APRV-01**: The user can review a tenant-wide approvals queue covering awaiting, scheduled, in-flight, decided and cleared work; approve, schedule, cancel, discard and revise actions have explicit server-side state guards, idempotent outcomes and scheduler-race handling, with calendar revisions returning to the originating cockpit until a safe inline availability/CAS contract exists
+- [ ] **FIN-01**: The user can inspect truthful reasoning, media and ingest spend as estimated, reserved, actual, refunded and unlanded movements from an append-only ledger with an explicit coverage start; tenant rails and owner-only deployment rails remain distinct, and missing history is shown as unknown rather than zero
+- [ ] **CONT-01**: The user can browse a bounded unified library of Vault artifacts, rendered media and sent mail with stable provenance, ownership-checked signed downloads and processing states; reuse opens/prefills the cockpit and never silently duplicates or sends an artifact
+- [ ] **RPRT-01**: The user can view bounded business, operations and governance reports for a selected half-open time window, including a server-sanitized audit projection; WORM, active-skill and deployment-budget facts remain owner-only, and board-pack generation lands as a governed downloadable artifact
+- [x] **PIPE-01** *(Phase 19 companion)*: The user can use a pipeline view over Phase 19's single tenant-scoped contacts/follow-up/consent/suppression substrate without creating a second CRM store; suppressed recipients are still refused in every product-email terminal and the first release does not invent opportunities, deal stages or monetary pipeline values
+- [ ] **HOME-01**: Command Center v2 composes stable bounded summaries from the landed Approvals, Finance, Content, Reports and Pipeline surfaces, produces a deterministic recommended next move and binding constraint with explainable inputs, and shows generic health to tenants while owner-only operational facts remain restricted
+
+## Post-Beta Knowledge-Work Pack Requirements
+
+*Added 2026-08-05 from the owner-approved knowledge-work plugin rollout. These phases are planned
+now but execute after Phase 25 opens the private beta; they do not become a new beta-admission gate.
+Anthropic's repository is an upstream workflow source, never a second plugin runtime or capability
+boundary inside Pikar.*
+
+### Curated Pack Pilot
+
+- [ ] **PACK-01**: Every adapted upstream workflow pins an exact source commit and file set, retains Apache-2.0 attribution and modification notices, records a source hash/provenance manifest, and can update only through an explicit reviewed diff — never an automatic production sync
+- [ ] **PACK-02**: Business Pulse, Campaign Plan, Customer Complaint Response, Sales Call Prep, Process/SOP Builder and Brand Review run as native Pikar workflows over the existing Executive Agent, Business Blueprint, Vault, research, document/content, calendar, inbox and approval surfaces; no second router, memory store, plugin runtime or duplicate output plane is introduced
+- [ ] **PACK-03**: Each pilot workflow has a complete operation-to-tool matrix; skill bodies remain registry-owned while every capability grant is code-owned and structurally absent when not allowed; connector content is fenced as untrusted, writes remain behind the plan gate, and each skill publishes as a candidate that must pass outcome-state evals plus an authenticated browser gate before exposure
+- [ ] **PACK-04**: Workflow-pack telemetry measures time-to-first-useful-outcome, recommendation acceptance, plan approve/edit/reject, missing-connector surprise rate, citation/unsupported-claim rate, completion outcome, cost and latency without placing raw content or PII in telemetry
+
+### Connector-Backed Revenue Pack
+
+- [ ] **REVN-01**: A server-side HubSpot adapter provides tenant-scoped read-only account, contact and pipeline projections after endpoint, OAuth, data-processing, rate-limit and commercial-terms review; no generic tenant-supplied MCP client is introduced
+- [ ] **REVN-02**: A server-side QuickBooks adapter provides tenant-scoped read-only reports required for cash, receivables, payables and revenue analysis after the same suitability and terms gate
+- [ ] **REVN-03**: Server-side Stripe and PayPal adapters provide tenant-scoped read-only payments, invoices, settlements and dispute context; tokens use revocable provider grants and encrypted storage, with honest partial/unavailable states
+- [ ] **REVN-04**: Lead triage, call lists, pipeline review and customer pulse consume the Phase 19 person/consent/suppression substrate plus read-only connector projections without creating a second CRM or fabricating deal values/stages
+- [ ] **REVN-05**: Cash-flow and payroll-confidence results are computed in deterministic, tested pure TypeScript over validated normalized financial inputs with explicit provenance, coverage windows, confidence semantics and accountant-review disclaimers — never by LLM arithmetic
+- [ ] **REVN-06**: Invoice reminders are drafts until a user approves a governed plan; sending, refunds, credits, CRM mutations and financial writes are unreachable from read-only revenue specialists
+
+### Unified Knowledge and Routines
+
+- [ ] **KNOW-01**: One tenant-scoped search experience decomposes a query across native Pikar sources (Vault, Drive, Gmail and landed CRM/support sources), returns cited and deduplicated answers with source authority/freshness/confidence, and names unavailable or partial sources honestly
+- [ ] **ROUT-01**: Phase 21's authoring seam becomes a user-facing workflow-pack authoring layer: users customize approved native templates and publish immutable tenant-scoped candidates through the existing eval gate, never arbitrary tool grants or executable code
+- [ ] **ROUT-02**: Recurring routines ship only after the standing-instruction approval model, OAuth lifetime/re-auth behavior, missed-run semantics, timezone/DST handling, idempotency and pause/revoke controls are explicitly decided and tested; until then the safe deliverable remains a manually re-runnable pinned workflow
+
+### Optional Vertical Packs
+
+- [ ] **VERT-01**: Legal, HR, Product, Design, Engineering and Data packs are discoverable only when tenant tier, business profile and connected capabilities make them relevant; selection changes guidance and templates, never tool authority
+- [ ] **VERT-02**: Each vertical pack is a separately versioned, provenance-tracked and eval-gated native pack with vertical-specific disclaimers, output contracts, failure states and authenticated UAT; high-stakes results remain assistive and require qualified human review
+- [ ] **VERT-03**: Data analysis starts file-first and read-only; warehouse execution, HRIS/ATS, legal-system, design, source-control and monitoring connectors require their own server-side suitability/security/terms gate before activation
+- [ ] **VERT-04**: Bio Research remains outside the general product and roadmap execution until behavioral demand, a named target persona, scientific validation, data/licensing review and a separate regulated-risk plan justify a dedicated vertical
+
+### Marketing (minted 2026-08-07 — Phases 31-32, PULLED PRE-BETA per ADR-015)
+
+*Admitted by explicit owner override of the admission rule at `PROJECT.md:51-53`, not by a Validated
+line. ADR-015 is the override record. MKTG-04/05/06 are gated on the legal entity — see the EXTERNAL
+BLOCKER section of `ROADMAP.md`.*
+
+- [ ] **MKTG-01**: A Marketing surface renders every planned outbound channel with an honest state — connected, connectable, or blocked-with-reason naming the external gate — and never renders an unconnectable channel as a zero; the Executive Agent assists on this surface by proposing, never by publishing
+- [ ] **MKTG-02**: Funnel v0 is link-only on the Convex `httpAction` plane: one unguessable token increments three integer counters (visits/claims/downloads) with `?s=` source attribution and 302s to stored bytes; it is the product's first unauthenticated read and does not widen `apps/web/middleware.ts`, add a public write, or ship an event table
+- [ ] **MKTG-03**: A captured lead writes into Phase 19's single tenant-scoped person store with `origin`, `consentAt` and `consentSource` — never a second CRM plane — and the SEND-path suppression guard continues to refuse suppressed addresses in every product-email terminal
+- [ ] **MKTG-04** *(gated on the legal entity)*: Each social channel passes an independent suitability/OAuth/security/terms review and exposes tenant-scoped, encrypted, revocable credentials with honest re-auth and error states, plus provider-side revocation on disconnect (GOVN-03's standard)
+- [ ] **MKTG-05** *(gated on the legal entity)*: Publishing and scheduling to a channel stage into the existing plan gate and reuse the shipped deferred-send machinery; no new unattended authority is minted and approve-once-for-many remains deferred per ADR-004
+- [ ] **MKTG-06** *(gated on the legal entity)*: Per-post engagement metrics store provider-issued ids, counts and timestamps only — never post text or recipient identity — under the same refs-and-counts contract that governs audit, and the table arrives with a connected channel rather than empty and ahead of one
 
 ## v2 Requirements
 
@@ -238,7 +300,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VALT-13 | Phase 15.3 | Pending |
 | VALT-14 | Phase 15.3 | Pending |
 | VALT-15 | Phase 20.1 | Pending |
-| VALT-16 | Phase 15.4 | Pending |
+| VALT-16 | Phase 15.4 | Complete |
 | VOIC-01 | Phase 6 | Complete (client shipped 06-06: /dashboard/voice WebRTC hook + pre-flight + live surface w/ End button + text fallback; typecheck-verified; live audio round-trip / barge-in at phase-gate human-verify) |
 | VOIC-02 | Phase 6 | Complete (server engine unit-verified 06-05: watchdog cap + clean/abnormal CAS + fail-closed metering; live 15:00 hangup at phase-gate human-verify) |
 | VOIC-03 | Phase 6 | Complete (server engine unit-verified 06-05: brief → vault ingest, refs-only session audit; live round-trip at phase-gate human-verify) |
@@ -267,23 +329,59 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BEVL-01 | Phase 12 | Complete |
 | BEVL-02 | Phase 12 | Complete |
 | BEVL-03 | Phase 13 | Complete |
-| DOCV-01 | Phase 14 | Pending |
+| DOCV-01 | Phase 14 | Complete (2026-07-26; owner live-verified a real grounded call and both governed outcome paths; honest no-gap behavior is code/test-enforced. Tool-declaration branch and retrieval latency remain explicitly unmeasured observations, not requirement blockers) |
 | BLPR-01 | Phase 17.1 | Complete |
 | BLPR-02 | Phase 17.1 | Complete |
 | DISP-01 | Phase 15 | Complete (seams 15-01; registry + loop seam 15-02; governed dispatcher — depth cap, cycle refusal, shared envelope, refs-only lineage, SC#5 isolation — 15-03; "Act on this" runs the specialist onto the single Approve gate 15-04; action-type dispatcher 15-05; runnable specialist bodies + multi-pin eval gate 15-06. CAVEAT: the 15-06 body rewrite's eval gate is UNPAID — the candidates are parked and the ACTIVE v1 bodies stay live, so a dispatched specialist still runs the OLD body until the owner runs the gate) |
 | ACTN-01 | Phase 15 | Complete (closed action-type union + `actionTypeOf` landed 15-01; 15-05 generalized `executePlan` into an exhaustive `armFor(actionTypeOf(plan.kind))` switch with an `assertNever` backstop, retiring 12-05's ad-hoc `kind === "memo"` branch. `deliverApprovedPlan.ts` is byte-unchanged — the gmail terminal was generalized around, not widened) |
-| DISP-02 | Phase 16 | Pending |
-| ACTN-03 | Phase 16 | Pending |
+| DISP-02 | Phase 16 | Complete (2026-08-08; unfiltered gate `14feb4b7` 34/34, re-confirmed by `d17039a8`; `research-specialist@8` evidence recorded and activated, with end-to-end `subagent.completed` / `research.persisted` audit evidence) |
+| ACTN-03 | Phase 16 | Complete |
 | ACTN-02 | Phase 17 | Pending |
 | ACTN-04 | Phase 18 | Pending |
-| ACTN-05 | Phase 19 | Pending |
+| ACTN-05 | Phase 19 | Complete (2026-08-10) |
 | MEDIA-01 | Phase 20 | Pending |
 | SKILL-01 | Phase 21 | Pending |
 | GOVN-01 | Phase 22 | Pending |
 | SKILL-02 | Phase 23 | Pending |
 | GOVN-02 | Phase 24 | Pending |
 | GOVN-03 | Phase 22.1 | Pending |
-| BETA-05 | Phase 25 | Complete |
+| BETA-05 | Phase 25 | Pending |
+| DASH-01 | Phase 26 | Pending |
+| APRV-01 | Phase 26 | Pending |
+| FIN-01 | Phase 26 | Pending |
+| CONT-01 | Phase 26 | Pending |
+| RPRT-01 | Phase 26 | Pending |
+| PIPE-01 | Phase 19 (consumed by Phase 26 nav/integration gate) | Complete (2026-08-10) |
+| HOME-01 | Phase 26 | Pending |
+| PACK-01 | Phase 27 | Pending |
+| PACK-02 | Phase 27 | Pending |
+| PACK-03 | Phase 27 | Pending |
+| PACK-04 | Phase 27 | Pending |
+| REVN-01 | Phase 28 | Pending |
+| REVN-02 | Phase 28 | Pending |
+| REVN-03 | Phase 28 | Pending |
+| REVN-04 | Phase 28 | Pending |
+| REVN-05 | Phase 28 | Pending |
+| REVN-06 | Phase 28 | Pending |
+| KNOW-01 | Phase 29 | Pending |
+| ROUT-01 | Phase 29 | Pending |
+| ROUT-02 | Phase 29 | Pending |
+| VERT-01 | Phase 30 | Pending |
+| VERT-02 | Phase 30 | Pending |
+| VERT-03 | Phase 30 | Pending |
+| VERT-04 | Phase 30 | Pending |
+| MKTG-01 | Phase 31 | Pending |
+| MKTG-02 | Phase 31 | Pending |
+| MKTG-03 | Phase 31 | Pending |
+| MKTG-04 | Phase 32 | **BLOCKED** (legal entity) |
+| MKTG-05 | Phase 32 | **BLOCKED** (legal entity) |
+| MKTG-06 | Phase 32 | **BLOCKED** (legal entity) |
+
+**Marketing coverage (minted 2026-08-07, pulled pre-beta per ADR-015):**
+- Requirements: **6 total** (MKTG-01..06)
+- Mapped to phases 31-32: 6
+- Unmapped: 0 ✓
+- Of these, **3 are externally blocked** on a non-code prerequisite that has not started.
 
 **Coverage:**
 - v1 requirements: **49 total** (history: header originally said "36"; corrected to the actual 40 distinct IDs during roadmap creation; +3 CKPT IDs minted 2026-07-12 for cockpit slices 2–4 — count discrepancy CLOSED; +1 SCHD-01 minted 2026-07-12 for deferred send; +2 EVAL IDs minted 2026-07-14 for the agent eval gate, Phase 3.6; +1 CKPT-04 minted 2026-07-14 for inbox briefing, Phase 3.7; +1 CKPT-05 minted 2026-07-17 for agent activity streaming, Phase 3.9; +1 RPLY-01 minted 2026-07-19 for inbox reply, Phase 3.11)
@@ -295,6 +393,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 - Mapped to phases 10-25: 27
 - Unmapped: 0 ✓
 - Each v2.0 requirement maps to exactly one phase; no orphans, no duplicates.
+
+**Post-beta knowledge-work pack coverage (planned 2026-08-05):**
+- Requirements: **17 total** (PACK-01..04; REVN-01..06; KNOW-01; ROUT-01..02; VERT-01..04)
+- Mapped to phases 27-30: 17
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-07-09*
