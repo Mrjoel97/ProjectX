@@ -1127,7 +1127,6 @@ describe("OpenAI audio request bodies", () => {
       speed: 1,
     });
   });
-
 });
 
 describe("WAN task landing", () => {
