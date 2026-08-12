@@ -292,8 +292,8 @@ export function Dropzone({
           <UploadCloudIcon size={28} />
         </span>
         <span style={{ fontSize: "1.05rem", color: "var(--ink-soft)" }}>
-          <span style={{ color: "var(--ink)", fontWeight: 700 }}>Click to upload</span> or drag
-          and drop
+          <span style={{ color: "var(--ink)", fontWeight: 700 }}>Click to upload</span> or drag and
+          drop
         </span>
         <span style={{ fontSize: "0.85rem", color: "var(--ink-soft)", textAlign: "center" }}>
           Searchable: PDF, DOCX, XLSX, PPTX, CSV, TXT, Markdown

@@ -227,7 +227,11 @@ function VaultContentNotice({
             <p>{state.message}</p>
           </div>
           <div className="vault-state-actions">
-            <button type="button" className="vault-button vault-button-primary" onClick={onRetrySearch}>
+            <button
+              type="button"
+              className="vault-button vault-button-primary"
+              onClick={onRetrySearch}
+            >
               Try again
             </button>
             <button type="button" className="vault-button" onClick={onClearSearch}>
@@ -241,7 +245,10 @@ function VaultContentNotice({
         <section className="vault-state">
           <p className="caps-label">Your source library</p>
           <h2>No documents yet.</h2>
-          <p>Upload a file, choose a folder, or import from Drive to give your agents grounded context.</p>
+          <p>
+            Upload a file, choose a folder, or import from Drive to give your agents grounded
+            context.
+          </p>
         </section>
       );
     case "category-empty":
@@ -317,16 +324,18 @@ export function DocGrid({
   // cross-disable every failed document's Retry while a folder cancel is in flight.
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const folderCount = folders?.length ?? 0;
+  const scopeIdentity = `${category}:${folderId ?? "root"}`;
 
   // Folder/category changes invalidate both the result set and every response still in flight.
   // The identity carries folderId explicitly so a response from folder A cannot paint folder B.
   useEffect(() => {
+    void scopeIdentity;
     searchSequence.current += 1;
     activeSearchIdentity.current = null;
     setQuery("");
     setHitIds(null);
     setSearchState({ kind: "idle" });
-  }, [category, folderId]);
+  }, [scopeIdentity]);
 
   async function runCancel(f: VaultFolder) {
     setCancellingId(f._id);
@@ -411,9 +420,7 @@ export function DocGrid({
           totalCount: totalCount + folderCount,
         },
     search: searchState,
-    processingCount: docs.filter(
-      (doc) => doc.status !== "ready" && doc.status !== "failed",
-    ).length,
+    processingCount: docs.filter((doc) => doc.status !== "ready" && doc.status !== "failed").length,
     failedCount: docs.filter((doc) => doc.status === "failed").length,
   });
   const suppressGrid =

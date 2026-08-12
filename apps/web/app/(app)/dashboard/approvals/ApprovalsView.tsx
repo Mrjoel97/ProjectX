@@ -352,7 +352,10 @@ function ScheduleComposer({
           Review absolute time
         </button>
       ) : (
-        <div role="group" aria-label="Confirm absolute schedule" style={stack}>
+        <fieldset
+          aria-label="Confirm absolute schedule"
+          style={{ ...stack, border: 0, margin: 0, padding: 0 }}
+        >
           <p style={{ margin: 0 }}>
             Confirm <strong>{formatAbsoluteInstant(reviewed, zone)}</strong>. Nothing runs before
             this instant.
@@ -365,7 +368,7 @@ function ScheduleComposer({
           >
             {busy ? "Working…" : label}
           </button>
-        </div>
+        </fieldset>
       )}
     </div>
   );
@@ -562,14 +565,15 @@ function AwaitingCard({ item }: { item: AwaitingItem }) {
 
       {scheduleOpen && <ScheduleComposer busy={busy} onConfirm={schedule} />}
       {confirmDiscard && (
-        <div
-          role="group"
+        <fieldset
           aria-label="Confirm discard"
           style={{
             ...stack,
             padding: "0.75rem",
             border: "1px solid var(--rule)",
             borderRadius: "0.75rem",
+            margin: 0,
+            minWidth: 0,
           }}
         >
           <strong>Discard this plan permanently?</strong>
@@ -592,7 +596,7 @@ function AwaitingCard({ item }: { item: AwaitingItem }) {
               Keep plan
             </button>
           </div>
-        </div>
+        </fieldset>
       )}
       {result && (
         <ApprovalsStateNotice state={result.includes("Nothing") ? "refusal" : "partial"}>
@@ -683,14 +687,15 @@ function ScheduledRow({ item }: { item: ScheduledItem }) {
         <ScheduleComposer busy={busy} label="Confirm new schedule" onConfirm={doMove} />
       )}
       {mode === "cancel" && (
-        <div
-          role="group"
+        <fieldset
           aria-label="Confirm scheduled cancel"
           style={{
             ...stack,
             padding: "0.75rem",
             border: "1px solid var(--rule)",
             borderRadius: "0.75rem",
+            margin: 0,
+            minWidth: 0,
           }}
         >
           <strong>Cancel before this schedule fires?</strong>
@@ -711,7 +716,7 @@ function ScheduledRow({ item }: { item: ScheduledItem }) {
               Keep schedule
             </button>
           </div>
-        </div>
+        </fieldset>
       )}
       {result && <ApprovalsStateNotice state="partial">{result}</ApprovalsStateNotice>}
     </article>
@@ -872,7 +877,7 @@ function Section({
         </h2>
         {count !== undefined && (
           <span
-            aria-label={`${count} items`}
+            title={`${count} items`}
             style={{
               ...caps,
               border: "1px solid var(--rule)",

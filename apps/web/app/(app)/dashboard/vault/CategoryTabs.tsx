@@ -33,11 +33,7 @@ export function CategoryTabs({
   onChange: (category: string) => void;
 }) {
   return (
-    <div
-      role="tablist"
-      aria-label="Vault categories"
-      className="vault-category-tabs"
-    >
+    <div role="tablist" aria-label="Vault categories" className="vault-category-tabs">
       {VAULT_TABS.map(({ label, category, Icon }) => {
         const on = active === category;
         return (

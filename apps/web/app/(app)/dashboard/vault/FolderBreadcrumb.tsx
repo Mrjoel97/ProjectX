@@ -94,11 +94,7 @@ export function FolderBreadcrumb({
         />
       </div>
       {rebuildStatus && (
-        <p
-          role="status"
-          aria-live="polite"
-          className="vault-folder-outcome"
-        >
+        <p role="status" aria-live="polite" className="vault-folder-outcome">
           {rebuildStatus}
         </p>
       )}

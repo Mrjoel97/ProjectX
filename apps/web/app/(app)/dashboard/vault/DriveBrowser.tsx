@@ -95,7 +95,9 @@ export function DriveBrowser() {
     return (
       <section className="clay-card" style={box} aria-labelledby="vault-drive-heading">
         <p className="caps-label">Connected import</p>
-        <h2 id="vault-drive-heading" style={{ margin: "0.25rem 0 0", fontSize: "1.1rem" }}>Import from Google Drive</h2>
+        <h2 id="vault-drive-heading" style={{ margin: "0.25rem 0 0", fontSize: "1.1rem" }}>
+          Import from Google Drive
+        </h2>
         <p style={{ margin: "0.35rem 0 0.7rem", color: "var(--ink-soft)" }}>
           {status.connected
             ? "Your Google connection was made before Drive access existed. Reconnect to add it — nothing else changes."
@@ -168,7 +170,9 @@ export function DriveBrowser() {
   return (
     <section className="clay-card" style={box} aria-labelledby="vault-drive-heading">
       <p className="caps-label">Connected import</p>
-      <h2 id="vault-drive-heading" style={{ margin: "0.25rem 0 0", fontSize: "1.1rem" }}>Import from Google Drive</h2>
+      <h2 id="vault-drive-heading" style={{ margin: "0.25rem 0 0", fontSize: "1.1rem" }}>
+        Import from Google Drive
+      </h2>
 
       {/* The trail. Every crumb is a button, including the current one — climbing back to where you
           already are is a harmless re-read, and disabling it costs an explanation. */}
