@@ -233,7 +233,6 @@
     "packages/backend/convex/render/",
     "apps/web/app/api/media/",
     "apps/web/app/(app)/dashboard/workspace/MediaCanvas.tsx",
-    "packages/backend/scripts/check-fal-catalog.mjs",
     "apps/web/scripts/bake-sandbox-snapshot.mjs"
   ],
   "contacts-crm.md": [

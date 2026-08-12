@@ -65,25 +65,25 @@ describe("estimateMediaUsd — video, priced per video-second", () => {
 });
 
 describe("estimateMediaUsd — the billing units differ, and the tests sit side by side", () => {
-  it("IMAGES round megapixels UP: 1080x1920 = 2.0736 MP bills as 3 MP → $0.009", () => {
+  it("IMAGES bill per successful output: one image costs $0.03", () => {
     const { model, width, height } = MEDIA_DEFAULT_IMAGE;
-    expect(usd({ kind: "image", model, width, height })).toBeCloseTo(0.009, 10);
+    expect(usd({ kind: "image", model, width, height })).toBeCloseTo(0.03, 10);
   });
-  it("TTS does NOT round its thousands: 1,200 chars → $0.012 exactly", () => {
-    expect(usd(voice(1200))).toBeCloseTo(0.012, 10);
+  it("TTS does NOT round its thousands: 1,200 chars → $0.018 exactly", () => {
+    expect(usd(voice(1200))).toBeCloseTo(0.018, 10);
   });
   it("…and 1 char is a fraction of a cent, not a whole thousand", () => {
-    expect(usd(voice(1))).toBeCloseTo(0.00001, 12);
+    expect(usd(voice(1))).toBeCloseTo(0.000015, 12);
   });
-  it("STT bills whole INPUT audio minutes: 1 min → $0.008, 30 s still buys one", () => {
+  it("STT bills whole INPUT audio minutes: 1 min → $0.006, 30 s still buys one", () => {
     const stt = (audioMinutes: number): MediaSpec => ({
       kind: "stt",
       model: MEDIA_DEFAULT_STT.model,
       audioMinutes,
     });
-    expect(usd(stt(1))).toBeCloseTo(0.008, 10);
-    expect(usd(stt(0.5))).toBeCloseTo(0.008, 10);
-    expect(usd(stt(2))).toBeCloseTo(0.016, 10);
+    expect(usd(stt(1))).toBeCloseTo(0.006, 10);
+    expect(usd(stt(0.5))).toBeCloseTo(0.006, 10);
+    expect(usd(stt(2))).toBeCloseTo(0.012, 10);
   });
   it("the render is a flat named constant, and a free block is zero", () => {
     expect(usd({ kind: "render" })).toBe(MEDIA_SANDBOX_USD_PER_RENDER);
@@ -101,20 +101,20 @@ describe("estimateMediaUsd — the billing units differ, and the tests sit side 
 // The §4.1 job, as data. This is the reel the phase is budgeted around.
 const JOB_4_1: MediaSpec[] = [
   ...Array.from({ length: 6 }, () => clip()), // 6 x 480p x 10 s = $3.000
-  voice(1200), //                                voice            = $0.012
-  voice(1200), //                                retry allowance  = $0.012
-  { kind: "stt", model: MEDIA_DEFAULT_STT.model, audioMinutes: 1 }, // captions = $0.008
+  voice(1200), //                                voice            = $0.018
+  voice(1200), //                                retry allowance  = $0.018
+  { kind: "stt", model: MEDIA_DEFAULT_STT.model, audioMinutes: 1 }, // captions = $0.006
   { kind: "render" }, //                         render           = $0.020
 ];
 
 describe("estimateBatchUsd + the job cap", () => {
-  it("the §4.1 job totals $3.052 and PASSES the $3.50 cap with 12.8% headroom", () => {
+  it("the §4.1 job totals $3.062 and PASSES the $3.50 cap", () => {
     const total = estimateBatchUsd(JOB_4_1);
     expect(total.ok).toBe(true);
-    if (total.ok) expect(total.value).toBeCloseTo(3.052, 10);
+    if (total.ok) expect(total.value).toBeCloseTo(3.062, 10);
     const chosen = chooseMediaBatch(JOB_4_1, MEDIA_JOB_CAP_USD);
     expect(chosen.ok).toBe(true);
-    if (chosen.ok) expect(chosen.value.estCents).toBe(306);
+    if (chosen.ok) expect(chosen.value.estCents).toBe(307);
   });
   it("6 blocks at 720p ($6.00+) → over_job_cap", () => {
     const job = [...Array.from({ length: 6 }, () => clip("720p")), { kind: "render" } as MediaSpec];
@@ -154,7 +154,7 @@ describe("estimateBatchUsd + the job cap", () => {
 // D12(a) — THE reason this module exists. The cents floor is a fail-closed bias that is correct
 // ONCE and catastrophic per line item.
 describe("chooseMediaBatch — the cents floor is applied ONCE, on the total", () => {
-  it("6 lines of $0.002 reserve 2 cents ($0.012 → ceil 1.2), NOT 6", () => {
+  it("6 lines of $0.003 reserve 2 cents ($0.018 → ceil 1.8), NOT 6", () => {
     // NB: the plan wrote "1 cent, not 6". $0.012 is 1.2 cents, so the fail-closed ceiling is 2.
     // The number that matters is the CONTRAST: per-line flooring reserves 6 — 3x this, 5x the
     // true cost. Corrected here rather than asserted wrong.
@@ -162,13 +162,13 @@ describe("chooseMediaBatch — the cents floor is applied ONCE, on the total", (
     const r = chooseMediaBatch(six, MEDIA_JOB_CAP_USD);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.value.estUsd).toBeCloseTo(0.012, 10);
+    expect(r.value.estUsd).toBeCloseTo(0.018, 10);
     expect(r.value.estCents).toBe(2);
     // what per-line flooring would have reserved, spelled out so the regression is legible:
     expect(six.reduce((c, s) => c + Math.max(1, Math.ceil(usd(s) * 100)), 0)).toBe(6);
   });
   it("13 sub-cent lines reserve 1 cent, not 13", () => {
-    const thirteen = Array.from({ length: 13 }, () => voice(50)); // $0.0005 each → $0.0065
+    const thirteen = Array.from({ length: 13 }, () => voice(50)); // $0.00075 each → $0.00975
     const r = chooseMediaBatch(thirteen, MEDIA_JOB_CAP_USD);
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.value.estCents).toBe(1);
@@ -176,7 +176,7 @@ describe("chooseMediaBatch — the cents floor is applied ONCE, on the total", (
   it("estUsd stays FRACTIONAL — the row stores USD, only the reservation is cents", () => {
     const r = chooseMediaBatch([voice(1200)], MEDIA_JOB_CAP_USD);
     if (!r.ok) throw new Error("expected ok");
-    expect(r.value.estUsd).toBeCloseTo(0.012, 10);
+    expect(r.value.estUsd).toBeCloseTo(0.018, 10);
     expect(Number.isInteger(r.value.estUsd)).toBe(false);
   });
 });

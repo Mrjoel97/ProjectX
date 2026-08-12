@@ -11,11 +11,11 @@
  *
  * Three containment rules this module exists to enforce:
  *  1. Every table is keyed by the billing unit the vendor ACTUALLY charges on (submitted
- *     characters, whole megapixels, video-seconds, input audio minutes). A model billed per
+ *     characters, generated images, video-seconds, input audio minutes). A model billed per
  *     GENERATED output duration or per COMPUTE second cannot be reserved and is therefore refused
- *     by construction — not by preference. `fal-ai/whisper` is out for that reason alone.
+ *     by construction — not by preference.
  *  2. A resolution missing from a model's row is `unknown_model`, NEVER a fallback to another
- *     tier. fal's Wan 2.5 default is 1080p, so a 480p estimate against a submit that omitted the
+ *     tier. Wan 2.5 supports multiple priced tiers, so a 480p estimate against a submit that omitted the
  *     resolution under-reports by 3x.
  *  3. The cents floor happens ONCE, on the batch total. See chooseMediaBatch.
  */
@@ -24,37 +24,31 @@ import { CLIP_SECONDS } from "@pikar/core/storyboard";
 
 export type VideoRes = "480p" | "720p" | "1080p";
 
-/* ponytail: hand-maintained tables, sourced from fal's own catalog API on 2026-08-02
- * (`https://fal.ai/api/models?keywords=…` — unauthenticated and machine-readable).
- * `media.fixtures.json` pins those verbatim vendor strings and media.test.ts asserts these tables
- * agree with them, so drift shows up as a diff rather than as a surprise invoice. Reconciliation is
- * the manual procedure in docs/playbooks/media.md. Upgrade path if fal ever publishes a stable
- * versioned price endpoint: fetch + cache it, and keep these tables as the fail-closed fallback. */
+/* ponytail: hand-maintained tables, sourced from Alibaba Model Studio and OpenAI pricing on
+ * 2026-08-12. Reconciliation is the manual procedure in docs/playbooks/media.md. Upgrade path:
+ * use a versioned machine-readable price feed if either provider publishes one. */
 
 /** USD per video-second, per resolution. */
 export const MEDIA_VIDEO_PRICING: Record<string, Partial<Record<VideoRes, number>>> = {
-  "fal-ai/wan-25-preview/text-to-video": { "480p": 0.05, "720p": 0.1, "1080p": 0.15 },
+  "wan2.5-t2v-preview": { "480p": 0.05, "720p": 0.1, "1080p": 0.15 },
 };
 
-/** USD per WHOLE megapixel, rounded UP (the vendor's own billing rule). */
+/** USD per successfully generated image. */
 export const MEDIA_IMAGE_PRICING: Record<string, number> = {
-  "fal-ai/flux/schnell": 0.003,
+  "wan2.5-t2i-preview": 0.03,
 };
 
 /** USD per 1000 SUBMITTED characters. Character billing is the REQUIREMENT, not a preference: the
  *  job is reserved before any request exists, so a per-generated-second model cannot be priced. It
- *  is also why `fal-ai/inworld-tts` wins over `fal-ai/kokoro/*` — kokoro exposes a 0.1–5.0 pace
- *  knob, and a time-stretch lever is a live violation of D8's no-stretch rule that no test would
- *  catch (delta pitfall 15). */
+ *  OpenAI's legacy TTS tier is billed on submitted characters and is therefore pre-computable. */
 export const MEDIA_TTS_PRICING: Record<string, number> = {
-  "fal-ai/inworld-tts": 0.01,
+  "openai/tts-1": 0.015,
 };
 
 /** USD per INPUT audio MINUTE — estimable pre-flight because WE generated the audio and know its
- *  window count. `fal-ai/whisper` is compute-second-billed and is therefore refused by
- *  construction; "cheap in practice" is exactly the reasoning ADR-011 exists to forbid. */
+ *  window count. */
 export const MEDIA_STT_PRICING: Record<string, number> = {
-  "fal-ai/elevenlabs/speech-to-text/scribe-v2": 0.008,
+  "openai/whisper-1": 0.006,
 };
 
 /** D10 — the ceiling on the WHOLE job: clips + voice + STT + render. Supersedes D4's
@@ -67,33 +61,31 @@ export const MEDIA_JOB_CAP_USD = 3.5;
  * procedure in docs/playbooks/media.md. */
 export const MEDIA_SANDBOX_USD_PER_RENDER = 0.02;
 
-/** 480p is pinned DELIBERATELY: never omit `resolution` on submit — fal defaults to 1080p and the
- *  estimate would be 3x low. D10's cap arithmetic also REFUSES six blocks at 720p ($6.00+), so the
+/** 480p is pinned DELIBERATELY: never omit `resolution` on submit. D10's cap arithmetic also REFUSES six blocks at 720p ($6.00+), so the
  *  budget rail is simultaneously the render-duration rail: the sandbox never sees a resolution
  *  whose encode time would change delta §2.4's numbers. */
 export const MEDIA_DEFAULT_VIDEO = {
-  model: "fal-ai/wan-25-preview/text-to-video",
+  model: "wan2.5-t2v-preview",
   resolution: "480p",
   seconds: 10,
 } as const;
 
 export const MEDIA_DEFAULT_IMAGE = {
-  model: "fal-ai/flux/schnell",
+  model: "wan2.5-t2i-preview",
   width: 1080,
   height: 1920,
 } as const;
 
 /** Voice and sample size are PINNED here, never left to a provider default: the vendor default is
- *  48000 Hz, and 24000 halves the bytes that have to reach the render sandbox. The voice is a
- *  member of the endpoint's closed enum. No pace/stretch parameter is submitted, ever. */
+ *  24000 Hz keeps render inputs deterministic. No pace/stretch parameter is submitted, ever. */
 export const MEDIA_DEFAULT_VOICE = {
-  model: "fal-ai/inworld-tts",
-  voice: "Evelyn (en)",
+  model: "openai/tts-1",
+  voice: "nova",
   sampleRateHertz: 24000,
 } as const;
 
 export const MEDIA_DEFAULT_STT = {
-  model: "fal-ai/elevenlabs/speech-to-text/scribe-v2",
+  model: "openai/whisper-1",
 } as const;
 
 export type MediaSpec =
@@ -132,9 +124,7 @@ export function estimateMediaUsd(spec: MediaSpec): Result<number, MediaCostError
       const perMegapixel = MEDIA_IMAGE_PRICING[spec.model];
       if (perMegapixel === undefined) return err({ code: "unknown_model" });
       if (!counted(spec.width, spec.height)) return err({ code: "illegal_duration" });
-      // Whole megapixels, rounded UP — the vendor's own billing rule, not our bias.
-      const megapixels = Math.ceil((spec.width * spec.height) / 1_000_000);
-      return ok(megapixels * perMegapixel);
+      return ok(perMegapixel);
     }
     case "tts": {
       const perThousand = MEDIA_TTS_PRICING[spec.model];

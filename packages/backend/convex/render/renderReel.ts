@@ -372,7 +372,7 @@ export const renderReel = internalAction({
     if (fixture) {
       outcome = JSON.parse(fixture) as RouteSuccess | { ok: false; code: string };
     } else {
-      // NOTHING FORBIDDEN CROSSES IN. This body is the complete list: no FAL_KEY, no
+      // NOTHING FORBIDDEN CROSSES IN. This body is the complete list: no media-provider key, no
       // OPENAI_API_KEY, no Vercel credential, no tenantId, no fal URL, no `storage.getUrl` result,
       // no prompt and no narration. The job ids are opaque refs the runner appends to OUR OWN
       // blob origin — it is handed no URL to fetch at all.

@@ -7,9 +7,8 @@
  * Convex-hosted runner would need `VERCEL_TOKEN` + `VERCEL_TEAM_ID` + `VERCEL_PROJECT_ID`. A
  * Vercel personal access token is scoped to a **team, not a capability**: it can deploy, delete
  * projects and read every project environment variable. That is strictly more powerful than
- * anything else this codebase holds, and it would falsify ADR-011's cleanest property — *"an API
- * key in a deployment secret is the whole auth story"* — which is true of `FAL_KEY` precisely
- * because `FAL_KEY` can only generate media.
+ * anything else this codebase holds. Media-provider keys are capability-scoped generation keys;
+ * a Vercel team token is not.
  *
  * **D11's answer: put the runner where OIDC is automatic.** Note what is NOT in the `Sandbox.create`
  * call below: no `token`, no `teamId`, no `projectId`. Inside a Vercel deployment the SDK resolves

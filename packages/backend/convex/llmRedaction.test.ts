@@ -1217,6 +1217,7 @@ const MEDIA_AUDIT_ALLOWED = new Set([
   "jobId",
   "batchId",
   "planId",
+  "providerRequestId",
   "falRequestId",
   "kind",
   "model",
@@ -1410,7 +1411,7 @@ test("NOTHING FORBIDDEN crosses into the sandbox — not a key, not a tenant, no
   expect(body, "the render request body literal was not found - the scan is vacuous").toBeTruthy();
 
   for (const banned of [
-    "FAL_KEY",
+    "Video_and_image_API_Key",
     "OPENAI_API_KEY",
     "VERCEL_TOKEN",
     "SKILLOPT_TOKEN",
@@ -1435,10 +1436,9 @@ test("NOTHING FORBIDDEN crosses into the sandbox — not a key, not a tenant, no
 
 test("NO VERCEL ACCESS TOKEN EXISTS ANYWHERE — D11's headline property, asserted not asserted-about", () => {
   // A Vercel access token is scoped to a TEAM, not a capability: it can deploy, delete projects
-  // and read every project environment variable. That is strictly more powerful than anything
-  // else this codebase holds, and it would falsify ADR-011's cleanest property — "an API key in a
-  // deployment secret is the whole auth story", true of FAL_KEY precisely because FAL_KEY can only
-  // generate media. D11 chose a route handler over a Convex-hosted runner SPECIFICALLY so that
+  // and read every project environment variable. That is strictly more powerful than a
+  // capability-scoped media generation key. D11 chose a route handler over a Convex-hosted runner
+  // SPECIFICALLY so that
   // none exists. This is the assertion that keeps it true.
   //
   // Comments are stripped first (the file-wide idiom): the route and the bake script both NAME
@@ -1553,19 +1553,8 @@ test("the route's maxDuration LITERAL still equals the exported constant", () =>
   expect(timeoutMs).toBeLessThan(Number(literal) * 1000);
 });
 
-test("no audio_url the media plane submits can originate from ctx.storage.getUrl", () => {
-  // THE TRUST BOUNDARY THIS PLAN EXISTS AROUND (20-17). Every fal STT endpoint takes a URL fal
-  // must FETCH. Our audio lives in `ctx.storage`, and `plans.attachmentUrls`' own header calls a
-  // signed storage URL a BEARER CAPABILITY — handing one to a third party gives them read access
-  // to a tenant's bytes for the life of the signature. The bytes go as a `data:` URI instead, so
-  // no URL of ours exists to hand over.
-  //
-  // Scanned rather than described: this is a one-line "fix" away from being false, and the
-  // symptom would be invisible — the transcript would come back correct either way.
+test("caption audio reaches OpenAI as multipart bytes, never as a signed storage URL", () => {
   const media = stripCode(readSource("media.ts"));
-  // Anchored on CODE at both ends, never on a comment: `stripCode` deletes comments, so a comment
-  // marker resolves to -1 and `slice(start, -1)` silently returns the rest of the FILE — a scan
-  // that reads far more than it claims to and fails for reasons that have nothing to do with it.
   const submitAt = media.indexOf("export const submitCaptions");
   const nextExport = media.indexOf("\nexport const", submitAt + 1);
   const submitFn = media.slice(submitAt, nextExport === -1 ? media.length : nextExport);
@@ -1573,21 +1562,9 @@ test("no audio_url the media plane submits can originate from ctx.storage.getUrl
   expect(submitFn, "the captions submit reaches for a signed storage URL").not.toMatch(
     /storage\.getUrl/,
   );
-  // …and the only thing that becomes an `audio_url` anywhere in the module is the data URI.
-  const audioUrlAssignments = [...media.matchAll(/audio_?[Uu]rl:\s*([^,\n]+)/g)].map((m) =>
-    (m[1] ?? "").trim(),
-  );
-  // Three: the field's TYPE on `SubmittableSpec`, the wire field in `buildSubmitBody`, and the one
-  // construction site. The type declaration is included deliberately — if the field is ever
-  // widened or re-typed, this count moves and the change gets read.
-  expect(audioUrlAssignments.length, "no audio_url assignment found - the scan is vacuous").toBe(3);
-  for (const value of audioUrlAssignments) {
-    expect(value, `audio_url is built from "${value}"`).toMatch(
-      // `^string` is the TYPE declaration on `SubmittableSpec`; the other two are the wire field
-      // and the one construction site. Nothing else may ever produce this value.
-      /^string\b|spec\.audioUrl|audioDataUri\(/,
-    );
-  }
+  expect(submitFn).toMatch(/new FormData\(\)/);
+  expect(submitFn).toMatch(/form\.append\("file",\s*new Blob\(/);
+  expect(submitFn).not.toMatch(/audio_?[Uu]rl|data:audio/);
 });
 
 test("storage.delete has exactly ONE site in the media subsystem — the retention loop", () => {

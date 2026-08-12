@@ -1,65 +1,64 @@
 {
-  "_what": "Vendor-price PROVENANCE for packages/cost/src/media.ts. Every string under `vendor` is verbatim from fal's own catalog API — nothing here is paraphrased or secondary-sourced unless `confidence` says so. media.test.ts asserts the shipped price tables agree with `rates`/`rate` field for field, so a table edit without a fresh vendor read shows up as a RED test, and a real price change shows up as a diff with the vendor's own words next to it.",
-  "_how_to_refresh": "GET https://fal.ai/api/models?keywords={wan-25|inworld|scribe|schnell}&page=1 (unauthenticated, machine-readable) and copy `pricingInfoOverride` / `billingMessage` / `status` / `deprecated` / `removed` for each id below. The same read is the free endpoint-health check for the `-preview` rename risk. Procedure: docs/playbooks/media.md § Reconciliation.",
-  "source": "https://fal.ai/api/models?keywords=<kw>&page=1",
-  "readAt": "2026-08-02",
+  "_what": "Provider-price provenance for the media estimator. Values were read from the official Alibaba Model Studio and OpenAI documentation.",
+  "_how_to_refresh": "Re-read Alibaba Model Studio model pricing and OpenAI API pricing, then run packages/cost/src/media.test.ts.",
+  "source": "https://www.alibabacloud.com/help/en/model-studio/model-pricing",
+  "readAt": "2026-08-12",
   "entries": [
     {
-      "id": "fal-ai/wan-25-preview/text-to-video",
+      "id": "wan2.5-t2v-preview",
       "kind": "video",
-      "unit": "USD per video-second, per resolution",
+      "unit": "USD per output video-second, per resolution",
       "rates": { "480p": 0.05, "720p": 0.1, "1080p": 0.15 },
       "confidence": "HIGH",
       "vendor": {
-        "pricingInfoOverride": "Your request will cost **$0.05** per second for **480p**, **$0.10** per second for **720p**, **$0.15** per second for **1080p**.",
+        "pricingInfoOverride": "Singapore wan2.5 text-to-video: $0.05 per second at 480P, $0.10 per second at 720P, and $0.15 per second at 1080P.",
         "status": "public",
         "deprecated": false,
         "removed": false
       },
-      "notes": "A `-preview` endpoint that has NOT been renamed or retired as of the read date. Its `image-to-video` sibling carries an identical pricing string. The OpenAPI input schema defaults `resolution` to \"1080p\" — 3x the 480p figure — which is why the adapter pins it explicitly. `duration` is a STRING enum [\"5\",\"10\"], default \"5\"."
+      "notes": "Alibaba Model Studio Singapore legacy Wan API. The adapter pins size, duration, prompt extension, and asynchronous mode."
     },
     {
-      "id": "fal-ai/inworld-tts",
+      "id": "openai/tts-1",
       "kind": "tts",
-      "unit": "USD per 1000 SUBMITTED characters",
-      "rate": 0.01,
+      "unit": "USD per 1000 submitted characters",
+      "rate": 0.015,
       "confidence": "HIGH",
       "vendor": {
-        "pricingInfoOverride": "Your request will cost **$0.01** per 1000 character.",
+        "pricingInfoOverride": "tts-1 costs $15.00 per 1 million characters ($0.015 per 1000 characters).",
         "status": "public",
         "deprecated": false,
         "removed": false
       },
-      "notes": "Billed on submitted input, so a voice take is priceable BEFORE it exists — the reason this model is in and per-generated-second models are out. Input schema: `text`, `voice` (closed enum), `sample_rate_hertz` (enum, default 48000). No pace/stretch knob is exposed, which is the point (delta pitfall 15)."
+      "notes": "The adapter pins WAV output, voice, and speed 1."
     },
     {
-      "id": "fal-ai/elevenlabs/speech-to-text/scribe-v2",
+      "id": "openai/whisper-1",
       "kind": "stt",
-      "unit": "USD per INPUT audio minute",
-      "rate": 0.008,
+      "unit": "USD per input audio minute",
+      "rate": 0.006,
       "confidence": "HIGH",
       "vendor": {
-        "pricingInfoOverride": "Your request will cost **$0.008 per input audio minutes**. If keyterm is used, you request will cost %30 more.",
+        "pricingInfoOverride": "whisper-1 transcription costs $0.006 per minute.",
         "status": "public",
         "deprecated": false,
         "removed": false
       },
-      "notes": "SURCHARGE: the vendor string states +30% when keyterms are used. We submit `keyterms: []` and must NOT start sending them without re-pricing this row to $0.0104/min. Input schema: `audio_url`, `keyterms` (default []), `diarize`, `tag_audio_events`, `language_code`."
+      "notes": "Verbose JSON with word timestamps is requested for caption timing."
     },
     {
-      "id": "fal-ai/flux/schnell",
+      "id": "wan2.5-t2i-preview",
       "kind": "image",
-      "unit": "USD per WHOLE megapixel, rounded UP",
-      "rate": 0.003,
-      "confidence": "MEDIUM",
+      "unit": "USD per successfully generated image",
+      "rate": 0.03,
+      "confidence": "HIGH",
       "vendor": {
-        "pricingInfoOverride": null,
-        "billingMessage": "Images are billed by rounding up to the nearest megapixel.",
+        "pricingInfoOverride": "Singapore wan2.5 text-to-image costs $0.03 per successfully generated image.",
         "status": "public",
         "deprecated": false,
         "removed": false
       },
-      "notes": "The ROUNDING RULE is vendor-direct; the $0.003 figure is NOT — this entry exposes no `pricingInfoOverride`, so the number is secondary-sourced and stays MEDIUM until an invoice reconciles it (docs/playbooks/media.md § Reconciliation). `fal-ai/flux-1/schnell` exists with the identical billing message. Input schema takes `image_size` (preset name OR {width,height}) and `num_images` (default 1, a straight price MULTIPLIER) — both pinned by the adapter."
+      "notes": "The adapter pins n=1, size, watermark=false, and prompt_extend=false."
     }
   ]
 }
