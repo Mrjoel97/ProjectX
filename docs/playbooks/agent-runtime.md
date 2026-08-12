@@ -1,5 +1,12 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-08-12 (20-20 owner closure — exact response:
+> **`ratify cloud-dev finance predecessor`**. Phase 20-12 may now use cloud-dev
+> `woozy-wren-368` `cockpit-agent v1` / sha256
+> `b765d7422d5e0d5d0d6beaa58b1310fbba02ced028a613cdc38aef01c3fec7e7` as its finance-bearing
+> predecessor. The 36/36 evidence remains run `107ee875`; it was not rerun. Production remains
+> empty and unratified, and this closure made no live mutation or paid call: **$0.00**.)
+
 > Last verified: 2026-08-12 (20-20 zero-spend reconciliation — **THIS SUPERSEDES THE 2026-08-10
 > FINANCE ENTRY BELOW THAT SAYS FIXTURE 37 NEVER RAN LIVE.** The exact finance-bearing runtime body
 > has a complete cloud-dev result: `woozy-wren-368`, global `cockpit-agent v1`, run `107ee875`,

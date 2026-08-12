@@ -1,5 +1,13 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-12 (20-20 owner closure — exact response:
+> **`ratify cloud-dev finance predecessor`**. This ratifies `woozy-wren-368`'s already-active,
+> already-evidenced `cockpit-agent v1` as Phase 20-12's **cloud-dev predecessor**. It does not
+> recast bootstrap as an owner-triggered candidate activation, does not authorize production, and
+> does not authorize a seed, deploy, evidence write or paid rerun. A read-only closeout check found
+> the same v1/hash/evidence in cloud dev and no `skills` documents in production. Closure spend:
+> **$0.00**.)
+
 > Last verified: 2026-08-12 (20-20 zero-spend reconciliation — **CLOUD DEV IS CLEARED;
 > PRODUCTION IS NOT.** Read-only registry inspection of `woozy-wren-368` returned exactly one
 > `cockpit-agent` row: **v1, `active`**, sha256
