@@ -185,7 +185,7 @@ jobs:
         run: pnpm --filter @pikar/backend seed
 
       - name: Probe staged Vercel deployment
-        run: vercel --token="$VERCEL_TOKEN" curl / --deployment="${{ steps.stage.outputs.url }}"
+        run: vercel curl / --deployment="${{ steps.stage.outputs.url }}"
 
       - name: Promote staged Vercel deployment
         run: vercel promote "${{ steps.stage.outputs.url }}" --yes --timeout=5m --token="$VERCEL_TOKEN"
