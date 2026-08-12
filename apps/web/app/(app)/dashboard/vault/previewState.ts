@@ -1,11 +1,6 @@
 export const PREVIEW_SNIPPET_CHARS = 1500;
 
-export type PreviewStatus =
-  | "pending_extraction"
-  | "extracting"
-  | "processing"
-  | "ready"
-  | "failed";
+export type PreviewStatus = "pending_extraction" | "extracting" | "processing" | "ready" | "failed";
 
 export type PreviewContentState =
   | { kind: "loading"; title: string; detail: string }
@@ -58,7 +53,9 @@ type PreviewStateInput = {
   ownedDocument?: boolean;
 };
 
-function processingCopy(status: PreviewStatus): Pick<PreviewContentState, "title"> & { detail: string } {
+function processingCopy(
+  status: PreviewStatus,
+): Pick<PreviewContentState, "title"> & { detail: string } {
   switch (status) {
     case "pending_extraction":
       return {
@@ -207,7 +204,8 @@ export function derivePreviewState(input: PreviewStateInput): PreviewState {
     content: {
       kind: "unsupported",
       title: "No inline preview",
-      detail: "This file is stored safely, but its format has no inline preview. Download the original to open it.",
+      detail:
+        "This file is stored safely, but its format has no inline preview. Download the original to open it.",
     },
   };
 }

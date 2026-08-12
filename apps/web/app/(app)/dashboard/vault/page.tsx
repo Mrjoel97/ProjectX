@@ -44,10 +44,7 @@ export default function VaultPage() {
   return (
     <div className="vault-surface vault-nord-edge">
       <div className="vault-scroll">
-        <VaultErrorBoundary
-          key={nonce}
-          onRetry={() => setNonce((n) => n + 1)}
-        >
+        <VaultErrorBoundary key={nonce} onRetry={() => setNonce((n) => n + 1)}>
           <VaultBody
             category={category}
             onCategory={setCategory}
@@ -76,7 +73,10 @@ class VaultErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error("Vault browse query failed", { error: error.message, componentStack: info.componentStack });
+    console.error("Vault browse query failed", {
+      error: error.message,
+      componentStack: info.componentStack,
+    });
   }
 
   render() {
@@ -93,7 +93,11 @@ class VaultErrorBoundary extends Component<
         <p className="caps-label">Vault unavailable</p>
         <h2>We couldn&rsquo;t load your documents.</h2>
         <p>{viewState.content.message} Nothing has been removed.</p>
-        <button type="button" className="vault-button vault-button-primary" onClick={this.props.onRetry}>
+        <button
+          type="button"
+          className="vault-button vault-button-primary"
+          onClick={this.props.onRetry}
+        >
           Try again
         </button>
       </section>
@@ -146,7 +150,9 @@ function VaultBody({
         <div>
           <p className="caps-label">Grounding for every agent</p>
           <h1>Knowledge Vault</h1>
-          <p className="vault-header-copy">Keep the source material your team can search, cite, and act on.</p>
+          <p className="vault-header-copy">
+            Keep the source material your team can search, cite, and act on.
+          </p>
         </div>
         <div className="vault-header-actions">
           {loading && <span className="vault-status-pill">Loading</span>}
@@ -154,7 +160,8 @@ function VaultBody({
             visible={!currentFolderId && !picked}
             disabled={phase.kind === "uploading"}
             handlers={{
-              onUpload: () => uploadSourceRef.current?.querySelector<HTMLButtonElement>("button")?.click(),
+              onUpload: () =>
+                uploadSourceRef.current?.querySelector<HTMLButtonElement>("button")?.click(),
               onFolderUpload: () =>
                 uploadSourceRef.current
                   ?.querySelector<HTMLInputElement>("input[webkitdirectory]")
@@ -165,21 +172,21 @@ function VaultBody({
               },
             }}
           />
-        {/* Belt AND braces with lifting `phase`: the upload loop RUNS inside PreFlight, which is
+          {/* Belt AND braces with lifting `phase`: the upload loop RUNS inside PreFlight, which is
             inside VaultBody, so a remount mid-loop orphans it (setState on an unmounted tree, a
             half-created folder). Disabling the only remount trigger is the guard that makes that
             impossible — and Refresh is meaningless mid-upload anyway, since every vault query is
             already live (BRAND §1: say why, honestly). */}
-        <button
-          type="button"
-          onClick={onRefresh}
-          disabled={phase.kind === "uploading"}
-          title={phase.kind === "uploading" ? "Finishing your folder upload…" : undefined}
-          className="vault-button vault-button-primary"
-        >
-          <RefreshIcon />
-          Refresh
-        </button>
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={phase.kind === "uploading"}
+            title={phase.kind === "uploading" ? "Finishing your folder upload…" : undefined}
+            className="vault-button vault-button-primary"
+          >
+            <RefreshIcon />
+            Refresh
+          </button>
         </div>
       </header>
 

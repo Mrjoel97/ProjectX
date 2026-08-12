@@ -24,9 +24,7 @@ export type VaultIngestState =
   | { kind: "healthy" }
   | { kind: "partial"; processingCount: number; failedCount: number };
 
-export type VaultDigestState =
-  | { kind: "current" }
-  | { kind: "stale"; unincorporatedCount: number };
+export type VaultDigestState = { kind: "current" } | { kind: "stale"; unincorporatedCount: number };
 
 export type VaultViewState = {
   content: VaultContentState;
@@ -58,9 +56,7 @@ export function deriveVaultViewState(input: VaultViewStateInput): VaultViewState
       ? { kind: "partial", processingCount, failedCount }
       : { kind: "healthy" };
   const digest: VaultDigestState =
-    unincorporatedCount > 0
-      ? { kind: "stale", unincorporatedCount }
-      : { kind: "current" };
+    unincorporatedCount > 0 ? { kind: "stale", unincorporatedCount } : { kind: "current" };
 
   if (input.list.kind === "loading") {
     return { content: { kind: "initial-loading" }, ingest, digest };

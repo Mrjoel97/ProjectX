@@ -16,11 +16,7 @@ describe("deriveVaultViewState", () => {
       ready({ list: { kind: "error", message: "The vault could not be read." } }),
       "list-error",
     ],
-    [
-      "search loading",
-      ready({ search: { kind: "loading", query: "invoice" } }),
-      "search-loading",
-    ],
+    ["search loading", ready({ search: { kind: "loading", query: "invoice" } }), "search-loading"],
     [
       "search error",
       ready({ search: { kind: "error", query: "invoice", message: "Search failed." } }),
@@ -61,9 +57,7 @@ describe("deriveVaultViewState", () => {
 
   test("keeps stale digest structurally separate from content and partial ingest", () => {
     expect(
-      deriveVaultViewState(
-        ready({ scope: "folder", processingCount: 1, unincorporatedCount: 3 }),
-      ),
+      deriveVaultViewState(ready({ scope: "folder", processingCount: 1, unincorporatedCount: 3 })),
     ).toMatchObject({
       content: { kind: "ready" },
       ingest: { kind: "partial" },

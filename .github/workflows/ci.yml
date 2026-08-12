@@ -55,7 +55,7 @@ jobs:
       - name: Lint
         # Report only blocking diagnostics so the warning baseline cannot exhaust Biome's default
         # diagnostic cap and hide the errors that actually reddened the job.
-        run: pnpm lint -- --diagnostic-level=error --max-diagnostics=none
+        run: pnpm lint --diagnostic-level=error --max-diagnostics=none
 
       # Unit tests only (vitest). apps/web's Playwright suite is `test:e2e` and is deliberately NOT
       # part of this gate — it needs a live deployment and a seeded tenant.

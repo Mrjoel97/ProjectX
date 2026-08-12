@@ -43,18 +43,12 @@ export function VaultStats({ stats }: { stats: Stats | undefined }) {
     <>
       <div className="vault-stats">
         {TILES.map(({ key, label, accent, Icon }) => (
-          <div
-            key={key}
-            className="vault-stat-card"
-          >
+          <div key={key} className="vault-stat-card">
             <div>
               <div className="vault-stat-label">{label}</div>
               <div className="vault-stat-value">{valueFor(key, stats)}</div>
             </div>
-            <span
-              aria-hidden="true"
-              className={`vault-stat-badge is-${accent}`}
-            >
+            <span aria-hidden="true" className={`vault-stat-badge is-${accent}`}>
               <Icon />
             </span>
           </div>
