@@ -1,5 +1,32 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-12 (20-20 zero-spend reconciliation — **CLOUD DEV IS CLEARED;
+> PRODUCTION IS NOT.** Read-only registry inspection of `woozy-wren-368` returned exactly one
+> `cockpit-agent` row: **v1, `active`**, sha256
+> `b765d7422d5e0d5d0d6beaa58b1310fbba02ced028a613cdc38aef01c3fec7e7`, with passing evidence
+> for run `107ee875`: **36/36**, one retry (`21-fragment-answer-absorbed`), `$0.4047304`, model
+> `openai/gpt-4o-mini`, and `skillVersions: {"cockpit-agent":1}`. The complete run includes
+> fixture 37. A separate read-only inspection of production `opulent-octopus-494` returned no
+> documents in `skills`. No seed, deploy, eval, evidence write or activation ran: **$0.00**.)
+>
+> **Fingerprint convention:** the registry body and generated TypeScript mirror use LF. The local
+> canonical markdown hashes to the value above after CRLF→LF normalization; its raw Windows
+> worktree bytes hash differently and are not the registry fingerprint. The contracts mirror test
+> is green (22/22), so the generated body is the normalized canonical source.
+>
+> **This was bootstrap, not a candidate activation.** Cloud dev's table was empty when
+> `seedSkills` first inserted v1, and the empty-registry branch writes `status: "active"` before any
+> eval evidence exists. The later green run records evidence on that already-active row. On every
+> later boot, `seedSkills` compares the current body with the **newest** row and inserts nothing
+> when they match. Therefore rerunning the seed cannot mint the “finance candidate” the stale
+> 20-20 plan demanded, and inventing a no-op seed/eval/activation cycle would falsify provenance.
+>
+> **Authority boundary:** the cloud-dev gate is evidence, not production activation authority and
+> not proof of a separately owner-triggered candidate flip. Before 20-12 relies on v1 as its
+> development predecessor, the owner must explicitly ratify that deployment-scoped boundary. If
+> production clearance is required instead, deploy/bootstrap/evidence provenance needs its own
+> authorized plan; nothing in this entry authorizes or claims it.
+
 > Last verified: 2026-08-11 (21-04 — **A TENANT ROW CAN NOW BECOME `active`.** 21-02 and 21-03 both
 > closed with "no tenant row can become active through any code path"; that sentence is now false.
 > **Nothing was activated live, no tenant candidate has ever passed a real eval run, and NO PAID

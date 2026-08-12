@@ -1,5 +1,24 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-08-12 (20-20 zero-spend reconciliation — **THIS SUPERSEDES THE 2026-08-10
+> FINANCE ENTRY BELOW THAT SAYS FIXTURE 37 NEVER RAN LIVE.** The exact finance-bearing runtime body
+> has a complete cloud-dev result: `woozy-wren-368`, global `cockpit-agent v1`, run `107ee875`,
+> **36/36** in one unfiltered run including fixture 37, one retry, and `$0.4047304` total recorded
+> cost. Read-only live inspection returned v1 `active` with evidence pinning `cockpit-agent: 1` and
+> sha256 `b765d7422d5e0d5d0d6beaa58b1310fbba02ced028a613cdc38aef01c3fec7e7`.)
+>
+> The local canonical markdown produces the same sha after the repository's required CRLF→LF
+> normalization, and the generated TypeScript mirror test passes 22/22. The raw Windows file-byte
+> hash is deliberately not used as a runtime-body identity. The runner's free `--self-check` also
+> passes with 36 fixtures and 12 gated skills.
+>
+> **Scope and authority remain narrow.** Cloud dev bootstrapped v1 directly as `active` on an empty
+> registry before the gate; no owner activated an evidenced candidate. Production
+> `opulent-octopus-494` still has no skill rows. The existing result therefore clears the exact
+> finance body in cloud dev, but it neither activates production nor supplies owner ratification to
+> use cloud dev as Phase 20-12's predecessor. Plan 20-20 now stops for that explicit scope decision.
+> No paid call or live mutation was made during this reconciliation: **$0.00**.
+
 > Last verified: 2026-08-11 (21-03 — **THE REAL ENTRY the 21-05 lane's date-bump below hands over
 > for `run-eval-golden.mjs` and `smoke.ts`. NO PAID EVAL WAS RUN: $0.00.** The only eval invocation
 > this plan made is the free `--self-check`, which PASSED. A standing do-not-rerun order is in force
