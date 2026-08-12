@@ -13,7 +13,6 @@
     "codegen": "convex codegen",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "check:fal-catalog": "node ./scripts/check-fal-catalog.mjs",
     "probe:gemini": "node ./scripts/probe-gemini.mjs",
     "probe:gemini:grounded": "node ./scripts/probe-gemini.mjs --grounded",
     "eval:golden": "node ./scripts/run-eval-golden.mjs",

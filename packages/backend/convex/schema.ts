@@ -1604,7 +1604,8 @@ export default defineSchema({
     planId: v.id("plans"),
     batchId: v.string(), // server-minted crypto.randomUUID(); groups ONE reservation
     blockIndex: v.number(), // index into plans.shots; -1 for a job that belongs to the whole deck (stt)
-    provider: v.literal("fal"), // closed literal — a second provider is a deliberate schema edit
+    // `fal` remains readable for historical rows; new work uses Wan for visuals and OpenAI audio.
+    provider: v.union(v.literal("fal"), v.literal("wan"), v.literal("openai")),
     // FOUR kinds, closed. A fifth member is a deliberate schema edit, the `provider` precedent.
     kind: v.union(v.literal("video"), v.literal("image"), v.literal("tts"), v.literal("stt")),
     model: v.string(), // MUST be a key of the @pikar/cost/media price table (fail-closed at estimate)
@@ -1630,6 +1631,7 @@ export default defineSchema({
       v.literal("blocked"),
     ),
     falRequestId: v.optional(v.string()),
+    providerRequestId: v.optional(v.string()),
     /** D12(a) — FRACTIONAL USD, never floored cents. The batch's reservation is the only thing
      *  expressed in cents and it is floored ONCE, in `chooseMediaBatch`. Storing floored cents per
      *  line re-creates the 5x over-reservation this field exists to prevent: six voice lines of

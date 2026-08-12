@@ -87,8 +87,8 @@ export const resolveJob = internalQuery({
 /**
  * Kinds whose spend is a pure function of what WE SUBMITTED, so actual == estimate BY CONSTRUCTION.
  *
- * `fal-ai/inworld-tts` bills per **submitted character**, and its response carries no duration and
- * no character count; `scribe-v2` bills per **input audio minute**, of audio we generated and
+ * OpenAI TTS bills per **submitted character**, and its response carries no duration and no
+ * character count; Whisper bills per **input audio minute**, of audio we generated and
  * therefore already measured. There is literally nothing to reconcile.
  *
  * **This is NOT an optimisation and NOT a trust decision.** Re-pricing here would mean INVENTING an
@@ -343,12 +343,12 @@ export const landResult = internalMutation({
         tenantId: row.tenantId,
         correlationId: row.batchId,
         eventType: "media.landed",
-        actor: "fal",
+        actor: row.provider,
         payload: {
           jobId,
           batchId: row.batchId,
           planId: row.planId,
-          falRequestId: row.falRequestId,
+          providerRequestId: row.providerRequestId ?? row.falRequestId,
           kind: row.kind,
           model: row.model,
           promptHash: row.promptHash,

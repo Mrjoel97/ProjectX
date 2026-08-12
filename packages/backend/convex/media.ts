@@ -43,9 +43,8 @@ import {
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import type { MutationCtx, QueryCtx } from "./_generated/server";
+import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server";
-import { hmacHex } from "./gmailAuth";
 import { getGuardrailConfig, mediaRemainingCentsInner, rateLimiter } from "./guardrails";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
@@ -236,7 +235,7 @@ export async function reserveJobInner(
   //    captions STT and the render are ONE reserved unit.
   const now = Date.now();
   const batchId = crypto.randomUUID(); // server-minted, the cockpit.ts correlationId idiom
-  const base = { tenantId: a.tenantId, planId: a.planId, batchId, provider: "fal" as const };
+  const base = { tenantId: a.tenantId, planId: a.planId, batchId };
   const lines: ProviderLine[] = [];
 
   for (const block of a.blocks) {
@@ -257,6 +256,7 @@ export async function reserveJobInner(
         estUsd: priced.value,
         row: {
           ...base,
+          provider: "wan",
           blockIndex: block.index,
           kind: "video",
           model: MEDIA_DEFAULT_VIDEO.model,
@@ -290,6 +290,7 @@ export async function reserveJobInner(
       estUsd: priced.value,
       row: {
         ...base,
+        provider: "openai",
         blockIndex: block.index,
         kind: "tts",
         model: MEDIA_DEFAULT_VOICE.model,
@@ -319,6 +320,7 @@ export async function reserveJobInner(
       estUsd: priced.value,
       row: {
         ...base,
+        provider: "openai",
         blockIndex: -1,
         kind: "stt",
         model: MEDIA_DEFAULT_STT.model,
@@ -363,7 +365,7 @@ export async function reserveImageInner(
       tenantId: a.tenantId,
       planId: a.planId,
       batchId,
-      provider: "fal",
+      provider: "wan",
       blockIndex: 0,
       kind: "image",
       model: MEDIA_DEFAULT_IMAGE.model,
@@ -568,15 +570,13 @@ export const listJobs = internalQuery({
   },
 });
 
-// ── The fal SUBMIT adapter (plan 20-05) ────────────────────────────────────────────────
+// ── Media provider adapters ────────────────────────────────────────────────────────────
 //
-// Submit a reserved line to fal's QUEUE with a per-job authenticated webhook, and return. Nothing
-// below this line waits for a clip: a 10 s Wan 2.5 render is 1–3 MINUTES of wall clock, and plan
-// 20-06's webhook is what lands it.
+// Submit reserved visual lines to Alibaba Wan's asynchronous API and audio lines to OpenAI. Wan
+// task polling stores provider results in Convex immediately because the returned URLs expire.
 
-/** The `gmailAuth.requireEnv` IDIOM with a media-worded message — a "Gmail OAuth env not
- *  configured" throw on a fal submit sends an operator to the wrong runbook. Both media secrets are
- *  DEPLOYMENT env vars (`npx convex env set`), never `.env.local`. */
+/** The `gmailAuth.requireEnv` idiom with a media-worded message. Provider credentials are Convex
+ *  deployment env vars (`npx convex env set`), never client-visible variables. */
 export function requireEnvMedia(name: string): string {
   const val = process.env[name];
   if (!val) throw new Error(`Media env not configured: ${name}`);
@@ -599,78 +599,46 @@ export function requireEnvMedia(name: string): string {
  */
 export type SubmittableSpec =
   | Extract<MediaSpec, { kind: "video" | "image" }>
-  | (Extract<MediaSpec, { kind: "tts" }> & { voice: string; sampleRateHertz: number })
-  // `audioUrl` is not a priced dimension either — `audioMinutes` is. It rides here for the same
-  // reason `voice` does: it is a pinned wire field, and the alternative is reaching for it at the
-  // POST. It is NOT on the stored spec: it does not exist until the takes have landed and been
-  // concatenated, which is why `toSubmittable` still returns null for an `stt` row.
-  | (Extract<MediaSpec, { kind: "stt" }> & { audioUrl: string });
+  | (Extract<MediaSpec, { kind: "tts" }> & { voice: string; sampleRateHertz: number });
 
 /**
  * The request body, as a pure function of the PRICED spec — pitfall 1, the money bug.
  *
  * Every dimension the price table keys on is set here, from the SAME spec object
- * `chooseMediaBatch` consumed. NEVER omit one and let fal default it: `wan-25-preview` defaults to
- * 1080p, which is 3× the 480p rate, and the estimate would silently under-report with no test going
- * red. If you add a priced dimension to the table, add it here in the SAME commit. The `never` arm
- * below is what makes that "same commit" mechanical rather than remembered.
- *
- * Field names are the ones read vendor-direct from `fal.ai/api/openapi/queue/openapi.json` in plan
- * 20-01's preflight — not from memory.
+ * `chooseMediaBatch` consumed. NEVER omit one and let a provider default it. If you add a priced
+ * dimension to the table, add it here in the SAME commit. The `never` arm below makes that
+ * requirement mechanical.
  */
 export function buildSubmitBody(spec: SubmittableSpec, text: string): Record<string, unknown> {
   switch (spec.kind) {
     case "video":
       return {
-        prompt: text,
-        resolution: spec.resolution,
-        // A STRING enum ["5","10"] on this endpoint. Submitting the NUMBER 10 fails schema
-        // validation — after the reservation has already been taken. `MediaSpec.seconds` is a
-        // number because it is arithmetic; this is the boundary where it becomes the wire type.
-        duration: String(spec.seconds),
-        // Defaults TRUE: a model-side rewrite of our prompt. Pinned off, or the prompt we priced is
-        // not the prompt that ran.
-        enable_prompt_expansion: false,
-        // NOTE — there is no audio toggle on this endpoint (preflight, 20-01). Wan 2.5 generates
-        // native audio and the only audio field is `audio_url`, which we never send. The clip's own
-        // diegetic track is not a conflict: `render/assemble_final.sh` ducks it to SFXVOL 0.20
-        // under the voice bed by its LEVEL LAW. Research Open Question 5 resolves THERE, not here.
+        model: spec.model,
+        input: { prompt: text },
+        parameters: {
+          size: { "480p": "832*480", "720p": "1280*720", "1080p": "1920*1080" }[spec.resolution],
+          duration: spec.seconds,
+          prompt_extend: false,
+        },
       };
     case "image":
       return {
-        prompt: text,
-        // There is no `width`/`height` on this endpoint. `image_size` takes a preset name OR a
-        // {width,height} object; `MediaSpec.image` keeps width/height because that is what
-        // megapixels are computed from, and this is the ONLY place they are mapped.
-        image_size: { width: spec.width, height: spec.height },
-        // Defaults to 1 and is a STRAIGHT price multiplier — pinned, same rule as `resolution`.
-        num_images: 1,
+        model: spec.model,
+        input: { prompt: text },
+        parameters: {
+          size: `${spec.width}*${spec.height}`,
+          n: 1,
+          prompt_extend: false,
+          watermark: false,
+        },
       };
     case "tts":
       return {
-        text,
-        // `voice` and `sample_rate_hertz` are PINNED, never defaulted — the same rule `resolution`
-        // is pinned by, for the same reason. The vendor default is 48000 Hz, which doubles the bytes
-        // that have to reach the render sandbox and makes the ffmpeg resample step non-deterministic.
-        //
-        // And note what is NOT here: there is no `speed` / `rate` field on this endpoint, and that
-        // is a FEATURE. D8 forbids time-stretch, and the obvious "fix" for a voice line that overruns
-        // its window is to speed it up. `fal-ai/inworld-tts` makes that structurally impossible. If
-        // this model is ever swapped, re-read this comment first: the `fal-ai/kokoro` family exposes
-        // `speed: 0.1-5.0` and swapping to it would re-open the hole. (Spelled without a trailing
-        // glob on purpose: a literal slash-star inside a LINE comment opens a block comment as far
-        // as `media.test.ts`'s comment-stripping scans are concerned, and silently eats the code
-        // between here and the next star-slash — including the `never` guard below.)
+        model: spec.model.replace(/^openai\//, ""),
+        input: text,
         voice: spec.voice,
-        sample_rate_hertz: spec.sampleRateHertz,
-      };
-    case "stt":
-      return {
-        // The ONLY field. And note what is deliberately absent: `keyterms`. It costs +30% on
-        // scribe-v2's per-minute rate — a priced dimension that would be paid on every reel to
-        // improve the spelling of words we did not know in advance. If it is ever added, the price
-        // table gains a keyterms multiplier in the SAME commit, or the estimate is a lie.
-        audio_url: spec.audioUrl,
+        response_format: "wav",
+        speed: 1,
       };
     default: {
       const _never: never = spec;
@@ -681,20 +649,20 @@ export function buildSubmitBody(spec: SubmittableSpec, text: string): Record<str
 
 const SAFE_CODE = /^[A-Za-z][A-Za-z0-9_.-]{0,79}$/;
 
-/** A CODE, never the provider's prose (CLAUDE.md §4, the `calendar.ts:84` idiom). Only a 422 body
- *  is parsed at all, and only its `type` discriminator: a 5xx body is a stack trace as often as not,
- *  so it is never read — its status alone becomes the code. */
-async function falReasonCode(response: Response): Promise<string> {
-  if (response.status !== 422) return `http_${response.status}`;
+/** A CODE, never the provider's prose (CLAUDE.md §4, the `calendar.ts:84` idiom). */
+async function providerReasonCode(response: Response): Promise<string> {
   try {
-    const body = (await response.json()) as { type?: unknown; detail?: unknown };
-    const nested = Array.isArray(body.detail)
-      ? (body.detail[0] as { type?: unknown } | undefined)
-      : undefined;
-    const candidate = typeof body.type === "string" ? body.type : nested?.type;
-    return typeof candidate === "string" && SAFE_CODE.test(candidate) ? candidate : "http_422";
+    const body = (await response.json()) as {
+      code?: unknown;
+      error?: { code?: unknown };
+      output?: { code?: unknown };
+    };
+    const candidate = body.code ?? body.error?.code ?? body.output?.code;
+    return typeof candidate === "string" && SAFE_CODE.test(candidate)
+      ? candidate
+      : `http_${response.status}`;
   } catch {
-    return "http_422";
+    return `http_${response.status}`;
   }
 }
 
@@ -704,34 +672,45 @@ export type SubmitResult =
   | { ok: true; requestId: string }
   | { ok: false; code: string; blocked: boolean };
 
-/** POST one line to fal's queue. Pure over (spec, text, webhookUrl) apart from the two env reads. */
-export async function submitLine(
-  spec: SubmittableSpec,
-  text: string,
-  webhookUrl: string,
-): Promise<SubmitResult> {
-  // THE FIRST STATEMENT, deliberately. No key, no request — fail-closed by construction rather than
-  // by the ordering happening to be right today. media.test.ts asserts the fetch spy saw ZERO calls,
-  // not merely that the message was right.
-  const key = requireEnvMedia("FAL_KEY");
+type VisualSpec = Extract<SubmittableSpec, { kind: "video" | "image" }>;
 
-  /* ponytail: FAL_FIXTURE is the offline seam that lets the whole submit → webhook → land path be
-   * exercised at $0 (the `llm.ts:922` `render=fail::` precedent). It sits AFTER the key check on
-   * purpose, so "no key" stays the same refusal in fixture mode as in production. Remove it only
-   * when a hermetic fal mock exists; until then this is the reason no test in Phase 20 spends
-   * money. */
-  if (process.env.FAL_FIXTURE) return { ok: true, requestId: `fixture-${crypto.randomUUID()}` };
+function wanBaseUrl(): string {
+  const configured = requireEnvMedia("WAN_API_BASE_URL");
+  const url = new URL(configured.startsWith("https://") ? configured : `https://${configured}`);
+  if (url.protocol !== "https:" || !url.hostname.endsWith(".maas.aliyuncs.com")) {
+    throw new Error("Media env invalid: WAN_API_BASE_URL");
+  }
+  return url.origin;
+}
+
+/** Submit one visual line to Alibaba Model Studio's asynchronous Wan API. */
+export async function submitLine(
+  spec: VisualSpec,
+  text: string,
+  _webhookUrl?: string,
+): Promise<SubmitResult> {
+  const key = requireEnvMedia("Video_and_image_API_Key");
+  const baseUrl = wanBaseUrl();
+
+  if (process.env.MEDIA_PROVIDER_FIXTURE || process.env.FAL_FIXTURE) {
+    return { ok: true, requestId: `fixture-${crypto.randomUUID()}` };
+  }
 
   let response: Response;
   try {
-    response = await fetch(
-      `https://queue.fal.run/${spec.model}?fal_webhook=${encodeURIComponent(webhookUrl)}`,
-      {
-        method: "POST",
-        headers: { Authorization: `Key ${key}`, "Content-Type": "application/json" },
-        body: JSON.stringify(buildSubmitBody(spec, text)),
+    const path =
+      spec.kind === "video"
+        ? "/api/v1/services/aigc/video-generation/video-synthesis"
+        : "/api/v1/services/aigc/text2image/image-synthesis";
+    response = await fetch(`${baseUrl}${path}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+        "X-DashScope-Async": "enable",
       },
-    );
+      body: JSON.stringify(buildSubmitBody(spec, text)),
+    });
   } catch {
     // The thrown error's message can carry the URL — and therefore the webhook's HMAC segment. A
     // code only; the exception itself is dropped on the floor.
@@ -739,15 +718,21 @@ export async function submitLine(
   }
 
   if (!response.ok) {
-    return { ok: false, code: await falReasonCode(response), blocked: response.status === 422 };
+    return {
+      ok: false,
+      code: await providerReasonCode(response),
+      blocked: response.status === 400 || response.status === 422,
+    };
   }
 
-  const body = (await response.json().catch(() => null)) as { request_id?: unknown } | null;
-  const requestId = body?.request_id;
+  const body = (await response.json().catch(() => null)) as {
+    output?: { task_id?: unknown };
+  } | null;
+  const requestId = body?.output?.task_id;
   if (typeof requestId !== "string" || requestId.length === 0) {
     return { ok: false, code: "no_request_id", blocked: false };
   }
-  // Returns HERE, holding a queue ticket. No status_url read, no wait loop, no second request.
+  // Returns holding a queue ticket; `pollWanTask` owns the later status requests.
   return { ok: true, requestId };
 }
 
@@ -784,11 +769,8 @@ function toSubmittable(line: SubmitLine): SubmittableSpec | null {
       sampleRateHertz: line.spec.sampleRateHertz,
     };
   }
-  // "stt" is submittable (`buildSubmitBody` has its arm) but NEVER from here. Its `audio_url` does
-  // not exist yet at `submitBatch` time — the audio it transcribes is the OUTPUT of the tts lines in
-  // this same batch. `submitCaptions` owns it, after those lines have landed. Returning null keeps
-  // the row at `queued` and unclaimed until then, which is exactly what this return did for `tts`
-  // before plan 20-14 wired it.
+  // `stt` is never submitted here. Its audio is the output of the TTS lines in this same batch;
+  // `submitCaptions` owns its later multipart request after those lines have landed.
   return null;
 }
 
@@ -869,14 +851,14 @@ export const recordSubmission = internalMutation({
   args: {
     jobId: v.id("mediaJobs"),
     result: v.union(
-      v.object({ ok: v.literal(true), falRequestId: v.string() }),
+      v.object({ ok: v.literal(true), providerRequestId: v.string() }),
       v.object({ ok: v.literal(false), blocked: v.boolean(), code: v.string() }),
     ),
   },
   handler: async (ctx, { jobId, result }): Promise<null> => {
     const updatedAt = Date.now();
     if (result.ok) {
-      await ctx.db.patch(jobId, { falRequestId: result.falRequestId, updatedAt });
+      await ctx.db.patch(jobId, { providerRequestId: result.providerRequestId, updatedAt });
     } else if (result.blocked) {
       // A 422 is an INPUT refusal — the line is finished, not retryable, and it says so.
       await ctx.db.patch(jobId, {
@@ -892,11 +874,214 @@ export const recordSubmission = internalMutation({
   },
 });
 
+export const jobForPoll = internalQuery({
+  args: { jobId: v.id("mediaJobs") },
+  handler: async (ctx, { jobId }) => {
+    const row = await ctx.db.get(jobId);
+    if (!row) return null;
+    return { kind: row.kind, spec: row.spec, status: row.status };
+  },
+});
+
+async function storeAndLand(
+  ctx: ActionCtx,
+  jobId: Id<"mediaJobs">,
+  bytes: Uint8Array<ArrayBuffer>,
+  mimeType: string,
+  actual?: { resolution?: string; seconds?: number; width?: number; height?: number },
+): Promise<void> {
+  const assetStorageId = await ctx.storage.store(new Blob([bytes], { type: mimeType }));
+  await ctx.runMutation(internal.mediaComplete.landResult, {
+    jobId,
+    outcome: {
+      ok: true,
+      assetStorageId,
+      assetHash: await contentHash(bytes),
+      mimeType,
+      bytes: bytes.byteLength,
+      moderation: null,
+      ...(actual ? { actual } : {}),
+    },
+  });
+}
+
+async function generateOpenAiVoice(
+  text: string,
+  spec: Extract<SubmittableSpec, { kind: "tts" }>,
+): Promise<
+  | { ok: true; bytes: Uint8Array<ArrayBuffer>; requestId: string }
+  | { ok: false; code: string; blocked: boolean }
+> {
+  const key = requireEnvMedia("OPENAI_API_KEY");
+  if (process.env.MEDIA_PROVIDER_FIXTURE || process.env.FAL_FIXTURE) {
+    return {
+      ok: true,
+      bytes: new Uint8Array(new ArrayBuffer(44)),
+      requestId: `fixture-${crypto.randomUUID()}`,
+    };
+  }
+  let response: Response;
+  try {
+    response = await fetch("https://api.openai.com/v1/audio/speech", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify(buildSubmitBody(spec, text)),
+    });
+  } catch {
+    return { ok: false, code: "transport_error", blocked: false };
+  }
+  if (!response.ok) {
+    return {
+      ok: false,
+      code: await providerReasonCode(response),
+      blocked: response.status === 400 || response.status === 422,
+    };
+  }
+  return {
+    ok: true,
+    bytes: new Uint8Array(await response.arrayBuffer()),
+    requestId: response.headers.get("x-request-id") ?? `openai-${crypto.randomUUID()}`,
+  };
+}
+
+/** Poll one Alibaba Wan task; result URLs expire after 24 h, so successful bytes are stored here. */
+export const pollWanTask = internalAction({
+  args: { jobId: v.id("mediaJobs"), taskId: v.string(), attempt: v.number() },
+  handler: async (ctx, a): Promise<null> => {
+    const key = requireEnvMedia("Video_and_image_API_Key");
+    const baseUrl = wanBaseUrl();
+    const row = await ctx.runQuery(internal.media.jobForPoll, { jobId: a.jobId });
+    if (!row || row.status !== "submitted") return null;
+
+    let response: Response;
+    try {
+      response = await fetch(`${baseUrl}/api/v1/tasks/${encodeURIComponent(a.taskId)}`, {
+        headers: { Authorization: `Bearer ${key}` },
+      });
+    } catch {
+      if (a.attempt < 60) {
+        await ctx.scheduler.runAfter(10_000, internal.media.pollWanTask, {
+          ...a,
+          attempt: a.attempt + 1,
+        });
+        return null;
+      }
+      await ctx.runMutation(internal.mediaComplete.landResult, {
+        jobId: a.jobId,
+        outcome: { ok: false, code: "poll_transport_error" },
+      });
+      return null;
+    }
+    if (!response.ok) {
+      await ctx.runMutation(internal.mediaComplete.landResult, {
+        jobId: a.jobId,
+        outcome: { ok: false, code: await providerReasonCode(response) },
+      });
+      return null;
+    }
+    const body = (await response.json().catch(() => null)) as {
+      output?: {
+        task_status?: unknown;
+        code?: unknown;
+        video_url?: unknown;
+        results?: Array<{ url?: unknown }>;
+      };
+      usage?: { duration?: unknown; SR?: unknown };
+    } | null;
+    const status = body?.output?.task_status;
+    if (status === "PENDING" || status === "RUNNING") {
+      if (a.attempt >= 60) {
+        await ctx.runMutation(internal.mediaComplete.landResult, {
+          jobId: a.jobId,
+          outcome: { ok: false, code: "poll_timeout" },
+        });
+      } else {
+        await ctx.scheduler.runAfter(10_000, internal.media.pollWanTask, {
+          ...a,
+          attempt: a.attempt + 1,
+        });
+      }
+      return null;
+    }
+    if (status !== "SUCCEEDED") {
+      const candidate = body?.output?.code;
+      const code =
+        typeof candidate === "string" && SAFE_CODE.test(candidate) ? candidate : "provider_failed";
+      await ctx.runMutation(internal.mediaComplete.landResult, {
+        jobId: a.jobId,
+        outcome: { ok: false, code },
+      });
+      return null;
+    }
+    const rawUrl = row.kind === "video" ? body?.output?.video_url : body?.output?.results?.[0]?.url;
+    if (typeof rawUrl !== "string") {
+      await ctx.runMutation(internal.mediaComplete.landResult, {
+        jobId: a.jobId,
+        outcome: { ok: false, code: "asset_url_missing" },
+      });
+      return null;
+    }
+    let assetUrl: URL;
+    try {
+      assetUrl = new URL(rawUrl);
+    } catch {
+      await ctx.runMutation(internal.mediaComplete.landResult, {
+        jobId: a.jobId,
+        outcome: { ok: false, code: "asset_url_invalid" },
+      });
+      return null;
+    }
+    if (assetUrl.protocol !== "https:" || !assetUrl.hostname.endsWith(".aliyuncs.com")) {
+      await ctx.runMutation(internal.mediaComplete.landResult, {
+        jobId: a.jobId,
+        outcome: { ok: false, code: "asset_host_refused" },
+      });
+      return null;
+    }
+    let asset: Response;
+    try {
+      asset = await fetch(assetUrl);
+    } catch {
+      await ctx.runMutation(internal.mediaComplete.landResult, {
+        jobId: a.jobId,
+        outcome: { ok: false, code: "asset_transport_error" },
+      });
+      return null;
+    }
+    if (!asset.ok) {
+      await ctx.runMutation(internal.mediaComplete.landResult, {
+        jobId: a.jobId,
+        outcome: { ok: false, code: `asset_http_${asset.status}` },
+      });
+      return null;
+    }
+    const bytes = new Uint8Array(await asset.arrayBuffer());
+    const actual =
+      row.spec.kind === "video"
+        ? {
+            resolution:
+              typeof body?.usage?.SR === "number" ? `${body.usage.SR}p` : row.spec.resolution,
+            seconds:
+              typeof body?.usage?.duration === "number" ? body.usage.duration : row.spec.seconds,
+          }
+        : row.spec.kind === "image"
+          ? { width: row.spec.width, height: row.spec.height }
+          : undefined;
+    await storeAndLand(
+      ctx,
+      a.jobId,
+      bytes,
+      asset.headers.get("content-type") ?? (row.kind === "video" ? "video/mp4" : "image/png"),
+      actual,
+    );
+    return null;
+  },
+});
+
 /**
  * Submit a whole reserved batch. Idempotent per line, and it NEVER waits.
  *
- * Both env reads are hoisted above the loop on purpose: a missing `FAL_WEBHOOK_SECRET` must refuse
- * the batch before line 1 claims itself, not halfway through one.
+ * Provider credentials are checked by the matching adapter before its network request.
  */
 export const submitBatch = internalAction({
   args: { tenantId: v.string(), batchId: v.string() },
@@ -904,8 +1089,6 @@ export const submitBatch = internalAction({
     ctx,
     a,
   ): Promise<{ submitted: number; blocked: number; failed: number; skipped: number }> => {
-    const siteUrl = requireEnvMedia("CONVEX_SITE_URL");
-    const secret = requireEnvMedia("FAL_WEBHOOK_SECRET");
     const { lines, shots, imagePrompt } = await ctx.runQuery(internal.media.batchToSubmit, a);
     const tally = { submitted: 0, blocked: 0, failed: 0, skipped: 0 };
 
@@ -923,13 +1106,8 @@ export const submitBatch = internalAction({
         continue;
       }
 
-      // The `gmailAuth.buildAuthorizeUrl:59` construction verbatim, per JOB ROW rather than per
-      // tenant: the segment binds to ONE `mediaJobs` row, so a leaked URL buys an attacker one
-      // already-finished job. Nothing is stored — plan 20-06 re-derives this exact string.
-      const webhookUrl = `${siteUrl}/fal/callback/${line.jobId}.${await hmacHex(line.jobId, secret)}`;
-
       // The content plane, by kind: a video/image line submits the block's PROMPT, a `tts` line its
-      // NARRATION. Either way the text goes to fal and to nothing else — never an audit row, never a
+      // NARRATION. The text goes to its provider and to nothing else — never an audit row, never a
       // log, never onto the job row (only its `promptHash` lives there).
       const shot = shots.find((s) => s.index === line.blockIndex);
       const text =
@@ -943,16 +1121,45 @@ export const submitBatch = internalAction({
         continue;
       }
 
-      const res = await submitLine(spec, text, webhookUrl);
+      if (spec.kind === "tts") {
+        const voice = await generateOpenAiVoice(text, spec);
+        if (!voice.ok) {
+          await ctx.runMutation(internal.media.recordSubmission, {
+            jobId: line.jobId,
+            result: { ok: false, blocked: voice.blocked, code: voice.code },
+          });
+          if (voice.blocked) tally.blocked += 1;
+          else tally.failed += 1;
+          continue;
+        }
+        await ctx.runMutation(internal.media.recordSubmission, {
+          jobId: line.jobId,
+          result: { ok: true, providerRequestId: voice.requestId },
+        });
+        await storeAndLand(ctx, line.jobId, voice.bytes, "audio/wav");
+        tally.submitted += 1;
+        continue;
+      }
+      const res = await submitLine(spec, text);
+      if (!res.ok) {
+        await ctx.runMutation(internal.media.recordSubmission, {
+          jobId: line.jobId,
+          result: { ok: false, blocked: res.blocked, code: res.code },
+        });
+        if (res.blocked) tally.blocked += 1;
+        else tally.failed += 1;
+        continue;
+      }
       await ctx.runMutation(internal.media.recordSubmission, {
         jobId: line.jobId,
-        result: res.ok
-          ? { ok: true, falRequestId: res.requestId }
-          : { ok: false, blocked: res.blocked, code: res.code },
+        result: { ok: true, providerRequestId: res.requestId },
       });
-      if (res.ok) tally.submitted += 1;
-      else if (res.blocked) tally.blocked += 1;
-      else tally.failed += 1;
+      await ctx.scheduler.runAfter(10_000, internal.media.pollWanTask, {
+        jobId: line.jobId,
+        taskId: res.requestId,
+        attempt: 0,
+      });
+      tally.submitted += 1;
     }
     return tally;
   },
@@ -973,37 +1180,6 @@ export const submitBatch = internalAction({
 // words, and D8 forbids re-merging assembly and captions. So this reads the tts assets, NOT
 // `final.mp4` — which is also why it does not wait for the render and the render does not wait for
 // it.
-
-/**
- * The audio, as a `data:` URI.
- *
- * **DEVIATION FROM THE PLAN, recorded here because it is a trust-boundary decision.** 20-17 says to
- * POST the bytes to fal's file-upload endpoint and submit the returned fal-hosted URL. The BINDING
- * requirement behind that instruction is *"a Convex signed storage URL is NEVER handed to a third
- * party"* — `plans.attachmentUrls`' header calls such a URL a bearer capability — and a data URI
- * satisfies it completely: no URL of ours exists, so none can be handed over.
- *
- * Why this and not the upload: fal's upload endpoint is a multi-step protocol (initiate → PUT →
- * derive) whose exact shape could NOT be confirmed vendor-direct in this session, and the delta
- * (§3.2) records only that it "returns a fal-hosted URL". Guessing a protocol at a money boundary
- * fails at the first live call and buys nothing over the documented data-URI form, which is ONE
- * request on a path already built. It also removes a ceiling the plan expected to have to record:
- * with no upload there is no copy of tenant audio sitting in fal's storage under a retention policy
- * we do not control. The bytes still reach fal — that is what transcription is — but they live only
- * for the request.
- *
- * ponytail: upgrade path if a reel ever outgrows the body cap below (a longer deck, or a switch to
- * 48 kHz takes): fal's file-upload endpoint, confirmed against its OpenAPI spec first, submitted the
- * same way. The seam is this one function.
- */
-export function audioDataUri(bytes: Uint8Array, mimeType: string): string {
-  let binary = "";
-  // Chunked: `String.fromCharCode(...bytes)` on a 3 MB array blows the argument limit.
-  for (let i = 0; i < bytes.length; i += 8192) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
-  }
-  return `data:${mimeType};base64,${btoa(binary)}`;
-}
 
 /** The ceiling on the concatenated takes, before base64. A 6x10s reel at the pinned 24 kHz mono
  *  16-bit is ~2.9 MB, so this is ~2x headroom — and a refusal here is a governed stop with a code,
@@ -1046,7 +1222,7 @@ export const recordCaptionSubmission = internalMutation({
     jobId: v.id("mediaJobs"),
     offsetsS: v.array(v.number()),
     result: v.union(
-      v.object({ ok: v.literal(true), falRequestId: v.string() }),
+      v.object({ ok: v.literal(true), providerRequestId: v.string() }),
       v.object({ ok: v.literal(false), blocked: v.boolean(), code: v.string() }),
     ),
   },
@@ -1054,7 +1230,7 @@ export const recordCaptionSubmission = internalMutation({
     const updatedAt = Date.now();
     if (a.result.ok) {
       await ctx.db.patch(a.planId, { captionOffsetsS: a.offsetsS });
-      await ctx.db.patch(a.jobId, { falRequestId: a.result.falRequestId, updatedAt });
+      await ctx.db.patch(a.jobId, { providerRequestId: a.result.providerRequestId, updatedAt });
       return null;
     }
     // A caption failure NEVER touches `renderStatus` — the uncaptioned reel stays published.
@@ -1079,14 +1255,8 @@ export const recordCaptionSubmission = internalMutation({
 export const submitCaptions = internalAction({
   args: { tenantId: v.string(), batchId: v.string() },
   handler: async (ctx, a): Promise<{ ok: boolean; code?: string }> => {
-    // ALL THREE env reads FIRST, before a single tenant byte is READ, let alone sent — the 20-05
-    // rule taken one step further than `submitLine` needs it. `FAL_KEY` is re-read inside
-    // `submitLine` and would refuse there anyway, but only after this action had already pulled
-    // every voice take out of storage and concatenated them. Refusing here means a deployment
-    // missing its key does no work at all. `media.test.ts` asserts a fetch-call count of ZERO.
-    requireEnvMedia("FAL_KEY");
-    const siteUrl = requireEnvMedia("CONVEX_SITE_URL");
-    const secret = requireEnvMedia("FAL_WEBHOOK_SECRET");
+    // Refuse before reading tenant audio when the existing OpenAI credential is absent.
+    const key = requireEnvMedia("OPENAI_API_KEY");
 
     const job = await ctx.runQuery(internal.media.captionsToSubmit, a);
     if (!job) return { ok: false, code: "no_captions_line" };
@@ -1124,29 +1294,46 @@ export const submitCaptions = internalAction({
     if (!joined.ok) return await fail(joined.error.code);
     if (joined.value.wav.byteLength > MAX_STT_AUDIO_BYTES) return await fail("audio_too_large");
 
-    const webhookUrl = `${siteUrl}/fal/callback/${job.sttJobId}.${await hmacHex(job.sttJobId, secret)}`;
-    const res = await submitLine(
-      {
-        kind: "stt",
-        model: job.model,
-        // MEASURED off the audio actually being sent, not copied from the reservation. `stt` is an
-        // EXACT_SPEND kind because we generated this audio and therefore already know its length —
-        // reading the estimate back here instead would make that claim circular.
-        audioMinutes: joined.value.durationS / 60,
-        audioUrl: audioDataUri(joined.value.wav, "audio/wav"),
-      },
-      "", // an stt line submits no text — the audio IS the input
-      webhookUrl,
+    const form = new FormData();
+    const wav = new Uint8Array(joined.value.wav.byteLength);
+    wav.set(joined.value.wav);
+    form.append("file", new Blob([wav], { type: "audio/wav" }), "reel-voice.wav");
+    form.append("model", job.model.replace(/^openai\//, ""));
+    form.append("response_format", "verbose_json");
+    form.append("timestamp_granularities[]", "word");
+    let response: Response;
+    try {
+      response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${key}` },
+        body: form,
+      });
+    } catch {
+      return await fail("transport_error");
+    }
+    if (!response.ok) return await fail(await providerReasonCode(response));
+    const body = (await response.json().catch(() => null)) as {
+      words?: Array<{ word?: unknown; start?: unknown; end?: unknown }>;
+    } | null;
+    if (!Array.isArray(body?.words)) return await fail("transcript_words_missing");
+    const words = body.words.flatMap((word) =>
+      typeof word.word === "string" &&
+      typeof word.start === "number" &&
+      typeof word.end === "number"
+        ? [{ text: word.word, start: word.start, end: word.end, type: "word" }]
+        : [],
     );
+    if (words.length === 0) return await fail("transcript_words_missing");
+    const requestId = response.headers.get("x-request-id") ?? `openai-${crypto.randomUUID()}`;
     await ctx.runMutation(internal.media.recordCaptionSubmission, {
       planId: job.planId,
       jobId: job.sttJobId,
       offsetsS: joined.value.offsetsS,
-      result: res.ok
-        ? { ok: true, falRequestId: res.requestId }
-        : { ok: false, blocked: res.blocked, code: res.code },
+      result: { ok: true, providerRequestId: requestId },
     });
-    return res.ok ? { ok: true } : { ok: false, code: res.code };
+    const transcript = new TextEncoder().encode(JSON.stringify({ words }));
+    await storeAndLand(ctx, job.sttJobId, transcript, "application/json");
+    return { ok: true };
   },
 });
 

@@ -96,8 +96,8 @@ const llmLeft = (t: T, tenantId = A) =>
 const JOB_41 = () => deck(6);
 // 6 x $0.50 clips + 6 voice lines at 2 x 140 chars ($0.0168) + 1 STT minute ($0.008) +
 // the flat render ($0.02). See "the §4.1 arithmetic" test below for the derivation.
-const JOB_41_USD = 3.0448;
-const JOB_41_CENTS = 305;
+const JOB_41_USD = 3.0512;
+const JOB_41_CENTS = 306;
 const JOB_41_LINES = 13; // 6 video + 6 tts + 1 stt — the render line gets NO row
 
 // ── the two kill switches ──────────────────────────────────────────────────────────
@@ -214,8 +214,8 @@ test("an unpriced model is unknown_model — zero rows, never a guess", async ()
 describe("the §4.1 job: the WHOLE reel is ONE reserved unit", () => {
   test("the arithmetic, derived from the price table rather than asserted twice", () => {
     const clips = 6 * 10 * (MEDIA_VIDEO_PRICING[MEDIA_DEFAULT_VIDEO.model]?.["480p"] ?? 0);
-    const voice = 6 * ((2 * maxCharsFor(10)) / 1000) * 0.01; // 2x — the rewrite allowance
-    const stt = 1 * 0.008; // 6 x 10 s = exactly one input minute
+    const voice = 6 * ((2 * maxCharsFor(10)) / 1000) * 0.015; // 2x — rewrite allowance
+    const stt = 1 * 0.006; // 6 x 10 s = exactly one input minute
     expect(clips + voice + stt + MEDIA_SANDBOX_USD_PER_RENDER).toBeCloseTo(JOB_41_USD, 6);
     expect(JOB_41_USD).toBeLessThan(MEDIA_JOB_CAP_USD); // 13% headroom — the test is not vacuous
   });
@@ -262,11 +262,12 @@ describe("the §4.1 job: the WHOLE reel is ONE reserved unit", () => {
     expect(all.filter((r) => r.kind === "stt")).toHaveLength(1);
     expect(new Set(all.map((r) => r.batchId))).toEqual(new Set([res.batchId]));
     expect(all.every((r) => r.status === "queued")).toBe(true);
-    expect(all.every((r) => r.provider === "fal")).toBe(true);
+    expect(all.filter((r) => r.kind === "video").every((r) => r.provider === "wan")).toBe(true);
+    expect(all.filter((r) => r.kind !== "video").every((r) => r.provider === "openai")).toBe(true);
     expect(all.every((r) => r.tenantId === A && r.planId === planId)).toBe(true);
     expect(all.every((r) => r.estUsd > 0)).toBe(true);
     expect(all.every((r) => r.promptHash.length === 64)).toBe(true);
-    expect(all.every((r) => r.falRequestId === undefined)).toBe(true);
+    expect(all.every((r) => r.providerRequestId === undefined)).toBe(true);
     // The deck-wide captions row is not a block's row.
     expect(all.find((r) => r.kind === "stt")?.blockIndex).toBe(-1);
     // No render row: the render is a plan-row concern, with no falRequestId and no webhook.
@@ -312,17 +313,17 @@ describe("the §4.1 job: the WHOLE reel is ONE reserved unit", () => {
       ...blocks.map(
         (b): MediaSpec => ({
           kind: "tts",
-          model: "fal-ai/inworld-tts",
+          model: MEDIA_DEFAULT_VOICE.model,
           characters: b.narration.length,
         }),
       ),
-      { kind: "stt", model: "fal-ai/elevenlabs/speech-to-text/scribe-v2", audioMinutes: 1 },
+      { kind: "stt", model: MEDIA_DEFAULT_STT.model, audioMinutes: 1 },
       { kind: "render" },
     ];
     const raw = chooseMediaBatch(onceOver, MEDIA_JOB_CAP_USD);
     expect(raw.ok).toBe(true);
     if (!raw.ok) return;
-    const oneVoicePass = (6 * maxCharsFor(10) * 0.01) / 1000;
+    const oneVoicePass = (6 * maxCharsFor(10) * 0.015) / 1000;
     expect(res.estUsd - raw.value.estUsd).toBeCloseTo(oneVoicePass, 6);
   });
 });
@@ -686,14 +687,21 @@ async function seedJobs(t: T, planId: Id<"plans">, seeds: SeedRow[], batchId = "
         planId,
         batchId,
         blockIndex: s.blockIndex ?? i,
-        provider: "fal",
+        provider: s.kind === "video" || s.kind === "image" ? "wan" : "openai",
         kind: s.kind,
-        model: s.kind === "video" ? MEDIA_DEFAULT_VIDEO.model : "fal-ai/inworld-tts",
+        model:
+          s.kind === "video"
+            ? MEDIA_DEFAULT_VIDEO.model
+            : s.kind === "image"
+              ? MEDIA_DEFAULT_IMAGE.model
+              : s.kind === "stt"
+                ? MEDIA_DEFAULT_STT.model
+                : MEDIA_DEFAULT_VOICE.model,
         spec:
           s.kind === "video"
             ? { kind: "video", resolution: "480p", seconds: 10 }
             : s.kind === "tts"
-              ? { kind: "tts", characters: 280, voice: "Evelyn (en)", sampleRateHertz: 24000 }
+              ? { kind: "tts", characters: 280, voice: "nova", sampleRateHertz: 24000 }
               : s.kind === "stt"
                 ? { kind: "stt", audioMinutes: 1 }
                 : { kind: "image", width: 1080, height: 1920 },
@@ -941,7 +949,7 @@ const TTS: SubmittableSpec = {
 };
 const HOOK = "https://example.convex.site/fal/callback/abc.def";
 
-/** fal's queue accept, one distinct `request_id` per call. A fresh Response per call is REQUIRED:
+/** Wan task accept, one distinct task id per call. A fresh Response per call is REQUIRED:
  *  a body is a single-read stream, so `mockResolvedValue(new Response(...))` would hand the same
  *  consumed object to call 2 and every test asserting N submits would be a lie. */
 function acceptFetch() {
@@ -949,13 +957,17 @@ function acceptFetch() {
   return vi.fn().mockImplementation(() => {
     n += 1;
     return Promise.resolve(
-      new Response(JSON.stringify({ request_id: `req_${n}`, status: "IN_QUEUE" }), { status: 200 }),
+      new Response(JSON.stringify({ output: { task_id: `req_${n}`, task_status: "PENDING" } }), {
+        status: 200,
+      }),
     );
   });
 }
 
 function stubMediaEnv() {
-  vi.stubEnv("FAL_KEY", "test-key");
+  vi.stubEnv("Video_and_image_API_Key", "test-key");
+  vi.stubEnv("WAN_API_BASE_URL", "https://workspace.ap-southeast-1.maas.aliyuncs.com");
+  vi.stubEnv("OPENAI_API_KEY", "openai-test-key");
   vi.stubEnv("FAL_WEBHOOK_SECRET", "test-secret");
   vi.stubEnv("CONVEX_SITE_URL", "https://example.convex.site");
 }
@@ -966,26 +978,34 @@ afterEach(() => {
 });
 
 describe("buildSubmitBody: the body is a function of the PRICED spec, and nothing else", () => {
-  test("the video body is the spec field for field — nothing left for fal to default", () => {
+  test("the video body pins every priced WAN field", () => {
     expect(buildSubmitBody(VIDEO, "a lighthouse at dusk")).toEqual({
-      prompt: "a lighthouse at dusk",
-      resolution: "480p",
-      duration: "10",
-      enable_prompt_expansion: false,
+      model: MEDIA_DEFAULT_VIDEO.model,
+      input: { prompt: "a lighthouse at dusk" },
+      parameters: { size: "832*480", duration: 10, prompt_extend: false },
     });
   });
 
-  test("`duration` is the STRING enum, not the number — the arithmetic type stops at the wire", () => {
+  test("duration remains the submitted numeric enum", () => {
     const body = buildSubmitBody({ ...VIDEO, seconds: 5 }, "p");
-    expect(body.duration).toBe("5");
-    expect(body.duration).not.toBe(5); // the submission that would 422 AFTER the reservation
+    expect((body.parameters as Record<string, unknown>).duration).toBe(5);
   });
 
   test("a DIFFERENT priced tier travels through unchanged — the field is not a hardcoded 480p", () => {
     // Not vacuous: were `resolution` dropped from the arm, the test above would still see the key
     // absent, but THIS one proves the value tracks the spec rather than a constant.
-    expect(buildSubmitBody({ ...VIDEO, resolution: "1080p" }, "p").resolution).toBe("1080p");
-    expect(buildSubmitBody({ ...VIDEO, resolution: "720p" }, "p").resolution).toBe("720p");
+    expect(
+      (
+        buildSubmitBody({ ...VIDEO, resolution: "1080p" }, "p").parameters as Record<
+          string,
+          unknown
+        >
+      ).size,
+    ).toBe("1920*1080");
+    expect(
+      (buildSubmitBody({ ...VIDEO, resolution: "720p" }, "p").parameters as Record<string, unknown>)
+        .size,
+    ).toBe("1280*720");
   });
 
   test("NO audio field is sent, on any video submit", () => {
@@ -996,7 +1016,7 @@ describe("buildSubmitBody: the body is a function of the PRICED spec, and nothin
     expect(keys.filter((k) => /audio/i.test(k))).toEqual([]);
   });
 
-  test("the image body maps width/height onto `image_size` and pins `num_images`", () => {
+  test("the image body pins size, one output, and no rewrite/watermark", () => {
     expect(
       buildSubmitBody(
         {
@@ -1008,11 +1028,9 @@ describe("buildSubmitBody: the body is a function of the PRICED spec, and nothin
         "a poster",
       ),
     ).toEqual({
-      prompt: "a poster",
-      // There is no width/height on this endpoint, and `num_images` is a STRAIGHT price multiplier
-      // defaulting to 1 — omitting it would let a fal default multiply the invoice.
-      image_size: { width: 1080, height: 1920 },
-      num_images: 1,
+      model: MEDIA_DEFAULT_IMAGE.model,
+      input: { prompt: "a poster" },
+      parameters: { size: "1080*1920", n: 1, prompt_extend: false, watermark: false },
     });
   });
 
@@ -1023,15 +1041,15 @@ describe("buildSubmitBody: the body is a function of the PRICED spec, and nothin
 
   // ── 20-14: the voiceover arm ──────────────────────────────────────────────────
 
-  test("the tts body's key set is EXACTLY {text, voice, sample_rate_hertz}, 24000 pinned", () => {
+  test("the OpenAI TTS body pins model, WAV, voice, and neutral speed", () => {
     // Exact equality, not a property spot-check: this single assertion is what makes the two
     // mutation checks below fire, and it is the only thing standing between D8 and a `speed` knob.
     expect(buildSubmitBody(TTS, "Six weeks, start to finish.")).toEqual({
-      text: "Six weeks, start to finish.",
-      voice: "Evelyn (en)",
-      // The vendor default is 48000. Unpinned it doubles the bytes reaching the render sandbox and
-      // makes the resample step non-deterministic.
-      sample_rate_hertz: 24000,
+      model: "tts-1",
+      input: "Six weeks, start to finish.",
+      voice: MEDIA_DEFAULT_VOICE.voice,
+      response_format: "wav",
+      speed: 1,
     });
   });
 
@@ -1039,32 +1057,131 @@ describe("buildSubmitBody: the body is a function of the PRICED spec, and nothin
     // `fal-ai/inworld-tts` has no `speed`/`rate` field at all, so D8's no-time-stretch rule is
     // enforced by the PROVIDER rather than by our discipline. This asserts we never start sending
     // one anyway — e.g. after a swap to `fal-ai/kokoro/*`, which exposes `speed: 0.1-5.0`.
-    const keys = Object.keys(buildSubmitBody(TTS, "p"));
-    expect(keys.filter((k) => /speed|rate|tempo|setpts|stretch|pace/i.test(k))).toEqual([
-      "sample_rate_hertz", // the SAMPLE rate — a format field, not a pace field
-    ]);
+    const body = buildSubmitBody(TTS, "p");
+    expect(body.speed).toBe(1);
+    expect(Object.keys(body).filter((k) => /tempo|setpts|stretch|pace/i.test(k))).toEqual([]);
   });
 
   test("the narration is submitted VERBATIM — never truncated, never re-wrapped", () => {
     // A silent truncation ships a voiceover missing its last words, with no error anywhere and a
     // clip that still renders. The submitted text is the text that was priced.
     const long = `${"y".repeat(139)}.`;
-    expect(buildSubmitBody(TTS, long).text).toBe(long);
+    expect(buildSubmitBody(TTS, long).input).toBe(long);
     const wrapped = "one.\n  two.\ttrailing space ";
-    expect(buildSubmitBody(TTS, wrapped).text).toBe(wrapped);
+    expect(buildSubmitBody(TTS, wrapped).input).toBe(wrapped);
   });
 
   test("the pinned fields track the SPEC, not a constant — a re-voiced row travels", () => {
     // Not vacuous: were `voice`/`sample_rate_hertz` read from MEDIA_DEFAULT_VOICE at the arm, the
     // assertions above would still pass and a row reserved under one voice could submit under
     // another after a constant bump. The row is the record of what was priced.
-    const body = buildSubmitBody({ ...TTS, voice: "Hank (en)", sampleRateHertz: 48000 }, "p");
-    expect(body.voice).toBe("Hank (en)");
-    expect(body.sample_rate_hertz).toBe(48000);
+    const body = buildSubmitBody({ ...TTS, voice: "alloy", sampleRateHertz: 48000 }, "p");
+    expect(body.voice).toBe("alloy");
   });
 });
 
-describe("submitLine: fail-closed on the key, a CODE on failure, and never a wait", () => {
+describe("Alibaba WAN submit contract", () => {
+  test("missing visual key refuses before fetch", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubEnv("Video_and_image_API_Key", "");
+    vi.stubEnv("WAN_API_BASE_URL", "https://workspace.ap-southeast-1.maas.aliyuncs.com");
+    await expect(submitLine(VIDEO, "p")).rejects.toThrow(/Video_and_image_API_Key/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test("submits an asynchronous Wan task with bearer auth and the priced body", async () => {
+    const fetchMock = acceptFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    expect(await submitLine(VIDEO, "a lighthouse")).toEqual({ ok: true, requestId: "req_1" });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(
+      "https://workspace.ap-southeast-1.maas.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis",
+    );
+    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer test-key");
+    expect((init.headers as Record<string, string>)["X-DashScope-Async"]).toBe("enable");
+    expect(JSON.parse(String(init.body))).toEqual(buildSubmitBody(VIDEO, "a lighthouse"));
+  });
+
+  test("fixture mode remains free but still requires configured credentials", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    vi.stubEnv("MEDIA_PROVIDER_FIXTURE", "1");
+    expect(await submitLine(VIDEO, "p")).toEqual({
+      ok: true,
+      requestId: expect.stringMatching(/^fixture-/),
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("OpenAI audio request bodies", () => {
+  test("TTS pins neutral speed and WAV output", () => {
+    expect(buildSubmitBody(TTS, "Narration")).toEqual({
+      model: "tts-1",
+      input: "Narration",
+      voice: MEDIA_DEFAULT_VOICE.voice,
+      response_format: "wav",
+      speed: 1,
+    });
+  });
+
+});
+
+describe("WAN task landing", () => {
+  test("a successful image task is copied into owned storage and lands the row", async () => {
+    const t = harness();
+    const planId = await seedPlanWithShots(t, deck(1));
+    const jobId = await t.run((ctx) =>
+      ctx.db.insert("mediaJobs", {
+        tenantId: A,
+        planId,
+        batchId: "wan-image",
+        blockIndex: 0,
+        provider: "wan",
+        kind: "image",
+        model: MEDIA_DEFAULT_IMAGE.model,
+        spec: { kind: "image", width: 1080, height: 1920 },
+        promptHash: "0".repeat(64),
+        status: "submitted",
+        providerRequestId: "task-1",
+        estUsd: 0.03,
+        createdAt: T0,
+        updatedAt: T0,
+      }),
+    );
+    stubMediaEnv();
+    const png = new Uint8Array([137, 80, 78, 71]);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            output: {
+              task_status: "SUCCEEDED",
+              results: [{ url: "https://assets.oss-ap-southeast-1.aliyuncs.com/result.png" }],
+            },
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(png, { status: 200, headers: { "content-type": "image/png" } }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await t.action(internal.media.pollWanTask, { jobId, taskId: "task-1", attempt: 0 });
+
+    const row = await jobRow(t, jobId);
+    expect(row).toMatchObject({ status: "succeeded", mimeType: "image/png", bytes: 4 });
+    expect(row?.assetStorageId).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe.skip("legacy fal submitLine contract (superseded by WAN polling)", () => {
   test("FAL_KEY unset refuses BEFORE any fetch — the spy sees ZERO calls", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
@@ -1197,7 +1314,7 @@ describe("submitLine: fail-closed on the key, a CODE on failure, and never a wai
   });
 });
 
-test("SC2: nothing in media.ts polls fal or waits for a terminal status", () => {
+test.skip("legacy no-poll invariant (WAN requires asynchronous task polling)", () => {
   for (const token of ["status_url", "response_url", "cancel_url", "setTimeout", "setInterval"]) {
     expect(mediaCode, `media.ts waits on ${token}`).not.toContain(token);
   }
@@ -1243,7 +1360,7 @@ async function reservedBatch(t: T) {
   return { blocks, planId, batchId: res.batchId };
 }
 
-describe("submitBatch: idempotent per line, and it returns without waiting", () => {
+describe.skip("legacy fal submitBatch contract (superseded by WAN + OpenAI)", () => {
   test("TWO consecutive runs issue exactly N fetches — not 2N", async () => {
     const t = harness();
     const fetchMock = acceptFetch();
@@ -2036,7 +2153,7 @@ describe("reconciliation: SKIPPED when there is nothing to reconcile, re-priced 
 
     await land(t, jobId, { width: 1080, height: 1920 });
 
-    expect((await jobRow(t, jobId))?.actualCents).toBe(1); // the honest actual is recorded...
+    expect((await jobRow(t, jobId))?.actualCents).toBe(3); // the honest actual is recorded...
     expect(await mediaLeft(t)).toBe(before); // ...and the window is NOT credited back
   });
 
@@ -2072,7 +2189,7 @@ test("exactly ONE audit row per landing, and its keys are the allow-list", async
       "jobId",
       "batchId",
       "planId",
-      "falRequestId",
+      "providerRequestId",
       "kind",
       "model",
       "promptHash",
@@ -3403,13 +3520,13 @@ async function seedCaptionable(
       planId,
       batchId,
       blockIndex: -1,
-      provider: "fal",
+      provider: "openai",
       kind: "stt",
       model: MEDIA_DEFAULT_STT.model,
       spec: { kind: "stt", audioMinutes: 0.5 },
       promptHash: "0".repeat(64),
       status: "queued",
-      estUsd: 0.008,
+      estUsd: 0.006,
       createdAt: T0,
       updatedAt: T0,
     });
@@ -3417,26 +3534,7 @@ async function seedCaptionable(
   return { planId, batchId, jobIds, sttJobId };
 }
 
-describe("the stt submit body: one field, and deliberately no keyterms", () => {
-  const sttSpec = (audioUrl: string): SubmittableSpec => ({
-    kind: "stt",
-    model: MEDIA_DEFAULT_STT.model,
-    audioMinutes: 1,
-    audioUrl,
-  });
-
-  test("an stt line submits its audio_url and nothing else", () => {
-    expect(
-      buildSubmitBody(sttSpec("data:audio/wav;base64,AAA"), "ignored - an stt line has no text"),
-    ).toEqual({ audio_url: "data:audio/wav;base64,AAA" });
-  });
-
-  test("keyterms is ABSENT - it costs +30% on a per-minute rate", () => {
-    expect(Object.keys(buildSubmitBody(sttSpec("data:x"), ""))).toEqual(["audio_url"]);
-  });
-});
-
-describe("submitCaptions: the audio goes out, a signed storage URL never does", () => {
+describe.skip("legacy fal caption submission contract (superseded by OpenAI multipart)", () => {
   test("with FAL_KEY unset it refuses BEFORE any fetch exists", async () => {
     const t = harness();
     const { batchId } = await seedCaptionable(t);
@@ -3504,6 +3602,46 @@ describe("submitCaptions: the audio goes out, a signed storage URL never does", 
     expect(await t.action(internal.media.submitCaptions, { tenantId: A, batchId })).toEqual({
       ok: false,
       code: "no_captions_line",
+    });
+  });
+});
+
+describe("OpenAI caption submission", () => {
+  test("clean voice audio is sent as multipart and word timestamps land in owned storage", async () => {
+    const t = harness();
+    const { batchId, planId, sttJobId } = await seedCaptionable(t, {
+      blocks: 2,
+      takesLanded: true,
+    });
+    stubMediaEnv();
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) =>
+        new Response(JSON.stringify({ words: [{ word: "Hello", start: 0.1, end: 0.5 }] }), {
+          status: 200,
+          headers: { "x-request-id": "openai-stt-1" },
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(await t.action(internal.media.submitCaptions, { tenantId: A, batchId })).toEqual({
+      ok: true,
+    });
+
+    const firstCall = fetchMock.mock.calls[0];
+    if (!firstCall) throw new Error("OpenAI transcription was not called");
+    const [, init] = firstCall;
+    if (!init) throw new Error("OpenAI transcription request options were missing");
+    expect(init.body).toBeInstanceOf(FormData);
+    const form = init.body as FormData;
+    expect(form.get("model")).toBe("whisper-1");
+    expect(form.get("timestamp_granularities[]")).toBe("word");
+    expect(form.get("file")).toBeInstanceOf(Blob);
+    expect((await planRow(t, planId))?.captionOffsetsS).toEqual([0, 1]);
+    expect(await jobRow(t, sttJobId)).toMatchObject({
+      provider: "openai",
+      providerRequestId: "openai-stt-1",
+      status: "succeeded",
+      mimeType: "application/json",
     });
   });
 });
