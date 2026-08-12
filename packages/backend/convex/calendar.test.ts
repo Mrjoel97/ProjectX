@@ -979,7 +979,7 @@ describe("calendarEvents registry (17-05 — tenant-scoped identity, reset-proof
   const SHARED_EXTERNAL_ID = "0123456789abc"; // base32hex, the eventIdFor grammar
 
   async function seedRow(
-    t: ReturnType<typeof convexTest>,
+    t: ReturnType<typeof harness>,
     tenantId: string,
     overrides: Partial<{
       provider: "google" | "microsoft";
@@ -1018,7 +1018,7 @@ describe("calendarEvents registry (17-05 — tenant-scoped identity, reset-proof
 
   /** THE composite lookup, exactly as 17-08/17-09 must perform it. */
   const lookup = (
-    t: ReturnType<typeof convexTest>,
+    t: ReturnType<typeof harness>,
     tenantId: string,
     provider: "google" | "microsoft",
     externalEventId: string,
