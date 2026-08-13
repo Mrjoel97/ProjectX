@@ -211,11 +211,19 @@ function ImageCanvas({ plan }: { plan: MediaPlan }) {
   const generateImage = useMutation(api.media.generateImage);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  const asset = (assets ?? []).find((row) => row.kind === "image");
+  // `assetUrls` is oldest-first. A failed attempt remains immutable history, so the canvas must
+  // render the latest attempt instead of getting pinned forever to the first failed row.
+  const imageAttempts = (assets ?? []).filter((row) => row.kind === "image");
+  const asset = imageAttempts.at(-1);
   const prompt = plan.imagePrompt?.trim() ?? "";
   const estimateReady = estimate !== undefined;
+  const retryable = asset?.status === "failed" || asset?.status === "blocked";
   const canGenerate =
-    estimateReady && estimate.refusal === null && asset === undefined && !busy && prompt.length > 0;
+    estimateReady &&
+    estimate.refusal === null &&
+    (asset === undefined || retryable) &&
+    !busy &&
+    prompt.length > 0;
 
   async function generate() {
     if (!canGenerate) return;
@@ -271,9 +279,9 @@ function ImageCanvas({ plan }: { plan: MediaPlan }) {
         ) : (
           <p style={{ ...dimText, padding: "1rem", textAlign: "center" }}>
             {asset?.status === "submitted"
-              ? "fal is generating the image. It will appear here when the webhook lands."
+              ? "Wan is generating the image. It will appear here when the job completes."
               : asset?.status === "failed" || asset?.status === "blocked"
-                ? IMAGE_STATUS[asset.status]
+                ? `${IMAGE_STATUS[asset.status]}${asset.failureReason ? ` (${asset.failureReason.replaceAll("_", " ")})` : ""}. You can retry this reviewed prompt.`
                 : "The generated image will appear here."}
           </p>
         )}
@@ -295,7 +303,7 @@ function ImageCanvas({ plan }: { plan: MediaPlan }) {
         ) : (
           <>
             <p style={{ ...dimText, marginTop: "0.45rem" }}>
-              1 image · {estimate.width}×{estimate.height} · Flux Schnell
+              1 image · {estimate.width}×{estimate.height} · {estimate.model}
             </p>
             <p style={{ ...dimText, marginTop: "0.25rem" }}>
               Total {money(estimate.totalCents)} · {money(estimate.remainingCents)} of today's media
@@ -319,7 +327,13 @@ function ImageCanvas({ plan }: { plan: MediaPlan }) {
             fontWeight: 600,
           }}
         >
-          {busy ? "Starting…" : asset ? "Generation started" : "Generate image"}
+          {busy
+            ? "Starting…"
+            : retryable
+              ? "Retry image"
+              : asset
+                ? "Generation started"
+                : "Generate image"}
         </button>
         {note && <p style={{ ...dimText, marginTop: "0.5rem" }}>{note}</p>}
       </div>
