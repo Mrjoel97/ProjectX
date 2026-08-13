@@ -2666,6 +2666,34 @@ describe("standalone image: one reviewed prompt through the existing media rail"
     expect(await mediaLeft(t)).toBe(afterFirst);
   });
 
+  test("a terminal failed attempt can be retried, while the new active attempt stays single", async () => {
+    const t = harness();
+    const { planId } = await seedImagePlan(t);
+    const first = await asA(t).mutation(api.media.generateImage, { planId });
+    expect(first.ok).toBe(true);
+    const [failed] = await rows(t);
+    expect(failed).toBeTruthy();
+    await t.run((ctx) =>
+      ctx.db.patch(failed!._id, {
+        status: "failed",
+        failureReason: "AccessDenied",
+        updatedAt: T0 + 1,
+      }),
+    );
+
+    const retried = await asA(t).mutation(api.media.generateImage, { planId });
+    expect(retried.ok).toBe(true);
+    const attempts = (await rows(t)).filter((row) => row.kind === "image");
+    expect(attempts).toHaveLength(2);
+    expect(attempts.map((row) => row.status).sort()).toEqual(["failed", "queued"]);
+
+    expect(await asA(t).mutation(api.media.generateImage, { planId })).toEqual({
+      ok: false,
+      reason: "already_started",
+    });
+    expect((await rows(t)).filter((row) => row.kind === "image")).toHaveLength(2);
+  });
+
   test("proposal staging is free and reset clears both image fields", async () => {
     const t = harness();
     const planId = await t.mutation(internal.plans.insertPlan, {

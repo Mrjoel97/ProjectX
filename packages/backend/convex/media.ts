@@ -1492,14 +1492,18 @@ export const assetUrls = tenantQuery({
       .collect();
 
     return await Promise.all(
-      rows.map(async (r) => ({
-        blockIndex: r.blockIndex,
-        kind: r.kind,
-        mimeType: r.mimeType ?? null,
-        status: r.status,
-        verdict: r.verdict ?? null,
-        url: r.assetStorageId ? await ctx.storage.getUrl(r.assetStorageId) : null,
-      })),
+      rows
+        .sort((a, b) => a.createdAt - b.createdAt || a._creationTime - b._creationTime)
+        .map(async (r) => ({
+          blockIndex: r.blockIndex,
+          kind: r.kind,
+          mimeType: r.mimeType ?? null,
+          status: r.status,
+          verdict: r.verdict ?? null,
+          failureReason: r.failureReason ?? null,
+          createdAt: r.createdAt,
+          url: r.assetStorageId ? await ctx.storage.getUrl(r.assetStorageId) : null,
+        })),
     );
   },
 });
@@ -1782,8 +1786,9 @@ export const generateReel = tenantMutation({
   },
 });
 
-/** Generate one reviewed still image. The serializable existing-row check is the server-side
- * double-click guard: once a reservation inserts its row, no second mutation can reserve again. */
+/** Generate one reviewed still image. The serializable active/successful-row check is the
+ * server-side double-click guard. A terminal failed/blocked attempt may be retried by a fresh
+ * human click; its immutable row remains as history and the retry receives a new reservation. */
 export const generateImage = tenantMutation({
   args: { planId: v.id("plans") },
   handler: async (ctx, { planId }) => {
@@ -1794,7 +1799,13 @@ export const generateImage = tenantMutation({
       .query("mediaJobs")
       .withIndex("by_plan", (q) => q.eq("tenantId", ctx.tenantId).eq("planId", planId))
       .collect();
-    if (rows.some((row) => row.kind === "image")) {
+    if (
+      rows.some(
+        (row) =>
+          row.kind === "image" &&
+          (row.status === "queued" || row.status === "submitted" || row.status === "succeeded"),
+      )
+    ) {
       return { ok: false as const, reason: "already_started" as const };
     }
     const reserved = await reserveImageInner(ctx, { tenantId: ctx.tenantId, planId, prompt });

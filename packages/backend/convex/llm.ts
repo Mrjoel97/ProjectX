@@ -103,6 +103,7 @@ import { api, components, internal } from "./_generated/api";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
 import { contentHash } from "./lib/hash";
+import { isExplicitVideoCreationRequest } from "./mediaIntent";
 
 // Per-call wall-clock ceiling. Retry budget lives in ONE layer: SDK maxRetries:1 on the
 // primary + one CHEAP_MODEL fallback (the pipeline runs these steps with retry:false).
@@ -4522,6 +4523,38 @@ export const runCockpitAgent = internalAction({
       skillVersions,
       omitRecipientEdits,
     );
+    // Explicit video creation is a code-owned route. The direct call stages only the FREE
+    // media-director proposal; paid generation remains behind the existing human approval gate.
+    const directVideo = !smokeOp && isExplicitVideoCreationRequest(text);
+    if (directVideo) {
+      const stepKey = "route-dispatchMedia";
+      const startedAt = Date.now();
+      if (turnId !== undefined)
+        await ctx.runMutation(internal.agentSteps.record, {
+          tenantId,
+          threadId,
+          turnId,
+          stepKey,
+          tool: "dispatchMedia",
+          startedAt,
+        });
+      let phase: "done" | "error" = "error";
+      try {
+        const reply = await invokeTool(tools, "dispatchMedia", { brief: text });
+        phase = "done";
+        return { reply, costUsd: 0 };
+      } finally {
+        if (turnId !== undefined)
+          await ctx.runMutation(internal.agentSteps.finish, {
+            tenantId,
+            turnId,
+            stepKey,
+            phase,
+            durationMs: Date.now() - startedAt,
+            endedAt: Date.now(),
+          });
+      }
+    }
     if (smokeOp) {
       // Emit around the ONE smoke call site (CKPT-05, research Pitfall 4). generateText is never
       // called here, so no SDK callback can fire — and EVERY offline E2E in the repo drives this
