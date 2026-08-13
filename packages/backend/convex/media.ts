@@ -1495,14 +1495,14 @@ export const assetUrls = tenantQuery({
       rows
         .sort((a, b) => a.createdAt - b.createdAt || a._creationTime - b._creationTime)
         .map(async (r) => ({
-        blockIndex: r.blockIndex,
-        kind: r.kind,
-        mimeType: r.mimeType ?? null,
-        status: r.status,
-        verdict: r.verdict ?? null,
-        failureReason: r.failureReason ?? null,
-        createdAt: r.createdAt,
-        url: r.assetStorageId ? await ctx.storage.getUrl(r.assetStorageId) : null,
+          blockIndex: r.blockIndex,
+          kind: r.kind,
+          mimeType: r.mimeType ?? null,
+          status: r.status,
+          verdict: r.verdict ?? null,
+          failureReason: r.failureReason ?? null,
+          createdAt: r.createdAt,
+          url: r.assetStorageId ? await ctx.storage.getUrl(r.assetStorageId) : null,
         })),
     );
   },
