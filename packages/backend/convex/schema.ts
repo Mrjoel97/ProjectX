@@ -1307,6 +1307,9 @@ export default defineSchema({
     tenantId: v.string(),
     name: v.string(),
     source: v.union(v.literal("upload"), v.literal("drive")),
+    // Organizational folders already exist in production. Optional keeps historical upload and
+    // Drive rows valid while allowing the schema to validate the newer organizational rows.
+    organizational: v.optional(v.boolean()),
     status: v.union(
       v.literal("reserving"), // estimate taken, reservation not yet held
       v.literal("ingesting"), // reserved; members in flight; SEALED from retrieval
