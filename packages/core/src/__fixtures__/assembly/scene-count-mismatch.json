@@ -1,7 +1,7 @@
 {
   "script": "assemble_final.sh",
   "out": "final.mp4",
-  "scene_count": 4,
+  "scene_count": 5,
   "target_duration_s": 30,
   "total_duration_s": 30,
   "actual_duration_s": 30.016,

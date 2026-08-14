@@ -71,7 +71,7 @@
       "visual": "video",
       "lead_silence_s": 0.2,
       "speech_abs_s": 18.2,
-      "speech_dur_s": 11.6,
+      "speech_dur_s": 12.5,
       "clip_dur_s": 12,
       "overrun": false,
       "internal_pauses": 0,

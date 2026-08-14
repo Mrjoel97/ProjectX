@@ -73,7 +73,7 @@
       "speech_abs_s": 18.2,
       "speech_dur_s": 11.6,
       "clip_dur_s": 12,
-      "overrun": false,
+      "overrun": true,
       "internal_pauses": 0,
       "freeze_head": false,
       "freeze_tail": false

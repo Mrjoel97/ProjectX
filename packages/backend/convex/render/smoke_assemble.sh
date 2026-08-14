@@ -95,28 +95,29 @@ awk -v a="$AD" -v d="$FD" 'BEGIN{x=a-d; if(x<0)x=-x; exit (x<=0.5)?0:1}' || fail
 node -e '
 const s=JSON.parse(require("fs").readFileSync("out/final.mp4.assembly.json","utf8"));
 const bad=(m)=>{console.error("SMOKE FAIL: "+m);process.exit(1)};
-if(s.block_count!==4) bad("block_count "+s.block_count);
+if(s.scene_count!==4) bad("scene_count "+s.scene_count);
+if(s.block_count!==undefined||s.clip_seconds!==undefined||s.blocks!==undefined) bad("the v1 sidecar fields came back — packages/core/src/assembly.ts refuses this outright");
 if(s.target_duration_s!==30) bad("target_duration_s "+s.target_duration_s);
-const kinds=s.blocks.map(b=>b.visual).join(",");
+const kinds=s.scenes.map(b=>b.visual).join(",");
 if(kinds!=="video,image,card,video") bad("visual kinds: "+kinds);
-const durs=s.blocks.map(b=>b.duration_s).join(",");
+const durs=s.scenes.map(b=>b.duration_s).join(",");
 if(durs!=="8,6,4,12") bad("per-scene duration_s: "+durs);
-const starts=s.blocks.map(b=>b.window_start_s).join(",");
+const starts=s.scenes.map(b=>b.start_s).join(",");
 if(starts!=="0,8,14,18") bad("running-sum offsets: "+starts);
 // The SILENT card must record zero speech, and the narrated scenes must record real speech.
-if(s.blocks[2].speech_dur_s!==0) bad("card scene claims speech: "+s.blocks[2].speech_dur_s);
-for(const i of [0,1,3]) if(!(s.blocks[i].speech_dur_s>1)) bad("scene "+i+" lost its speech");
-if(s.blocks.some(b=>b.overrun)) bad("an overrun survived to the sidecar");
+if(s.scenes[2].speech_dur_s!==0) bad("card scene claims speech: "+s.scenes[2].speech_dur_s);
+for(const i of [0,1,3]) if(!(s.scenes[i].speech_dur_s>1)) bad("scene "+i+" lost its speech");
+if(s.scenes.some(b=>b.overrun)) bad("an overrun survived to the sidecar");
 // WAVE 4, the load-bearing row: scene 2 is 6s and its line carries ~7.2s of speech. Wave 3 exited
 // with "REWRITE the narration" here. If this ever reads <=6 again, the per-cell band grew back.
-if(!(s.blocks[1].speech_dur_s>6.5)) bad("scene 2 speech is "+s.blocks[1].speech_dur_s+"s — a take that outruns its scene was trimmed or rejected");
+if(!(s.scenes[1].speech_dur_s>6.5)) bad("scene 2 speech is "+s.scenes[1].speech_dur_s+"s — a take that outruns its scene was trimmed or rejected");
 // ...and it must be ANCHORED at its scene start (8s), not centred at 8+(6-7.2)/2 = 7.4s.
-if(Math.abs(s.blocks[1].speech_abs_s-8)>0.35) bad("scene 2 speech starts at "+s.blocks[1].speech_abs_s+"s, expected ~8s (anchored, not centred)");
+if(Math.abs(s.scenes[1].speech_abs_s-8)>0.35) bad("scene 2 speech starts at "+s.scenes[1].speech_abs_s+"s, expected ~8s (anchored, not centred)");
 // The takes must still be in order on the timeline — captions rebase off these.
-const abs=s.blocks.map(b=>b.speech_abs_s);
+const abs=s.scenes.map(b=>b.speech_abs_s);
 for(let i=1;i<abs.length;i++) if(!(abs[i]>abs[i-1])) bad("speech_abs_s is not monotonic: "+abs.join(","));
 console.log("  sidecar OK: 4 scenes, kinds "+kinds+", durations "+durs+", offsets "+starts);
-console.log("  scene 2 carries "+s.blocks[1].speech_dur_s+"s of speech in a 6s scene, anchored at "+s.blocks[1].speech_abs_s+"s");
+console.log("  scene 2 carries "+s.scenes[1].speech_dur_s+"s of speech in a 6s scene, anchored at "+s.scenes[1].speech_abs_s+"s");
 '
 
 # expansion=none: the literal %{pts} must NOT have been evaluated into a timestamp. Extract the

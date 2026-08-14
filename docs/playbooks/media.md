@@ -10,6 +10,16 @@
 > for already-submitted historical jobs. Older provider-specific sections below describe the
 > superseded implementation unless explicitly marked current. See ADR-017.
 
+> Last verified: 2026-08-14 (20.2 wave 5, part 1 — **the SCENE sidecar, and the v1 shape refused
+> by name.** `scene_count`/`target_duration_s`/`scenes[]` replace `block_count`/`clip_seconds`/
+> `blocks[]`; the validator re-derives the running sums and both timeline guarantees from the bytes.
+> `renderInputName` gained `blockNN.png` and `cardNN.txt`, the route body carries
+> `targetSeconds`+`scenes[]`+`cards[]`, and `batchToRender` reads the deck so a card needs no job and
+> a silent scene needs no take. Verified by a REAL render whose sidecar was fed back through the
+> shipped validator and accepted; 897 core + 1645 backend green. **NOT yet done in this wave:**
+> `reserveJobInner`'s scene line items and the `hasAssetSource` narrowing — see the note at the end
+> of the assemble-contract section.)
+
 > Last verified: 2026-08-14 (20.2 wave 4 follow-up — **the captions module was corrected for the
 > scene timeline BEFORE wave 5 removes the refusals hiding the defect.** Take offsets are now keyed
 > by narrated ordinal (a silent scene is a hole, not an index), and the clamp bound is the next
@@ -952,6 +962,92 @@ it defaults to the sum, which is what the uniform `--blocks` path passes.
 > publish. It goes away with `clip_seconds` itself in wave 5; until then the assembler emits a
 > `WARN` naming the refusal, rather than letting a paid render be rejected with no explanation
 > anywhere.
+
+### The SCENE sidecar (20.2 wave 5) — and the v1 shape refused by name
+
+`block_count` and `clip_seconds` are **gone**, not renamed-and-kept: a reel is scenes with their
+own lengths, so "the clip length" was a fact about a contract that no longer exists.
+
+```
+block_count      -> scene_count
+clip_seconds     -> (removed; per-scene duration_s)
+                 +  target_duration_s
+blocks[]         -> scenes[] { index, start_s, duration_s, visual,
+                               lead_silence_s, speech_abs_s, speech_dur_s,
+                               overrun, internal_pauses, freeze_head, freeze_tail }
+```
+
+**`parseAssemblySidecar` refuses the v1 shape OUTRIGHT**, with its own `legacy_sidecar` code, on the
+mere presence of `block_count`, `clip_seconds` or `blocks`. Falling through to `missing_field` would
+send an operator looking for a corrupted write; naming the old shape says the runner is stale. A
+validator that accepts two shapes proves neither. **This was safe to ship because it was measured,
+not assumed:** production held 257 `plans` rows on 2026-08-14, fully scanned, and zero carried a
+`sidecarStorageId` — so there is no published reel to orphan and no re-render decision to make.
+
+The validator now re-derives, from the bytes, the same guarantees the script enforces: the scenes
+SUM to the declared target, `start_s` is genuinely the running sum, no line runs past the end of
+the reel, and no line runs into the next one. A sidecar that did not come from the script has to
+lie about all of them, not just about the `overrun` flag.
+
+**The two sides are tied by a test.** The script writes the sidecar with a shell `printf` and
+`assembly.ts` reads it with a TS parser, in different packages — nothing else connects them, and
+each suite is self-consistent under a rename. `assembleScript.test.ts` pins the exact field names
+the validator requires, and asserts the retired ones are absent from the script.
+
+### Inputs, and the ONE that is not a job (20.2 wave 5)
+
+`renderInputName` gained two kinds and `RENDER_INPUT_NAME` — the path-traversal allow-list the
+runner checks before writing a byte — widened with them:
+
+| Scene kind | File | Where the bytes come from |
+|---|---|---|
+| `video` (`generated_video`, `uploaded_video`) | `blockNN.mp4` | a `video` job, fetched by id |
+| `image` (`animated_image`) | `blockNN.png` | an `image` job, fetched by id |
+| `card` (`text_card`) | `cardNN.txt` | **the request body** |
+| narration | `voiceNN.wav` | a `tts` job, fetched by id — and now OPTIONAL |
+
+A still shares its clip's STEM on purpose: the assembler picks its branch from the scene kind it was
+given, never from what it found in the directory, so `block02.png` and `block02.mp4` are one slot
+rather than two.
+
+> **A card's WORDS cross into the VM, and that is a deliberate exception to "no narration, no
+> prompts".** A card is drawn, so there is no job, no asset and no storage id to hand over instead —
+> the alternative was minting a storage object per card to carry forty characters. It is bounded on
+> both sides: `isRenderableCardText` (non-empty, ≤512 chars, printable — newline is the one control
+> character allowed) at the route AND at `batchToRender`, and `expansion=none` + `textfile=` in the
+> script is what stops those words being evaluated as an ffmpeg expression. It is never logged,
+> audited or echoed in a failure. **A second exception is a decision, not a patch.**
+>
+> `cardNN.txt` is refused in the `inputs` list for a related reason: an input name is FETCHED from
+> the blob route, which resolves job ids, so the two lists must not overlap.
+
+### `batchToRender` reads the DECK now, not just the jobs
+
+On the block contract the jobs were a complete description of the reel — one clip per index, every
+clip the same length. On a scene timeline they are not: a `text_card` has no job at all and a silent
+scene has no take. So the shape comes off `plans.shots` and the jobs are checked against it, index
+by index. Two unconditional demands became conditional:
+
+- **the picture** is still required per scene, but WHICH one depends on the kind — and a card needs
+  none;
+- **a voice take** is required only where the deck declares a line. Demanding one at every index is
+  what made a deck containing a silent card unrenderable, and it was NOT in the wave-5 plan row —
+  wave 4 made narration optional at the assembler and left this side unchanged.
+
+The route call carries `targetSeconds` + `scenes[]` + `cards[]` instead of `blockCount` +
+`clipSeconds`, and the script is invoked as `--scene KIND:SECONDS … --target-seconds N`. The
+scenes-sum-to-target check runs in three places (`batchToRender`, `parseBody`, the script) because
+each is a cheaper failure than the one after it — the first costs nothing, the last costs a sandbox.
+
+> **Wave-4 defect found and fixed here:** `reasonCodeFor`'s stderr patterns still matched the
+> pre-wave-4 wording (`of speech; required`, `have NO narration in their windows`, `!= expected`).
+> Wave 4 rewrote all three messages, so a line running past the reel came back as the catch-all
+> `render_failed` instead of `speech_out_of_window`. The patterns now match the script's current
+> wording, and `render.test.ts` drives them from strings copied out of it.
+
+> **Still named `blockCount`:** `plans.renderSummary.blockCount` and the `media.rendered` audit
+> payload key. Both are display/record fields owned by the canvas, which wave 6 touches — they are
+> fed `report.sceneCount` and rename with the UI rather than ahead of it.
 
 ### The sidecar field set AS HARVESTED
 

@@ -163,6 +163,49 @@ test("the declared target is asserted before any work AND on the output, at 0.5s
   expect(code, "and it is measured against the DECLARED target").toContain('-v e="$TARGET"');
 });
 
+// ── 20.2 wave 5: the sidecar the validator actually reads ──────────────────────────────────────
+//
+// The script WRITES the sidecar and `packages/core/src/assembly.ts` READS it, and nothing else
+// connects the two — they are a shell printf and a TS parser in different packages. A rename on
+// either side is invisible to both test suites (each one is self-consistent) and shows up as a
+// governed render being refused at publish. This is the tie.
+
+test("the sidecar printf emits EXACTLY the field names the validator requires", () => {
+  // Kept as a literal list rather than derived: the point is that changing either side has to
+  // change this line too, which is the moment someone notices there are two sides.
+  for (const field of [
+    '"scene_count"',
+    '"target_duration_s"',
+    '"total_duration_s"',
+    '"actual_duration_s"',
+    '"gates"',
+    '"scenes"',
+  ]) {
+    expect(SH, `${field} is a top-level field parseAssemblySidecar requires`).toContain(field);
+  }
+  for (const field of [
+    '"index"',
+    '"start_s"',
+    '"duration_s"',
+    '"visual"',
+    '"lead_silence_s"',
+    '"speech_abs_s"',
+    '"speech_dur_s"',
+    '"overrun"',
+  ]) {
+    expect(SH, `${field} is a per-scene field parseAssemblySidecar requires`).toContain(field);
+  }
+});
+
+test("the retired v1 sidecar fields are GONE from the script, not merely unused", () => {
+  // `assembly.ts` refuses a sidecar carrying any of these BY NAME, so a script that still writes
+  // one produces a reel that renders and can never be published. Deleting them here is what makes
+  // that refusal unreachable rather than merely unlikely.
+  for (const gone of ['"block_count"', '"clip_seconds"', '"blocks"', '"block_index"']) {
+    expect(SH, `${gone} is the v1 shape and the validator refuses it`).not.toContain(gone);
+  }
+});
+
 test("the uniform BLOCK contract is still expressible, and is not a second code path", () => {
   // `--blocks N --clip-seconds C` fills the SAME scene arrays with N entries of `video:C`. That is
   // what lets the live block contract keep rendering byte-identically while the scene contract is

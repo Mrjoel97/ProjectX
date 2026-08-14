@@ -9,7 +9,7 @@
 //
 // The return-validation matrix reuses the COMMITTED sidecar fixtures from plan 20-13 rather than
 // inventing new strings, so the runner is driven against the same bytes the validator was written
-// to. `overrun-block-4.json` in particular is D8's hard error arriving from the renderer.
+// to. `overrun-scene-4.json` in particular is D8's hard error arriving from the renderer.
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -19,8 +19,10 @@ import {
   CAPTION_MAX_ASS_BYTES,
   convexSiteOrigin,
   handleRenderRequest,
+  isRenderableCardText,
   RENDER_INPUT_NAME,
   RENDER_MAX_BYTES,
+  RENDER_MAX_CARD_CHARS,
   RENDER_MAX_DURATION_S,
   RENDER_MIN_BYTES,
   RENDER_SANDBOX_TIMEOUT_MS,
@@ -110,9 +112,37 @@ describe("renderInputName: the 0-based row index becomes the script's 1-based, 2
 
   it("every name it can produce is accepted by the runner's own filename guard", () => {
     for (let i = 0; i < 12; i++) {
-      expect(RENDER_INPUT_NAME.test(renderInputName("video", i))).toBe(true);
-      expect(RENDER_INPUT_NAME.test(renderInputName("tts", i))).toBe(true);
+      for (const kind of ["video", "tts", "image", "card"] as const) {
+        expect(RENDER_INPUT_NAME.test(renderInputName(kind, i))).toBe(true);
+      }
     }
+  });
+
+  it("a still shares its CLIP's stem, and a card has its own (20.2 wave 5)", () => {
+    // Same stem, different extension: the assembler picks its branch from the scene KIND it was
+    // given, never from what it found in the directory, so `block02.png` and `block02.mp4` are the
+    // same slot rather than two. A card is `cardNN.txt` because it is not a picture we fetched —
+    // it is text we were handed, and the different stem is what lets the runner keep the two
+    // apart when it decides which inputs to fetch and which to write from the body.
+    expect(renderInputName("image", 1)).toBe("block02.png");
+    expect(renderInputName("card", 2)).toBe("card03.txt");
+  });
+
+  it("card text is bounded: printable, non-empty, and under the ceiling", () => {
+    expect(isRenderableCardText("Ninety minutes a day: gone.")).toBe(true);
+    expect(isRenderableCardText("two\nlines")).toBe(true); // newline is how a card gets two lines
+    expect(isRenderableCardText("")).toBe(false);
+    expect(isRenderableCardText("   ")).toBe(false);
+    expect(isRenderableCardText("x".repeat(RENDER_MAX_CARD_CHARS + 1))).toBe(false);
+    // A NUL truncates the file for whatever reads it next; a lone CR moves the cursor back over
+    // what was already drawn. Neither is a glyph anyone asked to burn into a frame.
+    expect(isRenderableCardText("a\u0000b")).toBe(false);
+    expect(isRenderableCardText("a\rb")).toBe(false);
+    expect(isRenderableCardText("a\u007Fb")).toBe(false);
+    // `%{...}` is NOT refused here — `expansion=none` in the script is what defuses it, and
+    // refusing a literal percent-brace would reject a legitimate card for a reason that no longer
+    // applies. This asserts the division of labour, not an oversight.
+    expect(isRenderableCardText("100%{ish} of the time")).toBe(true);
   });
 
   it("REFUSES a path traversal, a nested path and a stray extension — the writeFiles guard", () => {
@@ -165,7 +195,7 @@ describe("validateRenderReturn: nothing the VM returns is trusted, and every fai
     const r = validateRenderReturn({ mp4: plausibleMp4(), sidecar: fixture("valid") });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.report.blockCount).toBe(6);
+    expect(r.report.sceneCount).toBe(4);
     expect(r.report.gates.length).toBeGreaterThan(0);
   });
 
@@ -225,11 +255,11 @@ describe("validateRenderReturn: nothing the VM returns is trusted, and every fai
     // MUTATION CHECK (plan 20-15 verification): make validateRenderReturn accept an overrunning
     // sidecar and this goes red. The refusal lives in the SHIPPED validator (assembly.ts) — this
     // asserts we do not swallow it on the way past.
-    const r = validateRenderReturn({ mp4: plausibleMp4(), sidecar: fixture("overrun-block-4") });
+    const r = validateRenderReturn({ mp4: plausibleMp4(), sidecar: fixture("overrun-scene-4") });
     expect(r.ok).toBe(false);
     expect(codeOf(r)).toBe("invalid_sidecar");
     if (!r.ok && r.code === "invalid_sidecar") {
-      expect(r.detail).toMatchObject({ code: "block_overrun", blockIndex: 3 });
+      expect(r.detail).toMatchObject({ code: "scene_overrun", sceneIndex: 3 });
     }
   });
 
@@ -326,14 +356,25 @@ function deps(
 
 const body = (over: Record<string, unknown> = {}) => ({
   renderId: "batch-1",
-  blockCount: 2,
-  clipSeconds: 10,
+  targetSeconds: 30,
+  // A MIXED deck on purpose: a clip, a still, a silent drawn card, a clip. Two identical video
+  // blocks would pass every guard below while proving nothing about the contract they exist for.
+  scenes: [
+    { kind: "video", seconds: 8 },
+    { kind: "image", seconds: 6 },
+    { kind: "card", seconds: 4 },
+    { kind: "video", seconds: 12 },
+  ],
   inputs: [
     { name: "block01.mp4", jobId: "job1" },
     { name: "voice01.wav", jobId: "job2" },
-    { name: "block02.mp4", jobId: "job3" },
+    { name: "block02.png", jobId: "job3" },
     { name: "voice02.wav", jobId: "job4" },
+    { name: "block04.mp4", jobId: "job5" },
+    { name: "voice04.wav", jobId: "job6" },
   ],
+  // Scene 3 is a silent card: its bytes are HERE, not in `inputs`, and it has no voice take.
+  cards: [{ name: "card03.txt", text: "Ninety minutes a day: gone." }],
   uploadUrls: {
     mp4: `${DEPLOYMENT}/api/storage/upload?token=a`,
     sidecar: `${DEPLOYMENT}/api/storage/upload?token=b`,
@@ -430,10 +471,27 @@ describe("handleRenderRequest: nothing untrusted reaches the VM", () => {
 
   it.each([
     ["a non-object body", "nope"],
-    ["a bad clipSeconds", body({ clipSeconds: 7 })],
-    ["a zero blockCount", body({ blockCount: 0 })],
+    ["a targetSeconds nobody priced", body({ targetSeconds: 25 })],
+    ["scenes that do not sum to the declared target", body({ targetSeconds: 60 })],
+    ["an empty scenes array", body({ scenes: [] })],
+    ["a scene kind we did not ship", body({ scenes: [{ kind: "hologram", seconds: 30 }] })],
+    // A stale Convex deployment still speaking the v1 contract. It must be REFUSED, not defaulted
+    // into a reel of the wrong shape.
+    ["the v1 body from a stale deployment", { renderId: "b", blockCount: 2, clipSeconds: 10 }],
     ["an empty inputs array", body({ inputs: [] })],
     ["a jobId with a path separator", body({ inputs: [{ name: "block01.mp4", jobId: "a/b" }] })],
+    // The cards list is the one place request-body BYTES cross into the VM.
+    ["a card whose name is not a card", body({ cards: [{ name: "block01.mp4", text: "x" }] })],
+    ["a card carrying a NUL", body({ cards: [{ name: "card03.txt", text: "a\0b" }] })],
+    [
+      "a card longer than the ceiling",
+      body({ cards: [{ name: "card03.txt", text: "x".repeat(513) }] }),
+    ],
+    ["an empty card", body({ cards: [{ name: "card03.txt", text: "   " }] })],
+    // A `cardNN.txt` in `inputs` would be FETCHED from the blob route, which resolves job ids —
+    // so the two lists must not overlap.
+    ["a card smuggled in as an input", body({ inputs: [{ name: "card03.txt", jobId: "job9" }] })],
+    ["a scene with no input at its index", body({ inputs: [{ name: "block01.mp4", jobId: "j" }] })],
   ])("refuses %s with bad_request and no sandbox", async (_label, b) => {
     const { deps: d, rec } = deps();
     const res = await handleRenderRequest(post(b), d);
@@ -445,7 +503,9 @@ describe("handleRenderRequest: nothing untrusted reaches the VM", () => {
     const { deps: d, rec } = deps();
     await handleRenderRequest(post(body()), d);
     const blobFetches = rec.fetches.filter((f) => f.url.includes("/media/blob/"));
-    expect(blobFetches).toHaveLength(4);
+    // SIX now, not four: the mixed deck has three pictures and three voice takes. The CARD is
+    // not among them — its bytes never round-trip through storage.
+    expect(blobFetches).toHaveLength(6);
     for (const f of blobFetches) {
       expect(f.url.startsWith(`${SITE}/media/blob/`)).toBe(true);
       expect(headersOf(f).Authorization).toBe(`Bearer ${SECRET}`);
@@ -471,17 +531,38 @@ describe("handleRenderRequest: nothing untrusted reaches the VM", () => {
     expect(rec.writes.map((w) => w.path)).toEqual([
       "in/block01.mp4",
       "in/voice01.wav",
-      "in/block02.mp4",
+      "in/block02.png",
       "in/voice02.wav",
+      "in/block04.mp4",
+      "in/voice04.wav",
+      "in/card03.txt",
       "assemble_final.sh",
     ]);
+    // The card is written from the BODY, and its bytes are exactly the text that was sent.
+    const card = rec.writes.find((w) => w.path === "in/card03.txt");
+    expect(new TextDecoder().decode(card?.content)).toBe("Ninety minutes a day: gone.");
   });
 
-  it("invokes the script with the CLI 20-13 pinned", async () => {
+  it("invokes the script on the SCENE contract, in deck order", async () => {
     const { deps: d, rec } = deps();
     await handleRenderRequest(post(body()), d);
     expect(rec.commands).toEqual([
-      { cmd: "sh", args: ["assemble_final.sh", "--blocks", "2", "--clip-seconds", "10"] },
+      {
+        cmd: "sh",
+        args: [
+          "assemble_final.sh",
+          "--scene",
+          "video:8",
+          "--scene",
+          "image:6",
+          "--scene",
+          "card:4",
+          "--scene",
+          "video:12",
+          "--target-seconds",
+          "30",
+        ],
+      },
     ]);
   });
 });
@@ -494,7 +575,7 @@ describe("handleRenderRequest: nothing the VM returns is published unchecked", (
       ok: true,
       mp4StorageId: expect.any(String),
       sidecarStorageId: expect.any(String),
-      blockCount: 6,
+      sceneCount: 4,
     });
     const uploads = rec.fetches.filter((f) => f.init?.method === "POST");
     expect(uploads).toHaveLength(2);
@@ -518,7 +599,7 @@ describe("handleRenderRequest: nothing the VM returns is published unchecked", (
   });
 
   it("publishes NOTHING for a VALID sidecar reporting overrun — D8's hard error from the renderer", async () => {
-    const { deps: d, rec } = deps({ sidecar: fixture("overrun-block-4") });
+    const { deps: d, rec } = deps({ sidecar: fixture("overrun-scene-4") });
     const res = await handleRenderRequest(post(body()), d);
     await expect(res.json()).resolves.toMatchObject({ ok: false, code: "invalid_sidecar" });
     expect(rec.fetches.filter((f) => f.init?.method === "POST")).toHaveLength(0);
@@ -568,11 +649,31 @@ describe("reasonCodeFor: a code, and provably never its input", () => {
   it.each([
     ["ERROR: 'ffmpeg' not found", "missing_binary"],
     ["ERROR: clip not found: in/block03.mp4", "input_missing"],
-    ["ERROR: --clip-seconds must be 5 or 10, got: 7", "bad_invocation"],
-    ["ERROR: voice 4 carries 10.90s of speech; required 8.6-10.0s", "speech_out_of_window"],
+    // Every string here is the script's OWN wording, copied from `assemble_final.sh`. Wave 4
+    // rewrote three of these messages and this table was not moved with them, so a line running
+    // past the reel came back as the catch-all `render_failed` — the codes below are the fix, and
+    // `assembleScript.test.ts` now pins the wording on the other side.
+    ["ERROR: unsupported --clip-seconds: 7", "bad_invocation"],
+    ["ERROR: --target-seconds must be a positive integer, got: x", "bad_invocation"],
+    [
+      "ERROR: the scenes sum to 30s but the deck declares --target-seconds 45 — fix the deck; the assembler will not pad or trim to reach a target.",
+      "bad_invocation",
+    ],
+    ["ERROR: unknown scene kind: hologram (want video, image or card)", "bad_invocation"],
+    [
+      "ERROR: voice 4 is still speaking at 31.400s but the reel ends at 30s — the line would be cut mid-word.",
+      "speech_out_of_window",
+    ],
+    [
+      "ERROR: voice 2 runs to 19.400s but voice 4 starts at 18.200s — two narrators would speak at once.",
+      "speech_out_of_window",
+    ],
     ["ERROR: clip 2 is only 8.1s (<10s) — a held still frame is not a scene.", "clip_too_short"],
-    ["ERROR: blocks [3,5] have NO narration in their windows", "missing_narration"],
-    ["ERROR: final duration 47.2s != expected 60s (+/-1s)", "duration_mismatch"],
+    [
+      "ERROR: the narration declared for scene(s) [3,5] is NOT in the mix — those spans are silent through their centre.",
+      "missing_narration",
+    ],
+    ["ERROR: final duration 47.2s != declared 60s (+/-0.5s)", "duration_mismatch"],
     ["ERROR: final has no readable audio stream", "no_audio_stream"],
     ["ERROR: final failed decode validation — corrupted stream", "decode_failed"],
   ])("maps the script's own wording to a code: %s", (stderr, code) => {
@@ -592,7 +693,7 @@ describe("reasonCodeFor: a code, and provably never its input", () => {
     // spoken line itself. Feed it both and assert neither substring survives into the result.
     const filename = "in/voice04-alice-smith-quarterly.wav";
     const narration = "Alice, our margins slipped four points last quarter.";
-    const stderr = `ERROR: ${filename}: voice 4 carries 11.2s of speech; required 8.6-10.0s — "${narration}"`;
+    const stderr = `ERROR: ${filename}: voice 4 is still speaking past the end of the reel — the line would be cut mid-word — "${narration}"`;
     const code = reasonCodeFor(1, stderr);
 
     expect(code).toBe("speech_out_of_window");

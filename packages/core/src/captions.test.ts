@@ -13,7 +13,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import type { AssemblyBlock } from "./assembly";
+import type { AssemblyScene } from "./assembly";
 import {
   buildCaptionLines,
   concatWavTakes,
@@ -24,9 +24,11 @@ import {
   toAss,
 } from "./captions";
 
-const block = (over: Partial<AssemblyBlock> = {}): AssemblyBlock => ({
-  blockIndex: 0,
-  windowStartS: 10,
+const block = (over: Partial<AssemblyScene> = {}): AssemblyScene => ({
+  index: 0,
+  startS: 10,
+  durationS: 10,
+  visual: "video",
   leadSilenceS: 0.4,
   speechAbsS: 11,
   speechDurS: 8,
@@ -51,7 +53,7 @@ describe("rebaseWords — the sidecar's anchor, not the file's start", () => {
   it("applies speechAbsS + (t - leadSilenceS) to every word", () => {
     // windowStartS moves with the anchor: a block whose speech sits at 20.5s is the THIRD window,
     // not the second. An anchor outside its own window is a state `parseAssemblySidecar` refuses.
-    const b = block({ windowStartS: 20, leadSilenceS: 0.25, speechAbsS: 20.5 });
+    const b = block({ startS: 20, leadSilenceS: 0.25, speechAbsS: 20.5 });
     const [line] = rebaseWords([word("later", 1.25, 1.75)], b, 30);
     // 20.5 + (1.25 - 0.25) = 21.5
     expect(line?.startS).toBeCloseTo(21.5, 10);
@@ -59,9 +61,9 @@ describe("rebaseWords — the sidecar's anchor, not the file's start", () => {
   });
 
   it("is NOT windowStartS + t — the two disagree by exactly the anchor offset", () => {
-    const b = block({ windowStartS: 10, leadSilenceS: 0.4, speechAbsS: 11 });
+    const b = block({ startS: 10, leadSilenceS: 0.4, speechAbsS: 11 });
     const [line] = rebaseWords([word("w", 0.4, 0.9)], b, 20);
-    expect(line?.startS).not.toBeCloseTo(b.windowStartS + 0.4, 3);
+    expect(line?.startS).not.toBeCloseTo(b.startS + 0.4, 3);
   });
 
   it("drops spacing and audio_event, keeps only words", () => {
@@ -82,21 +84,21 @@ describe("rebaseWords — the sidecar's anchor, not the file's start", () => {
   it("CLAMPS a word that would bleed before its window, and flags it", () => {
     // A take whose measured lead silence is longer than the word's own start: the rebase runs
     // negative relative to the anchor and would land in the PREVIOUS block's caption.
-    const b = block({ windowStartS: 10, leadSilenceS: 2, speechAbsS: 11 });
+    const b = block({ startS: 10, leadSilenceS: 2, speechAbsS: 11 });
     const [line] = rebaseWords([word("early", 0, 0.3)], b, 20);
     expect(line?.startS).toBe(10);
     expect(line?.clamped).toBe(true);
   });
 
   it("CLAMPS a word that would bleed past its bound, and flags it", () => {
-    const b = block({ windowStartS: 10, leadSilenceS: 0, speechAbsS: 11 });
+    const b = block({ startS: 10, leadSilenceS: 0, speechAbsS: 11 });
     const [line] = rebaseWords([word("late", 30, 31)], b, 20);
     expect(line?.endS).toBe(20); // the bound it was given — the next take's start, or the reel's end
     expect(line?.clamped).toBe(true);
   });
 
   it("never emits a line whose end precedes its start", () => {
-    const b = block({ windowStartS: 10, leadSilenceS: 5, speechAbsS: 11 });
+    const b = block({ startS: 10, leadSilenceS: 5, speechAbsS: 11 });
     for (const l of rebaseWords([word("a", 0, 0.1), word("b", 40, 41)], b, 20)) {
       expect(l.endS).toBeGreaterThanOrEqual(l.startS);
     }
@@ -271,14 +273,14 @@ describe("concatWavTakes — one transcript needs one audio file", () => {
 
 describe("buildCaptionLines — the whole track, partitioned by take", () => {
   const report = {
-    blockCount: 2,
-    clipSeconds: 10,
+    sceneCount: 2,
+    targetDurationS: 20,
     totalDurationS: 20,
     actualDurationS: 20,
     gates: [],
-    blocks: [
-      block({ blockIndex: 0, windowStartS: 0, leadSilenceS: 0.5, speechAbsS: 1 }),
-      block({ blockIndex: 1, windowStartS: 10, leadSilenceS: 0.5, speechAbsS: 11 }),
+    scenes: [
+      block({ index: 0, startS: 0, leadSilenceS: 0.5, speechAbsS: 1 }),
+      block({ index: 1, startS: 10, leadSilenceS: 0.5, speechAbsS: 11 }),
     ],
   };
 
@@ -329,18 +331,18 @@ describe("captions on a SCENE timeline", () => {
     // owns it — the word lands ~10s early, against the wrong anchor, and the last scene loses its
     // captions entirely.
     const report = {
-      blockCount: 3,
-      clipSeconds: 10,
+      sceneCount: 3,
+      targetDurationS: 30,
       totalDurationS: 30,
       actualDurationS: 30,
       gates: [],
-      blocks: [
-        block({ blockIndex: 0, windowStartS: 0, leadSilenceS: 0.5, speechAbsS: 1, speechDurS: 8 }),
+      scenes: [
+        block({ index: 0, startS: 0, leadSilenceS: 0.5, speechAbsS: 1, speechDurS: 8 }),
         // The card: no take, and the sidecar says so with speech_dur_s = 0.
-        block({ blockIndex: 1, windowStartS: 10, leadSilenceS: 0, speechAbsS: 10, speechDurS: 0 }),
+        block({ index: 1, startS: 10, leadSilenceS: 0, speechAbsS: 10, speechDurS: 0 }),
         block({
-          blockIndex: 2,
-          windowStartS: 20,
+          index: 2,
+          startS: 20,
           leadSilenceS: 0.5,
           speechAbsS: 21,
           speechDurS: 8,
@@ -361,16 +363,16 @@ describe("captions on a SCENE timeline", () => {
 
   it("a silent scene contributes no caption line of its own", () => {
     const report = {
-      blockCount: 2,
-      clipSeconds: 10,
+      sceneCount: 2,
+      targetDurationS: 20,
       totalDurationS: 20,
       actualDurationS: 20,
       gates: [],
-      blocks: [
-        block({ blockIndex: 0, windowStartS: 0, leadSilenceS: 0, speechAbsS: 0, speechDurS: 0 }),
+      scenes: [
+        block({ index: 0, startS: 0, leadSilenceS: 0, speechAbsS: 0, speechDurS: 0 }),
         block({
-          blockIndex: 1,
-          windowStartS: 10,
+          index: 1,
+          startS: 10,
           leadSilenceS: 0.5,
           speechAbsS: 11,
           speechDurS: 8,
@@ -392,29 +394,29 @@ describe("captions on a SCENE timeline", () => {
     // the assembler's timeline checks pass it. `windowStartS + clipSeconds` would clamp its tail
     // back to 20.0 and flag it, which is a caption cut off mid-word for being correct.
     const report = {
-      blockCount: 3,
-      clipSeconds: 10,
+      sceneCount: 3,
+      targetDurationS: 30,
       totalDurationS: 30,
       actualDurationS: 30,
       gates: [],
-      blocks: [
+      scenes: [
         block({
-          blockIndex: 0,
-          windowStartS: 0,
+          index: 0,
+          startS: 0,
           leadSilenceS: 0.2,
           speechAbsS: 0.2,
           speechDurS: 9,
         }),
         block({
-          blockIndex: 1,
-          windowStartS: 10,
+          index: 1,
+          startS: 10,
           leadSilenceS: 0.2,
           speechAbsS: 10,
           speechDurS: 10.4,
         }),
         block({
-          blockIndex: 2,
-          windowStartS: 20,
+          index: 2,
+          startS: 20,
           leadSilenceS: 0.2,
           speechAbsS: 20.6,
           speechDurS: 9,
@@ -437,14 +439,14 @@ describe("captions on a SCENE timeline", () => {
     // not an arbitrary window width. STT drift that would put this word on top of the following
     // caption is still pulled back.
     const report = {
-      blockCount: 2,
-      clipSeconds: 10,
+      sceneCount: 2,
+      targetDurationS: 30,
       totalDurationS: 30,
       actualDurationS: 30,
       gates: [],
-      blocks: [
-        block({ blockIndex: 0, windowStartS: 0, leadSilenceS: 0, speechAbsS: 0, speechDurS: 9 }),
-        block({ blockIndex: 1, windowStartS: 10, leadSilenceS: 0, speechAbsS: 12, speechDurS: 9 }),
+      scenes: [
+        block({ index: 0, startS: 0, leadSilenceS: 0, speechAbsS: 0, speechDurS: 9 }),
+        block({ index: 1, startS: 10, leadSilenceS: 0, speechAbsS: 12, speechDurS: 9 }),
       ],
     };
     const lines = buildCaptionLines({

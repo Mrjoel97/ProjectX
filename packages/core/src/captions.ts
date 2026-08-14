@@ -27,7 +27,7 @@
  * ever changes: a real library, at which point this file is deleted rather than extended.
  */
 
-import type { AssemblyBlock, AssemblyReport } from "./assembly";
+import type { AssemblyReport, AssemblyScene } from "./assembly";
 import { err, ok, type Result } from "./result";
 
 /** One word as the STT provider returns it. `type` is `"word" | "spacing" | "audio_event"` in
@@ -65,16 +65,16 @@ export const DEFAULT_LINE_CHARS = 32;
  */
 export function rebaseWords(
   words: readonly SttWord[],
-  block: AssemblyBlock,
+  scene: AssemblyScene,
   boundS: number,
 ): CaptionLine[] {
-  const lo = block.windowStartS;
+  const lo = scene.startS;
   const hi = Math.max(lo, boundS);
   const lines: CaptionLine[] = [];
   for (const w of words) {
     if (w.type !== "word") continue;
-    const rawStart = block.speechAbsS + (w.start - block.leadSilenceS);
-    const rawEnd = block.speechAbsS + (w.end - block.leadSilenceS);
+    const rawStart = scene.speechAbsS + (w.start - scene.leadSilenceS);
+    const rawEnd = scene.speechAbsS + (w.end - scene.leadSilenceS);
     const startS = Math.min(Math.max(rawStart, lo), hi);
     const endS = Math.min(Math.max(rawEnd, lo), hi);
     const clamped = startS !== rawStart || endS !== rawEnd;
@@ -324,8 +324,8 @@ export function buildCaptionLines(a: {
   const out: CaptionLine[] = [];
   // The scenes that DECLARE narration, in reel order. This is the take list the STT stage was
   // handed, so its position is the key into `offsetsS`.
-  const narrated = a.report.blocks.filter((b) => b.speechDurS > 0);
-  for (const [ordinal, block] of narrated.entries()) {
+  const narrated = a.report.scenes.filter((s) => s.speechDurS > 0);
+  for (const [ordinal, scene] of narrated.entries()) {
     const takeStart = a.offsetsS[ordinal];
     if (takeStart === undefined) continue; // fewer takes than narrated scenes: no words for this one
     const takeEnd = a.offsetsS[ordinal + 1] ?? Number.POSITIVE_INFINITY;
@@ -335,7 +335,7 @@ export function buildCaptionLines(a: {
     // A line may run past its own scene but never into the next line — the same bound the
     // assembler enforces on the audio, applied to the captions so the two cannot disagree.
     const bound = narrated[ordinal + 1]?.speechAbsS ?? a.report.totalDurationS;
-    out.push(...groupIntoLines(rebaseWords(inTake, block, bound), a.maxChars));
+    out.push(...groupIntoLines(rebaseWords(inTake, scene, bound), a.maxChars));
   }
   return out.sort((l, r) => l.startS - r.startS);
 }

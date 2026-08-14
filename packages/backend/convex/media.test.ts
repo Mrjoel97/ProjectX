@@ -2328,23 +2328,27 @@ const RENDER_SECRET = "test-render-secret";
 /** A sidecar the SHIPPED validator accepts, for the defence-in-depth re-check on return. */
 const RENDER_SIDECAR = JSON.stringify({
   script: "assemble_final.sh",
-  block_count: 2,
-  clip_seconds: MEDIA_DEFAULT_VIDEO.seconds,
+  scene_count: 2,
+  target_duration_s: 2 * MEDIA_DEFAULT_VIDEO.seconds,
   total_duration_s: 2 * MEDIA_DEFAULT_VIDEO.seconds,
   actual_duration_s: 2 * MEDIA_DEFAULT_VIDEO.seconds,
-  gates: ["speech_within_window", "no_time_stretch"],
-  blocks: [
+  gates: ["speech_fits_the_reel", "no_time_stretch"],
+  scenes: [
     {
-      block_index: 0,
-      window_start_s: 0,
+      index: 0,
+      start_s: 0,
+      duration_s: MEDIA_DEFAULT_VIDEO.seconds,
+      visual: "video",
       lead_silence_s: 0.3,
       speech_abs_s: 0.5,
       speech_dur_s: MEDIA_DEFAULT_VIDEO.seconds - 1,
       overrun: false,
     },
     {
-      block_index: 1,
-      window_start_s: MEDIA_DEFAULT_VIDEO.seconds,
+      index: 1,
+      start_s: MEDIA_DEFAULT_VIDEO.seconds,
+      duration_s: MEDIA_DEFAULT_VIDEO.seconds,
+      visual: "video",
       lead_silence_s: 0.3,
       speech_abs_s: MEDIA_DEFAULT_VIDEO.seconds + 0.5,
       speech_dur_s: MEDIA_DEFAULT_VIDEO.seconds - 1,
@@ -2368,6 +2372,8 @@ async function seedRenderable(
     batchId?: string;
     missVoice?: boolean;
     unlanded?: boolean;
+    /** Per-index patches onto the seeded deck rows — how a test asks for a scene deck. */
+    deckOverrides?: Record<number, Record<string, unknown>>;
   } = {},
 ) {
   const blocks = opts.blocks ?? 2;
@@ -2414,6 +2420,23 @@ async function seedRenderable(
         );
       }
     }
+    // THE DECK, which `batchToRender` reads from 20.2 wave 5 onward. Production always has one —
+    // the jobs exist BECAUSE a deck was reserved — and before wave 5 this helper got away without
+    // it only because the jobs alone described a uniform reel. They no longer do: a card has no
+    // job, and a silent scene has no take, so the shape has to come off the row.
+    await ctx.db.patch(planId, {
+      clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
+      shots: Array.from({ length: blocks }, (_, index) => ({
+        index,
+        type: "AI",
+        seconds: MEDIA_DEFAULT_VIDEO.seconds,
+        windowStartMs: index * MEDIA_DEFAULT_VIDEO.seconds * 1000,
+        description: `scene ${index}`,
+        narration: "x".repeat(40),
+        prompt: `prompt ${index}`,
+        ...(opts.deckOverrides?.[index] ?? {}),
+      })),
+    });
   });
   return { planId, batchId, tenantId, jobIds };
 }
@@ -2444,8 +2467,14 @@ describe("batchToRender: a reel is ALL-OR-NOTHING, and the refusal is free", () 
       "block03.mp4",
       "voice03.wav",
     ]);
-    expect(res.value.blockCount).toBe(3);
-    expect(res.value.clipSeconds).toBe(MEDIA_DEFAULT_VIDEO.seconds);
+    // The uniform BLOCK contract, expressed as scenes: N entries of `video:clipSeconds`, and the
+    // declared length is their sum. It is not a second code path — it is the general one with
+    // every entry equal, which is what keeps a live block deck rendering byte-identically.
+    expect(res.value.scenes).toEqual(
+      Array.from({ length: 3 }, () => ({ kind: "video", seconds: MEDIA_DEFAULT_VIDEO.seconds })),
+    );
+    expect(res.value.targetSeconds).toBe(3 * MEDIA_DEFAULT_VIDEO.seconds);
+    expect(res.value.cards).toEqual([]);
   });
 
   test("REFUSES a batch whose lines have not all landed — no sandbox is worth starting for it", async () => {
@@ -2524,7 +2553,7 @@ describe("renderReel: fail-closed on the secret, then the offline seam", () => {
         sidecarStorageId,
         renderMs: 91_000,
         gates: [],
-        blockCount: 2,
+        sceneCount: 2,
       }),
     );
 
@@ -2548,8 +2577,8 @@ describe("renderReel: fail-closed on the secret, then the offline seam", () => {
     // A sidecar reporting an overrun — D8's hard error. A compromised or buggy route could return
     // `ok: true` for it; re-validating from the bytes that actually landed in OUR storage is what
     // stops an ungoverned reel being published anyway.
-    const bad = JSON.parse(RENDER_SIDECAR) as { blocks: Array<{ overrun: boolean }> };
-    const target = bad.blocks[1];
+    const bad = JSON.parse(RENDER_SIDECAR) as { scenes: Array<{ overrun: boolean }> };
+    const target = bad.scenes[1];
     if (target) target.overrun = true;
     const sidecarStorageId = await storeBlob(t, JSON.stringify(bad), "application/json");
     const mp4StorageId = await storeBlob(t, new Uint8Array([1]), "video/mp4");
@@ -2561,7 +2590,7 @@ describe("renderReel: fail-closed on the secret, then the offline seam", () => {
         sidecarStorageId,
         renderMs: 1,
         gates: [],
-        blockCount: 2,
+        sceneCount: 2,
       }),
     );
 
@@ -2607,7 +2636,7 @@ describe("renderReel: fail-closed on the secret, then the offline seam", () => {
         sidecarStorageId,
         renderMs: 91_000,
         gates: [],
-        blockCount: 2,
+        sceneCount: 2,
       }),
     );
     await t.action(internal.render.renderReel.renderReel, { tenantId: A, batchId });
@@ -3376,6 +3405,17 @@ async function seedInFlight(t: T, opts: { blocks?: number; batchId?: string } = 
     await ctx.db.patch(planId, {
       renderStatus: "pending",
       clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
+      // The DECK. `batchToRender` reads it from 20.2 wave 5 onward — the jobs alone no longer
+      // describe a reel, because a card has no job and a silent scene has no take.
+      shots: Array.from({ length: blocks }, (_, index) => ({
+        index,
+        type: "AI",
+        seconds: MEDIA_DEFAULT_VIDEO.seconds,
+        windowStartMs: index * MEDIA_DEFAULT_VIDEO.seconds * 1000,
+        description: `scene ${index}`,
+        narration: "x".repeat(40),
+        prompt: `prompt ${index}`,
+      })),
     });
     for (let i = 0; i < blocks; i++) {
       for (const kind of ["video", "tts"] as const) {
@@ -3527,7 +3567,7 @@ describe("D12(b) RETENTION: delete on success, KEEP on failure", () => {
       sidecarStorageId,
       renderMs: 1000,
       gates: [],
-      blockCount: 2,
+      sceneCount: 2,
     });
 
     // The FIELDS are unset…
@@ -3580,7 +3620,7 @@ describe("D12(b) RETENTION: delete on success, KEEP on failure", () => {
       sidecarStorageId,
       renderMs: 1,
       gates: [],
-      blockCount: 2,
+      sceneCount: 2,
     });
     expect(await t.run(async (ctx) => await ctx.db.query("deadLetters").collect())).toHaveLength(0);
   });
@@ -3650,14 +3690,16 @@ function wavBytes(samples: number): Uint8Array<ArrayBuffer> {
 function sidecarFor(blocks: number, clipSeconds = MEDIA_DEFAULT_VIDEO.seconds): string {
   return JSON.stringify({
     script: "assemble_final.sh",
-    block_count: blocks,
-    clip_seconds: clipSeconds,
+    scene_count: blocks,
+    target_duration_s: blocks * clipSeconds,
     total_duration_s: blocks * clipSeconds,
     actual_duration_s: blocks * clipSeconds,
-    gates: ["speech_within_window"],
-    blocks: Array.from({ length: blocks }, (_, i) => ({
-      block_index: i,
-      window_start_s: i * clipSeconds,
+    gates: ["speech_fits_the_reel"],
+    scenes: Array.from({ length: blocks }, (_, i) => ({
+      index: i,
+      start_s: i * clipSeconds,
+      duration_s: clipSeconds,
+      visual: "video",
       lead_silence_s: 0.5,
       speech_abs_s: i * clipSeconds + 0.5,
       speech_dur_s: Math.max(0.5, clipSeconds - 1),
@@ -4023,7 +4065,7 @@ describe("the NARROWED retention rule (plan 20-17 over 20-16)", () => {
         sidecarStorageId: sidecar,
         renderMs: 1000,
         gates: ["speech_within_window"],
-        blockCount: 2,
+        sceneCount: 2,
       }),
     );
     await t.action(internal.render.renderReel.renderReel, { tenantId: A, batchId });
@@ -4086,7 +4128,7 @@ describe("the NARROWED retention rule (plan 20-17 over 20-16)", () => {
         sidecarStorageId: sidecar,
         renderMs: 1000,
         gates: ["speech_within_window"],
-        blockCount: 2,
+        sceneCount: 2,
       }),
     );
     await t.action(internal.render.renderReel.renderReel, { tenantId: A, batchId });

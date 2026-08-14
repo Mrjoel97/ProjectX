@@ -11,7 +11,14 @@
  *     a user without passing through this file.
  */
 
-import { type AssemblyError, type AssemblyReport, parseAssemblySidecar } from "./assembly";
+import {
+  ASSEMBLY_VISUALS,
+  type AssemblyError,
+  type AssemblyReport,
+  type AssemblyVisual,
+  parseAssemblySidecar,
+} from "./assembly";
+import { TARGET_DURATIONS } from "./storyboard";
 
 // ── The duration ceiling (plan 20-15 Task 1, settled 2026-08-02) ───────────────────────────────
 //
@@ -99,15 +106,68 @@ export function buildSandboxOptions(a: { snapshotId: string; timeoutMs?: number 
  * landing plane records 24 kHz mono 16-bit PCM (`mediaComplete.ts:98-100`). If the TTS endpoint is
  * ever swapped for one returning mp3, this line and that constant move together.
  */
-export function renderInputName(kind: "video" | "tts", blockIndex: number): string {
+export function renderInputName(
+  kind: "video" | "tts" | "image" | "card",
+  blockIndex: number,
+): string {
   const n = String(blockIndex + 1).padStart(2, "0");
-  return kind === "video" ? `block${n}.mp4` : `voice${n}.wav`;
+  switch (kind) {
+    case "video":
+      return `block${n}.mp4`;
+    // 20.2 wave 5. A still is `blockNN.png` — the SAME stem as a clip, because the assembler picks
+    // the branch from the scene KIND it was given, not from what it found lying in the directory.
+    // One stem per index is also what keeps "block03 + voice05" impossible.
+    case "image":
+      return `block${n}.png`;
+    case "card":
+      return `card${n}.txt`;
+    case "tts":
+      return `voice${n}.wav`;
+  }
 }
 
 /** Exactly the names `renderInputName` can produce. The runner validates every filename it is
  *  handed against this before writing a byte — a name from a request body reaching `writeFiles`
  *  unchecked is a path traversal into the VM's filesystem. */
-export const RENDER_INPUT_NAME = /^(?:block\d{2}\.mp4|voice\d{2}\.wav)$/;
+export const RENDER_INPUT_NAME = /^(?:block\d{2}\.(?:mp4|png)|voice\d{2}\.wav|card\d{2}\.txt)$/;
+
+/** A card's name specifically, for the one input whose CONTENT travels in the request body rather
+ *  than being resolved server-side from a job id. */
+export const RENDER_CARD_NAME = /^card\d{2}\.txt$/;
+
+/**
+ * The ceiling on a text card's words.
+ *
+ * A card is a few lines on a 9:16 frame; anything approaching this is already unreadable at that
+ * size. It is a bound on what crosses into the VM, not a style rule — and it is small deliberately,
+ * because this is the ONLY input whose bytes come from the request body instead of from a
+ * tenant-scoped job row.
+ */
+export const RENDER_MAX_CARD_CHARS = 512;
+
+/**
+ * Is this text safe to write into the VM as a card?
+ *
+ * `assemble_final.sh` already removes the injection half — `textfile=` (not `text=`) means no shell
+ * or filtergraph escaping is involved, and `expansion=none` means drawtext will not EVALUATE
+ * `%{...}` as an ffmpeg expression. What is left is the bytes themselves: a NUL truncates the file
+ * for whatever reads it next, and other control characters are not glyphs anyone asked to burn into
+ * a frame. Newline is the one that is meaningful — it is how a card gets two lines.
+ *
+ * REFUSED rather than sanitised. A silently stripped character is a card that renders differently
+ * from the deck the owner approved, which is the failure mode this whole subsystem is arranged
+ * against.
+ */
+export const isRenderableCardText = (text: string): boolean => {
+  if (text.trim().length === 0 || text.length > RENDER_MAX_CARD_CHARS) return false;
+  for (const ch of text) {
+    const c = ch.codePointAt(0) ?? 0;
+    // A codepoint scan rather than a regex with escaped control ranges: the escaping is the part
+    // that goes wrong, and what this actually says is one sentence.
+    if (ch !== "\n" && (c < 0x20 || c === 0x7f)) return false;
+  }
+  return true;
+};
 
 /**
  * The ONE origin the render runner is permitted to fetch tenant bytes from: this deployment's own
@@ -241,13 +301,16 @@ const STDERR_CODES: ReadonlyArray<readonly [RegExp, RenderReasonCode]> = [
   [/'(?:ffmpeg|ffprobe|awk)' not found/, "missing_binary"],
   [/not found:/, "input_missing"],
   [
-    /--blocks N is REQUIRED|--blocks must be a positive integer|--clip-seconds must be 5 or 10|unknown argument:|--subs was removed/,
+    /--blocks N is REQUIRED|--blocks must be a positive integer|unsupported --clip-seconds|--target-seconds must be a positive integer|the assembler will not pad or trim to reach a target|unknown scene kind:|pass --scene OR --blocks|must be a positive whole number of seconds|unknown argument:|--subs was removed/,
     "bad_invocation",
   ],
-  [/of speech; required/, "speech_out_of_window"],
+  // 20.2 wave 4 replaced the per-cell speech band with two TIMELINE errors, and these patterns
+  // must move with it. They did not in wave 4, which meant a line running past the reel came back
+  // as the catch-all `render_failed` instead of the code that tells an operator to rewrite it.
+  [/would be cut mid-word|two narrators would speak at once/, "speech_out_of_window"],
   [/a held still frame is not a scene/, "clip_too_short"],
-  [/have NO narration in their windows/, "missing_narration"],
-  [/!= expected/, "duration_mismatch"],
+  [/is NOT in the mix/, "missing_narration"],
+  [/!= declared/, "duration_mismatch"],
   [/no readable audio stream|mismatched\/truncated audio/, "no_audio_stream"],
   [/failed decode validation/, "decode_failed"],
   // `burn_caps.sh`'s own wording (plan 20-17), anchored on the fixed part exactly as above.
@@ -347,9 +410,13 @@ type RenderRequestBody =
   | {
       mode: "assemble";
       renderId: string;
-      blockCount: number;
-      clipSeconds: number;
+      /** The DECLARED reel length. The scenes must sum to it, here and in the script. */
+      targetSeconds: number;
+      /** The reel, in order. Order IS the index — the same rule the deck parser follows. */
+      scenes: Array<{ kind: AssemblyVisual; seconds: number }>;
       inputs: Array<{ name: string; jobId: string }>;
+      /** Text cards: the only input whose bytes come from the body rather than a job row. */
+      cards: Array<{ name: string; text: string }>;
       uploadUrls: { mp4: string; sidecar: string };
     }
   | {
@@ -361,8 +428,12 @@ type RenderRequestBody =
       uploadUrls: { mp4: string };
     };
 
-/** The clip lengths the price table, storyboard parser and assembler agree on. */
-const CLIP_SECONDS_SET = new Set([4, 5, 8, 10, 12]);
+/** The reel lengths the deck header, the price table and the assembler agree on. A target outside
+ *  this set is a reel nobody priced — the same closed-set rule `clipSeconds` used to carry. */
+const TARGET_SECONDS_SET = new Set<number>(TARGET_DURATIONS);
+
+/** The three kinds of picture the assembler can build, as the script names them. */
+const SCENE_KIND_SET = new Set<string>(ASSEMBLY_VISUALS);
 
 const isStr = (v: unknown): v is string => typeof v === "string" && v.length > 0;
 
@@ -406,11 +477,28 @@ function parseBody(raw: unknown, uploadOrigin: string): RenderRequestBody | null
     };
   }
 
-  if (typeof b.blockCount !== "number" || !Number.isInteger(b.blockCount) || b.blockCount < 1) {
-    return null;
-  }
-  if (typeof b.clipSeconds !== "number" || !CLIP_SECONDS_SET.has(b.clipSeconds)) return null;
+  // ASSEMBLE MODE, on the SCENE contract (20.2 wave 5). `blockCount` + `clipSeconds` described a
+  // reel of N identical windows and cannot describe this one, so they are gone rather than
+  // defaulted — a caller still sending them is a stale Convex deployment, and defaulting would let
+  // it render a reel of the wrong shape instead of being told.
+  if (typeof b.targetSeconds !== "number" || !TARGET_SECONDS_SET.has(b.targetSeconds)) return null;
+  if (!Array.isArray(b.scenes) || b.scenes.length === 0) return null;
   if (!Array.isArray(b.inputs) || b.inputs.length === 0) return null;
+
+  const scenes: Array<{ kind: AssemblyVisual; seconds: number }> = [];
+  let summed = 0;
+  for (const entry of b.scenes) {
+    if (entry === null || typeof entry !== "object") return null;
+    const { kind, seconds } = entry as Record<string, unknown>;
+    if (!isStr(kind) || !SCENE_KIND_SET.has(kind)) return null;
+    if (typeof seconds !== "number" || !Number.isInteger(seconds) || seconds < 1) return null;
+    summed += seconds;
+    scenes.push({ kind: kind as AssemblyVisual, seconds });
+  }
+  // The script asserts this too, and refuses before doing any work. Asserting it HERE as well is
+  // the cheaper of the two failures by a whole sandbox: a deck that does not add up to what it
+  // declared never gets a VM at all.
+  if (summed !== b.targetSeconds) return null;
 
   const inputs: Array<{ name: string; jobId: string }> = [];
   for (const entry of b.inputs) {
@@ -420,11 +508,41 @@ function parseBody(raw: unknown, uploadOrigin: string): RenderRequestBody | null
     // writes wherever the caller names — including over `assemble_final.sh` itself, which would
     // make this endpoint arbitrary code execution inside the VM.
     if (!isStr(name) || !RENDER_INPUT_NAME.test(name)) return null;
+    // A card's bytes come from `cards`, never from a job id. A `cardNN.txt` arriving here would
+    // otherwise be fetched from the blob route, which resolves job ids — so the two lists must not
+    // overlap, or a caller could name a card and be handed some other tenant-scoped asset's bytes.
+    if (RENDER_CARD_NAME.test(name)) return null;
     // A Convex id is opaque; it only ever gets appended to OUR origin, so the guard it needs is
     // "no path characters", not "is a valid id".
     if (!isStr(jobId) || !/^[A-Za-z0-9_-]{1,64}$/.test(jobId)) return null;
     inputs.push({ name, jobId });
   }
+
+  // THE CARDS — the ONLY input whose CONTENT travels in the request body. Everything else here is
+  // a job id resolved server-side against a tenant-scoped row; a card is model-authored text with
+  // no row of its own, so it is bounded here instead: a card filename (nothing else), and text
+  // that is printable. `assemble_final.sh` handles the other half with `textfile=` and
+  // `expansion=none`, which is what stops those words being evaluated as an ffmpeg expression.
+  const cards: Array<{ name: string; text: string }> = [];
+  const rawCards = b.cards === undefined ? [] : b.cards;
+  if (!Array.isArray(rawCards)) return null;
+  for (const entry of rawCards) {
+    if (entry === null || typeof entry !== "object") return null;
+    const { name, text } = entry as Record<string, unknown>;
+    if (!isStr(name) || !RENDER_CARD_NAME.test(name)) return null;
+    if (typeof text !== "string" || !isRenderableCardText(text)) return null;
+    cards.push({ name, text });
+  }
+
+  // EVERY SCENE MUST HAVE ITS INPUT, checked before a VM exists. The script discovers inputs by
+  // index and hard-errors on the first one missing — which is a $0.01 sandbox spent to learn
+  // something derivable from the body. A `card` scene is satisfied by `cards`, never by `inputs`.
+  const present = new Set([...inputs.map((i) => i.name), ...cards.map((c) => c.name)]);
+  for (const [i, scene] of scenes.entries()) {
+    if (!present.has(renderInputName(scene.kind, i))) return null;
+  }
+  const names = [...inputs.map((i) => i.name), ...cards.map((c) => c.name)];
+  if (new Set(names).size !== names.length) return null; // one file, one writer
 
   const up = b.uploadUrls;
   if (up === null || typeof up !== "object") return null;
@@ -437,9 +555,10 @@ function parseBody(raw: unknown, uploadOrigin: string): RenderRequestBody | null
   return {
     mode: "assemble",
     renderId: b.renderId,
-    blockCount: b.blockCount,
-    clipSeconds: b.clipSeconds,
+    targetSeconds: b.targetSeconds,
+    scenes,
     inputs,
+    cards,
     uploadUrls: { mp4, sidecar },
   };
 }
@@ -604,6 +723,11 @@ export async function handleRenderRequest(req: Request, deps: RenderDeps): Promi
     if (!content) return jsonStop("input_fetch_failed");
     files.push({ path: `in/${input.name}`, content });
   }
+  // A card's words never round-trip through storage — there is no asset to fetch, the text IS the
+  // input. `parseBody` has already bounded both the name and the bytes; this is the write.
+  for (const card of body.cards) {
+    files.push({ path: `in/${card.name}`, content: new TextEncoder().encode(card.text) });
+  }
 
   const startedAt = Date.now();
   const sandbox = await deps.createSandbox(
@@ -618,12 +742,14 @@ export async function handleRenderRequest(req: Request, deps: RenderDeps): Promi
       { path: "assemble_final.sh", content: new TextEncoder().encode(deps.assembleScript) },
     ]);
 
+    // `--scene KIND:SECONDS` per scene, IN ORDER, plus the declared total. Order is the reel's
+    // order and the index — the script derives every filename from the same loop counter, which is
+    // what makes "block03 + voice05" impossible rather than merely detectable.
     const run = await sandbox.runCommand("sh", [
       "assemble_final.sh",
-      "--blocks",
-      String(body.blockCount),
-      "--clip-seconds",
-      String(body.clipSeconds),
+      ...body.scenes.flatMap((s) => ["--scene", `${s.kind}:${s.seconds}`]),
+      "--target-seconds",
+      String(body.targetSeconds),
     ]);
     if (run.exitCode !== 0) {
       // THE ONLY READ OF stderr IN THIS SYSTEM, and it goes straight into a code. See
@@ -665,7 +791,7 @@ export async function handleRenderRequest(req: Request, deps: RenderDeps): Promi
       sidecarStorageId,
       renderMs: Date.now() - startedAt,
       gates: checked.report.gates,
-      blockCount: checked.report.blockCount,
+      sceneCount: checked.report.sceneCount,
     });
   } finally {
     // ALWAYS. Vercel's own cost guidance: "Stop sandboxes promptly rather than waiting for

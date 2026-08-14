@@ -359,7 +359,7 @@ for ((i=0;i<SCENES;i++)); do
   # own SCENE is no longer an overrun at all. The field is written anyway so that a sidecar which
   # did NOT come from this script has to lie explicitly, and so the validator has something to
   # refuse.
-  PBJSON[i]="$(printf '{"block_index":%d,"window_start_s":%s,"duration_s":%s,"visual":"%s","lead_silence_s":%.3f,"speech_abs_s":%s,"speech_dur_s":%.3f,"clip_dur_s":%.3f,"overrun":%s,"internal_pauses":%d,"freeze_head":%s,"freeze_tail":%s}' \
+  PBJSON[i]="$(printf '{"index":%d,"start_s":%s,"duration_s":%s,"visual":"%s","lead_silence_s":%.3f,"speech_abs_s":%s,"speech_dur_s":%.3f,"clip_dur_s":%.3f,"overrun":%s,"internal_pauses":%d,"freeze_head":%s,"freeze_tail":%s}' \
     "$i" "$START" "$SEC" "$KIND" "$SS" "$SPEECH_ABS" "$SPEECH" "$D" "$OVERRUN" "${IPN:-0}" \
     "$([[ "${FRZH:-0}" != "0" ]] && echo true || echo false)" "$([[ "${FRZT:-0}" != "0" ]] && echo true || echo false)")"
   FRZH=0; FRZT=0
@@ -483,23 +483,15 @@ DERR="$( (ffmpeg -v error -xerror -i "$OUT" -f null - ) 2>&1 | head -3 || true)"
 # A final video without one was hand-assembled. `packages/core/src/assembly.ts` is the validator and
 # the source of truth for these field names; a render whose sidecar fails it is NOT published.
 #
-# `clip_seconds` is the LONGEST scene on a mixed deck. It is meaningless there and the validator
-# stops reading it in wave 5 — `target_duration_s` and the per-scene `duration_s` are what replace
-# it. On a uniform deck it is still the block length, so a block-contract render produces the same
-# sidecar it always did.
-CLIPOUT="${SECS[0]}"; for ((i=0;i<SCENES;i++)); do [[ "${SECS[i]}" -gt "$CLIPOUT" ]] && CLIPOUT="${SECS[i]}"; done
-# The validator still refuses a sidecar whose `speech_dur_s` exceeds `clip_seconds`, and on the
-# scene timeline a line is ALLOWED to be longer than the longest scene. That refusal goes away
-# with `clip_seconds` itself in wave 5; until then, say so out loud rather than let a render that
-# cost money be refused at publish with no explanation anywhere.
-for ((k=0;k<NTAKE;k++)); do
-  awk -v s="${TAKE_SPEECH[k]}" -v c="$CLIPOUT" 'BEGIN{exit (s>c)?0:1}' && \
-    echo "WARN: voice ${TAKE_SCENE[k]} carries ${TAKE_SPEECH[k]}s of speech, longer than the longest scene (${CLIPOUT}s). The render is correct, but the wave-4 sidecar validator will refuse it as speech_exceeds_window until clip_seconds is removed (wave 5)." >&2
-done
+# `clip_seconds` and `block_count` are GONE (wave 5), not renamed-and-kept. A reel is scenes with
+# their own lengths, so "the clip length" was a fact about a contract that no longer exists, and a
+# sidecar carrying it describes a render nobody performed. `packages/core/src/assembly.ts` refuses
+# a sidecar that still has either field, by name — so a stale runner fails loudly instead of
+# publishing a reel whose sidecar means something different from what the validator reads.
 SIDE="${OUT}.assembly.json"
 {
-  printf '{"script":"assemble_final.sh","out":"%s","block_count":%d,"clip_seconds":%s,"target_duration_s":%s,"total_duration_s":%s,"actual_duration_s":%s,"width":%s,"height":%s,"fps":"%s","sfx_vol":%s,"gates":["speech_fits_the_reel","no_overlapping_lines","clip_covers_window","speech_centred","no_time_stretch","narration_every_narrated_span","master_audio_timeline","linear_loudnorm_-16","duration_within_0.5s","full_decode"],"blocks":[' \
-    "$(basename "$OUT")" "$SCENES" "$CLIPOUT" "$TARGET" "$TOT" "$FDUR" "$W" "$H" "$FPS" "$SFXVOL"
+  printf '{"script":"assemble_final.sh","out":"%s","scene_count":%d,"target_duration_s":%s,"total_duration_s":%s,"actual_duration_s":%s,"width":%s,"height":%s,"fps":"%s","sfx_vol":%s,"gates":["speech_fits_the_reel","no_overlapping_lines","clip_covers_window","speech_centred","no_time_stretch","narration_every_narrated_span","master_audio_timeline","linear_loudnorm_-16","duration_within_0.5s","full_decode"],"scenes":[' \
+    "$(basename "$OUT")" "$SCENES" "$TARGET" "$TOT" "$FDUR" "$W" "$H" "$FPS" "$SFXVOL"
   for ((i=0;i<SCENES;i++)); do printf '%s%s' "${PBJSON[i]}" "$([[ $i -lt $((SCENES-1)) ]] && echo ,)"; done
   printf '],"ts":"%s"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 } > "$SIDE"
