@@ -1,5 +1,56 @@
 # Playbook: Persona Onboarding & Business Profile
 
+> Last verified: 2026-08-14 (17-06 Task 3, ADR-018 — **the Microsoft connect / disconnect / consent
+> surfaces**, verified in a real browser: `e2e/connect-microsoft.spec.ts` **7/7** against a prod
+> build on `:3111`.)
+>
+> **THIS PLAYBOOK NOW OWNS THE MICROSOFT CONSENT SURFACES** — `apps/web/app/(app)/connect-microsoft/`
+> and `_components/DisconnectMicrosoft.tsx` are registered here, because this playbook already owns
+> `dashboard/profile/` (the Connections tab) and consent copy is an onboarding concern.
+> **THE SPLIT IS DELIBERATE AND ASYMMETRIC, so do not "tidy" it by accident:** the GOOGLE twins
+> (`connect-gmail/`, `DisconnectGoogle.tsx`) remain registered under `cockpit.md`, which also owns
+> Calendar runtime behaviour. Changing a Microsoft surface bumps THIS file; changing the Google one
+> bumps `cockpit.md`. Overlapping the two entries would make both playbooks mandatory for every
+> connection change, which is what `watch.json` ownership exists to prevent.
+>
+> **The consent paragraph is the consent, and it names a capability the product does not yet use.**
+> ADR-018 requests ONE union grant (`offline_access openid profile email Calendars.ReadWrite
+> Mail.Send Mail.Read`) so a beta user connects Microsoft once instead of twice. That means
+> `Mail.Send`/`Mail.Read` are granted NOW and first used by Phase 25-06. The page therefore says so
+> in plain words — "Mail features are not switched on yet; the permission is requested now so you
+> only have to approve this connection once." **A consent screen that under-describes a granted
+> scope is ADR-018 consequence 6's named defect**, and `connectionsSurface.test.ts` fails until every
+> Microsoft surface names every capability, exactly as it already does for Google's Drive scope.
+>
+> **Invariants on these surfaces:**
+> - **The raw `?microsoftError=` value is NEVER rendered.** Only `microsoftCallbackMessage(code)`,
+>   whose default branch returns a FIXED sentence. The query value is attacker-controllable; a
+>   browser test drives `<img src=x onerror=alert(1)>` through it and asserts the generic copy plus
+>   `img[src='x']` count 0.
+> - **`DisconnectMicrosoft` never claims a revocation it cannot perform.** No revocation endpoint
+>   exists in the v2 delegated flow, so the confirm copy states up front that Pikar's token copy is
+>   deleted while the consent entry survives on the user's Microsoft account (My Apps, or Entra for
+>   work/school). A test asserts it does not borrow `myaccount.google.com`. **GOVN-03 inherits this
+>   limitation and must state it rather than imply parity with the Google disconnect.**
+> - **Both readiness halves are surfaced, never just `connected`.** Microsoft can grant LESS than
+>   requested, so the Connections row and the connect page each read `calendarReady` AND `mailReady`
+>   and name the missing half — the same class of guard as Google's `driveReady` line.
+> - **`<DisconnectMicrosoft />` mounts UNCONDITIONALLY at both call sites.** It owns its own
+>   `microsoftStatus` subscription; gating its mount on `status.connected` would unmount it the
+>   instant the action resolves, destroying its own provider-revocation notice.
+> - **Loading is never rendered as disconnected** ("Checking…" first), because a false "Not
+>   connected" invites reconnecting an already-connected account.
+>
+> **Measured:** `connect-microsoft.spec.ts` 7/7 (run three times: unconfigured, configured, and
+> unconfigured again). The CONFIGURED branch was proven directly rather than assumed — with
+> placeholder OAuth values set, the rendered link carried
+> `https://login.microsoftonline.com/common/oauth2/v2.0/authorize`, scope
+> `offline_access openid profile email Calendars.ReadWrite Mail.Send Mail.Read`, `prompt=consent`,
+> `response_type=code`, `response_mode=query`, a 97-char state (32-char tenant + `.` + 64-hex
+> signature) and no secret. **Those placeholders were then REMOVED** — a Connect button backed by a
+> bogus client id is worse than the honest "not configured" notice, and the live gate (17-11) still
+> needs a real Azure app registration.
+
 > Last verified: 2026-08-14 (⚠ **SOURCE REVIEW OF AN UNCOMMITTED FOREIGN-LANE DIFF, NOT A RUN.**
 > Reviewed by reading the working-tree diff of `onboarding/page.tsx` plus the new
 > `onboarding/onboardingFolder.ts`; no upload, onboarding turn or browser session was executed.

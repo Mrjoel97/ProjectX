@@ -14,6 +14,27 @@
 > `proposed → approved` CAS, which is what makes approve-once reserve-once true without a second
 > idempotency mechanism. See `docs/playbooks/media.md` and ADR-019.)
 
+> Last verified: 2026-08-14 (17-06 Task 3 — **the H3 offline regression, paired**. The Microsoft
+> connect/disconnect/consent SURFACES are owned by `onboarding.md`, not this file; see the split
+> note there. This entry covers only the Calendar-runtime half and the new browser spec.)
+>
+> **H3, and why a second test was needed when one already passed.** `calendar.test.ts` already had
+> "a grant lacking free/busy scope returns reauth before even the refresh POST", asserting
+> `not.toHaveBeenCalled()`. That assertion is satisfied just as well by a `freeBusy` that never
+> fetches under ANY conditions — a broken adapter passes it perfectly. The new
+> `H3 — a pre-widening grant reauths with ZERO fetches while a calendar grant reaches the adapter`
+> pairs it with a POSITIVE WITNESS: same action, same args, one scope wider, and the fetch DOES go
+> out. The contrast is what proves the stored-scope check at `calendar.ts:149` is the cause.
+>
+> Mutation-measured: `if (false && !hasScope(...))` turns BOTH red — the old one at "expected spy to
+> not be called at all, but actually been called 1 times", the new one at
+> `{ reason: 'unavailable' } to deeply equal { reason: 'reauth' }`. The negative mock deliberately
+> returns a VALID JSON body; with an empty one the mutation died on "Unexpected end of JSON input",
+> a crash rather than the claim.
+>
+> This is the offline half only. **The live negative is still owed by Plan 17-11** and cannot be
+> substituted by this test. `calendar.test.ts` 40/40.
+>
 > Last verified: 2026-08-14 (17-06 Task 2, **THE `/microsoft/callback` EXCHANGE**. Still **NO
 > PROVIDER CALL AGAINST GRAPH AND ACTN-02 IS NOT SATISFIED** — this is the OAuth round-trip only.)
 >

@@ -3,12 +3,20 @@
 import { api } from "@pikar/backend/api";
 import { useQuery } from "convex/react";
 import { DisconnectGoogle } from "../../_components/DisconnectGoogle";
+import { DisconnectMicrosoft } from "../../_components/DisconnectMicrosoft";
 import { BLOCKED } from "./connections";
 import { card, label } from "./styles";
 
-// The connections surface. Google is the only provider that can connect today, so it is written
-// CONCRETELY — no Record<Provider, …> lookup and no ConnectionRow interface. Phase 25 mints that
-// lookup in the same commit as the Microsoft Graph adapter (spec §3), not before.
+// The connections surface. There are now TWO connectable providers (17-06 added Microsoft), and
+// both rows are still written CONCRETELY — no Record<Provider, …> lookup and no ConnectionRow
+// interface.
+//
+// That is a deliberate re-decision, not inherited inertia. The original note said Phase 25 would
+// mint the lookup "in the same commit as the Microsoft Graph adapter". Two rows is not enough
+// repetition to pay for an abstraction: the readiness fields genuinely differ (Google reports
+// `driveReady`, Microsoft reports `calendarReady` AND `mailReady`), so a shared row component would
+// need a per-provider slot for the one part that matters — an abstraction that abstracts nothing.
+// Revisit at a THIRD provider, when the shape is actually known.
 
 const row: React.CSSProperties = {
   display: "flex",
@@ -45,6 +53,7 @@ export function ConnectionsPanel() {
       </div>
 
       <GoogleRow />
+      <MicrosoftRow />
 
       {BLOCKED.map((c) => (
         <div key={c.id} style={row}>
@@ -56,6 +65,74 @@ export function ConnectionsPanel() {
         </div>
       ))}
     </section>
+  );
+}
+
+// 17-06 (ADR-018): ONE Microsoft connection covering calendar AND Outlook mail. The row names both
+// halves because this tab is the answer to "what is Pikar connected to" — an unnamed capability is
+// invisible here. `connectionsSurface.test.ts` fails until it names every capability in the grant.
+function MicrosoftRow() {
+  const status = useQuery(api.microsoftAuth.microsoftStatus);
+
+  return (
+    <div style={row} data-testid="connections-microsoft">
+      <div style={{ display: "grid", gap: "0.2rem", maxWidth: "34rem" }}>
+        <strong style={{ fontSize: "0.94rem", color: "var(--ink)" }}>
+          Microsoft — Calendar &amp; Outlook mail
+        </strong>
+        <span style={{ fontSize: "0.85rem", color: "var(--ink-soft)" }}>
+          {/* `undefined` = still loading. Rendering "Not connected" here would be a FALSE NEGATIVE
+              inviting the user to reconnect an already-connected account — same rule as the row
+              above, and the same reason. */}
+          {status === undefined
+            ? "Checking…"
+            : !status.connected
+              ? "Not connected"
+              : status.expiresAt
+                ? `Access token expires ${new Date(status.expiresAt).toLocaleString()}`
+                : "Connected"}
+        </span>
+        {/* A CONNECTED GRANT IS NOT NECESSARILY A COMPLETE ONE. Microsoft can return LESS than was
+            requested, and a grant stored before a widening keeps its old scope string — so
+            `connected` alone reports a half-grant as healthy. These two lines are the only place a
+            user learns which half is missing before hitting a 403. */}
+        {status?.connected && !status.calendarReady && (
+          <span style={{ fontSize: "0.85rem", color: "var(--ink)" }}>
+            Calendar is not included in this connection. Reconnect to add it.
+          </span>
+        )}
+        {status?.connected && !status.mailReady && (
+          <span style={{ fontSize: "0.85rem", color: "var(--ink)" }}>
+            Outlook mail is not included in this connection. Reconnect to add it.
+          </span>
+        )}
+      </div>
+      {/* `<DisconnectMicrosoft />` renders UNCONDITIONALLY — never gated on `status.connected`,
+          for the reason its own block comment gives: the action deletes the row before returning,
+          so gating the mount here would unmount the component before its provider-revocation
+          notice could be read. */}
+      <div style={{ display: "grid", gap: "0.4rem", justifyItems: "end" }}>
+        {status !== undefined &&
+          (!status.connected || !status.calendarReady || !status.mailReady) && (
+            <a
+              href="/connect-microsoft"
+              style={{
+                padding: "0.45rem 0.9rem",
+                borderRadius: "0.375rem",
+                background: "var(--teal-600)",
+                color: "#fff",
+                textDecoration: "none",
+                fontWeight: 600,
+                fontSize: "0.9rem",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {status.connected ? "Reconnect" : "Connect"}
+            </a>
+          )}
+        <DisconnectMicrosoft />
+      </div>
+    </div>
   );
 }
 

@@ -1,5 +1,32 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-08-14 (17-06, ADR-018 — **a SECOND reconnect kind, and it stays OUT of
+> `NOTIFICATION_KINDS` for the same reason the two review kinds do.**) `notificationTemplates.ts`
+> gains `RECONNECT_PROVIDERS` / `RECONNECT` / `RECONNECT_KINDS`, a small table carrying the kind
+> string, message, href and CTA for `gmail_reconnect` and the new `microsoft_calendar_reconnect`.
+>
+> **`NOTIFICATION_KINDS` IS BYTE-IDENTICAL, and that is the guarantee, not an omission.** That list
+> is what arms `notifyExternal.dispatch`, which reaches `freshAccessToken` and sends MAIL. A
+> reconnect prompt says "your connection is dying"; routing it through the connection it reports on
+> is the loop this playbook's direct-insert bypass exists to avoid. The table lives beside the list
+> it must stay out of precisely because that is where a future reader stands when tempted to add it.
+>
+> **The direct-insert bypass list now has THREE enumerated users**, not two:
+> `gmailAuth.flagExpiringTokens`, `proactiveReview.insertReviewNotification`, and
+> `microsoftAuth.store` — which does not insert but PATCHES `read: true`, retiring only
+> `microsoft_calendar_reconnect` rows. Mutation-proven: relaxing that filter to
+> `endsWith("_reconnect")` clears the user's `gmail_reconnect` banner and hides a Google connection
+> that is still genuinely broken.
+>
+> ONE new audit eventType: `microsoft.disconnected`, written by `microsoftAuth.disconnectMicrosoft`,
+> `actor:"user"`, correlationId `microsoft-disconnect:<tenantId>` (the `google.disconnected`
+> precedent), payload EXACTLY `{deleted:boolean, revokedAtProvider:boolean}`. **`revokedAtProvider`
+> is a HARD `false`, never a placeholder** — the Microsoft v2 delegated flow has no revocation
+> endpoint, so the audit trail must record that the provider-side grant was NOT revoked and a later
+> compliance read must not mistake this for a Google-style disconnect. `microsoftAuth.test.ts`
+> asserts no audit row anywhere contains token material. `@pikar/core` `notificationTemplates.test.ts`
+> stays green (the no-kind-arms-the-mail-path assertion is unaffected).
+
 > Last verified: 2026-08-03 (15.3-04 repair — **a daily `vaultSweep` cron now backstops the extraction watchdog.** 15.3-04 moved watchdog arming from queue-time to work-start so queue depth can no longer fabricate `extraction_stalled` failures; the cost is that a row enqueued but whose action never reaches its handler body (deployment restart, dropped job) has no per-attempt clock at all. The resumable, batched, self-gating sweep now runs daily instead of only on an operator . `{ reset: true }` is REQUIRED, not decorative — `sweepPendingExtraction` is a @convex-dev/migrations migration and a completed migration NO-OPS on a bare invocation, the 2026-07-18 stranded-.xlsm lesson. Each re-queued extraction still self-gates on the kill switch and the budget.)
 >
 > Last verified: 2026-07-31 (22.1-01 — the Gmail disconnect). ONE new audit eventType: `google.disconnected`, written by `gmailAuth.disconnectGoogle`, `actor:"user"`, correlationId `google-disconnect:<tenantId>` (the `owner.granted` synthetic-id precedent), payload EXACTLY `{revoked:boolean, status:number}` — a flag and an HTTP status, nothing else. This is the single highest-risk audit row in the repo, because the function holds the refresh token in scope one line above the `log` call; `calendar.test.ts` asserts the exact key set AND that the serialized row contains neither the refresh nor the access token. One row per user action, on the transition only — a disconnect on an already-empty tenant still records `{revoked:false, status:0}`. No notification, no DLQ entry, no cron change; `NOTIFICATION_KINDS` byte-identical. Note the direct-insert bypass list below still has exactly two users: deleting the token row stops `flagExpiringTokens` producing NEW expiry notifications, but already-inserted unread ones survive a disconnect by design (see cockpit.md's Known gaps). Prior: 2026-07-25 (13-03 — the review's in-app surface). NO audit/DLQ/notification-plane behavior change: no new kind, no new audit eventType, `NOTIFICATION_KINDS` still byte-identical. ONE addition here — the `KIND_HREF` bullet in the Notification matrix: `NotificationsBanner` now renders a message as a `<Link>` when its kind has an entry in a code-owned kind→href map, and as today's plain `<span>` when it does not (opt-in per kind, two BEVL-03 entries, no new route). Web typecheck + `check-playbooks` exit 0; backend untouched. Prior: 2026-07-25 (13-02 — the proactive weekly review lands). NO audit/DLQ behavior change and NO new audit eventType: the review rides the existing refs-only `evaluation.ran` row (a `review.delivered` row would duplicate it). Two additions here: a **Cron jobs** section (the new `crons.weekly("proactive-review", monday 06:00 UTC)` alongside the two dailies, plus the `crons.weekly`-over-`crons.cron` override and its reason), and a Notification-matrix bullet recording that the DIRECT-insert bypass now has TWO enumerated users — `gmailAuth.flagExpiringTokens` and `proactiveReview.insertReviewNotification` — both bypassing `notify` because `notify` schedules `notifyExternal.dispatch` unconditionally. `NOTIFICATION_KINDS` is still byte-identical (the two review kinds stay out; that absence is the second barrier). Backend 494/495, sole red the pre-existing `audit.test.ts auditCounts`. Prior: 2026-07-25 (13-01 — proactive review groundwork). NO audit/DLQ/notification behavior change. `packages/core/src/notificationTemplates.ts` gained three static review constants (`REVIEW_THREAD_ID`, `REVIEW_READY_MESSAGE`, `REVIEW_FAILED_MESSAGE`) that are NOT notification kinds — see the last bullet of the Notification matrix for why that absence is the guarantee. `NOTIFICATION_KINDS` is byte-identical; `@pikar/core` 195/195 green including `notificationTemplates.test.ts`.

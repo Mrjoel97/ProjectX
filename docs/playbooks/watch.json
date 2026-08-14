@@ -39,6 +39,8 @@
     "packages/backend/convex/tenantProfile.test.ts",
     "apps/web/app/(app)/dashboard/onboarding/",
     "apps/web/app/(app)/dashboard/profile/",
+    "apps/web/app/(app)/connect-microsoft/",
+    "apps/web/app/(app)/_components/DisconnectMicrosoft.tsx",
     "packages/core/src/blueprintSegments.ts",
     "packages/core/src/blueprintSegments.test.ts",
     "packages/core/src/blueprintPulse.ts",

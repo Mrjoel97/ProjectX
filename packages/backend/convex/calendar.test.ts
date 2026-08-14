@@ -318,6 +318,54 @@ describe("freeBusy — fixture-first, governed read", () => {
     expect(await t.run((ctx) => ctx.db.query("audit").collect())).toEqual([]);
   });
 
+  // ── H3, the OFFLINE half (17-06). The live negative is repeated in Plan 17-11. ──────────────
+  //
+  // WHY THIS EXISTS WHEN THE ZERO-FETCH TEST ABOVE ALREADY PASSES. `not.toHaveBeenCalled()` is
+  // satisfied just as well by a `freeBusy` that never fetches under ANY conditions — a broken
+  // adapter passes it perfectly. The guard is only proven by the CONTRAST: same action, same
+  // fixture shape, two stored scopes, one fetch and one not. That is what makes the stored-scope
+  // check the cause, rather than something else silently short-circuiting the call.
+  //
+  // The pre-widening row is not hypothetical: `include_granted_scopes` is FORWARD-only, so every
+  // tenant who connected before 17-02 holds a mail-only grant that refreshes perfectly and 403s on
+  // the first calendar call. Catching it BEFORE `freshAccessToken` is what turns that into a
+  // reconnect prompt instead of a raw provider error.
+  test("H3 — a pre-widening grant reauths with ZERO fetches while a calendar grant reaches the adapter", async () => {
+    // NEGATIVE: mail-only, the shape a pre-17-02 connection actually has.
+    const preWidening = harness();
+    await seedGoogleToken(preWidening, TENANT, GMAIL_MODIFY_SCOPE);
+    // A VALID body on purpose. With an empty one, removing the guard makes this test die on
+    // "Unexpected end of JSON input" — a crash, not the claim. Answering plausibly means a removed
+    // guard fails on "expected spy not to be called", which is what a future reader needs to see.
+    const noFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ access_token: "a", expires_in: 3600, calendars: {} }), {
+        status: 200,
+      }),
+    );
+    vi.stubGlobal("fetch", noFetch);
+
+    expect(await preWidening.action(internal.calendar.freeBusy, freeBusyArgs)).toEqual({
+      ok: false,
+      reason: "reauth",
+    });
+    expect(noFetch, "a pre-widening grant must never reach the network").not.toHaveBeenCalled();
+    // Nothing is audited for a call that never happened.
+    expect(await preWidening.run((ctx) => ctx.db.query("audit").collect())).toEqual([]);
+
+    // POSITIVE WITNESS: the same action, the same args, one scope wider — and it DOES go out.
+    // Without this half the assertion above is satisfied by an adapter that fetches nothing ever.
+    const widened = harness();
+    await seedGoogleToken(widened, TENANT, `${GMAIL_MODIFY_SCOPE} ${CALENDAR_FREEBUSY_SCOPE}`);
+    const didFetch = vi.fn().mockResolvedValue(new Response("", { status: 400 }));
+    vi.stubGlobal("fetch", didFetch);
+
+    await widened.action(internal.calendar.freeBusy, freeBusyArgs);
+    expect(
+      didFetch.mock.calls.length,
+      "the positive witness never fetched — the negative assertion above is therefore vacuous",
+    ).toBeGreaterThan(0);
+  });
+
   test("a failed refresh returns reauth rather than throwing", async () => {
     const t = harness();
     await seedGoogleToken(t, TENANT, `${GMAIL_MODIFY_SCOPE} ${CALENDAR_FREEBUSY_SCOPE}`);
