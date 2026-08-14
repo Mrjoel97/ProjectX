@@ -1,5 +1,19 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-14 (20.2 wave 8, **THE APPROVE ARM OPENS ON SCENE DECKS** — scoped to
+> `executePlan`'s media pre-step and `dispatch.persistStoryboard`'s comment. The arm refused a scene
+> deck by name (`scene_render_not_ready`) from wave 2 until now, because the specialist could not
+> WRITE one for a human to approve; its body does as of this wave, so the refusal is deleted rather
+> than left as a member nothing can reach. The arm now branches on `sceneDeckOf(plan)` FIRST and
+> reserves through `reserveSceneJobInner` — the same function the canvas prices with — so approving
+> from the agent and clicking Generate on the canvas are one gate with one number. Pinned in
+> `cockpit.test.ts`: the `spendEvents` reserved movement equals `jobEstimate.totalCents` for the same
+> deck, the clips are bought at their OWN lengths (8 s and 12 s, not a deck-wide `clipSeconds`), and
+> a deck that does not sum to its declared target refuses BEFORE the CAS with zero rows. The
+> reservation stays inside this mutation, unchanged and deliberately: this mutation IS the
+> `proposed → approved` CAS, which is what makes approve-once reserve-once true without a second
+> idempotency mechanism. See `docs/playbooks/media.md` and ADR-019.)
+
 > Last verified: 2026-08-14 (17-06 Task 2, **THE `/microsoft/callback` EXCHANGE**. Still **NO
 > PROVIDER CALL AGAINST GRAPH AND ACTN-02 IS NOT SATISFIED** — this is the OAuth round-trip only.)
 >

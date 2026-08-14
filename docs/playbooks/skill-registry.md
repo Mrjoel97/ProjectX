@@ -1,5 +1,20 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-14 (20.2 wave 8 — **`media-director` v2 rewrites its body for the scene
+> contract, and it costs NOTHING to ship, which is the point of the UNGATED row.** `seedSkills`
+> sees a changed body on an ungated name and inserts `maxVersion + 1` as `active`: no candidate, no
+> eval gate, no owner activation. That is the deal 20-03 recorded — the golden runner drives
+> `runCockpitAgent` over TEXT fixtures and structurally cannot exercise a script / art-direction /
+> storyboard turn, so gating this row would strand it at v1 on its first body edit, and the
+> exemption is asserted in `skillBodies.test.ts` and derived non-vacuously by
+> `run-eval-golden.mjs --self-check`. The residual risk is unchanged and still named at that site:
+> this body activates with NO eval evidence. What replaces the gate is CODE plus one pinned test —
+> `searchVault` is the specialist's only grant, and `storyboard.test.ts`'s round trip parses the
+> body's OWN worked example with the shipped parser, so a body that drifts off the format fails
+> here rather than proposing an empty deck to a user. **The `.md` and its `.ts` mirror were
+> regenerated together; never hand-edit the mirror.** SEEDING IS REQUIRED for the new body to be
+> live: `pnpm dev`, not `npx convex dev` alone.)
+
 > Last verified: 2026-08-12 (production release-gate formatting pass — the watched skill-body test
 > changed only by deterministic import ordering; registry content, hashes, activation state, and
 > the production-readiness conclusions below are unchanged.)

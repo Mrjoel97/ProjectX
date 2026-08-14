@@ -457,6 +457,106 @@ describe("executePlan media arm (20-07, MEDIA-01)", () => {
     );
   });
 
+  // ── 20.2 wave 8: the arm opens on SCENES ───────────────────────────────────────────────────
+  //
+  // This arm refused a scene deck by name (`scene_render_not_ready`) from wave 2 until now, for a
+  // reason that was true at the time: the specialist could not WRITE a scene deck for a human to
+  // approve. Its body does now, so the refusal is deleted rather than left as a member nothing can
+  // reach.
+
+  /** A staged SCENE DECK: 8 s clip / 6 s still / 4 s card / 12 s clip = an exact 30 s. */
+  async function seedMediaScenePlan(t: ReturnType<typeof convexTest>) {
+    const seconds = [8, 6, 4, 12];
+    const visuals = ["generated_video", "animated_image", "text_card", "generated_video"];
+    let startMs = 0;
+    const shots = seconds.map((sec, index) => {
+      const shot = {
+        index,
+        visual: visuals[index] as string,
+        seconds: sec,
+        windowStartMs: startMs,
+        description: `scene ${index}`,
+        narration: `line ${index}`,
+        prompt: `prompt ${index}`,
+        // A card must name its words, or `hasAssetSource` refuses the deck.
+        ...(visuals[index] === "text_card" ? { overlay: `card ${index}` } : {}),
+      };
+      startMs += sec * 1000;
+      return shot;
+    });
+    return t.run((ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: `media_thread_${crypto.randomUUID()}`,
+        kind: "media",
+        status: "proposed" as const,
+        createdAt: Date.now(),
+        targetDurationSeconds: 30,
+        clipSeconds: 12,
+        shots,
+      }),
+    );
+  }
+
+  test("approving a SCENE deck reserves it per kind — the same gate, not a second rail", async () => {
+    const t = withMedia();
+    const planId = await seedMediaScenePlan(t);
+    // What the canvas would have PRINTED for this deck, read before the money moves.
+    const estimate = await t
+      .withIdentity({ subject: TENANT })
+      .query(api.media.jobEstimate, { planId });
+
+    const result = await t
+      .withIdentity({ subject: TENANT })
+      .mutation(api.cockpit.executePlan, { planId });
+    await t.finishInProgressScheduledFunctions();
+
+    expect(result).toEqual({ ok: true });
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan?.status).toBe("delivering");
+    expect(plan?.renderStatus).toBe("pending");
+    expect(plan?.mediaRunId).toEqual(expect.any(String));
+
+    // PER KIND, exactly as `generateReel` prices the same deck: two clips at their OWN lengths,
+    // one still, and NO picture line for the card. Under the block contract this arm could not buy
+    // this deck at all — `deckOf` returns null for a scene row.
+    const jobs = await mediaJobsOf(t);
+    expect(
+      jobs
+        .filter((r) => r.kind === "video")
+        .map((r) => (r.spec.kind === "video" ? r.spec.seconds : 0))
+        .sort((l, r) => l - r),
+    ).toEqual([8, 12]);
+    expect(jobs.filter((r) => r.kind === "image").map((r) => r.blockIndex)).toEqual([1]);
+    expect(jobs.some((r) => r.kind === "video" && r.blockIndex === 2)).toBe(false);
+
+    // ONE rail, ONE number: the estimate the canvas shows and the movement the ledger records for
+    // the agent's approval are the same cents, because both come off `reserveSceneJobInner`.
+    const moved = await t.run((ctx) => ctx.db.query("spendEvents").collect());
+    expect(moved.filter((m) => m.phase === "reserved")).toHaveLength(1);
+    expect(moved.find((m) => m.phase === "reserved")?.amountCents).toBe(estimate.totalCents);
+  });
+
+  test("a SCENE deck that does not sum to its declared target refuses before the CAS", async () => {
+    const t = withMedia();
+    const planId = await seedMediaScenePlan(t);
+    // 30 declared, 29 on the rows. The assembler would hard-error on this inside a VM that has
+    // already been paid for; here it is free.
+    await t.run(async (ctx) => {
+      const plan = await ctx.db.get(planId);
+      const shots = (plan?.shots ?? []).map((s) => (s.index === 1 ? { ...s, seconds: 5 } : s));
+      await ctx.db.patch(planId, { shots });
+    });
+
+    const result = await t
+      .withIdentity({ subject: TENANT })
+      .mutation(api.cockpit.executePlan, { planId });
+
+    expect(result).toEqual({ ok: false, reason: "illegal_duration" });
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("proposed");
+    expect(await mediaJobsOf(t)).toHaveLength(0);
+  });
+
   test.each([
     ["an over-length narration line", { chars: maxCharsFor(4) + 1 }, "narration_too_long"],
     ["a clip length nobody prices", { clipSeconds: 7, chars: 90 }, "illegal_duration"],

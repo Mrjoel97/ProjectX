@@ -10,6 +10,30 @@
 > for already-submitted historical jobs. Older provider-specific sections below describe the
 > superseded implementation unless explicitly marked current. See ADR-017.
 
+> Last verified: 2026-08-14 (20.2 wave 8 — **THE SPECIALIST BECOMES A SCENE AUTHOR, and the approve
+> arm opens.** `media-director.md` is v2: `SCENE DECK` with `Target duration`, a `Seconds` column
+> that must sum to it EXACTLY, the four visual kinds, optional narration, and the per-window
+> character ceiling instead of the impossible 31–56 band. The mirror was regenerated and the
+> round-trip test now reads the body's own example with `parseSceneDeck` — including that the
+> example MIXES kinds (an all-generated deck cannot hit a target at all), that `startMs` is a
+> running sum over unequal durations, and that both a speaking and a silent scene are demonstrated.
+> `cockpit.executePlan` reserves scene decks through `reserveSceneJobInner`, so the agent's approve
+> arm and the canvas are ONE gate with ONE number (pinned: the ledger movement equals
+> `jobEstimate.totalCents`); `scene_render_not_ready` is deleted rather than left unreachable.
+> **A silent-degradation bug was found and fixed on the way:** `parsePrompts` matched `Block N`
+> only, so every `Scene N` prompt would have fallen back to the row's DESCRIPTION — not a parse
+> failure, and invisible until the pictures came back generic. Observed RED before the fix.
+> **THE GATE, corrected: there is none to pay.** The plan budgeted a candidate seed, a ~$0.35 eval
+> gate and a blocking owner activation for this body. `media-director` is DELIBERATELY UNGATED by a
+> decision recorded in `skill.ts`, asserted in `skillBodies.test.ts` and derived non-vacuously by
+> `run-eval-golden.mjs --self-check` — the golden runner drives `runCockpitAgent` over TEXT fixtures
+> and structurally cannot exercise a storyboard turn, so gating it would strand it at v1 forever.
+> `seedSkills` therefore publishes this edit straight to `active`. The residual risk is the one
+> already named at that site — a `media-director` body edit activates with no eval evidence — and it
+> is unchanged by this wave. **SEEDING IS REQUIRED:** until `pnpm dev` runs against a deployment
+> (`npx convex dev` alone does NOT seed), the live row is still v1 and the specialist still writes
+> block decks. 936 core + 31 contracts + 1714 backend green; $0.)
+
 > Last verified: 2026-08-14 (20.2 wave 7 — **THE SCENE-KIND PRICE TABLE, and what it turned out to
 > prove.** Scene pricing was two hand-copied branches at two money sites (`reserveSceneJobInner` and
 > `jobEstimate`); it is now ONE table in the pure package — `SCENE_VISUAL_LINE` / `sceneVisualSpec`
@@ -385,6 +409,43 @@ Against `MEDIA_JOB_CAP_USD = $3.50` — **13% headroom**.
 D10's arithmetic refuses 6 blocks at 720p ($6.00+) and 12 blocks at 480p ($6.00+), and why **the
 budget rail is also the render-duration rail**: the sandbox never sees a resolution whose encode time
 would change delta §2.4's numbers. Both refusals are pinned in `media.test.ts`.
+
+## The specialist writes scenes (20.2 wave 8)
+
+`packages/contracts/skills/media-director.md` is v2 and teaches the SCENE contract. The `.md` is
+canonical; `packages/contracts/src/skills/mediaDirector.ts` is its LF-normalised mirror and
+`skillBodies.test.ts` fails on drift — regenerate the mirror, never hand-edit it.
+
+**What pins the body to the parser:** `storyboard.test.ts`'s round trip reads the body's own worked
+example with `parseSceneDeck`. A drifted table is not an error — it produces an EMPTY deck, which
+reads to the user as "the specialist proposed nothing". The round trip asserts the example obeys
+every rule the body teaches, including two that are easy to lose:
+
+- **The example MIXES kinds.** Not a style note — every `GENERATED_CLIP_SECONDS` value is a multiple
+  of 4, so an all-generated deck cannot sum to 15 or 30, and a 60 is over the job cap (ADR-019). An
+  example that reached for a clip every time would teach the one deck shape that cannot render.
+- **The example demonstrates a SILENT scene** as well as a speaking one. Optional narration is the
+  wave-4 contract; an example where every scene speaks teaches the deleted rule by omission.
+
+**`SCENE PROMPTS` entries say `Scene N`,** and `parsePrompts` accepts `Block N` or `Scene N` — the
+prompts section is shared by both deck contracts. Wave 8 found it matching `Block` only, which
+would have silently degraded every prompt to its row's description.
+
+**THE GATE: `media-director` is DELIBERATELY UNGATED.** Recorded in `packages/contracts/src/skill.ts`,
+asserted in `skillBodies.test.ts`, and derived non-vacuously by `run-eval-golden.mjs --self-check`.
+The golden runner drives `runCockpitAgent` over TEXT fixtures and structurally cannot exercise a
+script/art-direction/storyboard turn, so gating this row would strand it at v1 on its first body
+edit with no runner able to clear the gate. Consequences, both of which are the deal:
+
+- A body edit costs **nothing** and needs no owner activation. `seedSkills` sees a changed body on an
+  ungated name and inserts `maxVersion + 1` as `active`.
+- A body edit therefore **activates with no eval evidence.** That residual risk is named at the
+  self-check site and is not new. What protects the money is CODE, not prose: `searchVault` is the
+  specialist's only grant, the parser refuses every deck shape the assembler cannot build, and the
+  model comes from a price table the body cannot name into.
+
+**SEEDING IS REQUIRED.** `npx convex dev` alone does not seed — run `pnpm dev`. Until then the live
+row is v1 and the specialist still proposes block decks, which still parse and still render.
 
 ## The scene-kind price table (20.2 wave 7) — ADR-019
 

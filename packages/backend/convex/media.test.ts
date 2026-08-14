@@ -5145,19 +5145,9 @@ describe("20.2 wave 5 — THE SCENE GATE OPENS: a scene deck is finally buyable"
     expect(await t.query(internal.guardrails.mediaRemainingCents, { tenantId: A })).toBe(before);
   });
 
-  test("the AGENT's approve arm still refuses — the cockpit path is not wired to scenes yet", async () => {
-    // Deliberate and named. `cockpit.executePlan` builds its own reservation from the block deck;
-    // opening it is the agent proposing a scene deck end to end, which is the media-director
-    // certification in wave 8. The canvas path is open; this one says so rather than mispricing.
-    const t = harness();
-    const { planId } = await seedSceneDeck(t);
-    await t.run(async (ctx) => ctx.db.patch(planId, { kind: "media", status: "proposed" }));
-    expect(await asA(t).mutation(api.cockpit.executePlan, { planId })).toEqual({
-      ok: false,
-      reason: "scene_render_not_ready",
-    });
-    expect(await t.run((ctx) => ctx.db.query("mediaJobs").collect())).toHaveLength(0);
-  });
+  // The AGENT's approve arm opened in wave 8 and its test moved to `cockpit.test.ts`, which is
+  // where that mutation's harness lives — reaching `EXTERNAL_TARGETS` needs the action-retrier
+  // component this file deliberately does not mount. `scene_render_not_ready` is gone with it.
 
   // ── 20.2 wave 6: regenerating ONE scene, against the WHOLE deck's timeline ───────────────────
   test("regenerating ONE scene buys that scene ALONE — and is priced against the whole deck", async () => {

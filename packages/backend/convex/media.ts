@@ -64,15 +64,6 @@ export type ReserveRefusal =
   | "over_job_cap"
   | "illegal_duration"
   | "unrenderable_block"
-  /** 20.2 — a SCENE deck reached a money gate that cannot buy one.
-   *
-   *  **NARROWED in wave 5.** The CANVAS path (`generateReel` / `jobEstimate`) no longer returns
-   *  this: the assembler builds three kinds of scene, the sidecar describes them and
-   *  `reserveSceneJobInner` prices them per kind, so a scene deck is buyable there. What still
-   *  returns it is `cockpit.executePlan` — the AGENT's approve arm builds its own reservation from
-   *  a block deck, and opening it is the media-director certification in wave 8. Delete this member
-   *  when that lands; a refusal nothing can trigger is worse than none. */
-  | "scene_render_not_ready"
   /** 20.2 wave 6 — regenerating a scene that BUYS NOTHING. A `text_card` is drawn by ffmpeg and an
    *  `uploaded_video`'s bytes are already the tenant's, so a silent one of either has no provider
    *  line to reserve: there is literally nothing to re-buy. Editing its words and generating the

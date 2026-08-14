@@ -778,9 +778,11 @@ async function persistStoryboard(
 
   /* 20.2 — TWO CONTRACTS, ONE TERMINAL, and the ORDER is the whole design.
    *
-   * `media-director.md` still teaches the BLOCK deck and does not become a scene author until its
-   * body is recertified through the eval gate (wave 8). So both shapes arrive here for several
-   * waves, and this function must read whichever it is handed rather than the one we wish it were.
+   * `media-director.md` teaches the SCENE deck as of 20.2 wave 8, but the BLOCK shape does not go
+   * away with it: `parseSceneDeck` still accepts the legacy visual names, plans proposed before the
+   * body changed are still on screen, and a registry row is a database write that can be rolled
+   * back to v1 without a deploy. So both shapes arrive here, and this function must read whichever
+   * it is handed rather than the one we wish it were.
    *
    * A SCENE deck wins when the body contains one. The fallback is guarded on `no_deck` ALONE —
    * "this body has no SCENE DECK heading at all" — and never on any other scene refusal. A scene
