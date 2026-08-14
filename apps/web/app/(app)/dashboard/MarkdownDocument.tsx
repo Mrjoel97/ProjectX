@@ -75,10 +75,7 @@ export function MarkdownDocument({
     }
 
     if (token.kind === "table") {
-      const columnCount = Math.max(
-        token.header.length,
-        ...token.rows.map((row) => row.length),
-      );
+      const columnCount = Math.max(token.header.length, ...token.rows.map((row) => row.length));
       blocks.push(
         <div className="markdown-table-scroll" key={`table-${index}`}>
           <table>

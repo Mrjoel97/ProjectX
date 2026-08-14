@@ -1,7 +1,8 @@
 // @vitest-environment node
 //
-// Correction 7: a corpus-backed, non-email-first cockpit journey. The fixture is read from the
-// upload package users actually test with; it is deliberately not a hand-written ACME surrogate.
+// Correction 7: a corpus-backed, non-email-first cockpit journey. The fixture is a committed copy
+// of the upload package users actually test with; it is deliberately not a hand-written ACME
+// surrogate.
 // One governed agent loop grounds in Zawadi's strategy, assesses the business, and creates a
 // standalone operating document while the tenant has no Gmail connection.
 
@@ -27,9 +28,24 @@ const rateLimiterModules = import.meta.glob(
 
 const TENANT = "zawadi_solopreneur";
 const THREAD = "zawadi_operator_journey";
+// THE CORPUS IS COMMITTED, and this path is load-bearing in two ways.
+//
+// (1) It used to read `output/simulated-businesses/...`, a LOCALLY GENERATED upload package that a
+//     fresh clone — which is exactly what CI is — does not have. The suite died at COLLECTION with
+//     `ENOENT ... business-overview.md` and took the whole `@pikar/backend` task red, which meant a
+//     red gate, which meant `deploy-production` could never fire. It was briefly skipped-when-absent
+//     to unblock the release; skipping is not passing, so the six files it actually reads are now
+//     tracked and the journey is covered again, in CI, for real.
+//
+// (2) The fixtures live OUTSIDE `convex/` deliberately. Everything under that directory is bundled
+//     and pushed to the deployment, and these are test inputs, not deployable modules.
+//
+// ~7 KB, synthetic throughout (a fictional Dar es Salaam consultancy), and read for contact data
+// before being committed: no addresses, no emails, no phone numbers — every digit run in them is a
+// date. Keep it that way; this is a fixture, never a place to park real customer records.
 const corpusRoot = join(
   dirname(fileURLToPath(import.meta.url)),
-  "../../../output/simulated-businesses/zawadi-growth-studio/01-clean-baseline",
+  "../__fixtures__/zawadi-growth-studio",
 );
 
 const corpus = (relativePath: string): string =>

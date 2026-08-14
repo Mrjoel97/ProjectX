@@ -331,6 +331,10 @@ export function DocGrid({
   // Deliberately NOT retryingId: that is a GLOBAL one-at-a-time lock, so sharing it would
   // cross-disable every failed document's Retry while a folder cancel is in flight.
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  // Two-click delete for a filing folder: the first click ARMS, the second removes. No native
+  // confirm() (it blocks the tab and cannot be styled or read by the same a11y path as the rest of
+  // this grid), and no modal for a two-word decision that removes no documents.
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [folderName, setFolderName] = useState("");
@@ -603,7 +607,10 @@ export function DocGrid({
           </>
         )}
         {organizeNotice && (
-          <span role="status" style={{ flexBasis: "100%", color: "var(--ink-soft)", fontSize: "0.82rem" }}>
+          <span
+            role="status"
+            style={{ flexBasis: "100%", color: "var(--ink-soft)", fontSize: "0.82rem" }}
+          >
             {organizeNotice}
           </span>
         )}
@@ -743,7 +750,14 @@ export function DocGrid({
                     height: view === "grid" ? "100%" : undefined,
                     padding: "1rem",
                     // In list view the pill row sits vertically centred at the right — reserve room.
-                    paddingRight: view === "list" && sealed ? "11rem" : "1rem",
+                    paddingRight:
+                      view === "list"
+                        ? sealed
+                          ? "11rem"
+                          : f.organizational === true
+                            ? "6rem"
+                            : "1rem"
+                        : "1rem",
                     borderRadius: "0.85rem",
                     cursor: onOpenFolder ? "pointer" : "default",
                     flexDirection: view === "grid" ? "column" : "row",
@@ -831,6 +845,46 @@ export function DocGrid({
                     </button>
                   </span>
                 )}
+                {/* DELETE, for a filing folder the user made — the one folder kind that is theirs
+                    to unmake. It is offered whatever the member count, because "empty" was exactly
+                    the case with no control at all: `sealed` is false the instant an organizational
+                    folder is born (it is `complete` from birth), so this branch was unreachable and
+                    an empty folder was permanent. An upload/Drive folder keeps its cancel-only rail
+                    — its counters, reservation and digest describe a batch, not a filing choice.
+                    NON-DESTRUCTIVE: `cancelFolder` removes the FOLDER; its members keep a dangling
+                    folderId and become ordinary documents (see vaultFolders.cancelFolder). */}
+                {!sealed && f.organizational === true && (
+                  <span style={{ ...pillAnchor(view), display: "inline-flex", gap: "0.35rem" }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (confirmDeleteId !== f._id) {
+                          setConfirmDeleteId(f._id);
+                          return;
+                        }
+                        setConfirmDeleteId(null);
+                        void runCancel(f);
+                      }}
+                      onBlur={() => setConfirmDeleteId((id) => (id === f._id ? null : id))}
+                      disabled={cancellingId !== null}
+                      aria-label={
+                        confirmDeleteId === f._id
+                          ? `Confirm deleting folder ${f.name}. The ${f.memberCount} document${f.memberCount === 1 ? "" : "s"} inside stay in your vault.`
+                          : `Delete folder: ${f.name}`
+                      }
+                      title="Deletes the folder only — any documents inside stay in your vault"
+                      style={{
+                        ...pillShape,
+                        cursor: cancellingId ? "default" : "pointer",
+                        background: confirmDeleteId === f._id ? "var(--teal-600)" : "var(--rule)",
+                        color: confirmDeleteId === f._id ? "#fff" : "var(--ink)",
+                        opacity: cancellingId === f._id ? 0.6 : 1,
+                      }}
+                    >
+                      {confirmDeleteId === f._id ? "Delete?" : "Delete"}
+                    </button>
+                  </span>
+                )}
               </div>
             );
           })}
@@ -853,7 +907,9 @@ export function DocGrid({
                 onClick={() =>
                   selectionMode && canSelectDoc(doc) ? toggleSelected(doc) : onOpen?.(doc)
                 }
-                aria-pressed={selectionMode && canSelectDoc(doc) ? selectedIds.has(doc._id) : undefined}
+                aria-pressed={
+                  selectionMode && canSelectDoc(doc) ? selectedIds.has(doc._id) : undefined
+                }
                 className="clay-card"
                 style={{
                   display: "flex",

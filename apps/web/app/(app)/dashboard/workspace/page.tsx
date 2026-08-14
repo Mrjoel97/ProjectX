@@ -396,7 +396,9 @@ export default function WorkspacePage() {
     setView("work");
   };
   const clearChatHistory = async (): Promise<boolean> => {
-    if (!window.confirm("Clear all workspace chat history? Documents saved to the vault will remain.")) {
+    if (
+      !window.confirm("Clear all workspace chat history? Documents saved to the vault will remain.")
+    ) {
       return false;
     }
     setClearingHistory(true);
@@ -521,7 +523,11 @@ export default function WorkspacePage() {
                         {clearingHistory ? "Clearing…" : "Clear chat history"}
                       </button>
                       {historyNotice && (
-                        <p role="status" className="head-menu-empty" style={{ whiteSpace: "normal" }}>
+                        <p
+                          role="status"
+                          className="head-menu-empty"
+                          style={{ whiteSpace: "normal" }}
+                        >
                           {historyNotice}
                         </p>
                       )}
