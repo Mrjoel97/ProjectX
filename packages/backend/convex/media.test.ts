@@ -16,6 +16,7 @@ import {
   MEDIA_JOB_CAP_USD,
   MEDIA_SANDBOX_USD_PER_RENDER,
   MEDIA_VIDEO_PRICING,
+  MEDIA_VIDEO_SECONDS,
   type MediaSpec,
 } from "@pikar/cost/media";
 import { convexTest, type TestConvex } from "convex-test";
@@ -418,20 +419,24 @@ describe("the narration BAND is caught before payment, not by ffprobe after it",
     expect(await rows(t)).toHaveLength(0);
   });
 
-  test("the band travels with the block length — 43-70 at 5 s, not 103-140", async () => {
+  test("the band travels with the block length — 56 at 4 s, not 168 at 12 s", async () => {
     const t = harness();
     const planId = await seedPlan(t);
-    // 120 characters clears the 10-second ceiling and BLOWS the 5-second one. A flat 140 would
-    // have let this reach a reservation and then hard-error in the render sandbox.
+    // 120 characters clears the 12-second ceiling and BLOWS the 4-second one. A flat ceiling
+    // would have let this reach a reservation and then hard-error in the render sandbox.
+    //
+    // 4 and 12, not 5 and 10: after the OpenAI cutover the pinned model's grid is [4,8,12], so a
+    // 5-second deck is refused as `illegal_duration` before the band is ever consulted — which
+    // would have made this test pass for the WRONG reason.
     const res = await reserve(t, {
       tenantId: A,
       planId,
-      blocks: deck(3, { seconds: 5, chars: 120 }),
-      clipSeconds: 5,
+      blocks: deck(3, { seconds: 4, chars: 120 }),
+      clipSeconds: 4,
       withCaptions: false,
     });
     expect(res).toEqual({ ok: false, reason: "narration_too_long" });
-    expect(120).toBeLessThan(maxCharsFor(10)); // not vacuous: it is legal at 10 s
+    expect(120).toBeLessThan(maxCharsFor(12)); // not vacuous: the SAME line is legal at 12 s
   });
 });
 
@@ -458,8 +463,8 @@ test("an UNRENDERABLE deck is refused BEFORE a cent moves — zero rows, zero co
     const res = await reserve(t, {
       tenantId: A,
       planId,
-      blocks: deck(3, { type, seconds: 5, chars: minCharsFor(5) }),
-      clipSeconds: 5,
+      blocks: deck(3, { type, seconds: 4, chars: minCharsFor(4) }),
+      clipSeconds: 4,
       withCaptions: false,
     });
     expect(res, `${type} deck was reserved`).toEqual({ ok: false, reason: "unrenderable_block" });
@@ -471,10 +476,10 @@ test("an UNRENDERABLE deck is refused BEFORE a cent moves — zero rows, zero co
     tenantId: A,
     planId,
     blocks: [
-      ...deck(2, { type: "AI", seconds: 5, chars: minCharsFor(5) }),
-      ...deck(1, { type: "TEXT", seconds: 5, chars: minCharsFor(5) }),
+      ...deck(2, { type: "AI", seconds: 4, chars: minCharsFor(4) }),
+      ...deck(1, { type: "TEXT", seconds: 4, chars: minCharsFor(4) }),
     ].map((b, i) => ({ ...b, index: i })),
-    clipSeconds: 5,
+    clipSeconds: 4,
     withCaptions: false,
   });
   expect(mixed).toEqual({ ok: false, reason: "unrenderable_block" });
@@ -4292,5 +4297,173 @@ describe("ledger parity: the media rail reserves whole and lands per line", () =
     // a credit path (a real design change that must be argued, not slipped in) or something is
     // minting money into the ledger that the limiter never returned.
     expect(refunded).toHaveLength(0);
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+// THE SCENE TIMELINE reaches the adapters (phase 20.2, wave 2)
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+
+/** A SCENE-shaped deck on the plan row: `visual` instead of `type`, per-scene `seconds`, and a
+ *  `windowStartMs` that is a RUNNING SUM rather than a uniform grid. Durations deliberately
+ *  disagree — a fixture where they happened to match could not tell the two arithmetics apart. */
+async function seedSceneDeck(
+  t: T,
+  opts: { tenantId?: string; seconds?: number[]; target?: number; visuals?: string[] } = {},
+) {
+  const tenantId = opts.tenantId ?? A;
+  const seconds = opts.seconds ?? [8, 6, 4, 12];
+  const visuals = opts.visuals ?? [
+    "generated_video",
+    "animated_image",
+    "text_card",
+    "generated_video",
+  ];
+  const planId = await seedPlan(t, tenantId);
+  let startMs = 0;
+  const shots = seconds.map((sec, i) => {
+    const shot = {
+      index: i,
+      visual: visuals[i] ?? "generated_video",
+      seconds: sec,
+      windowStartMs: startMs,
+      description: `scene ${i}`,
+      prompt: `prompt ${i}`,
+      narration: `line ${i}`,
+    };
+    startMs += sec * 1000;
+    return shot;
+  });
+  await t.run(async (ctx) =>
+    ctx.db.patch(planId, {
+      targetDurationSeconds: opts.target ?? seconds.reduce((n, x) => n + x, 0),
+      clipSeconds: Math.max(...seconds),
+      shots,
+    }),
+  );
+  return { planId, seconds, shots };
+}
+
+describe("20.2 wave 2 — the ordering arithmetic is a RUNNING SUM", () => {
+  test("reorder recomputes offsets from each scene's OWN length, not index * clipSeconds", async () => {
+    const t = harness();
+    // 8 / 6 / 4 / 12 reordered to 12 / 4 / 8 / 6 must give offsets 0 / 12000 / 16000 / 24000.
+    // The old `index * clipSeconds` arithmetic would have written 0 / 12000 / 24000 / 36000 off
+    // the deck-wide clipSeconds (12) — a grid none of these scenes was cut to, and a 36-second
+    // offset inside a 30-second reel.
+    const { planId } = await seedSceneDeck(t);
+
+    expect(await asA(t).mutation(api.media.reorderBlocks, { planId, order: [3, 2, 0, 1] })).toEqual(
+      { ok: true },
+    );
+
+    const after = await planRowOf(t, planId);
+    expect(after?.shots?.map((x) => x.seconds)).toEqual([12, 4, 8, 6]);
+    expect(after?.shots?.map((x) => x.windowStartMs)).toEqual([0, 12_000, 16_000, 24_000]);
+    expect(after?.shots?.map((x) => x.index)).toEqual([0, 1, 2, 3]);
+  });
+
+  test("delete re-closes the timeline — no hole where the removed scene was", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    expect(await asA(t).mutation(api.media.deleteBlock, { planId, blockIndex: 1 })).toEqual({
+      ok: true,
+    });
+    const after = await planRowOf(t, planId);
+    // 8 / 4 / 12 — the 6-second scene is gone and everything after it moved UP by exactly 6s.
+    expect(after?.shots?.map((x) => x.seconds)).toEqual([8, 4, 12]);
+    expect(after?.shots?.map((x) => x.windowStartMs)).toEqual([0, 8_000, 12_000]);
+  });
+
+  test("a UNIFORM deck is byte-identical under the new arithmetic — this is a generalisation", async () => {
+    const t = harness();
+    const { planId, clipSeconds } = await seedDeck(t, { blocks: 3 });
+    await asA(t).mutation(api.media.reorderBlocks, { planId, order: [2, 1, 0] });
+    const after = await planRowOf(t, planId);
+    expect(after?.shots?.map((x) => x.windowStartMs)).toEqual([
+      0,
+      clipSeconds * 1000,
+      clipSeconds * 2000,
+    ]);
+  });
+});
+
+describe("20.2 wave 2 — a scene deck reaches the money gate and is REFUSED, not mispriced", () => {
+  test("generateReel says scene_render_not_ready, never no_deck", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    // `no_deck` would be a lie: the deck parsed, it is stored, and the user can read it on the
+    // canvas. What is missing is the assembler's branches, and the refusal has to say so.
+    expect(await asA(t).mutation(api.media.generateReel, { planId })).toEqual({
+      ok: false,
+      reason: "scene_render_not_ready",
+    });
+  });
+
+  test("NOTHING is reserved — zero mediaJobs rows and the budget is untouched", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    const before = await t.query(internal.guardrails.mediaRemainingCents, { tenantId: A });
+    await asA(t).mutation(api.media.generateReel, { planId });
+    expect(await t.run((ctx) => ctx.db.query("mediaJobs").collect())).toHaveLength(0);
+    expect(await t.query(internal.guardrails.mediaRemainingCents, { tenantId: A })).toBe(before);
+  });
+
+  test("the APPROVE arm refuses it too — both money gates read the same two functions", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    await t.run(async (ctx) => ctx.db.patch(planId, { kind: "media", status: "proposed" }));
+    expect(await asA(t).mutation(api.cockpit.executePlan, { planId })).toEqual({
+      ok: false,
+      reason: "scene_render_not_ready",
+    });
+    expect(await t.run((ctx) => ctx.db.query("mediaJobs").collect())).toHaveLength(0);
+  });
+
+  test("a scene row is NOT readable as a block deck — the absent `type` is the fail-closed seam", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    // If `deckOf` ever accepted a scene row, these four scenes would be priced at the deck-wide
+    // `clipSeconds` (12) instead of 8/6/4/12 — silently overcharging by ~60% on a paid path.
+    // `jobEstimate` is the canvas mirror of the same reader, so it is the observable.
+    const estimate = await asA(t).query(api.media.jobEstimate, { planId });
+    expect(estimate.lines).toEqual([]);
+    expect(estimate.totalCents).toBe(0);
+    // …and the canvas is TOLD why, rather than shown a silent zero.
+    expect(estimate.refusal).toEqual({ reason: "scene_render_not_ready" });
+  });
+});
+
+describe("20.2 wave 2 — the money gate asks the PROVIDER what it can buy", () => {
+  test("a clip length the pinned model cannot produce refuses BEFORE any pricing", async () => {
+    const t = harness();
+    // 10 seconds is in `CLIP_SECONDS` (the display set) and NOT in the Sora grid. Before 20.2 it
+    // cleared this gate and was refused three checks later inside `estimateMediaUsd` — same code,
+    // wrong place, and it read like a pricing bug.
+    const { planId } = await seedDeck(t, { clipSeconds: 10, chars: 90 });
+    expect(await asA(t).mutation(api.media.generateReel, { planId })).toEqual({
+      ok: false,
+      reason: "illegal_duration",
+    });
+  });
+
+  test("the canvas estimate names the SAME refusal, so the button explains itself", async () => {
+    const t = harness();
+    const { planId } = await seedDeck(t, { clipSeconds: 10, chars: 90 });
+    const estimate = await asA(t).query(api.media.jobEstimate, { planId });
+    expect(estimate.refusal).toEqual({ reason: "illegal_duration" });
+  });
+
+  test("every duration the pinned model DOES support is buyable", async () => {
+    for (const seconds of MEDIA_VIDEO_SECONDS[MEDIA_DEFAULT_VIDEO.model] ?? []) {
+      const t = harness();
+      const { planId } = await seedDeck(t, {
+        blocks: 1,
+        clipSeconds: seconds,
+        chars: minCharsFor(seconds),
+      });
+      const estimate = await asA(t).query(api.media.jobEstimate, { planId });
+      expect(estimate.refusal).toBeNull();
+    }
   });
 });

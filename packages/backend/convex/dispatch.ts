@@ -25,9 +25,12 @@ import {
 import {
   narrationChars,
   type ParsedDeck,
+  type ParsedSceneDeck,
   parseArtDirection,
   parseBlockDeck,
+  parseSceneDeck,
   parseScript,
+  sceneNarrationChars,
 } from "@pikar/core/storyboard";
 import type { GenericActionCtx } from "convex/server";
 import { v } from "convex/values";
@@ -634,6 +637,35 @@ function deckRefusalBody(bad: Extract<ParsedDeck, { ok: false }>): string {
   return `${lede} — ${cause}.${where}${tail}\n\n_Reason: ${bad.reason}._`;
 }
 
+/** The SCENE contract's twin (20.2). A separate function rather than an extra branch in the one
+ *  above: the two refusal vocabularies share only `no_deck` and `empty_deck`, and threading two
+ *  unions through one `why` table is how a reason ends up rendering the wrong sentence. */
+function sceneRefusalBody(bad: Extract<ParsedSceneDeck, { ok: false }>): string {
+  const where =
+    "sceneIndex" in bad
+      ? ` Scene ${bad.sceneIndex + 1}${"chars" in bad ? ` is ${bad.chars} characters` : ""}.`
+      : "";
+  const why: Record<string, string> = {
+    no_deck: "it never wrote a scene deck",
+    empty_deck: "the scene deck came back empty",
+    bad_target_duration: "the reel length was not one of the supported 15, 30 or 60 seconds",
+    unknown_visual_kind: "a scene asked for a kind of visual the renderer does not have",
+    bad_scene_duration: "a scene did not say how many whole seconds it runs for",
+    illegal_generated_duration:
+      "a generated scene asked for a length the video model cannot produce",
+    missing_asset: "a scene said to use your own footage but never named which file",
+    duration_mismatch: "the scene lengths did not add up to the reel length it declared",
+    no_narration: "not one scene had a spoken line, so there would be nothing to voice",
+    narration_too_long: "a spoken line is too long to finish before the next line starts",
+  };
+  // Assembled from SHORT pieces for the same reason as its sibling above: `skills.test.ts` refuses
+  // any inline string over 200 characters anywhere in `convex/` (§5, no hardcoded prompts).
+  const lede = "# Reel\n\nI drafted this, but I couldn't turn it into a usable deck";
+  const tail = " Ask me to redo the scene deck and I'll keep the direction below.";
+  const cause = why[bad.reason] ?? "the deck did not parse";
+  return `${lede} — ${cause}.${where}${tail}\n\n_Reason: ${bad.reason}._`;
+}
+
 /**
  * The storyboard terminal (MEDIA-01), bolted onto a media dispatch AFTER `dispatchAndLand` has
  * returned — `persistResearchFindings`' ordering argument verbatim: the memo card is already landed
@@ -649,6 +681,92 @@ function deckRefusalBody(bad: Extract<ParsedDeck, { ok: false }>): string {
  * blocks, and nothing ever explains why. A body that does not parse lands as a MEMO with the lever
  * named instead.
  */
+/**
+ * The SCENE arm of the storyboard terminal (20.2).
+ *
+ * Structurally identical to the block arm below — same refusal-lands-as-a-memo shape, same
+ * refs-and-counts-only audit, same never-writes-an-empty-deck rule — because those properties are
+ * the terminal's, not the contract's. What differs is the vocabulary and the numbers worth being
+ * able to reconcile later.
+ *
+ * `type` is deliberately NOT written, and `visual` is. See the schema comment: an absent `type`
+ * makes `media.deckOf` fail closed on a scene row, where a legacy-equivalent token would let it be
+ * priced at a uniform `clipSeconds` it was never written against.
+ */
+async function persistSceneDeck(
+  ctx: Ctx,
+  args: DispatchArgs,
+  // The BODY, not the `DispatchResult`: the caller has already narrowed to the success arm, and
+  // taking the union back here would re-widen it for no reason. Returns void — the caller owns
+  // what it hands back.
+  body: string,
+  scene: ParsedSceneDeck,
+): Promise<void> {
+  if (!scene.ok) {
+    await ctx.runMutation(internal.plans.landStoryboardRefusal, {
+      tenantId: args.tenantId,
+      planId: args.planId,
+      body: sceneRefusalBody(scene),
+    });
+    await ctx.runMutation(internal.audit.log, {
+      tenantId: args.tenantId,
+      correlationId: args.rootRequestId,
+      eventType: "media.deck_refused",
+      actor: "system",
+      // Refs and COUNTS only (§4): the reason CODE, the scene INDEX, the character COUNT and the
+      // seconds the rows summed to. Never the narration, never the prompt, never the body.
+      payload: {
+        ...lineageRefs(args),
+        reason: scene.reason,
+        ...("sceneIndex" in scene ? { sceneIndex: scene.sceneIndex } : {}),
+        ...("chars" in scene ? { chars: scene.chars } : {}),
+        ...("totalSeconds" in scene ? { totalSeconds: scene.totalSeconds } : {}),
+      },
+    });
+    return;
+  }
+
+  const artDirection = parseArtDirection(body);
+  await ctx.runMutation(internal.plans.persistDeck, {
+    tenantId: args.tenantId,
+    planId: args.planId,
+    script: parseScript(body),
+    artDirection,
+    targetDurationSeconds: scene.targetDurationSeconds,
+    // `clipSeconds` is a REQUIRED arg and a scene deck has no single one. The longest scene is
+    // written, never an average or a first-row value: every consumer that still reads it treats it
+    // as a per-block ceiling, so the longest is the only choice that cannot under-state one.
+    // It is inert for scene rows — `targetDurationSeconds` is what wave 4 onward reads.
+    clipSeconds: Math.max(...scene.scenes.map((s) => s.durationMs)) / 1000,
+    shots: scene.scenes.map((s) => ({
+      index: s.index,
+      visual: s.visual,
+      seconds: s.durationMs / 1000,
+      windowStartMs: s.startMs,
+      description: s.description,
+      ...(s.overlay === undefined ? {} : { overlay: s.overlay }),
+      ...(s.asset === undefined ? {} : { asset: s.asset }),
+      prompt: s.prompt,
+      narration: s.narration,
+    })),
+  });
+  await ctx.runMutation(internal.audit.log, {
+    tenantId: args.tenantId,
+    correlationId: args.rootRequestId,
+    eventType: "media.deck_persisted",
+    actor: "system",
+    // COUNTS only, and the same three the block arm records plus the declared length — these are
+    // what a later `mediaJobs` batch has to reconcile against.
+    payload: {
+      ...lineageRefs(args),
+      blocks: scene.scenes.length,
+      targetDurationSeconds: scene.targetDurationSeconds,
+      narrationChars: sceneNarrationChars(scene.scenes),
+      hasArtDirection: artDirection !== null,
+    },
+  });
+}
+
 async function persistStoryboard(
   ctx: Ctx,
   args: DispatchArgs,
@@ -657,6 +775,24 @@ async function persistStoryboard(
   // SUCCESS PATH ONLY. A governed refusal is a paused conversation, not a proposal — its reply is
   // already on the card via `fallbackBody`.
   if (!res.ok) return res;
+
+  /* 20.2 — TWO CONTRACTS, ONE TERMINAL, and the ORDER is the whole design.
+   *
+   * `media-director.md` still teaches the BLOCK deck and does not become a scene author until its
+   * body is recertified through the eval gate (wave 8). So both shapes arrive here for several
+   * waves, and this function must read whichever it is handed rather than the one we wish it were.
+   *
+   * A SCENE deck wins when the body contains one. The fallback is guarded on `no_deck` ALONE —
+   * "this body has no SCENE DECK heading at all" — and never on any other scene refusal. A scene
+   * deck whose durations do not sum, or whose visual kind is unknown, must be REFUSED as a scene
+   * deck; falling through to `parseBlockDeck` there would read its rows under the uniform contract
+   * and quietly propose a reel nobody wrote.
+   */
+  const scene = parseSceneDeck(res.body);
+  if (scene.ok || scene.reason !== "no_deck") {
+    await persistSceneDeck(ctx, args, res.body, scene);
+    return res;
+  }
 
   const deck = parseBlockDeck(res.body);
   if (!deck.ok) {

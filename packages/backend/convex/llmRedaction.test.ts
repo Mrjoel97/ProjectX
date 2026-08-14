@@ -874,7 +874,25 @@ test("dispatch.ts lineage payloads reference no specialist output (reply/body/te
   //                            NUMBER (the total the tts reservation is priced from), never the
   //                            narration. No script, no prompt, no art direction, no block text.
   // Both are §4-clean. A NINTH is a new §4 surface and gets the same treatment, not a renumber.
-  expect(payloads.length, "dispatch.ts audit payload count changed").toBe(8);
+  //
+  // 20.2 adds the NINTH and TENTH — the SCENE arm of the same storyboard terminal
+  // (`persistSceneDeck`). BOTH REVIEWED against this rule before the count moved:
+  //   `media.deck_refused`   — `{...lineageRefs(args), reason: <ParsedSceneDeck reason>,
+  //                            sceneIndex, chars, totalSeconds}`. The reason is a CODE from the
+  //                            scene parser's CLOSED union; `sceneIndex` is a REF, `chars` is a
+  //                            COUNT, and `totalSeconds` is the NUMBER the rows summed to. The
+  //                            narration never enters — same reason the parser returns
+  //                            `{sceneIndex, chars}` rather than the offending line.
+  //   `media.deck_persisted` — `{...lineageRefs(args), blocks, targetDurationSeconds,
+  //                            narrationChars, hasArtDirection}`. Three COUNTS and a boolean.
+  //                            `targetDurationSeconds` is the DECLARED length, a number the user
+  //                            chose, not content. No script, no prompt, no scene text.
+  // ⚠ `persistSceneDeck` also takes a parameter literally named `body` — the specialist's output.
+  // It is passed to `parseArtDirection`/`parseScript` and to `landStoryboardRefusal` (the CONTENT
+  // plane, where it belongs), and reaches NO payload. That is precisely what the scan below
+  // checks, and it is why the parameter name is safe rather than merely unnoticed.
+  // An ELEVENTH is a new §4 surface and gets the same treatment, not a renumber.
+  expect(payloads.length, "dispatch.ts audit payload count changed").toBe(10);
   // All of them SPREAD one shared refs object (15-04 made it the `lineageRefs` helper so the throw
   // path could not drift from the rest) — scanning the payloads alone would miss a leak added
   // inside it, so its body is scanned as a payload too.

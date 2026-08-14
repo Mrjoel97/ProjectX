@@ -21,14 +21,14 @@
  * wrappers (CLAUDE.md §2).
  */
 import { concatWavTakes } from "@pikar/core/captions";
-import type { Block, ShotType } from "@pikar/core/storyboard";
+import type { Block, Scene, ShotType, VisualKind } from "@pikar/core/storyboard";
 import {
-  CLIP_SECONDS,
   isPaidBlock,
   MAX_CHARS_PER_BLOCK,
   maxCharsFor,
   minCharsFor,
   SHOT_TYPES,
+  VISUAL_KINDS,
 } from "@pikar/core/storyboard";
 import type { MediaSpec } from "@pikar/cost/media";
 import {
@@ -39,6 +39,7 @@ import {
   MEDIA_DEFAULT_VIDEO,
   MEDIA_DEFAULT_VOICE,
   MEDIA_JOB_CAP_USD,
+  MEDIA_VIDEO_SECONDS,
 } from "@pikar/cost/media";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
@@ -60,6 +61,13 @@ export type ReserveRefusal =
   | "over_job_cap"
   | "illegal_duration"
   | "unrenderable_block"
+  /** 20.2 — a SCENE deck reached the money gate before the assembler could build one. A scene
+   *  timeline needs per-scene durations, a drawtext card branch, a pan/zoom branch and a master
+   *  audio track; waves 3 and 4 add them. Until then this refusal is the ONLY correct answer, and
+   *  it is deliberately at the money gate rather than earlier: the deck is a perfectly good
+   *  proposal to read, edit and reorder — it just cannot be bought yet. Delete this member when
+   *  wave 4 lands; leaving it behind would be a refusal nothing can trigger. */
+  | "scene_render_not_ready"
   | "narration_too_long"
   | "narration_too_short"
   | "media_daily_exhausted"
@@ -77,7 +85,21 @@ type ProviderLine = {
   row: Omit<Doc<"mediaJobs">, "_id" | "_creationTime">;
 };
 
-const CLIP_SECONDS_SET = new Set<number>(CLIP_SECONDS);
+/**
+ * Can the PINNED video model actually produce a block of this length?
+ *
+ * NOT `CLIP_SECONDS`. That constant is the DISPLAY set — deliberately wide ([4,5,8,10,12]) so a
+ * deck proposed under an older provider still renders on the canvas. What may be BOUGHT is
+ * whatever the model this code is about to submit to supports, which after the OpenAI cutover is
+ * `MEDIA_VIDEO_SECONDS["sora-2"]` = [4,8,12].
+ *
+ * The two drifted apart at the cutover and nothing noticed, because a 10-second deck still failed
+ * — just three checks later, inside `estimateMediaUsd`, with the same code. ONE predicate, asked of
+ * the provider table rather than of a constant, is what stops that recurring the next time the
+ * pinned model changes.
+ */
+const isBuyableClipLength = (seconds: number): boolean =>
+  MEDIA_VIDEO_SECONDS[MEDIA_DEFAULT_VIDEO.model]?.includes(seconds) ?? false;
 const standaloneImageSpec = (): Extract<MediaSpec, { kind: "image" }> => ({
   kind: "image",
   model: MEDIA_DEFAULT_IMAGE.model,
@@ -190,9 +212,19 @@ export async function reserveJobInner(
   const cfg = await getGuardrailConfig(ctx);
   if (cfg.killSwitch || cfg.mediaKillSwitch) return { ok: false, reason: "kill_switch" };
 
-  // 2. A block length nobody prices. `chooseMediaBatch` would catch it too, but checking here means
-  //    the narration band below is computed against a LEGAL window rather than a nonsense one.
-  if (!CLIP_SECONDS_SET.has(a.clipSeconds)) return { ok: false, reason: "illegal_duration" };
+  // 2. A block length THE PINNED MODEL cannot produce.
+  //
+  //    This checked `CLIP_SECONDS` until 20.2 found the hole, and the hole was real rather than
+  //    theoretical: `CLIP_SECONDS` is [4,5,8,10,12] — deliberately WIDE, so a historical Wan deck
+  //    still DISPLAYS — while `MEDIA_VIDEO_SECONDS["sora-2"]` is [4,8,12]. After the OpenAI
+  //    cutover a 10-second deck therefore parsed free, cleared THIS check, and was refused deeper
+  //    in by `estimateMediaUsd` with the same `illegal_duration` code. Same outcome, wrong place,
+  //    and it made `cockpit.test.ts` red for a reason that read like a pricing bug.
+  //
+  //    A display set and a purchasable set are different questions. This is the money gate, so it
+  //    asks the second one — of the model it is actually about to submit to, never of a constant
+  //    that has to be remembered when the provider changes.
+  if (!isBuyableClipLength(a.clipSeconds)) return { ok: false, reason: "illegal_duration" };
 
   // 3. THE FREE PRE-FLIGHT GUARD, before anything else costs a thought.
   //    A narration line has a BAND, not a ceiling, and the band travels with the block length
@@ -1534,11 +1566,65 @@ async function clearRender(ctx: MutationCtx, planId: Id<"plans">): Promise<void>
 
 /** The deck as `reserveJobInner` wants it, or null when the plan carries nothing reservable. The
  *  `cockpit.ts:668` boundary check verbatim — a money gate does not assume its writer was correct. */
-function deckOf(plan: Doc<"plans">): readonly Block[] | null {
+export function deckOf(plan: Doc<"plans">): readonly Block[] | null {
   const shots = plan.shots ?? [];
   if (shots.length === 0 || plan.clipSeconds === undefined) return null;
-  if (!shots.every((s) => (SHOT_TYPES as readonly string[]).includes(s.type))) return null;
-  return shots.map((s) => ({ ...s, type: s.type as ShotType }));
+  // 20.2: `type` is now optional on the row, and a SCENE row does not write it. That absence is
+  // load-bearing rather than incidental — it is what stops a scene deck being read here as a block
+  // deck and priced at a uniform `clipSeconds` it was never written against. Fail closed.
+  if (
+    !shots.every((s) => s.type !== undefined && (SHOT_TYPES as readonly string[]).includes(s.type))
+  )
+    return null;
+  return shots.map((s) => ({
+    index: s.index,
+    type: s.type as ShotType,
+    seconds: s.seconds,
+    windowStartMs: s.windowStartMs,
+    description: s.description,
+    ...(s.overlay === undefined ? {} : { overlay: s.overlay }),
+    prompt: s.prompt,
+    narration: s.narration,
+  }));
+}
+
+/**
+ * The scene deck as `Scene[]`, or null (20.2).
+ *
+ * `deckOf`'s twin, and the two are MUTUALLY EXCLUSIVE by construction: a row carries `type` or
+ * `visual`, never both, so exactly one of these functions can return non-null for a given plan.
+ * That is why neither needs to know about the other.
+ *
+ * `startMs` and `durationMs` are read straight off `windowStartMs` and `seconds` rather than
+ * re-derived from an index — those two columns ARE the timeline, and re-deriving them is the
+ * uniform-grid assumption this phase exists to remove.
+ */
+export function sceneDeckOf(
+  plan: Doc<"plans">,
+): { targetDurationSeconds: number; scenes: Scene[] } | null {
+  const shots = plan.shots ?? [];
+  if (shots.length === 0 || plan.targetDurationSeconds === undefined) return null;
+  if (
+    !shots.every(
+      (s) => s.visual !== undefined && (VISUAL_KINDS as readonly string[]).includes(s.visual),
+    )
+  ) {
+    return null;
+  }
+  return {
+    targetDurationSeconds: plan.targetDurationSeconds,
+    scenes: shots.map((s) => ({
+      index: s.index,
+      startMs: s.windowStartMs,
+      durationMs: s.seconds * 1000,
+      visual: s.visual as VisualKind,
+      ...(s.asset === undefined ? {} : { asset: s.asset }),
+      description: s.description,
+      narration: s.narration,
+      ...(s.overlay === undefined ? {} : { overlay: s.overlay }),
+      prompt: s.prompt,
+    })),
+  };
 }
 
 /** One `mediaJobs` row reduced to what a tile shows. NO url — that is `assetUrls`' job alone. */
@@ -1731,13 +1817,20 @@ export const jobEstimate = tenantQuery({
 
     const plan = await ownedPlan(ctx, planId, ctx.tenantId);
     if (!plan) return empty;
+    // 20.2 — the scene gate, FIRST and in the same order as the two money gates. Without it a
+    // scene deck falls through to `empty` and the canvas renders a silent $0 estimate with no
+    // refusal: a Generate button that is disabled for a reason nothing on screen states. The whole
+    // point of this query is to name the lever BEFORE the button is pressed.
+    if (sceneDeckOf(plan) !== null) {
+      return { ...empty, refusal: { reason: "scene_render_not_ready" as const } };
+    }
     const blocks = deckOf(plan);
     const clipSeconds = plan.clipSeconds;
     if (!blocks || clipSeconds === undefined) return empty;
 
     // The SAME pre-flight refusals `reserveJobInner` applies, in the same order, so the canvas can
     // name the lever BEFORE the button is pressed rather than after.
-    if (!CLIP_SECONDS_SET.has(clipSeconds)) {
+    if (!isBuyableClipLength(clipSeconds)) {
       return { ...empty, refusal: { reason: "illegal_duration" } };
     }
     for (const b of blocks) {
@@ -1911,6 +2004,12 @@ export const generateReel = tenantMutation({
   args: { planId: v.id("plans") },
   handler: async (ctx, { planId }) => {
     const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
+    // 20.2 — THE SCENE GATE, and it is deliberately the FIRST thing here. A scene deck reaching
+    // `deckOf` returns null and would refuse as `no_deck`, which is a lie: the deck parsed, it is
+    // on screen, and the user can read it. The honest refusal names what is actually missing.
+    if (sceneDeckOf(plan) !== null) {
+      return { ok: false as const, reason: "scene_render_not_ready" as const };
+    }
     const blocks = deckOf(plan);
     if (!blocks || plan.clipSeconds === undefined) return { ok: false as const, reason: "no_deck" };
     return await reserveAndSchedule(ctx, {
@@ -1991,18 +2090,32 @@ export const regenerateBlock = tenantMutation({
 // one shared helper: a reel assembled from a different block order — or from a line that has since
 // been rewritten — is not the reel on screen.
 
-/** Patch one element of `plans.shots`, renumber, and clear the render. The single write path the
- *  five editor mutations share. */
+/**
+ * Patch one element of `plans.shots`, renumber, and clear the render. The single write path the
+ * five editor mutations share.
+ *
+ * **20.2 — the offsets are a RUNNING SUM of each shot's own length, not `index × clipSeconds`.**
+ * The old arithmetic read the deck-wide `clipSeconds`, which is only the truth when every shot is
+ * the same length; on a scene deck a reorder or a delete would have rewritten every offset to a
+ * uniform grid the shots were never cut to, silently desynchronising the whole timeline from the
+ * narration anchors. The new form is identical for a uniform deck by construction — `seconds` is
+ * `clipSeconds` on every block row — so this is a generalisation, not a behaviour change, and the
+ * block-contract tests pin that.
+ *
+ * The `plan` argument is gone with the arithmetic that needed it.
+ */
 async function patchShots(
   ctx: MutationCtx,
   planId: Id<"plans">,
-  plan: Doc<"plans">,
   next: NonNullable<Doc<"plans">["shots"]>,
 ): Promise<void> {
-  const clipMs = (plan.clipSeconds ?? 0) * 1000;
-  await ctx.db.patch(planId, {
-    shots: next.map((s, i) => ({ ...s, index: i, windowStartMs: i * clipMs })),
+  let startMs = 0;
+  const renumbered = next.map((s, i) => {
+    const shot = { ...s, index: i, windowStartMs: startMs };
+    startMs += s.seconds * 1000;
+    return shot;
   });
+  await ctx.db.patch(planId, { shots: renumbered });
   await clearRender(ctx, planId);
 }
 
@@ -2016,7 +2129,6 @@ export const editBlockPrompt = tenantMutation({
     await patchShots(
       ctx,
       planId,
-      plan,
       shots.map((s) => (s.index === blockIndex ? { ...s, prompt } : s)),
     );
     return { ok: true as const };
@@ -2054,7 +2166,6 @@ export const editBlockNarration = tenantMutation({
     await patchShots(
       ctx,
       planId,
-      plan,
       shots.map((s) => (s.index === blockIndex ? { ...s, narration } : s)),
     );
     return { ok: true as const };
@@ -2090,7 +2201,7 @@ export const reorderBlocks = tenantMutation({
 
     const byIndex = new Map(shots.map((s) => [s.index, s]));
     const next = order.map((i) => byIndex.get(i)).filter((s) => s !== undefined);
-    await patchShots(ctx, planId, plan, next);
+    await patchShots(ctx, planId, next);
     return { ok: true as const };
   },
 });
@@ -2106,7 +2217,6 @@ export const deleteBlock = tenantMutation({
     await patchShots(
       ctx,
       planId,
-      plan,
       shots.filter((s) => s.index !== blockIndex),
     );
     return { ok: true as const };

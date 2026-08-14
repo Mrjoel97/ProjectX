@@ -492,6 +492,12 @@ export default defineSchema({
     script: v.optional(v.string()),
     /** D8: block length, UNIFORM across the deck, ∈ {5,10} (Wan 2.5 accepts nothing else). */
     clipSeconds: v.optional(v.number()),
+    /** 20.2: the reel's DECLARED length in seconds, ∈ {15,30,60}. Present on a SCENE deck and
+     *  absent on a BLOCK deck, which is exactly how the two are told apart everywhere downstream —
+     *  there is no third `deckKind` discriminator to keep in sync. A block deck's length is still
+     *  the accident `shots.length * clipSeconds`; a scene deck's is this number, and its scene
+     *  durations must sum to it EXACTLY. */
+    targetDurationSeconds: v.optional(v.number()),
     /** The deck, INLINE rather than a `mediaShots` table: `plans.by_thread` is `.unique()`, so
      *  there is exactly one plan row per thread, and the canvas editor's reorder / delete / edit
      *  is then ONE array patch instead of N row writes plus an ordering column. There is no
@@ -501,13 +507,31 @@ export default defineSchema({
       v.array(
         v.object({
           index: v.number(),
-          type: v.string(),
+          /** A `ShotType` value on a BLOCK row, and ABSENT on a 20.2 scene row. Widened to
+           *  optional rather than overloaded with `VisualKind`, and that is the fail-closed
+           *  choice: `media.deckOf` gates on `SHOT_TYPES.includes(s.type)`, so an absent `type`
+           *  makes it return null. Writing a legacy-equivalent token here instead would let a
+           *  scene deck be read as a block deck and PRICED at a uniform `clipSeconds` it was
+           *  never written against — fail-open, on the money path. */
+          type: v.optional(v.string()),
+          /** 20.2: a `VisualKind` value, present on a SCENE row and absent on a block row. Its
+           *  presence is the per-row discriminator between the two contracts.
+           *  @pikar/core/storyboard owns this closed set, exactly as it owns `type`'s. */
+          visual: v.optional(v.string()),
+          /** THIS shot's own length, and THIS shot's own offset. They already carried a variable
+           *  timeline — the block contract merely happened to write them uniformly
+           *  (`clipSeconds`, `index * clipSeconds * 1000`). A scene row writes its real duration
+           *  and its running-sum start into the SAME two fields, so no `durationMs`/`startMs`
+           *  pair exists to disagree with them. */
           seconds: v.number(),
           windowStartMs: v.number(),
           description: v.string(),
           overlay: v.optional(v.string()),
           prompt: v.string(),
           narration: v.string(), // the block's SPOKEN line. Content-plane. Never audited.
+          /** 20.2, `uploaded_video` only: the tenant's own footage, as a vault doc REF — never a
+           *  URL and never bytes, the same rule every other asset on this path follows. */
+          asset: v.optional(v.object({ source: v.literal("vault"), docId: v.string() })),
         }),
       ),
     ),

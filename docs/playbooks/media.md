@@ -10,6 +10,13 @@
 > for already-submitted historical jobs. Older provider-specific sections below describe the
 > superseded implementation unless explicitly marked current. See ADR-017.
 
+> Last verified: 2026-08-14 (20.2 wave 2 — the scene contract reaches the Convex adapters. Schema
+> WIDENED (`shots.visual`, `shots.asset`, `shots.type` now optional, `plans.targetDurationSeconds`);
+> `persistStoryboard` reads either contract; the editor offsets are a RUNNING SUM; and a scene deck
+> is REFUSED at both money gates with `scene_render_not_ready` rather than mispriced. Two
+> pre-existing defects were fixed on the way in — see the section below. backend 1631/1655,
+> core 868/868, cost 55/55, tsc clean.)
+
 > Last verified: 2026-08-14 (20.2 wave 1 — **the SCENE TIMELINE contract lands in `storyboard.ts`,
 > alongside the uniform BLOCK contract rather than replacing it.** `parseSceneDeck` is exported and
 > has no callers yet; wave 2 moves them and a later wave deletes `parseBlockDeck`. Nothing about the
@@ -1638,6 +1645,106 @@ while the behaviour was broken.
 **NOT yet done (waves 2-8):** no caller reads `parseSceneDeck`; the schema, price table, assembler,
 sidecar, captions, canvas and the `media-director` body are all still on the block contract. The
 reel stays unreachable until wave 3 gives the assembler its card / still / upload branches.
+
+
+## The scene timeline reaches the adapters (20.2 wave 2)
+
+Wave 1 was one pure file with no callers. Wave 2 is where the contract meets the database, the
+dispatch terminal and the two money gates.
+
+### The schema is WIDENED, and `type` going optional is the load-bearing part
+
+```
+shots[].type      v.string()  ->  v.optional(v.string())   // block rows only
+shots[].visual                    v.optional(v.string())   // NEW - scene rows only
+shots[].asset                     v.optional({source,docId}) // NEW - uploaded_video only
+plans.targetDurationSeconds       v.optional(v.number())   // NEW - scene decks only
+```
+
+**There is no `durationMs` and no `startMs`, deliberately.** `shots[].seconds` and
+`shots[].windowStartMs` already carried a variable timeline — the block contract merely happened
+to write them uniformly. A scene row writes its real duration and its running-sum offset into the
+SAME two columns, so there is no second pair of fields that can disagree with them.
+
+**`type` was widened to optional rather than overloaded with a `VisualKind`, and that choice is a
+money-path guard.** `media.deckOf` gates on `SHOT_TYPES.includes(s.type)`. An absent `type` makes
+it return null, so a scene deck cannot be read as a block deck. Writing a legacy-equivalent token
+there instead would have let four scenes of 8/6/4/12 seconds be priced at the deck-wide
+`clipSeconds` of 12 — fail-open, silently overcharging, on a paid path. `visual` present is the
+per-row discriminator; `targetDurationSeconds` present is the per-plan one. There is no third
+`deckKind` column to keep in sync with either.
+
+### Two contracts, one terminal — and the ORDER is the design
+
+`media-director.md` still teaches the BLOCK deck and does not become a scene author until its body
+is recertified through the eval gate (wave 8), so both shapes arrive at `persistStoryboard` for
+several waves. A scene deck wins when the body contains one. **The fallback to `parseBlockDeck` is
+guarded on `no_deck` ALONE** — "this body has no SCENE DECK heading at all". A scene deck whose
+durations do not sum, or whose visual kind is unknown, is REFUSED as a scene deck; falling through
+there would read its rows under the uniform contract and propose a reel nobody wrote.
+
+### The editor offsets are a RUNNING SUM
+
+`patchShots` computed `windowStartMs: i * clipSeconds * 1000`. On a scene deck a reorder or a
+delete would have rewritten every offset onto a uniform grid the shots were never cut to —
+desynchronising the whole timeline from the narration anchors, and on a 30-second reel writing a
+36-second offset. It now sums each shot's own `seconds`. **Identical output for a uniform deck by
+construction**, which the block-contract tests pin, so this is a generalisation rather than a
+behaviour change.
+
+### A scene deck is REFUSED at the money gates, not mispriced
+
+`scene_render_not_ready` is a new `ReserveRefusal`, returned by `generateReel`, by the approve arm
+in `cockpit.executePlan`, and by `jobEstimate` so the canvas states it instead of rendering a
+silent $0. It sits at the MONEY gate rather than earlier on purpose: a scene deck is a perfectly
+good proposal to read, edit and reorder — it just cannot be bought until waves 3 and 4 give the
+assembler its card / still / upload branches and its master audio track.
+
+⚠ **The plan had wave 2 narrowing `unrenderable_block` to `hasAssetSource`. It does NOT, and must
+not.** Narrowing it here would let a `text_card` scene through the money gate while the assembler
+still has no `drawtext` branch — the paid scenes land, then the render hard-errors on the missing
+`blockNN.mp4`. That is exactly the money leak the guard exists to close, re-opened for one wave.
+The narrowing belongs in wave 3, the moment the assembler can actually draw a card.
+
+### Two pre-existing defects fixed on the way in
+
+**1. The display set and the purchasable set had drifted, and the money gate asked the wrong one.**
+`CLIP_SECONDS` is `[4,5,8,10,12]` — deliberately wide, so a deck proposed under an older provider
+still DISPLAYS. `MEDIA_VIDEO_SECONDS["sora-2"]` is `[4,8,12]`. After the OpenAI cutover a
+10-second deck therefore parsed free, cleared `reserveJobInner`'s own duration check, and was
+refused three checks later inside `estimateMediaUsd` with the same `illegal_duration` code — same
+outcome, wrong place, and it read like a pricing bug. `cockpit.test.ts` had been RED for this
+since the cutover. There is now ONE predicate, `isBuyableClipLength`, asked of the provider table
+rather than of a constant, used by both `reserveJobInner` and `jobEstimate`.
+
+**A 10-second block deck is no longer buyable.** That is a real product consequence of the Sora
+cutover, not a test detail: the block contract is now 4, 8 or 12 seconds.
+
+**2. The approve path carried a hand-rolled copy of `deckOf`.** `cockpit.executePlan` re-derived
+the same three checks inline. Making `shots.type` optional broke the copy and not the original,
+so the approve path and the canvas path could have disagreed about whether a deck was readable —
+on the money path. It calls the shipped reader now. A money gate still does not assume its writer
+was correct; it just stops re-deciding what "correct" means.
+
+### How to verify
+
+`packages/backend`, `npx vitest run convex/media.test.ts convex/cockpit.test.ts
+convex/dispatch.test.ts convex/llmRedaction.test.ts`. The guards that can go vacuous are the
+running sum and the scene gate; both were mutation-checked — revert the sum to
+`i * clipSeconds * 1000` and two tests go red, delete the scene gate and one does.
+
+`llmRedaction.test.ts` pins the dispatch audit-payload COUNT (now 10) and demands a written §4
+review of each new payload before the number may move. `persistSceneDeck` takes a parameter
+literally named `body` — the specialist's output — which reaches `parseArtDirection`,
+`parseScript` and `landStoryboardRefusal` (the CONTENT plane) and NO audit payload. That is what
+the scan checks, and it is why the parameter name is safe rather than merely unnoticed.
+
+### Known red, and NOT this phase's
+
+`apps/web` `cockpitAccess.test.ts` fails on `ChatPane.tsx` copy ("Run the business with Pikar.").
+It is a source scan over a file 20.2 does not touch, and it was red before this phase started —
+in-flight work from the business-first cockpit language change. Left alone deliberately: fixing it
+means writing product copy nobody asked for.
 
 
 ## Storage retention (D12b)

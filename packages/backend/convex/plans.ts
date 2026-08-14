@@ -248,7 +248,10 @@ export const stageMediaPlan = internalMutation({
       // A media row holds a PREVIOUS reel's deck, and a canceled row is one the user halted —
       // neither is work in progress. Anything else with content in it is.
       const userWork =
-        !completedMemo && plan.kind !== "media" && plan.status !== "canceled" && hasDraftContent(plan);
+        !completedMemo &&
+        plan.kind !== "media" &&
+        plan.status !== "canceled" &&
+        hasDraftContent(plan);
       if (userWork) return { ok: false, reason: "draft_in_progress" };
       planId = plan._id;
       // resetPlan, NOT patchPlan: patchPlan drops `undefined` and so can never clear a filled slot.
@@ -307,16 +310,22 @@ export const persistDeck = internalMutation({
       }),
     ),
     clipSeconds: v.number(),
+    /** 20.2: present for a SCENE deck, absent for a BLOCK deck. Its presence on the plan row is
+     *  the discriminator downstream — see the schema comment. */
+    targetDurationSeconds: v.optional(v.number()),
     shots: v.array(
       v.object({
         index: v.number(),
-        type: v.string(),
+        // `type` on a block row, `visual` on a scene row — exactly one of the two, never both.
+        type: v.optional(v.string()),
+        visual: v.optional(v.string()),
         seconds: v.number(),
         windowStartMs: v.number(),
         description: v.string(),
         overlay: v.optional(v.string()),
         prompt: v.string(),
         narration: v.string(),
+        asset: v.optional(v.object({ source: v.literal("vault"), docId: v.string() })),
       }),
     ),
   },
@@ -332,6 +341,11 @@ export const persistDeck = internalMutation({
       script: a.script,
       ...(a.artDirection === null ? {} : { artDirection: a.artDirection }),
       clipSeconds: a.clipSeconds,
+      // Passed through UNCONDITIONALLY, undefined included. This is a direct `db.patch`, not
+      // `patchPlan`, so undefined CLEARS — and clearing is what a block deck must do here. This
+      // function writes a WHOLE deck; leaving a previous scene deck's target behind would leave
+      // the plan claiming a declared length that none of its shots was written against.
+      targetDurationSeconds: a.targetDurationSeconds,
       shots: a.shots,
       status: "proposed",
     });
@@ -740,6 +754,10 @@ export const resetPlan = internalMutation({
       artDirection: undefined,
       script: undefined,
       clipSeconds: undefined,
+      // 20.2: the SAME Pitfall-6 class. A surviving `targetDurationSeconds` would tell the next
+      // proposal in this thread that it is a 30-second scene deck when its shots say otherwise —
+      // and the exact-sum gate would then refuse a deck the user never wrote wrong.
+      targetDurationSeconds: undefined,
       shots: undefined,
       renderStatus: undefined,
       renderStorageId: undefined,

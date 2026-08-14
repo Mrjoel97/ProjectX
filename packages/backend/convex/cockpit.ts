@@ -47,7 +47,7 @@ import { retrier, workflow } from "./index";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 // 20-07 MEDIA-01: the whole-reel reservation, called DIRECTLY (not via runMutation) so it lands in
 // the same serializable transaction as the proposed -> approved CAS. See its doc comment.
-import { type ReserveRefusal, reserveJobInner } from "./media";
+import { deckOf, type ReserveRefusal, reserveJobInner, sceneDeckOf } from "./media";
 
 // No hardcoded `instructions` prompt (CLAUDE.md §5): the reasoning prompt is the cockpit-agent
 // skill body, loaded inside runCockpitAgent. The Agent here is a pure message store — it never
@@ -838,22 +838,29 @@ export const executePlan = tenantMutation({
           // `proposed → approved` CAS.** That is what makes "approve once, reserve once" true
           // without a second idempotency mechanism — and it is why plan 20-04 exposed
           // `reserveJobInner` as a plain async function: a Convex mutation cannot `runMutation`.
-          const shots = plan.shots ?? [];
+          // 20.2 — THE SCENE GATE, first, and for the same reason it is first in `generateReel`:
+          // `deckOf` returns null for a scene row, so refusing one as `no_deck` would be a lie
+          // about a deck the user can read on screen. A scene deck cannot be BOUGHT until waves 3
+          // and 4 give the assembler its branches; it is a perfectly good proposal until then.
+          if (sceneDeckOf(plan) !== null) {
+            return { ok: false, reason: "scene_render_not_ready" };
+          }
           // Absent, empty, or carrying a shot type the price table does not know — all three mean
-          // there is nothing safe to reserve. `persistStoryboard` (20-08) parses through
-          // `parseBlockDeck`, which already enforces SHOT_TYPES, so this is a boundary check rather
-          // than an expected path; a money gate does not assume its writer was correct.
-          if (
-            shots.length === 0 ||
-            plan.clipSeconds === undefined ||
-            !shots.every((s) => (SHOT_TYPES as readonly string[]).includes(s.type))
-          ) {
+          // there is nothing safe to reserve.
+          //
+          // **This used to be a hand-rolled copy of `deckOf`'s three checks**, and 20.2 proved why
+          // that mattered: making `shots.type` optional broke this copy and NOT `deckOf`, so the
+          // approve path and the canvas path could have disagreed about whether a deck was
+          // readable — on the money path. It calls the shipped reader now. A money gate still does
+          // not assume its writer was correct; it just stops re-deciding what "correct" means.
+          const blocks = deckOf(plan);
+          if (!blocks || plan.clipSeconds === undefined) {
             return { ok: false, reason: "no_deck" };
           }
           const reserved = await reserveJobInner(ctx, {
             tenantId: ctx.tenantId,
             planId,
-            blocks: shots.map((s) => ({ ...s, type: s.type as ShotType })),
+            blocks,
             clipSeconds: plan.clipSeconds,
             // ponytail: PINNED true until the canvas (20-09) offers a toggle. Captions are part of
             // the D8 deliverable, and the fail-closed direction is over-reserving: an unused STT

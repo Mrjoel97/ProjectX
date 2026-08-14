@@ -366,9 +366,14 @@ async function seedMediaPlan(
     noDeck?: boolean;
   } = {},
 ) {
-  const clipSeconds = opts.clipSeconds ?? 10;
+  // 4 seconds, not 10: after the OpenAI cutover `MEDIA_VIDEO_SECONDS["sora-2"]` is [4,8,12], so a
+  // 10-second block deck is no longer BUYABLE and every test built on one refused with
+  // `illegal_duration` before reaching what it meant to assert. The band travels with the length:
+  // `maxCharsFor` is read from the SAME variable rather than a second literal, so this cannot
+  // drift again.
+  const clipSeconds = opts.clipSeconds ?? 4;
   const n = opts.blocks ?? 2;
-  const chars = opts.chars ?? maxCharsFor(10);
+  const chars = opts.chars ?? maxCharsFor(clipSeconds);
   return t.run((ctx) =>
     ctx.db.insert("plans", {
       tenantId: opts.tenantId ?? TENANT,
@@ -453,7 +458,7 @@ describe("executePlan media arm (20-07, MEDIA-01)", () => {
   });
 
   test.each([
-    ["an over-length narration line", { chars: maxCharsFor(10) + 1 }, "narration_too_long"],
+    ["an over-length narration line", { chars: maxCharsFor(4) + 1 }, "narration_too_long"],
     ["a clip length nobody prices", { clipSeconds: 7, chars: 90 }, "illegal_duration"],
   ] as const)("%s refuses before the CAS", async (_label, opts, reason) => {
     const t = withMedia();
