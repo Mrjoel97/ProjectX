@@ -2873,6 +2873,187 @@ describe("batchToRender: a reel is ALL-OR-NOTHING, and the refusal is free", () 
     );
     expect(res).toEqual({ ok: false, reason: "empty_batch" });
   });
+
+  // ── 20.2 wave 6: A REGENERATE BATCH IS A PARTIAL BATCH, and it has to render ─────────────────
+  //
+  // `regenerateBlock` has shipped since 20-09 and buys ONE block's clip and voice into a NEW batch
+  // — `media.test.ts:3526` pins exactly that ("1 video + 1 tts + 1 stt; NOT the whole four-block
+  // deck"). Nothing pinned what happens NEXT, and what happened next is that the render refused:
+  // the inputs were read from the batch alone, so every index the regenerate did not re-buy had no
+  // job and the whole reel came back `incomplete_blocks`. The user paid for a clip AND lost the
+  // published reel, because `reserveAndSchedule` clears the render in the same transaction.
+  //
+  // The fix is the one the deck already implies: a scene's picture and take are whatever LANDED for
+  // that scene most recently on this plan, and the batch is only the trigger.
+  test("a REGENERATE batch renders — the re-bought scene is new, the rest are reused from the plan", async () => {
+    const t = harness();
+    const { planId, tenantId } = await seedRenderable(t, { blocks: 3 });
+    // The regenerate: a second batch carrying index 1 only, landed. Exactly what
+    // `regenerateBlock` → `submitBatch` → the webhook leaves behind.
+    const again = "batch_regen";
+    const fresh = await t.run(async (ctx) => {
+      const ids: Id<"mediaJobs">[] = [];
+      for (const kind of ["video", "tts"] as const) {
+        const storageId = await ctx.storage.store(
+          new Blob([new Uint8Array([9])], { type: "video/mp4" }),
+        );
+        ids.push(
+          await ctx.db.insert("mediaJobs", {
+            tenantId,
+            planId,
+            batchId: again,
+            blockIndex: 1,
+            provider: "fal",
+            kind,
+            model: kind === "video" ? MEDIA_DEFAULT_VIDEO.model : MEDIA_DEFAULT_VOICE.model,
+            spec:
+              kind === "video"
+                ? {
+                    kind: "video",
+                    resolution: MEDIA_DEFAULT_VIDEO.resolution,
+                    seconds: MEDIA_DEFAULT_VIDEO.seconds,
+                  }
+                : { kind: "tts", characters: 280, voice: "Evelyn (en)", sampleRateHertz: 24000 },
+            promptHash: "0".repeat(64),
+            status: "succeeded",
+            assetStorageId: storageId,
+            mimeType: kind === "video" ? "video/mp4" : "audio/wav",
+            estUsd: 0.5,
+            createdAt: T0 + 1_000,
+            updatedAt: T0 + 1_000,
+          }),
+        );
+      }
+      return ids;
+    });
+
+    const res = await t.run(
+      async (ctx) =>
+        await ctx.runQuery(internal.render.renderReel.batchToRender, {
+          tenantId,
+          batchId: again,
+        }),
+    );
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    // All three scenes, in deck order — the reel is still three scenes long.
+    expect(res.value.inputs.map((i) => i.name)).toEqual([
+      "block01.mp4",
+      "voice01.wav",
+      "block02.mp4",
+      "voice02.wav",
+      "block03.mp4",
+      "voice03.wav",
+    ]);
+    // …and scene 2 is the FRESH pair, not the one it replaced.
+    expect(res.value.inputs[2]?.jobId).toBe(fresh[0]);
+    expect(res.value.inputs[3]?.jobId).toBe(fresh[1]);
+  });
+
+  // The flow the regenerate button exists FOR: rewrite one prompt, re-buy that scene, keep the
+  // rest. An edit in place leaves every index meaning what it meant, so it must NOT invalidate the
+  // neighbours — if it did, the user would pay for a take and then be refused the render, which is
+  // the same leak with an extra step.
+  test("an edited prompt does NOT stale the deck — edit one scene, re-buy one scene, render", async () => {
+    const t = harness();
+    const { planId, tenantId } = await seedRenderable(t, { blocks: 3 });
+    await asA(t).mutation(api.media.editBlockPrompt, {
+      planId,
+      blockIndex: 1,
+      prompt: "a different second scene",
+    });
+    const again = "batch_regen_edit";
+    await t.run(async (ctx) => {
+      for (const kind of ["video", "tts"] as const) {
+        const storageId = await ctx.storage.store(
+          new Blob([new Uint8Array([9])], { type: "video/mp4" }),
+        );
+        await ctx.db.insert("mediaJobs", {
+          tenantId,
+          planId,
+          batchId: again,
+          blockIndex: 1,
+          provider: "fal",
+          kind,
+          model: kind === "video" ? MEDIA_DEFAULT_VIDEO.model : MEDIA_DEFAULT_VOICE.model,
+          spec:
+            kind === "video"
+              ? {
+                  kind: "video",
+                  resolution: MEDIA_DEFAULT_VIDEO.resolution,
+                  seconds: MEDIA_DEFAULT_VIDEO.seconds,
+                }
+              : { kind: "tts", characters: 280, voice: "Evelyn (en)", sampleRateHertz: 24000 },
+          promptHash: "0".repeat(64),
+          status: "succeeded",
+          assetStorageId: storageId,
+          mimeType: kind === "video" ? "video/mp4" : "audio/wav",
+          estUsd: 0.5,
+          createdAt: T0 + 1_000,
+          updatedAt: T0 + 1_000,
+        });
+      }
+    });
+
+    const res = await t.run(
+      async (ctx) =>
+        await ctx.runQuery(internal.render.renderReel.batchToRender, {
+          tenantId,
+          batchId: again,
+        }),
+    );
+    expect(res.ok).toBe(true);
+  });
+
+  test("REFUSES to reuse an asset bought before the deck was edited — the reorder trap", async () => {
+    const t = harness();
+    const { planId, tenantId } = await seedRenderable(t, { blocks: 3 });
+    // A free structural edit AFTER the assets landed. `patchShots` clears the render and stamps the
+    // deck's change time; scene 0's clip was bought against a deck that no longer exists, and
+    // reusing it would put the wrong footage under the wrong scene with nothing on screen saying so.
+    await asA(t).mutation(api.media.reorderBlocks, { planId, order: [2, 1, 0] });
+    const again = "batch_regen_stale";
+    await t.run(async (ctx) => {
+      for (const kind of ["video", "tts"] as const) {
+        const storageId = await ctx.storage.store(
+          new Blob([new Uint8Array([9])], { type: "video/mp4" }),
+        );
+        await ctx.db.insert("mediaJobs", {
+          tenantId,
+          planId,
+          batchId: again,
+          blockIndex: 1,
+          provider: "fal",
+          kind,
+          model: kind === "video" ? MEDIA_DEFAULT_VIDEO.model : MEDIA_DEFAULT_VOICE.model,
+          spec:
+            kind === "video"
+              ? {
+                  kind: "video",
+                  resolution: MEDIA_DEFAULT_VIDEO.resolution,
+                  seconds: MEDIA_DEFAULT_VIDEO.seconds,
+                }
+              : { kind: "tts", characters: 280, voice: "Evelyn (en)", sampleRateHertz: 24000 },
+          promptHash: "0".repeat(64),
+          status: "succeeded",
+          assetStorageId: storageId,
+          mimeType: kind === "video" ? "video/mp4" : "audio/wav",
+          estUsd: 0.5,
+          createdAt: T0 + 1_000,
+          updatedAt: T0 + 1_000,
+        });
+      }
+    });
+
+    const res = await t.run(
+      async (ctx) =>
+        await ctx.runQuery(internal.render.renderReel.batchToRender, {
+          tenantId,
+          batchId: again,
+        }),
+    );
+    expect(res).toEqual({ ok: false, reason: "stale_inputs" });
+  });
 });
 
 describe("renderReel: fail-closed on the secret, then the offline seam", () => {
@@ -4887,13 +5068,62 @@ describe("20.2 wave 5 — THE SCENE GATE OPENS: a scene deck is finally buyable"
     expect(await t.run((ctx) => ctx.db.query("mediaJobs").collect())).toHaveLength(0);
   });
 
-  test("regenerating ONE scene refuses by name — the reel's length is the SUM of its scenes", async () => {
+  // ── 20.2 wave 6: regenerating ONE scene, against the WHOLE deck's timeline ───────────────────
+  test("regenerating ONE scene buys that scene ALONE — and is priced against the whole deck", async () => {
     const t = harness();
+    // 8 s generated_video / 6 s animated_image / 4 s text_card / 12 s generated_video = 30 s.
     const { planId } = await seedSceneDeck(t);
+    const res = await asA(t).mutation(api.media.regenerateBlock, { planId, blockIndex: 1 });
+    expect(res.ok).toBe(true);
+
+    const rows = await t.run(async (ctx) => await ctx.db.query("mediaJobs").collect());
+    // Scene 1's still and its take, plus the deck-wide captions line at index -1. NOT the other
+    // three scenes, and in particular not scene 3's $0.40 clip.
+    expect(rows.map((r) => `${r.blockIndex}:${r.kind}`).sort()).toEqual([
+      "-1:stt",
+      "1:image",
+      "1:tts",
+    ]);
+    // The captions line prices the WHOLE reel, because re-buying one scene re-renders and
+    // re-captions all thirty seconds of it.
+    expect(rows.find((r) => r.kind === "stt")?.spec).toEqual({
+      kind: "stt",
+      audioMinutes: 30 / 60,
+    });
+  });
+
+  test("a partial buy still refuses on a NEIGHBOUR's broken row — the deck is validated whole", async () => {
+    const t = harness();
+    // Scene 2 is a card with no words: `hasAssetSource` refuses it, and it is not the scene being
+    // re-bought. Reserving anyway would take the money and hand the render a deck it cannot build.
+    const { planId } = await seedSceneDeck(t);
+    await t.run(async (ctx) => {
+      const plan = await ctx.db.get(planId);
+      const shots = (plan?.shots ?? []).map((s) => (s.index === 2 ? { ...s, overlay: "  " } : s));
+      await ctx.db.patch(planId, { shots });
+    });
     expect(await asA(t).mutation(api.media.regenerateBlock, { planId, blockIndex: 0 })).toEqual({
       ok: false,
-      reason: "scene_regenerate_not_ready",
+      reason: "unrenderable_block",
     });
+    expect(await t.run((ctx) => ctx.db.query("mediaJobs").collect())).toHaveLength(0);
+  });
+
+  test("a scene with NOTHING to buy says so — it does not open a transaction for air", async () => {
+    const t = harness();
+    // A silent text card: drawn by ffmpeg, no clip, no take, nothing to re-buy. The cure is to
+    // edit its words and generate the reel, and the refusal has to say which.
+    const { planId } = await seedSceneDeck(t);
+    await t.run(async (ctx) => {
+      const plan = await ctx.db.get(planId);
+      const shots = (plan?.shots ?? []).map((s) => (s.index === 2 ? { ...s, narration: "" } : s));
+      await ctx.db.patch(planId, { shots });
+    });
+    expect(await asA(t).mutation(api.media.regenerateBlock, { planId, blockIndex: 2 })).toEqual({
+      ok: false,
+      reason: "nothing_to_regenerate",
+    });
+    expect(await t.run((ctx) => ctx.db.query("mediaJobs").collect())).toHaveLength(0);
   });
 });
 

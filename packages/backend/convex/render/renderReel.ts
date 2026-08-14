@@ -35,6 +35,7 @@ export type RenderRefusal =
   | "empty_batch"
   | "incomplete_blocks"
   | "not_all_succeeded"
+  | "stale_inputs"
   | "route_unreachable"
   | "route_rejected"
   | "sidecar_rejected_on_return";
@@ -140,17 +141,47 @@ export const batchToRender = internalQuery({
     }
     const deck = [...plan.shots].sort((l, r) => l.index - r.index);
 
+    // **THE INPUTS COME FROM THE PLAN, NOT FROM THE BATCH ALONE (20.2 wave 6).**
+    //
+    // `regenerateBlock` has shipped since 20-09 and buys ONE scene into a NEW batch. Reading the
+    // inputs off that batch meant every scene it did not re-buy had no job, so the render refused
+    // `incomplete_blocks` — the user paid for a clip AND lost the published reel, because the
+    // reservation clears the render in the same transaction. The batch is the TRIGGER (it is what
+    // just landed, and `maybeStartRender` fires on its last landing); the INPUTS are whatever this
+    // plan most recently landed at each index. Sorting oldest-first and letting later rows
+    // overwrite makes "most recent" the selection rule, so a re-bought scene wins over the take it
+    // replaced while its untouched neighbours stay exactly as they were.
+    //
+    // A failed or blocked attempt is history and is skipped here — `not_all_succeeded` above is
+    // what refuses a batch still in flight, and that check stays on the batch's OWN rows.
+    const landed = await ctx.db
+      .query("mediaJobs")
+      .withIndex("by_plan", (q) => q.eq("tenantId", a.tenantId).eq("planId", planId))
+      .collect();
+
     const byIndex = new Map<
       number,
       { video?: Doc<"mediaJobs">; image?: Doc<"mediaJobs">; tts?: Doc<"mediaJobs"> }
     >();
-    for (const row of renderable) {
+    for (const row of landed
+      .filter((r) => r.status === "succeeded" && r.assetStorageId !== undefined)
+      .sort((l, r) => l.createdAt - r.createdAt || l._creationTime - r._creationTime)) {
       const slot = byIndex.get(row.blockIndex) ?? {};
       if (row.kind === "video") slot.video = row;
       else if (row.kind === "image") slot.image = row;
-      else slot.tts = row;
+      else if (row.kind === "tts") slot.tts = row;
+      else continue; // `stt` sits at index -1 and is not an assembly input
       byIndex.set(row.blockIndex, slot);
     }
+
+    /** An asset may be reused only while the deck it was bought against still stands. Every write
+     *  to `shots` dates itself (`media.patchShots`, `plans.persistDeck`), so this one comparison
+     *  covers reorder, delete, a re-proposed deck and an edit made while a job was in flight. The
+     *  refusal is BY NAME because the cure differs from every other one: nothing is missing and
+     *  nothing failed — the footage on hand belongs to a deck that no longer exists, and the only
+     *  way forward is to buy the reel again. */
+    const changedAt = plan.shotsChangedAt ?? 0;
+    const fresh = (row: Doc<"mediaJobs">): boolean => row.createdAt >= changedAt;
 
     const scenes: RenderInputs["scenes"] = [];
     const inputs: RenderInputs["inputs"] = [];
@@ -174,6 +205,7 @@ export const batchToRender = internalQuery({
         cards.push({ name: renderInputName("card", i), text });
       } else if (kind === "image") {
         if (!slot?.image) return { ok: false, reason: "incomplete_blocks" };
+        if (!fresh(slot.image)) return { ok: false, reason: "stale_inputs" };
         inputs.push({ name: renderInputName("image", i), jobId: slot.image._id });
       } else if (shot.visual === "uploaded_video") {
         // THE VAULT BRIDGE (20.2 wave 5). An upload buys nothing, so it has no `mediaJobs` row and
@@ -198,6 +230,7 @@ export const batchToRender = internalQuery({
         inputs.push({ name: renderInputName("video", i), jobId: docId });
       } else {
         if (!slot?.video) return { ok: false, reason: "incomplete_blocks" };
+        if (!fresh(slot.video)) return { ok: false, reason: "stale_inputs" };
         inputs.push({ name: renderInputName("video", i), jobId: slot.video._id });
       }
 
@@ -207,6 +240,9 @@ export const batchToRender = internalQuery({
       // is exactly the deck the rest of this wave exists to make renderable.
       const wantsVoice = shot.narration.trim() !== "";
       if (wantsVoice && !slot?.tts) return { ok: false, reason: "incomplete_blocks" };
+      if (wantsVoice && slot?.tts && !fresh(slot.tts)) {
+        return { ok: false, reason: "stale_inputs" };
+      }
       if (wantsVoice && slot?.tts) {
         // The filename mapping lives in ONE place (`@pikar/core/render`) so the picture and the
         // voice take cannot be numbered by two different pieces of code and drift — 20-13's whole
@@ -217,8 +253,15 @@ export const batchToRender = internalQuery({
 
     // A job at an index the deck does not have is a batch and a deck that disagree about what was
     // bought. Refuse rather than render the shorter of the two.
-    for (const idx of byIndex.keys()) {
-      if (idx < 0 || idx >= deck.length) return { ok: false, reason: "incomplete_blocks" };
+    //
+    // Checked over the BATCH's rows, not the plan's history: a deck that shrank leaves landed jobs
+    // at indices that no longer exist, and those are simply history — `shotsChangedAt` has already
+    // moved past them, so they can never be selected as an input. What must still agree is what
+    // was just BOUGHT.
+    for (const row of renderable) {
+      if (row.blockIndex < 0 || row.blockIndex >= deck.length) {
+        return { ok: false, reason: "incomplete_blocks" };
+      }
     }
 
     // THE DECLARED LENGTH. A scene deck carries it on the row; a block deck's length is still the

@@ -10,6 +10,21 @@
 > for already-submitted historical jobs. Older provider-specific sections below describe the
 > superseded implementation unless explicitly marked current. See ADR-017.
 
+> Last verified: 2026-08-14 (20.2 wave 6, part 1 — **a partial buy can finally render, and the
+> scene arm of `regenerateBlock` opens.** A defect older than this phase: `regenerateBlock` buys ONE
+> scene into a NEW batch, and `batchToRender` read its inputs off that batch alone, so every index
+> the regenerate did not re-buy had no job and the whole reel came back `incomplete_blocks` — the
+> user paid for a clip AND lost the published reel, because the reservation clears the render in the
+> same transaction. Observed RED first (`a REGENERATE batch renders`). The batch is now the TRIGGER
+> and the INPUTS come off the PLAN: newest succeeded job per (index, kind). `plans.shotsChangedAt`
+> is what keeps that honest — stamped by STRUCTURAL writes only (reorder, delete, a re-proposed
+> deck), never by an edited prompt or line, because invalidating the neighbours on a content edit
+> would make edit-then-regenerate pay for a take and then be refused. A reused asset older than that
+> stamp refuses as `stale_inputs`. `reserveSceneJobInner` gained `only`: the WHOLE deck is validated
+> (sum, asset source, narration ceilings) and only the LINES are narrowed, with captions still
+> priced over the whole reel. `scene_regenerate_not_ready` is deleted; `nothing_to_regenerate`
+> replaces it for a scene that buys nothing at all. 1669 backend green.)
+
 > Last verified: 2026-08-14 (20.2 wave 5 COMPLETE — **the scene gate opens: a scene deck is
 > buyable, renderable and publishable.** `reserveSceneJobInner` prices per kind (a clip at its own
 > length, a still at ~a tenth, nothing for a card or an upload, a take only where there is a line);
@@ -1095,13 +1110,49 @@ floor any more — a short line is a pause, not a fault.
 > generated clips and stills at ~a tenth the price, and one label saying "clips" would misdescribe
 > what was bought. A per-kind breakdown is wave 7's price table.
 
-**Two gates deliberately still refuse, by name rather than by mispricing:**
+**One gate deliberately still refuses, by name rather than by mispricing:**
 
 - `cockpit.executePlan` → `scene_render_not_ready`. The AGENT's approve arm builds its own
   reservation from a block deck; opening it is the media-director certification (wave 8).
-- `regenerateBlock` → `scene_regenerate_not_ready`. A reel's length is the SUM of its scenes, so
-  re-buying one in isolation reserves a batch that does not add up to the declared target. Doing it
-  properly means reserving against the whole deck's timeline — a canvas decision (wave 6).
+
+`regenerateBlock`'s scene arm OPENED in wave 6. It hands `reserveSceneJobInner` the whole deck and
+an `only` index: every refusal a full buy would raise is raised (the deck must still sum to its
+target, every scene must still name its source, every line must still fit its take's window), and
+only the provider LINES are narrowed to the one scene. Captions are still priced over the whole
+reel, because re-buying one scene re-renders and re-captions all of it. A scene with nothing to buy
+— a silent card, a silent upload — refuses as `nothing_to_regenerate` rather than opening a
+transaction for air.
+
+### THE INPUTS COME OFF THE PLAN, AND THE BATCH IS ONLY THE TRIGGER (wave 6)
+
+`regenerateBlock` buys ONE scene into a NEW batch — `media.test.ts` has pinned exactly that since
+20-09 ("1 video + 1 tts + 1 stt; NOT the whole four-block deck"). Nothing pinned what happened
+NEXT, and what happened next was that the render refused: `batchToRender` read its inputs off the
+batch, so every index the regenerate did not re-buy had no job and the reel came back
+`incomplete_blocks`. **The user paid for the clip and lost the published reel**, because
+`reserveAndSchedule` clears the render in the same transaction as the reservation. This was live on
+the BLOCK contract too, for any deck longer than one scene.
+
+So the batch is now the TRIGGER (it is what just landed, and `maybeStartRender` still fires on its
+last landing) and the INPUTS are the plan's newest SUCCEEDED job per `(index, kind)`. A re-bought
+scene wins over the take it replaced; its untouched neighbours stay exactly as they were.
+
+**`plans.shotsChangedAt` is what stops that becoming a silent wrongness.** A reorder moves a scene
+out from under the index its clip was bought at, and a delete renumbers everything after it, so an
+asset older than the deck it is being rendered into is refused by name: `stale_inputs`. The stamp
+is written by STRUCTURAL writes only — `media.patchShots` detects them as "the incoming indices
+are not already `0..n-1`", and `plans.persistDeck` stamps because a whole new deck is the largest
+structural change there is. **A content edit deliberately does NOT stamp.** Editing a prompt or a
+line leaves every index meaning what it meant, and invalidating the neighbours would make the
+commonest flow in the canvas — rewrite one line, regenerate that scene — buy a take and then be
+refused the render, which is the same leak with an extra step.
+
+> ponytail: the residual is narrow and deliberate. Edit scene 2's line, then regenerate scene 3, and
+> scene 2 still speaks its OLD take — the only take that exists. Refusing the render instead would
+> refuse work the user can legitimately want, so the obligation lands on the SURFACE: the canvas
+> owes that scene a per-tile "bought before your last edit" line (`byPlan` can see it by comparing
+> the job's `promptHash` with the shot's current text). Until the canvas carries it, this is the one
+> thing on this page a user cannot see from the app.
 
 ### THE VAULT BRIDGE — an `uploaded_video`'s bytes, and whose they are
 

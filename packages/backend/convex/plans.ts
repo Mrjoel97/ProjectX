@@ -389,6 +389,10 @@ export const persistDeck = internalMutation({
       // the plan claiming a declared length that none of its shots was written against.
       targetDurationSeconds: a.targetDurationSeconds,
       shots: a.shots,
+      // A WHOLE new deck is the largest change there is, so it dates itself for the same reason
+      // the editor's own writes do (`media.patchShots`): assets bought against the deck this one
+      // replaces must not be reused under scenes that are no longer theirs.
+      shotsChangedAt: Date.now(),
       status: "proposed",
     });
     return null;

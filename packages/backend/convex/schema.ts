@@ -535,6 +535,14 @@ export default defineSchema({
         }),
       ),
     ),
+    /** 20.2 wave 6: when `shots` was last REWRITTEN — by the free editor or by a fresh proposal.
+     *  It is what makes a landed asset reusable or not. A regenerate buys ONE scene and the render
+     *  takes the rest from whatever landed for this plan before it; an asset bought against a deck
+     *  that has since been reordered, trimmed or re-proposed belongs to a scene that may no longer
+     *  be at its index, so `batchToRender` refuses it (`stale_inputs`) rather than rendering the
+     *  wrong footage under the right caption. Absent on every row written before this wave, which
+     *  reads as "never edited" and is correct for all of them. */
+    shotsChangedAt: v.optional(v.number()),
     // The RENDER PLANE — fields on the plan row, NOT a second table. A reel is one artifact per
     // PLAN (delta §6.3), so a `mediaRenders` table would hold at most one row per plan forever.
     renderStatus: v.optional(

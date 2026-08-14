@@ -72,11 +72,11 @@ export type ReserveRefusal =
    *  a block deck, and opening it is the media-director certification in wave 8. Delete this member
    *  when that lands; a refusal nothing can trigger is worse than none. */
   | "scene_render_not_ready"
-  /** 20.2 wave 5 — regenerating ONE scene of a scene deck. A reel's length is the SUM of its
-   *  scenes, so re-buying one in isolation reserves a batch whose scenes do not add up to the
-   *  declared target. Doing it properly means reserving against the WHOLE deck's timeline, which
-   *  is a canvas decision (wave 6). Named rather than mispriced. */
-  | "scene_regenerate_not_ready"
+  /** 20.2 wave 6 — regenerating a scene that BUYS NOTHING. A `text_card` is drawn by ffmpeg and an
+   *  `uploaded_video`'s bytes are already the tenant's, so a silent one of either has no provider
+   *  line to reserve: there is literally nothing to re-buy. Editing its words and generating the
+   *  reel is the whole cure, and saying so beats opening a $0 transaction that buys air. */
+  | "nothing_to_regenerate"
   | "narration_too_long"
   | "narration_too_short"
   | "media_daily_exhausted"
@@ -410,6 +410,14 @@ export async function reserveJobInner(
  *   * **The narration ceiling is the TAKE's window, not the scene's.** `narrationCeilingSeconds`
  *     runs to the next NARRATED scene, so a silent scene lends its duration to the line before it.
  *     There is no floor any more — a short line is a pause, not a fault.
+ *
+ * **`only` — one scene, bought against the WHOLE deck's timeline (20.2 wave 6).** This is what
+ * `regenerateBlock` needs and why it refused until now. A reel's length is the sum of its scenes,
+ * so a one-scene reservation cannot be a one-scene DECK: the sum gate would refuse it, and the
+ * narration ceiling would be measured against a neighbour that is not there. So the whole deck is
+ * validated exactly as a full reservation validates it — every refusal a full buy would raise, a
+ * partial buy raises too — and only the LINES are narrowed. The captions line still prices the
+ * whole reel, because re-buying one scene re-renders and re-captions all of it.
  */
 export async function reserveSceneJobInner(
   ctx: MutationCtx,
@@ -419,6 +427,8 @@ export async function reserveSceneJobInner(
     scenes: readonly Scene[];
     targetDurationSeconds: number;
     withCaptions: boolean;
+    /** A scene INDEX. Absent buys the whole deck; present buys that scene alone. */
+    only?: number;
   },
 ): Promise<ReserveResult> {
   // Same order as the block path, and for the same reasons — coverage above every refusal, then
@@ -444,6 +454,16 @@ export async function reserveSceneJobInner(
     // finding that out in the VM costs the whole deck.
     if (!hasAssetSource(scene)) return { ok: false, reason: "unrenderable_block" };
 
+    // EVERY scene is validated; only the chosen one is BOUGHT. The refusals above and below stay
+    // deck-wide on purpose — a partial buy that ignored a neighbour's broken row would reserve
+    // successfully and then be refused by the render, which is the failure mode wave 6 exists to
+    // remove rather than reproduce one function to the left.
+    const buying = a.only === undefined || scene.index === a.only;
+    /** A provider line, kept only if this scene is the one being bought. The refusals stay where
+     *  they were; this is the ONLY thing `only` changes. */
+    const buy = (line: ProviderLine): void => {
+      if (buying) lines.push(line);
+    };
     const seconds = scene.durationMs / 1000;
 
     if (scene.visual === "generated_video") {
@@ -459,7 +479,7 @@ export async function reserveSceneJobInner(
       };
       const priced = estimateMediaUsd(spec);
       if (!priced.ok) return { ok: false, reason: priced.error.code }; // fail closed, never guess
-      lines.push({
+      buy({
         spec,
         estUsd: priced.value,
         row: {
@@ -487,7 +507,7 @@ export async function reserveSceneJobInner(
       };
       const priced = estimateMediaUsd(spec);
       if (!priced.ok) return { ok: false, reason: priced.error.code };
-      lines.push({
+      buy({
         spec,
         estUsd: priced.value,
         row: {
@@ -527,7 +547,7 @@ export async function reserveSceneJobInner(
       const spec: MediaSpec = { kind: "tts", model: MEDIA_DEFAULT_VOICE.model, characters };
       const priced = estimateMediaUsd(spec);
       if (!priced.ok) return { ok: false, reason: priced.error.code };
-      lines.push({
+      buy({
         spec,
         estUsd: priced.value,
         row: {
@@ -553,8 +573,16 @@ export async function reserveSceneJobInner(
   }
 
   // A deck of nothing but free scenes and no narration has nothing to reserve and nothing to
-  // render into: refuse rather than open a money transaction with an empty line list.
-  if (lines.length === 0) return { ok: false, reason: "unrenderable_block" };
+  // render into: refuse rather than open a money transaction with an empty line list. On a PARTIAL
+  // buy the same emptiness means something else entirely — the deck is fine and this one scene
+  // simply has nothing to purchase — so it is named separately rather than told the deck is
+  // unrenderable when it is not.
+  if (lines.length === 0) {
+    return {
+      ok: false,
+      reason: a.only === undefined ? "unrenderable_block" : "nothing_to_regenerate",
+    };
+  }
 
   // One deck-wide captions pass, priced against the DECLARED length rather than
   // `blocks × clipSeconds` — the arithmetic that no longer describes a reel.
@@ -2289,7 +2317,15 @@ async function reserveAndSchedule(
      *  ("this plan has no deck at all") stays the caller's. */
     deck:
       | { kind: "block"; blocks: readonly Block[]; clipSeconds: number }
-      | { kind: "scene"; scenes: readonly Scene[]; targetDurationSeconds: number };
+      | {
+          kind: "scene";
+          scenes: readonly Scene[];
+          targetDurationSeconds: number;
+          /** 20.2 wave 6 — buy ONE scene of this deck. The block arm expresses the same thing by
+           *  passing a one-element `blocks`, which a scene deck cannot do: its scenes have to sum
+           *  to the declared target, so the whole timeline goes in and the purchase is narrowed. */
+          only?: number;
+        };
   },
 ): Promise<
   { ok: true; batchId: string; estCents: number } | { ok: false; reason: ReserveRefusal }
@@ -2305,6 +2341,7 @@ async function reserveAndSchedule(
           scenes: a.deck.scenes,
           targetDurationSeconds: a.deck.targetDurationSeconds,
           withCaptions: true,
+          ...(a.deck.only === undefined ? {} : { only: a.deck.only }),
         })
       : await reserveJobInner(ctx, {
           tenantId: a.tenantId,
@@ -2400,14 +2437,21 @@ export const regenerateBlock = tenantMutation({
   args: { planId: v.id("plans"), blockIndex: v.number() },
   handler: async (ctx, { planId, blockIndex }) => {
     const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
-    // Regenerating ONE scene of a scene deck is not this function with a different deck type: the
-    // reel's length is the SUM of its scenes, so re-buying one in isolation would reserve a batch
-    // whose scenes do not add up to the declared target and be refused by `reserveSceneJobInner`'s
-    // own gate. Making it work means reserving a one-scene batch against the WHOLE deck's timeline,
-    // which is a canvas decision (wave 6) rather than a patch here — so it refuses by name.
+    // 20.2 wave 6 — THE SCENE ARM OPENS. Re-buying one scene in isolation would reserve a batch
+    // whose scenes do not add up to the declared target, so the WHOLE timeline is handed to the
+    // reserve and only the purchase is narrowed (`only`). The render then takes this scene's new
+    // asset and its neighbours' existing ones off the plan — see `batchToRender`, which until this
+    // wave read the batch alone and refused every partial buy, block decks included.
     const sceneDeck = sceneDeckOf(plan);
     if (sceneDeck !== null) {
-      return { ok: false as const, reason: "scene_regenerate_not_ready" as const };
+      if (!sceneDeck.scenes.some((s) => s.index === blockIndex)) {
+        return { ok: false as const, reason: "no_deck" as const };
+      }
+      return await reserveAndSchedule(ctx, {
+        tenantId: ctx.tenantId,
+        planId,
+        deck: { kind: "scene", ...sceneDeck, only: blockIndex },
+      });
     }
     const blocks = deckOf(plan);
     if (!blocks || plan.clipSeconds === undefined) return { ok: false as const, reason: "no_deck" };
@@ -2456,7 +2500,26 @@ async function patchShots(
     startMs += s.seconds * 1000;
     return shot;
   });
-  await ctx.db.patch(planId, { shots: renumbered });
+
+  // **STRUCTURAL vs CONTENT, and the difference is money (20.2 wave 6).**
+  //
+  // `shotsChangedAt` is what makes a landed asset un-reusable by the next render
+  // (`batchToRender`'s `stale_inputs`), so stamping it on the wrong edits is expensive in both
+  // directions. A REORDER or a DELETE moves a scene out from under the index its clip was bought
+  // at — reusing that clip would put the wrong footage under the right caption, so the whole deck
+  // must be bought again. An edited prompt or narration line changes ONE scene in place and every
+  // index still means what it meant, so the neighbours' assets stay valid: without this
+  // distinction the commonest flow there is — edit a line, regenerate that scene — would buy a
+  // take and then refuse the render, which is the same money leak this wave came to close.
+  //
+  // The discriminator is `next`'s own indices: a content edit maps the deck in place, so they are
+  // already `0..n-1`; a permutation or a deletion is the only way they are not. No flag to pass,
+  // and no caller that can forget to.
+  const structural = next.some((s, i) => s.index !== i);
+  await ctx.db.patch(planId, {
+    shots: renumbered,
+    ...(structural ? { shotsChangedAt: Date.now() } : {}),
+  });
   await clearRender(ctx, planId);
 }
 
