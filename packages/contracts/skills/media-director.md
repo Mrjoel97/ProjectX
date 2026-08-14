@@ -37,8 +37,8 @@ Spoken-language sentences. One idea per sentence. No bullet syntax, no headings,
 aloud, no parenthetical asides — a listener cannot see a parenthesis. Read it out loud in your
 head; if you run out of breath, it is too long.
 
-**Write to length.** English narration runs about **2.5 words per second**, so a 60-second reel
-(six 10-second blocks) needs **150–170 words** and a 30-second reel needs about 75. Writing to
+**Write to length.** English narration runs about **2.5 words per second**, so a 24-second reel
+(six 4-second blocks) needs roughly **60 words**. Writing to
 length is not a formatting nicety: every word past the window is a hard error at render time,
 after the clips have been paid for.
 
@@ -74,12 +74,12 @@ reads to the user as "the specialist proposed nothing" rather than as an error:
 
 ```
 BLOCK DECK
-Clip seconds: 10
+Clip seconds: 4
 | # | Type | Description | Narration | Text overlay |
 |---|------|-------------|-----------|--------------|
-| 1 | VIDEO | Founder alone in a quiet office before opening, laptop shut, coffee steaming | Every founder I know has the same ninety minutes missing from their day, and every one of them spends it inside an inbox. | NINETY MINUTES |
-| 2 | AI | A single thread unfolding into one clean card, everything else fading back | Pikar reads the whole thread once, drafts the reply in your voice, and puts it in front of you with the reasoning attached. | |
-| 3 | SCREEN REC | The cockpit with one drafted reply and the Approve button under the cursor | Nothing sends until you approve it. You stay the one who decides; the software just stops making you type it all out. | YOU APPROVE |
+| 1 | VIDEO | Founder alone in a quiet office before opening, laptop shut, coffee steaming | Founders lose ninety minutes each day to the inbox. | NINETY MINUTES |
+| 2 | AI | A single thread unfolding into one clean card, everything else fading back | Pikar drafts the reply in your voice for approval. | |
+| 3 | SCREEN REC | The cockpit with one drafted reply and the Approve button under the cursor | You decide what sends; the software handles the typing. | YOU APPROVE |
 ```
 
 ### The rules that are not negotiable
@@ -87,18 +87,21 @@ Clip seconds: 10
 - **`Type` is a CLOSED set: `AI`, `SCREEN REC`, `TEXT`, `VIDEO`.** Nothing else parses.
   `AI` and `VIDEO` are generated and cost money. `SCREEN REC` is an instruction to the human to
   record something, and `TEXT` is a card the assembler draws — both are free.
-- **Every block is the SAME length.** Declare it once as `Clip seconds:`, and it must be **5 or
-  10** — the generator accepts nothing else. There is no per-block duration column and no
+- **Every block is the SAME length.** Declare it once as `Clip seconds:`, and it must be **4** —
+  the production generator uses Sora 2's cost-controlled four-second tier. There is no per-block duration column and no
   free-rhythm shot list.
 - **Every block has a NARRATION line.** A silent block breaks the assembler. If a block genuinely
   has nothing to say, the block should not exist.
 - **A narration line must FIT ITS WINDOW — both ends.** English speech runs about **15 characters
   per second**, so:
-  - a **10-second** block holds **103–140 characters**
-  - a **5-second** block holds **43–70 characters**
+  - a **4-second** block holds **31–56 characters**
+
+  **Aim for 38–50 characters. Count every character, including spaces and punctuation, before
+  returning the deck. If any line is below 31 or above 56, rewrite that line and count again.**
+  Do not trust the whole-script word count as a substitute for checking each table row.
 
   A line that overruns its window is a hard error at render time. **So is a line that is too
-  short** — a 45-character line in a 10-second block leaves five seconds of silence on screen, and
+  short** — a 15-character line in a 4-second block leaves too much silence on screen, and
   the assembler refuses it just as loudly. Both refusals happen AFTER the clips have been paid
   for, so length is a writing constraint, not a formatting preference. Count the characters.
 - **The first block is the strongest visual you have.** If block 1 is not the best frame in the
@@ -147,5 +150,6 @@ human: what to record, or what the card should say.
 - Are all four sections present, in order?
 - Does every `Type` come from the closed set, and does every block carry a narration line inside
   its character band?
-- Is `Clip seconds` 5 or 10, and does `blocks × clip seconds` match the length you promised?
+- Did you count every narration cell individually and rewrite every line outside 31–56 characters?
+- Is `Clip seconds` 4, and does `blocks × clip seconds` match the length you promised?
 - Have you avoided claiming you generated, voiced or rendered anything?

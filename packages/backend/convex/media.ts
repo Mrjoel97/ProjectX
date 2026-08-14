@@ -2,8 +2,8 @@
  * The media JOB reservation (MEDIA-01, D10) — the ONE money gate for Phase 20.
  *
  * A per-request cap bounds NOTHING when a reel is N clips PLUS N voice takes PLUS an STT pass PLUS
- * a render: six 480p x 10 s clips are six passing $0.50 requests and one $3.00 job. So the whole
- * JOB is estimated, capped and RESERVED in ONE serializable transaction, before a single fal
+ * a render: six 720p x 4 s Sora clips are six passing $0.40 requests and one $2.40 visual job. So
+ * the whole JOB is estimated, capped and RESERVED in ONE serializable transaction, before a single
  * request exists.
  *
  * **This is the one place media DIVERGES from the LLM rail, deliberately.**
@@ -13,7 +13,7 @@
  * window that had room for one. 20-PROVIDER-EVAL.md §4: *an LLM overshoot is cents, a media
  * overshoot is dollars.*
  *
- * Default runtime — NOT "use node". This module touches ctx.db; the later fal calls need only
+ * Default runtime — NOT "use node". This module touches ctx.db; the provider calls need only
  * `fetch`, and `smoke.ts:234` records that a regular action already has `ctx.storage.store`.
  *
  * internalMutation from ./_generated/server is NOT banned by the import guard (the telemetry.ts
@@ -239,9 +239,8 @@ export async function reserveJobInner(
   const lines: ProviderLine[] = [];
 
   for (const block of a.blocks) {
-    // One video line per PAID block. `model` and `resolution` are PINNED from MEDIA_DEFAULT_VIDEO
-    // and never left for fal to default — Wan 2.5 defaults to 1080p, so an estimate computed at
-    // 480p against a submit that omitted the resolution under-reports by 3x.
+    // One video line per PAID block. Model, resolution and duration are pinned from the same
+    // OpenAI-backed spec that the cost rail prices; no provider default can change the invoice.
     if (isPaidBlock(block)) {
       const spec: MediaSpec = {
         kind: "video",
@@ -256,7 +255,7 @@ export async function reserveJobInner(
         estUsd: priced.value,
         row: {
           ...base,
-          provider: "wan",
+          provider: "openai",
           blockIndex: block.index,
           kind: "video",
           model: MEDIA_DEFAULT_VIDEO.model,
@@ -365,7 +364,7 @@ export async function reserveImageInner(
       tenantId: a.tenantId,
       planId: a.planId,
       batchId,
-      provider: "wan",
+      provider: "openai",
       blockIndex: 0,
       kind: "image",
       model: MEDIA_DEFAULT_IMAGE.model,
@@ -572,8 +571,9 @@ export const listJobs = internalQuery({
 
 // ── Media provider adapters ────────────────────────────────────────────────────────────
 //
-// Submit reserved visual lines to Alibaba Wan's asynchronous API and audio lines to OpenAI. Wan
-// task polling stores provider results in Convex immediately because the returned URLs expire.
+// Submit new visual and audio lines to OpenAI. GPT Image 2 returns image bytes synchronously;
+// Sora returns a video id, so clips are polled and copied into Convex storage before their rows land.
+// The legacy Wan poller remains only for tasks submitted before the provider cutover.
 
 /** The `gmailAuth.requireEnv` idiom with a media-worded message. Provider credentials are Convex
  *  deployment env vars (`npx convex env set`), never client-visible variables. */
@@ -614,23 +614,18 @@ export function buildSubmitBody(spec: SubmittableSpec, text: string): Record<str
     case "video":
       return {
         model: spec.model,
-        input: { prompt: text },
-        parameters: {
-          size: { "480p": "832*480", "720p": "1280*720", "1080p": "1920*1080" }[spec.resolution],
-          duration: spec.seconds,
-          prompt_extend: false,
-        },
+        prompt: text,
+        seconds: String(spec.seconds),
+        size: { "480p": "480x854", "720p": "720x1280", "1080p": "1080x1920" }[spec.resolution],
       };
     case "image":
       return {
         model: spec.model,
-        input: { prompt: text },
-        parameters: {
-          size: `${spec.width}*${spec.height}`,
-          n: 1,
-          prompt_extend: false,
-          watermark: false,
-        },
+        prompt: text,
+        n: 1,
+        size: `${spec.width}x${spec.height}`,
+        quality: "low",
+        output_format: "png",
       };
     case "tts":
       return {
@@ -669,7 +664,7 @@ async function providerReasonCode(response: Response): Promise<string> {
 /** `blocked` is the 422 arm — a non-retryable input refusal, which is a `provider_blocked` VERDICT
  *  on the row rather than a failure. Everything else is a plain failure the retrier may re-run. */
 export type SubmitResult =
-  | { ok: true; requestId: string }
+  | { ok: true; requestId: string; asset?: { bytes: Uint8Array<ArrayBuffer>; mimeType: string } }
   | { ok: false; code: string; blocked: boolean };
 
 type VisualSpec = Extract<SubmittableSpec, { kind: "video" | "image" }>;
@@ -683,34 +678,51 @@ function wanBaseUrl(): string {
   return url.origin;
 }
 
-/** Submit one visual line to Alibaba Model Studio's asynchronous Wan API. */
+function decodeBase64(value: string): Uint8Array<ArrayBuffer> {
+  const binary = atob(value);
+  const buffer = new ArrayBuffer(binary.length);
+  const bytes = new Uint8Array(buffer);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+/** Submit one new visual line to OpenAI. Images return their bytes synchronously; Sora returns an
+ *  asynchronous video id which `pollOpenAiVideoTask` owns. */
 export async function submitLine(
   spec: VisualSpec,
   text: string,
   _webhookUrl?: string,
 ): Promise<SubmitResult> {
-  const key = requireEnvMedia("Video_and_image_API_Key");
-  const baseUrl = wanBaseUrl();
+  const key = requireEnvMedia("OPENAI_API_KEY");
 
   if (process.env.MEDIA_PROVIDER_FIXTURE || process.env.FAL_FIXTURE) {
-    return { ok: true, requestId: `fixture-${crypto.randomUUID()}` };
+    return spec.kind === "image"
+      ? {
+          ok: true,
+          requestId: `fixture-${crypto.randomUUID()}`,
+          asset: { bytes: new Uint8Array(new ArrayBuffer(16)), mimeType: "image/png" },
+        }
+      : { ok: true, requestId: `fixture-${crypto.randomUUID()}` };
   }
 
   let response: Response;
   try {
-    const path =
-      spec.kind === "video"
-        ? "/api/v1/services/aigc/video-generation/video-synthesis"
-        : "/api/v1/services/aigc/text2image/image-synthesis";
-    response = await fetch(`${baseUrl}${path}`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${key}`,
-        "Content-Type": "application/json",
-        "X-DashScope-Async": "enable",
-      },
-      body: JSON.stringify(buildSubmitBody(spec, text)),
-    });
+    const body = buildSubmitBody(spec, text);
+    if (spec.kind === "video") {
+      const form = new FormData();
+      for (const [name, value] of Object.entries(body)) form.append(name, String(value));
+      response = await fetch("https://api.openai.com/v1/videos", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${key}` },
+        body: form,
+      });
+    } else {
+      response = await fetch("https://api.openai.com/v1/images/generations", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    }
   } catch {
     // The thrown error's message can carry the URL — and therefore the webhook's HMAC segment. A
     // code only; the exception itself is dropped on the floor.
@@ -726,13 +738,25 @@ export async function submitLine(
   }
 
   const body = (await response.json().catch(() => null)) as {
-    output?: { task_id?: unknown };
+    id?: unknown;
+    data?: Array<{ b64_json?: unknown }>;
   } | null;
-  const requestId = body?.output?.task_id;
+  if (spec.kind === "image") {
+    const encoded = body?.data?.[0]?.b64_json;
+    if (typeof encoded !== "string" || encoded.length === 0) {
+      return { ok: false, code: "asset_missing", blocked: false };
+    }
+    return {
+      ok: true,
+      requestId: response.headers.get("x-request-id") ?? `openai-${crypto.randomUUID()}`,
+      asset: { bytes: decodeBase64(encoded), mimeType: "image/png" },
+    };
+  }
+  const requestId = body?.id;
   if (typeof requestId !== "string" || requestId.length === 0) {
     return { ok: false, code: "no_request_id", blocked: false };
   }
-  // Returns holding a queue ticket; `pollWanTask` owns the later status requests.
+  // Returns holding a queue ticket; `pollOpenAiVideoTask` owns the later status requests.
   return { ok: true, requestId };
 }
 
@@ -1078,6 +1102,103 @@ export const pollWanTask = internalAction({
   },
 });
 
+/** Poll one OpenAI Sora job and copy the completed MP4 into tenant storage. The content endpoint
+ *  is called immediately after completion because provider-side job assets are not our durable
+ *  workspace artifact. */
+export const pollOpenAiVideoTask = internalAction({
+  args: { jobId: v.id("mediaJobs"), videoId: v.string(), attempt: v.number() },
+  handler: async (ctx, a): Promise<null> => {
+    const key = requireEnvMedia("OPENAI_API_KEY");
+    const row = await ctx.runQuery(internal.media.jobForPoll, { jobId: a.jobId });
+    if (!row || row.status !== "submitted" || row.spec.kind !== "video") return null;
+
+    let response: Response;
+    try {
+      response = await fetch(`https://api.openai.com/v1/videos/${encodeURIComponent(a.videoId)}`, {
+        headers: { Authorization: `Bearer ${key}` },
+      });
+    } catch {
+      if (a.attempt < 180) {
+        await ctx.scheduler.runAfter(10_000, internal.media.pollOpenAiVideoTask, {
+          ...a,
+          attempt: a.attempt + 1,
+        });
+        return null;
+      }
+      await ctx.runMutation(internal.mediaComplete.landResult, {
+        jobId: a.jobId,
+        outcome: { ok: false, code: "poll_transport_error" },
+      });
+      return null;
+    }
+    if (!response.ok) {
+      await ctx.runMutation(internal.mediaComplete.landResult, {
+        jobId: a.jobId,
+        outcome: { ok: false, code: await providerReasonCode(response) },
+      });
+      return null;
+    }
+    const body = (await response.json().catch(() => null)) as {
+      status?: unknown;
+      error?: { code?: unknown };
+    } | null;
+    const status = body?.status;
+    if (status === "queued" || status === "in_progress") {
+      if (a.attempt >= 180) {
+        await ctx.runMutation(internal.mediaComplete.landResult, {
+          jobId: a.jobId,
+          outcome: { ok: false, code: "poll_timeout" },
+        });
+      } else {
+        await ctx.scheduler.runAfter(10_000, internal.media.pollOpenAiVideoTask, {
+          ...a,
+          attempt: a.attempt + 1,
+        });
+      }
+      return null;
+    }
+    if (status !== "completed") {
+      const candidate = body?.error?.code;
+      const code =
+        typeof candidate === "string" && SAFE_CODE.test(candidate) ? candidate : "provider_failed";
+      await ctx.runMutation(internal.mediaComplete.landResult, {
+        jobId: a.jobId,
+        outcome: { ok: false, code },
+      });
+      return null;
+    }
+
+    let asset: Response;
+    try {
+      asset = await fetch(
+        `https://api.openai.com/v1/videos/${encodeURIComponent(a.videoId)}/content`,
+        { headers: { Authorization: `Bearer ${key}` } },
+      );
+    } catch {
+      await ctx.runMutation(internal.mediaComplete.landResult, {
+        jobId: a.jobId,
+        outcome: { ok: false, code: "asset_transport_error" },
+      });
+      return null;
+    }
+    if (!asset.ok) {
+      await ctx.runMutation(internal.mediaComplete.landResult, {
+        jobId: a.jobId,
+        outcome: { ok: false, code: `asset_http_${asset.status}` },
+      });
+      return null;
+    }
+    await storeAndLand(
+      ctx,
+      a.jobId,
+      new Uint8Array(await asset.arrayBuffer()),
+      asset.headers.get("content-type") ?? "video/mp4",
+      { resolution: row.spec.resolution, seconds: row.spec.seconds },
+    );
+    return null;
+  },
+});
+
 /**
  * Submit a whole reserved batch. Idempotent per line, and it NEVER waits.
  *
@@ -1154,11 +1275,26 @@ export const submitBatch = internalAction({
         jobId: line.jobId,
         result: { ok: true, providerRequestId: res.requestId },
       });
-      await ctx.scheduler.runAfter(10_000, internal.media.pollWanTask, {
-        jobId: line.jobId,
-        taskId: res.requestId,
-        attempt: 0,
-      });
+      if (spec.kind === "image") {
+        if (!res.asset) {
+          await ctx.runMutation(internal.mediaComplete.landResult, {
+            jobId: line.jobId,
+            outcome: { ok: false, code: "asset_missing" },
+          });
+          tally.failed += 1;
+          continue;
+        }
+        await storeAndLand(ctx, line.jobId, res.asset.bytes, res.asset.mimeType, {
+          width: spec.width,
+          height: spec.height,
+        });
+      } else {
+        await ctx.scheduler.runAfter(10_000, internal.media.pollOpenAiVideoTask, {
+          jobId: line.jobId,
+          videoId: res.requestId,
+          attempt: 0,
+        });
+      }
       tally.submitted += 1;
     }
     return tally;
@@ -1492,14 +1628,18 @@ export const assetUrls = tenantQuery({
       .collect();
 
     return await Promise.all(
-      rows.map(async (r) => ({
-        blockIndex: r.blockIndex,
-        kind: r.kind,
-        mimeType: r.mimeType ?? null,
-        status: r.status,
-        verdict: r.verdict ?? null,
-        url: r.assetStorageId ? await ctx.storage.getUrl(r.assetStorageId) : null,
-      })),
+      rows
+        .sort((a, b) => a.createdAt - b.createdAt || a._creationTime - b._creationTime)
+        .map(async (r) => ({
+          blockIndex: r.blockIndex,
+          kind: r.kind,
+          mimeType: r.mimeType ?? null,
+          status: r.status,
+          verdict: r.verdict ?? null,
+          failureReason: r.failureReason ?? null,
+          createdAt: r.createdAt,
+          url: r.assetStorageId ? await ctx.storage.getUrl(r.assetStorageId) : null,
+        })),
     );
   },
 });
@@ -1782,8 +1922,9 @@ export const generateReel = tenantMutation({
   },
 });
 
-/** Generate one reviewed still image. The serializable existing-row check is the server-side
- * double-click guard: once a reservation inserts its row, no second mutation can reserve again. */
+/** Generate one reviewed still image. The serializable active/successful-row check is the
+ * server-side double-click guard. A terminal failed/blocked attempt may be retried by a fresh
+ * human click; its immutable row remains as history and the retry receives a new reservation. */
 export const generateImage = tenantMutation({
   args: { planId: v.id("plans") },
   handler: async (ctx, { planId }) => {
@@ -1794,7 +1935,13 @@ export const generateImage = tenantMutation({
       .query("mediaJobs")
       .withIndex("by_plan", (q) => q.eq("tenantId", ctx.tenantId).eq("planId", planId))
       .collect();
-    if (rows.some((row) => row.kind === "image")) {
+    if (
+      rows.some(
+        (row) =>
+          row.kind === "image" &&
+          (row.status === "queued" || row.status === "submitted" || row.status === "succeeded"),
+      )
+    ) {
       return { ok: false as const, reason: "already_started" as const };
     }
     const reserved = await reserveImageInner(ctx, { tenantId: ctx.tenantId, planId, prompt });

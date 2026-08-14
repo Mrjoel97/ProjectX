@@ -2138,6 +2138,27 @@ describe("20-08 — stageMediaPlan refuses rather than destroying an in-flight r
     expect(plan?.renderStatus).toBeUndefined();
   });
 
+  test("a completed refusal memo recycles so the user can retry the reel in the same chat", async () => {
+    const { t, planId } = await setup();
+    await t.run((ctx) =>
+      ctx.db.patch(planId, {
+        kind: "memo",
+        status: "done",
+        subject: "Reel: previous attempt",
+        body: "The previous deck was refused before generation.",
+      }),
+    );
+
+    const again = await restage(t);
+    expect(again.ok).toBe(true);
+    expect(await readPlan(t, planId)).toMatchObject({
+      kind: "memo",
+      status: "collecting",
+      subject: "Reel 2",
+      body: "",
+    });
+  });
+
   test("the USER'S OWN email draft is protected — the MODEL is deciding here, not the user", async () => {
     // `setup()` already inserts THIS thread's plan row, and `plans.by_thread` is `.unique()` —
     // inserting a second one throws before the assertion can run.

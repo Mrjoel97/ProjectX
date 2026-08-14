@@ -361,8 +361,8 @@ type RenderRequestBody =
       uploadUrls: { mp4: string };
     };
 
-/** The two clip lengths the price table, the storyboard parser and the assembler all agree on. */
-const CLIP_SECONDS_SET = new Set([5, 10]);
+/** The clip lengths the price table, storyboard parser and assembler agree on. */
+const CLIP_SECONDS_SET = new Set([4, 5, 8, 10, 12]);
 
 const isStr = (v: unknown): v is string => typeof v === "string" && v.length > 0;
 

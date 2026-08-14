@@ -8,6 +8,8 @@ import {
   ApprovalKindBadge,
   ApprovalsStateNotice,
   actionLabel,
+  emailApprovalActionLabel,
+  emailBusinessAction,
   formatAbsoluteInstant,
   parseScheduleInput,
   refusalMessage,
@@ -58,6 +60,50 @@ describe("Approvals connected state contracts", () => {
     ["finance_write", "Approve & update the figure"],
   ] as const)("the %s approve button names its own outcome", (kind, copy) => {
     expect(actionLabel(kind)).toBe(copy);
+  });
+
+  test("an email approval names the business action and person, not an email workflow", () => {
+    const plan = {
+      recipients: ["amina@example.com"],
+      recipientNames: { "amina@example.com": "Amina" },
+      subject: "Growth partnership proposal",
+      mode: "individual" as const,
+    };
+
+    expect(emailBusinessAction(plan)).toBe("Send “Growth partnership proposal” to Amina");
+    expect(emailApprovalActionLabel(plan)).toBe("Approve & send to Amina");
+    expect(actionLabel("email", plan)).toBe("Approve & send to Amina");
+    expect(emailBusinessAction(plan)).not.toMatch(/email (plan|workflow)/i);
+  });
+
+  test("reply and multi-recipient approvals remain outcome-specific", () => {
+    expect(
+      emailBusinessAction({
+        recipients: ["amina@example.com"],
+        recipientNames: { "amina@example.com": "Amina" },
+        subject: "Re: Revised proposal",
+        replyThreadId: "gmail-thread-ref",
+      }),
+    ).toBe("Reply to Amina about “Revised proposal”");
+
+    const group = {
+      recipients: ["amina@example.com", "omar@example.com", "team@example.com"],
+      recipientNames: {
+        "amina@example.com": "Amina",
+        "omar@example.com": "Omar",
+      },
+      subject: "Workshop confirmation",
+      mode: "group" as const,
+    };
+    expect(emailBusinessAction(group)).toBe("Send “Workshop confirmation” to Amina and 2 others");
+    expect(emailApprovalActionLabel(group)).toBe("Approve & send to 3 recipients");
+  });
+
+  test("approval and cleared-record cards retain exact email channel and address review", () => {
+    expect(source).toContain('aria-label="Email delivery details"');
+    expect(source).toContain("Email via Gmail");
+    expect(source).toContain("name === address ? address :");
+    expect(source).toMatch(/function ClearedRow[\s\S]*?<EmailApprovalDetails plan=\{plan\}/);
   });
 
   test("resolves a local wall time to one absolute instant and rejects invalid or past input", () => {

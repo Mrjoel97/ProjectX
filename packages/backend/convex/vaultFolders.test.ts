@@ -902,3 +902,93 @@ describe("ledger parity: the folder rail names its folder and refunds it exactly
     expect(refunds[0]).toMatchObject({ correlationId, folderId, amountCents: costOf(3) });
   });
 });
+
+// ── User-created organizational folders ─────────────────────────────────────────────────────
+
+describe("organizational folders move individual vault files without touching ingest folders", () => {
+  const seedReady = (t: ReturnType<typeof convexTest>, title: string, tenantId = TENANT) =>
+    t.run((ctx) =>
+      ctx.db.insert("vaultDocuments", {
+        tenantId,
+        title,
+        kind: "upload",
+        category: "my-uploads",
+        source: "upload",
+        mimeType: "text/plain",
+        size: title.length,
+        contentHash: `hash_${tenantId}_${title}`,
+        text: `${title} body`,
+        status: "ready",
+        createdAt: Date.now(),
+      }),
+    );
+
+  test("an empty folder is immediately browseable and a multi-select move files into it", async () => {
+    const t = setup();
+    const first = await seedReady(t, "First plan");
+    const second = await seedReady(t, "Second plan");
+    const { folderId } = await asTenant(t).mutation(
+      api.vaultFolders.createOrganizationalFolder,
+      { name: "Operating plans" },
+    );
+
+    expect(await asTenant(t).query(api.vaultFolders.getFolder, { folderId })).toMatchObject({
+      name: "Operating plans",
+      organizational: true,
+      status: "complete",
+      memberCount: 0,
+    });
+
+    expect(
+      await asTenant(t).mutation(api.vaultFolders.moveDocuments, {
+        folderId,
+        docIds: [first, second],
+      }),
+    ).toEqual({ moved: 2, skipped: 0 });
+
+    const inside = await asTenant(t).query(api.vault.listVaultDocs, { folderId });
+    expect(inside.map((doc) => doc._id).sort()).toEqual([first, second].sort());
+    const root = await asTenant(t).query(api.vault.listVaultDocs, {});
+    expect(root.map((doc) => doc._id)).not.toContain(first);
+    expect(root.map((doc) => doc._id)).not.toContain(second);
+    expect(await asTenant(t).query(api.vaultFolders.getFolder, { folderId })).toMatchObject({
+      memberCount: 2,
+      terminalCount: 2,
+    });
+  });
+
+  test("moving between filing folders updates both counts and refuses an ingest destination", async () => {
+    const t = setup();
+    const docId = await seedReady(t, "Board memo");
+    const { folderId: first } = await asTenant(t).mutation(
+      api.vaultFolders.createOrganizationalFolder,
+      { name: "Drafts" },
+    );
+    const { folderId: second } = await asTenant(t).mutation(
+      api.vaultFolders.createOrganizationalFolder,
+      { name: "Final" },
+    );
+    await asTenant(t).mutation(api.vaultFolders.moveDocuments, {
+      folderId: first,
+      docIds: [docId],
+    });
+    await asTenant(t).mutation(api.vaultFolders.moveDocuments, {
+      folderId: second,
+      docIds: [docId],
+    });
+    expect(await asTenant(t).query(api.vaultFolders.getFolder, { folderId: first })).toMatchObject({
+      memberCount: 0,
+    });
+    expect(await asTenant(t).query(api.vaultFolders.getFolder, { folderId: second })).toMatchObject({
+      memberCount: 1,
+    });
+
+    const ingestFolder = await newFolder(t);
+    await expect(
+      asTenant(t).mutation(api.vaultFolders.moveDocuments, {
+        folderId: ingestFolder,
+        docIds: [docId],
+      }),
+    ).rejects.toThrow(/destination not found/);
+  });
+});

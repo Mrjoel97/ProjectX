@@ -5,18 +5,18 @@ import { expect, test } from "@playwright/test";
 test("cockpit renders both panes under the auth gate", async ({ page }) => {
   await page.goto("/dashboard/workspace");
 
-  // Both titled panes are present (the shell renders regardless of Gmail state).
+  // Both titled panes are present (the operating shell renders regardless of Gmail state).
   // Headings follow the brand chrome: "Pikar AI" (chat) + the canvas heading, which is the
-  // time-of-day greeting ("Good …, Executive.") on an empty canvas and "Live work canvas"
-  // once a thread is active.
+  // time-of-day business prompt on an empty canvas and "Live work canvas" once a thread is active.
   await expect(page.getByRole("heading", { name: "Pikar AI" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: /Executive\.|Live work canvas/ })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /What should we move forward\?|Live work canvas/ }),
+  ).toBeVisible();
   await expect(page.getByTestId("split-handle")).toBeVisible();
 
-  // No eternal spinner: the gate resolves to EITHER the composer OR the Connect-Gmail CTA.
-  await expect(
-    page
-      .getByPlaceholder("Describe your goal…")
-      .or(page.getByRole("link", { name: "Connect Gmail to start planning" })),
-  ).toBeVisible({ timeout: 15_000 });
+  // No email prerequisite and no eternal spinner: the business composer is always available.
+  await expect(page.getByPlaceholder("What business outcome should we work on?")).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(page.getByRole("link", { name: "Connect Gmail to start planning" })).toHaveCount(0);
 });

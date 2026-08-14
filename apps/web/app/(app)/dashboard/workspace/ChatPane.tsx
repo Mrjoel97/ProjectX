@@ -13,6 +13,7 @@ import {
   SendIcon,
   UserIcon,
 } from "../../../(auth)/icons";
+import { MarkdownDocument } from "../MarkdownDocument";
 // The verb map lives in exactly ONE module (cards.tsx) and both surfaces read it through
 // stepText — a second copy WILL drift, and a drifted verb is a surface disagreeing with itself.
 import { stepText, traceText } from "./cards";
@@ -70,6 +71,16 @@ export function pinLabel(state?: PinState): string {
   if (state === "error") return "Pin failed — try again";
   return "Pin prompt";
 }
+
+// Business-first starting points for an empty cockpit. These populate the composer for review;
+// they never execute on click, so the user stays in control of the exact instruction that starts
+// a turn. Email is intentionally not the default framing — it is one execution channel the agent
+// can select when the work actually calls for it.
+export const COCKPIT_STARTERS = [
+  "Review my business and identify the highest-leverage next move.",
+  "Turn my current strategy into a focused 30-day operating plan.",
+  "Analyze my offer, pipeline, and finances for the biggest risk and opportunity.",
+] as const;
 
 // MessageDoc.content is a string or an array of typed parts — flatten to the text parts only.
 function messageText(content: unknown): string {
@@ -211,9 +222,45 @@ export function ChatPane({
         {loading ? (
           <p style={{ color: "var(--ink-soft)", margin: 0 }}>Loading…</p>
         ) : empty ? (
-          <p style={{ color: "var(--ink-soft)", margin: 0 }}>
-            Tell me who to email and what to say.
-          </p>
+          <div
+            data-testid="cockpit-empty-state"
+            style={{
+              color: "var(--ink-soft)",
+              display: "grid",
+              gap: "0.65rem",
+              alignContent: "start",
+            }}
+          >
+            <fieldset
+              aria-label="Suggested business prompts"
+              style={{
+                border: 0,
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "0.4rem",
+                margin: 0,
+                padding: 0,
+              }}
+            >
+              {COCKPIT_STARTERS.map((starter) => (
+                <button
+                  key={starter}
+                  type="button"
+                  className="composer-pill"
+                  onClick={() => setText(starter)}
+                  style={{
+                    height: "auto",
+                    maxWidth: "100%",
+                    padding: "0.45rem 0.65rem",
+                    textAlign: "left",
+                    whiteSpace: "normal",
+                  }}
+                >
+                  {starter}
+                </button>
+              ))}
+            </fieldset>
+          </div>
         ) : (
           messages.results.map((m) => {
             const mine = m.message?.role === "user";
@@ -229,7 +276,7 @@ export function ChatPane({
                   {!mine && <span className="msg-name">Pikar AI</span>}
                   <div className="bubble-wrap">
                     <div data-testid="chat-message" style={bubble(mine)}>
-                      {body}
+                      {mine ? body : <MarkdownDocument markdown={body} compact />}
                     </div>
                     {/* The hover chips. `.msg-copy` is absolutely positioned on its own, so two of
                         them would stack — this wrapper takes the position and the chips go static
@@ -340,7 +387,7 @@ export function ChatPane({
                 void onSend();
               }
             }}
-            placeholder="Describe your goal…"
+            placeholder="What business outcome should we work on?"
             rows={2}
             style={{
               width: "100%",

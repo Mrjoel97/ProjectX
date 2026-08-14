@@ -425,6 +425,25 @@ export const listThreads = tenantQuery({
 });
 
 /**
+ * Explicit user-requested conversation erasure. Ordinary navigation, reloads, tab changes and a
+ * fresh composer never call this; that is what makes chat history durable by default. The Agent
+ * component owns its message/stream cascade, while business artifacts already saved to the vault
+ * remain intact.
+ */
+export const clearChatHistory = tenantMutation({
+  args: {},
+  handler: async (ctx): Promise<{ ok: true }> => {
+    // The component performs a bounded first page in this transaction and schedules the rest.
+    // This keeps the browser call mutation-shaped and avoids coupling unrelated UI code to the
+    // raw cockpit action hook.
+    await ctx.runMutation(components.agent.users.deleteAllForUserIdAsync, {
+      userId: ctx.tenantId,
+    });
+    return { ok: true };
+  },
+});
+
+/**
  * Code-invoked PLAN write (NOT an LLM tool; the recipient/subject are structural, read from the
  * plan ROW by the proposePlan tool, never model-invented). Patches the drafted body + slots and
  * flips status → `proposed` so the PLAN card renders and awaits Approve.

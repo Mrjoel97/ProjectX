@@ -11,7 +11,7 @@ function tableBlock(name: string): string {
   const start = SCHEMA.indexOf(marker);
   expect(start, `${name} table must exist`).toBeGreaterThan(-1);
   const rest = SCHEMA.slice(start + marker.length);
-  const next = rest.search(/\n  [A-Za-z][A-Za-z0-9]*: defineTable\(/);
+  const next = rest.search(/\n {2}[A-Za-z][A-Za-z0-9]*: defineTable\(/);
   return `${marker}${next === -1 ? rest : rest.slice(0, next)}`;
 }
 

@@ -102,7 +102,14 @@ import { type Color, PDFDocument, type PDFFont, rgb, StandardFonts } from "pdf-l
 import { api, components, internal } from "./_generated/api";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
+import {
+  applyGmailCapability,
+  GMAIL_CONNECTION_REQUIRED_REPLY,
+  isPinnedCockpitEvaluation,
+  shouldUseGmailCapability,
+} from "./cockpitCapabilities";
 import { contentHash } from "./lib/hash";
+import { isExplicitVideoCreationRequest } from "./mediaIntent";
 
 // Per-call wall-clock ceiling. Retry budget lives in ONE layer: SDK maxRetries:1 on the
 // primary + one CHEAP_MODEL fallback (the pipeline runs these steps with retry:false).
@@ -1510,6 +1517,8 @@ export function buildCockpitTools(
     grantDispatch?: boolean;
     threadId?: string;
     rootRequestId?: string;
+    /** True only for an explicit email route backed by a live Gmail grant. */
+    gmailEnabled?: boolean;
   },
 ) {
   const webResearchTool = buildWebResearchTool();
@@ -1861,7 +1870,7 @@ export function buildCockpitTools(
     }),
   };
 
-  return {
+  const allTools = {
     resolveContacts: tool({
       // Split literals keep each chunk under the §5 no-hardcoded-prompt scan ceiling (200 chars).
       description:
@@ -3536,6 +3545,7 @@ export function buildCockpitTools(
       },
     }),
   };
+  return applyGmailCapability(allTools, agentContext?.gmailEnabled ?? true);
 }
 
 // ── The governed Executive-Agent tool-loop (AGNT-01/02) ──────────────────────
@@ -3664,6 +3674,9 @@ async function runAgentLoop(
     // UAT-F2: the loop builds its OWN tool set below, so the withholding flag must ride these args
     // too (append-only optional — every existing caller keeps working; absent = full set).
     omitRecipientEdits?: boolean;
+    // Executive-only capability containment. Gmail tools are present only when this turn's
+    // deterministic route selected email and the tenant has a live grant.
+    gmailEnabled?: boolean;
     // DISP-01: the specialist's tool-set. ABSENT ⇒ the full record, byte-identical to today —
     // every existing caller keeps working. A specialist is a swapped (system, tools) pair through
     // THIS function; there is no second loop.
@@ -3708,6 +3721,7 @@ async function runAgentLoop(
     threadId,
     clientContext,
     omitRecipientEdits,
+    gmailEnabled,
     toolNames,
     maxSteps,
     timeoutMs,
@@ -3732,6 +3746,7 @@ async function runAgentLoop(
       grantDispatch: toolNames === undefined,
       threadId,
       rootRequestId: turnId,
+      gmailEnabled,
     },
   );
   // `=== undefined`, never a truthiness test: an EMPTY allow-list must yield an EMPTY record. A
@@ -4512,7 +4527,39 @@ export const runCockpitAgent = internalAction({
     // 4. Offline sentinel path (Plan 05 E2E): one op → one governed tool call, no generateText. The
     //    SMOKE path pins a deterministic clock so sendTime= resolves offline (§2-D — never the model).
     const smokeOp = parseAgentSmoke(text);
+    // Code-owned intent routing determines whether this turn may see the Gmail rail. A genuine
+    // email action with no grant gets a just-in-time connection request; every other capability
+    // continues without Gmail. SMOKE remains the deterministic offline tool harness.
+    const continuingEmailPlan = Boolean(
+      plan &&
+        actionTypeOf(plan.kind) === "email" &&
+        (plan.recipients?.length ||
+          plan.subject ||
+          plan.body ||
+          plan.candidates?.length),
+    );
+    const gmailRequired = shouldUseGmailCapability(text, continuingEmailPlan);
+    const pinnedGoldenEvaluation = isPinnedCockpitEvaluation(
+      tenantId,
+      skillVersions?.[COCKPIT_AGENT_SKILL],
+    );
+    // No grant read at all on a non-email route. Gmail is not even a dependency of ordinary
+    // business work, rather than merely a check whose negative result happens to be ignored.
+    const gmailConnected: boolean =
+      smokeOp || !gmailRequired || pinnedGoldenEvaluation
+        ? true
+        : await ctx.runQuery(internal.gmailAuth.hasGmailConnection, { tenantId });
+    if (gmailRequired && !gmailConnected) {
+      return { reply: GMAIL_CONNECTION_REQUIRED_REPLY, costUsd: 0 };
+    }
+    const gmailEnabled = gmailRequired && gmailConnected;
     const effectiveClientContext = smokeOp ? { tz: "UTC", nowMs: SMOKE_NOW_MS } : clientContext;
+    // Explicit video creation is a code-owned route, just like Gmail capability selection above.
+    // Work it out BEFORE constructing this driver-only tool record: dispatch tools are
+    // structurally absent unless the executive lineage grant is supplied. The old ordering built
+    // a record without `dispatchMedia` and then immediately tried to invoke that missing key,
+    // turning every direct video request into the driver's generic "nothing was sent" reply.
+    const directVideo = !smokeOp && !gmailRequired && isExplicitVideoCreationRequest(text);
     // The flag rides here too — harmless (no SMOKE op is a continue turn), and uniform.
     const tools = buildCockpitTools(
       ctx,
@@ -4521,7 +4568,51 @@ export const runCockpitAgent = internalAction({
       effectiveClientContext,
       skillVersions,
       omitRecipientEdits,
+      {
+        gmailEnabled: smokeOp ? true : gmailEnabled,
+        ...(directVideo
+          ? {
+              grantDispatch: true,
+              threadId,
+              // The cockpit driver normally supplies turnId. Keep internal callers functional too:
+              // a fresh refs-only lineage id is sufficient when they do not need a visible trace.
+              rootRequestId: turnId ?? crypto.randomUUID(),
+            }
+          : {}),
+      },
     );
+    // The direct call stages only the FREE media-director proposal. Paid clip/voice/render work is
+    // still unreachable until the human approves the resulting card. Keep mixed email requests in
+    // the normal loop so routing one capability never silently drops the other.
+    if (directVideo) {
+      const stepKey = "route-dispatchMedia";
+      const startedAt = Date.now();
+      if (turnId !== undefined)
+        await ctx.runMutation(internal.agentSteps.record, {
+          tenantId,
+          threadId,
+          turnId,
+          stepKey,
+          tool: "dispatchMedia",
+          startedAt,
+        });
+      let phase: "done" | "error" = "error";
+      try {
+        const reply = await invokeTool(tools, "dispatchMedia", { brief: text });
+        phase = "done";
+        return { reply, costUsd: 0 };
+      } finally {
+        if (turnId !== undefined)
+          await ctx.runMutation(internal.agentSteps.finish, {
+            tenantId,
+            turnId,
+            stepKey,
+            phase,
+            durationMs: Date.now() - startedAt,
+            endedAt: Date.now(),
+          });
+      }
+    }
     if (smokeOp) {
       // Emit around the ONE smoke call site (CKPT-05, research Pitfall 4). generateText is never
       // called here, so no SDK callback can fire — and EVERY offline E2E in the repo drives this
@@ -4610,6 +4701,7 @@ export const runCockpitAgent = internalAction({
       // ran. Without this the tools the loop builds refuse every dated request.
       clientContext: effectiveClientContext,
       omitRecipientEdits, // UAT-F2 — the loop's own tool build must honor the withholding
+      gmailEnabled,
     });
     return { reply, costUsd };
   },

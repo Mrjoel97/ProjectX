@@ -94,3 +94,4 @@ __pycache__/
 # that the PDFs are deliberately not ingested.
 Skills/**/*.pdf
 Skills/*.pdf
+.vercel

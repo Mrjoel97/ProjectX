@@ -10,10 +10,9 @@ import { expect, type Page, test } from "@playwright/test";
 // flag short-circuits the toolless digest (03.7-03), so nothing here touches the network or a key.
 //
 // Runs signed-in (storageState from auth.setup.ts) against the ALREADY-RUNNING local stack
-// (`convex dev` NOT --once + `next dev` :3111 — see e2e/README.md). Like every cockpit spec it
-// assumes the harness user has a Gmail token row (even a stale one): the workspace hides the
-// composer behind `gmailAuth.status.connected`. The briefing itself needs no token — the fixture
-// serves the mailbox — but the UI gate is upstream of the chat.
+// (`convex dev` NOT --once + `next dev` :3111 — see e2e/README.md). Cockpit access does not depend
+// on a Gmail token. The offline fixture serves this email-dependent briefing capability before the
+// provider-token boundary, so the test remains zero-network and does not need a real mailbox.
 //
 // Assertions ride the row-derived CARD (stable), never the agent's prose, except for the one
 // counts-only reply assertion that is the loop-visible half of SC-2.
@@ -85,7 +84,7 @@ test("seeded inbox → SMOKE brief=today → grouped BRIEFING card (Needs-you is
 }) => {
   await page.goto("/dashboard/workspace");
 
-  const composer = page.getByPlaceholder("Describe your goal…");
+  const composer = page.getByPlaceholder("What business outcome should we work on?");
   await expect(composer).toBeVisible({ timeout: 15_000 });
 
   // Seed the fixture mailbox for THIS session's tenant. Idempotent: seedInboxFixture deletes any

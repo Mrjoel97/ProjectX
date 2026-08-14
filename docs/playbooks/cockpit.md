@@ -1,5 +1,48 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-14 (⚠ **REGISTRATION OF TWO PREVIOUSLY UNWATCHED MODULES, FROM SOURCE
+> REVIEW OF AN UNCOMMITTED FOREIGN-LANE DIFF — NOT A RUN.** No cockpit turn, eval or gate was
+> executed; both modules were read, not exercised. They were landing outside any playbook's watched
+> paths, which is why they are registered here now. **`cockpitCapabilities.ts` — DETERMINISTIC
+> CAPABILITY ROUTING, AND IT IS CONTAINMENT, NOT A SECOND MODEL CALL.** `routeCockpitIntent` matches
+> a ten-capability regex table against the turn text; `applyGmailCapability` then returns the
+> executive tool record with the 18 `GMAIL_TOOL_NAMES` keys **structurally absent** when the rail is
+> off, so a Gmail-less tenant cannot have an email tool selected rather than merely being refused
+> after selection — the same absence-over-refusal shape the dispatch guard uses. `llm.ts:3548` is the
+> single application point and `llm.ts:4541` the single decision point; keep it that way. Three traps
+> the source already encodes and a changer must not undo: the email pattern REQUIRES an action verb
+> so "email marketing strategy" does not seize the Gmail rail; a capitalised `Email Amina` is caught
+> by a SEPARATE case-sensitive rule after the case-insensitive pass, because lower-casing first would
+> swallow it; and `shouldUseGmailCapability` resolves multi-turn ambiguity by letting a bare answer
+> continue an active email plan unless `EXPLICIT_NON_EMAIL_ACTION` matches. `isPinnedCockpitEvaluation`
+> deliberately keeps email tools alive for `eval-` tenants with a pinned version, because the golden
+> fixtures stage email plans on a tenant that is intentionally disconnected — **a change that drops
+> that exemption turns the email fixtures red for a reason that has nothing to do with the model.**
+> **`mediaIntent.ts` — the narrow bypass.** `isExplicitVideoCreationRequest` is the ONLY thing that
+> lets a turn skip model tool selection for video (`llm.ts:4562`, and only when `!smokeOp &&
+> !gmailRequired`). It is deliberately imperative-only, and it returns false outright when the text
+> mentions email/attach/forward/reply/recipient, so a mixed request can never have its email half
+> discarded by the media route. Widen it and you are widening what bypasses the model, which is the
+> opposite of what the rest of this playbook is for. Neither module's routing has been measured
+> against real turns by this review.)
+
+> Last verified: 2026-08-12 (Plan 26-18 — Sales Pipeline sidebar activation). Owner UAT was
+> accepted and the existing `/dashboard/pipeline` surface was exposed in the primary sidebar.
+> This is a navigation-only release: cockpit planning, approval boundaries, consent suppression,
+> recipient resolution, and provider execution are unchanged. The Pipeline UAT remains the
+> executable end-to-end contract for those safety seams. Evidence IDs are `ACTN-05` and `PIPE-01`;
+> UI rollback may hide the Pipeline entry, but suppression and the required postal footer remain
+> irreversible safety behavior.
+>
+> PREVIOUS:
+
+> Last verified: 2026-08-12 (production-release qualification — the Calendar registry test helpers
+> now preserve the application's schema type by accepting `ReturnType<typeof harness>`. This is a
+> test-only typing repair: runtime Calendar behavior, schema, indexes, and provider calls are
+> unchanged. The backend typecheck and focused Calendar test are the executable gate.)
+>
+> PREVIOUS:
+>
 > Last verified: 2026-08-11 (17-05, the ACTN-02 GAP-CLOSURE SUBSTRATE — **NO PROVIDER CALL WAS
 > ADDED. Google create is still the only executable Calendar target, and ACTN-02 is still not
 > satisfied.**) `calendar_manage` is the SEVENTH `ACTION_TYPES` member and the `externalAction`

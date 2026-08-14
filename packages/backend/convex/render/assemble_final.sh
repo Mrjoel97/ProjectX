@@ -64,9 +64,9 @@ done
 # so a dropped block FAILS instead of silently shipping a hole in the reel.
 [[ -n "$BLOCKS" ]] || { echo "ERROR: --blocks N is REQUIRED — pass the expected block count." >&2; exit 1; }
 awk -v b="$BLOCKS" 'BEGIN{exit (b+0>=1 && b+0==int(b+0))?0:1}' || { echo "ERROR: --blocks must be a positive integer, got: $BLOCKS" >&2; exit 1; }
-# {5,10} only — the same closed set the price table and the storyboard parser enforce. A third
-# value would be a duration nobody priced.
-[[ "$CLIP" == "5" || "$CLIP" == "10" ]] || { echo "ERROR: --clip-seconds must be 5 or 10, got: $CLIP" >&2; exit 1; }
+# The same closed set the price table and storyboard parser enforce. Historical Wan durations stay
+# accepted while new Sora decks use 4, 8 or 12 seconds.
+[[ "$CLIP" == "4" || "$CLIP" == "5" || "$CLIP" == "8" || "$CLIP" == "10" || "$CLIP" == "12" ]] || { echo "ERROR: unsupported --clip-seconds: $CLIP" >&2; exit 1; }
 # LEVEL LAW: voice is ALWAYS 1.0; SFX is clamped at 0.20 so no caller can bury the narration.
 SFXVOL="$(awk -v v="$SFXVOL" 'BEGIN{v=v+0; if(v<0)v=0; if(v>0.2){print "WARN: --sfx-vol clamped to 0.20 (voice stays 1.0)" > "/dev/stderr"; v=0.2} printf "%.3f", v}')"
 for b in ffmpeg ffprobe awk; do command -v "$b" >/dev/null 2>&1 || { echo "ERROR: '$b' not found" >&2; exit 1; }; done
@@ -186,14 +186,15 @@ echo "[2/3] concat -> single track" >&2
 ffmpeg -y -loglevel error -f concat -safe 0 -i "$LIST" -c:v libx264 -preset veryfast -crf 20 -c:a aac -movflags +faststart "$VOTRACK"
 
 # NARRATION-PER-WINDOW assert: every window must carry voice-level audio (peaks > -18dB; SFX at
-# 0.12 tops out around -18.4dB and stays below). A window whose centre [+2..+8] is quiet for 6s
-# straight has NO narration — the exact "silent second half" failure of hand-rolled assemblies.
-QUIET="$(ffmpeg -i "$VOTRACK" -af "silencedetect=noise=-18dB:d=6" -f null - 2>&1 | grep -Eo 'silence_(start|end): *[0-9.]+' || true)"
+# 0.12 tops out around -18.4dB and stays below). Inspect the centre 60% of each window so the gate
+# scales from four-second Sora clips through the historical five/ten-second tiers.
+QUIET_DUR="$(awk -v c="$CLIP" 'BEGIN{d=c*0.6; if(d<1)d=1; printf "%.2f", d}')"
+QUIET="$(ffmpeg -i "$VOTRACK" -af "silencedetect=noise=-18dB:d=${QUIET_DUR}" -f null - 2>&1 | grep -Eo 'silence_(start|end): *[0-9.]+' || true)"
 EMPTY="$(awk -v C="$CLIP" -v P="$BLOCKS" '
   /silence_start/ { s[++k]=$NF+0; next }
   /silence_end/   { e[k]=$NF+0 }
   END {
-    for (i=0;i<P;i++) { ws=i*C+2; we=i*C+8;
+    for (i=0;i<P;i++) { ws=i*C+C*0.2; we=(i+1)*C-C*0.2;
       for (j=1;j<=k;j++) { ee=(e[j]>0)?e[j]:1e9;
         if (s[j]<=ws && ee>=we) { printf "%s%d", (out++?",":""), i+1; break } } } }' <<< "$QUIET")"
 if [[ -n "$EMPTY" ]]; then

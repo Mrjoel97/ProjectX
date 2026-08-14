@@ -1,5 +1,11 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Last verified: 2026-08-12 (Vault UI lint/a11y repair). Browse controls now use type-only React
+> imports, scoped search resets explicitly key their trigger-only dependencies, preview entity and
+> action groups use semantic list/section/fieldset markup, and the modal backdrop is a real
+> non-tabbable button while the focus trap remains modal-lifetime scoped. Evidence: targeted Biome
+> 5/5 files, `@pikar/web` typecheck, and 37/37 focused Vault tests all green.
+>
 > Last verified: 2026-08-12 (17.1-10 authorized L6 recovery — **Blueprint proven, gate still
 > RED/inconclusive; do not claim a golden pass**). Attempt `aba002b1` announced 36 cases and seeded
 > its 5-message inbox, then the first OpenAI embedding failed with Windows socket error 10013. The

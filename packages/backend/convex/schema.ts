@@ -1307,6 +1307,9 @@ export default defineSchema({
     tenantId: v.string(),
     name: v.string(),
     source: v.union(v.literal("upload"), v.literal("drive")),
+    // User-created filing folders are complete immediately and never participate in ingest
+    // reservation/digest accounting. Optional keeps every existing upload/Drive row valid.
+    organizational: v.optional(v.boolean()),
     status: v.union(
       v.literal("reserving"), // estimate taken, reservation not yet held
       v.literal("ingesting"), // reserved; members in flight; SEALED from retrieval

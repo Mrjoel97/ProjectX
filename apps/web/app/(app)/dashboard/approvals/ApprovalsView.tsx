@@ -20,7 +20,7 @@ type ScheduledPage = FunctionReturnType<typeof api.approvals.listScheduled>;
 type ScheduledItem = ScheduledPage["items"][number];
 type InFlightPage = FunctionReturnType<typeof api.approvals.listInFlight>;
 type InFlightItem = InFlightPage["items"][number];
-type ClearedPage = FunctionReturnType<typeof api.approvals.listCleared>;
+type ClearedItem = FunctionReturnType<typeof api.approvals.listCleared>["items"][number];
 type DecisionPage = FunctionReturnType<typeof api.approvals.listDecisions>;
 type DecisionItem = DecisionPage["items"][number];
 type Plan = NonNullable<FunctionReturnType<typeof api.plans.byThread>>;
@@ -228,6 +228,59 @@ function ageLabel(epoch: number): string {
   return `${Math.floor(hours / 24)} days`;
 }
 
+export type EmailApprovalPresentation = {
+  recipients?: string[];
+  recipientNames?: Record<string, string>;
+  subject?: string;
+  replyToMessageId?: string;
+  replyThreadId?: string;
+  mode?: "individual" | "group";
+};
+
+function compactSubject(subject?: string): string {
+  const normalized = subject?.replace(/\s+/g, " ").trim() ?? "";
+  if (normalized.length <= 90) return normalized;
+  return `${normalized.slice(0, 89).trimEnd()}…`;
+}
+
+function recipientName(plan: EmailApprovalPresentation, address: string): string {
+  return plan.recipientNames?.[address.toLowerCase()]?.trim() || address;
+}
+
+/**
+ * The approval headline describes the business outcome, while EmailApprovalDetails below keeps
+ * the exact transport and addresses visible at the safety gate. Names are content-plane hints on
+ * the plan row; this derived copy is never persisted to audit or dashboard summary records.
+ */
+export function emailBusinessAction(plan: EmailApprovalPresentation): string {
+  const recipients = plan.recipients ?? [];
+  const first = recipients[0] ? recipientName(plan, recipients[0]) : "the recipient";
+  const audience =
+    recipients.length <= 1
+      ? first
+      : recipients.length === 2
+        ? `${first} and ${recipientName(plan, recipients[1] ?? "the other recipient")}`
+        : `${first} and ${recipients.length - 1} others`;
+  const subject = compactSubject(plan.subject);
+  const isReply = Boolean(plan.replyToMessageId || plan.replyThreadId);
+
+  if (isReply) {
+    const topic = subject.replace(/^(?:re\s*:\s*)+/i, "").trim();
+    return topic ? `Reply to ${audience} about “${topic}”` : `Reply to ${audience}`;
+  }
+  if (subject) return `Send “${subject}” to ${audience}`;
+  return `Send an email to ${audience}`;
+}
+
+export function emailApprovalActionLabel(plan: EmailApprovalPresentation): string {
+  const recipients = plan.recipients ?? [];
+  const onlyRecipient = recipients[0];
+  if (recipients.length === 1 && onlyRecipient)
+    return `Approve & send to ${recipientName(plan, onlyRecipient)}`;
+  if (recipients.length > 1) return `Approve & send to ${recipients.length} recipients`;
+  return "Approve & send email";
+}
+
 function titleFor(plan: Plan): string {
   if (plan.kind === "calendar_event") return plan.eventTitle || "Calendar plan";
   if (plan.kind === "calendar_manage")
@@ -250,10 +303,10 @@ function titleFor(plan: Plan): string {
       typeof plan.artDirection === "string" ? plan.artDirection : plan.artDirection?.mood;
     return plan.imagePrompt || artDirection || "Media generation plan";
   }
-  return plan.subject || "Email plan";
+  return emailBusinessAction(plan);
 }
 
-export function actionLabel(kind: PlanKind): string {
+export function actionLabel(kind: PlanKind, plan?: EmailApprovalPresentation): string {
   if (kind === "memo") return "Approve & file to vault";
   if (kind === "calendar_event") return "Approve & create event";
   // 17-05: kind-only, so it cannot name update vs delete — the cockpit card can (it reads
@@ -266,7 +319,7 @@ export function actionLabel(kind: PlanKind): string {
   // panel. "Approve & send" here would promise an email nothing in the inline arm can produce.
   if (kind === "finance_write") return "Approve & update the figure";
   if (kind === "reel" || kind === "image") return "Approve governed generation";
-  return "Approve & send";
+  return plan ? emailApprovalActionLabel(plan) : "Approve & send";
 }
 
 function PlanMeta({ item }: { item: AwaitingItem | ScheduledItem | InFlightItem }) {
@@ -283,6 +336,44 @@ function PlanMeta({ item }: { item: AwaitingItem | ScheduledItem | InFlightItem 
       </span>
       <span>Cost not recorded</span>
     </div>
+  );
+}
+
+function EmailApprovalDetails({ plan }: { plan: Plan }) {
+  if (plan.kind !== undefined) return null;
+  const recipients = plan.recipients ?? [];
+  return (
+    <dl
+      aria-label="Email delivery details"
+      style={{
+        display: "grid",
+        gridTemplateColumns: "max-content minmax(0, 1fr)",
+        gap: "0.35rem 0.75rem",
+        margin: 0,
+        padding: "0.75rem",
+        border: "1px solid var(--rule)",
+        borderRadius: "0.75rem",
+        background: "var(--canvas)",
+      }}
+    >
+      <dt style={caps}>Channel</dt>
+      <dd style={{ ...muted, margin: 0 }}>Email via Gmail</dd>
+      <dt style={caps}>To</dt>
+      <dd style={{ ...muted, margin: 0, overflowWrap: "anywhere" }}>
+        {recipients.length === 0
+          ? "No recipient set"
+          : recipients
+              .map((address) => {
+                const name = recipientName(plan, address);
+                return name === address ? address : `${name} (${address})`;
+              })
+              .join(", ")}
+      </dd>
+      <dt style={caps}>Delivery</dt>
+      <dd style={{ ...muted, margin: 0 }}>
+        {plan.mode === "group" ? "One group email" : "Individual email delivery"}
+      </dd>
+    </dl>
   );
 }
 
@@ -354,12 +445,12 @@ function ScheduleComposer({
       ) : (
         <fieldset
           aria-label="Confirm absolute schedule"
-          style={{ ...stack, border: 0, margin: 0, padding: 0 }}
+          style={{ ...stack, border: 0, margin: 0, padding: 0, minWidth: 0 }}
         >
-          <p style={{ margin: 0 }}>
+          <legend style={{ marginBottom: "0.75rem" }}>
             Confirm <strong>{formatAbsoluteInstant(reviewed, zone)}</strong>. Nothing runs before
             this instant.
-          </p>
+          </legend>
           <button
             type="button"
             style={primary}
@@ -494,6 +585,7 @@ function AwaitingCard({ item }: { item: AwaitingItem }) {
           {plan.body.length > 320 ? "…" : ""}
         </p>
       )}
+      <EmailApprovalDetails plan={plan} />
       {plan.kind === "calendar_event" && (
         <p style={muted}>
           {plan.eventStartMs
@@ -531,7 +623,7 @@ function AwaitingCard({ item }: { item: AwaitingItem }) {
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
         <button type="button" style={primary} disabled={busy} onClick={() => void approve()}>
-          {busy ? "Working…" : actionLabel(item.kind)}
+          {busy ? "Working…" : actionLabel(item.kind, plan)}
         </button>
         {item.kind === "email" && (
           <button
@@ -576,7 +668,9 @@ function AwaitingCard({ item }: { item: AwaitingItem }) {
             minWidth: 0,
           }}
         >
-          <strong>Discard this plan permanently?</strong>
+          <legend>
+            <strong>Discard this plan permanently?</strong>
+          </legend>
           <p style={muted}>It will not be eligible for rescheduling.</p>
           <div style={{ display: "flex", gap: "0.5rem" }}>
             <button
@@ -669,6 +763,7 @@ function ScheduledRow({ item }: { item: ScheduledItem }) {
           ? `Fires ${formatAbsoluteInstant(item.scheduledAt, browserTimeZone())}`
           : "Scheduled time is unknown on this legacy row."}
       </p>
+      {plan && <EmailApprovalDetails plan={plan} />}
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
         <button type="button" style={button} onClick={() => setMode("move")} disabled={busy}>
           Reschedule
@@ -698,7 +793,9 @@ function ScheduledRow({ item }: { item: ScheduledItem }) {
             minWidth: 0,
           }}
         >
-          <strong>Cancel before this schedule fires?</strong>
+          <legend>
+            <strong>Cancel before this schedule fires?</strong>
+          </legend>
           <p style={muted}>
             If the scheduler already won the race, the result will say In flight instead of
             canceled.
@@ -759,6 +856,7 @@ function InFlightRow({ item }: { item: InFlightItem }) {
           Delivery is in flight. Exact counters are unavailable for this legacy plan.
         </ApprovalsStateNotice>
       )}
+      {plan && <EmailApprovalDetails plan={plan} />}
       {/* SC#5's withheld report, DURABLY. `withheldSuffix` on the approve handler above still
           appends it to the transient result sentence, but nobody can read that: `listAwaiting`
           paginates `proposed` only, so the AwaitingCard that set it unmounts on the very approve
@@ -1064,6 +1162,39 @@ function DecisionsAndBlocked() {
   );
 }
 
+function ClearedRow({ item }: { item: ClearedItem }) {
+  const plan = useQuery(api.plans.byThread, { threadId: item.threadId });
+  const status =
+    item.status === "done"
+      ? "Completed"
+      : item.cancellation?.state === "known" && item.cancellation.kind === "discarded"
+        ? "Discarded"
+        : item.cancellation?.state === "known"
+          ? "Canceled before fire"
+          : "Canceled · legacy reason unknown";
+
+  return (
+    <article style={{ ...card, ...stack }} data-plan-id={item.planId}>
+      <div style={row}>
+        <div style={{ ...stack, gap: "0.35rem", minWidth: 0 }}>
+          <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
+            <ApprovalKindBadge kind={item.kind} />
+            <span style={caps}>{status}</span>
+          </div>
+          <h3 style={{ ...cardTitle, overflowWrap: "anywhere" }}>
+            {plan === undefined ? "Loading action…" : plan ? titleFor(plan) : "Unavailable action"}
+          </h3>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <p style={muted}>{formatAbsoluteInstant(item.createdAt, browserTimeZone())}</p>
+          <p style={muted}>Cost not recorded</p>
+        </div>
+      </div>
+      {plan && <EmailApprovalDetails plan={plan} />}
+    </article>
+  );
+}
+
 function ClearedSection() {
   const sinceMs = useMemo(() => Date.now() - CLEARED_WINDOW_MS, []);
   const page = useQuery(api.approvals.listCleared, { sinceMs, limit: 50 });
@@ -1078,24 +1209,7 @@ function ClearedSection() {
       ) : (
         <div style={stack}>
           {page.items.map((item) => (
-            <article key={item.planId} style={{ ...card, ...row }}>
-              <div>
-                <ApprovalKindBadge kind={item.kind} />
-                <p style={{ margin: "0.45rem 0 0", fontWeight: 700 }}>
-                  {item.status === "done"
-                    ? "Completed"
-                    : item.cancellation?.state === "known" && item.cancellation.kind === "discarded"
-                      ? "Discarded"
-                      : item.cancellation?.state === "known"
-                        ? "Canceled before fire"
-                        : "Canceled · legacy reason unknown"}
-                </p>
-              </div>
-              <div style={{ textAlign: "right" }}>
-                <p style={muted}>{formatAbsoluteInstant(item.createdAt, browserTimeZone())}</p>
-                <p style={muted}>Cost not recorded</p>
-              </div>
-            </article>
+            <ClearedRow key={item.planId} item={item} />
           ))}
         </div>
       )}

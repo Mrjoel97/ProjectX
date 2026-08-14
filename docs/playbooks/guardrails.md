@@ -1,5 +1,9 @@
 # Playbook: Guardrails (the spend rails, the kill switches, the redaction choke point)
 
+> Last verified: 2026-08-12 (production release-gate formatting pass — the watched cost table had
+> only an extra blank line removed; model pricing, search fees, budget math, and kill-switch
+> behavior are unchanged.)
+
 > Last verified: 2026-08-08 (26-07 + its follow-up sweep — the spend ledger rides alongside every
 > reasoning and ingest limiter movement, and **all twelve `recordSpend` call sites now pass a
 > stable correlation**; see the Phase 26 section below for the per-site table and the discriminator

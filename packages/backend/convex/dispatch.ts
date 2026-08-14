@@ -618,7 +618,7 @@ function deckRefusalBody(bad: Extract<ParsedDeck, { ok: false }>): string {
     no_deck: "it never wrote a block deck",
     empty_deck: "the block deck came back empty",
     unknown_shot_type: "one of the blocks used a shot type the renderer does not have",
-    bad_duration: "the block length was not 5 or 10 seconds, which is all the model accepts",
+    bad_duration: "the block length was not one of the generation model's supported durations",
     mixed_durations: "the blocks disagreed about how long they are, and they must all match",
     missing_narration: "a block had no narration line, and every block needs one to be voiced",
     narration_too_long: "a narration line is too long to fit its block without rushing it",

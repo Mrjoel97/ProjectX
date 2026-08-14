@@ -4,7 +4,6 @@ import { api } from "@pikar/backend/api";
 // BEVL-03: the ONE deterministic thread the weekly review writes to, per tenant.
 import { REVIEW_THREAD_ID } from "@pikar/core";
 import { useMutation, useQuery } from "convex/react";
-import Link from "next/link";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { BrainIcon, ClockIcon, DotsIcon, StarIcon, TrashIcon } from "../../../(auth)/icons";
 import { ChatPane } from "./ChatPane";
@@ -20,16 +19,17 @@ import { useSendCockpitMessage } from "./useSendCockpitMessage";
 // dispatcher. Both share one `threadId` held here — the first `sendCockpitMessage` mints it
 // (ChatPane → onThread) and it flows into both panes so the cards track the same conversation.
 //
-// Nothing plans without a mailbox: the composer stays gated behind api.gmailAuth.gmailStatus
-// (unconnected → teal Connect-Gmail CTA). The panels always render (shell independent of mailbox
-// state). SplitPane + the (app) auth gate are untouched (plan 05).
+// The cockpit is the business operating surface. It is available whether or not an optional
+// delivery channel is connected; a capability asks for its own connection only when the user
+// chooses work that needs it. SplitPane + the (app) auth gate are untouched (plan 05).
 //
-// Chrome replicates brand-024113/024149: chat header ("Pikar AI / Executive Assistant &
-// Orchestrator" + history/menu), a chat-tab strip, AGENT WORKSPACE canvas header with the
+// Chrome replicates brand-024113/024149: chat header ("Pikar AI / Business Operating Partner" +
+// history/menu), a chat-tab strip, OPERATING WORKSPACE canvas header with the
 // time-of-day greeting on an empty canvas and "Live work canvas" once a thread is active,
 // and a dark "Clear workspace" pill. Tabs/Clear are thin thread-switching over the existing
 // engine: a tab = a threadId; "New chat"/"Clear workspace" = fresh thread on next send.
-// ponytail: tabs are session-state only — persist them once a real thread-list query exists.
+// Workspace tabs/current thread persist for the browser session; messages remain
+// durable in the Agent component until the user explicitly clears chat history.
 
 // Anchored surfaces, not floating cards: square corners, no shadow — the pane classes
 // (.pane-chat / .pane-canvas) own the backgrounds; only the artifacts inside float.
@@ -58,6 +58,29 @@ type Tab = { id: string; label: string };
 // Tab (rather than rendering it separately) is what makes the ?thread= deep-link dedupe for free:
 // openThread already skips ids it is already showing.
 const REVIEW_TAB: Tab = { id: REVIEW_THREAD_ID, label: "Weekly review" };
+const WORKSPACE_SESSION_KEY = "pikar.workspace.session.v1";
+
+type StoredWorkspace = { tabs: Tab[]; threadId?: string };
+
+function readStoredWorkspace(): StoredWorkspace | null {
+  try {
+    const raw = window.sessionStorage.getItem(WORKSPACE_SESSION_KEY);
+    if (!raw) return null;
+    const value = JSON.parse(raw) as Partial<StoredWorkspace>;
+    const tabs = Array.isArray(value.tabs)
+      ? value.tabs.filter(
+          (tab): tab is Tab =>
+            Boolean(tab) && typeof tab.id === "string" && typeof tab.label === "string",
+        )
+      : [];
+    return {
+      tabs: [REVIEW_TAB, ...tabs.filter((tab) => tab.id !== REVIEW_THREAD_ID)],
+      threadId: typeof value.threadId === "string" ? value.threadId : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
 
 // Header dropdown: an icon button that toggles a light-dismiss menu. The scrim is a real
 // full-screen button so an outside click (or its focus) closes the menu — no document listener.
@@ -270,9 +293,9 @@ function PinnedPromptsFallback() {
 }
 
 export default function WorkspacePage() {
-  const status = useQuery(api.gmailAuth.gmailStatus);
   const [tabs, setTabs] = useState<Tab[]>([REVIEW_TAB]);
   const [threadId, setThreadId] = useState<string | undefined>(undefined);
+  const [workspaceRestored, setWorkspaceRestored] = useState(false);
   // "A turn is in flight" — lifted here so BOTH trace surfaces (ChatPane's bubble + CardList's
   // ActivityCard) share ONE signal (FIX 4). It is the difference between "no thread, nothing sent"
   // (a fresh chat — show NO trace, or a previous thread's LATEST turn leaks in) and "no thread, a
@@ -282,7 +305,11 @@ export default function WorkspacePage() {
 
   // First send on a fresh chat mints the thread — register its tab, labeled by the message.
   const registerThread = (id: string, firstText: string) => {
-    setTabs((t) => [...t, { id, label: firstText.trim().slice(0, 24) || "New chat" }]);
+    setTabs((t) =>
+      t.some((tab) => tab.id === id)
+        ? t
+        : [...t, { id, label: firstText.trim().slice(0, 24) || "New chat" }],
+    );
     setThreadId(id);
   };
   // Open a past chat from the history menu — add a session tab if it isn't already showing.
@@ -292,6 +319,25 @@ export default function WorkspacePage() {
     );
     setThreadId(id);
   }, []);
+
+  // Preserve the open conversation and tab strip across reloads and route changes in this browser
+  // tab. The durable message history itself remains in Convex; sessionStorage only remembers which
+  // persisted threads were open. It is removed only by the two explicit clearing controls below.
+  useEffect(() => {
+    const stored = readStoredWorkspace();
+    if (stored) {
+      setTabs(stored.tabs);
+      setThreadId(stored.threadId);
+    }
+    setWorkspaceRestored(true);
+  }, []);
+  useEffect(() => {
+    if (!workspaceRestored) return;
+    window.sessionStorage.setItem(
+      WORKSPACE_SESSION_KEY,
+      JSON.stringify({ tabs: tabs.filter((tab) => tab.id !== REVIEW_THREAD_ID), threadId }),
+    );
+  }, [tabs, threadId, workspaceRestored]);
 
   // The voice brief→plan handoff (VOIC-04) navigates here as /workspace?thread=<id> — sendCockpitMessage
   // already minted the thread + its PLAN card, so we just re-open it at the existing Approve gate. Read
@@ -328,6 +374,9 @@ export default function WorkspacePage() {
   // It throws on failure on purpose: the menu catches and renders the notice next to the control
   // the user pressed, which is closer to their attention than anything this component could show.
   const send = useSendCockpitMessage();
+  const clearHistoryAction = useMutation(api.cockpit.clearChatHistory);
+  const [clearingHistory, setClearingHistory] = useState(false);
+  const [historyNotice, setHistoryNotice] = useState<string | null>(null);
   const runPinned = async (text: string) => {
     setSending(true);
     try {
@@ -339,6 +388,30 @@ export default function WorkspacePage() {
   };
 
   const newChat = () => setThreadId(undefined);
+  const clearWorkspace = () => {
+    window.sessionStorage.removeItem(WORKSPACE_SESSION_KEY);
+    setTabs([REVIEW_TAB]);
+    setThreadId(undefined);
+    setAuthoring(false);
+    setView("work");
+  };
+  const clearChatHistory = async (): Promise<boolean> => {
+    if (!window.confirm("Clear all workspace chat history? Documents saved to the vault will remain.")) {
+      return false;
+    }
+    setClearingHistory(true);
+    setHistoryNotice(null);
+    try {
+      await clearHistoryAction({});
+      clearWorkspace();
+      return true;
+    } catch {
+      setHistoryNotice("Chat history could not be cleared. Nothing was removed.");
+      return false;
+    } finally {
+      setClearingHistory(false);
+    }
+  };
   // Close a session tab. The tab strip is view state, so this only stops SHOWING the chat — the
   // thread and its messages are untouched and stay reopenable from the "Past chats" menu, which
   // reads the persisted `cockpit.listThreads`. Closing the ACTIVE tab falls back to its neighbour
@@ -398,7 +471,7 @@ export default function WorkspacePage() {
                     textOverflow: "ellipsis",
                   }}
                 >
-                  Executive Assistant &amp; Orchestrator
+                  Business Operating Partner
                 </p>
               </div>
               <div className="chat-head-icons">
@@ -438,6 +511,20 @@ export default function WorkspacePage() {
                       >
                         Adapt a business skill
                       </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="head-menu-item"
+                        disabled={clearingHistory}
+                        onClick={() => void clearChatHistory().then((ok) => ok && close())}
+                      >
+                        {clearingHistory ? "Clearing…" : "Clear chat history"}
+                      </button>
+                      {historyNotice && (
+                        <p role="status" className="head-menu-empty" style={{ whiteSpace: "normal" }}>
+                          {historyNotice}
+                        </p>
+                      )}
                     </div>
                   )}
                 </HeaderMenu>
@@ -499,37 +586,19 @@ export default function WorkspacePage() {
                 "cockpit: plan row missing for thread" (cockpit.ts:93) on any send. Reading degrades
                 gracefully (listThreadMessages returns an empty page), so only the COMPOSER is
                 suppressed. Do NOT loosen that backend guard instead — it protects the real cockpit.
-                Checked BEFORE the gmail-status branch on purpose: the review has nothing to do with
-                a mailbox, so a disconnected user must still see it (SC#2). */}
+                Gmail is deliberately absent from this gate: the cockpit is useful before any
+                delivery channel is connected. */}
             {threadId === REVIEW_THREAD_ID ? (
               <p style={{ color: "var(--ink-soft)", margin: 0, fontSize: "0.9rem" }}>
                 This is your weekly business review. Start a new chat to act on anything here.
               </p>
-            ) : status === undefined ? (
-              <p style={{ color: "var(--ink-soft)", margin: 0 }}>Loading…</p>
-            ) : status.connected ? (
+            ) : (
               <ChatPane
                 threadId={threadId}
                 onThread={registerThread}
                 sending={sending}
                 onSending={setSending}
               />
-            ) : (
-              <Link
-                href="/connect-gmail"
-                style={{
-                  display: "inline-block",
-                  width: "fit-content",
-                  padding: "0.6rem 1.2rem",
-                  borderRadius: "0.375rem",
-                  background: "var(--teal-600)",
-                  color: "#fff",
-                  textDecoration: "none",
-                  fontWeight: 600,
-                }}
-              >
-                Connect Gmail to start planning
-              </Link>
             )}
           </section>
         }
@@ -541,7 +610,7 @@ export default function WorkspacePage() {
           >
             <header style={{ display: "flex", alignItems: "flex-start", gap: "1rem" }}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={capsTeal}>Agent workspace</p>
+                <p style={capsTeal}>Operating workspace</p>
                 <h2
                   style={{
                     margin: "0.35rem 0 0.2rem",
@@ -555,14 +624,14 @@ export default function WorkspacePage() {
                     ? "Media canvas"
                     : threadId
                       ? "Live work canvas"
-                      : `${greeting}, Executive.`}
+                      : `${greeting}. What should we move forward?`}
                 </h2>
                 <p style={{ margin: 0, fontSize: "0.9rem", color: "var(--ink-soft)" }}>
                   {view === "canvas"
                     ? "The storyboard, the blocks and the finished reel for this thread. Nothing generates until you approve the cost."
                     : threadId
                       ? "Plans, drafts, and delivery reports render here live as the agent works."
-                      : "Start from chat and the agent will stream its work here — plans, drafts, and delivery reports."}
+                      : "Set a business goal in chat. Pikar will reason across your knowledge, shape the work, and bring plans and outputs here for review."}
                 </p>
               </div>
               {/* The canvas toggle, beside Clear workspace. A BUTTON, not a link: it swaps what the
@@ -607,7 +676,7 @@ export default function WorkspacePage() {
                   fontFamily: "inherit",
                 }}
                 title="Clears this canvas by starting a new chat"
-                onClick={newChat}
+                onClick={clearWorkspace}
               >
                 <TrashIcon size={15} /> Clear workspace
               </button>

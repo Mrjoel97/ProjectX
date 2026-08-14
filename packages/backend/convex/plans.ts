@@ -224,6 +224,12 @@ export const stageMediaPlan = internalMutation({
 
     let planId: Id<"plans">;
     if (plan) {
+      // A completed memo is terminal, not a draft. This includes a prior media-director refusal:
+      // the user may ask for the reel again in the SAME chat after correcting the brief or after
+      // we improve the specialist. Treating `done` as universally non-recyclable trapped that
+      // thread forever behind `draft_in_progress`, even though no provider job or render existed.
+      // The memo remains in chat/vault history; only the live canvas slot is reused.
+      const completedMemo = plan.kind === "memo" && plan.status === "done";
       if (plan.kind === "media") {
         // The index PREFIX is the tenant boundary, so these are this tenant's rows by construction.
         const jobs = await ctx.db
@@ -237,10 +243,12 @@ export const stageMediaPlan = internalMutation({
           return { ok: false, reason: "render_in_flight" };
         }
       }
-      if (!RECYCLABLE_STATUS.has(plan.status)) return { ok: false, reason: "draft_in_progress" };
+      if (!completedMemo && !RECYCLABLE_STATUS.has(plan.status))
+        return { ok: false, reason: "draft_in_progress" };
       // A media row holds a PREVIOUS reel's deck, and a canceled row is one the user halted —
       // neither is work in progress. Anything else with content in it is.
-      const userWork = plan.kind !== "media" && plan.status !== "canceled" && hasDraftContent(plan);
+      const userWork =
+        !completedMemo && plan.kind !== "media" && plan.status !== "canceled" && hasDraftContent(plan);
       if (userWork) return { ok: false, reason: "draft_in_progress" };
       planId = plan._id;
       // resetPlan, NOT patchPlan: patchPlan drops `undefined` and so can never clear a filled slot.

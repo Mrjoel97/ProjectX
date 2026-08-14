@@ -99,11 +99,12 @@ export function composeBrief(transcript: TranscriptTurn[], dateStr: string): str
 }
 
 /**
- * Pull the DECISIONS + ACTION ITEMS lines for the plan seed (VOIC-04). Reads BOTH brief flavors
+ * Pull the DECISIONS + ACTION ITEMS + CONVERSATION lines for the plan seed (VOIC-04). Reads BOTH brief flavors
  * (they share BRIEF_HEADERS). A section runs from its header line to the next known header. Blank
  * lines, `- ` bullet markers, parenthetical hints, and the literal "None" placeholder are dropped.
- * Falls back to the whole brief when both sections are empty, so the cockpit agent always has
- * something to plan from.
+ * The transcript is intentionally retained: the voice agent's diagnosis, alternatives, and
+ * business reasoning are part of the context the cockpit needs to turn the discussion into an
+ * executable plan. Falls back to the whole brief when every parsed section is empty.
  */
 export function planSeedFromBrief(brief: string): string {
   const lines = brief.split("\n");
@@ -120,13 +121,23 @@ export function planSeedFromBrief(brief: string): string {
     }
     return body.join("\n").trim();
   };
+  const summary = section(BRIEF_HEADERS.summary);
   const decisions = section(BRIEF_HEADERS.decisions);
   const actions = section(BRIEF_HEADERS.actionItems);
-  if (!decisions && !actions) return brief.trim();
+  const openQuestions = section(BRIEF_HEADERS.openQuestions);
+  const discussion = section(BRIEF_HEADERS.discussion);
+  const conversation = section(BRIEF_HEADERS.conversation);
+  if (!summary && !decisions && !actions && !openQuestions && !discussion && !conversation) {
+    return brief.trim();
+  }
   return [
-    "Turn this voice brief into a plan.",
+    "Turn this voice conversation into a concrete plan. Preserve the decisions and constraints in the transcript, use the business context available to the cockpit, and execute through the normal approval path.",
+    summary && `\nSummary:\n${summary}`,
     decisions && `\nDecisions:\n${decisions}`,
     actions && `\nAction items:\n${actions}`,
+    openQuestions && `\nOpen questions:\n${openQuestions}`,
+    discussion && `\nDiscussion findings:\n${discussion}`,
+    conversation && `\nConversation transcript:\n${conversation}`,
   ]
     .filter(Boolean)
     .join("\n");

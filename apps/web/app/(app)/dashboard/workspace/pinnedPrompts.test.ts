@@ -157,8 +157,8 @@ describe("page.tsx — the Pinned prompts menu and the fresh-thread Run", () => 
     expect(menu).toContain("Deleting…");
     // Accessible names carry the VERB, so the two controls are distinguishable to a screen reader
     // reading a list of twenty rows that all look like prompt titles.
-    expect(menu).toContain("`Run pinned prompt: ${p.title}`");
-    expect(menu).toContain("`Delete pinned prompt: ${p.title}`");
+    expect(menu).toContain("`Run pinned prompt: $" + "{p.title}`");
+    expect(menu).toContain("`Delete pinned prompt: $" + "{p.title}`");
     // Inline, announced, grey — never a window.alert/confirm, never a dialog, never amber
     // (BRAND §2 reserves `--held` for the approval gate alone).
     expect(menu).toContain('role="status"');

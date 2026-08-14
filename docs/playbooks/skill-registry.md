@@ -1,5 +1,9 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-12 (production release-gate formatting pass — the watched skill-body test
+> changed only by deterministic import ordering; registry content, hashes, activation state, and
+> the production-readiness conclusions below are unchanged.)
+
 > Last verified: 2026-08-12 (20-20 owner closure — exact response:
 > **`ratify cloud-dev finance predecessor`**. This ratifies `woozy-wren-368`'s already-active,
 > already-evidenced `cockpit-agent v1` as Phase 20-12's **cloud-dev predecessor**. It does not

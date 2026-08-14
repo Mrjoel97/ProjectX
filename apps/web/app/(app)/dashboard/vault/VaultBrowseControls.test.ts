@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test, vi } from "vitest";
@@ -8,6 +10,8 @@ import {
   type VaultBrowseHandlers,
   vaultBrowseActions,
 } from "./VaultBrowseControls";
+
+const dropzoneSource = readFileSync(join(__dirname, "Dropzone.tsx"), "utf8");
 
 function handlers(): VaultBrowseHandlers {
   return {
@@ -23,6 +27,8 @@ describe("VaultBrowseControls", () => {
 
     expect(html).toContain("Upload a file");
     expect(html).toContain("Choose a folder");
+    expect(html).toContain('webkitdirectory=""');
+    expect(html).toContain('directory=""');
     expect(html).toContain("Import from Drive");
     expect(html).not.toContain("disabled");
   });
@@ -43,6 +49,12 @@ describe("VaultBrowseControls", () => {
     expect(html.match(/disabled=""/g)).toHaveLength(3);
   });
 
+  test("keeps the in-page folder control native and directory-enabled from first render", () => {
+    expect(dropzoneSource).toContain("DIRECTORY_INPUT_ATTRIBUTES");
+    expect(dropzoneSource).not.toContain("dirRef.current?.click()");
+    expect(dropzoneSource).not.toContain('setAttribute("webkitdirectory"');
+  });
+
   test("maps each descriptor to exactly its existing page handler", () => {
     const callbacks = handlers();
     const actions = vaultBrowseActions(callbacks);
@@ -52,8 +64,8 @@ describe("VaultBrowseControls", () => {
     expect(callbacks.onFolderUpload).not.toHaveBeenCalled();
     expect(callbacks.onDriveImport).not.toHaveBeenCalled();
 
-    actions.find((action) => action.id === "folder-upload")?.onSelect();
-    expect(callbacks.onFolderUpload).toHaveBeenCalledOnce();
+    actions.find((action) => action.id === "folder-upload")?.onSelect(null);
+    expect(callbacks.onFolderUpload).toHaveBeenCalledWith(null);
     expect(callbacks.onDriveImport).not.toHaveBeenCalled();
 
     actions.find((action) => action.id === "drive-import")?.onSelect();
@@ -68,7 +80,7 @@ describe("folder and digest controls", () => {
       createElement(FolderOpenControl, {
         name: "Client contracts",
         onOpen,
-        // biome-ignore lint/correctness/noChildrenProp: createElement's props overload requires this component's non-optional children field.
+        // biome-ignore lint/correctness/noChildrenProp: createElement's TypeScript overload requires the component's declared children prop here.
         children: createElement("span", null, "Client contracts"),
       }),
     );

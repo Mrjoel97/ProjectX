@@ -143,6 +143,16 @@ export const getTokens = internalQuery({
       .unique(),
 });
 
+/** Capability-only grant check for the cockpit router. Never returns token material. */
+export const hasGmailConnection = internalQuery({
+  args: { tenantId: v.string() },
+  handler: async (ctx, { tenantId }): Promise<boolean> =>
+    (await ctx.db
+      .query("gmailTokens")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .unique()) !== null,
+});
+
 /** Persist a freshly-refreshed access token (keeps the refresh clock intact). */
 export const updateAccess = internalMutation({
   args: { tenantId: v.string(), accessToken: v.string(), expiresAt: v.number() },

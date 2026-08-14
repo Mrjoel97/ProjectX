@@ -22,6 +22,7 @@ import { useAction, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import Link from "next/link";
 import { useState } from "react";
+import { MarkdownDocument } from "../MarkdownDocument";
 import { MediaCanvas } from "./MediaCanvas";
 import { useSendCockpitMessage } from "./useSendCockpitMessage";
 
@@ -339,7 +340,10 @@ type PlanNote = { text: string; tone?: "error" | "info"; link?: { href: string; 
  * same stop must not read as two different rules on the two surfaces.
  */
 export const PLAN_REFUSALS: Record<string, PlanNote> = {
-  gmail_not_connected: { text: "Connect Gmail before approving." },
+  gmail_not_connected: {
+    text: "This email is ready, but Gmail is not connected. Connect it to send this approved message.",
+    link: { href: "/connect-gmail", label: "Connect Gmail" },
+  },
   no_postal_address: {
     text: "Add your postal address before sending — the law requires it in every email's footer.",
     // href and label travel TOGETHER (Task 8 review). They used to be an optional `href` beside a
@@ -2041,9 +2045,9 @@ export const typeBadge = {
   border: "1px solid var(--teal-400)",
 } as const;
 
-// The rendered artifact: the newest write's stored markdown, first ~240 chars as written by the
-// tool. A PREVIEW, not a renderer — the vault owns the full document (CONTEXT lock: do not invent
-// a second way to display an artifact). Neutral --canvas sheet, the insufficientBox idiom below.
+// The rendered artifact uses the shared safe MarkdownDocument surface, matching the vault preview
+// and chat without evaluating model-authored HTML. Neutral --canvas sheet, the insufficientBox
+// idiom below.
 export const snippetSheet = {
   margin: "0.7rem 0 0",
   border: "1px solid var(--rule)",
@@ -2052,7 +2056,6 @@ export const snippetSheet = {
   padding: "0.7rem 0.85rem",
   color: "var(--ink-soft)",
   fontSize: "0.85rem",
-  whiteSpace: "pre-wrap" as const,
   overflowWrap: "anywhere" as const,
 } as const;
 
@@ -2060,6 +2063,12 @@ function OutputCard({ threadId }: { threadId?: string }) {
   const created: VaultSources | null | undefined = useQuery(
     api.vaultSources.byThread,
     threadId ? { threadId, role: "created" } : "skip",
+  );
+  const [selected, setSelected] = useState(0);
+  const selectedId = created?.docIds[selected] ?? created?.docIds[0];
+  const artifact = useQuery(
+    api.vault.vaultDocText,
+    selectedId ? { vaultDocId: selectedId } : "skip",
   );
   if (!created || created.count === 0) return null;
   // Absent `form` ⇒ DOCUMENT: rows written before this phase carry no form, and guessing from
@@ -2083,17 +2092,26 @@ function OutputCard({ threadId }: { threadId?: string }) {
         }}
       >
         {created.titles.map((title, i) => (
-          // ponytail: doc-level link to /dashboard/vault — the SAME context-sanctioned click-through
-          // SourceCard uses, and the inline-PreviewModal upgrade is deferred with SourceCard's.
           <li key={created.docIds[i] ?? title} style={{ ...traceText, fontWeight: 600 }}>
             {many && <span style={{ color: "var(--ink-soft)", fontWeight: 500 }}>#{i + 1} </span>}
-            <Link
-              href="/dashboard/vault"
+            <button
+              type="button"
               data-testid="output-title"
-              style={{ color: "var(--teal-600)" }}
+              aria-pressed={selected === i}
+              onClick={() => setSelected(i)}
+              style={{
+                border: 0,
+                padding: 0,
+                background: "transparent",
+                color: "var(--teal-600)",
+                font: "inherit",
+                fontWeight: "inherit",
+                cursor: "pointer",
+                textAlign: "left",
+              }}
             >
               {title}
-            </Link>
+            </button>
           </li>
         ))}
       </ul>
@@ -2101,7 +2119,25 @@ function OutputCard({ threadId }: { threadId?: string }) {
       <p style={{ margin: "0.55rem 0 0", fontSize: "0.8rem", color: "var(--ink-soft)" }}>
         Saved to your vault. Nothing was sent.
       </p>
-      {created.snippet && <div style={snippetSheet}>{created.snippet}</div>}
+      <section aria-label="Created artifact preview" style={{ ...snippetSheet, color: "var(--ink)" }}>
+        {artifact === undefined ? (
+          "Loading document…"
+        ) : artifact?.text ? (
+          <div style={{ maxHeight: "32rem", overflowY: "auto" }}>
+            <MarkdownDocument markdown={artifact.text} />
+          </div>
+        ) : created.snippet ? (
+          <MarkdownDocument markdown={created.snippet} compact />
+        ) : (
+          "This artifact has no text preview."
+        )}
+      </section>
+      <Link
+        href="/dashboard/vault"
+        style={{ display: "inline-block", marginTop: "0.6rem", color: "var(--teal-600)", fontSize: "0.82rem" }}
+      >
+        Open in Knowledge Vault
+      </Link>
     </div>
   );
 }

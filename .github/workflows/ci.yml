@@ -13,6 +13,9 @@
 
 name: ci
 
+permissions:
+  contents: read
+
 # Quoted so YAML keeps the string key `on` (unquoted `on` parses to boolean true) — matches skillopt.yml.
 "on":
   push:
@@ -28,6 +31,7 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       NEXT_PUBLIC_CONVEX_URL: ${{ vars.NEXT_PUBLIC_CONVEX_URL }}
     steps:

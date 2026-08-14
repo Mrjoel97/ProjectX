@@ -59,7 +59,7 @@ function windowLabel(index: number, clipSeconds: number): string {
 /**
  * THE VERDICT COPY, and this is a compliance statement rather than a style choice.
  *
- * `none_reported` means the provider reported NOTHING — **it is not "clean"**. Every Wan 2.5 video
+ * `none_reported` means the provider reported NOTHING — **it is not "clean"**. Every Sora 2 video
  * and every voice take lands there, and rendering it as a pass would make a safety claim fal never
  * made. Never a green tick, and never colour alone (BRAND §6).
  */
@@ -98,7 +98,7 @@ function refusalText(
   const block = refusal.blockIndex === undefined ? "A block" : `Block ${refusal.blockIndex + 1}`;
   switch (refusal.reason) {
     case "over_job_cap":
-      return `This reel would cost ${money(totalCents)}, over the ${money(capCents)} per-reel limit — remove blocks or drop to 480p.`;
+      return `This reel would cost ${money(totalCents)}, over the ${money(capCents)} per-reel limit — remove blocks or use the four-second clip tier.`;
     case "illegal_duration":
       return "Every block must be 5 or 10 seconds.";
     case "narration_too_long":
@@ -151,7 +151,7 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
     }
   }
 
-  const clipSeconds = plan.clipSeconds ?? 10;
+  const clipSeconds = plan.clipSeconds ?? 4;
   const art = plan.artDirection ?? null;
   const landed = (assets ?? []).filter((a) => a.url !== null).length;
 
@@ -211,11 +211,19 @@ function ImageCanvas({ plan }: { plan: MediaPlan }) {
   const generateImage = useMutation(api.media.generateImage);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  const asset = (assets ?? []).find((row) => row.kind === "image");
+  // `assetUrls` is oldest-first. A failed attempt remains immutable history, so the canvas must
+  // render the latest attempt instead of getting pinned forever to the first failed row.
+  const imageAttempts = (assets ?? []).filter((row) => row.kind === "image");
+  const asset = imageAttempts.at(-1);
   const prompt = plan.imagePrompt?.trim() ?? "";
   const estimateReady = estimate !== undefined;
+  const retryable = asset?.status === "failed" || asset?.status === "blocked";
   const canGenerate =
-    estimateReady && estimate.refusal === null && asset === undefined && !busy && prompt.length > 0;
+    estimateReady &&
+    estimate.refusal === null &&
+    (asset === undefined || retryable) &&
+    !busy &&
+    prompt.length > 0;
 
   async function generate() {
     if (!canGenerate) return;
@@ -271,9 +279,9 @@ function ImageCanvas({ plan }: { plan: MediaPlan }) {
         ) : (
           <p style={{ ...dimText, padding: "1rem", textAlign: "center" }}>
             {asset?.status === "submitted"
-              ? "fal is generating the image. It will appear here when the webhook lands."
+              ? "Wan is generating the image. It will appear here when the job completes."
               : asset?.status === "failed" || asset?.status === "blocked"
-                ? IMAGE_STATUS[asset.status]
+                ? `${IMAGE_STATUS[asset.status]}${asset.failureReason ? ` (${asset.failureReason.replaceAll("_", " ")})` : ""}. You can retry this reviewed prompt.`
                 : "The generated image will appear here."}
           </p>
         )}
@@ -295,7 +303,7 @@ function ImageCanvas({ plan }: { plan: MediaPlan }) {
         ) : (
           <>
             <p style={{ ...dimText, marginTop: "0.45rem" }}>
-              1 image · {estimate.width}×{estimate.height} · Flux Schnell
+              1 image · {estimate.width}×{estimate.height} · {estimate.model}
             </p>
             <p style={{ ...dimText, marginTop: "0.25rem" }}>
               Total {money(estimate.totalCents)} · {money(estimate.remainingCents)} of today's media
@@ -319,7 +327,13 @@ function ImageCanvas({ plan }: { plan: MediaPlan }) {
             fontWeight: 600,
           }}
         >
-          {busy ? "Starting…" : asset ? "Generation started" : "Generate image"}
+          {busy
+            ? "Starting…"
+            : retryable
+              ? "Retry image"
+              : asset
+                ? "Generation started"
+                : "Generate image"}
         </button>
         {note && <p style={{ ...dimText, marginTop: "0.5rem" }}>{note}</p>}
       </div>
@@ -918,7 +932,7 @@ function EstimateGate({
   const resolved = estimate !== undefined;
   const refusal = estimate?.refusal ?? null;
   const canGenerate = resolved && refusal === null && (estimate?.lines.length ?? 0) > 0 && !busy;
-  const maxChars = clipSeconds === 5 ? 70 : 140;
+  const maxChars = Math.round(clipSeconds * 14);
 
   return (
     <div
@@ -973,7 +987,7 @@ function EstimateGate({
 
       {resolved && (
         <p style={{ ...dimText, marginTop: "0.5rem" }}>
-          Priced at Wan 2.5, 480p, {clipSeconds} s per block ·{" "}
+          Priced at OpenAI Sora 2, 720p, {clipSeconds} s per block ·{" "}
           {money(estimate?.remainingCents ?? 0)} of today's media budget remains.
         </p>
       )}

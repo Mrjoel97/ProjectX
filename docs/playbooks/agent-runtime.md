@@ -1,5 +1,9 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-08-12 (production release-gate formatting pass — watched smoke and golden-eval
+> files changed only through Biome layout normalization; runtime behavior, fixtures, pins, and the
+> previously recorded cloud evidence are unchanged.)
+
 > Last verified: 2026-08-12 (20-20 owner closure — exact response:
 > **`ratify cloud-dev finance predecessor`**. Phase 20-12 may now use cloud-dev
 > `woozy-wren-368` `cockpit-agent v1` / sha256

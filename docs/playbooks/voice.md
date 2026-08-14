@@ -1,5 +1,31 @@
 # Playbook: Live Voice Sessions
 
+> Last verified: 2026-08-14 (⚠ **SOURCE REVIEW OF AN UNCOMMITTED FOREIGN-LANE DIFF, NOT A RUN.**
+> Reviewed by reading the working-tree diff of `voiceToken.ts` and `packages/voice/src/brief.ts`;
+> no voice session, mint, or brief was executed, and no live gate was re-run. Two behaviours moved.
+> **(1) THE CONFIRMED BLUEPRINT SPINE NOW CROSSES INTO EVERY REALTIME SESSION.**
+> `mintClientSecret` calls `internal.blueprint.spineForTenant` and appends the result to
+> `instructions` for BOTH the unscoped and the doc-scoped mint. The Phase-6 claim that an unscoped
+> mint is "byte-for-byte the Phase-6 body" is now FALSE and the source comment was corrected in the
+> same diff — do not restore that sentence. `spineForTenant` returns the CONFIRMED blueprint only,
+> so a draft can never reach a voice session, and the spine arrives already bounded (the 2500-char
+> tripwire) and fenced by the single `@pikar/core` renderer — do NOT re-slice or re-fence it here,
+> the same rule the doc digest already has. **This is a real data-egress widening:** standing
+> tenant business context now leaves for the OpenAI Realtime boundary on every mint, where before
+> only the persona (and, when doc-scoped, one report's digest) did. **(2) A ONE-TOKEN CHANGE IN THE
+> DOC-SCOPED BRANCH IS LOAD-BEARING:** it composes `${instructions}` where it used to compose
+> `${skill.body}`. Reverting that token silently drops the spine on doc-scoped sessions ONLY, while
+> unscoped sessions keep it — a half-regression with no error and no test named after it. **(3)
+> `planSeedFromBrief` (VOIC-04) WIDENED FROM TWO SECTIONS TO SIX.** It was DECISIONS + ACTION ITEMS;
+> it now emits summary, decisions, action items, open questions, discussion findings and **the
+> conversation transcript**, under a new lead instruction that tells the cockpit to preserve the
+> transcript's constraints and execute through the normal approval path. The empty-fallback
+> predicate widened with it — it returns the whole brief only when ALL SIX sections are empty, where
+> before two sufficed. Consequence to watch: the cockpit thread a call opens now receives the full
+> transcript, so the seed prompt is materially larger and carries far more raw user content than the
+> distilled seed it replaced. Neither the new egress nor the larger seed has been measured for cost
+> or for redaction behaviour by this review.)
+
 > Last verified: 2026-08-10 (Plan 19-12 — the phase-19 UAT clock defect). **No voice BEHAVIOUR changed.** `PostCall`'s
 > "Turn into a plan" (VOIC-04) and `AbnormalBriefBanner`'s dropped-brief handoff were two of the
 > five web callers of `api.cockpit.sendCockpitMessage` that never sent `clientContext`, so the

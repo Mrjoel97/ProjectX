@@ -70,7 +70,11 @@ async function seedPlan(t: T, tenantId = A): Promise<Id<"plans">> {
 /** N blocks at `seconds`, every narration exactly `chars` long (inside the band by default). */
 function deck(
   n: number,
-  { type = "AI" as ShotType, seconds = 10, chars = maxCharsFor(10) } = {},
+  {
+    type = "AI" as ShotType,
+    seconds = MEDIA_DEFAULT_VIDEO.seconds,
+    chars = maxCharsFor(MEDIA_DEFAULT_VIDEO.seconds),
+  }: { type?: ShotType; seconds?: number; chars?: number } = {},
 ): Block[] {
   return Array.from({ length: n }, (_, index) => ({
     index,
@@ -92,12 +96,12 @@ const mediaLeft = (t: T, tenantId = A) =>
 const llmLeft = (t: T, tenantId = A) =>
   t.query(internal.guardrails.remainingDailyCents, { tenantId });
 
-/** The §4.1 job: 6 paid blocks at 480p x 10 s, at the band ceiling, with captions. */
+/** The reference job: six paid Sora blocks at the default duration, with captions. */
 const JOB_41 = () => deck(6);
-// 6 x $0.50 clips + 6 voice lines at 2 x 140 chars ($0.0168) + 1 STT minute ($0.008) +
-// the flat render ($0.02). See "the §4.1 arithmetic" test below for the derivation.
-const JOB_41_USD = 3.0512;
-const JOB_41_CENTS = 306;
+// 6 x $0.40 clips + 6 voice lines at 2 x 56 chars ($0.01008) + one rounded-up STT minute
+// ($0.006) + the flat render ($0.02).
+const JOB_41_USD = 2.43608;
+const JOB_41_CENTS = 244;
 const JOB_41_LINES = 13; // 6 video + 6 tts + 1 stt — the render line gets NO row
 
 // ── the two kill switches ──────────────────────────────────────────────────────────
@@ -123,7 +127,7 @@ describe("kill switches: two INDEPENDENT levers, either one stops media", () => 
       tenantId: A,
       planId,
       blocks: JOB_41(),
-      clipSeconds: 10,
+      clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: true,
     });
 
@@ -141,7 +145,7 @@ describe("kill switches: two INDEPENDENT levers, either one stops media", () => 
       tenantId: A,
       planId,
       blocks: JOB_41(),
-      clipSeconds: 10,
+      clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: true,
     });
 
@@ -173,7 +177,7 @@ describe("kill switches: two INDEPENDENT levers, either one stops media", () => 
       tenantId: A,
       planId,
       blocks: deck(1),
-      clipSeconds: 10,
+      clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: false,
     });
     expect(res.ok).toBe(true); // no seed, no migration — and it proceeds
@@ -197,7 +201,7 @@ test("an unpriced model is unknown_model — zero rows, never a guess", async ()
         tenantId: A,
         planId,
         blocks: JOB_41(),
-        clipSeconds: 10,
+        clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
         withCaptions: true,
       }),
     );
@@ -213,9 +217,12 @@ test("an unpriced model is unknown_model — zero rows, never a guess", async ()
 
 describe("the §4.1 job: the WHOLE reel is ONE reserved unit", () => {
   test("the arithmetic, derived from the price table rather than asserted twice", () => {
-    const clips = 6 * 10 * (MEDIA_VIDEO_PRICING[MEDIA_DEFAULT_VIDEO.model]?.["480p"] ?? 0);
-    const voice = 6 * ((2 * maxCharsFor(10)) / 1000) * 0.015; // 2x — rewrite allowance
-    const stt = 1 * 0.006; // 6 x 10 s = exactly one input minute
+    const clips =
+      6 *
+      MEDIA_DEFAULT_VIDEO.seconds *
+      (MEDIA_VIDEO_PRICING[MEDIA_DEFAULT_VIDEO.model]?.[MEDIA_DEFAULT_VIDEO.resolution] ?? 0);
+    const voice = 6 * ((2 * maxCharsFor(MEDIA_DEFAULT_VIDEO.seconds)) / 1000) * 0.015; // 2x — rewrite allowance
+    const stt = 1 * 0.006; // the sub-minute input is billed as one minute
     expect(clips + voice + stt + MEDIA_SANDBOX_USD_PER_RENDER).toBeCloseTo(JOB_41_USD, 6);
     expect(JOB_41_USD).toBeLessThan(MEDIA_JOB_CAP_USD); // 13% headroom — the test is not vacuous
   });
@@ -229,7 +236,7 @@ describe("the §4.1 job: the WHOLE reel is ONE reserved unit", () => {
       tenantId: A,
       planId,
       blocks: JOB_41(),
-      clipSeconds: 10,
+      clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: true,
     });
 
@@ -249,7 +256,7 @@ describe("the §4.1 job: the WHOLE reel is ONE reserved unit", () => {
       tenantId: A,
       planId,
       blocks: JOB_41(),
-      clipSeconds: 10,
+      clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: true,
     });
     expect(res.ok).toBe(true);
@@ -262,8 +269,7 @@ describe("the §4.1 job: the WHOLE reel is ONE reserved unit", () => {
     expect(all.filter((r) => r.kind === "stt")).toHaveLength(1);
     expect(new Set(all.map((r) => r.batchId))).toEqual(new Set([res.batchId]));
     expect(all.every((r) => r.status === "queued")).toBe(true);
-    expect(all.filter((r) => r.kind === "video").every((r) => r.provider === "wan")).toBe(true);
-    expect(all.filter((r) => r.kind !== "video").every((r) => r.provider === "openai")).toBe(true);
+    expect(all.every((r) => r.provider === "openai")).toBe(true);
     expect(all.every((r) => r.tenantId === A && r.planId === planId)).toBe(true);
     expect(all.every((r) => r.estUsd > 0)).toBe(true);
     expect(all.every((r) => r.promptHash.length === 64)).toBe(true);
@@ -272,9 +278,13 @@ describe("the §4.1 job: the WHOLE reel is ONE reserved unit", () => {
     expect(all.find((r) => r.kind === "stt")?.blockIndex).toBe(-1);
     // No render row: the render is a plan-row concern, with no falRequestId and no webhook.
     expect(all.some((r) => (r.kind as string) === "render")).toBe(false);
-    // The resolution is PINNED on the row — never left for fal to default to 1080p.
+    // The resolution is PINNED on the row — never left to a provider default.
     const video = all.find((r) => r.kind === "video");
-    expect(video?.spec).toMatchObject({ kind: "video", resolution: "480p", seconds: 10 });
+    expect(video?.spec).toMatchObject({
+      kind: "video",
+      resolution: MEDIA_DEFAULT_VIDEO.resolution,
+      seconds: MEDIA_DEFAULT_VIDEO.seconds,
+    });
     expect(video?.model).toBe(MEDIA_DEFAULT_VIDEO.model);
   });
 
@@ -286,7 +296,7 @@ describe("the §4.1 job: the WHOLE reel is ONE reserved unit", () => {
       tenantId: A,
       planId,
       blocks,
-      clipSeconds: 10,
+      clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: true,
     });
     expect(res.ok).toBe(true);
@@ -307,7 +317,7 @@ describe("the §4.1 job: the WHOLE reel is ONE reserved unit", () => {
           kind: "video",
           model: MEDIA_DEFAULT_VIDEO.model,
           resolution: MEDIA_DEFAULT_VIDEO.resolution,
-          seconds: 10,
+          seconds: MEDIA_DEFAULT_VIDEO.seconds,
         }),
       ),
       ...blocks.map(
@@ -323,7 +333,7 @@ describe("the §4.1 job: the WHOLE reel is ONE reserved unit", () => {
     const raw = chooseMediaBatch(onceOver, MEDIA_JOB_CAP_USD);
     expect(raw.ok).toBe(true);
     if (!raw.ok) return;
-    const oneVoicePass = (6 * maxCharsFor(10) * 0.015) / 1000;
+    const oneVoicePass = (6 * maxCharsFor(MEDIA_DEFAULT_VIDEO.seconds) * 0.015) / 1000;
     expect(res.estUsd - raw.value.estUsd).toBeCloseTo(oneVoicePass, 6);
   });
 });
@@ -331,14 +341,14 @@ describe("the §4.1 job: the WHOLE reel is ONE reserved unit", () => {
 // ── the cap refusals ───────────────────────────────────────────────────────────────
 
 describe("over_job_cap: the cap is bounded by the CLIPS", () => {
-  test("12 blocks at 480p is refused — zero rows, zero consumption", async () => {
+  test("12 default Sora blocks are refused — zero rows, zero consumption", async () => {
     const t = harness();
     const planId = await seedPlan(t);
     const res = await reserve(t, {
       tenantId: A,
       planId,
       blocks: deck(12),
-      clipSeconds: 10,
+      clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: true,
     });
     expect(res).toEqual({ ok: false, reason: "over_job_cap" });
@@ -346,19 +356,16 @@ describe("over_job_cap: the cap is bounded by the CLIPS", () => {
     expect(await mediaLeft(t)).toBe(MEDIA_DAILY_BUDGET_CENTS);
   });
 
-  test("the 480p PIN is load-bearing: the same 6-block job at 720p is over the cap", () => {
-    // There is no resolution argument on `reserveJob` BY DESIGN — 480p is pinned in
-    // MEDIA_DEFAULT_VIDEO so nobody can choose a tier that triples the invoice. This asserts what
-    // the pin is worth: were the pin ever relaxed, the identical deck would be refused.
-    const at = (resolution: "480p" | "720p"): MediaSpec[] =>
-      Array.from({ length: 6 }, () => ({
+  test("eight default clips pass while nine cross the existing cap", () => {
+    const at = (count: number): MediaSpec[] =>
+      Array.from({ length: count }, () => ({
         kind: "video" as const,
         model: MEDIA_DEFAULT_VIDEO.model,
-        resolution,
-        seconds: 10,
+        resolution: MEDIA_DEFAULT_VIDEO.resolution,
+        seconds: MEDIA_DEFAULT_VIDEO.seconds,
       }));
-    expect(chooseMediaBatch(at("480p"), MEDIA_JOB_CAP_USD).ok).toBe(true);
-    const over = chooseMediaBatch(at("720p"), MEDIA_JOB_CAP_USD);
+    expect(chooseMediaBatch(at(8), MEDIA_JOB_CAP_USD).ok).toBe(true);
+    const over = chooseMediaBatch(at(9), MEDIA_JOB_CAP_USD);
     expect(over.ok).toBe(false);
     if (!over.ok) expect(over.error.code).toBe("over_job_cap");
   });
@@ -388,8 +395,8 @@ describe("the narration BAND is caught before payment, not by ffprobe after it",
     const res = await reserve(t, {
       tenantId: A,
       planId,
-      blocks: deck(3, { chars: maxCharsFor(10) + 1 }),
-      clipSeconds: 10,
+      blocks: deck(3, { chars: maxCharsFor(MEDIA_DEFAULT_VIDEO.seconds) + 1 }),
+      clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: false,
     });
     expect(res).toEqual({ ok: false, reason: "narration_too_long" });
@@ -403,8 +410,8 @@ describe("the narration BAND is caught before payment, not by ffprobe after it",
     const res = await reserve(t, {
       tenantId: A,
       planId,
-      blocks: deck(3, { chars: minCharsFor(10) - 1 }),
-      clipSeconds: 10,
+      blocks: deck(3, { chars: minCharsFor(MEDIA_DEFAULT_VIDEO.seconds) - 1 }),
+      clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: false,
     });
     expect(res).toEqual({ ok: false, reason: "narration_too_short" });
@@ -481,14 +488,18 @@ test("an UNRENDERABLE deck is refused BEFORE a cent moves — zero rows, zero co
 test("D12a AT THE RAIL: the batch total is rounded ONCE, not per line", async () => {
   const t = harness();
   const planId = await seedPlan(t);
-  // A RENDERABLE deck now: 3 AI blocks at 5 s = 3 video lines + 3 voice lines + the flat render.
-  // The voice lines are the sub-cent ones (2 x 43 = 86 chars, $0.00086 each) and they are what
+  // A RENDERABLE deck now: 3 AI blocks at 4 s = 3 video lines + 3 voice lines + the flat render.
+  // The voice lines are the sub-cent ones and they are what
   // per-line flooring would round up to a whole cent apiece.
   const res = await reserve(t, {
     tenantId: A,
     planId,
-    blocks: deck(3, { type: "AI", seconds: 5, chars: minCharsFor(5) }),
-    clipSeconds: 5,
+    blocks: deck(3, {
+      type: "AI",
+      seconds: MEDIA_DEFAULT_VIDEO.seconds,
+      chars: minCharsFor(MEDIA_DEFAULT_VIDEO.seconds),
+    }),
+    clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
     withCaptions: false,
   });
 
@@ -525,7 +536,7 @@ describe("the media windows: keyed per tenant, with a keyless ceiling behind the
       tenantId: A,
       planId,
       blocks: JOB_41(),
-      clipSeconds: 10,
+      clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: true,
     });
     expect(res.ok).toBe(true);
@@ -542,33 +553,39 @@ describe("the media windows: keyed per tenant, with a keyless ceiling behind the
       tenantId: A,
       planId,
       blocks: JOB_41(),
-      clipSeconds: 10,
+      clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: true,
     } as const;
-    // 3 x 305 = 915 of 1000. The fourth cannot fit in the 85 that remain.
-    for (let i = 0; i < 3; i++) expect((await reserve(t, job)).ok).toBe(true);
+    // Four jobs fit in the tenant window. The fifth cannot.
+    for (let i = 0; i < 4; i++) expect((await reserve(t, job)).ok).toBe(true);
     const rowsBefore = (await rows(t)).length;
-    expect(rowsBefore).toBe(3 * JOB_41_LINES);
+    expect(rowsBefore).toBe(4 * JOB_41_LINES);
 
     const res = await reserve(t, job);
 
     expect(res).toEqual({ ok: false, reason: "media_daily_exhausted" });
     expect((await rows(t)).length).toBe(rowsBefore); // all-or-nothing
-    expect(await mediaLeft(t, A)).toBe(MEDIA_DAILY_BUDGET_CENTS - 3 * JOB_41_CENTS);
+    expect(await mediaLeft(t, A)).toBe(MEDIA_DAILY_BUDGET_CENTS - 4 * JOB_41_CENTS);
   });
 
   test("the KEYLESS ceiling refuses independently, with its own distinct reason", async () => {
     const t = harness();
     const planId = await seedPlan(t);
     const job = (tenantId: string) =>
-      ({ tenantId, planId, blocks: JOB_41(), clipSeconds: 10, withCaptions: true }) as const;
+      ({
+        tenantId,
+        planId,
+        blocks: JOB_41(),
+        clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
+        withCaptions: true,
+      }) as const;
 
     // Many tenants, each individually modest (3 jobs = 915 < its own 1000 allowance), together
     // exceeding the 10,000 ceiling. No single tenant is over its own window, so only the global
     // rail can refuse here.
     let sawCeiling = false;
     outer: for (let i = 0; i < 12 && !sawCeiling; i++) {
-      for (let j = 0; j < 3; j++) {
+      for (let j = 0; j < 4; j++) {
         const res = await reserve(t, job(`crowd_${i}`));
         if (!res.ok) {
           expect(res.reason).toBe("deployment_media_exhausted");
@@ -597,7 +614,7 @@ describe("the media windows: keyed per tenant, with a keyless ceiling behind the
       tenantId: A,
       planId,
       blocks: JOB_41(),
-      clipSeconds: 10,
+      clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: true,
     });
     expect(res.ok).toBe(true);
@@ -618,7 +635,7 @@ describe("the media windows: keyed per tenant, with a keyless ceiling behind the
       tenantId: A,
       planId,
       blocks: JOB_41(),
-      clipSeconds: 10,
+      clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: true,
     } as const;
     for (let i = 0; i < 3; i++) await reserve(t, job);
@@ -635,14 +652,14 @@ test("CONCURRENCY: two jobs that fit alone but not together — exactly ONE wins
     tenantId: A,
     planId,
     blocks: JOB_41(),
-    clipSeconds: 10,
+    clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
     withCaptions: true,
   } as const;
 
-  // Leave room for exactly one more job: 1000 - 2 x 305 = 390, and 2 x 305 = 610 > 390.
-  for (let i = 0; i < 2; i++) expect((await reserve(t, job)).ok).toBe(true);
+  // Leave room for exactly one more job.
+  for (let i = 0; i < 3; i++) expect((await reserve(t, job)).ok).toBe(true);
   const room = await mediaLeft(t, A);
-  expect(room).toBe(MEDIA_DAILY_BUDGET_CENTS - 2 * JOB_41_CENTS);
+  expect(room).toBe(MEDIA_DAILY_BUDGET_CENTS - 3 * JOB_41_CENTS);
   expect(room).toBeGreaterThanOrEqual(JOB_41_CENTS); // one fits...
   expect(room).toBeLessThan(2 * JOB_41_CENTS); // ...two do not. The test is not vacuous.
 
@@ -658,7 +675,7 @@ test("CONCURRENCY: two jobs that fit alone but not together — exactly ONE wins
   // Consumed cents equal the WINNER's estimate, not both.
   expect(await mediaLeft(t, A)).toBe(room - JOB_41_CENTS);
   // ...and the loser wrote nothing.
-  expect(await rows(t)).toHaveLength(3 * JOB_41_LINES);
+  expect(await rows(t)).toHaveLength(4 * JOB_41_LINES);
 });
 
 // ── plan 20-18: the D5 reconciliation readers ──────────────────────────────────────
@@ -699,7 +716,11 @@ async function seedJobs(t: T, planId: Id<"plans">, seeds: SeedRow[], batchId = "
                 : MEDIA_DEFAULT_VOICE.model,
         spec:
           s.kind === "video"
-            ? { kind: "video", resolution: "480p", seconds: 10 }
+            ? {
+                kind: "video",
+                resolution: MEDIA_DEFAULT_VIDEO.resolution,
+                seconds: MEDIA_DEFAULT_VIDEO.seconds,
+              }
             : s.kind === "tts"
               ? { kind: "tts", characters: 280, voice: "nova", sampleRateHertz: 24000 }
               : s.kind === "stt"
@@ -820,7 +841,7 @@ describe("spendForPeriod: the D5(a) aggregate, and the three things that would m
       tenantId: A,
       planId,
       blocks: JOB_41(),
-      clipSeconds: 10,
+      clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: true,
     });
     expect(res.ok).toBe(true);
@@ -938,7 +959,7 @@ const VIDEO: SubmittableSpec = {
   kind: "video",
   model: MEDIA_DEFAULT_VIDEO.model,
   resolution: MEDIA_DEFAULT_VIDEO.resolution,
-  seconds: 10,
+  seconds: MEDIA_DEFAULT_VIDEO.seconds,
 };
 const TTS: SubmittableSpec = {
   kind: "tts",
@@ -949,7 +970,7 @@ const TTS: SubmittableSpec = {
 };
 const HOOK = "https://example.convex.site/fal/callback/abc.def";
 
-/** Wan task accept, one distinct task id per call. A fresh Response per call is REQUIRED:
+/** Sora task accept, one distinct video id per call. A fresh Response per call is REQUIRED:
  *  a body is a single-read stream, so `mockResolvedValue(new Response(...))` would hand the same
  *  consumed object to call 2 and every test asserting N submits would be a lie. */
 function acceptFetch() {
@@ -957,7 +978,7 @@ function acceptFetch() {
   return vi.fn().mockImplementation(() => {
     n += 1;
     return Promise.resolve(
-      new Response(JSON.stringify({ output: { task_id: `req_${n}`, task_status: "PENDING" } }), {
+      new Response(JSON.stringify({ id: `req_${n}`, status: "queued" }), {
         status: 200,
       }),
     );
@@ -978,34 +999,25 @@ afterEach(() => {
 });
 
 describe("buildSubmitBody: the body is a function of the PRICED spec, and nothing else", () => {
-  test("the video body pins every priced WAN field", () => {
+  test("the video body pins every priced Sora field", () => {
     expect(buildSubmitBody(VIDEO, "a lighthouse at dusk")).toEqual({
       model: MEDIA_DEFAULT_VIDEO.model,
-      input: { prompt: "a lighthouse at dusk" },
-      parameters: { size: "832*480", duration: 10, prompt_extend: false },
+      prompt: "a lighthouse at dusk",
+      seconds: String(MEDIA_DEFAULT_VIDEO.seconds),
+      size: "720x1280",
     });
   });
 
-  test("duration remains the submitted numeric enum", () => {
-    const body = buildSubmitBody({ ...VIDEO, seconds: 5 }, "p");
-    expect((body.parameters as Record<string, unknown>).duration).toBe(5);
+  test("duration remains the submitted OpenAI string enum", () => {
+    const body = buildSubmitBody({ ...VIDEO, seconds: 8 }, "p");
+    expect(body.seconds).toBe("8");
   });
 
   test("a DIFFERENT priced tier travels through unchanged — the field is not a hardcoded 480p", () => {
     // Not vacuous: were `resolution` dropped from the arm, the test above would still see the key
     // absent, but THIS one proves the value tracks the spec rather than a constant.
-    expect(
-      (
-        buildSubmitBody({ ...VIDEO, resolution: "1080p" }, "p").parameters as Record<
-          string,
-          unknown
-        >
-      ).size,
-    ).toBe("1920*1080");
-    expect(
-      (buildSubmitBody({ ...VIDEO, resolution: "720p" }, "p").parameters as Record<string, unknown>)
-        .size,
-    ).toBe("1280*720");
+    expect(buildSubmitBody({ ...VIDEO, resolution: "1080p" }, "p").size).toBe("1080x1920");
+    expect(buildSubmitBody({ ...VIDEO, resolution: "720p" }, "p").size).toBe("720x1280");
   });
 
   test("NO audio field is sent, on any video submit", () => {
@@ -1029,8 +1041,11 @@ describe("buildSubmitBody: the body is a function of the PRICED spec, and nothin
       ),
     ).toEqual({
       model: MEDIA_DEFAULT_IMAGE.model,
-      input: { prompt: "a poster" },
-      parameters: { size: "1080*1920", n: 1, prompt_extend: false, watermark: false },
+      prompt: "a poster",
+      n: 1,
+      size: "1024x1536",
+      quality: "low",
+      output_format: "png",
     });
   });
 
@@ -1080,28 +1095,26 @@ describe("buildSubmitBody: the body is a function of the PRICED spec, and nothin
   });
 });
 
-describe("Alibaba WAN submit contract", () => {
+describe("OpenAI Sora submit contract", () => {
   test("missing visual key refuses before fetch", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    vi.stubEnv("Video_and_image_API_Key", "");
-    vi.stubEnv("WAN_API_BASE_URL", "https://workspace.ap-southeast-1.maas.aliyuncs.com");
-    await expect(submitLine(VIDEO, "p")).rejects.toThrow(/Video_and_image_API_Key/);
+    vi.stubEnv("OPENAI_API_KEY", "");
+    await expect(submitLine(VIDEO, "p")).rejects.toThrow(/OPENAI_API_KEY/);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  test("submits an asynchronous Wan task with bearer auth and the priced body", async () => {
+  test("submits an asynchronous Sora task with bearer auth and the priced body", async () => {
     const fetchMock = acceptFetch();
     vi.stubGlobal("fetch", fetchMock);
     stubMediaEnv();
     expect(await submitLine(VIDEO, "a lighthouse")).toEqual({ ok: true, requestId: "req_1" });
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe(
-      "https://workspace.ap-southeast-1.maas.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis",
+    expect(url).toBe("https://api.openai.com/v1/videos");
+    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer openai-test-key");
+    expect(Object.fromEntries((init.body as FormData).entries())).toEqual(
+      buildSubmitBody(VIDEO, "a lighthouse"),
     );
-    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer test-key");
-    expect((init.headers as Record<string, string>)["X-DashScope-Async"]).toBe("enable");
-    expect(JSON.parse(String(init.body))).toEqual(buildSubmitBody(VIDEO, "a lighthouse"));
   });
 
   test("fixture mode remains free but still requires configured credentials", async () => {
@@ -1115,6 +1128,33 @@ describe("Alibaba WAN submit contract", () => {
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  test("GPT Image 2 decodes the returned PNG and keeps it off the job payload", async () => {
+    const encoded = btoa(String.fromCharCode(137, 80, 78, 71));
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: [{ b64_json: encoded }] }), {
+        status: 200,
+        headers: { "x-request-id": "image_req_1" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    const result = await submitLine(
+      {
+        kind: "image",
+        model: MEDIA_DEFAULT_IMAGE.model,
+        width: MEDIA_DEFAULT_IMAGE.width,
+        height: MEDIA_DEFAULT_IMAGE.height,
+      },
+      "a baobab at dawn",
+    );
+    expect(result).toMatchObject({ ok: true, requestId: "image_req_1" });
+    if (!result.ok) return;
+    expect([...((result.asset?.bytes ?? new Uint8Array()) as Uint8Array)]).toEqual([
+      137, 80, 78, 71,
+    ]);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.openai.com/v1/images/generations");
+  });
 });
 
 describe("OpenAI audio request bodies", () => {
@@ -1127,7 +1167,6 @@ describe("OpenAI audio request bodies", () => {
       speed: 1,
     });
   });
-
 });
 
 describe("WAN task landing", () => {
@@ -1178,6 +1217,62 @@ describe("WAN task landing", () => {
     expect(row).toMatchObject({ status: "succeeded", mimeType: "image/png", bytes: 4 });
     expect(row?.assetStorageId).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("OpenAI Sora task landing", () => {
+  test("a completed video is downloaded from OpenAI and stored in the workspace", async () => {
+    const t = harness();
+    const planId = await seedPlan(t);
+    const jobId = await t.run((ctx) =>
+      ctx.db.insert("mediaJobs", {
+        tenantId: A,
+        planId,
+        batchId: "sora-video",
+        blockIndex: 0,
+        provider: "openai",
+        kind: "video",
+        model: MEDIA_DEFAULT_VIDEO.model,
+        spec: {
+          kind: "video",
+          resolution: MEDIA_DEFAULT_VIDEO.resolution,
+          seconds: MEDIA_DEFAULT_VIDEO.seconds,
+        },
+        promptHash: "0".repeat(64),
+        status: "submitted",
+        providerRequestId: "video_1",
+        estUsd: 0.4,
+        createdAt: T0,
+        updatedAt: T0,
+      }),
+    );
+    stubMediaEnv();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: "video_1", status: "completed" })))
+      .mockResolvedValueOnce(
+        new Response(new Uint8Array([0, 0, 0, 24]), {
+          status: 200,
+          headers: { "content-type": "video/mp4" },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await t.action(internal.media.pollOpenAiVideoTask, {
+      jobId,
+      videoId: "video_1",
+      attempt: 0,
+    });
+
+    expect(await jobRow(t, jobId)).toMatchObject({
+      status: "succeeded",
+      mimeType: "video/mp4",
+      bytes: 4,
+    });
+    expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([
+      "https://api.openai.com/v1/videos/video_1",
+      "https://api.openai.com/v1/videos/video_1/content",
+    ]);
   });
 });
 
@@ -1353,7 +1448,7 @@ async function reservedBatch(t: T) {
     tenantId: A,
     planId,
     blocks,
-    clipSeconds: 10,
+    clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
     withCaptions: false,
   });
   if (!res.ok) throw new Error(`reserve failed: ${res.reason}`);
@@ -1413,7 +1508,7 @@ describe.skip("legacy fal submitBatch contract (superseded by WAN + OpenAI)", ()
       tenantId: A,
       planId,
       blocks,
-      clipSeconds: 10,
+      clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: false,
     });
     if (!res.ok) throw new Error(`reserve failed: ${res.reason}`);
@@ -1529,7 +1624,7 @@ describe.skip("legacy fal submitBatch contract (superseded by WAN + OpenAI)", ()
       tenantId: A,
       planId,
       blocks: deck(1),
-      clipSeconds: 10,
+      clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: false,
     });
     expect(res.ok).toBe(true);
@@ -1656,7 +1751,11 @@ async function seedLandable(
         spec:
           opts.spec ??
           (kind === "video"
-            ? { kind: "video", resolution: "480p", seconds: 10 }
+            ? {
+                kind: "video",
+                resolution: MEDIA_DEFAULT_VIDEO.resolution,
+                seconds: MEDIA_DEFAULT_VIDEO.seconds,
+              }
             : kind === "image"
               ? { kind: "image", width: 1080, height: 1920 }
               : { kind: "tts", characters: 280, voice: "Evelyn (en)", sampleRateHertz: 24000 }),
@@ -2006,7 +2105,11 @@ describe("the happy path: the bytes land, the URL does not", () => {
     const fetchMock = assetFetch("audio/wav");
     vi.stubGlobal("fetch", fetchMock);
     stubMediaEnv();
-    const { jobId } = await seedLandable(t, { kind: "tts", estUsd: 0.0028, clipSeconds: 10 });
+    const { jobId } = await seedLandable(t, {
+      kind: "tts",
+      estUsd: 0.0028,
+      clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
+    });
     const segment = await signed(jobId);
 
     expect((await post(t, segment, AUDIO_OK)).status).toBe(200);
@@ -2036,7 +2139,11 @@ describe("the happy path: the bytes land, the URL does not", () => {
       ),
     );
     stubMediaEnv();
-    const { jobId } = await seedLandable(t, { kind: "tts", estUsd: 0.0028, clipSeconds: 10 });
+    const { jobId } = await seedLandable(t, {
+      kind: "tts",
+      estUsd: 0.0028,
+      clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
+    });
 
     expect((await post(t, await signed(jobId), AUDIO_OK)).status).toBe(200);
 
@@ -2128,18 +2235,16 @@ describe("reconciliation: SKIPPED when there is nothing to reconcile, re-priced 
     expect(payload.reconciled).toBe("exact_by_construction");
   });
 
-  test("a re-price UPWARD consumes exactly the delta, on BOTH windows", async () => {
+  test("GPT Image 2 keeps its flat reservation across reported dimensions", async () => {
     const t = harness();
     stubMediaEnv();
-    // Submitted 1080x1920 = 2.07 MP -> ceil 3 MP -> $0.009 -> 1 cent.
-    const { jobId } = await seedLandable(t, { kind: "image", estUsd: 0.009 });
+    const { jobId } = await seedLandable(t, { kind: "image", estUsd: 0.01 });
     const before = await mediaLeft(t);
 
-    // fal returned 2160x3840 = 8.29 MP -> ceil 9 MP -> $0.027 -> 3 cents.
     await land(t, jobId, { width: 2160, height: 3840 });
 
-    expect((await jobRow(t, jobId))?.actualCents).toBe(3);
-    expect(await mediaLeft(t)).toBe(before - 2); // 3 - 1, and not 3
+    expect((await jobRow(t, jobId))?.actualCents).toBe(1);
+    expect(await mediaLeft(t)).toBe(before);
     const payload = (await auditRows(t))[0]?.payload as Record<string, unknown>;
     expect(payload.reconciled).toBe("repriced");
   });
@@ -2153,7 +2258,7 @@ describe("reconciliation: SKIPPED when there is nothing to reconcile, re-priced 
 
     await land(t, jobId, { width: 1080, height: 1920 });
 
-    expect((await jobRow(t, jobId))?.actualCents).toBe(3); // the honest actual is recorded...
+    expect((await jobRow(t, jobId))?.actualCents).toBe(1); // the honest actual is recorded...
     expect(await mediaLeft(t)).toBe(before); // ...and the window is NOT credited back
   });
 
@@ -2219,9 +2324,9 @@ const RENDER_SECRET = "test-render-secret";
 const RENDER_SIDECAR = JSON.stringify({
   script: "assemble_final.sh",
   block_count: 2,
-  clip_seconds: 10,
-  total_duration_s: 20,
-  actual_duration_s: 20,
+  clip_seconds: MEDIA_DEFAULT_VIDEO.seconds,
+  total_duration_s: 2 * MEDIA_DEFAULT_VIDEO.seconds,
+  actual_duration_s: 2 * MEDIA_DEFAULT_VIDEO.seconds,
   gates: ["speech_within_window", "no_time_stretch"],
   blocks: [
     {
@@ -2229,15 +2334,15 @@ const RENDER_SIDECAR = JSON.stringify({
       window_start_s: 0,
       lead_silence_s: 0.3,
       speech_abs_s: 0.5,
-      speech_dur_s: 9,
+      speech_dur_s: MEDIA_DEFAULT_VIDEO.seconds - 1,
       overrun: false,
     },
     {
       block_index: 1,
-      window_start_s: 10,
+      window_start_s: MEDIA_DEFAULT_VIDEO.seconds,
       lead_silence_s: 0.3,
-      speech_abs_s: 10.5,
-      speech_dur_s: 9,
+      speech_abs_s: MEDIA_DEFAULT_VIDEO.seconds + 0.5,
+      speech_dur_s: MEDIA_DEFAULT_VIDEO.seconds - 1,
       overrun: false,
     },
   ],
@@ -2287,7 +2392,11 @@ async function seedRenderable(
             model: kind === "video" ? MEDIA_DEFAULT_VIDEO.model : MEDIA_DEFAULT_VOICE.model,
             spec:
               kind === "video"
-                ? { kind: "video", resolution: "480p", seconds: 10 }
+                ? {
+                    kind: "video",
+                    resolution: MEDIA_DEFAULT_VIDEO.resolution,
+                    seconds: MEDIA_DEFAULT_VIDEO.seconds,
+                  }
                 : { kind: "tts", characters: 280, voice: "Evelyn (en)", sampleRateHertz: 24000 },
             promptHash: "0".repeat(64),
             status: held ? "submitted" : "succeeded",
@@ -2331,7 +2440,7 @@ describe("batchToRender: a reel is ALL-OR-NOTHING, and the refusal is free", () 
       "voice03.wav",
     ]);
     expect(res.value.blockCount).toBe(3);
-    expect(res.value.clipSeconds).toBe(10);
+    expect(res.value.clipSeconds).toBe(MEDIA_DEFAULT_VIDEO.seconds);
   });
 
   test("REFUSES a batch whose lines have not all landed — no sandbox is worth starting for it", async () => {
@@ -2588,7 +2697,7 @@ async function seedDeck(
   opts: { tenantId?: string; blocks?: number; clipSeconds?: number; chars?: number } = {},
 ) {
   const tenantId = opts.tenantId ?? A;
-  const clipSeconds = opts.clipSeconds ?? 10;
+  const clipSeconds = opts.clipSeconds ?? MEDIA_DEFAULT_VIDEO.seconds;
   const n = opts.blocks ?? 3;
   const planId = await seedPlan(t, tenantId);
   const shots = Array.from({ length: n }, (_, i) => ({
@@ -2667,6 +2776,34 @@ describe("standalone image: one reviewed prompt through the existing media rail"
     expect(await mediaLeft(t)).toBe(afterFirst);
   });
 
+  test("a terminal failed attempt can be retried, while the new active attempt stays single", async () => {
+    const t = harness();
+    const { planId } = await seedImagePlan(t);
+    const first = await asA(t).mutation(api.media.generateImage, { planId });
+    expect(first.ok).toBe(true);
+    const [failed] = await rows(t);
+    expect(failed).toBeTruthy();
+    await t.run((ctx) =>
+      ctx.db.patch(failed!._id, {
+        status: "failed",
+        failureReason: "AccessDenied",
+        updatedAt: T0 + 1,
+      }),
+    );
+
+    const retried = await asA(t).mutation(api.media.generateImage, { planId });
+    expect(retried.ok).toBe(true);
+    const attempts = (await rows(t)).filter((row) => row.kind === "image");
+    expect(attempts).toHaveLength(2);
+    expect(attempts.map((row) => row.status).sort()).toEqual(["failed", "queued"]);
+
+    expect(await asA(t).mutation(api.media.generateImage, { planId })).toEqual({
+      ok: false,
+      reason: "already_started",
+    });
+    expect((await rows(t)).filter((row) => row.kind === "image")).toHaveLength(2);
+  });
+
   test("proposal staging is free and reset clears both image fields", async () => {
     const t = harness();
     const planId = await t.mutation(internal.plans.insertPlan, {
@@ -2734,7 +2871,11 @@ describe("the canvas READ plane: two states per block, and a url only when it is
         blockIndex: 0,
         kind: "video",
         model: MEDIA_DEFAULT_VIDEO.model,
-        spec: { kind: "video", resolution: "480p", seconds: 10 },
+        spec: {
+          kind: "video",
+          resolution: MEDIA_DEFAULT_VIDEO.resolution,
+          seconds: MEDIA_DEFAULT_VIDEO.seconds,
+        },
         status: "submitted",
       });
       await ctx.db.insert("mediaJobs", {
@@ -2751,7 +2892,11 @@ describe("the canvas READ plane: two states per block, and a url only when it is
         blockIndex: 1,
         kind: "video",
         model: MEDIA_DEFAULT_VIDEO.model,
-        spec: { kind: "video", resolution: "480p", seconds: 10 },
+        spec: {
+          kind: "video",
+          resolution: MEDIA_DEFAULT_VIDEO.resolution,
+          seconds: MEDIA_DEFAULT_VIDEO.seconds,
+        },
         status: "succeeded",
         assetStorageId: storageId,
       });
@@ -2788,7 +2933,11 @@ describe("the canvas READ plane: two states per block, and a url only when it is
         provider: "fal",
         kind: "video",
         model: MEDIA_DEFAULT_VIDEO.model,
-        spec: { kind: "video", resolution: "480p", seconds: 10 },
+        spec: {
+          kind: "video",
+          resolution: MEDIA_DEFAULT_VIDEO.resolution,
+          seconds: MEDIA_DEFAULT_VIDEO.seconds,
+        },
         promptHash: "0".repeat(64),
         status: "submitted",
         estUsd: 0.1,
@@ -2915,12 +3064,15 @@ describe("jobEstimate: four itemised lines, and the SAME number the rail will co
 
   test("names the LEVER: an over-length line comes back with its block index and count", async () => {
     const t = harness();
-    const { planId } = await seedDeck(t, { blocks: 2, chars: maxCharsFor(10) + 46 });
+    const { planId } = await seedDeck(t, {
+      blocks: 2,
+      chars: maxCharsFor(MEDIA_DEFAULT_VIDEO.seconds) + 46,
+    });
     const est = await asA(t).query(api.media.jobEstimate, { planId });
     expect(est.refusal).toMatchObject({
       reason: "narration_too_long",
       blockIndex: 0,
-      chars: maxCharsFor(10) + 46,
+      chars: maxCharsFor(MEDIA_DEFAULT_VIDEO.seconds) + 46,
     });
     expect(est.totalCents).toBe(0); // nothing to price until the lever is pulled
   });
@@ -2956,7 +3108,10 @@ describe("the PAID write plane: one money gate, and a regenerate that cannot lea
 
   test("a REFUSED generate schedules nothing and consumes nothing", async () => {
     const t = harness();
-    const { planId } = await seedDeck(t, { blocks: 2, chars: maxCharsFor(10) + 46 });
+    const { planId } = await seedDeck(t, {
+      blocks: 2,
+      chars: maxCharsFor(MEDIA_DEFAULT_VIDEO.seconds) + 46,
+    });
     const before = await mediaLeft(t);
 
     expect(await asA(t).mutation(api.media.generateReel, { planId })).toEqual({
@@ -3024,7 +3179,7 @@ describe("the FREE editor: five affordances, none of which costs a cent", () => 
     expect((await planRowOf(t, planId))?.shots?.[0]?.prompt).toBe("new");
     expect((await planRowOf(t, planId))?.renderStatus).toBe("pending");
 
-    const line = "y".repeat(minCharsFor(10));
+    const line = "y".repeat(minCharsFor(MEDIA_DEFAULT_VIDEO.seconds));
     expect(
       await asA(t).mutation(api.media.editBlockNarration, {
         planId,
@@ -3041,7 +3196,7 @@ describe("the FREE editor: five affordances, none of which costs a cent", () => 
   test("an over-length narration edit is REFUSED with the same count the rail would report", async () => {
     const t = harness();
     const { planId } = await seedDeck(t, { blocks: 1 });
-    const tooLong = "z".repeat(maxCharsFor(10) + 46);
+    const tooLong = "z".repeat(maxCharsFor(MEDIA_DEFAULT_VIDEO.seconds) + 46);
     // Without this cure, `narration_too_long` from the rail is a dead end: the user is told the
     // line is too long and has no way to shorten it.
     expect(
@@ -3069,7 +3224,11 @@ describe("the FREE editor: five affordances, none of which costs a cent", () => 
       promptsBefore?.[1],
     ]);
     expect(after?.shots?.map((s) => s.index)).toEqual([0, 1, 2]);
-    expect(after?.shots?.map((s) => s.windowStartMs)).toEqual([0, 10_000, 20_000]);
+    expect(after?.shots?.map((s) => s.windowStartMs)).toEqual([
+      0,
+      MEDIA_DEFAULT_VIDEO.seconds * 1000,
+      MEDIA_DEFAULT_VIDEO.seconds * 2000,
+    ]);
 
     for (const bad of [
       [0, 1],
@@ -3108,7 +3267,11 @@ describe("the FREE editor: five affordances, none of which costs a cent", () => 
         provider: "fal",
         kind: "video",
         model: MEDIA_DEFAULT_VIDEO.model,
-        spec: { kind: "video", resolution: "480p", seconds: 10 },
+        spec: {
+          kind: "video",
+          resolution: MEDIA_DEFAULT_VIDEO.resolution,
+          seconds: MEDIA_DEFAULT_VIDEO.seconds,
+        },
         promptHash: "0".repeat(64),
         status: "succeeded",
         estUsd: 0.1,
@@ -3158,7 +3321,7 @@ describe("BETA-05 ISOLATION: tenant B cannot read, spend or edit tenant A's canv
     const { planId } = await seedDeck(t, { tenantId: A, blocks: 2 });
     const before = await mediaLeft(t);
 
-    const line = "y".repeat(minCharsFor(10));
+    const line = "y".repeat(minCharsFor(MEDIA_DEFAULT_VIDEO.seconds));
     await expect(asB(t).mutation(api.media.generateReel, { planId })).rejects.toThrow(
       /plan not found/,
     );
@@ -3205,7 +3368,10 @@ async function seedInFlight(t: T, opts: { blocks?: number; batchId?: string } = 
   const planId = await seedPlan(t, A);
   const jobIds: Id<"mediaJobs">[] = [];
   await t.run(async (ctx) => {
-    await ctx.db.patch(planId, { renderStatus: "pending", clipSeconds: 10 });
+    await ctx.db.patch(planId, {
+      renderStatus: "pending",
+      clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
+    });
     for (let i = 0; i < blocks; i++) {
       for (const kind of ["video", "tts"] as const) {
         jobIds.push(
@@ -3219,7 +3385,11 @@ async function seedInFlight(t: T, opts: { blocks?: number; batchId?: string } = 
             model: kind === "video" ? MEDIA_DEFAULT_VIDEO.model : MEDIA_DEFAULT_VOICE.model,
             spec:
               kind === "video"
-                ? { kind: "video", resolution: "480p", seconds: 10 }
+                ? {
+                    kind: "video",
+                    resolution: MEDIA_DEFAULT_VIDEO.resolution,
+                    seconds: MEDIA_DEFAULT_VIDEO.seconds,
+                  }
                 : { kind: "tts", characters: 100, voice: "v", sampleRateHertz: 24000 },
             promptHash: "0".repeat(64),
             status: "submitted",
@@ -3472,7 +3642,7 @@ function wavBytes(samples: number): Uint8Array<ArrayBuffer> {
 
 /** A sidecar the shipped validator ACCEPTS, with real per-block speech anchors — the rebase is
  *  arithmetic on these, so a fixture that skipped them would prove nothing. */
-function sidecarFor(blocks: number, clipSeconds = 10): string {
+function sidecarFor(blocks: number, clipSeconds = MEDIA_DEFAULT_VIDEO.seconds): string {
   return JSON.stringify({
     script: "assemble_final.sh",
     block_count: blocks,
@@ -3485,7 +3655,7 @@ function sidecarFor(blocks: number, clipSeconds = 10): string {
       window_start_s: i * clipSeconds,
       lead_silence_s: 0.5,
       speech_abs_s: i * clipSeconds + 0.5,
-      speech_dur_s: 8,
+      speech_dur_s: Math.max(0.5, clipSeconds - 1),
       overrun: false,
     })),
   });
@@ -3955,7 +4125,7 @@ describe("ledger parity: the media rail reserves whole and lands per line", () =
       tenantId: A,
       planId,
       blocks: JOB_41(),
-      clipSeconds: 10,
+      clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: true,
     });
     expect(res.ok).toBe(true);
@@ -3983,14 +4153,14 @@ describe("ledger parity: the media rail reserves whole and lands per line", () =
       tenantId: A,
       planId,
       blocks: JOB_41(),
-      clipSeconds: 10,
+      clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: true,
     } as const;
 
     // Drain the tenant's media window through the REAL rail rather than a test-only door, then ask
     // for one more. 305c a job against a 1000c window, so the fourth is the one that cannot fit.
     let refused: Awaited<ReturnType<typeof reserve>> | null = null;
-    for (let i = 0; i < 4 && refused === null; i += 1) {
+    for (let i = 0; i < 5 && refused === null; i += 1) {
       const res = await reserve(t, { ...job, blocks: JOB_41() });
       if (!res.ok) refused = res;
     }
@@ -4002,8 +4172,8 @@ describe("ledger parity: the media rail reserves whole and lands per line", () =
 
     // Exactly the successful reservations are recorded, and the refusal added nothing.
     const reserved = (await events(t)).filter((r) => r.phase === "reserved");
-    expect(reserved).toHaveLength(3);
-    expect(reserved.reduce((sum, r) => sum + r.amountCents, 0)).toBe(JOB_41_CENTS * 3);
+    expect(reserved).toHaveLength(4);
+    expect(reserved.reduce((sum, r) => sum + r.amountCents, 0)).toBe(JOB_41_CENTS * 4);
   });
 
   test("even a REFUSED media job opens coverage — a refusal is a confident zero", async () => {
@@ -4022,7 +4192,7 @@ describe("ledger parity: the media rail reserves whole and lands per line", () =
       tenantId: A,
       planId,
       blocks: JOB_41(),
-      clipSeconds: 10,
+      clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: true,
     });
 
@@ -4106,7 +4276,7 @@ describe("ledger parity: the media rail reserves whole and lands per line", () =
       tenantId: A,
       planId,
       blocks: JOB_41(),
-      clipSeconds: 10,
+      clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: true,
     });
     if (!res.ok) throw new Error("expected ok");

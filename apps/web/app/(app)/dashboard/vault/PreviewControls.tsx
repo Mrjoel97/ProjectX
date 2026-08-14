@@ -1,5 +1,5 @@
 import { DOC_TYPE_LABEL, DOC_TYPES, type DocType } from "@pikar/core";
-import React from "react";
+import type React from "react";
 import type { PreviewCapabilities } from "./previewState";
 
 const sectionStyle: React.CSSProperties = {
@@ -291,12 +291,20 @@ export function PreviewControls({
             </p>
           ) : (
             <>
-              <div
+              <ul
                 className="vault-preview-entities"
-                style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}
+                aria-label="Entities found"
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "0.4rem",
+                  margin: 0,
+                  padding: 0,
+                  listStyle: "none",
+                }}
               >
                 {entities.map((entity) => (
-                  <span
+                  <li
                     key={entity._id}
                     title={entity.type}
                     style={{
@@ -312,9 +320,9 @@ export function PreviewControls({
                     }}
                   >
                     {entity.name} <small>{entity.type}</small>
-                  </span>
+                  </li>
                 ))}
-              </div>
+              </ul>
               {(relationships ?? []).length > 0 && (
                 <ul
                   className="vault-preview-relationships"
@@ -342,8 +350,9 @@ export function PreviewControls({
         </section>
       )}
 
-      <div
+      <section
         className="vault-preview-actions"
+        aria-label="Document actions"
         style={{
           display: "flex",
           flexWrap: "wrap",
@@ -384,10 +393,10 @@ export function PreviewControls({
               alignItems: "center",
               gap: "0.5rem",
               padding: "0.75rem",
+              borderRadius: "0.75rem",
               border: 0,
               margin: 0,
-              minWidth: 0,
-              borderRadius: "0.75rem",
+              minInlineSize: 0,
               background: "var(--vault-danger-bg)",
             }}
           >
@@ -420,7 +429,7 @@ export function PreviewControls({
             </button>
           </fieldset>
         )}
-      </div>
+      </section>
     </>
   );
 }

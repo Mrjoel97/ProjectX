@@ -540,7 +540,19 @@ export const listVaultDocs = tenantQuery({
   args: { category: v.optional(v.string()), folderId: v.optional(v.id("vaultFolders")) },
   handler: async (ctx, { category, folderId }) => {
     const { rows } = await readVaultPage(ctx, ctx.tenantId, folderId);
-    const docs = rows.map(projectVaultDoc);
+    let visible = rows;
+    if (!folderId) {
+      // Filing a document removes it from the root grid. Upload/Drive batch folders retain their
+      // existing root behavior; only the explicit organizational flag changes browse visibility.
+      const organizational = new Map<Id<"vaultFolders">, boolean>();
+      for (const row of rows) {
+        if (row.folderId && !organizational.has(row.folderId)) {
+          organizational.set(row.folderId, (await ctx.db.get(row.folderId))?.organizational === true);
+        }
+      }
+      visible = rows.filter((row) => !row.folderId || !organizational.get(row.folderId));
+    }
+    const docs = visible.map(projectVaultDoc);
     return category ? docs.filter((d) => d.category === category) : docs;
   },
 });
