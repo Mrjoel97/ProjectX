@@ -2059,13 +2059,37 @@ export const snippetSheet = {
   overflowWrap: "anywhere" as const,
 } as const;
 
+/**
+ * Which artifact the Output card previews: the user's explicit click, else THE NEWEST.
+ *
+ * This was `useState(0)` inline, which pinned the preview to document #1 for the life of the
+ * thread. `titles`/`docIds` ACCUMULATE over the conversation (18-06), so a thread that created
+ * three artifacts previewed the OLDEST while the user was asking where the newest one was. The
+ * titles are clickable so it was recoverable — but only by someone who already knew to click, and
+ * the one thing a user who just asked for a document wants to see is the document they just asked
+ * for.
+ *
+ * Exported and pure so the RULE is testable rather than merely present: a source scan for
+ * `picked ?? newest` would pass with the arithmetic wrong (the 19.1 `ImportDone` lesson — move the
+ * arithmetic somewhere a test can call it).
+ *
+ * `picked` out of range falls back to the newest rather than to nothing: the row can shrink when a
+ * `replace` supersedes an entry, and a stale index must not blank the preview.
+ */
+export const previewIndex = (count: number, picked: number | null): number => {
+  const newest = Math.max(count - 1, 0);
+  return picked !== null && picked >= 0 && picked < count ? picked : newest;
+};
+
 function OutputCard({ threadId }: { threadId?: string }) {
   const created: VaultSources | null | undefined = useQuery(
     api.vaultSources.byThread,
     threadId ? { threadId, role: "created" } : "skip",
   );
-  const [selected, setSelected] = useState(0);
-  const selectedId = created?.docIds[selected] ?? created?.docIds[0];
+  // `null` means FOLLOW THE NEWEST; a number is an explicit click. See `previewIndex`.
+  const [picked, setPicked] = useState<number | null>(null);
+  const selected = previewIndex(created?.docIds.length ?? 0, picked);
+  const selectedId = created?.docIds[selected];
   const artifact = useQuery(
     api.vault.vaultDocText,
     selectedId ? { vaultDocId: selectedId } : "skip",
@@ -2098,7 +2122,7 @@ function OutputCard({ threadId }: { threadId?: string }) {
               type="button"
               data-testid="output-title"
               aria-pressed={selected === i}
-              onClick={() => setSelected(i)}
+              onClick={() => setPicked(i)}
               style={{
                 border: 0,
                 padding: 0,
@@ -2119,7 +2143,10 @@ function OutputCard({ threadId }: { threadId?: string }) {
       <p style={{ margin: "0.55rem 0 0", fontSize: "0.8rem", color: "var(--ink-soft)" }}>
         Saved to your vault. Nothing was sent.
       </p>
-      <section aria-label="Created artifact preview" style={{ ...snippetSheet, color: "var(--ink)" }}>
+      <section
+        aria-label="Created artifact preview"
+        style={{ ...snippetSheet, color: "var(--ink)" }}
+      >
         {artifact === undefined ? (
           "Loading document…"
         ) : artifact?.text ? (
@@ -2134,7 +2161,12 @@ function OutputCard({ threadId }: { threadId?: string }) {
       </section>
       <Link
         href="/dashboard/vault"
-        style={{ display: "inline-block", marginTop: "0.6rem", color: "var(--teal-600)", fontSize: "0.82rem" }}
+        style={{
+          display: "inline-block",
+          marginTop: "0.6rem",
+          color: "var(--teal-600)",
+          fontSize: "0.82rem",
+        }}
       >
         Open in Knowledge Vault
       </Link>

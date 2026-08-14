@@ -1346,8 +1346,14 @@ const IMAGE_REFUSAL_REPLY: Record<
     "An image is already being generated on this conversation. Nothing new was started. Tell the user it is still running.",
   image_already_started:
     "This conversation already has an image generation attempt. Nothing was replaced or charged. Tell the user a new image needs a new conversation.",
+  // NAMES THE LEVER THE MODEL ALREADY HOLDS. The old copy said only "tell the user to finish or
+  // discard it first", so the user answered "im ready, proceed" — which is not a discard — and the
+  // turn deadlocked: the model has `resetPlan` and never reached for it, because nothing here said
+  // it could. A refusal that ends in an instruction only the OTHER party can carry out is a dead
+  // end, and this one is reachable from an ordinary "make me an image for this" turn.
   draft_in_progress:
-    "There is another draft on this conversation's plan card. Nothing was replaced or generated. Tell the user to finish or discard it first.",
+    "There is another draft on this conversation's plan card. Nothing was replaced or generated. " +
+    "Ask the user whether to clear it; if they say yes, call `resetPlan` and then try again.",
   invalid_prompt:
     "The image prompt was empty or too long, so no proposal was staged. Ask the user for a concise visual description.",
 };
@@ -3167,6 +3173,11 @@ export function buildCockpitTools(
         "Use `long` for proposals, one-pagers and reports; `short` for posts, ad copy or headlines. " +
         "Pass `replace` to rewrite a document created earlier in this conversation in place. " +
         "It saves only — it never sends anything. " +
+        // The FORMAT clause. There is no format argument and there is no pptx, docx or slides
+        // path; asked for one, say what this writes instead of agreeing. Observed live: the agent
+        // reported creating a deck "in PowerPoint format" that never existed.
+        "It writes markdown and a PDF — never PowerPoint, Word or slides. " +
+        "The finished document appears in the workspace as well as the vault. " +
         "Create directly when the user asks for one; when creating one is YOUR idea, say what you " +
         "would write and wait for a yes.",
       inputSchema: jsonSchema<{ topic: string; form: "short" | "long"; replace?: number }>({
@@ -3322,13 +3333,34 @@ export function buildCockpitTools(
           form,
           createdAt: Date.now(),
         });
-        // A ref-only sentence: the title and what the user can do with it. Never bytes, never a
-        // URL, never an _id.
+        // A ref-only sentence: the title, WHERE it is and WHAT it is. Never bytes, never a URL,
+        // never an _id.
+        //
+        // The last two clauses are not decoration — each closes a defect observed live:
+        //
+        //  * WHERE. Asked to "open it in the workspace so I can see it", the agent answered "I
+        //    can't open files directly in the workspace". It cannot, and it does not have to: the
+        //    Output card (`cards.tsx` OutputCard) already renders the full artifact text there,
+        //    ungated by any plan row. The model has no tool that reports this and the skill body
+        //    does not say it, so the tool result is where it belongs — a model reports its TOOL
+        //    inventory as the PRODUCT's capability unless something tells it otherwise.
+        //
+        //  * WHAT. Asked for "the slide deck in pptx", the agent replied that it had created one
+        //    "in PowerPoint format". There is no `format` argument on this tool and `DocFormat` is
+        //    `pdf | html` — no pptx path exists anywhere. The old sentence named no format at all,
+        //    so nothing contradicted the invention. Naming the real artifact means a claim of any
+        //    other format now contradicts the model's own tool result.
+        //
+        // Split across constants to stay under the §5 200-character inline-string scan.
         const saved =
           effectiveReplace === undefined
             ? "saved to your vault"
             : `rewritten as #${effectiveReplace}`;
-        return `Created "${draft.title}" — ${saved}${storageId ? " with a PDF download" : ""}.`;
+        const shown = " It is already open in the workspace for the user to read.";
+        const asFormat = storageId
+          ? " Written as markdown, with a PDF to download."
+          : " Written as markdown.";
+        return `Created "${draft.title}" — ${saved}.${shown}${asFormat}`;
       },
     }),
     // ── evaluateBusiness (BEVL-01) — the read-only business-assessment tool ─────────────────────────
@@ -4533,10 +4565,7 @@ export const runCockpitAgent = internalAction({
     const continuingEmailPlan = Boolean(
       plan &&
         actionTypeOf(plan.kind) === "email" &&
-        (plan.recipients?.length ||
-          plan.subject ||
-          plan.body ||
-          plan.candidates?.length),
+        (plan.recipients?.length || plan.subject || plan.body || plan.candidates?.length),
     );
     const gmailRequired = shouldUseGmailCapability(text, continuingEmailPlan);
     const pinnedGoldenEvaluation = isPinnedCockpitEvaluation(

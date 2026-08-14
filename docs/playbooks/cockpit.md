@@ -1,5 +1,12 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-14 (the CREATED-ARTIFACT surface, from a real cockpit transcript — the
+> agent told the user it "can't open files directly in the workspace" when the Output card was
+> already rendering the document there, and separately claimed to have written a deck "in
+> PowerPoint format" that no code path can produce. Four root causes, four code-only fixes, no
+> skill-registry change. See "The created-artifact surface" below. web 245/246, backend media +
+> cockpit + cockpitTools + llmRedaction + skills 495 passed, both typechecks clean.)
+
 > Last verified: 2026-08-14 (⚠ **REGISTRATION OF TWO PREVIOUSLY UNWATCHED MODULES, FROM SOURCE
 > REVIEW OF AN UNCOMMITTED FOREIGN-LANE DIFF — NOT A RUN.** No cockpit turn, eval or gate was
 > executed; both modules were read, not exercised. They were landing outside any playbook's watched
@@ -3041,6 +3048,86 @@ Mutation-verification ledger (each mutation was applied, observed RED, and rever
 This is the CODE proof: scripted models prove deterministic degradation and containment. Plan
 16-09 is the PROMPT proof: the eval gate measures grounded, useful, injection-resistant research
 answers. Neither proof substitutes for the other.
+
+## The created-artifact surface — what the agent may say about it (2026-08-14)
+
+From a real transcript. The user asked for a slide deck, got one, and then could not find it:
+
+> **User:** Okay, where is the slide deck? I want you to open it in the workspace so that I can see it.
+> **Agent:** I can't open files directly in the workspace, but you can easily access the slide
+> deck by downloading it from your vault.
+
+**The agent was wrong, and the product was working.** `OutputCard` (`cards.tsx`) renders the
+full artifact text in the workspace, ungated by any plan row (it sits above the plan-status
+branches with `SourceCard` and `EvaluationCard`, because a creating turn carries no plan row at
+all). Four separate causes stacked into one bad conversation.
+
+### 1. The preview was pinned to document #1
+
+`OutputCard` held `useState(0)` and never reconciled it as `docIds` grew. `titles`/`docIds`
+ACCUMULATE over the conversation (18-06), so a thread that created three artifacts previewed the
+OLDEST while the user asked where the newest was. Recoverable by clicking a title — if you knew
+to click.
+
+Now `previewIndex(count, picked)`, **exported and pure**: `null` follows the newest, a number is
+an explicit click and wins, an out-of-range pick falls back to the newest rather than blanking
+the preview. Exported deliberately — a source scan for `picked ?? newest` passes with the
+arithmetic wrong, so the rule lives somewhere a test can CALL it (the 19.1 `ImportDone` lesson).
+Mutation-checked: restoring `picked ?? 0` reds four tests.
+
+### 2. A model reports its TOOL inventory as the PRODUCT's capability
+
+There is no `openInWorkspace` tool, the skill body says only that `createDocument` "saves it to
+their vault", and the tool's success sentence named no location. Given all three, "I can't open
+files in the workspace" is the honest answer from where the model was standing.
+
+**The fix is the tool RESULT, not the skill body.** A tool result is a driver-plane string —
+code-owned, free to change, no eval gate — and it is the most immediate thing the model reads.
+`createDocument` now returns `… It is already open in the workspace for the user to read.`
+
+> **Rule.** When the model is asked whether the product can do X and answers from its tool list,
+> the gap is knowledge, not capability. Close it at the cheapest layer that carries it: tool
+> result first, tool description second, skill body only at the next certification.
+
+### 3. It claimed a format that does not exist
+
+Asked for "the slide deck in pptx", the agent replied that it had created one "in PowerPoint
+format". `createDocument`'s schema is `{topic, form, replace?}` — there is **no format
+argument** — and `DocFormat` is `pdf | html`. No pptx path exists anywhere in the repo. The old
+success sentence named no format, so nothing contradicted the invention.
+
+The result now names the real artifact (`Written as markdown, with a PDF to download.`) and the
+tool description says `never PowerPoint, Word or slides`. A format claim now has to contradict
+the model's own tool result to be made. Same defect class as `provenance-laundering`: **ask what
+the stored/returned record actually says, and whether the model can talk over it.**
+
+### 4. A refusal that only the OTHER party could act on
+
+`proposeImage` refused with `draft_in_progress` → *"Tell the user to finish or discard it
+first."* The user answered "im ready, proceed", which is not a discard, and the turn deadlocked
+— while `resetPlan` sat unused in the model's own toolbox. The refusal now says: ask, and on a
+yes call `resetPlan` and retry.
+
+> **Rule.** A refusal string that ends in an instruction the model cannot carry out is a dead
+> end. Name the lever the model holds, or say plainly that there is none.
+
+### Still open, and NOT fixed here
+
+`dispatchMedia` was invoked on three consecutive turns for a slide-deck DESIGN request — the
+video-reel specialist, for a document. `MEDIA_UNDERWAY_REPLY` says "do not ask for a reel again
+on this conversation", but that is advice to the model rather than an interlock, and
+`stageMediaPlan` recycles a `kind:"media"` row with no live jobs — so each retry silently RESET
+the previously staged proposal. Two candidate fixes, and they cost very differently: a code-side
+interlock (a media dispatch in flight refuses a second one), or a skill-body routing rule (a
+registry row, so a candidate seed + a paid eval gate + owner activation). Not chosen yet.
+
+### How to verify
+
+`apps/web`, `npx vitest run "app/(app)/dashboard/workspace/outputCard.test.ts"`. The selection
+rule is behaviour-tested and mutation-checked; the three agent-facing sentences are pinned at
+the source, which is all a free test can do for a string the model reads — behaviour coverage
+for those lives in the paid eval fixtures.
+
 
 ## Phase 17 gap closure — the `calendar_manage` substrate (17-05)
 

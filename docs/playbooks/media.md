@@ -10,6 +10,12 @@
 > for already-submitted historical jobs. Older provider-specific sections below describe the
 > superseded implementation unless explicitly marked current. See ADR-017.
 
+> Last verified: 2026-08-14 (`media.byPlan` now projects `shot.type ?? shot.visual` for the tile
+> caption — the ONE place the block and scene closed sets are allowed to meet, because it is a
+> display projection. `deckOf` keeps them apart on the money path, where reading a scene as a
+> block would price it at the wrong duration. This closed an `apps/web` typecheck break left by
+> 20.2 wave 2, which verified `packages/backend` tsc but not `apps/web` tsc.)
+
 > Last verified: 2026-08-14 (20.2 wave 2 — the scene contract reaches the Convex adapters. Schema
 > WIDENED (`shots.visual`, `shots.asset`, `shots.type` now optional, `plans.targetDurationSeconds`);
 > `persistStoryboard` reads either contract; the editor offsets are a RUNNING SUM; and a scene deck

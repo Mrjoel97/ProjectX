@@ -1676,7 +1676,12 @@ export const byPlan = tenantQuery({
       const mine = rows.filter((r) => r.blockIndex === shot.index);
       return {
         blockIndex: shot.index,
-        type: shot.type,
+        // DISPLAY ONLY, and the one place the two closed sets are allowed to meet. A block row
+        // carries `type`, a 20.2 scene row carries `visual`, and a tile has to label whichever it
+        // was handed. Collapsing them is safe HERE precisely because it is safe nowhere else:
+        // `deckOf` keeps them apart on the money path, where reading a scene as a block would
+        // price it at the wrong duration. This is a projection for a caption.
+        type: shot.type ?? shot.visual ?? "",
         description: shot.description,
         overlay: shot.overlay ?? null,
         prompt: shot.prompt,
