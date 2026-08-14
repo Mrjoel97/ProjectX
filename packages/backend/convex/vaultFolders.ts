@@ -137,10 +137,7 @@ export const createOrganizationalFolder = tenantMutation({
  * upload batch and cannot be rewritten by an organizational action. */
 export const moveDocuments = tenantMutation({
   args: { folderId: v.id("vaultFolders"), docIds: v.array(v.id("vaultDocuments")) },
-  handler: async (
-    ctx,
-    { folderId, docIds },
-  ): Promise<{ moved: number; skipped: number }> => {
+  handler: async (ctx, { folderId, docIds }): Promise<{ moved: number; skipped: number }> => {
     if (docIds.length === 0 || docIds.length > 25) {
       throw new Error("vaultFolders: select between 1 and 25 documents per move");
     }

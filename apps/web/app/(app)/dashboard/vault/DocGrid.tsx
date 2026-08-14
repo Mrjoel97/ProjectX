@@ -607,7 +607,10 @@ export function DocGrid({
           </>
         )}
         {organizeNotice && (
-          <span role="status" style={{ flexBasis: "100%", color: "var(--ink-soft)", fontSize: "0.82rem" }}>
+          <span
+            role="status"
+            style={{ flexBasis: "100%", color: "var(--ink-soft)", fontSize: "0.82rem" }}
+          >
             {organizeNotice}
           </span>
         )}
@@ -904,7 +907,9 @@ export function DocGrid({
                 onClick={() =>
                   selectionMode && canSelectDoc(doc) ? toggleSelected(doc) : onOpen?.(doc)
                 }
-                aria-pressed={selectionMode && canSelectDoc(doc) ? selectedIds.has(doc._id) : undefined}
+                aria-pressed={
+                  selectionMode && canSelectDoc(doc) ? selectedIds.has(doc._id) : undefined
+                }
                 className="clay-card"
                 style={{
                   display: "flex",

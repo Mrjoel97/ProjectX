@@ -547,7 +547,10 @@ export const listVaultDocs = tenantQuery({
       const organizational = new Map<Id<"vaultFolders">, boolean>();
       for (const row of rows) {
         if (row.folderId && !organizational.has(row.folderId)) {
-          organizational.set(row.folderId, (await ctx.db.get(row.folderId))?.organizational === true);
+          organizational.set(
+            row.folderId,
+            (await ctx.db.get(row.folderId))?.organizational === true,
+          );
         }
       }
       visible = rows.filter((row) => !row.folderId || !organizational.get(row.folderId));

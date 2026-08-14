@@ -927,10 +927,9 @@ describe("organizational folders move individual vault files without touching in
     const t = setup();
     const first = await seedReady(t, "First plan");
     const second = await seedReady(t, "Second plan");
-    const { folderId } = await asTenant(t).mutation(
-      api.vaultFolders.createOrganizationalFolder,
-      { name: "Operating plans" },
-    );
+    const { folderId } = await asTenant(t).mutation(api.vaultFolders.createOrganizationalFolder, {
+      name: "Operating plans",
+    });
 
     expect(await asTenant(t).query(api.vaultFolders.getFolder, { folderId })).toMatchObject({
       name: "Operating plans",
@@ -979,9 +978,11 @@ describe("organizational folders move individual vault files without touching in
     expect(await asTenant(t).query(api.vaultFolders.getFolder, { folderId: first })).toMatchObject({
       memberCount: 0,
     });
-    expect(await asTenant(t).query(api.vaultFolders.getFolder, { folderId: second })).toMatchObject({
-      memberCount: 1,
-    });
+    expect(await asTenant(t).query(api.vaultFolders.getFolder, { folderId: second })).toMatchObject(
+      {
+        memberCount: 1,
+      },
+    );
 
     const ingestFolder = await newFolder(t);
     await expect(

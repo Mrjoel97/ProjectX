@@ -28,7 +28,7 @@ describe("MarkdownDocument", () => {
     expect(html).toContain("<ul>");
     expect(html).toContain('<div class="markdown-table-scroll"');
     expect(html).toContain("<table>");
-    expect(html).toContain("<th scope=\"col\">Goal</th>");
+    expect(html).toContain('<th scope="col">Goal</th>');
     expect(html).not.toContain("## Objectives");
     expect(html).not.toContain("**Establish");
     expect(html).not.toContain("| Goal |");
