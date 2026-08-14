@@ -13,7 +13,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import type { AssemblyBlock } from "./assembly";
+import type { AssemblyScene } from "./assembly";
 import {
   buildCaptionLines,
   concatWavTakes,
@@ -24,9 +24,11 @@ import {
   toAss,
 } from "./captions";
 
-const block = (over: Partial<AssemblyBlock> = {}): AssemblyBlock => ({
-  blockIndex: 0,
-  windowStartS: 10,
+const block = (over: Partial<AssemblyScene> = {}): AssemblyScene => ({
+  index: 0,
+  startS: 10,
+  durationS: 10,
+  visual: "video",
   leadSilenceS: 0.4,
   speechAbsS: 11,
   speechDurS: 8,
@@ -44,24 +46,24 @@ const word = (text: string, start: number, end: number, type = "word"): SttWord 
 describe("rebaseWords — the sidecar's anchor, not the file's start", () => {
   it("puts the take's first speech instant EXACTLY at speechAbsS", () => {
     const b = block();
-    const [line] = rebaseWords([word("hello", b.leadSilenceS, b.leadSilenceS + 0.5)], b, 10);
+    const [line] = rebaseWords([word("hello", b.leadSilenceS, b.leadSilenceS + 0.5)], b, 20);
     expect(line?.startS).toBeCloseTo(b.speechAbsS, 10);
   });
 
   it("applies speechAbsS + (t - leadSilenceS) to every word", () => {
     // windowStartS moves with the anchor: a block whose speech sits at 20.5s is the THIRD window,
     // not the second. An anchor outside its own window is a state `parseAssemblySidecar` refuses.
-    const b = block({ windowStartS: 20, leadSilenceS: 0.25, speechAbsS: 20.5 });
-    const [line] = rebaseWords([word("later", 1.25, 1.75)], b, 10);
+    const b = block({ startS: 20, leadSilenceS: 0.25, speechAbsS: 20.5 });
+    const [line] = rebaseWords([word("later", 1.25, 1.75)], b, 30);
     // 20.5 + (1.25 - 0.25) = 21.5
     expect(line?.startS).toBeCloseTo(21.5, 10);
     expect(line?.endS).toBeCloseTo(22, 10);
   });
 
   it("is NOT windowStartS + t — the two disagree by exactly the anchor offset", () => {
-    const b = block({ windowStartS: 10, leadSilenceS: 0.4, speechAbsS: 11 });
-    const [line] = rebaseWords([word("w", 0.4, 0.9)], b, 10);
-    expect(line?.startS).not.toBeCloseTo(b.windowStartS + 0.4, 3);
+    const b = block({ startS: 10, leadSilenceS: 0.4, speechAbsS: 11 });
+    const [line] = rebaseWords([word("w", 0.4, 0.9)], b, 20);
+    expect(line?.startS).not.toBeCloseTo(b.startS + 0.4, 3);
   });
 
   it("drops spacing and audio_event, keeps only words", () => {
@@ -74,7 +76,7 @@ describe("rebaseWords — the sidecar's anchor, not the file's start", () => {
         word("also", 1.2, 1.5),
       ],
       b,
-      10,
+      20,
     );
     expect(lines.map((l) => l.text)).toEqual(["kept", "also"]);
   });
@@ -82,22 +84,22 @@ describe("rebaseWords — the sidecar's anchor, not the file's start", () => {
   it("CLAMPS a word that would bleed before its window, and flags it", () => {
     // A take whose measured lead silence is longer than the word's own start: the rebase runs
     // negative relative to the anchor and would land in the PREVIOUS block's caption.
-    const b = block({ windowStartS: 10, leadSilenceS: 2, speechAbsS: 11 });
-    const [line] = rebaseWords([word("early", 0, 0.3)], b, 10);
+    const b = block({ startS: 10, leadSilenceS: 2, speechAbsS: 11 });
+    const [line] = rebaseWords([word("early", 0, 0.3)], b, 20);
     expect(line?.startS).toBe(10);
     expect(line?.clamped).toBe(true);
   });
 
-  it("CLAMPS a word that would bleed past the window's end, and flags it", () => {
-    const b = block({ windowStartS: 10, leadSilenceS: 0, speechAbsS: 11 });
-    const [line] = rebaseWords([word("late", 30, 31)], b, 10);
-    expect(line?.endS).toBe(20); // windowStartS + clipSeconds
+  it("CLAMPS a word that would bleed past its bound, and flags it", () => {
+    const b = block({ startS: 10, leadSilenceS: 0, speechAbsS: 11 });
+    const [line] = rebaseWords([word("late", 30, 31)], b, 20);
+    expect(line?.endS).toBe(20); // the bound it was given — the next take's start, or the reel's end
     expect(line?.clamped).toBe(true);
   });
 
   it("never emits a line whose end precedes its start", () => {
-    const b = block({ windowStartS: 10, leadSilenceS: 5, speechAbsS: 11 });
-    for (const l of rebaseWords([word("a", 0, 0.1), word("b", 40, 41)], b, 10)) {
+    const b = block({ startS: 10, leadSilenceS: 5, speechAbsS: 11 });
+    for (const l of rebaseWords([word("a", 0, 0.1), word("b", 40, 41)], b, 20)) {
       expect(l.endS).toBeGreaterThanOrEqual(l.startS);
     }
   });
@@ -271,14 +273,14 @@ describe("concatWavTakes — one transcript needs one audio file", () => {
 
 describe("buildCaptionLines — the whole track, partitioned by take", () => {
   const report = {
-    blockCount: 2,
-    clipSeconds: 10,
+    sceneCount: 2,
+    targetDurationS: 20,
     totalDurationS: 20,
     actualDurationS: 20,
     gates: [],
-    blocks: [
-      block({ blockIndex: 0, windowStartS: 0, leadSilenceS: 0.5, speechAbsS: 1 }),
-      block({ blockIndex: 1, windowStartS: 10, leadSilenceS: 0.5, speechAbsS: 11 }),
+    scenes: [
+      block({ index: 0, startS: 0, leadSilenceS: 0.5, speechAbsS: 1 }),
+      block({ index: 1, startS: 10, leadSilenceS: 0.5, speechAbsS: 11 }),
     ],
   };
 
@@ -308,6 +310,153 @@ describe("buildCaptionLines — the whole track, partitioned by take", () => {
   it("ignores a transcript with more takes than the sidecar has blocks", () => {
     const lines = buildCaptionLines({ words: [word("x", 0.5, 1)], report, offsetsS: [0, 4, 8] });
     expect(lines.length).toBeGreaterThan(0);
+  });
+});
+
+// ── 20.2 wave 4 fallout, fixed before wave 5 removes the guards hiding it ───────────────────────
+//
+// Two defects that are UNREACHABLE today only because of refusals wave 5 deletes:
+//   * `media.ts:260` (`unrenderable_block`) and `media.ts:262` (min narration chars) mean no
+//     reserved deck has a silent scene, so the take list never has a hole.
+//   * `assembly.ts:129` (`speech_dur_s > clip_seconds`) means an overrunning take never reaches
+//     the caption stage.
+// Wave 4 made both states legal at the assembler. Wave 5 removes both refusals. So these must be
+// correct BEFORE that wave, not during it — the narrowing rule the plan already applies to the
+// money leak applies here for the same reason.
+describe("captions on a SCENE timeline", () => {
+  it("assigns takes by NARRATED ORDINAL, not by block index — a silent scene is a hole", () => {
+    // Three scenes; the middle one is a deliberately silent card, so only TWO takes were ever
+    // recorded and `offsetsS` has two entries. Indexing them by `blockIndex` reads take 1 as if it
+    // belonged to the card and then runs off the end of the array for the scene that actually
+    // owns it — the word lands ~10s early, against the wrong anchor, and the last scene loses its
+    // captions entirely.
+    const report = {
+      sceneCount: 3,
+      targetDurationS: 30,
+      totalDurationS: 30,
+      actualDurationS: 30,
+      gates: [],
+      scenes: [
+        block({ index: 0, startS: 0, leadSilenceS: 0.5, speechAbsS: 1, speechDurS: 8 }),
+        // The card: no take, and the sidecar says so with speech_dur_s = 0.
+        block({ index: 1, startS: 10, leadSilenceS: 0, speechAbsS: 10, speechDurS: 0 }),
+        block({
+          index: 2,
+          startS: 20,
+          leadSilenceS: 0.5,
+          speechAbsS: 21,
+          speechDurS: 8,
+        }),
+      ],
+    };
+    const lines = buildCaptionLines({
+      words: [word("first", 0.5, 1), word("third", 9.5, 10)],
+      report,
+      offsetsS: [0, 9], // take 0 is scene 1's; take 1 is scene 3's
+      maxChars: 32,
+    });
+    expect(lines).toHaveLength(2);
+    expect(lines[0]?.startS).toBeCloseTo(1, 10); // scene 1's anchor
+    expect(lines[1]?.startS).toBeCloseTo(21, 10); // scene 3's anchor — NOT the card's 10.5
+    expect(lines.map((l) => l.text)).toEqual(["first", "third"]);
+  });
+
+  it("a silent scene contributes no caption line of its own", () => {
+    const report = {
+      sceneCount: 2,
+      targetDurationS: 20,
+      totalDurationS: 20,
+      actualDurationS: 20,
+      gates: [],
+      scenes: [
+        block({ index: 0, startS: 0, leadSilenceS: 0, speechAbsS: 0, speechDurS: 0 }),
+        block({
+          index: 1,
+          startS: 10,
+          leadSilenceS: 0.5,
+          speechAbsS: 11,
+          speechDurS: 8,
+        }),
+      ],
+    };
+    const lines = buildCaptionLines({
+      words: [word("only", 0.5, 1)],
+      report,
+      offsetsS: [0], // ONE take, and it belongs to the second scene
+    });
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.startS).toBeCloseTo(11, 10);
+  });
+
+  it("keeps a line that outruns its own scene, and stops it at the NEXT take", () => {
+    // The live uniform path: three 10s blocks. Wave 4 deleted the per-cell band, so a take
+    // carrying 10.4s of speech now renders — it ends at 20.4s, before take 3 starts at 20.6s, so
+    // the assembler's timeline checks pass it. `windowStartS + clipSeconds` would clamp its tail
+    // back to 20.0 and flag it, which is a caption cut off mid-word for being correct.
+    const report = {
+      sceneCount: 3,
+      targetDurationS: 30,
+      totalDurationS: 30,
+      actualDurationS: 30,
+      gates: [],
+      scenes: [
+        block({
+          index: 0,
+          startS: 0,
+          leadSilenceS: 0.2,
+          speechAbsS: 0.2,
+          speechDurS: 9,
+        }),
+        block({
+          index: 1,
+          startS: 10,
+          leadSilenceS: 0.2,
+          speechAbsS: 10,
+          speechDurS: 10.4,
+        }),
+        block({
+          index: 2,
+          startS: 20,
+          leadSilenceS: 0.2,
+          speechAbsS: 20.6,
+          speechDurS: 9,
+        }),
+      ],
+    };
+    const lines = buildCaptionLines({
+      words: [word("tail", 10.4, 10.6)], // take-relative, inside take 1
+      report,
+      offsetsS: [0, 0, 21], // take 1 spans [0, 21) of the concatenated stream
+      maxChars: 32,
+    });
+    const tail = lines.find((l) => l.text === "tail");
+    expect(tail?.endS).toBeCloseTo(20.4, 6); // past its own scene, which ended at 20
+    expect(tail?.clamped).toBeUndefined();
+  });
+
+  it("still clamps a word that would land on the NEXT take's line", () => {
+    // The hazard the clamp exists for, re-expressed: the bound is the next take's speech start,
+    // not an arbitrary window width. STT drift that would put this word on top of the following
+    // caption is still pulled back.
+    const report = {
+      sceneCount: 2,
+      targetDurationS: 30,
+      totalDurationS: 30,
+      actualDurationS: 30,
+      gates: [],
+      scenes: [
+        block({ index: 0, startS: 0, leadSilenceS: 0, speechAbsS: 0, speechDurS: 9 }),
+        block({ index: 1, startS: 10, leadSilenceS: 0, speechAbsS: 12, speechDurS: 9 }),
+      ],
+    };
+    const lines = buildCaptionLines({
+      words: [word("drift", 25, 26)],
+      report,
+      offsetsS: [0, 30],
+      maxChars: 32,
+    });
+    expect(lines[0]?.endS).toBe(12); // the next take's speechAbsS, not 0 + clipSeconds
+    expect(lines[0]?.clamped).toBe(true);
   });
 });
 

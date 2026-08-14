@@ -15,8 +15,7 @@
  *     GENERATED output duration or per COMPUTE second cannot be reserved and is therefore refused
  *     by construction — not by preference.
  *  2. A resolution missing from a model's row is `unknown_model`, NEVER a fallback to another
- *     tier. Wan 2.5 supports multiple priced tiers, so a 480p estimate against a submit that omitted the
- *     resolution under-reports by 3x.
+ *     tier. A priced resolution must be present on both the estimate and the provider request.
  *  3. The cents floor happens ONCE, on the batch total. See chooseMediaBatch.
  */
 import { err, ok, type Result } from "@pikar/core/result";
@@ -24,18 +23,28 @@ import { CLIP_SECONDS } from "@pikar/core/storyboard";
 
 export type VideoRes = "480p" | "720p" | "1080p";
 
-/* ponytail: hand-maintained tables, sourced from Alibaba Model Studio and OpenAI pricing on
- * 2026-08-12. Reconciliation is the manual procedure in docs/playbooks/media.md. Upgrade path:
+/* ponytail: hand-maintained tables, sourced from legacy Alibaba Model Studio and current OpenAI pricing on
+ * 2026-08-14. Reconciliation is the manual procedure in docs/playbooks/media.md. Upgrade path:
  * use a versioned machine-readable price feed if either provider publishes one. */
 
 /** USD per video-second, per resolution. */
 export const MEDIA_VIDEO_PRICING: Record<string, Partial<Record<VideoRes, number>>> = {
   "wan2.5-t2v-preview": { "480p": 0.05, "720p": 0.1, "1080p": 0.15 },
+  "sora-2": { "720p": 0.1 },
+};
+
+/** Provider-supported generated durations. Kept model-specific so historical Wan rows remain
+ *  priceable without allowing an unsupported duration to reach Sora. */
+export const MEDIA_VIDEO_SECONDS: Record<string, readonly number[]> = {
+  "wan2.5-t2v-preview": [5, 10],
+  "sora-2": [4, 8, 12],
 };
 
 /** USD per successfully generated image. */
 export const MEDIA_IMAGE_PRICING: Record<string, number> = {
   "wan2.5-t2i-preview": 0.03,
+  // Conservative low-quality 1024x1536 reservation including a short prompt-input allowance.
+  "gpt-image-2": 0.01,
 };
 
 /** USD per 1000 SUBMITTED characters. Character billing is the REQUIREMENT, not a preference: the
@@ -61,19 +70,18 @@ export const MEDIA_JOB_CAP_USD = 3.5;
  * procedure in docs/playbooks/media.md. */
 export const MEDIA_SANDBOX_USD_PER_RENDER = 0.02;
 
-/** 480p is pinned DELIBERATELY: never omit `resolution` on submit. D10's cap arithmetic also REFUSES six blocks at 720p ($6.00+), so the
- *  budget rail is simultaneously the render-duration rail: the sandbox never sees a resolution
- *  whose encode time would change delta §2.4's numbers. */
+/** Sora 2's lowest supported tier and duration are pinned deliberately. Six four-second clips cost
+ *  $2.40, leaving room under the existing whole-job cap for voice, captions and render. */
 export const MEDIA_DEFAULT_VIDEO = {
-  model: "wan2.5-t2v-preview",
-  resolution: "480p",
-  seconds: 10,
+  model: "sora-2",
+  resolution: "720p",
+  seconds: 4,
 } as const;
 
 export const MEDIA_DEFAULT_IMAGE = {
-  model: "wan2.5-t2i-preview",
-  width: 1080,
-  height: 1920,
+  model: "gpt-image-2",
+  width: 1024,
+  height: 1536,
 } as const;
 
 /** Voice and sample size are PINNED here, never left to a provider default: the vendor default is
@@ -100,7 +108,8 @@ export type MediaSpec =
  *  - `unknown_model`     — nothing in the table prices this model+resolution. Fail closed.
  *  - `over_job_cap`      — priced fine, but the reel is too big. Cut blocks or drop resolution.
  *  - `illegal_duration`  — a submitted dimension that cannot be priced at all: a clip length
- *                          outside {5,10}, or a non-finite/negative count. Collapsing this into
+ *                          outside the selected model's supported set, or a non-finite/negative
+ *                          count. Collapsing this into
  *                          `unknown_model` would lie about a model we price perfectly well. */
 export type MediaCostError = { code: "unknown_model" | "over_job_cap" | "illegal_duration" };
 
@@ -115,6 +124,9 @@ export function estimateMediaUsd(spec: MediaSpec): Result<number, MediaCostError
       const row = MEDIA_VIDEO_PRICING[spec.model];
       if (!row) return err({ code: "unknown_model" });
       if (!CLIP_SET.has(spec.seconds)) return err({ code: "illegal_duration" });
+      if (!MEDIA_VIDEO_SECONDS[spec.model]?.includes(spec.seconds)) {
+        return err({ code: "illegal_duration" });
+      }
       const perSecond = row[spec.resolution];
       // A missing resolution is unknown_model — never a fallback to a cheaper tier.
       if (perSecond === undefined) return err({ code: "unknown_model" });

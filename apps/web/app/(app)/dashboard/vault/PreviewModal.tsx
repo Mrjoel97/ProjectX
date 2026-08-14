@@ -5,6 +5,7 @@ import type { DocType } from "@pikar/core";
 import { useConvex, useMutation, useQuery } from "convex/react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { MarkdownDocument } from "../MarkdownDocument";
 import { docLabel, fmtSize, type VaultDoc } from "./DocGrid";
 import { failureCopy } from "./failureCopy";
 import { XIcon } from "./icons";
@@ -108,6 +109,7 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
   }, []);
 
   useEffect(() => {
+    // Reset transient controls when the same mounted modal is repointed at another document.
     void doc._id;
     setExpanded(false);
     setDeleteConfirmation(false);
@@ -207,9 +209,6 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
     // biome-ignore lint/a11y/noStaticElementInteractions: Backdrop dismissal supplements the dialog's close button and Escape handler.
     <div
       className="vault-preview-scrim"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onCloseRef.current();
-      }}
       style={{
         position: "fixed",
         inset: 0,
@@ -220,6 +219,21 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
         background: "color-mix(in srgb, var(--ink) 58%, transparent)",
       }}
     >
+      <button
+        type="button"
+        aria-label="Close preview"
+        aria-hidden="true"
+        tabIndex={-1}
+        onMouseDown={() => onCloseRef.current()}
+        style={{
+          position: "absolute",
+          inset: 0,
+          border: 0,
+          padding: 0,
+          background: "transparent",
+          cursor: "default",
+        }}
+      />
       <div
         ref={dialogRef}
         role="dialog"
@@ -229,6 +243,8 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
         tabIndex={-1}
         className="vault-preview-grid"
         style={{
+          position: "relative",
+          zIndex: 1,
           width: "min(64rem, 100%)",
           overflow: "hidden",
           border: "1px solid var(--vault-border)",
@@ -253,19 +269,25 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
           </p>
           {preview.content.kind === "ready-text" ? (
             <>
-              <pre
-                style={{
-                  margin: 0,
-                  whiteSpace: "pre-wrap",
-                  overflowWrap: "anywhere",
-                  fontFamily: "var(--font-sans), system-ui, sans-serif",
-                  fontSize: "0.92rem",
-                  lineHeight: 1.7,
-                  color: "var(--ink)",
-                }}
-              >
-                {expanded ? preview.content.text : preview.content.excerpt}
-              </pre>
+              {doc.mimeType === "text/markdown" ? (
+                <MarkdownDocument
+                  markdown={expanded ? preview.content.text : preview.content.excerpt}
+                />
+              ) : (
+                <pre
+                  style={{
+                    margin: 0,
+                    whiteSpace: "pre-wrap",
+                    overflowWrap: "anywhere",
+                    fontFamily: "var(--font-sans), system-ui, sans-serif",
+                    fontSize: "0.92rem",
+                    lineHeight: 1.7,
+                    color: "var(--ink)",
+                  }}
+                >
+                  {expanded ? preview.content.text : preview.content.excerpt}
+                </pre>
+              )}
               {preview.content.canExpand && (
                 <button
                   type="button"

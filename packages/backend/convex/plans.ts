@@ -215,7 +215,15 @@ export const stageMediaPlan = internalMutation({
     { tenantId, threadId, subject },
   ): Promise<
     | { ok: true; planId: Id<"plans"> }
-    | { ok: false; reason: "reel_in_flight" | "render_in_flight" | "draft_in_progress" }
+    | {
+        ok: false;
+        reason:
+          | "reel_in_flight"
+          | "render_in_flight"
+          | "draft_in_progress"
+          | "dispatch_in_flight"
+          | "image_proposal_pending";
+      }
   > => {
     const plan = await ctx.db
       .query("plans")
@@ -224,6 +232,28 @@ export const stageMediaPlan = internalMutation({
 
     let planId: Id<"plans">;
     if (plan) {
+      // A completed memo is terminal, not a draft. This includes a prior media-director refusal:
+      // the user may ask for the reel again in the SAME chat after correcting the brief or after
+      // we improve the specialist. Treating `done` as universally non-recyclable trapped that
+      // thread forever behind `draft_in_progress`, even though no provider job or render existed.
+      // The memo remains in chat/vault history; only the live canvas slot is reused.
+      const completedMemo = plan.kind === "memo" && plan.status === "done";
+      // ── THE MISSING INTERLOCK (2026-08-14) ──────────────────────────────────────────────────
+      // A `collecting` MEMO row is one a DISPATCH staged and still owns. `stageResearchPlan`
+      // refuses exactly this shape as `research_in_flight`, and the header above says this
+      // function is "a SECOND copy of that shape" — but the copy DROPPED this check, which is the
+      // one that makes "one run per thread" true.
+      //
+      // It was reachable, not theoretical: a second `dispatchMedia` while the media director was
+      // still writing did refuse — but as `draft_in_progress`, whose reply talks about an EMAIL
+      // draft the user does not have. So the agent relayed a sentence about a draft that did not
+      // exist, and the user could not act on it. Refusing here, first, gives the honest reason.
+      //
+      // `done` still recycles (see `completedMemo` below) — a landed run is not in flight, and
+      // trapping a thread behind a finished one is the bug that comment was written for.
+      if (plan.status === "collecting" && plan.kind === "memo") {
+        return { ok: false, reason: "dispatch_in_flight" };
+      }
       if (plan.kind === "media") {
         // The index PREFIX is the tenant boundary, so these are this tenant's rows by construction.
         const jobs = await ctx.db
@@ -236,11 +266,34 @@ export const stageMediaPlan = internalMutation({
         if (plan.renderStatus !== undefined && LIVE_RENDER_STATUS.has(plan.renderStatus)) {
           return { ok: false, reason: "render_in_flight" };
         }
+        // ── A STAGED IMAGE PROPOSAL IS NOT A SPENT REEL DECK ──────────────────────────────────
+        // `userWork` below excludes `kind: "media"` on the reasoning that "a media row holds a
+        // PREVIOUS reel's deck ... not work in progress". That is true of a deck the user already
+        // generated or walked away from, and FALSE of a proposal staged moments earlier — and
+        // `mediaMode: "image"` rows are `kind: "media"` too.
+        //
+        // Observed live, in a conversation about a SLIDE DECK: `proposeImage` staged an image
+        // proposal, and the next turn's `dispatchMedia` recycled the row out from under it. The
+        // user never saw the image they were told to review, the following `proposeImage` then
+        // refused with `draft_in_progress` against the memo this function had just written, and
+        // the turn deadlocked. Silently destroying an un-acted-on proposal is the defect; a reel
+        // replacing a reel is the INTENDED flow and is deliberately still allowed.
+        //
+        // `jobs.length === 0` is what makes "un-acted-on" precise rather than a guess: the moment
+        // the user clicks Generate a row exists, and a spent proposal may be recycled.
+        if (plan.mediaMode === "image" && plan.imagePrompt && jobs.length === 0) {
+          return { ok: false, reason: "image_proposal_pending" };
+        }
       }
-      if (!RECYCLABLE_STATUS.has(plan.status)) return { ok: false, reason: "draft_in_progress" };
+      if (!completedMemo && !RECYCLABLE_STATUS.has(plan.status))
+        return { ok: false, reason: "draft_in_progress" };
       // A media row holds a PREVIOUS reel's deck, and a canceled row is one the user halted —
       // neither is work in progress. Anything else with content in it is.
-      const userWork = plan.kind !== "media" && plan.status !== "canceled" && hasDraftContent(plan);
+      const userWork =
+        !completedMemo &&
+        plan.kind !== "media" &&
+        plan.status !== "canceled" &&
+        hasDraftContent(plan);
       if (userWork) return { ok: false, reason: "draft_in_progress" };
       planId = plan._id;
       // resetPlan, NOT patchPlan: patchPlan drops `undefined` and so can never clear a filled slot.
@@ -299,16 +352,22 @@ export const persistDeck = internalMutation({
       }),
     ),
     clipSeconds: v.number(),
+    /** 20.2: present for a SCENE deck, absent for a BLOCK deck. Its presence on the plan row is
+     *  the discriminator downstream — see the schema comment. */
+    targetDurationSeconds: v.optional(v.number()),
     shots: v.array(
       v.object({
         index: v.number(),
-        type: v.string(),
+        // `type` on a block row, `visual` on a scene row — exactly one of the two, never both.
+        type: v.optional(v.string()),
+        visual: v.optional(v.string()),
         seconds: v.number(),
         windowStartMs: v.number(),
         description: v.string(),
         overlay: v.optional(v.string()),
         prompt: v.string(),
         narration: v.string(),
+        asset: v.optional(v.object({ source: v.literal("vault"), docId: v.string() })),
       }),
     ),
   },
@@ -324,6 +383,11 @@ export const persistDeck = internalMutation({
       script: a.script,
       ...(a.artDirection === null ? {} : { artDirection: a.artDirection }),
       clipSeconds: a.clipSeconds,
+      // Passed through UNCONDITIONALLY, undefined included. This is a direct `db.patch`, not
+      // `patchPlan`, so undefined CLEARS — and clearing is what a block deck must do here. This
+      // function writes a WHOLE deck; leaving a previous scene deck's target behind would leave
+      // the plan claiming a declared length that none of its shots was written against.
+      targetDurationSeconds: a.targetDurationSeconds,
       shots: a.shots,
       status: "proposed",
     });
@@ -732,6 +796,10 @@ export const resetPlan = internalMutation({
       artDirection: undefined,
       script: undefined,
       clipSeconds: undefined,
+      // 20.2: the SAME Pitfall-6 class. A surviving `targetDurationSeconds` would tell the next
+      // proposal in this thread that it is a 30-second scene deck when its shots say otherwise —
+      // and the exact-sum gate would then refuse a deck the user never wrote wrong.
+      targetDurationSeconds: undefined,
       shots: undefined,
       renderStatus: undefined,
       renderStorageId: undefined,

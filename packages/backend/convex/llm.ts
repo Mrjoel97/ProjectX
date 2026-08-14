@@ -102,6 +102,12 @@ import { type Color, PDFDocument, type PDFFont, rgb, StandardFonts } from "pdf-l
 import { api, components, internal } from "./_generated/api";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
+import {
+  applyGmailCapability,
+  GMAIL_CONNECTION_REQUIRED_REPLY,
+  isPinnedCockpitEvaluation,
+  shouldUseGmailCapability,
+} from "./cockpitCapabilities";
 import { contentHash } from "./lib/hash";
 import { isExplicitVideoCreationRequest } from "./mediaIntent";
 
@@ -1314,9 +1320,25 @@ const MEDIA_UNDERWAY_REPLY =
   "the voiceover and the render happens only when the user approves the card. Tell the user the " +
   "proposal is being put together and carry on.";
 const MEDIA_REFUSAL_REPLY: Record<
-  "reel_in_flight" | "render_in_flight" | "draft_in_progress",
+  | "reel_in_flight"
+  | "render_in_flight"
+  | "draft_in_progress"
+  | "dispatch_in_flight"
+  | "image_proposal_pending",
   string
 > = {
+  // A specialist is ALREADY writing on this thread. Says WAIT, and says it without naming a lever:
+  // there is nothing to reset — the run lands on its own. The old path returned
+  // `draft_in_progress`, whose reply describes an email draft the user does not have.
+  dispatch_in_flight:
+    "Something is already being written on this conversation and it has not landed yet. Nothing " +
+    "new was started. Tell the user to give it a moment; do not start another one.",
+  // The one the transcript actually shows. A staged image proposal is a live artifact the user was
+  // told to review, and starting a reel would have thrown it away without saying so.
+  image_proposal_pending:
+    "There is an image proposal on this conversation's plan card that the user has not generated " +
+    "yet, and starting a reel would discard it. Nothing was started. Ask whether to drop the " +
+    "image; if they say yes, call `resetPlan` and try again.",
   reel_in_flight:
     "A reel is already being generated on this conversation and its clips are already paid for. " +
     "Nothing new was started. Tell the user it is still running, and that a second reel needs a " +
@@ -1340,8 +1362,14 @@ const IMAGE_REFUSAL_REPLY: Record<
     "An image is already being generated on this conversation. Nothing new was started. Tell the user it is still running.",
   image_already_started:
     "This conversation already has an image generation attempt. Nothing was replaced or charged. Tell the user a new image needs a new conversation.",
+  // NAMES THE LEVER THE MODEL ALREADY HOLDS. The old copy said only "tell the user to finish or
+  // discard it first", so the user answered "im ready, proceed" — which is not a discard — and the
+  // turn deadlocked: the model has `resetPlan` and never reached for it, because nothing here said
+  // it could. A refusal that ends in an instruction only the OTHER party can carry out is a dead
+  // end, and this one is reachable from an ordinary "make me an image for this" turn.
   draft_in_progress:
-    "There is another draft on this conversation's plan card. Nothing was replaced or generated. Tell the user to finish or discard it first.",
+    "There is another draft on this conversation's plan card. Nothing was replaced or generated. " +
+    "Ask the user whether to clear it; if they say yes, call `resetPlan` and then try again.",
   invalid_prompt:
     "The image prompt was empty or too long, so no proposal was staged. Ask the user for a concise visual description.",
 };
@@ -1511,6 +1539,8 @@ export function buildCockpitTools(
     grantDispatch?: boolean;
     threadId?: string;
     rootRequestId?: string;
+    /** True only for an explicit email route backed by a live Gmail grant. */
+    gmailEnabled?: boolean;
   },
 ) {
   const webResearchTool = buildWebResearchTool();
@@ -1862,7 +1892,7 @@ export function buildCockpitTools(
     }),
   };
 
-  return {
+  const allTools = {
     resolveContacts: tool({
       // Split literals keep each chunk under the §5 no-hardcoded-prompt scan ceiling (200 chars).
       description:
@@ -3159,6 +3189,11 @@ export function buildCockpitTools(
         "Use `long` for proposals, one-pagers and reports; `short` for posts, ad copy or headlines. " +
         "Pass `replace` to rewrite a document created earlier in this conversation in place. " +
         "It saves only — it never sends anything. " +
+        // The FORMAT clause. There is no format argument and there is no pptx, docx or slides
+        // path; asked for one, say what this writes instead of agreeing. Observed live: the agent
+        // reported creating a deck "in PowerPoint format" that never existed.
+        "It writes markdown and a PDF — never PowerPoint, Word or slides. " +
+        "The finished document appears in the workspace as well as the vault. " +
         "Create directly when the user asks for one; when creating one is YOUR idea, say what you " +
         "would write and wait for a yes.",
       inputSchema: jsonSchema<{ topic: string; form: "short" | "long"; replace?: number }>({
@@ -3314,13 +3349,34 @@ export function buildCockpitTools(
           form,
           createdAt: Date.now(),
         });
-        // A ref-only sentence: the title and what the user can do with it. Never bytes, never a
-        // URL, never an _id.
+        // A ref-only sentence: the title, WHERE it is and WHAT it is. Never bytes, never a URL,
+        // never an _id.
+        //
+        // The last two clauses are not decoration — each closes a defect observed live:
+        //
+        //  * WHERE. Asked to "open it in the workspace so I can see it", the agent answered "I
+        //    can't open files directly in the workspace". It cannot, and it does not have to: the
+        //    Output card (`cards.tsx` OutputCard) already renders the full artifact text there,
+        //    ungated by any plan row. The model has no tool that reports this and the skill body
+        //    does not say it, so the tool result is where it belongs — a model reports its TOOL
+        //    inventory as the PRODUCT's capability unless something tells it otherwise.
+        //
+        //  * WHAT. Asked for "the slide deck in pptx", the agent replied that it had created one
+        //    "in PowerPoint format". There is no `format` argument on this tool and `DocFormat` is
+        //    `pdf | html` — no pptx path exists anywhere. The old sentence named no format at all,
+        //    so nothing contradicted the invention. Naming the real artifact means a claim of any
+        //    other format now contradicts the model's own tool result.
+        //
+        // Split across constants to stay under the §5 200-character inline-string scan.
         const saved =
           effectiveReplace === undefined
             ? "saved to your vault"
             : `rewritten as #${effectiveReplace}`;
-        return `Created "${draft.title}" — ${saved}${storageId ? " with a PDF download" : ""}.`;
+        const shown = " It is already open in the workspace for the user to read.";
+        const asFormat = storageId
+          ? " Written as markdown, with a PDF to download."
+          : " Written as markdown.";
+        return `Created "${draft.title}" — ${saved}.${shown}${asFormat}`;
       },
     }),
     // ── evaluateBusiness (BEVL-01) — the read-only business-assessment tool ─────────────────────────
@@ -3537,6 +3593,7 @@ export function buildCockpitTools(
       },
     }),
   };
+  return applyGmailCapability(allTools, agentContext?.gmailEnabled ?? true);
 }
 
 // ── The governed Executive-Agent tool-loop (AGNT-01/02) ──────────────────────
@@ -3665,6 +3722,9 @@ async function runAgentLoop(
     // UAT-F2: the loop builds its OWN tool set below, so the withholding flag must ride these args
     // too (append-only optional — every existing caller keeps working; absent = full set).
     omitRecipientEdits?: boolean;
+    // Executive-only capability containment. Gmail tools are present only when this turn's
+    // deterministic route selected email and the tenant has a live grant.
+    gmailEnabled?: boolean;
     // DISP-01: the specialist's tool-set. ABSENT ⇒ the full record, byte-identical to today —
     // every existing caller keeps working. A specialist is a swapped (system, tools) pair through
     // THIS function; there is no second loop.
@@ -3709,6 +3769,7 @@ async function runAgentLoop(
     threadId,
     clientContext,
     omitRecipientEdits,
+    gmailEnabled,
     toolNames,
     maxSteps,
     timeoutMs,
@@ -3733,6 +3794,7 @@ async function runAgentLoop(
       grantDispatch: toolNames === undefined,
       threadId,
       rootRequestId: turnId,
+      gmailEnabled,
     },
   );
   // `=== undefined`, never a truthiness test: an EMPTY allow-list must yield an EMPTY record. A
@@ -4513,7 +4575,36 @@ export const runCockpitAgent = internalAction({
     // 4. Offline sentinel path (Plan 05 E2E): one op → one governed tool call, no generateText. The
     //    SMOKE path pins a deterministic clock so sendTime= resolves offline (§2-D — never the model).
     const smokeOp = parseAgentSmoke(text);
+    // Code-owned intent routing determines whether this turn may see the Gmail rail. A genuine
+    // email action with no grant gets a just-in-time connection request; every other capability
+    // continues without Gmail. SMOKE remains the deterministic offline tool harness.
+    const continuingEmailPlan = Boolean(
+      plan &&
+        actionTypeOf(plan.kind) === "email" &&
+        (plan.recipients?.length || plan.subject || plan.body || plan.candidates?.length),
+    );
+    const gmailRequired = shouldUseGmailCapability(text, continuingEmailPlan);
+    const pinnedGoldenEvaluation = isPinnedCockpitEvaluation(
+      tenantId,
+      skillVersions?.[COCKPIT_AGENT_SKILL],
+    );
+    // No grant read at all on a non-email route. Gmail is not even a dependency of ordinary
+    // business work, rather than merely a check whose negative result happens to be ignored.
+    const gmailConnected: boolean =
+      smokeOp || !gmailRequired || pinnedGoldenEvaluation
+        ? true
+        : await ctx.runQuery(internal.gmailAuth.hasGmailConnection, { tenantId });
+    if (gmailRequired && !gmailConnected) {
+      return { reply: GMAIL_CONNECTION_REQUIRED_REPLY, costUsd: 0 };
+    }
+    const gmailEnabled = gmailRequired && gmailConnected;
     const effectiveClientContext = smokeOp ? { tz: "UTC", nowMs: SMOKE_NOW_MS } : clientContext;
+    // Explicit video creation is a code-owned route, just like Gmail capability selection above.
+    // Work it out BEFORE constructing this driver-only tool record: dispatch tools are
+    // structurally absent unless the executive lineage grant is supplied. The old ordering built
+    // a record without `dispatchMedia` and then immediately tried to invoke that missing key,
+    // turning every direct video request into the driver's generic "nothing was sent" reply.
+    const directVideo = !smokeOp && !gmailRequired && isExplicitVideoCreationRequest(text);
     // The flag rides here too — harmless (no SMOKE op is a continue turn), and uniform.
     const tools = buildCockpitTools(
       ctx,
@@ -4522,10 +4613,22 @@ export const runCockpitAgent = internalAction({
       effectiveClientContext,
       skillVersions,
       omitRecipientEdits,
+      {
+        gmailEnabled: smokeOp ? true : gmailEnabled,
+        ...(directVideo
+          ? {
+              grantDispatch: true,
+              threadId,
+              // The cockpit driver normally supplies turnId. Keep internal callers functional too:
+              // a fresh refs-only lineage id is sufficient when they do not need a visible trace.
+              rootRequestId: turnId ?? crypto.randomUUID(),
+            }
+          : {}),
+      },
     );
-    // Explicit video creation is a code-owned route. The direct call stages only the FREE
-    // media-director proposal; paid generation remains behind the existing human approval gate.
-    const directVideo = !smokeOp && isExplicitVideoCreationRequest(text);
+    // The direct call stages only the FREE media-director proposal. Paid clip/voice/render work is
+    // still unreachable until the human approves the resulting card. Keep mixed email requests in
+    // the normal loop so routing one capability never silently drops the other.
     if (directVideo) {
       const stepKey = "route-dispatchMedia";
       const startedAt = Date.now();
@@ -4643,6 +4746,7 @@ export const runCockpitAgent = internalAction({
       // ran. Without this the tools the loop builds refuse every dated request.
       clientContext: effectiveClientContext,
       omitRecipientEdits, // UAT-F2 — the loop's own tool build must honor the withholding
+      gmailEnabled,
     });
     return { reply, costUsd };
   },

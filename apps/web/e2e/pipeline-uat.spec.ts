@@ -149,7 +149,7 @@ const shot = (page: Page, name: string) =>
 /** Drive one cockpit turn. Waits for the composer to clear (ChatPane empties it once the action
  *  resolves), never asserts on model prose — assertions ride the plan-derived cards. */
 async function say(page: Page, text: string): Promise<void> {
-  const composer = page.getByPlaceholder("Describe your goal…");
+  const composer = page.getByPlaceholder("What business outcome should we work on?");
   await expect(composer).toBeVisible({ timeout: 30_000 });
   await composer.fill(text);
   await composer.press("Enter");
@@ -217,12 +217,15 @@ test.beforeAll(async ({ browser }: { browser: Browser }) => {
   // seeds a profile + a postal address and ZERO contacts/followUps/suppressions — so the tenant is
   // still empty in every sense step 1 asserts.
   convexRun("onboarding:__seedOnboardedTenant", { tenantId });
-  // THE COCKPIT COMPOSER IS GATED ON A GMAIL CONNECTION (`workspace/page.tsx`: an unconnected
-  // tenant gets a "Connect Gmail to start planning" CTA and no composer at all), so steps 5/7/8
-  // need the synthetic grant too — not just the send steps. The deterministic offline inbox fixture
-  // rides with it so any `gmail.search` the agent attempts is served locally instead of 401-ing
-  // against Google: same seam `cockpit-resolve.spec.ts` uses, no network, no spend.
-  seedSyntheticGmail(tenantId);
+  // Prove the new hierarchy on a genuinely disconnected tenant: business work is available before
+  // any delivery channel is connected. A Gmail prompt belongs only to an email action boundary.
+  await page.goto(WORKSPACE);
+  await expect(page.getByPlaceholder("What business outcome should we work on?")).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(page.getByRole("link", { name: "Connect Gmail to start planning" })).toHaveCount(0);
+  // The deterministic offline inbox fixture lets any mailbox-reading tool selected in steps 5/7/8
+  // resolve locally before the provider-token boundary: no network, no synthetic Gmail grant.
   convexRun("smoke:seedInboxFixture", { tenantId, offlineDigest: true });
   await context.storageState({ path: UAT_STATE_ABS });
   writeFileSync(resolve(UAT_DIR, "tenant.txt"), `${UAT_EMAIL}\n${tenantId}\n`, "utf8");
@@ -757,6 +760,35 @@ test("step 8: a follow-up naming NOBODY makes the agent ASK — it never invents
 });
 
 // ── STEPS 9 / 10 / 11 — the send-path trust boundary ($0, seeded plans) ───────────────────────────
+
+test("email boundary: a disconnected cockpit asks for Gmail only when an email is approved", async ({
+  page,
+}) => {
+  const { threadId } = seedEmailPlan(tenantId, {
+    recipients: [`uat19-channel-${stamp}@example.com`],
+    mode: "individual",
+    subject: `UAT19 contextual channel ${stamp}`,
+    body: "This proposed email proves that channel setup is deferred to its action boundary.",
+  });
+
+  await page.goto(`${WORKSPACE}?thread=${threadId}`);
+  const pane = page.getByTestId("workspace-pane");
+  await expect(pane.getByText("PLAN", { exact: true })).toBeVisible({ timeout: 60_000 });
+  await pane.getByRole("button", { name: "Approve", exact: true }).click();
+
+  const refusal = pane.getByRole("alert");
+  await expect(refusal).toContainText(/This email is ready, but Gmail is not connected/i);
+  await expect(refusal.getByRole("link", { name: "Connect Gmail" })).toHaveAttribute(
+    "href",
+    "/connect-gmail",
+  );
+  const plan = (await fetchQuery(api.plans.byThread, { threadId }, auth)) as {
+    status?: string;
+    recipientTotal?: number;
+  } | null;
+  expect(plan?.status).toBe("proposed");
+  expect(plan?.recipientTotal ?? 0).toBe(0);
+});
 
 /** Step 9's fixture, shared by 9a and 9b: five recipients, the third suppressed, one seeded plan,
  *  approved from the cockpit card. Returns the thread and the address that must be dropped. */

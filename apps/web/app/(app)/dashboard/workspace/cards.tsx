@@ -22,6 +22,11 @@ import { useAction, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import Link from "next/link";
 import { useState } from "react";
+import { MarkdownDocument } from "../MarkdownDocument";
+// The SHIPPED vault preview, mounted here rather than reimplemented: it already renders markdown,
+// PDFs, images and video, the extraction/failure states and the entity chips. A second document
+// viewer would be a second thing to keep in step with `previewState`.
+import { PreviewModal } from "../vault/PreviewModal";
 import { MediaCanvas } from "./MediaCanvas";
 import { useSendCockpitMessage } from "./useSendCockpitMessage";
 
@@ -339,7 +344,10 @@ type PlanNote = { text: string; tone?: "error" | "info"; link?: { href: string; 
  * same stop must not read as two different rules on the two surfaces.
  */
 export const PLAN_REFUSALS: Record<string, PlanNote> = {
-  gmail_not_connected: { text: "Connect Gmail before approving." },
+  gmail_not_connected: {
+    text: "This email is ready, but Gmail is not connected. Connect it to send this approved message.",
+    link: { href: "/connect-gmail", label: "Connect Gmail" },
+  },
   no_postal_address: {
     text: "Add your postal address before sending — the law requires it in every email's footer.",
     // href and label travel TOGETHER (Task 8 review). They used to be an optional `href` beside a
@@ -1961,6 +1969,72 @@ function ActivityCard({ steps }: { steps: StepView[] }) {
 // never a query string or chunk text (§4, vaultSources.ts writes NO log-plane row).
 type VaultSources = NonNullable<FunctionReturnType<typeof api.vaultSources.byThread>>;
 
+// ---------- IN-PLACE DOCUMENT VIEWING (the deferred `getVaultDoc(byId)` upgrade) ----------
+
+/**
+ * Open ONE vault document over the workspace, without leaving it.
+ *
+ * Every document reference in this file used to be `<Link href="/dashboard/vault">` — a
+ * whole-route jump that dropped the reader into an unfiltered grid and left the conversation
+ * behind. It was a deliberate stopgap (`SourceCard`'s own comment named the upgrade: "add a
+ * getVaultDoc(byId) tenant query + import PreviewModal"), and `api.vault.vaultDoc` is that query.
+ *
+ * The doc id is the ONLY thing a workspace card holds — `vaultSources` rows carry ids and titles,
+ * never rows — so the fetch happens here and nowhere else. `null` (deleted, or another tenant's)
+ * renders nothing and closes: a card must not assert a document exists because a stale row names it.
+ */
+function VaultDocModal({ docId, onClose }: { docId: string; onClose: () => void }) {
+  const doc = useQuery(api.vault.vaultDoc, { vaultDocId: docId });
+  if (doc === undefined || doc === null) return null;
+  return <PreviewModal doc={doc} onClose={onClose} />;
+}
+
+/** A document TITLE that opens the document. A button, never a link: it opens a dialog in place,
+ *  and dressing that as navigation is the lie the route-jump version told. */
+function VaultDocButton({
+  docId,
+  children,
+  testId,
+  style,
+}: {
+  docId: string | undefined;
+  children: React.ReactNode;
+  testId?: string;
+  style?: React.CSSProperties;
+}) {
+  const [open, setOpen] = useState(false);
+  // No id (a row written before ids were carried) ⇒ plain text, never a control that does nothing.
+  if (!docId) {
+    return (
+      <span data-testid={testId} style={style}>
+        {children}
+      </span>
+    );
+  }
+  return (
+    <>
+      <button
+        type="button"
+        data-testid={testId}
+        onClick={() => setOpen(true)}
+        style={{
+          border: 0,
+          padding: 0,
+          background: "transparent",
+          font: "inherit",
+          color: "var(--teal-600)",
+          cursor: "pointer",
+          textAlign: "left",
+          ...style,
+        }}
+      >
+        {children}
+      </button>
+      {open && <VaultDocModal docId={docId} onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
 /**
  * "📚 Grounded in N documents" — a DUMB renderer over vaultSources.byThread (the briefing precedent):
  * self-queries on threadId, returns null when a turn wasn't grounded, so an ungrounded/compose turn
@@ -1988,17 +2062,12 @@ function SourceCard({ threadId }: { threadId?: string }) {
         }}
       >
         {sources.titles.map((title, i) => (
-          // ponytail: doc-level link to /dashboard/vault (context-sanctioned fallback, no new query).
-          //  Inline PreviewModal upgrade = add a getVaultDoc(byId) tenant query + import PreviewModal —
-          //  deferred (Pitfall 5). docIds ride along in the row for that future targeted click-through.
+          // The deferred upgrade, taken: the docId the row already carried now opens the document
+          // in place instead of navigating to an unfiltered /dashboard/vault.
           <li key={sources.docIds[i] ?? title} style={traceText}>
-            <Link
-              href="/dashboard/vault"
-              data-testid="source-title"
-              style={{ color: "var(--teal-600)" }}
-            >
+            <VaultDocButton docId={sources.docIds[i]} testId="source-title">
               {title}
-            </Link>
+            </VaultDocButton>
           </li>
         ))}
       </ul>
@@ -2041,9 +2110,9 @@ export const typeBadge = {
   border: "1px solid var(--teal-400)",
 } as const;
 
-// The rendered artifact: the newest write's stored markdown, first ~240 chars as written by the
-// tool. A PREVIEW, not a renderer — the vault owns the full document (CONTEXT lock: do not invent
-// a second way to display an artifact). Neutral --canvas sheet, the insufficientBox idiom below.
+// The rendered artifact uses the shared safe MarkdownDocument surface, matching the vault preview
+// and chat without evaluating model-authored HTML. Neutral --canvas sheet, the insufficientBox
+// idiom below.
 export const snippetSheet = {
   margin: "0.7rem 0 0",
   border: "1px solid var(--rule)",
@@ -2052,14 +2121,43 @@ export const snippetSheet = {
   padding: "0.7rem 0.85rem",
   color: "var(--ink-soft)",
   fontSize: "0.85rem",
-  whiteSpace: "pre-wrap" as const,
   overflowWrap: "anywhere" as const,
 } as const;
+
+/**
+ * Which artifact the Output card previews: the user's explicit click, else THE NEWEST.
+ *
+ * This was `useState(0)` inline, which pinned the preview to document #1 for the life of the
+ * thread. `titles`/`docIds` ACCUMULATE over the conversation (18-06), so a thread that created
+ * three artifacts previewed the OLDEST while the user was asking where the newest one was. The
+ * titles are clickable so it was recoverable — but only by someone who already knew to click, and
+ * the one thing a user who just asked for a document wants to see is the document they just asked
+ * for.
+ *
+ * Exported and pure so the RULE is testable rather than merely present: a source scan for
+ * `picked ?? newest` would pass with the arithmetic wrong (the 19.1 `ImportDone` lesson — move the
+ * arithmetic somewhere a test can call it).
+ *
+ * `picked` out of range falls back to the newest rather than to nothing: the row can shrink when a
+ * `replace` supersedes an entry, and a stale index must not blank the preview.
+ */
+export const previewIndex = (count: number, picked: number | null): number => {
+  const newest = Math.max(count - 1, 0);
+  return picked !== null && picked >= 0 && picked < count ? picked : newest;
+};
 
 function OutputCard({ threadId }: { threadId?: string }) {
   const created: VaultSources | null | undefined = useQuery(
     api.vaultSources.byThread,
     threadId ? { threadId, role: "created" } : "skip",
+  );
+  // `null` means FOLLOW THE NEWEST; a number is an explicit click. See `previewIndex`.
+  const [picked, setPicked] = useState<number | null>(null);
+  const selected = previewIndex(created?.docIds.length ?? 0, picked);
+  const selectedId = created?.docIds[selected];
+  const artifact = useQuery(
+    api.vault.vaultDocText,
+    selectedId ? { vaultDocId: selectedId } : "skip",
   );
   if (!created || created.count === 0) return null;
   // Absent `form` ⇒ DOCUMENT: rows written before this phase carry no form, and guessing from
@@ -2083,17 +2181,26 @@ function OutputCard({ threadId }: { threadId?: string }) {
         }}
       >
         {created.titles.map((title, i) => (
-          // ponytail: doc-level link to /dashboard/vault — the SAME context-sanctioned click-through
-          // SourceCard uses, and the inline-PreviewModal upgrade is deferred with SourceCard's.
           <li key={created.docIds[i] ?? title} style={{ ...traceText, fontWeight: 600 }}>
             {many && <span style={{ color: "var(--ink-soft)", fontWeight: 500 }}>#{i + 1} </span>}
-            <Link
-              href="/dashboard/vault"
+            <button
+              type="button"
               data-testid="output-title"
-              style={{ color: "var(--teal-600)" }}
+              aria-pressed={selected === i}
+              onClick={() => setPicked(i)}
+              style={{
+                border: 0,
+                padding: 0,
+                background: "transparent",
+                color: "var(--teal-600)",
+                font: "inherit",
+                fontWeight: "inherit",
+                cursor: "pointer",
+                textAlign: "left",
+              }}
             >
               {title}
-            </Link>
+            </button>
           </li>
         ))}
       </ul>
@@ -2101,7 +2208,32 @@ function OutputCard({ threadId }: { threadId?: string }) {
       <p style={{ margin: "0.55rem 0 0", fontSize: "0.8rem", color: "var(--ink-soft)" }}>
         Saved to your vault. Nothing was sent.
       </p>
-      {created.snippet && <div style={snippetSheet}>{created.snippet}</div>}
+      <section
+        aria-label="Created artifact preview"
+        style={{ ...snippetSheet, color: "var(--ink)" }}
+      >
+        {artifact === undefined ? (
+          "Loading document…"
+        ) : artifact?.text ? (
+          <div style={{ maxHeight: "32rem", overflowY: "auto" }}>
+            <MarkdownDocument markdown={artifact.text} />
+          </div>
+        ) : created.snippet ? (
+          <MarkdownDocument markdown={created.snippet} compact />
+        ) : (
+          "This artifact has no text preview."
+        )}
+      </section>
+      {/* The full document, HERE. The inline preview above is the text; this opens the shipped
+          vault viewer over the workspace for the rest of it — the stored PDF, download, entities,
+          rename/delete — without leaving the conversation that produced it. */}
+      <VaultDocButton
+        docId={selectedId}
+        testId="output-open"
+        style={{ display: "inline-block", marginTop: "0.6rem", fontSize: "0.82rem" }}
+      >
+        Open full document
+      </VaultDocButton>
     </div>
   );
 }
@@ -2409,13 +2541,13 @@ function EvaluationCard({ threadId }: { threadId?: string }) {
                       <span style={{ ...traceText, flex: 1, color: "var(--ink)" }}>
                         {f.label}{" "}
                         {f.citationDocId ? (
-                          <Link
-                            href="/dashboard/vault"
-                            data-testid="evaluation-citation"
-                            style={{ color: "var(--teal-600)", fontSize: "0.8rem" }}
+                          <VaultDocButton
+                            docId={f.citationDocId}
+                            testId="evaluation-citation"
+                            style={{ fontSize: "0.8rem" }}
                           >
                             [{f.citationTitle}]
-                          </Link>
+                          </VaultDocButton>
                         ) : (
                           <span
                             data-testid="evaluation-citation"

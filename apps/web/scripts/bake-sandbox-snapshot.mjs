@@ -76,6 +76,12 @@ async function main() {
   });
 
   try {
+    // Vercel's current Amazon Linux 2023 sandbox image includes `tar` but not the `xz` helper
+    // needed for the pinned .tar.xz asset. Install it before downloading so extraction is
+    // deterministic instead of depending on an undocumented base-image package.
+    await step(sandbox, "install xz decompressor", "dnf", ["install", "-y", "xz"], {
+      sudo: true,
+    });
     await step(sandbox, "download ffmpeg", "sh", [
       "-c",
       `curl -fsSL -o /tmp/ffmpeg.tar.xz "${FFMPEG_TARBALL}"`,

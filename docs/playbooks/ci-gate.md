@@ -1,5 +1,26 @@
 # Playbook: CI gate (typecheck / lint / test / build)
 
+> Last verified: 2026-08-12 (isolated Vercel project packaging — `.vercelignore` now limits direct
+> deploy uploads to application/workspace sources and excludes local caches, evidence, environment
+> files, and credentials. Repository-only directory patterns are root-anchored so the root `Skills`
+> directory cannot accidentally exclude application `src/skills` modules on case-insensitive hosts.)
+
+> Last verified: 2026-08-12 (hosted release compatibility — the deployment job uses Node 24 to
+> match Vercel's supported production runtime. Convex deploy skips its package-local tsc lookup
+> because the exact SHA has already passed the repository-wide TypeScript gate before this job.)
+
+> Last verified: 2026-08-12 (production release automation — `ci` now uses least-privilege read
+> permissions and a bounded timeout; a separate `deploy-production` workflow consumes only a
+> successful same-repository `main` CI SHA, stages Vercel without moving domains, dry-runs and
+> deploys Convex, requires committed generated types, seeds/read-backs the skill registry, then
+> promotes and probes the durable URL. The workflow is protected by GitHub's `production`
+> environment and serialized concurrency. Workflow YAML and embedded shell syntax were validated;
+> the full repository gate is currently red in unfinished feature work and therefore correctly
+> prevents this workflow from releasing. `CONVEX_DEPLOY_KEY` remains GitHub-only; Vercel receives
+> only the public Convex client URL plus web-runtime secrets that its own routes require.)
+>
+> PREVIOUS:
+>
 > Last verified: 2026-08-07 (turbo env surface — **`globalPassThroughEnv` now carries
 > `CONVEX_LOCAL_BACKEND_STARTUP_TIMEOUT_SECS`.** DIFF-REVIEWED ONLY: the four gate commands were
 > NOT re-run in this pass, so 2026-08-04 remains the last date they were observed to exit 0. The
@@ -20,10 +41,13 @@ for a live deployment. Red blocks. Nobody has to remember to run anything.
 ## Key files
 
 - `.github/workflows/ci.yml` — the gate itself; the only workflow that verifies the codebase.
+- `.github/workflows/deploy-production.yml` — the protected promotion pipeline. It consumes the
+  exact SHA verified by `ci`, stages Vercel first, deploys/seeds Convex, and only then promotes the
+  web artifact to durable production domains.
 - `.github/workflows/skillopt.yml` — unrelated; the dormant skill optimizer (IMPR-02). Do not
   merge the two: it is schedule/dispatch-driven and gated on a kill switch.
-- `.github/workflows/fal-catalog.yml` — unrelated to the gate; a scheduled vendor-price/endpoint
-  drift **detector**, not a merge gate (plan 20-19). Needs no secrets. See its section below.
+- The retired `.github/workflows/fal-catalog.yml` monitored the former fal integration; Alibaba Wan
+  and OpenAI pricing is now pinned in `packages/cost/src/media.fixtures.json`.
 - `package.json` — `typecheck` / `lint` / `format` / `test` / `build` scripts. **CI runs these
   exact scripts**, so `pnpm lint` locally and `pnpm lint` in CI cannot disagree.
 - `turbo.json` — task graph; `typecheck` and `test` both `dependsOn: ["^build"]`.
@@ -142,7 +166,10 @@ happen"*, and it would report the same green if the optimizer were armed. Two co
   later steps run, that step must fail loudly. Fix (not yet applied — see gaps): drop `|| true`,
   or branch on the empty case explicitly and exit non-zero.
 
-## `fal-catalog.yml` — the scheduled detector (plan 20-19, 2026-08-02)
+## Retired: `fal-catalog.yml` (plan 20-19, 2026-08-02)
+
+> Retired 2026-08-13 with the fal provider migration. The section below is historical evidence,
+> not an active command or workflow.
 
 The repo's second workflow, and the first one written **after** the `skillopt.yml` lesson above —
 which is why it carries no `|| true`, no `continue-on-error` and no `if: always()`, and why a grep

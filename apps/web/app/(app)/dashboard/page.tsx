@@ -45,22 +45,14 @@ export default function Dashboard() {
     day: "numeric",
   });
 
-  // The one recommended move, honestly derived: no mailbox → connect it;
-  // otherwise the workspace is where work happens.
-  const nextMove =
-    gmail !== undefined && !gmail.connected
-      ? {
-          title: "Connect your mailbox",
-          body: "Pikar delivers through your Gmail. Connect it once to unlock planning and delivery.",
-          href: "/connect-gmail",
-          cta: "Connect Gmail",
-        }
-      : {
-          title: "Open your workspace",
-          body: "Tell Pikar the goal. It plans, you approve once, it delivers — every step audited.",
-          href: "/dashboard/workspace",
-          cta: "Open workspace",
-        };
+  // The operating workspace is always the next-move surface. Gmail remains visible below as the
+  // status of one optional execution channel, but never outranks the business work or blocks it.
+  const nextMove = {
+    title: "Open your operating workspace",
+    body: "Set the business outcome. Pikar reasons across your knowledge, shapes the work, and brings consequential actions back for approval.",
+    href: "/dashboard/workspace",
+    cta: "Open workspace",
+  };
 
   const count = (rows: unknown[] | undefined) => (rows === undefined ? "—" : String(rows.length));
 
@@ -93,7 +85,7 @@ export default function Dashboard() {
           icon={<ShieldIcon size={16} />}
         />
         <StatTile
-          label="Mailbox"
+          label="Email channel"
           value={gmail === undefined ? "—" : gmail.connected ? "Connected" : "Not connected"}
           icon={<MailIcon size={16} />}
           text

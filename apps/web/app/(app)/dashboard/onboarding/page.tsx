@@ -8,12 +8,45 @@ import {
   type ProfileInput,
   type SlotName,
 } from "@pikar/core";
+import { capMB, VAULT_FILE_CAP_BYTES, VAULT_VIDEO_CAP_BYTES } from "@pikar/vault/constants";
 import { useAction, useMutation, useQuery } from "convex/react";
 import type { FunctionArgs } from "convex/server";
 import { ConvexError } from "convex/values";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BrainIcon, MicIcon, PaperclipIcon, SendIcon } from "../../../(auth)/icons";
+import { FolderIcon } from "../vault/icons";
+import {
+  buildOnboardingFolderIntake,
+  isOnboardingTextFile,
+  onboardingFolderDisplayPath,
+  onboardingFolderMimeType,
+  selectOnboardingFolderFiles,
+} from "./onboardingFolder";
+
+const ONBOARDING_UPLOAD_ACCEPT = [
+  "image/*",
+  "application/pdf",
+  "audio/*",
+  "text/plain",
+  "text/markdown",
+  "text/csv",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ".txt",
+  ".md",
+  ".markdown",
+  ".csv",
+  ".docx",
+  ".xlsx",
+  ".pptx",
+].join(",");
+
+const ONBOARDING_DIRECTORY_INPUT_ATTRIBUTES = {
+  webkitdirectory: "",
+  directory: "",
+} as const;
 
 // ONBD-01/02 first-run onboarding — the forced-but-resumable gate's destination (layout.tsx redirects
 // here until a business_profile is committed). It reuses the cockpit's chat idiom (BRAND §5 — agent
@@ -200,12 +233,14 @@ export default function OnboardingPage() {
   const [waitMsg, setWaitMsg] = useState("");
   const [committing, setCommitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploadNote, setUploadNote] = useState<string | null>(null);
   const [gaps, setGaps] = useState<SlotName[] | null>(null);
   const [pendingDocId, setPendingDocId] = useState<VaultDocId | null>(null);
   const [recording, setRecording] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
@@ -360,29 +395,43 @@ export default function OnboardingPage() {
     })();
   }
 
+  async function storeVaultFile(blob: Blob, mimeType: string, filename: string, text?: string) {
+    if (mimeType.startsWith("video/")) {
+      if (blob.size > VAULT_VIDEO_CAP_BYTES)
+        throw new Error(`video exceeds ${capMB(VAULT_VIDEO_CAP_BYTES)}`);
+    } else if (blob.size > VAULT_FILE_CAP_BYTES) {
+      throw new Error(`file exceeds ${capMB(VAULT_FILE_CAP_BYTES)}`);
+    }
+    const buf = await blob.arrayBuffer();
+    const contentHash = await sha256(buf);
+    const url = await generateUploadUrl();
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": mimeType },
+      body: blob,
+    });
+    if (!res.ok) throw new Error("upload failed");
+    const { storageId } = (await res.json()) as { storageId: StorageId };
+    return await vaultUpload({
+      storageId,
+      filename,
+      mimeType,
+      size: blob.size,
+      contentHash,
+      ...(text === undefined ? {} : { text }),
+    });
+  }
+
   async function uploadAndWait(blob: Blob, mimeType: string, filename: string) {
     if (busy) return;
     setBusy(true);
     setError(null);
+    setUploadNote(null);
     setWaitMsg("Uploading…");
     try {
-      const buf = await blob.arrayBuffer();
-      const contentHash = await sha256(buf);
-      const url = await generateUploadUrl();
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": mimeType },
-        body: blob,
-      });
-      if (!res.ok) throw new Error("upload failed");
-      const { storageId } = (await res.json()) as { storageId: StorageId };
-      const { vaultDocId } = await vaultUpload({
-        storageId,
-        filename,
-        mimeType,
-        size: blob.size,
-        contentHash,
-      });
+      const searchableText =
+        blob instanceof File && isOnboardingTextFile(blob) ? await blob.text() : undefined;
+      const { vaultDocId } = await storeVaultFile(blob, mimeType, filename, searchableText);
       setWaitMsg("Reading your brief…");
       setPendingDocId(vaultDocId); // busy stays true — the poll effect clears it via openingTurn
     } catch {
@@ -394,7 +443,72 @@ export default function OnboardingPage() {
   function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (fileInputRef.current) fileInputRef.current.value = "";
-    if (file) void uploadAndWait(file, file.type || "application/octet-stream", file.name);
+    if (file) void uploadAndWait(file, onboardingFolderMimeType(file), file.name);
+  }
+
+  async function uploadFolder(selectedFiles: readonly File[]) {
+    if (busy || selectedFiles.length === 0) return;
+    const selected = selectOnboardingFolderFiles(selectedFiles);
+    if (selected.files.length === 0) {
+      setError("That folder has no supported business documents.");
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+    setUploadNote(null);
+    const intakeText = await buildOnboardingFolderIntake(selected.files);
+    let uploaded = 0;
+    let failed = 0;
+    let fallbackDocId: VaultDocId | null = null;
+
+    for (const [index, file] of selected.files.entries()) {
+      setWaitMsg(`Uploading ${index + 1} of ${selected.files.length} from your folder…`);
+      try {
+        const mimeType = onboardingFolderMimeType(file);
+        const searchableText = isOnboardingTextFile(file) ? await file.text() : undefined;
+        const result = await storeVaultFile(
+          file,
+          mimeType,
+          onboardingFolderDisplayPath(file),
+          searchableText,
+        );
+        fallbackDocId ??= result.vaultDocId;
+        uploaded += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+
+    if (uploaded === 0 || !fallbackDocId) {
+      setBusy(false);
+      setError("None of the documents in that folder could be uploaded. Please try again.");
+      return;
+    }
+
+    const skipped = selected.ignoredCount + failed;
+    setUploadNote(
+      `${uploaded} document${uploaded === 1 ? "" : "s"} added from the folder${
+        skipped > 0
+          ? `; ${skipped} unsupported or failed item${skipped === 1 ? " was" : "s were"} skipped`
+          : ""
+      }.`,
+    );
+
+    if (intakeText) {
+      setWaitMsg("Understanding the business folder…");
+      await openingTurn(intakeText);
+      return;
+    }
+
+    setWaitMsg("Reading the first business document…");
+    setPendingDocId(fallbackDocId);
+  }
+
+  function onPickFolder(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (folderInputRef.current) folderInputRef.current.value = "";
+    void uploadFolder(files);
   }
 
   async function toggleRecord() {
@@ -608,25 +722,40 @@ export default function OnboardingPage() {
             <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
               {!profile && (
                 <>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    // Extensions listed alongside the MIME types: Windows has no registry entry for
-                    // text/markdown, so a MIME-only accept hides .md files in the picker.
-                    accept="image/*,application/pdf,audio/*,text/plain,text/markdown,text/csv,.txt,.md,.markdown,.csv"
-                    aria-label="Upload a document"
-                    onChange={onPickFile}
-                    style={{ display: "none" }}
-                  />
-                  <button
-                    type="button"
-                    className="icon-btn"
-                    aria-label="Upload a document"
-                    title="Upload a document — a deck, a one-pager, notes"
-                    onClick={() => fileInputRef.current?.click()}
+                  <span
+                    className={`icon-btn onboarding-file-picker${busy ? " is-disabled" : ""}`}
+                    title="Upload one business brief"
                   >
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      // Keep extensions alongside MIME types: Windows does not consistently assign
+                      // Markdown or Office MIME types in its file picker.
+                      accept={ONBOARDING_UPLOAD_ACCEPT}
+                      aria-label="Upload one business brief"
+                      data-testid="onboarding-file-input"
+                      disabled={busy}
+                      onChange={onPickFile}
+                    />
                     <PaperclipIcon size={17} />
-                  </button>
+                  </span>
+                  <span
+                    className={`icon-btn onboarding-file-picker${busy ? " is-disabled" : ""}`}
+                    title="Upload a business folder"
+                  >
+                    <input
+                      {...ONBOARDING_DIRECTORY_INPUT_ATTRIBUTES}
+                      ref={folderInputRef}
+                      type="file"
+                      multiple
+                      accept={ONBOARDING_UPLOAD_ACCEPT}
+                      aria-label="Upload a business folder"
+                      data-testid="onboarding-folder-input"
+                      disabled={busy}
+                      onChange={onPickFolder}
+                    />
+                    <FolderIcon size={17} />
+                  </span>
                   <button
                     type="button"
                     className="icon-btn"
@@ -676,6 +805,17 @@ export default function OnboardingPage() {
               </button>
             </div>
           </div>
+          {!profile && (
+            <p style={{ color: "var(--ink-soft)", fontSize: "0.78rem", margin: 0 }}>
+              Upload one starter file or choose an unzipped business folder. Folder documents are
+              added to your Vault and used together to begin onboarding; ZIP files must be unzipped.
+            </p>
+          )}
+          {uploadNote && (
+            <p role="status" style={{ color: "var(--ink-soft)", fontSize: "0.82rem", margin: 0 }}>
+              {uploadNote}
+            </p>
+          )}
           {error && (
             <p role="alert" style={{ color: "#dc2626", fontSize: "0.85rem", margin: 0 }}>
               {error}

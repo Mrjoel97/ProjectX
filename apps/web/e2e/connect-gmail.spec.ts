@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-// Groundwork E2E (SC-prereq): the Connect-Gmail page and the cockpit gate both resolve to a
+// Groundwork E2E (SC-prereq): the optional Connect-Gmail page and the cockpit both resolve to a
 // BOUNDED state — no eternal spinner. This verifies the already-landed 18c8442 fix (the `(app)`
 // `<Authenticated>` gate) by observation; it does NOT re-touch layout.tsx's auth gate. Signed-in
 // via storageState (auth.setup.ts). Also covers the `gmailConnectUrl` residual flagged in
@@ -23,17 +23,15 @@ test("connect-gmail resolves to a bounded state (no eternal spinner)", async ({ 
   await expect(page.getByText("Preparing consent link…")).toHaveCount(0);
 });
 
-test("workspace gate resolves (no eternal spinner) — the 18c8442 fix", async ({ page }) => {
+test("workspace is usable without an upstream Gmail gate — the 18c8442 fix", async ({ page }) => {
   await page.goto("/dashboard/workspace");
 
-  // The shell renders regardless of mailbox state (both panes present).
+  // The operating shell and its composer render regardless of email-channel state.
   await expect(page.getByRole("heading", { name: "Pikar AI" })).toBeVisible();
-
-  // The composer gate resolves to EITHER the composer OR the Connect-Gmail CTA — never stuck loading.
-  await expect(
-    page
-      .getByPlaceholder("Describe your goal…")
-      .or(page.getByRole("link", { name: "Connect Gmail to start planning" })),
-  ).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByPlaceholder("What business outcome should we work on?")).toBeVisible({
+    timeout: 15_000,
+  });
+  // Connecting Gmail is never a prerequisite for planning or using non-email capabilities.
+  await expect(page.getByRole("link", { name: "Connect Gmail to start planning" })).toHaveCount(0);
   await expect(page.getByTestId("chat-pane").getByText("Loading…")).toHaveCount(0);
 });

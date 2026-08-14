@@ -17,7 +17,7 @@
  */
 import { parseAssemblySidecar } from "@pikar/core/assembly";
 import { buildCaptionLines, toAss } from "@pikar/core/captions";
-import { renderInputName } from "@pikar/core/render";
+import { isRenderableCardText, renderInputName } from "@pikar/core/render";
 import { v } from "convex/values";
 import { internal } from "./../_generated/api";
 import type { Doc, Id } from "./../_generated/dataModel";
@@ -39,26 +39,62 @@ export type RenderRefusal =
   | "route_rejected"
   | "sidecar_rejected_on_return";
 
+/**
+ * A deck row → the kind of picture the assembler builds for it, or `null` for a row it cannot.
+ *
+ * The two vocabularies are deliberately different and this is the ONE place they meet. The deck
+ * speaks about intent and money (`generated_video` is bought, `uploaded_video` is already owned);
+ * the script speaks about what it does with the bytes (both are a clip on disk). Collapsing them
+ * into one enum would make the price table and the ffmpeg branch the same decision, which is how a
+ * free scene ends up billed as a paid one.
+ *
+ * A BLOCK row (no `visual`) is a `video` — that is what every one of them was.
+ */
+function assemblerKindOf(shot: {
+  visual?: string;
+  overlay?: string;
+}): "video" | "image" | "card" | null {
+  switch (shot.visual) {
+    case undefined:
+    case "generated_video":
+    case "uploaded_video":
+      return "video";
+    case "animated_image":
+      return "image";
+    case "text_card":
+      return "card";
+    default:
+      return null; // a VisualKind this renderer does not ship — refuse, never guess
+  }
+}
+
 type RenderInputs = {
   planId: Id<"plans">;
-  blockCount: number;
-  clipSeconds: number;
+  /** The DECLARED reel length. The scenes must sum to it — asserted here, at the route, and again
+   *  inside the script, because each of the three is a cheaper failure than the one after it. */
+  targetSeconds: number;
+  scenes: Array<{ kind: "video" | "image" | "card"; seconds: number }>;
   inputs: Array<{ name: string; jobId: Id<"mediaJobs"> }>;
+  /** Text cards: drawn from the deck's own words, with no job and no bytes in storage. */
+  cards: Array<{ name: string; text: string }>;
 };
 
 /**
  * The batch's renderable inputs, or a refusal — never a partial set.
  *
- * **A reel is all-or-nothing.** A batch missing one clip does not render a shorter reel: the
- * assembler asserts `--blocks N` before any work precisely so a dropped block FAILS instead of
+ * **A reel is all-or-nothing.** A batch missing one input does not render a shorter reel: the
+ * assembler asserts the scene list before any work precisely so a dropped scene FAILS instead of
  * silently shipping a hole. Catching it here means the failure is free, rather than a $0.02
  * sandbox that hard-errors on a missing input.
  *
- * NOTE ON A DECK THAT CANNOT RENDER: `reserveJobInner` creates a video line only `if
- * (isPaidBlock(block))`, so a deck containing a TEXT or SCREEN REC block has a voice take and NO
- * clip for that index — and `assemble_final.sh` requires both. Such a deck is refused here as
- * `incomplete_blocks` rather than discovering it inside the VM. Making those blocks renderable
- * (a generated title card, say) is a scope decision for the canvas, not a patch here.
+ * **This reads the DECK, not just the jobs (20.2 wave 5).** On the block contract the jobs were a
+ * complete description of the reel — one clip per index, every clip the same length. On a scene
+ * timeline they are not: a `text_card` has no job at all, and a silent scene has no voice take. So
+ * the shape comes off `plans.shots` and the jobs are checked AGAINST it, index by index. Two rules
+ * follow, and both replace an unconditional demand that used to live here:
+ *   * a picture is required per scene, but WHICH one depends on the kind — and a card needs none;
+ *   * a voice take is required only where the deck declares a line. Demanding one everywhere is
+ *     what made a deck with a silent card unrenderable, which is the state wave 5 removes.
  */
 export const batchToRender = internalQuery({
   args: { tenantId: v.string(), batchId: v.string() },
@@ -72,8 +108,11 @@ export const batchToRender = internalQuery({
       .withIndex("by_batch", (q) => q.eq("tenantId", a.tenantId).eq("batchId", a.batchId))
       .collect();
 
-    // `stt` (captions, plan 20-17) sits at blockIndex -1 and is not an assembly input.
-    const renderable = rows.filter((r) => r.kind === "video" || r.kind === "tts");
+    // `stt` (captions, plan 20-17) sits at blockIndex -1 and is not an assembly input. `image` is
+    // (20.2 wave 5): an `animated_image` scene buys ONE still and the assembler pans across it.
+    const renderable = rows.filter(
+      (r) => r.kind === "video" || r.kind === "image" || r.kind === "tts",
+    );
     if (renderable.length === 0) return { ok: false, reason: "empty_batch" };
 
     const planId = renderable[0]?.planId;
@@ -86,33 +125,84 @@ export const batchToRender = internalQuery({
       return { ok: false, reason: "not_all_succeeded" };
     }
 
-    // Contiguous 0..N-1, with BOTH a clip and a voice take at every index.
-    const byIndex = new Map<number, { video?: Doc<"mediaJobs">; tts?: Doc<"mediaJobs"> }>();
+    // THE DECK is what says how long each scene is and what kind of picture it wants. It could be
+    // inferred from the job rows on the block contract — every index had a clip, every clip was
+    // the same length — and it cannot be on a scene one: a card has no job at all, so the jobs no
+    // longer describe the reel. Read the row.
+    const plan = await ctx.db.get(planId);
+    if (!plan || plan.tenantId !== a.tenantId || !plan.shots?.length) {
+      return { ok: false, reason: "incomplete_blocks" };
+    }
+    const deck = [...plan.shots].sort((l, r) => l.index - r.index);
+
+    const byIndex = new Map<
+      number,
+      { video?: Doc<"mediaJobs">; image?: Doc<"mediaJobs">; tts?: Doc<"mediaJobs"> }
+    >();
     for (const row of renderable) {
       const slot = byIndex.get(row.blockIndex) ?? {};
       if (row.kind === "video") slot.video = row;
+      else if (row.kind === "image") slot.image = row;
       else slot.tts = row;
       byIndex.set(row.blockIndex, slot);
     }
-    const blockCount = byIndex.size;
+
+    const scenes: RenderInputs["scenes"] = [];
     const inputs: RenderInputs["inputs"] = [];
-    for (let i = 0; i < blockCount; i++) {
+    const cards: RenderInputs["cards"] = [];
+    for (const [i, shot] of deck.entries()) {
+      if (shot.index !== i) return { ok: false, reason: "incomplete_blocks" }; // not contiguous
       const slot = byIndex.get(i);
-      if (!slot?.video || !slot.tts) return { ok: false, reason: "incomplete_blocks" };
-      // The filename mapping lives in ONE place (`@pikar/core/render`) so the clip and the voice
-      // take cannot be numbered by two different pieces of code and drift — 20-13's whole reason
-      // for dropping upstream's `--allow-mismatch` pair check.
-      inputs.push({ name: renderInputName("video", i), jobId: slot.video._id });
-      inputs.push({ name: renderInputName("tts", i), jobId: slot.tts._id });
+      const kind = assemblerKindOf(shot);
+      if (!kind) return { ok: false, reason: "incomplete_blocks" };
+      if (!Number.isInteger(shot.seconds) || shot.seconds < 1) {
+        return { ok: false, reason: "incomplete_blocks" };
+      }
+      scenes.push({ kind, seconds: shot.seconds });
+
+      // THE PICTURE. A `card` is drawn from text and has no job — which is the whole reason the
+      // `unrenderable_block` refusal at `media.reserveJobInner` could finally be narrowed. The
+      // other two must have LANDED bytes at their own index.
+      if (kind === "card") {
+        const text = (shot.overlay ?? "").trim();
+        if (!isRenderableCardText(text)) return { ok: false, reason: "incomplete_blocks" };
+        cards.push({ name: renderInputName("card", i), text });
+      } else if (kind === "image") {
+        if (!slot?.image) return { ok: false, reason: "incomplete_blocks" };
+        inputs.push({ name: renderInputName("image", i), jobId: slot.image._id });
+      } else {
+        if (!slot?.video) return { ok: false, reason: "incomplete_blocks" };
+        inputs.push({ name: renderInputName("video", i), jobId: slot.video._id });
+      }
+
+      // THE VOICE TAKE, and this is the half wave 4 changed: narration is OPTIONAL now, so a
+      // missing take is only a failure for a scene that declared a line. Demanding one at every
+      // index — which this did until wave 5 — refuses every deck containing a silent card, which
+      // is exactly the deck the rest of this wave exists to make renderable.
+      const wantsVoice = shot.narration.trim() !== "";
+      if (wantsVoice && !slot?.tts) return { ok: false, reason: "incomplete_blocks" };
+      if (wantsVoice && slot?.tts) {
+        // The filename mapping lives in ONE place (`@pikar/core/render`) so the picture and the
+        // voice take cannot be numbered by two different pieces of code and drift — 20-13's whole
+        // reason for dropping upstream's `--allow-mismatch` pair check.
+        inputs.push({ name: renderInputName("tts", i), jobId: slot.tts._id });
+      }
     }
 
-    // The window every block was PRICED at. Read off the row, not off a constant: the row is the
-    // record of what was reserved, and `--clip-seconds` must describe the clips that were bought.
-    const firstVideo = byIndex.get(0)?.video;
-    const clipSeconds = firstVideo?.spec.kind === "video" ? firstVideo.spec.seconds : Number.NaN;
-    if (!Number.isFinite(clipSeconds)) return { ok: false, reason: "incomplete_blocks" };
+    // A job at an index the deck does not have is a batch and a deck that disagree about what was
+    // bought. Refuse rather than render the shorter of the two.
+    for (const idx of byIndex.keys()) {
+      if (idx < 0 || idx >= deck.length) return { ok: false, reason: "incomplete_blocks" };
+    }
 
-    return { ok: true, value: { planId, blockCount, clipSeconds, inputs } };
+    // THE DECLARED LENGTH. A scene deck carries it on the row; a block deck's length is still the
+    // accident `shots.length × clipSeconds`, and computing it here is what lets the uniform
+    // contract keep rendering through the same path rather than a second one.
+    const summed = scenes.reduce((n, s) => n + s.seconds, 0);
+    const targetSeconds = plan.targetDurationSeconds ?? summed;
+    if (summed !== targetSeconds) return { ok: false, reason: "incomplete_blocks" };
+
+    return { ok: true, value: { planId, targetSeconds, scenes, inputs, cards } };
   },
 });
 
@@ -347,7 +437,7 @@ export const renderReel = internalAction({
 
     const batch = await ctx.runQuery(internal.render.renderReel.batchToRender, a);
     if (!batch.ok) return { ok: false, reason: batch.reason };
-    const { planId, blockCount, clipSeconds, inputs } = batch.value;
+    const { planId, targetSeconds, scenes, inputs, cards } = batch.value;
 
     await ctx.runMutation(internal.render.renderReel.markRendering, { planId });
 
@@ -376,14 +466,23 @@ export const renderReel = internalAction({
       // OPENAI_API_KEY, no Vercel credential, no tenantId, no fal URL, no `storage.getUrl` result,
       // no prompt and no narration. The job ids are opaque refs the runner appends to OUR OWN
       // blob origin — it is handed no URL to fetch at all.
+      //
+      // ONE THING CHANGED IN 20.2 WAVE 5, and it is stated rather than buried: a text card's WORDS
+      // now cross. They have to — a card is drawn, so there is no job, no asset and no storage id
+      // to hand over instead, and the alternative was minting a storage object per card to carry
+      // forty characters. It is deck content, so it is bounded on both sides
+      // (`isRenderableCardText`) and it is never logged, never audited and never echoed in a
+      // failure. Narration and prompts still do NOT cross; a card's overlay is the only exception,
+      // and adding a second one is a decision, not a patch.
       const response = await fetch(routeUrl, {
         method: "POST",
         headers: { Authorization: `Bearer ${secret}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           renderId: a.batchId,
-          blockCount,
-          clipSeconds,
+          targetSeconds,
+          scenes,
           inputs: inputs.map((i) => ({ name: i.name, jobId: i.jobId })),
+          cards,
           uploadUrls,
         }),
       }).catch(() => null);
@@ -436,13 +535,13 @@ export const renderReel = internalAction({
         renderStorageId: outcome.mp4StorageId as Id<"_storage">,
         sidecarStorageId,
         sidecarHash: await contentHash(raw),
-        blockCount: reparsed.value.blockCount,
+        blockCount: reparsed.value.sceneCount,
         renderMs: outcome.renderMs,
         gatesPassed: reparsed.value.gates.length,
         // From the RE-VALIDATED parse, never from what the route claimed.
         summary: {
           durationS: reparsed.value.totalDurationS,
-          blockCount: reparsed.value.blockCount,
+          blockCount: reparsed.value.sceneCount,
           gates: [...reparsed.value.gates],
         },
       },

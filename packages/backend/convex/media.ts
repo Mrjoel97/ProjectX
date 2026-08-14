@@ -2,8 +2,8 @@
  * The media JOB reservation (MEDIA-01, D10) — the ONE money gate for Phase 20.
  *
  * A per-request cap bounds NOTHING when a reel is N clips PLUS N voice takes PLUS an STT pass PLUS
- * a render: six 480p x 10 s clips are six passing $0.50 requests and one $3.00 job. So the whole
- * JOB is estimated, capped and RESERVED in ONE serializable transaction, before a single fal
+ * a render: six 720p x 4 s Sora clips are six passing $0.40 requests and one $2.40 visual job. So
+ * the whole JOB is estimated, capped and RESERVED in ONE serializable transaction, before a single
  * request exists.
  *
  * **This is the one place media DIVERGES from the LLM rail, deliberately.**
@@ -13,7 +13,7 @@
  * window that had room for one. 20-PROVIDER-EVAL.md §4: *an LLM overshoot is cents, a media
  * overshoot is dollars.*
  *
- * Default runtime — NOT "use node". This module touches ctx.db; the later fal calls need only
+ * Default runtime — NOT "use node". This module touches ctx.db; the provider calls need only
  * `fetch`, and `smoke.ts:234` records that a regular action already has `ctx.storage.store`.
  *
  * internalMutation from ./_generated/server is NOT banned by the import guard (the telemetry.ts
@@ -21,14 +21,14 @@
  * wrappers (CLAUDE.md §2).
  */
 import { concatWavTakes } from "@pikar/core/captions";
-import type { Block, ShotType } from "@pikar/core/storyboard";
+import type { Block, Scene, ShotType, VisualKind } from "@pikar/core/storyboard";
 import {
-  CLIP_SECONDS,
   isPaidBlock,
   MAX_CHARS_PER_BLOCK,
   maxCharsFor,
   minCharsFor,
   SHOT_TYPES,
+  VISUAL_KINDS,
 } from "@pikar/core/storyboard";
 import type { MediaSpec } from "@pikar/cost/media";
 import {
@@ -39,6 +39,7 @@ import {
   MEDIA_DEFAULT_VIDEO,
   MEDIA_DEFAULT_VOICE,
   MEDIA_JOB_CAP_USD,
+  MEDIA_VIDEO_SECONDS,
 } from "@pikar/cost/media";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
@@ -60,6 +61,13 @@ export type ReserveRefusal =
   | "over_job_cap"
   | "illegal_duration"
   | "unrenderable_block"
+  /** 20.2 — a SCENE deck reached the money gate before the assembler could build one. A scene
+   *  timeline needs per-scene durations, a drawtext card branch, a pan/zoom branch and a master
+   *  audio track; waves 3 and 4 add them. Until then this refusal is the ONLY correct answer, and
+   *  it is deliberately at the money gate rather than earlier: the deck is a perfectly good
+   *  proposal to read, edit and reorder — it just cannot be bought yet. Delete this member when
+   *  wave 4 lands; leaving it behind would be a refusal nothing can trigger. */
+  | "scene_render_not_ready"
   | "narration_too_long"
   | "narration_too_short"
   | "media_daily_exhausted"
@@ -77,7 +85,21 @@ type ProviderLine = {
   row: Omit<Doc<"mediaJobs">, "_id" | "_creationTime">;
 };
 
-const CLIP_SECONDS_SET = new Set<number>(CLIP_SECONDS);
+/**
+ * Can the PINNED video model actually produce a block of this length?
+ *
+ * NOT `CLIP_SECONDS`. That constant is the DISPLAY set — deliberately wide ([4,5,8,10,12]) so a
+ * deck proposed under an older provider still renders on the canvas. What may be BOUGHT is
+ * whatever the model this code is about to submit to supports, which after the OpenAI cutover is
+ * `MEDIA_VIDEO_SECONDS["sora-2"]` = [4,8,12].
+ *
+ * The two drifted apart at the cutover and nothing noticed, because a 10-second deck still failed
+ * — just three checks later, inside `estimateMediaUsd`, with the same code. ONE predicate, asked of
+ * the provider table rather than of a constant, is what stops that recurring the next time the
+ * pinned model changes.
+ */
+const isBuyableClipLength = (seconds: number): boolean =>
+  MEDIA_VIDEO_SECONDS[MEDIA_DEFAULT_VIDEO.model]?.includes(seconds) ?? false;
 const standaloneImageSpec = (): Extract<MediaSpec, { kind: "image" }> => ({
   kind: "image",
   model: MEDIA_DEFAULT_IMAGE.model,
@@ -190,9 +212,19 @@ export async function reserveJobInner(
   const cfg = await getGuardrailConfig(ctx);
   if (cfg.killSwitch || cfg.mediaKillSwitch) return { ok: false, reason: "kill_switch" };
 
-  // 2. A block length nobody prices. `chooseMediaBatch` would catch it too, but checking here means
-  //    the narration band below is computed against a LEGAL window rather than a nonsense one.
-  if (!CLIP_SECONDS_SET.has(a.clipSeconds)) return { ok: false, reason: "illegal_duration" };
+  // 2. A block length THE PINNED MODEL cannot produce.
+  //
+  //    This checked `CLIP_SECONDS` until 20.2 found the hole, and the hole was real rather than
+  //    theoretical: `CLIP_SECONDS` is [4,5,8,10,12] — deliberately WIDE, so a historical Wan deck
+  //    still DISPLAYS — while `MEDIA_VIDEO_SECONDS["sora-2"]` is [4,8,12]. After the OpenAI
+  //    cutover a 10-second deck therefore parsed free, cleared THIS check, and was refused deeper
+  //    in by `estimateMediaUsd` with the same `illegal_duration` code. Same outcome, wrong place,
+  //    and it made `cockpit.test.ts` red for a reason that read like a pricing bug.
+  //
+  //    A display set and a purchasable set are different questions. This is the money gate, so it
+  //    asks the second one — of the model it is actually about to submit to, never of a constant
+  //    that has to be remembered when the provider changes.
+  if (!isBuyableClipLength(a.clipSeconds)) return { ok: false, reason: "illegal_duration" };
 
   // 3. THE FREE PRE-FLIGHT GUARD, before anything else costs a thought.
   //    A narration line has a BAND, not a ceiling, and the band travels with the block length
@@ -239,9 +271,8 @@ export async function reserveJobInner(
   const lines: ProviderLine[] = [];
 
   for (const block of a.blocks) {
-    // One video line per PAID block. `model` and `resolution` are PINNED from MEDIA_DEFAULT_VIDEO
-    // and never left for fal to default — Wan 2.5 defaults to 1080p, so an estimate computed at
-    // 480p against a submit that omitted the resolution under-reports by 3x.
+    // One video line per PAID block. Model, resolution and duration are pinned from the same
+    // OpenAI-backed spec that the cost rail prices; no provider default can change the invoice.
     if (isPaidBlock(block)) {
       const spec: MediaSpec = {
         kind: "video",
@@ -256,7 +287,7 @@ export async function reserveJobInner(
         estUsd: priced.value,
         row: {
           ...base,
-          provider: "wan",
+          provider: "openai",
           blockIndex: block.index,
           kind: "video",
           model: MEDIA_DEFAULT_VIDEO.model,
@@ -365,7 +396,7 @@ export async function reserveImageInner(
       tenantId: a.tenantId,
       planId: a.planId,
       batchId,
-      provider: "wan",
+      provider: "openai",
       blockIndex: 0,
       kind: "image",
       model: MEDIA_DEFAULT_IMAGE.model,
@@ -572,8 +603,9 @@ export const listJobs = internalQuery({
 
 // ── Media provider adapters ────────────────────────────────────────────────────────────
 //
-// Submit reserved visual lines to Alibaba Wan's asynchronous API and audio lines to OpenAI. Wan
-// task polling stores provider results in Convex immediately because the returned URLs expire.
+// Submit new visual and audio lines to OpenAI. GPT Image 2 returns image bytes synchronously;
+// Sora returns a video id, so clips are polled and copied into Convex storage before their rows land.
+// The legacy Wan poller remains only for tasks submitted before the provider cutover.
 
 /** The `gmailAuth.requireEnv` idiom with a media-worded message. Provider credentials are Convex
  *  deployment env vars (`npx convex env set`), never client-visible variables. */
@@ -614,23 +646,18 @@ export function buildSubmitBody(spec: SubmittableSpec, text: string): Record<str
     case "video":
       return {
         model: spec.model,
-        input: { prompt: text },
-        parameters: {
-          size: { "480p": "832*480", "720p": "1280*720", "1080p": "1920*1080" }[spec.resolution],
-          duration: spec.seconds,
-          prompt_extend: false,
-        },
+        prompt: text,
+        seconds: String(spec.seconds),
+        size: { "480p": "480x854", "720p": "720x1280", "1080p": "1080x1920" }[spec.resolution],
       };
     case "image":
       return {
         model: spec.model,
-        input: { prompt: text },
-        parameters: {
-          size: `${spec.width}*${spec.height}`,
-          n: 1,
-          prompt_extend: false,
-          watermark: false,
-        },
+        prompt: text,
+        n: 1,
+        size: `${spec.width}x${spec.height}`,
+        quality: "low",
+        output_format: "png",
       };
     case "tts":
       return {
@@ -669,7 +696,7 @@ async function providerReasonCode(response: Response): Promise<string> {
 /** `blocked` is the 422 arm — a non-retryable input refusal, which is a `provider_blocked` VERDICT
  *  on the row rather than a failure. Everything else is a plain failure the retrier may re-run. */
 export type SubmitResult =
-  | { ok: true; requestId: string }
+  | { ok: true; requestId: string; asset?: { bytes: Uint8Array<ArrayBuffer>; mimeType: string } }
   | { ok: false; code: string; blocked: boolean };
 
 type VisualSpec = Extract<SubmittableSpec, { kind: "video" | "image" }>;
@@ -683,34 +710,51 @@ function wanBaseUrl(): string {
   return url.origin;
 }
 
-/** Submit one visual line to Alibaba Model Studio's asynchronous Wan API. */
+function decodeBase64(value: string): Uint8Array<ArrayBuffer> {
+  const binary = atob(value);
+  const buffer = new ArrayBuffer(binary.length);
+  const bytes = new Uint8Array(buffer);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+/** Submit one new visual line to OpenAI. Images return their bytes synchronously; Sora returns an
+ *  asynchronous video id which `pollOpenAiVideoTask` owns. */
 export async function submitLine(
   spec: VisualSpec,
   text: string,
   _webhookUrl?: string,
 ): Promise<SubmitResult> {
-  const key = requireEnvMedia("Video_and_image_API_Key");
-  const baseUrl = wanBaseUrl();
+  const key = requireEnvMedia("OPENAI_API_KEY");
 
   if (process.env.MEDIA_PROVIDER_FIXTURE || process.env.FAL_FIXTURE) {
-    return { ok: true, requestId: `fixture-${crypto.randomUUID()}` };
+    return spec.kind === "image"
+      ? {
+          ok: true,
+          requestId: `fixture-${crypto.randomUUID()}`,
+          asset: { bytes: new Uint8Array(new ArrayBuffer(16)), mimeType: "image/png" },
+        }
+      : { ok: true, requestId: `fixture-${crypto.randomUUID()}` };
   }
 
   let response: Response;
   try {
-    const path =
-      spec.kind === "video"
-        ? "/api/v1/services/aigc/video-generation/video-synthesis"
-        : "/api/v1/services/aigc/text2image/image-synthesis";
-    response = await fetch(`${baseUrl}${path}`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${key}`,
-        "Content-Type": "application/json",
-        "X-DashScope-Async": "enable",
-      },
-      body: JSON.stringify(buildSubmitBody(spec, text)),
-    });
+    const body = buildSubmitBody(spec, text);
+    if (spec.kind === "video") {
+      const form = new FormData();
+      for (const [name, value] of Object.entries(body)) form.append(name, String(value));
+      response = await fetch("https://api.openai.com/v1/videos", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${key}` },
+        body: form,
+      });
+    } else {
+      response = await fetch("https://api.openai.com/v1/images/generations", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    }
   } catch {
     // The thrown error's message can carry the URL — and therefore the webhook's HMAC segment. A
     // code only; the exception itself is dropped on the floor.
@@ -726,13 +770,25 @@ export async function submitLine(
   }
 
   const body = (await response.json().catch(() => null)) as {
-    output?: { task_id?: unknown };
+    id?: unknown;
+    data?: Array<{ b64_json?: unknown }>;
   } | null;
-  const requestId = body?.output?.task_id;
+  if (spec.kind === "image") {
+    const encoded = body?.data?.[0]?.b64_json;
+    if (typeof encoded !== "string" || encoded.length === 0) {
+      return { ok: false, code: "asset_missing", blocked: false };
+    }
+    return {
+      ok: true,
+      requestId: response.headers.get("x-request-id") ?? `openai-${crypto.randomUUID()}`,
+      asset: { bytes: decodeBase64(encoded), mimeType: "image/png" },
+    };
+  }
+  const requestId = body?.id;
   if (typeof requestId !== "string" || requestId.length === 0) {
     return { ok: false, code: "no_request_id", blocked: false };
   }
-  // Returns holding a queue ticket; `pollWanTask` owns the later status requests.
+  // Returns holding a queue ticket; `pollOpenAiVideoTask` owns the later status requests.
   return { ok: true, requestId };
 }
 
@@ -1078,6 +1134,103 @@ export const pollWanTask = internalAction({
   },
 });
 
+/** Poll one OpenAI Sora job and copy the completed MP4 into tenant storage. The content endpoint
+ *  is called immediately after completion because provider-side job assets are not our durable
+ *  workspace artifact. */
+export const pollOpenAiVideoTask = internalAction({
+  args: { jobId: v.id("mediaJobs"), videoId: v.string(), attempt: v.number() },
+  handler: async (ctx, a): Promise<null> => {
+    const key = requireEnvMedia("OPENAI_API_KEY");
+    const row = await ctx.runQuery(internal.media.jobForPoll, { jobId: a.jobId });
+    if (!row || row.status !== "submitted" || row.spec.kind !== "video") return null;
+
+    let response: Response;
+    try {
+      response = await fetch(`https://api.openai.com/v1/videos/${encodeURIComponent(a.videoId)}`, {
+        headers: { Authorization: `Bearer ${key}` },
+      });
+    } catch {
+      if (a.attempt < 180) {
+        await ctx.scheduler.runAfter(10_000, internal.media.pollOpenAiVideoTask, {
+          ...a,
+          attempt: a.attempt + 1,
+        });
+        return null;
+      }
+      await ctx.runMutation(internal.mediaComplete.landResult, {
+        jobId: a.jobId,
+        outcome: { ok: false, code: "poll_transport_error" },
+      });
+      return null;
+    }
+    if (!response.ok) {
+      await ctx.runMutation(internal.mediaComplete.landResult, {
+        jobId: a.jobId,
+        outcome: { ok: false, code: await providerReasonCode(response) },
+      });
+      return null;
+    }
+    const body = (await response.json().catch(() => null)) as {
+      status?: unknown;
+      error?: { code?: unknown };
+    } | null;
+    const status = body?.status;
+    if (status === "queued" || status === "in_progress") {
+      if (a.attempt >= 180) {
+        await ctx.runMutation(internal.mediaComplete.landResult, {
+          jobId: a.jobId,
+          outcome: { ok: false, code: "poll_timeout" },
+        });
+      } else {
+        await ctx.scheduler.runAfter(10_000, internal.media.pollOpenAiVideoTask, {
+          ...a,
+          attempt: a.attempt + 1,
+        });
+      }
+      return null;
+    }
+    if (status !== "completed") {
+      const candidate = body?.error?.code;
+      const code =
+        typeof candidate === "string" && SAFE_CODE.test(candidate) ? candidate : "provider_failed";
+      await ctx.runMutation(internal.mediaComplete.landResult, {
+        jobId: a.jobId,
+        outcome: { ok: false, code },
+      });
+      return null;
+    }
+
+    let asset: Response;
+    try {
+      asset = await fetch(
+        `https://api.openai.com/v1/videos/${encodeURIComponent(a.videoId)}/content`,
+        { headers: { Authorization: `Bearer ${key}` } },
+      );
+    } catch {
+      await ctx.runMutation(internal.mediaComplete.landResult, {
+        jobId: a.jobId,
+        outcome: { ok: false, code: "asset_transport_error" },
+      });
+      return null;
+    }
+    if (!asset.ok) {
+      await ctx.runMutation(internal.mediaComplete.landResult, {
+        jobId: a.jobId,
+        outcome: { ok: false, code: `asset_http_${asset.status}` },
+      });
+      return null;
+    }
+    await storeAndLand(
+      ctx,
+      a.jobId,
+      new Uint8Array(await asset.arrayBuffer()),
+      asset.headers.get("content-type") ?? "video/mp4",
+      { resolution: row.spec.resolution, seconds: row.spec.seconds },
+    );
+    return null;
+  },
+});
+
 /**
  * Submit a whole reserved batch. Idempotent per line, and it NEVER waits.
  *
@@ -1154,11 +1307,26 @@ export const submitBatch = internalAction({
         jobId: line.jobId,
         result: { ok: true, providerRequestId: res.requestId },
       });
-      await ctx.scheduler.runAfter(10_000, internal.media.pollWanTask, {
-        jobId: line.jobId,
-        taskId: res.requestId,
-        attempt: 0,
-      });
+      if (spec.kind === "image") {
+        if (!res.asset) {
+          await ctx.runMutation(internal.mediaComplete.landResult, {
+            jobId: line.jobId,
+            outcome: { ok: false, code: "asset_missing" },
+          });
+          tally.failed += 1;
+          continue;
+        }
+        await storeAndLand(ctx, line.jobId, res.asset.bytes, res.asset.mimeType, {
+          width: spec.width,
+          height: spec.height,
+        });
+      } else {
+        await ctx.scheduler.runAfter(10_000, internal.media.pollOpenAiVideoTask, {
+          jobId: line.jobId,
+          videoId: res.requestId,
+          attempt: 0,
+        });
+      }
       tally.submitted += 1;
     }
     return tally;
@@ -1398,11 +1566,65 @@ async function clearRender(ctx: MutationCtx, planId: Id<"plans">): Promise<void>
 
 /** The deck as `reserveJobInner` wants it, or null when the plan carries nothing reservable. The
  *  `cockpit.ts:668` boundary check verbatim — a money gate does not assume its writer was correct. */
-function deckOf(plan: Doc<"plans">): readonly Block[] | null {
+export function deckOf(plan: Doc<"plans">): readonly Block[] | null {
   const shots = plan.shots ?? [];
   if (shots.length === 0 || plan.clipSeconds === undefined) return null;
-  if (!shots.every((s) => (SHOT_TYPES as readonly string[]).includes(s.type))) return null;
-  return shots.map((s) => ({ ...s, type: s.type as ShotType }));
+  // 20.2: `type` is now optional on the row, and a SCENE row does not write it. That absence is
+  // load-bearing rather than incidental — it is what stops a scene deck being read here as a block
+  // deck and priced at a uniform `clipSeconds` it was never written against. Fail closed.
+  if (
+    !shots.every((s) => s.type !== undefined && (SHOT_TYPES as readonly string[]).includes(s.type))
+  )
+    return null;
+  return shots.map((s) => ({
+    index: s.index,
+    type: s.type as ShotType,
+    seconds: s.seconds,
+    windowStartMs: s.windowStartMs,
+    description: s.description,
+    ...(s.overlay === undefined ? {} : { overlay: s.overlay }),
+    prompt: s.prompt,
+    narration: s.narration,
+  }));
+}
+
+/**
+ * The scene deck as `Scene[]`, or null (20.2).
+ *
+ * `deckOf`'s twin, and the two are MUTUALLY EXCLUSIVE by construction: a row carries `type` or
+ * `visual`, never both, so exactly one of these functions can return non-null for a given plan.
+ * That is why neither needs to know about the other.
+ *
+ * `startMs` and `durationMs` are read straight off `windowStartMs` and `seconds` rather than
+ * re-derived from an index — those two columns ARE the timeline, and re-deriving them is the
+ * uniform-grid assumption this phase exists to remove.
+ */
+export function sceneDeckOf(
+  plan: Doc<"plans">,
+): { targetDurationSeconds: number; scenes: Scene[] } | null {
+  const shots = plan.shots ?? [];
+  if (shots.length === 0 || plan.targetDurationSeconds === undefined) return null;
+  if (
+    !shots.every(
+      (s) => s.visual !== undefined && (VISUAL_KINDS as readonly string[]).includes(s.visual),
+    )
+  ) {
+    return null;
+  }
+  return {
+    targetDurationSeconds: plan.targetDurationSeconds,
+    scenes: shots.map((s) => ({
+      index: s.index,
+      startMs: s.windowStartMs,
+      durationMs: s.seconds * 1000,
+      visual: s.visual as VisualKind,
+      ...(s.asset === undefined ? {} : { asset: s.asset }),
+      description: s.description,
+      narration: s.narration,
+      ...(s.overlay === undefined ? {} : { overlay: s.overlay }),
+      prompt: s.prompt,
+    })),
+  };
 }
 
 /** One `mediaJobs` row reduced to what a tile shows. NO url — that is `assetUrls`' job alone. */
@@ -1454,7 +1676,12 @@ export const byPlan = tenantQuery({
       const mine = rows.filter((r) => r.blockIndex === shot.index);
       return {
         blockIndex: shot.index,
-        type: shot.type,
+        // DISPLAY ONLY, and the one place the two closed sets are allowed to meet. A block row
+        // carries `type`, a 20.2 scene row carries `visual`, and a tile has to label whichever it
+        // was handed. Collapsing them is safe HERE precisely because it is safe nowhere else:
+        // `deckOf` keeps them apart on the money path, where reading a scene as a block would
+        // price it at the wrong duration. This is a projection for a caption.
+        type: shot.type ?? shot.visual ?? "",
         description: shot.description,
         overlay: shot.overlay ?? null,
         prompt: shot.prompt,
@@ -1595,13 +1822,20 @@ export const jobEstimate = tenantQuery({
 
     const plan = await ownedPlan(ctx, planId, ctx.tenantId);
     if (!plan) return empty;
+    // 20.2 — the scene gate, FIRST and in the same order as the two money gates. Without it a
+    // scene deck falls through to `empty` and the canvas renders a silent $0 estimate with no
+    // refusal: a Generate button that is disabled for a reason nothing on screen states. The whole
+    // point of this query is to name the lever BEFORE the button is pressed.
+    if (sceneDeckOf(plan) !== null) {
+      return { ...empty, refusal: { reason: "scene_render_not_ready" as const } };
+    }
     const blocks = deckOf(plan);
     const clipSeconds = plan.clipSeconds;
     if (!blocks || clipSeconds === undefined) return empty;
 
     // The SAME pre-flight refusals `reserveJobInner` applies, in the same order, so the canvas can
     // name the lever BEFORE the button is pressed rather than after.
-    if (!CLIP_SECONDS_SET.has(clipSeconds)) {
+    if (!isBuyableClipLength(clipSeconds)) {
       return { ...empty, refusal: { reason: "illegal_duration" } };
     }
     for (const b of blocks) {
@@ -1775,6 +2009,12 @@ export const generateReel = tenantMutation({
   args: { planId: v.id("plans") },
   handler: async (ctx, { planId }) => {
     const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
+    // 20.2 — THE SCENE GATE, and it is deliberately the FIRST thing here. A scene deck reaching
+    // `deckOf` returns null and would refuse as `no_deck`, which is a lie: the deck parsed, it is
+    // on screen, and the user can read it. The honest refusal names what is actually missing.
+    if (sceneDeckOf(plan) !== null) {
+      return { ok: false as const, reason: "scene_render_not_ready" as const };
+    }
     const blocks = deckOf(plan);
     if (!blocks || plan.clipSeconds === undefined) return { ok: false as const, reason: "no_deck" };
     return await reserveAndSchedule(ctx, {
@@ -1855,18 +2095,32 @@ export const regenerateBlock = tenantMutation({
 // one shared helper: a reel assembled from a different block order — or from a line that has since
 // been rewritten — is not the reel on screen.
 
-/** Patch one element of `plans.shots`, renumber, and clear the render. The single write path the
- *  five editor mutations share. */
+/**
+ * Patch one element of `plans.shots`, renumber, and clear the render. The single write path the
+ * five editor mutations share.
+ *
+ * **20.2 — the offsets are a RUNNING SUM of each shot's own length, not `index × clipSeconds`.**
+ * The old arithmetic read the deck-wide `clipSeconds`, which is only the truth when every shot is
+ * the same length; on a scene deck a reorder or a delete would have rewritten every offset to a
+ * uniform grid the shots were never cut to, silently desynchronising the whole timeline from the
+ * narration anchors. The new form is identical for a uniform deck by construction — `seconds` is
+ * `clipSeconds` on every block row — so this is a generalisation, not a behaviour change, and the
+ * block-contract tests pin that.
+ *
+ * The `plan` argument is gone with the arithmetic that needed it.
+ */
 async function patchShots(
   ctx: MutationCtx,
   planId: Id<"plans">,
-  plan: Doc<"plans">,
   next: NonNullable<Doc<"plans">["shots"]>,
 ): Promise<void> {
-  const clipMs = (plan.clipSeconds ?? 0) * 1000;
-  await ctx.db.patch(planId, {
-    shots: next.map((s, i) => ({ ...s, index: i, windowStartMs: i * clipMs })),
+  let startMs = 0;
+  const renumbered = next.map((s, i) => {
+    const shot = { ...s, index: i, windowStartMs: startMs };
+    startMs += s.seconds * 1000;
+    return shot;
   });
+  await ctx.db.patch(planId, { shots: renumbered });
   await clearRender(ctx, planId);
 }
 
@@ -1880,7 +2134,6 @@ export const editBlockPrompt = tenantMutation({
     await patchShots(
       ctx,
       planId,
-      plan,
       shots.map((s) => (s.index === blockIndex ? { ...s, prompt } : s)),
     );
     return { ok: true as const };
@@ -1918,7 +2171,6 @@ export const editBlockNarration = tenantMutation({
     await patchShots(
       ctx,
       planId,
-      plan,
       shots.map((s) => (s.index === blockIndex ? { ...s, narration } : s)),
     );
     return { ok: true as const };
@@ -1954,7 +2206,7 @@ export const reorderBlocks = tenantMutation({
 
     const byIndex = new Map(shots.map((s) => [s.index, s]));
     const next = order.map((i) => byIndex.get(i)).filter((s) => s !== undefined);
-    await patchShots(ctx, planId, plan, next);
+    await patchShots(ctx, planId, next);
     return { ok: true as const };
   },
 });
@@ -1970,7 +2222,6 @@ export const deleteBlock = tenantMutation({
     await patchShots(
       ctx,
       planId,
-      plan,
       shots.filter((s) => s.index !== blockIndex),
     );
     return { ok: true as const };

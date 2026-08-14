@@ -34,12 +34,10 @@ import { expect, type Page, test } from "@playwright/test";
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 //
 // Runs signed-in (storageState from auth.setup.ts) against the ALREADY-RUNNING local stack
-// (`convex dev` NOT --once + `next dev` :3111 — see e2e/README.md). Like every cockpit spec it
-// assumes the harness user has a Gmail token row: the workspace hides the composer behind
-// `gmailAuth.status.connected`. That gate — plus the absent E2E_USER_EMAIL/E2E_USER_PASSWORD —
-// is why `cockpit-briefing.spec.ts` has never run (03.7-04 / 03.7-UAT "Still blocked"). Do not
-// weaken the gate to make this pass; run it in a live human-verify session, which has a
-// connected user by construction.
+// (`convex dev` NOT --once + `next dev` :3111 — see e2e/README.md). The composer is a general
+// business capability and is available without Gmail. This particular sentinel uses the offline
+// inbox fixture, which is checked before any provider-token boundary and therefore needs no real
+// Gmail connection or traffic.
 
 const backendDir = resolve(dirname(fileURLToPath(import.meta.url)), "../../../packages/backend");
 const convexBin = resolve(backendDir, "node_modules/convex/bin/main.js");
@@ -111,7 +109,7 @@ test("SMOKE brief=today → LATEST TRACE renders step rows on both surfaces, car
 }) => {
   await page.goto("/dashboard/workspace");
 
-  const composer = page.getByPlaceholder("Describe your goal…");
+  const composer = page.getByPlaceholder("What business outcome should we work on?");
   await expect(composer).toBeVisible({ timeout: 15_000 });
 
   // Seed the fixture mailbox for THIS session's tenant so briefInbox completes offline and its

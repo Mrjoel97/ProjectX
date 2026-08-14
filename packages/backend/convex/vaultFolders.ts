@@ -57,6 +57,7 @@ type FolderView = {
   _id: Id<"vaultFolders">;
   name: string;
   source: "upload" | "drive";
+  organizational?: boolean;
   status: "reserving" | "ingesting" | "complete" | "refused";
   memberCount: number;
   terminalCount: number;
@@ -71,6 +72,7 @@ const projectFolder = (f: Doc<"vaultFolders">): FolderView => ({
   _id: f._id,
   name: f.name,
   source: f.source,
+  organizational: f.organizational,
   status: f.status,
   memberCount: f.memberCount,
   terminalCount: f.terminalCount,
@@ -103,6 +105,83 @@ export const createFolder = tenantMutation({
       createdAt: Date.now(),
     });
     return { folderId };
+  },
+});
+
+/** Create an empty filing folder. It is complete from birth: no upload manifest, reservation,
+ * extraction fan-out, or digest belongs to a folder whose only job is organization. */
+export const createOrganizationalFolder = tenantMutation({
+  args: { name: v.string() },
+  handler: async (ctx, { name }): Promise<{ folderId: Id<"vaultFolders"> }> => {
+    const clean = name.trim().slice(0, 200);
+    if (!clean) throw new Error("vaultFolders: folder name required");
+    const folderId = await ctx.db.insert("vaultFolders", {
+      tenantId: ctx.tenantId,
+      name: clean,
+      source: "upload",
+      organizational: true,
+      status: "complete",
+      memberCount: 0,
+      terminalCount: 0,
+      failedCount: 0,
+      reservedCents: 0,
+      spentCents: 0,
+      createdAt: Date.now(),
+    });
+    return { folderId };
+  },
+});
+
+/** Move a bounded selection of ordinary files into a user-created filing folder. Ingestion
+ * folders are deliberately immutable here: their counters, reservation and digest describe the
+ * upload batch and cannot be rewritten by an organizational action. */
+export const moveDocuments = tenantMutation({
+  args: { folderId: v.id("vaultFolders"), docIds: v.array(v.id("vaultDocuments")) },
+  handler: async (ctx, { folderId, docIds }): Promise<{ moved: number; skipped: number }> => {
+    if (docIds.length === 0 || docIds.length > 25) {
+      throw new Error("vaultFolders: select between 1 and 25 documents per move");
+    }
+    const target = await ctx.db.get(folderId);
+    if (!target || target.tenantId !== ctx.tenantId || target.organizational !== true) {
+      throw new Error("vaultFolders: destination not found");
+    }
+
+    const unique = [...new Set(docIds)];
+    const oldCounts = new Map<Id<"vaultFolders">, number>();
+    let moved = 0;
+    for (const docId of unique) {
+      const doc = await ctx.db.get(docId);
+      if (!doc || doc.tenantId !== ctx.tenantId || doc.folderId === folderId) continue;
+
+      if (doc.folderId) {
+        const current = await ctx.db.get(doc.folderId);
+        // Missing means a cancelled upload folder and therefore an ordinary document. A live
+        // non-organizational folder remains immutable for the accounting reason above.
+        if (current && current.organizational !== true) continue;
+        if (current?.organizational) {
+          oldCounts.set(current._id, (oldCounts.get(current._id) ?? 0) + 1);
+        }
+      }
+
+      await ctx.db.patch(docId, { folderId });
+      moved += 1;
+    }
+
+    if (moved > 0) {
+      await ctx.db.patch(folderId, {
+        memberCount: target.memberCount + moved,
+        terminalCount: target.terminalCount + moved,
+      });
+      for (const [oldFolderId, count] of oldCounts) {
+        const old = await ctx.db.get(oldFolderId);
+        if (!old || old.tenantId !== ctx.tenantId || old.organizational !== true) continue;
+        await ctx.db.patch(oldFolderId, {
+          memberCount: Math.max(0, old.memberCount - count),
+          terminalCount: Math.max(0, old.terminalCount - count),
+        });
+      }
+    }
+    return { moved, skipped: unique.length - moved };
   },
 });
 

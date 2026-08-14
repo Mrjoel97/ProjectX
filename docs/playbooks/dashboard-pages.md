@@ -1,5 +1,38 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-14 (⚠ **REGISTRATION OF ONE PREVIOUSLY UNWATCHED COMPONENT, FROM SOURCE
+> REVIEW OF AN UNCOMMITTED FOREIGN-LANE DIFF — NOT A RUN.** Nothing was rendered or screenshotted.
+> `apps/web/app/(app)/dashboard/MarkdownDocument.tsx` is the shared safe renderer for
+> agent-authored Markdown, and it is registered here because it sits at the dashboard root rather
+> than inside any one surface's folder — **but its blast radius is three surfaces across two other
+> playbooks**: `vault/PreviewModal.tsx` (vault.md), and `workspace/ChatPane.tsx` +
+> `workspace/cards.tsx` (cockpit.md). Change it and you have changed all three; check them before
+> you claim a local edit. **The invariant that matters: it consumes `tokenizeMarkdown`/`inlineRuns`
+> from `@pikar/core` — THE SAME portable tokenizer the PDF/HTML document pipeline uses — so the
+> canvas, the vault preview and the exported artifact cannot disagree about headings, emphasis,
+> lists and tables. No model-authored HTML is ever evaluated.** Do not swap in a Markdown library
+> or hand-roll a second parser for one surface: the agreement between rendered and exported output
+> is the point, and a second parser silently breaks it in the one place nobody is looking. The
+> file-level `biome-ignore` for array-index keys is justified in source — tokens are immutable
+> display output replaced as one document — so a reordering or stateful variant would invalidate
+> that reasoning and needs real keys.)
+
+> Last verified: 2026-08-12 (Plan 26-18 — Sales Pipeline sidebar activation). The shipped
+> `/dashboard/pipeline` page is now reachable from the primary sidebar as a semantic active link;
+> its temporary `Soon`/disabled presentation was removed after the owner accepted UAT. The
+> activation changes navigation only: Pipeline data, approval, consent, and delivery behavior are
+> unchanged. Gate evidence: `ACTN-05`, `PIPE-01`, and Phase 19's recorded 15/15 authenticated
+> Pipeline UAT. Presentation rollback may hide the nav/route again; suppression enforcement and
+> the mandatory postal footer must never be rolled back.
+>
+> PREVIOUS:
+
+> Last verified: 2026-08-12 (production CI qualification — the dashboard layout's active-route
+> parser now uses an explicit empty-string fallback instead of a non-null assertion. Runtime route
+> matching is unchanged; the TypeScript and Biome gates cover the repair.)
+>
+> PREVIOUS:
+>
 > Touched 2026-08-11 by 21-04 to clear the §9 Stop hook. **NOTHING HERE WAS RE-VERIFIED AND THIS
 > ENTRY DOCUMENTS NO CHANGE OF ITS OWN.** The hook builds its changed-set from the whole tree, and
 > it fired on `apps/web/app/(app)/dashboard/approvals/ApprovalsView.tsx` and

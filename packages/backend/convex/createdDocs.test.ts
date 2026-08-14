@@ -319,3 +319,27 @@ test("SC7: a revision cannot overwrite a user-uploaded document", async () => {
   expect(row?.text).toBe("their own");
   expect(row?.title).toBe("their contract.md");
 });
+
+// The in-place viewing half: the workspace holds a doc ID and nothing else, so `vault.vaultDoc` is
+// what lets the created artifact be READ where it was made instead of via /dashboard/vault. Its two
+// failure modes are the only interesting logic — a foreign id and a malformed one must both come
+// back `null`, never a throw and never another tenant's row.
+test("vaultDoc: own row projects, foreign and malformed ids fail closed to null", async () => {
+  const t = convexTest(schema, modules);
+  const storageId = await storePdf(t);
+  const docId = await t.mutation(internal.vault.insertCreatedDoc, {
+    tenantId: "tenant_a",
+    title: "A's one-pager",
+    form: "long",
+    markdown: "# A",
+    contentHash: "hash_view",
+    storageId,
+  });
+
+  const mine = await asTenant(t, "tenant_a").query(api.vault.vaultDoc, { vaultDocId: docId });
+  expect(mine?.title).toBe("A's one-pager");
+  expect(await asTenant(t, "tenant_b").query(api.vault.vaultDoc, { vaultDocId: docId })).toBeNull();
+  expect(
+    await asTenant(t, "tenant_a").query(api.vault.vaultDoc, { vaultDocId: "not-an-id" }),
+  ).toBeNull();
+});

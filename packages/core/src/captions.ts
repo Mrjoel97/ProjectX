@@ -27,7 +27,7 @@
  * ever changes: a real library, at which point this file is deleted rather than extended.
  */
 
-import type { AssemblyBlock, AssemblyReport } from "./assembly";
+import type { AssemblyReport, AssemblyScene } from "./assembly";
 import { err, ok, type Result } from "./result";
 
 /** One word as the STT provider returns it. `type` is `"word" | "spacing" | "audio_event"` in
@@ -52,22 +52,29 @@ export const DEFAULT_LINE_CHARS = 32;
  * provider describing the audio ("(music)"), not transcribing speech — burning either would put
  * text on screen that nobody said.
  *
- * A rebased time outside `[windowStartS, windowStartS + clipSeconds]` is CLAMPED to the window,
- * never allowed through: a word that bleeds is a word rendered over the NEXT block's scene, which
- * reads as a caption for the wrong shot rather than as a timing bug.
+ * A rebased time outside `[windowStartS, boundS]` is CLAMPED, never allowed through: a word that
+ * bleeds is a word rendered over the NEXT take's caption, which reads as a caption for the wrong
+ * line rather than as a timing bug.
+ *
+ * `boundS` is the NEXT take's speech start (or the reel's end for the last take) — **not**
+ * `windowStartS + clipSeconds`. Since 20.2 wave 4 a line may legitimately run past its own scene
+ * and carry over the cut, so a scene-width bound is wrong in both directions: it cuts a correct
+ * line off at the boundary, and on a deck of mixed scene lengths `clipSeconds` is the LONGEST
+ * scene, which lets a drifting word sail over the next take. The next take's start is the bound
+ * the assembler itself enforces (it refuses two lines that overlap), so it is the one that holds.
  */
 export function rebaseWords(
   words: readonly SttWord[],
-  block: AssemblyBlock,
-  clipSeconds: number,
+  scene: AssemblyScene,
+  boundS: number,
 ): CaptionLine[] {
-  const lo = block.windowStartS;
-  const hi = block.windowStartS + clipSeconds;
+  const lo = scene.startS;
+  const hi = Math.max(lo, boundS);
   const lines: CaptionLine[] = [];
   for (const w of words) {
     if (w.type !== "word") continue;
-    const rawStart = block.speechAbsS + (w.start - block.leadSilenceS);
-    const rawEnd = block.speechAbsS + (w.end - block.leadSilenceS);
+    const rawStart = scene.speechAbsS + (w.start - scene.leadSilenceS);
+    const rawEnd = scene.speechAbsS + (w.end - scene.leadSilenceS);
     const startS = Math.min(Math.max(rawStart, lo), hi);
     const endS = Math.min(Math.max(rawEnd, lo), hi);
     const clamped = startS !== rawStart || endS !== rawEnd;
@@ -299,6 +306,14 @@ export function concatWavTakes(
  * Words are partitioned by take using the concat offsets, shifted back to take-relative time, and
  * rebased against THAT block's anchors. A word is never rebased against a block it was not spoken
  * in, which is the failure the offsets exist to prevent.
+ *
+ * **The offsets are keyed by NARRATED ORDINAL, never by `blockIndex`.** `concatWavTakes` builds one
+ * offset per take it was actually handed, positionally; those two agree only while every scene owns
+ * a take. Since 20.2 wave 3 a scene may be deliberately silent, and the sidecar says so with
+ * `speech_dur_s: 0` — so a silent scene is a HOLE, and reading `offsetsS[blockIndex]` past one
+ * hands every later scene the wrong take and drops the last one off the end of the array. That is
+ * a caption on the wrong shot, not a rounding error: on a 3-scene reel with a silent card the last
+ * line lands ~10s early.
  */
 export function buildCaptionLines(a: {
   words: readonly SttWord[];
@@ -307,14 +322,20 @@ export function buildCaptionLines(a: {
   maxChars?: number;
 }): CaptionLine[] {
   const out: CaptionLine[] = [];
-  for (const block of a.report.blocks) {
-    const takeStart = a.offsetsS[block.blockIndex];
-    if (takeStart === undefined) continue; // fewer takes than blocks: that block simply has no words
-    const takeEnd = a.offsetsS[block.blockIndex + 1] ?? Number.POSITIVE_INFINITY;
+  // The scenes that DECLARE narration, in reel order. This is the take list the STT stage was
+  // handed, so its position is the key into `offsetsS`.
+  const narrated = a.report.scenes.filter((s) => s.speechDurS > 0);
+  for (const [ordinal, scene] of narrated.entries()) {
+    const takeStart = a.offsetsS[ordinal];
+    if (takeStart === undefined) continue; // fewer takes than narrated scenes: no words for this one
+    const takeEnd = a.offsetsS[ordinal + 1] ?? Number.POSITIVE_INFINITY;
     const inTake = a.words
       .filter((w) => w.start >= takeStart && w.start < takeEnd)
       .map((w) => ({ ...w, start: w.start - takeStart, end: w.end - takeStart }));
-    out.push(...groupIntoLines(rebaseWords(inTake, block, a.report.clipSeconds), a.maxChars));
+    // A line may run past its own scene but never into the next line — the same bound the
+    // assembler enforces on the audio, applied to the captions so the two cannot disagree.
+    const bound = narrated[ordinal + 1]?.speechAbsS ?? a.report.totalDurationS;
+    out.push(...groupIntoLines(rebaseWords(inTake, scene, bound), a.maxChars));
   }
   return out.sort((l, r) => l.startS - r.startS);
 }

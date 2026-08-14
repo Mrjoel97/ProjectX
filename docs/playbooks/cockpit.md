@@ -1,5 +1,74 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-14 (the created-artifact surface, second pass — **A DOCUMENT REFERENCE IN
+> THE WORKSPACE NOW OPENS THE DOCUMENT, IN THE WORKSPACE.**) The entry below fixed what the Output
+> card SAYS; this fixes every other document reference on the surface, which was still
+> `<Link href="/dashboard/vault">` — a whole-route jump that drops the reader into an unfiltered
+> grid and leaves the conversation behind. `SourceCard`'s own comment named the upgrade and
+> deferred it ("add a getVaultDoc(byId) tenant query + import PreviewModal"); `api.vault.vaultDoc`
+> is that query and this took it. `cards.tsx` gains `VaultDocButton` (a button, never a link — it
+> opens a dialog in place, and dressing that as navigation was the lie the route-jump told) and
+> `VaultDocModal`, which mounts the SHIPPED `vault/PreviewModal` rather than a second viewer: it
+> already renders markdown, PDFs, images, video, the extraction/failure states and the entity
+> chips, and a second one would be a second thing to keep in step with `previewState`. Three call
+> sites moved: grounded-source titles, the Output card's trailing control (now "Open full
+> document", the stored PDF/download/entities that the inline text preview cannot show), and
+> evaluation citations. A row with no docId renders as plain text, never a control that does
+> nothing; `vaultDoc` returning `null` (deleted, or another tenant's) renders nothing, so a card
+> never asserts a document exists because a stale row names it. Evidence: web workspace + vault 55
+> green, `@pikar/web` typecheck clean apart from two pre-existing foreign-lane `renderReel.ts`
+> errors.
+
+> Last verified: 2026-08-14 (the CREATED-ARTIFACT surface, from a real cockpit transcript — the
+> agent told the user it "can't open files directly in the workspace" when the Output card was
+> already rendering the document there, and separately claimed to have written a deck "in
+> PowerPoint format" that no code path can produce. Four root causes, four code-only fixes, no
+> skill-registry change. See "The created-artifact surface" below. web 245/246, backend media +
+> cockpit + cockpitTools + llmRedaction + skills 495 passed, both typechecks clean.)
+
+> Last verified: 2026-08-14 (⚠ **REGISTRATION OF TWO PREVIOUSLY UNWATCHED MODULES, FROM SOURCE
+> REVIEW OF AN UNCOMMITTED FOREIGN-LANE DIFF — NOT A RUN.** No cockpit turn, eval or gate was
+> executed; both modules were read, not exercised. They were landing outside any playbook's watched
+> paths, which is why they are registered here now. **`cockpitCapabilities.ts` — DETERMINISTIC
+> CAPABILITY ROUTING, AND IT IS CONTAINMENT, NOT A SECOND MODEL CALL.** `routeCockpitIntent` matches
+> a ten-capability regex table against the turn text; `applyGmailCapability` then returns the
+> executive tool record with the 18 `GMAIL_TOOL_NAMES` keys **structurally absent** when the rail is
+> off, so a Gmail-less tenant cannot have an email tool selected rather than merely being refused
+> after selection — the same absence-over-refusal shape the dispatch guard uses. `llm.ts:3548` is the
+> single application point and `llm.ts:4541` the single decision point; keep it that way. Three traps
+> the source already encodes and a changer must not undo: the email pattern REQUIRES an action verb
+> so "email marketing strategy" does not seize the Gmail rail; a capitalised `Email Amina` is caught
+> by a SEPARATE case-sensitive rule after the case-insensitive pass, because lower-casing first would
+> swallow it; and `shouldUseGmailCapability` resolves multi-turn ambiguity by letting a bare answer
+> continue an active email plan unless `EXPLICIT_NON_EMAIL_ACTION` matches. `isPinnedCockpitEvaluation`
+> deliberately keeps email tools alive for `eval-` tenants with a pinned version, because the golden
+> fixtures stage email plans on a tenant that is intentionally disconnected — **a change that drops
+> that exemption turns the email fixtures red for a reason that has nothing to do with the model.**
+> **`mediaIntent.ts` — the narrow bypass.** `isExplicitVideoCreationRequest` is the ONLY thing that
+> lets a turn skip model tool selection for video (`llm.ts:4562`, and only when `!smokeOp &&
+> !gmailRequired`). It is deliberately imperative-only, and it returns false outright when the text
+> mentions email/attach/forward/reply/recipient, so a mixed request can never have its email half
+> discarded by the media route. Widen it and you are widening what bypasses the model, which is the
+> opposite of what the rest of this playbook is for. Neither module's routing has been measured
+> against real turns by this review.)
+
+> Last verified: 2026-08-12 (Plan 26-18 — Sales Pipeline sidebar activation). Owner UAT was
+> accepted and the existing `/dashboard/pipeline` surface was exposed in the primary sidebar.
+> This is a navigation-only release: cockpit planning, approval boundaries, consent suppression,
+> recipient resolution, and provider execution are unchanged. The Pipeline UAT remains the
+> executable end-to-end contract for those safety seams. Evidence IDs are `ACTN-05` and `PIPE-01`;
+> UI rollback may hide the Pipeline entry, but suppression and the required postal footer remain
+> irreversible safety behavior.
+>
+> PREVIOUS:
+
+> Last verified: 2026-08-12 (production-release qualification — the Calendar registry test helpers
+> now preserve the application's schema type by accepting `ReturnType<typeof harness>`. This is a
+> test-only typing repair: runtime Calendar behavior, schema, indexes, and provider calls are
+> unchanged. The backend typecheck and focused Calendar test are the executable gate.)
+>
+> PREVIOUS:
+>
 > Last verified: 2026-08-11 (17-05, the ACTN-02 GAP-CLOSURE SUBSTRATE — **NO PROVIDER CALL WAS
 > ADDED. Google create is still the only executable Calendar target, and ACTN-02 is still not
 > satisfied.**) `calendar_manage` is the SEVENTH `ACTION_TYPES` member and the `externalAction`
@@ -2998,6 +3067,137 @@ Mutation-verification ledger (each mutation was applied, observed RED, and rever
 This is the CODE proof: scripted models prove deterministic degradation and containment. Plan
 16-09 is the PROMPT proof: the eval gate measures grounded, useful, injection-resistant research
 answers. Neither proof substitutes for the other.
+
+## The created-artifact surface — what the agent may say about it (2026-08-14)
+
+From a real transcript. The user asked for a slide deck, got one, and then could not find it:
+
+> **User:** Okay, where is the slide deck? I want you to open it in the workspace so that I can see it.
+> **Agent:** I can't open files directly in the workspace, but you can easily access the slide
+> deck by downloading it from your vault.
+
+**The agent was wrong, and the product was working.** `OutputCard` (`cards.tsx`) renders the
+full artifact text in the workspace, ungated by any plan row (it sits above the plan-status
+branches with `SourceCard` and `EvaluationCard`, because a creating turn carries no plan row at
+all). Four separate causes stacked into one bad conversation.
+
+### 1. The preview was pinned to document #1
+
+`OutputCard` held `useState(0)` and never reconciled it as `docIds` grew. `titles`/`docIds`
+ACCUMULATE over the conversation (18-06), so a thread that created three artifacts previewed the
+OLDEST while the user asked where the newest was. Recoverable by clicking a title — if you knew
+to click.
+
+Now `previewIndex(count, picked)`, **exported and pure**: `null` follows the newest, a number is
+an explicit click and wins, an out-of-range pick falls back to the newest rather than blanking
+the preview. Exported deliberately — a source scan for `picked ?? newest` passes with the
+arithmetic wrong, so the rule lives somewhere a test can CALL it (the 19.1 `ImportDone` lesson).
+Mutation-checked: restoring `picked ?? 0` reds four tests.
+
+### 2. A model reports its TOOL inventory as the PRODUCT's capability
+
+There is no `openInWorkspace` tool, the skill body says only that `createDocument` "saves it to
+their vault", and the tool's success sentence named no location. Given all three, "I can't open
+files in the workspace" is the honest answer from where the model was standing.
+
+**The fix is the tool RESULT, not the skill body.** A tool result is a driver-plane string —
+code-owned, free to change, no eval gate — and it is the most immediate thing the model reads.
+`createDocument` now returns `… It is already open in the workspace for the user to read.`
+
+> **Rule.** When the model is asked whether the product can do X and answers from its tool list,
+> the gap is knowledge, not capability. Close it at the cheapest layer that carries it: tool
+> result first, tool description second, skill body only at the next certification.
+
+### 3. It claimed a format that does not exist
+
+Asked for "the slide deck in pptx", the agent replied that it had created one "in PowerPoint
+format". `createDocument`'s schema is `{topic, form, replace?}` — there is **no format
+argument** — and `DocFormat` is `pdf | html`. No pptx path exists anywhere in the repo. The old
+success sentence named no format, so nothing contradicted the invention.
+
+The result now names the real artifact (`Written as markdown, with a PDF to download.`) and the
+tool description says `never PowerPoint, Word or slides`. A format claim now has to contradict
+the model's own tool result to be made. Same defect class as `provenance-laundering`: **ask what
+the stored/returned record actually says, and whether the model can talk over it.**
+
+### 4. A refusal that only the OTHER party could act on
+
+`proposeImage` refused with `draft_in_progress` → *"Tell the user to finish or discard it
+first."* The user answered "im ready, proceed", which is not a discard, and the turn deadlocked
+— while `resetPlan` sat unused in the model's own toolbox. The refusal now says: ask, and on a
+yes call `resetPlan` and retry.
+
+> **Rule.** A refusal string that ends in an instruction the model cannot carry out is a dead
+> end. Name the lever the model holds, or say plainly that there is none.
+
+### The interlock (2026-08-14) — two refusals `stageMediaPlan` was missing
+
+`dispatchMedia` fired on three consecutive turns of a SLIDE-DECK conversation. Tracing it found
+two distinct gaps, and the second is the one the user actually felt.
+
+**1. `dispatch_in_flight` — the missing copy of `research_in_flight`.** `stageMediaPlan` leaves
+the row `kind: memo` + `collecting`, which is exactly the shape `stageResearchPlan` refuses as
+`research_in_flight`. This function is documented in its own header as *a SECOND copy of that
+shape*, and the copy DROPPED that check — the one that makes "one run per thread" true. A second
+dispatch did still refuse, but as `draft_in_progress`, whose reply describes an email draft the
+user does not have. So the agent relayed a sentence about a draft that did not exist.
+
+**2. `image_proposal_pending` — a staged proposal is not a spent deck.** `userWork` excludes
+`kind: "media"` on the reasoning that a media row holds a PREVIOUS deck. That is true of a deck
+already generated or abandoned, and false of one staged moments ago — and `mediaMode: "image"`
+rows are `kind: "media"` too. So `proposeImage` staged an image, the next `dispatchMedia`
+recycled the row out from under it, the user never saw the image they were told to review, and
+the following `proposeImage` then refused against the memo the dispatch had just written. That
+is the whole deadlock, and none of it was visible to the user as anything but a loop.
+
+`jobs.length === 0` is what makes "un-acted-on" precise rather than a guess: the moment the user
+clicks Generate a row exists, and a spent proposal may be recycled. **A reel replacing a reel is
+the intended flow and is deliberately still allowed** — pinned by its own test, because an
+interlock that also blocks the happy path is a worse bug than the one it fixes.
+
+Both replies name the lever: `image_proposal_pending` says ask, then `resetPlan`.
+`dispatch_in_flight` deliberately names none — there is nothing to reset, the run lands on its
+own, and the honest instruction is to wait.
+
+⚠ **Mutation-checking these needed care, and nearly did not happen.** `plans.ts` is LF while much
+of this repo (docs, `.planning`, several `apps/web` files) is CRLF. A first mutation pass used
+`\r\n` anchors, silently matched nothing, and reported both interlocks GREEN with the code
+supposedly removed — the exact `green-tests-over-broken-capability` shape, arrived at while
+trying to avoid it. **Assert the anchor is unique and the write actually changed the file BEFORE
+trusting a mutation result**: from the output alone, a no-op mutation and a vacuous test are
+indistinguishable.
+
+### Still open, and NOT fixed here
+
+**The ROUTING half is still open.** `dispatchMedia` was reachable at all for a slide-deck DESIGN request — the
+video-reel specialist, for a document. `MEDIA_UNDERWAY_REPLY` says "do not ask for a reel again
+on this conversation", but that is advice to the model rather than an interlock, and
+`stageMediaPlan` recycles a `kind:"media"` row with no live jobs — so each retry silently RESET
+the previously staged proposal. Two candidate fixes, and they cost very differently: a code-side
+interlock (a media dispatch in flight refuses a second one), or a skill-body routing rule (a
+registry row, so a candidate seed + a paid eval gate + owner activation).
+
+**OWNER ASSIGNED 2026-08-14: plan 20-12**, which already carries a `cockpit-agent` body edit
+and a paid gate. The rule is folded into its scope with the wording drafted, rather than
+paying a second gate for one paragraph. Two companions ride with it — that the tool writes
+markdown and a PDF and NEVER pptx/docx/slides, and that a created document appears in the
+WORKSPACE as well as the vault. Both are already in the tool result and the tool description,
+which is the cheap layer; the body is the durable one, and it is the only layer the model
+reads BEFORE choosing a tool.
+
+20-12 also gains a NEGATIVE fixture (`38b-media-not-a-document`). Fixture 38 proves only that
+ordinary video language REACHES `dispatchMedia`; nothing proved a document request does not.
+A gate that only ever asserts the positive cannot catch a tool being over-selected, and this
+defect is exactly that shape. The negative case runs in the same paid gate at no extra
+authorization.
+
+### How to verify
+
+`apps/web`, `npx vitest run "app/(app)/dashboard/workspace/outputCard.test.ts"`. The selection
+rule is behaviour-tested and mutation-checked; the three agent-facing sentences are pinned at
+the source, which is all a free test can do for a string the model reads — behaviour coverage
+for those lives in the paid eval fixtures.
+
 
 ## Phase 17 gap closure — the `calendar_manage` substrate (17-05)
 

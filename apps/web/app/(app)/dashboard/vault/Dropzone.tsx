@@ -8,7 +8,7 @@ import { resolveMimeType } from "@pikar/core/validateSubmit";
 import { capMB, VAULT_FILE_CAP_BYTES, VAULT_VIDEO_CAP_BYTES } from "@pikar/vault/constants";
 import { useMutation } from "convex/react";
 import type { FunctionArgs } from "convex/server";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { UploadCloudIcon } from "./icons";
 
 // The upload dropzone + Brain-Dump paste (brand-024242 / brand-024258). Upload flow mirrors the
@@ -48,6 +48,29 @@ export type PickedFolder = {
   /** Sum of `manifest[].size`. */
   totalBytes: number;
 };
+
+// React's input typings omit the browser-standard directory-picker attributes. Spreading this
+// object keeps them declarative in the first render instead of racing a post-mount setAttribute.
+export const DIRECTORY_INPUT_ATTRIBUTES = {
+  webkitdirectory: "",
+  directory: "",
+} as const;
+
+export function pickedFolderFromFiles(files: FileList | null): PickedFolder | null {
+  const picked = Array.from(files ?? []);
+  if (picked.length === 0) return null;
+  const name = picked[0]?.webkitRelativePath.split("/")[0] || "Folder";
+  const manifest = picked.map((file) => ({
+    size: file.size,
+    mimeType: resolveMimeType(file.name, file.type),
+  }));
+  return {
+    name,
+    files: picked,
+    manifest,
+    totalBytes: manifest.reduce((total, item) => total + item.size, 0),
+  };
+}
 
 /** One file's result. Replaces the single `error` string the upload loop used to overwrite. */
 export type FileOutcome = { name: string; ok: boolean; note?: string };
@@ -96,12 +119,9 @@ export function Dropzone({
   const vaultUpload = useMutation(api.vault.vaultUpload);
   const ingestText = useMutation(api.vault.vaultIngestText);
   const inputRef = useRef<HTMLInputElement>(null);
-  // A SECOND hidden input: `webkitdirectory` makes an input directory-ONLY, so it cannot replace
-  // the file input above. React/TS does not type the attribute, hence the ref + setAttribute.
+  // A SECOND input: `webkitdirectory` makes an input directory-ONLY, so it cannot replace the file
+  // input above. It is placed over the visible control so the browser receives a native user click.
   const dirRef = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    dirRef.current?.setAttribute("webkitdirectory", "");
-  }, []);
   const [busy, setBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   // `error` stays for the SINGLE-LINE notes (a Brain-Dump failure, a dropped directory).
@@ -179,23 +199,11 @@ export function Dropzone({
    *  hashes server-side (plan 04), and 400 client-side `arrayBuffer()` reads is exactly what that
    *  move avoided. Nothing is uploaded here; the pre-flight owns Start. */
   function handleFolderPick(files: FileList | null) {
-    const picked = Array.from(files ?? []);
-    if (picked.length === 0) return;
-    // Every File in one directory pick shares the first path segment, so the first file names it.
-    const name = picked[0]?.webkitRelativePath.split("/")[0] || "Folder";
-    const manifest = picked.map((f) => ({
-      size: f.size,
-      // The resolved type, never the raw `file.type` — the browser leaves it empty for .md/.csv.
-      mimeType: resolveMimeType(f.name, f.type),
-    }));
+    const picked = pickedFolderFromFiles(files);
+    if (!picked) return;
     setError(null);
     setOutcomes([]);
-    onPickFolder({
-      name,
-      files: picked,
-      manifest,
-      totalBytes: manifest.reduce((n, m) => n + m.size, 0),
-    });
+    onPickFolder(picked);
     if (dirRef.current) dirRef.current.value = "";
   }
 
@@ -313,17 +321,6 @@ export function Dropzone({
         onChange={(e) => void handleFiles(e.target.files ?? [])}
       />
 
-      {/* The directory picker. `webkitdirectory` is set imperatively (see dirRef above) and makes
-          this input directory-ONLY, which is why it is a second input and not a flag on the first. */}
-      <input
-        ref={dirRef}
-        type="file"
-        multiple
-        hidden
-        aria-label="Choose a folder to upload"
-        onChange={(e) => handleFolderPick(e.target.files)}
-      />
-
       {error && (
         <p role="alert" style={{ color: "#dc2626", fontSize: "0.85rem", margin: "0.5rem 0 0" }}>
           {error}
@@ -355,15 +352,21 @@ export function Dropzone({
       <div style={{ marginTop: "0.75rem" }}>
         {!pasteOpen ? (
           <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
-            <button
-              type="button"
-              className="vault-button"
-              disabled={busy}
-              onClick={() => dirRef.current?.click()}
+            <span
+              className={`vault-button vault-folder-picker${busy ? " is-disabled" : ""}`}
               style={pillSecondary(busy)}
             >
+              <input
+                {...DIRECTORY_INPUT_ATTRIBUTES}
+                ref={dirRef}
+                type="file"
+                multiple
+                disabled={busy}
+                aria-label="Choose a folder to upload"
+                onChange={(event) => handleFolderPick(event.target.files)}
+              />
               Choose a folder
-            </button>
+            </span>
             <button
               type="button"
               className="vault-button"

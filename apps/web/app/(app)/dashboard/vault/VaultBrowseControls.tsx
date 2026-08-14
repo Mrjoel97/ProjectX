@@ -1,8 +1,13 @@
-import React, { type CSSProperties, type ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
+
+const DIRECTORY_INPUT_ATTRIBUTES = {
+  webkitdirectory: "",
+  directory: "",
+} as const;
 
 export type VaultBrowseHandlers = {
   onUpload: () => void;
-  onFolderUpload: () => void;
+  onFolderUpload: (files: FileList | null) => void;
   onDriveImport: () => void;
 };
 
@@ -12,7 +17,7 @@ export type VaultBrowseAction = {
   id: VaultBrowseActionId;
   label: string;
   controls: string;
-  onSelect: () => void;
+  onSelect: (files?: FileList | null) => void;
 };
 
 /** One descriptor list is shared by the presenter and its callback-contract test. */
@@ -28,7 +33,7 @@ export function vaultBrowseActions(handlers: VaultBrowseHandlers): readonly Vaul
       id: "folder-upload",
       label: "Choose a folder",
       controls: "vault-folder-source",
-      onSelect: handlers.onFolderUpload,
+      onSelect: (files) => handlers.onFolderUpload(files ?? null),
     },
     {
       id: "drive-import",
@@ -52,18 +57,41 @@ export function VaultBrowseControls({
 
   return (
     <nav className="vault-action-cluster" aria-label="Add to your vault">
-      {vaultBrowseActions(handlers).map((action, index) => (
-        <button
-          key={action.id}
-          type="button"
-          className={index === 0 ? "vault-button vault-button-primary" : "vault-button"}
-          disabled={disabled}
-          aria-controls={action.controls}
-          onClick={action.onSelect}
-        >
-          {action.label}
-        </button>
-      ))}
+      {vaultBrowseActions(handlers).map((action, index) => {
+        const className = index === 0 ? "vault-button vault-button-primary" : "vault-button";
+        if (action.id === "folder-upload") {
+          return (
+            <span
+              key={action.id}
+              className={`${className} vault-folder-picker${disabled ? " is-disabled" : ""}`}
+              aria-controls={action.controls}
+            >
+              <input
+                {...DIRECTORY_INPUT_ATTRIBUTES}
+                id="vault-folder-source"
+                type="file"
+                multiple
+                disabled={disabled}
+                aria-label="Choose a folder"
+                onChange={(event) => action.onSelect(event.target.files)}
+              />
+              {action.label}
+            </span>
+          );
+        }
+        return (
+          <button
+            key={action.id}
+            type="button"
+            className={className}
+            disabled={disabled}
+            aria-controls={action.controls}
+            onClick={() => action.onSelect()}
+          >
+            {action.label}
+          </button>
+        );
+      })}
     </nav>
   );
 }

@@ -94,6 +94,36 @@ function seedDoc(
   );
 }
 
+/** Seed the smallest confirmed live blueprint needed to exercise the voice grounding boundary. */
+async function seedConfirmedBlueprint(t: ReturnType<typeof convexTest>): Promise<void> {
+  const blueprintDocId = await t.run(async (ctx) =>
+    ctx.db.insert("vaultDocuments", {
+      tenantId: TENANT,
+      title: "Business blueprint",
+      kind: "business_blueprint",
+      category: "business",
+      source: "generated",
+      mimeType: "text/markdown",
+      size: 96,
+      contentHash: "voice_blueprint_hash",
+      text: "# Business blueprint\n\n- One-line description: Repairs bicycles for city commuters [stated]\n",
+      status: "ready",
+      createdAt: Date.now(),
+    }),
+  );
+  await t.run(async (ctx) => {
+    await ctx.db.insert("tenantProfiles", {
+      tenantId: TENANT,
+      tier: "sme",
+      tierSource: "confirmed",
+      derivedAt: Date.now(),
+      blueprintDocId,
+      blueprintConfirmedAt: Date.now(),
+      blueprintSourceDocIds: [],
+    });
+  });
+}
+
 // ── Task 1: mintClientSecret ──────────────────────────────────────────────────────────────────
 
 test("mintClientSecret POSTs the client_secrets endpoint with the Bearer key + the registry persona", async () => {
@@ -121,6 +151,22 @@ test("mintClientSecret POSTs the client_secrets endpoint with the Bearer key + t
   // doc-scoped feature can never quietly change the shape of every ordinary voice call.
   expect(Object.hasOwn(body.session, "tools")).toBe(false);
   expect(Object.hasOwn(body.session, "tool_choice")).toBe(false);
+});
+
+test("an unscoped voice session receives the tenant's confirmed blueprint spine", async () => {
+  const t = convexTest(schema, modules);
+  await t.mutation(internal.skills.seedSkills, {});
+  await seedConfirmedBlueprint(t);
+  stubFetch(() => Response.json({ value: "ek_blueprint", expires_at: 1234 }));
+
+  await asTenant(t).action(api.voiceToken.mintClientSecret, {});
+
+  const instructions = sessionOf(0).instructions as string;
+  expect(instructions.startsWith(voiceSessionSkillBody)).toBe(true);
+  expect(instructions).toContain("<business_blueprint>");
+  expect(instructions).toContain("Repairs bicycles for city commuters");
+  expect(instructions).toContain("</business_blueprint>");
+  expect(instructions).not.toContain("# Business blueprint");
 });
 
 test("mintClientSecret returns ONLY {clientSecret, expiresAt, toolsAtMint} and NEVER the API key", async () => {

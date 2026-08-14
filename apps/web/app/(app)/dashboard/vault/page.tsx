@@ -6,7 +6,7 @@ import { Component, type ErrorInfo, type ReactNode, useRef, useState } from "rea
 import { CategoryTabs } from "./CategoryTabs";
 import { DocGrid, type VaultDoc, type VaultFolder } from "./DocGrid";
 import { DriveBrowser } from "./DriveBrowser";
-import { Dropzone, type PickedFolder } from "./Dropzone";
+import { Dropzone, type PickedFolder, pickedFolderFromFiles } from "./Dropzone";
 import { FolderBreadcrumb } from "./FolderBreadcrumb";
 import { RefreshIcon } from "./icons";
 import { PreFlight, type StartPhase } from "./PreFlight";
@@ -133,7 +133,7 @@ function VaultBody({
     api.vault.listVaultDocs,
     currentFolderId ? { folderId: currentFolderId } : { category },
   );
-  const folders = useQuery(api.vaultFolders.listFolders, currentFolderId ? "skip" : {});
+  const folders = useQuery(api.vaultFolders.listFolders, {});
   const loading = stats === undefined || docs === undefined;
   const uploadSourceRef = useRef<HTMLDivElement>(null);
   const driveSourceRef = useRef<HTMLDivElement>(null);
@@ -162,10 +162,10 @@ function VaultBody({
             handlers={{
               onUpload: () =>
                 uploadSourceRef.current?.querySelector<HTMLButtonElement>("button")?.click(),
-              onFolderUpload: () =>
-                uploadSourceRef.current
-                  ?.querySelector<HTMLInputElement>("input[webkitdirectory]")
-                  ?.click(),
+              onFolderUpload: (files) => {
+                const next = pickedFolderFromFiles(files);
+                if (next) onPicked(next);
+              },
               onDriveImport: () => {
                 driveSourceRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
                 driveSourceRef.current?.focus({ preventScroll: true });
@@ -217,7 +217,6 @@ function VaultBody({
         ) : (
           <>
             <div id="vault-upload-source" ref={uploadSourceRef}>
-              <span id="vault-folder-source" />
               <Dropzone onPickFolder={onPicked} />
             </div>
             <div id="vault-drive-source" ref={driveSourceRef} tabIndex={-1}>
@@ -236,6 +235,7 @@ function VaultBody({
         loading={docs === undefined}
         totalCount={stats?.totalFiles ?? 0}
         folders={currentFolderId ? undefined : (folders ?? [])}
+        moveTargets={folders ?? []}
         onOpen={setSelected}
         onOpenFolder={onFolder}
       />

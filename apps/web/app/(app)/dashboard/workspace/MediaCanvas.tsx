@@ -59,7 +59,7 @@ function windowLabel(index: number, clipSeconds: number): string {
 /**
  * THE VERDICT COPY, and this is a compliance statement rather than a style choice.
  *
- * `none_reported` means the provider reported NOTHING — **it is not "clean"**. Every Wan 2.5 video
+ * `none_reported` means the provider reported NOTHING — **it is not "clean"**. Every Sora 2 video
  * and every voice take lands there, and rendering it as a pass would make a safety claim fal never
  * made. Never a green tick, and never colour alone (BRAND §6).
  */
@@ -98,7 +98,7 @@ function refusalText(
   const block = refusal.blockIndex === undefined ? "A block" : `Block ${refusal.blockIndex + 1}`;
   switch (refusal.reason) {
     case "over_job_cap":
-      return `This reel would cost ${money(totalCents)}, over the ${money(capCents)} per-reel limit — remove blocks or drop to 480p.`;
+      return `This reel would cost ${money(totalCents)}, over the ${money(capCents)} per-reel limit — remove blocks or use the four-second clip tier.`;
     case "illegal_duration":
       return "Every block must be 5 or 10 seconds.";
     case "narration_too_long":
@@ -151,7 +151,7 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
     }
   }
 
-  const clipSeconds = plan.clipSeconds ?? 10;
+  const clipSeconds = plan.clipSeconds ?? 4;
   const art = plan.artDirection ?? null;
   const landed = (assets ?? []).filter((a) => a.url !== null).length;
 
@@ -932,7 +932,7 @@ function EstimateGate({
   const resolved = estimate !== undefined;
   const refusal = estimate?.refusal ?? null;
   const canGenerate = resolved && refusal === null && (estimate?.lines.length ?? 0) > 0 && !busy;
-  const maxChars = clipSeconds === 5 ? 70 : 140;
+  const maxChars = Math.round(clipSeconds * 14);
 
   return (
     <div
@@ -987,7 +987,7 @@ function EstimateGate({
 
       {resolved && (
         <p style={{ ...dimText, marginTop: "0.5rem" }}>
-          Priced at Wan 2.5, 480p, {clipSeconds} s per block ·{" "}
+          Priced at OpenAI Sora 2, 720p, {clipSeconds} s per block ·{" "}
           {money(estimate?.remainingCents ?? 0)} of today's media budget remains.
         </p>
       )}

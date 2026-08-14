@@ -90,18 +90,18 @@ describe("composeBrief (client clean-end)", () => {
 describe("planSeedFromBrief", () => {
   it("extracts filled Decisions + Action items from a server brief (bullets stripped)", () => {
     const seed = planSeedFromBrief(buildBriefMarkdown(filled, transcript, "en"));
-    expect(seed).toContain("Turn this voice brief into a plan.");
+    expect(seed).toContain("Turn this voice conversation into a concrete plan.");
     expect(seed).toContain("Decisions:\nShip beta 2026-08\nHire a designer");
     expect(seed).toContain("Action items:\nJoel: draft pricing");
-    // The conversation/discussion prose must NOT leak into the plan seed.
-    expect(seed).not.toContain("Long narrative");
-    expect(seed).not.toContain("Hello");
+    // The synthesized findings and real transcript both carry into the cockpit handoff.
+    expect(seed).toContain("Discussion findings:\nLong narrative goes here.");
+    expect(seed).toContain("Conversation transcript:\nUser: Hi\nAgent: Hello");
   });
 
   it("falls back to the whole brief when both sections are empty (parenthetical hints ignored)", () => {
     const brief = composeBrief([{ speaker: "user", text: "hi" }], "2026-07-20");
-    // Unedited client brief → hints stripped → both sections empty → whole brief is the seed.
-    expect(planSeedFromBrief(brief)).toBe(brief.trim());
+    // Unedited client brief still carries its transcript as explicit cockpit context.
+    expect(planSeedFromBrief(brief)).toContain("Conversation transcript:\nYou: hi");
   });
 
   it("treats an empty server section ('None') as empty, not a decision", () => {

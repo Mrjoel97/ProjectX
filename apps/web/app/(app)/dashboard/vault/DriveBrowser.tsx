@@ -54,15 +54,19 @@ export function DriveBrowser() {
     async (parentId: string | null) => {
       setNodes(null);
       setFiles([]);
-      const r = await listFolders(parentId === null ? {} : { parentId });
-      if (!r.ok) {
+      // `.catch` is LOAD-BEARING, not belt-and-braces. This runs from `void load(...)` in an
+      // effect, so a rejected action was an UNHANDLED promise rejection: the list stayed at
+      // `null` and the picker sat on "Reading Drive…" forever with no message. Any failure has
+      // to land on a rendered sentence.
+      const r = await listFolders(parentId === null ? {} : { parentId }).catch(() => null);
+      if (!r || !r.ok) {
         setNodes([]);
         setNote({
           tone: "warn",
           text:
-            r.reason === "reauth" || r.reason === "refresh_failed"
+            r && (r.reason === "reauth" || r.reason === "refresh_failed")
               ? "Your Google connection needs reconnecting."
-              : "Could not read that folder.",
+              : "Google Drive did not answer. Try again in a moment.",
         });
         return;
       }
@@ -159,9 +163,13 @@ export function DriveBrowser() {
           tone: "warn",
           text: `That folder needs ${r.shortfallCents}¢ more than today's ingest budget allows. Nothing was imported.`,
         });
+      } else if (r.reason === "drive_error" || r.reason === "bad_folder_id") {
+        setNote({ tone: "warn", text: "Google Drive did not answer. Nothing was imported." });
       } else {
         setNote({ tone: "warn", text: "Your Google connection needs reconnecting." });
       }
+    } catch {
+      setNote({ tone: "warn", text: "The import could not be started. Nothing was imported." });
     } finally {
       setBusy(false);
     }

@@ -1,0 +1,37 @@
+# Keep Vercel uploads limited to the deployable monorepo sources. The web app
+# imports workspace packages, so apps/ and packages/ intentionally remain in scope.
+.git
+.github
+.claude
+.codex
+.convex
+.planning
+.playwright-cli
+.playwright-mcp
+.pnpm-store
+.superpowers
+.tmp
+.tmp-*
+.turbo
+.vercel
+.worktrees
+**/node_modules
+**/.next
+**/.turbo
+
+# Local evidence, generated output, and operator-only material.
+/docs
+/graphify-out
+/output
+/Screenshots
+/sidecars
+/skillopt
+/Skills
+/debug.log
+
+# Local credentials and environment files must never enter a deployment archive.
+.env
+.env.*
+**/.env
+**/.env.*
+gen-lang-client-*.json

@@ -19,10 +19,17 @@ import {
   type VideoRes,
 } from "./media";
 
-const WAN = MEDIA_DEFAULT_VIDEO.model;
-const clip = (resolution: VideoRes = "480p", seconds = 10): MediaSpec => ({
+const VIDEO_MODEL = MEDIA_DEFAULT_VIDEO.model;
+const clip = (
+  resolution: VideoRes = MEDIA_DEFAULT_VIDEO.resolution,
+  // ANNOTATED, like `resolution` above. `MEDIA_DEFAULT_VIDEO` is `as const`, so `.seconds` is the
+  // literal `4` — and an unannotated parameter takes its type FROM its default, which pinned this
+  // helper to `seconds: 4`. That silently made the illegal-duration cases (3, 5, 10, 15, 0, NaN)
+  // uncompilable: the test proving duration validation works could not itself typecheck.
+  seconds: number = MEDIA_DEFAULT_VIDEO.seconds,
+): MediaSpec => ({
   kind: "video",
-  model: WAN,
+  model: VIDEO_MODEL,
   resolution,
   seconds,
 });
@@ -42,22 +49,18 @@ const codeOf = (spec: MediaSpec) => {
 };
 
 describe("estimateMediaUsd — video, priced per video-second", () => {
-  it("Wan 2.5 480p x 10 s = $0.50", () => expect(usd(clip())).toBeCloseTo(0.5, 10));
-  it("720p is 2x and 1080p is 3x the 480p line", () => {
-    expect(usd(clip("720p"))).toBeCloseTo(1.0, 10);
-    expect(usd(clip("1080p"))).toBeCloseTo(1.5, 10);
-  });
+  it("Sora 2 720p x 4 s = $0.40", () => expect(usd(clip())).toBeCloseTo(0.4, 10));
   it("an unpriced model → unknown_model (a Veo-class endpoint is not in the table)", () => {
-    expect(codeOf({ kind: "video", model: "fal-ai/veo3", resolution: "480p", seconds: 10 })).toBe(
+    expect(codeOf({ kind: "video", model: "fal-ai/veo3", resolution: "720p", seconds: 4 })).toBe(
       "unknown_model",
     );
   });
   it("a resolution missing from the model's row → unknown_model, NEVER a tier fallback", () => {
     expect(codeOf(clip("4k" as VideoRes))).toBe("unknown_model");
   });
-  it("a duration outside {5,10} → illegal_duration, a DISTINCT lever from unknown_model", () => {
-    for (const s of [3, 7, 15, 0]) expect(codeOf(clip("480p", s))).toBe("illegal_duration");
-    expect(codeOf(clip("480p", 5))).toBe("ok");
+  it("a Sora duration outside {4,8,12} → illegal_duration", () => {
+    for (const s of [3, 5, 10, 15, 0]) expect(codeOf(clip("720p", s))).toBe("illegal_duration");
+    for (const s of [4, 8, 12]) expect(codeOf(clip("720p", s))).toBe("ok");
   });
   it("a non-finite duration is refused, never NaN dollars", () => {
     expect(codeOf(clip("480p", Number.NaN))).toBe("illegal_duration");
@@ -65,9 +68,9 @@ describe("estimateMediaUsd — video, priced per video-second", () => {
 });
 
 describe("estimateMediaUsd — the billing units differ, and the tests sit side by side", () => {
-  it("IMAGES bill per successful output: one image costs $0.03", () => {
+  it("GPT Image 2 low portrait reserves one cent including prompt allowance", () => {
     const { model, width, height } = MEDIA_DEFAULT_IMAGE;
-    expect(usd({ kind: "image", model, width, height })).toBeCloseTo(0.03, 10);
+    expect(usd({ kind: "image", model, width, height })).toBeCloseTo(0.01, 10);
   });
   it("TTS does NOT round its thousands: 1,200 chars → $0.018 exactly", () => {
     expect(usd(voice(1200))).toBeCloseTo(0.018, 10);
@@ -100,7 +103,7 @@ describe("estimateMediaUsd — the billing units differ, and the tests sit side 
 
 // The §4.1 job, as data. This is the reel the phase is budgeted around.
 const JOB_4_1: MediaSpec[] = [
-  ...Array.from({ length: 6 }, () => clip()), // 6 x 480p x 10 s = $3.000
+  ...Array.from({ length: 6 }, () => clip()), // 6 x 720p x 4 s = $2.400
   voice(1200), //                                voice            = $0.018
   voice(1200), //                                retry allowance  = $0.018
   { kind: "stt", model: MEDIA_DEFAULT_STT.model, audioMinutes: 1 }, // captions = $0.006
@@ -108,21 +111,21 @@ const JOB_4_1: MediaSpec[] = [
 ];
 
 describe("estimateBatchUsd + the job cap", () => {
-  it("the §4.1 job totals $3.062 and PASSES the $3.50 cap", () => {
+  it("the six-block Sora job totals $2.462 and PASSES the $3.50 cap", () => {
     const total = estimateBatchUsd(JOB_4_1);
     expect(total.ok).toBe(true);
-    if (total.ok) expect(total.value).toBeCloseTo(3.062, 10);
+    if (total.ok) expect(total.value).toBeCloseTo(2.462, 10);
     const chosen = chooseMediaBatch(JOB_4_1, MEDIA_JOB_CAP_USD);
     expect(chosen.ok).toBe(true);
-    if (chosen.ok) expect(chosen.value.estCents).toBe(307);
+    if (chosen.ok) expect(chosen.value.estCents).toBe(247);
   });
-  it("6 blocks at 720p ($6.00+) → over_job_cap", () => {
-    const job = [...Array.from({ length: 6 }, () => clip("720p")), { kind: "render" } as MediaSpec];
+  it("9 Sora blocks at 720p ($3.60+) → over_job_cap", () => {
+    const job = [...Array.from({ length: 9 }, () => clip()), { kind: "render" } as MediaSpec];
     const r = chooseMediaBatch(job, MEDIA_JOB_CAP_USD);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.code).toBe("over_job_cap");
   });
-  it("12 blocks at 480p ($6.00+) → over_job_cap", () => {
+  it("12 Sora blocks at 720p ($4.80+) → over_job_cap", () => {
     const r = chooseMediaBatch(
       Array.from({ length: 12 }, () => clip()),
       MEDIA_JOB_CAP_USD,
@@ -133,7 +136,7 @@ describe("estimateBatchUsd + the job cap", () => {
   it("ANY member's Err propagates — one unpriceable line refuses the whole job", () => {
     const r = estimateBatchUsd([
       clip(),
-      { kind: "video", model: "fal-ai/veo3", resolution: "480p", seconds: 10 },
+      { kind: "video", model: "fal-ai/veo3", resolution: "720p", seconds: 4 },
     ]);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.code).toBe("unknown_model");
@@ -141,7 +144,7 @@ describe("estimateBatchUsd + the job cap", () => {
   it("free line items contribute 0 and never make a job unknown_model", () => {
     const r = estimateBatchUsd([clip(), { kind: "free" }, { kind: "free" }]);
     expect(r.ok).toBe(true);
-    if (r.ok) expect(r.value).toBeCloseTo(0.5, 10);
+    if (r.ok) expect(r.value).toBeCloseTo(0.4, 10);
   });
   it("a non-positive cap refuses rather than passing everything", () => {
     for (const cap of [0, -1, Number.NaN]) {
@@ -211,11 +214,11 @@ describe("the price tables agree with the committed vendor fixture", () => {
     expect(MEDIA_TTS_PRICING[byKind("tts").id]).toBe(byKind("tts").rate);
     expect(MEDIA_STT_PRICING[byKind("stt").id]).toBe(byKind("stt").rate);
   });
-  it("every fixture entry records a live, non-deprecated endpoint", () => {
+  it("every fixture entry records a live endpoint and any deprecation has a shutdown date", () => {
     for (const e of FIXTURES.entries) {
-      expect(e.vendor.deprecated).toBe(false);
       expect(e.vendor.removed).toBe(false);
       expect(e.vendor.status).toBe("public");
+      if (e.vendor.deprecated) expect(e.vendor.shutdown).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     }
   });
   it("each number in a table is justified by the vendor's OWN string, or is marked MEDIUM", () => {

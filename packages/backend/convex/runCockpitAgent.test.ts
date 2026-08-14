@@ -150,6 +150,53 @@ test("kill-switch: runCockpitAgent returns a paused reply + blocked, and writes 
   expect(dlq).toHaveLength(0);
 });
 
+test("an email-dependent turn requests Gmail only when the disconnected user asks for email", async () => {
+  const { t, planId } = await setup();
+  const res = await t.action(internal.llm.runCockpitAgent, {
+    tenantId: "t1",
+    threadId: "thread1",
+    planId,
+    text: "Send the proposal to Amina",
+  });
+
+  expect(res.costUsd).toBe(0);
+  expect(res.reply).toMatch(/email capability/i);
+  expect(res.reply).toMatch(/connect Gmail/i);
+  expect(res.reply).toMatch(/rest of the cockpit remains available/i);
+});
+
+test("an explicit video request stages the media dispatch instead of invoking a withheld tool", async () => {
+  const { t, planId } = await setup();
+
+  const res = await t.action(internal.llm.runCockpitAgent, {
+    tenantId: "t1",
+    threadId: "thread1",
+    planId,
+    text: "Create a short-form video for our launch",
+    turnId: "video-turn",
+  });
+
+  expect(res.costUsd).toBe(0);
+  expect(res.reply).toMatch(/media director has started/i);
+  expect(res.reply).toMatch(/nothing has been generated/i);
+
+  const plan = await readPlan(t, planId);
+  expect(plan).toMatchObject({ kind: "memo", status: "collecting" });
+  expect(plan?.subject).toMatch(/^Reel:/);
+
+  const steps = await t.run((ctx) => ctx.db.query("agentSteps").collect());
+  expect(steps).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        turnId: "video-turn",
+        stepKey: "route-dispatchMedia",
+        tool: "dispatchMedia",
+        phase: "done",
+      }),
+    ]),
+  );
+});
+
 test("SMOKE::agent attachment ops drive the tools offline (attach -> regenerate -> removeAttachment)", async () => {
   const { t, planId } = await setup();
   const run = (text: string) =>

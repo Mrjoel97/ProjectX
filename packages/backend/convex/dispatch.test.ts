@@ -2138,6 +2138,98 @@ describe("20-08 — stageMediaPlan refuses rather than destroying an in-flight r
     expect(plan?.renderStatus).toBeUndefined();
   });
 
+  // ── THE INTERLOCK (2026-08-14) ────────────────────────────────────────────────────────────
+  // Reconstructed from a real transcript in which a SLIDE-DECK conversation lost its staged
+  // image proposal to a reel dispatch and then deadlocked.
+
+  test("a dispatch still in flight refuses a second one — the missing copy of research_in_flight", async () => {
+    const { t } = await setup();
+    // `stageMediaPlan` leaves the row `kind: memo` + `collecting`, which is precisely the shape
+    // `stageResearchPlan` refuses as `research_in_flight`. This function is documented as a
+    // second copy of that shape and had dropped the check.
+    await stagedMediaPlan(t);
+
+    const again = await restage(t);
+    expect(again.ok).toBe(false);
+    // NOT `draft_in_progress`: that reply tells the user about an email draft they do not have.
+    if (!again.ok) expect(again.reason).toBe("dispatch_in_flight");
+  });
+
+  test("a STAGED IMAGE PROPOSAL is not a spent deck — a reel may not silently discard it", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    // What `proposeImage` writes: a media-kind row carrying a prompt the user was told to review,
+    // with NO job yet because generation needs their click.
+    await t.run((ctx) =>
+      ctx.db.patch(planId, {
+        kind: "media",
+        mediaMode: "image",
+        imagePrompt: "A modern water-sensor dashboard, cool blues",
+        status: "proposed",
+      }),
+    );
+
+    const again = await restage(t);
+    expect(again.ok).toBe(false);
+    if (!again.ok) expect(again.reason).toBe("image_proposal_pending");
+    // …and the proposal SURVIVED. This is the assertion that matters: the old code returned ok
+    // and `resetPlan` wiped `imagePrompt`, so the user never saw the image they were promised.
+    const plan = await readPlan(t, planId);
+    expect(plan?.imagePrompt).toBe("A modern water-sensor dashboard, cool blues");
+    expect(plan?.mediaMode).toBe("image");
+  });
+
+  test("a SPENT image proposal recycles — the click already happened", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    await t.run((ctx) =>
+      ctx.db.patch(planId, {
+        kind: "media",
+        mediaMode: "image",
+        imagePrompt: "x",
+        status: "proposed",
+      }),
+    );
+    // One terminal job = the user clicked Generate. The proposal is history, not work in
+    // progress, so a reel may take the row. `jobs.length === 0` is what draws that line.
+    await seedJob(t, planId, "succeeded");
+
+    expect((await restage(t)).ok).toBe(true);
+  });
+
+  test("a reel still replaces a reel — the INTENDED flow is not caught by either interlock", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    // A previously proposed DECK, no image mode, no jobs. Not vacuous: it is the same
+    // `kind: media` + `proposed` shape the image case refuses, differing only in mediaMode.
+    await t.run((ctx) =>
+      ctx.db.patch(planId, { kind: "media", status: "proposed", clipSeconds: 4 }),
+    );
+
+    expect((await restage(t)).ok).toBe(true);
+  });
+
+  test("a completed refusal memo recycles so the user can retry the reel in the same chat", async () => {
+    const { t, planId } = await setup();
+    await t.run((ctx) =>
+      ctx.db.patch(planId, {
+        kind: "memo",
+        status: "done",
+        subject: "Reel: previous attempt",
+        body: "The previous deck was refused before generation.",
+      }),
+    );
+
+    const again = await restage(t);
+    expect(again.ok).toBe(true);
+    expect(await readPlan(t, planId)).toMatchObject({
+      kind: "memo",
+      status: "collecting",
+      subject: "Reel 2",
+      body: "",
+    });
+  });
+
   test("the USER'S OWN email draft is protected — the MODEL is deciding here, not the user", async () => {
     // `setup()` already inserts THIS thread's plan row, and `plans.by_thread` is `.unique()` —
     // inserting a second one throws before the assertion can run.

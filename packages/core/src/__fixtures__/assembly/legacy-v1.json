@@ -1,0 +1,28 @@
+{
+  "script": "assemble_final.sh",
+  "out": "final.mp4",
+  "block_count": 6,
+  "clip_seconds": 10,
+  "total_duration_s": 60,
+  "actual_duration_s": 60.04,
+  "width": 1080,
+  "height": 1920,
+  "fps": "30.0000",
+  "sfx_vol": 0.12,
+  "gates": ["speech_within_window", "narration_every_window", "duration_within_1s"],
+  "blocks": [
+    {
+      "block_index": 0,
+      "window_start_s": 0,
+      "lead_silence_s": 0.35,
+      "speech_abs_s": 0.5,
+      "speech_dur_s": 9,
+      "clip_dur_s": 10.02,
+      "overrun": false,
+      "internal_pauses": 0,
+      "freeze_head": false,
+      "freeze_tail": false
+    }
+  ],
+  "ts": "2026-08-02T00:00:00Z"
+}

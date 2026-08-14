@@ -141,7 +141,10 @@ describe("estimateFolderCents — conservatism, by direction", () => {
     ];
     const { perFile, estCents } = estimateFolderCents(files);
     expect(perFile).toHaveLength(2);
-    expect(perFile[1]!.cents).toBeGreaterThan(perFile[0]!.cents);
+    const small = perFile[0];
+    const large = perFile[1];
+    if (!small || !large) throw new Error("expected one estimate per fixture");
+    expect(large.cents).toBeGreaterThan(small.cents);
     expect(perFile.reduce((s, f) => s + f.cents, 0)).toBe(estCents);
   });
 

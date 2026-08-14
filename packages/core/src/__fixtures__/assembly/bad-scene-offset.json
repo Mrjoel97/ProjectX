@@ -1,0 +1,83 @@
+{
+  "script": "assemble_final.sh",
+  "out": "final.mp4",
+  "scene_count": 4,
+  "target_duration_s": 30,
+  "total_duration_s": 30,
+  "actual_duration_s": 30.016,
+  "width": 1080,
+  "height": 1920,
+  "fps": "30.0000",
+  "sfx_vol": 0.12,
+  "gates": [
+    "speech_fits_the_reel",
+    "no_overlapping_lines",
+    "clip_covers_window",
+    "speech_centred",
+    "no_time_stretch",
+    "narration_every_narrated_span",
+    "master_audio_timeline",
+    "linear_loudnorm_-16",
+    "duration_within_0.5s",
+    "full_decode"
+  ],
+  "scenes": [
+    {
+      "index": 0,
+      "start_s": 0,
+      "duration_s": 8,
+      "visual": "video",
+      "lead_silence_s": 0.2,
+      "speech_abs_s": 0.4,
+      "speech_dur_s": 7.6,
+      "clip_dur_s": 8,
+      "overrun": false,
+      "internal_pauses": 0,
+      "freeze_head": false,
+      "freeze_tail": false
+    },
+    {
+      "index": 1,
+      "start_s": 8,
+      "duration_s": 6,
+      "visual": "image",
+      "lead_silence_s": 0.2,
+      "speech_abs_s": 8,
+      "speech_dur_s": 7.6,
+      "clip_dur_s": 6,
+      "overrun": false,
+      "internal_pauses": 0,
+      "freeze_head": false,
+      "freeze_tail": false
+    },
+    {
+      "index": 2,
+      "start_s": 15,
+      "duration_s": 4,
+      "visual": "card",
+      "lead_silence_s": 0,
+      "speech_abs_s": 14,
+      "speech_dur_s": 0,
+      "clip_dur_s": 4,
+      "overrun": false,
+      "internal_pauses": 0,
+      "freeze_head": false,
+      "freeze_tail": false
+    },
+    {
+      "index": 3,
+      "start_s": 18,
+      "duration_s": 12,
+      "visual": "video",
+      "lead_silence_s": 0.2,
+      "speech_abs_s": 18.2,
+      "speech_dur_s": 11.6,
+      "clip_dur_s": 12,
+      "overrun": false,
+      "internal_pauses": 0,
+      "freeze_head": false,
+      "freeze_tail": false
+    }
+  ],
+  "ts": "2026-08-14T00:00:00Z"
+}

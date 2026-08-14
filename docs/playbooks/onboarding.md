@@ -1,5 +1,40 @@
 # Playbook: Persona Onboarding & Business Profile
 
+> Last verified: 2026-08-14 (⚠ **SOURCE REVIEW OF AN UNCOMMITTED FOREIGN-LANE DIFF, NOT A RUN.**
+> Reviewed by reading the working-tree diff of `onboarding/page.tsx` plus the new
+> `onboarding/onboardingFolder.ts`; no upload, onboarding turn or browser session was executed.
+> **ONBOARDING INTAKE NOW HAS TWO DOORS, NOT ONE: one starter file, or an unzipped FOLDER** via a
+> second `webkitdirectory` input (`data-testid="onboarding-folder-input"`, beside
+> `onboarding-file-input`). ZIP is explicitly unsupported and the helper copy says so.
+> **The selection brain is a new PURE module, `onboardingFolder.ts` — put folder logic there, not in
+> the page.** It owns: a 17-entry extension→MIME table (now including `.docx`/`.xlsx`/`.pptx`, and
+> `ONBOARDING_UPLOAD_ACCEPT` carries both MIME types and extensions for the same Windows-registry
+> reason recorded in the 2026-07-25 entry below); a skip set for `validation-private`, `.git`,
+> `node_modules`, `__macosx`; a 12-term priority sort that floats `business-overview`,
+> `company-profile`, `pricing`, `document-index` and friends to the front; and a hard
+> `ONBOARDING_FOLDER_FILE_CAP = 200`. **The intake text is NOT the documents** — only text-ish files
+> are concatenated, each fenced as `--- <folder-relative path> ---`, truncated at
+> `ONBOARDING_FOLDER_INTAKE_CHAR_CAP = 120_000`, and handed to `openingTurn(intakeText)`; when no
+> text file yields content it falls back to the single-doc `setPendingDocId` poll on the FIRST
+> successfully uploaded document. **THE FOLDER DOOR DELIBERATELY DOES NOT USE THE PHASE-15.3 FOLDER
+> RAIL.** `vault.vaultUpload` accepts an optional `folderId`; this path passes NONE. So an onboarding
+> folder lands N LOOSE vault documents whose filenames are folder-relative paths — **no `vaultFolders`
+> row, no reservation, no per-folder budget estimate, no folder digest, no drill-in.** Two folder
+> upload paths with different guarantees now exist; do not assume one when reading the other, and do
+> not "fix" this by threading a `folderId` without also taking 15.3's reservation, which exists
+> because a half-ingested folder is worse than a refused one. Also landed: per-file caps are
+> pre-checked CLIENT-side against `VAULT_FILE_CAP_BYTES`/`VAULT_VIDEO_CAP_BYTES` REUSED from
+> `@pikar/vault/constants` (a UX pre-check — the server cap is still the trust boundary); text files
+> are read in the browser and passed as `text` to `vaultUpload`, so those skip server extraction and
+> land `processing` rather than `pending_extraction`; the upload loop is SEQUENTIAL and
+> partial-failure tolerant, hard-failing only when zero files land and otherwise reporting a
+> `role="status"` note; and the pickers became `<span class="icon-btn onboarding-file-picker">`
+> wrapping real inputs with `disabled={busy}`, replacing the hidden-input-plus-button idiom.
+> **TWO HONEST DEFECTS FOUND BY THIS REVIEW AND NOT FIXED — see "Known gaps & deferred work":**
+> `ignoredCount` conflates unsupported-type with over-the-200-cap so the copy calls cap drops
+> "unsupported", and a 200-file sequential loop has no resume, so a closed tab leaves a partly
+> populated vault with nothing recording that a folder was ever attempted.)
+
 > Last verified: 2026-08-10 (17.1-10 L6 postmortem). The live gate did not produce a certifying
 > result: its one top-level command timed out after **1808.1 seconds** with no captured stdout and
 > surviving eval-owned processes. Database recovery did verify the eval-only seed wrote confirmed
@@ -1141,6 +1176,20 @@ cannot see:
 
 ## Known gaps & deferred work
 
+- **Folder intake reports cap drops as "unsupported"** (found 2026-08-14 by source review, NOT
+  fixed). `selectOnboardingFolderFiles` returns a single `ignoredCount = files.length -
+  min(supported.length, 200)`, which folds two different reasons into one number: a file the
+  allow-list rejected, and a perfectly supported file dropped by `ONBOARDING_FOLDER_FILE_CAP`. The
+  page then renders it as "N unsupported or failed items were skipped", so a 500-document folder
+  tells the user 300 of their documents were unsupported when they were simply over the cap — the
+  same class of user-visible untruthfulness as the 19.1 `1 rejected → 0 rejected` defect.
+  `ponytail:` upgrade path = return `{unsupported, overCap}` and let the copy name the cap.
+- **A folder upload has no resume and leaves no trace of the attempt** (found 2026-08-14, NOT
+  fixed). Up to 200 files upload sequentially in the browser with no concurrency and no
+  checkpoint; a closed tab or a refresh mid-loop leaves a partly populated vault and — because this
+  path passes no `folderId` — no `vaultFolders` row recording that a folder was ever attempted, so
+  nothing can report it as incomplete or resume it. This is the exact failure mode Phase 15.3's
+  reservation exists to prevent on the other folder path.
 - **Names-in-prose PII ceiling** (shared S1/S4 open item): `packages/pii` scrubs STRUCTURED PII only;
   grounded business-profile prose containing person names must stay out of exportable/WORM tables until
   the NER spike resolves. `ponytail:` upgrade path = Presidio/NER before any multi-user export.

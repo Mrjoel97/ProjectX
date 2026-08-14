@@ -1,5 +1,76 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Provider cutover verified 2026-08-14: new images use OpenAI GPT Image 2 and new videos use
+> OpenAI Sora 2 through `OPENAI_API_KEY`. Images land synchronously; videos follow
+> `submitLine` → `pollOpenAiVideoTask` → `mediaComplete.landResult`. OpenAI has announced that
+> the Sora 2 Videos API shuts down on 2026-09-24. Voiceover and word-timed captions use the
+> same OpenAI account. Narration text is sent to OpenAI for speech,
+> and the generated clean voice audio is sent back to OpenAI for transcription with the owner's
+> explicit approval. The Wan poller and fal callback fields/routes remain legacy-compatible only
+> for already-submitted historical jobs. Older provider-specific sections below describe the
+> superseded implementation unless explicitly marked current. See ADR-017.
+
+> Last verified: 2026-08-14 (20.2 wave 5, part 1 — **the SCENE sidecar, and the v1 shape refused
+> by name.** `scene_count`/`target_duration_s`/`scenes[]` replace `block_count`/`clip_seconds`/
+> `blocks[]`; the validator re-derives the running sums and both timeline guarantees from the bytes.
+> `renderInputName` gained `blockNN.png` and `cardNN.txt`, the route body carries
+> `targetSeconds`+`scenes[]`+`cards[]`, and `batchToRender` reads the deck so a card needs no job and
+> a silent scene needs no take. Verified by a REAL render whose sidecar was fed back through the
+> shipped validator and accepted; 897 core + 1645 backend green. **NOT yet done in this wave:**
+> `reserveJobInner`'s scene line items and the `hasAssetSource` narrowing — see the note at the end
+> of the assemble-contract section.)
+
+> Last verified: 2026-08-14 (20.2 wave 4 follow-up — **the captions module was corrected for the
+> scene timeline BEFORE wave 5 removes the refusals hiding the defect.** Take offsets are now keyed
+> by narrated ordinal (a silent scene is a hole, not an index), and the clamp bound is the next
+> take's `speechAbsS` rather than `windowStartS + clip_seconds`. Both were observed RED first — the
+> misassignment put a caption 10.5s from where it belonged. Risk 5 is CLOSED by measurement:
+> production holds 257 `plans` rows, fully scanned, and **zero** carry a `sidecarStorageId`, so
+> wave 5 may hard-reject the v1 sidecar shape with no migration and no re-render decision.)
+
+> Last verified: 2026-08-14 (20.2 wave 4 — **narration moved to a MASTER AUDIO TIMELINE and the
+> per-scene speech band is deleted.** Every scene is built as a silent picture, the pictures are
+> concatenated once, and every voice take plus every clip's diegetic bed is placed at its ABSOLUTE
+> offset and mixed in a SINGLE `amix`. A line may now run past its own scene. Verified by a REAL
+> render: `smoke_assemble.sh` put 7.2s of speech in a 6s scene — a wave-3 hard error — and the
+> reel came out at 30.016s. The narration assert was **observed RED**: the same deck through a
+> sabotaged copy with the takes muted into the mix exits 1 with the narration error, which is the
+> phase's named vacuity risk closed by observation rather than by claim. New: `--target-seconds`,
+> asserted before any work and on the output at ±0.5s.)
+
+> Last verified: 2026-08-14 (20.2 wave 3 — the assembler builds THREE kinds of scene at
+> per-scene lengths, and a voice take is now optional. Verified by a REAL render:
+> `smoke_assemble.sh` produced a 30s reel from clip+still+card+clip with one silent scene,
+> decode-validated, sidecar asserted. The uniform BLOCK path renders unchanged and its sidecar
+> is still ACCEPTED by the live publish gate; a mixed sidecar is REFUSED by it, which is
+> correct and is why waves 4-5 must land before a scene deck is buyable.)
+
+> Last verified: 2026-08-14 (`media.byPlan` now projects `shot.type ?? shot.visual` for the tile
+> caption — the ONE place the block and scene closed sets are allowed to meet, because it is a
+> display projection. `deckOf` keeps them apart on the money path, where reading a scene as a
+> block would price it at the wrong duration. This closed an `apps/web` typecheck break left by
+> 20.2 wave 2, which verified `packages/backend` tsc but not `apps/web` tsc.)
+
+> Last verified: 2026-08-14 (20.2 wave 2 — the scene contract reaches the Convex adapters. Schema
+> WIDENED (`shots.visual`, `shots.asset`, `shots.type` now optional, `plans.targetDurationSeconds`);
+> `persistStoryboard` reads either contract; the editor offsets are a RUNNING SUM; and a scene deck
+> is REFUSED at both money gates with `scene_render_not_ready` rather than mispriced. Two
+> pre-existing defects were fixed on the way in — see the section below. backend 1631/1655,
+> core 868/868, cost 55/55, tsc clean.)
+
+> Last verified: 2026-08-14 (20.2 wave 1 — **the SCENE TIMELINE contract lands in `storyboard.ts`,
+> alongside the uniform BLOCK contract rather than replacing it.** `parseSceneDeck` is exported and
+> has no callers yet; wave 2 moves them and a later wave deletes `parseBlockDeck`. Nothing about the
+> live reel path changed. `packages/core` 868/868, and BOTH new guards — the exact-length assert and
+> the narration ceiling — were OBSERVED RED under mutation before being trusted.)
+
+> Last verified: 2026-08-12 (production snapshot bake prerequisite — Vercel's current AL2023
+> sandbox image has `tar` but omits the `xz` helper required by the pinned ffmpeg `.tar.xz` asset.
+> The owner bake now installs `xz` explicitly before download/extraction; render sandboxes remain
+> deny-all and the one-time bake sandbox is still stopped on every failure path. The corrected bake
+> completed on 2026-08-12 and produced `snap_shetn1hAzlXxJMSA3lQmE5keSIIh`, installed on the new
+> isolated Vercel project's preview and production environments.)
+
 > Last verified: 2026-08-09 (26-08 — **the media rail is now double-entered, and it is the ONE rail
 > whose two planes deliberately do NOT agree cent for cent.** See "The spend ledger (26-08)" below.)
 >
@@ -829,15 +900,154 @@ entry and no `render/`-sourced body ever appears. Do not "fix" the mirror into a
 
 | Property | The failure it prevents |
 |---|---|
-| **Fixed length `N × clip-seconds`**, asserted on the OUTPUT to ±1s | a video silently shortened to fit its audio |
+| **Fixed length**, asserted on the OUTPUT to ±0.5s against `--target-seconds` (wave 4; was `N × clip-seconds` to ±1s) | a video silently shortened to fit its audio |
 | **No time-stretch, ever** — no `atempo`, no `setpts`, no speech trimming | an overrunning line rate-shifted into the window; audible, and no downstream test would catch it. An overrun is a HARD ERROR to be rewritten upstream |
 | **A clip shorter than its window by >0.5s is a HARD ERROR** | a held still frame passed off as a scene |
 | **Speech-centred, not file-centred** (lead/trail silence measured by `silencedetect` and ignored) | a padded TTS take shifting the words off their scene |
-| **Narration in every window**, asserted on the joined track before finalisation | the "silent second half" failure of every hand-rolled assembly |
+| **Narration over every NARRATED SPAN**, asserted on the mixed track before finalisation (wave 4; was "every window") | the "silent second half" failure of every hand-rolled assembly |
 
 Also inherited: per-input voice loudnorm (a fresh TTS take lands near −31 dB while dialogue lifted
 out of a generated clip lands near −21 dB — mixing both at 1.0 is the "narrator quiet, character
 loud" complaint), two-pass **linear** loudnorm at −16 LUFS on the final, and full-decode validation.
+
+### The master audio timeline (20.2 wave 4) — and what replaced the per-cell band
+
+Audio used to be mixed **inside each scene**, and the finished scenes concatenated. That made the
+scene the mixing unit, and everything else followed from it: a voice line had to fit
+`[SEC − 1.4, SEC]` seconds, so narration was written for a 56-character cell rather than for a reel.
+
+The shape now:
+
+1. Each scene is built as a **silent** picture, exactly its own length. Nothing is muxed per scene.
+2. The pictures are concatenated **once** (`-an`) into one silent track.
+3. Each take is level-matched individually (`loudnorm=I=−19:TP=−1.5:LRA=11` — **unchanged**, it is
+   what removes the "narrator quiet, character loud" spread) and each `video` scene's diegetic audio
+   is lifted off the ORIGINAL clip to a wav.
+4. Everything is placed on ONE timeline at its **absolute** offset via `adelay` and mixed in a
+   **single `amix`** with `normalize=0` (the default would divide a reel down for having more lines
+   in it). Input 1 is a full-length silence bed, so the mix always spans the reel.
+5. Two-pass **linear** loudnorm at −16 LUFS on the result — **unchanged**.
+
+**Placement:** speech is centred in its own scene, compensating for the take's own lead silence. A
+take LONGER than its scene cannot be centred without starting before the scene does, so it
+**anchors at that scene's start** and carries over the cut. `speech_abs_s` is recomputed FROM the
+applied delay, never from the intent, so a clamp can't make the sidecar disagree with the mix.
+
+**What replaced the band — two errors about the TIMELINE, not the cell.** Both are still HARD
+ERRORS whose fix is to rewrite the line upstream; the "no time-stretch, ever" property is unchanged:
+
+- a line whose speech runs **past the end of the reel** (it would be cut mid-word), and
+- a line whose speech runs **into the start of the next line** (two narrators at once).
+
+0.05s of slack on each absorbs `silencedetect`'s own resolution.
+
+**Why the narration assert is not vacuous.** With optional narration, "narration in every window"
+becomes trivially passable if it is *relaxed*; this repo has a named defect class for exactly that.
+It was **re-expressed**, not relaxed: the span checked is the TAKE's own speech span on the master
+timeline, keyed off the takes that actually existed. A scene with no take declares no span and is
+never checked; a scene that HAS a take is always checked. So a deck cannot dilute the gate by adding
+silent scenes, and a take that was measured, level-matched, delayed and then lost on the way into
+the mix still fails. `smoke_assemble.sh` ends by re-rendering the same deck through a sabotaged copy
+(one `sed`, muting the takes into the mix) and **requires that run to fail** — the sabotage lives in
+the smoke and never in the shipped script, because a production assembler with a "skip the gate"
+switch is the same hole.
+
+**`--target-seconds`**, off the deck header: the scenes must sum to exactly it (refused before any
+work, while the failure is still free) and the finished file must land within 0.5s of it. Omitted,
+it defaults to the sum, which is what the uniform `--blocks` path passes.
+
+> **Known seam, wave 4 → wave 5.** `assembly.ts` still refuses a sidecar whose `speech_dur_s`
+> exceeds `clip_seconds` (the longest scene on a mixed deck). On the scene timeline a line is
+> ALLOWED to be longer than that, so such a render is correct and would still be refused at
+> publish. It goes away with `clip_seconds` itself in wave 5; until then the assembler emits a
+> `WARN` naming the refusal, rather than letting a paid render be rejected with no explanation
+> anywhere.
+
+### The SCENE sidecar (20.2 wave 5) — and the v1 shape refused by name
+
+`block_count` and `clip_seconds` are **gone**, not renamed-and-kept: a reel is scenes with their
+own lengths, so "the clip length" was a fact about a contract that no longer exists.
+
+```
+block_count      -> scene_count
+clip_seconds     -> (removed; per-scene duration_s)
+                 +  target_duration_s
+blocks[]         -> scenes[] { index, start_s, duration_s, visual,
+                               lead_silence_s, speech_abs_s, speech_dur_s,
+                               overrun, internal_pauses, freeze_head, freeze_tail }
+```
+
+**`parseAssemblySidecar` refuses the v1 shape OUTRIGHT**, with its own `legacy_sidecar` code, on the
+mere presence of `block_count`, `clip_seconds` or `blocks`. Falling through to `missing_field` would
+send an operator looking for a corrupted write; naming the old shape says the runner is stale. A
+validator that accepts two shapes proves neither. **This was safe to ship because it was measured,
+not assumed:** production held 257 `plans` rows on 2026-08-14, fully scanned, and zero carried a
+`sidecarStorageId` — so there is no published reel to orphan and no re-render decision to make.
+
+The validator now re-derives, from the bytes, the same guarantees the script enforces: the scenes
+SUM to the declared target, `start_s` is genuinely the running sum, no line runs past the end of
+the reel, and no line runs into the next one. A sidecar that did not come from the script has to
+lie about all of them, not just about the `overrun` flag.
+
+**The two sides are tied by a test.** The script writes the sidecar with a shell `printf` and
+`assembly.ts` reads it with a TS parser, in different packages — nothing else connects them, and
+each suite is self-consistent under a rename. `assembleScript.test.ts` pins the exact field names
+the validator requires, and asserts the retired ones are absent from the script.
+
+### Inputs, and the ONE that is not a job (20.2 wave 5)
+
+`renderInputName` gained two kinds and `RENDER_INPUT_NAME` — the path-traversal allow-list the
+runner checks before writing a byte — widened with them:
+
+| Scene kind | File | Where the bytes come from |
+|---|---|---|
+| `video` (`generated_video`, `uploaded_video`) | `blockNN.mp4` | a `video` job, fetched by id |
+| `image` (`animated_image`) | `blockNN.png` | an `image` job, fetched by id |
+| `card` (`text_card`) | `cardNN.txt` | **the request body** |
+| narration | `voiceNN.wav` | a `tts` job, fetched by id — and now OPTIONAL |
+
+A still shares its clip's STEM on purpose: the assembler picks its branch from the scene kind it was
+given, never from what it found in the directory, so `block02.png` and `block02.mp4` are one slot
+rather than two.
+
+> **A card's WORDS cross into the VM, and that is a deliberate exception to "no narration, no
+> prompts".** A card is drawn, so there is no job, no asset and no storage id to hand over instead —
+> the alternative was minting a storage object per card to carry forty characters. It is bounded on
+> both sides: `isRenderableCardText` (non-empty, ≤512 chars, printable — newline is the one control
+> character allowed) at the route AND at `batchToRender`, and `expansion=none` + `textfile=` in the
+> script is what stops those words being evaluated as an ffmpeg expression. It is never logged,
+> audited or echoed in a failure. **A second exception is a decision, not a patch.**
+>
+> `cardNN.txt` is refused in the `inputs` list for a related reason: an input name is FETCHED from
+> the blob route, which resolves job ids, so the two lists must not overlap.
+
+### `batchToRender` reads the DECK now, not just the jobs
+
+On the block contract the jobs were a complete description of the reel — one clip per index, every
+clip the same length. On a scene timeline they are not: a `text_card` has no job at all and a silent
+scene has no take. So the shape comes off `plans.shots` and the jobs are checked against it, index
+by index. Two unconditional demands became conditional:
+
+- **the picture** is still required per scene, but WHICH one depends on the kind — and a card needs
+  none;
+- **a voice take** is required only where the deck declares a line. Demanding one at every index is
+  what made a deck containing a silent card unrenderable, and it was NOT in the wave-5 plan row —
+  wave 4 made narration optional at the assembler and left this side unchanged.
+
+The route call carries `targetSeconds` + `scenes[]` + `cards[]` instead of `blockCount` +
+`clipSeconds`, and the script is invoked as `--scene KIND:SECONDS … --target-seconds N`. The
+scenes-sum-to-target check runs in three places (`batchToRender`, `parseBody`, the script) because
+each is a cheaper failure than the one after it — the first costs nothing, the last costs a sandbox.
+
+> **Wave-4 defect found and fixed here:** `reasonCodeFor`'s stderr patterns still matched the
+> pre-wave-4 wording (`of speech; required`, `have NO narration in their windows`, `!= expected`).
+> Wave 4 rewrote all three messages, so a line running past the reel came back as the catch-all
+> `render_failed` instead of `speech_out_of_window`. The patterns now match the script's current
+> wording, and `render.test.ts` drives them from strings copied out of it.
+
+> **Still named `blockCount`:** `plans.renderSummary.blockCount` and the `media.rendered` audit
+> payload key. Both are display/record fields owned by the canvas, which wave 6 touches — they are
+> fed `report.sceneCount` and rename with the UI rather than ahead of it.
 
 ### The sidecar field set AS HARVESTED
 
@@ -845,7 +1055,7 @@ loud" complaint), two-pass **linear** loudnorm at −16 LUFS on the final, and f
 validator maps snake_case in → camelCase out in one place, so a field-name correction is a one-file
 change.
 
-Top level: `script` · `out` · `block_count` · `clip_seconds` · `total_duration_s` ·
+Top level: `script` · `out` · `block_count` · `clip_seconds` · `target_duration_s` · `total_duration_s` ·
 `actual_duration_s` · `width` · `height` · `fps` · `sfx_vol` · `gates[]` · `blocks[]` · `ts`
 Per block: `block_index` (0-based) · `window_start_s` · `lead_silence_s` · `speech_abs_s` ·
 `speech_dur_s` · `clip_dur_s` · `overrun` · `internal_pauses` · `freeze_head` · `freeze_tail`
@@ -1379,9 +1589,33 @@ after it. `packages/core/src/captions.ts` owns this, consumes the VALIDATED `Ass
 a raw sidecar), and its first test asserts the identity directly: a word at the take's very first
 speech instant lands EXACTLY at `speechAbsS`.
 
-A rebased time outside its own block's window is **CLAMPED and flagged**, never allowed through — a
-bleeding word is a caption rendered over the next block's scene, which reads as a caption for the
+A rebased time outside `[windowStartS, boundS]` is **CLAMPED and flagged**, never allowed through —
+a bleeding word is a caption rendered over the next take's line, which reads as a caption for the
 wrong shot rather than as a timing bug.
+
+#### The two keys, both corrected for the scene timeline (20.2, before wave 5)
+
+Neither of these was reachable in production — `unrenderable_block`, the minimum-narration check and
+`assembly.ts`'s `speech_exceeds_window` refusal each held one shut. **Wave 5 removes all three**, so
+they were fixed first. That is the same ordering rule the plan already applies to the money leak.
+
+**1. The take offsets are keyed by NARRATED ORDINAL, never by `blockIndex`.** `concatWavTakes`
+emits one offset per take it was handed, positionally, and `media.ts:1375-1378` hands it the
+succeeded `tts` rows **sorted by `blockIndex`**. Those agree with `blockIndex` only while every
+scene owns a take. Since wave 3 a scene may be deliberately silent — the sidecar says so with
+`speech_dur_s: 0` — and a silent scene is a **hole**: reading `offsetsS[blockIndex]` past one hands
+every later scene the wrong take and drops the last one off the end of the array. On a 3-scene reel
+with a silent card the final line landed **10.5s early, against the card's anchor**. The invariant
+wave 5 must preserve: *a scene has a `tts` row if and only if its sidecar entry has
+`speech_dur_s > 0`.*
+
+**2. The clamp bound is the NEXT take's `speechAbsS` (or `total_duration_s` for the last), not
+`windowStartS + clip_seconds`.** Since wave 4 a line may legitimately run past its own scene, so a
+scene-width bound is wrong in *both* directions: it cuts a correct line off at the boundary (the
+live uniform path — a 10.4s take in a 10s block loses its last 0.4s and gets flagged `clamped`),
+and on a mixed deck `clip_seconds` is the LONGEST scene, which is loose enough to let a drifting
+word sail over the next take. The next take's start is the bound `assemble_final.sh` itself
+enforces on the audio, so the captions and the mix cannot disagree about where a line ends.
 
 ### ONE request, which forced a real wav concat
 
@@ -1556,6 +1790,229 @@ guard narrows to "unpaid AND no overlay text" rather than disappearing.
 lines"* test used a 13×TEXT deck and passed — which was the defect. The flooring-once property is now
 asserted on a RENDERABLE deck, and the pure 13-line arithmetic remains in
 `packages/cost/src/media.test.ts`.
+
+
+## The scene timeline (20.2) — the contract that makes the reel reachable again
+
+⚠ **The guard above is correct, and the deck it refuses is the deck the specialist is TAUGHT to
+write.** `media-director.md:82` emits a `SCREEN REC` row in its own worked example, and
+`media-director.md:87-89` teaches all four shot types as legal. So the canonical proposal passes
+every free stage, reaches the money gate, and is refused with `unrenderable_block`. **The reel has
+been unreachable in the PRODUCT, not broken in the render chain** — `renderReel` → the route → the
+sandbox → `assemble_final.sh` is intact and its tests are green.
+
+Phase 20.2 repairs this by making all four visual sources renderable, rather than by narrowing what
+the specialist is allowed to write. Wave 1 lands the CONTRACT only, in
+`packages/core/src/storyboard.ts`, **beside** the block contract:
+
+| Block contract (live) | Scene contract (20.2) |
+|---|---|
+| `Block`, `parseBlockDeck` | `Scene`, `parseSceneDeck` |
+| `SHOT_TYPES` — AI / SCREEN REC / TEXT / VIDEO, two of them unrenderable | `VISUAL_KINDS` — `generated_video` / `animated_image` / `uploaded_video` / `text_card`, **all four renderable** |
+| `clipSeconds`, uniform; `mixed_durations` refuses rows that disagree | per-scene `durationMs`; `duration_mismatch` refuses rows that disagree with the DECLARED TOTAL |
+| length is an accident of `blocks × clipSeconds` | `TARGET_DURATIONS` = 15 / 30 / 60, summed EXACTLY |
+| `windowStartMs = index * clipSeconds * 1000` | `startMs` = running sum of prior durations |
+| narration band `[minCharsFor, maxCharsFor]` per window | ceiling only — `narrationCeilingSeconds` |
+
+**The narration FLOOR is deleted, and that is a consequence rather than a preference.** Under the
+block contract a take is `adelay`-padded and `amix`ed INSIDE its own window, so speech had to FILL
+`[clip - 1.4, clip]` seconds — a 31–56 character band at 4 s, which is not a band a person can write
+in. Wave 4 places every take at an absolute offset on ONE master track, so silence around a line is
+free and the only physical limit is that a line must not run into the NEXT line. That limit is
+`narrationCeilingSeconds(scenes, i)`: from a scene start to the start of the next NARRATED scene.
+**A silent scene lends its whole duration to the line before it**, which is what lets a deck cut
+visually without cutting the sentence.
+
+**The provider grid is real, and is named rather than hidden.** Sora returns 4, 8 or 12 second
+clips, so a `generated_video` scene must land on `GENERATED_CLIP_SECONDS`. The other three kinds are
+frame-exact at any whole second — which is what makes an exact 15/30/60 possible at all, and is also
+a ~10x cost lever: a 4 s generated clip is ~40 cents, a 4 s animated still ~4 cents.
+
+**`LEGACY_VISUAL` migrates a TYPE, never a DURATION.** The block contract used 5- and 10-second
+clips and neither is on Sora's grid, so an old Wan deck maps its types cleanly and still refuses
+with `illegal_generated_duration`. Pinned by a test; pretending otherwise would move the failure out
+of this parser and into a paid submit.
+
+**`unrenderable_block` narrows rather than disappears.** Its replacement is `hasAssetSource`: an
+`uploaded_video` scene with no vault ref has nothing to render. `isPaidScene` is now a separate
+question from renderability, where `isPaidBlock` conflated the two.
+
+`SECTION_TOKENS` gained `SCENE DECK` and `SCENE PROMPTS`, so `ART DIRECTION` terminates at a scene
+deck instead of swallowing it — the same failure the block tokens were added for.
+
+**How to verify:** from `packages/core`, `npx vitest run src/storyboard.test.ts`. The two guards
+that can go vacuous are the exact-length assert and the narration ceiling; both were
+mutation-checked (neuter the condition, observe exactly one test go red) rather than trusted. Do the
+same to anything added here — this subsystem has a documented history of mechanism coverage passing
+while the behaviour was broken.
+
+**NOT yet done (waves 2-8):** no caller reads `parseSceneDeck`; the schema, price table, assembler,
+sidecar, captions, canvas and the `media-director` body are all still on the block contract. The
+reel stays unreachable until wave 3 gives the assembler its card / still / upload branches.
+
+
+## The scene timeline reaches the adapters (20.2 wave 2)
+
+Wave 1 was one pure file with no callers. Wave 2 is where the contract meets the database, the
+dispatch terminal and the two money gates.
+
+### The schema is WIDENED, and `type` going optional is the load-bearing part
+
+```
+shots[].type      v.string()  ->  v.optional(v.string())   // block rows only
+shots[].visual                    v.optional(v.string())   // NEW - scene rows only
+shots[].asset                     v.optional({source,docId}) // NEW - uploaded_video only
+plans.targetDurationSeconds       v.optional(v.number())   // NEW - scene decks only
+```
+
+**There is no `durationMs` and no `startMs`, deliberately.** `shots[].seconds` and
+`shots[].windowStartMs` already carried a variable timeline — the block contract merely happened
+to write them uniformly. A scene row writes its real duration and its running-sum offset into the
+SAME two columns, so there is no second pair of fields that can disagree with them.
+
+**`type` was widened to optional rather than overloaded with a `VisualKind`, and that choice is a
+money-path guard.** `media.deckOf` gates on `SHOT_TYPES.includes(s.type)`. An absent `type` makes
+it return null, so a scene deck cannot be read as a block deck. Writing a legacy-equivalent token
+there instead would have let four scenes of 8/6/4/12 seconds be priced at the deck-wide
+`clipSeconds` of 12 — fail-open, silently overcharging, on a paid path. `visual` present is the
+per-row discriminator; `targetDurationSeconds` present is the per-plan one. There is no third
+`deckKind` column to keep in sync with either.
+
+### Two contracts, one terminal — and the ORDER is the design
+
+`media-director.md` still teaches the BLOCK deck and does not become a scene author until its body
+is recertified through the eval gate (wave 8), so both shapes arrive at `persistStoryboard` for
+several waves. A scene deck wins when the body contains one. **The fallback to `parseBlockDeck` is
+guarded on `no_deck` ALONE** — "this body has no SCENE DECK heading at all". A scene deck whose
+durations do not sum, or whose visual kind is unknown, is REFUSED as a scene deck; falling through
+there would read its rows under the uniform contract and propose a reel nobody wrote.
+
+### The editor offsets are a RUNNING SUM
+
+`patchShots` computed `windowStartMs: i * clipSeconds * 1000`. On a scene deck a reorder or a
+delete would have rewritten every offset onto a uniform grid the shots were never cut to —
+desynchronising the whole timeline from the narration anchors, and on a 30-second reel writing a
+36-second offset. It now sums each shot's own `seconds`. **Identical output for a uniform deck by
+construction**, which the block-contract tests pin, so this is a generalisation rather than a
+behaviour change.
+
+### A scene deck is REFUSED at the money gates, not mispriced
+
+`scene_render_not_ready` is a new `ReserveRefusal`, returned by `generateReel`, by the approve arm
+in `cockpit.executePlan`, and by `jobEstimate` so the canvas states it instead of rendering a
+silent $0. It sits at the MONEY gate rather than earlier on purpose: a scene deck is a perfectly
+good proposal to read, edit and reorder — it just cannot be bought until waves 3 and 4 give the
+assembler its card / still / upload branches and its master audio track.
+
+⚠ **The plan had wave 2 narrowing `unrenderable_block` to `hasAssetSource`. It does NOT, and must
+not.** Narrowing it here would let a `text_card` scene through the money gate while the assembler
+still has no `drawtext` branch — the paid scenes land, then the render hard-errors on the missing
+`blockNN.mp4`. That is exactly the money leak the guard exists to close, re-opened for one wave.
+The narrowing belongs in wave 3, the moment the assembler can actually draw a card.
+
+### Two pre-existing defects fixed on the way in
+
+**1. The display set and the purchasable set had drifted, and the money gate asked the wrong one.**
+`CLIP_SECONDS` is `[4,5,8,10,12]` — deliberately wide, so a deck proposed under an older provider
+still DISPLAYS. `MEDIA_VIDEO_SECONDS["sora-2"]` is `[4,8,12]`. After the OpenAI cutover a
+10-second deck therefore parsed free, cleared `reserveJobInner`'s own duration check, and was
+refused three checks later inside `estimateMediaUsd` with the same `illegal_duration` code — same
+outcome, wrong place, and it read like a pricing bug. `cockpit.test.ts` had been RED for this
+since the cutover. There is now ONE predicate, `isBuyableClipLength`, asked of the provider table
+rather than of a constant, used by both `reserveJobInner` and `jobEstimate`.
+
+**A 10-second block deck is no longer buyable.** That is a real product consequence of the Sora
+cutover, not a test detail: the block contract is now 4, 8 or 12 seconds.
+
+**2. The approve path carried a hand-rolled copy of `deckOf`.** `cockpit.executePlan` re-derived
+the same three checks inline. Making `shots.type` optional broke the copy and not the original,
+so the approve path and the canvas path could have disagreed about whether a deck was readable —
+on the money path. It calls the shipped reader now. A money gate still does not assume its writer
+was correct; it just stops re-deciding what "correct" means.
+
+### How to verify
+
+`packages/backend`, `npx vitest run convex/media.test.ts convex/cockpit.test.ts
+convex/dispatch.test.ts convex/llmRedaction.test.ts`. The guards that can go vacuous are the
+running sum and the scene gate; both were mutation-checked — revert the sum to
+`i * clipSeconds * 1000` and two tests go red, delete the scene gate and one does.
+
+`llmRedaction.test.ts` pins the dispatch audit-payload COUNT (now 10) and demands a written §4
+review of each new payload before the number may move. `persistSceneDeck` takes a parameter
+literally named `body` — the specialist's output — which reaches `parseArtDirection`,
+`parseScript` and `landStoryboardRefusal` (the CONTENT plane) and NO audit payload. That is what
+the scan checks, and it is why the parameter name is safe rather than merely unnoticed.
+
+### Known red, and NOT this phase's
+
+`apps/web` `cockpitAccess.test.ts` fails on `ChatPane.tsx` copy ("Run the business with Pikar.").
+It is a source scan over a file 20.2 does not touch, and it was red before this phase started —
+in-flight work from the business-first cockpit language change. Left alone deliberately: fixing it
+means writing product copy nobody asked for.
+
+
+## The assembler learns three kinds of scene (20.2 wave 3)
+
+`assemble_final.sh` took N clips of one length. It now takes a list of SCENES, each with its
+own length and its own kind of picture:
+
+| kind | input, by index | built by |
+|---|---|---|
+| `video` | `in/blockNN.mp4` | scale/pad/fps normalise, as before |
+| `image` | `in/blockNN.png` | `zoompan` slow push, x4 upscale first |
+| `card` | `in/cardNN.txt` | `drawtext` over black |
+
+`--blocks N --clip-seconds C` still works and is **exactly N scenes of `video:C`** — it FILLS
+the same two arrays rather than taking a second path, which is what lets the live block contract
+keep rendering byte-identically while the scene contract is built around it. Passing both shapes
+is refused; a caller that says both does not know which contract it is on.
+
+**A voice take is now OPTIONAL.** The scene contract allows an empty narration cell, and a
+silent scene lends its window to the line before it (wave 1). A missing `voiceNN.wav` is
+silence, never an error. The narration-per-window assert therefore checks only the windows that
+HAD a take — and it builds that list from the takes that actually existed, so a scene that was
+supposed to have one and lost it still fails. Checking every scene and then excusing the silent
+ones is how that gate goes vacuous.
+
+### Three details that are load-bearing rather than incidental
+
+**`textfile=` + `expansion=none`.** A card's words are model-authored. `text=` would need shell
+AND filtergraph escaping of `:` `'` `\` `%` — quoting that works until someone writes a colon.
+Worse, drawtext's DEFAULT expansion EVALUATES `%{...}` as an ffmpeg expression, inside the VM
+that holds tenant media. Both are pinned by tests; deleting either is a silent capability grant.
+
+**The x4 upscale before `zoompan`.** zoompan steps its crop window in whole SOURCE pixels, so a
+slow push at native size visibly stutters. Upscaling first makes each step a quarter-pixel at
+output scale. This is the difference between a Ken Burns move and a stutter, and it is invisible
+in any test that does not actually watch the frames.
+
+**The concat list is RELATIVE.** The demuxer resolves entries against the list file's own
+directory. Absolute paths broke the first smoke run outright and would break any run where the
+list is read from a different mount than it was written on.
+
+### Verified by a real render, not by reading
+
+`smoke_assemble.sh` synthesises every input with ffmpeg — no committed binaries, no network —
+and renders clip+still+card+clip at 8/6/4/12s with the card silent. It asserts the 30s total,
+the per-scene `duration_s`/`visual`, the RUNNING-SUM offsets `0,8,14,18`, that the silent scene
+records zero speech while the narrated ones record real speech, and that the card frame is not
+black. That last one matters: drawtext failing silently passes every downstream gate — the file
+decodes, the duration is right, the sidecar is well-formed, and only the picture is missing.
+
+⚠ **A machine whose ffmpeg has no usable fontconfig SEGFAULTS on every drawtext call**,
+including one with no `fontfile` at all (observed on the Windows gyan.dev build under msys).
+Point `FONTCONFIG_FILE` at a minimal `fonts.conf` naming a font directory. Environment fault,
+not script fault — written down because it reads exactly like a broken filtergraph.
+
+### What wave 3 does NOT do
+
+**The reel is still not reachable.** A scene deck cannot be bought (`scene_render_not_ready`),
+and a MIXED sidecar is REFUSED by `parseAssemblySidecar` — it still asserts
+`blockCount × clipSeconds === totalDurationS`. Both were verified rather than assumed: the
+uniform sidecar is accepted by the live validator, the mixed one comes back
+`{code: "duration_mismatch"}`. That is the fail-closed system working. Waves 4 and 5 are what
+make a scene deck purchasable and publishable, and the `hasAssetSource` narrowing rides with
+wave 5's plumbing — see the correction note in the phase plan for why it moved twice.
 
 
 ## Storage retention (D12b)

@@ -73,10 +73,12 @@ export const docForMint = internalQuery({
  * Mint a short-lived Realtime client secret for the browser (VOIC-01 pre-flight), optionally
  * scoped to ONE vault report (DOCV-01).
  *
- * Unscoped it is byte-for-byte the Phase-6 body: the `voice-session` REGISTRY persona and no tool
- * array at all. Scoped it swaps in the `document-analyst` persona, appends a bounded FENCED digest
- * of that report, and declares exactly one read-only retrieval tool. Both personas are
- * registry-loaded and fail closed when unseeded — never a hardcoded prompt (§5).
+ * Unscoped it uses the `voice-session` REGISTRY persona and no tool array at all. Scoped it swaps
+ * in the `document-analyst` persona, appends a bounded FENCED digest of that report, and declares
+ * exactly one read-only retrieval tool. When the tenant has a confirmed business blueprint, both
+ * modes also receive its bounded, fenced spine so the live conversation has the same standing
+ * business context as the cockpit. Both personas are registry-loaded and fail closed when
+ * unseeded — never a hardcoded prompt (§5).
  *
  * Returns `{clientSecret, expiresAt, toolsAtMint}` — OPENAI_API_KEY stays in Convex env and never
  * enters this object, a thrown message, a log line, or an audit row (Pitfall 4).
@@ -98,6 +100,13 @@ export const mintClientSecret = tenantAction({
     // wall-clock order, since the browser mints before it has a session row. A document must
     // exist, be this tenant's, and be `ready`; the thrown message is a STATUS, never content.
     let instructions = skill.body;
+    // The owner explicitly authorizes this tenant-scoped blueprint to cross the OpenAI Realtime
+    // boundary as private session context. `spineForTenant` returns only the CONFIRMED blueprint,
+    // already bounded and fenced as reference data; drafts can never leak into a voice session.
+    const blueprintSpine = await ctx.runQuery(internal.blueprint.spineForTenant, {
+      tenantId: ctx.tenantId,
+    });
+    if (blueprintSpine) instructions = `${instructions}\n\n${blueprintSpine}`;
     if (docId) {
       const doc = await ctx.runQuery(internal.voiceToken.docForMint, {
         vaultDocId: docId,
@@ -108,7 +117,7 @@ export const mintClientSecret = tenantAction({
       // The digest is already capped, fenced and truncation-disclosing in @pikar/voice — do NOT
       // re-slice or re-fence it here, and do NOT add a behavioural instruction inline: every rule
       // the analyst follows lives in the registry skill body (§5).
-      instructions = `${skill.body}\n\n${buildDocDigest({
+      instructions = `${instructions}\n\n${buildDocDigest({
         title: doc.title,
         text: doc.text,
         truncated: doc.extractionTruncated,
@@ -130,7 +139,7 @@ export const mintClientSecret = tenantAction({
         session: {
           type: "realtime",
           model: DEFAULT_REALTIME_MODEL,
-          instructions, // registry persona (+ fenced digest when doc-scoped)
+          instructions, // registry persona + confirmed blueprint (+ digest when doc-scoped)
           // LIVE-VERIFIED 2026-07-20: turn_detection + transcription nest under `audio.input` — a
           // top-level `session.turn_detection` 400s ("unknown parameter"); the API key is `transcription`.
           audio: {
