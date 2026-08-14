@@ -200,16 +200,13 @@ jobs:
         run: vercel curl / --deployment="${{ steps.stage.outputs.url }}"
 
       - name: Promote staged Vercel deployment
-        run: vercel promote "${{ steps.stage.outputs.url }}" --yes --timeout=5m --token="$VERCEL_TOKEN"
+        run: vercel promote "${{ steps.stage.outputs.url }}" --yes --timeout=5m --scope="$VERCEL_ORG_ID" --token="$VERCEL_TOKEN"
 
       - name: Verify durable production URL
         id: release
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --location \
-            --retry 5 --retry-all-errors --retry-delay 5 \
-            --connect-timeout 10 --max-time 60 \
-            "$PRODUCTION_URL" > /dev/null
+          vercel curl "$PRODUCTION_URL" > /dev/null
           echo "url=$PRODUCTION_URL" >> "$GITHUB_OUTPUT"
           echo "Deployed $DEPLOY_SHA to $PRODUCTION_URL"
