@@ -3111,9 +3111,46 @@ yes call `resetPlan` and retry.
 > **Rule.** A refusal string that ends in an instruction the model cannot carry out is a dead
 > end. Name the lever the model holds, or say plainly that there is none.
 
+### The interlock (2026-08-14) — two refusals `stageMediaPlan` was missing
+
+`dispatchMedia` fired on three consecutive turns of a SLIDE-DECK conversation. Tracing it found
+two distinct gaps, and the second is the one the user actually felt.
+
+**1. `dispatch_in_flight` — the missing copy of `research_in_flight`.** `stageMediaPlan` leaves
+the row `kind: memo` + `collecting`, which is exactly the shape `stageResearchPlan` refuses as
+`research_in_flight`. This function is documented in its own header as *a SECOND copy of that
+shape*, and the copy DROPPED that check — the one that makes "one run per thread" true. A second
+dispatch did still refuse, but as `draft_in_progress`, whose reply describes an email draft the
+user does not have. So the agent relayed a sentence about a draft that did not exist.
+
+**2. `image_proposal_pending` — a staged proposal is not a spent deck.** `userWork` excludes
+`kind: "media"` on the reasoning that a media row holds a PREVIOUS deck. That is true of a deck
+already generated or abandoned, and false of one staged moments ago — and `mediaMode: "image"`
+rows are `kind: "media"` too. So `proposeImage` staged an image, the next `dispatchMedia`
+recycled the row out from under it, the user never saw the image they were told to review, and
+the following `proposeImage` then refused against the memo the dispatch had just written. That
+is the whole deadlock, and none of it was visible to the user as anything but a loop.
+
+`jobs.length === 0` is what makes "un-acted-on" precise rather than a guess: the moment the user
+clicks Generate a row exists, and a spent proposal may be recycled. **A reel replacing a reel is
+the intended flow and is deliberately still allowed** — pinned by its own test, because an
+interlock that also blocks the happy path is a worse bug than the one it fixes.
+
+Both replies name the lever: `image_proposal_pending` says ask, then `resetPlan`.
+`dispatch_in_flight` deliberately names none — there is nothing to reset, the run lands on its
+own, and the honest instruction is to wait.
+
+⚠ **Mutation-checking these needed care, and nearly did not happen.** `plans.ts` is LF while much
+of this repo (docs, `.planning`, several `apps/web` files) is CRLF. A first mutation pass used
+`\r\n` anchors, silently matched nothing, and reported both interlocks GREEN with the code
+supposedly removed — the exact `green-tests-over-broken-capability` shape, arrived at while
+trying to avoid it. **Assert the anchor is unique and the write actually changed the file BEFORE
+trusting a mutation result**: from the output alone, a no-op mutation and a vacuous test are
+indistinguishable.
+
 ### Still open, and NOT fixed here
 
-`dispatchMedia` was invoked on three consecutive turns for a slide-deck DESIGN request — the
+**The ROUTING half is still open.** `dispatchMedia` was reachable at all for a slide-deck DESIGN request — the
 video-reel specialist, for a document. `MEDIA_UNDERWAY_REPLY` says "do not ask for a reel again
 on this conversation", but that is advice to the model rather than an interlock, and
 `stageMediaPlan` recycles a `kind:"media"` row with no live jobs — so each retry silently RESET

@@ -1320,9 +1320,25 @@ const MEDIA_UNDERWAY_REPLY =
   "the voiceover and the render happens only when the user approves the card. Tell the user the " +
   "proposal is being put together and carry on.";
 const MEDIA_REFUSAL_REPLY: Record<
-  "reel_in_flight" | "render_in_flight" | "draft_in_progress",
+  | "reel_in_flight"
+  | "render_in_flight"
+  | "draft_in_progress"
+  | "dispatch_in_flight"
+  | "image_proposal_pending",
   string
 > = {
+  // A specialist is ALREADY writing on this thread. Says WAIT, and says it without naming a lever:
+  // there is nothing to reset — the run lands on its own. The old path returned
+  // `draft_in_progress`, whose reply describes an email draft the user does not have.
+  dispatch_in_flight:
+    "Something is already being written on this conversation and it has not landed yet. Nothing " +
+    "new was started. Tell the user to give it a moment; do not start another one.",
+  // The one the transcript actually shows. A staged image proposal is a live artifact the user was
+  // told to review, and starting a reel would have thrown it away without saying so.
+  image_proposal_pending:
+    "There is an image proposal on this conversation's plan card that the user has not generated " +
+    "yet, and starting a reel would discard it. Nothing was started. Ask whether to drop the " +
+    "image; if they say yes, call `resetPlan` and try again.",
   reel_in_flight:
     "A reel is already being generated on this conversation and its clips are already paid for. " +
     "Nothing new was started. Tell the user it is still running, and that a second reel needs a " +

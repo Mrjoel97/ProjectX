@@ -215,7 +215,15 @@ export const stageMediaPlan = internalMutation({
     { tenantId, threadId, subject },
   ): Promise<
     | { ok: true; planId: Id<"plans"> }
-    | { ok: false; reason: "reel_in_flight" | "render_in_flight" | "draft_in_progress" }
+    | {
+        ok: false;
+        reason:
+          | "reel_in_flight"
+          | "render_in_flight"
+          | "draft_in_progress"
+          | "dispatch_in_flight"
+          | "image_proposal_pending";
+      }
   > => {
     const plan = await ctx.db
       .query("plans")
@@ -230,6 +238,22 @@ export const stageMediaPlan = internalMutation({
       // thread forever behind `draft_in_progress`, even though no provider job or render existed.
       // The memo remains in chat/vault history; only the live canvas slot is reused.
       const completedMemo = plan.kind === "memo" && plan.status === "done";
+      // ── THE MISSING INTERLOCK (2026-08-14) ──────────────────────────────────────────────────
+      // A `collecting` MEMO row is one a DISPATCH staged and still owns. `stageResearchPlan`
+      // refuses exactly this shape as `research_in_flight`, and the header above says this
+      // function is "a SECOND copy of that shape" — but the copy DROPPED this check, which is the
+      // one that makes "one run per thread" true.
+      //
+      // It was reachable, not theoretical: a second `dispatchMedia` while the media director was
+      // still writing did refuse — but as `draft_in_progress`, whose reply talks about an EMAIL
+      // draft the user does not have. So the agent relayed a sentence about a draft that did not
+      // exist, and the user could not act on it. Refusing here, first, gives the honest reason.
+      //
+      // `done` still recycles (see `completedMemo` below) — a landed run is not in flight, and
+      // trapping a thread behind a finished one is the bug that comment was written for.
+      if (plan.status === "collecting" && plan.kind === "memo") {
+        return { ok: false, reason: "dispatch_in_flight" };
+      }
       if (plan.kind === "media") {
         // The index PREFIX is the tenant boundary, so these are this tenant's rows by construction.
         const jobs = await ctx.db
@@ -241,6 +265,24 @@ export const stageMediaPlan = internalMutation({
         }
         if (plan.renderStatus !== undefined && LIVE_RENDER_STATUS.has(plan.renderStatus)) {
           return { ok: false, reason: "render_in_flight" };
+        }
+        // ── A STAGED IMAGE PROPOSAL IS NOT A SPENT REEL DECK ──────────────────────────────────
+        // `userWork` below excludes `kind: "media"` on the reasoning that "a media row holds a
+        // PREVIOUS reel's deck ... not work in progress". That is true of a deck the user already
+        // generated or walked away from, and FALSE of a proposal staged moments earlier — and
+        // `mediaMode: "image"` rows are `kind: "media"` too.
+        //
+        // Observed live, in a conversation about a SLIDE DECK: `proposeImage` staged an image
+        // proposal, and the next turn's `dispatchMedia` recycled the row out from under it. The
+        // user never saw the image they were told to review, the following `proposeImage` then
+        // refused with `draft_in_progress` against the memo this function had just written, and
+        // the turn deadlocked. Silently destroying an un-acted-on proposal is the defect; a reel
+        // replacing a reel is the INTENDED flow and is deliberately still allowed.
+        //
+        // `jobs.length === 0` is what makes "un-acted-on" precise rather than a guess: the moment
+        // the user clicks Generate a row exists, and a spent proposal may be recycled.
+        if (plan.mediaMode === "image" && plan.imagePrompt && jobs.length === 0) {
+          return { ok: false, reason: "image_proposal_pending" };
         }
       }
       if (!completedMemo && !RECYCLABLE_STATUS.has(plan.status))
