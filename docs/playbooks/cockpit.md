@@ -9,7 +9,10 @@
 > named inline with `stageFinanceWrite`, and the fresh-start bullet states 'instead' is a NEW
 > email. v24 seeded, byte-verified against the md — and gate run `62903ef6` is GREEN: 38/38,
 > $0.3424 exec + $0.1197 specialist = $0.4621, retries 23/35/38b only, fixtures 20/37/38 all
-> first-try. Evidence recorded on cockpit-agent v24; it stays PARKED until the owner activates. The
+> first-try. Evidence recorded on cockpit-agent v24, and the owner activated it with the exact
+> words the checkpoint required — activateSkill flipped it through EVAL_GATE and getActiveSkill
+> reads back version 24, body byte-identical to the evidenced md. Task 5 (no-spend reel
+> observation, fal spend stays $0) is the one open 20-12 gate. The
 > `workspace/cards.tsx` change in this tree is the concurrent vault/finance lane's, not this
 > session's.)
 >
