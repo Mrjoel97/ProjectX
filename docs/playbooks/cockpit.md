@@ -1,5 +1,266 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-15 (20-12 v24 cycle — the v23 run `cc63246f` came back 36/38 and BOTH
+> reds were pre-existing body-judgement flaws, not the media delta: fixture 37 routed a stated
+> cash-on-hand to `recordScorecardAnswer`+`evaluateBusiness` (the stage branch said 'one of its
+> five', abstract, while the scorecard branch carried a literal tool + dot path — concrete beats
+> abstract), and fixture 20 ran `resetPlan` then RE-STAGED the cancelled subject+body because
+> 'draft to X instead' reads as the same email re-addressed. Two bullets edited: the five are now
+> named inline with `stageFinanceWrite`, and the fresh-start bullet states 'instead' is a NEW
+> email. v24 seeded, byte-verified against the md — and gate run `62903ef6` is GREEN: 38/38,
+> $0.3424 exec + $0.1197 specialist = $0.4621, retries 23/35/38b only, fixtures 20/37/38 all
+> first-try. Evidence recorded on cockpit-agent v24, and the owner activated it with the exact
+> words the checkpoint required — activateSkill flipped it through EVAL_GATE and getActiveSkill
+> reads back version 24, body byte-identical to the evidenced md. Task 5 (no-spend reel
+> observation, fal spend stays $0) is the one open 20-12 gate. The
+> `workspace/cards.tsx` change in this tree is the concurrent vault/finance lane's, not this
+> session's.)
+>
+> Last verified: 2026-08-14 (20-12, after gate run `420c852b` — **THE FORMAT CAVEAT SWALLOWED THE
+> ACTION.** Fixture 38b asked for a slide deck and the agent made **no tool calls at all** — no
+> `dispatchMedia` (the routing half worked) and no `createDocument` either. The cause was the body
+> bullet added hours earlier: *"Asked for a `.pptx`, say what you can write instead"*. "Slide deck"
+> pattern-matches onto that, so the model explained instead of creating. Rewritten so the caveat
+> governs the CLAIM and never the ACT: a deck they READ is a document, an explicit ask is the
+> go-ahead, "six or seven slides" is still a document you WRITE laid out as sections — *"never let
+> this caveat become a reason to produce nothing."* This is a general drafting hazard for this body:
+> a rule about how to DESCRIBE an output, written next to the rule about producing it, can be read
+> as permission to skip the producing. Still a parked candidate — NOT live.)
+
+> Last verified: 2026-08-14 (20-12 offline half — **the body learns to pick the video tool, and to
+> stop picking it for documents.** A new `## Creating images and video` section teaches
+> `dispatchMedia` against the CURRENT contract: the proposal arrives later as a workspace card (not
+> in the turn), it is a scene deck of 15/30/60 seconds mixing four picture kinds, the proposal is
+> FREE and the reel is not, and Generate is a click only the user can make. The plan's draft wording
+> ("the shipped 5/10-second-block reel") was stale twice over and was NOT used. Three bullets also
+> land in `## Creating a document or a post`, all three from one real transcript: a slide deck /
+> one-pager / report is `createDocument` and never `dispatchMedia` (the agent invoked the VIDEO
+> specialist on three consecutive turns for a deck); `createDocument` writes markdown plus a PDF and
+> there is no PowerPoint output to report having produced; and a created document appears in the
+> WORKSPACE as well as the vault, so "I cannot open files" is false while the card is on screen.
+> The `dispatchMedia` tool DESCRIPTION in `llm.ts` was corrected in the same commit — it still said
+> "a deck of blocks" — because a tool result only reaches the model AFTER it has chosen the tool.
+> Body + LF mirror regenerated together; mirror drift test green. NOT YET LIVE: this is a gated
+> candidate awaiting its eval gate and owner activation.)
+
+> Last verified: 2026-08-14 (20.2 wave 8, **THE APPROVE ARM OPENS ON SCENE DECKS** — scoped to
+> `executePlan`'s media pre-step and `dispatch.persistStoryboard`'s comment. The arm refused a scene
+> deck by name (`scene_render_not_ready`) from wave 2 until now, because the specialist could not
+> WRITE one for a human to approve; its body does as of this wave, so the refusal is deleted rather
+> than left as a member nothing can reach. The arm now branches on `sceneDeckOf(plan)` FIRST and
+> reserves through `reserveSceneJobInner` — the same function the canvas prices with — so approving
+> from the agent and clicking Generate on the canvas are one gate with one number. Pinned in
+> `cockpit.test.ts`: the `spendEvents` reserved movement equals `jobEstimate.totalCents` for the same
+> deck, the clips are bought at their OWN lengths (8 s and 12 s, not a deck-wide `clipSeconds`), and
+> a deck that does not sum to its declared target refuses BEFORE the CAS with zero rows. The
+> reservation stays inside this mutation, unchanged and deliberately: this mutation IS the
+> `proposed → approved` CAS, which is what makes approve-once reserve-once true without a second
+> idempotency mechanism. See `docs/playbooks/media.md` and ADR-019.)
+
+> Last verified: 2026-08-14 (17-07 Task 1 — **the Graph concurrency PROBE now exists**, in
+> `microsoftCalendar.ts`. It has NOT been run: that still needs a real Azure app registration and a
+> DISPOSABLE Microsoft account. `17-GRAPH-CONCURRENCY-PROBE.json` is still absent and must never be
+> hand-written.)
+>
+> **Why the probe lives here and not in `smoke.ts` as the plan lists.** `freshGraphToken` is in this
+> `"use node"` module; `smoke.ts` is not one, and importing across that boundary is exactly what
+> Convex forbids. Recorded as a deviation rather than worked around.
+>
+> **`internal.microsoftCalendar.graphConcurrencyProbe` is gated on the EXACT string
+> `PHASE17_ALLOW_DISPOSABLE_GRAPH_PROBE === "true"`** and refuses BEFORE reading the token, so a
+> stray invocation cannot even authenticate, let alone touch a calendar. Mutation-proven: relaxing
+> it to a truthy check lets `"false"`, `"TRUE"`, `"1"` and `"yes"` through — four cases red.
+>
+> It creates ONE attendee-free event, reads its etag, conditionally updates it (the POSITIVE
+> WITNESS — without it, a Graph that rejects *every* `If-Match` would look identical to one that
+> enforces it), then attempts a stale `If-Match` PATCH and a stale `If-Match` DELETE, re-reading
+> after each to prove the newer event survived. `DELETE`, never `/cancel` — cancel mails attendees.
+> Cleanup runs in `finally` with the CURRENT etag and asserts a 404. The artifact is refs-only:
+> hashes, statuses, booleans. `accountIdHash` is the PIKAR tenant hashed, deliberately not the
+> Microsoft account id — reading `/me` needs `User.Read`, and widening the ADR-018 grant to label a
+> bookkeeping artifact would be a permission asked for by paperwork.
+>
+> ⚠ **RUN ONLY AGAINST A DISPOSABLE ACCOUNT**, capture stdout to the artifact path, then REMOVE the
+> flag. The exact three commands are in the block comment above the action.
+>
+> `microsoftCalendar.test.ts` 43/43 (the six gate cases are the offline-provable half; the 412
+> behaviour itself is the thing only a live account can answer).
+>
+> Last verified: 2026-08-14 (17-07 Tasks 1-3 — **Microsoft Calendar read + create, behind the same
+> stage → Approve boundary**. ⚠ **ACTN-02 IS STILL UNMET AND 17-07 IS NOT COMPLETE**: Task 1's
+> disposable-account Graph concurrency PROBE has not run and cannot run without a real Azure app
+> registration. It gates Microsoft MANAGEMENT (17-08), not this create-only slice — see below.)
+>
+> **New module: `microsoftCalendar.ts`**, the twin of `calendar.ts`, registered here beside it. Two
+> provider facts drive its shape and NEITHER matches Google:
+>
+> 1. **Availability comes from `/me/calendarView`, NOT `getSchedule`.** getSchedule is the obvious
+>    freeBusy analogue and is unsupported for delegated PERSONAL accounts — half of what the
+>    `common` endpoint admits. calendarView returns EVENTS, so `$select=start,end,showAs` is the
+>    content firewall, not tidiness: subject, body, location, organizer and attendees are never
+>    requested, so they cannot be logged, audited or returned. Mutation-proven by asserting on the
+>    REQUEST (adding `subject` to `$select` turns the named test red).
+> 2. **Microsoft ROTATES refresh tokens; Google does not.** `updateAccess` takes an optional
+>    `refreshToken` and the adapter passes it through only when present. Dropping a rotated token
+>    leaves the stored one dead and the connection unrecoverable without re-consent.
+>
+> **`@odata.nextLink` is a provider-supplied URL that this code puts a BEARER TOKEN on.** An
+> unvalidated next link is a credential-exfiltration primitive. `safeNextLink` requires https, the
+> exact `https://graph.microsoft.com` origin, and a `/v1.0/` path prefix — never a substring or
+> hostname `includes`. Mutation-proven: removing it sends the token to `evil.test`, plain http, a
+> suffix-attached lookalike (`graph.microsoft.com.evil.test`), `/beta`, and `javascript:` — five of
+> six cases red. Paging is capped (5 pages / 500 items) and reports `truncated` into the audit
+> rather than paging forever.
+>
+> **THE COMPATIBILITY GUARANTEE, and it is the load-bearing claim of this plan.** Every plan staged
+> before 17-07 has NO `calendarProvider`, and each must still take the Google path byte-for-byte.
+> Expressed ONCE as a pure default (`parseCalendarProvider`, absent → google) rather than an `if`
+> per call site. Proven by WHICH HOST is contacted — the only evidence a stubbed response shape
+> cannot fake. Mutation-proven: defaulting to Microsoft turns FOUR tests red, three of them
+> pre-existing Google ones.
+>
+> `internal.calendar.createEvent` REMAINS the single retried entry `executePlan` calls; the provider
+> branch sits AFTER plan/tenant/stage validation so both providers inherit identical refusals (a
+> partially-staged row is terminal on either, before any token or network work).
+>
+> **`CreateEventResult` widened with `provider` and `etag`.** The etag is what event-specific
+> concurrency needs in 17-08, captured at create because both providers offer it only there.
+> Google's 409 branch now does ONE bounded GET of the deterministic id to recover the etag a
+> duplicate response never carries; a failed recovery degrades to `etag: null`, which means
+> "management must re-read first" and must never be read as "any version will do".
+> `calendarComplete.ts`'s runtime projection accepts BOTH fields as OPTIONAL on purpose: a retrier
+> result from the PREVIOUS deploy can still be in flight, and rejecting it would strand a really-
+> created event as an unparseable result, leaving the plan at `delivering` forever.
+>
+> **A Microsoft outage writes a MICROSOFT reconnect row.** `calendarUnavailable` now takes the
+> provider. A `gmail_reconnect` row for an Outlook failure sends the user to the GOOGLE consent
+> screen: the banner clears, the real problem stands, the next check fails identically. Mutation-
+> proven red.
+>
+> **The provider is a FACT ON THE ROW, never conversation history** — `proposeCalendarEvent` stages
+> `calendarProvider` and `executePlan` routes on stored state after Approve. Both tools take a
+> CLOSED optional enum (`google`/`microsoft`), never a free string: the provider selects which
+> credential and which host is reached, so an arbitrary model-supplied value would be a routing
+> decision taken by prose. Staging still performs ZERO network calls (asserted). The plan card names
+> the calendar, because it is the last surface before an irreversible write and "Google" on a
+> Microsoft event is a false promise at the moment of decision.
+>
+> **WHAT IS NOT DONE, AND MUST NOT BE READ AS DONE:** no update/move/cancel on either provider; no
+> `If-Match`/412 path; the Graph concurrency probe is unrun, so `17-GRAPH-CONCURRENCY-PROBE.json`
+> does not exist and 17-08 is BLOCKED by its own gate. Graph collapses a repeated `transactionId`
+> silently rather than reporting a duplicate, so the Microsoft adapter reports `duplicate: false`
+> honestly instead of guessing — unlike Google's 409, it cannot distinguish first-write from retry.
+>
+> **Measured:** backend **1759 passed / 24 skipped** (79 files) · core 936/936 · backend and web
+> `tsc --noEmit` exit 0 · `calendar.test.ts` 44/44, `microsoftCalendar.test.ts` 36/36,
+> `cockpitTools.test.ts` 128/128. Five mutations red then reverted.
+>
+> Last verified: 2026-08-14 (17-06 Task 3 — **the H3 offline regression, paired**. The Microsoft
+> connect/disconnect/consent SURFACES are owned by `onboarding.md`, not this file; see the split
+> note there. This entry covers only the Calendar-runtime half and the new browser spec.)
+>
+> **H3, and why a second test was needed when one already passed.** `calendar.test.ts` already had
+> "a grant lacking free/busy scope returns reauth before even the refresh POST", asserting
+> `not.toHaveBeenCalled()`. That assertion is satisfied just as well by a `freeBusy` that never
+> fetches under ANY conditions — a broken adapter passes it perfectly. The new
+> `H3 — a pre-widening grant reauths with ZERO fetches while a calendar grant reaches the adapter`
+> pairs it with a POSITIVE WITNESS: same action, same args, one scope wider, and the fetch DOES go
+> out. The contrast is what proves the stored-scope check at `calendar.ts:149` is the cause.
+>
+> Mutation-measured: `if (false && !hasScope(...))` turns BOTH red — the old one at "expected spy to
+> not be called at all, but actually been called 1 times", the new one at
+> `{ reason: 'unavailable' } to deeply equal { reason: 'reauth' }`. The negative mock deliberately
+> returns a VALID JSON body; with an empty one the mutation died on "Unexpected end of JSON input",
+> a crash rather than the claim.
+>
+> This is the offline half only. **The live negative is still owed by Plan 17-11** and cannot be
+> substituted by this test. `calendar.test.ts` 40/40.
+>
+> Last verified: 2026-08-14 (17-06 Task 2, **THE `/microsoft/callback` EXCHANGE**. Still **NO
+> PROVIDER CALL AGAINST GRAPH AND ACTN-02 IS NOT SATISFIED** — this is the OAuth round-trip only.)
+>
+> **The Microsoft callback deliberately diverges from the Gmail callback beside it, twice, and both
+> divergences are tightenings. Do not "make them consistent" by loosening this one.**
+>
+> 1. **Fixed error codes, never provider text.** The Gmail route interpolates `${oauthError}` and raw
+>    prose into its redirect. A Microsoft error body can carry the authorization code, correlation
+>    ids and directory/tenant names — and a redirect is written to browser history, sent as a
+>    `Referer`, and logged by every proxy in between. So failures map onto the closed
+>    `MICROSOFT_CALLBACK_ERRORS` set (`cancelled`, `missing_callback`, `invalid_state`,
+>    `exchange_failed`, `missing_refresh`) and the connect page owns the wording via
+>    `microsoftCallbackMessage`, whose default branch returns a FIXED sentence — an unrecognised or
+>    hand-typed `?microsoftError=` value is never reflected back onto the page.
+> 2. **No provider detail is thrown either**, because a thrown message becomes a Convex log line.
+>    Failure paths return a redirect; the error body is never even read on a non-ok exchange.
+>
+> **Two invariants with teeth:**
+> - **State is verified BEFORE the credentialed token POST.** Mutation-measured: deleting the early
+>   return turns the named test red at `Validator error: Expected string, got null` — `store`'s
+>   `v.string()` is a real second line of defence — but it fires TOO LATE, after the client secret
+>   has already been spent on the attacker's code. The test therefore asserts on `fetch` not being
+>   called, not only on the absent row.
+> - **The GRANTED scope is stored, never the requested one.** Microsoft may grant less than was
+>   asked for; storing `MICROSOFT_SCOPES` would make `mailReady` claim a capability the grant lacks,
+>   which is the exact lie the derived-readiness booleans exist to prevent. An absent `scope` falls
+>   back to EMPTY — an unknown grant must read un-ready, never fully ready.
+>
+> Success lands on `/dashboard/profile` (Connections). The refresh token, access token and
+> authorization code are each asserted absent from the redirect.
+>
+> **Measured:** `httpAuth.test.ts` 13/13, `microsoftAuth.test.ts` 25/25, `microsoft.test.ts` 22/22,
+> `calendar.test.ts` 39/39, `importGuard.test.ts` 82/82 — **159 backend tests green together**; core
+> and backend `tsc --noEmit` exit 0 each; biome clean. The Google callback is proven untouched by a
+> test that runs it end to end and asserts the grant lands in `gmailTokens` with
+> `microsoftCalendarTokens` still empty.
+>
+> Last verified: 2026-08-14 (17-06 Task 1, **THE MICROSOFT GRANT — ONE CONNECTION, NOT TWO**, per
+> [ADR-018](../decisions/018-one-microsoft-connection-not-two.md). **NO PROVIDER CALL HAS BEEN MADE
+> AND ACTN-02 IS NOT SATISFIED** — this registers the auth substrate only; the Graph Calendar
+> adapter, the management operations and the live gates remain owed by 17-07…17-11.)
+>
+> **What ADR-018 prevented, and why it is a playbook entry rather than a footnote.** Plans 17-06
+> (Calendar) and 25-06 (Outlook mail) each independently specified a Microsoft delegated OAuth flow
+> for the SAME account, colliding on `http.ts`, `ReconnectBanner.tsx` and this file. Both were
+> unexecuted, so nothing was unwound. **17-06 now owns the one shared connection; 25-06 consumes it
+> and adds the mail adapter only.** Do not re-add a Microsoft callback or re-generalize the reconnect
+> banner in 25-06 — 17-06 does both, once.
+>
+> **New watched modules:** `packages/core/src/microsoft.ts` (+ test) and
+> `packages/backend/convex/microsoftAuth.ts` (+ test), registered beside `gmailAuth.ts` because this
+> playbook already owns the Google twin and `http.ts`.
+>
+> **Invariants that must not break:**
+> - **The grant is the UNION** — `offline_access openid profile email Calendars.ReadWrite Mail.Send
+>   Mail.Read`. One consent, one token row, one disconnect. The identity scope is NOT padding:
+>   `Mail.Send` sends AS the connected account, so the product must be able to SHOW the sending
+>   address before a human approves a plan.
+> - **The signed `state` carries a provider discriminator** (`microsoft:<tenantId>`). This is
+>   load-bearing and mutation-proven: removing it makes a **Google-issued state verify as Microsoft**
+>   (the test fails with `expected 'tenant_microsoft' to be null`). Never sign the bare tenantId.
+> - **`microsoftStatus` returns booleans and timestamps ONLY** — never a token, never the raw `scope`
+>   string, which is a capability inventory. `calendarReady`/`mailReady` are DERIVED, for the same
+>   reason `driveReady` is on the Google side: `connected` alone cannot tell a pre-widening grant
+>   from a current one, and a mail control that trusts `connected` walks the user into a 403.
+> - **`store` REPLACES the row.** A widened grant must overwrite the narrower `scope`, or `mailReady`
+>   stays false forever after the widening.
+> - **A Microsoft reconnect retires ONLY `microsoft_calendar_reconnect`.** Mutation-proven: relaxing
+>   the filter to `endsWith("_reconnect")` clears the user's `gmail_reconnect` banner and hides a
+>   Google connection that is still genuinely broken.
+> - **`updateAccess` accepts an optional `refreshToken` because MICROSOFT ROTATES REFRESH TOKENS**
+>   and Google does not. Dropping a rotated token leaves the stored one dead and the connection
+>   unrecoverable without re-consent.
+> - **`disconnectMicrosoft` is NOT parity with `disconnectGoogle` and must never be described as if
+>   it were.** The v2 delegated flow used here has no revocation endpoint, so this deletes the local
+>   row and audits `revokedAtProvider: false` as a HARD false. Removing consent stays a separate user
+>   action in Microsoft My Apps or Entra. **GOVN-03 inherits this limitation and must state it.**
+> - The table keeps its 17-05 name `microsoftCalendarTokens` though it now holds the union grant —
+>   the `gmailTokens` precedent: renaming a Convex table is a migration for cosmetic gain.
+>
+> **Measured at this entry:** `microsoftAuth.test.ts` 25/25, `microsoft.test.ts` 16/16,
+> `calendar.test.ts` 39/39, `importGuard.test.ts` 82/82 (146 backend tests green together); core and
+> backend `tsc --noEmit` exit 0 each; biome clean. Three mutations turned named tests red and were
+> reverted: the state discriminator, the notification filter, and the qualified-scope match.
+>
 > Last verified: 2026-08-14 (the created-artifact surface, second pass — **A DOCUMENT REFERENCE IN
 > THE WORKSPACE NOW OPENS THE DOCUMENT, IN THE WORKSPACE.**) The entry below fixed what the Output
 > card SAYS; this fixes every other document reference on the surface, which was still

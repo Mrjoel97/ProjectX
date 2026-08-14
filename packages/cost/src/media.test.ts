@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { TARGET_DURATIONS, type VisualKind } from "@pikar/core/storyboard";
 import { describe, expect, it } from "vitest";
 import {
   chooseMediaBatch,
@@ -15,7 +16,10 @@ import {
   MEDIA_STT_PRICING,
   MEDIA_TTS_PRICING,
   MEDIA_VIDEO_PRICING,
+  MEDIA_VIDEO_SECONDS,
   type MediaSpec,
+  SCENE_VISUAL_LINE,
+  sceneVisualSpec,
   type VideoRes,
 } from "./media";
 
@@ -196,6 +200,16 @@ const FIXTURES = JSON.parse(read("./media.fixtures.json")) as {
     rates?: Record<string, number>;
     vendor: Record<string, unknown>;
   }[];
+  sceneKinds: {
+    perScene: {
+      visual: VisualKind;
+      buys: "video" | "image" | null;
+      usdAt4s: number;
+      durations: number[] | "any";
+    }[];
+    reel30s: { mixed: { pictureUsd: number } };
+    targetsUnreachableByGeneratedVideoAlone: number[];
+  };
 };
 
 describe("the price tables agree with the committed vendor fixture", () => {
@@ -231,6 +245,84 @@ describe("the price tables agree with the committed vendor fixture", () => {
         if (!justified) expect((e as { confidence?: string }).confidence).toBe("MEDIUM");
       }
     }
+  });
+});
+
+// --- 20.2 wave 7: the scene-kind price table ------------------------------------------------
+const sceneUsd = (visual: VisualKind, seconds: number): number => {
+  const r = sceneVisualSpec(visual, seconds);
+  if (!r.ok) throw new Error(`expected ok, got ${r.error.code}`);
+  return r.value?.usd ?? 0;
+};
+
+describe("the scene-kind price table — §2.3, and why the cheap kinds are not a fallback", () => {
+  const SCENE = FIXTURES.sceneKinds;
+
+  it("every kind buys what the fixture says, at the price the fixture says", () => {
+    for (const row of SCENE.perScene) {
+      expect(SCENE_VISUAL_LINE[row.visual]).toBe(row.buys);
+      expect(sceneUsd(row.visual, 4)).toBeCloseTo(row.usdAt4s, 10);
+    }
+    // …and no kind is quietly missing from the fixture, which is what would let a new one ship
+    // unpriced and be discovered by an invoice.
+    expect(SCENE.perScene.map((r) => r.visual).sort()).toEqual(
+      Object.keys(SCENE_VISUAL_LINE).sort(),
+    );
+  });
+
+  it("a free kind buys NOTHING at any length — null, not a zero-dollar provider line", () => {
+    for (const visual of ["uploaded_video", "text_card"] as const) {
+      for (const seconds of [2, 4, 7, 12.5]) {
+        const r = sceneVisualSpec(visual, seconds);
+        if (!r.ok) throw new Error(`refused: ${r.error.code}`);
+        expect(r.value).toBeNull();
+      }
+    }
+  });
+
+  it("a still costs the same at 12 s as at 2 s — duration freedom IS the lever", () => {
+    expect(sceneUsd("animated_image", 12)).toBe(sceneUsd("animated_image", 2));
+    // 40x, at 4 s. The block contract had no way to express this and bought a clip every time.
+    expect(sceneUsd("generated_video", 4) / sceneUsd("animated_image", 4)).toBeCloseTo(40, 10);
+  });
+
+  it("a generated clip is priced at ITS OWN length, and one off the provider grid is refused", () => {
+    expect(sceneUsd("generated_video", 8)).toBeCloseTo(0.8, 10);
+    expect(sceneUsd("generated_video", 12)).toBeCloseTo(1.2, 10);
+    for (const seconds of [5, 6, 10, 15]) {
+      const r = sceneVisualSpec("generated_video", seconds);
+      expect(r.ok ? "ok" : r.error.code).toBe("illegal_duration");
+    }
+  });
+
+  it("the §2.3 30-second reel costs what the ADR claims", () => {
+    const pictures =
+      3 * sceneUsd("generated_video", 4) +
+      4 * sceneUsd("animated_image", 4) +
+      sceneUsd("text_card", 2);
+    expect(pictures).toBeCloseTo(SCENE.reel30s.mixed.pictureUsd, 10);
+  });
+
+  it("NOT ONE target duration is reachable with generated video alone", () => {
+    const grid = MEDIA_VIDEO_SECONDS[MEDIA_DEFAULT_VIDEO.model] ?? [];
+    /** Can `t` seconds be filled EXACTLY with the pinned model's own clip lengths? */
+    const fillable = (t: number): boolean => {
+      const reached = Array.from({ length: t + 1 }, () => false);
+      reached[0] = true;
+      for (let i = 1; i <= t; i++) reached[i] = grid.some((g) => g <= i && reached[i - g]);
+      return reached[t] ?? false;
+    };
+    const perSecond =
+      MEDIA_VIDEO_PRICING[MEDIA_DEFAULT_VIDEO.model]?.[MEDIA_DEFAULT_VIDEO.resolution];
+    for (const target of TARGET_DURATIONS) {
+      // Video is priced per SECOND, so every composition of `target` costs the same — the cap check
+      // needs the length, not the arrangement. 15 and 30 fail the arithmetic (every supported clip
+      // length is a multiple of 4); 60 is composable and costs $6.00, over the $3.50 job cap.
+      const usd = target * (perSecond ?? 0);
+      expect(fillable(target) && usd <= MEDIA_JOB_CAP_USD).toBe(false);
+    }
+    expect([...TARGET_DURATIONS]).toEqual(SCENE.targetsUnreachableByGeneratedVideoAlone);
+    expect(fillable(28)).toBe(true); // the grid itself works — 28 s is buildable, 30 s is not
   });
 });
 

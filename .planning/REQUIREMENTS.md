@@ -62,16 +62,16 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 - [x] **VALT-02**: Graphify extracts entities/relationships from vault content at ingestion; nodes/edges stored in Convex
 - [x] **VALT-03**: Request grounding uses hybrid retrieval — vector similarity plus hop-capped graph traversal — scoped to the requesting user
 - [x] **VALT-04**: User can browse and search their vault contents
-- [ ] **VALT-05**: User can upload a company folder as a unit (up to 1.5 GB total, 200 MB per file) and the vault tracks it as one thing
-- [ ] **VALT-06**: A folder's cost is estimated and the whole folder is reserved before the first paid call, or the folder is refused intact with its estimate, remaining budget and shortfall named
-- [ ] **VALT-07**: A folder's documents are excluded from retrieval until the folder completes
-- [ ] **VALT-08**: A folder completes with an honest manifest of what failed and why, and the digest states what it could not read
-- [ ] **VALT-09**: A folder-level digest is synthesised as a vault document that embeds, retrieves and grounds through the existing rails
-- [ ] **VALT-10**: Digest staleness is surfaced with a one-click rebuild, and no model call fires until the user asks
-- [ ] **VALT-11**: User can drill into a folder and browse its documents rather than one flat grid
-- [ ] **VALT-12**: Documents carry a machine-derived type and identity line that the user can correct, and a user correction is never overwritten
+- [x] **VALT-05**: User can upload a company folder as a unit (up to 1.5 GB total, 200 MB per file) and the vault tracks it as one thing
+- [x] **VALT-06**: A folder's cost is estimated and the whole folder is reserved before the first paid call, or the folder is refused intact with its estimate, remaining budget and shortfall named
+- [x] **VALT-07**: A folder's documents are excluded from retrieval until the folder completes
+- [x] **VALT-08**: A folder completes with an honest manifest of what failed and why, and the digest states what it could not read
+- [x] **VALT-09**: A folder-level digest is synthesised as a vault document that embeds, retrieves and grounds through the existing rails
+- [x] **VALT-10**: Digest staleness is surfaced with a one-click rebuild, and no model call fires until the user asks
+- [x] **VALT-11**: User can drill into a folder and browse its documents rather than one flat grid
+- [x] **VALT-12**: Documents carry a machine-derived type and identity line that the user can correct, and a user correction is never overwritten
 - [ ] **VALT-13**: User can import a Google Drive folder once and re-import on demand, bounded by the same budget rail
-- [ ] **VALT-14**: The vault read surfaces remain within Convex's per-transaction read cap at folder-scale document counts
+- [x] **VALT-14**: The vault read surfaces remain within Convex's per-transaction read cap at folder-scale document counts
 - [ ] **VALT-15**: The Executive Agent can browse and search the user's Google Drive to answer "which folder has X", WITHOUT any path to importing it or to the ingest budget
 - [x] **VALT-16**: The Knowledge Vault matches the approved Nord Edge browse, folder, preview, and empty-state designs without regressing upload, Drive import, synthesis, metadata correction, citations, download, or delete; search is scoped to the current folder and the UI never fabricates exact counts the backend does not provide
 
@@ -289,16 +289,16 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VALT-02 | Phase 5 | Complete |
 | VALT-03 | Phase 5 | Complete |
 | VALT-04 | Phase 5 | Complete |
-| VALT-05 | Phase 15.3 | Pending |
-| VALT-06 | Phase 15.3 | Pending |
-| VALT-07 | Phase 15.3 | Pending |
-| VALT-08 | Phase 15.3 | Pending |
-| VALT-09 | Phase 15.3 | Pending |
-| VALT-10 | Phase 15.3 | Pending |
-| VALT-11 | Phase 15.3 | Pending |
-| VALT-12 | Phase 15.3 | Pending |
-| VALT-13 | Phase 15.3 | Pending |
-| VALT-14 | Phase 15.3 | Pending |
+| VALT-05 | Phase 15.3 | Complete (2026-08-10; `15.3-VERIFICATION.md` VERIFIED — directory-only picker + one folder through `createFolder`/member upload/`reserveFolder`; `vaultFolders.test.ts` 23/23) |
+| VALT-06 | Phase 15.3 | Complete (2026-08-10; `15.3-VERIFICATION.md` VERIFIED — `folderEstimate`/`reserveFolder` parity, hard reserve, clamped idempotent `settleFolder`; 24-hour rollover remains a documented limitation, not a missing guard) |
+| VALT-07 | Phase 15.3 | Complete (2026-08-10; `15.3-VERIFICATION.md` VERIFIED — one `sealedIn` predicate across vector seeds, graph neighbors, browse search and blueprint drift; `vaultSealing.test.ts` 6/6) |
+| VALT-08 | Phase 15.3 | Complete (2026-08-10; `15.3-VERIFICATION.md` VERIFIED — folder counters cover every terminal outcome and a failed member is named in digest text with its reason) |
+| VALT-09 | Phase 15.3 | Complete (2026-08-10; `15.3-VERIFICATION.md` VERIFIED — `buildFolderDigest` starts normal ingest and `vaultDigest.test.ts` proves a real `ragEntryId` grounds through the normal rail, not an origin literal) |
+| VALT-10 | Phase 15.3 | Complete (2026-08-10; `15.3-VERIFICATION.md` VERIFIED — bounded `folderDigestState` set difference, explicit rebuild control, exact at 120 members, and no automatic rebuild call present) |
+| VALT-11 | Phase 15.3 | Complete (2026-08-10; `15.3-VERIFICATION.md` VERIFIED — folder-scoped `listVaultDocs` + `FolderBreadcrumb`, also exercised against a real Drive subfolder in the 2026-08-05 live session) |
+| VALT-12 | Phase 15.3 | Complete (2026-08-10; `15.3-VERIFICATION.md` VERIFIED — `vaultClassify.test.ts` 5/5 proves a user-set value survives reclassification byte-unchanged and an invalid model value never persists) |
+| VALT-13 | Phase 15.3 | **Pending — the one open Phase 15.3 requirement.** Code is offline-green (`importDriveFolder` checks scope before refresh, reserves before bytes, diffs on `driveFileId + modifiedTime`), but no real Drive file has ever traversed `exportOne → landFile → fan-in → member ingest → digest` and this rail has spent $0. Closes on owner live gates H1 (populated folder) and H2 (real Shared Drive) — `15.3-VERIFICATION.md` |
+| VALT-14 | Phase 15.3 | Complete (2026-08-10; `15.3-VERIFICATION.md` VERIFIED — `readVaultPage` stops on rows OR byte budget, list results project away `text`, folder completion is O(1); 50-member and 120-member cases covered) |
 | VALT-15 | Phase 20.1 | Pending |
 | VALT-16 | Phase 15.4 | Complete |
 | VOIC-01 | Phase 6 | Complete (client shipped 06-06: /dashboard/voice WebRTC hook + pre-flight + live surface w/ End button + text fallback; typecheck-verified; live audio round-trip / barge-in at phase-gate human-verify) |
@@ -336,10 +336,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ACTN-01 | Phase 15 | Complete (closed action-type union + `actionTypeOf` landed 15-01; 15-05 generalized `executePlan` into an exhaustive `armFor(actionTypeOf(plan.kind))` switch with an `assertNever` backstop, retiring 12-05's ad-hoc `kind === "memo"` branch. `deliverApprovedPlan.ts` is byte-unchanged — the gmail terminal was generalized around, not widened) |
 | DISP-02 | Phase 16 | Complete (2026-08-08; unfiltered gate `14feb4b7` 34/34, re-confirmed by `d17039a8`; `research-specialist@8` evidence recorded and activated, with end-to-end `subagent.completed` / `research.persisted` audit evidence) |
 | ACTN-03 | Phase 16 | Complete |
-| ACTN-02 | Phase 17 | Pending |
+| ACTN-02 | Phase 17 | Pending — `17-VERIFICATION.md` `gaps_found`. The Google availability read and plan-gated create are implemented and live-checkable; **"schedule and manage"** and **"(Google / Microsoft)"** are both unmet. Closes via plans 17-06…17-11 (management ops, then the Microsoft adapter), not via the H1-H3 live gates |
 | ACTN-04 | Phase 18 | Pending |
 | ACTN-05 | Phase 19 | Complete (2026-08-10) |
-| MEDIA-01 | Phase 20 | Pending |
+| MEDIA-01 | Phase 20 (+ Phase 20.2 Scene Timeline, registered 2026-08-14) | Pending — Phase 20 has 20-11/20-12 unexecuted and `20-VALIDATION.md` is `in_progress` with the owner-run fal/render gate unpaid; Phase 20.2 replaces the uniform block deck with the scene timeline and is part-executed (20.2-01…06) but still `status: proposed` |
 | SKILL-01 | Phase 21 | Pending |
 | GOVN-01 | Phase 22 | Pending |
 | SKILL-02 | Phase 23 | Pending |

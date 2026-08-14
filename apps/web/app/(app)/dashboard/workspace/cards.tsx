@@ -630,6 +630,11 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
   if (plan.kind === "calendar_event") {
     const startMs = plan.eventStartMs;
     const durationMs = plan.eventDurationMs;
+    // 17-07: the card must name the calendar the event will actually land on — this is the last
+    // surface before an irreversible write, and "Google" on a Microsoft event is a false promise at
+    // exactly the moment the user is deciding. ABSENT means Google (`plans.calendarProvider`'s
+    // documented rule), so every row staged before this phase still reads correctly.
+    const calendarName = plan.calendarProvider === "microsoft" ? "Microsoft" : "Google";
     return (
       <div style={box} data-testid="calendar-plan-card">
         <div style={label}>CALENDAR EVENT</div>
@@ -641,8 +646,12 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
         <div style={dim}>
           Duration: {durationMs ? `${Math.round(durationMs / 60000)} min` : "—"}
         </div>
+        <div style={dim} data-testid="calendar-plan-provider">
+          Calendar: {calendarName}
+        </div>
         <p style={{ ...dim, margin: "0.75rem 0" }}>
-          Approving adds this to your Google Calendar. No one is invited and nothing is emailed.
+          Approving adds this to your {calendarName} Calendar. No one is invited and nothing is
+          emailed.
         </p>
         <button
           type="button"

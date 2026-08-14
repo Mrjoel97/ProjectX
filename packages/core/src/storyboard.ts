@@ -151,7 +151,11 @@ function parsePrompts(section: string): Map<number, string> {
   const out = new Map<number, string>();
   let current: number | undefined;
   for (const line of section.split(/\r?\n/)) {
-    const head = /^\s*#*\s*Block\s+(\d+)\b/i.exec(line);
+    // `Scene N` as well as `Block N` (20.2 wave 8). The prompts section is SHARED by both deck
+    // contracts, and a scene body writing `Scene 1` under a `Block`-only head regex would attach no
+    // prompt at all — `parseSceneDeck` falls back to the row's DESCRIPTION, which is not a parse
+    // failure and not a lie anyone notices until the pictures come back generic.
+    const head = /^\s*#*\s*(?:Block|Scene)\s+(\d+)\b/i.exec(line);
     if (head) {
       current = Number(head[1]);
       continue;
@@ -414,9 +418,11 @@ export type VisualKind = (typeof VISUAL_KINDS)[number];
 
 /** The provider's duration grid. Sora returns 4, 8 or 12 second clips and nothing between, so a
  *  `generated_video` scene MUST land on it. **This is the real reason the other three kinds
- *  exist**: they are frame-exact at any length, which is what makes an exact 15/30/60 possible at
- *  all. It is also a 10x cost lever — a 4 s generated clip is ~$0.40 and a 4 s animated still is
- *  ~$0.04 — so a deck that reaches for a still first is cheaper AND more flexible. */
+ *  exist**: they are frame-exact at any length, and every member of this grid is a multiple of 4,
+ *  so a deck of ONLY generated clips cannot sum to 15 or 30 at all (and a 60 costs $6.00, over the
+ *  job cap). It is also a 40x cost lever — measured at wave 7: a 4 s generated clip is $0.40 and a
+ *  still is $0.01 at ANY length — so a deck that reaches for a still first is cheaper AND more
+ *  flexible. See ADR-019. */
 export const GENERATED_CLIP_SECONDS = [4, 8, 12] as const;
 
 /** The old closed set, mapped onto the new one, so a deck proposed under the block contract still
@@ -461,11 +467,26 @@ const PAID_VISUAL = {
 
 export const isPaidScene = (s: Scene): boolean => PAID_VISUAL[s.visual];
 
-/** Can this scene produce pixels at all? The narrowed replacement for `isPaidBlock`'s use as a
- *  renderability proxy (`media.ts:228`). Unpaid no longer implies unrenderable — only a missing
- *  upload does. */
-export const hasAssetSource = (s: Scene): boolean =>
-  s.visual !== "uploaded_video" || s.asset !== undefined;
+/**
+ * Can this scene produce pixels at all? The narrowed replacement for `isPaidBlock`'s use as a
+ * renderability proxy (`media.ts:260`).
+ *
+ * **Unpaid no longer implies unrenderable** — that equivalence held only while the assembler had
+ * no `drawtext` and no still path, and it is what made a deck containing a text card impossible to
+ * buy. What remains is the honest question: does this row name the thing its picture is built FROM?
+ *
+ *   * `uploaded_video` — the vault doc. Named, or there is no footage.
+ *   * `text_card` — the words. `drawtext` with nothing to draw is a black rectangle that passes
+ *     every downstream gate: the file decodes, the duration is right, the sidecar is well-formed.
+ *     Only the picture is missing, which is the failure `assemble_final.sh` refuses to ship by
+ *     probing for a font rather than trusting one. Same reasoning, one step earlier and for free.
+ *   * `generated_video` / `animated_image` — the prompt, which the parser already requires.
+ */
+export const hasAssetSource = (s: Scene): boolean => {
+  if (s.visual === "uploaded_video") return s.asset !== undefined;
+  if (s.visual === "text_card") return (s.overlay ?? "").trim() !== "";
+  return true;
+};
 
 /** Total SUBMITTED characters across the reel — the tts MediaSpec's input, as `narrationChars` is
  *  for blocks. Silent scenes contribute nothing. */

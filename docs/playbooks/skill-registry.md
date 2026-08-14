@@ -1,5 +1,53 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-14 (20-12 gate run `420c852b` — **the gate REFUSED `cockpit-agent@22`, and
+> that is the system working.** 35/38, $0.4420 exec+specialist against a $2.00 cap, two retries. No
+> evidence row was written, so `activateSkill` would throw `EVAL_GATE` on v22 even if someone tried:
+> a failed run cannot pin a version. v22 stays `candidate`, v18 stays `active`, and the parked
+> stream is now v16/v19/v20/v21/v22.
+> **Both failures were in the certifying apparatus, not in the body under test** — one observable
+> counting two actors, one body bullet whose caveat suppressed the action it qualified. Fixes are
+> offline and $0; the candidate CANNOT be re-certified in place, because a body edit mints a NEW
+> version. The next seed is v23 and it needs its own full paid run — there is no partial re-run and
+> no way to patch evidence onto an existing row, which is exactly the property that makes evidence
+> mean something.)
+
+> Last verified: 2026-08-14 (20-12 offline half + **THE `cockpit-agent` CANDIDATE STREAM,
+> RECONCILED.** Read off the live registry, not assumed: active is **v18** (carrying eval evidence)
+> while **v16, v19, v20 and v21 sit parked as candidates with none**. The stream is a LINEAR chain,
+> not divergent drift — v19 adds `## Financial figures` (the "number they SAID, never one you worked
+> out" provenance rule), v20 rewrites that same section (a stated figure is always recorded; CAC is
+> not one of `stageFinanceWrite`'s five, so it routes to `recordScorecardAnswer("financials.cac")`),
+> and v21 is the identity rewrite (`Business Cockpit (v2)` + `## Route by intent, not by habit`).
+> **v21 is byte-identical to the repo `.md`** (sha 9575d01b), and nothing was lost along the chain:
+> v21 still carries `## Financial figures`, `recordScorecardAnswer` and `financials.cac`. v16 is an
+> orphan BELOW the active version and contributes no heading v21 lacks. So there is exactly ONE body
+> worth gating and it is the newest; 16/19/20 are dead intermediates.
+> **They cannot be archived, and that is by design.** `archiveSkill` archives the ACTIVE row only,
+> and there is exactly ONE `patch(..., {status:"active"})` and one archiving patch in `skills.ts` —
+> `skills.test.ts` COUNTS them, because "a second one is a second gate". A candidate is an immutable
+> record of what was proposed; adding a candidate-archiving mutation would weaken a counted
+> invariant to satisfy a cosmetic preference. They stay parked.
+> **The owed fixture landed with the body it certifies:** 20-12's `cockpit-agent` edit ships with
+> fixtures 38 / 38b and the `mediaDispatchCount` observable, per the "teach a tool, owe a fixture"
+> rule — so the candidate about to be seeded is gated by a suite that can actually fail on its
+> headline claim.)
+
+> Last verified: 2026-08-14 (20.2 wave 8 — **`media-director` v2 rewrites its body for the scene
+> contract, and it costs NOTHING to ship, which is the point of the UNGATED row.** `seedSkills`
+> sees a changed body on an ungated name and inserts `maxVersion + 1` as `active`: no candidate, no
+> eval gate, no owner activation. That is the deal 20-03 recorded — the golden runner drives
+> `runCockpitAgent` over TEXT fixtures and structurally cannot exercise a script / art-direction /
+> storyboard turn, so gating this row would strand it at v1 on its first body edit, and the
+> exemption is asserted in `skillBodies.test.ts` and derived non-vacuously by
+> `run-eval-golden.mjs --self-check`. The residual risk is unchanged and still named at that site:
+> this body activates with NO eval evidence. What replaces the gate is CODE plus one pinned test —
+> `searchVault` is the specialist's only grant, and `storyboard.test.ts`'s round trip parses the
+> body's OWN worked example with the shipped parser, so a body that drifts off the format fails
+> here rather than proposing an empty deck to a user. **The `.md` and its `.ts` mirror were
+> regenerated together; never hand-edit the mirror.** SEEDING IS REQUIRED for the new body to be
+> live: `pnpm dev`, not `npx convex dev` alone.)
+
 > Last verified: 2026-08-12 (production release-gate formatting pass — the watched skill-body test
 > changed only by deterministic import ordering; registry content, hashes, activation state, and
 > the production-readiness conclusions below are unchanged.)

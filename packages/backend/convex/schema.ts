@@ -535,6 +535,14 @@ export default defineSchema({
         }),
       ),
     ),
+    /** 20.2 wave 6: when `shots` was last REWRITTEN — by the free editor or by a fresh proposal.
+     *  It is what makes a landed asset reusable or not. A regenerate buys ONE scene and the render
+     *  takes the rest from whatever landed for this plan before it; an asset bought against a deck
+     *  that has since been reordered, trimmed or re-proposed belongs to a scene that may no longer
+     *  be at its index, so `batchToRender` refuses it (`stale_inputs`) rather than rendering the
+     *  wrong footage under the right caption. Absent on every row written before this wave, which
+     *  reads as "never edited" and is correct for all of them. */
+    shotsChangedAt: v.optional(v.number()),
     // The RENDER PLANE — fields on the plan row, NOT a second table. A reel is one artifact per
     // PLAN (delta §6.3), so a `mediaRenders` table would hold at most one row per plan forever.
     renderStatus: v.optional(
@@ -565,7 +573,13 @@ export default defineSchema({
     renderSummary: v.optional(
       v.object({
         durationS: v.number(),
-        blockCount: v.number(),
+        /** 20.2 wave 6: the reel is a deck of SCENES, and this count has been fed
+         *  `report.sceneCount` since wave 5 — only the name lagged. Both members are optional and
+         *  exactly one is written: `sceneCount` from this wave on, `blockCount` on every row
+         *  rendered before it. Widen-only, because a required member would fail the schema push
+         *  against the rows that already exist. `media.reel` reads `sceneCount ?? blockCount`. */
+        sceneCount: v.optional(v.number()),
+        blockCount: v.optional(v.number()),
         gates: v.array(v.string()),
       }),
     ),
@@ -1096,7 +1110,13 @@ export default defineSchema({
   // and `freshAccessToken` is documented as "the ONE token-refresh root" over it. Adding a
   // discriminator would make every existing `by_tenant` `.unique()` read ambiguous, and the two
   // grants have genuinely different refresh endpoints, scope strings and expiry behaviour.
-  // NOTHING WRITES THIS TABLE YET — Plan 17-06 owns the OAuth flow that fills it.
+  // Written by `microsoftAuth.store` (17-06). THE NAME IS NOW NARROWER THAN THE CONTENTS and stays
+  // that way deliberately: ADR-018 made this ONE Microsoft grant serving BOTH Calendar and Mail, so
+  // the row's `scope` carries `Calendars.ReadWrite`, `Mail.Send` and `Mail.Read` together. Renaming
+  // a Convex table is a migration for cosmetic gain — the exact reasoning `gmailTokens` records at
+  // gmailAuth.ts:54-56, where one Google grant covering mail + calendar + drive also kept its
+  // original mail-shaped name. Phase 25-06 CONSUMES this row for Outlook; it must not mint a second.
+  // Read per-half readiness with `microsoftCalendarReady`/`microsoftMailReady`, never `connected`.
   microsoftCalendarTokens: defineTable({
     tenantId: v.string(),
     refreshToken: v.string(),

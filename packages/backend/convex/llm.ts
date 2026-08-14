@@ -48,9 +48,11 @@ import {
   buildRecipientView,
   CALENDAR_HORIZON_MS,
   CASH_INPUTS,
+  type CalendarProvider,
   type CashInputField,
   type CrmOperation,
   cashInputSpec,
+  DEFAULT_CALENDAR_PROVIDER,
   type DigestBatch,
   type DigestItem,
   type DocFormat,
@@ -64,8 +66,10 @@ import {
   isNeedsYou,
   joinDigest,
   parseAddress,
+  parseCalendarProvider,
   parseCrmOperations,
   parseSendTime,
+  RECONNECT,
   type RecipientEdit,
   rankCandidates,
   renderHtmlDocument,
@@ -1663,8 +1667,11 @@ export function buildCockpitTools(
   const dispatchMediaTool = {
     dispatchMedia: tool({
       description:
-        "Propose a short-form video reel — a script, an art direction and a deck of blocks with " +
-        "a narration line each. The media director runs in the background and the proposal " +
+        "Propose a short-form video reel — a script, an art direction and a deck of scenes " +
+        "totalling 15, 30 or 60 seconds, each with its own length, its own kind of picture and, " +
+        "where it speaks, a narration line. Use it for a VIDEO; a slide deck, one-pager or report " +
+        "the user reads is createDocument. The media director runs in the background and the " +
+        "proposal " +
         "arrives as a plan card in the workspace; you do not get it in this turn. The proposal " +
         "itself is free. Generating the clips, recording the voiceover and rendering the finished " +
         "video cost real money and happen only after the user approves the card — a separate " +
@@ -1748,13 +1755,24 @@ export function buildCockpitTools(
     });
     return `I couldn't ${what} — the mailbox isn't reachable. Tell the user plainly and suggest they reconnect Gmail.`;
   };
-  const calendarUnavailable = async (what: string): Promise<string> => {
+  // 17-07: PROVIDER-SPECIFIC, and that is the whole point. A Microsoft calendar outage that wrote a
+  // `gmail_reconnect` row would send the user to the Google consent screen to fix an Outlook
+  // connection — the banner would clear, the real problem would stand, and the next availability
+  // check would fail identically. The reconnect kind, the copy and the link all follow the provider.
+  const calendarUnavailable = async (
+    what: string,
+    provider: CalendarProvider = DEFAULT_CALENDAR_PROVIDER,
+  ): Promise<string> => {
+    const microsoft = provider === "microsoft";
     await ctx.runMutation(internal.notifications.notify, {
       tenantId,
-      kind: "gmail_reconnect",
-      message: "I couldn't read your calendar — reconnect Google so I can check availability.",
+      kind: microsoft ? RECONNECT.microsoft.kind : RECONNECT.google.kind,
+      message: microsoft
+        ? "I couldn't read your calendar — reconnect Microsoft so I can check availability."
+        : "I couldn't read your calendar — reconnect Google so I can check availability.",
     });
-    return `I couldn't ${what} — the calendar isn't reachable. Tell the user plainly and suggest they reconnect Google.`;
+    const name = microsoft ? "Microsoft" : "Google";
+    return `I couldn't ${what} — the calendar isn't reachable. Tell the user plainly and suggest they reconnect ${name}.`;
   };
 
   // Shared generate path for generateAttachment/regenerateAttachment (CKPT-02): scan (fail-closed)
@@ -2361,7 +2379,7 @@ export function buildCockpitTools(
         "Read-only: check when the user is busy, never what they are doing. " +
         "Returns busy times only, with no event titles, descriptions, or attendees. " +
         "It cannot create, move, or cancel calendar events.",
-      inputSchema: jsonSchema<{ range: AvailabilityRange }>({
+      inputSchema: jsonSchema<{ range: AvailabilityRange; provider?: CalendarProvider }>({
         type: "object",
         properties: {
           range: {
@@ -2369,23 +2387,44 @@ export function buildCockpitTools(
             enum: ["today", "tomorrow", "week"],
             description: "The availability window to check.",
           },
+          // A CLOSED enum, never a free string: the provider selects which credential and which
+          // host this reaches, so an arbitrary model-supplied value would be a routing decision
+          // taken by prose. OPTIONAL so every shipped prompt, fixture and smoke case keeps working
+          // unchanged — absent means Google.
+          provider: {
+            type: "string",
+            enum: ["google", "microsoft"],
+            description: "Which connected calendar to read. Omit unless the user names one.",
+          },
         },
         required: ["range"],
         additionalProperties: false,
       }),
-      execute: async ({ range }): Promise<string> => {
+      execute: async ({ range, provider: rawProvider }): Promise<string> => {
         // §2-D: the trusted client supplies BOTH clock and zone. Never substitute Date.now().
         if (!clientContext)
           return "I couldn't read your local time and timezone, so I can't check calendar availability yet.";
+        const provider = parseCalendarProvider(rawProvider);
         // correlationId = planId: the stable ref for the refs-only calendar availability audit.
-        const res = await ctx.runAction(internal.calendar.freeBusy, {
-          tenantId,
-          correlationId: planId,
-          range,
-          tz: clientContext.tz,
-          nowMs: clientContext.nowMs,
-        });
-        if (!res.ok) return calendarUnavailable("check calendar availability");
+        // Only the READ action is selectable here — neither branch can reach a create or manage
+        // entry point, which is what keeps this tool structurally read-only.
+        const res =
+          provider === "microsoft"
+            ? await ctx.runAction(internal.microsoftCalendar.freeBusy, {
+                tenantId,
+                correlationId: planId,
+                range,
+                tz: clientContext.tz,
+                nowMs: clientContext.nowMs,
+              })
+            : await ctx.runAction(internal.calendar.freeBusy, {
+                tenantId,
+                correlationId: planId,
+                range,
+                tz: clientContext.tz,
+                nowMs: clientContext.nowMs,
+              });
+        if (!res.ok) return calendarUnavailable("check calendar availability", provider);
         if (res.busy.length === 0)
           return `You're free for ${range} — there are no busy blocks in that window.`;
         // ponytail: render at most five blocks into the loop; the full count remains visible.
@@ -2409,17 +2448,28 @@ export function buildCockpitTools(
         "Stage a calendar event on the plan for the user to approve. " +
         "This does not put anything on the calendar. " +
         "Pass the user's time words; the app supplies the current time and timezone.",
-      inputSchema: jsonSchema<{ title: string; when: string; durationMinutes: number }>({
+      inputSchema: jsonSchema<{
+        title: string;
+        when: string;
+        durationMinutes: number;
+        provider?: CalendarProvider;
+      }>({
         type: "object",
         properties: {
           title: { type: "string", description: "The event title." },
           when: { type: "string", description: "The user's natural-language event time." },
           durationMinutes: { type: "number", description: "The event duration in minutes." },
+          // Closed enum, optional, absent means Google — the same contract as checkAvailability.
+          provider: {
+            type: "string",
+            enum: ["google", "microsoft"],
+            description: "Which connected calendar to use. Omit unless the user names one.",
+          },
         },
         required: ["title", "when", "durationMinutes"],
         additionalProperties: false,
       }),
-      execute: async ({ title, when, durationMinutes }): Promise<string> => {
+      execute: async ({ title, when, durationMinutes, provider: rawProvider }): Promise<string> => {
         // §2-D: a model supplies the user's WORDS, never an instant, clock, or timezone.
         if (!clientContext)
           return "I couldn't read your local time and timezone, so I can't stage the calendar event yet.";
@@ -2444,6 +2494,10 @@ export function buildCockpitTools(
             const clampedMinutes = Math.min(480, Math.max(15, Math.round(durationMinutes)));
             // Staging boundary: no fetch, no calendar-write action or scheduler, no nested
             // generateText, and no attendee handling. The human Approve gate owns the side effect.
+            // ONE plan patch, zero network calls — staging still touches no provider. The
+            // provider is written as a FACT ON THE ROW so `calendar.createEvent` routes on stored
+            // state after Approve, never on conversation history.
+            const staged = parseCalendarProvider(rawProvider);
             await ctx.runMutation(internal.plans.patchPlan, {
               planId,
               kind: "calendar_event",
@@ -2452,9 +2506,11 @@ export function buildCockpitTools(
               eventStartMs: parsed.epochMs,
               eventDurationMs: clampedMinutes * 60_000,
               eventTz: clientContext.tz,
+              calendarProvider: staged,
             });
             const at = fmtSendInstant(parsed.epochMs, clientContext.tz);
-            return `Calendar event staged for ${at} (${clampedMinutes} minutes). Confirm this exact time back to the user; it will be added only after they Approve.`;
+            const where = staged === "microsoft" ? "Microsoft" : "Google";
+            return `Calendar event staged for ${at} (${clampedMinutes} minutes) on ${where} Calendar. Confirm this exact time and calendar back to the user; it will be added only after they Approve.`;
           }
           case "ambiguous":
             return "That event time is ambiguous — ask which day and time they meant (never guess). Nothing was staged.";

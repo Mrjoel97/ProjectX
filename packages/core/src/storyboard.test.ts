@@ -2,13 +2,16 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import type { Scene } from "./storyboard";
 import {
   CLIP_SECONDS,
   DEFAULT_CLIP_SECONDS,
+  GENERATED_CLIP_SECONDS,
   hasAssetSource,
   isPaidBlock,
   isPaidScene,
   MAX_CHARS_PER_BLOCK,
+  MAX_CHARS_PER_SECOND,
   maxCharsFor,
   minCharsFor,
   narrationCeilingSeconds,
@@ -20,6 +23,7 @@ import {
   SHOT_TYPES,
   sceneNarrationChars,
   TARGET_DURATIONS,
+  VISUAL_KINDS,
 } from "./storyboard";
 
 /** A well-formed deck, built from parts so each test can corrupt exactly one thing. */
@@ -307,58 +311,97 @@ describe("media-director.md round trip — the body's example survives its own r
     fileURLToPath(new URL("../../contracts/skills/media-director.md", import.meta.url)),
     "utf8",
   );
-  const r = parseBlockDeck(body);
+  // 20.2 wave 8: the body now writes a SCENE deck, so this round trip reads it with the parser the
+  // money path uses. Every assertion below is a rule the body TEACHES — a worked example that
+  // violates its own rule is how a model learns the rule is optional.
+  const r = parseSceneDeck(body);
 
-  it("parses to a deck of at least 2 blocks, in index order", () => {
-    expect(r.ok, `the body's BLOCK DECK did not parse: ${r.ok ? "" : r.reason}`).toBe(true);
+  it("parses to a deck of at least 3 scenes, in index order", () => {
+    expect(r.ok, `the body's SCENE DECK did not parse: ${r.ok ? "" : r.reason}`).toBe(true);
     if (!r.ok) return;
-    expect(r.blocks.length).toBeGreaterThanOrEqual(2);
-    expect(r.blocks.map((b) => b.index)).toEqual(r.blocks.map((_, i) => i));
+    expect(r.scenes.length).toBeGreaterThanOrEqual(3);
+    expect(r.scenes.map((s) => s.index)).toEqual(r.scenes.map((_, i) => i));
   });
 
-  it("every type is a member of the closed SHOT_TYPES set", () => {
+  it("every visual is a member of the closed VISUAL_KINDS set", () => {
     if (!r.ok) throw new Error("expected ok");
-    for (const b of r.blocks) expect(SHOT_TYPES).toContain(b.type);
+    for (const s of r.scenes) expect(VISUAL_KINDS).toContain(s.visual);
   });
 
-  it("the deck's clipSeconds is legal and EVERY block matches it", () => {
+  it("the declared target is legal and the scenes sum to it EXACTLY", () => {
     if (!r.ok) throw new Error("expected ok");
-    expect(CLIP_SECONDS).toContain(r.clipSeconds);
-    for (const b of r.blocks) expect(b.seconds).toBe(r.clipSeconds);
+    expect(TARGET_DURATIONS).toContain(r.targetDurationSeconds);
+    const summed = r.scenes.reduce((n, s) => n + s.durationMs, 0) / 1000;
+    expect(summed).toBe(r.targetDurationSeconds);
   });
 
-  it("every narration in the worked example obeys the band the body TEACHES", () => {
-    // A worked example that violates its own rule is how a model learns the rule is optional.
+  it("every generated_video scene lands on the provider's grid", () => {
     if (!r.ok) throw new Error("expected ok");
-    for (const b of r.blocks) {
-      expect(b.narration.length, `block ${b.index} narration`).toBeGreaterThanOrEqual(
-        minCharsFor(r.clipSeconds),
-      );
-      expect(b.narration.length, `block ${b.index} narration`).toBeLessThanOrEqual(
-        maxCharsFor(r.clipSeconds),
+    for (const s of r.scenes) {
+      if (s.visual !== "generated_video") continue;
+      expect(GENERATED_CLIP_SECONDS, `scene ${s.index}`).toContain(s.durationMs / 1000);
+    }
+  });
+
+  it("the example MIXES kinds — an all-generated deck cannot hit a target at all", () => {
+    // Not a style note. Every member of GENERATED_CLIP_SECONDS is a multiple of 4, so a deck of
+    // only generated clips cannot sum to 15 or 30, and a 60 costs $6.00 against a $3.50 job cap
+    // (ADR-019). A worked example that reached for a clip every time would teach the one deck
+    // shape the contract cannot render.
+    if (!r.ok) throw new Error("expected ok");
+    expect(r.scenes.some((s) => s.visual !== "generated_video")).toBe(true);
+    expect(r.scenes.some((s) => s.visual === "generated_video")).toBe(true);
+  });
+
+  it("every scene names what its picture is built from", () => {
+    if (!r.ok) throw new Error("expected ok");
+    // A text_card with no overlay and an uploaded_video with no asset both clear the money gate
+    // and then render nothing. The body teaches both; the example must obey both.
+    for (const s of r.scenes) expect(hasAssetSource(s), `scene ${s.index}`).toBe(true);
+  });
+
+  it("the example demonstrates BOTH a speaking scene and a silent one", () => {
+    // Optional narration is the wave-4 contract. An example where every scene speaks teaches the
+    // old rule by omission, and one where none does would not parse at all.
+    if (!r.ok) throw new Error("expected ok");
+    expect(r.scenes.some((s) => s.narration !== "")).toBe(true);
+    expect(r.scenes.some((s) => s.narration === "")).toBe(true);
+  });
+
+  it("every narration line fits the window it ACTUALLY has, not a uniform one", () => {
+    if (!r.ok) throw new Error("expected ok");
+    for (const [i, s] of r.scenes.entries()) {
+      if (s.narration === "") continue;
+      const available = narrationCeilingSeconds(r.scenes, i);
+      expect(s.narration.length, `scene ${s.index} narration`).toBeLessThanOrEqual(
+        available * MAX_CHARS_PER_SECOND,
       );
     }
   });
 
-  it("windowStartMs is strictly increasing and derived", () => {
+  it("startMs is a RUNNING SUM, not index x a constant", () => {
     if (!r.ok) throw new Error("expected ok");
-    for (const b of r.blocks) expect(b.windowStartMs).toBe(b.index * r.clipSeconds * 1000);
-    const starts = r.blocks.map((b) => b.windowStartMs);
-    expect(starts).toEqual([...starts].sort((a, b) => a - b));
-    expect(new Set(starts).size).toBe(starts.length);
+    let running = 0;
+    for (const s of r.scenes) {
+      expect(s.startMs).toBe(running);
+      running += s.durationMs;
+    }
+    // …and the example must actually exercise the difference, or this passes on a uniform deck.
+    expect(new Set(r.scenes.map((s) => s.durationMs)).size).toBeGreaterThan(1);
   });
 
-  it("the BLOCK PROMPTS section is actually reached — a prompt differs from its description", () => {
+  it("the SCENE PROMPTS section is actually reached — a prompt differs from its description", () => {
     // Without this the body could drop section 4 entirely and every prompt would silently
-    // degrade to the block's visual description, which is not a parse failure and not a lie
-    // anyone would notice until the images came back generic.
+    // degrade to the scene's visual description, which is not a parse failure and not a lie
+    // anyone would notice until the images came back generic. It is also what catches the
+    // `Scene N` / `Block N` head mismatch: the prompts section is shared by both contracts.
     if (!r.ok) throw new Error("expected ok");
-    expect(r.blocks.some((b) => b.prompt !== b.description)).toBe(true);
+    expect(r.scenes.some((s) => s.prompt !== s.description)).toBe(true);
   });
 
-  it("the body teaches the character band it is held to, and names its only tool", () => {
-    expect(body).toContain(String(maxCharsFor(DEFAULT_CLIP_SECONDS)));
-    expect(body).toContain(String(minCharsFor(DEFAULT_CLIP_SECONDS)));
+  it("the body teaches the speech rate it is held to, and names its only tool", () => {
+    expect(body).toContain(String(MAX_CHARS_PER_SECOND));
+    for (const kind of VISUAL_KINDS) expect(body, `${kind} is not taught`).toContain(kind);
     expect(body).toContain("searchVault");
   });
 });
@@ -527,6 +570,52 @@ describe("parseSceneDeck — the happy path", () => {
   it("sums the submitted narration characters", () => {
     if (!r.ok) return;
     expect(sceneNarrationChars(r.scenes)).toBe(S1.length + S2.length + S3.length + S4.length);
+  });
+});
+
+describe("hasAssetSource — does this row name what its picture is built FROM? (20.2 wave 5)", () => {
+  // The narrowed replacement for `isPaidBlock`-as-renderability. It is the guard `media.ts` calls
+  // at the money gate, so a `true` here is a scene that may be BOUGHT — and a false negative
+  // refuses a legitimate deck while a false positive buys the paid scenes around a row that can
+  // never produce pixels, then hard-errors in the VM. Both directions are asserted.
+  const scene = (over: Partial<Scene>): Scene => ({
+    index: 0,
+    startMs: 0,
+    durationMs: 4000,
+    visual: "generated_video",
+    description: "d",
+    narration: "n",
+    prompt: "p",
+    ...over,
+  });
+
+  it("an uploaded_video needs its vault doc NAMED — there is no footage otherwise", () => {
+    expect(hasAssetSource(scene({ visual: "uploaded_video" }))).toBe(false);
+    expect(
+      hasAssetSource(
+        scene({ visual: "uploaded_video", asset: { source: "vault", docId: "doc_1" } }),
+      ),
+    ).toBe(true);
+  });
+
+  it("a text_card needs WORDS — drawtext with nothing to draw is a black rectangle", () => {
+    // …and a black rectangle passes every downstream gate: the file decodes, the duration is
+    // right, the sidecar is well-formed. Only the picture is missing.
+    expect(hasAssetSource(scene({ visual: "text_card" }))).toBe(false);
+    expect(hasAssetSource(scene({ visual: "text_card", overlay: "   " }))).toBe(false);
+    expect(hasAssetSource(scene({ visual: "text_card", overlay: "Ninety minutes" }))).toBe(true);
+  });
+
+  it("a GENERATED kind is always renderable — its source is the prompt the parser required", () => {
+    expect(hasAssetSource(scene({ visual: "generated_video" }))).toBe(true);
+    expect(hasAssetSource(scene({ visual: "animated_image" }))).toBe(true);
+  });
+
+  it("is NOT the paid flag — that equivalence is exactly what wave 5 removed", () => {
+    // A free scene that names its source is renderable; a paid one is not automatically so.
+    const card = scene({ visual: "text_card", overlay: "words" });
+    expect(isPaidScene(card)).toBe(false);
+    expect(hasAssetSource(card)).toBe(true);
   });
 });
 

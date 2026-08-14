@@ -51,6 +51,46 @@ export const REVIEW_READY_MESSAGE = "Your weekly business review is ready.";
 export const REVIEW_FAILED_MESSAGE =
   "We couldn't run your weekly review — open the cockpit to run one now.";
 
+/**
+ * The per-provider reconnect prompts — DELIBERATELY OUTSIDE `NOTIFICATION_KINDS` above.
+ *
+ * ⚠ DO NOT ADD THESE TO `NOTIFICATION_KINDS`. That list is what arms
+ * `notifyExternal.dispatch`, which reaches `freshAccessToken` and sends MAIL. A reconnect
+ * prompt says "your connection is dying" — routing it through the connection it reports on is
+ * the loop `audit-dead-letter.md` exists to prevent, and it is why `gmail_reconnect` rows are
+ * inserted directly with their own copy rather than through `notificationMessage`. The same
+ * reasoning that keeps the two review kinds out of that list keeps these out.
+ *
+ * They live here anyway, beside the list they must stay out of, because that is where a future
+ * reader is standing when they are tempted to add them.
+ *
+ * 17-06 (ADR-018) added the Microsoft row. Before it there was one hardcoded `"gmail_reconnect"`
+ * literal in six places; a second provider made the table cheaper than the literals.
+ */
+export const RECONNECT_PROVIDERS = ["google", "microsoft"] as const;
+export type ReconnectProvider = (typeof RECONNECT_PROVIDERS)[number];
+
+export const RECONNECT: Record<
+  ReconnectProvider,
+  { readonly kind: string; readonly message: string; readonly href: string; readonly cta: string }
+> = {
+  google: {
+    kind: "gmail_reconnect",
+    message: "Reconnect Gmail to send this",
+    href: "/connect-gmail",
+    cta: "Reconnect",
+  },
+  microsoft: {
+    kind: "microsoft_calendar_reconnect",
+    message: "Reconnect Microsoft to keep calendar access working",
+    href: "/connect-microsoft",
+    cta: "Reconnect",
+  },
+};
+
+/** Every reconnect kind, for the banner's filter and for tests that must be exhaustive. */
+export const RECONNECT_KINDS = RECONNECT_PROVIDERS.map((p) => RECONNECT[p].kind);
+
 /** Static label per kind. `Record<NotificationKind, …>` makes a missing kind a compile error. */
 const MESSAGES: Record<NotificationKind, string> = {
   "validation.rejected": "A submission was rejected by validation.",

@@ -9,6 +9,8 @@ const read = (rel: string) => readFileSync(new URL(`../../../${rel}`, import.met
 const WEB = "apps/web/app/(app)";
 const button = read(`${WEB}/_components/DisconnectGoogle.tsx`);
 const connectPage = read(`${WEB}/connect-gmail/page.tsx`);
+const msButton = read(`${WEB}/_components/DisconnectMicrosoft.tsx`);
+const msConnectPage = read(`${WEB}/connect-microsoft/page.tsx`);
 const panel = read(`${WEB}/dashboard/profile/ConnectionsPanel.tsx`);
 const data = read(`${WEB}/dashboard/profile/connections.ts`);
 const profilePage = read(`${WEB}/dashboard/profile/page.tsx`);
@@ -149,6 +151,121 @@ describe("the blocked rows are information, not decoration", () => {
 // A scope is a PROMISE to a person, not a config value. These assertions make the promise and the
 // grant fail together: add a fourth capability to GOOGLE_SCOPES and this suite is red until every
 // surface that speaks to the user has been told about it.
+
+// ── The Microsoft scope-copy sweep (17-06, ADR-018) ──────────────────────────
+//
+// Same rule as the Google sweep below, with one extra edge that makes it MORE necessary here, not
+// less: ADR-018 requests the union grant so the user consents once, which means `Mail.Send` and
+// `Mail.Read` are granted NOW while no mail code ships until 25-06. A consent screen describing
+// only "the calendar feature shipping this week" would be asking for a permission it does not
+// mention — ADR-018 consequence 6 names that as the defect these assertions exist to prevent.
+describe("every user-facing surface names every capability in the Microsoft grant", () => {
+  // Keep in step with `MICROSOFT_SCOPES` in microsoft.ts.
+  const MS_CAPABILITIES = ["calendar", "mail"] as const;
+
+  // Comments stripped for the same reason the Google sweep strips them: the ⚠ comment beside the
+  // consent copy naturally says "mail" while EXPLAINING the rule, and would satisfy every assertion
+  // on its own. Only rendered copy counts.
+  const copyOnly = (src: string): string =>
+    src.replace(/\{?\/\*[\s\S]*?\*\/\}?/g, "").replace(/\/\/[^\n]*/g, "");
+
+  const msConnectCopy = copyOnly(msConnectPage);
+  const msPanelCopy = copyOnly(panel);
+  const msConfirmCopy = copyOnly(msButton);
+
+  test("the scan is reading real copy, not an empty string", () => {
+    expect(msConnectPage.length).toBeGreaterThan(500);
+    expect(msConnectCopy).toContain("Pikar needs your consent");
+    expect(msButton).toContain("export function DisconnectMicrosoft");
+    expect(msConfirmCopy).toContain("Disconnect Microsoft?");
+  });
+
+  test("the consent page names all of them — it IS the consent", () => {
+    for (const capability of MS_CAPABILITIES) {
+      expect(
+        new RegExp(capability, "i").test(msConnectCopy),
+        `the Microsoft connect page never says "${capability}" — a user cannot consent to a ` +
+          `capability the consent screen does not mention. Widen MICROSOFT_SCOPES, widen this sentence.`,
+      ).toBe(true);
+    }
+  });
+
+  test("the consent page is honest that mail is granted before it is used", () => {
+    // The specific ADR-018 consequence-6 promise: not merely naming mail, but saying WHY it is
+    // being requested now. Without this the page reads as over-asking.
+    expect(msConnectCopy).toMatch(/not switched on yet|only have to approve/i);
+  });
+
+  test("the disconnect confirm names all of them — it is what the user gives up", () => {
+    for (const capability of MS_CAPABILITIES) {
+      expect(
+        new RegExp(capability, "i").test(msConfirmCopy),
+        `the Microsoft disconnect copy never says "${capability}" — someone reading "disconnect ` +
+          `Microsoft" would not expect that capability to stop working.`,
+      ).toBe(true);
+    }
+  });
+
+  // THE DIVERGENCE FROM GOOGLE THAT MUST NOT BE QUIETLY "FIXED". There is no revocation endpoint
+  // in the v2 delegated flow, so every surface must say the grant survives on the user's account.
+  // A future edit that copies DisconnectGoogle's wording wholesale turns this red.
+  test("the Microsoft disconnect never claims a revocation it cannot perform", () => {
+    expect(msConfirmCopy).toMatch(/My Apps/);
+    expect(msConfirmCopy).toMatch(/does NOT remove|still lists Pikar/i);
+    // And it must not borrow Google's revocation destination.
+    expect(msConfirmCopy).not.toContain("myaccount.google.com");
+  });
+
+  test("the connections row names all of them and reads BOTH readiness flags", () => {
+    for (const capability of MS_CAPABILITIES) {
+      expect(
+        new RegExp(capability, "i").test(msPanelCopy),
+        `the connections row never says "${capability}" — this tab is the answer to "what is Pikar ` +
+          `connected to", so an unnamed capability is invisible.`,
+      ).toBe(true);
+    }
+    // `connected` alone cannot distinguish a half-grant: Microsoft may return LESS than requested.
+    // Without both flags a tenant with calendar-only access is reported as healthy while every
+    // Outlook send fails — the same class of bug the Google row's `driveReady` line exists for.
+    expect(
+      panel,
+      "the connections row does not read calendarReady — a partial Microsoft grant is then " +
+        "reported as healthy while every calendar call 403s.",
+    ).toContain("calendarReady");
+    expect(
+      panel,
+      "the connections row does not read mailReady — a calendar-only Microsoft grant is then " +
+        "reported as healthy while every Outlook send fails.",
+    ).toContain("mailReady");
+  });
+
+  // The query value is attacker-controllable; rendering it would reflect arbitrary text.
+  //
+  // Asserted against STRIPPED source, and the first run is why: the page's own ⚠ comment writes
+  // `{errorCode}` verbatim while explaining that rendering it is forbidden, so the raw-source
+  // version failed on the documentation rather than on the code. Same trap as the capability
+  // sweeps, in the opposite direction — there a comment satisfied an assertion it shouldn't,
+  // here a comment violated one it shouldn't.
+  test("the connect page renders the mapped message, never the raw error code", () => {
+    expect(msConnectCopy).toContain("microsoftCallbackMessage(errorCode)");
+    expect(msConnectCopy).not.toMatch(/\{\s*errorCode\s*\}/);
+  });
+
+  test("DisconnectMicrosoft carries its own microsoftStatus subscription", () => {
+    expect(msButton).toContain("useQuery(api.microsoftAuth.microsoftStatus)");
+  });
+
+  test("neither call site gates <DisconnectMicrosoft /> on a status.connected ternary", () => {
+    for (const [src, name] of [
+      [panel, "ConnectionsPanel"],
+      [msConnectPage, "connect-microsoft"],
+    ] as const) {
+      const branch = ternaryTrueBranch(src, "status.connected");
+      if (branch !== null) expect(branch, name).not.toContain("DisconnectMicrosoft");
+      expect(src, name).toContain("<DisconnectMicrosoft");
+    }
+  });
+});
 
 describe("every user-facing surface names every capability in the Google grant", () => {
   // Keep this list in step with `GOOGLE_SCOPES` in calendar.ts.

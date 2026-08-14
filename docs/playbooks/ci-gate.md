@@ -1,5 +1,9 @@
 # Playbook: CI gate (typecheck / lint / test / build)
 
+> Last verified: 2026-08-15 (origin/main merged into feature/cash-business-finance for the
+> production release: package.json gained main's `pnpm gate` script (bc9c4f1), which mirrors this
+> playbook's CI sequence as one local command. No gate semantics changed on this branch.)
+>
 > Last verified: 2026-08-12 (isolated Vercel project packaging — `.vercelignore` now limits direct
 > deploy uploads to application/workspace sources and excludes local caches, evidence, environment
 > files, and credentials. Repository-only directory patterns are root-anchored so the root `Skills`

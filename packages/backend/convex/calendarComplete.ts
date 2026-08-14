@@ -33,7 +33,19 @@ function createEventResult(value: unknown): CreateEventResult | null {
     typeof row.eventId === "string" &&
     typeof row.duplicate === "boolean"
   ) {
-    return { ...refs, outcome: "created", eventId: row.eventId, duplicate: row.duplicate };
+    return {
+      ...refs,
+      outcome: "created",
+      eventId: row.eventId,
+      duplicate: row.duplicate,
+      // 17-07: NOT required in the runtime check, deliberately. A retrier result produced by the
+      // PREVIOUS deploy can still be in flight when this one lands, and rejecting it here would
+      // strand a real created event as an unparseable result — the plan would sit at `delivering`
+      // forever with the event existing in the provider. Absent provider means Google, the same
+      // rule the schema states for `plans.calendarProvider`; absent etag means "unknown version".
+      provider: row.provider === "microsoft" ? "microsoft" : "google",
+      etag: typeof row.etag === "string" ? row.etag : null,
+    };
   }
   if (row.outcome === "reauth") return { ...refs, outcome: "reauth" };
   if (

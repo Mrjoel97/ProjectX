@@ -23,10 +23,12 @@
 import { concatWavTakes } from "@pikar/core/captions";
 import type { Block, Scene, ShotType, VisualKind } from "@pikar/core/storyboard";
 import {
+  hasAssetSource,
   isPaidBlock,
   MAX_CHARS_PER_BLOCK,
   maxCharsFor,
   minCharsFor,
+  narrationCeilingSeconds,
   SHOT_TYPES,
   VISUAL_KINDS,
 } from "@pikar/core/storyboard";
@@ -40,6 +42,7 @@ import {
   MEDIA_DEFAULT_VOICE,
   MEDIA_JOB_CAP_USD,
   MEDIA_VIDEO_SECONDS,
+  sceneVisualSpec,
 } from "@pikar/cost/media";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
@@ -61,13 +64,11 @@ export type ReserveRefusal =
   | "over_job_cap"
   | "illegal_duration"
   | "unrenderable_block"
-  /** 20.2 — a SCENE deck reached the money gate before the assembler could build one. A scene
-   *  timeline needs per-scene durations, a drawtext card branch, a pan/zoom branch and a master
-   *  audio track; waves 3 and 4 add them. Until then this refusal is the ONLY correct answer, and
-   *  it is deliberately at the money gate rather than earlier: the deck is a perfectly good
-   *  proposal to read, edit and reorder — it just cannot be bought yet. Delete this member when
-   *  wave 4 lands; leaving it behind would be a refusal nothing can trigger. */
-  | "scene_render_not_ready"
+  /** 20.2 wave 6 — regenerating a scene that BUYS NOTHING. A `text_card` is drawn by ffmpeg and an
+   *  `uploaded_video`'s bytes are already the tenant's, so a silent one of either has no provider
+   *  line to reserve: there is literally nothing to re-buy. Editing its words and generating the
+   *  reel is the whole cure, and saying so beats opening a $0 transaction that buys air. */
+  | "nothing_to_regenerate"
   | "narration_too_long"
   | "narration_too_short"
   | "media_daily_exhausted"
@@ -374,6 +375,201 @@ export async function reserveJobInner(
 
   // 5-9. The shared transaction floors the batch total once, checks and consumes BOTH windows, and
   // inserts only after every refusal has passed. The standalone image path calls this exact helper.
+  return await reserveProviderLinesInner(ctx, a.tenantId, batchId, lines, specs);
+}
+
+/**
+ * `reserveJobInner`'s SCENE twin (20.2 wave 5) — the money gate for a scene deck.
+ *
+ * Separate from `reserveJobInner` rather than a widened signature, and the reason is the same one
+ * that keeps `deckOf` and `sceneDeckOf` apart: a plan carries one contract or the other, never
+ * both, so a function that took either would spend its length asking which. The two SHARE the part
+ * that actually moves money — `reserveProviderLinesInner` floors the batch total, checks and
+ * consumes both windows, and inserts only after every refusal has passed — so there is exactly one
+ * transaction, not two to keep in step.
+ *
+ * WHAT CHANGED FROM THE BLOCK PATH, and every one of these is why the twin exists:
+ *
+ *   * **A picture line is per-KIND, not per-paid-flag.** `generated_video` buys a clip at ITS OWN
+ *     length; `animated_image` buys ONE still and the assembler pans across it (~a tenth of the
+ *     cost, and frame-exact at any duration); `uploaded_video` and `text_card` buy nothing at all.
+ *   * **`unrenderable_block` is NARROWED to `hasAssetSource`.** The old check refused every unpaid
+ *     row, because an unpaid row had no clip and the assembler hard-errors on a missing input.
+ *     Waves 3-5 removed that: a card is drawn, a still is panned, and an upload is fetched from
+ *     the vault. What is still refused is a row that does not name what its picture is built from.
+ *   * **A voice line only where there is a line to speak.** Silence is legal (wave 4), and
+ *     reserving a tts call for an empty string would buy nothing and then fail to land.
+ *   * **The narration ceiling is the TAKE's window, not the scene's.** `narrationCeilingSeconds`
+ *     runs to the next NARRATED scene, so a silent scene lends its duration to the line before it.
+ *     There is no floor any more — a short line is a pause, not a fault.
+ *
+ * **`only` — one scene, bought against the WHOLE deck's timeline (20.2 wave 6).** This is what
+ * `regenerateBlock` needs and why it refused until now. A reel's length is the sum of its scenes,
+ * so a one-scene reservation cannot be a one-scene DECK: the sum gate would refuse it, and the
+ * narration ceiling would be measured against a neighbour that is not there. So the whole deck is
+ * validated exactly as a full reservation validates it — every refusal a full buy would raise, a
+ * partial buy raises too — and only the LINES are narrowed. The captions line still prices the
+ * whole reel, because re-buying one scene re-renders and re-captions all of it.
+ */
+export async function reserveSceneJobInner(
+  ctx: MutationCtx,
+  a: {
+    tenantId: string;
+    planId: Id<"plans">;
+    scenes: readonly Scene[];
+    targetDurationSeconds: number;
+    withCaptions: boolean;
+    /** A scene INDEX. Absent buys the whole deck; present buys that scene alone. */
+    only?: number;
+  },
+): Promise<ReserveResult> {
+  // Same order as the block path, and for the same reasons — coverage above every refusal, then
+  // both kill switches, then the free checks, then the lines.
+  await ensureCoverage(ctx, a.tenantId, Date.now());
+  const cfg = await getGuardrailConfig(ctx);
+  if (cfg.killSwitch || cfg.mediaKillSwitch) return { ok: false, reason: "kill_switch" };
+  if (a.scenes.length === 0) return { ok: false, reason: "unrenderable_block" };
+
+  // The deck must add up to what it declared. The assembler asserts this too and refuses before
+  // any work — but that refusal is inside a VM that has already been paid for, and this one is
+  // free. Same rule that puts the narration ceiling here rather than downstream.
+  const summed = a.scenes.reduce((n, s) => n + s.durationMs, 0) / 1000;
+  if (summed !== a.targetDurationSeconds) return { ok: false, reason: "illegal_duration" };
+
+  const now = Date.now();
+  const batchId = crypto.randomUUID();
+  const base = { tenantId: a.tenantId, planId: a.planId, batchId };
+  const lines: ProviderLine[] = [];
+
+  for (const [i, scene] of a.scenes.entries()) {
+    // THE NARROWED GUARD. A row that does not name its own source can never produce pixels, and
+    // finding that out in the VM costs the whole deck.
+    if (!hasAssetSource(scene)) return { ok: false, reason: "unrenderable_block" };
+
+    // EVERY scene is validated; only the chosen one is BOUGHT. The refusals above and below stay
+    // deck-wide on purpose — a partial buy that ignored a neighbour's broken row would reserve
+    // successfully and then be refused by the render, which is the failure mode wave 6 exists to
+    // remove rather than reproduce one function to the left.
+    const buying = a.only === undefined || scene.index === a.only;
+    /** A provider line, kept only if this scene is the one being bought. The refusals stay where
+     *  they were; this is the ONLY thing `only` changes. */
+    const buy = (line: ProviderLine): void => {
+      if (buying) lines.push(line);
+    };
+    const seconds = scene.durationMs / 1000;
+
+    // THE PICTURE, off the scene-kind price table (20.2 wave 7) rather than a branch per kind
+    // written out at every money site. The provider's duration GRID is enforced inside it, against
+    // the model we are about to submit to rather than against the wider display set — the hole 20.2
+    // found in the block path's `isBuyableClipLength`.
+    const picture = sceneVisualSpec(scene.visual, seconds);
+    if (!picture.ok) return { ok: false, reason: picture.error.code }; // fail closed, never guess
+    if (picture.value !== null) {
+      const { spec, usd } = picture.value;
+      buy({
+        spec,
+        estUsd: usd,
+        row: {
+          ...base,
+          provider: "openai",
+          blockIndex: scene.index,
+          kind: spec.kind,
+          model: spec.model,
+          spec:
+            spec.kind === "video"
+              ? { kind: "video", resolution: spec.resolution, seconds: spec.seconds }
+              : { kind: "image", width: spec.width, height: spec.height },
+          promptHash: await contentHash(scene.prompt),
+          status: "queued",
+          estUsd: usd,
+          createdAt: now,
+          updatedAt: now,
+        },
+      });
+    }
+    // A `null` picture line is a kind that buys NOTHING: an `uploaded_video`'s bytes are already
+    // the tenant's (resolved from the vault at render time) and a `text_card` is drawn by ffmpeg
+    // inside a sandbox the flat render line already pays for.
+
+    // THE VOICE TAKE, only where there is a line. The ceiling runs to the next NARRATED scene, so
+    // a silent scene lends its window to the line before it — checked here, upstream of payment,
+    // because an overrun is otherwise only provable inside a sandbox that has already been bought.
+    if (scene.narration !== "") {
+      const availableSeconds = narrationCeilingSeconds(a.scenes, i);
+      if (scene.narration.length > maxCharsFor(availableSeconds)) {
+        return { ok: false, reason: "narration_too_long" };
+      }
+      // Doubled for the same reason the block path doubles: ONE rewrite round is pre-paid, because
+      // the provider returns no duration and a job that cannot afford its own cure strands a paid
+      // deck. At $0.012 the doubling is free and the fail-closed direction is over-reserving.
+      const characters = scene.narration.length * 2;
+      const spec: MediaSpec = { kind: "tts", model: MEDIA_DEFAULT_VOICE.model, characters };
+      const priced = estimateMediaUsd(spec);
+      if (!priced.ok) return { ok: false, reason: priced.error.code };
+      buy({
+        spec,
+        estUsd: priced.value,
+        row: {
+          ...base,
+          provider: "openai",
+          blockIndex: scene.index,
+          kind: "tts",
+          model: MEDIA_DEFAULT_VOICE.model,
+          spec: {
+            kind: "tts",
+            characters,
+            voice: MEDIA_DEFAULT_VOICE.voice,
+            sampleRateHertz: MEDIA_DEFAULT_VOICE.sampleRateHertz,
+          },
+          promptHash: await contentHash(scene.narration),
+          status: "queued",
+          estUsd: priced.value,
+          createdAt: now,
+          updatedAt: now,
+        },
+      });
+    }
+  }
+
+  // A deck of nothing but free scenes and no narration has nothing to reserve and nothing to
+  // render into: refuse rather than open a money transaction with an empty line list. On a PARTIAL
+  // buy the same emptiness means something else entirely — the deck is fine and this one scene
+  // simply has nothing to purchase — so it is named separately rather than told the deck is
+  // unrenderable when it is not.
+  if (lines.length === 0) {
+    return {
+      ok: false,
+      reason: a.only === undefined ? "unrenderable_block" : "nothing_to_regenerate",
+    };
+  }
+
+  // One deck-wide captions pass, priced against the DECLARED length rather than
+  // `blocks × clipSeconds` — the arithmetic that no longer describes a reel.
+  if (a.withCaptions) {
+    const audioMinutes = a.targetDurationSeconds / 60;
+    const spec: MediaSpec = { kind: "stt", model: MEDIA_DEFAULT_STT.model, audioMinutes };
+    const priced = estimateMediaUsd(spec);
+    if (!priced.ok) return { ok: false, reason: priced.error.code };
+    lines.push({
+      spec,
+      estUsd: priced.value,
+      row: {
+        ...base,
+        provider: "openai",
+        blockIndex: -1,
+        kind: "stt",
+        model: MEDIA_DEFAULT_STT.model,
+        spec: { kind: "stt", audioMinutes },
+        promptHash: await contentHash(a.scenes.map((s) => s.narration).join("\n")),
+        status: "queued",
+        estUsd: priced.value,
+        createdAt: now,
+        updatedAt: now,
+      },
+    });
+  }
+
+  const specs: MediaSpec[] = [...lines.map((l) => l.spec), { kind: "render" }];
   return await reserveProviderLinesInner(ctx, a.tenantId, batchId, lines, specs);
 }
 
@@ -1668,31 +1864,68 @@ export const byPlan = tenantQuery({
       .withIndex("by_plan", (q) => q.eq("tenantId", ctx.tenantId).eq("planId", planId))
       .collect();
 
-    const maxChars =
+    const deckMaxChars =
       plan.clipSeconds === undefined ? MAX_CHARS_PER_BLOCK : maxCharsFor(plan.clipSeconds);
-    return (plan.shots ?? []).map((shot) => {
-      // The job's OWN blockIndex is authoritative, never the array position — see the reorder
-      // ceiling on `reorderBlocks`.
-      const mine = rows.filter((r) => r.blockIndex === shot.index);
-      return {
-        blockIndex: shot.index,
-        // DISPLAY ONLY, and the one place the two closed sets are allowed to meet. A block row
-        // carries `type`, a 20.2 scene row carries `visual`, and a tile has to label whichever it
-        // was handed. Collapsing them is safe HERE precisely because it is safe nowhere else:
-        // `deckOf` keeps them apart on the money path, where reading a scene as a block would
-        // price it at the wrong duration. This is a projection for a caption.
-        type: shot.type ?? shot.visual ?? "",
-        description: shot.description,
-        overlay: shot.overlay ?? null,
-        prompt: shot.prompt,
-        narration: shot.narration,
-        narrationChars: shot.narration.length,
-        maxChars,
-        overCharLimit: shot.narration.length > maxChars,
-        clip: faceOf(mine.find((r) => r.kind === "video")),
-        voice: faceOf(mine.find((r) => r.kind === "tts")),
-      };
-    });
+    // 20.2 wave 6 — on a SCENE deck the narration ceiling is the TAKE's window, not the deck's
+    // longest scene. `clipSeconds` on a scene row is the longest scene (`persistSceneDeck` says
+    // so), which is loose in both directions: it lets the canvas accept a line the money gate will
+    // refuse, and it under-states the room a line before a silent scene actually has. The canvas
+    // has to show the number the reserve will apply, or the count beside the textarea is a guess.
+    const sceneDeck = sceneDeckOf(plan);
+    return await Promise.all(
+      (plan.shots ?? []).map(async (shot, position) => {
+        // The job's OWN blockIndex is authoritative, never the array position — see the reorder
+        // ceiling on `reorderBlocks`.
+        const mine = rows.filter((r) => r.blockIndex === shot.index);
+        const clipRow = mine.find((r) => r.kind === "video" || r.kind === "image");
+        const voiceRow = mine.find((r) => r.kind === "tts");
+        const maxChars = sceneDeck
+          ? maxCharsFor(narrationCeilingSeconds(sceneDeck.scenes, position))
+          : deckMaxChars;
+        return {
+          blockIndex: shot.index,
+          // DISPLAY ONLY, and the one place the two closed sets are allowed to meet. A block row
+          // carries `type`, a 20.2 scene row carries `visual`, and a tile has to label whichever it
+          // was handed. Collapsing them is safe HERE precisely because it is safe nowhere else:
+          // `deckOf` keeps them apart on the money path, where reading a scene as a block would
+          // price it at the wrong duration. This is a projection for a caption.
+          type: shot.type ?? shot.visual ?? "",
+          /** 20.2 wave 6, and NOT the same field as `type` above. The canvas branches on the KIND
+           *  — a card has no clip to wait for, an upload needs a vault document, a still is panned
+           *  rather than generated — so it needs the closed set itself, not a label. `null` on a
+           *  block row, which is what makes "is this a scene deck?" answerable on the client. */
+          visual: shot.visual ?? null,
+          /** THIS scene's own place on the timeline. The canvas sizes its tiles from them, so they
+           *  come off the row rather than being re-derived from an index and a deck-wide length —
+           *  that arithmetic is the uniform contract this phase removed. */
+          startMs: shot.windowStartMs,
+          durationMs: shot.seconds * 1000,
+          /** The vault document an `uploaded_video` names, so the picker can show what is chosen
+           *  and the tile can say when nothing is. A REF, never bytes and never a URL. */
+          asset: shot.asset ?? null,
+          description: shot.description,
+          overlay: shot.overlay ?? null,
+          prompt: shot.prompt,
+          narration: shot.narration,
+          narrationChars: shot.narration.length,
+          maxChars,
+          overCharLimit: shot.narration.length > maxChars,
+          clip: faceOf(clipRow),
+          voice: faceOf(voiceRow),
+          /** **BOUGHT FOR TEXT THAT HAS SINCE CHANGED.** A landed asset survives a free edit — the
+           *  render reuses it, deliberately, because it is the only footage that exists (see
+           *  `batchToRender`'s `stale_inputs` note). That makes it the one thing about a reel a
+           *  user cannot otherwise see: the tile says "your line changed since this take was
+           *  recorded", and the cure is the regenerate control right beside it. The comparison is
+           *  the job's own `promptHash` against the shot's current text — the same hash the
+           *  reserve wrote, so it cannot drift from what was actually bought. */
+          clipStale: clipRow ? clipRow.promptHash !== (await contentHash(shot.prompt)) : false,
+          voiceStale: voiceRow
+            ? voiceRow.promptHash !== (await contentHash(shot.narration))
+            : false,
+        };
+      }),
+    );
   },
 });
 
@@ -1753,7 +1986,7 @@ export const reel = tenantQuery({
       status: null as string | null,
       url: null as string | null,
       durationS: null as number | null,
-      blockCount: null as number | null,
+      sceneCount: null as number | null,
       gates: [] as string[],
       reason: null as string | null,
     };
@@ -1781,7 +2014,10 @@ export const reel = tenantQuery({
       ...base,
       url: await ctx.storage.getUrl(plan.renderStorageId),
       durationS: plan.renderSummary.durationS,
-      blockCount: plan.renderSummary.blockCount,
+      // One name on the wire, both names in the store: a reel rendered before wave 6 wrote
+      // `blockCount` for the same count, and it is a published artifact rather than something to
+      // migrate. The canvas says "scenes" either way.
+      sceneCount: plan.renderSummary.sceneCount ?? plan.renderSummary.blockCount ?? null,
       gates: [...plan.renderSummary.gates],
     };
   },
@@ -1822,12 +2058,108 @@ export const jobEstimate = tenantQuery({
 
     const plan = await ownedPlan(ctx, planId, ctx.tenantId);
     if (!plan) return empty;
-    // 20.2 — the scene gate, FIRST and in the same order as the two money gates. Without it a
-    // scene deck falls through to `empty` and the canvas renders a silent $0 estimate with no
-    // refusal: a Generate button that is disabled for a reason nothing on screen states. The whole
-    // point of this query is to name the lever BEFORE the button is pressed.
-    if (sceneDeckOf(plan) !== null) {
-      return { ...empty, refusal: { reason: "scene_render_not_ready" as const } };
+    // 20.2 wave 5 — the scene gate OPENS here in the same commit it opens at `generateReel`, and
+    // that co-location is the point: a working Generate button behind a refusing estimate would
+    // spend money the canvas never showed. The whole purpose of this query is to name the number
+    // BEFORE the button is pressed, so the two must open together or not at all.
+    const sceneDeck = sceneDeckOf(plan);
+    if (sceneDeck !== null) {
+      const { scenes, targetDurationSeconds } = sceneDeck;
+
+      // The SAME pre-flight refusals `reserveSceneJobInner` applies, in the same order.
+      if (scenes.reduce((n, s) => n + s.durationMs, 0) / 1000 !== targetDurationSeconds) {
+        return { ...empty, refusal: { reason: "illegal_duration" } };
+      }
+      const specs: MediaSpec[] = [];
+      let clipSecondsTotal = 0;
+      let voiceChars = 0;
+      for (const [i, s] of scenes.entries()) {
+        if (!hasAssetSource(s)) {
+          return { ...empty, refusal: { reason: "unrenderable_block", blockIndex: s.index } };
+        }
+        const seconds = s.durationMs / 1000;
+        // The SAME table `reserveSceneJobInner` reserves from, so the number on screen and the
+        // number the rail consumes cannot drift — that used to be two hand-copied branches.
+        const picture = sceneVisualSpec(s.visual, seconds);
+        if (!picture.ok) return { ...empty, refusal: { reason: picture.error.code } };
+        if (picture.value !== null) {
+          specs.push(picture.value.spec);
+          if (picture.value.spec.kind === "video") clipSecondsTotal += seconds;
+        }
+        if (s.narration !== "") {
+          const availableSeconds = narrationCeilingSeconds(scenes, i);
+          if (s.narration.length > maxCharsFor(availableSeconds)) {
+            return {
+              ...empty,
+              refusal: {
+                reason: "narration_too_long",
+                blockIndex: s.index,
+                chars: s.narration.length,
+              },
+            };
+          }
+          const characters = s.narration.length * 2; // the 2x rewrite allowance, as reserved
+          voiceChars += characters;
+          specs.push({ kind: "tts", model: MEDIA_DEFAULT_VOICE.model, characters });
+        }
+      }
+      const audioMinutes = targetDurationSeconds / 60;
+      specs.push({ kind: "stt", model: MEDIA_DEFAULT_STT.model, audioMinutes });
+      specs.push({ kind: "render" });
+
+      const priced = chooseMediaBatch(specs, MEDIA_JOB_CAP_USD);
+      if (!priced.ok) return { ...empty, refusal: { reason: priced.error.code } };
+      const sub = (of: MediaSpec[]): number =>
+        Math.round(
+          of.reduce((n, x) => {
+            const p = estimateMediaUsd(x);
+            return n + (p.ok ? p.value : 0);
+          }, 0) * 100,
+        );
+      const voiceCount = scenes.filter((s) => s.narration !== "").length;
+      const clips = specs.filter((x) => x.kind === "video");
+      const stills = specs.filter((x) => x.kind === "image");
+      return {
+        // ONE LINE PER PAID KIND (wave 7). Wave 5 printed a blended `pictures` row because the
+        // price table did not exist yet; a generated clip is 40x a still, so the blend hid the only
+        // lever the user has. D7's requirement is that the estimate names WHICH line is expensive
+        // BEFORE the button is clickable, and a mixed deck's expensive line is always the clips.
+        // A kind the deck does not use is omitted rather than printed at zero. `uploaded_video` and
+        // `text_card` have no line at all — they buy nothing, and the ribbon above already shows
+        // them.
+        lines: [
+          ...(clips.length > 0
+            ? [
+                {
+                  label: "clips",
+                  qty: clips.length,
+                  unit: `${clipSecondsTotal}s of ${targetDurationSeconds}s ${MEDIA_DEFAULT_VIDEO.resolution}`,
+                  cents: sub(clips),
+                },
+              ]
+            : []),
+          ...(stills.length > 0
+            ? [{ label: "stills", qty: stills.length, unit: "pan/zoom", cents: sub(stills) }]
+            : []),
+          {
+            label: "voice",
+            qty: voiceCount,
+            unit: `${voiceChars} chars`,
+            cents: sub(specs.filter((x) => x.kind === "tts")),
+          },
+          {
+            label: "captions",
+            qty: 1,
+            unit: `${audioMinutes.toFixed(2)} min`,
+            cents: sub(specs.filter((x) => x.kind === "stt")),
+          },
+          { label: "render", qty: 1, unit: "sandbox", cents: sub([{ kind: "render" }]) },
+        ],
+        totalCents: priced.value.estCents,
+        capCents,
+        remainingCents,
+        refusal: null,
+      };
     }
     const blocks = deckOf(plan);
     const clipSeconds = plan.clipSeconds;
@@ -1977,20 +2309,47 @@ export const imageEstimate = tenantQuery({
  *  than throwing — a refusal is an answer, not an error. */
 async function reserveAndSchedule(
   ctx: MutationCtx,
-  a: { tenantId: string; planId: Id<"plans">; blocks: readonly Block[]; clipSeconds: number },
+  a: {
+    tenantId: string;
+    planId: Id<"plans">;
+    /** ONE contract or the other, never both — the same discriminator `deckOf` / `sceneDeckOf`
+     *  already enforce on the row. Passed in rather than re-read here so the caller's own refusal
+     *  ("this plan has no deck at all") stays the caller's. */
+    deck:
+      | { kind: "block"; blocks: readonly Block[]; clipSeconds: number }
+      | {
+          kind: "scene";
+          scenes: readonly Scene[];
+          targetDurationSeconds: number;
+          /** 20.2 wave 6 — buy ONE scene of this deck. The block arm expresses the same thing by
+           *  passing a one-element `blocks`, which a scene deck cannot do: its scenes have to sum
+           *  to the declared target, so the whole timeline goes in and the purchase is narrowed. */
+          only?: number;
+        };
+  },
 ): Promise<
   { ok: true; batchId: string; estCents: number } | { ok: false; reason: ReserveRefusal }
 > {
-  const reserved = await reserveJobInner(ctx, {
-    tenantId: a.tenantId,
-    planId: a.planId,
-    blocks: a.blocks,
-    clipSeconds: a.clipSeconds,
-    // PINNED true, the `cockpit.ts:681` reasoning verbatim: the fail-closed direction is
-    // over-reserving, and an unused STT line costs $0.008 while an unreserved one that IS used is
-    // spend outside the rail.
-    withCaptions: true,
-  });
+  // PINNED true in both arms, the `cockpit.ts:681` reasoning verbatim: the fail-closed direction is
+  // over-reserving, and an unused STT line costs $0.008 while an unreserved one that IS used is
+  // spend outside the rail.
+  const reserved =
+    a.deck.kind === "scene"
+      ? await reserveSceneJobInner(ctx, {
+          tenantId: a.tenantId,
+          planId: a.planId,
+          scenes: a.deck.scenes,
+          targetDurationSeconds: a.deck.targetDurationSeconds,
+          withCaptions: true,
+          ...(a.deck.only === undefined ? {} : { only: a.deck.only }),
+        })
+      : await reserveJobInner(ctx, {
+          tenantId: a.tenantId,
+          planId: a.planId,
+          blocks: a.deck.blocks,
+          clipSeconds: a.deck.clipSeconds,
+          withCaptions: true,
+        });
   if (!reserved.ok) return { ok: false, reason: reserved.reason }; // nothing scheduled, zero rows
 
   // The render-clear rides in the SAME mutation as the reservation, so there is no scheduler tick
@@ -2009,19 +2368,25 @@ export const generateReel = tenantMutation({
   args: { planId: v.id("plans") },
   handler: async (ctx, { planId }) => {
     const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
-    // 20.2 — THE SCENE GATE, and it is deliberately the FIRST thing here. A scene deck reaching
-    // `deckOf` returns null and would refuse as `no_deck`, which is a lie: the deck parsed, it is
-    // on screen, and the user can read it. The honest refusal names what is actually missing.
-    if (sceneDeckOf(plan) !== null) {
-      return { ok: false as const, reason: "scene_render_not_ready" as const };
+    // 20.2 wave 5 — THE SCENE GATE OPENS. Wave 2 put a `scene_render_not_ready` refusal here
+    // because a scene deck reaching `deckOf` returns null and would have refused as `no_deck`,
+    // which was a lie: the deck parsed and was on screen. Everything it was waiting for now
+    // exists — the assembler builds three kinds of scene, the sidecar describes them, and
+    // `reserveSceneJobInner` prices them per kind. This is where a scene deck becomes BUYABLE.
+    const sceneDeck = sceneDeckOf(plan);
+    if (sceneDeck !== null) {
+      return await reserveAndSchedule(ctx, {
+        tenantId: ctx.tenantId,
+        planId,
+        deck: { kind: "scene", ...sceneDeck },
+      });
     }
     const blocks = deckOf(plan);
     if (!blocks || plan.clipSeconds === undefined) return { ok: false as const, reason: "no_deck" };
     return await reserveAndSchedule(ctx, {
       tenantId: ctx.tenantId,
       planId,
-      blocks,
-      clipSeconds: plan.clipSeconds,
+      deck: { kind: "block", blocks, clipSeconds: plan.clipSeconds },
     });
   },
 });
@@ -2072,6 +2437,22 @@ export const regenerateBlock = tenantMutation({
   args: { planId: v.id("plans"), blockIndex: v.number() },
   handler: async (ctx, { planId, blockIndex }) => {
     const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
+    // 20.2 wave 6 — THE SCENE ARM OPENS. Re-buying one scene in isolation would reserve a batch
+    // whose scenes do not add up to the declared target, so the WHOLE timeline is handed to the
+    // reserve and only the purchase is narrowed (`only`). The render then takes this scene's new
+    // asset and its neighbours' existing ones off the plan — see `batchToRender`, which until this
+    // wave read the batch alone and refused every partial buy, block decks included.
+    const sceneDeck = sceneDeckOf(plan);
+    if (sceneDeck !== null) {
+      if (!sceneDeck.scenes.some((s) => s.index === blockIndex)) {
+        return { ok: false as const, reason: "no_deck" as const };
+      }
+      return await reserveAndSchedule(ctx, {
+        tenantId: ctx.tenantId,
+        planId,
+        deck: { kind: "scene", ...sceneDeck, only: blockIndex },
+      });
+    }
     const blocks = deckOf(plan);
     if (!blocks || plan.clipSeconds === undefined) return { ok: false as const, reason: "no_deck" };
     const one = blocks.find((b) => b.index === blockIndex);
@@ -2079,8 +2460,7 @@ export const regenerateBlock = tenantMutation({
     return await reserveAndSchedule(ctx, {
       tenantId: ctx.tenantId,
       planId,
-      blocks: [one],
-      clipSeconds: plan.clipSeconds,
+      deck: { kind: "block", blocks: [one], clipSeconds: plan.clipSeconds },
     });
   },
 });
@@ -2120,7 +2500,26 @@ async function patchShots(
     startMs += s.seconds * 1000;
     return shot;
   });
-  await ctx.db.patch(planId, { shots: renumbered });
+
+  // **STRUCTURAL vs CONTENT, and the difference is money (20.2 wave 6).**
+  //
+  // `shotsChangedAt` is what makes a landed asset un-reusable by the next render
+  // (`batchToRender`'s `stale_inputs`), so stamping it on the wrong edits is expensive in both
+  // directions. A REORDER or a DELETE moves a scene out from under the index its clip was bought
+  // at — reusing that clip would put the wrong footage under the right caption, so the whole deck
+  // must be bought again. An edited prompt or narration line changes ONE scene in place and every
+  // index still means what it meant, so the neighbours' assets stay valid: without this
+  // distinction the commonest flow there is — edit a line, regenerate that scene — would buy a
+  // take and then refuse the render, which is the same money leak this wave came to close.
+  //
+  // The discriminator is `next`'s own indices: a content edit maps the deck in place, so they are
+  // already `0..n-1`; a permutation or a deletion is the only way they are not. No flag to pass,
+  // and no caller that can forget to.
+  const structural = next.some((s, i) => s.index !== i);
+  await ctx.db.patch(planId, {
+    shots: renumbered,
+    ...(structural ? { shotsChangedAt: Date.now() } : {}),
+  });
   await clearRender(ctx, planId);
 }
 
@@ -2158,8 +2557,17 @@ export const editBlockNarration = tenantMutation({
     if (!shots.some((s) => s.index === blockIndex))
       return { ok: false as const, reason: "no_block" };
 
-    const maxChars =
-      plan.clipSeconds === undefined ? MAX_CHARS_PER_BLOCK : maxCharsFor(plan.clipSeconds);
+    // The SAME ceiling the reserve will apply — on a scene deck that is the take's window
+    // (`narrationCeilingSeconds`), not the deck's longest scene. Using the loose deck-wide number
+    // here would let this mutation accept a line `reserveSceneJobInner` then refuses as
+    // `narration_too_long`, which is precisely the disagreement this function exists to prevent.
+    const sceneDeck = sceneDeckOf(plan);
+    const position = (plan.shots ?? []).findIndex((s) => s.index === blockIndex);
+    const maxChars = sceneDeck
+      ? maxCharsFor(narrationCeilingSeconds(sceneDeck.scenes, position))
+      : plan.clipSeconds === undefined
+        ? MAX_CHARS_PER_BLOCK
+        : maxCharsFor(plan.clipSeconds);
     if (narration.length > maxChars) {
       return {
         ok: false as const,
@@ -2172,6 +2580,57 @@ export const editBlockNarration = tenantMutation({
       ctx,
       planId,
       shots.map((s) => (s.index === blockIndex ? { ...s, narration } : s)),
+    );
+    return { ok: true as const };
+  },
+});
+
+/**
+ * Choose the vault document an `uploaded_video` scene renders (20.2 wave 6) — the sixth editor
+ * affordance, and the only one this phase adds.
+ *
+ * **It is an editor control, not a new ingest surface.** §7's open question 1 was answered by the
+ * contract wave 1 shipped: `Scene.asset` has one member, `{ source: "vault", docId }`, so the file
+ * arrives through the vault's existing upload path and this mutation only POINTS at it. A direct
+ * upload from the canvas would be a second `source` member plus its own ingest, which is a decision
+ * rather than a patch.
+ *
+ * **Everything the render will demand is checked HERE, where the refusal is free.** The doc must
+ * exist, be this tenant's, have bytes, and be a video — the same narrowing `batchToRender` and
+ * `resolveRenderAsset` apply. Letting a PDF be chosen would clear the money gate (an upload buys
+ * nothing, so nothing refuses) and then hard-error in the sandbox with the deck already paid for.
+ *
+ * `vaultDocId` is a plain string normalised here, not a `v.id`: it is the same id the vault surface
+ * hands the browser, and a malformed one must land on the same fail-closed return as a foreign one
+ * rather than throwing a different error and distinguishing the two.
+ */
+export const setSceneAsset = tenantMutation({
+  args: { planId: v.id("plans"), blockIndex: v.number(), vaultDocId: v.string() },
+  handler: async (ctx, { planId, blockIndex, vaultDocId }) => {
+    const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
+    const shots = plan.shots ?? [];
+    const shot = shots.find((s) => s.index === blockIndex);
+    if (!shot) return { ok: false as const, reason: "no_block" as const };
+    // Only the kind that HAS an asset. Writing one onto a generated scene would be a field the
+    // renderer ignores and the canvas then displays — a lie with no consumer.
+    if (shot.visual !== "uploaded_video") {
+      return { ok: false as const, reason: "not_an_upload" as const };
+    }
+    const docId = ctx.db.normalizeId("vaultDocuments", vaultDocId);
+    if (!docId) return { ok: false as const, reason: "no_document" as const };
+    const doc = await ctx.db.get(docId);
+    if (!doc || doc.tenantId !== ctx.tenantId || !doc.storageId) {
+      return { ok: false as const, reason: "no_document" as const };
+    }
+    if (!doc.mimeType.startsWith("video/")) {
+      return { ok: false as const, reason: "not_a_video" as const };
+    }
+    await patchShots(
+      ctx,
+      planId,
+      shots.map((s) =>
+        s.index === blockIndex ? { ...s, asset: { source: "vault" as const, docId } } : s,
+      ),
     );
     return { ok: true as const };
   },

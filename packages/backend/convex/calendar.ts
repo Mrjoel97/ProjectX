@@ -10,8 +10,10 @@ import {
   availabilityWindow,
   CALENDAR_EVENTS_SCOPE,
   CALENDAR_FREEBUSY_SCOPE,
+  type CalendarProvider,
   eventIdFor,
   hasScope,
+  parseCalendarProvider,
   toRfc3339,
 } from "@pikar/core";
 import { v } from "convex/values";
@@ -33,8 +35,15 @@ export type CreateEventResult = {
   planId: Id<"plans">;
   tenantId: string;
   correlationId: string;
-} & (
-  | { outcome: "created"; eventId: string; duplicate: boolean }
+} & // the create/GET response, and a later round-trip to fetch it is a second chance to be wrong. // (17-08, gated on the Graph probe); it is captured now because both providers offer it only on // holds the event and its durable version. The etag is what event-specific concurrency needs // 17-07: `provider` and `etag` widen the CREATED variant so the terminal records WHICH calendar
+(
+  | {
+      outcome: "created";
+      eventId: string;
+      duplicate: boolean;
+      provider: CalendarProvider;
+      etag: string | null;
+    }
   | { outcome: "reauth" }
   | { outcome: "terminal"; status: number; reason: string }
 );
@@ -219,6 +228,39 @@ export const createEvent = internalAction({
       return { ...refs, outcome: "terminal", status: 0, reason: "incomplete_stage" };
     }
 
+    // 17-07: the provider branch, AFTER plan/tenant/stage validation so both providers inherit the
+    // identical refusals. `parseCalendarProvider` treats an ABSENT value as Google, which is what
+    // keeps every plan staged before this phase executing exactly as it did — the compatibility
+    // guarantee, expressed once as a pure default rather than as an `if` at each call site.
+    const provider: CalendarProvider = parseCalendarProvider(plan.calendarProvider);
+    if (provider === "microsoft") {
+      // Delegated wholesale. Token logic is NEVER copied into this module: microsoftAuth owns the
+      // grant and microsoftCalendar owns the Graph calls, so there is exactly one place each can
+      // be wrong.
+      const ms = await ctx.runAction(internal.microsoftCalendar.createEvent, {
+        planId,
+        tenantId,
+        correlationId,
+        subject: plan.eventTitle,
+        startMs: plan.eventStartMs,
+        endMs: plan.eventStartMs + plan.eventDurationMs,
+        nowMs: Date.now(),
+      });
+      if (ms.outcome === "created") {
+        return {
+          ...refs,
+          outcome: "created",
+          eventId: ms.eventId,
+          duplicate: ms.duplicate,
+          provider: "microsoft",
+          etag: ms.etag,
+        };
+      }
+      return ms.outcome === "reauth"
+        ? { ...refs, outcome: "reauth" }
+        : { ...refs, outcome: "terminal", status: ms.status, reason: ms.reason };
+    }
+
     const token: Doc<"gmailTokens"> | null = await ctx.runQuery(internal.gmailAuth.getTokens, {
       tenantId,
     });
@@ -257,18 +299,44 @@ export const createEvent = internalAction({
     // A retried create either succeeds or collides with its deterministic id; the collision means
     // the event already exists and is therefore the idempotent success case.
     if (response.status === 409) {
-      return { ...refs, outcome: "created", eventId, duplicate: true };
+      // 17-07: a duplicate is still a success, but it arrives with NO body and therefore no etag —
+      // and 17-08 needs the version of the event that actually exists. One bounded GET of the
+      // deterministic id recovers it. A failed recovery degrades to `etag: null` rather than
+      // failing the create: the event exists either way, and a null version means "management must
+      // re-read first", which is honest. It must never mean "any version will do".
+      let etag: string | null = null;
+      try {
+        const existing = await fetch(`${EVENTS_INSERT_ENDPOINT}/${encodeURIComponent(eventId)}`, {
+          headers: { Authorization: `Bearer ${access.token}` },
+        });
+        if (existing.ok) {
+          const body = (await existing.json()) as { etag?: unknown };
+          if (typeof body.etag === "string") etag = body.etag;
+        }
+      } catch {
+        // Recovery is best-effort by design; see above.
+      }
+      return { ...refs, outcome: "created", eventId, duplicate: true, provider: "google", etag };
     }
 
     if (response.ok) {
       let returnedId = eventId;
+      let etag: string | null = null;
       try {
-        const body = (await response.json()) as { id?: unknown };
+        const body = (await response.json()) as { id?: unknown; etag?: unknown };
         if (typeof body.id === "string") returnedId = body.id;
+        if (typeof body.etag === "string") etag = body.etag;
       } catch {
         // The deterministic request id remains the provider ref if a successful body is empty.
       }
-      return { ...refs, outcome: "created", eventId: returnedId, duplicate: false };
+      return {
+        ...refs,
+        outcome: "created",
+        eventId: returnedId,
+        duplicate: false,
+        provider: "google",
+        etag,
+      };
     }
 
     if (response.status === 429 || response.status >= 500) {

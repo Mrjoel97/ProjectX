@@ -35,6 +35,7 @@ export type RenderRefusal =
   | "empty_batch"
   | "incomplete_blocks"
   | "not_all_succeeded"
+  | "stale_inputs"
   | "route_unreachable"
   | "route_rejected"
   | "sidecar_rejected_on_return";
@@ -74,7 +75,12 @@ type RenderInputs = {
    *  inside the script, because each of the three is a cheaper failure than the one after it. */
   targetSeconds: number;
   scenes: Array<{ kind: "video" | "image" | "card"; seconds: number }>;
-  inputs: Array<{ name: string; jobId: Id<"mediaJobs"> }>;
+  /** An OPAQUE ref the blob route resolves — a `mediaJobs` row for anything that was bought, or a
+   *  `vaultDocuments` row for an `uploaded_video` scene, whose bytes were already the tenant's.
+   *  `resolveRenderAsset` is the single place that knows which table an id belongs to; the runner
+   *  only ever appends it to our own origin. Still called `jobId` on the wire — the route's guard
+   *  is "no path characters", not "is a valid id of table X". */
+  inputs: Array<{ name: string; jobId: Id<"mediaJobs"> | Id<"vaultDocuments"> }>;
   /** Text cards: drawn from the deck's own words, with no job and no bytes in storage. */
   cards: Array<{ name: string; text: string }>;
 };
@@ -135,17 +141,47 @@ export const batchToRender = internalQuery({
     }
     const deck = [...plan.shots].sort((l, r) => l.index - r.index);
 
+    // **THE INPUTS COME FROM THE PLAN, NOT FROM THE BATCH ALONE (20.2 wave 6).**
+    //
+    // `regenerateBlock` has shipped since 20-09 and buys ONE scene into a NEW batch. Reading the
+    // inputs off that batch meant every scene it did not re-buy had no job, so the render refused
+    // `incomplete_blocks` — the user paid for a clip AND lost the published reel, because the
+    // reservation clears the render in the same transaction. The batch is the TRIGGER (it is what
+    // just landed, and `maybeStartRender` fires on its last landing); the INPUTS are whatever this
+    // plan most recently landed at each index. Sorting oldest-first and letting later rows
+    // overwrite makes "most recent" the selection rule, so a re-bought scene wins over the take it
+    // replaced while its untouched neighbours stay exactly as they were.
+    //
+    // A failed or blocked attempt is history and is skipped here — `not_all_succeeded` above is
+    // what refuses a batch still in flight, and that check stays on the batch's OWN rows.
+    const landed = await ctx.db
+      .query("mediaJobs")
+      .withIndex("by_plan", (q) => q.eq("tenantId", a.tenantId).eq("planId", planId))
+      .collect();
+
     const byIndex = new Map<
       number,
       { video?: Doc<"mediaJobs">; image?: Doc<"mediaJobs">; tts?: Doc<"mediaJobs"> }
     >();
-    for (const row of renderable) {
+    for (const row of landed
+      .filter((r) => r.status === "succeeded" && r.assetStorageId !== undefined)
+      .sort((l, r) => l.createdAt - r.createdAt || l._creationTime - r._creationTime)) {
       const slot = byIndex.get(row.blockIndex) ?? {};
       if (row.kind === "video") slot.video = row;
       else if (row.kind === "image") slot.image = row;
-      else slot.tts = row;
+      else if (row.kind === "tts") slot.tts = row;
+      else continue; // `stt` sits at index -1 and is not an assembly input
       byIndex.set(row.blockIndex, slot);
     }
+
+    /** An asset may be reused only while the deck it was bought against still stands. Every write
+     *  to `shots` dates itself (`media.patchShots`, `plans.persistDeck`), so this one comparison
+     *  covers reorder, delete, a re-proposed deck and an edit made while a job was in flight. The
+     *  refusal is BY NAME because the cure differs from every other one: nothing is missing and
+     *  nothing failed — the footage on hand belongs to a deck that no longer exists, and the only
+     *  way forward is to buy the reel again. */
+    const changedAt = plan.shotsChangedAt ?? 0;
+    const fresh = (row: Doc<"mediaJobs">): boolean => row.createdAt >= changedAt;
 
     const scenes: RenderInputs["scenes"] = [];
     const inputs: RenderInputs["inputs"] = [];
@@ -169,9 +205,32 @@ export const batchToRender = internalQuery({
         cards.push({ name: renderInputName("card", i), text });
       } else if (kind === "image") {
         if (!slot?.image) return { ok: false, reason: "incomplete_blocks" };
+        if (!fresh(slot.image)) return { ok: false, reason: "stale_inputs" };
         inputs.push({ name: renderInputName("image", i), jobId: slot.image._id });
+      } else if (shot.visual === "uploaded_video") {
+        // THE VAULT BRIDGE (20.2 wave 5). An upload buys nothing, so it has no `mediaJobs` row and
+        // no job id — its bytes are already the tenant's, sitting on a `vaultDocuments` row.
+        //
+        // **`asset.docId` IS MODEL-AUTHORED TEXT.** It reaches this line off `plans.shots`, which
+        // the specialist wrote, so it is a caller-supplied id in every sense that matters — and
+        // the id it is compared against downstream is opaque. The tenant check is therefore HERE,
+        // on the row, and it is the whole containment: `normalizeId` fails closed for a malformed
+        // or foreign-table id, and a doc belonging to another tenant is refused before its id is
+        // ever handed to the runner. Without this line a deck could name any vault document in
+        // the deployment and have the render fetch it.
+        const docId = ctx.db.normalizeId("vaultDocuments", shot.asset?.docId ?? "");
+        if (!docId) return { ok: false, reason: "incomplete_blocks" };
+        const doc = await ctx.db.get(docId);
+        if (!doc || doc.tenantId !== a.tenantId || !doc.storageId) {
+          return { ok: false, reason: "incomplete_blocks" };
+        }
+        // A vault document that is not a video has no business in a reel, and refusing it here is
+        // also what keeps the blob route's vault branch narrow — see `resolveRenderAsset`.
+        if (!doc.mimeType.startsWith("video/")) return { ok: false, reason: "incomplete_blocks" };
+        inputs.push({ name: renderInputName("video", i), jobId: docId });
       } else {
         if (!slot?.video) return { ok: false, reason: "incomplete_blocks" };
+        if (!fresh(slot.video)) return { ok: false, reason: "stale_inputs" };
         inputs.push({ name: renderInputName("video", i), jobId: slot.video._id });
       }
 
@@ -181,6 +240,9 @@ export const batchToRender = internalQuery({
       // is exactly the deck the rest of this wave exists to make renderable.
       const wantsVoice = shot.narration.trim() !== "";
       if (wantsVoice && !slot?.tts) return { ok: false, reason: "incomplete_blocks" };
+      if (wantsVoice && slot?.tts && !fresh(slot.tts)) {
+        return { ok: false, reason: "stale_inputs" };
+      }
       if (wantsVoice && slot?.tts) {
         // The filename mapping lives in ONE place (`@pikar/core/render`) so the picture and the
         // voice take cannot be numbered by two different pieces of code and drift — 20-13's whole
@@ -191,8 +253,15 @@ export const batchToRender = internalQuery({
 
     // A job at an index the deck does not have is a batch and a deck that disagree about what was
     // bought. Refuse rather than render the shorter of the two.
-    for (const idx of byIndex.keys()) {
-      if (idx < 0 || idx >= deck.length) return { ok: false, reason: "incomplete_blocks" };
+    //
+    // Checked over the BATCH's rows, not the plan's history: a deck that shrank leaves landed jobs
+    // at indices that no longer exist, and those are simply history — `shotsChangedAt` has already
+    // moved past them, so they can never be selected as an input. What must still agree is what
+    // was just BOUGHT.
+    for (const row of renderable) {
+      if (row.blockIndex < 0 || row.blockIndex >= deck.length) {
+        return { ok: false, reason: "incomplete_blocks" };
+      }
     }
 
     // THE DECLARED LENGTH. A scene deck carries it on the row; a block deck's length is still the
@@ -228,6 +297,22 @@ export const resolveRenderAsset = internalQuery({
         mimeType: row.mimeType ?? "application/octet-stream",
       };
     }
+    // …or a VAULT DOCUMENT (20.2 wave 5), for an `uploaded_video` scene. Those bytes are already
+    // the tenant's and were never bought, so there is no `mediaJobs` row to serve them from.
+    //
+    // **NARROWED TO VIDEO, deliberately.** This branch widens what a compromised runner could
+    // read, and the vault is where a tenant's briefs, contracts and business documents live —
+    // serving "any vault document by id" would be a far larger capability than a render needs.
+    // A reel input is a video, so that is the only thing this serves. The TENANT check is not here
+    // and must not be: this query takes a raw id with no tenant to check it against, exactly as
+    // the `mediaJobs` branch does. `batchToRender` is the boundary, and it verifies the doc's
+    // tenant before the id ever reaches the runner.
+    const docId = ctx.db.normalizeId("vaultDocuments", raw);
+    if (docId) {
+      const doc = await ctx.db.get(docId);
+      if (!doc?.storageId || !doc.mimeType.startsWith("video/")) return null;
+      return { assetStorageId: doc.storageId, mimeType: doc.mimeType };
+    }
     // …or the PUBLISHED REEL itself (plan 20-17). The caption burn's input is `final.mp4`, which
     // lives on the plan row rather than on a `mediaJobs` row, so the same route serves it from the
     // same shape: an opaque id in, everything else read off the row. `normalizeId` is still the
@@ -260,14 +345,14 @@ export const recordRender = internalMutation({
         renderStorageId: v.id("_storage"),
         sidecarStorageId: v.id("_storage"),
         sidecarHash: v.string(),
-        blockCount: v.number(),
+        sceneCount: v.number(),
         renderMs: v.number(),
         gatesPassed: v.number(),
         /** The sidecar's own facts, for the canvas (20-09). Parsed ONCE, here, because a query
          *  cannot read a blob — `ctx.storage` in a query is a `StorageReader`. */
         summary: v.object({
           durationS: v.number(),
-          blockCount: v.number(),
+          sceneCount: v.number(),
           gates: v.array(v.string()),
         }),
       }),
@@ -318,7 +403,10 @@ export const recordRender = internalMutation({
       payload: {
         batchId: a.batchId,
         planId: a.planId,
-        blockCount: a.result.blockCount,
+        // `sceneCount` from wave 6 on. The audit log is append-only (§3), so rows written before
+        // this carry `blockCount` for the same number and a reader must know both names — renaming
+        // forward is the only rename an insert-only log allows.
+        sceneCount: a.result.sceneCount,
         renderMs: a.result.renderMs,
         sidecarHash: a.result.sidecarHash,
         gatesPassed: a.result.gatesPassed,
@@ -535,13 +623,13 @@ export const renderReel = internalAction({
         renderStorageId: outcome.mp4StorageId as Id<"_storage">,
         sidecarStorageId,
         sidecarHash: await contentHash(raw),
-        blockCount: reparsed.value.sceneCount,
+        sceneCount: reparsed.value.sceneCount,
         renderMs: outcome.renderMs,
         gatesPassed: reparsed.value.gates.length,
         // From the RE-VALIDATED parse, never from what the route claimed.
         summary: {
           durationS: reparsed.value.totalDurationS,
-          blockCount: reparsed.value.sceneCount,
+          sceneCount: reparsed.value.sceneCount,
           gates: [...reparsed.value.gates],
         },
       },

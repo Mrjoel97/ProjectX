@@ -187,3 +187,47 @@ describe("agentSteps.latestTurn (the first-turn window)", () => {
     expect(turn?.steps.length).toBeLessThanOrEqual(12);
   });
 });
+
+// ── 20-12: the eval harness's media observable reads THIS table, and two actors write to it ──
+//
+// `smoke:mediaDispatchCountForThread` answers "how many times did the AGENT call dispatchMedia".
+// The trap is that `dispatch.ts` records the SPECIALIST RUN it schedules with the SAME tool name
+// (`resolved.spec.stepTool`) on the SAME thread, under a `dispatch:<rootRequestId>` stepKey. A
+// count that does not exclude it reads 2 for one call — which is exactly how fixture 38 failed its
+// first paid gate run: the agent had behaved correctly and the observable was wrong. That cost a
+// real eval run to discover, so it is pinned here where it costs nothing.
+describe("mediaDispatchCountForThread — the AGENT's calls, not the specialist's run", () => {
+  const mediaStep = (t: T, over: { stepKey: string; threadId?: string; tenantId?: string }) =>
+    t.mutation(internal.agentSteps.record, {
+      tenantId: over.tenantId ?? TENANT,
+      threadId: over.threadId ?? THREAD,
+      turnId: TURN,
+      stepKey: over.stepKey,
+      tool: "dispatchMedia",
+      startedAt: NOW,
+    });
+  const count = (t: T, threadId = THREAD, tenantId = TENANT) =>
+    t.query(internal.smoke.mediaDispatchCountForThread, { tenantId, threadId });
+
+  test("ONE agent call plus its specialist run counts as ONE", async () => {
+    const t = convexTest(schema, modules);
+    await mediaStep(t, { stepKey: "call_abc" }); // the cockpit's tool call
+    await mediaStep(t, { stepKey: "dispatch:root-1" }); // dispatch.ts's specialist run
+    expect(await count(t)).toBe(1);
+  });
+
+  test("a genuine SECOND dispatch is still visible — the filter must not hide the defect", async () => {
+    const t = convexTest(schema, modules);
+    await mediaStep(t, { stepKey: "call_abc" });
+    await mediaStep(t, { stepKey: "dispatch:root-1" });
+    await mediaStep(t, { stepKey: "call_def" });
+    expect(await count(t)).toBe(2);
+  });
+
+  test("a prose-only turn counts ZERO, and another thread's calls never leak in", async () => {
+    const t = convexTest(schema, modules);
+    await mediaStep(t, { stepKey: "call_abc", threadId: "other_thread" });
+    await mediaStep(t, { stepKey: "call_xyz", tenantId: OTHER });
+    expect(await count(t)).toBe(0);
+  });
+});

@@ -10,6 +10,107 @@
 > for already-submitted historical jobs. Older provider-specific sections below describe the
 > superseded implementation unless explicitly marked current. See ADR-017.
 
+> Last verified: 2026-08-14 (20.2 wave 8 — **THE SPECIALIST BECOMES A SCENE AUTHOR, and the approve
+> arm opens.** `media-director.md` is v2: `SCENE DECK` with `Target duration`, a `Seconds` column
+> that must sum to it EXACTLY, the four visual kinds, optional narration, and the per-window
+> character ceiling instead of the impossible 31–56 band. The mirror was regenerated and the
+> round-trip test now reads the body's own example with `parseSceneDeck` — including that the
+> example MIXES kinds (an all-generated deck cannot hit a target at all), that `startMs` is a
+> running sum over unequal durations, and that both a speaking and a silent scene are demonstrated.
+> `cockpit.executePlan` reserves scene decks through `reserveSceneJobInner`, so the agent's approve
+> arm and the canvas are ONE gate with ONE number (pinned: the ledger movement equals
+> `jobEstimate.totalCents`); `scene_render_not_ready` is deleted rather than left unreachable.
+> **A silent-degradation bug was found and fixed on the way:** `parsePrompts` matched `Block N`
+> only, so every `Scene N` prompt would have fallen back to the row's DESCRIPTION — not a parse
+> failure, and invisible until the pictures came back generic. Observed RED before the fix.
+> **THE GATE, corrected: there is none to pay.** The plan budgeted a candidate seed, a ~$0.35 eval
+> gate and a blocking owner activation for this body. `media-director` is DELIBERATELY UNGATED by a
+> decision recorded in `skill.ts`, asserted in `skillBodies.test.ts` and derived non-vacuously by
+> `run-eval-golden.mjs --self-check` — the golden runner drives `runCockpitAgent` over TEXT fixtures
+> and structurally cannot exercise a storyboard turn, so gating it would strand it at v1 forever.
+> `seedSkills` therefore publishes this edit straight to `active`. The residual risk is the one
+> already named at that site — a `media-director` body edit activates with no eval evidence — and it
+> is unchanged by this wave. **SEEDING IS REQUIRED:** until `pnpm dev` runs against a deployment
+> (`npx convex dev` alone does NOT seed), the live row is still v1 and the specialist still writes
+> block decks. 936 core + 31 contracts + 1714 backend green; $0.)
+
+> Last verified: 2026-08-14 (20.2 wave 7 — **THE SCENE-KIND PRICE TABLE, and what it turned out to
+> prove.** Scene pricing was two hand-copied branches at two money sites (`reserveSceneJobInner` and
+> `jobEstimate`); it is now ONE table in the pure package — `SCENE_VISUAL_LINE` / `sceneVisualSpec`
+> in `packages/cost/src/media.ts` — read by both, so the number on screen and the number the rail
+> consumes cannot drift by editing one branch. `CLIP_SECONDS` is gone from the cost surface: the
+> duration grid is asked of the pinned model's own row, never of the block era's wider DISPLAY set,
+> which said the same thing twice. **The measured finding: not one of the three target durations is
+> reachable with `generated_video` alone.** Every length Sora 2 supports is a multiple of 4, so no
+> sum of them is 15 or 30; 60 composes and costs $6.00, over the $3.50 job cap. The cheap kinds are
+> a FEASIBILITY requirement, not a cost optimisation — computed from the live tables in
+> `media.test.ts`, observed RED first by adding a 5 s grid entry. The canvas estimate now prints one
+> line per PAID kind (`clips`, `stills`) instead of wave 5's blended `pictures`, which hid a 40x
+> price difference behind one row. ADR-019 records the contract and supersedes D8's fixed-length
+> blocks. 917 core + 61 cost + 1712 backend green; $0.)
+
+> Last verified: 2026-08-14 (20.2 wave 6, VERIFIED IN A BROWSER — `apps/web/e2e/media-canvas.spec.ts`
+> passes against a live local stack: a four-kind 8/6/4/12 scene deck staged through the
+> specialist's own two internal mutations, then the canvas asserted where it actually renders. The
+> load-bearing line is the ribbon's MEASURED widths (`boundingBox()` per segment, ordered AND
+> 12s/4s > 2x) — `ribbonShares` being right and the strip being proportional on screen are
+> different claims, and only the second is what the wave promised. Also asserted live: the four
+> windows off their own offsets (a uniform grid would have read 0:00–0:12 … 0:36–0:48 for a
+> 30-second reel), the card's "drawn when the reel is assembled" instead of a clip it will never
+> have, the silent scene offering NO paid control, the vault picker with its honest empty state,
+> and the estimate refusing by name (`doesn't say what its picture is made from`) with Generate
+> disabled. $0 — nothing is ever generated. **Two harness traps found and written into
+> `e2e/README.md`:** every `convex run` against the LOCAL backend ends the browser session (so a
+> fixture-staging spec must stage first and authenticate after), and an un-onboarded tenant cannot
+> reach the workspace at all (`onboarding:__seedOnboardedTenant`). The run also needed a PROD
+> build — the long-lived `next dev` on :3111 had stopped hydrating, which is the documented
+> workspace-OOM failure and makes every click a native form submit.)
+
+> Last verified: 2026-08-14 (20.2 wave 6 — **THE CANVAS LEARNS THE SCENE CONTRACT.** A timeline
+> ribbon whose segments are as wide as their scenes are long (`ribbonShares`, with a minimum width
+> so a 2 s card in a 60 s reel is still readable — read-only, see the D7 note below); per-scene
+> windows off the row's OWN `startMs`/`durationMs` rather than `index x clipSeconds`; the four kinds
+> badged and, more importantly, STATUSED per kind — a card said "Clip: not requested yet" forever
+> about a picture nobody will ever request. The vault picker (`media.setSceneAsset`) makes an
+> `uploaded_video` scene renderable: video-only, tenant-checked and bytes-checked where the refusal
+> is FREE, because an upload buys nothing and would otherwise clear the money gate and die in the
+> sandbox. The stale refusal copy is gone (`only VIDEO and IMAGE blocks` named a `ShotType` that
+> never existed), and every refusal now speaks the deck's own noun. `renderSummary.blockCount` →
+> `sceneCount`, widened not migrated, with `media.reel` reading `sceneCount ?? blockCount` so reels
+> rendered before this wave still report their length; the `media.rendered` audit key follows, and
+> the redaction allow-list carries BOTH names because the log is insert-only. `byPlan` also gained
+> the per-scene narration ceiling (the TAKE's window, not the deck's longest scene — the loose
+> number let the canvas accept a line the money gate then refused) and `clipStale`/`voiceStale`,
+> which is the surface obligation wave 6 part 1 left behind. **The canvas's derivations and every
+> sentence it prints now live in `mediaCanvasView.ts`** and are tested by CALLING them: `apps/web`'s
+> runner is `.ts`-only and DOM-less, so anything left in the `.tsx` can only be asserted as source
+> text — the `green-tests-over-broken-capability` shape. 24 web + 1672 backend green.)
+
+> Last verified: 2026-08-14 (20.2 wave 6, part 1 — **a partial buy can finally render, and the
+> scene arm of `regenerateBlock` opens.** A defect older than this phase: `regenerateBlock` buys ONE
+> scene into a NEW batch, and `batchToRender` read its inputs off that batch alone, so every index
+> the regenerate did not re-buy had no job and the whole reel came back `incomplete_blocks` — the
+> user paid for a clip AND lost the published reel, because the reservation clears the render in the
+> same transaction. Observed RED first (`a REGENERATE batch renders`). The batch is now the TRIGGER
+> and the INPUTS come off the PLAN: newest succeeded job per (index, kind). `plans.shotsChangedAt`
+> is what keeps that honest — stamped by STRUCTURAL writes only (reorder, delete, a re-proposed
+> deck), never by an edited prompt or line, because invalidating the neighbours on a content edit
+> would make edit-then-regenerate pay for a take and then be refused. A reused asset older than that
+> stamp refuses as `stale_inputs`. `reserveSceneJobInner` gained `only`: the WHOLE deck is validated
+> (sum, asset source, narration ceilings) and only the LINES are narrowed, with captions still
+> priced over the whole reel. `scene_regenerate_not_ready` is deleted; `nothing_to_regenerate`
+> replaces it for a scene that buys nothing at all. 1669 backend green.)
+
+> Last verified: 2026-08-14 (20.2 wave 5 COMPLETE — **the scene gate opens: a scene deck is
+> buyable, renderable and publishable.** `reserveSceneJobInner` prices per kind (a clip at its own
+> length, a still at ~a tenth, nothing for a card or an upload, a take only where there is a line);
+> `unrenderable_block` is narrowed to `hasAssetSource`; the vault bridge resolves an
+> `uploaded_video` to its own tenant s vault doc, with the tenant check on the row because
+> `asset.docId` is model-authored. `jobEstimate` opened in the same commit as `generateReel` and a
+> test asserts the two numbers agree. Still refused BY NAME: `cockpit.executePlan`
+> (`scene_render_not_ready`, wave 8) and `regenerateBlock` (`scene_regenerate_not_ready`, wave 6).
+> 901 core + 1654 backend green.)
+
 > Last verified: 2026-08-14 (20.2 wave 5, part 1 — **the SCENE sidecar, and the v1 shape refused
 > by name.** `scene_count`/`target_duration_s`/`scenes[]` replace `block_count`/`clip_seconds`/
 > `blocks[]`; the validator re-derives the running sums and both timeline guarantees from the bytes.
@@ -308,6 +409,87 @@ Against `MEDIA_JOB_CAP_USD = $3.50` — **13% headroom**.
 D10's arithmetic refuses 6 blocks at 720p ($6.00+) and 12 blocks at 480p ($6.00+), and why **the
 budget rail is also the render-duration rail**: the sandbox never sees a resolution whose encode time
 would change delta §2.4's numbers. Both refusals are pinned in `media.test.ts`.
+
+## The specialist writes scenes (20.2 wave 8)
+
+`packages/contracts/skills/media-director.md` is v2 and teaches the SCENE contract. The `.md` is
+canonical; `packages/contracts/src/skills/mediaDirector.ts` is its LF-normalised mirror and
+`skillBodies.test.ts` fails on drift — regenerate the mirror, never hand-edit it.
+
+**What pins the body to the parser:** `storyboard.test.ts`'s round trip reads the body's own worked
+example with `parseSceneDeck`. A drifted table is not an error — it produces an EMPTY deck, which
+reads to the user as "the specialist proposed nothing". The round trip asserts the example obeys
+every rule the body teaches, including two that are easy to lose:
+
+- **The example MIXES kinds.** Not a style note — every `GENERATED_CLIP_SECONDS` value is a multiple
+  of 4, so an all-generated deck cannot sum to 15 or 30, and a 60 is over the job cap (ADR-019). An
+  example that reached for a clip every time would teach the one deck shape that cannot render.
+- **The example demonstrates a SILENT scene** as well as a speaking one. Optional narration is the
+  wave-4 contract; an example where every scene speaks teaches the deleted rule by omission.
+
+**`SCENE PROMPTS` entries say `Scene N`,** and `parsePrompts` accepts `Block N` or `Scene N` — the
+prompts section is shared by both deck contracts. Wave 8 found it matching `Block` only, which
+would have silently degraded every prompt to its row's description.
+
+**THE GATE: `media-director` is DELIBERATELY UNGATED.** Recorded in `packages/contracts/src/skill.ts`,
+asserted in `skillBodies.test.ts`, and derived non-vacuously by `run-eval-golden.mjs --self-check`.
+The golden runner drives `runCockpitAgent` over TEXT fixtures and structurally cannot exercise a
+script/art-direction/storyboard turn, so gating this row would strand it at v1 on its first body
+edit with no runner able to clear the gate. Consequences, both of which are the deal:
+
+- A body edit costs **nothing** and needs no owner activation. `seedSkills` sees a changed body on an
+  ungated name and inserts `maxVersion + 1` as `active`.
+- A body edit therefore **activates with no eval evidence.** That residual risk is named at the
+  self-check site and is not new. What protects the money is CODE, not prose: `searchVault` is the
+  specialist's only grant, the parser refuses every deck shape the assembler cannot build, and the
+  model comes from a price table the body cannot name into.
+
+**SEEDING IS REQUIRED.** `npx convex dev` alone does not seed — run `pnpm dev`. Until then the live
+row is v1 and the specialist still proposes block decks, which still parse and still render.
+
+## The scene-kind price table (20.2 wave 7) — ADR-019
+
+The §4.1 table above is the BLOCK era's economics: one clip length, every block paid. A scene deck
+is priced per kind, by one table in the pure package that both money sites read.
+
+`packages/cost/src/media.ts`:
+
+- **`SCENE_VISUAL_LINE`** — what one scene of each `VisualKind` buys. `null` means it buys NOTHING,
+  which is different from costing zero: there is no provider line to reserve, no row to insert and
+  nothing to poll.
+- **`sceneVisualSpec(visual, seconds)`** — the priced spec, or `ok(null)` for a free kind. Err
+  propagates unchanged; an off-grid `generated_video` is `illegal_duration` here, at the free gate,
+  rather than inside a sandbox that has already been bought.
+
+| Kind | Buys | USD at 4 s | Duration freedom |
+|---|---|---|---|
+| `generated_video` | one `sora-2` clip | $0.40 | 4 / 8 / 12 s only |
+| `animated_image` | one `gpt-image-2` still, panned by ffmpeg | $0.01 | any |
+| `uploaded_video` | nothing — a tenant vault asset | $0 | any |
+| `text_card` | nothing — `drawtext` in the sandbox | $0 | any |
+
+**NOT ONE TARGET DURATION IS REACHABLE WITH `generated_video` ALONE.** Every clip length the pinned
+model supports is a multiple of 4, so no sum of them is 15 or 30; 60 composes and costs $6.00 —
+over `MEDIA_JOB_CAP_USD`. The cheap kinds are what make the contract legal at all. A 30-second reel
+of 3 clips + 4 stills + 1 card costs **$1.24** in pictures; the nearest composable all-generated
+reel is **28 seconds** and costs $2.80.
+
+This is asserted, not written down: `media.test.ts` recomputes every figure above from the live
+tables against `media.fixtures.json`'s `sceneKinds` block, so a price row moving turns the table
+red rather than making this section quietly wrong. The test was observed RED (a 5-second entry
+added to the Sora grid makes 15 s and 30 s composable under the cap).
+
+**The grid is asked of the PROVIDER, never of `CLIP_SECONDS`.** That constant is the block era's
+DISPLAY set ([4,5,8,10,12]) — wider than any real provider row. `estimateMediaUsd` checked both and
+the second check did all the work; the first only tied the money path to a constant the scene
+contract deprecates. Removed in wave 7. `isBuyableClipLength` in `media.ts` keeps the same rule for
+the BLOCK path, and reads the same provider table.
+
+**The canvas prints one line per paid kind.** Wave 5 printed a blended `pictures` row because this
+table did not exist yet; a generated clip is 40x a still, so the blend hid the only lever the user
+has. `jobEstimate` now emits `clips` and `stills` separately, and omits a kind the deck does not use
+rather than printing it at zero. `uploaded_video` and `text_card` get no line at all — they buy
+nothing, and the timeline ribbon above already shows them.
 
 ## The budget rail (20-04)
 
@@ -1049,6 +1231,108 @@ each is a cheaper failure than the one after it — the first costs nothing, the
 > payload key. Both are display/record fields owned by the canvas, which wave 6 touches — they are
 > fed `report.sceneCount` and rename with the UI rather than ahead of it.
 
+### The SCENE money gate, and the narrowing that finally rode with it (20.2 wave 5)
+
+`reserveSceneJobInner` is `reserveJobInner`'s twin, not a widened signature — a plan carries one
+contract or the other (the `visual`/`type` discriminator), so a function taking either would spend
+its length asking which. They **share the part that moves money**: `reserveProviderLinesInner`
+floors the batch total, checks and consumes both windows, and inserts only after every refusal has
+passed. One transaction, not two to keep in step.
+
+| Scene kind | Buys | Why |
+|---|---|---|
+| `generated_video` | one clip **at its own length** | the provider's duration grid still applies |
+| `animated_image` | one **still** | ~a tenth of a clip, frame-exact at any duration |
+| `uploaded_video` | nothing | the tenant already owns the bytes |
+| `text_card` | nothing | `drawtext` in the sandbox |
+| any narrated scene | one voice take | silence is legal, so an empty line buys nothing |
+
+**`unrenderable_block` is NARROWED to `hasAssetSource`.** The old check refused every *unpaid* row,
+because unpaid meant no clip and the assembler hard-errors on a missing input. That equivalence is
+gone: a card is drawn, a still is panned, an upload is fetched. What is still refused is a row that
+does not name **what its picture is built from** — an `uploaded_video` with no vault doc, or a
+`text_card` with no words. A card with nothing to draw is a black rectangle that passes every
+downstream gate: the file decodes, the duration is right, the sidecar is well-formed, and only the
+picture is missing.
+
+**The narration ceiling is the TAKE's window, not the scene's.** `narrationCeilingSeconds` runs to
+the next NARRATED scene, so a silent scene lends its duration to the line before it. There is no
+floor any more — a short line is a pause, not a fault.
+
+> **The estimate and the buy opened in the SAME commit, and must always.** `jobEstimate` mirrors
+> every refusal above in the same order. A working Generate button behind a refusing estimate would
+> spend money the canvas never showed, which is the exact inversion of this query's purpose ("name
+> the lever BEFORE the button is pressed"). A test asserts `res.estCents === estimate.totalCents`.
+> The estimate's paid line is labelled **`pictures`**, not `clips` — the paid visuals are a mix of
+> generated clips and stills at ~a tenth the price, and one label saying "clips" would misdescribe
+> what was bought. A per-kind breakdown is wave 7's price table.
+
+**One gate deliberately still refuses, by name rather than by mispricing:**
+
+- `cockpit.executePlan` → `scene_render_not_ready`. The AGENT's approve arm builds its own
+  reservation from a block deck; opening it is the media-director certification (wave 8).
+
+`regenerateBlock`'s scene arm OPENED in wave 6. It hands `reserveSceneJobInner` the whole deck and
+an `only` index: every refusal a full buy would raise is raised (the deck must still sum to its
+target, every scene must still name its source, every line must still fit its take's window), and
+only the provider LINES are narrowed to the one scene. Captions are still priced over the whole
+reel, because re-buying one scene re-renders and re-captions all of it. A scene with nothing to buy
+— a silent card, a silent upload — refuses as `nothing_to_regenerate` rather than opening a
+transaction for air.
+
+### THE INPUTS COME OFF THE PLAN, AND THE BATCH IS ONLY THE TRIGGER (wave 6)
+
+`regenerateBlock` buys ONE scene into a NEW batch — `media.test.ts` has pinned exactly that since
+20-09 ("1 video + 1 tts + 1 stt; NOT the whole four-block deck"). Nothing pinned what happened
+NEXT, and what happened next was that the render refused: `batchToRender` read its inputs off the
+batch, so every index the regenerate did not re-buy had no job and the reel came back
+`incomplete_blocks`. **The user paid for the clip and lost the published reel**, because
+`reserveAndSchedule` clears the render in the same transaction as the reservation. This was live on
+the BLOCK contract too, for any deck longer than one scene.
+
+So the batch is now the TRIGGER (it is what just landed, and `maybeStartRender` still fires on its
+last landing) and the INPUTS are the plan's newest SUCCEEDED job per `(index, kind)`. A re-bought
+scene wins over the take it replaced; its untouched neighbours stay exactly as they were.
+
+**`plans.shotsChangedAt` is what stops that becoming a silent wrongness.** A reorder moves a scene
+out from under the index its clip was bought at, and a delete renumbers everything after it, so an
+asset older than the deck it is being rendered into is refused by name: `stale_inputs`. The stamp
+is written by STRUCTURAL writes only — `media.patchShots` detects them as "the incoming indices
+are not already `0..n-1`", and `plans.persistDeck` stamps because a whole new deck is the largest
+structural change there is. **A content edit deliberately does NOT stamp.** Editing a prompt or a
+line leaves every index meaning what it meant, and invalidating the neighbours would make the
+commonest flow in the canvas — rewrite one line, regenerate that scene — buy a take and then be
+refused the render, which is the same leak with an extra step.
+
+> ponytail: the residual is narrow and deliberate. Edit scene 2's line, then regenerate scene 3, and
+> scene 2 still speaks its OLD take — the only take that exists. Refusing the render instead would
+> refuse work the user can legitimately want, so the obligation lands on the SURFACE: the canvas
+> owes that scene a per-tile "bought before your last edit" line (`byPlan` can see it by comparing
+> the job's `promptHash` with the shot's current text). Until the canvas carries it, this is the one
+> thing on this page a user cannot see from the app.
+
+### THE VAULT BRIDGE — an `uploaded_video`'s bytes, and whose they are
+
+An upload buys nothing, so it has **no `mediaJobs` row and no job id**. Its bytes sit on a
+`vaultDocuments` row, and `batchToRender` resolves them into the scene's input slot.
+
+> **`asset.docId` IS MODEL-AUTHORED TEXT.** It reaches `batchToRender` off `plans.shots`, which the
+> specialist wrote — a caller-supplied id in every sense that matters. **The tenant check is on the
+> row, in `batchToRender`, and it is the whole containment:** `normalizeId` fails closed for a
+> malformed or foreign-table id, and a doc belonging to another tenant is refused before its id is
+> ever handed to the runner. Without that line a deck could name any vault document in the
+> deployment and have the render fetch it through the bearer-guarded blob route.
+
+`resolveRenderAsset` gained a `vaultDocuments` branch **narrowed to `video/*`**. It deliberately has
+no tenant check — it takes a raw id with no tenant to check against, exactly as the `mediaJobs`
+branch does. The narrowing is what bounds it instead: the vault is where a tenant's briefs,
+contracts and business documents live, and serving *any* vault document by id would be a far larger
+capability than a render needs. Both halves are tested, including the cross-tenant refusal.
+
+**Direct upload was NOT added.** `Scene.asset` is `{ source: "vault"; docId }` and there is no other
+variant — the contract answered §7's open question 1 in wave 1. A direct upload would be a new
+`source` member plus its own ingest, which is additive and a decision, not a patch.
+
 ### The sidecar field set AS HARVESTED
 
 **`packages/core/src/assembly.ts` is the SOURCE OF TRUTH for these names from here on.** The
@@ -1325,11 +1609,25 @@ A row hand-patched to `rendered` therefore surfaces no reel.
 `renderSummary` (`{ durationS, blockCount, gates }`) exists for that reason and one more: it means
 the sidecar is parsed once per RENDER instead of once per canvas subscription tick.
 
-### The free editor: five affordances, floor AND ceiling
+### The free editor: six affordances, floor AND ceiling
 
-`editBlockPrompt` · `editBlockNarration` · `regenerateBlock` · `reorderBlocks` · `deleteBlock`.
-**Nothing else.** No timeline, transitions, filters, layers, masking, music, or client-side
-rendering. If a reviewer asks for one, it is a deferred idea and not a small addition.
+`editBlockPrompt` · `editBlockNarration` · `regenerateBlock` · `reorderBlocks` · `deleteBlock` ·
+`setSceneAsset` (20.2 wave 6). **Nothing else.** No transitions, filters, layers, masking, music,
+or client-side rendering. If a reviewer asks for one, it is a deferred idea and not a small
+addition.
+
+`setSceneAsset` is the sixth, and it is the same argument `editBlockNarration` won: an
+`uploaded_video` scene with no document named is refused by `hasAssetSource`, and **nothing else in
+the product can name one**. It is an editor control, not a second ingest surface — the file arrives
+through the vault's existing upload path and this only points at it, which is what §7's open
+question 1 was answered with. It re-checks everything the render will demand (the doc exists, is
+this tenant's, has bytes, is `video/*`) because an upload BUYS NOTHING: no money gate would refuse
+a PDF, so without this check the deck clears payment and dies in the sandbox.
+
+**On "no timeline".** D7 banned a timeline EDITOR — drag handles, trims, ripple. The read-only
+ribbon wave 6 draws is a picture of lengths the deck already declares, and it exists because the
+scene contract made those lengths differ: under D8 every window was the same size, so there was
+nothing to see. Nothing on it is draggable.
 
 `editBlockNarration` is **the UI half of the pre-payment guard, not scope creep**: without it,
 `narration_too_long` from the rail is a dead end — a user told *"block 4's line is 186 characters"*
@@ -1506,11 +1804,18 @@ drop to 480p; `narration_too_long` names the block, its character count and the 
 Edit-narration control is on that same tile**, because a refusal whose cure is three clicks away is
 a dead end.
 
-### Exactly five editor affordances, labelled by what they cost
+### Exactly six editor affordances, labelled by what they cost
 
 Free: **edit prompt**, **edit narration**, **move up / move down** (one `reorderBlocks` call with
-the whole new order), **delete block**. Paid: **regenerate this block**, which states in words that
-it buys a new clip and voice take AND rebuilds the reel.
+the whole new order), **delete scene**, and **choose your footage** (20.2 wave 6, `uploaded_video`
+scenes only). Paid: **regenerate this scene**, which states in words WHAT it buys — a clip, a
+still, a voice take, or a pair — and that the other scenes are kept.
+
+**A control that cannot spend must not look like one.** Three of the four kinds buy nothing on
+their own, so a silent card or a silent upload shows no paid row at all: the tile says "nothing to
+buy for this scene — edit it above and generate the reel" rather than sending a click to a mutation
+that would answer `nothing_to_regenerate`. The refusal still exists for the callers the tile does
+not cover; the tile simply knows the answer already.
 
 The narration editor carries a **live character count against the block's own `maxChars`**, turning
 `--held-text` amber past the limit — `--held-text`, never `--held`, which is a fill token and fails
@@ -1518,9 +1823,9 @@ contrast as text (BRAND §6). **The count itself is the signal**, so the state i
 colour alone. This control is the UI half of the pre-payment guard: `jobEstimate` refuses an
 over-length deck before a cent moves, and this is where the user fixes it.
 
-**Nothing beyond those five exists** — no timeline, no transitions, no filters, no layers, no
-masking, no music controls, no client-side rendering. That is D7's ceiling and the canvas is
-deliberately at it.
+**Nothing beyond those six exists** — no transitions, no filters, no layers, no masking, no music
+controls, no client-side rendering, and no timeline EDITOR (wave 6's ribbon is read-only; see the
+free-editor section above). That is D7's ceiling and the canvas is deliberately at it.
 
 ### The 18-07 Output-card collision, resolved
 

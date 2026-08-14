@@ -270,6 +270,25 @@ const EXPECT_KEYS = new Set([
   // asserting 1 therefore proves the tool ran AND that `replace` revised instead of duplicating —
   // the locked revision semantic, which has no code branch to test offline.
   "createdDocCount",
+  // 20-12 (MEDIA-01): `mediaDispatchCount` — how many times the agent CALLED `dispatchMedia` on
+  // the thread, read from smoke:mediaDispatchCountForThread (`agentSteps` rows carrying that
+  // tool), never from the reply and never from the plan row.
+  //
+  // NOT plan state, and the reason is structural: `plans.by_thread` is `.unique()` and
+  // `stageMediaPlan` recycles that one row, so a plan-derived observable can say "a media plan
+  // exists" and can NEVER say the tool was called twice. `agentSteps` writes a row per call, so a
+  // duplicate dispatch is visible here and nowhere else.
+  //
+  // The failure it exists to catch is the agent answering IN PROSE — "I'll get a reel together" —
+  // while never calling the tool, which no reply assertion can tell apart from success.
+  //
+  // ZERO IS A LEGITIMATE ASSERTION HERE, unlike every other count in this vocabulary, and that is
+  // what fixture 38b is: a slide-deck request must route to `createDocument` and must NOT reach
+  // the video specialist. `validateFixture` therefore does not reject a zero outright — it
+  // requires the zero to be PAIRED with a positive proof that the agent did the right thing
+  // instead (`createdDocCount`), because a bare `mediaDispatchCount: 0` passes on a turn where
+  // the agent did nothing at all.
+  "mediaDispatchCount",
   // Phase 19 (ACTN-05): `crmOperationCount` — how many changes to the user's OWN records
   // `stageCrmWrite` staged on this thread. Graded off `plan.crmOperations`, the content-plane field
   // 19-06 put on the plan row, exactly like `attachmentCount` and `recipientCount`.
@@ -396,6 +415,22 @@ function validateFixture(fx, source) {
     (!Number.isInteger(fx.expect.createdDocCount) || fx.expect.createdDocCount < 1)
   ) {
     fail("expect.createdDocCount must be an integer >= 1 (a zero count is vacuous)");
+  }
+  // 20-12 (MEDIA-01). The ONE count in this vocabulary where zero is a real assertion — "a slide
+  // deck must NOT reach the video specialist" is the whole point of fixture 38b. So the rule is
+  // not "reject zero", it is "a zero must be PAIRED": on its own, `mediaDispatchCount: 0` passes
+  // on a turn where the agent did nothing whatsoever, which is the vacuity this file exists to
+  // refuse. Paired with `createdDocCount`, it asserts the agent chose the OTHER tool — a claim
+  // only a wrong routing decision can fail.
+  if (fx.expect.mediaDispatchCount !== undefined) {
+    if (!Number.isInteger(fx.expect.mediaDispatchCount) || fx.expect.mediaDispatchCount < 0) {
+      fail("expect.mediaDispatchCount must be an integer >= 0");
+    }
+    if (fx.expect.mediaDispatchCount === 0 && fx.expect.createdDocCount === undefined) {
+      fail(
+        "expect.mediaDispatchCount:0 requires createdDocCount (a bare zero passes on a turn that did nothing)",
+      );
+    }
   }
   // Phase 19 (ACTN-05): the same anti-vacuity rule, for the same reason. `crmOperationCount: 0`
   // passes on all 34 fixtures that never mention a contact, so it asserts nothing. A fixture that
@@ -934,6 +969,10 @@ function evaluateExpect(
   /** @param createdDocCount smoke:createdDocCountForThread (0 when unasked — read skipped). 0 is
    *  the FAIL-CLOSED direction: an unread key must never manufacture a created document. */
   createdDocCount = 0,
+  /** @param mediaDispatchCount smoke:mediaDispatchCountForThread (0 when unasked — read skipped).
+   *  0 is the FAIL-CLOSED direction for the POSITIVE fixture and, paired with createdDocCount, the
+   *  asserted value for the negative one. See the vocabulary note. */
+  mediaDispatchCount = 0,
 ) {
   const failures = [];
   const miss = (key, expected, actual) => failures.push({ key, expected, actual });
@@ -1014,6 +1053,12 @@ function evaluateExpect(
       case "createdDocCount":
         if (createdDocCount !== expected) miss(key, expected, createdDocCount);
         break;
+      case "mediaDispatchCount":
+        // Equality, not a floor: "exactly one" is the assertion. A second dispatch on the same
+        // thread is a real defect (it recycles the plan row the first proposal is being written
+        // into), and a floor would pass on it.
+        if (mediaDispatchCount !== expected) miss(key, expected, mediaDispatchCount);
+        break;
       case "crmOperationCount":
         // Plan-row key (19-06's `plans.crmOperations`), graded like `attachmentCount`.
         if ((plan.crmOperations ?? []).length !== expected)
@@ -1087,7 +1132,9 @@ function selfCheck() {
   // condition: a lane that teaches a tool in the body owes a case that exercises it.
   // 36 adds Task 9's finance-update case (live-finance-inputs) — the same owed-fixture rule for
   // `readFinance`/`stageFinanceWrite`, taught in the body alongside it.
-  assert.ok(fixtures.length >= 36, `expected >= 36 fixtures, found ${fixtures.length}`);
+  // 20-12: the deletion floor rises with the set — 38 and 38b are the media pair. A floor that
+  // stayed at 36 would let one of them be deleted and the suite still call itself complete.
+  assert.ok(fixtures.length >= 38, `expected >= 38 fixtures, found ${fixtures.length}`);
   const ids = new Set(fixtures.map((f) => f.id));
   assert.equal(ids.size, fixtures.length, "fixture ids must be unique");
 
@@ -1358,6 +1405,115 @@ function selfCheck() {
       .length,
     1,
     "createdDocCount:1 MUST FAIL when a `replace` appended a second document instead of revising",
+  );
+
+  // 2f-bis. 20-12 (MEDIA-01): `mediaDispatchCount` is in the vocabulary, is graded off the READ
+  // (arg 14) rather than the plan row, and its zero is PAIRED rather than banned.
+  assert.ok(
+    validateFixture({ ...base, expect: { mediaDispatchCount: 1 } }, "<synthetic>"),
+    "mediaDispatchCount must be an accepted expect key",
+  );
+  assert.throws(
+    () => validateFixture({ ...base, expect: { mediaDispatchCount: 0 } }, "<synthetic>"),
+    /requires createdDocCount/,
+    "a BARE zero media-dispatch count passes on a turn that did nothing at all",
+  );
+  assert.ok(
+    validateFixture(
+      { ...base, expect: { mediaDispatchCount: 0, createdDocCount: 1 } },
+      "<synthetic>",
+    ),
+    "the PAIRED zero is fixture 38b's whole assertion and must be accepted",
+  );
+  assert.throws(
+    () => validateFixture({ ...base, expect: { mediaDispatchCount: -1 } }, "<synthetic>"),
+    /integer >= 0/,
+    "a negative dispatch count is not a thing that can be observed",
+  );
+  assert.equal(
+    evaluateExpect(
+      { mediaDispatchCount: 1 },
+      collecting,
+      0,
+      false,
+      0,
+      0,
+      0,
+      "",
+      0,
+      false,
+      0,
+      false,
+      0,
+      1,
+    ).length,
+    0,
+    "mediaDispatchCount:1 passes when the thread really carries one dispatchMedia step",
+  );
+  // The load-bearing negative, and the reason this key is not read off the plan row: the agent
+  // answered in PROSE ("I'll put a reel together") and never called the tool.
+  assert.equal(
+    evaluateExpect(
+      { mediaDispatchCount: 1 },
+      collecting,
+      0,
+      false,
+      0,
+      0,
+      0,
+      "",
+      0,
+      false,
+      0,
+      false,
+      0,
+      0,
+    ).length,
+    1,
+    "mediaDispatchCount:1 MUST FAIL when dispatchMedia never ran (a prose-only answer)",
+  );
+  // The DUPLICATE, which only an agentSteps read can see: `plans.by_thread` is unique and
+  // `stageMediaPlan` recycles it, so plan state reads identically for one dispatch and for two.
+  assert.equal(
+    evaluateExpect(
+      { mediaDispatchCount: 1 },
+      collecting,
+      0,
+      false,
+      0,
+      0,
+      0,
+      "",
+      0,
+      false,
+      0,
+      false,
+      0,
+      2,
+    ).length,
+    1,
+    "mediaDispatchCount:1 MUST FAIL on a SECOND dispatch — equality, never a floor",
+  );
+  // And 38b's direction: the video tool must stay untouched on a document request.
+  assert.equal(
+    evaluateExpect(
+      { mediaDispatchCount: 0 },
+      collecting,
+      0,
+      false,
+      0,
+      0,
+      0,
+      "",
+      0,
+      false,
+      0,
+      false,
+      0,
+      1,
+    ).length,
+    1,
+    "mediaDispatchCount:0 MUST FAIL when a slide-deck request reached the video specialist",
   );
 
   // 2g. Phase 19 (ACTN-05): `crmOperationCount` is in the vocabulary, is graded off the PLAN ROW
@@ -2513,6 +2669,16 @@ function attemptCase(fixture, tenant, pins, tenantSkillIds = {}) {
     fixture.expect.createdDocCount === undefined
       ? 0
       : parse(must("smoke:createdDocCountForThread", { tenantId: tenant, threadId }, RETRY_READ));
+  // 20-12 (MEDIA-01). Same skipped-unless-asked rule: the 34 fixtures that never mention a video
+  // pay no extra hop and see the fail-closed 0. The read is asked for on BOTH media fixtures — the
+  // positive one expects 1, the negative one expects 0 — so `undefined` here means "not asked",
+  // never "asked and empty".
+  const mediaDispatchCount =
+    fixture.expect.mediaDispatchCount === undefined
+      ? 0
+      : parse(
+          must("smoke:mediaDispatchCountForThread", { tenantId: tenant, threadId }, RETRY_READ),
+        );
   const failures = evaluateExpect(
     fixture.expect,
     plan,
@@ -2527,6 +2693,7 @@ function attemptCase(fixture, tenant, pins, tenantSkillIds = {}) {
     webSearchCalls,
     declaredUnsupported,
     createdDocCount,
+    mediaDispatchCount,
   );
   // Standing invariants: zero requests rows + refs-only needle scan (throws on violation).
   try {

@@ -1,10 +1,11 @@
-import { GOOGLE_SCOPES, notificationMessage } from "@pikar/core";
+import { GOOGLE_SCOPES, type MicrosoftCallbackError, notificationMessage } from "@pikar/core";
 import { httpRouter } from "convex/server";
 import { internal } from "./_generated/api";
 import { httpAction } from "./_generated/server";
 import { auth } from "./auth";
 import { verifyState } from "./gmailAuth";
 import { contentHash } from "./lib/hash";
+import { MICROSOFT_TOKEN_ENDPOINT, verifyMicrosoftState } from "./microsoftAuth";
 
 const http = httpRouter();
 
@@ -75,6 +76,88 @@ http.route({
     });
     // Back to the cockpit — gmailStatus (reactive) flips the composer to connected on arrival.
     return seeOther("/dashboard/workspace");
+  }),
+});
+
+// Microsoft OAuth callback (17-06, ADR-018): validate `state`, exchange `code` for tokens, store
+// internally. ONE grant covering Calendar AND Mail — Phase 25-06 consumes this row for Outlook and
+// must NOT add a second callback here.
+//
+// TWO DELIBERATE DIVERGENCES FROM THE GMAIL ROUTE ABOVE, both tightenings:
+//
+//  1. **Fixed error codes, never provider text.** The Gmail route interpolates `${oauthError}` and
+//     raw prose into its redirect. A Microsoft error body can carry the authorization code,
+//     correlation ids and directory/tenant names, and a redirect is written to browser history, the
+//     Referer header and every proxy log in between. So this maps failures onto the closed
+//     `MICROSOFT_CALLBACK_ERRORS` set and the connect page owns the wording.
+//  2. **No provider detail is thrown, either.** A thrown message becomes a Convex log line; the
+//     failure paths return a redirect instead of throwing, so there is no error string to leak.
+//
+// The crown-jewel refresh token never touches the browser — it flows code → server → DB.
+http.route({
+  path: "/microsoft/callback",
+  method: "GET",
+  handler: httpAction(async (ctx, req) => {
+    // This runs on the Convex site origin; it MUST bounce the browser back to the app (SITE_URL)
+    // so the user never dead-ends on this domain. Success → Connections, where the newly connected
+    // card is what the user came to see. Failure → the connect page carrying only a fixed code.
+    const site = process.env.SITE_URL ?? "http://localhost:3111";
+    const seeOther = (path: string) =>
+      new Response(null, { status: 303, headers: { Location: `${site}${path}` } });
+    const fail = (code: MicrosoftCallbackError) =>
+      seeOther(`/connect-microsoft?microsoftError=${code}`);
+
+    const url = new URL(req.url);
+    // Any provider-side refusal — user declined, admin consent required, invalid_client — collapses
+    // to one code. The distinction is not actionable by the user and the detail is not safe to echo.
+    if (url.searchParams.get("error")) return fail("cancelled");
+
+    const code = url.searchParams.get("code");
+    const state = url.searchParams.get("state");
+    if (!code || !state) return fail("missing_callback");
+
+    // BEFORE the token POST, always. An unverified state must never reach a credentialed request:
+    // that is what stops a forged callback from grafting an attacker's grant onto another tenant.
+    const tenantId = await verifyMicrosoftState(state);
+    if (!tenantId) return fail("invalid_state");
+
+    const tokenRes = await fetch(MICROSOFT_TOKEN_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code,
+        client_id: process.env.MICROSOFT_OAUTH_CLIENT_ID ?? "",
+        client_secret: process.env.MICROSOFT_OAUTH_CLIENT_SECRET ?? "",
+        redirect_uri: process.env.MICROSOFT_CALENDAR_REDIRECT_URI ?? "",
+        grant_type: "authorization_code",
+      }),
+    });
+    // The body is NOT read on failure. Reading it invites logging it.
+    if (!tokenRes.ok) return fail("exchange_failed");
+
+    // Only known scalars are named. An unexpected field cannot ride along into the DB.
+    const tok = (await tokenRes.json()) as {
+      refresh_token?: string;
+      access_token?: string;
+      expires_in?: number;
+      scope?: string;
+    };
+    // No refresh token means a non-durable connection: it works until the first expiry and then
+    // dies silently. Refuse it as a hard error so the user re-consents rather than half-connecting.
+    if (!tok.refresh_token || !tok.access_token) return fail("missing_refresh");
+
+    await ctx.runMutation(internal.microsoftAuth.store, {
+      tenantId,
+      refreshToken: tok.refresh_token,
+      accessToken: tok.access_token,
+      expiresAt: Date.now() + (tok.expires_in ?? 3600) * 1000,
+      // The GRANTED scope, not the requested one. Microsoft may return less than was asked for, and
+      // storing MICROSOFT_SCOPES here would make `mailReady` claim a capability the grant lacks —
+      // the exact lie the derived-readiness booleans exist to prevent. Fall back to empty, never to
+      // the request: an unknown grant must read as un-ready, not as fully ready.
+      scope: tok.scope ?? "",
+    });
+    return seeOther("/dashboard/profile");
   }),
 });
 
