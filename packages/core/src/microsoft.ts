@@ -79,6 +79,54 @@ export function hasMicrosoftScope(granted: string, want: string): boolean {
     });
 }
 
+/**
+ * The CLOSED set of reasons the Microsoft callback can bounce the browser back.
+ *
+ * **Fixed codes, never provider text.** A Microsoft error body can carry the authorization code,
+ * correlation ids, tenant names and directory details; putting one in a redirect writes it into
+ * browser history, the Referer header and any proxy log between here and the user. The Google
+ * callback next to this one DOES interpolate `${oauthError}` into its redirect — that is the older
+ * pattern, and this deliberately does not copy it.
+ *
+ * Closed so a new reason is a deliberate edit with copy attached, not a provider string leaking
+ * through a template.
+ */
+export const MICROSOFT_CALLBACK_ERRORS = [
+  "cancelled",
+  "missing_callback",
+  "invalid_state",
+  "exchange_failed",
+  "missing_refresh",
+] as const;
+export type MicrosoftCallbackError = (typeof MICROSOFT_CALLBACK_ERRORS)[number];
+
+export const isMicrosoftCallbackError = (v: string): v is MicrosoftCallbackError =>
+  (MICROSOFT_CALLBACK_ERRORS as readonly string[]).includes(v);
+
+/**
+ * User-facing copy for a callback failure. Exhaustive over the closed set, so adding a code
+ * without adding its sentence does not compile.
+ *
+ * An unrecognised value is NOT echoed back — a hand-typed `?microsoftError=<script>` or a forged
+ * provider string must render the generic sentence, never itself.
+ */
+export function microsoftCallbackMessage(code: string): string {
+  switch (code) {
+    case "cancelled":
+      return "Microsoft connection was cancelled. You can try again whenever you're ready.";
+    case "missing_callback":
+      return "Microsoft didn't send back everything we needed. Please try connecting again.";
+    case "invalid_state":
+      return "That connection link didn't match this session. Please start the connection again.";
+    case "exchange_failed":
+      return "We couldn't complete the handshake with Microsoft. Please try connecting again.";
+    case "missing_refresh":
+      return "Microsoft didn't return a lasting connection. Please try again and accept the permissions when asked.";
+    default:
+      return "Microsoft connection didn't complete. Please try connecting again.";
+  }
+}
+
 /** Does a stored grant carry everything the CALENDAR half needs? (ACTN-02) */
 export const microsoftCalendarReady = (grantedScope: string): boolean =>
   hasMicrosoftScope(grantedScope, MS_CALENDARS_READWRITE_SCOPE);

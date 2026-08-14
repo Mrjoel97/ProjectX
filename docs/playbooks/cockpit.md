@@ -1,5 +1,42 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-14 (17-06 Task 2, **THE `/microsoft/callback` EXCHANGE**. Still **NO
+> PROVIDER CALL AGAINST GRAPH AND ACTN-02 IS NOT SATISFIED** — this is the OAuth round-trip only.)
+>
+> **The Microsoft callback deliberately diverges from the Gmail callback beside it, twice, and both
+> divergences are tightenings. Do not "make them consistent" by loosening this one.**
+>
+> 1. **Fixed error codes, never provider text.** The Gmail route interpolates `${oauthError}` and raw
+>    prose into its redirect. A Microsoft error body can carry the authorization code, correlation
+>    ids and directory/tenant names — and a redirect is written to browser history, sent as a
+>    `Referer`, and logged by every proxy in between. So failures map onto the closed
+>    `MICROSOFT_CALLBACK_ERRORS` set (`cancelled`, `missing_callback`, `invalid_state`,
+>    `exchange_failed`, `missing_refresh`) and the connect page owns the wording via
+>    `microsoftCallbackMessage`, whose default branch returns a FIXED sentence — an unrecognised or
+>    hand-typed `?microsoftError=` value is never reflected back onto the page.
+> 2. **No provider detail is thrown either**, because a thrown message becomes a Convex log line.
+>    Failure paths return a redirect; the error body is never even read on a non-ok exchange.
+>
+> **Two invariants with teeth:**
+> - **State is verified BEFORE the credentialed token POST.** Mutation-measured: deleting the early
+>   return turns the named test red at `Validator error: Expected string, got null` — `store`'s
+>   `v.string()` is a real second line of defence — but it fires TOO LATE, after the client secret
+>   has already been spent on the attacker's code. The test therefore asserts on `fetch` not being
+>   called, not only on the absent row.
+> - **The GRANTED scope is stored, never the requested one.** Microsoft may grant less than was
+>   asked for; storing `MICROSOFT_SCOPES` would make `mailReady` claim a capability the grant lacks,
+>   which is the exact lie the derived-readiness booleans exist to prevent. An absent `scope` falls
+>   back to EMPTY — an unknown grant must read un-ready, never fully ready.
+>
+> Success lands on `/dashboard/profile` (Connections). The refresh token, access token and
+> authorization code are each asserted absent from the redirect.
+>
+> **Measured:** `httpAuth.test.ts` 13/13, `microsoftAuth.test.ts` 25/25, `microsoft.test.ts` 22/22,
+> `calendar.test.ts` 39/39, `importGuard.test.ts` 82/82 — **159 backend tests green together**; core
+> and backend `tsc --noEmit` exit 0 each; biome clean. The Google callback is proven untouched by a
+> test that runs it end to end and asserts the grant lands in `gmailTokens` with
+> `microsoftCalendarTokens` still empty.
+>
 > Last verified: 2026-08-14 (17-06 Task 1, **THE MICROSOFT GRANT — ONE CONNECTION, NOT TWO**, per
 > [ADR-018](../decisions/018-one-microsoft-connection-not-two.md). **NO PROVIDER CALL HAS BEEN MADE
 > AND ACTN-02 IS NOT SATISFIED** — this registers the auth substrate only; the Graph Calendar

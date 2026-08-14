@@ -7,12 +7,15 @@
 import { describe, expect, test } from "vitest";
 import {
   hasMicrosoftScope,
+  isMicrosoftCallbackError,
+  MICROSOFT_CALLBACK_ERRORS,
   MICROSOFT_SCOPES,
   MS_CALENDARS_READWRITE_SCOPE,
   MS_MAIL_READ_SCOPE,
   MS_MAIL_SEND_SCOPE,
   MS_OFFLINE_ACCESS_SCOPE,
   microsoftCalendarReady,
+  microsoftCallbackMessage,
   microsoftMailReady,
 } from "./microsoft";
 
@@ -75,6 +78,41 @@ describe("hasMicrosoftScope — why this is not Google's hasScope", () => {
 
   test("an empty grant grants nothing", () => {
     expect(hasMicrosoftScope("", "Mail.Read")).toBe(false);
+  });
+});
+
+describe("callback error codes — fixed codes, never provider text", () => {
+  test("every code has its own sentence, and none is the generic fallback", () => {
+    const generic = microsoftCallbackMessage("something-unrecognised");
+    for (const code of MICROSOFT_CALLBACK_ERRORS) {
+      expect(microsoftCallbackMessage(code)).not.toBe(generic);
+      expect(microsoftCallbackMessage(code).length).toBeGreaterThan(20);
+    }
+  });
+
+  // The reason the default branch returns a FIXED sentence instead of interpolating: a hand-typed
+  // or forged `?microsoftError=` value must never be reflected back onto the page.
+  test.each([
+    "<script>alert(1)</script>",
+    "AADSTS70008: the grant expired for contoso.onmicrosoft.com",
+    "",
+  ])("an unrecognised value %j is never echoed back", (hostile) => {
+    const msg = microsoftCallbackMessage(hostile);
+    expect(msg).toBe(microsoftCallbackMessage("some-other-unknown"));
+    if (hostile) expect(msg).not.toContain(hostile);
+  });
+
+  test("isMicrosoftCallbackError accepts only the closed set", () => {
+    for (const code of MICROSOFT_CALLBACK_ERRORS) expect(isMicrosoftCallbackError(code)).toBe(true);
+    for (const bad of ["", "CANCELLED", "invalid_grant", "exchange_failed "])
+      expect(isMicrosoftCallbackError(bad)).toBe(false);
+  });
+
+  // A code carrying provider detail would defeat the whole point of the closed set.
+  test("no code contains a space, a colon, or provider-shaped detail", () => {
+    for (const code of MICROSOFT_CALLBACK_ERRORS) {
+      expect(code).toMatch(/^[a-z_]+$/);
+    }
   });
 });
 
