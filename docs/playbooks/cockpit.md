@@ -14,6 +14,75 @@
 > `proposed → approved` CAS, which is what makes approve-once reserve-once true without a second
 > idempotency mechanism. See `docs/playbooks/media.md` and ADR-019.)
 
+> Last verified: 2026-08-14 (17-07 Tasks 1-3 — **Microsoft Calendar read + create, behind the same
+> stage → Approve boundary**. ⚠ **ACTN-02 IS STILL UNMET AND 17-07 IS NOT COMPLETE**: Task 1's
+> disposable-account Graph concurrency PROBE has not run and cannot run without a real Azure app
+> registration. It gates Microsoft MANAGEMENT (17-08), not this create-only slice — see below.)
+>
+> **New module: `microsoftCalendar.ts`**, the twin of `calendar.ts`, registered here beside it. Two
+> provider facts drive its shape and NEITHER matches Google:
+>
+> 1. **Availability comes from `/me/calendarView`, NOT `getSchedule`.** getSchedule is the obvious
+>    freeBusy analogue and is unsupported for delegated PERSONAL accounts — half of what the
+>    `common` endpoint admits. calendarView returns EVENTS, so `$select=start,end,showAs` is the
+>    content firewall, not tidiness: subject, body, location, organizer and attendees are never
+>    requested, so they cannot be logged, audited or returned. Mutation-proven by asserting on the
+>    REQUEST (adding `subject` to `$select` turns the named test red).
+> 2. **Microsoft ROTATES refresh tokens; Google does not.** `updateAccess` takes an optional
+>    `refreshToken` and the adapter passes it through only when present. Dropping a rotated token
+>    leaves the stored one dead and the connection unrecoverable without re-consent.
+>
+> **`@odata.nextLink` is a provider-supplied URL that this code puts a BEARER TOKEN on.** An
+> unvalidated next link is a credential-exfiltration primitive. `safeNextLink` requires https, the
+> exact `https://graph.microsoft.com` origin, and a `/v1.0/` path prefix — never a substring or
+> hostname `includes`. Mutation-proven: removing it sends the token to `evil.test`, plain http, a
+> suffix-attached lookalike (`graph.microsoft.com.evil.test`), `/beta`, and `javascript:` — five of
+> six cases red. Paging is capped (5 pages / 500 items) and reports `truncated` into the audit
+> rather than paging forever.
+>
+> **THE COMPATIBILITY GUARANTEE, and it is the load-bearing claim of this plan.** Every plan staged
+> before 17-07 has NO `calendarProvider`, and each must still take the Google path byte-for-byte.
+> Expressed ONCE as a pure default (`parseCalendarProvider`, absent → google) rather than an `if`
+> per call site. Proven by WHICH HOST is contacted — the only evidence a stubbed response shape
+> cannot fake. Mutation-proven: defaulting to Microsoft turns FOUR tests red, three of them
+> pre-existing Google ones.
+>
+> `internal.calendar.createEvent` REMAINS the single retried entry `executePlan` calls; the provider
+> branch sits AFTER plan/tenant/stage validation so both providers inherit identical refusals (a
+> partially-staged row is terminal on either, before any token or network work).
+>
+> **`CreateEventResult` widened with `provider` and `etag`.** The etag is what event-specific
+> concurrency needs in 17-08, captured at create because both providers offer it only there.
+> Google's 409 branch now does ONE bounded GET of the deterministic id to recover the etag a
+> duplicate response never carries; a failed recovery degrades to `etag: null`, which means
+> "management must re-read first" and must never be read as "any version will do".
+> `calendarComplete.ts`'s runtime projection accepts BOTH fields as OPTIONAL on purpose: a retrier
+> result from the PREVIOUS deploy can still be in flight, and rejecting it would strand a really-
+> created event as an unparseable result, leaving the plan at `delivering` forever.
+>
+> **A Microsoft outage writes a MICROSOFT reconnect row.** `calendarUnavailable` now takes the
+> provider. A `gmail_reconnect` row for an Outlook failure sends the user to the GOOGLE consent
+> screen: the banner clears, the real problem stands, the next check fails identically. Mutation-
+> proven red.
+>
+> **The provider is a FACT ON THE ROW, never conversation history** — `proposeCalendarEvent` stages
+> `calendarProvider` and `executePlan` routes on stored state after Approve. Both tools take a
+> CLOSED optional enum (`google`/`microsoft`), never a free string: the provider selects which
+> credential and which host is reached, so an arbitrary model-supplied value would be a routing
+> decision taken by prose. Staging still performs ZERO network calls (asserted). The plan card names
+> the calendar, because it is the last surface before an irreversible write and "Google" on a
+> Microsoft event is a false promise at the moment of decision.
+>
+> **WHAT IS NOT DONE, AND MUST NOT BE READ AS DONE:** no update/move/cancel on either provider; no
+> `If-Match`/412 path; the Graph concurrency probe is unrun, so `17-GRAPH-CONCURRENCY-PROBE.json`
+> does not exist and 17-08 is BLOCKED by its own gate. Graph collapses a repeated `transactionId`
+> silently rather than reporting a duplicate, so the Microsoft adapter reports `duplicate: false`
+> honestly instead of guessing — unlike Google's 409, it cannot distinguish first-write from retry.
+>
+> **Measured:** backend **1759 passed / 24 skipped** (79 files) · core 936/936 · backend and web
+> `tsc --noEmit` exit 0 · `calendar.test.ts` 44/44, `microsoftCalendar.test.ts` 36/36,
+> `cockpitTools.test.ts` 128/128. Five mutations red then reverted.
+>
 > Last verified: 2026-08-14 (17-06 Task 3 — **the H3 offline regression, paired**. The Microsoft
 > connect/disconnect/consent SURFACES are owned by `onboarding.md`, not this file; see the split
 > note there. This entry covers only the Calendar-runtime half and the new browser spec.)

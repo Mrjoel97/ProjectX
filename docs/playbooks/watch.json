@@ -149,6 +149,8 @@
     "packages/backend/convex/calendar.ts",
     "packages/backend/convex/calendarComplete.ts",
     "packages/backend/convex/calendar.test.ts",
+    "packages/backend/convex/microsoftCalendar.ts",
+    "packages/backend/convex/microsoftCalendar.test.ts",
     "packages/backend/convex/savedPrompts.ts",
     "packages/backend/convex/savedPrompts.test.ts",
     "packages/backend/convex/traceParity.test.ts",

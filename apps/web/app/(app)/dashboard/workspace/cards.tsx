@@ -630,6 +630,11 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
       <div style={box} data-testid="calendar-plan-card">
         <div style={label}>CALENDAR EVENT</div>
         <div style={{ margin: "0.5rem 0" }}>
+    // 17-07: the card must name the calendar the event will actually land on â€” this is the last
+    // surface before an irreversible write, and "Google" on a Microsoft event is a false promise at
+    // exactly the moment the user is deciding. ABSENT means Google (`plans.calendarProvider`'s
+    // documented rule), so every row staged before this phase still reads correctly.
+    const calendarName = plan.calendarProvider === "microsoft" ? "Microsoft" : "Google";
           <strong>{plan.eventTitle || "—"}</strong>
         </div>
         {/* A partially-staged row may carry none of these — render a dash, never NaN. */}
@@ -638,9 +643,13 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
           Duration: {durationMs ? `${Math.round(durationMs / 60000)} min` : "—"}
         </div>
         <p style={{ ...dim, margin: "0.75rem 0" }}>
-          Approving adds this to your Google Calendar. No one is invited and nothing is emailed.
+          Approving adds this to your {calendarName} Calendar. No one is invited and nothing is
+          emailed.
         </p>
         <button
+        <div style={dim} data-testid="calendar-plan-provider">
+          Calendar: {calendarName}
+        </div>
           type="button"
           disabled={busy}
           onClick={() => void approve()}

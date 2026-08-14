@@ -1291,6 +1291,74 @@ test("checkAvailability turns reauth into a reconnect notification and conversat
   expect(notifications.filter((row) => row.kind === "gmail_reconnect")).toHaveLength(1);
 });
 
+// ── 17-07: explicit provider selection, and the reconnect that must follow it ──────────────────
+//
+// THE DEFECT THIS BLOCK EXISTS FOR: a Microsoft calendar outage that writes a `gmail_reconnect`
+// row sends the user to the GOOGLE consent screen to fix an Outlook connection. The banner clears,
+// the real problem stands, and the next check fails identically — a dead end that looks like it was
+// handled.
+test("a Microsoft outage writes a MICROSOFT reconnect row, never a gmail_reconnect one", async () => {
+  const { t, planId } = await setup();
+  // No Microsoft grant at all: the read fails at `not_connected`.
+  const reply = await callClock(t, planId, "checkAvailability", {
+    range: "today",
+    provider: "microsoft",
+  });
+
+  expect(reply).toMatch(/reconnect Microsoft/i);
+  expect(reply).not.toMatch(/reconnect Google/i);
+  const kinds = (await t.run((ctx) => ctx.db.query("notifications").collect())).map((r) => r.kind);
+  expect(kinds).toContain("microsoft_calendar_reconnect");
+  expect(kinds).not.toContain("gmail_reconnect");
+});
+
+test("an ABSENT provider still reads Google — every shipped prompt and fixture keeps working", async () => {
+  const { t, planId } = await setup();
+  await t.mutation(internal.smoke.seedCalendarFixture, {
+    tenantId: "t1",
+    baseMs: PIN_CLOCK.nowMs,
+  });
+  // The Google fixture answers, which it could only do on the Google branch.
+  const reply = await callClock(t, planId, "checkAvailability", { range: "today" });
+  expect(reply).toMatch(/2 busy block/i);
+});
+
+test("proposeCalendarEvent stages the provider as a FACT ON THE ROW, and absent means google", async () => {
+  for (const [provider, expected] of [
+    ["microsoft", "microsoft"],
+    [undefined, "google"],
+  ] as const) {
+    const { t, planId } = await setup();
+    const reply = await callClock(t, planId, "proposeCalendarEvent", {
+      title: "Quarterly review",
+      when: "tomorrow at 9am",
+      durationMinutes: 30,
+      ...(provider ? { provider } : {}),
+    });
+    // The staged row is the oracle — `executePlan` routes on stored state after Approve, never on
+    // what the model said in conversation.
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan?.calendarProvider ?? "google").toBe(expected);
+    expect(plan?.status).toBe("proposed");
+    // And the confirmation names the calendar, because the user is about to approve a write to it.
+    expect(reply).toMatch(expected === "microsoft" ? /Microsoft Calendar/ : /Google Calendar/);
+  }
+});
+
+test("staging touches no provider — the network is never reached before Approve", async () => {
+  const { t, planId } = await setup();
+  const fetchMock = vi.fn();
+  vi.stubGlobal("fetch", fetchMock);
+  await callClock(t, planId, "proposeCalendarEvent", {
+    title: "Quarterly review",
+    when: "tomorrow at 9am",
+    durationMinutes: 30,
+    provider: "microsoft",
+  });
+  expect(fetchMock).not.toHaveBeenCalled();
+  vi.unstubAllGlobals();
+});
+
 test("checkAvailability without clientContext refuses before freeBusy is called", async () => {
   const { t, planId } = await setup();
   await t.mutation(internal.smoke.seedCalendarFixture, {

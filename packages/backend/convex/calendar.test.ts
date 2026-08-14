@@ -465,6 +465,7 @@ async function seedCalendarPlan(
     status?: PlanStatus;
     missing?: EventField;
     calendarRunId?: RunId;
+    calendarProvider?: "google" | "microsoft";
   } = {},
 ) {
   const eventFields: CalendarEventFields = {
@@ -480,6 +481,7 @@ async function seedCalendarPlan(
       tenantId: options.tenantId ?? TENANT,
       threadId: `calendar-thread-${options.tenantId ?? TENANT}`,
       status: options.status ?? "delivering",
+      ...(options.calendarProvider ? { calendarProvider: options.calendarProvider } : {}),
       kind: "calendar_event",
       ...eventFields,
       calendarRunId: options.calendarRunId,
@@ -608,6 +610,114 @@ describe("calendar event creation terminal", () => {
 });
 
 describe("createEvent — idempotent governed write", () => {
+  // ── 17-07 provider dispatch ────────────────────────────────────────────────────────────────
+  //
+  // The compatibility guarantee is the whole point: every plan staged before this phase has NO
+  // `calendarProvider`, and each one must still take the Google path byte-for-byte. Expressed as a
+  // pure default (`parseCalendarProvider`) rather than an `if` per call site, and proven here by
+  // WHICH HOST is contacted — the only evidence that cannot be faked by a stubbed response shape.
+  test("an ABSENT calendarProvider still takes the Google path", async () => {
+    const t = harness();
+    const planId = await seedCalendarPlan(t);
+    await seedCalendarGrant(t);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json({ access_token: "a", expires_in: 3600 }))
+      .mockResolvedValueOnce(Response.json({ id: "google-event", etag: '"g1"' }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(
+      await t.action(internal.calendar.createEvent, {
+        planId,
+        tenantId: TENANT,
+        correlationId: "c",
+      }),
+    ).toMatchObject({ outcome: "created", provider: "google", etag: '"g1"' });
+
+    // Google's host, and NOTHING went to Graph.
+    const hosts = fetchMock.mock.calls.map((c) => new URL(String(c[0])).host);
+    expect(hosts).toContain("www.googleapis.com");
+    expect(hosts).not.toContain("graph.microsoft.com");
+    expect(hosts).not.toContain("login.microsoftonline.com");
+  });
+
+  test("an EXPLICIT microsoft provider takes only the Graph path", async () => {
+    const t = harness();
+    const planId = await seedCalendarPlan(t, { calendarProvider: "microsoft" });
+    // A Google grant EXISTS and must go untouched — the branch is the provider, never "whichever
+    // token happens to be present".
+    await seedCalendarGrant(t);
+    await t.run((ctx) =>
+      ctx.db.insert("microsoftCalendarTokens", {
+        tenantId: TENANT,
+        refreshToken: "ms-refresh",
+        accessToken: "ms-access",
+        expiresAt: Date.now() + 3_600_000,
+        scope: "offline_access Calendars.ReadWrite",
+        updatedAt: BASE_MS,
+      }),
+    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        Response.json({ id: "AAMkGraph", "@odata.etag": 'W/"m1"' }, { status: 201 }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(
+      await t.action(internal.calendar.createEvent, {
+        planId,
+        tenantId: TENANT,
+        correlationId: "c",
+      }),
+    ).toMatchObject({
+      outcome: "created",
+      eventId: "AAMkGraph",
+      provider: "microsoft",
+      etag: 'W/"m1"',
+    });
+
+    const hosts = fetchMock.mock.calls.map((c) => new URL(String(c[0])).host);
+    expect(hosts).toEqual(["graph.microsoft.com"]);
+    expect(hosts).not.toContain("www.googleapis.com");
+  });
+
+  test("a Microsoft plan with no Microsoft grant reauths without touching Google", async () => {
+    const t = harness();
+    const planId = await seedCalendarPlan(t, { calendarProvider: "microsoft" });
+    await seedCalendarGrant(t); // Google is connected; that must not rescue Microsoft.
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(
+      await t.action(internal.calendar.createEvent, {
+        planId,
+        tenantId: TENANT,
+        correlationId: "c",
+      }),
+    ).toMatchObject({ outcome: "reauth" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test("the shared refusals run BEFORE the provider branch, for both providers", async () => {
+    const t = harness();
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    for (const calendarProvider of ["google", "microsoft"] as const) {
+      const planId = await seedCalendarPlan(t, { calendarProvider, missing: "eventStartMs" });
+      expect(
+        await t.action(internal.calendar.createEvent, {
+          planId,
+          tenantId: TENANT,
+          correlationId: "c",
+        }),
+      ).toMatchObject({ outcome: "terminal", reason: "incomplete_stage" });
+    }
+    // A partially staged row is permanently unsatisfiable on EITHER provider; neither may spend a
+    // token or a network call discovering that.
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   test("a repeated create sends the same id and treats Google's 409 as success", async () => {
     const t = harness();
     const planId = await seedCalendarPlan(t);
@@ -621,7 +731,11 @@ describe("createEvent — idempotent governed write", () => {
       .mockResolvedValueOnce(
         Response.json({ access_token: "second-access-token", expires_in: 3600 }),
       )
-      .mockResolvedValueOnce(new Response("", { status: 409 }));
+      .mockResolvedValueOnce(new Response("", { status: 409 }))
+      // 17-07: the 409 is now followed by ONE bounded GET of the deterministic id, because a
+      // duplicate arrives with no body and therefore no etag — and 17-08 needs the version of the
+      // event that actually exists.
+      .mockResolvedValueOnce(Response.json({ id: "provider-event-id", etag: '"dup-etag"' }));
     vi.stubGlobal("fetch", fetchMock);
 
     const args = { planId, tenantId: TENANT, correlationId: "create-correlation" };
@@ -629,11 +743,24 @@ describe("createEvent — idempotent governed write", () => {
       outcome: "created",
       eventId: "provider-event-id",
       duplicate: false,
+      provider: "google",
     });
     const duplicate = await t.action(internal.calendar.createEvent, args);
-    expect(duplicate).toMatchObject({ outcome: "created", duplicate: true });
+    expect(duplicate).toMatchObject({
+      outcome: "created",
+      duplicate: true,
+      provider: "google",
+      etag: '"dup-etag"',
+    });
 
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    // 5, not 4: refresh, create, refresh, create(409), etag-recovery GET.
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    const recovery = fetchMock.mock.calls[4] as [string, RequestInit | undefined];
+    expect(String(recovery[0])).toContain(
+      "https://www.googleapis.com/calendar/v3/calendars/primary/events/",
+    );
+    // A GET — the recovery must never re-attempt a write.
+    expect(recovery[1]?.method ?? "GET").toBe("GET");
     const eventCalls = fetchMock.mock.calls.filter((_, index) => index === 1 || index === 3);
     const requestBodies = eventCalls.map((call) =>
       JSON.parse(String((call[1] as RequestInit).body)),
