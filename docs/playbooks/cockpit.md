@@ -30,6 +30,35 @@
 > `proposed → approved` CAS, which is what makes approve-once reserve-once true without a second
 > idempotency mechanism. See `docs/playbooks/media.md` and ADR-019.)
 
+> Last verified: 2026-08-14 (17-07 Task 1 — **the Graph concurrency PROBE now exists**, in
+> `microsoftCalendar.ts`. It has NOT been run: that still needs a real Azure app registration and a
+> DISPOSABLE Microsoft account. `17-GRAPH-CONCURRENCY-PROBE.json` is still absent and must never be
+> hand-written.)
+>
+> **Why the probe lives here and not in `smoke.ts` as the plan lists.** `freshGraphToken` is in this
+> `"use node"` module; `smoke.ts` is not one, and importing across that boundary is exactly what
+> Convex forbids. Recorded as a deviation rather than worked around.
+>
+> **`internal.microsoftCalendar.graphConcurrencyProbe` is gated on the EXACT string
+> `PHASE17_ALLOW_DISPOSABLE_GRAPH_PROBE === "true"`** and refuses BEFORE reading the token, so a
+> stray invocation cannot even authenticate, let alone touch a calendar. Mutation-proven: relaxing
+> it to a truthy check lets `"false"`, `"TRUE"`, `"1"` and `"yes"` through — four cases red.
+>
+> It creates ONE attendee-free event, reads its etag, conditionally updates it (the POSITIVE
+> WITNESS — without it, a Graph that rejects *every* `If-Match` would look identical to one that
+> enforces it), then attempts a stale `If-Match` PATCH and a stale `If-Match` DELETE, re-reading
+> after each to prove the newer event survived. `DELETE`, never `/cancel` — cancel mails attendees.
+> Cleanup runs in `finally` with the CURRENT etag and asserts a 404. The artifact is refs-only:
+> hashes, statuses, booleans. `accountIdHash` is the PIKAR tenant hashed, deliberately not the
+> Microsoft account id — reading `/me` needs `User.Read`, and widening the ADR-018 grant to label a
+> bookkeeping artifact would be a permission asked for by paperwork.
+>
+> ⚠ **RUN ONLY AGAINST A DISPOSABLE ACCOUNT**, capture stdout to the artifact path, then REMOVE the
+> flag. The exact three commands are in the block comment above the action.
+>
+> `microsoftCalendar.test.ts` 43/43 (the six gate cases are the offline-provable half; the 412
+> behaviour itself is the thing only a live account can answer).
+>
 > Last verified: 2026-08-14 (17-07 Tasks 1-3 — **Microsoft Calendar read + create, behind the same
 > stage → Approve boundary**. ⚠ **ACTN-02 IS STILL UNMET AND 17-07 IS NOT COMPLETE**: Task 1's
 > disposable-account Graph concurrency PROBE has not run and cannot run without a real Azure app

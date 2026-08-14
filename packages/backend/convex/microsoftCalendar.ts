@@ -20,6 +20,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { type ActionCtx, internalAction } from "./_generated/server";
+import { contentHash } from "./lib/hash";
 import { MICROSOFT_TOKEN_ENDPOINT } from "./microsoftAuth";
 
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
@@ -343,6 +344,175 @@ export const createEvent = internalAction({
       // than reporting a duplicate — so this adapter cannot distinguish first-write from retry the
       // way Google's 409 branch can. Reported honestly as false rather than guessed.
       duplicate: false,
+    };
+  },
+});
+
+// ── The Graph event-concurrency probe (17-07 Task 1, the gate on 17-08) ────────────────────────
+//
+// WHY THIS EXISTS AT ALL. Microsoft documents `changeKey` as the event version and a GET event
+// returns `@odata.etag`, but the v1.0 event PATCH/DELETE reference does NOT promise `If-Match`
+// support or a 412 on a stale one. Generic OData assumptions are not evidence. Management (update /
+// move / cancel) without a proven atomic compare-and-swap means a lost update: two edits race and
+// the second silently overwrites the first on a real person's calendar.
+//
+// So 17-08 is gated on THIS returning `supported: true` against a real account. If Graph ignores or
+// rejects `If-Match`, the recorded fallback is Microsoft create-only plus Google management while
+// ACTN-02 stays pending — and a new plan must choose a Microsoft-DOCUMENTED atomic primitive.
+// **Never fall back to unconditional PATCH/DELETE, and never to a GET-then-compare `changeKey`**:
+// both are read-modify-write races wearing a seatbelt.
+//
+// ⚠ RUN THIS ONLY AGAINST A DISPOSABLE ACCOUNT. It creates and deletes a real calendar event.
+// It is gated on an explicit env flag so it can never fire as a side effect of anything else.
+//
+//   npx convex env set PHASE17_ALLOW_DISPOSABLE_GRAPH_PROBE true
+//   npx convex run microsoftCalendar:graphConcurrencyProbe '{"tenantId":"<tenant>"}' \
+//     > .planning/phases/17-calendar-actions/17-GRAPH-CONCURRENCY-PROBE.json
+//   npx convex env remove PHASE17_ALLOW_DISPOSABLE_GRAPH_PROBE
+//
+// The result is REFS ONLY — hashes, statuses and booleans. No subject, time, body, token or raw
+// account id is stored, because this artifact is committed.
+export const graphConcurrencyProbe = internalAction({
+  args: { tenantId: v.string() },
+  handler: async (ctx, { tenantId }) => {
+    // The gate. Not a warning, not a confirm — a refusal, so a stray invocation cannot touch a
+    // real calendar.
+    if (process.env.PHASE17_ALLOW_DISPOSABLE_GRAPH_PROBE !== "true") {
+      throw new Error(
+        "graphConcurrencyProbe refused: set PHASE17_ALLOW_DISPOSABLE_GRAPH_PROBE=true and run only against a DISPOSABLE Microsoft account.",
+      );
+    }
+
+    const nowMs = Date.now();
+    const access = await freshGraphToken(ctx, tenantId, nowMs);
+    if (!access.ok) throw new Error(`graphConcurrencyProbe: no usable grant (${access.reason})`);
+    const auth = { Authorization: `Bearer ${access.token}` };
+    const jsonAuth = { ...auth, "Content-Type": "application/json" };
+
+    // A unique marker so a leaked event is identifiable and never collides with real work.
+    const marker = `pikar-probe-${eventIdFor(`${tenantId}:${nowMs}`)}`;
+    const startMs = nowMs + 86_400_000;
+    const eventUrl = (id: string) => `${EVENTS_ENDPOINT}/${encodeURIComponent(id)}`;
+
+    let eventId: string | null = null;
+    let freshEtag: string | null = null;
+    let initialEtag: string | null = null;
+    let changedEtag: string | null = null;
+    let stalePatchStatus = 0;
+    let staleDeleteStatus = 0;
+    let stalePatchPreserved = false;
+    let staleDeletePreserved = false;
+    let cleanupMissing = false;
+
+    try {
+      // 1. E1 — attendee-free, so nothing is mailed to anyone by creating it.
+      const created = await fetch(EVENTS_ENDPOINT, {
+        method: "POST",
+        headers: jsonAuth,
+        body: JSON.stringify({
+          subject: marker,
+          start: { dateTime: toRfc3339(startMs), timeZone: "UTC" },
+          end: { dateTime: toRfc3339(startMs + 1_800_000), timeZone: "UTC" },
+        }),
+      });
+      if (!created.ok) throw new Error(`probe create failed: ${created.status}`);
+      const createdBody = (await created.json()) as { id?: string; "@odata.etag"?: string };
+      if (!createdBody.id) throw new Error("probe create returned no id");
+      eventId = createdBody.id;
+
+      // 2. GET E1's authoritative etag (the create response's is not re-read by management).
+      const readOne = await fetch(eventUrl(eventId), { headers: auth });
+      const readOneBody = (await readOne.json()) as { "@odata.etag"?: string };
+      initialEtag = readOneBody["@odata.etag"] ?? createdBody["@odata.etag"] ?? null;
+      if (!initialEtag) throw new Error("probe: no etag on the created event");
+      freshEtag = initialEtag;
+
+      // 3. A CONDITIONAL update with the CURRENT etag must SUCCEED — the positive witness. Without
+      //    it, a Graph that rejects every If-Match would look identical to one that enforces it.
+      const updated = await fetch(eventUrl(eventId), {
+        method: "PATCH",
+        headers: { ...jsonAuth, "If-Match": initialEtag },
+        body: JSON.stringify({ subject: `${marker}-v2` }),
+      });
+      if (!updated.ok) throw new Error(`probe conditional update failed: ${updated.status}`);
+      const updatedBody = (await updated.json()) as { "@odata.etag"?: string };
+      changedEtag = updatedBody["@odata.etag"] ?? null;
+      if (changedEtag) freshEtag = changedEtag;
+      // The version MUST move, or there is nothing for a stale comparison to catch.
+      if (!changedEtag || changedEtag === initialEtag) {
+        throw new Error("probe: the etag did not change across a successful update");
+      }
+
+      // 4. THE STALE PATCH. Expect 412.
+      const stalePatch = await fetch(eventUrl(eventId), {
+        method: "PATCH",
+        headers: { ...jsonAuth, "If-Match": initialEtag },
+        body: JSON.stringify({ subject: `${marker}-STALE-MUST-NOT-LAND` }),
+      });
+      stalePatchStatus = stalePatch.status;
+
+      // 5. E2 must be untouched by the refusal — a 412 that still wrote is worse than no 412.
+      const afterPatch = await fetch(eventUrl(eventId), { headers: auth });
+      const afterPatchBody = (await afterPatch.json()) as { "@odata.etag"?: string };
+      stalePatchPreserved = afterPatch.ok && afterPatchBody["@odata.etag"] === changedEtag;
+      if (afterPatchBody["@odata.etag"]) freshEtag = afterPatchBody["@odata.etag"];
+
+      // 6. THE STALE DELETE. Expect 412. `DELETE`, never `/cancel` — cancel mails attendees.
+      const staleDelete = await fetch(eventUrl(eventId), {
+        method: "DELETE",
+        headers: { ...auth, "If-Match": initialEtag },
+      });
+      staleDeleteStatus = staleDelete.status;
+
+      // 7. The event must still EXIST after the refused delete.
+      const afterDelete = await fetch(eventUrl(eventId), { headers: auth });
+      staleDeletePreserved = afterDelete.ok;
+      if (afterDelete.ok) {
+        const b = (await afterDelete.json()) as { "@odata.etag"?: string };
+        if (b["@odata.etag"]) freshEtag = b["@odata.etag"];
+      }
+    } finally {
+      // Cleanup ALWAYS runs, with the CURRENT version — a probe that leaves an event on a real
+      // calendar is a defect regardless of what it proved.
+      if (eventId) {
+        try {
+          await fetch(eventUrl(eventId), {
+            method: "DELETE",
+            headers: freshEtag ? { ...auth, "If-Match": freshEtag } : auth,
+          });
+          const gone = await fetch(eventUrl(eventId), { headers: auth });
+          cleanupMissing = gone.status === 404;
+        } catch {
+          cleanupMissing = false;
+        }
+      }
+    }
+
+    const supported =
+      stalePatchStatus === 412 &&
+      staleDeleteStatus === 412 &&
+      stalePatchPreserved &&
+      staleDeletePreserved;
+
+    return {
+      schema: "phase17-graph-concurrency-probe.v1",
+      deploymentUrlHash: await contentHash(
+        process.env.CONVEX_SITE_URL ?? process.env.CONVEX_CLOUD_URL ?? "unknown",
+      ),
+      // The PIKAR tenant that owns the grant, hashed. Deliberately NOT the Microsoft account id:
+      // reading `/me` needs `User.Read`, and widening the ADR-018 grant to label a probe artifact
+      // would be a permission asked for by bookkeeping. This still answers "which connection".
+      accountIdHash: await contentHash(tenantId),
+      eventIdHash: eventId ? await contentHash(eventId) : "",
+      initialEtagHash: initialEtag ? await contentHash(initialEtag) : "",
+      changedEtagHash: changedEtag ? await contentHash(changedEtag) : "",
+      stalePatchStatus,
+      staleDeleteStatus,
+      stalePatchPreserved,
+      staleDeletePreserved,
+      cleanupMissing,
+      supported,
+      capturedAt: new Date(nowMs).toISOString(),
     };
   },
 });

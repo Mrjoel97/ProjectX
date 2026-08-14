@@ -395,6 +395,48 @@ describe("pagination — a provider-supplied URL carries our bearer token", () =
   });
 });
 
+// The probe touches a REAL calendar, so its refusal is the safety property — the one thing about
+// it that can be proven offline. Its actual 412 behaviour can only be measured against a live
+// disposable account (that is the entire point of the probe).
+describe("graphConcurrencyProbe — the gate, not the probe", () => {
+  test.each([
+    undefined,
+    "",
+    "false",
+    "TRUE",
+    "1",
+    "yes",
+  ])("refuses and touches nothing when the flag is %j", async (flag) => {
+    const t = harness();
+    await seedToken(t);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    if (flag === undefined) vi.stubEnv("PHASE17_ALLOW_DISPOSABLE_GRAPH_PROBE", "");
+    else vi.stubEnv("PHASE17_ALLOW_DISPOSABLE_GRAPH_PROBE", flag);
+
+    await expect(
+      t.action(internal.microsoftCalendar.graphConcurrencyProbe, { tenantId: TENANT }),
+    ).rejects.toThrow(/refused/i);
+    // The refusal happens BEFORE the token is read and before anything reaches the network —
+    // a probe that authenticated first would already have touched the account.
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  // Exact-string gating: "TRUE" and "1" above must NOT open it, so the flag cannot be tripped by a
+  // truthy-looking value someone set for a different purpose.
+  test("only the exact string 'true' passes the gate", async () => {
+    const t = harness();
+    vi.stubEnv("PHASE17_ALLOW_DISPOSABLE_GRAPH_PROBE", "true");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    // No grant seeded, so it gets PAST the gate and fails on the token instead — which is how we
+    // know the gate opened rather than the call being refused for the same reason as above.
+    await expect(
+      t.action(internal.microsoftCalendar.graphConcurrencyProbe, { tenantId: TENANT }),
+    ).rejects.toThrow(/no usable grant/i);
+  });
+});
+
 describe("createEvent — subject and UTC times ONLY, with a retry-safe key", () => {
   async function create(body: unknown, status: number) {
     const t = harness();
