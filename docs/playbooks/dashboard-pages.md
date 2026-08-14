@@ -1,5 +1,8 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-15 (origin/main merge only — MarkdownDocument.tsx/.test.ts changes arrived
+> from main's vault-fixes PR #11, already CI-verified there; nothing authored on this branch.)
+>
 > Last verified: 2026-08-14 (⚠ **REGISTRATION OF ONE PREVIOUSLY UNWATCHED COMPONENT, FROM SOURCE
 > REVIEW OF AN UNCOMMITTED FOREIGN-LANE DIFF — NOT A RUN.** Nothing was rendered or screenshotted.
 > `apps/web/app/(app)/dashboard/MarkdownDocument.tsx` is the shared safe renderer for

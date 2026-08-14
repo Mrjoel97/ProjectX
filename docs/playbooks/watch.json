@@ -1,5 +1,7 @@
 {
-  "_unassigned": ["packages/backend/vitest.diag.setup.ts"],
+  "_unassigned": [
+    "packages/backend/vitest.diag.setup.ts"
+  ],
   "ci-gate.md": [
     ".github/workflows/ci.yml",
     "package.json",
@@ -146,6 +148,7 @@
     "packages/core/src/actionType.test.ts",
     "packages/backend/convex/research.ts",
     "packages/backend/convex/research.test.ts",
+    "packages/backend/convex/calendarViews.ts",
     "packages/backend/convex/calendar.ts",
     "packages/backend/convex/calendarComplete.ts",
     "packages/backend/convex/calendar.test.ts",
