@@ -3156,7 +3156,21 @@ on this conversation", but that is advice to the model rather than an interlock,
 `stageMediaPlan` recycles a `kind:"media"` row with no live jobs — so each retry silently RESET
 the previously staged proposal. Two candidate fixes, and they cost very differently: a code-side
 interlock (a media dispatch in flight refuses a second one), or a skill-body routing rule (a
-registry row, so a candidate seed + a paid eval gate + owner activation). Not chosen yet.
+registry row, so a candidate seed + a paid eval gate + owner activation).
+
+**OWNER ASSIGNED 2026-08-14: plan 20-12**, which already carries a `cockpit-agent` body edit
+and a paid gate. The rule is folded into its scope with the wording drafted, rather than
+paying a second gate for one paragraph. Two companions ride with it — that the tool writes
+markdown and a PDF and NEVER pptx/docx/slides, and that a created document appears in the
+WORKSPACE as well as the vault. Both are already in the tool result and the tool description,
+which is the cheap layer; the body is the durable one, and it is the only layer the model
+reads BEFORE choosing a tool.
+
+20-12 also gains a NEGATIVE fixture (`38b-media-not-a-document`). Fixture 38 proves only that
+ordinary video language REACHES `dispatchMedia`; nothing proved a document request does not.
+A gate that only ever asserts the positive cannot catch a tool being over-selected, and this
+defect is exactly that shape. The negative case runs in the same paid gate at no extra
+authorization.
 
 ### How to verify
 
