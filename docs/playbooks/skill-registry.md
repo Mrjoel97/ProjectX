@@ -1,5 +1,17 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-14 (20-12 gate run `420c852b` — **the gate REFUSED `cockpit-agent@22`, and
+> that is the system working.** 35/38, $0.4420 exec+specialist against a $2.00 cap, two retries. No
+> evidence row was written, so `activateSkill` would throw `EVAL_GATE` on v22 even if someone tried:
+> a failed run cannot pin a version. v22 stays `candidate`, v18 stays `active`, and the parked
+> stream is now v16/v19/v20/v21/v22.
+> **Both failures were in the certifying apparatus, not in the body under test** — one observable
+> counting two actors, one body bullet whose caveat suppressed the action it qualified. Fixes are
+> offline and $0; the candidate CANNOT be re-certified in place, because a body edit mints a NEW
+> version. The next seed is v23 and it needs its own full paid run — there is no partial re-run and
+> no way to patch evidence onto an existing row, which is exactly the property that makes evidence
+> mean something.)
+
 > Last verified: 2026-08-14 (20-12 offline half + **THE `cockpit-agent` CANDIDATE STREAM,
 > RECONCILED.** Read off the live registry, not assumed: active is **v18** (carrying eval evidence)
 > while **v16, v19, v20 and v21 sit parked as candidates with none**. The stream is a LINEAR chain,

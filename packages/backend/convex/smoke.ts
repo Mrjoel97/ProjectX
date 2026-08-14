@@ -696,6 +696,13 @@ export const createdDocCountForThread = internalQuery({
  *
  * The failure it exists to catch is the agent ANSWERING IN PROSE — "I'll put a reel together for
  * you" — while never calling the tool, which no reply assertion can tell apart from success.
+ *
+ * **TWO ACTORS WRITE THIS TOOL NAME ON THIS THREAD, and only one of them is the agent.** The
+ * cockpit's tool call carries the AI SDK's `toolCallId` as `stepKey`; `dispatch.ts` then records the
+ * SPECIALIST RUN it scheduled with `tool: resolved.spec.stepTool` — the same string — under
+ * `stepKey: "dispatch:<rootRequestId>"`. Counting both reads 2 for one call, which is exactly what
+ * fixture 38 failed on at first: the agent had behaved correctly and the observable was wrong. The
+ * `dispatch:` prefix is the discriminator the runtime already uses, so it is the one asked here.
  */
 export const mediaDispatchCountForThread = internalQuery({
   args: { tenantId: v.string(), threadId: v.string() },
@@ -706,7 +713,10 @@ export const mediaDispatchCountForThread = internalQuery({
         q.eq("tenantId", tenantId).eq("tool", "dispatchMedia"),
       )
       .collect()
-      .then((rows) => rows.filter((r) => r.threadId === threadId).length),
+      .then(
+        (rows) =>
+          rows.filter((r) => r.threadId === threadId && !r.stepKey.startsWith("dispatch:")).length,
+      ),
 });
 
 /** Phase 16: the eval harness's `researchDocPresent` read. Read the persisted web-research table

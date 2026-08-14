@@ -1,5 +1,16 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-14 (20-12, after gate run `420c852b` — **THE FORMAT CAVEAT SWALLOWED THE
+> ACTION.** Fixture 38b asked for a slide deck and the agent made **no tool calls at all** — no
+> `dispatchMedia` (the routing half worked) and no `createDocument` either. The cause was the body
+> bullet added hours earlier: *"Asked for a `.pptx`, say what you can write instead"*. "Slide deck"
+> pattern-matches onto that, so the model explained instead of creating. Rewritten so the caveat
+> governs the CLAIM and never the ACT: a deck they READ is a document, an explicit ask is the
+> go-ahead, "six or seven slides" is still a document you WRITE laid out as sections — *"never let
+> this caveat become a reason to produce nothing."* This is a general drafting hazard for this body:
+> a rule about how to DESCRIBE an output, written next to the rule about producing it, can be read
+> as permission to skip the producing. Still a parked candidate — NOT live.)
+
 > Last verified: 2026-08-14 (20-12 offline half — **the body learns to pick the video tool, and to
 > stop picking it for documents.** A new `## Creating images and video` section teaches
 > `dispatchMedia` against the CURRENT contract: the proposal arrives later as a workspace card (not

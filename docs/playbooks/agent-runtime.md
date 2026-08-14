@@ -1,5 +1,21 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-08-14 (20-12 gate run `420c852b` — **RED at 35/38, $0.4420, and BOTH failures
+> were the harness, not the agent.** Evidence: none recorded; `cockpit-agent@22` stays a candidate.
+>
+> **`mediaDispatchCount` counted two actors.** `dispatch.ts:401` records the SPECIALIST RUN it
+> schedules with `tool: resolved.spec.stepTool` — the string `dispatchMedia` — under
+> `stepKey: "dispatch:<rootRequestId>"`, on the SAME thread as the agent's own tool call. Fixture 38
+> read `expected 1, got 2` while the agent had called the tool exactly once, reproducibly across
+> both retries (`dispatchMedia` 49 ms `call_…`, `dispatchMedia` 15 s `dispatch:…`, then the
+> specialist's own `searchVault`). The query now excludes the `dispatch:` prefix — the discriminator
+> the runtime already uses — and `agentSteps.test.ts` pins it offline in three cases: one agent call
+> plus its specialist run is ONE, a genuine second call is still TWO (the filter must not hide the
+> defect it was added to expose), and a prose-only turn is ZERO. Observed RED before the fix.
+> **The lesson worth the $0.44:** "does this table get one row per call?" was the wrong question.
+> The right one was "who ELSE writes this tool name?" — `agentSteps.record` inserting once per call
+> is true and was not sufficient.)
+
 > Last verified: 2026-08-14 (20-12 offline half — **`mediaDispatchCount`, and why it is read off
 > `agentSteps` rather than the plan row.** The new expect key counts `dispatchMedia` CALLS on the
 > thread (`smoke:mediaDispatchCountForThread`, over `by_tenant_tool_startedAt` filtered by thread —
