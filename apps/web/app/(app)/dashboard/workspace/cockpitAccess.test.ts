@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
+import { COCKPIT_STARTERS } from "./ChatPane";
 import { PLAN_REFUSALS } from "./cards";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -42,8 +43,14 @@ describe("business-first cockpit language", () => {
   test("the identity, empty state, and composer start with outcomes rather than email", () => {
     expect(page).toContain("Business Operating Partner");
     expect(page).toContain("Operating workspace");
-    expect(chat).toContain("Run the business with Pikar.");
-    expect(chat).toContain("Plan strategy, analyze business knowledge, create assets");
+    // The empty state was REDESIGNED from a headline + subhead into the COCKPIT_STARTERS pills,
+    // and this assertion still named the deleted strings — so the guard failed while the property
+    // it guards (business-first, never email-first) was intact and arguably stronger. Assert the
+    // MECHANISM that carries the intent now, not the copy that used to.
+    expect(chat).toContain("COCKPIT_STARTERS");
+    expect(chat).toContain("Suggested business prompts");
+    expect(COCKPIT_STARTERS[0]).toContain("Review my business");
+    expect(COCKPIT_STARTERS.some((s) => /email/i.test(s))).toBe(false);
     expect(chat).toContain('placeholder="What business outcome should we work on?"');
     expect(chat).not.toContain("Tell me who to email and what to say.");
   });

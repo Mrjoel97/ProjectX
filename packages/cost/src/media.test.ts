@@ -22,7 +22,11 @@ import {
 const VIDEO_MODEL = MEDIA_DEFAULT_VIDEO.model;
 const clip = (
   resolution: VideoRes = MEDIA_DEFAULT_VIDEO.resolution,
-  seconds = MEDIA_DEFAULT_VIDEO.seconds,
+  // ANNOTATED, like `resolution` above. `MEDIA_DEFAULT_VIDEO` is `as const`, so `.seconds` is the
+  // literal `4` — and an unannotated parameter takes its type FROM its default, which pinned this
+  // helper to `seconds: 4`. That silently made the illegal-duration cases (3, 5, 10, 15, 0, NaN)
+  // uncompilable: the test proving duration validation works could not itself typecheck.
+  seconds: number = MEDIA_DEFAULT_VIDEO.seconds,
 ): MediaSpec => ({
   kind: "video",
   model: VIDEO_MODEL,
