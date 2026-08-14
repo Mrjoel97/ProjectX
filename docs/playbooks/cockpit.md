@@ -1,5 +1,18 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-15 (20-12 v24 cycle — the v23 run `cc63246f` came back 36/38 and BOTH
+> reds were pre-existing body-judgement flaws, not the media delta: fixture 37 routed a stated
+> cash-on-hand to `recordScorecardAnswer`+`evaluateBusiness` (the stage branch said 'one of its
+> five', abstract, while the scorecard branch carried a literal tool + dot path — concrete beats
+> abstract), and fixture 20 ran `resetPlan` then RE-STAGED the cancelled subject+body because
+> 'draft to X instead' reads as the same email re-addressed. Two bullets edited: the five are now
+> named inline with `stageFinanceWrite`, and the fresh-start bullet states 'instead' is a NEW
+> email. v24 seeded, byte-verified against the md — and gate run `62903ef6` is GREEN: 38/38,
+> $0.3424 exec + $0.1197 specialist = $0.4621, retries 23/35/38b only, fixtures 20/37/38 all
+> first-try. Evidence recorded on cockpit-agent v24; it stays PARKED until the owner activates. The
+> `workspace/cards.tsx` change in this tree is the concurrent vault/finance lane's, not this
+> session's.)
+>
 > Last verified: 2026-08-14 (20-12, after gate run `420c852b` — **THE FORMAT CAVEAT SWALLOWED THE
 > ACTION.** Fixture 38b asked for a slide deck and the agent made **no tool calls at all** — no
 > `dispatchMedia` (the routing half worked) and no `createDocument` either. The cause was the body

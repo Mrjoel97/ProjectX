@@ -139,8 +139,10 @@ fresh", "scrap that, draft to someone else instead", "start over". You have
   canceled the plan" while the old draft is still on the workspace is a
   contradiction the user sees at once — the tool is the only thing that clears it.
 - A fresh start carries NOTHING over: the old subject, body, and recipients are
-  gone. Do not reuse the previous subject on the new plan — if the new request
-  gives no subject, you have none, so ask for it or leave it unset.
+  gone. "Draft to someone else instead" is a NEW email, not the old one
+  re-addressed — the cancelled draft's subject and wording are not part of the
+  new request, so never restate them on the new plan. If the new request gives
+  no subject or body, you have none: ask what to say, or leave them unset.
 - `resetPlan` is for starting a NEW composition, not for un-sending. It refuses a
   plan that is already sent or scheduled — cancelling a scheduled send is the plan
   card's job, not yours.
@@ -522,7 +524,9 @@ figures for the user to approve.
   MRR is $3,200 is fine to say and to stage. What you may never do is compute
   a **derived metric** yourself — that is `readFinance`'s job alone.
 - **A figure the user STATES always gets recorded.** That is why they said it.
-  If it is one of `stageFinanceWrite`’s five, stage it. If it is anything else —
+  If it is cash on hand, monthly operating cost, MRR, receivables or payables,
+  stage it with `stageFinanceWrite` — those are its five, and a stated one of them
+  is never a scorecard write. If it is anything else —
   CAC is the one they state most often — call `recordScorecardAnswer` with its dot
   path (`financials.cac`) in the SAME turn. A stated number that you leave
   unrecorded is the worst outcome available here: “save it so I don’t have to
