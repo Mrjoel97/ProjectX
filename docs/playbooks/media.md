@@ -10,6 +10,23 @@
 > for already-submitted historical jobs. Older provider-specific sections below describe the
 > superseded implementation unless explicitly marked current. See ADR-017.
 
+> Last verified: 2026-08-14 (20.2 wave 6, VERIFIED IN A BROWSER — `apps/web/e2e/media-canvas.spec.ts`
+> passes against a live local stack: a four-kind 8/6/4/12 scene deck staged through the
+> specialist's own two internal mutations, then the canvas asserted where it actually renders. The
+> load-bearing line is the ribbon's MEASURED widths (`boundingBox()` per segment, ordered AND
+> 12s/4s > 2x) — `ribbonShares` being right and the strip being proportional on screen are
+> different claims, and only the second is what the wave promised. Also asserted live: the four
+> windows off their own offsets (a uniform grid would have read 0:00–0:12 … 0:36–0:48 for a
+> 30-second reel), the card's "drawn when the reel is assembled" instead of a clip it will never
+> have, the silent scene offering NO paid control, the vault picker with its honest empty state,
+> and the estimate refusing by name (`doesn't say what its picture is made from`) with Generate
+> disabled. $0 — nothing is ever generated. **Two harness traps found and written into
+> `e2e/README.md`:** every `convex run` against the LOCAL backend ends the browser session (so a
+> fixture-staging spec must stage first and authenticate after), and an un-onboarded tenant cannot
+> reach the workspace at all (`onboarding:__seedOnboardedTenant`). The run also needed a PROD
+> build — the long-lived `next dev` on :3111 had stopped hydrating, which is the documented
+> workspace-OOM failure and makes every click a native form submit.)
+
 > Last verified: 2026-08-14 (20.2 wave 6 — **THE CANVAS LEARNS THE SCENE CONTRACT.** A timeline
 > ribbon whose segments are as wide as their scenes are long (`ribbonShares`, with a minimum width
 > so a 2 s card in a 60 s reel is still readable — read-only, see the D7 note below); per-scene

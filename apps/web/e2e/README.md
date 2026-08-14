@@ -42,6 +42,25 @@ Playwright does **not** auto-start them: `playwright.config.ts` uses
 `scripts/smokeRun.mjs` live-deployment convention. A blank page at :3111 or a
 "local backend isn't running" error means the process died, not that a spec broke.
 
+## `convex run` ENDS THE BROWSER SESSION on a local deployment (measured 2026-08-14)
+
+A spec that stages fixtures through `npx convex run` against the **local (anonymous)** backend on
+`:3210` signs the browser out. Measured, not inferred: a context restored from `storageState`
+reaches `/dashboard`, one `convex run` lands (CLI exit 0), and the very next navigation is
+`/signin`. The saved `storageState` is dead from that moment, and so is any session the `setup`
+project just minted.
+
+So a spec that needs internal-mutation fixtures must **stage first and authenticate after** —
+`media-canvas.spec.ts` signs in once to learn its tenant id (the JWT subject, which is what
+`requireTenant` uses), stages, then signs in again. Its `signIn()` helper carries the note. Specs
+that only read public data are unaffected.
+
+## The onboarding gate
+
+A tenant with no committed business profile is force-redirected to `/dashboard/onboarding` by the
+`(app)` layout and cannot reach any other route. `onboarding:__seedOnboardedTenant` is the
+sanctioned way past it: idempotent, offline, no credits.
+
 ## Specs
 
 - **Plan 05** (SC1) — `cockpit-render` (two panes render under the auth gate) +
