@@ -14,6 +14,8 @@
     "lint": "biome ci .",
     "format": "biome check --write .",
     "test": "turbo run test",
+    "gate": "pnpm typecheck --force && pnpm test --force --concurrency=1 && pnpm build --force",
+    "gate:lint": "biome ci . --diagnostic-level=error --max-diagnostics=none",
     "test:e2e": "pnpm --filter @pikar/web test:e2e",
     "eval:golden": "pnpm --filter @pikar/backend eval:golden",
     "boot:check": "node scripts/boot-check.mjs"

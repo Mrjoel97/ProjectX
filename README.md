@@ -110,7 +110,38 @@ Action Retrier. Each sidecar's URL is a Convex env var (`PRESIDIO_URL`, `GRAPHIF
 | `pnpm typecheck`   | Typecheck every package                             |
 | `pnpm test`        | Run tests (convex-test via vitest, no watch mode)   |
 | `pnpm boot:check`  | Clean-boot gate: install -> codegen -> typecheck    |
+| `pnpm gate`        | Pre-push gate: typecheck + test + build, cold       |
+| `pnpm gate:lint`   | Formatter/lint gate — **LF checkouts only**, see below |
 | `pnpm --filter @pikar/backend seed` | Seed the agent skill registry (post-deploy) |
+
+### `pnpm gate` — run this before you push
+
+It runs the same work the `ci` workflow does, in the same order, so a red gate here is a red gate
+there. Two details are load-bearing:
+
+- **`--force` on every task.** Turbo caches task results, and a cached "success" from an earlier
+  commit will happily report green for code CI has never compiled. CI always runs cold; so does this.
+- **`--concurrency=1` on tests.** Parallel vitest workers intermittently fail to spawn on Windows,
+  and the turbo test task exits non-zero after vitest itself has already reported success.
+
+Budget ~10 minutes on Windows (typecheck ~5m20s, tests ~3m26s, build ~1m); CI does the same work in
+about three, because it runs on Linux and in parallel. The gate is slower on purpose — a fast signal
+you cannot trust is worth nothing.
+
+### Why lint is a SEPARATE script, and why it lies on Windows
+
+`gate:lint` is deliberately not part of `pnpm gate`. Biome formats to LF, and a Windows checkout is
+CRLF (`.gitattributes` normalises to LF in the index, not in your working tree) — so `biome ci`
+reports a whole-file diff for **every** file in the repo. Real violations are then indistinguishable
+from several hundred files of line-ending noise, and the command always exits non-zero.
+
+Folding that into `pnpm gate` would make the gate permanently red on Windows and stop it before it
+ever reached the tests, so the useful three run alone.
+
+**The consequence, stated plainly: on Windows you cannot verify lint locally.** The PR's Linux CI run
+is the only authority. This is not theoretical — eight genuinely unformatted files once reached CI
+after `biome ci` had been run locally and read as clean. If you are on Linux, WSL, or an LF checkout,
+`pnpm gate:lint` is trustworthy and worth running. To fix what it finds: `pnpm format`.
 
 ---
 
