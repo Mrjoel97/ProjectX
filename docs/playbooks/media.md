@@ -1,5 +1,28 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Provider cutover verified 2026-08-14: new images use OpenAI GPT Image 2 and new videos use
+> OpenAI Sora 2 through `OPENAI_API_KEY`. Images land synchronously; videos follow
+> `submitLine` → `pollOpenAiVideoTask` → `mediaComplete.landResult`. OpenAI has announced that
+> the Sora 2 Videos API shuts down on 2026-09-24. Voiceover and word-timed captions use the
+> same OpenAI account. Narration text is sent to OpenAI for speech,
+> and the generated clean voice audio is sent back to OpenAI for transcription with the owner's
+> explicit approval. The Wan poller and fal callback fields/routes remain legacy-compatible only
+> for already-submitted historical jobs. Older provider-specific sections below describe the
+> superseded implementation unless explicitly marked current. See ADR-017.
+
+> Last verified: 2026-08-14 (20.2 wave 1 — **the SCENE TIMELINE contract lands in `storyboard.ts`,
+> alongside the uniform BLOCK contract rather than replacing it.** `parseSceneDeck` is exported and
+> has no callers yet; wave 2 moves them and a later wave deletes `parseBlockDeck`. Nothing about the
+> live reel path changed. `packages/core` 868/868, and BOTH new guards — the exact-length assert and
+> the narration ceiling — were OBSERVED RED under mutation before being trusted.)
+
+> Last verified: 2026-08-12 (production snapshot bake prerequisite — Vercel's current AL2023
+> sandbox image has `tar` but omits the `xz` helper required by the pinned ffmpeg `.tar.xz` asset.
+> The owner bake now installs `xz` explicitly before download/extraction; render sandboxes remain
+> deny-all and the one-time bake sandbox is still stopped on every failure path. The corrected bake
+> completed on 2026-08-12 and produced `snap_shetn1hAzlXxJMSA3lQmE5keSIIh`, installed on the new
+> isolated Vercel project's preview and production environments.)
+
 > Last verified: 2026-08-09 (26-08 — **the media rail is now double-entered, and it is the ONE rail
 > whose two planes deliberately do NOT agree cent for cent.** See "The spend ledger (26-08)" below.)
 >
@@ -1556,6 +1579,65 @@ guard narrows to "unpaid AND no overlay text" rather than disappearing.
 lines"* test used a 13×TEXT deck and passed — which was the defect. The flooring-once property is now
 asserted on a RENDERABLE deck, and the pure 13-line arithmetic remains in
 `packages/cost/src/media.test.ts`.
+
+
+## The scene timeline (20.2) — the contract that makes the reel reachable again
+
+⚠ **The guard above is correct, and the deck it refuses is the deck the specialist is TAUGHT to
+write.** `media-director.md:82` emits a `SCREEN REC` row in its own worked example, and
+`media-director.md:87-89` teaches all four shot types as legal. So the canonical proposal passes
+every free stage, reaches the money gate, and is refused with `unrenderable_block`. **The reel has
+been unreachable in the PRODUCT, not broken in the render chain** — `renderReel` → the route → the
+sandbox → `assemble_final.sh` is intact and its tests are green.
+
+Phase 20.2 repairs this by making all four visual sources renderable, rather than by narrowing what
+the specialist is allowed to write. Wave 1 lands the CONTRACT only, in
+`packages/core/src/storyboard.ts`, **beside** the block contract:
+
+| Block contract (live) | Scene contract (20.2) |
+|---|---|
+| `Block`, `parseBlockDeck` | `Scene`, `parseSceneDeck` |
+| `SHOT_TYPES` — AI / SCREEN REC / TEXT / VIDEO, two of them unrenderable | `VISUAL_KINDS` — `generated_video` / `animated_image` / `uploaded_video` / `text_card`, **all four renderable** |
+| `clipSeconds`, uniform; `mixed_durations` refuses rows that disagree | per-scene `durationMs`; `duration_mismatch` refuses rows that disagree with the DECLARED TOTAL |
+| length is an accident of `blocks × clipSeconds` | `TARGET_DURATIONS` = 15 / 30 / 60, summed EXACTLY |
+| `windowStartMs = index * clipSeconds * 1000` | `startMs` = running sum of prior durations |
+| narration band `[minCharsFor, maxCharsFor]` per window | ceiling only — `narrationCeilingSeconds` |
+
+**The narration FLOOR is deleted, and that is a consequence rather than a preference.** Under the
+block contract a take is `adelay`-padded and `amix`ed INSIDE its own window, so speech had to FILL
+`[clip - 1.4, clip]` seconds — a 31–56 character band at 4 s, which is not a band a person can write
+in. Wave 4 places every take at an absolute offset on ONE master track, so silence around a line is
+free and the only physical limit is that a line must not run into the NEXT line. That limit is
+`narrationCeilingSeconds(scenes, i)`: from a scene start to the start of the next NARRATED scene.
+**A silent scene lends its whole duration to the line before it**, which is what lets a deck cut
+visually without cutting the sentence.
+
+**The provider grid is real, and is named rather than hidden.** Sora returns 4, 8 or 12 second
+clips, so a `generated_video` scene must land on `GENERATED_CLIP_SECONDS`. The other three kinds are
+frame-exact at any whole second — which is what makes an exact 15/30/60 possible at all, and is also
+a ~10x cost lever: a 4 s generated clip is ~40 cents, a 4 s animated still ~4 cents.
+
+**`LEGACY_VISUAL` migrates a TYPE, never a DURATION.** The block contract used 5- and 10-second
+clips and neither is on Sora's grid, so an old Wan deck maps its types cleanly and still refuses
+with `illegal_generated_duration`. Pinned by a test; pretending otherwise would move the failure out
+of this parser and into a paid submit.
+
+**`unrenderable_block` narrows rather than disappears.** Its replacement is `hasAssetSource`: an
+`uploaded_video` scene with no vault ref has nothing to render. `isPaidScene` is now a separate
+question from renderability, where `isPaidBlock` conflated the two.
+
+`SECTION_TOKENS` gained `SCENE DECK` and `SCENE PROMPTS`, so `ART DIRECTION` terminates at a scene
+deck instead of swallowing it — the same failure the block tokens were added for.
+
+**How to verify:** from `packages/core`, `npx vitest run src/storyboard.test.ts`. The two guards
+that can go vacuous are the exact-length assert and the narration ceiling; both were
+mutation-checked (neuter the condition, observe exactly one test go red) rather than trusted. Do the
+same to anything added here — this subsystem has a documented history of mechanism coverage passing
+while the behaviour was broken.
+
+**NOT yet done (waves 2-8):** no caller reads `parseSceneDeck`; the schema, price table, assembler,
+sidecar, captions, canvas and the `media-director` body are all still on the block contract. The
+reel stays unreachable until wave 3 gives the assembler its card / still / upload branches.
 
 
 ## Storage retention (D12b)

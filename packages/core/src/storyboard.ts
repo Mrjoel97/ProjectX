@@ -27,12 +27,13 @@
 export const SHOT_TYPES = ["AI", "SCREEN REC", "TEXT", "VIDEO"] as const;
 export type ShotType = (typeof SHOT_TYPES)[number];
 
-/** Wan 2.5's ONLY accepted durations. There is no 15 s. */
-export const CLIP_SECONDS = [5, 10] as const;
+/** Visual-provider durations supported by the media rail. The default is Sora's lowest-cost tier;
+ *  5 and 10 remain accepted so already-proposed Wan decks can still be read and displayed. */
+export const CLIP_SECONDS = [4, 5, 8, 10, 12] as const;
 /** D8's default block length — the value the canvas editor starts a new deck at. The PARSER does
  *  not fall back to it: an absent `Clip seconds:` declaration is `bad_duration`, because guessing
  *  a block length picks a price. */
-export const DEFAULT_CLIP_SECONDS = 10;
+export const DEFAULT_CLIP_SECONDS = 4;
 /** `assemble_final.sh`'s own tolerance: a take's SPEECH must fill
  *  `[clipSeconds - SPEECH_SLACK_S, clipSeconds]` seconds. BOTH ends are hard errors at render
  *  time — after the clips are paid for — so both ends are guarded here, at parse time, for free.
@@ -174,7 +175,17 @@ function parsePrompts(section: string): Map<number, string> {
  *    swallow the whole deck — `avoid` would come back carrying table rows, on a plan row the user
  *    reads at the Approve gate.
  */
-const SECTION_TOKENS = ["SCRIPT", "ART DIRECTION", "BLOCK DECK", "BLOCK PROMPTS"];
+const SECTION_TOKENS = [
+  "SCRIPT",
+  "ART DIRECTION",
+  "BLOCK DECK",
+  "BLOCK PROMPTS",
+  // The SCENE contract's two headings (20.2). Registered here rather than in a second list so a
+  // body carrying a scene deck terminates `ART DIRECTION` at the deck instead of swallowing it —
+  // the exact failure the comment above describes, one contract later.
+  "SCENE DECK",
+  "SCENE PROMPTS",
+];
 
 function sectionOf(body: string, heading: string): string {
   const at = new RegExp(`^[ \\t]*#*[ \\t]*(?:\\d+\\.[ \\t]*)?${heading}\\b.*$`, "im").exec(body);
@@ -357,4 +368,299 @@ export function parseBlockDeck(body: string): ParsedDeck {
   }
 
   return { ok: true, clipSeconds, blocks };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+// THE SCENE TIMELINE (phase 20.2, wave 1)
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+//
+// Everything above this line is the UNIFORM BLOCK contract: N blocks, all the same length, one
+// narration line per window, total length whatever `blocks × clipSeconds` happens to be. It is
+// still the live contract and every caller still reads it; wave 2 moves them and wave 3 deletes it.
+//
+// What changes, and why each change is forced rather than chosen:
+//
+//  * A reel now declares its LENGTH (15/30/60 s) and the scenes sum to it EXACTLY. Length was
+//    previously an accident of block count — nobody could ask for a 30-second reel.
+//  * Scenes have INDIVIDUAL durations, so `mixed_durations` (the refusal that made a deck with
+//    disagreeing rows a parse failure) is gone. Its replacement is `duration_mismatch`: the rows
+//    must agree with the DECLARED TOTAL, not with each other.
+//  * FOUR visual sources, not four shot types, and **all four are renderable**. That is the whole
+//    repair: `media.ts`'s `unrenderable_block` refuses any deck containing a `TEXT` or
+//    `SCREEN REC` block, and `media-director.md`'s own worked example emits a `SCREEN REC` — so
+//    the deck the specialist is taught to write cannot be generated. Here a card is drawn and an
+//    upload is supplied, so the only thing left to refuse is an upload with nothing to upload.
+//  * The narration FLOOR is DELETED and the ceiling is re-derived. Under the block contract a take
+//    was mixed inside its own window, so speech had to FILL `[clip - 1.4, clip]` seconds — hence a
+//    31-56 character band at 4 s, which is not a band a person can write in. Under the master
+//    audio timeline (wave 4) a take is placed at an absolute offset on ONE track, so silence
+//    between lines is free and the only physical limit is that a line must not run into the NEXT
+//    line. `narrationCeilingSeconds` is that limit, and it is the ONLY narration rule left.
+
+/** The reel lengths a user may ask for. A closed set because each one is a price and a format
+ *  decision, not a free parameter. */
+export const TARGET_DURATIONS = [15, 30, 60] as const;
+export type TargetDuration = (typeof TARGET_DURATIONS)[number];
+
+/** Where a scene's pixels come from. A CLOSED set, and unlike `SHOT_TYPES` every member is
+ *  renderable — see the header note. */
+export const VISUAL_KINDS = [
+  "generated_video",
+  "animated_image",
+  "uploaded_video",
+  "text_card",
+] as const;
+export type VisualKind = (typeof VISUAL_KINDS)[number];
+
+/** The provider's duration grid. Sora returns 4, 8 or 12 second clips and nothing between, so a
+ *  `generated_video` scene MUST land on it. **This is the real reason the other three kinds
+ *  exist**: they are frame-exact at any length, which is what makes an exact 15/30/60 possible at
+ *  all. It is also a 10x cost lever — a 4 s generated clip is ~$0.40 and a 4 s animated still is
+ *  ~$0.04 — so a deck that reaches for a still first is cheaper AND more flexible. */
+export const GENERATED_CLIP_SECONDS = [4, 8, 12] as const;
+
+/** The old closed set, mapped onto the new one, so a deck proposed under the block contract still
+ *  READS. Accepted by the parser for one version and taught by the skill body for none:
+ *  `AI`/`VIDEO` were both paid video lines, `TEXT` was always meant to be a drawn card, and
+ *  `SCREEN REC` was always meant to be a human-supplied recording. */
+const LEGACY_VISUAL: Readonly<Record<ShotType, VisualKind>> = {
+  AI: "generated_video",
+  VIDEO: "generated_video",
+  TEXT: "text_card",
+  "SCREEN REC": "uploaded_video",
+};
+
+export type Scene = {
+  index: number;
+  /** DERIVED: the running sum of every prior scene's `durationMs`. Never `index * something` —
+   *  that arithmetic is what the uniform contract was. */
+  startMs: number;
+  durationMs: number;
+  visual: VisualKind;
+  /** `uploaded_video` only, and REQUIRED there: a scene that says "use the user's footage" with no
+   *  footage named has nothing to render. Vault-only by decision — it reuses the shipped ingest
+   *  path rather than adding a second upload surface. */
+  asset?: { source: "vault"; docId: string };
+  description: string;
+  /** The spoken line, or `""` for a deliberately silent scene. Silence is now legal — see the
+   *  header note on the deleted floor. */
+  narration: string;
+  overlay?: string;
+  prompt: string;
+};
+
+/** Which kinds draw money. Same `satisfies Record<...>` table as `PAID`, for the same reason:
+ *  adding a member to `VISUAL_KINDS` without deciding whether it costs money is a COMPILE error,
+ *  where a `switch` with a `default` would silently inherit another kind's billing. */
+const PAID_VISUAL = {
+  generated_video: true,
+  animated_image: true, // one still generation, then ffmpeg pan/zoom — paid, but ~10x cheaper
+  uploaded_video: false, // the tenant already owns the bytes
+  text_card: false, // drawtext in the sandbox
+} as const satisfies Record<VisualKind, boolean>;
+
+export const isPaidScene = (s: Scene): boolean => PAID_VISUAL[s.visual];
+
+/** Can this scene produce pixels at all? The narrowed replacement for `isPaidBlock`'s use as a
+ *  renderability proxy (`media.ts:228`). Unpaid no longer implies unrenderable — only a missing
+ *  upload does. */
+export const hasAssetSource = (s: Scene): boolean =>
+  s.visual !== "uploaded_video" || s.asset !== undefined;
+
+/** Total SUBMITTED characters across the reel — the tts MediaSpec's input, as `narrationChars` is
+ *  for blocks. Silent scenes contribute nothing. */
+export const sceneNarrationChars = (scenes: readonly Scene[]): number =>
+  scenes.reduce((n, s) => n + s.narration.length, 0);
+
+/**
+ * How many seconds scene `i`'s line has to be spoken in: from its own start to the start of the
+ * NEXT NARRATED scene, or to the end of the reel if it is the last one.
+ *
+ * The generalisation of the old per-window ceiling, and the reason a line may now run past its own
+ * scene: a take is placed on one master track at an absolute offset, so the only thing it can
+ * collide with is the next take. A silent scene therefore lends its whole duration to the line
+ * before it, which is what lets a deck cut visually without cutting the sentence.
+ */
+export function narrationCeilingSeconds(scenes: readonly Scene[], i: number): number {
+  const self = scenes[i];
+  if (!self) return 0;
+  const totalMs = scenes.reduce((n, s) => n + s.durationMs, 0);
+  const nextNarrated = scenes.find((s, j) => j > i && s.narration !== "");
+  return ((nextNarrated?.startMs ?? totalMs) - self.startMs) / 1000;
+}
+
+export type ParsedSceneDeck =
+  | {
+      ok: true;
+      targetDurationSeconds: TargetDuration;
+      scenes: Scene[];
+    }
+  | {
+      ok: false;
+      reason:
+        | "no_deck"
+        | "empty_deck"
+        | "bad_target_duration"
+        | "unknown_visual_kind"
+        | "no_narration";
+    }
+  | {
+      ok: false;
+      reason: "duration_mismatch";
+      /** What the rows actually summed to, so the refusal can say the number rather than "wrong". */
+      totalSeconds: number;
+    }
+  | {
+      ok: false;
+      reason: "bad_scene_duration" | "illegal_generated_duration" | "missing_asset";
+      sceneIndex: number;
+    }
+  | {
+      ok: false;
+      reason: "narration_too_long";
+      sceneIndex: number;
+      chars: number;
+      /** The window the line had, so the refusal can be acted on without re-deriving it. */
+      availableSeconds: number;
+    };
+
+const VISUAL_KIND_SET = new Set<string>(VISUAL_KINDS);
+const TARGET_SET = new Set<number>(TARGET_DURATIONS);
+const GENERATED_SET = new Set<number>(GENERATED_CLIP_SECONDS);
+
+const sceneFail = (reason: Extract<ParsedSceneDeck, { ok: false }>["reason"]) =>
+  ({ ok: false, reason }) as ParsedSceneDeck;
+
+/**
+ * `generated_video`, `Generated Video`, `GENERATED-VIDEO`, `AI` → a `VisualKind`, or `null`.
+ *
+ * Underscores, hyphens and case are all normalised away because a model produces all of them and
+ * none of the differences mean anything — the same tolerance `fieldOf` extends to bullet and
+ * separator style. What is NOT tolerated is an unknown token: that is a parse failure, never a
+ * silent default, because guessing a kind picks a price.
+ */
+function visualKindOf(cell: string): VisualKind | null {
+  const norm = cell.toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+  if (VISUAL_KIND_SET.has(norm.replace(/ /g, "_"))) return norm.replace(/ /g, "_") as VisualKind;
+  const legacy = norm.toUpperCase();
+  return SHOT_TYPE_SET.has(legacy) ? LEGACY_VISUAL[legacy as ShotType] : null;
+}
+
+/**
+ * Parse a SCENE DECK, or refuse.
+ *
+ * Every refusal RETURNS — nothing throws, exactly as `parseBlockDeck` does, because a governed
+ * stop is a value. And every refusal happens BEFORE a cent moves: `duration_mismatch`,
+ * `illegal_generated_duration` and `narration_too_long` are all conditions the assembler would
+ * hard-error on inside a VM, after the clips have been paid for.
+ *
+ * ponytail: scene durations are WHOLE SECONDS. 15, 30 and 60 all decompose into integers, an
+ * integer column is one `Number.parseInt` instead of a float-sum tolerance, and the exact-sum
+ * assert stays exact. Upgrade path if a deck ever needs 2.5 s: parse to milliseconds here and the
+ * sum assert already works in ms.
+ */
+export function parseSceneDeck(body: string): ParsedSceneDeck {
+  const deckAt = /^[ \t]*#*[ \t]*SCENE DECK\b.*$/im.exec(body);
+  if (!deckAt) return sceneFail("no_deck");
+
+  const afterDeck = body.slice(deckAt.index + deckAt[0].length);
+  const promptsAt = /^[ \t]*#*[ \t]*SCENE PROMPTS\b.*$/im.exec(afterDeck);
+  const section = promptsAt ? afterDeck.slice(0, promptsAt.index) : afterDeck;
+  const prompts = promptsAt
+    ? parsePrompts(afterDeck.slice(promptsAt.index))
+    : new Map<number, string>();
+
+  const declared = /^[ \t]*(?:\*\*)?Target duration(?:\*\*)?[ \t]*:[ \t]*(\d+)/im.exec(section);
+  const targetDurationSeconds = declared ? Number(declared[1]) : Number.NaN;
+  if (!TARGET_SET.has(targetDurationSeconds)) return sceneFail("bad_target_duration");
+
+  const rows = section
+    .split(/\r?\n/)
+    .filter((l) => l.trim().startsWith("|"))
+    .map(cellsOf)
+    .filter((c) => !isSeparatorRow(c));
+  const header = rows.shift();
+  if (!header) return sceneFail("no_deck");
+
+  const col = (...names: string[]) =>
+    header.findIndex((h) => names.includes(h.toLowerCase().replace(/[*#]/g, "").trim()));
+  const iVisual = col("visual", "type", "kind");
+  const iSeconds = col("seconds", "secs", "duration");
+  const iDesc = col("description", "desc");
+  const iNarr = col("narration", "voiceover", "vo");
+  const iOverlay = col("text overlay", "overlay");
+  const iAsset = col("asset", "source", "file");
+  // `Seconds` is REQUIRED now, where the block contract treated it as an optional cross-check. A
+  // scene deck without per-row durations is the uniform contract wearing new column names.
+  if (iVisual < 0 || iSeconds < 0 || iDesc < 0 || iNarr < 0) return sceneFail("no_deck");
+  if (rows.length === 0) return sceneFail("empty_deck");
+
+  const scenes: Scene[] = [];
+  let startMs = 0;
+  for (const [index, cells] of rows.entries()) {
+    const visual = visualKindOf(cells[iVisual] ?? "");
+    if (visual === null) return sceneFail("unknown_visual_kind");
+
+    const seconds = Number.parseInt((cells[iSeconds] ?? "").trim(), 10);
+    if (!Number.isInteger(seconds) || seconds <= 0) {
+      return { ok: false, reason: "bad_scene_duration", sceneIndex: index };
+    }
+    // The provider grid, checked HERE rather than at submit: a 6-second Sora request is not a
+    // shorter clip, it is a refused one, and finding that out at submit means the rest of the deck
+    // has already been bought.
+    if (visual === "generated_video" && !GENERATED_SET.has(seconds)) {
+      return { ok: false, reason: "illegal_generated_duration", sceneIndex: index };
+    }
+
+    const assetCell = iAsset >= 0 ? (cells[iAsset] ?? "").replace(/`/g, "").trim() : "";
+    if (visual === "uploaded_video" && assetCell === "") {
+      return { ok: false, reason: "missing_asset", sceneIndex: index };
+    }
+
+    const description = (cells[iDesc] ?? "").trim();
+    const narration = (cells[iNarr] ?? "").trim();
+    const overlay = iOverlay >= 0 ? (cells[iOverlay] ?? "").trim() : "";
+    scenes.push({
+      index,
+      startMs,
+      durationMs: seconds * 1000,
+      visual,
+      ...(assetCell === "" ? {} : { asset: { source: "vault" as const, docId: assetCell } }),
+      description,
+      narration,
+      ...(overlay === "" ? {} : { overlay }),
+      // The deck's `#` column is DISPLAY, 1-based; row order is the reel's order and the truth.
+      prompt: prompts.get(index + 1) ?? description,
+    });
+    startMs += seconds * 1000;
+  }
+
+  // THE EXACT-LENGTH RULE. Renormalising a deck that summed to 28 s would submit a duration nobody
+  // priced and a reel nobody asked for — the `mixed_durations` reasoning, one contract later.
+  const totalSeconds = startMs / 1000;
+  if (totalSeconds !== targetDurationSeconds) {
+    return { ok: false, reason: "duration_mismatch", totalSeconds };
+  }
+
+  // A reel with no narration at all is a silent video. Silence in SOME scenes is the feature; in
+  // ALL of them it is a deck that forgot the voiceover, and the tts lines would price zero.
+  if (scenes.every((s) => s.narration === "")) return sceneFail("no_narration");
+
+  // The ONE narration rule left: a line must not run into the next line. No floor — see the
+  // header note.
+  for (const [index, scene] of scenes.entries()) {
+    if (scene.narration === "") continue;
+    const availableSeconds = narrationCeilingSeconds(scenes, index);
+    if (scene.narration.length > availableSeconds * MAX_CHARS_PER_SECOND) {
+      return {
+        ok: false,
+        reason: "narration_too_long",
+        sceneIndex: index,
+        chars: scene.narration.length,
+        availableSeconds,
+      };
+    }
+  }
+
+  return { ok: true, targetDurationSeconds: targetDurationSeconds as TargetDuration, scenes };
 }

@@ -5,15 +5,21 @@ import { describe, expect, it } from "vitest";
 import {
   CLIP_SECONDS,
   DEFAULT_CLIP_SECONDS,
+  hasAssetSource,
   isPaidBlock,
+  isPaidScene,
   MAX_CHARS_PER_BLOCK,
   maxCharsFor,
   minCharsFor,
+  narrationCeilingSeconds,
   narrationChars,
   parseArtDirection,
   parseBlockDeck,
+  parseSceneDeck,
   parseScript,
   SHOT_TYPES,
+  sceneNarrationChars,
+  TARGET_DURATIONS,
 } from "./storyboard";
 
 /** A well-formed deck, built from parts so each test can corrupt exactly one thing. */
@@ -351,8 +357,8 @@ describe("media-director.md round trip — the body's example survives its own r
   });
 
   it("the body teaches the character band it is held to, and names its only tool", () => {
-    expect(body).toContain(String(maxCharsFor(10)));
-    expect(body).toContain(String(minCharsFor(10)));
+    expect(body).toContain(String(maxCharsFor(DEFAULT_CLIP_SECONDS)));
+    expect(body).toContain(String(minCharsFor(DEFAULT_CLIP_SECONDS)));
     expect(body).toContain("searchVault");
   });
 });
@@ -451,5 +457,296 @@ describe("parseArtDirection", () => {
     // the Approve gate, where a human is already reading the proposal and is the better judge.
     const vague = PROSE.replace(/^- \*\*Palette\*\*.*$/m, "- **Palette** — warm tones");
     expect(parseArtDirection(vague)?.palette).toEqual(["warm tones"]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+// THE SCENE TIMELINE (phase 20.2, wave 1)
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+
+/** A well-formed 30-second scene deck, built from parts so each test corrupts exactly one thing.
+ *  Four scenes: 8 + 6 + 4 + 12 = 30, which is what makes the exact-sum assert testable by
+ *  arithmetic rather than by trust. */
+const sceneDeck = (rows: readonly string[], header = "Target duration: 30") =>
+  [
+    "Some preamble the specialist wrote.",
+    "",
+    "SCENE DECK",
+    header,
+    "",
+    "| # | Visual | Seconds | Description | Narration | Text overlay | Asset |",
+    "|---|--------|---------|-------------|-----------|--------------|-------|",
+    ...rows,
+    "",
+  ].join("\n");
+
+// Ceilings for this shape at 14 chars/second: 8s -> 112, 6s -> 84, 4s -> 56, 12s -> 168.
+const S1 = "Most founders lose a full hour a day to inbox triage.";
+const S2 = "Pikar reads the thread and drafts your reply.";
+const S3 = "You approve. Nothing sends alone.";
+const S4 = "Every send is written down, and the whole trail stays yours to read.";
+
+const SCENES = [
+  `| 1 | generated_video | 8 | Founder at a desk, morning light | ${S1} | LOSE AN HOUR | |`,
+  `| 2 | animated_image | 6 | Mail icons collapsing into one card | ${S2} | | |`,
+  `| 3 | text_card | 4 | A single line of type on black | ${S3} | YOU APPROVE | |`,
+  `| 4 | generated_video | 12 | The cockpit, one drafted reply | ${S4} | | |`,
+] as const;
+
+describe("parseSceneDeck — the happy path", () => {
+  const r = parseSceneDeck(sceneDeck(SCENES));
+
+  it("parses N scenes in row order", () => {
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.scenes).toHaveLength(4);
+    expect(r.scenes.map((s) => s.index)).toEqual([0, 1, 2, 3]);
+    expect(r.targetDurationSeconds).toBe(30);
+  });
+
+  it("derives startMs as a RUNNING SUM, never index * something", () => {
+    if (!r.ok) return;
+    // The uniform contract's `index * clipSeconds * 1000` would give 0/8000/16000/24000 here.
+    expect(r.scenes.map((s) => s.startMs)).toEqual([0, 8000, 14000, 18000]);
+    expect(r.scenes.map((s) => s.durationMs)).toEqual([8000, 6000, 4000, 12000]);
+  });
+
+  it("carries the four visual kinds and their paid/renderable facts", () => {
+    if (!r.ok) return;
+    expect(r.scenes.map((s) => s.visual)).toEqual([
+      "generated_video",
+      "animated_image",
+      "text_card",
+      "generated_video",
+    ]);
+    expect(r.scenes.map(isPaidScene)).toEqual([true, true, false, true]);
+    // THE REPAIR: every kind here is renderable, where the block contract refused two of four.
+    expect(r.scenes.every(hasAssetSource)).toBe(true);
+  });
+
+  it("sums the submitted narration characters", () => {
+    if (!r.ok) return;
+    expect(sceneNarrationChars(r.scenes)).toBe(S1.length + S2.length + S3.length + S4.length);
+  });
+});
+
+describe("parseSceneDeck — the exact-length rule", () => {
+  it("REFUSES rows that do not sum to the declared target, and says what they summed to", () => {
+    // 8 + 6 + 4 + 8 = 26 against a declared 30. Renormalising would submit a duration nobody
+    // priced — `mixed_durations`' reasoning, one contract later.
+    const short = SCENES.map((row) => row.replace("| 12 |", "| 8 |"));
+    const r2 = parseSceneDeck(sceneDeck(short));
+    expect(r2.ok).toBe(false);
+    if (r2.ok) return;
+    expect(r2.reason).toBe("duration_mismatch");
+    expect(r2).toMatchObject({ totalSeconds: 26 });
+  });
+
+  it("refuses a target length nobody prices", () => {
+    expect(parseSceneDeck(sceneDeck(SCENES, "Target duration: 20"))).toMatchObject({
+      reason: "bad_target_duration",
+    });
+  });
+
+  it("refuses an ABSENT target rather than guessing one", () => {
+    expect(parseSceneDeck(sceneDeck(SCENES, ""))).toMatchObject({ reason: "bad_target_duration" });
+  });
+
+  it("accepts every member of TARGET_DURATIONS", () => {
+    for (const t of TARGET_DURATIONS) {
+      const rows = [`| 1 | animated_image | ${t} | One still, slowly pushing in | ${S3} | | |`];
+      expect(parseSceneDeck(sceneDeck(rows, `Target duration: ${t}`)).ok).toBe(true);
+    }
+  });
+});
+
+describe("parseSceneDeck — the provider grid", () => {
+  it("refuses a generated clip off the 4/8/12 grid, naming the scene", () => {
+    // A 6-second Sora request is a REFUSED request, not a shorter clip — and finding that out at
+    // submit means the rest of the deck has already been bought.
+    const offGrid = [
+      `| 1 | generated_video | 6 | Founder at a desk | ${S2} | | |`,
+      `| 2 | animated_image | 24 | Mail icons | ${S4} | | |`,
+    ];
+    expect(parseSceneDeck(sceneDeck(offGrid))).toMatchObject({
+      reason: "illegal_generated_duration",
+      sceneIndex: 0,
+    });
+  });
+
+  it("lets the OTHER kinds take any whole-second duration — that is why they exist", () => {
+    const odd = [
+      `| 1 | animated_image | 7 | A still pushing in | ${S2} | | |`,
+      `| 2 | text_card | 11 | One line of type | ${S4} | | |`,
+      `| 3 | uploaded_video | 12 | The founder's own footage | ${S1} | | doc_abc |`,
+    ];
+    const r2 = parseSceneDeck(sceneDeck(odd));
+    expect(r2.ok).toBe(true);
+    if (!r2.ok) return;
+    expect(r2.scenes.map((s) => s.durationMs)).toEqual([7000, 11000, 12000]);
+  });
+
+  it("refuses a non-integer or non-positive scene duration", () => {
+    for (const bad of ["0", "-4", "two", ""]) {
+      const rows = [`| 1 | animated_image | ${bad} | A still | ${S3} | | |`];
+      expect(parseSceneDeck(sceneDeck(rows, "Target duration: 15"))).toMatchObject({
+        reason: "bad_scene_duration",
+        sceneIndex: 0,
+      });
+    }
+  });
+});
+
+describe("parseSceneDeck — uploaded footage", () => {
+  it("refuses an uploaded_video scene with nothing to upload", () => {
+    const rows = [`| 1 | uploaded_video | 15 | The founder's own clip | ${S3} | | |`];
+    expect(parseSceneDeck(sceneDeck(rows, "Target duration: 15"))).toMatchObject({
+      reason: "missing_asset",
+      sceneIndex: 0,
+    });
+  });
+
+  it("carries the vault ref, backticks stripped", () => {
+    const rows = [`| 1 | uploaded_video | 15 | The founder's own clip | ${S3} | | \`doc_xyz\` |`];
+    const r2 = parseSceneDeck(sceneDeck(rows, "Target duration: 15"));
+    expect(r2.ok).toBe(true);
+    if (!r2.ok) return;
+    expect(r2.scenes[0]?.asset).toEqual({ source: "vault", docId: "doc_xyz" });
+  });
+});
+
+describe("parseSceneDeck — narration has a ceiling and NO floor", () => {
+  it("accepts a line far shorter than its scene — the DELETED floor", () => {
+    // Under the block contract this was `narration_too_short`: a take had to FILL its window
+    // because it was mixed inside it. On a master timeline the silence around a line is free.
+    const rows = ["| 1 | animated_image | 30 | A slow push across one still | Hello. | | |"];
+    expect(parseSceneDeck(sceneDeck(rows)).ok).toBe(true);
+  });
+
+  it("refuses a line that would run into the NEXT line, naming its window", () => {
+    const tooLong = `${S4} ${S4} ${S4}`; // 200+ chars against an 8-second, 112-character window
+    const rows = [
+      `| 1 | generated_video | 8 | Founder at a desk | ${tooLong} | | |`,
+      `| 2 | animated_image | 22 | Mail icons | ${S2} | | |`,
+    ];
+    expect(parseSceneDeck(sceneDeck(rows))).toMatchObject({
+      reason: "narration_too_long",
+      sceneIndex: 0,
+      chars: tooLong.length,
+      availableSeconds: 8,
+    });
+  });
+
+  it("lets a SILENT scene lend its whole duration to the line before it", () => {
+    // Scene 1 starts at 0 and the next NARRATED scene starts at 18000, so the line has 18 seconds
+    // (252 characters) even though its own scene is 8. This is what lets a deck cut visually
+    // without cutting the sentence — and it is the whole point of the master audio timeline.
+    const long = `${S1} ${S2} ${S3}`;
+    const rows = [
+      `| 1 | generated_video | 8 | Founder at a desk | ${long} | | |`,
+      "| 2 | animated_image | 6 | Mail icons | | | |",
+      "| 3 | text_card | 4 | One line of type | | | |",
+      `| 4 | generated_video | 12 | The cockpit | ${S4} | | |`,
+    ];
+    const r2 = parseSceneDeck(sceneDeck(rows));
+    expect(long.length).toBeGreaterThan(112); // would have failed its OWN window
+    expect(r2.ok).toBe(true);
+    if (!r2.ok) return;
+    expect(narrationCeilingSeconds(r2.scenes, 0)).toBe(18);
+  });
+
+  it("refuses a deck where EVERY scene is silent", () => {
+    const rows = [
+      "| 1 | animated_image | 15 | A still | | | |",
+      "| 2 | text_card | 15 | One line of type | | | |",
+    ];
+    expect(parseSceneDeck(sceneDeck(rows))).toMatchObject({ reason: "no_narration" });
+  });
+});
+
+describe("parseSceneDeck — shape and tolerance", () => {
+  it("maps the legacy block types onto the new kinds so an old deck still reads", () => {
+    const legacy = [
+      `| 1 | VIDEO | 8 | Founder at a desk | ${S1} | | |`,
+      `| 2 | AI | 4 | Mail icons | ${S2} | | |`,
+      `| 3 | TEXT | 6 | One line of type | ${S3} | | |`,
+      `| 4 | SCREEN REC | 12 | The founder's own capture | ${S4} | | doc_1 |`,
+    ];
+    const r2 = parseSceneDeck(sceneDeck(legacy));
+    expect(r2.ok).toBe(true);
+    if (!r2.ok) return;
+    expect(r2.scenes.map((s) => s.visual)).toEqual([
+      "generated_video",
+      "generated_video",
+      "text_card",
+      "uploaded_video",
+    ]);
+  });
+
+  it("migrates a legacy TYPE but not a legacy DURATION — an old Wan deck still refuses", () => {
+    // The block contract's clip lengths were 5 and 10 seconds; Sora's grid is 4/8/12. So the
+    // migration map alone does NOT make an old deck renderable, and pretending otherwise would
+    // move the failure from this parser into a paid submit. Six 5-second AI blocks = 30 s, a deck
+    // that sums perfectly and still cannot be generated.
+    const oldWan = Array.from(
+      { length: 6 },
+      (_, i) => `| ${i + 1} | AI | 5 | Mail icons | ${S3} | | |`,
+    );
+    expect(parseSceneDeck(sceneDeck(oldWan))).toMatchObject({
+      reason: "illegal_generated_duration",
+      sceneIndex: 0,
+    });
+  });
+
+  it("tolerates the casing and separator styles a model actually produces", () => {
+    const messy = SCENES.map((row) =>
+      row.replace("generated_video", "Generated Video").replace("animated_image", "ANIMATED-IMAGE"),
+    );
+    const r2 = parseSceneDeck(sceneDeck(messy));
+    expect(r2.ok).toBe(true);
+    if (!r2.ok) return;
+    expect(r2.scenes[0]?.visual).toBe("generated_video");
+    expect(r2.scenes[1]?.visual).toBe("animated_image");
+  });
+
+  it("refuses an unknown kind rather than defaulting — guessing a kind picks a price", () => {
+    const rows = [`| 1 | hologram | 30 | Something new | ${S1} | | |`];
+    expect(parseSceneDeck(sceneDeck(rows))).toMatchObject({ reason: "unknown_visual_kind" });
+  });
+
+  it("requires the Seconds column — without it this is the uniform contract renamed", () => {
+    const noSeconds = [
+      "SCENE DECK",
+      "Target duration: 30",
+      "",
+      "| # | Visual | Description | Narration |",
+      "|---|--------|-------------|-----------|",
+      `| 1 | animated_image | A still | ${S1} |`,
+    ].join("\n");
+    expect(parseSceneDeck(noSeconds)).toMatchObject({ reason: "no_deck" });
+  });
+
+  it("refuses a deck with a header and no rows", () => {
+    expect(parseSceneDeck(sceneDeck([]))).toMatchObject({ reason: "empty_deck" });
+  });
+
+  it("refuses a body with no SCENE DECK at all", () => {
+    expect(parseSceneDeck("Just some prose about a video.")).toMatchObject({ reason: "no_deck" });
+  });
+
+  it("reads SCENE PROMPTS by DISPLAY number and falls back to the description", () => {
+    const withPrompts = `${sceneDeck(SCENES)}\nSCENE PROMPTS\n\nBlock 2\n- Prompt: A slow push across stacked mail cards, cool light\n`;
+    const r2 = parseSceneDeck(withPrompts);
+    expect(r2.ok).toBe(true);
+    if (!r2.ok) return;
+    expect(r2.scenes[1]?.prompt).toBe("A slow push across stacked mail cards, cool light");
+    expect(r2.scenes[0]?.prompt).toBe("Founder at a desk, morning light"); // description fallback
+  });
+
+  it("does not let ART DIRECTION swallow a scene deck", () => {
+    const body = `ART DIRECTION\n- **Mood** — Quiet.\n\n${sceneDeck(SCENES)}`;
+    // The section terminates at SCENE DECK, so `avoid` cannot come back carrying table rows.
+    expect(parseArtDirection(body)).toBeNull(); // incomplete art direction, NOT a swallowed deck
+    expect(parseSceneDeck(body).ok).toBe(true);
   });
 });
