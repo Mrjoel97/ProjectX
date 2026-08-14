@@ -5097,9 +5097,21 @@ describe("20.2 wave 5 — THE SCENE GATE OPENS: a scene deck is finally buyable"
     const estimate = await asA(t).query(api.media.jobEstimate, { planId });
     expect(estimate.refusal).toBeNull();
     expect(estimate.totalCents).toBeGreaterThan(0);
-    // `pictures`, not `clips`: the paid visuals are a MIX of generated clips and stills.
-    expect(estimate.lines.map((l) => l.label)).toEqual(["pictures", "voice", "captions", "render"]);
-    expect(estimate.lines.find((l) => l.label === "pictures")?.qty).toBe(3);
+    // ONE LINE PER PAID KIND (wave 7). The blended `pictures` row wave 5 printed hid the only
+    // lever the user has: 20 s of generated clip is $2.00 and the still beside it is $0.01.
+    expect(estimate.lines.map((l) => l.label)).toEqual([
+      "clips",
+      "stills",
+      "voice",
+      "captions",
+      "render",
+    ]);
+    const line = (label: string) => estimate.lines.find((l) => l.label === label);
+    expect(line("clips")?.qty).toBe(2);
+    expect(line("clips")?.cents).toBe(200); // 8 s + 12 s at $0.10 a second
+    expect(line("stills")?.qty).toBe(1);
+    expect(line("stills")?.cents).toBe(1); // ONE still, whatever its scene's length
+    // The card buys nothing, so it has no line at all — not a zero-cent row to scan past.
   });
 
   test("the estimate and the reservation agree — the canvas names the number it will charge", async () => {

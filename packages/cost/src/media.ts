@@ -19,7 +19,7 @@
  *  3. The cents floor happens ONCE, on the batch total. See chooseMediaBatch.
  */
 import { err, ok, type Result } from "@pikar/core/result";
-import { CLIP_SECONDS } from "@pikar/core/storyboard";
+import type { VisualKind } from "@pikar/core/storyboard";
 
 export type VideoRes = "480p" | "720p" | "1080p";
 
@@ -102,7 +102,7 @@ export type MediaSpec =
   | { kind: "tts"; model: string; characters: number }
   | { kind: "stt"; model: string; audioMinutes: number }
   | { kind: "render" } // the flat sandbox constant — a cost line, not a provider call
-  | { kind: "free" }; // SCREEN REC / TEXT — a block that costs nothing
+  | { kind: "free" }; // a scene whose picture costs nothing — see SCENE_VISUAL_LINE
 
 /** Three DISTINCT codes, because they send the user to three different levers:
  *  - `unknown_model`     — nothing in the table prices this model+resolution. Fail closed.
@@ -113,7 +113,6 @@ export type MediaSpec =
  *                          `unknown_model` would lie about a model we price perfectly well. */
 export type MediaCostError = { code: "unknown_model" | "over_job_cap" | "illegal_duration" };
 
-const CLIP_SET = new Set<number>(CLIP_SECONDS);
 const counted = (...ns: number[]) => ns.every((n) => Number.isFinite(n) && n >= 0);
 
 /** Prices ONE line item in FRACTIONAL USD. Never floors, never rounds to cents — that happens
@@ -123,7 +122,10 @@ export function estimateMediaUsd(spec: MediaSpec): Result<number, MediaCostError
     case "video": {
       const row = MEDIA_VIDEO_PRICING[spec.model];
       if (!row) return err({ code: "unknown_model" });
-      if (!CLIP_SET.has(spec.seconds)) return err({ code: "illegal_duration" });
+      // The GRID is asked of the model we are about to submit to — never of `CLIP_SECONDS`, which
+      // was the block era's DISPLAY set ([4,5,8,10,12]) and is wider than any real provider row.
+      // Checking both said the same thing twice and tied the money path to a constant the scene
+      // contract deprecates (20.2 §3, "not blocks x clipSeconds").
       if (!MEDIA_VIDEO_SECONDS[spec.model]?.includes(spec.seconds)) {
         return err({ code: "illegal_duration" });
       }
@@ -198,4 +200,65 @@ export function chooseMediaBatch(
   }
   // Integer cents, fail-closed bias: a sub-cent job still costs 1 cent of budget. ONCE.
   return ok({ estUsd: est.value, estCents: Math.max(1, Math.ceil(est.value * 100)) });
+}
+
+/* --- THE SCENE-KIND PRICE TABLE (20.2 §2.3) -------------------------------------------------- */
+
+/**
+ * What ONE scene of each visual kind buys from a provider.
+ *
+ * `null` is not "free by accident". A `text_card` is drawn by ffmpeg inside a sandbox we already
+ * pay the flat render constant for, and an `uploaded_video`'s bytes are already the tenant's — so
+ * neither has a provider line to reserve at all. That is the whole cost lever of the scene
+ * contract: the same 30 seconds of screen time costs $1.24 or $2.80+ depending on which rows the
+ * deck picks.
+ *
+ * It is a TABLE, and it lives in the pure package, because three callers must agree on it: the
+ * RESERVATION (`reserveSceneJobInner`), the ESTIMATE the canvas prints before the button is
+ * clickable (`jobEstimate`), and the ADR's arithmetic. They drifted while the branches were
+ * copy-pasted at two Convex call sites.
+ */
+export const SCENE_VISUAL_LINE = {
+  generated_video: "video",
+  animated_image: "image",
+  uploaded_video: null,
+  text_card: null,
+} as const satisfies Record<VisualKind, "video" | "image" | null>;
+
+/** The picture line a scene buys. `render`/`tts`/`stt`/`free` are deck-wide or narration-driven and
+ *  are therefore NOT scene-kind decisions. */
+export type SceneVisualSpec = Extract<MediaSpec, { kind: "video" | "image" }>;
+
+/**
+ * Prices ONE scene's picture: the spec to submit and its fractional USD, or `null` for a kind that
+ * buys nothing. Err propagates unchanged — an off-grid `generated_video` is `illegal_duration`
+ * here, at the free gate, rather than inside a sandbox that has already been bought.
+ *
+ * The duration grid is enforced by `estimateMediaUsd` against the PINNED model's own row, so a
+ * model swap moves the constraint by itself. `animated_image` is priced per IMAGE and its
+ * `seconds` is deliberately unused: one still is one still whether it pans for 2 s or 12 s, which
+ * is exactly why the cheap kinds are the only way to hit a 15 s or 30 s target (see the ADR).
+ */
+export function sceneVisualSpec(
+  visual: VisualKind,
+  seconds: number,
+): Result<{ spec: SceneVisualSpec; usd: number } | null, MediaCostError> {
+  const line = SCENE_VISUAL_LINE[visual];
+  if (line === null) return ok(null);
+  const spec: SceneVisualSpec =
+    line === "video"
+      ? {
+          kind: "video",
+          model: MEDIA_DEFAULT_VIDEO.model,
+          resolution: MEDIA_DEFAULT_VIDEO.resolution,
+          seconds,
+        }
+      : {
+          kind: "image",
+          model: MEDIA_DEFAULT_IMAGE.model,
+          width: MEDIA_DEFAULT_IMAGE.width,
+          height: MEDIA_DEFAULT_IMAGE.height,
+        };
+  const priced = estimateMediaUsd(spec);
+  return priced.ok ? ok({ spec, usd: priced.value }) : err(priced.error);
 }

@@ -10,6 +10,21 @@
 > for already-submitted historical jobs. Older provider-specific sections below describe the
 > superseded implementation unless explicitly marked current. See ADR-017.
 
+> Last verified: 2026-08-14 (20.2 wave 7 — **THE SCENE-KIND PRICE TABLE, and what it turned out to
+> prove.** Scene pricing was two hand-copied branches at two money sites (`reserveSceneJobInner` and
+> `jobEstimate`); it is now ONE table in the pure package — `SCENE_VISUAL_LINE` / `sceneVisualSpec`
+> in `packages/cost/src/media.ts` — read by both, so the number on screen and the number the rail
+> consumes cannot drift by editing one branch. `CLIP_SECONDS` is gone from the cost surface: the
+> duration grid is asked of the pinned model's own row, never of the block era's wider DISPLAY set,
+> which said the same thing twice. **The measured finding: not one of the three target durations is
+> reachable with `generated_video` alone.** Every length Sora 2 supports is a multiple of 4, so no
+> sum of them is 15 or 30; 60 composes and costs $6.00, over the $3.50 job cap. The cheap kinds are
+> a FEASIBILITY requirement, not a cost optimisation — computed from the live tables in
+> `media.test.ts`, observed RED first by adding a 5 s grid entry. The canvas estimate now prints one
+> line per PAID kind (`clips`, `stills`) instead of wave 5's blended `pictures`, which hid a 40x
+> price difference behind one row. ADR-019 records the contract and supersedes D8's fixed-length
+> blocks. 917 core + 61 cost + 1712 backend green; $0.)
+
 > Last verified: 2026-08-14 (20.2 wave 6, VERIFIED IN A BROWSER — `apps/web/e2e/media-canvas.spec.ts`
 > passes against a live local stack: a four-kind 8/6/4/12 scene deck staged through the
 > specialist's own two internal mutations, then the canvas asserted where it actually renders. The
@@ -370,6 +385,50 @@ Against `MEDIA_JOB_CAP_USD = $3.50` — **13% headroom**.
 D10's arithmetic refuses 6 blocks at 720p ($6.00+) and 12 blocks at 480p ($6.00+), and why **the
 budget rail is also the render-duration rail**: the sandbox never sees a resolution whose encode time
 would change delta §2.4's numbers. Both refusals are pinned in `media.test.ts`.
+
+## The scene-kind price table (20.2 wave 7) — ADR-019
+
+The §4.1 table above is the BLOCK era's economics: one clip length, every block paid. A scene deck
+is priced per kind, by one table in the pure package that both money sites read.
+
+`packages/cost/src/media.ts`:
+
+- **`SCENE_VISUAL_LINE`** — what one scene of each `VisualKind` buys. `null` means it buys NOTHING,
+  which is different from costing zero: there is no provider line to reserve, no row to insert and
+  nothing to poll.
+- **`sceneVisualSpec(visual, seconds)`** — the priced spec, or `ok(null)` for a free kind. Err
+  propagates unchanged; an off-grid `generated_video` is `illegal_duration` here, at the free gate,
+  rather than inside a sandbox that has already been bought.
+
+| Kind | Buys | USD at 4 s | Duration freedom |
+|---|---|---|---|
+| `generated_video` | one `sora-2` clip | $0.40 | 4 / 8 / 12 s only |
+| `animated_image` | one `gpt-image-2` still, panned by ffmpeg | $0.01 | any |
+| `uploaded_video` | nothing — a tenant vault asset | $0 | any |
+| `text_card` | nothing — `drawtext` in the sandbox | $0 | any |
+
+**NOT ONE TARGET DURATION IS REACHABLE WITH `generated_video` ALONE.** Every clip length the pinned
+model supports is a multiple of 4, so no sum of them is 15 or 30; 60 composes and costs $6.00 —
+over `MEDIA_JOB_CAP_USD`. The cheap kinds are what make the contract legal at all. A 30-second reel
+of 3 clips + 4 stills + 1 card costs **$1.24** in pictures; the nearest composable all-generated
+reel is **28 seconds** and costs $2.80.
+
+This is asserted, not written down: `media.test.ts` recomputes every figure above from the live
+tables against `media.fixtures.json`'s `sceneKinds` block, so a price row moving turns the table
+red rather than making this section quietly wrong. The test was observed RED (a 5-second entry
+added to the Sora grid makes 15 s and 30 s composable under the cap).
+
+**The grid is asked of the PROVIDER, never of `CLIP_SECONDS`.** That constant is the block era's
+DISPLAY set ([4,5,8,10,12]) — wider than any real provider row. `estimateMediaUsd` checked both and
+the second check did all the work; the first only tied the money path to a constant the scene
+contract deprecates. Removed in wave 7. `isBuyableClipLength` in `media.ts` keeps the same rule for
+the BLOCK path, and reads the same provider table.
+
+**The canvas prints one line per paid kind.** Wave 5 printed a blended `pictures` row because this
+table did not exist yet; a generated clip is 40x a still, so the blend hid the only lever the user
+has. `jobEstimate` now emits `clips` and `stills` separately, and omits a kind the deck does not use
+rather than printing it at zero. `uploaded_video` and `text_card` get no line at all — they buy
+nothing, and the timeline ribbon above already shows them.
 
 ## The budget rail (20-04)
 

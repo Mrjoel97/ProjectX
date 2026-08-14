@@ -61,5 +61,24 @@
       },
       "notes": "Conservative per-image reservation: low-quality 1024x1536 output plus a short prompt-input allowance."
     }
-  ]
+  ],
+  "sceneKinds": {
+    "_what": "20.2 §2.3 / ADR-019 — the per-scene-kind economics the scene contract is justified by.",
+    "_derived": "DERIVED from the provider entries above, not separately sourced. media.test.ts recomputes every number here from the live tables, so the ADR's arithmetic cannot rot silently while a price row moves.",
+    "perScene": [
+      { "visual": "generated_video", "buys": "video", "usdAt4s": 0.4, "durations": [4, 8, 12] },
+      { "visual": "animated_image", "buys": "image", "usdAt4s": 0.01, "durations": "any" },
+      { "visual": "uploaded_video", "buys": null, "usdAt4s": 0, "durations": "any" },
+      { "visual": "text_card", "buys": null, "usdAt4s": 0, "durations": "any" }
+    ],
+    "reel30s": {
+      "_what": "The §2.3 worked example, REPRICED against the shipped tables. The plan's $1.36-vs-$3.00 predated the gpt-image-2 cutover, and the all-generated column turned out not to exist at all.",
+      "mixed": { "scenes": "3 generated x 4s + 4 stills x 4s + 1 card x 2s", "pictureUsd": 1.24 },
+      "generatedOnly": {
+        "reachable": false,
+        "why": "every clip length sora-2 supports is a multiple of 4 s, so no sum of them is 30"
+      }
+    },
+    "targetsUnreachableByGeneratedVideoAlone": [15, 30, 60]
+  }
 }

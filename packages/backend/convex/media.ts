@@ -42,6 +42,7 @@ import {
   MEDIA_DEFAULT_VOICE,
   MEDIA_JOB_CAP_USD,
   MEDIA_VIDEO_SECONDS,
+  sceneVisualSpec,
 } from "@pikar/cost/media";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
@@ -466,71 +467,38 @@ export async function reserveSceneJobInner(
     };
     const seconds = scene.durationMs / 1000;
 
-    if (scene.visual === "generated_video") {
-      // The provider's duration GRID is a real constraint, and it is checked against the model we
-      // are about to submit to rather than against the wider display set — the same hole 20.2
-      // found in the block path's `isBuyableClipLength`.
-      if (!isBuyableClipLength(seconds)) return { ok: false, reason: "illegal_duration" };
-      const spec: MediaSpec = {
-        kind: "video",
-        model: MEDIA_DEFAULT_VIDEO.model,
-        resolution: MEDIA_DEFAULT_VIDEO.resolution,
-        seconds,
-      };
-      const priced = estimateMediaUsd(spec);
-      if (!priced.ok) return { ok: false, reason: priced.error.code }; // fail closed, never guess
+    // THE PICTURE, off the scene-kind price table (20.2 wave 7) rather than a branch per kind
+    // written out at every money site. The provider's duration GRID is enforced inside it, against
+    // the model we are about to submit to rather than against the wider display set — the hole 20.2
+    // found in the block path's `isBuyableClipLength`.
+    const picture = sceneVisualSpec(scene.visual, seconds);
+    if (!picture.ok) return { ok: false, reason: picture.error.code }; // fail closed, never guess
+    if (picture.value !== null) {
+      const { spec, usd } = picture.value;
       buy({
         spec,
-        estUsd: priced.value,
+        estUsd: usd,
         row: {
           ...base,
           provider: "openai",
           blockIndex: scene.index,
-          kind: "video",
-          model: MEDIA_DEFAULT_VIDEO.model,
-          spec: { kind: "video", resolution: MEDIA_DEFAULT_VIDEO.resolution, seconds },
+          kind: spec.kind,
+          model: spec.model,
+          spec:
+            spec.kind === "video"
+              ? { kind: "video", resolution: spec.resolution, seconds: spec.seconds }
+              : { kind: "image", width: spec.width, height: spec.height },
           promptHash: await contentHash(scene.prompt),
           status: "queued",
-          estUsd: priced.value,
-          createdAt: now,
-          updatedAt: now,
-        },
-      });
-    } else if (scene.visual === "animated_image") {
-      // ONE still, at any scene length — the 10x cost lever, not a fallback. The still's own
-      // dimensions are the pinned image defaults; the PAN is free and happens in the sandbox.
-      const spec: MediaSpec = {
-        kind: "image",
-        model: MEDIA_DEFAULT_IMAGE.model,
-        width: MEDIA_DEFAULT_IMAGE.width,
-        height: MEDIA_DEFAULT_IMAGE.height,
-      };
-      const priced = estimateMediaUsd(spec);
-      if (!priced.ok) return { ok: false, reason: priced.error.code };
-      buy({
-        spec,
-        estUsd: priced.value,
-        row: {
-          ...base,
-          provider: "openai",
-          blockIndex: scene.index,
-          kind: "image",
-          model: MEDIA_DEFAULT_IMAGE.model,
-          spec: {
-            kind: "image",
-            width: MEDIA_DEFAULT_IMAGE.width,
-            height: MEDIA_DEFAULT_IMAGE.height,
-          },
-          promptHash: await contentHash(scene.prompt),
-          status: "queued",
-          estUsd: priced.value,
+          estUsd: usd,
           createdAt: now,
           updatedAt: now,
         },
       });
     }
-    // `uploaded_video` and `text_card` buy NOTHING. The upload's bytes are already the tenant's
-    // (resolved from the vault at render time) and a card is drawn by ffmpeg.
+    // A `null` picture line is a kind that buys NOTHING: an `uploaded_video`'s bytes are already
+    // the tenant's (resolved from the vault at render time) and a `text_card` is drawn by ffmpeg
+    // inside a sandbox the flat render line already pays for.
 
     // THE VOICE TAKE, only where there is a line. The ceiling runs to the next NARRATED scene, so
     // a silent scene lends its window to the line before it — checked here, upstream of payment,
@@ -2112,32 +2080,20 @@ export const jobEstimate = tenantQuery({
         return { ...empty, refusal: { reason: "illegal_duration" } };
       }
       const specs: MediaSpec[] = [];
-      let pictureCount = 0;
+      let clipSecondsTotal = 0;
       let voiceChars = 0;
       for (const [i, s] of scenes.entries()) {
         if (!hasAssetSource(s)) {
           return { ...empty, refusal: { reason: "unrenderable_block", blockIndex: s.index } };
         }
         const seconds = s.durationMs / 1000;
-        if (s.visual === "generated_video") {
-          if (!isBuyableClipLength(seconds)) {
-            return { ...empty, refusal: { reason: "illegal_duration" } };
-          }
-          pictureCount += 1;
-          specs.push({
-            kind: "video",
-            model: MEDIA_DEFAULT_VIDEO.model,
-            resolution: MEDIA_DEFAULT_VIDEO.resolution,
-            seconds,
-          });
-        } else if (s.visual === "animated_image") {
-          pictureCount += 1;
-          specs.push({
-            kind: "image",
-            model: MEDIA_DEFAULT_IMAGE.model,
-            width: MEDIA_DEFAULT_IMAGE.width,
-            height: MEDIA_DEFAULT_IMAGE.height,
-          });
+        // The SAME table `reserveSceneJobInner` reserves from, so the number on screen and the
+        // number the rail consumes cannot drift — that used to be two hand-copied branches.
+        const picture = sceneVisualSpec(s.visual, seconds);
+        if (!picture.ok) return { ...empty, refusal: { reason: picture.error.code } };
+        if (picture.value !== null) {
+          specs.push(picture.value.spec);
+          if (picture.value.spec.kind === "video") clipSecondsTotal += seconds;
         }
         if (s.narration !== "") {
           const availableSeconds = narrationCeilingSeconds(scenes, i);
@@ -2170,17 +2126,30 @@ export const jobEstimate = tenantQuery({
           }, 0) * 100,
         );
       const voiceCount = scenes.filter((s) => s.narration !== "").length;
+      const clips = specs.filter((x) => x.kind === "video");
+      const stills = specs.filter((x) => x.kind === "image");
       return {
-        // `pictures`, not `clips`: on a scene deck the paid visuals are a MIX of generated clips
-        // and stills at ~a tenth the price, and one label saying "clips" would misdescribe what
-        // was bought. A per-kind breakdown is wave 7's price table, not this display.
+        // ONE LINE PER PAID KIND (wave 7). Wave 5 printed a blended `pictures` row because the
+        // price table did not exist yet; a generated clip is 40x a still, so the blend hid the only
+        // lever the user has. D7's requirement is that the estimate names WHICH line is expensive
+        // BEFORE the button is clickable, and a mixed deck's expensive line is always the clips.
+        // A kind the deck does not use is omitted rather than printed at zero. `uploaded_video` and
+        // `text_card` have no line at all — they buy nothing, and the ribbon above already shows
+        // them.
         lines: [
-          {
-            label: "pictures",
-            qty: pictureCount,
-            unit: `${targetDurationSeconds}s reel`,
-            cents: sub(specs.filter((x) => x.kind === "video" || x.kind === "image")),
-          },
+          ...(clips.length > 0
+            ? [
+                {
+                  label: "clips",
+                  qty: clips.length,
+                  unit: `${clipSecondsTotal}s of ${targetDurationSeconds}s ${MEDIA_DEFAULT_VIDEO.resolution}`,
+                  cents: sub(clips),
+                },
+              ]
+            : []),
+          ...(stills.length > 0
+            ? [{ label: "stills", qty: stills.length, unit: "pan/zoom", cents: sub(stills) }]
+            : []),
           {
             label: "voice",
             qty: voiceCount,
