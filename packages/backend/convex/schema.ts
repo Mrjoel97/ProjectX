@@ -573,7 +573,13 @@ export default defineSchema({
     renderSummary: v.optional(
       v.object({
         durationS: v.number(),
-        blockCount: v.number(),
+        /** 20.2 wave 6: the reel is a deck of SCENES, and this count has been fed
+         *  `report.sceneCount` since wave 5 — only the name lagged. Both members are optional and
+         *  exactly one is written: `sceneCount` from this wave on, `blockCount` on every row
+         *  rendered before it. Widen-only, because a required member would fail the schema push
+         *  against the rows that already exist. `media.reel` reads `sceneCount ?? blockCount`. */
+        sceneCount: v.optional(v.number()),
+        blockCount: v.optional(v.number()),
         gates: v.array(v.string()),
       }),
     ),

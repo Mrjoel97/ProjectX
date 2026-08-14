@@ -4,6 +4,23 @@ import { api } from "@pikar/backend/api";
 import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import { briefingSheet, capsTeal, snippetSheet, traceText, typeBadge } from "./cards";
+import {
+  asVisualKind,
+  durationLabel,
+  failureText,
+  isPickableVideo,
+  KIND_COST_NOTE,
+  KIND_LABEL,
+  pictureLine,
+  refusalText,
+  ribbonShares,
+  STALE_CLIP_NOTE,
+  STALE_VOICE_NOTE,
+  VERDICT_COPY,
+  type VisualKind,
+  voiceLine,
+  windowLabel,
+} from "./mediaCanvasView";
 
 /**
  * THE MEDIA CANVAS (MEDIA-01, D7, plan 20-10) — a media plan, seen.
@@ -23,9 +40,16 @@ import { briefingSheet, capsTeal, snippetSheet, traceText, typeBadge } from "./c
  * patch to an open canvas with no ticker at all. `ActivityCard` records the same rule: *"measured
  * server-side … never a setInterval."* If you find yourself writing one, the bug is elsewhere.
  *
- * D7's ceiling, stated so it is not drifted past: no timeline, no transitions, no filters, no
- * layers, no masking, no music controls, no client-side rendering. Five editor affordances, and
- * nothing beyond them.
+ * D7's ceiling, stated so it is not drifted past: no transitions, no filters, no layers, no
+ * masking, no music controls, no client-side rendering. Six editor affordances now (20.2 wave 6
+ * adds the vault picker, because an `uploaded_video` scene with no document named is unrenderable
+ * and nothing else in the product can name it), and nothing beyond them.
+ *
+ * **On "no timeline" (20.2 wave 6).** D7 banned a timeline EDITOR — drag handles, trims, ripple.
+ * The strip this canvas draws is a read-only picture of lengths the deck already declares, and it
+ * exists because the scene contract made those lengths differ: under D8 every window was the same
+ * size, so there was nothing to see. Nothing on the ribbon is draggable, and the five free edits
+ * are still the only way to change the deck.
  */
 
 type MediaPlan = {
@@ -34,6 +58,9 @@ type MediaPlan = {
   imagePrompt?: string | null;
   artDirection?: ArtDirection | null;
   clipSeconds?: number | null;
+  /** 20.2: the DECLARED reel length. Present on a scene deck and absent on a block one, which is
+   *  what makes it the discriminator the estimate line reads. */
+  targetDurationSeconds?: number | null;
 };
 type ArtDirection = {
   palette: string[];
@@ -49,73 +76,83 @@ type ArtDirection = {
 
 const money = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
-/** `0:00–0:10`. The window a block OWNS, derived from the uniform clip length — D8 makes every
- *  window the same size, so this is arithmetic and never a stored string that could disagree. */
-function windowLabel(index: number, clipSeconds: number): string {
-  const at = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-  return `${at(index * clipSeconds)}–${at((index + 1) * clipSeconds)}`;
-}
-
 /**
- * THE VERDICT COPY, and this is a compliance statement rather than a style choice.
+ * THE TIMELINE RIBBON (20.2 wave 6) — the reel's shape, at a glance.
  *
- * `none_reported` means the provider reported NOTHING — **it is not "clean"**. Every Sora 2 video
- * and every voice take lands there, and rendering it as a pass would make a safety claim fal never
- * made. Never a green tick, and never colour alone (BRAND §6).
+ * Every segment is as wide as its scene is long, which is the one thing a stack of equal cards
+ * cannot show and the thing the scene contract made true: a deck is now 12 s of footage, 4 s of
+ * card and 6 s of still, and "which of these is the long one" was previously unanswerable without
+ * reading four headers.
+ *
+ * It is READ-ONLY (see the header note on D7). Nothing here is a control, so nothing here can
+ * change the deck — the tiles below own every edit.
+ *
+ * Each segment carries its length and its kind AS TEXT. A segment distinguished only by a colour
+ * would be meaning in colour alone (BRAND §6), and a 2-second card is too thin for a swatch to be
+ * read anyway — which is also why `ribbonShares` gives every scene a minimum width.
  */
-const VERDICT_COPY: Record<string, string> = {
-  checker_clear: "Provider safety check: passed",
-  checker_flagged: "Provider safety check: flagged",
-  provider_blocked: "Refused by the provider's content check",
-  none_reported: "Not checked — this model reports no safety verdict",
-};
+function TimelineRibbon({
+  scenes,
+}: {
+  scenes: Array<{ blockIndex: number; visual: VisualKind | null; durationMs: number }>;
+}) {
+  const shares = ribbonShares(scenes.map((s) => s.durationMs));
+  const totalMs = scenes.reduce((n, s) => n + s.durationMs, 0);
 
-/** Status copy per pipeline. A block is TWO jobs from two providers landing minutes apart, so the
- *  words differ: "Generating…" is wrong for audio and "Recording…" is wrong for video. */
-const CLIP_COPY: Record<string, string> = {
-  queued: "Clip: waiting to start",
-  submitted: "Clip: generating… (usually 1–3 minutes)",
-  succeeded: "Clip: ready",
-  failed: "Clip: failed",
-  blocked: "Clip: refused by the provider's content check",
-};
-const VOICE_COPY: Record<string, string> = {
-  queued: "Voice: waiting to start",
-  submitted: "Voice: recording the narration…",
-  succeeded: "Voice: ready",
-  failed: "Voice: failed",
-  blocked: "Voice: refused by the provider's content check",
-};
-
-/** The refusal copy NAMES THE LEVER. A refusal the user cannot act on is a dead end, and the one
- *  whose cure is an edit gets that edit rendered right beside it (see `BlockTile`). */
-function refusalText(
-  refusal: { reason: string; blockIndex?: number; chars?: number },
-  capCents: number,
-  totalCents: number,
-  maxChars: number,
-): string {
-  const block = refusal.blockIndex === undefined ? "A block" : `Block ${refusal.blockIndex + 1}`;
-  switch (refusal.reason) {
-    case "over_job_cap":
-      return `This reel would cost ${money(totalCents)}, over the ${money(capCents)} per-reel limit — remove blocks or use the four-second clip tier.`;
-    case "illegal_duration":
-      return "Every block must be 5 or 10 seconds.";
-    case "narration_too_long":
-      return `${block}'s narration is ${refusal.chars} characters — trim it to ${maxChars} or fewer, or the render will fail.`;
-    case "narration_too_short":
-      return `${block}'s narration is only ${refusal.chars} characters — too short to fill its window.`;
-    case "unknown_model":
-      return "This block names a model we can't price, so it won't run.";
-    case "unrenderable_block":
-      return `${block} has no clip to render — only VIDEO and IMAGE blocks can be generated today.`;
-    case "kill_switch":
-      return "Media generation is paused by the operator.";
-    case "over_daily_budget":
-      return "Today's media budget is spent. This resets tomorrow.";
-    default:
-      return "This reel can't be generated yet.";
-  }
+  return (
+    <div style={{ marginTop: "1.1rem" }} data-testid="media-timeline">
+      <div style={{ display: "flex", alignItems: "baseline", gap: "0.6rem" }}>
+        <p style={capsTeal}>Timeline</p>
+        <span style={dimText}>
+          {durationLabel(totalMs)} · {scenes.length} scenes
+        </span>
+      </div>
+      <ol
+        aria-label="The reel's scenes, in order, sized by their length"
+        style={{
+          display: "flex",
+          gap: "0.15rem",
+          listStyle: "none",
+          margin: "0.55rem 0 0",
+          padding: 0,
+        }}
+      >
+        {scenes.map((scene, i) => (
+          <li
+            key={scene.blockIndex}
+            title={`${scene.visual ? KIND_LABEL[scene.visual] : "BLOCK"} · ${durationLabel(scene.durationMs)}`}
+            style={{
+              flexGrow: shares[i] ?? 1,
+              flexBasis: 0,
+              minWidth: 0,
+              overflow: "hidden",
+              whiteSpace: "nowrap",
+              textOverflow: "ellipsis",
+              padding: "0.4rem 0.35rem",
+              borderRadius: "0.35rem",
+              background: "var(--canvas)",
+              // PAID vs FREE, and never by colour alone — the kind is written in the segment and
+              // repeated on the tile below. A generated clip and a still are bought; a card and
+              // the tenant's own footage are not, and a solid edge is how the expensive half of a
+              // deck is visible before the estimate is read.
+              border:
+                scene.visual === "uploaded_video" || scene.visual === "text_card"
+                  ? "1px dashed var(--rule)"
+                  : "1px solid var(--teal-600)",
+              fontSize: "0.7rem",
+              color: "var(--ink-soft)",
+            }}
+          >
+            <span style={{ display: "block", color: "var(--ink)", fontWeight: 700 }}>
+              {durationLabel(scene.durationMs)}
+            </span>
+            {scene.visual ? KIND_LABEL[scene.visual] : `Block ${scene.blockIndex + 1}`}
+          </li>
+        ))}
+      </ol>
+      <hr style={sectionRule} />
+    </div>
+  );
 }
 
 export function MediaCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) {
@@ -154,30 +191,54 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
   const clipSeconds = plan.clipSeconds ?? 4;
   const art = plan.artDirection ?? null;
   const landed = (assets ?? []).filter((a) => a.url !== null).length;
+  // `visual` crosses the wire as a string (the closed set lives in `@pikar/core`, not in Convex's
+  // validators), so it is narrowed ONCE here and every consumer below sees the union or `null`.
+  const deck = (blocks ?? []).map((b) => ({ ...b, visual: asVisualKind(b.visual) }));
+
+  // ONE deck's vocabulary, decided once. A row carries `visual` or it carries `type`, never both
+  // (`media.sceneDeckOf`'s discriminator), so the whole surface can say "scene" or "block" without
+  // eight sentences each guessing.
+  const isScene = deck.some((b) => b.visual !== null);
+  const noun = isScene ? ("scene" as const) : ("block" as const);
+
+  // The vault list is fetched ONCE for the deck and only when a scene actually needs it — an
+  // `uploaded_video` is the only kind whose picture comes from a document. `"skip"` keeps a deck
+  // without one from subscribing to the vault at all.
+  const needsPicker = deck.some((b) => b.visual === "uploaded_video");
+  const vaultDocs = useQuery(api.vault.listVaultDocs, needsPicker ? {} : "skip");
+  const videos = (vaultDocs ?? []).filter(isPickableVideo);
 
   return (
     <div style={{ ...briefingSheet, padding: "1.15rem 1.25rem" }} data-testid="media-canvas">
       {art && <ArtDirectionHeader art={art} />}
 
-      <ReelRegion reel={reel} landedAssets={landed} clipSeconds={clipSeconds} />
+      <ReelRegion reel={reel} landedAssets={landed} noun={noun} />
+
+      {isScene && deck.length > 0 && <TimelineRibbon scenes={deck} />}
 
       <p style={{ ...capsTeal, margin: "1.4rem 0 0.7rem" }}>Storyboard</p>
       {blocks === undefined && <p style={dimText}>Loading the deck…</p>}
-      {blocks?.length === 0 && <p style={dimText}>This plan has no blocks yet.</p>}
+      {deck.length === 0 && blocks !== undefined && (
+        <p style={dimText}>This plan has no {noun}s yet.</p>
+      )}
       <div style={{ display: "grid", gap: "0.9rem" }}>
-        {(blocks ?? []).map((b, position) => (
-          <BlockTile
+        {deck.map((b, position) => (
+          <SceneTile
             key={b.blockIndex}
             block={b}
             position={position}
-            total={(blocks ?? []).length}
+            total={deck.length}
             planId={planId}
+            noun={noun}
             clipSeconds={clipSeconds}
-            asset={(assets ?? []).find((a) => a.blockIndex === b.blockIndex && a.kind === "video")}
+            asset={(assets ?? []).find(
+              (a) => a.blockIndex === b.blockIndex && (a.kind === "video" || a.kind === "image"),
+            )}
             voiceAsset={(assets ?? []).find(
               (a) => a.blockIndex === b.blockIndex && a.kind === "tts",
             )}
-            order={(blocks ?? []).map((x) => x.blockIndex)}
+            order={deck.map((x) => x.blockIndex)}
+            videos={videos}
           />
         ))}
       </div>
@@ -187,7 +248,10 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
         busy={busy}
         note={note}
         onGenerate={() => void generate()}
+        noun={noun}
         clipSeconds={clipSeconds}
+        targetSeconds={plan.targetDurationSeconds ?? null}
+        sceneCount={deck.length}
         threadId={threadId}
       />
     </div>
@@ -424,20 +488,20 @@ function ArtDirectionHeader({ art }: { art: ArtDirection }) {
 function ReelRegion({
   reel,
   landedAssets,
-  clipSeconds,
+  noun,
 }: {
   reel:
     | {
         status: string | null;
         url: string | null;
         durationS: number | null;
-        blockCount: number | null;
+        sceneCount: number | null;
         gates: string[];
         reason: string | null;
       }
     | undefined;
   landedAssets: number;
-  clipSeconds: number;
+  noun: "scene" | "block";
 }) {
   const status = reel?.status ?? null;
   // THE OUT-OF-DATE STATE. `regenerateBlock` and every structural edit clear the render fields
@@ -459,14 +523,14 @@ function ReelRegion({
 
         {status === "pending" && !outOfDate && (
           <p style={dimText}>
-            Not assembled yet. The reel is built after every block's clip and voice have landed.
+            Not assembled yet. The reel is built once every {noun}'s picture and voice have landed.
           </p>
         )}
 
         {outOfDate && (
           <p style={dimText}>
-            The reel is out of date — the blocks have changed since it was assembled. Generate again
-            to rebuild it.
+            The reel is out of date — the {noun}s have changed since it was assembled. Generate
+            again to rebuild it.
           </p>
         )}
 
@@ -485,9 +549,9 @@ function ReelRegion({
               style={{ width: "100%", maxWidth: "22rem", borderRadius: "0.6rem", display: "block" }}
             />
             <p style={{ ...dimText, marginTop: "0.5rem" }}>
-              {reel.blockCount} blocks · {Math.round(reel.durationS ?? 0)} seconds
+              {reel.sceneCount} {noun}s · {Math.round(reel.durationS ?? 0)} seconds
               {reel.gates.includes("speech_within_window")
-                ? " · every block's narration fits its window."
+                ? " · every narration line fits before the next one."
                 : "."}
             </p>
           </>
@@ -506,7 +570,7 @@ function ReelRegion({
         {status === "failed" && (
           <p style={dimText}>
             The reel could not be assembled
-            {reel?.reason ? `: ${failureText(reel.reason, clipSeconds)}` : "."}
+            {reel?.reason ? `: ${failureText(reel.reason, noun)}` : "."}
           </p>
         )}
       </div>
@@ -515,31 +579,17 @@ function ReelRegion({
   );
 }
 
-/** A render reasonCode, in words. The backend keeps a CLOSED union and never stores ffmpeg's prose
- *  (§4), so this map is where the sentence lives — an unrecognised code falls through to the code
- *  itself rather than being swallowed. */
-function failureText(reason: string, clipSeconds: number): string {
-  const map: Record<string, string> = {
-    incomplete_batch:
-      "one of the blocks never produced its clip or its voice, so there was nothing to assemble",
-    not_all_succeeded: "not every block had landed when the render started",
-    incomplete_blocks: "a block is missing either its clip or its voice take",
-    speech_out_of_window: `a narration line runs longer than its ${clipSeconds}-second window — shorten it and regenerate`,
-    clip_too_short: "a generated clip was shorter than its window",
-    missing_narration: "a window came out silent",
-    duration_mismatch: "the finished file was not the expected length",
-    sandbox_timeout: "the render ran out of time",
-    missing_binary: "the render environment is missing a required tool",
-    route_unreachable: "the render service could not be reached",
-    sidecar_rejected_on_return:
-      "the render produced no valid assembly record, so nothing was published",
-  };
-  return map[reason] ?? reason;
-}
-
+/** One row of `media.byPlan` — a BLOCK row (`type`, `visual: null`) or a 20.2 SCENE row. The two
+ *  are one shape here on purpose: a tile renders whichever it was handed, and `visual` is the
+ *  discriminator (`media.byPlan`'s own comment says why that projection is safe HERE and nowhere
+ *  on the money path). */
 type Block = {
   blockIndex: number;
   type: string;
+  visual: VisualKind | null;
+  startMs: number;
+  durationMs: number;
+  asset: { source: "vault"; docId: string } | null;
   description: string;
   overlay: string | null;
   prompt: string;
@@ -549,7 +599,15 @@ type Block = {
   overCharLimit: boolean;
   clip: { status: string; verdict: string | null; model: string } | null;
   voice: { status: string; verdict: string | null; model: string } | null;
+  /** Bought for text that has since been edited. See `mediaCanvasView`'s stale notes — the render
+   *  reuses the old asset deliberately, so the tile is the only place this is visible. */
+  clipStale: boolean;
+  voiceStale: boolean;
 };
+
+/** A vault document the picker may offer. Projected by `vault.listVaultDocs`; narrowed to video by
+ *  `isPickableVideo`, which is the same narrowing the render applies. */
+type VaultVideo = { _id: string; title: string; mimeType?: string | null; status?: string };
 
 /**
  * ONE BLOCK, as the BRAND Output card (`BRAND.md:101-102`): a titled card with an UPPERCASE type
@@ -566,38 +624,56 @@ type Block = {
  * land minutes apart, and a block whose voice is ready but whose clip is not MUST look different
  * from the reverse.
  */
-function BlockTile({
+function SceneTile({
   block,
   position,
   total,
   planId,
+  noun,
   clipSeconds,
   asset,
   voiceAsset,
   order,
+  videos,
 }: {
   block: Block;
   position: number;
   total: number;
   planId: never;
+  noun: "scene" | "block";
   clipSeconds: number;
   asset?: { url: string | null; mimeType: string | null };
   voiceAsset?: { url: string | null };
   order: number[];
+  videos: VaultVideo[];
 }) {
   const editPrompt = useMutation(api.media.editBlockPrompt);
   const editNarration = useMutation(api.media.editBlockNarration);
   const regenerate = useMutation(api.media.regenerateBlock);
   const reorder = useMutation(api.media.reorderBlocks);
   const remove = useMutation(api.media.deleteBlock);
+  const setAsset = useMutation(api.media.setSceneAsset);
 
   const [editing, setEditing] = useState<"prompt" | "narration" | null>(null);
   const [prompt, setPrompt] = useState(block.prompt);
   const [narration, setNarration] = useState(block.narration);
   const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
 
   const chars = narration.length;
   const over = chars > block.maxChars;
+  const chosen = videos.find((v) => v._id === block.asset?.docId);
+
+  // **A CONTROL THAT CANNOT SPEND MUST NOT LOOK LIKE ONE.** Three of the four scene kinds buy
+  // nothing on their own: a card is drawn in the render, an upload is already the tenant's. Such a
+  // scene has something to re-buy only if it has a line to re-record. Offering "Regenerate" anyway
+  // would send a click to a mutation that answers `nothing_to_regenerate` — a refusal the tile
+  // could have known without asking.
+  const buysPicture =
+    block.visual === null ||
+    block.visual === "generated_video" ||
+    block.visual === "animated_image";
+  const buysSomething = buysPicture || block.narration.trim() !== "";
 
   async function run(fn: () => Promise<unknown>) {
     if (busy) return;
@@ -634,12 +710,23 @@ function BlockTile({
       data-testid="media-block-tile"
     >
       <div style={{ display: "flex", alignItems: "center", gap: "0.55rem", flexWrap: "wrap" }}>
-        <span style={typeBadge}>{block.type.toUpperCase()}</span>
+        <span style={typeBadge}>
+          {block.visual ? KIND_LABEL[block.visual] : block.type.toUpperCase()}
+        </span>
         <strong style={{ fontSize: "0.85rem", color: "var(--ink)" }}>
-          Block {block.blockIndex + 1}
+          {noun === "scene" ? "Scene" : "Block"} {block.blockIndex + 1}
         </strong>
-        <span style={dimText}>{windowLabel(position, clipSeconds)}</span>
+        {/* THE WINDOW, from this scene's OWN offset and length. `index x clipSeconds` was the
+            uniform contract's arithmetic and it is wrong the moment two scenes differ. */}
+        <span style={dimText}>
+          {windowLabel(block.startMs, block.durationMs)} · {durationLabel(block.durationMs)}
+        </span>
       </div>
+      {block.visual && (
+        <p style={{ ...dimText, fontSize: "0.72rem", margin: "0.3rem 0 0" }}>
+          {KIND_COST_NOTE[block.visual]}
+        </p>
+      )}
 
       <p style={{ ...dimText, ...traceText, margin: "0.5rem 0 0", color: "var(--ink)" }}>
         {block.description}
@@ -674,9 +761,7 @@ function BlockTile({
       <div aria-live="polite" style={{ display: "grid", gap: "0.35rem", marginTop: "0.6rem" }}>
         <div className="trace-line">
           <span style={traceText}>
-            {block.clip
-              ? (CLIP_COPY[block.clip.status] ?? `Clip: ${block.clip.status}`)
-              : "Clip: not requested yet"}
+            {pictureLine(block.visual, block.clip, block.asset, chosen?.title)}
           </span>
         </div>
         {block.clip?.verdict && (
@@ -684,12 +769,15 @@ function BlockTile({
             <span style={traceText}>{VERDICT_COPY[block.clip.verdict] ?? block.clip.verdict}</span>
           </div>
         )}
+        {block.clipStale && (
+          <div className="trace-line">
+            <span style={{ ...traceText, color: "var(--held-text)", fontWeight: 600 }}>
+              {STALE_CLIP_NOTE}
+            </span>
+          </div>
+        )}
         <div className="trace-line">
-          <span style={traceText}>
-            {block.voice
-              ? (VOICE_COPY[block.voice.status] ?? `Voice: ${block.voice.status}`)
-              : "Voice: not requested yet"}
-          </span>
+          <span style={traceText}>{voiceLine(block.narration, block.voice)}</span>
         </div>
         {block.voice?.verdict && (
           <div className="trace-line">
@@ -698,7 +786,93 @@ function BlockTile({
             </span>
           </div>
         )}
+        {block.voiceStale && (
+          <div className="trace-line">
+            <span style={{ ...traceText, color: "var(--held-text)", fontWeight: 600 }}>
+              {STALE_VOICE_NOTE}
+            </span>
+          </div>
+        )}
       </div>
+
+      {/* THE VAULT PICKER (20.2 wave 6) — the sixth affordance, and the only thing in the product
+          that can make an `uploaded_video` scene renderable. Vault-only by the contract wave 1
+          shipped: `Scene.asset` has one member, so the file arrives through the vault's existing
+          upload path and this control only points at it. FREE — it buys nothing, which is the
+          whole reason this kind exists beside a $0.40 generated clip. */}
+      {block.visual === "uploaded_video" && (
+        <div style={{ marginTop: "0.65rem" }}>
+          <label
+            htmlFor={`scene-asset-${block.blockIndex}`}
+            style={{ ...dimText, fontSize: "0.72rem", display: "block", marginBottom: "0.3rem" }}
+          >
+            Your footage for this scene
+          </label>
+          <select
+            id={`scene-asset-${block.blockIndex}`}
+            value={block.asset?.docId ?? ""}
+            disabled={busy || videos.length === 0}
+            data-testid="scene-asset-picker"
+            onChange={(e) => {
+              const vaultDocId = e.target.value;
+              if (!vaultDocId) return;
+              setNote(null);
+              void run(async () => {
+                const res = await setAsset({ planId, blockIndex: block.blockIndex, vaultDocId });
+                // The refusals are the render's own rules, applied where they are free — a
+                // document that is not a video would clear the money gate and then fail in the
+                // sandbox. Say which rule, never a bare "failed".
+                if (!res.ok) {
+                  setNote(
+                    res.reason === "not_a_video"
+                      ? "That document isn't a video, so it can't be a scene."
+                      : "That document isn't available any more.",
+                  );
+                }
+              });
+            }}
+            style={{
+              width: "100%",
+              maxWidth: "22rem",
+              padding: "0.35rem 0.4rem",
+              borderRadius: "0.35rem",
+              border: "1px solid var(--rule)",
+              background: "var(--paper)",
+              color: "var(--ink)",
+              fontSize: "0.8rem",
+            }}
+          >
+            <option value="">
+              {videos.length === 0
+                ? "No videos in your vault yet — upload one there first"
+                : "Choose a video from your vault…"}
+            </option>
+            {videos.map((v) => (
+              <option key={v._id} value={v._id}>
+                {v.title}
+              </option>
+            ))}
+          </select>
+          {/* An HONEST empty state (BRAND §1/§5): the cure is in another route, so it is named. */}
+          {videos.length === 0 && (
+            <p style={{ ...dimText, fontSize: "0.72rem", marginTop: "0.3rem" }}>
+              Upload the clip in the vault, then choose it here. Nothing is bought for this scene.
+            </p>
+          )}
+          {note && (
+            <p
+              style={{
+                ...dimText,
+                fontSize: "0.72rem",
+                marginTop: "0.3rem",
+                color: "var(--held-text)",
+              }}
+            >
+              {note}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* THE NARRATION, and its live character count. This control is the UI half of the
           pre-payment guard: `jobEstimate` refuses a deck whose narration is too long, and the cure
@@ -857,7 +1031,7 @@ function BlockTile({
           style={ghostBtn}
           onClick={() => void run(() => remove({ planId, blockIndex: block.blockIndex }))}
         >
-          Delete block
+          Delete {noun}
         </button>
       </div>
       <div
@@ -869,18 +1043,39 @@ function BlockTile({
           alignItems: "center",
         }}
       >
-        <span style={{ ...dimText, fontSize: "0.72rem", fontWeight: 700 }}>Costs money:</span>
-        <button
-          type="button"
-          disabled={busy}
-          style={ghostBtn}
-          onClick={() => void run(() => regenerate({ planId, blockIndex: block.blockIndex }))}
-        >
-          Regenerate this block
-        </button>
-        <span style={{ ...dimText, fontSize: "0.72rem" }}>
-          Buys one new clip and voice take, and rebuilds the reel.
-        </span>
+        {buysSomething ? (
+          <>
+            <span style={{ ...dimText, fontSize: "0.72rem", fontWeight: 700 }}>Costs money:</span>
+            <button
+              type="button"
+              disabled={busy}
+              style={ghostBtn}
+              onClick={() => void run(() => regenerate({ planId, blockIndex: block.blockIndex }))}
+            >
+              Regenerate this {noun}
+            </button>
+            {/* WHAT IT BUYS, per kind — a still is ~a tenth of a clip, and a silent scene has no
+                take to re-record. A single sentence for all four would over-state three of them. */}
+            <span style={{ ...dimText, fontSize: "0.72rem" }}>
+              Buys{" "}
+              {[
+                block.visual === "animated_image"
+                  ? "one new still"
+                  : buysPicture
+                    ? "one new clip"
+                    : null,
+                block.narration.trim() === "" ? null : "one new voice take",
+              ]
+                .filter(Boolean)
+                .join(" and ")}
+              , and rebuilds the reel. The other {noun}s are kept.
+            </span>
+          </>
+        ) : (
+          <span style={{ ...dimText, fontSize: "0.72rem" }}>
+            Nothing to buy for this {noun} — edit it above and generate the reel.
+          </span>
+        )}
       </div>
     </div>
   );
@@ -911,7 +1106,10 @@ function EstimateGate({
   busy,
   note,
   onGenerate,
+  noun,
   clipSeconds,
+  targetSeconds,
+  sceneCount,
   threadId,
 }: {
   estimate:
@@ -926,12 +1124,18 @@ function EstimateGate({
   busy: boolean;
   note: string | null;
   onGenerate: () => void;
+  noun: "scene" | "block";
   clipSeconds: number;
+  targetSeconds: number | null;
+  sceneCount: number;
   threadId?: string;
 }) {
   const resolved = estimate !== undefined;
   const refusal = estimate?.refusal ?? null;
   const canGenerate = resolved && refusal === null && (estimate?.lines.length ?? 0) > 0 && !busy;
+  // The ceiling the refusal quotes. On a scene deck it is the TAKE's window and varies per scene,
+  // so the estimate's own `chars` and the tile's counter are the precise numbers; this is the
+  // fallback for a block deck, where every window is the same size.
   const maxChars = Math.round(clipSeconds * 14);
 
   return (
@@ -987,8 +1191,12 @@ function EstimateGate({
 
       {resolved && (
         <p style={{ ...dimText, marginTop: "0.5rem" }}>
-          Priced at OpenAI Sora 2, 720p, {clipSeconds} s per block ·{" "}
-          {money(estimate?.remainingCents ?? 0)} of today's media budget remains.
+          {/* A SCENE deck has no single clip length — that arithmetic is what this phase removed —
+              so it is priced as a reel of N scenes, and only a block deck quotes seconds-per-block. */}
+          {targetSeconds === null
+            ? `Priced at OpenAI Sora 2, 720p, ${clipSeconds} s per block`
+            : `A ${targetSeconds}-second reel of ${sceneCount} scenes, priced per scene`}{" "}
+          · {money(estimate?.remainingCents ?? 0)} of today's media budget remains.
         </p>
       )}
 
@@ -996,7 +1204,12 @@ function EstimateGate({
           control on the offending tile directly above. */}
       {refusal && (
         <p style={{ ...dimText, marginTop: "0.5rem", color: "var(--held-text)", fontWeight: 600 }}>
-          {refusalText(refusal, estimate?.capCents ?? 0, estimate?.totalCents ?? 0, maxChars)}
+          {refusalText(refusal, {
+            capCents: estimate?.capCents ?? 0,
+            totalCents: estimate?.totalCents ?? 0,
+            maxChars,
+            noun,
+          })}
         </p>
       )}
 

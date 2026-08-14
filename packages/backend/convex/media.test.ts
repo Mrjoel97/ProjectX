@@ -3193,7 +3193,7 @@ describe("renderReel: fail-closed on the secret, then the offline seam", () => {
     expect(audit).toHaveLength(1);
     // Kept in lockstep with llmRedaction.test.ts's MEDIA_AUDIT_ALLOWED — refs, hashes and counts.
     expect(Object.keys((audit[0]?.payload ?? {}) as object).sort()).toEqual(
-      ["batchId", "planId", "blockCount", "renderMs", "sidecarHash", "gatesPassed"].sort(),
+      ["batchId", "planId", "sceneCount", "renderMs", "sidecarHash", "gatesPassed"].sort(),
     );
     expect(JSON.stringify(audit[0]?.payload)).not.toMatch(/url|href|http/i);
     // `gatesPassed` comes from the RE-VALIDATED sidecar, not from what the route claimed: the
@@ -3429,6 +3429,83 @@ describe("standalone image: one reviewed prompt through the existing media rail"
 });
 
 describe("the canvas READ plane: two states per block, and a url only when it is earned", () => {
+  // ── 20.2 wave 6: what a SCENE tile needs, and what it must not have to guess ─────────────────
+  test("byPlan projects each scene's own kind, place and length — never index x clipSeconds", async () => {
+    const t = harness();
+    // 8 / 6 / 4 / 12, summing to 30. `clipSeconds` on this row is 12 (the longest scene), which is
+    // exactly the number a tile must NOT size itself from.
+    const { planId } = await seedSceneDeck(t);
+    const rows = await asA(t).query(api.media.byPlan, { planId });
+    expect(rows.map((r) => [r.visual, r.startMs, r.durationMs])).toEqual([
+      ["generated_video", 0, 8000],
+      ["animated_image", 8000, 6000],
+      ["text_card", 14_000, 4000],
+      ["generated_video", 18_000, 12_000],
+    ]);
+  });
+
+  test("a scene's character ceiling is its TAKE's window, not the deck's longest scene", async () => {
+    const t = harness();
+    // Scene 2 is silent, so scene 1's line runs until scene 3 starts: 6 s + 4 s = 10 s of room,
+    // where the deck-wide `clipSeconds` (12) would have promised more and the scene's own length
+    // (6) less. Both wrong numbers are reachable; only one is the number the reserve applies.
+    const { planId } = await seedSceneDeck(t);
+    await t.run(async (ctx) => {
+      const plan = await ctx.db.get(planId);
+      const shots = (plan?.shots ?? []).map((s) => (s.index === 2 ? { ...s, narration: "" } : s));
+      await ctx.db.patch(planId, { shots });
+    });
+    const rows = await asA(t).query(api.media.byPlan, { planId });
+    expect(rows[1]?.maxChars).toBe(maxCharsFor(10));
+    // …and the mutation that edits the line applies the SAME ceiling, or the count beside the
+    // textarea would promise room the money gate then refuses.
+    expect(
+      await asA(t).mutation(api.media.editBlockNarration, {
+        planId,
+        blockIndex: 1,
+        narration: "x".repeat(maxCharsFor(10) + 1),
+      }),
+    ).toMatchObject({ ok: false, reason: "narration_too_long", maxChars: maxCharsFor(10) });
+  });
+
+  test("a take bought for a line that has since been rewritten is reported STALE", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    await t.run(async (ctx) => {
+      const storageId = await ctx.storage.store(
+        new Blob([new Uint8Array([1])], { type: "audio/wav" }),
+      );
+      await ctx.db.insert("mediaJobs", {
+        tenantId: A,
+        planId,
+        batchId: "b1",
+        blockIndex: 0,
+        provider: "openai",
+        kind: "tts",
+        model: MEDIA_DEFAULT_VOICE.model,
+        spec: { kind: "tts", characters: 12, voice: "v", sampleRateHertz: 24000 },
+        // Bought for the line the deck was written with.
+        promptHash: await contentHash("line 0"),
+        status: "succeeded",
+        assetStorageId: storageId,
+        estUsd: 0.01,
+        createdAt: T0,
+        updatedAt: T0,
+      });
+    });
+    expect((await asA(t).query(api.media.byPlan, { planId }))[0]?.voiceStale).toBe(false);
+
+    // The free edit. The take survives it — the render reuses it deliberately, because it is the
+    // only audio that exists — so the tile is the only place a user can learn the reel still says
+    // the old words.
+    await asA(t).mutation(api.media.editBlockNarration, {
+      planId,
+      blockIndex: 0,
+      narration: "something else entirely",
+    });
+    expect((await asA(t).query(api.media.byPlan, { planId }))[0]?.voiceStale).toBe(true);
+  });
+
   test("byPlan reports the clip and the voice INDEPENDENTLY", async () => {
     const t = harness();
     const { planId } = await seedDeck(t, { blocks: 2 });
@@ -3593,7 +3670,9 @@ describe("the canvas READ plane: two states per block, and a url only when it is
     const r = await asA(t).query(api.media.reel, { planId });
     expect(r.url).toBeTruthy();
     expect(r.durationS).toBe(30);
-    expect(r.blockCount).toBe(3);
+    // Wave 6 renamed the wire field; the ROW is a pre-wave-6 one carrying `blockCount`, and it
+    // still reads. That fallback is the whole reason the schema widened rather than migrating.
+    expect(r.sceneCount).toBe(3);
     expect(r.gates).toEqual(["no_time_stretch", "full_decode"]);
   });
 });
@@ -4184,10 +4263,10 @@ describe("D12(b) RETENTION: delete on success, KEEP on failure", () => {
       renderStorageId: mp4StorageId,
       sidecarStorageId,
       sidecarHash: "c".repeat(64),
-      blockCount: 2,
+      sceneCount: 2,
       renderMs: 1,
       gatesPassed: 2,
-      summary: { durationS: 20, blockCount: 2, gates: ["g", "h"] },
+      summary: { durationS: 20, sceneCount: 2, gates: ["g", "h"] },
     };
     const run = () =>
       t.run(async (ctx) =>
@@ -5107,6 +5186,92 @@ describe("20.2 wave 5 — THE SCENE GATE OPENS: a scene deck is finally buyable"
       reason: "unrenderable_block",
     });
     expect(await t.run((ctx) => ctx.db.query("mediaJobs").collect())).toHaveLength(0);
+  });
+
+  // ── 20.2 wave 6: the vault picker, checked where the refusal is free ─────────────────────────
+  test("setSceneAsset points an upload at a vault VIDEO, and refuses everything else", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t, {
+      visuals: ["uploaded_video", "animated_image", "text_card", "generated_video"],
+    });
+    const { videoId, pdfId, foreignId } = await t.run(async (ctx) => {
+      const store = async (type: string) =>
+        await ctx.storage.store(new Blob([new Uint8Array([1])], { type }));
+      const base = {
+        title: "t",
+        kind: "upload",
+        category: "other",
+        source: "upload",
+        size: 1,
+        contentHash: "f".repeat(64),
+        status: "ready" as const,
+        createdAt: T0,
+      };
+      return {
+        videoId: await ctx.db.insert("vaultDocuments", {
+          ...base,
+          tenantId: A,
+          mimeType: "video/mp4",
+          storageId: await store("video/mp4"),
+        }),
+        pdfId: await ctx.db.insert("vaultDocuments", {
+          ...base,
+          tenantId: A,
+          mimeType: "application/pdf",
+          storageId: await store("application/pdf"),
+        }),
+        // Another tenant's video. The whole reason this check is on the ROW.
+        foreignId: await ctx.db.insert("vaultDocuments", {
+          ...base,
+          tenantId: B,
+          mimeType: "video/mp4",
+          storageId: await store("video/mp4"),
+        }),
+      };
+    });
+
+    expect(
+      await asA(t).mutation(api.media.setSceneAsset, {
+        planId,
+        blockIndex: 0,
+        vaultDocId: videoId,
+      }),
+    ).toEqual({ ok: true });
+    const shot = (await planRowOf(t, planId))?.shots?.[0];
+    expect(shot?.asset).toEqual({ source: "vault", docId: videoId });
+
+    // A document that is not a video would clear the money gate — an upload buys nothing — and
+    // then hard-error inside a sandbox the deck has already paid for.
+    expect(
+      await asA(t).mutation(api.media.setSceneAsset, { planId, blockIndex: 0, vaultDocId: pdfId }),
+    ).toEqual({ ok: false, reason: "not_a_video" });
+    expect(
+      await asA(t).mutation(api.media.setSceneAsset, {
+        planId,
+        blockIndex: 0,
+        vaultDocId: foreignId,
+      }),
+    ).toEqual({ ok: false, reason: "no_document" });
+    expect(
+      await asA(t).mutation(api.media.setSceneAsset, {
+        planId,
+        blockIndex: 0,
+        vaultDocId: "not-an-id",
+      }),
+    ).toEqual({ ok: false, reason: "no_document" });
+    // …and a scene whose picture is generated has no asset to point anywhere.
+    expect(
+      await asA(t).mutation(api.media.setSceneAsset, {
+        planId,
+        blockIndex: 3,
+        vaultDocId: videoId,
+      }),
+    ).toEqual({ ok: false, reason: "not_an_upload" });
+    // The one accepted write stands; four refusals changed nothing.
+    expect((await planRowOf(t, planId))?.shots?.[0]?.asset).toEqual({
+      source: "vault",
+      docId: videoId,
+    });
   });
 
   test("a scene with NOTHING to buy says so — it does not open a transaction for air", async () => {

@@ -10,6 +10,26 @@
 > for already-submitted historical jobs. Older provider-specific sections below describe the
 > superseded implementation unless explicitly marked current. See ADR-017.
 
+> Last verified: 2026-08-14 (20.2 wave 6 — **THE CANVAS LEARNS THE SCENE CONTRACT.** A timeline
+> ribbon whose segments are as wide as their scenes are long (`ribbonShares`, with a minimum width
+> so a 2 s card in a 60 s reel is still readable — read-only, see the D7 note below); per-scene
+> windows off the row's OWN `startMs`/`durationMs` rather than `index x clipSeconds`; the four kinds
+> badged and, more importantly, STATUSED per kind — a card said "Clip: not requested yet" forever
+> about a picture nobody will ever request. The vault picker (`media.setSceneAsset`) makes an
+> `uploaded_video` scene renderable: video-only, tenant-checked and bytes-checked where the refusal
+> is FREE, because an upload buys nothing and would otherwise clear the money gate and die in the
+> sandbox. The stale refusal copy is gone (`only VIDEO and IMAGE blocks` named a `ShotType` that
+> never existed), and every refusal now speaks the deck's own noun. `renderSummary.blockCount` →
+> `sceneCount`, widened not migrated, with `media.reel` reading `sceneCount ?? blockCount` so reels
+> rendered before this wave still report their length; the `media.rendered` audit key follows, and
+> the redaction allow-list carries BOTH names because the log is insert-only. `byPlan` also gained
+> the per-scene narration ceiling (the TAKE's window, not the deck's longest scene — the loose
+> number let the canvas accept a line the money gate then refused) and `clipStale`/`voiceStale`,
+> which is the surface obligation wave 6 part 1 left behind. **The canvas's derivations and every
+> sentence it prints now live in `mediaCanvasView.ts`** and are tested by CALLING them: `apps/web`'s
+> runner is `.ts`-only and DOM-less, so anything left in the `.tsx` can only be asserted as source
+> text — the `green-tests-over-broken-capability` shape. 24 web + 1672 backend green.)
+
 > Last verified: 2026-08-14 (20.2 wave 6, part 1 — **a partial buy can finally render, and the
 > scene arm of `regenerateBlock` opens.** A defect older than this phase: `regenerateBlock` buys ONE
 > scene into a NEW batch, and `batchToRender` read its inputs off that batch alone, so every index
@@ -1452,11 +1472,25 @@ A row hand-patched to `rendered` therefore surfaces no reel.
 `renderSummary` (`{ durationS, blockCount, gates }`) exists for that reason and one more: it means
 the sidecar is parsed once per RENDER instead of once per canvas subscription tick.
 
-### The free editor: five affordances, floor AND ceiling
+### The free editor: six affordances, floor AND ceiling
 
-`editBlockPrompt` · `editBlockNarration` · `regenerateBlock` · `reorderBlocks` · `deleteBlock`.
-**Nothing else.** No timeline, transitions, filters, layers, masking, music, or client-side
-rendering. If a reviewer asks for one, it is a deferred idea and not a small addition.
+`editBlockPrompt` · `editBlockNarration` · `regenerateBlock` · `reorderBlocks` · `deleteBlock` ·
+`setSceneAsset` (20.2 wave 6). **Nothing else.** No transitions, filters, layers, masking, music,
+or client-side rendering. If a reviewer asks for one, it is a deferred idea and not a small
+addition.
+
+`setSceneAsset` is the sixth, and it is the same argument `editBlockNarration` won: an
+`uploaded_video` scene with no document named is refused by `hasAssetSource`, and **nothing else in
+the product can name one**. It is an editor control, not a second ingest surface — the file arrives
+through the vault's existing upload path and this only points at it, which is what §7's open
+question 1 was answered with. It re-checks everything the render will demand (the doc exists, is
+this tenant's, has bytes, is `video/*`) because an upload BUYS NOTHING: no money gate would refuse
+a PDF, so without this check the deck clears payment and dies in the sandbox.
+
+**On "no timeline".** D7 banned a timeline EDITOR — drag handles, trims, ripple. The read-only
+ribbon wave 6 draws is a picture of lengths the deck already declares, and it exists because the
+scene contract made those lengths differ: under D8 every window was the same size, so there was
+nothing to see. Nothing on it is draggable.
 
 `editBlockNarration` is **the UI half of the pre-payment guard, not scope creep**: without it,
 `narration_too_long` from the rail is a dead end — a user told *"block 4's line is 186 characters"*
@@ -1633,11 +1667,18 @@ drop to 480p; `narration_too_long` names the block, its character count and the 
 Edit-narration control is on that same tile**, because a refusal whose cure is three clicks away is
 a dead end.
 
-### Exactly five editor affordances, labelled by what they cost
+### Exactly six editor affordances, labelled by what they cost
 
 Free: **edit prompt**, **edit narration**, **move up / move down** (one `reorderBlocks` call with
-the whole new order), **delete block**. Paid: **regenerate this block**, which states in words that
-it buys a new clip and voice take AND rebuilds the reel.
+the whole new order), **delete scene**, and **choose your footage** (20.2 wave 6, `uploaded_video`
+scenes only). Paid: **regenerate this scene**, which states in words WHAT it buys — a clip, a
+still, a voice take, or a pair — and that the other scenes are kept.
+
+**A control that cannot spend must not look like one.** Three of the four kinds buy nothing on
+their own, so a silent card or a silent upload shows no paid row at all: the tile says "nothing to
+buy for this scene — edit it above and generate the reel" rather than sending a click to a mutation
+that would answer `nothing_to_regenerate`. The refusal still exists for the callers the tile does
+not cover; the tile simply knows the answer already.
 
 The narration editor carries a **live character count against the block's own `maxChars`**, turning
 `--held-text` amber past the limit — `--held-text`, never `--held`, which is a fill token and fails
@@ -1645,9 +1686,9 @@ contrast as text (BRAND §6). **The count itself is the signal**, so the state i
 colour alone. This control is the UI half of the pre-payment guard: `jobEstimate` refuses an
 over-length deck before a cent moves, and this is where the user fixes it.
 
-**Nothing beyond those five exists** — no timeline, no transitions, no filters, no layers, no
-masking, no music controls, no client-side rendering. That is D7's ceiling and the canvas is
-deliberately at it.
+**Nothing beyond those six exists** — no transitions, no filters, no layers, no masking, no music
+controls, no client-side rendering, and no timeline EDITOR (wave 6's ribbon is read-only; see the
+free-editor section above). That is D7's ceiling and the canvas is deliberately at it.
 
 ### The 18-07 Output-card collision, resolved
 

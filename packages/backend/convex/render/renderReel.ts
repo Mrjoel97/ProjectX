@@ -345,14 +345,14 @@ export const recordRender = internalMutation({
         renderStorageId: v.id("_storage"),
         sidecarStorageId: v.id("_storage"),
         sidecarHash: v.string(),
-        blockCount: v.number(),
+        sceneCount: v.number(),
         renderMs: v.number(),
         gatesPassed: v.number(),
         /** The sidecar's own facts, for the canvas (20-09). Parsed ONCE, here, because a query
          *  cannot read a blob — `ctx.storage` in a query is a `StorageReader`. */
         summary: v.object({
           durationS: v.number(),
-          blockCount: v.number(),
+          sceneCount: v.number(),
           gates: v.array(v.string()),
         }),
       }),
@@ -403,7 +403,10 @@ export const recordRender = internalMutation({
       payload: {
         batchId: a.batchId,
         planId: a.planId,
-        blockCount: a.result.blockCount,
+        // `sceneCount` from wave 6 on. The audit log is append-only (§3), so rows written before
+        // this carry `blockCount` for the same number and a reader must know both names — renaming
+        // forward is the only rename an insert-only log allows.
+        sceneCount: a.result.sceneCount,
         renderMs: a.result.renderMs,
         sidecarHash: a.result.sidecarHash,
         gatesPassed: a.result.gatesPassed,
@@ -620,13 +623,13 @@ export const renderReel = internalAction({
         renderStorageId: outcome.mp4StorageId as Id<"_storage">,
         sidecarStorageId,
         sidecarHash: await contentHash(raw),
-        blockCount: reparsed.value.sceneCount,
+        sceneCount: reparsed.value.sceneCount,
         renderMs: outcome.renderMs,
         gatesPassed: reparsed.value.gates.length,
         // From the RE-VALIDATED parse, never from what the route claimed.
         summary: {
           durationS: reparsed.value.totalDurationS,
-          blockCount: reparsed.value.sceneCount,
+          sceneCount: reparsed.value.sceneCount,
           gates: [...reparsed.value.gates],
         },
       },

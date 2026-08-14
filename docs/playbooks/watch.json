@@ -239,6 +239,7 @@
     "packages/backend/convex/render/",
     "apps/web/app/api/media/",
     "apps/web/app/(app)/dashboard/workspace/MediaCanvas.tsx",
+    "apps/web/app/(app)/dashboard/workspace/mediaCanvasView.ts",
     "apps/web/scripts/bake-sandbox-snapshot.mjs"
   ],
   "contacts-crm.md": [

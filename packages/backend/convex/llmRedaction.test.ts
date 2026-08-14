@@ -1249,10 +1249,14 @@ const MEDIA_AUDIT_ALLOWED = new Set([
   "failureReason",
   // 20-15, the render terminal. All four are counts or hashes: `renderMs` is a duration,
   // `gatesPassed` is the LENGTH of the sidecar's gate list (never the gate names), `sidecarHash`
-  // is a content hash and `blockCount` is a count. No filename, no narration, no URL, no stderr.
+  // is a content hash and `sceneCount` is a count. No filename, no narration, no URL, no stderr.
   "renderMs",
   "gatesPassed",
   "sidecarHash",
+  // 20.2 wave 6 renamed this key. The log is insert-only (§3), so rows written before the wave
+  // still carry `blockCount` and it stays on the list — an allow-list describes what may appear
+  // in the table, not only what the current source writes.
+  "sceneCount",
   "blockCount",
   // 20-16's render DEAD LETTER. A code, not ffmpeg's prose — `reasonCodeFor` is the only thing
   // that ever reads stderr and it returns a member of a closed union.

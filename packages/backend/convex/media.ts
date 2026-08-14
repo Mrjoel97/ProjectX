@@ -1905,31 +1905,68 @@ export const byPlan = tenantQuery({
       .withIndex("by_plan", (q) => q.eq("tenantId", ctx.tenantId).eq("planId", planId))
       .collect();
 
-    const maxChars =
+    const deckMaxChars =
       plan.clipSeconds === undefined ? MAX_CHARS_PER_BLOCK : maxCharsFor(plan.clipSeconds);
-    return (plan.shots ?? []).map((shot) => {
-      // The job's OWN blockIndex is authoritative, never the array position — see the reorder
-      // ceiling on `reorderBlocks`.
-      const mine = rows.filter((r) => r.blockIndex === shot.index);
-      return {
-        blockIndex: shot.index,
-        // DISPLAY ONLY, and the one place the two closed sets are allowed to meet. A block row
-        // carries `type`, a 20.2 scene row carries `visual`, and a tile has to label whichever it
-        // was handed. Collapsing them is safe HERE precisely because it is safe nowhere else:
-        // `deckOf` keeps them apart on the money path, where reading a scene as a block would
-        // price it at the wrong duration. This is a projection for a caption.
-        type: shot.type ?? shot.visual ?? "",
-        description: shot.description,
-        overlay: shot.overlay ?? null,
-        prompt: shot.prompt,
-        narration: shot.narration,
-        narrationChars: shot.narration.length,
-        maxChars,
-        overCharLimit: shot.narration.length > maxChars,
-        clip: faceOf(mine.find((r) => r.kind === "video")),
-        voice: faceOf(mine.find((r) => r.kind === "tts")),
-      };
-    });
+    // 20.2 wave 6 — on a SCENE deck the narration ceiling is the TAKE's window, not the deck's
+    // longest scene. `clipSeconds` on a scene row is the longest scene (`persistSceneDeck` says
+    // so), which is loose in both directions: it lets the canvas accept a line the money gate will
+    // refuse, and it under-states the room a line before a silent scene actually has. The canvas
+    // has to show the number the reserve will apply, or the count beside the textarea is a guess.
+    const sceneDeck = sceneDeckOf(plan);
+    return await Promise.all(
+      (plan.shots ?? []).map(async (shot, position) => {
+        // The job's OWN blockIndex is authoritative, never the array position — see the reorder
+        // ceiling on `reorderBlocks`.
+        const mine = rows.filter((r) => r.blockIndex === shot.index);
+        const clipRow = mine.find((r) => r.kind === "video" || r.kind === "image");
+        const voiceRow = mine.find((r) => r.kind === "tts");
+        const maxChars = sceneDeck
+          ? maxCharsFor(narrationCeilingSeconds(sceneDeck.scenes, position))
+          : deckMaxChars;
+        return {
+          blockIndex: shot.index,
+          // DISPLAY ONLY, and the one place the two closed sets are allowed to meet. A block row
+          // carries `type`, a 20.2 scene row carries `visual`, and a tile has to label whichever it
+          // was handed. Collapsing them is safe HERE precisely because it is safe nowhere else:
+          // `deckOf` keeps them apart on the money path, where reading a scene as a block would
+          // price it at the wrong duration. This is a projection for a caption.
+          type: shot.type ?? shot.visual ?? "",
+          /** 20.2 wave 6, and NOT the same field as `type` above. The canvas branches on the KIND
+           *  — a card has no clip to wait for, an upload needs a vault document, a still is panned
+           *  rather than generated — so it needs the closed set itself, not a label. `null` on a
+           *  block row, which is what makes "is this a scene deck?" answerable on the client. */
+          visual: shot.visual ?? null,
+          /** THIS scene's own place on the timeline. The canvas sizes its tiles from them, so they
+           *  come off the row rather than being re-derived from an index and a deck-wide length —
+           *  that arithmetic is the uniform contract this phase removed. */
+          startMs: shot.windowStartMs,
+          durationMs: shot.seconds * 1000,
+          /** The vault document an `uploaded_video` names, so the picker can show what is chosen
+           *  and the tile can say when nothing is. A REF, never bytes and never a URL. */
+          asset: shot.asset ?? null,
+          description: shot.description,
+          overlay: shot.overlay ?? null,
+          prompt: shot.prompt,
+          narration: shot.narration,
+          narrationChars: shot.narration.length,
+          maxChars,
+          overCharLimit: shot.narration.length > maxChars,
+          clip: faceOf(clipRow),
+          voice: faceOf(voiceRow),
+          /** **BOUGHT FOR TEXT THAT HAS SINCE CHANGED.** A landed asset survives a free edit — the
+           *  render reuses it, deliberately, because it is the only footage that exists (see
+           *  `batchToRender`'s `stale_inputs` note). That makes it the one thing about a reel a
+           *  user cannot otherwise see: the tile says "your line changed since this take was
+           *  recorded", and the cure is the regenerate control right beside it. The comparison is
+           *  the job's own `promptHash` against the shot's current text — the same hash the
+           *  reserve wrote, so it cannot drift from what was actually bought. */
+          clipStale: clipRow ? clipRow.promptHash !== (await contentHash(shot.prompt)) : false,
+          voiceStale: voiceRow
+            ? voiceRow.promptHash !== (await contentHash(shot.narration))
+            : false,
+        };
+      }),
+    );
   },
 });
 
@@ -1990,7 +2027,7 @@ export const reel = tenantQuery({
       status: null as string | null,
       url: null as string | null,
       durationS: null as number | null,
-      blockCount: null as number | null,
+      sceneCount: null as number | null,
       gates: [] as string[],
       reason: null as string | null,
     };
@@ -2018,7 +2055,10 @@ export const reel = tenantQuery({
       ...base,
       url: await ctx.storage.getUrl(plan.renderStorageId),
       durationS: plan.renderSummary.durationS,
-      blockCount: plan.renderSummary.blockCount,
+      // One name on the wire, both names in the store: a reel rendered before wave 6 wrote
+      // `blockCount` for the same count, and it is a published artifact rather than something to
+      // migrate. The canvas says "scenes" either way.
+      sceneCount: plan.renderSummary.sceneCount ?? plan.renderSummary.blockCount ?? null,
       gates: [...plan.renderSummary.gates],
     };
   },
@@ -2557,8 +2597,17 @@ export const editBlockNarration = tenantMutation({
     if (!shots.some((s) => s.index === blockIndex))
       return { ok: false as const, reason: "no_block" };
 
-    const maxChars =
-      plan.clipSeconds === undefined ? MAX_CHARS_PER_BLOCK : maxCharsFor(plan.clipSeconds);
+    // The SAME ceiling the reserve will apply — on a scene deck that is the take's window
+    // (`narrationCeilingSeconds`), not the deck's longest scene. Using the loose deck-wide number
+    // here would let this mutation accept a line `reserveSceneJobInner` then refuses as
+    // `narration_too_long`, which is precisely the disagreement this function exists to prevent.
+    const sceneDeck = sceneDeckOf(plan);
+    const position = (plan.shots ?? []).findIndex((s) => s.index === blockIndex);
+    const maxChars = sceneDeck
+      ? maxCharsFor(narrationCeilingSeconds(sceneDeck.scenes, position))
+      : plan.clipSeconds === undefined
+        ? MAX_CHARS_PER_BLOCK
+        : maxCharsFor(plan.clipSeconds);
     if (narration.length > maxChars) {
       return {
         ok: false as const,
@@ -2571,6 +2620,57 @@ export const editBlockNarration = tenantMutation({
       ctx,
       planId,
       shots.map((s) => (s.index === blockIndex ? { ...s, narration } : s)),
+    );
+    return { ok: true as const };
+  },
+});
+
+/**
+ * Choose the vault document an `uploaded_video` scene renders (20.2 wave 6) — the sixth editor
+ * affordance, and the only one this phase adds.
+ *
+ * **It is an editor control, not a new ingest surface.** §7's open question 1 was answered by the
+ * contract wave 1 shipped: `Scene.asset` has one member, `{ source: "vault", docId }`, so the file
+ * arrives through the vault's existing upload path and this mutation only POINTS at it. A direct
+ * upload from the canvas would be a second `source` member plus its own ingest, which is a decision
+ * rather than a patch.
+ *
+ * **Everything the render will demand is checked HERE, where the refusal is free.** The doc must
+ * exist, be this tenant's, have bytes, and be a video — the same narrowing `batchToRender` and
+ * `resolveRenderAsset` apply. Letting a PDF be chosen would clear the money gate (an upload buys
+ * nothing, so nothing refuses) and then hard-error in the sandbox with the deck already paid for.
+ *
+ * `vaultDocId` is a plain string normalised here, not a `v.id`: it is the same id the vault surface
+ * hands the browser, and a malformed one must land on the same fail-closed return as a foreign one
+ * rather than throwing a different error and distinguishing the two.
+ */
+export const setSceneAsset = tenantMutation({
+  args: { planId: v.id("plans"), blockIndex: v.number(), vaultDocId: v.string() },
+  handler: async (ctx, { planId, blockIndex, vaultDocId }) => {
+    const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
+    const shots = plan.shots ?? [];
+    const shot = shots.find((s) => s.index === blockIndex);
+    if (!shot) return { ok: false as const, reason: "no_block" as const };
+    // Only the kind that HAS an asset. Writing one onto a generated scene would be a field the
+    // renderer ignores and the canvas then displays — a lie with no consumer.
+    if (shot.visual !== "uploaded_video") {
+      return { ok: false as const, reason: "not_an_upload" as const };
+    }
+    const docId = ctx.db.normalizeId("vaultDocuments", vaultDocId);
+    if (!docId) return { ok: false as const, reason: "no_document" as const };
+    const doc = await ctx.db.get(docId);
+    if (!doc || doc.tenantId !== ctx.tenantId || !doc.storageId) {
+      return { ok: false as const, reason: "no_document" as const };
+    }
+    if (!doc.mimeType.startsWith("video/")) {
+      return { ok: false as const, reason: "not_a_video" as const };
+    }
+    await patchShots(
+      ctx,
+      planId,
+      shots.map((s) =>
+        s.index === blockIndex ? { ...s, asset: { source: "vault" as const, docId } } : s,
+      ),
     );
     return { ok: true as const };
   },
