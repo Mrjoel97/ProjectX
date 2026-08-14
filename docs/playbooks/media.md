@@ -10,6 +10,14 @@
 > for already-submitted historical jobs. Older provider-specific sections below describe the
 > superseded implementation unless explicitly marked current. See ADR-017.
 
+> Last verified: 2026-08-14 (20.2 wave 4 follow-up — **the captions module was corrected for the
+> scene timeline BEFORE wave 5 removes the refusals hiding the defect.** Take offsets are now keyed
+> by narrated ordinal (a silent scene is a hole, not an index), and the clamp bound is the next
+> take's `speechAbsS` rather than `windowStartS + clip_seconds`. Both were observed RED first — the
+> misassignment put a caption 10.5s from where it belonged. Risk 5 is CLOSED by measurement:
+> production holds 257 `plans` rows, fully scanned, and **zero** carry a `sidecarStorageId`, so
+> wave 5 may hard-reject the v1 sidecar shape with no migration and no re-render decision.)
+
 > Last verified: 2026-08-14 (20.2 wave 4 — **narration moved to a MASTER AUDIO TIMELINE and the
 > per-scene speech band is deleted.** Every scene is built as a silent picture, the pictures are
 > concatenated once, and every voice take plus every clip's diegetic bed is placed at its ABSOLUTE
@@ -1485,9 +1493,33 @@ after it. `packages/core/src/captions.ts` owns this, consumes the VALIDATED `Ass
 a raw sidecar), and its first test asserts the identity directly: a word at the take's very first
 speech instant lands EXACTLY at `speechAbsS`.
 
-A rebased time outside its own block's window is **CLAMPED and flagged**, never allowed through — a
-bleeding word is a caption rendered over the next block's scene, which reads as a caption for the
+A rebased time outside `[windowStartS, boundS]` is **CLAMPED and flagged**, never allowed through —
+a bleeding word is a caption rendered over the next take's line, which reads as a caption for the
 wrong shot rather than as a timing bug.
+
+#### The two keys, both corrected for the scene timeline (20.2, before wave 5)
+
+Neither of these was reachable in production — `unrenderable_block`, the minimum-narration check and
+`assembly.ts`'s `speech_exceeds_window` refusal each held one shut. **Wave 5 removes all three**, so
+they were fixed first. That is the same ordering rule the plan already applies to the money leak.
+
+**1. The take offsets are keyed by NARRATED ORDINAL, never by `blockIndex`.** `concatWavTakes`
+emits one offset per take it was handed, positionally, and `media.ts:1375-1378` hands it the
+succeeded `tts` rows **sorted by `blockIndex`**. Those agree with `blockIndex` only while every
+scene owns a take. Since wave 3 a scene may be deliberately silent — the sidecar says so with
+`speech_dur_s: 0` — and a silent scene is a **hole**: reading `offsetsS[blockIndex]` past one hands
+every later scene the wrong take and drops the last one off the end of the array. On a 3-scene reel
+with a silent card the final line landed **10.5s early, against the card's anchor**. The invariant
+wave 5 must preserve: *a scene has a `tts` row if and only if its sidecar entry has
+`speech_dur_s > 0`.*
+
+**2. The clamp bound is the NEXT take's `speechAbsS` (or `total_duration_s` for the last), not
+`windowStartS + clip_seconds`.** Since wave 4 a line may legitimately run past its own scene, so a
+scene-width bound is wrong in *both* directions: it cuts a correct line off at the boundary (the
+live uniform path — a 10.4s take in a 10s block loses its last 0.4s and gets flagged `clamped`),
+and on a mixed deck `clip_seconds` is the LONGEST scene, which is loose enough to let a drifting
+word sail over the next take. The next take's start is the bound `assemble_final.sh` itself
+enforces on the audio, so the captions and the mix cannot disagree about where a line ends.
 
 ### ONE request, which forced a real wav concat
 
