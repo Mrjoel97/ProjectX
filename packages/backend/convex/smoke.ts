@@ -681,6 +681,34 @@ export const createdDocCountForThread = internalQuery({
   },
 });
 
+/**
+ * 20-12 (MEDIA-01): the eval harness's `mediaDispatchCount` read — how many times the agent CALLED
+ * `dispatchMedia` on this thread.
+ *
+ * Read from `agentSteps`, NOT from the plan row, and that is the whole design. `plans.by_thread` is
+ * `.unique()` and `stageMediaPlan` RECYCLES that single row, so plan state can say "a media plan
+ * exists" and can never say how many times the tool was called — a second dispatch is invisible
+ * there. A step row is written per CALL, so this is the only source that can fail a duplicate.
+ *
+ * It reads the tool-scoped index and filters by thread in code: `by_tenant_tool_startedAt` eq's
+ * both `tenantId` and `tool`, so the scan is this tenant's dispatchMedia steps and nothing else.
+ * There is deliberately no `by_thread` index on `agentSteps` (see schema).
+ *
+ * The failure it exists to catch is the agent ANSWERING IN PROSE — "I'll put a reel together for
+ * you" — while never calling the tool, which no reply assertion can tell apart from success.
+ */
+export const mediaDispatchCountForThread = internalQuery({
+  args: { tenantId: v.string(), threadId: v.string() },
+  handler: async (ctx, { tenantId, threadId }): Promise<number> =>
+    await ctx.db
+      .query("agentSteps")
+      .withIndex("by_tenant_tool_startedAt", (q) =>
+        q.eq("tenantId", tenantId).eq("tool", "dispatchMedia"),
+      )
+      .collect()
+      .then((rows) => rows.filter((r) => r.threadId === threadId).length),
+});
+
 /** Phase 16: the eval harness's `researchDocPresent` read. Read the persisted web-research table
  * row, not the memo plan: a prose answer or a staged card must not pass a research fixture. */
 export const researchCountForThread = internalQuery({

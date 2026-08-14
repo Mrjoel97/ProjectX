@@ -1,5 +1,26 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-14 (20-12 offline half + **THE `cockpit-agent` CANDIDATE STREAM,
+> RECONCILED.** Read off the live registry, not assumed: active is **v18** (carrying eval evidence)
+> while **v16, v19, v20 and v21 sit parked as candidates with none**. The stream is a LINEAR chain,
+> not divergent drift — v19 adds `## Financial figures` (the "number they SAID, never one you worked
+> out" provenance rule), v20 rewrites that same section (a stated figure is always recorded; CAC is
+> not one of `stageFinanceWrite`'s five, so it routes to `recordScorecardAnswer("financials.cac")`),
+> and v21 is the identity rewrite (`Business Cockpit (v2)` + `## Route by intent, not by habit`).
+> **v21 is byte-identical to the repo `.md`** (sha 9575d01b), and nothing was lost along the chain:
+> v21 still carries `## Financial figures`, `recordScorecardAnswer` and `financials.cac`. v16 is an
+> orphan BELOW the active version and contributes no heading v21 lacks. So there is exactly ONE body
+> worth gating and it is the newest; 16/19/20 are dead intermediates.
+> **They cannot be archived, and that is by design.** `archiveSkill` archives the ACTIVE row only,
+> and there is exactly ONE `patch(..., {status:"active"})` and one archiving patch in `skills.ts` —
+> `skills.test.ts` COUNTS them, because "a second one is a second gate". A candidate is an immutable
+> record of what was proposed; adding a candidate-archiving mutation would weaken a counted
+> invariant to satisfy a cosmetic preference. They stay parked.
+> **The owed fixture landed with the body it certifies:** 20-12's `cockpit-agent` edit ships with
+> fixtures 38 / 38b and the `mediaDispatchCount` observable, per the "teach a tool, owe a fixture"
+> rule — so the candidate about to be seeded is gated by a suite that can actually fail on its
+> headline claim.)
+
 > Last verified: 2026-08-14 (20.2 wave 8 — **`media-director` v2 rewrites its body for the scene
 > contract, and it costs NOTHING to ship, which is the point of the UNGATED row.** `seedSkills`
 > sees a changed body on an ungated name and inserts `maxVersion + 1` as `active`: no candidate, no

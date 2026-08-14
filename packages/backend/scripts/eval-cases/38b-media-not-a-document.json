@@ -1,0 +1,15 @@
+{
+  "id": "38b-media-not-a-document",
+  "description": "The INVERSE of 38, and it is not symmetry for its own sake — it is a live defect. A real conversation asked for a slide deck and the agent invoked `dispatchMedia`, the short-form VIDEO specialist, on three consecutive turns. The destructive half is fixed in code (`stageMediaPlan`'s `dispatch_in_flight` / `image_proposal_pending` interlocks, commit ceb21b6) so a retry can no longer discard a staged proposal; what code cannot fix is the agent reaching for the video tool for a document in the first place, which is a body rule. Turn 1 asks for a deck the user READS, in the language they actually used, and never names either tool. The pairing is the assertion: `createdDocCount: 1` proves the agent did the right thing and `mediaDispatchCount: 0` proves it did not also do the wrong one. Neither half stands alone — a bare zero passes on a turn where the agent did nothing at all, which is why `validateFixture` refuses an unpaired `mediaDispatchCount: 0`. `recipientCount: 0` and `attachmentCount: 0` keep the third wrong answer out too: a slide deck is not an email and not an attachment on one.",
+  "turns": [
+    "Can you build me a slide deck walking through the benchmark-MD2 pricing change? Six or seven slides, something I can read through before the call."
+  ],
+  "expect": {
+    "mediaDispatchCount": 0,
+    "createdDocCount": 1,
+    "statusAtMost": "collecting",
+    "recipientCount": 0,
+    "attachmentCount": 0
+  },
+  "needles": ["benchmark-MD2", "pricing change"]
+}

@@ -1667,8 +1667,11 @@ export function buildCockpitTools(
   const dispatchMediaTool = {
     dispatchMedia: tool({
       description:
-        "Propose a short-form video reel — a script, an art direction and a deck of blocks with " +
-        "a narration line each. The media director runs in the background and the proposal " +
+        "Propose a short-form video reel — a script, an art direction and a deck of scenes " +
+        "totalling 15, 30 or 60 seconds, each with its own length, its own kind of picture and, " +
+        "where it speaks, a narration line. Use it for a VIDEO; a slide deck, one-pager or report " +
+        "the user reads is createDocument. The media director runs in the background and the " +
+        "proposal " +
         "arrives as a plan card in the workspace; you do not get it in this turn. The proposal " +
         "itself is free. Generating the clips, recording the voiceover and rendering the finished " +
         "video cost real money and happen only after the user approves the card — a separate " +

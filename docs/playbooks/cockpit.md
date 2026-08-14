@@ -1,5 +1,21 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-14 (20-12 offline half — **the body learns to pick the video tool, and to
+> stop picking it for documents.** A new `## Creating images and video` section teaches
+> `dispatchMedia` against the CURRENT contract: the proposal arrives later as a workspace card (not
+> in the turn), it is a scene deck of 15/30/60 seconds mixing four picture kinds, the proposal is
+> FREE and the reel is not, and Generate is a click only the user can make. The plan's draft wording
+> ("the shipped 5/10-second-block reel") was stale twice over and was NOT used. Three bullets also
+> land in `## Creating a document or a post`, all three from one real transcript: a slide deck /
+> one-pager / report is `createDocument` and never `dispatchMedia` (the agent invoked the VIDEO
+> specialist on three consecutive turns for a deck); `createDocument` writes markdown plus a PDF and
+> there is no PowerPoint output to report having produced; and a created document appears in the
+> WORKSPACE as well as the vault, so "I cannot open files" is false while the card is on screen.
+> The `dispatchMedia` tool DESCRIPTION in `llm.ts` was corrected in the same commit — it still said
+> "a deck of blocks" — because a tool result only reaches the model AFTER it has chosen the tool.
+> Body + LF mirror regenerated together; mirror drift test green. NOT YET LIVE: this is a gated
+> candidate awaiting its eval gate and owner activation.)
+
 > Last verified: 2026-08-14 (20.2 wave 8, **THE APPROVE ARM OPENS ON SCENE DECKS** — scoped to
 > `executePlan`'s media pre-step and `dispatch.persistStoryboard`'s comment. The arm refused a scene
 > deck by name (`scene_render_not_ready`) from wave 2 until now, because the specialist could not
