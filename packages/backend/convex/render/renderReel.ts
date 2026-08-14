@@ -74,7 +74,12 @@ type RenderInputs = {
    *  inside the script, because each of the three is a cheaper failure than the one after it. */
   targetSeconds: number;
   scenes: Array<{ kind: "video" | "image" | "card"; seconds: number }>;
-  inputs: Array<{ name: string; jobId: Id<"mediaJobs"> }>;
+  /** An OPAQUE ref the blob route resolves — a `mediaJobs` row for anything that was bought, or a
+   *  `vaultDocuments` row for an `uploaded_video` scene, whose bytes were already the tenant's.
+   *  `resolveRenderAsset` is the single place that knows which table an id belongs to; the runner
+   *  only ever appends it to our own origin. Still called `jobId` on the wire — the route's guard
+   *  is "no path characters", not "is a valid id of table X". */
+  inputs: Array<{ name: string; jobId: Id<"mediaJobs"> | Id<"vaultDocuments"> }>;
   /** Text cards: drawn from the deck's own words, with no job and no bytes in storage. */
   cards: Array<{ name: string; text: string }>;
 };
@@ -170,6 +175,27 @@ export const batchToRender = internalQuery({
       } else if (kind === "image") {
         if (!slot?.image) return { ok: false, reason: "incomplete_blocks" };
         inputs.push({ name: renderInputName("image", i), jobId: slot.image._id });
+      } else if (shot.visual === "uploaded_video") {
+        // THE VAULT BRIDGE (20.2 wave 5). An upload buys nothing, so it has no `mediaJobs` row and
+        // no job id — its bytes are already the tenant's, sitting on a `vaultDocuments` row.
+        //
+        // **`asset.docId` IS MODEL-AUTHORED TEXT.** It reaches this line off `plans.shots`, which
+        // the specialist wrote, so it is a caller-supplied id in every sense that matters — and
+        // the id it is compared against downstream is opaque. The tenant check is therefore HERE,
+        // on the row, and it is the whole containment: `normalizeId` fails closed for a malformed
+        // or foreign-table id, and a doc belonging to another tenant is refused before its id is
+        // ever handed to the runner. Without this line a deck could name any vault document in
+        // the deployment and have the render fetch it.
+        const docId = ctx.db.normalizeId("vaultDocuments", shot.asset?.docId ?? "");
+        if (!docId) return { ok: false, reason: "incomplete_blocks" };
+        const doc = await ctx.db.get(docId);
+        if (!doc || doc.tenantId !== a.tenantId || !doc.storageId) {
+          return { ok: false, reason: "incomplete_blocks" };
+        }
+        // A vault document that is not a video has no business in a reel, and refusing it here is
+        // also what keeps the blob route's vault branch narrow — see `resolveRenderAsset`.
+        if (!doc.mimeType.startsWith("video/")) return { ok: false, reason: "incomplete_blocks" };
+        inputs.push({ name: renderInputName("video", i), jobId: docId });
       } else {
         if (!slot?.video) return { ok: false, reason: "incomplete_blocks" };
         inputs.push({ name: renderInputName("video", i), jobId: slot.video._id });
@@ -227,6 +253,22 @@ export const resolveRenderAsset = internalQuery({
         assetStorageId: row.assetStorageId,
         mimeType: row.mimeType ?? "application/octet-stream",
       };
+    }
+    // …or a VAULT DOCUMENT (20.2 wave 5), for an `uploaded_video` scene. Those bytes are already
+    // the tenant's and were never bought, so there is no `mediaJobs` row to serve them from.
+    //
+    // **NARROWED TO VIDEO, deliberately.** This branch widens what a compromised runner could
+    // read, and the vault is where a tenant's briefs, contracts and business documents live —
+    // serving "any vault document by id" would be a far larger capability than a render needs.
+    // A reel input is a video, so that is the only thing this serves. The TENANT check is not here
+    // and must not be: this query takes a raw id with no tenant to check it against, exactly as
+    // the `mediaJobs` branch does. `batchToRender` is the boundary, and it verifies the doc's
+    // tenant before the id ever reaches the runner.
+    const docId = ctx.db.normalizeId("vaultDocuments", raw);
+    if (docId) {
+      const doc = await ctx.db.get(docId);
+      if (!doc?.storageId || !doc.mimeType.startsWith("video/")) return null;
+      return { assetStorageId: doc.storageId, mimeType: doc.mimeType };
     }
     // …or the PUBLISHED REEL itself (plan 20-17). The caption burn's input is `final.mp4`, which
     // lives on the plan row rather than on a `mediaJobs` row, so the same route serves it from the

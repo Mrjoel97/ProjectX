@@ -461,11 +461,26 @@ const PAID_VISUAL = {
 
 export const isPaidScene = (s: Scene): boolean => PAID_VISUAL[s.visual];
 
-/** Can this scene produce pixels at all? The narrowed replacement for `isPaidBlock`'s use as a
- *  renderability proxy (`media.ts:228`). Unpaid no longer implies unrenderable — only a missing
- *  upload does. */
-export const hasAssetSource = (s: Scene): boolean =>
-  s.visual !== "uploaded_video" || s.asset !== undefined;
+/**
+ * Can this scene produce pixels at all? The narrowed replacement for `isPaidBlock`'s use as a
+ * renderability proxy (`media.ts:260`).
+ *
+ * **Unpaid no longer implies unrenderable** — that equivalence held only while the assembler had
+ * no `drawtext` and no still path, and it is what made a deck containing a text card impossible to
+ * buy. What remains is the honest question: does this row name the thing its picture is built FROM?
+ *
+ *   * `uploaded_video` — the vault doc. Named, or there is no footage.
+ *   * `text_card` — the words. `drawtext` with nothing to draw is a black rectangle that passes
+ *     every downstream gate: the file decodes, the duration is right, the sidecar is well-formed.
+ *     Only the picture is missing, which is the failure `assemble_final.sh` refuses to ship by
+ *     probing for a font rather than trusting one. Same reasoning, one step earlier and for free.
+ *   * `generated_video` / `animated_image` — the prompt, which the parser already requires.
+ */
+export const hasAssetSource = (s: Scene): boolean => {
+  if (s.visual === "uploaded_video") return s.asset !== undefined;
+  if (s.visual === "text_card") return (s.overlay ?? "").trim() !== "";
+  return true;
+};
 
 /** Total SUBMITTED characters across the reel — the tts MediaSpec's input, as `narrationChars` is
  *  for blocks. Silent scenes contribute nothing. */

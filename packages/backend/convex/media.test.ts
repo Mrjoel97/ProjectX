@@ -5,7 +5,7 @@
 // Every assertion here is $0: nothing in this file calls fal, OpenAI or Vercel. The `node`
 // environment matches the research.test.ts / dispatch.test.ts harness idiom — convex-test's lazy
 // module loader pulls every convex module, and some of them are "use node".
-import type { Block, ShotType } from "@pikar/core/storyboard";
+import type { Block, Scene, ShotType } from "@pikar/core/storyboard";
 import { maxCharsFor, minCharsFor } from "@pikar/core/storyboard";
 import {
   chooseMediaBatch,
@@ -30,7 +30,13 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { hmacHex } from "./gmailAuth";
 import { DEPLOYMENT_MEDIA_BUDGET_CENTS, MEDIA_DAILY_BUDGET_CENTS } from "./guardrails";
 import { contentHash } from "./lib/hash";
-import { buildSubmitBody, reserveJobInner, type SubmittableSpec, submitLine } from "./media";
+import {
+  buildSubmitBody,
+  reserveJobInner,
+  reserveSceneJobInner,
+  type SubmittableSpec,
+  submitLine,
+} from "./media";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
@@ -2448,6 +2454,367 @@ async function storeBlob(t: T, body: string | Uint8Array<ArrayBuffer>, type: str
   return await t.run(async (ctx) => await ctx.storage.store(new Blob([body], { type })));
 }
 
+// ── 20.2 wave 5: the SCENE money gate, and the narrowed renderability guard ─────────────────────
+
+/** A scene, with the fields a reserve actually reads. */
+const sc = (over: Partial<Scene> & { index: number; startMs: number; durationMs: number }): Scene =>
+  ({
+    visual: "generated_video",
+    description: "d",
+    narration: "x".repeat(40),
+    prompt: "p",
+    ...over,
+  }) as Scene;
+
+/** video:8 + image:6 + card:4 (silent) + upload:12 — one of every kind, summing to 30. */
+const MIXED_SCENES = (): Scene[] => [
+  sc({ index: 0, startMs: 0, durationMs: 8000, visual: "generated_video" }),
+  sc({ index: 1, startMs: 8000, durationMs: 6000, visual: "animated_image" }),
+  sc({
+    index: 2,
+    startMs: 14_000,
+    durationMs: 4000,
+    visual: "text_card",
+    overlay: "Gone.",
+    narration: "",
+  }),
+  sc({
+    index: 3,
+    startMs: 18_000,
+    durationMs: 12_000,
+    visual: "uploaded_video",
+    asset: { source: "vault", docId: "doc_placeholder" },
+  }),
+];
+
+const reserveScenes = (t: T, scenes: Scene[], over: Record<string, unknown> = {}) =>
+  t.run(async (ctx) => {
+    const planId = await ctx.db.insert("plans", {
+      tenantId: A,
+      threadId: "thread_scene",
+      status: "proposed",
+      createdAt: Date.now(),
+    });
+    return await reserveSceneJobInner(ctx, {
+      tenantId: A,
+      planId,
+      scenes,
+      targetDurationSeconds: 30,
+      withCaptions: false,
+      ...over,
+    });
+  });
+
+describe("reserveSceneJobInner: what a scene deck BUYS, kind by kind", () => {
+  test("one video line, one image line, and NOTHING for the card or the upload", async () => {
+    const t = harness();
+    const res = await reserveScenes(t, MIXED_SCENES());
+    expect(res.ok, `refused: ${res.ok ? "" : res.reason}`).toBe(true);
+    const inserted = await rows(t);
+    // The whole point of the phase, as a table: a 30s reel that would have been four generated
+    // clips is now one clip + one still + two free scenes.
+    expect(inserted.filter((r) => r.kind === "video")).toHaveLength(1);
+    expect(inserted.filter((r) => r.kind === "image")).toHaveLength(1);
+    // Three narrated scenes → three takes. The silent card buys none.
+    expect(
+      inserted
+        .filter((r) => r.kind === "tts")
+        .map((r) => r.blockIndex)
+        .sort(),
+    ).toEqual([0, 1, 3]);
+    expect(inserted.some((r) => r.blockIndex === 2)).toBe(false);
+  });
+
+  test("the video line is bought at ITS OWN length, not at a uniform clipSeconds", async () => {
+    const t = harness();
+    await reserveScenes(t, MIXED_SCENES());
+    const video = (await rows(t)).find((r) => r.kind === "video");
+    expect(video?.spec.kind === "video" && video.spec.seconds).toBe(8);
+  });
+
+  test("THE NARROWING, in the direction that costs money: a card with no words is refused", async () => {
+    // `unrenderable_block` used to mean "unpaid". It now means "does not name what its picture is
+    // built from" — and this is the case where the two disagree. A card with nothing to draw
+    // renders a black rectangle that passes every downstream gate.
+    const t = harness();
+    const scenes = MIXED_SCENES();
+    scenes[2] = sc({
+      index: 2,
+      startMs: 14_000,
+      durationMs: 4000,
+      visual: "text_card",
+      narration: "",
+    });
+    expect(await reserveScenes(t, scenes)).toEqual({ ok: false, reason: "unrenderable_block" });
+    expect(await rows(t)).toHaveLength(0); // and NOTHING was bought
+  });
+
+  test("…and an upload with no vault doc named, for the same reason", async () => {
+    const t = harness();
+    const scenes = MIXED_SCENES();
+    scenes[3] = sc({ index: 3, startMs: 18_000, durationMs: 12_000, visual: "uploaded_video" });
+    expect(await reserveScenes(t, scenes)).toEqual({ ok: false, reason: "unrenderable_block" });
+    expect(await rows(t)).toHaveLength(0);
+  });
+
+  test("…but a card WITH words is bought around, where the block contract refused the deck", async () => {
+    const t = harness();
+    const res = await reserveScenes(t, MIXED_SCENES());
+    expect(res.ok).toBe(true);
+  });
+
+  test("a deck that does not sum to its declared target is refused before a cent moves", async () => {
+    const t = harness();
+    const scenes = MIXED_SCENES();
+    scenes[0] = sc({ index: 0, startMs: 0, durationMs: 4000, visual: "generated_video" }); // 26s
+    expect(await reserveScenes(t, scenes)).toEqual({ ok: false, reason: "illegal_duration" });
+    expect(await rows(t)).toHaveLength(0);
+  });
+
+  test("a generated clip off the provider's duration GRID is refused", async () => {
+    const t = harness();
+    const scenes = [
+      sc({ index: 0, startMs: 0, durationMs: 7000, visual: "generated_video" }),
+      sc({ index: 1, startMs: 7000, durationMs: 23_000, visual: "animated_image" }),
+    ];
+    expect(await reserveScenes(t, scenes)).toEqual({ ok: false, reason: "illegal_duration" });
+  });
+
+  test("the narration ceiling is the TAKE's window — a silent scene lends its duration", async () => {
+    const t = harness();
+    // Scene 0 is 8s and is followed by a SILENT 6s scene, so its line has 14s to be spoken in.
+    // Under the old per-cell ceiling this length was a refusal.
+    const scenes = [
+      sc({
+        index: 0,
+        startMs: 0,
+        durationMs: 8000,
+        visual: "generated_video",
+        narration: "x".repeat(maxCharsFor(13)),
+      }),
+      sc({
+        index: 1,
+        startMs: 8000,
+        durationMs: 6000,
+        visual: "text_card",
+        overlay: "w",
+        narration: "",
+      }),
+      sc({ index: 2, startMs: 14_000, durationMs: 16_000, visual: "animated_image" }),
+    ];
+    const res = await reserveScenes(t, scenes);
+    expect(res.ok, `refused: ${res.ok ? "" : res.reason}`).toBe(true);
+  });
+
+  test("…and it is still a CEILING: a line past the next take's start is refused", async () => {
+    const t = harness();
+    const scenes = [
+      sc({
+        index: 0,
+        startMs: 0,
+        durationMs: 8000,
+        visual: "generated_video",
+        narration: "x".repeat(maxCharsFor(30) + 1),
+      }),
+      sc({ index: 1, startMs: 8000, durationMs: 22_000, visual: "animated_image" }),
+    ];
+    expect(await reserveScenes(t, scenes)).toEqual({ ok: false, reason: "narration_too_long" });
+    expect(await rows(t)).toHaveLength(0);
+  });
+
+  test("captions are priced off the DECLARED length, not blocks x clipSeconds", async () => {
+    const t = harness();
+    await reserveScenes(t, MIXED_SCENES(), { withCaptions: true });
+    const stt = (await rows(t)).find((r) => r.kind === "stt");
+    expect(stt?.blockIndex).toBe(-1);
+    expect(stt?.spec.kind === "stt" && stt.spec.audioMinutes).toBe(30 / 60);
+  });
+
+  test("the kill switch refuses a scene deck exactly as it refuses a block deck", async () => {
+    const t = harness();
+    await t.run(async (ctx) => {
+      const cfg = await ctx.db.query("guardrailConfig").first();
+      if (cfg) await ctx.db.patch(cfg._id, { mediaKillSwitch: true });
+      else
+        await ctx.db.insert("guardrailConfig", {
+          budgetUsdPerRequest: 5,
+          killSwitch: false,
+          mediaKillSwitch: true,
+          updatedAt: Date.now(),
+        });
+    });
+    expect(await reserveScenes(t, MIXED_SCENES())).toEqual({ ok: false, reason: "kill_switch" });
+  });
+});
+
+describe("THE VAULT BRIDGE: an uploaded_video's bytes, and whose they are", () => {
+  /** Scene 0 is a bought clip; scene 1 is the tenant's own footage from the vault. */
+  async function seedUploadDeck(
+    t: T,
+    opts: { docTenant?: string; mimeType?: string; docId?: string } = {},
+  ) {
+    const batchId = "batch_upload";
+    return await t.run(async (ctx) => {
+      const vaultDocId = await ctx.db.insert("vaultDocuments", {
+        tenantId: opts.docTenant ?? A,
+        title: "b-roll",
+        kind: "upload",
+        category: "operations",
+        source: "upload",
+        mimeType: opts.mimeType ?? "video/mp4",
+        size: 1024,
+        contentHash: "a".repeat(64),
+        storageId: await ctx.storage.store(new Blob([new Uint8Array([1])], { type: "video/mp4" })),
+        status: "ready",
+        createdAt: T0,
+      });
+      const planId = await ctx.db.insert("plans", {
+        tenantId: A,
+        threadId: "thread_upload",
+        status: "proposed",
+        createdAt: Date.now(),
+        targetDurationSeconds: 20,
+        shots: [
+          {
+            index: 0,
+            visual: "generated_video",
+            seconds: 8,
+            windowStartMs: 0,
+            description: "d",
+            narration: "x".repeat(40),
+            prompt: "p",
+          },
+          {
+            index: 1,
+            visual: "uploaded_video",
+            seconds: 12,
+            windowStartMs: 8000,
+            description: "d",
+            narration: "x".repeat(40),
+            prompt: "p",
+            asset: { source: "vault", docId: opts.docId ?? vaultDocId },
+          },
+        ],
+      });
+      for (const [blockIndex, kinds] of [
+        [0, ["video", "tts"]],
+        [1, ["tts"]],
+      ] as const) {
+        for (const kind of kinds) {
+          await ctx.db.insert("mediaJobs", {
+            tenantId: A,
+            planId,
+            batchId,
+            blockIndex,
+            provider: "openai",
+            kind,
+            model: kind === "video" ? MEDIA_DEFAULT_VIDEO.model : MEDIA_DEFAULT_VOICE.model,
+            spec:
+              kind === "video"
+                ? { kind: "video", resolution: MEDIA_DEFAULT_VIDEO.resolution, seconds: 8 }
+                : { kind: "tts", characters: 80, voice: "Evelyn (en)", sampleRateHertz: 24000 },
+            promptHash: "0".repeat(64),
+            status: "succeeded",
+            assetStorageId: await ctx.storage.store(
+              new Blob([new Uint8Array([2])], { type: "video/mp4" }),
+            ),
+            mimeType: kind === "video" ? "video/mp4" : "audio/wav",
+            estUsd: 0.1,
+            createdAt: T0,
+            updatedAt: T0,
+          });
+        }
+      }
+      return { planId, batchId, vaultDocId };
+    });
+  }
+
+  const toRender = (t: T, batchId: string, tenantId = A) =>
+    t.run(
+      async (ctx) =>
+        await ctx.runQuery(internal.render.renderReel.batchToRender, { tenantId, batchId }),
+    );
+
+  test("resolves the vault doc into the scene's OWN input slot — no job, no purchase", async () => {
+    const t = harness();
+    const { batchId, vaultDocId } = await seedUploadDeck(t);
+    const res = await toRender(t, batchId);
+    expect(res.ok, `refused: ${res.ok ? "" : res.reason}`).toBe(true);
+    if (!res.ok) return;
+    expect(res.value.scenes).toEqual([
+      { kind: "video", seconds: 8 },
+      { kind: "video", seconds: 12 },
+    ]);
+    // `block02.mp4` is served from the VAULT row, not from a mediaJobs row that was never bought.
+    expect(res.value.inputs.find((i) => i.name === "block02.mp4")?.jobId).toBe(vaultDocId);
+  });
+
+  test("REFUSES a vault doc belonging to ANOTHER TENANT — asset.docId is model-authored", async () => {
+    // The load-bearing test of this bridge. `asset.docId` reaches `batchToRender` off
+    // `plans.shots`, which the specialist wrote — it is a caller-supplied id in every sense that
+    // matters. Without the tenant check on the row, a deck could name any vault document in the
+    // deployment and the runner would fetch it through the bearer-guarded blob route.
+    const t = harness();
+    const { batchId } = await seedUploadDeck(t, { docTenant: B });
+    expect(await toRender(t, batchId)).toEqual({ ok: false, reason: "incomplete_blocks" });
+  });
+
+  test("REFUSES a vault doc that is not a video — the vault is not a file server", async () => {
+    const t = harness();
+    const { batchId } = await seedUploadDeck(t, { mimeType: "application/pdf" });
+    expect(await toRender(t, batchId)).toEqual({ ok: false, reason: "incomplete_blocks" });
+  });
+
+  test("REFUSES a docId that is malformed or names another table — normalizeId fails closed", async () => {
+    const t = harness();
+    for (const docId of ["../../etc/passwd", "not_an_id", ""]) {
+      const { batchId } = await seedUploadDeck(t, { docId });
+      expect(await toRender(t, batchId), docId).toEqual({
+        ok: false,
+        reason: "incomplete_blocks",
+      });
+    }
+  });
+
+  test("the blob route serves a VIDEO vault doc and refuses every other document", async () => {
+    // `resolveRenderAsset` deliberately has NO tenant check — it takes a raw id with no tenant to
+    // check it against, exactly as the mediaJobs branch does, and `batchToRender` is the boundary.
+    // The narrowing that bounds it instead is "video only": the vault holds a tenant's briefs and
+    // contracts, and serving any document by id would be a far larger capability than a render
+    // needs.
+    const t = harness();
+    const { vaultDocId } = await seedUploadDeck(t);
+    const served = await t.run(
+      async (ctx) =>
+        await ctx.runQuery(internal.render.renderReel.resolveRenderAsset, { raw: vaultDocId }),
+    );
+    expect(served?.mimeType).toBe("video/mp4");
+
+    const pdfId = await t.run(
+      async (ctx) =>
+        await ctx.db.insert("vaultDocuments", {
+          tenantId: A,
+          title: "contract",
+          kind: "upload",
+          category: "operations",
+          source: "upload",
+          mimeType: "application/pdf",
+          size: 10,
+          contentHash: "b".repeat(64),
+          storageId: await ctx.storage.store(new Blob(["x"], { type: "application/pdf" })),
+          status: "ready",
+          createdAt: T0,
+        }),
+    );
+    expect(
+      await t.run(
+        async (ctx) =>
+          await ctx.runQuery(internal.render.renderReel.resolveRenderAsset, { raw: pdfId }),
+      ),
+    ).toBeNull();
+  });
+});
+
 describe("batchToRender: a reel is ALL-OR-NOTHING, and the refusal is free", () => {
   test("returns one input per clip AND per voice take, named the way the script discovers them", async () => {
     const t = harness();
@@ -4372,6 +4739,9 @@ async function seedSceneDeck(
       description: `scene ${i}`,
       prompt: `prompt ${i}`,
       narration: `line ${i}`,
+      // A card must name its words or `hasAssetSource` refuses it — the narrowed guard is about
+      // naming the SOURCE, and a card with nothing to draw is a black rectangle.
+      ...((visuals[i] ?? "") === "text_card" ? { overlay: `card ${i}` } : {}),
     };
     startMs += sec * 1000;
     return shot;
@@ -4430,28 +4800,83 @@ describe("20.2 wave 2 — the ordering arithmetic is a RUNNING SUM", () => {
   });
 });
 
-describe("20.2 wave 2 — a scene deck reaches the money gate and is REFUSED, not mispriced", () => {
-  test("generateReel says scene_render_not_ready, never no_deck", async () => {
+describe("20.2 wave 5 — THE SCENE GATE OPENS: a scene deck is finally buyable", () => {
+  test("generateReel RESERVES it, priced per kind rather than at a uniform clipSeconds", async () => {
     const t = harness();
     const { planId } = await seedSceneDeck(t);
-    // `no_deck` would be a lie: the deck parsed, it is stored, and the user can read it on the
-    // canvas. What is missing is the assembler's branches, and the refusal has to say so.
-    expect(await asA(t).mutation(api.media.generateReel, { planId })).toEqual({
-      ok: false,
-      reason: "scene_render_not_ready",
-    });
+    const res = await asA(t).mutation(api.media.generateReel, { planId });
+    expect(res.ok, `refused: ${res.ok ? "" : res.reason}`).toBe(true);
+    const inserted = await t.run((ctx) => ctx.db.query("mediaJobs").collect());
+    // 8s clip + 6s still + 4s card + 12s clip: TWO video lines, ONE image, NO line for the card.
+    // Under the block contract this deck could not be bought at all.
+    expect(
+      inserted
+        .filter((r) => r.kind === "video")
+        .map((r) => r.blockIndex)
+        .sort(),
+    ).toEqual([0, 3]);
+    expect(inserted.filter((r) => r.kind === "image").map((r) => r.blockIndex)).toEqual([1]);
+    expect(inserted.some((r) => r.kind === "video" && r.blockIndex === 2)).toBe(false);
   });
 
-  test("NOTHING is reserved — zero mediaJobs rows and the budget is untouched", async () => {
+  test("each generated clip is bought at ITS OWN length — the ~60% overcharge that would have been", async () => {
     const t = harness();
     const { planId } = await seedSceneDeck(t);
-    const before = await t.query(internal.guardrails.mediaRemainingCents, { tenantId: A });
     await asA(t).mutation(api.media.generateReel, { planId });
+    const secs = (await t.run((ctx) => ctx.db.query("mediaJobs").collect()))
+      .filter((r) => r.kind === "video")
+      .map((r) => (r.spec.kind === "video" ? r.spec.seconds : 0))
+      .sort((l, r) => l - r);
+    // If `deckOf` ever read a scene row, both would be priced at the deck-wide `clipSeconds` (12).
+    expect(secs).toEqual([8, 12]);
+  });
+
+  test("the canvas estimate opens in the SAME commit — a working button behind a refusing estimate spends money nothing showed", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    const estimate = await asA(t).query(api.media.jobEstimate, { planId });
+    expect(estimate.refusal).toBeNull();
+    expect(estimate.totalCents).toBeGreaterThan(0);
+    // `pictures`, not `clips`: the paid visuals are a MIX of generated clips and stills.
+    expect(estimate.lines.map((l) => l.label)).toEqual(["pictures", "voice", "captions", "render"]);
+    expect(estimate.lines.find((l) => l.label === "pictures")?.qty).toBe(3);
+  });
+
+  test("the estimate and the reservation agree — the canvas names the number it will charge", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    const estimate = await asA(t).query(api.media.jobEstimate, { planId });
+    const res = await asA(t).mutation(api.media.generateReel, { planId });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.estCents).toBe(estimate.totalCents);
+  });
+
+  test("a card with NO words refuses the whole deck, and buys nothing", async () => {
+    const t = harness();
+    // The narrowed guard in the direction that matters: `unrenderable_block` no longer means
+    // "unpaid", it means "does not name what its picture is built from".
+    const { planId } = await seedSceneDeck(t);
+    await t.run(async (ctx) => {
+      const plan = await ctx.db.get(planId);
+      const shots = (plan?.shots ?? []).map((s) =>
+        s.visual === "text_card" ? { ...s, overlay: undefined } : s,
+      );
+      await ctx.db.patch(planId, { shots });
+    });
+    const before = await t.query(internal.guardrails.mediaRemainingCents, { tenantId: A });
+    expect(await asA(t).mutation(api.media.generateReel, { planId })).toEqual({
+      ok: false,
+      reason: "unrenderable_block",
+    });
     expect(await t.run((ctx) => ctx.db.query("mediaJobs").collect())).toHaveLength(0);
     expect(await t.query(internal.guardrails.mediaRemainingCents, { tenantId: A })).toBe(before);
   });
 
-  test("the APPROVE arm refuses it too — both money gates read the same two functions", async () => {
+  test("the AGENT's approve arm still refuses — the cockpit path is not wired to scenes yet", async () => {
+    // Deliberate and named. `cockpit.executePlan` builds its own reservation from the block deck;
+    // opening it is the agent proposing a scene deck end to end, which is the media-director
+    // certification in wave 8. The canvas path is open; this one says so rather than mispricing.
     const t = harness();
     const { planId } = await seedSceneDeck(t);
     await t.run(async (ctx) => ctx.db.patch(planId, { kind: "media", status: "proposed" }));
@@ -4462,17 +4887,13 @@ describe("20.2 wave 2 — a scene deck reaches the money gate and is REFUSED, no
     expect(await t.run((ctx) => ctx.db.query("mediaJobs").collect())).toHaveLength(0);
   });
 
-  test("a scene row is NOT readable as a block deck — the absent `type` is the fail-closed seam", async () => {
+  test("regenerating ONE scene refuses by name — the reel's length is the SUM of its scenes", async () => {
     const t = harness();
     const { planId } = await seedSceneDeck(t);
-    // If `deckOf` ever accepted a scene row, these four scenes would be priced at the deck-wide
-    // `clipSeconds` (12) instead of 8/6/4/12 — silently overcharging by ~60% on a paid path.
-    // `jobEstimate` is the canvas mirror of the same reader, so it is the observable.
-    const estimate = await asA(t).query(api.media.jobEstimate, { planId });
-    expect(estimate.lines).toEqual([]);
-    expect(estimate.totalCents).toBe(0);
-    // …and the canvas is TOLD why, rather than shown a silent zero.
-    expect(estimate.refusal).toEqual({ reason: "scene_render_not_ready" });
+    expect(await asA(t).mutation(api.media.regenerateBlock, { planId, blockIndex: 0 })).toEqual({
+      ok: false,
+      reason: "scene_regenerate_not_ready",
+    });
   });
 });
 

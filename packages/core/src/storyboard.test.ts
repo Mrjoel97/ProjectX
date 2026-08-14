@@ -2,6 +2,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import type { Scene } from "./storyboard";
 import {
   CLIP_SECONDS,
   DEFAULT_CLIP_SECONDS,
@@ -527,6 +528,52 @@ describe("parseSceneDeck — the happy path", () => {
   it("sums the submitted narration characters", () => {
     if (!r.ok) return;
     expect(sceneNarrationChars(r.scenes)).toBe(S1.length + S2.length + S3.length + S4.length);
+  });
+});
+
+describe("hasAssetSource — does this row name what its picture is built FROM? (20.2 wave 5)", () => {
+  // The narrowed replacement for `isPaidBlock`-as-renderability. It is the guard `media.ts` calls
+  // at the money gate, so a `true` here is a scene that may be BOUGHT — and a false negative
+  // refuses a legitimate deck while a false positive buys the paid scenes around a row that can
+  // never produce pixels, then hard-errors in the VM. Both directions are asserted.
+  const scene = (over: Partial<Scene>): Scene => ({
+    index: 0,
+    startMs: 0,
+    durationMs: 4000,
+    visual: "generated_video",
+    description: "d",
+    narration: "n",
+    prompt: "p",
+    ...over,
+  });
+
+  it("an uploaded_video needs its vault doc NAMED — there is no footage otherwise", () => {
+    expect(hasAssetSource(scene({ visual: "uploaded_video" }))).toBe(false);
+    expect(
+      hasAssetSource(
+        scene({ visual: "uploaded_video", asset: { source: "vault", docId: "doc_1" } }),
+      ),
+    ).toBe(true);
+  });
+
+  it("a text_card needs WORDS — drawtext with nothing to draw is a black rectangle", () => {
+    // …and a black rectangle passes every downstream gate: the file decodes, the duration is
+    // right, the sidecar is well-formed. Only the picture is missing.
+    expect(hasAssetSource(scene({ visual: "text_card" }))).toBe(false);
+    expect(hasAssetSource(scene({ visual: "text_card", overlay: "   " }))).toBe(false);
+    expect(hasAssetSource(scene({ visual: "text_card", overlay: "Ninety minutes" }))).toBe(true);
+  });
+
+  it("a GENERATED kind is always renderable — its source is the prompt the parser required", () => {
+    expect(hasAssetSource(scene({ visual: "generated_video" }))).toBe(true);
+    expect(hasAssetSource(scene({ visual: "animated_image" }))).toBe(true);
+  });
+
+  it("is NOT the paid flag — that equivalence is exactly what wave 5 removed", () => {
+    // A free scene that names its source is renderable; a paid one is not automatically so.
+    const card = scene({ visual: "text_card", overlay: "words" });
+    expect(isPaidScene(card)).toBe(false);
+    expect(hasAssetSource(card)).toBe(true);
   });
 });
 

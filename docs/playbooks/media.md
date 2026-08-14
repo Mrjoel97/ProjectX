@@ -10,6 +10,16 @@
 > for already-submitted historical jobs. Older provider-specific sections below describe the
 > superseded implementation unless explicitly marked current. See ADR-017.
 
+> Last verified: 2026-08-14 (20.2 wave 5 COMPLETE — **the scene gate opens: a scene deck is
+> buyable, renderable and publishable.** `reserveSceneJobInner` prices per kind (a clip at its own
+> length, a still at ~a tenth, nothing for a card or an upload, a take only where there is a line);
+> `unrenderable_block` is narrowed to `hasAssetSource`; the vault bridge resolves an
+> `uploaded_video` to its own tenant s vault doc, with the tenant check on the row because
+> `asset.docId` is model-authored. `jobEstimate` opened in the same commit as `generateReel` and a
+> test asserts the two numbers agree. Still refused BY NAME: `cockpit.executePlan`
+> (`scene_render_not_ready`, wave 8) and `regenerateBlock` (`scene_regenerate_not_ready`, wave 6).
+> 901 core + 1654 backend green.)
+
 > Last verified: 2026-08-14 (20.2 wave 5, part 1 — **the SCENE sidecar, and the v1 shape refused
 > by name.** `scene_count`/`target_duration_s`/`scenes[]` replace `block_count`/`clip_seconds`/
 > `blocks[]`; the validator re-derives the running sums and both timeline guarantees from the bytes.
@@ -1048,6 +1058,72 @@ each is a cheaper failure than the one after it — the first costs nothing, the
 > **Still named `blockCount`:** `plans.renderSummary.blockCount` and the `media.rendered` audit
 > payload key. Both are display/record fields owned by the canvas, which wave 6 touches — they are
 > fed `report.sceneCount` and rename with the UI rather than ahead of it.
+
+### The SCENE money gate, and the narrowing that finally rode with it (20.2 wave 5)
+
+`reserveSceneJobInner` is `reserveJobInner`'s twin, not a widened signature — a plan carries one
+contract or the other (the `visual`/`type` discriminator), so a function taking either would spend
+its length asking which. They **share the part that moves money**: `reserveProviderLinesInner`
+floors the batch total, checks and consumes both windows, and inserts only after every refusal has
+passed. One transaction, not two to keep in step.
+
+| Scene kind | Buys | Why |
+|---|---|---|
+| `generated_video` | one clip **at its own length** | the provider's duration grid still applies |
+| `animated_image` | one **still** | ~a tenth of a clip, frame-exact at any duration |
+| `uploaded_video` | nothing | the tenant already owns the bytes |
+| `text_card` | nothing | `drawtext` in the sandbox |
+| any narrated scene | one voice take | silence is legal, so an empty line buys nothing |
+
+**`unrenderable_block` is NARROWED to `hasAssetSource`.** The old check refused every *unpaid* row,
+because unpaid meant no clip and the assembler hard-errors on a missing input. That equivalence is
+gone: a card is drawn, a still is panned, an upload is fetched. What is still refused is a row that
+does not name **what its picture is built from** — an `uploaded_video` with no vault doc, or a
+`text_card` with no words. A card with nothing to draw is a black rectangle that passes every
+downstream gate: the file decodes, the duration is right, the sidecar is well-formed, and only the
+picture is missing.
+
+**The narration ceiling is the TAKE's window, not the scene's.** `narrationCeilingSeconds` runs to
+the next NARRATED scene, so a silent scene lends its duration to the line before it. There is no
+floor any more — a short line is a pause, not a fault.
+
+> **The estimate and the buy opened in the SAME commit, and must always.** `jobEstimate` mirrors
+> every refusal above in the same order. A working Generate button behind a refusing estimate would
+> spend money the canvas never showed, which is the exact inversion of this query's purpose ("name
+> the lever BEFORE the button is pressed"). A test asserts `res.estCents === estimate.totalCents`.
+> The estimate's paid line is labelled **`pictures`**, not `clips` — the paid visuals are a mix of
+> generated clips and stills at ~a tenth the price, and one label saying "clips" would misdescribe
+> what was bought. A per-kind breakdown is wave 7's price table.
+
+**Two gates deliberately still refuse, by name rather than by mispricing:**
+
+- `cockpit.executePlan` → `scene_render_not_ready`. The AGENT's approve arm builds its own
+  reservation from a block deck; opening it is the media-director certification (wave 8).
+- `regenerateBlock` → `scene_regenerate_not_ready`. A reel's length is the SUM of its scenes, so
+  re-buying one in isolation reserves a batch that does not add up to the declared target. Doing it
+  properly means reserving against the whole deck's timeline — a canvas decision (wave 6).
+
+### THE VAULT BRIDGE — an `uploaded_video`'s bytes, and whose they are
+
+An upload buys nothing, so it has **no `mediaJobs` row and no job id**. Its bytes sit on a
+`vaultDocuments` row, and `batchToRender` resolves them into the scene's input slot.
+
+> **`asset.docId` IS MODEL-AUTHORED TEXT.** It reaches `batchToRender` off `plans.shots`, which the
+> specialist wrote — a caller-supplied id in every sense that matters. **The tenant check is on the
+> row, in `batchToRender`, and it is the whole containment:** `normalizeId` fails closed for a
+> malformed or foreign-table id, and a doc belonging to another tenant is refused before its id is
+> ever handed to the runner. Without that line a deck could name any vault document in the
+> deployment and have the render fetch it through the bearer-guarded blob route.
+
+`resolveRenderAsset` gained a `vaultDocuments` branch **narrowed to `video/*`**. It deliberately has
+no tenant check — it takes a raw id with no tenant to check against, exactly as the `mediaJobs`
+branch does. The narrowing is what bounds it instead: the vault is where a tenant's briefs,
+contracts and business documents live, and serving *any* vault document by id would be a far larger
+capability than a render needs. Both halves are tested, including the cross-tenant refusal.
+
+**Direct upload was NOT added.** `Scene.asset` is `{ source: "vault"; docId }` and there is no other
+variant — the contract answered §7's open question 1 in wave 1. A direct upload would be a new
+`source` member plus its own ingest, which is additive and a decision, not a patch.
 
 ### The sidecar field set AS HARVESTED
 
