@@ -60,3 +60,59 @@ test("the harvested contract's five properties are all still present", () => {
   expect(SH, "narration-per-window assert").toMatch(/have NO narration in their windows/);
   expect(SH, "the sidecar is written").toContain('"gates":[');
 });
+
+// ── 20.2 wave 3: the scene branches ─────────────────────────────────────────────────────────────
+//
+// A shell script cannot be unit-tested, so these are SOURCE tripwires — the same instrument the
+// three tests above use, for the same reason. The behavioural half is `smoke_assemble.sh`, which
+// renders a real 30-second reel from a clip, a still, a drawn card and a silent scene, and asserts
+// the sidecar. Neither half substitutes for the other: a tripwire cannot tell you the card drew,
+// and the smoke does not run in CI.
+
+test("EXPANSION IS OFF on the card — this is a trust boundary, not a formatting choice", () => {
+  // The card's words are model-authored. With drawtext's default expansion, `%{...}` in the text
+  // file is EVALUATED as an ffmpeg expression inside the VM that holds tenant media. `textfile=`
+  // (not `text=`) removes the shell/filtergraph escaping problem; `expansion=none` removes the
+  // evaluation. Deleting either one is a silent capability grant, so both are pinned.
+  const code = SH.split("\n")
+    .filter((l) => !l.trimStart().startsWith("#"))
+    .join("\n");
+  expect(code, "the card must read its words from a FILE, never an inlined argument").toContain(
+    "textfile=",
+  );
+  expect(code, "drawtext must not evaluate %{...} in model-authored text").toContain(
+    "expansion=none",
+  );
+  expect(code, "a card must never be built by interpolating text into the filtergraph").not.toMatch(
+    /drawtext=[^\n]*\btext=/,
+  );
+});
+
+test("a build that cannot draw REFUSES, rather than shipping a black rectangle", () => {
+  // The `burn_caps.sh` libass precedent. A minimal ffmpeg has no drawtext, and a card scene that
+  // silently rendered nothing would pass every downstream gate — the file decodes, the duration is
+  // right, the sidecar is well-formed. Only the picture is missing.
+  expect(SH).toContain("has no 'drawtext' filter");
+  expect(SH, "a missing font is named with its fix, not left to ffmpeg").toMatch(
+    /needs a TrueType font and none was found/,
+  );
+});
+
+test("the concat list is RELATIVE — an absolute path is a portability trap", () => {
+  // The demuxer resolves each entry against the list file's own directory, and every scene is
+  // written beside it. Absolute paths broke the first smoke run outright.
+  const code = SH.split("\n")
+    .filter((l) => !l.trimStart().startsWith("#"))
+    .join("\n");
+  expect(code).toContain('echo "file \'$(basename "$out")\'"');
+});
+
+test("the uniform BLOCK contract is still expressible, and is not a second code path", () => {
+  // `--blocks N --clip-seconds C` fills the SAME scene arrays with N entries of `video:C`. That is
+  // what lets the live block contract keep rendering byte-identically while the scene contract is
+  // still being built. A second loop would be two things to keep in step.
+  expect(SH).toContain('KINDS+=("video"); SECS+=("$CLIP")');
+  expect(SH, "the two shapes must not be combinable").toContain(
+    "pass --scene OR --blocks, never both",
+  );
+});

@@ -10,6 +10,13 @@
 > for already-submitted historical jobs. Older provider-specific sections below describe the
 > superseded implementation unless explicitly marked current. See ADR-017.
 
+> Last verified: 2026-08-14 (20.2 wave 3 — the assembler builds THREE kinds of scene at
+> per-scene lengths, and a voice take is now optional. Verified by a REAL render:
+> `smoke_assemble.sh` produced a 30s reel from clip+still+card+clip with one silent scene,
+> decode-validated, sidecar asserted. The uniform BLOCK path renders unchanged and its sidecar
+> is still ACCEPTED by the live publish gate; a mixed sidecar is REFUSED by it, which is
+> correct and is why waves 4-5 must land before a scene deck is buyable.)
+
 > Last verified: 2026-08-14 (`media.byPlan` now projects `shot.type ?? shot.visual` for the tile
 > caption — the ONE place the block and scene closed sets are allowed to meet, because it is a
 > display projection. `deckOf` keeps them apart on the money path, where reading a scene as a
@@ -1751,6 +1758,70 @@ the scan checks, and it is why the parameter name is safe rather than merely unn
 It is a source scan over a file 20.2 does not touch, and it was red before this phase started —
 in-flight work from the business-first cockpit language change. Left alone deliberately: fixing it
 means writing product copy nobody asked for.
+
+
+## The assembler learns three kinds of scene (20.2 wave 3)
+
+`assemble_final.sh` took N clips of one length. It now takes a list of SCENES, each with its
+own length and its own kind of picture:
+
+| kind | input, by index | built by |
+|---|---|---|
+| `video` | `in/blockNN.mp4` | scale/pad/fps normalise, as before |
+| `image` | `in/blockNN.png` | `zoompan` slow push, x4 upscale first |
+| `card` | `in/cardNN.txt` | `drawtext` over black |
+
+`--blocks N --clip-seconds C` still works and is **exactly N scenes of `video:C`** — it FILLS
+the same two arrays rather than taking a second path, which is what lets the live block contract
+keep rendering byte-identically while the scene contract is built around it. Passing both shapes
+is refused; a caller that says both does not know which contract it is on.
+
+**A voice take is now OPTIONAL.** The scene contract allows an empty narration cell, and a
+silent scene lends its window to the line before it (wave 1). A missing `voiceNN.wav` is
+silence, never an error. The narration-per-window assert therefore checks only the windows that
+HAD a take — and it builds that list from the takes that actually existed, so a scene that was
+supposed to have one and lost it still fails. Checking every scene and then excusing the silent
+ones is how that gate goes vacuous.
+
+### Three details that are load-bearing rather than incidental
+
+**`textfile=` + `expansion=none`.** A card's words are model-authored. `text=` would need shell
+AND filtergraph escaping of `:` `'` `\` `%` — quoting that works until someone writes a colon.
+Worse, drawtext's DEFAULT expansion EVALUATES `%{...}` as an ffmpeg expression, inside the VM
+that holds tenant media. Both are pinned by tests; deleting either is a silent capability grant.
+
+**The x4 upscale before `zoompan`.** zoompan steps its crop window in whole SOURCE pixels, so a
+slow push at native size visibly stutters. Upscaling first makes each step a quarter-pixel at
+output scale. This is the difference between a Ken Burns move and a stutter, and it is invisible
+in any test that does not actually watch the frames.
+
+**The concat list is RELATIVE.** The demuxer resolves entries against the list file's own
+directory. Absolute paths broke the first smoke run outright and would break any run where the
+list is read from a different mount than it was written on.
+
+### Verified by a real render, not by reading
+
+`smoke_assemble.sh` synthesises every input with ffmpeg — no committed binaries, no network —
+and renders clip+still+card+clip at 8/6/4/12s with the card silent. It asserts the 30s total,
+the per-scene `duration_s`/`visual`, the RUNNING-SUM offsets `0,8,14,18`, that the silent scene
+records zero speech while the narrated ones record real speech, and that the card frame is not
+black. That last one matters: drawtext failing silently passes every downstream gate — the file
+decodes, the duration is right, the sidecar is well-formed, and only the picture is missing.
+
+⚠ **A machine whose ffmpeg has no usable fontconfig SEGFAULTS on every drawtext call**,
+including one with no `fontfile` at all (observed on the Windows gyan.dev build under msys).
+Point `FONTCONFIG_FILE` at a minimal `fonts.conf` naming a font directory. Environment fault,
+not script fault — written down because it reads exactly like a broken filtergraph.
+
+### What wave 3 does NOT do
+
+**The reel is still not reachable.** A scene deck cannot be bought (`scene_render_not_ready`),
+and a MIXED sidecar is REFUSED by `parseAssemblySidecar` — it still asserts
+`blockCount × clipSeconds === totalDurationS`. Both were verified rather than assumed: the
+uniform sidecar is accepted by the live validator, the mixed one comes back
+`{code: "duration_mismatch"}`. That is the fail-closed system working. Waves 4 and 5 are what
+make a scene deck purchasable and publishable, and the `hasAssetSource` narrowing rides with
+wave 5's plumbing — see the correction note in the phase plan for why it moved twice.
 
 
 ## Storage retention (D12b)
