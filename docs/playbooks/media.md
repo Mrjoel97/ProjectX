@@ -10,6 +10,16 @@
 > for already-submitted historical jobs. Older provider-specific sections below describe the
 > superseded implementation unless explicitly marked current. See ADR-017.
 
+> Last verified: 2026-08-14 (20.2 wave 4 — **narration moved to a MASTER AUDIO TIMELINE and the
+> per-scene speech band is deleted.** Every scene is built as a silent picture, the pictures are
+> concatenated once, and every voice take plus every clip's diegetic bed is placed at its ABSOLUTE
+> offset and mixed in a SINGLE `amix`. A line may now run past its own scene. Verified by a REAL
+> render: `smoke_assemble.sh` put 7.2s of speech in a 6s scene — a wave-3 hard error — and the
+> reel came out at 30.016s. The narration assert was **observed RED**: the same deck through a
+> sabotaged copy with the takes muted into the mix exits 1 with the narration error, which is the
+> phase's named vacuity risk closed by observation rather than by claim. New: `--target-seconds`,
+> asserted before any work and on the output at ±0.5s.)
+
 > Last verified: 2026-08-14 (20.2 wave 3 — the assembler builds THREE kinds of scene at
 > per-scene lengths, and a voice take is now optional. Verified by a REAL render:
 > `smoke_assemble.sh` produced a 30s reel from clip+still+card+clip with one silent scene,
@@ -872,15 +882,68 @@ entry and no `render/`-sourced body ever appears. Do not "fix" the mirror into a
 
 | Property | The failure it prevents |
 |---|---|
-| **Fixed length `N × clip-seconds`**, asserted on the OUTPUT to ±1s | a video silently shortened to fit its audio |
+| **Fixed length**, asserted on the OUTPUT to ±0.5s against `--target-seconds` (wave 4; was `N × clip-seconds` to ±1s) | a video silently shortened to fit its audio |
 | **No time-stretch, ever** — no `atempo`, no `setpts`, no speech trimming | an overrunning line rate-shifted into the window; audible, and no downstream test would catch it. An overrun is a HARD ERROR to be rewritten upstream |
 | **A clip shorter than its window by >0.5s is a HARD ERROR** | a held still frame passed off as a scene |
 | **Speech-centred, not file-centred** (lead/trail silence measured by `silencedetect` and ignored) | a padded TTS take shifting the words off their scene |
-| **Narration in every window**, asserted on the joined track before finalisation | the "silent second half" failure of every hand-rolled assembly |
+| **Narration over every NARRATED SPAN**, asserted on the mixed track before finalisation (wave 4; was "every window") | the "silent second half" failure of every hand-rolled assembly |
 
 Also inherited: per-input voice loudnorm (a fresh TTS take lands near −31 dB while dialogue lifted
 out of a generated clip lands near −21 dB — mixing both at 1.0 is the "narrator quiet, character
 loud" complaint), two-pass **linear** loudnorm at −16 LUFS on the final, and full-decode validation.
+
+### The master audio timeline (20.2 wave 4) — and what replaced the per-cell band
+
+Audio used to be mixed **inside each scene**, and the finished scenes concatenated. That made the
+scene the mixing unit, and everything else followed from it: a voice line had to fit
+`[SEC − 1.4, SEC]` seconds, so narration was written for a 56-character cell rather than for a reel.
+
+The shape now:
+
+1. Each scene is built as a **silent** picture, exactly its own length. Nothing is muxed per scene.
+2. The pictures are concatenated **once** (`-an`) into one silent track.
+3. Each take is level-matched individually (`loudnorm=I=−19:TP=−1.5:LRA=11` — **unchanged**, it is
+   what removes the "narrator quiet, character loud" spread) and each `video` scene's diegetic audio
+   is lifted off the ORIGINAL clip to a wav.
+4. Everything is placed on ONE timeline at its **absolute** offset via `adelay` and mixed in a
+   **single `amix`** with `normalize=0` (the default would divide a reel down for having more lines
+   in it). Input 1 is a full-length silence bed, so the mix always spans the reel.
+5. Two-pass **linear** loudnorm at −16 LUFS on the result — **unchanged**.
+
+**Placement:** speech is centred in its own scene, compensating for the take's own lead silence. A
+take LONGER than its scene cannot be centred without starting before the scene does, so it
+**anchors at that scene's start** and carries over the cut. `speech_abs_s` is recomputed FROM the
+applied delay, never from the intent, so a clamp can't make the sidecar disagree with the mix.
+
+**What replaced the band — two errors about the TIMELINE, not the cell.** Both are still HARD
+ERRORS whose fix is to rewrite the line upstream; the "no time-stretch, ever" property is unchanged:
+
+- a line whose speech runs **past the end of the reel** (it would be cut mid-word), and
+- a line whose speech runs **into the start of the next line** (two narrators at once).
+
+0.05s of slack on each absorbs `silencedetect`'s own resolution.
+
+**Why the narration assert is not vacuous.** With optional narration, "narration in every window"
+becomes trivially passable if it is *relaxed*; this repo has a named defect class for exactly that.
+It was **re-expressed**, not relaxed: the span checked is the TAKE's own speech span on the master
+timeline, keyed off the takes that actually existed. A scene with no take declares no span and is
+never checked; a scene that HAS a take is always checked. So a deck cannot dilute the gate by adding
+silent scenes, and a take that was measured, level-matched, delayed and then lost on the way into
+the mix still fails. `smoke_assemble.sh` ends by re-rendering the same deck through a sabotaged copy
+(one `sed`, muting the takes into the mix) and **requires that run to fail** — the sabotage lives in
+the smoke and never in the shipped script, because a production assembler with a "skip the gate"
+switch is the same hole.
+
+**`--target-seconds`**, off the deck header: the scenes must sum to exactly it (refused before any
+work, while the failure is still free) and the finished file must land within 0.5s of it. Omitted,
+it defaults to the sum, which is what the uniform `--blocks` path passes.
+
+> **Known seam, wave 4 → wave 5.** `assembly.ts` still refuses a sidecar whose `speech_dur_s`
+> exceeds `clip_seconds` (the longest scene on a mixed deck). On the scene timeline a line is
+> ALLOWED to be longer than that, so such a render is correct and would still be refused at
+> publish. It goes away with `clip_seconds` itself in wave 5; until then the assembler emits a
+> `WARN` naming the refusal, rather than letting a paid render be rejected with no explanation
+> anywhere.
 
 ### The sidecar field set AS HARVESTED
 
@@ -888,7 +951,7 @@ loud" complaint), two-pass **linear** loudnorm at −16 LUFS on the final, and f
 validator maps snake_case in → camelCase out in one place, so a field-name correction is a one-file
 change.
 
-Top level: `script` · `out` · `block_count` · `clip_seconds` · `total_duration_s` ·
+Top level: `script` · `out` · `block_count` · `clip_seconds` · `target_duration_s` · `total_duration_s` ·
 `actual_duration_s` · `width` · `height` · `fps` · `sfx_vol` · `gates[]` · `blocks[]` · `ts`
 Per block: `block_index` (0-based) · `window_start_s` · `lead_silence_s` · `speech_abs_s` ·
 `speech_dur_s` · `clip_dur_s` · `overrun` · `internal_pauses` · `freeze_head` · `freeze_tail`

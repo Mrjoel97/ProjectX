@@ -8,11 +8,21 @@
 # by ffmpeg itself, so there are no committed binary fixtures and no network.
 #
 # What it proves, and each one is a failure that would otherwise reach a paid sandbox:
-#   * four scenes of DIFFERENT lengths sum to an exact 30s
+#   * four scenes of DIFFERENT lengths sum to an exact 30s, and land within 0.5s of it
 #   * a still becomes a moving scene, a text card is drawn, an upload/clip is normalised
 #   * a scene with NO voice take is silent rather than an error
 #   * the sidecar records per-scene duration/visual and RUNNING-SUM offsets
 #   * the card is not a black rectangle (drawtext failing silently is the whole reason to check)
+#   * (wave 4) a voice line LONGER than its own scene renders — carrying over the cut into the
+#     next scene instead of being rejected by a per-cell band. Scene 2 is 6s and its take carries
+#     7.2s of speech; under wave 3 that was a hard error, and it is the point of the wave.
+#   * (wave 4) the narration assert is NOT vacuous. The run ends by rendering the SAME deck a
+#     second time through a deliberately sabotaged COPY of the script — one sed, muting the voice
+#     takes as they enter the master mix — and requires that run to FAIL with the narration error.
+#     The phase's named risk is this gate quietly going vacuous under optional narration, and an
+#     assert nobody has watched go red is not evidence. The sabotage lives here and never in the
+#     shipped script: a production assembler with a "skip the gate" switch is the same hole.
+#     `SMOKE_SKIP_RED=1` skips that second render when you only want the ~40s happy path.
 #
 # Usage:  bash smoke_assemble.sh <path-to-assemble_final.sh> <work-dir> [font.ttf]
 #
@@ -41,8 +51,11 @@ printf 'Ninety minutes a day: gone.\nYou approve; we type.\n%%{pts} must render 
 ffmpeg -y -loglevel error -f lavfi -t 12.4 -i "testsrc2=s=${W}x${H}:r=${FPS}" \
   -c:v libx264 -preset ultrafast -an in/block04.mp4
 
-# Voice takes. The band is [SEC-1.4, SEC], so speech must nearly fill its scene.
-# Scene 3 gets NO take — a deliberately silent card, which is the new optional-voice path.
+# Voice takes. There is NO per-cell band any more (wave 4): a line is written for the reel and may
+# run past its own scene. Scene 2 is 6s and deliberately carries 7.2s of speech, which wave 3
+# rejected outright — it now spills into the silent card that follows it, which is exactly what
+# "a silent scene lends its window to the line before it" means once the mix is one timeline.
+# Scene 3 gets NO take — a deliberately silent card, which is the optional-voice path.
 mkspeech() { # $1=out $2=speech-seconds  (0.2s lead + tone + 0.2s tail)
   ffmpeg -y -loglevel error \
     -f lavfi -t 0.2 -i anullsrc=r=24000:cl=mono \
@@ -51,7 +64,7 @@ mkspeech() { # $1=out $2=speech-seconds  (0.2s lead + tone + 0.2s tail)
     -filter_complex "[0:a][1:a][2:a]concat=n=3:v=0:a=1[a]" -map "[a]" -ar 24000 -ac 1 "$1"
 }
 mkspeech in/voice01.wav 7.2
-mkspeech in/voice02.wav 5.2
+mkspeech in/voice02.wav 7.2   # 7.2s of speech in a 6s scene — the whole point of wave 4
 mkspeech in/voice04.wav 11.2
 
 # The font is copied to a RELATIVE, colon-free path. A Windows font lives at `C:/…`, and a colon
@@ -60,16 +73,24 @@ mkspeech in/voice04.wav 11.2
 # sandbox will, instead of a Windows-only escaping variant of it.
 cp "$SRC_FONT" in/font.ttf
 export ASSEMBLE_FONT="in/font.ttf"
-bash "$SH" --scene video:8 --scene image:6 --scene card:4 --scene video:12 \
-  --in in --out out/final.mp4
+SCENES=(--scene video:8 --scene image:6 --scene card:4 --scene video:12)
+bash "$SH" "${SCENES[@]}" --target-seconds 30 --in in --out out/final.mp4
 
 # ── ASSERTIONS. A render that exits 0 is not a render that is correct. ──────────────────────────
 fail() { echo "SMOKE FAIL: $1" >&2; exit 1; }
 dur() { ffprobe -v error -show_entries format=duration -of csv=p=0 "$1"; }
 
 FD="$(dur out/final.mp4)"
-awk -v d="$FD" 'BEGIN{exit (d>29 && d<31)?0:1}' || fail "final is ${FD}s, expected 30s (8+6+4+12)"
+# ±0.5s, matching the tightened assert inside the script — not ±1s, which would pass a reel the
+# script itself would refuse.
+awk -v d="$FD" 'BEGIN{x=d-30; if(x<0)x=-x; exit (x<=0.5)?0:1}' || fail "final is ${FD}s, expected 30s +/-0.5 (8+6+4+12)"
 [ -f out/final.mp4.assembly.json ] || fail "no sidecar was written"
+
+# The audio must span the WHOLE reel, not stop at the last take. Under the old per-scene mix this
+# was true because every scene carried its own stream; under one amix it is true because of the
+# full-length silence bed, which is a thing that can be dropped by accident.
+AD="$(ffprobe -v error -select_streams a:0 -show_entries stream=duration -of csv=p=0 out/final.mp4 | head -1)"
+awk -v a="$AD" -v d="$FD" 'BEGIN{x=a-d; if(x<0)x=-x; exit (x<=0.5)?0:1}' || fail "audio is ${AD}s against ${FD}s of video — the mix does not span the reel"
 
 node -e '
 const s=JSON.parse(require("fs").readFileSync("out/final.mp4.assembly.json","utf8"));
@@ -86,7 +107,16 @@ if(starts!=="0,8,14,18") bad("running-sum offsets: "+starts);
 if(s.blocks[2].speech_dur_s!==0) bad("card scene claims speech: "+s.blocks[2].speech_dur_s);
 for(const i of [0,1,3]) if(!(s.blocks[i].speech_dur_s>1)) bad("scene "+i+" lost its speech");
 if(s.blocks.some(b=>b.overrun)) bad("an overrun survived to the sidecar");
+// WAVE 4, the load-bearing row: scene 2 is 6s and its line carries ~7.2s of speech. Wave 3 exited
+// with "REWRITE the narration" here. If this ever reads <=6 again, the per-cell band grew back.
+if(!(s.blocks[1].speech_dur_s>6.5)) bad("scene 2 speech is "+s.blocks[1].speech_dur_s+"s — a take that outruns its scene was trimmed or rejected");
+// ...and it must be ANCHORED at its scene start (8s), not centred at 8+(6-7.2)/2 = 7.4s.
+if(Math.abs(s.blocks[1].speech_abs_s-8)>0.35) bad("scene 2 speech starts at "+s.blocks[1].speech_abs_s+"s, expected ~8s (anchored, not centred)");
+// The takes must still be in order on the timeline — captions rebase off these.
+const abs=s.blocks.map(b=>b.speech_abs_s);
+for(let i=1;i<abs.length;i++) if(!(abs[i]>abs[i-1])) bad("speech_abs_s is not monotonic: "+abs.join(","));
 console.log("  sidecar OK: 4 scenes, kinds "+kinds+", durations "+durs+", offsets "+starts);
+console.log("  scene 2 carries "+s.blocks[1].speech_dur_s+"s of speech in a 6s scene, anchored at "+s.blocks[1].speech_abs_s+"s");
 '
 
 # expansion=none: the literal %{pts} must NOT have been evaluated into a timestamp. Extract the
@@ -96,4 +126,24 @@ ffmpeg -y -v error -ss 16 -i out/final.mp4 -frames:v 1 out/card.png
 NONBLACK="$(ffmpeg -v error -i out/card.png -vf "blackframe=amount=98" -f null - 2>&1 | grep -c blackframe || true)"
 [ "$NONBLACK" = "0" ] || fail "the card frame is blank — drawtext drew nothing"
 
-echo "SMOKE OK: 30s reel from video+image+card+video, sidecar validated, card drew text"
+# ── THE NARRATION ASSERT, OBSERVED RED ─────────────────────────────────────────────────────────
+# Risk 1 of this phase: with optional narration, "narration in every window" becomes trivially
+# passable if it is relaxed instead of re-expressed, and this repo has a named defect class for
+# exactly that. A green assert proves nothing on its own — so break the one thing it watches and
+# require the failure. The break is ONE sed on a COPY: the voice takes enter the master mix at
+# volume=0. Everything else — the takes, the delays, the sidecar, the durations — is untouched, so
+# a pass here would mean the gate is measuring something other than "the voice reached the mix".
+if [ "${SMOKE_SKIP_RED:-0}" != "1" ]; then
+  sed 's|,adelay=${TAKE_PAD\[k\]}|,volume=0,adelay=${TAKE_PAD[k]}|' "$SH" > sabotaged.sh
+  grep -q 'volume=0,adelay' sabotaged.sh || fail "the sabotage sed matched nothing — the mix line was renamed, so this check is no longer breaking what it thinks it is"
+  rm -rf red; mkdir -p red/out; cp -r in red/in
+  set +e
+  (cd red && bash ../sabotaged.sh "${SCENES[@]}" --target-seconds 30 --in in --out out/final.mp4) > red.log 2>&1
+  RC=$?
+  set -e
+  [ "$RC" -ne 0 ] || fail "the muted-voice render SUCCEEDED — the narration assert is vacuous"
+  grep -q "is NOT in the mix" red.log || fail "the muted-voice render failed for the wrong reason:$(printf '\n')$(tail -3 red.log)"
+  echo "  narration assert observed RED with the voices muted (exit $RC)"
+fi
+
+echo "SMOKE OK: 30s reel from video+image+card+video, a line outrunning its scene, sidecar validated, card drew text, narration assert seen red"

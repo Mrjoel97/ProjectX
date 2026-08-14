@@ -22,7 +22,22 @@
 # `--blocks N --clip-seconds C` still works and is exactly N scenes of `video:C`. It is not a
 # second code path: it FILLS the same scene arrays, so the uniform reel is the general one with
 # every entry equal. That is what lets the block contract keep rendering byte-identically while
-# the scene contract is still being built (waves 4-8).
+# the scene contract is still being built (waves 5-8).
+#
+# ── THE MASTER AUDIO TIMELINE (phase 20.2 wave 4) ─────────────────────────────────────────────
+# Audio used to be mixed INSIDE each scene and the finished scenes concatenated. That made the
+# scene the mixing unit, which is the only reason a voice line had to fit `[SEC-1.4, SEC]` — a
+# 56-character cell nobody writes good narration into.
+#
+# Now every scene is built as a SILENT picture, the pictures are concatenated ONCE, and every
+# voice take plus every clip's own diegetic audio is placed on ONE timeline at its ABSOLUTE
+# offset and mixed in a SINGLE amix. A line is therefore free to run past its own scene and
+# carry over the cut, which is what narration written for a REEL actually does.
+#
+# What replaces the per-cell band — two errors that are about the TIMELINE, not the cell:
+#   * a line whose speech runs past the END OF THE REEL (it would be cut mid-word), and
+#   * a line whose speech runs into the START of the NEXT line (two narrators at once).
+# Both are still HARD ERRORS to be rewritten upstream. Neither is a length nobody can hit.
 #
 # WHY image AND card EXIST AT ALL: an unpaid block used to be an UNRENDERABLE one. `TEXT` and
 # `SCREEN REC` got no video line, so nothing ever wrote their `blockNN.mp4`, and this script
@@ -32,17 +47,25 @@
 # frame-exact at any length, which is also what makes an exact 15/30/60-second reel possible.
 #
 # GUARANTEES — each one encodes a failure that has actually happened:
-#   * FIXED LENGTH = the sum of the scene lengths. The video is NEVER shortened to fit the audio;
-#     the final duration is asserted on the output and the script FAILS if it is off by >1s.
+#   * FIXED LENGTH = the TARGET (--target-seconds, defaulting to the sum of the scene lengths).
+#     A deck whose scenes do not sum to the declared target is refused BEFORE any work, and the
+#     video is NEVER shortened to fit the audio; the final duration is asserted on the output and
+#     the script FAILS if it is off by >0.5s. The tolerance was 1s while a clip's length was
+#     whatever the provider returned; every duration here is one we choose, so it is 0.5s now.
 #   * NO TIME-STRETCH, EVER. No atempo, no speed change, no trimming speech. A voice line whose
-#     SPEECH is longer than its window is a HARD ERROR — rewrite the line and regenerate upstream.
+#     SPEECH runs past the end of the reel, or into the next line, is a HARD ERROR — rewrite the
+#     line and regenerate upstream. It may freely run past its OWN scene (master timeline).
 #   * A clip shorter than its scene by > 0.5s is a HARD ERROR. A held still frame is not a scene.
 #     (A `card` or an `image` is BUILT to length, so it cannot fail this — only `video` can.)
 #   * SPEECH-CENTRED, not file-centred: leading and trailing silence in the TTS take is measured
-#     (silencedetect) and ignored, so a padded take cannot shift the words off their scene.
-#   * NARRATION IN EVERY NARRATED WINDOW, asserted on the joined track before finalisation. A
-#     window that is quiet through its centre has no narration — the "silent second half" failure
-#     of every hand-rolled assembly. A scene with NO take is deliberately silent and is skipped.
+#     (silencedetect) and ignored, so a padded take cannot shift the words off their scene. A take
+#     LONGER than its scene cannot be centred in it, so it anchors at that scene's start instead.
+#   * NARRATION OVER EVERY NARRATED SPAN, asserted on the mixed track before finalisation. The
+#     span checked is the TAKE's own speech span on the master timeline, not the scene's window:
+#     a span quiet through its centre means the voice never reached the mix — the "silent second
+#     half" failure of every hand-rolled assembly. A scene with NO take declares no span and is
+#     never checked; a scene that DOES have a take always is, so the gate cannot go vacuous by
+#     a deck simply using more silent scenes.
 #   * LEVEL LAW: voice is always 1.0; the clips' own diegetic SFX sit under it at 0.12
 #     (--sfx-vol, hard-clamped ≤ 0.20); final two-pass LINEAR loudnorm at -16 LUFS.
 #   * An assembly.json SIDECAR is written last. A final video without one was hand-assembled.
@@ -50,6 +73,7 @@
 # Usage:
 #   assemble_final.sh --blocks N [--clip-seconds 10] [--in in] [--out out/final.mp4] [--sfx-vol 0.12]
 #   assemble_final.sh --scene video:8 --scene image:6 --scene card:4 --scene video:12 [...]
+#   ... [--target-seconds 30]   the DECLARED reel length; the scenes must sum to exactly it
 #
 # Inputs are DISCOVERED BY INDEX, not passed as pairs: scene 1 reads `<in>/block01.*` and
 # `<in>/voice01.wav`, … through N. That is deliberate — upstream took positional clip/voice pairs
@@ -72,12 +96,15 @@
 # Requires: ffmpeg, ffprobe, awk. A `card` scene additionally needs a TrueType font in the image.
 set -euo pipefail
 
-IN_DIR="in"; OUT="out/final.mp4"; CLIP=10; SFXVOL="0.12"; BLOCKS=""
+IN_DIR="in"; OUT="out/final.mp4"; CLIP=10; SFXVOL="0.12"; BLOCKS=""; TARGET=""
 KINDS=(); SECS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --blocks) BLOCKS="$2"; shift 2 ;;
     --clip-seconds) CLIP="$2"; shift 2 ;;
+    # The DECLARED reel length, off the deck header. Asserted twice: the scenes must sum to it
+    # before any work, and the finished file must land within 0.5s of it.
+    --target-seconds) TARGET="$2"; shift 2 ;;
     # KIND:SECONDS, one per scene, IN ORDER. Order is the reel's order and the index, which is the
     # same rule the deck parser follows — the display `#` column is never read as a position.
     --scene)
@@ -166,10 +193,25 @@ for ((i=0;i<SCENES;i++)); do
 done
 
 TOT=0; for ((i=0;i<SCENES;i++)); do TOT=$((TOT + ${SECS[i]})); done
-echo "[1/3] ${SCENES} scenes -> ${W}x${H} @ ${FPS}fps, ${TOT}s total; speech-centred, no atempo" >&2
+
+# THE TARGET, asserted BEFORE any work. A deck that promised 30 seconds and lists scenes summing
+# to 28 is a deck that was mispriced and miswritten, and finding that out after the paid clips are
+# already in the input directory costs the whole reel. Refuse it while it is still free.
+if [[ -n "$TARGET" ]]; then
+  awk -v t="$TARGET" 'BEGIN{exit (t+0>=1 && t+0==int(t+0))?0:1}' || { echo "ERROR: --target-seconds must be a positive integer, got: $TARGET" >&2; exit 1; }
+  [[ "$TOT" -eq "$TARGET" ]] || { echo "ERROR: the scenes sum to ${TOT}s but the deck declares --target-seconds ${TARGET} — fix the deck; the assembler will not pad or trim to reach a target." >&2; exit 1; }
+else
+  TARGET="$TOT"
+fi
+
+echo "[1/4] ${SCENES} scenes -> ${W}x${H} @ ${FPS}fps, ${TOT}s total; speech-centred, no atempo" >&2
 
 LIST="$TMP/list.txt"; : > "$LIST"
-NARRATED=""   # "start:end" per NARRATED window, for the assert below
+# The master timeline, gathered in the loop and MIXED ONCE below. Every delay here is ABSOLUTE
+# (milliseconds from the start of the reel), which is the whole change: a take is no longer
+# placed relative to a scene it is then trapped inside.
+TAKE_FILE=(); TAKE_PAD=(); TAKE_ABS=(); TAKE_SPEECH=(); TAKE_SCENE=()
+DIEG_FILE=(); DIEG_PAD=()
 START=0
 for ((i=0;i<SCENES;i++)); do
   n=$((i+1)); SEC="${SECS[i]}"; KIND="${KINDS[i]}"
@@ -225,7 +267,19 @@ for ((i=0;i<SCENES;i++)); do
       ;;
   esac
 
-  out="$TMP/b_$(printf '%03d' "$i").mp4"
+  # THE DIEGETIC BED. A generated clip's own SFX has to come off the ORIGINAL file — the picture
+  # built above is silent by construction — and it is lifted out here, at this scene's length, so
+  # the master mix below is a list of wavs and offsets rather than a second pass over the inputs.
+  if [[ "$KIND" == "video" ]]; then
+    src="$IN_DIR/$(printf 'block%02d.mp4' "$n")"
+    if [[ "$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_type -of csv=p=0 "$src" | head -1)" == "audio" ]]; then
+      dieg="$TMP/d_$(printf '%03d' "$i").wav"
+      if ffmpeg -y -loglevel error -i "$src" -vn -t "$SEC" -ar 48000 -ac 2 "$dieg" 2>/dev/null; then
+        DIEG_FILE+=("$dieg"); DIEG_PAD+=($((START * 1000)))
+      fi
+    fi
+  fi
+
   if [[ -f "$voice" ]]; then
     A="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$voice")"
     # SPEECH bounds: ignore the take's own leading/trailing silence when centring.
@@ -252,18 +306,14 @@ for ((i=0;i<SCENES;i++)); do
       END{ printf "%d %.2f", n+0, mx+0 }' <<< "$EVENTS")"
     [[ "${IPN:-0}" != "0" ]] && echo "WARN: voice $n has ${IPN} internal pause(s) >=0.8s (longest ${IPMAX}s) — rewrite the line as ONE flowing clause and regenerate." >&2
 
-    # HARD checks. The window floor is SEC-1.4 and the ceiling is SEC, expressed relative to the
-    # SCENE so a deck of mixed lengths keeps the same headroom everywhere. Upstream learned this
-    # the expensive way: a tighter 9.4-9.8s window sat in the DEAD ZONE between the two modes TTS
-    # actually returns (~9.0s and ~10.4s for the same line), so good takes were rejected and two
-    # dev runs on 2026-07-29 burned ~150 generations on 18 lines before someone started cutting
-    # silence inside the takes to pass. Audio surgery is audible; 0.7s of lead and tail is not.
-    SPEECH_MIN="$(awk -v c="$SEC" 'BEGIN{printf "%.3f", c-1.4}')"
-    SPEECH_MAX="$(awk -v c="$SEC" 'BEGIN{printf "%.3f", c}')"
+    # NO PER-CELL BAND (wave 4). The old floor/ceiling of [SEC-1.4, SEC] existed because the
+    # SCENE was the mixing unit; it is not any more. Upstream learned what a tight band costs the
+    # expensive way — a 9.4-9.8s window sat in the DEAD ZONE between the two modes TTS actually
+    # returns (~9.0s and ~10.4s for the same line), so good takes were rejected and two dev runs
+    # on 2026-07-29 burned ~150 generations on 18 lines before someone started cutting silence
+    # inside the takes to pass. Audio surgery is audible. The replacement checks are on the
+    # TIMELINE (past the reel's end, or into the next line) and run once all takes are known.
     OVERRUN=false
-    awk -v s="$SPEECH" -v hi="$SPEECH_MAX" 'BEGIN{exit (s > hi) ? 0 : 1}' && OVERRUN=true
-    awk -v s="$SPEECH" -v lo="$SPEECH_MIN" -v hi="$SPEECH_MAX" 'BEGIN{exit (s < lo || s > hi) ? 0 : 1}' && {
-      echo "ERROR: voice $n carries ${SPEECH}s of speech; required ${SPEECH_MIN}-${SPEECH_MAX}s — REWRITE the narration and regenerate (never pad, atempo, or trim speech)." >&2; exit 1; }
 
     # LEVEL-MATCH each voice input BEFORE it enters the mix. A fresh TTS take lands near -31 dB
     # mean while dialogue lifted out of a generated clip lands near -21 dB; mixing both at 1.0
@@ -276,45 +326,39 @@ for ((i=0;i<SCENES;i++)); do
       echo "WARN: could not level-match voice $n — mixing it as-is; scene loudness may differ from its neighbours." >&2
     fi
 
-    # Centre the SPEECH in the scene: speech starts at (SEC - speech)/2, compensating for the
-    # file's own leading silence. NO atempo.
-    PAD_MS="$(awk -v ss="$SS" -v sp="$SPEECH" -v c="$SEC" 'BEGIN{t0=(c-sp)/2; if(t0<0)t0=0; d=t0-ss; if(d<0)d=0; printf "%d", d*1000}')"
-    # Keep the source's own diegetic SFX under the voice. A built picture (image/card) has no
-    # audio stream at all, and neither does a normalised clip — the SFX is taken from the ORIGINAL
-    # clip, which is why `video` re-reads it here.
-    if [[ "$KIND" == "video" ]] && [[ "$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_type -of csv=p=0 "$IN_DIR/$(printf 'block%02d.mp4' "$n")" | head -1)" == "audio" ]]; then
-      FC="[1:a]adelay=${PAD_MS}:all=1,apad[vo];[2:a]volume=${SFXVOL},apad[sfx];[sfx][vo]amix=inputs=2:duration=first:normalize=0[a]"
-      ffmpeg -y -loglevel error -i "$pic" -i "$voice" -i "$IN_DIR/$(printf 'block%02d.mp4' "$n")" -filter_complex "$FC" \
-        -map 0:v -map "[a]" -t "$SEC" -c:v copy -c:a aac -b:a 192k "$out"
-    else
-      FC="[1:a]adelay=${PAD_MS}:all=1,apad[a]"
-      ffmpeg -y -loglevel error -i "$pic" -i "$voice" -filter_complex "$FC" \
-        -map 0:v -map "[a]" -t "$SEC" -c:v copy -c:a aac -b:a 192k "$out"
-    fi
+    # PLACEMENT on the master timeline, in ABSOLUTE milliseconds. Speech is centred in its own
+    # scene — `(SEC - speech)/2` past the scene's start — compensating for the take's own leading
+    # silence. A take LONGER than its scene cannot be centred in it without starting before the
+    # scene does, so it ANCHORS at the scene's start and carries over the cut instead. NO atempo.
+    PAD_MS="$(awk -v st="$START" -v ss="$SS" -v sp="$SPEECH" -v c="$SEC" 'BEGIN{t0=st+(c-sp)/2; if(sp>c)t0=st; d=t0-ss; if(d<0)d=0; printf "%d", d*1000}')"
 
     # The captions rebase, and the whole reason these two numbers are recorded:
     #   absolute_t = speech_abs_s + (word_t_in_clean_take - lead_silence_s)
     # Captions are timed on the CLEAN voice take (no SFX to confuse the STT) and shifted by these.
-    SPEECH_ABS="$(awk -v st="$START" -v p="$PAD_MS" -v ss="$SS" 'BEGIN{printf "%.3f", st + p/1000 + ss}')"
-    NARRATED="${NARRATED}${START}:$((START + SEC)) "
+    # Recomputed FROM the delay rather than from the intent, so the clamp above cannot make the
+    # sidecar disagree with the mix.
+    SPEECH_ABS="$(awk -v p="$PAD_MS" -v ss="$SS" 'BEGIN{printf "%.3f", p/1000 + ss}')"
+    TAKE_FILE+=("$voice"); TAKE_PAD+=("$PAD_MS"); TAKE_ABS+=("$SPEECH_ABS")
+    TAKE_SPEECH+=("$SPEECH"); TAKE_SCENE+=("$n")
     printf '  scene %02d (%s): %ss, take %.2fs, speech %.2fs -> starts at %ss\n' "$n" "$KIND" "$SEC" "$A" "$SPEECH" "$SPEECH_ABS" >&2
   else
     # A DELIBERATELY SILENT SCENE. Not an error: the scene contract allows an empty narration cell
-    # and a silent scene lends its window to the line before it. It still needs an audio stream,
-    # or `concat` would produce a file whose audio stops partway through.
+    # and a silent scene lends its window to the line before it — which under the master timeline
+    # is literal, since the previous line may still be speaking here.
     A=0; SS=0; SPEECH=0; OVERRUN=false; IPN=0; SPEECH_ABS="$START"
-    ffmpeg -y -loglevel error -i "$pic" -f lavfi -t "$SEC" -i anullsrc=r=48000:cl=stereo \
-      -map 0:v -map 1:a -t "$SEC" -c:v copy -c:a aac -b:a 192k "$out"
     printf '  scene %02d (%s): %ss, silent\n' "$n" "$KIND" "$SEC" >&2
   fi
   # RELATIVE, not absolute. The concat demuxer resolves each entry against the LIST FILE's own
   # directory, and every scene is written beside it — so a basename is both shorter and the only
   # form that survives the list being read from a different mount or drive than it was written on.
-  echo "file '$(basename "$out")'" >> "$LIST"
+  # The PICTURE is what is listed: it carries no audio at all, and the audio arrives in one mix.
+  echo "file '$(basename "$pic")'" >> "$LIST"
 
-  # `overrun` is FALSE by construction here — an overrunning line exited above. The field is
-  # written anyway so that a sidecar which did NOT come from this script has to lie explicitly,
-  # and so the validator's refusal has something to refuse.
+  # `overrun` is FALSE by construction — a line that overruns THE REEL, or the next line, exits at
+  # the timeline checks below, and this sidecar is only written after they pass. Overrunning its
+  # own SCENE is no longer an overrun at all. The field is written anyway so that a sidecar which
+  # did NOT come from this script has to lie explicitly, and so the validator has something to
+  # refuse.
   PBJSON[i]="$(printf '{"block_index":%d,"window_start_s":%s,"duration_s":%s,"visual":"%s","lead_silence_s":%.3f,"speech_abs_s":%s,"speech_dur_s":%.3f,"clip_dur_s":%.3f,"overrun":%s,"internal_pauses":%d,"freeze_head":%s,"freeze_tail":%s}' \
     "$i" "$START" "$SEC" "$KIND" "$SS" "$SPEECH_ABS" "$SPEECH" "$D" "$OVERRUN" "${IPN:-0}" \
     "$([[ "${FRZH:-0}" != "0" ]] && echo true || echo false)" "$([[ "${FRZT:-0}" != "0" ]] && echo true || echo false)")"
@@ -322,21 +366,68 @@ for ((i=0;i<SCENES;i++)); do
   START=$((START + SEC))
 done
 
-VOTRACK="$TMP/joined.mp4"
-echo "[2/3] concat -> single track" >&2
-ffmpeg -y -loglevel error -f concat -safe 0 -i "$LIST" -c:v libx264 -preset veryfast -crf 20 -c:a aac -movflags +faststart "$VOTRACK"
+# ── THE TIMELINE CHECKS, in place of the per-cell band ────────────────────────────────────────
+# These are the two ways speech can still be WRONG once a line is free to cross a scene boundary.
+# Both are hard errors for the same reason the band was: the fix is to rewrite the line upstream,
+# never to stretch, trim or pad audio here. 0.05s of slack absorbs silencedetect's own resolution.
+NTAKE=${#TAKE_FILE[@]}
+TAKE_END=()
+for ((k=0;k<NTAKE;k++)); do
+  TAKE_END[k]="$(awk -v a="${TAKE_ABS[k]}" -v s="${TAKE_SPEECH[k]}" 'BEGIN{printf "%.3f", a+s}')"
+  awk -v e="${TAKE_END[k]}" -v t="$TOT" 'BEGIN{exit (e > t+0.05) ? 0 : 1}' && {
+    echo "ERROR: voice ${TAKE_SCENE[k]} is still speaking at ${TAKE_END[k]}s but the reel ends at ${TOT}s — the line would be cut mid-word. REWRITE it shorter or give the deck more seconds (never pad, atempo, or trim speech)." >&2; exit 1; }
+  if [[ $((k+1)) -lt "$NTAKE" ]]; then
+    awk -v e="${TAKE_END[k]}" -v nx="${TAKE_ABS[k+1]}" 'BEGIN{exit (e > nx+0.05) ? 0 : 1}' && {
+      echo "ERROR: voice ${TAKE_SCENE[k]} runs to ${TAKE_END[k]}s but voice ${TAKE_SCENE[k+1]} starts at ${TAKE_ABS[k+1]}s — two narrators would speak at once. REWRITE one of the two lines shorter." >&2; exit 1; }
+  fi
+done
 
-# NARRATION-PER-WINDOW assert: every NARRATED window must carry voice-level audio (peaks > -18dB;
-# SFX at 0.12 tops out around -18.4dB and stays below). Inspect the centre 60% of each window so
-# the gate scales from four-second Sora scenes through the historical ten-second tiers.
+VOSIL="$TMP/silent.mp4"
+echo "[2/4] concat -> single silent picture track" >&2
+ffmpeg -y -loglevel error -f concat -safe 0 -i "$LIST" -an -c:v libx264 -preset veryfast -crf 20 "$VOSIL"
+
+# ── THE SINGLE MIX ────────────────────────────────────────────────────────────────────────────
+# Input 0 is the picture. Input 1 is a silence bed spanning the WHOLE reel — it costs nothing at
+# normalize=0 and it means the mix always has an input and always spans the video, so a reel with
+# no narration at all still carries a full-length audio stream instead of stopping partway.
+# Everything after that is one take or one diegetic bed, delayed to its ABSOLUTE offset.
+echo "[3/4] mix ${NTAKE} take(s) + ${#DIEG_FILE[@]} diegetic bed(s) on ONE timeline" >&2
+VOTRACK="$TMP/joined.mp4"
+MIXARGS=(); FC=""; LBLS="[1:a]"; NMIX=1; IDX=2
+AFMT="aformat=sample_rates=48000:channel_layouts=stereo"
+for ((k=0;k<NTAKE;k++)); do
+  MIXARGS+=(-i "${TAKE_FILE[k]}")
+  FC="${FC}[${IDX}:a]${AFMT},adelay=${TAKE_PAD[k]}:all=1[t${k}];"
+  LBLS="${LBLS}[t${k}]"; NMIX=$((NMIX+1)); IDX=$((IDX+1))
+done
+NDIEG=${#DIEG_FILE[@]}
+for ((k=0;k<NDIEG;k++)); do
+  MIXARGS+=(-i "${DIEG_FILE[k]}")
+  FC="${FC}[${IDX}:a]${AFMT},volume=${SFXVOL},adelay=${DIEG_PAD[k]}:all=1[s${k}];"
+  LBLS="${LBLS}[s${k}]"; NMIX=$((NMIX+1)); IDX=$((IDX+1))
+done
+# normalize=0 is the LEVEL LAW in one option: amix's default divides every input by the number of
+# inputs, which would make a reel quieter simply for having more lines in it.
+FC="${FC}${LBLS}amix=inputs=${NMIX}:duration=longest:normalize=0[a]"
+ffmpeg -y -loglevel error -i "$VOSIL" -f lavfi -t "$TOT" -i anullsrc=r=48000:cl=stereo \
+  ${MIXARGS[@]+"${MIXARGS[@]}"} -filter_complex "$FC" \
+  -map 0:v -map "[a]" -t "$TOT" -c:v copy -c:a aac -b:a 192k -movflags +faststart "$VOTRACK"
+
+# NARRATION-OVER-EVERY-NARRATED-SPAN assert: each take's own speech span on the master timeline
+# must carry voice-level audio (peaks > -18dB; SFX at 0.12 tops out around -18.4dB and stays
+# below). The centre 60% of the span is inspected, so the gate scales from a two-second line to a
+# fifteen-second one without a per-tier constant.
 #
-# Only NARRATED windows are checked. A scene with no take is silent BY CONSTRUCTION, and asserting
-# narration over it would fail every deck that uses a card — while checking "every scene" and then
-# excusing the silent ones is how this gate goes vacuous. The list is built from the takes that
-# actually existed, so a scene that was SUPPOSED to have a take and lost it still fails: its
-# window never enters the list, and the sidecar records `speech_dur_s: 0` against it.
-if [[ -n "$NARRATED" ]]; then
-  QUIET_DUR="$(awk -v c="$(awk -v n="$SCENES" -v t="$TOT" 'BEGIN{printf "%.2f", t/n}')" 'BEGIN{d=c*0.6; if(d<1)d=1; printf "%.2f", d}')"
+# The spans come from the takes that ACTUALLY EXISTED, which is what keeps this gate honest under
+# optional narration: a scene with no take declares no span and is never checked, but a scene that
+# HAS a take is always checked — so a deck cannot make the gate vacuous by adding silent scenes,
+# and a take that was level-matched, delayed and then lost on its way into the mix still fails
+# here. Checking "every scene" and then excusing the silent ones is the version that goes vacuous.
+if [[ "$NTAKE" -gt 0 ]]; then
+  NARRATED=""
+  for ((k=0;k<NTAKE;k++)); do NARRATED="${NARRATED}${TAKE_SCENE[k]}:${TAKE_ABS[k]}:${TAKE_END[k]} "; done
+  # One threshold for the whole file, so it has to be short enough for the SHORTEST span's centre.
+  QUIET_DUR="$(awk -v spec="$NARRATED" 'BEGIN{m=split(spec,w," "); mn=1e9; for(i=1;i<=m;i++){if(w[i]=="")continue; split(w[i],se,":"); d=se[3]-se[2]; if(d<mn)mn=d} d=mn*0.6; if(d<0.3)d=0.3; printf "%.2f", d}')"
   QUIET="$(ffmpeg -i "$VOTRACK" -af "silencedetect=noise=-18dB:d=${QUIET_DUR}" -f null - 2>&1 | grep -Eo 'silence_(start|end): *[0-9.]+' || true)"
   EMPTY="$(awk -v spec="$NARRATED" '
     /silence_start/ { s[++k]=$NF+0; next }
@@ -344,17 +435,17 @@ if [[ -n "$NARRATED" ]]; then
     END {
       m=split(spec, w, " ");
       for (i=1;i<=m;i++) { if (w[i]=="") continue;
-        split(w[i], se, ":"); dur=se[2]-se[1]; ws=se[1]+dur*0.2; we=se[2]-dur*0.2;
+        split(w[i], se, ":"); dur=se[3]-se[2]; ws=se[2]+dur*0.2; we=se[3]-dur*0.2;
         for (j=1;j<=k;j++) { ee=(e[j]>0)?e[j]:1e9;
-          if (s[j]<=ws && ee>=we) { printf "%s%d", (out++?",":""), i; break } } } }' <<< "$QUIET")"
+          if (s[j]<=ws && ee>=we) { printf "%s%s", (out++?",":""), se[1]; break } } } }' <<< "$QUIET")"
   if [[ -n "$EMPTY" ]]; then
-    echo "ERROR: narrated windows [$EMPTY] have NO narration in their windows — the voice never made it into the mix. Fix the inputs and re-run; do NOT deliver." >&2
+    echo "ERROR: the narration declared for scene(s) [$EMPTY] is NOT in the mix — those spans are silent through their centre. Fix the inputs and re-run; do NOT deliver." >&2
     exit 1
   fi
-  echo "  narration present in every narrated window" >&2
+  echo "  narration present across all ${NTAKE} narrated span(s)" >&2
 fi
 
-echo "[3/3] finalize -> $OUT" >&2
+echo "[4/4] finalize -> $OUT" >&2
 # Two-pass LINEAR loudnorm: ONE constant gain for the whole file, so the voice/SFX ratio set above
 # is PRESERVED. Single-pass dynamic loudnorm pumps quiet SFX-only stretches up toward the voice.
 ln2_args() {
@@ -371,10 +462,13 @@ else
   ffmpeg -y -loglevel error -i "$VOTRACK" -af "loudnorm=I=-16:TP=-1.5:LRA=11" -c:v copy -c:a aac -b:a 192k "$OUT"
 fi
 
-# The fixed-length guarantee, asserted on the OUTPUT: |actual - sum(scene lengths)| <= 1s.
+# The fixed-length guarantee, asserted on the OUTPUT against the DECLARED TARGET: 0.5s, not 1s.
+# The old tolerance was sized for clips whose length was whatever the provider returned. Every
+# duration on a scene timeline is one this script chose and built to, so a whole second of drift
+# is no longer measurement noise — it is a scene that did not come out the length it was given.
 FDUR="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$OUT")"
-awk -v d="$FDUR" -v e="$TOT" 'BEGIN{x=d-e; if(x<0)x=-x; exit (x<=1)?0:1}' || {
-  echo "ERROR: final duration ${FDUR}s != expected ${TOT}s (+/-1s) — do NOT deliver; investigate the inputs." >&2; exit 1; }
+awk -v d="$FDUR" -v e="$TARGET" 'BEGIN{x=d-e; if(x<0)x=-x; exit (x<=0.5)?0:1}' || {
+  echo "ERROR: final duration ${FDUR}s != declared ${TARGET}s (+/-0.5s) — do NOT deliver; investigate the inputs." >&2; exit 1; }
 
 # Integrity: the final must carry an audio stream spanning the video, and must FULLY DECODE with
 # zero errors (catches corrupted/truncated streams that a stream-copy hides).
@@ -394,10 +488,18 @@ DERR="$( (ffmpeg -v error -xerror -i "$OUT" -f null - ) 2>&1 | head -3 || true)"
 # it. On a uniform deck it is still the block length, so a block-contract render produces the same
 # sidecar it always did.
 CLIPOUT="${SECS[0]}"; for ((i=0;i<SCENES;i++)); do [[ "${SECS[i]}" -gt "$CLIPOUT" ]] && CLIPOUT="${SECS[i]}"; done
+# The validator still refuses a sidecar whose `speech_dur_s` exceeds `clip_seconds`, and on the
+# scene timeline a line is ALLOWED to be longer than the longest scene. That refusal goes away
+# with `clip_seconds` itself in wave 5; until then, say so out loud rather than let a render that
+# cost money be refused at publish with no explanation anywhere.
+for ((k=0;k<NTAKE;k++)); do
+  awk -v s="${TAKE_SPEECH[k]}" -v c="$CLIPOUT" 'BEGIN{exit (s>c)?0:1}' && \
+    echo "WARN: voice ${TAKE_SCENE[k]} carries ${TAKE_SPEECH[k]}s of speech, longer than the longest scene (${CLIPOUT}s). The render is correct, but the wave-4 sidecar validator will refuse it as speech_exceeds_window until clip_seconds is removed (wave 5)." >&2
+done
 SIDE="${OUT}.assembly.json"
 {
-  printf '{"script":"assemble_final.sh","out":"%s","block_count":%d,"clip_seconds":%s,"target_duration_s":%s,"total_duration_s":%s,"actual_duration_s":%s,"width":%s,"height":%s,"fps":"%s","sfx_vol":%s,"gates":["speech_within_window","clip_covers_window","speech_centred","no_time_stretch","narration_every_window","linear_loudnorm_-16","duration_within_1s","full_decode"],"blocks":[' \
-    "$(basename "$OUT")" "$SCENES" "$CLIPOUT" "$TOT" "$TOT" "$FDUR" "$W" "$H" "$FPS" "$SFXVOL"
+  printf '{"script":"assemble_final.sh","out":"%s","block_count":%d,"clip_seconds":%s,"target_duration_s":%s,"total_duration_s":%s,"actual_duration_s":%s,"width":%s,"height":%s,"fps":"%s","sfx_vol":%s,"gates":["speech_fits_the_reel","no_overlapping_lines","clip_covers_window","speech_centred","no_time_stretch","narration_every_narrated_span","master_audio_timeline","linear_loudnorm_-16","duration_within_0.5s","full_decode"],"blocks":[' \
+    "$(basename "$OUT")" "$SCENES" "$CLIPOUT" "$TARGET" "$TOT" "$FDUR" "$W" "$H" "$FPS" "$SFXVOL"
   for ((i=0;i<SCENES;i++)); do printf '%s%s' "${PBJSON[i]}" "$([[ $i -lt $((SCENES-1)) ]] && echo ,)"; done
   printf '],"ts":"%s"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 } > "$SIDE"

@@ -55,9 +55,14 @@ test("no time-stretch filter and no deferred-mode flag survives in the harvested
 test("the harvested contract's five properties are all still present", () => {
   expect(SH, "fixed-length windows").toContain("--clip-seconds");
   expect(SH, "clip must cover its window").toMatch(/REGENERATE the block/);
-  expect(SH, "speech window is a hard error, not a stretch").toMatch(/REWRITE the narration/);
+  // Wave 4 moved this from the CELL to the TIMELINE. The property is unchanged — an overrunning
+  // line is rewritten upstream, never stretched — so it is still asserted here, on the two ways
+  // speech can overrun once it is free to cross a scene boundary.
+  expect(SH, "a line past the end of the reel is a hard error").toMatch(/would be cut mid-word/);
+  expect(SH, "two lines at once is a hard error").toMatch(/two narrators would speak at once/);
+  expect(SH, "and the fix is upstream, never a stretch").toMatch(/REWRITE it shorter/);
   expect(SH, "speech-centred via silencedetect").toContain("silencedetect=noise=-45dB");
-  expect(SH, "narration-per-window assert").toMatch(/have NO narration in their windows/);
+  expect(SH, "narration assert over the narrated spans").toMatch(/is NOT in the mix/);
   expect(SH, "the sidecar is written").toContain('"gates":[');
 });
 
@@ -104,7 +109,58 @@ test("the concat list is RELATIVE — an absolute path is a portability trap", (
   const code = SH.split("\n")
     .filter((l) => !l.trimStart().startsWith("#"))
     .join("\n");
-  expect(code).toContain('echo "file \'$(basename "$out")\'"');
+  // The variable is deliberately not pinned here — wave 4 changed WHAT is listed (the silent
+  // picture, not a per-scene mux) and that belongs in its own test. This one owns `basename`.
+  expect(code).toContain("echo \"file '$(basename ");
+});
+
+// ── 20.2 wave 4: the master audio timeline ─────────────────────────────────────────────────────
+//
+// Source tripwires again, for the same reason: the behavioural half is `smoke_assemble.sh`, which
+// renders a 6-second scene carrying 7.2 seconds of speech and then re-renders the same deck
+// through a sabotaged copy to watch the narration assert go red. These pin the SHAPE that makes
+// that possible, so it cannot be undone by a well-meaning edit that still passes a green smoke.
+
+test("audio is mixed ONCE, on one timeline — not per scene and concatenated", () => {
+  const code = SH.split("\n")
+    .filter((l) => !l.trimStart().startsWith("#"))
+    .join("\n");
+  // Two amix calls means two mixing units, which means the scene is a mixing unit again — and the
+  // per-cell band follows from that, not the other way round.
+  expect(code.match(/amix=/g) ?? [], "there must be exactly one amix").toHaveLength(1);
+  expect(code, "the mix must not be divided down by its own input count").toContain("normalize=0");
+  // The concat list carries the PICTURE, which is silent by construction. Listing a per-scene mux
+  // here is what the old shape did.
+  expect(code).toContain('echo "file \'$(basename "$pic")\'"');
+  expect(code, "the picture track is joined with no audio at all").toContain("-an -c:v libx264");
+});
+
+test("the per-cell speech band is GONE, and did not come back as a constant", () => {
+  const code = SH.split("\n")
+    .filter((l) => !l.trimStart().startsWith("#"))
+    .join("\n");
+  // The band was `[SEC-1.4, SEC]`, enforced per scene. Wave 4's whole deliverable is its removal;
+  // a re-added floor or ceiling would silently restore "narration written for a 56-character
+  // cell" while every other test here stayed green.
+  for (const gone of ["SPEECH_MIN", "SPEECH_MAX", "c-1.4"]) {
+    expect(code, `${gone} is the per-cell band and must not return`).not.toContain(gone);
+  }
+  // …and the replacement is a check against the REEL, not against the scene.
+  expect(code, "the reel's own end is what speech is bounded by").toContain('-v t="$TOT"');
+});
+
+test("the declared target is asserted before any work AND on the output, at 0.5s", () => {
+  expect(SH, "--target-seconds is the declared length").toContain("--target-seconds");
+  expect(SH, "a deck that does not sum to its target is refused while it is still free").toMatch(
+    /the assembler will not pad or trim to reach a target/,
+  );
+  const code = SH.split("\n")
+    .filter((l) => !l.trimStart().startsWith("#"))
+    .join("\n");
+  // The tolerance is the guarantee. 1s was sized for provider-returned clip lengths; every
+  // duration on a scene timeline is one this script built to.
+  expect(code, "the output tolerance is 0.5s, not 1s").toContain("exit (x<=0.5)?0:1");
+  expect(code, "and it is measured against the DECLARED target").toContain('-v e="$TARGET"');
 });
 
 test("the uniform BLOCK contract is still expressible, and is not a second code path", () => {
