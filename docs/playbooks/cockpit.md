@@ -1,5 +1,72 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-14 (17-06 Task 1, **THE MICROSOFT GRANT — ONE CONNECTION, NOT TWO**, per
+> [ADR-018](../decisions/018-one-microsoft-connection-not-two.md). **NO PROVIDER CALL HAS BEEN MADE
+> AND ACTN-02 IS NOT SATISFIED** — this registers the auth substrate only; the Graph Calendar
+> adapter, the management operations and the live gates remain owed by 17-07…17-11.)
+>
+> **What ADR-018 prevented, and why it is a playbook entry rather than a footnote.** Plans 17-06
+> (Calendar) and 25-06 (Outlook mail) each independently specified a Microsoft delegated OAuth flow
+> for the SAME account, colliding on `http.ts`, `ReconnectBanner.tsx` and this file. Both were
+> unexecuted, so nothing was unwound. **17-06 now owns the one shared connection; 25-06 consumes it
+> and adds the mail adapter only.** Do not re-add a Microsoft callback or re-generalize the reconnect
+> banner in 25-06 — 17-06 does both, once.
+>
+> **New watched modules:** `packages/core/src/microsoft.ts` (+ test) and
+> `packages/backend/convex/microsoftAuth.ts` (+ test), registered beside `gmailAuth.ts` because this
+> playbook already owns the Google twin and `http.ts`.
+>
+> **Invariants that must not break:**
+> - **The grant is the UNION** — `offline_access openid profile email Calendars.ReadWrite Mail.Send
+>   Mail.Read`. One consent, one token row, one disconnect. The identity scope is NOT padding:
+>   `Mail.Send` sends AS the connected account, so the product must be able to SHOW the sending
+>   address before a human approves a plan.
+> - **The signed `state` carries a provider discriminator** (`microsoft:<tenantId>`). This is
+>   load-bearing and mutation-proven: removing it makes a **Google-issued state verify as Microsoft**
+>   (the test fails with `expected 'tenant_microsoft' to be null`). Never sign the bare tenantId.
+> - **`microsoftStatus` returns booleans and timestamps ONLY** — never a token, never the raw `scope`
+>   string, which is a capability inventory. `calendarReady`/`mailReady` are DERIVED, for the same
+>   reason `driveReady` is on the Google side: `connected` alone cannot tell a pre-widening grant
+>   from a current one, and a mail control that trusts `connected` walks the user into a 403.
+> - **`store` REPLACES the row.** A widened grant must overwrite the narrower `scope`, or `mailReady`
+>   stays false forever after the widening.
+> - **A Microsoft reconnect retires ONLY `microsoft_calendar_reconnect`.** Mutation-proven: relaxing
+>   the filter to `endsWith("_reconnect")` clears the user's `gmail_reconnect` banner and hides a
+>   Google connection that is still genuinely broken.
+> - **`updateAccess` accepts an optional `refreshToken` because MICROSOFT ROTATES REFRESH TOKENS**
+>   and Google does not. Dropping a rotated token leaves the stored one dead and the connection
+>   unrecoverable without re-consent.
+> - **`disconnectMicrosoft` is NOT parity with `disconnectGoogle` and must never be described as if
+>   it were.** The v2 delegated flow used here has no revocation endpoint, so this deletes the local
+>   row and audits `revokedAtProvider: false` as a HARD false. Removing consent stays a separate user
+>   action in Microsoft My Apps or Entra. **GOVN-03 inherits this limitation and must state it.**
+> - The table keeps its 17-05 name `microsoftCalendarTokens` though it now holds the union grant —
+>   the `gmailTokens` precedent: renaming a Convex table is a migration for cosmetic gain.
+>
+> **Measured at this entry:** `microsoftAuth.test.ts` 25/25, `microsoft.test.ts` 16/16,
+> `calendar.test.ts` 39/39, `importGuard.test.ts` 82/82 (146 backend tests green together); core and
+> backend `tsc --noEmit` exit 0 each; biome clean. Three mutations turned named tests red and were
+> reverted: the state discriminator, the notification filter, and the qualified-scope match.
+>
+> Last verified: 2026-08-14 (the created-artifact surface, second pass — **A DOCUMENT REFERENCE IN
+> THE WORKSPACE NOW OPENS THE DOCUMENT, IN THE WORKSPACE.**) The entry below fixed what the Output
+> card SAYS; this fixes every other document reference on the surface, which was still
+> `<Link href="/dashboard/vault">` — a whole-route jump that drops the reader into an unfiltered
+> grid and leaves the conversation behind. `SourceCard`'s own comment named the upgrade and
+> deferred it ("add a getVaultDoc(byId) tenant query + import PreviewModal"); `api.vault.vaultDoc`
+> is that query and this took it. `cards.tsx` gains `VaultDocButton` (a button, never a link — it
+> opens a dialog in place, and dressing that as navigation was the lie the route-jump told) and
+> `VaultDocModal`, which mounts the SHIPPED `vault/PreviewModal` rather than a second viewer: it
+> already renders markdown, PDFs, images, video, the extraction/failure states and the entity
+> chips, and a second one would be a second thing to keep in step with `previewState`. Three call
+> sites moved: grounded-source titles, the Output card's trailing control (now "Open full
+> document", the stored PDF/download/entities that the inline text preview cannot show), and
+> evaluation citations. A row with no docId renders as plain text, never a control that does
+> nothing; `vaultDoc` returning `null` (deleted, or another tenant's) renders nothing, so a card
+> never asserts a document exists because a stale row names it. Evidence: web workspace + vault 55
+> green, `@pikar/web` typecheck clean apart from two pre-existing foreign-lane `renderReel.ts`
+> errors.
+
 > Last verified: 2026-08-14 (the CREATED-ARTIFACT surface, from a real cockpit transcript — the
 > agent told the user it "can't open files directly in the workspace" when the Output card was
 > already rendering the document there, and separately claimed to have written a deck "in

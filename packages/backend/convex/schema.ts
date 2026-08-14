@@ -1110,7 +1110,13 @@ export default defineSchema({
   // and `freshAccessToken` is documented as "the ONE token-refresh root" over it. Adding a
   // discriminator would make every existing `by_tenant` `.unique()` read ambiguous, and the two
   // grants have genuinely different refresh endpoints, scope strings and expiry behaviour.
-  // NOTHING WRITES THIS TABLE YET — Plan 17-06 owns the OAuth flow that fills it.
+  // Written by `microsoftAuth.store` (17-06). THE NAME IS NOW NARROWER THAN THE CONTENTS and stays
+  // that way deliberately: ADR-018 made this ONE Microsoft grant serving BOTH Calendar and Mail, so
+  // the row's `scope` carries `Calendars.ReadWrite`, `Mail.Send` and `Mail.Read` together. Renaming
+  // a Convex table is a migration for cosmetic gain — the exact reasoning `gmailTokens` records at
+  // gmailAuth.ts:54-56, where one Google grant covering mail + calendar + drive also kept its
+  // original mail-shaped name. Phase 25-06 CONSUMES this row for Outlook; it must not mint a second.
+  // Read per-half readiness with `microsoftCalendarReady`/`microsoftMailReady`, never `connected`.
   microsoftCalendarTokens: defineTable({
     tenantId: v.string(),
     refreshToken: v.string(),

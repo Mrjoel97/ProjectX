@@ -7,6 +7,7 @@ export * from "./buildTelemetry";
 export * from "./businessProfile";
 export * from "./calendar";
 export * from "./calendarManagement";
+export * from "./microsoft";
 export * from "./cash";
 export * from "./cashSpine";
 export * from "./contactImport";

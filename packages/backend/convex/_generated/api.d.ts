@@ -45,6 +45,7 @@ import type * as llm from "../llm.js";
 import type * as media from "../media.js";
 import type * as mediaComplete from "../mediaComplete.js";
 import type * as mediaIntent from "../mediaIntent.js";
+import type * as microsoftAuth from "../microsoftAuth.js";
 import type * as migrations from "../migrations.js";
 import type * as notifications from "../notifications.js";
 import type * as notifyExternal from "../notifyExternal.js";
@@ -134,6 +135,7 @@ declare const fullApi: ApiFromModules<{
   media: typeof media;
   mediaComplete: typeof mediaComplete;
   mediaIntent: typeof mediaIntent;
+  microsoftAuth: typeof microsoftAuth;
   migrations: typeof migrations;
   notifications: typeof notifications;
   notifyExternal: typeof notifyExternal;
