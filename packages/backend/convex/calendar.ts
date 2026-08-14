@@ -35,8 +35,7 @@ export type CreateEventResult = {
   planId: Id<"plans">;
   tenantId: string;
   correlationId: string;
-} & // the create/GET response, and a later round-trip to fetch it is a second chance to be wrong. // (17-08, gated on the Graph probe); it is captured now because both providers offer it only on // holds the event and its durable version. The etag is what event-specific concurrency needs // 17-07: `provider` and `etag` widen the CREATED variant so the terminal records WHICH calendar
-(
+} & ( // the create/GET response, and a later round-trip to fetch it is a second chance to be wrong. // (17-08, gated on the Graph probe); it is captured now because both providers offer it only on // holds the event and its durable version. The etag is what event-specific concurrency needs // 17-07: `provider` and `etag` widen the CREATED variant so the terminal records WHICH calendar
   | {
       outcome: "created";
       eventId: string;
