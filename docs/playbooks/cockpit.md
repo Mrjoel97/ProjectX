@@ -1,5 +1,24 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-14 (the created-artifact surface, second pass — **A DOCUMENT REFERENCE IN
+> THE WORKSPACE NOW OPENS THE DOCUMENT, IN THE WORKSPACE.**) The entry below fixed what the Output
+> card SAYS; this fixes every other document reference on the surface, which was still
+> `<Link href="/dashboard/vault">` — a whole-route jump that drops the reader into an unfiltered
+> grid and leaves the conversation behind. `SourceCard`'s own comment named the upgrade and
+> deferred it ("add a getVaultDoc(byId) tenant query + import PreviewModal"); `api.vault.vaultDoc`
+> is that query and this took it. `cards.tsx` gains `VaultDocButton` (a button, never a link — it
+> opens a dialog in place, and dressing that as navigation was the lie the route-jump told) and
+> `VaultDocModal`, which mounts the SHIPPED `vault/PreviewModal` rather than a second viewer: it
+> already renders markdown, PDFs, images, video, the extraction/failure states and the entity
+> chips, and a second one would be a second thing to keep in step with `previewState`. Three call
+> sites moved: grounded-source titles, the Output card's trailing control (now "Open full
+> document", the stored PDF/download/entities that the inline text preview cannot show), and
+> evaluation citations. A row with no docId renders as plain text, never a control that does
+> nothing; `vaultDoc` returning `null` (deleted, or another tenant's) renders nothing, so a card
+> never asserts a document exists because a stale row names it. Evidence: web workspace + vault 55
+> green, `@pikar/web` typecheck clean apart from two pre-existing foreign-lane `renderReel.ts`
+> errors.
+
 > Last verified: 2026-08-14 (the CREATED-ARTIFACT surface, from a real cockpit transcript — the
 > agent told the user it "can't open files directly in the workspace" when the Output card was
 > already rendering the document there, and separately claimed to have written a deck "in

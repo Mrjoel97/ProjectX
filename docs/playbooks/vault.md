@@ -1,5 +1,34 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Last verified: 2026-08-14 (three user-reported vault defects, code-only). **(1) THE DRIVE
+> PICKER NO LONGER THROWS.** Every browse path in `vaultDrive.ts` used to
+> `throw new Error("drive: files.list <status>")`; a throw out of an action reaches the browser as
+> an untyped `Server Error` AND — because `DriveBrowser` calls `void load(...)` from an effect —
+> as an unhandled promise rejection, so the picker sat on "Reading Drive…" forever with no
+> sentence attached. The root level is THREE independent lists and one throw killed all three, so a
+> single 403 on `sharedWithMe` hid every folder in My Drive too. Now: `folderPage` degrades to
+> `[]` (the rule `drives.list` already followed), the level/search/enumerate paths return
+> `reason: "drive_error"`, and `logDriveFailure` writes the status + Drive's message to the SERVER
+> console only (Drive echoes the `q`, which carries a folder id — a console line, never an audit
+> payload, §4). The client also `.catch`es the action. Ground truth for the report in hand: the
+> tenant's own refresh token was probed directly against `files.list` (root, sharedWithMe) and
+> `drives.list` — all three returned 200 with folders, so the outage was the resilience path, not
+> the grant. **(2) A FILING FOLDER CAN BE DELETED WHEN IT IS EMPTY**, which is exactly the case that
+> had no control: `DocGrid`'s only folder action was gated on `sealed`
+> (`reserving`/`ingesting`), and an organizational folder is `complete` FROM BIRTH, so the branch
+> was unreachable and an empty folder was permanent. A two-click Delete pill now shows for
+> `organizational === true` folders at any member count. It reuses `vaultFolders.cancelFolder`
+> unchanged and is NON-DESTRUCTIVE to documents: the row goes, members keep a dangling `folderId`
+> and become ordinary documents (the lenient join). Upload/Drive folders keep their cancel-only
+> rail — their counters, reservation and digest describe a batch, not a filing choice.
+> **(3) `vault.vaultDoc`** — ONE document's projection by id, the `getVaultDoc(byId)` the workspace
+> cards deferred (see cockpit.md). `v.string()` + `normalizeId`, not `v.id`, because the callers
+> hold plain strings (`evaluations.citationDocId`); malformed and foreign both return `null` on the
+> `vaultDocText` fail-closed rule, never a throw. Evidence: backend vaultDrive 16 + vaultFolders 25
+> + createdDocs 11 (incl. a new `vaultDoc` own/foreign/malformed test) + dispatchGuard 15 green;
+> web vault + workspace 55 green; `@pikar/web` typecheck clean apart from two pre-existing
+> `render/renderReel.ts` errors from another lane.
+
 > Last verified: 2026-08-12 (Vault UI lint/a11y repair). Browse controls now use type-only React
 > imports, scoped search resets explicitly key their trigger-only dependencies, preview entity and
 > action groups use semantic list/section/fieldset markup, and the modal backdrop is a real

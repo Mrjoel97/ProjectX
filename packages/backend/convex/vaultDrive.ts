@@ -229,6 +229,24 @@ async function driveFetch(url: string, token: string): Promise<Response> {
 }
 
 /**
+ * Drive said no — LOG IT, and let the caller return a code instead of throwing.
+ *
+ * ⚠ WHY THIS EXISTS AT ALL. Every browse path used to `throw new Error("drive: files.list 403")`.
+ * A throw out of an action reaches the browser as an untyped `Server Error` AND as an unhandled
+ * promise rejection (`void load(...)` in the picker), so the picker painted "Reading Drive…"
+ * forever and said nothing — which is exactly what "Drive is not responding" looks like from the
+ * outside. Worse, the root level is THREE lists and one throw killed all three: a single 403 on the
+ * shared-with-me query hid every folder in My Drive too.
+ *
+ * The status and Drive's own message go to the SERVER log only. A status code is not user content,
+ * but Drive echoes the `q` (which carries a folder id) in its error body, so this is a console line
+ * and never an audit payload (§4).
+ */
+async function logDriveFailure(label: string, res: Response): Promise<void> {
+  console.error(`drive: ${label} ${res.status} ${(await res.text()).slice(0, 300)}`);
+}
+
+/**
  * Breadth-first enumeration of a Drive folder, metadata only.
  *
  * ONE `files.list` per folder per page — the field projection asks for everything the pre-flight
@@ -361,19 +379,28 @@ const BROWSE_FIELDS =
   "nextPageToken,files(id,name,mimeType,size,modifiedTime,shortcutDetails,capabilities/canDownload)";
 
 /** One page-1 `files.list` of folders. Deliberately NOT paginated: a browse level is a HUMAN
- *  reading a list, and 100 folders in one directory is already past what anyone scans. */
+ *  reading a list, and 100 folders in one directory is already past what anyone scans.
+ *
+ *  DEGRADES TO EMPTY, exactly as `drives.list` already does. The root is a merge of three
+ *  independent lists and one of them failing is not a reason to show none of them. */
 async function folderPage(token: string, q: string): Promise<DriveNode[]> {
   const res = await driveFetch(
     driveUrl("", { q, fields: NODE_FIELDS, pageSize: "100", includeItemsFromAllDrives: "true" }),
     token,
   );
-  if (!res.ok) throw new Error(`drive: files.list ${res.status}`);
+  if (!res.ok) {
+    await logDriveFailure("files.list (folders)", res);
+    return [];
+  }
   const body = (await res.json()) as { files?: { id: string; name: string }[] };
   return (body.files ?? []).map((f) => ({ id: f.id, name: f.name, kind: "folder" as const }));
 }
 
 export type DriveBrowseResult =
-  | { ok: false; reason: "not_connected" | "reauth" | "refresh_failed" | "bad_folder_id" }
+  | {
+      ok: false;
+      reason: "not_connected" | "reauth" | "refresh_failed" | "bad_folder_id" | "drive_error";
+    }
   | { ok: true; folders: DriveNode[]; files: DriveEntry[]; truncated: boolean };
 
 export type DriveSearchHit = {
@@ -385,7 +412,7 @@ export type DriveSearchHit = {
 };
 
 export type DriveSearchResult =
-  | { ok: false; reason: "not_connected" | "reauth" | "refresh_failed" }
+  | { ok: false; reason: "not_connected" | "reauth" | "refresh_failed" | "drive_error" }
   | { ok: true; hits: DriveSearchHit[] };
 
 /** Escape a value embedded inside one of Drive's single-quoted query-language literals. URL
@@ -447,7 +474,10 @@ export const listDriveFolders = tenantAction({
         }),
         access.token,
       );
-      if (!res.ok) throw new Error(`drive: files.list ${res.status}`);
+      if (!res.ok) {
+        await logDriveFailure("files.list (level)", res);
+        return { ok: false, reason: "drive_error" };
+      }
       const body = (await res.json()) as { files?: DriveFile[]; nextPageToken?: string };
       const entries = body.files ?? [];
 
@@ -527,7 +557,10 @@ export const findInDrive = tenantAction({
       }),
       access.token,
     );
-    if (!res.ok) throw new Error(`drive: files.list ${res.status}`);
+    if (!res.ok) {
+      await logDriveFailure("files.list (search)", res);
+      return { ok: false, reason: "drive_error" };
+    }
     const body = (await res.json()) as { files?: DriveFile[] };
 
     return {
@@ -548,7 +581,10 @@ export const findInDrive = tenantAction({
 // ── The entry point ───────────────────────────────────────────────────────────
 
 export type DriveImportResult =
-  | { ok: false; reason: "not_connected" | "reauth" | "refresh_failed" | "bad_folder_id" }
+  | {
+      ok: false;
+      reason: "not_connected" | "reauth" | "refresh_failed" | "bad_folder_id" | "drive_error";
+    }
   | { ok: false; reason: "empty_folder" }
   | {
       ok: false;
@@ -602,7 +638,17 @@ export const importDriveFolder = tenantAction({
       };
 
     // 2. Enumerate. Metadata only — nothing is downloaded and nothing has cost anything yet.
-    const { files, truncated } = await enumerateFolder(access.token, driveFolderId);
+    //    A Drive-side failure here is a CODE, never a throw: nothing has been reserved or fetched,
+    //    so there is nothing to unwind, and an untyped Server Error would leave the button spinning
+    //    with no sentence attached to it (see `logDriveFailure`).
+    let enumerated: { files: DriveFile[]; truncated: boolean };
+    try {
+      enumerated = await enumerateFolder(access.token, driveFolderId);
+    } catch (error) {
+      console.error(`drive: enumerate failed — ${String(error)}`);
+      return { ok: false, reason: "drive_error" };
+    }
+    const { files, truncated } = enumerated;
 
     // ⚠ A ZERO-CHILD RESULT ON A FOLDER THE USER EXPLICITLY PICKED IS SUSPICIOUS, NOT A SUCCESS.
     // It is what a missing shared-drive param looks like, and it is what an empty folder looks

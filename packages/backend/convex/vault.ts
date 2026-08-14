@@ -578,6 +578,34 @@ export const vaultDocText = tenantQuery({
 });
 
 /**
+ * ONE document's PROJECTED metadata by id — the `getVaultDoc(byId)` the workspace cards deferred.
+ *
+ * The vault grid gets its rows from `listVaultDocs`, but the workspace only ever holds a docId (the
+ * `vaultSources` row carries ids and titles, never rows), so a card there could offer nothing but a
+ * link out to /dashboard/vault. This is the missing half: with it the shipped `PreviewModal` mounts
+ * in the workspace over the same projection it already renders, so an agent-created artifact is READ
+ * WHERE IT WAS MADE rather than in another route.
+ *
+ * Same fail-closed shape as `vaultDocText` — `null` for missing AND for foreign, never a throw, so
+ * the pair cannot become an ownership oracle.
+ *
+ * `vaultDocId` is a plain STRING, not `v.id`, and `normalizeId` is the guard. The callers are
+ * citation and source rows whose doc ids were stored as strings (`evaluations.citationDocId`), so a
+ * branded arg would force a cast in the browser — i.e. move an unchecked assumption to the side of
+ * the wire that cannot check it. A malformed id normalizes to `null` and lands on the same
+ * fail-closed return as a foreign one.
+ */
+export const vaultDoc = tenantQuery({
+  args: { vaultDocId: v.string() },
+  handler: async (ctx, { vaultDocId }): Promise<ReturnType<typeof projectVaultDoc> | null> => {
+    const id = ctx.db.normalizeId("vaultDocuments", vaultDocId);
+    const doc = id === null ? null : await ctx.db.get(id);
+    if (!doc || doc.tenantId !== ctx.tenantId) return null;
+    return projectVaultDoc(doc);
+  },
+});
+
+/**
  * The 4 browse stats, DERIVED from the same bounded window the grid reads: TOTAL FILES, PROCESSED
  * (status === "ready"), STORAGE USED (Σ size), CATEGORIES (the fixed 6).
  *

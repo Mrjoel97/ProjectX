@@ -23,6 +23,10 @@ import type { FunctionReturnType } from "convex/server";
 import Link from "next/link";
 import { useState } from "react";
 import { MarkdownDocument } from "../MarkdownDocument";
+// The SHIPPED vault preview, mounted here rather than reimplemented: it already renders markdown,
+// PDFs, images and video, the extraction/failure states and the entity chips. A second document
+// viewer would be a second thing to keep in step with `previewState`.
+import { PreviewModal } from "../vault/PreviewModal";
 import { MediaCanvas } from "./MediaCanvas";
 import { useSendCockpitMessage } from "./useSendCockpitMessage";
 
@@ -1965,6 +1969,72 @@ function ActivityCard({ steps }: { steps: StepView[] }) {
 // never a query string or chunk text (§4, vaultSources.ts writes NO log-plane row).
 type VaultSources = NonNullable<FunctionReturnType<typeof api.vaultSources.byThread>>;
 
+// ---------- IN-PLACE DOCUMENT VIEWING (the deferred `getVaultDoc(byId)` upgrade) ----------
+
+/**
+ * Open ONE vault document over the workspace, without leaving it.
+ *
+ * Every document reference in this file used to be `<Link href="/dashboard/vault">` — a
+ * whole-route jump that dropped the reader into an unfiltered grid and left the conversation
+ * behind. It was a deliberate stopgap (`SourceCard`'s own comment named the upgrade: "add a
+ * getVaultDoc(byId) tenant query + import PreviewModal"), and `api.vault.vaultDoc` is that query.
+ *
+ * The doc id is the ONLY thing a workspace card holds — `vaultSources` rows carry ids and titles,
+ * never rows — so the fetch happens here and nowhere else. `null` (deleted, or another tenant's)
+ * renders nothing and closes: a card must not assert a document exists because a stale row names it.
+ */
+function VaultDocModal({ docId, onClose }: { docId: string; onClose: () => void }) {
+  const doc = useQuery(api.vault.vaultDoc, { vaultDocId: docId });
+  if (doc === undefined || doc === null) return null;
+  return <PreviewModal doc={doc} onClose={onClose} />;
+}
+
+/** A document TITLE that opens the document. A button, never a link: it opens a dialog in place,
+ *  and dressing that as navigation is the lie the route-jump version told. */
+function VaultDocButton({
+  docId,
+  children,
+  testId,
+  style,
+}: {
+  docId: string | undefined;
+  children: React.ReactNode;
+  testId?: string;
+  style?: React.CSSProperties;
+}) {
+  const [open, setOpen] = useState(false);
+  // No id (a row written before ids were carried) ⇒ plain text, never a control that does nothing.
+  if (!docId) {
+    return (
+      <span data-testid={testId} style={style}>
+        {children}
+      </span>
+    );
+  }
+  return (
+    <>
+      <button
+        type="button"
+        data-testid={testId}
+        onClick={() => setOpen(true)}
+        style={{
+          border: 0,
+          padding: 0,
+          background: "transparent",
+          font: "inherit",
+          color: "var(--teal-600)",
+          cursor: "pointer",
+          textAlign: "left",
+          ...style,
+        }}
+      >
+        {children}
+      </button>
+      {open && <VaultDocModal docId={docId} onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
 /**
  * "📚 Grounded in N documents" — a DUMB renderer over vaultSources.byThread (the briefing precedent):
  * self-queries on threadId, returns null when a turn wasn't grounded, so an ungrounded/compose turn
@@ -1992,17 +2062,12 @@ function SourceCard({ threadId }: { threadId?: string }) {
         }}
       >
         {sources.titles.map((title, i) => (
-          // ponytail: doc-level link to /dashboard/vault (context-sanctioned fallback, no new query).
-          //  Inline PreviewModal upgrade = add a getVaultDoc(byId) tenant query + import PreviewModal —
-          //  deferred (Pitfall 5). docIds ride along in the row for that future targeted click-through.
+          // The deferred upgrade, taken: the docId the row already carried now opens the document
+          // in place instead of navigating to an unfiltered /dashboard/vault.
           <li key={sources.docIds[i] ?? title} style={traceText}>
-            <Link
-              href="/dashboard/vault"
-              data-testid="source-title"
-              style={{ color: "var(--teal-600)" }}
-            >
+            <VaultDocButton docId={sources.docIds[i]} testId="source-title">
               {title}
-            </Link>
+            </VaultDocButton>
           </li>
         ))}
       </ul>
@@ -2159,17 +2224,16 @@ function OutputCard({ threadId }: { threadId?: string }) {
           "This artifact has no text preview."
         )}
       </section>
-      <Link
-        href="/dashboard/vault"
-        style={{
-          display: "inline-block",
-          marginTop: "0.6rem",
-          color: "var(--teal-600)",
-          fontSize: "0.82rem",
-        }}
+      {/* The full document, HERE. The inline preview above is the text; this opens the shipped
+          vault viewer over the workspace for the rest of it — the stored PDF, download, entities,
+          rename/delete — without leaving the conversation that produced it. */}
+      <VaultDocButton
+        docId={selectedId}
+        testId="output-open"
+        style={{ display: "inline-block", marginTop: "0.6rem", fontSize: "0.82rem" }}
       >
-        Open in Knowledge Vault
-      </Link>
+        Open full document
+      </VaultDocButton>
     </div>
   );
 }
@@ -2477,13 +2541,13 @@ function EvaluationCard({ threadId }: { threadId?: string }) {
                       <span style={{ ...traceText, flex: 1, color: "var(--ink)" }}>
                         {f.label}{" "}
                         {f.citationDocId ? (
-                          <Link
-                            href="/dashboard/vault"
-                            data-testid="evaluation-citation"
-                            style={{ color: "var(--teal-600)", fontSize: "0.8rem" }}
+                          <VaultDocButton
+                            docId={f.citationDocId}
+                            testId="evaluation-citation"
+                            style={{ fontSize: "0.8rem" }}
                           >
                             [{f.citationTitle}]
-                          </Link>
+                          </VaultDocButton>
                         ) : (
                           <span
                             data-testid="evaluation-citation"
