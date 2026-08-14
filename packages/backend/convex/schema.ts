@@ -665,6 +665,36 @@ export default defineSchema({
     .index("by_thread", ["tenantId", "threadId"])
     .index("by_tenant_createdAt", ["tenantId", "createdAt"]),
 
+  // ── Calendar-availability content plane (ACTN-02) ─────────────────────────
+  // The calendar sibling of `briefings`, and it exists for the identical reason. `checkAvailability`
+  // returns a STRING to the model loop, so "what's on my calendar?" left the canvas BLANK while the
+  // only copy of the answer lived in chat prose — the same detachment `briefings` was created to fix
+  // for the inbox. This row is the thing the CALENDAR card renders.
+  //
+  // AN EMPTY `busy` ARRAY IS A REAL ANSWER, NOT AN ABSENT ONE. "You are free that week" is precisely
+  // what the user asked for, so the row is written on the empty read too and the card renders an
+  // explicit clear state. Skipping the write when `busy.length === 0` would reintroduce the exact
+  // blank canvas this table exists to remove — the failure mode is silence, not wrong data.
+  //
+  // Content plane only: no audit row is written here. The refs-only `calendar.availability` audit
+  // (range + busyCount, never an instant) stays with the ACTING module — calendar.ts /
+  // microsoftCalendar.ts — so times held here can never reach a payload (CLAUDE.md §4).
+  calendarViews: defineTable({
+    tenantId: v.string(),
+    threadId: v.string(), // renders the CALENDAR card for this thread, like briefings
+    provider: v.union(v.literal("google"), v.literal("microsoft")), // which calendar was read
+    range: v.string(), // the requested range literal (caller-supplied, never user prose)
+    tz: v.string(), // the IANA zone the read was bucketed in (display honesty, as in briefings)
+    // Code-owned instants straight off the provider — never model output (ADR-004). freeBusy
+    // returns windows ONLY, with no titles or attendees, so this table cannot leak event contents.
+    busy: v.array(v.object({ startMs: v.number(), endMs: v.number() })),
+    // Microsoft caps its event scan (MAX_ITEMS) and reports it; Google's freeBusy does not.
+    // Optional → no migration. Rendered as an explicit note so a TRUNCATED read can never be
+    // mistaken for a complete one — the same cap-honesty rule as briefings.listedCount.
+    truncated: v.optional(v.boolean()),
+    createdAt: v.number(),
+  }).index("by_thread", ["tenantId", "threadId"]),
+
   // ── Phase-10 vault-grounding content plane (VGND-01) ──────────────────────
   // The read-only sibling of `briefings`: holds the labels the SOURCE card renders for a
   // searchVault turn. Titles + doc ids + count ONLY — labels-to-UI, NEVER chunk text, NEVER an
