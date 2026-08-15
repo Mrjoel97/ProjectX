@@ -4,13 +4,13 @@ milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_plan: 7 (done)
 status: completed
-stopped_at: Completed 33-01-PLAN.md
-last_updated: "2026-08-15T17:52:58.655Z"
+stopped_at: Completed 33-02-PLAN.md
+last_updated: "2026-08-15T18:42:06.179Z"
 progress:
   total_phases: 53
   completed_phases: 31
-  total_plans: 410
-  completed_plans: 281
+  total_plans: 412
+  completed_plans: 282
 ---
 
 > **Counting note, 2026-08-14.** `total_phases` 52 → 53 reflects Phase 20.2 being registered, not new
@@ -1776,6 +1776,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 | Phase 19 P02 | 55 min | 3 tasks | 4 files |
 | Phase 19.1 P01 | 35 | 3 tasks | 5 files |
 | Phase 33-media-creation-ux-overhaul-guided-intake-storyboard-variations-auto-assembled-reel-reel-first-canvas-clear-failure-retry-grounded-citations P01 | 32min | 3 tasks | 3 files |
+| Phase 33 P02 | 43min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -1982,6 +1983,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 33]: 33-01: Source citation lines parse from SCENE PROMPTS per-scene blocks, not the deck table — v2 deck tables stay byte-identical
 - [Phase 33]: 33-01: unreadable Source lines (empty [doc:] id or freehand text) refuse the deck as malformed_source — a citation is never silently dropped; parser output carries no confirmation field (provenance rule)
 - [Phase 33]: 33-01: parseVariations refuses the whole proposal on any inner deck refusal — no silent one-deck fallback; each VariationSlice carries its own body slice for per-variation SCRIPT/ART DIRECTION
+- [Phase 33]: confirmClaim args are planId+sceneIndex only — actor/timestamp ctx-derived; the model has no write path to confirmedAt
+- [Phase 33]: plans.shots stays THE picked deck — altShots/altTargetDurationSeconds swap via switchDeck (structural stamp + render clear), money path textually untouched
 
 ### Pending Todos
 
@@ -2013,8 +2016,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
-Last session: 2026-08-15T17:51:12.779Z
-Stopped at: Completed 33-01-PLAN.md
+Last session: 2026-08-15T18:42:02.621Z
+Stopped at: Completed 33-02-PLAN.md
 Last session: 2026-08-03T06:20:00.000Z
 Stopped at: Completed 15.3-04-PLAN.md
 Last session: 2026-08-03T01:10:00.000Z
