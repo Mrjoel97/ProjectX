@@ -8,8 +8,33 @@
 // narrative fields a model may propose. Adding a field there adds it here; the totality test in
 // proposal.test.ts fails if the two ever drift.
 import { BLUEPRINT_FIELDS, FIELD_SPEC } from "./blueprint";
+import type { BusinessProfile } from "./businessProfile";
 import { CASH_INPUTS } from "./cash";
 import type { FigureActor, FigureConfidence, FigureOrigin } from "./financeClaim";
+
+/**
+ * The `BusinessProfile` keys a profile proposal may actually persist into — a `keyof BusinessProfile`
+ * array, so a typo here is a compile error rather than a silently-dead registry entry.
+ *
+ * NOT the same set as "derivable blueprint fields" (`FIELD_SPEC[f].derivable`): `revenueModel` and
+ * `bindingConstraint` are legal, model-derivable BLUEPRINT fields — they reach the blueprint spine
+ * as document-derived candidates — but `BusinessProfile` has no field for either, so there is
+ * nowhere for `writeProfileDoc` to persist a proposal for them. Before this list existed, both
+ * passed `proposalTarget`'s existence check, got merged onto the write object by the applier, and
+ * were silently dropped by `serializeProfile` — a proposal that reported success and changed
+ * nothing. `PROPOSAL_TARGETS` below intersects `derivable` with membership here so that failure
+ * mode cannot recur: excluded fields never become a `ProposalTarget` at all, so the applier's
+ * `unknown_target` refusal catches them instead of an approval doing nothing.
+ */
+const PROFILE_WRITABLE_FIELDS: readonly (keyof BusinessProfile)[] = [
+  "name",
+  "oneLineDescription",
+  "stage",
+  "offering",
+  "targetCustomer",
+  "primaryGoals",
+  "knownConstraints",
+] as const;
 
 export type ProposalStore =
   | "financeInputs"
@@ -72,7 +97,9 @@ export const PROPOSAL_TARGETS: readonly ProposalTarget[] = [
     valueType: "number" as const,
     unlocks: spec.unlocks,
   })),
-  ...BLUEPRINT_FIELDS.filter((f) => FIELD_SPEC[f].derivable).map((f) => ({
+  ...BLUEPRINT_FIELDS.filter(
+    (f) => FIELD_SPEC[f].derivable && (PROFILE_WRITABLE_FIELDS as readonly string[]).includes(f),
+  ).map((f) => ({
     store: "profile" as ProposalStore,
     field: f as string,
     label: FIELD_SPEC[f].label,

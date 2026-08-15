@@ -1,7 +1,22 @@
 import { describe, expect, test } from "vitest";
 import { BLUEPRINT_FIELDS, FIELD_SPEC } from "./blueprint";
+import type { BusinessProfile } from "./businessProfile";
 import { CASH_INPUTS } from "./cash";
 import { PROPOSAL_TARGETS, proposalTarget } from "./proposal";
+
+// The `BusinessProfile` keys the profile writer can actually persist into — mirrors
+// `proposal.ts`'s private `PROFILE_WRITABLE_FIELDS` so this test can assert against the real
+// write target rather than trusting the registry's own filter to have applied it correctly.
+const PROFILE_KEYS: readonly (keyof BusinessProfile)[] = [
+  "name",
+  "oneLineDescription",
+  "persona",
+  "stage",
+  "offering",
+  "targetCustomer",
+  "primaryGoals",
+  "knownConstraints",
+];
 
 describe("the target registry is closed and total", () => {
   test("every CASH_INPUTS field is a target, on its own store", () => {
@@ -12,11 +27,30 @@ describe("the target registry is closed and total", () => {
     }
   });
 
-  test("every model-derivable blueprint field is a profile target", () => {
+  test("every model-derivable blueprint field that has a BusinessProfile slot is a profile target", () => {
     for (const field of BLUEPRINT_FIELDS) {
       if (!FIELD_SPEC[field].derivable) continue;
+      if (!(PROFILE_KEYS as readonly string[]).includes(field)) continue;
       expect(proposalTarget("profile", field), `${field} missing`).not.toBeNull();
     }
+  });
+
+  test("every profile target names a real, WRITABLE BusinessProfile key — no silent-drop field", () => {
+    // The ruling-2 regression guard: `revenueModel` and `bindingConstraint` are derivable blueprint
+    // fields with NO slot on `BusinessProfile`. Before this test (and the registry fix it pins), a
+    // proposal for either passed `proposalTarget`'s existence check, got merged onto the write
+    // object by the applier, and was silently dropped by `serializeProfile` on write — an approved
+    // proposal that reported success and changed nothing. This must fail if either field, or any
+    // other unwritable one, is ever re-added to the profile slice of `PROPOSAL_TARGETS`.
+    for (const t of PROPOSAL_TARGETS) {
+      if (t.store !== "profile") continue;
+      expect(
+        (PROFILE_KEYS as readonly string[]).includes(t.field),
+        `${t.field} is a profile target but not a BusinessProfile key`,
+      ).toBe(true);
+    }
+    expect(proposalTarget("profile", "revenueModel")).toBeNull();
+    expect(proposalTarget("profile", "bindingConstraint")).toBeNull();
   });
 
   test("a non-derivable blueprint field is NOT a target", () => {

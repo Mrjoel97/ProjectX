@@ -40,6 +40,17 @@ const cacFact = {
   sourceLocator: { kind: "vault_doc" as const, vaultDocId: "doc123" },
 };
 
+const profileFact = {
+  target: { store: "profile" as const, field: "oneLineDescription" },
+  value: "A bakery in Nairobi",
+  confidence: "high" as const,
+  origin: "stated" as const,
+  actor: "agent" as const,
+  basis: "vaultDoc:doc123",
+  observedAt: 1_650_000_000_000,
+  sourceLocator: { kind: "vault_doc" as const, vaultDocId: "doc123" },
+};
+
 async function seedProposal(t: ReturnType<typeof convexTest>, tenantId: string, items: unknown[]) {
   return t.run((ctx) =>
     ctx.db.insert("proposals", {
@@ -254,5 +265,27 @@ describe("acceptProposal", () => {
       acceptedIndices: [0],
     });
     expect(result).toMatchObject({ ok: false, reason: "not_found" });
+  });
+
+  // Ruling 3 (fix round 1): a profile proposal for a tenant with no `tenantProfiles` row must
+  // refuse rather than fabricate a `persona`. No `tenantProfiles` seed here — that IS the case
+  // under test.
+  test("a profile proposal for a tenant with no tier row refuses incomplete_facts, writing nothing", async () => {
+    const t = convexTest(schema, modules);
+    const proposalId = await seedProposal(t, "u3", [profileFact]);
+    const result = await asTenant(t, "u3").mutation(api.proposals.acceptProposal, {
+      proposalId,
+      acceptedIndices: [0],
+    });
+    expect(result).toMatchObject({ ok: false, reason: "incomplete_facts" });
+    const docs = await t.run((ctx) =>
+      ctx.db
+        .query("vaultDocuments")
+        .withIndex("by_tenant_kind", (q) => q.eq("tenantId", "u3").eq("kind", "business_profile"))
+        .collect(),
+    );
+    expect(docs).toHaveLength(0);
+    const row = await t.run((ctx) => ctx.db.get(proposalId));
+    expect(row?.status).toBe("pending");
   });
 });

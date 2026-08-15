@@ -511,8 +511,10 @@ export async function writeProfileDoc(
  * runs inside a mutation, so it is the SAME transaction either way and the query hop buys nothing.
  * `.unique()` mirrors `tenantProfile.byTenant` — one row per tenant is THE invariant of that table,
  * so a duplicate is LOUD rather than silently shadowed.
- */
-const currentTierRow = (
+ *
+ * Exported for `proposals.ts`: the applier refuses a profile proposal rather than fabricate a
+ * `persona` when this returns `null`, mirroring `updateProfile`'s own `INCOMPLETE_FACTS` gate. */
+export const currentTierRow = (
   ctx: QueryCtx | MutationCtx,
   tenantId: string,
 ): Promise<Doc<"tenantProfiles"> | null> =>

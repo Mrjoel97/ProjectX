@@ -14,22 +14,28 @@ import {
   classifyProposal,
   deserializeProfile,
   type FigureClaim,
+  type ProposalGuard,
   proposalTarget,
 } from "@pikar/core";
 import { v } from "convex/values";
 import { applyFinanceClaims, inputStatesFor } from "./cash";
 import { tenantMutation, tenantQuery } from "./lib/functions";
-import { currentProfileDoc, writeProfileDoc } from "./onboarding";
+import { currentProfileDoc, currentTierRow, writeProfileDoc } from "./onboarding";
 
 export type ProposalRefusal =
   | "not_found"
   | "not_pending"
   | "unknown_item"
   | "unknown_target"
-  | "writer_refused";
+  | "writer_refused"
+  // A profile fact was accepted for a tenant with no `tenantProfiles` row yet. Distinct from
+  // `writer_refused`: this is not a consent problem, it is a missing FACT this function will not
+  // guess — `persona`/tier has no honest default, so `writeProfileDoc` is never called without one.
+  // Mirrors `updateProfile`'s own `INCOMPLETE_FACTS` refusal for the same missing row.
+  | "incomplete_facts";
 
 type AcceptResult =
-  | { ok: true; applied: number; skipped: number }
+  | { ok: true; applied: number; skipped: number; guards: Record<ProposalGuard, number> }
   | { ok: false; reason: ProposalRefusal };
 
 export const acceptProposal = tenantMutation({
@@ -92,6 +98,9 @@ export const acceptProposal = tenantMutation({
     // ── PASS 2: every item cleared; now read current state, classify, and write. ─────────────
     let applied = 0;
     let skipped = 0;
+    // Reporting only — see the doc comment above `classifyProposal`'s call below. Never gates a
+    // write here; `applyFinanceClaims` is the sole authority on whether a claim is too old to apply.
+    const guards: Record<ProposalGuard, number> = { blank: 0, overwrite: 0, stale: 0 };
 
     const financeFacts = chosen.filter(
       (f) => f.target.store === "financeInputs" || f.target.store === "scorecard",
@@ -112,27 +121,31 @@ export const acceptProposal = tenantMutation({
                 statedByUser: state.actor === "user",
                 statedAt: state.statedAt,
               };
-        const guard = classifyProposal(
-          {
-            target: f.target,
-            value: f.value,
-            confidence: f.confidence,
-            origin: f.origin,
-            actor: f.actor,
-            basis: f.basis,
-            observedAt: f.observedAt,
-            sourceLocator: f.sourceLocator,
-          },
-          current,
-        );
-        // Staleness is a temporal-correctness fact, not a consent question — no explicit click can
-        // make an old fact newer than what is stored. `applyFinanceClaims` enforces this too
-        // (isNewerThan); dropping it here keeps `skipped` honest even for a batch that never
-        // reaches the writer because every remaining claim was stale.
-        if (guard === "stale") {
-          skipped += 1;
-          continue;
-        }
+        // Classified for REPORTING only (a future UI can render "N of these overwrite a stated
+        // figure"), never to gate the write: `acceptedIndices` IS the deliberate click design §6.1
+        // asks for, so a non-blank guard does not refuse here. Staleness in particular must not be
+        // enforced a second time in THIS function — `applyFinanceClaims` already skips a stale claim
+        // at write time (cash.ts, `isNewerThan`), inside the same transaction that reads the
+        // authoritative stored time; a second, separately-derived "is this stale" here would be two
+        // implementations of one rule with no guarantee they keep agreeing (ruling 2026-08-15,
+        // fix round 1). Also redundant BY CONSTRUCTION for `profile` (not reached in this branch):
+        // its `CurrentValue.statedAt` is always `null`, so `classifyProposal` can never return
+        // `"stale"` for it.
+        guards[
+          classifyProposal(
+            {
+              target: f.target,
+              value: f.value,
+              confidence: f.confidence,
+              origin: f.origin,
+              actor: f.actor,
+              basis: f.basis,
+              observedAt: f.observedAt,
+              sourceLocator: f.sourceLocator,
+            },
+            current,
+          )
+        ] += 1;
         claims.push({
           field: f.target.field as CashInputField,
           value: f.value as number,
@@ -146,6 +159,8 @@ export const acceptProposal = tenantMutation({
       if (claims.length > 0) {
         const result = await applyFinanceClaims(ctx, ctx.tenantId, claims);
         if (!result.ok) return { ok: false, reason: "writer_refused" };
+        // The skipped count comes ONLY from what `applyFinanceClaims` actually reports — never from
+        // a pre-pass guess — so the two can never disagree about what was skipped and why.
         applied += result.applied;
         skipped += result.skipped;
       }
@@ -153,13 +168,21 @@ export const acceptProposal = tenantMutation({
 
     const profileFacts = chosen.filter((f) => f.target.store === "profile");
     if (profileFacts.length > 0) {
+      // Mirrors `updateProfile`'s own gate (onboarding.ts): the tier is DERIVED, never fabricated,
+      // and `writeProfileDoc` requires one. A tenant who has not yet answered enough for
+      // `tenantProfile.saveFacts` to derive a tier gets `incomplete_facts` here rather than a
+      // guessed persona — the same defect class as fabricating a figure, the thing this whole plan
+      // exists to shut out (ruling 2026-08-15, fix round 1).
+      const tierRow = await currentTierRow(ctx, ctx.tenantId);
+      if (!tierRow) return { ok: false, reason: "incomplete_facts" };
+
       const existingDoc = await currentProfileDoc(ctx, ctx.tenantId);
       const existingProfile: BusinessProfile = existingDoc?.text
         ? deserializeProfile(existingDoc.text)
         : {
             name: "",
             oneLineDescription: "",
-            persona: "solopreneur",
+            persona: tierRow.tier,
             stage: "",
             offering: "",
             targetCustomer: "",
@@ -167,13 +190,12 @@ export const acceptProposal = tenantMutation({
             knownConstraints: [],
           };
       // Merge ONLY the proposed fields over the existing profile — a field nobody proposed stays
-      // absent, never becomes "".
-      // ponytail: a straight per-field assignment. Two registry targets (`revenueModel`,
-      // `bindingConstraint`) have no home on `BusinessProfile` yet (blueprint.ts: "nothing types
-      // them today"), so a proposal for either lands on the merged object but `serializeProfile`
-      // silently drops it on write. Upgrade path: widen `BusinessProfile` when a caller needs to
-      // persist them.
-      const merged = { ...existingProfile } as Record<string, unknown>;
+      // absent, never becomes "". `persona` is always the FRESH tier (§4.2: the markdown is a
+      // projection, `tenantProfiles` is the record), matching `updateProfile`'s own splice — never
+      // trusted off a possibly-stale doc. `PROPOSAL_TARGETS` only ever names a real `BusinessProfile`
+      // key here (proposal.ts's `PROFILE_WRITABLE_FIELDS` intersection), so this assignment can no
+      // longer silently drop a field the way an unwritable target once did.
+      const merged = { ...existingProfile, persona: tierRow.tier } as Record<string, unknown>;
       for (const f of profileFacts) merged[f.target.field] = f.value;
       await writeProfileDoc(
         ctx,
@@ -185,7 +207,7 @@ export const acceptProposal = tenantMutation({
     }
 
     await ctx.db.patch(proposalId, { status: "accepted" });
-    return { ok: true, applied, skipped };
+    return { ok: true, applied, skipped, guards };
   },
 });
 
