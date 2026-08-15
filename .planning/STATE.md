@@ -1788,6 +1788,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 - Phase 30 added: Optional Vertical Workflow Packs
 - Phase 15.4 inserted after Phase 15: Vault redesign and scoped browse correctness (URGENT)
 - Phase 26 added: Pending product pages and Vault redesign integration
+- Phase 33 added: Media creation UX overhaul (guided intake, storyboard variations, auto-assembled reel, reel-first canvas, clear failure retry, grounded citations)
 - Phase 15.3 inserted after Phase 15.2: Vault Folders — Folder Ingest, Synthesis & Drill-In
   (2026-08-02). **Not new scope — a slot for scope that already existed and was homeless.** Phase
   15.2 carved this out as "Phase 2 of this line of work" at `15.2-CONTEXT.md:170-184` and sequenced
