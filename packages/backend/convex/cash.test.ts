@@ -320,6 +320,77 @@ describe("cash.inputs", () => {
     expect(cac?.actor).toBe("user");
     expect(cac?.statedAt).toBe(1_700_000_000_000);
   });
+
+  // Fix round 1: the two tests above happened to pass pre-fix too — Task 2 made `userProvided`
+  // literal, so an agent-written figure was never a member of it, meaning `userStated` already
+  // evaluated `false` and `origin` was already hardcoded `"stated"` BEFORE this task's change.
+  // Only `statedAt` genuinely discriminated. These two insert `fieldProvenance` and the legacy
+  // proxy DISAGREEING on the same row, so old logic and new logic answer differently — a true
+  // mechanism check, not a lucky default.
+  test("fieldProvenance wins over the legacy userProvided proxy — actor and statedAt", async () => {
+    const t = convexTest(schema, modules);
+    await t.run((ctx) =>
+      ctx.db.insert("evaluations", {
+        tenantId: "u1",
+        threadId: "thread_1",
+        framework: "growth-os" as const,
+        findings: [],
+        gaps: [],
+        notEnoughData: [],
+        scorecard: { ...emptyScorecard, financials: { ...emptyScorecard.financials, cac: 500 } },
+        // The legacy proxy says "user, answered at 1_700_000_000_000" — the OLD logic's answer.
+        userProvided: ["financials.cac"],
+        userProvidedAt: { "financials.cac": 1_700_000_000_000 },
+        // The record disagrees: agent, a different timestamp. The NEW logic must prefer this.
+        fieldProvenance: {
+          "financials.cac": {
+            actor: "agent",
+            origin: "stated",
+            source: "vaultDoc:disagree",
+            at: 1_650_000_000_000,
+          },
+        },
+        verdict: "gaps" as const,
+        createdAt: 1_700_000_000_000,
+      }),
+    );
+    const { inputs } = await asTenant(t, "u1").query(api.cash.inputs, {});
+    const cac = inputs.find((i) => i.field === "cac");
+    expect(cac?.actor).toBe("agent");
+    expect(cac?.statedAt).toBe(1_650_000_000_000);
+  });
+
+  // "observed" means PIKAR measured the figure itself; nothing writes that yet, but the read path
+  // must not silently discard it back to the old hardcoded "stated" once something does.
+  test("fieldProvenance wins over the legacy userProvided proxy — origin 'observed'", async () => {
+    const t = convexTest(schema, modules);
+    await t.run((ctx) =>
+      ctx.db.insert("evaluations", {
+        tenantId: "u1",
+        threadId: "thread_1",
+        framework: "growth-os" as const,
+        findings: [],
+        gaps: [],
+        notEnoughData: [],
+        scorecard: { ...emptyScorecard, financials: { ...emptyScorecard.financials, cac: 500 } },
+        userProvided: ["financials.cac"],
+        userProvidedAt: { "financials.cac": 1_700_000_000_000 },
+        fieldProvenance: {
+          "financials.cac": {
+            actor: "agent",
+            origin: "observed",
+            source: "vaultDoc:measured",
+            at: 1_650_000_000_000,
+          },
+        },
+        verdict: "gaps" as const,
+        createdAt: 1_700_000_000_000,
+      }),
+    );
+    const { inputs } = await asTenant(t, "u1").query(api.cash.inputs, {});
+    const cac = inputs.find((i) => i.field === "cac");
+    expect(cac?.origin).toBe("observed");
+  });
 });
 
 describe("cash.unitEconomics", () => {
