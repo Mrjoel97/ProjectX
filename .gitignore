@@ -95,3 +95,8 @@ __pycache__/
 Skills/**/*.pdf
 Skills/*.pdf
 .vercel
+
+# Scratch worktrees/checkouts. `.worktrees/` was already ignored; `.tmp/` held two more
+# registered worktrees and was not, so it leaked into every `git status` and broke `pnpm lint`
+# with a nested biome root config (also excluded in biome.json).
+.tmp/

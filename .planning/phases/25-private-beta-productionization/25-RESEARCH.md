@@ -1,5 +1,37 @@
 # Phase 25: Private Beta Productionization - Research
 
+> ## ⚠️ SUPERSEDED IN ONE AREA — READ THIS BEFORE THE MICROSOFT/MAIL SECTIONS
+>
+> **Added 2026-08-15 by the phase 14→25 gap audit.** This document is loaded in the `<context>`
+> block of plans 25-05, 25-06 and 25-07. Its **token-schema recommendation is now WRONG** and an
+> executor following it would unwind shipped, ADR-backed code.
+>
+> **What this document recommends and you must NOT build:** a `provider` column on `gmailTokens`,
+> a `by_tenant_provider` index, and a tracked `@convex-dev/migrations` backfill (see the "Primary
+> recommendation" line, the `.index("by_tenant_provider", ...)` snippet, and the ⚠️ note warning
+> against making `provider` optional).
+>
+> **What actually landed instead:** Plan 17-05 created a SECOND table, `microsoftCalendarTokens`,
+> and `schema.ts` records the reasoning in-source — `gmailTokens` IS the Google grant,
+> `freshAccessToken` is documented as "the ONE token-refresh root" over it, a discriminator column
+> "would make every existing `by_tenant` `.unique()` read ambiguous", and the two grants have
+> genuinely different refresh endpoints, scope strings and expiry behaviour. **`gmailTokens` is
+> unchanged and stays that way. There is no provider column, no `by_tenant_provider` index, and no
+> migration in this phase.**
+>
+> **The ⚠️ warning below is not wrong — it is moot.** It correctly says an optional `provider` field
+> would make `by_tenant_provider` miss pre-widening rows, with the visible symptom being *the
+> owner's live Gmail connection disappearing*. That hazard is real for the design it describes; the
+> design was simply not adopted. Two tenant-keyed tables have no such failure mode.
+>
+> **Also superseded:** ADR-018 made the Microsoft grant a UNION (`offline_access` + identity +
+> `Calendars.ReadWrite` + `Mail.Send` + `Mail.Read`) consented ONCE by 17-06, so there is no separate
+> Microsoft mail OAuth flow, callback, consent page or token row left to build. See
+> `docs/decisions/018-one-microsoft-connection-not-two.md` and the `amended:` fields of 25-05/06/07.
+>
+> Everything else in this document — the invite-gate research, the BETA-05 three-bucket isolation
+> suite, the Graph endpoint/wire findings — is unaffected.
+
 **Researched:** 2026-08-09
 **Domain:** Convex Auth invite reconciliation · multi-tenant isolation proof · Microsoft Graph mail adapter · production go-live
 **Confidence:** HIGH on the four blocking unknowns (all resolved from pinned package source + official docs); MEDIUM on the Graph read plane (endpoints verified, wire behaviour needs one live call)

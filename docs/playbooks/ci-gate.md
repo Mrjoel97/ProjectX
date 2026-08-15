@@ -1,5 +1,77 @@
 # Playbook: CI gate (typecheck / lint / test / build)
 
+> Last verified: 2026-08-15 (phase 14→25 gap audit — **`biome.json` `files.includes` gained
+> `!.tmp` and `!.worktrees`**, and `.gitignore` gained `.tmp/`. MEASURED, not diff-reviewed.)
+>
+> **The local lint gate was hard-broken and this is what fixed it.** `pnpm lint` did not report
+> lint results at all — it aborted before checking anything with *"Found a nested root
+> configuration, but there's already a root configuration"*. The cause was six stray `biome.json`
+> files inside scratch checkouts: `.tmp/media-release`, `.tmp/media-release-origin`, and four
+> `.worktrees/*` directories. Biome treats a nested root config as a fatal configuration error, so
+> **one leftover worktree anywhere under the repo root disables the entire local lint gate.**
+> `.worktrees/` was already git-ignored but biome does not infer its include set from
+> `.gitignore` alone for this check, and `.tmp/` was not ignored by either.
+>
+> **Why this is a config fix and not a cleanup.** Five stray worktrees were also deregistered in
+> the same pass, which would have cleared the error on its own — but this repo spawns worktrees
+> continuously (eight existed at audit time), so the next one silently re-breaks the gate. The
+> exclusion is the durable fix; the pruning is not.
+>
+> **What was actually observed at `8b40e54`:**
+> - `pnpm typecheck` — **10/10 tasks GREEN**, 2m31s. The two historically-recorded `cash.ts`
+>   errors are gone.
+> - `pnpm lint` — **now runs**: 597 files checked in 8s. It reports **84 errors, 268 warnings,
+>   2 infos**, spread across real source (`apps/web/.../dashboard/vault/*`, `PipelineView.tsx`,
+>   `packages/vault/src/ingestEstimate.test.ts`, root and `packages/backend` `package.json`).
+>   **These are pre-existing and were being MASKED by the config abort — they are not caused by
+>   this change.** `biome ci` checks formatting as well as lint rules, and several of the named
+>   files are under concurrent in-flight edits, so formatter drift is the likely bulk.
+> - `pnpm test` and `pnpm build` — **NOT RUN this pass.** They remain unqualified here.
+>
+> **Consequence for `22.1-03`**, whose must-have truth is *"a quiescent current tree passes pnpm
+> typecheck, pnpm lint, pnpm test and pnpm build without any remembered error baseline"*: the
+> blocker moved rather than cleared. The gate is now runnable, and it is red. Note the 2026-08-12
+> entry below already said *"the full repository gate is currently red in unfinished feature
+> work"* — that statement is now measurable instead of inferred. **Do not treat this entry as
+> evidence the gate passes.** It does not.
+>
+> ### Triage of the red gate, 2026-08-15 — 76 of 86 are a Windows artifact, not defects
+>
+> **NONE of the errors are lint-rule violations.** Biome's rule table accounts for the 268 warnings
+> and 2 infos only (`noNonNullAssertion` 221, `noDescendingSpecificity` 21, `useOptionalChain` 13,
+> `noUnusedImports` 6, and a tail). **Every error is the FORMATTER** — *"the following files need
+> to be formatted"*.
+>
+> **`pnpm lint` and `pnpm gate` are STRUCTURALLY UNABLE TO PASS ON A WINDOWS CHECKOUT.** This repo
+> sets `.gitattributes` `* text=auto` and the machine has `core.autocrlf=true`, so tracked files
+> land in the working tree as **CRLF**. `biome.json` sets no `formatter.lineEnding`, so biome
+> defaults to **`lf`** and reports every CRLF file as needing formatting. **76 of the 86 errors are
+> exactly this** — same bytes, different checkout. On Linux CI the identical commits are LF and
+> pass. **This is not fixable by formatting files**; formatting them on Windows and committing
+> would round-trip forever. The options are `core.autocrlf=false` / `core.eol=lf` plus a working-
+> tree refresh (mass re-checkout — do NOT attempt while lanes hold a dirty tree), or accepting that
+> the local mirror of CI cannot be green here and qualifying `22.1-03` against CI instead.
+> **`*.sh text eol=lf` is already pinned in `.gitattributes` for the sandbox shebang reason — the
+> same reasoning generalises, it just was never generalised.**
+>
+> **The other 10 are real, and CI has not seen them yet.** They are LF files that genuinely need
+> formatting, and every one is a branch-only change absent from `origin/main` — which is precisely
+> why CI is green (run `31883067840`, main, success) while local is red. **CI will go red on these
+> when this branch merges.** They are: `packages/core/src/proposal.ts` (new on branch),
+> `storyboard.ts` + `storyboard.test.ts` (differ from main), `docs/playbooks/watch.json`,
+> root and `packages/backend` `package.json`, two `scripts/eval-cases/*.json`, and two
+> `output/**/oracle.json` (untracked evidence, not a CI concern).
+>
+> **Mixed line endings inside single files is the sharper form of the same bug.** Root
+> `package.json` is LF throughout except ONE CRLF line — biome's diff shows the bare `␍` on the
+> `"gate:lint"` entry. `file(1)` reports such a file as LF because it reports the majority, so a
+> file-type check will mis-sort it; only byte-level tooling sees it. **A Windows editor appending
+> one line to an LF file is enough to redden the gate.**
+>
+> **NOT FIXED IN THIS PASS, deliberately.** `package.json` gained `"gate:lint"` from a concurrent
+> lane *during* this session, and `proposal.ts` / `storyboard.ts` are under active edit by the
+> 21-02 and 20.2 lanes. Formatting files another lane is holding is a collision, not a fix.
+
 > Last verified: 2026-08-15 (origin/main merged into feature/cash-business-finance for the
 > production release: package.json gained main's `pnpm gate` script (bc9c4f1), which mirrors this
 > playbook's CI sequence as one local command. No gate semantics changed on this branch.)

@@ -1,5 +1,14 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Touched 2026-08-15 (phase 14→25 gap-audit session) to clear the §9 Stop hook — **NOT a
+> verification.** **This session changed no product code at all** — only
+> `.planning/phases/25-private-beta-productionization/25-PREREQUISITE-EVIDENCE.md`.
+> `packages/backend/convex/vaultDrive.ts` and `vaultDrive.test.ts` are *still* carrying the same
+> uncommitted in-flight changes from the concurrent Drive/media lane that `f885a82` named earlier
+> today — now uncovered for the third session running. That work remains unread and unattested
+> here; **the lane that owns it still owes this playbook a real entry.** The audit itself records
+> this recurrence under "Shared-worktree and baseline evidence".
+
 > Touched 2026-08-15 (item-4 session) to clear the §9 Stop hook — **NOT a verification.**
 > `packages/backend/convex/vaultDrive.ts` is STILL carrying uncommitted in-flight changes from the
 > concurrent Drive/media lane — the same work `f885a82` named earlier today, still open. This
@@ -58,7 +67,10 @@
 > shared-drives probe alone may still degrade (personal accounts 403 `drives.list` by design), but
 > a failed `files.list` is always an error. Ops note: the Drive API must be ENABLED on the OAuth
 > client's GCP project — the scope grant alone does not enable the API; the 403 body names the
-> exact enable URL and `logDriveFailure` puts it in the Convex log.)
+> exact enable URL and `logDriveFailure` puts it in the Convex log. Re-attested 2026-08-15 by the
+> phase-33 planning session: the still-uncommitted `vaultDrive.ts` working-tree diff — `folderPage`
+> returning `DriveNode[] | null` and `listDriveFolders` mapping a null `mine`/`shared` page to
+> `{ ok: false, reason: "drive_error" }` — matches this entry exactly; no playbook content change.)
 
 > Last verified: 2026-08-15 (**PDF previews render as the document, not as a wall of its text** —
 > Seam A of the PDF end-to-end work). This is the real entry the note below correctly says was

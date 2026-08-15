@@ -135,14 +135,19 @@ suppressions, calendar, goals, the spend ledger, and the Phase 26 dashboard read
 - **Account types:** personal + work via the `/common` authority from a single Azure app
   registration. Unverified-publisher consent is acceptable for the beta (mirrors Gmail Testing
   mode).
-- **The adapter is built in the SAME commit as the Graph implementation, not before.** Roadmap
-  SC#5 is explicit and cites the code: `gmailTokens` (`schema.ts:625-632`) has no `provider`
-  column and is indexed `by_tenant` only; `gmail.ts:45-46` hardcodes
-  `GOOGLE_OAUTH_CLIENT_ID`/`GOOGLE_OAUTH_CLIENT_SECRET`; `gmail.ts:19` hardcodes the Google
-  token endpoint. The widening — a `provider` column, a `by_tenant_provider` index, a provider
-  lookup — ships **with** the Microsoft adapter. **An abstraction with one implementation is
-  what CLAUDE.md §8 forbids**; a plan that lands the seam in an earlier wave than the Graph
-  adapter is wrong on its face.
+- **The adapter is built in the SAME commit as the Graph implementation, not before.** **An
+  abstraction with one implementation is what CLAUDE.md §8 forbids**; a plan that lands the seam in
+  an earlier wave than the Graph adapter is wrong on its face. **This half of the bullet still
+  stands.**
+  > **CORRECTED 2026-08-15 (phase 14→25 gap audit) — the WIDENING half of this bullet is dead.**
+  > It said the seam is "a `provider` column, a `by_tenant_provider` index, a provider lookup" on
+  > `gmailTokens`. **None of that is being built.** Plan 17-05 landed a SECOND table,
+  > `microsoftCalendarTokens`, and `schema.ts` explains in-source why a discriminator column is the
+  > wrong shape: it "would make every existing `by_tenant` `.unique()` read ambiguous", and the two
+  > grants have different refresh endpoints, scope strings and expiry behaviour. `gmailTokens` is
+  > unchanged. The seam that DOES ship with the Graph adapter is `mailProvider` on plan/request
+  > state plus `delivery.ts`'s two arms — see the re-cut `25-05-PLAN.md`. The line-number citations
+  > above (`schema.ts:625-632`) are also stale; `gmailTokens` now sits near line 1146.
 - **Seam to rewrite:** `deliverApprovedPlan.ts` currently calls `internal.gmail.send`
   **directly**. That call site is where per-send provider routing lands.
 - **Re-auth:** the Gmail 7-day Testing-mode expiry is handled by `ReconnectBanner` + the
