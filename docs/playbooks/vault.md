@@ -1,5 +1,12 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Touched 2026-08-15 to clear the §9 Stop hook, **on the owner's instruction — NOT a verification.**
+> `PreviewModal.tsx`, `previewState.ts` and `previewState.test.ts` carried uncommitted in-flight
+> changes from another lane (a `pdf` preview kind plus a shared is-previewable predicate). That
+> work is unfinished, unreviewed by this session, and unattested here. **The lane that owns it still
+> owes this playbook a real entry and a real `Last verified` bump.** Do not read the dates below as
+> covering the PDF preview path.
+
 > Last verified: 2026-08-15 (20.1-02 offline half — **the import boundary, restated where the
 > agent now looks.** The cockpit body's new Drive section names this playbook's contract: Drive
 > reads through the agent return METADATA ONLY, and bringing a file into the vault happens in the
