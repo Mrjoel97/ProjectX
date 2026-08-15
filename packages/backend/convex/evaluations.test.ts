@@ -53,6 +53,23 @@ vi.setConfig({ testTimeout: 30_000 });
 const TENANT = "tenant_a";
 const THREAD = "thread_1";
 
+// Shared FieldProvenance fixtures (cash-business-finance Task 2) — reused by the pre-existing
+// carry-forward/delta tests below (which need a GENUINELY user-attributed write, now that
+// `recordScorecardAnswer` is agent-only — see "an AGENT answer..." near the end of this file) and
+// by the new provenance tests themselves.
+const USER_PROV = {
+  actor: "user" as const,
+  origin: "stated" as const,
+  source: "finance-panel",
+  at: 1_700_000_000_000,
+};
+const AGENT_PROV = {
+  actor: "agent" as const,
+  origin: "stated" as const,
+  source: "vaultDoc:abc123",
+  at: 1_600_000_000_000,
+};
+
 /** convex-test instance with every component the engine + the dispatch terminal touch. */
 function newTest(): TestConvex<typeof schema> {
   const t = convexTest(schema, modules);
@@ -342,7 +359,11 @@ describe("runEvaluation (BEVL-01 — grounded assessment persists a cited row)",
 });
 
 describe("recordScorecardAnswer (BEVL-01 — the 'store' persistence path)", () => {
-  test("stores a user figure into the latest row's scorecard + userProvided[]", async () => {
+  // cash-business-finance Task 2: `recordScorecardAnswer` is the cockpit tool's backing mutation —
+  // a model RELAYING what it heard, not the user typing directly — so it now writes `actor: "agent"`
+  // (see `applyScorecardAnswer`'s literal in `evaluations.ts`). The value still lands, but it must
+  // NOT join `userProvided`; that is the anti-laundering guarantee this test now asserts.
+  test("stores a relayed figure into the latest row's scorecard, but does not credit it as user-provided", async () => {
     const t = newTest();
     await t.mutation(internal.skills.seedSkills, {});
     const docId = await seedDoc(t, TENANT, profileDocText(false));
@@ -362,7 +383,7 @@ describe("recordScorecardAnswer (BEVL-01 — the 'store' persistence path)", () 
       threadId: THREAD,
     });
     expect(row?.scorecard.financials.cac).toBe(150);
-    expect(row?.userProvided).toContain("financials.cac");
+    expect(row?.userProvided).not.toContain("financials.cac");
 
     // 16-09 REGRESSION GUARD, folded into THIS test rather than a sibling: every `newTest()` boots
     // a fresh in-memory backend + four components, and the marginal one pushed this file's
@@ -386,6 +407,23 @@ describe("recordScorecardAnswer (BEVL-01 — the 'store' persistence path)", () 
     expect(coerced?.scorecard.modelCard.offerTypesPresent.upsell).toBe(false);
     expect(typeof coerced?.scorecard.modelCard.offerTypesPresent.upsell).toBe("boolean");
     expect(coerced?.scorecard.financials.ltgp).toBe(3200);
+  });
+
+  // `recordScorecardAnswerInternal` is the identity-free twin the cockpit tool loop actually calls
+  // (llm.ts:3536) — the tenantMutation above is a separate, currently-uncalled door. Nothing asserted
+  // its provenance literal until now.
+  test("recordScorecardAnswerInternal (the cockpit's real write door) stamps agent provenance", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.evaluations.recordScorecardAnswerInternal, {
+      tenantId: TENANT,
+      threadId: THREAD,
+      field: "financials.cac",
+      value: 150,
+    });
+    const row = await t.run((ctx) => latestScorecardRow(ctx.db, TENANT));
+    expect(row?.scorecard.financials.cac).toBe(150);
+    expect(row?.fieldProvenance?.["financials.cac"]?.actor).toBe("agent");
+    expect(row?.userProvided).not.toContain("financials.cac");
   });
 });
 
@@ -440,11 +478,12 @@ describe("carry-forward / anti-re-ask (LOCKED store half)", () => {
       threadId: THREAD,
       query: `SMOKE::${docId}`,
     });
-    await t.withIdentity({ subject: TENANT }).mutation(api.evaluations.recordScorecardAnswer, {
-      threadId: THREAD,
-      field: "financials.cac",
-      value: 150,
-    });
+    // A GENUINE user answer (Task 2: `recordScorecardAnswer` is the agent-relayed cockpit path and
+    // no longer joins `userProvided` — see the describe block above). This carry-forward test needs
+    // the real thing, so it writes through `applyScorecardAnswer` directly with user provenance.
+    await t.run((ctx) =>
+      applyScorecardAnswer(ctx.db, TENANT, THREAD, "financials.cac", 150, USER_PROV),
+    );
     await t.action(internal.evaluations.runEvaluation, {
       tenantId: TENANT,
       threadId: THREAD,
@@ -513,6 +552,41 @@ describe("carry-forward / anti-re-ask (LOCKED store half)", () => {
     // confirmed today the moment a re-evaluation merely carried it forward.
     expect(row?.userProvidedAt?.["financials.cac"]).toBe(answeredAt);
     expect(row?.userProvidedAt?.["financials.cac"]).not.toBe(row?.createdAt);
+  });
+
+  // cash-business-finance Task 3: `fieldProvenance` must carry forward exactly like `userProvided`
+  // and `userProvidedAt` above, or a weekly re-evaluation silently erases every provenance record —
+  // the read side then falls back to the legacy proxy, which reports an agent's own relayed figure
+  // as unknown-origin rather than as an agent's.
+  test("fieldProvenance is carried forward unchanged by a re-evaluation", async () => {
+    const t = newTest();
+    await t.mutation(internal.skills.seedSkills, {});
+    const docId = await seedDoc(t, TENANT, profileDocText(false));
+
+    await t.action(internal.evaluations.runEvaluation, {
+      tenantId: TENANT,
+      threadId: THREAD,
+      query: `SMOKE::${docId}`,
+    });
+    // An agent-relayed answer (via the cockpit's real write door) — lands the value, is never
+    // re-asked, and its provenance must ride along into the NEXT row exactly as written.
+    await t.run((ctx) =>
+      applyScorecardAnswer(ctx.db, TENANT, THREAD, "financials.cac", 340, AGENT_PROV),
+    );
+
+    // The re-evaluation — this is the exact operation the weekly cron runs. It stamps a fresh
+    // `createdAt` on a NEW row; `fieldProvenance` must not reset with it.
+    await t.action(internal.evaluations.runEvaluation, {
+      tenantId: TENANT,
+      threadId: THREAD,
+      query: `SMOKE::${docId}`,
+    });
+
+    const row = await t.withIdentity({ subject: TENANT }).query(api.evaluations.byThread, {
+      threadId: THREAD,
+    });
+    expect(row?.scorecard.financials.cac).toBe(340);
+    expect(row?.fieldProvenance?.["financials.cac"]).toEqual(AGENT_PROV);
   });
 });
 
@@ -643,11 +717,11 @@ describe("delta (BEVL-03 — what changed since the previous evaluation)", () =>
     const t = newTest();
     await t.mutation(internal.skills.seedSkills, {});
     // A user-answered figure seeds a carrier row with zero findings; the first real run cites it.
-    await t.withIdentity({ subject: TENANT }).mutation(api.evaluations.recordScorecardAnswer, {
-      threadId: THREAD,
-      field: "financials.cac",
-      value: 150,
-    });
+    // Task 2: written via `applyScorecardAnswer` with genuine user provenance — `recordScorecardAnswer`
+    // is the agent-relayed cockpit path and no longer joins `userProvided` (so it would cite nothing).
+    await t.run((ctx) =>
+      applyScorecardAnswer(ctx.db, TENANT, THREAD, "financials.cac", 150, USER_PROV),
+    );
     await t.action(internal.evaluations.runEvaluation, {
       tenantId: TENANT,
       threadId: THREAD,
@@ -1168,7 +1242,14 @@ describe("applyScorecardAnswer / setPath does not throw on a malformed carrier (
 
     // Before the fix, `setPath({}, "financials.cac", 150)` threw: `cur = clone["financials"]` was
     // `undefined`, and the final assignment onto `undefined` is a TypeError.
-    await t.run((ctx) => applyScorecardAnswer(ctx.db, TENANT, THREAD, "financials.cac", 150));
+    await t.run((ctx) =>
+      applyScorecardAnswer(ctx.db, TENANT, THREAD, "financials.cac", 150, {
+        actor: "user",
+        origin: "stated",
+        source: "finance-panel",
+        at: 1_700_000_000_000,
+      }),
+    );
 
     const row = await t.run((ctx) =>
       ctx.db
@@ -1179,4 +1260,109 @@ describe("applyScorecardAnswer / setPath does not throw on a malformed carrier (
     );
     expect(row?.scorecard.financials.cac).toBe(150);
   });
+});
+
+describe("evaluations.fieldProvenance schema column", () => {
+  test("an evaluation row round-trips fieldProvenance", async () => {
+    const t = convexTest(schema, modules);
+    const id = await t.run((ctx) =>
+      ctx.db.insert("evaluations", {
+        tenantId: TENANT,
+        threadId: THREAD,
+        framework: "growth-os" as const,
+        findings: [],
+        gaps: [],
+        notEnoughData: [],
+        scorecard: emptyScorecard,
+        userProvided: [],
+        fieldProvenance: {
+          "financials.cac": {
+            actor: "agent" as const,
+            origin: "stated" as const,
+            source: "vaultDoc:abc123",
+            at: 1_700_000_000_000,
+          },
+        },
+        verdict: "gaps" as const,
+        createdAt: 1_700_000_000_000,
+      }),
+    );
+    const row = await t.run((ctx) => ctx.db.get(id));
+    expect(row?.fieldProvenance?.["financials.cac"]).toEqual({
+      actor: "agent",
+      origin: "stated",
+      source: "vaultDoc:abc123",
+      at: 1_700_000_000_000,
+    });
+  });
+
+  test("a legacy row with no fieldProvenance is still valid", async () => {
+    const t = convexTest(schema, modules);
+    const id = await t.run((ctx) =>
+      ctx.db.insert("evaluations", {
+        tenantId: TENANT,
+        threadId: THREAD,
+        framework: "growth-os" as const,
+        findings: [],
+        gaps: [],
+        notEnoughData: [],
+        scorecard: emptyScorecard,
+        userProvided: [],
+        verdict: "gaps" as const,
+        createdAt: 1_700_000_000_000,
+      }),
+    );
+    const row = await t.run((ctx) => ctx.db.get(id));
+    expect(row?.fieldProvenance).toBeUndefined();
+  });
+});
+
+test("a USER answer joins userProvided and stamps userProvidedAt", async () => {
+  const t = convexTest(schema, modules);
+  await t.run((ctx) =>
+    applyScorecardAnswer(ctx.db, TENANT, THREAD, "financials.cac", 150, USER_PROV),
+  );
+  const row = await t.run((ctx) => latestScorecardRow(ctx.db, TENANT));
+  expect(row?.scorecard.financials.cac).toBe(150);
+  expect(row?.userProvided).toContain("financials.cac");
+  expect(row?.userProvidedAt?.["financials.cac"]).toBe(USER_PROV.at);
+  expect(row?.fieldProvenance?.["financials.cac"]).toEqual(USER_PROV);
+});
+
+// THE ANTI-LAUNDERING ASSERTION. This is the whole design in one test: the value is usable,
+// the provenance is honest, and the owner is not credited with something they did not say.
+test("an AGENT answer lands the value but NEVER joins userProvided", async () => {
+  const t = convexTest(schema, modules);
+  await t.run((ctx) =>
+    applyScorecardAnswer(ctx.db, TENANT, THREAD, "financials.cac", 340, AGENT_PROV),
+  );
+  const row = await t.run((ctx) => latestScorecardRow(ctx.db, TENANT));
+  expect(row?.scorecard.financials.cac).toBe(340);
+  expect(row?.userProvided).not.toContain("financials.cac");
+  expect(row?.userProvidedAt?.["financials.cac"]).toBeUndefined();
+  expect(row?.fieldProvenance?.["financials.cac"]).toEqual(AGENT_PROV);
+});
+
+test("an agent answer does not reset the observedAt clock to write time", async () => {
+  const t = convexTest(schema, modules);
+  await t.run((ctx) =>
+    applyScorecardAnswer(ctx.db, TENANT, THREAD, "financials.cac", 340, AGENT_PROV),
+  );
+  const row = await t.run((ctx) => latestScorecardRow(ctx.db, TENANT));
+  // 1_600_000_000_000, the figure's own date — not Date.now().
+  expect(row?.fieldProvenance?.["financials.cac"]?.at).toBe(AGENT_PROV.at);
+});
+
+test("a user re-answer overwrites provenance, so a corrected figure is freshly stated", async () => {
+  const t = convexTest(schema, modules);
+  await t.run((ctx) =>
+    applyScorecardAnswer(ctx.db, TENANT, THREAD, "financials.cac", 340, AGENT_PROV),
+  );
+  await t.run((ctx) =>
+    applyScorecardAnswer(ctx.db, TENANT, THREAD, "financials.cac", 150, USER_PROV),
+  );
+  const row = await t.run((ctx) => latestScorecardRow(ctx.db, TENANT));
+  expect(row?.scorecard.financials.cac).toBe(150);
+  expect(row?.userProvided).toContain("financials.cac");
+  expect(row?.fieldProvenance?.["financials.cac"]).toEqual(USER_PROV);
 });

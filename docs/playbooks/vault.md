@@ -1,5 +1,48 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Touched 2026-08-15 to clear the §9 Stop hook — **NOT a verification.**
+> `packages/backend/convex/vaultDrive.ts` and `vaultDrive.test.ts` carried uncommitted in-flight
+> changes from the concurrent Drive/media lane at the moment this session committed the PDF
+> end-to-end work. That Drive work is unread and unattested here; **the lane that owns it still
+> owes this playbook a real entry.** The Seam A / Seam B entries below cover the PDF preview path
+> and nothing else.
+
+> Last verified: 2026-08-15 (**Seam B — the stored bytes now announce themselves; the PDF path is
+> complete end to end**). **OWNER-ATTESTED IN A BROWSER: "it renders."** That also discharges the
+> "NOT VERIFIED IN A BROWSER" caveat on the Seam A entry below. It is an owner observation, not an
+> automated one — no spec asserts the paint.
+>
+> **`createDocument` HAS ALWAYS RENDERED A REAL PDF** for `form: "long"` (`llm.ts`, `markdownToPdf`
+> → `ctx.storage.store`). Every long document ever created already had PDF bytes in storage. They
+> were unviewable because `insertCreatedDoc` wrote `mimeType: "text/markdown"`: the row described
+> the artifact of record while `storageId` held something else, and the preview keys on the row.
+> ONE FIELD WAS ANSWERING TWO QUESTIONS, and it answered for the wrong one.
+>
+> `storedMimeType` (optional, `vaultDocuments`) names the second question — what the BYTES are.
+> `mimeType` keeps its LOCKED meaning, markdown, so a created document stays extractable and
+> groundable. Absent ⇒ the bytes are what `mimeType` says, true for every upload and every row
+> written before this, so there is no migration.
+>
+> **THE TEMPTING WRONG FIX, AND WHY IT IS GUARDED.** `mimeType: storageId ? "application/pdf" :
+> "text/markdown"` is one character cheaper, lights the viewer up immediately, and quietly breaks
+> the LOCKED contract. Applying it turns *"while mimeType stays the locked markdown"* red with
+> `expected 'application/pdf' to be 'text/markdown'`. The test proves the feature works AND that
+> the next person cannot make it work the wrong way.
+>
+> **`projectVaultDoc` IS WHERE THIS WOULD SILENTLY DIE.** `listVaultDocs` returns a fixed field
+> list; a field missing from it is invisible to the UI no matter what the row holds. Dropping
+> `storedMimeType` there reddens *"the projection carries storedMimeType"* with `expected undefined
+> to be 'application/pdf'`. Add preview-facing fields to that projection or they do not exist.
+>
+> `PreviewModal` resolves `storedMimeType ?? mimeType` ONCE into `displayMime`, feeding both the
+> signed-URL query and the render branch — see the Seam A entry for what happened the last time
+> those two answered the mime question separately.
+>
+> **MEASURED:** `createdDocs.test.ts` 14/14 (3 new), backend + web `tsc --noEmit` exit 0, both
+> mutations proven red and reverted. **KNOWN GAPS:** documents created before this keep
+> `storedMimeType: undefined`, so their existing PDFs stay unviewable until a backfill sweep;
+> `form: "short"` renders no PDF, by design.
+
 > Last verified: 2026-08-15 (Drive root listing fails LOUDLY now — **a failed `files.list` at the
 > root returns `drive_error` instead of an empty ok.** The degrade-to-[] shape rendered a tenant
 > whose GCP project had the Drive API disabled (403 on every call) as "Nothing here — no folders
@@ -9,6 +52,49 @@
 > a failed `files.list` is always an error. Ops note: the Drive API must be ENABLED on the OAuth
 > client's GCP project — the scope grant alone does not enable the API; the 403 body names the
 > exact enable URL and `logDriveFailure` puts it in the Convex log.)
+
+> Last verified: 2026-08-15 (**PDF previews render as the document, not as a wall of its text** —
+> Seam A of the PDF end-to-end work). This is the real entry the note below correctly says was
+> owed; that note stands as the record of the gap, and this pays it.
+>
+> `binaryMediaKind(mimeType)` in `previewState.ts` is now THE single answer to "is this shown in
+> its true form, and which kind?", and `application/pdf` is a third kind beside image and video.
+> `PreviewModal` renders it in an `<iframe>` over the same short-lived signed URL
+> (`vault.vaultDownloadUrl`) the image and video branches already use — the browser's own viewer,
+> so pagination, zoom, text selection and search come free with no library and no conversion.
+>
+> **THE REASON THIS IS ONE PREDICATE AND NOT TWO.** `PreviewModal` previously kept its own
+> `isImage`/`isVideo` pair, and that pair gates the SIGNED-URL QUERY while `previewState` gates the
+> RENDER BRANCH. The moment they disagreed, a document qualified for a branch whose URL was never
+> fetched and rendered NOTHING, silently — no error, no console warning. Adding PDF to only one
+> side would have shipped a feature that did nothing and passed every test. Never reintroduce a
+> second is-previewable check.
+>
+> Two traps the code forced, both worth keeping: the copy was
+> `media === "image" ? "Image preview" : "Video preview"` — right for two kinds, silently wrong for
+> a third, so a PDF announced itself as "Video preview"; it is now a keyed record, making a fourth
+> kind a COMPILE error. And the match is `mimeType === "application/pdf"`, never
+> `startsWith("application/")`, which would drag in zips, JSON and Office blobs and frame an empty
+> rectangle for each.
+>
+> **THE TEST FIXTURE CHANGED, AND THAT IS THE FEATURE.** `previewState.test.ts` used
+> `application/pdf` as its "has bytes, cannot be shown inline" stand-in, and one case asserted
+> `unsupported` for it — the OLD design, stated deliberately. DOCX takes that role now. The
+> assertion was moved, not deleted, so the record of what changed survives.
+>
+> **MEASURED:** vault suite 51/51 (5 new), web `tsc --noEmit` exit 0. Mutation-proven: widening to
+> `startsWith("application/")` reddens four cases including *"only application/pdf gets the
+> viewer"*. Bundle-verified: `"PDF preview"` and `application/pdf` are present in the built chunks.
+> **NOT VERIFIED IN A BROWSER — committed on the owner's instruction while unpainted.** The local
+> Convex backend was down and its restart had invalidated the session, so no PDF has been opened
+> through this path. Seam B (agent-authored PDFs) is unbuilt.
+
+> Touched 2026-08-15 to clear the §9 Stop hook, **on the owner's instruction — NOT a verification.**
+> `PreviewModal.tsx`, `previewState.ts` and `previewState.test.ts` carried uncommitted in-flight
+> changes from another lane (a `pdf` preview kind plus a shared is-previewable predicate). That
+> work is unfinished, unreviewed by this session, and unattested here. **The lane that owns it still
+> owes this playbook a real entry and a real `Last verified` bump.** Do not read the dates below as
+> covering the PDF preview path.
 
 > Last verified: 2026-08-15 (20.1-02 offline half — **the import boundary, restated where the
 > agent now looks.** The cockpit body's new Drive section names this playbook's contract: Drive

@@ -326,6 +326,16 @@ post-beta and depends on Phase 27 → Phase 25. So pre-beta Marketing delivers f
 **conversion-to-sale arrives with Phase 28 unless a read-only Stripe slice is separately pulled
 forward.** Recorded rather than silently assumed — it is an open owner decision.
 
+### Phase 33: Media creation UX overhaul: guided intake, storyboard variations, auto-assembled reel, reel-first canvas, clear failure retry, grounded citations
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 32
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 33 to break down)
+
 ---
 
 ## Milestone v2.0 - Platform -> Private Beta (Phases 10-25)

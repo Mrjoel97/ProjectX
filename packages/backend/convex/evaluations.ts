@@ -18,7 +18,13 @@ import {
   LEAN_CANVAS_SKILL,
   SWOT_SKILL,
 } from "@pikar/contracts/skill";
-import { deserializeProfile, resolveSpecialist, specialistMemoBody, type Tier } from "@pikar/core";
+import {
+  deserializeProfile,
+  type FieldProvenance,
+  resolveSpecialist,
+  specialistMemoBody,
+  type Tier,
+} from "@pikar/core";
 import {
   diagnose,
   emptyScorecard,
@@ -164,6 +170,7 @@ export const insertEvaluation = internalMutation({
     scorecard: evalFields.scorecard,
     userProvided: evalFields.userProvided,
     userProvidedAt: evalFields.userProvidedAt,
+    fieldProvenance: evalFields.fieldProvenance,
     verdict: evalFields.verdict,
     delta: evalFields.delta,
   },
@@ -227,6 +234,13 @@ export const runEvaluation = internalAction({
       // survive the weekly re-evaluation that stamps a fresh `createdAt` on the new ROW (cash-
       // business-finance Task 3 fix). `createdAt` is the ROW's timestamp, never a field's.
       const userProvidedAt: Record<string, number> = { ...(last?.userProvidedAt ?? {}) };
+      // Carried UNCHANGED, exactly like `userProvided` and `userProvidedAt` above. Without this a
+      // weekly re-evaluation erases every provenance record, and the read side silently falls back
+      // to the legacy proxy — which reports an agent figure as unknown-origin rather than as an
+      // agent's. The erasure direction is the unsafe one.
+      const fieldProvenance: Record<string, FieldProvenance> = {
+        ...(last?.fieldProvenance ?? {}),
+      };
       let scorecard: Scorecard = JSON.parse(
         JSON.stringify((last?.scorecard as Scorecard | undefined) ?? emptyScorecard),
       );
@@ -482,6 +496,7 @@ export const runEvaluation = internalAction({
         scorecard,
         userProvided,
         userProvidedAt,
+        fieldProvenance,
         verdict,
         delta,
       });
@@ -571,16 +586,21 @@ function coerceScorecardValue(
 }
 
 /**
- * The "store" persistence path: a user's in-conversation answer to a missing figure. Writes the
- * value into the latest row's Scorecard + adds the dot-path to userProvided[] so the NEXT
- * runEvaluation carries it forward (never re-asks) and cites any finding on it "user-provided".
+ * The "store" persistence path: an answer to a missing figure, from EITHER a user's in-conversation
+ * statement or an agent's relayed one — `provenance` (required, `FieldProvenance`) says which. The
+ * value always lands in the latest row's Scorecard, so the NEXT runEvaluation carries it forward
+ * (never re-asks) regardless of who answered. Only a USER answer (`provenance.actor === "user"`)
+ * adds the dot-path to `userProvided[]` and lets a finding on it cite "user-provided" — an agent
+ * answer is USABLE but never CREDITED as the owner's own testimony (the anti-laundering guarantee).
+ * `fieldProvenance` records EVERY answer, agent or user, and is the honest per-field audit trail.
  * Tenant-guarded (§2). No prior row (answer before the first evaluation) → seed a minimal carrier
  * row so the figure still survives forward.
  *
- * The shared store logic — patch the latest row's Scorecard (adding the dot-path to userProvided[]),
- * or seed a minimal carrier row when the user answers before the first evaluation. Takes an explicit
- * `tenantId` so BOTH the auth-scoped tenantMutation (client path) and the internal mutation (the
- * identity-free cockpit tool loop, plan 04) route through ONE implementation — no drift.
+ * The shared store logic — patch the latest row's Scorecard (joining `userProvided[]` only for a
+ * user answer, always recording `fieldProvenance`), or seed a minimal carrier row when the answer
+ * arrives before the first evaluation. Takes an explicit `tenantId` so BOTH the auth-scoped
+ * tenantMutation (client path) and the internal mutation (the identity-free cockpit tool loop, plan
+ * 04) route through ONE implementation — no drift.
  */
 export async function applyScorecardAnswer(
   db: DatabaseWriter,
@@ -588,6 +608,7 @@ export async function applyScorecardAnswer(
   threadId: string,
   field: string,
   value: number | string | boolean,
+  provenance: FieldProvenance,
 ): Promise<{ recorded: true }> {
   // NOT named `v` — that is the convex/values validator import at module scope.
   const coerced = coerceScorecardValue(field, value);
@@ -597,17 +618,36 @@ export async function applyScorecardAnswer(
     .order("desc")
     .first();
 
-  // `userProvidedAt` is stamped on EVERY answer, including a re-answer of an already-provided
-  // field — a confirm-or-update IS a fresh stated time, not a no-op (cash-business-finance Task 3
-  // fix). This is the one writer every surface (panel, Approvals, cockpit) routes through, so the
-  // stated time can never drift out of step with the value it describes.
+  // `userProvided` and `userProvidedAt` are now LITERAL: they record what the USER supplied, and
+  // an agent write must not join them. `runEvaluation` rebuilds its citation map from
+  // `userProvided` and stamps every member `source: "user-provided"` at HIGH confidence, so an
+  // agent figure appearing there would launder into the evaluation engine as the owner's own
+  // testimony. `fieldProvenance` is written for EVERY answer and is the honest record.
+  const byUser = provenance.actor === "user";
+
   if (last) {
     const scorecard = setPath(last.scorecard, field, coerced);
-    const userProvided = last.userProvided.includes(field)
-      ? last.userProvided
-      : [...last.userProvided, field];
-    const userProvidedAt = { ...(last.userProvidedAt ?? {}), [field]: Date.now() };
-    await db.patch(last._id, { scorecard, userProvided, userProvidedAt });
+    // An agent write DROPS the path from `userProvided` rather than merely declining to add it —
+    // fix (2026-08-15, laundering-by-overwrite): the value just changed to the agent's, so a
+    // surviving membership marker would keep citing the OLD user-typed figure's authority onto the
+    // NEW agent-supplied one the moment `saveInput` was followed by an approved `applyFinanceClaims`
+    // write. Refusing the overwrite is not the fix — `applyFinanceClaims` runs post-approval, after
+    // the human already agreed to it — so the membership marker is what has to give.
+    const userProvided = byUser
+      ? last.userProvided.includes(field)
+        ? last.userProvided
+        : [...last.userProvided, field]
+      : last.userProvided.filter((f) => f !== field);
+    // Stamped from the provenance's own `at`, NEVER `Date.now()`: a figure's stated time is when
+    // it was TRUE. A user typing in the panel passes `at: Date.now()` and behaviour is unchanged;
+    // a six-week-old P&L keeps its own date and stays six weeks into its staleness clock. The
+    // matching entry is dropped on an agent write, same reasoning as `userProvided` above.
+    const userProvidedAt = byUser
+      ? { ...(last.userProvidedAt ?? {}), [field]: provenance.at }
+      : last.userProvidedAt &&
+        Object.fromEntries(Object.entries(last.userProvidedAt).filter(([k]) => k !== field));
+    const fieldProvenance = { ...(last.fieldProvenance ?? {}), [field]: provenance };
+    await db.patch(last._id, { scorecard, userProvided, userProvidedAt, fieldProvenance });
     return { recorded: true };
   }
 
@@ -620,8 +660,9 @@ export async function applyScorecardAnswer(
     gaps: [],
     notEnoughData: [],
     scorecard: setPath(emptyScorecard, field, coerced),
-    userProvided: [field],
-    userProvidedAt: { [field]: Date.now() },
+    userProvided: byUser ? [field] : [],
+    ...(byUser ? { userProvidedAt: { [field]: provenance.at } } : {}),
+    fieldProvenance: { [field]: provenance },
     verdict: "insufficient",
     createdAt: Date.now(),
   });
@@ -679,7 +720,12 @@ export const recordScorecardAnswer = tenantMutation({
     value: v.union(v.number(), v.string(), v.boolean()),
   },
   handler: (ctx, { threadId, field, value }) =>
-    applyScorecardAnswer(ctx.db, ctx.tenantId, threadId, field, value),
+    applyScorecardAnswer(ctx.db, ctx.tenantId, threadId, field, value, {
+      actor: "agent",
+      origin: "stated",
+      source: "cockpit:recordScorecardAnswer",
+      at: Date.now(),
+    }),
 });
 
 /**
@@ -696,7 +742,12 @@ export const recordScorecardAnswerInternal = internalMutation({
     value: v.union(v.number(), v.string(), v.boolean()),
   },
   handler: (ctx, { tenantId, threadId, field, value }) =>
-    applyScorecardAnswer(ctx.db, tenantId, threadId, field, value),
+    applyScorecardAnswer(ctx.db, tenantId, threadId, field, value, {
+      actor: "agent",
+      origin: "stated",
+      source: "cockpit:recordScorecardAnswer",
+      at: Date.now(),
+    }),
 });
 
 // ── The ACTING side (BEVL-02, 12-05): a gap → an approvable next-step memo ────────────────────

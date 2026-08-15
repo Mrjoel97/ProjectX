@@ -1,5 +1,90 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-15 (plan `2026-08-15-scorecard-field-provenance`, COMPLETE — full backend
+> suite green: `pnpm typecheck` clean, `pnpm vitest run` 79 test files / 1793 passed / 24 skipped, 0
+> red; `cash.test.ts` 49/49, `plans.test.ts` 27/27, `approvals.test.ts` 8/8, `cockpit.test.ts` 70/70,
+> `cockpitTools.test.ts` 131/131 on their own. **This file's read/write side of the
+> `userProvided`/`fieldProvenance` split — see `docs/playbooks/business-evaluation.md`'s consolidated
+> entry and `docs/decisions/021-userprovided-fieldprovenance-split.md` for the full decision record.**
+> `userProvided` keeps its literal meaning ("the user supplied it") and is never widened;
+> `evaluations.fieldProvenance` (dot-path → `{actor, origin, source, at}`) records every answer,
+> agent or user, and readers prefer it, falling back to the `userProvided`/`userProvidedAt` proxy for
+> any row whose write path never recorded a `fieldProvenance` entry for that field.
+>
+> **CORRECTED 2026-08-15 (whole-branch review Finding 3):** this entry, and the "Read side prefers
+> `fieldProvenance`" bullet below, used to describe the fallback as applying only to rows written
+> before Task 1's column existed — false. `runEvaluation`'s `fillVault` (`evaluations.ts`) is a
+> SECOND scorecard writer that fills a null slot from grounded vault text and records NO
+> `fieldProvenance` entry, so a row written after this plan can still take the fallback. Harmless
+> today (both writers resolve to `actor: "agent"`, `statedAt: null` on read), but the fallback stays
+> live code for a reason beyond legacy rows.
+>
+> **Type + schema (Task 1).** `FieldProvenance` lands in `packages/core/src/financeClaim.ts`, reusing
+> the existing `FigureActor`/`FigureOrigin` unions (never a second vocabulary); `evaluations` gains
+> the matching optional `fieldProvenance` column. Optional ⇒ no migration; every existing row stays
+> valid.
+>
+> **Required provenance argument (Task 2).** `applyScorecardAnswer(db, tenantId, threadId, field,
+> value, provenance)` takes a REQUIRED sixth `FieldProvenance` argument, no default — every existing
+> caller became a compile error until it declared who is answering. `cash.ts`'s `writeFigureRow`
+> passes the claim's own `{actor, origin, basis→source, observedAt→at}` verbatim (closing a
+> four-field loss the pre-plan code had); `approvals.ts`'s `answerDecision` stamps `{actor: "user",
+> origin: "stated", source: "approvals:answerDecision", at: Date.now()}`. `userProvidedAt` is now
+> stamped ONLY when `provenance.actor === "user"`, from `provenance.at` — never `Date.now()` — so a
+> stated figure keeps its own staleness clock. The cockpit's `recordScorecardAnswer` tool (both the
+> `tenantMutation` and its `recordScorecardAnswerInternal` twin) stamps `actor: "agent"`
+> unconditionally: a model relays what it heard in chat, it does not verify it, so a chat-given
+> figure no longer joins `userProvided` or gets cited "user-provided" at high confidence.
+>
+> **Read side prefers `fieldProvenance` (Task 4).** `inputStatesFor`'s scorecard branch (documented
+> below as `statedFigure`) reads `evaluation?.fieldProvenance?.[spec.path]` first — `actor`,
+> `statedAt` and `origin` come from the record when present — and falls back to the
+> `userProvided`/`userProvidedAt` proxy for any row with no `fieldProvenance` entry for that path
+> (see the corrected note above — that is not only rows written before Task 1's column existed).
+>
+> **Both agent-write refusals into the scorecard store are DELETED, not narrowed (Task 5).**
+> `writeFigureRow`'s `if (claim.actor === "agent") throw` guard in the scorecard branch is gone — the
+> branch now calls `applyScorecardAnswer` with the claim's own provenance unconditionally.
+> `applyFinanceClaims`'s unconditional `agent_cannot_update_figure` return for a scorecard-store
+> field is deleted outright — the same pass's `validateFigureClaim` call already refuses a
+> blank/whitespace `basis` and every other malformed shape a few lines later, so a replacement guard
+> would have been dead code. `FinanceApplyRefusal` KEEPS the `agent_cannot_update_figure` member (six
+> consumers: `ApprovalsView.tsx`, `cards.tsx`, several tests) — it is simply no longer PRODUCED,
+> marked `ponytail:` at the type so a future reader does not delete it as unreachable-code cleanup.
+> An agent claim on `cac` (or any of the six scorecard-store `CASH_INPUTS` fields) now applies: the
+> value lands, `fieldProvenance[path].actor` reads `"agent"`, and the path is kept OUT of
+> `userProvided`.
+>
+> **Staleness now consults `fieldProvenance[path].at`, with a legacy fallback.**
+> `applyFinanceClaims`'s merge check used to query `financeInputs` for EVERY claim, including
+> scorecard-store ones — which never have a `financeInputs` row, so the check was a silent no-op for
+> `cac` and its five siblings: an agent claim always "won", even over a figure typed today, moving
+> `fieldProvenance.at` backwards. Fixed in two passes: it now consults `fieldProvenance[path].at` for
+> a scorecard-store field, and — because a row written BEFORE this plan existed has `userProvidedAt`
+> and no `fieldProvenance` entry at all — falls back provenance-first then legacy-second:
+> `row?.fieldProvenance?.[path]?.at ?? row?.userProvidedAt?.[path] ?? null`, `null` only when NEITHER
+> exists, so a genuine first claim still writes. Production has exactly such legacy rows; this was
+> not a hypothetical.
+>
+> **An agent write DROPS a stale `userProvided` membership marker, not just declines to add one** —
+> the mechanism lives in `applyScorecardAnswer` (`evaluations.ts`), documented in
+> `docs/playbooks/business-evaluation.md`'s consolidated entry; `applyFinanceClaims` (this file) is
+> the caller that made the gap reachable, via a user-typed `cac` later overwritten by an approved
+> agent claim.
+>
+> **Test-coverage fixes made alongside the behaviour, not left to rot into false assurance:** the
+> batch-mixing test now covers a bad SECOND claim blocking a good FIRST one in one approved list (the
+> earlier version only demonstrated the positive case); a new test pins a scorecard claim older than
+> the stored figure being skipped with the stored value unchanged; a blank-basis-on-a-scorecard-claim
+> case rides the same shared `validateFigureClaim` rule the guard-deletion relies on; a legacy row's
+> `userProvidedAt` (no `fieldProvenance` entry) still staleness-guards an older agent claim.
+>
+> **Still gated, and deliberately so:** `llm.ts`'s `stageFinanceWrite` cockpit tool still refuses to
+> STAGE a scorecard-field claim from chat — see `docs/playbooks/cockpit.md`'s consolidated entry.
+> That is a hold on what the model may PROPOSE, not a limit this file's store or applier still
+> carry — a hand-seeded/legacy plan row, or a future writer of `financeClaims` (a vault document, a
+> connector), still reaches `applyFinanceClaims` directly and applies.
+>
 > Last verified: 2026-08-15 (origin/main merge only — MarkdownDocument.tsx/.test.ts changes arrived
 > from main's vault-fixes PR #11, already CI-verified there; nothing authored on this branch.)
 >

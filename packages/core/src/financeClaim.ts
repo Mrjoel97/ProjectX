@@ -62,3 +62,27 @@ export function validateFigureClaim(
  *  `null` means nothing is stored, so anything is newer. */
 export const isNewerThan = (claim: FigureClaim, storedObservedAt: number | null): boolean =>
   storedObservedAt === null || claim.observedAt > storedObservedAt;
+
+/**
+ * Per-field provenance for a SCORECARD dot-path. The scorecard store historically carried none,
+ * so `userProvided` had to answer both "whose fact is this" and "who typed it in" — and therefore
+ * lied about one whenever an agent wrote. This record separates them.
+ *
+ * `origin` is the fact's nature: a figure read out of the owner's own P&L is `stated` — a human
+ * asserted it, in a document. `actor` is who performed the write. The pair `stated` + `agent` is
+ * the common and correct shape for a document-derived figure, and is exactly what stops the
+ * finance page printing "Measured by Pikar" over it.
+ *
+ * `source` is refs/ids/labels ONLY (CLAUDE.md §4) — a docId, a surface name. NEVER a quoted
+ * passage, and never a raw value.
+ *
+ * `at` is when the figure was TRUE, not when the row was written. A P&L dated six weeks ago is
+ * already six weeks into its 90-day staleness clock; stamping the write time would reset a clock
+ * that must not reset.
+ */
+export type FieldProvenance = {
+  actor: FigureActor;
+  origin: FigureOrigin;
+  source: string;
+  at: number;
+};

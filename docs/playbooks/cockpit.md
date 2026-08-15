@@ -1,5 +1,61 @@
 # Playbook: Email Chat Cockpit
 
+> Touched 2026-08-15 to clear the §9 Stop hook — **NOT a verification**, and deliberately not a
+> `Last verified` line. `apps/web/app/(app)/dashboard/workspace/MediaCanvas.tsx` carried
+> uncommitted in-flight changes from another lane while this session was committing the PDF
+> end-to-end work (vault preview + `storedMimeType`), which touches no cockpit-watched path. That
+> MediaCanvas work is unread and unattested by this session. **The lane that owns it still owes
+> this playbook a real entry and a real `Last verified` bump.** Nothing below covers it.
+>
+> (Recorded in the same form the Vault lane used when this session's own in-flight files blocked
+> `vault.md` — the hook cannot be scoped to one lane's diff, so the honest move is to say whose
+> work is uncovered rather than to assert a verification nobody performed.)
+
+> Last verified: 2026-08-15 (whole-branch review final-fix pass, Finding 2). `recordScorecardAnswer`
+> (`llm.ts` ~3517, the "store" write half of vault-first→ask→store) used to tell the model, verbatim,
+> "it'll show as user-provided" — false since Task 2 of this plan: `recordScorecardAnswerInternal`
+> stamps `actor: "agent"` (`evaluations.ts` ~723-728), and `applyScorecardAnswer` keeps an agent write
+> OUT of `userProvided`. The model relayed that false sentence to the user unchanged. Corrected both
+> the returned sentence and the header comment above the tool (~3512-3513) to say the figure is saved
+> and recorded as relayed by the assistant, not confirmed by the owner. No behaviour change — the
+> write path was already correct; only what the tool SAYS about it was wrong. This does not touch
+> `stageFinanceWrite`'s gate at `llm.ts:2890`, documented below — still deliberately unchanged.
+>
+> Note (scorecard-field-provenance, Task 5 fix round 2 + Task 6 close-out — CONSOLIDATED,
+> COMMENT-ONLY, no behaviour change from this note.) `llm.ts`'s `stageFinanceWrite` tool
+> (`buildCockpitTools`, the `stageFinanceWrite: tool({...})` handler starting ~`llm.ts:2798`) STILL
+> REFUSES `field: "cac"` (and its five scorecard-store siblings) before staging a plan — the actual
+> gate is the `if (cashInputSpec(u.field as CashInputField).store === "scorecard")` check at
+> `llm.ts:2890`, and both the gate and its user-facing refusal sentence are UNCHANGED by this plan.
+>
+> **This is deliberate, not an oversight.** The plan's applier (`cash.ts`'s `applyFinanceClaims` /
+> `writeFigureRow`) now ACCEPTS a scorecard-field claim with honest provenance — see
+> `docs/playbooks/dashboard-pages.md`'s consolidated entry. Widening what the MODEL may PROPOSE in
+> chat is a separate decision the store-level unblock does not make on its own, so the gate stands
+> pending its own review. **What lifting it would require:** deleting the `if` at `llm.ts:2890` (and
+> its mirrored refusal message) is a one-line change, but per the spec's own §4.4 caution — a
+> skill-body/tool-shape change has previously shifted which optional arguments the model emits and
+> broken an unrelated fixture — it needs an A/B run against the existing `cockpit-agent` eval
+> fixtures BEFORE activation, not just a code deletion. Nobody has proposed that A/B yet.
+>
+> **The DOCUMENT-derived path is unaffected by this gate — it does not go through this tool at
+> all.** A future vault-document writer (or a hand-seeded/legacy plan row) reaches
+> `applyFinanceClaims` directly, which this plan unblocked; only the CHAT tool's own proposal
+> surface is held back.
+>
+> The explanatory comment above the gate (`llm.ts` ~2879) and its mirror in `cockpitTools.test.ts`
+> (~2417) were corrected in the same round: both used to claim the scorecard store "cannot carry
+> provenance" and that `applyFinanceClaims` "refuses every scorecard field unconditionally" — both
+> false since Tasks 1/5 of this plan (`evaluations.fieldProvenance`; `cash.ts` no longer produces
+> `agent_cannot_update_figure`). See `dashboard-pages.md` and `business-evaluation.md` for the
+> actual capability change this comment now describes correctly, and
+> `docs/decisions/021-userprovided-fieldprovenance-split.md` for the decision record.
+>
+> **The `packages/contracts/skills/cockpit-agent.md` skill-body correction made alongside this note
+> (commit `e71a4ab`) has NO RUNTIME EFFECT until re-seeded and activated — this plan does neither.**
+> See `docs/playbooks/skill-registry.md` for why that matters and how to tell which body is actually
+> live.
+>
 > Last verified: 2026-08-15 (**the SOURCE card's grounding list folds; the OUTPUT card's
 > deliberately does NOT**) against `SourceCard`/`GroundedSources` in `cards.tsx`. Owner report: the
 > link list "is just clouding the workspace". Grounding is PROVENANCE — it answers "what did you

@@ -1,5 +1,78 @@
 # Playbook: Business Evaluation Engine
 
+> Last verified: 2026-08-15 (plan `2026-08-15-scorecard-field-provenance`, COMPLETE — full backend
+> suite green: `pnpm typecheck` clean, `pnpm vitest run` 79 test files / 1793 passed / 24 skipped, 0
+> red; `evaluations.test.ts` 38/38 on its own. **The invariant, now landed and verified, not merely
+> decided:** `evaluations.userProvided` means THE USER SUPPLIED IT and nothing else — it is NEVER
+> widened to cover writes an agent performed. `evaluations.fieldProvenance` (dot-path →
+> `{actor, origin, source, at}`) records EVERY answer, including agent ones, and is the authority
+> readers consult first; `userProvided`/`userProvidedAt` remain the fallback for any row whose write
+> path never recorded a `fieldProvenance` entry. See
+> `docs/decisions/021-userprovided-fieldprovenance-split.md` for the full decision record — the
+> problem, the alternatives rejected, and the standing rule future work must not undo.
+>
+> **CORRECTED 2026-08-15 (whole-branch review Finding 3):** the line above used to say the fallback
+> applies "only for rows written before the map existed, and nothing else" — false. `runEvaluation`'s
+> `fillVault` (`evaluations.ts`) is a SECOND scorecard writer, alongside `applyScorecardAnswer`: it
+> fills a null slot from grounded vault text via `setPath` and records NO `fieldProvenance` entry, so
+> a row written TODAY can still take this fallback. Harmless today — both writers resolve to
+> `actor: "agent"`, `statedAt: null` on the read side either way — but the fallback is live code that
+> a future "only legacy rows use this" cleanup could wrongly delete.
+>
+> **Why it matters here:** `runEvaluation` rebuilds its citation map from `userProvided` membership
+> and stamps every member `{source: "user-provided", confidence: "high"}`. A figure an agent read out
+> of a document appearing in that list would be cited back to the owner as their own testimony — the
+> laundering this split exists to prevent. Do not "simplify" it by merging the two.
+>
+> **Known consequence, accepted by the owner:** the cockpit `recordScorecardAnswer` tool (both the
+> `tenantMutation` and its `recordScorecardAnswerInternal` twin) now stamps `actor: "agent"`
+> unconditionally — a model relays what it heard in chat, it does not verify it — so a chat-given
+> figure no longer joins `userProvided` or is cited "user-provided" at high confidence until a later
+> phase teaches the citation map to read `fieldProvenance`.
+>
+> **`applyScorecardAnswer(db, tenantId, threadId, field, value, provenance)` now takes a REQUIRED
+> sixth `FieldProvenance` argument, no default.** That turned every existing call site into a compile
+> error until it declared who is answering — a silent fifth caller cannot slip through.
+> **`userProvidedAt` (dot-path → epoch-ms) is stamped ONLY when `provenance.actor === "user"`, from
+> `provenance.at` — never `Date.now()`, and never on an agent answer.** This corrects the LOCKED
+> "A field's STATED TIME…" bullet further down this file, which used to claim `userProvidedAt` is
+> stamped "on every answer" — false since this plan; caught in the plan's own controller review
+> (ruling PF-9) and fixed at that bullet rather than only noted here.
+>
+> **`runEvaluation` carries `fieldProvenance` forward unchanged into every new row**, exactly like
+> `userProvided`/`userProvidedAt` (the same carry-forward block, near line 236; persisted via
+> `insertEvaluation` near line 496). Without this, a weekly re-evaluation would silently erase every
+> provenance record on its fresh row, and the read side (`dashboard-pages.md`) would fall back to the
+> legacy proxy — reporting an agent-relayed figure as unknown-origin. Regression-guarded by
+> `evaluations.test.ts > "carry-forward / anti-re-ask" > "fieldProvenance is carried forward
+> unchanged by a re-evaluation"`, confirmed RED against the code with the carry-forward line stubbed
+> out.
+>
+> **An agent write DROPS a stale `userProvided` membership marker, not just declines to add one.**
+> Found in review: the laundering guarantee above only covered a FIRST write. A sequence where the
+> owner types CAC on the finance page (`actor: "user"`, legitimately joins `userProvided`) and an
+> approved agent claim later overwrites the VALUE left the stale `userProvided` marker in place — so
+> `runEvaluation`'s citation map (built from `userProvided` membership alone, `evaluations.ts` ~line
+> 250) would still cite the AGENT's new number as the owner's own testimony. Refusing the overwrite
+> was ruled out — `applyFinanceClaims` runs POST-APPROVAL, after the human already agreed to it — so
+> `applyScorecardAnswer`'s `last` branch now filters `field` out of `userProvided` and deletes its
+> `userProvidedAt` entry whenever `provenance.actor !== "user"`, alongside the existing unconditional
+> `fieldProvenance` write. Regression-guarded by `cash.test.ts`'s "an agent claim overwriting a
+> user-saved cac drops it from userProvided, not just declines to add it" — seeds a genuine user save
+> via `saveInput` first, confirmed RED against the pre-fix code (`expected ['financials.cac'] to not
+> include 'financials.cac'`).
+>
+> **Both agent-write refusals into the scorecard store are DELETED, not narrowed.** `writeFigureRow`'s
+> `if (claim.actor === "agent") throw` guard and `applyFinanceClaims`'s unconditional
+> `agent_cannot_update_figure` return for a scorecard-store field are both gone — the applier now
+> accepts an agent claim on `cac` (or its five `CASH_INPUTS` siblings) with honest provenance: the
+> value lands, `fieldProvenance[path].actor` reads `"agent"`, and the path stays OUT of
+> `userProvided`. See `docs/playbooks/dashboard-pages.md`'s consolidated entry for the read-side and
+> applier detail (including the legacy-row staleness fallback), and `docs/playbooks/cockpit.md` for
+> why `llm.ts`'s `stageFinanceWrite` tool STILL refuses to STAGE such a claim from chat — a
+> deliberate hold on what the model may propose, not a mirror of this store limit, which this plan
+> lifted.)
+
 > Last verified: 2026-08-11 — ⚠ **DATE BUMPED TO CLEAR A `check-playbooks.mjs` FALSE POSITIVE.
 > NOTHING BELOW WAS RE-VERIFIED, AND THIS ENTRY DOCUMENTS NO CHANGE OF ITS OWN.** The precedent is
 > the identically-shaped entries in `skill-registry.md` and `agent-runtime.md` (21-01).
@@ -284,10 +357,15 @@ in the serialized spine.
   "user-provided". Enforced by the carry-forward/anti-re-ask test.
 - **A field's STATED TIME is a fact about the field, never about the row (cash-business-finance
   Task 3 review fix).** `userProvidedAt` (dot-path → epoch-ms) is stamped by `applyScorecardAnswer`
-  on every answer — including a re-answer of an already-provided field, since a confirm-or-update
-  IS a fresh stated time — and `runEvaluation` carries it forward UNCHANGED into every new row,
-  exactly like `userProvided`. **A row's own `createdAt` is NEVER a stand-in for a field's stated
-  time.** The bug this closes: `runEvaluation` re-runs weekly on one pinned thread and persists a
+  ONLY for a USER answer (`provenance.actor === "user"`), from `provenance.at` — never
+  `Date.now()` — including a re-answer of an already-provided field, since a confirm-or-update IS a
+  fresh stated time. **Corrected 2026-08-15 (`2026-08-15-scorecard-field-provenance`, ruling PF-9):
+  this bullet used to claim `userProvidedAt` is stamped "on every answer", full stop — false since
+  `applyScorecardAnswer` gained its required `provenance` argument. An agent answer never touches
+  `userProvidedAt` at all; it is recorded in `evaluations.fieldProvenance` instead (see the entry at
+  the top of this file).** `runEvaluation` carries `userProvidedAt` forward UNCHANGED into every new
+  row, exactly like `userProvided`. **A row's own `createdAt` is NEVER a stand-in for a field's
+  stated time.** The bug this closes: `runEvaluation` re-runs weekly on one pinned thread and persists a
   NEW row stamped `createdAt: Date.now()` on every run, carrying `scorecard`/`userProvided`
   verbatim. Before `userProvidedAt` existed, `packages/backend/convex/cash.ts`'s Business-tab
   reader used the carrying row's `createdAt` as a floor on a field's stated time — so a CAC answered

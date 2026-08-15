@@ -2876,13 +2876,17 @@ export function buildCockpitTools(
           if (!CASH_INPUTS.some((s) => s.field === u.field)) {
             return `"${u.field}" is not a figure I can update. Ask the user which one they mean.`;
           }
-          // The scorecard store cannot carry provenance, so `applyFinanceClaims` refuses every
-          // scorecard field UNCONDITIONALLY (`agent_cannot_update_figure`). Refusing HERE means the
-          // model learns it this turn instead of the user spending an approval click on a plan that
-          // can never apply. `cash.ts:448` deliberately stays — it is still reached by its own unit
-          // tests, by a plan row revised between staging and Approve, by a row staged under an
-          // older build, and by any future writer of `financeClaims` (vault documents, connectors).
-          // Two guards, one rule; neither is dead.
+          // Fix round 2 (Task 5): this used to say the scorecard store cannot carry provenance and
+          // `applyFinanceClaims` refuses every scorecard field unconditionally — both false since
+          // Tasks 1/5 (`evaluations.fieldProvenance`; `cash.ts`'s `agent_cannot_update_figure` is no
+          // longer produced there). The applier now ACCEPTS an agent scorecard claim with honest
+          // provenance if one reaches it. This gate stands anyway, as a DELIBERATE HOLD, not a store
+          // limit: refusing HERE means the model learns it this turn instead of the user spending an
+          // approval click on a plan the product does not yet want it proposing, pending a review of
+          // what the model should be allowed to propose in chat. Refusing at the tool is strictly
+          // narrower than the store's own capability — a hand-seeded/legacy plan row, or a future
+          // writer of `financeClaims` (vault documents, connectors), still reaches `applyFinanceClaims`
+          // directly and applies.
           if (cashInputSpec(u.field as CashInputField).store === "scorecard") {
             return (
               `I cannot update ${u.field} — it is one the user has to enter themselves for now. ` +
@@ -3505,8 +3509,10 @@ export function buildCockpitTools(
       },
     }),
     // ── recordScorecardAnswer (BEVL-01) — the "store" write half of vault-first→ask→store ──────────
-    // A DIRECT scorecard write: the user hands over their OWN figure ("my CAC is 120"), so it is cited
-    // "user-provided" and does NOT cross the Approve gate — a self-reported fact is not an outbound
+    // The user HANDS OVER a figure in chat ("my CAC is 120"), but the write lands through the AGENT,
+    // not the owner's own hand on the finance panel — `applyScorecardAnswer` stamps it
+    // `actor: "agent"` (Task 2), so it is cited as relayed by the assistant, never "user-provided".
+    // It still does NOT cross the Approve gate — a self-reported fact is not an outbound
     // action, so the two-shapes rule doesn't apply. Tenant-scoped via the EXPLICIT tenantId (the loop
     // carries no live identity), refs-only audit (§4 — field name + a value fingerprint, never the raw
     // figure). Quiet: no agentStep, so no SMOKE_OP_TOOL / tool-union entry (only evaluateBusiness steps).
@@ -3547,7 +3553,7 @@ export function buildCockpitTools(
           actor: "system",
           payload: { field, valueHash: await contentHash(value) },
         });
-        return "Noted — I saved that for your evaluation and won't ask again; it'll show as user-provided.";
+        return "Noted — I saved that for your evaluation and won't ask again; it's recorded as relayed by me, not confirmed by you.";
       },
     }),
     // ── replyToMessage (RPLY-01) — turn "reply to X" into a real threaded reply in ONE turn ───────

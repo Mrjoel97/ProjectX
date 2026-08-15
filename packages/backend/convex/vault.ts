@@ -512,6 +512,10 @@ function projectVaultDoc(d: Doc<"vaultDocuments">) {
     category: d.category,
     source: d.source,
     mimeType: d.mimeType,
+    // The preview needs to know what the BYTES are, not only what the row is — an agent-created
+    // document is `text/markdown` carrying a rendered PDF. Absent for every upload, where the two
+    // are the same thing. Metadata only, so it stays inside this projection's cheap contract.
+    storedMimeType: d.storedMimeType,
     size: d.size,
     status: d.status,
     failureReason: d.failureReason,
@@ -1196,6 +1200,12 @@ export const insertCreatedDoc = internalMutation({
       contentHash: hash,
       text: markdown,
       storageId, // absent ⇒ PreviewModal's canDownload is false ⇒ no Download button, for free
+      // The LOCKED line above stays locked, and this is why it can: `mimeType` answers "what is the
+      // artifact of record", `storedMimeType` answers "what are the bytes". They genuinely differ
+      // for a long document — we hold markdown AND the PDF `createDocument` rendered from it — and
+      // making one field carry both meanings is what left every agent-authored PDF unviewable.
+      // Only `long` renders a PDF, so `storageId` present ⇒ those bytes are one.
+      storedMimeType: storageId ? "application/pdf" : undefined,
       origin: "agent", // the provenance + deferred-promotion discriminator
       status: "ready", // ready WITHOUT ingest — see the block comment above
       createdAt: Date.now(),

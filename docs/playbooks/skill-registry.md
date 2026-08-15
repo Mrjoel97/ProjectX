@@ -1,5 +1,39 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Note (scorecard-field-provenance plan, 2026-08-15 — COMMENT-ONLY, not a "Last verified" bump: the
+> registry mechanics below were not re-exercised by this plan.) **A skill-body EDIT in this repo has
+> NO RUNTIME EFFECT on its own.** Commit `e71a4ab` corrected
+> `packages/contracts/skills/cockpit-agent.md`'s `stageFinanceWrite`/CAC section — it used to say the
+> refusal is "about the STORE, not the figure" and that "the scorecard cannot record who supplied a
+> number"; both became false once this plan's `evaluations.fieldProvenance` landed, and the body now
+> says the refusal is "a deliberate hold, not a store limit" (see `docs/playbooks/cockpit.md`'s
+> consolidated scorecard-field-provenance note for the code-side half of the same correction). That
+> edit changed a file on disk only. The LIVE model body a real conversation runs is whatever version
+> is `status: "active"` in the `skills` table, and getting a body edit there is a TWO-step, owner-
+> gated process this plan performed NEITHER of: (1) `seedSkills` (internalMutation) inserts the new
+> body as the next `candidate` version — it does not touch what is active; (2) `activateSkill` /
+> `activateCandidate` (through the shared `activateSkillVersion`, the EVAL_GATE choke point further
+> down this file) is a SEPARATE, owner-triggered flip that requires a green eval run's evidence
+> before it will move the active pointer. **Anyone reading this repo's source and assuming the model
+> already argues from the corrected text is wrong until both steps run.** Check which body is
+> actually live before trusting a skill-file diff: read the `skills` table's active row for
+> `cockpit-agent`, not the `.md` file — see the version-collision precedent recorded elsewhere in
+> this project's memory (a plan-authored version pin can be wrong against the live DB, because
+> optimizer dry-run candidates and other lanes' seeds occupy versions too).
+>
+> Last verified: 2026-08-15 (20.1-02 live half — **the Drive body is ACTIVE ON PRODUCTION as v6,
+> certified there, 39/39 including the new fixture on its first try.** Gate run `df00ab21`,
+> $0.3365 exec + $0.1080 specialist = $0.4445, one retry (38b, as always). Owner activated with
+> `activate Drive candidate 6`; readback: prod active v6, body byte-identical to the repo md.
+> **The LOCAL cycle did NOT happen and v25 is NOT certified** — its gate (run `4f98b2e8`) was
+> killed at case 38/39 by local-backend Server Errors, and the backend then would not restart at
+> all: 539 MB free of 8 GB, so it cannot load its own database (function prepares had already
+> degraded 1.4m -> 11.7m). Local v25 stays a parked, unevidenced candidate; free RAM and re-run
+> before trusting anything local. **DEVIATION, recorded not hidden:** prod Convex functions were
+> deployed DIRECTLY (`convex deploy` off `feature/cash-business-finance`) because the gate needs
+> `smoke:driveReadCountForThread` present — that bypassed `deploy-production`, so prod backend is
+> AHEAD of main until the branch merges. Vercel web is untouched at the CI-verified `b65a876`.)
+>
 > Last verified: 2026-08-15 (20.1-02 offline half — **the Drive teaching is written and its
 > fixture is owed and PAID: 39-drive-read lands in the same commit as the body section** (the
 > teach-a-tool-owe-a-fixture rule). Predecessor for the coming candidate: the dual-active

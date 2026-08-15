@@ -2414,12 +2414,15 @@ test("stageFinanceWrite stages NOTHING when a later update in the list is bad", 
   expect(plan?.financeClaims).toBeUndefined(); // the GOOD first element is not stranded on the row
 });
 
-// 6 of the 11 collected inputs are `store: "scorecard"` and `applyFinanceClaims` refuses every one
-// of them (`agent_cannot_update_figure`) — the scorecard cannot carry provenance. Refusing at the
-// TOOL means the model learns it this turn instead of the user spending an approval click on a
-// plan that can never apply. `cash.ts`'s guard stays as defence in depth (it is still reached by
-// its own unit tests, by a plan row revised after staging, and by any future writer of
-// `financeClaims`), so this is not a duplicate — it is the earlier of two.
+// Fix round 2 (Task 5): 6 of the 11 collected inputs are `store: "scorecard"`, and this comment
+// used to say `applyFinanceClaims` refuses every one of them unconditionally — false since Tasks
+// 1/5 (`evaluations.fieldProvenance`; `cash.ts` no longer produces `agent_cannot_update_figure`).
+// `llm.ts`'s `stageFinanceWrite` gate stands anyway, as a DELIBERATE HOLD: refusing at the TOOL
+// means the model learns it this turn instead of the user spending an approval click on a plan the
+// product does not yet want it proposing, pending a review of what the model should be allowed to
+// propose in chat. A hand-seeded/legacy plan row, or a future writer of `financeClaims` (vault
+// documents, connectors), still reaches `applyFinanceClaims` directly and applies — this tool-level
+// refusal is strictly narrower than the store's own capability, not a mirror of a store limit.
 test("stageFinanceWrite REFUSES a scorecard figure and NAMES the five it can write", async () => {
   const { t, planId } = await setup();
   const reply = await callClock(t, planId, "stageFinanceWrite", {

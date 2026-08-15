@@ -14,15 +14,12 @@ import {
   type PreviewControlHandlers,
   PreviewControls,
 } from "./PreviewControls";
-import { derivePreviewState } from "./previewState";
+import { binaryMediaKind, derivePreviewState } from "./previewState";
 
-function isImage(mime: string): boolean {
-  return mime.startsWith("image/");
-}
-
-function isVideo(mime: string): boolean {
-  return mime.startsWith("video/");
-}
+// `isImage`/`isVideo` used to live here, duplicating the same decision `previewState` makes. That
+// duplication had teeth: this file gates the SIGNED-URL query and previewState gates the RENDER
+// BRANCH, so the moment they disagreed a document qualified for a branch whose URL was never
+// fetched — and rendered nothing, silently. Both now ask `binaryMediaKind`.
 
 const focusableSelector = [
   "a[href]",
@@ -52,13 +49,22 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
-  const media = isImage(doc.mimeType) || isVideo(doc.mimeType);
+  // WHAT THE BYTES ARE beats what the row calls itself, and it is resolved ONCE. `mimeType` is the
+  // artifact of record (LOCKED to "text/markdown" for agent-created documents so they stay
+  // extractable and groundable); `storedMimeType` describes the PDF `createDocument` actually
+  // rendered. Absent for uploads, where the two are the same thing.
+  //
+  // Resolved here and passed down rather than read twice: this value feeds BOTH the signed-URL
+  // query and the render branch, and the last time those two answered the mime question separately
+  // a document qualified for a branch whose URL was never fetched and rendered nothing, silently.
+  const displayMime = doc.storedMimeType ?? doc.mimeType;
+  const media = binaryMediaKind(displayMime) !== null;
   const mediaUrl = useQuery(api.vault.vaultDownloadUrl, media ? { vaultDocId: doc._id } : "skip");
   const docText = useQuery(api.vault.vaultDocText, { vaultDocId: doc._id });
   const text = docText === undefined ? undefined : (docText?.text ?? null);
   const preview = derivePreviewState({
     status: doc.status,
-    mimeType: doc.mimeType,
+    mimeType: displayMime,
     text,
     // A resolved null URL means the metadata points at bytes that no longer exist. Keep undefined
     // as loading so a media document does not flash the missing-original state while its lazy
@@ -343,6 +349,26 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
                     View full screen
                   </button>
                 </div>
+              ) : preview.content.media === "pdf" ? (
+                // The browser's OWN PDF viewer, over the same short-lived signed URL the image and
+                // video branches use — pagination, zoom, text selection and search for free. No
+                // library, no conversion, no rendering fidelity to argue about.
+                //
+                // Taller than the 60vh media cap because a PDF is READ here rather than glanced at,
+                // and it keeps its own internal scroll; the extracted text still rides beneath.
+                <iframe
+                  src={mediaUrl}
+                  title={doc.title}
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    height: preview.content.text ? "70vh" : "100%",
+                    minHeight: "24rem",
+                    border: "1px solid var(--vault-border)",
+                    borderRadius: "0.5rem",
+                    background: "var(--vault-paper)",
+                  }}
+                />
               ) : (
                 // biome-ignore lint/a11y/useMediaCaption: user-uploaded media has no caption track
                 <video

@@ -2020,22 +2020,45 @@ describe("executePlan finance_write arm", () => {
     fetchSpy.mockRestore();
   });
 
-  // The refusal has to reach the APPROVE path, not just the applier's unit test: a plan the user
-  // already agreed to must fail loudly and stay approvable-again rather than half-applying.
-  test("a scorecard-field claim refuses at the apply boundary and the plan stays proposed", async () => {
+  // Task 5 (INVERTED): this has to reach the APPROVE path, not just the applier's unit test — a
+  // scorecard claim used to refuse loudly here and leave the plan re-approvable. Now that
+  // `evaluations.fieldProvenance` (Task 4) lets the store record who supplied a figure, the SAME
+  // approve boundary applies it: the plan finishes `done`, the evaluation row carries the figure
+  // stamped `actor: "agent"`, and the audit row (`finance.claims_applied`) is written.
+  test("a scorecard-field claim applies at the apply boundary, with honest provenance", async () => {
     const t = withAudit();
     const planId = await seedFinancePlan(t, [{ ...CLAIM, field: "cac", value: 1_400 }]);
 
-    // The refusal is now a RETURN, not a throw (2026-08-10): a throw would be redacted by Convex
-    // in production, leaving the approval card with no lever. Both halves still matter — the
-    // reason the card renders, AND that nothing was written.
     const result = await t
       .withIdentity({ subject: TENANT })
       .mutation(api.cockpit.executePlan, { planId });
-    expect(result).toEqual({ ok: false, reason: "agent_cannot_update_figure" });
+    expect(result).toEqual({ ok: true, applied: 1 });
 
-    // Nothing was written: no evaluation row, no status flip, no audit row.
-    expect(await t.run((ctx) => ctx.db.query("evaluations").collect())).toHaveLength(0);
+    const rows = await t.run((ctx) => ctx.db.query("evaluations").collect());
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.scorecard.financials.cac).toBe(1_400);
+    // The assertion that makes the whole plan worth doing.
+    expect(rows[0]?.userProvided).not.toContain("financials.cac");
+    expect(rows[0]?.fieldProvenance?.["financials.cac"]?.actor).toBe("agent");
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("done");
+    expect(await t.run((ctx) => ctx.db.query("audit").collect())).toHaveLength(1);
+  });
+
+  // B3 (fix round 1): the test above INVERTED the ONLY case that reached `cockpit.ts`'s governed
+  // stop (`if (!applied.ok) return { ok: false, reason }` — plan stays "proposed", nothing written,
+  // the reason reaches the card) at the APPROVE boundary, not just `applyFinanceClaims`'s own unit
+  // test. `malformed_figure_claim` still reaches that stop (only `agent_cannot_update_figure` was
+  // lifted), so this restores coverage of the boundary with a claim that is still refused.
+  test("a malformed claim refuses at the apply boundary and the plan stays proposed", async () => {
+    const t = withAudit();
+    const planId = await seedFinancePlan(t, [{ ...CLAIM, basis: "   " }]);
+
+    const result = await t
+      .withIdentity({ subject: TENANT })
+      .mutation(api.cockpit.executePlan, { planId });
+    expect(result).toEqual({ ok: false, reason: "malformed_figure_claim" });
+
+    expect(await t.run((ctx) => ctx.db.query("financeInputs").collect())).toHaveLength(0);
     expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("proposed");
     expect(await t.run((ctx) => ctx.db.query("audit").collect())).toHaveLength(0);
   });

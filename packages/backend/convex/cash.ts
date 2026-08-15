@@ -156,16 +156,26 @@ async function inputStatesFor(
       // `needsConfirmation` (the SAME predicate the `financeInputs` branch above and `cash.ts`'s
       // `statedFigure` both call — one definition, not three) treats that as needing confirmation,
       // never as fresh, and never fabricates a date.
+      // `fieldProvenance` is the authority when present. `userProvided` / `userProvidedAt` remain
+      // the fallback for any row whose write path never records a `fieldProvenance` entry: membership
+      // there means "somebody answered, probably the owner" and absence means "we do not know" — both
+      // resolved in the safe direction, exactly as before.
+      // CORRECTED 2026-08-15 (whole-branch review Finding 3): this used to say "New rows never take
+      // the fallback," which is false — `runEvaluation`'s `fillVault` (evaluations.ts) is a SECOND
+      // scorecard writer that fills a null slot from grounded text via `setPath` and records NO
+      // `fieldProvenance` entry, so a row written TODAY can still carry a value with no map entry and
+      // take this fallback. Harmless today (both `applyScorecardAnswer` and `fillVault` land on
+      // `actor: "agent"`, `statedAt: null` here either way), but the fallback is live code, not
+      // legacy-only dead weight — do not delete it on the old claim's authority.
+      const prov =
+        spec.path === undefined ? undefined : evaluation?.fieldProvenance?.[spec.path as string];
       const statedAt =
-        value === null ? null : (evaluation?.userProvidedAt?.[spec.path as string] ?? null);
-      // `userProvided` is an OVER-BROAD provenance proxy, and this is the only signal the scorecard
-      // store has: it is appended by `applyScorecardAnswer` for the panel, the Approvals question
-      // catalogue AND the agent's `recordScorecardAnswer` alike, and every figure written before it
-      // existed is absent from it. So membership means "somebody answered, probably the owner" and
-      // absence means "we do not know" — not "Pikar measured it". Both directions are resolved in
-      // the SAFE direction below. Upgrade path (also named at `writeFigureRow`): a per-dot-path
-      // provenance map on `evaluations` beside `userProvidedAt`.
-      const userStated = (evaluation?.userProvided ?? []).includes(spec.path as string);
+        value === null
+          ? null
+          : (prov?.at ?? evaluation?.userProvidedAt?.[spec.path as string] ?? null);
+      const userStated = prov
+        ? prov.actor === "user"
+        : (evaluation?.userProvided ?? []).includes(spec.path as string);
       return {
         field: spec.field,
         value,
@@ -176,7 +186,9 @@ async function inputStatesFor(
         // it", and nothing measures yet: a figure read out of the owner's own P&L is still an
         // assertion by a human, made in a document. `stated` + `agent` says exactly that, and is
         // what stops the page printing "Measured by Pikar on <date>." over a grounded fill.
-        origin: "stated",
+        // `prov.origin` is the recorded truth when present — a figure PIKAR measured must not be
+        // reported as `stated` just because this branch's default used to be unconditional.
+        origin: prov?.origin ?? "stated",
         actor: userStated ? "user" : "agent",
         basis: userStated ? null : "business evaluation grounding",
       };
@@ -365,23 +377,16 @@ export async function writeFigureRow(
 
   if (spec.store === "scorecard") {
     if (spec.path === undefined) throw new Error("INVALID_INPUT: no scorecard path");
-    // The scorecard store carries NO provenance. `applyScorecardAnswer` takes only
-    // (db, tenantId, threadId, path, value), so FOUR of a claim's seven fields — `origin`,
-    // `actor`, `basis` AND `observedAt` — are dropped on the floor here, and the answer is stamped
-    // with the WRITE time rather than the time the figure was true (the thing financeClaim.ts's
-    // `observedAt` comment forbids). Worse, the loss is not display-only: `applyScorecardAnswer`
-    // appends the dot-path to `userProvided`, from which `runEvaluation` rebuilds its citation map
-    // and stamps every member `{title: "user-provided", confidence: "high", source: "user-provided"}`
-    // — so an agent figure would launder into the Business Evaluation Engine at HIGH confidence and
-    // suppress the re-ask. An agent claim is therefore REFUSED, loudly, rather than half-written:
-    // a store that cannot record who said it must not be told by a machine.
+    // The scorecard store now carries per-dot-path provenance (`evaluations.fieldProvenance`), so
+    // an agent claim is recorded honestly rather than refused: the value lands and is usable, the
+    // write is stamped `actor: "agent"`, and `applyScorecardAnswer` keeps it OUT of `userProvided`
+    // — which is what `runEvaluation` rebuilds its citation map from. B1 fix (Task 5, round 1):
+    // `applyScorecardAnswer` also DROPS the path from `userProvided` when an agent write overwrites
+    // a figure the user previously saved themselves, so a stale membership marker cannot outlive the
+    // value it once described. That closes the two laundering routes THIS guard's removal could have
+    // reopened; it is not a claim that every future caller of `applyScorecardAnswer` is safe by
+    // construction — a new caller still owes it honest provenance.
     //
-    // ponytail: a refusal, not a fix. Upgrade path, and what unblocks an agent-written `cac`:
-    // a per-dot-path provenance map on `evaluations` beside `userProvidedAt`, carried forward the
-    // same way. Until then the applier restricts itself to `financeInputs` fields.
-    if (claim.actor === "agent") {
-      throw new Error("INVALID_INPUT: scorecard store carries no provenance");
-    }
     // No evaluation yet: seed under a stable, non-conversational thread id so the panel's answers
     // survive into the tenant's first real evaluation (the applyScorecardAnswer carrier path).
     const existing = await latestScorecardRow(db, tenantId);
@@ -391,6 +396,12 @@ export async function writeFigureRow(
       existing?.threadId ?? "finance-panel",
       spec.path,
       claim.value,
+      {
+        actor: claim.actor,
+        origin: claim.origin,
+        source: claim.basis,
+        at: claim.observedAt,
+      },
     );
     return;
   }
@@ -438,7 +449,13 @@ export const saveInput = tenantMutation({
 /** Every way a staged finance claim can be refused at Approve time. Distinct from a throw
  *  (2026-08-10): `executePlan`'s finance_write arm returns these to the approval card via
  *  `refusalMessage` — the SAME delivery path `no_deck` and the CAN-SPAM refusals use — rather
- *  than a raw `Error` that Convex redacts in production and the card cannot render. */
+ *  than a raw `Error` that Convex redacts in production and the card cannot render.
+ *
+ *  ponytail: `agent_cannot_update_figure` is no longer PRODUCED by `applyFinanceClaims` — the
+ *  scorecard store now carries per-dot-path provenance, so a scorecard claim is refused (or not)
+ *  by the same `malformed_figure_claim` rule as every other field. The member is deliberately
+ *  RETAINED for the rendered refusal vocabulary: it has consumers across the approvals UI, the
+ *  workspace cards, and several tests. Do not delete it as unreachable-code cleanup. */
 export type FinanceApplyRefusal = "malformed_figure_claim" | "agent_cannot_update_figure";
 
 /**
@@ -480,20 +497,12 @@ export async function applyFinanceClaims(
     if (!CASH_INPUTS.some((s) => s.field === claim.field) || typeof claim.basis !== "string") {
       return { ok: false, reason: "malformed_figure_claim" };
     }
-    // The scorecard store cannot carry provenance: `applyScorecardAnswer` takes only
-    // (db, tenantId, threadId, path, value), so origin/actor/basis/observedAt are all discarded,
-    // and it appends the dot-path to `userProvided` — which `runEvaluation` rebuilds its citation
-    // map from, stamping "user-provided" at HIGH confidence. An agent claim on a scorecard field
-    // would therefore read back as the owner's own statement AND launder into the evaluation
-    // engine's citations. `writeFigureRow` throws on this; refuse earlier, with a reason the
-    // approval card can show.
+    // The scorecard store now carries per-dot-path provenance (`evaluations.fieldProvenance`,
+    // Task 4), so an agent claim on a scorecard field is no longer refused here — it is validated
+    // by the SAME rule as every other claim below and, once it clears, recorded with
+    // `actor: "agent"` and kept OUT of `userProvided`, so it never launders into the evaluation
+    // engine's citations. `writeFigureRow`'s matching throw was lifted for the same reason.
     //
-    // ponytail: a refusal, not a fix. The agent can update the five `financeInputs` figures and
-    // CANNOT yet update CAC. Upgrade path: a per-dot-path provenance map on `evaluations` beside
-    // `userProvidedAt`, so `applyScorecardAnswer` can record who supplied a figure.
-    if (cashInputSpec(claim.field).store === "scorecard") {
-      return { ok: false, reason: "agent_cannot_update_figure" };
-    }
     // THE FULL RULE, not just the two shape-guards above: a blank basis (whitespace-only, not
     // just non-string), an out-of-range or NaN value, a NaN/negative/future observedAt. This is
     // the SAME check `writeFigureRow` runs and used to throw past this function's own return
@@ -533,13 +542,40 @@ export async function applyFinanceClaims(
     // this an approved claim observed in June patches over a figure the human saved today, moving
     // statedAt backward and flipping actor. A stale claim is SKIPPED, not an error: the store
     // already holds the better number, which is not a failure the approver needs to see.
-    const stored = await ctx.db
-      .query("financeInputs")
-      .withIndex("by_tenant_field", (q) =>
-        q.eq("tenantId", tenantId).eq("field", claim.field as "cashOnHand"),
-      )
-      .unique();
-    if (!isNewerThan(stamped, stored?.statedAt ?? null)) continue;
+    //
+    // B4 fix (Task 5, round 1): `financeInputs` never carries a row for a scorecard-store field —
+    // `cac` and its five siblings live in `evaluations.scorecard` — so the `financeInputs` lookup
+    // below was always undefined for them and this check was a silent no-op: an agent claim always
+    // "won" a scorecard field, even over a figure the owner typed TODAY, moving
+    // `fieldProvenance.at` backwards. The staleness authority for a scorecard field is its own
+    // `fieldProvenance[path].at`, the same column `writeFigureRow` stamps it into.
+    //
+    // Residual 2 fix (Task 5, round 2): `fieldProvenance` alone is not enough — a row written
+    // BEFORE this plan existed has `userProvidedAt` but no `fieldProvenance` entry, so the lookup
+    // above read `null` for every legacy row and an old agent claim could still clobber a figure
+    // the owner typed months ago. Provenance-first, legacy-second: fall back to the pre-existing
+    // `userProvidedAt[path]` when `fieldProvenance` has no entry yet, and only read `null` (anything
+    // is newer — a genuine first claim must still write) when NEITHER has one.
+    const spec = cashInputSpec(claim.field);
+    let storedAt: number | null;
+    if (spec.store === "scorecard") {
+      const row = await latestScorecardRow(ctx.db, tenantId);
+      storedAt =
+        row?.fieldProvenance?.[spec.path as string]?.at ??
+        row?.userProvidedAt?.[spec.path as string] ??
+        null;
+    } else {
+      storedAt =
+        (
+          await ctx.db
+            .query("financeInputs")
+            .withIndex("by_tenant_field", (q) =>
+              q.eq("tenantId", tenantId).eq("field", claim.field as "cashOnHand"),
+            )
+            .unique()
+        )?.statedAt ?? null;
+    }
+    if (!isNewerThan(stamped, storedAt)) continue;
     await writeFigureRow(ctx.db, tenantId, stamped);
     // The STAMPED claim, so `payload.actors` reports the door, not the row's own claim about it.
     written.push(stamped);

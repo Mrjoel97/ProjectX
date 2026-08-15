@@ -343,3 +343,71 @@ test("vaultDoc: own row projects, foreign and malformed ids fail closed to null"
     await asTenant(t, "tenant_a").query(api.vault.vaultDoc, { vaultDocId: "not-an-id" }),
   ).toBeNull();
 });
+
+// ── The stored bytes announce themselves (PDF end-to-end, Seam B) ─────────────────────────────
+//
+// `createDocument` has ALWAYS rendered a real PDF for `form: "long"` and stored it — but the row
+// advertised `text/markdown`, so the preview could never show the document in its true form. One
+// field was answering two different questions. `storedMimeType` answers the second one.
+//
+// These assert BOTH halves on purpose: the new field appearing is worthless if it arrived by
+// loosening the LOCKED `mimeType`, which is what keeps a created document extractable and
+// groundable. A change that flips `mimeType` to "application/pdf" makes the first assertion pass
+// and the second fail.
+
+test("a long document's row says its bytes are a PDF — while mimeType stays the locked markdown", async () => {
+  const t = convexTest(schema, modules);
+  const storageId = await storePdf(t);
+
+  const docId = await t.mutation(internal.vault.insertCreatedDoc, {
+    tenantId: "tenant_a",
+    title: "Quarterly one-pager",
+    form: "long",
+    markdown: "# Q3\n\nnumbers",
+    contentHash: "hash_pdf",
+    storageId,
+  });
+
+  const row = await t.run(async (ctx) => ctx.db.get(docId));
+  expect(row?.storedMimeType).toBe("application/pdf"); // what the BYTES are → the viewer
+  expect(row?.mimeType).toBe("text/markdown"); // LOCKED: the artifact of record, unchanged
+  expect(row?.text).toBe("# Q3\n\nnumbers"); // still groundable, still searchable
+});
+
+test("no stored bytes ⇒ no storedMimeType — absence means 'the bytes are what mimeType says'", async () => {
+  // `short` renders no PDF, and every upload's bytes already match its mimeType. Writing a value
+  // here would claim a PDF exists where none does, and the preview would frame an empty rectangle.
+  const t = convexTest(schema, modules);
+
+  const docId = await t.mutation(internal.vault.insertCreatedDoc, {
+    tenantId: "tenant_a",
+    title: "A short post",
+    form: "short",
+    markdown: "just a paragraph",
+    contentHash: "hash_short",
+  });
+
+  const row = await t.run(async (ctx) => ctx.db.get(docId));
+  expect(row?.storedMimeType).toBeUndefined();
+  expect(row?.mimeType).toBe("text/markdown");
+});
+
+test("the projection carries storedMimeType to the browser — the preview cannot read the raw row", async () => {
+  // listVaultDocs projects a fixed field list; a field missing from it is invisible to the UI no
+  // matter what the row holds. That projection is exactly where this feature would silently die.
+  const t = convexTest(schema, modules);
+  const storageId = await storePdf(t);
+
+  const docId = await t.mutation(internal.vault.insertCreatedDoc, {
+    tenantId: "tenant_a",
+    title: "Projected one-pager",
+    form: "long",
+    markdown: "# body",
+    contentHash: "hash_proj",
+    storageId,
+  });
+
+  const docs = await asTenant(t, "tenant_a").query(api.vault.listVaultDocs, {});
+  const row = docs.find((d) => d._id === docId);
+  expect(row?.storedMimeType).toBe("application/pdf");
+});

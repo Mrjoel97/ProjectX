@@ -8,6 +8,7 @@ import { describe, expect, test } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import { applyFinanceClaims, writeFigureRow } from "./cash";
+import { applyScorecardAnswer, latestScorecardRow } from "./evaluations";
 import schema from "./schema";
 
 // convex-test discovers Convex function modules via import.meta.glob. Exclude
@@ -274,6 +275,121 @@ describe("cash.inputs", () => {
     expect(cac?.value).toBe(900);
     expect(cac?.statedAt).toBeNull(); // honest — we do not know when this was stated
     expect(cac?.stale).toBe(true); // unknown age needs confirmation, never reads as fresh
+  });
+
+  // Task 4: the read side now prefers `fieldProvenance` (Task 1-3) over the `userProvided` proxy.
+  test("an agent-written scorecard figure reports actor 'agent'", async () => {
+    const t = convexTest(schema, modules);
+    await t.run((ctx) =>
+      applyScorecardAnswer(ctx.db, "u1", "thread_1", "financials.cac", 340, {
+        actor: "agent",
+        origin: "stated",
+        source: "vaultDoc:abc123",
+        at: 1_600_000_000_000,
+      }),
+    );
+    const { inputs } = await asTenant(t, "u1").query(api.cash.inputs, {});
+    const cac = inputs.find((i) => i.field === "cac");
+    expect(cac?.value).toBe(340);
+    expect(cac?.actor).toBe("agent");
+    expect(cac?.origin).toBe("stated");
+    expect(cac?.statedAt).toBe(1_600_000_000_000);
+  });
+
+  // Regression guard: a row written before `fieldProvenance` existed has no map entry, so the
+  // legacy `userProvided` / `userProvidedAt` proxy must still be honored.
+  test("a legacy row with userProvided but no fieldProvenance still reports actor 'user'", async () => {
+    const t = convexTest(schema, modules);
+    await t.run((ctx) =>
+      ctx.db.insert("evaluations", {
+        tenantId: "u1",
+        threadId: "thread_1",
+        framework: "growth-os" as const,
+        findings: [],
+        gaps: [],
+        notEnoughData: [],
+        scorecard: { ...emptyScorecard, financials: { ...emptyScorecard.financials, cac: 150 } },
+        userProvided: ["financials.cac"],
+        userProvidedAt: { "financials.cac": 1_700_000_000_000 },
+        verdict: "gaps" as const,
+        createdAt: 1_700_000_000_000,
+      }),
+    );
+    const { inputs } = await asTenant(t, "u1").query(api.cash.inputs, {});
+    const cac = inputs.find((i) => i.field === "cac");
+    expect(cac?.actor).toBe("user");
+    expect(cac?.statedAt).toBe(1_700_000_000_000);
+  });
+
+  // Fix round 1: the two tests above happened to pass pre-fix too — Task 2 made `userProvided`
+  // literal, so an agent-written figure was never a member of it, meaning `userStated` already
+  // evaluated `false` and `origin` was already hardcoded `"stated"` BEFORE this task's change.
+  // Only `statedAt` genuinely discriminated. These two insert `fieldProvenance` and the legacy
+  // proxy DISAGREEING on the same row, so old logic and new logic answer differently — a true
+  // mechanism check, not a lucky default.
+  test("fieldProvenance wins over the legacy userProvided proxy — actor and statedAt", async () => {
+    const t = convexTest(schema, modules);
+    await t.run((ctx) =>
+      ctx.db.insert("evaluations", {
+        tenantId: "u1",
+        threadId: "thread_1",
+        framework: "growth-os" as const,
+        findings: [],
+        gaps: [],
+        notEnoughData: [],
+        scorecard: { ...emptyScorecard, financials: { ...emptyScorecard.financials, cac: 500 } },
+        // The legacy proxy says "user, answered at 1_700_000_000_000" — the OLD logic's answer.
+        userProvided: ["financials.cac"],
+        userProvidedAt: { "financials.cac": 1_700_000_000_000 },
+        // The record disagrees: agent, a different timestamp. The NEW logic must prefer this.
+        fieldProvenance: {
+          "financials.cac": {
+            actor: "agent",
+            origin: "stated",
+            source: "vaultDoc:disagree",
+            at: 1_650_000_000_000,
+          },
+        },
+        verdict: "gaps" as const,
+        createdAt: 1_700_000_000_000,
+      }),
+    );
+    const { inputs } = await asTenant(t, "u1").query(api.cash.inputs, {});
+    const cac = inputs.find((i) => i.field === "cac");
+    expect(cac?.actor).toBe("agent");
+    expect(cac?.statedAt).toBe(1_650_000_000_000);
+  });
+
+  // "observed" means PIKAR measured the figure itself; nothing writes that yet, but the read path
+  // must not silently discard it back to the old hardcoded "stated" once something does.
+  test("fieldProvenance wins over the legacy userProvided proxy — origin 'observed'", async () => {
+    const t = convexTest(schema, modules);
+    await t.run((ctx) =>
+      ctx.db.insert("evaluations", {
+        tenantId: "u1",
+        threadId: "thread_1",
+        framework: "growth-os" as const,
+        findings: [],
+        gaps: [],
+        notEnoughData: [],
+        scorecard: { ...emptyScorecard, financials: { ...emptyScorecard.financials, cac: 500 } },
+        userProvided: ["financials.cac"],
+        userProvidedAt: { "financials.cac": 1_700_000_000_000 },
+        fieldProvenance: {
+          "financials.cac": {
+            actor: "agent",
+            origin: "observed",
+            source: "vaultDoc:measured",
+            at: 1_650_000_000_000,
+          },
+        },
+        verdict: "gaps" as const,
+        createdAt: 1_700_000_000_000,
+      }),
+    );
+    const { inputs } = await asTenant(t, "u1").query(api.cash.inputs, {});
+    const cac = inputs.find((i) => i.field === "cac");
+    expect(cac?.origin).toBe("observed");
   });
 });
 
@@ -550,15 +666,18 @@ describe("applyFinanceClaims (the finance_write inline arm)", () => {
     expect(inputs.find((i) => i.field === "cashOnHand")?.actor).toBe("agent");
   });
 
-  // ALL-OR-NOTHING, asserted rather than assumed — but not by ROLLBACK anymore. REVIEW FIX (Task
-  // 5 follow-up): after the pass-1 hoist above, every `validateFigureClaim` rule is checked in
-  // pass 1, so pass 2's `writeFigureRow` can never fail for a claim that reached it — a genuine
-  // "good write, then a THROW mid-batch that Convex rolls back" case is provably unreachable from
-  // this function now. All-or-nothing is enforced by ORDERING instead: nothing in pass 2 runs
-  // until every claim in the whole list has cleared pass 1, so a good FIRST claim never gets the
-  // chance to write before a bad SECOND one is seen.
-  test("a bad SECOND claim blocks the good FIRST one — approve-all-or-none", async () => {
-    const t = convexTest(schema, modules);
+  // Task 5 (INVERTED — this used to pair a good `cashOnHand` claim with a `cac` claim that was
+  // unconditionally refused, demonstrating all-or-nothing by showing the good claim blocked on the
+  // bad one. `evaluations.fieldProvenance` (Task 4) means a scorecard claim is no longer bad by
+  // construction, so the realistic pairing — cash on hand AND a CAC heard in the same turn — is now
+  // the positive case: both land in ONE approved batch, each in the store its `cashInputSpec`
+  // names, with honest per-field attribution. B2 fix (Task 5, round 1): all-or-nothing coverage for
+  // a MULTI-claim batch moved to the dedicated test below — a claim previously said this was "still
+  // covered by the malformed-claim tests below," which is WRONG; every one of those passes a
+  // SINGLE-element list, so none of them exercised pass 1 discarding a good claim alongside a later
+  // bad one in the SAME batch.
+  test("a batch mixing a financeInputs claim and a scorecard claim now applies both, together", async () => {
+    const t = withAudit();
     const result = await t.run((ctx) =>
       applyFinanceClaims(ctx, "u1", [
         agentClaim,
@@ -566,8 +685,34 @@ describe("applyFinanceClaims (the finance_write inline arm)", () => {
         { ...agentClaim, field: "cac" as const, value: 1_400 },
       ]),
     );
-    expect(result).toEqual({ ok: false, reason: "agent_cannot_update_figure" });
+    expect(result).toEqual({ ok: true, applied: 2, skipped: 0 });
+    const rows = await t.run((ctx) => ctx.db.query("financeInputs").collect());
+    expect(rows[0]?.valueUsd).toBe(38_500);
+    const row = await t.run((ctx) => latestScorecardRow(ctx.db, "u1"));
+    expect(row?.scorecard.financials.cac).toBe(1_400);
+    // The assertion that makes the whole plan worth doing: the agent's figure is USABLE but never
+    // credited as the owner's own testimony.
+    expect(row?.userProvided).not.toContain("financials.cac");
+    expect(row?.fieldProvenance?.["financials.cac"]?.actor).toBe("agent");
+  });
+
+  // B2 (fix round 1): restores the all-or-nothing coverage the test above lost once its own second
+  // claim (a scorecard `cac`) stopped being bad. A genuinely malformed SECOND claim in a multi-claim
+  // batch — paired with a GOOD first claim — must still block the whole list: pass 1 validates
+  // every claim with zero writes, so a good first claim never gets the chance to write before a bad
+  // second one is seen (this function's own doc comment: "every claim is validated FIRST, with zero
+  // writes").
+  test("a bad SECOND claim in a multi-claim batch blocks the good FIRST one — approve-all-or-none", async () => {
+    const t = convexTest(schema, modules);
+    const result = await t.run((ctx) =>
+      applyFinanceClaims(ctx, "u1", [
+        agentClaim,
+        { ...agentClaim, field: "mrr" as const, basis: "   " },
+      ]),
+    );
+    expect(result).toEqual({ ok: false, reason: "malformed_figure_claim" });
     expect(await t.run((ctx) => ctx.db.query("financeInputs").collect())).toHaveLength(0);
+    expect(await t.run((ctx) => ctx.db.query("evaluations").collect())).toHaveLength(0);
   });
 
   test("an empty claim list writes no audit row — nothing happened", async () => {
@@ -612,6 +757,12 @@ describe("applyFinanceClaims (the finance_write inline arm)", () => {
       { ...agentClaim, observedAt: Number.NaN },
       { ...agentClaim, observedAt: -1 },
       { ...agentClaim, observedAt: Date.now() + 86_400_000 },
+      // The proposition the whole Task 5 guard-deletion rests on: a SCORECARD-store field with a
+      // blank basis is refused by this SAME shared rule, not by a dedicated scorecard guard — which
+      // is exactly why deleting the unconditional scorecard check outright (rather than narrowing
+      // it to `store === "scorecard" && basis.trim() === ""`) left no gap. Brief Step 1's second
+      // test, unpinned until now.
+      { ...agentClaim, field: "cac" as const, basis: "   " },
     ];
     for (const claim of cases) {
       expect(await t.run((ctx) => applyFinanceClaims(ctx, "u1", [claim]))).toEqual({
@@ -622,18 +773,58 @@ describe("applyFinanceClaims (the finance_write inline arm)", () => {
     expect(await t.run((ctx) => ctx.db.query("financeInputs").collect())).toHaveLength(0);
   });
 
-  // The real product limit, refused HERE with a reason the approval card can show rather than deep
-  // inside `writeFigureRow`: the scorecard store discards origin/actor/basis/observedAt and appends
-  // the dot-path to `userProvided`, which `runEvaluation` rebuilds its citation map from at HIGH
-  // confidence. The agent can update the five `financeInputs` figures and cannot yet update CAC.
-  test("an agent claim on a scorecard field is refused, and nothing is written", async () => {
-    const t = convexTest(schema, modules);
+  // Task 5 (INVERTED): the old limit was that the scorecard store could not carry provenance, so a
+  // claim on it was refused here with a reason the approval card could show. `evaluations
+  // .fieldProvenance` (Task 4) closes that gap — the claim now applies, is stamped `actor: "agent"`
+  // in `fieldProvenance`, and is kept OUT of `userProvided` so it never launders into the evaluation
+  // engine's citations at HIGH confidence. The audit row is written too (a real applied claim).
+  test("an agent claim on a scorecard field now applies, with honest provenance", async () => {
+    const t = withAudit();
     const result = await t.run((ctx) =>
       applyFinanceClaims(ctx, "u1", [{ ...agentClaim, field: "cac" as const, value: 1_400 }]),
     );
-    expect(result).toEqual({ ok: false, reason: "agent_cannot_update_figure" });
-    expect(await t.run((ctx) => ctx.db.query("evaluations").collect())).toHaveLength(0);
-    expect(await t.run((ctx) => ctx.db.query("audit").collect())).toHaveLength(0);
+    expect(result).toEqual({ ok: true, applied: 1, skipped: 0 });
+    const row = await t.run((ctx) => latestScorecardRow(ctx.db, "u1"));
+    expect(row?.scorecard.financials.cac).toBe(1_400);
+    // The assertion that makes the whole plan worth doing.
+    expect(row?.userProvided).not.toContain("financials.cac");
+    expect(row?.fieldProvenance?.["financials.cac"]?.actor).toBe("agent");
+    expect(row?.fieldProvenance?.["financials.cac"]?.at).toBe(agentClaim.observedAt);
+    expect(await t.run((ctx) => ctx.db.query("audit").collect())).toHaveLength(1);
+  });
+
+  // B1 (fix round 1): laundering-by-OVERWRITE. The owner types CAC on the finance page first — a
+  // genuine `actor: "user"` write that legitimately joins `userProvided`. An approved agent claim
+  // then overwrites the VALUE. Before this fix `applyScorecardAnswer` only ever ADDED to
+  // `userProvided` and never removed, so the stale membership marker survived the overwrite and
+  // `runEvaluation` (which builds its citation map from `userProvided` membership alone) would have
+  // cited the AGENT's new number as the owner's own testimony. Refusing the overwrite is not the
+  // fix — this runs POST-APPROVAL, after the human already agreed to it — so the marker must go.
+  test("an agent claim overwriting a user-saved cac drops it from userProvided, not just declines to add it", async () => {
+    const t = withAudit();
+    const asUser = t.withIdentity({ subject: "u1|s1" });
+    await asUser.mutation(api.cash.saveInput, { field: "cac", value: 900 });
+
+    const before = await t.run((ctx) => latestScorecardRow(ctx.db, "u1"));
+    expect(before?.userProvided).toContain("financials.cac");
+    const savedAt = before?.userProvidedAt?.["financials.cac"];
+    expect(savedAt).toBeDefined();
+
+    // Newer than the user's save (B4's merge check now consults `fieldProvenance.at` for a
+    // scorecard field), but not `agentClaim`'s own fixed 2025 date — that would read as OLDER than
+    // a save made "today" and get skipped, which is a different test (see the B4 case below).
+    const result = await t.run((ctx) =>
+      applyFinanceClaims(ctx, "u1", [
+        { ...agentClaim, field: "cac" as const, value: 1_400, observedAt: (savedAt ?? 0) + 1 },
+      ]),
+    );
+    expect(result).toEqual({ ok: true, applied: 1, skipped: 0 });
+
+    const after = await t.run((ctx) => latestScorecardRow(ctx.db, "u1"));
+    expect(after?.scorecard.financials.cac).toBe(1_400);
+    expect(after?.userProvided).not.toContain("financials.cac");
+    expect(after?.userProvidedAt?.["financials.cac"]).toBeUndefined();
+    expect(after?.fieldProvenance?.["financials.cac"]?.actor).toBe("agent");
   });
 
   // The merge policy lives in the CALLER — `writeFigureRow` has no isNewerThan guard. Without this
@@ -671,6 +862,62 @@ describe("applyFinanceClaims (the finance_write inline arm)", () => {
     expect(JSON.stringify(row)).not.toContain("38500");
   });
 
+  // B4 (fix round 1): the merge check above was a NO-OP for a scorecard-store field —
+  // `financeInputs` never carries a row for `cac`, so `stored` was always `undefined` and an agent
+  // claim always "won", even over a figure the owner typed TODAY. The staleness authority for a
+  // scorecard field is now its own `fieldProvenance[path].at`. `agentClaim`'s fixed 2025 date is
+  // naturally older than a `saveInput` call made at real `Date.now()`, so no override is needed —
+  // the mirror image of the "an agent claim overwriting a user-saved cac" test above, which offsets
+  // `observedAt` forward specifically so it is NOT skipped by this same check.
+  test("a scorecard claim older than the stored figure is skipped, and the stored value is unchanged", async () => {
+    const t = withAudit();
+    const asUser = t.withIdentity({ subject: "u1|s1" });
+    await asUser.mutation(api.cash.saveInput, { field: "cac", value: 900 });
+
+    const result = await t.run((ctx) =>
+      applyFinanceClaims(ctx, "u1", [{ ...agentClaim, field: "cac" as const, value: 1_400 }]),
+    );
+    expect(result).toEqual({ ok: true, applied: 0, skipped: 1 });
+
+    const row = await t.run((ctx) => latestScorecardRow(ctx.db, "u1"));
+    expect(row?.scorecard.financials.cac).toBe(900);
+    expect(row?.userProvided).toContain("financials.cac");
+    expect(row?.fieldProvenance?.["financials.cac"]?.actor).toBe("user");
+  });
+
+  // Residual 2 (fix round 2): the B4 test above only proved staleness works when `fieldProvenance`
+  // exists. A row written BEFORE this plan has `userProvidedAt` but NO `fieldProvenance` entry — the
+  // live-data case, not a hypothetical — so the lookup above would read `null` for it and an old
+  // agent claim would still clobber a figure the owner typed months ago. This row is inserted
+  // directly (the legacy-row idiom `cash.test.ts` already uses above) with a NEWER `userProvidedAt`
+  // and no `fieldProvenance` key at all.
+  test("a legacy row's userProvidedAt (no fieldProvenance entry) still staleness-guards an older agent claim", async () => {
+    const t = withAudit();
+    await t.run((ctx) =>
+      ctx.db.insert("evaluations", {
+        tenantId: "u1",
+        threadId: "thread_1",
+        framework: "growth-os" as const,
+        findings: [],
+        gaps: [],
+        notEnoughData: [],
+        scorecard: { ...emptyScorecard, financials: { ...emptyScorecard.financials, cac: 900 } },
+        userProvided: ["financials.cac"],
+        userProvidedAt: { "financials.cac": 1_760_000_000_000 },
+        verdict: "gaps" as const,
+        createdAt: 1_760_000_000_000,
+      }),
+    );
+
+    const result = await t.run((ctx) =>
+      applyFinanceClaims(ctx, "u1", [{ ...agentClaim, field: "cac" as const, value: 1_400 }]),
+    );
+    expect(result).toEqual({ ok: true, applied: 0, skipped: 1 });
+
+    const row = await t.run((ctx) => latestScorecardRow(ctx.db, "u1"));
+    expect(row?.scorecard.financials.cac).toBe(900);
+  });
+
   test("a mixed batch reports what was written and what was already up to date", async () => {
     const t = withAudit();
     const asUser = t.withIdentity({ subject: "u1|s1" });
@@ -687,25 +934,37 @@ describe("applyFinanceClaims (the finance_write inline arm)", () => {
   });
 });
 
-test("an agent claim on a scorecard field is REFUSED — that store cannot record who said it", async () => {
+// Task 5 (INVERTED): `writeFigureRow` used to throw here — the scorecard store could not record
+// who supplied a figure, so an agent claim on it was refused rather than half-written.
+// `evaluations.fieldProvenance` (Task 4) closes that gap: the value now lands, stamped
+// `actor: "agent"`, and `applyScorecardAnswer` keeps it OUT of `userProvided` — so it is usable but
+// never fed to the citation map as the owner's own testimony.
+test("an agent claim on a scorecard field now applies, via writeFigureRow, with honest provenance", async () => {
   const t = convexTest(schema, modules);
-  await expect(
-    t.run(async (ctx) => {
-      await writeFigureRow(ctx.db, "u1", {
-        field: "cac",
-        value: 250,
-        origin: "observed",
-        actor: "agent",
-        basis: "vault document ref",
-        observedAt: 1_754_000_000_000,
-        confidence: "medium",
-      });
-    }),
-  ).rejects.toThrow(/INVALID_INPUT: scorecard store carries no provenance/);
-  // Refused BEFORE the write: half-written is the failure mode, since `applyScorecardAnswer` would
-  // also have marked the dot-path user-provided and fed it to the citation map at high confidence.
-  const evaluations = await t.run((ctx) => ctx.db.query("evaluations").collect());
-  expect(evaluations).toHaveLength(0);
+  await t.run(async (ctx) => {
+    await writeFigureRow(ctx.db, "u1", {
+      field: "cac",
+      value: 250,
+      origin: "observed",
+      actor: "agent",
+      basis: "vault document ref",
+      observedAt: 1_754_000_000_000,
+      confidence: "medium",
+    });
+  });
+  const row = await t.run((ctx) => latestScorecardRow(ctx.db, "u1"));
+  expect(row?.scorecard.financials.cac).toBe(250);
+  expect(row?.userProvided).not.toContain("financials.cac");
+  expect(row?.fieldProvenance?.["financials.cac"]?.actor).toBe("agent");
+  expect(row?.fieldProvenance?.["financials.cac"]?.at).toBe(1_754_000_000_000);
+  // Finding 4 (deferred-minor triage, fix-before-merge): `writeFigureRow` forwards ALL FOUR
+  // provenance fields (`actor`, `origin`, `source`, `at`) to `applyScorecardAnswer`, but nothing
+  // above pinned `origin`/`source` — only `actor`/`at`. A hardcoded `origin: "stated"` in
+  // `writeFigureRow` would flip the finance page's `FigureTile`/`InputRow` rendering (an "observed"
+  // claim rendering as "stated") with zero red tests: the read-side origin test inserts its row
+  // directly and cannot catch a write-side regression on the claim's own origin/basis.
+  expect(row?.fieldProvenance?.["financials.cac"]?.origin).toBe("observed");
+  expect(row?.fieldProvenance?.["financials.cac"]?.source).toBe("vault document ref");
 });
 
 // ── cash.financeSpineFor: the always-on cockpit line (spec §2) ───────────────────────────────────

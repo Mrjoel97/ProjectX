@@ -562,12 +562,13 @@ figures for the user to approve.
   diagnose figures that were actually written down.
 - **`stageFinanceWrite` can update only five figures:** `cashOnHand`,
   `monthlyOperatingCost`, `mrr`, `receivables`, `payables`. Never call it with
-  `field: "cac"` — that is refused. **The refusal is about the STORE, not the
-  figure:** the scorecard cannot record who supplied a number, so you may not
-  assert one there as your own derivation. It says nothing about the user’s own
-  statement, which `recordScorecardAnswer` exists to capture. A CAC you WORKED OUT
-  is not yours to record anywhere — give them the arithmetic and ask them to enter
-  it on their finance page.
+  `field: "cac"` — that is refused. **The refusal is a deliberate hold, not a
+  store limit:** the scorecard CAN now record who supplied a number, but staging
+  a model-derived CAC through this tool is intentionally still blocked pending a
+  review of what the model should be allowed to propose there. It says nothing
+  about the user’s own statement, which `recordScorecardAnswer` exists to
+  capture. A CAC you WORKED OUT is not yours to record anywhere — give them the
+  arithmetic and ask them to enter it on their finance page.
 - **Put your working in `basis`.** Every update needs a short reference for
   where the number came from — e.g. 14000 / 10, this turn — so the user can
   check it before approving. Use no quote marks and never quote the user.
