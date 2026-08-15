@@ -72,6 +72,10 @@ export type ReserveRefusal =
   | "nothing_to_regenerate"
   | "narration_too_long"
   | "narration_too_short"
+  /** 33-03 — a picked-deck scene states a figure the user has not vouched for
+   *  (`needsConfirmation` with no `confirmedAt`). The lever is `confirmClaim`, not a rewrite:
+   *  the model proposes, only the owner vouches, and money is where that becomes structural. */
+  | "unconfirmed_claims"
   | "media_daily_exhausted"
   | "deployment_media_exhausted";
 
@@ -412,6 +416,15 @@ export async function reserveJobInner(
  * partial buy raises too — and only the LINES are narrowed. The captions line still prices the
  * whole reel, because re-buying one scene re-renders and re-captions all of it.
  */
+/** 33-03 — the first PICKED-DECK shot stating a figure the user has not vouched for, or null.
+ *  ONE predicate for both money sites, so the estimate and the reserve cannot drift on what
+ *  "unconfirmed" means. Reads shot elements (the row), never parser `Scene`s — parser output
+ *  structurally cannot carry `confirmedAt`, so the row is the only place the answer exists. */
+const firstUnconfirmedClaim = (
+  shots: readonly { index: number; needsConfirmation?: boolean; confirmedAt?: number }[] | undefined,
+): { index: number } | null =>
+  shots?.find((s) => s.needsConfirmation === true && s.confirmedAt === undefined) ?? null;
+
 export async function reserveSceneJobInner(
   ctx: MutationCtx,
   a: {
@@ -436,6 +449,17 @@ export async function reserveSceneJobInner(
   // free. Same rule that puts the narration ceiling here rather than downstream.
   const summed = a.scenes.reduce((n, s) => n + s.durationMs, 0) / 1000;
   if (summed !== a.targetDurationSeconds) return { ok: false, reason: "illegal_duration" };
+
+  // 33-03 — the confirm gate, in the SAME position of the same pre-flight order as `jobEstimate`'s
+  // (the wave-5 co-location rule: the number on screen and the button refuse together). Checked
+  // off the ROW rather than the passed scenes, and deck-wide like every other refusal here — a
+  // partial buy against a deck with an unvouched figure is still money against that deck. Reading
+  // it HERE means no caller can hand this function a deck that skips the gate.
+  const planRow = await ctx.db.get(a.planId);
+  const claim = firstUnconfirmedClaim(
+    planRow && planRow.tenantId === a.tenantId ? planRow.shots : undefined,
+  );
+  if (claim) return { ok: false, reason: "unconfirmed_claims" };
 
   const now = Date.now();
   const batchId = crypto.randomUUID();
@@ -2070,6 +2094,13 @@ export const jobEstimate = tenantQuery({
       // The SAME pre-flight refusals `reserveSceneJobInner` applies, in the same order.
       if (scenes.reduce((n, s) => n + s.durationMs, 0) / 1000 !== targetDurationSeconds) {
         return { ...empty, refusal: { reason: "illegal_duration" } };
+      }
+      // 33-03 — the confirm gate OPENS here in the same position it opens at the reserve, FREE:
+      // the block happens where every other block happens, before the button. `blockIndex` names
+      // the first offending scene so the canvas can point at the chip to confirm.
+      const claim = firstUnconfirmedClaim(plan.shots);
+      if (claim) {
+        return { ...empty, refusal: { reason: "unconfirmed_claims", blockIndex: claim.index } };
       }
       const specs: MediaSpec[] = [];
       let clipSecondsTotal = 0;
