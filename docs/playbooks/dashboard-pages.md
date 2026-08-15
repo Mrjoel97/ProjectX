@@ -1,5 +1,33 @@
 # Playbook: Connected dashboard pages
 
+> Note (scorecard-field-provenance Task 5 — not yet a "Last verified" bump; Task 6 closes the plan
+> and reconciles this stack. **Both scorecard refusals named by the Task 4 note directly below are
+> now lifted.** `writeFigureRow`'s `if (claim.actor === "agent") throw` guard in the scorecard branch
+> is DELETED — the branch calls `applyScorecardAnswer` with the claim's own provenance unconditionally
+> (Task 2 already wired that call; nothing else there changed). `applyFinanceClaims`'s unconditional
+> `if (cashInputSpec(claim.field).store === "scorecard") return { ok: false, reason:
+> "agent_cannot_update_figure" }` check is DELETED OUTRIGHT, not replaced with a narrower one — the
+> SAME pass already calls `validateFigureClaim`, which refuses a blank/whitespace `basis` (and every
+> other malformed shape) a few lines later, so a replacement guard would have been dead code. An agent
+> claim on `cac` (or any of the six scorecard-store `CASH_INPUTS` fields) now APPLIES: the value lands
+> in the Scorecard, `fieldProvenance[path].actor` reads `"agent"`, and the path is kept OUT of
+> `userProvided` — so `runEvaluation` never cites it as the owner's own testimony. `FinanceApplyRefusal`
+> KEEPS the `agent_cannot_update_figure` member (six consumers: `ApprovalsView.tsx`, `cards.tsx`,
+> several tests) — it is simply no longer PRODUCED by `applyFinanceClaims`, marked `ponytail:` at the
+> type so a future reader does not delete it as unreachable-code cleanup. **Out of scope for this
+> task, and still gating the cockpit chat path:** `llm.ts`'s `stageFinanceWrite` tool refuses to even
+> STAGE a scorecard-field claim (`cashInputSpec(u.field).store === "scorecard"` → a returned sentence,
+> before a plan row is ever created), so an agent asked in conversation to record a CAC still cannot —
+> the two refusals this task lifted only unblock `applyFinanceClaims`/`writeFigureRow` for a claim
+> that reaches them by some OTHER route (a future vault-document writer, a hand-seeded/legacy plan
+> row, or `stageFinanceWrite`'s own guard being lifted in a later task). `cash.test.ts` gained one
+> inverted test on `writeFigureRow` directly and two on `applyFinanceClaims` (one single-claim, one a
+> mixed batch pairing a `financeInputs` field with a scorecard field in ONE approved list);
+> `cockpit.test.ts` gained one inverted test on the `executePlan` approve boundary. All four assert the
+> value lands, `fieldProvenance[...].actor === "agent"`, and `userProvided` does not gain the path.
+> `pnpm vitest run convex/cash.test.ts convex/evaluations.test.ts convex/cockpit.test.ts
+> convex/plans.test.ts convex/approvals.test.ts` — 187/187 green; `pnpm typecheck` clean.)
+>
 > Note (scorecard-field-provenance Task 4 — not yet a "Last verified" bump; Task 6 closes the plan
 > and reconciles this stack. **The READ side now prefers `fieldProvenance` over the legacy proxy.**
 > `cash.ts`'s `inputStatesFor` (the scorecard branch documented below as `statedFigure`) reads
