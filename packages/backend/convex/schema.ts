@@ -776,7 +776,17 @@ export default defineSchema({
         // 14-09 pins that with a mutation-verified static scan.
         citationExcerpt: v.optional(v.string()),
         confidence: v.union(v.literal("high"), v.literal("medium"), v.literal("low")),
-        source: v.union(v.literal("vault"), v.literal("user-provided")),
+        // "agent-relayed": the OWNER stated the figure in conversation and the AGENT wrote it —
+        // origin and actor are independent (see `FigureActor`). Additive third literal, so every
+        // pre-existing row stays valid (append-only, no migration). Without it a relayed figure had
+        // only two possible fates, and both were wrong: cited as the owner's own confirmed entry,
+        // which is the laundering 5523f3e closed, or not cited at all, which is what collapsed
+        // `findings` to zero and force-cleared every gap (SC #1).
+        source: v.union(
+          v.literal("vault"),
+          v.literal("user-provided"),
+          v.literal("agent-relayed"),
+        ),
       }),
     ),
     // Leverage-ranked prescriptions (diagnose() → the single highest-leverage constraint first).

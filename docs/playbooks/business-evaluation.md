@@ -1,5 +1,58 @@
 # Playbook: Business Evaluation Engine
 
+> Last verified: 2026-08-15 (**the provenance split lost its join, and the engine went silent about
+> figures it had just been given** — root-caused, fixed and LIVE-verified). `runEvaluation` seeded
+> its findings-provenance map from `userProvided`, but `5523f3e` (21-01, same day) had made that
+> array LITERAL — only what the USER supplied — while `recordScorecardAnswerInternal` writes
+> `actor: "agent"` by construction, because the cockpit RELAYS what it heard. Both facts are
+> correct; together they made `userProvided` permanently empty on the conversational path, so
+> `findings` came out EMPTY, so SC #1 force-cleared every gap. The engine answered "not enough
+> data" about a number the owner had given it one turn earlier and which was sitting correctly in
+> the scorecard the whole time. **The defect was citation-only — the VALUE always landed.**
+>
+> **THIS WAS LIVE ON THE ACTIVE BODY, NOT ONLY IN THE GATE.** Any tenant who stated a figure in
+> conversation and then asked for an evaluation got the thin-data answer. The window is short only
+> because `5523f3e` landed the same day.
+>
+> FIX: seed `provenance` from `fieldProvenance` (the record of WHO answered), `userProvided` kept
+> as the legacy-row fallback, and a relayed figure cited as `agent-relayed` — a third ADDITIVE
+> literal on `findings[].source`. That literal is load-bearing: a relayed figure MUST be cited
+> (`FigureActor`'s contract is that origin and actor are INDEPENDENT — the owner stated it, the
+> agent only wrote it down) but must NEVER be cited as `user-provided`, which is the laundering
+> `5523f3e` closed. Both wrong answers were reachable; the union needed a third member so the
+> honest one was expressible. Do not collapse it back to two.
+>
+> MEASURED: new regression test observed RED (`expected undefined to be defined`) then green — it
+> asserts the SPECIFIC finding for the relayed field, never `findings.length >= 1`, because the
+> profile doc contributes identity findings that would have made a count assertion pass while the
+> figure still cited nothing. `evaluations` 39/39 with the anti-laundering assertions intact,
+> `gapAction`+`cash` 59/59, `tsc` clean. **LIVE on the ACTIVE `cockpit-agent@24`: fixtures 27+28
+> went 0/2 → 2/2 (run `e6ddb1e9`), and 29+30+31 went 0/3 → 3/3 each with a real specialist
+> dispatch. All five originally-red fixtures pass, from ONE fix.**
+>
+> WHY IT ESCAPED, and the rule worth keeping: `5523f3e` shipped 105 lines of correct new tests that
+> asserted the MECHANISM (provenance records the right actor) and never the BEHAVIOUR (an evaluation
+> still produces findings). The pre-existing findings test seeds a vault doc WITH financial lines,
+> so it grounded through the vault path and stayed green throughout. When a write side is split,
+> test the READ side that consumed the old shape. Full write-up:
+> `.planning/debug/business-evaluation-no-grounded-findings.md`.)
+
+> Touched 2026-08-15 (phase 14→25 gap-audit session) to clear the §9 Stop hook — **NOT a
+> verification**, and deliberately not a `Last verified` line. **This session changed no product
+> code at all** — its edits were planning documents (`25-05/06/07` re-cut, new `22.1-04`/`22.1-05`,
+> `25-RESEARCH.md`, `25-CONTEXT.md`, `ROADMAP.md`), three playbook notes, `biome.json` and
+> `.gitignore`. The hook fired on `packages/backend/convex/evaluations.ts` and
+> `evaluations.test.ts`, which carry uncommitted in-flight changes from a concurrent lane; HEAD
+> moved twice more while this note was being written (`2d74b1a`, `40046b2`). That work is unread
+> and unattested here. **The lane that owns it still owes this playbook a real entry and a real
+> `Last verified` bump.**
+>
+> This is the THIRD playbook and the FOURTH firing of this kind in one session (`cockpit.md` and
+> `vault.md` are the others). Recorded as playbook debt in
+> `.planning/phases/25-private-beta-productionization/25-PREREQUISITE-EVIDENCE.md` — the §9 hook
+> cannot be scoped to one lane's diff, so in a shared working tree every passing session is forced
+> to either assert a verification nobody performed or stack another disclaimer.
+
 > Last verified: 2026-08-15 (plan `2026-08-15-scorecard-field-provenance`, COMPLETE — full backend
 > suite green: `pnpm typecheck` clean, `pnpm vitest run` 79 test files / 1793 passed / 24 skipped, 0
 > red; `evaluations.test.ts` 38/38 on its own. **The invariant, now landed and verified, not merely
