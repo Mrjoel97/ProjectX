@@ -885,6 +885,39 @@ describe("applyFinanceClaims (the finance_write inline arm)", () => {
     expect(row?.fieldProvenance?.["financials.cac"]?.actor).toBe("user");
   });
 
+  // Residual 2 (fix round 2): the B4 test above only proved staleness works when `fieldProvenance`
+  // exists. A row written BEFORE this plan has `userProvidedAt` but NO `fieldProvenance` entry — the
+  // live-data case, not a hypothetical — so the lookup above would read `null` for it and an old
+  // agent claim would still clobber a figure the owner typed months ago. This row is inserted
+  // directly (the legacy-row idiom `cash.test.ts` already uses above) with a NEWER `userProvidedAt`
+  // and no `fieldProvenance` key at all.
+  test("a legacy row's userProvidedAt (no fieldProvenance entry) still staleness-guards an older agent claim", async () => {
+    const t = withAudit();
+    await t.run((ctx) =>
+      ctx.db.insert("evaluations", {
+        tenantId: "u1",
+        threadId: "thread_1",
+        framework: "growth-os" as const,
+        findings: [],
+        gaps: [],
+        notEnoughData: [],
+        scorecard: { ...emptyScorecard, financials: { ...emptyScorecard.financials, cac: 900 } },
+        userProvided: ["financials.cac"],
+        userProvidedAt: { "financials.cac": 1_760_000_000_000 },
+        verdict: "gaps" as const,
+        createdAt: 1_760_000_000_000,
+      }),
+    );
+
+    const result = await t.run((ctx) =>
+      applyFinanceClaims(ctx, "u1", [{ ...agentClaim, field: "cac" as const, value: 1_400 }]),
+    );
+    expect(result).toEqual({ ok: true, applied: 0, skipped: 1 });
+
+    const row = await t.run((ctx) => latestScorecardRow(ctx.db, "u1"));
+    expect(row?.scorecard.financials.cac).toBe(900);
+  });
+
   test("a mixed batch reports what was written and what was already up to date", async () => {
     const t = withAudit();
     const asUser = t.withIdentity({ subject: "u1|s1" });

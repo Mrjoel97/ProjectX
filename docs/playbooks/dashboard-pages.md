@@ -1,5 +1,18 @@
 # Playbook: Connected dashboard pages
 
+> Note (scorecard-field-provenance Task 5, FIX ROUND 2 — not yet a "Last verified" bump; Task 6
+> closes the plan. **Residual 2: `applyFinanceClaims`'s B4 staleness fix (round 1, directly below)
+> did not cover LEGACY rows.** `fieldProvenance[path].at` is the staleness authority for a
+> scorecard-store field, but a row written BEFORE this plan existed has `userProvidedAt` and no
+> `fieldProvenance` entry at all — the lookup read `null` for every such row, so an old agent claim
+> could still clobber a figure the owner typed months ago. Production has exactly such rows; not a
+> hypothetical. Fixed by falling back, provenance-first then legacy-second:
+> `row?.fieldProvenance?.[path]?.at ?? row?.userProvidedAt?.[path] ?? null` — `null` only when
+> NEITHER exists, so a genuine first claim still writes. New test: "a legacy row's userProvidedAt
+> (no fieldProvenance entry) still staleness-guards an older agent claim" — inserts an
+> `evaluations` row directly with `userProvidedAt` set and `fieldProvenance` omitted, confirmed RED
+> against the pre-fix code (`applied: 1` instead of the expected `0`).
+>
 > Note (scorecard-field-provenance Task 5, FIX ROUND 1 — not yet a "Last verified" bump; Task 6
 > closes the plan. A reviewer pass on the Task 5 note directly below found the suite-level damage
 > its per-test inversions caused and one pre-existing gap. Four `cash.ts` fixes: **(B2)** the batch

@@ -542,19 +542,32 @@ export async function applyFinanceClaims(
     // "won" a scorecard field, even over a figure the owner typed TODAY, moving
     // `fieldProvenance.at` backwards. The staleness authority for a scorecard field is its own
     // `fieldProvenance[path].at`, the same column `writeFigureRow` stamps it into.
+    //
+    // Residual 2 fix (Task 5, round 2): `fieldProvenance` alone is not enough — a row written
+    // BEFORE this plan existed has `userProvidedAt` but no `fieldProvenance` entry, so the lookup
+    // above read `null` for every legacy row and an old agent claim could still clobber a figure
+    // the owner typed months ago. Provenance-first, legacy-second: fall back to the pre-existing
+    // `userProvidedAt[path]` when `fieldProvenance` has no entry yet, and only read `null` (anything
+    // is newer — a genuine first claim must still write) when NEITHER has one.
     const spec = cashInputSpec(claim.field);
-    const storedAt =
-      spec.store === "scorecard"
-        ? ((await latestScorecardRow(ctx.db, tenantId))?.fieldProvenance?.[spec.path as string]
-            ?.at ?? null)
-        : ((
-            await ctx.db
-              .query("financeInputs")
-              .withIndex("by_tenant_field", (q) =>
-                q.eq("tenantId", tenantId).eq("field", claim.field as "cashOnHand"),
-              )
-              .unique()
-          )?.statedAt ?? null);
+    let storedAt: number | null;
+    if (spec.store === "scorecard") {
+      const row = await latestScorecardRow(ctx.db, tenantId);
+      storedAt =
+        row?.fieldProvenance?.[spec.path as string]?.at ??
+        row?.userProvidedAt?.[spec.path as string] ??
+        null;
+    } else {
+      storedAt =
+        (
+          await ctx.db
+            .query("financeInputs")
+            .withIndex("by_tenant_field", (q) =>
+              q.eq("tenantId", tenantId).eq("field", claim.field as "cashOnHand"),
+            )
+            .unique()
+        )?.statedAt ?? null;
+    }
     if (!isNewerThan(stamped, storedAt)) continue;
     await writeFigureRow(ctx.db, tenantId, stamped);
     // The STAMPED claim, so `payload.actors` reports the door, not the row's own claim about it.

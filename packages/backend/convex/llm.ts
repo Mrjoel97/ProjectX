@@ -2876,13 +2876,17 @@ export function buildCockpitTools(
           if (!CASH_INPUTS.some((s) => s.field === u.field)) {
             return `"${u.field}" is not a figure I can update. Ask the user which one they mean.`;
           }
-          // The scorecard store cannot carry provenance, so `applyFinanceClaims` refuses every
-          // scorecard field UNCONDITIONALLY (`agent_cannot_update_figure`). Refusing HERE means the
-          // model learns it this turn instead of the user spending an approval click on a plan that
-          // can never apply. `cash.ts:448` deliberately stays — it is still reached by its own unit
-          // tests, by a plan row revised between staging and Approve, by a row staged under an
-          // older build, and by any future writer of `financeClaims` (vault documents, connectors).
-          // Two guards, one rule; neither is dead.
+          // Fix round 2 (Task 5): this used to say the scorecard store cannot carry provenance and
+          // `applyFinanceClaims` refuses every scorecard field unconditionally — both false since
+          // Tasks 1/5 (`evaluations.fieldProvenance`; `cash.ts`'s `agent_cannot_update_figure` is no
+          // longer produced there). The applier now ACCEPTS an agent scorecard claim with honest
+          // provenance if one reaches it. This gate stands anyway, as a DELIBERATE HOLD, not a store
+          // limit: refusing HERE means the model learns it this turn instead of the user spending an
+          // approval click on a plan the product does not yet want it proposing, pending a review of
+          // what the model should be allowed to propose in chat. Refusing at the tool is strictly
+          // narrower than the store's own capability — a hand-seeded/legacy plan row, or a future
+          // writer of `financeClaims` (vault documents, connectors), still reaches `applyFinanceClaims`
+          // directly and applies.
           if (cashInputSpec(u.field as CashInputField).store === "scorecard") {
             return (
               `I cannot update ${u.field} — it is one the user has to enter themselves for now. ` +

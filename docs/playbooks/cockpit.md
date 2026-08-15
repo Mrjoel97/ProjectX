@@ -1,5 +1,18 @@
 # Playbook: Email Chat Cockpit
 
+> Note (scorecard-field-provenance Task 5, fix round 2 — not yet a "Last verified" bump; Task 6
+> closes the plan. COMMENT-ONLY, no behaviour change.) `llm.ts`'s `stageFinanceWrite` tool still
+> refuses `field: "cac"` (and its five scorecard-store siblings) before staging a plan — that gate,
+> and its user-facing refusal sentence, are UNCHANGED. Only the explanatory comment above the gate
+> (`llm.ts` ~2879) and its mirror in `cockpitTools.test.ts` (~2417) were corrected: both used to
+> claim the scorecard store "cannot carry provenance" and that `applyFinanceClaims` "refuses every
+> scorecard field unconditionally" — both false since Tasks 1/5 of this plan
+> (`evaluations.fieldProvenance`; `cash.ts` no longer produces `agent_cannot_update_figure`). The
+> TRUE reason the gate stands: it is a deliberate hold on what the model may propose in chat, not a
+> mirror of a store limit — a hand-seeded/legacy plan row, or a future writer of `financeClaims`,
+> still reaches `applyFinanceClaims` directly and applies. See `dashboard-pages.md` and
+> `business-evaluation.md` for the actual capability change this comment now describes correctly.
+>
 > Last verified: 2026-08-15 (**the SOURCE card's grounding list folds; the OUTPUT card's
 > deliberately does NOT**) against `SourceCard`/`GroundedSources` in `cards.tsx`. Owner report: the
 > link list "is just clouding the workspace". Grounding is PROVENANCE — it answers "what did you
