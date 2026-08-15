@@ -2555,8 +2555,12 @@ function selfCheck() {
   //     …and the read-only inspection mode must EXIT before the paid path is even entered.
   const entry = runnerSource.slice(runnerSource.lastIndexOf(marker("entry")));
   const inspectCallAt = entry.indexOf("runInspect(inspect)");
+  const liveSelfCheckAt = entry.indexOf("selfCheck();", inspectCallAt);
   const liveCallAt = entry.indexOf("await runLive(");
-  assert.ok(inspectCallAt > 0 && liveCallAt > 0, "both entry branches exist");
+  assert.ok(
+    inspectCallAt > 0 && liveSelfCheckAt > inspectCallAt && liveCallAt > liveSelfCheckAt,
+    "the live entry must run the free self-check before entering the paid/provider path",
+  );
   assert.ok(
     inspectCallAt < liveCallAt,
     "--inspect-tenant-skill must be dispatched BEFORE runLive — a read-only mode that seeds fixtures is not read-only",
@@ -3166,6 +3170,9 @@ try {
   }
   const inspect = parseInspectArgs(argv);
   if (inspect) runInspect(inspect); // read-only: exits before any seed/model/evidence code
+  // A live run inherits every free fixture/vocabulary/cost/registry guard. Keep this immediately
+  // before runLive: no fixture seed, Convex call or model/provider work may precede the preflight.
+  selfCheck();
   await runLive(parseSkillPins(argv), parseOnlyFilters(argv), parseTenantSkillIds(argv));
 } catch (e) {
   console.error(`[eval:golden] ${e.message}`);
