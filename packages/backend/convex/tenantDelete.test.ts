@@ -1,7 +1,7 @@
 import { deletableTables, type TenantDeletionCursor } from "@pikar/core/tenantData";
 import { makeFunctionReference } from "convex/server";
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
 
@@ -15,6 +15,19 @@ const deleteTenantDataPage = makeFunctionReference<
     nextCursor: TenantDeletionCursor | null;
   }
 >("tenantDelete:deleteTenantDataPage");
+type ProviderResult = {
+  provider: "google" | "microsoft";
+  localRowDeleted: boolean;
+  revokedAtProvider: boolean;
+  failure: boolean;
+};
+const deleteTenantData = makeFunctionReference<
+  "action",
+  { confirmation: string },
+  { deletedByTable: Record<string, number>; providers: ProviderResult[] }
+>("tenantDelete:deleteTenantData");
+
+afterEach(() => vi.unstubAllGlobals());
 
 async function deleteAll(
   t: ReturnType<typeof convexTest>,
@@ -142,5 +155,110 @@ describe("tenant data deletion pages", () => {
     expect(Object.entries(counts).filter(([table]) => table !== "users").every(([, n]) => n === 0)).toBe(
       true,
     );
+  });
+});
+
+describe("tenant deletion provider truth", () => {
+  test("reports the disconnect results per provider without token or content escape", async () => {
+    const { t, tenantA } = await seedTwoTenants();
+    await t.run(async (ctx) => {
+      await ctx.db.insert("gmailTokens", {
+        tenantId: tenantA,
+        refreshToken: "GOOGLE_DELETE_CROWN_JEWEL",
+        accessToken: "GOOGLE_ACCESS_CROWN_JEWEL",
+        scope: "gmail.modify",
+        updatedAt: 1,
+      });
+      await ctx.db.insert("microsoftCalendarTokens", {
+        tenantId: tenantA,
+        refreshToken: "MICROSOFT_DELETE_CROWN_JEWEL",
+        accessToken: "MICROSOFT_ACCESS_CROWN_JEWEL",
+        expiresAt: 2,
+        scope: "Calendars.ReadWrite",
+        updatedAt: 1,
+      });
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 200 })));
+
+    const result = await t
+      .withIdentity({ subject: `${tenantA}|delete-session` })
+      .action(deleteTenantData, { confirmation: "DELETE MY DATA" });
+    const bytes = JSON.stringify(result);
+
+    expect(result.providers).toEqual([
+      {
+        provider: "google",
+        localRowDeleted: true,
+        revokedAtProvider: true,
+        failure: false,
+      },
+      {
+        provider: "microsoft",
+        localRowDeleted: true,
+        revokedAtProvider: false,
+        failure: false,
+      },
+    ]);
+    expect(bytes).not.toMatch(/refreshToken|accessToken|CROWN_JEWEL/);
+    await t.run(async (ctx) => {
+      const auditBytes = JSON.stringify(await ctx.db.query("audit").collect());
+      expect(auditBytes).not.toMatch(/refreshToken|accessToken|CROWN_JEWEL/);
+    });
+  });
+
+  test("continues local erasure and records failure when Google revocation throws", async () => {
+    const { t, tenantA } = await seedTwoTenants();
+    await t.run(async (ctx) => {
+      await ctx.db.insert("gmailTokens", {
+        tenantId: tenantA,
+        refreshToken: "FAILURE_REFRESH_SECRET",
+        accessToken: "FAILURE_ACCESS_SECRET",
+        scope: "gmail.modify",
+        updatedAt: 1,
+      });
+      await ctx.db.insert("microsoftCalendarTokens", {
+        tenantId: tenantA,
+        refreshToken: "MS_FAILURE_REFRESH_SECRET",
+        accessToken: "MS_FAILURE_ACCESS_SECRET",
+        expiresAt: 2,
+        scope: "Calendars.ReadWrite",
+        updatedAt: 1,
+      });
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new Error("provider token leak"))));
+
+    const result = await t
+      .withIdentity({ subject: `${tenantA}|delete-session` })
+      .action(deleteTenantData, { confirmation: "DELETE MY DATA" });
+
+    expect(result.providers[0]).toEqual({
+      provider: "google",
+      localRowDeleted: true,
+      revokedAtProvider: false,
+      failure: true,
+    });
+    expect(result.providers[1]).toEqual({
+      provider: "microsoft",
+      localRowDeleted: true,
+      revokedAtProvider: false,
+      failure: false,
+    });
+    await t.run(async (ctx) => {
+      expect(
+        await ctx.db
+          .query("gmailTokens")
+          .withIndex("by_tenant", (q) => q.eq("tenantId", tenantA))
+          .unique(),
+      ).toBeNull();
+      expect(
+        await ctx.db
+          .query("microsoftCalendarTokens")
+          .withIndex("by_tenant", (q) => q.eq("tenantId", tenantA))
+          .unique(),
+      ).toBeNull();
+      expect(JSON.stringify(await ctx.db.query("audit").collect())).not.toContain(
+        "provider token leak",
+      );
+    });
   });
 });
