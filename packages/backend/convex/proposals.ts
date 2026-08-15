@@ -95,6 +95,23 @@ export const acceptProposal = tenantMutation({
       }
     }
 
+    const financeFacts = chosen.filter(
+      (f) => f.target.store === "financeInputs" || f.target.store === "scorecard",
+    );
+    const profileFacts = chosen.filter((f) => f.target.store === "profile");
+
+    // Still PASS 1 — a READ, not a write. HOISTED here (fix round 2, finding A): this gate used to
+    // sit inside PASS 2, AFTER the finance write block below. A batch mixing finance and profile
+    // facts, for a tenant with no `tenantProfiles` row, would run `applyFinanceClaims` to completion
+    // — committing figure rows and the `finance.claims_applied` audit insert — and only THEN hit
+    // this refusal. A `return` does not roll back a Convex transaction (see the file header), so the
+    // finance half would stay written while the mutation reported a refusal and left `status`
+    // `"pending"` — re-acceptable, which would double-apply the already-written finance facts on a
+    // retry. PASS 1 exists precisely so every refusal is cheap and total; a tier check is a read, so
+    // it belongs here, before any writer runs — same reasoning as the loop just above.
+    const tierRow = profileFacts.length > 0 ? await currentTierRow(ctx, ctx.tenantId) : null;
+    if (profileFacts.length > 0 && !tierRow) return { ok: false, reason: "incomplete_facts" };
+
     // ── PASS 2: every item cleared; now read current state, classify, and write. ─────────────
     let applied = 0;
     let skipped = 0;
@@ -102,9 +119,6 @@ export const acceptProposal = tenantMutation({
     // write here; `applyFinanceClaims` is the sole authority on whether a claim is too old to apply.
     const guards: Record<ProposalGuard, number> = { blank: 0, overwrite: 0, stale: 0 };
 
-    const financeFacts = chosen.filter(
-      (f) => f.target.store === "financeInputs" || f.target.store === "scorecard",
-    );
     if (financeFacts.length > 0) {
       // The ONE read of "what is stored and who said it" — the same call the finance page renders
       // from (cash.ts's own doc comment). No second definition to drift.
@@ -166,15 +180,12 @@ export const acceptProposal = tenantMutation({
       }
     }
 
-    const profileFacts = chosen.filter((f) => f.target.store === "profile");
     if (profileFacts.length > 0) {
-      // Mirrors `updateProfile`'s own gate (onboarding.ts): the tier is DERIVED, never fabricated,
-      // and `writeProfileDoc` requires one. A tenant who has not yet answered enough for
-      // `tenantProfile.saveFacts` to derive a tier gets `incomplete_facts` here rather than a
-      // guessed persona — the same defect class as fabricating a figure, the thing this whole plan
-      // exists to shut out (ruling 2026-08-15, fix round 1).
-      const tierRow = await currentTierRow(ctx, ctx.tenantId);
-      if (!tierRow) return { ok: false, reason: "incomplete_facts" };
+      // `tierRow` was read and gated on in PASS 1 above (`profileFacts.length > 0` here is the same
+      // condition that gated it there, so this cannot miss) — re-checked rather than asserted with
+      // `!`, mirroring `itemAt`'s pattern, because `noUncheckedIndexedAccess`-style correlation
+      // across two variables is not something the type-checker tracks on its own.
+      if (!tierRow) throw new Error("unreachable: profile facts were gated on tierRow in PASS 1");
 
       const existingDoc = await currentProfileDoc(ctx, ctx.tenantId);
       const existingProfile: BusinessProfile = existingDoc?.text

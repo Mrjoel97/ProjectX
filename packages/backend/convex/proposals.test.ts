@@ -288,4 +288,44 @@ describe("acceptProposal", () => {
     const row = await t.run((ctx) => ctx.db.get(proposalId));
     expect(row?.status).toBe("pending");
   });
+
+  // Fix round 2, finding A: the profile-only test above cannot catch a gate sitting in the WRONG
+  // pass — it never reaches the finance branch at all. A MIXED batch is the only way to prove the
+  // tier gate runs before any writer, not just before the profile writer: `withAudit()` because the
+  // pre-fix code (gate inside PASS 2, after the finance block) would actually reach
+  // `applyFinanceClaims` -> `internal.audit.log` here.
+  test("a mixed finance+profile batch for a tenant with no tier row refuses incomplete_facts, writing NEITHER half", async () => {
+    const t = withAudit();
+    const proposalId = await seedProposal(t, "u4", [cacFact, profileFact]);
+    const result = await asTenant(t, "u4").mutation(api.proposals.acceptProposal, {
+      proposalId,
+      acceptedIndices: [0, 1],
+    });
+    expect(result).toMatchObject({ ok: false, reason: "incomplete_facts" });
+    // Zero finance rows: the scorecard field never landed.
+    const scorecardRow = await t.run((ctx) => latestScorecardRow(ctx.db, "u4"));
+    expect(scorecardRow).toBeNull();
+    // Zero financeInputs rows either, for completeness (this fact targets scorecard, but the
+    // invariant under test is "the finance writer never ran at all").
+    const financeInputRows = await t.run((ctx) =>
+      ctx.db
+        .query("financeInputs")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", "u4"))
+        .collect(),
+    );
+    expect(financeInputRows).toHaveLength(0);
+    // Zero audit rows: `applyFinanceClaims`'s `finance.claims_applied` insert never ran either.
+    const auditRows = await t.run((ctx) => ctx.db.query("audit").collect());
+    expect(auditRows).toHaveLength(0);
+    // Zero profile docs, same as the profile-only test.
+    const docs = await t.run((ctx) =>
+      ctx.db
+        .query("vaultDocuments")
+        .withIndex("by_tenant_kind", (q) => q.eq("tenantId", "u4").eq("kind", "business_profile"))
+        .collect(),
+    );
+    expect(docs).toHaveLength(0);
+    const row = await t.run((ctx) => ctx.db.get(proposalId));
+    expect(row?.status).toBe("pending");
+  });
 });

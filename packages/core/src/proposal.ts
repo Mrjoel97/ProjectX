@@ -16,15 +16,26 @@ import type { FigureActor, FigureConfidence, FigureOrigin } from "./financeClaim
  * The `BusinessProfile` keys a profile proposal may actually persist into — a `keyof BusinessProfile`
  * array, so a typo here is a compile error rather than a silently-dead registry entry.
  *
- * NOT the same set as "derivable blueprint fields" (`FIELD_SPEC[f].derivable`): `revenueModel` and
- * `bindingConstraint` are legal, model-derivable BLUEPRINT fields — they reach the blueprint spine
- * as document-derived candidates — but `BusinessProfile` has no field for either, so there is
- * nowhere for `writeProfileDoc` to persist a proposal for them. Before this list existed, both
- * passed `proposalTarget`'s existence check, got merged onto the write object by the applier, and
- * were silently dropped by `serializeProfile` — a proposal that reported success and changed
- * nothing. `PROPOSAL_TARGETS` below intersects `derivable` with membership here so that failure
- * mode cannot recur: excluded fields never become a `ProposalTarget` at all, so the applier's
- * `unknown_target` refusal catches them instead of an approval doing nothing.
+ * NOT the same set as "derivable blueprint fields" (`FIELD_SPEC[f].derivable`): the registry lists
+ * what may be PROPOSED **AND WRITTEN**, not merely what is nameable. Two exclusion reasons, both
+ * fix-round regression guards:
+ *   - `revenueModel` / `bindingConstraint` are legal, model-derivable BLUEPRINT fields — they reach
+ *     the blueprint spine as document-derived candidates — but `BusinessProfile` has no field for
+ *     either, so there is nowhere for `writeProfileDoc` to persist a proposal for them. Before this
+ *     list existed, both passed `proposalTarget`'s existence check, got merged onto the write object
+ *     by the applier, and were silently dropped by `serializeProfile` on write — a proposal that
+ *     reported success and changed nothing (fix round 1, finding 2).
+ *   - `primaryGoals` / `knownConstraints` DO have a `BusinessProfile` slot, but it is `string[]`
+ *     while every profile `ProposalTarget` is registered `valueType: "string"` (a single scalar) —
+ *     the applier merges a bare `value` straight onto that slot with no list-vs-scalar handling, so
+ *     a proposal for either would land a plain string on a list field and throw inside
+ *     `serializeProfile`'s `bullets()` the moment it tried to render. Loud, not silent, but still
+ *     worse than a refusal; excluded until plan 3 builds real list-field handling (multi-value
+ *     accept, append-vs-replace) for the applier (fix round 2, finding B).
+ *
+ * `PROPOSAL_TARGETS` below intersects `derivable` with membership here so that neither failure mode
+ * can recur: an excluded field never becomes a `ProposalTarget` at all, so the applier's
+ * `unknown_target` refusal catches a proposal for it instead of an approval doing nothing or a crash.
  */
 const PROFILE_WRITABLE_FIELDS: readonly (keyof BusinessProfile)[] = [
   "name",
@@ -32,8 +43,6 @@ const PROFILE_WRITABLE_FIELDS: readonly (keyof BusinessProfile)[] = [
   "stage",
   "offering",
   "targetCustomer",
-  "primaryGoals",
-  "knownConstraints",
 ] as const;
 
 export type ProposalStore =

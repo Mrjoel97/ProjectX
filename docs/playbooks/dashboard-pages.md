@@ -6,27 +6,42 @@
 > `currentProfileDoc` exports are visibility-only (behaviour-preserving; the full pre-existing suite —
 > `cash.test.ts` 49/49, `evaluations.test.ts` 38/38, `onboarding.test.ts` 24/24 — passes unchanged).
 > `acceptProposal` is a `tenantMutation`, two-pass (validate-then-write), and NEVER writes a target
-> store via `ctx.db` — the only `ctx.db` write is the `proposals` row's own `status`. Finance facts:
-> read via ONE `inputStatesFor` call, classified per-item with `classifyProposal`; a `stale` guard is
-> dropped before the writer is even called (staleness is a temporal fact, not a consent question — no
-> explicit click can antedate a newer stored figure), everything else — blank OR overwrite — is
-> applied, because `acceptedIndices` IS the deliberate click design §6.1 requires; `actor: "agent"` is
-> STAMPED on every item before it reaches a claim, never trusted off the row. Profile facts: merged
-> over `currentProfileDoc`'s parsed doc (or a blank skeleton if none exists yet) and written through
-> `writeProfileDoc` — absent fields stay absent. Contacts/followUps refuse wholesale
-> (`writer_refused`) until plan 3's batch attestation exists. A foreign or missing proposal id both
-> return `not_found` (existence is not leaked across tenants). `discardProposal` and `listPending`
-> round out the surface. Two `ponytail:` markers left in source, both read-visible, not hidden: (1)
-> the contacts refusal itself, upgrade path = plan 3's attestation arg; (2) `revenueModel` and
-> `bindingConstraint` are legal `PROPOSAL_TARGETS` (derivable blueprint fields) but have no field on
-> `BusinessProfile` yet, so a proposal for either merges onto the write object and `serializeProfile`
-> silently drops it — upgrade path is widening `BusinessProfile` when a caller needs to persist them;
-> no test exercises this today. A first-ever profile proposal (no vault doc yet) defaults
-> `persona: "solopreneur"` rather than reading `tenantProfiles` — `currentTierRow` was deliberately
-> NOT exported (out of this task's scope) — so a proposal-created profile doc can carry a guessed tier
-> until the tenant's own onboarding or profile edit corrects it. Full command output:
+> store via `ctx.db` — the only `ctx.db` write is the `proposals` row's own `status`.
+> **[Corrected by fix rounds 1-2, in place, per CLAUDE.md §9 — this paragraph now describes the
+> LANDED behaviour, not the original Task-5 submission; date intentionally not bumped, Task 6 owns
+> that.]** Finance facts: read via ONE `inputStatesFor` call, classified per-item with
+> `classifyProposal` — but the guard is REPORTING ONLY now (`guards: Record<ProposalGuard, number>`
+> on the `ok:true` result), never enforced by the applier itself; `applyFinanceClaims` is the SOLE
+> staleness authority (its own `isNewerThan` check, at write time, in the same transaction), so there
+> is exactly one place staleness is decided rather than two separately-derived notions of "stored
+> time" that only happened to agree. Every accepted finance item reaches `applyFinanceClaims` in one
+> call regardless of guard, because `acceptedIndices` IS the deliberate click design §6.1 requires;
+> `actor: "agent"` is STAMPED on every item before it reaches a claim, never trusted off the row.
+> Profile facts are GATED, in PASS 1, on a `tenantProfiles` row existing: `currentTierRow` (exported
+> from `onboarding.ts`) is read before any writer runs, and a missing row refuses `incomplete_facts`
+> — never a fabricated `persona`. This gate sitting in PASS 2 (after the finance write block) was a
+> real regression caught by fix round 2: a mixed finance+profile batch for a tenant with no tier row
+> would commit the finance half (rows AND the `finance.claims_applied` audit insert) before refusing
+> on the profile half, leaving `status` `"pending"` and the batch re-acceptable — a double-apply
+> waiting to happen. The gate is a READ, hoisted into PASS 1 alongside the other validation, so it is
+> cheap and total like every other PASS-1 refusal. Once past the gate, profile facts are merged over
+> `currentProfileDoc`'s parsed doc (or a blank skeleton if none exists yet) — `persona` always the
+> FRESHLY-read tier, never trusted off a possibly-stale doc — and written through `writeProfileDoc`;
+> absent fields stay absent. Contacts/followUps refuse wholesale (`writer_refused`) until plan 3's
+> batch attestation exists. A foreign or missing proposal id both return `not_found` (existence is
+> not leaked across tenants). `discardProposal` and `listPending` round out the surface.
+> The `revenueModel`/`bindingConstraint` `ponytail:` marker that used to live in THIS file's applier
+> is GONE — not because the gap closed, but because it moved: `packages/core/src/proposal.ts` now
+> excludes both from `PROFILE_WRITABLE_FIELDS` (no `BusinessProfile` slot for either — the applier
+> would have silently dropped a proposal for one on write), and `primaryGoals`/`knownConstraints` are
+> excluded there too (they DO have a slot, but it is `string[]`, not the scalar every profile
+> `ProposalTarget` is registered as — a proposal for either would have thrown inside
+> `serializeProfile`'s `bullets()`). Both exclusions are pinned by a totality test in
+> `proposal.test.ts`, not a comment. ONE `ponytail:` marker remains in `proposals.ts`: the contacts
+> refusal itself, upgrade path = plan 3's attestation arg. Full command output (fix round 2):
 > `pnpm vitest run convex/proposals.test.ts convex/cash.test.ts convex/evaluations.test.ts
-> convex/onboarding.test.ts` → 4 files, 120/120 passed; `pnpm typecheck` clean.)
+> convex/onboarding.test.ts` → 4 files, 122/122 passed; `pnpm typecheck` clean; core
+> `pnpm vitest run src/proposal.test.ts` → 14/14 passed.)
 
 > Touched 2026-08-15 (item-4 session) to clear the §9 Stop hook — **NOT a verification**, and
 > deliberately not a `Last verified` line. `packages/core/src/financeClaim.ts` and

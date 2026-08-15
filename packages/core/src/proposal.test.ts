@@ -5,17 +5,19 @@ import { CASH_INPUTS } from "./cash";
 import { PROPOSAL_TARGETS, proposalTarget } from "./proposal";
 
 // The `BusinessProfile` keys the profile writer can actually persist into — mirrors
-// `proposal.ts`'s private `PROFILE_WRITABLE_FIELDS` so this test can assert against the real
+// `proposal.ts`'s private `PROFILE_WRITABLE_FIELDS` EXACTLY (not merely a superset — a looser
+// mirror here would blunt the regression guard below) so this test can assert against the real
 // write target rather than trusting the registry's own filter to have applied it correctly.
+// `persona` is never derivable/proposable (tier is computed, not model-derivable) and
+// `primaryGoals`/`knownConstraints` are `string[]` slots a scalar `ProposalTarget` cannot write to
+// without list-field handling the applier does not have yet (fix round 2, finding B) — both
+// excluded here for the same reason `proposal.ts` excludes them.
 const PROFILE_KEYS: readonly (keyof BusinessProfile)[] = [
   "name",
   "oneLineDescription",
-  "persona",
   "stage",
   "offering",
   "targetCustomer",
-  "primaryGoals",
-  "knownConstraints",
 ];
 
 describe("the target registry is closed and total", () => {
@@ -35,22 +37,27 @@ describe("the target registry is closed and total", () => {
     }
   });
 
-  test("every profile target names a real, WRITABLE BusinessProfile key — no silent-drop field", () => {
-    // The ruling-2 regression guard: `revenueModel` and `bindingConstraint` are derivable blueprint
-    // fields with NO slot on `BusinessProfile`. Before this test (and the registry fix it pins), a
-    // proposal for either passed `proposalTarget`'s existence check, got merged onto the write
-    // object by the applier, and was silently dropped by `serializeProfile` on write — an approved
-    // proposal that reported success and changed nothing. This must fail if either field, or any
-    // other unwritable one, is ever re-added to the profile slice of `PROPOSAL_TARGETS`.
+  test("every profile target names a real, SCALAR-WRITABLE BusinessProfile key — no silent-drop or writer-crash field", () => {
+    // The regression guard for BOTH fix rounds. `revenueModel` / `bindingConstraint`: derivable
+    // blueprint fields with NO slot on `BusinessProfile` — a proposal for either passed
+    // `proposalTarget`'s existence check, got merged onto the write object by the applier, and was
+    // silently dropped by `serializeProfile` on write (fix round 1, finding 2). `primaryGoals` /
+    // `knownConstraints`: DO have a slot, but it is `string[]`, not the scalar every profile
+    // `ProposalTarget` is registered as — a proposal for either would merge a bare string onto a
+    // list slot and throw inside `serializeProfile`'s `bullets()` (fix round 2, finding B). This
+    // must fail if any of the four, or any other unwritable/non-scalar field, is ever re-added to
+    // the profile slice of `PROPOSAL_TARGETS`.
     for (const t of PROPOSAL_TARGETS) {
       if (t.store !== "profile") continue;
       expect(
         (PROFILE_KEYS as readonly string[]).includes(t.field),
-        `${t.field} is a profile target but not a BusinessProfile key`,
+        `${t.field} is a profile target but not a scalar-writable BusinessProfile key`,
       ).toBe(true);
     }
     expect(proposalTarget("profile", "revenueModel")).toBeNull();
     expect(proposalTarget("profile", "bindingConstraint")).toBeNull();
+    expect(proposalTarget("profile", "primaryGoals")).toBeNull();
+    expect(proposalTarget("profile", "knownConstraints")).toBeNull();
   });
 
   test("a non-derivable blueprint field is NOT a target", () => {
