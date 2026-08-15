@@ -34,6 +34,7 @@ import {
   buildSubmitBody,
   reserveJobInner,
   reserveSceneJobInner,
+  sceneDeckOf,
   type SubmittableSpec,
   submitLine,
 } from "./media";
@@ -5325,5 +5326,201 @@ describe("20.2 wave 2 — the money gate asks the PROVIDER what it can buy", () 
       const estimate = await asA(t).query(api.media.jobEstimate, { planId });
       expect(estimate.refusal).toBeNull();
     }
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+// 33-02 — the BRIEF plane and the TWO-DECK variation plane
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+
+const BRIEF = {
+  topic: "solar for smallholders",
+  durationSeconds: 30,
+  audience: "model-guessed farmers",
+  tone: "warm",
+  defaulted: ["audience", "tone"],
+};
+
+/** A second, deliberately DIFFERENT scene deck parked as the alternate: 10 s + 5 s generated
+ *  clips (15 s total) against the primary's 8/6/4/12 (30 s) — so a swapped estimate, target and
+ *  narration set are all distinguishable from the original's. */
+async function seedAltDeck(t: T, planId: Id<"plans">) {
+  const seconds = [10, 5];
+  let startMs = 0;
+  const altShots = seconds.map((sec, i) => {
+    const shot = {
+      index: i,
+      visual: "generated_video",
+      seconds: sec,
+      windowStartMs: startMs,
+      description: `alt scene ${i}`,
+      prompt: `alt prompt ${i}`,
+      narration: `alt line ${i}`,
+    };
+    startMs += sec * 1000;
+    return shot;
+  });
+  await t.run(async (ctx) =>
+    ctx.db.patch(planId, { altShots, altTargetDurationSeconds: 15 }),
+  );
+  return altShots;
+}
+
+describe("33-02 editBrief: a chip edit patches the BRIEF plane and nothing else", () => {
+  test("merges the patch, strips edited fields from `defaulted`, stamps briefChangedAt — and never moves the money contract", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t); // targetDurationSeconds 30, shots 8/6/4/12
+    await t.run(async (ctx) => ctx.db.patch(planId, { brief: BRIEF }));
+    const shotsBefore = (await planRowOf(t, planId))?.shots;
+
+    expect(
+      await asA(t).mutation(api.media.editBrief, {
+        planId,
+        patch: { durationSeconds: 60, audience: "smallholder co-ops" },
+      }),
+    ).toEqual({ ok: true });
+
+    const plan = await planRowOf(t, planId);
+    expect(plan?.brief).toMatchObject({
+      topic: BRIEF.topic, // unedited chips stand
+      durationSeconds: 60, // the USER'S ask moved…
+      audience: "smallholder co-ops",
+      tone: BRIEF.tone,
+      defaulted: ["tone"], // …and `audience` is no longer a model guess
+    });
+    expect(plan?.briefChangedAt).toBeTypeOf("number");
+    // THE INVARIANT: the deck's own money contract is byte-untouched. A brief/deck divergence is
+    // exactly what the stale badge expresses — never an estimate refusal, never a silent re-deck.
+    expect(plan?.targetDurationSeconds).toBe(30);
+    expect(plan?.shots).toEqual(shotsBefore);
+    expect(plan?.shotsChangedAt).toBeUndefined();
+  });
+
+  test("a duration outside the presets refuses illegal_duration and writes NOTHING", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    await t.run(async (ctx) => ctx.db.patch(planId, { brief: BRIEF }));
+    expect(
+      await asA(t).mutation(api.media.editBrief, { planId, patch: { durationSeconds: 45 } }),
+    ).toEqual({ ok: false, reason: "illegal_duration" });
+    const plan = await planRowOf(t, planId);
+    expect(plan?.brief).toEqual(BRIEF);
+    expect(plan?.briefChangedAt).toBeUndefined();
+  });
+
+  test("a locked deck refuses deck_locked — post-Generate edits are canvas-only, on the paid rail", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    await t.run(async (ctx) => ctx.db.patch(planId, { brief: BRIEF, deckLockedAt: 1 }));
+    expect(
+      await asA(t).mutation(api.media.editBrief, { planId, patch: { topic: "something else" } }),
+    ).toEqual({ ok: false, reason: "deck_locked" });
+    expect((await planRowOf(t, planId))?.brief).toEqual(BRIEF);
+  });
+
+  test("a plan that never had a brief refuses no_brief rather than inventing one", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    expect(
+      await asA(t).mutation(api.media.editBrief, { planId, patch: { topic: "x" } }),
+    ).toEqual({ ok: false, reason: "no_brief" });
+    expect((await planRowOf(t, planId))?.brief).toBeUndefined();
+  });
+
+  test("tenant B's edit THROWS — writes throw where reads return empty", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t, { tenantId: A });
+    await t.run(async (ctx) => ctx.db.patch(planId, { brief: BRIEF }));
+    await expect(
+      asB(t).mutation(api.media.editBrief, { planId, patch: { topic: "stolen" } }),
+    ).rejects.toThrow(/plan not found/);
+  });
+});
+
+describe("33-02 switchDeck: the unpicked deck swaps in atomically, until Generate locks the choice", () => {
+  test("swaps shots↔altShots AND the two targets, stamps shotsChangedAt, clears the render", async () => {
+    const t = harness();
+    const { planId, shots } = await seedSceneDeck(t);
+    const altShots = await seedAltDeck(t, planId);
+    await t.run(async (ctx) => ctx.db.patch(planId, { renderStatus: "rendered" }));
+
+    expect(await asA(t).mutation(api.media.switchDeck, { planId })).toEqual({ ok: true });
+
+    const plan = await planRowOf(t, planId);
+    expect(plan?.shots).toEqual(altShots);
+    expect(plan?.targetDurationSeconds).toBe(15);
+    expect(plan?.altShots).toEqual(shots);
+    expect(plan?.altTargetDurationSeconds).toBe(30);
+    // Structural stamp: landed assets belong to the deck that BOUGHT them, so invalidating the
+    // reuse window on a switch is correct, not collateral damage.
+    expect(plan?.shotsChangedAt).toBeTypeOf("number");
+    // …and the rendered reel of the OTHER deck cannot keep showing beside this one.
+    expect(plan?.renderStatus).toBe("pending");
+    expect(plan?.renderStorageId).toBeUndefined();
+  });
+
+  test("switching twice round-trips the decks byte-for-byte", async () => {
+    const t = harness();
+    const { planId, shots } = await seedSceneDeck(t);
+    const altShots = await seedAltDeck(t, planId);
+    await asA(t).mutation(api.media.switchDeck, { planId });
+    await asA(t).mutation(api.media.switchDeck, { planId });
+    const plan = await planRowOf(t, planId);
+    expect(plan?.shots).toEqual(shots);
+    expect(plan?.targetDurationSeconds).toBe(30);
+    expect(plan?.altShots).toEqual(altShots);
+    expect(plan?.altTargetDurationSeconds).toBe(15);
+  });
+
+  test("sceneDeckOf and jobEstimate always read plans.shots — the money path never learns variations exist", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    await seedAltDeck(t, planId);
+
+    // Before the switch: the picked deck is 8 s + 12 s of paid clip → 200 cents of clips.
+    const before = await asA(t).query(api.media.jobEstimate, { planId });
+    expect(before.lines.find((l) => l.label === "clips")?.cents).toBe(200);
+
+    await asA(t).mutation(api.media.switchDeck, { planId });
+
+    // After: the SAME query, textually untouched by this plan, prices the formerly-alternate deck
+    // (10 s + 5 s → 150 cents) because `plans.shots` IS the picked deck.
+    const row = await planRowOf(t, planId);
+    const deck = row ? sceneDeckOf(row) : null;
+    expect(deck?.targetDurationSeconds).toBe(15);
+    expect(deck?.scenes.map((s) => s.narration)).toEqual(["alt line 0", "alt line 1"]);
+    const after = await asA(t).query(api.media.jobEstimate, { planId });
+    expect(after.refusal).toBeNull();
+    expect(after.lines.find((l) => l.label === "clips")?.cents).toBe(150);
+  });
+
+  test("no_alternate when there is nothing to switch to", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    expect(await asA(t).mutation(api.media.switchDeck, { planId })).toEqual({
+      ok: false,
+      reason: "no_alternate",
+    });
+  });
+
+  test("deck_locked once Generate has bought against the picked deck", async () => {
+    const t = harness();
+    const { planId, shots } = await seedSceneDeck(t);
+    await seedAltDeck(t, planId);
+    await t.run(async (ctx) => ctx.db.patch(planId, { deckLockedAt: 1 }));
+    expect(await asA(t).mutation(api.media.switchDeck, { planId })).toEqual({
+      ok: false,
+      reason: "deck_locked",
+    });
+    expect((await planRowOf(t, planId))?.shots).toEqual(shots);
+  });
+
+  test("tenant B's switch THROWS", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t, { tenantId: A });
+    await seedAltDeck(t, planId);
+    await expect(asB(t).mutation(api.media.switchDeck, { planId })).rejects.toThrow(
+      /plan not found/,
+    );
   });
 });
