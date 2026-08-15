@@ -354,6 +354,20 @@ const EXPECT_KEYS = new Set([
   // evidence anything was written — the apply happens behind a human Approve this harness never
   // clicks, same as every other staging tool here.
   "financeClaimCount",
+  // Phase 17 (ACTN-02): `calendarEventPresent` — did `proposeCalendarEvent` actually stage an event
+  // on this plan? Graded off `plan.eventStartMs`, which llm.ts writes at exactly ONE site (the
+  // `resolved` branch of that tool) and plans.ts clears on reset, so a finite value cannot be
+  // reached by any other path. It also pins the RESOLVED branch specifically: the ambiguous, past,
+  // too-far and no-time-detected branches all return their refusal WITHOUT patching the row, so a
+  // fixture whose time the parser could not resolve reddens here rather than passing quietly.
+  // A boolean rather than a count, unlike `crmOperationCount` / `financeClaimCount`: one plan row
+  // carries at most ONE event (the tool patches fields, it does not append to a list), so a count
+  // could only ever read 1 and would imply a list length that does not exist.
+  // The failure it exists to catch is this vocabulary's recurring one — the agent answering "I've
+  // put that on your calendar" while the tool never ran, which no reply assertion can tell apart
+  // from success. And a staged event is never evidence anything reached a calendar: the create
+  // happens behind a human Approve this harness never clicks, same as every other staging tool.
+  "calendarEventPresent",
 ]);
 
 // The pinned plans lifecycle order (schema.ts) — statusAtMost compares indices.
@@ -479,6 +493,13 @@ function validateFixture(fx, source) {
     (!Number.isInteger(fx.expect.financeClaimCount) || fx.expect.financeClaimCount < 1)
   ) {
     fail("expect.financeClaimCount must be an integer >= 1 (a zero count is vacuous)");
+  }
+  // Phase 17 (ACTN-02): the same anti-vacuity rule in its boolean form. `calendarEventPresent:
+  // false` holds on every fixture that never mentions the calendar, so it asserts nothing. A
+  // fixture meaning "the agent must NOT stage an event" needs its own key, not a false that is
+  // indistinguishable from the key being absent.
+  if (fx.expect.calendarEventPresent !== undefined && fx.expect.calendarEventPresent !== true) {
+    fail("expect.calendarEventPresent must be true (false holds on every fixture and is vacuous)");
   }
   if (fx.expect.datedFollowUpCount !== undefined && fx.expect.crmOperationCount === undefined) {
     fail("expect.datedFollowUpCount requires crmOperationCount (it is a SUBSET of the total)");
@@ -1112,6 +1133,14 @@ function evaluateExpect(
         if ((plan.financeClaims ?? []).length !== expected)
           miss(key, expected, (plan.financeClaims ?? []).length);
         break;
+      case "calendarEventPresent": {
+        // Phase 17 (ACTN-02). Plan-row key, graded like the two above — but `eventStartMs` is a
+        // NUMBER, so `present()` (string-only, :1002) cannot grade it and Number.isFinite does.
+        // That also rejects the absent field without a separate null branch.
+        const staged = Number.isFinite(plan.eventStartMs);
+        if (staged !== expected) miss(key, expected, staged);
+        break;
+      }
       case "attributionRoute": {
         // specialistMemoBody puts this FIRST, so match the prefix — a fallback memo (refusal,
         // throw, empty reply) starts with "# Next step" and fails here.
@@ -1773,6 +1802,46 @@ function selfCheck() {
     evaluateExpect({ financeClaimCount: 1 }, financeStaged(2)).length,
     1,
     "financeClaimCount:1 MUST FAIL when a second, unrequested figure claim was staged",
+  );
+
+  // 2j. Phase 17 (ACTN-02): `calendarEventPresent` is in the vocabulary, is graded off the PLAN ROW
+  // (`plans.eventStartMs`) rather than a smoke read, and rejects the vacuous false — the
+  // `financeClaimCount` shape (2i above), added here for the same stated reason: without it a typo
+  // in the field name would surface only on the fixture's first LIVE (paid) run. The `refused`
+  // fixture below is the one this key exists for beyond a missing call: proposeCalendarEvent's
+  // ambiguous/past/tooFar/none branches return prose and patch NOTHING, so a plan that reached
+  // `proposed` with a chatty reply and no event must still be red.
+  const eventStaged = (startMs) => ({
+    status: "collecting",
+    ...(startMs === undefined ? {} : { eventStartMs: startMs }),
+  });
+  assert.ok(
+    validateFixture({ ...base, expect: { calendarEventPresent: true } }, "<synthetic>"),
+    "calendarEventPresent must be an accepted expect key",
+  );
+  assert.throws(
+    () => validateFixture({ ...base, expect: { calendarEventPresent: false } }, "<synthetic>"),
+    /must be true/,
+    "a false calendar assertion holds on every fixture in the set and asserts nothing",
+  );
+  assert.equal(
+    evaluateExpect({ calendarEventPresent: true }, eventStaged(1_800_000_000_000)).length,
+    0,
+    "calendarEventPresent:true passes when the plan really carries a resolved event start",
+  );
+  // The load-bearing negative: the agent said "I've put that on your calendar" and never called
+  // proposeCalendarEvent. No reply assertion can tell that apart from success.
+  assert.equal(
+    evaluateExpect({ calendarEventPresent: true }, eventStaged(undefined)).length,
+    1,
+    "calendarEventPresent:true MUST FAIL when proposeCalendarEvent never ran (a prose-only claim)",
+  );
+  // The refusal branches leave the field absent, so they grade identically to never calling it —
+  // asserted explicitly because "the tool ran" and "the tool staged" are different claims.
+  assert.equal(
+    evaluateExpect({ calendarEventPresent: true }, eventStaged(Number.NaN)).length,
+    1,
+    "calendarEventPresent:true MUST FAIL on a non-finite start (no refusal branch may pass as staged)",
   );
 
   // 3. Cost summation + cap logic on synthetic per-turn costs.

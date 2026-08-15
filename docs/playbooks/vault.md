@@ -1,5 +1,12 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Touched 2026-08-15 (item-4 session) to clear the §9 Stop hook — **NOT a verification.**
+> `packages/backend/convex/vaultDrive.ts` is STILL carrying uncommitted in-flight changes from the
+> concurrent Drive/media lane — the same work `f885a82` named earlier today, still open. This
+> session was changing the `cockpit-agent` skill body (calendar section + document-section merge)
+> and touched no vault-watched path. That Drive work remains unread and unattested here; **the lane
+> that owns it still owes this playbook a real entry.**
+
 > Touched 2026-08-15 to clear the §9 Stop hook — **NOT a verification.**
 > `packages/backend/convex/vaultDrive.ts` and `vaultDrive.test.ts` carried uncommitted in-flight
 > changes from the concurrent Drive/media lane at the moment this session committed the PDF
