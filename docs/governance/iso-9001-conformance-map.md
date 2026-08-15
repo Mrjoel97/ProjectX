@@ -155,7 +155,9 @@ bounded commands with a paid live eval or production mutation.
 - The direct 8.6 release status applies only to gated candidate skill versions. Bootstrap v1,
   explicitly ungated skills, unpaid/failed candidates, on-demand live runs, and deployment remain
   outside that claim.
-- Clause 10.2 currently proves detection, containment, visibility, and disposition only. Plan 24-02
-  owns the corrective-action evidence linkage; resolved status alone is insufficient.
+- Clause 10.2 directly proves detection, containment, visibility, and disposition, while the bounded
+  index supports corrective-action closure for two selected material cases only. It does not show
+  that every nonconformity or DLQ row receives cause analysis, corrective action, or effectiveness
+  review; resolved status alone remains insufficient.
 - No repository evidence establishes a clause 9.2 internal-audit program or clause 9.3 management
   review. Tests and owner checkpoints must not be relabelled as either.
