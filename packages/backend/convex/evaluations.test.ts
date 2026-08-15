@@ -553,6 +553,41 @@ describe("carry-forward / anti-re-ask (LOCKED store half)", () => {
     expect(row?.userProvidedAt?.["financials.cac"]).toBe(answeredAt);
     expect(row?.userProvidedAt?.["financials.cac"]).not.toBe(row?.createdAt);
   });
+
+  // cash-business-finance Task 3: `fieldProvenance` must carry forward exactly like `userProvided`
+  // and `userProvidedAt` above, or a weekly re-evaluation silently erases every provenance record —
+  // the read side then falls back to the legacy proxy, which reports an agent's own relayed figure
+  // as unknown-origin rather than as an agent's.
+  test("fieldProvenance is carried forward unchanged by a re-evaluation", async () => {
+    const t = newTest();
+    await t.mutation(internal.skills.seedSkills, {});
+    const docId = await seedDoc(t, TENANT, profileDocText(false));
+
+    await t.action(internal.evaluations.runEvaluation, {
+      tenantId: TENANT,
+      threadId: THREAD,
+      query: `SMOKE::${docId}`,
+    });
+    // An agent-relayed answer (via the cockpit's real write door) — lands the value, is never
+    // re-asked, and its provenance must ride along into the NEXT row exactly as written.
+    await t.run((ctx) =>
+      applyScorecardAnswer(ctx.db, TENANT, THREAD, "financials.cac", 340, AGENT_PROV),
+    );
+
+    // The re-evaluation — this is the exact operation the weekly cron runs. It stamps a fresh
+    // `createdAt` on a NEW row; `fieldProvenance` must not reset with it.
+    await t.action(internal.evaluations.runEvaluation, {
+      tenantId: TENANT,
+      threadId: THREAD,
+      query: `SMOKE::${docId}`,
+    });
+
+    const row = await t.withIdentity({ subject: TENANT }).query(api.evaluations.byThread, {
+      threadId: THREAD,
+    });
+    expect(row?.scorecard.financials.cac).toBe(340);
+    expect(row?.fieldProvenance?.["financials.cac"]).toEqual(AGENT_PROV);
+  });
 });
 
 describe("two-tenant isolation (SC #5)", () => {

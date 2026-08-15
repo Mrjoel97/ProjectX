@@ -19,6 +19,15 @@
 > **Known consequence, accepted by the owner:** the cockpit `recordScorecardAnswer` tool now writes
 > `actor: "agent"`, so figures given in chat stop being cited as user-provided until a later phase
 > teaches the citation map to read `fieldProvenance`.
+>
+> **Task 3 of this plan (not yet verified — see the IN-FLIGHT note above):** `runEvaluation` now
+> carries `fieldProvenance` forward unchanged into every new row, exactly like `userProvided` and
+> `userProvidedAt` (the same carry-forward block, `evaluations.ts` near line 236; persisted via
+> `insertEvaluation` near line 496). Without this, a weekly re-evaluation would silently erase every
+> provenance record on its fresh row, and Tasks 4/5's read side would fall back to the legacy proxy —
+> reporting an agent-relayed figure as unknown-origin. Regression-guarded by
+> `evaluations.test.ts > "carry-forward / anti-re-ask" > "fieldProvenance is carried forward unchanged
+> by a re-evaluation"`, confirmed RED against the code with the carry-forward line stubbed out.
 
 > Last verified: 2026-08-11 — ⚠ **DATE BUMPED TO CLEAR A `check-playbooks.mjs` FALSE POSITIVE.
 > NOTHING BELOW WAS RE-VERIFIED, AND THIS ENTRY DOCUMENTS NO CHANGE OF ITS OWN.** The precedent is

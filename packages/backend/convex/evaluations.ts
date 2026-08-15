@@ -234,6 +234,13 @@ export const runEvaluation = internalAction({
       // survive the weekly re-evaluation that stamps a fresh `createdAt` on the new ROW (cash-
       // business-finance Task 3 fix). `createdAt` is the ROW's timestamp, never a field's.
       const userProvidedAt: Record<string, number> = { ...(last?.userProvidedAt ?? {}) };
+      // Carried UNCHANGED, exactly like `userProvided` and `userProvidedAt` above. Without this a
+      // weekly re-evaluation erases every provenance record, and the read side silently falls back
+      // to the legacy proxy — which reports an agent figure as unknown-origin rather than as an
+      // agent's. The erasure direction is the unsafe one.
+      const fieldProvenance: Record<string, FieldProvenance> = {
+        ...(last?.fieldProvenance ?? {}),
+      };
       let scorecard: Scorecard = JSON.parse(
         JSON.stringify((last?.scorecard as Scorecard | undefined) ?? emptyScorecard),
       );
@@ -489,6 +496,7 @@ export const runEvaluation = internalAction({
         scorecard,
         userProvided,
         userProvidedAt,
+        fieldProvenance,
         verdict,
         delta,
       });
