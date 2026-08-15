@@ -2155,6 +2155,113 @@ export const previewIndex = (count: number, picked: number | null): number => {
   return picked !== null && picked >= 0 && picked < count ? picked : newest;
 };
 
+// ── CALENDAR card (ACTN-02) ──────────────────────────────────────────────────────────────────
+// The calendar sibling of BriefingCard, and it sits on the SourceCard/OutputCard footing for the
+// same reason they do: an availability read is a pure-advice turn that carries NO plan row, so a
+// card gated behind plan status would simply never appear.
+//
+// THE EMPTY STATE IS THE POINT, not a fallback. "Nothing scheduled" is the answer to "what's on my
+// calendar this week?", and rendering nothing for it is what made the agent feel detached from the
+// workspace — the user could not tell an empty calendar from a broken one.
+type CalendarView = NonNullable<FunctionReturnType<typeof api.calendarViews.byThread>>;
+
+const CAL_PROVIDER_LABEL: Record<CalendarView["provider"], string> = {
+  google: "Google Calendar",
+  microsoft: "Microsoft Calendar",
+};
+
+// `range` is the tool's closed enum literal ("today" | "tomorrow" | "week"), which reads fine as a
+// caps label but NOT inside a sentence — the first live paint said "you're free for week". The row
+// stores a `string`, not the union (the enum lives in the tool's inputSchema), so an unknown value
+// falls back to the literal rather than throwing or rendering "undefined".
+const CAL_RANGE_PHRASE: Record<string, string> = {
+  today: "today",
+  tomorrow: "tomorrow",
+  week: "this week",
+};
+export const rangePhrase = (range: string): string => CAL_RANGE_PHRASE[range] ?? range;
+
+/**
+ * One busy window in the zone the READ was bucketed in (`view.tz`), never the browser's — display
+ * honesty, the same rule fmtItemTime follows for briefings. Same-day blocks (the overwhelming
+ * case) print the date once: "Mon 18 Aug · 09:00 – 10:30".
+ */
+export function fmtBusyBlock(startMs: number, endMs: number, tz: string): string {
+  const day = new Intl.DateTimeFormat(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: tz,
+  });
+  const clock = new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: tz,
+  });
+  const startDay = day.format(startMs);
+  const endDay = day.format(endMs);
+  return startDay === endDay
+    ? `${startDay} · ${clock.format(startMs)} – ${clock.format(endMs)}`
+    : `${startDay} ${clock.format(startMs)} – ${endDay} ${clock.format(endMs)}`;
+}
+
+function CalendarCard({ threadId }: { threadId?: string }) {
+  const view: CalendarView | null | undefined = useQuery(
+    api.calendarViews.byThread,
+    threadId ? { threadId } : "skip",
+  );
+  // `undefined` = still loading, `null` = no availability read on this thread. Neither is a
+  // calendar state, so neither renders — unlike `busy: []`, which IS one and renders below.
+  if (!view) return null;
+  const clear = view.busy.length === 0;
+  return (
+    <div style={{ ...briefingSheet, padding: "1rem 1.15rem" }} data-testid="calendar-card">
+      <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+        <p style={capsTeal}>📅 Calendar · {view.range}</p>
+        <span style={typeBadge} data-testid="calendar-provider">
+          {CAL_PROVIDER_LABEL[view.provider]}
+        </span>
+      </div>
+      {clear ? (
+        // Stated positively and unambiguously: the user asked a question and this is the answer.
+        <p style={{ ...traceText, margin: "0.7rem 0 0" }} data-testid="calendar-clear">
+          Nothing scheduled — you're free {rangePhrase(view.range)}.
+        </p>
+      ) : (
+        <ul
+          style={{
+            listStyle: "none",
+            margin: "0.7rem 0 0",
+            padding: 0,
+            display: "grid",
+            gap: "0.4rem",
+          }}
+        >
+          {view.busy.map((block) => (
+            <li
+              key={`${block.startMs}-${block.endMs}`}
+              style={{ ...traceText, fontWeight: 600 }}
+              data-testid="calendar-busy-block"
+            >
+              {fmtBusyBlock(block.startMs, block.endMs, view.tz)}
+            </li>
+          ))}
+        </ul>
+      )}
+      {/* Cap honesty, mirroring briefings' "summarized N of M": a truncated read must never be
+          readable as a complete one. Microsoft-only today — Google's freeBusy does not cap. */}
+      {view.truncated && (
+        <p
+          style={{ ...traceText, margin: "0.6rem 0 0", color: "var(--ink-soft)" }}
+          data-testid="calendar-truncated"
+        >
+          More busy blocks exist in this window than are shown.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function OutputCard({ threadId }: { threadId?: string }) {
   const created: VaultSources | null | undefined = useQuery(
     api.vaultSources.byThread,
@@ -2754,6 +2861,9 @@ export function CardList({
       {/* Like SourceCard: evaluation happens on advice turns that may carry no plan row, so it
           renders above the plan-status branches and self-reads its own latest-row data. */}
       <EvaluationCard threadId={threadId} />
+      {/* Same footing, same reason (ACTN-02): checking availability is a read, so an availability
+          turn carries no plan row and the CALENDAR card must not sit under a plan gate. */}
+      <CalendarCard threadId={threadId} />
       {rest()}
     </div>
   );

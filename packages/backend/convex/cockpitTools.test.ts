@@ -1270,6 +1270,64 @@ test("checkAvailability says the user is free when the selected window has zero 
   expect(reply).toMatch(/free|no busy/i);
 });
 
+// ── ACTN-02: the availability read must leave a row the CALENDAR card can render ───────────────
+//
+// THE DEFECT THESE EXIST FOR, in the owner's words: "it just replied with a message ... no card in
+// the workspace." The tool answered correctly in chat and wrote nothing down, so the canvas stayed
+// blank and the agent looked detached from its own actions. The assertions below are on the STORED
+// ROW, never on the reply string — the reply was already right when the bug was live, so asserting
+// it would pass with the card still missing.
+
+test("a BUSY availability read writes the blocks to the content plane for the card", async () => {
+  const { t, planId } = await setup();
+  await t.mutation(internal.smoke.seedCalendarFixture, {
+    tenantId: "t1",
+    baseMs: PIN_CLOCK.nowMs,
+  });
+
+  await callClock(t, planId, "checkAvailability", { range: "today" });
+
+  const views = await t.run((ctx) => ctx.db.query("calendarViews").collect());
+  expect(views).toHaveLength(1);
+  expect(views[0].busy).toHaveLength(2); // the same two blocks the reply reports
+  expect(views[0].range).toBe("today");
+  expect(views[0].tz).toBe(PIN_CLOCK.tz); // the zone the read was bucketed in, not the browser's
+  // Instants are code-owned and land unrounded — the card formats, the row stores.
+  expect(views[0].busy[0].startMs).toBeLessThan(views[0].busy[0].endMs);
+});
+
+test("an EMPTY availability read STILL writes a row — a clear calendar is an answer, not a blank", async () => {
+  // This is the case the owner was most likely to read as broken: ask what's on the calendar, get
+  // prose saying "you're free", and see an empty canvas that looks identical to a failure. A
+  // `busy.length > 0` guard anywhere in the write path makes this test red.
+  const { t, planId } = await setup();
+  await t.mutation(internal.smoke.seedCalendarFixture, {
+    tenantId: "t1",
+    baseMs: PIN_CLOCK.nowMs + 8 * DAY_MS, // fixture lands outside the window ⇒ zero busy blocks
+  });
+
+  await callClock(t, planId, "checkAvailability", { range: "today" });
+
+  const views = await t.run((ctx) => ctx.db.query("calendarViews").collect());
+  expect(views).toHaveLength(1); // the row EXISTS...
+  expect(views[0].busy).toEqual([]); // ...and says, positively, that nothing is scheduled
+});
+
+test("the stored row records WHICH calendar was read, so the card cannot mislabel it", async () => {
+  // Mislabelling is not cosmetic here: a user who connected both providers and is shown the wrong
+  // one has no way to tell an empty Outlook calendar from a full Google one.
+  const { t, planId } = await setup();
+  await t.mutation(internal.smoke.seedCalendarFixture, {
+    tenantId: "t1",
+    baseMs: PIN_CLOCK.nowMs,
+  });
+
+  await callClock(t, planId, "checkAvailability", { range: "today" });
+
+  const views = await t.run((ctx) => ctx.db.query("calendarViews").collect());
+  expect(views[0].provider).toBe("google"); // the default branch, explicitly recorded
+});
+
 test("checkAvailability turns reauth into a reconnect notification and conversational fallback", async () => {
   const { t, planId } = await setup();
   await t.run((ctx) =>

@@ -1,5 +1,33 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-15 (ACTN-02 — **the CALENDAR card: the agent's calendar reads now leave a
+> mark on the canvas**) against `checkAvailability` + the new `calendarViews` content plane. Owner
+> report, verbatim: "it just replied with a message … no brief card in the workspace." Diagnosis:
+> the canvas renders ONLY what something writes down — plan rows and `briefings` rows — and
+> `checkAvailability` returned a string to the model loop and persisted nothing, so the answer
+> existed only as chat prose. This affected **both providers equally**; it was never a Microsoft
+> bug. Shipped the `briefings` pattern for the calendar and nothing else: new `calendarViews` table
+> + `calendarViews.ts` adapter (mirrors `briefings.ts`, writes NO log-plane row, validators DERIVED
+> from the schema), an additive write in `llm.ts` `checkAvailability` placed **above** the
+> empty-window return, and a `CalendarCard` in `cards.tsx` on the SourceCard/OutputCard footing
+> (above the plan-status branches — an availability read carries no plan row, so a plan-gated card
+> would never appear). **The tool's description and return strings are UNCHANGED** — the model's
+> behaviour and arguments are untouched, deliberately avoiding the known skill-prose→tool-args
+> hazard. Times render in the ROW's `tz`, never the browser's; `truncated` (Microsoft's scan cap)
+> renders an explicit note so a partial read cannot read as complete. **The load-bearing invariant
+> is that an EMPTY read still writes a row** — "nothing scheduled" is the answer, and skipping the
+> write restores the blank canvas for precisely the case a user misreads as broken. Mutation-proven,
+> not read: adding `if (res.busy.length > 0)` above the insert turns *"an EMPTY availability read
+> STILL writes a row"* red with `expected [] to have a length of 1 but got +0`. Assertions are on
+> the STORED ROW, never the reply string — the reply was already correct while the bug was live.
+> **MEASURED:** `cockpitTools.test.ts` 131/131 (3 new, every pre-existing `checkAvailability` case
+> still green), `calendarCard.test.ts` 4/4 (`fmtBusyBlock` same-day / cross-midnight / tz-honesty /
+> zero-length), backend `tsc --noEmit` exit 0, web `tsc --noEmit` exit 0. **NOT addressed, and NOT a
+> rendering gap:** Outlook has no inbox brief because `briefInbox` is hardcoded to `internal.gmail.*`
+> and `graph.ts`/`delivery.ts` do not exist on disk — that is Phase 25 (25-05/25-06/25-09). **NOT
+> VERIFIED IN A BROWSER:** no live availability turn has painted this card yet; the automated proof
+> is the stored row, not the paint.
+
 > Last verified: 2026-08-15 (20-12 v24 cycle — the v23 run `cc63246f` came back 36/38 and BOTH
 > reds were pre-existing body-judgement flaws, not the media delta: fixture 37 routed a stated
 > cash-on-hand to `recordScorecardAnswer`+`evaluateBusiness` (the stage branch said 'one of its
@@ -2836,6 +2864,50 @@ validator-checked call args), so 16-06's scheduled research tool can correlate i
 
 > Append-only container: each Phase-17 plan writes ONLY inside its own
 > `### Phase 17 — <plan>` subsection. On merge conflict, **keep both**.
+
+### Phase 17 — the CALENDAR card (ACTN-02, availability content plane)
+
+**The defect, in the owner's words: "it just replied with a message … no card in the workspace."**
+`checkAvailability` was correct and invisible. It returned a STRING to the model loop and wrote
+nothing down, so a "what's on my calendar?" turn answered in chat prose and left the canvas blank —
+for BOTH providers, not just Microsoft. The owner read that as the agent being detached from its own
+actions, and they were right: **the canvas can only render what something writes down.** Only two
+producers feed it — plan rows (`cards.tsx` kind dispatch) and `briefings` rows. Every other tool
+result is conversation that evaporates.
+
+The fix is the `briefings` pattern applied to the calendar, and nothing more:
+
+- **`calendarViews` table** (`schema.ts`) + **`calendarViews.ts`** adapter — an exact mirror of
+  `briefings`/`briefings.ts`, including the property that matters: it writes **NO log-plane row**.
+  The refs-only `calendar.availability` audit (range + busyCount, never an instant) stays with the
+  ACTING modules, `calendar.ts` / `microsoftCalendar.ts`, so the times held here cannot reach a
+  payload (§4). `insert` is internal + append-only; `byThread` is the tenantQuery the card
+  subscribes through. Its `BUSY`/`PROVIDER` validators are **DERIVED** from the schema for the
+  reason `briefings.ts` learned the hard way — do not re-inline them.
+- **`llm.ts` `checkAvailability`** writes the row after a successful read. **The write sits ABOVE
+  the empty-window return, deliberately.** `busy: []` is the ANSWER ("nothing scheduled"), not the
+  absence of one; a `busy.length > 0` guard anywhere in this path restores the blank canvas for
+  exactly the case a user is most likely to misread as broken. The tool's **description and return
+  strings are UNCHANGED** — the card is purely additive, so the model's behaviour and arguments are
+  untouched (the skill-body-edits-shift-tool-args hazard is avoided by not editing prose at all).
+- **`cards.tsx` `CalendarCard`** sits on the `SourceCard`/`OutputCard`/`EvaluationCard` footing —
+  ABOVE the plan-status branches, self-reading its own row. An availability read is a pure-advice
+  turn carrying **no plan row**, so a card gated behind plan status would never appear at all.
+  It renders busy windows via `fmtBusyBlock` in **the row's `tz`**, never the browser's (the
+  `fmtItemTime` display-honesty rule), an explicit clear state when `busy` is empty, and a
+  truncation note when Microsoft's scan cap was hit (`truncated`) so a partial read can never read
+  as a complete one — the `briefings.listedCount` cap-honesty rule.
+
+**Invariant — the empty read must always write a row.** Verified by mutation, not by reading: adding
+`if (res.busy.length > 0)` above the insert turns
+`cockpitTools.test.ts` › *"an EMPTY availability read STILL writes a row"* red with
+`expected [] to have a length of 1 but got +0`. Assertions are on the STORED ROW, never the reply
+string — the reply was already correct while the bug was live, so asserting it would pass with the
+card still missing (the mechanism-vs-behaviour trap this repo keeps falling into).
+
+**Still true after this change:** Outlook has no inbox brief, because `briefInbox` is hardcoded to
+`internal.gmail.*` and `graph.ts`/`delivery.ts` do not exist — that is Phase 25 (25-05/25-06/25-09),
+not a rendering gap. The calendar card is provider-agnostic and already labels Microsoft correctly.
 
 ### Phase 17 — Wave 0 (freeze)
 
