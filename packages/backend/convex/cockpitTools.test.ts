@@ -2451,9 +2451,8 @@ test("stageFinanceWrite REFUSES an empty update list — a sentence, never a thr
   expect((await readPlan(t, planId))?.kind).toBeUndefined();
 });
 
-// §4 at the boundary that CONSTRUCTS `basis`. `validateFigureClaim` can only check non-emptiness —
-// "refs only, never quoted content" is not mechanically decidable in pure TS — so the producer is
-// the enforcement point. `basis` reaches the audit log and the approval card.
+// §4 is enforced in `validateFigureClaim` (@pikar/core) — the shared boundary every producer
+// runs, not just this one. `basis` reaches the audit log and the approval card.
 test("stageFinanceWrite REFUSES a basis that QUOTES the user instead of naming a reference (§4)", async () => {
   const { t, planId } = await setup();
   const quoted = await callClock(t, planId, "stageFinanceWrite", {
