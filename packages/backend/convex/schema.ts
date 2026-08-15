@@ -1242,17 +1242,6 @@ export default defineSchema({
     size: v.number(),
     contentHash: v.string(), // sha-256 hex → cross-doc dedup
     storageId: v.optional(v.id("_storage")), // stored bytes for downloadable uploads
-    // WHAT THE BYTES ARE, when that differs from what the ROW is. `mimeType` above is the artifact
-    // of record — it drives extraction routing and searchability, and for an agent-created document
-    // it is LOCKED to "text/markdown" because markdown is the thing we wrote and can ground on.
-    // But `createDocument` also renders a real PDF and stores it in `storageId`, so one field was
-    // being asked to describe two different things and answered for the wrong one: the row said
-    // markdown, the bytes were a PDF, and the preview could never show the document in its true
-    // form. This names the second thing instead of overloading the first.
-    //
-    // Optional, so no migration and no backfill: absent means "the bytes are what `mimeType` says",
-    // which is true for every upload and every row written before this existed.
-    storedMimeType: v.optional(v.string()),
     text: v.optional(v.string()), // raw extracted text (content plane, §4)
     ragEntryId: v.optional(v.string()), // the embedded rag entry id
     status: v.union(
