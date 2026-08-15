@@ -76,9 +76,12 @@ export function tenantTableScope(table: DeletableTenantTable): "identity" | "ten
 
 /** The only table source future deletion code is allowed to consume. */
 export function deletableTables(): readonly DeletableTenantTable[] {
-  return Object.entries(TENANT_TABLE_CLASSIFICATION)
+  const tables = Object.entries(TENANT_TABLE_CLASSIFICATION)
     .filter(([, category]) => category === "tenant_owned" || category === "tenant_credential")
     .map(([table]) => table as DeletableTenantTable);
+  // The authenticated users row is the resumability boundary: deleting it last keeps every prior
+  // bounded continuation authorizable without introducing a deletion-job table.
+  return [...tables.filter((table) => table !== "users"), "users"];
 }
 
 export const exportableTables = deletableTables;
@@ -143,4 +146,8 @@ export type TenantDataExportPage = {
   omitted: Readonly<Record<string, string>>;
   nextCursor: TenantExportCursor | null;
   limits: TenantDataExport["limits"];
+};
+
+export type TenantDeletionCursor = {
+  tableIndex: number;
 };

@@ -2,12 +2,13 @@ import { deletableTables, type TenantDeletionCursor } from "@pikar/core/tenantDa
 import { makeFunctionReference } from "convex/server";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
+import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.*s");
 const deleteTenantDataPage = makeFunctionReference<
   "mutation",
-  { tenantId: string; userId: string; cursor?: TenantDeletionCursor },
+  { tenantId: string; userId: Id<"users">; cursor?: TenantDeletionCursor },
   {
     table: string;
     deleted: number;
@@ -18,7 +19,7 @@ const deleteTenantDataPage = makeFunctionReference<
 async function deleteAll(
   t: ReturnType<typeof convexTest>,
   tenantId: string,
-  userId: string,
+  userId: Id<"users">,
   start?: TenantDeletionCursor,
 ) {
   let cursor = start;
@@ -76,7 +77,7 @@ describe("tenant data deletion pages", () => {
     const { t, tenantA, auditA, auditB } = await seedTwoTenants();
     expect(deletableTables()).not.toContain("audit");
 
-    await deleteAll(t, String(tenantA), String(tenantA));
+    await deleteAll(t, String(tenantA), tenantA);
 
     await t.run(async (ctx) => {
       expect(await ctx.db.get(auditA)).toMatchObject({ correlationId: "audit-a-immutable" });
@@ -89,7 +90,7 @@ describe("tenant data deletion pages", () => {
     const { t, tenantA } = await seedTwoTenants();
     const first = await t.mutation(deleteTenantDataPage, {
       tenantId: String(tenantA),
-      userId: String(tenantA),
+      userId: tenantA,
     });
 
     expect(first.deleted).toBeLessThanOrEqual(2);
@@ -97,7 +98,7 @@ describe("tenant data deletion pages", () => {
     const resumed = await deleteAll(
       t,
       String(tenantA),
-      String(tenantA),
+      tenantA,
       first.nextCursor ?? undefined,
     );
     expect(Object.values(resumed).every((count) => count <= 5)).toBe(true);
@@ -116,7 +117,7 @@ describe("tenant data deletion pages", () => {
   test("never touches another tenant's rows", async () => {
     const { t, tenantA, tenantB } = await seedTwoTenants();
 
-    await deleteAll(t, String(tenantA), String(tenantA));
+    await deleteAll(t, String(tenantA), tenantA);
 
     await t.run(async (ctx) => {
       expect(await ctx.db.get(tenantB)).toMatchObject({ email: "tenant-b-keep@example.test" });
@@ -135,7 +136,7 @@ describe("tenant data deletion pages", () => {
       ctx.db.insert("users", { email: "empty-delete@example.test", owner: true }),
     );
 
-    const counts = await deleteAll(t, String(userId), String(userId));
+    const counts = await deleteAll(t, String(userId), userId);
 
     expect(counts.users).toBe(1);
     expect(Object.entries(counts).filter(([table]) => table !== "users").every(([, n]) => n === 0)).toBe(
