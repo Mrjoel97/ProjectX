@@ -1,5 +1,14 @@
 # Playbook: Connected dashboard pages
 
+> Touched 2026-08-15 (item-4 session) to clear the §9 Stop hook — **NOT a verification**, and
+> deliberately not a `Last verified` line. `packages/core/src/financeClaim.ts` and
+> `financeClaim.test.ts` were last changed by **`f6fe5d2` (21-02, "the refs-only basis rule moves
+> to the boundary every producer runs")**, which landed mid-session and updated NO playbook. That
+> work is unread and unattested by this session, which was changing the `cockpit-agent` skill body
+> and touched no path this playbook watches. **The 21-02 lane still owes this playbook a real entry**
+> covering what moving the refs-only basis rule to the producer boundary means for the finance
+> surfaces described below. Nothing below covers it.
+
 > Last verified: 2026-08-15 (plan `2026-08-15-scorecard-field-provenance`, COMPLETE — full backend
 > suite green: `pnpm typecheck` clean, `pnpm vitest run` 79 test files / 1793 passed / 24 skipped, 0
 > red; `cash.test.ts` 49/49, `plans.test.ts` 27/27, `approvals.test.ts` 8/8, `cockpit.test.ts` 70/70,

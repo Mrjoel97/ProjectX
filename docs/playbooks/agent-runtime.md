@@ -1,5 +1,45 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-08-15 (item-4 offline half — **`calendarEventPresent`, the expect
+> vocabulary's one BOOLEAN plan-row observable, and the body sections that finally REACH the
+> calendar tools.** `proposeCalendarEvent` and `checkAvailability` have been built in `llm.ts`
+> (:2472 and :2376) since Phase 17 and the cockpit body named NEITHER — and because CLAUDE.md §5
+> forbids a hardcoded fallback prompt there is no other instruction path, so a tool absent from the
+> body is a tool the agent cannot be expected to reach. That is the clock-plane shape (19-11) and
+> the vault-island shape again: built, unit-tested, unreachable. The body now carries a
+> `## The user's calendar` section, and the same edit merges `## Attachments` and `## Creating a
+> document or a post` into one `## Documents, attachments and decks` section that settles the
+> attach / standalone / reel routing BEFORE the per-tool rules. The merge teaches no new tool, so it
+> owes no new fixture — 10, 11, 12 and 35 already exercise those four tools and ARE the regression
+> signal if the restructuring degrades routing.
+>
+> Fixture 40 asks in ordinary calendar grammar and grades `plan.eventStartMs`, which has EXACTLY
+> ONE writer (`llm.ts` proposeCalendarEvent, `resolved` branch) and is cleared by `plans.ts` on
+> reset, so a finite value cannot arrive by another path — and it pins the RESOLVED branch
+> specifically, since the ambiguous/past/tooFar/none branches all return refusal prose WITHOUT
+> patching the row. A boolean rather than a count, unlike every other plan-row observable here:
+> one plan row carries at most ONE event, so a count could only read 1 and would imply a list length
+> that does not exist. `validateFixture` rejects `calendarEventPresent: false` outright — the
+> `driveReadToolCount` rule, same reason: false holds on all 39 other fixtures and asserts nothing.
+>
+> **The fixture is ONE turn deliberately.** The obvious companion — a second turn with an ambiguous
+> time that the agent must ask about rather than guess — WOULD BE VACUOUS: `patchPlan` overwrites
+> `eventStartMs` wholesale, so a turn-2 stage and a turn-2 refusal both leave the field finite and
+> this key cannot tell them apart. That is the replacement-satisfies-the-count hole 19-11 found in
+> fixture 36, recognised here BEFORE a paid run rather than after one. The refusal branches are
+> covered offline at $0 by self-check 2j (absent start and non-finite start both grade RED).
+> `Thursday at 2pm` was chosen AGAINST `parseSendTime`, not by feel: its weekday anchor computes
+> `(dow - nowDow + 7) % 7` and rewrites a zero to 7, so the instant is always future and always
+> inside `CALENDAR_HORIZON_MS` (365 days), while a bare `at 2` grades ambiguous and `today at
+> 2pm` would be PAST for every gate run after 14:00 UTC. A fixture that reddens by wall-clock is
+> worse than no fixture.
+>
+> Self-check PASSED at 40 fixtures. **NO GATE RUN, NO SPEND, NO EVIDENCE — and the body on disk now
+> carries THREE stacked ungated changes**: 20-12's media sections, 20.1-02's Drive section, and this
+> one. The next gate certifies all three together, and the last recorded run of this body was
+> `420c852b`, RED at 35/38 for two harness defects since fixed. `cockpit-agent` stays a candidate
+> until an owner-triggered green run says otherwise.)
+
 > Last verified: 2026-08-15 (20.1-02 offline half — **`driveReadToolCount`, the vocabulary's one
 > FLOOR.** Fixture 39 asks where a document lives in ordinary language; the observable counts
 > `findInDrive`+`listDriveFolders` agentSteps rows for the thread (`smoke:driveReadCountForThread`,
@@ -10,7 +50,8 @@
 > other way — `validateFixture` rejects `driveReadToolCount: 0` outright (a floor of zero asserts
 > nothing). Self-check green at 39 fixtures; the eval tenant has no Google connection, so the tool
 > answers not-connected and the CALL is still the pass. Gate run for the Drive candidate: pending
-> the owner's proceed.)
+> the owner's proceed. Re-checked 2026-08-15: this entry covers the still-uncommitted working-tree
+> diff on smoke.ts / run-eval-golden.mjs / eval-cases/39-drive-read.json — no content change.)
 >
 > Last verified: 2026-08-14 (20-12 gate run `420c852b` — **RED at 35/38, $0.4420, and BOTH failures
 > were the harness, not the agent.** Evidence: none recorded; `cockpit-agent@22` stays a candidate.
