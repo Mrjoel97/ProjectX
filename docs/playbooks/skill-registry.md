@@ -1,5 +1,16 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-15 (**the certified body is ACTIVE on BOTH deployments, each behind its
+> own per-deployment evidence — the gate design held end to end.**  Local/dev: two judgement bullets
+> edited after v23 run `cc63246f` (36/38) — finance stage-branch made concrete, fresh-start
+> 'instead' reading killed — seeded as **v24**, certified by run `62903ef6` 38/38 $0.4621, owner-
+> activated with readback. Production (`prod:opulent-octopus`): the SAME body seeded as **v5** by
+> the deploy pipeline's seed step at `b65a876`; evidence rows do NOT travel between deployments, so
+> a fresh gate ran ON PROD — run `7d3b852e`, **38/38 no retries, $0.4250** — then owner-activated
+> ('activate media candidate 5'), readback active v5 byte-identical to the certified md. Prior prod
+> active was v2, an old body observed walking Drive folders on an inbox ask; v5 supersedes it. The
+> Drive-boundary body teaching itself remains 20.1-02's scope.)
+>
 > Last verified: 2026-08-14 (20-12 gate run `420c852b` — **the gate REFUSED `cockpit-agent@22`, and
 > that is the system working.** 35/38, $0.4420 exec+specialist against a $2.00 cap, two retries. No
 > evidence row was written, so `activateSkill` would throw `EVAL_GATE` on v22 even if someone tried:
