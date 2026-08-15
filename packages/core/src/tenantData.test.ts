@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
-import { TENANT_TABLE_CLASSIFICATION } from "./tenantData";
+import { deletableTables, TENANT_TABLE_CLASSIFICATION } from "./tenantData";
 
 const schemaSource = readFileSync(
   new URL("../../backend/convex/schema.ts", import.meta.url),
@@ -27,5 +27,22 @@ describe("tenant table classification registry", () => {
       .sort();
 
     expect(credentialTables).toEqual(["gmailTokens", "microsoftCalendarTokens"]);
+  });
+
+  test("exposes only tenant-owned and credential tables to deletion, with identity last", () => {
+    const tables = deletableTables();
+
+    expect(tables).not.toContain("audit");
+    expect(tables).not.toContain("deadLetters");
+    expect(tables).not.toContain("skills");
+    expect(tables).not.toContain("exportCursors");
+    expect(tables.at(-1)).toBe("users");
+    expect(tables).toEqual([
+      ...Object.entries(TENANT_TABLE_CLASSIFICATION)
+        .filter(([, category]) => category === "tenant_owned" || category === "tenant_credential")
+        .map(([table]) => table)
+        .filter((table) => table !== "users"),
+      "users",
+    ]);
   });
 });
