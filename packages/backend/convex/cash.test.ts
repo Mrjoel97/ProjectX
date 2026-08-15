@@ -8,6 +8,7 @@ import { describe, expect, test } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import { applyFinanceClaims, writeFigureRow } from "./cash";
+import { applyScorecardAnswer } from "./evaluations";
 import schema from "./schema";
 
 // convex-test discovers Convex function modules via import.meta.glob. Exclude
@@ -274,6 +275,50 @@ describe("cash.inputs", () => {
     expect(cac?.value).toBe(900);
     expect(cac?.statedAt).toBeNull(); // honest — we do not know when this was stated
     expect(cac?.stale).toBe(true); // unknown age needs confirmation, never reads as fresh
+  });
+
+  // Task 4: the read side now prefers `fieldProvenance` (Task 1-3) over the `userProvided` proxy.
+  test("an agent-written scorecard figure reports actor 'agent'", async () => {
+    const t = convexTest(schema, modules);
+    await t.run((ctx) =>
+      applyScorecardAnswer(ctx.db, "u1", "thread_1", "financials.cac", 340, {
+        actor: "agent",
+        origin: "stated",
+        source: "vaultDoc:abc123",
+        at: 1_600_000_000_000,
+      }),
+    );
+    const { inputs } = await asTenant(t, "u1").query(api.cash.inputs, {});
+    const cac = inputs.find((i) => i.field === "cac");
+    expect(cac?.value).toBe(340);
+    expect(cac?.actor).toBe("agent");
+    expect(cac?.origin).toBe("stated");
+    expect(cac?.statedAt).toBe(1_600_000_000_000);
+  });
+
+  // Regression guard: a row written before `fieldProvenance` existed has no map entry, so the
+  // legacy `userProvided` / `userProvidedAt` proxy must still be honored.
+  test("a legacy row with userProvided but no fieldProvenance still reports actor 'user'", async () => {
+    const t = convexTest(schema, modules);
+    await t.run((ctx) =>
+      ctx.db.insert("evaluations", {
+        tenantId: "u1",
+        threadId: "thread_1",
+        framework: "growth-os" as const,
+        findings: [],
+        gaps: [],
+        notEnoughData: [],
+        scorecard: { ...emptyScorecard, financials: { ...emptyScorecard.financials, cac: 150 } },
+        userProvided: ["financials.cac"],
+        userProvidedAt: { "financials.cac": 1_700_000_000_000 },
+        verdict: "gaps" as const,
+        createdAt: 1_700_000_000_000,
+      }),
+    );
+    const { inputs } = await asTenant(t, "u1").query(api.cash.inputs, {});
+    const cac = inputs.find((i) => i.field === "cac");
+    expect(cac?.actor).toBe("user");
+    expect(cac?.statedAt).toBe(1_700_000_000_000);
   });
 });
 

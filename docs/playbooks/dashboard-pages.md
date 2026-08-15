@@ -1,5 +1,23 @@
 # Playbook: Connected dashboard pages
 
+> Note (scorecard-field-provenance Task 4 — not yet a "Last verified" bump; Task 6 closes the plan
+> and reconciles this stack. **The READ side now prefers `fieldProvenance` over the legacy proxy.**
+> `cash.ts`'s `inputStatesFor` (the scorecard branch documented below as `statedFigure`) reads
+> `evaluation?.fieldProvenance?.[spec.path]` first: when present, `actor` comes from `prov.actor`,
+> `statedAt` from `prov.at`, and `origin` from `prov.origin` — so an agent-written scorecard figure
+> (via `applyScorecardAnswer`'s now-required provenance argument, Task 2) reports `actor: "agent"`
+> and its own recorded date instead of borrowing "somebody answered" from `userProvided` membership.
+> The `userProvided`/`userProvidedAt` proxy this section's Task-3-REVIEW-FIX entry names as
+> "over-broad" is now ONLY the fallback for a row with no `fieldProvenance` entry for that path —
+> every row written before Task 1's column existed, and nothing else. Read-only: `writeFigureRow`'s
+> `actor === "agent"` scorecard-write guard and `applyFinanceClaims`'s `agent_cannot_update_figure`
+> refusal are UNCHANGED (out of scope for this task; a later task in the same plan owns removing
+> them once this read-side fix is in). `cash.test.ts` gained two cases — an agent-provenance row
+> reads `actor: "agent"`/`statedAt` from the record; a legacy row with `userProvided` but no
+> `fieldProvenance` entry still reads `actor: "user"` from the old proxy (this one was already
+> green before the change — a regression guard, not a new behaviour). All 43 pre-existing
+> `cash.test.ts` cases and all 38 `evaluations.test.ts` cases pass unchanged; `pnpm typecheck` clean.)
+>
 > Last verified: 2026-08-15 (scorecard-field-provenance Task 2 — **the writer-side wiring Task 1
 > deferred has landed: `applyScorecardAnswer(db, tenantId, threadId, field, value, provenance)` now
 > takes a REQUIRED sixth `FieldProvenance` argument, no default.** That turned all four existing

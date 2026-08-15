@@ -156,16 +156,19 @@ async function inputStatesFor(
       // `needsConfirmation` (the SAME predicate the `financeInputs` branch above and `cash.ts`'s
       // `statedFigure` both call — one definition, not three) treats that as needing confirmation,
       // never as fresh, and never fabricates a date.
+      // `fieldProvenance` is the authority when present. `userProvided` / `userProvidedAt` remain
+      // the fallback for rows written before the map existed: membership there means "somebody
+      // answered, probably the owner" and absence means "we do not know" — both resolved in the
+      // safe direction, exactly as before. New rows never take the fallback.
+      const prov =
+        spec.path === undefined ? undefined : evaluation?.fieldProvenance?.[spec.path as string];
       const statedAt =
-        value === null ? null : (evaluation?.userProvidedAt?.[spec.path as string] ?? null);
-      // `userProvided` is an OVER-BROAD provenance proxy, and this is the only signal the scorecard
-      // store has: it is appended by `applyScorecardAnswer` for the panel, the Approvals question
-      // catalogue AND the agent's `recordScorecardAnswer` alike, and every figure written before it
-      // existed is absent from it. So membership means "somebody answered, probably the owner" and
-      // absence means "we do not know" — not "Pikar measured it". Both directions are resolved in
-      // the SAFE direction below. Upgrade path (also named at `writeFigureRow`): a per-dot-path
-      // provenance map on `evaluations` beside `userProvidedAt`.
-      const userStated = (evaluation?.userProvided ?? []).includes(spec.path as string);
+        value === null
+          ? null
+          : (prov?.at ?? evaluation?.userProvidedAt?.[spec.path as string] ?? null);
+      const userStated = prov
+        ? prov.actor === "user"
+        : (evaluation?.userProvided ?? []).includes(spec.path as string);
       return {
         field: spec.field,
         value,
@@ -176,7 +179,9 @@ async function inputStatesFor(
         // it", and nothing measures yet: a figure read out of the owner's own P&L is still an
         // assertion by a human, made in a document. `stated` + `agent` says exactly that, and is
         // what stops the page printing "Measured by Pikar on <date>." over a grounded fill.
-        origin: "stated",
+        // `prov.origin` is the recorded truth when present — a figure PIKAR measured must not be
+        // reported as `stated` just because this branch's default used to be unconditional.
+        origin: prov?.origin ?? "stated",
         actor: userStated ? "user" : "agent",
         basis: userStated ? null : "business evaluation grounding",
       };
