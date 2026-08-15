@@ -802,13 +802,23 @@ export const acceptProposal = tenantMutation({
 });
 ```
 
-**How to read `CurrentValue` per store** — the predicates in Task 3 need this shape and cannot fetch it themselves:
+**How to read `CurrentValue` per store** — the predicates in Task 3 need this shape and cannot fetch it themselves.
 
-| store | value | `statedByUser` | `statedAt` |
-| --- | --- | --- | --- |
-| `scorecard` | `getPath(latestScorecardRow(...).scorecard, spec.path)` | `fieldProvenance?.[path]?.actor === "user"`, else `userProvided.includes(path)` for legacy rows | `fieldProvenance?.[path]?.at ?? userProvidedAt?.[path] ?? null` |
-| `financeInputs` | the `financeInputs` row's `value` for that field | its `actor === "user"` | its `observedAt` |
-| `profile` | the parsed profile's field | always `true` — every profile field today is owner-entered | `null` (the profile carries no per-field time) |
+**Do NOT re-derive it for the two finance stores.** `inputStatesFor(ctx, tenantId, nowMs)`
+(`cash.ts:121`, currently module-private — export it) already returns a `CashInputState[]` covering
+every `CASH_INPUTS` field across BOTH stores, and `CashInputState` (`packages/core/src/cash.ts:289`)
+is this exact shape under different names: `value`, `statedAt`, and `actor`. It already reads
+`fieldProvenance` first with the legacy `userProvided`/`userProvidedAt` fallback, because plan 1
+built that. Calling it once means the applier's notion of "what is stored and who said it" is
+literally the same code the finance page renders from — there is no second definition to drift.
+
+| store | how to read it |
+| --- | --- |
+| `financeInputs`, `scorecard` | ONE call to `inputStatesFor(ctx, ctx.tenantId, Date.now())`; map each `CashInputState` to `{ value, statedByUser: s.actor === "user", statedAt: s.statedAt }`. A `value` of `null` means blank, so pass `null` as the whole `CurrentValue`. |
+| `profile` | `currentProfileDoc` → parsed profile; the field's value, `statedByUser: true`, `statedAt: null`. |
+
+Export `inputStatesFor` from `cash.ts` with a one-line comment naming its second caller, exactly as
+Task 5 Step 1 does for `writeProfileDoc`.
 
 `profile` being always `statedByUser: true` is deliberate and load-bearing: it means a proposal that would overwrite an existing profile field is ALWAYS a contradiction needing its own click, and only a genuinely blank field can be swept. That is the conservative reading of §6.1 for a store with no provenance of its own.
 
