@@ -37,9 +37,11 @@ import {
   VOICE_BRIEF_SKILL,
 } from "@pikar/contracts/skill";
 import {
+  type ActionType,
   type AvailabilityRange,
   actionTypeOf,
   applyRecipientEdit,
+  assertNever,
   BODY_TRUNCATE_CHARS,
   BRIEFING_BODY_CAP,
   type BriefingItem,
@@ -1057,15 +1059,10 @@ type PlanRow = {
   // plan past `proposed` (a sent/scheduled plan is cancelled via the plan card, not reset). getById
   // returns it at runtime; never model-facing (the model reasons about slots, not the raw status).
   status: "collecting" | "proposed" | "approved" | "scheduled" | "delivering" | "done" | "canceled";
-  // ACTN-01 action type, ABSENT ⇒ email. Declared here as of Task 8 (live-finance-inputs) because
-  // `otherKindStaged` reads it — and the declaration has a SECOND effect worth keeping: every
-  // caller passes a `PlanRow` to `buildAgentContext`, whose own param declares the SAME union, so
-  // widening `ACTION_TYPES` and this line without widening that one is now an assignability error
-  // at the call site. That is the compile-time guard the corrected note there says does not exist;
-  // it exists for the NEXT action type. Keep the two unions identical.
-  // 17-05: the NEXT action type arrived (`calendar_manage`) and the guard worked exactly as
-  // described — widening `plans.kind` alone stopped compiling at four `readPlan()` call sites.
-  kind?: "memo" | "calendar_event" | "media" | "crm_write" | "finance_write" | "calendar_manage";
+  // ACTN-01 action type, ABSENT ⇒ email. Derived from the shared closed union rather than mirrored:
+  // widening `ACTION_TYPES` now reaches both PlanRow and buildAgentContext, whose exhaustive switch
+  // must classify the new member before typecheck can pass.
+  kind?: Exclude<ActionType, "email">;
 };
 
 // One formatter for the resolved send instant — shared by buildAgentContext's Send-time line
@@ -1083,18 +1080,7 @@ const fmtSendInstant = (ms: number, tz?: string) =>
 export function buildAgentContext(
   plan: {
     /** ACTN-01 action type. ABSENT ⇒ email (actionTypeOf), so every pre-Phase-15 row is unchanged. */
-    kind?:
-      | "memo"
-      | "calendar_event"
-      | "media"
-      | "crm_write"
-      | "finance_write"
-      // 17-05: declared so a `calendar_manage` row is ASSIGNABLE here. There is deliberately no
-      // `calendar_manage` BRANCH below — nothing can stage such a plan until Plan 17-09, which
-      // owns the staging tool and must add the branch in the same commit. Note the SAME gap
-      // already exists for `calendar_event`: this function is the hand-maintained, model-facing
-      // half of the executor, and only `memo`/`crm_write`/`finance_write` have branches.
-      | "calendar_manage";
+    kind?: Exclude<ActionType, "email">;
     recipients?: string[];
     subject?: string;
     body?: string;
@@ -1118,46 +1104,56 @@ export function buildAgentContext(
   // confirm; the model never supplies it. Defaults to UTC when a turn carries no client clock.
   tz = "UTC",
 ): string {
-  // ACTN-01: a non-email action gets a context shaped like the action it IS. Phase 15 generalized
-  // the EXECUTOR (ACTION_TYPES / actionTypeOf / armFor) but left this, the model-facing half, email-
-  // only — so a `kind: "memo"` plan staged by "Act on this" (evaluations.ts) was announced to the
-  // model as "Current email plan:" with Recipients/Send-mode/Send-time slots, and the model dutifully
-  // offered to send it to recipients. Branch on the SHARED reader, never on `plan.kind` directly, so
-  // a new ACTION_TYPES member surfaces here as a compile error rather than silently rendering as
-  // email. Verified live 2026-07-26.
-  //
-  // **CORRECTED 19-06: (*) is FALSE — this is NOT a compile-error site.** `PlanRow`, the type every
-  // caller passes, does not declare `kind` at all, so widening `ACTION_TYPES` never breaks the
-  // call: `media` proved it, shipping in Phase 20 without ever reaching the param union above.
-  // `getById` returns the field at runtime, so the branches below DO fire; the type merely
-  // under-declares. A new action type must therefore be added here BY HAND, and one that is not
-  // gets announced to the model as an email.
-  if (actionTypeOf(plan.kind) === "crm_write") {
-    return (
-      "Current CRM plan. This is NOT an email: it has no recipients, no send mode and no send" +
-      " time, and approving it writes contacts and follow-ups into the user's own records rather" +
-      " than sending anything to anyone. Do not offer to add recipients or to send it."
-    );
-  }
-  // Task 8 (live-finance-inputs), added BY HAND for the reason the corrected note above gives —
-  // `finance_write` reaching ACTION_TYPES did NOT break this call, so nothing but this edit stops
-  // a staged figure plan being announced as an email with recipient slots the model then offers to
-  // fill and send. Pinned by a test in cockpitTools.test.ts, because the type system will not.
-  if (actionTypeOf(plan.kind) === "finance_write") {
-    return (
-      "Current figure-update plan. This is NOT an email: it has no recipients, no send mode and" +
-      " no send time, and approving it saves the staged figures into the user's own numbers" +
-      " rather than sending anything to anyone. Do not offer to add recipients or to send it."
-    );
-  }
-  if (actionTypeOf(plan.kind) === "memo") {
-    return [
-      "Current memo plan. A memo is NOT an email: it has no recipients, no send mode and no send" +
-        " time, and approving it saves it to the knowledge vault rather than sending it to anyone." +
-        " Do not offer to add recipients or to send it.",
-      `Subject: ${plan.subject ?? "(not set)"}`,
-      `Body drafted: ${plan.body ? "yes" : "no"}`,
-    ].join("\n");
+  // ACTN-01: context dispatch is total over the SAME closed union as the executor. Phase 15 first
+  // exposed the failure mode: a memo absent from this model-facing half inherited email slots. The
+  // later media/calendar members proved that a hand-maintained if-chain could repeat it. The shared
+  // type on `kind`, this exhaustive switch and cockpitTools.test.ts's runtime ACTION_TYPES walk are
+  // three independent locks: schema/type drift, branch drift and registry drift respectively.
+  const actionType = actionTypeOf(plan.kind);
+  switch (actionType) {
+    case "memo":
+      return [
+        "Current memo plan. A memo is NOT an email: it has no recipients, no send mode and no send" +
+          " time, and approving it saves it to the knowledge vault rather than sending it to anyone." +
+          " Do not offer to add recipients or to send it.",
+        `Subject: ${plan.subject ?? "(not set)"}`,
+        `Body drafted: ${plan.body ? "yes" : "no"}`,
+      ].join("\n");
+    case "calendar_event":
+      return (
+        "Current calendar event plan. This is NOT an email: it has no email recipients, send" +
+        " mode or send time, and approving it creates the proposed event in the user's connected" +
+        " calendar. Do not offer email fields or claim the event was created before approval."
+      );
+    case "media":
+      return (
+        "Current media plan. This is NOT an email: it has no recipients, send mode or send time," +
+        " and approving it starts the staged media generation through the human approval gate." +
+        " Do not offer email fields or claim generation has started before approval."
+      );
+    case "crm_write":
+      return (
+        "Current CRM plan. This is NOT an email: it has no recipients, no send mode and no send" +
+        " time, and approving it writes contacts and follow-ups into the user's own records rather" +
+        " than sending anything to anyone. Do not offer to add recipients or to send it."
+      );
+    case "finance_write":
+      return (
+        "Current figure-update plan. This is NOT an email: it has no recipients, no send mode and" +
+        " no send time, and approving it saves the staged figures into the user's own numbers" +
+        " rather than sending anything to anyone. Do not offer to add recipients or to send it."
+      );
+    case "calendar_manage":
+      return (
+        "Current calendar-management plan. This is NOT an email: it has no email recipients," +
+        " send mode or send time, and approving it applies the proposed update or deletion to a" +
+        " Pikar-created event through the connected calendar. Do not offer email fields or claim" +
+        " the event changed before approval."
+      );
+    case "email":
+      break;
+    default:
+      return assertNever(actionType);
   }
   const bodies = plan.recipientBodies ?? {};
   const addrs = plan.recipients ?? [];

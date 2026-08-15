@@ -11,6 +11,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CONTENT_DRAFTER_SKILL } from "@pikar/contracts/skill";
 import {
+  ACTION_TYPES,
+  type ActionType,
   CALENDAR_HORIZON_MS,
   PLAN_ATTACHMENT_CAP_BYTES,
   parseSendTime,
@@ -1228,6 +1230,38 @@ test("buildAgentContext still describes an email plan as an email (no kind ⇒ e
   const ctx = buildAgentContext({ recipients: ["bob@example.com"], subject: "Q3 numbers" });
   expect(ctx).toContain("Current email plan:"); // the absent-kind default is unchanged
   expect(ctx).toMatch(/Send mode/); // email slots still offered
+});
+
+const ACTION_CONTEXT_HEADERS = {
+  email: /^Current email plan:/,
+  memo: /^Current memo plan/,
+  calendar_event: /^Current calendar event plan/,
+  media: /^Current media plan/,
+  crm_write: /^Current CRM plan/,
+  finance_write: /^Current figure-update plan/,
+  calendar_manage: /^Current calendar-management plan/,
+} as const satisfies Record<ActionType, RegExp>;
+
+test("buildAgentContext has one explicit semantic branch for EVERY ACTION_TYPES member", () => {
+  // Exact key equality is the runtime half of the switch's compile-time `assertNever`: a widened
+  // registry must make this test visit the new member, not merely leave an uncalled branch behind.
+  expect(Object.keys(ACTION_CONTEXT_HEADERS)).toEqual([...ACTION_TYPES]);
+
+  for (const actionType of ACTION_TYPES) {
+    const ctx = buildAgentContext(actionType === "email" ? {} : { kind: actionType });
+    expect(ctx, `wrong context branch for ${actionType}`).toMatch(
+      ACTION_CONTEXT_HEADERS[actionType],
+    );
+    expect(
+      Object.values(ACTION_CONTEXT_HEADERS).filter((header) => header.test(ctx)),
+      `${actionType} matched more than one action-context header`,
+    ).toHaveLength(1);
+
+    if (actionType !== "email") {
+      expect(ctx).not.toContain("Current email plan:");
+      expect(ctx).not.toMatch(/^Recipients \(|^Send mode:|^Send time:|^Attachments \(/m);
+    }
+  }
 });
 
 // ── Phase 17-03 Task 1: checkAvailability — read-only busy ranges in the governed loop ────────
