@@ -1,19 +1,46 @@
-/// <reference types="vite/client" />
-
 import {
   AUDIT_ARCHIVE_STATEMENT,
   TENANT_EXPORT_SCHEMA_VERSION,
   type TenantDataExport,
-} from "@pikar/core";
+  type TenantDataExportPage,
+  type TenantExportCursor,
+} from "@pikar/core/tenantData";
 import { makeFunctionReference } from "convex/server";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.*s");
-const exportTenantData = makeFunctionReference<"query", Record<string, never>, TenantDataExport>(
-  "tenantExport:exportTenantData",
-);
+const exportTenantData = makeFunctionReference<
+  "query",
+  { cursor?: TenantExportCursor },
+  TenantDataExportPage
+>("tenantExport:exportTenantData");
+
+async function downloadExport(
+  t: ReturnType<typeof convexTest>,
+  tenantId: string,
+): Promise<TenantDataExport> {
+  let cursor: TenantExportCursor | undefined;
+  let header: TenantDataExport["header"] | undefined;
+  let limits: TenantDataExport["limits"] | undefined;
+  const tables: Record<string, readonly unknown[]> = {};
+  const omitted: Record<string, string> = {};
+
+  do {
+    const page = await t
+      .withIdentity({ subject: `${tenantId}|export-session` })
+      .query(exportTenantData, cursor ? { cursor } : {});
+    header ??= page.header;
+    tables[page.table.name] = [...(tables[page.table.name] ?? []), ...page.table.rows];
+    Object.assign(omitted, page.omitted);
+    limits = page.limits;
+    cursor = page.nextCursor ?? undefined;
+  } while (cursor);
+
+  if (!header || !limits) throw new Error("EMPTY_EXPORT");
+  return { header, tables, omitted, limits };
+}
 
 async function seedTwoTenants() {
   const t = convexTest(schema, modules);
@@ -65,9 +92,7 @@ describe("tenant data export", () => {
   test("exports only the authenticated tenant and states the immutable-audit omission", async () => {
     const { t, tenantA } = await seedTwoTenants();
 
-    const result = await t
-      .withIdentity({ subject: `${tenantA}|export-session` })
-      .query(exportTenantData, {});
+    const result = await downloadExport(t, tenantA);
     const bytes = JSON.stringify(result);
 
     expect(result.header).toMatchObject({
@@ -87,9 +112,7 @@ describe("tenant data export", () => {
   test("reduces credential rows and contains no token material in the produced bytes", async () => {
     const { t, tenantA } = await seedTwoTenants();
 
-    const result = await t
-      .withIdentity({ subject: `${tenantA}|export-session` })
-      .query(exportTenantData, {});
+    const result = await downloadExport(t, tenantA);
     const bytes = JSON.stringify(result);
 
     expect(result.tables.gmailTokens).toEqual([
@@ -117,9 +140,7 @@ describe("tenant data export", () => {
       }
     });
 
-    const result = await t
-      .withIdentity({ subject: `${tenantA}|export-session` })
-      .query(exportTenantData, {});
+    const result = await downloadExport(t, tenantA);
 
     expect(result.limits.pageSize).toBeGreaterThan(0);
     expect(result.limits.totalRows).toBeLessThanOrEqual(128);

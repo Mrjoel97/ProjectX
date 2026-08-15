@@ -81,6 +81,8 @@ export function deletableTables(): readonly DeletableTenantTable[] {
     .map(([table]) => table as DeletableTenantTable);
 }
 
+export const exportableTables = deletableTables;
+
 export const TENANT_EXPORT_SCHEMA_VERSION = 1;
 export const AUDIT_ARCHIVE_STATEMENT =
   "references, identifiers, hashes, and counts only — never the content of your messages, and no personal data.";
@@ -98,6 +100,25 @@ export type TenantCredentialSummary = {
   scopeHalves: readonly number[];
 };
 
+/** Scope values are capability inventories; expose only token lengths, never the capability text. */
+export function summarizeTenantCredential(row: {
+  updatedAt?: unknown;
+  scope?: unknown;
+}): TenantCredentialSummary {
+  return {
+    connected: true,
+    updatedAt: typeof row.updatedAt === "number" ? row.updatedAt : null,
+    scopeHalves:
+      typeof row.scope === "string"
+        ? row.scope
+            .trim()
+            .split(/\s+/)
+            .filter(Boolean)
+            .map((scopeHalf) => scopeHalf.length)
+        : [],
+  };
+}
+
 export type TenantDataExport = {
   header: TenantExportHeader;
   tables: Readonly<Record<string, readonly unknown[]>>;
@@ -107,4 +128,19 @@ export type TenantDataExport = {
     totalRows: number;
     truncated: boolean;
   };
+};
+
+export type TenantExportCursor = {
+  tableIndex: number;
+  cursor: string | null;
+  rowsExported: number;
+  generatedAt: string;
+};
+
+export type TenantDataExportPage = {
+  header: TenantExportHeader;
+  table: { name: DeletableTenantTable; rows: readonly unknown[] };
+  omitted: Readonly<Record<string, string>>;
+  nextCursor: TenantExportCursor | null;
+  limits: TenantDataExport["limits"];
 };

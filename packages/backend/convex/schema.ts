@@ -172,6 +172,7 @@ export default defineSchema({
     createdAt: v.number(),
   })
     // Effective-load and per-tenant status reads.
+    .index("by_tenant", ["tenantId"])
     .index("by_tenant_name_status", ["tenantId", "name", "status"])
     // Next-version allocation and the exact-version read: descending `.take(1)`, never `.collect()`.
     .index("by_tenant_name_version", ["tenantId", "name", "version"])
@@ -194,6 +195,7 @@ export default defineSchema({
     textHash: v.string(),
     createdAt: v.number(),
   })
+    .index("by_tenant", ["tenantId"])
     .index("by_tenant_createdAt", ["tenantId", "createdAt"])
     .index("by_tenant_textHash", ["tenantId", "textHash"]),
 
@@ -277,6 +279,7 @@ export default defineSchema({
     skillVersion: v.optional(v.number()),
     createdAt: v.number(),
   })
+    .index("by_tenant", ["tenantId"])
     .index("by_tenant_status", ["tenantId", "status"])
     // Pulse layer (living-map §3.1): windowed status reads for the tenant-wide outcome counts.
     .index("by_tenant_status_createdAt", ["tenantId", "status", "createdAt"])
@@ -664,6 +667,7 @@ export default defineSchema({
     workflowId: v.optional(v.string()), // set on executePlan
     createdAt: v.number(),
   })
+    .index("by_tenant", ["tenantId"])
     .index("by_thread", ["tenantId", "threadId"])
     // Pulse layer (living-map §3.1): windowed status reads for the tenant-wide outcome counts.
     .index("by_tenant_status_createdAt", ["tenantId", "status", "createdAt"])
@@ -714,6 +718,7 @@ export default defineSchema({
     synopsis: v.optional(v.string()),
     createdAt: v.number(),
   })
+    .index("by_tenant", ["tenantId"])
     .index("by_thread", ["tenantId", "threadId"])
     .index("by_tenant_createdAt", ["tenantId", "createdAt"]),
 
@@ -745,7 +750,9 @@ export default defineSchema({
     // mistaken for a complete one — the same cap-honesty rule as briefings.listedCount.
     truncated: v.optional(v.boolean()),
     createdAt: v.number(),
-  }).index("by_thread", ["tenantId", "threadId"]),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_thread", ["tenantId", "threadId"]),
 
   // ── Phase-10 vault-grounding content plane (VGND-01) ──────────────────────
   // The read-only sibling of `briefings`: holds the labels the SOURCE card renders for a
@@ -775,7 +782,9 @@ export default defineSchema({
     // beside `titles`, not a second table.
     form: v.optional(v.union(v.literal("short"), v.literal("long"))),
     createdAt: v.number(),
-  }).index("by_thread", ["tenantId", "threadId"]),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_thread", ["tenantId", "threadId"]),
 
   // ── Phase-12 business-evaluation content plane (BEVL-01) ──────────────────
   //
@@ -1134,6 +1143,7 @@ export default defineSchema({
     // restored backup, a test fixture), so an index without it would let one tenant's update
     // resolve to another tenant's row. Convex index queries must eq the prefix in order, so the
     // tenant predicate cannot be forgotten at a call site — it is unwritable, not just wrong.
+    .index("by_tenant", ["tenantId"])
     .index("by_tenant_provider_external", ["tenantId", "provider", "externalEventId"]),
 
   inboxFixtures: defineTable({
@@ -1167,7 +1177,9 @@ export default defineSchema({
     mimeType: v.string(),
     size: v.number(),
     extracted: v.optional(v.string()),
-  }).index("by_request", ["requestId"]),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_request", ["requestId"]),
 
   // One row per request, written once at terminal state (OPSG-01). Bounded by
   // request count — queried directly, not via the aggregate.
@@ -1187,6 +1199,7 @@ export default defineSchema({
     .index("by_correlation", ["correlationId"])
     // EVAL-02 read side: tenant-scoped, time-windowed signal reads (opsSignals.ts).
     // An index is not a write path; Convex backfills it automatically.
+    .index("by_tenant", ["tenantId"])
     .index("by_tenant_created", ["tenantId", "createdAt"]),
 
   // In-app notifications (INTK-04 seam; OPSG-05 grows channels onto these rows in Phase 7).
@@ -1197,7 +1210,9 @@ export default defineSchema({
     message: v.string(),
     read: v.boolean(),
     createdAt: v.number(),
-  }).index("by_tenant_read", ["tenantId", "read"]),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_read", ["tenantId", "read"]),
 
   // Gmail OAuth tokens — the crown jewels. Read by internal functions ONLY;
   // never returned to a client query, never in the browser, never in an audit payload.
@@ -1282,7 +1297,9 @@ export default defineSchema({
     ),
     extracted: v.optional(v.string()), // REDACTED safeText (content plane; §4 keeps it out of audit)
     createdAt: v.number(),
-  }).index("by_thread", ["tenantId", "threadId"]),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_thread", ["tenantId", "threadId"]),
 
   // ── Phase-5 knowledge-vault plane ──────────────────────────────────────────
   // Per-user Knowledge Vault + GraphRAG (VALT-01..04). New tables + optional
@@ -1520,6 +1537,7 @@ export default defineSchema({
     normalizedName: v.string(), // normalizeName(name) → dedup key
     degree: v.number(),
   })
+    .index("by_tenant", ["tenantId"])
     .index("by_tenant_normalized", ["tenantId", "normalizedName"]) // upsert/dedup
     // Phase-17.1 (BLPR-01): the blueprint's top-entities read —
     // `.withIndex("by_tenant_degree", q => q.eq("tenantId", tenantId)).order("desc").take(20)`.
@@ -1538,6 +1556,7 @@ export default defineSchema({
     rel: v.string(),
     sourceDocId: v.id("vaultDocuments"),
   })
+    .index("by_tenant", ["tenantId"])
     .index("by_tenant_fromNode", ["tenantId", "fromNodeId"]) // BFS forward
     .index("by_tenant_toNode", ["tenantId", "toNodeId"]) // BFS reverse
     .index("by_tenant_source", ["tenantId", "sourceDocId"]), // delete-cascade
@@ -1594,6 +1613,7 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   })
+    .index("by_tenant", ["tenantId"])
     .index("by_tenant_request", ["tenantId", "requestId"]) // one editable row per (tenant, request)
     .index("by_tenant_createdAt", ["tenantId", "createdAt"])
     .index("by_skill", ["skillName", "skillVersion"]), // eligibility rolls the negative-rate over this
@@ -1712,7 +1732,9 @@ export default defineSchema({
     // Stamped on every transition. `statusChangedAt - createdAt` on an achieved goal IS the cycle
     // time — no history table until something needs more than the last transition.
     statusChangedAt: v.number(),
-  }).index("by_tenant_status", ["tenantId", "status"]),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_status", ["tenantId", "status"]),
 
   // ── Phase-26 connected dashboard accounting foundation ────────────────────
   // Append-only reporting facts. Enforcement remains in the rate limiter; these rows retain
@@ -1738,6 +1760,7 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_tenant_createdAt", ["tenantId", "createdAt"])
+    .index("by_tenant", ["tenantId"])
     .index("by_tenant_rail_createdAt", ["tenantId", "rail", "createdAt"])
     .index("by_correlation", ["correlationId"]),
 
@@ -1824,6 +1847,7 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_plan", ["tenantId", "planId"])
+    .index("by_tenant", ["tenantId"])
     .index("by_batch", ["tenantId", "batchId"])
     .index("by_tenant_createdAt", ["tenantId", "createdAt"]),
 
@@ -1889,6 +1913,7 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   })
+    .index("by_tenant", ["tenantId"])
     .index("by_tenant_email", ["tenantId", "email"])
     .index("by_tenant_createdAt", ["tenantId", "createdAt"]),
 
@@ -1913,6 +1938,7 @@ export default defineSchema({
     sourcePlanId: v.optional(v.id("plans")),
     createdAt: v.number(),
   })
+    .index("by_tenant", ["tenantId"])
     .index("by_tenant_status_dueAt", ["tenantId", "status", "dueAt"])
     .index("by_tenant_contact", ["tenantId", "contactId"]),
 
@@ -1928,6 +1954,7 @@ export default defineSchema({
   })
     // The ONE index the send guard reads — per-address, so a 5-recipient fan-out drops exactly the
     // suppressed address and still sends to the other four.
+    .index("by_tenant", ["tenantId"])
     .index("by_tenant_address", ["tenantId", "address"]),
 
   // The FINANCE-OPS inputs, and only those (design §5). The Hormozi inputs stay on the scorecard —
@@ -2012,5 +2039,6 @@ export default defineSchema({
   })
     .index("by_tenant_status", ["tenantId", "status"])
     // Re-ingesting the same document supersedes its prior pending proposal (§6.3).
+    .index("by_tenant", ["tenantId"])
     .index("by_tenant_source", ["tenantId", "sourceKind", "sourceRef"]),
 });
