@@ -8,8 +8,17 @@
 > `acceptProposal` is a `tenantMutation`, two-pass (validate-then-write), and NEVER writes a target
 > store via `ctx.db` — the only `ctx.db` write is the `proposals` row's own `status`.
 > **[Corrected by fix rounds 1-2, in place, per CLAUDE.md §9 — this paragraph now describes the
-> LANDED behaviour, not the original Task-5 submission; date intentionally not bumped, Task 6 owns
-> that.]** Finance facts: read via ONE `inputStatesFor` call, classified per-item with
+> LANDED behaviour, not the original Task-5 submission. VERIFIED ACCURATE BY TASK 6, 2026-08-15,
+> against the code as it stands (not merely re-read from the prior entry): `proposals.ts` inspected
+> directly — the tier-row gate is confirmed in PASS 1 before any writer runs, the ONE `ponytail:`
+> marker is confirmed to be exactly the contacts refusal (grepped), and `proposal.ts` carries zero
+> `ponytail:` markers. Full command output: `pnpm vitest run convex/proposals.test.ts
+> convex/cash.test.ts convex/evaluations.test.ts convex/onboarding.test.ts` → 4 files, 122/122
+> passed (unchanged from fix round 2); `pnpm typecheck` clean; core `pnpm vitest run
+> src/proposal.test.ts` → 14/14 passed. The dedicated playbook is now `docs/playbooks/proposals.md`
+> (Task 6) — it owns the proposals SUBSYSTEM itself; this entry documents what accepting a proposal
+> means for the finance/profile stores this playbook already covers.]** Finance facts: read via ONE
+> `inputStatesFor` call, classified per-item with
 > `classifyProposal` — but the guard is REPORTING ONLY now (`guards: Record<ProposalGuard, number>`
 > on the `ok:true` result), never enforced by the applier itself; `applyFinanceClaims` is the SOLE
 > staleness authority (its own `isNewerThan` check, at write time, in the same transaction), so there
