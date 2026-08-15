@@ -2425,6 +2425,33 @@ export function buildCockpitTools(
                 nowMs: clientContext.nowMs,
               });
         if (!res.ok) return calendarUnavailable("check calendar availability", provider);
+
+        // CONTENT PLANE (the briefInbox precedent, ACTN-02). Everything below this point is prose
+        // for the model, and prose is not a surface: before this row existed, "what's on my
+        // calendar?" was answered in chat and left the workspace canvas BLANK — the same
+        // detachment `briefings` was built to fix for the inbox, still open for the calendar.
+        //
+        // WRITTEN BEFORE THE EMPTY-WINDOW RETURN, DELIBERATELY. A clear calendar IS the answer the
+        // user asked for, so the card must render "nothing scheduled" rather than render nothing.
+        // Moving this below the next line would restore the blank canvas for exactly the case the
+        // user is most likely to doubt the product on.
+        //
+        // Additive only: the loop return strings and this tool's description are UNCHANGED, so the
+        // model's behaviour and arguments are untouched by the card's existence.
+        // `truncated` exists only on the Microsoft branch — `in` narrows the union without a cast.
+        const plan = await readPlan(); // threadId + the cross-tenant guard
+        await ctx.runMutation(internal.calendarViews.insert, {
+          tenantId,
+          threadId: plan.threadId,
+          provider,
+          range,
+          tz: clientContext.tz,
+          busy: res.busy,
+          truncated: "truncated" in res ? res.truncated : undefined,
+          // §2-D trusted clock, never Date.now() — same rule the guard at the top of this tool enforces.
+          createdAt: clientContext.nowMs,
+        });
+
         if (res.busy.length === 0)
           return `You're free for ${range} — there are no busy blocks in that window.`;
         // ponytail: render at most five blocks into the loop; the full count remains visible.
