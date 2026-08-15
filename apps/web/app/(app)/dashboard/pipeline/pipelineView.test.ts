@@ -79,6 +79,19 @@ const table = (rows: Array<Record<string, unknown>>, over: Record<string, unknow
 const tileValue = (html: string, id: string) =>
   html.match(new RegExp(`pipeline-tile-${id}"[\\s\\S]*?stat-value">([^<]*)<`))?.[1];
 
+const EXPECTED_TILE_VALUES = {
+  "needing-attention": "3",
+  "followups-due": "7",
+  consent: "2",
+  suppressed: "1",
+} as const;
+
+/** A negative-control-friendly form of the per-tile oracle. The positive assertion below proves
+ *  it accepts the intended render; the transposition test proves it rejects the same four values
+ *  when `needingAttention` and `followUpsDue` trade semantic homes. */
+const tileValuesMatch = (html: string, expected: Record<string, string>) =>
+  Object.entries(expected).every(([id, value]) => tileValue(html, id) === value);
+
 describe("the four tiles are ALWAYS-KNOWN counts (invariant 3)", () => {
   test("a brand-new empty tenant reads FOUR real zeroes, and no hedge anywhere", () => {
     const html = render(PipelineTiles, {
@@ -112,16 +125,30 @@ describe("the four tiles are ALWAYS-KNOWN counts (invariant 3)", () => {
       },
     });
     // Each value read out of ITS OWN tile, so a transposition between two tiles fails here.
-    expect(tileValue(html, "needing-attention")).toBe("3");
-    expect(tileValue(html, "followups-due")).toBe("7");
-    expect(tileValue(html, "consent")).toBe("2");
-    expect(tileValue(html, "suppressed")).toBe("1");
+    expect(tileValuesMatch(html, EXPECTED_TILE_VALUES)).toBe(true);
     for (const id of ["needing-attention", "followups-due", "consent", "suppressed"]) {
       expect(html).toContain(`data-testid="pipeline-tile-${id}"`);
     }
     // Under the bound the counts are EXACT totals, so nothing may suggest "at least". This is the
     // non-vacuity floor for the `row-cap` case below.
     expect(html).not.toContain("+");
+  });
+
+  test("the tile oracle REJECTS a needing-attention/follow-ups-due transposition", () => {
+    const swapped = render(PipelineTiles, {
+      tiles: {
+        needingAttention: 7,
+        followUpsDue: 3,
+        consentOnRecord: 2,
+        suppressed: 1,
+        partial: null,
+      },
+    });
+    // All four expected values remain present document-wide. Only their semantic tile IDs changed.
+    expect(Object.values(EXPECTED_TILE_VALUES).every((value) => swapped.includes(`>${value}<`))).toBe(
+      true,
+    );
+    expect(tileValuesMatch(swapped, EXPECTED_TILE_VALUES)).toBe(false);
   });
 
   test("PAST the backend's scan bound every value reads as a FLOOR — `1000+`, still never Unknown", () => {
@@ -342,6 +369,21 @@ const preview = (over: Record<string, unknown> = {}) =>
     ...over,
   });
 
+const EXPECTED_PREVIEW_COUNTS = {
+  new: "3",
+  enriched: "2",
+  unchanged: "0",
+  rejected: "1",
+} as const;
+
+const previewCount = (html: string, label: string) =>
+  html.match(new RegExp(`<strong>([^<]*)</strong> ${label}`))?.[1];
+
+/** Kept pure so the suite can run an actual swapped-output negative control, not merely claim in a
+ *  comment that four independent document-wide presence checks would notice a transposition. */
+const previewCountsMatch = (html: string, expected: Record<string, string>) =>
+  Object.entries(expected).every(([label, value]) => previewCount(html, label) === value);
+
 describe("the CSV import panel", () => {
   test("Confirm is DISABLED until the attestation is ticked, and the box starts unticked", () => {
     const unticked = attest();
@@ -374,13 +416,21 @@ describe("the CSV import panel", () => {
     const html = preview();
     // Each count anchored to the word it qualifies. The bare `">3<"`/`">2<"` form these replace was
     // satisfied by any of the four counts, so `enriched` and `rejected` could swap unnoticed.
-    expect(html).toContain("<strong>3</strong> new");
-    expect(html).toContain("<strong>2</strong> enriched");
-    expect(html).toContain("<strong>0</strong> unchanged");
-    expect(html).toContain("<strong>1</strong> rejected");
+    expect(previewCountsMatch(html, EXPECTED_PREVIEW_COUNTS)).toBe(true);
     // A zero is a fact here too (invariant 3's rule, one section down the page): "0 unchanged" is
     // knowledge, and hedging it would make the preview stop promising what the write will do.
     expect(html).not.toContain("Unknown");
+  });
+
+  test("the preview oracle REJECTS an enriched/rejected transposition", () => {
+    const swapped = preview({
+      counts: { newCount: 3, enriched: 1, unchanged: 0, rejected: 2 },
+    });
+    // The mutation preserves every number and every label; only their association is wrong.
+    expect(Object.values(EXPECTED_PREVIEW_COUNTS).every((value) => swapped.includes(`>${value}<`))).toBe(
+      true,
+    );
+    expect(previewCountsMatch(swapped, EXPECTED_PREVIEW_COUNTS)).toBe(false);
   });
 
   test("every rejected row is named by its FILE LINE and its reason", () => {
