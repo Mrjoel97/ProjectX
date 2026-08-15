@@ -144,7 +144,8 @@ type Provenance = {
   docId?: string;
   title: string;
   confidence: "high" | "medium" | "low";
-  source: "vault" | "user-provided";
+  // "agent-relayed" — the owner STATED it, the agent WROTE it. See schema.ts's matching literal.
+  source: "vault" | "user-provided" | "agent-relayed";
 };
 
 /** Latest row for a thread (carry-forward source + the card read). Append-only → order desc. */
@@ -246,8 +247,32 @@ export const runEvaluation = internalAction({
       );
 
       const provenance = new Map<string, Provenance>();
-      // A carried user-provided figure is cited honestly + never re-asked.
+      // SEEDED FROM `fieldProvenance`, NEVER FROM `userProvided` — and that distinction is the
+      // whole defect this block once carried. 5523f3e made `userProvided` LITERAL (only what the
+      // USER supplied) while `recordScorecardAnswer` writes `actor: "agent"` by construction, so
+      // seeding from `userProvided` meant a figure the owner stated in conversation cited NOTHING:
+      // `findings` collapsed to zero, SC #1 then force-cleared every gap, and the engine reported
+      // "not enough data" about a number the owner had just given it. Eval fixtures 27/28/29/30/31
+      // went red on the ACTIVE body. Both halves of the split were correct; only this join was not.
+      //
+      // A relayed figure IS an honest grounding basis: `FigureActor`'s own contract is that origin
+      // and actor are INDEPENDENT — the owner stated it, the agent merely wrote it down. So it is
+      // cited, and cited as `agent-relayed` so it can never read as the owner's own confirmed
+      // entry. Do not "simplify" this back to `userProvided`, and do not relabel these
+      // `user-provided` to avoid the new literal — that is the laundering 5523f3e closed.
+      for (const [field, fp] of Object.entries(fieldProvenance)) {
+        if (getPath(scorecard, field) == null) continue;
+        const byUser = fp.actor === "user";
+        provenance.set(field, {
+          title: byUser ? "user-provided" : "agent-relayed",
+          confidence: "high",
+          source: byUser ? "user-provided" : "agent-relayed",
+        });
+      }
+      // Legacy rows written before `fieldProvenance` existed carry only `userProvided`. First
+      // writer wins, so a row carrying BOTH keeps the richer attribution above.
       for (const field of userProvided) {
+        if (provenance.has(field)) continue;
         if (getPath(scorecard, field) != null) {
           provenance.set(field, {
             title: "user-provided",

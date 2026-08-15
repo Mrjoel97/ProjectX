@@ -1366,3 +1366,51 @@ test("a user re-answer overwrites provenance, so a corrected figure is freshly s
   expect(row?.userProvided).toContain("financials.cac");
   expect(row?.fieldProvenance?.["financials.cac"]).toEqual(USER_PROV);
 });
+// ── The JOIN between the two halves of the 21-01 provenance split ─────────────────────────────
+//
+// `recordScorecardAnswer` correctly writes `actor: "agent"` (5523f3e's anti-laundering fix: the
+// cockpit RELAYS what it heard, the owner did not confirm it), and `runEvaluation` correctly fills
+// the scorecard from it regardless of actor. But the findings pre-seed iterated `userProvided`,
+// which 5523f3e made EMPTY on that path — so a figure the owner stated in conversation grounded
+// NOTHING. Zero findings then force-clears the gaps (SC #1), which is what reddened eval fixtures
+// 27, 28, 29, 30 and 31 on the ACTIVE skill body. Each half was correct; the join was not.
+//
+// This asserts the SPECIFIC finding for the relayed field, never a total count: the profile doc
+// contributes identity findings of its own, so `findings.length >= 1` would pass while the CAC
+// figure still cited nothing — the exact vacuity this repo keeps catching.
+describe("runEvaluation (a relayed figure still grounds its own finding)", () => {
+  test("a figure recorded by the cockpit is cited, and is NOT laundered into user-provided", async () => {
+    const t = newTest();
+    await t.mutation(internal.skills.seedSkills, {});
+    // NO financial lines in the doc: the only possible basis for a CAC finding is what the owner
+    // said in conversation and the agent relayed.
+    const docId = await seedDoc(t, TENANT, profileDocText(false));
+
+    await t.mutation(internal.evaluations.recordScorecardAnswerInternal, {
+      tenantId: TENANT,
+      threadId: THREAD,
+      field: "financials.cac",
+      value: 180,
+    });
+
+    await t.action(internal.evaluations.runEvaluation, {
+      tenantId: TENANT,
+      threadId: THREAD,
+      query: `SMOKE::${docId}`,
+    });
+
+    const row = await t.withIdentity({ subject: TENANT }).query(api.evaluations.byThread, {
+      threadId: THREAD,
+    });
+    // The value half already worked — the defect was citation-only, and proving that here is what
+    // stops a future "fix" being applied to the wrong half.
+    expect(row?.scorecard.financials.cac).toBe(180);
+
+    const cac = row?.findings.find((f) => f.label === "CAC: 180");
+    expect(cac, "a relayed figure must ground its own cited finding").toBeDefined();
+    // The anti-laundering half must STILL hold: stated by the owner, WRITTEN by the agent, so it
+    // may never claim to be the owner's own confirmed entry.
+    expect(cac?.source).not.toBe("user-provided");
+    expect(cac?.citationTitle).toBeTruthy();
+  });
+});
