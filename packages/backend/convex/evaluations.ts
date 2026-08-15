@@ -18,7 +18,13 @@ import {
   LEAN_CANVAS_SKILL,
   SWOT_SKILL,
 } from "@pikar/contracts/skill";
-import { deserializeProfile, resolveSpecialist, specialistMemoBody, type Tier } from "@pikar/core";
+import {
+  deserializeProfile,
+  type FieldProvenance,
+  resolveSpecialist,
+  specialistMemoBody,
+  type Tier,
+} from "@pikar/core";
 import {
   diagnose,
   emptyScorecard,
@@ -589,6 +595,7 @@ export async function applyScorecardAnswer(
   threadId: string,
   field: string,
   value: number | string | boolean,
+  provenance: FieldProvenance,
 ): Promise<{ recorded: true }> {
   // NOT named `v` — that is the convex/values validator import at module scope.
   const coerced = coerceScorecardValue(field, value);
@@ -598,17 +605,27 @@ export async function applyScorecardAnswer(
     .order("desc")
     .first();
 
-  // `userProvidedAt` is stamped on EVERY answer, including a re-answer of an already-provided
-  // field — a confirm-or-update IS a fresh stated time, not a no-op (cash-business-finance Task 3
-  // fix). This is the one writer every surface (panel, Approvals, cockpit) routes through, so the
-  // stated time can never drift out of step with the value it describes.
+  // `userProvided` and `userProvidedAt` are now LITERAL: they record what the USER supplied, and
+  // an agent write must not join them. `runEvaluation` rebuilds its citation map from
+  // `userProvided` and stamps every member `source: "user-provided"` at HIGH confidence, so an
+  // agent figure appearing there would launder into the evaluation engine as the owner's own
+  // testimony. `fieldProvenance` is written for EVERY answer and is the honest record.
+  const byUser = provenance.actor === "user";
+
   if (last) {
     const scorecard = setPath(last.scorecard, field, coerced);
-    const userProvided = last.userProvided.includes(field)
-      ? last.userProvided
-      : [...last.userProvided, field];
-    const userProvidedAt = { ...(last.userProvidedAt ?? {}), [field]: Date.now() };
-    await db.patch(last._id, { scorecard, userProvided, userProvidedAt });
+    const userProvided =
+      byUser && !last.userProvided.includes(field)
+        ? [...last.userProvided, field]
+        : last.userProvided;
+    // Stamped from the provenance's own `at`, NEVER `Date.now()`: a figure's stated time is when
+    // it was TRUE. A user typing in the panel passes `at: Date.now()` and behaviour is unchanged;
+    // a six-week-old P&L keeps its own date and stays six weeks into its staleness clock.
+    const userProvidedAt = byUser
+      ? { ...(last.userProvidedAt ?? {}), [field]: provenance.at }
+      : last.userProvidedAt;
+    const fieldProvenance = { ...(last.fieldProvenance ?? {}), [field]: provenance };
+    await db.patch(last._id, { scorecard, userProvided, userProvidedAt, fieldProvenance });
     return { recorded: true };
   }
 
@@ -621,8 +638,9 @@ export async function applyScorecardAnswer(
     gaps: [],
     notEnoughData: [],
     scorecard: setPath(emptyScorecard, field, coerced),
-    userProvided: [field],
-    userProvidedAt: { [field]: Date.now() },
+    userProvided: byUser ? [field] : [],
+    ...(byUser ? { userProvidedAt: { [field]: provenance.at } } : {}),
+    fieldProvenance: { [field]: provenance },
     verdict: "insufficient",
     createdAt: Date.now(),
   });
@@ -680,7 +698,12 @@ export const recordScorecardAnswer = tenantMutation({
     value: v.union(v.number(), v.string(), v.boolean()),
   },
   handler: (ctx, { threadId, field, value }) =>
-    applyScorecardAnswer(ctx.db, ctx.tenantId, threadId, field, value),
+    applyScorecardAnswer(ctx.db, ctx.tenantId, threadId, field, value, {
+      actor: "agent",
+      origin: "stated",
+      source: "cockpit:recordScorecardAnswer",
+      at: Date.now(),
+    }),
 });
 
 /**
@@ -697,7 +720,12 @@ export const recordScorecardAnswerInternal = internalMutation({
     value: v.union(v.number(), v.string(), v.boolean()),
   },
   handler: (ctx, { tenantId, threadId, field, value }) =>
-    applyScorecardAnswer(ctx.db, tenantId, threadId, field, value),
+    applyScorecardAnswer(ctx.db, tenantId, threadId, field, value, {
+      actor: "agent",
+      origin: "stated",
+      source: "cockpit:recordScorecardAnswer",
+      at: Date.now(),
+    }),
 });
 
 // ── The ACTING side (BEVL-02, 12-05): a gap → an approvable next-step memo ────────────────────

@@ -389,7 +389,12 @@ export const answerDecision = tenantMutation({
     // ONE writer: the same `applyScorecardAnswer` the panel (`cash.ts`) and the cockpit tool
     // (`recordScorecardAnswer`) use, so an answer given here, in conversation, or in the panel land
     // in the same place and carry forward the same way (design §5's anti-drift rule).
-    await applyScorecardAnswer(ctx.db, ctx.tenantId, threadId, answer.field, answer.value);
+    await applyScorecardAnswer(ctx.db, ctx.tenantId, threadId, answer.field, answer.value, {
+      actor: "user",
+      origin: "stated",
+      source: "approvals:answerDecision",
+      at: Date.now(),
+    });
     return { recorded: true as const };
   },
 });

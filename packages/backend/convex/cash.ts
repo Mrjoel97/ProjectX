@@ -391,6 +391,12 @@ export async function writeFigureRow(
       existing?.threadId ?? "finance-panel",
       spec.path,
       claim.value,
+      {
+        actor: claim.actor,
+        origin: claim.origin,
+        source: claim.basis,
+        at: claim.observedAt,
+      },
     );
     return;
   }

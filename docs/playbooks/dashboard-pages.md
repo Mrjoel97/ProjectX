@@ -1,5 +1,29 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-15 (scorecard-field-provenance Task 2 — **the writer-side wiring Task 1
+> deferred has landed: `applyScorecardAnswer(db, tenantId, threadId, field, value, provenance)` now
+> takes a REQUIRED sixth `FieldProvenance` argument, no default.** That turned all four existing
+> call sites into compile errors until each declared who is answering, which is the point — a silent
+> fifth caller cannot slip through. `cash.ts`'s `writeFigureRow` now passes the claim's own
+> `{actor, origin, basis→source, observedAt→at}` verbatim (closing the FOUR-field loss the Task 3
+> entry below names — `origin`/`actor`/`basis`/`observedAt` no longer drop on the floor), and
+> `approvals.ts`'s `answerDecision` stamps `{actor: "user", origin: "stated", source:
+> "approvals:answerDecision", at: Date.now()}` (a human answering a decision question IS a direct
+> statement). `userProvided`/`userProvidedAt` are now LITERAL — they record what the USER supplied,
+> gated on `provenance.actor === "user"` — while `fieldProvenance` (Task 1's column) is written on
+> EVERY answer, agent or user, as the honest record. `userProvidedAt` is stamped from
+> `provenance.at`, never `Date.now()`, so a stated figure keeps its own staleness clock.
+> **OWNER DECISION, closing the laundering door the Task 3 entry below first named:** the cockpit's
+> `recordScorecardAnswer` tool (both the `tenantMutation` and its `recordScorecardAnswerInternal`
+> twin) now stamps `actor: "agent"` unconditionally — a model RELAYS what it heard in chat, it does
+> not verify it, so a chat-given figure can no longer join `userProvided` or be cited
+> `"user-provided"` at high confidence by `runEvaluation`. The value still lands in the scorecard
+> (never re-asked) and is now traceable via `fieldProvenance`, but it is not credited as the owner's
+> own testimony. **The scorecard-store ceiling the Task 3 entry below calls "KNOWN" is now PARTIALLY
+> closed**: `writeFigureRow`'s `if (claim.actor === "agent") throw` guard is UNCHANGED (still
+> refuses an agent-authored scorecard write outright) — that removal, once the read side honestly
+> renders `fieldProvenance`, is a later task in the same plan.)
+>
 > Last verified: 2026-08-15 (scorecard-field-provenance Task 1 — **`FieldProvenance` type added to
 > `packages/core/src/financeClaim.ts`, reusing the existing `FigureActor`/`FigureOrigin` unions
 > already declared in that file** (never a second vocabulary). This is the type half of the upgrade
