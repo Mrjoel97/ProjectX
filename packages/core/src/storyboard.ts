@@ -456,6 +456,14 @@ export type Scene = {
   narration: string;
   overlay?: string;
   prompt: string;
+  /** Document-level citation (the Phase-14 locked idiom): ONE vault doc per scene, no chunk refs.
+   *  Declared by the specialist as a `Source:` line in the scene's SCENE PROMPTS block. */
+  source?: { docId: string; title: string };
+  /** `Source: unverified` — a factual claim the specialist could not ground in the vault, so the
+   *  owner must confirm it before it ships. NOTE deliberately no `confirmedAt` here or anywhere in
+   *  parser output: a confirmation is written ONLY by an authenticated tenant mutation later. The
+   *  model must have no path to writing one, and this type is the first door. */
+  needsConfirmation?: true;
 };
 
 /** Which kinds draw money. Same `satisfies Record<...>` table as `PAID`, for the same reason:
@@ -536,7 +544,7 @@ export type ParsedSceneDeck =
     }
   | {
       ok: false;
-      reason: "bad_scene_duration" | "illegal_generated_duration" | "missing_asset";
+      reason: "bad_scene_duration" | "illegal_generated_duration" | "missing_asset" | "malformed_source";
       sceneIndex: number;
     }
   | {
@@ -570,6 +578,42 @@ function visualKindOf(cell: string): VisualKind | null {
   return SHOT_TYPE_SET.has(legacy) ? LEGACY_VISUAL[legacy as ShotType] : null;
 }
 
+type SceneSource = { docId: string; title: string } | "unverified";
+
+/**
+ * Per-scene `Source:` lines from the SCENE PROMPTS blocks (33-01) — same `Scene N` head walk as
+ * `parsePrompts`, kept separate so the shared prompts reader stays untouched for the block
+ * contract, which has no citations.
+ *
+ * Three legal forms and NOTHING else: `<title> [doc:<id>]`, `unverified`, or no line at all. A
+ * Source line the parser cannot read — an empty `[doc:]` id, or freehand text with no token — is
+ * a citation that would otherwise be SILENTLY DROPPED into creative copy, so it refuses instead
+ * (`malformed` carries the scene's display number).
+ */
+function sceneSourcesOf(section: string): { sources: Map<number, SceneSource>; malformed?: number } {
+  const sources = new Map<number, SceneSource>();
+  let current: number | undefined;
+  for (const line of section.split(/\r?\n/)) {
+    const head = /^\s*#*\s*(?:Block|Scene)\s+(\d+)\b/i.exec(line);
+    if (head) {
+      current = Number(head[1]);
+      continue;
+    }
+    const s = /^\s*[*-]?\s*(?:\*\*)?Source(?:\*\*)?\s*:\s*(.+)$/i.exec(line);
+    if (!s || current === undefined || sources.has(current)) continue;
+    const value = (s[1] ?? "").trim();
+    if (/^unverified$/i.test(value)) {
+      sources.set(current, "unverified");
+      continue;
+    }
+    const doc = /^(.*?)\s*\[doc:([^\]]*)\]$/.exec(value);
+    const docId = (doc?.[2] ?? "").trim();
+    if (!doc || docId === "") return { sources, malformed: current };
+    sources.set(current, { docId, title: (doc[1] ?? "").replace(/`/g, "").trim() });
+  }
+  return { sources };
+}
+
 /**
  * Parse a SCENE DECK, or refuse.
  *
@@ -593,6 +637,13 @@ export function parseSceneDeck(body: string): ParsedSceneDeck {
   const prompts = promptsAt
     ? parsePrompts(afterDeck.slice(promptsAt.index))
     : new Map<number, string>();
+  const { sources, malformed } = promptsAt
+    ? sceneSourcesOf(afterDeck.slice(promptsAt.index))
+    : { sources: new Map<number, SceneSource>(), malformed: undefined };
+  // Display numbers are 1-based (the `prompts.get(index + 1)` idiom below); refusals speak row index.
+  if (malformed !== undefined) {
+    return { ok: false, reason: "malformed_source", sceneIndex: malformed - 1 };
+  }
 
   const declared = /^[ \t]*(?:\*\*)?Target duration(?:\*\*)?[ \t]*:[ \t]*(\d+)/im.exec(section);
   const targetDurationSeconds = declared ? Number(declared[1]) : Number.NaN;
@@ -655,6 +706,11 @@ export function parseSceneDeck(body: string): ParsedSceneDeck {
       ...(overlay === "" ? {} : { overlay }),
       // The deck's `#` column is DISPLAY, 1-based; row order is the reel's order and the truth.
       prompt: prompts.get(index + 1) ?? description,
+      ...(() => {
+        const src = sources.get(index + 1);
+        if (src === undefined) return {};
+        return src === "unverified" ? { needsConfirmation: true as const } : { source: src };
+      })(),
     });
     startMs += seconds * 1000;
   }
