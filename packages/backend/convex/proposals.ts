@@ -1,8 +1,9 @@
 // The applier — the ONLY place a proposed fact reaches a target store. It NEVER writes a target
 // store via `ctx.db`: every write goes through that store's existing single writer
-// (`applyFinanceClaims`, `writeProfileDoc`), so every validator, range check, consent rule and
-// provenance stamp that guards a manual entry guards a proposal-applied one too, by construction —
-// there is no second route in. The only `ctx.db` write here is the `proposals` row's own `status`.
+// (`applyFinanceClaims`, `validateAndWriteProfile`), so every validator, range check, consent rule
+// and provenance stamp that guards a manual entry guards a proposal-applied one too, by
+// construction — there is no second route in. The only `ctx.db` write here is the `proposals`
+// row's own `status`.
 //
 // TWO PASSES, matching `applyFinanceClaims`'s discipline (cash.ts): validate every accepted item
 // with zero writes, then write. A `return` does NOT roll back a Convex transaction — only a throw
@@ -16,11 +17,13 @@ import {
   type FigureClaim,
   type ProposalGuard,
   proposalTarget,
+  validateProfile,
 } from "@pikar/core";
 import { v } from "convex/values";
+import type { Doc } from "./_generated/dataModel";
 import { applyFinanceClaims, inputStatesFor } from "./cash";
 import { tenantMutation, tenantQuery } from "./lib/functions";
-import { currentProfileDoc, currentTierRow, writeProfileDoc } from "./onboarding";
+import { currentProfileDoc, currentTierRow, validateAndWriteProfile } from "./onboarding";
 
 export type ProposalRefusal =
   | "not_found"
@@ -30,9 +33,21 @@ export type ProposalRefusal =
   | "writer_refused"
   // A profile fact was accepted for a tenant with no `tenantProfiles` row yet. Distinct from
   // `writer_refused`: this is not a consent problem, it is a missing FACT this function will not
-  // guess — `persona`/tier has no honest default, so `writeProfileDoc` is never called without one.
-  // Mirrors `updateProfile`'s own `INCOMPLETE_FACTS` refusal for the same missing row.
-  | "incomplete_facts";
+  // guess — `persona`/tier has no honest default, so the profile writer is never called without
+  // one. Mirrors `updateProfile`'s own `INCOMPLETE_FACTS` refusal for the same missing row.
+  | "incomplete_facts"
+  // Finding 4: a fact's (or an edit's) `value` does not match its target's registered `valueType`
+  // (e.g. a boolean proposed for a `"number"` finance field). Caught in PASS 1, before any writer
+  // runs — a mismatched type reaching `applyFinanceClaims` degrades safely (it refuses non-numerics
+  // itself), but one reaching the profile branch would be coerced into markdown by
+  // `serializeProfile`'s template literals instead of refused.
+  | "invalid_value_type"
+  // Finding 1: the merged profile (existing doc's fields overlaid with the accepted proposal
+  // values) failed `validateProfile` — e.g. a batch that would clear a `oneLineDescription` down to
+  // blank on a tenant with no committed profile doc yet. Computed in PASS 1 (a pure check over
+  // already-read state, no write), so this refusal is as cheap and total as every other PASS-1
+  // refusal — never discovered after the finance half of a mixed batch has already written.
+  | "invalid_profile";
 
 type AcceptResult =
   | { ok: true; applied: number; skipped: number; guards: Record<ProposalGuard, number> }
@@ -83,8 +98,15 @@ export const acceptProposal = tenantMutation({
       };
     });
     for (const fact of chosen) {
-      if (proposalTarget(fact.target.store, fact.target.field) === null) {
-        return { ok: false, reason: "unknown_target" };
+      const target = proposalTarget(fact.target.store, fact.target.field);
+      if (target === null) return { ok: false, reason: "unknown_target" };
+      // Finding 4: neither a fact's stored `value` nor an `edits[]` override (already spliced onto
+      // `chosen` above) was ever checked against the target's registered `valueType`. Finance
+      // degrades safely on a mismatch (`validateFigureClaim` refuses non-numerics), but nothing
+      // upstream of the profile branch would — a non-string reaching it would be coerced into
+      // markdown by `serializeProfile`'s template literals rather than refused.
+      if (typeof fact.value !== target.valueType) {
+        return { ok: false, reason: "invalid_value_type" };
       }
       // ponytail: contacts are refused wholesale until plan 3 builds the batch attestation the
       // bulk importer already requires (spec §4.2). Upgrade path: accept an `attestation` arg here
@@ -111,6 +133,53 @@ export const acceptProposal = tenantMutation({
     // it belongs here, before any writer runs — same reasoning as the loop just above.
     const tierRow = profileFacts.length > 0 ? await currentTierRow(ctx, ctx.tenantId) : null;
     if (profileFacts.length > 0 && !tierRow) return { ok: false, reason: "incomplete_facts" };
+
+    // Still PASS 1 (fix, finding 1) — compute the merged profile and validate it BEFORE any writer
+    // runs, for the exact same reason the tier-row gate above is hoisted: a validation refusal
+    // discovered in PASS 2, after the finance branch has already written, would leave the batch
+    // half-applied while reporting a refusal. This is a READ (`currentProfileDoc`) plus a PURE check
+    // (`validateProfile`), so hoisting it costs nothing. `writeProfileDoc` itself never validated —
+    // that was finding 1 — so this is the ONLY gate standing between an accepted profile fact and a
+    // blank-skeleton write; PASS 2 below calls `validateAndWriteProfile`, which re-validates as a
+    // second, cheap, defense-in-depth check rather than trusting this one blindly.
+    let profileWrite: {
+      merged: BusinessProfile;
+      existingDoc: Doc<"vaultDocuments"> | undefined;
+    } | null = null;
+    if (profileFacts.length > 0) {
+      if (!tierRow) throw new Error("unreachable: profile facts were gated on tierRow above");
+      const existingDoc = await currentProfileDoc(ctx, ctx.tenantId);
+      const existingProfile: BusinessProfile = existingDoc?.text
+        ? deserializeProfile(existingDoc.text)
+        : {
+            name: "",
+            oneLineDescription: "",
+            persona: tierRow.tier,
+            stage: "",
+            offering: "",
+            targetCustomer: "",
+            primaryGoals: [],
+            knownConstraints: [],
+          };
+      // Merge ONLY the proposed fields over the existing profile — a field nobody proposed stays
+      // absent, never becomes "". `persona` is always the FRESH tier (§4.2: the markdown is a
+      // projection, `tenantProfiles` is the record), matching `updateProfile`'s own splice — never
+      // trusted off a possibly-stale doc. `PROPOSAL_TARGETS` only ever names a real `BusinessProfile`
+      // key here (proposal.ts's `PROFILE_WRITABLE_FIELDS` intersection), so this assignment can no
+      // longer silently drop a field the way an unwritable target once did.
+      const merged = { ...existingProfile, persona: tierRow.tier } as Record<string, unknown>;
+      for (const f of profileFacts) merged[f.target.field] = f.value;
+      // The concrete finding-1 failure: a batch containing only `{store:"profile", field:"stage"}`
+      // for a tenant with no profile doc yet would merge `stage` onto the BLANK skeleton above and
+      // write `oneLineDescription: ""` — a document `commitProfile`/`updateProfile` both refuse to
+      // create. Caught HERE, not after a writer has run.
+      const check = validateProfile(merged as unknown as BusinessProfile);
+      if (!check.ok) return { ok: false, reason: "invalid_profile" };
+      profileWrite = {
+        merged: merged as unknown as BusinessProfile,
+        existingDoc: existingDoc ?? undefined,
+      };
+    }
 
     // ── PASS 2: every item cleared; now read current state, classify, and write. ─────────────
     let applied = 0;
@@ -181,43 +250,33 @@ export const acceptProposal = tenantMutation({
     }
 
     if (profileFacts.length > 0) {
-      // `tierRow` was read and gated on in PASS 1 above (`profileFacts.length > 0` here is the same
-      // condition that gated it there, so this cannot miss) — re-checked rather than asserted with
-      // `!`, mirroring `itemAt`'s pattern, because `noUncheckedIndexedAccess`-style correlation
-      // across two variables is not something the type-checker tracks on its own.
-      if (!tierRow) throw new Error("unreachable: profile facts were gated on tierRow in PASS 1");
-
-      const existingDoc = await currentProfileDoc(ctx, ctx.tenantId);
-      const existingProfile: BusinessProfile = existingDoc?.text
-        ? deserializeProfile(existingDoc.text)
-        : {
-            name: "",
-            oneLineDescription: "",
-            persona: tierRow.tier,
-            stage: "",
-            offering: "",
-            targetCustomer: "",
-            primaryGoals: [],
-            knownConstraints: [],
-          };
-      // Merge ONLY the proposed fields over the existing profile — a field nobody proposed stays
-      // absent, never becomes "". `persona` is always the FRESH tier (§4.2: the markdown is a
-      // projection, `tenantProfiles` is the record), matching `updateProfile`'s own splice — never
-      // trusted off a possibly-stale doc. `PROPOSAL_TARGETS` only ever names a real `BusinessProfile`
-      // key here (proposal.ts's `PROFILE_WRITABLE_FIELDS` intersection), so this assignment can no
-      // longer silently drop a field the way an unwritable target once did.
-      const merged = { ...existingProfile, persona: tierRow.tier } as Record<string, unknown>;
-      for (const f of profileFacts) merged[f.target.field] = f.value;
-      await writeProfileDoc(
+      // `profileWrite` was computed and validated in PASS 1 above (`profileFacts.length > 0` here is
+      // the same condition that gated it there, so this cannot miss) — re-checked rather than
+      // asserted with `!`, mirroring `itemAt`'s pattern, because `noUncheckedIndexedAccess`-style
+      // correlation across two variables is not something the type-checker tracks on its own.
+      if (!profileWrite)
+        throw new Error("unreachable: profile facts were gated on profileWrite above");
+      // `validateAndWriteProfile` (fix, finding 1) re-validates before writing — cheap
+      // defense-in-depth, since PASS 1 already validated the identical `merged` object above; a
+      // `false` result here would mean the two computations somehow disagreed, which cannot happen
+      // for a pure function given the same input.
+      const result = await validateAndWriteProfile(
         ctx,
         ctx.tenantId,
-        merged as unknown as BusinessProfile,
-        existingDoc ?? undefined,
+        profileWrite.merged,
+        profileWrite.existingDoc,
       );
+      if (!result.ok) return { ok: false, reason: "invalid_profile" };
       applied += profileFacts.length;
     }
 
-    await ctx.db.patch(proposalId, { status: "accepted" });
+    // Finding 3: an empty `acceptedIndices` clears PASS 1 trivially and writes nothing — marking the
+    // row `accepted` in that case would be a lie (nothing was), and would make the row's remaining
+    // items permanently unreachable (a later call returns `not_pending`). Only patch the status when
+    // something was actually chosen.
+    if (acceptedIndices.length > 0) {
+      await ctx.db.patch(proposalId, { status: "accepted" });
+    }
     return { ok: true, applied, skipped, guards };
   },
 });

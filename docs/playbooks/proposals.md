@@ -9,6 +9,10 @@
 > Build history: `.superpowers/sdd/2026-08-15-proposals-table-and-applier/` · Related ADRs: none yet
 > (the design doc §10 calls for one recording the `userProvided`/`fieldProvenance` split; not filed
 > as of this entry — check before assuming it exists).
+> **Fix round 3 note** (same day, final review): Invariant 1's writer-inheritance claim shipped
+> FALSE for the profile store — see invariant 1 below for the corrected version and
+> `.superpowers/sdd/2026-08-15-proposals-table-and-applier/final-fix-report.md` for the full finding.
+> Not a re-verification of the whole playbook; do not treat this note as moving `Last verified`.
 
 ## Purpose
 
@@ -54,9 +58,14 @@ searchable and nothing else (design doc §1).
   and `scorecard` proposals, exported already) and `inputStatesFor` (exported for this module,
   comment names `proposals.ts` as the second caller — read current finance/scorecard state in ONE
   call, the same call the finance page renders from).
-- `packages/backend/convex/onboarding.ts` — `writeProfileDoc`, `currentProfileDoc`, `currentTierRow`
-  (all exported for this module, each with a doc comment naming `proposals.ts` as the second
-  caller). The profile writer.
+- `packages/backend/convex/onboarding.ts` — `validateAndWriteProfile`, `currentProfileDoc`,
+  `currentTierRow` (all exported for this module, each with a doc comment naming `proposals.ts` as
+  the third caller — `commitProfile`/`updateProfile` are the other two). The profile store's ONE
+  entry point (CORRECTED — fix round 3, finding 1): `writeProfileDoc` itself is no longer exported;
+  it never called `validateProfile`, and a comment here used to claim it did "either way," which
+  shipped false and let a proposal-applied profile write skip validation entirely.
+  `validateAndWriteProfile` wraps `validateProfile` then `writeProfileDoc` in one call, so the only
+  way to reach the writer is through the validator.
 - `packages/backend/convex/contacts.ts` — `applyCrmOperations` exists and is the eventual writer for
   `contacts`/`followUps` proposals, but `proposals.ts` never calls it yet — see invariant 6.
 
@@ -108,26 +117,47 @@ first. Couplings graphify cannot see:
    `not_pending` if already resolved. Check every accepted index is in range and not duplicated
    (`unknown_item`); apply `edits` over the stored value; stamp `actor: "agent"` on every chosen
    item, unconditionally; refuse `unknown_target` if `proposalTarget(store, field)` is `null` for
-   any item; refuse `writer_refused` for every `contacts`/`followUps` item (invariant 6); refuse
-   `incomplete_facts` if any item targets `profile` and the tenant has no `tenantProfiles` row yet.
+   any item; refuse `invalid_value_type` if a chosen (post-edit) value's runtime type does not match
+   its target's registered `valueType`; refuse `writer_refused` for every `contacts`/`followUps` item
+   (invariant 6); refuse `incomplete_facts` if any item targets `profile` and the tenant has no
+   `tenantProfiles` row yet; if any item targets `profile`, merge it onto `currentProfileDoc`'s
+   parsed doc (or a blank skeleton) and refuse `invalid_profile` if `validateProfile` rejects the
+   merged result (fix round 3, finding 1 — see invariant 1).
 4. **PASS 2 — read current state, classify (reporting only), write.** Finance/scorecard items: one
    `inputStatesFor` call, `classifyProposal` per item (tally only), then ALL chosen finance items in
    one `applyFinanceClaims` call — it is the sole staleness authority and re-validates everything
-   itself. Profile items: merge onto `currentProfileDoc`'s parsed doc (or a blank skeleton) and
-   write through `writeProfileDoc`.
-5. Patch the row to `status: "accepted"` LAST, after every writer call has returned successfully.
+   itself. Profile items: write the ALREADY-VALIDATED merged profile from PASS 1 through
+   `validateAndWriteProfile` (which re-validates as cheap defense-in-depth, then calls
+   `writeProfileDoc`).
+5. Patch the row to `status: "accepted"` LAST, after every writer call has returned successfully —
+   and ONLY if at least one item was actually chosen (fix round 3, finding 3: an empty
+   `acceptedIndices` writes nothing and must leave the row `pending`, not report a lie).
 6. `discardProposal` is a one-step alternative to step 2: `pending` → `discarded`, no writer touched.
 
 ## Invariants — what must never break
 
-**1. The applier never writes a target store via `ctx.db`.** Its only `ctx.db` write anywhere in
-`proposals.ts` is `ctx.db.patch(proposalId, { status: ... })` on the `proposals` row itself. Every
-fact lands through `applyFinanceClaims` or `writeProfileDoc` — the store's existing single writer —
-so every validator, consent rule and provenance stamp that guards a manual entry guards a
-proposal-applied one automatically, with no second route to keep in sync.
-*Enforcement:* read the file; there is no test that greps for a bare `ctx.db.patch`/`ctx.db.insert`
-outside the one `status` site — this is a gap, stated here rather than hidden. If a future change
-adds a second `ctx.db` write, this playbook's word is the only thing that will notice.
+**1. The applier never writes a target store via `ctx.db`, and the profile store's writer is never
+reachable without validation.** Its only `ctx.db` write anywhere in `proposals.ts` is
+`ctx.db.patch(proposalId, { status: ... })` on the `proposals` row itself. Every fact lands through
+`applyFinanceClaims` or `validateAndWriteProfile` (`onboarding.ts`) — the store's existing single
+entry point — so every validator, consent rule and provenance stamp that guards a manual entry
+guards a proposal-applied one too.
+CORRECTED (fix round 3, finding 1): this invariant used to read "every write goes through that
+store's existing single writer... by construction," and a doc comment on `writeProfileDoc` claimed
+the proposals caller "inherits `validateProfile` either way." Both were FALSE. `writeProfileDoc`
+never called `validateProfile` — validation was CALLER-SIDE only, in `commitProfile` and
+`updateProfile`, and `acceptProposal`'s profile branch (the third caller) omitted it. A batch
+proposing only `{store:"profile", field:"stage"}` for a mid-onboarding tenant (a `tenantProfiles` row
+present, no profile doc yet) would merge `stage` onto a BLANK skeleton and write a `business_profile`
+vault doc with `oneLineDescription: ""` — a document `commitProfile`/`updateProfile` both refuse to
+create. The fix is `onboarding.ts`'s `validateAndWriteProfile`: `writeProfileDoc` is no longer
+exported, so `validateProfile` then `writeProfileDoc`, together, is the ONLY way any of the three
+callers (`commitProfile`, `updateProfile`, `acceptProposal`) can reach the profile store — a fourth
+caller cannot forget the validator by construction, because it cannot import the writer without it.
+*Enforcement:* `proposals.test.ts` — "a profile-only batch that would create a BLANK profile refuses
+invalid_profile, writing nothing" is the exact scenario above, pinned as a regression test. There is
+still no test that greps for a bare `ctx.db.patch`/`ctx.db.insert` outside the one `status` site —
+that gap is unchanged and stated here rather than hidden.
 
 **2. Two passes, never interleaved. A `return` does not roll back a Convex transaction.** Only a
 `throw` does. Every refusal check that can fire for ANY item in the batch must run in PASS 1, before
