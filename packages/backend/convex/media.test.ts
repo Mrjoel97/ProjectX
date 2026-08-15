@@ -5341,16 +5341,17 @@ const BRIEF = {
   defaulted: ["audience", "tone"],
 };
 
-/** A second, deliberately DIFFERENT scene deck parked as the alternate: 10 s + 5 s generated
- *  clips (15 s total) against the primary's 8/6/4/12 (30 s) — so a swapped estimate, target and
- *  narration set are all distinguishable from the original's. */
+/** A second, deliberately DIFFERENT scene deck parked as the alternate: a 12 s clip + a 3 s
+ *  still (15 s total, both lengths the pinned models accept) against the primary's 8/6/4/12
+ *  (30 s) — so a swapped estimate, target and narration set are all distinguishable. */
 async function seedAltDeck(t: T, planId: Id<"plans">) {
-  const seconds = [10, 5];
+  const seconds = [12, 3];
+  const visuals = ["generated_video", "animated_image"];
   let startMs = 0;
   const altShots = seconds.map((sec, i) => {
     const shot = {
       index: i,
-      visual: "generated_video",
+      visual: visuals[i] ?? "generated_video",
       seconds: sec,
       windowStartMs: startMs,
       description: `alt scene ${i}`,
@@ -5484,14 +5485,14 @@ describe("33-02 switchDeck: the unpicked deck swaps in atomically, until Generat
     await asA(t).mutation(api.media.switchDeck, { planId });
 
     // After: the SAME query, textually untouched by this plan, prices the formerly-alternate deck
-    // (10 s + 5 s → 150 cents) because `plans.shots` IS the picked deck.
+    // (one 12 s clip → 120 cents) because `plans.shots` IS the picked deck.
     const row = await planRowOf(t, planId);
     const deck = row ? sceneDeckOf(row) : null;
     expect(deck?.targetDurationSeconds).toBe(15);
     expect(deck?.scenes.map((s) => s.narration)).toEqual(["alt line 0", "alt line 1"]);
     const after = await asA(t).query(api.media.jobEstimate, { planId });
     expect(after.refusal).toBeNull();
-    expect(after.lines.find((l) => l.label === "clips")?.cents).toBe(150);
+    expect(after.lines.find((l) => l.label === "clips")?.cents).toBe(120);
   });
 
   test("no_alternate when there is nothing to switch to", async () => {

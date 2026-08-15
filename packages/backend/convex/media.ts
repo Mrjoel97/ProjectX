@@ -30,6 +30,7 @@ import {
   minCharsFor,
   narrationCeilingSeconds,
   SHOT_TYPES,
+  TARGET_DURATIONS,
   VISUAL_KINDS,
 } from "@pikar/core/storyboard";
 import type { MediaSpec } from "@pikar/cost/media";
@@ -2683,6 +2684,92 @@ export const deleteBlock = tenantMutation({
       planId,
       shots.filter((s) => s.index !== blockIndex),
     );
+    return { ok: true as const };
+  },
+});
+
+// ── 33-02: the BRIEF plane and the TWO-DECK variation plane ────────────────────────────────────
+//
+// Two governed writes, and one rule shared by both: `plans.shots` IS the picked deck. The money
+// path (`sceneDeckOf`, `jobEstimate`, the reserves) is textually untouched by this plan and never
+// learns variations exist — it prices whatever is in `shots`, which is always the picked deck.
+
+/**
+ * Edit a brief chip. Patches ONLY the brief plane: `brief.durationSeconds` is the USER'S ask, the
+ * deck's own `targetDurationSeconds` remains the money contract, and a divergence between the two
+ * renders as the stale badge (`briefChangedAt > deckProposedAt`) — never as an estimate refusal
+ * and never as a silent re-deck. Fields named in the patch stop being `defaulted`: a chip the
+ * user has touched is the user's word, whatever its value.
+ */
+export const editBrief = tenantMutation({
+  args: {
+    planId: v.id("plans"),
+    patch: v.object({
+      topic: v.optional(v.string()),
+      durationSeconds: v.optional(v.number()),
+      audience: v.optional(v.string()),
+      tone: v.optional(v.string()),
+      brandVoice: v.optional(v.string()),
+    }),
+  },
+  handler: async (ctx, { planId, patch }) => {
+    const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
+    // No brief, nothing to edit — the chips only render off an existing brief, and inventing one
+    // here would launder a client-supplied object into "what the user asked for".
+    if (plan.brief === undefined) return { ok: false as const, reason: "no_brief" as const };
+    // Post-Generate the choice is bought; brief edits from then on are canvas-only, paid-rail.
+    if (plan.deckLockedAt !== undefined) {
+      return { ok: false as const, reason: "deck_locked" as const };
+    }
+    if (
+      patch.durationSeconds !== undefined &&
+      !(TARGET_DURATIONS as readonly number[]).includes(patch.durationSeconds)
+    ) {
+      return { ok: false as const, reason: "illegal_duration" as const };
+    }
+    const edited = Object.keys(patch).filter(
+      (k) => patch[k as keyof typeof patch] !== undefined,
+    );
+    await ctx.db.patch(planId, {
+      brief: {
+        ...plan.brief,
+        ...Object.fromEntries(edited.map((k) => [k, patch[k as keyof typeof patch]])),
+        defaulted: plan.brief.defaulted.filter((f) => !edited.includes(f)),
+      },
+      briefChangedAt: Date.now(),
+    });
+    return { ok: true as const };
+  },
+});
+
+/**
+ * Swap the picked deck for the parked alternate — `shots`↔`altShots` and
+ * `targetDurationSeconds`↔`altTargetDurationSeconds`, in ONE patch, until Generate locks the
+ * choice (`deckLockedAt`).
+ *
+ * The stamp is STRUCTURAL and deliberate: landed assets belong to the deck that bought them, so
+ * `shotsChangedAt` making them un-reusable (`batchToRender`'s `stale_inputs`) is correct here,
+ * not the money leak the content/structural split exists to prevent. Not `patchShots` — the
+ * alternate's indices are already 0..n-1, which that helper would read as a content edit.
+ */
+export const switchDeck = tenantMutation({
+  args: { planId: v.id("plans") },
+  handler: async (ctx, { planId }) => {
+    const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
+    if (plan.altShots === undefined) return { ok: false as const, reason: "no_alternate" as const };
+    if (plan.deckLockedAt !== undefined) {
+      return { ok: false as const, reason: "deck_locked" as const };
+    }
+    await ctx.db.patch(planId, {
+      shots: plan.altShots,
+      altShots: plan.shots,
+      targetDurationSeconds: plan.altTargetDurationSeconds,
+      altTargetDurationSeconds: plan.targetDurationSeconds,
+      shotsChangedAt: Date.now(),
+    });
+    // The rendered reel — if any — is the OTHER deck's artifact; showing it beside this deck
+    // would be the exact stale-final.mp4 lie `clearRender` exists to prevent.
+    await clearRender(ctx, planId);
     return { ok: true as const };
   },
 });
