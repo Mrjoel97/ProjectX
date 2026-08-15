@@ -2043,4 +2043,23 @@ describe("executePlan finance_write arm", () => {
     expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("done");
     expect(await t.run((ctx) => ctx.db.query("audit").collect())).toHaveLength(1);
   });
+
+  // B3 (fix round 1): the test above INVERTED the ONLY case that reached `cockpit.ts`'s governed
+  // stop (`if (!applied.ok) return { ok: false, reason }` — plan stays "proposed", nothing written,
+  // the reason reaches the card) at the APPROVE boundary, not just `applyFinanceClaims`'s own unit
+  // test. `malformed_figure_claim` still reaches that stop (only `agent_cannot_update_figure` was
+  // lifted), so this restores coverage of the boundary with a claim that is still refused.
+  test("a malformed claim refuses at the apply boundary and the plan stays proposed", async () => {
+    const t = withAudit();
+    const planId = await seedFinancePlan(t, [{ ...CLAIM, basis: "   " }]);
+
+    const result = await t
+      .withIdentity({ subject: TENANT })
+      .mutation(api.cockpit.executePlan, { planId });
+    expect(result).toEqual({ ok: false, reason: "malformed_figure_claim" });
+
+    expect(await t.run((ctx) => ctx.db.query("financeInputs").collect())).toHaveLength(0);
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("proposed");
+    expect(await t.run((ctx) => ctx.db.query("audit").collect())).toHaveLength(0);
+  });
 });

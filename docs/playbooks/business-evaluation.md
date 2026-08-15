@@ -28,6 +28,21 @@
 > reporting an agent-relayed figure as unknown-origin. Regression-guarded by
 > `evaluations.test.ts > "carry-forward / anti-re-ask" > "fieldProvenance is carried forward unchanged
 > by a re-evaluation"`, confirmed RED against the code with the carry-forward line stubbed out.
+>
+> **Task 5 fix round 1 (not yet verified — see the IN-FLIGHT note above): `applyScorecardAnswer` now
+> DROPS a path from `userProvided` on an agent write, not just declines to add it.** Found in review:
+> the laundering guarantee above only covered a FIRST write. A sequence where the owner types CAC on
+> the finance page (`actor: "user"`, legitimately joins `userProvided`) and an approved agent claim
+> later overwrites the VALUE left the stale `userProvided` membership marker in place — so
+> `runEvaluation`'s citation map (built from `userProvided` membership alone, `evaluations.ts`
+> ~line 250) would still cite the AGENT's new number as the owner's own testimony. Refusing the
+> overwrite was ruled out — `applyFinanceClaims` runs POST-APPROVAL, after the human already agreed
+> to it — so `applyScorecardAnswer`'s `last` branch now filters `field` out of `userProvided` and
+> deletes its `userProvidedAt` entry whenever `provenance.actor !== "user"`, alongside the existing
+> unconditional `fieldProvenance` write. Regression-guarded by `cash.test.ts`'s "an agent claim
+> overwriting a user-saved cac drops it from userProvided, not just declines to add it" — seeds a
+> genuine user save via `saveInput` first, confirmed RED against the pre-fix code (`expected
+> ['financials.cac'] to not include 'financials.cac'`).
 
 > Last verified: 2026-08-11 — ⚠ **DATE BUMPED TO CLEAR A `check-playbooks.mjs` FALSE POSITIVE.
 > NOTHING BELOW WAS RE-VERIFIED, AND THIS ENTRY DOCUMENTS NO CHANGE OF ITS OWN.** The precedent is

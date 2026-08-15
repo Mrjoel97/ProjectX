@@ -373,8 +373,12 @@ export async function writeFigureRow(
     // The scorecard store now carries per-dot-path provenance (`evaluations.fieldProvenance`), so
     // an agent claim is recorded honestly rather than refused: the value lands and is usable, the
     // write is stamped `actor: "agent"`, and `applyScorecardAnswer` keeps it OUT of `userProvided`
-    // — which is what `runEvaluation` rebuilds its citation map from. The laundering path this
-    // guard existed to block no longer exists.
+    // — which is what `runEvaluation` rebuilds its citation map from. B1 fix (Task 5, round 1):
+    // `applyScorecardAnswer` also DROPS the path from `userProvided` when an agent write overwrites
+    // a figure the user previously saved themselves, so a stale membership marker cannot outlive the
+    // value it once described. That closes the two laundering routes THIS guard's removal could have
+    // reopened; it is not a claim that every future caller of `applyScorecardAnswer` is safe by
+    // construction — a new caller still owes it honest provenance.
     //
     // No evaluation yet: seed under a stable, non-conversational thread id so the panel's answers
     // survive into the tenant's first real evaluation (the applyScorecardAnswer carrier path).
@@ -531,13 +535,27 @@ export async function applyFinanceClaims(
     // this an approved claim observed in June patches over a figure the human saved today, moving
     // statedAt backward and flipping actor. A stale claim is SKIPPED, not an error: the store
     // already holds the better number, which is not a failure the approver needs to see.
-    const stored = await ctx.db
-      .query("financeInputs")
-      .withIndex("by_tenant_field", (q) =>
-        q.eq("tenantId", tenantId).eq("field", claim.field as "cashOnHand"),
-      )
-      .unique();
-    if (!isNewerThan(stamped, stored?.statedAt ?? null)) continue;
+    //
+    // B4 fix (Task 5, round 1): `financeInputs` never carries a row for a scorecard-store field —
+    // `cac` and its five siblings live in `evaluations.scorecard` — so the `financeInputs` lookup
+    // below was always undefined for them and this check was a silent no-op: an agent claim always
+    // "won" a scorecard field, even over a figure the owner typed TODAY, moving
+    // `fieldProvenance.at` backwards. The staleness authority for a scorecard field is its own
+    // `fieldProvenance[path].at`, the same column `writeFigureRow` stamps it into.
+    const spec = cashInputSpec(claim.field);
+    const storedAt =
+      spec.store === "scorecard"
+        ? ((await latestScorecardRow(ctx.db, tenantId))?.fieldProvenance?.[spec.path as string]
+            ?.at ?? null)
+        : ((
+            await ctx.db
+              .query("financeInputs")
+              .withIndex("by_tenant_field", (q) =>
+                q.eq("tenantId", tenantId).eq("field", claim.field as "cashOnHand"),
+              )
+              .unique()
+          )?.statedAt ?? null);
+    if (!isNewerThan(stamped, storedAt)) continue;
     await writeFigureRow(ctx.db, tenantId, stamped);
     // The STAMPED claim, so `payload.actors` reports the door, not the row's own claim about it.
     written.push(stamped);

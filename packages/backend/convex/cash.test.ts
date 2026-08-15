@@ -671,8 +671,11 @@ describe("applyFinanceClaims (the finance_write inline arm)", () => {
   // bad one. `evaluations.fieldProvenance` (Task 4) means a scorecard claim is no longer bad by
   // construction, so the realistic pairing — cash on hand AND a CAC heard in the same turn — is now
   // the positive case: both land in ONE approved batch, each in the store its `cashInputSpec`
-  // names, with honest per-field attribution. (All-or-nothing itself is still covered — by the
-  // malformed-claim tests below, which have real bad claims to block on.)
+  // names, with honest per-field attribution. B2 fix (Task 5, round 1): all-or-nothing coverage for
+  // a MULTI-claim batch moved to the dedicated test below — a claim previously said this was "still
+  // covered by the malformed-claim tests below," which is WRONG; every one of those passes a
+  // SINGLE-element list, so none of them exercised pass 1 discarding a good claim alongside a later
+  // bad one in the SAME batch.
   test("a batch mixing a financeInputs claim and a scorecard claim now applies both, together", async () => {
     const t = withAudit();
     const result = await t.run((ctx) =>
@@ -691,6 +694,25 @@ describe("applyFinanceClaims (the finance_write inline arm)", () => {
     // credited as the owner's own testimony.
     expect(row?.userProvided).not.toContain("financials.cac");
     expect(row?.fieldProvenance?.["financials.cac"]?.actor).toBe("agent");
+  });
+
+  // B2 (fix round 1): restores the all-or-nothing coverage the test above lost once its own second
+  // claim (a scorecard `cac`) stopped being bad. A genuinely malformed SECOND claim in a multi-claim
+  // batch — paired with a GOOD first claim — must still block the whole list: pass 1 validates
+  // every claim with zero writes, so a good first claim never gets the chance to write before a bad
+  // second one is seen (this function's own doc comment: "every claim is validated FIRST, with zero
+  // writes").
+  test("a bad SECOND claim in a multi-claim batch blocks the good FIRST one — approve-all-or-none", async () => {
+    const t = convexTest(schema, modules);
+    const result = await t.run((ctx) =>
+      applyFinanceClaims(ctx, "u1", [
+        agentClaim,
+        { ...agentClaim, field: "mrr" as const, basis: "   " },
+      ]),
+    );
+    expect(result).toEqual({ ok: false, reason: "malformed_figure_claim" });
+    expect(await t.run((ctx) => ctx.db.query("financeInputs").collect())).toHaveLength(0);
+    expect(await t.run((ctx) => ctx.db.query("evaluations").collect())).toHaveLength(0);
   });
 
   test("an empty claim list writes no audit row — nothing happened", async () => {
@@ -735,6 +757,12 @@ describe("applyFinanceClaims (the finance_write inline arm)", () => {
       { ...agentClaim, observedAt: Number.NaN },
       { ...agentClaim, observedAt: -1 },
       { ...agentClaim, observedAt: Date.now() + 86_400_000 },
+      // The proposition the whole Task 5 guard-deletion rests on: a SCORECARD-store field with a
+      // blank basis is refused by this SAME shared rule, not by a dedicated scorecard guard — which
+      // is exactly why deleting the unconditional scorecard check outright (rather than narrowing
+      // it to `store === "scorecard" && basis.trim() === ""`) left no gap. Brief Step 1's second
+      // test, unpinned until now.
+      { ...agentClaim, field: "cac" as const, basis: "   " },
     ];
     for (const claim of cases) {
       expect(await t.run((ctx) => applyFinanceClaims(ctx, "u1", [claim]))).toEqual({
@@ -763,6 +791,40 @@ describe("applyFinanceClaims (the finance_write inline arm)", () => {
     expect(row?.fieldProvenance?.["financials.cac"]?.actor).toBe("agent");
     expect(row?.fieldProvenance?.["financials.cac"]?.at).toBe(agentClaim.observedAt);
     expect(await t.run((ctx) => ctx.db.query("audit").collect())).toHaveLength(1);
+  });
+
+  // B1 (fix round 1): laundering-by-OVERWRITE. The owner types CAC on the finance page first — a
+  // genuine `actor: "user"` write that legitimately joins `userProvided`. An approved agent claim
+  // then overwrites the VALUE. Before this fix `applyScorecardAnswer` only ever ADDED to
+  // `userProvided` and never removed, so the stale membership marker survived the overwrite and
+  // `runEvaluation` (which builds its citation map from `userProvided` membership alone) would have
+  // cited the AGENT's new number as the owner's own testimony. Refusing the overwrite is not the
+  // fix — this runs POST-APPROVAL, after the human already agreed to it — so the marker must go.
+  test("an agent claim overwriting a user-saved cac drops it from userProvided, not just declines to add it", async () => {
+    const t = withAudit();
+    const asUser = t.withIdentity({ subject: "u1|s1" });
+    await asUser.mutation(api.cash.saveInput, { field: "cac", value: 900 });
+
+    const before = await t.run((ctx) => latestScorecardRow(ctx.db, "u1"));
+    expect(before?.userProvided).toContain("financials.cac");
+    const savedAt = before?.userProvidedAt?.["financials.cac"];
+    expect(savedAt).toBeDefined();
+
+    // Newer than the user's save (B4's merge check now consults `fieldProvenance.at` for a
+    // scorecard field), but not `agentClaim`'s own fixed 2025 date — that would read as OLDER than
+    // a save made "today" and get skipped, which is a different test (see the B4 case below).
+    const result = await t.run((ctx) =>
+      applyFinanceClaims(ctx, "u1", [
+        { ...agentClaim, field: "cac" as const, value: 1_400, observedAt: (savedAt ?? 0) + 1 },
+      ]),
+    );
+    expect(result).toEqual({ ok: true, applied: 1, skipped: 0 });
+
+    const after = await t.run((ctx) => latestScorecardRow(ctx.db, "u1"));
+    expect(after?.scorecard.financials.cac).toBe(1_400);
+    expect(after?.userProvided).not.toContain("financials.cac");
+    expect(after?.userProvidedAt?.["financials.cac"]).toBeUndefined();
+    expect(after?.fieldProvenance?.["financials.cac"]?.actor).toBe("agent");
   });
 
   // The merge policy lives in the CALLER — `writeFigureRow` has no isNewerThan guard. Without this
@@ -798,6 +860,29 @@ describe("applyFinanceClaims (the finance_write inline arm)", () => {
     expect(row?.payload).toMatchObject({ count: 0, skipped: 1, fields: [] });
     // §4 still holds on the path that writes nothing: no figure anywhere in the row.
     expect(JSON.stringify(row)).not.toContain("38500");
+  });
+
+  // B4 (fix round 1): the merge check above was a NO-OP for a scorecard-store field —
+  // `financeInputs` never carries a row for `cac`, so `stored` was always `undefined` and an agent
+  // claim always "won", even over a figure the owner typed TODAY. The staleness authority for a
+  // scorecard field is now its own `fieldProvenance[path].at`. `agentClaim`'s fixed 2025 date is
+  // naturally older than a `saveInput` call made at real `Date.now()`, so no override is needed —
+  // the mirror image of the "an agent claim overwriting a user-saved cac" test above, which offsets
+  // `observedAt` forward specifically so it is NOT skipped by this same check.
+  test("a scorecard claim older than the stored figure is skipped, and the stored value is unchanged", async () => {
+    const t = withAudit();
+    const asUser = t.withIdentity({ subject: "u1|s1" });
+    await asUser.mutation(api.cash.saveInput, { field: "cac", value: 900 });
+
+    const result = await t.run((ctx) =>
+      applyFinanceClaims(ctx, "u1", [{ ...agentClaim, field: "cac" as const, value: 1_400 }]),
+    );
+    expect(result).toEqual({ ok: true, applied: 0, skipped: 1 });
+
+    const row = await t.run((ctx) => latestScorecardRow(ctx.db, "u1"));
+    expect(row?.scorecard.financials.cac).toBe(900);
+    expect(row?.userProvided).toContain("financials.cac");
+    expect(row?.fieldProvenance?.["financials.cac"]?.actor).toBe("user");
   });
 
   test("a mixed batch reports what was written and what was already up to date", async () => {

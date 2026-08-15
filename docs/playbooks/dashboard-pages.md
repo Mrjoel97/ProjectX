@@ -1,5 +1,25 @@
 # Playbook: Connected dashboard pages
 
+> Note (scorecard-field-provenance Task 5, FIX ROUND 1 — not yet a "Last verified" bump; Task 6
+> closes the plan. A reviewer pass on the Task 5 note directly below found the suite-level damage
+> its per-test inversions caused and one pre-existing gap. Four `cash.ts` fixes: **(B2)** the batch
+> mixing test that replaced "approve-all-or-none" only demonstrated the positive case — a NEW test,
+> "a bad SECOND claim in a multi-claim batch blocks the good FIRST one", restores real multi-element
+> coverage (a good `cashOnHand` claim paired with a malformed `mrr` claim), and the stale comment
+> claiming the malformed-claim tests "still covered" it (they all pass single-element lists) is
+> corrected. **(B4)** `applyFinanceClaims`'s staleness merge check queried `financeInputs` for
+> EVERY claim, including scorecard-store ones — which never have a `financeInputs` row, so the
+> check was a silent no-op for `cac` and its five siblings: an agent claim always "won", even over a
+> figure typed TODAY, moving `fieldProvenance.at` backwards. It now consults
+> `fieldProvenance[path].at` for a scorecard-store field instead. New test: "a scorecard claim older
+> than the stored figure is skipped, and the stored value is unchanged." **(B6)** the comment above
+> `writeFigureRow`'s scorecard branch claiming the guard's laundering path "no longer exists" is
+> corrected to name what B1 (below) actually closes, rather than an absolute claim. **(unpinned
+> proposition)** the brief's second Step-1 test — a scorecard claim with a blank basis is still
+> refused, via the SAME shared `validateFigureClaim` rule the guard-deletion relies on — is now a
+> case in "every validateFigureClaim rule refuses as a return". The B1 laundering-by-overwrite fix
+> itself lives in `evaluations.ts`/`applyScorecardAnswer` — see `business-evaluation.md`.
+>
 > Note (scorecard-field-provenance Task 5 — not yet a "Last verified" bump; Task 6 closes the plan
 > and reconciles this stack. **Both scorecard refusals named by the Task 4 note directly below are
 > now lifted.** `writeFigureRow`'s `if (claim.actor === "agent") throw` guard in the scorecard branch

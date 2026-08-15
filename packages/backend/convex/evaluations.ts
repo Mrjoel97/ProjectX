@@ -627,16 +627,25 @@ export async function applyScorecardAnswer(
 
   if (last) {
     const scorecard = setPath(last.scorecard, field, coerced);
-    const userProvided =
-      byUser && !last.userProvided.includes(field)
-        ? [...last.userProvided, field]
-        : last.userProvided;
+    // An agent write DROPS the path from `userProvided` rather than merely declining to add it —
+    // fix (2026-08-15, laundering-by-overwrite): the value just changed to the agent's, so a
+    // surviving membership marker would keep citing the OLD user-typed figure's authority onto the
+    // NEW agent-supplied one the moment `saveInput` was followed by an approved `applyFinanceClaims`
+    // write. Refusing the overwrite is not the fix — `applyFinanceClaims` runs post-approval, after
+    // the human already agreed to it — so the membership marker is what has to give.
+    const userProvided = byUser
+      ? last.userProvided.includes(field)
+        ? last.userProvided
+        : [...last.userProvided, field]
+      : last.userProvided.filter((f) => f !== field);
     // Stamped from the provenance's own `at`, NEVER `Date.now()`: a figure's stated time is when
     // it was TRUE. A user typing in the panel passes `at: Date.now()` and behaviour is unchanged;
-    // a six-week-old P&L keeps its own date and stays six weeks into its staleness clock.
+    // a six-week-old P&L keeps its own date and stays six weeks into its staleness clock. The
+    // matching entry is dropped on an agent write, same reasoning as `userProvided` above.
     const userProvidedAt = byUser
       ? { ...(last.userProvidedAt ?? {}), [field]: provenance.at }
-      : last.userProvidedAt;
+      : last.userProvidedAt &&
+        Object.fromEntries(Object.entries(last.userProvidedAt).filter(([k]) => k !== field));
     const fieldProvenance = { ...(last.fieldProvenance ?? {}), [field]: provenance };
     await db.patch(last._id, { scorecard, userProvided, userProvidedAt, fieldProvenance });
     return { recorded: true };
