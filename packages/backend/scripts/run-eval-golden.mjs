@@ -289,6 +289,18 @@ const EXPECT_KEYS = new Set([
   // instead (`createdDocCount`), because a bare `mediaDispatchCount: 0` passes on a turn where
   // the agent did nothing at all.
   "mediaDispatchCount",
+  // 20.1-02 (VALT-15): `driveReadToolCount` — how many times the agent called EITHER Drive read
+  // tool (`findInDrive`, `listDriveFolders`) on the thread, read from
+  // smoke:driveReadCountForThread (`agentSteps` rows), never from the reply.
+  //
+  // A FLOOR, not an equality — the one count in this vocabulary graded as `actual >= expected`.
+  // Deliberate, and the contrast with `mediaDispatchCount` is the reason: a duplicate DISPATCH is
+  // the defect that count exists to expose, while a second Drive READ is legitimate behaviour
+  // (search, then drill one folder level). Pinning equality here would fail the agent for reading
+  // MORE carefully. The vacuous direction is still closed: `validateFixture` rejects
+  // `driveReadToolCount: 0` outright — there is no "must not read Drive" fixture semantic; that
+  // negative belongs to a paired-zero design like 38b's if it is ever needed.
+  "driveReadToolCount",
   // Phase 19 (ACTN-05): `crmOperationCount` — how many changes to the user's OWN records
   // `stageCrmWrite` staged on this thread. Graded off `plan.crmOperations`, the content-plane field
   // 19-06 put on the plan row, exactly like `attachmentCount` and `recipientCount`.
@@ -430,6 +442,14 @@ function validateFixture(fx, source) {
       fail(
         "expect.mediaDispatchCount:0 requires createdDocCount (a bare zero passes on a turn that did nothing)",
       );
+    }
+  }
+  // 20.1-02 (VALT-15): `driveReadToolCount` is a FLOOR (see the vocabulary note), so zero is
+  // rejected OUTRIGHT rather than paired: "at least zero reads" is true of every turn ever run,
+  // which is the vacuity this file exists to refuse.
+  if (fx.expect.driveReadToolCount !== undefined) {
+    if (!Number.isInteger(fx.expect.driveReadToolCount) || fx.expect.driveReadToolCount < 1) {
+      fail("expect.driveReadToolCount must be an integer >= 1 (a floor of zero asserts nothing)");
     }
   }
   // Phase 19 (ACTN-05): the same anti-vacuity rule, for the same reason. `crmOperationCount: 0`
@@ -973,6 +993,9 @@ function evaluateExpect(
    *  0 is the FAIL-CLOSED direction for the POSITIVE fixture and, paired with createdDocCount, the
    *  asserted value for the negative one. See the vocabulary note. */
   mediaDispatchCount = 0,
+  /** @param driveReadToolCount smoke:driveReadCountForThread (0 when unasked — read skipped).
+   *  0 is the FAIL-CLOSED direction: an unread key must never satisfy the floor. */
+  driveReadToolCount = 0,
 ) {
   const failures = [];
   const miss = (key, expected, actual) => failures.push({ key, expected, actual });
@@ -1059,6 +1082,12 @@ function evaluateExpect(
         // into), and a floor would pass on it.
         if (mediaDispatchCount !== expected) miss(key, expected, mediaDispatchCount);
         break;
+      case "driveReadToolCount":
+        // A FLOOR, not equality — the deliberate inverse of mediaDispatchCount's rule. A second
+        // READ (search, then drill one level) is legitimate behaviour; only fewer-than-asserted
+        // calls is the defect (prose answering "I found it" while never touching Drive).
+        if (driveReadToolCount < expected) miss(key, expected, driveReadToolCount);
+        break;
       case "crmOperationCount":
         // Plan-row key (19-06's `plans.crmOperations`), graded like `attachmentCount`.
         if ((plan.crmOperations ?? []).length !== expected)
@@ -1134,7 +1163,7 @@ function selfCheck() {
   // `readFinance`/`stageFinanceWrite`, taught in the body alongside it.
   // 20-12: the deletion floor rises with the set — 38 and 38b are the media pair. A floor that
   // stayed at 36 would let one of them be deleted and the suite still call itself complete.
-  assert.ok(fixtures.length >= 38, `expected >= 38 fixtures, found ${fixtures.length}`);
+  assert.ok(fixtures.length >= 39, `expected >= 39 fixtures, found ${fixtures.length}`);
   const ids = new Set(fixtures.map((f) => f.id));
   assert.equal(ids.size, fixtures.length, "fixture ids must be unique");
 
@@ -1514,6 +1543,91 @@ function selfCheck() {
     ).length,
     1,
     "mediaDispatchCount:0 MUST FAIL when a slide-deck request reached the video specialist",
+  );
+
+  // 2f-ter. 20.1-02 (VALT-15): `driveReadToolCount` is in the vocabulary, is graded off the READ
+  // (arg 15, smoke:driveReadCountForThread) as a FLOOR, and rejects zero OUTRIGHT (a floor of
+  // zero asserts nothing — see the vocabulary note for why this key inverts mediaDispatchCount's
+  // equality rule).
+  assert.ok(
+    validateFixture({ ...base, expect: { driveReadToolCount: 1 } }, "<synthetic>"),
+    "driveReadToolCount must be an accepted expect key",
+  );
+  assert.throws(
+    () => validateFixture({ ...base, expect: { driveReadToolCount: 0 } }, "<synthetic>"),
+    /floor of zero asserts nothing/,
+    "driveReadToolCount:0 is vacuous — at least zero reads is true of every turn ever run",
+  );
+  assert.throws(
+    () => validateFixture({ ...base, expect: { driveReadToolCount: -1 } }, "<synthetic>"),
+    /integer >= 1/,
+    "a negative drive-read count is not a thing that can be observed",
+  );
+  assert.equal(
+    evaluateExpect(
+      { driveReadToolCount: 1 },
+      collecting,
+      0,
+      false,
+      0,
+      0,
+      0,
+      "",
+      0,
+      false,
+      0,
+      false,
+      0,
+      0,
+      1,
+    ).length,
+    0,
+    "driveReadToolCount:1 passes when the thread carries exactly one Drive read step",
+  );
+  // The floor's whole point: a drill-down after the search is MORE careful, never a defect.
+  assert.equal(
+    evaluateExpect(
+      { driveReadToolCount: 1 },
+      collecting,
+      0,
+      false,
+      0,
+      0,
+      0,
+      "",
+      0,
+      false,
+      0,
+      false,
+      0,
+      0,
+      2,
+    ).length,
+    0,
+    "driveReadToolCount:1 passes on search-then-drill (a floor, deliberately not equality)",
+  );
+  // The load-bearing negative, same shape as mediaDispatchCount's: the agent answered in PROSE
+  // ("it's in your Q3 folder") and never touched Drive.
+  assert.equal(
+    evaluateExpect(
+      { driveReadToolCount: 1 },
+      collecting,
+      0,
+      false,
+      0,
+      0,
+      0,
+      "",
+      0,
+      false,
+      0,
+      false,
+      0,
+      0,
+      0,
+    ).length,
+    1,
+    "driveReadToolCount:1 MUST FAIL when no Drive read tool ever ran (a prose-only answer)",
   );
 
   // 2g. Phase 19 (ACTN-05): `crmOperationCount` is in the vocabulary, is graded off the PLAN ROW
@@ -2679,6 +2793,10 @@ function attemptCase(fixture, tenant, pins, tenantSkillIds = {}) {
       : parse(
           must("smoke:mediaDispatchCountForThread", { tenantId: tenant, threadId }, RETRY_READ),
         );
+  const driveReadToolCount =
+    fixture.expect.driveReadToolCount === undefined
+      ? 0
+      : parse(must("smoke:driveReadCountForThread", { tenantId: tenant, threadId }, RETRY_READ));
   const failures = evaluateExpect(
     fixture.expect,
     plan,
@@ -2694,6 +2812,7 @@ function attemptCase(fixture, tenant, pins, tenantSkillIds = {}) {
     declaredUnsupported,
     createdDocCount,
     mediaDispatchCount,
+    driveReadToolCount,
   );
   // Standing invariants: zero requests rows + refs-only needle scan (throws on violation).
   try {

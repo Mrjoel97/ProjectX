@@ -719,6 +719,36 @@ export const mediaDispatchCountForThread = internalQuery({
       ),
 });
 
+/**
+ * 20.1-02 (VALT-15): the eval harness's `driveReadToolCount` read — how many times the agent
+ * called EITHER Drive read tool (`findInDrive`, `listDriveFolders`) on this thread.
+ *
+ * Same source-of-truth argument as `mediaDispatchCountForThread` above: a step row is written per
+ * CALL, so this is the only read that can tell "the agent searched Drive" from the agent ANSWERING
+ * IN PROSE ("I found it in your Q3 folder") while never calling anything — which no reply
+ * assertion can distinguish from success. Two index scans because the tool-scoped index eq's ONE
+ * tool name; summed in code.
+ *
+ * No `dispatch:` discriminator here, deliberately: only the agent loop writes these two tool
+ * names — no specialist run is scheduled under them (`dispatch.ts` writes `resolved.spec.stepTool`,
+ * which is never a Drive read). If a second writer ever appears, fixture 39's gate run will read
+ * high and fail loudly, which is the correct direction.
+ */
+export const driveReadCountForThread = internalQuery({
+  args: { tenantId: v.string(), threadId: v.string() },
+  handler: async (ctx, { tenantId, threadId }): Promise<number> => {
+    let total = 0;
+    for (const tool of ["findInDrive", "listDriveFolders"] as const) {
+      const rows = await ctx.db
+        .query("agentSteps")
+        .withIndex("by_tenant_tool_startedAt", (q) => q.eq("tenantId", tenantId).eq("tool", tool))
+        .collect();
+      total += rows.filter((r) => r.threadId === threadId).length;
+    }
+    return total;
+  },
+});
+
 /** Phase 16: the eval harness's `researchDocPresent` read. Read the persisted web-research table
  * row, not the memo plan: a prose answer or a staged card must not pass a research fixture. */
 export const researchCountForThread = internalQuery({

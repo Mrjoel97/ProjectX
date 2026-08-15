@@ -1,5 +1,15 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Last verified: 2026-08-15 (20.1-02 offline half — **the import boundary, restated where the
+> agent now looks.** The cockpit body's new Drive section names this playbook's contract: Drive
+> reads through the agent return METADATA ONLY, and bringing a file into the vault happens in the
+> Vault page's Drive panel by the USER'S click — no agent path imports, ingests, or moves ingest
+> budget. Real-UAT evidence slots (to be filled by 20.1-02 Task 5, on a connected drive.readonly
+> account): named folder/file matched against Drive · ingest budget delta 0 · vault rows delta 0 ·
+> reservations delta 0 · Drive-import workflow rows delta 0 · refs-only audit carries no Drive
+> name · reconnect sentence observed on a pre-widening token OR that live case labeled
+> unavailable, never fabricated.)
+>
 > Last verified: 2026-08-14 (three user-reported vault defects, code-only). **(1) THE DRIVE
 > PICKER NO LONGER THROWS.** Every browse path in `vaultDrive.ts` used to
 > `throw new Error("drive: files.list <status>")`; a throw out of an action reaches the browser as

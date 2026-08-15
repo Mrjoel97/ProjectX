@@ -1,5 +1,17 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-08-15 (20.1-02 offline half — **`driveReadToolCount`, the vocabulary's one
+> FLOOR.** Fixture 39 asks where a document lives in ordinary language; the observable counts
+> `findInDrive`+`listDriveFolders` agentSteps rows for the thread (`smoke:driveReadCountForThread`,
+> two eq-scans on `by_tenant_tool_startedAt`, no `dispatch:` discriminator — no specialist writes
+> these names). Graded `actual >= expected`, the deliberate INVERSE of `mediaDispatchCount`'s
+> equality: a duplicate dispatch is the defect there, while search-then-drill is MORE careful
+> reading here, so equality would fail the agent for diligence. The vacuous direction is closed the
+> other way — `validateFixture` rejects `driveReadToolCount: 0` outright (a floor of zero asserts
+> nothing). Self-check green at 39 fixtures; the eval tenant has no Google connection, so the tool
+> answers not-connected and the CALL is still the pass. Gate run for the Drive candidate: pending
+> the owner's proceed.)
+>
 > Last verified: 2026-08-14 (20-12 gate run `420c852b` — **RED at 35/38, $0.4420, and BOTH failures
 > were the harness, not the agent.** Evidence: none recorded; `cockpit-agent@22` stays a candidate.
 >

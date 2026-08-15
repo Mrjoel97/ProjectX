@@ -1,5 +1,15 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-15 (20.1-02 offline half — **the body learns Drive, and learns its
+> boundary.** New `## Finding things in the user's Drive` section: 'where is X' is `findInDrive`
+> always (never a memory answer); `listDriveFolders` opens ONE named level and is not a way to
+> hunt — the section exists because prod v2 was observed burning full 8-step budgets walking
+> folders on an INBOX question, so it also states Drive is for document questions only; import is
+> the USER'S click in the Vault Drive panel and the agent can never claim ingestion; connection
+> problems relay the tool's own sentence verbatim. Owed fixture: 39-drive-read
+> (`driveReadToolCount`, floor — agent-runtime.md carries the observable). Candidate unseeded at
+> this entry.)
+>
 > Last verified: 2026-08-15 (ACTN-02 — **the CALENDAR card: the agent's calendar reads now leave a
 > mark on the canvas**) against `checkAvailability` + the new `calendarViews` content plane. Owner
 > report, verbatim: "it just replied with a message … no brief card in the workspace." Diagnosis:

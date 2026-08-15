@@ -1,5 +1,13 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-15 (20.1-02 offline half — **the Drive teaching is written and its
+> fixture is owed and PAID: 39-drive-read lands in the same commit as the body section** (the
+> teach-a-tool-owe-a-fixture rule). Predecessor for the coming candidate: the dual-active
+> media/finance body below (local v24 / prod v5). Lifecycle ahead, in order: owner proceed with a
+> named max -> seed -> read back actual version -> one full 39-case gate pinned to it -> evidence
+> -> exact-version owner activation -> real metadata-only Drive UAT with zero ingest movement.
+> Nothing live has been touched at this entry.)
+>
 > Last verified: 2026-08-15 (**the certified body is ACTIVE on BOTH deployments, each behind its
 > own per-deployment evidence — the gate design held end to end.**  Local/dev: two judgement bullets
 > edited after v23 run `cc63246f` (36/38) — finance stage-branch made concrete, fresh-start

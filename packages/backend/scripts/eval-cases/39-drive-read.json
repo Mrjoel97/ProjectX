@@ -1,0 +1,14 @@
+{
+  "id": "39-drive-read",
+  "description": "20.1-02's behavioural proof for the `## Finding things in the user's Drive` body section added alongside it, and the fixture owed by the playbook rule 'teach a tool, owe a fixture' now that `findInDrive`/`listDriveFolders` are taught. The turn asks WHERE a document lives in ordinary language and deliberately never names a tool — a compliance turn would prove nothing about selection. `driveReadToolCount: 1` is a FLOOR read off `agentSteps` (smoke:driveReadCountForThread), never the reply: the failure this fixture exists to catch is the agent answering in PROSE ('it's in your Q3 folder') while never calling either read tool, which no reply assertion can tell apart from success. A floor and not equality, deliberately — search-then-drill is two calls and is MORE careful, not a defect (the inverse of mediaDispatchCount's duplicate-dispatch rule; the vocabulary note carries the full argument). The eval tenant has NO Google connection, so the tool returns its not-connected sentence — the call is still the pass, and the body's reconnect-relay rule is what the reply should carry. `recipientCount: 0` and `attachmentCount: 0` are the same anti-drift teeth 35/36/37/38 use: a where-is-my-file question must never become an outbound email plan. `statusAtMost: proposed` pins that nothing silently applies past the human gate. The needles are the user's own file-topic words: they must stay OUT of every log plane (refs-only audits), which assertEvalCaseClean enforces.",
+  "turns": [
+    "Which folder in my Drive has the Q3 numbers deck? I can't remember where I put it."
+  ],
+  "expect": {
+    "driveReadToolCount": 1,
+    "statusAtMost": "proposed",
+    "recipientCount": 0,
+    "attachmentCount": 0
+  },
+  "needles": ["Q3 numbers deck"]
+}
