@@ -1,5 +1,15 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Last verified: 2026-08-15 (Drive root listing fails LOUDLY now — **a failed `files.list` at the
+> root returns `drive_error` instead of an empty ok.** The degrade-to-[] shape rendered a tenant
+> whose GCP project had the Drive API disabled (403 on every call) as "Nothing here — no folders
+> and no files", indistinguishable from an empty Drive; the owner read it as a broken connection.
+> The asymmetry is deliberate and now pinned by two tests in `vaultDrive.test.ts`: the
+> shared-drives probe alone may still degrade (personal accounts 403 `drives.list` by design), but
+> a failed `files.list` is always an error. Ops note: the Drive API must be ENABLED on the OAuth
+> client's GCP project — the scope grant alone does not enable the API; the 403 body names the
+> exact enable URL and `logDriveFailure` puts it in the Convex log.)
+
 > Last verified: 2026-08-15 (20.1-02 offline half — **the import boundary, restated where the
 > agent now looks.** The cockpit body's new Drive section names this playbook's contract: Drive
 > reads through the agent return METADATA ONLY, and bringing a file into the vault happens in the

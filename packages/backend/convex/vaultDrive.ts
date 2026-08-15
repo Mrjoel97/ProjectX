@@ -383,14 +383,17 @@ const BROWSE_FIELDS =
  *
  *  DEGRADES TO EMPTY, exactly as `drives.list` already does. The root is a merge of three
  *  independent lists and one of them failing is not a reason to show none of them. */
-async function folderPage(token: string, q: string): Promise<DriveNode[]> {
+async function folderPage(token: string, q: string): Promise<DriveNode[] | null> {
   const res = await driveFetch(
     driveUrl("", { q, fields: NODE_FIELDS, pageSize: "100", includeItemsFromAllDrives: "true" }),
     token,
   );
   if (!res.ok) {
     await logDriveFailure("files.list (folders)", res);
-    return [];
+    // null, NOT [] — the caller must render an ERROR. A 403 here (the Drive API disabled on the
+    // OAuth project, observed 2026-08-15) degraded to "Nothing here — no folders and no files",
+    // which reads as a broken connection and cost a live debugging session to see through.
+    return null;
   }
   const body = (await res.json()) as { files?: { id: string; name: string }[] };
   return (body.files ?? []).map((f) => ({ id: f.id, name: f.name, kind: "folder" as const }));
@@ -516,6 +519,11 @@ export const listDriveFolders = tenantAction({
       folderPage(access.token, `'root' in parents and ${FOLDER_Q}`),
       folderPage(access.token, `sharedWithMe and ${FOLDER_Q}`),
     ]);
+
+    // A failed folder list is an ERROR, never an empty Drive. Only the shared-drives probe above
+    // may degrade to "none" — a personal account 403s that endpoint by design; `files.list` does
+    // not fail on any healthy grant.
+    if (mine === null || shared === null) return { ok: false, reason: "drive_error" };
 
     // Dedup by id: a folder can legitimately appear in more than one of the three lists.
     const byId = new Map<string, DriveNode>();
