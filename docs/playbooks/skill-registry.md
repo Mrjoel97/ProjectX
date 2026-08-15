@@ -1,5 +1,18 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-15 (20.1-02 live half — **the Drive body is ACTIVE ON PRODUCTION as v6,
+> certified there, 39/39 including the new fixture on its first try.** Gate run `df00ab21`,
+> $0.3365 exec + $0.1080 specialist = $0.4445, one retry (38b, as always). Owner activated with
+> `activate Drive candidate 6`; readback: prod active v6, body byte-identical to the repo md.
+> **The LOCAL cycle did NOT happen and v25 is NOT certified** — its gate (run `4f98b2e8`) was
+> killed at case 38/39 by local-backend Server Errors, and the backend then would not restart at
+> all: 539 MB free of 8 GB, so it cannot load its own database (function prepares had already
+> degraded 1.4m -> 11.7m). Local v25 stays a parked, unevidenced candidate; free RAM and re-run
+> before trusting anything local. **DEVIATION, recorded not hidden:** prod Convex functions were
+> deployed DIRECTLY (`convex deploy` off `feature/cash-business-finance`) because the gate needs
+> `smoke:driveReadCountForThread` present — that bypassed `deploy-production`, so prod backend is
+> AHEAD of main until the branch merges. Vercel web is untouched at the CI-verified `b65a876`.)
+>
 > Last verified: 2026-08-15 (20.1-02 offline half — **the Drive teaching is written and its
 > fixture is owed and PAID: 39-drive-read lands in the same commit as the body section** (the
 > teach-a-tool-owe-a-fixture rule). Predecessor for the coming candidate: the dual-active
