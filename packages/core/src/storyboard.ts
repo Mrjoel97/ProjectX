@@ -189,6 +189,9 @@ const SECTION_TOKENS = [
   // the exact failure the comment above describes, one contract later.
   "SCENE DECK",
   "SCENE PROMPTS",
+  // The guided-intake heading (33-01), registered for the same reason: a BRIEF above a script must
+  // end where the script starts, and vice versa.
+  "BRIEF",
 ];
 
 function sectionOf(body: string, heading: string): string {
@@ -684,4 +687,63 @@ export function parseSceneDeck(body: string): ParsedSceneDeck {
   }
 
   return { ok: true, targetDurationSeconds: targetDurationSeconds as TargetDuration, scenes };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+// THE PHASE-33 PARSE SURFACES (33-01)
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+
+/** The guided-intake brief, as the specialist echoed it back. `defaulted` names the fields the
+ *  specialist filled from the business profile rather than from the user's own words — the canvas
+ *  badges those chips, and the copy never carries the marker itself. */
+export type BriefFields = {
+  topic: string;
+  durationSeconds: TargetDuration;
+  audience?: string;
+  tone?: string;
+  brandVoice?: string;
+  /** Field NAMES ("audience" | "tone" | "brandVoice" | "duration"), in the order they appear. */
+  defaulted: string[];
+};
+
+/**
+ * Parse the BRIEF section, or `null` — the `parseArtDirection` precedent, NOT a refusal: a missing
+ * brief is a worse UX, not an unusable proposal, because the deck still carries its own validated
+ * `targetDurationSeconds`. All free at parse time; nothing here touches money.
+ *
+ * `null` when the section is absent, when `Topic:` is empty, or when `Duration:` is off the
+ * 15/30/60 preset grid — presets only, per the locked decision; a free-entry duration is a price
+ * nobody computed. A `(defaulted)` suffix (case-insensitive) is stripped from the value and the
+ * FIELD NAME is recorded instead, so "(defaulted)" can never leak into a chip as copy.
+ */
+export function parseBrief(body: string): BriefFields | null {
+  const section = sectionOf(body, "BRIEF");
+  if (section === "") return null;
+
+  const defaulted: string[] = [];
+  const read = (label: string, name: string): string => {
+    const raw = fieldOf(section, label);
+    const marked = /^(.*?)\s*\(defaulted\)$/i.exec(raw);
+    if (!marked) return raw;
+    defaulted.push(name);
+    return (marked[1] ?? "").trim();
+  };
+
+  // Topic is the user's own ask — there is nothing to default it FROM, so no marker handling.
+  const topic = fieldOf(section, "Topic");
+  // `30s` and `30` both parse; `parseInt` stops at the `s`. Anything off the preset grid is null.
+  const durationSeconds = Number.parseInt(read("Duration", "duration"), 10);
+  if (topic === "" || !TARGET_SET.has(durationSeconds)) return null;
+
+  const audience = read("Audience", "audience");
+  const tone = read("Tone", "tone");
+  const brandVoice = read("Brand voice", "brandVoice");
+  return {
+    topic,
+    durationSeconds: durationSeconds as TargetDuration,
+    ...(audience === "" ? {} : { audience }),
+    ...(tone === "" ? {} : { tone }),
+    ...(brandVoice === "" ? {} : { brandVoice }),
+    defaulted,
+  };
 }
