@@ -913,3 +913,73 @@ describe("parseBrief — guided intake (33-01)", () => {
     expect(parseSceneDeck(body).ok).toBe(true); // and the deck still parses beside it
   });
 });
+
+describe("parseSceneDeck — per-scene Source lines (33-01, document-level citations)", () => {
+  // Source lines live in the per-scene blocks of SCENE PROMPTS, beside Prompt — the deck table
+  // stays byte-for-byte what it was, which is what keeps every v2 fixture green.
+  const withSources = [
+    sceneDeck(SCENES),
+    "SCENE PROMPTS",
+    "",
+    "Scene 1",
+    "- Prompt: Founder at a desk, morning light, slow push in",
+    "- Source: The 2025 pricing one-pager [doc:k57abc123]",
+    "",
+    "Scene 2",
+    "- Source: unverified",
+    "",
+  ].join("\n");
+  const r = parseSceneDeck(withSources);
+
+  it("a cited scene gains source { docId, title } and nothing else", () => {
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.scenes[0]?.source).toEqual({ docId: "k57abc123", title: "The 2025 pricing one-pager" });
+    expect(r.scenes[0]?.needsConfirmation).toBeUndefined();
+  });
+
+  it("`Source: unverified` marks the scene as needing owner confirmation, with no doc", () => {
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.scenes[1]?.needsConfirmation).toBe(true);
+    expect(r.scenes[1]?.source).toBeUndefined();
+  });
+
+  it("an absent Source line means creative copy — neither field, and v2 decks are untouched", () => {
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    for (const s of [r.scenes[2], r.scenes[3]]) {
+      expect(s?.source).toBeUndefined();
+      expect(s?.needsConfirmation).toBeUndefined();
+    }
+    const plain = parseSceneDeck(sceneDeck(SCENES));
+    expect(plain.ok).toBe(true);
+    if (!plain.ok) return;
+    for (const s of plain.scenes) {
+      expect(s.source).toBeUndefined();
+      expect(s.needsConfirmation).toBeUndefined();
+    }
+  });
+
+  it("refuses the deck on a [doc:] token with an empty id — never silently dropped", () => {
+    const bad = withSources.replace("[doc:k57abc123]", "[doc:]");
+    expect(parseSceneDeck(bad)).toMatchObject({ reason: "malformed_source", sceneIndex: 0 });
+  });
+
+  it("refuses a Source line that is neither a doc token nor `unverified`", () => {
+    const bad = withSources.replace(
+      "- Source: unverified",
+      "- Source: something the model asserted freehand",
+    );
+    expect(parseSceneDeck(bad)).toMatchObject({ reason: "malformed_source", sceneIndex: 1 });
+  });
+
+  it("carries NO confirmation field in parser output — confirmedAt is a mutation's word, never the model's", () => {
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const scene = r.scenes[1];
+    expect(scene && "confirmedAt" in scene).toBe(false);
+    // @ts-expect-error — the Scene type must not grow a confirmation timestamp (provenance rule)
+    scene?.confirmedAt;
+  });
+});
