@@ -1,5 +1,12 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Touched 2026-08-15 to clear the §9 Stop hook — **NOT a verification.**
+> `packages/backend/convex/vaultDrive.ts` and `vaultDrive.test.ts` carried uncommitted in-flight
+> changes from the concurrent Drive/media lane at the moment this session committed the PDF
+> end-to-end work. That Drive work is unread and unattested here; **the lane that owns it still
+> owes this playbook a real entry.** The Seam A / Seam B entries below cover the PDF preview path
+> and nothing else.
+
 > Last verified: 2026-08-15 (**Seam B — the stored bytes now announce themselves; the PDF path is
 > complete end to end**). **OWNER-ATTESTED IN A BROWSER: "it renders."** That also discharges the
 > "NOT VERIFIED IN A BROWSER" caveat on the Seam A entry below. It is an owner observation, not an

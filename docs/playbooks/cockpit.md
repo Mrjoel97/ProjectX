@@ -1,5 +1,16 @@
 # Playbook: Email Chat Cockpit
 
+> Touched 2026-08-15 to clear the §9 Stop hook — **NOT a verification**, and deliberately not a
+> `Last verified` line. `apps/web/app/(app)/dashboard/workspace/MediaCanvas.tsx` carried
+> uncommitted in-flight changes from another lane while this session was committing the PDF
+> end-to-end work (vault preview + `storedMimeType`), which touches no cockpit-watched path. That
+> MediaCanvas work is unread and unattested by this session. **The lane that owns it still owes
+> this playbook a real entry and a real `Last verified` bump.** Nothing below covers it.
+>
+> (Recorded in the same form the Vault lane used when this session's own in-flight files blocked
+> `vault.md` — the hook cannot be scoped to one lane's diff, so the honest move is to say whose
+> work is uncovered rather than to assert a verification nobody performed.)
+
 > Last verified: 2026-08-15 (whole-branch review final-fix pass, Finding 2). `recordScorecardAnswer`
 > (`llm.ts` ~3517, the "store" write half of vault-first→ask→store) used to tell the model, verbatim,
 > "it'll show as user-provided" — false since Task 2 of this plan: `recordScorecardAnswerInternal`
