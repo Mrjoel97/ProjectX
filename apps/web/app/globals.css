@@ -877,10 +877,26 @@ button.rail-item:hover {
   padding: clamp(1.5rem, 2.5vw, 2.25rem) clamp(1.5rem, 3vw, 2.75rem);
 }
 
-/* ---------- Knowledge Vault: Nord Edge composition ----------
-   Deliberately scoped. The workspace still depends on the global .pane-canvas aura and the
-   glass-over-clay rules below; the Vault uses solid paper on a quiet canvas instead. */
-.vault-nord-edge {
+/* ---------- Knowledge Vault palette ----------
+   THE TOKENS ARE GLOBAL; THE COMPOSITION IS SCOPED. These used to live inside
+   `.vault-nord-edge` and that was a real user-visible bug, not a tidiness issue: `PreviewModal`
+   lives in the vault directory but is RENDERED from two surfaces that are not inside that class —
+   `workspace/cards.tsx` and `pipeline/ImportPanel.tsx`. Outside the scope every `--vault-*`
+   reference resolved to nothing, so the dialog's `background: var(--vault-paper)` became
+   transparent and its right-hand `<aside>` — which sets no background of its own — vanished
+   against the 58%-dark scrim. The LEFT pane survived only by accident, because it happens to set
+   `background: var(--canvas)` (a global token) inline, which is why the card looked half-broken
+   rather than absent.
+
+   Six tokens were dying, not two: `PreviewModal` uses paper/border, and the `PreviewControls` it
+   renders adds danger, danger-bg and slate-bg. A destructive control silently losing its danger
+   styling is a safety regression, not a cosmetic one.
+
+   Custom properties fail SILENTLY to `initial` — no error, no console warning — which is why this
+   survived. Promoting them is value-identical on the Vault page: `.vault-nord-edge` never
+   overrode `--card`/`--rule`, it only read them, so every token computes exactly as before there.
+   Keep new `--vault-*` tokens here, at `:root`, not in the composition block below. */
+:root {
   --vault-paper: var(--card);
   --vault-border: var(--rule);
   --vault-shadow: 0 14px 40px -30px rgb(14 20 25 / 40%);
@@ -894,6 +910,12 @@ button.rail-item:hover {
   --vault-green-bg: #e7f4ed;
   --vault-danger: #991b1b;
   --vault-danger-bg: #fdecec;
+}
+
+/* Deliberately scoped — this is the Vault's COMPOSITION, not its palette. The workspace still
+   depends on the global .pane-canvas aura and the glass-over-clay rules below; the Vault uses
+   solid paper on a quiet canvas instead. */
+.vault-nord-edge {
   background: var(--canvas);
   color: var(--ink);
 }
