@@ -1,12 +1,13 @@
 ---
 phase: 19
 slug: contacts-crm-follow-ups
-status: offline surface COMPLETE and re-measured at 19-13; owner browser UAT RAN 15/15 at 19-12; only the owner's JUDGEMENT sign-off is outstanding
+status: complete
 nyquist_compliant: true
 wave_0_complete: true
 created: 2026-08-09
 filled_in: 2026-08-10
 corrected: 2026-08-10 (Plan 19-13 — this file had gone actively false; see the correction notice)
+reconciled: 2026-08-16 (owner judgement and real-inbox attestation were recorded after 19-13)
 ---
 
 # Phase 19 — Validation Strategy
@@ -224,10 +225,9 @@ reaches it is not a delivered capability. This is why the requirement is NOT tic
 **SUPERSEDED (19-11, 19-12, recorded here at 19-13): ACTN-05 IS MET.** The mechanism works, the
 model reaches it, and a real browser turn has been observed doing so (UAT step 7 asserts the
 `addFollowUp` with a finite `dueAt` off the PLAN ROW, not the DOM — the only observer that can see
-this class of bug, because every offline layer supplies its own clock). The requirement is still
-not ticked in `REQUIREMENTS.md`, but for a different and narrower reason: **the owner has not yet
-given judgement sign-off on the seven UAT screenshots.** "A requirement is met because someone
-verified it, not because the code exists" — the verification now exists; the tick is an owner act.
+this class of bug, because every offline layer supplies its own clock). The later owner judgement
+and real-inbox attestation are recorded in `19-VERIFICATION.md`; ACTN-05 and PIPE-01 are now checked
+and Complete in `REQUIREMENTS.md`.
 
 ---
 
@@ -281,16 +281,14 @@ verified it, not because the code exists" — the verification now exists; the t
 - [x] Backend typecheck re-measured at 19-13: **8/10, `cash.ts` (concurrent lane) the only red**
 - [x] SC#4's second sentence closed at 19-13 by `contacts.consentRecord` — the consent record is
       reproducible on request, unit-proven, isolation-proven and both guards mutation-proven red-able
-- [ ] **OWNER JUDGEMENT SIGN-OFF — still outstanding.** The run happened; nobody has yet LOOKED at
-      the seven UAT screenshots and judged BRAND conformance, whether the withheld-recipients note
-      reads as information rather than failure, and whether the three send-refusal notes are honest
-      and actionable. This is the one unchecked box and the phase does not close without it.
+- [x] **OWNER JUDGEMENT SIGN-OFF — complete 2026-08-10.** The owner approved the seven UAT
+      screenshots for BRAND/tone and attested that the authorized product email arrived with the
+      configured postal footer and a working unsubscribe landing-page link. The final unsubscribe
+      button was deliberately not pressed.
 
-**Approval:** offline surface signed off 2026-08-10 by plan 19-10, re-measured and corrected by plan
-19-13; the browser UAT ran at 19-12 and is 15/15. **Owner JUDGEMENT approval is still PENDING**, and
-`ACTN-05` / `PIPE-01` stay Pending in `REQUIREMENTS.md` until it lands — a requirement is met
-because someone verified it, not because the code exists. No plan in this phase has ticked them, and
-19-13 did not touch `REQUIREMENTS.md` at all.
+**Approval:** complete. The offline surface was signed off 2026-08-10 by plan 19-10, re-measured
+and corrected by plan 19-13; the browser UAT ran 15/15, and the owner subsequently approved the
+seven judgements and attested the live-inbox result. `ACTN-05` and `PIPE-01` are Complete.
 
 ---
 

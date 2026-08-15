@@ -1,13 +1,21 @@
 ---
 phase: 15
 slug: sub-agent-dispatch-action-executor
-status: draft
+status: complete
 nyquist_compliant: true
-wave_0_complete: false
+wave_0_complete: true
 created: 2026-07-25
+revised: 2026-08-16
 ---
 
 # Phase 15 — Validation Strategy
+
+> **Closure reconciliation (2026-08-16):** All Wave 0 assets and every automated row below landed
+> in Plans 15-01 through 15-06. `15-VERIFICATION.md` passed 5/5. The later Phase 16 closing gate
+> `14feb4b7` also discharged the historical 15-06 ship-dark state: offer-architect@4,
+> money-model-designer@4, and lead-engine@4 received passing evidence, were activated, and were read
+> back. The Per-Task table retains its planning-time symbols as provenance; they are superseded by
+> this closure record and the verifier.
 
 > Per-phase validation contract for feedback sampling during execution.
 > Derived from `15-RESEARCH.md` § Validation Architecture.
@@ -72,22 +80,22 @@ planner fills `Task ID` / `Plan` / `Wave` when plans are written.
 
 Wave 0 must land before any lane emits a dispatch step. Three of these fail **silently** if skipped.
 
-- [ ] `packages/backend/convex/schema.ts` — dispatch literal(s) added to the closed `agentSteps.tool` union.
+- [x] `packages/backend/convex/schema.ts` — dispatch literal(s) added to the closed `agentSteps.tool` union.
       **Mandatory before any lane emits a step** — a missing literal fails silently in production because
       the SDK swallows callback throws (Pitfall 3).
-- [ ] `docs/playbooks/watch.json` — register `packages/core/src/specialists.ts`,
+- [x] `docs/playbooks/watch.json` — register `packages/core/src/specialists.ts`,
       `packages/core/src/actionType.ts`, `packages/backend/convex/dispatch.ts` (+ their test dirs).
       **The Stop hook blocks every lane otherwise.**
-- [ ] `apps/web/.../workspace/cards.tsx` VERB map — dispatch entries + the missing `evaluateBusiness` entry.
+- [x] `apps/web/.../workspace/cards.tsx` VERB map — dispatch entries + the missing `evaluateBusiness` entry.
       **PARALLELIZATION Stage 2's Phase-15 lane table has no web column — Stage 1 must assign one.**
-- [ ] `packages/backend/convex/guardrails.ts` — `remainingDailyCents` internalQuery; file FROZEN afterwards
-- [ ] `packages/backend/convex/dispatch.ts` — empty stub file (lane-owned afterwards)
-- [ ] `packages/core/src/specialists.ts` — stub with `SPECIALIST_ROUTES` + `resolveSpecialist` failing closed,
+- [x] `packages/backend/convex/guardrails.ts` — `remainingDailyCents` internalQuery; file FROZEN afterwards
+- [x] `packages/backend/convex/dispatch.ts` — empty stub file (lane-owned afterwards)
+- [x] `packages/core/src/specialists.ts` — stub with `SPECIALIST_ROUTES` + `resolveSpecialist` failing closed,
       **no specialists registered yet** (PARALLELIZATION Stage 1 explicitly asks for this)
-- [ ] `packages/core/src/actionType.ts` — stub with the two-arm union and a no-op passthrough switch
-- [ ] New test files: `convex/dispatch.test.ts`, `convex/dispatchGuard.test.ts`,
+- [x] `packages/core/src/actionType.ts` — stub with the two-arm union and a no-op passthrough switch
+- [x] New test files: `convex/dispatch.test.ts`, `convex/dispatchGuard.test.ts`,
       `packages/core/src/specialists.test.ts`, `packages/core/src/actionType.test.ts`
-- [ ] No framework install needed — vitest + convex-test are already present
+- [x] No framework install needed — vitest + convex-test are already present
 
 ---
 
@@ -113,4 +121,5 @@ Every refusal path (unknown specialist, depth breach, cycle, drained envelope) i
 - [x] Feedback latency < 30s per task
 - [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** planned 2026-07-25 — 6 plans, 18 tasks, every task carries an `<automated>` command drawn from this map.
+**Approval:** complete. Planned 2026-07-25 and reconciled 2026-08-16 against the passing verifier
+and the later activation/readback evidence.

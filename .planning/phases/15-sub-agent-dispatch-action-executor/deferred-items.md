@@ -52,7 +52,13 @@ renders the `FALLBACK` `["Working…", "Done"]`. This is the SAME class of gap 1
 Phase 15 after Wave 0 — so this is deliberately left alone rather than smuggled into the freeze
 commit. One line to fix whenever `apps/web` next opens.
 
-## UNPAID GATE — the 15-06 specialist-body eval run was never executed (BLOCKING for activation)
+## RESOLVED — the 15-06 specialist-body eval/activation gate
+
+> **Closure update 2026-08-08:** Phase 16's unfiltered gate `14feb4b7` passed 34/34 for $0.3456,
+> recorded evidence on offer-architect@4, money-model-designer@4, and lead-engine@4, activated all
+> three, and read them back. Gate `d17039a8` re-confirmed 34/34. The historical record below is
+> retained because its earlier failures and ship-dark decision were real; its instructions and
+> active-v1 consequence are superseded.
 
 > **RUN 2026-07-31 — GATE RED, NOTHING ACTIVATED. Diagnosis below; the three bodies stay dark.**
 > Run `9dde13e8`, 27/33, $0.2148, pins `offer-architect@2 money-model-designer@2 lead-engine@2

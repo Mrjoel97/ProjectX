@@ -88,7 +88,11 @@ shipped behavior.
 
 ### Known, Already-Recorded Items (confirmed, not new gaps)
 
-- **15-06 eval gate UNPAID, ship dark.** Confirmed in `deferred-items.md`, `docs/playbooks/skill-registry.md`'s "GATE OUTCOME" paragraph, and `.planning/STATE.md` Pending Todos. The worktree genuinely has no `CONVEX_DEPLOYMENT` (bootstrapped from a copied `_generated`), so `pnpm eval:golden`/`seedSkills`/`activateSkill` could not run. The recording is accurate: nothing was faked, no fixture weakened, nothing hand-activated — verified by reading `run-eval-golden.mjs --self-check` output (30 fixtures valid) and the three new golden fixtures on disk, plus the explicit "ship dark" pre-decision in `15-CONTEXT.md`. Rewritten bodies are source-only; production `ACTIVE` skill rows remain v1.
+- **15-06 eval gate was unpaid at this verifier, then discharged by Phase 16.** The original
+  ship-dark record was accurate on 2026-07-25. The later unfiltered gate `14feb4b7` passed 34/34,
+  recorded evidence for offer-architect@4, money-model-designer@4, and lead-engine@4, activated
+  all three, and read them back; `d17039a8` re-confirmed the full gate. The old-body production
+  claim is historical, not current.
 - **`convex/audit.test.ts` `auditCounts` row red.** Reproduced independently: full backend suite run here shows exactly `1 failed | 544 passed` with the same `"Component \"auditCounts\" is not registered"` error, matching the documented pre-existing Phase-2 baseline.
 - **Backend `tsc --noEmit` test-file errors.** Reproduced independently at 55 errors, all in `.test.ts` files, zero in any non-test file. Note: this is 55, not 52 — but that is not a hidden regression; 15-06's own SUMMARY (line 285) and Verification table explicitly documents the baseline moved from 52→55 during the phase ("measured by stashing this plan's diff"), i.e. the increase is itself pre-existing/unrelated to Phase 15's changes and was honestly recorded at the time, not silently absorbed.
 - **`@pikar/audit` has no `tsconfig.json`.** Reproduced: `npx turbo run typecheck --continue` → 8 successful / 10 total, matching the documented baseline (`@pikar/audit` and `@pikar/backend` are the two reds).

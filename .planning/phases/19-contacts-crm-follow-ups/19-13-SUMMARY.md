@@ -41,7 +41,7 @@ patterns-established:
   - "Content-plane compliance reads stay out of the refs-only audit plane."
   - "A real foreign id proves tenant isolation at the handler rather than vacuously at validation."
 
-requirements-completed: []
+requirements-completed: [ACTN-05, PIPE-01]
 
 duration: 30 min
 completed: 2026-08-10

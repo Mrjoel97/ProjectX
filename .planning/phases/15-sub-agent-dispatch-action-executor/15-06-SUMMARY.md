@@ -3,6 +3,9 @@ phase: 15-sub-agent-dispatch-action-executor
 plan: 06
 subsystem: skill-registry
 tags: [skills, eval-gate, specialists, golden-fixtures, dispatch, playbooks, unpaid-gate]
+status: complete
+completed: 2026-07-25
+requirements-completed: [DISP-01, ACTN-01]
 
 # Dependency graph
 requires:
