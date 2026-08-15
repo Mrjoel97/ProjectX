@@ -1,5 +1,45 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-08-15 (item-4 LIVE MEASUREMENT — **THIS SUPERSEDES THE "NO GATE RUN, NO
+> SPEND, NO EVIDENCE" LINE IN THE ITEM-4 ENTRY BELOW, WHICH IS NOW FALSE.** The gate HAS been run.
+> `cockpit-agent@26` was published by `seedSkills` and measured. Pin numbers below were also wrong:
+> ACTIVE is **v24**, not v22 — live rows are active v24, stale candidate v25, item-4 candidate v26,
+> verified by hashing each row body against the `.md` on disk. Do not trust a version number quoted
+> in a plan or a playbook; probe it.
+>
+> **FIXTURE 40 PASSES ($0.0035).** The calendar capability is reachable for the first time: given the
+> new body section the model really does call `proposeCalendarEvent` and stage a resolved event with
+> `recipientCount: 0` and `attachmentCount: 0`. The document-section merge is clean too —
+> **35-create-document, 38-media-dispatch and 38b-media-not-a-document all PASS**, and 38b is the
+> load-bearing one because the merge rewrote the deck-is-not-a-reel routing rule it tests.
+> **36-crm-follow-up and 37-finance-update also PASS**, which is the `skill-body-edits-shift-model-
+> tool-args` check: adding a section did not shift behaviour in the neighbouring staging tools.
+> **39-drive-read PASSES**, so 20.1-02's Drive work is green for the first time, and 38's pass is the
+> first confirmation that 20-12's `dispatch:` prefix fix really closed `420c852b`'s two-actor bug.
+>
+> **MEASURED: 32 of 40 fixtures green on v26. Total spend $0.4395 across five runs.** Fixtures
+> 32/33/34 (research) were NOT run and are the only untested remainder — do not record them as green.
+>
+> **THE GATE IS STILL RED, AND NOT BECAUSE OF THIS CHANGE.** Fixtures 27, 28, 29, 30, 31 fail on a
+> single pre-existing defect — business evaluation persists ZERO grounded findings, so SC#1
+> force-clears the gaps and every gap-dispatch case then reports `gap_not_found`. **Reproduced
+> IDENTICALLY on the ACTIVE `cockpit-agent@24`** (run `bcaa9c7e`, 0/2, $0.0440), so it predates
+> both candidates. Written up at `.planning/debug/business-evaluation-no-grounded-findings.md`;
+> NOT root-caused, and the regression window is NOT established.
+>
+> **CONSEQUENCE: no evidence was recorded and NO candidate can be activated** — `recordEvalEvidence`
+> fires only on an all-green UNFILTERED run, so v25's media/Drive work is blocked behind this defect
+> exactly as v26 is. Fixing that defect, not re-running the gate, is the next action.
+>
+> **RUN-ORDER LESSON, measured the expensive way.** The first attempt (`9aaff3b3`) spent $0.3426 and
+> answered NOTHING: the OpenAI account hit zero credits at fixture 30, so 35-40 — every fixture this
+> change owed — never executed, while the money went to re-confirming 01-26 which were already known
+> green. The runner reports credit exhaustion as case FAILURES (exit 1), not an environment abort
+> (exit 2), so `25/40` read like 15 regressions when it was 5 real + 10 never-ran. **Triage any red
+> gate by per-case cost first: a failure at $0.0000 never reached the model and asserts nothing.**
+> Running the owed fixture ALONE first (`--only`, $0.0035) would have answered the question for 1% of
+> the cost. Do that before any full gate.)
+
 > Last verified: 2026-08-15 (item-4 offline half — **`calendarEventPresent`, the expect
 > vocabulary's one BOOLEAN plan-row observable, and the body sections that finally REACH the
 > calendar tools.** `proposeCalendarEvent` and `checkAvailability` have been built in `llm.ts`

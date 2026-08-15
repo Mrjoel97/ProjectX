@@ -60,6 +60,12 @@
 > and touched no path this playbook watches. **The 21-02 lane still owes this playbook a real entry**
 > covering what moving the refs-only basis rule to the producer boundary means for the finance
 > surfaces described below. Nothing below covers it.
+>
+> Re-tripped later the same session by `packages/backend/convex/proposals.ts`, ALSO the 21-02
+> lane's and still uncommitted — it is what added the `proposals.by_tenant_source` /
+> `by_tenant_status` indexes that appeared during a `convex dev` push. Same status: unread and
+> unattested here. Note `8b40e54` ("the proposals playbook, and the debt it closes") landed after
+> the note above was written and preserved it, so that lane is now partly discharging this debt.
 
 > Last verified: 2026-08-15 (cash-business-finance lane's in-flight proposals applier, read and
 > attested by the phase-33 planning session — TWO items. **(1) `cash.ts`'s `inputStatesFor` is now
