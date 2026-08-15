@@ -5763,3 +5763,152 @@ describe("33-03 the confirm gate: unconfirmed claims block the estimate AND the 
     expect(res.ok).toBe(true);
   });
 });
+
+// ── 33-03: Generate LOCKS the pick and DISCARDS the alternate; money tracks plans.shots alone ───
+
+describe("33-03 generateReel: the point of no return for variations", () => {
+  test("a successful Generate stamps deckLockedAt and deletes the alternate, in the same mutation", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    await seedAltDeck(t, planId);
+
+    const res = await asA(t).mutation(api.media.generateReel, { planId });
+    expect(res.ok, `refused: ${res.ok ? "" : res.reason}`).toBe(true);
+
+    const plan = await planRowOf(t, planId);
+    expect(plan?.deckLockedAt).toBeTypeOf("number");
+    // The locked discard decision: the unpicked deck is gone, not parked forever beside a bought
+    // one it can no longer replace.
+    expect(plan?.altShots).toBeUndefined();
+    expect(plan?.altTargetDurationSeconds).toBeUndefined();
+    // …and the lock is live: the choice can no longer be swapped.
+    expect(await asA(t).mutation(api.media.switchDeck, { planId })).toEqual({
+      ok: false,
+      reason: "deck_locked",
+    });
+  });
+
+  test("a REFUSED Generate locks nothing and discards nothing — the refusal is free", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    const altShots = await seedAltDeck(t, planId);
+    await flagClaims(t, planId, [1]);
+
+    expect(await asA(t).mutation(api.media.generateReel, { planId })).toEqual({
+      ok: false,
+      reason: "unconfirmed_claims",
+    });
+    const plan = await planRowOf(t, planId);
+    expect(plan?.deckLockedAt).toBeUndefined();
+    expect(plan?.altShots).toEqual(altShots);
+    expect(plan?.altTargetDurationSeconds).toBe(15);
+  });
+
+  test("PICKED-DECK-ONLY: a parked alternate moves NEITHER the estimate NOR the reservation", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    // The number with NO alternate anywhere — the pure picked-deck price.
+    const alone = await asA(t).query(api.media.jobEstimate, { planId });
+    expect(alone.refusal).toBeNull();
+
+    // Park a genuinely different deck (15s, 120¢ of clips vs the picked deck's 200¢).
+    await seedAltDeck(t, planId);
+    const parked = await asA(t).query(api.media.jobEstimate, { planId });
+    expect(parked.totalCents).toBe(alone.totalCents);
+    expect(parked.lines).toEqual(alone.lines);
+
+    // …and the reservation charges that SAME number: one estimate, one reservation, both over
+    // plans.shots only. The alternate is priced by nothing.
+    const res = await asA(t).mutation(api.media.generateReel, { planId });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.estCents).toBe(alone.totalCents);
+  });
+});
+
+describe("33-03 sceneCitations: model-authored docIds are checked where they are consumed", () => {
+  /** Scenes 0..3; 0 cites the tenant's own doc, 1 cites a FOREIGN doc, 2 is an uncited claim. */
+  async function seedCitedDeck(t: T) {
+    const { planId } = await seedSceneDeck(t);
+    const { ownId, foreignId } = await t.run(async (ctx) => {
+      const base = {
+        title: "t",
+        kind: "upload",
+        category: "other",
+        source: "upload",
+        mimeType: "application/pdf",
+        size: 1,
+        contentHash: "f".repeat(64),
+        status: "ready" as const,
+        createdAt: T0,
+      };
+      return {
+        ownId: await ctx.db.insert("vaultDocuments", { ...base, tenantId: A }),
+        foreignId: await ctx.db.insert("vaultDocuments", { ...base, tenantId: B }),
+      };
+    });
+    await t.run(async (ctx) => {
+      const plan = await ctx.db.get(planId);
+      const shots = (plan?.shots ?? []).map((s) => {
+        if (s.index === 0) return { ...s, source: { docId: ownId, title: "The pricing one-pager" } };
+        if (s.index === 1) {
+          return { ...s, source: { docId: foreignId, title: "Someone else's deck" } };
+        }
+        if (s.index === 2) return { ...s, needsConfirmation: true };
+        return s;
+      });
+      await ctx.db.patch(planId, { shots });
+    });
+    return { planId, ownId, foreignId };
+  }
+
+  test("own doc verifies; a FOREIGN docId is inert (verified:false) — never a valid citation", async () => {
+    const t = harness();
+    const { planId, ownId, foreignId } = await seedCitedDeck(t);
+    const cites = await asA(t).query(api.media.sceneCitations, { planId });
+    // One entry per scene that claims anything; the unclaimed scene 3 has no row.
+    expect(cites.map((c) => c.sceneIndex)).toEqual([0, 1, 2]);
+    expect(cites[0]).toEqual({
+      sceneIndex: 0,
+      docId: ownId,
+      title: "The pricing one-pager",
+      verified: true,
+      needsConfirmation: false,
+      confirmedAt: null,
+    });
+    // The model wrote another tenant's id: the row exists, the citation does not verify.
+    expect(cites[1]).toMatchObject({ docId: foreignId, verified: false });
+    // An unverified claim with no doc at all: nothing to link, owner must vouch.
+    expect(cites[2]).toEqual({
+      sceneIndex: 2,
+      docId: null,
+      title: null,
+      verified: false,
+      needsConfirmation: true,
+      confirmedAt: null,
+    });
+  });
+
+  test("a MALFORMED docId fails closed, and a confirmation shows on the entry", async () => {
+    const t = harness();
+    const { planId } = await seedCitedDeck(t);
+    await t.run(async (ctx) => {
+      const plan = await ctx.db.get(planId);
+      const shots = (plan?.shots ?? []).map((s) =>
+        s.index === 0 ? { ...s, source: { docId: "not_a_real_id", title: "Forged" } } : s,
+      );
+      await ctx.db.patch(planId, { shots });
+    });
+    await asA(t).mutation(api.media.confirmClaim, { planId, sceneIndex: 2 });
+
+    const cites = await asA(t).query(api.media.sceneCitations, { planId });
+    expect(cites[0]).toMatchObject({ docId: "not_a_real_id", verified: false });
+    expect(cites[2]?.confirmedAt).toBeTypeOf("number");
+  });
+
+  test("tenant B reads NOTHING off A's plan — reads return empty where writes throw", async () => {
+    const t = harness();
+    const { planId } = await seedCitedDeck(t);
+    expect(await asB(t).query(api.media.sceneCitations, { planId })).toEqual([]);
+  });
+});
