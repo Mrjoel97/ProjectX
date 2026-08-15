@@ -421,7 +421,9 @@ export async function reserveJobInner(
  *  "unconfirmed" means. Reads shot elements (the row), never parser `Scene`s — parser output
  *  structurally cannot carry `confirmedAt`, so the row is the only place the answer exists. */
 const firstUnconfirmedClaim = (
-  shots: readonly { index: number; needsConfirmation?: boolean; confirmedAt?: number }[] | undefined,
+  shots:
+    | readonly { index: number; needsConfirmation?: boolean; confirmedAt?: number }[]
+    | undefined,
 ): { index: number } | null =>
   shots?.find((s) => s.needsConfirmation === true && s.confirmedAt === undefined) ?? null;
 
@@ -2781,9 +2783,7 @@ export const editBrief = tenantMutation({
     ) {
       return { ok: false as const, reason: "illegal_duration" as const };
     }
-    const edited = Object.keys(patch).filter(
-      (k) => patch[k as keyof typeof patch] !== undefined,
-    );
+    const edited = Object.keys(patch).filter((k) => patch[k as keyof typeof patch] !== undefined);
     await ctx.db.patch(planId, {
       brief: {
         ...plan.brief,

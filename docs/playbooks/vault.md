@@ -1,5 +1,10 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Last verified: 2026-08-15 (Drive root error boundary). Both root-level `files.list` calls are
+> load-bearing: if either fails, `listDriveFolders` returns `drive_error` instead of presenting an
+> incomplete response as an empty Drive. The optional `drives.list` shared-drive probe may still
+> degrade to no shared drives for personal accounts. `vaultDrive.test.ts` pins both outcomes.
+
 > Touched 2026-08-15 (phase 14→25 gap-audit session) to clear the §9 Stop hook — **NOT a
 > verification.** **This session changed no product code at all** — only
 > `.planning/phases/25-private-beta-productionization/25-PREREQUISITE-EVIDENCE.md`.

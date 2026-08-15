@@ -544,7 +544,11 @@ export type ParsedSceneDeck =
     }
   | {
       ok: false;
-      reason: "bad_scene_duration" | "illegal_generated_duration" | "missing_asset" | "malformed_source";
+      reason:
+        | "bad_scene_duration"
+        | "illegal_generated_duration"
+        | "missing_asset"
+        | "malformed_source";
       sceneIndex: number;
     }
   | {
@@ -590,7 +594,10 @@ type SceneSource = { docId: string; title: string } | "unverified";
  * a citation that would otherwise be SILENTLY DROPPED into creative copy, so it refuses instead
  * (`malformed` carries the scene's display number).
  */
-function sceneSourcesOf(section: string): { sources: Map<number, SceneSource>; malformed?: number } {
+function sceneSourcesOf(section: string): {
+  sources: Map<number, SceneSource>;
+  malformed?: number;
+} {
   const sources = new Map<number, SceneSource>();
   let current: number | undefined;
   for (const line of section.split(/\r?\n/)) {

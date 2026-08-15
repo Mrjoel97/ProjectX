@@ -891,8 +891,11 @@ test("dispatch.ts lineage payloads reference no specialist output (reply/body/te
   // It is passed to `parseArtDirection`/`parseScript` and to `landStoryboardRefusal` (the CONTENT
   // plane, where it belongs), and reaches NO payload. That is precisely what the scan below
   // checks, and it is why the parameter name is safe rather than merely unnoticed.
-  // An ELEVENTH is a new §4 surface and gets the same treatment, not a renumber.
-  expect(payloads.length, "dispatch.ts audit payload count changed").toBe(10);
+  // 33-03 adds the ELEVENTH: a refused two-deck proposal. REVIEWED before moving this count:
+  // `{...lineageRefs(args), reason, variation}` carries refs plus two values from closed parser
+  // unions. It contains no deck body, prompt, narration, source title or other content.
+  // A TWELFTH is a new §4 surface and gets the same treatment, not a renumber.
+  expect(payloads.length, "dispatch.ts audit payload count changed").toBe(11);
   // All of them SPREAD one shared refs object (15-04 made it the `lineageRefs` helper so the throw
   // path could not drift from the rest) — scanning the payloads alone would miss a leak added
   // inside it, so its body is scanned as a payload too.
@@ -1235,6 +1238,8 @@ const MEDIA_AUDIT_ALLOWED = new Set([
   "jobId",
   "batchId",
   "planId",
+  // 33-02 claim confirmation: the scene position is a ref. Claim/source text is never logged.
+  "sceneIndex",
   "providerRequestId",
   "falRequestId",
   "kind",
@@ -1298,7 +1303,9 @@ test("media audit payloads are refs-only — every key is on the allow-list", ()
   // Both are scanned by this SAME allow-list, and neither needed a new key — a caption burn
   // produces a duration and two refs, which is all a successful re-encode of an already-published
   // reel can honestly report.
-  expect(literals.length, "no media audit payloads found - the scan is vacuous").toBe(7);
+  // -> 8 at 33-02: `media.claim_confirmed` carries only planId + sceneIndex, both pre-existing
+  // allow-listed refs. The claim text and source title never enter the log plane.
+  expect(literals.length, "no media audit payloads found - the scan is vacuous").toBe(8);
   for (const [file, literal] of literals) {
     for (const key of keysOf(literal)) {
       expect(
@@ -1342,7 +1349,7 @@ test("no prompt text and no narration text reaches the media log plane — only 
   }
 });
 
-test("the media log-plane surface is PINNED: exactly 2 audit sites across the three modules", () => {
+test("the media log-plane surface is PINNED: exactly 4 audit sites across the three modules", () => {
   // A COUNT, not a ">= 1". Plans 20-09 (canvas), 20-16 (retention) and 20-17 (captions) EACH add
   // audit sites and must EACH bump this number deliberately, having checked the new payload
   // against MEDIA_AUDIT_ALLOWED above. 1 -> 2 at 20-15: the render terminal.
@@ -1352,12 +1359,11 @@ test("the media log-plane surface is PINNED: exactly 2 audit sites across the th
   expect(
     sites.reduce((a, b) => a + b, 0),
     "media audit call-site count changed - is the new payload refs-only? (20-09/20-16/20-17 each bump this)",
-  ).toBe(3);
-  // And WHERE they live: the THREE TERMINALS — the fal landing, the render and the caption burn —
-  // never the submit path and never a pre-flight. `media.ts` staying at ZERO is the load-bearing
-  // half: it holds the prompts and the narration, and 20-17 gave it a whole new action without
-  // giving it a log-plane sink.
-  expect(sites[0], "media.ts grew an audit site").toBe(0);
+  ).toBe(4);
+  // And WHERE they live: the three job terminals — the fal landing, render and caption burn — plus
+  // 33-02's explicit user confirmation event. `media.ts` still has no job-path log sink: its one
+  // audit site is `confirmClaim`, whose payload is the refs-only literal reviewed above.
+  expect(sites[0], "media.ts should contain only the claim-confirmation audit site").toBe(1);
   expect(sites[1], "mediaComplete.ts is the landing terminal").toBe(1);
   expect(sites[2], "render/renderReel.ts holds the render AND caption terminals").toBe(2);
 });

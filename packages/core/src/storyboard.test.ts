@@ -935,7 +935,10 @@ describe("parseSceneDeck — per-scene Source lines (33-01, document-level citat
   it("a cited scene gains source { docId, title } and nothing else", () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.scenes[0]?.source).toEqual({ docId: "k57abc123", title: "The 2025 pricing one-pager" });
+    expect(r.scenes[0]?.source).toEqual({
+      docId: "k57abc123",
+      title: "The 2025 pricing one-pager",
+    });
     expect(r.scenes[0]?.needsConfirmation).toBeUndefined();
   });
 
@@ -1025,10 +1028,26 @@ describe("parseVariations — two-variation bodies (33-01)", () => {
   });
 
   it("a declared variation with no deck inside refuses too (no_deck is not 'fall back')", () => {
-    const noB = ["## VARIATION A", "", sceneDeck(SCENES), "", "## VARIATION B", "", "Prose only."].join("\n");
-    expect(parseVariations(noB)).toMatchObject({ kind: "refused", variation: "b", reason: "no_deck" });
+    const noB = [
+      "## VARIATION A",
+      "",
+      sceneDeck(SCENES),
+      "",
+      "## VARIATION B",
+      "",
+      "Prose only.",
+    ].join("\n");
+    expect(parseVariations(noB)).toMatchObject({
+      kind: "refused",
+      variation: "b",
+      reason: "no_deck",
+    });
     const headingOnlyA = ["## VARIATION A", "", "## VARIATION B", "", DECK_B].join("\n");
-    expect(parseVariations(headingOnlyA)).toMatchObject({ kind: "refused", variation: "a", reason: "no_deck" });
+    expect(parseVariations(headingOnlyA)).toMatchObject({
+      kind: "refused",
+      variation: "a",
+      reason: "no_deck",
+    });
     // One heading without its sibling is a declared-variations body missing a whole deck.
     expect(parseVariations(["## VARIATION A", "", sceneDeck(SCENES)].join("\n"))).toMatchObject({
       kind: "refused",

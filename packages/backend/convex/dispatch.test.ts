@@ -2559,9 +2559,15 @@ const VAR_BRIEF = [
   "",
 ].join("\n");
 
-const TWO_UP_BODY = [VAR_BRIEF, "## VARIATION A", "", VAR_A_DECK, "## VARIATION B", "", VAR_B_DECK].join(
-  "\n",
-);
+const TWO_UP_BODY = [
+  VAR_BRIEF,
+  "## VARIATION A",
+  "",
+  VAR_A_DECK,
+  "## VARIATION B",
+  "",
+  VAR_B_DECK,
+].join("\n");
 
 describe("33-03 — the variations terminal: parseVariations runs FIRST", () => {
   test("a two-variation proposal lands deck A picked, deck B parked, brief + citations, in one terminal", async () => {
@@ -2627,9 +2633,15 @@ describe("33-03 — the variations terminal: parseVariations runs FIRST", () => 
     const { t } = await setup();
     const planId = await stagedMediaPlan(t);
     // Variation B declared, no deck inside it: variation A alone must NOT quietly land.
-    const body = [VAR_BRIEF, "## VARIATION A", "", VAR_A_DECK, "## VARIATION B", "", "Prose only."].join(
-      "\n",
-    );
+    const body = [
+      VAR_BRIEF,
+      "## VARIATION A",
+      "",
+      VAR_A_DECK,
+      "## VARIATION B",
+      "",
+      "Prose only.",
+    ].join("\n");
     await t.action(
       internal.dispatch.__runSpecialistWithScript,
       mediaArgs(planId, { primary: [{ ...textStep(body), usage: SPEND_8_CENTS }] }),

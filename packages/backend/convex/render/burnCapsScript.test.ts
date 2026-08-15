@@ -59,4 +59,8 @@ test("the three silent-success failures are all refused", () => {
   expect(SH, "an ffmpeg without libass").toMatch(/libass is missing/);
   expect(SH, "an empty subtitle track").toMatch(/subtitle track is empty/);
   expect(SH, "a burn that re-timed the video").toMatch(/re-timed the video/);
+  expect(
+    SH,
+    "grep -q under pipefail can turn a successful filter probe into SIGPIPE 141",
+  ).not.toMatch(/ffmpeg[^\n]*-filters[^\n]*\|\s*grep\s+-q/);
 });

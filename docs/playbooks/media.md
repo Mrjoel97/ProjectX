@@ -13,7 +13,9 @@
 > (plan `p573x3...`, real inputs via the blob route) in a sandbox from the LIVE snapshot
 > `snap_shetn1hAzlXxJMSA3lQmE5keSIIh`: EXIT 0, 4 scenes, 15.000000 s, decode-validated. Rule:
 > **never `grep -q` the left side of a pipeline under pipefail** — probe with plain grep to
-> /dev/null, or capture first.)
+> /dev/null, or capture first. The mirror tests now reject any future
+> `ffmpeg -filters | grep -q` probe, and `render.test.ts` pins the libfreetype diagnostic to
+> `missing_binary`.)
 
 > Last verified: 2026-08-15 (canvas-crush fix, VERIFIED IN THE LIVE BROWSER — **the canvas view was
 > an unscrollable 413 px clip of a 3,466 px storyboard.** Both canvas sheets spread `briefingSheet`,

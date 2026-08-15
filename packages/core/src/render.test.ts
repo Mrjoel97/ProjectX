@@ -648,6 +648,10 @@ describe("reasonCodeFor: a code, and provably never its input", () => {
 
   it.each([
     ["ERROR: 'ffmpeg' not found", "missing_binary"],
+    [
+      "ERROR: this ffmpeg has no 'drawtext' filter — libfreetype is missing from the image",
+      "missing_binary",
+    ],
     ["ERROR: clip not found: in/block03.mp4", "input_missing"],
     // Every string here is the script's OWN wording, copied from `assemble_final.sh`. Wave 4
     // rewrote three of these messages and this table was not moved with them, so a line running

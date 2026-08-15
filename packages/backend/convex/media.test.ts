@@ -34,8 +34,8 @@ import {
   buildSubmitBody,
   reserveJobInner,
   reserveSceneJobInner,
-  sceneDeckOf,
   type SubmittableSpec,
+  sceneDeckOf,
   submitLine,
 } from "./media";
 import schema from "./schema";
@@ -5361,9 +5361,7 @@ async function seedAltDeck(t: T, planId: Id<"plans">) {
     startMs += sec * 1000;
     return shot;
   });
-  await t.run(async (ctx) =>
-    ctx.db.patch(planId, { altShots, altTargetDurationSeconds: 15 }),
-  );
+  await t.run(async (ctx) => ctx.db.patch(planId, { altShots, altTargetDurationSeconds: 15 }));
   return altShots;
 }
 
@@ -5422,9 +5420,10 @@ describe("33-02 editBrief: a chip edit patches the BRIEF plane and nothing else"
   test("a plan that never had a brief refuses no_brief rather than inventing one", async () => {
     const t = harness();
     const { planId } = await seedSceneDeck(t);
-    expect(
-      await asA(t).mutation(api.media.editBrief, { planId, patch: { topic: "x" } }),
-    ).toEqual({ ok: false, reason: "no_brief" });
+    expect(await asA(t).mutation(api.media.editBrief, { planId, patch: { topic: "x" } })).toEqual({
+      ok: false,
+      reason: "no_brief",
+    });
     expect((await planRowOf(t, planId))?.brief).toBeUndefined();
   });
 
@@ -5669,9 +5668,9 @@ describe("33-02 confirmClaim: the provenance front door — confirmation is the 
   test("tenant B's confirm THROWS", async () => {
     const t = harness();
     const planId = await seedClaim(t);
-    await expect(asB(t).mutation(api.media.confirmClaim, { planId, sceneIndex: 1 })).rejects.toThrow(
-      /plan not found/,
-    );
+    await expect(
+      asB(t).mutation(api.media.confirmClaim, { planId, sceneIndex: 1 }),
+    ).rejects.toThrow(/plan not found/);
   });
 });
 
@@ -5850,7 +5849,8 @@ describe("33-03 sceneCitations: model-authored docIds are checked where they are
     await t.run(async (ctx) => {
       const plan = await ctx.db.get(planId);
       const shots = (plan?.shots ?? []).map((s) => {
-        if (s.index === 0) return { ...s, source: { docId: ownId, title: "The pricing one-pager" } };
+        if (s.index === 0)
+          return { ...s, source: { docId: ownId, title: "The pricing one-pager" } };
         if (s.index === 1) {
           return { ...s, source: { docId: foreignId, title: "Someone else's deck" } };
         }

@@ -381,8 +381,8 @@ const BROWSE_FIELDS =
 /** One page-1 `files.list` of folders. Deliberately NOT paginated: a browse level is a HUMAN
  *  reading a list, and 100 folders in one directory is already past what anyone scans.
  *
- *  DEGRADES TO EMPTY, exactly as `drives.list` already does. The root is a merge of three
- *  independent lists and one of them failing is not a reason to show none of them. */
+ *  FAILS CLOSED as `null`, unlike `drives.list`: either `files.list` query failing means the root
+ *  result is incomplete and must surface `drive_error`, never masquerade as an empty Drive. */
 async function folderPage(token: string, q: string): Promise<DriveNode[] | null> {
   const res = await driveFetch(
     driveUrl("", { q, fields: NODE_FIELDS, pageSize: "100", includeItemsFromAllDrives: "true" }),

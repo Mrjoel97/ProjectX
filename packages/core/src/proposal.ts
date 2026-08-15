@@ -45,12 +45,7 @@ const PROFILE_WRITABLE_FIELDS: readonly (keyof BusinessProfile)[] = [
   "targetCustomer",
 ] as const;
 
-export type ProposalStore =
-  | "financeInputs"
-  | "scorecard"
-  | "profile"
-  | "contacts"
-  | "followUps";
+export type ProposalStore = "financeInputs" | "scorecard" | "profile" | "contacts" | "followUps";
 
 export type ProposalTarget = {
   readonly store: ProposalStore;

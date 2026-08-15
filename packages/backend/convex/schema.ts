@@ -834,11 +834,7 @@ export default defineSchema({
         // only two possible fates, and both were wrong: cited as the owner's own confirmed entry,
         // which is the laundering 5523f3e closed, or not cited at all, which is what collapsed
         // `findings` to zero and force-cleared every gap (SC #1).
-        source: v.union(
-          v.literal("vault"),
-          v.literal("user-provided"),
-          v.literal("agent-relayed"),
-        ),
+        source: v.union(v.literal("vault"), v.literal("user-provided"), v.literal("agent-relayed")),
       }),
     ),
     // Leverage-ranked prescriptions (diagnose() → the single highest-leverage constraint first).

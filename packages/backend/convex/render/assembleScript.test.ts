@@ -101,6 +101,10 @@ test("a build that cannot draw REFUSES, rather than shipping a black rectangle",
   expect(SH, "a missing font is named with its fix, not left to ffmpeg").toMatch(
     /needs a TrueType font and none was found/,
   );
+  expect(
+    SH,
+    "grep -q under pipefail can turn a successful filter probe into SIGPIPE 141",
+  ).not.toMatch(/ffmpeg[^\n]*-filters[^\n]*\|\s*grep\s+-q/);
 });
 
 test("the concat list is RELATIVE — an absolute path is a portability trap", () => {
