@@ -145,9 +145,9 @@ describe("the four tiles are ALWAYS-KNOWN counts (invariant 3)", () => {
       },
     });
     // All four expected values remain present document-wide. Only their semantic tile IDs changed.
-    expect(Object.values(EXPECTED_TILE_VALUES).every((value) => swapped.includes(`>${value}<`))).toBe(
-      true,
-    );
+    expect(
+      Object.values(EXPECTED_TILE_VALUES).every((value) => swapped.includes(`>${value}<`)),
+    ).toBe(true);
     expect(tileValuesMatch(swapped, EXPECTED_TILE_VALUES)).toBe(false);
   });
 
@@ -427,9 +427,9 @@ describe("the CSV import panel", () => {
       counts: { newCount: 3, enriched: 1, unchanged: 0, rejected: 2 },
     });
     // The mutation preserves every number and every label; only their association is wrong.
-    expect(Object.values(EXPECTED_PREVIEW_COUNTS).every((value) => swapped.includes(`>${value}<`))).toBe(
-      true,
-    );
+    expect(
+      Object.values(EXPECTED_PREVIEW_COUNTS).every((value) => swapped.includes(`>${value}<`)),
+    ).toBe(true);
     expect(previewCountsMatch(swapped, EXPECTED_PREVIEW_COUNTS)).toBe(false);
   });
 
