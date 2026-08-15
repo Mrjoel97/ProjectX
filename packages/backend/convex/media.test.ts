@@ -5674,3 +5674,92 @@ describe("33-02 confirmClaim: the provenance front door — confirmation is the 
     );
   });
 });
+
+// ── 33-03: the unconfirmed_claims gate — the estimate and the reserve open TOGETHER ─────────────
+//
+// An unconfirmed factual claim blocks BOTH money sites with the same refusal: the number the
+// canvas shows and the button beside it open together or not at all (the wave-5 co-location rule).
+// The reserve-side check is the one that matters under mutation: deleting it must send a test RED
+// because a reservation SUCCEEDS with an unconfirmed claim — money moved is the red.
+
+/** Mark the given scene indices as stating unvouched figures. */
+async function flagClaims(t: T, planId: Id<"plans">, indices: number[]) {
+  await t.run(async (ctx) => {
+    const plan = await ctx.db.get(planId);
+    const shots = (plan?.shots ?? []).map((s) =>
+      indices.includes(s.index) ? { ...s, needsConfirmation: true } : s,
+    );
+    await ctx.db.patch(planId, { shots });
+  });
+}
+
+describe("33-03 the confirm gate: unconfirmed claims block the estimate AND the reservation", () => {
+  test("jobEstimate refuses unconfirmed_claims, naming the FIRST offending scene — free, before the button", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    await flagClaims(t, planId, [1, 3]);
+    const estimate = await asA(t).query(api.media.jobEstimate, { planId });
+    expect(estimate.refusal).toEqual({ reason: "unconfirmed_claims", blockIndex: 1 });
+    expect(estimate.totalCents).toBe(0);
+  });
+
+  test("generateReel refuses the SAME way — zero rows, zero cents moved (the reserve-side observer)", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    await flagClaims(t, planId, [1]);
+    const before = await mediaLeft(t);
+    expect(await asA(t).mutation(api.media.generateReel, { planId })).toEqual({
+      ok: false,
+      reason: "unconfirmed_claims",
+    });
+    expect(await rows(t)).toHaveLength(0);
+    expect(await mediaLeft(t)).toBe(before);
+  });
+
+  test("regenerateBlock refuses too — the gate is deck-wide at the reserve, not a generateReel wrapper", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    await flagClaims(t, planId, [3]);
+    // Re-buying scene 1 while scene 3 states an unvouched figure: the deck is validated WHOLE,
+    // exactly as every other reserve refusal is.
+    expect(await asA(t).mutation(api.media.regenerateBlock, { planId, blockIndex: 1 })).toEqual({
+      ok: false,
+      reason: "unconfirmed_claims",
+    });
+    expect(await rows(t)).toHaveLength(0);
+  });
+
+  test("confirmClaim on every flagged scene clears the refusal REACTIVELY, and the same deck reserves", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    await flagClaims(t, planId, [1, 3]);
+    expect(await asA(t).mutation(api.media.confirmClaim, { planId, sceneIndex: 1 })).toEqual({
+      ok: true,
+    });
+    // One of two confirmed: still blocked, now naming the remaining scene.
+    expect((await asA(t).query(api.media.jobEstimate, { planId })).refusal).toEqual({
+      reason: "unconfirmed_claims",
+      blockIndex: 3,
+    });
+    expect(await asA(t).mutation(api.media.confirmClaim, { planId, sceneIndex: 3 })).toEqual({
+      ok: true,
+    });
+
+    const estimate = await asA(t).query(api.media.jobEstimate, { planId });
+    expect(estimate.refusal).toBeNull();
+    expect(estimate.totalCents).toBeGreaterThan(0);
+    const res = await asA(t).mutation(api.media.generateReel, { planId });
+    expect(res.ok, `refused: ${res.ok ? "" : res.reason}`).toBe(true);
+    if (!res.ok) return;
+    // The pinned agreement survives the gate: the number shown IS the number reserved.
+    expect(res.estCents).toBe(estimate.totalCents);
+  });
+
+  test("a deck with NO flagged scenes is untouched by the gate — v2 decks price exactly as before", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    expect((await asA(t).query(api.media.jobEstimate, { planId })).refusal).toBeNull();
+    const res = await asA(t).mutation(api.media.generateReel, { planId });
+    expect(res.ok).toBe(true);
+  });
+});
