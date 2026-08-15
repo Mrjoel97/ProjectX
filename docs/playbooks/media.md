@@ -10,6 +10,23 @@
 > for already-submitted historical jobs. Older provider-specific sections below describe the
 > superseded implementation unless explicitly marked current. See ADR-017.
 
+> Last verified: 2026-08-15 (33-01 — **THE PHASE-33 PARSE SURFACES: brief, citations, variations.**
+> `storyboard.ts` gains three free-at-parse contracts, all refusing before a cent moves — the
+> `parseSceneDeck` posture, three surfaces wider. `parseBrief` reads a `BRIEF` section (Topic /
+> Duration / Audience / Tone / Brand voice) into `BriefFields`, null-when-incomplete like
+> `parseArtDirection` — durations are the 15/30/60 presets ONLY, and a `(defaulted)` suffix is
+> STRIPPED from the value and recorded by field name in `defaulted[]`, so the marker can never
+> render as copy. A scene's SCENE PROMPTS block may carry ONE `Source:` line: `<title> [doc:<id>]`
+> becomes `scene.source`, `unverified` becomes `scene.needsConfirmation`, absence means creative
+> copy, and ANY other shape refuses the deck (`malformed_source`) — a citation is never silently
+> dropped. Parser output has NO confirmation field: `confirmedAt` is an authenticated tenant
+> mutation's word later, and the model has no path to writing one. `parseVariations` splits at
+> `VARIATION A`/`VARIATION B` headings and runs the UNCHANGED `parseSceneDeck` on each slice; any
+> inner refusal — including `no_deck` inside a declared variation, or one heading without its
+> sibling — refuses the WHOLE proposal, never a silent one-deck fallback. Bodies without the
+> headings return `kind: "one"` and v2 single-deck parsing is byte-for-byte unaffected —
+> 974/974 @pikar/core tests green.)
+
 > Last verified: 2026-08-14 (20.2 wave 8 — **THE SPECIALIST BECOMES A SCENE AUTHOR, and the approve
 > arm opens.** `media-director.md` is v2: `SCENE DECK` with `Target duration`, a `Seconds` column
 > that must sum to it EXACTLY, the four visual kinds, optional narration, and the per-window
@@ -447,6 +464,26 @@ edit with no runner able to clear the gate. Consequences, both of which are the 
 **SEEDING IS REQUIRED.** `npx convex dev` alone does not seed — run `pnpm dev`. Until then the live
 row is v1 and the specialist still proposes block decks, which still parse and still render.
 
+### The Phase-33 parse surfaces (33-01)
+
+Three additional contracts live beside `parseSceneDeck`, all pure parse, all free:
+
+- **`parseBrief(body)`** — the guided-intake echo. `BRIEF` is a registered section token, so a
+  brief above a script terminates where the script starts. Null (not a refusal) when absent,
+  topic-less, or off the 15/30/60 preset grid; `(defaulted)` markers become field names in
+  `defaulted[]`, never copy.
+- **Per-scene `Source:` lines** — document-level citations (the Phase-14 idiom: one doc, no chunk
+  refs), read from the `Scene N` blocks of SCENE PROMPTS by `sceneSourcesOf` (the shared
+  `parsePrompts` is untouched — the block contract has no citations). Three legal shapes:
+  `<title> [doc:<id>]` → `scene.source`; `unverified` → `scene.needsConfirmation`; absent →
+  creative copy. Anything else is `malformed_source` and refuses the whole deck. **The Scene type
+  must never grow a confirmation timestamp** — a `@ts-expect-error` in `storyboard.test.ts`
+  guards that door; confirmation is a tenant mutation's write, later, with auth.
+- **`parseVariations(body)`** — a thin, order-agnostic splitter at `VARIATION A`/`B` headings over
+  the unchanged `parseSceneDeck`. `kind: "two" | "one" | "refused"`; each `VariationSlice`
+  carries its own body slice so SCRIPT/ART DIRECTION parse per-variation. A refusing variation
+  refuses the WHOLE proposal — the `persistStoryboard` rule: a deck nobody wrote must never be
+  proposed.
 ## The scene-kind price table (20.2 wave 7) — ADR-019
 
 The §4.1 table above is the BLOCK era's economics: one clip length, every block paid. A scene deck
