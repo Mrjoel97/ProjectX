@@ -1,11 +1,20 @@
 # Playbook: Authorization (tenancy + ownership)
 
+> Last verified: 2026-08-16 (Phase 22 re-verification) — the former `/ops` presentation gap is
+> closed at the React component level. `opsPresentation.test.ts` renders the real `OpsPage` with
+> Convex hooks instrumented: exact owner true renders Optimizer and executes all owner-only panel
+> hooks; false, null, and loading render neither content nor subscriptions while Eval signals, DLQ,
+> and Dead letters remain. A complementary shell assertion pins Compliance → `/ops` and the DLQ
+> badge subscription. This is component/render evidence, **not browser pixels or a live DOM claim**.
+> The 2026-08-01 two-identity run remains the live proof of the server trust boundary.
+>
 > Last verified: 2026-08-11 (21-04) — the owner boundary now gates the TENANT skill overlay. Three
 > new owner-wrapped endpoints in `skills.ts`: `tenantCandidatesForReview` (ownerQuery),
 > `activateTenantCandidate` and `rollbackTenantSkill` (ownerMutation), all pinned by name in
 > `importGuard.test.ts`. **Nothing was activated live and NO paid eval was run — $0.00.** Everything
-> below is `convex-test` behaviour plus source scans; the two-identity live `/ops` check remains the
-> blocking checkpoint it has been since 22-03. **The artifact entry below refers to MY uncommitted
+> At that checkpoint, the evidence below was `convex-test` behaviour plus source scans and the
+> two-identity live `/ops` check remained blocking; the 2026-08-16 entry above supersedes that
+> presentation status. **The artifact entry below refers to MY uncommitted
 > `importGuard.test.ts` change — it is now committed in `18d8bca`, and this is its real entry.**
 >
 > **A KNOWN-STALE BULLET WAS FIXED IN THIS PASS.** The mutation-check list used to end with *"Move
@@ -40,7 +49,8 @@
 > still subscribe and leak through the subscription, loading state, or error boundary. Eval signals,
 > Dead letters, Compliance nav and the DLQ badge stay tenant-visible — this page is deliberately
 > mixed-purpose. Backend typecheck is back to the exact 150 baseline (Phase 22 delta = ZERO); web
-> typecheck + build green. **The two-identity live UAT is NOT run — it is a blocking owner checkpoint.**
+> typecheck + build green. **At that 2026-07-31 checkpoint, two-identity live UAT had not run and
+> was blocking; later entries above record the live server proof and component presentation proof.**
 > PREVIOUS: 2026-07-31 (22-02) — the four global Phase-8 controls moved onto the owner
 > wrappers: `getOptimizerStatus`/`setOptimizerEnabled` → `ownerQuery`/`ownerMutation`,
 > `activateCandidate`/`candidatesForReview` → `ownerMutation`/`ownerQuery`. Their source
@@ -79,6 +89,8 @@ disagrees with itself fails open.
 - `packages/backend/convex/skills.test.ts` — the owner/eval truth table, rollback eligibility, the
   bounded review queue, and the source contract that there is exactly one activating patch.
 - `apps/web/app/(app)/ops/tenantSkillReview.test.ts` — the ops surface, as a SOURCE SCAN.
+- `apps/web/app/(app)/ops/opsPresentation.test.ts` — real `OpsPage` component render plus recorded
+  Convex hook mounts for exact owner/false/null/loading; shell preservation is a source assertion.
 - `packages/backend/convex/tenant.test.ts` — stable-per-user scope, cross-user isolation.
 - `packages/backend/convex/importGuard.test.ts` — raw-builder scan + the static identity guard.
 
@@ -224,8 +236,11 @@ pnpm --filter @pikar/backend exec vitest run \
 pnpm --filter @pikar/backend exec vitest run \
   convex/skills.test.ts convex/importGuard.test.ts --maxWorkers=1
 
-# The /ops surface (SOURCE SCAN — apps/web has no jsdom; this proves text, not pixels)
-pnpm --filter web exec vitest run 'app/(app)/ops/tenantSkillReview.test.ts'
+# The /ops surfaces: real component/hook mount proof plus the tenant-review source contract.
+# React server rendering proves component output, not browser layout, hydration, focus, or pixels.
+pnpm --filter @pikar/web test -- \
+  'app/(app)/ops/opsPresentation.test.ts' \
+  'app/(app)/ops/tenantSkillReview.test.ts' --maxWorkers=1
 
 # Typecheck — ALWAYS with --force; turbo's cache restores a stale pass (see PARALLELIZATION.md)
 pnpm exec turbo run typecheck --filter=@pikar/backend --force
@@ -260,9 +275,15 @@ node scripts/check-playbooks.mjs
   assertion exists, and why deleting it as "redundant" would be a real regression.
 - Move the `<UserCandidatesPanel />` mount outside the `isOwner` branch → the ops source scan must
   turn RED. *Verified 2026-08-11: 1 failed / 14 passed.*
+- Remove the entire `isOwner` mount guard → the false/null/loading component cases must turn RED by
+  rendering Optimizer and recording its owner-only hooks. The exact-owner case positively requires
+  both the heading/switch and hook names, so deleting the whole branch cannot pass vacuously.
+  *Verified by the focused component contract 2026-08-16: 5/5 green with the guard present.*
 
-**Live only** (no offline substitute): the bootstrap returning `changed:true` then `changed:false`
-on the intended deployment, and the two-identity `/ops` check.
+**Live only** (no offline substitute): bootstrap returning `changed:true` then `changed:false` on
+the intended deployment and direct authenticated API behavior against that deployment. Browser
+layout/hydration remains a useful spot-check, but is not needed to prove React's mount/subscription
+branch now that the real page component is rendered and its hooks are recorded.
 
 ### The presentation rule (why the whole section is conditional)
 
@@ -278,7 +299,7 @@ subscribes** to global config and candidate prompt bodies. The gate must wrap th
 admin surface. And none of this is the trust boundary — a non-owner calling the API directly is
 still refused server-side. **Hiding the UI is a courtesy; the wrapper is the gate.**
 
-### Live owner/non-owner checklist (the blocking checkpoint)
+### Live owner/non-owner checklist (deployment smoke test)
 
 Run on the INTENDED deployment — never a lane deployment, whose user set and owner state differ.
 

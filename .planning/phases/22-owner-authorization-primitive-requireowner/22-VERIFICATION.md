@@ -1,14 +1,10 @@
 ---
 phase: 22-owner-authorization-primitive-requireowner
 requirement: GOVN-01
-verified: 2026-08-10T18:00:43Z
-status: human_needed
-score: "4/5 phase truths verified; 1 presentation truth requires live human evidence"
-re_verification: false
-human_verification:
-  - test: "Owner/non-owner /ops presentation and mount-guard mutation on the intended deployment"
-    expected: "The owner sees the Optimizer section after a fresh login; the controlled non-owner sees no optimizer heading, loading/error state, switch, candidate body/evidence, or Activate control while Eval signals, Dead letters, Compliance navigation, and the DLQ badge remain; removing the mount guard exposes the heading and restoring it removes it again."
-    why_human: "The 2026-08-01 live run proved the server boundary with two identities but could not reach a stable rendered /ops session because onboarding redirected the fresh identity and the local auth/backend later degraded. There is no /ops component test or completed browser artifact that substitutes for the missing DOM observation."
+verified: 2026-08-15T22:02:20Z
+status: passed
+score: "5/5 phase truths verified"
+re_verification: true
 ---
 
 # Phase 22: Owner Authorization Primitive Verification Report
@@ -16,8 +12,8 @@ human_verification:
 **Phase goal:** A durable `requireOwner(ctx)` primitive gates the Phase-8 global controls and establishes the server-side convention for every later admin-like public control.
 
 **Requirement:** GOVN-01  
-**Status:** `human_needed`  
-**Verdict:** The authorization primitive and server trust boundary are implemented, tested, committed, and proven live. The remaining work is the explicitly recorded `/ops` presentation checkpoint; it is not a server-security gap, but it prevents a fully `passed` phase verdict.
+**Status:** `passed`
+**Verdict:** The authorization primitive and server trust boundary are implemented, tested, and proven live. A focused React component test now closes the former `/ops` presentation gap by rendering the real page with instrumented Convex hooks: exact owner true mounts the optimizer panels and their hooks; false, null, and loading do not mount their content or subscriptions while tenant operations remain.
 
 ## Goal Achievement
 
@@ -29,9 +25,9 @@ human_verification:
 | 2 | Owner bootstrap is exact, internal-only, idempotent, and redaction-safe. | VERIFIED | `owner.ts:47-70` exposes only an `internalMutation`, targets an exact `users._id`, changes false/absent to true once, and emits one `owner.granted` event with payload keys `owner,userId`. Current focused tests pass. Live evidence from 2026-08-01 records `changed:true` then `changed:false`, exactly one grant row, and no identity prose/PII. |
 | 3 | The four Phase-8 public controls reject non-owners before their handlers can disclose or mutate global state. | VERIFIED | `optimizerConfig.ts:84,93` uses `ownerQuery`/`ownerMutation`; `skills.ts:183,203` uses `ownerMutation`/`ownerQuery`. `optimizerConfig.test.ts` and `skills.test.ts` prove non-owner refusal, no config/status change, and no candidate-body disclosure. The live two-identity run returned `OWNER_REQUIRED` from all four as an authenticated non-owner and left a pre-existing optimizer row byte-unchanged. |
 | 4 | Internal CI/eval/operator paths and the independent skill EVAL_GATE remain operational. | VERIFIED | `optimizerConfig.getOptimizerConfig/setOptimizerConfig` remain internal; `skills.activateSkill` remains internal and shares the single `activateSkillVersion` implementation. Tests prove an owner can reach the independent `EVAL_GATE`, while trusted internal activation remains identity-free. The live owner path reached `NO_SUCH_SKILL_VERSION`, proving authorization passed and the skill gate still executed. |
-| 5 | The `/ops` admin presentation is hidden from non-owners while tenant-visible operations remain. | HUMAN NEEDED | Current source is structurally correct: `ops/page.tsx:409-450` reads `api.owner.viewer`, computes exact `viewer?.isOwner === true`, and conditionally mounts the whole `OptimizerPanel`; Eval signals and Dead letters remain outside the condition. Web typecheck is green. However `22-UAT-EVIDENCE.md:87-112` explicitly records that owner/non-owner DOM steps and the UI mutation were not completed. |
+| 5 | The `/ops` admin presentation is hidden from non-owners while tenant-visible operations remain. | VERIFIED | `opsPresentation.test.ts` server-renders the real `OpsPage` with recorded Convex hook references. Exact owner true renders the Optimizer heading/switch and executes every owner-only query/mutation hook. False, null, and loading render no optimizer content and execute none of those hooks, while Eval signals, DLQ, and Dead letters render and keep their tenant queries. The same focused test pins the unchanged shell's Compliance `/ops` link and `DeadLetterBadge` subscription. This is React component/mount evidence, not a claim of browser pixels or a live DOM run. |
 
-**Score:** 4/5 truths fully verified; the fifth is code-complete but still needs live presentation evidence.
+**Score:** 5/5 truths verified.
 
 ## Required artifacts
 
@@ -42,8 +38,9 @@ human_verification:
 | `packages/backend/convex/schema.ts` | VERIFIED | Optional `users.owner` authority bit; no migration/backfill required. |
 | `packages/backend/convex/optimizerConfig.ts` | VERIFIED | Both public optimizer functions are owner-wrapped; internal config seams remain internal. |
 | `packages/backend/convex/skills.ts` | VERIFIED | Public candidate read/activation are owner-wrapped; shared internal EVAL_GATE remains single-source. |
-| `apps/web/app/(app)/ops/page.tsx` | VERIFIED (source), HUMAN NEEDED (live DOM) | Entire `OptimizerPanel` mount is conditional on exact owner true; tenant sections are outside the branch. No dedicated component test exists. |
-| `docs/playbooks/authorization.md` | VERIFIED with noted drift | Documents identity, wrapper trust boundary, live checklist, and outstanding DOM half. Its mutation checklist still contains one stale line saying a post-write owner check must turn immutability tests red, while the immediately preceding section correctly explains Convex atomic rollback makes that mutation unobservable. This documentation inconsistency does not weaken the implemented boundary. |
+| `apps/web/app/(app)/ops/page.tsx` | VERIFIED | Entire owner section is conditional on exact owner true; tenant sections are outside the branch. `opsPresentation.test.ts` renders this real component and records which Convex hooks mount. |
+| `apps/web/app/(app)/ops/opsPresentation.test.ts` | VERIFIED | Four viewer-state render cases plus shell preservation evidence; positive owner assertions make deletion of the entire branch fail, and every non-owner case fails if the mount guard is removed. |
+| `docs/playbooks/authorization.md` | VERIFIED | Documents the server trust boundary, component-level presentation proof, live deployment evidence, and honest evidence limits. |
 | `docs/playbooks/watch.json` | VERIFIED | Registers the wrapper, owner module/tests, and `/ops` path under `authorization.md`; `check-playbooks` passes. |
 
 ## Key-link verification
@@ -55,7 +52,7 @@ human_verification:
 | `getOptimizerStatus` / `setOptimizerEnabled` | owner primitive | owner wrappers | WIRED |
 | `candidatesForReview` / `activateCandidate` | owner primitive | owner wrappers | WIRED |
 | `activateCandidate` | skill evidence gate | shared `activateSkillVersion` | WIRED |
-| `/ops` owner boolean | optimizer subscriptions | conditional `<OptimizerPanel />` mount | WIRED IN SOURCE; LIVE DOM PENDING |
+| `/ops` owner boolean | optimizer subscriptions | conditional `<OptimizerPanel />` mount | WIRED; COMPONENT-RENDER VERIFIED |
 | later Finance admin controls | owner primitive | `finance.ts` uses `ownerQuery`/`ownerMutation` for `globalRails`, `controls`, and all three setters | WIRED |
 
 The current codebase therefore follows the “admin-ish controls start owner-gated” convention beyond the original four endpoints: the later Finance deployment controls are born on owner wrappers, and their UI skips owner-only queries for non-owners.
@@ -64,9 +61,34 @@ The current codebase therefore follows the “admin-ish controls start owner-gat
 
 | Requirement | Status | Evidence |
 |---|---|---|
-| GOVN-01 | HUMAN NEEDED | The durable primitive, four named Phase-8 guards, current later admin controls, tests, and live server boundary all satisfy the security substance. The requirement remains pending because the phase's own blocking `/ops` owner/non-owner presentation checkpoint was never completed. |
+| GOVN-01 | SATISFIED | The durable primitive, named public guards, independent eval gate, live server boundary, and component-rendered owner/non-owner presentation all pass. |
 
-## Automated evidence collected 2026-08-10
+## Automated evidence collected 2026-08-16
+
+### Presentation gap closure
+
+- Focused command: `pnpm --filter @pikar/web test -- "app/(app)/ops/opsPresentation.test.ts"
+  "app/(app)/ops/tenantSkillReview.test.ts" --maxWorkers=1` — **2/2 files, 20/20 tests passed**
+  (presentation component 5, tenant-review source contract 15).
+- Web TypeScript: `apps/web/node_modules/.bin/tsc.cmd --noEmit` — **exit 0**.
+- Playbook coverage was rerun after updating `authorization.md`; the authorization subsystem is no
+  longer named. The repository-wide decision remains blocked only by concurrent, out-of-scope
+  `cockpitTools.test.ts`/`llm.ts` changes requiring `docs/playbooks/cockpit.md`; this lane did not
+  touch or attest those files.
+- Focused web component suite: `opsPresentation.test.ts` renders the real `OpsPage` through
+  `renderToStaticMarkup` with only the Convex transport hooks mocked and recorded.
+- The exact-owner case is anti-vacuous: it requires rendered Optimizer heading/switch content and
+  the owner-only query/mutation hook names. Deleting the branch or changing the condition so the
+  owner cannot enter makes this case fail.
+- False, null, and loading viewer cases require no optimizer content and no owner-only hook names.
+  Removing the mount guard makes all three fail because React executes the panels and their hooks.
+- Every non-owner case positively requires rendered Eval signals, DLQ, Dead letters, the empty DLQ
+  state, and their tenant query hooks. The shell assertion separately pins Compliance → `/ops` and
+  the `DeadLetterBadge` subscription.
+- Evidence level: component-rendered React output and hook execution, not browser layout, pixels,
+  hydration, or a live-deployment DOM observation.
+
+## Prior automated evidence collected 2026-08-10
 
 ### Passed
 
@@ -98,26 +120,27 @@ The current codebase therefore follows the “admin-ish controls start owner-gat
 
 This is substantive two-direction proof of the server trust boundary, not an inferred or source-only claim.
 
-## Human verification required
+## Optional live presentation spot-check
 
-Use a healthy intended deployment and satisfy only the still-missing presentation steps:
+No human step remains blocking for GOVN-01. If deployment wiring or browser hydration changes, the
+following remains a useful smoke test on the intended deployment:
 
 1. **Owner rendering:** Sign in fresh as the confirmed owner and open `/ops`. Confirm the Optimizer heading, switch, and candidate review render after the fresh session.
 2. **Non-owner rendering and tenant preservation:** Use a controlled authenticated non-owner whose onboarding/profile gate is already satisfied. Confirm no Optimizer heading, loading/error state, switch, candidate body/evidence, or Activate control appears. Confirm Eval signals, Dead letters, Compliance navigation, and the DLQ badge remain.
-3. **Mount-guard mutation proof:** In an isolated temporary change, remove the `isOwner` mount condition, rebuild, and confirm the non-owner sees the Optimizer heading (RED). Restore the condition, rebuild, and confirm it disappears again. Do not retain the mutation.
+3. **Browser-level confirmation:** Confirm the shared Compliance navigation and DLQ badge remain.
 
-The four direct API refusals and bootstrap do **not** need repeating unless the configured deployment or owner row changed; they are already recorded live with anti-vacuity and state-immutability evidence.
+The component test now supplies the mount-guard mutation sensitivity that the incomplete 2026-08-01
+browser run lacked. The four direct API refusals and bootstrap do **not** need repeating unless the
+configured deployment or owner row changed; they are already recorded live with anti-vacuity and
+state-immutability evidence.
 
 ## Gaps summary
 
-No current server-authorization gap was found. GOVN-01's security boundary is implemented and proven. One human presentation checkpoint remains, plus two non-blocking documentation/tooling drifts:
-
-- `22-VALIDATION.md` still shows Wave-0 and task rows as pending even though the tests and server live gate subsequently completed.
-- `authorization.md` contains the stale post-write mutation bullet described above.
-
-Because the phase plan explicitly made owner/non-owner `/ops` rendering and its UI mutation a blocking checkpoint, the honest result is `human_needed`, not `passed` and not `gaps_found`.
+No current GOVN-01 gap was found. The server boundary is integration-tested and live-proven; the
+presentation branch is component-rendered across exact owner, false, null, and loading states with
+hook-execution assertions. Browser pixels were not observed and are not claimed.
 
 ---
 
-*Verified: 2026-08-10T18:00:43Z*  
-*Verifier: Codex (GSD verification pass)*
+*Verified: 2026-08-15T22:02:20Z*
+*Verifier: Codex (GSD re-verification pass)*
