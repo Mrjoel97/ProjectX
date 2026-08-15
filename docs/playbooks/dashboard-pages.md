@@ -1,5 +1,20 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-15 (scorecard-field-provenance Task 1 — **`FieldProvenance` type added to
+> `packages/core/src/financeClaim.ts`, reusing the existing `FigureActor`/`FigureOrigin` unions
+> already declared in that file** (never a second vocabulary). This is the type half of the upgrade
+> path the Cash section below has named since Task 3 of `live-finance-inputs`
+> ("the scorecard store has no provenance columns... the upgrade path is a per-dot-path provenance
+> map on `evaluations` beside `userProvidedAt`") — now landed. `evaluations.fieldProvenance` gains a
+> matching `v.optional(v.record(...))` schema column (dot-path → `{actor, origin, source, at}`), and
+> `insertEvaluation`'s args thread it through via the schema-derived `evalFields`. **No behaviour
+> change**: nothing writes or reads this column yet — `applyScorecardAnswer`/`recordScorecardAnswer`
+> still only touch `userProvided`/`userProvidedAt`, exactly as documented below. Optional column, no
+> migration, every existing row stays valid (pinned by a dedicated legacy-row test). This entry
+> documents the type+column addition only; the writer-side wiring (making an agent scorecard write
+> require this map) is a later task in the same plan and will update this playbook again when it
+> lands.)
+>
 > Last verified: 2026-08-15 (origin/main merge only — MarkdownDocument.tsx/.test.ts changes arrived
 > from main's vault-fixes PR #11, already CI-verified there; nothing authored on this branch.)
 >
