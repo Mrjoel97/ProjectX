@@ -2407,11 +2407,24 @@ export const generateReel = tenantMutation({
     // `reserveSceneJobInner` prices them per kind. This is where a scene deck becomes BUYABLE.
     const sceneDeck = sceneDeckOf(plan);
     if (sceneDeck !== null) {
-      return await reserveAndSchedule(ctx, {
+      const res = await reserveAndSchedule(ctx, {
         tenantId: ctx.tenantId,
         planId,
         deck: { kind: "scene", ...sceneDeck },
       });
+      // 33-03 — GENERATE IS THE POINT OF NO RETURN for variations, in the SAME transaction as the
+      // reservation: the pick is bought, so it locks (`switchDeck`/`editBrief` refuse from here),
+      // and the unpicked deck is DISCARDED rather than parked forever beside a deck it can no
+      // longer replace. `undefined` deletes on a direct patch. A refusal locks and discards
+      // NOTHING — the refusal is free, and the choice is still the user's.
+      if (res.ok) {
+        await ctx.db.patch(planId, {
+          deckLockedAt: Date.now(),
+          altShots: undefined,
+          altTargetDurationSeconds: undefined,
+        });
+      }
+      return res;
     }
     const blocks = deckOf(plan);
     if (!blocks || plan.clipSeconds === undefined) return { ok: false as const, reason: "no_deck" };
@@ -2797,10 +2810,13 @@ export const switchDeck = tenantMutation({
   args: { planId: v.id("plans") },
   handler: async (ctx, { planId }) => {
     const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
-    if (plan.altShots === undefined) return { ok: false as const, reason: "no_alternate" as const };
+    // The LOCK answers first (33-03): after Generate the alternate is discarded, so a locked plan
+    // has no altShots either — but "the choice is bought" is the truthful refusal, and the one
+    // that names the real ceiling. `no_alternate` is for a plan that never had a second deck.
     if (plan.deckLockedAt !== undefined) {
       return { ok: false as const, reason: "deck_locked" as const };
     }
+    if (plan.altShots === undefined) return { ok: false as const, reason: "no_alternate" as const };
     await ctx.db.patch(planId, {
       shots: plan.altShots,
       altShots: plan.shots,
@@ -2854,5 +2870,52 @@ export const confirmClaim = tenantMutation({
       payload: { planId, sceneIndex },
     });
     return { ok: true as const };
+  },
+});
+
+/**
+ * The picked deck's citation plane, one entry per scene that claims anything (33-03).
+ *
+ * **`source.docId` is MODEL-AUTHORED text, and this is where it is checked** — the `asset.docId`
+ * precedent (`setSceneAsset`): ownership is verified where the id is CONSUMED, never trusted at
+ * the write. `verified` is "this doc exists AND is this tenant's"; a foreign, malformed or deleted
+ * id comes back `verified: false`, which the canvas renders as unverified — never a clickable
+ * citation. `normalizeId` failing closed on garbage is the same door as a real id in the wrong
+ * tenant, deliberately: the two must be indistinguishable to a probing model.
+ *
+ * No URL is minted here — titles and ids only. PreviewModal does its own access check when the
+ * user opens the document.
+ */
+export const sceneCitations = tenantQuery({
+  args: { planId: v.id("plans") },
+  handler: async (ctx, { planId }) => {
+    const plan = await ownedPlan(ctx, planId, ctx.tenantId);
+    if (!plan) return [];
+    const out: {
+      sceneIndex: number;
+      docId: string | null;
+      title: string | null;
+      verified: boolean;
+      needsConfirmation: boolean;
+      confirmedAt: number | null;
+    }[] = [];
+    for (const s of plan.shots ?? []) {
+      if (s.source === undefined && s.needsConfirmation !== true) continue; // claims nothing
+      let verified = false;
+      if (s.source !== undefined) {
+        const docId = ctx.db.normalizeId("vaultDocuments", s.source.docId);
+        const doc = docId === null ? null : await ctx.db.get(docId);
+        verified = doc !== null && doc.tenantId === ctx.tenantId;
+      }
+      out.push({
+        sceneIndex: s.index,
+        docId: s.source?.docId ?? null,
+        title: s.source?.title ?? null,
+        verified,
+        needsConfirmation: s.needsConfirmation === true,
+        confirmedAt: s.confirmedAt ?? null,
+      });
+    }
+    return out;
   },
 });
