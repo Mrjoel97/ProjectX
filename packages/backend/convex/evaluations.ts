@@ -164,6 +164,7 @@ export const insertEvaluation = internalMutation({
     scorecard: evalFields.scorecard,
     userProvided: evalFields.userProvided,
     userProvidedAt: evalFields.userProvidedAt,
+    fieldProvenance: evalFields.fieldProvenance,
     verdict: evalFields.verdict,
     delta: evalFields.delta,
   },

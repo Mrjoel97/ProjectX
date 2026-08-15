@@ -1180,3 +1180,58 @@ describe("applyScorecardAnswer / setPath does not throw on a malformed carrier (
     expect(row?.scorecard.financials.cac).toBe(150);
   });
 });
+
+describe("evaluations.fieldProvenance schema column", () => {
+  test("an evaluation row round-trips fieldProvenance", async () => {
+    const t = convexTest(schema, modules);
+    const id = await t.run((ctx) =>
+      ctx.db.insert("evaluations", {
+        tenantId: TENANT,
+        threadId: THREAD,
+        framework: "growth-os" as const,
+        findings: [],
+        gaps: [],
+        notEnoughData: [],
+        scorecard: emptyScorecard,
+        userProvided: [],
+        fieldProvenance: {
+          "financials.cac": {
+            actor: "agent" as const,
+            origin: "stated" as const,
+            source: "vaultDoc:abc123",
+            at: 1_700_000_000_000,
+          },
+        },
+        verdict: "gaps" as const,
+        createdAt: 1_700_000_000_000,
+      }),
+    );
+    const row = await t.run((ctx) => ctx.db.get(id));
+    expect(row?.fieldProvenance?.["financials.cac"]).toEqual({
+      actor: "agent",
+      origin: "stated",
+      source: "vaultDoc:abc123",
+      at: 1_700_000_000_000,
+    });
+  });
+
+  test("a legacy row with no fieldProvenance is still valid", async () => {
+    const t = convexTest(schema, modules);
+    const id = await t.run((ctx) =>
+      ctx.db.insert("evaluations", {
+        tenantId: TENANT,
+        threadId: THREAD,
+        framework: "growth-os" as const,
+        findings: [],
+        gaps: [],
+        notEnoughData: [],
+        scorecard: emptyScorecard,
+        userProvided: [],
+        verdict: "gaps" as const,
+        createdAt: 1_700_000_000_000,
+      }),
+    );
+    const row = await t.run((ctx) => ctx.db.get(id));
+    expect(row?.fieldProvenance).toBeUndefined();
+  });
+});

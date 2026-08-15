@@ -809,6 +809,23 @@ export default defineSchema({
     // Optional ⇒ no migration; a legacy row with a value but no entry here has UNKNOWN age, which
     // `cash.ts` reads as needing confirmation, never as fresh.
     userProvidedAt: v.optional(v.record(v.string(), v.number())),
+    // Per-dot-path provenance — the upgrade path named at `cash.ts writeFigureRow` and
+    // `cash.ts statedFigure`, now taken. `userProvided` remains the LITERAL "the user supplied
+    // it" list; this map records every answer, including the ones an agent wrote, so a
+    // document-derived figure can be USED without being CITED as the owner's testimony.
+    // `at` is when the figure was true (never the write time). Optional ⇒ no migration; readers
+    // fall back to the `userProvided` / `userProvidedAt` proxies for rows written before this.
+    fieldProvenance: v.optional(
+      v.record(
+        v.string(),
+        v.object({
+          actor: v.union(v.literal("user"), v.literal("agent")),
+          origin: v.union(v.literal("stated"), v.literal("observed")),
+          source: v.string(), // refs/ids ONLY (§4)
+          at: v.number(),
+        }),
+      ),
+    ),
     verdict: v.union(v.literal("gaps"), v.literal("healthy"), v.literal("insufficient")),
     // BEVL-03 "what changed" line. Written ONLY by a cron-driven run (runEvaluation withDelta) —
     // an on-demand row has none and the card simply hides the line. Optional → no migration.
@@ -1225,6 +1242,17 @@ export default defineSchema({
     size: v.number(),
     contentHash: v.string(), // sha-256 hex → cross-doc dedup
     storageId: v.optional(v.id("_storage")), // stored bytes for downloadable uploads
+    // WHAT THE BYTES ARE, when that differs from what the ROW is. `mimeType` above is the artifact
+    // of record — it drives extraction routing and searchability, and for an agent-created document
+    // it is LOCKED to "text/markdown" because markdown is the thing we wrote and can ground on.
+    // But `createDocument` also renders a real PDF and stores it in `storageId`, so one field was
+    // being asked to describe two different things and answered for the wrong one: the row said
+    // markdown, the bytes were a PDF, and the preview could never show the document in its true
+    // form. This names the second thing instead of overloading the first.
+    //
+    // Optional, so no migration and no backfill: absent means "the bytes are what `mimeType` says",
+    // which is true for every upload and every row written before this existed.
+    storedMimeType: v.optional(v.string()),
     text: v.optional(v.string()), // raw extracted text (content plane, §4)
     ragEntryId: v.optional(v.string()), // the embedded rag entry id
     status: v.union(
