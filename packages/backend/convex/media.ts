@@ -2580,7 +2580,17 @@ export const editBlockNarration = tenantMutation({
     await patchShots(
       ctx,
       planId,
-      shots.map((s) => (s.index === blockIndex ? { ...s, narration } : s)),
+      // 33-02: a CHANGED claim is unconfirmed. The user vouched for the OLD words, so a real
+      // narration change drops `confirmedAt` (and only then — re-saving the same line changes
+      // nothing to unconfirm); `needsConfirmation` and `source` stand, because the new words
+      // still state a figure from the same document. This scene only: siblings ride `patchShots`
+      // untouched. If an overlay editor ever lands, its content change must clear the same way.
+      shots.map((s) => {
+        if (s.index !== blockIndex) return s;
+        if (s.confirmedAt === undefined || narration === s.narration) return { ...s, narration };
+        const { confirmedAt: _cleared, ...rest } = s;
+        return { ...rest, narration };
+      }),
     );
     return { ok: true as const };
   },
@@ -2770,6 +2780,48 @@ export const switchDeck = tenantMutation({
     // The rendered reel — if any — is the OTHER deck's artifact; showing it beside this deck
     // would be the exact stale-final.mp4 lie `clearRender` exists to prevent.
     await clearRender(ctx, planId);
+    return { ok: true as const };
+  },
+});
+
+/**
+ * Confirm a cited claim — the provenance front door (33-02).
+ *
+ * **The args are `planId` + `sceneIndex` and NOTHING else, and that is the security property.**
+ * Actor and timestamp derive from the authenticated tenant context (the schema.ts `authorUserId`
+ * idiom: "derived from authenticated identity, never from args"). The model has NO mutation that
+ * can set `confirmedAt`, and this validator structurally cannot be handed one — the
+ * provenance-laundering door stays shut at the arg shape, not at a runtime check.
+ *
+ * A DIRECT targeted patch, deliberately not `patchShots`: confirmation is not a structural deck
+ * edit (no `shotsChangedAt` — landed assets stay reusable) and not a content change (no render
+ * clear — the reel on screen is still the reel the user confirmed a claim inside).
+ */
+export const confirmClaim = tenantMutation({
+  args: { planId: v.id("plans"), sceneIndex: v.number() },
+  handler: async (ctx, { planId, sceneIndex }) => {
+    const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
+    const shots = plan.shots ?? [];
+    const shot = shots.find((s) => s.index === sceneIndex);
+    if (!shot) return { ok: false as const, reason: "no_block" as const };
+    // A scene that states no figure has nothing to confirm — minting a confirmation here would
+    // let "the user vouched for this" appear on a scene no one was ever asked about.
+    if (shot.needsConfirmation !== true) {
+      return { ok: false as const, reason: "not_a_claim" as const };
+    }
+    await ctx.db.patch(planId, {
+      shots: shots.map((s) => (s.index === sceneIndex ? { ...s, confirmedAt: Date.now() } : s)),
+    });
+    // Insert-only, refs only (§4): WHICH scene of WHICH plan — never the claim text, never the
+    // source title. A fresh correlation id, the `blueprint.confirmed` idiom: the confirmation is
+    // its own event, not a step of some other flow's lineage.
+    await ctx.runMutation(internal.audit.log, {
+      tenantId: ctx.tenantId,
+      correlationId: crypto.randomUUID(),
+      eventType: "media.claim_confirmed",
+      actor: ctx.tenantId,
+      payload: { planId, sceneIndex },
+    });
     return { ok: true as const };
   },
 });

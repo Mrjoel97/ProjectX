@@ -5570,10 +5570,10 @@ describe("33-02 confirmClaim: the provenance front door — confirmation is the 
     const planId = await seedClaim(t);
     await expect(
       asA(t).mutation(api.media.confirmClaim, { planId, sceneIndex: 1, confirmedAt: 5 } as never),
-    ).rejects.toThrow(/extra field/i);
+    ).rejects.toThrow(/Unexpected field `confirmedAt`/);
     await expect(
       asA(t).mutation(api.media.confirmClaim, { planId, sceneIndex: 1, actor: "model" } as never),
-    ).rejects.toThrow(/extra field/i);
+    ).rejects.toThrow(/Unexpected field `actor`/);
     expect((await planRowOf(t, planId))?.shots?.[1]?.confirmedAt).toBeUndefined();
   });
 
