@@ -21,6 +21,7 @@ import {
   parseBrief,
   parseSceneDeck,
   parseScript,
+  parseVariations,
   SHOT_TYPES,
   sceneNarrationChars,
   TARGET_DURATIONS,
@@ -981,5 +982,88 @@ describe("parseSceneDeck — per-scene Source lines (33-01, document-level citat
     expect(scene && "confirmedAt" in scene).toBe(false);
     // @ts-expect-error — the Scene type must not grow a confirmation timestamp (provenance rule)
     scene?.confirmedAt;
+  });
+});
+
+describe("parseVariations — two-variation bodies (33-01)", () => {
+  // A second, genuinely different deck: 15 seconds, different kinds, its own narration.
+  const DECK_B = sceneDeck(
+    [
+      "| 1 | animated_image | 11 | A calendar filling itself | Your week, planned before coffee. | | |",
+      "| 2 | text_card | 4 | Logo on black | | PIKAR | |",
+    ],
+    "Target duration: 15",
+  );
+  const twoUp = ["## VARIATION A", "", sceneDeck(SCENES), "", "## VARIATION B", "", DECK_B].join(
+    "\n",
+  );
+
+  it("parses two valid variations into two independent decks", () => {
+    const r = parseVariations(twoUp);
+    expect(r.kind).toBe("two");
+    if (r.kind !== "two") return;
+    expect(r.a.deck.targetDurationSeconds).toBe(30);
+    expect(r.a.deck.scenes).toHaveLength(4);
+    expect(r.b.deck.targetDurationSeconds).toBe(15);
+    expect(r.b.deck.scenes).toHaveLength(2);
+  });
+
+  it("returns kind:'one' for a body without VARIATION headings — v2 bodies are untouched", () => {
+    expect(parseVariations(sceneDeck(SCENES))).toEqual({ kind: "one" });
+    expect(parseVariations("just prose")).toEqual({ kind: "one" });
+  });
+
+  it("a refusing variation refuses the WHOLE proposal — never a silent one-deck fallback", () => {
+    // B sums to 14 against a declared 15: the inner deck refuses duration_mismatch, and the outer
+    // contract must surface that, not quietly hand back variation A alone.
+    const bShort = twoUp.replace("| 1 | animated_image | 11 |", "| 1 | animated_image | 10 |");
+    expect(parseVariations(bShort)).toMatchObject({
+      kind: "refused",
+      variation: "b",
+      reason: "duration_mismatch",
+    });
+  });
+
+  it("a declared variation with no deck inside refuses too (no_deck is not 'fall back')", () => {
+    const noB = ["## VARIATION A", "", sceneDeck(SCENES), "", "## VARIATION B", "", "Prose only."].join("\n");
+    expect(parseVariations(noB)).toMatchObject({ kind: "refused", variation: "b", reason: "no_deck" });
+    const headingOnlyA = ["## VARIATION A", "", "## VARIATION B", "", DECK_B].join("\n");
+    expect(parseVariations(headingOnlyA)).toMatchObject({ kind: "refused", variation: "a", reason: "no_deck" });
+    // One heading without its sibling is a declared-variations body missing a whole deck.
+    expect(parseVariations(["## VARIATION A", "", sceneDeck(SCENES)].join("\n"))).toMatchObject({
+      kind: "refused",
+      variation: "b",
+      reason: "no_deck",
+    });
+  });
+
+  it("Source lines inside a variation survive the split (composes with the citation contract)", () => {
+    const aWithSources = [
+      sceneDeck(SCENES),
+      "SCENE PROMPTS",
+      "",
+      "Scene 1",
+      "- Source: The 2025 pricing one-pager [doc:k57abc123]",
+      "",
+    ].join("\n");
+    const body = ["## VARIATION A", "", aWithSources, "", "## VARIATION B", "", DECK_B].join("\n");
+    const r = parseVariations(body);
+    expect(r.kind).toBe("two");
+    if (r.kind !== "two") return;
+    expect(r.a.deck.scenes[0]?.source).toEqual({
+      docId: "k57abc123",
+      title: "The 2025 pricing one-pager",
+    });
+    expect(r.b.deck.scenes[0]?.source).toBeUndefined(); // B's slice is clean — the split held
+  });
+
+  it("each variation keeps its own body slice, so per-variation SCRIPT/ART DIRECTION stay separate", () => {
+    const r = parseVariations(twoUp);
+    expect(r.kind).toBe("two");
+    if (r.kind !== "two") return;
+    expect(r.a.body).toContain("Target duration: 30");
+    expect(r.a.body).not.toContain("Target duration: 15");
+    expect(r.b.body).toContain("Target duration: 15");
+    expect(r.b.body).not.toContain("Target duration: 30");
   });
 });
