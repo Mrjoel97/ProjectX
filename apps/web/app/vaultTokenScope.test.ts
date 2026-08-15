@@ -31,10 +31,12 @@ function vaultTokenDefinitions(): { token: string; selector: string }[] {
   const out: { token: string; selector: string }[] = [];
   let selector = "(none)";
   for (const line of lines) {
-    const open = line.match(/^\s*([^{}]+?)\s*\{\s*$/);
-    if (open) selector = open[1].trim();
-    const def = line.match(/^\s*(--vault-[a-z-]+)\s*:/);
-    if (def) out.push({ token: def[1], selector });
+    // `?.[1]` not `match &&`: a regex group is `string | undefined` under strict null checks, and
+    // a bare truthiness test on the match array does not narrow the group.
+    const open = line.match(/^\s*([^{}]+?)\s*\{\s*$/)?.[1];
+    if (open) selector = open.trim();
+    const def = line.match(/^\s*(--vault-[a-z-]+)\s*:/)?.[1];
+    if (def) out.push({ token: def, selector });
   }
   return out;
 }

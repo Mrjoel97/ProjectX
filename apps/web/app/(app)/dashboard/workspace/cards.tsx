@@ -2050,6 +2050,80 @@ function VaultDocButton({
  * shows no card. Titles are labels-to-UI (BRAND §3 tracked-caps label + §2 opaque --card sheet, no
  * amber). Each links to the vault — the lazy, context-sanctioned click-through.
  */
+/**
+ * How many grounding sources render inline before the list folds away.
+ *
+ * Owner's words: the link list "is just clouding the workspace". Grounding is PROVENANCE — it
+ * answers "what did you read?" when asked, and most turns are never asked. The count in the header
+ * is the part that always matters; the titles are the audit trail behind it.
+ *
+ * Three, not zero: a one- or two-source turn reads as a fact about the answer, and hiding that
+ * behind a click would cost more than it saves. The cap only bites when the list is actually long
+ * enough to crowd — which is the complaint.
+ *
+ * NOTE this is deliberately NOT applied to the OUTPUT card. That list looks similar and is not:
+ * its `#index` ordering is the addressing grammar `createDocument`'s replace flow depends on
+ * ("make the second one shorter"), so folding it away would hide a control, not noise.
+ */
+export const SOURCE_INLINE_CAP = 3;
+
+/**
+ * Hook-free so `renderToStaticMarkup` can test it (the ApprovalsStateNotice/ImportDone precedent).
+ * `VaultDocButton`'s `useState` is fine under SSR — its Convex query only mounts once opened.
+ *
+ * THE INVARIANT: collapsing must never DROP a source. Every title is always in the markup; the
+ * disclosure changes what is visible, never what exists. A `.slice(0, CAP)` here would silently
+ * destroy provenance, which is the one thing this card is for.
+ */
+export function GroundedSources({
+  titles,
+  docIds,
+}: {
+  titles: readonly string[];
+  docIds: readonly (string | undefined)[];
+}) {
+  const list = (
+    <ul
+      style={{
+        listStyle: "none",
+        margin: "0.7rem 0 0",
+        padding: 0,
+        display: "grid",
+        gap: "0.4rem",
+      }}
+    >
+      {titles.map((title, i) => (
+        // The deferred upgrade, taken: the docId the row already carried now opens the document
+        // in place instead of navigating to an unfiltered /dashboard/vault.
+        <li key={docIds[i] ?? title} style={traceText}>
+          <VaultDocButton docId={docIds[i]} testId="source-title">
+            {title}
+          </VaultDocButton>
+        </li>
+      ))}
+    </ul>
+  );
+  if (titles.length <= SOURCE_INLINE_CAP) return list;
+  // Native <details>, not a useState toggle: keyboard operable, screen-reader announced and
+  // Ctrl+F-findable for free (ponytail rung 4 — the platform already does this).
+  return (
+    <details data-testid="source-disclosure">
+      <summary
+        style={{
+          ...traceText,
+          cursor: "pointer",
+          color: "var(--ink-soft)",
+          fontSize: "0.85rem",
+          marginTop: "0.6rem",
+        }}
+      >
+        Show the {titles.length} documents
+      </summary>
+      {list}
+    </details>
+  );
+}
+
 function SourceCard({ threadId }: { threadId?: string }) {
   const sources: VaultSources | null | undefined = useQuery(
     api.vaultSources.byThread,
@@ -2061,25 +2135,7 @@ function SourceCard({ threadId }: { threadId?: string }) {
       <p style={capsTeal}>
         📚 Grounded in {sources.count} document{sources.count === 1 ? "" : "s"}
       </p>
-      <ul
-        style={{
-          listStyle: "none",
-          margin: "0.7rem 0 0",
-          padding: 0,
-          display: "grid",
-          gap: "0.4rem",
-        }}
-      >
-        {sources.titles.map((title, i) => (
-          // The deferred upgrade, taken: the docId the row already carried now opens the document
-          // in place instead of navigating to an unfiltered /dashboard/vault.
-          <li key={sources.docIds[i] ?? title} style={traceText}>
-            <VaultDocButton docId={sources.docIds[i]} testId="source-title">
-              {title}
-            </VaultDocButton>
-          </li>
-        ))}
-      </ul>
+      <GroundedSources titles={sources.titles} docIds={sources.docIds} />
     </div>
   );
 }
