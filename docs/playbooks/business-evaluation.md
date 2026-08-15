@@ -6,10 +6,18 @@
 > decided:** `evaluations.userProvided` means THE USER SUPPLIED IT and nothing else — it is NEVER
 > widened to cover writes an agent performed. `evaluations.fieldProvenance` (dot-path →
 > `{actor, origin, source, at}`) records EVERY answer, including agent ones, and is the authority
-> readers consult first; `userProvided`/`userProvidedAt` remain the fallback for rows written before
-> the map existed. See `docs/decisions/021-userprovided-fieldprovenance-split.md` for the full
-> decision record — the problem, the alternatives rejected, and the standing rule future work must
-> not undo.
+> readers consult first; `userProvided`/`userProvidedAt` remain the fallback for any row whose write
+> path never recorded a `fieldProvenance` entry. See
+> `docs/decisions/021-userprovided-fieldprovenance-split.md` for the full decision record — the
+> problem, the alternatives rejected, and the standing rule future work must not undo.
+>
+> **CORRECTED 2026-08-15 (whole-branch review Finding 3):** the line above used to say the fallback
+> applies "only for rows written before the map existed, and nothing else" — false. `runEvaluation`'s
+> `fillVault` (`evaluations.ts`) is a SECOND scorecard writer, alongside `applyScorecardAnswer`: it
+> fills a null slot from grounded vault text via `setPath` and records NO `fieldProvenance` entry, so
+> a row written TODAY can still take this fallback. Harmless today — both writers resolve to
+> `actor: "agent"`, `statedAt: null` on the read side either way — but the fallback is live code that
+> a future "only legacy rows use this" cleanup could wrongly delete.
 >
 > **Why it matters here:** `runEvaluation` rebuilds its citation map from `userProvided` membership
 > and stamps every member `{source: "user-provided", confidence: "high"}`. A figure an agent read out

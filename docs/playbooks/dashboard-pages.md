@@ -8,8 +8,16 @@
 > entry and `docs/decisions/021-userprovided-fieldprovenance-split.md` for the full decision record.**
 > `userProvided` keeps its literal meaning ("the user supplied it") and is never widened;
 > `evaluations.fieldProvenance` (dot-path → `{actor, origin, source, at}`) records every answer,
-> agent or user, and readers prefer it, falling back to the `userProvided`/`userProvidedAt` proxy
-> only for rows written before the map existed.
+> agent or user, and readers prefer it, falling back to the `userProvided`/`userProvidedAt` proxy for
+> any row whose write path never recorded a `fieldProvenance` entry for that field.
+>
+> **CORRECTED 2026-08-15 (whole-branch review Finding 3):** this entry, and the "Read side prefers
+> `fieldProvenance`" bullet below, used to describe the fallback as applying only to rows written
+> before Task 1's column existed — false. `runEvaluation`'s `fillVault` (`evaluations.ts`) is a
+> SECOND scorecard writer that fills a null slot from grounded vault text and records NO
+> `fieldProvenance` entry, so a row written after this plan can still take the fallback. Harmless
+> today (both writers resolve to `actor: "agent"`, `statedAt: null` on read), but the fallback stays
+> live code for a reason beyond legacy rows.
 >
 > **Type + schema (Task 1).** `FieldProvenance` lands in `packages/core/src/financeClaim.ts`, reusing
 > the existing `FigureActor`/`FigureOrigin` unions (never a second vocabulary); `evaluations` gains
@@ -31,8 +39,8 @@
 > **Read side prefers `fieldProvenance` (Task 4).** `inputStatesFor`'s scorecard branch (documented
 > below as `statedFigure`) reads `evaluation?.fieldProvenance?.[spec.path]` first — `actor`,
 > `statedAt` and `origin` come from the record when present — and falls back to the
-> `userProvided`/`userProvidedAt` proxy only for a row with no `fieldProvenance` entry for that path
-> (every row written before Task 1's column existed).
+> `userProvided`/`userProvidedAt` proxy for any row with no `fieldProvenance` entry for that path
+> (see the corrected note above — that is not only rows written before Task 1's column existed).
 >
 > **Both agent-write refusals into the scorecard store are DELETED, not narrowed (Task 5).**
 > `writeFigureRow`'s `if (claim.actor === "agent") throw` guard in the scorecard branch is gone — the

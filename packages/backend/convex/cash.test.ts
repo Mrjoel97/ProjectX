@@ -957,6 +957,14 @@ test("an agent claim on a scorecard field now applies, via writeFigureRow, with 
   expect(row?.userProvided).not.toContain("financials.cac");
   expect(row?.fieldProvenance?.["financials.cac"]?.actor).toBe("agent");
   expect(row?.fieldProvenance?.["financials.cac"]?.at).toBe(1_754_000_000_000);
+  // Finding 4 (deferred-minor triage, fix-before-merge): `writeFigureRow` forwards ALL FOUR
+  // provenance fields (`actor`, `origin`, `source`, `at`) to `applyScorecardAnswer`, but nothing
+  // above pinned `origin`/`source` — only `actor`/`at`. A hardcoded `origin: "stated"` in
+  // `writeFigureRow` would flip the finance page's `FigureTile`/`InputRow` rendering (an "observed"
+  // claim rendering as "stated") with zero red tests: the read-side origin test inserts its row
+  // directly and cannot catch a write-side regression on the claim's own origin/basis.
+  expect(row?.fieldProvenance?.["financials.cac"]?.origin).toBe("observed");
+  expect(row?.fieldProvenance?.["financials.cac"]?.source).toBe("vault document ref");
 });
 
 // ── cash.financeSpineFor: the always-on cockpit line (spec §2) ───────────────────────────────────

@@ -157,9 +157,16 @@ async function inputStatesFor(
       // `statedFigure` both call — one definition, not three) treats that as needing confirmation,
       // never as fresh, and never fabricates a date.
       // `fieldProvenance` is the authority when present. `userProvided` / `userProvidedAt` remain
-      // the fallback for rows written before the map existed: membership there means "somebody
-      // answered, probably the owner" and absence means "we do not know" — both resolved in the
-      // safe direction, exactly as before. New rows never take the fallback.
+      // the fallback for any row whose write path never records a `fieldProvenance` entry: membership
+      // there means "somebody answered, probably the owner" and absence means "we do not know" — both
+      // resolved in the safe direction, exactly as before.
+      // CORRECTED 2026-08-15 (whole-branch review Finding 3): this used to say "New rows never take
+      // the fallback," which is false — `runEvaluation`'s `fillVault` (evaluations.ts) is a SECOND
+      // scorecard writer that fills a null slot from grounded text via `setPath` and records NO
+      // `fieldProvenance` entry, so a row written TODAY can still carry a value with no map entry and
+      // take this fallback. Harmless today (both `applyScorecardAnswer` and `fillVault` land on
+      // `actor: "agent"`, `statedAt: null` here either way), but the fallback is live code, not
+      // legacy-only dead weight — do not delete it on the old claim's authority.
       const prov =
         spec.path === undefined ? undefined : evaluation?.fieldProvenance?.[spec.path as string];
       const statedAt =

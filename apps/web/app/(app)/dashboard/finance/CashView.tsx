@@ -474,9 +474,17 @@ export function ActivitySection({
 
 /**
  * One row: a real `<label>`, a number input seeded from the stored value, a Save button and a
- * provenance line — `Unlocks <what>` when never answered, `Last confirmed <date>` otherwise, with a
- * confirm-or-update prompt appended once the input goes stale (CLAUDE.md §10: `--ink-soft` and an
- * explicit word, never the approval-gate amber).
+ * provenance line — `Unlocks <what>` when never answered, otherwise the SAME (origin, actor) wording
+ * `FigureTile` above uses (whole-branch review Finding 1): `state.actor === "user"` reads
+ * "You told us this on <date>.", anything else reads "Recorded by Pikar from your own information,
+ * as of <date>." — never the bare "Last confirmed <date>." this used to print regardless of actor,
+ * which let an agent-approved figure (Task 4's `fieldProvenance`-sourced `statedAt`) render as the
+ * owner's own confirmation under a heading that says "What you tell us". A confirm-or-update prompt
+ * is appended once the input goes stale either way (CLAUDE.md §10: `--ink-soft` and an explicit
+ * word, never the approval-gate amber).
+ *
+ * One component for BOTH `financeInputs` and scorecard-store fields (`CashInputSpec.store`) — fixing
+ * the attribution here covers every row `NumbersPanel` renders, not just the six scorecard ones.
  *
  * Validated on change with the SAME `validateCashInput` the mutation enforces — this is convenience,
  * not the trust boundary, which is why Save disables on an invalid draft rather than merely warning.
@@ -527,9 +535,16 @@ function InputRow({
             ? // A legacy value with no recorded date (it predates confirm-or-update tracking).
               // Unknown age is never rendered as fresh — honest about not knowing, not silent.
               "No confirmation date on file. Still right? Confirm or update it."
-            : state.stale
-              ? `Last confirmed ${formatUtcDay(state.statedAt)}. Still right? Confirm or update it.`
-              : `Last confirmed ${formatUtcDay(state.statedAt)}.`}
+            : // (origin, actor) — the SAME attribution FigureTile applies above, and for the same
+              // reason: `state.statedAt` can now come from `fieldProvenance.at` on an agent-approved
+              // claim (Task 4), so only `actor === "user"` earns "you told us"; anything else reads
+              // as Pikar's own record, never the owner's confirmation.
+              (() => {
+                const stalePrompt = state.stale ? " Still right? Confirm or update it." : "";
+                return state.actor === "user"
+                  ? `You told us this on ${formatUtcDay(state.statedAt)}.${stalePrompt}`
+                  : `Recorded by Pikar from your own information, as of ${formatUtcDay(state.statedAt)}.${stalePrompt}`;
+              })()}
       </p>
       {check && !check.ok ? (
         <p role="alert" style={{ ...muted, fontSize: "0.8rem", width: "100%", margin: 0 }}>

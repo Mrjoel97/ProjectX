@@ -162,6 +162,51 @@ describe("your numbers panel", () => {
     expect(html).toMatch(/receivables/i);
     expect(html).toMatch(/payables/i);
   });
+
+  // Whole-branch review Finding 1 — the central invariant (see FigureTile's "provenance is
+  // attributed to whoever actually supplied the figure" describe block above) reasserted at the
+  // collection surface, under the "What you tell us" heading. `applyScorecardAnswer` now writes
+  // agent-approved figures with a real `statedAt` (Task 4's fieldProvenance), so an unbranched
+  // "Last confirmed <date>." here presents the AGENT's figure as the OWNER's own confirmation —
+  // exactly the sentence "What you tell us" promises never to say about something nobody told it.
+  test("an agent-supplied input is never presented as the owner's own confirmation", () => {
+    const html = render(NumbersPanel, {
+      inputs: [
+        input({
+          field: "cac",
+          value: 250,
+          statedAt: Date.UTC(2026, 7, 10),
+          stale: false,
+          actor: "agent",
+        }),
+      ],
+      tier: "solopreneur",
+      busy: false,
+      error: null,
+      onSave: noop,
+    });
+    expect(html).not.toMatch(/Last confirmed/);
+    expect(html).toMatch(/Recorded by Pikar from your own information, as of /);
+  });
+
+  test("a user-supplied input still reads as the owner's own confirmation", () => {
+    const html = render(NumbersPanel, {
+      inputs: [
+        input({
+          field: "cashOnHand",
+          value: 5000,
+          statedAt: Date.UTC(2026, 7, 10),
+          stale: false,
+          actor: "user",
+        }),
+      ],
+      tier: "solopreneur",
+      busy: false,
+      error: null,
+      onSave: noop,
+    });
+    expect(html).toMatch(/You told us this on /);
+  });
 });
 
 describe("figure rendering — the four truths, on screen", () => {

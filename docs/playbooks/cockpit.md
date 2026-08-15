@@ -1,5 +1,15 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-15 (whole-branch review final-fix pass, Finding 2). `recordScorecardAnswer`
+> (`llm.ts` ~3517, the "store" write half of vault-first→ask→store) used to tell the model, verbatim,
+> "it'll show as user-provided" — false since Task 2 of this plan: `recordScorecardAnswerInternal`
+> stamps `actor: "agent"` (`evaluations.ts` ~723-728), and `applyScorecardAnswer` keeps an agent write
+> OUT of `userProvided`. The model relayed that false sentence to the user unchanged. Corrected both
+> the returned sentence and the header comment above the tool (~3512-3513) to say the figure is saved
+> and recorded as relayed by the assistant, not confirmed by the owner. No behaviour change — the
+> write path was already correct; only what the tool SAYS about it was wrong. This does not touch
+> `stageFinanceWrite`'s gate at `llm.ts:2890`, documented below — still deliberately unchanged.
+>
 > Note (scorecard-field-provenance, Task 5 fix round 2 + Task 6 close-out — CONSOLIDATED,
 > COMMENT-ONLY, no behaviour change from this note.) `llm.ts`'s `stageFinanceWrite` tool
 > (`buildCockpitTools`, the `stageFinanceWrite: tool({...})` handler starting ~`llm.ts:2798`) STILL

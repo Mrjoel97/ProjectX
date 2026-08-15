@@ -3509,8 +3509,10 @@ export function buildCockpitTools(
       },
     }),
     // ── recordScorecardAnswer (BEVL-01) — the "store" write half of vault-first→ask→store ──────────
-    // A DIRECT scorecard write: the user hands over their OWN figure ("my CAC is 120"), so it is cited
-    // "user-provided" and does NOT cross the Approve gate — a self-reported fact is not an outbound
+    // The user HANDS OVER a figure in chat ("my CAC is 120"), but the write lands through the AGENT,
+    // not the owner's own hand on the finance panel — `applyScorecardAnswer` stamps it
+    // `actor: "agent"` (Task 2), so it is cited as relayed by the assistant, never "user-provided".
+    // It still does NOT cross the Approve gate — a self-reported fact is not an outbound
     // action, so the two-shapes rule doesn't apply. Tenant-scoped via the EXPLICIT tenantId (the loop
     // carries no live identity), refs-only audit (§4 — field name + a value fingerprint, never the raw
     // figure). Quiet: no agentStep, so no SMOKE_OP_TOOL / tool-union entry (only evaluateBusiness steps).
@@ -3551,7 +3553,7 @@ export function buildCockpitTools(
           actor: "system",
           payload: { field, valueHash: await contentHash(value) },
         });
-        return "Noted — I saved that for your evaluation and won't ask again; it'll show as user-provided.";
+        return "Noted — I saved that for your evaluation and won't ask again; it's recorded as relayed by me, not confirmed by you.";
       },
     }),
     // ── replyToMessage (RPLY-01) — turn "reply to X" into a real threaded reply in ONE turn ───────

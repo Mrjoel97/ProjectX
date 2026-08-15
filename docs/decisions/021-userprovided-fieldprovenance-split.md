@@ -66,7 +66,8 @@ Concretely:
 3. `fieldProvenance` is written unconditionally, on every answer, regardless of actor.
 4. Readers (`cash.ts`'s `inputStatesFor`, the Finance-page adapter) **prefer `fieldProvenance` and
    fall back to the `userProvided`/`userProvidedAt` proxy only for a row with no `fieldProvenance`
-   entry for that path** — every row written before this column existed, and nothing else.
+   entry for that path** — not only rows written before this column existed; see the correction
+   note below.
 5. **An agent write drops a stale `userProvided` membership marker, it does not merely decline to
    add one.** Found during this plan's own review: the owner types a figure on the finance page
    (legitimately joins `userProvided`), and a later *approved* agent claim overwrites the *value* —
@@ -103,7 +104,8 @@ Anything that needs to represent "who wrote this, and was it the user" reads or 
 `fieldProvenance`, never `userProvided`. A consumer that needs the owner's own testimony — at the
 trust level `runEvaluation`'s citation map assumes — reads `userProvided` membership and nothing
 else; a consumer that needs to know the fact's real origin, including an honest "an agent wrote
-this," reads `fieldProvenance` and falls back to the legacy proxy only for rows that predate it.
+this," reads `fieldProvenance` and falls back to the legacy proxy for any row that lacks an entry —
+not only rows that predate this column; see the correction note below.
 
 ADRs in this repository are immutable once accepted (`docs/README.md`): this decision is not edited
 in place if it is later revisited — a reversal is a new ADR that supersedes this one, with this
@@ -126,4 +128,19 @@ file's Status line updated to point at it.
   gap in what the store can now honestly record — see `docs/playbooks/cockpit.md`.
 - **Every pre-existing `evaluations` row is still valid.** `fieldProvenance` is optional; a legacy
   row simply has none, and every reader that consults it falls back to the `userProvided` /
-  `userProvidedAt` proxy for exactly those rows. No migration, no backfill.
+  `userProvidedAt` proxy for any row lacking an entry (see the correction note below — not only
+  legacy rows). No migration, no backfill.
+
+## Correction — 2026-08-15 (whole-branch review Finding 3)
+
+This ADR, as originally recorded a few hours earlier the same day, described the
+`userProvided`/`userProvidedAt` fallback (Decision item 4, the Standing rule paragraph, and the last
+Consequences bullet) as applying "only for rows written before this column existed, and nothing
+else." That is factually wrong: `runEvaluation`'s `fillVault` (`packages/backend/convex/evaluations.ts`)
+is a second scorecard writer that fills a null slot from grounded vault text via `setPath` and records
+no `fieldProvenance` entry, so a row written **after** this plan can still take the fallback. The
+three passages above are corrected to say so. This correction changes only that factual description
+of the fallback's reach — the Decision itself (`userProvided` never widened, `fieldProvenance` is the
+authority, the fallback exists) and the Standing rule (`userProvided` is never widened to include a
+write an agent performed) are unchanged, per the controller's ruling that this ADR's immutability
+protects the recorded decision, not a factual error about what the code does.
