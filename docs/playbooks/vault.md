@@ -1,5 +1,51 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Last verified: 2026-08-15 (**Seam B — the stored bytes now announce themselves; the PDF path is
+> complete end to end**). **OWNER-ATTESTED IN A BROWSER: "it renders."** That also discharges the
+> "NOT VERIFIED IN A BROWSER" caveat on the Seam A entry below. It is an owner observation, not an
+> automated one — no spec asserts the paint.
+>
+> **`createDocument` HAS ALWAYS RENDERED A REAL PDF** for `form: "long"` (`llm.ts`, `markdownToPdf`
+> → `ctx.storage.store`). Every long document ever created already had PDF bytes in storage. They
+> were unviewable because `insertCreatedDoc` wrote `mimeType: "text/markdown"`: the row described
+> the artifact of record while `storageId` held something else, and the preview keys on the row.
+> ONE FIELD WAS ANSWERING TWO QUESTIONS, and it answered for the wrong one.
+>
+> `storedMimeType` (optional, `vaultDocuments`) names the second question — what the BYTES are.
+> `mimeType` keeps its LOCKED meaning, markdown, so a created document stays extractable and
+> groundable. Absent ⇒ the bytes are what `mimeType` says, true for every upload and every row
+> written before this, so there is no migration.
+>
+> **THE TEMPTING WRONG FIX, AND WHY IT IS GUARDED.** `mimeType: storageId ? "application/pdf" :
+> "text/markdown"` is one character cheaper, lights the viewer up immediately, and quietly breaks
+> the LOCKED contract. Applying it turns *"while mimeType stays the locked markdown"* red with
+> `expected 'application/pdf' to be 'text/markdown'`. The test proves the feature works AND that
+> the next person cannot make it work the wrong way.
+>
+> **`projectVaultDoc` IS WHERE THIS WOULD SILENTLY DIE.** `listVaultDocs` returns a fixed field
+> list; a field missing from it is invisible to the UI no matter what the row holds. Dropping
+> `storedMimeType` there reddens *"the projection carries storedMimeType"* with `expected undefined
+> to be 'application/pdf'`. Add preview-facing fields to that projection or they do not exist.
+>
+> `PreviewModal` resolves `storedMimeType ?? mimeType` ONCE into `displayMime`, feeding both the
+> signed-URL query and the render branch — see the Seam A entry for what happened the last time
+> those two answered the mime question separately.
+>
+> **MEASURED:** `createdDocs.test.ts` 14/14 (3 new), backend + web `tsc --noEmit` exit 0, both
+> mutations proven red and reverted. **KNOWN GAPS:** documents created before this keep
+> `storedMimeType: undefined`, so their existing PDFs stay unviewable until a backfill sweep;
+> `form: "short"` renders no PDF, by design.
+
+> Last verified: 2026-08-15 (Drive root listing fails LOUDLY now — **a failed `files.list` at the
+> root returns `drive_error` instead of an empty ok.** The degrade-to-[] shape rendered a tenant
+> whose GCP project had the Drive API disabled (403 on every call) as "Nothing here — no folders
+> and no files", indistinguishable from an empty Drive; the owner read it as a broken connection.
+> The asymmetry is deliberate and now pinned by two tests in `vaultDrive.test.ts`: the
+> shared-drives probe alone may still degrade (personal accounts 403 `drives.list` by design), but
+> a failed `files.list` is always an error. Ops note: the Drive API must be ENABLED on the OAuth
+> client's GCP project — the scope grant alone does not enable the API; the 403 body names the
+> exact enable URL and `logDriveFailure` puts it in the Convex log.)
+
 > Last verified: 2026-08-15 (**PDF previews render as the document, not as a wall of its text** —
 > Seam A of the PDF end-to-end work). This is the real entry the note below correctly says was
 > owed; that note stands as the record of the gap, and this pays it.

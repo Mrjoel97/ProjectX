@@ -49,13 +49,22 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
-  const media = binaryMediaKind(doc.mimeType) !== null;
+  // WHAT THE BYTES ARE beats what the row calls itself, and it is resolved ONCE. `mimeType` is the
+  // artifact of record (LOCKED to "text/markdown" for agent-created documents so they stay
+  // extractable and groundable); `storedMimeType` describes the PDF `createDocument` actually
+  // rendered. Absent for uploads, where the two are the same thing.
+  //
+  // Resolved here and passed down rather than read twice: this value feeds BOTH the signed-URL
+  // query and the render branch, and the last time those two answered the mime question separately
+  // a document qualified for a branch whose URL was never fetched and rendered nothing, silently.
+  const displayMime = doc.storedMimeType ?? doc.mimeType;
+  const media = binaryMediaKind(displayMime) !== null;
   const mediaUrl = useQuery(api.vault.vaultDownloadUrl, media ? { vaultDocId: doc._id } : "skip");
   const docText = useQuery(api.vault.vaultDocText, { vaultDocId: doc._id });
   const text = docText === undefined ? undefined : (docText?.text ?? null);
   const preview = derivePreviewState({
     status: doc.status,
-    mimeType: doc.mimeType,
+    mimeType: displayMime,
     text,
     // A resolved null URL means the metadata points at bytes that no longer exist. Keep undefined
     // as loading so a media document does not flash the missing-original state while its lazy
