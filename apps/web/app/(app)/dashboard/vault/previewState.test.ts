@@ -1,9 +1,20 @@
 import { describe, expect, test } from "vitest";
 import { derivePreviewState, PREVIEW_SNIPPET_CHARS, previewCapabilities } from "./previewState";
 
+// THE FIXTURE MIME CHANGED, AND THAT IS THE FEATURE, NOT A TEST REPAIR. It used to be
+// `application/pdf`, chosen as a stand-in for "has bytes, cannot be shown inline, so fall through
+// to extracted text". A PDF is no longer that document: `binaryMediaKind` now routes it to the
+// browser's own viewer. DOCX takes over the role — real bytes, real extracted text, and genuinely
+// nothing a browser can render.
+//
+// Three tests below failed on this change before the fixture moved, and one of them —
+// "distinguishes ready media from unsupported inline formats" — asserted `unsupported` for a PDF.
+// That assertion WAS the old behaviour, stated deliberately. It is what this feature reverses.
+const DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
 const ready = {
   status: "ready" as const,
-  mimeType: "application/pdf",
+  mimeType: DOCX,
   hasStoredBytes: true,
 };
 
@@ -48,7 +59,55 @@ describe("derivePreviewState", () => {
     expect(
       derivePreviewState({ ...ready, mimeType: "video/mp4", text: null }).content,
     ).toMatchObject({ kind: "ready-binary", media: "video" });
+    expect(
+      derivePreviewState({ ...ready, mimeType: "application/pdf", text: null }).content,
+    ).toMatchObject({ kind: "ready-binary", media: "pdf" });
     expect(derivePreviewState({ ...ready, text: null }).content.kind).toBe("unsupported");
+  });
+
+  // A PDF has a TRUE FORM — pagination, tables, figures, signatures — and every browser can
+  // already render it. Before this it fell through to the extracted-text branch and the document
+  // was replaced by a paragraph of its own words: the same defect 15.4-03 shipped for images.
+  test("a PDF with stored bytes renders as the document, not as a wall of its text", () => {
+    const withText = derivePreviewState({
+      ...ready,
+      mimeType: "application/pdf",
+      text: "Extracted contract body",
+    });
+    expect(withText.content).toMatchObject({ kind: "ready-binary", media: "pdf" });
+    // The extraction is NOT discarded — it rides beneath the viewer, as a transcript does.
+    expect(withText.content).toMatchObject({ text: "Extracted contract body" });
+  });
+
+  test("its copy names a PDF, rather than inheriting the video label", () => {
+    // The branch this replaced read `media === "image" ? "Image preview" : "Video preview"`, which
+    // is right for two kinds and silently wrong for a third.
+    expect(
+      derivePreviewState({ ...ready, mimeType: "application/pdf", text: null }).content,
+    ).toMatchObject({ title: "PDF preview" });
+  });
+
+  test("a PDF whose bytes are gone falls back — it must never frame nothing", () => {
+    // An <iframe> over a dead URL renders a blank rectangle with no error. The state has to refuse
+    // the binary branch itself rather than leave the UI to notice.
+    expect(
+      derivePreviewState({
+        ...ready,
+        mimeType: "application/pdf",
+        text: "Extracted contract body",
+        hasStoredBytes: false,
+      }).content.kind,
+    ).toBe("ready-text");
+  });
+
+  test("only application/pdf gets the viewer — not every application/* blob", () => {
+    // `startsWith("application/")` would drag in zips, JSON and Office files, none of which a
+    // browser can display. Each would frame an empty rectangle or trigger a download.
+    for (const mime of ["application/zip", "application/json", DOCX]) {
+      expect(derivePreviewState({ ...ready, mimeType: mime, text: null }).content.kind).toBe(
+        "unsupported",
+      );
+    }
   });
 
   // THE REGRESSION 15.4-03 SHIPPED. Every image is described by the hosted vision rail

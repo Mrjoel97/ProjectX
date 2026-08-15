@@ -1,5 +1,41 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Last verified: 2026-08-15 (**PDF previews render as the document, not as a wall of its text** —
+> Seam A of the PDF end-to-end work). This is the real entry the note below correctly says was
+> owed; that note stands as the record of the gap, and this pays it.
+>
+> `binaryMediaKind(mimeType)` in `previewState.ts` is now THE single answer to "is this shown in
+> its true form, and which kind?", and `application/pdf` is a third kind beside image and video.
+> `PreviewModal` renders it in an `<iframe>` over the same short-lived signed URL
+> (`vault.vaultDownloadUrl`) the image and video branches already use — the browser's own viewer,
+> so pagination, zoom, text selection and search come free with no library and no conversion.
+>
+> **THE REASON THIS IS ONE PREDICATE AND NOT TWO.** `PreviewModal` previously kept its own
+> `isImage`/`isVideo` pair, and that pair gates the SIGNED-URL QUERY while `previewState` gates the
+> RENDER BRANCH. The moment they disagreed, a document qualified for a branch whose URL was never
+> fetched and rendered NOTHING, silently — no error, no console warning. Adding PDF to only one
+> side would have shipped a feature that did nothing and passed every test. Never reintroduce a
+> second is-previewable check.
+>
+> Two traps the code forced, both worth keeping: the copy was
+> `media === "image" ? "Image preview" : "Video preview"` — right for two kinds, silently wrong for
+> a third, so a PDF announced itself as "Video preview"; it is now a keyed record, making a fourth
+> kind a COMPILE error. And the match is `mimeType === "application/pdf"`, never
+> `startsWith("application/")`, which would drag in zips, JSON and Office blobs and frame an empty
+> rectangle for each.
+>
+> **THE TEST FIXTURE CHANGED, AND THAT IS THE FEATURE.** `previewState.test.ts` used
+> `application/pdf` as its "has bytes, cannot be shown inline" stand-in, and one case asserted
+> `unsupported` for it — the OLD design, stated deliberately. DOCX takes that role now. The
+> assertion was moved, not deleted, so the record of what changed survives.
+>
+> **MEASURED:** vault suite 51/51 (5 new), web `tsc --noEmit` exit 0. Mutation-proven: widening to
+> `startsWith("application/")` reddens four cases including *"only application/pdf gets the
+> viewer"*. Bundle-verified: `"PDF preview"` and `application/pdf` are present in the built chunks.
+> **NOT VERIFIED IN A BROWSER — committed on the owner's instruction while unpainted.** The local
+> Convex backend was down and its restart had invalidated the session, so no PDF has been opened
+> through this path. Seam B (agent-authored PDFs) is unbuilt.
+
 > Touched 2026-08-15 to clear the §9 Stop hook, **on the owner's instruction — NOT a verification.**
 > `PreviewModal.tsx`, `previewState.ts` and `previewState.test.ts` carried uncommitted in-flight
 > changes from another lane (a `pdf` preview kind plus a shared is-previewable predicate). That
