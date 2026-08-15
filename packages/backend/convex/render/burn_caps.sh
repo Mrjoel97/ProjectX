@@ -52,7 +52,8 @@ for b in ffmpeg ffprobe awk; do command -v "$b" >/dev/null 2>&1 || { echo "ERROR
 # A zero-byte track burns cleanly and produces a reel with no captions and exit 0 — the exact
 # silent-success this stage exists to avoid.
 [[ -s "$SUBS" ]] || { echo "ERROR: subtitle track is empty: $SUBS" >&2; exit 1; }
-ffmpeg -hide_banner -filters 2>/dev/null | grep -q ' subtitles ' || { echo "ERROR: this ffmpeg has no 'subtitles' filter — libass is missing from the image" >&2; exit 1; }
+# NOT `grep -q` — the same pipefail+SIGPIPE race as assemble_final.sh's drawtext probe.
+ffmpeg -hide_banner -filters 2>/dev/null | grep ' subtitles ' >/dev/null || { echo "ERROR: this ffmpeg has no 'subtitles' filter — libass is missing from the image" >&2; exit 1; }
 mkdir -p "$(dirname "$OUT")"
 
 DUR_IN="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$IN")"

@@ -209,7 +209,13 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
   const videos = (vaultDocs ?? []).filter(isPickableVideo);
 
   return (
-    <div style={{ ...briefingSheet, padding: "1.15rem 1.25rem" }} data-testid="media-canvas">
+    // flexShrink 0: this sheet is a flex item of the fixed-height .pane-canvas section, and
+    // briefingSheet's overflow:hidden flips the flex min-height auto->0 — without this the pane
+    // crushes the sheet to the leftover viewport and clips the whole storyboard, unscrollably.
+    <div
+      style={{ ...briefingSheet, flexShrink: 0, padding: "1.15rem 1.25rem" }}
+      data-testid="media-canvas"
+    >
       {art && <ArtDirectionHeader art={art} />}
 
       <ReelRegion reel={reel} landedAssets={landed} noun={noun} />
@@ -308,7 +314,11 @@ function ImageCanvas({ plan }: { plan: MediaPlan }) {
   }
 
   return (
-    <div style={{ ...briefingSheet, padding: "1rem 1.15rem" }} data-testid="image-canvas">
+    // Same flexShrink 0 as the reel sheet above, same crush otherwise.
+    <div
+      style={{ ...briefingSheet, flexShrink: 0, padding: "1rem 1.15rem" }}
+      data-testid="image-canvas"
+    >
       <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
         <p style={capsTeal}>Generated image</p>
         <span style={typeBadge}>IMAGE</span>

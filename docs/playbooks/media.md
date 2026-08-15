@@ -1,5 +1,31 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-08-15 (render_failed postmortem, FIXED AND RE-RENDERED IN THE PROD SANDBOX —
+> **the first card-scene render died on a `grep -q` + pipefail SIGPIPE race, not a missing
+> library.** `assemble_final.sh`'s drawtext probe (`ffmpeg -filters | grep -q ' drawtext '`) under
+> `set -o pipefail`: `-q` exits at the first match (line 244 of 571), ffmpeg takes SIGPIPE (141)
+> writing the rest, pipefail fails the pipeline, and the script reported "libfreetype is missing"
+> on an image that HAS drawtext — an unmatched stderr, so Convex recorded the catch-all
+> `render_failed`. Windows never races (no SIGPIPE), which is why local runs passed the probe.
+> `burn_caps.sh`'s subtitles probe carried the identical landmine. Fix: plain `grep ... >/dev/null`
+> (reads to EOF, no SIGPIPE) in both scripts + regenerated .ts mirrors, and `libfreetype is
+> missing` now maps to `missing_binary` in `STDERR_CODES`. Verified by re-running the failed batch
+> (plan `p573x3...`, real inputs via the blob route) in a sandbox from the LIVE snapshot
+> `snap_shetn1hAzlXxJMSA3lQmE5keSIIh`: EXIT 0, 4 scenes, 15.000000 s, decode-validated. Rule:
+> **never `grep -q` the left side of a pipeline under pipefail** — probe with plain grep to
+> /dev/null, or capture first.)
+
+> Last verified: 2026-08-15 (canvas-crush fix, VERIFIED IN THE LIVE BROWSER — **the canvas view was
+> an unscrollable 413 px clip of a 3,466 px storyboard.** Both canvas sheets spread `briefingSheet`,
+> whose `overflow: hidden` (there for the rounded corners) flips a flex item's implicit
+> `min-height: auto` to `0`; as direct flex children of the fixed-height `.pane-canvas` section they
+> were crushed to the leftover viewport and clipped everything below — cards cut mid-body, wheel
+> scroll dead (`split-right` had nothing to scroll: sh == ch). The work view never showed it because
+> `CardList` is a grid child that overflows naturally. Fix: `flexShrink: 0` on both sheet roots, so
+> the sheet keeps its natural height and the pane scrolls exactly like the work view. Rule for the
+> future: **anything spreading `briefingSheet` that mounts as a flex item of a fixed-height pane
+> needs `flexShrink: 0`**, or it will silently become a clipped box.)
+
 > Provider cutover verified 2026-08-14: new images use OpenAI GPT Image 2 and new videos use
 > OpenAI Sora 2 through `OPENAI_API_KEY`. Images land synchronously; videos follow
 > `submitLine` → `pollOpenAiVideoTask` → `mediaComplete.landResult`. OpenAI has announced that
@@ -9,6 +35,22 @@
 > explicit approval. The Wan poller and fal callback fields/routes remain legacy-compatible only
 > for already-submitted historical jobs. Older provider-specific sections below describe the
 > superseded implementation unless explicitly marked current. See ADR-017.
+
+> Last verified: 2026-08-15 (route_unreachable postmortem — **THE PROD RENDER SPINE HAD NEVER
+> CARRIED A REQUEST, and three independent blockers said so with one reason code.** The 2026-08-14
+> dead-letter (plan `p57ce…`) traced to: (1) prod `MEDIA_RENDER_URL` was a stale generated
+> `*.vercel.app` deployment URL — Vercel Deployment Protection 401s "Protected deployment" before
+> the route runs, the same `ei931zp0e` URL that broke `SITE_URL` on 2026-08-12; (2) the auth
+> middleware matcher covers `/api/*` and `/api/media/render` was not on `isPublic`, so even the
+> durable domain 307'd the cookie-less server-to-server POST to `/signin`; (3) prod
+> `MEDIA_RENDER_SECRET` carried a trailing `\r` from a Windows `env set`, which makes fetch throw
+> on the Authorization header. Fixes: middleware exemption (the route's own bearer check is the
+> auth), `deploy-production.yml` now pins `MEDIA_RENDER_URL` to `$PRODUCTION_URL/api/media/render`
+> with read-back exactly like `SITE_URL`, and both prod env values re-set clean. Lesson recorded
+> in "The two secrets" below: **the URL must be the durable custom domain, never a generated
+> deployment URL** — those are protection-walled and go stale on every deploy. Note `renderReel`
+> collapses thrown fetches AND every non-2xx into `route_unreachable`; when it fires, probe the
+> URL by hand first.)
 
 > Last verified: 2026-08-14 (20.2 wave 8 — **THE SPECIALIST BECOMES A SCENE AUTHOR, and the approve
 > arm opens.** `media-director.md` is v2: `SCENE DECK` with `Target duration`, a `Seconds` column
@@ -1556,7 +1598,11 @@ bearer creates NO sandbox" is assertable at all, since `apps/web` has no unit-te
 ```bash
 # from packages/backend
 npx convex env set MEDIA_RENDER_SECRET <fresh random>
-npx convex env set MEDIA_RENDER_URL https://<app>/api/media/render
+npx convex env set MEDIA_RENDER_URL https://www.pikar-ai.com/api/media/render
+# DURABLE CUSTOM DOMAIN ONLY — a generated *.vercel.app deployment URL sits behind Vercel
+# Deployment Protection (401 before the route runs) and goes stale on every deploy. In prod the
+# release pipeline pins this to $PRODUCTION_URL/api/media/render with read-back; set it by hand
+# only on dev. Beware the Windows quoting quirk: a trailing \r in either value breaks the fetch.
 # and on Vercel (Project -> Settings -> Environment Variables)
 MEDIA_RENDER_SECRET=<the same value>
 MEDIA_SANDBOX_SNAPSHOT_ID=<from the bake script>

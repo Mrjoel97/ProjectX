@@ -228,6 +228,52 @@ describe("a browsed level shows what is in it, not just its subfolders", () => {
     ).not.toContain("google-apps.folder");
   });
 
+  // A failed `files.list` at the ROOT must render as an ERROR, never as an empty Drive. The
+  // degrade-to-[] shape showed a tenant with a disabled Drive API (403, observed 2026-08-15)
+  // "Nothing here — no folders and no files", which reads as a broken connection.
+  test("a failing files.list at the root returns drive_error, not an empty ok", async () => {
+    const t = harness();
+    await seedGrant(t, FULL_SCOPE);
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (!String(url).includes("/drive/v3/"))
+          return Response.json({ access_token: "fresh", expires_in: 3600 });
+        return new Response('{"error":{"code":403}}', { status: 403 });
+      }),
+    );
+
+    const r = await t.withIdentity({ subject: TENANT }).action(api.vaultDrive.listDriveFolders, {});
+    expect(r).toEqual({ ok: false, reason: "drive_error" });
+  });
+
+  // The asymmetry is DELIBERATE: the shared-drives probe alone may fail (a personal account 403s
+  // `drives.list` by design) and the root still lists — only the two `files.list` calls are load-
+  // bearing.
+  test("a failing drives.list alone still lists the root", async () => {
+    const t = harness();
+    await seedGrant(t, FULL_SCOPE);
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (!String(url).includes("/drive/v3/"))
+          return Response.json({ access_token: "fresh", expires_in: 3600 });
+        if (String(url).includes("/drive/v3/drives"))
+          return new Response('{"error":{"code":403}}', { status: 403 });
+        return Response.json({
+          files: [{ id: "f1", name: "Plans", mimeType: "application/vnd.google-apps.folder" }],
+        });
+      }),
+    );
+
+    const r = await t.withIdentity({ subject: TENANT }).action(api.vaultDrive.listDriveFolders, {});
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.folders.map((f) => f.id)).toEqual(["f1"]);
+  });
+
   // The classifier is SHARED with the import on purpose: what the picker promises and what the
   // import does cannot drift apart if there is only one function deciding.
   test("the browse verdict is the import's verdict — one classifier, not two", () => {

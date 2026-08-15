@@ -160,7 +160,10 @@ if printf '%s\n' "${KINDS[@]}" | grep -qx card; then
   # The libass precedent from `burn_caps.sh`: REFUSE a build that cannot draw rather than produce
   # a black rectangle with exit 0. drawtext is a --enable-libfreetype filter and is absent from
   # minimal builds.
-  ffmpeg -hide_banner -filters 2>/dev/null | grep -q ' drawtext ' || { echo "ERROR: this ffmpeg has no 'drawtext' filter — libfreetype is missing from the image, and a 'card' scene cannot be drawn." >&2; exit 1; }
+  # NOT `grep -q`: under pipefail, -q exits at the first match and ffmpeg dies on SIGPIPE (141)
+  # writing the rest of the filter list — the pipeline then FAILS on a build that HAS drawtext.
+  # Plain grep reads to EOF, so ffmpeg always exits 0 and the pipeline status is grep's own.
+  ffmpeg -hide_banner -filters 2>/dev/null | grep ' drawtext ' >/dev/null || { echo "ERROR: this ffmpeg has no 'drawtext' filter — libfreetype is missing from the image, and a 'card' scene cannot be drawn." >&2; exit 1; }
   for cand in ${ASSEMBLE_FONT:-} \
       /usr/share/fonts/dejavu-sans-fonts/DejaVuSans.ttf \
       /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf; do
