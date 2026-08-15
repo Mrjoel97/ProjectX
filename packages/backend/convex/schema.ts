@@ -800,8 +800,11 @@ export default defineSchema({
     scorecard: v.any(), // the parsed + carried-forward @pikar/core Scorecard snapshot
     userProvided: v.array(v.string()), // scorecard dot-path keys the user supplied in-conversation
     // Dot-path → epoch-ms the user stated/confirmed it (cash-business-finance Task 3 fix).
-    // `applyScorecardAnswer` is the ONE writer, stamping `Date.now()` on every answer, and
-    // `runEvaluation`'s carry-forward copies this map UNCHANGED into every new row — the whole
+    // `applyScorecardAnswer` is the ONE writer, but ONLY for a USER answer (`provenance.actor ===
+    // "user"`) and stamped from `provenance.at`, never `Date.now()` — a figure's stated time is
+    // when it was TRUE, not when it was written. An agent answer skips this map entirely; see
+    // `fieldProvenance` below, which records EVERY answer, agent or user. `runEvaluation`'s
+    // carry-forward copies this map UNCHANGED into every new row — the whole
     // point is that it survives the weekly re-evaluation that stamps a fresh `createdAt` on the
     // ROW. Without this, `createdAt` was read as a stand-in stated-time and a re-evaluation that
     // merely carries a field forward silently reported it "confirmed today", which suppresses the

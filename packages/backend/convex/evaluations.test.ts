@@ -408,6 +408,23 @@ describe("recordScorecardAnswer (BEVL-01 — the 'store' persistence path)", () 
     expect(typeof coerced?.scorecard.modelCard.offerTypesPresent.upsell).toBe("boolean");
     expect(coerced?.scorecard.financials.ltgp).toBe(3200);
   });
+
+  // `recordScorecardAnswerInternal` is the identity-free twin the cockpit tool loop actually calls
+  // (llm.ts:3536) — the tenantMutation above is a separate, currently-uncalled door. Nothing asserted
+  // its provenance literal until now.
+  test("recordScorecardAnswerInternal (the cockpit's real write door) stamps agent provenance", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.evaluations.recordScorecardAnswerInternal, {
+      tenantId: TENANT,
+      threadId: THREAD,
+      field: "financials.cac",
+      value: 150,
+    });
+    const row = await t.run((ctx) => latestScorecardRow(ctx.db, TENANT));
+    expect(row?.scorecard.financials.cac).toBe(150);
+    expect(row?.fieldProvenance?.["financials.cac"]?.actor).toBe("agent");
+    expect(row?.userProvided).not.toContain("financials.cac");
+  });
 });
 
 describe("evaluation.ran audit is refs-only (§4 — no grounded prose leaks)", () => {

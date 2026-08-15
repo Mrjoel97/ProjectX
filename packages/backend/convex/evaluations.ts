@@ -578,16 +578,21 @@ function coerceScorecardValue(
 }
 
 /**
- * The "store" persistence path: a user's in-conversation answer to a missing figure. Writes the
- * value into the latest row's Scorecard + adds the dot-path to userProvided[] so the NEXT
- * runEvaluation carries it forward (never re-asks) and cites any finding on it "user-provided".
+ * The "store" persistence path: an answer to a missing figure, from EITHER a user's in-conversation
+ * statement or an agent's relayed one — `provenance` (required, `FieldProvenance`) says which. The
+ * value always lands in the latest row's Scorecard, so the NEXT runEvaluation carries it forward
+ * (never re-asks) regardless of who answered. Only a USER answer (`provenance.actor === "user"`)
+ * adds the dot-path to `userProvided[]` and lets a finding on it cite "user-provided" — an agent
+ * answer is USABLE but never CREDITED as the owner's own testimony (the anti-laundering guarantee).
+ * `fieldProvenance` records EVERY answer, agent or user, and is the honest per-field audit trail.
  * Tenant-guarded (§2). No prior row (answer before the first evaluation) → seed a minimal carrier
  * row so the figure still survives forward.
  *
- * The shared store logic — patch the latest row's Scorecard (adding the dot-path to userProvided[]),
- * or seed a minimal carrier row when the user answers before the first evaluation. Takes an explicit
- * `tenantId` so BOTH the auth-scoped tenantMutation (client path) and the internal mutation (the
- * identity-free cockpit tool loop, plan 04) route through ONE implementation — no drift.
+ * The shared store logic — patch the latest row's Scorecard (joining `userProvided[]` only for a
+ * user answer, always recording `fieldProvenance`), or seed a minimal carrier row when the answer
+ * arrives before the first evaluation. Takes an explicit `tenantId` so BOTH the auth-scoped
+ * tenantMutation (client path) and the internal mutation (the identity-free cockpit tool loop, plan
+ * 04) route through ONE implementation — no drift.
  */
 export async function applyScorecardAnswer(
   db: DatabaseWriter,
