@@ -4,13 +4,13 @@ milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_plan: 7 (done)
 status: completed
-stopped_at: Phase 33 context gathered
-last_updated: "2026-08-15T14:05:32.694Z"
+stopped_at: Completed 33-01-PLAN.md
+last_updated: "2026-08-15T17:52:58.655Z"
 progress:
   total_phases: 53
   completed_phases: 31
-  total_plans: 400
-  completed_plans: 280
+  total_plans: 410
+  completed_plans: 281
 ---
 
 > **Counting note, 2026-08-14.** `total_phases` 52 → 53 reflects Phase 20.2 being registered, not new
@@ -1775,6 +1775,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 | Phase 19 P03 | 20 min | 2 tasks | 4 files |
 | Phase 19 P02 | 55 min | 3 tasks | 4 files |
 | Phase 19.1 P01 | 35 | 3 tasks | 5 files |
+| Phase 33-media-creation-ux-overhaul-guided-intake-storyboard-variations-auto-assembled-reel-reel-first-canvas-clear-failure-retry-grounded-citations P01 | 32min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -1978,6 +1979,9 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 19]: 19-02: contacts.ts ships NO public tenantQuery — writes and internals only; an export-set pin makes that provable rather than writing a vacuous foreign-tenant read test
 - [Phase 19.1]: 19.1-01: parseCsv reports the PHYSICAL file line (newlines inside quoted fields counted), not the record index — mutation-proven
 - [Phase 19.1]: 19.1-01: import identity/validity are the IMPORTED normalizeAddress/isValidEmail — an import-local rule would create contacts the send path refuses
+- [Phase 33]: 33-01: Source citation lines parse from SCENE PROMPTS per-scene blocks, not the deck table — v2 deck tables stay byte-identical
+- [Phase 33]: 33-01: unreadable Source lines (empty [doc:] id or freehand text) refuse the deck as malformed_source — a citation is never silently dropped; parser output carries no confirmation field (provenance rule)
+- [Phase 33]: 33-01: parseVariations refuses the whole proposal on any inner deck refusal — no silent one-deck fallback; each VariationSlice carries its own body slice for per-variation SCRIPT/ART DIRECTION
 
 ### Pending Todos
 
@@ -2009,8 +2013,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
-Last session: 2026-08-15T14:05:32.594Z
-Stopped at: Phase 33 context gathered
+Last session: 2026-08-15T17:51:12.779Z
+Stopped at: Completed 33-01-PLAN.md
 Last session: 2026-08-03T06:20:00.000Z
 Stopped at: Completed 15.3-04-PLAN.md
 Last session: 2026-08-03T01:10:00.000Z
@@ -2021,4 +2025,4 @@ Last session: 2026-07-27T01:04:16.127Z
 Stopped at: Completed 15.2-02-PLAN.md
 Last session: 2026-07-25T22:23:43.857Z
 Stopped at: Completed 14-04-PLAN.md (the doc-grounded mint, Lane C)
-Resume file: .planning/phases/33-media-creation-ux-overhaul-guided-intake-storyboard-variations-auto-assembled-reel-reel-first-canvas-clear-failure-retry-grounded-citations/33-CONTEXT.md
+Resume file: None
