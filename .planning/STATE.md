@@ -2,16 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
-current_phase: 20
-current_plan: 0 (2026-08-14 — PHASE 14→25 GAP AUDIT + Bucket-A reconciliation. NO plan executed, NO product code changed.)
-status: phase_complete
-stopped_at: "**2026-08-14: A PHASE 14→25 GAP AUDIT RAN AT OWNER REQUEST AND ITS DOCUMENT-RECONCILIATION HALF (Bucket A) IS APPLIED. NO PRODUCT CODE WAS TOUCHED AND NO PLAN WAS EXECUTED.** The audit re-cut `25-PREREQUISITE-EVIDENCE.md`, which was written by plan 25-00 at `aa5445b` on 2026-08-10 and had gone stale across **141 commits**. Re-audit point is `d274281`. **THE PHASE-25 GATE VERDICT IS UNCHANGED: `not eligible for review, do not type approved`** — but for a materially different row set than before. **FIVE ROWS CLEARED:** Phase 14 (`14-VALIDATION.md` now `complete_with_open_observations`, DOCV-01 Complete), Phase 15.4 (`passed` 5/5, absent from the original matrix entirely), Phase 16 (`16-VALIDATION.md` now `complete`, DISP-02 Complete), Phase 19.1 (`passed` 11/11, owner `approved`, superseding the original matrix's 'not planned or executed'), and Phases 20.1/21/23/24/26/31 moved from 'not started / no planning directory' to 'planned, unexecuted' — 21 is 5/7 done, 23 has 9 plans, 31 has 8. **ONE ROW WORSENED:** Phase 17.1 — commits `a2d7a0b` then `bc05eed` record a **FAILED** L6 gate recovery, so 17.1-10 is further from closure than the original audit implied; diagnose the failure before re-running it. **ONE ROW WAS ADDED THAT NO CHECKBOX-BASED AUDIT COULD HAVE FOUND: PHASE 20.2 (Scene Timeline Reels).** It was authored, planned and part-executed — six commits, `cca3820` through `d274281` — while appearing in NO ROADMAP, REQUIREMENTS or STATE row. It is now registered in the ROADMAP. It is still `status: proposed`, it supersedes the uniform BLOCK-DECK contract (`storyboard.ts`, D8) that Phase 20's shipped code rests on, and **it carries the whole phase in ONE document with no per-plan SUMMARY files, so plan-level completion cannot be audited the way every other phase is.** That is an open decision, not a closed one. **ONE ROW RECLASSIFIED AS NON-INDEPENDENT:** Phase 22's `/ops` DOM residue does NOT need its own pass — `25-02`'s own objective is to close it. **WHAT WAS EDITED, AND THE EVIDENCE FOR EACH:** (1) `REQUIREMENTS.md` — VALT-05…12 and VALT-14 ticked and their traceability rows moved to Complete, each citing the specific line of `15.3-VERIFICATION.md`'s per-requirement table that grounds it (that report marks exactly these nine VERIFIED and says the requirements file 'remains untouched by this verification' — declining to edit, not declining the truth). **VALT-13 STAYS PENDING** and its row now names why: no real Drive file has ever traversed `exportOne → landFile → fan-in → member ingest → digest`, and the rail has spent $0. (2) `ROADMAP.md` — **PHASE 17 WAS UNTICKED.** It was `[x]` against its own verifier, which is `gaps_found` and says in terms: 'ACTN-02 remains correctly unchecked and Pending. It must not be marked complete from the narrow Google-create result.' `calendarEvents.ts` and `microsoftCalendar.ts` DO NOT EXIST on disk; the adapter exports only `freeBusy` and `createEvent`. Six gap-closure plans (17-06…17-11) are unexecuted. **THE H1-H3 LIVE GATES CANNOT CLOSE ACTN-02** — they validate the shipped Google slice; they cannot make a missing provider exist. (3) `ROADMAP.md` — Phase 20.2 registered. (4) `REQUIREMENTS.md` — ACTN-02 and MEDIA-01 rows now name their actual blocking plans. **A FIX I PROPOSED AND WITHDREW, RECORDED SO IT IS NOT RE-PROPOSED:** I nearly ticked Phase 15.3's ROADMAP checkbox as a stale-bookkeeping defect. It is NOT one. This file already records the rule — 'the Phase-17 `human_needed` convention' — that a phase checkbox stays unticked while a live gate is open. 15.3's `[ ]` is the convention being obeyed. That same convention is exactly what made Phase 17's `[x]` (at `gaps_found`, a rung BELOW `human_needed`) the real defect. **THE BASELINE IS LESS STABLE THAN AT THE ORIGINAL AUDIT, NOT MORE** — and 25-00 exists to freeze a stable one. Since `aa5445b`: the finance/cash lane merged (working branch is `feature/cash-business-finance`); **the media generation stack migrated to Wan and OpenAI** (`eb9e2c3`, `5c06b33`) — under the very requirement Phase 20's UNPAID vendor gate is meant to qualify, so that gate would now qualify different code than it was specified against; **a production release pipeline and `.github/workflows/deploy-production.yml` landed through ten PRs** (`6aa1736`, `30a7e4a`, `be8c95f`), which is 22.1-03's SC3 substance AND Plans 25-10/25-11 territory, delivered with NO phase bookkeeping — 22.1-03 must now reconcile against CI that already exists rather than build it; and Phase 20.2 began rewriting the scene contract Phase 20 rests on. `plans.ts` moved from dirty to committed by a concurrent lane DURING this session, so lanes still share one working tree — **never `git add -A` here.** Working tree at close: 24 tracked modifications, 35 untracked paths. **THE REMAINING BACKLOG, MEASURED NOT ESTIMATED: 39 unexecuted plans inside phases 17-25, plus 18 more in phases 26 and 31, which Phase 25 names as its own prerequisites.** Owner-selected next track: Bucket A (done), then Bucket B by dependency, starting at the `20-11 → 20-12 → 20.1-02` shared `cockpit-agent` skill chain (ONE gated skill, ONE candidate stream, therefore strictly serial, and it blocks two phases at once). **THREE OWNER LIVE GATES ARE QUEUED BUT DELIBERATELY UNSCHEDULED** — the owner selected all three AND 'none right now': 15.3 H1/H2/H3 (populated Drive folder + real Shared Drive), 17 H1/H2/H3 (real Google consent + live create), and the Phase 20 fal.ai render gate (SPENDS MONEY). Surface each at the moment it becomes the actual blocker; do not send the owner to a browser before then. **`REQUIREMENTS.md` WAS EDITED THIS SESSION** — the block below says the phase-25 lane owns that file, and this pass IS that lane, acting at owner direction."
-last_updated: "2026-08-14T00:00:00.000Z"
+current_plan: 7 (done)
+status: completed
+stopped_at: Phase 33 context gathered
+last_updated: "2026-08-15T14:05:32.694Z"
 progress:
   total_phases: 53
-  completed_phases: 32
-  total_plans: 365
-  completed_plans: 268
+  completed_phases: 31
+  total_plans: 400
+  completed_plans: 280
 ---
 
 > **Counting note, 2026-08-14.** `total_phases` 52 → 53 reflects Phase 20.2 being registered, not new
@@ -2010,8 +2009,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
-Last session: 2026-08-09T11:46:24.828Z
-Stopped at: Completed 19-02-PLAN.md
+Last session: 2026-08-15T14:05:32.594Z
+Stopped at: Phase 33 context gathered
 Last session: 2026-08-03T06:20:00.000Z
 Stopped at: Completed 15.3-04-PLAN.md
 Last session: 2026-08-03T01:10:00.000Z
@@ -2022,4 +2021,4 @@ Last session: 2026-07-27T01:04:16.127Z
 Stopped at: Completed 15.2-02-PLAN.md
 Last session: 2026-07-25T22:23:43.857Z
 Stopped at: Completed 14-04-PLAN.md (the doc-grounded mint, Lane C)
-Resume file: None
+Resume file: .planning/phases/33-media-creation-ux-overhaul-guided-intake-storyboard-variations-auto-assembled-reel-reel-first-canvas-clear-failure-retry-grounded-citations/33-CONTEXT.md
