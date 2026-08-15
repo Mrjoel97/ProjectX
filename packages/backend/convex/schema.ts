@@ -1943,6 +1943,7 @@ export default defineSchema({
         basis: v.string(),
         /** When the fact was TRUE, never the write time. */
         observedAt: v.number(),
+        /** Where the fact came from. Refs and ids ONLY (§4) — never a passage. */
         sourceLocator: v.union(
           v.object({ kind: v.literal("vault_doc"), vaultDocId: v.string() }),
           v.object({ kind: v.literal("chat"), threadId: v.string() }),
