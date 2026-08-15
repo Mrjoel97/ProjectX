@@ -2,12 +2,56 @@
 // EMBEDDED, not a child table (see schema.ts comment on `proposals`) — these two tests guard the
 // round-trip and the honest-empty-result case, nothing else. A LATER task appends more tests here.
 import { convexTest } from "convex-test";
-import { expect, test } from "vitest";
+import { describe, expect, test } from "vitest";
+// `audit.log` maintains the auditCounts aggregate (audit.ts), so the component must be registered
+// or `acceptProposal`'s finance branch (which always reaches `applyFinanceClaims` ->
+// `internal.audit.log`) throws `Component "auditCounts" is not registered`. Same idiom as
+// cash.test.ts's `withAudit()`.
+import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
+import { api } from "./_generated/api";
+import { latestScorecardRow } from "./evaluations";
 import schema from "./schema";
 
 // convex-test discovers Convex function modules via import.meta.glob. Exclude
 // *.test.ts so the harness does not try to load the test files themselves (audit.test.ts idiom).
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
+const aggregateModules = import.meta.glob(
+  "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
+);
+
+function withAudit() {
+  const t = convexTest(schema, modules);
+  t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+  return t;
+}
+
+// Match cash.test.ts's identity helper exactly.
+const asTenant = (t: ReturnType<typeof convexTest>, userId: string) =>
+  t.withIdentity({ subject: `${userId}|session`, issuer: "test" });
+
+const cacFact = {
+  target: { store: "scorecard" as const, field: "cac" },
+  value: 340,
+  confidence: "high" as const,
+  origin: "stated" as const,
+  actor: "agent" as const,
+  basis: "vaultDoc:doc123",
+  observedAt: 1_650_000_000_000,
+  sourceLocator: { kind: "vault_doc" as const, vaultDocId: "doc123" },
+};
+
+async function seedProposal(t: ReturnType<typeof convexTest>, tenantId: string, items: unknown[]) {
+  return t.run((ctx) =>
+    ctx.db.insert("proposals", {
+      tenantId,
+      createdAt: 1_700_000_000_000,
+      sourceKind: "vault_doc" as const,
+      sourceRef: "doc123",
+      status: "pending" as const,
+      items: items as never,
+    }),
+  );
+}
 
 test("a proposals row round-trips with its items", async () => {
   const t = convexTest(schema, modules);
@@ -102,9 +146,7 @@ test("every union member round-trips through the validator", async () => {
   ];
   for (const [label, override] of itemVariants) {
     const item = { ...baseItem, ...override };
-    const id = await t.run((ctx) =>
-      ctx.db.insert("proposals", { ...baseRow, items: [item] }),
-    );
+    const id = await t.run((ctx) => ctx.db.insert("proposals", { ...baseRow, items: [item] }));
     const row = await t.run((ctx) => ctx.db.get(id));
     expect(row?.items[0], label).toEqual(item);
   }
@@ -137,4 +179,80 @@ test("an empty items array is storable — a source that yielded nothing is a re
     }),
   );
   expect((await t.run((ctx) => ctx.db.get(id)))?.items).toEqual([]);
+});
+
+describe("acceptProposal", () => {
+  test("accepting a blank scorecard fact applies it with honest provenance", async () => {
+    const t = withAudit();
+    const proposalId = await seedProposal(t, "u1", [cacFact]);
+    const result = await asTenant(t, "u1").mutation(api.proposals.acceptProposal, {
+      proposalId,
+      acceptedIndices: [0],
+    });
+    expect(result).toMatchObject({ ok: true, applied: 1 });
+    const row = await t.run((ctx) => latestScorecardRow(ctx.db, "u1"));
+    expect(row?.scorecard.financials.cac).toBe(340);
+    expect(row?.fieldProvenance?.["financials.cac"]?.actor).toBe("agent");
+    expect(row?.userProvided).not.toContain("financials.cac");
+  });
+
+  test("actor is STAMPED, never read from the row", async () => {
+    const t = withAudit();
+    // A stored item claiming the OWNER said it. The applier must overwrite that.
+    const proposalId = await seedProposal(t, "u1", [{ ...cacFact, actor: "user" as const }]);
+    await asTenant(t, "u1").mutation(api.proposals.acceptProposal, {
+      proposalId,
+      acceptedIndices: [0],
+    });
+    const row = await t.run((ctx) => latestScorecardRow(ctx.db, "u1"));
+    expect(row?.fieldProvenance?.["financials.cac"]?.actor).toBe("agent");
+    expect(row?.userProvided).not.toContain("financials.cac");
+  });
+
+  test("an index outside the items array refuses rather than applying a partial batch", async () => {
+    const t = convexTest(schema, modules);
+    const proposalId = await seedProposal(t, "u1", [cacFact]);
+    const result = await asTenant(t, "u1").mutation(api.proposals.acceptProposal, {
+      proposalId,
+      acceptedIndices: [0, 7],
+    });
+    expect(result).toMatchObject({ ok: false, reason: "unknown_item" });
+    const row = await t.run((ctx) => latestScorecardRow(ctx.db, "u1"));
+    expect(row).toBeNull();
+  });
+
+  test("a target absent from the registry refuses", async () => {
+    const t = convexTest(schema, modules);
+    const bad = { ...cacFact, target: { store: "scorecard" as const, field: "notAField" } };
+    const proposalId = await seedProposal(t, "u1", [bad]);
+    const result = await asTenant(t, "u1").mutation(api.proposals.acceptProposal, {
+      proposalId,
+      acceptedIndices: [0],
+    });
+    expect(result).toMatchObject({ ok: false, reason: "unknown_target" });
+  });
+
+  test("accepting marks the proposal accepted; a second accept is a no-op", async () => {
+    const t = withAudit();
+    const proposalId = await seedProposal(t, "u1", [cacFact]);
+    await asTenant(t, "u1").mutation(api.proposals.acceptProposal, {
+      proposalId,
+      acceptedIndices: [0],
+    });
+    const second = await asTenant(t, "u1").mutation(api.proposals.acceptProposal, {
+      proposalId,
+      acceptedIndices: [0],
+    });
+    expect(second).toMatchObject({ ok: false, reason: "not_pending" });
+  });
+
+  test("another tenant cannot accept this tenant's proposal", async () => {
+    const t = convexTest(schema, modules);
+    const proposalId = await seedProposal(t, "u1", [cacFact]);
+    const result = await asTenant(t, "u2").mutation(api.proposals.acceptProposal, {
+      proposalId,
+      acceptedIndices: [0],
+    });
+    expect(result).toMatchObject({ ok: false, reason: "not_found" });
+  });
 });

@@ -1,5 +1,33 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-15 (proposals-table-and-applier plan, Task 5 — the applier LANDS. This
+> supersedes the "in-flight" entry below it: `proposals.ts` is committed, not staged. Confirmed as
+> built: `cash.ts`'s `inputStatesFor` export and `onboarding.ts`'s `writeProfileDoc`/
+> `currentProfileDoc` exports are visibility-only (behaviour-preserving; the full pre-existing suite —
+> `cash.test.ts` 49/49, `evaluations.test.ts` 38/38, `onboarding.test.ts` 24/24 — passes unchanged).
+> `acceptProposal` is a `tenantMutation`, two-pass (validate-then-write), and NEVER writes a target
+> store via `ctx.db` — the only `ctx.db` write is the `proposals` row's own `status`. Finance facts:
+> read via ONE `inputStatesFor` call, classified per-item with `classifyProposal`; a `stale` guard is
+> dropped before the writer is even called (staleness is a temporal fact, not a consent question — no
+> explicit click can antedate a newer stored figure), everything else — blank OR overwrite — is
+> applied, because `acceptedIndices` IS the deliberate click design §6.1 requires; `actor: "agent"` is
+> STAMPED on every item before it reaches a claim, never trusted off the row. Profile facts: merged
+> over `currentProfileDoc`'s parsed doc (or a blank skeleton if none exists yet) and written through
+> `writeProfileDoc` — absent fields stay absent. Contacts/followUps refuse wholesale
+> (`writer_refused`) until plan 3's batch attestation exists. A foreign or missing proposal id both
+> return `not_found` (existence is not leaked across tenants). `discardProposal` and `listPending`
+> round out the surface. Two `ponytail:` markers left in source, both read-visible, not hidden: (1)
+> the contacts refusal itself, upgrade path = plan 3's attestation arg; (2) `revenueModel` and
+> `bindingConstraint` are legal `PROPOSAL_TARGETS` (derivable blueprint fields) but have no field on
+> `BusinessProfile` yet, so a proposal for either merges onto the write object and `serializeProfile`
+> silently drops it — upgrade path is widening `BusinessProfile` when a caller needs to persist them;
+> no test exercises this today. A first-ever profile proposal (no vault doc yet) defaults
+> `persona: "solopreneur"` rather than reading `tenantProfiles` — `currentTierRow` was deliberately
+> NOT exported (out of this task's scope) — so a proposal-created profile doc can carry a guessed tier
+> until the tenant's own onboarding or profile edit corrects it. Full command output:
+> `pnpm vitest run convex/proposals.test.ts convex/cash.test.ts convex/evaluations.test.ts
+> convex/onboarding.test.ts` → 4 files, 120/120 passed; `pnpm typecheck` clean.)
+
 > Touched 2026-08-15 (item-4 session) to clear the §9 Stop hook — **NOT a verification**, and
 > deliberately not a `Last verified` line. `packages/core/src/financeClaim.ts` and
 > `financeClaim.test.ts` were last changed by **`f6fe5d2` (21-02, "the refs-only basis rule moves
@@ -8,6 +36,21 @@
 > and touched no path this playbook watches. **The 21-02 lane still owes this playbook a real entry**
 > covering what moving the refs-only basis rule to the producer boundary means for the finance
 > surfaces described below. Nothing below covers it.
+
+> Last verified: 2026-08-15 (cash-business-finance lane's in-flight proposals applier, read and
+> attested by the phase-33 planning session — TWO items. **(1) `cash.ts`'s `inputStatesFor` is now
+> `export`ed** (visibility only, zero behaviour change) as the applier's ONE read of "what is stored
+> and who said it" for both finance stores — the same call the finance page renders from, so the
+> merge rule has no second, silently-drifting definition. **(2) `packages/backend/convex/proposals.ts`
+> is NEW and registered under this playbook's watch entry.** It is the applier: the ONLY place a
+> proposed fact reaches a target store, and it never writes a target store via `ctx.db` — finance
+> facts go through `applyFinanceClaims` (after `classifyProposal` against `inputStatesFor`, with
+> stale claims skipped, `actor: "agent"` STAMPED never read off the row), profile facts go through
+> `onboarding.ts`'s `writeProfileDoc`, and contacts/followUps are refused wholesale until the batch
+> attestation exists (spec §4.2). Two passes — validate everything with zero writes, then write —
+> because a `return` does not roll back a Convex transaction. Foreign/missing proposal ids return
+> the same `not_found`. The file is uncommitted in-flight work; its owning lane owes the fuller
+> entry when it lands, but the invariants above are read from source, not assumed.)
 
 > Last verified: 2026-08-15 (plan `2026-08-15-scorecard-field-provenance`, COMPLETE — full backend
 > suite green: `pnpm typecheck` clean, `pnpm vitest run` 79 test files / 1793 passed / 24 skipped, 0

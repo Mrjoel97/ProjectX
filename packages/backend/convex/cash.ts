@@ -117,8 +117,11 @@ function scorecardValue(scorecard: Scorecard, path: string): number | null {
  * tenant has entered — and, since the review fix, the always-on spine line reads it too, so all
  * four surfaces answer the provenance question identically rather than from three copies of the
  * merge rule.
+ *
+ * Exported for `proposals.ts`: the applier's ONE read of "what is stored and who said it" for both
+ * finance stores, so it can never define that question a second, silently-drifting way.
  */
-async function inputStatesFor(
+export async function inputStatesFor(
   ctx: { db: QueryCtx["db"] },
   tenantId: string,
   nowMs: number,

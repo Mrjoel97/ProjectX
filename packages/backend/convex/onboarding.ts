@@ -457,7 +457,9 @@ function populatedFieldCount(p: ProfileInput): number {
 // ponytail: an edit re-attributes the graph to the SAME sourceDocId but doesn't GC the prior version's
 // edges (upsertGraph dedups new ones; a short structured profile yields few) — the ceiling is routing
 // through vault.deleteVaultDoc's full cascade if profile-graph staleness ever matters.
-async function writeProfileDoc(
+/** Exported for `proposals.ts`: the profile store's ONE writer, so a proposal-applied field lands
+ *  by the same route as an onboarding edit and inherits `validateProfile` either way. */
+export async function writeProfileDoc(
   ctx: MutationCtx,
   tenantId: string,
   profile: BusinessProfile,
@@ -526,7 +528,7 @@ const currentTierRow = (
 // (every row, `text` blob included) to find at most a handful of profile rows, and timed out the
 // 1s query budget on `status` once a vault grew. blueprint.ts:212 forbids cloning that shape;
 // this is the site it was pointing at.
-async function currentProfileDoc(
+export async function currentProfileDoc(
   ctx: QueryCtx | MutationCtx,
   tenantId: string,
 ): Promise<Doc<"vaultDocuments"> | null> {
