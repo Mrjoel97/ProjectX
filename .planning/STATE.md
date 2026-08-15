@@ -4,10 +4,26 @@ milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_plan: 7 (done)
 status: completed
+stopped_at: Completed 22.1-04-PLAN.md
+last_updated: "2026-08-15T22:52:39.820Z"
+progress:
+  total_phases: 53
+  completed_phases: 31
+  total_plans: 412
+  completed_plans: 284
+  percent: 69
+---
+
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: - Platform -> Private Beta
+current_plan: 7 (done)
+status: completed
 stopped_at: Completed 33-03-PLAN.md
 last_updated: "2026-08-15T19:28:48.089Z"
 progress:
-  total_phases: 53
+  [███████░░░] 69%
   completed_phases: 31
   total_plans: 412
   completed_plans: 283
@@ -1778,6 +1794,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 | Phase 33-media-creation-ux-overhaul-guided-intake-storyboard-variations-auto-assembled-reel-reel-first-canvas-clear-failure-retry-grounded-citations P01 | 32min | 3 tasks | 3 files |
 | Phase 33 P02 | 43min | 3 tasks | 4 files |
 | Phase 33 P03 | 39min | 3 tasks | 6 files |
+| Phase 22.1 P04 | 1h 0m | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -1989,6 +2006,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 33]: 33-03: the reserve-side unconfirmed_claims check reads the plan ROW inside reserveSceneJobInner — unbypassable by any caller, deck-wide (regenerateBlock partial buys refuse too)
 - [Phase 33]: 33-03: switchDeck answers deck_locked before no_alternate — post-Generate the truthful refusal is the bought choice, not the (discarded) missing alternate
 - [Phase 33]: 33-03: persistDeck is whole-deck-write — a new proposal clears altShots/altTargetDurationSeconds and deckLockedAt, stamps deckProposedAt; brief is drop-undefined so a revision omitting BRIEF keeps the row's
+- [Phase 22.1]: Tenant export uses one registry-table page per tenantQuery continuation because Convex allows one paginate call per execution.
+- [Phase 22.1]: GOVN-03 stays pending after export; tenant deletion is 22.1-05 and provider-revocation posture remains separate.
 
 ### Pending Todos
 
@@ -2020,8 +2039,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
-Last session: 2026-08-15T19:28:02.910Z
-Stopped at: Completed 33-03-PLAN.md
+Last session: 2026-08-15T22:52:39.751Z
+Stopped at: Completed 22.1-04-PLAN.md
 Last session: 2026-08-03T06:20:00.000Z
 Stopped at: Completed 15.3-04-PLAN.md
 Last session: 2026-08-03T01:10:00.000Z
