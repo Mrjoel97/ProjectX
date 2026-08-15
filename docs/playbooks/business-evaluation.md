@@ -1,5 +1,25 @@
 # Playbook: Business Evaluation Engine
 
+> **IN FLIGHT 2026-08-15 — plan `2026-08-15-scorecard-field-provenance.md`. NOT yet verified; the
+> `Last verified` line below is unchanged on purpose and Task 6 of that plan bumps it once the
+> suite is green.** Recorded now because the invariant is decided (spec §3.4) and the code landing
+> under it should not be read without it.
+>
+> **The invariant:** `evaluations.userProvided` means THE USER SUPPLIED IT and nothing else. It is
+> never widened to cover writes an agent performed. The new `evaluations.fieldProvenance` map —
+> dot-path → `{ actor, origin, source, at }` — records EVERY answer, including agent ones, and is
+> the authority readers consult first; `userProvided` / `userProvidedAt` remain the fallback for
+> rows written before the map existed.
+>
+> **Why it matters here:** `runEvaluation` rebuilds its citation map from `userProvided` and stamps
+> every member `{source: "user-provided", confidence: "high"}`. A figure an agent read out of a
+> document appearing in that list would be cited back to the owner as their own testimony. That is
+> the laundering this split exists to prevent — do not "simplify" it by merging the two.
+>
+> **Known consequence, accepted by the owner:** the cockpit `recordScorecardAnswer` tool now writes
+> `actor: "agent"`, so figures given in chat stop being cited as user-provided until a later phase
+> teaches the citation map to read `fieldProvenance`.
+
 > Last verified: 2026-08-11 — ⚠ **DATE BUMPED TO CLEAR A `check-playbooks.mjs` FALSE POSITIVE.
 > NOTHING BELOW WAS RE-VERIFIED, AND THIS ENTRY DOCUMENTS NO CHANGE OF ITS OWN.** The precedent is
 > the identically-shaped entries in `skill-registry.md` and `agent-runtime.md` (21-01).
