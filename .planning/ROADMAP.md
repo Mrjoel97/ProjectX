@@ -328,13 +328,22 @@ forward.** Recorded rather than silently assumed — it is an open owner decisio
 
 ### Phase 33: Media creation UX overhaul: guided intake, storyboard variations, auto-assembled reel, reel-first canvas, clear failure retry, grounded citations
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Creating a reel becomes a guided, honest, verifiable experience over the shipped scene-deck pipeline: chat + brief-chip intake, two distinct-concept storyboard variations, a reel-first canvas whose hero tracks the unattended run to a captioned vault-saved final, plain-language failure cards with governed retry, and per-scene vault citations with an owner-confirmation gate before any money moves.
+**Requirements**: 33-INTAKE, 33-VARIA, 33-REEL, 33-CANVAS, 33-FAIL, 33-CITE (minted at planning; the UX face of MEDIA-01)
 **Depends on:** Phase 32
-**Plans:** 0 plans
+**Plans:** 10 plans across 10 sequential waves (shared files: media.ts, MediaCanvas.tsx, the media playbook)
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 33 to break down)
+- [ ] 33-01-PLAN.md — Core deck contracts: brief §-parser, two-variation parse, per-scene citations (Wave 1)
+- [ ] 33-02-PLAN.md — Plan-row state + editBrief/switchDeck/confirmClaim mutations (Wave 2)
+- [ ] 33-03-PLAN.md — Proposal terminal lands brief+variations+citations; unconfirmed_claims gate; Generate locks + discards (Wave 3)
+- [ ] 33-04-PLAN.md — Transient-code classification, ONE auto-retry, manual retry, fix-menu re-arm (Wave 4)
+- [ ] 33-05-PLAN.md — Vault auto-save of the final (refs-only citations) + old-final-held regenerate ordering (Wave 5)
+- [ ] 33-06-PLAN.md — Reel-first canvas: hero + strip layout, pipeline tracker, estimate headline/breakdown (Wave 6)
+- [ ] 33-07-PLAN.md — Brief chips, stale badge + free re-propose, side-by-side variation switcher (Wave 7)
+- [ ] 33-08-PLAN.md — Citation/confirm UI + failure cards with fix menu and sunk-cost honesty (Wave 8)
+- [ ] 33-09-PLAN.md — media-director v3 body + round-trip drift guard (Wave 9)
+- [ ] 33-10-PLAN.md — Live seed + read-back, e2e on prod build, full gates, owner UAT (Wave 10)
 
 ---
 
