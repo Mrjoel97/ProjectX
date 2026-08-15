@@ -332,6 +332,27 @@ export const stageMediaPlan = internalMutation({
  * deck actually parsed. `kind: "media"` moves at the same instant, so a `media` row without `shots`
  * is not a state this function can produce.
  */
+/** ONE parsed deck element (33-03) — shared by `shots` and `altShots` so the two arrays cannot
+ *  drift. **Deliberately NO `confirmedAt` member**: this validator is the second door after the
+ *  parser type — parsed MODEL content structurally cannot carry a confirmation, which is written
+ *  only by the authenticated `media.confirmClaim`. Do not add it here. */
+const parsedShot = v.object({
+  index: v.number(),
+  // `type` on a block row, `visual` on a scene row — exactly one of the two, never both.
+  type: v.optional(v.string()),
+  visual: v.optional(v.string()),
+  seconds: v.number(),
+  windowStartMs: v.number(),
+  description: v.string(),
+  overlay: v.optional(v.string()),
+  prompt: v.string(),
+  narration: v.string(),
+  asset: v.optional(v.object({ source: v.literal("vault"), docId: v.string() })),
+  // 33-03 citation plane, straight off the parser: the specialist's `Source:` line, verbatim.
+  source: v.optional(v.object({ docId: v.string(), title: v.string() })),
+  needsConfirmation: v.optional(v.boolean()),
+});
+
 export const persistDeck = internalMutation({
   args: {
     tenantId: v.string(),
@@ -355,19 +376,21 @@ export const persistDeck = internalMutation({
     /** 20.2: present for a SCENE deck, absent for a BLOCK deck. Its presence on the plan row is
      *  the discriminator downstream — see the schema comment. */
     targetDurationSeconds: v.optional(v.number()),
-    shots: v.array(
+    shots: v.array(parsedShot),
+    // ── 33-03 variation plane: deck B parked beside the picked deck A, or ABSENT — and absence
+    // CLEARS (whole-deck-write semantics below): a single-deck revision discards the alternate.
+    altShots: v.optional(v.array(parsedShot)),
+    altTargetDurationSeconds: v.optional(v.number()),
+    /** The guided-intake brief, when the body carried one. Drop-undefined (unlike the deck
+     *  fields): a chat revision that does not restate the BRIEF keeps the one on the row. */
+    brief: v.optional(
       v.object({
-        index: v.number(),
-        // `type` on a block row, `visual` on a scene row — exactly one of the two, never both.
-        type: v.optional(v.string()),
-        visual: v.optional(v.string()),
-        seconds: v.number(),
-        windowStartMs: v.number(),
-        description: v.string(),
-        overlay: v.optional(v.string()),
-        prompt: v.string(),
-        narration: v.string(),
-        asset: v.optional(v.object({ source: v.literal("vault"), docId: v.string() })),
+        topic: v.string(),
+        durationSeconds: v.number(),
+        audience: v.optional(v.string()),
+        tone: v.optional(v.string()),
+        brandVoice: v.optional(v.string()),
+        defaulted: v.array(v.string()),
       }),
     ),
   },
@@ -389,6 +412,18 @@ export const persistDeck = internalMutation({
       // the plan claiming a declared length that none of its shots was written against.
       targetDurationSeconds: a.targetDurationSeconds,
       shots: a.shots,
+      // 33-03: same whole-deck-write rule for the variation plane. A two-deck proposal writes
+      // both; a single-deck REVISION clears the parked alternate — a post-pick chat revision
+      // replaces the picked deck, so the alternate is stale by definition.
+      altShots: a.altShots,
+      altTargetDurationSeconds: a.altTargetDurationSeconds,
+      ...(a.brief === undefined ? {} : { brief: a.brief }),
+      /** When the deck(s) on this row were proposed — `briefChangedAt > deckProposedAt` is the
+       *  stale badge. */
+      deckProposedAt: Date.now(),
+      // A NEW proposal is a new choice: the lock a previous Generate stamped belonged to the deck
+      // this write replaces. `undefined` clears on a direct patch.
+      deckLockedAt: undefined,
       // A WHOLE new deck is the largest change there is, so it dates itself for the same reason
       // the editor's own writes do (`media.patchShots`): assets bought against the deck this one
       // replaces must not be reused under scenes that are no longer theirs.
