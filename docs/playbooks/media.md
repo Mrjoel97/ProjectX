@@ -1,5 +1,20 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-08-15 (render_failed postmortem, FIXED AND RE-RENDERED IN THE PROD SANDBOX —
+> **the first card-scene render died on a `grep -q` + pipefail SIGPIPE race, not a missing
+> library.** `assemble_final.sh`'s drawtext probe (`ffmpeg -filters | grep -q ' drawtext '`) under
+> `set -o pipefail`: `-q` exits at the first match (line 244 of 571), ffmpeg takes SIGPIPE (141)
+> writing the rest, pipefail fails the pipeline, and the script reported "libfreetype is missing"
+> on an image that HAS drawtext — an unmatched stderr, so Convex recorded the catch-all
+> `render_failed`. Windows never races (no SIGPIPE), which is why local runs passed the probe.
+> `burn_caps.sh`'s subtitles probe carried the identical landmine. Fix: plain `grep ... >/dev/null`
+> (reads to EOF, no SIGPIPE) in both scripts + regenerated .ts mirrors, and `libfreetype is
+> missing` now maps to `missing_binary` in `STDERR_CODES`. Verified by re-running the failed batch
+> (plan `p573x3...`, real inputs via the blob route) in a sandbox from the LIVE snapshot
+> `snap_shetn1hAzlXxJMSA3lQmE5keSIIh`: EXIT 0, 4 scenes, 15.000000 s, decode-validated. Rule:
+> **never `grep -q` the left side of a pipeline under pipefail** — probe with plain grep to
+> /dev/null, or capture first.)
+
 > Last verified: 2026-08-15 (canvas-crush fix, VERIFIED IN THE LIVE BROWSER — **the canvas view was
 > an unscrollable 413 px clip of a 3,466 px storyboard.** Both canvas sheets spread `briefingSheet`,
 > whose `overflow: hidden` (there for the rounded corners) flips a flex item's implicit

@@ -315,6 +315,9 @@ const STDERR_CODES: ReadonlyArray<readonly [RegExp, RenderReasonCode]> = [
   [/failed decode validation/, "decode_failed"],
   // `burn_caps.sh`'s own wording (plan 20-17), anchored on the fixed part exactly as above.
   [/libass is missing/, "missing_binary"],
+  // `assemble_final.sh`'s drawtext probe. Its message was NOT in this table when it first fired
+  // (2026-08-15, the pipefail+SIGPIPE race) and surfaced as the catch-all `render_failed`.
+  [/libfreetype is missing/, "missing_binary"],
   [/subtitle track is empty/, "caption_track_empty"],
   [/re-timed the video/, "duration_mismatch"],
 ];
