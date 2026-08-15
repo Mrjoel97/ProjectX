@@ -10,6 +10,21 @@
 > for already-submitted historical jobs. Older provider-specific sections below describe the
 > superseded implementation unless explicitly marked current. See ADR-017.
 
+> Last verified: 2026-08-15 (33-02 — **THE PLAN-ROW PLANES LAND: brief, two-deck variation,
+> per-scene citations, retry marker, vault-ref — all optional, widen-only** — plus the three
+> governed tenant mutations that write them. `editBrief` patches ONLY the brief plane (chip
+> merge, `defaulted` strip, `briefChangedAt` stamp) and NEVER moves `targetDurationSeconds` or
+> `shots` — a brief/deck divergence is the stale badge, not a refusal. `switchDeck` swaps
+> `shots`↔`altShots` and the two targets atomically, stamps `shotsChangedAt` (landed assets
+> belong to the deck that bought them, so invalidation on a switch is CORRECT) and clears the
+> render; both `deck_locked` guards were mutation-proven red-able by deleting them.
+> `confirmClaim(planId, sceneIndex)` is the provenance front door: actor and timestamp are
+> ctx-derived, the arg validator structurally cannot carry either, one insert-only refs-only
+> audit row (`media.claim_confirmed`, ids only), and a REAL narration edit of a confirmed scene
+> clears `confirmedAt` while reorder/delete leave siblings' confirmations riding their own shot
+> element. The money path (`sceneDeckOf`, `jobEstimate`, the reserves) is textually untouched
+> and prices whichever deck is picked. media.test.ts 204/204 green, backend tsc clean.)
+
 > Last verified: 2026-08-15 (33-01 — **THE PHASE-33 PARSE SURFACES: brief, citations, variations.**
 > `storyboard.ts` gains three free-at-parse contracts, all refusing before a cent moves — the
 > `parseSceneDeck` posture, three surfaces wider. `parseBrief` reads a `BRIEF` section (Topic /
@@ -484,6 +499,38 @@ Three additional contracts live beside `parseSceneDeck`, all pure parse, all fre
   carries its own body slice so SCRIPT/ART DIRECTION parse per-variation. A refusing variation
   refuses the WHOLE proposal — the `persistStoryboard` rule: a deck nobody wrote must never be
   proposed.
+
+### The Phase-33 plan-row planes (33-02)
+
+The parse surfaces above persist into new OPTIONAL `plans` fields — widen-only, no migration
+(the `renderSummary` precedent). The provenance question ("who does the STORED row say wrote
+this, and can the model influence it?") asked of every field:
+
+- **Brief plane** — `brief {topic, durationSeconds, audience?, tone?, brandVoice?, defaulted[]}`,
+  `briefChangedAt`, `deckProposedAt`. `brief.durationSeconds` is the USER'S ask (a
+  `TARGET_DURATIONS` preset); the deck's own `targetDurationSeconds` stays the money contract —
+  divergence renders as the stale badge (`briefChangedAt > deckProposedAt`), never as an
+  estimate refusal and never a silent re-deck. Model-parsed brief content arrives marked in
+  `defaulted[]`; a chip the user edits through `editBrief` leaves `defaulted` — from then on the
+  row says the USER wrote it, and only a user mutation can make that true.
+- **Variation plane** — `altShots` (the SAME shared `shotElement` validator as `shots`: one
+  const in `schema.ts`, so the two arrays cannot drift), `altTargetDurationSeconds`,
+  `deckLockedAt`. The refused anti-pattern: NO `decks[]` array with a picked index the money
+  path reads. `plans.shots` IS the picked deck — `sceneDeckOf`, `jobEstimate` and the reserves
+  never learn variations exist. `switchDeck` is the only swap, and it refuses once Generate has
+  locked the choice (`deck_locked`); post-Generate change is canvas-only, on the paid rail.
+- **Citation fields, ON the shot element** (so reorder/delete/switch carry them for free) —
+  `source {docId, title}` is MODEL-AUTHORED text whose ownership is checked where consumed (the
+  `asset.docId` precedent); `needsConfirmation` is the parser's flag. **`confirmedAt` is written
+  ONLY by `confirmClaim`, and the model can never write it**: no model-reachable mutation sets
+  it, and `confirmClaim`'s validator takes `planId` + `sceneIndex` and nothing else — an actor
+  or timestamp in the args is a validator error, not a runtime branch. A changed claim is
+  unconfirmed: a real narration edit of a confirmed scene clears `confirmedAt` (keeping
+  `needsConfirmation` and `source` — the new words still state a figure). Confirmation is NOT a
+  structural deck edit: no `shotsChangedAt`, no render clear.
+- **`renderRetriedAt`** — code-stamped retry marker (the clear-failure card's "assembled again"
+  time); **`reelVaultDocId`** — code-written vault doc REF, never a URL and never bytes. Neither
+  has any model write path.
 ## The scene-kind price table (20.2 wave 7) — ADR-019
 
 The §4.1 table above is the BLOCK era's economics: one clip length, every block paid. A scene deck
