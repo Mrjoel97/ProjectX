@@ -1,5 +1,85 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-08-15 (item-4 LIVE MEASUREMENT — **THIS SUPERSEDES THE "NO GATE RUN, NO
+> SPEND, NO EVIDENCE" LINE IN THE ITEM-4 ENTRY BELOW, WHICH IS NOW FALSE.** The gate HAS been run.
+> `cockpit-agent@26` was published by `seedSkills` and measured. Pin numbers below were also wrong:
+> ACTIVE is **v24**, not v22 — live rows are active v24, stale candidate v25, item-4 candidate v26,
+> verified by hashing each row body against the `.md` on disk. Do not trust a version number quoted
+> in a plan or a playbook; probe it.
+>
+> **FIXTURE 40 PASSES ($0.0035).** The calendar capability is reachable for the first time: given the
+> new body section the model really does call `proposeCalendarEvent` and stage a resolved event with
+> `recipientCount: 0` and `attachmentCount: 0`. The document-section merge is clean too —
+> **35-create-document, 38-media-dispatch and 38b-media-not-a-document all PASS**, and 38b is the
+> load-bearing one because the merge rewrote the deck-is-not-a-reel routing rule it tests.
+> **36-crm-follow-up and 37-finance-update also PASS**, which is the `skill-body-edits-shift-model-
+> tool-args` check: adding a section did not shift behaviour in the neighbouring staging tools.
+> **39-drive-read PASSES**, so 20.1-02's Drive work is green for the first time, and 38's pass is the
+> first confirmation that 20-12's `dispatch:` prefix fix really closed `420c852b`'s two-actor bug.
+>
+> **MEASURED: 32 of 40 fixtures green on v26. Total spend $0.4395 across five runs.** Fixtures
+> 32/33/34 (research) were NOT run and are the only untested remainder — do not record them as green.
+>
+> **THE GATE IS STILL RED, AND NOT BECAUSE OF THIS CHANGE.** Fixtures 27, 28, 29, 30, 31 fail on a
+> single pre-existing defect — business evaluation persists ZERO grounded findings, so SC#1
+> force-clears the gaps and every gap-dispatch case then reports `gap_not_found`. **Reproduced
+> IDENTICALLY on the ACTIVE `cockpit-agent@24`** (run `bcaa9c7e`, 0/2, $0.0440), so it predates
+> both candidates. Written up at `.planning/debug/business-evaluation-no-grounded-findings.md`;
+> NOT root-caused, and the regression window is NOT established.
+>
+> **CONSEQUENCE: no evidence was recorded and NO candidate can be activated** — `recordEvalEvidence`
+> fires only on an all-green UNFILTERED run, so v25's media/Drive work is blocked behind this defect
+> exactly as v26 is. Fixing that defect, not re-running the gate, is the next action.
+>
+> **RUN-ORDER LESSON, measured the expensive way.** The first attempt (`9aaff3b3`) spent $0.3426 and
+> answered NOTHING: the OpenAI account hit zero credits at fixture 30, so 35-40 — every fixture this
+> change owed — never executed, while the money went to re-confirming 01-26 which were already known
+> green. The runner reports credit exhaustion as case FAILURES (exit 1), not an environment abort
+> (exit 2), so `25/40` read like 15 regressions when it was 5 real + 10 never-ran. **Triage any red
+> gate by per-case cost first: a failure at $0.0000 never reached the model and asserts nothing.**
+> Running the owed fixture ALONE first (`--only`, $0.0035) would have answered the question for 1% of
+> the cost. Do that before any full gate.)
+
+> Last verified: 2026-08-15 (item-4 offline half — **`calendarEventPresent`, the expect
+> vocabulary's one BOOLEAN plan-row observable, and the body sections that finally REACH the
+> calendar tools.** `proposeCalendarEvent` and `checkAvailability` have been built in `llm.ts`
+> (:2472 and :2376) since Phase 17 and the cockpit body named NEITHER — and because CLAUDE.md §5
+> forbids a hardcoded fallback prompt there is no other instruction path, so a tool absent from the
+> body is a tool the agent cannot be expected to reach. That is the clock-plane shape (19-11) and
+> the vault-island shape again: built, unit-tested, unreachable. The body now carries a
+> `## The user's calendar` section, and the same edit merges `## Attachments` and `## Creating a
+> document or a post` into one `## Documents, attachments and decks` section that settles the
+> attach / standalone / reel routing BEFORE the per-tool rules. The merge teaches no new tool, so it
+> owes no new fixture — 10, 11, 12 and 35 already exercise those four tools and ARE the regression
+> signal if the restructuring degrades routing.
+>
+> Fixture 40 asks in ordinary calendar grammar and grades `plan.eventStartMs`, which has EXACTLY
+> ONE writer (`llm.ts` proposeCalendarEvent, `resolved` branch) and is cleared by `plans.ts` on
+> reset, so a finite value cannot arrive by another path — and it pins the RESOLVED branch
+> specifically, since the ambiguous/past/tooFar/none branches all return refusal prose WITHOUT
+> patching the row. A boolean rather than a count, unlike every other plan-row observable here:
+> one plan row carries at most ONE event, so a count could only read 1 and would imply a list length
+> that does not exist. `validateFixture` rejects `calendarEventPresent: false` outright — the
+> `driveReadToolCount` rule, same reason: false holds on all 39 other fixtures and asserts nothing.
+>
+> **The fixture is ONE turn deliberately.** The obvious companion — a second turn with an ambiguous
+> time that the agent must ask about rather than guess — WOULD BE VACUOUS: `patchPlan` overwrites
+> `eventStartMs` wholesale, so a turn-2 stage and a turn-2 refusal both leave the field finite and
+> this key cannot tell them apart. That is the replacement-satisfies-the-count hole 19-11 found in
+> fixture 36, recognised here BEFORE a paid run rather than after one. The refusal branches are
+> covered offline at $0 by self-check 2j (absent start and non-finite start both grade RED).
+> `Thursday at 2pm` was chosen AGAINST `parseSendTime`, not by feel: its weekday anchor computes
+> `(dow - nowDow + 7) % 7` and rewrites a zero to 7, so the instant is always future and always
+> inside `CALENDAR_HORIZON_MS` (365 days), while a bare `at 2` grades ambiguous and `today at
+> 2pm` would be PAST for every gate run after 14:00 UTC. A fixture that reddens by wall-clock is
+> worse than no fixture.
+>
+> Self-check PASSED at 40 fixtures. **NO GATE RUN, NO SPEND, NO EVIDENCE — and the body on disk now
+> carries THREE stacked ungated changes**: 20-12's media sections, 20.1-02's Drive section, and this
+> one. The next gate certifies all three together, and the last recorded run of this body was
+> `420c852b`, RED at 35/38 for two harness defects since fixed. `cockpit-agent` stays a candidate
+> until an owner-triggered green run says otherwise.)
+
 > Last verified: 2026-08-15 (20.1-02 offline half — **`driveReadToolCount`, the vocabulary's one
 > FLOOR.** Fixture 39 asks where a document lives in ordinary language; the observable counts
 > `findInDrive`+`listDriveFolders` agentSteps rows for the thread (`smoke:driveReadCountForThread`,
@@ -10,7 +90,8 @@
 > other way — `validateFixture` rejects `driveReadToolCount: 0` outright (a floor of zero asserts
 > nothing). Self-check green at 39 fixtures; the eval tenant has no Google connection, so the tool
 > answers not-connected and the CALL is still the pass. Gate run for the Drive candidate: pending
-> the owner's proceed.)
+> the owner's proceed. Re-checked 2026-08-15: this entry covers the still-uncommitted working-tree
+> diff on smoke.ts / run-eval-golden.mjs / eval-cases/39-drive-read.json — no content change.)
 >
 > Last verified: 2026-08-14 (20-12 gate run `420c852b` — **RED at 35/38, $0.4420, and BOTH failures
 > were the harness, not the agent.** Evidence: none recorded; `cockpit-agent@22` stays a candidate.

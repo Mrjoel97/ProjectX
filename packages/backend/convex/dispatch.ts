@@ -23,13 +23,18 @@ import {
   wouldCycle,
 } from "@pikar/core";
 import {
+  type BriefFields,
   narrationChars,
   type ParsedDeck,
   type ParsedSceneDeck,
+  type ParsedVariations,
   parseArtDirection,
   parseBlockDeck,
+  parseBrief,
   parseSceneDeck,
   parseScript,
+  parseVariations,
+  type Scene,
   sceneNarrationChars,
 } from "@pikar/core/storyboard";
 import type { GenericActionCtx } from "convex/server";
@@ -637,6 +642,23 @@ function deckRefusalBody(bad: Extract<ParsedDeck, { ok: false }>): string {
   return `${lede} — ${cause}.${where}${tail}\n\n_Reason: ${bad.reason}._`;
 }
 
+/** The SCENE refusal vocabulary, one sentence per lever — shared by the single-deck refusal card
+ *  and the 33-03 variation refusal card, so the same reason never renders two sentences. */
+const SCENE_WHY: Record<string, string> = {
+  no_deck: "it never wrote a scene deck",
+  empty_deck: "the scene deck came back empty",
+  bad_target_duration: "the reel length was not one of the supported 15, 30 or 60 seconds",
+  unknown_visual_kind: "a scene asked for a kind of visual the renderer does not have",
+  bad_scene_duration: "a scene did not say how many whole seconds it runs for",
+  illegal_generated_duration: "a generated scene asked for a length the video model cannot produce",
+  missing_asset: "a scene said to use your own footage but never named which file",
+  duration_mismatch: "the scene lengths did not add up to the reel length it declared",
+  no_narration: "not one scene had a spoken line, so there would be nothing to voice",
+  narration_too_long: "a spoken line is too long to finish before the next line starts",
+  // 33-01: a Source line the parser cannot read must never silently become creative copy.
+  malformed_source: "a scene cited a source in a form I couldn't read back",
+};
+
 /** The SCENE contract's twin (20.2). A separate function rather than an extra branch in the one
  *  above: the two refusal vocabularies share only `no_deck` and `empty_deck`, and threading two
  *  unions through one `why` table is how a reason ends up rendering the wrong sentence. */
@@ -645,25 +667,21 @@ function sceneRefusalBody(bad: Extract<ParsedSceneDeck, { ok: false }>): string 
     "sceneIndex" in bad
       ? ` Scene ${bad.sceneIndex + 1}${"chars" in bad ? ` is ${bad.chars} characters` : ""}.`
       : "";
-  const why: Record<string, string> = {
-    no_deck: "it never wrote a scene deck",
-    empty_deck: "the scene deck came back empty",
-    bad_target_duration: "the reel length was not one of the supported 15, 30 or 60 seconds",
-    unknown_visual_kind: "a scene asked for a kind of visual the renderer does not have",
-    bad_scene_duration: "a scene did not say how many whole seconds it runs for",
-    illegal_generated_duration:
-      "a generated scene asked for a length the video model cannot produce",
-    missing_asset: "a scene said to use your own footage but never named which file",
-    duration_mismatch: "the scene lengths did not add up to the reel length it declared",
-    no_narration: "not one scene had a spoken line, so there would be nothing to voice",
-    narration_too_long: "a spoken line is too long to finish before the next line starts",
-  };
   // Assembled from SHORT pieces for the same reason as its sibling above: `skills.test.ts` refuses
   // any inline string over 200 characters anywhere in `convex/` (§5, no hardcoded prompts).
   const lede = "# Reel\n\nI drafted this, but I couldn't turn it into a usable deck";
   const tail = " Ask me to redo the scene deck and I'll keep the direction below.";
-  const cause = why[bad.reason] ?? "the deck did not parse";
+  const cause = SCENE_WHY[bad.reason] ?? "the deck did not parse";
   return `${lede} — ${cause}.${where}${tail}\n\n_Reason: ${bad.reason}._`;
+}
+
+/** 33-03: a refusing VARIATION refuses the WHOLE proposal — this card says which one and why, in
+ *  the same vocabulary as the single-deck card. Never a silent one-deck fallback. */
+function variationRefusalBody(bad: Extract<ParsedVariations, { kind: "refused" }>): string {
+  const lede = "# Reel\n\nI drafted two variations, but variation ";
+  const tail = " Ask me to redo the variations and I'll keep the direction below.";
+  const cause = SCENE_WHY[bad.reason] ?? "the deck did not parse";
+  return `${lede}${bad.variation.toUpperCase()} couldn't become a usable deck — ${cause}.${tail}\n\n_Reason: ${bad.reason}._`;
 }
 
 /**
@@ -693,14 +711,40 @@ function sceneRefusalBody(bad: Extract<ParsedSceneDeck, { ok: false }>): string 
  * makes `media.deckOf` fail closed on a scene row, where a legacy-equivalent token would let it be
  * priced at a uniform `clipSeconds` it was never written against.
  */
+/** A parsed Scene[] as `persistDeck` shot elements — ONE mapping for the picked deck and the
+ *  alternate, so the two arrays cannot drift field-by-field. The 33-01 citation fields ride each
+ *  element; `confirmedAt` does not exist on `Scene` and the persist validator refuses it anyway. */
+const sceneShots = (scenes: readonly Scene[]) =>
+  scenes.map((s) => ({
+    index: s.index,
+    visual: s.visual,
+    seconds: s.durationMs / 1000,
+    windowStartMs: s.startMs,
+    description: s.description,
+    ...(s.overlay === undefined ? {} : { overlay: s.overlay }),
+    ...(s.asset === undefined ? {} : { asset: s.asset }),
+    prompt: s.prompt,
+    narration: s.narration,
+    ...(s.source === undefined ? {} : { source: s.source }),
+    ...(s.needsConfirmation === undefined ? {} : { needsConfirmation: s.needsConfirmation }),
+  }));
+
 async function persistSceneDeck(
   ctx: Ctx,
   args: DispatchArgs,
   // The BODY, not the `DispatchResult`: the caller has already narrowed to the success arm, and
   // taking the union back here would re-widen it for no reason. Returns void — the caller owns
   // what it hands back.
+  //
+  // 33-03: for a two-variation proposal this is variation A's OWN slice (script/art direction
+  // parse per-variation, no cross-contamination), and `extra` carries the parked alternate and
+  // the brief parsed off the FULL body.
   body: string,
   scene: ParsedSceneDeck,
+  extra: {
+    alt?: { scenes: readonly Scene[]; targetDurationSeconds: number };
+    brief?: BriefFields | null;
+  } = {},
 ): Promise<void> {
   if (!scene.ok) {
     await ctx.runMutation(internal.plans.landStoryboardRefusal, {
@@ -738,17 +782,16 @@ async function persistSceneDeck(
     // as a per-block ceiling, so the longest is the only choice that cannot under-state one.
     // It is inert for scene rows — `targetDurationSeconds` is what wave 4 onward reads.
     clipSeconds: Math.max(...scene.scenes.map((s) => s.durationMs)) / 1000,
-    shots: scene.scenes.map((s) => ({
-      index: s.index,
-      visual: s.visual,
-      seconds: s.durationMs / 1000,
-      windowStartMs: s.startMs,
-      description: s.description,
-      ...(s.overlay === undefined ? {} : { overlay: s.overlay }),
-      ...(s.asset === undefined ? {} : { asset: s.asset }),
-      prompt: s.prompt,
-      narration: s.narration,
-    })),
+    shots: sceneShots(scene.scenes),
+    // 33-03: the parked alternate — or undefined, which persistDeck CLEARS (a single-deck
+    // revision replaces the picked deck; the alternate is stale by definition).
+    ...(extra.alt === undefined
+      ? {}
+      : {
+          altShots: sceneShots(extra.alt.scenes),
+          altTargetDurationSeconds: extra.alt.targetDurationSeconds,
+        }),
+    ...(extra.brief == null ? {} : { brief: extra.brief }),
   });
   await ctx.runMutation(internal.audit.log, {
     tenantId: args.tenantId,
@@ -756,13 +799,18 @@ async function persistSceneDeck(
     eventType: "media.deck_persisted",
     actor: "system",
     // COUNTS only, and the same three the block arm records plus the declared length — these are
-    // what a later `mediaJobs` batch has to reconcile against.
+    // what a later `mediaJobs` batch has to reconcile against. 33-03 adds three more counts:
+    // how many decks were proposed, and the PICKED deck's cited / owner-must-confirm scenes.
+    // Never a doc title, never a claim — refs and counts (§4).
     payload: {
       ...lineageRefs(args),
       blocks: scene.scenes.length,
       targetDurationSeconds: scene.targetDurationSeconds,
       narrationChars: sceneNarrationChars(scene.scenes),
       hasArtDirection: artDirection !== null,
+      variations: extra.alt === undefined ? 1 : 2,
+      citedScenes: scene.scenes.filter((s) => s.source !== undefined).length,
+      unverifiedScenes: scene.scenes.filter((s) => s.needsConfirmation === true).length,
     },
   });
 }
@@ -789,10 +837,47 @@ async function persistStoryboard(
    * deck whose durations do not sum, or whose visual kind is unknown, must be REFUSED as a scene
    * deck; falling through to `parseBlockDeck` there would read its rows under the uniform contract
    * and quietly propose a reel nobody wrote.
+   *
+   * 33-03 — VARIATIONS PARSE FIRST, above both contracts, and the same refusal-over-fallback rule
+   * one level up: a body that DECLARED two variations and delivered a broken one refuses the whole
+   * proposal — quietly landing the surviving deck would propose "the" reel when the specialist
+   * wrote a choice. `kind: "one"` means no VARIATION headings at all, and the body flows into the
+   * existing two-contract read byte-for-byte unchanged.
    */
+  const variations = parseVariations(res.body);
+  if (variations.kind === "refused") {
+    await ctx.runMutation(internal.plans.landStoryboardRefusal, {
+      tenantId: args.tenantId,
+      planId: args.planId,
+      body: variationRefusalBody(variations),
+    });
+    await ctx.runMutation(internal.audit.log, {
+      tenantId: args.tenantId,
+      correlationId: args.rootRequestId,
+      eventType: "media.deck_refused",
+      actor: "system",
+      // Refs and COUNTS only (§4): the inner reason CODE and WHICH variation carried it.
+      payload: { ...lineageRefs(args), reason: variations.reason, variation: variations.variation },
+    });
+    return res;
+  }
+  if (variations.kind === "two") {
+    // Deck A is the picked deck, deck B the parked alternate. Script and art direction come off
+    // A's OWN slice (no cross-contamination); the BRIEF sits above the headings, so it parses off
+    // the full body.
+    await persistSceneDeck(ctx, args, variations.a.body, variations.a.deck, {
+      brief: parseBrief(res.body),
+      alt: {
+        scenes: variations.b.deck.scenes,
+        targetDurationSeconds: variations.b.deck.targetDurationSeconds,
+      },
+    });
+    return res;
+  }
+
   const scene = parseSceneDeck(res.body);
   if (scene.ok || scene.reason !== "no_deck") {
-    await persistSceneDeck(ctx, args, res.body, scene);
+    await persistSceneDeck(ctx, args, res.body, scene, { brief: parseBrief(res.body) });
     return res;
   }
 

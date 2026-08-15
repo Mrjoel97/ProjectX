@@ -34,6 +34,7 @@ import {
   buildSubmitBody,
   reserveJobInner,
   reserveSceneJobInner,
+  sceneDeckOf,
   type SubmittableSpec,
   submitLine,
 } from "./media";
@@ -5325,5 +5326,589 @@ describe("20.2 wave 2 — the money gate asks the PROVIDER what it can buy", () 
       const estimate = await asA(t).query(api.media.jobEstimate, { planId });
       expect(estimate.refusal).toBeNull();
     }
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+// 33-02 — the BRIEF plane and the TWO-DECK variation plane
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+
+const BRIEF = {
+  topic: "solar for smallholders",
+  durationSeconds: 30,
+  audience: "model-guessed farmers",
+  tone: "warm",
+  defaulted: ["audience", "tone"],
+};
+
+/** A second, deliberately DIFFERENT scene deck parked as the alternate: a 12 s clip + a 3 s
+ *  still (15 s total, both lengths the pinned models accept) against the primary's 8/6/4/12
+ *  (30 s) — so a swapped estimate, target and narration set are all distinguishable. */
+async function seedAltDeck(t: T, planId: Id<"plans">) {
+  const seconds = [12, 3];
+  const visuals = ["generated_video", "animated_image"];
+  let startMs = 0;
+  const altShots = seconds.map((sec, i) => {
+    const shot = {
+      index: i,
+      visual: visuals[i] ?? "generated_video",
+      seconds: sec,
+      windowStartMs: startMs,
+      description: `alt scene ${i}`,
+      prompt: `alt prompt ${i}`,
+      narration: `alt line ${i}`,
+    };
+    startMs += sec * 1000;
+    return shot;
+  });
+  await t.run(async (ctx) =>
+    ctx.db.patch(planId, { altShots, altTargetDurationSeconds: 15 }),
+  );
+  return altShots;
+}
+
+describe("33-02 editBrief: a chip edit patches the BRIEF plane and nothing else", () => {
+  test("merges the patch, strips edited fields from `defaulted`, stamps briefChangedAt — and never moves the money contract", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t); // targetDurationSeconds 30, shots 8/6/4/12
+    await t.run(async (ctx) => ctx.db.patch(planId, { brief: BRIEF }));
+    const shotsBefore = (await planRowOf(t, planId))?.shots;
+
+    expect(
+      await asA(t).mutation(api.media.editBrief, {
+        planId,
+        patch: { durationSeconds: 60, audience: "smallholder co-ops" },
+      }),
+    ).toEqual({ ok: true });
+
+    const plan = await planRowOf(t, planId);
+    expect(plan?.brief).toMatchObject({
+      topic: BRIEF.topic, // unedited chips stand
+      durationSeconds: 60, // the USER'S ask moved…
+      audience: "smallholder co-ops",
+      tone: BRIEF.tone,
+      defaulted: ["tone"], // …and `audience` is no longer a model guess
+    });
+    expect(plan?.briefChangedAt).toBeTypeOf("number");
+    // THE INVARIANT: the deck's own money contract is byte-untouched. A brief/deck divergence is
+    // exactly what the stale badge expresses — never an estimate refusal, never a silent re-deck.
+    expect(plan?.targetDurationSeconds).toBe(30);
+    expect(plan?.shots).toEqual(shotsBefore);
+    expect(plan?.shotsChangedAt).toBeUndefined();
+  });
+
+  test("a duration outside the presets refuses illegal_duration and writes NOTHING", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    await t.run(async (ctx) => ctx.db.patch(planId, { brief: BRIEF }));
+    expect(
+      await asA(t).mutation(api.media.editBrief, { planId, patch: { durationSeconds: 45 } }),
+    ).toEqual({ ok: false, reason: "illegal_duration" });
+    const plan = await planRowOf(t, planId);
+    expect(plan?.brief).toEqual(BRIEF);
+    expect(plan?.briefChangedAt).toBeUndefined();
+  });
+
+  test("a locked deck refuses deck_locked — post-Generate edits are canvas-only, on the paid rail", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    await t.run(async (ctx) => ctx.db.patch(planId, { brief: BRIEF, deckLockedAt: 1 }));
+    expect(
+      await asA(t).mutation(api.media.editBrief, { planId, patch: { topic: "something else" } }),
+    ).toEqual({ ok: false, reason: "deck_locked" });
+    expect((await planRowOf(t, planId))?.brief).toEqual(BRIEF);
+  });
+
+  test("a plan that never had a brief refuses no_brief rather than inventing one", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    expect(
+      await asA(t).mutation(api.media.editBrief, { planId, patch: { topic: "x" } }),
+    ).toEqual({ ok: false, reason: "no_brief" });
+    expect((await planRowOf(t, planId))?.brief).toBeUndefined();
+  });
+
+  test("tenant B's edit THROWS — writes throw where reads return empty", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t, { tenantId: A });
+    await t.run(async (ctx) => ctx.db.patch(planId, { brief: BRIEF }));
+    await expect(
+      asB(t).mutation(api.media.editBrief, { planId, patch: { topic: "stolen" } }),
+    ).rejects.toThrow(/plan not found/);
+  });
+});
+
+describe("33-02 switchDeck: the unpicked deck swaps in atomically, until Generate locks the choice", () => {
+  test("swaps shots↔altShots AND the two targets, stamps shotsChangedAt, clears the render", async () => {
+    const t = harness();
+    const { planId, shots } = await seedSceneDeck(t);
+    const altShots = await seedAltDeck(t, planId);
+    await t.run(async (ctx) => ctx.db.patch(planId, { renderStatus: "rendered" }));
+
+    expect(await asA(t).mutation(api.media.switchDeck, { planId })).toEqual({ ok: true });
+
+    const plan = await planRowOf(t, planId);
+    expect(plan?.shots).toEqual(altShots);
+    expect(plan?.targetDurationSeconds).toBe(15);
+    expect(plan?.altShots).toEqual(shots);
+    expect(plan?.altTargetDurationSeconds).toBe(30);
+    // Structural stamp: landed assets belong to the deck that BOUGHT them, so invalidating the
+    // reuse window on a switch is correct, not collateral damage.
+    expect(plan?.shotsChangedAt).toBeTypeOf("number");
+    // …and the rendered reel of the OTHER deck cannot keep showing beside this one.
+    expect(plan?.renderStatus).toBe("pending");
+    expect(plan?.renderStorageId).toBeUndefined();
+  });
+
+  test("switching twice round-trips the decks byte-for-byte", async () => {
+    const t = harness();
+    const { planId, shots } = await seedSceneDeck(t);
+    const altShots = await seedAltDeck(t, planId);
+    await asA(t).mutation(api.media.switchDeck, { planId });
+    await asA(t).mutation(api.media.switchDeck, { planId });
+    const plan = await planRowOf(t, planId);
+    expect(plan?.shots).toEqual(shots);
+    expect(plan?.targetDurationSeconds).toBe(30);
+    expect(plan?.altShots).toEqual(altShots);
+    expect(plan?.altTargetDurationSeconds).toBe(15);
+  });
+
+  test("sceneDeckOf and jobEstimate always read plans.shots — the money path never learns variations exist", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    await seedAltDeck(t, planId);
+
+    // Before the switch: the picked deck is 8 s + 12 s of paid clip → 200 cents of clips.
+    const before = await asA(t).query(api.media.jobEstimate, { planId });
+    expect(before.lines.find((l) => l.label === "clips")?.cents).toBe(200);
+
+    await asA(t).mutation(api.media.switchDeck, { planId });
+
+    // After: the SAME query, textually untouched by this plan, prices the formerly-alternate deck
+    // (one 12 s clip → 120 cents) because `plans.shots` IS the picked deck.
+    const row = await planRowOf(t, planId);
+    const deck = row ? sceneDeckOf(row) : null;
+    expect(deck?.targetDurationSeconds).toBe(15);
+    expect(deck?.scenes.map((s) => s.narration)).toEqual(["alt line 0", "alt line 1"]);
+    const after = await asA(t).query(api.media.jobEstimate, { planId });
+    expect(after.refusal).toBeNull();
+    expect(after.lines.find((l) => l.label === "clips")?.cents).toBe(120);
+  });
+
+  test("no_alternate when there is nothing to switch to", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    expect(await asA(t).mutation(api.media.switchDeck, { planId })).toEqual({
+      ok: false,
+      reason: "no_alternate",
+    });
+  });
+
+  test("deck_locked once Generate has bought against the picked deck", async () => {
+    const t = harness();
+    const { planId, shots } = await seedSceneDeck(t);
+    await seedAltDeck(t, planId);
+    await t.run(async (ctx) => ctx.db.patch(planId, { deckLockedAt: 1 }));
+    expect(await asA(t).mutation(api.media.switchDeck, { planId })).toEqual({
+      ok: false,
+      reason: "deck_locked",
+    });
+    expect((await planRowOf(t, planId))?.shots).toEqual(shots);
+  });
+
+  test("tenant B's switch THROWS", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t, { tenantId: A });
+    await seedAltDeck(t, planId);
+    await expect(asB(t).mutation(api.media.switchDeck, { planId })).rejects.toThrow(
+      /plan not found/,
+    );
+  });
+});
+
+describe("33-02 confirmClaim: the provenance front door — confirmation is the USER'S word only", () => {
+  /** Scene 1 carries a cited claim awaiting the user's word. The narration is deliberately
+   *  distinctive so the audit-redaction test can scan for it. */
+  async function seedClaim(t: T) {
+    const { planId } = await seedSceneDeck(t);
+    await t.run(async (ctx) => {
+      const plan = await ctx.db.get(planId);
+      const shots = (plan?.shots ?? []).map((s) =>
+        s.index === 1
+          ? {
+              ...s,
+              narration: "REVENUE-GREW-BY-40-PERCENT",
+              source: { docId: "doc123", title: "Q3 board deck" },
+              needsConfirmation: true,
+            }
+          : s,
+      );
+      await ctx.db.patch(planId, { shots });
+    });
+    return planId;
+  }
+
+  test("confirm writes confirmedAt from the authenticated context — args carry only planId + sceneIndex", async () => {
+    const t = harness();
+    const planId = await seedClaim(t);
+    await t.run(async (ctx) => ctx.db.patch(planId, { renderStatus: "rendered" }));
+
+    expect(await asA(t).mutation(api.media.confirmClaim, { planId, sceneIndex: 1 })).toEqual({
+      ok: true,
+    });
+
+    const plan = await planRowOf(t, planId);
+    expect(plan?.shots?.[1]?.confirmedAt).toBeTypeOf("number");
+    expect(plan?.shots?.[1]?.needsConfirmation).toBe(true); // the flag survives; the timestamp answers it
+    // NOT a structural deck edit, and NOT a content change: no staleness stamp, no render clear.
+    expect(plan?.shotsChangedAt).toBeUndefined();
+    expect(plan?.renderStatus).toBe("rendered");
+  });
+
+  test("the arg validator structurally cannot carry an actor or a timestamp", async () => {
+    const t = harness();
+    const planId = await seedClaim(t);
+    await expect(
+      asA(t).mutation(api.media.confirmClaim, { planId, sceneIndex: 1, confirmedAt: 5 } as never),
+    ).rejects.toThrow(/Unexpected field `confirmedAt`/);
+    await expect(
+      asA(t).mutation(api.media.confirmClaim, { planId, sceneIndex: 1, actor: "model" } as never),
+    ).rejects.toThrow(/Unexpected field `actor`/);
+    expect((await planRowOf(t, planId))?.shots?.[1]?.confirmedAt).toBeUndefined();
+  });
+
+  test("re-confirming is idempotent, a missing scene is no_block, an unclaimed scene is not_a_claim", async () => {
+    const t = harness();
+    const planId = await seedClaim(t);
+    expect(await asA(t).mutation(api.media.confirmClaim, { planId, sceneIndex: 1 })).toEqual({
+      ok: true,
+    });
+    expect(await asA(t).mutation(api.media.confirmClaim, { planId, sceneIndex: 1 })).toEqual({
+      ok: true,
+    });
+    expect((await planRowOf(t, planId))?.shots?.[1]?.confirmedAt).toBeTypeOf("number");
+    expect(await asA(t).mutation(api.media.confirmClaim, { planId, sceneIndex: 9 })).toEqual({
+      ok: false,
+      reason: "no_block",
+    });
+    // Scene 0 states no figure — confirming it would mint a confirmation with nothing to confirm.
+    expect(await asA(t).mutation(api.media.confirmClaim, { planId, sceneIndex: 0 })).toEqual({
+      ok: false,
+      reason: "not_a_claim",
+    });
+    expect((await planRowOf(t, planId))?.shots?.[0]?.confirmedAt).toBeUndefined();
+  });
+
+  test("ONE audit row, refs only — never the claim text, the title, or the narration", async () => {
+    const t = harness();
+    const planId = await seedClaim(t);
+    await asA(t).mutation(api.media.confirmClaim, { planId, sceneIndex: 1 });
+    const rows = await t.run(async (ctx) => await ctx.db.query("audit").collect());
+    const confirms = rows.filter((r) => r.eventType === "media.claim_confirmed");
+    expect(confirms).toHaveLength(1);
+    // The KEY SET is pinned sorted, so an added payload field fails here (the cash.ts idiom).
+    expect(Object.keys(confirms[0]?.payload ?? {}).sort()).toEqual(["planId", "sceneIndex"]);
+    expect(confirms[0]?.payload).toEqual({ planId, sceneIndex: 1 });
+    // §4: the serialized row must not carry content-plane text.
+    const serialized = JSON.stringify(confirms[0]);
+    expect(serialized).not.toContain("REVENUE-GREW-BY-40-PERCENT");
+    expect(serialized).not.toContain("Q3 board deck");
+  });
+
+  test("editing the confirmed scene's narration CLEARS its confirmation — a changed claim is unconfirmed", async () => {
+    const t = harness();
+    const planId = await seedClaim(t);
+    await asA(t).mutation(api.media.confirmClaim, { planId, sceneIndex: 1 });
+
+    expect(
+      await asA(t).mutation(api.media.editBlockNarration, {
+        planId,
+        blockIndex: 1,
+        narration: "REVENUE-GREW-BY-90-PERCENT",
+      }),
+    ).toEqual({ ok: true });
+
+    const shot = (await planRowOf(t, planId))?.shots?.[1];
+    expect(shot?.confirmedAt).toBeUndefined(); // the user vouched for the OLD words
+    expect(shot?.needsConfirmation).toBe(true); // …and the new words still state a figure
+    expect(shot?.source).toEqual({ docId: "doc123", title: "Q3 board deck" });
+  });
+
+  test("re-writing the SAME narration leaves the confirmation standing — nothing changed to unconfirm", async () => {
+    const t = harness();
+    const planId = await seedClaim(t);
+    await asA(t).mutation(api.media.confirmClaim, { planId, sceneIndex: 1 });
+    await asA(t).mutation(api.media.editBlockNarration, {
+      planId,
+      blockIndex: 1,
+      narration: "REVENUE-GREW-BY-40-PERCENT",
+    });
+    expect((await planRowOf(t, planId))?.shots?.[1]?.confirmedAt).toBeTypeOf("number");
+  });
+
+  test("reorder and delete leave a sibling's confirmation riding its OWN scene", async () => {
+    const t = harness();
+    const planId = await seedClaim(t);
+    await asA(t).mutation(api.media.confirmClaim, { planId, sceneIndex: 1 });
+
+    await asA(t).mutation(api.media.reorderBlocks, { planId, order: [3, 1, 0, 2] });
+    let confirmed = (await planRowOf(t, planId))?.shots?.find(
+      (s) => s.narration === "REVENUE-GREW-BY-40-PERCENT",
+    );
+    expect(confirmed?.confirmedAt).toBeTypeOf("number");
+    expect(confirmed?.source).toEqual({ docId: "doc123", title: "Q3 board deck" });
+
+    // Deleting a DIFFERENT scene renumbers through patchShots; the claim keeps its fields.
+    await asA(t).mutation(api.media.deleteBlock, { planId, blockIndex: 0 });
+    confirmed = (await planRowOf(t, planId))?.shots?.find(
+      (s) => s.narration === "REVENUE-GREW-BY-40-PERCENT",
+    );
+    expect(confirmed?.confirmedAt).toBeTypeOf("number");
+  });
+
+  test("tenant B's confirm THROWS", async () => {
+    const t = harness();
+    const planId = await seedClaim(t);
+    await expect(asB(t).mutation(api.media.confirmClaim, { planId, sceneIndex: 1 })).rejects.toThrow(
+      /plan not found/,
+    );
+  });
+});
+
+// ── 33-03: the unconfirmed_claims gate — the estimate and the reserve open TOGETHER ─────────────
+//
+// An unconfirmed factual claim blocks BOTH money sites with the same refusal: the number the
+// canvas shows and the button beside it open together or not at all (the wave-5 co-location rule).
+// The reserve-side check is the one that matters under mutation: deleting it must send a test RED
+// because a reservation SUCCEEDS with an unconfirmed claim — money moved is the red.
+
+/** Mark the given scene indices as stating unvouched figures. */
+async function flagClaims(t: T, planId: Id<"plans">, indices: number[]) {
+  await t.run(async (ctx) => {
+    const plan = await ctx.db.get(planId);
+    const shots = (plan?.shots ?? []).map((s) =>
+      indices.includes(s.index) ? { ...s, needsConfirmation: true } : s,
+    );
+    await ctx.db.patch(planId, { shots });
+  });
+}
+
+describe("33-03 the confirm gate: unconfirmed claims block the estimate AND the reservation", () => {
+  test("jobEstimate refuses unconfirmed_claims, naming the FIRST offending scene — free, before the button", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    await flagClaims(t, planId, [1, 3]);
+    const estimate = await asA(t).query(api.media.jobEstimate, { planId });
+    expect(estimate.refusal).toEqual({ reason: "unconfirmed_claims", blockIndex: 1 });
+    expect(estimate.totalCents).toBe(0);
+  });
+
+  test("generateReel refuses the SAME way — zero rows, zero cents moved (the reserve-side observer)", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    await flagClaims(t, planId, [1]);
+    const before = await mediaLeft(t);
+    expect(await asA(t).mutation(api.media.generateReel, { planId })).toEqual({
+      ok: false,
+      reason: "unconfirmed_claims",
+    });
+    expect(await rows(t)).toHaveLength(0);
+    expect(await mediaLeft(t)).toBe(before);
+  });
+
+  test("regenerateBlock refuses too — the gate is deck-wide at the reserve, not a generateReel wrapper", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    await flagClaims(t, planId, [3]);
+    // Re-buying scene 1 while scene 3 states an unvouched figure: the deck is validated WHOLE,
+    // exactly as every other reserve refusal is.
+    expect(await asA(t).mutation(api.media.regenerateBlock, { planId, blockIndex: 1 })).toEqual({
+      ok: false,
+      reason: "unconfirmed_claims",
+    });
+    expect(await rows(t)).toHaveLength(0);
+  });
+
+  test("confirmClaim on every flagged scene clears the refusal REACTIVELY, and the same deck reserves", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    await flagClaims(t, planId, [1, 3]);
+    expect(await asA(t).mutation(api.media.confirmClaim, { planId, sceneIndex: 1 })).toEqual({
+      ok: true,
+    });
+    // One of two confirmed: still blocked, now naming the remaining scene.
+    expect((await asA(t).query(api.media.jobEstimate, { planId })).refusal).toEqual({
+      reason: "unconfirmed_claims",
+      blockIndex: 3,
+    });
+    expect(await asA(t).mutation(api.media.confirmClaim, { planId, sceneIndex: 3 })).toEqual({
+      ok: true,
+    });
+
+    const estimate = await asA(t).query(api.media.jobEstimate, { planId });
+    expect(estimate.refusal).toBeNull();
+    expect(estimate.totalCents).toBeGreaterThan(0);
+    const res = await asA(t).mutation(api.media.generateReel, { planId });
+    expect(res.ok, `refused: ${res.ok ? "" : res.reason}`).toBe(true);
+    if (!res.ok) return;
+    // The pinned agreement survives the gate: the number shown IS the number reserved.
+    expect(res.estCents).toBe(estimate.totalCents);
+  });
+
+  test("a deck with NO flagged scenes is untouched by the gate — v2 decks price exactly as before", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    expect((await asA(t).query(api.media.jobEstimate, { planId })).refusal).toBeNull();
+    const res = await asA(t).mutation(api.media.generateReel, { planId });
+    expect(res.ok).toBe(true);
+  });
+});
+
+// ── 33-03: Generate LOCKS the pick and DISCARDS the alternate; money tracks plans.shots alone ───
+
+describe("33-03 generateReel: the point of no return for variations", () => {
+  test("a successful Generate stamps deckLockedAt and deletes the alternate, in the same mutation", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    await seedAltDeck(t, planId);
+
+    const res = await asA(t).mutation(api.media.generateReel, { planId });
+    expect(res.ok, `refused: ${res.ok ? "" : res.reason}`).toBe(true);
+
+    const plan = await planRowOf(t, planId);
+    expect(plan?.deckLockedAt).toBeTypeOf("number");
+    // The locked discard decision: the unpicked deck is gone, not parked forever beside a bought
+    // one it can no longer replace.
+    expect(plan?.altShots).toBeUndefined();
+    expect(plan?.altTargetDurationSeconds).toBeUndefined();
+    // …and the lock is live: the choice can no longer be swapped.
+    expect(await asA(t).mutation(api.media.switchDeck, { planId })).toEqual({
+      ok: false,
+      reason: "deck_locked",
+    });
+  });
+
+  test("a REFUSED Generate locks nothing and discards nothing — the refusal is free", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    const altShots = await seedAltDeck(t, planId);
+    await flagClaims(t, planId, [1]);
+
+    expect(await asA(t).mutation(api.media.generateReel, { planId })).toEqual({
+      ok: false,
+      reason: "unconfirmed_claims",
+    });
+    const plan = await planRowOf(t, planId);
+    expect(plan?.deckLockedAt).toBeUndefined();
+    expect(plan?.altShots).toEqual(altShots);
+    expect(plan?.altTargetDurationSeconds).toBe(15);
+  });
+
+  test("PICKED-DECK-ONLY: a parked alternate moves NEITHER the estimate NOR the reservation", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    // The number with NO alternate anywhere — the pure picked-deck price.
+    const alone = await asA(t).query(api.media.jobEstimate, { planId });
+    expect(alone.refusal).toBeNull();
+
+    // Park a genuinely different deck (15s, 120¢ of clips vs the picked deck's 200¢).
+    await seedAltDeck(t, planId);
+    const parked = await asA(t).query(api.media.jobEstimate, { planId });
+    expect(parked.totalCents).toBe(alone.totalCents);
+    expect(parked.lines).toEqual(alone.lines);
+
+    // …and the reservation charges that SAME number: one estimate, one reservation, both over
+    // plans.shots only. The alternate is priced by nothing.
+    const res = await asA(t).mutation(api.media.generateReel, { planId });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.estCents).toBe(alone.totalCents);
+  });
+});
+
+describe("33-03 sceneCitations: model-authored docIds are checked where they are consumed", () => {
+  /** Scenes 0..3; 0 cites the tenant's own doc, 1 cites a FOREIGN doc, 2 is an uncited claim. */
+  async function seedCitedDeck(t: T) {
+    const { planId } = await seedSceneDeck(t);
+    const { ownId, foreignId } = await t.run(async (ctx) => {
+      const base = {
+        title: "t",
+        kind: "upload",
+        category: "other",
+        source: "upload",
+        mimeType: "application/pdf",
+        size: 1,
+        contentHash: "f".repeat(64),
+        status: "ready" as const,
+        createdAt: T0,
+      };
+      return {
+        ownId: await ctx.db.insert("vaultDocuments", { ...base, tenantId: A }),
+        foreignId: await ctx.db.insert("vaultDocuments", { ...base, tenantId: B }),
+      };
+    });
+    await t.run(async (ctx) => {
+      const plan = await ctx.db.get(planId);
+      const shots = (plan?.shots ?? []).map((s) => {
+        if (s.index === 0) return { ...s, source: { docId: ownId, title: "The pricing one-pager" } };
+        if (s.index === 1) {
+          return { ...s, source: { docId: foreignId, title: "Someone else's deck" } };
+        }
+        if (s.index === 2) return { ...s, needsConfirmation: true };
+        return s;
+      });
+      await ctx.db.patch(planId, { shots });
+    });
+    return { planId, ownId, foreignId };
+  }
+
+  test("own doc verifies; a FOREIGN docId is inert (verified:false) — never a valid citation", async () => {
+    const t = harness();
+    const { planId, ownId, foreignId } = await seedCitedDeck(t);
+    const cites = await asA(t).query(api.media.sceneCitations, { planId });
+    // One entry per scene that claims anything; the unclaimed scene 3 has no row.
+    expect(cites.map((c) => c.sceneIndex)).toEqual([0, 1, 2]);
+    expect(cites[0]).toEqual({
+      sceneIndex: 0,
+      docId: ownId,
+      title: "The pricing one-pager",
+      verified: true,
+      needsConfirmation: false,
+      confirmedAt: null,
+    });
+    // The model wrote another tenant's id: the row exists, the citation does not verify.
+    expect(cites[1]).toMatchObject({ docId: foreignId, verified: false });
+    // An unverified claim with no doc at all: nothing to link, owner must vouch.
+    expect(cites[2]).toEqual({
+      sceneIndex: 2,
+      docId: null,
+      title: null,
+      verified: false,
+      needsConfirmation: true,
+      confirmedAt: null,
+    });
+  });
+
+  test("a MALFORMED docId fails closed, and a confirmation shows on the entry", async () => {
+    const t = harness();
+    const { planId } = await seedCitedDeck(t);
+    await t.run(async (ctx) => {
+      const plan = await ctx.db.get(planId);
+      const shots = (plan?.shots ?? []).map((s) =>
+        s.index === 0 ? { ...s, source: { docId: "not_a_real_id", title: "Forged" } } : s,
+      );
+      await ctx.db.patch(planId, { shots });
+    });
+    await asA(t).mutation(api.media.confirmClaim, { planId, sceneIndex: 2 });
+
+    const cites = await asA(t).query(api.media.sceneCitations, { planId });
+    expect(cites[0]).toMatchObject({ docId: "not_a_real_id", verified: false });
+    expect(cites[2]?.confirmedAt).toBeTypeOf("number");
+  });
+
+  test("tenant B reads NOTHING off A's plan — reads return empty where writes throw", async () => {
+    const t = harness();
+    const { planId } = await seedCitedDeck(t);
+    expect(await asB(t).query(api.media.sceneCitations, { planId })).toEqual([]);
   });
 });

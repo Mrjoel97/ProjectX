@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { type FigureClaim, isNewerThan, validateFigureClaim } from "./financeClaim";
+import { BASIS_CHAR_CAP, type FigureClaim, isNewerThan, validateFigureClaim } from "./financeClaim";
 
 const claim = (over: Partial<FigureClaim> = {}): FigureClaim => ({
   field: "cac",
@@ -53,6 +53,32 @@ test("an infinite observedAt is refused", () => {
 test("a negative observedAt (before the epoch) is refused", () => {
   const r = validateFigureClaim(claim({ observedAt: -1 }));
   expect(r).toEqual({ ok: false, reason: "A figure must have a valid observed date." });
+});
+
+test("a basis carrying quoted content is refused", () => {
+  const r = validateFigureClaim(claim({ basis: 'the P&L says "revenue 40200"' }));
+  expect(r.ok).toBe(false);
+  if (!r.ok) expect(r.reason).toMatch(/not quote it/);
+});
+
+test("a basis long enough to be a transcript is refused", () => {
+  const r = validateFigureClaim(claim({ basis: "a".repeat(BASIS_CHAR_CAP + 1) }));
+  expect(r.ok).toBe(false);
+});
+
+test("a basis of exactly the cap is allowed", () => {
+  const r = validateFigureClaim(claim({ basis: "a".repeat(BASIS_CHAR_CAP) }));
+  expect(r.ok).toBe(true);
+});
+
+test("curly quotes are refused too, not just straight ones", () => {
+  const r = validateFigureClaim(claim({ basis: "the deck said “40k”" }));
+  expect(r.ok).toBe(false);
+});
+
+test("an ordinary ref-style basis still passes", () => {
+  const r = validateFigureClaim(claim({ basis: "vaultDoc:abc123 p4" }));
+  expect(r.ok).toBe(true);
 });
 
 test("isNewerThan is true when nothing is stored", () => {

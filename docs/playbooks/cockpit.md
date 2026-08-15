@@ -1,15 +1,50 @@
 # Playbook: Email Chat Cockpit
 
+> Touched 2026-08-15 (phase 14→25 gap-audit session) to clear the §9 Stop hook — **NOT a
+> verification**, and deliberately not a `Last verified` line. **This session changed no product
+> code at all**: it re-cut `.planning/phases/25-private-beta-productionization/25-PREREQUISITE-EVIDENCE.md`
+> and nothing else. The hook fired on
+> `apps/web/app/(app)/dashboard/workspace/MediaCanvas.tsx`, which is *still* carrying the same
+> uncommitted in-flight changes from the concurrent Drive/media lane that `f885a82` named earlier
+> today — now uncovered for the third session running. **The lane that owns it still owes this
+> playbook a real entry and a real `Last verified` bump.** Nothing below covers it.
+
+> Touched 2026-08-15 (item-4 session) to clear the §9 Stop hook — **NOT a verification**, and
+> deliberately not a `Last verified` line. The item-4 change (the `cockpit-agent` body: a new
+> `## The user's calendar` section plus the merge of the two document sections) touches NO
+> cockpit-watched path — its watched playbooks are `agent-runtime.md` and `skill-registry.md`,
+> and both carry real entries for it. Two OTHER lanes' files tripped the hook here:
+>
+> - `packages/backend/convex/llm.ts` and `convex/cockpitTools.test.ts`, last changed by
+>   **`f6fe5d2` (21-02, "the refs-only basis rule moves to the boundary every producer runs")**,
+>   which landed mid-session and updated NO playbook. **That lane owes this file a real entry and a
+>   real `Last verified` bump** for what the boundary move did to the cockpit tool surface.
+> - `apps/web/app/(app)/dashboard/workspace/MediaCanvas.tsx`, STILL uncommitted from the
+>   concurrent Drive/media lane — the same in-flight work `f885a82` named earlier today. Still
+>   unread and unattested at the time — since read and entered; see the MediaCanvas flex-crush entry below.
+>
+> Nothing below covers either. Recorded in `f885a82`'s form on purpose: the hook cannot be scoped
+> to one lane's diff, so the honest move is to say whose work is uncovered rather than to assert a
+> verification nobody performed.
+
 > Touched 2026-08-15 to clear the §9 Stop hook — **NOT a verification**, and deliberately not a
 > `Last verified` line. `apps/web/app/(app)/dashboard/workspace/MediaCanvas.tsx` carried
 > uncommitted in-flight changes from another lane while this session was committing the PDF
 > end-to-end work (vault preview + `storedMimeType`), which touches no cockpit-watched path. That
 > MediaCanvas work is unread and unattested by this session. **The lane that owns it still owes
-> this playbook a real entry and a real `Last verified` bump.** Nothing below covers it.
+> this playbook a real entry and a real `Last verified` bump.** That debt is now paid — see the
+> MediaCanvas flex-crush entry below (read and attested 2026-08-15).
 >
 > (Recorded in the same form the Vault lane used when this session's own in-flight files blocked
 > `vault.md` — the hook cannot be scoped to one lane's diff, so the honest move is to say whose
 > work is uncovered rather than to assert a verification nobody performed.)
+
+> Last verified: 2026-08-15 (MediaCanvas flex-crush fix, read and attested by the phase-33 planning
+> session — **both canvas sheets in `MediaCanvas.tsx` now set `flexShrink: 0`.** `briefingSheet`'s
+> `overflow: hidden` flips the flex min-height auto→0 inside the fixed-height `.pane-canvas`
+> section, so without it the pane crushed the sheet to the leftover viewport and clipped the whole
+> storyboard, unscrollably. Applied to BOTH the reel sheet and the image sheet; layout-only — no
+> data, tool-surface, or governance change. This pays the debt the two notes above recorded.)
 
 > Last verified: 2026-08-15 (whole-branch review final-fix pass, Finding 2). `recordScorecardAnswer`
 > (`llm.ts` ~3517, the "store" write half of vault-first→ask→store) used to tell the model, verbatim,

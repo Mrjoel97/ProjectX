@@ -1,5 +1,87 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-15 (proposals-table-and-applier plan, Task 5 — the applier LANDS. This
+> supersedes the "in-flight" entry below it: `proposals.ts` is committed, not staged. Confirmed as
+> built: `cash.ts`'s `inputStatesFor` export and `onboarding.ts`'s `writeProfileDoc`/
+> `currentProfileDoc` exports are visibility-only (behaviour-preserving; the full pre-existing suite —
+> `cash.test.ts` 49/49, `evaluations.test.ts` 38/38, `onboarding.test.ts` 24/24 — passes unchanged).
+> `acceptProposal` is a `tenantMutation`, two-pass (validate-then-write), and NEVER writes a target
+> store via `ctx.db` — the only `ctx.db` write is the `proposals` row's own `status`.
+> **[Corrected by fix rounds 1-2, in place, per CLAUDE.md §9 — this paragraph now describes the
+> LANDED behaviour, not the original Task-5 submission. VERIFIED ACCURATE BY TASK 6, 2026-08-15,
+> against the code as it stands (not merely re-read from the prior entry): `proposals.ts` inspected
+> directly — the tier-row gate is confirmed in PASS 1 before any writer runs, the ONE `ponytail:`
+> marker is confirmed to be exactly the contacts refusal (grepped), and `proposal.ts` carries zero
+> `ponytail:` markers. Full command output: `pnpm vitest run convex/proposals.test.ts
+> convex/cash.test.ts convex/evaluations.test.ts convex/onboarding.test.ts` → 4 files, 122/122
+> passed (unchanged from fix round 2); `pnpm typecheck` clean; core `pnpm vitest run
+> src/proposal.test.ts` → 14/14 passed. The dedicated playbook is now `docs/playbooks/proposals.md`
+> (Task 6) — it owns the proposals SUBSYSTEM itself; this entry documents what accepting a proposal
+> means for the finance/profile stores this playbook already covers.]** Finance facts: read via ONE
+> `inputStatesFor` call, classified per-item with
+> `classifyProposal` — but the guard is REPORTING ONLY now (`guards: Record<ProposalGuard, number>`
+> on the `ok:true` result), never enforced by the applier itself; `applyFinanceClaims` is the SOLE
+> staleness authority (its own `isNewerThan` check, at write time, in the same transaction), so there
+> is exactly one place staleness is decided rather than two separately-derived notions of "stored
+> time" that only happened to agree. Every accepted finance item reaches `applyFinanceClaims` in one
+> call regardless of guard, because `acceptedIndices` IS the deliberate click design §6.1 requires;
+> `actor: "agent"` is STAMPED on every item before it reaches a claim, never trusted off the row.
+> Profile facts are GATED, in PASS 1, on a `tenantProfiles` row existing: `currentTierRow` (exported
+> from `onboarding.ts`) is read before any writer runs, and a missing row refuses `incomplete_facts`
+> — never a fabricated `persona`. This gate sitting in PASS 2 (after the finance write block) was a
+> real regression caught by fix round 2: a mixed finance+profile batch for a tenant with no tier row
+> would commit the finance half (rows AND the `finance.claims_applied` audit insert) before refusing
+> on the profile half, leaving `status` `"pending"` and the batch re-acceptable — a double-apply
+> waiting to happen. The gate is a READ, hoisted into PASS 1 alongside the other validation, so it is
+> cheap and total like every other PASS-1 refusal. Once past the gate, profile facts are merged over
+> `currentProfileDoc`'s parsed doc (or a blank skeleton if none exists yet) — `persona` always the
+> FRESHLY-read tier, never trusted off a possibly-stale doc — and written through `writeProfileDoc`;
+> absent fields stay absent. Contacts/followUps refuse wholesale (`writer_refused`) until plan 3's
+> batch attestation exists. A foreign or missing proposal id both return `not_found` (existence is
+> not leaked across tenants). `discardProposal` and `listPending` round out the surface.
+> The `revenueModel`/`bindingConstraint` `ponytail:` marker that used to live in THIS file's applier
+> is GONE — not because the gap closed, but because it moved: `packages/core/src/proposal.ts` now
+> excludes both from `PROFILE_WRITABLE_FIELDS` (no `BusinessProfile` slot for either — the applier
+> would have silently dropped a proposal for one on write), and `primaryGoals`/`knownConstraints` are
+> excluded there too (they DO have a slot, but it is `string[]`, not the scalar every profile
+> `ProposalTarget` is registered as — a proposal for either would have thrown inside
+> `serializeProfile`'s `bullets()`). Both exclusions are pinned by a totality test in
+> `proposal.test.ts`, not a comment. ONE `ponytail:` marker remains in `proposals.ts`: the contacts
+> refusal itself, upgrade path = plan 3's attestation arg. Full command output (fix round 2):
+> `pnpm vitest run convex/proposals.test.ts convex/cash.test.ts convex/evaluations.test.ts
+> convex/onboarding.test.ts` → 4 files, 122/122 passed; `pnpm typecheck` clean; core
+> `pnpm vitest run src/proposal.test.ts` → 14/14 passed.)
+
+> Touched 2026-08-15 (item-4 session) to clear the §9 Stop hook — **NOT a verification**, and
+> deliberately not a `Last verified` line. `packages/core/src/financeClaim.ts` and
+> `financeClaim.test.ts` were last changed by **`f6fe5d2` (21-02, "the refs-only basis rule moves
+> to the boundary every producer runs")**, which landed mid-session and updated NO playbook. That
+> work is unread and unattested by this session, which was changing the `cockpit-agent` skill body
+> and touched no path this playbook watches. **The 21-02 lane still owes this playbook a real entry**
+> covering what moving the refs-only basis rule to the producer boundary means for the finance
+> surfaces described below. Nothing below covers it.
+>
+> Re-tripped later the same session by `packages/backend/convex/proposals.ts`, ALSO the 21-02
+> lane's and still uncommitted — it is what added the `proposals.by_tenant_source` /
+> `by_tenant_status` indexes that appeared during a `convex dev` push. Same status: unread and
+> unattested here. Note `8b40e54` ("the proposals playbook, and the debt it closes") landed after
+> the note above was written and preserved it, so that lane is now partly discharging this debt.
+
+> Last verified: 2026-08-15 (cash-business-finance lane's in-flight proposals applier, read and
+> attested by the phase-33 planning session — TWO items. **(1) `cash.ts`'s `inputStatesFor` is now
+> `export`ed** (visibility only, zero behaviour change) as the applier's ONE read of "what is stored
+> and who said it" for both finance stores — the same call the finance page renders from, so the
+> merge rule has no second, silently-drifting definition. **(2) `packages/backend/convex/proposals.ts`
+> is NEW and registered under this playbook's watch entry.** It is the applier: the ONLY place a
+> proposed fact reaches a target store, and it never writes a target store via `ctx.db` — finance
+> facts go through `applyFinanceClaims` (after `classifyProposal` against `inputStatesFor`, with
+> stale claims skipped, `actor: "agent"` STAMPED never read off the row), profile facts go through
+> `onboarding.ts`'s `writeProfileDoc`, and contacts/followUps are refused wholesale until the batch
+> attestation exists (spec §4.2). Two passes — validate everything with zero writes, then write —
+> because a `return` does not roll back a Convex transaction. Foreign/missing proposal ids return
+> the same `not_found`. The file is uncommitted in-flight work; its owning lane owes the fuller
+> entry when it lands, but the invariants above are read from source, not assumed.)
+
 > Last verified: 2026-08-15 (plan `2026-08-15-scorecard-field-provenance`, COMPLETE — full backend
 > suite green: `pnpm typecheck` clean, `pnpm vitest run` 79 test files / 1793 passed / 24 skipped, 0
 > red; `cash.test.ts` 49/49, `plans.test.ts` 27/27, `approvals.test.ts` 8/8, `cockpit.test.ts` 70/70,

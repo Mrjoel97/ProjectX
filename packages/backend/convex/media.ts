@@ -30,6 +30,7 @@ import {
   minCharsFor,
   narrationCeilingSeconds,
   SHOT_TYPES,
+  TARGET_DURATIONS,
   VISUAL_KINDS,
 } from "@pikar/core/storyboard";
 import type { MediaSpec } from "@pikar/cost/media";
@@ -71,6 +72,10 @@ export type ReserveRefusal =
   | "nothing_to_regenerate"
   | "narration_too_long"
   | "narration_too_short"
+  /** 33-03 — a picked-deck scene states a figure the user has not vouched for
+   *  (`needsConfirmation` with no `confirmedAt`). The lever is `confirmClaim`, not a rewrite:
+   *  the model proposes, only the owner vouches, and money is where that becomes structural. */
+  | "unconfirmed_claims"
   | "media_daily_exhausted"
   | "deployment_media_exhausted";
 
@@ -411,6 +416,15 @@ export async function reserveJobInner(
  * partial buy raises too — and only the LINES are narrowed. The captions line still prices the
  * whole reel, because re-buying one scene re-renders and re-captions all of it.
  */
+/** 33-03 — the first PICKED-DECK shot stating a figure the user has not vouched for, or null.
+ *  ONE predicate for both money sites, so the estimate and the reserve cannot drift on what
+ *  "unconfirmed" means. Reads shot elements (the row), never parser `Scene`s — parser output
+ *  structurally cannot carry `confirmedAt`, so the row is the only place the answer exists. */
+const firstUnconfirmedClaim = (
+  shots: readonly { index: number; needsConfirmation?: boolean; confirmedAt?: number }[] | undefined,
+): { index: number } | null =>
+  shots?.find((s) => s.needsConfirmation === true && s.confirmedAt === undefined) ?? null;
+
 export async function reserveSceneJobInner(
   ctx: MutationCtx,
   a: {
@@ -435,6 +449,17 @@ export async function reserveSceneJobInner(
   // free. Same rule that puts the narration ceiling here rather than downstream.
   const summed = a.scenes.reduce((n, s) => n + s.durationMs, 0) / 1000;
   if (summed !== a.targetDurationSeconds) return { ok: false, reason: "illegal_duration" };
+
+  // 33-03 — the confirm gate, in the SAME position of the same pre-flight order as `jobEstimate`'s
+  // (the wave-5 co-location rule: the number on screen and the button refuse together). Checked
+  // off the ROW rather than the passed scenes, and deck-wide like every other refusal here — a
+  // partial buy against a deck with an unvouched figure is still money against that deck. Reading
+  // it HERE means no caller can hand this function a deck that skips the gate.
+  const planRow = await ctx.db.get(a.planId);
+  const claim = firstUnconfirmedClaim(
+    planRow && planRow.tenantId === a.tenantId ? planRow.shots : undefined,
+  );
+  if (claim) return { ok: false, reason: "unconfirmed_claims" };
 
   const now = Date.now();
   const batchId = crypto.randomUUID();
@@ -2070,6 +2095,13 @@ export const jobEstimate = tenantQuery({
       if (scenes.reduce((n, s) => n + s.durationMs, 0) / 1000 !== targetDurationSeconds) {
         return { ...empty, refusal: { reason: "illegal_duration" } };
       }
+      // 33-03 — the confirm gate OPENS here in the same position it opens at the reserve, FREE:
+      // the block happens where every other block happens, before the button. `blockIndex` names
+      // the first offending scene so the canvas can point at the chip to confirm.
+      const claim = firstUnconfirmedClaim(plan.shots);
+      if (claim) {
+        return { ...empty, refusal: { reason: "unconfirmed_claims", blockIndex: claim.index } };
+      }
       const specs: MediaSpec[] = [];
       let clipSecondsTotal = 0;
       let voiceChars = 0;
@@ -2375,11 +2407,24 @@ export const generateReel = tenantMutation({
     // `reserveSceneJobInner` prices them per kind. This is where a scene deck becomes BUYABLE.
     const sceneDeck = sceneDeckOf(plan);
     if (sceneDeck !== null) {
-      return await reserveAndSchedule(ctx, {
+      const res = await reserveAndSchedule(ctx, {
         tenantId: ctx.tenantId,
         planId,
         deck: { kind: "scene", ...sceneDeck },
       });
+      // 33-03 — GENERATE IS THE POINT OF NO RETURN for variations, in the SAME transaction as the
+      // reservation: the pick is bought, so it locks (`switchDeck`/`editBrief` refuse from here),
+      // and the unpicked deck is DISCARDED rather than parked forever beside a deck it can no
+      // longer replace. `undefined` deletes on a direct patch. A refusal locks and discards
+      // NOTHING — the refusal is free, and the choice is still the user's.
+      if (res.ok) {
+        await ctx.db.patch(planId, {
+          deckLockedAt: Date.now(),
+          altShots: undefined,
+          altTargetDurationSeconds: undefined,
+        });
+      }
+      return res;
     }
     const blocks = deckOf(plan);
     if (!blocks || plan.clipSeconds === undefined) return { ok: false as const, reason: "no_deck" };
@@ -2579,7 +2624,17 @@ export const editBlockNarration = tenantMutation({
     await patchShots(
       ctx,
       planId,
-      shots.map((s) => (s.index === blockIndex ? { ...s, narration } : s)),
+      // 33-02: a CHANGED claim is unconfirmed. The user vouched for the OLD words, so a real
+      // narration change drops `confirmedAt` (and only then — re-saving the same line changes
+      // nothing to unconfirm); `needsConfirmation` and `source` stand, because the new words
+      // still state a figure from the same document. This scene only: siblings ride `patchShots`
+      // untouched. If an overlay editor ever lands, its content change must clear the same way.
+      shots.map((s) => {
+        if (s.index !== blockIndex) return s;
+        if (s.confirmedAt === undefined || narration === s.narration) return { ...s, narration };
+        const { confirmedAt: _cleared, ...rest } = s;
+        return { ...rest, narration };
+      }),
     );
     return { ok: true as const };
   },
@@ -2684,5 +2739,183 @@ export const deleteBlock = tenantMutation({
       shots.filter((s) => s.index !== blockIndex),
     );
     return { ok: true as const };
+  },
+});
+
+// ── 33-02: the BRIEF plane and the TWO-DECK variation plane ────────────────────────────────────
+//
+// Two governed writes, and one rule shared by both: `plans.shots` IS the picked deck. The money
+// path (`sceneDeckOf`, `jobEstimate`, the reserves) is textually untouched by this plan and never
+// learns variations exist — it prices whatever is in `shots`, which is always the picked deck.
+
+/**
+ * Edit a brief chip. Patches ONLY the brief plane: `brief.durationSeconds` is the USER'S ask, the
+ * deck's own `targetDurationSeconds` remains the money contract, and a divergence between the two
+ * renders as the stale badge (`briefChangedAt > deckProposedAt`) — never as an estimate refusal
+ * and never as a silent re-deck. Fields named in the patch stop being `defaulted`: a chip the
+ * user has touched is the user's word, whatever its value.
+ */
+export const editBrief = tenantMutation({
+  args: {
+    planId: v.id("plans"),
+    patch: v.object({
+      topic: v.optional(v.string()),
+      durationSeconds: v.optional(v.number()),
+      audience: v.optional(v.string()),
+      tone: v.optional(v.string()),
+      brandVoice: v.optional(v.string()),
+    }),
+  },
+  handler: async (ctx, { planId, patch }) => {
+    const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
+    // No brief, nothing to edit — the chips only render off an existing brief, and inventing one
+    // here would launder a client-supplied object into "what the user asked for".
+    if (plan.brief === undefined) return { ok: false as const, reason: "no_brief" as const };
+    // Post-Generate the choice is bought; brief edits from then on are canvas-only, paid-rail.
+    if (plan.deckLockedAt !== undefined) {
+      return { ok: false as const, reason: "deck_locked" as const };
+    }
+    if (
+      patch.durationSeconds !== undefined &&
+      !(TARGET_DURATIONS as readonly number[]).includes(patch.durationSeconds)
+    ) {
+      return { ok: false as const, reason: "illegal_duration" as const };
+    }
+    const edited = Object.keys(patch).filter(
+      (k) => patch[k as keyof typeof patch] !== undefined,
+    );
+    await ctx.db.patch(planId, {
+      brief: {
+        ...plan.brief,
+        ...Object.fromEntries(edited.map((k) => [k, patch[k as keyof typeof patch]])),
+        defaulted: plan.brief.defaulted.filter((f) => !edited.includes(f)),
+      },
+      briefChangedAt: Date.now(),
+    });
+    return { ok: true as const };
+  },
+});
+
+/**
+ * Swap the picked deck for the parked alternate — `shots`↔`altShots` and
+ * `targetDurationSeconds`↔`altTargetDurationSeconds`, in ONE patch, until Generate locks the
+ * choice (`deckLockedAt`).
+ *
+ * The stamp is STRUCTURAL and deliberate: landed assets belong to the deck that bought them, so
+ * `shotsChangedAt` making them un-reusable (`batchToRender`'s `stale_inputs`) is correct here,
+ * not the money leak the content/structural split exists to prevent. Not `patchShots` — the
+ * alternate's indices are already 0..n-1, which that helper would read as a content edit.
+ */
+export const switchDeck = tenantMutation({
+  args: { planId: v.id("plans") },
+  handler: async (ctx, { planId }) => {
+    const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
+    // The LOCK answers first (33-03): after Generate the alternate is discarded, so a locked plan
+    // has no altShots either — but "the choice is bought" is the truthful refusal, and the one
+    // that names the real ceiling. `no_alternate` is for a plan that never had a second deck.
+    if (plan.deckLockedAt !== undefined) {
+      return { ok: false as const, reason: "deck_locked" as const };
+    }
+    if (plan.altShots === undefined) return { ok: false as const, reason: "no_alternate" as const };
+    await ctx.db.patch(planId, {
+      shots: plan.altShots,
+      altShots: plan.shots,
+      targetDurationSeconds: plan.altTargetDurationSeconds,
+      altTargetDurationSeconds: plan.targetDurationSeconds,
+      shotsChangedAt: Date.now(),
+    });
+    // The rendered reel — if any — is the OTHER deck's artifact; showing it beside this deck
+    // would be the exact stale-final.mp4 lie `clearRender` exists to prevent.
+    await clearRender(ctx, planId);
+    return { ok: true as const };
+  },
+});
+
+/**
+ * Confirm a cited claim — the provenance front door (33-02).
+ *
+ * **The args are `planId` + `sceneIndex` and NOTHING else, and that is the security property.**
+ * Actor and timestamp derive from the authenticated tenant context (the schema.ts `authorUserId`
+ * idiom: "derived from authenticated identity, never from args"). The model has NO mutation that
+ * can set `confirmedAt`, and this validator structurally cannot be handed one — the
+ * provenance-laundering door stays shut at the arg shape, not at a runtime check.
+ *
+ * A DIRECT targeted patch, deliberately not `patchShots`: confirmation is not a structural deck
+ * edit (no `shotsChangedAt` — landed assets stay reusable) and not a content change (no render
+ * clear — the reel on screen is still the reel the user confirmed a claim inside).
+ */
+export const confirmClaim = tenantMutation({
+  args: { planId: v.id("plans"), sceneIndex: v.number() },
+  handler: async (ctx, { planId, sceneIndex }) => {
+    const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
+    const shots = plan.shots ?? [];
+    const shot = shots.find((s) => s.index === sceneIndex);
+    if (!shot) return { ok: false as const, reason: "no_block" as const };
+    // A scene that states no figure has nothing to confirm — minting a confirmation here would
+    // let "the user vouched for this" appear on a scene no one was ever asked about.
+    if (shot.needsConfirmation !== true) {
+      return { ok: false as const, reason: "not_a_claim" as const };
+    }
+    await ctx.db.patch(planId, {
+      shots: shots.map((s) => (s.index === sceneIndex ? { ...s, confirmedAt: Date.now() } : s)),
+    });
+    // Insert-only, refs only (§4): WHICH scene of WHICH plan — never the claim text, never the
+    // source title. A fresh correlation id, the `blueprint.confirmed` idiom: the confirmation is
+    // its own event, not a step of some other flow's lineage.
+    await ctx.runMutation(internal.audit.log, {
+      tenantId: ctx.tenantId,
+      correlationId: crypto.randomUUID(),
+      eventType: "media.claim_confirmed",
+      actor: ctx.tenantId,
+      payload: { planId, sceneIndex },
+    });
+    return { ok: true as const };
+  },
+});
+
+/**
+ * The picked deck's citation plane, one entry per scene that claims anything (33-03).
+ *
+ * **`source.docId` is MODEL-AUTHORED text, and this is where it is checked** — the `asset.docId`
+ * precedent (`setSceneAsset`): ownership is verified where the id is CONSUMED, never trusted at
+ * the write. `verified` is "this doc exists AND is this tenant's"; a foreign, malformed or deleted
+ * id comes back `verified: false`, which the canvas renders as unverified — never a clickable
+ * citation. `normalizeId` failing closed on garbage is the same door as a real id in the wrong
+ * tenant, deliberately: the two must be indistinguishable to a probing model.
+ *
+ * No URL is minted here — titles and ids only. PreviewModal does its own access check when the
+ * user opens the document.
+ */
+export const sceneCitations = tenantQuery({
+  args: { planId: v.id("plans") },
+  handler: async (ctx, { planId }) => {
+    const plan = await ownedPlan(ctx, planId, ctx.tenantId);
+    if (!plan) return [];
+    const out: {
+      sceneIndex: number;
+      docId: string | null;
+      title: string | null;
+      verified: boolean;
+      needsConfirmation: boolean;
+      confirmedAt: number | null;
+    }[] = [];
+    for (const s of plan.shots ?? []) {
+      if (s.source === undefined && s.needsConfirmation !== true) continue; // claims nothing
+      let verified = false;
+      if (s.source !== undefined) {
+        const docId = ctx.db.normalizeId("vaultDocuments", s.source.docId);
+        const doc = docId === null ? null : await ctx.db.get(docId);
+        verified = doc !== null && doc.tenantId === ctx.tenantId;
+      }
+      out.push({
+        sceneIndex: s.index,
+        docId: s.source?.docId ?? null,
+        title: s.source?.title ?? null,
+        verified,
+        needsConfirmation: s.needsConfirmation === true,
+        confirmedAt: s.confirmedAt ?? null,
+      });
+    }
+    return out;
   },
 });

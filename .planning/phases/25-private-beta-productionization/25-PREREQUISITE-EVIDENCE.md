@@ -3,132 +3,288 @@
 ## Gate status
 
 - **Original audit point:** `aa5445bd9b7288b47f12b7c75607f064fee7be37` on 2026-08-10.
-- **Re-audit point:** `d274281` on 2026-08-14, after **141 commits** landed on `feature/cash-business-finance`.
-- **Task 1 result:** **STILL BLOCKED — not eligible for owner approval.** Five rows cleared since the
-  original audit; ten remain open across implementation, live-UAT, and baseline-stability gates.
+- **First re-audit point:** `d274281` on 2026-08-14, after 141 commits.
+- **Second re-audit point:** `8062157` on 2026-08-15, after a further **67 commits** on
+  `feature/cash-business-finance`. A 68th (`8062157`) landed from a concurrent lane *during* this
+  audit — see "Shared-worktree" below.
+- **Task 1 result:** **STILL BLOCKED — not eligible for owner approval.** Four more rows cleared, one
+  materially worsened, and **four gap classes surfaced that no prior pass had a row for**.
 - **Evidence rule (unchanged):** a ROADMAP checkbox, plan count, or later narrative does not override a
   SUMMARY/VERIFICATION/UAT artifact that remains open. Completion requires final code plus reconciled
   phase evidence at one auditable commit.
-- **Execution boundary:** no Phase 25 application code has been changed. Task 2 inventories, graph
-  refresh, test/typecheck qualification, downstream plan reconciliation, and Plan 01+ remain prohibited.
-- **What this re-audit changed:** rows only. The 2026-08-14 pass reconciled `REQUIREMENTS.md`
-  (VALT-05…12 and VALT-14 to Complete from `15.3-VERIFICATION.md`'s per-requirement table) and
-  `ROADMAP.md` (Phase 17 untick, Phase 20.2 registration). No product code, no plan execution.
+- **Execution boundary:** no Phase 25 application code has been changed by this audit. Rows only.
 
-## Method note — why a checkbox is never the evidence
+## Method note — three blind spots this pass found in the method itself
 
-Every row below is derived from two mechanical facts, never from prose: whether a `NN-PLAN.md` has a
-matching `NN-SUMMARY.md`, and the `status:` frontmatter of the phase's VALIDATION/VERIFICATION file.
-The 2026-08-10 pass found three phases whose ROADMAP rows disagreed with their own verifiers. The
-2026-08-14 pass found a fourth class the checkbox scan cannot catch at all: **a phase with no roadmap
-row whatsoever** (20.2), which no audit keyed on roadmap rows would ever have listed as missing.
+Every row is derived from two mechanical facts: whether an `NN-PLAN.md` has a matching
+`NN-SUMMARY.md`, and the `status:` frontmatter of the phase's VALIDATION/VERIFICATION file. The
+2026-08-10 pass found phases whose ROADMAP rows disagreed with their own verifiers. The 2026-08-14
+pass found a phase with **no roadmap row at all** (20.2). This pass found three more classes the
+PLAN↔SUMMARY scan cannot see:
 
-## Prerequisite completion matrix
+1. **Work with no plan number.** Phase 19 commits `b73bff8` (19-11) and five 19-12 commits executed
+   real defect closure and a 15/15 owner UAT. **Neither `19-11-PLAN.md` nor `19-12-PLAN.md` exists.**
+   The scan cannot count what was never planned on disk. Phase 19 is genuinely `passed`, so this
+   produced no false-open — but the same shape elsewhere would be invisible work.
+2. **Colliding plan numbers across two planning systems.** Commits `dc2dcc0`, `c870d8f`, `5be62bd`,
+   `d1d2455`, `6f1c66d`, `8062157` and eleven more are tagged `21-01` / `21-02` and are **not GSD
+   Phase 21**. They belong to a parallel `docs/superpowers/plans/` lane (scorecard field provenance;
+   the proposals table + applier). GSD `21-01`…`21-05` were closed long before. `git log --grep 21-0`
+   cannot separate them. **GSD Phase 21 has advanced by exactly zero plans since the last audit.**
+3. **Phases never entered in the matrix at all.** Phases **15, 15.1 and 15.2** are inside the
+   14→25 range and appeared in no prior version of this table. They are added below.
 
-| Included lane | Current evidence inspected (2026-08-14) | Current finding | Gate |
+## Prerequisite completion matrix — 2026-08-15 at `8062157`
+
+| Included lane | Evidence inspected | Finding | Gate |
 | --- | --- | --- | --- |
-| Phase 14 — Flagship Voice-Doc | `14-VALIDATION.md` is now `status: complete_with_open_observations`; REQUIREMENTS carries DOCV-01 Complete with the tool-declaration branch and retrieval latency recorded as unmeasured observations rather than blockers. | The bookkeeping inconsistency the original audit blocked on is reconciled. | **PASS — no remaining Phase 14 gate.** |
-| Phase 15.3 — Vault folders / Drive import | `15.3-VERIFICATION.md` `human_needed`, 9/10. VALT-05…12 and VALT-14 reconciled to Complete on 2026-08-14 against that report's per-requirement evidence table. VALT-13 remains Pending. | Code is offline-green and 9 requirements are closed. No real Drive file has ever traversed `exportOne → landFile → fan-in → member ingest → digest`; this rail has spent $0. | **BLOCKED — owner live gates H1/H2/H3 ONLY. No code work outstanding; no implementation change is justified unless H1-H3 expose a failure.** |
-| Phase 15.4 — Vault redesign / scoped browse | `15.4-VALIDATION.md` `complete`; `15.4-VERIFICATION.md` `passed`, 5/5; VALT-16 Complete. | Absent from the original matrix. Verified complete on inspection. | **PASS — no Phase 15.4 gate.** |
-| Phase 16 — Research Sub-Agent | `16-VALIDATION.md` is now `status: complete`; REQUIREMENTS carries DISP-02 Complete (gate `14feb4b7` 34/34, re-confirmed `d17039a8`, `research-specialist@8` activated) and ACTN-03 Complete. | The stale SUMMARY/VALIDATION/DISP-02 baseline the original audit blocked on is reconciled. This matters because Phase 16 moved the shared active-skill baseline later lanes consume. | **PASS — no remaining Phase 16 gate.** |
-| Phase 17 — Calendar actions | `17-VERIFICATION.md` `gaps_found`. Plans 17-06…17-11 (waves 2-7) have no SUMMARY. `calendarEvents.ts` and `microsoftCalendar.ts` do not exist on disk; the adapter exports only `freeBusy` and `createEvent`. The ROADMAP row was `[x]` against this verifier and was unticked 2026-08-14. | Worse than the original audit recorded. This is not only an open UAT — ACTN-02's "manage" and "Microsoft" clauses are both unimplemented. The verifier states the live gates "cannot make the missing provider and operations exist". | **BLOCKED — six unexecuted plans (17-06…17-11) AND owner UAT H1-H3.** |
-| Phase 17.1 — Business Blueprint | `17.1-10-PLAN.md` still has no SUMMARY. Since the original audit, `a2d7a0b` recorded "gate recovery readiness" and `bc05eed` recorded **failed** L6 recovery evidence. | Not merely unclosed — a recovery attempt has been recorded as failed. The final live gate is further from closure than the original audit implied. | **BLOCKED — execute and close 17.1-10; the failed recovery must be diagnosed first.** |
-| Phase 18 — Document & Content Creation | Plans 18-09 and 18-10 have no SUMMARY; `18-VALIDATION.md` `planned`; ACTN-04 Pending. Note 18-09 `depends_on` 18-10, so the two are strictly ordered. | Unchanged from the original audit. | **BLOCKED — complete 18-10, then 18-09.** |
-| Phase 19 — Contacts, CRM & Follow-ups | `19-VERIFICATION.md` `passed`, 8/8, `human_verification: complete`, owner-attested inbox proof. ACTN-05 and PIPE-01 Complete. | Complete. The disclosed split-gate caveat (`086f8267` plus isolated `0b2b6b22`) remains an accepted risk, not an open gate. | **PASS — no remaining Phase 19 gate.** |
-| Phase 19.1 — Bulk Contact Import (CSV) | `19.1-VERIFICATION.md` `passed`, **11/11**; 7/7 plans; browser UAT `pipeline-uat.spec.ts` 16/16 with `step 3b` uploading a real CSV, measured spend $0.0500; owner gate closed with the verbatim one-word verdict `approved`. All three items open at the gate were resolved 2026-08-11 (`5746523`, `921cc5d`). | The original audit's "not planned or executed" is now fully superseded. The contacts schema-union widening (`origin += imported`, `consentSource += imported-attested`) has landed and is verified, so the baseline Plan 25 must freeze is settled on this axis. | **PASS — no remaining Phase 19.1 gate.** |
-| Phase 20 — Media Canvas | Plans 20-11 and 20-12 still have no SUMMARY; `20-VALIDATION.md` `in_progress`; the owner-run fal/sandbox/media-canvas gate is unpaid. Since the original audit the generation stack was **migrated to Wan and OpenAI** (`eb9e2c3`, `5c06b33`) and permissions/routing were repaired (`a9519d1`). | The vendor/live render gate and the shared-skill 20-12 checkpoint are still open, and the provider substrate underneath them changed after the original audit — the unpaid gate would now be qualifying different code than when it was specified. | **BLOCKED — 20-11, 20-12, the paid vendor/render/UAT gate, and final phase verification.** |
-| Phase 20.1 — Drive in the Cockpit | `20.1-01-SUMMARY.md` now exists. `20.1-02-PLAN.md` has no SUMMARY and `depends_on: ["20.1-01", "20-12"]`. VALT-15 Pending. | Partially cleared. The remaining plan is chained behind Phase 20's shared cockpit-skill gate and cannot start independently. | **BLOCKED — 20.1-02, gated on 20-12.** |
-| Phase 20.2 — Scene Timeline Reels | **NEW ROW — this lane did not exist at the original audit.** `20.2-PLAN.md` is `status: proposed` and carries the entire phase in ONE document with no per-plan SUMMARY files. Six commits have landed (`cca3820` 20.2-01 → `d274281` 20.2-06). Registered in the ROADMAP on 2026-08-14. | A phase serving MEDIA-01 was authored, planned and part-executed while appearing in no ROADMAP, REQUIREMENTS or STATE row. It supersedes the uniform BLOCK DECK contract (`storyboard.ts`, D8) that Phase 20's shipped code is built on. **Its single-document form means plan-level completion cannot be audited the way every other phase is.** | **BLOCKED — in flight, and unauditable by the standard evidence rule until it carries per-plan or per-wave summaries.** |
-| Phase 21 — User-Authored Skills & Routines | Six plans on disk; 21-01…21-05 have SUMMARYs; **21-06 and 21-07 do not**. `21-VALIDATION.md` `draft`. SKILL-01 Pending. | The original audit's "not started / no planning directory" is superseded — the lane is 5/7 done. | **BLOCKED — 21-06, then 21-07 (live result).** |
-| Phase 22 — Owner Authorization Primitive | `22-VERIFICATION.md` `human_needed`, 4/5. Server boundary proven live with two identities; only the `/ops` owner-vs-non-owner DOM observation and the mount-guard mutation remain. GOVN-01 Pending. | Unchanged — but note the closure is **already scheduled inside Phase 25 itself**: `25-02`'s objective is to expose the admission boundary "while closing Phase 22's outstanding owner/non-owner DOM residue". | **BLOCKED, but NOT independently — this closes as part of 25-02 and needs no separate pass.** |
-| Phase 22.1 — Beta Admission Readiness | `22.1-03-PLAN.md` (the deployment/typecheck/CI gate, SC3) has no SUMMARY. GOVN-03 Pending. **However `.github/workflows/ci.yml` and `.github/workflows/deploy-production.yml` now exist**, landed via PRs #1-#10 on the `release-pipeline-activation-20260812` branch (`6aa1736`, `30a7e4a`, `be8c95f`, `7fb2f44`). | SC3's substance was partly delivered **outside its own plan and with no phase bookkeeping**. 22.1-03 must now reconcile against CI that already exists rather than build it from nothing. | **BLOCKED — execute 22.1-03 against the landed CI, not against a green field.** |
-| Phase 23 — Agent-Authored Skills | Nine plans now on disk (23-01…23-09); **zero SUMMARYs**. `23-VALIDATION.md` `ready`. SKILL-02 Pending. | The original audit's "no planning directory" is superseded — the lane is planned and validated-ready, but entirely unexecuted. Five plans are `autonomous: true`. | **BLOCKED — largest single unexecuted block in the milestone (9 plans).** |
-| Phase 24 — ISO 9001 Conformance Map | `24-01-SUMMARY.md` exists; `24-02-PLAN.md` (`autonomous: false`, GOVN-02) has no SUMMARY. `24-VALIDATION.md` `draft`. | The original audit's "not started" is superseded — one plan remains. | **BLOCKED — 24-02.** |
-| Phase 26 — Connected Product Pages / Command Center | 26-01…26-09 have SUMMARYs; **26-10…26-17, 26-19 and 26-20 do not**. 26-18 has a SUMMARY and the Sales Pipeline nav was activated (`d0c2ffb`). All Phase 26 requirements remain Pending. | Partially cleared — the Phase-19-dependent nav gate (26-18) is done. Ten plans remain: source pages, authenticated integration gates, and Command Center. | **BLOCKED — 10 unexecuted plans.** |
-| Phase 31 — Marketing Surface & Funnel v0 | Eight plans now on disk (31-00…31-07); **zero SUMMARYs**. `31-VALIDATION.md` exists. MKTG-01…03 Pending. | The original audit's "no planning directory" is superseded — planned, unexecuted. Pulled pre-beta by owner override under ADR-015, not by a Validated line. | **BLOCKED — 8 unexecuted plans.** |
+| Phase 14 — Flagship Voice-Doc | 9/9 plans closed; `14-VALIDATION.md` `complete_with_open_observations`; DOCV-01 Complete. | Unchanged from the 08-14 clearance. | **PASS.** |
+| Phase 15 — Sub-Agent Dispatch | **NEW ROW.** 6/6 plans closed; `15-VERIFICATION.md` `passed`; `15-VALIDATION.md` still `draft`. DISP-01/ACTN-01 Complete. | Substantively complete. The `draft` VALIDATION is stale bookkeeping behind a `passed` verifier, not open work. | **PASS — bookkeeping residue only.** |
+| Phase 15.1 — Tier & Conversational Onboarding | **NEW ROW.** 7/7 plans closed; `15.1-VERIFICATION.md` `passed`; `15.1-VALIDATION.md` `planned`. ONBD-01/02 Complete. | Same shape as Phase 15. | **PASS — bookkeeping residue only.** |
+| Phase 15.2 — Vault Universal Format Recognition | **NEW ROW.** 8/8 plans closed. `15.2-VALIDATION.md` `planned`. **No `15.2-VERIFICATION.md` exists at all.** | Code-complete and **never verified**. Its criteria are local SC#1–SC#7, not milestone requirements, so it holds no requirement hostage — which is why every prior pass missed it. But the vault extraction fan-out that 15.3/15.4/20.1 all build on has no verifier of its own. | **OPEN — unverified phase. Lowest severity in this table; must not be recorded as complete.** |
+| Phase 15.3 — Vault folders / Drive import | 9/9 closed; `15.3-VERIFICATION.md` `human_needed` 9/10; VALT-05…12, VALT-14 Complete; VALT-13 Pending. | Unchanged. No real Drive file has traversed `exportOne → landFile → fan-in → member ingest → digest`; this rail has spent $0. | **BLOCKED — owner live gates H1/H2/H3 ONLY. No code work outstanding.** |
+| Phase 15.4 — Vault redesign / scoped browse | 4/4 closed; VALIDATION `complete`; VERIFICATION `passed` 5/5; VALT-16 Complete. | Unchanged. | **PASS.** |
+| Phase 16 — Research Sub-Agent | 9/9 closed; `16-VALIDATION.md` `complete`; DISP-02 + ACTN-03 Complete. | Unchanged. | **PASS.** |
+| Phase 17 — Calendar actions | **MOVED.** `17-06` now closed (SUMMARY present) — the Microsoft grant, callback and connect page are live and browser-verified (`a36c641`, `72ff6bc`, `d783479`). **`17-07` code landed across six commits** (`aaf7059`, `1bb1dde`, `c6db979`, `587a526`, `a221d1b`, `449cd68`) — `microsoftCalendar.ts` exports `freeBusy`, `createEvent`, `graphConcurrencyProbe`; `calendarViews.ts` and `packages/core/src/calendarManagement.ts` exist — **but `17-07-SUMMARY.md` does not.** `17-08`…`17-11` unexecuted. `calendarEvents.ts` still does not exist. `17-VERIFICATION.md` `gaps_found`. | Real progress: the "(Google / Microsoft)" half of ACTN-02 is now largely built. The **"manage" half is still absent** — `calendarEvents.ts` (update/cancel) is 17-08's deliverable and was never started. 17-07 is the repo's only *unclosed-but-landed* plan: its code is in main-line history with no evidence artifact. | **BLOCKED — close 17-07, then 17-08 → 17-09 → 17-10 → 17-11 (11 is an owner live gate).** |
+| Phase 17.1 — Business Blueprint | `17.1-10-PLAN.md` still has no SUMMARY. `a2d7a0b` then `bc05eed` record a **failed** L6 gate recovery; nothing since. | Unchanged and still the worst-diagnosed row. **Newly discovered: it is also an ordering prerequisite for Phase 18** — see the ordering inversion below. | **BLOCKED — diagnose the failed recovery, then execute 17.1-10.** |
+| Phase 18 — Document & Content Creation | `18-09`, `18-10` no SUMMARY; `18-VALIDATION.md` `planned`; ACTN-04 Pending. 18-09 `depends_on` 18-10. | Unchanged in count. **The dependency is deeper than the audit recorded:** `18-10`'s own must-have truth is *"17.1-10's live gate ran BEFORE any Phase-18 artifact could corrupt the number it measures."* | **BLOCKED — and it is 17.1-10 → 18-10 → 18-09, not 18-10 first.** |
+| Phase 19 — Contacts, CRM & Follow-ups | `19-VERIFICATION.md` `passed` 8/8, `human_verification: complete`. ACTN-05, PIPE-01 Complete. `19-11`/`19-12` executed with no PLAN or SUMMARY files (method note 1). | Complete. The missing 19-11/19-12 artifacts are a method blind spot, not open work. | **PASS.** |
+| Phase 19.1 — Bulk Contact Import (CSV) | 7/7 closed; VERIFICATION `passed` 11/11; owner `approved`. | Unchanged. | **PASS.** |
+| Phase 20 — Media Canvas | **MOVED.** The plan set is now 20 plans, not 12 — `20-13`…`20-20` all carry SUMMARYs. **`20-12` is CLOSED** (`f618c2f`, `306879c`: certified body live on both deployments, readback proven, $0). **Only `20-11` remains open** — `autonomous: false`, tasks 1-3 landed at `1db8a03`, resume point is the owner-approved **paid** Run-A live render gate. `20-VALIDATION.md` `in_progress`. | The audit's #1 blocker chain has half-collapsed: 20-12 no longer blocks anything. What is left in Phase 20 is **one owner action that spends money**, plus final phase verification. | **BLOCKED — 20-11 (paid owner gate) + phase verification.** |
+| Phase 20.1 — Drive in the Cockpit | **MOVED.** `20.1-02` code landed (`9bdde53`, `629ed69`, `1320cc3`). Prod gate `df00ab21` 39/39, $0.4445, owner activated `cockpit-agent` v6 on production. **No `20.1-02-SUMMARY.md`.** VALT-15 Pending. | Half-certified by the plan's own record: *"the local half is NOT certified"* — the local v25 gate died at 38/39 on backend Server Errors and the local backend then would not restart (539 MB free of 8 GB). v25 is parked and unevidenced. | **BLOCKED — 20.1-02 is unclosed with a disclosed one-sided certification. See the prod-divergence finding below.** |
+| Phase 20.2 — Scene Timeline Reels | **MOVED, substantially.** `20.2-PLAN.md` still `status: proposed`, still ONE document, still no per-plan SUMMARYs. **Waves 1–8 are all recorded COMPLETE**; wave 8's code shipped `media-director` v2, `reserveSceneJobInner`, and deleted `scene_render_not_ready`. ADR-019 recorded. | The phase found its own row's premise wrong: **`media-director` is deliberately ungated**, so wave 8's budgeted paid eval gate does not exist and the body publishes straight to `active`. Two items remain, both owner-side: **(1) SEED THE BODY** — the live row is still v1 and the specialist still proposes block decks; **(2)** 20-12 was *not* folded in and closed separately, which is now correct and done. | **BLOCKED — owner seed + readback, and the auditability exemption below.** |
+| Phase 21 — User-Authored Skills & Routines | 21-01…21-05 closed; **21-06 and 21-07 still have no SUMMARY**; `21-VALIDATION.md` `draft`; SKILL-01 Pending. **Zero movement** since the last audit — the intervening `21-0x` commits are the `docs/superpowers/` lane (method note 2). | Unchanged. 21-06 is the authenticated browser-evidence + live-handoff plan; 21-07 is the owner live result. | **BLOCKED — 21-06, then 21-07 (owner live result).** |
+| Phase 22 — Owner Authorization Primitive | `22-VERIFICATION.md` `human_needed` 4/5; GOVN-01 Pending. | Unchanged. Closure is scheduled inside `25-02`. | **BLOCKED, but NOT independently — 25-02 owns it.** |
+| Phase 22.1 — Beta Admission Readiness | `22.1-03` no SUMMARY; GOVN-03 Pending. CI (`ci.yml`, `deploy-production.yml`, `skillopt.yml`) exists and runs typecheck/lint/test/build. `pnpm gate` was added (`bc9c4f1`). | **Newly measurable, and it fails.** 22.1-03's must-have truth is *"a quiescent current tree passes pnpm typecheck, pnpm lint, pnpm test and pnpm build."* Measured this pass: **typecheck 10/10 GREEN; `pnpm lint` RED** — biome aborts on *"nested root configuration"* from stray `biome.json` files in `.tmp/media-release`, `.tmp/media-release-origin` and four `.worktrees/` checkouts. CI is unaffected (clean checkout); the **local** gate is unrunnable until those worktrees are pruned. | **BLOCKED — prune the stray worktrees first, then run the gate. And see the GOVN-03 orphan below.** |
+| Phase 23 — Agent-Authored Skills | 9 plans, **zero SUMMARYs**; `23-VALIDATION.md` `ready`; SKILL-02 Pending. | Unchanged. Largest single unexecuted block inside the milestone. | **BLOCKED — 9 plans.** |
+| Phase 24 — ISO 9001 Conformance Map | `24-01` closed; `24-02` (`autonomous: false`, GOVN-02) no SUMMARY; VALIDATION `draft`. | Unchanged. | **BLOCKED — 24-02.** |
+| Phase 25 — itself | **14 plans (`25-00`…`25-13`), zero SUMMARYs.** `25-VALIDATION.md` `planned`. BETA-01/02/03/05 and DLVR-02 all Pending. | Entirely unexecuted, as designed — but `25-06` is now **stale**, see below. | **BLOCKED — the whole phase, and 25-06 must be re-cut before it runs.** |
+| Phase 26 — Connected Product Pages / Command Center | 20 plans; `26-10`…`26-17`, `26-19`, `26-20` have no SUMMARY. `26-VALIDATION.md` `draft`. All Phase 26 requirements Pending. | Unchanged — 10 unexecuted plans. | **BLOCKED — 10 plans.** |
+| Phase 31 — Marketing Surface & Funnel v0 | 8 plans, zero SUMMARYs. MKTG-01…03 Pending. | Unchanged. | **BLOCKED — 8 plans.** |
 
-## Cross-phase conflict found 2026-08-14 — Microsoft OAuth is specified twice
+## Findings this pass, that no prior pass had a row for
 
-**Not a stale row. A live collision between two unexecuted plans, neither of which references the other.**
+### 1. The Microsoft OAuth collision was RESOLVED, and it made `25-06` stale
 
-| | Phase 17-06 (`autonomous: true`) | Phase 25-06 (`autonomous: false`) |
-| --- | --- | --- |
-| Scope requested | `offline_access Calendars.ReadWrite` | `offline_access Mail.Send Mail.Read` plus identity scopes |
-| Auth module | **creates** `microsoftCalendarAuth.ts` (new, parallel) | **extends** `gmailAuth.ts` into the two-provider mail module |
-| Callback | adds `/microsoft-calendar/callback` to `http.ts` | adds its Microsoft callback to `http.ts` |
-| Consent surface | new `/connect-microsoft` page | extends `connect-gmail/page.tsx` |
-| Reconnect UI | "generalize `ReconnectBanner` by provider" | also modifies `ReconnectBanner.tsx` |
-| Token row | new Microsoft token row, explicitly "do not rename `gmailTokens`" | 25-05 migrates `gmailTokens`; 25-07 then narrows the provider schema |
+The 2026-08-14 audit recorded a live collision between `17-06` and `25-06` and said it *"must be
+decided before 17-06 is executed."* **It was decided, correctly, and then 17-06 executed.**
+`ADR-018: One Microsoft connection, not two` was accepted 2026-08-14 while both plans were still
+unexecuted, and the code follows it:
 
-**Three files are claimed by both:** `packages/backend/convex/http.ts`,
-`apps/web/app/(app)/_components/ReconnectBanner.tsx`, `docs/playbooks/cockpit.md`.
+- `packages/backend/convex/microsoftAuth.ts` — ONE token store, `MICROSOFT_SCOPES` covering both
+  halves, with `microsoftCalendarReady()` / `microsoftMailReady()` deriving per-half readiness from
+  the granted scope string.
+- `packages/backend/convex/http.ts` — a single `/microsoft/callback`, carrying the explicit comment
+  *"must NOT add a second callback here."*
+- `apps/web/app/(app)/connect-microsoft/` — one consent surface.
 
-**Consequence if both ship as written:** a beta user connects one Microsoft account through **two**
-consent screens into **two** token rows with **two** disconnect controls, and 25-07 ("narrow the
-provider schema and fallbacks") reconciles a schema 17-06 widened without its knowledge. The two
-scope sets are also incrementally consentable in one grant on the Microsoft v2 `common` endpoint,
-so the second consent screen buys nothing.
+**Consequence for Phase 25:** `25-06` was written to *create* the Microsoft mail grant. That grant
+now exists. 25-06 must be re-cut as *"extend the existing single grant's scope set and prove
+`mailReady` flips"* — not as new-module work. `25-05` and `25-07` (the `gmailTokens` migration and
+provider-schema narrowing) must likewise be re-read against a schema that already carries a second
+provider. **Executing 25-05…25-07 as written would unwind shipped, ADR-backed code.**
 
-**This must be decided before 17-06 is executed** — 17-06 is otherwise the only pure-code plan
-runnable without an owner checkpoint or a live stack, and building it as written produces ~400 lines
-that 25-06 must then unwind. Recorded here rather than resolved: the choice spans two phases and two
-requirements (ACTN-02, DLVR-02) and is the owner's.
+### 2. Production is LIVE with no admission gate — and BETA-01 is Phase 25's own requirement
+
+`ADR-020` was recorded **today, 2026-08-15**, at the first real production deploy (run
+`31854161028`, off `9eada53` / PR #17). `https://www.pikar-ai.com` serves the full platform with
+**no invite module, no waitlist table, no domain lock, no password**. Any Google sign-in yields a
+working tenant that can drive the cockpit agent against the owner's single production
+`OPENAI_API_KEY`, with only global — not per-tenant — budget rails between an anonymous signup and
+that key. The owner was shown this twice and chose to ship open; the ADR exists so the decision is
+recorded rather than discovered from a bill.
+
+**This is not a documentation gap — it is the milestone's live risk position.** BETA-01 is owned by
+`25-01`/`25-02`, which are unexecuted. ADR-020 also pre-records where the gate belongs when it is
+built: `requireScope` in `packages/backend/convex/lib/functions.ts`, **not** a tenant-creation hook,
+because no tenant-creation event exists to guard.
+
+### 3. Production Convex is AHEAD of `main`, deployed off a feature branch
+
+`20.1-02`'s own record (`1320cc3`): *"prod Convex functions were deployed directly off this branch
+so the gate could read the new observable, bypassing `deploy-production` — prod backend is ahead of
+main until this branch merges."* Combined with ADR-020's separate production deploy off `9eada53`,
+**there is no single commit that describes what production is running.** Phase 25's Task 2 requires
+a stable baseline SHA; that SHA does not currently exist. `feature/cash-business-finance` is
+**9 commits behind and 12 ahead** of `origin/main` (which already merged this branch once, PR #19).
+
+### 4. GOVN-03 has orphaned scope with no plan in any phase — and 17-06 regressed its standard
+
+GOVN-03 requires *"in-app disconnection of a connected account WITH revocation at the provider …
+and tenant data deletion and export."* Two halves are unowned:
+
+- **Tenant data deletion and export.** `22.1-03`'s own must-have truth states plainly: *"Closing this
+  plan does not complete GOVN-03: tenant data deletion and export remain unimplemented requirement
+  scope."* A repo-wide search for `deleteTenant|exportTenant|purgeTenant|dataExport` returns
+  **nothing**. Phase 22.1 has three plans and none covers it. **No plan in any phase does.**
+- **Microsoft provider-side revocation.** `gmailAuth.disconnectGoogle` revokes at Google then deletes
+  the row — the standard 22.1-01 established. `microsoftAuth.disconnectMicrosoft` returns
+  `revokedAtProvider: false` and is documented in-source as *"NOT PARITY WITH `disconnectGoogle`,
+  AND MUST NOT BE DESCRIBED AS IF IT WERE."* The code is honest, but **17-06 shipped a new connected
+  account that does not meet GOVN-03's own bar**, and Phase 22.1's plans predate it.
+
+The privacy policy is the specification here (`apps/web/app/privacy/page.tsx`). **A published policy
+promising controls that do not exist is the exact defect that minted GOVN-03 on 2026-08-01.**
+
+### 5. The blocker ordering in the previous audit was inverted for Phase 18
+
+Prior list: *"4. 18-10 → 18-09. 5. 17.1-10."* `18-10`'s must-have truth requires that **17.1-10's
+live gate has already run** before any Phase-18 artifact exists to corrupt the drift number it
+measures. Correct order: **17.1-10 → 18-10 → 18-09.**
 
 ## Explicit non-prerequisite
 
 | Lane | Evidence | Decision |
 | --- | --- | --- |
-| Phase 32 — Channel connection, publishing and metrics | ADR-015 and ROADMAP identify tranche B as blocked on a legal entity that has not started. `9a74e59` explicitly defers the legal formation gate. | **EXCLUDED from Phase 25's critical path.** Neither complete nor required for Task 1 approval. |
+| Phase 32 — Channel connection, publishing and metrics | ADR-015 and ROADMAP identify tranche B as blocked on a legal entity that has not started. `9a74e59` defers the legal formation gate. | **EXCLUDED from Phase 25's critical path.** |
+| Phase 33 — Media creation UX overhaul | Added to the ROADMAP `e2a93a8` on 2026-08-15, after Phase 25 was specified. Planning directory is untracked. | **EXCLUDED — post-dates the Phase 25 prerequisite set; must not silently widen it.** |
 
-## Shared-worktree and baseline evidence
+## Shared-worktree and baseline evidence — measured at `8062157`
 
-`git status --short` at `d274281` reports **24 tracked modifications and 35 untracked paths**, including
-active edits to `packages/backend/convex/media.ts`, `render/renderReel.ts`, `schema.ts`, `vault.ts`,
-`vaultDrive.ts`, `apps/web/.../MediaCanvas.tsx` and four playbooks. Untracked paths include
-`.playwright-cli/`, `.tmp/` and `output/`.
+| Signal | Measurement | Verdict |
+| --- | --- | --- |
+| `pnpm typecheck` | **10/10 tasks successful**, 2m31s | **GREEN.** Better than every prior audit — the two historical `cash.ts` errors are gone. |
+| `pnpm lint` — before | **RED, aborted** — *"Found a nested root configuration"*; zero files checked | Caused by stray `biome.json` in `.tmp/media-release`, `.tmp/media-release-origin`, `.worktrees/favicon-production-clean`, `.worktrees/lane-c-voicedoc`, `.worktrees/live-finance-inputs`, `.worktrees/pipeline-activation-release-20260812`. |
+| `pnpm lint` — after the fix | **RUNS**: 597 files in 8s. **RED on 84 errors, 268 warnings, 2 infos** | Fixed in this pass: `biome.json` `files.includes` gained `!.tmp` / `!.worktrees`, `.gitignore` gained `.tmp/`, and five stray worktrees were deregistered. **The 84 diagnostics are pre-existing and were MASKED by the abort** — real source (`dashboard/vault/*`, `PipelineView.tsx`, `ingestEstimate.test.ts`, two `package.json`), likely mostly formatter drift from concurrent in-flight edits. **`22.1-03`'s blocker MOVED, it did not clear:** the gate is now runnable and red on real diagnostics. The 2026-08-12 `ci-gate.md` entry already asserted the repo gate was red in unfinished feature work; that is now measured rather than inferred. |
+| `pnpm test` / `pnpm build` | Not run this pass | Unqualified. |
+| Tracked modifications | **13** — incl. `MediaCanvas.tsx`, `render/assembleScript.ts`, `assemble_final.sh`, `burn_caps.sh`, `vaultDrive.ts`, `core/src/render.ts`, `docs/playbooks/media.md` | Active in-flight media/vault edits. Not quiescent. |
+| Untracked paths | **35** — incl. `.playwright-cli/`, `.tmp/`, `output/`, `.planning/phases/33-…/` | `.worktrees/` is gitignored; **`.tmp/` is NOT.** |
+| Registered worktrees | **8**, incl. two under `.tmp/` and one outside the repo at `Desktop/pikar-ai-cash` on `main` | The "lanes share one tree" rule now coexists with real worktrees. **Never `git add -A` here.** |
+| Concurrent-lane write | `8062157` landed **during this audit** (`fix(21-02)`, the superpowers lane) | Confirmed again: the tree moves under you mid-session. |
+| Playbook §9 debt | **THREE playbooks now carry "NOT a verification" disclaimers instead of `Last verified` bumps**: `cockpit.md` and `vault.md` across three consecutive sessions (`f885a82`, the item-4 session, this audit), and `business-evaluation.md` added by a **fourth firing during this same session**. | Two distinct foreign lanes trigger it: `MediaCanvas.tsx` + `vaultDrive.ts` (Drive/media lane) and `evaluations.ts` + `evaluations.test.ts` (the scorecard-provenance lane). The §9 hook cannot be scoped to one lane's diff, so in a shared working tree every passing session must either assert a verification nobody performed or stack another disclaimer. **Both lanes owe their playbooks a real entry.** Four firings and three playbooks in one session is past annoyance — it is playbook debt that should close before Phase 25 freezes a baseline, and it is also evidence for the quiescence problem: **HEAD moved four times during this audit** (`8062157`, `12eb2a6`, `2d74b1a`, `40046b2`). |
+| `.planning/STATE.md` ownership | Top frontmatter block is now `stopped_at: Phase 33 context gathered`, `last_updated: 2026-08-15T14:05:32Z` | **The 2026-08-14 phase-25 audit's STATE entry has been overwritten by the Phase 33 lane.** STATE.md is a stack of frontmatter blocks and the live block no longer describes the Phase 25 gate. **This audit deliberately did NOT write STATE.md** — reclaiming the top block would clobber an active lane. `25-PREREQUISITE-EVIDENCE.md` is therefore the only current record of the gate, and STATE must be reconciled by the owner, not by a lane. |
+| Branch vs `origin/main` | **12 ahead, 9 behind** | No single commit describes production. |
+| Local dev capacity | **MEASURED 2026-08-15: RAM 7.88 GB total, 0.36 GB free. Disk 27.16 GB free.** | **CORRECTION — an earlier version of this row treated the constraint as DISK. It is RAM.** The `1320cc3` figure ("539 MB free of 8 GB") and the Phase 19.1 STATE entry ("OOM at 0.43 GB free of 7.88 GB, exit 134") are both *memory*, not storage. Deleting 2.15 GB of stray worktrees moved free disk 27.10 → 27.16 GB and **cannot** help. **Local paid/live gates remain unrunnable — 20-11, 21-06 and 17.1-10 are blocked on MEMORY**, which pruning, tidying and config changes do not address. The known workarounds are per-package runs with `--maxWorkers=1` and `NODE_OPTIONS=--max-old-space-size=3072`; whether a local Convex backend can start at all under this ceiling is unproven. |
 
-**The baseline is materially less stable than at the original audit, not more.** Between `aa5445b` and
-`d274281`:
+## Exact blockers before owner approval — ordered by real dependency
 
-1. A **finance/cash lane** merged (the working branch is `feature/cash-business-finance`; `convex/cash.ts`
-   previously produced the only two `pnpm typecheck` errors on record).
-2. The **media generation stack migrated to Wan and OpenAI** — under the requirement Phase 20's unpaid
-   vendor gate is meant to qualify.
-3. A **production release pipeline and `deploy-production.yml`** landed through ten PRs — territory
-   Plans 25-10 and 25-11 own.
-4. **Phase 20.2 began rewriting the storyboard/scene contract** that Phase 20's shipped code depends on.
-5. `plans.ts` moved from dirty to committed by a concurrent lane mid-session, confirming that lanes
-   continue to share one working tree. **Never `git add -A` here.**
+**Unexecuted plans inside 14→25: 23 prerequisite plans + Phase 25's own 14 = 37.**
+Plus **18** in the two out-of-range lanes Phase 25 names as prerequisites (26: 10, 31: 8).
 
-Task 2 cannot start before Task 1 approval, and Task 1 cannot be approved while the rows above remain open.
-
-## Exact blockers before owner approval
-
-Ordered by dependency, with owner-only gates marked. **Total unexecuted plans: 39 inside phases 17-25,
-plus 18 in the two out-of-range lanes Phase 25 names as its own prerequisites (26, 31).**
-
-1. **20-11 → 20-12 → 20.1-02** — the shared `cockpit-agent` skill chain. One gated skill with one
-   candidate stream, so these are strictly serial and they block two phases at once. Highest leverage.
-2. **22.1-03** — the CI/typecheck/deployment gate, reconciled against the CI that already landed.
-3. **17-06 → 17-11** — calendar management ops, then the Microsoft adapter. Required for ACTN-02;
-   the live gates cannot substitute.
-4. **18-10 → 18-09** — required for ACTN-04.
-5. **17.1-10** — diagnose the recorded failed L6 recovery first *(owner live gate)*.
-6. **21-06 → 21-07** *(21-07 owner live result)*.
-7. **24-02**, then **Phase 23** (9 plans), then **Phase 31** (8 plans).
-8. **Phase 26** — 10 plans: source pages, authenticated gates, Command Center.
-9. **Owner live gates, queued and unscheduled:** 15.3 H1/H2/H3 (populated Drive folder + real Shared
-   Drive), 17 H1/H2/H3 (real Google consent + live create), 20 fal.ai render gate *(spends money)*.
-   Phase 22's `/ops` DOM residue is **not** on this list — 25-02 owns it.
-10. **Phase 20.2** must either land per-plan summaries or be explicitly exempted, or MEDIA-01 closes on
-    evidence that cannot be audited by this document's own rule.
-11. After all lanes land, reach a quiescent worktree and re-inventory the merged finance, media-provider,
-    scene-contract, 17.1, schema, skill, CI/deploy and delivery baselines before Task 2 can claim a stable SHA.
+1. ~~**Make `pnpm lint` runnable.**~~ **DONE 2026-08-15.** `biome.json` now excludes `.tmp` and
+   `.worktrees`, `.gitignore` covers `.tmp/`, and five stray worktrees are deregistered. Uncommitted
+   work from all five was backed up first and verified redundant (`5c06b33` is an ancestor of HEAD,
+   all three branches merged, the "new" untracked files already exist in the main tree).
+   The leftover directories were also deleted (2.15 GB across ten trees; `_stale-patches` kept —
+   it holds seven lane `.patch` snapshots and costs 20 MB).
+   **This item is now CLOSED, and it did NOT unblock the live gates.** The blocker was mis-stated
+   as disk; **it is RAM** — see the capacity row above. Free disk moved 27.10 → 27.16 GB.
+   **20-11, 21-06 and 17.1-10 remain blocked on a 7.88 GB machine with 0.36 GB free**, and no
+   amount of tree-pruning changes that. Treat "find a way to run the live gates under this memory
+   ceiling" as its own unowned task.
+2. ~~**Triage the lint errors.**~~ **DONE 2026-08-15 — and it changes what `22.1-03` can be asked
+   to prove.** Zero errors are lint-rule violations; all are the **formatter**. **76 of 86 are a
+   Windows CRLF artifact** (`* text=auto` + `core.autocrlf=true` gives a CRLF working tree; biome
+   defaults to `lineEnding: lf`), so **`pnpm lint` and `pnpm gate` cannot be green on this machine
+   at all** — the same commits pass on Linux CI. The remaining **10 are real** but are branch-only
+   changes absent from `origin/main`, which is why CI is green (`31883067840`, success) while local
+   is red; **CI will redden on them at merge**. Root `package.json` is LF with ONE CRLF line, so
+   `file(1)` mis-sorts it — only byte-level tooling sees it. Full analysis in `docs/playbooks/ci-gate.md`.
+   **DECISION NEEDED:** either normalise the working tree to LF (`core.autocrlf=false` /
+   `core.eol=lf` + re-checkout — **NOT while lanes hold a dirty tree**, and note `.gitattributes`
+   already pins `*.sh text eol=lf` for the same reason without generalising it), or **qualify
+   `22.1-03` against CI rather than a local run** and amend its must-have truth, which as written
+   demands something a Windows checkout cannot deliver. Not fixed in this pass: `package.json`
+   gained `"gate:lint"` from a concurrent lane mid-session and `proposal.ts`/`storyboard.ts` are
+   held by the 21-02 and 20.2 lanes. Note 22.1-03 still does **not** close GOVN-03.
+3. **17-07 — CORRECTION 2026-08-15: this is NOT a bookkeeping gap and its SUMMARY MUST NOT BE
+   WRITTEN YET.** An earlier line in this document implied 17-07 only lacked paperwork for code
+   already in history. Reading the plan disproves that. Its `resume:` field states that Tasks 1
+   (code half), 2 and 3 are complete and verified — backend 1759 passed, core 936/936, five
+   mutations observed red then reverted — **but that Task 1's Graph concurrency probe HAS NOT RUN**,
+   because it needs a real Azure app registration and a disposable Microsoft account, and the
+   placeholder credentials used to prove the connect branch were deliberately removed afterwards.
+   `17-GRAPH-CONCURRENCY-PROBE.json` **does not exist and the plan says in capitals that it must not
+   be fabricated**; the plan's own `<verify>` hard-asserts `stalePatchStatus === 412` and
+   `supported === true` from that artifact. Writing a SUMMARY would flip this document's own
+   mechanical PLAN↔SUMMARY rule to "closed" for a plan with an unmet hard gate — **the ledger would
+   start lying about the thing it exists to measure.** The probe also gates 17-08: the plan forbids
+   starting it before `supported === true`, and forbids unconditional Graph PATCH/DELETE and
+   GET-then-compare `changeKey` as fallbacks. **Real blocker: obtain an Azure registration + a
+   disposable account, run the probe, write the artifact, THEN the SUMMARY.** After that,
+   **17-08 → 17-09 → 17-10 → 17-11**; 17-08 is where `calendarEvents.ts` and the "manage" half of
+   ACTN-02 finally get built.
+4. **17.1-10** — diagnose the recorded failed L6 recovery first *(owner live gate)*.
+5. **18-10 → 18-09** — strictly after step 4, per 18-10's own truth. Closes ACTN-04.
+6. **20-11** — the paid owner render gate *(spends money)*, then Phase 20 verification.
+7. **20.2 owner seed + readback** — the live `media-director` row is still v1. Then either land
+   per-wave summaries or record an explicit exemption (item 12).
+8. **Close `20.1-02`** — write the SUMMARY, and decide whether the disclosed one-sided (prod-only)
+   certification is accepted or the local half must be re-gated. Closes VALT-15.
+9. **21-06 → 21-07** *(21-07 owner live result)*. Closes SKILL-01.
+10. **24-02**, then **Phase 23** (9 plans), then **Phase 31** (8 plans).
+11. **Phase 26** — 10 plans: source pages, authenticated gates, Command Center.
+12. **Owner live gates, queued and unscheduled:** 15.3 H1/H2/H3 (populated Drive folder + real Shared
+    Drive), 17 H1/H2/H3 (real Google consent + live create), 20 fal.ai render gate *(spends money)*.
+    Phase 22's `/ops` DOM residue is **not** on this list — 25-02 owns it.
+13. **Decisions the owner must make before Phase 25 executes, not during it:**
+    - ~~**Re-cut `25-05`/`25-06`/`25-07`**~~ **DONE 2026-08-15 at owner direction** (which also
+      lifted this document's own "downstream plan reconciliation is prohibited" boundary for that
+      task — recorded in each plan's `amended:` field rather than silently bypassed). What the
+      re-cut found: **`25-07` was ~2/3 obsolete**, not merely stale. Its Tasks 1-2 (backfill, then
+      narrow `gmailTokens.provider` to required) act on a column that will never exist — 17-05
+      landed `microsoftCalendarTokens` as a SEPARATE tenant-keyed table and schema.ts records why a
+      discriminator is the wrong shape. Those tasks are deleted; 25-07 is rebuilt around its
+      surviving third, live continuity, which now matters MORE because 25-05 moves both production
+      callers off `internal.gmail.send`. **`25-06`'s prose amendment was already correct but its
+      machine-readable fields were never updated to match it** — `files_modified`, `artifacts` and
+      `key_links` still named `http.ts`, `gmailAuth.ts`, `connect-gmail/page.tsx`,
+      `ReconnectBanner.tsx` and a `by_tenant_provider` index that must not exist. An executor reads
+      those fields, so the plan would have rebuilt 17-06's callback. Fixed. **`25-05` keeps its real
+      work** (mailProvider, graph.ts, delivery.ts, both callers) and loses the widening/migration;
+      `graph.ts` is now required to reuse `microsoftCalendar.freshGraphToken` rather than open a
+      second refresh path over one row. **Two things surfaced that are NOT resolved:** 17-06 shipped
+      `/connect-microsoft` as its own page beside `/connect-gmail`, so the phase now has two
+      connection surfaces where one was assumed — a UX decision needing its own plan; and
+      `disconnectMicrosoft` returns `revokedAtProvider:false`, so **GOVN-03's provider-revocation
+      clause stays open and 25-06 is now explicit that it does not close it.**
+      **FOLLOW-UP THE SAME DAY — re-cutting the plans was NOT sufficient, and nearly failed.** A
+      sweep found the superseded design still prescribed in **six other documents**, two of which
+      (`25-RESEARCH.md`, `25-CONTEXT.md`) are loaded in the `<context>` block of all three re-cut
+      plans. An executor opening 25-05 would have read its "DO NOT TOUCH `gmailTokens`" instruction
+      and then, in the same context window, research telling it to add the `provider` column, the
+      `by_tenant_provider` index and a tracked backfill — including a ⚠️ note arguing the migration
+      is mandatory. **A plan cannot out-vote its own attached research.** Superseding banners are
+      now in `25-RESEARCH.md` and `25-CONTEXT.md`, the stale `ROADMAP.md` SC#5 widening clause is
+      corrected (its `schema.ts:625-632` citation was also stale — `gmailTokens` now sits near
+      1146), and `design/growth-surfaces-canvas-funnels-connections.md` is marked superseded for the
+      mail grants with a warning not to cite them as precedent if the same idiom is later applied to
+      Phase 32 channel connections. **General lesson for this ledger: when a decision reverses,
+      grep for the OLD design across `.planning/` and `docs/`, not just for the plan that owns it —
+      the instruction usually lives in more places than the decision does.**
+    - ~~**Assign GOVN-03's orphaned scope**~~ **DONE 2026-08-15 — two plans minted in Phase 22.1,
+      which owns GOVN-03.** `22.1-04` takes EXPORT (Art. 15 access + Art. 20 portability);
+      `22.1-05` takes DELETION (Art. 17), kept separate because it is irreversible and needs its own
+      owner gate. Both are built on a **table-classification registry** covering all 43 schema tables
+      (37 carry `tenantId`), with a drift test that fails when `schema.ts` gains an unclassified
+      table — without it, export and deletion silently rot to a stale subset as the schema grows.
+      **The sharpest constraint found while writing them:** a tenant-deletion feature is the single
+      most likely thing in this codebase to breach CLAUDE.md §3 (insert-only audit) by accident,
+      because "delete everything belonging to this tenant" is the obvious implementation and it is
+      wrong here. The privacy policy already resolves it — §9 rests the coexistence of an immutable
+      log with the right to erasure entirely on the audit log holding "references, identifiers,
+      hashes, and counts only ... there is nothing in the archive to erase" — so 22.1-05 implements
+      the policy's own resolution and makes audit **unreachable by construction** (the registry
+      exposes a `deletableTables()` accessor and the deletion module has no other way to name a
+      table) rather than skippable by an `if`. **STILL OPEN AFTER BOTH PLANS, and explicitly not
+      claimed by either:** GOVN-03's Microsoft provider-side revocation clause. `disconnectMicrosoft`
+      returns `revokedAtProvider:false` by design; `25-06` Task 2 owns the owner posture decision.
+      Deletion must therefore REPORT per-provider what revocation actually achieved rather than
+      averaging Google and Microsoft into one boolean.
+    - **Decide BETA-01's timing against ADR-020.** Production is open right now. Either 25-01/25-02
+      move to the front of the phase, or the open door is re-affirmed with a per-tenant spend cap.
+    - **Exempt or document Phase 20.2** — its single-document form means plan-level completion cannot
+      be audited by this document's own rule, and MEDIA-01 would otherwise close on unauditable evidence.
+    - **Record Phase 15.2's verification** or accept it as an unverified dependency of 15.3/15.4/20.1.
+14. **Only then:** reach a quiescent worktree, merge to `main`, redeploy production from `main` so one
+    SHA describes it, and re-inventory the merged finance, media-provider, scene-contract, 17.1,
+    schema, skill, CI/deploy and delivery baselines before Task 2 can claim a stable SHA.
 
 **Approval state: not eligible for review. Do not type `approved`.**
 
 ---
-*Original audit: 2026-08-10 at `aa5445b`. Re-audited 2026-08-14 at `d274281` — 5 rows cleared
-(14, 15.4, 16, 19.1, and partially 20.1/21/23/24/26/31 from "not started" to "planned, unexecuted"),
-1 row worsened (17.1, failed recovery evidence), 1 row added (20.2), 1 row reclassified as
-non-independent (22, absorbed by 25-02).*
+*Original audit 2026-08-10 at `aa5445b`. Re-audited 2026-08-14 at `d274281`. Re-audited 2026-08-15 at
+`8062157` — 4 rows cleared or advanced (17-06 closed, 20-12 closed, 20.2 waves 1-8 complete, 20.1-02
+code landed), 3 rows added that were never in the table (15, 15.1, 15.2), 2 rows worsened by
+measurement (22.1 local lint red, 20.1 one-sided certification), and 5 cross-phase findings recorded
+that no PLAN↔SUMMARY scan could produce.*

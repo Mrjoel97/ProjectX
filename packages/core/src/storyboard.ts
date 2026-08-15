@@ -189,6 +189,9 @@ const SECTION_TOKENS = [
   // the exact failure the comment above describes, one contract later.
   "SCENE DECK",
   "SCENE PROMPTS",
+  // The guided-intake heading (33-01), registered for the same reason: a BRIEF above a script must
+  // end where the script starts, and vice versa.
+  "BRIEF",
 ];
 
 function sectionOf(body: string, heading: string): string {
@@ -453,6 +456,14 @@ export type Scene = {
   narration: string;
   overlay?: string;
   prompt: string;
+  /** Document-level citation (the Phase-14 locked idiom): ONE vault doc per scene, no chunk refs.
+   *  Declared by the specialist as a `Source:` line in the scene's SCENE PROMPTS block. */
+  source?: { docId: string; title: string };
+  /** `Source: unverified` — a factual claim the specialist could not ground in the vault, so the
+   *  owner must confirm it before it ships. NOTE deliberately no `confirmedAt` here or anywhere in
+   *  parser output: a confirmation is written ONLY by an authenticated tenant mutation later. The
+   *  model must have no path to writing one, and this type is the first door. */
+  needsConfirmation?: true;
 };
 
 /** Which kinds draw money. Same `satisfies Record<...>` table as `PAID`, for the same reason:
@@ -533,7 +544,7 @@ export type ParsedSceneDeck =
     }
   | {
       ok: false;
-      reason: "bad_scene_duration" | "illegal_generated_duration" | "missing_asset";
+      reason: "bad_scene_duration" | "illegal_generated_duration" | "missing_asset" | "malformed_source";
       sceneIndex: number;
     }
   | {
@@ -567,6 +578,42 @@ function visualKindOf(cell: string): VisualKind | null {
   return SHOT_TYPE_SET.has(legacy) ? LEGACY_VISUAL[legacy as ShotType] : null;
 }
 
+type SceneSource = { docId: string; title: string } | "unverified";
+
+/**
+ * Per-scene `Source:` lines from the SCENE PROMPTS blocks (33-01) — same `Scene N` head walk as
+ * `parsePrompts`, kept separate so the shared prompts reader stays untouched for the block
+ * contract, which has no citations.
+ *
+ * Three legal forms and NOTHING else: `<title> [doc:<id>]`, `unverified`, or no line at all. A
+ * Source line the parser cannot read — an empty `[doc:]` id, or freehand text with no token — is
+ * a citation that would otherwise be SILENTLY DROPPED into creative copy, so it refuses instead
+ * (`malformed` carries the scene's display number).
+ */
+function sceneSourcesOf(section: string): { sources: Map<number, SceneSource>; malformed?: number } {
+  const sources = new Map<number, SceneSource>();
+  let current: number | undefined;
+  for (const line of section.split(/\r?\n/)) {
+    const head = /^\s*#*\s*(?:Block|Scene)\s+(\d+)\b/i.exec(line);
+    if (head) {
+      current = Number(head[1]);
+      continue;
+    }
+    const s = /^\s*[*-]?\s*(?:\*\*)?Source(?:\*\*)?\s*:\s*(.+)$/i.exec(line);
+    if (!s || current === undefined || sources.has(current)) continue;
+    const value = (s[1] ?? "").trim();
+    if (/^unverified$/i.test(value)) {
+      sources.set(current, "unverified");
+      continue;
+    }
+    const doc = /^(.*?)\s*\[doc:([^\]]*)\]$/.exec(value);
+    const docId = (doc?.[2] ?? "").trim();
+    if (!doc || docId === "") return { sources, malformed: current };
+    sources.set(current, { docId, title: (doc[1] ?? "").replace(/`/g, "").trim() });
+  }
+  return { sources };
+}
+
 /**
  * Parse a SCENE DECK, or refuse.
  *
@@ -590,6 +637,13 @@ export function parseSceneDeck(body: string): ParsedSceneDeck {
   const prompts = promptsAt
     ? parsePrompts(afterDeck.slice(promptsAt.index))
     : new Map<number, string>();
+  const { sources, malformed } = promptsAt
+    ? sceneSourcesOf(afterDeck.slice(promptsAt.index))
+    : { sources: new Map<number, SceneSource>(), malformed: undefined };
+  // Display numbers are 1-based (the `prompts.get(index + 1)` idiom below); refusals speak row index.
+  if (malformed !== undefined) {
+    return { ok: false, reason: "malformed_source", sceneIndex: malformed - 1 };
+  }
 
   const declared = /^[ \t]*(?:\*\*)?Target duration(?:\*\*)?[ \t]*:[ \t]*(\d+)/im.exec(section);
   const targetDurationSeconds = declared ? Number(declared[1]) : Number.NaN;
@@ -652,6 +706,11 @@ export function parseSceneDeck(body: string): ParsedSceneDeck {
       ...(overlay === "" ? {} : { overlay }),
       // The deck's `#` column is DISPLAY, 1-based; row order is the reel's order and the truth.
       prompt: prompts.get(index + 1) ?? description,
+      ...(() => {
+        const src = sources.get(index + 1);
+        if (src === undefined) return {};
+        return src === "unverified" ? { needsConfirmation: true as const } : { source: src };
+      })(),
     });
     startMs += seconds * 1000;
   }
@@ -684,4 +743,120 @@ export function parseSceneDeck(body: string): ParsedSceneDeck {
   }
 
   return { ok: true, targetDurationSeconds: targetDurationSeconds as TargetDuration, scenes };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+// THE PHASE-33 PARSE SURFACES (33-01)
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+
+/** The guided-intake brief, as the specialist echoed it back. `defaulted` names the fields the
+ *  specialist filled from the business profile rather than from the user's own words — the canvas
+ *  badges those chips, and the copy never carries the marker itself. */
+export type BriefFields = {
+  topic: string;
+  durationSeconds: TargetDuration;
+  audience?: string;
+  tone?: string;
+  brandVoice?: string;
+  /** Field NAMES ("audience" | "tone" | "brandVoice" | "duration"), in the order they appear. */
+  defaulted: string[];
+};
+
+/**
+ * Parse the BRIEF section, or `null` — the `parseArtDirection` precedent, NOT a refusal: a missing
+ * brief is a worse UX, not an unusable proposal, because the deck still carries its own validated
+ * `targetDurationSeconds`. All free at parse time; nothing here touches money.
+ *
+ * `null` when the section is absent, when `Topic:` is empty, or when `Duration:` is off the
+ * 15/30/60 preset grid — presets only, per the locked decision; a free-entry duration is a price
+ * nobody computed. A `(defaulted)` suffix (case-insensitive) is stripped from the value and the
+ * FIELD NAME is recorded instead, so "(defaulted)" can never leak into a chip as copy.
+ */
+export function parseBrief(body: string): BriefFields | null {
+  const section = sectionOf(body, "BRIEF");
+  if (section === "") return null;
+
+  const defaulted: string[] = [];
+  const read = (label: string, name: string): string => {
+    const raw = fieldOf(section, label);
+    const marked = /^(.*?)\s*\(defaulted\)$/i.exec(raw);
+    if (!marked) return raw;
+    defaulted.push(name);
+    return (marked[1] ?? "").trim();
+  };
+
+  // Topic is the user's own ask — there is nothing to default it FROM, so no marker handling.
+  const topic = fieldOf(section, "Topic");
+  // `30s` and `30` both parse; `parseInt` stops at the `s`. Anything off the preset grid is null.
+  const durationSeconds = Number.parseInt(read("Duration", "duration"), 10);
+  if (topic === "" || !TARGET_SET.has(durationSeconds)) return null;
+
+  const audience = read("Audience", "audience");
+  const tone = read("Tone", "tone");
+  const brandVoice = read("Brand voice", "brandVoice");
+  return {
+    topic,
+    durationSeconds: durationSeconds as TargetDuration,
+    ...(audience === "" ? {} : { audience }),
+    ...(tone === "" ? {} : { tone }),
+    ...(brandVoice === "" ? {} : { brandVoice }),
+    defaulted,
+  };
+}
+
+/** One variation: its parsed deck, plus its OWN body slice so a caller can run
+ *  `parseScript`/`parseArtDirection`/`parsePrompts` per-variation without cross-contamination. */
+export type VariationSlice = {
+  deck: Extract<ParsedSceneDeck, { ok: true }>;
+  body: string;
+};
+
+export type ParsedVariations =
+  | { kind: "two"; a: VariationSlice; b: VariationSlice }
+  /** No VARIATION headings — the caller falls through to the existing single-deck path. */
+  | { kind: "one" }
+  | {
+      kind: "refused";
+      variation: "a" | "b";
+      reason: Extract<ParsedSceneDeck, { ok: false }>["reason"];
+    };
+
+const variationHeading = (letter: "A" | "B", body: string) =>
+  new RegExp(`^[ \\t]*#*[ \\t]*(?:\\d+\\.[ \\t]*)?VARIATION ${letter}\\b.*$`, "im").exec(body);
+
+/**
+ * Split a two-variation body at its VARIATION A / VARIATION B headings and run the EXISTING
+ * `parseSceneDeck` on each slice, unchanged — a thin splitter, no duplicate scene parsing.
+ *
+ * The one rule that matters: a variation slice whose deck refuses FOR ANY REASON — including
+ * `no_deck` inside a declared variation, or one heading written without its sibling — refuses the
+ * WHOLE proposal. Never a silent fallback to a single deck: the persistStoryboard rule again, a
+ * deck nobody wrote must never be proposed.
+ */
+export function parseVariations(body: string): ParsedVariations {
+  const aAt = variationHeading("A", body);
+  const bAt = variationHeading("B", body);
+  if (!aAt && !bAt) return { kind: "one" };
+  if (!aAt) return { kind: "refused", variation: "a", reason: "no_deck" };
+  if (!bAt) return { kind: "refused", variation: "b", reason: "no_deck" };
+
+  // Order-agnostic slices: each runs from the end of its heading to the other heading or EOF.
+  const marks = [
+    { v: "a" as const, m: aAt },
+    { v: "b" as const, m: bAt },
+  ].sort((x, y) => x.m.index - y.m.index);
+  const first = marks[0] as (typeof marks)[number];
+  const second = marks[1] as (typeof marks)[number];
+  const slices = {
+    [first.v]: body.slice(first.m.index + first.m[0].length, second.m.index),
+    [second.v]: body.slice(second.m.index + second.m[0].length),
+  } as Record<"a" | "b", string>;
+
+  const out = {} as Record<"a" | "b", VariationSlice>;
+  for (const v of ["a", "b"] as const) {
+    const deck = parseSceneDeck(slices[v]);
+    if (!deck.ok) return { kind: "refused", variation: v, reason: deck.reason };
+    out[v] = { deck, body: slices[v] };
+  }
+  return { kind: "two", a: out.a, b: out.b };
 }

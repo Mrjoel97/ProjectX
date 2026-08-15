@@ -1,5 +1,16 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Note (item-4 body change, 2026-08-15 — COMMENT-ONLY, not a "Last verified" bump: the registry
+> mechanics below were not re-exercised.) The cockpit body gained a `## The user's calendar`
+> section and merged its two document sections into one. **Per the two-step rule stated immediately
+> below, this changed a file on disk and nothing else** — neither `seedSkills` nor
+> `activateSkillVersion` was run, so no candidate version was inserted and the active pointer did
+> not move. It also stacks: `packages/contracts/skills/cockpit-agent.md` now differs from the
+> ACTIVE row by three separate committed-or-pending changes (20-12 media, 20.1-02 Drive, item 4), so
+> whoever runs `seedSkills` next publishes ONE candidate carrying all three and the version it
+> lands on is `maxVersion + 1`, not any number a plan document predicted. Read the `skills` table's
+> active row before believing any of these sections is live.
+
 > Note (scorecard-field-provenance plan, 2026-08-15 — COMMENT-ONLY, not a "Last verified" bump: the
 > registry mechanics below were not re-exercised by this plan.) **A skill-body EDIT in this repo has
 > NO RUNTIME EFFECT on its own.** Commit `e71a4ab` corrected

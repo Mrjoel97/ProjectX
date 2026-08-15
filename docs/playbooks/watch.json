@@ -1,5 +1,7 @@
 {
-  "_unassigned": ["packages/backend/vitest.diag.setup.ts"],
+  "_unassigned": [
+    "packages/backend/vitest.diag.setup.ts"
+  ],
   "ci-gate.md": [
     ".github/workflows/ci.yml",
     "package.json",
@@ -80,6 +82,7 @@
     "packages/core/src/financeClaim.test.ts",
     "packages/backend/convex/cash.ts",
     "packages/backend/convex/cash.test.ts",
+    "packages/backend/convex/proposals.ts",
     "packages/backend/convex/content.ts",
     "packages/backend/convex/content.test.ts",
     "packages/backend/convex/reportsBusiness.ts",
@@ -264,5 +267,11 @@
     "packages/backend/convex/guardrails.ts",
     "packages/backend/scripts/run-smoke-guardrails.mjs",
     "packages/cost/src/cost.ts"
+  ],
+  "proposals.md": [
+    "packages/core/src/proposal.ts",
+    "packages/core/src/proposal.test.ts",
+    "packages/backend/convex/proposals.ts",
+    "packages/backend/convex/proposals.test.ts"
   ]
 }

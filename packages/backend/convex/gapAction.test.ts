@@ -268,7 +268,7 @@ describe("actOnGap on a voice-doc thread (DOCV-01 / SC3)", () => {
           citationTitle: "Quarterly report",
           citationExcerpt: "Churn rose in month two.",
           confidence: "high",
-          // "vault", not "grounded" — the schema union is `vault | user-provided`, and it is exactly
+          // "vault", not "grounded" — the schema union is `vault | user-provided | agent-relayed`,
           // what `shapeDocReview` welds. The fixture must mirror the real writer, not paraphrase it.
           source: "vault",
         },

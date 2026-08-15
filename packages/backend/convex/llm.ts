@@ -2894,14 +2894,8 @@ export function buildCockpitTools(
               "Tell them they can set it on their finance page."
             );
           }
-          // §4 is enforced HERE, at the boundary that CONSTRUCTS `basis`. `validateFigureClaim`
-          // checks only that a basis is non-empty — "refs only, never quoted content" is not
-          // mechanically decidable in pure TS, so the producer is the enforcement point. Reject a
-          // basis carrying quoted content, or long enough to be a transcript, rather than letting
-          // it reach the audit log and the approval card.
-          if (/["'“”]/.test(u.basis) || u.basis.length > 120) {
-            return `The basis for ${u.field} must name where the number came from, not quote it.`;
-          }
+          // §4's refs-only rule is enforced in `validateFigureClaim` (@pikar/core) — the shared
+          // boundary every producer runs — so it is not repeated here.
           const claim: FigureClaim = {
             field: u.field as CashInputField,
             value: u.value,

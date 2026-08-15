@@ -30,6 +30,9 @@ export type FigureClaim = {
   confidence: FigureConfidence;
 };
 
+/** Long enough for a real ref (`vaultDoc:<id> p4`), far short of a pasted passage. */
+export const BASIS_CHAR_CAP = 120;
+
 export function validateFigureClaim(
   claim: FigureClaim,
   nowMs: number = Date.now(),
@@ -39,6 +42,14 @@ export function validateFigureClaim(
   const value = validateCashInput(claim.field, claim.value);
   if (!value.ok) return value;
   if (claim.basis.trim() === "") return { ok: false, reason: "A claim must carry a basis." };
+  // §4 at the SHARED boundary, not at one producer. `basis` reaches the audit log and the approval
+  // card, so "refs only, never quoted content" has to hold for every writer — the cockpit tool that
+  // enforced it locally, and the proposal applier that did not exist when it was written. Not
+  // mechanically decidable in general; these two cheap shapes catch the realistic failures (a model
+  // quoting the source line, or pasting a transcript).
+  if (/["'“”]/.test(claim.basis) || claim.basis.length > BASIS_CHAR_CAP) {
+    return { ok: false, reason: "A basis must name where the number came from, not quote it." };
+  }
   if (claim.actor === "user" && claim.confidence !== "high") {
     return { ok: false, reason: "A user-entered figure is always high confidence." };
   }

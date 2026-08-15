@@ -457,6 +457,12 @@ function populatedFieldCount(p: ProfileInput): number {
 // ponytail: an edit re-attributes the graph to the SAME sourceDocId but doesn't GC the prior version's
 // edges (upsertGraph dedups new ones; a short structured profile yields few) — the ceiling is routing
 // through vault.deleteVaultDoc's full cascade if profile-graph staleness ever matters.
+/** NOT exported. `validateProfile` lives at the CALL site, not in here — every caller used to have
+ *  to remember to run it first, and the `proposals.ts` applier didn't (fix, finding 1: it wrote a
+ *  blank-skeleton profile straight through this function with no validation at all, while a
+ *  now-corrected comment here claimed it "inherited `validateProfile` either way"). The only way to
+ *  reach this function is now `validateAndWriteProfile` below, so a validation-free write is a
+ *  compile error (no import), not a caller that forgot a line. */
 async function writeProfileDoc(
   ctx: MutationCtx,
   tenantId: string,
@@ -502,6 +508,29 @@ async function writeProfileDoc(
 }
 
 /**
+ * The profile store's ONE entry point (fix, finding 1). `validateProfile` then `writeProfileDoc` —
+ * always in that order, always together — so every validator that guards a manual entry guards a
+ * proposal-applied one too, BY CONSTRUCTION: there is no way to reach `writeProfileDoc` without
+ * going through this, because `writeProfileDoc` is not exported. A caller that wants to reject
+ * loudly (`commitProfile`, `updateProfile`) throws on a `false` result immediately; `proposals.ts`'s
+ * applier cannot throw a `ConvexError` past its own `ok/reason` contract, so it turns a `false`
+ * result into its own `"invalid_profile"` refusal instead — same rule, two calling conventions.
+ *
+ * Exported for `proposals.ts`, which is the third caller.
+ */
+export async function validateAndWriteProfile(
+  ctx: MutationCtx,
+  tenantId: string,
+  profile: BusinessProfile,
+  existing?: Doc<"vaultDocuments">,
+): Promise<{ ok: true; vaultDocId: Id<"vaultDocuments"> } | { ok: false; errors: string[] }> {
+  const check = validateProfile(profile);
+  if (!check.ok) return { ok: false, errors: check.errors };
+  const vaultDocId = await writeProfileDoc(ctx, tenantId, profile, existing);
+  return { ok: true, vaultDocId };
+}
+
+/**
  * The tenant's tier row — the RECORD (design §4.2). Both write paths read it here and splice
  * `row.tier` into the serialized markdown, which is only ever a PROJECTION of it.
  *
@@ -509,8 +538,10 @@ async function writeProfileDoc(
  * runs inside a mutation, so it is the SAME transaction either way and the query hop buys nothing.
  * `.unique()` mirrors `tenantProfile.byTenant` — one row per tenant is THE invariant of that table,
  * so a duplicate is LOUD rather than silently shadowed.
- */
-const currentTierRow = (
+ *
+ * Exported for `proposals.ts`: the applier refuses a profile proposal rather than fabricate a
+ * `persona` when this returns `null`, mirroring `updateProfile`'s own `INCOMPLETE_FACTS` gate. */
+export const currentTierRow = (
   ctx: QueryCtx | MutationCtx,
   tenantId: string,
 ): Promise<Doc<"tenantProfiles"> | null> =>
@@ -526,7 +557,7 @@ const currentTierRow = (
 // (every row, `text` blob included) to find at most a handful of profile rows, and timed out the
 // 1s query budget on `status` once a vault grew. blueprint.ts:212 forbids cloning that shape;
 // this is the site it was pointing at.
-async function currentProfileDoc(
+export async function currentProfileDoc(
   ctx: QueryCtx | MutationCtx,
   tenantId: string,
 ): Promise<Doc<"vaultDocuments"> | null> {
@@ -565,8 +596,13 @@ async function currentProfileDoc(
 export const commitProfile = tenantMutation({
   args: { profile: vProfile },
   handler: async (ctx, { profile }): Promise<{ vaultDocId: Id<"vaultDocuments"> }> => {
-    const check = validateProfile(profile);
-    if (!check.ok) throw new ConvexError({ code: "INVALID_PROFILE", errors: check.errors });
+    // Validated FIRST, same order as before this fix — an empty/whitespace `oneLineDescription` is
+    // BOTH invalid (`validateProfile`) and a missing fact slot (`missingSlots`, below), and
+    // `INVALID_PROFILE` is the more specific, actionable refusal of the two. `validateAndWriteProfile`
+    // re-runs this same check right before the write; calling it here too is what lets this refusal
+    // fire before the tier-completeness gate rather than after.
+    const preCheck = validateProfile(profile);
+    if (!preCheck.ok) throw new ConvexError({ code: "INVALID_PROFILE", errors: preCheck.errors });
 
     const row = await currentTierRow(ctx, ctx.tenantId);
     const missing = missingSlots({
@@ -580,8 +616,14 @@ export const commitProfile = tenantMutation({
       throw new ConvexError({ code: "INCOMPLETE_ONBOARDING", missing });
     }
 
-    // §4.2 — the markdown is a PROJECTION, the table is the record.
-    const vaultDocId = await writeProfileDoc(ctx, ctx.tenantId, { ...profile, persona: row.tier });
+    // §4.2 — the markdown is a PROJECTION, the table is the record. Validate-then-write, together —
+    // see `validateAndWriteProfile`'s doc comment.
+    const result = await validateAndWriteProfile(ctx, ctx.tenantId, {
+      ...profile,
+      persona: row.tier,
+    });
+    if (!result.ok) throw new ConvexError({ code: "INVALID_PROFILE", errors: result.errors });
+    const { vaultDocId } = result;
 
     await ctx.runMutation(internal.audit.log, {
       tenantId: ctx.tenantId,
@@ -736,8 +778,10 @@ export const __seedOnboardedTenant = internalMutation({
 export const updateProfile = tenantMutation({
   args: { profile: vProfile },
   handler: async (ctx, { profile }): Promise<{ vaultDocId: Id<"vaultDocuments"> }> => {
-    const check = validateProfile(profile);
-    if (!check.ok) throw new ConvexError({ code: "INVALID_PROFILE", errors: check.errors });
+    // Same ordering rationale as `commitProfile`'s pre-check: validate first, so an invalid profile
+    // reports `INVALID_PROFILE` even when the tenant also has no tier row.
+    const preCheck = validateProfile(profile);
+    if (!preCheck.ok) throw new ConvexError({ code: "INVALID_PROFILE", errors: preCheck.errors });
 
     const row = await currentTierRow(ctx, ctx.tenantId);
     if (!row) {
@@ -749,13 +793,16 @@ export const updateProfile = tenantMutation({
     }
 
     const existing = await currentProfileDoc(ctx, ctx.tenantId);
-    // §4.2 — the markdown follows the TABLE, on an edit exactly as on a commit.
-    const vaultDocId = await writeProfileDoc(
+    // §4.2 — the markdown follows the TABLE, on an edit exactly as on a commit. Validate-then-write,
+    // together — see `validateAndWriteProfile`'s doc comment.
+    const result = await validateAndWriteProfile(
       ctx,
       ctx.tenantId,
       { ...profile, persona: row.tier },
       existing ?? undefined,
     );
+    if (!result.ok) throw new ConvexError({ code: "INVALID_PROFILE", errors: result.errors });
+    const { vaultDocId } = result;
 
     await ctx.runMutation(internal.audit.log, {
       tenantId: ctx.tenantId,

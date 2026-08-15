@@ -13,6 +13,8 @@
       "!**/.next",
       "!**/dist",
       "!.planning",
+      "!.tmp",
+      "!.worktrees",
       "!docs/design/mockups",
       "!graphify-out",
       "!packages/core/src/__fixtures__/assembly/empty.json",

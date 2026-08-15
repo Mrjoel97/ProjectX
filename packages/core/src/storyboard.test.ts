@@ -18,8 +18,10 @@ import {
   narrationChars,
   parseArtDirection,
   parseBlockDeck,
+  parseBrief,
   parseSceneDeck,
   parseScript,
+  parseVariations,
   SHOT_TYPES,
   sceneNarrationChars,
   TARGET_DURATIONS,
@@ -837,5 +839,231 @@ describe("parseSceneDeck — shape and tolerance", () => {
     // The section terminates at SCENE DECK, so `avoid` cannot come back carrying table rows.
     expect(parseArtDirection(body)).toBeNull(); // incomplete art direction, NOT a swallowed deck
     expect(parseSceneDeck(body).ok).toBe(true);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+// THE PHASE-33 PARSE SURFACES (33-01)
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+
+describe("parseBrief — guided intake (33-01)", () => {
+  const BRIEF = [
+    "## 1. BRIEF",
+    "",
+    "Topic: Inbox triage, and what it costs a founder",
+    "Duration: 30s",
+    "Audience: Solo founders drowning in email (defaulted)",
+    "Tone: Quietly confident (Defaulted)",
+    "Brand voice: Plain words, short sentences",
+    "",
+  ].join("\n");
+
+  it("round-trips a well-formed BRIEF, stripping the defaulted markers into the array", () => {
+    const b = parseBrief(BRIEF);
+    expect(b).not.toBeNull();
+    expect(b?.topic).toBe("Inbox triage, and what it costs a founder");
+    expect(b?.durationSeconds).toBe(30);
+    // The markers are STRIPPED from the values — a chip must never render "(defaulted)" as copy —
+    // and recorded by FIELD NAME, case-insensitively, so the canvas knows which chips to badge.
+    expect(b?.audience).toBe("Solo founders drowning in email");
+    expect(b?.tone).toBe("Quietly confident");
+    expect(b?.brandVoice).toBe("Plain words, short sentences");
+    expect(b?.defaulted).toEqual(["audience", "tone"]);
+  });
+
+  it("accepts a bare-number duration and a defaulted one — the preset can itself default", () => {
+    const bare = parseBrief("BRIEF\nTopic: A topic\nDuration: 60");
+    expect(bare?.durationSeconds).toBe(60);
+    expect(bare?.defaulted).toEqual([]);
+
+    const marked = parseBrief("BRIEF\nTopic: A topic\nDuration: 15s (defaulted)");
+    expect(marked?.durationSeconds).toBe(15);
+    expect(marked?.defaulted).toEqual(["duration"]);
+  });
+
+  it("omits the optional fields the specialist did not write, without inventing defaults", () => {
+    const b = parseBrief("BRIEF\nTopic: A topic\nDuration: 30s");
+    expect(b).not.toBeNull();
+    expect(b?.audience).toBeUndefined();
+    expect(b?.tone).toBeUndefined();
+    expect(b?.brandVoice).toBeUndefined();
+    expect(b?.defaulted).toEqual([]);
+  });
+
+  it("is NULL when the section is absent — a v2 body parses exactly as before", () => {
+    expect(parseBrief(sceneDeck(SCENES))).toBeNull();
+    expect(parseBrief("just prose, no headings")).toBeNull();
+  });
+
+  it("is NULL on an empty topic — a brief with nothing captured is no brief", () => {
+    expect(parseBrief("BRIEF\nTopic:\nDuration: 30s")).toBeNull();
+  });
+
+  it("is NULL on a duration off the 15/30/60 presets — never free entry, never a guess", () => {
+    for (const bad of ["45s", "20", "three", ""]) {
+      expect(parseBrief(`BRIEF\nTopic: A topic\nDuration: ${bad}`)).toBeNull();
+    }
+    expect(parseBrief("BRIEF\nTopic: A topic")).toBeNull(); // absent line, same answer
+  });
+
+  it("terminates at the next section — a BRIEF above a deck reads both, brief fields clean", () => {
+    const body = `BRIEF\nTopic: A topic\nDuration: 30s\n\n${sceneDeck(SCENES)}`;
+    const b = parseBrief(body);
+    expect(b?.topic).toBe("A topic");
+    expect(b?.brandVoice).toBeUndefined(); // nothing leaked in from the deck below
+    expect(parseSceneDeck(body).ok).toBe(true); // and the deck still parses beside it
+  });
+});
+
+describe("parseSceneDeck — per-scene Source lines (33-01, document-level citations)", () => {
+  // Source lines live in the per-scene blocks of SCENE PROMPTS, beside Prompt — the deck table
+  // stays byte-for-byte what it was, which is what keeps every v2 fixture green.
+  const withSources = [
+    sceneDeck(SCENES),
+    "SCENE PROMPTS",
+    "",
+    "Scene 1",
+    "- Prompt: Founder at a desk, morning light, slow push in",
+    "- Source: The 2025 pricing one-pager [doc:k57abc123]",
+    "",
+    "Scene 2",
+    "- Source: unverified",
+    "",
+  ].join("\n");
+  const r = parseSceneDeck(withSources);
+
+  it("a cited scene gains source { docId, title } and nothing else", () => {
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.scenes[0]?.source).toEqual({ docId: "k57abc123", title: "The 2025 pricing one-pager" });
+    expect(r.scenes[0]?.needsConfirmation).toBeUndefined();
+  });
+
+  it("`Source: unverified` marks the scene as needing owner confirmation, with no doc", () => {
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.scenes[1]?.needsConfirmation).toBe(true);
+    expect(r.scenes[1]?.source).toBeUndefined();
+  });
+
+  it("an absent Source line means creative copy — neither field, and v2 decks are untouched", () => {
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    for (const s of [r.scenes[2], r.scenes[3]]) {
+      expect(s?.source).toBeUndefined();
+      expect(s?.needsConfirmation).toBeUndefined();
+    }
+    const plain = parseSceneDeck(sceneDeck(SCENES));
+    expect(plain.ok).toBe(true);
+    if (!plain.ok) return;
+    for (const s of plain.scenes) {
+      expect(s.source).toBeUndefined();
+      expect(s.needsConfirmation).toBeUndefined();
+    }
+  });
+
+  it("refuses the deck on a [doc:] token with an empty id — never silently dropped", () => {
+    const bad = withSources.replace("[doc:k57abc123]", "[doc:]");
+    expect(parseSceneDeck(bad)).toMatchObject({ reason: "malformed_source", sceneIndex: 0 });
+  });
+
+  it("refuses a Source line that is neither a doc token nor `unverified`", () => {
+    const bad = withSources.replace(
+      "- Source: unverified",
+      "- Source: something the model asserted freehand",
+    );
+    expect(parseSceneDeck(bad)).toMatchObject({ reason: "malformed_source", sceneIndex: 1 });
+  });
+
+  it("carries NO confirmation field in parser output — confirmedAt is a mutation's word, never the model's", () => {
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const scene = r.scenes[1];
+    expect(scene && "confirmedAt" in scene).toBe(false);
+    // @ts-expect-error — the Scene type must not grow a confirmation timestamp (provenance rule)
+    scene?.confirmedAt;
+  });
+});
+
+describe("parseVariations — two-variation bodies (33-01)", () => {
+  // A second, genuinely different deck: 15 seconds, different kinds, its own narration.
+  const DECK_B = sceneDeck(
+    [
+      "| 1 | animated_image | 11 | A calendar filling itself | Your week, planned before coffee. | | |",
+      "| 2 | text_card | 4 | Logo on black | | PIKAR | |",
+    ],
+    "Target duration: 15",
+  );
+  const twoUp = ["## VARIATION A", "", sceneDeck(SCENES), "", "## VARIATION B", "", DECK_B].join(
+    "\n",
+  );
+
+  it("parses two valid variations into two independent decks", () => {
+    const r = parseVariations(twoUp);
+    expect(r.kind).toBe("two");
+    if (r.kind !== "two") return;
+    expect(r.a.deck.targetDurationSeconds).toBe(30);
+    expect(r.a.deck.scenes).toHaveLength(4);
+    expect(r.b.deck.targetDurationSeconds).toBe(15);
+    expect(r.b.deck.scenes).toHaveLength(2);
+  });
+
+  it("returns kind:'one' for a body without VARIATION headings — v2 bodies are untouched", () => {
+    expect(parseVariations(sceneDeck(SCENES))).toEqual({ kind: "one" });
+    expect(parseVariations("just prose")).toEqual({ kind: "one" });
+  });
+
+  it("a refusing variation refuses the WHOLE proposal — never a silent one-deck fallback", () => {
+    // B sums to 14 against a declared 15: the inner deck refuses duration_mismatch, and the outer
+    // contract must surface that, not quietly hand back variation A alone.
+    const bShort = twoUp.replace("| 1 | animated_image | 11 |", "| 1 | animated_image | 10 |");
+    expect(parseVariations(bShort)).toMatchObject({
+      kind: "refused",
+      variation: "b",
+      reason: "duration_mismatch",
+    });
+  });
+
+  it("a declared variation with no deck inside refuses too (no_deck is not 'fall back')", () => {
+    const noB = ["## VARIATION A", "", sceneDeck(SCENES), "", "## VARIATION B", "", "Prose only."].join("\n");
+    expect(parseVariations(noB)).toMatchObject({ kind: "refused", variation: "b", reason: "no_deck" });
+    const headingOnlyA = ["## VARIATION A", "", "## VARIATION B", "", DECK_B].join("\n");
+    expect(parseVariations(headingOnlyA)).toMatchObject({ kind: "refused", variation: "a", reason: "no_deck" });
+    // One heading without its sibling is a declared-variations body missing a whole deck.
+    expect(parseVariations(["## VARIATION A", "", sceneDeck(SCENES)].join("\n"))).toMatchObject({
+      kind: "refused",
+      variation: "b",
+      reason: "no_deck",
+    });
+  });
+
+  it("Source lines inside a variation survive the split (composes with the citation contract)", () => {
+    const aWithSources = [
+      sceneDeck(SCENES),
+      "SCENE PROMPTS",
+      "",
+      "Scene 1",
+      "- Source: The 2025 pricing one-pager [doc:k57abc123]",
+      "",
+    ].join("\n");
+    const body = ["## VARIATION A", "", aWithSources, "", "## VARIATION B", "", DECK_B].join("\n");
+    const r = parseVariations(body);
+    expect(r.kind).toBe("two");
+    if (r.kind !== "two") return;
+    expect(r.a.deck.scenes[0]?.source).toEqual({
+      docId: "k57abc123",
+      title: "The 2025 pricing one-pager",
+    });
+    expect(r.b.deck.scenes[0]?.source).toBeUndefined(); // B's slice is clean — the split held
+  });
+
+  it("each variation keeps its own body slice, so per-variation SCRIPT/ART DIRECTION stay separate", () => {
+    const r = parseVariations(twoUp);
+    expect(r.kind).toBe("two");
+    if (r.kind !== "two") return;
+    expect(r.a.body).toContain("Target duration: 30");
+    expect(r.a.body).not.toContain("Target duration: 15");
+    expect(r.b.body).toContain("Target duration: 15");
+    expect(r.b.body).not.toContain("Target duration: 30");
   });
 });

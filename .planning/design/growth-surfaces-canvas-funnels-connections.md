@@ -269,6 +269,16 @@ security model, which is already implemented in `packages/backend/convex/skills.
   Graph adapter: an optional `provider` column (absent ⇒ `"google"`, the migration-free
   widening idiom documented at `packages/core/src/actionType.ts:11-13`), a
   `by_tenant_provider` index, and one `Record<Provider, {...}>` const. Not before.
+  > **SUPERSEDED 2026-08-15 (phase 14→25 gap audit) for the MAIL/CALENDAR grants.** The
+  > `provider`-column-on-`gmailTokens` design above was not adopted: 17-05 landed a second table,
+  > `microsoftCalendarTokens`, because a discriminator would make every existing `by_tenant`
+  > `.unique()` read ambiguous and the two grants differ in refresh endpoint, scope string and
+  > expiry behaviour. No `provider` column, no `by_tenant_provider` index, no migration. If this
+  > design's `PROVIDERS`/`by_tenant_provider` idiom is later applied to CHANNEL connections
+  > (Phase 32), decide it on that table's own merits — do not cite the mail grants as precedent,
+  > because they went the other way. Related open question this document should answer: 17-06
+  > shipped `/connect-microsoft` as a page separate from `/connect-gmail`, so there are now TWO
+  > connection surfaces where this design assumes one.
 - **Connections are TENANT data, not owner config** — `tenantQuery`/`tenantMutation`, never
   `ownerQuery`. The owner boundary belongs to platform config, which lives on `/ops`.
 - **MCP: expose, do not consume.** A user-supplied MCP client is a runtime-mutable tool set,

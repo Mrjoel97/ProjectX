@@ -52,6 +52,49 @@
 > collapses thrown fetches AND every non-2xx into `route_unreachable`; when it fires, probe the
 > URL by hand first.)
 
+> Last verified: 2026-08-15 (33-03 — **THE MONEY GATES AND THE VARIATIONS TERMINAL.**
+> `persistStoryboard` runs `parseVariations` FIRST: a two-variation body lands deck A as `shots`
+> and deck B as `altShots` in ONE `persistDeck` call, plus the brief and per-scene citations; a
+> refusing variation refuses the WHOLE proposal (never a silent one-deck fallback). The internal
+> `persistDeck` validator has NO `confirmedAt` member — the second door after the parser type.
+> `unconfirmed_claims` refuses at `jobEstimate` AND `reserveSceneJobInner` in the same pre-flight
+> position; the reserve-side check reads the plan ROW, mutation-proven (deleting it moves money and
+> goes red). `generateReel` locks the pick (`deckLockedAt`) and DELETES the alternate in the same
+> mutation as a successful reservation; `sceneCitations` verifies model-authored docIds where
+> consumed — foreign/malformed ids are `verified: false`, never a clickable citation.)
+
+> Last verified: 2026-08-15 (33-02 — **THE PLAN-ROW PLANES LAND: brief, two-deck variation,
+> per-scene citations, retry marker, vault-ref — all optional, widen-only** — plus the three
+> governed tenant mutations that write them. `editBrief` patches ONLY the brief plane (chip
+> merge, `defaulted` strip, `briefChangedAt` stamp) and NEVER moves `targetDurationSeconds` or
+> `shots` — a brief/deck divergence is the stale badge, not a refusal. `switchDeck` swaps
+> `shots`↔`altShots` and the two targets atomically, stamps `shotsChangedAt` (landed assets
+> belong to the deck that bought them, so invalidation on a switch is CORRECT) and clears the
+> render; both `deck_locked` guards were mutation-proven red-able by deleting them.
+> `confirmClaim(planId, sceneIndex)` is the provenance front door: actor and timestamp are
+> ctx-derived, the arg validator structurally cannot carry either, one insert-only refs-only
+> audit row (`media.claim_confirmed`, ids only), and a REAL narration edit of a confirmed scene
+> clears `confirmedAt` while reorder/delete leave siblings' confirmations riding their own shot
+> element. The money path (`sceneDeckOf`, `jobEstimate`, the reserves) is textually untouched
+> and prices whichever deck is picked. media.test.ts 204/204 green, backend tsc clean.)
+
+> Last verified: 2026-08-15 (33-01 — **THE PHASE-33 PARSE SURFACES: brief, citations, variations.**
+> `storyboard.ts` gains three free-at-parse contracts, all refusing before a cent moves — the
+> `parseSceneDeck` posture, three surfaces wider. `parseBrief` reads a `BRIEF` section (Topic /
+> Duration / Audience / Tone / Brand voice) into `BriefFields`, null-when-incomplete like
+> `parseArtDirection` — durations are the 15/30/60 presets ONLY, and a `(defaulted)` suffix is
+> STRIPPED from the value and recorded by field name in `defaulted[]`, so the marker can never
+> render as copy. A scene's SCENE PROMPTS block may carry ONE `Source:` line: `<title> [doc:<id>]`
+> becomes `scene.source`, `unverified` becomes `scene.needsConfirmation`, absence means creative
+> copy, and ANY other shape refuses the deck (`malformed_source`) — a citation is never silently
+> dropped. Parser output has NO confirmation field: `confirmedAt` is an authenticated tenant
+> mutation's word later, and the model has no path to writing one. `parseVariations` splits at
+> `VARIATION A`/`VARIATION B` headings and runs the UNCHANGED `parseSceneDeck` on each slice; any
+> inner refusal — including `no_deck` inside a declared variation, or one heading without its
+> sibling — refuses the WHOLE proposal, never a silent one-deck fallback. Bodies without the
+> headings return `kind: "one"` and v2 single-deck parsing is byte-for-byte unaffected —
+> 974/974 @pikar/core tests green.)
+
 > Last verified: 2026-08-14 (20.2 wave 8 — **THE SPECIALIST BECOMES A SCENE AUTHOR, and the approve
 > arm opens.** `media-director.md` is v2: `SCENE DECK` with `Target duration`, a `Seconds` column
 > that must sum to it EXACTLY, the four visual kinds, optional narration, and the per-window
@@ -488,6 +531,100 @@ edit with no runner able to clear the gate. Consequences, both of which are the 
 
 **SEEDING IS REQUIRED.** `npx convex dev` alone does not seed — run `pnpm dev`. Until then the live
 row is v1 and the specialist still proposes block decks, which still parse and still render.
+
+### The Phase-33 parse surfaces (33-01)
+
+Three additional contracts live beside `parseSceneDeck`, all pure parse, all free:
+
+- **`parseBrief(body)`** — the guided-intake echo. `BRIEF` is a registered section token, so a
+  brief above a script terminates where the script starts. Null (not a refusal) when absent,
+  topic-less, or off the 15/30/60 preset grid; `(defaulted)` markers become field names in
+  `defaulted[]`, never copy.
+- **Per-scene `Source:` lines** — document-level citations (the Phase-14 idiom: one doc, no chunk
+  refs), read from the `Scene N` blocks of SCENE PROMPTS by `sceneSourcesOf` (the shared
+  `parsePrompts` is untouched — the block contract has no citations). Three legal shapes:
+  `<title> [doc:<id>]` → `scene.source`; `unverified` → `scene.needsConfirmation`; absent →
+  creative copy. Anything else is `malformed_source` and refuses the whole deck. **The Scene type
+  must never grow a confirmation timestamp** — a `@ts-expect-error` in `storyboard.test.ts`
+  guards that door; confirmation is a tenant mutation's write, later, with auth.
+- **`parseVariations(body)`** — a thin, order-agnostic splitter at `VARIATION A`/`B` headings over
+  the unchanged `parseSceneDeck`. `kind: "two" | "one" | "refused"`; each `VariationSlice`
+  carries its own body slice so SCRIPT/ART DIRECTION parse per-variation. A refusing variation
+  refuses the WHOLE proposal — the `persistStoryboard` rule: a deck nobody wrote must never be
+  proposed.
+
+### The Phase-33 plan-row planes (33-02)
+
+The parse surfaces above persist into new OPTIONAL `plans` fields — widen-only, no migration
+(the `renderSummary` precedent). The provenance question ("who does the STORED row say wrote
+this, and can the model influence it?") asked of every field:
+
+- **Brief plane** — `brief {topic, durationSeconds, audience?, tone?, brandVoice?, defaulted[]}`,
+  `briefChangedAt`, `deckProposedAt`. `brief.durationSeconds` is the USER'S ask (a
+  `TARGET_DURATIONS` preset); the deck's own `targetDurationSeconds` stays the money contract —
+  divergence renders as the stale badge (`briefChangedAt > deckProposedAt`), never as an
+  estimate refusal and never a silent re-deck. Model-parsed brief content arrives marked in
+  `defaulted[]`; a chip the user edits through `editBrief` leaves `defaulted` — from then on the
+  row says the USER wrote it, and only a user mutation can make that true.
+- **Variation plane** — `altShots` (the SAME shared `shotElement` validator as `shots`: one
+  const in `schema.ts`, so the two arrays cannot drift), `altTargetDurationSeconds`,
+  `deckLockedAt`. The refused anti-pattern: NO `decks[]` array with a picked index the money
+  path reads. `plans.shots` IS the picked deck — `sceneDeckOf`, `jobEstimate` and the reserves
+  never learn variations exist. `switchDeck` is the only swap, and it refuses once Generate has
+  locked the choice (`deck_locked`); post-Generate change is canvas-only, on the paid rail.
+- **Citation fields, ON the shot element** (so reorder/delete/switch carry them for free) —
+  `source {docId, title}` is MODEL-AUTHORED text whose ownership is checked where consumed (the
+  `asset.docId` precedent); `needsConfirmation` is the parser's flag. **`confirmedAt` is written
+  ONLY by `confirmClaim`, and the model can never write it**: no model-reachable mutation sets
+  it, and `confirmClaim`'s validator takes `planId` + `sceneIndex` and nothing else — an actor
+  or timestamp in the args is a validator error, not a runtime branch. A changed claim is
+  unconfirmed: a real narration edit of a confirmed scene clears `confirmedAt` (keeping
+  `needsConfirmation` and `source` — the new words still state a figure). Confirmation is NOT a
+  structural deck edit: no `shotsChangedAt`, no render clear.
+- **`renderRetriedAt`** — code-stamped retry marker (the clear-failure card's "assembled again"
+  time); **`reelVaultDocId`** — code-written vault doc REF, never a URL and never bytes. Neither
+  has any model write path.
+### The Phase-33 money gates and the variations terminal (33-03)
+
+The planes above go LIVE at three choke points — the terminal that writes them, and the two money
+sites that read them:
+
+- **The variations terminal** — `dispatch.persistStoryboard` runs `parseVariations` FIRST, above
+  both deck contracts. `kind:"two"` lands deck A picked (`shots` + `targetDurationSeconds`) and
+  deck B parked (`altShots` + `altTargetDurationSeconds`) in ONE `persistDeck` call, with script /
+  art direction parsed off A's OWN slice, the brief off the full body, and the per-scene
+  `source`/`needsConfirmation` fields riding each shot element. `kind:"refused"` lands a refusal
+  card naming WHICH variation and why (`variationRefusalBody`, same `SCENE_WHY` vocabulary) —
+  refusal-over-fallback one level up: a body that declared a choice never quietly lands "the"
+  deck. `kind:"one"` is the untouched v2 flow, extended to land brief + citations and to CLEAR
+  the parked alternate (whole-deck-write semantics: a post-pick chat revision replaces the picked
+  deck, so the alternate — and any previous `deckLockedAt` — is stale by definition). The
+  `persistDeck` arg validator (`parsedShot` in plans.ts) accepts `source`/`needsConfirmation` and
+  has structurally NO `confirmedAt` — the second provenance door after the parser type; a test
+  pins the rejection. `deck_persisted` audit gains `variations`/`citedScenes`/`unverifiedScenes`
+  COUNTS — never a title, never a claim (§4).
+- **The confirm gate (`unconfirmed_claims`)** — a picked-deck shot with `needsConfirmation` and no
+  `confirmedAt` refuses BOTH `jobEstimate` and `reserveSceneJobInner`, in the SAME position of the
+  same pre-flight order (the wave-5 co-location rule: the number on screen and the button open
+  together or not at all). ONE shared predicate (`firstUnconfirmedClaim`) so the two sites cannot
+  drift. The reserve-side check reads the plan ROW inside `reserveSceneJobInner` — no caller can
+  hand it a deck that skips the gate, and it is deck-wide (a `regenerateBlock` partial buy refuses
+  too). The estimate names the FIRST offending scene (`blockIndex`) so the canvas can point at the
+  chip. `confirmClaim` on every flagged scene clears it reactively. Mutation-proven: deleting the
+  reserve-side check makes a reservation SUCCEED with an unconfirmed claim — money moved is red.
+- **Generate is the point of no return** — on a SUCCESSFUL scene reservation, `generateReel`
+  stamps `deckLockedAt` and DELETES `altShots`/`altTargetDurationSeconds` in the same mutation
+  (the locked discard decision). A refusal locks and discards nothing. `switchDeck` answers
+  `deck_locked` BEFORE `no_alternate` — post-Generate the truthful refusal is "the choice is
+  bought", not "there is no second deck" (there isn't, because it locked). Picked-deck-only
+  invariant, pinned by test: a parked alternate moves NEITHER the estimate lines nor the
+  reservation's `estCents`; the money number tracks `plans.shots` alone.
+- **`sceneCitations`** — the citation read plane: one entry per scene that claims anything
+  (`{sceneIndex, docId, title, verified, needsConfirmation, confirmedAt}`). `verified` = the doc
+  exists AND belongs to `ctx.tenantId`, checked where the model-authored id is CONSUMED (the
+  `asset.docId` precedent); a foreign, malformed or deleted id is `verified: false` — inert,
+  never a clickable citation — and `normalizeId` failing closed makes garbage indistinguishable
+  from a foreign id. Titles and ids only; no URL is minted (PreviewModal does its own access).
 
 ## The scene-kind price table (20.2 wave 7) — ADR-019
 

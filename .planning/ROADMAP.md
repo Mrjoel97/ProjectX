@@ -328,13 +328,22 @@ forward.** Recorded rather than silently assumed — it is an open owner decisio
 
 ### Phase 33: Media creation UX overhaul: guided intake, storyboard variations, auto-assembled reel, reel-first canvas, clear failure retry, grounded citations
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Creating a reel becomes a guided, honest, verifiable experience over the shipped scene-deck pipeline: chat + brief-chip intake, two distinct-concept storyboard variations, a reel-first canvas whose hero tracks the unattended run to a captioned vault-saved final, plain-language failure cards with governed retry, and per-scene vault citations with an owner-confirmation gate before any money moves.
+**Requirements**: 33-INTAKE, 33-VARIA, 33-REEL, 33-CANVAS, 33-FAIL, 33-CITE (minted at planning; the UX face of MEDIA-01)
 **Depends on:** Phase 32
-**Plans:** 0 plans
+**Plans:** 3/10 plans executed
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 33 to break down)
+- [x] 33-01-PLAN.md — Core deck contracts: brief §-parser, two-variation parse, per-scene citations (Wave 1)
+- [x] 33-02-PLAN.md — Plan-row state + editBrief/switchDeck/confirmClaim mutations (Wave 2)
+- [x] 33-03-PLAN.md — Proposal terminal lands brief+variations+citations; unconfirmed_claims gate; Generate locks + discards (Wave 3)
+- [ ] 33-04-PLAN.md — Transient-code classification, ONE auto-retry, manual retry, fix-menu re-arm (Wave 4)
+- [ ] 33-05-PLAN.md — Vault auto-save of the final (refs-only citations) + old-final-held regenerate ordering (Wave 5)
+- [ ] 33-06-PLAN.md — Reel-first canvas: hero + strip layout, pipeline tracker, estimate headline/breakdown (Wave 6)
+- [ ] 33-07-PLAN.md — Brief chips, stale badge + free re-propose, side-by-side variation switcher (Wave 7)
+- [ ] 33-08-PLAN.md — Citation/confirm UI + failure cards with fix menu and sunk-cost honesty (Wave 8)
+- [ ] 33-09-PLAN.md — media-director v3 body + round-trip drift guard (Wave 9)
+- [ ] 33-10-PLAN.md — Live seed + read-back, e2e on prod build, full gates, owner UAT (Wave 10)
 
 ---
 
@@ -1303,7 +1312,7 @@ Plans:
   2. Invite redemption binds the OAuth SUBJECT (not the typed email), verifies the invited email matches, records the subject immutably, and rejects cross-subject re-redemption - tested against both Google and Microsoft subject formats.
   3. A two-user cross-tenant isolation test (BETA-05) covers every table and index added across S1-S3 and asserts a non-owner cannot reach the three owner-gated functions; grounded-prose export stays owner-gated until the `packages/pii` names-in-prose scrub ceiling is closed.
   4. A new user reaches a first real delivered result (a governed email to their own address) within minutes via the scripted first-run cockpit onboarding.
-  5. An approved plan can deliver via Microsoft Graph (Outlook) (connect-both, choose-per-send). **Phase 25 BUILDS the provider-agnostic adapter — it does not exist today**: `gmailTokens` (`schema.ts:625-632`) has no `provider` column and is indexed `by_tenant` only, `gmail.ts:45-46` hardcodes `GOOGLE_OAUTH_CLIENT_ID`/`GOOGLE_OAUTH_CLIENT_SECRET`, and `gmail.ts:19` hardcodes the Google token endpoint. The widening — a `provider` column, a `by_tenant_provider` index, and a provider lookup — is written in the SAME commit as the Microsoft Graph adapter and NOT before; an abstraction with one implementation is what CLAUDE.md §8 forbids. Deployed to a live Vercel domain on Gmail Testing mode + unverified Azure app (verification off the critical path).
+  5. An approved plan can deliver via Microsoft Graph (Outlook) (connect-both, choose-per-send). **Phase 25 BUILDS the provider-agnostic adapter — it does not exist today**: `gmailTokens` (`schema.ts:625-632`) has no `provider` column and is indexed `by_tenant` only, `gmail.ts:45-46` hardcodes `GOOGLE_OAUTH_CLIENT_ID`/`GOOGLE_OAUTH_CLIENT_SECRET`, and `gmail.ts:19` hardcodes the Google token endpoint. **CORRECTED 2026-08-15 (phase 14→25 gap audit): the widening described here is NOT being built.** This line said the seam is a `provider` column plus a `by_tenant_provider` index on `gmailTokens`. Plan 17-05 instead landed a SECOND table, `microsoftCalendarTokens`, and `schema.ts` records why a discriminator column is the wrong shape — it would make every existing `by_tenant` `.unique()` read ambiguous, and the two grants have different refresh endpoints, scope strings and expiry behaviour. `gmailTokens` is UNCHANGED; there is no provider column, no `by_tenant_provider` index and no migration. The seam that DOES ship in the same commit as the Graph adapter is `mailProvider` on plan/request state plus `delivery.ts`'s two arms (re-cut `25-05-PLAN.md`). ADR-018 further made the Microsoft grant a UNION consented once by 17-06, so no separate Outlook OAuth flow remains. The line-number citations above are stale (`gmailTokens` now sits near `schema.ts:1146`). An abstraction with one implementation is still what CLAUDE.md §8 forbids — that half stands. Deployed to a live Vercel domain on Gmail Testing mode + unverified Azure app (verification off the critical path).
   6. The custom-domain decision is MADE here, because every user-shareable URL depends on it. Serving from `*.convex.site` shares a host with the OAuth callback (`http.ts:15`), so a reputation flag on that host breaks SIGN-IN, not just the page; and a Convex deployment URL is deployment-scoped, so a link a user sent a client does not survive a prod migration. Branch A (durable domain + DNS + TLS) is required to complete the mandatory BETA-03 and DLVR-02 live sends. Branch B records that no user-shareable URL ships and explicitly BLOCKS Phase 25 until Branch A becomes available.
 **Plans**: 14 plans across 13 waves (execution is blocked on Plan 25-00's prerequisite gate; Plan 25-10 Branch B also blocks completion)
 

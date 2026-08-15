@@ -2507,3 +2507,231 @@ describe("21-03 — an exact tenant candidate id survives the scheduled dispatch
     expect(completed?.payload.skillScope).not.toBe("tenant");
   });
 });
+
+// ── 33-03 — the variations terminal: brief + two decks + citations land in ONE terminal ─────────
+//
+// `persistStoryboard` now runs `parseVariations` FIRST. A two-variation body lands deck A as the
+// picked deck (`shots`) and deck B as the parked alternate (`altShots`), plus the BRIEF and the
+// per-scene Source fields, in one `persistDeck` call. A refusing variation refuses the WHOLE
+// proposal — never a silent one-deck fallback. A single-deck body still lands exactly as before,
+// EXTENDED to carry brief + citations and to DISCARD any parked alternate (a post-pick chat
+// revision replaces the picked deck; the alternate is stale by definition).
+
+/** Deck A: 8 + 22 = 30s. Narration windows: scene 1 has 8s (112 chars), scene 2 has 22s. */
+const VAR_A_DECK = [
+  "SCENE DECK",
+  "Target duration: 30",
+  "",
+  "| # | Visual | Seconds | Description | Narration | Text overlay | Asset |",
+  "|---|--------|---------|-------------|-----------|--------------|-------|",
+  "| 1 | generated_video | 8 | Founder at a desk | Most founders lose a full hour a day to inbox triage. | | |",
+  "| 2 | animated_image | 22 | Mail icons collapsing | Pikar reads the thread and drafts your reply. | | |",
+  "",
+  "SCENE PROMPTS",
+  "",
+  "Scene 1",
+  "- Prompt: Founder at a desk, warm light",
+  "- Source: The 2025 pricing one-pager [doc:k57abc123]",
+  "",
+  "Scene 2",
+  "- Source: unverified",
+  "",
+].join("\n");
+
+/** Deck B: 11 + 4 = 15s, genuinely different kinds — the alternate the user can switch to. */
+const VAR_B_DECK = [
+  "SCENE DECK",
+  "Target duration: 15",
+  "",
+  "| # | Visual | Seconds | Description | Narration | Text overlay | Asset |",
+  "|---|--------|---------|-------------|-----------|--------------|-------|",
+  "| 1 | animated_image | 11 | A calendar filling itself | Your week, planned before coffee. | | |",
+  "| 2 | text_card | 4 | Logo on black | | PIKAR | |",
+  "",
+].join("\n");
+
+const VAR_BRIEF = [
+  "## 1. BRIEF",
+  "",
+  "Topic: Inbox triage, and what it costs a founder",
+  "Duration: 30s",
+  "Audience: Solo founders drowning in email (defaulted)",
+  "",
+].join("\n");
+
+const TWO_UP_BODY = [VAR_BRIEF, "## VARIATION A", "", VAR_A_DECK, "## VARIATION B", "", VAR_B_DECK].join(
+  "\n",
+);
+
+describe("33-03 — the variations terminal: parseVariations runs FIRST", () => {
+  test("a two-variation proposal lands deck A picked, deck B parked, brief + citations, in one terminal", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    const res = ok(
+      await t.action(
+        internal.dispatch.__runSpecialistWithScript,
+        mediaArgs(planId, { primary: [{ ...textStep(TWO_UP_BODY), usage: SPEND_8_CENTS }] }),
+      ),
+    );
+    expect(res.ok).toBe(true);
+
+    const plan = await readPlan(t, planId);
+    expect(plan?.kind).toBe("media");
+    expect(plan?.status).toBe("proposed");
+    // Deck A IS the picked deck — the money path reads `shots` and never learns B exists.
+    expect(plan?.shots).toHaveLength(2);
+    expect(plan?.targetDurationSeconds).toBe(30);
+    expect(plan?.shots?.map((s) => s.visual)).toEqual(["generated_video", "animated_image"]);
+    // Deck B is the parked alternate, with its OWN declared length.
+    expect(plan?.altShots).toHaveLength(2);
+    expect(plan?.altTargetDurationSeconds).toBe(15);
+    expect(plan?.altShots?.map((s) => s.visual)).toEqual(["animated_image", "text_card"]);
+    // The brief landed beside the decks, defaulted markers stripped into the array.
+    expect(plan?.brief).toMatchObject({
+      topic: "Inbox triage, and what it costs a founder",
+      durationSeconds: 30,
+      audience: "Solo founders drowning in email",
+      defaulted: ["audience"],
+    });
+    // Per-scene citations rode the shots in — the parser's word, verbatim.
+    expect(plan?.shots?.[0]?.source).toEqual({
+      docId: "k57abc123",
+      title: "The 2025 pricing one-pager",
+    });
+    expect(plan?.shots?.[0]?.needsConfirmation).toBeUndefined();
+    expect(plan?.shots?.[1]?.needsConfirmation).toBe(true);
+    // NO shot carries a confirmation — parsed model content structurally cannot vouch for itself.
+    expect(plan?.shots?.every((s) => s.confirmedAt === undefined)).toBe(true);
+    expect(plan?.deckProposedAt).toBeTypeOf("number");
+    expect(plan?.deckLockedAt).toBeUndefined();
+  });
+
+  test("the deck_persisted audit gains variations/citedScenes/unverifiedScenes COUNTS — and no titles (§4)", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    await t.action(
+      internal.dispatch.__runSpecialistWithScript,
+      mediaArgs(planId, { primary: [{ ...textStep(TWO_UP_BODY), usage: SPEND_8_CENTS }] }),
+    );
+    const audit = (await readLineage(t)).filter((r) => r.eventType === "media.deck_persisted");
+    expect(audit).toHaveLength(1);
+    const payload = audit[0]?.payload as Record<string, unknown>;
+    expect(payload.variations).toBe(2);
+    expect(payload.citedScenes).toBe(1);
+    expect(payload.unverifiedScenes).toBe(1);
+    // Refs and COUNTS only: the doc title and the claim text appear NOWHERE in the audit plane.
+    expect(JSON.stringify(await readLineage(t))).not.toContain("pricing one-pager");
+  });
+
+  test("a refusing variation refuses the WHOLE proposal — never a silent one-deck fallback", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    // Variation B declared, no deck inside it: variation A alone must NOT quietly land.
+    const body = [VAR_BRIEF, "## VARIATION A", "", VAR_A_DECK, "## VARIATION B", "", "Prose only."].join(
+      "\n",
+    );
+    await t.action(
+      internal.dispatch.__runSpecialistWithScript,
+      mediaArgs(planId, { primary: [{ ...textStep(body), usage: SPEND_8_CENTS }] }),
+    );
+
+    const plan = await readPlan(t, planId);
+    expect(plan?.kind).not.toBe("media");
+    expect(plan?.shots).toBeUndefined();
+    expect(plan?.altShots).toBeUndefined();
+    expect(plan?.body).toContain("no_deck");
+
+    const audit = (await readLineage(t)).filter((r) => r.eventType === "media.deck_refused");
+    expect(audit).toHaveLength(1);
+    const payload = audit[0]?.payload as Record<string, unknown>;
+    expect(payload.reason).toBe("no_deck");
+    expect(payload.variation).toBe("b");
+  });
+
+  test("a single-deck revision DISCARDS the parked alternate and still lands brief + citations", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    // A previous two-deck proposal parked an alternate (and an old lock, from a generated deck
+    // this revision replaces). The revision is a plain single-deck body.
+    await t.run(async (ctx) =>
+      ctx.db.patch(planId, {
+        altShots: [
+          {
+            index: 0,
+            visual: "text_card",
+            seconds: 15,
+            windowStartMs: 0,
+            description: "stale alternate",
+            overlay: "OLD",
+            prompt: "p",
+            narration: "old line",
+          },
+        ],
+        altTargetDurationSeconds: 15,
+        deckLockedAt: 123,
+      }),
+    );
+    const singleBody = [VAR_BRIEF, VAR_A_DECK].join("\n");
+    await t.action(
+      internal.dispatch.__runSpecialistWithScript,
+      mediaArgs(planId, { primary: [{ ...textStep(singleBody), usage: SPEND_8_CENTS }] }),
+    );
+
+    const plan = await readPlan(t, planId);
+    expect(plan?.kind).toBe("media");
+    expect(plan?.shots).toHaveLength(2);
+    // The alternate is stale by definition — a post-pick revision replaces the picked deck.
+    expect(plan?.altShots).toBeUndefined();
+    expect(plan?.altTargetDurationSeconds).toBeUndefined();
+    // A NEW proposal is a new choice: the old deck's lock does not survive it.
+    expect(plan?.deckLockedAt).toBeUndefined();
+    expect(plan?.brief?.topic).toBe("Inbox triage, and what it costs a founder");
+    expect(plan?.shots?.[0]?.source?.docId).toBe("k57abc123");
+    expect(plan?.shots?.[1]?.needsConfirmation).toBe(true);
+    expect(plan?.deckProposedAt).toBeTypeOf("number");
+  });
+
+  test("the persist validator ACCEPTS source/needsConfirmation and REJECTS confirmedAt — the second door", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    const shot = {
+      index: 0,
+      visual: "generated_video",
+      seconds: 8,
+      windowStartMs: 0,
+      description: "d",
+      prompt: "p",
+      narration: "n",
+      source: { docId: "k57abc123", title: "t" },
+      needsConfirmation: true,
+    };
+    // A confirmation is a tenant mutation's word ONLY. The validator has no `confirmedAt` member,
+    // so parsed model content STRUCTURALLY cannot carry one into the row.
+    await expect(
+      t.mutation(internal.plans.persistDeck, {
+        tenantId: TENANT,
+        planId,
+        script: "s",
+        artDirection: null,
+        clipSeconds: 8,
+        targetDurationSeconds: 8,
+        shots: [{ ...shot, confirmedAt: 1 } as typeof shot],
+      }),
+    ).rejects.toThrow(/confirmedAt/);
+
+    // …while the citation fields themselves are accepted, verbatim.
+    await t.mutation(internal.plans.persistDeck, {
+      tenantId: TENANT,
+      planId,
+      script: "s",
+      artDirection: null,
+      clipSeconds: 8,
+      targetDurationSeconds: 8,
+      shots: [shot],
+    });
+    const plan = await readPlan(t, planId);
+    expect(plan?.shots?.[0]?.source).toEqual({ docId: "k57abc123", title: "t" });
+    expect(plan?.shots?.[0]?.needsConfirmation).toBe(true);
+    expect(plan?.shots?.[0]?.confirmedAt).toBeUndefined();
+  });
+});
