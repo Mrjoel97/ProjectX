@@ -6,6 +6,49 @@ import { v } from "convex/values";
 // Compile-time proof the Convex bundler resolves source-export workspace packages.
 void CONTRACTS_PACKAGE_NAME;
 
+/** ONE deck element, shared by `plans.shots` and `plans.altShots` (33-02) — a single const so the
+ *  two arrays can never drift apart field-by-field. `type` is a ShotType value; @pikar/core/storyboard
+ *  owns the closed set. */
+const shotElement = v.object({
+  index: v.number(),
+  /** A `ShotType` value on a BLOCK row, and ABSENT on a 20.2 scene row. Widened to
+   *  optional rather than overloaded with `VisualKind`, and that is the fail-closed
+   *  choice: `media.deckOf` gates on `SHOT_TYPES.includes(s.type)`, so an absent `type`
+   *  makes it return null. Writing a legacy-equivalent token here instead would let a
+   *  scene deck be read as a block deck and PRICED at a uniform `clipSeconds` it was
+   *  never written against — fail-open, on the money path. */
+  type: v.optional(v.string()),
+  /** 20.2: a `VisualKind` value, present on a SCENE row and absent on a block row. Its
+   *  presence is the per-row discriminator between the two contracts.
+   *  @pikar/core/storyboard owns this closed set, exactly as it owns `type`'s. */
+  visual: v.optional(v.string()),
+  /** THIS shot's own length, and THIS shot's own offset. They already carried a variable
+   *  timeline — the block contract merely happened to write them uniformly
+   *  (`clipSeconds`, `index * clipSeconds * 1000`). A scene row writes its real duration
+   *  and its running-sum start into the SAME two fields, so no `durationMs`/`startMs`
+   *  pair exists to disagree with them. */
+  seconds: v.number(),
+  windowStartMs: v.number(),
+  description: v.string(),
+  overlay: v.optional(v.string()),
+  prompt: v.string(),
+  narration: v.string(), // the block's SPOKEN line. Content-plane. Never audited.
+  /** 20.2, `uploaded_video` only: the tenant's own footage, as a vault doc REF — never a
+   *  URL and never bytes, the same rule every other asset on this path follows. */
+  asset: v.optional(v.object({ source: v.literal("vault"), docId: v.string() })),
+  // ── 33-02 citation plane, ON THE ELEMENT so reorder/delete/switchDeck carry it for free ──
+  /** The vault document this scene's claim is grounded in. `docId` is MODEL-AUTHORED text —
+   *  ownership is checked where it is consumed, never trusted here (the `asset.docId`
+   *  precedent). Absent on an unclaimed scene. */
+  source: v.optional(v.object({ docId: v.string(), title: v.string() })),
+  /** The parser's flag that this scene states a figure the user has not vouched for. */
+  needsConfirmation: v.optional(v.boolean()),
+  /** Written ONLY by `media.confirmClaim`, from the authenticated tenant context — the model
+   *  has NO mutation that can set this, and confirmClaim's arg validator structurally cannot
+   *  carry an actor or a timestamp (the schema.ts:120 idiom, provenance-laundering guard). */
+  confirmedAt: v.optional(v.number()),
+});
+
 export default defineSchema({
   // Convex Auth identity tables (users, authSessions, authAccounts, ...).
   ...authTables,
@@ -498,43 +541,46 @@ export default defineSchema({
      *  the accident `shots.length * clipSeconds`; a scene deck's is this number, and its scene
      *  durations must sum to it EXACTLY. */
     targetDurationSeconds: v.optional(v.number()),
+    // ── 33-02 BRIEF plane — the guided-intake chips, a plane of its own ─────────────────────
+    /** The USER'S ask, as parsed/edited chips. `brief.durationSeconds` is a TARGET_DURATIONS
+     *  preset and it is NOT the money contract — the deck's own `targetDurationSeconds` above
+     *  remains that; a divergence between the two renders as the stale badge, never as an
+     *  estimate refusal. `defaulted` names the fields the model filled in rather than the user
+     *  stating them, so the canvas can mark them. */
+    brief: v.optional(
+      v.object({
+        topic: v.string(),
+        durationSeconds: v.number(),
+        audience: v.optional(v.string()),
+        tone: v.optional(v.string()),
+        brandVoice: v.optional(v.string()),
+        defaulted: v.array(v.string()),
+      }),
+    ),
+    /** When a brief chip was last edited (`media.editBrief` only) — the deck-staleness stamp's
+     *  brief-plane sibling: `briefChangedAt > deckProposedAt` is what the stale badge reads. */
+    briefChangedAt: v.optional(v.number()),
+    /** When the current deck(s) were proposed against the brief. */
+    deckProposedAt: v.optional(v.number()),
     /** The deck, INLINE rather than a `mediaShots` table: `plans.by_thread` is `.unique()`, so
      *  there is exactly one plan row per thread, and the canvas editor's reorder / delete / edit
      *  is then ONE array patch instead of N row writes plus an ordering column. There is no
      *  `mediaAssets` table either — a job produces at most one asset and its storage id lives on
-     *  the job row. `type` is a ShotType value; @pikar/core/storyboard owns the closed set. */
-    shots: v.optional(
-      v.array(
-        v.object({
-          index: v.number(),
-          /** A `ShotType` value on a BLOCK row, and ABSENT on a 20.2 scene row. Widened to
-           *  optional rather than overloaded with `VisualKind`, and that is the fail-closed
-           *  choice: `media.deckOf` gates on `SHOT_TYPES.includes(s.type)`, so an absent `type`
-           *  makes it return null. Writing a legacy-equivalent token here instead would let a
-           *  scene deck be read as a block deck and PRICED at a uniform `clipSeconds` it was
-           *  never written against — fail-open, on the money path. */
-          type: v.optional(v.string()),
-          /** 20.2: a `VisualKind` value, present on a SCENE row and absent on a block row. Its
-           *  presence is the per-row discriminator between the two contracts.
-           *  @pikar/core/storyboard owns this closed set, exactly as it owns `type`'s. */
-          visual: v.optional(v.string()),
-          /** THIS shot's own length, and THIS shot's own offset. They already carried a variable
-           *  timeline — the block contract merely happened to write them uniformly
-           *  (`clipSeconds`, `index * clipSeconds * 1000`). A scene row writes its real duration
-           *  and its running-sum start into the SAME two fields, so no `durationMs`/`startMs`
-           *  pair exists to disagree with them. */
-          seconds: v.number(),
-          windowStartMs: v.number(),
-          description: v.string(),
-          overlay: v.optional(v.string()),
-          prompt: v.string(),
-          narration: v.string(), // the block's SPOKEN line. Content-plane. Never audited.
-          /** 20.2, `uploaded_video` only: the tenant's own footage, as a vault doc REF — never a
-           *  URL and never bytes, the same rule every other asset on this path follows. */
-          asset: v.optional(v.object({ source: v.literal("vault"), docId: v.string() })),
-        }),
-      ),
-    ),
+     *  the job row. The element shape is the shared `shotElement` const above. */
+    shots: v.optional(v.array(shotElement)),
+    // ── 33-02 VARIATION plane — the UNPICKED deck, parked beside the picked one ─────────────
+    // The anti-pattern refused here: NO `decks[]` array with a `pickedIndex` the money path
+    // reads. `plans.shots` IS the picked deck — `sceneDeckOf`, `jobEstimate` and the reserves
+    // stay textually untouched and never learn variations exist. `media.switchDeck` swaps the
+    // two pairs atomically (and stamps `shotsChangedAt`: landed assets belong to the deck that
+    // bought them, so invalidation on a switch is CORRECT, not collateral).
+    altShots: v.optional(v.array(shotElement)),
+    /** The alternate deck's own declared length — swapped with `targetDurationSeconds`. */
+    altTargetDurationSeconds: v.optional(v.number()),
+    /** Set when Generate first buys against the picked deck; `switchDeck` and `editBrief`
+     *  refuse from then on (`deck_locked`) — post-Generate change is canvas-only, on the paid
+     *  rail. */
+    deckLockedAt: v.optional(v.number()),
     /** 20.2 wave 6: when `shots` was last REWRITTEN — by the free editor or by a fresh proposal.
      *  It is what makes a landed asset reusable or not. A regenerate buys ONE scene and the render
      *  takes the rest from whatever landed for this plan before it; an asset bought against a deck
@@ -564,6 +610,9 @@ export default defineSchema({
      *  file names and can echo narration text straight into a stored field (§4). */
     renderReason: v.optional(v.string()),
     renderedAt: v.optional(v.number()),
+    /** 33-02: when a failed render was last retried without re-buying assets — the clear-failure
+     *  card's "retry assembled it again" marker, distinct from `renderedAt` (success time). */
+    renderRetriedAt: v.optional(v.number()),
     /** The sidecar's own facts, parsed ONCE at the render terminal and persisted (20-09). The
      *  canvas needs the duration and the gate list to say in words what was proven, and a query
      *  cannot read a blob — `ctx.storage` in a query is a `StorageReader` with `getUrl` and
@@ -604,6 +653,9 @@ export default defineSchema({
      *  belong to take 1 rather than take 0, and it cannot be recomputed later without re-fetching
      *  and re-concatenating every take. Seconds, take order, always `blockCount` long. */
     captionOffsetsS: v.optional(v.array(v.number())),
+    /** 33-02: the finished reel SAVED into the vault, as a doc REF — never a URL, never bytes
+     *  (the `asset.docId` rule). Set by the save-to-vault mutation; absence means never saved. */
+    reelVaultDocId: v.optional(v.id("vaultDocuments")),
     // Skill-version attribution (08 IMPR-02). Set at propose (Plan 02) from the active
     // skill that drafted this plan, then copied onto the per-recipient `requests` rows at
     // executePlan. Optional → no migration (the sendAt/attachments precedent).
