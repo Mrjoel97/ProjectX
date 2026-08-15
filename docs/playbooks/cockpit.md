@@ -1,5 +1,10 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-16 (22.1-05 Task 2 — tenant erasure calls each connected provider's
+> existing disconnect before registry deletion, reports Google and Microsoft separately, and
+> continues local credential/data removal when a provider attempt fails). Focused deletion tests
+> 6/6 and backend typecheck passed; no live tenant was deleted.
+
 > Touched 2026-08-15 (phase 14→25 gap-audit session) to clear the §9 Stop hook — **NOT a
 > verification**, and deliberately not a `Last verified` line. **This session changed no product
 > code at all**: it re-cut `.planning/phases/25-private-beta-productionization/25-PREREQUISITE-EVIDENCE.md`
@@ -2424,6 +2429,7 @@ when assessing blast radius). Couplings graphify cannot see:
 - **`executePlan` is a human gate, not an LLM tool.** Idempotent CAS: only `proposed → approved` proceeds; double-approve is a no-op. Tested in `cockpit.test.ts` (SC4).
 - **Zero sends before Approve**: `gmail.send` is called only inside `deliverApprovedPlan`, which is started only by `executePlan`. Tested in `cockpit.test.ts`.
 - **A disconnect revokes at Google BEFORE it deletes locally, and deletes locally even if the revoke fails (22.1).** Both halves, in that order. Delete-only leaves the grant live on the user's Google account and makes `privacy/page.tsx:312` a false published claim — the defect this closed. Revoke-only leaves the crown-jewel refresh token at rest in a DB where nothing honours it. The revoke targets the REFRESH token (kills the whole grant), and a 400 is success, not failure. Tested in `calendar.test.ts`, mutation-verified.
+- **Tenant erasure is revoke-then-delete, with provider truth kept separate (22.1-05).** The owner-gated deletion action calls `disconnectGoogle` and `disconnectMicrosoft` before its registry-driven deletion pages. It maps the actual returns rather than averaging them: Google can report `revokedAtProvider:true`; Microsoft reports its shipped `false`. A thrown/failed provider attempt becomes a boolean failure result and never blocks local credential or tenant-data erasure. Results and the completion audit contain only provider flags, a tenant-id hash, table names, and counts — never tokens or user content. Tested in `tenantDelete.test.ts` with success and throwing-revocation cases.
 - **The review gate is bounded and fails closed (REVW-02, 07-04)**: `proposeEmailPlan` counts each redraft on `plans.reviseCount` via `@pikar/core classifyReviewDecision` (the SAME classifier the pipeline gate uses — never fork it); past `MAX_REGENERATE`(=3) it sets `plans.escalated` + notifies `retry.limit` and STOPS re-proposing. `executePlan` then refuses an escalated plan (`{ ok: false, reason: "review_escalated" }`) as an early guard before the CAS flip — an escalated plan is a terminal that can never be sent. A raw regenerate compare that inlines `3` or lets a past-cap redraft re-propose reintroduces the unbounded/unapproved-send bug. Tested in `cockpit.test.ts`.
 - **Per-recipient correlationId**, server-minted, never client-supplied — a shared cid collapses audit/telemetry/DLQ isolation (telemetry is write-once per cid). Exercised by `smoke:fanout`.
 - **Redaction (CLAUDE.md §4)**: recipients/subject/body live only in content-plane `plans`/`requests`; audit/DLQ/telemetry payloads carry refs only. Enforced statically by `llmRedaction.test.ts`; at runtime by `assertNoRawPiiFanout` in `smoke:fanout`.

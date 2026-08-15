@@ -2,10 +2,14 @@ import { deletableTables, type TenantDeletionCursor } from "@pikar/core/tenantDa
 import { makeFunctionReference } from "convex/server";
 import { convexTest } from "convex-test";
 import { afterEach, describe, expect, test, vi } from "vitest";
+import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.*s");
+const aggregateModules = import.meta.glob(
+  "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
+);
 const deleteTenantDataPage = makeFunctionReference<
   "mutation",
   { tenantId: string; userId: Id<"users">; cursor?: TenantDeletionCursor },
@@ -51,6 +55,7 @@ async function deleteAll(
 
 async function seedTwoTenants() {
   const t = convexTest(schema, modules);
+  t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
   const seeded = await t.run(async (ctx) => {
     const tenantA = await ctx.db.insert("users", {
       email: "tenant-a-delete@example.test",
@@ -201,7 +206,19 @@ describe("tenant deletion provider truth", () => {
     ]);
     expect(bytes).not.toMatch(/refreshToken|accessToken|CROWN_JEWEL/);
     await t.run(async (ctx) => {
-      const auditBytes = JSON.stringify(await ctx.db.query("audit").collect());
+      const audits = await ctx.db.query("audit").collect();
+      const completion = audits.filter((row) => row.eventType === "tenant.deleted");
+      expect(completion).toHaveLength(1);
+      expect(completion[0]?.payload).toMatchObject({
+        deleted_demoItems: 5,
+        deleted_users: 1,
+        googleLocalRowDeleted: true,
+        googleRevokedAtProvider: true,
+        microsoftLocalRowDeleted: true,
+        microsoftRevokedAtProvider: false,
+      });
+      expect(completion[0]?.payload.tenantIdHash).toMatch(/^[a-f0-9]{64}$/);
+      const auditBytes = JSON.stringify(audits);
       expect(auditBytes).not.toMatch(/refreshToken|accessToken|CROWN_JEWEL/);
     });
   });
