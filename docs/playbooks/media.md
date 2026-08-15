@@ -1,5 +1,16 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-08-15 (canvas-crush fix, VERIFIED IN THE LIVE BROWSER — **the canvas view was
+> an unscrollable 413 px clip of a 3,466 px storyboard.** Both canvas sheets spread `briefingSheet`,
+> whose `overflow: hidden` (there for the rounded corners) flips a flex item's implicit
+> `min-height: auto` to `0`; as direct flex children of the fixed-height `.pane-canvas` section they
+> were crushed to the leftover viewport and clipped everything below — cards cut mid-body, wheel
+> scroll dead (`split-right` had nothing to scroll: sh == ch). The work view never showed it because
+> `CardList` is a grid child that overflows naturally. Fix: `flexShrink: 0` on both sheet roots, so
+> the sheet keeps its natural height and the pane scrolls exactly like the work view. Rule for the
+> future: **anything spreading `briefingSheet` that mounts as a flex item of a fixed-height pane
+> needs `flexShrink: 0`**, or it will silently become a clipped box.)
+
 > Provider cutover verified 2026-08-14: new images use OpenAI GPT Image 2 and new videos use
 > OpenAI Sora 2 through `OPENAI_API_KEY`. Images land synchronously; videos follow
 > `submitLine` → `pollOpenAiVideoTask` → `mediaComplete.landResult`. OpenAI has announced that
