@@ -10,6 +10,22 @@
 > for already-submitted historical jobs. Older provider-specific sections below describe the
 > superseded implementation unless explicitly marked current. See ADR-017.
 
+> Last verified: 2026-08-15 (route_unreachable postmortem — **THE PROD RENDER SPINE HAD NEVER
+> CARRIED A REQUEST, and three independent blockers said so with one reason code.** The 2026-08-14
+> dead-letter (plan `p57ce…`) traced to: (1) prod `MEDIA_RENDER_URL` was a stale generated
+> `*.vercel.app` deployment URL — Vercel Deployment Protection 401s "Protected deployment" before
+> the route runs, the same `ei931zp0e` URL that broke `SITE_URL` on 2026-08-12; (2) the auth
+> middleware matcher covers `/api/*` and `/api/media/render` was not on `isPublic`, so even the
+> durable domain 307'd the cookie-less server-to-server POST to `/signin`; (3) prod
+> `MEDIA_RENDER_SECRET` carried a trailing `\r` from a Windows `env set`, which makes fetch throw
+> on the Authorization header. Fixes: middleware exemption (the route's own bearer check is the
+> auth), `deploy-production.yml` now pins `MEDIA_RENDER_URL` to `$PRODUCTION_URL/api/media/render`
+> with read-back exactly like `SITE_URL`, and both prod env values re-set clean. Lesson recorded
+> in "The two secrets" below: **the URL must be the durable custom domain, never a generated
+> deployment URL** — those are protection-walled and go stale on every deploy. Note `renderReel`
+> collapses thrown fetches AND every non-2xx into `route_unreachable`; when it fires, probe the
+> URL by hand first.)
+
 > Last verified: 2026-08-14 (20.2 wave 8 — **THE SPECIALIST BECOMES A SCENE AUTHOR, and the approve
 > arm opens.** `media-director.md` is v2: `SCENE DECK` with `Target duration`, a `Seconds` column
 > that must sum to it EXACTLY, the four visual kinds, optional narration, and the per-window
@@ -1556,7 +1572,11 @@ bearer creates NO sandbox" is assertable at all, since `apps/web` has no unit-te
 ```bash
 # from packages/backend
 npx convex env set MEDIA_RENDER_SECRET <fresh random>
-npx convex env set MEDIA_RENDER_URL https://<app>/api/media/render
+npx convex env set MEDIA_RENDER_URL https://www.pikar-ai.com/api/media/render
+# DURABLE CUSTOM DOMAIN ONLY — a generated *.vercel.app deployment URL sits behind Vercel
+# Deployment Protection (401 before the route runs) and goes stale on every deploy. In prod the
+# release pipeline pins this to $PRODUCTION_URL/api/media/render with read-back; set it by hand
+# only on dev. Beware the Windows quoting quirk: a trailing \r in either value breaks the fetch.
 # and on Vercel (Project -> Settings -> Environment Variables)
 MEDIA_RENDER_SECRET=<the same value>
 MEDIA_SANDBOX_SNAPSHOT_ID=<from the bake script>

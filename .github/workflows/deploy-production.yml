@@ -172,15 +172,25 @@ jobs:
       # durable custom domain, never a generated Vercel deployment URL, or host-only auth cookies
       # will be minted on one origin while middleware checks another (the "second login works"
       # failure observed on 2026-08-12).
-      - name: Pin Convex Auth to the durable production origin
+      # MEDIA_RENDER_URL has the same stale-deployment-URL failure mode (observed 2026-08-14: a
+      # generated *.vercel.app URL sits behind Deployment Protection, Vercel 401s before the route
+      # runs, and renderReel dead-letters route_unreachable), so it is pinned the same way.
+      - name: Pin Convex Auth and render route to the durable production origin
         working-directory: packages/backend
         shell: bash
         run: |
           set -euo pipefail
+          media_render_url="$PRODUCTION_URL/api/media/render"
           node node_modules/convex/bin/main.js env set SITE_URL "$PRODUCTION_URL"
+          node node_modules/convex/bin/main.js env set MEDIA_RENDER_URL "$media_render_url"
           actual=$(node node_modules/convex/bin/main.js env get SITE_URL)
           if [ "$actual" != "$PRODUCTION_URL" ]; then
             echo "::error::Convex SITE_URL mismatch: expected $PRODUCTION_URL, got $actual"
+            exit 1
+          fi
+          actual=$(node node_modules/convex/bin/main.js env get MEDIA_RENDER_URL)
+          if [ "$actual" != "$media_render_url" ]; then
+            echo "::error::Convex MEDIA_RENDER_URL mismatch: expected $media_render_url, got $actual"
             exit 1
           fi
 
