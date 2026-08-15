@@ -10,6 +10,17 @@
 > for already-submitted historical jobs. Older provider-specific sections below describe the
 > superseded implementation unless explicitly marked current. See ADR-017.
 
+> Last verified: 2026-08-15 (33-03 — **THE MONEY GATES AND THE VARIATIONS TERMINAL.**
+> `persistStoryboard` runs `parseVariations` FIRST: a two-variation body lands deck A as `shots`
+> and deck B as `altShots` in ONE `persistDeck` call, plus the brief and per-scene citations; a
+> refusing variation refuses the WHOLE proposal (never a silent one-deck fallback). The internal
+> `persistDeck` validator has NO `confirmedAt` member — the second door after the parser type.
+> `unconfirmed_claims` refuses at `jobEstimate` AND `reserveSceneJobInner` in the same pre-flight
+> position; the reserve-side check reads the plan ROW, mutation-proven (deleting it moves money and
+> goes red). `generateReel` locks the pick (`deckLockedAt`) and DELETES the alternate in the same
+> mutation as a successful reservation; `sceneCitations` verifies model-authored docIds where
+> consumed — foreign/malformed ids are `verified: false`, never a clickable citation.)
+
 > Last verified: 2026-08-15 (33-02 — **THE PLAN-ROW PLANES LAND: brief, two-deck variation,
 > per-scene citations, retry marker, vault-ref — all optional, widen-only** — plus the three
 > governed tenant mutations that write them. `editBrief` patches ONLY the brief plane (chip
@@ -531,6 +542,48 @@ this, and can the model influence it?") asked of every field:
 - **`renderRetriedAt`** — code-stamped retry marker (the clear-failure card's "assembled again"
   time); **`reelVaultDocId`** — code-written vault doc REF, never a URL and never bytes. Neither
   has any model write path.
+### The Phase-33 money gates and the variations terminal (33-03)
+
+The planes above go LIVE at three choke points — the terminal that writes them, and the two money
+sites that read them:
+
+- **The variations terminal** — `dispatch.persistStoryboard` runs `parseVariations` FIRST, above
+  both deck contracts. `kind:"two"` lands deck A picked (`shots` + `targetDurationSeconds`) and
+  deck B parked (`altShots` + `altTargetDurationSeconds`) in ONE `persistDeck` call, with script /
+  art direction parsed off A's OWN slice, the brief off the full body, and the per-scene
+  `source`/`needsConfirmation` fields riding each shot element. `kind:"refused"` lands a refusal
+  card naming WHICH variation and why (`variationRefusalBody`, same `SCENE_WHY` vocabulary) —
+  refusal-over-fallback one level up: a body that declared a choice never quietly lands "the"
+  deck. `kind:"one"` is the untouched v2 flow, extended to land brief + citations and to CLEAR
+  the parked alternate (whole-deck-write semantics: a post-pick chat revision replaces the picked
+  deck, so the alternate — and any previous `deckLockedAt` — is stale by definition). The
+  `persistDeck` arg validator (`parsedShot` in plans.ts) accepts `source`/`needsConfirmation` and
+  has structurally NO `confirmedAt` — the second provenance door after the parser type; a test
+  pins the rejection. `deck_persisted` audit gains `variations`/`citedScenes`/`unverifiedScenes`
+  COUNTS — never a title, never a claim (§4).
+- **The confirm gate (`unconfirmed_claims`)** — a picked-deck shot with `needsConfirmation` and no
+  `confirmedAt` refuses BOTH `jobEstimate` and `reserveSceneJobInner`, in the SAME position of the
+  same pre-flight order (the wave-5 co-location rule: the number on screen and the button open
+  together or not at all). ONE shared predicate (`firstUnconfirmedClaim`) so the two sites cannot
+  drift. The reserve-side check reads the plan ROW inside `reserveSceneJobInner` — no caller can
+  hand it a deck that skips the gate, and it is deck-wide (a `regenerateBlock` partial buy refuses
+  too). The estimate names the FIRST offending scene (`blockIndex`) so the canvas can point at the
+  chip. `confirmClaim` on every flagged scene clears it reactively. Mutation-proven: deleting the
+  reserve-side check makes a reservation SUCCEED with an unconfirmed claim — money moved is red.
+- **Generate is the point of no return** — on a SUCCESSFUL scene reservation, `generateReel`
+  stamps `deckLockedAt` and DELETES `altShots`/`altTargetDurationSeconds` in the same mutation
+  (the locked discard decision). A refusal locks and discards nothing. `switchDeck` answers
+  `deck_locked` BEFORE `no_alternate` — post-Generate the truthful refusal is "the choice is
+  bought", not "there is no second deck" (there isn't, because it locked). Picked-deck-only
+  invariant, pinned by test: a parked alternate moves NEITHER the estimate lines nor the
+  reservation's `estCents`; the money number tracks `plans.shots` alone.
+- **`sceneCitations`** — the citation read plane: one entry per scene that claims anything
+  (`{sceneIndex, docId, title, verified, needsConfirmation, confirmedAt}`). `verified` = the doc
+  exists AND belongs to `ctx.tenantId`, checked where the model-authored id is CONSUMED (the
+  `asset.docId` precedent); a foreign, malformed or deleted id is `verified: false` — inert,
+  never a clickable citation — and `normalizeId` failing closed makes garbage indistinguishable
+  from a foreign id. Titles and ids only; no URL is minted (PreviewModal does its own access).
+
 ## The scene-kind price table (20.2 wave 7) — ADR-019
 
 The §4.1 table above is the BLOCK era's economics: one clip length, every block paid. A scene deck
