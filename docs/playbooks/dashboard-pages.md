@@ -1,5 +1,11 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-16 (22.1-04 — the rail-foot now links to the live
+> `/dashboard/settings` route, whose Data controls card downloads the tenant-scoped continuation
+> sequence as one structured JSON file. The control uses the existing rail/card/token patterns and
+> states the credential and immutable-audit omissions before download; it does not claim deletion,
+> which remains 22.1-05.)
+>
 > Last verified: 2026-08-15 (proposals-table-and-applier plan, Task 5 — the applier LANDS. This
 > supersedes the "in-flight" entry below it: `proposals.ts` is committed, not staged. Confirmed as
 > built: `cash.ts`'s `inputStatesFor` export and `onboarding.ts`'s `writeProfileDoc`/

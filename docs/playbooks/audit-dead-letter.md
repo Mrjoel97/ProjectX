@@ -1,5 +1,13 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-08-16 (22.1-04 — tenant data export). `tenantData.ts` classifies the
+> `audit` table as `audit_immutable`; both `audit` and the refs-only dead-letter compliance plane are
+> excluded from Art. 15/20 tenant exports with an explicit reason in the JSON file. This exclusion
+> is safe only while the §4 refs/hashes/ids/counts-only write contract holds: personal data found in
+> either payload is a write-site redaction defect, never a reason to widen the export. Credential
+> tables are exported only as connected state, `updatedAt`, and scope-token lengths; OAuth token
+> material never crosses the export boundary.
+>
 > Last verified: 2026-08-14 (17-06, ADR-018 — **a SECOND reconnect kind, and it stays OUT of
 > `NOTIFICATION_KINDS` for the same reason the two review kinds do.**) `notificationTemplates.ts`
 > gains `RECONNECT_PROVIDERS` / `RECONNECT` / `RECONNECT_KINDS`, a small table carrying the kind

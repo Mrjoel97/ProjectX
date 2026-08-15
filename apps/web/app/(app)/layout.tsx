@@ -196,6 +196,14 @@ function Shell({ children }: { children: ReactNode }) {
             <MailIcon />
             <span className="rail-label">Connections</span>
           </a>
+          <Link
+            href="/dashboard/settings"
+            className={`rail-item${isActive("/dashboard/settings") ? " is-active" : ""}`}
+            title={collapsed ? "Settings" : undefined}
+          >
+            <ShieldIcon size={18} />
+            <span className="rail-label">Settings</span>
+          </Link>
           <button
             type="button"
             className="rail-item"
