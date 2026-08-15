@@ -803,3 +803,60 @@ export function parseBrief(body: string): BriefFields | null {
     defaulted,
   };
 }
+
+/** One variation: its parsed deck, plus its OWN body slice so a caller can run
+ *  `parseScript`/`parseArtDirection`/`parsePrompts` per-variation without cross-contamination. */
+export type VariationSlice = {
+  deck: Extract<ParsedSceneDeck, { ok: true }>;
+  body: string;
+};
+
+export type ParsedVariations =
+  | { kind: "two"; a: VariationSlice; b: VariationSlice }
+  /** No VARIATION headings — the caller falls through to the existing single-deck path. */
+  | { kind: "one" }
+  | {
+      kind: "refused";
+      variation: "a" | "b";
+      reason: Extract<ParsedSceneDeck, { ok: false }>["reason"];
+    };
+
+const variationHeading = (letter: "A" | "B", body: string) =>
+  new RegExp(`^[ \\t]*#*[ \\t]*(?:\\d+\\.[ \\t]*)?VARIATION ${letter}\\b.*$`, "im").exec(body);
+
+/**
+ * Split a two-variation body at its VARIATION A / VARIATION B headings and run the EXISTING
+ * `parseSceneDeck` on each slice, unchanged — a thin splitter, no duplicate scene parsing.
+ *
+ * The one rule that matters: a variation slice whose deck refuses FOR ANY REASON — including
+ * `no_deck` inside a declared variation, or one heading written without its sibling — refuses the
+ * WHOLE proposal. Never a silent fallback to a single deck: the persistStoryboard rule again, a
+ * deck nobody wrote must never be proposed.
+ */
+export function parseVariations(body: string): ParsedVariations {
+  const aAt = variationHeading("A", body);
+  const bAt = variationHeading("B", body);
+  if (!aAt && !bAt) return { kind: "one" };
+  if (!aAt) return { kind: "refused", variation: "a", reason: "no_deck" };
+  if (!bAt) return { kind: "refused", variation: "b", reason: "no_deck" };
+
+  // Order-agnostic slices: each runs from the end of its heading to the other heading or EOF.
+  const marks = [
+    { v: "a" as const, m: aAt },
+    { v: "b" as const, m: bAt },
+  ].sort((x, y) => x.m.index - y.m.index);
+  const first = marks[0] as (typeof marks)[number];
+  const second = marks[1] as (typeof marks)[number];
+  const slices = {
+    [first.v]: body.slice(first.m.index + first.m[0].length, second.m.index),
+    [second.v]: body.slice(second.m.index + second.m[0].length),
+  } as Record<"a" | "b", string>;
+
+  const out = {} as Record<"a" | "b", VariationSlice>;
+  for (const v of ["a", "b"] as const) {
+    const deck = parseSceneDeck(slices[v]);
+    if (!deck.ok) return { kind: "refused", variation: v, reason: deck.reason };
+    out[v] = { deck, body: slices[v] };
+  }
+  return { kind: "two", a: out.a, b: out.b };
+}
