@@ -5525,3 +5525,152 @@ describe("33-02 switchDeck: the unpicked deck swaps in atomically, until Generat
     );
   });
 });
+
+describe("33-02 confirmClaim: the provenance front door — confirmation is the USER'S word only", () => {
+  /** Scene 1 carries a cited claim awaiting the user's word. The narration is deliberately
+   *  distinctive so the audit-redaction test can scan for it. */
+  async function seedClaim(t: T) {
+    const { planId } = await seedSceneDeck(t);
+    await t.run(async (ctx) => {
+      const plan = await ctx.db.get(planId);
+      const shots = (plan?.shots ?? []).map((s) =>
+        s.index === 1
+          ? {
+              ...s,
+              narration: "REVENUE-GREW-BY-40-PERCENT",
+              source: { docId: "doc123", title: "Q3 board deck" },
+              needsConfirmation: true,
+            }
+          : s,
+      );
+      await ctx.db.patch(planId, { shots });
+    });
+    return planId;
+  }
+
+  test("confirm writes confirmedAt from the authenticated context — args carry only planId + sceneIndex", async () => {
+    const t = harness();
+    const planId = await seedClaim(t);
+    await t.run(async (ctx) => ctx.db.patch(planId, { renderStatus: "rendered" }));
+
+    expect(await asA(t).mutation(api.media.confirmClaim, { planId, sceneIndex: 1 })).toEqual({
+      ok: true,
+    });
+
+    const plan = await planRowOf(t, planId);
+    expect(plan?.shots?.[1]?.confirmedAt).toBeTypeOf("number");
+    expect(plan?.shots?.[1]?.needsConfirmation).toBe(true); // the flag survives; the timestamp answers it
+    // NOT a structural deck edit, and NOT a content change: no staleness stamp, no render clear.
+    expect(plan?.shotsChangedAt).toBeUndefined();
+    expect(plan?.renderStatus).toBe("rendered");
+  });
+
+  test("the arg validator structurally cannot carry an actor or a timestamp", async () => {
+    const t = harness();
+    const planId = await seedClaim(t);
+    await expect(
+      asA(t).mutation(api.media.confirmClaim, { planId, sceneIndex: 1, confirmedAt: 5 } as never),
+    ).rejects.toThrow(/extra field/i);
+    await expect(
+      asA(t).mutation(api.media.confirmClaim, { planId, sceneIndex: 1, actor: "model" } as never),
+    ).rejects.toThrow(/extra field/i);
+    expect((await planRowOf(t, planId))?.shots?.[1]?.confirmedAt).toBeUndefined();
+  });
+
+  test("re-confirming is idempotent, a missing scene is no_block, an unclaimed scene is not_a_claim", async () => {
+    const t = harness();
+    const planId = await seedClaim(t);
+    expect(await asA(t).mutation(api.media.confirmClaim, { planId, sceneIndex: 1 })).toEqual({
+      ok: true,
+    });
+    expect(await asA(t).mutation(api.media.confirmClaim, { planId, sceneIndex: 1 })).toEqual({
+      ok: true,
+    });
+    expect((await planRowOf(t, planId))?.shots?.[1]?.confirmedAt).toBeTypeOf("number");
+    expect(await asA(t).mutation(api.media.confirmClaim, { planId, sceneIndex: 9 })).toEqual({
+      ok: false,
+      reason: "no_block",
+    });
+    // Scene 0 states no figure — confirming it would mint a confirmation with nothing to confirm.
+    expect(await asA(t).mutation(api.media.confirmClaim, { planId, sceneIndex: 0 })).toEqual({
+      ok: false,
+      reason: "not_a_claim",
+    });
+    expect((await planRowOf(t, planId))?.shots?.[0]?.confirmedAt).toBeUndefined();
+  });
+
+  test("ONE audit row, refs only — never the claim text, the title, or the narration", async () => {
+    const t = harness();
+    const planId = await seedClaim(t);
+    await asA(t).mutation(api.media.confirmClaim, { planId, sceneIndex: 1 });
+    const rows = await t.run(async (ctx) => await ctx.db.query("audit").collect());
+    const confirms = rows.filter((r) => r.eventType === "media.claim_confirmed");
+    expect(confirms).toHaveLength(1);
+    // The KEY SET is pinned sorted, so an added payload field fails here (the cash.ts idiom).
+    expect(Object.keys(confirms[0]?.payload ?? {}).sort()).toEqual(["planId", "sceneIndex"]);
+    expect(confirms[0]?.payload).toEqual({ planId, sceneIndex: 1 });
+    // §4: the serialized row must not carry content-plane text.
+    const serialized = JSON.stringify(confirms[0]);
+    expect(serialized).not.toContain("REVENUE-GREW-BY-40-PERCENT");
+    expect(serialized).not.toContain("Q3 board deck");
+  });
+
+  test("editing the confirmed scene's narration CLEARS its confirmation — a changed claim is unconfirmed", async () => {
+    const t = harness();
+    const planId = await seedClaim(t);
+    await asA(t).mutation(api.media.confirmClaim, { planId, sceneIndex: 1 });
+
+    expect(
+      await asA(t).mutation(api.media.editBlockNarration, {
+        planId,
+        blockIndex: 1,
+        narration: "REVENUE-GREW-BY-90-PERCENT",
+      }),
+    ).toEqual({ ok: true });
+
+    const shot = (await planRowOf(t, planId))?.shots?.[1];
+    expect(shot?.confirmedAt).toBeUndefined(); // the user vouched for the OLD words
+    expect(shot?.needsConfirmation).toBe(true); // …and the new words still state a figure
+    expect(shot?.source).toEqual({ docId: "doc123", title: "Q3 board deck" });
+  });
+
+  test("re-writing the SAME narration leaves the confirmation standing — nothing changed to unconfirm", async () => {
+    const t = harness();
+    const planId = await seedClaim(t);
+    await asA(t).mutation(api.media.confirmClaim, { planId, sceneIndex: 1 });
+    await asA(t).mutation(api.media.editBlockNarration, {
+      planId,
+      blockIndex: 1,
+      narration: "REVENUE-GREW-BY-40-PERCENT",
+    });
+    expect((await planRowOf(t, planId))?.shots?.[1]?.confirmedAt).toBeTypeOf("number");
+  });
+
+  test("reorder and delete leave a sibling's confirmation riding its OWN scene", async () => {
+    const t = harness();
+    const planId = await seedClaim(t);
+    await asA(t).mutation(api.media.confirmClaim, { planId, sceneIndex: 1 });
+
+    await asA(t).mutation(api.media.reorderBlocks, { planId, order: [3, 1, 0, 2] });
+    let confirmed = (await planRowOf(t, planId))?.shots?.find(
+      (s) => s.narration === "REVENUE-GREW-BY-40-PERCENT",
+    );
+    expect(confirmed?.confirmedAt).toBeTypeOf("number");
+    expect(confirmed?.source).toEqual({ docId: "doc123", title: "Q3 board deck" });
+
+    // Deleting a DIFFERENT scene renumbers through patchShots; the claim keeps its fields.
+    await asA(t).mutation(api.media.deleteBlock, { planId, blockIndex: 0 });
+    confirmed = (await planRowOf(t, planId))?.shots?.find(
+      (s) => s.narration === "REVENUE-GREW-BY-40-PERCENT",
+    );
+    expect(confirmed?.confirmedAt).toBeTypeOf("number");
+  });
+
+  test("tenant B's confirm THROWS", async () => {
+    const t = harness();
+    const planId = await seedClaim(t);
+    await expect(asB(t).mutation(api.media.confirmClaim, { planId, sceneIndex: 1 })).rejects.toThrow(
+      /plan not found/,
+    );
+  });
+});
