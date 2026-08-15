@@ -1,5 +1,26 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Note (scorecard-field-provenance plan, 2026-08-15 — COMMENT-ONLY, not a "Last verified" bump: the
+> registry mechanics below were not re-exercised by this plan.) **A skill-body EDIT in this repo has
+> NO RUNTIME EFFECT on its own.** Commit `e71a4ab` corrected
+> `packages/contracts/skills/cockpit-agent.md`'s `stageFinanceWrite`/CAC section — it used to say the
+> refusal is "about the STORE, not the figure" and that "the scorecard cannot record who supplied a
+> number"; both became false once this plan's `evaluations.fieldProvenance` landed, and the body now
+> says the refusal is "a deliberate hold, not a store limit" (see `docs/playbooks/cockpit.md`'s
+> consolidated scorecard-field-provenance note for the code-side half of the same correction). That
+> edit changed a file on disk only. The LIVE model body a real conversation runs is whatever version
+> is `status: "active"` in the `skills` table, and getting a body edit there is a TWO-step, owner-
+> gated process this plan performed NEITHER of: (1) `seedSkills` (internalMutation) inserts the new
+> body as the next `candidate` version — it does not touch what is active; (2) `activateSkill` /
+> `activateCandidate` (through the shared `activateSkillVersion`, the EVAL_GATE choke point further
+> down this file) is a SEPARATE, owner-triggered flip that requires a green eval run's evidence
+> before it will move the active pointer. **Anyone reading this repo's source and assuming the model
+> already argues from the corrected text is wrong until both steps run.** Check which body is
+> actually live before trusting a skill-file diff: read the `skills` table's active row for
+> `cockpit-agent`, not the `.md` file — see the version-collision precedent recorded elsewhere in
+> this project's memory (a plan-authored version pin can be wrong against the live DB, because
+> optimizer dry-run candidates and other lanes' seeds occupy versions too).
+>
 > Last verified: 2026-08-15 (20.1-02 live half — **the Drive body is ACTIVE ON PRODUCTION as v6,
 > certified there, 39/39 including the new fixture on its first try.** Gate run `df00ab21`,
 > $0.3365 exec + $0.1080 specialist = $0.4445, one retry (38b, as always). Owner activated with

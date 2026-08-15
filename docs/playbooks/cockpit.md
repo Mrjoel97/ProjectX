@@ -1,17 +1,39 @@
 # Playbook: Email Chat Cockpit
 
-> Note (scorecard-field-provenance Task 5, fix round 2 — not yet a "Last verified" bump; Task 6
-> closes the plan. COMMENT-ONLY, no behaviour change.) `llm.ts`'s `stageFinanceWrite` tool still
-> refuses `field: "cac"` (and its five scorecard-store siblings) before staging a plan — that gate,
-> and its user-facing refusal sentence, are UNCHANGED. Only the explanatory comment above the gate
-> (`llm.ts` ~2879) and its mirror in `cockpitTools.test.ts` (~2417) were corrected: both used to
-> claim the scorecard store "cannot carry provenance" and that `applyFinanceClaims` "refuses every
-> scorecard field unconditionally" — both false since Tasks 1/5 of this plan
-> (`evaluations.fieldProvenance`; `cash.ts` no longer produces `agent_cannot_update_figure`). The
-> TRUE reason the gate stands: it is a deliberate hold on what the model may propose in chat, not a
-> mirror of a store limit — a hand-seeded/legacy plan row, or a future writer of `financeClaims`,
-> still reaches `applyFinanceClaims` directly and applies. See `dashboard-pages.md` and
-> `business-evaluation.md` for the actual capability change this comment now describes correctly.
+> Note (scorecard-field-provenance, Task 5 fix round 2 + Task 6 close-out — CONSOLIDATED,
+> COMMENT-ONLY, no behaviour change from this note.) `llm.ts`'s `stageFinanceWrite` tool
+> (`buildCockpitTools`, the `stageFinanceWrite: tool({...})` handler starting ~`llm.ts:2798`) STILL
+> REFUSES `field: "cac"` (and its five scorecard-store siblings) before staging a plan — the actual
+> gate is the `if (cashInputSpec(u.field as CashInputField).store === "scorecard")` check at
+> `llm.ts:2890`, and both the gate and its user-facing refusal sentence are UNCHANGED by this plan.
+>
+> **This is deliberate, not an oversight.** The plan's applier (`cash.ts`'s `applyFinanceClaims` /
+> `writeFigureRow`) now ACCEPTS a scorecard-field claim with honest provenance — see
+> `docs/playbooks/dashboard-pages.md`'s consolidated entry. Widening what the MODEL may PROPOSE in
+> chat is a separate decision the store-level unblock does not make on its own, so the gate stands
+> pending its own review. **What lifting it would require:** deleting the `if` at `llm.ts:2890` (and
+> its mirrored refusal message) is a one-line change, but per the spec's own §4.4 caution — a
+> skill-body/tool-shape change has previously shifted which optional arguments the model emits and
+> broken an unrelated fixture — it needs an A/B run against the existing `cockpit-agent` eval
+> fixtures BEFORE activation, not just a code deletion. Nobody has proposed that A/B yet.
+>
+> **The DOCUMENT-derived path is unaffected by this gate — it does not go through this tool at
+> all.** A future vault-document writer (or a hand-seeded/legacy plan row) reaches
+> `applyFinanceClaims` directly, which this plan unblocked; only the CHAT tool's own proposal
+> surface is held back.
+>
+> The explanatory comment above the gate (`llm.ts` ~2879) and its mirror in `cockpitTools.test.ts`
+> (~2417) were corrected in the same round: both used to claim the scorecard store "cannot carry
+> provenance" and that `applyFinanceClaims` "refuses every scorecard field unconditionally" — both
+> false since Tasks 1/5 of this plan (`evaluations.fieldProvenance`; `cash.ts` no longer produces
+> `agent_cannot_update_figure`). See `dashboard-pages.md` and `business-evaluation.md` for the
+> actual capability change this comment now describes correctly, and
+> `docs/decisions/021-userprovided-fieldprovenance-split.md` for the decision record.
+>
+> **The `packages/contracts/skills/cockpit-agent.md` skill-body correction made alongside this note
+> (commit `e71a4ab`) has NO RUNTIME EFFECT until re-seeded and activated — this plan does neither.**
+> See `docs/playbooks/skill-registry.md` for why that matters and how to tell which body is actually
+> live.
 >
 > Last verified: 2026-08-15 (**the SOURCE card's grounding list folds; the OUTPUT card's
 > deliberately does NOT**) against `SourceCard`/`GroundedSources` in `cards.tsx`. Owner report: the
