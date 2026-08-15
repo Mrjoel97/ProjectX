@@ -1905,4 +1905,53 @@ export default defineSchema({
   })
     .index("by_tenant", ["tenantId"])
     .index("by_tenant_field", ["tenantId", "field"]),
+
+  // One row per SOURCE EVENT (design §3.1) — a document, a chat turn, a voice session — holding the
+  // N facts derived from it. Items are EMBEDDED, not a child table: one card is one row, so
+  // accept-all is one Convex mutation and all-or-none comes for free, the same property
+  // `applyCrmOperations` already relies on. Per-item override is an argument to the accept
+  // mutation, not a second table.
+  proposals: defineTable({
+    tenantId: v.string(),
+    createdAt: v.number(),
+    sourceKind: v.union(v.literal("vault_doc"), v.literal("chat"), v.literal("voice")),
+    /** vaultDocId | threadId | voiceSessionId — an id, never a title (§4). */
+    sourceRef: v.string(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("accepted"),
+      v.literal("discarded"),
+      v.literal("superseded"),
+    ),
+    items: v.array(
+      v.object({
+        target: v.object({
+          store: v.union(
+            v.literal("financeInputs"),
+            v.literal("scorecard"),
+            v.literal("profile"),
+            v.literal("contacts"),
+            v.literal("followUps"),
+          ),
+          field: v.string(),
+        }),
+        value: v.union(v.number(), v.string(), v.boolean()),
+        confidence: v.union(v.literal("high"), v.literal("medium"), v.literal("low")),
+        origin: v.union(v.literal("stated"), v.literal("observed")),
+        actor: v.union(v.literal("user"), v.literal("agent")),
+        /** Refs/ids/labels ONLY (§4) — code-constructed, never model-supplied. */
+        basis: v.string(),
+        /** When the fact was TRUE, never the write time. */
+        observedAt: v.number(),
+        sourceLocator: v.union(
+          v.object({ kind: v.literal("vault_doc"), vaultDocId: v.string() }),
+          v.object({ kind: v.literal("chat"), threadId: v.string() }),
+          v.object({ kind: v.literal("voice"), voiceSessionId: v.string() }),
+        ),
+      }),
+    ),
+  })
+    .index("by_tenant_status", ["tenantId", "status"])
+    // Re-ingesting the same document supersedes its prior pending proposal (§6.3).
+    .index("by_tenant_source", ["tenantId", "sourceKind", "sourceRef"]),
 });
