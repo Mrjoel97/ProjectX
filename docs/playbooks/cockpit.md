@@ -1,5 +1,41 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-15 (**the SOURCE card's grounding list folds; the OUTPUT card's
+> deliberately does NOT**) against `SourceCard`/`GroundedSources` in `cards.tsx`. Owner report: the
+> link list "is just clouding the workspace". Grounding is PROVENANCE — it answers "what did you
+> read?" when asked, and most turns are never asked — so the count in the card header is the part
+> that always matters and the titles are the audit trail behind it. `GroundedSources` renders
+> inline at or below `SOURCE_INLINE_CAP` (3) and folds into a native `<details>` above it, with the
+> real number in the summary so the fold never hides HOW MUCH was hidden. Native `<details>`, not a
+> `useState` toggle: keyboard operable, screen-reader announced and Ctrl+F-findable for free
+> (ponytail rung 4). **THE CAP IS NOT APPLIED TO THE OUTPUT CARD, and that is a decision, not an
+> oversight:** that list looks identical and is not the same thing — its `#index` ordering IS the
+> addressing grammar `createDocument`'s replace flow depends on ("make the second one shorter"), so
+> folding it would hide a control rather than noise. **THE INVARIANT IS THAT COLLAPSING NEVER DROPS
+> A SOURCE** — every title stays in the markup and the disclosure only changes visibility. A
+> `.slice(0, CAP)` would silently destroy the provenance trail the card exists for, and would look
+> correct in every count-based assertion. That is why the check renders to markup
+> (`renderToStaticMarkup`, the ApprovalsStateNotice/ImportDone precedent) instead of asserting a
+> pure function. **Mutation-proven, and the proof is the interesting part:** introducing that exact
+> slice left FOUR of the five tests green and reddened only *"EVERY source survives the fold"* with
+> `expected '<details …' to contain 'Source document 4'`. **MEASURED:** workspace suite 86/86 (5
+> new), web `tsc --noEmit` exit 0, biome clean. That typecheck also caught a real miss —
+> `app/vaultTokenScope.test.ts`, committed one commit earlier, did not compile under strict null
+> checks (a regex group is `string | undefined`, and a truthiness test on the match array does not
+> narrow it); fixed in the same pass. **NOT VERIFIED IN A BROWSER:** no thread in this deployment
+> grounds against more than three documents, so the folded state has never been painted live — the
+> render test is the only proof of the `> CAP` branch.
+
+> Last verified: 2026-08-15 (20.1-02 offline half — **the body learns Drive, and learns its
+> boundary.** New `## Finding things in the user's Drive` section: 'where is X' is `findInDrive`
+> always (never a memory answer); `listDriveFolders` opens ONE named level and is not a way to
+> hunt — the section exists because prod v2 was observed burning full 8-step budgets walking
+> folders on an INBOX question, so it also states Drive is for document questions only; import is
+> the USER'S click in the Vault Drive panel and the agent can never claim ingestion; connection
+> problems relay the tool's own sentence verbatim. Owed fixture: 39-drive-read
+> (`driveReadToolCount`, floor — agent-runtime.md carries the observable). Candidate unseeded at
+> this entry.)
+>
 > Last verified: 2026-08-15 (ACTN-02 — **the CALENDAR card: the agent's calendar reads now leave a
 > mark on the canvas**) against `checkAvailability` + the new `calendarViews` content plane. Owner
 > report, verbatim: "it just replied with a message … no brief card in the workspace." Diagnosis:

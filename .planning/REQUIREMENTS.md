@@ -113,6 +113,13 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 ### Private Beta
 
 - [ ] **BETA-01**: New users can sign up only with a valid invite code (Convex Auth)
+  — **KNOWINGLY UNMET IN LIVE PRODUCTION as of 2026-08-15.** `www.pikar-ai.com` is deployed with
+  signup fully OPEN; anyone can sign in with Google, get a tenant, and spend the owner's
+  `OPENAI_API_KEY`. Owner was shown the exposure twice and chose to ship and stay open. See
+  `docs/decisions/020-production-opened-without-an-admission-gate.md` — it records the accepted
+  risk AND the implementation finding: the gate belongs in `requireScope`
+  (`packages/backend/convex/lib/functions.ts`), because `tenantId` IS the auth user id and there
+  is no tenant-creation event to guard.
 - [ ] **BETA-02**: All data — requests, vault, cache, audit, telemetry — is isolated per user across every table and index
 - [ ] **BETA-03**: A new user reaches their first delivered result within minutes via a guided conversational onboarding
 - [x] **BETA-04**: User sees live pipeline status and their review queue update in real time (Convex subscriptions)
