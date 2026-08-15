@@ -46,3 +46,58 @@ describe("the target registry is closed and total", () => {
     expect(proposalTarget("scorecard", "notAField")).toBeNull();
   });
 });
+
+import { classifyProposal, sweepable } from "./proposal";
+
+const fact = {
+  target: { store: "scorecard" as const, field: "cac" },
+  value: 340,
+  confidence: "high" as const,
+  origin: "stated" as const,
+  actor: "agent" as const,
+  basis: "vaultDoc:abc123",
+  observedAt: 1_700_000_000_000,
+  sourceLocator: { kind: "vault_doc" as const, vaultDocId: "abc123" },
+};
+
+describe("what may be swept into accept-all", () => {
+  test("a fact filling a blank is sweepable", () => {
+    expect(classifyProposal(fact, null)).toBe("blank");
+    expect(sweepable("blank")).toBe(true);
+  });
+
+  test("overwriting a value the USER stated is a contradiction, never swept", () => {
+    const current = { value: 150, statedByUser: true, statedAt: 1_600_000_000_000 };
+    expect(classifyProposal(fact, current)).toBe("overwrite");
+    expect(sweepable("overwrite")).toBe(false);
+  });
+
+  test("overwriting an AGENT-written value is NOT a contradiction", () => {
+    // The owner's word is what accept-all must never quietly replace. A prior agent figure
+    // carries no such authority, so a newer one may sweep.
+    const current = { value: 150, statedByUser: false, statedAt: 1_600_000_000_000 };
+    expect(classifyProposal(fact, current)).toBe("blank");
+  });
+
+  test("a fact older than the stored figure is stale, never swept", () => {
+    const current = { value: 150, statedByUser: false, statedAt: 1_800_000_000_000 };
+    expect(classifyProposal(fact, current)).toBe("stale");
+    expect(sweepable("stale")).toBe(false);
+  });
+
+  test("staleness is checked before the overwrite rule, so an old fact over a user value is stale", () => {
+    const current = { value: 150, statedByUser: true, statedAt: 1_800_000_000_000 };
+    expect(classifyProposal(fact, current)).toBe("stale");
+  });
+
+  test("an unknown stored time does not make a fact stale", () => {
+    // A legacy row with no recorded time must not silently block every new fact.
+    const current = { value: 150, statedByUser: false, statedAt: null };
+    expect(classifyProposal(fact, current)).toBe("blank");
+  });
+
+  test("an equal timestamp is not stale — only strictly older is", () => {
+    const current = { value: 150, statedByUser: false, statedAt: fact.observedAt };
+    expect(classifyProposal(fact, current)).toBe("blank");
+  });
+});

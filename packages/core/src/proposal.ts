@@ -88,3 +88,36 @@ const BY_KEY = new Map(PROPOSAL_TARGETS.map((t) => [`${t.store}:${t.field}`, t])
  *  not an exceptional condition, so this never throws. */
 export const proposalTarget = (store: string, field: string): ProposalTarget | null =>
   BY_KEY.get(`${store}:${field}`) ?? null;
+
+/** What a store already holds for a target, in the ONE shape both predicates need. The applier
+ *  reads it per store; the predicates never touch a database. */
+export type CurrentValue = {
+  readonly value: number | string | boolean;
+  /** True only when the OWNER supplied it. An agent-written value is false — see `classifyProposal`. */
+  readonly statedByUser: boolean;
+  /** When the stored figure was TRUE. `null` for a legacy row with no recorded time. */
+  readonly statedAt: number | null;
+};
+
+/**
+ * `blank`     — nothing there, or what is there carries no owner authority. Sweepable.
+ * `overwrite` — would replace something the OWNER stated. Needs its own deliberate click.
+ * `stale`     — the fact is older than what is stored. Needs its own deliberate click.
+ */
+export type ProposalGuard = "blank" | "overwrite" | "stale";
+
+export function classifyProposal(fact: ProposedFact, current: CurrentValue | null): ProposalGuard {
+  if (current === null) return "blank";
+  // Staleness FIRST. An old fact over an owner-stated value is both stale and an overwrite, and
+  // "stale" is the more informative thing to tell the user — it names why the newer number wins.
+  // An unknown stored time (`null`) is NOT treated as stale: a legacy row with no recorded time
+  // would otherwise block every new fact forever, which is the unsafe direction.
+  if (current.statedAt !== null && fact.observedAt < current.statedAt) return "stale";
+  // Only the OWNER's word is protected from a one-click sweep. Replacing a previous agent figure
+  // with a newer one is ordinary progress, not a contradiction.
+  if (current.statedByUser) return "overwrite";
+  return "blank";
+}
+
+/** Accept-all covers blanks ONLY (design §6.1). Both other guards need their own click. */
+export const sweepable = (guard: ProposalGuard): boolean => guard === "blank";
