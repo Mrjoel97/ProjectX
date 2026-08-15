@@ -18,6 +18,7 @@ import {
   narrationChars,
   parseArtDirection,
   parseBlockDeck,
+  parseBrief,
   parseSceneDeck,
   parseScript,
   SHOT_TYPES,
@@ -837,5 +838,78 @@ describe("parseSceneDeck — shape and tolerance", () => {
     // The section terminates at SCENE DECK, so `avoid` cannot come back carrying table rows.
     expect(parseArtDirection(body)).toBeNull(); // incomplete art direction, NOT a swallowed deck
     expect(parseSceneDeck(body).ok).toBe(true);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+// THE PHASE-33 PARSE SURFACES (33-01)
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+
+describe("parseBrief — guided intake (33-01)", () => {
+  const BRIEF = [
+    "## 1. BRIEF",
+    "",
+    "Topic: Inbox triage, and what it costs a founder",
+    "Duration: 30s",
+    "Audience: Solo founders drowning in email (defaulted)",
+    "Tone: Quietly confident (Defaulted)",
+    "Brand voice: Plain words, short sentences",
+    "",
+  ].join("\n");
+
+  it("round-trips a well-formed BRIEF, stripping the defaulted markers into the array", () => {
+    const b = parseBrief(BRIEF);
+    expect(b).not.toBeNull();
+    expect(b?.topic).toBe("Inbox triage, and what it costs a founder");
+    expect(b?.durationSeconds).toBe(30);
+    // The markers are STRIPPED from the values — a chip must never render "(defaulted)" as copy —
+    // and recorded by FIELD NAME, case-insensitively, so the canvas knows which chips to badge.
+    expect(b?.audience).toBe("Solo founders drowning in email");
+    expect(b?.tone).toBe("Quietly confident");
+    expect(b?.brandVoice).toBe("Plain words, short sentences");
+    expect(b?.defaulted).toEqual(["audience", "tone"]);
+  });
+
+  it("accepts a bare-number duration and a defaulted one — the preset can itself default", () => {
+    const bare = parseBrief("BRIEF\nTopic: A topic\nDuration: 60");
+    expect(bare?.durationSeconds).toBe(60);
+    expect(bare?.defaulted).toEqual([]);
+
+    const marked = parseBrief("BRIEF\nTopic: A topic\nDuration: 15s (defaulted)");
+    expect(marked?.durationSeconds).toBe(15);
+    expect(marked?.defaulted).toEqual(["duration"]);
+  });
+
+  it("omits the optional fields the specialist did not write, without inventing defaults", () => {
+    const b = parseBrief("BRIEF\nTopic: A topic\nDuration: 30s");
+    expect(b).not.toBeNull();
+    expect(b?.audience).toBeUndefined();
+    expect(b?.tone).toBeUndefined();
+    expect(b?.brandVoice).toBeUndefined();
+    expect(b?.defaulted).toEqual([]);
+  });
+
+  it("is NULL when the section is absent — a v2 body parses exactly as before", () => {
+    expect(parseBrief(sceneDeck(SCENES))).toBeNull();
+    expect(parseBrief("just prose, no headings")).toBeNull();
+  });
+
+  it("is NULL on an empty topic — a brief with nothing captured is no brief", () => {
+    expect(parseBrief("BRIEF\nTopic:\nDuration: 30s")).toBeNull();
+  });
+
+  it("is NULL on a duration off the 15/30/60 presets — never free entry, never a guess", () => {
+    for (const bad of ["45s", "20", "three", ""]) {
+      expect(parseBrief(`BRIEF\nTopic: A topic\nDuration: ${bad}`)).toBeNull();
+    }
+    expect(parseBrief("BRIEF\nTopic: A topic")).toBeNull(); // absent line, same answer
+  });
+
+  it("terminates at the next section — a BRIEF above a deck reads both, brief fields clean", () => {
+    const body = `BRIEF\nTopic: A topic\nDuration: 30s\n\n${sceneDeck(SCENES)}`;
+    const b = parseBrief(body);
+    expect(b?.topic).toBe("A topic");
+    expect(b?.brandVoice).toBeUndefined(); // nothing leaked in from the deck below
+    expect(parseSceneDeck(body).ok).toBe(true); // and the deck still parses beside it
   });
 });
