@@ -1390,3 +1390,28 @@ export function proposalFailureCard(
       : refusal.reason,
   };
 }
+
+/**
+ * THE SALVAGE, SAID OUT LOUD (33-13, disclosing 33-11).
+ *
+ * 33-11 stopped one refusing variation from killing its good sibling — the survivor is proposed
+ * ALONE and `plans.lostVariation` records which sibling was lost and why. That row exists to be
+ * READ. A user who was promised two storyboards and silently handed one has been told something
+ * untrue by omission, and would never know to ask for the other.
+ *
+ * The surviving letter is DERIVED (`a` <-> `b`), not stored, because the variation plane is
+ * exactly two decks by construction — `parseVariations` has no third letter to produce. Naming
+ * both is the point: a sentence that only names the loss leaves the reader guessing which of the
+ * two is on their screen.
+ */
+export function salvageNote(
+  lost: { variation: string; reason: string } | null | undefined,
+): string | null {
+  if (!lost) return null;
+  const lostLetter = lost.variation.toUpperCase() === "A" ? "A" : "B";
+  const keptLetter = lostLetter === "A" ? "B" : "A";
+  // Always the SCENE contract: variations exist only under it (`parseVariations` runs
+  // `parseSceneDeck` on each slice and nothing else).
+  const clause = deckRefusalClause("scene", lost.reason);
+  return `Only one of the two storyboards could be built: variation ${keptLetter} is the one below, and variation ${lostLetter} fell through because ${clause}. Ask me to redo the variations if you want the choice back.`;
+}

@@ -35,6 +35,7 @@ import {
   RETRY_PROPOSAL_MESSAGE,
   refusalText,
   ribbonShares,
+  salvageNote,
   type SummaryShot,
   type TrackerScene,
   trackerView,
@@ -1264,5 +1265,62 @@ describe("the canvas mounts the proposal failure card at BOTH of its mount point
     expect(canvas).toContain("FailureCardBlock");
     // No thread, no send: sending without one MINTS A NEW THREAD (33-07's rule, verbatim).
     expect(canvas).toContain("!threadId");
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+// 33-13 TASK 2 — THE SALVAGE IS DISCLOSED
+//
+// 33-11 stopped one refusing variation from killing its good sibling: the survivor is proposed
+// ALONE, and `plans.lostVariation` records which sibling was lost and why. That row exists so the
+// canvas can SAY so. A user who was promised a choice of two and silently handed one has been
+// told something untrue by omission — and they would never know to ask for the other.
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+describe("salvageNote — one of two, said out loud", () => {
+  test("names BOTH letters: the one you are looking at and the one that was lost", () => {
+    const note = salvageNote({ variation: "b", reason: "illegal_generated_duration" });
+    expect(note).toContain("variation A");
+    expect(note).toContain("variation B");
+    // The one BELOW is the survivor; the one named as broken is the lost sibling. Order matters:
+    // a sentence that swaps them tells the user the storyboard they can see is the broken one.
+    expect(note?.indexOf("variation A")).toBeLessThan(note?.indexOf("variation B") as number);
+    expect(note).toContain("a generated scene asked for a length the video model cannot produce");
+  });
+
+  test("the surviving letter is the OTHER one — a lost A means B is what's on screen", () => {
+    const note = salvageNote({ variation: "a", reason: "no_deck" });
+    expect(note?.indexOf("variation B")).toBeLessThan(note?.indexOf("variation A") as number);
+    expect(note).toContain("it never wrote a scene deck");
+  });
+
+  test("it says only ONE could be built, in words, without a code", () => {
+    const note = salvageNote({ variation: "b", reason: "duration_mismatch" });
+    expect(note).toMatch(/only one/i);
+    expect(note).not.toContain("duration_mismatch");
+  });
+
+  test("an unknown reason still discloses the salvage — the disclosure is not conditional on words", () => {
+    const note = salvageNote({ variation: "b", reason: "sideways" });
+    expect(note).toContain(GENERIC_DECK_REFUSAL);
+    expect(note).toMatch(/only one/i);
+  });
+
+  test("no salvage, no sentence — an ordinary one- or two-deck proposal says nothing", () => {
+    expect(salvageNote(null)).toBeNull();
+    expect(salvageNote(undefined)).toBeNull();
+  });
+
+  test("the canvas renders it UNCONDITIONALLY, not inside a <details>", () => {
+    const reel = source.slice(
+      source.indexOf("function ReelCanvas("),
+      source.indexOf("/** `media.editBrief`'s patch"),
+    );
+    expect(reel).toContain("salvageNote(");
+    // Above the storyboard and outside every disclosure widget on this surface.
+    expect(reel).toContain("ParserNotes");
+    const notes = source.slice(source.indexOf("function ParserNotes("));
+    const block = notes.slice(0, notes.indexOf("\nfunction "));
+    expect(block).not.toContain("<details");
+    expect(block).not.toContain("<summary");
   });
 });

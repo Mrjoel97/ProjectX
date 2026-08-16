@@ -1,5 +1,24 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-08-16 (33-13 task 2 — **a salvaged proposal says so, unprompted and
+> unexpanded.** 33-11's `plans.lostVariation` finally has a reader.)
+>
+> `salvageNote(plan.lostVariation)` renders in `ParserNotes`, directly under the brief and above
+> everything else — **not** inside a `<details>`, because a disclosure a person has to open is one
+> most people never read, and this one changes what the storyboard below IS. The sentence names
+> BOTH letters: the survivor ("variation A is the one below") and the sibling that fell through,
+> with the reason in words from the SAME `SCENE_REFUSAL_WHY` table the refusal card and the memo
+> body read. The surviving letter is DERIVED (`a` <-> `b`) rather than stored — the variation plane
+> is exactly two decks by construction (`parseVariations` has no third letter).
+>
+> **Why both letters.** A user promised a choice of two and silently handed one has been told
+> something untrue by omission and would never know to ask for the other; a note that names only
+> the loss leaves them guessing which deck is on their screen.
+>
+> Verified: apps/web 116 canvas tests (110 -> 116), `tsc --noEmit` clean. **Mutation check:**
+> transposing the kept and lost letters in the sentence (both letters still present, each under the
+> other's role) reddened 2 tests; reverted.
+
 > Last verified: 2026-08-16 (33-13 task 1 — **a proposal refusal is a FAILURE CARD now, not a memo
 > with Approve/Save.** The third and last of the three fixes for the dead end the owner hit twice.)
 >

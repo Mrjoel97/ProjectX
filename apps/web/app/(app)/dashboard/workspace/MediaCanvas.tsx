@@ -44,6 +44,7 @@ import {
   RETRY_PROPOSAL_MESSAGE,
   refusalText,
   ribbonShares,
+  salvageNote,
   type SceneCitation,
   STALE_CLIP_NOTE,
   STALE_VOICE_NOTE,
@@ -116,6 +117,9 @@ type MediaPlan = {
   shots?: SummaryShot[] | null;
   altShots?: SummaryShot[] | null;
   deckLockedAt?: number | null;
+  /** 33-11 / 33-13: which sibling variation could not be built, and why. Present ONLY on a
+   *  salvaged proposal, and the canvas is obliged to say so — see `ParserNotes`. */
+  lostVariation?: { variation: string; reason: string } | null;
 };
 type ArtDirection = {
   palette: string[];
@@ -418,6 +422,10 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
           visible before a person spends time judging the storyboard that came out of it. */}
       <BriefRow planId={planId} threadId={threadId} chips={chips} locked={locked} stale={stale} />
 
+      {/* WHAT THE PARSER DID (33-13). Between the ask and the answer, because it changes what
+          the answer IS — and never behind a disclosure widget. */}
+      <ParserNotes salvage={salvageNote(plan.lostVariation)} />
+
       {/* THE TWO PROPOSALS, side by side — between the ask and the answer, and gone after
           Generate. */}
       <VariationCompare planId={planId} view={variations} noun={noun} />
@@ -476,6 +484,39 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
           />
         ))}
       </div>
+    </div>
+  );
+}
+
+/**
+ * WHAT THE PARSER DID TO THIS PROPOSAL (33-13) — the salvage, in the user's words.
+ *
+ * It sits directly under the brief and above everything else, and it is NOT inside a `<details>`:
+ * both facts here change what the storyboard below actually IS, and a disclosure a person has to
+ * open is one most people never read. That is the whole difference between disclosed and silent.
+ *
+ * `aria-live="polite"` for the same reason the failure cards carry it: a proposal lands reactively
+ * under a user who may already be looking at the canvas.
+ */
+function ParserNotes({ salvage }: { salvage: string | null }) {
+  if (salvage === null) return null;
+  return (
+    <div
+      aria-live="polite"
+      data-testid="media-parser-notes"
+      style={{
+        border: "1px solid var(--rule)",
+        borderRadius: "0.55rem",
+        background: "var(--card)",
+        padding: "0.6rem 0.7rem",
+        margin: "0.6rem 0 0",
+        display: "grid",
+        gap: "0.3rem",
+      }}
+    >
+      {/* --held-text, not --held: amber on paper fails WCAG as text (BRAND §6), and the words
+          carry the meaning either way — nothing here is signalled by colour alone. */}
+      <p style={{ ...dimText, color: "var(--held-text)", fontWeight: 600 }}>{salvage}</p>
     </div>
   );
 }
