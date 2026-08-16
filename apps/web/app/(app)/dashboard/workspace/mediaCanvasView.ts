@@ -383,7 +383,9 @@ export function trackerView(
   const noun = scenes.some((s) => s.visual !== null) ? "scene" : "block";
 
   const pictureStates = scenes.filter((s) => buysPicture(s.visual)).map((s) => faceState(s.clip));
-  const voiceStates = scenes.filter((s) => s.narration.trim() !== "").map((s) => faceState(s.voice));
+  const voiceStates = scenes
+    .filter((s) => s.narration.trim() !== "")
+    .map((s) => faceState(s.voice));
 
   const generate = rollUp(pictureStates);
   const voice = rollUp(voiceStates);
@@ -541,6 +543,19 @@ export function estimateView(
   };
 }
 
+/** WHAT IS BEING PRICED, in the deck's own terms. A scene deck has no single clip length — that
+ *  arithmetic is what 20.2 removed — so it is priced as a reel of N scenes, and only a block deck
+ *  quotes seconds-per-block. It lives here rather than in the component for the module's own rule:
+ *  a sentence that picks between two shapes is a decision, and decisions are testable. */
+export const pricedAsLine = (
+  targetSeconds: number | null,
+  sceneCount: number,
+  clipSeconds: number,
+): string =>
+  targetSeconds === null
+    ? `Priced at OpenAI Sora 2, 720p, ${clipSeconds} s per block`
+    : `A ${targetSeconds}-second reel of ${sceneCount} scenes, priced per scene`;
+
 /** What the hero slot holds. A discriminated union rather than five booleans, because "playing the
  *  old final AND showing the tracker" is a real state and two booleans would also permit three that
  *  are not. */
@@ -617,7 +632,10 @@ export function heroState(
   const landed = scenes.some(
     (s) => s.clip?.status === "succeeded" || s.voice?.status === "succeeded",
   );
-  return { mode: "tracker", reason: landed && status === "pending" ? "out_of_date" : "never_built" };
+  return {
+    mode: "tracker",
+    reason: landed && status === "pending" ? "out_of_date" : "never_built",
+  };
 }
 
 /** Is this document usable as an `uploaded_video` scene's source? The SAME narrowing the render

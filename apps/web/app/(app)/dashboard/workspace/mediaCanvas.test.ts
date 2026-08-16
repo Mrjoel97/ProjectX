@@ -6,10 +6,11 @@ import {
   estimateView,
   failureText,
   heroState,
-  KIND_COST_NOTE,
   isPickableVideo,
+  KIND_COST_NOTE,
   KIND_LABEL,
   pictureLine,
+  pricedAsLine,
   refusalText,
   ribbonShares,
   type TrackerScene,
@@ -264,16 +265,19 @@ describe("33-06: the estimate is ONE headline, and it is jobEstimate's own numbe
   test("an estimate with NO lines cannot be generated — there is nothing to buy", () => {
     expect(estimateView({ ...est, lines: [] }, o).generateDisabled).toBe(true);
   });
+
+  test("what is being priced is said in the DECK's terms, never the other deck's", () => {
+    expect(pricedAsLine(30, 4, 4)).toBe("A 30-second reel of 4 scenes, priced per scene");
+    expect(pricedAsLine(30, 4, 4)).not.toMatch(/per block/);
+    expect(pricedAsLine(null, 4, 8)).toMatch(/8 s per block/);
+  });
 });
 
 describe("33-06: every new refusal code is a DISTINCT lever, in a sentence", () => {
   const base = { capCents: 500, totalCents: 812, maxChars: 140, noun: "scene" } as const;
-  const sentences = [
-    "unconfirmed_claims",
-    "deck_locked",
-    "no_alternate",
-    "nothing_to_render",
-  ].map((reason) => refusalText({ reason, blockIndex: 1 }, base));
+  const sentences = ["unconfirmed_claims", "deck_locked", "no_alternate", "nothing_to_render"].map(
+    (reason) => refusalText({ reason, blockIndex: 1 }, base),
+  );
 
   test("unconfirmed claims send the user to the confirmation badge, not to a rewrite", () => {
     expect(sentences[0]).toMatch(/[Cc]onfirm/);
@@ -504,7 +508,9 @@ describe("the hero slot holds ONE thing at a time, and never jumps the layout", 
       noUrl,
     );
     expect(hero.mode).toBe("held");
-    expect(hero.mode === "held" && hero.sentence).toMatch(/never produced its picture or its voice/);
+    expect(hero.mode === "held" && hero.sentence).toMatch(
+      /never produced its picture or its voice/,
+    );
   });
 
   test("every other failure is a FAILURE, and it says what happened", () => {
@@ -546,13 +552,21 @@ describe("the vault picker offers only what the render will accept", () => {
     // The saved-reel shape: `mimeType` markdown (the searchable transcript row),
     // `storedMimeType` the mp4 bytes. `(storedMimeType ?? mimeType)` is what the render serves.
     expect(
-      isPickableVideo({ mimeType: "text/markdown", storedMimeType: "video/mp4", status: "processing" }),
+      isPickableVideo({
+        mimeType: "text/markdown",
+        storedMimeType: "video/mp4",
+        status: "processing",
+      }),
     ).toBe(true);
     // A markdown doc with NO storedMimeType is still just a document — never offered.
     expect(isPickableVideo({ mimeType: "text/markdown", status: "ready" })).toBe(false);
     // A two-mime doc whose bytes are NOT video (the createDocument PDF shape) stays excluded.
     expect(
-      isPickableVideo({ mimeType: "text/markdown", storedMimeType: "application/pdf", status: "ready" }),
+      isPickableVideo({
+        mimeType: "text/markdown",
+        storedMimeType: "application/pdf",
+        status: "ready",
+      }),
     ).toBe(false);
   });
 });

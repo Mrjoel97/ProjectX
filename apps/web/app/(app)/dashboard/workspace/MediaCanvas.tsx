@@ -7,15 +7,24 @@ import { briefingSheet, capsTeal, snippetSheet, traceText, typeBadge } from "./c
 import {
   asVisualKind,
   durationLabel,
-  failureText,
+  type EstimateView,
+  estimateView,
+  type HeroState,
+  heroState,
   isPickableVideo,
+  type JobEstimate,
   KIND_COST_NOTE,
   KIND_LABEL,
   pictureLine,
-  refusalText,
+  pricedAsLine,
   ribbonShares,
   STALE_CLIP_NOTE,
   STALE_VOICE_NOTE,
+  type StageState,
+  type TrackerScene,
+  type TrackerView,
+  trackerView,
+  usd,
   VERDICT_COPY,
   type VisualKind,
   voiceLine,
@@ -61,6 +70,12 @@ type MediaPlan = {
   /** 20.2: the DECLARED reel length. Present on a scene deck and absent on a block one, which is
    *  what makes it the discriminator the estimate line reads. */
   targetDurationSeconds?: number | null;
+  /** 33-06, the tracker's last two inputs. The render plane arrives through `media.reel` (which is
+   *  also where the url guarantee lives), but the CAPTION plane and the retry stamp are on the plan
+   *  row itself — `plans.byThread` returns the whole document, so they are already here. Both are
+   *  reactive for the same reason everything else on this surface is. */
+  captionStatus?: string | null;
+  renderRetriedAt?: number | null;
 };
 type ArtDirection = {
   palette: string[];
@@ -73,8 +88,6 @@ type ArtDirection = {
   references: string[];
   avoid: string;
 };
-
-const money = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
 /**
  * THE TIMELINE RIBBON (20.2 wave 6) — the reel's shape, at a glance.
@@ -155,15 +168,13 @@ function TimelineRibbon({
   );
 }
 
-export function MediaCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) {
-  return plan.mediaMode === "image" ? (
-    <ImageCanvas plan={plan} />
-  ) : (
-    <ReelCanvas plan={plan} threadId={threadId} />
-  );
+/** `threadId` is accepted and deliberately unused: it is part of the card contract every plan-kind
+ *  branch in `cards.tsx` is called with, and the reel canvas self-queries from `plan._id`. */
+export function MediaCanvas({ plan }: { plan: MediaPlan; threadId?: string }) {
+  return plan.mediaMode === "image" ? <ImageCanvas plan={plan} /> : <ReelCanvas plan={plan} />;
 }
 
-function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) {
+function ReelCanvas({ plan }: { plan: MediaPlan }) {
   const planId = plan._id as never;
   const blocks = useQuery(api.media.byPlan, { planId });
   const assets = useQuery(api.media.assetUrls, { planId });
@@ -190,7 +201,6 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
 
   const clipSeconds = plan.clipSeconds ?? 4;
   const art = plan.artDirection ?? null;
-  const landed = (assets ?? []).filter((a) => a.url !== null).length;
   // `visual` crosses the wire as a string (the closed set lives in `@pikar/core`, not in Convex's
   // validators), so it is narrowed ONCE here and every consumer below sees the union or `null`.
   const deck = (blocks ?? []).map((b) => ({ ...b, visual: asVisualKind(b.visual) }));
@@ -200,6 +210,37 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
   // eight sentences each guessing.
   const isScene = deck.some((b) => b.visual !== null);
   const noun = isScene ? ("scene" as const) : ("block" as const);
+
+  // ── THE THREE DERIVATIONS (33-06) ──────────────────────────────────────────────────────────
+  // Everything the hero, the tracker and the cost control render is decided in `mediaCanvasView`
+  // and called here. This file gets the JSX and the event wiring, and nothing else: the runner in
+  // `apps/web` is DOM-less, so a decision left in a `.tsx` can only ever be asserted as source
+  // text — the shape this repo has a named defect class for.
+  const trackerScenes: TrackerScene[] = deck.map((b) => ({
+    blockIndex: b.blockIndex,
+    visual: b.visual,
+    narration: b.narration,
+    clip: b.clip,
+    voice: b.voice,
+  }));
+  const tracker = trackerView(
+    trackerScenes,
+    reel?.status,
+    plan.captionStatus,
+    plan.renderRetriedAt,
+  );
+  const hero = heroState(
+    { renderStatus: reel?.status ?? null, renderReason: reel?.reason ?? null },
+    trackerScenes,
+    reel?.url,
+  );
+  // The ceiling a refusal quotes. On a scene deck it is the TAKE's window and varies per scene, so
+  // the estimate's own `chars` and the tile's counter are the precise numbers; this is the fallback
+  // for a block deck, where every window is the same size.
+  const cost = estimateView(estimate as JobEstimate | undefined, {
+    noun,
+    maxChars: Math.round(clipSeconds * 14),
+  });
 
   // The vault list is fetched ONCE for the deck and only when a scene actually needs it — an
   // `uploaded_video` is the only kind whose picture comes from a document. `"skip"` keeps a deck
@@ -216,11 +257,23 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
       style={{ ...briefingSheet, flexShrink: 0, padding: "1.15rem 1.25rem" }}
       data-testid="media-canvas"
     >
-      {art && <ArtDirectionHeader art={art} />}
+      {/* HERO FIRST, and it is the same slot for the whole lifecycle — tracker, then reel, then
+          both during a regenerate. Nothing below it moves when the render lands. */}
+      <ReelHero hero={hero} tracker={tracker} reel={reel} noun={noun} />
 
-      <ReelRegion reel={reel} landedAssets={landed} noun={noun} />
+      <GenerateBar
+        view={cost}
+        pricedAs={pricedAsLine(plan.targetDurationSeconds ?? null, deck.length, clipSeconds)}
+        busy={busy}
+        note={note}
+        onGenerate={() => void generate()}
+      />
 
+      {/* THE STRIP: the ribbon, the art direction and the per-scene tiles, in that order. Every
+          affordance the tiles carried is unchanged — they moved, they did not change. */}
       {isScene && deck.length > 0 && <TimelineRibbon scenes={deck} />}
+
+      {art && <ArtDirectionHeader art={art} />}
 
       <p style={{ ...capsTeal, margin: "1.4rem 0 0.7rem" }}>Storyboard</p>
       {blocks === undefined && <p style={dimText}>Loading the deck…</p>}
@@ -248,18 +301,6 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
           />
         ))}
       </div>
-
-      <EstimateGate
-        estimate={estimate}
-        busy={busy}
-        note={note}
-        onGenerate={() => void generate()}
-        noun={noun}
-        clipSeconds={clipSeconds}
-        targetSeconds={plan.targetDurationSeconds ?? null}
-        sceneCount={deck.length}
-        threadId={threadId}
-      />
     </div>
   );
 }
@@ -380,7 +421,7 @@ function ImageCanvas({ plan }: { plan: MediaPlan }) {
               1 image · {estimate.width}×{estimate.height} · {estimate.model}
             </p>
             <p style={{ ...dimText, marginTop: "0.25rem" }}>
-              Total {money(estimate.totalCents)} · {money(estimate.remainingCents)} of today's media
+              Total {usd(estimate.totalCents)} · {usd(estimate.remainingCents)} of today's media
               budget remains.
             </p>
           </>
@@ -488,100 +529,213 @@ function ArtDirectionHeader({ art }: { art: ArtDirection }) {
   );
 }
 
+/** A stage's state, in ink. Colour is the SECOND signal, never the only one (BRAND §6): every mark
+ *  below is a word as well, and `--teal-600` is a fill colour rather than a text colour at 2.9:1 —
+ *  an active stage takes `--teal-900`. */
+const STAGE_TONE: Record<StageState, string> = {
+  pending: "var(--ink-soft)",
+  active: "var(--teal-900)",
+  done: "var(--released)",
+  failed: "var(--held-text)",
+  skipped: "var(--ink-soft)",
+};
+const STAGE_MARK: Record<StageState, string> = {
+  pending: "Waiting",
+  active: "Working",
+  done: "Done",
+  failed: "Failed",
+  skipped: "Not needed",
+};
+
 /**
- * THE REEL — the top-level artifact, as a BRAND Output card.
+ * THE PIPELINE TRACKER — what the hero slot holds until there is a reel to play.
  *
- * FIVE states, and every one of them says what happened IN WORDS. A failed render in particular
- * gets a sentence, never a bare code and never a red dot: the person reading it has to know whether
- * to retry, rewrite a line, or call someone.
+ * NO POLLING and no spinner. Every stage below moves because a Convex subscription delivered a
+ * webhook's mutation or the render terminal's patch, which is the mechanism this whole surface is
+ * built on; the fold that turns those rows into stages is `trackerView`, and it is tested by being
+ * called. What lives here is the markup.
  */
-function ReelRegion({
+function PipelineTracker({ view, compact }: { view: TrackerView; compact?: boolean }) {
+  return (
+    <div aria-live="polite" data-testid="media-tracker" style={{ display: "grid", gap: "0.5rem" }}>
+      <ol
+        style={{
+          display: "grid",
+          gap: "0.4rem",
+          listStyle: "none",
+          margin: 0,
+          padding: 0,
+          gridTemplateColumns: "repeat(auto-fit, minmax(9rem, 1fr))",
+        }}
+      >
+        {view.stages.map((stage) => (
+          <li
+            key={stage.key}
+            style={{
+              borderTop: `2px solid ${STAGE_TONE[stage.state]}`,
+              paddingTop: "0.35rem",
+              minWidth: 0,
+            }}
+          >
+            <p style={{ ...capsTeal, color: "var(--ink)" }}>{stage.label}</p>
+            <p
+              style={{
+                ...dimText,
+                fontSize: "0.72rem",
+                fontWeight: 700,
+                color: STAGE_TONE[stage.state],
+              }}
+            >
+              {STAGE_MARK[stage.state]}
+            </p>
+            <p style={{ ...dimText, fontSize: "0.75rem" }}>{stage.detail}</p>
+          </li>
+        ))}
+      </ol>
+
+      {/* THE PER-SCENE LANDING ROWS. Two providers' webhooks land minutes apart, so a scene whose
+          voice is ready and whose picture is not must look different from the reverse — the same
+          reason the tiles below carry two status rows rather than one. */}
+      {!compact && (
+        <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "0.15rem" }}>
+          {view.scenes.map((row) => (
+            <li key={row.blockIndex} style={{ ...dimText, fontSize: "0.75rem" }}>
+              <span style={{ color: "var(--ink)", fontWeight: 700 }}>{row.label}</span> ·{" "}
+              <span style={{ color: STAGE_TONE[row.picture.state] }}>
+                picture {row.picture.text}
+              </span>{" "}
+              · <span style={{ color: STAGE_TONE[row.voice.state] }}>voice {row.voice.text}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/**
+ * THE HERO — one slot, the whole lifecycle.
+ *
+ * The slot exists from the moment a deck is picked and never moves: it holds the tracker before the
+ * reel exists, the reel afterwards, and BOTH during a regenerate (33-05 holds the old final's
+ * validated artifact triple precisely so the user is not left staring at a gap for three minutes).
+ * A layout that swapped a text region for a player when the render landed would jump the strip
+ * below it down the page at the least convenient moment.
+ *
+ * **The player is four native attributes.** `autoPlay muted loop playsInline` is exactly the locked
+ * "muted autoplay loop, tap for sound" decision, and `controls` is the tap: every browser's own
+ * unmute button, keyboard-operable, with no player library and no component library (BRAND §8.3).
+ */
+function ReelHero({
+  hero,
+  tracker,
   reel,
-  landedAssets,
   noun,
 }: {
-  reel:
-    | {
-        status: string | null;
-        url: string | null;
-        durationS: number | null;
-        sceneCount: number | null;
-        gates: string[];
-        reason: string | null;
-      }
-    | undefined;
-  landedAssets: number;
+  hero: HeroState;
+  tracker: TrackerView;
+  reel: { durationS: number | null; sceneCount: number | null; gates: string[] } | undefined;
   noun: "scene" | "block";
 }) {
-  const status = reel?.status ?? null;
-  // THE OUT-OF-DATE STATE. `regenerateBlock` and every structural edit clear the render fields
-  // (20-09), so a deck whose assets have landed but whose reel is back at `pending` is not
-  // "waiting to start" — it is stale, and saying "not assembled yet" would be a lie the user can
-  // watch. The two are indistinguishable from `renderStatus` alone; the landed count is what
-  // separates them.
-  const outOfDate = status === "pending" && landedAssets > 0;
-
   return (
-    <div style={{ marginTop: "1.1rem" }}>
+    <div style={{ marginTop: "0.2rem" }} data-testid="media-hero">
       <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
         <p style={capsTeal}>Reel</p>
         <span style={typeBadge}>VIDEO</span>
       </div>
 
-      <div aria-live="polite" style={{ marginTop: "0.6rem" }}>
-        {status === null && <p style={dimText}>No reel has been requested for this plan yet.</p>}
-
-        {status === "pending" && !outOfDate && (
-          <p style={dimText}>
-            Not assembled yet. The reel is built once every {noun}'s picture and voice have landed.
-          </p>
-        )}
-
-        {outOfDate && (
-          <p style={dimText}>
-            The reel is out of date — the {noun}s have changed since it was assembled. Generate
-            again to rebuild it.
-          </p>
-        )}
-
-        {status === "rendering" && (
-          <p style={dimText}>Assembling the reel… (usually 1–3 minutes)</p>
-        )}
-
-        {status === "rendered" && reel?.url && (
+      <div
+        style={{
+          marginTop: "0.6rem",
+          borderRadius: "0.6rem",
+          border: "1px solid var(--rule)",
+          background: "var(--canvas)",
+          padding: "0.85rem",
+          minHeight: "9rem",
+        }}
+      >
+        {hero.mode === "video" && (
           <>
-            {/* biome-ignore lint/a11y/useMediaCaption: the burned-in captions ARE the caption track
-                (plan 20-17) — they are pixels in the video, so there is no WebVTT file to attach and
-                a <track> element would point at nothing. */}
-            <video
-              controls
-              src={reel.url}
-              style={{ width: "100%", maxWidth: "22rem", borderRadius: "0.6rem", display: "block" }}
-            />
-            <p style={{ ...dimText, marginTop: "0.5rem" }}>
-              {reel.sceneCount} {noun}s · {Math.round(reel.durationS ?? 0)} seconds
-              {reel.gates.includes("speech_within_window")
-                ? " · every narration line fits before the next one."
-                : "."}
-            </p>
+            <div style={{ position: "relative" }}>
+              {/* NO <track>, and no suppression needed for it any more: the burned-in captions ARE
+                  the caption track (plan 20-17) — they are pixels in the video, so there is no
+                  WebVTT file to attach — and `muted` takes this element out of useMediaCaption's
+                  scope entirely, which is why the old biome-ignore here now has no effect. */}
+              <video
+                autoPlay
+                muted
+                loop
+                playsInline
+                controls
+                src={hero.url}
+                data-testid="media-final"
+                style={{
+                  width: "100%",
+                  maxWidth: "22rem",
+                  borderRadius: "0.5rem",
+                  display: "block",
+                  background: "var(--ink)",
+                }}
+              />
+              {hero.regenerating && (
+                <div
+                  style={{
+                    marginTop: "0.6rem",
+                    borderRadius: "0.5rem",
+                    border: "1px dashed var(--rule)",
+                    background: "var(--card)",
+                    padding: "0.6rem",
+                  }}
+                >
+                  <PipelineTracker view={tracker} compact />
+                </div>
+              )}
+            </div>
+            {hero.note && (
+              <p style={{ ...dimText, marginTop: "0.5rem", color: "var(--held-text)" }}>
+                {hero.note}
+              </p>
+            )}
+            {reel?.sceneCount !== null && reel?.sceneCount !== undefined && (
+              <p style={{ ...dimText, marginTop: "0.5rem" }}>
+                {reel.sceneCount} {noun}s · {Math.round(reel.durationS ?? 0)} seconds
+                {reel.gates.includes("speech_within_window")
+                  ? " · every narration line fits before the next one."
+                  : "."}
+              </p>
+            )}
           </>
         )}
 
-        {/* A `rendered` status with no url means the sidecar did NOT validate — `media.reel`
-            returns a url only when it did. D8: "a final video without an assembly.json was
-            hand-assembled", so this is a governed refusal to publish, not a missing file. */}
-        {status === "rendered" && !reel?.url && (
-          <p style={dimText}>
-            The render finished but did not produce a valid assembly record, so it was not
-            published.
-          </p>
+        {hero.mode === "tracker" && (
+          <>
+            {hero.reason === "out_of_date" && (
+              <p style={{ ...dimText, marginBottom: "0.6rem", color: "var(--held-text)" }}>
+                The reel is out of date — the {noun}s have changed since it was last assembled.
+                Generate again to rebuild it.
+              </p>
+            )}
+            <PipelineTracker view={tracker} />
+          </>
         )}
 
-        {status === "failed" && (
-          <p style={dimText}>
-            The reel could not be assembled
-            {reel?.reason ? `: ${failureText(reel.reason, noun)}` : "."}
-          </p>
+        {/* HELD and FAILED both keep the tracker underneath: the sentence says what stopped, and
+            the stages say how far it got. The per-scene FIX CARDS land in 33-08. */}
+        {(hero.mode === "held" || hero.mode === "failed") && (
+          <>
+            <p
+              style={{
+                ...dimText,
+                color: "var(--held-text)",
+                fontWeight: 600,
+                marginBottom: "0.6rem",
+              }}
+              data-testid="media-hero-failure"
+            >
+              {hero.sentence}
+            </p>
+            <PipelineTracker view={tracker} />
+          </>
         )}
       </div>
       <hr style={sectionRule} />
@@ -1064,7 +1218,8 @@ function SceneTile({
             >
               Regenerate this {noun}
             </button>
-            {/* WHAT IT BUYS, per kind — a still is ~a tenth of a clip, and a silent scene has no
+            {/* WHAT IT BUYS, per kind — a still is ~a FORTIETH of a clip (measured, wave 7: $0.01
+                vs $0.40 at 4 s; this comment said "a tenth" until 33-06), and a silent scene has no
                 take to re-record. A single sentence for all four would over-state three of them. */}
             <span style={{ ...dimText, fontSize: "0.72rem" }}>
               Buys{" "}
@@ -1102,147 +1257,140 @@ const ghostBtn = {
 } as const;
 
 /**
- * THE ESTIMATE GATE — D7's binding rule, and it takes FOUR lines rather than one total.
+ * THE GENERATE CONTROL — D7's binding rule, now as ONE headline over an expandable breakdown.
  *
  * *"The editor must not offer a control that can spend money without showing the estimate first."*
- * One number is not enough: the user has to see WHICH line is expensive before deciding to cut a
- * block, which is why `jobEstimate` itemises and this panel prints every line.
+ * 20-10 met that with four always-open lines, which met the letter and lost the number: the total —
+ * the thing a person decides on — read as one row of five. 33-06 promotes it to a headline beside
+ * the button and demotes the itemisation into a `<details>`, WITHOUT losing it, because the 40x
+ * clip-vs-still lever only exists in the lines.
  *
- * The button is `disabled` until the estimate resolves — not merely un-styled, because a disabled
- * look on an enabled button is a click that spends money the user was told they could not.
+ * `<details>`/`<summary>` is a native disclosure widget: keyboard-operable and screen-reader
+ * announced with no state, no library, and no ARIA of our own (BRAND §8.3).
+ *
+ * Every string and both booleans come from `estimateView`. The button is `disabled` from the same
+ * derivation that produces the sentence explaining why — a disabled look on an enabled button is a
+ * click that spends money the user was told they could not.
  */
-function EstimateGate({
-  estimate,
+function GenerateBar({
+  view,
+  pricedAs,
   busy,
   note,
   onGenerate,
-  noun,
-  clipSeconds,
-  targetSeconds,
-  sceneCount,
-  threadId,
 }: {
-  estimate:
-    | {
-        lines: Array<{ label: string; qty: number; unit: string; cents: number }>;
-        totalCents: number;
-        capCents: number;
-        remainingCents: number;
-        refusal: { reason: string; blockIndex?: number; chars?: number } | null;
-      }
-    | undefined;
+  view: EstimateView;
+  pricedAs: string;
   busy: boolean;
   note: string | null;
   onGenerate: () => void;
-  noun: "scene" | "block";
-  clipSeconds: number;
-  targetSeconds: number | null;
-  sceneCount: number;
-  threadId?: string;
 }) {
-  const resolved = estimate !== undefined;
-  const refusal = estimate?.refusal ?? null;
-  const canGenerate = resolved && refusal === null && (estimate?.lines.length ?? 0) > 0 && !busy;
-  // The ceiling the refusal quotes. On a scene deck it is the TAKE's window and varies per scene,
-  // so the estimate's own `chars` and the tile's counter are the precise numbers; this is the
-  // fallback for a block deck, where every window is the same size.
-  const maxChars = Math.round(clipSeconds * 14);
+  const canGenerate = !view.generateDisabled && !busy;
 
   return (
     <div
-      style={{ marginTop: "1.2rem", borderTop: "1px solid var(--rule)", paddingTop: "0.9rem" }}
+      style={{ marginTop: "1rem", borderTop: "1px solid var(--rule)", paddingTop: "0.9rem" }}
       data-testid="media-estimate"
     >
-      <p style={capsTeal}>Cost</p>
-      {!resolved && (
-        <p style={{ ...dimText, marginTop: "0.5rem" }}>Working out what this reel costs…</p>
-      )}
-
-      {resolved && (estimate?.lines.length ?? 0) > 0 && (
-        <ul
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: "0.75rem",
+        }}
+      >
+        <div>
+          <p style={capsTeal}>Cost</p>
+          {/* The BRAND §3 stat value: one big number, one small caps label above it. */}
+          <p
+            style={{
+              margin: "0.15rem 0 0",
+              fontSize: "1.6rem",
+              fontWeight: 700,
+              color: "var(--ink)",
+              fontVariantNumeric: "tabular-nums",
+              lineHeight: 1.1,
+            }}
+            data-testid="media-total"
+          >
+            {view.headline}
+          </p>
+        </div>
+        <button
+          type="button"
+          disabled={!canGenerate}
+          onClick={onGenerate}
+          data-testid="media-generate"
           style={{
-            listStyle: "none",
-            padding: 0,
-            margin: "0.6rem 0 0",
-            display: "grid",
-            gap: "0.25rem",
+            padding: "0.6rem 1.15rem",
+            borderRadius: "0.375rem",
+            cursor: canGenerate ? "pointer" : "not-allowed",
+            background: canGenerate ? "var(--teal-600)" : "var(--canvas)",
+            color: canGenerate ? "#fff" : "var(--ink-soft)",
+            border: canGenerate ? "none" : "1px solid var(--rule)",
+            fontWeight: 600,
           }}
         >
-          {estimate?.lines.map((line) => (
-            <li
-              key={line.label}
-              style={{ ...dimText, display: "flex", justifyContent: "space-between", gap: "1rem" }}
-            >
-              <span style={traceText}>
-                {line.label} · {line.qty} {line.unit}
-              </span>
-              <span style={{ fontVariantNumeric: "tabular-nums" }}>{money(line.cents)}</span>
-            </li>
-          ))}
-          <li
+          {busy ? "Starting…" : "Generate reel"}
+        </button>
+      </div>
+
+      {view.lines.length > 0 && (
+        <details style={{ marginTop: "0.6rem" }}>
+          <summary style={{ ...dimText, cursor: "pointer", fontSize: "0.8rem" }}>
+            What makes up {view.headline}
+          </summary>
+          <ul
             style={{
-              ...dimText,
-              display: "flex",
-              justifyContent: "space-between",
-              gap: "1rem",
-              color: "var(--ink)",
-              fontWeight: 700,
-              borderTop: "1px solid var(--rule)",
-              paddingTop: "0.25rem",
+              listStyle: "none",
+              padding: 0,
+              margin: "0.5rem 0 0",
+              display: "grid",
+              gap: "0.3rem",
             }}
           >
-            <span>Total</span>
-            <span style={{ fontVariantNumeric: "tabular-nums" }}>
-              {money(estimate?.totalCents ?? 0)}
-            </span>
-          </li>
-        </ul>
-      )}
-
-      {resolved && (
-        <p style={{ ...dimText, marginTop: "0.5rem" }}>
-          {/* A SCENE deck has no single clip length — that arithmetic is what this phase removed —
-              so it is priced as a reel of N scenes, and only a block deck quotes seconds-per-block. */}
-          {targetSeconds === null
-            ? `Priced at OpenAI Sora 2, 720p, ${clipSeconds} s per block`
-            : `A ${targetSeconds}-second reel of ${sceneCount} scenes, priced per scene`}{" "}
-          · {money(estimate?.remainingCents ?? 0)} of today's media budget remains.
-        </p>
+            {view.lines.map((line) => (
+              <li key={line.label}>
+                <div
+                  style={{
+                    ...dimText,
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: "1rem",
+                  }}
+                >
+                  <span style={traceText}>
+                    {line.label} · {line.detail}
+                  </span>
+                  <span style={{ fontVariantNumeric: "tabular-nums" }}>{line.amount}</span>
+                </div>
+                {line.note && (
+                  <p style={{ ...dimText, fontSize: "0.72rem", margin: "0.1rem 0 0" }}>
+                    {line.note}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+          <p style={{ ...dimText, marginTop: "0.5rem" }}>
+            {pricedAs} · {view.remaining}
+          </p>
+        </details>
       )}
 
       {/* The refusal names the LEVER, and for the narration case the cure is the Edit narration
-          control on the offending tile directly above. */}
-      {refusal && (
+          control on the offending tile in the strip above. */}
+      {view.refusalSentence && (
         <p style={{ ...dimText, marginTop: "0.5rem", color: "var(--held-text)", fontWeight: 600 }}>
-          {refusalText(refusal, {
-            capCents: estimate?.capCents ?? 0,
-            totalCents: estimate?.totalCents ?? 0,
-            maxChars,
-            noun,
-          })}
+          {view.refusalSentence}
         </p>
       )}
-
-      <button
-        type="button"
-        disabled={!canGenerate}
-        onClick={onGenerate}
-        data-testid="media-generate"
-        style={{
-          marginTop: "0.8rem",
-          padding: "0.5rem 1rem",
-          borderRadius: "0.375rem",
-          cursor: canGenerate ? "pointer" : "not-allowed",
-          background: canGenerate ? "var(--teal-600)" : "var(--canvas)",
-          color: canGenerate ? "#fff" : "var(--ink-soft)",
-          border: canGenerate ? "none" : "1px solid var(--rule)",
-          fontWeight: 600,
-        }}
-      >
-        {busy ? "Starting…" : "Generate reel"}
-      </button>
+      {view.lines.length === 0 && view.refusalSentence === null && (
+        <p style={{ ...dimText, marginTop: "0.5rem" }}>{view.remaining}</p>
+      )}
       {note && <p style={{ ...dimText, marginTop: "0.5rem" }}>{note}</p>}
-      {threadId === undefined && null}
     </div>
   );
 }
