@@ -169,6 +169,8 @@
     "packages/core/src/tenantData.test.ts",
     "packages/backend/convex/tenantExport.ts",
     "packages/backend/convex/tenantExport.test.ts",
+    "packages/backend/convex/tenantDelete.ts",
+    "packages/backend/convex/tenantDelete.test.ts",
     "packages/backend/convex/audit.ts",
     "packages/backend/convex/deadLetter.ts",
     "packages/backend/convex/deadLetters.ts",

@@ -1,5 +1,21 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Touched 2026-08-16 (eval-gate session) to clear the §9 Stop hook — **NOT a verification**, and
+> deliberately not a `Last verified` line. **`packages/backend/convex/tenantDelete.ts` +
+> `tenantDelete.test.ts` are newly REGISTERED to this playbook in `watch.json` by this session, and
+> that registration is the ONLY thing done for them.** They arrived from the concurrent 22.1-05
+> lane (`344d4be`, "revoke providers before tenant erasure") when the shared working tree switched
+> branches mid-session; this session ran the eval gate and fixed `evaluations.ts`, and has neither
+> read nor exercised tenant erasure.
+>
+> They were registered HERE rather than under `_unassigned` on purpose: `_unassigned` asserts a path
+> genuinely needs no playbook, which is false for a tenant-ERASURE path with audit and retention
+> consequences, and this playbook already owns its direct sibling `tenantExport.ts` — export and
+> erasure being the two halves of the tenant data lifecycle. **Registration is not documentation:
+> nothing below describes the erasure path, and the 22.1-05 lane still owes this playbook a real
+> entry and a real `Last verified` bump.** The registration exists so the hook can protect that
+> file from here on, not to imply it is covered.
+
 > Last verified: 2026-08-16 (22.1-04 — tenant data export). `tenantData.ts` classifies the
 > `audit` table as `audit_immutable`; both `audit` and the refs-only dead-letter compliance plane are
 > excluded from Art. 15/20 tenant exports with an explicit reason in the JSON file. This exclusion

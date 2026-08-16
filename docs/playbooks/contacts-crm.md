@@ -1,5 +1,17 @@
 # Playbook: Contacts, CRM & follow-ups
 
+> Touched 2026-08-16 (eval-gate session) to clear the §9 Stop hook — **NOT a verification**, and
+> deliberately not a `Last verified` line.
+> `apps/web/app/(app)/dashboard/pipeline/pipelineView.test.ts` changed under another lane and
+> surfaced here when the shared working tree switched branches mid-session. This session ran the
+> golden eval gate and fixed `evaluations.ts`; it touched no contacts/CRM path. That work is unread
+> and unattested here; **the lane that owns it still owes this playbook a real entry.**
+>
+> (One CRM-relevant FACT, recorded as evidence rather than verification: `36-crm-follow-up` PASSED
+> in the all-green gate run `d59099cd` against `cockpit-agent@26`, so ACTN-05's staging path still
+> routes correctly under a cockpit body that gained a calendar section. That says nothing about the
+> pipeline view this playbook documents.)
+
 > Last verified: 2026-08-11 (Post-19.1 verification gap closure — **BOTH ITEMS LEFT OPEN AT THE
 > 19.1-07 OWNER GATE ARE NOW CLOSED.** The phase verifier confirmed both as real before either was
 > touched; the owner then directed the fix. No plan file — this is gap closure against
