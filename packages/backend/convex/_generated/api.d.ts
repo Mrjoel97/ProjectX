@@ -73,6 +73,8 @@ import type * as smoke from "../smoke.js";
 import type * as smokeAssert from "../smokeAssert.js";
 import type * as spendLedger from "../spendLedger.js";
 import type * as telemetry from "../telemetry.js";
+import type * as tenantDelete from "../tenantDelete.js";
+import type * as tenantExport from "../tenantExport.js";
 import type * as tenantProfile from "../tenantProfile.js";
 import type * as vault from "../vault.js";
 import type * as vaultDigest from "../vaultDigest.js";
@@ -166,6 +168,8 @@ declare const fullApi: ApiFromModules<{
   smokeAssert: typeof smokeAssert;
   spendLedger: typeof spendLedger;
   telemetry: typeof telemetry;
+  tenantDelete: typeof tenantDelete;
+  tenantExport: typeof tenantExport;
   tenantProfile: typeof tenantProfile;
   vault: typeof vault;
   vaultDigest: typeof vaultDigest;
