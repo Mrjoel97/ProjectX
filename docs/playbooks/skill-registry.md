@@ -1,6 +1,26 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
-> Last verified: 2026-08-16 (**PRODUCTION IS NOW ON `cockpit-agent` v8. THE POINTER MOVED: v6 → v8.
+> Last verified: 2026-08-16 (25-03 — **the grounded-prose export is on the TOKEN plane, not the
+> owner plane, and 25-03 was about to convert it and break CI.**)
+>
+> `skilloptExport.buildTrajectoryExport` is an `internalQuery`. Its only door is the
+> `/skillopt/export` HTTP route behind a fail-closed `Bearer ${SKILLOPT_TOKEN}` compare. 25-03's
+> Task 3 as planned said "change `skilloptExport.ts` only if the test finds it is not already
+> owner-wrapped" — it is not, so that instruction meant *convert it*. **An `ownerQuery` is a PUBLIC
+> function whose `requireOwner` does `ctx.db.get(scope.userId)`, and the CI SkillOpt job
+> authenticates with a bearer token and has no `users` row.** The conversion would have refused the
+> entire export plane, and there is no `ownerAction` to fall back to (an action has no `ctx.db`).
+>
+> The invariant is therefore the INVERSE of what the plan assumed: grounded prose must stay
+> **unreachable from any public wrapper**. `isolation.test.ts` now asserts exactly that —
+> `buildTrajectoryExport` is declared `internalQuery`, `skilloptExport` appears nowhere in the
+> public-surface scan, and `http.ts` still names both the internal reference and a 401 path.
+>
+> **The ceiling is unchanged and is not owner-gating:** grounded prose stays off any tenant-facing
+> surface until `packages/pii` gains tested names-in-prose scrubbing. A test now asserts that no
+> test in this repo claims that scrub already exists, so the ceiling cannot be quietly forgotten.
+>
+> Prior entry — 2026-08-16 (**PRODUCTION IS NOW ON `cockpit-agent` v8. THE POINTER MOVED: v6 → v8.
 > THIS SUPERSEDES THE ENTRY IMMEDIATELY BELOW**, which said "PRODUCTION STILL RUNS THE OLD BODY, AND
 > THE PRODUCTION CANDIDATE IS GATE-BLOCKED" — true when written, false now. The gate that had come
 > back 39/40 three times went **40/40** once the defect behind it was found, and it was NOT in the

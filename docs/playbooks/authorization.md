@@ -1,6 +1,37 @@
 # Playbook: Authorization (tenancy + ownership)
 
-> Last verified: 2026-08-16 (25-01 — **the raw-builder allowlist gained its first genuinely PUBLIC
+> Last verified: 2026-08-16 (25-03 — **`isolation.test.ts` is the BETA-02/BETA-05 gate, and it is
+> derived rather than enumerated: a new table, index, public function or owner endpoint is covered
+> automatically or reddens the suite.**)
+>
+> **"ALL THREE OWNER-GATED FUNCTIONS" WAS 14.** The count in `25-CONTEXT.md`/`25-VALIDATION.md` is a
+> stale Phase-8 figure. Measured: `finance.ts` ×5 (**including `setMasterKillSwitch` and
+> `setMediaKillSwitch`, the global spend kill switches**), `optimizerConfig.ts` ×2, `skills.ts` ×5,
+> `invites.ts` ×2. `importGuard.test.ts` pins only 7 of them and **all five finance owner endpoints
+> were pinned by nothing** — a silent downgrade of the global kill switch to `tenantMutation` broke
+> no test. `isolation.test.ts` now derives the list from a source scan and loops the
+> `OWNER_REQUIRED` assertion over it. Mutation-proven: downgrading `setMasterKillSwitch` reddens it.
+>
+> **ARGUMENT VALIDATION RUNS BEFORE `requireOwner`.** Measured, and contrary to what the gate first
+> assumed: calling an owner endpoint with `{}` throws `Validator error: Missing required field`,
+> never `OWNER_REQUIRED`. A test passing empty args would have "passed" on 8 of the 14 while proving
+> nothing about authorization. Every owner endpoint in the gate gets real, schema-valid arguments,
+> and a separate assertion fails if a new one is added without them.
+>
+> **THE INDEX RULE KEYS ON `tenantId`, NOT ON THE REGISTRY CATEGORY.** Filtering to
+> `tenant_owned`/`tenant_credential` silently skipped `audit` and `deadLetters` — both
+> `audit_immutable`, both carrying `tenantId`, with 3 non-tenant-leading indexes between them.
+> **Found by mutation: deleting `audit.by_ts` from the exception list left the suite green.** The
+> exception criterion is also widened from "a cross-tenant range is impossible by construction" to
+> "a named internal/owner-plane consumer with no tenant-facing caller", because for several of these
+> the cross-tenant range IS the point (`audit.by_ts` is what the WORM export cron scans).
+>
+> **THE PUBLIC-SURFACE SCAN COVERS RAW BUILDERS, not just the five wrapper names.** Since 25-01 the
+> repo has PUBLIC raw-builder functions, and a wrapper-only regex would be blind to precisely the
+> unauthenticated internet-reachable endpoints an admission-gated beta most needs pinned. Each one
+> must be allow-listed AND carry a written reason; "it needed to be callable" is not a reason.
+>
+> Prior entry — 2026-08-16 (25-01 — **the raw-builder allowlist gained its first genuinely PUBLIC
 > entry, and `importGuard.test.ts` gained a guard against the two-allowlist divergence.**)
 >
 > **`packages/backend/convex/invites.ts` and `invites.test.ts` have MOVED to
