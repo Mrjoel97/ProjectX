@@ -69,6 +69,29 @@ function SignUp() {
   // A provider round trip loses component state, so the code has to survive in the URL.
   const oauthReturn = `/signup?invite=${encodeURIComponent(code.trim())}&r=1`;
 
+  /**
+   * These buttons were `onClick={() => void signIn(…)}`. `void` discards the promise, so a
+   * rejection went nowhere — no redirect, no message, nothing in the console. A button that does
+   * nothing is indistinguishable from a dead page, and the user retries instead of reporting it.
+   *
+   * SCOPE, HONESTLY: this reports failures raised while STARTING the flow. A failure inside
+   * `/api/auth/callback/<provider>` is a server-side 500 with no redirect and no error parameter
+   * (`@convex-dev/auth` rewrites the destination only on success), so it cannot surface here — the
+   * browser never comes back to this page. Those live in the Convex logs.
+   */
+  async function onOAuth(provider: string, label: string) {
+    setError(null);
+    setBusy(true);
+    try {
+      await signIn(provider, { redirectTo: oauthReturn });
+      // `busy` deliberately stays set on success: the browser is leaving for the provider, and
+      // re-enabling the button would flash it live again mid-navigation.
+    } catch {
+      setError(`Could not start ${label} sign-in. Please try again.`);
+      setBusy(false);
+    }
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -191,10 +214,10 @@ function SignUp() {
         <button
           type="button"
           className="auth-google"
-          disabled={!codeAccepted}
-          onClick={() => void signIn("google", { redirectTo: oauthReturn })}
+          disabled={!codeAccepted || busy}
+          onClick={() => void onOAuth("google", "Google")}
         >
-          <GoogleIcon /> Continue with Google
+          <GoogleIcon /> {busy ? "Connecting…" : "Continue with Google"}
         </button>
       )}
 
@@ -204,11 +227,11 @@ function SignUp() {
         <button
           type="button"
           className="auth-google"
-          disabled={!codeAccepted}
+          disabled={!codeAccepted || busy}
           style={{ marginTop: "0.6rem" }}
-          onClick={() => void signIn("microsoft-entra-id", { redirectTo: oauthReturn })}
+          onClick={() => void onOAuth("microsoft-entra-id", "Microsoft")}
         >
-          Continue with Microsoft
+          {busy ? "Connecting…" : "Continue with Microsoft"}
         </button>
       )}
 

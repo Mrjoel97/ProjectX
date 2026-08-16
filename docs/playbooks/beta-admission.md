@@ -1,5 +1,34 @@
 # Playbook: Beta Admission (BETA-01)
 
+> Last verified: 2026-08-17 (**the OAuth buttons no longer swallow their own failures.**)
+>
+> All three OAuth call sites on `/signin` and `/signup` were `onClick={() => void signIn(…)}`.
+> `void` discards the promise, so a rejection produced no redirect, no message and no console
+> entry — a button that did nothing, which a user cannot tell apart from a dead page. During the
+> 2026-08-16 lockout the server was failing loudly (twelve logged crashes naming the exact dead
+> user id) while the page showed the owner absolutely nothing, and the retries that produced those
+> twelve entries were the direct result.
+>
+> Both pages now route their buttons through an `onOAuth(provider, label)` helper that awaits,
+> catches, sets the page's existing `auth-error` text and disables the button while in flight.
+>
+> **SCOPE, AND DO NOT OVERSTATE IT:** this reports failures raised while STARTING the flow. A
+> failure inside `/api/auth/callback/<provider>` is a server-side 500 with no redirect and no error
+> parameter — `@convex-dev/auth` rewrites the destination only on success (`index.js:188-227`) — so
+> the browser never returns to the page and nothing can be shown there. **The 2026-08-16 crash was
+> a callback failure and would still be invisible in the UI.** Callback failures are found in the
+> Convex logs, and that remains the documented recovery route. `/signup` separately avoids rendering
+> a provider button at all unless `authProviders` reports credentials for it, which covers a MISSING
+> provider but no other refusal.
+>
+> **Verification:** `apps/web/app/(auth)/oauthErrors.test.ts`, a deliberately labelled SOURCE-level
+> guard — it reads both pages as text and asserts no `void signIn(`, every `signIn` awaited, a
+> `setError` per `catch`, and the handler actually wired to the buttons. It strips block comments
+> first, because both files describe the old shape in prose and a naive scan would match its own
+> explanation. It is not behavioural evidence: the repo's DOM-free runner renders to static markup
+> and never fires an onClick, so a real assertion needs Playwright. Mutation-checked — restoring
+> `void signIn(` on `/signin` reddens that page's three cases and leaves `/signup`'s three green.
+
 > Last verified: 2026-08-17 (**`admitIdentity`'s `existingUserId` branch no longer patches a user
 > document it has not confirmed exists.**)
 >
