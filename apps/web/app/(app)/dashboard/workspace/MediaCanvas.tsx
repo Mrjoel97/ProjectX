@@ -12,6 +12,7 @@ import {
   briefChips,
   briefRefusalText,
   DECK_STALE_NOTE,
+  type DeckSummary,
   deckStale,
   durationLabel,
   type EstimateView,
@@ -26,6 +27,7 @@ import {
   pricedAsLine,
   REPROPOSE_LABEL,
   REPROPOSE_MESSAGE,
+  refusalText,
   ribbonShares,
   STALE_CLIP_NOTE,
   STALE_VOICE_NOTE,
@@ -37,6 +39,7 @@ import {
   usd,
   VERDICT_COPY,
   type VisualKind,
+  variationView,
   voiceLine,
   windowLabel,
 } from "./mediaCanvasView";
@@ -281,6 +284,7 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
   const locked = plan.deckLockedAt !== undefined && plan.deckLockedAt !== null;
   const chips = briefChips(plan.brief, locked);
   const stale = deckStale(plan.briefChangedAt, plan.deckProposedAt);
+  const variations = variationView(plan);
 
   return (
     // flexShrink 0: this sheet is a flex item of the fixed-height .pane-canvas section, and
@@ -293,6 +297,10 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
       {/* THE BRIEF READS FIRST. Everything under it is an ANSWER to it, so a mis-parsed ask is
           visible before a person spends time judging the storyboard that came out of it. */}
       <BriefRow planId={planId} threadId={threadId} chips={chips} locked={locked} stale={stale} />
+
+      {/* THE TWO PROPOSALS, side by side — between the ask and the answer, and gone after
+          Generate. */}
+      <VariationCompare planId={planId} view={variations} noun={noun} />
 
       {/* HERO, and it is the same slot for the whole lifecycle — tracker, then reel, then
           both during a regenerate. Nothing below it moves when the render lands. */}
@@ -640,6 +648,138 @@ function briefPatch(field: string, value: string): BriefPatch {
       : field === "tone"
         ? { tone: value }
         : { brandVoice: value };
+}
+
+/**
+ * THE A/B COMPARE REGION (33-07) — two proposals, side by side, until Generate.
+ *
+ * The PICKED deck is summarised here and drawn in full by the strip below; the ALTERNATE has only
+ * this card, because a second full storyboard would double the page for a deck the user is
+ * deciding whether to look at. Both summaries come from ONE fold (`deckSummary`), so the two
+ * halves cannot count differently.
+ *
+ * **After Generate the region is ABSENT, not disabled.** `generateReel` discards `altShots` in the
+ * same patch that stamps `deckLockedAt`, and `variationView` returns a null alternate for any
+ * locked plan — so there is nothing here to grey out. A greyed switch would be a control that can
+ * only ever answer `deck_locked`.
+ *
+ * Switching needs no estimate wiring: `switchDeck` swaps `shots`, and `jobEstimate` prices
+ * whatever is in `shots`. The headline follows on its own subscription.
+ *
+ * NO CROSS-DECK SCENE MIXING. Deferred by decision — the per-scene editor already covers it by
+ * hand, and a merge UI is a second deck model to keep consistent with the money path.
+ */
+function VariationCompare({
+  planId,
+  view,
+  noun,
+}: {
+  planId: never;
+  view: ReturnType<typeof variationView>;
+  noun: "scene" | "block";
+}) {
+  const switchDeck = useMutation(api.media.switchDeck);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+
+  async function swap() {
+    if (busy) return;
+    setBusy(true);
+    setNote(null);
+    try {
+      const res = await switchDeck({ planId });
+      // The rail's own sentences for these two codes (33-06 added both) — one vocabulary for a
+      // refusal, wherever it is read. Neither arm of `no_alternate`/`deck_locked` quotes money.
+      if (!res.ok) {
+        setNote(
+          refusalText({ reason: res.reason }, { capCents: 0, totalCents: 0, maxChars: 0, noun }),
+        );
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!view.hasAlternate || view.picked === null || view.alternate === null) return null;
+
+  return (
+    <div data-testid="media-variations">
+      <div style={{ display: "flex", alignItems: "baseline", gap: "0.6rem", flexWrap: "wrap" }}>
+        <p style={capsTeal}>Two storyboards</p>
+        <span style={dimText}>
+          Pick one before you generate — after that, the other is gone and every change is paid.
+        </span>
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gap: "0.6rem",
+          margin: "0.55rem 0 0",
+          gridTemplateColumns: "repeat(auto-fit, minmax(13rem, 1fr))",
+        }}
+      >
+        <DeckCard summary={view.picked} title="Showing now" />
+        <DeckCard
+          summary={view.alternate}
+          title="The other one"
+          action={
+            <button
+              type="button"
+              disabled={busy || !view.canSwitch}
+              style={ghostBtn}
+              data-testid="media-switch-deck"
+              onClick={() => void swap()}
+            >
+              {busy ? "Switching…" : "Switch to this storyboard"}
+            </button>
+          }
+        />
+      </div>
+      {note && (
+        <p
+          role="status"
+          style={{ ...dimText, marginTop: "0.5rem", color: "var(--held-text)", fontWeight: 600 }}
+        >
+          {note}
+        </p>
+      )}
+      <hr style={sectionRule} />
+    </div>
+  );
+}
+
+/** One deck, compactly. The kind mix uses `KIND_LABEL`'s own words, so this card and the tiles
+ *  below it name the same things — and it is what makes the cheap deck visibly the cheap one. */
+function DeckCard({
+  summary,
+  title,
+  action,
+}: {
+  summary: DeckSummary;
+  title: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        border: "1px solid var(--rule)",
+        borderRadius: "0.6rem",
+        background: "var(--card)",
+        padding: "0.7rem 0.8rem",
+        display: "grid",
+        gap: "0.3rem",
+        alignContent: "start",
+      }}
+    >
+      <p style={{ ...capsTeal, color: "var(--ink)" }}>{title}</p>
+      <p style={{ ...dimText, ...traceText, color: "var(--ink)" }}>{summary.concept}</p>
+      <p style={{ ...dimText, fontSize: "0.75rem" }}>
+        {summary.sceneCount} scenes · {summary.duration}
+      </p>
+      <p style={{ ...dimText, fontSize: "0.72rem" }}>{summary.kindMix}</p>
+      {action}
+    </div>
+  );
 }
 
 const IMAGE_STATUS: Record<string, string> = {
