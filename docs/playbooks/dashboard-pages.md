@@ -1,5 +1,21 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-16 (**the erasure card is VERIFIED IN PRODUCTION, no longer "a built
+> surface".** A real user typed `DELETE MY DATA` on `/dashboard/settings` at pikar-ai.com and the
+> card drove live request `a73023088f58ea6e` to completion — 1,538 rows across 24 tables, per-provider
+> lines rendered from the action's actual return (Google "revoked at the provider", Microsoft
+> "removed here only"), never averaged.
+>
+> Two production defects reached users through this surface first, and both are worth remembering
+> when adding any destructive control here: (1) the action was owner-gated, so every real signup got
+> `OWNER_REQUIRED` — the card was reachable while the capability was not; (2) the earlier copy
+> claimed Microsoft "exposes no revocation endpoint", which was false. Both are fixed
+> (`1ca7c6f`, `8f3561f`). **A control that renders is not a control that works** — this card looked
+> perfect in 5/5 green tests while returning a server error to every user who pressed it.
+>
+> The typed-phrase gate did its job: no accidental erasure, and the two failed attempts wrote
+> `databaseWriteBytes: 0`. Full evidence in `22.1-05-SUMMARY.md`. GOVN-03 closed.)
+
 > Last verified: 2026-08-16 (GOVN-03 — the Microsoft half stops being a dead end. The erasure card
 > and `apps/web/app/privacy/page.tsx` now both name the limit AND hand over the real control:
 > `account.microsoft.com/privacy/app-access` (personal) and `myapps.microsoft.com` (work/school).

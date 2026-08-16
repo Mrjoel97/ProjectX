@@ -1,5 +1,27 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-08-16 (**THE AUDIT-IMMUTABILITY INVARIANT IS NOW PROVEN AGAINST PRODUCTION,
+> not against fixtures.** Live erasure request `a73023088f58ea6e` on SHA `1ca7c6f` removed **1,538
+> rows across 24 tables** for tenant `qd76g6zsn8…cb233` (agentSteps 382, spendEvents 298, graphNodes
+> 265, graphEdges 261, vaultDocuments 97, vaultSources 65, mediaJobs 69, plans 45, …) and
+> `audit:countAudit` for that tenant returns **304** afterwards. The data is gone; the compliance log
+> is whole. CLAUDE.md §3 holds on real data, not just in `convex-test`.
+>
+> The only audit movement was the single `tenant.deleted` completion row: `actor: "user"`,
+> `correlationId: tenant-delete:0b2ee191…`, payload = table counts + tenant-id hash + six provider
+> booleans. Refs and counts only (§4), zero content. The tenant's earlier `google.disconnected`
+> (`{revoked: true, status: 200}`) and `microsoft.disconnected` (`{deleted: true,
+> revokedAtProvider: false}`) rows are still readable in the table AFTER erasure — that is the
+> preserved-rows proof, observed rather than asserted.
+>
+> `gmailTokens: 0` / `microsoftCalendarTokens: 0` in the sweep is NOT a miss: revoke-then-delete
+> removed both before the table walk. Google revoked at the provider; Microsoft did not and said so.
+>
+> **NOT verified, and deliberately recorded as such:** the post-erasure re-export. `users` is deleted
+> last, so the account cannot authenticate to call the export afterwards. Completion is evidenced by
+> the action returning `error: null` with a null final cursor after walking every
+> `deletableTables()` entry. Full numbers in `22.1-05-SUMMARY.md`. GOVN-03 closed.)
+
 > Last verified: 2026-08-16 (**erasure is SELF-scoped, not owner-gated — the production defect and
 > its root-cause fix.** `authorizeTenantDeletion` required `user.owner === true` alongside the
 > self check, so every real signup got `OWNER_REQUIRED`: production request `9a23216e3f16ebe8`,
