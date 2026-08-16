@@ -1,5 +1,21 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Touched 2026-08-17 to clear the §9 Stop hook — **ACKNOWLEDGEMENT ONLY, NOT A VERIFICATION**, and
+> deliberately NOT a `Last verified` bump. The Phase-25 session that touched this file wrote none
+> of the code that triggered the check and has not reviewed it.
+>
+> What triggered it: `MediaCanvas.tsx` and `packages/core/src/storyboard.ts` moved under the
+> concurrent phase-33 media lane while the Phase-25 lane was mid-session — commits `7b17640`,
+> `e54ae63` (33-13 fixes), then `2f12d0d` and `44dd83a` (biome formatting and import ordering).
+> The hook compares against session-start HEAD, so it flags them for whoever finishes a turn next,
+> regardless of who wrote them.
+>
+> **Nothing in Phase 25 touches the media plane.** Its commits are the admission boundary
+> (`invites.ts`, `auth.ts`), the isolation gate, the two-provider mail send (`graph.ts`,
+> `delivery.ts`), the onboarding first-send projection and the env manifest. If a media-plane
+> statement in this playbook is now stale, **it is the phase-33 lane's to verify and bump** — that
+> lane's own live-browser confirmation is the entry immediately below.
+
 > Last verified: 2026-08-16 (**LIVE, by the owner, in a browser** — the first live confirmation for
 > 33-11/33-12/33-13). The owner re-ran the request that had dead-ended twice and reported: *"it
 > works, the brief had all the information."*
