@@ -13,6 +13,28 @@
 > `dispatch:` prefix fix really closed `420c852b`'s two-actor miscount. That says nothing about the
 > render pipeline this playbook documents.)
 
+> Last verified: 2026-08-16 (33-06 — **THE REEL-FIRST CANVAS: hero on top, strip below, one layout
+> for the whole lifecycle.** The hero slot exists from the moment a deck is picked and never moves:
+> `trackerView` folds the four-stage spine (generate → voice → assemble → captions) out of reads
+> that were ALREADY reactive — `byPlan`'s two independent job faces plus the plan row's
+> `renderStatus`/`captionStatus`/`renderRetriedAt` — with `skipped` a first-class state (a deck of
+> cards and uploads buys no picture; a silent deck is never transcribed) and failure winning every
+> roll-up. `heroState` decides the slot: `video` whenever a url exists (ANY status — 33-05 holds the
+> validated triple, so a url with a non-`rendered` status is the PREVIOUS reel and says so),
+> `tracker` otherwise, `held` for the three deck-hole codes whose cure is a per-scene fix, `failed`
+> for everything else INCLUDING `rendered`-with-no-url (D8's governed refusal to publish). Both
+> 20-10 traps survive verbatim. The player is four native attributes —
+> `<video autoPlay muted loop playsInline controls>` — no player lib, no component lib. `estimateView`
+> reformats `jobEstimate` into ONE `$X.XX` headline over a native `<details>` breakdown; the headline
+> is `totalCents` and is NEVER re-added from the lines (a test feeds it inconsistent input to hold
+> that), the clips line keeps the 40× lever in words, and four rail codes gained sentences
+> (`unconfirmed_claims` → the confirmation badge, `deck_locked`, `no_alternate`,
+> `nothing_to_render`). NO logic entered `MediaCanvas.tsx` and no `setInterval` entered anything.
+> Fixed on the way through: `KIND_COST_NOTE.animated_image` said a still was "about a tenth of a
+> clip" — measured, it is a FORTIETH ($0.01 vs $0.40 at 4 s), understating the user's only cost lever
+> by 4× in three places. Web suite 332 green (59 in `mediaCanvas.test.ts`), `tsc --noEmit` clean in
+> apps/web AND packages/backend. NOT yet seen in a browser — 33-10 owns that gate.)
+
 > Last verified: 2026-08-16 (33-05 — **THE FINISHED REEL BECOMES A VAULT ASSET, and the old final
 > is HELD through a regenerate.** (1) VAULT AUTO-SAVE: `render/renderReel.saveReelToVault` — the
 > persistFindings idiom — upserts ONE `vaultDocuments` row per plan, keyed by
@@ -1503,7 +1525,7 @@ passed. One transaction, not two to keep in step.
 | Scene kind | Buys | Why |
 |---|---|---|
 | `generated_video` | one clip **at its own length** | the provider's duration grid still applies |
-| `animated_image` | one **still** | ~a tenth of a clip, frame-exact at any duration |
+| `animated_image` | one **still** | ~a FORTIETH of a clip ($0.01 vs $0.40 at 4 s — this row said "a tenth" until 33-06), frame-exact at any duration |
 | `uploaded_video` | nothing | the tenant already owns the bytes |
 | `text_card` | nothing | `drawtext` in the sandbox |
 | any narrated scene | one voice take | silence is legal, so an empty line buys nothing |
@@ -2063,6 +2085,12 @@ looks necessary, the bug is elsewhere.
 
 ### The reel region has FIVE states, and one of them is a trap
 
+> **Superseded 2026-08-16 (33-06) — the states are unchanged, their HOME is not.** The region is now
+> the HERO SLOT and the branch is `heroState` in `mediaCanvasView.ts`. Both traps below survive
+> verbatim; what changed is that a landed reel PLAYS in the same slot the tracker occupied, and that
+> a url can now arrive with any `renderStatus` (33-05 holds the artifact triple). See
+> "The reel-first canvas (33-06)".
+
 | State | What it says |
 |---|---|
 | no `renderStatus` | "No reel has been requested for this plan yet." |
@@ -2107,6 +2135,10 @@ and rendering it as a pass makes a claim fal never made. Never colour alone, for
 
 ### The estimate gate: four lines, not one total
 
+> **Superseded 2026-08-16 (33-06).** The four lines are still printed and still itemised — they just
+> live inside a native `<details>` under a `$X.XX` headline now. The binding rule and the genuinely
+> disabled button are unchanged. See "The reel-first canvas (33-06)".
+
 D7's binding rule is *"the editor must not offer a control that can spend money without showing the
 estimate first."* The button is `disabled` until `jobEstimate` resolves — genuinely disabled, not
 merely styled that way, because a disabled *look* on a live button is a click that spends money the
@@ -2120,6 +2152,91 @@ Every refusal NAMES THE LEVER rather than reporting a code: `over_job_cap` says 
 drop to 480p; `narration_too_long` names the block, its character count and the limit — **and the
 Edit-narration control is on that same tile**, because a refusal whose cure is three clicks away is
 a dead end.
+
+## The reel-first canvas (33-06) — one layout, the whole lifecycle
+
+The canvas is now **HERO then STRIP**, in that order, and the hero slot exists from the moment a
+deck is picked. Before the reel exists it holds the pipeline tracker; afterwards it holds the reel;
+during a regenerate it holds BOTH. Nothing below it moves when a render lands, which is the whole
+point — the old layout swapped a paragraph for a `<video>` and shoved the storyboard down the page
+at the least convenient moment.
+
+Render order in `ReelCanvas`: `ReelHero` → `GenerateBar` → `TimelineRibbon` → art direction →
+scene tiles. Every tile affordance is untouched: they moved, they did not change.
+
+### Every sentence and every state is a CALLED function, not read source
+
+`MediaCanvas.tsx` gained no derivation. `mediaCanvasView.ts` gained `trackerView`, `heroState`,
+`estimateView`, `pricedAsLine` and `usd`; the component gained JSX and event wiring. This is the
+module's founding rule (`apps/web`'s runner is `.ts`-only and DOM-less, so anything left in the
+`.tsx` can only be asserted as source text — the repo's named `green-tests-over-broken-capability`
+defect class). 59 tests in `mediaCanvas.test.ts`, all by calling.
+
+### The tracker: four stages, folded from reads that were already reactive
+
+`trackerView(scenes, renderStatus, captionStatus, renderRetriedAt)` → `generate → voice → assemble
+→ captions`, each `{ label, state, detail }`, plus one landing row per scene.
+
+- **`skipped` is a first-class state, not a rounding of `pending`.** A deck of cards and uploads
+  buys no picture; a silent deck records no take and is never transcribed. A stage that says
+  "waiting" about a job that will never be requested is the same defect as a spinner that never
+  resolves — the exact bug `pictureLine` was written to kill at the tile level.
+- **The two job faces stay independent** all the way up: the picture column and the voice column
+  roll up separately, because two providers' webhooks land minutes apart.
+- **Failure wins a roll-up.** One refused scene makes the stage `failed`, not "still working" —
+  that is what sends the user to the fix menu instead of to a wait with no end.
+- **`renderRetriedAt` is an honesty requirement.** 33-04's one automatic retry leaves
+  `renderStatus: "rendering"` standing, so without reading the stamp the second sandbox is
+  indistinguishable from the first taking a long time. The detail line says "the first attempt
+  failed".
+- **A caption failure never unpublishes the reel** (20-17) — the captions stage says `failed` and
+  says the reel is published without them.
+- **Still NO POLLING.** Every input is an existing `tenantQuery` subscription. There is no clock in
+  the view module for the same reason there is none in the component.
+
+### The hero: five modes, and the two traps both survive
+
+| Mode | When | What the user sees |
+|---|---|---|
+| `video` | a url exists (ANY `renderStatus` — 33-05 holds the triple) | the final, muted-autoplay looping; `regenerating` puts the tracker under it |
+| `tracker` | no url, `pending`/`rendering`/nothing | the four stages; `out_of_date` when assets have landed |
+| `held` | `failed` + `incomplete_batch` / `not_all_succeeded` / `incomplete_blocks` | "the reel is held" — the cure is a per-scene fix (33-04), never a retry |
+| `failed` | any other `failed` reason | `failureText` in words |
+| `failed` | `rendered` with NO url | the governed refusal to publish (D8) |
+
+**A url with a non-`rendered` status is the PREVIOUS reel, and it says so.** `clearRender` holds the
+validated triple through a regenerate, so "there is a url" no longer means "this is current". The
+note names which and why; letting the old final pass as the new one would be a lie the user can
+watch play.
+
+**The player is four native attributes.** `<video autoPlay muted loop playsInline controls>` is
+exactly the locked "muted autoplay loop, tap for sound" decision — `controls` IS the tap, keyboard
+operable, and `muted` is also what takes the element out of biome's `useMediaCaption` scope (the old
+`biome-ignore` there is now inert). No player library, no component library (BRAND §8.3).
+
+### The cost control: ONE headline, and it is never re-added
+
+`estimateView(est, { noun, maxChars })` REFORMATS `jobEstimate`'s output and does no arithmetic
+beyond cents→USD. **`headline` is `totalCents`, never a sum of `lines`** — the render line is priced
+as a constant no line-sum reproduces, and a second sum here would be a second estimate drifting from
+the one the rail consumes. A test feeds it deliberately inconsistent input to hold that.
+
+The itemisation moved into a native `<details>`, and the clip line carries the 40× lever in words:
+knowing which line is expensive is only useful beside knowing what the cheap kind costs.
+`generateDisabled` folds the three no-spend reasons (unresolved, refused, nothing to buy) so the
+component asks one question.
+
+**Four refusal codes gained sentences** that existed on the rail with none: `unconfirmed_claims`
+(→ the confirmation badge, NOT a rewrite — the model proposes, only the owner vouches),
+`deck_locked` (→ post-Generate edits are canvas-only and paid), `no_alternate`, `nothing_to_render`.
+Every code is a distinct lever; that is the rule this map exists to keep.
+
+### Corrected on the way through: the still was never "a tenth"
+
+`KIND_COST_NOTE.animated_image` read *"about a tenth of a clip"* in shipped UI copy (and in this
+playbook's scene-kind table, and in a `MediaCanvas.tsx` comment). Measured at 20.2 wave 7 / ADR-019:
+a 4 s generated clip is $0.40 and a still is $0.01 at ANY length — **a fortieth**. The one cost lever
+a user has was understated by 4×. All three sites now say fortieth.
 
 ### Exactly six editor affordances, labelled by what they cost
 
