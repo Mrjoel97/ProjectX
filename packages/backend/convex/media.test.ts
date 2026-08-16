@@ -6561,3 +6561,159 @@ describe("33-05 saveReelToVault: one vault doc per plan, at every pipeline termi
     expect(await reelDocs(t)).toHaveLength(0);
   });
 });
+
+describe("33-05 the OLD final is held until the new one lands", () => {
+  test("regenerate resets the render plane but KEEPS the old final playable", async () => {
+    const t = harness();
+    const { planId } = await seedDeck(t, { blocks: 2 });
+    const oldFinal = await storeBlob(t, new Uint8Array([1]), "video/mp4");
+    const sidecar = await storeBlob(t, RENDER_SIDECAR, "application/json");
+    await t.run(async (ctx) =>
+      ctx.db.patch(planId, {
+        renderStatus: "rendered",
+        renderStorageId: oldFinal,
+        sidecarStorageId: sidecar,
+        sidecarHash: "a".repeat(64),
+        renderedAt: T0,
+        renderSummary: { durationS: 20, blockCount: 2, gates: ["g"] },
+        captionStatus: "captioned",
+        captionOffsetsS: [0, 1],
+      }),
+    );
+
+    await asA(t).mutation(api.media.regenerateBlock, { planId, blockIndex: 0 });
+
+    const plan = await planRowOf(t, planId);
+    expect(plan?.renderStatus).toBe("pending");
+    // The artifact fields are KEPT: the canvas separates stale-reel from never-built by landed
+    // count, and the old final must stay watchable until the new one lands.
+    expect(plan?.renderStorageId).toBe(oldFinal);
+    expect(plan?.sidecarStorageId).toBe(sidecar);
+    expect(plan?.renderSummary).toBeDefined();
+    // The CAPTION plane resets with the render plane — a new pipeline must be able to caption,
+    // and a stale `captioned` would make `maybeStartCaptions` skip the new batch forever.
+    expect(plan?.captionStatus).toBeUndefined();
+    expect(plan?.captionOffsetsS).toBeUndefined();
+    // …and the reel query keeps serving the governed url: the triple IS the guarantee.
+    expect((await asA(t).query(api.media.reel, { planId })).url).toBeTruthy();
+    expect(await blobExists(t, oldFinal)).toBe(true);
+  });
+
+  test("the reel query serves the HELD final through pending/rendering/failed", async () => {
+    const t = harness();
+    const { planId } = await seedDeck(t);
+    const finalId = await storeBlob(t, new Uint8Array([1]), "video/mp4");
+    await t.run(async (ctx) =>
+      ctx.db.patch(planId, {
+        renderStorageId: finalId,
+        sidecarStorageId: finalId,
+        renderSummary: { durationS: 20, sceneCount: 3, gates: ["g"] },
+      }),
+    );
+    for (const status of ["pending", "rendering", "failed"] as const) {
+      await t.run(async (ctx) => await ctx.db.patch(planId, { renderStatus: status }));
+      const r = await asA(t).query(api.media.reel, { planId });
+      expect(r.status).toBe(status); // the state is still reported honestly…
+      expect(r.url).toBeTruthy(); // …but the held final stays watchable throughout
+    }
+  });
+
+  test("the NEW final lands: plan and vault doc repoint, the old blob is deleted", async () => {
+    const t = harness();
+    // No `stt` in the batch → the render terminal is the save terminal (no captions ever).
+    const { planId, batchId } = await seedRenderable(t, { blocks: 2 });
+    const record = (mp4: Id<"_storage">, sidecar: Id<"_storage">) =>
+      t.run(async (ctx) =>
+        ctx.runMutation(internal.render.renderReel.recordRender, {
+          tenantId: A,
+          planId,
+          batchId,
+          result: {
+            ok: true,
+            renderStorageId: mp4,
+            sidecarStorageId: sidecar,
+            sidecarHash: "c".repeat(64),
+            sceneCount: 2,
+            renderMs: 1,
+            gatesPassed: 1,
+            summary: { durationS: 20, sceneCount: 2, gates: ["g"] },
+          },
+        }),
+      );
+    const mp4A = await storeBlob(t, new Uint8Array([1]), "video/mp4");
+    await record(mp4A, await storeBlob(t, RENDER_SIDECAR, "application/json"));
+    expect((await reelDocs(t))[0]?.storageId).toBe(mp4A);
+
+    const mp4B = await storeBlob(t, new Uint8Array([2]), "video/mp4");
+    await record(mp4B, await storeBlob(t, RENDER_SIDECAR, "application/json"));
+
+    expect((await planRowOf(t, planId))?.renderStorageId).toBe(mp4B);
+    expect((await reelDocs(t))[0]?.storageId).toBe(mp4B);
+    // The old final is orphaned by BOTH repoints, and only then deleted — never leaked.
+    expect(await blobExists(t, mp4A)).toBe(false);
+    expect(await blobExists(t, mp4B)).toBe(true);
+  });
+
+  test("captions OWED: the vault doc HOLDS the old final until the burn repoints it", async () => {
+    const t = harness();
+    const { planId, reelId } = await seedSaveable(t);
+    // Pipeline #1 completes at the caption terminal; the vault doc points at capA.
+    const capA = await storeBlob(t, new Uint8Array([1]), "video/mp4");
+    await burn(t, planId, { ok: true, captionedStorageId: capA, renderMs: 1 });
+    expect(await blobExists(t, reelId)).toBe(false); // uncaptioned #1 already cleaned up
+
+    // A regenerate starts: clearRender resets status + caption plane, HOLDS the artifacts.
+    await t.run(async (ctx) => {
+      await ctx.db.patch(planId, { renderStatus: "pending", captionStatus: undefined });
+      // The new batch reserved captions — an `stt` line exists, so a burn is coming.
+      await ctx.db.insert("mediaJobs", {
+        tenantId: A,
+        planId,
+        batchId: "batch_save",
+        blockIndex: -1,
+        provider: "openai",
+        kind: "stt",
+        model: MEDIA_DEFAULT_STT.model,
+        spec: { kind: "stt", audioMinutes: 0.5 },
+        promptHash: "0".repeat(64),
+        status: "queued",
+        estUsd: 0.006,
+        createdAt: T0,
+        updatedAt: T0,
+      });
+    });
+
+    // The new UNCAPTIONED final lands. The vault doc must NOT be repointed yet — and the old
+    // captioned final it references must survive this terminal.
+    const mp4B = await storeBlob(t, new Uint8Array([2]), "video/mp4");
+    await t.run(async (ctx) =>
+      ctx.runMutation(internal.render.renderReel.recordRender, {
+        tenantId: A,
+        planId,
+        batchId: "batch_save",
+        result: {
+          ok: true,
+          renderStorageId: mp4B,
+          sidecarStorageId: mp4B,
+          sidecarHash: "c".repeat(64),
+          sceneCount: 4,
+          renderMs: 1,
+          gatesPassed: 1,
+          summary: { durationS: 30, sceneCount: 4, gates: ["g"] },
+        },
+      }),
+    );
+    expect((await planRowOf(t, planId))?.renderStorageId).toBe(mp4B);
+    expect((await reelDocs(t))[0]?.storageId).toBe(capA); // the doc still holds the old final
+    expect(await blobExists(t, capA)).toBe(true); // …so the blob is NOT deleted
+
+    // The burn completes: plan and doc repoint to capB; capA and the uncaptioned mp4B both go.
+    const capB = await storeBlob(t, new Uint8Array([3]), "video/mp4");
+    await burn(t, planId, { ok: true, captionedStorageId: capB, renderMs: 1 });
+    expect((await planRowOf(t, planId))?.renderStorageId).toBe(capB);
+    expect((await reelDocs(t))[0]?.storageId).toBe(capB);
+    expect(await blobExists(t, capA)).toBe(false);
+    expect(await blobExists(t, mp4B)).toBe(false);
+    expect(await blobExists(t, capB)).toBe(true);
+  });
+});
