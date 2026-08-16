@@ -739,3 +739,155 @@ test("converse writes NOTHING — it is a read-shaped turn (§4, and the state s
   // conversational turn on the log plane, which §4 forbids.
   expect(await planeCounts(t)).toEqual(before);
 });
+
+// ── BETA-03: the first-send offer projection (25-04) ─────────────────────────────────────────────
+//
+// These use a REAL `users` row and the `${userId}|session_x` subject shape, unlike the tests above
+// which pass a bare tenant string — `firstSendOffer` does `ctx.db.get(ctx.userId)`, so a synthetic
+// tenant id would read null and every case would collapse to `no_address` for the wrong reason.
+//
+// The claim under test is that this is a PROJECTION: no row anywhere records that an offer was
+// made, so there is nothing to go stale.
+
+/** A real users row + the identity that resolves to it. */
+async function seedUser(t: TestConvex<typeof schema>, fields: Partial<Doc<"users">> = {}) {
+  const userId = await t.run((ctx) => ctx.db.insert("users", fields));
+  return { userId, as: t.withIdentity({ subject: `${userId}|session_x` }) };
+}
+
+/** Complete onboarding for a real user id, the same way the product does. */
+async function completeOnboarding(t: TestConvex<typeof schema>, userId: Id<"users">) {
+  await seedTierRow(t, String(userId), { tier: "sme", tierSource: "derived", ...COMPLETE_FACTS });
+  await t
+    .withIdentity({ subject: `${userId}|session_x` })
+    .mutation(api.onboarding.commitProfile, { profile: PROFILE });
+}
+
+test("firstSendOffer refuses BEFORE onboarding is complete, naming the reason", async () => {
+  const t = setup();
+  const { as } = await seedUser(t, { email: "owner@example.com" });
+
+  expect(await as.query(api.onboarding.firstSendOffer, {})).toEqual({
+    eligible: false,
+    recipient: null,
+    emailVerified: false,
+    reason: "onboarding_incomplete",
+  });
+});
+
+test("firstSendOffer becomes eligible after commitProfile, addressed to the user's OWN email", async () => {
+  const t = setup();
+  const { userId, as } = await seedUser(t, {
+    email: "owner@example.com",
+    emailVerificationTime: 123,
+  });
+  await completeOnboarding(t, userId);
+
+  expect(await as.query(api.onboarding.firstSendOffer, {})).toEqual({
+    eligible: true,
+    recipient: "owner@example.com",
+    emailVerified: true,
+    reason: "ok",
+  });
+});
+
+test("a THIN idea-stage profile is eligible — only oneLineDescription is non-empty", async () => {
+  // Phase 11's sparse-start rule survives. `persona` is NOT an input at any layer (ProfileInput
+  // omits it and vProfile has no such key), so this fixture cannot carry one.
+  const t = setup();
+  const { userId, as } = await seedUser(t, { email: "idea@example.com" });
+  await seedTierRow(t, String(userId), {
+    tier: "solopreneur",
+    tierSource: "derived",
+    ...COMPLETE_FACTS,
+  });
+  await t.withIdentity({ subject: `${userId}|session_x` }).mutation(api.onboarding.commitProfile, {
+    profile: {
+      name: "",
+      oneLineDescription: "An idea for a bakery.",
+      stage: "idea",
+      offering: "",
+      targetCustomer: "",
+      primaryGoals: [],
+      knownConstraints: [],
+    },
+  });
+
+  const offer = await as.query(api.onboarding.firstSendOffer, {});
+  expect(offer.eligible).toBe(true);
+  expect(offer.recipient).toBe("idea@example.com");
+});
+
+test("an ABSENT users.email makes the offer ineligible — there is no fallback address", async () => {
+  // `users.email` is v.optional and an OAuth profile can legitimately carry no email claim.
+  const t = setup();
+  const { userId, as } = await seedUser(t, {});
+  await completeOnboarding(t, userId);
+
+  expect(await as.query(api.onboarding.firstSendOffer, {})).toEqual({
+    eligible: false,
+    recipient: null,
+    emailVerified: false,
+    reason: "no_address",
+  });
+});
+
+test("a self-asserted (password) address is offered but reported UNVERIFIED", async () => {
+  const t = setup();
+  const { userId, as } = await seedUser(t, { email: "self@example.com" }); // no verification time
+  await completeOnboarding(t, userId);
+
+  const offer = await as.query(api.onboarding.firstSendOffer, {});
+  expect(offer.eligible).toBe(true);
+  expect(offer.emailVerified).toBe(false);
+});
+
+test("the offer takes NO arguments — a caller cannot name the recipient", async () => {
+  const t = setup();
+  const { userId, as } = await seedUser(t, { email: "owner@example.com" });
+  await completeOnboarding(t, userId);
+
+  // The validator has no fields, so an attempt to supply one is refused outright. This is the
+  // open-relay guard: an onboarding offer that accepted an address would be one.
+  await expect(
+    as.query(api.onboarding.firstSendOffer, { recipient: "victim@elsewhere.test" } as never),
+  ).rejects.toThrow();
+});
+
+test("one tenant's offer never reads another tenant's address", async () => {
+  const t = setup();
+  const a = await seedUser(t, { email: "a@example.com" });
+  const b = await seedUser(t, { email: "b@example.com" });
+  await completeOnboarding(t, a.userId);
+  await completeOnboarding(t, b.userId);
+
+  expect((await a.as.query(api.onboarding.firstSendOffer, {})).recipient).toBe("a@example.com");
+  expect((await b.as.query(api.onboarding.firstSendOffer, {})).recipient).toBe("b@example.com");
+});
+
+test("the offer persists NO state — asking twice writes nothing", async () => {
+  // The no-checklist claim. If this ever writes, a refresh could show a completed offer for an
+  // action that never happened.
+  const t = setup();
+  const { userId, as } = await seedUser(t, { email: "owner@example.com" });
+  await completeOnboarding(t, userId);
+
+  const before = await t.run(async (ctx) => ({
+    tenantProfiles: (await ctx.db.query("tenantProfiles").collect()).length,
+    vaultDocuments: (await ctx.db.query("vaultDocuments").collect()).length,
+    requests: (await ctx.db.query("requests").collect()).length,
+    plans: (await ctx.db.query("plans").collect()).length,
+  }));
+
+  await as.query(api.onboarding.firstSendOffer, {});
+  await as.query(api.onboarding.firstSendOffer, {});
+
+  expect(
+    await t.run(async (ctx) => ({
+      tenantProfiles: (await ctx.db.query("tenantProfiles").collect()).length,
+      vaultDocuments: (await ctx.db.query("vaultDocuments").collect()).length,
+      requests: (await ctx.db.query("requests").collect()).length,
+      plans: (await ctx.db.query("plans").collect()).length,
+    })),
+  ).toEqual(before);
+});
