@@ -1,5 +1,55 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-08-16 (**THE PRODUCTION GATE IS GREEN: 40/40, evidence on `cockpit-agent v8`,
+> and the fault was IN THE FIXTURE — the agent was right all along. THIS SUPERSEDES THE ENTRY
+> IMMEDIATELY BELOW**, which said the production gate comes back 39/40 and named the harness's
+> called-vs-never-called blindness as the blocker. Both were true when written. The blindness is
+> still real and still worth fixing; it simply was not needed to solve this.
+>
+> **ROOT CAUSE, and it is a fixture-authoring lesson rather than a runtime one.**
+> `37-finance-update` stated its figure about **"Foxglove Bookkeeping"** — a name that appears
+> NOWHERE else in the repository — while `seedGoldenEvalBlueprint` gives the golden tenant the
+> business `Northwind <needle> Logistics`. The fixture therefore asked the agent to record a THIRD
+> PARTY's cash position as the USER'S OWN `cashOnHand`. On a near-empty tenant the agent has nothing
+> to contrast it against and charitably stages the write; once the tenant carries the confirmed
+> blueprint plus the contacts and companies the email fixtures create, it correctly declines. **The
+> gate was red because the model got BETTER, not worse.**
+>
+> **THE RETRY WAS THE TELL, and it is the transferable technique.** With 14 fixtures ahead, 37 came
+> back `PASS (retried)` (run `25472dfa`) — failed attempt 1, passed attempt 2. A deterministic
+> upstream poison fails both attempts identically; a MARGINAL one flips. That single observation
+> killed the "one bad fixture upstream" model and redirected the search to fixture 37's own text,
+> after two sessions of bisecting had eliminated 30-36 and were about to spend ~$0.60 more
+> eliminating 1-29. **When a case fails only at depth, read the retry column before bisecting.**
+> The dose curve, for the record: PASS alone and with 7 ahead ($0.0035); FAIL-then-PASS with 14
+> ahead; FAIL BOTH ATTEMPTS with 36 ahead, 3 runs running.
+>
+> **The corroborating read was FREE and nobody had taken it.** `plans:getById` on the failing plan
+> rows (their ids are printed by `attemptCase` on every attempt, and the rows outlive the run) shows
+> them BARE — `status: collecting`, no `kind`, no `financeClaims` — i.e. no tool touched the plan at
+> all. `cash:financeSpineFor` on the eval tenants returns null, which eliminated accumulated finance
+> state as the accumulator, because staging writes only the plan row (`writeFigureRow` runs at
+> Approve and no fixture ever approves). Both reads are `convex run` against production at $0.
+>
+> **THE FIX, and why it is not a weakened fixture.** The turn now reads "our cash on hand right now
+> is $42,000". **All four assertions are unchanged.** The old text tested charitable disambiguation
+> on an empty tenant, which the fixture's own description never claimed to test. The needles moved
+> from the company name to `$42,000`/`42,000` — a STRICTLY STRONGER §4 probe, since the VALUE is the
+> sensitive half and `audit.payload` carries refs/hashes/counts only.
+>
+> **MEASURED:** gate `e898d7d0`, full and unfiltered, pinned `@8`, **40/40**, `$0.3710` exec +
+> `$0.1194` specialist = **$0.4905**, exit 0, one retry (`20-reset-and-honesty`, a known flake).
+> Fixture 37 passed at **$0.0035** — its clean-window cost — from the very position that failed 3/3
+> before. Then production was activated v6 → v8 and re-verified UNPINNED (run `a40966d8`, 2/2). See
+> `skill-registry.md` for the flip and `.planning/debug/finance-update-fails-only-in-full-sequence.md`
+> for the whole trail.
+>
+> **STILL OWED, and now the only open item here:** `mediaDispatchCountForThread` remains hardcoded to
+> one tool name, so the harness still cannot distinguish a tool CALLED AND REFUSED from one NEVER
+> CALLED. Every dispatch-shaped fixture inherits that blindness. Generalising it is $0 in API spend
+> and wants a production deploy; it was not needed here only because the plan row happened to answer
+> the question.)
+
 > Last verified: 2026-08-16 (**COCKPIT-AGENT v26 IS NOW ACTIVE — v24 → v26, at owner instruction,
 > on the evidence from gate `d59099cd` (40/40).** The candidate stream that had been stuck since
 > `420c852b` is drained: nothing is pending activation, and the three ungated body changes this

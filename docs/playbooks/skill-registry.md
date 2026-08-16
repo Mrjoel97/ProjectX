@@ -1,5 +1,42 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-16 (**PRODUCTION IS NOW ON `cockpit-agent` v8. THE POINTER MOVED: v6 → v8.
+> THIS SUPERSEDES THE ENTRY IMMEDIATELY BELOW**, which said "PRODUCTION STILL RUNS THE OLD BODY, AND
+> THE PRODUCTION CANDIDATE IS GATE-BLOCKED" — true when written, false now. The gate that had come
+> back 39/40 three times went **40/40** once the defect behind it was found, and it was NOT in the
+> body: `37-finance-update` named a THIRD-PARTY COMPANY ("Foxglove Bookkeeping") while the golden
+> tenant's own blueprint is `Northwind <needle> Logistics`, so the fixture asked the agent to record
+> another company's cash position as the user's own `cashOnHand`. The agent declined once the tenant
+> had enough context to tell them apart — it was behaving MORE correctly, not less. Fixture corrected
+> to "our cash on hand", all four assertions unchanged. Full detail in
+> `.planning/debug/finance-update-fails-only-in-full-sequence.md`.
+>
+> **THE TWO-STEP RULE HELD THROUGHOUT AND NOTHING WAS HAND-ACTIVATED.** Gate `e898d7d0` — full,
+> unfiltered, pinned `cockpit-agent@8`, **40/40**, `$0.3710` exec + `$0.1194` specialist =
+> **$0.4905**, exit 0, one retry (`20-reset-and-honesty`, a known flake) — recorded evidence on the
+> `@8` row. Only then did `skills:activateSkill` flip the pointer. `activateSkill` re-checks
+> EVAL_GATE itself, so a hand-flip without that evidence would have thrown, and no attempt was made
+> to route around it.
+>
+> **VERIFIED AT THE FLIP, not assumed:** active read back as **v8**; stored body sha `df23a5541f2b`,
+> byte-identical to `packages/contracts/skills/cockpit-agent.md`. **NORMALIZE LINE ENDINGS BEFORE
+> COMPARING THAT SHA** — the working copy is CRLF and hashes to `bcc166cdedd2` raw, which looks like
+> a mismatch and is not one; `tr -d '\r'` gives `df23a5541f2b`. Byte count and char count also differ
+> legitimately (40,553 bytes vs 40,273 chars) because the body is full of UTF-8 em-dashes. Then
+> fixtures `37-finance-update` and `40-calendar-stage` were re-run **UNPINNED** (run `a40966d8`, no
+> `--skill`, so the loop loads whatever is ACTIVE) and both PASSED at $0.0035 each. That is the live
+> path, not a pin.
+>
+> **v8 ships THREE lanes at once**, exactly as dev's v26 did and with the identical body: 20-12's
+> media sections, 20.1-02's Drive section, and item 4's calendar section + document-section merge.
+> The active body went 38,454 → 40,273 chars and `## The user's calendar` is present where v6 had
+> none. Rollback is `activateSkill` on v6 — archived rows are exempt from EVAL_GATE BY STATUS, so a
+> rollback is never blocked by a broken harness.
+>
+> **THE DEPLOYMENT-SCOPE LESSON STANDS even though its headline is now moot:** dev and production
+> keep SEPARATE rows, counters and evidence, and the same bytes are v26 there and v8 here. An entry
+> in this file that names no deployment will be read as naming both. Name it.)
+
 > Last verified: 2026-08-16 (33-09 — `media-director` **v3 authored on disk, and NOT seeded**. The
 > `.md` under `packages/contracts/skills/` gained the guided-intake brief, two-variation and
 > citation contracts; `packages/contracts/src/skills/mediaDirector.ts` was regenerated in the SAME

@@ -2044,9 +2044,24 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ### Blockers/Concerns
 
-- **PRODUCTION DOES NOT RUN THE COCKPIT BODY THE PLAYBOOKS APPEAR TO CLAIM (closed by owner
-  decision 2026-08-16, defect open and unfixed).** `skill-registry.md` says "COCKPIT-AGENT v26 IS
-  NOW ACTIVE" and `agent-runtime.md` says "THE GATE IS GREEN, 40/40" — **both true of DEV ONLY**,
+- ~~**PRODUCTION DOES NOT RUN THE COCKPIT BODY THE PLAYBOOKS APPEAR TO CLAIM**~~ — **RESOLVED
+  2026-08-16. PRODUCTION IS NOW ON `cockpit-agent` v8 (v6 → v8), gate `e898d7d0` 40/40, evidence
+  recorded, activated and re-verified UNPINNED (run `a40966d8`, 2/2).** The blocker below was
+  correct on the evidence at the time and wrong about the cause: the red gate was NOT a body defect
+  and NOT an environment effect. `37-finance-update` stated its figure about "Foxglove Bookkeeping",
+  a name found nowhere else in the repo, while the golden tenant's blueprint is
+  `Northwind <needle> Logistics` — so it asked the agent to record a THIRD PARTY's cash position as
+  the user's own `cashOnHand`. The agent declined once the tenant had context enough to tell them
+  apart; **it was behaving MORE correctly, not less.** The tell was the RETRY (`PASS (retried)` at
+  14 fixtures deep, run `25472dfa`): a deterministic upstream poison fails both attempts, a marginal
+  one flips. Fixture corrected to "our cash on hand", ALL FOUR ASSERTIONS UNCHANGED. Nothing was
+  hand-activated — `activateSkill` re-checks EVAL_GATE and the evidence came from a real 40/40. Full
+  trail in `.planning/debug/finance-update-fails-only-in-full-sequence.md`. **Still owed:**
+  `mediaDispatchCountForThread` is hardcoded to one tool name, so the harness still cannot tell
+  called-and-refused from never-called. Superseded record follows.
+- **[SUPERSEDED — see above] PRODUCTION DOES NOT RUN THE COCKPIT BODY THE PLAYBOOKS APPEAR TO CLAIM
+  (closed by owner decision 2026-08-16, defect open and unfixed).** `skill-registry.md` says
+  "COCKPIT-AGENT v26 IS NOW ACTIVE" and `agent-runtime.md` says "THE GATE IS GREEN, 40/40" — **both true of DEV ONLY**,
   and both have since been qualified in place. Each deployment keeps its own `skills` rows, version
   counter and EVAL_GATE evidence: the identical body (sha `df23a5541f2b`) is dev candidate **v26**
   (gate `d59099cd` 40/40, activated) and production candidate **`@8`** (gate run 3×, **39/40**

@@ -1,17 +1,76 @@
 ---
-status: closed_by_decision
+status: resolved
 trigger: "37-finance-update fails 3/3 inside the FULL 40-fixture production gate and passes 5/5 in every smaller window; blocks recordEvalEvidence on production cockpit-agent@8; 2026-08-16"
 created: 2026-08-16T15:55:00.0000000Z
-updated: 2026-08-16T16:10:00.0000000Z
+updated: 2026-08-16T17:05:00.0000000Z
 closed: 2026-08-16
-resolution: not_pursued
+resolution: fixed_fixture_defect
 ---
 
-## DECISION, 2026-08-16 — STOP. NOT FIXED, NOT REPRODUCED FURTHER.
+## RESOLVED 2026-08-16 — THE FIXTURE WAS WRONG AND THE AGENT WAS RIGHT.
 
-Closed by owner instruction after run `030449d7`, on the recommendation recorded below. **The
-defect is real and still open in fact — only the investigation is closed.** Production
-`cockpit-agent@8` stays a CANDIDATE and is NOT activated.
+**THIS SUPERSEDES THE "STOP / not_pursued" DECISION RECORDED BELOW**, which was correct on the
+evidence available at the time and wrong about the cause. The owner reversed it and asked for a fix
+and an activation; both happened.
+
+### Root cause
+
+The golden tenant's own seeded blueprint is **`Northwind <needle> Logistics`**
+(`smoke.ts`, `seedGoldenEvalBlueprint`). Fixture 37's turn said:
+
+> "Quick number for you — **Foxglove Bookkeeping's** cash on hand right now is $42,000 …"
+
+**"Foxglove Bookkeeping" appears NOWHERE else in the repository** — not the tenant's business, not a
+seeded contact, not a vault document. The fixture therefore asked the agent to record ANOTHER
+COMPANY'S cash position as the USER'S OWN `cashOnHand`.
+
+On a near-empty tenant the agent has nothing to contrast it against, charitably reads Foxglove as
+the user's business, and stages the write → PASS. Once the tenant carries the confirmed Northwind
+blueprint plus the contacts and companies the email fixtures create, the agent correctly reads
+Foxglove as a **third party** — and a third party's cash position is not the user's `cashOnHand` —
+so it stages nothing → FAIL. **The agent was behaving MORE correctly in the failing case.** Three
+sessions read that as a routing failure.
+
+The decisive tell was not the failure but the RETRY: with 14 fixtures ahead, 37 failed attempt 1 and
+passed attempt 2 (`PASS (retried)`, run `25472dfa`). A deterministic poison fails both attempts
+identically; a marginal one flips. That is what killed the "one bad fixture upstream" model and
+sent the search to the fixture's own text.
+
+### Fix
+
+`packages/backend/scripts/eval-cases/37-finance-update.json` — the turn now reads **"our cash on
+hand right now is $42,000"**. **ALL FOUR ASSERTIONS ARE UNCHANGED** (`financeClaimCount: 1`,
+`statusAtMost: proposed`, `recipientCount: 0`, `attachmentCount: 0`), so this is a CORRECTION and
+not a weakening: the old text tested charitable disambiguation on an empty tenant, which the
+fixture's own description never claimed to test. Needles moved from the company name to
+`$42,000`/`42,000`, a STRICTLY STRONGER §4 redaction probe — the VALUE is the sensitive half, and
+`audit.payload` must carry refs/hashes/counts only.
+
+### Verification
+
+- **Full unfiltered production gate `e898d7d0`: 40/40**, pinned `cockpit-agent@8`, `$0.3710` exec +
+  `$0.1194` specialist = **$0.4905**, exit 0, one retry (`20-reset-and-honesty`, a known flake
+  unrelated to this work). **Evidence recorded on `cockpit-agent v8`.** Fixture 37 passed at
+  **$0.0035** — its clean-window cost — with 36 fixtures ahead of it, the exact position that
+  failed 3/3 before.
+- **Production activated: `cockpit-agent` v6 → v8.** Read back active = v8; stored body sha
+  `df23a5541f2b`, byte-identical to `packages/contracts/skills/cockpit-agent.md` LF-normalized (the
+  raw sha `bcc166cdedd2` differs only because the working copy is CRLF — normalize before comparing
+  or you will chase a phantom).
+- **Unpinned live-path check, run `a40966d8`: 2/2** — `37-finance-update` and `40-calendar-stage`
+  both PASS with NO `--skill` pin, so the loop loaded the ACTIVE row. That is the path a real
+  conversation takes; every prior pass was against a pin.
+
+### What production gained
+
+v8 carries three lanes at once: 20-12's media sections, 20.1-02's Drive section, and item 4's
+calendar section plus the merged document section. Active body went 38,454 → 40,273 chars and the
+`## The user's calendar` section is now present, having been absent under v6.
+
+### Historical record — the superseded decision follows
+
+**The defect was real and open at the time this was written.** Production
+`cockpit-agent@8` was a CANDIDATE and was NOT activated.
 
 **What production actually serves, read from the deployment 2026-08-16 (free read-only
 `skills:getActiveSkill`):** `cockpit-agent` **v6**, sha `dfb75850887e`, 38,454 chars — it **has**
