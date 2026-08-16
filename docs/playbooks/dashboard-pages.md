@@ -1,5 +1,38 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-16 (**TWO OF THE DISCLOSURES CORRECTED IN THE ENTRY BELOW WERE STILL WRONG,
+> AND ONLY PRODUCTION CONFIG COULD SHOW IT.** Both were resolved by reading the live deployment with
+> `npx convex env get … --prod`, which is the step the source-only sweep could not take.
+>
+> 1. **`WORM_BUCKET` IS NOT SET IN PRODUCTION.** `worm.ts:55` short-circuits without it, so the WORM
+>    export has never run on the live deployment and §9's "are exported to write-once storage" was
+>    FALSE — for the whole life of the document, not as a regression. §9 now states the guarantee it
+>    can actually keep (append-only by design: no code path in Pikar modifies or deletes an audit
+>    record) and says plainly that write-once-at-rest export is **built but not switched on**. The
+>    AWS bullet in §7 says the same, so a reader cannot infer from the processor list that the
+>    archive is live. **Setting `WORM_BUCKET` to a real S3 bucket with Object Lock would make the
+>    stronger claim true again** — that is an infra task with AWS credentials, and whoever does it
+>    owns reverting both edits in the same change.
+> 2. **The region IS Singapore after all.** The entry below deliberately wrote "Asia-Pacific" because
+>    `ap-southeast-1` appeared only in a `vi.stubEnv` fixture. Production `WAN_API_BASE_URL` is
+>    `https://ws-…​.ap-southeast-1.maas.aliyuncs.com`, so §8 now names Singapore and the region code.
+>    The earlier caution was still right: the fixture was not evidence, the deployment is. Verify
+>    against `--prod` before naming a region, and re-verify if `WAN_API_BASE_URL` ever changes.
+>
+> **NO TEST GUARDS EITHER OF THESE, DELIBERATELY.** Both claims are true or false according to
+> deployment ENV, which no unit test in this repo can observe — a test asserting the policy's wording
+> would only pin the wording, not the fact, and would read as coverage it does not have. They belong
+> in the ops runbook and here. **If you switch WORM on, or change the WAN region, this policy is
+> wrong until someone edits it, and nothing will go red.**
+>
+> Also recorded from the same `--prod` read, because it contradicts a blocker carried in the notes
+> for weeks: `MICROSOFT_OAUTH_CLIENT_ID` (a real GUID) and `MICROSOFT_OAUTH_CLIENT_SECRET` ARE set in
+> production with a live `MICROSOFT_CALENDAR_REDIRECT_URI`. **An Azure app registration EXISTS.** The
+> Phase 17-08 Graph-concurrency probe is therefore NOT blocked on "no Azure signup without a payment
+> card" — it is blocked only on a Microsoft account consenting and the gated probe being run.
+>
+> core connectionsSurface 30/30, web `tsc --noEmit` exit 0, biome clean. Not deployed.)
+
 > Last verified: 2026-08-16 (**THE POLICY'S CONTROLS WERE VERIFIED REPEATEDLY WHILE ITS DISCLOSURES
 > WENT UNREAD.** A GOVN-03 evidence sweep found the milestone audit's "tenant export/deletion are
 > absent" claim STALE — both exist and are wired (`tenantExport.ts:36`, `tenantDelete.ts:187`) — and
