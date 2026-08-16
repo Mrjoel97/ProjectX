@@ -3,8 +3,10 @@ import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import {
   durationLabel,
+  estimateView,
   failureText,
   heroState,
+  KIND_COST_NOTE,
   isPickableVideo,
   KIND_LABEL,
   pictureLine,
@@ -181,6 +183,116 @@ describe("the refusal names the lever, in the deck's own vocabulary", () => {
 
   test("an unrecognised reason still says something true", () => {
     expect(refusalText({ reason: "something_new" }, base)).toBe(
+      "This reel can't be generated yet.",
+    );
+  });
+});
+
+describe("33-06: the estimate is ONE headline, and it is jobEstimate's own number", () => {
+  const est = {
+    lines: [
+      { label: "clips", qty: 2, unit: "8s of 30s 720p", cents: 80 },
+      { label: "stills", qty: 2, unit: "pan/zoom", cents: 2 },
+      { label: "voice", qty: 3, unit: "420 chars", cents: 6 },
+      { label: "captions", qty: 1, unit: "0.50 min", cents: 3 },
+      { label: "render (incl. one retry)", qty: 1, unit: "sandbox", cents: 4 },
+    ],
+    totalCents: 95,
+    capCents: 500,
+    remainingCents: 412,
+    refusal: null,
+  };
+  const o = { noun: "scene", maxChars: 140 } as const;
+
+  test("THE HEADLINE IS THE TOTAL — never a sum of the lines", () => {
+    // Deliberately inconsistent input: the lines add to 95 and the total says 112. `jobEstimate`
+    // owns the number the rail will consume (the render line is priced there, not here), so a view
+    // that re-added the lines would print a SECOND estimate — the money bug in a new costume.
+    const view = estimateView({ ...est, totalCents: 112 }, o);
+    expect(view.headline).toBe("$1.12");
+  });
+
+  test("every line keeps ITS OWN label, including 33-04's retry wording", () => {
+    const view = estimateView(est, o);
+    expect(view.lines.map((l) => l.label)).toEqual([
+      "clips",
+      "stills",
+      "voice",
+      "captions",
+      "render (incl. one retry)",
+    ]);
+    expect(view.lines.map((l) => l.amount)).toEqual(["$0.80", "$0.02", "$0.06", "$0.03", "$0.04"]);
+    expect(view.lines[0]?.detail).toBe("2 × 8s of 30s 720p");
+  });
+
+  test("the clip line keeps the 40x lever discoverable — the whole point of itemising", () => {
+    const view = estimateView(est, o);
+    expect(view.lines[0]?.note).toMatch(/40/);
+    expect(view.lines[1]?.note).toBeNull();
+  });
+
+  test("a still is a FORTIETH of a clip, not a tenth — the tile note said the wrong number", () => {
+    // Measured at 20.2 wave 7 and written into `storyboard.ts`: a 4 s generated clip is $0.40 and a
+    // still is $0.01 at any length. "About a tenth" understated the only lever the user has by 4x.
+    expect(KIND_COST_NOTE.animated_image).toMatch(/fortieth/);
+    expect(KIND_COST_NOTE.animated_image).not.toMatch(/tenth/);
+  });
+
+  test("the remaining budget is named in money, beside the headline", () => {
+    expect(estimateView(est, o).remaining).toMatch(/\$4\.12 of today's media budget/);
+  });
+
+  test("an unresolved estimate disables Generate — a button that spends before the number lands", () => {
+    const view = estimateView(undefined, o);
+    expect(view.generateDisabled).toBe(true);
+    expect(view.lines).toEqual([]);
+    expect(view.headline).toBe("—");
+  });
+
+  test("a resolved, unrefused estimate with lines ENABLES Generate", () => {
+    const view = estimateView(est, o);
+    expect(view.generateDisabled).toBe(false);
+    expect(view.refusalSentence).toBeNull();
+  });
+
+  test("a refusal disables Generate and names the lever", () => {
+    const view = estimateView({ ...est, refusal: { reason: "over_job_cap" } }, o);
+    expect(view.generateDisabled).toBe(true);
+    expect(view.refusalSentence).toMatch(/over the \$5.00 per-reel limit/);
+  });
+
+  test("an estimate with NO lines cannot be generated — there is nothing to buy", () => {
+    expect(estimateView({ ...est, lines: [] }, o).generateDisabled).toBe(true);
+  });
+});
+
+describe("33-06: every new refusal code is a DISTINCT lever, in a sentence", () => {
+  const base = { capCents: 500, totalCents: 812, maxChars: 140, noun: "scene" } as const;
+  const sentences = [
+    "unconfirmed_claims",
+    "deck_locked",
+    "no_alternate",
+    "nothing_to_render",
+  ].map((reason) => refusalText({ reason, blockIndex: 1 }, base));
+
+  test("unconfirmed claims send the user to the confirmation badge, not to a rewrite", () => {
+    expect(sentences[0]).toMatch(/[Cc]onfirm/);
+    expect(sentences[0]).toContain("Scene 2");
+  });
+
+  test("a locked deck says the edits moved to the canvas, and that they are paid", () => {
+    expect(sentences[1]).toMatch(/locked/);
+    expect(sentences[1]).toMatch(/scene by scene|on the canvas/);
+  });
+
+  test("no alternate and nothing-to-render are different sentences, not one shrug", () => {
+    expect(sentences[2]).toMatch(/second storyboard/);
+    expect(sentences[3]).toMatch(/nothing to re-assemble|generate the reel first/);
+    expect(new Set(sentences).size).toBe(4);
+  });
+
+  test("an unknown code still falls through to the generic sentence", () => {
+    expect(refusalText({ reason: "invented_tomorrow" }, base)).toBe(
       "This reel can't be generated yet.",
     );
   });
