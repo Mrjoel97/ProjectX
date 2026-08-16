@@ -1,5 +1,43 @@
 # Playbook: Beta Admission (BETA-01)
 
+> Last verified: 2026-08-17 (**`admitIdentity`'s `existingUserId` branch no longer patches a user
+> document it has not confirmed exists.**)
+>
+> THIS IS A FIXED PRODUCTION LOCKOUT, not a hypothetical. `authAccounts` is Convex Auth's table,
+> keyed by `userId`; `users` is ours, deleted by tenant erasure via the `by_tenant` walk that cannot
+> reach `authAccounts`. Nothing made those two move together, so the 22.1-05 live erasure (request
+> `a73023088f58ea6e`) left **1 `authAccounts` row and 23 `authSessions` rows** pointing at a deleted
+> user. Convex Auth kept supplying that dead id as `existingUserId`, the unguarded `db.patch` threw
+> *"Update on nonexistent document ID"* inside `auth:store`, the transaction rolled back, and
+> `/api/auth/callback/google` returned HTTP 500. **Permanently** — every retry and every attempt to
+> re-register resolved the same orphan and died on the same line. The owner could not sign in to
+> their own production deployment.
+>
+> `tenantDelete.ts` now removes the auth binding during erasure (see `audit-dead-letter.md`), but
+> that fix does not heal orphans that already exist, and **admission must not assume erasure was
+> correct in the past**. So the branch now confirms the user document before patching it. A missing
+> document means the account is a leftover: fall through to fresh admission, which requires a valid
+> unredeemed invite — correct, because that person genuinely has no tenant any more. Convex Auth
+> then re-points the stale account at the newly inserted user (`createOrUpdateAccount` patches
+> `userId` whenever it differs, `users.js:117`), so the orphan **self-heals** rather than bricking
+> the identity.
+>
+> **The property that must not regress:** a LIVE returning identity is still patched in place and
+> still skips the invite check. Turning returns into signups would demand an invite from every
+> existing user the moment their original invite row was consumed — the exact lockout the branch
+> exists to prevent. Both directions are pinned by tests.
+>
+> **Verification performed:** two cases in `invites.test.ts` — an orphaned account reaching
+> `INVITE_REQUIRED` (a refusal proves the invite lookup was reached, rather than dying two
+> statements earlier), then being admitted as a NEW user id once re-invited; and a live user still
+> patched in place. Mutation-checked: removing the `db.get` guard turns the orphan case red and
+> leaves the live-user case green, so neither test is vacuous. 47/47 green across `invites` and
+> `tenantDelete`; `pnpm --filter @pikar/backend typecheck` clean.
+>
+> **Operational note for whoever hits this again:** the recovery is to delete the orphaned
+> `authAccounts` row for that `userId`. `invites.approve` is an `ownerMutation`, so it cannot be
+> used while the last owner is the one locked out — the Convex dashboard is the only way back in.
+
 > **25-10 note, 2026-08-17 — `/admin` gained a hosted-readiness section**
 > (`ops.envCheck`, owner-only, NAMES ONLY). It is on this playbook's watched path but belongs to
 > `production-beta.md`, which owns the manifest and its invariants. Relevant here for one reason:

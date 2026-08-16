@@ -305,8 +305,28 @@ export async function admitIdentity(
   // was consumed. Update the allowed profile fields and nothing else — notably NOT `owner`.
   if (args.existingUserId) {
     const userId = args.existingUserId as Id<"users">;
-    await db.patch(userId, userFields(args.profile));
-    return userId;
+    /**
+     * THE ACCOUNT ROW CAN OUTLIVE ITS USER, so this patch must not be unguarded.
+     *
+     * Erasure deletes `users` (tenant_owned) while `authAccounts` is Convex Auth's own table,
+     * keyed by `userId` rather than `tenantId` — the tenant walk could not reach it. Measured on
+     * production 2026-08-16: the unguarded patch threw "Update on nonexistent document ID" inside
+     * the `auth:store` mutation, which rolled the whole transaction back and returned HTTP 500 on
+     * `/api/auth/callback/google`. It was PERMANENT, because every retry and every attempt to
+     * re-register resolved the very same orphan and died in the same line.
+     *
+     * `tenantDelete.ts` no longer leaves orphans behind, but that does not heal the ones already
+     * out there, and admission must not depend on erasure having been correct in the past. A
+     * missing user document means this identity's account is a leftover, so fall through and admit
+     * the person as NEW — which requires a fresh invite, exactly as it should, because they
+     * genuinely have no tenant any more. Convex Auth then re-points the stale account at the user
+     * inserted below (`createOrUpdateAccount` patches `userId` whenever it differs), so the orphan
+     * self-heals instead of bricking the identity forever.
+     */
+    if (await db.get(userId)) {
+      await db.patch(userId, userFields(args.profile));
+      return userId;
+    }
   }
 
   const email = normalizeEmail(args.profile.email ?? args.profile.preferred_username);

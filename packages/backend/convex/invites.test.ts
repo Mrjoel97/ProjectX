@@ -690,3 +690,63 @@ describe("pinned @convex-dev/auth internals the zero-persistence claim rests on"
     expect(indexSrc).toContain("const { id, ...profileFromCallback } = await provider.profile(");
   });
 });
+
+// The `authAccounts` row is Convex Auth's, keyed by `userId`; the `users` row is ours, deleted by
+// tenant erasure. Nothing made those two facts move together until 2026-08-16, when a production
+// erasure left the account behind and the unguarded patch in the `existingUserId` branch threw
+// "Update on nonexistent document ID" inside `auth:store` — HTTP 500 on the OAuth callback, and
+// permanent, because every retry resolved the same orphan.
+describe("an account row that outlived its user does not brick admission", () => {
+  test("an orphaned account reaches the invite check instead of crashing on a dead id", async () => {
+    const h = await harness();
+    const first = await approvedInvite(h, "erased@example.com");
+    const deadUserId = await admit(h.t, {
+      profile: { email: "erased@example.com", oauthSubject: "erased-sub" },
+    });
+
+    // Erasure removes the users row and cannot reach authAccounts, so Convex Auth keeps handing
+    // admission the now-dead id. This is exactly the production state.
+    await h.t.run((ctx) => ctx.db.delete(deadUserId));
+
+    // The invite it originally spent is redeemed, so the correct answer is a REFUSAL — and getting
+    // a refusal at all is the proof: it means we reached the invite lookup rather than dying two
+    // statements earlier in the patch.
+    await expect(
+      admit(h.t, {
+        existingUserId: deadUserId,
+        profile: { email: "erased@example.com", oauthSubject: "erased-sub" },
+      }),
+    ).rejects.toThrow("INVITE_REQUIRED");
+
+    // Re-invited, the same human is admitted as genuinely new: a different user id, and the fresh
+    // invite is the one that gets spent. (The old row goes first because `by_email` is `.unique()`.)
+    await h.t.run((ctx) => ctx.db.delete(first.inviteId));
+    const second = await approvedInvite(h, "erased@example.com");
+    const healedUserId = await admit(h.t, {
+      existingUserId: deadUserId,
+      profile: { email: "erased@example.com", oauthSubject: "erased-sub" },
+    });
+
+    expect(healedUserId).not.toBe(deadUserId);
+    expect(await h.t.run((ctx) => ctx.db.get(healedUserId))).not.toBeNull();
+    expect((await h.t.run((ctx) => ctx.db.get(second.inviteId)))?.redeemedAt).toEqual(
+      expect.any(Number),
+    );
+  });
+
+  test("a LIVE user is still patched in place — the guard must not turn returns into signups", async () => {
+    const h = await harness();
+    await approvedInvite(h, "returning@example.com");
+    const userId = await admit(h.t, {
+      profile: { email: "returning@example.com", oauthSubject: "ret-sub", name: "First" },
+    });
+
+    const again = await admit(h.t, {
+      existingUserId: userId,
+      profile: { email: "returning@example.com", oauthSubject: "ret-sub", name: "Renamed" },
+    });
+
+    expect(again).toBe(userId);
+    expect((await h.t.run((ctx) => ctx.db.get(userId)))?.name).toBe("Renamed");
+  });
+});
