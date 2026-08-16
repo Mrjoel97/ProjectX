@@ -2678,6 +2678,31 @@ describe("33-03 — the variations terminal: parseVariations runs FIRST", () => 
     expect(payload.reason).toBe("no_deck");
   });
 
+  test("33-12: an off-grid clip is repaired ON THE ROW, and the row says what moved", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    // 10 + 20 = 30, the declared length: only the GRID is wrong. The parser snaps 10 -> 8 and
+    // gives the 2 seconds to the animated scene. Asserted from the STORED ROW, not the parser —
+    // a repair that never reaches the database is a repair the user never gets.
+    const body = VAR_A_DECK.replace(
+      "| 1 | generated_video | 8 |",
+      "| 1 | generated_video | 10 |",
+    )
+      .replace("| 2 | animated_image | 22 |", "| 2 | animated_image | 20 |");
+    await t.action(
+      internal.dispatch.__runSpecialistWithScript,
+      mediaArgs(planId, { primary: [{ ...textStep(body), usage: SPEND_8_CENTS }] }),
+    );
+
+    const plan = await readPlan(t, planId);
+    expect(plan?.kind).toBe("media");
+    expect(plan?.shots?.map((s) => s.seconds)).toEqual([8, 22]);
+    expect(plan?.deckAdjustments).toEqual([
+      { sceneIndex: 0, fromSeconds: 10, toSeconds: 8, why: "grid" },
+      { sceneIndex: 1, fromSeconds: 20, toSeconds: 22, why: "rebalance" },
+    ]);
+  });
+
   test("BOTH variations refusing still refuses the whole proposal — nothing to salvage", async () => {
     const { t } = await setup();
     const planId = await stagedMediaPlan(t);

@@ -796,6 +796,9 @@ async function persistSceneDeck(
     ...(extra.brief == null ? {} : { brief: extra.brief }),
     // Undefined on every ordinary proposal, which CLEARS a previous salvage note (whole-deck-write).
     lostVariation: extra.lost,
+    // 33-12: the seconds the parser moved to get the clips onto the provider's grid. Empty on a
+    // deck the model got right, and undefined-on-empty so a clean proposal clears a stale note.
+    deckAdjustments: scene.adjustments.length === 0 ? undefined : [...scene.adjustments],
   });
   await ctx.runMutation(internal.audit.log, {
     tenantId: args.tenantId,

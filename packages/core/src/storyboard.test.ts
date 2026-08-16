@@ -758,17 +758,23 @@ describe("parseSceneDeck — the exact-length rule", () => {
 });
 
 describe("parseSceneDeck — the provider grid", () => {
-  it("refuses a generated clip off the 4/8/12 grid, naming the scene", () => {
-    // A 6-second Sora request is a REFUSED request, not a shorter clip — and finding that out at
-    // submit means the rest of the deck has already been bought.
+  it("REPAIRS a generated clip off the 4/8/12 grid rather than refusing the deck (33-12)", () => {
+    // A 6-second Sora request is still not a 6-second clip — but 33-12 stopped throwing the whole
+    // reel away over it. The clip snaps to 4 and the animated scene takes the 2 seconds back, so
+    // the reel is still 30s and nothing is bought against a length the provider would reject.
+    // The refusal survives only where no repair is safe — see the 33-12 describe block.
     const offGrid = [
       `| 1 | generated_video | 6 | Founder at a desk | ${S2} | | |`,
       `| 2 | animated_image | 24 | Mail icons | ${S4} | | |`,
     ];
-    expect(parseSceneDeck(sceneDeck(offGrid))).toMatchObject({
-      reason: "illegal_generated_duration",
-      sceneIndex: 0,
-    });
+    const r = parseSceneDeck(sceneDeck(offGrid));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.scenes.map((s) => s.durationMs / 1000)).toEqual([4, 26]);
+    expect(r.adjustments).toEqual([
+      { sceneIndex: 0, fromSeconds: 6, toSeconds: 4, why: "grid" },
+      { sceneIndex: 1, fromSeconds: 24, toSeconds: 26, why: "rebalance" },
+    ]);
   });
 
   it("lets the OTHER kinds take any whole-second duration — that is why they exist", () => {
@@ -1094,6 +1100,91 @@ describe("parseSceneDeck — per-scene Source lines (33-01, document-level citat
   });
 });
 
+// ── 33-12: THE GENERATED-CLIP GRID IS REPAIRED, NOT JUST REFUSED ──────────────────────────────
+//
+// The generator only makes 4, 8 or 12 second clips. The model is TOLD this in both v2 and v3 of
+// the body and still gets it wrong — and a model that does the wrong thing regardless of the
+// instruction is not fixed by another instruction. Live on 2026-08-16 this cost the owner two
+// consecutive reels.
+//
+// The rule, and its limit: snap an off-grid generated scene DOWN to the nearest legal length, then
+// give the seconds back to the last scene that is NOT a generated clip, so the reel is still
+// exactly as long as the user asked. Lengthening is always safe here — the only narration rule is
+// that a line must not run into the NEXT one, and a longer window cannot break that.
+//
+// **It repairs the GRID, never the ARITHMETIC.** If the model's own rows do not add up to the
+// length it declared, that is still `duration_mismatch`. Snapping a clip is fixing a fact about
+// the provider; rebalancing a deck that never summed correctly would be inventing a reel.
+describe("parseSceneDeck — off-grid generated clips are repaired (33-12)", () => {
+  // 10 + 6 + 2 + 12 = 30, exactly the declared length. Only the GRID is wrong.
+  const offGrid = sceneDeck([
+    `| 1 | generated_video | 10 | Founder at a desk | ${S1} | | |`,
+    `| 2 | animated_image | 6 | Mail icons | ${S2} | | |`,
+    "| 3 | text_card | 2 | A line of type | | YOU APPROVE | |",
+    `| 4 | generated_video | 12 | The cockpit | ${S4} | | |`,
+  ]);
+
+  it("snaps the off-grid clip DOWN and gives the seconds to the last non-generated scene", () => {
+    const r = parseSceneDeck(offGrid);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const secs = r.scenes.map((s) => s.durationMs / 1000);
+    // Scene 1: 10 -> 8 (on the grid). Scene 3: 2 -> 4 (took the freed seconds).
+    expect(secs).toEqual([8, 6, 4, 12]);
+    // The reel is STILL exactly the length the user asked for.
+    expect(secs.reduce((a, b) => a + b, 0)).toBe(30);
+    expect(r.targetDurationSeconds).toBe(30);
+    // Scene starts were recomputed, not left pointing at the old timeline.
+    expect(r.scenes.map((s) => s.startMs)).toEqual([0, 8000, 14000, 18000]);
+  });
+
+  it("REPORTS every second it moved — a silent rewrite of the user's reel is not allowed", () => {
+    const r = parseSceneDeck(offGrid);
+    if (!r.ok) return;
+    expect(r.adjustments).toEqual([
+      { sceneIndex: 0, fromSeconds: 10, toSeconds: 8, why: "grid" },
+      { sceneIndex: 2, fromSeconds: 2, toSeconds: 4, why: "rebalance" },
+    ]);
+  });
+
+  it("a deck already on the grid is untouched and reports NO adjustments", () => {
+    const r = parseSceneDeck(sceneDeck(SCENES));
+    if (!r.ok) return;
+    expect(r.adjustments).toEqual([]);
+    expect(r.scenes.map((s) => s.durationMs / 1000)).toEqual([8, 6, 4, 12]);
+  });
+
+  it("still refuses when the rows never summed to the declared length — grid, not arithmetic", () => {
+    // 10 + 6 + 4 + 12 = 32 against a declared 30. Snapping 10->8 would make it 30 by accident,
+    // which would be repairing a deck the model got wrong. That must stay a refusal.
+    const alsoBadMath = sceneDeck([
+      `| 1 | generated_video | 10 | Founder at a desk | ${S1} | | |`,
+      `| 2 | animated_image | 6 | Mail icons | ${S2} | | |`,
+      "| 3 | text_card | 4 | A line of type | | YOU APPROVE | |",
+      `| 4 | generated_video | 12 | The cockpit | ${S4} | | |`,
+    ]);
+    // It reports the GRID violation — the first thing wrong with the row — and the point of the
+    // assertion is the `ok: false`: no repair was attempted on a deck whose own sum was wrong.
+    expect(parseSceneDeck(alsoBadMath)).toMatchObject({
+      ok: false,
+      reason: "illegal_generated_duration",
+    });
+  });
+
+  it("refuses when there is no non-generated scene to take the seconds back", () => {
+    // Every scene is a generated clip, so the freed seconds have nowhere safe to go.
+    const allGenerated = sceneDeck([
+      `| 1 | generated_video | 10 | Founder | ${S1} | | |`,
+      `| 2 | generated_video | 8 | Cockpit | ${S2} | | |`,
+      `| 3 | generated_video | 12 | Close | ${S4} | | |`,
+    ]);
+    expect(parseSceneDeck(allGenerated)).toMatchObject({
+      reason: "illegal_generated_duration",
+      sceneIndex: 0,
+    });
+  });
+});
+
 describe("parseVariations — two-variation bodies (33-01)", () => {
   // A second, genuinely different deck: 15 seconds, different kinds, its own narration.
   const DECK_B = sceneDeck(
@@ -1136,13 +1227,23 @@ describe("parseVariations — two-variation bodies (33-01)", () => {
   //
   // `salvaged` is NOT silent: it names the lost variation and its reason, and the caller is
   // obliged to say so on the canvas. A silent fallback would still be forbidden.
+  // An UNREPAIRABLE variation B: every scene is a generated clip, so 33-12's grid repair has no
+  // non-generated scene to give the freed seconds back to and correctly declines to touch it.
+  // (Injecting a merely off-grid clip no longer works as a failure — 33-12 repairs those, which
+  // is the point of 33-12.)
+  const DECK_B_UNFIXABLE = sceneDeck(
+    [
+      `| 1 | generated_video | 11 | A calendar filling itself | ${S1} | |`,
+      `| 2 | generated_video | 4 | Logo on black | ${S2} | |`,
+    ],
+    "Target duration: 15",
+  );
+  const twoUpBadB = ["## VARIATION A", "", sceneDeck(SCENES), "", "## VARIATION B", "", DECK_B_UNFIXABLE].join(
+    "\n",
+  );
+
   it("ONE good deck survives its sibling's refusal — salvaged, never silent", () => {
-    // The owner's real failure: a generated scene off the 4/8/12 provider grid, in variation B.
-    const bIllegal = twoUp.replace(
-      "| 1 | animated_image | 11 |",
-      "| 1 | generated_video | 11 |",
-    );
-    const r = parseVariations(bIllegal);
+    const r = parseVariations(twoUpBadB);
     expect(r).toMatchObject({
       kind: "salvaged",
       keptVariation: "a",
@@ -1171,9 +1272,9 @@ describe("parseVariations — two-variation bodies (33-01)", () => {
   it("BOTH variations refusing still refuses the whole proposal", () => {
     // The salvage has something to salvage FROM. When nothing parses, the old contract stands and
     // the reported variation is the FIRST to fail, so the message names a real deck.
-    const bothBad = twoUp
-      .replace("| 1 | generated_video | 8 |", "| 1 | generated_video | 7 |")
-      .replace("| 1 | animated_image | 11 |", "| 1 | generated_video | 11 |");
+    // A: 8 -> 7 makes the rows sum to 29 against a declared 30, so the repair declines (grid, not
+    // arithmetic) and the grid refusal stands. B is the all-generated deck above.
+    const bothBad = twoUpBadB.replace("| 1 | generated_video | 8 |", "| 1 | generated_video | 7 |");
     expect(parseVariations(bothBad)).toMatchObject({
       kind: "refused",
       variation: "a",

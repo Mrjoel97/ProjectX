@@ -607,6 +607,24 @@ export default defineSchema({
      * build one of the two" in the user's words. Absent on an ordinary one- or two-deck proposal.
      */
     lostVariation: v.optional(v.object({ variation: v.string(), reason: v.string() })),
+    /**
+     * 33-12: seconds the PARSER changed, not the model — an off-grid generated clip snapped to a
+     * length the provider can make (`grid`), and the scene that took those seconds back so the
+     * reel stays the length the user asked for (`rebalance`).
+     *
+     * Stored so the canvas can SAY so. A parser that quietly rewrites the user's reel is the same
+     * defect class as an invented provenance: the change may be right, but it must not be silent.
+     */
+    deckAdjustments: v.optional(
+      v.array(
+        v.object({
+          sceneIndex: v.number(),
+          fromSeconds: v.number(),
+          toSeconds: v.number(),
+          why: v.string(),
+        }),
+      ),
+    ),
     /** Set when Generate first buys against the picked deck; `switchDeck` and `editBrief`
      *  refuse from then on (`deck_locked`) — post-Generate change is canvas-only, on the paid
      *  rail. */

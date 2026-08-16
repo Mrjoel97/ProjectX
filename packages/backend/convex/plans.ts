@@ -384,6 +384,18 @@ export const persistDeck = internalMutation({
     /** 33-11: which sibling variation was lost, and why — whole-deck-write semantics like the
      *  rest of the deck plane, so a later single-deck revision CLEARS a stale salvage note. */
     lostVariation: v.optional(v.object({ variation: v.string(), reason: v.string() })),
+    /** 33-12: the seconds the parser moved. Whole-deck-write semantics like the rest — a clean
+     *  later proposal CLEARS a stale note rather than apologising for a deck it replaced. */
+    deckAdjustments: v.optional(
+      v.array(
+        v.object({
+          sceneIndex: v.number(),
+          fromSeconds: v.number(),
+          toSeconds: v.number(),
+          why: v.string(),
+        }),
+      ),
+    ),
     /** The guided-intake brief, when the body carried one. Drop-undefined (unlike the deck
      *  fields): a chat revision that does not restate the BRIEF keeps the one on the row. */
     brief: v.optional(
@@ -423,6 +435,7 @@ export const persistDeck = internalMutation({
       // Same whole-deck-write rule (33-11): undefined CLEARS, so a later clean proposal drops a
       // previous salvage note rather than leaving the canvas apologising for a deck it replaced.
       lostVariation: a.lostVariation,
+      deckAdjustments: a.deckAdjustments,
       ...(a.brief === undefined ? {} : { brief: a.brief }),
       /** When the deck(s) on this row were proposed — `briefChangedAt > deckProposedAt` is the
        *  stale badge. */

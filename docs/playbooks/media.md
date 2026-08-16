@@ -1,5 +1,44 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-08-16 (33-11 + 33-12 — **the two reasons a reel request dead-ended, found by
+> the owner's own live runs and fixed**, `8eb0dd7` and this commit). The owner asked for a reel
+> twice and got a memo card with Approve/Save both times. The trace showed the whole new path
+> working — `route-dispatchMedia` → `dispatchMedia` (23s) → `searchVault` — and then BOTH
+> proposals dying on `illegal_generated_duration`.
+>
+> **33-11 — one bad variation no longer kills its good sibling.** 33-03 made a refusing variation
+> refuse the WHOLE proposal ("never a silent one-deck fallback"). That doubled the chance of a dead
+> end, and both of the owner's runs lost a perfectly good storyboard to its sibling — one on
+> variation A, one on B. `parseVariations` now returns `salvaged` when exactly one deck parses; the
+> survivor is proposed alone. **The rule that mattered is intact:** the kept deck is the model's
+> own, whole and unedited, so no deck nobody wrote is ever proposed. The salvage is NOT silent —
+> `plans.lostVariation` carries which sibling was lost and why, and the canvas must say so. Both
+> decks refusing still refuses everything.
+>
+> **33-12 — the generated-clip grid is repaired, not just refused.** The generator makes 4, 8 or 12
+> second clips; v2 and v3 of the body both teach this and the model still gets it wrong, which is a
+> model-reflex problem no further instruction fixes. `parseSceneDeck` now snaps an off-grid clip
+> DOWN to the nearest legal length and gives the freed seconds to the last non-generated scene, so
+> the reel is still exactly as long as the user asked. **THREE DELIBERATE LIMITS:** (1) grid, never
+> arithmetic — if the model's rows never summed to the declared length, it still refuses, because
+> rebalancing a deck that never added up is inventing a reel; (2) down, never up — lengthening a
+> scene cannot break the one narration rule (a line must not run into the next), shortening can;
+> (3) into a non-generated scene or not at all — lengthening a clip would put it back off the grid,
+> so an all-generated deck still refuses. Every moved second is reported in `plans.deckAdjustments`
+> (`why: "grid" | "rebalance"`) **and the canvas must show it: a parser that quietly rewrites the
+> user's reel is the same defect class as an invented provenance.**
+>
+> Verified: core 1019/1019, backend dispatch+media+plans+llmRedaction 414 passed, both `tsc
+> --noEmit` clean. The dispatch test asserts the repair FROM THE STORED ROW, not from the parser —
+> a repair that never reaches the database is one the user never gets. `llmRedaction.test.ts`'s
+> dispatch payload count moved 11 → 12 for the new `media.variation_salvaged` event (refs + two
+> closed-union letters + a reason code; §4-clean).
+>
+> STILL OPEN after these two: a proposal refusal that survives both fixes still lands as a MEMO
+> with Approve/Save and no retry affordance — the render stage got failure cards in 33-04/33-08 and
+> the PROPOSAL stage never did. That is the next fix, and it is what makes a failure look like a
+> hang.
+
 > Touched 2026-08-16 (refusal-code lane) to clear the §9 Stop hook — **NOT a verification**, and
 > deliberately not a `Last verified` line. This session touched no media code: it widened the §4
 > basis guard in `@pikar/core`'s `financeClaim.ts` and added the `agentSteps.refusal` code. The hook

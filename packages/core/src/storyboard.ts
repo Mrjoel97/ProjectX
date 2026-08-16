@@ -528,11 +528,28 @@ export function narrationCeilingSeconds(scenes: readonly Scene[], i: number): nu
   return ((nextNarrated?.startMs ?? totalMs) - self.startMs) / 1000;
 }
 
+/**
+ * 33-12: one second of a scene's length that the PARSER changed, not the model. `grid` is an
+ * off-grid generated clip snapped to a length the provider can actually make; `rebalance` is the
+ * scene that took those seconds back so the reel stays exactly as long as the user asked.
+ *
+ * It exists to be SHOWN. A parser that quietly rewrites the user's reel is the same defect class
+ * as a figure whose provenance is invented — the change may be right, but it must not be silent.
+ */
+export type SceneAdjustment = {
+  sceneIndex: number;
+  fromSeconds: number;
+  toSeconds: number;
+  why: "grid" | "rebalance";
+};
+
 export type ParsedSceneDeck =
   | {
       ok: true;
       targetDurationSeconds: TargetDuration;
       scenes: Scene[];
+      /** Empty on a deck the model got right — which is the common case and stays silent. */
+      adjustments: readonly SceneAdjustment[];
     }
   | {
       ok: false;
@@ -684,13 +701,20 @@ export function parseSceneDeck(body: string): ParsedSceneDeck {
   if (iVisual < 0 || iSeconds < 0 || iDesc < 0 || iNarr < 0) return sceneFail("no_deck");
   if (rows.length === 0) return sceneFail("empty_deck");
 
+  // 33-12: repair off-grid generated clips BEFORE the row loop, because the seconds they give
+  // back land on a LATER row and a single forward pass cannot un-write one it already emitted.
+  // Returns per-row seconds to use instead of the model's, or null to leave every row as written
+  // (in which case the grid check below refuses exactly as it always did).
+  const repair = repairGeneratedGrid(rows, iVisual, iSeconds, targetDurationSeconds);
+  const adjustments = repair?.adjustments ?? [];
+
   const scenes: Scene[] = [];
   let startMs = 0;
   for (const [index, cells] of rows.entries()) {
     const visual = visualKindOf(cells[iVisual] ?? "");
     if (visual === null) return sceneFail("unknown_visual_kind");
 
-    const seconds = Number.parseInt((cells[iSeconds] ?? "").trim(), 10);
+    const seconds = repair?.seconds[index] ?? Number.parseInt((cells[iSeconds] ?? "").trim(), 10);
     if (!Number.isInteger(seconds) || seconds <= 0) {
       return { ok: false, reason: "bad_scene_duration", sceneIndex: index };
     }
@@ -756,7 +780,76 @@ export function parseSceneDeck(body: string): ParsedSceneDeck {
     }
   }
 
-  return { ok: true, targetDurationSeconds: targetDurationSeconds as TargetDuration, scenes };
+  return {
+    ok: true,
+    targetDurationSeconds: targetDurationSeconds as TargetDuration,
+    scenes,
+    adjustments,
+  };
+}
+
+/**
+ * 33-12. Snap off-grid `generated_video` rows to a length the provider can actually make, and give
+ * the freed seconds to the last scene that is NOT a generated clip, so the reel stays exactly as
+ * long as the user asked for.
+ *
+ * THE THREE LIMITS, each one a deliberate refusal to be clever:
+ *  1. **Grid, never arithmetic.** If the model's own rows do not already sum to the declared
+ *     length, this does nothing — `duration_mismatch`/the grid refusal still fires. Repairing a
+ *     deck that never added up would be inventing a reel nobody wrote.
+ *  2. **Down, never up.** Snapping DOWN frees seconds, and the scene that receives them only gets
+ *     LONGER — which cannot break the one narration rule (a line must not run into the next).
+ *     Snapping up would have to SHORTEN some other scene, which can.
+ *  3. **Into a non-generated scene, or not at all.** Lengthening a generated clip would put it
+ *     back off the grid, so a deck of nothing but generated clips is left to refuse.
+ *
+ * Returns null for "nothing to do, or nothing safe to do" — the caller then behaves exactly as it
+ * did before this function existed.
+ */
+function repairGeneratedGrid(
+  rows: string[][],
+  iVisual: number,
+  iSeconds: number,
+  targetDurationSeconds: number,
+): { seconds: number[]; adjustments: SceneAdjustment[] } | null {
+  const parsed = rows.map((cells) => ({
+    visual: visualKindOf(cells[iVisual] ?? ""),
+    seconds: Number.parseInt((cells[iSeconds] ?? "").trim(), 10),
+  }));
+  // Anything malformed is not this function's business — the row loop reports it precisely.
+  if (parsed.some((p) => p.visual === null || !Number.isInteger(p.seconds) || p.seconds <= 0)) {
+    return null;
+  }
+  // Limit 1: the model's own arithmetic must already be right.
+  if (parsed.reduce((sum, p) => sum + p.seconds, 0) !== targetDurationSeconds) return null;
+
+  const seconds = parsed.map((p) => p.seconds);
+  const adjustments: SceneAdjustment[] = [];
+  let freed = 0;
+  for (const [index, p] of parsed.entries()) {
+    if (p.visual !== "generated_video" || GENERATED_SET.has(p.seconds)) continue;
+    // Limit 2: the largest legal length at or below what was asked for.
+    const legal = GENERATED_CLIP_SECONDS.filter((s) => s < p.seconds).pop();
+    if (legal === undefined) return null; // shorter than the shortest clip — snapping up is unsafe
+    seconds[index] = legal;
+    freed += p.seconds - legal;
+    adjustments.push({ sceneIndex: index, fromSeconds: p.seconds, toSeconds: legal, why: "grid" });
+  }
+  if (freed === 0) return adjustments.length === 0 ? { seconds, adjustments } : null;
+
+  // Limit 3: the LAST non-generated scene takes the seconds back.
+  const absorber = parsed.map((p, i) => ({ ...p, i })).filter((p) => p.visual !== "generated_video");
+  const target = absorber[absorber.length - 1];
+  if (target === undefined) return null;
+  const before = seconds[target.i] as number;
+  seconds[target.i] = before + freed;
+  adjustments.push({
+    sceneIndex: target.i,
+    fromSeconds: before,
+    toSeconds: before + freed,
+    why: "rebalance",
+  });
+  return { seconds, adjustments };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
