@@ -2722,6 +2722,81 @@ describe("33-03 — the variations terminal: parseVariations runs FIRST", () => 
     );
   });
 
+  // ── 33-13: A REFUSAL IS A STATE, NOT A PARAGRAPH ────────────────────────────────────────────
+  //
+  // The prose alone left the canvas nothing to read: the row looked like any other memo, so it
+  // rendered as one — Approve/Save over a reel that does not exist, and no way forward. The CODE
+  // on the row is what lets the canvas draw the failure card the render stage has had since
+  // 33-04/33-08, with a retry that re-asks the specialist.
+  test("a variation refusal lands the CODE, the contract and WHICH variation on the row", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    const body = [VAR_BRIEF, "## VARIATION A", "", "Prose.", "## VARIATION B", "", "Prose."].join(
+      "\n",
+    );
+    await t.action(
+      internal.dispatch.__runSpecialistWithScript,
+      mediaArgs(planId, { primary: [{ ...textStep(body), usage: SPEND_8_CENTS }] }),
+    );
+    expect(await readPlan(t, planId)).toMatchObject({
+      proposalRefusal: { reason: "no_deck", contract: "scene", variation: "a" },
+    });
+  });
+
+  test("the SCENE contract's refusal names the scene contract — the owner's own live code", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    // Two generated clips, 10 + 20 = 30. The arithmetic is right, so 33-12's repair engages —
+    // and then declines (limit 3: an all-generated deck has no scene that can absorb the freed
+    // seconds without going off-grid itself), which is exactly the refusal the owner hit twice.
+    const body = VAR_A_DECK.replace(
+      "| 1 | generated_video | 8 |",
+      "| 1 | generated_video | 10 |",
+    ).replace("| 2 | animated_image | 22 |", "| 2 | generated_video | 20 |");
+    await t.action(
+      internal.dispatch.__runSpecialistWithScript,
+      mediaArgs(planId, { primary: [{ ...textStep(body), usage: SPEND_8_CENTS }] }),
+    );
+    const plan = await readPlan(t, planId);
+    expect(plan?.kind).not.toBe("media");
+    expect(plan?.proposalRefusal).toEqual({
+      reason: "illegal_generated_duration",
+      contract: "scene",
+    });
+  });
+
+  test("a body with no deck AT ALL refuses under the BLOCK contract, and says so", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    await t.action(
+      internal.dispatch.__runSpecialistWithScript,
+      mediaArgs(planId, {
+        primary: [{ ...textStep("# Reel\n\nSome thoughts, no deck."), usage: SPEND_8_CENTS }],
+      }),
+    );
+    expect(await readPlan(t, planId)).toMatchObject({
+      proposalRefusal: { reason: "no_deck", contract: "block" },
+    });
+  });
+
+  test("a LATER good proposal CLEARS the refusal — whole-deck-write, like every other deck field", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    await t.run((ctx) =>
+      ctx.db.patch(planId, { proposalRefusal: { reason: "no_deck", contract: "block" } }),
+    );
+    await t.action(
+      internal.dispatch.__runSpecialistWithScript,
+      mediaArgs(planId, {
+        primary: [{ ...textStep([VAR_BRIEF, VAR_A_DECK].join("\n")), usage: SPEND_8_CENTS }],
+      }),
+    );
+    const plan = await readPlan(t, planId);
+    expect(plan?.kind).toBe("media");
+    // A card apologising for the deck this one replaced is worse than no card at all.
+    expect(plan?.proposalRefusal).toBeUndefined();
+  });
+
   test("a single-deck revision DISCARDS the parked alternate and still lands brief + citations", async () => {
     const { t } = await setup();
     const planId = await stagedMediaPlan(t);

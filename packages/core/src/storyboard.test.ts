@@ -7,6 +7,8 @@ import {
   CLIP_SECONDS,
   DEFAULT_CLIP_SECONDS,
   GENERATED_CLIP_SECONDS,
+  GENERIC_DECK_REFUSAL,
+  deckRefusalClause,
   hasAssetSource,
   isPaidBlock,
   isPaidScene,
@@ -1347,5 +1349,49 @@ describe("parseVariations — two-variation bodies (33-01)", () => {
     expect(r.a.body).not.toContain("Target duration: 15");
     expect(r.b.body).toContain("Target duration: 15");
     expect(r.b.body).not.toContain("Target duration: 30");
+  });
+});
+
+// ── 33-13: the refusal vocabulary, now readable from BOTH halves ────────────────────────────────
+//
+// These sentences lived in `convex/dispatch.ts` while the memo body was the only place a user
+// could read them. The canvas renders a proposal refusal as a failure card now, so `apps/web`
+// needs the same words — and a second copy over there is exactly how one reason ends up saying
+// two different things.
+describe("deckRefusalClause (33-13)", () => {
+  it("gives each contract its OWN sentence for the codes the two vocabularies share", () => {
+    expect(deckRefusalClause("scene", "no_deck")).toBe("it never wrote a scene deck");
+    expect(deckRefusalClause("block", "no_deck")).toBe("it never wrote a block deck");
+    expect(deckRefusalClause("scene", "empty_deck")).not.toBe(
+      deckRefusalClause("block", "empty_deck"),
+    );
+  });
+
+  it("speaks every reason its own parser can produce", () => {
+    const sceneReasons = [
+      "no_deck",
+      "empty_deck",
+      "bad_target_duration",
+      "unknown_visual_kind",
+      "bad_scene_duration",
+      "illegal_generated_duration",
+      "missing_asset",
+      "duration_mismatch",
+      "no_narration",
+      "narration_too_long",
+      "malformed_source",
+    ];
+    for (const reason of sceneReasons) {
+      expect(deckRefusalClause("scene", reason), reason).not.toBe(GENERIC_DECK_REFUSAL);
+    }
+    // The live one the owner actually hit, in words rather than in a code.
+    expect(deckRefusalClause("scene", "illegal_generated_duration")).toBe(
+      "a generated scene asked for a length the video model cannot produce",
+    );
+  });
+
+  it("an unknown code falls back to the generic clause rather than printing itself", () => {
+    expect(deckRefusalClause("scene", "http_502")).toBe(GENERIC_DECK_REFUSAL);
+    expect(deckRefusalClause("block", "")).toBe(GENERIC_DECK_REFUSAL);
   });
 });

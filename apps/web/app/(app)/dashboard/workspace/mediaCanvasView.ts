@@ -20,7 +20,7 @@
 // produce an `illegal_duration` refusal the UI could have made unreachable. `@pikar/core` is a
 // pure-TS workspace package with no dependencies of its own (CLAUDE.md §1) — importing it does not
 // pull the backend's build graph in here, which is what the note below is about.
-import { TARGET_DURATIONS } from "@pikar/core/storyboard";
+import { type DeckContract, deckRefusalClause, TARGET_DURATIONS } from "@pikar/core/storyboard";
 
 /** The four kinds a scene's picture can come from (`@pikar/core/storyboard`'s `VisualKind`). Typed
  *  structurally rather than imported so this module stays free of the backend's build graph; the
@@ -1093,7 +1093,10 @@ export type FixArm =
   | "text_card"
   | "animated_image"
   | "uploaded_video"
-  | "retry_render";
+  | "retry_render"
+  /** 33-13. The PROPOSAL stage's only arm: re-ask the specialist. It buys no media at all, which
+   *  is why it is the one arm whose price label is unconditional. */
+  | "retry_proposal";
 
 export type FailureFix = {
   arm: FixArm;
@@ -1314,4 +1317,76 @@ export function failureCards(
   }
 
   return cards;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+// 33-13 — THE PROPOSAL STAGE, IN THE SAME VOCABULARY AS THE RENDER STAGE
+//
+// The owner asked for a reel twice and got a dead end both times: the deck refused, the row landed
+// as a memo, and the card offered **Approve** and **Save** — two acts that mean nothing over a reel
+// that does not exist — with the only way forward buried in prose. In their words: *"the user just
+// stays there and stares at the screen where nothing happens."*
+//
+// Nothing new was needed to fix it. The RENDER stage has spoken this language since 33-04/33-08 —
+// a card that names the stage, says the cause in words, prices every way out and carries the code
+// underneath — so the proposal stage speaks it too, through the SAME `FailureCard` shape and the
+// SAME component. The one new arm re-asks the specialist through the cockpit's own send path.
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+
+/** `plans.proposalRefusal`, structurally. `contract` crosses the wire as a string (the closed set
+ *  lives in `@pikar/core`), so it is narrowed here rather than trusted. */
+export type ProposalRefusal = {
+  reason: string;
+  contract: string;
+  variation?: string | null;
+};
+
+export const RETRY_PROPOSAL_LABEL = "Try again";
+
+/** The canned turn the retry sends. It reads like something a person could have typed, because it
+ *  lands in the transcript as an ordinary message — the same rule 33-07's re-propose follows. */
+export const RETRY_PROPOSAL_MESSAGE =
+  "That storyboard didn't come out usable — try the reel again from the same brief.";
+
+/**
+ * A REFUSED PROPOSAL, AS A CARD.
+ *
+ * `null` for a row with no refusal on it, so the caller renders this or not off one value — an
+ * ordinary memo stays an ordinary memo.
+ *
+ * The CONTRACT picks the sentence. `no_deck` means "no scene deck" under one parser and "no block
+ * deck" under the other, and guessing between them is how a card tells a user the wrong thing
+ * about what the model wrote; the backend stores which parser refused for exactly this reason.
+ */
+export function proposalFailureCard(
+  refusal: ProposalRefusal | null | undefined,
+): FailureCard | null {
+  if (!refusal) return null;
+  const contract: DeckContract = refusal.contract === "block" ? "block" : "scene";
+  // The code becomes a SENTENCE here and stays out of the headline — an unknown code falls back to
+  // the generic clause rather than putting a support string in front of a person (33-08's rule).
+  const clause = deckRefusalClause(contract, refusal.reason);
+  const which = refusal.variation ? ` variation ${refusal.variation.toUpperCase()}:` : "";
+  return {
+    key: "proposal-refused",
+    where: "hero",
+    sceneIndex: null,
+    headline: `I couldn't turn this into a usable storyboard —${which} ${clause}.`,
+    sceneRef: null,
+    // NOT a money figure, and deliberately so: this stage refuses BEFORE any reservation exists,
+    // so there is no `estUsd` to quote and quoting one would invent a bill. What the user needs to
+    // know at this moment is that the failure cost them nothing.
+    sunkLine: "No video, voice or render was bought — this stopped before anything was generated.",
+    fixes: [
+      {
+        arm: "retry_proposal",
+        label: RETRY_PROPOSAL_LABEL,
+        priceLabel: "free — nothing was generated",
+        note: "Asks for a fresh storyboard from the same brief. Nothing is bought until you approve the cost.",
+      },
+    ],
+    detailCode: refusal.variation
+      ? `${refusal.reason} · variation ${refusal.variation}`
+      : refusal.reason,
+  };
 }

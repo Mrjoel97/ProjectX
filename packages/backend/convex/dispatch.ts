@@ -24,6 +24,7 @@ import {
 } from "@pikar/core";
 import {
   type BriefFields,
+  deckRefusalClause,
   narrationChars,
   type ParsedDeck,
   type ParsedSceneDeck,
@@ -622,46 +623,19 @@ const MEDIA_FAILED_MEMO =
 function deckRefusalBody(bad: Extract<ParsedDeck, { ok: false }>): string {
   const where =
     "blockIndex" in bad ? ` Block ${bad.blockIndex + 1} is ${bad.chars} characters.` : "";
-  const why: Record<string, string> = {
-    no_deck: "it never wrote a block deck",
-    empty_deck: "the block deck came back empty",
-    unknown_shot_type: "one of the blocks used a shot type the renderer does not have",
-    bad_duration: "the block length was not one of the generation model's supported durations",
-    mixed_durations: "the blocks disagreed about how long they are, and they must all match",
-    missing_narration: "a block had no narration line, and every block needs one to be voiced",
-    narration_too_long: "a narration line is too long to fit its block without rushing it",
-    narration_too_short: "a narration line is too short to fill its block without dead air",
-  };
   // Assembled from SHORT pieces rather than one template literal: `skills.test.ts` refuses any
   // inline string over 200 characters anywhere in `convex/` (§5, no hardcoded prompts), and a
   // single-literal version of this sentence is 206. The sibling driver-plane strings above are
   // concatenated for the same reason.
   const lede = "# Reel\n\nI drafted this, but I couldn't turn it into a usable deck";
   const tail = " Ask me to redo the block deck and I'll keep the direction below.";
-  const cause = why[bad.reason] ?? "the deck did not parse";
-  return `${lede} — ${cause}.${where}${tail}\n\n_Reason: ${bad.reason}._`;
+  return `${lede} — ${deckRefusalClause("block", bad.reason)}.${where}${tail}\n\n_Reason: ${bad.reason}._`;
 }
-
-/** The SCENE refusal vocabulary, one sentence per lever — shared by the single-deck refusal card
- *  and the 33-03 variation refusal card, so the same reason never renders two sentences. */
-const SCENE_WHY: Record<string, string> = {
-  no_deck: "it never wrote a scene deck",
-  empty_deck: "the scene deck came back empty",
-  bad_target_duration: "the reel length was not one of the supported 15, 30 or 60 seconds",
-  unknown_visual_kind: "a scene asked for a kind of visual the renderer does not have",
-  bad_scene_duration: "a scene did not say how many whole seconds it runs for",
-  illegal_generated_duration: "a generated scene asked for a length the video model cannot produce",
-  missing_asset: "a scene said to use your own footage but never named which file",
-  duration_mismatch: "the scene lengths did not add up to the reel length it declared",
-  no_narration: "not one scene had a spoken line, so there would be nothing to voice",
-  narration_too_long: "a spoken line is too long to finish before the next line starts",
-  // 33-01: a Source line the parser cannot read must never silently become creative copy.
-  malformed_source: "a scene cited a source in a form I couldn't read back",
-};
 
 /** The SCENE contract's twin (20.2). A separate function rather than an extra branch in the one
  *  above: the two refusal vocabularies share only `no_deck` and `empty_deck`, and threading two
- *  unions through one `why` table is how a reason ends up rendering the wrong sentence. */
+ *  unions through one `why` table is how a reason ends up rendering the wrong sentence — which is
+ *  why `deckRefusalClause` (33-13, `@pikar/core`) takes the CONTRACT from the caller that knows it. */
 function sceneRefusalBody(bad: Extract<ParsedSceneDeck, { ok: false }>): string {
   const where =
     "sceneIndex" in bad
@@ -671,8 +645,7 @@ function sceneRefusalBody(bad: Extract<ParsedSceneDeck, { ok: false }>): string 
   // any inline string over 200 characters anywhere in `convex/` (§5, no hardcoded prompts).
   const lede = "# Reel\n\nI drafted this, but I couldn't turn it into a usable deck";
   const tail = " Ask me to redo the scene deck and I'll keep the direction below.";
-  const cause = SCENE_WHY[bad.reason] ?? "the deck did not parse";
-  return `${lede} — ${cause}.${where}${tail}\n\n_Reason: ${bad.reason}._`;
+  return `${lede} — ${deckRefusalClause("scene", bad.reason)}.${where}${tail}\n\n_Reason: ${bad.reason}._`;
 }
 
 /** 33-03: a refusing VARIATION refuses the WHOLE proposal — this card says which one and why, in
@@ -680,7 +653,7 @@ function sceneRefusalBody(bad: Extract<ParsedSceneDeck, { ok: false }>): string 
 function variationRefusalBody(bad: Extract<ParsedVariations, { kind: "refused" }>): string {
   const lede = "# Reel\n\nI drafted two variations, but variation ";
   const tail = " Ask me to redo the variations and I'll keep the direction below.";
-  const cause = SCENE_WHY[bad.reason] ?? "the deck did not parse";
+  const cause = deckRefusalClause("scene", bad.reason);
   return `${lede}${bad.variation.toUpperCase()} couldn't become a usable deck — ${cause}.${tail}\n\n_Reason: ${bad.reason}._`;
 }
 
@@ -753,6 +726,10 @@ async function persistSceneDeck(
       tenantId: args.tenantId,
       planId: args.planId,
       body: sceneRefusalBody(scene),
+      // 33-13: the CODE beside the prose, so the canvas can draw a failure card with a retry
+      // instead of a memo card with Approve/Save over a reel that does not exist.
+      reason: scene.reason,
+      contract: "scene",
     });
     await ctx.runMutation(internal.audit.log, {
       tenantId: args.tenantId,
@@ -857,6 +834,9 @@ async function persistStoryboard(
       tenantId: args.tenantId,
       planId: args.planId,
       body: variationRefusalBody(variations),
+      reason: variations.reason,
+      contract: "scene",
+      variation: variations.variation,
     });
     await ctx.runMutation(internal.audit.log, {
       tenantId: args.tenantId,
@@ -920,6 +900,8 @@ async function persistStoryboard(
       tenantId: args.tenantId,
       planId: args.planId,
       body: deckRefusalBody(deck),
+      reason: deck.reason,
+      contract: "block",
     });
     await ctx.runMutation(internal.audit.log, {
       tenantId: args.tenantId,

@@ -27,7 +27,7 @@ import { MarkdownDocument } from "../MarkdownDocument";
 // PDFs, images and video, the extraction/failure states and the entity chips. A second document
 // viewer would be a second thing to keep in step with `previewState`.
 import { PreviewModal } from "../vault/PreviewModal";
-import { MediaCanvas } from "./MediaCanvas";
+import { MediaCanvas, ProposalFailureCanvas } from "./MediaCanvas";
 import { useSendCockpitMessage } from "./useSendCockpitMessage";
 
 // SC3/SC5 render: the right-pane artifact dispatcher over the live `plans` row + REPORT
@@ -450,6 +450,14 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
       )}
     </p>
   );
+
+  // A REFUSED REEL PROPOSAL (33-13) — ahead of the memo branch, because that is the branch it was
+  // wrongly falling into. The row IS `kind: "memo"` (no deck parsed, so `persistStoryboard` never
+  // moved it), and the memo card offered Approve and Save over a reel that does not exist. What
+  // this needs is the media surface's own failure card, with the retry that re-asks the specialist.
+  if (plan.proposalRefusal) {
+    return <ProposalFailureCanvas refusal={plan.proposalRefusal} threadId={threadId} />;
+  }
 
   // MEMO plan (12-05, BEVL-02): same single Approve gate, a different promise. Everything below
   // this branch is email chrome — recipients, mode, a send-time picker, "Send to N recipients" —

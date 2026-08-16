@@ -436,6 +436,9 @@ export const persistDeck = internalMutation({
       // previous salvage note rather than leaving the canvas apologising for a deck it replaced.
       lostVariation: a.lostVariation,
       deckAdjustments: a.deckAdjustments,
+      // 33-13, same whole-deck-write rule: a deck that parsed CLEARS the previous refusal, so the
+      // canvas never shows a failure card over the storyboard that replaced it.
+      proposalRefusal: undefined,
       ...(a.brief === undefined ? {} : { brief: a.brief }),
       /** When the deck(s) on this row were proposed — `briefChangedAt > deckProposedAt` is the
        *  stale badge. */
@@ -515,15 +518,31 @@ export const stageImagePlan = internalMutation({
   },
 });
 
-/** A media run that produced prose but no usable deck. It lands as a MEMO — `kind` is left at what
- *  `stageMediaPlan` set, so nothing downstream reads this row as a reel — with the lever named in
- *  the body. The user sees WHY and what to ask for; they never see an empty canvas. */
+/** A media run that produced prose but no usable deck. `kind` is left at what `stageMediaPlan` set,
+ *  so nothing downstream reads this row as a reel — and 33-13 puts the refusal CODE on the row
+ *  beside the prose, which is what lets the canvas render this as a FAILURE CARD with a retry
+ *  rather than as a memo offering Approve and Save over a reel that does not exist. */
 export const landStoryboardRefusal = internalMutation({
-  args: { tenantId: v.string(), planId: v.id("plans"), body: v.string() },
-  handler: async (ctx, { tenantId, planId, body }): Promise<null> => {
+  args: {
+    tenantId: v.string(),
+    planId: v.id("plans"),
+    body: v.string(),
+    /** The parser's own reason code. A closed union at every call site (§4: codes, never prose). */
+    reason: v.string(),
+    /** WHICH parser refused — the two vocabularies share `no_deck`/`empty_deck` and mean a
+     *  different deck by them, so the reader must be told which table to speak from. */
+    contract: v.union(v.literal("scene"), v.literal("block")),
+    /** Set only when a VARIATION carried the refusal. */
+    variation: v.optional(v.string()),
+  },
+  handler: async (ctx, { tenantId, planId, body, reason, contract, variation }): Promise<null> => {
     const plan = await ctx.db.get(planId);
     if (!plan || plan.tenantId !== tenantId) return null;
-    await ctx.db.patch(planId, { body, status: "proposed" });
+    await ctx.db.patch(planId, {
+      body,
+      status: "proposed",
+      proposalRefusal: { reason, contract, ...(variation === undefined ? {} : { variation }) },
+    });
     return null;
   },
 });
@@ -859,6 +878,10 @@ export const resetPlan = internalMutation({
       // and the exact-sum gate would then refuse a deck the user never wrote wrong.
       targetDurationSeconds: undefined,
       shots: undefined,
+      // 33-13, and the same Pitfall-6 class: a surviving refusal CODE would put a media failure
+      // card ("I couldn't turn this into a usable storyboard") on the next EMAIL draft this thread
+      // composes — the card branches on this field before it looks at anything else.
+      proposalRefusal: undefined,
       renderStatus: undefined,
       renderStorageId: undefined,
       sidecarStorageId: undefined,

@@ -584,6 +584,55 @@ export type ParsedSceneDeck =
       availableSeconds: number;
     };
 
+/**
+ * WHY A DECK COULD NOT BE BUILT — one sentence per refusal code, per contract (33-13).
+ *
+ * These two tables lived in `convex/dispatch.ts`, where the only reader was the memo body it
+ * wrote. That is what made a proposal refusal look like a hang: the sentence was buried in prose
+ * on a card offering Approve/Save, and the CANVAS — which owns every other failure the user can
+ * act on — could not speak them at all, because `apps/web` cannot import a Convex module. They
+ * live here, beside the unions they describe, so the memo body and the canvas's failure card read
+ * from ONE vocabulary. A second copy in the browser is how one reason ends up saying two things.
+ *
+ * TWO TABLES, NEVER ONE. The block and scene contracts share only `no_deck` and `empty_deck`, and
+ * those two mean a different deck in each — merging the unions is how a reason renders the wrong
+ * sentence. The CALLER, which always knows statically which parser refused, passes the contract.
+ */
+export type DeckContract = "scene" | "block";
+
+export const BLOCK_REFUSAL_WHY: Record<string, string> = {
+  no_deck: "it never wrote a block deck",
+  empty_deck: "the block deck came back empty",
+  unknown_shot_type: "one of the blocks used a shot type the renderer does not have",
+  bad_duration: "the block length was not one of the generation model's supported durations",
+  mixed_durations: "the blocks disagreed about how long they are, and they must all match",
+  missing_narration: "a block had no narration line, and every block needs one to be voiced",
+  narration_too_long: "a narration line is too long to fit its block without rushing it",
+  narration_too_short: "a narration line is too short to fill its block without dead air",
+};
+
+export const SCENE_REFUSAL_WHY: Record<string, string> = {
+  no_deck: "it never wrote a scene deck",
+  empty_deck: "the scene deck came back empty",
+  bad_target_duration: "the reel length was not one of the supported 15, 30 or 60 seconds",
+  unknown_visual_kind: "a scene asked for a kind of visual the renderer does not have",
+  bad_scene_duration: "a scene did not say how many whole seconds it runs for",
+  illegal_generated_duration: "a generated scene asked for a length the video model cannot produce",
+  missing_asset: "a scene said to use your own footage but never named which file",
+  duration_mismatch: "the scene lengths did not add up to the reel length it declared",
+  no_narration: "not one scene had a spoken line, so there would be nothing to voice",
+  narration_too_long: "a spoken line is too long to finish before the next line starts",
+  // 33-01: a Source line the parser cannot read must never silently become creative copy.
+  malformed_source: "a scene cited a source in a form I couldn't read back",
+};
+
+/** What an UNKNOWN code says. A code is never prose (33-08's rule): the card prints the code once,
+ *  subordinate, and speaks in words above it. */
+export const GENERIC_DECK_REFUSAL = "the deck did not parse";
+
+export const deckRefusalClause = (contract: DeckContract, reason: string): string =>
+  (contract === "scene" ? SCENE_REFUSAL_WHY : BLOCK_REFUSAL_WHY)[reason] ?? GENERIC_DECK_REFUSAL;
+
 const VISUAL_KIND_SET = new Set<string>(VISUAL_KINDS);
 const TARGET_SET = new Set<number>(TARGET_DURATIONS);
 const GENERATED_SET = new Set<number>(GENERATED_CLIP_SECONDS);

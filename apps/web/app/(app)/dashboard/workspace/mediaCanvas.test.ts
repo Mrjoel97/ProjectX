@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { TARGET_DURATIONS } from "@pikar/core/storyboard";
+import { GENERIC_DECK_REFUSAL, TARGET_DURATIONS } from "@pikar/core/storyboard";
 import { describe, expect, test } from "vitest";
 import {
   BRIEF_DEFAULTED_MARKER,
@@ -28,8 +28,11 @@ import {
   KIND_LABEL,
   pictureLine,
   pricedAsLine,
+  proposalFailureCard,
   REPROPOSE_LABEL,
   REPROPOSE_MESSAGE,
+  RETRY_PROPOSAL_LABEL,
+  RETRY_PROPOSAL_MESSAGE,
   refusalText,
   ribbonShares,
   type SummaryShot,
@@ -1157,5 +1160,109 @@ describe("the reel's own failures: retry, hold, and the degraded deliverable", (
     expect(
       failureCards({ renderStatus: "rendered", captionStatus: "captioned" }, [fscene()], undefined),
     ).toEqual([]);
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+// 33-13 — THE PROPOSAL STAGE'S OWN FAILURE CARD
+//
+// The live defect, twice, in the owner's words: "the user just stays there and stares at the
+// screen where nothing happens." A deck that could not be parsed landed as a memo card offering
+// Approve and Save — two acts that mean nothing over a reel that does not exist — with the only
+// recovery instruction buried in prose. The RENDER stage has had a failure card with a named
+// cause and a retry since 33-04/33-08; this gives the PROPOSAL stage the same vocabulary.
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+describe("proposalFailureCard — a refusal is actionable, not a memo", () => {
+  test("names the cause in WORDS and carries a retry that costs nothing", () => {
+    const card = proposalFailureCard({
+      reason: "illegal_generated_duration",
+      contract: "scene",
+    });
+    expect(card?.where).toBe("hero");
+    // The owner's own code, as a sentence — and the code itself is NOT in the prose.
+    expect(card?.headline).toContain(
+      "a generated scene asked for a length the video model cannot produce",
+    );
+    expect(card?.headline).not.toContain("illegal_generated_duration");
+    // ...but it IS present, once, subordinate — the support string the card must not swallow.
+    expect(card?.detailCode).toContain("illegal_generated_duration");
+    // ONE arm, and it re-asks the specialist. Approve and Save are gone by construction: this is
+    // a FailureCard, and a FailureCard has no approve.
+    expect(card?.fixes.map((f) => f.arm)).toEqual(["retry_proposal"]);
+    expect(card?.fixes[0]?.label).toBe(RETRY_PROPOSAL_LABEL);
+    expect(card?.fixes[0]?.priceLabel).toMatch(/free/i);
+    // Nothing was generated, so the money line must not read as spend.
+    expect(card?.sunkLine).toMatch(/nothing|no video/i);
+    expect(card?.sunkLine).not.toMatch(/\$/);
+  });
+
+  test("the CONTRACT chooses the sentence — a block refusal never says 'scene deck'", () => {
+    const block = proposalFailureCard({ reason: "no_deck", contract: "block" });
+    const scene = proposalFailureCard({ reason: "no_deck", contract: "scene" });
+    expect(block?.headline).toContain("block deck");
+    expect(scene?.headline).toContain("scene deck");
+    expect(block?.headline).not.toContain("scene deck");
+  });
+
+  test("a variation refusal says WHICH variation broke, in the same sentence", () => {
+    const card = proposalFailureCard({ reason: "no_deck", contract: "scene", variation: "b" });
+    expect(card?.headline).toMatch(/variation B/);
+    expect(card?.detailCode).toContain("variation b");
+  });
+
+  test("an unknown code becomes a generic clause rather than prose the user can't read", () => {
+    const card = proposalFailureCard({ reason: "http_502", contract: "scene" });
+    expect(card?.headline).toContain(GENERIC_DECK_REFUSAL);
+    expect(card?.headline).not.toContain("http_502");
+    expect(card?.detailCode).toContain("http_502");
+    // The retry is offered whatever the code: a refusal we have no word for is still a refusal
+    // the user must be able to leave.
+    expect(card?.fixes.map((f) => f.arm)).toEqual(["retry_proposal"]);
+  });
+
+  test("no refusal, no card — an ordinary memo is still an ordinary memo", () => {
+    expect(proposalFailureCard(null)).toBeNull();
+    expect(proposalFailureCard(undefined)).toBeNull();
+  });
+
+  test("the retry message reads like something a person would type, and asks for a storyboard", () => {
+    expect(RETRY_PROPOSAL_MESSAGE.length).toBeGreaterThan(20);
+    expect(RETRY_PROPOSAL_MESSAGE).toMatch(/storyboard|reel/i);
+  });
+});
+
+describe("the canvas mounts the proposal failure card at BOTH of its mount points", () => {
+  // The canvas has two mount points — `cards.tsx`'s plan-kind switch and `page.tsx`'s
+  // CanvasPane — and 33-07's summary names threading a thing through one of them as the way the
+  // other gets forgotten. A refusal row is `kind: "memo"`, so BOTH doors have to branch on the
+  // refusal BEFORE they branch on the kind, or the canvas tab shows "no reel in this thread yet"
+  // over a run that failed.
+  const cards = readFileSync(join(__dirname, "cards.tsx"), "utf8");
+  const canvasPane = source.slice(source.indexOf("export function CanvasPane"));
+
+  test("cards.tsx branches on the refusal ahead of the memo card", () => {
+    expect(cards.indexOf("plan.proposalRefusal")).toBeGreaterThan(0);
+    expect(cards.indexOf("plan.proposalRefusal")).toBeLessThan(cards.indexOf('plan.kind === "memo"'));
+    expect(cards).toContain("ProposalFailureCanvas");
+  });
+
+  test("the canvas TAB shows the failure instead of an empty-thread message", () => {
+    expect(canvasPane).toContain("proposalRefusal");
+    expect(canvasPane.indexOf("proposalRefusal")).toBeLessThan(
+      canvasPane.indexOf('plan?.kind !== "media"'),
+    );
+  });
+
+  test("the retry goes through the ONE cockpit send path, not a second dispatch door", () => {
+    const canvas = source.slice(
+      source.indexOf("export function ProposalFailureCanvas"),
+      source.indexOf("function ReelCanvas("),
+    );
+    expect(canvas.length).toBeGreaterThan(400);
+    expect(canvas).toContain("useSendCockpitMessage()");
+    expect(canvas).toContain("RETRY_PROPOSAL_MESSAGE");
+    expect(canvas).toContain("FailureCardBlock");
+    // No thread, no send: sending without one MINTS A NEW THREAD (33-07's rule, verbatim).
+    expect(canvas).toContain("!threadId");
   });
 });

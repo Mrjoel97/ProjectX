@@ -625,6 +625,19 @@ export default defineSchema({
         }),
       ),
     ),
+    /**
+     * 33-13: the run produced prose but NO usable deck — the refusal CODE, and which contract
+     * refused it (`"scene"` or `"block"`, and the variation letter when a variation carried it).
+     *
+     * A refusal used to be prose alone, on a row that looked like any other memo — so it rendered
+     * as one, with Approve and Save over a reel that does not exist. This field is what lets the
+     * canvas draw the PROPOSAL stage's failure card (the render stage has had one since
+     * 33-04/33-08) with a retry that re-asks the specialist. Codes only, never provider or model
+     * prose (§4). Cleared by `persistDeck`, like every other deck field.
+     */
+    proposalRefusal: v.optional(
+      v.object({ reason: v.string(), contract: v.string(), variation: v.optional(v.string()) }),
+    ),
     /** Set when Generate first buys against the picked deck; `switchDeck` and `editBrief`
      *  refuse from then on (`deck_locked`) — post-Generate change is canvas-only, on the paid
      *  rail. */

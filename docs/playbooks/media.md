@@ -1,5 +1,39 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-08-16 (33-13 task 1 — **a proposal refusal is a FAILURE CARD now, not a memo
+> with Approve/Save.** The third and last of the three fixes for the dead end the owner hit twice.)
+>
+> A media run that produces prose but no usable deck lands on a `kind: "memo"` row, and until now
+> that row rendered as an ordinary memo: **Approve** and **Save** over a reel that does not exist,
+> with the only way forward buried in prose. The render stage has had a proper failure card since
+> 33-04/33-08 — stage named, cause in words, price on every arm, code underneath, a retry. The
+> PROPOSAL stage now uses THE SAME card (`FailureCardBlock`) and the same fold shape
+> (`proposalFailureCard` -> `FailureCard`), with one arm: **Try again**, free, which sends
+> `RETRY_PROPOSAL_MESSAGE` through `useSendCockpitMessage` — the cockpit's ONE send path, never a
+> second dispatch door (33-07's rule; the canvas has two mount points and a threaded callback is
+> two places to forget it).
+>
+> **Three invariants to keep.**
+> 1. `plans.proposalRefusal = { reason, contract, variation? }` is what makes the card possible —
+>    a refusal is a STATE, not a paragraph. Codes only (§4). `persistDeck` and `resetPlan` both
+>    CLEAR it: a card apologising for the deck that was replaced, or a media failure card on the
+>    next EMAIL draft in that thread, are the two ways this field goes wrong.
+> 2. **The contract picks the sentence.** `no_deck` means "no scene deck" under one parser and "no
+>    block deck" under the other. The refusal vocabulary moved out of `convex/dispatch.ts` into
+>    `@pikar/core/storyboard` (`SCENE_REFUSAL_WHY`, `BLOCK_REFUSAL_WHY`, `deckRefusalClause`) so the
+>    memo body and the canvas read ONE table — but they stay TWO tables keyed by contract, because
+>    merging the unions is how a reason renders the wrong deck's sentence.
+> 3. **BOTH mount points branch on the refusal before the kind.** `cards.tsx` (ahead of the memo
+>    card) and `CanvasPane` (ahead of "no reel in this thread yet"). Miss the second and the canvas
+>    tab tells a user whose run just failed that they never asked for anything.
+>
+> Verified: core storyboard 109/109, apps/web 24 files / 386 tests, backend dispatch 93/93 and
+> media+plans+llmRedaction+skills+importGuard 498 passed / 24 skipped, `tsc --noEmit` clean in
+> `apps/web`, `packages/backend` and `packages/core`. No audit or log-plane site was added, so
+> `llmRedaction.test.ts`'s pins (12 dispatch payloads, 7 media audit sites) are untouched and green.
+> **Mutation check:** transposing the two contract tables inside `deckRefusalClause` (every sentence
+> still present, each under the wrong contract) reddened 2 core tests and 2 canvas tests; reverted.
+
 > Last verified: 2026-08-16 (33-11 + 33-12 — **the two reasons a reel request dead-ended, found by
 > the owner's own live runs and fixed**, `8eb0dd7` and this commit). The owner asked for a reel
 > twice and got a memo card with Approve/Save both times. The trace showed the whole new path

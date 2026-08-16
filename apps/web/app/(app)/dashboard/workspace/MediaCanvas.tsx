@@ -37,8 +37,11 @@ import {
   KIND_LABEL,
   pictureLine,
   pricedAsLine,
+  type ProposalRefusal,
+  proposalFailureCard,
   REPROPOSE_LABEL,
   REPROPOSE_MESSAGE,
+  RETRY_PROPOSAL_MESSAGE,
   refusalText,
   ribbonShares,
   type SceneCitation,
@@ -214,6 +217,82 @@ export function MediaCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: st
     <ImageCanvas plan={plan} />
   ) : (
     <ReelCanvas plan={plan} threadId={threadId} />
+  );
+}
+
+/**
+ * A REFUSED PROPOSAL, ON THE MEDIA SURFACE (33-13).
+ *
+ * The row this renders is `kind: "memo"` — `stageMediaPlan` set it and `persistStoryboard` never
+ * moved it, because no deck parsed. Until now that meant it rendered as a memo card, with Approve
+ * and Save over a reel that does not exist and no way forward; the owner hit it twice live and
+ * described it as staring at a screen where nothing happens.
+ *
+ * It is the SAME `FailureCardBlock` the hero and the tiles use, given the same sheet the canvas
+ * uses, so a person reading "the reel is held" and "I couldn't turn this into a usable storyboard"
+ * is reading one story in one layout. No new vocabulary, no second card component.
+ *
+ * **The retry is an ORDINARY CHAT MESSAGE**, through `useSendCockpitMessage` — 33-07's rule
+ * verbatim, and for its reason: this canvas has TWO mount points (`cards.tsx`'s plan-kind switch
+ * and `page.tsx`'s CanvasPane), so a callback threaded down from a parent is two places to forget
+ * it. `threadId` is required rather than optional-with-a-fallback: sending without one MINTS A NEW
+ * THREAD, which moves the conversation out from under the canvas the user is looking at.
+ */
+export function ProposalFailureCanvas({
+  refusal,
+  threadId,
+}: {
+  refusal: ProposalRefusal;
+  threadId?: string;
+}) {
+  const send = useSendCockpitMessage();
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const card = proposalFailureCard(refusal);
+
+  async function retry() {
+    if (busy || !threadId) return;
+    setBusy(true);
+    setNote(null);
+    try {
+      await send({ threadId, text: RETRY_PROPOSAL_MESSAGE });
+    } catch {
+      setNote("That couldn't be sent. Nothing was asked for again — try once more.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (card === null) return null;
+
+  return (
+    // flexShrink 0 for the same reason the reel canvas carries it: this sheet is a flex item of
+    // the fixed-height .pane-canvas section, whose overflow:hidden flips the flex min-height.
+    <div
+      style={{ ...briefingSheet, flexShrink: 0, padding: "1.15rem 1.25rem" }}
+      data-testid="media-proposal-failure"
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+        <p style={capsTeal}>Reel</p>
+        <span style={typeBadge}>VIDEO</span>
+      </div>
+      <FailureCardBlock
+        card={card}
+        // No thread, no send — so the button says so by being disabled rather than by failing.
+        busy={busy || !threadId}
+        onFix={(fix) => {
+          if (fix.arm === "retry_proposal") void retry();
+        }}
+      />
+      {note && (
+        <p
+          role="status"
+          style={{ ...dimText, marginTop: "0.5rem", color: "var(--held-text)", fontWeight: 600 }}
+        >
+          {note}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -2282,6 +2361,11 @@ export function CanvasPane({ threadId }: { threadId?: string }) {
     );
   }
   if (plan === undefined) return <p style={{ ...dimText, marginTop: "1rem" }}>Loading…</p>;
+  // 33-13, and it MUST be ahead of the kind check: a refused proposal is `kind: "memo"`, so the
+  // empty-thread message below would tell a user whose run just failed that they never asked.
+  if (plan?.proposalRefusal) {
+    return <ProposalFailureCanvas refusal={plan.proposalRefusal} threadId={threadId} />;
+  }
   if (plan?.kind !== "media") {
     return (
       <p style={{ ...dimText, marginTop: "1rem" }} data-testid="canvas-empty">
