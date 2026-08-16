@@ -13,6 +13,19 @@
 > `dispatch:` prefix fix really closed `420c852b`'s two-actor miscount. That says nothing about the
 > render pipeline this playbook documents.)
 
+> Last verified: 2026-08-16 (33-04 — **FAILURE/RETRY BACKEND: one auto-retry, manual retry, and
+> the fix-menu re-arm.** `TRANSIENT_RENDER_CODES` is a closed 6-member set in `@pikar/core/render`;
+> `recordRender`'s failure arm retries ONCE per plan via the `renderRetriedAt` CAS (same batch, no
+> dead letter, refs-only `media.render_retried` audit) — a narrow, dated supersession of 20-16's
+> no-retry rule, argued in the retry section below. `media.retryRender` is the FAILED-only manual
+> button. The render line is reserved DOUBLED (`MEDIA_SANDBOX_USD_PER_RENDER = $0.04`, labeled
+> `render (incl. one retry)`). The trigger's evaluation is extracted as
+> `evaluateRenderTrigger` (callable without a landing row); `setSceneAsset` and the new
+> `setSceneVisual` re-call it after a fix, and both the trigger and `batchToRender` now judge a
+> terminal job row by `deckStillNeedsJob` — a failed clip whose scene became a card/upload is
+> history, not a hold, while landed siblings stay fresh (the fixes are CONTENT-class, no
+> `shotsChangedAt`). Retry-twice observed RED on the mutation; core 1003/1003, media suites green.)
+
 > Last verified: 2026-08-16 (Phase 20.2 Nyquist audit — the local mixed-scene smoke now samples
 > decoded video-frame hashes inside the `animated_image` window. The current assembler is RED:
 > 48 decoded frames produced 1 unique hash, so the still path is frozen rather than animated.
@@ -1958,6 +1971,33 @@ there are none), CASes failed → rendering, schedules `renderReel`, and audits
 automatic retry stays once-per-plan even across manual attempts. Free to the user: compute is
 covered by the doubled render line; a rare THIRD sandbox (manual retry after the auto retry) is
 accepted, documented drift, never silent.
+
+### The fix-menu re-arm: which fixes resume a held reel, and how (33-04)
+
+A failed paid scene HOLDS the reel (`renderStatus: "failed"`, `renderReason: "incomplete_batch"` —
+the trigger refuses to buy a sandbox for a reel with a known hole). The hold ends per fix arm:
+
+| Fix arm | What re-arms the render |
+|---|---|
+| `regenerateBlock` (paid) | Nothing extra — the re-bought scene LANDS, and the landing re-fires `maybeStartRender` naturally. |
+| `setSceneVisual` (free kind switch) | The mutation itself: `patchShots` clears the render to `pending`, then `rearmAfterFix` calls `evaluateRenderTrigger` with the plan's latest batchId in the SAME mutation. |
+| `setSceneAsset` (free vault pick) | Same as `setSceneVisual` — the pick is what makes an `uploaded_video` scene renderable, so it re-arms too. |
+
+Three rules keep this honest:
+
+- **The fixes are CONTENT-class.** They map the deck in place, so `patchShots` does not stamp
+  `shotsChangedAt` — landed sibling assets stay fresh and `batchToRender` reuses them. A stamp
+  here would refuse `stale_inputs` and waste every sibling's paid work, violating the locked
+  "landed sibling work waits — nothing is wasted" decision.
+- **`deckStillNeedsJob` (`@pikar/core/render`) is the ONE predicate** both `evaluateRenderTrigger`
+  and `batchToRender` use to judge a terminal job row: a failed clip whose scene no longer wants a
+  clip (card, upload) is history, not a hold. Two predicates here would let the trigger schedule a
+  render the builder refuses, stranding the plan at `rendering`.
+- **A half-finished fix stays held, in words.** Switching to `uploaded_video` with no asset picked
+  yet re-evaluates to `incomplete_batch` again (the trigger's `hasAssetSource` check), so the
+  failure card and its fix menu stay up until `setSceneAsset` names the footage — never a
+  scheduled render that is known to refuse.
+
 
 ## The canvas, SEEN (20-10) — and the tab that opens it
 

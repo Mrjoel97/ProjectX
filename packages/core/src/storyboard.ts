@@ -493,7 +493,14 @@ export const isPaidScene = (s: Scene): boolean => PAID_VISUAL[s.visual];
  *     probing for a font rather than trusting one. Same reasoning, one step earlier and for free.
  *   * `generated_video` / `animated_image` — the prompt, which the parser already requires.
  */
-export const hasAssetSource = (s: Scene): boolean => {
+// Structurally typed (33-04): the same question is asked of parser `Scene`s at the money gate and
+// of stored `plans.shots` rows at the render trigger's re-arm, and the two shapes differ only in
+// optionality. One predicate, or the gate and the trigger drift on what "renderable" means.
+export const hasAssetSource = (s: {
+  visual?: string;
+  overlay?: string;
+  asset?: unknown;
+}): boolean => {
   if (s.visual === "uploaded_video") return s.asset !== undefined;
   if (s.visual === "text_card") return (s.overlay ?? "").trim() !== "";
   return true;

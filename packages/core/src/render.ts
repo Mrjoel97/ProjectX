@@ -387,6 +387,29 @@ export function isTransientRenderCode(code: string): boolean {
   return TRANSIENT_SET.has(code);
 }
 
+/**
+ * Does the deck still need what this job row was buying? (33-04, the fix-menu re-arm.)
+ *
+ * A failed job holds the reel (`incomplete_batch`) — but a FREE fix (kind switch to a card, vault
+ * asset pick) changes the DECK, not the batch, so the failed row keeps existing. This predicate is
+ * what lets both the render trigger and `batchToRender` ignore a terminal row whose scene no
+ * longer wants that kind of picture, without ever loosening the rule for rows the deck still
+ * depends on. ONE function for both call sites, so the trigger and the builder cannot disagree
+ * about what "needed" means.
+ *
+ * `shot === undefined` — the deck shrank past this row's index; the row is history, not a hold.
+ * A BLOCK row (no `visual`) is a video by construction, exactly as `assemblerKindOf` reads it.
+ */
+export function deckStillNeedsJob(
+  shot: { visual?: string; narration: string } | undefined,
+  kind: "video" | "image" | "tts",
+): boolean {
+  if (shot === undefined) return false;
+  if (kind === "tts") return shot.narration.trim() !== "";
+  if (kind === "image") return shot.visual === "animated_image";
+  return shot.visual === undefined || shot.visual === "generated_video";
+}
+
 // ── The RUNNER: the route handler's whole body, with the SDK injected ──────────────────────────
 //
 // The Next.js route file is a ~20-line adapter over this function (CLAUDE.md §1: domain logic in

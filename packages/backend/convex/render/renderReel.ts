@@ -17,7 +17,12 @@
  */
 import { parseAssemblySidecar } from "@pikar/core/assembly";
 import { buildCaptionLines, toAss } from "@pikar/core/captions";
-import { isRenderableCardText, isTransientRenderCode, renderInputName } from "@pikar/core/render";
+import {
+  deckStillNeedsJob,
+  isRenderableCardText,
+  isTransientRenderCode,
+  renderInputName,
+} from "@pikar/core/render";
 import { v } from "convex/values";
 import { internal } from "./../_generated/api";
 import type { Doc, Id } from "./../_generated/dataModel";
@@ -124,10 +129,9 @@ export const batchToRender = internalQuery({
     const planId = renderable[0]?.planId;
     if (!planId) return { ok: false, reason: "empty_batch" };
 
-    // Every input must have LANDED. A row that is queued, submitted, failed or blocked has no
-    // bytes, and a `succeeded` row without an `assetStorageId` is the landing plane's own
-    // impossible state — both refuse.
-    if (renderable.some((r) => r.status !== "succeeded" || r.assetStorageId === undefined)) {
+    // Every input must have LANDED. A batch still in flight has rows with no bytes yet — refuse
+    // unconditionally; the next landing re-fires the trigger.
+    if (renderable.some((r) => r.status === "queued" || r.status === "submitted")) {
       return { ok: false, reason: "not_all_succeeded" };
     }
 
@@ -140,6 +144,25 @@ export const batchToRender = internalQuery({
       return { ok: false, reason: "incomplete_blocks" };
     }
     const deck = [...plan.shots].sort((l, r) => l.index - r.index);
+
+    // 33-04 — a TERMINAL non-success row (failed/blocked, or succeeded with no bytes: the landing
+    // plane's own impossible state) refuses the render ONLY while the deck still needs what it was
+    // buying. The fix-menu changes the DECK, never the batch: after a failed clip's scene becomes
+    // a text card (or a vault pick), that row is history, not a hole in the reel. The predicate is
+    // the SAME `deckStillNeedsJob` the re-armed trigger uses, so the two cannot disagree — a
+    // trigger that schedules and a builder that refuses would strand the plan at `rendering`.
+    if (
+      renderable.some(
+        (r) =>
+          deckStillNeedsJob(
+            deck.find((s) => s.index === r.blockIndex),
+            r.kind as "video" | "image" | "tts",
+          ) &&
+          (r.status !== "succeeded" || r.assetStorageId === undefined),
+      )
+    ) {
+      return { ok: false, reason: "not_all_succeeded" };
+    }
 
     // **THE INPUTS COME FROM THE PLAN, NOT FROM THE BATCH ALONE (20.2 wave 6).**
     //

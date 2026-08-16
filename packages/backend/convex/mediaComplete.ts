@@ -16,6 +16,8 @@
  * route) cannot be "use node" either.
  */
 import { onCompleteValidator } from "@convex-dev/action-retrier";
+import { deckStillNeedsJob } from "@pikar/core/render";
+import { hasAssetSource } from "@pikar/core/storyboard";
 import type { MediaSpec, VideoRes } from "@pikar/cost/media";
 import { estimateMediaUsd } from "@pikar/cost/media";
 import { v } from "convex/values";
@@ -181,14 +183,39 @@ function resolutionRef(row: Doc<"mediaJobs">, actual: Actual | undefined): strin
  * that ever changes: a landed-count on the plan row, incremented in the same mutation.
  */
 async function maybeStartRender(ctx: MutationCtx, row: Doc<"mediaJobs">): Promise<void> {
-  const plan = await ctx.db.get(row.planId);
+  await evaluateRenderTrigger(ctx, {
+    tenantId: row.tenantId,
+    planId: row.planId,
+    batchId: row.batchId,
+  });
+}
+
+/**
+ * The trigger's evaluation, callable WITHOUT a landing row (33-04). `maybeStartRender` above is a
+ * thin wrapper for the landing path; the fix-menu mutations (`media.setSceneAsset`,
+ * `media.setSceneVisual`) call this directly to re-arm a held reel — a FREE fix produces no new
+ * landing, so nothing else would ever re-fire the render (research pitfall 6).
+ *
+ * ONE 33-04 change to the decision itself, shared by both callers: a terminal non-success row
+ * holds the reel ONLY while the deck still needs what that row was buying (`deckStillNeedsJob` —
+ * the fix changes the DECK, never the batch, so the failed row keeps existing), and the schedule
+ * arm additionally demands every scene name its asset source (`hasAssetSource`) — scheduling a
+ * render `batchToRender` is known to refuse would strand the plan at `rendering` with nothing in
+ * flight. For a deck that still needs every row it bought — every deck the landing path has ever
+ * seen — both checks reduce to the original `every(succeeded)`.
+ */
+export async function evaluateRenderTrigger(
+  ctx: MutationCtx,
+  a: { tenantId: string; planId: Id<"plans">; batchId: string },
+): Promise<void> {
+  const plan = await ctx.db.get(a.planId);
   // The GUARD. Anything other than `pending` means either the render has already been started by a
   // sibling landing, or this batch was never approved for one.
   if (plan?.renderStatus !== "pending") return;
 
   const siblings = await ctx.db
     .query("mediaJobs")
-    .withIndex("by_batch", (q) => q.eq("tenantId", row.tenantId).eq("batchId", row.batchId))
+    .withIndex("by_batch", (q) => q.eq("tenantId", a.tenantId).eq("batchId", a.batchId))
     .collect();
   const renderable = siblings.filter(
     (s) => s.kind === "video" || s.kind === "image" || s.kind === "tts",
@@ -197,20 +224,32 @@ async function maybeStartRender(ctx: MutationCtx, row: Doc<"mediaJobs">): Promis
   // Still in flight — this is not the LAST landing.
   if (renderable.some((s) => s.status === "queued" || s.status === "submitted")) return;
 
-  if (renderable.every((s) => s.status === "succeeded")) {
-    await ctx.db.patch(row.planId, { renderStatus: "rendering" });
+  const shots = plan.shots;
+  const needed = (row: Doc<"mediaJobs">): boolean =>
+    shots === undefined
+      ? true // no deck on the row — the batch alone describes the reel, so every row is needed
+      : deckStillNeedsJob(
+          shots.find((s) => s.index === row.blockIndex),
+          row.kind as "video" | "image" | "tts",
+        );
+  const deckReady = (shots ?? []).every((s) => hasAssetSource(s));
+
+  if (deckReady && renderable.filter(needed).every((s) => s.status === "succeeded")) {
+    await ctx.db.patch(a.planId, { renderStatus: "rendering" });
     await ctx.scheduler.runAfter(0, internal.render.renderReel.renderReel, {
-      tenantId: row.tenantId,
-      batchId: row.batchId,
+      tenantId: a.tenantId,
+      batchId: a.batchId,
     });
     return;
   }
 
-  // A sibling failed or was blocked and nothing is still in flight. **Do not start a render that
-  // will produce a reel with a missing block** — D8's fixed-window contract makes a missing clip a
-  // HARD ERROR, so this render is already known to fail, and finding that out in the sandbox costs
-  // a sandbox. The canvas can say `incomplete_batch` in words instead.
-  await ctx.db.patch(row.planId, {
+  // A needed sibling failed or was blocked (or a scene still names no asset source) and nothing is
+  // in flight. **Do not start a render that will produce a reel with a missing block** — D8's
+  // fixed-window contract makes a missing clip a HARD ERROR, so this render is already known to
+  // fail, and finding that out in the sandbox costs a sandbox. The canvas can say
+  // `incomplete_batch` in words instead — and the fix-menu mutations re-call this function, so the
+  // hold ends the moment a fix makes the deck renderable again.
+  await ctx.db.patch(a.planId, {
     renderStatus: "failed",
     renderReason: "incomplete_batch",
     renderedAt: Date.now(),

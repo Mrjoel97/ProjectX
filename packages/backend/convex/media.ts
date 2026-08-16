@@ -21,6 +21,7 @@
  * wrappers (CLAUDE.md §2).
  */
 import { concatWavTakes } from "@pikar/core/captions";
+import { isRenderableCardText } from "@pikar/core/render";
 import type { Block, Scene, ShotType, VisualKind } from "@pikar/core/storyboard";
 import {
   hasAssetSource,
@@ -53,6 +54,7 @@ import { internalAction, internalMutation, internalQuery } from "./_generated/se
 import { getGuardrailConfig, mediaRemainingCentsInner, rateLimiter } from "./guardrails";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+import { evaluateRenderTrigger } from "./mediaComplete";
 // The plain-function half of the ledger writer: the limiter movement and its row must commit
 // or fail together (FIN-01). A separate ctx.runMutation would be a second transaction.
 import { ensureCoverage, recordMovement } from "./spendLedger";
@@ -2744,9 +2746,96 @@ export const setSceneAsset = tenantMutation({
         s.index === blockIndex ? { ...s, asset: { source: "vault" as const, docId } } : s,
       ),
     );
+    // 33-04: a vault pick is a fix-menu arm — if this scene's failure was holding the reel, the
+    // pick is what un-holds it, and no landing will ever re-fire the trigger for a free fix.
+    await rearmAfterFix(ctx, ctx.tenantId, plan);
     return { ok: true as const };
   },
 });
+
+/**
+ * Switch one scene's VISUAL KIND (33-04) — the fix-menu's "make it cheaper / make it free" arm,
+ * and an ordinary editor affordance before Generate.
+ *
+ * **CONTENT-class on purpose, and the classification is the locked decision:** the switch maps the
+ * deck in place (indices untouched), so `patchShots` does NOT stamp `shotsChangedAt` — landed
+ * sibling assets stay fresh and the next render reuses them (`batchToRender` would otherwise
+ * refuse `stale_inputs` and the siblings' paid work would be wasted, exactly what "landed sibling
+ * work waits — nothing is wasted" forbids). A kind switch does not touch the narration, so a
+ * confirmed claim's `confirmedAt` SURVIVES — the user vouched for the words, and the words are
+ * unchanged.
+ *
+ * The overlay rule is `hasAssetSource`'s rule: a card must name its words, so switching to
+ * `text_card` demands renderable overlay text (given here or already on the scene). Switching to
+ * `uploaded_video` needs no asset YET — the re-arm below keeps the reel held, in words, until
+ * `setSceneAsset` names the footage.
+ */
+export const setSceneVisual = tenantMutation({
+  args: {
+    planId: v.id("plans"),
+    sceneIndex: v.number(),
+    visual: v.string(),
+    overlay: v.optional(v.string()),
+  },
+  handler: async (ctx, { planId, sceneIndex, visual, overlay }) => {
+    const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
+    // A closed vocabulary, checked before anything else — a kind this renderer does not ship must
+    // never be written onto a row `assemblerKindOf` will later refuse.
+    if (!(VISUAL_KINDS as readonly string[]).includes(visual)) {
+      return { ok: false as const, reason: "unknown_visual" as const };
+    }
+    // Kinds exist on the SCENE contract only. Writing one onto a block deck would make the row
+    // half-scene, half-block — a shape no reader owns.
+    if (sceneDeckOf(plan) === null) return { ok: false as const, reason: "no_deck" as const };
+    const shots = plan.shots ?? [];
+    const shot = shots.find((s) => s.index === sceneIndex);
+    if (!shot) return { ok: false as const, reason: "no_block" as const };
+    const nextOverlay = overlay !== undefined ? overlay.trim() : shot.overlay;
+    if (visual === "text_card" && !isRenderableCardText((nextOverlay ?? "").trim())) {
+      return { ok: false as const, reason: "no_overlay" as const };
+    }
+    await patchShots(
+      ctx,
+      planId,
+      shots.map((s) =>
+        s.index === sceneIndex
+          ? { ...s, visual, ...(overlay === undefined ? {} : { overlay: overlay.trim() }) }
+          : s,
+      ),
+    );
+    await rearmAfterFix(ctx, ctx.tenantId, plan);
+    return { ok: true as const };
+  },
+});
+
+/**
+ * The fix-menu RE-ARM (33-04, research pitfall 6). `maybeStartRender` fires on LANDINGS; a held
+ * reel (`failed`/`incomplete_batch`) whose failed scene is fixed by a FREE action has no new
+ * landing, so nothing would ever re-fire the trigger and the reel stays held forever. The fix
+ * mutations therefore re-evaluate the trigger themselves, in the SAME mutation as the fix.
+ *
+ * `before` is the plan row as it stood BEFORE the fix's `patchShots` (whose `clearRender` resets
+ * `renderStatus` to `pending` — which is what lets `evaluateRenderTrigger` run at all). Gated on
+ * the held state so an ordinary pre-Generate edit schedules nothing. Paid fixes
+ * (`regenerateBlock`) need no re-arm: their landings re-fire the trigger naturally.
+ */
+async function rearmAfterFix(
+  ctx: MutationCtx,
+  tenantId: string,
+  before: Doc<"plans">,
+): Promise<void> {
+  if (before.renderStatus !== "failed" || before.renderReason !== "incomplete_batch") return;
+  const rows = await ctx.db
+    .query("mediaJobs")
+    .withIndex("by_plan", (q) => q.eq("tenantId", tenantId).eq("planId", before._id))
+    .collect();
+  const latest = rows.reduce<Doc<"mediaJobs"> | null>(
+    (best, r) => (best === null || r.createdAt > best.createdAt ? r : best),
+    null,
+  );
+  if (!latest) return;
+  await evaluateRenderTrigger(ctx, { tenantId, planId: before._id, batchId: latest.batchId });
+}
 
 /**
  * Permute the deck.
