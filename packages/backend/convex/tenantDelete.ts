@@ -43,8 +43,26 @@ export const authorizeTenantDeletion = internalMutation({
   args: { tenantId: v.string(), userId: v.id("users") },
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.userId);
-    if (String(args.userId) !== args.tenantId || user?.owner !== true) {
-      throw new Error("OWNER_REQUIRED");
+    /**
+     * SELF, not OWNER. `String(args.userId) !== args.tenantId` is the whole authorization: both
+     * values are derived from the authenticated identity by `tenantAction`, never from client
+     * args, so this can only ever erase the caller's own tenant.
+     *
+     * This clause used to ALSO require `user?.owner === true`, and that was wrong. `users.owner`
+     * is the DEPLOYMENT-owner grant minted by `bootstrapOwner` (GOVN-01) — it gates the optimizer
+     * and skill activation. Erasure is not an administrative privilege; it is GDPR Art. 17, a
+     * right every user holds over their own data, and the published privacy policy promises it to
+     * everyone. Requiring the deployment grant meant every real signup got `OWNER_REQUIRED`
+     * (production request `9a23216e3f16ebe8`), so the control the policy advertises did not exist
+     * for anyone but the operator.
+     *
+     * It bought no isolation either: `deleteTenantDataPage` scopes the identity row by
+     * `String(user._id) === args.tenantId` and every other table by the `by_tenant` index. Dropping
+     * it removes a false gate, not a real one — and `tenantDelete.test.ts`'s non-owner case is the
+     * regression guard, because every other fixture in that file seeds `owner: true`.
+     */
+    if (!user || String(args.userId) !== args.tenantId) {
+      throw new Error("TENANT_SELF_REQUIRED");
     }
     const google = await ctx.db
       .query("gmailTokens")
@@ -112,7 +130,10 @@ export const deleteTenantDataPage = internalMutation({
             tenantId: args.tenantId,
             correlationId: `tenant-delete:${args.completion.tenantIdHash}`,
             eventType: "tenant.deleted",
-            actor: "owner",
+            // The erasing party is the TENANT acting on itself, which is usually not the
+            // deployment owner. Recording "owner" here would put a false actor in the immutable
+            // log — provenance the compliance read cannot later correct.
+            actor: "user",
             payload,
           });
         }

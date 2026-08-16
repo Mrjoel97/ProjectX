@@ -282,3 +282,48 @@ describe("tenant deletion provider truth", () => {
     });
   });
 });
+
+// GOVN-03: erasure is a RIGHT every user holds over their own data (GDPR Art. 17), not an
+// administrative privilege of the deployment owner. Every other fixture in this file seeds
+// `owner: true`, which made the `authorizeTenantDeletion` owner clause unreachable — the suite was
+// 6/6 green while the control was broken for every real signup. Production request
+// `9a23216e3f16ebe8` threw `OWNER_REQUIRED` at `tenantDelete.ts:48` with `databaseWriteBytes: 0`.
+// `owner` is `v.optional(v.boolean())`, so omitting it below is exactly what a real signup looks
+// like — that omission is the whole point of the fixture and must not be "tidied up".
+describe("tenant deletion is the tenant's own right, not an owner privilege", () => {
+  test("a NON-owner tenant erases its own data and still cannot reach another tenant's", async () => {
+    const t = convexTest(schema, modules);
+    t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+    const { tenantA, tenantB } = await t.run(async (ctx) => {
+      const tenantA = await ctx.db.insert("users", { email: "non-owner@example.test" });
+      const tenantB = await ctx.db.insert("users", { email: "bystander@example.test" });
+      for (let i = 0; i < 3; i++) {
+        await ctx.db.insert("demoItems", { tenantId: tenantA, label: `A-erase-${i}` });
+      }
+      await ctx.db.insert("demoItems", { tenantId: tenantB, label: "B-must-survive" });
+      return { tenantA, tenantB };
+    });
+
+    const result = await t
+      .withIdentity({ subject: `${tenantA}|non-owner-session` })
+      .action(deleteTenantData, { confirmation: "DELETE MY DATA" });
+
+    expect(result.deletedByTable.demoItems).toBe(3);
+    expect(result.deletedByTable.users).toBe(1);
+
+    await t.run(async (ctx) => {
+      expect(await ctx.db.get(tenantA)).toBeNull();
+      // the negative that matters: a non-owner erasure must not widen into anyone else's data
+      expect(await ctx.db.get(tenantB)).not.toBeNull();
+      const survivors = await ctx.db.query("demoItems").collect();
+      expect(survivors.map((row) => row.label)).toEqual(["B-must-survive"]);
+
+      // the completion record must not claim an owner performed this
+      const completion = (await ctx.db.query("audit").collect()).filter(
+        (row) => row.eventType === "tenant.deleted",
+      );
+      expect(completion).toHaveLength(1);
+      expect(completion[0]?.actor).toBe("user");
+    });
+  });
+});

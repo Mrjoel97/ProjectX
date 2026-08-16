@@ -1,5 +1,31 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-08-16 (**erasure is SELF-scoped, not owner-gated — the production defect and
+> its root-cause fix.** `authorizeTenantDeletion` required `user.owner === true` alongside the
+> self check, so every real signup got `OWNER_REQUIRED`: production request `9a23216e3f16ebe8`,
+> `tenantDelete.ts:48`, `databaseWriteBytes: 0`. The right the privacy policy advertises to every
+> user existed only for the operator.
+>
+> `users.owner` is the DEPLOYMENT-owner grant `bootstrapOwner` mints (GOVN-01) — it gates the
+> optimizer and skill activation. Erasure is GDPR Art. 17, a right each user holds over their OWN
+> data; the two are different questions and must not share a predicate. The guard is now
+> `!user || String(args.userId) !== args.tenantId` → `TENANT_SELF_REQUIRED`, and it is the whole
+> authorization: both values come from the authenticated identity via `tenantAction`, never from
+> client args, so it can only erase the caller's own tenant. **The owner clause bought no isolation
+> whatsoever** — `deleteTenantDataPage` already scopes the identity row by
+> `String(user._id) === args.tenantId` and every other table by `by_tenant`. Removing it deleted a
+> false gate, not a real one.
+>
+> `actor` on the `tenant.deleted` record moved `"owner"` → `"user"`. The erasing party is the
+> tenant acting on itself and is usually NOT the deployment owner; a false actor in an insert-only
+> log is provenance no later read can correct.
+>
+> **WHY NO TEST CAUGHT IT:** every other fixture in `tenantDelete.test.ts` seeds `owner: true`,
+> which made the clause unreachable — 6/6 green with the control broken for every real user. The
+> new non-owner case omits `owner` entirely (it is `v.optional`, so that is exactly what a signup
+> looks like) and asserts tenant B survives untouched. **Do not "tidy" that omission.**
+> backend tenantDelete 7/7, backend typecheck exit 0.)
+
 > Last verified: 2026-08-16 (**import ORDER only in `tenantDelete.ts` — no behaviour, no erasure
 > semantics, nothing below changes.** `biome ci` fails the build on `assist/source/organizeImports`,
 > and this file was one of exactly THREE real errors hiding under 93 local CRLF `format` diagnostics

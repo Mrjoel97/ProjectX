@@ -1,5 +1,22 @@
 # Playbook: Authorization (tenancy + ownership)
 
+> Last verified: 2026-08-16 (**what `owner` does NOT gate.** `users.owner` is the deployment-owner
+> grant (GOVN-01): the optimizer, skill activation/rollback, the owner-only finance rails and
+> `/ops`. It is NOT a general "may act destructively" flag, and `tenantDelete.ts` learned that in
+> production — its erasure path required `owner === true` and answered `OWNER_REQUIRED` to every
+> real signup (request `9a23216e3f16ebe8`).
+>
+> The rule this playbook now states plainly: **an operator-privilege question and a
+> right-over-my-own-data question are different questions and must not share a predicate.** Owner
+> asks *may this caller act on the DEPLOYMENT?* Tenant-self asks *is this caller acting on its OWN
+> tenant?* — and the latter is what `tenantAction`'s derived `ctx.tenantId`/`ctx.userId` already
+> answer. GDPR Art. 15/20 export and Art. 17 erasure are tenant-self, never owner. See
+> [[audit-dead-letter]] for the erasure guard itself.
+>
+> **No change to `owner.ts` or `requireOwner` in this edit** — the three Phase-8 functions, the
+> finance rails and the `/ops` mount are untouched and still owner-gated. This entry records a
+> boundary, so the clause is not re-added by someone reading "destructive ⇒ owner".)
+
 > Last verified: 2026-08-16 (Phase 22 re-verification) — the former `/ops` presentation gap is
 > closed at the React component level. `opsPresentation.test.ts` renders the real `OpsPage` with
 > Convex hooks instrumented: exact owner true renders Optimizer and executes all owner-only panel
