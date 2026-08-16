@@ -1,5 +1,23 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-16 (GOVN-03 — the Microsoft half stops being a dead end. The erasure card
+> and `apps/web/app/privacy/page.tsx` now both name the limit AND hand over the real control:
+> `account.microsoft.com/privacy/app-access` (personal) and `myapps.microsoft.com` (work/school).
+> The policy previously told Google users exactly where to revoke and said **nothing at all** to
+> Microsoft users — so a reader could only assume parity, which is precisely the "policy as
+> marketing" failure GOVN-03 exists to stop. The policy paragraph states plainly that we cannot
+> revoke at Microsoft and do not claim to.
+>
+> Pinned by `dataControls.test.ts` "hands the user Microsoft's own consent control instead of
+> implying parity with Google", which asserts BOTH sources carry both links, that the policy says
+> `cannot revoke the grant at Microsoft`, and — the regression that would otherwise pass unnoticed —
+> that the existing `myaccount.google.com/permissions` route was not dropped while editing.
+>
+> `apps/web/app/privacy/page.tsx` is watched by NO playbook (checked against `watch.json`). It is a
+> published legal document whose claims are a requirement's specification, so that is a real gap;
+> registering it belongs to whoever next owns the policy, not to this edit. web dataControls 5/5,
+> web + backend typecheck exit 0.)
+
 > Touched 2026-08-16 (media/eval lane) to clear the §9 Stop hook — **NOT a verification**, and
 > deliberately not a `Last verified` line. This session changed no dashboard code: it entered
 > 33-07's canvas work in `cockpit.md` and ran a production eval bisect on fixtures 30–37. The hook

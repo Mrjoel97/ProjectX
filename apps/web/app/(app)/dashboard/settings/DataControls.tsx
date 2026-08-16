@@ -19,6 +19,13 @@ const exportTenantData = makeFunctionReference<
  *  mis-typed confirmation is refused here before it can ever reach an irreversible action. */
 const DELETE_PHRASE = "DELETE MY DATA";
 
+/** Microsoft's own consent-management surfaces. We link them because we cannot revoke a Microsoft
+ *  grant on the user's behalf: the per-application route needs tenant-wide admin permissions we
+ *  deliberately do not hold, and the delegated route revokes EVERY application's tokens, not ours.
+ *  Naming the limit without handing over the real control would be honest but useless. */
+const MS_CONSENT_PERSONAL = "https://account.microsoft.com/privacy/app-access";
+const MS_CONSENT_WORK = "https://myapps.microsoft.com/";
+
 /** Mirrors `tenantDelete.ts`'s local result shape. Per-provider truth is reported, never averaged
  *  into one boolean — Google revokes at the provider, Microsoft does not (GOVN-03). */
 type ProviderDeletionResult = {
@@ -203,9 +210,17 @@ export function DataControls() {
           </p>
           <p style={body}>
             Connected accounts are disconnected before anything is erased. A Google grant is revoked
-            at Google. A Microsoft grant is removed here only — Microsoft exposes no delegated-token
-            revocation endpoint, so that grant stands until it expires or you remove it from your
-            Microsoft account. You are told which happened.
+            at Google. A Microsoft grant is removed here only — Microsoft offers no per-application
+            revocation an application can call for its own grant, so the consent entry stands on
+            your Microsoft account until you remove it at{" "}
+            <a href={MS_CONSENT_PERSONAL} rel="noopener noreferrer" target="_blank">
+              account.microsoft.com
+            </a>{" "}
+            (personal) or{" "}
+            <a href={MS_CONSENT_WORK} rel="noopener noreferrer" target="_blank">
+              myapps.microsoft.com
+            </a>{" "}
+            (work or school). You are told below which outcome each account actually reached.
           </p>
           <p style={body}>
             The audit archive is retained. It holds references, identifiers, hashes, and counts —
@@ -282,6 +297,20 @@ export function DataControls() {
                     : entry.revokedAtProvider
                       ? "revoked at the provider."
                       : "removed here only — not revoked at the provider."}
+                {entry.localRowDeleted && !entry.revokedAtProvider && (
+                  <>
+                    {" "}
+                    Remove the consent entry yourself at{" "}
+                    <a href={MS_CONSENT_PERSONAL} rel="noopener noreferrer" target="_blank">
+                      account.microsoft.com
+                    </a>{" "}
+                    or{" "}
+                    <a href={MS_CONSENT_WORK} rel="noopener noreferrer" target="_blank">
+                      myapps.microsoft.com
+                    </a>
+                    .
+                  </>
+                )}
               </li>
             ))}
           </ul>

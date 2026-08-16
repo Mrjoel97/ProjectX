@@ -45,4 +45,24 @@ describe("tenant data control reachability", () => {
     expect(source).toContain("cannot be undone");
     expect(source).toMatch(/revok|disconnect/i);
   });
+
+  // GOVN-03 is "the policy is the specification, not the marketing". The Microsoft grant is the one
+  // place the product CANNOT deliver what a reader might assume from the Google paragraph, so both
+  // the card and the published policy must name the gap AND hand over the real control. Without the
+  // links this is an honest dead end; with them it is an exercisable right.
+  test("hands the user Microsoft's own consent control instead of implying parity with Google", () => {
+    const card = read("./DataControls.tsx");
+    const policy = read("../../../privacy/page.tsx");
+
+    for (const source of [card, policy]) {
+      expect(source).toContain("account.microsoft.com/privacy/app-access");
+      expect(source).toContain("myapps.microsoft.com");
+    }
+
+    // the policy must say plainly that we do NOT revoke at Microsoft — never a bare "you can
+    // disconnect" that reads as Google-equivalent
+    expect(policy).toMatch(/cannot revoke the grant at Microsoft/i);
+    // and it must not have quietly dropped the Google route it already promised
+    expect(policy).toContain("myaccount.google.com/permissions");
+  });
 });

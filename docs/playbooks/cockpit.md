@@ -1,5 +1,19 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-16 (GOVN-03 precision — **`disconnectMicrosoft`'s comment used to say the
+> revocation endpoint DOES NOT EXIST. That was wrong**, and wrong in the direction that stops anyone
+> ever revisiting it. Two mechanisms exist; both are correctly REFUSED, and the comment now says so:
+> (1) `DELETE /oauth2PermissionGrants/{id}` revokes exactly this app's grant but needs
+> `DelegatedPermissionGrant.ReadWrite.All` / `AppRoleAssignment.ReadWrite.All` — admin-consent
+> application permissions. Holding tenant-wide grant-deletion rights in order to disconnect
+> ourselves is a far larger privilege than the mailbox scopes we need. (2)
+> `POST /me/revokeSignInSessions` invalidates the user's refresh tokens for EVERY application, not
+> just ours — disconnecting Pikar would sign the user out of Outlook and Teams, minutes later,
+> unannounced. So the gap is a deliberate refusal to over-privilege, NOT an absence, and
+> `revokedAtProvider: false` stays a hard false. **No behaviour changed in this edit** — the code
+> path is byte-identical; only the justification is now true. Do not "fix" this by adding either
+> call. backend typecheck exit 0.)
+
 > Last verified: 2026-08-16 (33-08 — **NO NEW COCKPIT BEHAVIOUR; two workspace-watched files moved
 > and this records why neither is a cockpit change.** `cards.tsx` gained ONE keyword: its
 > `VaultDocButton` is now `export`ed so `MediaCanvas.tsx` can open a scene's citation through the

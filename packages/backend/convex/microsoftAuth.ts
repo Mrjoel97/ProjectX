@@ -260,7 +260,22 @@ export const microsoftConnectUrl = tenantQuery({
  * matters for data-at-rest — and the UI copy says plainly that the consent entry remains on the
  * user's Microsoft account until they remove it there. GOVN-03 inherits this limitation and must
  * state it rather than imply a revocation we do not perform. Inventing a revoke call against a
- * non-existent endpoint would be worse than the honest gap: it would report success for nothing.
+ * an endpoint we cannot reach would be worse than the honest gap: it would report success for
+ * nothing.
+ *
+ * PRECISION (verified 2026-08-16 — the earlier wording here said the endpoint does not exist, which
+ * is wrong and would mislead the next reader into thinking this is unfixable). Two mechanisms DO
+ * exist; neither is usable by a user-consented delegated app revoking its OWN grant:
+ *   1. `DELETE /oauth2PermissionGrants/{id}` revokes exactly this app's grant — but requires
+ *      `DelegatedPermissionGrant.ReadWrite.All` / `AppRoleAssignment.ReadWrite.All`, admin-consent
+ *      application permissions. Holding tenant-wide grant-deletion rights just to disconnect
+ *      ourselves would be a far larger privilege than the mailbox scopes we actually need.
+ *   2. `POST /me/revokeSignInSessions` invalidates the user's refresh tokens — for EVERY
+ *      application, not just ours. Disconnecting Pikar would sign the user out of Outlook, Teams
+ *      and the rest, minutes later and without warning. That is user-hostile, not compliant.
+ * So the gap is a deliberate refusal to over-privilege, not an absence. The product's job is to say
+ * so and hand the user the real control (My Apps / account.microsoft.com), which the privacy policy
+ * and the erasure card both now do.
  *
  * `tenantAction`, not an arg-supplied tenantId: the scope comes from the caller's identity, so this
  * can only ever disconnect the caller's own grant.

@@ -321,6 +321,28 @@ export default function Privacy() {
         . Revoking access invalidates our tokens immediately.
       </p>
       <p>
+        You can disconnect your Microsoft account at any time from within the application. That
+        deletes the access and refresh tokens we hold, immediately and permanently.{" "}
+        <strong>
+          Unlike Google, we cannot revoke the grant at Microsoft on your behalf, and we do not claim
+          to.
+        </strong>{" "}
+        Microsoft offers no per-application revocation that an application can call for its own
+        grant — the available mechanisms either require tenant-wide administrative permissions we
+        deliberately do not hold, or would sign you out of every Microsoft application rather than
+        only this one. So the consent entry remains on your Microsoft account until you remove it
+        there. To remove it, visit{" "}
+        <a href="https://account.microsoft.com/privacy/app-access" rel="noopener noreferrer">
+          account.microsoft.com/privacy/app-access
+        </a>{" "}
+        for a personal Microsoft account, or{" "}
+        <a href="https://myapps.microsoft.com/" rel="noopener noreferrer">
+          myapps.microsoft.com
+        </a>{" "}
+        for a work or school account. When you delete your data, we tell you exactly which of these
+        two outcomes each connected account actually reached.
+      </p>
+      <p>
         If you are unhappy with how we handle your data, you may complain to your local supervisory
         authority. Our lead supervisory authority is {LEAD_AUTHORITY}. In the UK, this is the
         Information Commissioner&rsquo;s Office (<code>ico.org.uk</code>).
