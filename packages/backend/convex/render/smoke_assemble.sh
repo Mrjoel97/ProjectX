@@ -127,6 +127,22 @@ ffmpeg -y -v error -ss 16 -i out/final.mp4 -frames:v 1 out/card.png
 NONBLACK="$(ffmpeg -v error -i out/card.png -vf "blackframe=amount=98" -f null - 2>&1 | grep -c blackframe || true)"
 [ "$NONBLACK" = "0" ] || fail "the card frame is blank — drawtext drew nothing"
 
+# The still branch must be ANIMATED, not merely a decodable six-second freeze. Sample decoded
+# frames from the middle of scene 2 and compare their frame hashes. Hashes
+# are compared only with one another, never with a machine-specific golden: libx264/FFmpeg builds
+# may encode the same picture differently, while a moving decoded window must still produce a new
+# frame on most samples. Mapping the decoded video stream explicitly keeps audio packets and
+# container timestamps out of the count; the invariant sees pixels only.
+motion_stats() { # $1=file $2=start-seconds $3=duration-seconds -> "frames unique_hashes"
+  ffmpeg -v error -ss "$2" -i "$1" -t "$3" -map 0:v:0 -an -f framemd5 - 2>/dev/null \
+    | awk -F', ' '!/^#/ && NF {n++; seen[$NF]=1} END {for (h in seen) u++; printf "%d %d", n+0, u+0}'
+}
+read -r MOTION_FRAMES MOTION_UNIQUE <<< "$(motion_stats out/final.mp4 8.5 2)"
+[ "$MOTION_FRAMES" -ge 40 ] || fail "animated still yielded only ${MOTION_FRAMES} sampled frames"
+[ "$MOTION_UNIQUE" -ge $(((MOTION_FRAMES * 3) / 4)) ] || \
+  fail "animated still changed in only ${MOTION_UNIQUE}/${MOTION_FRAMES} sampled frames — zoompan is static or visibly stepping"
+echo "  animated still moved in ${MOTION_UNIQUE}/${MOTION_FRAMES} decoded frame samples"
+
 # ── THE NARRATION ASSERT, OBSERVED RED ─────────────────────────────────────────────────────────
 # Risk 1 of this phase: with optional narration, "narration in every window" becomes trivially
 # passable if it is relaxed instead of re-expressed, and this repo has a named defect class for

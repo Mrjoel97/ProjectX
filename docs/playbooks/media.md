@@ -1,5 +1,11 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-08-16 (Phase 20.2 Nyquist audit — the local mixed-scene smoke now samples
+> decoded video-frame hashes inside the `animated_image` window. The current assembler is RED:
+> 48 decoded frames produced 1 unique hash, so the still path is frozen rather than animated.
+> This is an implementation escalation; the smoke invariant is intentionally retained red until
+> the zoompan branch produces motion. No external deployment or provider was contacted.)
+
 > Last verified: 2026-08-15 (render_failed postmortem, FIXED AND RE-RENDERED IN THE PROD SANDBOX —
 > **the first card-scene render died on a `grep -q` + pipefail SIGPIPE race, not a missing
 > library.** `assemble_final.sh`'s drawtext probe (`ffmpeg -filters | grep -q ' drawtext '`) under
