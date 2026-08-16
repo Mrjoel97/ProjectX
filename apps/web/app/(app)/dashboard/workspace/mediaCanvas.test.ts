@@ -3,15 +3,15 @@ import { join } from "node:path";
 import { TARGET_DURATIONS } from "@pikar/core/storyboard";
 import { describe, expect, test } from "vitest";
 import {
-  type Brief,
   BRIEF_DEFAULTED_MARKER,
   BRIEF_LOCKED_NOTE,
   BRIEF_OPTIONAL_HINT,
+  type Brief,
   briefChips,
   DECK_STALE_NOTE,
+  DURATION_COST_NOTE,
   deckStale,
   deckSummary,
-  DURATION_COST_NOTE,
   durationLabel,
   estimateView,
   failureText,
@@ -21,9 +21,9 @@ import {
   KIND_LABEL,
   pictureLine,
   pricedAsLine,
-  refusalText,
   REPROPOSE_LABEL,
   REPROPOSE_MESSAGE,
+  refusalText,
   ribbonShares,
   type SummaryShot,
   type TrackerScene,
@@ -650,10 +650,7 @@ describe("the brief chips are what was captured, and only two of them may block"
   });
 
   test("a value the user stated is never marked, even if a defaulted list names another field", () => {
-    const chips = briefChips(
-      aBrief({ audience: "Solo founders", defaulted: ["tone"] }),
-      false,
-    );
+    const chips = briefChips(aBrief({ audience: "Solo founders", defaulted: ["tone"] }), false);
     expect(chipFor(chips, "audience").marker).toBeNull();
     expect(chipFor(chips, "tone").defaulted).toBe(true);
   });
@@ -679,9 +676,9 @@ describe("the brief chips are what was captured, and only two of them may block"
     expect(options.find((o) => o.seconds === 15)?.note).toBeNull();
     expect(options.find((o) => o.seconds === 30)?.note).toBeNull();
     // Picked → the note is on the chip itself, where it is read without opening the control.
-    expect(chipFor(briefChips(aBrief({ durationSeconds: 60 }), false), "durationSeconds").note).toBe(
-      DURATION_COST_NOTE,
-    );
+    expect(
+      chipFor(briefChips(aBrief({ durationSeconds: 60 }), false), "durationSeconds").note,
+    ).toBe(DURATION_COST_NOTE);
     expect(chipFor(briefChips(aBrief(), false), "durationSeconds").note).toBeNull();
   });
 

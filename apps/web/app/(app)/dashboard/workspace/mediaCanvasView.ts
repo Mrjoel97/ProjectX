@@ -15,6 +15,13 @@
  * and styling stay in the component.
  */
 
+// The ONE import this module has, and it is a VALUE rather than a type for a reason: the length
+// chip's options must BE the closed set `media.editBrief` validates against, or the control can
+// produce an `illegal_duration` refusal the UI could have made unreachable. `@pikar/core` is a
+// pure-TS workspace package with no dependencies of its own (CLAUDE.md §1) — importing it does not
+// pull the backend's build graph in here, which is what the note below is about.
+import { TARGET_DURATIONS } from "@pikar/core/storyboard";
+
 /** The four kinds a scene's picture can come from (`@pikar/core/storyboard`'s `VisualKind`). Typed
  *  structurally rather than imported so this module stays free of the backend's build graph; the
  *  `satisfies` tables below are what keep it honest if a member is ever added there. */
@@ -635,6 +642,235 @@ export function heroState(
   return {
     mode: "tracker",
     reason: landed && status === "pending" ? "out_of_date" : "never_built",
+  };
+}
+
+// ── 33-07 — THE BRIEF CHIPS, THE STALE BADGE AND THE TWO-DECK SWITCHER ────────────────────────
+//
+// **Two surfaces, one brief.** The chat captured it; the canvas is where it can be READ and
+// corrected, so the chips are the canvas's account of what was captured and the only place a
+// mis-parse is visible before money is spent.
+//
+// Three rules the derivations below exist to hold, each of which a component could quietly break:
+//
+// 1. **Only topic and length may block.** `audience`/`tone`/`brandVoice` are exactly the fields an
+//    idea-stage tenant cannot fill (Phase 11's sparse start), and a chip row that demanded them
+//    would re-gate the users Phase 11 deliberately admitted.
+// 2. **A defaulted field is not the user's word, and must say so.** `brief.defaulted` names the
+//    fields the model filled in; a chip that renders them identically to a stated one is the
+//    provenance-laundering shape this repo already has a defect class for.
+// 3. **Length is a preset, never a field.** `editBrief` validates against `TARGET_DURATIONS`, so a
+//    control built from anything else can produce an `illegal_duration` the UI could have
+//    prevented. Building the options FROM that constant makes the refusal unreachable.
+
+/** The brief plane, structurally (`plans.brief`). `defaulted` is the model-authored-fields list. */
+export type Brief = {
+  topic: string;
+  durationSeconds: number;
+  audience?: string | null;
+  tone?: string | null;
+  brandVoice?: string | null;
+  defaulted: readonly string[];
+};
+
+export type BriefChipField = "topic" | "durationSeconds" | "audience" | "tone" | "brandVoice";
+
+/** One preset on the length control. `current` is here rather than compared in the `.tsx` so the
+ *  selected state is decided once, by the same function that built the list. */
+export type BriefOption = { seconds: number; label: string; note: string | null; current: boolean };
+
+export type BriefChip = {
+  field: BriefChipField;
+  label: string;
+  /** The captured value AS TEXT — `""` when nothing was captured, which is a legal resting state
+   *  for the three optional fields and never a blocker. */
+  value: string;
+  required: boolean;
+  /** The model filled this in; the user has not stated it. */
+  defaulted: boolean;
+  /** The marker a defaulted chip carries, else `null`. A WORD, never a colour (BRAND §6). */
+  marker: string | null;
+  /** False from Generate on — `editBrief` answers `deck_locked` from then on, and a control that
+   *  can only buy a refusal must not look like a control. */
+  editable: boolean;
+  /** What an empty chip says. */
+  placeholder: string;
+  /** Cost discoverability on the chip itself, in the `KIND_COST_NOTE` idiom. */
+  note: string | null;
+  /** The preset options. NON-EMPTY ONLY on the length chip; `[]` is what tells the component to
+   *  render a text input, so "which fields are free text" is decided here too. */
+  options: BriefOption[];
+};
+
+export const BRIEF_DEFAULTED_MARKER = "from your profile";
+export const BRIEF_OPTIONAL_HINT = "Optional — the agent fills this in if you leave it.";
+export const BRIEF_LOCKED_NOTE =
+  "This brief was locked when you generated the reel. From here, changes happen scene by scene on the canvas, and each one is paid.";
+/** The 60 s note. The multiple is of the FOOTAGE (60/15), which is arithmetic on the presets
+ *  themselves — not a price claim — and the second clause names the same lever the clips line and
+ *  `KIND_COST_NOTE` name, because that is the one a user can actually pull. */
+export const DURATION_COST_NOTE =
+  "60 seconds is four times the footage of 15 — the most to fill, and the most to buy unless you lean on stills and cards.";
+
+const CHIP_LABEL: Record<BriefChipField, string> = {
+  topic: "Topic",
+  durationSeconds: "Length",
+  audience: "Audience",
+  tone: "Tone",
+  brandVoice: "Brand voice",
+};
+
+/**
+ * THE BRIEF, AS CHIPS — ordered, marked, and blocking on two fields only.
+ *
+ * No brief → no chips. `editBrief` refuses `no_brief` for the same reason: a chip row built over
+ * nothing would let a client-side default be read back as "what the user asked for".
+ */
+export function briefChips(brief: Brief | null | undefined, deckLocked: boolean): BriefChip[] {
+  if (!brief) return [];
+  const editable = !deckLocked;
+  const marked = (field: BriefChipField): boolean => brief.defaulted.includes(field);
+
+  const text = (
+    field: Exclude<BriefChipField, "durationSeconds">,
+    required: boolean,
+  ): BriefChip => {
+    const value = (field === "topic" ? brief.topic : brief[field]) ?? "";
+    return {
+      field,
+      label: CHIP_LABEL[field],
+      value,
+      required,
+      defaulted: marked(field),
+      marker: marked(field) ? BRIEF_DEFAULTED_MARKER : null,
+      editable,
+      placeholder: required ? "What the reel is about" : BRIEF_OPTIONAL_HINT,
+      note: null,
+      options: [],
+    };
+  };
+
+  return [
+    text("topic", true),
+    {
+      field: "durationSeconds",
+      label: CHIP_LABEL.durationSeconds,
+      value: `${brief.durationSeconds} seconds`,
+      required: true,
+      defaulted: marked("durationSeconds"),
+      marker: marked("durationSeconds") ? BRIEF_DEFAULTED_MARKER : null,
+      editable,
+      placeholder: "",
+      // On the chip when 60 is the ask, so it is read WITHOUT opening the control; on the option
+      // when it is not, so it is read before it is chosen.
+      note: brief.durationSeconds === 60 ? DURATION_COST_NOTE : null,
+      options: TARGET_DURATIONS.map((seconds) => ({
+        seconds,
+        label: `${seconds}s`,
+        note: seconds === 60 ? DURATION_COST_NOTE : null,
+        current: seconds === brief.durationSeconds,
+      })),
+    },
+    text("audience", false),
+    text("tone", false),
+    text("brandVoice", false),
+  ];
+}
+
+export const DECK_STALE_NOTE = "Brief changed — storyboards may be out of date.";
+export const REPROPOSE_LABEL = "Re-propose (free)";
+/** The canned turn. It goes through the ORDINARY chat send path (`useSendCockpitMessage`), so it
+ *  lands in the transcript like any other message and must read like one a person could have typed
+ *  — a second UI→dispatch entry point is the named anti-pattern this replaces. */
+export const REPROPOSE_MESSAGE = "Re-propose storyboards for the updated brief.";
+
+/**
+ * IS THE DECK BEHIND THE BRIEF?
+ *
+ * True iff BOTH stamps exist and the brief moved last. An absent stamp is never stale, and both
+ * absences are real states: an unedited brief (`briefChangedAt` unset) and a brief with no deck
+ * proposed yet (`deckProposedAt` unset) must each read as "nothing has drifted", not as a badge
+ * over an empty canvas. Equal stamps are the propose-then-stamp case, not an edit.
+ *
+ * NOTHING auto-fires from this. The badge and the button are the whole affordance — the re-propose
+ * costs a model turn, and D7's rule is that a spend follows a click.
+ */
+export const deckStale = (
+  briefChangedAt: number | null | undefined,
+  deckProposedAt: number | null | undefined,
+): boolean =>
+  typeof briefChangedAt === "number" &&
+  typeof deckProposedAt === "number" &&
+  briefChangedAt > deckProposedAt;
+
+/** One deck element, as a summary needs it — a structural subset of `plans.shots[]`/`altShots[]`. */
+export type SummaryShot = { visual?: string | null; seconds: number; description: string };
+
+export type DeckSummary = {
+  /** The opening scene's description — the shortest honest answer to "what is this one?". */
+  concept: string;
+  sceneCount: number;
+  /** `2 × ANIMATED STILL · 1 × TEXT CARD`, in `KIND_LABEL`'s own words so the compare card and the
+   *  tiles below it name the same things. */
+  kindMix: string;
+  duration: string;
+};
+
+/**
+ * ONE FOLD, USED TWICE — which is the whole point.
+ *
+ * A compare region whose two halves are built by two pieces of code is a region where one side can
+ * count scenes while the other counts shots, or one totals the real durations while the other
+ * quotes the declared target. The duration here is the SUM of the deck's own scene lengths (the
+ * ribbon's arithmetic), never `targetDurationSeconds`: a deck that does not add up to its declared
+ * length is exactly the thing a user comparing two proposals needs to see.
+ */
+export function deckSummary(shots: readonly SummaryShot[] | null | undefined): DeckSummary | null {
+  if (!shots || shots.length === 0) return null;
+  const counts = new Map<string, number>();
+  for (const s of shots) {
+    const kind = asVisualKind(s.visual);
+    const label = kind ? KIND_LABEL[kind] : "BLOCK";
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  return {
+    concept: shots[0]?.description.trim() ?? "",
+    sceneCount: shots.length,
+    kindMix: [...counts].map(([label, n]) => `${n} × ${label}`).join(" · "),
+    duration: durationLabel(shots.reduce((ms, s) => ms + s.seconds * 1000, 0)),
+  };
+}
+
+export type VariationView = {
+  hasAlternate: boolean;
+  locked: boolean;
+  canSwitch: boolean;
+  picked: DeckSummary | null;
+  alternate: DeckSummary | null;
+};
+
+/**
+ * THE A/B REGION'S WHOLE STATE.
+ *
+ * `locked` wins over everything. `generateReel` clears `altShots` in the same patch that stamps
+ * `deckLockedAt`, so a locked plan with an alternate should not exist — but `switchDeck` answers
+ * `deck_locked` BEFORE it looks for one, and a canvas that rendered the compare card off a stale
+ * row would be offering a control that can only ever refuse. The alternate is `null` when locked,
+ * so the region is simply absent after Generate rather than present-and-disabled.
+ */
+export function variationView(plan: {
+  shots?: readonly SummaryShot[] | null;
+  altShots?: readonly SummaryShot[] | null;
+  deckLockedAt?: number | null;
+}): VariationView {
+  const locked = plan.deckLockedAt !== undefined && plan.deckLockedAt !== null;
+  const hasAlternate = !locked && Boolean(plan.altShots && plan.altShots.length > 0);
+  return {
+    hasAlternate,
+    locked,
+    canSwitch: hasAlternate,
+    picked: deckSummary(plan.shots),
+    alternate: hasAlternate ? deckSummary(plan.altShots) : null,
   };
 }
 
