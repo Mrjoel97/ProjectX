@@ -331,13 +331,13 @@ forward.** Recorded rather than silently assumed — it is an open owner decisio
 **Goal:** Creating a reel becomes a guided, honest, verifiable experience over the shipped scene-deck pipeline: chat + brief-chip intake, two distinct-concept storyboard variations, a reel-first canvas whose hero tracks the unattended run to a captioned vault-saved final, plain-language failure cards with governed retry, and per-scene vault citations with an owner-confirmation gate before any money moves.
 **Requirements**: 33-INTAKE, 33-VARIA, 33-REEL, 33-CANVAS, 33-FAIL, 33-CITE (minted at planning; the UX face of MEDIA-01)
 **Depends on:** Phase 32
-**Plans:** 3/10 plans executed
+**Plans:** 4/10 plans executed
 
 Plans:
 - [x] 33-01-PLAN.md — Core deck contracts: brief §-parser, two-variation parse, per-scene citations (Wave 1)
 - [x] 33-02-PLAN.md — Plan-row state + editBrief/switchDeck/confirmClaim mutations (Wave 2)
 - [x] 33-03-PLAN.md — Proposal terminal lands brief+variations+citations; unconfirmed_claims gate; Generate locks + discards (Wave 3)
-- [ ] 33-04-PLAN.md — Transient-code classification, ONE auto-retry, manual retry, fix-menu re-arm (Wave 4)
+- [x] 33-04-PLAN.md — Transient-code classification, ONE auto-retry, manual retry, fix-menu re-arm (Wave 4)
 - [ ] 33-05-PLAN.md — Vault auto-save of the final (refs-only citations) + old-final-held regenerate ordering (Wave 5)
 - [ ] 33-06-PLAN.md — Reel-first canvas: hero + strip layout, pipeline tracker, estimate headline/breakdown (Wave 6)
 - [ ] 33-07-PLAN.md — Brief chips, stale badge + free re-propose, side-by-side variation switcher (Wave 7)

@@ -4,13 +4,13 @@ milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_plan: 7 (done)
 status: completed
-stopped_at: Completed 22.1-04-PLAN.md
-last_updated: "2026-08-15T22:52:39.820Z"
+stopped_at: Completed 33-04-PLAN.md
+last_updated: "2026-08-16T01:48:46.000Z"
 progress:
   total_phases: 53
   completed_phases: 31
   total_plans: 412
-  completed_plans: 284
+  completed_plans: 285
   percent: 69
 ---
 
@@ -20,13 +20,13 @@ milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_plan: 7 (done)
 status: completed
-stopped_at: Completed 33-03-PLAN.md
-last_updated: "2026-08-15T19:28:48.089Z"
+stopped_at: Completed 33-04-PLAN.md
+last_updated: "2026-08-16T01:48:46.000Z"
 progress:
   [███████░░░] 69%
   completed_phases: 31
   total_plans: 412
-  completed_plans: 283
+  completed_plans: 284
 ---
 
 > **Counting note, 2026-08-14.** `total_phases` 52 → 53 reflects Phase 20.2 being registered, not new
@@ -1742,6 +1742,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 | 18 | 01 | 23 min | 2 | 2 |
 | 15.3 | 03 | 105 min | 7 | 15 |
 | 15.3 | 04 | 105 min | 6 | 17 |
+| 33 | 04 | 71 min | 3 | 11 |
 
 **Recent Trend:** 10-03 landed clean (web typecheck + playbook check green; SourceCard reused the existing briefingSheet style — no new card idiom).
 
@@ -2006,6 +2007,10 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 33]: 33-03: the reserve-side unconfirmed_claims check reads the plan ROW inside reserveSceneJobInner — unbypassable by any caller, deck-wide (regenerateBlock partial buys refuse too)
 - [Phase 33]: 33-03: switchDeck answers deck_locked before no_alternate — post-Generate the truthful refusal is the bought choice, not the (discarded) missing alternate
 - [Phase 33]: 33-03: persistDeck is whole-deck-write — a new proposal clears altShots/altTargetDurationSeconds and deckLockedAt, stamps deckProposedAt; brief is drop-undefined so a revision omitting BRIEF keeps the row's
+- [Phase 33]: 33-04: TRANSIENT_RENDER_CODES is a closed 6-member exported list (missing_binary, route_unreachable, input_fetch_failed, upload_failed, submit_failed, render_failed); sandbox_timeout and every route/runner decision classified deterministic — never auto-retried
+- [Phase 33]: 33-04: ONE auto render retry per plan via the renderRetriedAt CAS inside recordRender (same batch, no dead letter, refs-only audit) — a dated narrow supersession of 20-16's no-retry rule, argued in media.md; the SECOND failure dead-letters byte-for-byte
+- [Phase 33]: 33-04: MEDIA_SANDBOX_USD_PER_RENDER doubled 0.02 -> 0.04 at its one source so the retry sandbox is RESERVED (label 'render (incl. one retry)'); a rare third sandbox from manual retryRender is accepted documented drift, never silent
+- [Phase 33]: 33-04: deckStillNeedsJob is the ONE predicate both evaluateRenderTrigger and batchToRender use for terminal job rows — the fix-menu (setSceneVisual/setSceneAsset, CONTENT-class, no shotsChangedAt) re-arms a held reel in the same mutation; a half-finished fix re-holds via hasAssetSource instead of scheduling a doomed render
 - [Phase 22.1]: Tenant export uses one registry-table page per tenantQuery continuation because Convex allows one paginate call per execution.
 - [Phase 22.1]: GOVN-03 stays pending after export; tenant deletion is 22.1-05 and provider-revocation posture remains separate.
 
@@ -2039,6 +2044,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
+Last session: 2026-08-16T01:48:46.000Z
+Stopped at: Completed 33-04-PLAN.md
 Last session: 2026-08-15T22:52:39.751Z
 Stopped at: Completed 22.1-04-PLAN.md
 Last session: 2026-08-03T06:20:00.000Z
