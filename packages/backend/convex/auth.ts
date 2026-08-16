@@ -10,7 +10,12 @@ import { admitIdentity } from "./invites";
 // this provider's `verify`/`reset` options and need a transactional email sender.
 // ponytail: length-only password rule for the closed beta; strength/breach checks +
 // verify/reset land with the email sender.
-const password = Password({
+// EXPORTED, like `google` and `microsoft` below, for ONE reason: `invites.test.ts` drives
+// `admitIdentity` with synthetic `provider` objects, and a hand-written `{id, type}` in a test
+// proves nothing about the provider the runtime actually hands the callback. The test
+// materializes THESE values through the auth package's own `providerDefaults` merge. Convex
+// ignores non-function module exports (the `guardrails.ts` precedent).
+export const password = Password({
   profile(params) {
     const p: { email: string; name?: string; inviteCode?: string } = {
       email: params.email as string,
@@ -38,7 +43,7 @@ const password = Password({
  * `providerAccountId` and is GONE from the profile the callback sees. Admission has to bind the
  * subject, so it needs its own copy under a name the package does not strip.
  */
-const google = Google({
+export const google = Google({
   authorization: { params: { scope: "openid email profile" } },
   profile: (p) => ({
     id: p.sub,
@@ -60,7 +65,7 @@ const google = Google({
  * Graph photo fetch for the avatar; it is deliberately not restored here, because it would need a
  * Graph scope this sign-in grant does not have.
  */
-const microsoft = MicrosoftEntraID({
+export const microsoft = MicrosoftEntraID({
   issuer: "https://login.microsoftonline.com/common/v2.0",
   authorization: { params: { scope: "openid email profile" } },
   profile: (p) => ({

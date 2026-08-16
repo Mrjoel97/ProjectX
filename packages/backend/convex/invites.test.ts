@@ -6,10 +6,13 @@
 // behind. A test that only checks `users` would pass while orphaned rows piled up in
 // `authAccounts` / `authVerificationCodes` / `authSessions`, so `identityRowCounts` reads EVERY
 // auth-plane table and the refusal cases compare the whole record before and after.
+
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
+import * as providerUtils from "../node_modules/@convex-dev/auth/dist/server/provider_utils.js";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { google, microsoft, password } from "./auth";
 import {
   admitIdentity,
   formatInviteCode,
@@ -68,8 +71,13 @@ async function approvedInvite(h: Harness, email: string) {
   return invite;
 }
 
-const googleProvider = { id: "google", type: "oauth" } as const;
-const entraProvider = { id: "microsoft-entra-id", type: "oauth" } as const;
+// `"oidc"`, NOT `"oauth"`, and the last test in this file is what proved it: Auth.js materializes
+// both Google and Entra as OIDC providers, while `userOAuth.js` separately hardcodes the *args*
+// `type: "oauth"` around them. The two fields disagree in production, so `admitIdentity` must never
+// branch on `provider.type === "oauth"` — it asks only whether the type IS `"credentials"`, which
+// fails CLOSED (into the subject-bound OAuth path) for every present and future provider type.
+const googleProvider = { id: "google", type: "oidc" } as const;
+const entraProvider = { id: "microsoft-entra-id", type: "oidc" } as const;
 const passwordProvider = { id: "password", type: "credentials" } as const;
 
 /** Drive the admission callback exactly as `auth.ts` does, inside one real transaction. */
@@ -467,5 +475,138 @@ describe("password admission is asymmetric — the code is required", () => {
         profile: { email: "mine@example.com", inviteCode: other.code },
       }),
     ).rejects.toThrow(/INVITE_CODE_REQUIRED/);
+  });
+});
+
+// EVERY test above hands `admitIdentity` a HAND-WRITTEN provider object. That is the vacuity risk
+// in this file: if the real runtime hands the callback a different `type`, the password branch is
+// never taken in production — password signup would demand an `oauthSubject` it can never have and
+// break outright, while all 27 tests above stayed green. So materialize the REAL exported configs
+// through the auth package's own `providerDefaults` merge and assert the literals the fixtures use.
+describe("the fixtures' provider shapes are the ones the runtime actually produces", () => {
+  type Materialized = {
+    id: string;
+    type: string;
+    profile: (p: Record<string, unknown>, tokens?: unknown) => Record<string, unknown>;
+  };
+  // `materializeProvider` is the package's own `@internal` helper — it exists at runtime but the
+  // declaration emitter strips it from provider_utils.d.ts, hence the cast. Using the package's
+  // real merge instead of re-implementing it is the entire point: a local copy would just re-assert
+  // this test's own assumptions. If a version bump removes it, this file fails loudly, which is
+  // the same signal the version guard below is there to give.
+  const { materializeProvider } = providerUtils as unknown as {
+    materializeProvider: (p: unknown) => Materialized;
+  };
+  const real = (p: unknown) => materializeProvider(p);
+
+  test("Password materializes to the exact {id, type} the credentials fixture claims", () => {
+    const p = real(password);
+    // `ConvexCredentials` literally returns `id: "credentials"`; only the `merge(provider,
+    // provider.options)` in provider_utils lifts the configured `"password"` over it. Asserting
+    // the merged value is the whole point — the pre-merge object would pass a weaker check.
+    expect({ id: p.id, type: p.type }).toEqual(passwordProvider);
+  });
+
+  test("the password profile mapper carries the typed invite code and nothing else new", () => {
+    const mapped = real(password).profile({
+      email: "Typed@Example.com",
+      name: "  Typed Person  ",
+      password: "hunter2hunter2",
+      inviteCode: "  abcd-efgh-jkmn-pqrs  ",
+      flow: "signUp",
+    });
+    expect(mapped).toEqual({
+      email: "Typed@Example.com",
+      name: "Typed Person",
+      inviteCode: "abcd-efgh-jkmn-pqrs",
+    });
+    // The secret must never ride the profile into the users row.
+    expect(mapped).not.toHaveProperty("password");
+  });
+
+  test("both OAuth mappers keep the subject under a name the package does not strip", () => {
+    for (const [provider, claims, expected] of [
+      [
+        google,
+        { sub: "104829301827364550192", email: "g@example.com", picture: "u" },
+        googleProvider,
+      ],
+      [microsoft, { sub: "AAbbCC-opaque", preferred_username: "e@contoso.com" }, entraProvider],
+    ] as const) {
+      const p = real(provider);
+      expect(p.id).toBe(expected.id);
+      expect(p.type).toBe(expected.type);
+
+      // index.js:207 — `const { id, ...profileFromCallback } = await provider.profile(...)`.
+      // Reproduce that strip here: whatever survives is exactly what `admitIdentity` sees.
+      const { id, ...seenByCallback } = p.profile(claims);
+      expect(id).toBe(claims.sub);
+      expect(seenByCallback.oauthSubject).toBe(claims.sub);
+      // And the surviving profile still resolves to the invited address on both providers.
+      expect(normalizeEmail(seenByCallback.email ?? seenByCallback.preferred_username)).toMatch(
+        /@/,
+      );
+    }
+  });
+});
+
+// The rollback property — "throwing leaves NO user, account, verification code or session" — is
+// not a property of our code. It is a property of the ORDER in which the pinned auth package calls
+// things inside the single `auth:store` mutation, and every test above proves only that
+// `admitIdentity` throws. A version bump could reorder it and nothing here would notice, which is
+// exactly the CLAUDE.md §6 hazard. This turns that risk into a red test instead of a code comment.
+describe("pinned @convex-dev/auth internals the zero-persistence claim rests on", () => {
+  const raw = (glob: Record<string, string>) => {
+    const [source] = Object.values(glob);
+    // Non-vacuity: an empty or unresolved glob must fail loudly, not assert against "".
+    expect(source && source.length).toBeGreaterThan(500);
+    return source as string;
+  };
+
+  const pkg = raw(
+    import.meta.glob("../node_modules/@convex-dev/auth/package.json", {
+      query: "?raw",
+      import: "default",
+      eager: true,
+    }),
+  );
+  const usersSrc = raw(
+    import.meta.glob("../node_modules/@convex-dev/auth/dist/server/implementation/users.js", {
+      query: "?raw",
+      import: "default",
+      eager: true,
+    }),
+  );
+  const indexSrc = raw(
+    import.meta.glob("../node_modules/@convex-dev/auth/dist/server/implementation/index.js", {
+      query: "?raw",
+      import: "default",
+      eager: true,
+    }),
+  );
+
+  test("the version these assertions were read against is still the installed one", () => {
+    // If this fails, do not just bump the literal: re-read users.js and re-run this file.
+    expect(JSON.parse(pkg).version).toBe("0.0.94");
+  });
+
+  test("the custom callback runs BEFORE the account is created, and short-circuits the default", () => {
+    const upsert = usersSrc.slice(
+      usersSrc.indexOf("export async function upsertUserAndAccount"),
+      usersSrc.indexOf("async function defaultCreateOrUpdateUser"),
+    );
+    expect(upsert).toContain("defaultCreateOrUpdateUser");
+    expect(upsert).toContain("createOrUpdateAccount");
+    // THE ordering that makes a throw a full rollback rather than an orphaned account.
+    expect(upsert.indexOf("defaultCreateOrUpdateUser")).toBeLessThan(
+      upsert.indexOf("createOrUpdateAccount"),
+    );
+    // And our callback replaces the default outright — it does not run in addition to a
+    // package-side `ctx.db.insert("users", ...)`.
+    expect(usersSrc).toContain("return await config.callbacks.createOrUpdateUser(ctx, {");
+  });
+
+  test("the OAuth profile's `id` is stripped before the callback, which is why oauthSubject exists", () => {
+    expect(indexSrc).toContain("const { id, ...profileFromCallback } = await provider.profile(");
   });
 });
