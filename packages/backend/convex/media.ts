@@ -1872,6 +1872,16 @@ type JobFace = {
   model: string;
   estUsd: number;
   actualCents: number | null;
+  /** 33-08 — the failure CODE, on the same face whose `status` the canvas is describing.
+   *
+   *  `assetUrls` also carries it, and reading it from THERE would have been a change-free option
+   *  and a wrong one: that query returns every attempt oldest-first while this face is one chosen
+   *  row, so on a regenerated scene the two can name different attempts. A card that says "failed"
+   *  from one row and prints the other row's code is a support ticket built by hand.
+   *
+   *  Safe to project by the same rule that lets it be stored: `mediaJobs.failureReason` is a CODE
+   *  (the `calendar.ts:84` idiom, schema-commented) — never provider prose (§4). */
+  failureReason: string | null;
 };
 
 const faceOf = (row: Doc<"mediaJobs"> | undefined): JobFace | null =>
@@ -1882,6 +1892,7 @@ const faceOf = (row: Doc<"mediaJobs"> | undefined): JobFace | null =>
         model: row.model,
         estUsd: row.estUsd,
         actualCents: row.actualCents ?? null,
+        failureReason: row.failureReason ?? null,
       }
     : null;
 

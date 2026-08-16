@@ -1999,8 +1999,13 @@ function VaultDocModal({ docId, onClose }: { docId: string; onClose: () => void 
 }
 
 /** A document TITLE that opens the document. A button, never a link: it opens a dialog in place,
- *  and dressing that as navigation is the lie the route-jump version told. */
-function VaultDocButton({
+ *  and dressing that as navigation is the lie the route-jump version told.
+ *
+ *  EXPORTED for `MediaCanvas.tsx` (33-08): a scene's citation is the same thing this renders — a
+ *  vault document reached from a card that holds only its id — and `api.vault.vaultDoc` returning
+ *  `null` for another tenant's id is exactly the guarantee a citation click-through needs. A second
+ *  copy over there would be a second place for that null-check to be forgotten. */
+export function VaultDocButton({
   docId,
   children,
   testId,

@@ -3,7 +3,14 @@
 import { api } from "@pikar/backend/api";
 import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
-import { briefingSheet, capsTeal, snippetSheet, traceText, typeBadge } from "./cards";
+import {
+  briefingSheet,
+  capsTeal,
+  snippetSheet,
+  traceText,
+  typeBadge,
+  VaultDocButton,
+} from "./cards";
 import {
   asVisualKind,
   BRIEF_LOCKED_NOTE,
@@ -11,6 +18,7 @@ import {
   type BriefChip,
   briefChips,
   briefRefusalText,
+  citationView,
   DECK_STALE_NOTE,
   type DeckSummary,
   deckStale,
@@ -29,6 +37,7 @@ import {
   REPROPOSE_MESSAGE,
   refusalText,
   ribbonShares,
+  type SceneCitation,
   STALE_CLIP_NOTE,
   STALE_VOICE_NOTE,
   type StageState,
@@ -90,6 +99,9 @@ type MediaPlan = {
    *  reactive for the same reason everything else on this surface is. */
   captionStatus?: string | null;
   renderRetriedAt?: number | null;
+  /** 33-08. The caption plane's own reason CODE, for the degraded-deliverable card. A code by
+   *  schema contract, never the burn's stderr (§4). */
+  captionReason?: string | null;
   /** 33-07, the BRIEF plane and the VARIATION plane. All five arrive on the same plan document
    *  `plans.byThread` already returns — the chips row and the A/B region add no subscription. */
   brief?: Brief | null;
@@ -208,6 +220,10 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
   const assets = useQuery(api.media.assetUrls, { planId });
   const reel = useQuery(api.media.reel, { planId });
   const estimate = useQuery(api.media.jobEstimate, { planId });
+  // 33-08. A fifth subscription, and the only read on this surface whose answer is about
+  // PROVENANCE rather than about state: `verified` is the server's tenant check on a
+  // model-authored docId, and it is the reason a citation may become a link at all.
+  const cites = useQuery(api.media.sceneCitations, { planId });
 
   const generateReel = useMutation(api.media.generateReel);
   const [busy, setBusy] = useState(false);
@@ -244,6 +260,9 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
   // and called here. This file gets the JSX and the event wiring, and nothing else: the runner in
   // `apps/web` is DOM-less, so a decision left in a `.tsx` can only ever be asserted as source
   // text — the shape this repo has a named defect class for.
+  // ONE array for both folds (33-08): `FailureScene` is `TrackerScene` with the money and the code
+  // on each face, so the tracker and the cards structurally cannot disagree about which scene
+  // failed. Two arrays built from the same rows is how that drift starts.
   const trackerScenes: TrackerScene[] = deck.map((b) => ({
     blockIndex: b.blockIndex,
     visual: b.visual,
@@ -286,6 +305,13 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
   const stale = deckStale(plan.briefChangedAt, plan.deckProposedAt);
   const variations = variationView(plan);
 
+  // ── THE CITATION AND FAILURE PLANES (33-08) ────────────────────────────────────────────────
+  // Both are folds over reads already on this component. `heroState` still decides WHICH mode the
+  // hero is in; `failureCards` decides what the held/failed modes actually SAY, which is why the
+  // hero renders cards when there are any and falls back to the mode sentence when there are not
+  // (a `rendered`-with-no-url refusal is a failed hero with no failed row behind it).
+  const citations = citationView(cites);
+
   return (
     // flexShrink 0: this sheet is a flex item of the fixed-height .pane-canvas section, and
     // briefingSheet's overflow:hidden flips the flex min-height auto->0 — without this the pane
@@ -311,6 +337,7 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
         pricedAs={pricedAsLine(plan.targetDurationSeconds ?? null, deck.length, clipSeconds)}
         busy={busy}
         note={note}
+        blockLine={citations.blockLine}
         onGenerate={() => void generate()}
       />
 
@@ -343,6 +370,7 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
             )}
             order={deck.map((x) => x.blockIndex)}
             videos={videos}
+            citation={citations.byScene[b.blockIndex]}
           />
         ))}
       </div>
@@ -1224,6 +1252,16 @@ function ReelHero({
  *  are one shape here on purpose: a tile renders whichever it was handed, and `visual` is the
  *  discriminator (`media.byPlan`'s own comment says why that projection is safe HERE and nowhere
  *  on the money path). */
+/** One `mediaJobs` row as `media.byPlan`'s `faceOf` projects it. */
+type JobFaceRow = {
+  status: string;
+  verdict: string | null;
+  model: string;
+  estUsd: number;
+  actualCents: number | null;
+  failureReason: string | null;
+};
+
 type Block = {
   blockIndex: number;
   type: string;
@@ -1238,8 +1276,11 @@ type Block = {
   narrationChars: number;
   maxChars: number;
   overCharLimit: boolean;
-  clip: { status: string; verdict: string | null; model: string } | null;
-  voice: { status: string; verdict: string | null; model: string } | null;
+  /** 33-08 widened both faces with `media.byPlan`'s money and its reason CODE — the sunk-cost and
+   *  detail-line inputs. They travel on the SAME face whose status the card is describing, which
+   *  is why the code is not read off `assetUrls` instead. */
+  clip: JobFaceRow | null;
+  voice: JobFaceRow | null;
   /** Bought for text that has since been edited. See `mediaCanvasView`'s stale notes — the render
    *  reuses the old asset deliberately, so the tile is the only place this is visible. */
   clipStale: boolean;
@@ -1276,6 +1317,7 @@ function SceneTile({
   voiceAsset,
   order,
   videos,
+  citation,
 }: {
   block: Block;
   position: number;
@@ -1287,6 +1329,7 @@ function SceneTile({
   voiceAsset?: { url: string | null };
   order: number[];
   videos: VaultVideo[];
+  citation?: SceneCitation;
 }) {
   const editPrompt = useMutation(api.media.editBlockPrompt);
   const editNarration = useMutation(api.media.editBlockNarration);
@@ -1294,6 +1337,7 @@ function SceneTile({
   const reorder = useMutation(api.media.reorderBlocks);
   const remove = useMutation(api.media.deleteBlock);
   const setAsset = useMutation(api.media.setSceneAsset);
+  const confirmClaim = useMutation(api.media.confirmClaim);
 
   const [editing, setEditing] = useState<"prompt" | "narration" | null>(null);
   const [prompt, setPrompt] = useState(block.prompt);
@@ -1374,6 +1418,65 @@ function SceneTile({
       </p>
       {block.overlay && (
         <p style={{ ...dimText, ...traceText, margin: "0.3rem 0 0" }}>Overlay: {block.overlay}</p>
+      )}
+
+      {/* THE CITATION (33-08) — where this scene's figure came from, and whose word it is.
+          Absent entirely for a scene that claims nothing: creative copy needs no source, and a
+          provenance affordance on a hook would train the user to ignore the ones that matter. */}
+      {citation && (
+        <div
+          style={{ margin: "0.45rem 0 0", display: "flex", gap: "0.4rem", flexWrap: "wrap" }}
+          data-testid="scene-citation"
+        >
+          {/* The state IN WORDS first, never a coloured dot (BRAND §6). */}
+          <span style={{ ...dimText, fontSize: "0.72rem", fontWeight: 700 }}>
+            {citation.kind === "cited"
+              ? "Source:"
+              : citation.kind === "confirmed"
+                ? "Confirmed:"
+                : citation.kind === "needs_confirmation"
+                  ? "Needs your confirmation:"
+                  : "Unverified source:"}
+          </span>
+          {citation.link ? (
+            /* The vault's own preview, through `cards.tsx`'s existing button — the ONLY path,
+               and it reaches `api.vault.vaultDoc`, which answers `null` for a document that is
+               not this tenant's. A `verified:false` citation has no `link` at all, so this
+               branch cannot be entered from a foreign id (`citationView`'s rule 1). Teal-900
+               rather than teal-600 and UNDERLINED: small teal-600 text is ~2.9:1 (BRAND §6), and
+               an affordance signalled by colour alone is no affordance. */
+            <VaultDocButton
+              docId={citation.link.docId}
+              testId="scene-citation-doc"
+              style={{
+                fontSize: "0.72rem",
+                color: "var(--teal-900)",
+                textDecoration: "underline",
+              }}
+            >
+              {citation.link.title}
+            </VaultDocButton>
+          ) : (
+            <span style={{ ...dimText, ...traceText, fontSize: "0.72rem" }}>{citation.label}</span>
+          )}
+          {citation.link && citation.kind !== "cited" && (
+            <span style={{ ...dimText, ...traceText, fontSize: "0.72rem" }}>{citation.label}</span>
+          )}
+          {/* THE PROVENANCE FRONT DOOR. `confirmClaim` takes the plan and the scene and nothing
+              else — actor and timestamp come from the authenticated context — so this click is
+              structurally the only way a model-authored figure becomes the owner's word. */}
+          {citation.action && (
+            <button
+              type="button"
+              disabled={busy}
+              style={ghostBtn}
+              data-testid="scene-citation-confirm"
+              onClick={() => void run(() => confirmClaim({ planId, sceneIndex: block.blockIndex }))}
+            >
+              {citation.action}
+            </button>
+          )}
+        </div>
       )}
 
       {/* The landed artifact. A voice take with no clip still renders — that is the whole point of
@@ -1754,12 +1857,17 @@ function GenerateBar({
   pricedAs,
   busy,
   note,
+  blockLine,
   onGenerate,
 }: {
   view: EstimateView;
   pricedAs: string;
   busy: boolean;
   note: string | null;
+  /** 33-08. The COUNT of unconfirmed claims, which `jobEstimate`'s refusal cannot give — it names
+   *  only the first offending scene. The refusal sentence stays the authoritative "why"; this is
+   *  "how many more". */
+  blockLine: string | null;
   onGenerate: () => void;
 }) {
   const canGenerate = !view.generateDisabled && !busy;
@@ -1862,6 +1970,14 @@ function GenerateBar({
       {view.refusalSentence && (
         <p style={{ ...dimText, marginTop: "0.5rem", color: "var(--held-text)", fontWeight: 600 }}>
           {view.refusalSentence}
+        </p>
+      )}
+      {/* WHAT WOULD UNBLOCK IT, beside the button that is blocked. The refusal above names the
+          first scene; this names the size of the job, so a deck with four flagged figures does
+          not read as one. */}
+      {blockLine && (
+        <p style={{ ...dimText, marginTop: "0.35rem" }} data-testid="media-confirm-block">
+          {blockLine}
         </p>
       )}
       {view.lines.length === 0 && view.refusalSentence === null && (
