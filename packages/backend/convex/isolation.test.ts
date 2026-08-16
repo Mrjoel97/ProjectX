@@ -254,6 +254,8 @@ const PUBLIC_UNAUTHENTICATED: Record<string, string> = {
     "BETA-01 waitlist. Writes one email-keyed row that precedes every tenant; reads nothing. Idempotent per address.",
   "invites.preflight":
     "BETA-01 invite check. Returns a boolean and a masked address only, and reports an unknown code and a spent code identically so it cannot be used as an oracle.",
+  "invites.authProviders":
+    "BETA-01 signup affordances. Returns three booleans about which sign-in providers this deployment has credentials for; discloses nothing a rendered button would not, and never a credential.",
 };
 
 describe("the public function surface is fully classified", () => {

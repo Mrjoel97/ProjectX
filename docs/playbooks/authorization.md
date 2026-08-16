@@ -1,5 +1,14 @@
 # Playbook: Authorization (tenancy + ownership)
 
+> **25-02 note, 2026-08-16 — Phase 22's outstanding owner/non-owner DOM evidence is closed at the
+> COMPONENT level, not in a browser.** `/admin` follows `/ops`'s mount-gate pattern exactly (the
+> whole view is conditional so its hooks never subscribe), and
+> `apps/web/app/(app)/admin/adminPresentation.test.ts` proves it by recording every hook reference
+> — mutation-proven against the `<div hidden>` anti-pattern. **A Playwright two-identity spec was
+> not written and could not be**: the harness has one storage state and one seeded user, `owner` is
+> hand-granted only, and the `(app)` onboarding redirect would have made the non-owner assertion
+> pass for the wrong reason. See `beta-admission.md` for the full statement of that limitation.
+
 > Last verified: 2026-08-16 (25-03 — **`isolation.test.ts` is the BETA-02/BETA-05 gate, and it is
 > derived rather than enumerated: a new table, index, public function or owner endpoint is covered
 > automatically or reddens the suite.**)

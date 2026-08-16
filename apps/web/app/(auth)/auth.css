@@ -365,6 +365,24 @@
   text-decoration: underline;
 }
 
+/* A button that reads as a link. BETA-01's signup toggles between the invite door and the
+   waitlist door, and that is an action on this page, not navigation — a real <a href> would be a
+   lie to a screen reader and to anyone middle-clicking it. Inherits `.auth-switch a`'s look so
+   the two are indistinguishable to a sighted reader. */
+.auth-linklike {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.auth-linklike:hover {
+  text-decoration: underline;
+}
+
 .auth-error {
   background: rgba(220, 38, 38, 0.16);
   border: 1px solid rgba(248, 113, 113, 0.4);

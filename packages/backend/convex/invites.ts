@@ -141,6 +141,35 @@ export const requestAccess = mutation({
 });
 
 /**
+ * PUBLIC and unauthenticated. Which sign-in providers this DEPLOYMENT can actually complete.
+ *
+ * The signup page needs this to avoid shipping a button that dead-ends at the provider.
+ * `microsoft-entra-id` is configured in `auth.ts` but is inert without
+ * `AUTH_MICROSOFT_ENTRA_ID_ID`/`_SECRET` and an Azure app registration, and those live on the
+ * Convex deployment — nothing the browser or the Next build can see.
+ *
+ * Deliberately reading the Convex env HERE rather than adding a `NEXT_PUBLIC_…` flag: a build-time
+ * mirror of a runtime secret is a second source of truth that can disagree with the first, and the
+ * disagreement shows up as a broken sign-in button for a real invited user. This answer cannot
+ * drift because it is read from the same place the auth package reads.
+ *
+ * Discloses nothing a rendered button would not: whether a provider exists, never a credential.
+ */
+export const authProviders = query({
+  args: {},
+  returns: v.object({ google: v.boolean(), microsoft: v.boolean(), password: v.boolean() }),
+  handler: async () => ({
+    // @auth/core derives credential names from the provider id, upper-snake-cased.
+    google: Boolean(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET),
+    microsoft: Boolean(
+      process.env.AUTH_MICROSOFT_ENTRA_ID_ID && process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET,
+    ),
+    // Credentials need no provider secret — it is always available.
+    password: true,
+  }),
+});
+
+/**
  * PUBLIC and unauthenticated. Returns the two bits the signup page needs and nothing more: is
  * this code live, and does it belong to the address you think it does. Never an id, a subject, a
  * user, another invite, or an unmasked address.

@@ -6,6 +6,37 @@
 > Build history: `.planning/phases/25-private-beta-productionization/` · Related ADRs: ADR-018
 > (one shared Microsoft app registration)
 
+> **25-02 update, 2026-08-16 — the UI half.** `/signup` is now ONE public route serving both doors:
+> `?invite=CODE` prefills a **visible, editable** code field, and no code shows the waitlist form.
+> `/admin` is the owner surface for approving requests and copying the `/signup?invite=…` link.
+>
+> **Three things about it are deliberate and load-bearing:**
+>
+> 1. **The Microsoft button renders only where the deployment holds Entra credentials.** A new
+>    public query, `invites.authProviders`, reads `AUTH_MICROSOFT_ENTRA_ID_ID`/`_SECRET` from the
+>    Convex env. A `NEXT_PUBLIC_…` flag was the obvious alternative and is worse — a build-time
+>    mirror of a runtime secret is a second source of truth, and when the two disagree the symptom
+>    is a real invited user hitting a dead sign-in button.
+> 2. **`/admin` does NOT consolidate `/ops`.** The plan said "consolidate or link". `/ops` is 800
+>    lines calling eleven backend APIs (dead letters, eval signals, optimizer controls, and the
+>    whole tenant-skill overlay review flow, three endpoints of which `importGuard.test.ts` pins).
+>    A three-control caricature of it would have orphaned shipped compliance UI. It gets a link.
+> 3. **The owner gate is a MOUNT gate, not a CSS gate.** `AdminView` owns the `invites.pending`
+>    subscription, so not-mounting it is what stops the subscription. `hidden`, `opacity`, or an
+>    early return *inside* the view would each still run the hook. Mutation-proven: swapping the
+>    conditional mount for `<div hidden>` reddens 4 tests.
+>
+> **THE PROOF IS A RENDER TEST, NOT A BROWSER SPEC, AND THAT IS A REAL LIMITATION —**
+> `apps/web/app/(app)/admin/adminPresentation.test.ts`. Two reasons the planned Playwright spec
+> could not be written: `playwright.config.ts` declares ONE project with ONE `storageState` and
+> `auth.setup.ts` signs in ONE seeded user, so there is no second identity (and `owner` is
+> grantable only by hand via `owner.bootstrapOwner`); rewriting that harness is **23-06's** owned
+> work, which the file-collision map forbids landing mid-Phase-25. And a browser spec would have
+> proved the wrong thing anyway: the `(app)` shell's ONBD-01 first-run gate redirects a fresh
+> non-owner to `/dashboard/onboarding` before `/admin` mounts, so "no admin controls" would pass
+> because of the onboarding redirect. **Phase 22's outstanding owner/non-owner DOM evidence is
+> therefore closed at the component level, not in a real browser. Do not record it as browser-proven.**
+
 ## Purpose
 
 The private beta is invite-only. This subsystem decides **whether a second human may become a
