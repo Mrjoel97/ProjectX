@@ -1331,6 +1331,26 @@ export default defineSchema({
     // Optional, so no migration and no backfill: absent means "the bytes are what `mimeType` says",
     // which is true for every upload and every row written before this existed.
     storedMimeType: v.optional(v.string()),
+    // 33-05: refs-only citation metadata for a SAVED REEL (`kind: "reel"`, written only by
+    // `render/renderReel.saveReelToVault`). Ids, hashes and timestamps ONLY (§4) — the claim TEXT
+    // is the narration transcript in `text`, the content plane, never here. `claimHash` is the
+    // contentHash of the scene's narration line, so "where did that number come from?" is
+    // answerable months later by joining hash → transcript line → cited doc. Every docId was
+    // tenant-verified at write time (a model-authored id that failed the check is SKIPPED, never
+    // stored). Optional → widen-only, no migration.
+    reelMeta: v.optional(
+      v.object({
+        planId: v.id("plans"),
+        citations: v.array(
+          v.object({
+            sceneIndex: v.number(),
+            docId: v.string(),
+            claimHash: v.string(),
+            confirmedAt: v.optional(v.number()),
+          }),
+        ),
+      }),
+    ),
     text: v.optional(v.string()), // raw extracted text (content plane, §4)
     ragEntryId: v.optional(v.string()), // the embedded rag entry id
     status: v.union(

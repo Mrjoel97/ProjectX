@@ -23,6 +23,7 @@ import {
   isTransientRenderCode,
   renderInputName,
 } from "@pikar/core/render";
+import { categoryFor } from "@pikar/vault";
 import { v } from "convex/values";
 import { internal } from "./../_generated/api";
 import type { Doc, Id } from "./../_generated/dataModel";
@@ -31,6 +32,7 @@ import { internalAction, internalMutation, internalQuery } from "./../_generated
 import { contentHash } from "./../lib/hash";
 import { requireEnvMedia } from "./../media";
 import { maybeBurnCaptions } from "./../mediaComplete";
+import { startIngest } from "./../vaultIngest";
 
 /** Every way a render can be refused or can fail, as a CODE. `renderReason` on the plan row is a
  *  reasonCode field and never ffmpeg's prose — the schema comment says so and this union is what
@@ -432,6 +434,10 @@ export const recordRender = internalMutation({
       // and failures are rare — see the retention note on the success arm below.
       return null;
     }
+    // 33-05: the OLD final (held through the regenerate by `clearRender`) is captured BEFORE the
+    // repoint — it becomes deletable only once neither the plan nor the vault doc points at it.
+    const before = await ctx.db.get(a.planId);
+    const oldFinal = before?.renderStorageId ?? null;
     // `renderSummary` rides in the SAME patch as the two storage ids, and both are written only
     // after `parseAssemblySidecar` accepted the bytes. That co-location is what lets `media.reel`
     // treat their presence as proof the sidecar validated, without re-reading the blob.
@@ -486,6 +492,29 @@ export const recordRender = internalMutation({
     if (!(await captionsStillOwed(ctx, a.tenantId, a.batchId))) {
       await deleteIntermediates(ctx, a.tenantId, a.batchId);
     }
+    // 33-05: SAVE AT THIS TERMINAL only when no caption terminal will ever run — a deck whose
+    // batch reserved no `stt` line (`maybeStartCaptions`' own gate: captions were never bought),
+    // or one whose caption pass already failed before the render landed. Otherwise the burn
+    // terminal is the one save per completion, over the captioned artifact of record.
+    const sttReserved = (
+      await ctx.db
+        .query("mediaJobs")
+        .withIndex("by_batch", (q) => q.eq("tenantId", a.tenantId).eq("batchId", a.batchId))
+        .collect()
+    ).some((r) => r.kind === "stt");
+    const captionsComing = sttReserved && before?.captionStatus !== "failed";
+    let orphanedDoc: Id<"_storage"> | null = null;
+    if (!captionsComing) {
+      orphanedDoc = await saveReelToVault(ctx, {
+        tenantId: a.tenantId,
+        planId: a.planId,
+        correlationId: a.batchId,
+      });
+    }
+    // Repoint plan (the patch above) → repoint vault doc (the save) → delete what nothing
+    // references. When captions ARE coming the vault doc still points at the old final, so the
+    // live-set check keeps it — the burn terminal repoints and deletes it.
+    await deleteOrphanedFinals(ctx, a.planId, [oldFinal, orphanedDoc]);
     // The reel is published either way. The burn, if one is owed, is triggered from here because
     // the transcript may well have landed while the render was still running.
     await maybeBurnCaptions(ctx, a.planId);
@@ -547,6 +576,148 @@ async function captionsStillOwed(
   // debugging evidence, and failures are rare. 20-16's "keep on failure" is not narrowed, only
   // "delete on success" is.
   return plan?.captionStatus !== "captioned";
+}
+
+/**
+ * THE VAULT SAVE (33-05) — the finished reel becomes a durable, groundable tenant asset.
+ *
+ * The `persistFindings` idiom (research.ts:134), applied to the reel: a system-authored
+ * `vaultDocuments` row whose `text` is the narration transcript ALREADY IN HAND (zero paid work —
+ * `mimeType: "text/markdown"` puts it on the normal embed rail, and NO upload-ingest stage runs),
+ * whose `storageId` is the final mp4 (`storedMimeType: "video/mp4"` — the createDocument
+ * two-mime precedent), and whose `reelMeta` is refs-only citation metadata (§4).
+ *
+ * **UPSERT, keyed by `plans.reelVaultDocId`.** One vault doc per plan, forever: the first
+ * completion inserts, every re-render PATCHES the same row. Called from exactly one terminal per
+ * pipeline completion — the caption terminal (both arms, since a failed burn still leaves a
+ * degraded deliverable), or the render terminal when no captions will ever come.
+ *
+ * Returns the doc's PREVIOUS storage id when the patch arm repointed it — the caller owns orphan
+ * deletion (one `deleteOrphanedFinals` pass per terminal, so two candidates can never double-free).
+ */
+export async function saveReelToVault(
+  ctx: MutationCtx,
+  a: { tenantId: string; planId: Id<"plans">; correlationId: string },
+): Promise<Id<"_storage"> | null> {
+  const plan = await ctx.db.get(a.planId);
+  if (!plan || plan.tenantId !== a.tenantId || !plan.renderStorageId) return null;
+
+  // The transcript: the picked deck's narration lines, in scene order. Content plane — it lives
+  // in `text` and NOWHERE else (never in reelMeta, never in an audit payload).
+  const deck = [...(plan.shots ?? [])].sort((l, r) => l.index - r.index);
+  const text = deck
+    .map((s) => s.narration.trim())
+    .filter((line) => line !== "")
+    .join("\n\n");
+
+  // Citations: `shot.source.docId` is MODEL-AUTHORED text (the `asset.docId` rule), so ownership
+  // is verified HERE, at the write — a malformed or foreign id is skipped, never persisted as if
+  // it verified. `claimHash` ties the citation to the exact narration line it grounds.
+  const citations: Array<{
+    sceneIndex: number;
+    docId: string;
+    claimHash: string;
+    confirmedAt?: number;
+  }> = [];
+  for (const s of deck) {
+    const raw = s.source?.docId;
+    if (!raw) continue;
+    const srcId = ctx.db.normalizeId("vaultDocuments", raw);
+    if (!srcId) continue;
+    const src = await ctx.db.get(srcId);
+    if (!src || src.tenantId !== a.tenantId) continue;
+    citations.push({
+      sceneIndex: s.index,
+      docId: String(srcId),
+      claimHash: await contentHash(s.narration.trim()),
+      ...(s.confirmedAt === undefined ? {} : { confirmedAt: s.confirmedAt }),
+    });
+  }
+
+  const reelMeta = { planId: a.planId, citations };
+  const hash = await contentHash(text);
+  const size = new TextEncoder().encode(text).length;
+  // A fully SILENT deck has no transcript: nothing to embed, so nothing rides the rail —
+  // `pending_extraction` says "stored, text not yet available" honestly rather than pushing an
+  // empty string through the chunker.
+  const status = text === "" ? ("pending_extraction" as const) : ("processing" as const);
+
+  let docId: Id<"vaultDocuments">;
+  let orphaned: Id<"_storage"> | null = null;
+  const existing = plan.reelVaultDocId ? await ctx.db.get(plan.reelVaultDocId) : null;
+  if (existing && existing.tenantId === a.tenantId) {
+    orphaned = existing.storageId ?? null;
+    await ctx.db.patch(existing._id, {
+      storageId: plan.renderStorageId,
+      text,
+      contentHash: hash,
+      size,
+      reelMeta,
+      status,
+    });
+    docId = existing._id;
+  } else {
+    docId = await ctx.db.insert("vaultDocuments", {
+      tenantId: a.tenantId,
+      title: `Reel: ${(plan.brief?.topic ?? plan.subject ?? "untitled").trim()}`,
+      kind: "reel", // the queryable class marker (`kind` is v.string() — a code-owned token)
+      category: categoryFor({ source: "agent" }),
+      source: "media",
+      mimeType: "text/markdown", // SEARCHABLE_MIME ⇒ the transcript is chunked + embedded
+      storedMimeType: "video/mp4", // what the BYTES are — the final mp4 in `storageId`
+      storageId: plan.renderStorageId,
+      size,
+      contentHash: hash,
+      text,
+      status,
+      sourcePlanId: a.planId, // Phase-26 provenance: this IS an authoritative write site
+      reelMeta,
+      createdAt: Date.now(),
+    });
+    await ctx.db.patch(a.planId, { reelVaultDocId: docId });
+  }
+  // The SOLE legal way to start ingest (it wires the onComplete that prevents a stranded
+  // `processing` row) — exactly as persistFindings does. Skipped for a silent deck: there is no
+  // text to embed and the row already says so.
+  if (status === "processing") {
+    await startIngest(ctx, { vaultDocId: docId, tenantId: a.tenantId, correlationId: a.correlationId });
+  }
+  // Refs and counts ONLY (§4) — no title, no transcript, no citation text.
+  await ctx.runMutation(internal.audit.log, {
+    tenantId: a.tenantId,
+    correlationId: a.correlationId,
+    eventType: "media.reel_saved",
+    actor: "render",
+    payload: { planId: a.planId, docId: String(docId), citations: citations.length },
+  });
+  return orphaned !== null && orphaned !== plan.renderStorageId ? orphaned : null;
+}
+
+/**
+ * Delete finished-reel blobs that NOTHING references any more (33-05).
+ *
+ * The live set is read fresh — the plan's current final and the vault doc's current bytes — so
+ * the ordering contract "repoint plan → repoint vault doc → delete orphan" cannot be violated by
+ * a call site getting the sequence wrong: a blob still referenced is simply skipped. Candidates
+ * are deduped because `storage.delete` THROWS on an id that is already gone, and one aborted
+ * terminal is worse than one leaked blob.
+ */
+async function deleteOrphanedFinals(
+  ctx: MutationCtx,
+  planId: Id<"plans">,
+  candidates: Array<Id<"_storage"> | null | undefined>,
+): Promise<void> {
+  const plan = await ctx.db.get(planId);
+  const doc = plan?.reelVaultDocId ? await ctx.db.get(plan.reelVaultDocId) : null;
+  const live = new Set<string>();
+  if (plan?.renderStorageId) live.add(plan.renderStorageId);
+  if (doc?.storageId) live.add(doc.storageId);
+  const seen = new Set<string>();
+  for (const id of candidates) {
+    if (!id || live.has(id) || seen.has(id)) continue;
+    seen.add(id);
+    await ctx.storage.delete(id);
+  }
 }
 
 /** The committed offline stub pair, used when `MEDIA_SANDBOX_FIXTURE` is set. */
@@ -765,6 +936,16 @@ export const recordCaptionBurn = internalMutation({
         status: "new",
         createdAt: Date.now(),
       });
+      // 33-05: a failed burn is still a pipeline COMPLETION — the uncaptioned cut is the
+      // (degraded) deliverable, and it is saved as such. Only when a reel actually stands.
+      if (plan.renderStatus === "rendered" && plan.renderStorageId) {
+        const orphaned = await saveReelToVault(ctx, {
+          tenantId: a.tenantId,
+          planId: a.planId,
+          correlationId: a.batchId,
+        });
+        await deleteOrphanedFinals(ctx, a.planId, [orphaned]);
+      }
       return null;
     }
 
@@ -780,10 +961,16 @@ export const recordCaptionBurn = internalMutation({
       actor: "render",
       payload: { batchId: a.batchId, planId: a.planId, renderMs: a.result.renderMs },
     });
-    // The uncaptioned cut is now unreferenced. Deleted AFTER the repoint, never before.
-    if (uncaptioned && uncaptioned !== a.result.captionedStorageId) {
-      await ctx.storage.delete(uncaptioned);
-    }
+    // 33-05 ORDERING CONTRACT: repoint plan (above) → repoint vault doc (the save) → only then
+    // delete what nothing references. The captioned cut is the artifact of record, so the save
+    // happens HERE, after the repoint; the uncaptioned cut and the vault doc's previous final
+    // become deletable only once both the plan and the doc have moved off them.
+    const orphaned = await saveReelToVault(ctx, {
+      tenantId: a.tenantId,
+      planId: a.planId,
+      correlationId: a.batchId,
+    });
+    await deleteOrphanedFinals(ctx, a.planId, [uncaptioned, orphaned]);
     // …and only NOW may the takes go: the transcript's source outlived the reel it captioned,
     // which is the whole retention narrowing.
     await deleteIntermediates(ctx, a.tenantId, a.batchId);
