@@ -25,6 +25,10 @@ import {
   durationLabel,
   type EstimateView,
   estimateView,
+  type FailureCard,
+  type FailureFix,
+  type FailureScene,
+  failureCards,
   type HeroState,
   heroState,
   isPickableVideo,
@@ -42,7 +46,6 @@ import {
   STALE_VOICE_NOTE,
   type StageState,
   type SummaryShot,
-  type TrackerScene,
   type TrackerView,
   trackerView,
   usd,
@@ -263,7 +266,7 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
   // ONE array for both folds (33-08): `FailureScene` is `TrackerScene` with the money and the code
   // on each face, so the tracker and the cards structurally cannot disagree about which scene
   // failed. Two arrays built from the same rows is how that drift starts.
-  const trackerScenes: TrackerScene[] = deck.map((b) => ({
+  const trackerScenes: FailureScene[] = deck.map((b) => ({
     blockIndex: b.blockIndex,
     visual: b.visual,
     narration: b.narration,
@@ -311,6 +314,18 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
   // hero renders cards when there are any and falls back to the mode sentence when there are not
   // (a `rendered`-with-no-url refusal is a failed hero with no failed row behind it).
   const citations = citationView(cites);
+  const failures = failureCards(
+    {
+      renderStatus: reel?.status ?? null,
+      renderReason: reel?.reason ?? null,
+      renderRetriedAt: plan.renderRetriedAt,
+      captionStatus: plan.captionStatus,
+      captionReason: plan.captionReason,
+    },
+    trackerScenes,
+    estimate as JobEstimate | undefined,
+  );
+  const heroFailures = failures.filter((c) => c.where === "hero");
 
   return (
     // flexShrink 0: this sheet is a flex item of the fixed-height .pane-canvas section, and
@@ -330,7 +345,14 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
 
       {/* HERO, and it is the same slot for the whole lifecycle — tracker, then reel, then
           both during a regenerate. Nothing below it moves when the render lands. */}
-      <ReelHero hero={hero} tracker={tracker} reel={reel} noun={noun} />
+      <ReelHero
+        hero={hero}
+        tracker={tracker}
+        reel={reel}
+        noun={noun}
+        cards={heroFailures}
+        planId={planId}
+      />
 
       <GenerateBar
         view={cost}
@@ -371,6 +393,7 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
             order={deck.map((x) => x.blockIndex)}
             videos={videos}
             citation={citations.byScene[b.blockIndex]}
+            failure={failures.find((c) => c.where === "scene" && c.sceneIndex === b.blockIndex)}
           />
         ))}
       </div>
@@ -665,6 +688,12 @@ function BriefRow({
     </div>
   );
 }
+
+/** A refusal that names no money, in the canvas's ONE refusal vocabulary. The fix menu and the
+ *  retry button both answer in codes `refusalText` already speaks; the zero context is what says
+ *  "this refusal quotes no total", exactly as the deck switcher's does. */
+const fixRefusal = (reason: string, noun: "scene" | "block"): string =>
+  refusalText({ reason }, { capCents: 0, totalCents: 0, maxChars: 0, noun });
 
 /** The four free-text brief fields → a typed patch. Spelt out rather than computed from the key
  *  so the mutation's arg shape is checked at compile time instead of cast past. */
@@ -1136,12 +1165,42 @@ function ReelHero({
   tracker,
   reel,
   noun,
+  cards,
+  planId,
 }: {
   hero: HeroState;
   tracker: TrackerView;
   reel: { durationS: number | null; sceneCount: number | null; gates: string[] } | undefined;
   noun: "scene" | "block";
+  /** The reel's OWN failures (33-08) — render, held, captions. Empty for every healthy state, and
+   *  also for the one failed state that has no failed row behind it (`rendered` with no url is a
+   *  governed refusal to publish), which is why `hero.sentence` remains the fallback. */
+  cards: FailureCard[];
+  planId: never;
 }) {
+  const retryRender = useMutation(api.media.retryRender);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+
+  // The ONE arm a reel-level card can carry. It is FREE to the user: 33-04 doubled the render line
+  // precisely so a second sandbox is already paid for, and the card says so rather than leaving
+  // "is this going to cost me again?" to be guessed.
+  async function retry() {
+    if (busy) return;
+    setBusy(true);
+    setNote(null);
+    try {
+      const res = await retryRender({ planId });
+      if (!res.ok) {
+        setNote(
+          refusalText({ reason: res.reason }, { capCents: 0, totalCents: 0, maxChars: 0, noun }),
+        );
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div style={{ marginTop: "0.2rem" }} data-testid="media-hero">
       <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
@@ -1224,24 +1283,50 @@ function ReelHero({
           </>
         )}
 
-        {/* HELD and FAILED both keep the tracker underneath: the sentence says what stopped, and
-            the stages say how far it got. The per-scene FIX CARDS land in 33-08. */}
-        {(hero.mode === "held" || hero.mode === "failed") && (
-          <>
-            <p
-              style={{
-                ...dimText,
-                color: "var(--held-text)",
-                fontWeight: 600,
-                marginBottom: "0.6rem",
-              }}
-              data-testid="media-hero-failure"
-            >
-              {hero.sentence}
-            </p>
-            <PipelineTracker view={tracker} />
-          </>
+        {/* HELD and FAILED both keep the tracker underneath: the card says what stopped and what
+            fixes it, and the stages say how far it got. 33-08 replaced the bare sentence with the
+            cards — except where there is no card to render, which is the `rendered`-with-no-url
+            refusal: a failed hero with no failed row anywhere behind it. */}
+        {(hero.mode === "held" || hero.mode === "failed") && cards.length === 0 && (
+          <p
+            style={{
+              ...dimText,
+              color: "var(--held-text)",
+              fontWeight: 600,
+              marginBottom: "0.6rem",
+            }}
+            data-testid="media-hero-failure"
+          >
+            {hero.sentence}
+          </p>
         )}
+
+        {/* The reel's own cards, in the hero: the render/held card, then the caption card. A
+            CAPTION failure appears here even over a PLAYING reel — the reel stands, and 20-17's
+            rule is that a caption failure never unpublishes it, so the card reports a degraded
+            deliverable rather than replacing the player. */}
+        {cards.map((card) => (
+          <FailureCardBlock
+            key={card.key}
+            card={card}
+            busy={busy}
+            // Retry is the ONLY arm a reel-level card carries; matching on it rather than
+            // assuming it means a future arm cannot silently inherit this handler.
+            onFix={(fix) => {
+              if (fix.arm === "retry_render") void retry();
+            }}
+          />
+        ))}
+        {note && (
+          <p
+            role="status"
+            style={{ ...dimText, marginTop: "0.5rem", color: "var(--held-text)", fontWeight: 600 }}
+          >
+            {note}
+          </p>
+        )}
+
+        {(hero.mode === "held" || hero.mode === "failed") && <PipelineTracker view={tracker} />}
       </div>
       <hr style={sectionRule} />
     </div>
@@ -1318,6 +1403,7 @@ function SceneTile({
   order,
   videos,
   citation,
+  failure,
 }: {
   block: Block;
   position: number;
@@ -1330,6 +1416,7 @@ function SceneTile({
   order: number[];
   videos: VaultVideo[];
   citation?: SceneCitation;
+  failure?: FailureCard;
 }) {
   const editPrompt = useMutation(api.media.editBlockPrompt);
   const editNarration = useMutation(api.media.editBlockNarration);
@@ -1338,6 +1425,16 @@ function SceneTile({
   const remove = useMutation(api.media.deleteBlock);
   const setAsset = useMutation(api.media.setSceneAsset);
   const confirmClaim = useMutation(api.media.confirmClaim);
+  const setVisual = useMutation(api.media.setSceneVisual);
+
+  // The fix menu's own message and its own draft, kept apart from the picker's `note` above: they
+  // are two independent controls on one tile, and sharing one slot would let a picker refusal
+  // overwrite a fix refusal the user is still reading.
+  const [fixNote, setFixNote] = useState<string | null>(null);
+  /** `null` = not asking. A text card must NAME ITS WORDS (`setSceneVisual` answers `no_overlay`
+   *  otherwise), so the arm opens this field for a scene that has no overlay yet instead of firing
+   *  a mutation whose refusal was knowable. */
+  const [cardWords, setCardWords] = useState<string | null>(null);
 
   const [editing, setEditing] = useState<"prompt" | "narration" | null>(null);
   const [prompt, setPrompt] = useState(block.prompt);
@@ -1369,6 +1466,31 @@ function SceneTile({
     } finally {
       setBusy(false);
     }
+  }
+
+  /** The fix menu's dispatch (33-08). One arm per locked option, and each arm is the mutation that
+   *  already exists for it — the card supplies the WORDS and the PRICE, never a new write path.
+   *
+   *  Every refusal comes back through `refusalText`, the canvas's one refusal vocabulary, so a
+   *  `no_overlay` or an `over_daily_budget` reads the same here as it does on the estimate rail. */
+  function applyFix(fix: FailureFix) {
+    setFixNote(null);
+    if (fix.arm === "regenerate") {
+      void run(async () => {
+        const res = await regenerate({ planId, blockIndex: block.blockIndex });
+        if (!res.ok) setFixNote(fixRefusal(res.reason, noun));
+      });
+      return;
+    }
+    // The one arm that needs an answer before it can fire.
+    if (fix.arm === "text_card" && (block.overlay ?? "").trim() === "") {
+      setCardWords("");
+      return;
+    }
+    void run(async () => {
+      const res = await setVisual({ planId, sceneIndex: block.blockIndex, visual: fix.arm });
+      if (!res.ok) setFixNote(fixRefusal(res.reason, noun));
+    });
   }
 
   /** Swap this block with its neighbour. `order` is the CURRENT blockIndex sequence — the mutation
@@ -1410,6 +1532,62 @@ function SceneTile({
       {block.visual && (
         <p style={{ ...dimText, fontSize: "0.72rem", margin: "0.3rem 0 0" }}>
           {KIND_COST_NOTE[block.visual]}
+        </p>
+      )}
+
+      {/* THE FIX MENU (33-08) — first thing on a broken tile, because on a held reel this is the
+          only control that ends the hold. The card names the price of every arm; the free ones are
+          free because they buy nothing, not because we are being generous. */}
+      {failure && <FailureCardBlock card={failure} busy={busy} onFix={applyFix} />}
+      {cardWords !== null && (
+        <div style={{ display: "flex", gap: "0.35rem", marginTop: "0.4rem", flexWrap: "wrap" }}>
+          <input
+            id={`scene-card-words-${block.blockIndex}`}
+            aria-label="What the text card should say"
+            value={cardWords}
+            placeholder="What the card should say"
+            onChange={(e) => setCardWords(e.target.value)}
+            style={{
+              fontSize: "0.82rem",
+              padding: "0.25rem 0.4rem",
+              borderRadius: "0.35rem",
+              border: "1px solid var(--rule)",
+              background: "var(--paper)",
+              color: "var(--ink)",
+              minWidth: "12rem",
+            }}
+          />
+          <button
+            type="button"
+            disabled={busy}
+            style={ghostBtn}
+            data-testid="scene-card-words-save"
+            onClick={() =>
+              void run(async () => {
+                const res = await setVisual({
+                  planId,
+                  sceneIndex: block.blockIndex,
+                  visual: "text_card",
+                  overlay: cardWords,
+                });
+                if (res.ok) setCardWords(null);
+                else setFixNote(fixRefusal(res.reason, noun));
+              })
+            }
+          >
+            Use this card
+          </button>
+          <button type="button" style={ghostBtn} onClick={() => setCardWords(null)}>
+            Cancel
+          </button>
+        </div>
+      )}
+      {fixNote && (
+        <p
+          role="status"
+          style={{ ...dimText, marginTop: "0.4rem", color: "var(--held-text)", fontWeight: 600 }}
+        >
+          {fixNote}
         </p>
       )}
 
@@ -1822,6 +2000,96 @@ function SceneTile({
           </span>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * ONE FAILURE, AS A CARD (33-08) — what happened, what it already cost, what fixing it costs.
+ *
+ * The same component in the hero (the reel's own failures) and on a tile (a scene's), because a
+ * user reading "the reel is held" and then "this scene's picture failed" is reading one story and
+ * two layouts would make it two.
+ *
+ * **The code is present and subordinate.** `detailCode` renders in `.trace-line` — the mono,
+ * dimmed idiom this tile already uses for its status rows — because the person who needs
+ * `sandbox_timeout` is opening a support ticket, and the person who needs "the render ran out of
+ * time" is everyone else. What it never does is appear inside the headline: the card models
+ * already guarantee that (`failureClause`), and this markup has no way to reintroduce it.
+ *
+ * `aria-live="polite"` because these cards APPEAR — a webhook lands, a render terminal patches, and
+ * the region changes under a user who may not be looking at it.
+ */
+function FailureCardBlock({
+  card,
+  busy,
+  onFix,
+}: {
+  card: FailureCard;
+  busy: boolean;
+  onFix: (fix: FailureFix) => void;
+}) {
+  return (
+    <div
+      aria-live="polite"
+      data-testid="media-failure-card"
+      style={{
+        border: "1px solid var(--rule)",
+        borderRadius: "0.55rem",
+        background: "var(--card)",
+        padding: "0.65rem 0.75rem",
+        display: "grid",
+        gap: "0.35rem",
+        margin: "0.5rem 0 0",
+      }}
+    >
+      <p style={{ ...dimText, color: "var(--held-text)", fontWeight: 600 }}>{card.headline}</p>
+      {/* SPENT, never pending. `UNLANDED_RESOLVES.media === false` is what makes that wording a
+          fact rather than a tone choice. */}
+      {card.sunkLine && <p style={{ ...dimText, fontSize: "0.75rem" }}>{card.sunkLine}</p>}
+
+      {card.fixes.length > 0 && (
+        <div style={{ display: "grid", gap: "0.45rem", marginTop: "0.15rem" }}>
+          {card.fixes.map((fix) => (
+            <div
+              key={fix.arm}
+              style={{ display: "flex", alignItems: "baseline", gap: "0.5rem", flexWrap: "wrap" }}
+            >
+              <button
+                type="button"
+                disabled={busy}
+                style={ghostBtn}
+                data-testid={`media-fix-${fix.arm}`}
+                onClick={() => onFix(fix)}
+              >
+                {fix.label}
+              </button>
+              {/* FREE vs PAID in the same slot on every arm, so the cheap fix is visible without
+                  reading three sentences — the 40x lever again, at the moment it matters most. */}
+              <span
+                style={{
+                  ...dimText,
+                  fontSize: "0.75rem",
+                  fontWeight: 700,
+                  color: "var(--ink)",
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {fix.priceLabel}
+              </span>
+              {fix.note && (
+                <span style={{ ...dimText, ...traceText, fontSize: "0.72rem" }}>{fix.note}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {card.detailCode && (
+        <div className="trace-line">
+          <span style={traceText}>{card.detailCode}</span>
+        </div>
+      )}
     </div>
   );
 }

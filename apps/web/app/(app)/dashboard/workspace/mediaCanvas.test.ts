@@ -1138,6 +1138,21 @@ describe("the reel's own failures: retry, hold, and the degraded deliverable", (
     expect(failureText("incomplete_takes", "scene")).not.toBe("incomplete_takes");
   });
 
+  test("every fix-menu refusal has a sentence in the SAME vocabulary the estimate rail uses", () => {
+    // One refusal vocabulary, wherever it is read. Each of these is a code a fix arm or the retry
+    // button can actually receive, and none of them quotes money — the zero context is the point.
+    const noMoney = { capCents: 0, totalCents: 0, maxChars: 0, noun: "scene" } as const;
+    expect(refusalText({ reason: "no_overlay" }, noMoney)).toMatch(/needs its words/);
+    expect(refusalText({ reason: "not_failed" }, noMoney)).toMatch(/nothing to retry/);
+    expect(refusalText({ reason: "no_block" }, noMoney)).toMatch(/isn't on this plan/);
+    expect(refusalText({ reason: "unknown_visual" }, noMoney)).toMatch(
+      /can't render|cannot render|isn't a kind/,
+    );
+    expect(refusalText({ reason: "not_a_claim" }, noMoney)).toMatch(/no flagged figure/);
+    // The block deck's vocabulary follows the noun, as everywhere else on this surface.
+    expect(refusalText({ reason: "no_deck" }, { ...noMoney, noun: "block" })).toMatch(/block/);
+  });
+
   test("a rendered reel with captions burned in has no cards", () => {
     expect(
       failureCards({ renderStatus: "rendered", captionStatus: "captioned" }, [fscene()], undefined),

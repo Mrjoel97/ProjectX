@@ -207,6 +207,24 @@ export function refusalText(
       return `This storyboard was locked when you generated the reel. From here, changes happen on the canvas ${o.noun} by ${o.noun}, and each one is paid.`;
     case "no_alternate":
       return "There's no second storyboard to switch to for this plan.";
+    // ── 33-08: the FIX MENU's own refusals ──────────────────────────────────────────────────────
+    // A card must name its words. This one is reachable only if the overlay field is submitted
+    // empty — the arm asks first — so it is the backstop rather than the expected path.
+    case "no_overlay":
+      return "A text card needs its words — type what it should say, then use the card.";
+    // `retryRender` is FAILED-only. A reel that re-fired between the render and the click has
+    // moved on, and saying so beats a button that silently does nothing.
+    case "not_failed":
+      return "This reel isn't in a failed state any more, so there's nothing to retry.";
+    case "no_block":
+    case "no_deck":
+      return `That ${o.noun} isn't on this plan any more.`;
+    case "unknown_visual":
+      return "That isn't a kind this build can render.";
+    // `confirmClaim`'s guard. The badge only appears on a flagged scene, so this fires only if the
+    // flag cleared underneath the click.
+    case "not_a_claim":
+      return `There's no flagged figure on this ${o.noun} to confirm.`;
     // 33-04's manual retry with no batch behind it.
     case "nothing_to_render":
       return "Nothing has been generated for this plan yet, so there's nothing to re-assemble — generate the reel first.";
