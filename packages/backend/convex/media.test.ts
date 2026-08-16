@@ -107,9 +107,10 @@ const llmLeft = (t: T, tenantId = A) =>
 /** The reference job: six paid Sora blocks at the default duration, with captions. */
 const JOB_41 = () => deck(6);
 // 6 x $0.40 clips + 6 voice lines at 2 x 56 chars ($0.01008) + one rounded-up STT minute
-// ($0.006) + the flat render ($0.02).
-const JOB_41_USD = 2.43608;
-const JOB_41_CENTS = 244;
+// ($0.006) + the flat render, DOUBLED at its source to cover the one automatic retry sandbox
+// (33-04: $0.02 -> $0.04 — a deliberate money change, noted in the playbook).
+const JOB_41_USD = 2.45608;
+const JOB_41_CENTS = 246;
 const JOB_41_LINES = 13; // 6 video + 6 tts + 1 stt — the render line gets NO row
 
 // ── the two kill switches ──────────────────────────────────────────────────────────
@@ -3684,7 +3685,12 @@ describe("jobEstimate: four itemised lines, and the SAME number the rail will co
     const { planId } = await seedDeck(t, { blocks: 3 });
     const est = await asA(t).query(api.media.jobEstimate, { planId });
 
-    expect(est.lines.map((l) => l.label)).toEqual(["clips", "voice", "captions", "render"]);
+    expect(est.lines.map((l) => l.label)).toEqual([
+      "clips",
+      "voice",
+      "captions",
+      "render (incl. one retry)",
+    ]);
     expect(est.lines[0]?.qty).toBe(3);
     expect(est.lines[1]?.qty).toBe(3);
     expect(est.totalCents).toBeGreaterThan(0);
@@ -5105,13 +5111,20 @@ describe("20.2 wave 5 — THE SCENE GATE OPENS: a scene deck is finally buyable"
       "stills",
       "voice",
       "captions",
-      "render",
+      "render (incl. one retry)",
     ]);
     const line = (label: string) => estimate.lines.find((l) => l.label === label);
     expect(line("clips")?.qty).toBe(2);
     expect(line("clips")?.cents).toBe(200); // 8 s + 12 s at $0.10 a second
     expect(line("stills")?.qty).toBe(1);
     expect(line("stills")?.cents).toBe(1); // ONE still, whatever its scene's length
+    // 33-04: the render line is DOUBLED at its one source so the retry sandbox is reserved, not
+    // silent drift on the no-refunds rail. Both money sites read the same constant; this pins the
+    // estimate side, and `res.estCents === estimate.totalCents` below pins the reservation side.
+    expect(line("render (incl. one retry)")?.cents).toBe(
+      Math.round(MEDIA_SANDBOX_USD_PER_RENDER * 100),
+    );
+    expect(MEDIA_SANDBOX_USD_PER_RENDER).toBe(0.04);
     // The card buys nothing, so it has no line at all — not a zero-cent row to scan past.
   });
 

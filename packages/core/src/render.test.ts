@@ -28,8 +28,10 @@ import {
   RENDER_SANDBOX_TIMEOUT_MS,
   RENDER_SANDBOX_VCPUS,
   type RenderDeps,
+  isTransientRenderCode,
   reasonCodeFor,
   renderInputName,
+  TRANSIENT_RENDER_CODES,
   type SandboxOptions,
   validateRenderReturn,
 } from "./render";
@@ -708,6 +710,69 @@ describe("reasonCodeFor: a code, and provably never its input", () => {
     // …and the same for a stderr that matches NOTHING, where a lazy implementation would be most
     // tempted to pass the string through.
     expect(reasonCodeFor(9, `${filename} ${narration}`)).toBe("render_failed");
+  });
+});
+
+describe("isTransientRenderCode: the CLOSED set behind the one automatic retry (33-04)", () => {
+  it("the set is closed and exactly these members — adding one is a money decision, not a patch", () => {
+    // Pinned as a LIST, not as membership checks alone: the retry buys a second sandbox, so a
+    // member added casually widens what the doubled render line must cover. Environmental codes
+    // only: the snapshot/env race (missing_binary — the 2026-08-15 SIGPIPE class), the transport
+    // legs (route_unreachable, input_fetch_failed, upload_failed), a submit that never reached
+    // the provider (submit_failed), and the catch-all render_failed — unknown is not provably
+    // structural, so it gets its one retry.
+    expect(TRANSIENT_RENDER_CODES).toEqual([
+      "missing_binary",
+      "route_unreachable",
+      "input_fetch_failed",
+      "upload_failed",
+      "submit_failed",
+      "render_failed",
+    ]);
+  });
+
+  it("every member classifies as transient", () => {
+    for (const code of TRANSIENT_RENDER_CODES) {
+      expect(isTransientRenderCode(code), code).toBe(true);
+    }
+  });
+
+  it.each([
+    // Deterministic ffmpeg codes — the render repeats the same failure at any temperature, and a
+    // retry is a second $0.02 sandbox buying the same stderr (20-16's reasoning, which stands for
+    // these).
+    "duration_mismatch",
+    "speech_out_of_window",
+    "clip_too_short",
+    "missing_narration",
+    "bad_invocation",
+    "input_missing",
+    "decode_failed",
+    "no_audio_stream",
+    "caption_track_empty",
+    // Wall-clock exhaustion: the operator route is "cut blocks or raise the ceiling" — a
+    // structural remedy, not a re-roll.
+    "sandbox_timeout",
+    // Runner/route decisions: the same request gets the same verdict.
+    "unauthorized",
+    "not_configured",
+    "bad_request",
+    "route_rejected",
+    "sidecar_rejected_on_return",
+    // Trigger-side refusals never reach the retry seam, but classify them honestly anyway.
+    "empty_batch",
+    "incomplete_blocks",
+    "not_all_succeeded",
+    "stale_inputs",
+  ])("NEVER retries the deterministic code %s", (code) => {
+    expect(isTransientRenderCode(code)).toBe(false);
+  });
+
+  it("an unknown string is NOT transient — except the named catch-all, nothing defaults to a retry", () => {
+    expect(isTransientRenderCode("some_future_code")).toBe(false);
+    expect(isTransientRenderCode("")).toBe(false);
+    // The one deliberate exception, IN the closed list rather than a fallthrough branch:
+    expect(isTransientRenderCode("render_failed")).toBe(true);
   });
 });
 
