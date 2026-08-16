@@ -41,3 +41,23 @@ ownership check — `doc.title` is right there) plus one test. Cheap, and the ca
 `citationView` renders whatever `title` arrives.
 
 **Owner:** whoever next touches `sceneCitations` — 33-09 or 33-10.
+
+---
+
+## 33-13 — two things seen while wiring the proposal failure card
+
+**1. `resetPlan` does not clear `altShots` / `altTargetDurationSeconds` / `lostVariation` /
+`deckAdjustments`.** It clears `shots` and the whole render plane, and 33-13 added
+`proposalRefusal` to the list (a stale refusal code would have put a media failure card on the
+next EMAIL draft in that thread). The four deck-plane siblings are still missing. It is not
+reachable today — `persistDeck` writes the whole deck plane on every proposal and clears all four
+— so nothing shows a stale alternate or a stale disclosure. It is one `undefined` per field the
+day a path writes `shots` without going through `persistDeck`. Pre-existing (33-02/33-03/33-11/
+33-12), out of 33-13's scope.
+
+**2. The refusal memo body promises a direction it no longer carries.** `sceneRefusalBody` /
+`deckRefusalBody` end with *"Ask me to redo the scene deck and I'll keep the direction below"* —
+but `landStoryboardRefusal` PATCHES `plan.body` to that sentence alone, so there is nothing below
+it on the row. The specialist's prose is in the transcript, not on the card. 33-13 makes this
+mostly invisible (the canvas now renders the failure card, not the memo body) but the sentence is
+still wrong wherever the body is read. One-line fix: drop the clause, or append the run's body.
