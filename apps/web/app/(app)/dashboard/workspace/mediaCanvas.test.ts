@@ -9,14 +9,20 @@ import {
   type Brief,
   briefChips,
   briefRefusalText,
+  type Citation,
+  citationView,
   DECK_STALE_NOTE,
   DURATION_COST_NOTE,
   deckStale,
   deckSummary,
   durationLabel,
   estimateView,
+  type FailureFace,
+  type FailureScene,
+  failureCards,
   failureText,
   heroState,
+  type JobEstimate,
   isPickableVideo,
   KIND_COST_NOTE,
   KIND_LABEL,
@@ -805,5 +811,335 @@ describe("the two decks are summarised the SAME way, and the switcher dies at Ge
     expect(view.canSwitch).toBe(false);
     expect(view.alternate).toBeNull();
     expect(view.picked?.sceneCount).toBe(3);
+  });
+});
+
+// ── 33-08 — THE CITATIONS AND THE FAILURE CARDS ───────────────────────────────────────────────
+//
+// Two surfaces whose whole value is being RIGHT about somebody else's money and somebody else's
+// word, which is why every case below is a called function rather than a source-text scan.
+
+const cite = (over: Partial<Citation> = {}): Citation => ({
+  sceneIndex: 0,
+  docId: "doc_1",
+  title: "Q3 revenue review",
+  verified: true,
+  needsConfirmation: false,
+  confirmedAt: null,
+  ...over,
+});
+
+describe("a citation is a link only when the document is genuinely this tenant's", () => {
+  test("a verified source renders its title and its docId, ready to open", () => {
+    const view = citationView([cite()]);
+    const scene = view.byScene[0];
+    expect(scene?.kind).toBe("cited");
+    expect(scene?.link).toEqual({ title: "Q3 revenue review", docId: "doc_1" });
+    expect(scene?.label).toBe("Q3 revenue review");
+    expect(scene?.action).toBeNull();
+    expect(view.unconfirmedCount).toBe(0);
+    expect(view.blockLine).toBeNull();
+  });
+
+  test("AN UNVERIFIED SOURCE IS NEVER A LINK — a foreign or deleted id is inert", () => {
+    // `sceneCitations` reports `verified:false` for a foreign, malformed or deleted docId, and the
+    // two are deliberately indistinguishable to a probing model. Minting a PreviewModal link off
+    // one would be a cross-tenant click-through offered by the UI.
+    const view = citationView([cite({ verified: false })]);
+    expect(view.byScene[0]?.kind).toBe("unverified");
+    expect(view.byScene[0]?.link).toBeNull();
+    expect(view.byScene[0]?.label).toMatch(/can't be checked|not in your vault/i);
+    // Nothing to confirm: `confirmClaim` answers `not_a_claim` for a scene the backend never
+    // flagged, so offering the button would be a control that can only ever refuse.
+    expect(view.byScene[0]?.action).toBeNull();
+    expect(view.unconfirmedCount).toBe(0);
+  });
+
+  test("AN UNCONFIRMED CLAIM asks the owner to vouch, and says so in words", () => {
+    const view = citationView([cite({ needsConfirmation: true, docId: null, title: null })]);
+    expect(view.byScene[0]?.kind).toBe("needs_confirmation");
+    expect(view.byScene[0]?.link).toBeNull();
+    expect(view.byScene[0]?.action).toMatch(/confirm/i);
+    expect(view.unconfirmedCount).toBe(1);
+  });
+
+  test("a confirmed claim is quiet, and stops blocking", () => {
+    const view = citationView([cite({ needsConfirmation: true, confirmedAt: 1_700_000_000_000 })]);
+    expect(view.byScene[0]?.kind).toBe("confirmed");
+    expect(view.byScene[0]?.action).toBeNull();
+    // Confirmed AND verified: the source stays openable — vouching for a figure does not hide
+    // where it came from.
+    expect(view.byScene[0]?.link).toEqual({ title: "Q3 revenue review", docId: "doc_1" });
+    expect(view.unconfirmedCount).toBe(0);
+    expect(view.blockLine).toBeNull();
+  });
+
+  test("a claim whose source cannot be verified is STILL confirmable — the owner is the door", () => {
+    // Both flags at once. The provenance rule's legitimate door is the owner's click, and it does
+    // not require the model's cited document to check out; what it must not do is pretend the
+    // unverifiable source is a real one.
+    const scene = citationView([cite({ verified: false, needsConfirmation: true })]).byScene[0];
+    expect(scene?.kind).toBe("needs_confirmation");
+    expect(scene?.link).toBeNull();
+    expect(scene?.action).toMatch(/confirm/i);
+  });
+
+  test("the deck-level line counts the claims and names Generate — singular and plural", () => {
+    const one = citationView([cite({ sceneIndex: 1, needsConfirmation: true })]);
+    expect(one.blockLine).toBe("Confirm 1 claim to enable Generate.");
+    const two = citationView([
+      cite({ sceneIndex: 1, needsConfirmation: true }),
+      cite({ sceneIndex: 2, needsConfirmation: true }),
+      cite({ sceneIndex: 3 }),
+    ]);
+    expect(two.unconfirmedCount).toBe(2);
+    expect(two.blockLine).toBe("Confirm 2 claims to enable Generate.");
+  });
+
+  test("a scene that claims nothing has no entry at all — absence is the fourth state", () => {
+    const view = citationView([cite({ sceneIndex: 4 })]);
+    expect(view.byScene[0]).toBeUndefined();
+    expect(view.byScene[4]?.kind).toBe("cited");
+    expect(citationView([]).byScene).toEqual({});
+    expect(citationView(undefined).unconfirmedCount).toBe(0);
+  });
+});
+
+// The two money inputs, kept deliberately unequal in every fixture below: a card that printed the
+// retry price in the sunk slot (or the reverse) would still print two plausible dollar amounts, so
+// the tests pin BOTH strings and the swap test transposes them rather than deleting one.
+const face = (over: Partial<FailureFace> = {}): FailureFace => ({
+  status: "succeeded",
+  failureReason: null,
+  estUsd: 0.4,
+  actualCents: null,
+  ...over,
+});
+
+const fscene = (over: Partial<FailureScene> = {}): FailureScene => ({
+  blockIndex: 0,
+  visual: "generated_video",
+  narration: "Revenue grew 40% last quarter.",
+  clip: face(),
+  voice: face({ estUsd: 0.02 }),
+  ...over,
+});
+
+const anEstimate = (): JobEstimate => ({
+  lines: [
+    { label: "clips", qty: 1, unit: "8s of 15s 720p", cents: 40 },
+    { label: "render (incl. one retry)", qty: 1, unit: "sandbox", cents: 5 },
+  ],
+  totalCents: 45,
+  capCents: 500,
+  remainingCents: 400,
+  refusal: null,
+});
+
+const scenesWithFailure = (): FailureScene[] => [
+  fscene(),
+  fscene({
+    blockIndex: 1,
+    clip: face({ status: "failed", failureReason: "http_502", estUsd: 0.4, actualCents: null }),
+    voice: face({ status: "succeeded", estUsd: 0.02, actualCents: 12 }),
+  }),
+];
+
+const sceneCard = (over: Partial<FailureScene> = {}, est: JobEstimate | undefined = anEstimate()) =>
+  failureCards({}, [fscene({ blockIndex: 1, ...over })], est).find((c) => c.where === "scene");
+
+describe("a failure is a plain-language card with honest economics", () => {
+  test("A FAILED SCENE NAMES WHAT BROKE, WHAT IT ALREADY COST, AND WHAT THE FIX ADDS", () => {
+    const cards = failureCards({}, scenesWithFailure(), anEstimate());
+    const card = cards.find((c) => c.where === "scene");
+    expect(card?.sceneIndex).toBe(1);
+    expect(card?.sceneRef).toBe("Scene 2");
+    expect(card?.headline).toMatch(/picture/i);
+
+    // SUNK: the failed clip's reservation (40c — unlanded and PERMANENTLY so, never "pending")
+    // plus the voice take that actually landed and actually billed 12c.
+    expect(card?.sunkLine).toContain("$0.52");
+    expect(card?.sunkLine).not.toMatch(/pending|refund(ed)? to you|will be returned/i);
+    expect(card?.sunkLine).toMatch(/cost|spent/i);
+
+    // ADDS: this scene's two lines again (42c) plus the re-assembly the regenerate also reserves
+    // (5c, the estimate's OWN render line). A DIFFERENT number from the sunk one, on purpose.
+    const regenerate = card?.fixes.find((f) => f.arm === "regenerate");
+    expect(regenerate?.priceLabel).toBe("$0.47 adds");
+    expect(card?.sunkLine).not.toContain("$0.47");
+    expect(regenerate?.priceLabel).not.toContain("$0.52");
+  });
+
+  test("SWAP-TESTED: transposing the two money fields moves the sunk line, it does not erase it", () => {
+    // The repo's vacuous-test lesson: deleting a value makes it ABSENT and almost any assertion
+    // notices. A transposition keeps every number present under the wrong label, which is the
+    // mutation that actually finds a card reading the wrong field.
+    const straight = sceneCard({
+      clip: face({ status: "failed", failureReason: "http_502", estUsd: 0.4, actualCents: null }),
+      voice: face({ estUsd: 0.02, actualCents: 12 }),
+    });
+    const transposed = sceneCard({
+      clip: face({ status: "failed", failureReason: "http_502", estUsd: 0.4, actualCents: null }),
+      voice: face({ estUsd: 0.12, actualCents: 2 }),
+    });
+    expect(straight?.sunkLine).toContain("$0.52");
+    expect(transposed?.sunkLine).toContain("$0.42");
+    expect(straight?.sunkLine).not.toBe(transposed?.sunkLine);
+    // And the retry price moves the other way — 42c vs 52c of scene lines, plus the same render 5c.
+    expect(straight?.fixes.find((f) => f.arm === "regenerate")?.priceLabel).toBe("$0.47 adds");
+    expect(transposed?.fixes.find((f) => f.arm === "regenerate")?.priceLabel).toBe("$0.57 adds");
+  });
+
+  test("with no estimate loaded the price is honest about what it does NOT include", () => {
+    // Understating money is the bad direction. Without the estimate's render line the card quotes
+    // the scene's own lines and SAYS the re-assembly is on top, rather than silently omitting it.
+    const card = sceneCard(
+      { clip: face({ status: "failed", failureReason: "http_502" }) },
+      undefined,
+    );
+    const regenerate = card?.fixes.find((f) => f.arm === "regenerate");
+    expect(regenerate?.priceLabel).toBe("$0.42 adds, plus the re-assembly");
+  });
+
+  test("THE CHEAP FIXES ARE MARKED FREE, and the current kind is never offered back", () => {
+    const card = sceneCard({ clip: face({ status: "failed", failureReason: "http_502" }) });
+    const arms = card?.fixes.map((f) => f.arm);
+    expect(arms).toEqual(["regenerate", "text_card", "animated_image", "uploaded_video"]);
+    for (const arm of ["text_card", "animated_image", "uploaded_video"] as const) {
+      expect(card?.fixes.find((f) => f.arm === arm)?.priceLabel).toMatch(/free/i);
+    }
+    // A still is bought by the REGENERATE that follows, not by the switch — and the ratio is the
+    // measured one (a fortieth, not a tenth).
+    expect(card?.fixes.find((f) => f.arm === "animated_image")?.note).toMatch(/fortieth/);
+    // An animated-still scene is not offered "switch to an animated still".
+    const still = sceneCard({
+      visual: "animated_image",
+      clip: face({ status: "failed", failureReason: "http_502" }),
+    });
+    expect(still?.fixes.map((f) => f.arm)).toEqual(["regenerate", "text_card", "uploaded_video"]);
+  });
+
+  test("A VOICE-ONLY FAILURE offers no kind switch — a text card would not fix a missing take", () => {
+    const card = sceneCard({
+      clip: face({ status: "succeeded", actualCents: 38 }),
+      voice: face({ status: "failed", failureReason: "submit_failed", estUsd: 0.02 }),
+    });
+    expect(card?.headline).toMatch(/voice/i);
+    expect(card?.fixes.map((f) => f.arm)).toEqual(["regenerate"]);
+    // The landed picture's ACTUAL bill is part of what this scene has already cost.
+    expect(card?.sunkLine).toContain("$0.40");
+  });
+
+  test("a BLOCKED scene says the provider refused it, and still owes the money", () => {
+    const card = sceneCard({ clip: face({ status: "blocked", failureReason: "content_policy" }) });
+    expect(card?.headline).toMatch(/refused/i);
+    expect(card?.detailCode).toContain("content_policy");
+    expect(card?.sunkLine).toContain("$0.42");
+  });
+
+  test("NO CARD PRINTS A PROVIDER STRING — the code is the detail line and nothing else", () => {
+    const card = sceneCard({
+      clip: face({ status: "failed", failureReason: "submit_canceled" }),
+    });
+    // A code the vocabulary knows becomes a SENTENCE in the headline; the code itself stays
+    // underneath as the support line, never inside the prose.
+    expect(card?.headline).not.toContain("submit_canceled");
+    expect(card?.detailCode).toBe("picture: submit_canceled");
+    expect(failureText("submit_canceled", "scene")).toMatch(/never (reached|started)|canceled/i);
+    expect(failureText("submit_failed", "scene")).not.toBe("submit_failed");
+  });
+
+  test("a deck with nothing failed has no cards at all", () => {
+    expect(failureCards({}, [fscene()], anEstimate())).toEqual([]);
+    expect(failureCards({ renderStatus: "rendered" }, [fscene()], anEstimate())).toEqual([]);
+  });
+});
+
+describe("the reel's own failures: retry, hold, and the degraded deliverable", () => {
+  test("A RENDER FAILURE offers the free retry — the compute was already reserved", () => {
+    const cards = failureCards(
+      { renderStatus: "failed", renderReason: "sandbox_timeout" },
+      [fscene()],
+      anEstimate(),
+    );
+    const card = cards.find((c) => c.where === "hero");
+    expect(card?.headline).toMatch(/ran out of time/);
+    expect(card?.detailCode).toBe("sandbox_timeout");
+    expect(card?.sceneRef).toBeNull();
+    const retry = card?.fixes.find((f) => f.arm === "retry_render");
+    expect(retry?.priceLabel).toMatch(/^free/);
+    expect(retry?.note).toBeNull();
+    // Nothing about a render failure is sunk on any ONE scene — the reel's own money is the
+    // reserved render line, and quoting a scene's spend here would be the wrong ledger.
+    expect(card?.sunkLine).toBeNull();
+  });
+
+  test("the SECOND retry says the first one already happened", () => {
+    const card = failureCards(
+      { renderStatus: "failed", renderReason: "route_unreachable", renderRetriedAt: 1_700_000 },
+      [fscene()],
+      anEstimate(),
+    )[0];
+    expect(card?.fixes.find((f) => f.arm === "retry_render")?.note).toMatch(/already retried/i);
+  });
+
+  test("an UNKNOWN render code still gets a sentence — the code never becomes the prose", () => {
+    const card = failureCards(
+      { renderStatus: "failed", renderReason: "brand_new_code" },
+      [fscene()],
+      anEstimate(),
+    )[0];
+    expect(card?.headline).not.toContain("brand_new_code");
+    expect(card?.headline).toMatch(/could not be assembled/);
+    expect(card?.detailCode).toBe("brand_new_code");
+  });
+
+  test("A HELD REEL IS NOT A DEAD END — it points at the scene that owes the fix", () => {
+    // `incomplete_batch` means a scene never landed. The lever is that scene's own fix menu, and a
+    // "Retry render" button here would re-run a sandbox over the same hole.
+    const cards = failureCards(
+      { renderStatus: "failed", renderReason: "incomplete_batch" },
+      scenesWithFailure(),
+      anEstimate(),
+    );
+    const held = cards.find((c) => c.where === "hero");
+    expect(held?.headline).toMatch(/held/i);
+    expect(held?.sceneRef).toBe("Scene 2");
+    expect(held?.fixes).toEqual([]);
+    // The scene's own card is still there, and it is where the arms live.
+    expect(cards.filter((c) => c.where === "scene")).toHaveLength(1);
+    // Hero first: the reel's state is read before its scenes'.
+    expect(cards[0]?.where).toBe("hero");
+  });
+
+  test("a hold with no failed scene still says what is missing rather than naming a scene", () => {
+    const held = failureCards(
+      { renderStatus: "failed", renderReason: "incomplete_blocks" },
+      [fscene()],
+      anEstimate(),
+    )[0];
+    expect(held?.sceneRef).toBeNull();
+    expect(held?.headline).toMatch(/held/i);
+  });
+
+  test("A CAPTION FAILURE IS A DEGRADED DELIVERABLE — the reel stands", () => {
+    // 20-17's rule, said to the user: a caption failure NEVER unpublishes the reel, and there is
+    // no retry arm because there is no mutation that re-burns them.
+    const card = failureCards(
+      { renderStatus: "rendered", captionStatus: "failed", captionReason: "incomplete_takes" },
+      [fscene()],
+      anEstimate(),
+    )[0];
+    expect(card?.where).toBe("hero");
+    expect(card?.headline).toMatch(/reel is published|without them|captions/i);
+    expect(card?.detailCode).toBe("incomplete_takes");
+    expect(card?.fixes).toEqual([]);
+    expect(failureText("incomplete_takes", "scene")).not.toBe("incomplete_takes");
+  });
+
+  test("a rendered reel with captions burned in has no cards", () => {
+    expect(
+      failureCards({ renderStatus: "rendered", captionStatus: "captioned" }, [fscene()], undefined),
+    ).toEqual([]);
   });
 });
