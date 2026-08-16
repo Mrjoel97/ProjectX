@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
-current_plan: 7 (done)
+current_plan: 5 of 10 (phase 33)
 status: completed
-stopped_at: Completed 33-04-PLAN.md
-last_updated: "2026-08-16T01:48:46.000Z"
+stopped_at: "Completed 33-05-PLAN.md — vault auto-save of the final reel + regenerate ordering. NOTE: the executing agent died on an API session limit AFTER all three task commits but BEFORE the SUMMARY, and left the suite RED: saveReelToVault added a 7th media audit site without the deliberate bump llmRedaction.test.ts requires. The orchestrator verified the new payload is refs-only (planId + docId + citations COUNT), widened MEDIA_AUDIT_ALLOWED, bumped the pins (literals 10->11, sites 6->7, renderReel 3->4) in 54535fd, and re-ran to green (83 files/1884 passed) before writing the SUMMARY. Second time in phase 33 a governance pin caught a plan's own new log-plane site — plans that add an audit site must budget for the bump. Next: 33-06 (reel-first canvas)."
+last_updated: "2026-08-16T11:00:00.000Z"
 progress:
   total_phases: 53
   completed_phases: 31
@@ -18,10 +18,10 @@ progress:
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
-current_plan: 7 (done)
+current_plan: 5 of 10 (phase 33)
 status: completed
-stopped_at: Completed 33-04-PLAN.md
-last_updated: "2026-08-16T01:48:46.000Z"
+stopped_at: "Completed 33-05-PLAN.md — vault auto-save of the final reel + regenerate ordering. NOTE: the executing agent died on an API session limit AFTER all three task commits but BEFORE the SUMMARY, and left the suite RED: saveReelToVault added a 7th media audit site without the deliberate bump llmRedaction.test.ts requires. The orchestrator verified the new payload is refs-only (planId + docId + citations COUNT), widened MEDIA_AUDIT_ALLOWED, bumped the pins (literals 10->11, sites 6->7, renderReel 3->4) in 54535fd, and re-ran to green (83 files/1884 passed) before writing the SUMMARY. Second time in phase 33 a governance pin caught a plan's own new log-plane site — plans that add an audit site must budget for the bump. Next: 33-06 (reel-first canvas)."
+last_updated: "2026-08-16T11:00:00.000Z"
 progress:
   [███████░░░] 69%
   completed_phases: 31
