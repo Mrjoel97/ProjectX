@@ -352,6 +352,41 @@ export function reasonCodeFor(exitCode: number, stderrSample: string): RenderRea
   return "render_failed";
 }
 
+/**
+ * The CLOSED set of render-failure codes the ONE automatic retry may fire on (33-04) — a narrow,
+ * documented supersession of 20-16's "a failed render does NOT retry" (see `media.md`). That rule's
+ * reasoning stands for every code NOT in this list: a structural failure repeats, and a retry is a
+ * second sandbox buying the same stderr.
+ *
+ * Membership means "plausibly environmental": the snapshot/env race (`missing_binary` — the
+ * 2026-08-15 SIGPIPE class fired exactly here), the three transport legs around the sandbox
+ * (`route_unreachable`, `input_fetch_failed`, `upload_failed`), a submit that never reached the
+ * provider (`submit_failed`), and the catch-all `render_failed` — an UNMATCHED stderr is not
+ * provably structural, so unknown-but-named gets its one retry. Everything else — the deterministic
+ * ffmpeg codes, `sandbox_timeout` (the remedy is "cut blocks or raise the ceiling", not a re-roll),
+ * and every route/runner DECISION (`unauthorized`, `bad_request`, `route_rejected`, ...) — fails
+ * straight to the dead letter.
+ *
+ * Adding a member is a MONEY decision, not a patch: each retry is a sandbox the reserved render
+ * line must cover (the line is doubled at `MEDIA_SANDBOX_USD_PER_RENDER` for exactly one).
+ */
+export const TRANSIENT_RENDER_CODES = [
+  "missing_binary",
+  "route_unreachable",
+  "input_fetch_failed",
+  "upload_failed",
+  "submit_failed",
+  "render_failed",
+] as const;
+
+const TRANSIENT_SET = new Set<string>(TRANSIENT_RENDER_CODES);
+
+/** Membership in the closed list above, and NOTHING else — an unknown string returns false, so a
+ *  future code cannot inherit a retry it was never granted. */
+export function isTransientRenderCode(code: string): boolean {
+  return TRANSIENT_SET.has(code);
+}
+
 // ── The RUNNER: the route handler's whole body, with the SDK injected ──────────────────────────
 //
 // The Next.js route file is a ~20-line adapter over this function (CLAUDE.md §1: domain logic in

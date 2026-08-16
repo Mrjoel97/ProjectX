@@ -111,17 +111,18 @@ const JOB_4_1: MediaSpec[] = [
   voice(1200), //                                voice            = $0.018
   voice(1200), //                                retry allowance  = $0.018
   { kind: "stt", model: MEDIA_DEFAULT_STT.model, audioMinutes: 1 }, // captions = $0.006
-  { kind: "render" }, //                         render           = $0.020
+  { kind: "render" }, //     render, incl. the one auto-retry sandbox (33-04)  = $0.040
 ];
 
 describe("estimateBatchUsd + the job cap", () => {
-  it("the six-block Sora job totals $2.462 and PASSES the $3.50 cap", () => {
+  it("the six-block Sora job totals $2.482 and PASSES the $3.50 cap", () => {
     const total = estimateBatchUsd(JOB_4_1);
     expect(total.ok).toBe(true);
-    if (total.ok) expect(total.value).toBeCloseTo(2.462, 10);
+    // 33-04: was 2.462 — the render line doubled at its source to reserve the one auto retry.
+    if (total.ok) expect(total.value).toBeCloseTo(2.482, 10);
     const chosen = chooseMediaBatch(JOB_4_1, MEDIA_JOB_CAP_USD);
     expect(chosen.ok).toBe(true);
-    if (chosen.ok) expect(chosen.value.estCents).toBe(247);
+    if (chosen.ok) expect(chosen.value.estCents).toBe(249);
   });
   it("9 Sora blocks at 720p ($3.60+) → over_job_cap", () => {
     const job = [...Array.from({ length: 9 }, () => clip()), { kind: "render" } as MediaSpec];

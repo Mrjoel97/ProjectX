@@ -67,8 +67,15 @@ export const MEDIA_JOB_CAP_USD = 3.5;
 /* ponytail: a flat estimate, not metered per-render. Vercel does not expose per-sandbox billing at
  * request time. The ceiling is that a pathological render could cost more than this constant; the
  * upgrade path is `sandbox.usage` on the returned session object, reconciled in the manual D5
- * procedure in docs/playbooks/media.md. */
-export const MEDIA_SANDBOX_USD_PER_RENDER = 0.02;
+ * procedure in docs/playbooks/media.md.
+ *
+ * 33-04: DOUBLED ($0.02 -> $0.04) to reserve the ONE automatic retry sandbox
+ * (`TRANSIENT_RENDER_CODES`) up front — on a no-refunds rail an unreserved second sandbox would be
+ * silent cents drift. A rare THIRD sandbox (manual retry after the auto retry) is accepted,
+ * documented drift, never silent — see the retry section of docs/playbooks/media.md. This is the
+ * single source both `jobEstimate` and the reserves read; the estimate line says
+ * "render (incl. one retry)" so the coverage is explicit on screen. */
+export const MEDIA_SANDBOX_USD_PER_RENDER = 0.04;
 
 /** Sora 2's lowest supported tier and duration are pinned deliberately. Six four-second clips cost
  *  $2.40, leaving room under the existing whole-job cap for voice, captions and render. */

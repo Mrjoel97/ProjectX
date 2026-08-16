@@ -2187,7 +2187,13 @@ export const jobEstimate = tenantQuery({
             unit: `${audioMinutes.toFixed(2)} min`,
             cents: sub(specs.filter((x) => x.kind === "stt")),
           },
-          { label: "render", qty: 1, unit: "sandbox", cents: sub([{ kind: "render" }]) },
+          // 33-04: the label names what the doubled constant covers — one auto-retry sandbox.
+          {
+            label: "render (incl. one retry)",
+            qty: 1,
+            unit: "sandbox",
+            cents: sub([{ kind: "render" }]),
+          },
         ],
         totalCents: priced.value.estCents,
         capCents,
@@ -2285,7 +2291,8 @@ export const jobEstimate = tenantQuery({
         cents: subtotal(specs.filter((s) => s.kind === "stt")),
       },
       {
-        label: "render",
+        // 33-04: the label names what the doubled constant covers — one auto-retry sandbox.
+        label: "render (incl. one retry)",
         qty: 1,
         unit: "sandbox",
         cents: subtotal(specs.filter((s) => s.kind === "render")),

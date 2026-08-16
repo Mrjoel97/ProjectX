@@ -473,7 +473,7 @@ with them.
 | `fal-ai/flux/schnell` | $0.003 per WHOLE megapixel | megapixel, rounded UP | **MEDIUM** — see below |
 | `fal-ai/inworld-tts` | $0.01 per 1000 characters | **submitted** characters — fractional, NOT rounded up | **HIGH** — vendor `pricingInfoOverride` |
 | `fal-ai/elevenlabs/speech-to-text/scribe-v2` | $0.008 per input audio minute | input audio minute | **HIGH** — vendor `pricingInfoOverride` |
-| Vercel Sandbox render | flat `$0.02` estimate | per render — a named constant, not metered | estimate (delta §2.5) |
+| Vercel Sandbox render | flat `$0.04` reserved — `$0.02` per sandbox, doubled for the one auto retry (33-04) | per job — a named constant, not metered | estimate (delta §2.5) |
 
 Three things the 2026-08-02 read established that the plan's table did not say:
 
@@ -498,10 +498,18 @@ The **worst legal case**: 6 paid blocks at 480p × 10 s, every narration at the 
 | 6 × 480p × 10 s clips | $3.0000 |
 | voice — 6 × 140 chars, reserved at **2×** (840 chars → 1,680 submitted) | $0.0168 |
 | captions STT (1 min) | $0.0080 |
-| render (sandbox) | $0.0200 |
-| **Total** | **$3.0448 → 305 cents** |
+| render (incl. one retry) | $0.0400 |
+| **Total** | **$3.0648 → 307 cents** |
 
-Against `MEDIA_JOB_CAP_USD = $3.50` — **13% headroom**.
+Against `MEDIA_JOB_CAP_USD = $3.50` — **12% headroom**.
+
+> **Corrected 2026-08-16 (33-04).** The render line is now reserved at **$0.04 — the $0.02 sandbox
+> constant DOUBLED at its one source (`MEDIA_SANDBOX_USD_PER_RENDER`)** so the one automatic retry
+> (`TRANSIENT_RENDER_CODES`, see the retry section) is covered by the reservation instead of
+> leaking as silent cents drift on the no-refunds rail. The estimate line is labeled
+> `render (incl. one retry)` so the coverage is visible on screen. A rare THIRD sandbox (a manual
+> "Retry render" after the auto retry already fired) is accepted, documented drift — never silent.
+> The previous total here was $3.0448 → 305 cents; `media.test.ts` pins the new arithmetic.
 
 > **Corrected 2026-08-02 (20-04).** This table previously read `voice (~1,200 chars) $0.012` +
 > `voice retry allowance $0.012`, total **$3.052 → 306 cents**. That 1,200 is **not reachable**: it
@@ -1788,10 +1796,10 @@ so a new canvas function cannot ship without it.
 ### D7's rule is a BACKEND requirement before it is a UI one
 
 *"The editor must not offer a control that can spend money without showing the estimate first."*
-`jobEstimate` returns **four labelled lines** — clips, voice, captions, render — plus `totalCents`,
-`capCents` and `remainingCents`, so the UI can print *"6 clips $3.00 · voice $0.02 · captions $0.01 ·
-render $0.02 = $3.05"*. A single total is not enough: **the user must be able to see WHICH line is
-the expensive one before deciding to cut a block.**
+`jobEstimate` returns **four labelled lines** — clips, voice, captions, `render (incl. one retry)`
+— plus `totalCents`, `capCents` and `remainingCents`, so the UI can print *"6 clips $3.00 · voice
+$0.02 · captions $0.01 · render (incl. one retry) $0.04 = $3.07"*. A single total is not enough:
+**the user must be able to see WHICH line is the expensive one before deciding to cut a block.**
 
 It builds the SAME spec list `reserveJobInner` builds, from the same price table, including the 2×
 voice multiplier and the flat render constant. **`media.test.ts` asserts `jobEstimate.totalCents ===
