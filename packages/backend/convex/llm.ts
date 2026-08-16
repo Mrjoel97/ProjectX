@@ -2831,12 +2831,43 @@ export function buildCockpitTools(
         required: ["updates"],
         additionalProperties: false,
       }),
-      execute: async ({ updates }): Promise<string> => {
+      execute: async ({ updates }, { toolCallId }): Promise<string> => {
+        // 2026-08-16: a refusal below is a RETURNED SENTENCE, so `onToolExecutionEnd` sees a
+        // successful toolOutput and closes the step `phase: "done"` — which is exactly why a
+        // refused call and a satisfied one were byte-identical in `agentSteps`. `refused()` stamps
+        // the code-owned reason on THIS call's step row before returning the sentence.
+        //
+        // BEST-EFFORT BY DESIGN: the row exists only when the loop minted a turnId ("undefined ⇒
+        // the loop emits nothing"), and a diagnostic must never be able to fail a governed turn.
+        const refused = async (
+          refusal:
+            | "no_updates"
+            | "email_draft_present"
+            | "other_kind_staged"
+            | "unknown_field"
+            | "scorecard_field"
+            | "invalid_claim",
+          sentence: string,
+        ): Promise<string> => {
+          const turnId = agentContext?.rootRequestId;
+          if (turnId) {
+            await ctx.runMutation(internal.agentSteps.refuse, {
+              tenantId,
+              turnId,
+              stepKey: toolCallId,
+              refusal,
+            });
+          }
+          return sentence;
+        };
         // Every exit below is a RETURNED SENTENCE the model can act on, never a throw out of the
         // governed loop (18-06's rule) — including the ones that exist purely to catch a
         // malformed emission.
         if (updates.length === 0) {
-          return "There were no changes to stage, so nothing happened. Ask the user which figure moved.";
+          return refused(
+            "no_updates",
+            "There were no changes to stage, so nothing happened. Ask the user which figure moved.",
+          );
         }
         // One plan row per thread (`plans.by_thread` is `.unique()`), so staging finance onto a
         // half-composed email would turn the draft into a figure card and strand it. The
@@ -2848,17 +2879,18 @@ export function buildCockpitTools(
           plan.body ||
           (plan.attachments?.length ?? 0) > 0
         ) {
-          return (
+          return refused(
+            "email_draft_present",
             "There is an email draft on this conversation's plan card, and staging figure updates " +
-            "would replace it. Nothing was staged. Tell the user plainly, and offer to update " +
-            "their figures once the draft is sent or discarded."
+              "would replace it. Nothing was staged. Tell the user plainly, and offer to update " +
+              "their figures once the draft is sent or discarded.",
           );
         }
         // …and the check above cannot see another STAGED ACTION: a `crm_write` row carries
         // `crmOperations` and no subject/body. Shared with `stageCrmWrite` — the hazard is
         // symmetric and a one-sided fix is not one.
         const blocking = otherKindStaged(plan, "finance_write");
-        if (blocking) return otherKindRefusal(blocking);
+        if (blocking) return refused("other_kind_staged", otherKindRefusal(blocking));
         // §2-D: the trusted client's clock, never the model's. `Date.now()` is the SERVER's clock
         // (also not the model's) and is the right fallback here — unlike `setSendTime`, nothing on
         // this path parses a model-supplied date phrase, so there is no instant to get wrong.
@@ -2870,7 +2902,10 @@ export function buildCockpitTools(
           // name ("revenue", "burnRate") is the likeliest malformed emission from a model. This
           // guard is what turns that throw into a sentence.
           if (!CASH_INPUTS.some((s) => s.field === u.field)) {
-            return `"${u.field}" is not a figure I can update. Ask the user which one they mean.`;
+            return refused(
+              "unknown_field",
+              `"${u.field}" is not a figure I can update. Ask the user which one they mean.`,
+            );
           }
           // Fix round 2 (Task 5): this used to say the scorecard store cannot carry provenance and
           // `applyFinanceClaims` refuses every scorecard field unconditionally — both false since
@@ -2884,10 +2919,11 @@ export function buildCockpitTools(
           // writer of `financeClaims` (vault documents, connectors), still reaches `applyFinanceClaims`
           // directly and applies.
           if (cashInputSpec(u.field as CashInputField).store === "scorecard") {
-            return (
+            return refused(
+              "scorecard_field",
               `I cannot update ${u.field} — it is one the user has to enter themselves for now. ` +
-              `I can only update these five: ${AGENT_WRITABLE_FIGURES.join(", ")}. ` +
-              "Tell them they can set it on their finance page."
+                `I can only update these five: ${AGENT_WRITABLE_FIGURES.join(", ")}. ` +
+                "Tell them they can set it on their finance page.",
             );
           }
           // §4's refs-only rule is enforced in `validateFigureClaim` (@pikar/core) — the shared
@@ -2907,7 +2943,8 @@ export function buildCockpitTools(
             confidence: "high",
           };
           const check = validateFigureClaim(claim, nowMs);
-          if (!check.ok) return `I cannot stage ${u.field}: ${check.reason}`;
+          if (!check.ok)
+            return refused("invalid_claim", `I cannot stage ${u.field}: ${check.reason}`);
           claims.push(claim);
         }
         // `status: "proposed"` is not decoration: `executePlan`'s Approve gate is a CAS that

@@ -1,5 +1,25 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-16 (**`stageFinanceWrite` NOW RECORDS WHY IT REFUSED.** All six of its
+> exits — `no_updates`, `email_draft_present`, `other_kind_staged`, `unknown_field`,
+> `scorecard_field`, `invalid_claim` — stamp a code-owned literal on their own `agentSteps` row
+> before returning the same sentence they always returned. **No refusal text changed and no
+> behaviour changed**: the model sees byte-identical sentences, and the tool still returns rather
+> than throws (18-06). What changed is that a refused call is now distinguishable from a satisfied
+> one, which it was not before.
+>
+> The mechanism: `execute` takes the SDK's second argument (`{ toolCallId }`, which IS the
+> `stepKey` — `stepKey: toolCall.toolCallId`) and a local `refused(code, sentence)` helper patches
+> the row via `internal.agentSteps.refuse`, keyed on `agentContext.rootRequestId` (the turnId). No
+> turnId ⇒ no stamp, same sentence — a diagnostic must never fail a governed turn. This is the
+> FIRST tool to use `execute`'s second parameter; the shim at `llm.ts` already passed
+> `{ toolCallId: "cockpit", messages: [] }`, so the shape was proven before it was relied on.
+>
+> Full rationale, the closed-union §4 argument and the ponytail ceiling (these six exits only) are
+> in [[agent-runtime]]. `agentSteps.test.ts` gained four tests; cockpitTools 260/261 with the one
+> failure belonging to the concurrent lane's `dispatch.ts` audit-payload addition, not to this
+> change.)
+
 > Last verified: 2026-08-16 (**TEST-ONLY ADDITION TO A WATCHED FILE — NO COCKPIT BEHAVIOUR
 > CHANGED.** `convex/agentSteps.test.ts` gained three tests for the new `smoke:toolCallsForThread`
 > read, which returns the per-tool call breakdown for one thread so the eval harness can finally

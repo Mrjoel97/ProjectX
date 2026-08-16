@@ -267,21 +267,97 @@ describe("toolCallsForThread — which tools the AGENT called on this thread", (
     const t = convexTest(schema, modules);
     await step(t, { tool: "searchVault", stepKey: "call_a" });
     const seen = await calls(t);
-    expect(seen.searchVault).toBe(1);
-    expect(seen.stageFinanceWrite).toBeUndefined();
+    expect(seen.calls.searchVault).toBe(1);
+    expect(seen.calls.stageFinanceWrite).toBeUndefined();
   });
 
   test("the specialist's dispatch run does not inflate the agent's count", async () => {
     const t = convexTest(schema, modules);
     await step(t, { tool: "dispatchMedia", stepKey: "call_abc" });
     await step(t, { tool: "dispatchMedia", stepKey: "dispatch:root-1" });
-    expect((await calls(t)).dispatchMedia).toBe(1);
+    expect((await calls(t)).calls.dispatchMedia).toBe(1);
   });
 
   test("another thread's and another tenant's calls never leak in", async () => {
     const t = convexTest(schema, modules);
     await step(t, { tool: "searchVault", stepKey: "call_a", threadId: "other_thread" });
     await step(t, { tool: "searchVault", stepKey: "call_b", tenantId: OTHER });
-    expect(await calls(t)).toEqual({});
+    expect((await calls(t)).calls).toEqual({});
+  });
+});
+
+// ── The refusal code (2026-08-16) ─────────────────────────────────────────────────────────────
+//
+// A REFUSAL IS NOT AN ERROR, and that is why it was invisible. Every cockpit tool returns its
+// refusal as a SENTENCE the model can act on rather than throwing (18-06's rule), so
+// `onToolExecutionEnd` sees a successful `toolOutput` and closes the step `phase: "done"`. A
+// refused call and a satisfied one were byte-identical in this table.
+//
+// `toolCallsForThread` closed half the gap — it says a tool WAS called. This closes the other
+// half: WHICH refusal ended it. `stageFinanceWrite` on fixture 37 is the worked example; the
+// answer took a production archaeology dig that this field makes a one-line read.
+//
+// The code is a CLOSED UNION of code-owned literals, never a message. This table's §4 safety is
+// STRUCTURAL — there is no field that can hold text — and a free-form `reason` would have thrown
+// that away to save typing an enum.
+describe("the refusal code — a refused call is not an error, and must still be visible", () => {
+  const open = (t: T, stepKey: string) =>
+    t.mutation(internal.agentSteps.record, {
+      tenantId: TENANT,
+      threadId: THREAD,
+      turnId: TURN,
+      stepKey,
+      tool: "stageFinanceWrite",
+      startedAt: NOW,
+    });
+  const refuse = (t: T, stepKey: string, refusal: string, turnId = TURN) =>
+    // biome-ignore lint/suspicious/noExplicitAny: the closed refusal union is the schema's
+    t.mutation(internal.agentSteps.refuse, { tenantId: TENANT, turnId, stepKey, refusal } as any);
+  const read = (t: T) =>
+    t.query(internal.smoke.toolCallsForThread, { tenantId: TENANT, threadId: THREAD });
+
+  test("a refused call reports its code, and still counts as a call", async () => {
+    const t = convexTest(schema, modules);
+    await open(t, "call_a");
+    await refuse(t, "call_a", "invalid_claim");
+    const seen = await read(t);
+    expect(seen.calls.stageFinanceWrite).toBe(1);
+    expect(seen.refusals).toEqual([{ tool: "stageFinanceWrite", refusal: "invalid_claim" }]);
+  });
+
+  // The whole point: these two were indistinguishable before, and they mean opposite things.
+  test("a SATISFIED call reports no refusal — the two are distinguishable", async () => {
+    const t = convexTest(schema, modules);
+    await open(t, "call_a");
+    const seen = await read(t);
+    expect(seen.calls.stageFinanceWrite).toBe(1);
+    expect(seen.refusals).toEqual([]);
+  });
+
+  // `finish` runs AFTER the tool returns, so a patch that dropped the code would erase it in the
+  // one ordering that always happens in production.
+  test("finish does not erase the refusal it was recorded before", async () => {
+    const t = convexTest(schema, modules);
+    await open(t, "call_a");
+    await refuse(t, "call_a", "scorecard_field");
+    await t.mutation(internal.agentSteps.finish, {
+      tenantId: TENANT,
+      turnId: TURN,
+      stepKey: "call_a",
+      phase: "done",
+      endedAt: NOW + 5,
+    });
+    expect((await read(t)).refusals).toEqual([
+      { tool: "stageFinanceWrite", refusal: "scorecard_field" },
+    ]);
+  });
+
+  // Same no-op contract `finish` already holds: an out-of-order or duplicate call must not throw,
+  // because the SDK swallows callback exceptions and a throw would fail SILENTLY in production.
+  test("an unmatched step is a NO-OP, never a throw", async () => {
+    const t = convexTest(schema, modules);
+    await open(t, "call_a");
+    await expect(refuse(t, "no_such_step", "unknown_field")).resolves.not.toThrow();
+    expect((await read(t)).refusals).toEqual([]);
   });
 });

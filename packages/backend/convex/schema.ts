@@ -6,6 +6,25 @@ import { v } from "convex/values";
 // Compile-time proof the Convex bundler resolves source-export workspace packages.
 void CONTRACTS_PACKAGE_NAME;
 
+/**
+ * WHY a cockpit tool call ended without doing its work — see `agentSteps.refusal`.
+ *
+ * A CLOSED UNION of code-owned literals, never a message. `agentSteps`'s §4 safety is STRUCTURAL:
+ * the table has no field that can hold text, and a free-form `reason` would trade that away to
+ * save typing an enum. The model cannot influence these — each is a constant at one refusal site.
+ *
+ * Exported because the column is `v.optional(...)` while `agentSteps.refuse`'s argument is
+ * REQUIRED: one definition, two arities.
+ */
+export const AGENT_STEP_REFUSAL = v.union(
+  v.literal("no_updates"), // an empty updates[] — a malformed emission
+  v.literal("email_draft_present"), // an email draft holds the one plan row
+  v.literal("other_kind_staged"), // the cross-kind interlock
+  v.literal("unknown_field"), // a field outside CASH_INPUTS (a hallucinated name)
+  v.literal("scorecard_field"), // a scorecard-stored figure the agent may not write
+  v.literal("invalid_claim"), // validateFigureClaim said no (basis quoting, bounds, dates)
+);
+
 /** ONE deck element, shared by `plans.shots` and `plans.altShots` (33-02) — a single const so the
  *  two arrays can never drift apart field-by-field. `type` is a ShotType value; @pikar/core/storyboard
  *  owns the closed set. */
@@ -580,6 +599,14 @@ export default defineSchema({
     altShots: v.optional(v.array(shotElement)),
     /** The alternate deck's own declared length — swapped with `targetDurationSeconds`. */
     altTargetDurationSeconds: v.optional(v.number()),
+    /**
+     * 33-11: set when exactly ONE of two proposed variations was usable. The survivor is on
+     * `shots` with NO `altShots`, and this records which sibling was lost and why.
+     *
+     * It exists so the salvage can never be SILENT: the canvas is obliged to say "I could only
+     * build one of the two" in the user's words. Absent on an ordinary one- or two-deck proposal.
+     */
+    lostVariation: v.optional(v.object({ variation: v.string(), reason: v.string() })),
     /** Set when Generate first buys against the picked deck; `switchDeck` and `editBrief`
      *  refuse from then on (`deck_locked`) — post-Generate change is canvas-only, on the paid
      *  rail. */
@@ -1068,6 +1095,24 @@ export default defineSchema({
     // buildCockpitTools, written by the <=3 tools that KNOW a count (briefInbox/listInbox/
     // resolveContacts) — never parsed out of a tool's return string (§4).
     count: v.optional(v.number()),
+    // 2026-08-16: WHY a call ended without doing its work. A cockpit tool returns its refusal as a
+    // SENTENCE the model can act on rather than throwing (18-06's rule), so `onToolExecutionEnd`
+    // sees a successful toolOutput and closes the step `phase: "done"` — a refused call and a
+    // satisfied one were byte-identical here. That cost a production archaeology dig on fixture
+    // 37-finance-update to answer once.
+    //
+    // A CLOSED UNION of code-owned literals, never a message, for the same reason `tool` above is
+    // one: this table's §4 safety is STRUCTURAL — it has no field that can hold text — and a
+    // free-form `reason` would trade that away to save typing an enum. The model cannot influence
+    // these values; each is a constant at a specific refusal site.
+    //
+    // ponytail: the six `stageFinanceWrite` exits only, because that is the tool whose refusal was
+    // actually unanswerable. Every other tool adopts the same one-line `refuse()` call at its own
+    // exits when someone next needs to see one — no migration, the field is optional.
+    // Named export (below the schema) rather than inline, because `agentSteps.refuse` needs the
+    // union REQUIRED while the column is optional — one definition, two arities, no unwrapping of
+    // a `v.optional()` wrapper.
+    refusal: v.optional(AGENT_STEP_REFUSAL),
   })
     .index("by_turn", ["tenantId", "turnId"])
     // by_tenant is ["tenantId"] ALONE, and that is load-bearing. latestTurn finds the newest turn

@@ -775,17 +775,27 @@ export const driveReadCountForThread = internalQuery({
  */
 export const toolCallsForThread = internalQuery({
   args: { tenantId: v.string(), threadId: v.string() },
-  handler: async (ctx, { tenantId, threadId }): Promise<Record<string, number>> => {
+  handler: async (
+    ctx,
+    { tenantId, threadId },
+  ): Promise<{
+    calls: Record<string, number>;
+    refusals: Array<{ tool: string; refusal: string }>;
+  }> => {
     const rows = await ctx.db
       .query("agentSteps")
       .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
       .collect();
     const calls: Record<string, number> = {};
+    // One entry per REFUSED CALL, not per tool: two refused `stageFinanceWrite` calls with
+    // different codes are two facts, and collapsing them to a map would drop one.
+    const refusals: Array<{ tool: string; refusal: string }> = [];
     for (const row of rows) {
       if (row.threadId !== threadId || row.stepKey.startsWith("dispatch:")) continue;
       calls[row.tool] = (calls[row.tool] ?? 0) + 1;
+      if (row.refusal !== undefined) refusals.push({ tool: row.tool, refusal: row.refusal });
     }
-    return calls;
+    return { calls, refusals };
   },
 });
 

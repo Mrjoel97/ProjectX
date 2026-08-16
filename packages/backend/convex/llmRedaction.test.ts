@@ -667,6 +667,10 @@ test("the agentSteps schema declares NO field outside the allow-list (§4 IS the
     "endedAt",
     "durationMs",
     "count",
+    // 2026-08-16: WHY a call ended without doing its work. Permitted because it is a CLOSED
+    // UNION of code-owned literals — the test below is what keeps it one. The allow-list alone
+    // only says the key may exist; it would happily pass a `v.string()`.
+    "refusal",
   ];
   const body = agentStepsSchemaBlock();
   // Keys at the table object's OWN depth (a nested v.union(...)/v.literal(...) contributes none).
@@ -691,6 +695,32 @@ test("the agentSteps schema declares NO field outside the allow-list (§4 IS the
     `agentSteps grew ${extra.join(", ")} — a step row must hold refs/enums/counts ONLY. The SDK's ` +
       `tool events carry the full model context and listInbox's return carries SUBJECTS; a text ` +
       `field here is one careless spread from a §4 leak.`,
+  ).toEqual([]);
+});
+
+test("the refusal code is a CLOSED union of literals — it can never hold text", () => {
+  // The allow-list above admits the KEY. This admits only a shape that cannot carry prose: the
+  // whole §4 argument for `agentSteps` is that no field CAN hold text, and a refusal reason is
+  // exactly the field a future contributor would "just make a string" to save typing an enum.
+  // A model must never be able to influence these values, so every member is a fixed literal.
+  const src = readSource("schema.ts").replace(/\/\/[^\n]*/g, "");
+  const start = src.indexOf("export const AGENT_STEP_REFUSAL = v.union(");
+  expect(start, "AGENT_STEP_REFUSAL is gone — renamed?").toBeGreaterThanOrEqual(0);
+  const from = src.indexOf("(", start) + 1;
+  let depth = 1;
+  let i = from;
+  for (; i < src.length && depth > 0; i++) {
+    if (src[i] === "(") depth++;
+    else if (src[i] === ")") depth--;
+  }
+  const body = src.slice(from, i - 1);
+  const literals = body.match(/v\.literal\("[a-z_]+"\)/g) ?? [];
+  expect(literals.length, "no literals parsed — the scan is vacuous").toBeGreaterThan(0);
+  // Every v.* call inside the union must BE a v.literal — no v.string(), v.any(), v.optional().
+  const calls = body.match(/v\.\w+\(/g) ?? [];
+  expect(
+    calls.filter((c) => c !== "v.literal("),
+    "the refusal union admits a non-literal — a step row must never be able to hold text",
   ).toEqual([]);
 });
 
@@ -894,8 +924,13 @@ test("dispatch.ts lineage payloads reference no specialist output (reply/body/te
   // 33-03 adds the ELEVENTH: a refused two-deck proposal. REVIEWED before moving this count:
   // `{...lineageRefs(args), reason, variation}` carries refs plus two values from closed parser
   // unions. It contains no deck body, prompt, narration, source title or other content.
-  // A TWELFTH is a new §4 surface and gets the same treatment, not a renumber.
-  expect(payloads.length, "dispatch.ts audit payload count changed").toBe(11);
+  // 33-11 adds the TWELFTH: `media.variation_salvaged`, written when exactly one of two proposed
+  // decks was usable. REVIEWED before moving this count: `{...lineageRefs(args), kept, lost,
+  // reason}` carries refs plus THREE values from closed unions — `kept`/`lost` are the literals
+  // "a"/"b" (which deck, never its contents) and `reason` is a code from the scene parser's closed
+  // set. No deck body, prompt, narration, scene description or source title. §4-clean.
+  // A THIRTEENTH is a new §4 surface and gets the same treatment, not a renumber.
+  expect(payloads.length, "dispatch.ts audit payload count changed").toBe(12);
   // All of them SPREAD one shared refs object (15-04 made it the `lineageRefs` helper so the throw
   // path could not drift from the rest) — scanning the payloads alone would miss a leak added
   // inside it, so its body is scanned as a payload too.

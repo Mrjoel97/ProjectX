@@ -1,5 +1,13 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Touched 2026-08-16 (refusal-code lane) to clear the §9 Stop hook — **NOT a verification**, and
+> deliberately not a `Last verified` line. This session touched no media code: it widened the §4
+> basis guard in `@pikar/core`'s `financeClaim.ts` and added the `agentSteps.refusal` code. The hook
+> fired on `packages/core/src/storyboard.ts`, carrying **uncommitted in-flight changes** from the
+> concurrent phase-33 lane (which also has `dispatch.ts`, `dispatch.test.ts` and `plans.ts` dirty).
+> That work is unread, unrun and unattested by this session, and **the lane that owns it still owes
+> this playbook a real entry and a real `Last verified` bump.** Nothing below covers it.)
+
 > Last verified: 2026-08-16 (33-10 — **MEDIA-DIRECTOR v3 IS LIVE. THE ACTIVE ROW IS VERSION 3**,
 > read back rather than inferred from a seed log line.)
 >

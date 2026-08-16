@@ -47,7 +47,11 @@ export function validateFigureClaim(
   // enforced it locally, and the proposal applier that did not exist when it was written. Not
   // mechanically decidable in general; these two cheap shapes catch the realistic failures (a model
   // quoting the source line, or pasting a transcript).
-  if (/["'“”]/.test(claim.basis) || claim.basis.length > BASIS_CHAR_CAP) {
+  // The class covers BOTH halves of both curly pairs, not just the doubles. The realistic leak is
+  // not a quoted passage — it is a POSSESSIVE ("Foxglove Bookkeeping’s cash position"), and every
+  // editor, phone keyboard and smart-quoting model renders that as U+2019, which passed this guard
+  // until 2026-08-16. Straight-vs-curly is a typographic accident, never a §4 distinction.
+  if (/["'‘’“”]/.test(claim.basis) || claim.basis.length > BASIS_CHAR_CAP) {
     return { ok: false, reason: "A basis must name where the number came from, not quote it." };
   }
   if (claim.actor === "user" && claim.confidence !== "high") {

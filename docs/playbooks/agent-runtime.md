@@ -1,5 +1,49 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-08-16 (**THE REFUSAL CODE — "called and refused" now resolves to WHICH
+> refusal, without archaeology.** `toolCallsForThread` (entry below) closed half the blindness: it
+> says a tool WAS called. This closes the other half.
+>
+> **WHY IT WAS INVISIBLE, and it is a design consequence rather than an oversight.** A cockpit tool
+> returns its refusal as a SENTENCE the model can act on rather than throwing (18-06's rule), so
+> `onToolExecutionEnd` sees a successful `toolOutput` and closes the step `phase: "done"`. A refused
+> call and a satisfied one were BYTE-IDENTICAL in `agentSteps`. Answering it once, for one fixture,
+> took a production dig through plan rows, scorecard provenance and six candidate refusal paths.
+>
+> **`agentSteps.refusal`** — a CLOSED UNION of code-owned literals (`no_updates`,
+> `email_draft_present`, `other_kind_staged`, `unknown_field`, `scorecard_field`, `invalid_claim`),
+> exported from `schema.ts` as `AGENT_STEP_REFUSAL` because the column is `v.optional(...)` while
+> `agentSteps.refuse`'s argument is REQUIRED — one definition, two arities. **Never a message.**
+> This table's §4 safety is STRUCTURAL — no field can hold text — and a free-form `reason` would
+> have traded that away to save typing an enum.
+>
+> **`agentSteps.refuse` is SEPARATE from `finish` and must stay so.** `finish` is SDK-driven and
+> fires after `execute` returns, when the refusal is already indistinguishable. Only the tool knows,
+> so the tool stamps its own step row before returning. `finish` then patches
+> `phase`/`durationMs`/`endedAt` and leaves `refusal` alone — the ordering that always happens in
+> production, pinned by a test. Unmatched step = NO-OP, never a throw (`finish`'s contract, for
+> `finish`'s reason: the SDK swallows callback exceptions, so a throw fails SILENTLY in prod).
+>
+> **BEST-EFFORT BY DESIGN:** the stamp needs `agentContext.rootRequestId` (which IS the turnId — see
+> the `rootRequestId: turnId` call site). No turnId ⇒ no step rows exist at all ⇒ no stamp, same
+> sentence. A diagnostic must never be able to fail a governed turn.
+>
+> `toolCallsForThread` now returns `{ calls, refusals }` — one read answering "what happened on this
+> thread". `refusals` is one entry per REFUSED CALL, not per tool: two refused calls with different
+> codes are two facts and a map would drop one.
+>
+> **ponytail:** the six `stageFinanceWrite` exits ONLY, because that is the tool whose refusal was
+> actually unanswerable. Every other tool adopts the same one-line `refused()` call at its own exits
+> when someone next needs to see one — the field is optional, so no migration.
+>
+> **TDD, RED observed on all 7** (`no such export refuse`, and the `{calls, refusals}` shape). Then
+> the §4 static guard in `llmRedaction.test.ts` FAILED — correctly — with "agentSteps grew refusal";
+> it was widened to admit the key AND gained a NEW test asserting the union contains only
+> `v.literal(...)` members, because the allow-list alone would happily pass a `v.string()`. core
+> 1014/1014, backend agentSteps 20/20 + llmRedaction green, `tsc --noEmit` exit 0, biome findings
+> IDENTICAL to the HEAD baseline (2 noUnusedImports / 13 noNonNullAssertion / 1
+> noTemplateCurlyInString, all pre-existing — compared via `git show`, not assumed).)
+
 > Last verified: 2026-08-16 (**DEPLOYED TO PRODUCTION — and `toolCallsForThread`'s FIRST read
 > overturned this session's own conclusion within the hour. "NO TOOL WAS CALLED" WAS WRONG.**
 > `npx convex deploy` against `opulent-octopus-494` from a clean tree at `8a492fb`: "No indexes are

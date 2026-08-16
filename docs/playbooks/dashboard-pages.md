@@ -1,5 +1,22 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-16 (**THE §4 BASIS GUARD LEAKED TYPOGRAPHIC QUOTES, AND THE REALISTIC LEAK
+> IS A POSSESSIVE.** `validateFigureClaim` refuses a `basis` carrying quoted content — the string
+> reaches the audit log and the approval card, so "refs only, never quoted content" has to hold. The
+> character class was `/["'“”]/`: straight quotes and curly DOUBLE quotes, but NOT `‘` (U+2018) or
+> `’` (U+2019). Widened to `/["'‘’“”]/`.
+>
+> **This was not hypothetical.** A model naming its source writes "Foxglove Bookkeeping's cash
+> position", and every editor, phone keyboard and smart-quoting model renders that apostrophe as
+> U+2019 — which walked straight past a §4 control. It surfaced from production: eval fixture
+> `37-finance-update` used the STRAIGHT form (U+0027, verified by codepoint), so it was correctly
+> refused, and that refusal is the only reason the hole was visible at all. The curly twin would
+> have passed silently and written a quoted fragment to the audit log.
+>
+> Straight-vs-curly is a typographic accident, never a §4 distinction. RED observed first
+> ("expected true to be false" on the possessive), plus a second test for the OPENING `‘` so both
+> halves of the pair are pinned rather than just the one that showed up. core 1014/1014.)
+
 > Last verified: 2026-08-16 (**the erasure card is VERIFIED IN PRODUCTION, no longer "a built
 > surface".** A real user typed `DELETE MY DATA` on `/dashboard/settings` at pikar-ai.com and the
 > card drove live request `a73023088f58ea6e` to completion — 1,538 rows across 24 tables, per-provider

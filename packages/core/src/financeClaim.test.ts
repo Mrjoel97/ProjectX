@@ -76,6 +76,23 @@ test("curly quotes are refused too, not just straight ones", () => {
   expect(r.ok).toBe(false);
 });
 
+// 2026-08-16: the guard covered straight quotes and curly DOUBLE quotes but not curly SINGLES, and
+// the realistic leak is not a quoted passage — it is a POSSESSIVE. A model naming its source writes
+// "Foxglove Bookkeeping's cash position"; every editor, phone keyboard and model that smart-quotes
+// turns that into U+2019, which slid straight past a §4 control. Found from production: fixture
+// 37-finance-update's turn used the STRAIGHT form (U+0027) and was correctly refused, which is what
+// made the refusal visible at all — the curly twin would have passed silently.
+test("a typographic apostrophe is refused — the possessive is the realistic leak", () => {
+  const r = validateFigureClaim(claim({ basis: "Foxglove Bookkeeping’s cash position" }));
+  expect(r.ok).toBe(false);
+  if (!r.ok) expect(r.reason).toMatch(/not quote it/);
+});
+
+test("a curly OPENING single quote is refused — both halves of the pair, not just the closer", () => {
+  const r = validateFigureClaim(claim({ basis: "the ‘cash’ line, this turn" }));
+  expect(r.ok).toBe(false);
+});
+
 test("an ordinary ref-style basis still passes", () => {
   const r = validateFigureClaim(claim({ basis: "vaultDoc:abc123 p4" }));
   expect(r.ok).toBe(true);

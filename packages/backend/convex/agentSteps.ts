@@ -17,12 +17,14 @@
 import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
 import { tenantQuery } from "./lib/functions";
-import schema from "./schema";
+import schema, { AGENT_STEP_REFUSAL } from "./schema";
 
 // DERIVED from schema.ts — the single source of truth for the closed tool union (the briefings.ts
 // ITEMS precedent: a hand-copied validator is a duplicate that WILL drift, and a drifted literal
 // means a silently swallowed insert, since the SDK eats callback throws). ponytail rung 2.
 const TOOL = schema.tables.agentSteps.validator.fields.tool;
+/** The refusal union, REQUIRED here while the column is optional — one definition (schema.ts). */
+const REFUSAL = AGENT_STEP_REFUSAL;
 
 /**
  * A turn is bounded at <=9 rows by the loop's `stopWhen: stepCountIs(8)` (8 tool steps + the one
@@ -84,6 +86,39 @@ export const finish = internalMutation({
     const row = page.find((r) => r.stepKey === stepKey);
     if (!row) return; // no-op
     await ctx.db.patch(row._id, { phase, durationMs, endedAt });
+  },
+});
+
+/**
+ * Stamp WHY a call ended without doing its work.
+ *
+ * Separate from `finish` on purpose, and it must stay separate. `finish` is driven by the SDK's
+ * `onToolExecutionEnd`, which fires AFTER `execute` returns and cannot see the difference between
+ * a refusal sentence and a success sentence — that is exactly the blindness this closes. The tool
+ * itself is the only thing that knows, so the tool calls this at its own refusal exits, before it
+ * returns. `finish` then patches `phase`/`durationMs`/`endedAt` and leaves `refusal` alone, which
+ * is the ordering that always happens in production and is pinned by a test.
+ *
+ * An unmatched (tenantId, turnId, stepKey) is a NO-OP, not a throw — `finish`'s contract, for
+ * `finish`'s reason: the SDK swallows callback exceptions, so a throw here would fail SILENTLY in
+ * production while every unit test passed.
+ */
+export const refuse = internalMutation({
+  args: {
+    tenantId: v.string(),
+    turnId: v.string(),
+    stepKey: v.string(),
+    refusal: REFUSAL,
+  },
+  handler: async (ctx, { tenantId, turnId, stepKey, refusal }) => {
+    // Indexed + bounded, then found in JS — `finish`'s shape, never an un-indexed .filter.
+    const page = await ctx.db
+      .query("agentSteps")
+      .withIndex("by_turn", (q) => q.eq("tenantId", tenantId).eq("turnId", turnId))
+      .take(TURN_STEP_CAP);
+    const row = page.find((r) => r.stepKey === stepKey);
+    if (!row) return; // no-op
+    await ctx.db.patch(row._id, { refusal });
   },
 });
 
