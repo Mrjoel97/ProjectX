@@ -1,5 +1,22 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-16 (33-09 — `media-director` **v3 authored on disk, and NOT seeded**. The
+> `.md` under `packages/contracts/skills/` gained the guided-intake brief, two-variation and
+> citation contracts; `packages/contracts/src/skills/mediaDirector.ts` was regenerated in the SAME
+> commit, because the Convex runtime cannot `fs.read` repo files — the derived `.ts` is what ships
+> and `skillBodies.test.ts` holds the two byte-identical (LF-normalised). Regenerating it is a
+> throwaway `JSON.stringify` of the `.md` plus `biome check --write`; there is no committed
+> generator, which is exactly why the drift row exists.
+>
+> Two registry facts this exercised, both already documented below and both worth restating because
+> this body is where they bite hardest: `media-director` is DELIBERATELY UNGATED, so `seedSkills`
+> publishes at `maxVersion + 1` and it is ACTIVE with no eval between the prose and production —
+> its pre-live gate is a unit test (`storyboard.test.ts` parses the body's own worked answer, and
+> was mutation-checked three ways). And **on disk is not live**: this session ran no `seedSkills`,
+> inserted no candidate and moved no pointer, so every deployment still serves the v2 body. 33-10
+> owns the seed and the read-back — the version it lands at is not predictable from the plan, since
+> optimizer dry-run candidates occupy version numbers.)
+
 > Last verified: 2026-08-16 (**"v26 IS NOW ACTIVE" MEANS DEV ONLY. PRODUCTION STILL RUNS THE OLD
 > BODY, AND THE PRODUCTION CANDIDATE IS GATE-BLOCKED.** This qualifies — it does not retract — the
 > entry immediately below, every word of which is true of the dev deployment where it was measured.

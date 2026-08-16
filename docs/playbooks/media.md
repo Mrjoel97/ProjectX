@@ -1,5 +1,45 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-08-16 (33-09 — **MEDIA-DIRECTOR v3 IS AUTHORED AND PINNED, AND IS NOT LIVE.**
+> The body on disk now teaches the three phase-33 output contracts the parsers have been reading
+> since 33-01: a `BRIEF` echo at the top (topic and duration REQUIRED, the rest optional, and
+> `(defaulted)` on any value taken from the business profile rather than from what the user said —
+> the Phase-11 thin-profile rule, so nothing is invented for a sparse account); `VARIATION A` and
+> `VARIATION B`, each a WHOLE proposal with its own script, art direction, deck and prompts, both
+> running the brief's duration, and A the deck the owner sees picked; and a `Source:` line on every
+> scene that states a checkable fact — `<title> [doc:<id>]` from a document `searchVault` actually
+> returned, or `Source: unverified`, with creative copy carrying none.
+>
+> **The body deliberately teaches that the title it writes is a label, not THE label**: when the id
+> names a real document the owner is shown that vault row's own title (the fix landed between waves
+> 8 and 9, `d69fc29`). Teaching otherwise would invite a model to compose a source line for a UI
+> that was never going to render it.
+>
+> The two partial examples (a deck fragment in §3, a prompts fragment in §4) were replaced by ONE
+> worked answer at the end of the file, and that answer is what `storyboard.test.ts` parses — with
+> `parseVariations` first, exactly as `persistStoryboard` does, then every per-deck rule against
+> BOTH decks. Variation B going unchecked would have been the same hole one level up.
+>
+> **`media-director` is UNGATED** (`skillBodies.test.ts` pins that, and gating it would deadlock:
+> the golden runner drives `runCockpitAgent` over TEXT fixtures and cannot exercise a storyboard
+> turn). A seed publishes at `maxVersion + 1` straight to active — there is NO eval between this
+> body and what the specialist proposes — so the round trip is the only pre-live gate, and it was
+> mutation-checked three ways: the v2 body redded 17 of 99, dropping the one `Source: unverified`
+> line redded 1, and giving variation B a different `Target duration` redded 15.
+>
+> `packages/contracts/src/skills/mediaDirector.ts` was regenerated in the same commit. The Convex
+> runtime cannot `fs.read` repo files, so the derived `.ts` is what SHIPS and the `.md` is only what
+> a human edits; `skillBodies.test.ts` holds them byte-identical.
+>
+> **THE LIVE DEPLOYMENT STILL RUNS THE OLD BODY.** Nothing in this entry changes a single live
+> proposal. 33-10 owns seeding it and READING BACK the active version — optimizer dry-run
+> candidates occupy version numbers, so the version this body lands at is not predictable from the
+> plan (the skill-version-collision gotcha). Verified here: `@pikar/core` 1010 passed (39 files,
+> `storyboard.test.ts` 92 → 99), `packages/backend` `media.test.ts` + `dispatch.test.ts` 324 passed
+> | 24 skipped, `@pikar/contracts` `skillBodies.test.ts` 22 passed, `tsc --noEmit` clean in both
+> packages. No audit or log-plane site was added, so `llmRedaction.test.ts`'s media count pins are
+> untouched.)
+
 > Last verified: 2026-08-16 (phase 33, between waves 8 and 9 — **a VERIFIED citation's title now
 > comes off the vault row, never off the model**, `d69fc29`). `sceneCitations` returned
 > `title: s.source?.title` — the string the MODEL wrote into the shot element — beside `verified`,
