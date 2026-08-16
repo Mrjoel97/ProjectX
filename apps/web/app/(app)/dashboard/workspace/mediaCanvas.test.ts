@@ -203,4 +203,18 @@ describe("the vault picker offers only what the render will accept", () => {
     // A failed ingest has no bytes to render, so offering it would buy a refusal later.
     expect(isPickableVideo({ mimeType: "video/mp4", status: "failed" })).toBe(false);
   });
+
+  test("33-05: a SAVED REEL is pickable — the BYTES are video, whatever the row says", () => {
+    // The saved-reel shape: `mimeType` markdown (the searchable transcript row),
+    // `storedMimeType` the mp4 bytes. `(storedMimeType ?? mimeType)` is what the render serves.
+    expect(
+      isPickableVideo({ mimeType: "text/markdown", storedMimeType: "video/mp4", status: "processing" }),
+    ).toBe(true);
+    // A markdown doc with NO storedMimeType is still just a document — never offered.
+    expect(isPickableVideo({ mimeType: "text/markdown", status: "ready" })).toBe(false);
+    // A two-mime doc whose bytes are NOT video (the createDocument PDF shape) stays excluded.
+    expect(
+      isPickableVideo({ mimeType: "text/markdown", storedMimeType: "application/pdf", status: "ready" }),
+    ).toBe(false);
+  });
 });
