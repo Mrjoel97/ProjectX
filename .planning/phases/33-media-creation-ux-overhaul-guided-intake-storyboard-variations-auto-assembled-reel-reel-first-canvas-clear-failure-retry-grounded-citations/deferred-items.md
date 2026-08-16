@@ -1,5 +1,21 @@
 # Phase 33 — deferred items
 
+## ~~A cited document's TITLE is model-authored, even when `verified` is true~~ — CLOSED 2026-08-16, `d69fc29`
+
+**Status: FIXED between waves 8 and 9 by the phase orchestrator**, not deferred to 33-09/33-10.
+Neither remaining plan owns `media.ts` (33-09 is the skill body, 33-10 is the e2e gate), so the
+"owner: whoever next touches `sceneCitations`" below resolved to nobody and it would have escaped
+the phase. `sceneCitations` now returns the vault row's own `title` for a verified citation and
+keeps the model's string only where no owned document contradicts it. Two tests added (title comes
+from the row; renaming the doc renames the citation) — RED observed before the fix. The
+pre-existing assertion expected the model's string and so **enshrined the hole**; it was corrected
+with the reason recorded beside it. Full `media.test.ts` 237 passed, `llmRedaction` 60 passed,
+`tsc --noEmit` clean.
+
+Original write-up follows.
+
+---
+
 ## A cited document's TITLE is model-authored, even when `verified` is true (found in 33-08)
 
 `media.sceneCitations` returns `title: s.source?.title` — the title the MODEL wrote into the shot

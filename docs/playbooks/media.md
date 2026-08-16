@@ -1,5 +1,26 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-08-16 (phase 33, between waves 8 and 9 — **a VERIFIED citation's title now
+> comes off the vault row, never off the model**, `d69fc29`). `sceneCitations` returned
+> `title: s.source?.title` — the string the MODEL wrote into the shot element — beside `verified`,
+> which only ever answered "is this `docId` a document of this tenant's?". The two are
+> INDEPENDENT, so a model could cite a real, owned document under a fabricated name: `verified:
+> true`, genuine `docId`, invented label, and the canvas rendered the invented label as the source
+> of the figure. This is the provenance-laundering class one door past the figure gate — the FIGURE
+> is gated by `confirmClaim`, the SOURCE LABEL beside it was not.
+>
+> **The rule: a label the owner is asked to trust must come from the store, not from the text the
+> model emitted.** An UNVERIFIED row deliberately keeps the model's string — there is no owned row
+> to take a title from, and blanking it would hide WHAT was claimed from the owner being asked to
+> vouch for it. Renaming the vault document renames the citation.
+>
+> Found by plan 33-08 and written up as deferred; closed by the phase orchestrator instead, because
+> neither remaining plan owns `media.ts` and "whoever next touches `sceneCitations`" resolved to
+> nobody. **The pre-existing test asserted the model's string and so ENSHRINED the hole** — a
+> reminder that a green assertion can be the bug's best defence. Verified: `media.test.ts` 237
+> passed (2 new, RED observed first), `llmRedaction.test.ts` 60 passed (no log-plane site added),
+> `tsc --noEmit` clean.
+
 > Touched 2026-08-16 (eval-gate session) to clear the §9 Stop hook — **NOT a verification**, and
 > deliberately not a `Last verified` line. This session ran the golden eval gate and fixed
 > `evaluations.ts`; it touched NO media-watched path.
