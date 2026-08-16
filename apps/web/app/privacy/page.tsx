@@ -267,7 +267,8 @@ export default function Privacy() {
           requests do not pass through Vercel; we call each AI provider directly.
         </li>
         <li>
-          <strong>Amazon Web Services</strong> — immutable archival storage of the audit log.
+          <strong>Amazon Web Services</strong> — immutable archival storage of the audit log. This
+          export is built but not currently switched on, so no data reaches it today (section 9).
         </li>
         <li>
           <strong>Google</strong> — in two distinct roles. As your connected account provider:
@@ -314,8 +315,9 @@ export default function Privacy() {
       <p>
         Most of our providers are established in, or process data in, the United States.{" "}
         <strong>One is not:</strong> media generation on the WAN models is routed to Alibaba Cloud
-        Model Studio, whose endpoint we configure by region and which is located outside the United
-        States, in Asia-Pacific. This applies only if you ask Pikar to generate images or video.
+        Model Studio in <strong>Singapore</strong> (region <code>ap-southeast-1</code>). This
+        applies only if you ask Pikar to generate images or video; if you never do, no data reaches
+        it.
       </p>
       <p>
         Where personal data is transferred outside the UK or European Economic Area, we rely on the
@@ -332,11 +334,17 @@ export default function Privacy() {
         required by Article 12(3) GDPR.
       </p>
       <p>
-        Audit records are retained as an immutable compliance log. The application can only ever
-        append to it: there is no code path in Pikar that can modify or delete an audit record, by
-        design. Those records are additionally exported to write-once archival storage that{" "}
-        <strong>cannot be modified or deleted</strong>, including by us. That is the point of the
-        log: the system that writes it must not be able to rewrite it.
+        Audit records are retained as an immutable compliance log.{" "}
+        <strong>The application can only ever append to it:</strong> there is no code path in Pikar
+        that can modify or delete an audit record. That is the point of the log — the system that
+        writes it must not be able to rewrite it.
+      </p>
+      <p>
+        Export of those records to separate write-once archival storage, which not even we could
+        alter, is built but is <strong>not currently switched on in this deployment</strong>. Until
+        it is, the guarantee above is the application-level one: append-only by design, not yet
+        write-once at rest. We will update this section when the archive is enabled rather than
+        describe it in advance.
       </p>
       <p>
         For this reason the audit log is designed to hold{" "}
