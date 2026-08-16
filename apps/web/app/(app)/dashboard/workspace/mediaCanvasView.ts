@@ -238,6 +238,285 @@ export const VERDICT_COPY: Record<string, string> = {
   none_reported: "Not checked — this model reports no safety verdict",
 };
 
+// ── 33-06 — THE PIPELINE TRACKER AND THE HERO SLOT ─────────────────────────────────────────────
+//
+// **One layout for the whole lifecycle.** The hero slot exists from the moment a deck is picked; it
+// holds the tracker before the reel exists and the reel afterwards, so nothing on the canvas jumps
+// when a render lands. What goes in it is decided HERE, by `heroState`, because "which of five
+// states is this plan in" is precisely the kind of thing that can be wrong on a Tuesday.
+//
+// **NO POLLING, and the tracker is why that stays true.** A clip is 1–3 minutes and the render adds
+// 1–3 more, so the surface must show meaningful movement through several minutes of nothing
+// arriving. Every input below is already a reactive `tenantQuery` read (`byPlan`'s two job faces,
+// the plan row's `renderStatus`/`captionStatus`/`renderRetriedAt`) — Convex delivers the webhook's
+// mutation to an open canvas with no ticker at all. There is no clock in this module for the same
+// reason there is none in the component: a `setInterval` here would mean the bug is elsewhere.
+
+/** A stage's, or a scene row's, state. `skipped` is a first-class member and the one that matters:
+ *  a deck that buys no picture, or a silent scene, must not sit at "waiting" forever about a job
+ *  that will never be requested. */
+export type StageState = "pending" | "active" | "done" | "failed" | "skipped";
+
+/** One scene, as the tracker needs it — a structural subset of a `media.byPlan` row. The two job
+ *  faces stay SEPARATE fields because they are two providers' webhooks landing minutes apart, and a
+ *  scene whose voice is ready but whose picture is not must look different from the reverse. */
+export type TrackerScene = {
+  blockIndex: number;
+  visual: VisualKind | null;
+  narration: string;
+  clip: { status: string } | null;
+  voice: { status: string } | null;
+};
+
+export type TrackerStage = {
+  key: "generate" | "voice" | "assemble" | "captions";
+  label: string;
+  state: StageState;
+  detail: string;
+};
+
+export type TrackerRow = {
+  blockIndex: number;
+  label: string;
+  picture: { state: StageState; text: string };
+  voice: { state: StageState; text: string };
+};
+
+export type TrackerView = { stages: TrackerStage[]; scenes: TrackerRow[] };
+
+/** Does this scene BUY a picture? Only two of the four kinds do — a card is drawn by ffmpeg at
+ *  render time and an upload is the tenant's own file — which is what makes "skipped" a real state
+ *  rather than a rounding of "pending". A `null` visual is a block-contract row, and those always
+ *  bought one. */
+const buysPicture = (visual: VisualKind | null): boolean =>
+  visual === null || visual === "generated_video" || visual === "animated_image";
+
+/** One job face → its state. `null` is "not requested yet", not "missing": the reserve has not run.
+ *  A `queued` job HAS been reserved, so the stage it belongs to is genuinely underway. An unknown
+ *  provider status counts as active rather than as done — never a terminal we did not observe. */
+const faceState = (face: { status: string } | null): StageState =>
+  face === null
+    ? "pending"
+    : face.status === "succeeded"
+      ? "done"
+      : face.status === "failed" || face.status === "blocked"
+        ? "failed"
+        : "active";
+
+const FACE_TEXT: Record<StageState, string> = {
+  pending: "not started",
+  active: "working…",
+  done: "ready",
+  failed: "failed",
+  skipped: "nothing to buy",
+};
+
+/** Roll a column of per-scene states into its stage. Failure WINS — a stage with one refused scene
+ *  is not "still working", and saying so is what sends the user to the fix menu instead of to a
+ *  wait that will never end. An empty column is `skipped`, never `done`: nothing happened. */
+function rollUp(states: readonly StageState[]): StageState {
+  if (states.length === 0) return "skipped";
+  if (states.includes("failed")) return "failed";
+  if (states.every((s) => s === "done")) return "done";
+  if (states.some((s) => s === "done" || s === "active")) return "active";
+  return "pending";
+}
+
+/** `1 of 2 ready.` — the count, not the word. "Working…" through four minutes of a three-scene deck
+ *  tells a user nothing; "2 of 3 ready" tells them the thing is moving and roughly how far. */
+function countDetail(states: readonly StageState[], noun: string): string {
+  const done = states.filter((s) => s === "done").length;
+  const failed = states.filter((s) => s === "failed").length;
+  if (failed > 0) return `${failed} of ${states.length} failed — fix the ${noun} below.`;
+  if (done === states.length) return `All ${states.length} ready.`;
+  if (done === 0) return "Not started.";
+  return `${done} of ${states.length} ready.`;
+}
+
+const CAPTION_DETAIL: Record<string, { state: StageState; detail: string }> = {
+  pending: { state: "pending", detail: "Burned in once the reel is assembled." },
+  transcribing: { state: "active", detail: "Transcribing the narration…" },
+  burning: { state: "active", detail: "Burning the captions in…" },
+  captioned: { state: "done", detail: "Burned in." },
+  // 20-17's rule, said out loud: a caption failure NEVER unpublishes the reel.
+  failed: { state: "failed", detail: "The captions failed — the reel is published without them." },
+};
+
+/**
+ * THE FOUR-STAGE SPINE: generate → voice → assemble → captions.
+ *
+ * A fold over inputs that are all already on screen elsewhere, gathered into the one sentence a
+ * person waiting three minutes actually wants: which stage is this in, and how far through.
+ *
+ * `renderRetriedAt` is read for exactly one thing, and it is an honesty requirement rather than a
+ * decoration: 33-04 grants ONE automatic retry that leaves `renderStatus: "rendering"` standing, so
+ * without this the second sandbox is indistinguishable from the first taking a long time.
+ */
+export function trackerView(
+  scenes: readonly TrackerScene[],
+  renderStatus: string | null | undefined,
+  captionStatus: string | null | undefined,
+  renderRetriedAt: number | null | undefined,
+): TrackerView {
+  const noun = scenes.some((s) => s.visual !== null) ? "scene" : "block";
+
+  const pictureStates = scenes.filter((s) => buysPicture(s.visual)).map((s) => faceState(s.clip));
+  const voiceStates = scenes.filter((s) => s.narration.trim() !== "").map((s) => faceState(s.voice));
+
+  const generate = rollUp(pictureStates);
+  const voice = rollUp(voiceStates);
+
+  const assembleState: StageState =
+    renderStatus === "rendering"
+      ? "active"
+      : renderStatus === "rendered"
+        ? "done"
+        : renderStatus === "failed"
+          ? "failed"
+          : "pending";
+
+  // A deck with no narration is never transcribed — `maybeStartCaptions` never fires, so a
+  // `captionStatus` of `pending` on a silent deck means "never", not "soon".
+  const caption =
+    voiceStates.length === 0
+      ? { state: "skipped" as StageState, detail: "Silent reel — nothing to caption." }
+      : (CAPTION_DETAIL[captionStatus ?? "pending"] ?? {
+          state: "pending" as StageState,
+          detail: captionStatus ?? "Burned in once the reel is assembled.",
+        });
+
+  return {
+    stages: [
+      {
+        key: "generate",
+        label: "Pictures",
+        state: generate,
+        detail:
+          generate === "skipped"
+            ? `Nothing to generate — every ${noun} uses your own footage or a text card.`
+            : countDetail(pictureStates, noun),
+      },
+      {
+        key: "voice",
+        label: "Voice",
+        state: voice,
+        detail:
+          voice === "skipped"
+            ? "Silent reel — no narration to record."
+            : countDetail(voiceStates, noun),
+      },
+      {
+        key: "assemble",
+        label: "Assemble",
+        state: assembleState,
+        detail:
+          assembleState === "active"
+            ? renderRetriedAt
+              ? "Retrying the assembly — the first attempt failed. (usually 1–3 minutes)"
+              : "Assembling the reel… (usually 1–3 minutes)"
+            : assembleState === "done"
+              ? "Assembled."
+              : assembleState === "failed"
+                ? "The assembly failed."
+                : `Starts once every ${noun}'s picture and voice have landed.`,
+      },
+      { key: "captions", label: "Captions", state: caption.state, detail: caption.detail },
+    ],
+    scenes: scenes.map((s, i) => {
+      const picture: StageState = buysPicture(s.visual) ? faceState(s.clip) : "skipped";
+      const take: StageState = s.narration.trim() === "" ? "skipped" : faceState(s.voice);
+      return {
+        blockIndex: s.blockIndex,
+        label: `${noun === "scene" ? "Scene" : "Block"} ${i + 1}`,
+        picture: {
+          state: picture,
+          text: picture === "skipped" && s.visual !== null ? "nothing to buy" : FACE_TEXT[picture],
+        },
+        voice: { state: take, text: take === "skipped" ? "silent" : FACE_TEXT[take] },
+      };
+    }),
+  };
+}
+
+/** What the hero slot holds. A discriminated union rather than five booleans, because "playing the
+ *  old final AND showing the tracker" is a real state and two booleans would also permit three that
+ *  are not. */
+export type HeroState =
+  | { mode: "tracker"; reason: "never_built" | "out_of_date" }
+  /** The final plays. `regenerating` puts the tracker OVER it rather than instead of it — 33-05
+   *  holds the validated artifact triple through a re-render precisely so this is possible. */
+  | { mode: "video"; url: string; regenerating: boolean; note: string | null }
+  /** A hole in the deck. The cure is a per-scene fix (33-04's fix menu), never a retry. */
+  | { mode: "held"; sentence: string }
+  | { mode: "failed"; sentence: string };
+
+/** The failure codes that mean A SCENE NEVER LANDED — the reel is HELD rather than broken, and the
+ *  fix menu on the offending tile is what ends the hold (33-04's re-arm table). Every other code is
+ *  a render-side failure whose lever is Retry render. */
+const HELD_REASONS = new Set(["incomplete_batch", "not_all_succeeded", "incomplete_blocks"]);
+
+/**
+ * WHICH ONE THING THE HERO SHOWS.
+ *
+ * Two traps are preserved here because both are states a shipped canvas got wrong:
+ *
+ * 1. **Stale vs never-built are the SAME `renderStatus`.** Both are `pending`; only a landed asset
+ *    separates them, and "not assembled yet" on a stale reel is a lie the user can watch.
+ * 2. **`rendered` with NO url is a governed REFUSAL to publish, not a missing file.** `media.reel`
+ *    returns a url only when the assembly sidecar validated (D8), so this arm says so in words.
+ */
+export function heroState(
+  plan: { renderStatus?: string | null; renderReason?: string | null },
+  scenes: readonly TrackerScene[],
+  videoUrl: string | null | undefined,
+): HeroState {
+  const noun = scenes.some((s) => s.visual !== null) ? ("scene" as const) : ("block" as const);
+  const status = plan.renderStatus ?? null;
+  const reason = plan.renderReason ?? null;
+
+  if (videoUrl) {
+    // 33-05: the triple is HELD through a regenerate, so a url can arrive with any status. Only
+    // `rendered` means "this is the current one"; everything else is the PREVIOUS reel, and the
+    // note says which and why rather than letting it pass as current.
+    const note =
+      status === "rendered"
+        ? null
+        : status === "rendering"
+          ? "This is the previous reel — the new one is being assembled now."
+          : status === "failed"
+            ? `This is the previous reel. The new one could not be assembled${reason ? `: ${failureText(reason, noun)}` : "."}`
+            : `This is the previous reel — the ${noun}s have changed since it was assembled. Generate again to rebuild it.`;
+    return { mode: "video", url: videoUrl, regenerating: status === "rendering", note };
+  }
+
+  if (status === "rendered") {
+    return {
+      mode: "failed",
+      sentence:
+        "The render finished but did not produce a valid assembly record, so it was not published.",
+    };
+  }
+
+  if (status === "failed") {
+    const what = reason ? failureText(reason, noun) : null;
+    return reason !== null && HELD_REASONS.has(reason)
+      ? {
+          mode: "held",
+          sentence: `The reel is held: ${what}. Fix the ${noun} below and it picks up where it stopped.`,
+        }
+      : {
+          mode: "failed",
+          sentence: `The reel could not be assembled${what ? `: ${what}` : "."}`,
+        };
+  }
+
+  // `pending`, `rendering` with no url, or nothing requested at all — the tracker owns the slot.
+  const landed = scenes.some(
+    (s) => s.clip?.status === "succeeded" || s.voice?.status === "succeeded",
+  );
+  return { mode: "tracker", reason: landed && status === "pending" ? "out_of_date" : "never_built" };
+}
+
 /** Is this document usable as an `uploaded_video` scene's source? The SAME narrowing the render
  *  applies (`resolveRenderAsset` serves `video/*` only, and `batchToRender` refuses anything else),
  *  stated once here so the picker cannot offer a document the render would then reject.
