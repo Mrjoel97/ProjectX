@@ -761,13 +761,14 @@ export function briefChips(brief: Brief | null | undefined, deckLocked: boolean)
       marker: marked("durationSeconds") ? BRIEF_DEFAULTED_MARKER : null,
       editable,
       placeholder: "",
-      // On the chip when 60 is the ask, so it is read WITHOUT opening the control; on the option
-      // when it is not, so it is read before it is chosen.
+      // ONE carrier, never two. The note is on the CHIP when 60 is the current ask (read without
+      // opening anything) and on the OPTION when it is not (read before it is chosen) — so the
+      // component renders both slots unconditionally and the sentence still appears exactly once.
       note: brief.durationSeconds === 60 ? DURATION_COST_NOTE : null,
       options: TARGET_DURATIONS.map((seconds) => ({
         seconds,
         label: `${seconds}s`,
-        note: seconds === 60 ? DURATION_COST_NOTE : null,
+        note: seconds === 60 && seconds !== brief.durationSeconds ? DURATION_COST_NOTE : null,
         current: seconds === brief.durationSeconds,
       })),
     },
@@ -775,6 +776,24 @@ export function briefChips(brief: Brief | null | undefined, deckLocked: boolean)
     text("tone", false),
     text("brandVoice", false),
   ];
+}
+
+/** `editBrief`'s refusals, in words. Two of the three are unreachable from a correctly built chip
+ *  row — the row does not render without a brief, and the length control is built from
+ *  `TARGET_DURATIONS` — so this map is the fail-closed backstop rather than the expected path. It
+ *  lives here, not in the component, for the module's own rule: a sentence a user reads is a thing
+ *  that can be wrong without anyone clicking. */
+export function briefRefusalText(reason: string): string {
+  switch (reason) {
+    case "deck_locked":
+      return BRIEF_LOCKED_NOTE;
+    case "illegal_duration":
+      return `A reel is ${TARGET_DURATIONS.slice(0, -1).join(", ")} or ${TARGET_DURATIONS.at(-1)} seconds long — nothing between.`;
+    case "no_brief":
+      return "There's no brief on this plan yet, so there's nothing to edit here.";
+    default:
+      return "That change could not be saved. Nothing was altered.";
+  }
 }
 
 export const DECK_STALE_NOTE = "Brief changed — storyboards may be out of date.";

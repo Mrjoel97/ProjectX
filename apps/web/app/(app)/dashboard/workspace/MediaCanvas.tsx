@@ -6,6 +6,13 @@ import { useState } from "react";
 import { briefingSheet, capsTeal, snippetSheet, traceText, typeBadge } from "./cards";
 import {
   asVisualKind,
+  BRIEF_LOCKED_NOTE,
+  type Brief,
+  type BriefChip,
+  briefChips,
+  briefRefusalText,
+  DECK_STALE_NOTE,
+  deckStale,
   durationLabel,
   type EstimateView,
   estimateView,
@@ -17,10 +24,13 @@ import {
   KIND_LABEL,
   pictureLine,
   pricedAsLine,
+  REPROPOSE_LABEL,
+  REPROPOSE_MESSAGE,
   ribbonShares,
   STALE_CLIP_NOTE,
   STALE_VOICE_NOTE,
   type StageState,
+  type SummaryShot,
   type TrackerScene,
   type TrackerView,
   trackerView,
@@ -30,6 +40,7 @@ import {
   voiceLine,
   windowLabel,
 } from "./mediaCanvasView";
+import { useSendCockpitMessage } from "./useSendCockpitMessage";
 
 /**
  * THE MEDIA CANVAS (MEDIA-01, D7, plan 20-10) — a media plan, seen.
@@ -76,6 +87,14 @@ type MediaPlan = {
    *  reactive for the same reason everything else on this surface is. */
   captionStatus?: string | null;
   renderRetriedAt?: number | null;
+  /** 33-07, the BRIEF plane and the VARIATION plane. All five arrive on the same plan document
+   *  `plans.byThread` already returns — the chips row and the A/B region add no subscription. */
+  brief?: Brief | null;
+  briefChangedAt?: number | null;
+  deckProposedAt?: number | null;
+  shots?: SummaryShot[] | null;
+  altShots?: SummaryShot[] | null;
+  deckLockedAt?: number | null;
 };
 type ArtDirection = {
   palette: string[];
@@ -168,13 +187,19 @@ function TimelineRibbon({
   );
 }
 
-/** `threadId` is accepted and deliberately unused: it is part of the card contract every plan-kind
- *  branch in `cards.tsx` is called with, and the reel canvas self-queries from `plan._id`. */
-export function MediaCanvas({ plan }: { plan: MediaPlan; threadId?: string }) {
-  return plan.mediaMode === "image" ? <ImageCanvas plan={plan} /> : <ReelCanvas plan={plan} />;
+/** `threadId` is part of the card contract every plan-kind branch in `cards.tsx` is called with.
+ *  The canvas still self-queries everything it READS from `plan._id`; the thread is needed only by
+ *  33-07's re-propose button, which sends an ordinary chat message into THIS conversation rather
+ *  than minting a second one. */
+export function MediaCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) {
+  return plan.mediaMode === "image" ? (
+    <ImageCanvas plan={plan} />
+  ) : (
+    <ReelCanvas plan={plan} threadId={threadId} />
+  );
 }
 
-function ReelCanvas({ plan }: { plan: MediaPlan }) {
+function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) {
   const planId = plan._id as never;
   const blocks = useQuery(api.media.byPlan, { planId });
   const assets = useQuery(api.media.assetUrls, { planId });
@@ -249,6 +274,14 @@ function ReelCanvas({ plan }: { plan: MediaPlan }) {
   const vaultDocs = useQuery(api.vault.listVaultDocs, needsPicker ? {} : "skip");
   const videos = (vaultDocs ?? []).filter(isPickableVideo);
 
+  // ── THE BRIEF AND THE VARIATION PLANES (33-07) ─────────────────────────────────────────────
+  // Both fold off the plan document that is already here. `deckLockedAt` is the ONE input both
+  // read, and it is why the chips go read-only and the switcher disappears at the same instant
+  // Generate buys the deck.
+  const locked = plan.deckLockedAt !== undefined && plan.deckLockedAt !== null;
+  const chips = briefChips(plan.brief, locked);
+  const stale = deckStale(plan.briefChangedAt, plan.deckProposedAt);
+
   return (
     // flexShrink 0: this sheet is a flex item of the fixed-height .pane-canvas section, and
     // briefingSheet's overflow:hidden flips the flex min-height auto->0 — without this the pane
@@ -257,7 +290,11 @@ function ReelCanvas({ plan }: { plan: MediaPlan }) {
       style={{ ...briefingSheet, flexShrink: 0, padding: "1.15rem 1.25rem" }}
       data-testid="media-canvas"
     >
-      {/* HERO FIRST, and it is the same slot for the whole lifecycle — tracker, then reel, then
+      {/* THE BRIEF READS FIRST. Everything under it is an ANSWER to it, so a mis-parsed ask is
+          visible before a person spends time judging the storyboard that came out of it. */}
+      <BriefRow planId={planId} threadId={threadId} chips={chips} locked={locked} stale={stale} />
+
+      {/* HERO, and it is the same slot for the whole lifecycle — tracker, then reel, then
           both during a regenerate. Nothing below it moves when the render lands. */}
       <ReelHero hero={hero} tracker={tracker} reel={reel} noun={noun} />
 
@@ -303,6 +340,306 @@ function ReelCanvas({ plan }: { plan: MediaPlan }) {
       </div>
     </div>
   );
+}
+
+/** `media.editBrief`'s patch, structurally. Only the brief plane — the deck's own
+ *  `targetDurationSeconds` is the money contract and nothing here can reach it. */
+type BriefPatch = {
+  topic?: string;
+  durationSeconds?: number;
+  audience?: string;
+  tone?: string;
+  brandVoice?: string;
+};
+
+/**
+ * THE BRIEF ROW (33-07) — the chips, the stale badge, and the one free way back to a proposal.
+ *
+ * **Two surfaces, one brief.** The chat captured it; this is where it can be read back and
+ * corrected. It renders ABOVE the hero because everything below is an answer to it, and a
+ * mis-parsed ask is worth catching before a person spends attention judging the storyboard it
+ * produced.
+ *
+ * **NOTHING HERE AUTO-FIRES.** Editing a chip calls `editBrief` and stops — it never triggers a
+ * proposal, because a proposal is a model turn and a model turn is money. The badge plus the
+ * button are the entire affordance, and the button is a CLICK (D7's rule, verbatim).
+ *
+ * **The re-propose is an ORDINARY CHAT MESSAGE.** It goes through `useSendCockpitMessage` — the
+ * same hook `ChatPane`'s composer, `cards.tsx`'s regenerate and four other surfaces use — with a
+ * canned text and THIS thread's id. A second UI→dispatch entry point is the named anti-pattern
+ * here: it would be a second door into the agent loop with its own guardrail, spend and clock
+ * behaviour to keep in sync, and the hook exists precisely so a new caller cannot be born
+ * clockless. The turn lands in the transcript like any other, which is also why the canned text
+ * reads like something a person could have typed.
+ *
+ * Every string on this surface comes from `mediaCanvasView`; this function is markup and wiring.
+ */
+function BriefRow({
+  planId,
+  threadId,
+  chips,
+  locked,
+  stale,
+}: {
+  planId: never;
+  threadId?: string;
+  chips: BriefChip[];
+  locked: boolean;
+  stale: boolean;
+}) {
+  const editBrief = useMutation(api.media.editBrief);
+  const send = useSendCockpitMessage();
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+
+  async function commit(patch: BriefPatch) {
+    if (busy) return;
+    setBusy(true);
+    setNote(null);
+    try {
+      const res = await editBrief({ planId, patch });
+      if (res.ok) setEditing(null);
+      else setNote(briefRefusalText(res.reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // The canned turn. `threadId` is required, not optional-with-a-fallback: sending without one
+  // MINTS A NEW THREAD, which would move the conversation out from under the canvas the user is
+  // looking at. No thread, no button.
+  async function repropose() {
+    if (busy || !threadId) return;
+    setBusy(true);
+    setNote(null);
+    try {
+      await send({ threadId, text: REPROPOSE_MESSAGE });
+    } catch {
+      setNote("That couldn't be sent. Nothing was re-proposed — try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // No brief, no row. `briefChips` returns `[]` for the same reason `editBrief` refuses
+  // `no_brief`: a chip row over nothing would read a client-side default back as the user's ask.
+  if (chips.length === 0) return null;
+
+  return (
+    <div data-testid="media-brief" style={{ marginBottom: "0.2rem" }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: "0.6rem", flexWrap: "wrap" }}>
+        <p style={capsTeal}>Brief</p>
+        {locked && <span style={dimText}>Locked</span>}
+      </div>
+
+      <ul
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "0.5rem",
+          listStyle: "none",
+          margin: "0.55rem 0 0",
+          padding: 0,
+        }}
+      >
+        {chips.map((chip) => (
+          <li
+            key={chip.field}
+            style={{
+              border: "1px solid var(--rule)",
+              borderRadius: "0.5rem",
+              padding: "0.45rem 0.6rem",
+              background: "var(--card)",
+              minWidth: 0,
+              maxWidth: "100%",
+            }}
+          >
+            <p style={{ ...capsTeal, color: "var(--ink-soft)", fontSize: "0.6rem" }}>
+              {chip.label}
+              {/* REQUIRED is a WORD, never an asterisk and never colour (BRAND §6). Only two
+                  chips carry it — the other three are an idea-stage tenant's blanks, and
+                  Phase 11 admitted those users on purpose. */}
+              {chip.required ? " · required" : ""}
+            </p>
+
+            {chip.options.length > 0 ? (
+              /* THE LENGTH PRESET. A native `<fieldset>` (the platform's own grouping element,
+                 which is why biome refuses a `role="group"` div here) holding the same
+                 `aria-pressed` two-state buttons the workspace's canvas toggle uses: the pressed
+                 state is announced, and there is no free-entry field to type an unpriceable
+                 number into. Its chrome is reset — the chip is already the visible border. */
+              <fieldset
+                aria-label="Reel length"
+                style={{
+                  display: "flex",
+                  gap: "0.25rem",
+                  marginTop: "0.3rem",
+                  border: 0,
+                  padding: 0,
+                  margin: "0.3rem 0 0",
+                  minWidth: 0,
+                }}
+              >
+                {chip.options.map((option) => (
+                  <button
+                    key={option.seconds}
+                    type="button"
+                    aria-pressed={option.current}
+                    disabled={busy || !chip.editable}
+                    data-testid="brief-duration-option"
+                    onClick={() => void commit({ durationSeconds: option.seconds })}
+                    style={{
+                      ...ghostBtn,
+                      cursor: chip.editable ? "pointer" : "default",
+                      fontWeight: option.current ? 700 : 400,
+                      // Teal as a FILL with white text — never as small teal text (BRAND §6).
+                      background: option.current ? "var(--teal-600)" : "var(--paper)",
+                      color: option.current ? "#fff" : "var(--ink)",
+                    }}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </fieldset>
+            ) : editing === chip.field ? (
+              <div style={{ display: "flex", gap: "0.35rem", marginTop: "0.3rem" }}>
+                <input
+                  id={`brief-${chip.field}`}
+                  aria-label={chip.label}
+                  value={draft}
+                  placeholder={chip.placeholder}
+                  onChange={(e) => setDraft(e.target.value)}
+                  style={{
+                    fontSize: "0.82rem",
+                    padding: "0.25rem 0.4rem",
+                    borderRadius: "0.35rem",
+                    border: "1px solid var(--rule)",
+                    background: "var(--paper)",
+                    color: "var(--ink)",
+                    minWidth: "10rem",
+                  }}
+                />
+                <button
+                  type="button"
+                  disabled={busy}
+                  style={ghostBtn}
+                  onClick={() => void commit(briefPatch(chip.field, draft))}
+                >
+                  Save
+                </button>
+                <button type="button" style={ghostBtn} onClick={() => setEditing(null)}>
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={!chip.editable}
+                data-testid="brief-chip-edit"
+                aria-label={`Edit ${chip.label}`}
+                onClick={() => {
+                  setDraft(chip.value);
+                  setEditing(chip.field);
+                }}
+                style={{
+                  ...ghostBtn,
+                  marginTop: "0.3rem",
+                  border: "none",
+                  padding: "0.1rem 0",
+                  background: "transparent",
+                  cursor: chip.editable ? "pointer" : "default",
+                  textAlign: "left",
+                  maxWidth: "18rem",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  color: chip.value === "" ? "var(--ink-soft)" : "var(--ink)",
+                }}
+              >
+                {chip.value === "" ? chip.placeholder : chip.value}
+              </button>
+            )}
+
+            {/* THE DEFAULTED MARKER — the model's word, not the user's, said in words. Editing
+                the chip is what clears it (`editBrief` drops the field from `defaulted`). */}
+            {chip.marker && (
+              <p style={{ ...dimText, fontSize: "0.68rem", margin: "0.2rem 0 0" }}>{chip.marker}</p>
+            )}
+            {/* Cost discoverability, in the KIND_COST_NOTE idiom: on the chip when 60 s is the
+                current ask, on the option when it is not — so it is read either way, once. */}
+            {chip.note && (
+              <p style={{ ...dimText, fontSize: "0.68rem", margin: "0.2rem 0 0" }}>{chip.note}</p>
+            )}
+            {chip.options.map(
+              (option) =>
+                option.note && (
+                  <p
+                    key={option.seconds}
+                    style={{ ...dimText, fontSize: "0.68rem", margin: "0.2rem 0 0" }}
+                  >
+                    {option.note}
+                  </p>
+                ),
+            )}
+          </li>
+        ))}
+      </ul>
+
+      {locked && <p style={{ ...dimText, marginTop: "0.5rem" }}>{BRIEF_LOCKED_NOTE}</p>}
+
+      {/* THE STALE BADGE. It appears because a stamp moved, and it does exactly nothing else —
+          the button beside it is the only thing that spends. */}
+      {stale && !locked && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.6rem",
+            flexWrap: "wrap",
+            marginTop: "0.6rem",
+          }}
+          data-testid="media-brief-stale"
+        >
+          <span style={{ ...dimText, color: "var(--held-text)", fontWeight: 600 }}>
+            {DECK_STALE_NOTE}
+          </span>
+          <button
+            type="button"
+            disabled={busy || !threadId}
+            style={ghostBtn}
+            data-testid="media-repropose"
+            onClick={() => void repropose()}
+          >
+            {busy ? "Sending…" : REPROPOSE_LABEL}
+          </button>
+        </div>
+      )}
+
+      {note && (
+        <p
+          role="status"
+          style={{ ...dimText, marginTop: "0.5rem", color: "var(--held-text)", fontWeight: 600 }}
+        >
+          {note}
+        </p>
+      )}
+      <hr style={sectionRule} />
+    </div>
+  );
+}
+
+/** The four free-text brief fields → a typed patch. Spelt out rather than computed from the key
+ *  so the mutation's arg shape is checked at compile time instead of cast past. */
+function briefPatch(field: string, value: string): BriefPatch {
+  return field === "topic"
+    ? { topic: value }
+    : field === "audience"
+      ? { audience: value }
+      : field === "tone"
+        ? { tone: value }
+        : { brandVoice: value };
 }
 
 const IMAGE_STATUS: Record<string, string> = {

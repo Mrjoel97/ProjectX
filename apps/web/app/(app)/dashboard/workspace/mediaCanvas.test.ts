@@ -8,6 +8,7 @@ import {
   BRIEF_OPTIONAL_HINT,
   type Brief,
   briefChips,
+  briefRefusalText,
   DECK_STALE_NOTE,
   DURATION_COST_NOTE,
   deckStale,
@@ -675,11 +676,13 @@ describe("the brief chips are what was captured, and only two of them may block"
     // The two cheaper presets carry no note: a note on every option is a note on none.
     expect(options.find((o) => o.seconds === 15)?.note).toBeNull();
     expect(options.find((o) => o.seconds === 30)?.note).toBeNull();
-    // Picked → the note is on the chip itself, where it is read without opening the control.
-    expect(
-      chipFor(briefChips(aBrief({ durationSeconds: 60 }), false), "durationSeconds").note,
-    ).toBe(DURATION_COST_NOTE);
+    // Picked → the note MOVES to the chip itself, where it is read without opening the control.
+    const picked60 = chipFor(briefChips(aBrief({ durationSeconds: 60 }), false), "durationSeconds");
+    expect(picked60.note).toBe(DURATION_COST_NOTE);
     expect(chipFor(briefChips(aBrief(), false), "durationSeconds").note).toBeNull();
+    // ONE CARRIER, NEVER TWO: the component renders the chip note and the option notes in the
+    // same pass, so the sentence sitting in both slots at once would print it twice.
+    expect(picked60.options.find((o) => o.seconds === 60)?.note).toBeNull();
   });
 
   test("A LOCKED DECK MAKES EVERY CHIP READ-ONLY, and says why once", () => {
@@ -717,6 +720,18 @@ describe("the stale badge fires on the two stamps and nothing else", () => {
     expect(deckStale(2_000, undefined)).toBe(false);
     expect(deckStale(undefined, undefined)).toBe(false);
     expect(deckStale(null, null)).toBe(false);
+  });
+
+  test("editBrief's refusals have sentences — including the two a correct chip row cannot reach", () => {
+    expect(briefRefusalText("deck_locked")).toBe(BRIEF_LOCKED_NOTE);
+    // Unreachable from a preset control, which is the point — it is the fail-closed backstop, and
+    // it names the closed set rather than the code.
+    expect(briefRefusalText("illegal_duration")).toBe(
+      "A reel is 15, 30 or 60 seconds long — nothing between.",
+    );
+    expect(briefRefusalText("no_brief")).toMatch(/no brief on this plan/);
+    // An unrecognised reason must still say that NOTHING happened, never a bare "failed".
+    expect(briefRefusalText("something_new")).toMatch(/Nothing was altered/);
   });
 
   test("the badge names the drift and the button says the re-propose is FREE", () => {
