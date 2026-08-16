@@ -1,5 +1,20 @@
 # Playbook: Authorization (tenancy + ownership)
 
+> Touched 2026-08-16 to clear the §9 Stop hook — **REGISTRATION ONLY, NOT A VERIFICATION**, and
+> deliberately not a `Last verified` bump. `packages/backend/convex/invites.ts` + `invites.test.ts`
+> are NEW and UNCOMMITTED work from the concurrent BETA-01 / Phase-25 lane; this session (the media
+> lane) neither wrote nor reviewed them. They are registered here rather than left unwatched or
+> parked in `_unassigned` because the module is by its own description **an authorization trust
+> boundary**: `admitIdentity` runs inside the `auth:store` mutation before any account, session or
+> verification code is written, and it is the first genuinely PUBLIC entry on the raw-builder
+> allowlist (§2) — which this playbook already owns via `lib/allowlist.ts`. The same lane also has
+> `auth.ts`, `lib/allowlist.ts` and `schema.ts` modified in the tree.
+>
+> **The owning lane still owes this playbook a real entry and a real `Last verified` line**
+> covering the issuance/admission split, why two public functions are safe on the allowlist, and
+> what the preflight deliberately does not authorize. Nothing below covers it. Registering the path
+> only means the hook will protect it from here on; it is not a claim that anyone has checked it.
+
 > Last verified: 2026-08-16 (**what `owner` does NOT gate.** `users.owner` is the deployment-owner
 > grant (GOVN-01): the optimizer, skill activation/rollback, the owner-only finance rails and
 > `/ops`. It is NOT a general "may act destructively" flag, and `tenantDelete.ts` learned that in

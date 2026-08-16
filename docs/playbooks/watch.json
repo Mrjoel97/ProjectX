@@ -10,6 +10,8 @@
   "authorization.md": [
     "packages/backend/convex/lib/functions.ts",
     "packages/backend/convex/lib/allowlist.ts",
+    "packages/backend/convex/invites.ts",
+    "packages/backend/convex/invites.test.ts",
     "packages/backend/convex/owner.ts",
     "packages/backend/convex/owner.test.ts",
     "packages/backend/convex/tenant.test.ts",
