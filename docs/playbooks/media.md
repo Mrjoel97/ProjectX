@@ -30,6 +30,29 @@
 > pipeline this playbook documents, and the media/Drive sections of that body remain **dev-only** —
 > production was never activated. See `.planning/debug/finance-update-fails-only-in-full-sequence.md`.)
 
+> Last verified: 2026-08-16 (33-08 - **THE CITATIONS AND THE FAILURE CARDS - the canvas is now
+> complete.** Every cited scene shows its vault doc title, opening `PreviewModal` through
+> `cards.tsx`'s existing `VaultDocButton`; a `verified:false` source is plain text with NO link and
+> NO confirm button, because `confirmClaim` answers `not_a_claim` for a scene the parser never
+> flagged and the Generate gate keys on `needsConfirmation` alone - so "unverified" is a FOURTH
+> state rather than a rounding of "needs your confirmation". `citationView` computes the link ONCE
+> above every branch, so no arm can mint one from a foreign id. A flagged claim carries the badge
+> and the confirm click - the provenance front door - and `blockLine` counts them beside the
+> disabled button. `failureCards` renders four families through one card: per-scene, render (free
+> "Retry render"), HELD (no arm of its own; it points at the failed scene's card, because a retry
+> over a hole buys a second sandbox) and CAPTION (degraded deliverable, no re-burn mutation
+> exists). **The money is the point:** sunk = `actualCents` when a face landed and its `estUsd`
+> reservation when it failed (media unlanded is PERMANENT - the line says spent, never pending);
+> the retry price adds the estimate's OWN render line because `regenerateBlock` reserves one, and
+> with no estimate loaded it says so rather than understating. The two numbers are pinned to
+> DIFFERENT values and SWAP-TESTED BY TRANSPOSITION (`estUsd` <-> `actualCents`, which reddens 4
+> tests) rather than by deletion. A code is never prose: `failureClause` gives an unknown code a
+> generic sentence and every card prints the code once, in `.trace-line`, underneath.
+> `media.byPlan`'s `JobFace` gained `failureReason` so the code travels on the same face whose
+> status the card describes. Web `mediaCanvas.test.ts` 78 -> 101, apps/web 376 green,
+> `media.test.ts` + `llmRedaction.test.ts` + `importGuard.test.ts` 382 green, `tsc --noEmit` clean
+> in apps/web and packages/backend. NOT seen in a browser - 33-10 owns that gate.)
+
 > Last verified: 2026-08-16 (33-07 - **THE GUIDED-INTAKE CHIPS AND THE TWO-DECK SWITCHER, on the
 > canvas.** The brief now reads FIRST, above the hero: `briefChips(brief, deckLocked)` renders the
 > parsed ask as five editable chips, and it is the only place a mis-parse is visible before money
@@ -766,6 +789,54 @@ sites that read them:
   `asset.docId` precedent); a foreign, malformed or deleted id is `verified: false` — inert,
   never a clickable citation — and `normalizeId` failing closed makes garbage indistinguishable
   from a foreign id. Titles and ids only; no URL is minted (PreviewModal does its own access).
+
+### The Phase-33 citation and failure SURFACES (33-08)
+
+The canvas half of the two gates above. Everything here is derived in `mediaCanvasView.ts` and
+called by `mediaCanvas.test.ts`; `MediaCanvas.tsx` holds markup and event wiring only.
+
+- **`citationView(citations)` — a citation is a LINK only when `verified`.** Four states, and the
+  fourth is the one worth knowing: `cited` (verified doc → `link`), `confirmed`,
+  `needs_confirmation`, and **`unverified`** — a scene carrying a source the server could not
+  match to one of this tenant's documents. `unverified` is NOT rendered as "needs your
+  confirmation", because `confirmClaim` answers `not_a_claim` for a scene the parser never
+  flagged: a confirm button there could only ever refuse, and the Generate gate keys on
+  `needsConfirmation` alone, so calling it a block would also be false. The `link` is computed
+  ONCE, above every branch, so no arm can mint one from an unverified row. Click-through reuses
+  `cards.tsx`'s `VaultDocButton` (exported for this) → `api.vault.vaultDoc`, which answers `null`
+  for another tenant's id. `blockLine` ("Confirm N claims to enable Generate.") is the COUNT beside
+  the disabled button; `jobEstimate`'s `unconfirmed_claims` sentence remains the authoritative
+  refusal, since it names the first offending scene and this cannot.
+- **`failureCards(plan, scenes, estimate)` — four families, one card shape.** A per-scene card for
+  every failed/blocked face; a RENDER card (free "Retry render"); a HELD card for the
+  `HELD_REASONS` set, which carries **no arm of its own** and points at the failed scene's card
+  (a retry there buys a second sandbox over the same hole); and a CAPTION card, which is a
+  degraded-deliverable report with no arm because no re-burn mutation exists (20-17: a caption
+  failure never unpublishes the reel).
+- **THE MONEY RULES, and they are the reason this is a tested fold rather than JSX.**
+  - *Sunk* = `actualCents` when a face LANDED, its `estUsd` reservation when it FAILED —
+    `media.ts` says `actualCents` "stays absent if it failed", and `UNLANDED_RESOLVES.media` is
+    `false`, so that reservation is spent permanently. The line says **spent**, never "pending".
+  - *Retry adds* = this scene's own reserved lines PLUS the estimate's own `render (incl. one
+    retry)` line, because `regenerateBlock` reserves a render alongside the scene. With no
+    estimate loaded the label says `"…adds, plus the re-assembly"` rather than silently omitting
+    it — understating money is the one direction a price label may not err in.
+  - The two numbers are pinned to DIFFERENT values in the tests and **swap-tested by
+    transposition** (`estUsd` ↔ `actualCents`), not by deletion: a deleted value is absent and
+    almost any assertion notices, while a transposition keeps every number present under the wrong
+    label. The mutation reddens 4 tests.
+  - A kind switch is FREE and buys nothing; the cheaper picture is bought by the regenerate that
+    follows. `text_card` is the arm that can end a hold with no spend at all.
+- **A code is NEVER prose.** `failureClause` maps every code in the four closed vocabularies
+  (`STDERR_CODES`/`RenderRunnerCode`, `RenderRefusal` + trigger-side `incomplete_batch`,
+  `submit_canceled`/`submit_failed`, and the caption codes) to a sentence, and an unrecognised code
+  falls back to a GENERIC sentence — never to itself, which is what `failureText` still does for
+  the detail line. Every card renders its code once, in `.trace-line` (mono, dimmed), underneath.
+  No card model can contain a provider string: `mediaJobs.failureReason` and `plans.renderReason`
+  are CODE fields by schema contract (§4), and `failureReason` was added to `media.byPlan`'s
+  `JobFace` so the code travels on the SAME face whose `status` the card describes — `assetUrls`
+  carries it too, but returns every attempt, so on a regenerated scene the two can name different
+  rows.
 
 ## The scene-kind price table (20.2 wave 7) — ADR-019
 

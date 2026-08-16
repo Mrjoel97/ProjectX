@@ -1,5 +1,16 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-16 (33-08 — **NO NEW COCKPIT BEHAVIOUR; two workspace-watched files moved
+> and this records why neither is a cockpit change.** `cards.tsx` gained ONE keyword: its
+> `VaultDocButton` is now `export`ed so `MediaCanvas.tsx` can open a scene's citation through the
+> same `api.vault.vaultDoc` → `PreviewModal` path every other workspace card uses — a second copy
+> over there would have been a second place for that query's `null`-for-another-tenant answer to be
+> forgotten. `MediaCanvas.tsx` gained citation chips and failure cards, which are documented in
+> `media.md`; it added FOUR direct `useMutation` calls (`confirmClaim`, `setSceneVisual`,
+> `retryRender`, plus the existing `regenerateBlock`) and **no new UI→dispatch path** — 33-07's
+> single `useSendCockpitMessage` caller is still the only door from this canvas into the agent
+> loop. The flexShrink:0 fix on both canvas sheets is untouched.)
+
 > Last verified: 2026-08-16 (33-07 — **THE MEDIA CANVAS CAN NOW SPEAK INTO THE TRANSCRIPT.** The
 > cockpit-watched file here is `MediaCanvas.tsx`, and what 33-07 added to it is a UI→chat entry
 > point: the "Re-propose (free)" button sends ONE canned turn (`REPROPOSE_MESSAGE` — *"Re-propose
