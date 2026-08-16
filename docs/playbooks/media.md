@@ -13,6 +13,26 @@
 > `dispatch:` prefix fix really closed `420c852b`'s two-actor miscount. That says nothing about the
 > render pipeline this playbook documents.)
 
+> Last verified: 2026-08-16 (33-07 - **THE GUIDED-INTAKE CHIPS AND THE TWO-DECK SWITCHER, on the
+> canvas.** The brief now reads FIRST, above the hero: `briefChips(brief, deckLocked)` renders the
+> parsed ask as five editable chips, and it is the only place a mis-parse is visible before money
+> moves. **Only topic and length are required** - audience/tone/brandVoice are exactly the fields an
+> idea-stage tenant cannot fill (Phase 11's sparse start), so they render as empty-but-never-blocking
+> chips, and a `brief.defaulted` field carries a "from your profile" MARKER in words rather than
+> passing as the user's own. **Length is a native `<fieldset>` of `TARGET_DURATIONS` presets built
+> FROM the same constant `editBrief` validates against**, so `illegal_duration` is unreachable from
+> the control; 60 s carries its cost note on the option before it is chosen and on the chip once it
+> is, never both. **Nothing auto-fires:** a chip edit calls `editBrief` and stops, `deckStale`
+> (`briefChangedAt > deckProposedAt`, false whenever either stamp is absent) raises the badge, and
+> the free "Re-propose" button sends ONE canned message through `useSendCockpitMessage` into THIS
+> thread - the existing chat path, never a second UI->dispatch door. `variationView` puts the two
+> proposals side by side over ONE `deckSummary` fold (concept, scene count, `KIND_LABEL` mix,
+> summed duration), with `switchDeck` behind the switch; after Generate `deckLockedAt` makes every
+> chip read-only and removes the compare region entirely - absent, not greyed, because a greyed
+> switch can only ever answer `deck_locked`. Still NO logic in `MediaCanvas.tsx`. Web
+> `mediaCanvas.test.ts` 59 -> 78, `tsc --noEmit` clean in apps/web and packages/backend. NOT seen in
+> a browser - 33-10 owns that gate.)
+
 > Last verified: 2026-08-16 (33-06 — **THE REEL-FIRST CANVAS: hero on top, strip below, one layout
 > for the whole lifecycle.** The hero slot exists from the moment a deck is picked and never moves:
 > `trackerView` folds the four-stage spine (generate → voice → assemble → captions) out of reads
@@ -2152,6 +2172,108 @@ Every refusal NAMES THE LEVER rather than reporting a code: `over_job_cap` says 
 drop to 480p; `narration_too_long` names the block, its character count and the limit — **and the
 Edit-narration control is on that same tile**, because a refusal whose cure is three clicks away is
 a dead end.
+
+## The guided-intake chips and the two-deck switcher (33-07)
+
+Two surfaces, ONE brief. The chat captured it (33-01's parse, 33-02's `plans.brief` plane); the
+canvas is where it can be read back and corrected. The chips render **above the hero**, because
+everything below them is an answer to them - a mis-parsed ask is worth catching before a person
+spends attention judging the storyboard it produced, and long before a cent moves.
+
+Render order in `ReelCanvas` is now: `BriefRow` -> `VariationCompare` -> `ReelHero` -> `GenerateBar`
+-> `TimelineRibbon` -> art direction -> scene tiles. The ask, then the two candidate answers, then
+the chosen one.
+
+### The chip contract
+
+| Chip | Required | Control | Note |
+|---|---|---|---|
+| Topic | **yes** | free text | the one thing the reel cannot be proposed without |
+| Length | **yes** | preset, `TARGET_DURATIONS` only | 60 s carries its cost note |
+| Audience | no | free text | empty is a legal resting state |
+| Tone | no | free text | empty is a legal resting state |
+| Brand voice | no | free text | empty is a legal resting state |
+
+**Only two chips may block, and that is a Phase-11 obligation rather than a preference.** Phase 11
+deliberately admits idea-stage tenants whose profile carries nothing but a one-line description; a
+chip row that demanded an audience would re-gate exactly the users that phase let in. The three
+optional chips render empty with `BRIEF_OPTIONAL_HINT` and never stop anything.
+
+**A defaulted field is not the user's word and must say so.** `brief.defaulted` names the fields the
+model filled in; those chips carry `BRIEF_DEFAULTED_MARKER` ("from your profile") as TEXT - a word,
+not a colour (BRAND section 6). Editing such a chip is what clears the mark: `editBrief` drops every
+field named in the patch from `defaulted`, whatever value the user typed. Rendering a model-authored
+value identically to a stated one is the provenance-laundering shape this repo already has a defect
+class for.
+
+**Length is a preset, and free entry is structurally impossible.** The options are built FROM
+`TARGET_DURATIONS` - the same closed set `media.editBrief` validates against - so the control cannot
+produce the `illegal_duration` refusal at all. `briefRefusalText("illegal_duration")` still exists as
+the fail-closed backstop; it should never be seen. The control is a native `<fieldset>` of
+`aria-pressed` buttons (biome refuses a `role="group"` div where the platform has an element), and
+the pressed option is a `--teal-600` FILL with white text, never small teal text.
+
+**The 60 s cost note has ONE carrier.** It sits on the OPTION while 60 is not the current ask (read
+before it is chosen) and moves to the CHIP once it is (read without opening the control). The
+component renders both slots unconditionally, so a sentence living in both at once would print
+twice; `briefChips` is where that is prevented, and a test pins it. The note's multiple is of the
+FOOTAGE (60/15), which is arithmetic on the presets themselves - not a price claim - and it names the
+same stills-and-cards lever `KIND_COST_NOTE` and the clips line name.
+
+### Nothing on this surface auto-fires
+
+A chip edit calls `editBrief` and **stops**. It never triggers a proposal, because a proposal is a
+model turn and a model turn is money - D7's rule is that a spend follows a click, and there is no
+exception for a cheap one.
+
+What a divergence produces instead is the **stale badge**: `deckStale(briefChangedAt,
+deckProposedAt)` is true iff BOTH stamps exist and the brief moved last. Either stamp absent reads
+false, and both absences are real states - an unedited brief, and a brief with no deck proposed yet.
+Equal stamps are the propose-then-stamp case, not an edit.
+
+Beside the badge is **"Re-propose (free)"**, and it is the whole affordance. It sends ONE canned
+message (`REPROPOSE_MESSAGE`) through **`useSendCockpitMessage`** with THIS thread's id.
+
+> **A second UI->dispatch entry point is the named anti-pattern here.** It would be a second door
+> into the agent loop with its own guardrail, spend, audit and clock behaviour to keep in step with
+> the first. `useSendCockpitMessage` exists precisely because a caller once forgot the trusted clock
+> and made every dated tool unreachable from the product while the eval gate certified them green
+> (phase 19-12); six surfaces now go through that one hook and a new caller cannot be born
+> clockless. The canned text lands in the transcript like any typed message, which is also why it
+> reads like one a person could have written.
+
+`threadId` is required, not optional-with-a-fallback: sending without one MINTS A NEW THREAD, which
+would move the conversation out from under the canvas the user is looking at. No thread, no button.
+
+### The two decks, side by side
+
+`variationView(plan)` -> `{ hasAlternate, locked, canSwitch, picked, alternate }`. The picked deck is
+summarised here and drawn in full by the strip below; the alternate has only its card, because a
+second full storyboard would double the page for a deck the user is still deciding whether to read.
+
+**Both halves fold through ONE `deckSummary`** - opening concept, scene count, `KIND_LABEL` kind mix,
+and the SUMMED scene durations. Two folds is how a compare region ends up counting scenes on one
+side and shots on the other, or totalling real lengths against a declared target. The duration is
+deliberately the sum rather than `targetDurationSeconds`: a deck that does not add up to its declared
+length is exactly what someone comparing two proposals needs to see.
+
+Switching calls `media.switchDeck` and needs no estimate wiring - it swaps `plans.shots`, and
+`jobEstimate` prices whatever is in `shots`, so the `$X.XX` headline follows on its own
+subscription. Its two refusals reuse the rail's own sentences (`no_alternate`, `deck_locked`, added
+to `refusalText` at 33-06): one vocabulary for a refusal, wherever it is read.
+
+### After Generate, the switcher is ABSENT - not disabled
+
+`generateReel` clears `altShots` in the same patch that stamps `deckLockedAt`. `variationView`
+returns a null alternate for ANY locked plan regardless, and `briefChips` marks every chip
+`editable: false` off the same flag, so the chips and the switcher die at the same instant the deck
+is bought. **A greyed switch would be a control that can only ever answer `deck_locked`** - the
+canvas already knows that answer, so it does not offer the click. The locked row says so once, in
+`BRIEF_LOCKED_NOTE`.
+
+**No cross-deck scene mixing.** Deferred by decision: the per-scene editor already covers it by
+hand, and a merge UI would be a second deck model to keep consistent with the money path - which is
+the exact `decks[]`-with-a-`pickedIndex` shape 33-02 refused on the schema.
 
 ## The reel-first canvas (33-06) — one layout, the whole lifecycle
 
