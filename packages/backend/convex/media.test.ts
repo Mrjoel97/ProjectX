@@ -4289,6 +4289,158 @@ describe("D12(b) RETENTION: delete on success, KEEP on failure", () => {
   });
 });
 
+// ── 33-04: ONE automatic render retry (transient codes only) + the manual button ───────────────
+//
+// A narrow, documented supersession of 20-16's "a failed render does NOT retry": the retry fires
+// ONCE per plan, only on `TRANSIENT_RENDER_CODES`, guarded by the `renderRetriedAt` CAS inside
+// `recordRender` itself. Everything else — deterministic codes, or a plan that already used its
+// retry — takes the existing fail + dead-letter path byte-for-byte.
+
+describe("33-04: the one auto-retry CAS and the manual retryRender", () => {
+  /** A plan mid-render: batch fully landed and `markRendering` already ran. */
+  async function seedMidRender(t: T) {
+    const { planId, batchId } = await seedRenderable(t, { blocks: 2 });
+    await t.run(async (ctx) => await ctx.db.patch(planId, { renderStatus: "rendering" }));
+    return { planId, batchId };
+  }
+  const failWith = (t: T, planId: Id<"plans">, batchId: string, reason: string) =>
+    t.run((ctx) =>
+      ctx.runMutation(internal.render.renderReel.recordRender, {
+        tenantId: A,
+        planId,
+        batchId,
+        result: { ok: false, reason },
+      }),
+    );
+  const pendingRenders = async (t: T) =>
+    (await t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect())).filter(
+      (s) => s.state.kind === "pending" && String(s.name).includes("renderReel"),
+    );
+  const deadLetterRows = (t: T) => t.run((ctx) => ctx.db.query("deadLetters").collect());
+  const auditsOf = (t: T, eventType: string) =>
+    t.run((ctx) =>
+      ctx.db
+        .query("audit")
+        .filter((q) => q.eq(q.field("eventType"), eventType))
+        .collect(),
+    );
+
+  test("a TRANSIENT failure retries once: same batch rescheduled, no dead letter, status stays rendering", async () => {
+    const t = harness();
+    const { planId, batchId } = await seedMidRender(t);
+
+    await failWith(t, planId, batchId, "render_failed");
+
+    const plan = await planRowOf(t, planId);
+    expect(plan?.renderStatus).toBe("rendering"); // NOT failed — the canvas keeps saying "assembling"
+    expect(plan?.renderRetriedAt).toBeDefined(); // the CAS is set in the SAME mutation
+    expect(await deadLetterRows(t)).toHaveLength(0); // the retried attempt is not an operator page
+
+    const scheduled = await pendingRenders(t);
+    expect(scheduled).toHaveLength(1);
+    expect(scheduled[0]?.args?.[0]).toMatchObject({ tenantId: A, batchId }); // the SAME batch
+
+    // ONE audit row, refs/codes only (§4).
+    const audits = await auditsOf(t, "media.render_retried");
+    expect(audits).toHaveLength(1);
+    expect(audits[0]?.payload).toMatchObject({ planId, batchId, reasonCode: "render_failed" });
+    expect(JSON.stringify(audits[0]?.payload)).not.toMatch(/url|href|http|\.mp4|\.wav/i);
+  });
+
+  test("THE CAP, observed on the mutation: a second transient failure dead-letters exactly as before", async () => {
+    const t = harness();
+    const { planId, batchId } = await seedMidRender(t);
+
+    await failWith(t, planId, batchId, "render_failed"); // the retry
+    await failWith(t, planId, batchId, "render_failed"); // the retried attempt failing again
+
+    // A version of this code that retries twice leaves the plan at `rendering` with a second
+    // scheduled render and no dead letter — every assertion below goes red.
+    const plan = await planRowOf(t, planId);
+    expect(plan?.renderStatus).toBe("failed");
+    expect(plan?.renderReason).toBe("render_failed");
+    expect(await deadLetterRows(t)).toHaveLength(1); // ONE dead letter, from the SECOND failure only
+    expect(await pendingRenders(t)).toHaveLength(1); // still just the first retry — nothing new scheduled
+    expect(await auditsOf(t, "media.render_retried")).toHaveLength(1);
+
+    // …and from `failed`, the manual button works: the user decides to spend the third sandbox.
+    expect(await asA(t).mutation(api.media.retryRender, { planId })).toEqual({ ok: true });
+    expect((await planRowOf(t, planId))?.renderStatus).toBe("rendering");
+    expect((await planRowOf(t, planId))?.renderReason).toBeUndefined();
+    expect(await pendingRenders(t)).toHaveLength(2);
+    expect(await auditsOf(t, "media.render_retry_manual")).toHaveLength(1);
+  });
+
+  test("a DETERMINISTIC code never auto-retries — straight to the dead letter, retry marker untouched", async () => {
+    const t = harness();
+    const { planId, batchId } = await seedMidRender(t);
+
+    await failWith(t, planId, batchId, "duration_mismatch");
+
+    const plan = await planRowOf(t, planId);
+    expect(plan?.renderStatus).toBe("failed");
+    expect(plan?.renderReason).toBe("duration_mismatch");
+    expect(plan?.renderRetriedAt).toBeUndefined(); // the one retry is still unspent
+    expect(await deadLetterRows(t)).toHaveLength(1);
+    expect(await pendingRenders(t)).toHaveLength(0);
+    expect(await auditsOf(t, "media.render_retried")).toHaveLength(0);
+  });
+
+  test("retryRender is FAILED-only and needs a batch: not_failed / nothing_to_render refusals", async () => {
+    const t = harness();
+    // A rendering plan is not retryable — the button only exists on the failure card.
+    const { planId } = await seedMidRender(t);
+    expect(await asA(t).mutation(api.media.retryRender, { planId })).toEqual({
+      ok: false,
+      reason: "not_failed",
+    });
+
+    // A failed plan with NO mediaJobs rows has no batch to re-render.
+    const bare = await seedPlan(t, A);
+    await t.run(async (ctx) =>
+      ctx.db.patch(bare, { renderStatus: "failed", renderReason: "incomplete_batch" }),
+    );
+    expect(await asA(t).mutation(api.media.retryRender, { planId: bare })).toEqual({
+      ok: false,
+      reason: "nothing_to_render",
+    });
+    expect(await pendingRenders(t)).toHaveLength(0);
+  });
+
+  test("retryRender re-fires the LATEST batch when a regenerate minted a newer one", async () => {
+    const t = harness();
+    const { planId } = await seedRenderable(t, { blocks: 2 });
+    // A second, later batch for the same plan — the regenerate idiom.
+    await t.run(async (ctx) => {
+      await ctx.db.insert("mediaJobs", {
+        tenantId: A,
+        planId,
+        batchId: "batch_newer",
+        blockIndex: 0,
+        provider: "openai",
+        kind: "video",
+        model: MEDIA_DEFAULT_VIDEO.model,
+        spec: {
+          kind: "video",
+          resolution: MEDIA_DEFAULT_VIDEO.resolution,
+          seconds: MEDIA_DEFAULT_VIDEO.seconds,
+        },
+        promptHash: "d".repeat(64),
+        status: "succeeded",
+        estUsd: 0.4,
+        createdAt: Date.now() + 60_000,
+        updatedAt: Date.now() + 60_000,
+      });
+      await ctx.db.patch(planId, { renderStatus: "failed", renderReason: "render_failed" });
+    });
+
+    expect(await asA(t).mutation(api.media.retryRender, { planId })).toEqual({ ok: true });
+    const scheduled = await pendingRenders(t);
+    expect(scheduled).toHaveLength(1);
+    expect(scheduled[0]?.args?.[0]).toMatchObject({ tenantId: A, batchId: "batch_newer" });
+  });
+});
+
 // ── CAPTIONS: the transcript, the trigger, the burn and the narrowed retention (plan 20-17) ────
 //
 // Everything here runs offline at $0. `FAL_FIXTURE` covers the transcript submit and
