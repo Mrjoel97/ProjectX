@@ -1,5 +1,126 @@
 # Phase 25 prerequisite evidence
 
+## GATE RE-SCOPED — 2026-08-16, at owner direction
+
+**This section supersedes the Task 1 verdict below. Everything under "Gate status" and after is
+retained as the audit history that produced this decision, and its rows remain true as statements
+about those lanes — they are simply no longer all Phase 25 blockers.**
+
+Phase 25 was gated on effectively the whole v2.0 milestone (14, 15.3, 17, 17.1, 18, 19, 20, 20.1,
+21, 22.1, 23, 24, 26, 31). Two defects in that scoping were found while reviewing Phases 23 and 25
+for simultaneous execution:
+
+1. **A cycle.** Phase 23's first must-have truth blocks on GOVN-01 closure; GOVN-01's closure was
+   scheduled inside `25-02`; this plan blocked `25-02` behind Phase 23. The 2026-08-16 milestone
+   audit names it: *"Phase 23 depends on Phase 22 closure, while the old Phase 25 plan assigned that
+   closure behind Phase 23; Phase 22 must close independently."* **It has since closed
+   independently** — `22-VERIFICATION.md` `status: passed` 5/5, GOVN-01 Complete in REQUIREMENTS.md.
+   The cycle is broken; no further action is needed on it.
+2. **Two requirement lanes conflated.** Phases 23/24/26/31 carry SKILL-02, GOVN-02, product-page and
+   marketing scope that **no Phase 25 requirement consumes**. They share source files with Phase 25.
+   That is a working-tree sequencing problem, not a requirement dependency, and gating on it stalled
+   both lanes indefinitely.
+
+`25-00-PLAN.md` is amended accordingly. Tasks 2 and 3 are **unchanged** — the quiescent-baseline
+requirement, the foreign-lane stop rule, and the full Plan 01–13 structural + goal-backward
+re-verification all still stand.
+
+### Narrowed prerequisite matrix — derived per requirement
+
+| Phase 25 requirement | Lane it actually consumes | Evidence | Gate |
+| --- | --- | --- | --- |
+| BETA-01 — invite-only signup | Phase 22 `requireOwner` (admin/ops surface) | `22-VERIFICATION.md` `status: passed`, 5/5, 2026-08-15T22:02Z. Owner-wrapped at source: `optimizerConfig.ts:93`, `skills.ts:371`, `skills.ts:391`. `/ops` presentation half at `29103e9`. | **PASS.** |
+| BETA-02 / BETA-05 — cross-tenant isolation | Phase 22.1 table registry, export and erasure | GOVN-03 Complete 2026-08-16. Export `22.1-04`, erasure `22.1-05`, both live-proven on production SHA `1ca7c6f`. Erasure `a73023088f58ea6e`: 1,538 rows / 24 tables removed, `audit:countAudit` still **304** — §3 immutability proven on real data. | **PASS.** |
+| BETA-03 — first result via guided onboarding | Phase 11 + Phase 15.1 | Phase 11 complete/verified 2026-07-24 (sparse-start admission). Phase 15.1 `15.1-VERIFICATION.md` `passed`, ONBD-01/02 Complete. | **PASS — 15.1's `planned` VALIDATION is bookkeeping residue behind a passed verifier.** |
+| DLVR-02 — Outlook via the same adapter | 17-06's ONE shared Microsoft connection (ADR-018) | `17-06-SUMMARY.md` present; grant, callback and connect page live and browser-verified at `a36c641`, `72ff6bc`, `d783479`. `microsoftAuth.ts` holds one token store with `microsoftMailReady()` deriving mail readiness from granted scope. | **PASS. 17-07..17-11 are calendar MANAGEMENT (ACTN-02) and are not on the mail path.** |
+
+**Task 1 verdict under the narrowed scope: every consumed lane is closed.** The gate now turns on
+Task 2's baseline conditions, not on prerequisite completeness.
+
+### Excluded lanes — DEFERRED, NOT COMPLETE
+
+Recorded here so the narrowing can never be misread as closure:
+
+| Lane | Real status | Why excluded |
+| --- | --- | --- |
+| **Phase 23 — Agent-Authored Skills (SKILL-02)** | **BLOCKED, 9 plans unexecuted.** Its own `23-01` truth stops execution until Phase 21 has a validated `21-LIVE-RESULT` and SKILL-01 closure. Measured 2026-08-16: `21-06`/`21-07` have no SUMMARY, neither `21-LIVE-HANDOFF.json` nor `21-LIVE-RESULT.json` exists on disk, SKILL-01 `Pending`. | No Phase 25 requirement consumes SKILL-02. Shares nine files with Phase 25 — sequencing, not dependency. |
+| Phase 24 (GOVN-02), Phase 26, Phase 31 (MKTG-01..03) | Open. 24-02 unexecuted; 26 has 10 unexecuted plans; 31 has 8, zero SUMMARYs. | No Phase 25 requirement consumes them. The private-beta waitlist path lives on the existing signup page per `25-02`, so no marketing surface is required for admission. |
+| Phase 14, 15.2, 15.3, 17-07..17-11, 17.1, 18, 20, 20.1, 20.2 | Open — see the historical matrix below for each. | None is on an admission, isolation, onboarding or mail path. |
+| Phase 32 | Legally blocked; legal entity not started. | **Unchanged** — expressly off Phase 25's critical path per ADR-015. |
+
+### SUPERSEDED BY EVENTS — 25-01 LANDED WITHOUT THIS GATE (2026-08-16, same session)
+
+**Read this before treating anything below as the live sequencing rule.**
+
+While this re-scope was being written, a concurrent lane executed and committed Plan 25-01:
+
+- `a584793` — `feat(25-01): the beta admission trust boundary — nothing persists for an uninvited
+  identity` (adds `packages/backend/convex/invites.ts` + `invites.test.ts`, and amends
+  `schema.ts`, `auth.ts`, `lib/allowlist.ts`)
+- `c1877ce` — `chore(playbooks): register the BETA-01 invites module under authorization`
+
+**`.planning/phases/25-private-beta-productionization/` still contains NO `25-00-SUMMARY.md`.** The
+Task 1 and Task 3 checkpoints in `25-00-PLAN.md` are `checkpoint:human-verify` with
+`gate="blocking"`, and that plan's own `<done>` reads *"Owner types `approved` on the reconciled
+plan set; only this approval releases Plan 25-01."* No such approval is recorded anywhere in this
+directory.
+
+**So the ordering contract in `25-00-PLAN.md` is now factually contradicted by the repository.**
+This document does not resolve that, and MUST NOT be read as ratifying it. Two readings are
+available and only the owner can choose:
+
+1. **The gate is retroactively satisfied** — the narrowing above shows every consumed prerequisite
+   was in fact closed before `a584793` landed, so 25-01 ran against a genuinely clear board and the
+   missing artifact is bookkeeping. If so, `25-00-SUMMARY.md` must be written to say exactly that,
+   naming `a584793` as having preceded it.
+2. **The gate was skipped** — in which case 25-01's landed code has never been checked against
+   Task 2's baseline inventory (schema/wrapper-export/Gmail-caller/onboarding re-inventory) or
+   Task 3's plan-set re-verification, and that check is now owed retroactively.
+
+**Do not write `25-00-SUMMARY.md` from this file.** A summary asserting a blocking human approval
+that did not happen is the precise defect this document exists to prevent, and it would flip the
+mechanical PLAN↔SUMMARY scan to "closed" for a gate nobody cleared.
+
+### Blocking conditions that remain, and are NOT prerequisite completeness
+
+1. **The working tree is MOSTLY quiescent — the code half cleared mid-session.**
+   - *Measured 2026-08-16, earlier in the session, at HEAD `15ef427`:* a foreign lane held
+     uncommitted edits in `packages/backend/convex/schema.ts` (+37 lines, `AGENT_STEP_REFUSAL`),
+     `llm.ts`, `agentSteps.ts`, `packages/core/src/storyboard.ts`, `financeClaim.ts` and
+     `docs/playbooks/onboarding.md`. `schema.ts` is owned by `25-01`/`25-05`, `llm.ts` by `25-09`,
+     `onboarding.md` by `25-04`. Owner decision: **wait, do not absorb.**
+   - *Re-measured the same session at HEAD `1c5b6dc`:* **that lane committed.** Three commits landed
+     (`8eb0dd7` 33-11, `e831c73` docs(eval), `1c5b6dc` 33-12) and **every one of those source files
+     is now clean.** `25-01`'s and `25-09`'s file blocker is CLEARED without anything being stashed,
+     reset or absorbed — the wait was the correct call and it cost nothing.
+   - *Still held:* `docs/playbooks/onboarding.md` (+8 lines) carries an uncommitted CLAUDE.md §9
+     disclaimer from the same phase-33 lane. It is **documentation only, no code**, but the file is
+     owned by `25-04`. It is the one remaining foreign edit in a Phase 25 owned path.
+   - This is the fourth recorded instance of HEAD moving under an active session in this tree.
+     **Re-measure `git status` immediately before `25-01`, never trust an earlier reading.**
+2. **Task 1 and Task 3 remain blocking human checkpoints.** Only the owner releases `25-01`.
+
+### File-collision map — Phase 23 against Phase 25
+
+Both phases are live lanes in ONE working tree (there are no per-lane worktrees). If both are ever
+in flight, these are the collision points and they must be wave-sequenced, never concurrent:
+
+| File | Phase 23 plans | Phase 25 plans |
+| --- | --- | --- |
+| `packages/backend/convex/schema.ts` | 23-01, 23-03 | 25-01, 25-05 |
+| `packages/backend/convex/llm.ts` | 23-03 | 25-09 |
+| `apps/web/app/(app)/ops/page.tsx` | 23-05 | 25-02 |
+| `apps/web/app/(app)/dashboard/workspace/cards.tsx` | 23-03 | 25-04, 25-06 |
+| `docs/playbooks/cockpit.md` | 23-03, 23-05, 23-09 | 25-04..25-09, 25-13 |
+| `docs/playbooks/skill-registry.md` | 23-01, 23-02, 23-04, 23-05, 23-09 | 25-03 |
+| `docs/playbooks/authorization.md` | 23-05, 23-09 | 25-02, 25-03 |
+| `.planning/REQUIREMENTS.md`, `.planning/ROADMAP.md` | 23-09 | 25-13 |
+| `apps/web/playwright.config.ts`, `apps/web/e2e/auth.setup.ts` | 23-06 (rewrites both) | consumed by `admin.spec.ts`, `onboarding-first-send.spec.ts`, `mail-provider.spec.ts` |
+
+`23-06` rewriting the shared Playwright auth setup is the sharpest one: it introduces two controlled
+identities with separate gitignored storage states, which every Phase 25 authenticated spec then
+runs against. **Phase 23's `23-06` must not land mid-Phase-25.**
+
 ## Gate status
 
 - **Original audit point:** `aa5445bd9b7288b47f12b7c75607f064fee7be37` on 2026-08-10.
