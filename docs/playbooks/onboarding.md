@@ -1,6 +1,34 @@
 # Playbook: Persona Onboarding & Business Profile
 
-> Last verified: 2026-08-17 (25-04 — **the BETA-03 first-send offer, and a CORRECTION to the entry
+> Last verified: 2026-08-17 (owner-reported defect — **THE INTAKE MODALITIES NO LONGER VANISH AFTER
+> THE FIRST TYPED TURN.** Source + typecheck + `page.test.ts` (4/4); no live browser run.)
+>
+> **The defect, exactly.** The composer's control row was wrapped in `{!profile && (…)}`. The first
+> typed message ran `extractProfile` → `setProfile(p)`, so `profile` went non-null and React
+> unmounted the paperclip, the folder picker AND the mic. A user who typed a sentence before
+> attaching their business folder could then never attach it — the only surviving control was Send.
+> The guard was deliberate ("after that the conversation is typed, because it is a conversation"),
+> but it made the folder door unreachable for anyone who greeted the agent first, which is most
+> people. The row now renders on every turn of the conversation.
+>
+> **`openingTurn` IS GONE; the one entry point is `submitIntake(intakeText)`.** Unhiding the icons
+> alone would have been a data-loss bug, not a fix: every upload path (the `vaultDocText` poll
+> effect and `uploadFolder`) fed `openingTurn`, which re-runs `extractProfile` and restarts
+> `runTurn(text, seeded, [])` with an EMPTY history. A document handed over mid-conversation would
+> have overwritten the extracted narrative and discarded every fact already answered.
+> `submitIntake` branches on `profile`: absent → extract + open (step 2 + first pass of step 3,
+> unchanged); present → `runTurn(intakeText, slots, transcript)`, i.e. an ordinary user turn.
+> `onSend` routes through it too, so typed and uploaded intake cannot drift apart again. **Any new
+> intake modality must call `submitIntake` and nothing else.**
+>
+> **Unchanged and still binding:** the server still owns `missingSlots`/`done`; the page still never
+> picks the next question or renders a slot checklist; the folder door still passes no `folderId`
+> (see the 2026-08-14 entry — that limitation and both known folder defects stand); the
+> saveFacts→commitProfile ordering, the tier derivation and the "no tier control on this page" rule
+> are untouched. Two source-level regression tests in `page.test.ts` pin both halves: the control row
+> contains no `!profile &&` guard, and the poll effect dispatches `submitIntake`.
+>
+> Prior entry — 2026-08-17 (25-04 — **the BETA-03 first-send offer, and a CORRECTION to the entry
 > below it.**)
 >
 > **THE ENTRY IMMEDIATELY BELOW IS WRONG ON A FACT, and is left in place rather than deleted so the
