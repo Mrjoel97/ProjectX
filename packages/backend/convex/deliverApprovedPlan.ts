@@ -34,7 +34,10 @@ export const deliverApprovedPlan = workflow.define({
       if (!requestId || !correlationId) continue; // parallel arrays; guards noUncheckedIndexedAccess
       await step.runMutation(internal.pipeline.setStatus, { requestId, status: "delivering" });
       try {
-        const result = await step.runAction(internal.gmail.send, { requestId }); // workpool retries
+        // DLVR-02: routes on the row's `mailProvider` (absent ⇒ Google). Was
+        // `internal.gmail.send` until 25-05; the terminal handling below is unchanged because
+        // both arms return the same `suppressed`/reauth vocabulary.
+        const result = await step.runAction(internal.delivery.send, { requestId }); // workpool retries
         if (!result.delivered) {
           // 19-05: a suppression is PERMANENT, unlike awaiting_reauth (which resumes the moment the
           // user reconnects). Left on the bare `continue` below, the row would sit at `delivering`

@@ -103,6 +103,9 @@ export const submit = tenantMutation({
       recipient,
       status: "submitted",
       attachmentRefs: [],
+      // DLVR-02: this lane has no plan to inherit a provider from, so it states the default
+      // explicitly rather than relying on absence. See plans.insertPlan for why.
+      mailProvider: "google",
       createdAt: Date.now(),
     });
 

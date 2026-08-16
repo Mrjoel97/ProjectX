@@ -67,6 +67,11 @@ export const insertPlan = internalMutation({
       threadId,
       status: "collecting",
       recipients: [],
+      // DLVR-02: written EXPLICITLY at creation rather than left absent, even though absent means
+      // the same thing. A row whose provider is unset is indistinguishable from a pre-25-05 legacy
+      // row, and that ambiguity is what would make a later "which of these actually chose Google?"
+      // question unanswerable. 25-06 lets the user change it before approval.
+      mailProvider: "google",
       createdAt: Date.now(),
     }),
 });

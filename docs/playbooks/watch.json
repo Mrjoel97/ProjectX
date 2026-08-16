@@ -1,5 +1,7 @@
 {
-  "_unassigned": ["packages/backend/vitest.diag.setup.ts"],
+  "_unassigned": [
+    "packages/backend/vitest.diag.setup.ts"
+  ],
   "ci-gate.md": [
     ".github/workflows/ci.yml",
     "package.json",
@@ -171,7 +173,11 @@
     "packages/core/src/calendarManagement.test.ts",
     "packages/core/src/calendarManagement.ts",
     "scripts/run-calendar-test-gate.mjs",
-    "packages/backend/scripts/probe-gemini.mjs"
+    "packages/backend/scripts/probe-gemini.mjs",
+    "packages/backend/convex/graph.ts",
+    "packages/backend/convex/graph.test.ts",
+    "packages/backend/convex/delivery.ts",
+    "packages/backend/convex/requests.ts"
   ],
   "audit-dead-letter.md": [
     "packages/core/src/tenantData.ts",

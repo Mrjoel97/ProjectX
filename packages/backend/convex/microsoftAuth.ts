@@ -176,6 +176,26 @@ export const hasMicrosoftConnection = internalQuery({
 });
 
 /**
+ * The granted scope string, and nothing else. Never returns token material — same posture as
+ * `hasMicrosoftConnection` above, and the reason it is a separate query rather than `getTokens`:
+ * `graph.send` needs to know whether Mail.Send was granted, and handing a send adapter the refresh
+ * token to answer a capability question is how a credential ends up somewhere it did not need to be.
+ *
+ * `null` means no connection at all, which the caller must distinguish from "connected but
+ * Calendar-only" (ADR-018: one grant serves both, and 17-05-era grants predate Mail.Send).
+ */
+export const grantedScope = internalQuery({
+  args: { tenantId: v.string() },
+  handler: async (ctx, { tenantId }): Promise<string | null> =>
+    (
+      await ctx.db
+        .query("microsoftCalendarTokens")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+        .unique()
+    )?.scope ?? null,
+});
+
+/**
  * Persist a freshly-refreshed access token.
  *
  * `refreshToken` is OPTIONAL here for a reason specific to this provider: **Microsoft rotates

@@ -1042,6 +1042,12 @@ export const executePlan = tenantMutation({
         // seeded row (set at propose) so a feedback rating on this delivered response resolves to the
         // exact version that produced it. Optional → a plan with no skillVersion copies none.
         skillVersion: plan.skillVersion,
+        // DLVR-02: the plan's chosen mailbox rides onto every seeded row, exactly like
+        // skillVersion and the reply anchor above — the same Pitfall-4 shape, and the same
+        // consequence if it is ever dropped: `delivery.send` reads the REQUEST, not the plan, so a
+        // row that does not carry the provider silently delivers through Google no matter what the
+        // user picked. `?? "google"` covers a legacy plan row written before 25-05.
+        mailProvider: plan.mailProvider ?? "google",
         planId,
         createdAt: Date.now(),
       });

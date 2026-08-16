@@ -1,6 +1,53 @@
 # Playbook: Email Chat Cockpit
 
-> Last verified: 2026-08-16 (33-13 — **the cockpit's plan-kind switch gained ONE branch, and the
+> Last verified: 2026-08-16 (25-05 — **THE SEND PATH IS NOW TWO-ARMED. `internal.gmail.send` is no
+> longer what the production callers invoke; `internal.delivery.send` is.**)
+>
+> **The seam.** `delivery.ts` is a ~10-line dispatcher reading one field — `requests.mailProvider`
+> — and handing off to `internal.gmail.send` or `internal.graph.send`. Both production callers
+> (`deliverApprovedPlan.ts`, `pipeline.ts`) point at it. Their terminal handling is UNCHANGED,
+> because both arms return the same `suppressed`/reauth vocabulary.
+>
+> **ABSENCE MEANS GOOGLE, and that is the entire migration story.** `mailProvider` is optional on
+> both `plans` and `requests`. Every row written before 25-05 predates the second provider and was
+> a Gmail send, so legacy rows keep delivering with **no backfill, no index, and no discriminator
+> column on `gmailTokens`** — `gmailTokens` and `microsoftCalendarTokens` remain two separate
+> tenant-keyed tables (ADR-018; a discriminator would make every existing `by_tenant` `.unique()`
+> read ambiguous). Mutation-proven: flipping the default to Microsoft reddens the legacy test.
+>
+> **THE GOVERNANCE SPINE IS SHARED, ON PURPOSE.** `gmail.ts` now exports
+> `prepareGovernedMessage(ctx, req)` — suppression check, attachment resolution, CAN-SPAM footer,
+> `buildMime` — and BOTH arms call it. The footer is still concatenated at the `buildMime` call
+> site, which that function now is for both providers. **Two providers with two copies of an
+> unbypassable guard is how a bypass gets built**: the second copy drifts, or the third provider
+> only inherits one of them. `graph.test.ts` asserts BYTE PARITY — the two arms hand their provider
+> the identical MIME for the same row — and mutation-proving it (bypassing the shared prep) reddens
+> 4 tests including that one. `notifyExternal.ts` deliberately stays outside: it sends a static
+> service notice to the user's OWN mailbox, which carries no footer and has nobody to unsubscribe.
+>
+> **What is Microsoft-specific, and why each exists.** STANDARD base64, not URL-safe (the one
+> byte-level divergence, and a copy-paste of the Gmail arm is exactly how the wrong alphabet would
+> arrive). `text/plain` content type. A **scope check BEFORE the token round trip** —
+> `microsoftMailReady(scope)` via the new `microsoftAuth.grantedScope` internalQuery, which returns
+> the scope string and never token material — so a 17-05-era **calendar-only grant** is refused as
+> `mail_scope_missing` rather than surfacing as an opaque Graph 403 on the delivery path. A 3 MB
+> MIME ceiling. And **`messageId: ""`**: Graph's `sendMail` returns 202 with an EMPTY body, so
+> there is no id — the audit row records `{requestId, provider}` and fabricating an id would put a
+> lie in the log.
+>
+> **`graph.ts` NEVER refreshes or writes `microsoftCalendarTokens`.** `freshGraphToken` in
+> `microsoftCalendar.ts` is the one refresh root over that row. A second refresh path is a
+> rotation race: two concurrent refreshes POST the same refresh_token, Microsoft rotates it on the
+> first, and the second persists a token the provider has already invalidated.
+>
+> **OPEN, AND OWNED BY 25-06 — the reauth HOLD surface is still hardcoded Google.**
+> `ReconnectBanner.tsx` was generalized by 17-06 for the NOTIFICATION half only; its hold half
+> assumes `awaiting_reauth` means Gmail, and its in-source comment says so because no Microsoft
+> send path existed yet. **It does now.** A Microsoft send held at `awaiting_reauth` will currently
+> tell the user to reconnect *Gmail*. Not fixed here because `ReconnectBanner.tsx` is outside this
+> plan's owned files; recorded so 25-06 cannot miss it.
+>
+> Prior entry — 2026-08-16 (33-13 — **the cockpit's plan-kind switch gained ONE branch, and the
 > canvas gained a SECOND `useSendCockpitMessage` caller. Nothing else about the cockpit changed.**)
 >
 > `PlanCard` in `cards.tsx` now branches on `plan.proposalRefusal` **ahead of the memo card**: a

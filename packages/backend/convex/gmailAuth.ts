@@ -170,6 +170,16 @@ export const updateAccess = internalMutation({
  * derives tenantId from the caller's identity. The send action runs in the retrier's
  * system context (no identity), so it must read by explicit requestId.
  */
+/** DLVR-02: which mailbox this row goes out through. A tiny projection of its own rather than a
+ *  field on `getForDelivery`, so the dispatcher can route WITHOUT resolving attachments, storage
+ *  refs and the reply anchor for a decision that needs none of them. `null` for a missing row and
+ *  for a legacy row that predates the field — both mean Google to the caller. */
+export const mailProviderFor = internalQuery({
+  args: { requestId: v.id("requests") },
+  handler: async (ctx, { requestId }): Promise<"google" | "microsoft" | null> =>
+    (await ctx.db.get(requestId))?.mailProvider ?? null,
+});
+
 export const getForDelivery = internalQuery({
   args: { requestId: v.id("requests") },
   handler: async (ctx, { requestId }) => {

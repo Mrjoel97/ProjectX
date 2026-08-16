@@ -346,6 +346,21 @@ export default defineSchema({
     // feedback rating is attributable to the exact skill version that produced this response.
     // Optional → no migration (the threadId/inReplyTo copy precedent).
     skillVersion: v.optional(v.number()),
+    /**
+     * DLVR-02: which mailbox delivers this row. Copied from the plan at executePlan, exactly like
+     * `skillVersion` above.
+     *
+     * OPTIONAL, AND ABSENCE MEANS GOOGLE. That is what makes this a widening with no migration and
+     * no backfill: every row written before 25-05 predates the second provider, and every one of
+     * them was a Gmail send. `delivery.send` reads `mailProvider ?? "google"` and legacy rows keep
+     * delivering unchanged.
+     *
+     * NOTE this is NOT a discriminator on the token tables — `gmailTokens` and
+     * `microsoftCalendarTokens` stay two separate tenant-keyed tables (see the note beside them,
+     * and ADR-018). This field says which mailbox a MESSAGE goes out through, nothing about
+     * credentials.
+     */
+    mailProvider: v.optional(v.union(v.literal("google"), v.literal("microsoft"))),
     createdAt: v.number(),
   })
     .index("by_tenant", ["tenantId"])
@@ -771,6 +786,9 @@ export default defineSchema({
     // skill that drafted this plan, then copied onto the per-recipient `requests` rows at
     // executePlan. Optional → no migration (the sendAt/attachments precedent).
     skillVersion: v.optional(v.number()),
+    /** DLVR-02: the mailbox this plan will send through, chosen before approval and copied onto
+     *  every per-recipient `requests` row at executePlan. Optional; absence means Google. */
+    mailProvider: v.optional(v.union(v.literal("google"), v.literal("microsoft"))),
     correlationId: v.optional(v.string()), // set on executePlan (not the per-recipient cids)
     workflowId: v.optional(v.string()), // set on executePlan
     createdAt: v.number(),
