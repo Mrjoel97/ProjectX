@@ -688,7 +688,11 @@ export async function saveReelToVault(
   // `processing` row) — exactly as persistFindings does. Skipped for a silent deck: there is no
   // text to embed and the row already says so.
   if (status === "processing") {
-    await startIngest(ctx, { vaultDocId: docId, tenantId: a.tenantId, correlationId: a.correlationId });
+    await startIngest(ctx, {
+      vaultDocId: docId,
+      tenantId: a.tenantId,
+      correlationId: a.correlationId,
+    });
   }
   // Refs and counts ONLY (§4) — no title, no transcript, no citation text.
   await ctx.runMutation(internal.audit.log, {

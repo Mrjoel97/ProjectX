@@ -113,12 +113,7 @@ describe("tenant data deletion pages", () => {
 
     expect(first.deleted).toBeLessThanOrEqual(2);
     expect(first.nextCursor).not.toBeNull();
-    const resumed = await deleteAll(
-      t,
-      String(tenantA),
-      tenantA,
-      first.nextCursor ?? undefined,
-    );
+    const resumed = await deleteAll(t, String(tenantA), tenantA, first.nextCursor ?? undefined);
     expect(Object.values(resumed).every((count) => count <= 5)).toBe(true);
 
     await t.run(async (ctx) => {
@@ -157,9 +152,11 @@ describe("tenant data deletion pages", () => {
     const counts = await deleteAll(t, String(userId), userId);
 
     expect(counts.users).toBe(1);
-    expect(Object.entries(counts).filter(([table]) => table !== "users").every(([, n]) => n === 0)).toBe(
-      true,
-    );
+    expect(
+      Object.entries(counts)
+        .filter(([table]) => table !== "users")
+        .every(([, n]) => n === 0),
+    ).toBe(true);
   });
 });
 
@@ -183,7 +180,10 @@ describe("tenant deletion provider truth", () => {
         updatedAt: 1,
       });
     });
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 200 })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(null, { status: 200 })),
+    );
 
     const result = await t
       .withIdentity({ subject: `${tenantA}|delete-session` })
@@ -242,7 +242,10 @@ describe("tenant deletion provider truth", () => {
         updatedAt: 1,
       });
     });
-    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new Error("provider token leak"))));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Promise.reject(new Error("provider token leak"))),
+    );
 
     const result = await t
       .withIdentity({ subject: `${tenantA}|delete-session` })

@@ -96,9 +96,7 @@ test("cockpit Drive reads traverse the authenticated boundary and return metadat
   expect(listed).toContain("Forecast.txt [id: file-1; readable]");
 
   const found = await callDriveTool(t, planId, "findInDrive", { query: "forecast" });
-  expect(found).toBe(
-    "Drive search found 1 item(s): Forecast.txt (file, readable) [id: file-1].",
-  );
+  expect(found).toBe("Drive search found 1 item(s): Forecast.txt (file, readable) [id: file-1].");
   expect(fetchSpy).toHaveBeenCalledTimes(4);
   expect(await t.run((ctx) => ctx.db.query("vaultFolders").collect())).toEqual([]);
   expect(await t.run((ctx) => ctx.db.query("vaultDocuments").collect())).toEqual([]);
@@ -131,15 +129,18 @@ test("cockpit Drive reads translate connection and reference refusals honestly",
 
   {
     const { t, planId } = await setup();
-    expect(
-      await callDriveTool(t, planId, "listDriveFolders", { parentId: "bad'id" }),
-    ).toMatch(/folder reference is invalid/i);
+    expect(await callDriveTool(t, planId, "listDriveFolders", { parentId: "bad'id" })).toMatch(
+      /folder reference is invalid/i,
+    );
   }
 
   {
     const { t, planId } = await setup();
     await seedGrant(t, FULL_SCOPE, 0);
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("refresh failed", { status: 500 })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("refresh failed", { status: 500 })),
+    );
     expect(await callDriveTool(t, planId, "findInDrive", { query: "forecast" })).toMatch(
       /connection could not be refreshed.*reconnect/i,
     );

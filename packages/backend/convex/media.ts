@@ -2562,7 +2562,8 @@ export const retryRender = tenantMutation({
   args: { planId: v.id("plans") },
   handler: async (ctx, { planId }) => {
     const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
-    if (plan.renderStatus !== "failed") return { ok: false as const, reason: "not_failed" as const };
+    if (plan.renderStatus !== "failed")
+      return { ok: false as const, reason: "not_failed" as const };
     // The LATEST batch is the one whose landings describe the current deck — `batchToRender` reads
     // inputs off the whole plan anyway, so the batch is only the trigger handle here.
     const rows = await ctx.db

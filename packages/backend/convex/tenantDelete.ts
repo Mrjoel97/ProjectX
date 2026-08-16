@@ -76,7 +76,10 @@ export const deleteTenantDataPage = internalMutation({
       }),
     ),
   },
-  handler: async (ctx, args): Promise<{
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{
     table: DeletableTenantTable;
     deleted: number;
     nextCursor: TenantDeletionCursor | null;
@@ -115,7 +118,11 @@ export const deleteTenantDataPage = internalMutation({
         }
         await ctx.db.delete(user._id);
       }
-      return { table, deleted: user && String(user._id) === args.tenantId ? 1 : 0, nextCursor: null };
+      return {
+        table,
+        deleted: user && String(user._id) === args.tenantId ? 1 : 0,
+        nextCursor: null,
+      };
     }
 
     const page = await ctx.db
@@ -158,7 +165,9 @@ const deleteTenantDataPageRef = makeFunctionReference<
 /** Owner-gated, revoke-first orchestration over bounded mutation pages. */
 export const deleteTenantData = tenantAction({
   args: { confirmation: v.literal("DELETE MY DATA") },
-  handler: async (ctx): Promise<{
+  handler: async (
+    ctx,
+  ): Promise<{
     deletedByTable: Record<string, number>;
     providers: ProviderDeletionResult[];
   }> => {
@@ -171,7 +180,10 @@ export const deleteTenantData = tenantAction({
     let googleFailure = false;
     if (connected.googleConnected) {
       try {
-        const result: { revoked: boolean } = await ctx.runAction(api.gmailAuth.disconnectGoogle, {});
+        const result: { revoked: boolean } = await ctx.runAction(
+          api.gmailAuth.disconnectGoogle,
+          {},
+        );
         googleRevoked = result.revoked;
         googleFailure = !result.revoked;
       } catch {
