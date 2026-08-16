@@ -6309,7 +6309,9 @@ describe("33-03 sceneCitations: model-authored docIds are checked where they are
     expect(cites[0]).toEqual({
       sceneIndex: 0,
       docId: ownId,
-      title: "The pricing one-pager",
+      // "t" — the VAULT ROW's title, not the model's "The pricing one-pager". This assertion used
+      // to expect the model's string and so quietly enshrined the laundering hole closed below.
+      title: "t",
       verified: true,
       needsConfirmation: false,
       confirmedAt: null,
@@ -6348,6 +6350,38 @@ describe("33-03 sceneCitations: model-authored docIds are checked where they are
     const t = harness();
     const { planId } = await seedCitedDeck(t);
     expect(await asB(t).query(api.media.sceneCitations, { planId })).toEqual([]);
+  });
+
+  // 33-08 finding, closed here: `verified` only ever answered "is this docId yours?" while the
+  // TITLE beside it stayed the string the MODEL wrote. A model could cite a real owned document
+  // under an invented name — verified:true, genuine docId, fabricated label — and the canvas would
+  // render the invented name as the source of the figure. That is the provenance-laundering shape
+  // one door past the figure gate: the FIGURE is gated by confirmClaim, the SOURCE LABEL was not.
+  // A verified citation's title now comes off the vault row itself; the model's string survives
+  // only where there is no owned document to contradict it.
+  test("a VERIFIED citation's title comes from the vault row, never from the model", async () => {
+    const t = harness();
+    const { planId, ownId, foreignId } = await seedCitedDeck(t);
+    // The seeded document is really called "t". The model claimed "The pricing one-pager".
+    const cites = await asA(t).query(api.media.sceneCitations, { planId });
+    expect(cites[0]).toMatchObject({ docId: ownId, verified: true, title: "t" });
+    // Unverified rows keep the model's string — there is no owned row to take a title from, and
+    // blanking it would hide WHAT was claimed from the owner being asked to vouch for it.
+    expect(cites[1]).toMatchObject({
+      docId: foreignId,
+      verified: false,
+      title: "Someone else's deck",
+    });
+  });
+
+  test("renaming the vault doc renames the citation — the label tracks the document", async () => {
+    const t = harness();
+    const { planId, ownId } = await seedCitedDeck(t);
+    await t.run(async (ctx) => {
+      await ctx.db.patch(ownId, { title: "Pricing v4 (final)" });
+    });
+    const cites = await asA(t).query(api.media.sceneCitations, { planId });
+    expect(cites[0]).toMatchObject({ verified: true, title: "Pricing v4 (final)" });
   });
 });
 

@@ -3073,15 +3073,24 @@ export const sceneCitations = tenantQuery({
     for (const s of plan.shots ?? []) {
       if (s.source === undefined && s.needsConfirmation !== true) continue; // claims nothing
       let verified = false;
+      // The title a VERIFIED citation is rendered under comes off the vault row, never off the
+      // model's string: `verified` only ever answered "is this docId yours?", so a model could
+      // cite a real owned document under an invented name and the canvas would print the invented
+      // name as the source of the figure. The figure is gated by `confirmClaim`; the label beside
+      // it was not. An unverified row keeps the model's string — there is no owned document to
+      // take a title from, and blanking it would hide WHAT was claimed from the owner being asked
+      // to vouch for it.
+      let verifiedTitle: string | null = null;
       if (s.source !== undefined) {
         const docId = ctx.db.normalizeId("vaultDocuments", s.source.docId);
         const doc = docId === null ? null : await ctx.db.get(docId);
         verified = doc !== null && doc.tenantId === ctx.tenantId;
+        if (verified && doc !== null) verifiedTitle = doc.title;
       }
       out.push({
         sceneIndex: s.index,
         docId: s.source?.docId ?? null,
-        title: s.source?.title ?? null,
+        title: verifiedTitle ?? s.source?.title ?? null,
         verified,
         needsConfirmation: s.needsConfirmation === true,
         confirmedAt: s.confirmedAt ?? null,
