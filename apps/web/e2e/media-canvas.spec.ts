@@ -46,6 +46,16 @@ function convexRun(fn: string, args: Record<string, unknown>): string {
   return out;
 }
 
+/** `convex run`'s stdout for a function that returns a bare string — the id, unquoted. Convex
+ *  prints the JSON value, so the whole of stdout is `"kh7…"` plus whatever the CLI logged around
+ *  it; the last quoted token is the return value. */
+function returnedId(out: string, fn: string): string {
+  const ids = out.match(/"([a-z0-9]{20,})"/g);
+  const last = ids?.at(-1);
+  if (!last) throw new Error(`${fn} returned no id:\n${out.trim()}`);
+  return last.slice(1, -1);
+}
+
 /** The tenant is the stable user id from the session's own JWT — `requireTenant`'s rule (the
  *  subject before `|`), so the staged deck belongs to the signed-in user and not to a fixture
  *  tenant the canvas would never read. */
@@ -236,13 +246,345 @@ ${staged}`,
 
   // ── THE ESTIMATE GATE ──────────────────────────────────────────────────────────────────────
   const estimate = page.getByTestId("media-estimate");
-  await expect(estimate).toContainText("A 30-second reel of 4 scenes, priced per scene");
   // The stale block-contract line, gone.
   await expect(estimate).not.toContainText("per block");
+
+  // ── WHAT A REFUSED ESTIMATE SHOWS, AS OF 33-06 ─────────────────────────────────────────────
+  // This assertion used to read `toContainText("A 30-second reel of 4 scenes, priced per scene")`,
+  // and it was written when `jobEstimate`'s four lines were ALWAYS open. 33-06 moved the priced-as
+  // sentence inside the `<details>` breakdown, and the breakdown renders only when there are lines
+  // to itemise — a REFUSED deck has none, so the sentence is genuinely absent here. Measured in a
+  // browser (33-10), not inferred: the region reads "Cost $0.00 / Generate reel / Scene 4 doesn't
+  // say what its picture is made from…".
+  //
+  // The refused state is pinned as what it IS, and the positive priced-as assertion moved to the
+  // phase-33 test below, where the deck actually prices. Whether a refused deck ought to keep
+  // saying what it would be pricing is a COPY question raised at 33-10's owner gate, not something
+  // this spec should quietly decide by asserting either way.
+  await expect(page.getByTestId("media-total")).toHaveText("$0.00");
+  await expect(estimate).not.toContainText("What makes up");
+  await expect(estimate).not.toContainText("priced per scene");
 
   // The deck names an upload with no document, so `hasAssetSource` refuses it — BEFORE the button
   // is live, which is the whole point of the estimate being a query. The refusal names the lever.
   await expect(estimate).toContainText("doesn't say what its picture is made from");
   await expect(estimate).not.toContainText("only VIDEO and IMAGE");
   await expect(page.getByTestId("media-generate")).toBeDisabled();
+});
+
+/* ═══ PHASE 33 — THE GUIDED-INTAKE CANVAS, END TO END, STILL FOR $0 ═══════════════════════════
+ *
+ * Everything above was ONE deck on a bare plan row. Phase 33 added four surfaces that no unit test
+ * can see together: the brief the user can correct, TWO storyboards to choose between, a per-scene
+ * citation that must name the VAULT's title rather than the model's, and the confirm gate that
+ * holds the money door shut until the owner vouches for a figure the agent wrote.
+ *
+ * **Why a browser and not `mediaCanvas.test.ts`.** Those tests call the folds directly. The claim
+ * here is the composition: that a flagged scene disables the button AND says how many, that the
+ * SAME click that vouches for the figure opens the button, and that switching decks re-prices the
+ * whole reel — three subscriptions, one layout, no reload.
+ *
+ * $0, and deliberately so. Every write below is a free mutation (`confirmClaim`, `switchDeck`,
+ * `editBrief`) or an internal staging call. Generate is asserted ENABLED and never clicked: the
+ * one thing on this page that spends is the one thing the owner does at the checkpoint.
+ */
+
+/** The vault row a verified citation points at. Its TITLE is the load-bearing part: the shot below
+ *  cites it under a DIFFERENT, model-authored name, and the canvas must print this one. */
+const CITED_DOC_TITLE = "Q3 support response times";
+/** What the model wrote on the Source line. It must never reach the screen (`d69fc29`). */
+const MODEL_AUTHORED_LABEL = "our internal numbers";
+
+/** DECK A — 8 s clip + 12 s still + 10 s silent card = 30 s. Scene 0 cites a real document; scene 1
+ *  states a figure the agent wrote and is flagged for confirmation; scene 2 claims nothing. */
+const PICKED = (docId: string) => [
+  {
+    index: 0,
+    visual: "generated_video",
+    seconds: 8,
+    windowStartMs: 0,
+    description: "The support desk at 9am",
+    prompt: "A support desk at opening time, warm morning light",
+    narration: "Replies used to take us most of a day.",
+    source: { docId, title: MODEL_AUTHORED_LABEL },
+  },
+  {
+    index: 1,
+    visual: "animated_image",
+    seconds: 12,
+    windowStartMs: 8_000,
+    description: "The same queue, an hour later",
+    prompt: "A clean support queue, teal accents, slow pan",
+    narration: "Now the first reply lands in under an hour.",
+    needsConfirmation: true,
+  },
+  {
+    index: 2,
+    visual: "text_card",
+    seconds: 10,
+    windowStartMs: 20_000,
+    description: "The promise, held",
+    overlay: "Under an hour.",
+    prompt: "n/a",
+    narration: "",
+  },
+];
+
+/** DECK B — the genuinely different concept: four cheap scenes, no generated clip at all. Same 30
+ *  seconds, and the price gap between the two is the cost lever the whole phase is about. */
+const ALTERNATE = [
+  {
+    index: 0,
+    visual: "animated_image",
+    seconds: 9,
+    windowStartMs: 0,
+    description: "A hand-drawn clock, unwinding",
+    prompt: "An illustrated clock unwinding, paper texture",
+    narration: "A day of waiting, drawn one hour at a time.",
+  },
+  {
+    index: 1,
+    visual: "text_card",
+    seconds: 6,
+    windowStartMs: 9_000,
+    description: "The old number",
+    overlay: "A whole day.",
+    prompt: "n/a",
+    narration: "",
+  },
+  {
+    index: 2,
+    visual: "animated_image",
+    seconds: 9,
+    windowStartMs: 15_000,
+    description: "The same clock, barely moved",
+    prompt: "The same illustrated clock, barely moved",
+    narration: "Now it is one hour.",
+  },
+  {
+    index: 3,
+    visual: "text_card",
+    seconds: 6,
+    windowStartMs: 24_000,
+    description: "The new number",
+    overlay: "One hour.",
+    prompt: "n/a",
+    narration: "",
+  },
+];
+
+/** `$1.23` → `123`. The headline is the number a person decides on, so the deck comparison below
+ *  asserts on its VALUE rather than on two strings being different. */
+function cents(headline: string): number {
+  const m = /\$([\d.]+)/.exec(headline);
+  if (!m?.[1]) throw new Error(`Not a money headline: ${JSON.stringify(headline)}`);
+  return Math.round(Number(m[1]) * 100);
+}
+
+test("the phase-33 canvas: brief chips, two storyboards, a grounded citation and the confirm gate", async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+
+  await signIn(page);
+  const cookie = (await page.context().cookies()).find((c) => c.name === "__convexAuthJWT");
+  if (!cookie?.value) throw new Error("Signed in, but no Convex Auth JWT cookie was set.");
+  const tenantId = tenantIdFrom(cookie.value);
+
+  // ── STAGE EVERYTHING FIRST (the CLI ends the session — see `signIn`'s note) ─────────────────
+  convexRun("onboarding:__seedOnboardedTenant", { tenantId });
+
+  // A real vault row for the citation to resolve against. `insertCreatedDoc` writes one WITHOUT
+  // starting ingest — no rag entry, no graph nodes, no credits — which is all `sceneCitations`
+  // needs: it asks `db.get` + tenant match, never search.
+  const docId = returnedId(
+    convexRun("vault:insertCreatedDoc", {
+      tenantId,
+      title: CITED_DOC_TITLE,
+      form: "short",
+      markdown: "First response time fell from 7h 40m to 52m across Q3.",
+      contentHash: `e2e-${Date.now().toString(36)}`,
+    }),
+    "vault:insertCreatedDoc",
+  );
+
+  const threadId = `e2e-33-${Date.now().toString(36)}`;
+  const staged = convexRun("plans:stageMediaPlan", {
+    tenantId,
+    threadId,
+    subject: "A 30-second reel about response times",
+  });
+  const planId = /"planId":\s*"([^"]+)"/.exec(staged)?.[1];
+  expect(planId, `stageMediaPlan returned no planId:\n${staged}`).toBeTruthy();
+
+  convexRun("plans:persistDeck", {
+    tenantId,
+    planId,
+    script: "A 30-second reel about answering faster.",
+    artDirection: null,
+    clipSeconds: 12,
+    targetDurationSeconds: 30,
+    shots: PICKED(docId),
+    // The parked alternate — the whole reason the compare region exists.
+    altShots: ALTERNATE,
+    altTargetDurationSeconds: 30,
+    // `audience` is the model's word, not the user's, and the chip must say so.
+    brief: {
+      topic: "Answering support in under an hour",
+      durationSeconds: 30,
+      audience: "Small business owners",
+      tone: "Plain and direct",
+      defaulted: ["audience"],
+    },
+  });
+
+  await signIn(page);
+  await page.goto(`/dashboard/workspace?thread=${threadId}&view=canvas`);
+  const canvas = page.getByTestId("media-canvas");
+  await expect(canvas).toBeVisible({ timeout: 30_000 });
+
+  // ── THE BRIEF, AS CHIPS (33-07) ────────────────────────────────────────────────────────────
+  const brief = page.getByTestId("media-brief");
+  await expect(brief).toBeVisible();
+  await expect(brief).toContainText("Answering support in under an hour");
+  // Only two chips may block, and they say so in a WORD.
+  await expect(brief).toContainText("Topic · required");
+  await expect(brief).toContainText("Length · required");
+  // The three Phase-11 blanks are present and NOT required — an idea-stage tenant is still admitted.
+  await expect(brief).toContainText("Brand voice");
+  await expect(brief).not.toContainText("Brand voice · required");
+  // A model-filled value is marked as one. This is the provenance rule as a visible chip.
+  await expect(brief).toContainText("from your profile");
+
+  // Length is a PRESET, never a free-text field: exactly the three legal reel lengths, with the
+  // current one pressed. A typed number is how an `illegal_duration` reaches the money gate.
+  const presets = page.getByTestId("brief-duration-option");
+  await expect(presets).toHaveCount(3);
+  await expect(presets.nth(0)).toHaveText("15s");
+  await expect(presets.nth(1)).toHaveText("30s");
+  await expect(presets.nth(2)).toHaveText("60s");
+  await expect(presets.nth(1)).toHaveAttribute("aria-pressed", "true");
+  await expect(presets.nth(0)).toHaveAttribute("aria-pressed", "false");
+
+  // ── THE HERO SLOT EXISTS BEFORE THERE IS A REEL (33-06) ────────────────────────────────────
+  // The slot is the layout's fixed point: the tracker lives in it now, the finished video lands in
+  // the SAME box later. A surface that swapped one region for the other would jump the strip below
+  // it down the page at the worst possible moment.
+  const hero = page.getByTestId("media-hero");
+  await expect(hero).toBeVisible();
+  await expect(hero.getByTestId("media-tracker")).toBeVisible();
+  for (const stage of ["Pictures", "Voice", "Assemble", "Captions"]) {
+    await expect(hero).toContainText(stage);
+  }
+  // Nothing has been bought, so every stage is waiting and no player exists.
+  await expect(page.getByTestId("media-final")).toHaveCount(0);
+
+  // ── TWO STORYBOARDS, SIDE BY SIDE (33-07) ──────────────────────────────────────────────────
+  const variations = page.getByTestId("media-variations");
+  await expect(variations).toBeVisible();
+  await expect(variations).toContainText("Two storyboards");
+  await expect(variations).toContainText("Showing now");
+  await expect(variations).toContainText("The other one");
+  // Two genuinely different concepts, and the kind mix is what makes the difference legible —
+  // three scenes with a generated clip against four cheap ones.
+  await expect(variations).toContainText("3 scenes");
+  await expect(variations).toContainText("4 scenes");
+  await expect(variations).toContainText("1 × GENERATED CLIP");
+  await expect(variations).toContainText("2 × TEXT CARD");
+
+  // ── THE CITATION PLANE (33-08) ─────────────────────────────────────────────────────────────
+  const tiles = page.getByTestId("media-block-tile");
+  await expect(tiles).toHaveCount(3);
+  const citations = page.getByTestId("scene-citation");
+  // Two scenes claim something; the card claims nothing and gets NO provenance affordance — a chip
+  // on creative copy trains the reader to ignore the ones that matter.
+  await expect(citations).toHaveCount(2);
+
+  // Scene 0: a VERIFIED citation renders the VAULT ROW'S OWN TITLE. The shot cites the same
+  // document under a name the model invented, and that name must not reach the screen — a model
+  // that can label a real document with its own words can launder a figure through the label.
+  const citedDoc = page.getByTestId("scene-citation-doc");
+  await expect(citedDoc).toHaveText(CITED_DOC_TITLE);
+  await expect(canvas).not.toContainText(MODEL_AUTHORED_LABEL);
+  await expect(citations.nth(0)).toContainText("Source:");
+
+  // Scene 1: the agent's own figure, flagged, in words rather than a colour.
+  await expect(citations.nth(1)).toContainText("Needs your confirmation:");
+  await expect(citations.nth(1)).toContainText(
+    "The agent wrote this figure. Confirm it to make it your word.",
+  );
+
+  // ── THE GATE IS SHUT, AND SAYS HOW MANY ────────────────────────────────────────────────────
+  const estimate = page.getByTestId("media-estimate");
+  const generate = page.getByTestId("media-generate");
+  await expect(generate).toBeDisabled();
+  await expect(page.getByTestId("media-confirm-block")).toHaveText(
+    "Confirm 1 claim to enable Generate.",
+  );
+
+  // ── THE CITATION OPENS THE DOCUMENT, IN PLACE ──────────────────────────────────────────────
+  // `api.vault.vaultDoc` answers `null` for a document that is not this tenant's, so the click-
+  // through cannot be a cross-tenant read — and the dialog is what proves the chip is a control
+  // rather than a decoration.
+  await citedDoc.click();
+  const preview = page.getByRole("dialog");
+  await expect(preview).toBeVisible({ timeout: 15_000 });
+  await expect(preview).toContainText(CITED_DOC_TITLE);
+  await page.getByRole("button", { name: "Close preview" }).first().click();
+  await expect(preview).toHaveCount(0);
+
+  // ── THE OWNER VOUCHES, AND ONLY THEN DOES THE DOOR OPEN ────────────────────────────────────
+  await page.getByTestId("scene-citation-confirm").click();
+  await expect(citations.nth(1)).toContainText("You confirmed this figure.", { timeout: 15_000 });
+  await expect(page.getByTestId("media-confirm-block")).toHaveCount(0);
+  // The confirm button is gone with the thing it confirmed — a control that can only answer
+  // `not_a_claim` must not look like a control.
+  await expect(page.getByTestId("scene-citation-confirm")).toHaveCount(0);
+  await expect(generate).toBeEnabled({ timeout: 15_000 });
+
+  // ── THE ESTIMATE, ONE HEADLINE OVER AN ITEMISED BREAKDOWN (33-06) ──────────────────────────
+  const headline = page.getByTestId("media-total");
+  const pickedHeadline = (await headline.innerText()).trim();
+  expect(cents(pickedHeadline)).toBeGreaterThan(0);
+  // The itemisation is inside a native `<details>`; Playwright reads through it, which is what
+  // makes "demoted, not lost" checkable.
+  await expect(estimate).toContainText("What makes up ");
+  for (const line of ["clips", "stills", "voice", "captions", "render (incl. one retry)"]) {
+    await expect(estimate).toContainText(line);
+  }
+  // The 40x lever, on the line it applies to.
+  await expect(estimate).toContainText("A generated clip costs about 40× an animated still");
+  await expect(estimate).toContainText("A 30-second reel of 3 scenes, priced per scene");
+  await expect(estimate).toContainText("of today's media budget remains.");
+  await expect(estimate).not.toContainText("per block");
+
+  // ── SWITCHING DECKS RE-PRICES THE REEL ─────────────────────────────────────────────────────
+  await page.getByTestId("media-switch-deck").click();
+  await expect(tiles).toHaveCount(4, { timeout: 15_000 });
+  await expect(tiles.nth(0)).toContainText("ANIMATED STILL");
+  await expect(tiles.nth(1)).toContainText("TEXT CARD");
+  // The cheap concept costs less, and the whole page agrees about it: the strip, the compare card
+  // and the headline all followed one `switchDeck` with no reload.
+  const altHeadline = (await headline.innerText()).trim();
+  expect(cents(altHeadline)).toBeLessThan(cents(pickedHeadline));
+  await expect(estimate).toContainText("A 30-second reel of 4 scenes, priced per scene");
+  // No generated clip in this deck, so there is no clips line to price.
+  await expect(estimate).not.toContainText("A generated clip costs about 40×");
+
+  // ── AN EDITED CHIP MARKS THE DECK STALE AND FIRES NOTHING (33-07) ───────────────────────────
+  // The badge is a statement, not a trigger: the re-propose beside it costs a model turn, and this
+  // repo's rule is that a spend follows a click.
+  await expect(page.getByTestId("media-brief-stale")).toHaveCount(0);
+  await brief.getByTestId("brief-chip-edit").first().click();
+  await brief
+    .getByLabel("Topic", { exact: true })
+    .fill("Answering support in under thirty minutes");
+  await brief.getByRole("button", { name: "Save" }).click();
+  const stale = page.getByTestId("media-brief-stale");
+  await expect(stale).toBeVisible({ timeout: 15_000 });
+  await expect(stale).toContainText("Brief changed — storyboards may be out of date.");
+  // FREE, and it says so on the control itself.
+  await expect(page.getByTestId("media-repropose")).toHaveText("Re-propose (free)");
+  // The deck did not re-propose itself: the strip is still the one the user switched to.
+  await expect(tiles).toHaveCount(4);
 });

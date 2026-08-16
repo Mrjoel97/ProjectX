@@ -1,5 +1,12 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-16 (33-10 — **WATCH-GATE ONLY.** `watch.json` gives `apps/web/e2e/` to this
+> playbook, and 33-10 added a second test to `media-canvas.spec.ts`. Nothing in the cockpit's own
+> contracts changed; the media canvas's invariants live in `docs/playbooks/media.md`. The one fact
+> worth carrying here: a spec that stages fixtures through `npx convex run` must stage BEFORE it
+> authenticates — the CLI ends the browser session on a local deployment — and the phase-33 test
+> follows the same sign-in / stage / sign-in-again order the first one documents.)
+
 > Last verified: 2026-08-16 (GOVN-03 precision — **`disconnectMicrosoft`'s comment used to say the
 > revocation endpoint DOES NOT EXIST. That was wrong**, and wrong in the direction that stops anyone
 > ever revisiting it. Two mechanisms exist; both are correctly REFUSED, and the comment now says so:

@@ -34,6 +34,33 @@
 > not what the specialist does with it. The A/B fixture that would prove behaviour was NOT run
 > (see 33-10's summary).
 
+> Last verified: 2026-08-16 (33-10 — **THE PHASE-33 CANVAS HAS NOW BEEN SEEN IN A REAL BROWSER, FOR
+> $0.** `apps/web/e2e/media-canvas.spec.ts` gained a second test against a PROD BUILD on `:3111` and
+> the local backend: brief chips (two required, three optional, `from your profile` on a
+> model-filled value, the three length presets with `aria-pressed`), the hero slot holding the
+> tracker BEFORE any reel exists, two storyboards side by side with different kind mixes, a
+> VERIFIED citation rendering the vault row's own title, the confirm gate, the itemised estimate,
+> a deck switch that re-prices the reel, and a chip edit that raises the stale badge and fires
+> NOTHING. Generate is asserted ENABLED and never clicked — the only control here that spends is
+> the owner's at the gate. Both tests green, run twice.
+>
+> **The mutation proof, in a browser.** Reverting `sceneCitations` to `title: s.source?.title`
+> (the pre-`d69fc29` line) turns the citation chip into `our internal numbers` — the model's own
+> label on a real document — and the spec fails on exactly that assertion. Reverted; green again.
+> This is the provenance-laundering defect class caught at the surface rather than at the fold.
+>
+> **A pre-existing assertion was FALSIFIED by 33-06 and had never been run.** The old test asserted
+> the estimate region contains `A 30-second reel of 4 scenes, priced per scene` over a REFUSED
+> deck. 33-06 moved that sentence inside the `<details>` breakdown, which renders only when there
+> are lines to itemise — and a refusal has none. A refused deck now shows a `$0.00` headline, the
+> Generate button and the refusal sentence, and nothing else. The spec pins that state as what it
+> IS; whether a refused deck should still say what it WOULD be pricing is an open copy question
+> raised at 33-10's owner gate, not a thing the spec decided by asserting either way.
+>
+> Staging note for anyone extending this spec: `vault:insertCreatedDoc` is the cheap way to give a
+> citation a real document to resolve against — a `ready` row with no ingest, no rag entry and no
+> credits, which is all `sceneCitations`' `db.get` + tenant match needs.
+
 > Last verified: 2026-08-16 (33-09 — **MEDIA-DIRECTOR v3 IS AUTHORED AND PINNED, AND IS NOT LIVE.**
 > The body on disk now teaches the three phase-33 output contracts the parsers have been reading
 > since 33-01: a `BRIEF` echo at the top (topic and duration REQUIRED, the rest optional, and
