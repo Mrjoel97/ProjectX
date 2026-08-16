@@ -44,7 +44,13 @@ next-env.d.ts
 graphify-out/cache/
 graphify-out/*.html
 graphify-out/20[0-9][0-9]-*/
+graphify-out/.graph.tmp.json
 .playwright-mcp/
+.playwright-cli/
+
+# UAT / repro scratch: ffmpeg fixtures, page dumps, generated business corpora. Binary and
+# regenerable — and one `git add -A` from permanent history in a tree parallel lanes share.
+output/
 
 # Parallel-lane git worktrees (multi-session build)
 .worktrees/
