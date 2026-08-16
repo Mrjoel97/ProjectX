@@ -11,8 +11,24 @@ resolution: not_pursued
 
 Closed by owner instruction after run `030449d7`, on the recommendation recorded below. **The
 defect is real and still open in fact — only the investigation is closed.** Production
-`cockpit-agent@8` stays a CANDIDATE and is NOT activated; production continues to serve the
-previously-active body.
+`cockpit-agent@8` stays a CANDIDATE and is NOT activated.
+
+**What production actually serves, read from the deployment 2026-08-16 (free read-only
+`skills:getActiveSkill`):** `cockpit-agent` **v6**, sha `dfb75850887e`, 38,454 chars — it **has**
+the Drive section and **does NOT have** the `## The user's calendar` section. That is item 4's work
+sitting undeployed, which is precisely what the gate is refusing to certify.
+
+**Why the version numbers differ between deployments, since this confuses on sight:** version is a
+PER-DEPLOYMENT counter, not a property of the body. `seedSkills` computes `maxVersion + 1` from that
+deployment's own `skills` rows (`skills.ts:594`), and `skills.ts:592` skips an unchanged body, so
+versions are burned by DISTINCT bodies only. Dev burned 25 of them (iterations, the superseded v25,
+optimizer dry-run candidates); production burned 7. Identical bytes, different number.
+
+**The consequence that makes dev's green run permanently useless here:** `hasPassingEvidence`
+(`skill.ts:427`) requires `parsed.skillVersions[name] === version`. Dev's evidence names version
+**26**; the production row is version **8**. Even hand-copying the evidence blob across would fail
+that comparison. Evidence is structurally non-portable between deployments — each one must earn its
+own gate. Do not attempt to shortcut this.
 
 What that costs, stated plainly so nobody re-discovers it as a surprise: the calendar section, the
 Drive section, 20-12's media sections and the document-section merge are all live on **dev** (v26)
