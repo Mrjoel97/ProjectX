@@ -20,7 +20,12 @@
 // produce an `illegal_duration` refusal the UI could have made unreachable. `@pikar/core` is a
 // pure-TS workspace package with no dependencies of its own (CLAUDE.md §1) — importing it does not
 // pull the backend's build graph in here, which is what the note below is about.
-import { type DeckContract, deckRefusalClause, TARGET_DURATIONS } from "@pikar/core/storyboard";
+import {
+  type DeckContract,
+  deckRefusalClause,
+  GENERATED_CLIP_SECONDS,
+  TARGET_DURATIONS,
+} from "@pikar/core/storyboard";
 
 /** The four kinds a scene's picture can come from (`@pikar/core/storyboard`'s `VisualKind`). Typed
  *  structurally rather than imported so this module stays free of the backend's build graph; the
@@ -1414,4 +1419,53 @@ export function salvageNote(
   // `parseSceneDeck` on each slice and nothing else).
   const clause = deckRefusalClause("scene", lost.reason);
   return `Only one of the two storyboards could be built: variation ${keptLetter} is the one below, and variation ${lostLetter} fell through because ${clause}. Ask me to redo the variations if you want the choice back.`;
+}
+
+/** `plans.deckAdjustments`, structurally (`SceneAdjustment` on the wire). `why` is a string here
+ *  for the same reason `visual` is: the closed set lives in `@pikar/core`, not in Convex. */
+export type DeckAdjustment = {
+  sceneIndex: number;
+  fromSeconds: number;
+  toSeconds: number;
+  why: string;
+};
+
+export const DECK_ADJUSTED_LEDE =
+  "I had to change some scene lengths before this reel could be built:";
+
+/**
+ * EVERY SECOND THE PARSER MOVED (33-13, disclosing 33-12).
+ *
+ * 33-12 snaps an off-grid `generated_video` scene DOWN to a length the provider can actually make
+ * and gives the freed seconds to the last non-generated scene, so the reel still runs as long as
+ * the user asked. That is the parser REWRITING the user's reel, and the committed rule is that it
+ * must never be silent: a quiet rewrite is the same defect class as an invented provenance — the
+ * change may be right, but the person who asked for it has to be told.
+ *
+ * The DIRECTION is in the verb ("shortened from 10s to 8s"), not just in two numbers, because a
+ * pair of numbers under swapped labels reads perfectly and says the opposite thing. An unknown
+ * `why` still reports the seconds: the disclosure is not conditional on our vocabulary.
+ */
+export function adjustmentNotes(
+  adjustments: readonly DeckAdjustment[] | null | undefined,
+  targetDurationSeconds: number | null | undefined,
+): string[] {
+  if (!adjustments || adjustments.length === 0) return [];
+  // The legal lengths come from the SAME constant the parser snaps to, so this sentence cannot
+  // name a set the repair does not actually use.
+  const legal = GENERATED_CLIP_SECONDS.join(", ").replace(/, (\d+)$/, " or $1");
+  return adjustments.map((a) => {
+    const moved = `${a.fromSeconds}s to ${a.toSeconds}s`;
+    const verb = a.toSeconds < a.fromSeconds ? "shortened" : "lengthened";
+    const head = `Scene ${a.sceneIndex + 1} ${verb} from ${moved}`;
+    if (a.why === "grid") return `${head} — the generator only makes ${legal} second clips.`;
+    if (a.why === "rebalance") {
+      // No declared length, no number: `targetDurationSeconds` is absent on a block deck, and a
+      // reel length invented here would be a claim about the deck that nothing on it supports.
+      return targetDurationSeconds == null
+        ? `${head} — the seconds freed above went back into it, so the reel is still its full length.`
+        : `${head} — the seconds freed above went back into it, so the reel is still ${targetDurationSeconds} seconds.`;
+    }
+    return `${head}.`;
+  });
 }

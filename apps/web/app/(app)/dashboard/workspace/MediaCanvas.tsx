@@ -12,6 +12,7 @@ import {
   VaultDocButton,
 } from "./cards";
 import {
+  adjustmentNotes,
   asVisualKind,
   BRIEF_LOCKED_NOTE,
   type Brief,
@@ -19,7 +20,9 @@ import {
   briefChips,
   briefRefusalText,
   citationView,
+  DECK_ADJUSTED_LEDE,
   DECK_STALE_NOTE,
+  type DeckAdjustment,
   type DeckSummary,
   deckStale,
   durationLabel,
@@ -120,6 +123,9 @@ type MediaPlan = {
   /** 33-11 / 33-13: which sibling variation could not be built, and why. Present ONLY on a
    *  salvaged proposal, and the canvas is obliged to say so — see `ParserNotes`. */
   lostVariation?: { variation: string; reason: string } | null;
+  /** 33-12 / 33-13: the seconds the PARSER moved to get the clips onto the provider's grid.
+   *  Empty/absent on a deck the model got right — and never silent when it is not. */
+  deckAdjustments?: DeckAdjustment[] | null;
 };
 type ArtDirection = {
   palette: string[];
@@ -424,7 +430,10 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
 
       {/* WHAT THE PARSER DID (33-13). Between the ask and the answer, because it changes what
           the answer IS — and never behind a disclosure widget. */}
-      <ParserNotes salvage={salvageNote(plan.lostVariation)} />
+      <ParserNotes
+        salvage={salvageNote(plan.lostVariation)}
+        adjusted={adjustmentNotes(plan.deckAdjustments, plan.targetDurationSeconds)}
+      />
 
       {/* THE TWO PROPOSALS, side by side — between the ask and the answer, and gone after
           Generate. */}
@@ -489,7 +498,7 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
 }
 
 /**
- * WHAT THE PARSER DID TO THIS PROPOSAL (33-13) — the salvage, in the user's words.
+ * WHAT THE PARSER DID TO THIS PROPOSAL (33-13) — the salvage, and every second it moved.
  *
  * It sits directly under the brief and above everything else, and it is NOT inside a `<details>`:
  * both facts here change what the storyboard below actually IS, and a disclosure a person has to
@@ -498,8 +507,8 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
  * `aria-live="polite"` for the same reason the failure cards carry it: a proposal lands reactively
  * under a user who may already be looking at the canvas.
  */
-function ParserNotes({ salvage }: { salvage: string | null }) {
-  if (salvage === null) return null;
+function ParserNotes({ salvage, adjusted }: { salvage: string | null; adjusted: string[] }) {
+  if (salvage === null && adjusted.length === 0) return null;
   return (
     <div
       aria-live="polite"
@@ -516,7 +525,23 @@ function ParserNotes({ salvage }: { salvage: string | null }) {
     >
       {/* --held-text, not --held: amber on paper fails WCAG as text (BRAND §6), and the words
           carry the meaning either way — nothing here is signalled by colour alone. */}
-      <p style={{ ...dimText, color: "var(--held-text)", fontWeight: 600 }}>{salvage}</p>
+      {salvage && (
+        <p style={{ ...dimText, color: "var(--held-text)", fontWeight: 600 }}>{salvage}</p>
+      )}
+      {adjusted.length > 0 && (
+        <>
+          <p style={{ ...dimText, color: "var(--held-text)", fontWeight: 600 }}>
+            {DECK_ADJUSTED_LEDE}
+          </p>
+          <ul style={{ listStyle: "disc", margin: 0, padding: "0 0 0 1.1rem", display: "grid" }}>
+            {adjusted.map((line) => (
+              <li key={line} style={{ ...dimText, fontSize: "0.78rem" }}>
+                {line}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </div>
   );
 }

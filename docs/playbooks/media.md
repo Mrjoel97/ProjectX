@@ -1,5 +1,28 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-08-16 (33-13 task 3 — **a repaired deck shows every second the parser
+> moved.** 33-12's `plans.deckAdjustments` finally has a reader, and phase 33's three-part live fix
+> is complete.)
+>
+> `adjustmentNotes(plan.deckAdjustments, plan.targetDurationSeconds)` renders one line per moved
+> scene in `ParserNotes`, beside the salvage note and outside every disclosure widget:
+> *"Scene 1 shortened from 10s to 8s — the generator only makes 4, 8 or 12 second clips"*,
+> *"Scene 2 lengthened from 20s to 22s — the seconds freed above went back into it, so the reel is
+> still 30 seconds."* This is REQUIRED, not polish: 33-12 lets the parser rewrite the user's reel,
+> and a silent rewrite is the same defect class as an invented provenance.
+>
+> **Three things to keep.** (1) The DIRECTION lives in the VERB (`shortened`/`lengthened` derived
+> from the two numbers), because a from/to pair under swapped labels reads perfectly and says the
+> opposite thing — that is the mutation this suite is written against. (2) The legal lengths come
+> from `GENERATED_CLIP_SECONDS` itself, so the sentence cannot name a set the repair does not snap
+> to. (3) With no `targetDurationSeconds` (a block deck) the rebalance line quotes NO number rather
+> than inventing a reel length.
+>
+> Verified: apps/web 24 files / 399 tests (canvas 116 -> 123), `tsc --noEmit` clean.
+> **Mutation check:** transposing `fromSeconds` and `toSeconds` in the rendered sentence (both
+> numbers still present, each under the other's label — the transposition this repo's
+> vacuous-test lesson demands over a deletion) reddened the direction test; reverted.
+
 > Last verified: 2026-08-16 (33-13 task 2 — **a salvaged proposal says so, unprompted and
 > unexpanded.** 33-11's `plans.lostVariation` finally has a reader.)
 >

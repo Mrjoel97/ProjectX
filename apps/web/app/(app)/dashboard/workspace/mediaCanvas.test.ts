@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { GENERIC_DECK_REFUSAL, TARGET_DURATIONS } from "@pikar/core/storyboard";
 import { describe, expect, test } from "vitest";
 import {
+  adjustmentNotes,
   BRIEF_DEFAULTED_MARKER,
   BRIEF_LOCKED_NOTE,
   BRIEF_OPTIONAL_HINT,
@@ -11,6 +12,7 @@ import {
   briefRefusalText,
   type Citation,
   citationView,
+  DECK_ADJUSTED_LEDE,
   DECK_STALE_NOTE,
   DURATION_COST_NOTE,
   deckStale,
@@ -1243,7 +1245,9 @@ describe("the canvas mounts the proposal failure card at BOTH of its mount point
 
   test("cards.tsx branches on the refusal ahead of the memo card", () => {
     expect(cards.indexOf("plan.proposalRefusal")).toBeGreaterThan(0);
-    expect(cards.indexOf("plan.proposalRefusal")).toBeLessThan(cards.indexOf('plan.kind === "memo"'));
+    expect(cards.indexOf("plan.proposalRefusal")).toBeLessThan(
+      cards.indexOf('plan.kind === "memo"'),
+    );
     expect(cards).toContain("ProposalFailureCanvas");
   });
 
@@ -1322,5 +1326,86 @@ describe("salvageNote — one of two, said out loud", () => {
     const block = notes.slice(0, notes.indexOf("\nfunction "));
     expect(block).not.toContain("<details");
     expect(block).not.toContain("<summary");
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+// 33-13 TASK 3 — THE REPAIR IS DISCLOSED
+//
+// 33-12 stopped an off-grid generated clip from throwing the whole reel away: the parser snaps it
+// DOWN to a length the provider can make and gives the freed seconds to the last non-generated
+// scene. That rewrites the user's reel. The committed rule is that such a change must never be
+// silent — a parser quietly editing what the user asked for is the same defect class as an
+// invented provenance. `plans.deckAdjustments` records every moved second; this reads it back.
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+describe("adjustmentNotes — every second the parser moved", () => {
+  const REPAIR = [
+    { sceneIndex: 0, fromSeconds: 10, toSeconds: 8, why: "grid" },
+    { sceneIndex: 1, fromSeconds: 20, toSeconds: 22, why: "rebalance" },
+  ];
+
+  test("says WHICH scene, from WHAT to WHAT, and why — in that direction", () => {
+    const notes = adjustmentNotes(REPAIR, 30);
+    expect(notes).toHaveLength(2);
+    // Scene numbers are 1-based on screen; `sceneIndex` is the array index.
+    expect(notes[0]).toContain("Scene 1");
+    expect(notes[1]).toContain("Scene 2");
+    // The DIRECTION is the assertion: a shortened scene went from the bigger number to the
+    // smaller one, and a lengthened scene the other way. Both numbers appear either way.
+    expect(notes[0]).toMatch(/shortened .*10s.*8s/);
+    expect(notes[1]).toMatch(/lengthened .*20s.*22s/);
+    expect(notes[0]).not.toMatch(/shortened .*8s.*10s/);
+    expect(notes[1]).not.toMatch(/lengthened .*22s.*20s/);
+  });
+
+  test("the GRID reason names the only lengths the generator makes", () => {
+    const note = adjustmentNotes([REPAIR[0] as (typeof REPAIR)[number]], 30)[0];
+    expect(note).toContain("4, 8 or 12");
+    expect(note).not.toContain("grid");
+  });
+
+  test("the REBALANCE reason names the reel length the seconds went back into", () => {
+    const note = adjustmentNotes([REPAIR[1] as (typeof REPAIR)[number]], 30)[0];
+    expect(note).toContain("30");
+    expect(note).not.toContain("rebalance");
+  });
+
+  test("with no declared reel length it still discloses, without inventing one", () => {
+    const note = adjustmentNotes([REPAIR[1] as (typeof REPAIR)[number]], null)[0];
+    expect(note).toContain("20s");
+    expect(note).toContain("22s");
+    expect(note).not.toContain("30");
+  });
+
+  test("an unknown why still reports the seconds — disclosure is never conditional on vocabulary", () => {
+    const note = adjustmentNotes(
+      [{ sceneIndex: 2, fromSeconds: 6, toSeconds: 4, why: "sideways" }],
+      15,
+    )[0];
+    expect(note).toContain("Scene 3");
+    expect(note).toContain("6s");
+    expect(note).toContain("4s");
+  });
+
+  test("a deck the model got right says nothing at all", () => {
+    expect(adjustmentNotes([], 30)).toEqual([]);
+    expect(adjustmentNotes(null, 30)).toEqual([]);
+    expect(adjustmentNotes(undefined, null)).toEqual([]);
+  });
+
+  test("the canvas renders every note, unexpanded, beside the salvage note", () => {
+    const reel = source.slice(
+      source.indexOf("function ReelCanvas("),
+      source.indexOf("function ParserNotes("),
+    );
+    expect(reel).toContain("adjustmentNotes(");
+    expect(reel).toContain("plan.deckAdjustments");
+    const notes = source.slice(source.indexOf("function ParserNotes("));
+    const block = notes.slice(0, notes.indexOf("\nfunction "));
+    expect(block).toContain("DECK_ADJUSTED_LEDE");
+    expect(block).not.toContain("<details");
+    expect(block).not.toContain("<summary");
+    // The lede says a length changed — it is the sentence that makes the list mean something.
+    expect(DECK_ADJUSTED_LEDE).toMatch(/length|second/i);
   });
 });
