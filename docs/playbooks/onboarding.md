@@ -1,5 +1,13 @@
 # Playbook: Persona Onboarding & Business Profile
 
+> Last verified: 2026-08-15 (cash-business-finance lane's in-flight applier wiring, read and
+> attested by the phase-33 planning session — **`writeProfileDoc` and `currentProfileDoc` are now
+> `export`ed** (visibility only, zero behaviour change) so the new proposals applier
+> (`packages/backend/convex/proposals.ts`, registered under `dashboard-pages.md`) writes the profile
+> store through its ONE existing writer. A proposal-applied profile field therefore lands by the
+> same route as an onboarding edit and inherits `validateProfile` either way — no second door into
+> the profile doc. The applier itself is documented in `dashboard-pages.md`.)
+
 > Last verified: 2026-08-14 (17-06 Task 3, ADR-018 — **the Microsoft connect / disconnect / consent
 > surfaces**, verified in a real browser: `e2e/connect-microsoft.spec.ts` **7/7** against a prod
 > build on `:3111`.)

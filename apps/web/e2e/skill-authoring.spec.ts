@@ -45,6 +45,12 @@ function convexCli(args: string[]): string {
   const result = spawnSync(process.execPath, [convexBin, ...args], {
     cwd: backendDir,
     encoding: "utf8",
+    // A long-lived local deployment holds far more than 1 MB of audit rows and log history, and
+    // Node's default spawnSync buffer is exactly 1 MB — the overflow surfaces as an opaque ENOBUFS
+    // "failed to start", not as a truncated read. Measured on a 935 MB local backend.
+    // ponytail: one generous ceiling over paginating the CLI reads; paginate only if a deployment
+    // ever exceeds this, which would mean these scans need rethinking anyway.
+    maxBuffer: 128 * 1024 * 1024,
   });
   if (result.error) throw new Error(`Convex CLI failed to start: ${result.error.message}`);
   const stderr = result.stderr ?? "";
@@ -52,6 +58,38 @@ function convexCli(args: string[]): string {
     throw new Error(`convex ${args.join(" ")} failed:\n${stderr.trim()}\n${result.stdout.trim()}`);
   }
   return result.stdout ?? "";
+}
+
+/**
+ * `convex logs` is a STREAM, not a query: it prints `--history` and then tails forever. There is no
+ * flag that makes it exit (checked `logs --help`). Run through `spawnSync` it therefore blocks the
+ * event loop indefinitely — and because the block is synchronous, Playwright's own `setTimeout`
+ * CANNOT fire, so the whole spec hangs with no verdict rather than failing.
+ *
+ * Measured on this deployment: the full 1000-entry history flushes in under 8s (1018 lines /
+ * 920 KB); a 20s read adds only 11 more lines, which are live tail noise, not late history. So a
+ * bounded read captures all of it.
+ *
+ * The empty-output guard is the important half. This feeds a PRIVACY assertion, and
+ * `occurrenceCount("")` is 0 — a silently failed read would look exactly like "the needle never
+ * leaked" and pass the gate vacuously. An unreadable log plane must fail loudly instead.
+ */
+function convexLogHistory(): string {
+  const result = spawnSync(
+    process.execPath,
+    [convexBin, "logs", "--history", "1000", "--jsonl"],
+    // The timeout kill IS the expected exit here, so `result.error` is not treated as failure —
+    // the output we already collected is the whole history.
+    { cwd: backendDir, encoding: "utf8", maxBuffer: 128 * 1024 * 1024, timeout: 20_000 },
+  );
+  const out = result.stdout ?? "";
+  if (out.trim() === "") {
+    throw new Error(
+      `convex logs produced no output, so the log-plane needle count would be vacuously 0` +
+        `${result.error ? `: ${result.error.message}` : ""}`,
+    );
+  }
+  return out;
 }
 
 function convexData(table: string): Array<Record<string, unknown>> {
@@ -76,7 +114,7 @@ function privateNeedleCounts(): PrivacyCounts {
     evidenceNeedleCount: occurrenceCount(
       JSON.stringify(tenantSkills.map((row) => row.evidence ?? null)),
     ),
-    logNeedleCount: occurrenceCount(convexCli(["logs", "--history", "1000", "--jsonl"])),
+    logNeedleCount: occurrenceCount(convexLogHistory()),
     dlqNeedleCount: occurrenceCount(JSON.stringify(convexData("deadLetters"))),
     telemetryNeedleCount: occurrenceCount(JSON.stringify(convexData("telemetry"))),
   };
@@ -170,7 +208,7 @@ test("candidate-only authoring and pinned prompt run use exact response and a fr
   await page.goto("/dashboard/workspace");
   const auth = await authFor(page);
 
-  const composer = page.getByPlaceholder("Describe your goal…");
+  const composer = page.getByPlaceholder("What business outcome should we work on?");
   await expect(composer).toBeVisible({ timeout: 15_000 });
 
   // Open the one authoring surface. Empty and over-cap states are honest, keyboard-reachable and
@@ -221,7 +259,13 @@ test("candidate-only authoring and pinned prompt run use exact response and a fr
   });
 
   await expect(panel.getByText(authoredNeedle, { exact: false })).toBeVisible();
-  await expect(panel.getByText(/Draft saved — waiting to be evaluated/i)).toBeVisible();
+  // Scope the state assertion to THIS run's row. "Your adaptations" lists every candidate the tenant
+  // owns, so a bare panel-wide match is strict-mode ambiguous the moment a second candidate exists —
+  // and `.first()` would silently assert against someone else's row. The needle is unique per run,
+  // so filtering the <li> by it proves the row we just published is the one awaiting evaluation.
+  const myRow = panel.locator("li").filter({ hasText: authoredNeedle });
+  await expect(myRow).toHaveCount(1);
+  await expect(myRow.getByText(/Draft saved — waiting to be evaluated/i)).toBeVisible();
   await expect(panel.getByRole("button", { name: /activate/i })).toHaveCount(0);
   await expect(panel).not.toContainText("## Tenant-authored business adaptation");
   await panel.getByRole("button", { name: "Close skill authoring" }).click();
@@ -252,6 +296,11 @@ test("candidate-only authoring and pinned prompt run use exact response and a fr
   const savedRow = saved.find((row) => row.text === prompt);
   if (!savedRow) throw new Error("the browser pin produced no exact savedPrompt row");
   const pinnedPromptId = String(savedRow.id);
+  // The menu labels carry the SERVER-DERIVED title, not the raw text: `derivePromptTitle` caps at
+  // SAVED_PROMPT_TITLE_MAX (80) and this needle prompt is 84 chars, so it arrives truncated with an
+  // ellipsis. Read the title off the row we already fetched rather than re-deriving the truncation
+  // here — a second copy of that rule in the test would drift from the one in savedPrompts.ts.
+  const pinnedTitle = String(savedRow.title);
 
   // Reload proves persistence. Run closes the menu only after the same trusted hook returns a
   // distinct fresh thread, then Delete removes only the saved row.
@@ -261,7 +310,7 @@ test("candidate-only authoring and pinned prompt run use exact response and a fr
   await pinnedMenuButton.focus();
   await pinnedMenuButton.press("Enter");
   const menu = page.getByRole("menu", { name: "Pinned prompts" });
-  const run = menu.getByRole("menuitem", { name: `Run pinned prompt: ${prompt}` });
+  const run = menu.getByRole("menuitem", { name: `Run pinned prompt: ${pinnedTitle}` });
   await expect(run).toBeVisible({ timeout: 15_000 });
   const beforeRun = new Set((await threads(auth)).map((row) => row.threadId));
   await run.click();
@@ -274,7 +323,7 @@ test("candidate-only authoring and pinned prompt run use exact response and a fr
   await pinnedMenuButton.click();
   const deletePin = page
     .getByRole("menu", { name: "Pinned prompts" })
-    .getByRole("button", { name: `Delete pinned prompt: ${prompt}` });
+    .getByRole("button", { name: `Delete pinned prompt: ${pinnedTitle}` });
   await deletePin.click();
   await expect
     .poll(
@@ -290,6 +339,19 @@ test("candidate-only authoring and pinned prompt run use exact response and a fr
   expect(finalThreads.has(sourceThreadId)).toBe(true);
   expect(finalThreads.has(runThreadId)).toBe(true);
   onlyZeroCounts(privateNeedleCounts());
+
+  // Deleting a pin deliberately leaves the menu OPEN (so several can be removed in one visit),
+  // whereas Run closes it — `HeaderMenu` is a bare toggle with no Escape handler. The keyboard loop
+  // below toggles, so it must start from a KNOWN-CLOSED menu; otherwise its first Enter closes the
+  // still-open menu and the visibility assertion fails on a working UI. Drive off `aria-expanded`
+  // rather than assuming which step ran last.
+  // Close via the KEYBOARD, not `.click()`: while the menu is open a full-bleed `menu-scrim` button
+  // covers the trigger and intercepts pointer events (that scrim is the click-outside-to-close
+  // affordance). This is the same reason the loop below drives the menu with focus + Enter.
+  if ((await pinnedMenuButton.getAttribute("aria-expanded")) === "true") {
+    await pinnedMenuButton.press("Enter");
+  }
+  await expect(pinnedMenuButton).toHaveAttribute("aria-expanded", "false");
 
   // The two viewports exercise the shipped responsive seam, and the menu remains keyboard
   // operable at both sizes. A horizontal overflow is a real narrow-layout failure.
