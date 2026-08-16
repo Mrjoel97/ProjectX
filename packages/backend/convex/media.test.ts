@@ -25,6 +25,10 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 // specifiers). guardrails.test.ts carries the same line for the same reason.
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
+// 33-05: `saveReelToVault` starts the ingest workflow, so the harness needs the workflow
+// component (+ its inner workpool) registered — the research.test.ts pair, verbatim.
+import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/schema.js";
+import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { hmacHex } from "./gmailAuth";
@@ -47,6 +51,12 @@ const rateLimiterModules = import.meta.glob(
 const aggregateModules = import.meta.glob(
   "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
 );
+const workflowModules = import.meta.glob(
+  "../node_modules/@convex-dev/workflow/src/component/**/!(*.test).ts",
+);
+const workpoolModules = import.meta.glob(
+  "../node_modules/@convex-dev/workpool/src/component/**/!(*.test).ts",
+);
 
 type T = TestConvex<typeof schema>;
 
@@ -57,6 +67,9 @@ function harness(): T {
   const t = convexTest(schema, modules);
   t.registerComponent("rateLimiter", rateLimiterSchema, rateLimiterModules);
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+  // 33-05: the vault save at the pipeline terminals calls `startIngest` (workflow.start).
+  t.registerComponent("workflow", workflowSchema, workflowModules);
+  t.registerComponent("workflow/workpool", workpoolSchema, workpoolModules);
   return t;
 }
 
@@ -6330,5 +6343,221 @@ describe("33-03 sceneCitations: model-authored docIds are checked where they are
     const t = harness();
     const { planId } = await seedCitedDeck(t);
     expect(await asB(t).query(api.media.sceneCitations, { planId })).toEqual([]);
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+// 33-05 — the finished reel becomes a DURABLE VAULT ASSET, and the old final is HELD
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+
+/** A scene plan with a published uncaptioned reel and two cited scenes (one own, one FOREIGN) —
+ *  the state the caption terminal fires from. */
+async function seedSaveable(t: T) {
+  const { planId } = await seedSceneDeck(t);
+  const { ownId, foreignId } = await t.run(async (ctx) => {
+    const base = {
+      title: "t",
+      kind: "upload",
+      category: "other",
+      source: "upload",
+      mimeType: "application/pdf",
+      size: 1,
+      contentHash: "f".repeat(64),
+      status: "ready" as const,
+      createdAt: T0,
+    };
+    return {
+      ownId: await ctx.db.insert("vaultDocuments", { ...base, tenantId: A }),
+      foreignId: await ctx.db.insert("vaultDocuments", { ...base, tenantId: B }),
+    };
+  });
+  const reelId = await storeBlob(t, new Uint8Array([1, 2, 3]), "video/mp4");
+  const sidecarId = await storeBlob(t, sidecarFor(4), "application/json");
+  await t.run(async (ctx) => {
+    const plan = await ctx.db.get(planId);
+    const shots = (plan?.shots ?? []).map((s) => {
+      if (s.index === 0) {
+        return { ...s, source: { docId: ownId, title: "The pricing one-pager" }, confirmedAt: T0 };
+      }
+      if (s.index === 1) return { ...s, source: { docId: foreignId, title: "Someone else's" } };
+      return s;
+    });
+    await ctx.db.patch(planId, {
+      shots,
+      brief: {
+        topic: "Autumn launch teaser",
+        durationSeconds: 30,
+        defaulted: [],
+      },
+      renderStatus: "rendered",
+      renderStorageId: reelId,
+      sidecarStorageId: sidecarId,
+      renderSummary: { durationS: 30, sceneCount: 4, gates: ["g"] },
+    });
+  });
+  return { planId, ownId, foreignId, reelId, sidecarId };
+}
+
+const reelDocs = (t: T) =>
+  t.run(async (ctx) =>
+    (await ctx.db.query("vaultDocuments").collect()).filter((d) => d.kind === "reel"),
+  );
+
+const burn = (
+  t: T,
+  planId: Id<"plans">,
+  result:
+    | { ok: true; captionedStorageId: Id<"_storage">; renderMs: number }
+    | { ok: false; reason: string },
+) =>
+  t.run(async (ctx) =>
+    ctx.runMutation(internal.render.renderReel.recordCaptionBurn, {
+      tenantId: A,
+      planId,
+      batchId: "batch_save",
+      result,
+    }),
+  );
+
+describe("33-05 saveReelToVault: one vault doc per plan, at every pipeline terminal", () => {
+  test("the caption terminal saves the reel: transcript text, refs-only tenant-verified citations", async () => {
+    const t = harness();
+    const { planId, ownId, foreignId } = await seedSaveable(t);
+    const capId = await storeBlob(t, new Uint8Array([9]), "video/mp4");
+    await burn(t, planId, { ok: true, captionedStorageId: capId, renderMs: 1 });
+
+    const docs = await reelDocs(t);
+    expect(docs).toHaveLength(1);
+    const doc = docs[0];
+    // The ROW is markdown (searchable — rides the embed rail); the BYTES are the final mp4.
+    expect(doc?.mimeType).toBe("text/markdown");
+    expect(doc?.storedMimeType).toBe("video/mp4");
+    expect(doc?.storageId).toBe(capId);
+    expect(doc?.status).toBe("processing");
+    expect(doc?.title).toContain("Autumn launch teaser");
+    // The transcript IS the narration, in scene order — zero paid work.
+    expect(doc?.text).toBe("line 0\n\nline 1\n\nline 2\n\nline 3");
+    expect(doc?.contentHash).toBe(await contentHash("line 0\n\nline 1\n\nline 2\n\nline 3"));
+    // Refs-only citation metadata (§4): ids, hashes and timestamps — never the claim text.
+    expect(doc?.reelMeta?.planId).toBe(planId);
+    expect(doc?.reelMeta?.citations).toEqual([
+      {
+        sceneIndex: 0,
+        docId: ownId,
+        claimHash: await contentHash("line 0"),
+        confirmedAt: T0,
+      },
+    ]);
+    // The FOREIGN docId the model wrote is skipped, never persisted as if it verified.
+    expect(JSON.stringify(doc?.reelMeta)).not.toContain(foreignId);
+    // The plan carries the ref — the upsert key for every later completion.
+    expect((await planRowOf(t, planId))?.reelVaultDocId).toBe(doc?._id);
+
+    const saved = (await auditRows(t)).filter((r) => r.eventType === "media.reel_saved");
+    expect(saved).toHaveLength(1);
+    expect(Object.keys(saved[0]?.payload as object).sort()).toEqual([
+      "citations",
+      "docId",
+      "planId",
+    ]);
+    expect((saved[0]?.payload as { citations: number }).citations).toBe(1);
+  });
+
+  test("UPSERT idempotence: a second completion PATCHES the same doc — never a second row", async () => {
+    const t = harness();
+    const { planId } = await seedSaveable(t);
+    const capA = await storeBlob(t, new Uint8Array([1]), "video/mp4");
+    await burn(t, planId, { ok: true, captionedStorageId: capA, renderMs: 1 });
+
+    // A re-render lands and its burn completes with a NEW captioned cut.
+    const finalB = await storeBlob(t, new Uint8Array([2]), "video/mp4");
+    await t.run(async (ctx) => ctx.db.patch(planId, { renderStorageId: finalB }));
+    const capB = await storeBlob(t, new Uint8Array([3]), "video/mp4");
+    await burn(t, planId, { ok: true, captionedStorageId: capB, renderMs: 1 });
+
+    const docs = await reelDocs(t);
+    expect(docs).toHaveLength(1);
+    expect(docs[0]?.storageId).toBe(capB);
+    expect(docs[0]?.status).toBe("processing");
+  });
+
+  test("a FAILED burn still saves the degraded uncaptioned reel — it is the deliverable", async () => {
+    const t = harness();
+    const { planId, reelId } = await seedSaveable(t);
+    await burn(t, planId, { ok: false, reason: "missing_binary" });
+
+    const docs = await reelDocs(t);
+    expect(docs).toHaveLength(1);
+    expect(docs[0]?.storageId).toBe(reelId);
+  });
+
+  test("a deck with NO caption line saves at the RENDER terminal — no burn will ever come", async () => {
+    const t = harness();
+    // seedRenderable reserves no `stt` row: captions were never bought for this deck.
+    const { planId, batchId } = await seedRenderable(t, { blocks: 2 });
+    const mp4 = await storeBlob(t, new Uint8Array([1]), "video/mp4");
+    const sidecar = await storeBlob(t, RENDER_SIDECAR, "application/json");
+    await t.run(async (ctx) =>
+      ctx.runMutation(internal.render.renderReel.recordRender, {
+        tenantId: A,
+        planId,
+        batchId,
+        result: {
+          ok: true,
+          renderStorageId: mp4,
+          sidecarStorageId: sidecar,
+          sidecarHash: "c".repeat(64),
+          sceneCount: 2,
+          renderMs: 1,
+          gatesPassed: 1,
+          summary: { durationS: 20, sceneCount: 2, gates: ["g"] },
+        },
+      }),
+    );
+    const docs = await reelDocs(t);
+    expect(docs).toHaveLength(1);
+    expect(docs[0]?.storageId).toBe(mp4);
+  });
+
+  test("captions OWED → the render terminal does NOT save; the burn terminal will", async () => {
+    const t = harness();
+    const { planId, batchId } = await seedRenderable(t, { blocks: 2 });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("mediaJobs", {
+        tenantId: A,
+        planId,
+        batchId,
+        blockIndex: -1,
+        provider: "openai",
+        kind: "stt",
+        model: MEDIA_DEFAULT_STT.model,
+        spec: { kind: "stt", audioMinutes: 0.5 },
+        promptHash: "0".repeat(64),
+        status: "queued",
+        estUsd: 0.006,
+        createdAt: T0,
+        updatedAt: T0,
+      });
+    });
+    const mp4 = await storeBlob(t, new Uint8Array([1]), "video/mp4");
+    const sidecar = await storeBlob(t, RENDER_SIDECAR, "application/json");
+    await t.run(async (ctx) =>
+      ctx.runMutation(internal.render.renderReel.recordRender, {
+        tenantId: A,
+        planId,
+        batchId,
+        result: {
+          ok: true,
+          renderStorageId: mp4,
+          sidecarStorageId: sidecar,
+          sidecarHash: "c".repeat(64),
+          sceneCount: 2,
+          renderMs: 1,
+          gatesPassed: 1,
+          summary: { durationS: 20, sceneCount: 2, gates: ["g"] },
+        },
+      }),
+    );
+    expect(await reelDocs(t)).toHaveLength(0);
   });
 });
