@@ -1,5 +1,44 @@
 # Playbook: Beta Admission (BETA-01)
 
+> Last verified: 2026-08-17 (**SECURITY AUDIT BEFORE SHIPPING — the OAuth path trusted an
+> UNVERIFIED email claim, and it is now refused.** Full report:
+> `.planning/phases/25-private-beta-productionization/25-01-SECURITY-AUDIT.md`.
+>
+> **THE DEFECT (nOAuth class).** `admitIdentity` matched an invite on
+> `profile.email ?? profile.preferred_username` and its own comment called that
+> "provider-VERIFIED". Nothing checked it. Entra verifies NEITHER claim, so anyone who knew an
+> invited address and held any Entra account could redeem that invite — admitting a stranger and
+> locking the real invitee out, since the invite is single-use and then spent. Bounded to
+> admission, NOT account takeover: `existingUserId` comes only from an existing ACCOUNT
+> (`@convex-dev/auth@0.0.94` `users.js:13`), so a forged address creates a new user and cannot
+> inherit one. **It was DORMANT** — prod has no `AUTH_MICROSOFT_ENTRA_ID_ID`/`_SECRET` (the
+> calendar connector uses different names), so no Entra button renders — and it would have ARMED
+> ITSELF the day someone enabled Microsoft sign-in.
+>
+> **THE INVARIANT NOW: the OAuth path admits nobody whose address the provider did not vouch for.**
+> Both mappers carry `emailVerified`; `admitIdentity` refuses non-credentials admission unless it
+> is `true`, **before the invite lookup**, throwing the same generic `INVITE_REQUIRED`. Both
+> details are load-bearing: a distinct error, or one raised after the lookup, turns this into an
+> oracle for "does this address have a live invite". Entra's only answer is the OPTIONAL `xms_edov`
+> claim (Token configuration → optional claim → `xms_edov`); until it is configured, Entra signup
+> is REFUSED and invited users take Google or password + code. **Never default `emailVerified` to
+> true to clear a refusal.** The credentials path is untouched — a password signup is proven by the
+> code, not by a claim.
+>
+> **DO NOT REMOVE THE `createOrUpdateUser` CALLBACK.** Defining it also makes the package's DEFAULT
+> path unreachable, and that path (`users.js:21-27`) computes `emailVerified` as defaulting to TRUE
+> for any OAuth provider unless `allowDangerousEmailAccountLinking` is explicitly false, then links
+> accounts by email — a genuine account-takeover vector. Removing the callback reopens it silently.
+>
+> Measured: `invites.test.ts` 33 → **37 passed**; the harness defaults `emailVerified: true` so the
+> pre-existing tests still model a verified provider. Mutation-proof red then reverted — disabling
+> the guard reddens exactly the three new tests and leaves the credentials test green.
+> `tsc --noEmit` exit 0 in `packages/backend`. **Still unproven: no browser has walked
+> invite → signup → tenant against a running deployment.**
+>
+> Known and NOT fixed: `approve`'s replay branch returns the existing invite without patching the
+> waitlist row to `approved`, so such a row stays in the owner queue forever. Cosmetic.)
+
 > Last verified: 2026-08-16 against `a584793` + the provider-shape guard (25-01 — waitlist,
 > owner-gated invites, and the
 > `createOrUpdateUser` admission transaction for Google / Microsoft Entra ID / password).

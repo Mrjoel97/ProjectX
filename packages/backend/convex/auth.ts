@@ -49,6 +49,11 @@ export const google = Google({
     id: p.sub,
     oauthSubject: p.sub,
     email: p.email,
+    // Admission matches an invite on this address, so whether the PROVIDER vouches for it is part
+    // of the security decision and has to travel with it. Google sets `email_verified` on its own
+    // accounts; comparing to `true` rather than coercing means a missing claim reads as NOT
+    // verified. See the refusal in `admitIdentity`.
+    emailVerified: p.email_verified === true,
     name: p.name,
     image: p.picture,
   }),
@@ -73,6 +78,20 @@ export const microsoft = MicrosoftEntraID({
     oauthSubject: p.sub,
     // Entra omits `email` for many account shapes; `preferred_username` carries the address then.
     email: p.email ?? p.preferred_username,
+    /**
+     * **ENTRA DOES NOT VERIFY `email` OR `preferred_username`, AND THIS IS THE nOAuth CLASS.**
+     * The `email` claim is settable by a user or a tenant admin on accounts they control, so an
+     * address here is a CLAIM, not a proof — treating it as proof lets someone who knows an
+     * invited address redeem that invite. `xms_edov` ("email domain owner verified") is the only
+     * claim that answers it, it is OPTIONAL, and it must be turned on per app registration
+     * (Token configuration → add optional claim → `xms_edov`, for both ID and access tokens).
+     *
+     * So this is `false` until that claim is configured AND true, and `admitIdentity` refuses
+     * OAuth admission without it. That fails CLOSED: with Entra sign-in enabled but `xms_edov`
+     * unconfigured, an invited user signs up with Google or with password + code instead. Do NOT
+     * "fix" a refusal here by defaulting this to true.
+     */
+    emailVerified: (p as { xms_edov?: boolean }).xms_edov === true,
     name: p.name,
   }),
 });

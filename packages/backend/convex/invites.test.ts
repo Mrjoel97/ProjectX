@@ -97,7 +97,10 @@ function admit(
       existingUserId: args.existingUserId ?? null,
       type: args.type ?? "oauth",
       provider: (args.provider ?? googleProvider) as never,
-      profile: args.profile,
+      // `emailVerified: true` by DEFAULT so every test above models the ordinary case — a provider
+      // that vouches for the address. Spreading `args.profile` second means a test can still pass
+      // `emailVerified: false` (or omit it entirely) to exercise the unverified-claim refusal.
+      profile: { emailVerified: true, ...args.profile },
     }),
   );
 }
@@ -342,6 +345,83 @@ describe("admission inside the auth transaction", () => {
 
     // Byte-unchanged: the first redemption's three fields are immutable.
     expect(await h.t.run((ctx) => ctx.db.get(invite.inviteId))).toEqual(spent);
+  });
+
+  // ── The unverified-claim refusal (the nOAuth guard) ──────────────────────────────────────────
+  //
+  // Entra does NOT verify `email`/`preferred_username`. Without this refusal, anyone who knows an
+  // invited address and controls any Entra account can set that address as their own `email`,
+  // redeem the invite, and lock the real invitee out — the invite is single-use, so the theft is
+  // also a denial. These tests pass `emailVerified: false` explicitly, overriding the harness
+  // default.
+  test("an OAuth identity whose address the provider did not verify is refused", async () => {
+    const h = await harness();
+    await approvedInvite(h, "victim@contoso.com");
+
+    await expect(
+      admit(h.t, {
+        provider: entraProvider,
+        profile: {
+          email: "victim@contoso.com",
+          oauthSubject: "attacker-sub",
+          emailVerified: false,
+        },
+      }),
+    ).rejects.toThrow(/INVITE_REQUIRED/);
+  });
+
+  test("the refused unverified claim spends nothing and stays usable by the real invitee", async () => {
+    const h = await harness();
+    const invite = await approvedInvite(h, "victim@contoso.com");
+    const before = await h.t.run((ctx) => ctx.db.get(invite.inviteId));
+    // NOT zero — the harness seeds an owner. The claim is that the refusal adds nobody.
+    const usersBefore = await h.t.run((ctx) => ctx.db.query("users").collect());
+
+    await expect(
+      admit(h.t, {
+        provider: entraProvider,
+        profile: { email: "victim@contoso.com", oauthSubject: "attacker", emailVerified: false },
+      }),
+    ).rejects.toThrow(/INVITE_REQUIRED/);
+
+    // Byte-unchanged, and no user was created for the attacker.
+    expect(await h.t.run((ctx) => ctx.db.get(invite.inviteId))).toEqual(before);
+    expect(await h.t.run((ctx) => ctx.db.query("users").collect())).toEqual(usersBefore);
+
+    // The real invitee, on a provider that DOES vouch for the address, still gets in.
+    const userId = await admit(h.t, {
+      profile: { email: "victim@contoso.com", oauthSubject: "real-sub", emailVerified: true },
+    });
+    expect(userId).toBeDefined();
+  });
+
+  test("a missing emailVerified claim is treated as unverified, not as absent-so-fine", async () => {
+    const h = await harness();
+    await approvedInvite(h, "nomissing@example.com");
+
+    await expect(
+      // The harness default is stripped by passing the key explicitly as undefined.
+      admit(h.t, {
+        profile: {
+          email: "nomissing@example.com",
+          oauthSubject: "s",
+          emailVerified: undefined,
+        },
+      }),
+    ).rejects.toThrow(/INVITE_REQUIRED/);
+  });
+
+  test("the credentials path is unaffected — its proof is the code, not a provider claim", async () => {
+    const h = await harness();
+    const invite = await approvedInvite(h, "pw@example.com");
+
+    // No emailVerified at all, and it still admits: a password signup is verified by the code.
+    const userId = await admit(h.t, {
+      provider: passwordProvider,
+      type: "credentials",
+      profile: { email: "pw@example.com", inviteCode: invite.code, emailVerified: false },
+    });
+    expect(userId).toBeDefined();
   });
 
   test("cross-provider reuse of one invite fails closed rather than linking accounts", async () => {

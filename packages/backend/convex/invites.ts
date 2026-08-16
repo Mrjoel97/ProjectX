@@ -312,6 +312,29 @@ export async function admitIdentity(
   const email = normalizeEmail(args.profile.email ?? args.profile.preferred_username);
   if (!email) throw new Error("INVITE_NO_EMAIL");
 
+  // Password email is SELF-ASSERTED — anyone can type an invited address — so credentials
+  // admission additionally requires the code itself (checked below). OAuth cannot carry the typed
+  // code through Convex Auth, so the OAuth path leans entirely on the address being VERIFIED.
+  const isCredentials = args.provider.type === "credentials";
+
+  /**
+   * THE OAUTH PATH TRUSTS AN EMAIL, SO IT MUST CHECK THAT THE EMAIL WAS VERIFIED.
+   *
+   * Matching an invite on an unverified provider claim is the nOAuth pattern: an attacker who
+   * knows an invited address, on any issuer that lets them set their own `email`, redeems someone
+   * else's invite — admitting a stranger AND locking the real invitee out, since the invite is
+   * then spent. It is not account takeover (`existingUserId` comes only from an existing ACCOUNT,
+   * never from an email match — @convex-dev/auth@0.0.94 `users.js:13`, and defining this callback
+   * is what keeps the package's own `shouldLinkViaEmail` path unreachable), but it is admission.
+   *
+   * REFUSED WITH THE SAME `INVITE_REQUIRED` AS EVERY OTHER REFUSAL, AND CHECKED BEFORE THE INVITE
+   * IS LOOKED UP. A distinct error, or one thrown after the lookup, would tell a stranger that the
+   * address they guessed has a live invite — the oracle this module is careful not to be.
+   */
+  if (!isCredentials && args.profile.emailVerified !== true) {
+    throw new Error("INVITE_REQUIRED");
+  }
+
   const invite = await db
     .query("betaInvites")
     .withIndex("by_email", (q) => q.eq("email", email))
@@ -321,10 +344,6 @@ export async function admitIdentity(
   // the list.
   if (!invite || invite.redeemedAt !== undefined) throw new Error("INVITE_REQUIRED");
 
-  // Password email is SELF-ASSERTED — anyone can type an invited address — so credentials
-  // admission additionally requires the code itself. OAuth cannot carry the typed code through
-  // Convex Auth, but its email is provider-VERIFIED, which is the stronger fact.
-  const isCredentials = args.provider.type === "credentials";
   if (isCredentials && normalizeCode(args.profile.inviteCode) !== invite.code) {
     throw new Error("INVITE_CODE_REQUIRED");
   }
