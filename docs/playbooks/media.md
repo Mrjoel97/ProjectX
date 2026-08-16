@@ -13,6 +13,23 @@
 > `dispatch:` prefix fix really closed `420c852b`'s two-actor miscount. That says nothing about the
 > render pipeline this playbook documents.)
 
+> Touched 2026-08-16 (eval close-out lane) to clear the §9 Stop hook — **NOT a verification**, and
+> deliberately not a `Last verified` line. This session touched no media code: it closed the
+> production eval/activation investigation (bisect run `030449d7`, 8/8, $0.1581) and corrected the
+> deployment-scope claims in `skill-registry.md` and `agent-runtime.md`. The hook fired on
+> `MediaCanvas.tsx`, `workspace/cards.tsx` and `convex/media.ts`, all carrying **uncommitted
+> in-flight changes** from the concurrent **33-08** lane, which committed its derivations at
+> `3b58092` and has not yet reached its docs step — 33-06 and 33-07 each closed with their own
+> `docs(33-0N)` commit against this file, and 33-08's is still owed. That work is unread, unrun and
+> unattested by this session, and **the lane that owns it still owes this playbook a real entry and
+> a real `Last verified` bump.** Nothing below covers it.
+>
+> (One media-adjacent FACT from this session, recorded as evidence rather than verification: the
+> production bisect confirmed `35-create-document`, `36-crm-follow-up` and the three research
+> fixtures all PASS on production against `cockpit-agent@8`. That says nothing about the render
+> pipeline this playbook documents, and the media/Drive sections of that body remain **dev-only** —
+> production was never activated. See `.planning/debug/finance-update-fails-only-in-full-sequence.md`.)
+
 > Last verified: 2026-08-16 (33-07 - **THE GUIDED-INTAKE CHIPS AND THE TWO-DECK SWITCHER, on the
 > canvas.** The brief now reads FIRST, above the hero: `briefChips(brief, deckLocked)` renders the
 > parsed ask as five editable chips, and it is the only place a mis-parse is visible before money

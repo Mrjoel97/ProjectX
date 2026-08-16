@@ -12,6 +12,33 @@
 > that gated it. Active body verified byte-identical to the `.md` on disk at the moment of the
 > flip.)
 
+> Last verified: 2026-08-16 (**"THE GATE IS GREEN, 40/40" IS TRUE OF DEV AND FALSE OF PRODUCTION.**
+> Qualifying, not retracting, the entry below: gate `d59099cd` really did go 40/40 and really did
+> record evidence — on the **dev** deployment. **The production gate has run three times and comes
+> back 39/40**, red on `37-finance-update` and nothing else, so no evidence row exists on production
+> candidate `@8` and the production pointer has NOT moved.
+>
+> **The failure is an ordering effect, not a defect in anything this playbook documents.** The same
+> body (sha `df23a5541f2b`) passes fixture 37 in five separate windows — alone; with 27+28; with
+> 35+36; and in bisect run `030449d7` (production, pinned `@8`, `--only` 30→37, **8/8 green,
+> $0.1581**) with seven fixtures ahead of it. It fails only at full 40-fixture length, 3/3. That run
+> also confirmed production carries the `evaluations.ts` provenance fix, since `30-gap-dispatch-money-model`
+> and `31-gap-dispatch-lead-engine` both PASS where they previously failed `actOnGap: gap_not_found`.
+>
+> **The harness limitation this exposes is worth more than the bug.** Nothing in the runner can
+> distinguish a tool that was **called and refused** from one that was **never called**:
+> `mediaDispatchCountForThread` is hardcoded to a single tool name. Every dispatch-shaped fixture
+> inherits that blindness, so any future "the agent did not do X" failure is undiagnosable by the
+> same mechanism. Generalising the query to take a tool name costs $0 in API spend and is blocked
+> only on a production deploy.
+>
+> **Investigation closed by owner decision; the defect is open and unfixed.** Do not re-run the full
+> production gate hoping — three attempts at ~$0.50 each have produced the identical result, and the
+> session that ran the third flagged it as one it should not have spent. Detail, the five passing
+> windows, everything ruled out at $0 and the untested hypothesis are in
+> `.planning/debug/finance-update-fails-only-in-full-sequence.md`. Total spend on the bisect that
+> closed it: **$0.1581**.)
+
 > Last verified: 2026-08-16 (**THE GATE IS GREEN. 40/40, and evidence is recorded on
 > `cockpit-agent v26`** — run `d59099cd`, unfiltered, pinned, $0.3735 exec + $0.1088 specialist =
 > **$0.4824**, exit 0, two fixtures retried once each (05-edit-make-formal, 28-healthy-no-gaps).

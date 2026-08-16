@@ -2044,6 +2044,29 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ### Blockers/Concerns
 
+- **PRODUCTION DOES NOT RUN THE COCKPIT BODY THE PLAYBOOKS APPEAR TO CLAIM (closed by owner
+  decision 2026-08-16, defect open and unfixed).** `skill-registry.md` says "COCKPIT-AGENT v26 IS
+  NOW ACTIVE" and `agent-runtime.md` says "THE GATE IS GREEN, 40/40" — **both true of DEV ONLY**,
+  and both have since been qualified in place. Each deployment keeps its own `skills` rows, version
+  counter and EVAL_GATE evidence: the identical body (sha `df23a5541f2b`) is dev candidate **v26**
+  (gate `d59099cd` 40/40, activated) and production candidate **`@8`** (gate run 3×, **39/40**
+  every time, red on `37-finance-update` and nothing else). No evidence row exists on `@8`, so
+  `activateSkill` would throw `EVAL_GATE`; nothing was hand-activated. **Consequence: the calendar
+  section, the Drive section, 20-12's media sections and the merged document section are live on
+  dev and NOT live for real users.** The failure is an ordering effect, not a code defect — 37
+  passes in five separate windows (alone; with 27+28; with 35+36; and with 30–36 ahead of it in
+  bisect run `030449d7`, production, **8/8 green $0.1581**) and fails only at full 40-fixture
+  length. Root cause undiagnosable as the harness stands: nothing can distinguish
+  called-and-refused from never-called, because `mediaDispatchCountForThread` is hardcoded to one
+  tool name — generalising it is $0 in API and blocked only on a production deploy. **DO NOT re-run
+  the full production gate hoping**; three attempts at ~$0.50 each gave the identical result and the
+  session that ran the third flagged it as one it should not have spent. Full evidence, the five
+  windows, everything ruled out at $0 and the untested hypothesis (per-tenant rate limit vs
+  accumulated tenant state) are in
+  `.planning/debug/finance-update-fails-only-in-full-sequence.md`. Reopen only if the finance path
+  misbehaves for a real user, or if production activation becomes required — and start from the
+  diagnostic query, NOT another bisect round.
+
 - **Phase-8 owner-auth blocker (open):** three functions (`setOptimizerEnabled`, `activateCandidate`, `candidatesForReview`) are tenant-callable with no owner primitive — closed by Phase 22 (`requireOwner`); MUST land before Phase 23 and Phase 25.
 - **Names-in-prose PII ceiling:** `packages/pii` scrubs structured PII only; a shared S1/S4 open design question — grounded business-profile prose must stay out of exportable/WORM tables until resolved (short spike before S1 redaction-boundary work is called done).
 - **Media MCP unknowns (Phase 20):** Pikar-Ai MCP backend OAuth/token-exchange + pricing units unverified — the phase's first task is a spike.

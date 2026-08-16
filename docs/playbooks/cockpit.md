@@ -1,5 +1,24 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-16 (33-07 — **THE MEDIA CANVAS CAN NOW SPEAK INTO THE TRANSCRIPT.** The
+> cockpit-watched file here is `MediaCanvas.tsx`, and what 33-07 added to it is a UI→chat entry
+> point: the "Re-propose (free)" button sends ONE canned turn (`REPROPOSE_MESSAGE` — *"Re-propose
+> storyboards for the updated brief."*) through `useSendCockpitMessage`, the SAME hook the composer
+> uses. Deliberately NOT a second dispatch path — the message lands in the transcript like any
+> other, reads like one a person could have typed, and the agent answers it with the ordinary tool
+> loop. **`threadId` is REQUIRED, not optional-with-a-fallback:** `MediaCanvas` and `ReelCanvas`
+> both take it as a prop and the button does not render without one, because sending with no thread
+> MINTS A NEW THREAD and would move the conversation out from under the canvas the user is looking
+> at. The canvas also gained two direct `useMutation` calls (`api.media.editBrief`,
+> `api.media.switchDeck`), and **nothing auto-fires from either** — editing a brief chip calls
+> `editBrief` and STOPS. The stale badge (`deckStale`, true only when BOTH stamps exist and
+> `briefChangedAt > deckProposedAt`) plus that one button are the whole affordance, because the
+> re-propose costs a model turn and D7's rule is that a spend follows a click. Every string on the
+> surface comes from `mediaCanvasView.ts`; the component is markup and wiring. Verified this
+> session: `mediaCanvas.test.ts` 78/78 green and `tsc --noEmit` clean in `apps/web`. **NOT seen in a
+> browser and no cockpit send path was exercised live** — 33-10 owns that gate. The media half of
+> 33-07 is entered in `media.md` by the lane that owns it (`860671b`).)
+
 > Last verified: 2026-08-16 (22.1-05 Task 2 — tenant erasure calls each connected provider's
 > existing disconnect before registry deletion, reports Google and Microsoft separately, and
 > continues local credential/data removal when a provider attempt fails). Focused deletion tests

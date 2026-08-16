@@ -1,5 +1,38 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-16 (**"v26 IS NOW ACTIVE" MEANS DEV ONLY. PRODUCTION STILL RUNS THE OLD
+> BODY, AND THE PRODUCTION CANDIDATE IS GATE-BLOCKED.** This qualifies — it does not retract — the
+> entry immediately below, every word of which is true of the dev deployment where it was measured.
+> The entry simply never named a deployment, and this file's own media precedent does
+> (`Production (prod:opulent-octopus)`, seeded v5, gate `7d3b852e` 38/38, owner-activated). Read
+> without that qualifier, it says the calendar/Drive/media/document work is live for users. It is
+> not.
+>
+> **THE TWO-DEPLOYMENT SHAPE, which the two-step rule below does not by itself make obvious:** each
+> deployment keeps its OWN `skills` rows, its OWN version counter and its OWN EVAL_GATE evidence.
+> The identical body is candidate **v26 on dev** and candidate **`@8` on production** (both sha
+> `df23a5541f2b`). Dev's gate `d59099cd` went 40/40 and dev was activated. **Production's gate has
+> been run three times and comes back 39/40** — `37-finance-update`, and nothing else, every time.
+> `shouldRecordEvidence` requires `allGreen && casesTotal > 0 && filters.length === 0`, so no
+> evidence row exists on `@8` and `activateSkill` would throw `EVAL_GATE` if anyone tried. Nobody
+> tried; nothing was hand-activated.
+>
+> **THE INVESTIGATION IS CLOSED BY OWNER DECISION, THE DEFECT IS NOT FIXED.** Bisect run
+> `030449d7` (production, pinned `@8`, `--only` 30→37) went **8/8 green for $0.1581**, eliminating
+> fixtures 30–36 and narrowing the window to 1–29; `37-finance-update` now passes in five separate
+> windows and fails only at full length. It is an ordering effect on production, not a code defect
+> — `cash.ts`, `llm.ts` and `financeClaim.ts` are byte-identical between deployments and both skill
+> rows hash the same. The harness cannot say whether `stageFinanceWrite` was called-and-refused or
+> never-called, because `mediaDispatchCountForThread` is hardcoded to one tool name; generalising it
+> is $0 in API and blocked only on a production deploy. Full evidence table, the five passing
+> windows, everything ruled out at $0 and the untested hypothesis are in
+> `.planning/debug/finance-update-fails-only-in-full-sequence.md`.
+>
+> **What is therefore true of production right now:** the previously-active cockpit body is what
+> serves real traffic; the calendar section, the Drive section, 20-12's media sections and the
+> merged document section are dev-only. Rollback is unaffected. No registry mechanic changed here —
+> this is a correction of what the rows on two deployments actually say.)
+
 > Last verified: 2026-08-16 (**COCKPIT-AGENT v26 IS NOW ACTIVE. THE POINTER MOVED: v24 → v26.**
 > THIS SUPERSEDES THIS SESSION'S EARLIER NOTE BELOW, which said "neither `seedSkills` nor
 > `activateSkillVersion` was run, so no candidate version was inserted and the active pointer did
