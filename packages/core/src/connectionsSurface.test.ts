@@ -1,5 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
+import { GOOGLE_SCOPES } from "./calendar";
+import { MICROSOFT_SCOPES } from "./microsoft";
 
 // These files live in `apps/web`, outside this package. Reading them by path is the established
 // repo idiom for asserting a guarantee that lives in the UI — see the profile source scan in
@@ -14,6 +16,8 @@ const msConnectPage = read(`${WEB}/connect-microsoft/page.tsx`);
 const panel = read(`${WEB}/dashboard/profile/ConnectionsPanel.tsx`);
 const data = read(`${WEB}/dashboard/profile/connections.ts`);
 const profilePage = read(`${WEB}/dashboard/profile/page.tsx`);
+// NOT under `${WEB}` — the policy is a public page, outside the authenticated app.
+const privacyPage = read("apps/web/app/privacy/page.tsx");
 
 // The exact user-facing sentence. If the Google scope changes, this string changes in ONE place.
 const CONFIRM =
@@ -324,5 +328,69 @@ describe("every user-facing surface names every capability in the Google grant",
       "the connections row does not read driveReady — a tenant connected before the Drive widening " +
         "is then reported as healthy while every Drive import 403s.",
     ).toContain("driveReady");
+  });
+});
+
+// ── The privacy policy is a user-facing surface too (added 2026-08-16) ────────────────────────
+//
+// THIS IS THE GAP THE SWEEPS ABOVE LEFT OPEN, and it stayed open through two verification passes.
+// Every surface they cover — the connect pages, the disconnect confirm, the connections row — named
+// Drive correctly, while §4 of the privacy policy still said Pikar requests `gmail.modify` alone.
+// Three scopes had been added since that sentence was written. The consent screen and the policy
+// are two different promises made to the same person about the same grant; only one was under test.
+//
+// A policy is also the surface with the LONGEST feedback loop: nobody reads it in review, and being
+// wrong there is a regulatory exposure rather than a bug report. So it gets the same treatment as
+// the consent copy — widen a scope constant, and this suite is red until the policy has been told.
+//
+// Asserted against the SCOPE CONSTANTS, not a hand-copied list, for the reason the file's other
+// sweeps exist: a literal list here would be one more place to forget.
+describe("the privacy policy names every scope in both grants", () => {
+  // Same comment-stripping rule as the sweeps above, and for the same reason: prose that NAMES a
+  // scope while explaining a rule is documentation, not disclosure. Only rendered copy counts.
+  const policyCopy = privacyPage.replace(/\{?\/\*[\s\S]*?\*\/\}?/g, "").replace(/\/\/[^\n]*/g, "");
+
+  test("the scan is reading the real policy, not an empty string", () => {
+    expect(policyCopy.length).toBeGreaterThan(2000);
+    expect(policyCopy).toContain("Privacy Policy");
+    expect(policyCopy).toContain("4. Google user data");
+  });
+
+  // `gmail.modify`, `calendar.freebusy`, `calendar.events`, `drive.readonly` — the policy names the
+  // short form, which is also how Google's own consent screen names them to the user.
+  test("every Google scope is disclosed", () => {
+    for (const scope of GOOGLE_SCOPES.split(" ")) {
+      const shortName = scope.split("/").pop() as string;
+      expect(
+        policyCopy.includes(shortName),
+        `the privacy policy never says "${shortName}" — it is in GOOGLE_SCOPES, so the app asks ` +
+          `for it. A policy that under-states the grant is worse than one that says nothing: §4 ` +
+          `is the section written to be maximally candid about how much access we hold.`,
+      ).toBe(true);
+    }
+  });
+
+  // Includes Mail.Send / Mail.Read, which are granted NOW and unused until 25-06 (ADR-018's
+  // consent-once union grant). An undisclosed granted-but-unused permission is the exact defect
+  // ADR-018 consequence 6 warns about, one surface further out than the consent screen.
+  test("every Microsoft scope is disclosed, including the ones not yet used", () => {
+    for (const scope of MICROSOFT_SCOPES.split(" ")) {
+      expect(
+        policyCopy.includes(scope),
+        `the privacy policy never says "${scope}" — it is in MICROSOFT_SCOPES, so the consent ` +
+          `screen asks for it. Scopes we hold but do not yet use still have to be disclosed.`,
+      ).toBe(true);
+    }
+  });
+
+  test("the policy does not claim model requests route through the Vercel AI Gateway", () => {
+    // `llm.ts` resolves models against @ai-sdk/openai directly — "The Vercel AI Gateway is NOT
+    // used" (decision 2026-07-13). The policy asserted the opposite for a year.
+    expect(
+      /AI Gateway/i.test(policyCopy),
+      "the privacy policy still names the Vercel AI Gateway as a processor of message content, " +
+        "but llm.ts calls OpenAI directly. Naming a processor that never sees the data is as " +
+        "wrong as omitting one that does.",
+    ).toBe(false);
   });
 });

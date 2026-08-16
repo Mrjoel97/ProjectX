@@ -1,5 +1,7 @@
 {
-  "_unassigned": ["packages/backend/vitest.diag.setup.ts"],
+  "_unassigned": [
+    "packages/backend/vitest.diag.setup.ts"
+  ],
   "ci-gate.md": [
     ".github/workflows/ci.yml",
     "package.json",
@@ -106,7 +108,9 @@
     "apps/web/e2e/finance.spec.ts",
     "apps/web/e2e/content.spec.ts",
     "apps/web/e2e/reports.spec.ts",
-    "apps/web/e2e/command-center.spec.ts"
+    "apps/web/e2e/command-center.spec.ts",
+    "apps/web/app/privacy/",
+    "packages/core/src/connectionsSurface.test.ts"
   ],
   "cockpit.md": [
     "apps/web/app/(app)/dashboard/workspace/",

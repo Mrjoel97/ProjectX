@@ -26,6 +26,13 @@ const DELETE_PHRASE = "DELETE MY DATA";
 const MS_CONSENT_PERSONAL = "https://account.microsoft.com/privacy/app-access";
 const MS_CONSENT_WORK = "https://myapps.microsoft.com/";
 
+/** Google's own consent surface. Needed because "removed here, not revoked at the provider" is
+ *  reachable for GOOGLE too — not only for Microsoft. `disconnectGoogle` reports `revoked:false` on
+ *  a network throw or a 5xx, and `tenantDelete` carries that through per provider. Before this
+ *  constant existed the Microsoft links rendered for that case, telling a Google user to go remove
+ *  their grant at account.microsoft.com. */
+const GOOGLE_CONSENT = "https://myaccount.google.com/permissions";
+
 /** Mirrors `tenantDelete.ts`'s local result shape. Per-provider truth is reported, never averaged
  *  into one boolean — Google revokes at the provider, Microsoft does not (GOVN-03). */
 type ProviderDeletionResult = {
@@ -297,20 +304,31 @@ export function DataControls() {
                     : entry.revokedAtProvider
                       ? "revoked at the provider."
                       : "removed here only — not revoked at the provider."}
-                {entry.localRowDeleted && !entry.revokedAtProvider && (
-                  <>
-                    {" "}
-                    Remove the consent entry yourself at{" "}
-                    <a href={MS_CONSENT_PERSONAL} rel="noopener noreferrer" target="_blank">
-                      account.microsoft.com
-                    </a>{" "}
-                    or{" "}
-                    <a href={MS_CONSENT_WORK} rel="noopener noreferrer" target="_blank">
-                      myapps.microsoft.com
-                    </a>
-                    .
-                  </>
-                )}
+                {entry.localRowDeleted &&
+                  !entry.revokedAtProvider &&
+                  (entry.provider === "microsoft" ? (
+                    <>
+                      {" "}
+                      Remove the consent entry yourself at{" "}
+                      <a href={MS_CONSENT_PERSONAL} rel="noopener noreferrer" target="_blank">
+                        account.microsoft.com
+                      </a>{" "}
+                      or{" "}
+                      <a href={MS_CONSENT_WORK} rel="noopener noreferrer" target="_blank">
+                        myapps.microsoft.com
+                      </a>
+                      .
+                    </>
+                  ) : (
+                    <>
+                      {" "}
+                      Remove the consent entry yourself at{" "}
+                      <a href={GOOGLE_CONSENT} rel="noopener noreferrer" target="_blank">
+                        myaccount.google.com/permissions
+                      </a>
+                      .
+                    </>
+                  ))}
               </li>
             ))}
           </ul>

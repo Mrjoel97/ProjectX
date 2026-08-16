@@ -1,5 +1,55 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-16 (**THE POLICY'S CONTROLS WERE VERIFIED REPEATEDLY WHILE ITS DISCLOSURES
+> WENT UNREAD.** A GOVN-03 evidence sweep found the milestone audit's "tenant export/deletion are
+> absent" claim STALE — both exist and are wired (`tenantExport.ts:36`, `tenantDelete.ts:187`) — and
+> then found SIX FALSE STATEMENTS in `apps/web/app/privacy/page.tsx`, live on the public site:
+>
+> 1. §4 said Pikar requests `gmail.modify` alone. The real grant is four scopes — `gmail.modify`,
+>    `calendar.freebusy`, `calendar.events`, `drive.readonly` (`GOOGLE_SCOPES`, core/calendar.ts).
+>    §4 is the section written to be maximally candid about access breadth, and it UNDER-STATED it.
+> 2. `Mail.Send`/`Mail.Read` are granted at Microsoft connect (ADR-018's consent-once union grant)
+>    and were disclosed NOWHERE. **The scopes were NOT dropped.** Dropping them was considered and
+>    refused: it reverses an accepted ADR and splits one consent into two. They are now disclosed,
+>    with the fact that no code reads or sends Microsoft mail today stated plainly rather than
+>    left as a granted-but-invisible permission.
+> 3. §7 named the Vercel AI Gateway as a processor of message content. `llm.ts:16-18` says verbatim
+>    it is NOT used (decision 2026-07-13); OpenAI is called directly.
+> 4. §7 listed Google as a mail provider only. It is also an LLM and the vault embedding provider.
+> 5. fal.ai, Tavily and Alibaba Cloud Model Studio were absent from §7 entirely.
+> 6. §8 said all providers process data in the United States. Alibaba Model Studio does not.
+>
+> **THE REGION WAS DELIBERATELY NOT WRITTEN AS "SINGAPORE".** `ap-southeast-1` appears only in
+> `media.test.ts` inside `vi.stubEnv("WAN_API_BASE_URL", …)`; production code (`media.ts:932`) pins
+> only the `.maas.aliyuncs.com` suffix and takes the region from env. §8 therefore says "outside the
+> United States, in Asia-Pacific" and offers the exact region on request. A test fixture is not a
+> deployment fact, and a privacy policy is the last place to promote one into a claim.
+>
+> **THE GAP NAMED IN THE GOVN-03 ENTRY BELOW IS NOW CLOSED.** That entry recorded that
+> `privacy/page.tsx` was watched by NO playbook and left registering it to "whoever next owns the
+> policy". It is registered in `watch.json` here, together with `connectionsSurface.test.ts`.
+>
+> **The root cause was a sweep that stopped one surface short.** `connectionsSurface.test.ts` already
+> asserted that every user-facing surface names every granted capability — but it covered the connect
+> pages, the disconnect confirm and the connections row, NOT the policy. So all of those said "Drive"
+> while the policy did not. The sweep now reads the policy and asserts every scope in `GOOGLE_SCOPES`
+> and `MICROSOFT_SCOPES` appears in it, driven off the CONSTANTS rather than a hand-copied list, plus
+> a guard that the AI Gateway claim cannot return. Widen a scope and this suite is red until the
+> policy has been told.
+>
+> Also fixed: `DataControls.tsx` rendered Microsoft's consent links for ANY provider whose grant was
+> removed locally but not revoked at the provider — and `disconnectGoogle` reports `revoked:false` on
+> a network throw or a 5xx, so a failed GOOGLE revoke sent the user to `account.microsoft.com` to
+> remove a Google grant. It now branches on `entry.provider`, with `myaccount.google.com/permissions`
+> for Google.
+>
+> Two mutation proofs, RED first then reverted: replacing `drive.readonly` throughout the policy
+> reddens "every Google scope is disclosed" with the missing scope named in the failure message;
+> restoring the AI Gateway sentence reddens the gateway guard. core connectionsSurface 30/30, web
+> dataControls 5/5, core + web `tsc --noEmit` exit 0 each, biome clean (2 `format` findings fixed,
+> zero lint findings). **NOTHING WAS PUBLISHED — the policy edit is committed, not deployed, and the
+> corrected text is live to nobody until someone deploys it.**)
+
 > Last verified: 2026-08-16 (**THE §4 BASIS GUARD LEAKED TYPOGRAPHIC QUOTES, AND THE REALISTIC LEAK
 > IS A POSSESSIVE.** `validateFigureClaim` refuses a `basis` carrying quoted content — the string
 > reaches the audit log and the approval card, so "refs only, never quoted content" has to hold. The
