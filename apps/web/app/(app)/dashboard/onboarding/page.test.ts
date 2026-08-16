@@ -21,4 +21,26 @@ describe("onboarding business-brief upload", () => {
     expect(source).toContain("uploadFolder(files)");
     expect(source).toContain("ZIP files must be unzipped");
   });
+
+  // The composer row was wrapped in `{!profile && (…)}`, so the FIRST typed message set `profile`
+  // and unmounted the paperclip, the folder picker and the mic — a user who typed a sentence before
+  // attaching their business folder could never attach it at all.
+  test("the intake modalities survive the first turn", () => {
+    const row = source.slice(
+      source.indexOf('display: "flex", alignItems: "center", gap: "0.35rem"'),
+      source.indexOf('aria-label="Send"'),
+    );
+    expect(row).toContain('data-testid="onboarding-file-input"');
+    expect(row).toContain('data-testid="onboarding-folder-input"');
+    expect(row).not.toContain("!profile &&");
+  });
+
+  // …and the other half of that fix: a document handed over mid-conversation must be an ordinary
+  // user turn. Routing it back through the opening path would re-run `extractProfile` and restart
+  // `runTurn` with an empty history, discarding every fact already answered.
+  test("a mid-conversation upload is a turn, not a restart", () => {
+    expect(source).toContain("void submitIntake(extracted)");
+    expect(source).toContain("await runTurn(intakeText, slots, transcript)");
+    expect(source).not.toContain("openingTurn");
+  });
 });

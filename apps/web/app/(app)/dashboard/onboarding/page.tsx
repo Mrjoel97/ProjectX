@@ -332,16 +332,27 @@ export default function OnboardingPage() {
   );
 
   /**
-   * Step 2 + the first pass of step 3. `extractProfile` runs ONCE, on the intake text; the same text
-   * is then the first user message of the fact conversation.
+   * ONE entry point for every intake modality (typed, file, folder, spoken brief), on every turn.
+   *
+   * Step 2 + the first pass of step 3 happen only on the FIRST intake: `extractProfile` runs ONCE,
+   * and the same text is then the first user message of the fact conversation. A LATER intake — a
+   * document or spoken brief dropped mid-conversation, which the composer now allows — is just
+   * another user turn against the slots and transcript already gathered. Re-running `extract` there
+   * would overwrite the reviewed narrative and re-open the conversation with an empty history,
+   * silently discarding every fact already answered.
    */
-  const openingTurn = useCallback(
+  const submitIntake = useCallback(
     async (intakeText: string) => {
       setBusy(true);
       setError(null);
       setGaps(null);
-      setWaitMsg("Understanding your business…");
       try {
+        if (profile) {
+          setWaitMsg("Thinking…");
+          await runTurn(intakeText, slots, transcript);
+          return;
+        }
+        setWaitMsg("Understanding your business…");
         const p = await extract({ intakeText });
         setProfile(p);
         const seeded: OnboardingSlots =
@@ -354,7 +365,7 @@ export default function OnboardingPage() {
         setBusy(false);
       }
     },
-    [extract, runTurn],
+    [extract, runTurn, profile, slots, transcript],
   );
 
   useEffect(() => {
@@ -368,31 +379,15 @@ export default function OnboardingPage() {
     if (doc.text && doc.text.trim() !== "") {
       const extracted = doc.text;
       setPendingDocId(null);
-      void openingTurn(extracted);
+      void submitIntake(extracted);
     }
-  }, [pendingDocId, doc, openingTurn]);
+  }, [pendingDocId, doc, submitIntake]);
 
   function onSend() {
     const t = text.trim();
     if (t === "" || busy) return;
     setText("");
-    if (!profile) {
-      void openingTurn(t);
-      return;
-    }
-    void (async () => {
-      setBusy(true);
-      setError(null);
-      setGaps(null);
-      setWaitMsg("Thinking…");
-      try {
-        await runTurn(t, slots, transcript);
-      } catch {
-        setError("That didn't go through. Say it again and I'll pick up where we left off.");
-      } finally {
-        setBusy(false);
-      }
-    })();
+    void submitIntake(t);
   }
 
   async function storeVaultFile(blob: Blob, mimeType: string, filename: string, text?: string) {
@@ -433,7 +428,7 @@ export default function OnboardingPage() {
         blob instanceof File && isOnboardingTextFile(blob) ? await blob.text() : undefined;
       const { vaultDocId } = await storeVaultFile(blob, mimeType, filename, searchableText);
       setWaitMsg("Reading your brief…");
-      setPendingDocId(vaultDocId); // busy stays true — the poll effect clears it via openingTurn
+      setPendingDocId(vaultDocId); // busy stays true — the poll effect clears it via submitIntake
     } catch {
       setBusy(false);
       setError("Upload failed. Try again, or paste your brief instead.");
@@ -497,7 +492,7 @@ export default function OnboardingPage() {
 
     if (intakeText) {
       setWaitMsg("Understanding the business folder…");
-      await openingTurn(intakeText);
+      await submitIntake(intakeText);
       return;
     }
 
@@ -719,60 +714,60 @@ export default function OnboardingPage() {
                 color: "var(--ink)",
               }}
             />
+            {/* The three modalities stay for EVERY turn of the conversation, not just the opening
+                one: a user who starts by typing still has to be able to hand over the folder or the
+                spoken brief they meant to attach. `submitIntake` makes a mid-conversation document
+                an ordinary user turn, so nothing already gathered is lost by using them late. */}
             <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-              {!profile && (
-                <>
-                  <span
-                    className={`icon-btn onboarding-file-picker${busy ? " is-disabled" : ""}`}
-                    title="Upload one business brief"
-                  >
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      // Keep extensions alongside MIME types: Windows does not consistently assign
-                      // Markdown or Office MIME types in its file picker.
-                      accept={ONBOARDING_UPLOAD_ACCEPT}
-                      aria-label="Upload one business brief"
-                      data-testid="onboarding-file-input"
-                      disabled={busy}
-                      onChange={onPickFile}
-                    />
-                    <PaperclipIcon size={17} />
-                  </span>
-                  <span
-                    className={`icon-btn onboarding-file-picker${busy ? " is-disabled" : ""}`}
-                    title="Upload a business folder"
-                  >
-                    <input
-                      {...ONBOARDING_DIRECTORY_INPUT_ATTRIBUTES}
-                      ref={folderInputRef}
-                      type="file"
-                      multiple
-                      accept={ONBOARDING_UPLOAD_ACCEPT}
-                      aria-label="Upload a business folder"
-                      data-testid="onboarding-folder-input"
-                      disabled={busy}
-                      onChange={onPickFolder}
-                    />
-                    <FolderIcon size={17} />
-                  </span>
-                  <button
-                    type="button"
-                    className="icon-btn"
-                    aria-label={recording ? "Stop recording" : "Record a spoken brief"}
-                    aria-pressed={recording}
-                    title={recording ? "Stop recording" : "Record a spoken brief"}
-                    onClick={() => void toggleRecord()}
-                    style={recording ? { background: "var(--teal-600)", color: "#fff" } : undefined}
-                  >
-                    <MicIcon size={17} />
-                  </button>
-                  {recording && (
-                    <span style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>
-                      Recording… tap to stop
-                    </span>
-                  )}
-                </>
+              <span
+                className={`icon-btn onboarding-file-picker${busy ? " is-disabled" : ""}`}
+                title="Upload one business brief"
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  // Keep extensions alongside MIME types: Windows does not consistently assign
+                  // Markdown or Office MIME types in its file picker.
+                  accept={ONBOARDING_UPLOAD_ACCEPT}
+                  aria-label="Upload one business brief"
+                  data-testid="onboarding-file-input"
+                  disabled={busy}
+                  onChange={onPickFile}
+                />
+                <PaperclipIcon size={17} />
+              </span>
+              <span
+                className={`icon-btn onboarding-file-picker${busy ? " is-disabled" : ""}`}
+                title="Upload a business folder"
+              >
+                <input
+                  {...ONBOARDING_DIRECTORY_INPUT_ATTRIBUTES}
+                  ref={folderInputRef}
+                  type="file"
+                  multiple
+                  accept={ONBOARDING_UPLOAD_ACCEPT}
+                  aria-label="Upload a business folder"
+                  data-testid="onboarding-folder-input"
+                  disabled={busy}
+                  onChange={onPickFolder}
+                />
+                <FolderIcon size={17} />
+              </span>
+              <button
+                type="button"
+                className="icon-btn"
+                aria-label={recording ? "Stop recording" : "Record a spoken brief"}
+                aria-pressed={recording}
+                title={recording ? "Stop recording" : "Record a spoken brief"}
+                onClick={() => void toggleRecord()}
+                style={recording ? { background: "var(--teal-600)", color: "#fff" } : undefined}
+              >
+                <MicIcon size={17} />
+              </button>
+              {recording && (
+                <span style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>
+                  Recording… tap to stop
+                </span>
               )}
               {profile && remaining !== null && remaining > 0 && (
                 // A subtle "still to cover" affordance (BRAND §3 tracked caps) — a COUNT, never a
