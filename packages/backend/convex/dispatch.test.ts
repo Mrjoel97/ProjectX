@@ -2687,8 +2687,7 @@ describe("33-03 — the variations terminal: parseVariations runs FIRST", () => 
     const body = VAR_A_DECK.replace(
       "| 1 | generated_video | 8 |",
       "| 1 | generated_video | 10 |",
-    )
-      .replace("| 2 | animated_image | 22 |", "| 2 | animated_image | 20 |");
+    ).replace("| 2 | animated_image | 22 |", "| 2 | animated_image | 20 |");
     await t.action(
       internal.dispatch.__runSpecialistWithScript,
       mediaArgs(planId, { primary: [{ ...textStep(body), usage: SPEND_8_CENTS }] }),

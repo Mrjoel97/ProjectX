@@ -6,9 +6,9 @@ import type { Scene } from "./storyboard";
 import {
   CLIP_SECONDS,
   DEFAULT_CLIP_SECONDS,
+  deckRefusalClause,
   GENERATED_CLIP_SECONDS,
   GENERIC_DECK_REFUSAL,
-  deckRefusalClause,
   hasAssetSource,
   isPaidBlock,
   isPaidScene,
@@ -1240,9 +1240,15 @@ describe("parseVariations — two-variation bodies (33-01)", () => {
     ],
     "Target duration: 15",
   );
-  const twoUpBadB = ["## VARIATION A", "", sceneDeck(SCENES), "", "## VARIATION B", "", DECK_B_UNFIXABLE].join(
-    "\n",
-  );
+  const twoUpBadB = [
+    "## VARIATION A",
+    "",
+    sceneDeck(SCENES),
+    "",
+    "## VARIATION B",
+    "",
+    DECK_B_UNFIXABLE,
+  ].join("\n");
 
   it("ONE good deck survives its sibling's refusal — salvaged, never silent", () => {
     const r = parseVariations(twoUpBadB);
@@ -1259,10 +1265,7 @@ describe("parseVariations — two-variation bodies (33-01)", () => {
   });
 
   it("salvages symmetrically — a bad A keeps B", () => {
-    const aIllegal = twoUp.replace(
-      "| 1 | generated_video | 8 |",
-      "| 1 | generated_video | 7 |",
-    );
+    const aIllegal = twoUp.replace("| 1 | generated_video | 8 |", "| 1 | generated_video | 7 |");
     expect(parseVariations(aIllegal)).toMatchObject({
       kind: "salvaged",
       keptVariation: "b",

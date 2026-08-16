@@ -887,7 +887,9 @@ function repairGeneratedGrid(
   if (freed === 0) return adjustments.length === 0 ? { seconds, adjustments } : null;
 
   // Limit 3: the LAST non-generated scene takes the seconds back.
-  const absorber = parsed.map((p, i) => ({ ...p, i })).filter((p) => p.visual !== "generated_video");
+  const absorber = parsed
+    .map((p, i) => ({ ...p, i }))
+    .filter((p) => p.visual !== "generated_video");
   const target = absorber[absorber.length - 1];
   if (target === undefined) return null;
   const before = seconds[target.i] as number;
