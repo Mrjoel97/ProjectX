@@ -1,5 +1,34 @@
 # Playbook: Connected dashboard pages
 
+> Touched 2026-08-16 (media/eval lane) to clear the §9 Stop hook — **NOT a verification**, and
+> deliberately not a `Last verified` line. This session changed no dashboard code: it entered
+> 33-07's canvas work in `cockpit.md` and ran a production eval bisect on fixtures 30–37. The hook
+> fired on `apps/web/app/(app)/dashboard/settings/dataControls.test.ts`, which is carrying
+> **uncommitted in-flight changes** (+25 lines) from the concurrent 22.1 lane — the lane whose last
+> commits on this playbook's paths are `f449e71` and `38bc024`. That work is unread, unrun and
+> unattested by this session, and **the lane that owns it still owes this playbook a real entry and
+> a real `Last verified` bump.** Nothing above or below covers it.
+>
+> (Recorded in the form this repo already uses when a shared working tree puts another lane's diff
+> under the hook: the hook cannot be scoped to one lane's changes, so the honest move is to name
+> whose work is uncovered rather than to assert a verification nobody performed.)
+
+> Last verified: 2026-08-16 (22.1-05 Task 3 — the settings route gained a SECOND card, *Delete your
+> data*, which discharges the entry the note above records as owed by this lane. Same card, token
+> and rail idiom as the download control: the destructive fill is `--vault-danger`, a real `:root`
+> token in `globals.css`, never a raw hex (BRAND §8.1) — and `--held` stays reserved for the
+> approval gate alone (BRAND §2), so erasure is red, not amber.
+>
+> The button is `disabled` until the typed phrase equals `DELETE MY DATA` exactly; the field is a
+> real labelled `<input id="erase-confirm">` and the result is an `aria-live="polite"` status
+> region. **No `window.confirm`** — a browser modal blocks the Playwright specs (the 19-03 lesson)
+> and would also swallow the per-provider result the card exists to show.
+>
+> The card states what is removed, that it cannot be undone, what the audit archive retains, and
+> what each provider disconnect actually achieved. It does NOT claim the erasure has been proven:
+> 22.1-05 Task 3's disposable-tenant run is still open, so the page ships a control, not a verified
+> outcome. web dataControls 4/4, web typecheck exit 0.)
+
 > Last verified: 2026-08-16 (the download control states its own result. It used to say "The
 > file reached the stated export row limit" — a limit the page never states — which told the
 > user neither how much they got nor what was missing. It now reports the actual row count and

@@ -16,6 +16,29 @@
 > entry and a real `Last verified` bump.** The registration exists so the hook can protect that
 > file from here on, not to imply it is covered.
 
+> Last verified: 2026-08-16 (22.1-05 Task 3 — **the erasure SURFACE, and the real entry the note
+> above records as owed.** `/dashboard/settings` now carries a *Delete your data* card beside the
+> download one. It arms ONLY on the exact phrase `DELETE MY DATA` — the same literal the
+> `tenantDelete:deleteTenantData` action takes as `v.literal` — so a mis-typed confirmation is
+> refused at the surface before it can reach an irreversible action, and there is deliberately no
+> single-click path to erasure.
+>
+> THE AUDIT RULE IS THE POINT (CLAUDE.md §3): erasure walks `deletableTables()` and can only ever
+> name `tenant_owned` / `tenant_credential` tables, so `audit` is unreachable BY CONSTRUCTION rather
+> than by a remembered `if`. The card repeats the privacy policy's own resolution instead of
+> inventing a softer one — the archive holds "references, identifiers, hashes, and counts — never
+> the content of your messages, and no personal data", so there is nothing in it to erase.
+>
+> Per-provider revocation is REPORTED, never averaged. Google renders "revoked at the provider";
+> Microsoft renders "removed here only — not revoked at the provider"; a failed disconnect still
+> says the local grant was removed anyway, because a user asking for erasure must not be blocked by
+> a provider outage. Rounding those two into one "revoked" line would defeat GOVN-03 — do not.
+>
+> **NOT OWNER-PROVEN.** 22.1-05 Task 3's disposable-tenant irreversibility run — export, delete,
+> re-export empty-but-well-formed, audit row count identical before and after — has NOT been
+> performed. Until it has, this is a built surface, not a verified erasure, and GOVN-03 stays open.
+> web dataControls 4/4, backend tenantDelete 6/6, web typecheck exit 0.)
+
 > Last verified: 2026-08-16 (export budget is PER TABLE now — the global cap starved every
 > table after the first big one. `exportableTables()` is a fixed order with `agentSteps` 10th
 > and `telemetry` 15th, ahead of contacts/goals/proposals/vaultDocuments, so one 128-row global
