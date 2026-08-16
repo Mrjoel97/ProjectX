@@ -249,10 +249,12 @@ for ((i=0;i<SCENES;i++)); do
       D="$SEC"
       # KEN BURNS. The x4 upscale BEFORE zoompan is not decoration: zoompan steps the crop window
       # in whole source pixels, so at native size a slow push visibly stutters. Upscaling first
-      # makes each step a quarter-pixel at output scale, which reads as smooth. `d=1` advances the
-      # zoom once per input frame, and `-loop 1 -framerate` supplies SEC*FPS identical frames.
+      # makes each step a quarter-pixel at output scale, which reads as smooth. `d=1` emits one
+      # frame per repeated input frame; `pzoom` carries the previous input frame's final zoom so
+      # the push does not reset to 1.0 every frame. Pinning zoompan's own fps keeps that state
+      # advance deterministic instead of inheriting the filter's 25fps default.
       ffmpeg -y -loglevel error -loop 1 -framerate "$FPS" -t "$SEC" -i "$still" \
-        -vf "scale=${W}*4:${H}*4:force_original_aspect_ratio=increase,crop=${W}*4:${H}*4,zoompan=z='min(zoom+0.0012,1.20)':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=${W}x${H},${NORM}" \
+        -vf "scale=${W}*4:${H}*4:force_original_aspect_ratio=increase,crop=${W}*4:${H}*4,zoompan=z='min(pzoom+0.0012,1.20)':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=${W}x${H}:fps=${FPS},${NORM}" \
         -an -t "$SEC" -c:v libx264 -preset veryfast -crf 20 "$pic"
       ;;
     card)

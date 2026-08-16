@@ -26,6 +26,17 @@
 > history, not a hold, while landed siblings stay fresh (the fixes are CONTENT-class, no
 > `shotsChangedAt`). Retry-twice observed RED on the mutation; core 1003/1003, media suites green.)
 
+> Last verified: 2026-08-16 (Ken Burns `pzoom` fix MIRRORED — motion NOT re-observed. The still
+> path used `zoompan=z='min(zoom+0.0012,1.20)'`, but `zoom` resets to 1.0 on every INPUT frame,
+> and `-loop 1` feeds identical frames — so the expression re-evaluated `min(1.0012,1.20)`
+> forever and the push never advanced. Now `pzoom` (the previous input frame's final zoom) with
+> zoompan's own `fps=${FPS}` pinned so the state advance is deterministic rather than inheriting
+> the filter's 25fps default. The `.sh` edit had been sitting UNCOMMITTED against a stale
+> `assembleScript.ts`, which made it both red and INERT: the Sandbox runner writes the mirror to
+> disk and executes it, never the `.sh`. Mirror regenerated; `assembleScript.test.ts` 13/13
+> green. The frame-hash smoke in the entry below was NOT re-run — whether 48 decoded frames now
+> yield more than 1 unique hash is still unobserved, so the 20.2 escalation stays OPEN.)
+
 > Last verified: 2026-08-16 (Phase 20.2 Nyquist audit — the local mixed-scene smoke now samples
 > decoded video-frame hashes inside the `animated_image` window. The current assembler is RED:
 > 48 decoded frames produced 1 unique hash, so the still path is frozen rather than animated.
