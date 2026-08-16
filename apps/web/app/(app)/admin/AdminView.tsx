@@ -22,6 +22,49 @@ type PendingRow = FunctionReturnType<typeof api.invites.pending>[number];
  * endpoint it calls is `ownerQuery`/`ownerMutation` anyway. Hiding a control is cosmetic — the
  * wrappers are the boundary.
  */
+/**
+ * 25-10 hosted readiness. NAMES ONLY — never a value, not even a masked one. A readiness screen
+ * that echoed a secret to prove it was set would be a worse leak than the misconfiguration it
+ * reports.
+ *
+ * `ready` turns on REQUIRED names alone: a dark feature is a product decision, a missing required
+ * name is a broken deployment, and collapsing the two makes this unactionable.
+ */
+function EnvReadiness() {
+  const env = useQuery(api.ops.envCheck, {});
+  if (env === undefined) return null;
+
+  return (
+    <section style={{ display: "grid", gap: "0.5rem" }}>
+      <p className="caps-label" style={{ margin: 0 }}>
+        Hosted configuration
+      </p>
+      <p style={{ margin: 0, color: env.ready ? "var(--ink)" : "#92400e", fontWeight: 600 }}>
+        {env.ready
+          ? "Every required name is set."
+          : `${env.missingRequired.length} required name(s) missing — delivery or sign-in is broken.`}
+      </p>
+      {env.missingRequired.length > 0 && (
+        <p style={{ margin: 0, color: "#92400e" }}>
+          <code>{env.missingRequired.join(", ")}</code>
+        </p>
+      )}
+      {env.missingFeature.length > 0 && (
+        <p style={{ margin: 0, color: "var(--ink-2)", fontSize: "0.9rem" }}>
+          Features dark: <code>{env.missingFeature.join(", ")}</code>
+        </p>
+      )}
+      {env.fixturesActive.length > 0 && (
+        <p style={{ margin: 0, color: "#92400e", fontSize: "0.9rem" }}>
+          {/* The dangerous one: a fixture seam left on FAKES a provider, so it looks like success. */}
+          Fixture seams ACTIVE — these fake real providers:{" "}
+          <code>{env.fixturesActive.join(", ")}</code>
+        </p>
+      )}
+    </section>
+  );
+}
+
 export function AdminView() {
   const pending = useQuery(api.invites.pending, {});
   const approve = useMutation(api.invites.approve);
@@ -149,6 +192,8 @@ export function AdminView() {
           );
         })}
       </section>
+
+      <EnvReadiness />
 
       <section style={{ display: "grid", gap: "0.5rem" }}>
         <p className="caps-label" style={{ margin: 0 }}>

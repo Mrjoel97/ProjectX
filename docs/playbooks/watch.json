@@ -293,5 +293,11 @@
     "packages/core/src/proposal.test.ts",
     "packages/backend/convex/proposals.ts",
     "packages/backend/convex/proposals.test.ts"
+  ],
+  "production-beta.md": [
+    "packages/backend/convex/lib/env.ts",
+    "packages/backend/convex/env.test.ts",
+    "packages/backend/convex/ops.ts",
+    ".github/workflows/deploy-production.yml"
   ]
 }

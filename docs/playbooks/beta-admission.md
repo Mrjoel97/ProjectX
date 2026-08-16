@@ -1,5 +1,14 @@
 # Playbook: Beta Admission (BETA-01)
 
+> **25-10 note, 2026-08-17 — `/admin` gained a hosted-readiness section**
+> (`ops.envCheck`, owner-only, NAMES ONLY). It is on this playbook's watched path but belongs to
+> `production-beta.md`, which owns the manifest and its invariants. Relevant here for one reason:
+> **`AUTH_MICROSOFT_ENTRA_ID_ID`/`_SECRET` are classified `feature`, not `required`, precisely
+> because `/signup` hides the Microsoft button while they are unset** — so their absence reads as
+> honest rather than broken, and the readiness screen says "feature dark" instead of "deployment
+> broken". If that hiding behaviour is ever removed, the tier must change with it.
+> The invites-module entries in this file's own log are the concurrent audit lane's, not 25-10's.
+
 > Last verified: 2026-08-17 (**SECURITY AUDIT BEFORE SHIPPING — the OAuth path trusted an
 > UNVERIFIED email claim, and it is now refused.** Full report:
 > `.planning/phases/25-private-beta-productionization/25-01-SECURITY-AUDIT.md`.

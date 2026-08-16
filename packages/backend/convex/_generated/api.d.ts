@@ -56,6 +56,7 @@ import type * as notifications from "../notifications.js";
 import type * as notifyExternal from "../notifyExternal.js";
 import type * as onboarding from "../onboarding.js";
 import type * as opsSignals from "../opsSignals.js";
+import type * as ops from "../ops.js";
 import type * as optimizerConfig from "../optimizerConfig.js";
 import type * as optimizerEligibility from "../optimizerEligibility.js";
 import type * as owner from "../owner.js";
@@ -154,6 +155,7 @@ declare const fullApi: ApiFromModules<{
   notifyExternal: typeof notifyExternal;
   onboarding: typeof onboarding;
   opsSignals: typeof opsSignals;
+  ops: typeof ops;
   optimizerConfig: typeof optimizerConfig;
   optimizerEligibility: typeof optimizerEligibility;
   owner: typeof owner;
