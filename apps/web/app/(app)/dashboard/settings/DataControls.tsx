@@ -5,8 +5,8 @@ import {
   type TenantDataExportPage,
   type TenantExportCursor,
 } from "@pikar/core/tenantData";
-import { makeFunctionReference } from "convex/server";
 import { useConvex } from "convex/react";
+import { makeFunctionReference } from "convex/server";
 import { useState } from "react";
 
 const exportTenantData = makeFunctionReference<
@@ -55,10 +55,11 @@ export function DataControls() {
       URL.revokeObjectURL(url);
 
       setState("idle");
+      const rowCount = `${limits.totalRows.toLocaleString()} ${limits.totalRows === 1 ? "row" : "rows"}`;
       setMessage(
         limits.truncated
-          ? "Download ready. The file reached the stated export row limit."
-          : "Download ready.",
+          ? `Download ready — ${rowCount}. Some tables held more rows than one export can carry, so this file is partial. Contact support for a complete archive.`
+          : `Download ready — ${rowCount}. This is your complete record.`,
       );
     } catch (error) {
       setState("error");
