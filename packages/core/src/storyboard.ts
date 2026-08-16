@@ -829,6 +829,21 @@ export type ParsedVariations =
   | { kind: "two"; a: VariationSlice; b: VariationSlice }
   /** No VARIATION headings — the caller falls through to the existing single-deck path. */
   | { kind: "one" }
+  /**
+   * 33-11: exactly ONE of the two decks parsed. The survivor is proposed ALONE, and the caller
+   * MUST say which sibling was lost and why — `salvaged` is not a quiet `two`.
+   *
+   * This narrows 33-01/33-03's "a refusing variation refuses the WHOLE proposal", and only that
+   * far. The rule that rationale actually protects — **never propose a deck nobody wrote** — is
+   * untouched: `kept` is the model's own deck, whole and unedited.
+   */
+  | {
+      kind: "salvaged";
+      kept: VariationSlice;
+      keptVariation: "a" | "b";
+      lostVariation: "a" | "b";
+      reason: Extract<ParsedSceneDeck, { ok: false }>["reason"];
+    }
   | {
       kind: "refused";
       variation: "a" | "b";
@@ -866,11 +881,37 @@ export function parseVariations(body: string): ParsedVariations {
     [second.v]: body.slice(second.m.index + second.m[0].length),
   } as Record<"a" | "b", string>;
 
-  const out = {} as Record<"a" | "b", VariationSlice>;
-  for (const v of ["a", "b"] as const) {
-    const deck = parseSceneDeck(slices[v]);
-    if (!deck.ok) return { kind: "refused", variation: v, reason: deck.reason };
-    out[v] = { deck, body: slices[v] };
+  // Parse BOTH before deciding: the outcome depends on how many survived, so an early return on
+  // the first refusal cannot tell "one bad deck" from "two bad decks".
+  const parsed = (["a", "b"] as const).map((v) => ({ v, deck: parseSceneDeck(slices[v]) }));
+  const good = parsed.filter((p) => p.deck.ok);
+  const bad = parsed.filter((p) => !p.deck.ok);
+
+  if (bad.length === 0) {
+    const [a, b] = parsed;
+    // Non-null: `parsed` is built from a two-element literal and every deck is `ok` here.
+    return {
+      kind: "two",
+      a: { deck: a?.deck as ParsedSceneDeck & { ok: true }, body: slices.a },
+      b: { deck: b?.deck as ParsedSceneDeck & { ok: true }, body: slices.b },
+    };
   }
-  return { kind: "two", a: out.a, b: out.b };
+
+  // Both refused: the old contract, unchanged. Report the FIRST failure so the sentence names a
+  // deck the model really wrote rather than whichever happened to be scanned last.
+  const firstBad = bad[0] as (typeof bad)[number];
+  const firstBadReason = (firstBad.deck as Extract<ParsedSceneDeck, { ok: false }>).reason;
+  if (good.length === 0) {
+    return { kind: "refused", variation: firstBad.v, reason: firstBadReason };
+  }
+
+  // Exactly one survived. Propose it alone and hand the caller what it must disclose.
+  const keeper = good[0] as (typeof good)[number];
+  return {
+    kind: "salvaged",
+    kept: { deck: keeper.deck as ParsedSceneDeck & { ok: true }, body: slices[keeper.v] },
+    keptVariation: keeper.v,
+    lostVariation: firstBad.v,
+    reason: firstBadReason,
+  };
 }

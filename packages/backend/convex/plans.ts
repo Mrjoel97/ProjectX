@@ -381,6 +381,9 @@ export const persistDeck = internalMutation({
     // CLEARS (whole-deck-write semantics below): a single-deck revision discards the alternate.
     altShots: v.optional(v.array(parsedShot)),
     altTargetDurationSeconds: v.optional(v.number()),
+    /** 33-11: which sibling variation was lost, and why — whole-deck-write semantics like the
+     *  rest of the deck plane, so a later single-deck revision CLEARS a stale salvage note. */
+    lostVariation: v.optional(v.object({ variation: v.string(), reason: v.string() })),
     /** The guided-intake brief, when the body carried one. Drop-undefined (unlike the deck
      *  fields): a chat revision that does not restate the BRIEF keeps the one on the row. */
     brief: v.optional(
@@ -417,6 +420,9 @@ export const persistDeck = internalMutation({
       // replaces the picked deck, so the alternate is stale by definition.
       altShots: a.altShots,
       altTargetDurationSeconds: a.altTargetDurationSeconds,
+      // Same whole-deck-write rule (33-11): undefined CLEARS, so a later clean proposal drops a
+      // previous salvage note rather than leaving the canvas apologising for a deck it replaced.
+      lostVariation: a.lostVariation,
       ...(a.brief === undefined ? {} : { brief: a.brief }),
       /** When the deck(s) on this row were proposed — `briefChangedAt > deckProposedAt` is the
        *  stale badge. */

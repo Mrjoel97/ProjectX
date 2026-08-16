@@ -744,6 +744,8 @@ async function persistSceneDeck(
   extra: {
     alt?: { scenes: readonly Scene[]; targetDurationSeconds: number };
     brief?: BriefFields | null;
+    /** 33-11: set ONLY on a salvaged proposal — the sibling that could not be built. */
+    lost?: { variation: "a" | "b"; reason: string };
   } = {},
 ): Promise<void> {
   if (!scene.ok) {
@@ -792,6 +794,8 @@ async function persistSceneDeck(
           altTargetDurationSeconds: extra.alt.targetDurationSeconds,
         }),
     ...(extra.brief == null ? {} : { brief: extra.brief }),
+    // Undefined on every ordinary proposal, which CLEARS a previous salvage note (whole-deck-write).
+    lostVariation: extra.lost,
   });
   await ctx.runMutation(internal.audit.log, {
     tenantId: args.tenantId,
@@ -858,6 +862,32 @@ async function persistStoryboard(
       actor: "system",
       // Refs and COUNTS only (§4): the inner reason CODE and WHICH variation carried it.
       payload: { ...lineageRefs(args), reason: variations.reason, variation: variations.variation },
+    });
+    return res;
+  }
+  if (variations.kind === "salvaged") {
+    // 33-11: one deck parsed, the other did not. Propose the survivor ALONE rather than throwing
+    // away a storyboard the model really wrote — the failure the owner hit twice on 2026-08-16,
+    // where a good deck died because its sibling carried an off-grid clip length.
+    //
+    // NO `alt`: there is no second deck, and inventing one is the thing `persistStoryboard` has
+    // always refused. `lostVariation` is what stops this being the SILENT fallback 33-01 banned.
+    await persistSceneDeck(ctx, args, variations.kept.body, variations.kept.deck, {
+      brief: parseBrief(res.body),
+      lost: { variation: variations.lostVariation, reason: variations.reason },
+    });
+    await ctx.runMutation(internal.audit.log, {
+      tenantId: args.tenantId,
+      correlationId: args.rootRequestId,
+      eventType: "media.variation_salvaged",
+      actor: "system",
+      // Refs and CODES only (§4): which deck was kept, which was lost, and the lost one's reason.
+      payload: {
+        ...lineageRefs(args),
+        kept: variations.keptVariation,
+        lost: variations.lostVariation,
+        reason: variations.reason,
+      },
     });
     return res;
   }

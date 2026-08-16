@@ -1122,18 +1122,72 @@ describe("parseVariations — two-variation bodies (33-01)", () => {
     expect(parseVariations("just prose")).toEqual({ kind: "one" });
   });
 
-  it("a refusing variation refuses the WHOLE proposal — never a silent one-deck fallback", () => {
-    // B sums to 14 against a declared 15: the inner deck refuses duration_mismatch, and the outer
-    // contract must surface that, not quietly hand back variation A alone.
-    const bShort = twoUp.replace("| 1 | animated_image | 11 |", "| 1 | animated_image | 10 |");
-    expect(parseVariations(bShort)).toMatchObject({
-      kind: "refused",
-      variation: "b",
-      reason: "duration_mismatch",
+  // ── 33-11: ONE BAD DECK NO LONGER KILLS ITS GOOD SIBLING ────────────────────────────────────
+  //
+  // THE RULE THIS REPLACES, and exactly how far: 33-01/33-03 refused the WHOLE proposal when
+  // either variation refused, to stop "a silent one-deck fallback". The rationale it protected is
+  // **never propose a deck nobody wrote** — and that is UNTOUCHED here: the surviving deck is one
+  // the model really did write, whole and unedited. What changes is only the fate of its sibling.
+  //
+  // WHY IT HAD TO CHANGE (live, 2026-08-16, the owner's own two runs): requiring TWO legal decks
+  // doubles the chance of a dead end, and both of the owner's attempts died this way — one on
+  // variation A, one on variation B — throwing away a perfectly good storyboard each time. The
+  // refusal then landed as a memo card with Approve/Save and no way forward.
+  //
+  // `salvaged` is NOT silent: it names the lost variation and its reason, and the caller is
+  // obliged to say so on the canvas. A silent fallback would still be forbidden.
+  it("ONE good deck survives its sibling's refusal — salvaged, never silent", () => {
+    // The owner's real failure: a generated scene off the 4/8/12 provider grid, in variation B.
+    const bIllegal = twoUp.replace(
+      "| 1 | animated_image | 11 |",
+      "| 1 | generated_video | 11 |",
+    );
+    const r = parseVariations(bIllegal);
+    expect(r).toMatchObject({
+      kind: "salvaged",
+      keptVariation: "a",
+      lostVariation: "b",
+      reason: "illegal_generated_duration",
+    });
+    if (r.kind !== "salvaged") return;
+    // The KEPT deck is variation A, entire and unmodified — 4 scenes summing to its declared 30.
+    expect(r.kept.deck.targetDurationSeconds).toBe(30);
+    expect(r.kept.deck.scenes).toHaveLength(4);
+  });
+
+  it("salvages symmetrically — a bad A keeps B", () => {
+    const aIllegal = twoUp.replace(
+      "| 1 | generated_video | 8 |",
+      "| 1 | generated_video | 7 |",
+    );
+    expect(parseVariations(aIllegal)).toMatchObject({
+      kind: "salvaged",
+      keptVariation: "b",
+      lostVariation: "a",
+      reason: "illegal_generated_duration",
     });
   });
 
-  it("a declared variation with no deck inside refuses too (no_deck is not 'fall back')", () => {
+  it("BOTH variations refusing still refuses the whole proposal", () => {
+    // The salvage has something to salvage FROM. When nothing parses, the old contract stands and
+    // the reported variation is the FIRST to fail, so the message names a real deck.
+    const bothBad = twoUp
+      .replace("| 1 | generated_video | 8 |", "| 1 | generated_video | 7 |")
+      .replace("| 1 | animated_image | 11 |", "| 1 | generated_video | 11 |");
+    expect(parseVariations(bothBad)).toMatchObject({
+      kind: "refused",
+      variation: "a",
+      reason: "illegal_generated_duration",
+    });
+  });
+
+  it("a declared variation with no deck inside SALVAGES its sibling, and still says so", () => {
+    // 33-11 CHANGED THIS CASE DELIBERATELY. It used to refuse the whole proposal, on the reading
+    // that "no_deck is not 'fall back'". But from the user's chair a prose-only variation and a
+    // malformed one are the same situation — exactly one usable storyboard exists — and dead-ending
+    // on either is the failure the owner actually hit. `salvaged` is not the silent fallback the
+    // old rule forbade: it carries `lostVariation` + `reason: "no_deck"`, which the canvas renders
+    // as "it never wrote a scene deck". The proposal still discloses that it is one option, not two.
     const noB = [
       "## VARIATION A",
       "",
@@ -1144,14 +1198,16 @@ describe("parseVariations — two-variation bodies (33-01)", () => {
       "Prose only.",
     ].join("\n");
     expect(parseVariations(noB)).toMatchObject({
-      kind: "refused",
-      variation: "b",
+      kind: "salvaged",
+      keptVariation: "a",
+      lostVariation: "b",
       reason: "no_deck",
     });
     const headingOnlyA = ["## VARIATION A", "", "## VARIATION B", "", DECK_B].join("\n");
     expect(parseVariations(headingOnlyA)).toMatchObject({
-      kind: "refused",
-      variation: "a",
+      kind: "salvaged",
+      keptVariation: "b",
+      lostVariation: "a",
       reason: "no_deck",
     });
     // One heading without its sibling is a declared-variations body missing a whole deck.

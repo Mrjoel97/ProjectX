@@ -2629,10 +2629,18 @@ describe("33-03 — the variations terminal: parseVariations runs FIRST", () => 
     expect(JSON.stringify(await readLineage(t))).not.toContain("pricing one-pager");
   });
 
-  test("a refusing variation refuses the WHOLE proposal — never a silent one-deck fallback", async () => {
+  test("a refusing variation SALVAGES its good sibling — proposed alone, and disclosed", async () => {
     const { t } = await setup();
     const planId = await stagedMediaPlan(t);
-    // Variation B declared, no deck inside it: variation A alone must NOT quietly land.
+    // Variation B declared, no deck inside it. Variation A is whole and usable.
+    //
+    // 33-11 REVERSED THIS TEST'S EXPECTATION ON PURPOSE. It used to assert the whole proposal
+    // died here ("never a silent one-deck fallback"). Live on 2026-08-16 that rule cost the owner
+    // two consecutive reels: a good storyboard was discarded because its sibling carried an
+    // off-grid clip length, and the refusal landed as a memo card with Approve/Save and no way
+    // forward. The rule's REAL protection — never propose a deck nobody wrote — still holds: what
+    // lands is variation A exactly as the model wrote it. The fallback is no longer SILENT,
+    // which is what `lostVariation` on the row is for.
     const body = [
       VAR_BRIEF,
       "## VARIATION A",
@@ -2648,16 +2656,45 @@ describe("33-03 — the variations terminal: parseVariations runs FIRST", () => 
     );
 
     const plan = await readPlan(t, planId);
+    // The survivor IS the proposal: a real media canvas, not a memo.
+    expect(plan?.kind).toBe("media");
+    expect(plan?.shots?.length).toBeGreaterThan(0);
+    // ...and there is no invented alternate. One deck was written, one deck is offered.
+    expect(plan?.altShots).toBeUndefined();
+    // The loss is ON THE ROW, so the canvas cannot fail to mention it.
+    expect(plan?.lostVariation).toMatchObject({ variation: "b", reason: "no_deck" });
+
+    // No refusal was logged, because nothing was refused — a salvage has its own event.
+    expect((await readLineage(t)).filter((r) => r.eventType === "media.deck_refused")).toHaveLength(
+      0,
+    );
+    const salvaged = (await readLineage(t)).filter(
+      (r) => r.eventType === "media.variation_salvaged",
+    );
+    expect(salvaged).toHaveLength(1);
+    const payload = salvaged[0]?.payload as Record<string, unknown>;
+    expect(payload.kept).toBe("a");
+    expect(payload.lost).toBe("b");
+    expect(payload.reason).toBe("no_deck");
+  });
+
+  test("BOTH variations refusing still refuses the whole proposal — nothing to salvage", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    const body = [VAR_BRIEF, "## VARIATION A", "", "Prose.", "## VARIATION B", "", "Prose."].join(
+      "\n",
+    );
+    await t.action(
+      internal.dispatch.__runSpecialistWithScript,
+      mediaArgs(planId, { primary: [{ ...textStep(body), usage: SPEND_8_CENTS }] }),
+    );
+    const plan = await readPlan(t, planId);
     expect(plan?.kind).not.toBe("media");
     expect(plan?.shots).toBeUndefined();
-    expect(plan?.altShots).toBeUndefined();
     expect(plan?.body).toContain("no_deck");
-
-    const audit = (await readLineage(t)).filter((r) => r.eventType === "media.deck_refused");
-    expect(audit).toHaveLength(1);
-    const payload = audit[0]?.payload as Record<string, unknown>;
-    expect(payload.reason).toBe("no_deck");
-    expect(payload.variation).toBe("b");
+    expect((await readLineage(t)).filter((r) => r.eventType === "media.deck_refused")).toHaveLength(
+      1,
+    );
   });
 
   test("a single-deck revision DISCARDS the parked alternate and still lands brief + citations", async () => {
