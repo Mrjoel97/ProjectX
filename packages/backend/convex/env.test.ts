@@ -7,7 +7,7 @@
 import { convexTest } from "convex-test";
 import { describe, expect, test, vi } from "vitest";
 import { api } from "./_generated/api";
-import { ENV_MANIFEST, isDurableOrigin, missingEnv, REQUIRED_ENV } from "./lib/env";
+import { ENV_MANIFEST, isDurableOrigin, missingEnv, ORIGIN_ENV, REQUIRED_ENV } from "./lib/env";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
@@ -148,8 +148,14 @@ describe("envCheck is owner-only and leaks nothing", () => {
     vi.unstubAllEnvs();
   });
 
-  test("`ready` turns on REQUIRED only — a dark feature is not a broken deployment", async () => {
+  test("a dark FEATURE is not a broken deployment — `ready` ignores missingFeature", async () => {
+    // ADR-022 widened `ready`: it is REQUIRED names AND durable origins now, so the origin names
+    // need real values here. Stubbing them to the literal "set" like the rest correctly makes
+    // `ready` false, which is what caught this test's stale premise.
     for (const name of REQUIRED_ENV) vi.stubEnv(name, "set");
+    vi.stubEnv("SITE_URL", "https://www.pikar-ai.com");
+    vi.stubEnv("CONVEX_SITE_URL", "https://woozy-wren-368.convex.site");
+    vi.stubEnv("GMAIL_OAUTH_REDIRECT_URI", "https://woozy-wren-368.convex.site/gmail/callback");
     const t = convexTest(schema, modules);
     const ownerId = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
 
@@ -158,6 +164,59 @@ describe("envCheck is owner-only and leaks nothing", () => {
     expect(result.ready).toBe(true);
     // …while feature names are still reported as missing rather than hidden.
     expect(result.missingFeature.length).toBeGreaterThan(0);
+    vi.unstubAllEnvs();
+  });
+});
+
+describe("ADR-022: a SET but EPHEMERAL origin is caught, which missingRequired cannot see", () => {
+  test("every origin name is a real manifest entry", () => {
+    const classified = new Set(ENV_MANIFEST.map((e) => e.name));
+    for (const name of ORIGIN_ENV) expect(classified.has(name)).toBe(true);
+    expect(ORIGIN_ENV.length).toBeGreaterThanOrEqual(4);
+  });
+
+  test("a preview-build SITE_URL makes the deployment NOT ready, though nothing is missing", async () => {
+    // The whole point. The name is present, so `missingRequired` is empty and every prior check
+    // reads green — while the unsubscribe link in a sent email points at a build that stops
+    // resolving on the next push.
+    for (const name of REQUIRED_ENV) vi.stubEnv(name, "set");
+    vi.stubEnv("SITE_URL", "https://pikar-ai-git-abc123x.vercel.app");
+    vi.stubEnv("CONVEX_SITE_URL", "https://woozy-wren-368.convex.site");
+
+    const t = convexTest(schema, modules);
+    const ownerId = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
+    const result = await t.withIdentity({ subject: `${ownerId}|s` }).query(api.ops.envCheck, {});
+
+    expect(result.missingRequired).toEqual([]);
+    expect(result.nonDurableOrigins).toContain("SITE_URL");
+    expect(result.ready).toBe(false);
+    vi.unstubAllEnvs();
+  });
+
+  test("durable origins report ready, and *.convex.site is durable", async () => {
+    for (const name of REQUIRED_ENV) vi.stubEnv(name, "set");
+    vi.stubEnv("SITE_URL", "https://www.pikar-ai.com");
+    vi.stubEnv("CONVEX_SITE_URL", "https://woozy-wren-368.convex.site");
+    vi.stubEnv("GMAIL_OAUTH_REDIRECT_URI", "https://woozy-wren-368.convex.site/gmail/callback");
+
+    const t = convexTest(schema, modules);
+    const ownerId = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
+    const result = await t.withIdentity({ subject: `${ownerId}|s` }).query(api.ops.envCheck, {});
+
+    expect(result.nonDurableOrigins).toEqual([]);
+    expect(result.ready).toBe(true);
+    vi.unstubAllEnvs();
+  });
+
+  test("an UNSET origin is reported as missing, never as non-durable — one fault, one message", async () => {
+    for (const name of REQUIRED_ENV) vi.stubEnv(name, "set");
+    vi.stubEnv("SITE_URL", "");
+    const t = convexTest(schema, modules);
+    const ownerId = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
+    const result = await t.withIdentity({ subject: `${ownerId}|s` }).query(api.ops.envCheck, {});
+
+    expect(result.missingRequired).toContain("SITE_URL");
+    expect(result.nonDurableOrigins).not.toContain("SITE_URL");
     vi.unstubAllEnvs();
   });
 });

@@ -207,6 +207,20 @@ export function missingEnv(read: (name: string) => string | undefined): {
 }
 
 /**
+ * The names whose VALUE must be a durable origin, not merely present (ADR-022).
+ *
+ * `CONVEX_SITE_URL` is included even though this repo never sets it — it is the Convex
+ * deployment's own origin, and the unsubscribe link is minted from it and fails closed when empty.
+ * A read-only assertion is the most this side can do, and it is worth doing.
+ */
+export const ORIGIN_ENV: readonly string[] = [
+  "CONVEX_SITE_URL",
+  "SITE_URL",
+  "GMAIL_OAUTH_REDIRECT_URI",
+  "MICROSOFT_CALENDAR_REDIRECT_URI",
+];
+
+/**
  * Is this a durable, user-shareable origin?
  *
  * 25-10 asked for "durable CUSTOM origins", which the 25-00 baseline found would block the phase on

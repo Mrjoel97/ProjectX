@@ -1,7 +1,26 @@
 # Playbook: Production Beta Readiness (25-10)
 
-> Last verified: 2026-08-17 (25-10 Task 1 — the environment manifest, the drift scan that keeps it
-> honest, and the owner readiness surface. **Tasks 2 and 3 are NOT done; see Known gaps.**)
+> Last verified: 2026-08-17 (25-10 Tasks 1 **and 3** — the environment manifest, the drift scan, the
+> owner readiness surface, and durable-origin enforcement. **Task 2's ADR-022 is written but
+> `Proposed`, awaiting owner acceptance.**)
+>
+> **ADR-022 is the durable-domain posture, and it is numbered 022 because 017 COLLIDES** with the
+> Accepted `017-direct-wan-visuals-openai-audio.md`; ADRs are immutable (§9). It also drops the
+> plan's "custom" requirement: `*.convex.site` is durable but not custom, and a literal reading
+> would have blocked the phase on a hostname property nothing consumes.
+>
+> **What Task 3 enforces, and the failure it exists for:** `envCheck` now also returns
+> `nonDurableOrigins`, and `ready` requires it to be empty. A **set but ephemeral** origin is
+> invisible to every other check — the name is present, so `missingRequired` is empty and the
+> screen reads green, while the unsubscribe link in an already-sent email points at a preview build
+> that stopped resolving on the next push. `ORIGIN_ENV` covers `CONVEX_SITE_URL`, `SITE_URL` and
+> both OAuth redirect URIs. An UNSET origin is reported as missing and NOT as non-durable — one
+> fault, one message.
+>
+> **This widened `ready`, and it caught a stale test doing so:** the existing "ready turns on
+> REQUIRED only" case stubbed every required name to the literal `"set"`, which is not a URL, so
+> `ready` correctly went false. The test's premise had changed and it was updated rather than
+> worked around.
 > Build history: `.planning/phases/25-private-beta-productionization/` · Related ADRs: ADR-020
 > (production opened without an admission gate)
 
@@ -28,12 +47,17 @@ its absence costs, surfaced to the owner on `/admin` as **names only**.
    that refuses to boot and takes every working feature down with the broken one.
 3. **A blank value counts as UNSET.** `convex env set X ""` is the most common way a key looks
    configured and is not.
-4. **`ready` turns on REQUIRED only.** A dark feature is a product decision; a missing required
-   name is a broken deployment. Collapsing them makes the screen unactionable.
-5. **An ACTIVE fixture seam is reported as a warning.** `FAL_FIXTURE`, `MEDIA_*_FIXTURE` and the
+4. **`ready` turns on REQUIRED names AND durable origins — never on features.** A dark feature is a
+   product decision; a missing required name, or an origin that will stop resolving, is a broken
+   deployment. Collapsing features in with those makes the screen unactionable.
+5. **A SET but EPHEMERAL origin must fail.** This is the one fault no other check can see: the name
+   is present, so `missingRequired` is empty and everything reads green, while the unsubscribe link
+   in an already-sent email points at a preview build that died on the next push. An UNSET origin
+   is reported as missing and NOT as non-durable — one fault, one message.
+6. **An ACTIVE fixture seam is reported as a warning.** `FAL_FIXTURE`, `MEDIA_*_FIXTURE` and the
    Graph-probe flag FAKE real providers — a failure that looks like success, which is the worst
    kind to leave undetectable in production.
-6. **The manifest is drift-checked in BOTH directions.** `env.test.ts` scans source for
+7. **The manifest is drift-checked in BOTH directions.** `env.test.ts` scans source for
    `process.env.NAME` and fails on a consumed-but-unclassified name AND on a classified-but-dead
    entry. A manifest maintained by remembering to update it goes stale silently, and in the
    direction that matters: a new required key nobody classified reads as "ready".
@@ -42,7 +66,7 @@ its absence costs, surfaced to the owner on `/admin` as **names only**.
 
 | Command | Proves |
 | --- | --- |
-| `pnpm --filter @pikar/backend exec vitest run convex/env.test.ts` | The manifest matches source, reports names only, and `envCheck` refuses a non-owner. 14 tests. |
+| `pnpm --filter @pikar/backend exec vitest run convex/env.test.ts` | The manifest matches source, reports names only, and `envCheck` refuses a non-owner, and no origin is ephemeral. 18 tests. |
 | Sign in as owner → `/admin` | The readiness section against the REAL deployment env. This is the easy path. |
 | `cd packages/backend && npx convex run --prod ops:envCheck --identity '{"subject":"<ownerUserId>\|cli"}'` | The same, from the CLI. **All three parts are required** — see below. |
 
@@ -69,7 +93,7 @@ directory; without `--prod` it targets the local dev deployment rather than the 
 
 ## Known gaps & deferred work
 
-1. **Task 2 (the durable-domain ADR) is NOT written, and the plan's framing is stale.** 25-10 poses
+1. **Task 2 IS WRITTEN as ADR-022 but sits at `Proposed` — the owner has not accepted it.** The plan's framing is stale and the ADR says why: 25-10 poses
    an A/B decision where Branch B is "no user-shareable URL ships". The 25-00 baseline found that
    decision **already made and shipped**: `docs/decisions/020-production-opened-without-an-admission-gate.md`
    is Accepted and records `https://www.pikar-ai.com` live with the full platform.
@@ -78,12 +102,13 @@ directory; without `--prod` it targets the local dev deployment rather than the 
    **Also: the plan's `docs/decisions/017-…` filename COLLIDES** — 017 is
    `017-direct-wan-visuals-openai-audio.md`, Accepted. ADRs are immutable (CLAUDE.md §9), so two
    files numbered 017 is permanent. **The next free number is 022.**
-2. **Task 3 (origin enforcement) is NOT wired.** `isDurableOrigin()` exists and is tested, but
-   nothing calls it yet. When it is wired, note that the plan's demand for durable **custom**
-   origins is wrong: the Convex HTTP-action origin is `*.convex.site`, fixed by Convex domain
-   configuration and never set by this repo. Durable is the requirement; custom is not, and a
-   literal reading forces Branch B over a non-problem. Scope enforcement to what the repo controls
-   — `SITE_URL`, `MEDIA_RENDER_URL`, the two OAuth redirect URIs — plus a read-only assertion that
-   `CONVEX_SITE_URL` is non-empty https.
+2. **Task 3 IS WIRED** — `ops.envCheck` returns `nonDurableOrigins`, `ready` requires it empty, and
+   `/admin` names any offender. **It deliberately does NOT implement the plan's "custom" wording:**
+   the Convex HTTP-action origin is `*.convex.site`, fixed by Convex domain configuration and never
+   set by this repo, so requiring custom would block the phase on a property nothing consumes.
+   Enforcement is scoped to what the repo controls — `SITE_URL` and the two OAuth redirect URIs —
+   plus a read-only assertion that `CONVEX_SITE_URL` is a non-empty https origin. **It cannot
+   validate DNS, TLS chains, or that a provider's registered redirect actually matches**; those are
+   observed at the live gates (25-11/25-12).
 3. **This manifest covers the CONVEX deployment only.** The web build's variables are the
    pipeline's business and are not visible to `envCheck`.

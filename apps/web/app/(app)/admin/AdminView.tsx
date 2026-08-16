@@ -49,6 +49,14 @@ function EnvReadiness() {
           <code>{env.missingRequired.join(", ")}</code>
         </p>
       )}
+      {env.nonDurableOrigins.length > 0 && (
+        <p style={{ margin: 0, color: "#92400e" }}>
+          {/* ADR-022. The name is SET, so nothing reads as missing — but the URL stops resolving,
+              which an unsubscribe link in an already-sent email cannot survive. */}
+          Origins that will stop resolving (preview build, localhost or plain http):{" "}
+          <code>{env.nonDurableOrigins.join(", ")}</code>
+        </p>
+      )}
       {env.missingFeature.length > 0 && (
         <p style={{ margin: 0, color: "var(--ink-2)", fontSize: "0.9rem" }}>
           Features dark: <code>{env.missingFeature.join(", ")}</code>

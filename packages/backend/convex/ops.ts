@@ -3,7 +3,7 @@
 // This exists so the question "is this deployment actually configured?" has an answer that is not
 // "try it and see which feature is broken". It reports NAMES ONLY — a readiness screen that echoed
 // a value to prove it was set would be a worse leak than the misconfiguration it reports.
-import { missingEnv } from "./lib/env";
+import { isDurableOrigin, missingEnv, ORIGIN_ENV } from "./lib/env";
 import { ownerQuery } from "./lib/functions";
 
 /**
@@ -27,13 +27,22 @@ export const envCheck = ownerQuery({
     missingRequired: string[];
     missingFeature: string[];
     fixturesActive: string[];
+    nonDurableOrigins: string[];
   }> => {
     const result = missingEnv((name) => process.env[name]);
+    // ADR-022. A set-but-EPHEMERAL origin is the failure this catches and `missingRequired` cannot:
+    // the name is present, so every existing check reads green, while the unsubscribe link in a
+    // sent email points at a preview build that stops resolving on the next push.
+    const nonDurableOrigins = ORIGIN_ENV.filter(
+      (name) => process.env[name]?.trim() && !isDurableOrigin(process.env[name]),
+    );
     return {
-      // `ready` turns on REQUIRED only. A dark feature is a product decision; a missing required
-      // name is a broken deployment, and collapsing the two would make this screen unactionable.
-      ready: result.missingRequired.length === 0,
+      // `ready` turns on REQUIRED names AND durable origins. A dark feature is a product decision;
+      // a missing required name or a URL that will stop resolving is a broken deployment, and
+      // collapsing those with features would make this screen unactionable.
+      ready: result.missingRequired.length === 0 && nonDurableOrigins.length === 0,
       ...result,
+      nonDurableOrigins,
     };
   },
 });
