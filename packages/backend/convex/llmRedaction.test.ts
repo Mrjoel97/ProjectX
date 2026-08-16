@@ -1266,6 +1266,11 @@ const MEDIA_AUDIT_ALLOWED = new Set([
   // 20-16's render DEAD LETTER. A code, not ffmpeg's prose — `reasonCodeFor` is the only thing
   // that ever reads stderr and it returns a member of a closed union.
   "reasonCode",
+  // 33-05's `media.reel_saved`. `docId` is the vault document the finished reel became — a ref,
+  // stringified, never its text or storage URL. `citations` is the LENGTH of the reel's citation
+  // list, never a source title, excerpt or docId from it.
+  "docId",
+  "citations",
 ]);
 
 /** Top-level keys of an object literal. A plain comma split is enough BECAUSE `mediaComplete.ts`
@@ -1307,7 +1312,9 @@ test("media audit payloads are refs-only — every key is on the allow-list", ()
   // allow-listed refs. The claim text and source title never enter the log plane.
   // -> 10 at 33-04: `media.render_retried` (batchId + planId + reasonCode) and
   // `media.render_retry_manual` (planId + batchId) — refs and a closed-union code, no new keys.
-  expect(literals.length, "no media audit payloads found - the scan is vacuous").toBe(10);
+  // -> 11 at 33-05: `media.reel_saved` (planId + docId + citations count). TWO new keys, both
+  // refs-only by the §4 test: the vault doc the reel became, and how many citations rode with it.
+  expect(literals.length, "no media audit payloads found - the scan is vacuous").toBe(11);
   for (const [file, literal] of literals) {
     for (const key of keysOf(literal)) {
       expect(
@@ -1351,18 +1358,19 @@ test("no prompt text and no narration text reaches the media log plane — only 
   }
 });
 
-test("the media log-plane surface is PINNED: exactly 6 audit sites across the three modules", () => {
+test("the media log-plane surface is PINNED: exactly 7 audit sites across the three modules", () => {
   // A COUNT, not a ">= 1". Plans 20-09 (canvas), 20-16 (retention) and 20-17 (captions) EACH add
   // audit sites and must EACH bump this number deliberately, having checked the new payload
   // against MEDIA_AUDIT_ALLOWED above. 1 -> 2 at 20-15: the render terminal. 4 -> 6 at 33-04:
-  // the auto-retry event in the render terminal and the manual retry mutation.
+  // the auto-retry event in the render terminal and the manual retry mutation. 6 -> 7 at 33-05:
+  // `media.reel_saved`, in `saveReelToVault` — the one place the finished reel becomes a vault doc.
   const sites = MEDIA_MODULES.map(
     (f) => [...stripCode(readSource(f)).matchAll(/internal\.audit\.log\b/g)].length,
   );
   expect(
     sites.reduce((a, b) => a + b, 0),
     "media audit call-site count changed - is the new payload refs-only? (20-09/20-16/20-17/33-04 each bump this)",
-  ).toBe(6);
+  ).toBe(7);
   // And WHERE they live: the three job terminals — the fal landing, render and caption burn — plus
   // 33-02's explicit user confirmation event, 33-04's auto-retry event beside the render terminal,
   // and 33-04's manual-retry event. `media.ts` still has no job-path log sink: its two audit sites
@@ -1371,8 +1379,8 @@ test("the media log-plane surface is PINNED: exactly 6 audit sites across the th
   expect(sites[1], "mediaComplete.ts is the landing terminal").toBe(1);
   expect(
     sites[2],
-    "render/renderReel.ts holds the render terminal, its auto-retry event, and the caption terminal",
-  ).toBe(3);
+    "render/renderReel.ts holds the render terminal, its auto-retry event, the caption terminal, and 33-05's reel_saved",
+  ).toBe(4);
 });
 
 test("only media.ts and mediaComplete.ts write a TERMINAL mediaJobs status, and succeeded is mediaComplete's alone", () => {
