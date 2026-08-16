@@ -343,3 +343,97 @@ describe("scope minimality reaches the wire", () => {
     expect(scope).not.toContain(".All");
   });
 });
+
+// ── 25-06: the mail half of the ONE grant, and the surfaces this plan must NOT have created ────
+//
+// The strongest thing here is a NEGATIVE. 17-06 built the authorize URL, the callback, the consent
+// page and the token row; `http.ts` carries an in-source instruction that a second callback must
+// not be added. A plan called "provider lifecycle" is exactly the one that would quietly add one,
+// so the absence is asserted rather than assumed.
+
+describe("25-06: no second OAuth surface exists, and mail readiness is derived not assumed", () => {
+  const httpSource = Object.entries(
+    import.meta.glob("./http.ts", { query: "?raw", import: "default", eager: true }) as Record<
+      string,
+      string
+    >,
+  )[0]?.[1] as string;
+
+  test("http.ts was actually read, so the counts below cannot be vacuous", () => {
+    expect(httpSource?.length ?? 0).toBeGreaterThan(1000);
+  });
+
+  test("there is exactly ONE Microsoft OAuth callback route, not two", () => {
+    const routes = [...httpSource.matchAll(/http\.route\(/g)].length;
+    // Pinned exactly: a new route of ANY kind fails this and has to be justified deliberately.
+    expect(routes).toBe(8);
+    const microsoftCallbacks = [...httpSource.matchAll(/microsoft/gi)].length;
+    expect(microsoftCallbacks).toBeGreaterThan(0);
+    // One path literal, however many times it is mentioned.
+    const paths = new Set(
+      [...httpSource.matchAll(/path:\s*"([^"]*microsoft[^"]*)"/gi)].map(([, p]) => p),
+    );
+    expect(paths.size).toBeLessThanOrEqual(1);
+  });
+
+  test("mailReady is FALSE on a legacy calendar-only grant, and connected is still true", async () => {
+    // The whole reason the boolean is derived: `connected` cannot tell these apart, and a mail
+    // control that trusts `connected` walks the user into a 403 instead of into reconnect.
+    const t = harness();
+    const userId = await t.run((ctx) => ctx.db.insert("users", {}));
+    const asUser = t.withIdentity({ subject: `${userId}|session_a` });
+    await t.run((ctx) =>
+      ctx.db.insert("microsoftCalendarTokens", {
+        tenantId: String(userId),
+        refreshToken: "r",
+        accessToken: "a",
+        expiresAt: BASE_MS,
+        scope: `offline_access ${MS_CALENDARS_READWRITE_SCOPE}`,
+        updatedAt: BASE_MS,
+      }),
+    );
+
+    const status = await asUser.query(api.microsoftAuth.microsoftStatus, {});
+    expect(status.connected).toBe(true);
+    expect(status.calendarReady).toBe(true);
+    expect(status.mailReady).toBe(false);
+  });
+
+  test("mailReady is TRUE on the union grant", async () => {
+    const t = harness();
+    const userId = await t.run((ctx) => ctx.db.insert("users", {}));
+    const asUser = t.withIdentity({ subject: `${userId}|session_a` });
+    await t.run((ctx) =>
+      ctx.db.insert("microsoftCalendarTokens", {
+        tenantId: String(userId),
+        refreshToken: "r",
+        accessToken: "a",
+        expiresAt: BASE_MS,
+        scope: MICROSOFT_SCOPES,
+        updatedAt: BASE_MS,
+      }),
+    );
+    expect((await asUser.query(api.microsoftAuth.microsoftStatus, {})).mailReady).toBe(true);
+  });
+
+  test("grantedScope returns the scope and NEVER token material", async () => {
+    const t = harness();
+    await t.run((ctx) =>
+      ctx.db.insert("microsoftCalendarTokens", {
+        tenantId: "t_scope",
+        refreshToken: "refresh-secret-value",
+        accessToken: "access-secret-value",
+        expiresAt: BASE_MS,
+        scope: MICROSOFT_SCOPES,
+        updatedAt: BASE_MS,
+      }),
+    );
+
+    const scope = await t.query(internal.microsoftAuth.grantedScope, { tenantId: "t_scope" });
+    expect(scope).toBe(MICROSOFT_SCOPES);
+    expect(scope).not.toContain("refresh-secret-value");
+    expect(scope).not.toContain("access-secret-value");
+    // An unconnected tenant is null, which the caller must distinguish from calendar-only.
+    expect(await t.query(internal.microsoftAuth.grantedScope, { tenantId: "nobody" })).toBeNull();
+  });
+});

@@ -681,6 +681,37 @@ export const setPlanSendTime = tenantMutation({
   },
 });
 
+/**
+ * DLVR-02: choose which mailbox this plan sends through, BEFORE approval.
+ *
+ * Modelled on `setPlanSendTime` directly above, including its cross-tenant guard. Per-PLAN and
+ * never per-tenant: there is deliberately no "active provider" row anywhere. A deployment-wide or
+ * tenant-wide active provider would make a second plan's mailbox depend on the last thing someone
+ * clicked on a different plan, and would silently re-route a proposal the user is still reading.
+ *
+ * Refuses once the plan has left `proposed`. `executePlan` copies `mailProvider` onto every
+ * per-recipient `requests` row at approval, so a change afterwards would edit the plan while the
+ * already-seeded rows kept delivering through the old mailbox — the display and the delivery would
+ * disagree, which is worse than refusing.
+ *
+ * Does NOT check that the provider is connected. `graph.send`/`gmail.send` own that, and they own
+ * it at the moment of sending rather than the moment of choosing — a grant can die in between.
+ */
+export const setPlanMailProvider = tenantMutation({
+  args: {
+    planId: v.id("plans"),
+    mailProvider: v.union(v.literal("google"), v.literal("microsoft")),
+  },
+  handler: async (ctx, { planId, mailProvider }) => {
+    const plan = await ctx.db.get(planId);
+    if (!plan || plan.tenantId !== ctx.tenantId) throw new Error("plan not found"); // no cross-tenant write
+    if (plan.status !== "proposed" && plan.status !== "collecting") {
+      throw new Error("PLAN_ALREADY_APPROVED");
+    }
+    await ctx.db.patch(planId, { mailProvider });
+  },
+});
+
 /** Terminal/CAS-friendly status setter (executePlan → approved; fan-out → done). */
 export const setPlanStatus = internalMutation({
   args: { planId: v.id("plans"), status: PLAN_STATUS },

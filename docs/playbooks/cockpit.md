@@ -1,6 +1,50 @@
 # Playbook: Email Chat Cockpit
 
-> Last verified: 2026-08-16 (25-05 — **THE SEND PATH IS NOW TWO-ARMED. `internal.gmail.send` is no
+> Last verified: 2026-08-16 (25-06 — **the per-plan mailbox choice, and the reauth banner bug that
+> 25-05 created.**)
+>
+> **THE REAUTH HOLD SURFACE IS NOW PROVIDER-AWARE — this was a real bug, introduced by 25-05.**
+> Before it, `awaiting_reauth` could only be set by `gmail.send`, so `ReconnectBanner` hardcoded
+> "a hold means Google". `graph.send` sets it too, so a held **Microsoft** send was about to tell
+> the user to reconnect **Gmail** — the wrong consent screen, with the real problem left standing.
+> Holds now partition on `mailProvider` (absent ⇒ google, the same default `delivery.send` uses).
+> The branching moved into an exported pure `reconnectLines()` because the component renders
+> nothing until its seen-set loads after mount, so a render test would have asserted on an empty
+> string and proved nothing. Mutation-proven: restoring the hardcoded-Google hold reddens 4.
+>
+> **A second, quieter defect fixed with it:** `RECONNECT.microsoft.message` is the CALENDAR expiry
+> cron's copy ("keep calendar access working"). Reusing it for a mail hold describes the wrong
+> subsystem, so `RECONNECT` now carries a separate `holdMessage` per provider.
+>
+> **THE MAILBOX CHOICE IS PER-PLAN, GATED ON `mailReady` — NEVER ON `connected`.**
+> `plans.setPlanMailProvider` (modelled on `setPlanSendTime`, same cross-tenant guard) refuses once
+> the plan leaves `proposed`/`collecting`, because `executePlan` has by then copied the provider
+> onto every `requests` row and a later change would make the display and the delivery disagree.
+> There is deliberately **no tenant-wide or deployment-wide "active provider"**: it would make one
+> plan's mailbox depend on the last thing clicked on a different plan.
+>
+> `mailboxOptions()` is exported and pure for the same testability reason. **A 17-05-era
+> calendar-only grant is `connected`, refreshable and completely real, and cannot send mail** —
+> offering it would walk the user into `mail_scope_missing` at approve time instead of into
+> re-consent now. Mutation-proven: gating on `connected` reddens that case.
+>
+> **NO SECOND OAUTH SURFACE WAS ADDED, and a test asserts it** — `microsoftAuth.test.ts` pins
+> `http.route(` at exactly 8 and at most one Microsoft callback path. 17-06 built the authorize
+> URL, callback, consent page and token row; a plan named "provider lifecycle" is precisely the one
+> that would quietly add a second, so the absence is measured rather than assumed.
+>
+> **UNRESOLVED, DELIBERATELY NOT DECIDED HERE:** 17-06 shipped `/connect-microsoft` as its own page
+> beside `/connect-gmail`. Two connection pages is the landed reality. Merging them into one
+> connections surface is a UX decision with its own plan — not a side effect of this one.
+>
+> **BLOCKING OWNER CHECKPOINT, OPEN:** the Microsoft disconnect support posture.
+> `disconnectMicrosoft` returns `revokedAtProvider: false` and that is the honest value — Entra
+> exposes no per-app revocation under a delegated grant. The evidence and the A/B choice are in
+> `.planning/phases/25-private-beta-productionization/25-MAIL-MIGRATION-EVIDENCE.md`. **The
+> disconnect COPY is deliberately unwritten until that is decided — the wording is the decision.**
+> **GOVN-03's provider-revocation clause stays OPEN; 25-06 does not close it.**
+>
+> Prior entry — 2026-08-16 (25-05 — **THE SEND PATH IS NOW TWO-ARMED. `internal.gmail.send` is no
 > longer what the production callers invoke; `internal.delivery.send` is.**)
 >
 > **The seam.** `delivery.ts` is a ~10-line dispatcher reading one field — `requests.mailProvider`

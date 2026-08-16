@@ -1,5 +1,13 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> **25-06 note, 2026-08-16 — `RECONNECT` gained `holdMessage`, one string per provider.** The
+> notification plane raises `microsoft_calendar_reconnect` from the CALENDAR expiry cron, and its
+> copy says so. Since 25-05 a Microsoft **mail** send can also park a request at `awaiting_reauth`,
+> and reusing the calendar sentence for that hold describes the wrong subsystem to the user. The
+> proactive (`message`) and reactive (`holdMessage`) strings are now separate fields because they
+> are different facts. **No notification KIND was added and no audit payload changed** — this is
+> presentation copy only. See `cockpit.md` for the provider-partitioning fix it belongs to.
+
 > Last verified: 2026-08-16 (**erasure now deletes the Convex Auth binding too — it was leaving
 > the erased person permanently unable to sign in.**)
 >

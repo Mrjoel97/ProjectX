@@ -370,6 +370,94 @@ export const PLAN_REFUSALS: Record<string, PlanNote> = {
   },
 };
 
+/**
+ * WHICH MAILBOXES THIS TENANT MAY SEND THROUGH, and what the picker should say about it.
+ *
+ * Pure and exported so the branching is testable without a Convex transport — the same reason
+ * `reconnectLines` is.
+ *
+ * THE LOAD-BEARING RULE: Microsoft is offered on `mailReady`, NEVER on `connected`. A 17-05-era
+ * grant is connected, refreshable and real, and simply cannot send mail (ADR-018 put Calendar and
+ * Mail on ONE grant, so a pre-widening consent carries only the calendar half). Offering it would
+ * walk the user into `mail_scope_missing` at approve time instead of into re-consent now.
+ *
+ * There is deliberately no "active provider" anywhere: the choice is per-plan, so a second plan
+ * never inherits what someone clicked on a different one.
+ */
+export function mailboxOptions(input: {
+  googleConnected: boolean;
+  microsoftConnected: boolean;
+  microsoftMailReady: boolean;
+}): {
+  options: ("google" | "microsoft")[];
+  /** Shown when a Microsoft grant exists but predates the mail scope. */
+  microsoftNeedsReconsent: boolean;
+} {
+  const options: ("google" | "microsoft")[] = [];
+  if (input.googleConnected) options.push("google");
+  if (input.microsoftMailReady) options.push("microsoft");
+  return {
+    options,
+    microsoftNeedsReconsent: input.microsoftConnected && !input.microsoftMailReady,
+  };
+}
+
+const MAILBOX_LABEL: Record<"google" | "microsoft", string> = {
+  google: "Gmail",
+  microsoft: "Outlook",
+};
+
+/** The per-plan mailbox choice. Renders nothing when there is only one option and it is already
+ *  the plan's — a picker with one entry is noise. */
+function MailboxPicker({ plan }: { plan: Plan }) {
+  const gmail = useQuery(api.gmailAuth.gmailStatus, {});
+  const microsoft = useQuery(api.microsoftAuth.microsoftStatus, {});
+  const setProvider = useMutation(api.plans.setPlanMailProvider);
+
+  if (gmail === undefined || microsoft === undefined) return null;
+
+  const { options, microsoftNeedsReconsent } = mailboxOptions({
+    googleConnected: gmail.connected,
+    microsoftConnected: microsoft.connected,
+    microsoftMailReady: microsoft.mailReady,
+  });
+  // Absence means Google — the same default `delivery.send` applies to the row itself.
+  const chosen = plan.mailProvider ?? "google";
+
+  // Nothing to choose between, and nothing to warn about.
+  if (options.length < 2 && !microsoftNeedsReconsent) return null;
+
+  return (
+    <div style={{ margin: "0 0 0.75rem" }}>
+      <div style={label}>SEND FROM</div>
+      <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.35rem", flexWrap: "wrap" }}>
+        {options.map((provider) => (
+          <button
+            key={provider}
+            type="button"
+            aria-pressed={chosen === provider}
+            onClick={() => void setProvider({ planId: plan._id, mailProvider: provider })}
+            style={{
+              ...btn,
+              border: chosen === provider ? "1px solid var(--teal-600)" : "1px solid #e5e5e5",
+              background: chosen === provider ? "var(--teal-50, #f0fdfa)" : "#fff",
+              fontWeight: chosen === provider ? 700 : 500,
+            }}
+          >
+            {MAILBOX_LABEL[provider]}
+          </button>
+        ))}
+      </div>
+      {microsoftNeedsReconsent && (
+        <p style={{ ...dim, margin: "0.35rem 0 0" }}>
+          Your Microsoft connection covers calendar only.{" "}
+          <Link href="/connect-microsoft">Reconnect Microsoft</Link> to send mail from Outlook.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
   const execute = useMutation(api.cockpit.executePlan);
   const setSendTime = useMutation(api.plans.setPlanSendTime);
@@ -789,6 +877,7 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
           Send to {recipients.length} recipient{recipients.length === 1 ? "" : "s"} ({mode})
         </li>
       </ol>
+      <MailboxPicker plan={plan} />
       <div style={{ margin: "0 0 0.75rem" }}>
         <div style={label}>SEND TIME</div>
         <input
