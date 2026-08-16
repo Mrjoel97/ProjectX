@@ -1,5 +1,39 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-08-16 (33-10 — **MEDIA-DIRECTOR v3 IS LIVE. THE ACTIVE ROW IS VERSION 3**,
+> read back rather than inferred from a seed log line.)
+>
+> ```
+> $ npx convex run skills:seedSkills '{}'            # from packages/backend
+> $ npx convex run skills:getActiveSkill '{"name":"media-director"}'
+>   version 3 · skillId kh70r0v9284ds55tgdprmqx4x18cj95w · 20041 body bytes
+>   HAS "VARIATION A"  HAS "VARIATION B"  HAS "Source: unverified"
+>   HAS "(defaulted)"  HAS "## 1. BRIEF"  HAS "The id does the work"
+>   byte-identical to packages/contracts/skills/media-director.md: true
+> ```
+>
+> Deployment: the LOCAL (anonymous) backend `local:local-joel_feruzi-pikar_ai_50c69-1`. **The cloud
+> dev deployment has NOT been seeded** — the seed is per-deployment and this read-back speaks only
+> for the one it ran against. v2 was the version this replaced, so the collision gotcha did not
+> bite here (no optimizer candidate had taken 3); it is still not predictable in general, which is
+> why the read-back and not the seed line is the evidence.
+>
+> **THE SEED IS NOT THE WHOLE STEP — THE PUSH IS.** `seedSkills` compares the body compiled into
+> the DEPLOYED functions against the newest registry row, so a seed against a STALE deployment is a
+> silent no-op: it ran clean, said nothing, and left v2 active because the running `convex dev` had
+> stopped pushing (it had also missed a schema change — the restart's push added ~15 `by_tenant`
+> indexes). Neither `touch`ing a `convex/` file nor appending a byte to one woke that watcher, and
+> `convex dev --once` refuses while a local backend holds port 3210. What worked: stop the wedged
+> `convex dev` AND its `convex-local-backend.exe`, then start one clean
+> `CONVEX_LOCAL_BACKEND_STARTUP_TIMEOUT_SECS=300 npx convex dev` (the default 30 s startup timeout
+> is too short for this local database — it fails with "Local backend did not start on port 3210"),
+> wait for `Convex functions ready!`, and seed after that. **Always read the version back; the seed
+> exiting 0 proves nothing.**
+>
+> No model has yet been shown this body on this deployment — the read-back proves what is stored,
+> not what the specialist does with it. The A/B fixture that would prove behaviour was NOT run
+> (see 33-10's summary).
+
 > Last verified: 2026-08-16 (33-09 — **MEDIA-DIRECTOR v3 IS AUTHORED AND PINNED, AND IS NOT LIVE.**
 > The body on disk now teaches the three phase-33 output contracts the parsers have been reading
 > since 33-01: a `BRIEF` echo at the top (topic and duration REQUIRED, the rest optional, and
