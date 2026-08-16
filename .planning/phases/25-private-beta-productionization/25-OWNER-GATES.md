@@ -30,6 +30,13 @@ block at the bottom.
 
 ## GATE 2 — 25-10 Task 2 · the durable-domain ADR *(decision, no cost)*
 
+> **STATUS 2026-08-17: the ADR is WRITTEN and sits at `Proposed` —
+> `docs/decisions/022-beta-domain-posture.md`. It needs your acceptance, nothing more.** Task 3's
+> enforcement is already wired and green (`ops.envCheck` → `nonDurableOrigins`, surfaced on
+> `/admin`). Read the ADR; if you accept it, change `Status: Proposed` → `Accepted` and date it.
+> The two corrections below are the reasons it does not follow the plan verbatim, and they are
+> already written into it.
+
 **Two corrections before you read the plan, both measured at the 25-00 baseline:**
 
 1. **The plan's `docs/decisions/017-…` filename COLLIDES.** `017` is already
