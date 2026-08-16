@@ -1,5 +1,24 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-08-16 (**LIVE, by the owner, in a browser** — the first live confirmation for
+> 33-11/33-12/33-13). The owner re-ran the request that had dead-ended twice and reported: *"it
+> works, the brief had all the information."*
+>
+> **What that confirms, exactly:** the request now reaches a real canvas with a populated guided
+> BRIEF, instead of the memo-with-Approve/Save that the `illegal_generated_duration` refusal used to
+> produce. The dead end is closed on the path that produced it.
+>
+> **What it does NOT yet confirm, and must not be read as confirming:** the two storyboards
+> rendering side by side as distinct concepts, the citation chips and the confirm gate, the salvage
+> and adjustment disclosures actually appearing (they only render when the parser HAS to intervene —
+> a clean proposal shows neither, so a good run is not evidence they work), the proposal failure
+> card and its retry, or anything on the paid rail. Those remain test-verified only.
+>
+> The rebuild is part of the fix's history and worth keeping: the app at `:3111` was serving a
+> production bundle compiled BEFORE these commits, so the backend being correct was not enough and
+> the owner would have seen the old behaviour either way. **A media fix is not live until `next
+> build` + restart has run** — the code landing in git is half of it.
+
 > Last verified: 2026-08-16 (33-13 task 3 — **a repaired deck shows every second the parser
 > moved.** 33-12's `plans.deckAdjustments` finally has a reader, and phase 33's three-part live fix
 > is complete.)
