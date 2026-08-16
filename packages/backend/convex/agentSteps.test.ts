@@ -231,3 +231,57 @@ describe("mediaDispatchCountForThread — the AGENT's calls, not the specialist'
     expect(await count(t)).toBe(0);
   });
 });
+
+// ── The called-vs-never-called read (2026-08-16) ──────────────────────────────────────────────
+//
+// `mediaDispatchCountForThread` above answers ONE hardcoded tool, and `driveReadCountForThread`
+// answers a hardcoded pair. Neither generalises, and that gap has a measured price: fixture
+// `37-finance-update` failed the production gate three times, and across three sessions nobody
+// could say whether `stageFinanceWrite` had been CALLED AND REFUSED or NEVER CALLED — the two
+// have identical plan rows (`financeClaims` absent either way) and no reply assertion can tell
+// them apart. The answer was in `agentSteps` the whole time; there was simply no read that could
+// ask an arbitrary tool name.
+//
+// `toolCallsForThread` is that read: the whole per-tool breakdown for one thread, so the next
+// "the agent did not do X" failure is one free query instead of a bisect.
+describe("toolCallsForThread — which tools the AGENT called on this thread", () => {
+  const step = (
+    t: T,
+    over: { tool: string; stepKey: string; threadId?: string; tenantId?: string },
+  ) =>
+    t.mutation(internal.agentSteps.record, {
+      tenantId: over.tenantId ?? TENANT,
+      threadId: over.threadId ?? THREAD,
+      turnId: TURN,
+      stepKey: over.stepKey,
+      // biome-ignore lint/suspicious/noExplicitAny: the closed tool union is the schema's, not the test's
+      tool: over.tool as any,
+      startedAt: NOW,
+    });
+  const calls = (t: T, threadId = THREAD, tenantId = TENANT) =>
+    t.query(internal.smoke.toolCallsForThread, { tenantId, threadId });
+
+  // THE ONE THIS EXISTS FOR. "Never called" must be expressible, and it must be DISTINCT from
+  // "called and refused" — a refused call still writes its step row, so it still appears here.
+  test("a tool the agent never called is ABSENT, while one that ran is present", async () => {
+    const t = convexTest(schema, modules);
+    await step(t, { tool: "searchVault", stepKey: "call_a" });
+    const seen = await calls(t);
+    expect(seen.searchVault).toBe(1);
+    expect(seen.stageFinanceWrite).toBeUndefined();
+  });
+
+  test("the specialist's dispatch run does not inflate the agent's count", async () => {
+    const t = convexTest(schema, modules);
+    await step(t, { tool: "dispatchMedia", stepKey: "call_abc" });
+    await step(t, { tool: "dispatchMedia", stepKey: "dispatch:root-1" });
+    expect((await calls(t)).dispatchMedia).toBe(1);
+  });
+
+  test("another thread's and another tenant's calls never leak in", async () => {
+    const t = convexTest(schema, modules);
+    await step(t, { tool: "searchVault", stepKey: "call_a", threadId: "other_thread" });
+    await step(t, { tool: "searchVault", stepKey: "call_b", tenantId: OTHER });
+    expect(await calls(t)).toEqual({});
+  });
+});

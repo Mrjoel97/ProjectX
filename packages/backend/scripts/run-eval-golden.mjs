@@ -2897,7 +2897,19 @@ function attemptCase(fixture, tenant, pins, tenantSkillIds = {}) {
       actual: e.message.split("\n")[0],
     });
   }
-  return { pass: failures.length === 0, failures, caseCost, specialistCost };
+  // 2026-08-16: on a FAILURE ONLY, capture WHICH TOOLS the agent actually called. Free (a pure
+  // internalQuery) and skipped on the happy path, the same rule the observable reads above follow.
+  //
+  // This is the read whose absence cost three sessions on `37-finance-update`: a plan row looks
+  // identical whether the tool was CALLED AND REFUSED or NEVER CALLED, and no reply assertion can
+  // separate them. An absent key here means never called; a present one means it ran and something
+  // downstream said no. Printed with the misses so the next failure is diagnosable from the log
+  // instead of from a bisect.
+  const toolCalls =
+    failures.length === 0
+      ? undefined
+      : parse(must("smoke:toolCallsForThread", { tenantId: tenant, threadId }, RETRY_READ));
+  return { pass: failures.length === 0, failures, caseCost, specialistCost, toolCalls };
 }
 
 async function runLive(pins, filters = [], tenantSkillIdArgs = []) {
@@ -3027,6 +3039,10 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = []) {
         console.log(
           `      ${f.key}: expected ${JSON.stringify(f.expected)}, got ${JSON.stringify(f.actual)}`,
         );
+      }
+      // An EMPTY map is a real answer, not a missing one: the agent called nothing at all.
+      if (outcome.toolCalls !== undefined) {
+        console.log(`      tools the agent called: ${JSON.stringify(outcome.toolCalls)}`);
       }
     }
   }

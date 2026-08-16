@@ -1,5 +1,59 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-08-16 (**THE CALLED-VS-NEVER-CALLED BLINDNESS IS CLOSED IN CODE.
+> `smoke:toolCallsForThread` lands, and the runner prints it on every failure.** This pays the debt
+> the entry below names as its only open item. **It is NOT yet on production** — see the deploy
+> caveat at the end, which is the load-bearing half of this entry.
+>
+> **WHAT IT IS.** One `internalQuery` returning the WHOLE per-tool breakdown for one thread —
+> `Record<toolName, count>` — instead of a third hardcoded variant beside
+> `mediaDispatchCountForThread` (one tool) and `driveReadCountForThread` (a hardcoded pair). **A MAP
+> rather than a count, and an ABSENT KEY is the point:** "never called" has to be expressible and
+> has to be DISTINCT from "called and refused", because a refused call still writes its step row and
+> therefore still appears here with a count. A plan row cannot tell those apart — `37-finance-update`
+> proved that over three sessions — and no reply assertion can either.
+>
+> **The `dispatch:` exclusion is inherited deliberately** from `mediaDispatchCountForThread`, for its
+> original reason: `dispatch.ts` records the SPECIALIST RUN it schedules under the SAME tool name on
+> the SAME thread, so a count that does not exclude it reads 2 for one agent call.
+>
+> **ponytail ceiling, stated because it is a real one:** `by_tenant` + a fold in code, since this
+> table has NO `by_tenant_thread` index and a diagnostic read on a throwaway `eval-<runId>` tenant
+> does not justify adding one. Upgrade path if it is ever wanted on a REAL tenant's trace, where
+> rows grow with every cockpit turn: add `.index("by_tenant_thread", ["tenantId", "threadId"])` and
+> eq both. Do not reach for that until something outside the harness needs it.
+>
+> **WIRED, not merely available** — an unused query pays no debt. `attemptCase` reads it ONLY when
+> `failures.length > 0` (the same skipped-unless-asked rule the other observables follow, so a green
+> run pays no extra hop) and returns it as `outcome.toolCalls`; the result printer emits
+> `tools the agent called: {...}` under the misses. **An EMPTY map is a real answer, not a missing
+> one:** it means the agent called nothing at all, which is exactly what
+> `37-finance-update` was doing and what took three sessions to establish by hand.
+>
+> **TDD, RED observed first:** the three tests in `agentSteps.test.ts` failed with
+> `Expected a Convex function exported from module "smoke" as toolCallsForThread, but there is no
+> such export` — feature missing, not a typo — then passed. 163/163 green across
+> `agentSteps.test.ts`, `llmRedaction.test.ts` and `importGuard.test.ts`; `tsc --noEmit` exit 0;
+> `--self-check` PASSED (40 fixtures). §4 is satisfied STRUCTURALLY: the return is tool names from
+> the schema's own CLOSED union plus integers, and there is no field that can carry text.
+>
+> **BIOME NOTE, because this repo keeps re-learning it:** local `biome check` reports a `format`
+> error on `run-eval-golden.mjs` and `lint/style/noNonNullAssertion` at `smoke.ts:334`. **BOTH ARE
+> PRE-EXISTING AND NEITHER IS FROM THIS CHANGE** — proven, not assumed, by running biome against the
+> HEAD versions extracted with `git show` (which normalizes to LF): the smoke warning reproduces
+> identically, and the format error DISAPPEARS, because it is the CRLF working copy and biome wants
+> to strip `␍` from line 1 onward. Do not "fix" it by reformatting; that fights the repo's
+> line-ending setup and buries the real diff.
+>
+> **THE DEPLOY CAVEAT — this is NOT usable on production yet, and the wiring is UNEXERCISED
+> end-to-end.** The query exists only in the working tree. Production evals cannot call it until a
+> backend deploy lands, and none was performed here on purpose: `packages/backend/convex/media.ts`
+> is carrying the concurrent 33-08 lane's uncommitted in-flight work, and `npx convex deploy` ships
+> the whole `convex/` directory — it would have pushed another lane's half-finished code to
+> production. **No failing case has been observed through this path**, so the printer's output has
+> never been seen on a real failure; the query itself is unit-proven and the wiring is four lines.
+> First deploy from a clean tree closes that gap.)
+
 > Last verified: 2026-08-16 (**THE PRODUCTION GATE IS GREEN: 40/40, evidence on `cockpit-agent v8`,
 > and the fault was IN THE FIXTURE — the agent was right all along. THIS SUPERSEDES THE ENTRY
 > IMMEDIATELY BELOW**, which said the production gate comes back 39/40 and named the harness's

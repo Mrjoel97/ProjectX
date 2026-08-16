@@ -749,6 +749,46 @@ export const driveReadCountForThread = internalQuery({
   },
 });
 
+/**
+ * 2026-08-16: THE CALLED-VS-NEVER-CALLED READ — the whole per-tool breakdown for one thread.
+ *
+ * The two reads above each answer a HARDCODED tool name, and that gap had a measured price.
+ * Fixture `37-finance-update` failed the production gate three times, and for three sessions
+ * nobody could say whether `stageFinanceWrite` had been CALLED AND REFUSED or NEVER CALLED: the
+ * plan row looks identical either way (`financeClaims` absent), and no reply assertion can tell
+ * a routing failure from a prose answer. The evidence was in `agentSteps` the whole time — there
+ * was just no read that could ask about an arbitrary tool. One generic read retires that class
+ * of blindness instead of adding a third hardcoded variant.
+ *
+ * A MAP, not a count, and an ABSENT key is the load-bearing part: "never called" has to be
+ * expressible and has to be distinct from "called and refused" — a refused call still writes its
+ * step row, so it still appears here with a count.
+ *
+ * The `dispatch:` exclusion matches `mediaDispatchCountForThread`'s, for its reason: `dispatch.ts`
+ * records the SPECIALIST RUN it schedules under the same tool name on the same thread, and
+ * counting it reads 2 for one agent call.
+ *
+ * ponytail: `by_tenant` + a fold in code, because there is no `by_tenant_thread` index on this
+ * table and a DIAGNOSTIC read on a throwaway `eval-<runId>` tenant does not justify one. Upgrade
+ * path if this is ever wanted on a real tenant's trace, where the row count grows with every
+ * cockpit turn: add `.index("by_tenant_thread", ["tenantId", "threadId"])` and eq both.
+ */
+export const toolCallsForThread = internalQuery({
+  args: { tenantId: v.string(), threadId: v.string() },
+  handler: async (ctx, { tenantId, threadId }): Promise<Record<string, number>> => {
+    const rows = await ctx.db
+      .query("agentSteps")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .collect();
+    const calls: Record<string, number> = {};
+    for (const row of rows) {
+      if (row.threadId !== threadId || row.stepKey.startsWith("dispatch:")) continue;
+      calls[row.tool] = (calls[row.tool] ?? 0) + 1;
+    }
+    return calls;
+  },
+});
+
 /** Phase 16: the eval harness's `researchDocPresent` read. Read the persisted web-research table
  * row, not the memo plan: a prose answer or a staged card must not pass a research fixture. */
 export const researchCountForThread = internalQuery({

@@ -1,5 +1,16 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-16 (**TEST-ONLY ADDITION TO A WATCHED FILE — NO COCKPIT BEHAVIOUR
+> CHANGED.** `convex/agentSteps.test.ts` gained three tests for the new `smoke:toolCallsForThread`
+> read, which returns the per-tool call breakdown for one thread so the eval harness can finally
+> tell a tool that was CALLED AND REFUSED from one that was NEVER CALLED. Nothing in the cockpit
+> loop, its tool surface, its prompts or its plan handling was touched — the only production file in
+> the change is `convex/smoke.ts`, which is harness-facing and carries no cockpit behaviour. The
+> full entry, including the ponytail ceiling and the fact that it is NOT yet deployed to production,
+> is in [[agent-runtime]]. Recorded here rather than waved through because this file watches
+> `agentSteps.test.ts` and a bare `Last verified` bump would say less than the truth: 163/163 green
+> across `agentSteps`, `llmRedaction` and `importGuard`, `tsc --noEmit` exit 0.)
+
 > Last verified: 2026-08-16 (33-10 — **WATCH-GATE ONLY.** `watch.json` gives `apps/web/e2e/` to this
 > playbook, and 33-10 added a second test to `media-canvas.spec.ts`. Nothing in the cockpit's own
 > contracts changed; the media canvas's invariants live in `docs/playbooks/media.md`. The one fact
