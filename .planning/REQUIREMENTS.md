@@ -161,7 +161,7 @@ Private Beta section above and land in this milestone's **final** stage (S4) —
 
 ### S4 — Governance & Open the Beta
 
-- [ ] **GOVN-01**: A `requireOwner` primitive gates the three Phase-8 functions (`setOptimizerEnabled`, `activateCandidate`, `candidatesForReview`) and the admin surface so non-owners cannot reach them — pulled early, since it gates S3 agent-authored skills and S4 multi-user
+- [x] **GOVN-01**: A `requireOwner` primitive gates the three Phase-8 functions (`setOptimizerEnabled`, `activateCandidate`, `candidatesForReview`) and the admin surface so non-owners cannot reach them — pulled early, since it gates S3 agent-authored skills and S4 multi-user
 - [ ] **GOVN-02**: An ISO 9001:2015 QMS conformance foundation maps the existing audit / skill-versioning / GSD-playbook change-control to the relevant clauses and fills the gaps — a conformance map, not process theater
 - [ ] **GOVN-03**: Every user-exercisable data and connection control the published privacy policy promises actually exists in the product and does what the policy says — the policy is the specification, not the marketing. Covers in-app disconnection of a connected account WITH revocation at the provider (not merely a local token delete), and tenant data deletion and export. Minted 2026-08-01 after `apps/web/app/privacy/page.tsx:312` was found promising an in-app Google disconnect that had no implementation anywhere in the repo.
 - [ ] **BETA-05**: Cross-tenant isolation assertions are written as each new surface ships (S1–S3), culminating in a two-user test covering every new table and index
@@ -348,7 +348,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ACTN-05 | Phase 19 | Complete (2026-08-10) |
 | MEDIA-01 | Phase 20 (+ Phase 20.2 Scene Timeline, registered 2026-08-14) | Pending — Phase 20 has 20-11/20-12 unexecuted and `20-VALIDATION.md` is `in_progress` with the owner-run fal/render gate unpaid; Phase 20.2 replaces the uniform block deck with the scene timeline and is part-executed (20.2-01…06) but still `status: proposed` |
 | SKILL-01 | Phase 21 | Pending |
-| GOVN-01 | Phase 22 | Pending |
+| GOVN-01 | Phase 22 | Complete (2026-08-16) — `22-VERIFICATION.md` `status: passed`, GOVN-01 row SATISFIED. All three Phase-8 functions are owner-wrapped at source: `setOptimizerEnabled` (`optimizerConfig.ts:93`), `activateCandidate` (`skills.ts:371`), `candidatesForReview` (`skills.ts:391`). The `/ops` presentation half closed at `29103e9` via `opsPresentation.test.ts` — React component/mount evidence across exact-owner/false/null/loading, **not** a live-DOM or browser observation; `22-VERIFICATION.md` records that limit itself |
 | SKILL-02 | Phase 23 | Pending |
 | GOVN-02 | Phase 24 | Pending |
 | GOVN-03 | Phase 22.1 | Pending |
