@@ -22,8 +22,8 @@ import {
   failureCards,
   failureText,
   heroState,
-  type JobEstimate,
   isPickableVideo,
+  type JobEstimate,
   KIND_COST_NOTE,
   KIND_LABEL,
   pictureLine,
@@ -993,10 +993,11 @@ describe("a failure is a plain-language card with honest economics", () => {
   test("with no estimate loaded the price is honest about what it does NOT include", () => {
     // Understating money is the bad direction. Without the estimate's render line the card quotes
     // the scene's own lines and SAYS the re-assembly is on top, rather than silently omitting it.
-    const card = sceneCard(
-      { clip: face({ status: "failed", failureReason: "http_502" }) },
+    const card = failureCards(
+      {},
+      [fscene({ clip: face({ status: "failed", failureReason: "http_502" }) })],
       undefined,
-    );
+    )[0];
     const regenerate = card?.fixes.find((f) => f.arm === "regenerate");
     expect(regenerate?.priceLabel).toBe("$0.42 adds, plus the re-assembly");
   });

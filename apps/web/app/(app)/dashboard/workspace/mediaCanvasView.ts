@@ -249,8 +249,46 @@ export function failureText(reason: string, noun: "scene" | "block"): string {
     route_rejected: "the render service refused the request",
     sidecar_rejected_on_return:
       "the render produced no valid assembly record, so nothing was published",
+    // ── 33-08: the other three closed vocabularies a card has to speak ─────────────────────────
+    // The RETRIER's terminal (`onSubmitComplete`). Neither of these is the provider's opinion of
+    // the request — they are the request never getting there — so neither is a rewrite lever.
+    submit_canceled: "the request was canceled before the provider started it",
+    submit_failed: "the request never reached the provider",
+    // The CAPTIONS plane. `maybeStartCaptions` refuses a transcript whose source takes are
+    // missing; `submitCaptions` fails on the transcript itself.
+    incomplete_takes: `a ${noun}'s voice take never landed, so there was nothing to transcribe`,
+    transcript_failed: "the narration could not be transcribed",
+    caption_track_empty: "the transcript came back empty, so there was nothing to burn in",
+    // Runner-side codes (`RenderRunnerCode`), which land in the same field as ffmpeg's.
+    unauthorized: "the render service rejected our credentials",
+    not_configured: "the render service is not configured on this deployment",
+    bad_request: "the render service refused the request as malformed",
+    input_fetch_failed: "the render could not fetch one of its inputs",
+    upload_failed: "the finished file could not be stored",
+    bad_invocation: "the assembler was called with arguments it does not accept",
+    input_missing: "one of the render's input files was not there",
+    no_audio_stream: "one of the audio inputs had no readable sound in it",
+    decode_failed: "one of the inputs failed to decode",
+    render_failed: "the render failed without a more specific cause",
+    empty_batch: "there was nothing in the batch to render",
   };
   return map[reason] ?? reason;
+}
+
+/**
+ * The same map, but as a SENTENCE — an unknown code falls back to a generic clause instead of to
+ * itself.
+ *
+ * `failureText` deliberately falls through to the raw code so nothing is swallowed, which is right
+ * for a detail line and wrong for prose: a card whose headline reads "The reel could not be
+ * assembled: http_502" has put a support string in front of a person. Every card therefore renders
+ * the code ONCE, as its own subordinate `detailCode` line, and speaks in words above it.
+ */
+export const GENERIC_FAILURE_CLAUSE = "something went wrong that we have no plainer word for";
+export function failureClause(reason: string | null | undefined, noun: "scene" | "block"): string {
+  if (!reason) return GENERIC_FAILURE_CLAUSE;
+  const said = failureText(reason, noun);
+  return said === reason ? GENERIC_FAILURE_CLAUSE : said;
 }
 
 /**
@@ -906,3 +944,356 @@ export const isPickableVideo = (doc: {
   status?: string;
 }): boolean =>
   (doc.storedMimeType ?? doc.mimeType ?? "").startsWith("video/") && doc.status !== "failed";
+
+// ── 33-08 — THE CITATIONS AND THE FAILURE CARDS ───────────────────────────────────────────────
+//
+// The last two canvas surfaces, and both of them are about being right on somebody else's behalf:
+// one about whose WORD a figure is, the other about whose MONEY is already gone.
+//
+// Three rules the derivations below exist to hold:
+//
+// 1. **A citation is a link only when the document is genuinely this tenant's.** `sceneCitations`
+//    returns `verified:false` for a foreign, malformed or deleted docId — deliberately
+//    indistinguishable from each other so a probing model learns nothing — and a UI that minted a
+//    `PreviewModal` link off one would be offering a cross-tenant click-through.
+// 2. **Only the OWNER vouches.** A model-authored figure becomes the user's word through the
+//    confirm click and nothing else, so the badge is a request rather than a decoration — and a
+//    scene the backend never flagged gets NO confirm button, because `confirmClaim` would answer
+//    `not_a_claim` and a control that can only refuse must not look like a control (33-07's rule).
+// 3. **Media money never resolves.** `UNLANDED_RESOLVES.media === false`: a failed line's
+//    reservation is spent, permanently, and `actualCents` "stays absent if it failed"
+//    (`media.ts`). So a failed face's cost is its ESTIMATE and a landed one's is its ACTUAL, and
+//    neither may ever be rendered as pending.
+
+/** One row of `media.sceneCitations`. `title`/`docId` are MODEL-AUTHORED text; `verified` is the
+ *  server's answer to "is that id a document of yours?", checked where the id is consumed. */
+export type Citation = {
+  sceneIndex: number;
+  docId: string | null;
+  title: string | null;
+  verified: boolean;
+  needsConfirmation: boolean;
+  confirmedAt: number | null;
+};
+
+export type SceneCitation = {
+  sceneIndex: number;
+  /** `unverified` is a FOURTH state the plan did not name, and it is not a rounding of
+   *  `needs_confirmation`: the backend's confirm gate keys on `needsConfirmation`, so a scene with
+   *  only a bad source has nothing confirmable and does not block Generate. Rendering it as "needs
+   *  your confirmation" would promise a button that refuses and a gate that is not there. */
+  kind: "cited" | "unverified" | "needs_confirmation" | "confirmed";
+  /** The doc, ONLY when verified. `null` is inert by construction — see rule 1. */
+  link: { title: string; docId: string } | null;
+  label: string;
+  /** The confirm control's words, or `null` when there is nothing this scene can confirm. */
+  action: string | null;
+};
+
+export type CitationView = {
+  /** Keyed by `sceneIndex`, because a tile knows its own index and nothing else. An ABSENT entry
+   *  is the "claims nothing" state — `sceneCitations` omits those scenes, and inventing an empty
+   *  chip for them would put a provenance affordance on creative copy that needs none. */
+  byScene: Record<number, SceneCitation>;
+  unconfirmedCount: number;
+  /** The sentence beside the disabled Generate button. `jobEstimate`'s `unconfirmed_claims`
+   *  refusal stays the authoritative copy; this one is the COUNT, which the refusal cannot give
+   *  (it names only the first offending scene). */
+  blockLine: string | null;
+};
+
+export const CONFIRM_ACTION = "This is my number — confirm";
+export const UNVERIFIED_LABEL = "Source not in your vault — this citation can't be checked.";
+export const NEEDS_CONFIRMATION_LABEL =
+  "The agent wrote this figure. Confirm it to make it your word.";
+export const CONFIRMED_LABEL = "You confirmed this figure.";
+
+export function citationView(citations: readonly Citation[] | null | undefined): CitationView {
+  const byScene: Record<number, SceneCitation> = {};
+  let unconfirmedCount = 0;
+
+  for (const c of citations ?? []) {
+    // The link is decided ONCE, before any branch, so no arm can accidentally mint one from an
+    // unverified row — the property is structural rather than repeated in four places.
+    const link =
+      c.verified && c.docId !== null && c.title !== null
+        ? { title: c.title, docId: c.docId }
+        : null;
+    const kind: SceneCitation["kind"] = c.needsConfirmation
+      ? c.confirmedAt !== null
+        ? "confirmed"
+        : "needs_confirmation"
+      : link !== null
+        ? "cited"
+        : "unverified";
+    if (kind === "needs_confirmation") unconfirmedCount += 1;
+    byScene[c.sceneIndex] = {
+      sceneIndex: c.sceneIndex,
+      kind,
+      link,
+      label:
+        kind === "cited"
+          ? (link?.title ?? "")
+          : kind === "confirmed"
+            ? CONFIRMED_LABEL
+            : kind === "needs_confirmation"
+              ? NEEDS_CONFIRMATION_LABEL
+              : UNVERIFIED_LABEL,
+      action: kind === "needs_confirmation" ? CONFIRM_ACTION : null,
+    };
+  }
+
+  return {
+    byScene,
+    unconfirmedCount,
+    blockLine:
+      unconfirmedCount === 0
+        ? null
+        : `Confirm ${unconfirmedCount} claim${unconfirmedCount === 1 ? "" : "s"} to enable Generate.`,
+  };
+}
+
+/** A job face with its money and its code. A superset of `TrackerScene`'s face, so ONE array
+ *  serves both folds — the tracker and the cards cannot disagree about which scene failed.
+ *
+ *  `failureReason` is a CODE by schema contract (`mediaJobs.failureReason`: "a CODE only … never
+ *  provider prose"), which is what makes it safe to render at all. */
+export type FailureFace = {
+  status: string;
+  failureReason: string | null;
+  estUsd: number;
+  actualCents: number | null;
+};
+
+export type FailureScene = Omit<TrackerScene, "clip" | "voice"> & {
+  clip: FailureFace | null;
+  voice: FailureFace | null;
+};
+
+export type FixArm =
+  | "regenerate"
+  | "text_card"
+  | "animated_image"
+  | "uploaded_video"
+  | "retry_render";
+
+export type FailureFix = {
+  arm: FixArm;
+  label: string;
+  /** FREE vs PAID is never implicit. Every arm says which it is, in the same slot. */
+  priceLabel: string;
+  note: string | null;
+};
+
+export type FailureCard = {
+  key: string;
+  /** `hero` cards describe the REEL and render in the hero slot; `scene` cards render on their
+   *  tile, where the levers already live. */
+  where: "hero" | "scene";
+  sceneIndex: number | null;
+  headline: string;
+  sceneRef: string | null;
+  /** What this scene's attempt already cost, phrased as spent. `null` on a reel-level card: the
+   *  render's own money is a reserved line, and quoting a scene's spend there is the wrong
+   *  ledger. */
+  sunkLine: string | null;
+  fixes: FailureFix[];
+  /** The support vocabulary, verbatim and subordinate. Never inside the prose above. */
+  detailCode: string | null;
+};
+
+const FAILED = (f: FailureFace | null): boolean =>
+  f !== null && (f.status === "failed" || f.status === "blocked");
+
+/**
+ * WHAT THIS FACE HAS ALREADY COST, and the branch is the no-refunds rule.
+ *
+ * A LANDED row reconciled to `actualCents` — the exact bill. A row that failed has no
+ * `actualCents` and never will (`media.ts`: "absent until a row lands, and stays absent if it
+ * failed"), so its reservation IS the cost: `UNLANDED_RESOLVES.media` is `false`, which is the
+ * ledger's way of saying that money is not coming back.
+ */
+const faceCents = (f: FailureFace | null): number =>
+  f === null ? 0 : (f.actualCents ?? Math.round(f.estUsd * 100));
+
+/** What re-buying this scene reserves, from the rows' OWN reserved prices. Not a re-pricing: these
+ *  are the numbers `chooseMediaBatch` produced for these exact specs, and `regenerateBlock` hands
+ *  the same specs back to the same table. */
+const sceneEstCents = (s: FailureScene): number =>
+  Math.round(((s.clip?.estUsd ?? 0) + (s.voice?.estUsd ?? 0)) * 100);
+
+/** The kinds a failed picture can be swapped TO, cheapest-consequence first. `generated_video` is
+ *  absent on purpose: switching to it buys the same thing that just failed. */
+const SWAP_ARMS = [
+  {
+    arm: "text_card" as const,
+    label: "Replace it with a text card",
+    priceLabel: "free",
+    note: "A card is drawn when the reel is assembled, so nothing is bought and the reel can finish.",
+  },
+  {
+    arm: "animated_image" as const,
+    label: "Switch it to an animated still",
+    priceLabel: "free to switch",
+    note: "The still itself is bought when you regenerate — about a fortieth of a generated clip.",
+  },
+  {
+    arm: "uploaded_video" as const,
+    label: "Use your own footage",
+    priceLabel: "free",
+    note: "Nothing is bought for this scene — pick the video on this scene below.",
+  },
+];
+
+/** The codes that mean A SCENE NEVER LANDED (`HELD_REASONS`, above) — the reel is HELD and the
+ *  lever is that scene's fix menu. A "Retry render" here would buy a second sandbox over the same
+ *  hole, which is the exact spend 33-04 exists to prevent. */
+
+/**
+ * EVERY ACTIVE FAILURE, AS A CARD.
+ *
+ * Hero cards first (the reel's own state is read before its scenes'), then one card per failed
+ * scene in deck order. A deck with nothing wrong returns `[]`, so the component renders the region
+ * or not off `.length` rather than off five booleans.
+ */
+export function failureCards(
+  plan: {
+    renderStatus?: string | null;
+    renderReason?: string | null;
+    renderRetriedAt?: number | null;
+    captionStatus?: string | null;
+    captionReason?: string | null;
+  },
+  scenes: readonly FailureScene[],
+  estimate: JobEstimate | undefined,
+): FailureCard[] {
+  const noun = scenes.some((s) => s.visual !== null) ? ("scene" as const) : ("block" as const);
+  const word = noun === "scene" ? "Scene" : "Block";
+  const cards: FailureCard[] = [];
+
+  // The estimate's OWN render line, never a constant of ours: `regenerateBlock` reserves a render
+  // alongside the scene (a changed scene makes the published mp4 stale), so a retry price that
+  // omitted it would understate the bill — the one direction a money label must never err in.
+  const renderCents = estimate?.lines.find((l) => l.label.startsWith("render"))?.cents ?? null;
+
+  const failedScenes = scenes
+    .map((s, position) => ({ s, position }))
+    .filter(({ s }) => FAILED(s.clip) || FAILED(s.voice));
+
+  // ── THE REEL'S OWN CARDS ────────────────────────────────────────────────────────────────────
+  if (plan.renderStatus === "failed") {
+    const reason = plan.renderReason ?? null;
+    const clause = failureClause(reason, noun);
+    if (reason !== null && HELD_REASONS.has(reason)) {
+      const first = failedScenes[0];
+      const ref = first ? `${word} ${first.position + 1}` : null;
+      cards.push({
+        key: "hero-held",
+        where: "hero",
+        sceneIndex: first?.s.blockIndex ?? null,
+        headline: `The reel is held — ${clause}. ${
+          ref
+            ? `Fix ${ref} below and it picks up where it stopped.`
+            : `Fix the ${noun} below and it picks up where it stopped.`
+        }`,
+        sceneRef: ref,
+        sunkLine: null,
+        // No arm of its own, deliberately: the levers are on the scene's card, and a second copy
+        // of them here would be two controls for one fix.
+        fixes: [],
+        detailCode: reason,
+      });
+    } else {
+      cards.push({
+        key: "hero-render",
+        where: "hero",
+        sceneIndex: null,
+        headline: `The reel could not be assembled — ${clause}.`,
+        sceneRef: null,
+        sunkLine: null,
+        fixes: [
+          {
+            arm: "retry_render",
+            label: "Retry render",
+            priceLabel: "free — the compute was already reserved",
+            note: plan.renderRetriedAt
+              ? "The first attempt already retried automatically, so this is a third sandbox on the same reserved line."
+              : null,
+          },
+        ],
+        detailCode: reason,
+      });
+    }
+  }
+
+  // 20-17's rule, said to the user: a caption failure NEVER unpublishes the reel. There is no
+  // re-burn mutation, so this card carries no arm — it reports a degraded deliverable rather than
+  // offering a fix that does not exist.
+  if (plan.captionStatus === "failed") {
+    cards.push({
+      key: "hero-captions",
+      where: "hero",
+      sceneIndex: null,
+      headline: `The reel is published without its captions — ${failureClause(plan.captionReason, noun)}.`,
+      sceneRef: null,
+      sunkLine: null,
+      fixes: [],
+      detailCode: plan.captionReason ?? null,
+    });
+  }
+
+  // ── THE PER-SCENE CARDS ─────────────────────────────────────────────────────────────────────
+  for (const { s, position } of failedScenes) {
+    const pictureFailed = FAILED(s.clip);
+    const voiceFailed = FAILED(s.voice);
+    const pictureWord = s.visual === "animated_image" ? "still" : "picture";
+    const said = (f: FailureFace | null, what: string): string =>
+      f?.status === "blocked"
+        ? `its ${what} was refused by the provider's content check`
+        : `its ${what} failed`;
+
+    const parts = [
+      pictureFailed ? said(s.clip, pictureWord) : null,
+      voiceFailed ? said(s.voice, "voice take") : null,
+    ].filter((p): p is string => p !== null);
+    // The CODE becomes a sentence when the vocabulary knows it, and stays out of the prose when it
+    // does not — the detail line below carries it either way.
+    const known = [
+      pictureFailed ? s.clip?.failureReason : null,
+      voiceFailed ? s.voice?.failureReason : null,
+    ].find((r) => r != null && failureText(r, noun) !== r);
+    const because = known ? ` — ${failureText(known, noun)}` : "";
+
+    cards.push({
+      key: `scene-${s.blockIndex}`,
+      where: "scene",
+      sceneIndex: s.blockIndex,
+      headline: `This ${noun}: ${parts.join(" and ")}${because}.`,
+      sceneRef: `${word} ${position + 1}`,
+      sunkLine: `This ${noun}'s attempt cost ${usd(faceCents(s.clip) + faceCents(s.voice))} — a failed line is never refunded, so that money is spent either way.`,
+      fixes: [
+        {
+          arm: "regenerate",
+          label: `Buy this ${noun} again`,
+          priceLabel:
+            renderCents === null
+              ? `${usd(sceneEstCents(s))} adds, plus the re-assembly`
+              : `${usd(sceneEstCents(s) + renderCents)} adds`,
+          note: `Buys this ${noun}'s picture and voice again and re-assembles the reel. The other ${noun}s are kept.`,
+        },
+        // A KIND SWITCH ONLY HELPS A PICTURE. If the take is what failed, a text card changes
+        // nothing about the missing voice — offering it would be a free click that fixes nothing.
+        ...(pictureFailed ? SWAP_ARMS.filter((a) => a.arm !== s.visual) : []),
+      ],
+      detailCode:
+        [
+          pictureFailed && s.clip?.failureReason ? `picture: ${s.clip.failureReason}` : null,
+          voiceFailed && s.voice?.failureReason ? `voice: ${s.voice.failureReason}` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ") || null,
+    });
+  }
+
+  return cards;
+}
