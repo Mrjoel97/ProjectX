@@ -1,5 +1,25 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-16 (**COCKPIT-AGENT v26 IS NOW ACTIVE. THE POINTER MOVED: v24 → v26.**
+> THIS SUPERSEDES THIS SESSION'S EARLIER NOTE BELOW, which said "neither `seedSkills` nor
+> `activateSkillVersion` was run, so no candidate version was inserted and the active pointer did
+> not move" — true when written, false now. Both steps of the two-step process have since run:
+> `seedSkills` published the edited body as candidate **v26** (`maxVersion + 1`, gated so it could
+> not auto-activate), the unfiltered gate `d59099cd` went **40/40** and recorded evidence on that
+> row, and `skills:activateSkill` then flipped the active pointer at owner instruction.
+>
+> **VERIFIED AT THE FLIP, not assumed:** active read back as v26, and its stored body is
+> BYTE-IDENTICAL (sha `df23a5541f2b`) to `packages/contracts/skills/cockpit-agent.md` on disk —
+> the check this file exists to demand, since a skill-file diff means nothing until the row
+> agrees. Then fixture `40-calendar-stage` was re-run **UNPINNED** (no `--skill`, so it loads
+> whatever is ACTIVE) and PASSED at $0.0035. That is the live path, not a pin.
+>
+> **v26 ships THREE lanes at once**, because the candidate accumulated all of them: 20-12's media
+> sections, 20.1-02's Drive section, and item 4's calendar section + document-section merge. v25
+> was SUPERSEDED, never activated — it is now a stale candidate row and should not be activated
+> later, since v26 contains it. Rollback, if ever needed, is `activateSkill` on a prior version
+> (v24 is the pre-flip body).)
+
 > Note (item-4 body change, 2026-08-15 — COMMENT-ONLY, not a "Last verified" bump: the registry
 > mechanics below were not re-exercised.) The cockpit body gained a `## The user's calendar`
 > section and merged its two document sections into one. **Per the two-step rule stated immediately

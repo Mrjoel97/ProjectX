@@ -1,5 +1,17 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-08-16 (**COCKPIT-AGENT v26 IS NOW ACTIVE — v24 → v26, at owner instruction,
+> on the evidence from gate `d59099cd` (40/40).** The candidate stream that had been stuck since
+> `420c852b` is drained: nothing is pending activation, and the three ungated body changes this
+> playbook has been tracking (20-12 media, 20.1-02 Drive, item 4 calendar + document merge) are all
+> LIVE in one row.
+>
+> Post-flip check, deliberately UNPINNED: `40-calendar-stage` re-run with NO `--skill` argument —
+> so the loop loads the ACTIVE skill exactly as a real conversation does — PASSED at $0.0035. The
+> calendar capability now works on the live path, which is a stronger claim than the pinned pass
+> that gated it. Active body verified byte-identical to the `.md` on disk at the moment of the
+> flip.)
+
 > Last verified: 2026-08-16 (**THE GATE IS GREEN. 40/40, and evidence is recorded on
 > `cockpit-agent v26`** — run `d59099cd`, unfiltered, pinned, $0.3735 exec + $0.1088 specialist =
 > **$0.4824**, exit 0, two fixtures retried once each (05-edit-make-formal, 28-healthy-no-gaps).
