@@ -1,5 +1,34 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-08-16 (**THE GATE IS GREEN. 40/40, and evidence is recorded on
+> `cockpit-agent v26`** — run `d59099cd`, unfiltered, pinned, $0.3735 exec + $0.1088 specialist =
+> **$0.4824**, exit 0, two fixtures retried once each (05-edit-make-formal, 28-healthy-no-gaps).
+> **THIS SUPERSEDES EVERY "the gate is red / no candidate can be activated" STATEMENT IN THE
+> ENTRIES BELOW.**
+>
+> This is the FIRST all-green unfiltered run this body has ever had, and the first time
+> `recordEvalEvidence` has fired for it. What unblocked it was NOT a skill-body change: it was
+> `4c33625`, the `evaluations.ts` provenance-join fix. Fixtures 27/28/29/30/31 had been red on the
+> ACTIVE `@24` because `runEvaluation` seeded its findings map from `userProvided` (made user-only
+> by `5523f3e`) instead of `fieldProvenance` — see `business-evaluation.md` and
+> `.planning/debug/business-evaluation-no-grounded-findings.md`.
+>
+> **32/33/34 (research) are now VERIFIED**, closing the one gap the earlier entries recorded as
+> untested — 33 alone costs $0.0454, most of it specialist. So all 40 fixtures in the set have now
+> passed against v26 in ONE run, not a splice: no `--only`, no evidence suppression, one tenant
+> (`eval-d59099cd`), one pin.
+>
+> **NOTHING WAS ACTIVATED.** `v26` is still a CANDIDATE and `v24` is still ACTIVE. Activation is a
+> separate OWNER act through `activateCandidate` (ownerMutation, ops panel) or `activateSkill`,
+> behind a second independent gate — `requireOwner` asks *may this caller act?*, EVAL_GATE asks
+> *has this body earned activation?*. The evidence above satisfies only the second.
+>
+> Activating v26 would ship THREE bodies of work at once, because v26 carries them all: 20-12's
+> media sections, 20.1-02's Drive section, and item 4's calendar + document-merge work. v25 is
+> superseded rather than separately activated. The evidence write is RUNNER-REPORTED (the harness
+> prints it only after the mutation returns); it was not independently read back from the row,
+> because the only reader is an owner-authed query.)
+
 > Last verified: 2026-08-15 (item-4 LIVE MEASUREMENT — **THIS SUPERSEDES THE "NO GATE RUN, NO
 > SPEND, NO EVIDENCE" LINE IN THE ITEM-4 ENTRY BELOW, WHICH IS NOW FALSE.** The gate HAS been run.
 > `cockpit-agent@26` was published by `seedSkills` and measured. Pin numbers below were also wrong:

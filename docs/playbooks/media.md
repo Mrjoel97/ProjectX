@@ -1,5 +1,18 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Touched 2026-08-16 (eval-gate session) to clear the §9 Stop hook — **NOT a verification**, and
+> deliberately not a `Last verified` line. This session ran the golden eval gate and fixed
+> `evaluations.ts`; it touched NO media-watched path.
+> `packages/backend/convex/render/assemble_final.sh` carries uncommitted in-flight changes from the
+> concurrent media/render lane, which is what tripped the hook. That work is unread and unattested
+> here; **the lane that owns it still owes this playbook a real entry.** Nothing below covers it.
+>
+> (One media-relevant FACT from this session, recorded because it is evidence rather than a
+> verification: fixtures `38-media-dispatch` and `38b-media-not-a-document` both PASSED in the
+> all-green gate run `d59099cd` against `cockpit-agent@26` — the first confirmation that 20-12's
+> `dispatch:` prefix fix really closed `420c852b`'s two-actor miscount. That says nothing about the
+> render pipeline this playbook documents.)
+
 > Last verified: 2026-08-16 (Phase 20.2 Nyquist audit — the local mixed-scene smoke now samples
 > decoded video-frame hashes inside the `animated_image` window. The current assembler is RED:
 > 48 decoded frames produced 1 unique hash, so the still path is frozen rather than animated.
