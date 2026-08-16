@@ -1,0 +1,15 @@
+{
+  "accountIdHash": "199b7e12b06ac39afeffb7242755e5ea6dbbae431d81829fdd5aae40437d60ec",
+  "capturedAt": "2026-08-16T20:35:39.398Z",
+  "changedEtagHash": "313baf06f67e16ac77d1311268cf066cc0e2b12139cc88cdd22c5d645779bc90",
+  "cleanupMissing": true,
+  "deploymentUrlHash": "fe9caaa6ad03ad51f45975cc2438e3bcd036d723278064876efbdc7b71e82d5b",
+  "eventIdHash": "6fc4acd44999f9ae20d79a76a096df981145a5cfae726aafc22711139c29ca5e",
+  "initialEtagHash": "8682fa21b8591fa34b01b1591713657be293324883dcd40ef547e5e3acb6c24b",
+  "schema": "phase17-graph-concurrency-probe.v1",
+  "staleDeletePreserved": false,
+  "staleDeleteStatus": 204,
+  "stalePatchPreserved": true,
+  "stalePatchStatus": 412,
+  "supported": false
+}
