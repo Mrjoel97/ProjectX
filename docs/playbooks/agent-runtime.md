@@ -1,5 +1,37 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-08-16 (**DEPLOYED FROM A CLEAN WORKTREE — `agentSteps.refuse` and the
+> `{ calls, refusals }` shape are live on production.** This supersedes the "NOT DEPLOYED" line in
+> `f7c0cab`'s commit message, true when written.
+>
+> **The clean-tree pattern, done properly and worth reusing.** The main tree was NOT clean — a
+> concurrent phase-33 lane had `dispatch.ts`, `plans.ts` and `storyboard.ts` uncommitted — and
+> `convex deploy` ships the whole `convex/` directory, so deploying from it would have pushed
+> another lane's half-finished work to production. Instead: `git worktree add --detach <tmp> f7c0cab`
+> → `pnpm install --frozen-lockfile --prefer-offline` (45 s; pnpm hardlinks from its store) →
+> `convex deploy` from THERE → `git worktree remove` + `prune`. Verified before pushing that the
+> worktree carried the COMMITTED versions of all three foreign files and `AGENT_STEP_REFUSAL` from
+> this lane. The main tree was never touched; those files are still dirty and still theirs.
+>
+> **Push output:** "No indexes are deleted by this push", **"Schema validation complete"** — the new
+> OPTIONAL `refusal` column validates against every existing production row, which is what makes it
+> a no-migration change. Only remote-config delta was the Node.js actions server version.
+> Post-deploy `function-spec` confirms `agentSteps.js:refuse` and `smoke.js:toolCallsForThread`
+> PRESENT, and a live read returns the new `{ calls, refusals }` shape.
+>
+> **WHAT IS DEPLOYED IS `f7c0cab`, NOT `HEAD`.** The phase-33 lane committed `8eb0dd7`
+> ("fix(33-11): one bad variation no longer kills its good sibling") while this deploy was running.
+> It is NOT on production. Anyone reading the branch tip and assuming production matches it will be
+> one commit wrong.
+>
+> **THE FIELD IS FORWARD-LOOKING ONLY, and this must not be misread.** Reading
+> `toolCallsForThread` against the historical fixture-37 failing thread returns
+> `refusals: []` — NOT because nothing was refused, but because those rows predate the column.
+> `stageFinanceWrite` demonstrably refused on that turn and WHY it refused is now permanently
+> unrecoverable; the two surviving candidates (`unknown_field` vs `invalid_claim`, the basis quote
+> guard) can never be separated retroactively. An empty `refusals` on any row written before
+> 2026-08-16 means "not recorded", never "not refused".)
+
 > Last verified: 2026-08-16 (**THE REFUSAL CODE — "called and refused" now resolves to WHICH
 > refusal, without archaeology.** `toolCallsForThread` (entry below) closed half the blindness: it
 > says a tool WAS called. This closes the other half.

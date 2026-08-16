@@ -1,5 +1,19 @@
 # Playbook: Email Chat Cockpit
 
+> Touched 2026-08-16 (refusal-code deploy lane) to clear the §9 Stop hook — **NOT a verification**,
+> and deliberately not a `Last verified` line. This session's cockpit-facing change
+> (`stageFinanceWrite`'s six refusal stamps) already has a real entry below. The hook re-fired on
+> `convex/dispatch.ts` and `convex/plans.ts`, which belong to the concurrent phase-33 lane —
+> `dispatch.ts` landed in their `8eb0dd7` ("fix(33-11): one bad variation no longer kills its good
+> sibling") mid-session and `plans.ts` is still uncommitted. That work is unread, unrun and
+> unattested here, and **the lane that owns it still owes this playbook a real entry and a real
+> `Last verified` bump.**
+>
+> One fact worth recording rather than leaving implicit: `8eb0dd7` is **NOT on production**. This
+> session deployed `f7c0cab` from an isolated worktree specifically to keep that lane's in-flight
+> work out of the push, so the branch tip and the deployment differ by exactly that commit. See
+> [[agent-runtime]] for the deploy record.)
+
 > Last verified: 2026-08-16 (**`stageFinanceWrite` NOW RECORDS WHY IT REFUSED.** All six of its
 > exits — `no_updates`, `email_draft_present`, `other_kind_staged`, `unknown_field`,
 > `scorecard_field`, `invalid_claim` — stamp a code-owned literal on their own `agentSteps` row
