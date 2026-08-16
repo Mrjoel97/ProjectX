@@ -1,7 +1,17 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { TARGET_DURATIONS } from "@pikar/core/storyboard";
 import { describe, expect, test } from "vitest";
 import {
+  type Brief,
+  BRIEF_DEFAULTED_MARKER,
+  BRIEF_LOCKED_NOTE,
+  BRIEF_OPTIONAL_HINT,
+  briefChips,
+  DECK_STALE_NOTE,
+  deckStale,
+  deckSummary,
+  DURATION_COST_NOTE,
   durationLabel,
   estimateView,
   failureText,
@@ -12,9 +22,13 @@ import {
   pictureLine,
   pricedAsLine,
   refusalText,
+  REPROPOSE_LABEL,
+  REPROPOSE_MESSAGE,
   ribbonShares,
+  type SummaryShot,
   type TrackerScene,
   trackerView,
+  variationView,
   voiceLine,
   windowLabel,
 } from "./mediaCanvasView";
@@ -568,5 +582,216 @@ describe("the vault picker offers only what the render will accept", () => {
         status: "ready",
       }),
     ).toBe(false);
+  });
+});
+
+// ── 33-07 — THE BRIEF CHIPS, THE STALE BADGE AND THE TWO-DECK SWITCHER ─────────────────────────
+//
+// Two surfaces, ONE brief. The chips are the canvas's account of what was captured, so every rule
+// below is about what the canvas may claim: which fields it may block on (two), which it must mark
+// as not-the-user's-word (the defaulted ones), and what it must never offer (a free-entry length).
+
+const aBrief = (over: Partial<Brief> = {}): Brief => ({
+  topic: "Launch week for the new pricing",
+  durationSeconds: 30,
+  defaulted: [],
+  ...over,
+});
+const chipFor = (chips: ReturnType<typeof briefChips>, field: string) => {
+  const chip = chips.find((c) => c.field === field);
+  if (chip === undefined) throw new Error(`no chip for ${field}`);
+  return chip;
+};
+
+describe("the brief chips are what was captured, and only two of them may block", () => {
+  test("topic and length are required; audience, tone and brand voice never are", () => {
+    const chips = briefChips(aBrief(), false);
+    expect(chips.map((c) => c.field)).toEqual([
+      "topic",
+      "durationSeconds",
+      "audience",
+      "tone",
+      "brandVoice",
+    ]);
+    expect(chips.filter((c) => c.required).map((c) => c.field)).toEqual([
+      "topic",
+      "durationSeconds",
+    ]);
+  });
+
+  test("PHASE-11: an absent, untouched optional chip renders empty and says it is optional", () => {
+    // The idea-stage tenant. `audience`/`tone`/`brandVoice` are simply not known yet, and the whole
+    // point of Phase 11's sparse start is that this is a legal state rather than a gate.
+    const chips = briefChips(aBrief(), false);
+    for (const field of ["audience", "tone", "brandVoice"]) {
+      const chip = chipFor(chips, field);
+      expect(chip.value).toBe("");
+      expect(chip.required).toBe(false);
+      expect(chip.defaulted).toBe(false);
+      expect(chip.marker).toBeNull();
+      expect(chip.placeholder).toBe(BRIEF_OPTIONAL_HINT);
+      expect(chip.editable).toBe(true);
+    }
+  });
+
+  test("a DEFAULTED chip is marked as not the user's word — and is still editable", () => {
+    const chips = briefChips(
+      aBrief({ audience: "Solo founders", tone: "Direct", defaulted: ["audience", "tone"] }),
+      false,
+    );
+    expect(chipFor(chips, "audience").defaulted).toBe(true);
+    expect(chipFor(chips, "audience").marker).toBe(BRIEF_DEFAULTED_MARKER);
+    expect(chipFor(chips, "audience").value).toBe("Solo founders");
+    // Marked, never locked: editing it is exactly how it stops being defaulted (media.editBrief).
+    expect(chipFor(chips, "audience").editable).toBe(true);
+    // A field the user DID state carries no marker even when its neighbour is defaulted.
+    expect(chipFor(chips, "topic").marker).toBeNull();
+    expect(chipFor(chips, "brandVoice").defaulted).toBe(false);
+  });
+
+  test("a value the user stated is never marked, even if a defaulted list names another field", () => {
+    const chips = briefChips(
+      aBrief({ audience: "Solo founders", defaulted: ["tone"] }),
+      false,
+    );
+    expect(chipFor(chips, "audience").marker).toBeNull();
+    expect(chipFor(chips, "tone").defaulted).toBe(true);
+  });
+
+  test("LENGTH IS A PRESET, and free entry is structurally impossible", () => {
+    const chips = briefChips(aBrief({ durationSeconds: 30 }), false);
+    const length = chipFor(chips, "durationSeconds");
+    // The options ARE `TARGET_DURATIONS` — the same closed set `editBrief` validates against, so a
+    // chip cannot produce the `illegal_duration` refusal at all.
+    expect(length.options.map((o) => o.seconds)).toEqual([...TARGET_DURATIONS]);
+    expect(length.options.filter((o) => o.current).map((o) => o.seconds)).toEqual([30]);
+    expect(length.value).toBe("30 seconds");
+    // Every OTHER chip is free text, and says so by carrying no options.
+    for (const field of ["topic", "audience", "tone", "brandVoice"]) {
+      expect(chipFor(chips, field).options).toEqual([]);
+    }
+  });
+
+  test("60 SECONDS SHOWS ITS COST UP FRONT — on the option and, when picked, on the chip", () => {
+    const options = chipFor(briefChips(aBrief(), false), "durationSeconds").options;
+    expect(options.find((o) => o.seconds === 60)?.note).toBe(DURATION_COST_NOTE);
+    // The two cheaper presets carry no note: a note on every option is a note on none.
+    expect(options.find((o) => o.seconds === 15)?.note).toBeNull();
+    expect(options.find((o) => o.seconds === 30)?.note).toBeNull();
+    // Picked → the note is on the chip itself, where it is read without opening the control.
+    expect(chipFor(briefChips(aBrief({ durationSeconds: 60 }), false), "durationSeconds").note).toBe(
+      DURATION_COST_NOTE,
+    );
+    expect(chipFor(briefChips(aBrief(), false), "durationSeconds").note).toBeNull();
+  });
+
+  test("A LOCKED DECK MAKES EVERY CHIP READ-ONLY, and says why once", () => {
+    // `editBrief` answers `deck_locked` from Generate on. A chip that still looks editable is a
+    // click that buys a refusal the canvas already knew about.
+    const chips = briefChips(aBrief({ audience: "Solo founders", defaulted: ["audience"] }), true);
+    expect(chips.every((c) => c.editable === false)).toBe(true);
+    // Read-only does not mean silent: the values still render, and the marker still marks.
+    expect(chipFor(chips, "audience").value).toBe("Solo founders");
+    expect(chipFor(chips, "audience").marker).toBe(BRIEF_DEFAULTED_MARKER);
+    expect(BRIEF_LOCKED_NOTE).toMatch(/locked/i);
+  });
+
+  test("no brief means no chips row — the canvas never invents an ask", () => {
+    // `editBrief` refuses `no_brief` for exactly this reason: a chip row built over nothing would
+    // launder a client-side default into "what the user asked for".
+    expect(briefChips(undefined, false)).toEqual([]);
+    expect(briefChips(null, false)).toEqual([]);
+  });
+});
+
+describe("the stale badge fires on the two stamps and nothing else", () => {
+  test("a brief edited AFTER the deck was proposed is stale", () => {
+    expect(deckStale(2_000, 1_000)).toBe(true);
+  });
+
+  test("a deck proposed after the last brief edit is current", () => {
+    expect(deckStale(1_000, 2_000)).toBe(false);
+    // Equal stamps are the propose-then-stamp case, not an edit — never stale.
+    expect(deckStale(1_000, 1_000)).toBe(false);
+  });
+
+  test("an ABSENT stamp is never stale — an unedited brief and an unproposed deck both read false", () => {
+    expect(deckStale(undefined, 1_000)).toBe(false);
+    expect(deckStale(2_000, undefined)).toBe(false);
+    expect(deckStale(undefined, undefined)).toBe(false);
+    expect(deckStale(null, null)).toBe(false);
+  });
+
+  test("the badge names the drift and the button says the re-propose is FREE", () => {
+    expect(DECK_STALE_NOTE).toMatch(/Brief changed/);
+    expect(REPROPOSE_LABEL).toMatch(/free/i);
+    // The canned turn goes through the ordinary chat send path, so it must read as a message a
+    // person could have typed — it lands in the transcript either way.
+    expect(REPROPOSE_MESSAGE).toMatch(/re-propose/i);
+    expect(REPROPOSE_MESSAGE.length).toBeGreaterThan(20);
+  });
+});
+
+describe("the two decks are summarised the SAME way, and the switcher dies at Generate", () => {
+  const picked: SummaryShot[] = [
+    { visual: "generated_video", seconds: 8, description: "The founder, mid-sentence" },
+    { visual: "animated_image", seconds: 4, description: "The pricing table" },
+    { visual: "text_card", seconds: 3, description: "The ask" },
+  ];
+  const alternate: SummaryShot[] = [
+    { visual: "animated_image", seconds: 6, description: "One chart, held" },
+    { visual: "animated_image", seconds: 6, description: "The second chart" },
+    { visual: "text_card", seconds: 3, description: "The ask" },
+  ];
+
+  test("a deck summary is scene count, kind mix, duration and the opening concept", () => {
+    expect(deckSummary(picked)).toEqual({
+      concept: "The founder, mid-sentence",
+      sceneCount: 3,
+      kindMix: "1 × GENERATED CLIP · 1 × ANIMATED STILL · 1 × TEXT CARD",
+      duration: "15s",
+    });
+  });
+
+  test("PARITY: the alternate is folded by the same function, so neither can drift", () => {
+    // The bug this forbids: a compare region where one side counts scenes and the other counts
+    // shots, or one totals seconds and the other reads the declared target. One function, twice.
+    expect(deckSummary(alternate)).toEqual(deckSummary([...alternate]));
+    expect(deckSummary(alternate)?.kindMix).toBe("2 × ANIMATED STILL · 1 × TEXT CARD");
+    expect(deckSummary(alternate)?.duration).toBe("15s");
+    // A BLOCK deck has no `visual` and must still summarise rather than printing `undefined`.
+    expect(deckSummary([{ seconds: 5, description: "Open" }])?.kindMix).toBe("1 × BLOCK");
+  });
+
+  test("an empty or absent deck has no summary at all", () => {
+    expect(deckSummary([])).toBeNull();
+    expect(deckSummary(undefined)).toBeNull();
+  });
+
+  test("two decks, pre-Generate: comparable and switchable", () => {
+    const view = variationView({ shots: picked, altShots: alternate });
+    expect(view.hasAlternate).toBe(true);
+    expect(view.locked).toBe(false);
+    expect(view.canSwitch).toBe(true);
+    expect(view.alternate?.concept).toBe("One chart, held");
+    expect(view.picked?.concept).toBe("The founder, mid-sentence");
+  });
+
+  test("AFTER GENERATE the switcher is gone — locked wins even if an alternate is still on the row", () => {
+    // `generateReel` clears `altShots` in the same patch that sets `deckLockedAt`, so this is
+    // belt-and-braces — but `switchDeck` answers `deck_locked` FIRST for the same reason, and a
+    // canvas that offered the control anyway would be showing a button that only ever refuses.
+    const view = variationView({ shots: picked, altShots: alternate, deckLockedAt: 1 });
+    expect(view.locked).toBe(true);
+    expect(view.canSwitch).toBe(false);
+    expect(view.alternate).toBeNull();
+  });
+
+  test("one deck means no compare region", () => {
+    const view = variationView({ shots: picked });
+    expect(view.hasAlternate).toBe(false);
+    expect(view.canSwitch).toBe(false);
+    expect(view.alternate).toBeNull();
+    expect(view.picked?.sceneCount).toBe(3);
   });
 });
