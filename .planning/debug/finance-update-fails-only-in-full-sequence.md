@@ -7,7 +7,45 @@ closed: 2026-08-16
 resolution: fixed_fixture_defect
 ---
 
+## CORRECTION 2026-08-16 (later the same day) — "NO TOOL WAS CALLED" WAS WRONG.
+
+`smoke:toolCallsForThread` was deployed to production hours after this was written, and the FIRST
+thing it did was overturn a claim three sessions had reached by inference — including the
+resolution below. Read against the historical failing thread
+(`eval-41dc2e83` / `smoke-attach-d17d430c-f227-4810-aea3-dd0bd18ee090`, the bare
+`p571ypxjy…` plan):
+
+```
+FAILING (old fixture)     { "evaluateBusiness": 4, "recordScorecardAnswer": 1, "stageFinanceWrite": 1 }
+PASSING (corrected)       { "evaluateBusiness": 2,                             "stageFinanceWrite": 1 }
+```
+
+**`stageFinanceWrite` WAS CALLED, exactly once, in the failing run.** The bare plan row said only
+that no claim was STAGED; every statement below inferring from it that "no tool was called at all"
+or that the agent "stages nothing" is **WRONG about the mechanism**. The correct reading is
+**CALLED AND DID NOT LAND** — precisely the distinction this repo had no read for, which is why
+three sessions could not settle it.
+
+**What actually differs.** The failing run additionally called `recordScorecardAnswer` and ran
+`evaluateBusiness` twice as often (4 vs 2): with the figure attributed to a third-party company, the
+agent routed it into the SCORECARD and its one `stageFinanceWrite` call produced no claim. The exact
+refusal or validation path that swallowed that call is **NOT yet established** and is deliberately
+not guessed at here — the tool map proves the call happened, nothing more.
+
+**WHAT SURVIVES UNCHANGED, because it was measured rather than inferred:** the fixture correction is
+right and is verified. Gate `e898d7d0` is 40/40; fixture 37 passes at $0.0035 from the position that
+failed 3/3; and the passing tool map shows ONE clean `stageFinanceWrite` that landed its claim. The
+third-party attribution really was the trigger. Only the sentence describing what the agent did in
+response to it was wrong.
+
+**The transferable lesson is about evidence, not finance.** A bare plan row is consistent with two
+opposite stories, and the confident one is not automatically the true one. The read that separates
+them existed nowhere until it was built, and it paid for itself the hour it shipped.
+
 ## RESOLVED 2026-08-16 — THE FIXTURE WAS WRONG AND THE AGENT WAS RIGHT.
+
+> **Superseded in part by the CORRECTION above** — the fix and its verification stand; the
+> "no tool was called" mechanism does not.
 
 **THIS SUPERSEDES THE "STOP / not_pursued" DECISION RECORDED BELOW**, which was correct on the
 evidence available at the time and wrong about the cause. The owner reversed it and asked for a fix

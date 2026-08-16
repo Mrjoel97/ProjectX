@@ -2052,7 +2052,12 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
   a name found nowhere else in the repo, while the golden tenant's blueprint is
   `Northwind <needle> Logistics` — so it asked the agent to record a THIRD PARTY's cash position as
   the user's own `cashOnHand`. The agent declined once the tenant had context enough to tell them
-  apart; **it was behaving MORE correctly, not less.** The tell was the RETRY (`PASS (retried)` at
+  apart. **CORRECTED LATER THE SAME DAY:** `smoke:toolCallsForThread` shipped to production and its
+  first read showed `stageFinanceWrite` WAS called once in the failing run
+  (`{evaluateBusiness: 4, recordScorecardAnswer: 1, stageFinanceWrite: 1}` vs
+  `{evaluateBusiness: 2, stageFinanceWrite: 1}` passing) — so the mechanism is CALLED AND DID NOT
+  LAND, not "never called". Three sessions inferred the wrong half from a bare plan row. The fixture
+  correction and its 40/40 verification still stand; only the mechanism sentence was wrong. The tell was the RETRY (`PASS (retried)` at
   14 fixtures deep, run `25472dfa`): a deterministic upstream poison fails both attempts, a marginal
   one flips. Fixture corrected to "our cash on hand", ALL FOUR ASSERTIONS UNCHANGED. Nothing was
   hand-activated — `activateSkill` re-checks EVAL_GATE and the evidence came from a real 40/40. Full

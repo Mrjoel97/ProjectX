@@ -1,5 +1,46 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-08-16 (**DEPLOYED TO PRODUCTION — and `toolCallsForThread`'s FIRST read
+> overturned this session's own conclusion within the hour. "NO TOOL WAS CALLED" WAS WRONG.**
+> `npx convex deploy` against `opulent-octopus-494` from a clean tree at `8a492fb`: "No indexes are
+> deleted by this push", "Schema validation complete", `authDiff`/`componentDiffs` empty, exit 0.
+> The query is live and the runner's failure printer can now use it.
+>
+> **THE FIRST REAL FINDING, and it corrects the entries below.** Read against the historical failing
+> thread (`eval-41dc2e83` / `smoke-attach-d17d430c-…`, the bare `p571ypxjy…` plan):
+>
+> ```
+> FAILING (old fixture)  { "evaluateBusiness": 4, "recordScorecardAnswer": 1, "stageFinanceWrite": 1 }
+> PASSING (corrected)    { "evaluateBusiness": 2,                             "stageFinanceWrite": 1 }
+> ```
+>
+> **`stageFinanceWrite` WAS CALLED, exactly once, in the failing run.** Three sessions — this one
+> included — inferred from a bare plan row that the agent never called it. The plan row only ever
+> said no claim was STAGED. The true reading is **CALLED AND DID NOT LAND**, which is exactly the
+> distinction that had no read until this query existed. The failing run also called
+> `recordScorecardAnswer` and ran `evaluateBusiness` twice as often, i.e. with the figure attributed
+> to a third-party company the agent routed it into the SCORECARD. **The refusal or validation path
+> that swallowed the `stageFinanceWrite` call is NOT established** and is not guessed at here.
+>
+> **WHAT STANDS:** the fixture correction and its verification, because those were measured — gate
+> `e898d7d0` 40/40, fixture 37 at $0.0035 from the position that failed 3/3, and a passing tool map
+> showing ONE clean `stageFinanceWrite` that landed. The third-party attribution was the trigger.
+> Only the description of the agent's response to it was wrong.
+>
+> **WHAT THIS SAYS ABOUT THE HARNESS, which is the durable part.** A bare plan row is consistent
+> with two OPPOSITE stories — never called, and called-then-refused — and the confident reading is
+> not automatically the true one. Every dispatch-shaped fixture in this suite had that ambiguity and
+> nobody could see it. The read that separates them cost four lines of wiring and paid for itself the
+> hour it shipped. **When a case fails on a "the agent did not do X" assertion, read the tool map
+> before theorising about the model.**
+>
+> **Deploy payload, recorded because a deploy is not scoped to one lane's intent:** the clean tree at
+> `8a492fb` also shipped `1ca7c6f` (GOVN-03 — tenant erasure moves from owner-AND-self to SELF only,
+> fixing a confirmed production `OWNER_REQUIRED` failure and restoring the GDPR Art. 17 control the
+> privacy policy promises), `8f3561f` (the Microsoft grant dead end), 33-08's citation work, and two
+> CI lint/format fixes. All were committed, tested and playbook-documented by their own lanes; none
+> were re-verified here. Read before assuming this deploy carried only the query.)
+
 > Last verified: 2026-08-16 (**THE CALLED-VS-NEVER-CALLED BLINDNESS IS CLOSED IN CODE.
 > `smoke:toolCallsForThread` lands, and the runner prints it on every failure.** This pays the debt
 > the entry below names as its only open item. **It is NOT yet on production** — see the deploy
