@@ -39,6 +39,7 @@ import type * as http from "../http.js";
 import type * as index from "../index.js";
 import type * as intake from "../intake.js";
 import type * as intakeDb from "../intakeDb.js";
+import type * as invites from "../invites.js";
 import type * as lib_allowlist from "../lib/allowlist.js";
 import type * as lib_functions from "../lib/functions.js";
 import type * as lib_hash from "../lib/hash.js";
@@ -134,6 +135,7 @@ declare const fullApi: ApiFromModules<{
   index: typeof index;
   intake: typeof intake;
   intakeDb: typeof intakeDb;
+  invites: typeof invites;
   "lib/allowlist": typeof lib_allowlist;
   "lib/functions": typeof lib_functions;
   "lib/hash": typeof lib_hash;

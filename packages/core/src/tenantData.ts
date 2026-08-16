@@ -2,7 +2,24 @@ export type TenantTableCategory =
   | "tenant_owned"
   | "tenant_credential"
   | "global"
-  | "audit_immutable";
+  | "audit_immutable"
+  /**
+   * BETA-01 admission rows: personal data that is NOT tenant data.
+   *
+   * A fifth category rather than reusing `global`, because `global` asserts "contains no tenant
+   * data" and every consumer reports it with that meaning — `betaWaitlist` holds the requester's
+   * own email address, so filing it under `global` would make the export manifest's omission
+   * reason false. These rows are keyed by EMAIL and deliberately precede any tenant, so neither
+   * deletion scope (`identity` by users._id, `tenant_index` by tenantId) can address them; they
+   * are excluded from `deletableTables()` by construction, like `audit_immutable`.
+   *
+   * OPEN, AND DELIBERATELY NOT DECIDED HERE — see docs/playbooks/beta-admission.md: whether tenant
+   * erasure should also remove the erased person's admission rows. It is a real Art. 17 question
+   * (the email survives erasure today), but tenant deletion is Phase 22.1's owned, irreversible
+   * surface and widening it from an admission plan would be an out-of-scope edit to a destructive
+   * path. Recorded for the owner, not resolved.
+   */
+  | "admission_plane";
 
 /**
  * The schema's export/deletion policy in one reviewable place. Keep this as data: adapters iterate
@@ -58,6 +75,8 @@ export const TENANT_TABLE_CLASSIFICATION = {
   suppressions: "tenant_owned",
   financeInputs: "tenant_owned",
   proposals: "tenant_owned",
+  betaWaitlist: "admission_plane",
+  betaInvites: "admission_plane",
 } as const satisfies Readonly<Record<string, TenantTableCategory>>;
 
 export type ClassifiedTenantTable = keyof typeof TENANT_TABLE_CLASSIFICATION;

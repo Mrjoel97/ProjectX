@@ -23,9 +23,18 @@ export const TENANT_EXPORT_PAGE_SIZE = 256;
 export const TENANT_EXPORT_ROWS_PER_TABLE = 500;
 export const TENANT_EXPORT_TOTAL_ROW_CAP = 20_000;
 
-const omittedReason = (category: "global" | "audit_immutable", table: string): string => {
+const omittedReason = (
+  category: "global" | "audit_immutable" | "admission_plane",
+  table: string,
+): string => {
   if (category === "global") {
     return "Excluded: deployment-global configuration is not tenant data.";
+  }
+  if (category === "admission_plane") {
+    // Deliberately NOT the "not tenant data" wording: these rows DO hold this person's email.
+    // They are omitted because they are keyed by email and precede the tenant, so this
+    // tenant-scoped export cannot address them — not because there is nothing of theirs in them.
+    return "Excluded: beta admission records are keyed by email address and precede any tenant, so this tenant-scoped export cannot reach them.";
   }
   if (table === "audit") {
     return `Excluded: immutable audit archive; it contains ${AUDIT_ARCHIVE_STATEMENT}`;
@@ -73,7 +82,11 @@ export const exportTenantData = tenantQuery({
 
     const omitted: Record<string, string> = {};
     for (const [omittedTable, category] of Object.entries(TENANT_TABLE_CLASSIFICATION)) {
-      if (category === "global" || category === "audit_immutable") {
+      if (
+        category === "global" ||
+        category === "audit_immutable" ||
+        category === "admission_plane"
+      ) {
         omitted[omittedTable] = omittedReason(category, omittedTable);
       }
     }

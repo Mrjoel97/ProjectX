@@ -95,6 +95,56 @@ export default defineSchema({
     .index("email", ["email"])
     .index("phone", ["phone"]),
 
+  // BETA-01 admission plane. These two tables are the ONLY tenant-less rows outside the
+  // Convex Auth spread, and that is deliberate: they exist to decide whether a tenant may be
+  // created at all, so they cannot be keyed by one. `25-03`'s isolation gate classifies them as
+  // auth-plane exceptions for exactly this reason — an index here leading with `tenantId` would
+  // be an index on a column that must not exist.
+  //
+  // Neither table ever holds tenant-owned content: an email, a self-asserted name, one free-text
+  // referral line, and the redemption facts. No plan, no message, no document.
+  betaWaitlist: defineTable({
+    /** Normalized: trim + lowercase. The idempotency key — one row per address, forever. */
+    email: v.string(),
+    name: v.optional(v.string()),
+    /** "how did you hear about us" — bounded, self-asserted, never used for authorization. */
+    referral: v.optional(v.string()),
+    status: v.union(v.literal("pending"), v.literal("approved")),
+    requestedAt: v.number(),
+    approvedAt: v.optional(v.number()),
+  })
+    .index("by_email", ["email"])
+    .index("by_status_requested", ["status", "requestedAt"]),
+
+  // ONE invite per approved address. Single-use, email-matched at first redemption, then bound
+  // forever to the provider-qualified subject that redeemed it.
+  betaInvites: defineTable({
+    /** Normalized, and the FIRST-redemption matching key only — never the authorization root. */
+    email: v.string(),
+    /**
+     * The raw code, not a digest.
+     *
+     * A digest would be the reflex, and it buys nothing here while costing the one property the
+     * owner surface depends on: `invites.approve` must be replay-safe and hand back the SAME
+     * `/signup?invite=…` link on every call (25-02), which a digest cannot do. And the code is
+     * not a credential on its own — it admits nobody without a provider-VERIFIED matching email,
+     * so a leaked code is not a leaked account. What actually protects admission is the email
+     * binding in `auth.ts`, not the storage form of this string.
+     * ponytail: raw code + email binding; move to a digest only if the code ever becomes
+     * sufficient on its own (i.e. if email matching is ever dropped).
+     */
+    code: v.string(),
+    createdAt: v.number(),
+    /** IMMUTABLE once written. The three redemption fields are only ever patched together. */
+    redeemedAt: v.optional(v.number()),
+    /** `${provider.id}|${oauthSubject}` — provider-qualified, so the same `sub` on two providers
+     *  is two different subjects. NOT the typed email, which is self-asserted for password. */
+    redeemedSubject: v.optional(v.string()),
+    redeemedUserId: v.optional(v.id("users")),
+  })
+    .index("by_email", ["email"])
+    .index("by_code", ["code"]),
+
   // Insert-only audit log. `payload` holds refs/hashes ONLY — never raw content
   // (redaction-safe). The audit module exposes no patch/replace/delete (see CLAUDE.md).
   audit: defineTable({

@@ -15,7 +15,8 @@ describe("tenant table classification registry", () => {
   test("classifies every explicit schema table exactly once, in both directions", () => {
     const classifiedTables = Object.keys(TENANT_TABLE_CLASSIFICATION);
 
-    expect(schemaTables).toHaveLength(43);
+    // 43 + the two BETA-01 admission tables (25-01).
+    expect(schemaTables).toHaveLength(45);
     expect(new Set(schemaTables).size).toBe(schemaTables.length);
     expect(classifiedTables.sort()).toEqual([...schemaTables].sort());
   });
@@ -36,6 +37,10 @@ describe("tenant table classification registry", () => {
     expect(tables).not.toContain("deadLetters");
     expect(tables).not.toContain("skills");
     expect(tables).not.toContain("exportCursors");
+    // Admission rows are email-keyed and precede every tenant, so neither deletion scope can
+    // address them. Excluded by construction, not by an `if` — same posture as `audit`.
+    expect(tables).not.toContain("betaWaitlist");
+    expect(tables).not.toContain("betaInvites");
     expect(tables.at(-1)).toBe("users");
     expect(tables).toEqual([
       ...Object.entries(TENANT_TABLE_CLASSIFICATION)

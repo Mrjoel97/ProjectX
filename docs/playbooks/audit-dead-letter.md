@@ -1,6 +1,33 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
-> Last verified: 2026-08-16 (**THE AUDIT-IMMUTABILITY INVARIANT IS NOW PROVEN AGAINST PRODUCTION,
+> Last verified: 2026-08-16 (25-01 — **the table registry gained a FIFTH category,
+> `admission_plane`, and the schema went 43 → 45 tables.**)
+>
+> `betaWaitlist` and `betaInvites` (BETA-01) are **personal data that is not tenant data**, and
+> none of the four existing categories could say that truthfully. `global` asserts "contains no
+> tenant data" and every consumer reports it with that meaning — filing an email-bearing table
+> under it would have made the export manifest's own omission reason false. So the union grew
+> rather than the classification being bent to fit.
+>
+> **Three files move together whenever a category is added, and the third is the one that rots
+> silently:** `TENANT_TABLE_CLASSIFICATION`, the count literal in `tenantData.test.ts`, and
+> `tenantExport.ts` — whose `omittedReason` narrows the category union **and** whose omission loop
+> enumerates categories explicitly (`if (category === "global" || ...)`) rather than defaulting.
+> A new category that is not added to that loop is neither exported nor listed as omitted: it just
+> vanishes from the manifest. Adding the table alone would have shipped that hole.
+>
+> **These rows are excluded from `deletableTables()` by construction**, like `audit` — they are
+> keyed by email and precede every tenant, so neither deletion scope (`identity` by `users._id`,
+> `tenant_index` by `tenantId`) can address them.
+>
+> **OPEN, AND DELIBERATELY NOT DECIDED BY 25-01: erasure does not reach the admission plane.** A
+> tenant deletion removes the `users` row and leaves that person's email in `betaWaitlist` /
+> `betaInvites`. That is a real Art. 17 question, but tenant deletion is this playbook's owned,
+> irreversible surface, and widening it from an admission plan would be an out-of-scope edit to a
+> destructive path. Recorded for the owner in `tenantData.ts` and in `beta-admission.md`; **not**
+> claimed as resolved anywhere.
+>
+> Prior entry — 2026-08-16 (**THE AUDIT-IMMUTABILITY INVARIANT IS NOW PROVEN AGAINST PRODUCTION,
 > not against fixtures.** Live erasure request `a73023088f58ea6e` on SHA `1ca7c6f` removed **1,538
 > rows across 24 tables** for tenant `qd76g6zsn8…cb233` (agentSteps 382, spendEvents 298, graphNodes
 > 265, graphEdges 261, vaultDocuments 97, vaultSources 65, mediaJobs 69, plans 45, …) and

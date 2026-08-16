@@ -57,7 +57,10 @@
   },
   "overrides": [
     {
-      "includes": ["packages/backend/convex/lib/functions.ts"],
+      "includes": [
+        "packages/backend/convex/lib/functions.ts",
+        "packages/backend/convex/invites.ts"
+      ],
       "linter": {
         "rules": {
           "style": {

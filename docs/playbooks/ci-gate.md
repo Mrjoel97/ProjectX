@@ -1,6 +1,29 @@
 # Playbook: CI gate (typecheck / lint / test / build)
 
-> Last verified: 2026-08-15 (phase 14→25 gap audit — **`biome.json` `files.includes` gained
+> Last verified: 2026-08-16 (25-01 — **`biome.json` `overrides[].includes` gained a SECOND entry,
+> `packages/backend/convex/invites.ts`**, and that exposed a trap worth naming here because it fails
+> in CI and nowhere else.)
+>
+> **TWO INDEPENDENT ALLOWLISTS GUARD THE RAW-BUILDER RULE (CLAUDE.md §2), AND THEY DO NOT KNOW
+> ABOUT EACH OTHER.** `RAW_BUILDER_ALLOWLIST` (`packages/backend/convex/lib/allowlist.ts`) exempts
+> a module from the *runtime* scan in `importGuard.test.ts`. Biome's `style/noRestrictedImports` is
+> exempted by the *separate* `overrides[].includes` array in `biome.json`, which until 25-01
+> contained exactly one path. **A module added to the first list only will pass `pnpm test` and then
+> fail `biome ci --diagnostic-level=error` — and because `deploy-production.yml` is `workflow_run`-
+> gated on a green CI run, a lint-red merge silently means production is never redeployed.** This
+> was hit for real while writing `invites.ts`.
+>
+> Guarded now: `importGuard.test.ts` reads `biome.json` and asserts that every module actually
+> importing a raw lowercase `query`/`mutation` appears in BOTH places. It also asserts the config
+> was read at all, so the check cannot pass vacuously if the glob ever stops resolving.
+>
+> **Unrelated local-noise reminder, re-measured today: `biome ci` over the repo reports 46 red
+> files that CI does not see.** They are CRLF-vs-LF formatting differences on files nobody touched
+> (the working tree is CRLF; CI checks out LF). When triaging a red lint locally, filter to the
+> files your change actually touched before believing any of it — that noise has hidden real errors
+> in this repo before.
+>
+> Prior entry — 2026-08-15 (phase 14→25 gap audit — **`biome.json` `files.includes` gained
 > `!.tmp` and `!.worktrees`**, and `.gitignore` gained `.tmp/`. MEASURED, not diff-reviewed.)
 >
 > **The local lint gate was hard-broken and this is what fixed it.** `pnpm lint` did not report

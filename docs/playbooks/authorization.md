@@ -1,6 +1,32 @@
 # Playbook: Authorization (tenancy + ownership)
 
-> Touched 2026-08-16 to clear the §9 Stop hook — **REGISTRATION ONLY, NOT A VERIFICATION**, and
+> Last verified: 2026-08-16 (25-01 — **the raw-builder allowlist gained its first genuinely PUBLIC
+> entry, and `importGuard.test.ts` gained a guard against the two-allowlist divergence.**)
+>
+> **`packages/backend/convex/invites.ts` and `invites.test.ts` have MOVED to
+> `docs/playbooks/beta-admission.md`**, which now owns the admission boundary end to end and is the
+> file to read before changing it. The provisional registration recorded below (by the concurrent
+> media lane, for work it had not written) is therefore superseded: the module is now landed,
+> tested and documented. This playbook keeps `lib/functions.ts`, `lib/allowlist.ts`, `owner.ts` and
+> `importGuard.test.ts`.
+>
+> **What changed here.** `RAW_BUILDER_ALLOWLIST` previously described itself, accurately, as a list
+> of INTERNAL-only modules that are "never client-callable with a tenant identity". `invites.ts`
+> breaks that sentence and the comment now says so explicitly rather than letting the next reader
+> generalise from it: a beta signup page is used by people who have **no identity yet**, which no
+> tenant wrapper can express — `tenantQuery` throws `UNAUTHENTICATED` by design. **The bar for a
+> public entry is not "it needed to be callable".** It is that the function reads and returns no
+> tenant-owned data and no secret: `requestAccess` writes one email-keyed row, and `preflight`
+> returns a boolean plus a masked address, reporting an unknown code and a spent code identically
+> so it cannot be used as an oracle. Meet that bar and say so in a comment, or use a wrapper.
+>
+> **Also enforced now:** a module exempted from the runtime scan but NOT from Biome's
+> `noRestrictedImports` override in `biome.json` passes `pnpm test` and fails `biome ci`. The new
+> divergence test in `importGuard.test.ts` catches it; see `ci-gate.md` for why that matters to the
+> production deploy.
+>
+> Prior note — touched 2026-08-16 to clear the §9 Stop hook — **REGISTRATION ONLY, NOT A
+> VERIFICATION**, and
 > deliberately not a `Last verified` bump. `packages/backend/convex/invites.ts` + `invites.test.ts`
 > are NEW and UNCOMMITTED work from the concurrent BETA-01 / Phase-25 lane; this session (the media
 > lane) neither wrote nor reviewed them. They are registered here rather than left unwatched or
