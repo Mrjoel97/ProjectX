@@ -20,6 +20,11 @@
  *  `satisfies` tables below are what keep it honest if a member is ever added there. */
 export type VisualKind = "generated_video" | "animated_image" | "uploaded_video" | "text_card";
 
+/** Cents → `$1.12`. The ONE money formatter this surface has, and deliberately the only arithmetic
+ *  it is allowed to do: every number it prints was computed by `jobEstimate` on the server, against
+ *  the same price table the reserve consumes. A second sum here would be a second estimate. */
+export const usd = (cents: number): string => `$${(cents / 100).toFixed(2)}`;
+
 /** `0:00`, `1:05`. Seconds are floored, never rounded, so consecutive windows cannot both claim
  *  the same second. */
 export function clockLabel(ms: number): string {
@@ -85,10 +90,14 @@ export const asVisualKind = (s: string | null | undefined): VisualKind | null =>
   s !== null && s !== undefined && s in KIND_LABEL ? (s as VisualKind) : null;
 
 /** What each kind costs, in the one word a tile has room for. `null` where nothing is bought — and
- *  the tile says so rather than leaving the question open. */
+ *  the tile says so rather than leaving the question open.
+ *
+ *  33-06 corrected the still's ratio: it read "about a tenth of a clip", which understated the only
+ *  cost lever a user has by 4x. The measured table (`storyboard.ts`, 20.2 wave 7 / ADR-019) is
+ *  $0.40 for a 4 s generated clip and $0.01 for a still at ANY length — a FORTIETH. */
 export const KIND_COST_NOTE = {
   generated_video: "Bought as a clip at this scene's length.",
-  animated_image: "One still, panned in the render — about a tenth of a clip.",
+  animated_image: "One still, panned in the render — about a fortieth of a clip.",
   uploaded_video: "Your own file. Nothing is bought for this scene.",
   text_card: "Drawn in the render. Nothing is bought for this scene.",
 } as const satisfies Record<VisualKind, string>;
@@ -163,7 +172,7 @@ export function refusalText(
   refusal: { reason: string; blockIndex?: number; chars?: number },
   o: { capCents: number; totalCents: number; maxChars: number; noun: "scene" | "block" },
 ): string {
-  const money = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+  const money = usd;
   const which =
     refusal.blockIndex === undefined
       ? `A ${o.noun}`
@@ -181,6 +190,19 @@ export function refusalText(
       return `${which}'s narration is only ${refusal.chars} characters — too short to fill its window.`;
     case "unknown_model":
       return `This ${o.noun} names a model we can't price, so it won't run.`;
+    // ── 33-06: four codes that existed on the rail with no sentence on the canvas ───────────────
+    // 33-03's confirm gate. The lever is NOT a rewrite: the model proposed a figure and only the
+    // owner may vouch for it, so the sentence points at the badge that does the vouching.
+    case "unconfirmed_claims":
+      return `${which} states a figure you haven't confirmed. Confirm the flagged claim on that ${o.noun}, or rewrite the line, before generating.`;
+    // 33-02's deck lock. Not a fault — a boundary, and the sentence says where the edits went.
+    case "deck_locked":
+      return `This storyboard was locked when you generated the reel. From here, changes happen on the canvas ${o.noun} by ${o.noun}, and each one is paid.`;
+    case "no_alternate":
+      return "There's no second storyboard to switch to for this plan.";
+    // 33-04's manual retry with no batch behind it.
+    case "nothing_to_render":
+      return "Nothing has been generated for this plan yet, so there's nothing to re-assemble — generate the reel first.";
     // 20.2 wave 5 NARROWED this from "unpaid" to "names no source". The old sentence — "only VIDEO
     // and IMAGE blocks can be generated today" — was wrong twice over: `IMAGE` was never a
     // `ShotType`, and a card and an upload are both renderable now.
@@ -435,6 +457,87 @@ export function trackerView(
         voice: { state: take, text: take === "skipped" ? "silent" : FACE_TEXT[take] },
       };
     }),
+  };
+}
+
+/** `jobEstimate`'s exact return, structurally. Not imported from the backend on purpose — the point
+ *  of typing it here is that a shape change over there shows up as a red test here rather than as a
+ *  silently-empty panel. */
+export type JobEstimate = {
+  lines: Array<{ label: string; qty: number; unit: string; cents: number }>;
+  totalCents: number;
+  capCents: number;
+  remainingCents: number;
+  refusal: { reason: string; blockIndex?: number; chars?: number } | null;
+};
+
+export type EstimateView = {
+  /** The one prominent number. `—` while the query is in flight, which is also the state that keeps
+   *  Generate disabled: a button that can spend before the estimate lands breaks D7. */
+  headline: string;
+  lines: Array<{ label: string; detail: string; amount: string; note: string | null }>;
+  remaining: string;
+  refusalSentence: string | null;
+  generateDisabled: boolean;
+};
+
+/**
+ * THE ESTIMATE, AS THE CANVAS SHOWS IT — one headline, an expandable breakdown underneath.
+ *
+ * **It REFORMATS. It never recomputes.** `jobEstimate` builds the same spec list `reserveJobInner`
+ * builds and prices it off the same table, so its `totalCents` is the number the rail will actually
+ * consume; re-adding the lines here would produce a second, subtly different estimate — and the
+ * render line in particular is priced as a constant that no line-sum reproduces. The only
+ * arithmetic in this function is cents→USD.
+ *
+ * `noun`/`maxChars` are the deck's vocabulary and its narration ceiling, which the estimate does not
+ * carry — they exist solely to hand `refusalText` what it needs, and touch no number.
+ */
+export function estimateView(
+  est: JobEstimate | undefined,
+  o: { noun: "scene" | "block"; maxChars: number },
+): EstimateView {
+  if (est === undefined) {
+    return {
+      headline: "—",
+      lines: [],
+      remaining: "Working out what this reel costs…",
+      refusalSentence: null,
+      generateDisabled: true,
+    };
+  }
+
+  const refusalSentence =
+    est.refusal === null
+      ? null
+      : refusalText(est.refusal, {
+          capCents: est.capCents,
+          totalCents: est.totalCents,
+          maxChars: o.maxChars,
+          noun: o.noun,
+        });
+
+  return {
+    headline: usd(est.totalCents),
+    lines: est.lines.map((line) => ({
+      // The estimate's OWN label, verbatim — including 33-04's "render (incl. one retry)", which is
+      // the only place the doubled render constant is visible to the person paying for it.
+      label: line.label,
+      detail: `${line.qty} × ${line.unit}`,
+      amount: usd(line.cents),
+      // The 40x lever, on the line it applies to. A blended "pictures" row hid it (wave 7's finding)
+      // and so does an itemised one that says nothing: knowing WHICH line is expensive is only
+      // useful next to knowing what the cheaper kind costs.
+      note:
+        line.label === "clips"
+          ? "A generated clip costs about 40× an animated still — switching one is the biggest lever here."
+          : null,
+    })),
+    remaining: `${usd(est.remainingCents)} of today's media budget remains.`,
+    refusalSentence,
+    // Three independent reasons not to spend: the number has not landed, the rail already refused,
+    // or there is nothing to buy. Each disables the SAME button, so the .tsx asks one question.
+    generateDisabled: est.refusal !== null || est.lines.length === 0,
   };
 }
 
