@@ -134,6 +134,13 @@ export type TenantExportCursor = {
   tableIndex: number;
   cursor: string | null;
   rowsExported: number;
+  /** Rows taken from the CURRENT table; resets to 0 whenever `tableIndex` advances. */
+  tableRows: number;
+  /**
+   * Sticky. The client overwrites `limits` with every page it receives, so a table truncated
+   * early in the walk has to carry that fact forward or it is absent from the final envelope.
+   */
+  truncated: boolean;
   generatedAt: string;
 };
 

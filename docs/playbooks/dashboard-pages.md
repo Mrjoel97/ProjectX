@@ -1,5 +1,14 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-16 (the download control states its own result. It used to say "The
+> file reached the stated export row limit" — a limit the page never states — which told the
+> user neither how much they got nor what was missing. It now reports the actual row count and
+> distinguishes a complete record from a partial one, wording the partial case as tables that
+> held more rows than one export can carry, with support as the route to a full archive. Paired
+> with the per-table export budget in [[audit-dead-letter]]; truncation is now rare rather than
+> routine. Import order also fixed here — `convex/react` before `convex/server`, which
+> `biome ci` fails the build on. web dataControls 2/2.)
+
 > Last verified: 2026-08-16 (22.1-04 — the rail-foot now links to the live
 > `/dashboard/settings` route, whose Data controls card downloads the tenant-scoped continuation
 > sequence as one structured JSON file. The control uses the existing rail/card/token patterns and

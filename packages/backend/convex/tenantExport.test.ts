@@ -9,6 +9,7 @@ import { makeFunctionReference } from "convex/server";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import schema from "./schema";
+import { TENANT_EXPORT_ROWS_PER_TABLE } from "./tenantExport";
 
 const modules = import.meta.glob("./**/*.*s");
 const exportTenantData = makeFunctionReference<
@@ -132,18 +133,46 @@ describe("tenant data export", () => {
     expect(bytes).not.toMatch(/refreshToken|accessToken/);
   });
 
-  test("caps the total rows while reading pages rather than collecting tables", async () => {
-    const { t, tenantA } = await seedTwoTenants();
-    await t.run(async (ctx) => {
-      for (let i = 0; i < 140; i++) {
-        await ctx.db.insert("demoItems", { tenantId: tenantA, label: `bounded-${i}` });
+  // Seeds `savedPrompts` past its own budget. It sits 6th in TENANT_TABLE_CLASSIFICATION, well
+  // ahead of `demoItems` (~24th), which is what makes it the right instrument for both tests.
+  async function seedOverBudgetEarlyTable() {
+    const seeded = await seedTwoTenants();
+    await seeded.t.run(async (ctx) => {
+      for (let i = 0; i < TENANT_EXPORT_ROWS_PER_TABLE + 40; i++) {
+        await ctx.db.insert("savedPrompts", {
+          tenantId: seeded.tenantA,
+          text: `bounded-${i}`,
+          title: `bounded-${i}`,
+          textHash: `hash-${i}`,
+          createdAt: 1_786_830_000_000 + i,
+        });
       }
     });
+    return seeded;
+  }
+
+  test("bounds a table at its own budget and says so, rather than reading it whole", async () => {
+    const { t, tenantA } = await seedOverBudgetEarlyTable();
 
     const result = await downloadExport(t, tenantA);
 
     expect(result.limits.pageSize).toBeGreaterThan(0);
-    expect(result.limits.totalRows).toBeLessThanOrEqual(128);
+    expect(result.tables.savedPrompts).toHaveLength(TENANT_EXPORT_ROWS_PER_TABLE);
+    expect(result.limits.truncated).toBe(true);
+  });
+
+  // The regression a GLOBAL row budget caused: `exportableTables()` is a fixed order, so one
+  // oversized table ahead of the rest spent the whole budget and every later table exported as
+  // nothing — silently, under a "portable record of your data" promise. The per-table budget is
+  // what makes coverage independent of position, and this is the test that holds it there.
+  test("a table AFTER an over-budget one still exports — coverage is not order-dependent", async () => {
+    const { t, tenantA } = await seedOverBudgetEarlyTable();
+
+    const result = await downloadExport(t, tenantA);
+
+    expect(result.tables.demoItems).toEqual([expect.objectContaining({ label: "A-only-row" })]);
+    expect(result.tables.gmailTokens).toHaveLength(1);
+    // …and the sticky flag survived the ~two dozen pages between the truncation and the last one.
     expect(result.limits.truncated).toBe(true);
   });
 });

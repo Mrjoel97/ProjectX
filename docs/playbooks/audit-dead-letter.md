@@ -1,5 +1,21 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-08-16 (export budget is PER TABLE now — the global cap starved every
+> table after the first big one. `exportableTables()` is a fixed order with `agentSteps` 10th
+> and `telemetry` 15th, ahead of contacts/goals/proposals/vaultDocuments, so one 128-row global
+> budget was spent before the business data was reached and those tables exported as NOTHING —
+> silently, under a "portable record of the data Pikar AI holds for your account" promise.
+> Coverage was an artefact of table position, not of what the tenant owns. Now
+> `TENANT_EXPORT_ROWS_PER_TABLE = 500` per table, with `TENANT_EXPORT_TOTAL_ROW_CAP = 20_000`
+> demoted to a memory bound on the single JSON blob the browser assembles, and page size 16 ->
+> 256. `truncated` became STICKY in the cursor: the client overwrites `limits` with every page,
+> so a table cut short twenty pages earlier would otherwise vanish from the final envelope.
+> Cursor validation moved from `>` to `>=` on both ceilings — a legitimate cursor is never
+> minted at either one, so an at-ceiling cursor is forged, and it used to reach `paginate` with
+> `numItems: 0`. PROVEN NON-VACUOUS by mutation: forcing the total cap back to 128 turns both
+> new tests red, and `tables.demoItems` comes back `undefined` — the starvation reproduced.
+> tenantExport 4/4, tenantDelete 6/6, web dataControls 2/2.)
+
 > Last verified: 2026-08-16 (22.1-04 — tenant data export). `tenantData.ts` classifies the
 > `audit` table as `audit_immutable`; both `audit` and the refs-only dead-letter compliance plane are
 > excluded from Art. 15/20 tenant exports with an explicit reason in the JSON file. This exclusion
