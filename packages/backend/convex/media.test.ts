@@ -3625,7 +3625,7 @@ describe("the canvas READ plane: two states per block, and a url only when it is
     expect(rows[0]?.status).toBe("submitted");
   });
 
-  test("reel returns a NULL url for every status that is not `rendered`", async () => {
+  test("reel returns a NULL url while the validated triple is absent, whatever the status", async () => {
     const t = harness();
     const { planId } = await seedDeck(t);
     for (const status of ["pending", "rendering", "failed"] as const) {
@@ -3814,7 +3814,7 @@ describe("the PAID write plane: one money gate, and a regenerate that cannot lea
     expect(new Set(rows.map((r) => r.blockIndex))).toEqual(new Set([2, -1]));
   });
 
-  test("REGENERATING CLEARS THE RENDER — every artifact field, in the same transaction", async () => {
+  test("REGENERATING RESETS THE PIPELINE and HOLDS THE ARTIFACT — 33-05's rewrite of 20-09", async () => {
     const t = harness();
     const { planId } = await seedDeck(t, { blocks: 2 });
     await t.run(async (ctx) => {
@@ -3827,23 +3827,28 @@ describe("the PAID write plane: one money gate, and a regenerate that cannot lea
         sidecarStorageId: storageId,
         sidecarHash: "a".repeat(64),
         renderedAt: T0,
+        renderRetriedAt: T0,
         renderSummary: { durationS: 20, blockCount: 2, gates: ["g"] },
       });
     });
 
     await asA(t).mutation(api.media.regenerateBlock, { planId, blockIndex: 0 });
 
-    // A canvas showing a stale final.mp4 beside a freshly regenerated block is lying to the user,
-    // and it is a lie they would only find by watching the whole reel.
+    // 20-09 unset the artifact fields here ("a stale final.mp4 is a lie"); 33-05 supersedes that:
+    // the old final stays WATCHABLE through the regenerate (the canvas marks it out of date from
+    // the landed count), and the blob is deleted only when the new final lands and nothing —
+    // neither the plan nor the reel's vault doc — references it any more.
     const plan = await planRowOf(t, planId);
     expect(plan?.renderStatus).toBe("pending");
-    expect(plan?.renderStorageId).toBeUndefined();
-    expect(plan?.sidecarStorageId).toBeUndefined();
-    expect(plan?.sidecarHash).toBeUndefined();
+    expect(plan?.renderStorageId).toBeDefined();
+    expect(plan?.sidecarStorageId).toBeDefined();
+    expect(plan?.renderSummary).toBeDefined();
+    // The PIPELINE fields do reset — including the auto-retry spend, which the new reservation
+    // re-bought (the render line is priced doubled), and the caption plane.
     expect(plan?.renderedAt).toBeUndefined();
-    expect(plan?.renderSummary).toBeUndefined();
-    // …and the reel query agrees, which is the property the user actually experiences.
-    expect((await asA(t).query(api.media.reel, { planId })).url).toBeNull();
+    expect(plan?.renderRetriedAt).toBeUndefined();
+    // …and the reel query keeps serving the held final.
+    expect((await asA(t).query(api.media.reel, { planId })).url).toBeTruthy();
   });
 });
 
@@ -5887,9 +5892,9 @@ describe("33-02 switchDeck: the unpicked deck swaps in atomically, until Generat
     // Structural stamp: landed assets belong to the deck that BOUGHT them, so invalidating the
     // reuse window on a switch is correct, not collateral damage.
     expect(plan?.shotsChangedAt).toBeTypeOf("number");
-    // …and the rendered reel of the OTHER deck cannot keep showing beside this one.
+    // …and the render pipeline resets. (33-05: the artifact fields are HELD, not unset — the
+    // other deck's reel stays watchable, labelled out of date, until a new final replaces it.)
     expect(plan?.renderStatus).toBe("pending");
-    expect(plan?.renderStorageId).toBeUndefined();
   });
 
   test("switching twice round-trips the decks byte-for-byte", async () => {

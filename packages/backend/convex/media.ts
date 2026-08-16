@@ -1768,24 +1768,37 @@ async function ownedPlanOrThrow(
 }
 
 /**
- * CLEAR THE RENDER. **One helper, six callers**, and that is deliberate: six copies of a four-field
- * unset is exactly how one of them ends up missing a field, and the guarantee it enforces — a
- * canvas can never show a stale `final.mp4` beside a block that has since changed — is the kind of
- * lie a user would only discover by watching the whole reel.
+ * RESET THE RENDER PLANE. **One helper, six callers**, and that is deliberate: six copies of the
+ * same multi-field patch is exactly how one of them ends up missing a field.
+ *
+ * **33-05 REWROTE WHAT "CLEAR" MEANS — the old final is HELD, not dropped.** Until this wave the
+ * artifact fields were unset here, on the argument that a canvas showing a stale `final.mp4`
+ * beside a changed deck is a lie. That unset had two costs the phase-33 contract refuses: the
+ * canvas goes DARK for the whole regenerate (the "old final keeps playing" must-have), and the
+ * orphaned blob was never deleted — a silent leak. Now:
+ *   - `renderStatus` returns to `pending` and the failure fields clear — the PIPELINE resets;
+ *   - `renderStorageId` / `sidecarStorageId` / `sidecarHash` / `renderSummary` are KEPT — the
+ *     validated triple stays servable (`media.reel`), and the stale-vs-never-built distinction is
+ *     the canvas's landed-asset count (ReelRegion's `outOfDate`), which already exists;
+ *   - the old blob is deleted by the NEXT success terminal (`deleteOrphanedFinals` in
+ *     `render/renderReel.ts`), once neither the plan nor the reel's vault doc references it;
+ *   - the CAPTION plane resets too: a stale `captioned`/`failed` would make `maybeStartCaptions`
+ *     skip the new batch's reserved caption line forever;
+ *   - `renderRetriedAt` resets: every reservation prices the render line DOUBLED ("incl. one
+ *     retry"), so a new purchase carries a fresh automatic retry. Manual `retryRender` still
+ *     never resets it — that path buys nothing.
  *
  * Convex unsets a field by patching it to `undefined`.
  */
 async function clearRender(ctx: MutationCtx, planId: Id<"plans">): Promise<void> {
   await ctx.db.patch(planId, {
     renderStatus: "pending",
-    renderStorageId: undefined,
-    sidecarStorageId: undefined,
-    sidecarHash: undefined,
     renderReason: undefined,
     renderedAt: undefined,
-    // Added when `renderSummary` was — and the test for this helper caught its absence, which is
-    // the exact "six copies, one of them missing a field" failure the helper exists to prevent.
-    renderSummary: undefined,
+    renderRetriedAt: undefined,
+    captionStatus: undefined,
+    captionReason: undefined,
+    captionOffsetsS: undefined,
   });
 }
 
@@ -2027,15 +2040,15 @@ export const reel = tenantQuery({
     // **THE URL GUARANTEE, and where it actually comes from.** `renderSummary` is written by
     // `recordRender` ONLY on the success arm, in the same patch as the two storage ids, and ONLY
     // after `parseAssemblySidecar` accepted the bytes that landed in our storage. So requiring all
-    // four here is requiring the sidecar to have validated — the check is at the WRITE, which is
+    // THREE here is requiring the sidecar to have validated — the check is at the WRITE, which is
     // the only place it can be, because `ctx.storage` in a query is a `StorageReader` with `getUrl`
     // and no way to read a blob at all.
-    if (
-      plan.renderStatus !== "rendered" ||
-      !plan.renderStorageId ||
-      !plan.sidecarStorageId ||
-      !plan.renderSummary
-    ) {
+    //
+    // 33-05: `renderStatus` is deliberately NOT part of the guarantee any more. `clearRender`
+    // HOLDS the artifact triple through a regenerate, so a plan at `pending`/`rendering`/`failed`
+    // with the triple intact is a plan whose OLD governed final is still the thing to show — the
+    // status is reported beside it and the canvas says "out of date" from the landed count.
+    if (!plan.renderStorageId || !plan.sidecarStorageId || !plan.renderSummary) {
       return base;
     }
 
