@@ -17,7 +17,7 @@
  */
 import { parseAssemblySidecar } from "@pikar/core/assembly";
 import { buildCaptionLines, toAss } from "@pikar/core/captions";
-import { isRenderableCardText, renderInputName } from "@pikar/core/render";
+import { isRenderableCardText, isTransientRenderCode, renderInputName } from "@pikar/core/render";
 import { v } from "convex/values";
 import { internal } from "./../_generated/api";
 import type { Doc, Id } from "./../_generated/dataModel";
@@ -361,14 +361,41 @@ export const recordRender = internalMutation({
   },
   handler: async (ctx, a): Promise<null> => {
     if (!a.result.ok) {
+      // 33-04 — the ONE automatic retry, a narrow supersession of 20-16's no-retry rule (the
+      // playbook carries the dated note). Only a code in the CLOSED transient set, and only while
+      // this plan's retry is unspent. `renderRetriedAt` is checked AND set inside this same
+      // serializable mutation — the `pending → rendering` CAS idiom — so two racing terminals
+      // cannot both schedule, and a second failure structurally cannot re-enter this arm.
+      // `renderStatus` is deliberately NOT touched: the canvas keeps saying "assembling" through
+      // the retry, and the retried attempt writes the terminal. Its sandbox is already reserved —
+      // the render line is doubled at `MEDIA_SANDBOX_USD_PER_RENDER` for exactly this.
+      const plan = await ctx.db.get(a.planId);
+      if (plan && isTransientRenderCode(a.result.reason) && plan.renderRetriedAt === undefined) {
+        await ctx.db.patch(a.planId, { renderRetriedAt: Date.now() });
+        await ctx.scheduler.runAfter(0, internal.render.renderReel.renderReel, {
+          tenantId: a.tenantId,
+          batchId: a.batchId,
+        });
+        // Refs and codes ONLY (§4). No dead letter on the retried attempt — an operator page for
+        // a failure the system is about to handle itself would be noise; the SECOND failure pages.
+        await ctx.runMutation(internal.audit.log, {
+          tenantId: a.tenantId,
+          correlationId: a.batchId,
+          eventType: "media.render_retried",
+          actor: "render",
+          payload: { batchId: a.batchId, planId: a.planId, reasonCode: a.result.reason },
+        });
+        return null;
+      }
       await ctx.db.patch(a.planId, {
         renderStatus: "failed",
         renderReason: a.result.reason,
         renderedAt: Date.now(),
       });
       // ONE dead letter, refs and codes ONLY (CLAUDE.md §4) — no ffmpeg output, no filename, no
-      // narration, no URL. A failed render does NOT retry: at 480p a structural failure repeats,
-      // and the action-retrier would buy N sandboxes to learn the same thing N times.
+      // narration, no URL. A failed render does NOT retry past this point: at 480p a structural
+      // failure repeats, and the action-retrier would buy N sandboxes to learn the same thing N
+      // times. 33-04 narrowed this rule to "after the one transient retry above", nothing more.
       await ctx.db.insert("deadLetters", {
         tenantId: a.tenantId,
         correlationId: a.batchId,

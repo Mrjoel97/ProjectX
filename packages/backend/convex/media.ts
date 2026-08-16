@@ -2519,6 +2519,54 @@ export const regenerateBlock = tenantMutation({
   },
 });
 
+/**
+ * The manual "Retry render" button (33-04) — FAILED-only, free to the user.
+ *
+ * No new reservation and no new landing: it re-fires `renderReel` over the assets the plan already
+ * paid for, exactly as the automatic retry does. Compute is covered by the doubled render line
+ * (`MEDIA_SANDBOX_USD_PER_RENDER`); a rare THIRD sandbox — a manual retry after the auto retry
+ * already fired — is accepted, documented drift (playbook), never silent. `renderRetriedAt` is
+ * deliberately NOT cleared: the automatic retry stays once-per-plan even across manual attempts.
+ *
+ * The failed→rendering transition in this serializable mutation is the CAS (the
+ * `pending → rendering` idiom): a double-click cannot schedule two renders, because the second
+ * click finds `rendering` and refuses.
+ */
+export const retryRender = tenantMutation({
+  args: { planId: v.id("plans") },
+  handler: async (ctx, { planId }) => {
+    const plan = await ownedPlanOrThrow(ctx, planId, ctx.tenantId);
+    if (plan.renderStatus !== "failed") return { ok: false as const, reason: "not_failed" as const };
+    // The LATEST batch is the one whose landings describe the current deck — `batchToRender` reads
+    // inputs off the whole plan anyway, so the batch is only the trigger handle here.
+    const rows = await ctx.db
+      .query("mediaJobs")
+      .withIndex("by_plan", (q) => q.eq("tenantId", ctx.tenantId).eq("planId", planId))
+      .collect();
+    const latest = rows.reduce<Doc<"mediaJobs"> | null>(
+      (best, r) => (best === null || r.createdAt > best.createdAt ? r : best),
+      null,
+    );
+    if (!latest) return { ok: false as const, reason: "nothing_to_render" as const };
+
+    await ctx.db.patch(planId, { renderStatus: "rendering", renderReason: undefined });
+    await ctx.scheduler.runAfter(0, internal.render.renderReel.renderReel, {
+      tenantId: ctx.tenantId,
+      batchId: latest.batchId,
+    });
+    // Insert-only, refs only (§4): WHICH plan and WHICH batch — never a reason string the user
+    // typed, never a URL.
+    await ctx.runMutation(internal.audit.log, {
+      tenantId: ctx.tenantId,
+      correlationId: latest.batchId,
+      eventType: "media.render_retry_manual",
+      actor: ctx.tenantId,
+      payload: { planId, batchId: latest.batchId },
+    });
+    return { ok: true as const };
+  },
+});
+
 // ── The FREE editor. Five affordances, and that is D7's floor AND its ceiling ──────────────────
 //
 // Edit a prompt, edit a narration line, regenerate one block, reorder, delete. **Nothing else.** No

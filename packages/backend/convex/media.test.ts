@@ -4312,9 +4312,13 @@ describe("33-04: the one auto-retry CAS and the manual retryRender", () => {
         result: { ok: false, reason },
       }),
     );
+  // STATE-AGNOSTIC on purpose: convex-test starts a runAfter(0) action as soon as the event loop
+  // yields, and with no render env stubbed it dies at `requireEnvMedia` BEFORE any write — which
+  // is exactly the harmless outcome these tests want. What is asserted is that the schedule
+  // HAPPENED (and against which batch), not the scheduled run's fate.
   const pendingRenders = async (t: T) =>
-    (await t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect())).filter(
-      (s) => s.state.kind === "pending" && String(s.name).includes("renderReel"),
+    (await t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect())).filter((s) =>
+      String(s.name).includes("renderReel:renderReel"),
     );
   const deadLetterRows = (t: T) => t.run((ctx) => ctx.db.query("deadLetters").collect());
   const auditsOf = (t: T, eventType: string) =>

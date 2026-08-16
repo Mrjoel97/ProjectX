@@ -1928,11 +1928,36 @@ get backwards and impossible to notice.
 `ponytail:` no TTL, no cron, no sweep job. Upgrade path if failed-render debris ever accumulates: a
 scheduled sweep of `mediaJobs` older than N days — which is a cron, and this deliberately is not one.
 
-### A failed render dead-letters, and does not retry
+### A failed render dead-letters — after at most ONE automatic retry (33-04)
 
-ONE `deadLetters` row, payload `{ batchId, planId, reasonCode }` and nothing else — no ffmpeg output,
-no filename, no narration, no URL. **A failed render does NOT retry:** at 480p a structural failure
-repeats, and the action-retrier would buy N sandboxes to learn the same thing N times.
+> **Superseded 2026-08-16 (Phase 33, plan 33-04) — narrowly.** 20-16's rule was *"a failed render
+> does NOT retry: at 480p a structural failure repeats, and the action-retrier would buy N
+> sandboxes to learn the same thing N times."* That reasoning STANDS for every structural failure,
+> and the action-retrier is still never used here. What 33-04 grants is exactly ONE automatic
+> retry, only for codes in the CLOSED transient set `TRANSIENT_RENDER_CODES`
+> (`@pikar/core/render`): `missing_binary`, `route_unreachable`, `input_fetch_failed`,
+> `upload_failed`, `submit_failed`, `render_failed` — plausibly-environmental codes plus the
+> catch-all, which is not provably structural. Deterministic codes (`duration_mismatch`,
+> `clip_too_short`, `speech_out_of_window`, `missing_narration`, `bad_invocation`, `input_missing`,
+> `decode_failed`, `no_audio_stream`, `caption_track_empty`, `sandbox_timeout`, and every
+> route/runner decision) never retry. Adding a member is a money decision — see the doubled render
+> line in §4.1.
+
+The guard is STRUCTURAL, not counted: `recordRender`'s failure arm checks AND sets
+`plans.renderRetriedAt` in the same serializable mutation (the `pending → rendering` CAS idiom),
+leaves `renderStatus: "rendering"` standing, reschedules `renderReel` with the SAME batchId, and
+writes one refs-only `media.render_retried` audit row. The retried attempt writes NO dead letter —
+the SECOND failure takes the 20-16 path byte-for-byte: ONE `deadLetters` row, payload
+`{ batchId, planId, reasonCode }` and nothing else — no ffmpeg output, no filename, no narration,
+no URL. `media.test.ts` observes the cap on the MUTATION: a version that retries twice goes red.
+
+From `failed`, the canvas may offer a manual **Retry render** (`media.retryRender`): FAILED-only,
+derives the latest batchId from the plan's own `mediaJobs` rows (refuses `nothing_to_render` when
+there are none), CASes failed → rendering, schedules `renderReel`, and audits
+`media.render_retry_manual` refs-only. It deliberately does NOT clear `renderRetriedAt` — the
+automatic retry stays once-per-plan even across manual attempts. Free to the user: compute is
+covered by the doubled render line; a rare THIRD sandbox (manual retry after the auto retry) is
+accepted, documented drift, never silent.
 
 ## The canvas, SEEN (20-10) — and the tab that opens it
 

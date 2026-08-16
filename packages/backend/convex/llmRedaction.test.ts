@@ -1305,7 +1305,9 @@ test("media audit payloads are refs-only — every key is on the allow-list", ()
   // reel can honestly report.
   // -> 8 at 33-02: `media.claim_confirmed` carries only planId + sceneIndex, both pre-existing
   // allow-listed refs. The claim text and source title never enter the log plane.
-  expect(literals.length, "no media audit payloads found - the scan is vacuous").toBe(8);
+  // -> 10 at 33-04: `media.render_retried` (batchId + planId + reasonCode) and
+  // `media.render_retry_manual` (planId + batchId) — refs and a closed-union code, no new keys.
+  expect(literals.length, "no media audit payloads found - the scan is vacuous").toBe(10);
   for (const [file, literal] of literals) {
     for (const key of keysOf(literal)) {
       expect(
@@ -1349,23 +1351,28 @@ test("no prompt text and no narration text reaches the media log plane — only 
   }
 });
 
-test("the media log-plane surface is PINNED: exactly 4 audit sites across the three modules", () => {
+test("the media log-plane surface is PINNED: exactly 6 audit sites across the three modules", () => {
   // A COUNT, not a ">= 1". Plans 20-09 (canvas), 20-16 (retention) and 20-17 (captions) EACH add
   // audit sites and must EACH bump this number deliberately, having checked the new payload
-  // against MEDIA_AUDIT_ALLOWED above. 1 -> 2 at 20-15: the render terminal.
+  // against MEDIA_AUDIT_ALLOWED above. 1 -> 2 at 20-15: the render terminal. 4 -> 6 at 33-04:
+  // the auto-retry event in the render terminal and the manual retry mutation.
   const sites = MEDIA_MODULES.map(
     (f) => [...stripCode(readSource(f)).matchAll(/internal\.audit\.log\b/g)].length,
   );
   expect(
     sites.reduce((a, b) => a + b, 0),
-    "media audit call-site count changed - is the new payload refs-only? (20-09/20-16/20-17 each bump this)",
-  ).toBe(4);
+    "media audit call-site count changed - is the new payload refs-only? (20-09/20-16/20-17/33-04 each bump this)",
+  ).toBe(6);
   // And WHERE they live: the three job terminals — the fal landing, render and caption burn — plus
-  // 33-02's explicit user confirmation event. `media.ts` still has no job-path log sink: its one
-  // audit site is `confirmClaim`, whose payload is the refs-only literal reviewed above.
-  expect(sites[0], "media.ts should contain only the claim-confirmation audit site").toBe(1);
+  // 33-02's explicit user confirmation event, 33-04's auto-retry event beside the render terminal,
+  // and 33-04's manual-retry event. `media.ts` still has no job-path log sink: its two audit sites
+  // are `confirmClaim` and `retryRender`, whose payloads are the refs-only literals reviewed above.
+  expect(sites[0], "media.ts holds the claim-confirmation and manual-retry audit sites").toBe(2);
   expect(sites[1], "mediaComplete.ts is the landing terminal").toBe(1);
-  expect(sites[2], "render/renderReel.ts holds the render AND caption terminals").toBe(2);
+  expect(
+    sites[2],
+    "render/renderReel.ts holds the render terminal, its auto-retry event, and the caption terminal",
+  ).toBe(3);
 });
 
 test("only media.ts and mediaComplete.ts write a TERMINAL mediaJobs status, and succeeded is mediaComplete's alone", () => {
