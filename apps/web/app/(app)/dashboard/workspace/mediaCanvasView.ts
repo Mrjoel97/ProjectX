@@ -240,6 +240,14 @@ export const VERDICT_COPY: Record<string, string> = {
 
 /** Is this document usable as an `uploaded_video` scene's source? The SAME narrowing the render
  *  applies (`resolveRenderAsset` serves `video/*` only, and `batchToRender` refuses anything else),
- *  stated once here so the picker cannot offer a document the render would then reject. */
-export const isPickableVideo = (doc: { mimeType?: string | null; status?: string }): boolean =>
-  (doc.mimeType ?? "").startsWith("video/") && doc.status !== "failed";
+ *  stated once here so the picker cannot offer a document the render would then reject.
+ *
+ *  33-05: the check is over WHAT THE BYTES ARE — `storedMimeType ?? mimeType`, the same fallback
+ *  the render now uses. A saved reel is a markdown row (the searchable transcript) carrying mp4
+ *  bytes, and it is immediately reusable as footage; a plain video upload is unchanged. */
+export const isPickableVideo = (doc: {
+  mimeType?: string | null;
+  storedMimeType?: string | null;
+  status?: string;
+}): boolean =>
+  (doc.storedMimeType ?? doc.mimeType ?? "").startsWith("video/") && doc.status !== "failed";

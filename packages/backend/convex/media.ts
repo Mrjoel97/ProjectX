@@ -2749,7 +2749,10 @@ export const setSceneAsset = tenantMutation({
     if (!doc || doc.tenantId !== ctx.tenantId || !doc.storageId) {
       return { ok: false as const, reason: "no_document" as const };
     }
-    if (!doc.mimeType.startsWith("video/")) {
+    // 33-05: `storedMimeType ?? mimeType` — what the BYTES are. A saved reel (markdown row, mp4
+    // bytes) is legal footage; the picker (`isPickableVideo`) and the render (`batchToRender`,
+    // `resolveRenderAsset`) apply the same fallback, so pickable stays equal to renderable.
+    if (!(doc.storedMimeType ?? doc.mimeType).startsWith("video/")) {
       return { ok: false as const, reason: "not_a_video" as const };
     }
     await patchShots(

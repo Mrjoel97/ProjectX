@@ -249,9 +249,13 @@ export const batchToRender = internalQuery({
         if (!doc || doc.tenantId !== a.tenantId || !doc.storageId) {
           return { ok: false, reason: "incomplete_blocks" };
         }
-        // A vault document that is not a video has no business in a reel, and refusing it here is
-        // also what keeps the blob route's vault branch narrow — see `resolveRenderAsset`.
-        if (!doc.mimeType.startsWith("video/")) return { ok: false, reason: "incomplete_blocks" };
+        // A vault document whose BYTES are not video has no business in a reel, and refusing it
+        // here is also what keeps the blob route's vault branch narrow — see `resolveRenderAsset`.
+        // 33-05: `storedMimeType ?? mimeType`, so a SAVED REEL (markdown row, mp4 bytes) is
+        // renderable footage — the same fallback the picker's `isPickableVideo` applies.
+        if (!(doc.storedMimeType ?? doc.mimeType).startsWith("video/")) {
+          return { ok: false, reason: "incomplete_blocks" };
+        }
         inputs.push({ name: renderInputName("video", i), jobId: docId });
       } else {
         if (!slot?.video) return { ok: false, reason: "incomplete_blocks" };
@@ -335,8 +339,12 @@ export const resolveRenderAsset = internalQuery({
     const docId = ctx.db.normalizeId("vaultDocuments", raw);
     if (docId) {
       const doc = await ctx.db.get(docId);
-      if (!doc?.storageId || !doc.mimeType.startsWith("video/")) return null;
-      return { assetStorageId: doc.storageId, mimeType: doc.mimeType };
+      // 33-05: judged and served by WHAT THE BYTES ARE (`storedMimeType ?? mimeType`) — a saved
+      // reel's row is markdown but its `storageId` is the final mp4. Still video-only: the widen
+      // admits exactly the reel shape, never "any vault document by id".
+      const bytesMime = doc?.storedMimeType ?? doc?.mimeType ?? "";
+      if (!doc?.storageId || !bytesMime.startsWith("video/")) return null;
+      return { assetStorageId: doc.storageId, mimeType: bytesMime };
     }
     // …or the PUBLISHED REEL itself (plan 20-17). The caption burn's input is `final.mp4`, which
     // lives on the plan row rather than on a `mediaJobs` row, so the same route serves it from the

@@ -13,6 +13,35 @@
 > `dispatch:` prefix fix really closed `420c852b`'s two-actor miscount. That says nothing about the
 > render pipeline this playbook documents.)
 
+> Last verified: 2026-08-16 (33-05 — **THE FINISHED REEL BECOMES A VAULT ASSET, and the old final
+> is HELD through a regenerate.** (1) VAULT AUTO-SAVE: `render/renderReel.saveReelToVault` — the
+> persistFindings idiom — upserts ONE `vaultDocuments` row per plan, keyed by
+> `plans.reelVaultDocId`: `kind "reel"`, `mimeType "text/markdown"` (the narration transcript in
+> scene order as `text`, riding the NORMAL embed rail — no paid ingest, no extra STT),
+> `storedMimeType "video/mp4"` with `storageId` = the final mp4, and refs-only `reelMeta`
+> citations (sceneIndex / docId / claimHash / confirmedAt; every docId tenant-verified at the
+> write, a foreign or malformed id is SKIPPED — §4). Exactly ONE save per pipeline completion:
+> the caption terminal (BOTH arms — a failed burn saves the degraded uncaptioned cut) or the
+> render terminal when no captions will ever come (no `stt` line in the batch — the
+> maybeStartCaptions gate — or captionStatus already failed). A fully SILENT deck saves at
+> `pending_extraction` (no transcript to embed, nothing rides the rail). Audit:
+> `media.reel_saved` {planId, docId, citations:n}. KNOWN GAP (accepted): an stt job that fails
+> AFTER render success reaches no save terminal — the save then happens at the next completion.
+> (2) OLD-FINAL ORDERING: `clearRender` now RESETS the pipeline (status, failure fields,
+> `renderRetriedAt` — the new reservation re-buys the doubled render line — and the CAPTION
+> plane, which also fixes regenerate-after-captioned never re-captioning) but HOLDS
+> renderStorageId / sidecarStorageId / sidecarHash / renderSummary; `media.reel` serves the url
+> whenever that validated triple is present, WHATEVER the status (the sidecar guarantee lives in
+> the triple, written together at the success terminal). Deletion contract: repoint plan →
+> repoint vault doc → `deleteOrphanedFinals` (fresh live-set over plan + vault doc, deduped
+> candidates) — no blob is deleted while either still points at it, and replaced finals no
+> longer leak (pre-33-05 clearRender orphaned every one; old SIDECAR blobs still leak — small,
+> deferred). (3) PICKABLE REEL: `isPickableVideo`, `media.setSceneAsset`, `batchToRender` and
+> `resolveRenderAsset` all judge `storedMimeType ?? mimeType` — what the BYTES are — so a saved
+> reel is immediately reusable as `uploaded_video` footage; the widen admits exactly the reel
+> shape, video bytes only. Backend media suites 246 green, web mediaCanvas 25 green, tsc clean
+> in both packages.)
+
 > Last verified: 2026-08-16 (33-04 — **FAILURE/RETRY BACKEND: one auto-retry, manual retry, and
 > the fix-menu re-arm.** `TRANSIENT_RENDER_CODES` is a closed 6-member set in `@pikar/core/render`;
 > `recordRender`'s failure arm retries ONCE per plan via the `renderRetriedAt` CAS (same batch, no

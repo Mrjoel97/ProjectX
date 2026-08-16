@@ -6722,3 +6722,76 @@ describe("33-05 the OLD final is held until the new one lands", () => {
     expect(await blobExists(t, capB)).toBe(true);
   });
 });
+
+describe("33-05 a saved reel is REUSABLE FOOTAGE — pickable equals renderable", () => {
+  test("setSceneAsset accepts the reel shape (markdown row, mp4 bytes) and the blob route serves it", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t, {
+      visuals: ["uploaded_video", "generated_video", "text_card", "generated_video"],
+    });
+    const bytes = await storeBlob(t, new Uint8Array([7]), "video/mp4");
+    const reelDocId = await t.run(async (ctx) =>
+      ctx.db.insert("vaultDocuments", {
+        tenantId: A,
+        title: "Reel: last month's teaser",
+        kind: "reel",
+        category: "workspace-docs",
+        source: "media",
+        mimeType: "text/markdown",
+        storedMimeType: "video/mp4",
+        storageId: bytes,
+        size: 1,
+        contentHash: "f".repeat(64),
+        status: "processing",
+        createdAt: T0,
+      }),
+    );
+
+    // The picker's mutation takes it — `storedMimeType ?? mimeType` is what the bytes are.
+    expect(
+      await asA(t).mutation(api.media.setSceneAsset, {
+        planId,
+        blockIndex: 0,
+        vaultDocId: reelDocId,
+      }),
+    ).toEqual({ ok: true });
+
+    // …and the blob route serves those bytes as VIDEO, so the render can fetch them.
+    const served = await t.run(async (ctx) =>
+      ctx.runQuery(internal.render.renderReel.resolveRenderAsset, { raw: reelDocId }),
+    );
+    expect(served).toEqual({ assetStorageId: bytes, mimeType: "video/mp4" });
+
+    // A markdown doc whose STORED bytes are not video (the createDocument PDF shape) stays
+    // refused — the widen admits exactly the reel shape, nothing broader.
+    const pdfBytes = await storeBlob(t, new Uint8Array([1]), "application/pdf");
+    const plainDocId = await t.run(async (ctx) =>
+      ctx.db.insert("vaultDocuments", {
+        tenantId: A,
+        title: "notes",
+        kind: "brief",
+        category: "workspace-docs",
+        source: "paste",
+        mimeType: "text/markdown",
+        storedMimeType: "application/pdf",
+        storageId: pdfBytes,
+        size: 1,
+        contentHash: "e".repeat(64),
+        status: "ready",
+        createdAt: T0,
+      }),
+    );
+    expect(
+      await asA(t).mutation(api.media.setSceneAsset, {
+        planId,
+        blockIndex: 0,
+        vaultDocId: plainDocId,
+      }),
+    ).toEqual({ ok: false, reason: "not_a_video" });
+    expect(
+      await t.run(async (ctx) =>
+        ctx.runQuery(internal.render.renderReel.resolveRenderAsset, { raw: plainDocId }),
+      ),
+    ).toBeNull();
+  });
+});
