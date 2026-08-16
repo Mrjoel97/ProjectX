@@ -308,103 +308,209 @@ describe("the constants themselves", () => {
 // The .md is read off DISK by relative path rather than imported: @pikar/core does not depend on
 // @pikar/contracts and must not start to (specialists.test.ts reads contracts/src/skill.ts the
 // same way, for the same reason).
-describe("media-director.md round trip — the body's example survives its own rules", () => {
+describe("media-director.md round trip — the body's worked answer survives its own rules", () => {
   const body = readFileSync(
     fileURLToPath(new URL("../../contracts/skills/media-director.md", import.meta.url)),
     "utf8",
   );
-  // 20.2 wave 8: the body now writes a SCENE deck, so this round trip reads it with the parser the
-  // money path uses. Every assertion below is a rule the body TEACHES — a worked example that
-  // violates its own rule is how a model learns the rule is optional.
-  const r = parseSceneDeck(body);
+  // 33-09: the body now answers with a BRIEF and TWO variations, so the round trip reads it the way
+  // `persistStoryboard` does — `parseVariations` first, then each slice on its own — and every
+  // per-deck rule below runs against BOTH decks. Variation B going unchecked would be the same hole
+  // one level up: a worked example that violates its own rule is how a model learns the rule is
+  // optional.
+  const v = parseVariations(body);
+  /** Both variation slices, or a loud failure. Never an empty array — a `for` over one of those
+   *  passes every assertion in this file while the body carries no deck at all. */
+  const both = () => {
+    expect(v.kind, `the body's variations did not parse: ${JSON.stringify(v)}`).toBe("two");
+    if (v.kind !== "two") throw new Error("expected two variations");
+    return [v.a, v.b];
+  };
+  const decks = () => both().map((s) => s.deck);
 
-  it("parses to a deck of at least 3 scenes, in index order", () => {
-    expect(r.ok, `the body's SCENE DECK did not parse: ${r.ok ? "" : r.reason}`).toBe(true);
-    if (!r.ok) return;
-    expect(r.scenes.length).toBeGreaterThanOrEqual(3);
-    expect(r.scenes.map((s) => s.index)).toEqual(r.scenes.map((_, i) => i));
+  // The BRIEF sits ABOVE the variation headings, so it belongs to neither slice and the terminal
+  // parses it off the whole turn. Here it is read off the worked ANSWER, because the file's own
+  // `## 1. BRIEF` is an instruction section — its field labels are backticked precisely so they
+  // cannot be mistaken for a filled-in brief.
+  const WORKED = "## A worked answer";
+  const workedAt = body.indexOf(WORKED);
+  const brief = parseBrief(body.slice(Math.max(workedAt, 0)));
+
+  it(`carries a worked answer ("${WORKED}") with a BRIEF and exactly TWO variations`, () => {
+    expect(workedAt, "the worked answer heading was renamed or removed").toBeGreaterThan(0);
+    expect(v.kind).toBe("two");
+    expect(brief, "the worked answer's BRIEF did not parse").not.toBeNull();
   });
 
-  it("every visual is a member of the closed VISUAL_KINDS set", () => {
-    if (!r.ok) throw new Error("expected ok");
-    for (const s of r.scenes) expect(VISUAL_KINDS).toContain(s.visual);
-  });
-
-  it("the declared target is legal and the scenes sum to it EXACTLY", () => {
-    if (!r.ok) throw new Error("expected ok");
-    expect(TARGET_DURATIONS).toContain(r.targetDurationSeconds);
-    const summed = r.scenes.reduce((n, s) => n + s.durationMs, 0) / 1000;
-    expect(summed).toBe(r.targetDurationSeconds);
-  });
-
-  it("every generated_video scene lands on the provider's grid", () => {
-    if (!r.ok) throw new Error("expected ok");
-    for (const s of r.scenes) {
-      if (s.visual !== "generated_video") continue;
-      expect(GENERATED_CLIP_SECONDS, `scene ${s.index}`).toContain(s.durationMs / 1000);
+  it("the brief echoes the ask and MARKS what it defaulted, never leaking the marker as copy", () => {
+    expect(brief?.topic).toBeTruthy();
+    expect(TARGET_DURATIONS).toContain(brief?.durationSeconds);
+    // At least one defaulted field, or the example teaches the marker by never showing it.
+    expect(brief?.defaulted.length ?? 0).toBeGreaterThanOrEqual(1);
+    for (const value of [brief?.topic, brief?.audience, brief?.tone, brief?.brandVoice]) {
+      expect(value ?? "", "(defaulted) must be stripped from the value").not.toMatch(/defaulted/i);
     }
   });
 
-  it("the example MIXES kinds — an all-generated deck cannot hit a target at all", () => {
+  it("BOTH decks run the brief's duration — two lengths would be two different asks", () => {
+    for (const r of decks()) expect(r.targetDurationSeconds).toBe(brief?.durationSeconds);
+  });
+
+  it("each deck parses to at least 3 scenes, in index order", () => {
+    for (const r of decks()) {
+      expect(r.scenes.length).toBeGreaterThanOrEqual(3);
+      expect(r.scenes.map((s) => s.index)).toEqual(r.scenes.map((_, i) => i));
+    }
+  });
+
+  it("every visual is a member of the closed VISUAL_KINDS set", () => {
+    for (const r of decks()) for (const s of r.scenes) expect(VISUAL_KINDS).toContain(s.visual);
+  });
+
+  it("the declared target is legal and the scenes sum to it EXACTLY", () => {
+    for (const r of decks()) {
+      expect(TARGET_DURATIONS).toContain(r.targetDurationSeconds);
+      const summed = r.scenes.reduce((n, s) => n + s.durationMs, 0) / 1000;
+      expect(summed).toBe(r.targetDurationSeconds);
+    }
+  });
+
+  it("every generated_video scene lands on the provider's grid", () => {
+    for (const r of decks()) {
+      for (const s of r.scenes) {
+        if (s.visual !== "generated_video") continue;
+        expect(GENERATED_CLIP_SECONDS, `scene ${s.index}`).toContain(s.durationMs / 1000);
+      }
+    }
+  });
+
+  it("no deck is all-generated, and at least one SPENDS a clip", () => {
     // Not a style note. Every member of GENERATED_CLIP_SECONDS is a multiple of 4, so a deck of
     // only generated clips cannot sum to 15 or 30, and a 60 costs $6.00 against a $3.50 job cap
-    // (ADR-019). A worked example that reached for a clip every time would teach the one deck
-    // shape the contract cannot render.
-    if (!r.ok) throw new Error("expected ok");
-    expect(r.scenes.some((s) => s.visual !== "generated_video")).toBe(true);
-    expect(r.scenes.some((s) => s.visual === "generated_video")).toBe(true);
+    // (ADR-019). The "at least one" half is per-ANSWER rather than per-deck now: a stills-and-cards
+    // concept costing a fortieth of its sibling is the cost lever the body teaches, not a gap.
+    for (const r of decks())
+      expect(r.scenes.some((s) => s.visual !== "generated_video")).toBe(true);
+    expect(decks().some((r) => r.scenes.some((s) => s.visual === "generated_video"))).toBe(true);
+  });
+
+  it("the two decks are different CONCEPTS — their kind mixes differ", () => {
+    // The testable shadow of "a different angle AND a different visual treatment". Two decks with
+    // the same kinds in the same order are one deck with different words, and the owner's choice
+    // is then a choice between nothing.
+    const [a, b] = decks();
+    const mix = (r: typeof a) =>
+      (r?.scenes ?? [])
+        .map((s) => s.visual)
+        .sort()
+        .join(",");
+    expect(mix(a)).not.toBe(mix(b));
   });
 
   it("every scene names what its picture is built from", () => {
-    if (!r.ok) throw new Error("expected ok");
     // A text_card with no overlay and an uploaded_video with no asset both clear the money gate
     // and then render nothing. The body teaches both; the example must obey both.
-    for (const s of r.scenes) expect(hasAssetSource(s), `scene ${s.index}`).toBe(true);
+    for (const r of decks()) {
+      for (const s of r.scenes) expect(hasAssetSource(s), `scene ${s.index}`).toBe(true);
+    }
   });
 
-  it("the example demonstrates BOTH a speaking scene and a silent one", () => {
+  it("each deck demonstrates BOTH a speaking scene and a silent one", () => {
     // Optional narration is the wave-4 contract. An example where every scene speaks teaches the
     // old rule by omission, and one where none does would not parse at all.
-    if (!r.ok) throw new Error("expected ok");
-    expect(r.scenes.some((s) => s.narration !== "")).toBe(true);
-    expect(r.scenes.some((s) => s.narration === "")).toBe(true);
+    for (const r of decks()) {
+      expect(r.scenes.some((s) => s.narration !== "")).toBe(true);
+      expect(r.scenes.some((s) => s.narration === "")).toBe(true);
+    }
   });
 
   it("every narration line fits the window it ACTUALLY has, not a uniform one", () => {
-    if (!r.ok) throw new Error("expected ok");
-    for (const [i, s] of r.scenes.entries()) {
-      if (s.narration === "") continue;
-      const available = narrationCeilingSeconds(r.scenes, i);
-      expect(s.narration.length, `scene ${s.index} narration`).toBeLessThanOrEqual(
-        available * MAX_CHARS_PER_SECOND,
-      );
+    for (const r of decks()) {
+      for (const [i, s] of r.scenes.entries()) {
+        if (s.narration === "") continue;
+        const available = narrationCeilingSeconds(r.scenes, i);
+        expect(s.narration.length, `scene ${s.index} narration`).toBeLessThanOrEqual(
+          available * MAX_CHARS_PER_SECOND,
+        );
+      }
     }
   });
 
   it("startMs is a RUNNING SUM, not index x a constant", () => {
-    if (!r.ok) throw new Error("expected ok");
-    let running = 0;
-    for (const s of r.scenes) {
-      expect(s.startMs).toBe(running);
-      running += s.durationMs;
+    for (const r of decks()) {
+      let running = 0;
+      for (const s of r.scenes) {
+        expect(s.startMs).toBe(running);
+        running += s.durationMs;
+      }
+      // …and the example must actually exercise the difference, or this passes on a uniform deck.
+      expect(new Set(r.scenes.map((s) => s.durationMs)).size).toBeGreaterThan(1);
     }
-    // …and the example must actually exercise the difference, or this passes on a uniform deck.
-    expect(new Set(r.scenes.map((s) => s.durationMs)).size).toBeGreaterThan(1);
   });
 
-  it("the SCENE PROMPTS section is actually reached — a prompt differs from its description", () => {
-    // Without this the body could drop section 4 entirely and every prompt would silently
+  it("each variation's SCENE PROMPTS are reached — a prompt differs from its description", () => {
+    // Without this the body could drop the prompts section entirely and every prompt would silently
     // degrade to the scene's visual description, which is not a parse failure and not a lie
     // anyone would notice until the images came back generic. It is also what catches the
     // `Scene N` / `Block N` head mismatch: the prompts section is shared by both contracts.
-    if (!r.ok) throw new Error("expected ok");
-    expect(r.scenes.some((s) => s.prompt !== s.description)).toBe(true);
+    for (const r of decks()) expect(r.scenes.some((s) => s.prompt !== s.description)).toBe(true);
+  });
+
+  it("each variation carries its OWN script and art direction inside its own slice", () => {
+    // The terminal reads both off `variations.a.body`. A body that wrote one art direction above
+    // the headings would land a plan row with none — a parse `null`, not an error.
+    for (const s of both()) {
+      const script = parseScript(s.body);
+      expect(script).not.toBe("");
+      const spoken = s.deck.scenes.find((sc) => sc.narration !== "");
+      expect(script, "the script must be the deck's own lines").toContain(spoken?.narration ?? "");
+      const art = parseArtDirection(s.body);
+      expect(art, "nine fields, per variation").not.toBeNull();
+      expect(art?.palette[0]).toMatch(/#[0-9a-f]{6}/i); // hex, never a vague colour word
+    }
+  });
+
+  it("the worked answer demonstrates ALL THREE citation states", () => {
+    // The whole point of 33-09's citation half: a cited claim, a claim the vault could not ground,
+    // and creative copy that must carry no citation at all. An example missing the middle one
+    // teaches that an ungrounded figure may simply be asserted.
+    const [a] = decks();
+    const scenes = a?.scenes ?? [];
+    const cited = scenes.filter((s) => s.source !== undefined);
+    const flagged = scenes.filter((s) => s.needsConfirmation === true);
+    const creative = scenes.filter(
+      (s) => s.source === undefined && s.needsConfirmation === undefined,
+    );
+    expect(cited.length, "no cited scene").toBeGreaterThanOrEqual(1);
+    expect(flagged.length, "no `Source: unverified` scene").toBeGreaterThanOrEqual(1);
+    expect(
+      creative.length,
+      "every scene is cited — creative copy must not be",
+    ).toBeGreaterThanOrEqual(1);
+    expect(cited[0]?.source?.docId).toBeTruthy();
+    expect(cited[0]?.source?.title).toBeTruthy();
+    // The two states are exclusive: a grounded claim is not also awaiting confirmation.
+    expect(cited.some((s) => s.needsConfirmation)).toBe(false);
   });
 
   it("the body teaches the speech rate it is held to, and names its only tool", () => {
     expect(body).toContain(String(MAX_CHARS_PER_SECOND));
     for (const kind of VISUAL_KINDS) expect(body, `${kind} is not taught`).toContain(kind);
     expect(body).toContain("searchVault");
+  });
+
+  it("the body teaches the three 33-09 contracts by their literal tokens", () => {
+    // Literal strings, because these ARE the output contract — the parser matches them byte for
+    // byte and guidance prose about them is not what a model copies (the model-reflex lesson).
+    for (const token of [
+      "VARIATION A",
+      "VARIATION B",
+      "(defaulted)",
+      "Source: unverified",
+      "[doc:",
+    ]) {
+      expect(body, `the body never shows \`${token}\``).toContain(token);
+    }
   });
 });
 
