@@ -59,7 +59,7 @@ test file.
 | Web `mediaCanvas.test.ts` | **24/24 passed** |
 | Core focused media files | **317 assertions observed passing** across storyboard (92), assembly (26), render (93), captions (31), specialists (59), and action type (16). The 75-test specialists/action run exited cleanly; the 242-test grouped run exhausted the Windows V8 worker after reporting all four files green, so it is environment evidence rather than a clean repository gate. |
 | Golden evaluator self-check | **PASS** — 40 fixtures valid, 12 gated skills, all checks offline |
-| Playbook watcher | Returned `block` only because the shared tree already contains a foreign edit to `packages/backend/convex/render/smoke_assemble.sh` without a `media.md` bump. The audit preserved both files and does not represent this as green. |
+| Playbook watcher | **PASS** on final rerun. An earlier run returned `block` for another lane's then-dirty `smoke_assemble.sh`; its owner resolved that work before audit close, and the unchanged command then exited 0 with no output. |
 
 Expected stderr from backend negative tests (`OPENAI_API_KEY` / `MEDIA_RENDER_SECRET` absent) proves
 the no-live-call refusals; the suite still exited 0. The audit made no implementation or test change.
@@ -149,7 +149,7 @@ and Phase 20 remain pending until then.
 - [x] Completed skill lifecycle evidence is deployment-scoped and not relabelled automated green.
 - [x] Unsupported LongCat/30-second/fps claims remain deferred.
 - [x] No provider, deploy, sandbox, registry mutation, or paid operation ran during this audit.
-- [ ] Foreign render-smoke worktree edit is resolved and the playbook gate returns `allow`.
+- [x] Playbook gate exits 0 after the foreign render-smoke lane resolved its worktree edit.
 - [ ] Owner-approved governed Run A is observed and reconciled.
 - [ ] `20-11-SUMMARY.md` and `20-VERIFICATION.md` exist with matching observed evidence.
 - [ ] `nyquist_compliant: true` — deliberately false until the open external rows close.
