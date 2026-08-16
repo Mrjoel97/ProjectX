@@ -4445,6 +4445,257 @@ describe("33-04: the one auto-retry CAS and the manual retryRender", () => {
   });
 });
 
+// ── 33-04: the fix-menu re-arm — a FREE fix resumes the held reel with no new landing ──────────
+//
+// `maybeStartRender` fires on LANDINGS. A held reel (failed sibling → `incomplete_batch`) whose
+// failed scene is fixed by a free action (kind switch, vault asset pick) has no new landing, so
+// the fix mutations re-evaluate the trigger themselves. The fixes are CONTENT-class (no
+// `shotsChangedAt` stamp) — landed sibling assets stay fresh, so nothing already paid for is
+// wasted (the locked "landed sibling work waits" decision).
+
+describe("33-04: fix-menu re-arm — free fixes resume the held reel", () => {
+  const scheduledRenders = async (t: T) =>
+    (await t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect())).filter((s) =>
+      String(s.name).includes("renderReel:renderReel"),
+    );
+
+  /** A scene-deck plan mid-pipeline: batch submitted, ready for landings to drive the REAL
+   *  trigger. Rows per the deck: video@0, image@1, (card@2 has no job), video@3, tts everywhere. */
+  async function seedHeldScenario(t: T, batchId = "batch_fix") {
+    const { planId } = await seedSceneDeck(t); // [generated, animated_image, text_card, generated]
+    await t.run(async (ctx) => await ctx.db.patch(planId, { renderStatus: "pending" }));
+    const jobIds: Record<string, Id<"mediaJobs">> = {};
+    await t.run(async (ctx) => {
+      const insert = async (key: string, kind: "video" | "image" | "tts", blockIndex: number) => {
+        jobIds[key] = await ctx.db.insert("mediaJobs", {
+          tenantId: A,
+          planId,
+          batchId,
+          blockIndex,
+          provider: kind === "tts" ? "openai" : "wan",
+          kind,
+          model:
+            kind === "video"
+              ? MEDIA_DEFAULT_VIDEO.model
+              : kind === "image"
+                ? MEDIA_DEFAULT_IMAGE.model
+                : MEDIA_DEFAULT_VOICE.model,
+          spec:
+            kind === "video"
+              ? {
+                  kind: "video",
+                  resolution: MEDIA_DEFAULT_VIDEO.resolution,
+                  seconds: MEDIA_DEFAULT_VIDEO.seconds,
+                }
+              : kind === "image"
+                ? { kind: "image", width: 1080, height: 1920 }
+                : { kind: "tts", characters: 20, voice: "nova", sampleRateHertz: 24000 },
+          promptHash: "e".repeat(64),
+          status: "submitted",
+          estUsd: 0.1,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        });
+      };
+      await insert("video0", "video", 0);
+      await insert("image1", "image", 1);
+      await insert("video3", "video", 3);
+      for (const i of [0, 1, 2, 3]) await insert(`tts${i}`, "tts", i);
+    });
+    // The failed clip lands FIRST, the healthy siblings after — the LAST landing runs the real
+    // trigger and writes the hold.
+    await land(t, jobIds.video0 as Id<"mediaJobs">, false);
+    for (const key of ["image1", "video3", "tts0", "tts1", "tts2", "tts3"]) {
+      await land(t, jobIds[key] as Id<"mediaJobs">);
+    }
+    return { planId, batchId };
+  }
+
+  test("setSceneVisual is a CONTENT-class kind switch: overlay set, no stamp, confirmation survives", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    // A confirmed claim on scene 0 — the kind switch does not touch narration, so it must survive.
+    await t.run(async (ctx) => {
+      const plan = await ctx.db.get(planId);
+      await ctx.db.patch(planId, {
+        shots: (plan?.shots ?? []).map((s) =>
+          s.index === 0 ? { ...s, needsConfirmation: true, confirmedAt: 111 } : s,
+        ),
+      });
+    });
+
+    expect(
+      await asA(t).mutation(api.media.setSceneVisual, {
+        planId,
+        sceneIndex: 0,
+        visual: "text_card",
+        overlay: "Q3 revenue grew 40%",
+      }),
+    ).toEqual({ ok: true });
+
+    const plan = await planRowOf(t, planId);
+    expect(plan?.shots?.[0]?.visual).toBe("text_card");
+    expect(plan?.shots?.[0]?.overlay).toBe("Q3 revenue grew 40%");
+    expect(plan?.shots?.[0]?.confirmedAt).toBe(111); // the user's vouch stands — words unchanged
+    expect(plan?.shots?.[0]?.narration).toBe("line 0");
+    // CONTENT-class: no structural stamp, so landed sibling assets stay fresh (the locked
+    // "nothing is wasted" decision) — batchToRender must not refuse stale_inputs after a fix.
+    expect(plan?.shotsChangedAt).toBeUndefined();
+    // …and the render was cleared like every deck edit clears it.
+    expect(plan?.renderStatus).toBe("pending");
+  });
+
+  test("setSceneVisual refusals: unknown kind, unknown scene, card without words, block deck", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    expect(
+      await asA(t).mutation(api.media.setSceneVisual, {
+        planId,
+        sceneIndex: 0,
+        visual: "hologram",
+      }),
+    ).toEqual({ ok: false, reason: "unknown_visual" });
+    expect(
+      await asA(t).mutation(api.media.setSceneVisual, {
+        planId,
+        sceneIndex: 99,
+        visual: "text_card",
+        overlay: "words",
+      }),
+    ).toEqual({ ok: false, reason: "no_block" });
+    // A card with nothing to draw is a black rectangle — the same rule `hasAssetSource` applies.
+    expect(
+      await asA(t).mutation(api.media.setSceneVisual, {
+        planId,
+        sceneIndex: 0,
+        visual: "text_card",
+      }),
+    ).toEqual({ ok: false, reason: "no_overlay" });
+
+    // A BLOCK deck has no visual kinds to switch — refuse rather than corrupt the contract.
+    const { planId: blockPlan } = await seedDeck(t);
+    expect(
+      await asA(t).mutation(api.media.setSceneVisual, {
+        planId: blockPlan,
+        sceneIndex: 0,
+        visual: "text_card",
+        overlay: "words",
+      }),
+    ).toEqual({ ok: false, reason: "no_deck" });
+  });
+
+  test("PITFALL 6 end-to-end: failed clip holds the reel; switch-to-card re-arms and renders, siblings reused", async () => {
+    const t = harness();
+    const { planId, batchId } = await seedHeldScenario(t);
+
+    // The real trigger wrote the hold: a failed paid scene HOLDS the reel (structural, 20-16).
+    const held = await planRowOf(t, planId);
+    expect(held?.renderStatus).toBe("failed");
+    expect(held?.renderReason).toBe("incomplete_batch");
+    expect(await scheduledRenders(t)).toHaveLength(0);
+
+    // The FREE fix: scene 0 becomes a text card. No new landing exists — the mutation itself must
+    // re-arm the trigger in the same transaction.
+    expect(
+      await asA(t).mutation(api.media.setSceneVisual, {
+        planId,
+        sceneIndex: 0,
+        visual: "text_card",
+        overlay: "The launch, in one card",
+      }),
+    ).toEqual({ ok: true });
+
+    const rearmed = await planRowOf(t, planId);
+    expect(rearmed?.renderStatus).toBe("rendering"); // re-armed AND scheduled, not just reset
+    expect(rearmed?.renderReason).toBeUndefined();
+    const scheduled = await scheduledRenders(t);
+    expect(scheduled).toHaveLength(1);
+    expect(scheduled[0]?.args?.[0]).toMatchObject({ tenantId: A, batchId });
+
+    // …and the render it scheduled can actually BUILD: batchToRender reads the fixed deck, takes
+    // the landed siblings (fresh — the fix was content-class) and the failed clip's absence is
+    // irrelevant because a card needs no job. Not stale_inputs, not not_all_succeeded.
+    const batch = await t.run((ctx) =>
+      ctx.runQuery(internal.render.renderReel.batchToRender, { tenantId: A, batchId }),
+    );
+    expect(batch).toMatchObject({ ok: true });
+    if (batch.ok) {
+      expect(batch.value.scenes[0]).toMatchObject({ kind: "card" });
+      expect(batch.value.cards.some((c) => c.text === "The launch, in one card")).toBe(true);
+    }
+  });
+
+  test("switch to uploaded_video WITHOUT an asset holds honestly; setSceneAsset then resumes", async () => {
+    const t = harness();
+    const { planId, batchId } = await seedHeldScenario(t);
+
+    // Fix arm 1: kind switch to uploaded_video. There is no asset yet, so the reel must NOT be
+    // sent to a render that is known to refuse — it stays held, in words, and the fix menu stays.
+    expect(
+      await asA(t).mutation(api.media.setSceneVisual, {
+        planId,
+        sceneIndex: 0,
+        visual: "uploaded_video",
+      }),
+    ).toEqual({ ok: true });
+    const stillHeld = await planRowOf(t, planId);
+    expect(stillHeld?.renderStatus).toBe("failed");
+    expect(stillHeld?.renderReason).toBe("incomplete_batch");
+    expect(await scheduledRenders(t)).toHaveLength(0);
+
+    // Fix arm 2: the vault pick — the asset arrives, and THIS mutation re-arms the render.
+    const videoId = await t.run(async (ctx) =>
+      ctx.db.insert("vaultDocuments", {
+        tenantId: A,
+        title: "b-roll",
+        kind: "upload",
+        category: "videos",
+        source: "upload",
+        size: 1,
+        contentHash: "f".repeat(64),
+        status: "ready",
+        createdAt: Date.now(),
+        mimeType: "video/mp4",
+        storageId: await ctx.storage.store(new Blob([new Uint8Array([1])], { type: "video/mp4" })),
+      }),
+    );
+    expect(
+      await asA(t).mutation(api.media.setSceneAsset, {
+        planId,
+        blockIndex: 0,
+        vaultDocId: videoId,
+      }),
+    ).toEqual({ ok: true });
+
+    const resumed = await planRowOf(t, planId);
+    expect(resumed?.renderStatus).toBe("rendering");
+    const scheduled = await scheduledRenders(t);
+    expect(scheduled).toHaveLength(1);
+    expect(scheduled[0]?.args?.[0]).toMatchObject({ tenantId: A, batchId });
+
+    const batch = await t.run((ctx) =>
+      ctx.runQuery(internal.render.renderReel.batchToRender, { tenantId: A, batchId }),
+    );
+    expect(batch).toMatchObject({ ok: true });
+  });
+
+  test("a fix on a plan that is NOT held does not schedule anything — landing behavior unchanged", async () => {
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    await t.run(async (ctx) => await ctx.db.patch(planId, { renderStatus: "pending" }));
+    expect(
+      await asA(t).mutation(api.media.setSceneVisual, {
+        planId,
+        sceneIndex: 0,
+        visual: "text_card",
+        overlay: "words",
+      }),
+    ).toEqual({ ok: true });
+    expect((await planRowOf(t, planId))?.renderStatus).toBe("pending");
+    expect(await scheduledRenders(t)).toHaveLength(0);
+  });
+});
+
 // ── CAPTIONS: the transcript, the trigger, the burn and the narrowed retention (plan 20-17) ────
 //
 // Everything here runs offline at $0. `FAL_FIXTURE` covers the transcript submit and

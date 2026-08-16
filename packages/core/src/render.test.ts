@@ -28,6 +28,7 @@ import {
   RENDER_SANDBOX_TIMEOUT_MS,
   RENDER_SANDBOX_VCPUS,
   type RenderDeps,
+  deckStillNeedsJob,
   isTransientRenderCode,
   reasonCodeFor,
   renderInputName,
@@ -773,6 +774,25 @@ describe("isTransientRenderCode: the CLOSED set behind the one automatic retry (
     expect(isTransientRenderCode("")).toBe(false);
     // The one deliberate exception, IN the closed list rather than a fallthrough branch:
     expect(isTransientRenderCode("render_failed")).toBe(true);
+  });
+});
+
+describe("deckStillNeedsJob: a terminal job row holds the reel only while the deck still needs it (33-04)", () => {
+  it("a generated scene needs its clip; a card/upload scene does not — that is what a kind-switch fix frees", () => {
+    expect(deckStillNeedsJob({ visual: "generated_video", narration: "x" }, "video")).toBe(true);
+    expect(deckStillNeedsJob({ visual: "text_card", narration: "x" }, "video")).toBe(false);
+    expect(deckStillNeedsJob({ visual: "uploaded_video", narration: "x" }, "video")).toBe(false);
+    // A BLOCK row (no `visual`) is a video by construction — behavior unchanged for block decks.
+    expect(deckStillNeedsJob({ narration: "x" }, "video")).toBe(true);
+  });
+  it("stills and voice follow the same rule: animated_image needs its still, a narrated scene its take", () => {
+    expect(deckStillNeedsJob({ visual: "animated_image", narration: "" }, "image")).toBe(true);
+    expect(deckStillNeedsJob({ visual: "generated_video", narration: "" }, "image")).toBe(false);
+    expect(deckStillNeedsJob({ visual: "text_card", narration: "hi" }, "tts")).toBe(true);
+    expect(deckStillNeedsJob({ visual: "text_card", narration: "  " }, "tts")).toBe(false);
+  });
+  it("a row whose scene the deck no longer has is history, not a hold", () => {
+    expect(deckStillNeedsJob(undefined, "video")).toBe(false);
   });
 });
 
