@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
-current_plan: 5 of 10 (phase 33)
+current_plan: 6 of 10 (phase 33)
 status: completed
-stopped_at: "Completed 33-05-PLAN.md — vault auto-save of the final reel + regenerate ordering. NOTE: the executing agent died on an API session limit AFTER all three task commits but BEFORE the SUMMARY, and left the suite RED: saveReelToVault added a 7th media audit site without the deliberate bump llmRedaction.test.ts requires. The orchestrator verified the new payload is refs-only (planId + docId + citations COUNT), widened MEDIA_AUDIT_ALLOWED, bumped the pins (literals 10->11, sites 6->7, renderReel 3->4) in 54535fd, and re-ran to green (83 files/1884 passed) before writing the SUMMARY. Second time in phase 33 a governance pin caught a plan's own new log-plane site — plans that add an audit site must budget for the bump. Next: 33-06 (reel-first canvas)."
-last_updated: "2026-08-16T11:00:00.000Z"
+stopped_at: "Completed 33-06-PLAN.md — the reel-first canvas. The media canvas is now HERO-then-STRIP for the whole lifecycle: trackerView folds the four-stage pipeline spine (generate/voice/assemble/captions) out of reads that were ALREADY reactive (byPlan's two job faces + renderStatus/captionStatus/renderRetriedAt) with `skipped` a first-class state and failure winning every roll-up; heroState picks tracker / video / held / failed, keeps both 20-10 traps (stale-vs-never-built, rendered-with-no-url) and adds 33-05's new one (a url with a non-rendered status is the PREVIOUS reel and says so); estimateView is ONE $X.XX headline over jobEstimate's totalCents, never re-added from the lines, with the breakdown in a native <details> and four rail refusal codes finally worded (unconfirmed_claims, deck_locked, no_alternate, nothing_to_render). Player is native <video autoPlay muted loop playsInline controls> — no player lib. NO logic entered MediaCanvas.tsx; no setInterval entered anything. Web 332 green (mediaCanvas 25->59 tests), tsc clean in apps/web AND packages/backend. This plan touched NO backend file, so the llmRedaction log-plane pins were untouched for once. Fixed in passing: KIND_COST_NOTE said a still is 'about a tenth of a clip' — measured it is a FORTIETH ($0.01 vs $0.40 at 4 s), wrong in three places. NOT browser-verified — 33-10 owns that gate and owes e2e hero/tracker assertions. Next: 33-07."
+last_updated: "2026-08-16T14:45:00.000Z"
 progress:
   total_phases: 53
   completed_phases: 31
   total_plans: 412
-  completed_plans: 285
+  completed_plans: 286
   percent: 69
 ---
 
@@ -18,15 +18,15 @@ progress:
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
-current_plan: 5 of 10 (phase 33)
+current_plan: 6 of 10 (phase 33)
 status: completed
-stopped_at: "Completed 33-05-PLAN.md — vault auto-save of the final reel + regenerate ordering. NOTE: the executing agent died on an API session limit AFTER all three task commits but BEFORE the SUMMARY, and left the suite RED: saveReelToVault added a 7th media audit site without the deliberate bump llmRedaction.test.ts requires. The orchestrator verified the new payload is refs-only (planId + docId + citations COUNT), widened MEDIA_AUDIT_ALLOWED, bumped the pins (literals 10->11, sites 6->7, renderReel 3->4) in 54535fd, and re-ran to green (83 files/1884 passed) before writing the SUMMARY. Second time in phase 33 a governance pin caught a plan's own new log-plane site — plans that add an audit site must budget for the bump. Next: 33-06 (reel-first canvas)."
-last_updated: "2026-08-16T11:00:00.000Z"
+stopped_at: "Completed 33-06-PLAN.md — the reel-first canvas. The media canvas is now HERO-then-STRIP for the whole lifecycle: trackerView folds the four-stage pipeline spine (generate/voice/assemble/captions) out of reads that were ALREADY reactive (byPlan's two job faces + renderStatus/captionStatus/renderRetriedAt) with `skipped` a first-class state and failure winning every roll-up; heroState picks tracker / video / held / failed, keeps both 20-10 traps (stale-vs-never-built, rendered-with-no-url) and adds 33-05's new one (a url with a non-rendered status is the PREVIOUS reel and says so); estimateView is ONE $X.XX headline over jobEstimate's totalCents, never re-added from the lines, with the breakdown in a native <details> and four rail refusal codes finally worded (unconfirmed_claims, deck_locked, no_alternate, nothing_to_render). Player is native <video autoPlay muted loop playsInline controls> — no player lib. NO logic entered MediaCanvas.tsx; no setInterval entered anything. Web 332 green (mediaCanvas 25->59 tests), tsc clean in apps/web AND packages/backend. This plan touched NO backend file, so the llmRedaction log-plane pins were untouched for once. Fixed in passing: KIND_COST_NOTE said a still is 'about a tenth of a clip' — measured it is a FORTIETH ($0.01 vs $0.40 at 4 s), wrong in three places. NOT browser-verified — 33-10 owns that gate and owes e2e hero/tracker assertions. Next: 33-07."
+last_updated: "2026-08-16T14:45:00.000Z"
 progress:
   [███████░░░] 69%
   completed_phases: 31
   total_plans: 412
-  completed_plans: 284
+  completed_plans: 285
 ---
 
 > **Counting note, 2026-08-14.** `total_phases` 52 → 53 reflects Phase 20.2 being registered, not new
@@ -1743,6 +1743,7 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 | 15.3 | 03 | 105 min | 7 | 15 |
 | 15.3 | 04 | 105 min | 6 | 17 |
 | 33 | 04 | 71 min | 3 | 11 |
+| 33 | 06 | 78 min | 3 | 4 |
 
 **Recent Trend:** 10-03 landed clean (web typecheck + playbook check green; SourceCard reused the existing briefingSheet style — no new card idiom).
 
@@ -2011,6 +2012,12 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - [Phase 33]: 33-04: ONE auto render retry per plan via the renderRetriedAt CAS inside recordRender (same batch, no dead letter, refs-only audit) — a dated narrow supersession of 20-16's no-retry rule, argued in media.md; the SECOND failure dead-letters byte-for-byte
 - [Phase 33]: 33-04: MEDIA_SANDBOX_USD_PER_RENDER doubled 0.02 -> 0.04 at its one source so the retry sandbox is RESERVED (label 'render (incl. one retry)'); a rare third sandbox from manual retryRender is accepted documented drift, never silent
 - [Phase 33]: 33-04: deckStillNeedsJob is the ONE predicate both evaluateRenderTrigger and batchToRender use for terminal job rows — the fix-menu (setSceneVisual/setSceneAsset, CONTENT-class, no shotsChangedAt) re-arms a held reel in the same mutation; a half-finished fix re-holds via hasAssetSource instead of scheduling a doomed render
+- [Phase 33]: 33-06: the canvas is HERO-then-STRIP and the hero slot exists from deck-pick — tracker before the reel, reel after, BOTH while regenerating; the layout never jumps when a render lands
+- [Phase 33]: 33-06: `skipped` is a first-class tracker state (a card/upload deck buys no picture, a silent deck is never transcribed) and failure wins every roll-up — no stage may say "waiting" about a job that will never be requested
+- [Phase 33]: 33-06: a url with a non-`rendered` renderStatus is the PREVIOUS reel and is labelled so — 33-05 holds the validated triple, so "there is a url" no longer means "this is current"
+- [Phase 33]: 33-06: estimateView's headline is jobEstimate's totalCents and is NEVER re-added from the lines (the render line is a constant no line-sum reproduces); a test feeds it inconsistent input to hold that
+- [Phase 33]: 33-06: incomplete_batch / not_all_succeeded / incomplete_blocks render as HELD not FAILED — the cure is a per-scene fix (33-04's re-arm), never a retry
+- [Phase 33]: 33-06: MEASURED CORRECTION — an animated still is a FORTIETH of a clip ($0.01 vs $0.40 at 4 s), not "about a tenth"; the wrong ratio was in UI copy, a source comment and media.md
 - [Phase 22.1]: Tenant export uses one registry-table page per tenantQuery continuation because Convex allows one paginate call per execution.
 - [Phase 22.1]: GOVN-03 stays pending after export; tenant deletion is 22.1-05 and provider-revocation posture remains separate.
 
@@ -2044,6 +2051,8 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
+Last session: 2026-08-16T14:45:00.000Z
+Stopped at: Completed 33-06-PLAN.md (reel-first canvas — hero + tracker + one-headline estimate)
 Last session: 2026-08-16T01:48:46.000Z
 Stopped at: Completed 33-04-PLAN.md
 Last session: 2026-08-15T22:52:39.751Z
