@@ -6499,7 +6499,7 @@ describe("33-05 saveReelToVault: one vault doc per plan, at every pipeline termi
       "docId",
       "planId",
     ]);
-    expect((saved[0]?.payload as { citations: number }).citations).toBe(1);
+    expect((saved[0]?.payload as { citations: number } | undefined)?.citations).toBe(1);
   });
 
   test("UPSERT idempotence: a second completion PATCHES the same doc — never a second row", async () => {

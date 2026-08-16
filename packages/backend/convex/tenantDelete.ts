@@ -1,16 +1,16 @@
 import {
-  deletableTables,
-  tenantTableScope,
   type DeletableTenantTable,
+  deletableTables,
   type TenantDeletionCursor,
+  tenantTableScope,
 } from "@pikar/core/tenantData";
 import { makeFunctionReference } from "convex/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation } from "./_generated/server";
-import { contentHash } from "./lib/hash";
 import { tenantAction } from "./lib/functions";
+import { contentHash } from "./lib/hash";
 
 export const TENANT_DELETE_BATCH_SIZE = 2;
 

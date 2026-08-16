@@ -1,5 +1,13 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-08-16 (**import ORDER only in `tenantDelete.ts` — no behaviour, no erasure
+> semantics, nothing below changes.** `biome ci` fails the build on `assist/source/organizeImports`,
+> and this file was one of exactly THREE real errors hiding under 93 local CRLF `format` diagnostics
+> on Windows. The `format` 93 are working-tree-only — `git ls-files --eol` shows `i/lf w/crlf`, so
+> CI's Linux checkout never sees them, which is precisely what let three build-breakers sit
+> unnoticed. Classify biome output by RULE NAME before believing a local red or a local green.
+> backend tenantDelete 6/6.)
+
 > Touched 2026-08-16 (eval-gate session) to clear the §9 Stop hook — **NOT a verification**, and
 > deliberately not a `Last verified` line. **`packages/backend/convex/tenantDelete.ts` +
 > `tenantDelete.test.ts` are newly REGISTERED to this playbook in `watch.json` by this session, and
