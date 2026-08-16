@@ -1,5 +1,29 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-16 (33-13 — **the cockpit's plan-kind switch gained ONE branch, and the
+> canvas gained a SECOND `useSendCockpitMessage` caller. Nothing else about the cockpit changed.**)
+>
+> `PlanCard` in `cards.tsx` now branches on `plan.proposalRefusal` **ahead of the memo card**: a
+> media run that produced no usable deck lands on a `kind: "memo"` row, and it was rendering as an
+> ordinary memo — Approve and Save over a reel that does not exist. It renders
+> `ProposalFailureCanvas` (the media surface's own failure card) instead. `CanvasPane` carries the
+> same branch ahead of its `kind !== "media"` empty state, for the reason 33-07 recorded: this
+> canvas has TWO mount points and anything wired into only one of them is the defect.
+>
+> **The retry is an ordinary chat turn.** `ProposalFailureCanvas` calls `useSendCockpitMessage()`
+> directly — the same hook, the same action, the same browser clock — so this canvas now has two
+> callers (`BriefRow`'s re-propose and this) and still **no second UI->dispatch entry point**. A
+> send with no `threadId` mints a NEW thread, so the button is disabled without one.
+>
+> `packages/backend/convex/plans.ts` (also watched here) changed by three small writes:
+> `landStoryboardRefusal` now stores the refusal CODE, and `persistDeck`/`resetPlan` clear it. The
+> `resetPlan` clear is the cockpit-facing one: without it a stale media refusal would put a
+> "couldn't build your storyboard" card on the next EMAIL draft composed in that thread.
+>
+> Verified: apps/web 24 files / 399 tests, backend dispatch 93/93 + media/plans/llmRedaction/skills
+> green, `tsc --noEmit` clean in `apps/web`, `packages/backend` and `packages/core`. Full detail
+> and the mutation checks are in [[media]].
+
 > Touched 2026-08-16 (refusal-code deploy lane) to clear the §9 Stop hook — **NOT a verification**,
 > and deliberately not a `Last verified` line. This session's cockpit-facing change
 > (`stageFinanceWrite`'s six refusal stamps) already has a real entry below. The hook re-fired on
