@@ -8,7 +8,7 @@ import { makeFunctionReference } from "convex/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { internalMutation } from "./_generated/server";
+import { internalMutation, type MutationCtx } from "./_generated/server";
 import { tenantAction } from "./lib/functions";
 import { contentHash } from "./lib/hash";
 
@@ -38,6 +38,76 @@ const auditLog = makeFunctionReference<
     payload: Record<string, string | number | boolean>;
   }
 >("audit:log");
+
+/**
+ * Delete the Convex Auth rows bound to the erased person, keyed by `userId`.
+ *
+ * WHY THIS IS NOT IN `TENANT_TABLE_CLASSIFICATION`: those tables belong to `@convex-dev/auth`, and
+ * they are keyed by `userId`, not `tenantId` — the registry-driven page loop below queries
+ * `by_tenant` and structurally cannot reach them. Excluding non-tenant tables is what keeps `audit`
+ * unreachable (CLAUDE.md §3), so the exclusion itself is right; the bug was assuming every excluded
+ * table should therefore SURVIVE.
+ *
+ * MEASURED CONSEQUENCE OF LEAVING THEM (production, 2026-08-16): erasure deleted the `users` row and
+ * left one `authAccounts` row pointing at it. Every later Google sign-in for that identity resolved
+ * that orphan, called `defaultCreateOrUpdateUser` against a document that no longer exists, and
+ * threw *"the user has been deleted but their account has not"* — a 500 on
+ * `/api/auth/callback/google` and a PERMANENT lockout, because re-registering matches the same
+ * orphan. Erasure has to remove the person's ability to sign in, not only their data; leaving the
+ * credential binding turns Art. 17 into an account brick.
+ *
+ * ORDERING mirrors the tenant walk — dependents before the row they reference (refresh tokens →
+ * sessions, verification codes → accounts) — so a failure part-way never strands a token pointing at
+ * a session that is already gone.
+ *
+ * NOT TOUCHED: `authRateLimits` is keyed by identifier, not user, and is abuse-control state rather
+ * than personal data; deleting it on request would hand every rate limit a free reset.
+ *
+ * ponytail: one transaction, no cursor — bounded by providers (≤3 accounts) and one person's session
+ * history. Page it the way the tenant tables page if a real account ever exceeds a mutation's write
+ * budget.
+ */
+async function deleteAuthCredentials(ctx: MutationCtx, userId: Id<"users">): Promise<number> {
+  let deleted = 0;
+
+  const sessions = await ctx.db
+    .query("authSessions")
+    .withIndex("userId", (q) => q.eq("userId", userId))
+    .collect();
+  for (const session of sessions) {
+    const tokens = await ctx.db
+      .query("authRefreshTokens")
+      .withIndex("sessionId", (q) => q.eq("sessionId", session._id))
+      .collect();
+    for (const token of tokens) {
+      await ctx.db.delete(token._id);
+      deleted++;
+    }
+    await ctx.db.delete(session._id);
+    deleted++;
+  }
+
+  // The account row LAST of the credential set: it is the one that actually bricks sign-in, so if
+  // anything above fails the binding is still present and the state stays diagnosable.
+  const accounts = await ctx.db
+    .query("authAccounts")
+    .withIndex("userIdAndProvider", (q) => q.eq("userId", userId))
+    .collect();
+  for (const account of accounts) {
+    const codes = await ctx.db
+      .query("authVerificationCodes")
+      .withIndex("accountId", (q) => q.eq("accountId", account._id))
+      .collect();
+    for (const code of codes) {
+      await ctx.db.delete(code._id);
+      deleted++;
+    }
+    await ctx.db.delete(account._id);
+    deleted++;
+  }
+
+  return deleted;
+}
 
 export const authorizeTenantDeletion = internalMutation({
   args: { tenantId: v.string(), userId: v.id("users") },
@@ -114,9 +184,11 @@ export const deleteTenantDataPage = internalMutation({
     if (tenantTableScope(table) === "identity") {
       const user = await ctx.db.get(args.userId);
       if (user && String(user._id) === args.tenantId) {
+        const authRowsDeleted = await deleteAuthCredentials(ctx, user._id);
         if (args.completion) {
           const payload: Record<string, string | number | boolean> = {
             tenantIdHash: args.completion.tenantIdHash,
+            deleted_authCredentials: authRowsDeleted,
           };
           for (const [deletedTable, count] of Object.entries(args.completion.deletedByTable)) {
             payload[`deleted_${deletedTable}`] = count;

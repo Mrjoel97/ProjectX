@@ -1,5 +1,36 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-08-16 (**erasure now deletes the Convex Auth binding too — it was leaving
+> the erased person permanently unable to sign in.**)
+>
+> MEASURED, ON PRODUCTION, NOT INFERRED. The 22.1-05 live erasure (request `a73023088f58ea6e`,
+> tenant `qd76g6zsn84679cb7k6rx6s4ad8cb233`) removed 1,538 rows including the `users` row, and left
+> **1 `authAccounts` row and 23 `authSessions` rows still pointing at it**. Every subsequent Google
+> sign-in resolved that orphan, called `defaultCreateOrUpdateUser` against a document that no longer
+> existed, and threw *"the user has been deleted but their account has not"* — HTTP 500 on
+> `/api/auth/callback/google`, and permanent, because re-registering matches the same orphan.
+>
+> **The rule this establishes:** `deletableTables()` excluding a table is a statement that the
+> registry cannot REACH it, not that it should SURVIVE. That exclusion is what keeps `audit`
+> unreachable (§3) and it stays. But Convex Auth's tables are keyed by `userId`, not `tenantId`, so
+> they were invisible to the `by_tenant` page loop and nobody had asked what should happen to them.
+> Erasure must remove the person's ability to sign in, not merely their rows — otherwise Art. 17
+> produces an account brick rather than a deletion.
+>
+> `deleteAuthCredentials()` in `tenantDelete.ts` now runs in the identity step, before the `users`
+> row goes: refresh tokens → sessions, verification codes → accounts, dependents always before the
+> row they reference. `authRateLimits` is deliberately untouched — it is keyed by identifier, not
+> user, and is abuse-control state, so honouring an erasure request with it would hand every rate
+> limit a free reset. The count is recorded in the `tenant.deleted` payload as
+> `deleted_authCredentials` (a count, never an identifier — §4).
+>
+> **Verification performed:** `tenantDelete.test.ts` gained a two-user case asserting the erased
+> identity keeps no `authAccounts`/`authSessions` row while a second user's rows survive — the
+> survivor is what stops a bulk "delete every auth row" implementation from passing. It was
+> mutation-checked: disabling the `deleteAuthCredentials` call turns that one test red and leaves
+> the other seven green. 41/41 green across `tenantDelete`, `tenantExport` and `isolation`;
+> `pnpm --filter @pikar/backend typecheck` clean.
+
 > Last verified: 2026-08-16 (25-01 — **the table registry gained a FIFTH category,
 > `admission_plane`, and the schema went 43 → 45 tables.**)
 >

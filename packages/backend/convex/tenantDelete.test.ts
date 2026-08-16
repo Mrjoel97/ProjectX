@@ -327,3 +327,57 @@ describe("tenant deletion is the tenant's own right, not an owner privilege", ()
     });
   });
 });
+
+describe("erasure removes the sign-in binding, not just the data", () => {
+  /**
+   * Regression for a PRODUCTION lockout (2026-08-16). Erasure deleted the `users` row and left the
+   * `authAccounts` row pointing at it, so every later Google sign-in resolved the orphan, called
+   * `defaultCreateOrUpdateUser` against a missing document and threw "the user has been deleted but
+   * their account has not" — a 500 on the OAuth callback, and permanent, because re-registering
+   * matched the same orphan. The erased person must not be left holding a credential binding.
+   */
+  test("deletes the erased user's auth account/session/token rows and leaves other users' alone", async () => {
+    const t = convexTest(schema, modules);
+    t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+
+    const seeded = await t.run(async (ctx) => {
+      const erased = await ctx.db.insert("users", { email: "erased@example.test" });
+      const survivor = await ctx.db.insert("users", { email: "survivor@example.test" });
+
+      for (const userId of [erased, survivor]) {
+        await ctx.db.insert("authAccounts", {
+          userId,
+          provider: "google",
+          providerAccountId: `google-${userId}`,
+        });
+        const session = await ctx.db.insert("authSessions", {
+          userId,
+          expirationTime: 1_786_830_300_000,
+        });
+        await ctx.db.insert("authRefreshTokens", {
+          sessionId: session,
+          expirationTime: 1_786_830_400_000,
+        });
+      }
+      return { erased, survivor };
+    });
+
+    await deleteAll(t, seeded.erased, seeded.erased);
+
+    await t.run(async (ctx) => {
+      const accounts = await ctx.db.query("authAccounts").collect();
+      const sessions = await ctx.db.query("authSessions").collect();
+      const tokens = await ctx.db.query("authRefreshTokens").collect();
+
+      // The erased identity keeps NO credential binding — this is the lockout guard.
+      expect(accounts.filter((r) => r.userId === seeded.erased)).toHaveLength(0);
+      expect(sessions.filter((r) => r.userId === seeded.erased)).toHaveLength(0);
+
+      // ...and erasure is still scoped: a bulk "delete every auth row" would also pass the two
+      // assertions above, so the survivor's rows are what make this test non-vacuous.
+      expect(accounts.filter((r) => r.userId === seeded.survivor)).toHaveLength(1);
+      expect(sessions.filter((r) => r.userId === seeded.survivor)).toHaveLength(1);
+      expect(tokens).toHaveLength(1);
+    });
+  });
+});
