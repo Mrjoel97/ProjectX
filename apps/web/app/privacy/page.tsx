@@ -12,7 +12,7 @@ import {
 export const metadata: Metadata = {
   title: "Privacy Policy — Pikar AI",
   description:
-    "How Pikar AI collects, uses, stores, shares, and protects personal data, including Google user data obtained through the gmail.modify scope, and your rights under the GDPR.",
+    "How Pikar AI collects, uses, stores, shares, and protects personal data, including Google user data obtained through the gmail.modify, calendar and drive.readonly scopes, Microsoft account data, and your rights under the GDPR.",
   alternates: { canonical: `${SITE}/privacy` },
 };
 
@@ -60,14 +60,20 @@ export default function Privacy() {
         </li>
         <li>
           <strong>Google user data.</strong> If you connect a Google account, the OAuth tokens that
-          permit our agents to act on your mailbox, and the content of the messages they read in
-          order to do so. This necessarily includes personal data about the people who write to you.
-          See section 4.
+          permit our agents to act on your mailbox, your calendar, and files in your Google Drive,
+          and the content of the messages, events, and documents they read in order to do so. This
+          necessarily includes personal data about the people who write to you. See section 4.
+        </li>
+        <li>
+          <strong>Microsoft account data.</strong> If you connect a Microsoft account, the OAuth
+          tokens that permit our agents to read and write your Outlook calendar, together with your
+          name and email address. The grant also covers reading and sending mail; see section 4 for
+          what we do and do not do with it today.
         </li>
         <li>
           <strong>Operational records.</strong> An append-only audit log of actions taken on your
           behalf. These records store references, identifiers, hashes, and counts — not the content
-          of your messages. See section 8.
+          of your messages. See section 9.
         </li>
         <li>
           <strong>Technical data.</strong> Data your browser sends when you use the service, such as
@@ -91,9 +97,9 @@ export default function Privacy() {
           — performance of a contract (Art. 6(1)(b)).
         </li>
         <li>
-          <strong>To connect your Google account</strong> — performance of a contract (Art.
-          6(1)(b)). You authorise the connection through Google&rsquo;s own consent screen and may
-          withdraw it at any time (section 9).
+          <strong>To connect your Google or Microsoft account</strong> — performance of a contract
+          (Art. 6(1)(b)). You authorise each connection through that provider&rsquo;s own consent
+          screen and may withdraw it at any time (section 10).
         </li>
         <li>
           <strong>To keep an audit log of actions taken on your behalf</strong> — our legitimate
@@ -109,22 +115,53 @@ export default function Privacy() {
       </ul>
       <p>
         We do not use your data for advertising, and we do not sell it. Where we rely on legitimate
-        interests, you have the right to object (section 9).
+        interests, you have the right to object (section 10).
       </p>
 
-      <h2>4. Google user data</h2>
+      <h2>4. Google user data, and Microsoft account data</h2>
       <p>
-        If you choose to connect a Google account, Pikar requests the <code>gmail.modify</code>{" "}
-        scope. Google classifies this as a <strong>restricted</strong> scope, because it grants wide
-        access to your mailbox. We want to be direct about what that means:
+        If you choose to connect a Google account, Pikar requests four scopes in a single consent:
       </p>
+      <ul>
+        <li>
+          <code>gmail.modify</code> — read, draft, send, and label mail in your mailbox. Google
+          classifies this as a <strong>restricted</strong> scope, because it grants wide access.
+        </li>
+        <li>
+          <code>calendar.freebusy</code> — read when you are busy, without reading event details.
+        </li>
+        <li>
+          <code>calendar.events</code> — create events on your calendar. Used today only to add an
+          event you have approved.
+        </li>
+        <li>
+          <code>drive.readonly</code> — read files in your Google Drive, so you can bring documents
+          into your knowledge vault. This is read-only across your whole Drive; we cannot modify or
+          delete anything in it.
+        </li>
+      </ul>
       <p>
         <strong>
-          Our agents can read the email in your mailbox, draft and send messages as you, and
-          organise your mail with labels.
+          Our agents can read the email in your mailbox, draft and send messages as you, organise
+          your mail with labels, see when you are busy, add calendar events you have approved, and
+          read files from your Drive.
         </strong>{" "}
         That access is what allows Pikar to act as an assistant rather than a text box. We do not
         pretend otherwise.
+      </p>
+      <p>
+        <strong>If you connect a Microsoft account</strong>, Pikar requests one grant covering{" "}
+        <code>Calendars.ReadWrite</code>, <code>Mail.Send</code>, <code>Mail.Read</code>,{" "}
+        <code>offline_access</code>, and your basic identity (<code>openid</code>,{" "}
+        <code>profile</code>, <code>email</code>). We ask for the mail permissions at the same time
+        as the calendar ones so that you consent once rather than twice.{" "}
+        <strong>
+          Outlook mail is not implemented yet: today we use only the calendar and identity
+          permissions, and no code in the product reads or sends Microsoft mail.
+        </strong>{" "}
+        We tell you this rather than let a granted-but-unused permission sit undisclosed. When the
+        mail feature ships, its behaviour will be the same as the Gmail behaviour described here,
+        and we will update this policy before it does.
       </p>
       <ul>
         <li>
@@ -150,9 +187,9 @@ export default function Privacy() {
           that purpose and is not retained beyond what is needed to do it.
         </li>
         <li>
-          <strong>It reaches our AI provider.</strong> To draft or summarise, message content is
-          sent to the large-language-model provider named in section 7, under contractual terms that
-          forbid retaining it or training on it.
+          <strong>It reaches our AI providers.</strong> To draft, summarise, or search your vault,
+          content is sent to the large-language-model and embedding providers named in section 7 —
+          OpenAI and Google — under contractual terms that forbid retaining it or training on it.
         </li>
         <li>
           <strong>It never reaches our audit log.</strong> The append-only log records references,
@@ -226,24 +263,48 @@ export default function Privacy() {
           <strong>Convex</strong> — application backend and database.
         </li>
         <li>
-          <strong>Vercel</strong> — hosting of this website and the application interface, and its
-          AI Gateway, which routes our model requests to the provider below. The AI Gateway
-          transmits message content in order to route it; it does not retain or train on it.
+          <strong>Vercel</strong> — hosting of this website and the application interface. Our model
+          requests do not pass through Vercel; we call each AI provider directly.
         </li>
         <li>
           <strong>Amazon Web Services</strong> — immutable archival storage of the audit log.
         </li>
         <li>
-          <strong>Google</strong> — reading, organising, and sending mail in your connected mailbox,
-          via the Gmail API.
+          <strong>Google</strong> — in two distinct roles. As your connected account provider:
+          reading, organising and sending mail, reading your calendar and creating events, and
+          reading Drive files, via Google&rsquo;s APIs. Separately, as an{" "}
+          <strong>AI provider</strong>: Google&rsquo;s Gemini models generate content and produce
+          the embeddings that make your vault searchable, and receive the content processed for
+          those purposes.
         </li>
         <li>
-          <strong>OpenAI</strong> — generation of plans, summaries, and drafts. Reached through
-          Vercel&rsquo;s AI Gateway (above), OpenAI receives the content of messages our agents read
-          in order to produce them. We use it only under API terms that forbid retention and forbid
+          <strong>Microsoft</strong> — reading and writing your Outlook calendar, via the Microsoft
+          Graph API, if you connect a Microsoft account.
+        </li>
+        <li>
+          <strong>OpenAI</strong> — generation of plans, summaries, and drafts, and embeddings for
+          vault search. OpenAI receives the content of messages and documents our agents read in
+          order to produce them. We use it only under API terms that forbid retention and forbid
           training on your data, as Google&rsquo;s restricted-scope policy requires.
         </li>
+        <li>
+          <strong>fal.ai</strong> — image, video, and speech generation. It receives the prompts and
+          any source images or audio for media you ask us to create.
+        </li>
+        <li>
+          <strong>Alibaba Cloud (Model Studio)</strong> — image and video generation using the WAN
+          models. It receives the prompts and source assets for that media. See section 8.
+        </li>
+        <li>
+          <strong>Tavily</strong> — web search, when an agent needs current information. It receives
+          the search query, which is screened for personal data before it is sent.
+        </li>
       </ul>
+      <p>
+        Not every provider is involved in every request. Your connected-account providers are used
+        only if you connect them; the media and web-search providers are used only when you ask for
+        work that needs them.
+      </p>
       <p>
         We do not sell personal data, and we do not share it with advertisers or data brokers. We
         may disclose data where required by law, or to establish or defend legal claims.
@@ -251,11 +312,17 @@ export default function Privacy() {
 
       <h2>8. International transfers</h2>
       <p>
-        Our providers are established in, or process data in, the United States. Where personal data
-        is transferred outside the UK or European Economic Area, we rely on the European
-        Commission&rsquo;s Standard Contractual Clauses, the UK International Data Transfer
+        Most of our providers are established in, or process data in, the United States.{" "}
+        <strong>One is not:</strong> media generation on the WAN models is routed to Alibaba Cloud
+        Model Studio, whose endpoint we configure by region and which is located outside the United
+        States, in Asia-Pacific. This applies only if you ask Pikar to generate images or video.
+      </p>
+      <p>
+        Where personal data is transferred outside the UK or European Economic Area, we rely on the
+        European Commission&rsquo;s Standard Contractual Clauses, the UK International Data Transfer
         Addendum, or an adequacy decision, as applicable to each provider. You may request a copy of
-        the safeguards in place by writing to <a href={`mailto:${CONTACT}`}>{CONTACT}</a>.
+        the safeguards in place, including the specific region a provider processes in, by writing
+        to <a href={`mailto:${CONTACT}`}>{CONTACT}</a>.
       </p>
 
       <h2>9. Retention, and the immutable audit archive</h2>
@@ -265,9 +332,11 @@ export default function Privacy() {
         required by Article 12(3) GDPR.
       </p>
       <p>
-        Audit records are retained as an immutable compliance log, and are exported to write-once
-        storage that <strong>cannot be modified or deleted</strong>, including by us. That is the
-        point of the log: the system that writes it must not be able to rewrite it.
+        Audit records are retained as an immutable compliance log. The application can only ever
+        append to it: there is no code path in Pikar that can modify or delete an audit record, by
+        design. Those records are additionally exported to write-once archival storage that{" "}
+        <strong>cannot be modified or deleted</strong>, including by us. That is the point of the
+        log: the system that writes it must not be able to rewrite it.
       </p>
       <p>
         For this reason the audit log is designed to hold{" "}
