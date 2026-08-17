@@ -669,6 +669,11 @@ function variationRefusalBody(bad: Extract<ParsedVariations, { kind: "refused" }
  * bugs. A NON-ZERO token count beside `reason: "no_deck"` now says it plainly: the deck was there
  * and the heading is what failed.
  *
+ * Narrowed 2026-08-17: `no_deck` no longer also means "the heading was there and the TABLE could
+ * not be read" — that is `unreadable_deck` now, with its own sentence. So `no_deck` beside a
+ * non-zero `sceneDeckTokens` is a much sharper signal than it was: the token is in the body and
+ * `headingAt` still did not match it.
+ *
  * `bad_target_duration` has the SAME two-cause problem, and the first fix missed it: the specialist
  * never declared a target, or it declared one this file could not read. `targetDurationTokens`
  * separates them — non-zero means the line was written and the VALUE or its decoration is what
@@ -858,6 +863,12 @@ async function persistStoryboard(
    * deck; falling through to `parseBlockDeck` there would read its rows under the uniform contract
    * and quietly propose a reel nobody wrote.
    *
+   * That sentence was TRUE OF THE INTENT AND FALSE OF THE CODE until 2026-08-17: `parseSceneDeck`
+   * returned `no_deck` from THREE places — heading absent, no table header row, and a missing
+   * required column — and only the first is "no scene deck at all". Splitting the latter two out
+   * as `unreadable_deck` is what makes this guard mean what it says. If you add a new early return
+   * to either parser, ask which of the two it is; a reason code read by a branch is a contract.
+   *
    * 33-03 — VARIATIONS PARSE FIRST, above both contracts, and the same refusal-over-fallback rule
    * one level up: a body that DECLARED two variations and delivered a broken one refuses the whole
    * proposal — quietly landing the surviving deck would propose "the" reel when the specialist
@@ -931,6 +942,12 @@ async function persistStoryboard(
   }
 
   const scene = parseSceneDeck(res.body);
+  // `no_deck` NOW MEANS WHAT THIS GUARD ALWAYS CLAIMED IT MEANT: the SCENE DECK heading is absent.
+  // Until 2026-08-17 the same code also came back when the heading WAS there and only its table
+  // could not be read (no header row, or a renamed required column). Those bodies fell through to
+  // `parseBlockDeck`, which found no BLOCK DECK heading either, and the owner was told "it never
+  // wrote a block deck" about a scene deck sitting fully written in the response. They are
+  // `unreadable_deck` now and REFUSE here, as every other non-`no_deck` scene refusal already did.
   if (scene.ok || scene.reason !== "no_deck") {
     await persistSceneDeck(ctx, args, res.body, scene, { brief: parseBrief(res.body) });
     return res;

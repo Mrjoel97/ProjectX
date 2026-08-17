@@ -217,7 +217,7 @@ describe("parseBlockDeck — discriminated refusals, never a throw", () => {
     if (!r.ok) expect(r.reason).toBe("mixed_durations");
   });
 
-  it("a table missing a required column → no_deck", () => {
+  it("a table missing a required column → unreadable_deck (the heading IS here)", () => {
     const body = [
       "BLOCK DECK",
       "Clip seconds: 10",
@@ -227,7 +227,7 @@ describe("parseBlockDeck — discriminated refusals, never a throw", () => {
     ].join("\n");
     const r = parseBlockDeck(body);
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.reason).toBe("no_deck");
+    if (!r.ok) expect(r.reason).toBe("unreadable_deck");
   });
 
   it("garbage never throws", () => {
@@ -928,7 +928,9 @@ describe("parseSceneDeck — shape and tolerance", () => {
       "|---|--------|-------------|-----------|",
       `| 1 | animated_image | A still | ${S1} |`,
     ].join("\n");
-    expect(parseSceneDeck(noSeconds)).toMatchObject({ reason: "no_deck" });
+    // `unreadable_deck` since 2026-08-17, NOT `no_deck`: the heading is right there in this
+    // fixture, and `no_deck` is the code persistStoryboard falls back to the block contract on.
+    expect(parseSceneDeck(noSeconds)).toMatchObject({ reason: "unreadable_deck" });
   });
 
   it("refuses a deck with a header and no rows", () => {
@@ -1514,5 +1516,85 @@ describe("a decorated label is the SAME label", () => {
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.reason).toBe("bad_target_duration");
+  });
+});
+
+/**
+ * `no_deck` MEANS THE HEADING IS ABSENT — the third gate, 2026-08-17.
+ *
+ * Both parsers returned `no_deck` from THREE places: the heading, the table's header row, and a
+ * missing required column. Only the first is "this body has no deck". `persistStoryboard` falls
+ * back to `parseBlockDeck` on `no_deck` ALONE, with a comment stating that guard means "no SCENE
+ * DECK heading at all" — so a scene deck with one renamed column fell through to the block
+ * contract, found no BLOCK DECK heading, and the owner was told **"it never wrote a block deck"**
+ * about a deck sitting fully written in the response. That is what production said after the
+ * heading and label fixes landed.
+ *
+ * The table-shaped failures are `unreadable_deck` now. The distinction is load-bearing: a branch
+ * reads it, so these tests assert the CODE, not just that something refused.
+ */
+describe("no_deck means the heading is absent, and nothing else", () => {
+  /** A scene deck whose columns are plausible synonyms the parser does not know. */
+  const renamedColumns = (rows: readonly string[]) =>
+    [
+      "SCENE DECK",
+      "Target duration: 30",
+      "",
+      "| # | Shot | Length | Scene | Script |",
+      "|---|------|--------|-------|--------|",
+      ...rows,
+      "",
+    ].join("\n");
+
+  it("a scene deck with unreadable columns is unreadable_deck, NOT no_deck", () => {
+    const r = parseSceneDeck(renamedColumns(SCENES));
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    // The whole point: this must NOT be the code persistStoryboard falls back to the block contract on.
+    expect(r.reason).toBe("unreadable_deck");
+  });
+
+  it("a scene deck heading with no table at all is unreadable_deck too", () => {
+    const r = parseSceneDeck("SCENE DECK\nTarget duration: 30\n\nI'll fill the shots in shortly.");
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.reason).toBe("unreadable_deck");
+  });
+
+  it("a block deck with unreadable columns is unreadable_deck, NOT no_deck", () => {
+    const body = [
+      "BLOCK DECK",
+      "Clip seconds: 10",
+      "",
+      "| # | Kind | Words |",
+      "|---|---|---|",
+      "| 1 | a | b |",
+    ].join("\n");
+    const r = parseBlockDeck(body);
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.reason).toBe("unreadable_deck");
+  });
+
+  it("a body with genuinely NO heading is still no_deck — the fallback must keep working", () => {
+    for (const parse of [parseSceneDeck, parseBlockDeck]) {
+      const r = parse("Here's my idea for the ad. It should feel warm and unhurried.");
+      expect(r.ok).toBe(false);
+      if (r.ok) return;
+      expect(r.reason).toBe("no_deck");
+    }
+  });
+
+  it("both contracts say the columns out loud instead of borrowing 'it never wrote a deck'", () => {
+    for (const contract of ["scene", "block"] as const) {
+      const clause = deckRefusalClause(contract, "unreadable_deck");
+      expect(clause).not.toBe(GENERIC_DECK_REFUSAL);
+      expect(clause).toMatch(/could not be read/i);
+      expect(clause).toMatch(/columns/i);
+      expect(clause).not.toMatch(/never wrote/i);
+    }
+    // And the two contracts still name their OWN columns — one vocabulary, two tables.
+    expect(deckRefusalClause("scene", "unreadable_deck")).toMatch(/Visual, Seconds/);
+    expect(deckRefusalClause("block", "unreadable_deck")).toMatch(/Type, Description/);
   });
 });

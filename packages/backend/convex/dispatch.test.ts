@@ -1972,6 +1972,45 @@ describe("20-08 — a media dispatch proposes a deck and spends nothing but toke
     expect(payload?.reason).toBe("no_deck");
   });
 
+  test("a SCENE deck the parser cannot read refuses as a SCENE deck — it does not fall through to the block contract", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    // The heading is right there and the target parses. Only the COLUMNS are synonyms this parser
+    // does not know — which is exactly what production returned on 2026-08-17 after the heading and
+    // label fixes landed, and the owner was told "it never wrote a block deck" about this body.
+    const body = [
+      "SCENE DECK",
+      "Target duration: 30",
+      "",
+      "| # | Shot | Length | Scene | Script |",
+      "|---|------|--------|-------|--------|",
+      "| 1 | animated_image | 15 | A workbench at dawn | We stitch every seam by hand. |",
+      "| 2 | text_card | 15 | The logo on white | Zawadi. Made by hand. |",
+    ].join("\n");
+
+    await t.action(
+      internal.dispatch.__runSpecialistWithScript,
+      mediaArgs(planId, { primary: [{ ...textStep(body), usage: SPEND_8_CENTS }] }),
+    );
+
+    const plan = await readPlan(t, planId);
+    expect(plan?.shots).toBeUndefined();
+    // THE REGRESSION GUARD: the block contract's sentence must never describe a scene body.
+    expect(plan?.body).not.toContain("never wrote a block deck");
+    expect(plan?.body).not.toContain("never wrote a scene deck");
+    // It says what is actually wrong, in the SCENE contract's own vocabulary.
+    expect(plan?.body).toContain("could not be read");
+    expect(plan?.body).toContain("Visual, Seconds");
+
+    const audit = (await readLineage(t)).filter((r) => r.eventType === "media.deck_refused");
+    expect(audit).toHaveLength(1);
+    const payload = audit[0]?.payload as Record<string, unknown>;
+    expect(payload.reason).toBe("unreadable_deck");
+    // The counts still ride along, and they corroborate the code: the deck token IS in the body.
+    expect(payload.sceneDeckTokens).toBe(1);
+    expect(payload.targetDurationTokens).toBe(1);
+  });
+
   test("an OVER-LENGTH narration is refused with the block and the count, and the text never leaks", async () => {
     const { t } = await setup();
     const planId = await stagedMediaPlan(t);
