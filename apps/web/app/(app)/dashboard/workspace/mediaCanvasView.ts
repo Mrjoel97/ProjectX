@@ -1466,6 +1466,15 @@ export function adjustmentNotes(
         ? `${head} — the seconds freed above went back into it, so the reel is still its full length.`
         : `${head} — the seconds freed above went back into it, so the reel is still ${targetDurationSeconds} seconds.`;
     }
+    // The narration repair trades seconds between two scenes, and the pair is emitted receiver-
+    // first — so the donor's sentence can point AT the one above it, the way `rebalance` does.
+    // Reading the direction off the numbers rather than off a second `why` is what keeps the two
+    // halves from ever swapping sentences.
+    if (a.why === "narration") {
+      return a.toSeconds > a.fromSeconds
+        ? `${head} — so its spoken line has room to finish before the next one starts.`
+        : `${head} — those seconds went to the scene above, so its line has room to finish.`;
+    }
     return `${head}.`;
   });
 }

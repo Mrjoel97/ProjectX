@@ -595,6 +595,11 @@ export function narrationCeilingSeconds(scenes: readonly Scene[], i: number): nu
  * off-grid generated clip snapped to a length the provider can actually make; `rebalance` is the
  * scene that took those seconds back so the reel stays exactly as long as the user asked.
  *
+ * `narration` is the second repair (`repairNarrationWindows`): seconds traded between two scenes so
+ * a spoken line has room to finish before the next one starts. It appears in PAIRS — the scene that
+ * grew, then the scene that paid — and the DIRECTION is read off the numbers, never off a separate
+ * code, so the two halves can never swap sentences.
+ *
  * It exists to be SHOWN. A parser that quietly rewrites the user's reel is the same defect class
  * as a figure whose provenance is invented — the change may be right, but it must not be silent.
  */
@@ -602,7 +607,7 @@ export type SceneAdjustment = {
   sceneIndex: number;
   fromSeconds: number;
   toSeconds: number;
-  why: "grid" | "rebalance";
+  why: "grid" | "rebalance" | "narration";
 };
 
 export type ParsedSceneDeck =
@@ -887,11 +892,20 @@ export function parseSceneDeck(body: string): ParsedSceneDeck {
   // ALL of them it is a deck that forgot the voiceover, and the tts lines would price zero.
   if (scenes.every((s) => s.narration === "")) return sceneFail("no_narration");
 
+  // SECONDS, NEVER WORDS. Before refusing an overrunning line, try to buy it the time it needs by
+  // trading duration between scenes — see `repairNarrationWindows` for why the only legal trade is
+  // "lengthen inside the window, shrink outside it". `null` means unchanged, so a deck that already
+  // fits keeps the exact scenes and the exact adjustment list the grid pass produced.
+  const repaired = repairNarrationWindows(scenes);
+  const finalScenes = repaired?.scenes ?? scenes;
+  const finalAdjustments = repaired ? [...adjustments, ...repaired.adjustments] : adjustments;
+
   // The ONE narration rule left: a line must not run into the next line. No floor — see the
-  // header note.
-  for (const [index, scene] of scenes.entries()) {
+  // header note. Still the LAST word: a repair that could not fix every window leaves the deck
+  // exactly as it was, and this loop refuses it on the same terms as before.
+  for (const [index, scene] of finalScenes.entries()) {
     if (scene.narration === "") continue;
-    const availableSeconds = narrationCeilingSeconds(scenes, index);
+    const availableSeconds = narrationCeilingSeconds(finalScenes, index);
     if (scene.narration.length > availableSeconds * MAX_CHARS_PER_SECOND) {
       return {
         ok: false,
@@ -906,8 +920,8 @@ export function parseSceneDeck(body: string): ParsedSceneDeck {
   return {
     ok: true,
     targetDurationSeconds: targetDurationSeconds as TargetDuration,
-    scenes,
-    adjustments,
+    scenes: finalScenes,
+    adjustments: finalAdjustments,
   };
 }
 
@@ -975,6 +989,141 @@ function repairGeneratedGrid(
     why: "rebalance",
   });
   return { seconds, adjustments };
+}
+
+/** The shortest a scene may be left after donating seconds. Nothing else in the contract sets a
+ *  floor (`repairGeneratedGrid` only rejects `<= 0`), and a one-second flash is not a scene — it
+ *  is a glitch the user never asked for. A repair that would produce one refuses instead. */
+export const MIN_DONOR_SECONDS = 2;
+
+/** Re-derive `durationMs`/`startMs` from a seconds array. The scenes are otherwise untouched —
+ *  narration, prompt, asset and citation fields ride through by spread. */
+const restartScenes = (scenes: readonly Scene[], seconds: readonly number[]): Scene[] => {
+  let startMs = 0;
+  return scenes.map((s, j) => {
+    const durationMs = (seconds[j] as number) * 1000;
+    const moved = { ...s, durationMs, startMs };
+    startMs += durationMs;
+    return moved;
+  });
+};
+
+/**
+ * Give ONE overrunning line the seconds it needs, by moving duration between scenes.
+ *
+ * THE GEOMETRY, which is not the one the refusal makes it look like. `narration_too_long` names a
+ * `sceneIndex`, so the fix reads as local — and it never is. `narrationCeilingSeconds(scenes, i)`
+ * is `start(next narrated) - start(i)`, which is exactly **the sum of the durations of the scenes
+ * from `i` up to the next narrated one** (or to the end of the reel when `i` speaks last). Call
+ * that span the WINDOW.
+ *
+ * Three consequences, and every one of them is a way the obvious repair does nothing:
+ *  * Shrinking a scene BEFORE `i` moves `start(i)` and `start(next narrated)` by the same amount.
+ *  * Shrinking a silent scene INSIDE the window is zero-sum — it is already counted.
+ *  * Lengthening the offending scene while paying for it from inside the window is both at once.
+ *
+ * So the ONLY move that widens a window is: **lengthen a scene inside the span, shrink one
+ * outside it.** That single rule is uniform across both shapes of the window — when `i` speaks
+ * last the span runs to the end of the reel, "outside" can only mean before `i`, and the sum grows
+ * exactly the same way.
+ *
+ * THE LIMITS, each forced rather than chosen:
+ *  1. **Seconds, never words.** No narration cell is read except for its LENGTH. Rewriting a line
+ *     to fit would put words in the user's mouth — the provenance rule, and the reason this
+ *     function moves time instead of text.
+ *  2. **Never a `generated_video`, at either end.** Resizing one puts it off the provider's
+ *     4/8/12 grid — the exact defect `repairGeneratedGrid` exists to prevent, and it would be
+ *     absurd to reintroduce it here.
+ *  3. **The total never moves.** Donor and receiver trade the same whole number of seconds, so
+ *     the exact-length rule still holds and the generated clips are still priced at what the user
+ *     approved.
+ *
+ * Returns null for "nothing to do, or nothing safe to do" — the caller then refuses exactly as it
+ * did before this function existed. Every second it moves is reported as a `SceneAdjustment`,
+ * because a parser that quietly rewrites the user's reel is the defect class this repo bans.
+ */
+function widenNarrationWindow(
+  scenes: readonly Scene[],
+  i: number,
+): { scenes: Scene[]; adjustments: SceneAdjustment[] } | null {
+  const self = scenes[i];
+  if (!self) return null;
+  const deficit =
+    Math.ceil(self.narration.length / MAX_CHARS_PER_SECOND) - narrationCeilingSeconds(scenes, i);
+  if (deficit <= 0) return null;
+
+  // The span whose durations SUM to the window. `-1` (nothing narrated after `i`) means it runs to
+  // the end of the reel, and "outside" then means "before `i`" — see the note above.
+  const next = scenes.findIndex((s, j) => j > i && s.narration !== "");
+  const spanEnd = next === -1 ? scenes.length : next;
+  const inSpan = (j: number) => j >= i && j < spanEnd;
+
+  const receiver = scenes.findIndex((s, j) => inSpan(j) && s.visual !== "generated_video");
+  if (receiver === -1) return null; // a span of nothing but generated clips cannot grow
+
+  // The donor with the most to give, so one trade covers as much as any single trade can.
+  let donor = -1;
+  let most = 0;
+  for (const [j, s] of scenes.entries()) {
+    if (inSpan(j) || s.visual === "generated_video") continue;
+    const slack = s.durationMs / 1000 - MIN_DONOR_SECONDS;
+    if (slack >= deficit && slack > most) {
+      donor = j;
+      most = slack;
+    }
+  }
+  if (donor === -1) return null;
+
+  const seconds = scenes.map((s) => s.durationMs / 1000);
+  const wasReceiver = seconds[receiver] as number;
+  const wasDonor = seconds[donor] as number;
+  seconds[receiver] = wasReceiver + deficit;
+  seconds[donor] = wasDonor - deficit;
+  return {
+    scenes: restartScenes(scenes, seconds),
+    adjustments: [
+      {
+        sceneIndex: receiver,
+        fromSeconds: wasReceiver,
+        toSeconds: wasReceiver + deficit,
+        why: "narration",
+      },
+      { sceneIndex: donor, fromSeconds: wasDonor, toSeconds: wasDonor - deficit, why: "narration" },
+    ],
+  };
+}
+
+/**
+ * Run `widenNarrationWindow` until every line fits, or until one cannot be fixed.
+ *
+ * Bounded by the scene count rather than looped to a fixed point: a trade that widens one window
+ * necessarily narrows something elsewhere, so an unbounded loop could ping-pong between two lines
+ * forever. One pass per scene is more than any deck needs, and running out is treated as "not
+ * safely repairable" — the deck refuses, which is where it started.
+ *
+ * `null` means UNCHANGED (nothing needed fixing, or nothing could be), so the caller keeps the
+ * scenes it built. That is what leaves a deck the model got right byte-for-byte untouched.
+ */
+function repairNarrationWindows(
+  scenes: readonly Scene[],
+): { scenes: Scene[]; adjustments: SceneAdjustment[] } | null {
+  let current = [...scenes];
+  const adjustments: SceneAdjustment[] = [];
+  for (let pass = 0; pass < scenes.length; pass++) {
+    const offender = current.findIndex(
+      (s, j) =>
+        s.narration !== "" &&
+        s.narration.length > narrationCeilingSeconds(current, j) * MAX_CHARS_PER_SECOND,
+    );
+    if (offender === -1) {
+      return adjustments.length === 0 ? null : { scenes: current, adjustments };
+    }
+    const traded = widenNarrationWindow(current, offender);
+    if (traded === null) return null;
+    current = traded.scenes;
+    adjustments.push(...traded.adjustments);
+  }
+  return null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════════

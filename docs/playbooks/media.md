@@ -1,5 +1,61 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-08-18 (**a long line now BUYS seconds instead of losing the deck.**
+> storyboard 132/132, @pikar/core 1049/1049, mediaCanvas 124/124, media+dispatch+cockpit 405/405,
+> core + backend typechecks clean. All four limits mutation-proven.)
+>
+> **The report.** A two-variation proposal came back with only variation A: B refused
+> `narration_too_long` and the salvage note (33-11/33-13) said so. The owner asked to see both.
+> There was nothing to see — a refused variation is never persisted, so the fix had to be upstream
+> of the canvas: stop losing the deck at all.
+>
+> **THE GEOMETRY, which is not the one the refusal makes it look like.** `narration_too_long` names
+> a `sceneIndex`, so the fix reads as local, and it never is.
+> `narrationCeilingSeconds(scenes, i)` is `start(next narrated) - start(i)` — which is exactly **the
+> sum of the durations of scenes `i … nextNarrated-1`**. Call that span the WINDOW. Three
+> consequences, and each is a way the obvious repair does nothing at all:
+>
+> * Shrinking a scene BEFORE `i` moves both endpoints by the same amount.
+> * Shrinking a silent scene INSIDE the window is zero-sum — it is already counted.
+> * Lengthening the offending scene and paying for it from inside the window is both at once.
+>
+> So the ONLY move that widens a window is **lengthen a scene inside the span, shrink one outside
+> it**, and that rule is uniform across both shapes of the window: when `i` speaks last the span
+> runs to the end of the reel, "outside" can only mean before `i`, and the sum grows identically.
+> `repairNarrationWindows` + `widenNarrationWindow` in `@pikar/core/storyboard` do exactly that,
+> bounded to one pass per scene so two lines cannot ping-pong forever.
+>
+> **The three limits, each forced rather than chosen:**
+>
+> 1. **Seconds, never words.** No narration cell is read except for its LENGTH. Rewriting a line to
+>    fit would put words in the user's mouth — the provenance rule, and the whole reason this moves
+>    time instead of text.
+> 2. **Never a `generated_video`, at either end.** Resizing one puts it off the provider's 4/8/12
+>    grid — the exact defect `repairGeneratedGrid` exists to prevent.
+> 3. **The total never moves.** Donor and receiver trade the same whole number of seconds, so the
+>    exact-length rule holds and the generated clips are still priced at what the user approved.
+>
+> Plus a floor: `MIN_DONOR_SECONDS = 2`. Nothing else in the contract sets one (`repairGeneratedGrid`
+> only rejects `<= 0`), and a one-second flash is a glitch, not a scene. A repair that would produce
+> one refuses instead.
+>
+> **Disclosed, like every other moved second.** `SceneAdjustment.why` gains `"narration"` and the
+> pair is emitted RECEIVER-FIRST, so `adjustmentNotes` reads the direction off the numbers and the
+> donor's sentence can point at the scene above it. The Convex validator is `why: v.string()` — the
+> closed set lives in `@pikar/core` — so no schema change was needed.
+>
+> **Mutation results, because a repair that silently does nothing is the failure mode here.** Donor
+> may be a generated clip → CAUGHT. No donor floor → CAUGHT. Receiver may be a generated clip →
+> CAUGHT. Donor may come from inside the window → SURVIVED the first fixture, and the test that
+> kills it ("takes from OUTSIDE the window even when a longer scene sits inside it") was added for
+> exactly that reason. **Do not delete it**: without the guard the repair burns every pass on trades
+> that buy nothing, and a deck that should land refuses.
+>
+> **NOT changed, deliberately.** The variation compare region is still a switcher — the alternate
+> gets a summary card and you switch to see it in full. Left alone because "which deck is picked" is
+> the same state as "which deck gets bought" (`jobEstimate` prices whatever is in `shots`), and an
+> expand-both UI splits that into two states the money path would have to track.
+
 > Last verified: 2026-08-18 (the THIRD gate, found by shipping the second and watching production
 > — **`no_deck` MEANS THE HEADING IS ABSENT, AND NOTHING ELSE.** storyboard 127/127, @pikar/core
 > 1044/1044, dispatch 98/98, backend 2034/2034, three typechecks clean, mutation-proven.)
@@ -969,6 +1025,19 @@ ADR rather than editing this page.
 - **Blocks are fixed-length and uniform** (D8). A clip shorter than its window is a HARD ERROR, never
   a held still frame. **No time-stretch, ever** — no `atempo`, no `setpts`, no TTS `speed`. A test in
   `media.test.ts` greps for those tokens.
+- **The parser may move SECONDS between scenes; it may never move WORDS.** Two repairs do this —
+  `repairGeneratedGrid` (off-grid clip → provider grid) and `repairNarrationWindows` (a line that
+  would run into the next one). Both keep the reel's declared total EXACT, both refuse to resize a
+  `generated_video` at either end, and both report every moved second as a `SceneAdjustment` that
+  the canvas renders. **A repair that cannot obey all three refuses instead** — returning `null`
+  leaves the deck exactly as the model wrote it and the original refusal stands. Rewriting a
+  narration line to fit is the one fix that is permanently out of bounds: it puts words in the
+  user's mouth.
+- **A narration window is a SPAN, not a scene.** `narrationCeilingSeconds(scenes, i)` sums the
+  durations of scenes `i … nextNarrated-1`, so seconds taken from inside that span buy zero
+  characters. Any repair must lengthen INSIDE the span and shrink OUTSIDE it. The test
+  `"takes from OUTSIDE the window even when a longer scene sits inside it"` is the only thing
+  standing between that rule and a repair that quietly does nothing.
 - **The JOB is the priced and reserved unit** — not the shot, not the clip.
 - **The cents floor is applied ONCE, on the batch total** (D12a). Never per line item: a 6-block
   reel's true $0.012 voice cost becomes $0.06 that way — a 5× over-reservation that compounds on

@@ -869,6 +869,108 @@ describe("parseSceneDeck — narration has a ceiling and NO floor", () => {
   });
 });
 
+/**
+ * SECONDS, NEVER WORDS. A line that overruns its window is repaired by moving DURATION between
+ * scenes — the narration text is never touched, and the reel stays exactly as long as it was.
+ *
+ * The geometry is the whole design, and it is not the one it looks like. `narrationCeilingSeconds`
+ * is `start(next narrated scene) - start(self)`, so scene i's window is the SUM of scenes
+ * `i … nextNarrated-1`. Shrinking a scene BEFORE i moves both endpoints equally; shrinking a silent
+ * scene INSIDE the window is zero-sum. Only seconds taken from OUTSIDE the span widen it.
+ */
+describe("parseSceneDeck — a long line buys seconds instead of losing the deck", () => {
+  // 202 characters: ceil(202/14) = 15 seconds needed, and 202 <= 15*14 so 15 is enough.
+  const long = `${S1} ${S2} ${S3} ${S4}`;
+
+  it("takes the seconds from a scene OUTSIDE the window and keeps the reel exactly as long", () => {
+    expect(long.length).toBe(202); // the fixture's premise, asserted rather than trusted
+    const rows = [
+      `| 1 | animated_image | 8 | Founder at a desk | ${long} | | |`,
+      `| 2 | generated_video | 12 | The cockpit | ${S4} | | |`,
+      "| 3 | animated_image | 10 | Mail icons | | | |",
+    ];
+    const r = parseSceneDeck(sceneDeck(rows));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // Scene 1 grew by 7, scene 3 paid the 7. The generated clip is untouched — it is on the grid.
+    expect(r.scenes.map((s) => s.durationMs / 1000)).toEqual([15, 12, 3]);
+    expect(narrationCeilingSeconds(r.scenes, 0)).toBe(15);
+    // Not one character moved.
+    expect(r.scenes[0]?.narration).toBe(long);
+    expect(r.adjustments).toEqual([
+      { sceneIndex: 0, fromSeconds: 8, toSeconds: 15, why: "narration" },
+      { sceneIndex: 2, fromSeconds: 10, toSeconds: 3, why: "narration" },
+    ]);
+  });
+
+  it("refuses when the only slack is INSIDE the window — moving it would change nothing", () => {
+    // Scene 2 is silent and sits inside scene 1's window, so its 6 seconds are ALREADY counted in
+    // the 10-second ceiling. Spending them would shorten a scene and buy zero characters. Every
+    // scene outside the span is a generated clip, which may never be resized.
+    const rows = [
+      `| 1 | animated_image | 4 | Founder at a desk | ${long} | | |`,
+      "| 2 | animated_image | 6 | Mail icons | | | |",
+      `| 3 | generated_video | 8 | The cockpit | ${S3} | | |`,
+      "| 4 | generated_video | 12 | The trail | | | |",
+    ];
+    expect(parseSceneDeck(sceneDeck(rows))).toMatchObject({
+      reason: "narration_too_long",
+      sceneIndex: 0,
+      availableSeconds: 10,
+    });
+  });
+
+  it("takes from OUTSIDE the window even when a longer scene sits inside it", () => {
+    // Scene 2 is the biggest donor on the deck by a mile — 12 seconds against scene 4's 4 — and it
+    // is the wrong one, because it is inside scene 1's window and its seconds are already counted.
+    // Taking them would shorten a scene and buy zero characters, and the deck would then refuse
+    // after burning every pass on trades that bought nothing. Scene 4 has exactly the 1 second the
+    // line is short by, and it is outside the span, so it is the only donor that can work.
+    const rows = [
+      `| 1 | animated_image | 2 | Founder at a desk | ${long} | | |`,
+      "| 2 | animated_image | 12 | Mail icons | | | |",
+      `| 3 | generated_video | 12 | The cockpit | ${S3} | | |`,
+      "| 4 | animated_image | 4 | One line of type | | | |",
+    ];
+    const r = parseSceneDeck(sceneDeck(rows));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.scenes.map((s) => s.durationMs / 1000)).toEqual([3, 12, 12, 3]);
+    expect(r.adjustments).toEqual([
+      { sceneIndex: 0, fromSeconds: 2, toSeconds: 3, why: "narration" },
+      { sceneIndex: 3, fromSeconds: 4, toSeconds: 3, why: "narration" },
+    ]);
+  });
+
+  it("refuses rather than cut a donor below the floor", () => {
+    // Scene 1 needs 7 more seconds. Scene 3 has 8 and scene 4 has 2 — donating 7 would leave a
+    // 1-second flash, so neither donor can cover it and the deck refuses as it did before.
+    const rows = [
+      `| 1 | animated_image | 8 | Founder at a desk | ${long} | | |`,
+      `| 2 | generated_video | 12 | The cockpit | ${S4} | | |`,
+      "| 3 | animated_image | 8 | Mail icons | | | |",
+      "| 4 | animated_image | 2 | One line of type | | | |",
+    ];
+    expect(parseSceneDeck(sceneDeck(rows))).toMatchObject({
+      reason: "narration_too_long",
+      sceneIndex: 0,
+      availableSeconds: 8,
+    });
+  });
+
+  it("leaves a deck that already fits completely alone", () => {
+    const rows = [
+      `| 1 | animated_image | 18 | Founder at a desk | ${long} | | |`,
+      `| 2 | generated_video | 12 | The cockpit | ${S4} | | |`,
+    ];
+    const r = parseSceneDeck(sceneDeck(rows));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.scenes.map((s) => s.durationMs / 1000)).toEqual([18, 12]);
+    expect(r.adjustments).toEqual([]);
+  });
+});
+
 describe("parseSceneDeck — shape and tolerance", () => {
   it("maps the legacy block types onto the new kinds so an old deck still reads", () => {
     const legacy = [
