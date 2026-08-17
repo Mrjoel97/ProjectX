@@ -1593,6 +1593,14 @@ export function buildCockpitTools(
     /** True only for an explicit email route backed by a live Gmail grant. */
     gmailEnabled?: boolean;
   },
+  // 21-03 (SKILL-01). Append-only 8th arg, `skillVersions`' orthogonal twin one scope down: an
+  // EXACT `tenantSkills` row id per skill name, where `skillVersions` names a GLOBAL `<name>@<n>`.
+  // Both must ride to the specialists this record dispatches, for the identical reason 16-09
+  // recorded for `skillVersions`: a dispatched specialist that silently loads the ACTIVE row while
+  // the evidence claims the pin certifies a body that never executed. Accepting a pin here and not
+  // forwarding it would be exactly that defect — which is the one this argument's absence at
+  // `runCockpitAgent` already caused once (run `6e021dce`, 0/41).
+  tenantSkillIds?: Record<string, Id<"tenantSkills">>,
 ) {
   const webResearchTool = buildWebResearchTool();
 
@@ -1702,6 +1710,9 @@ export function buildCockpitTools(
           // The eval runner's pins reach the RESEARCH specialist only through here. Without it a
           // `--skill research-specialist@2` run certifies a body in which v1 actually executed.
           skillVersions,
+          // 21-03: and the tenant twin, for the same reason at the row scope. `dispatchArgs`
+          // already validates it; dropping it HERE is the silent half of the same defect.
+          tenantSkillIds,
         });
         return RESEARCH_UNDERWAY_REPLY;
       },
@@ -1754,6 +1765,8 @@ export function buildCockpitTools(
           envelopeCents: 0, // the ROOT signal — governedDispatch derives the real envelope
           spentCents: 0,
           skillVersions,
+          // 21-03: same pair, same reason — see the research tool above.
+          tenantSkillIds,
         });
         return MEDIA_UNDERWAY_REPLY;
       },
@@ -4675,6 +4688,24 @@ export const runCockpitAgent = internalAction({
     // never supply it, §2-D analog): the eval runner pins the CANDIDATE row it evaluates. A missing
     // (name, version) FAILS CLOSED (getSkillVersion throws) — never silently falls back to active.
     skillVersions: v.optional(v.record(v.string(), v.number())),
+    // 21-03 (SKILL-01): the harness's EXACT tenant-candidate pins, name → `tenantSkills` row id.
+    // `dispatchArgs` in dispatch.ts declares the identical validator — the same pair of scopes,
+    // stated the same way, so neither entry point can drift from the other.
+    //
+    // THIS FIELD WAS MISSING UNTIL 2026-08-17 AND IT COST A WHOLE GOLDEN RUN. `d2374bf` threaded
+    // the pin through SCHEDULED DISPATCH and proved it there (`dispatch.test.ts`), but the eval
+    // runner reaches the system through THIS action. In Convex the `args` validator is the runtime
+    // contract, so an extra field is refused BEFORE the handler — run `6e021dce` died 0/41 at the
+    // door with `ArgumentValidationError: extra field tenantSkillIds`, having never called a model.
+    // The internal loop's type (`runSpecialistTurn`, :4211) had declared it the whole time; only
+    // the door was shut. Do not remove it, and do not add a caller-facing pin anywhere without
+    // adding it to EVERY entry point that caller can reach.
+    //
+    // The cockpit's OWN body is deliberately not resolved from this: `cockpit-agent` is not in
+    // USER_AUTHORABLE_SKILLS (see :4273), so there can be no tenant candidate for it. This action
+    // ACCEPTS the pin to FORWARD it to the specialists it dispatches — nothing here reads it for
+    // itself.
+    tenantSkillIds: v.optional(v.record(v.string(), v.id("tenantSkills"))),
     // Activity trace (CKPT-05): the turn identity the DRIVER mints (cockpit.ts) and owns. Optional
     // so every existing caller keeps working; absent ⇒ this turn emits no step rows.
     turnId: v.optional(v.string()),
@@ -4705,6 +4736,7 @@ export const runCockpitAgent = internalAction({
       model,
       clientContext,
       skillVersions,
+      tenantSkillIds,
       turnId,
       history,
       omitRecipientEdits,
@@ -4754,6 +4786,9 @@ export const runCockpitAgent = internalAction({
     const pinnedGoldenEvaluation = isPinnedCockpitEvaluation(
       tenantId,
       skillVersions?.[COCKPIT_AGENT_SKILL],
+      // 21-03: a `--tenant-skill` run pins in the OTHER scope and is just as much a harness-driven
+      // evaluation. Omitting this is what made a tenant-pinned golden run 21/41.
+      tenantSkillIds,
     );
     // No grant read at all on a non-email route. Gmail is not even a dependency of ordinary
     // business work, rather than merely a check whose negative result happens to be ignored.
@@ -4792,6 +4827,9 @@ export const runCockpitAgent = internalAction({
             }
           : {}),
       },
+      // 21-03: forward the tenant pin the eval runner sent. Nothing here reads it for the cockpit's
+      // own body (`cockpit-agent` is not authorable) — it exists to reach dispatched specialists.
+      tenantSkillIds,
     );
     // The direct call stages only the FREE media-director proposal. Paid clip/voice/render work is
     // still unreachable until the human approves the resulting card. Keep mixed email requests in

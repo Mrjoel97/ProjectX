@@ -102,12 +102,31 @@ export function shouldUseGmailCapability(text: string, activeEmailPlan: boolean)
  * Golden evaluations stage governed email plans but can never approve or execute them. Their
  * throwaway tenant is intentionally disconnected, so a pinned cockpit candidate must retain the
  * email tools the fixtures are evaluating. Real user turns never carry this internal version pin.
+ *
+ * 21-03 (SKILL-01) — WHY THERE ARE TWO PIN SCOPES HERE. A pinned evaluation is one the HARNESS
+ * drives, and since 21-03 the harness can pin in either of two scopes: `--skill name@version`
+ * (a GLOBAL `skills` row → `cockpitSkillVersion`) or `--tenant-skill <id>` (an EXACT `tenantSkills`
+ * row → `tenantSkillPins`). This function knew only the first, and the consequence was measured:
+ * golden run with 41 cases went 21/41 for $0.4157 while pinning ONLY a tenant candidate. The eval
+ * tenant is disconnected by design, so the bypass returning false withheld the Gmail rail; six
+ * fixtures returned at $0.0000 having called no tool at all, and the paid email fixtures show the
+ * model reaching for `checkAvailability`/`proposeCalendarEvent` because `addRecipients` and
+ * `proposePlan` were structurally absent. It measured the harness, not the candidate.
+ *
+ * The `eval-` tenant prefix is what keeps this away from real users, and it is UNCHANGED — a
+ * production turn has neither pin and cannot reach this branch by either scope.
  */
 export function isPinnedCockpitEvaluation(
   tenantId: string,
   cockpitSkillVersion: number | undefined,
+  tenantSkillPins?: Record<string, unknown>,
 ): boolean {
-  return tenantId.startsWith("eval-") && cockpitSkillVersion !== undefined;
+  if (!tenantId.startsWith("eval-")) return false;
+  // EITHER scope means "the harness is driving this turn". Deliberately not `cockpitSkillVersion`
+  // plus a `tenantSkillPins["cockpit-agent"]` lookup: `cockpit-agent` is not in
+  // USER_AUTHORABLE_SKILLS, so a tenant pin NEVER names it — requiring one would make this branch
+  // unreachable for exactly the runs it exists to serve.
+  return cockpitSkillVersion !== undefined || Object.keys(tenantSkillPins ?? {}).length > 0;
 }
 
 /** Gmail-bound keys in the executive tool record. Business/CRM/Vault/content tools are absent. */

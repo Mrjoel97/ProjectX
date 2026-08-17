@@ -1048,3 +1048,69 @@ test("21-02: a tenant with no overlay still loads the global row; an unseeded sk
   // …and the fallback did not soften the fail-closed contract for a name with no row at all.
   await expect(run("never-seeded-skill")).rejects.toThrow(/NO_ACTIVE_SKILL/);
 });
+
+/**
+ * 21-03 REGRESSION — and the reason it drives the ACTION instead of reading the source.
+ *
+ * `runCockpitAgent`'s args validator shipped WITHOUT `tenantSkillIds` while the internal loop's
+ * type (`runSpecialistTurn`) had declared it from the start. In Convex the `args` validator is the
+ * RUNTIME contract, so an unlisted field is refused BEFORE the handler runs: golden run `6e021dce`
+ * died 0/41 at the door with `ArgumentValidationError`, having never reached a model.
+ *
+ * Nothing caught it, and the near-misses are the instructive part. `d2374bf` threaded the pin
+ * through SCHEDULED DISPATCH and `dispatch.test.ts` proves it there — genuinely, with its own
+ * "drop tenantSkillIds at one handoff" mutation — but the eval reaches the system through THIS
+ * action, so that suite is structurally blind to this door. `eval:golden --self-check` asserts
+ * OFFLINE that the runner COMPOSES `{skillVersions, tenantSkillIds}`; it can never prove the
+ * server ACCEPTS it. 2030 backend tests were green throughout.
+ *
+ * Both halves below must stay:
+ *   1. THE DOOR OPENS — delete the validator field and `t.action` throws instead of returning.
+ *   2. THE PIN IS FORWARDED — accepting it and dropping it silently is the SAME defect one hop
+ *      later, and strictly worse than the crash: the specialist would run the ACTIVE body while
+ *      the evidence row claimed the candidate. That is the exact failure dispatch.ts:185-188
+ *      documents, arriving by a different road.
+ */
+test("21-03: runCockpitAgent accepts a tenant pin AND forwards it to the dispatched specialist", async () => {
+  const { t, planId } = await setup();
+
+  // A REAL row: `v.id("tenantSkills")` refuses anything that is not a decodable id of that table,
+  // so a fabricated string would fail for the wrong reason and prove nothing.
+  const candidateId = await t.run((ctx) =>
+    ctx.db.insert("tenantSkills", {
+      tenantId: "t1",
+      name: "media",
+      version: 2,
+      body: "candidate body",
+      authoredBody: "candidate adaptation",
+      status: "candidate",
+      author: "user",
+      basedOnScope: "global",
+      basedOnName: "media",
+      basedOnVersion: 1,
+      rollbackEligible: false,
+      createdAt: Date.now(),
+    }),
+  );
+
+  // The explicit-video route: code-owned, no model, and it SCHEDULES `dispatch.runMedia` — which
+  // makes the forwarded argument readable off the scheduler queue rather than inferred.
+  const res = await t.action(internal.llm.runCockpitAgent, {
+    tenantId: "t1",
+    threadId: "thread1",
+    planId,
+    text: "Create a short-form video for our launch",
+    turnId: "tenant-pin-turn",
+    tenantSkillIds: { media: candidateId },
+  });
+  // Half 1: we got a RETURN VALUE at all. Without the validator field this line is never reached.
+  expect(res.costUsd).toBe(0);
+
+  // Half 2: the pin is on the scheduled specialist call, not quietly dropped in the tool builder.
+  const scheduled = (await t.run((ctx) =>
+    ctx.db.system.query("_scheduled_functions").collect(),
+  )) as unknown as { name: string; args: unknown[] }[];
+  const media = scheduled.find((s) => s.name.includes("runMedia"));
+  expect(media, "the explicit-video route must schedule dispatch:runMedia").toBeTruthy();
+  expect(media?.args[0]).toMatchObject({ tenantSkillIds: { media: candidateId } });
+});

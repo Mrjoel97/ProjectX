@@ -123,11 +123,21 @@
 > beside `/connect-gmail`. Two connection pages is the landed reality. Merging them into one
 > connections surface is a UX decision with its own plan — not a side effect of this one.
 >
-> **BLOCKING OWNER CHECKPOINT, OPEN:** the Microsoft disconnect support posture.
+> **BLOCKING OWNER CHECKPOINT — DECIDED 2026-08-17, POSTURE A:** the Microsoft disconnect support posture.
 > `disconnectMicrosoft` returns `revokedAtProvider: false` and that is the honest value — Entra
 > exposes no per-app revocation under a delegated grant. The evidence and the A/B choice are in
 > `.planning/phases/25-private-beta-productionization/25-MAIL-MIGRATION-EVIDENCE.md`. **The
-> disconnect COPY is deliberately unwritten until that is decided — the wording is the decision.**
+> owner chose **Posture A**: the honest local disconnect, never labelled as remote revocation. Evidence
+> re-verified 2026-08-17 — two claims confirmed verbatim, and **the user-facing portal URL was found
+> WRONG**: `myaccount.microsoft.com/permissions` is neither route. Personal accounts use
+> `https://account.microsoft.com/privacy/app-access`; work/school accounts use
+> `https://myapps.microsoft.com/`. The shipped `DisconnectMicrosoft.tsx` copy names only "Microsoft My
+> Apps" (work/school) for both, so it misdirected personal-account users. **FIXED and LANDED
+> 2026-08-17** — the confirm names both routes and the success note LINKS both; `note` widened from
+> `string` to `ReactNode` to carry the anchors. `connectionsSurface.test.ts`'s guard was TIGHTENED:
+> it accepted the bare string "My Apps" before (which is how the wrong portal passed review) and now
+> requires both hostnames. Mutation-proven red-then-green. Superseded text follows: **The approved
+> replacement copy is drafted in the evidence doc and NOT YET LANDED (`copy_landed: false`).**
 > **GOVN-03's provider-revocation clause stays OPEN; 25-06 does not close it.**
 >
 > Prior entry — 2026-08-16 (25-05 — **THE SEND PATH IS NOW TWO-ARMED. `internal.gmail.send` is no
@@ -709,7 +719,9 @@
 > - **`disconnectMicrosoft` is NOT parity with `disconnectGoogle` and must never be described as if
 >   it were.** The v2 delegated flow used here has no revocation endpoint, so this deletes the local
 >   row and audits `revokedAtProvider: false` as a HARD false. Removing consent stays a separate user
->   action in Microsoft My Apps or Entra. **GOVN-03 inherits this limitation and must state it.**
+>   action the user takes at `account.microsoft.com/privacy/app-access` (personal) or
+>   `myapps.microsoft.com` (work/school) — **two different portals; naming only one misdirects half
+>   the users.** **GOVN-03 inherits this limitation and must state it.**
 > - The table keeps its 17-05 name `microsoftCalendarTokens` though it now holds the union grant —
 >   the `gmailTokens` precedent: renaming a Convex table is a migration for cosmetic gain.
 >
