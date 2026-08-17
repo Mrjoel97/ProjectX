@@ -1,0 +1,69 @@
+{
+  "schema": "phase21-live-handoff.v1",
+  "deploymentUrlHash": "b8c08f7d1a5e16e1c80eb69ccdd1c9870a923d4479387c1f1c28439bc39a49bf",
+  "capturedAt": "2026-08-17T13:14:59.223Z",
+  "candidate": {
+    "id": "qx73bwshbfds5nk7hd40vsf5y18cm7z0",
+    "tenantId": "kn790hj6pxay64s1pzrhrv6j2s8cep8s",
+    "name": "offer-architect",
+    "version": 12,
+    "bodyHash": "aee0008ce849cdac5456b3e45a6ca69e10609a5ca6b4c083d875781a7a50d1a0",
+    "author": "user",
+    "authorUserId": "kn790hj6pxay64s1pzrhrv6j2s8cep8s",
+    "status": "candidate",
+    "rollbackEligible": false,
+    "evidenceState": "absent",
+    "gatePassed": false,
+    "evidenceTarget": null,
+    "evidenceSummary": null,
+    "lineage": {
+      "basedOnScope": "global",
+      "basedOnName": "offer-architect",
+      "basedOnVersion": 4,
+      "basedOnGlobalSkillId": "kh7b4gz0h054denfck1cwtwh118bm0jf"
+    }
+  },
+  "rollbackBaseline": {
+    "id": "qx73cg6grg5gjr9tx1r3bzs5zx8ck3te",
+    "tenantId": "kn790hj6pxay64s1pzrhrv6j2s8cep8s",
+    "name": "offer-architect",
+    "version": 1,
+    "bodyHash": "4b6a29f9e051e81b57d807f8eec3591199385f25c3af457c34146b302e4512f7",
+    "author": "system",
+    "status": "archived",
+    "rollbackEligible": true
+  },
+  "effectiveBefore": {
+    "scope": "global",
+    "id": "kh7b4gz0h054denfck1cwtwh118bm0jf",
+    "name": "offer-architect",
+    "version": 4,
+    "bodyHash": "4b6a29f9e051e81b57d807f8eec3591199385f25c3af457c34146b302e4512f7",
+    "status": "active"
+  },
+  "globalBefore": {
+    "scope": "global",
+    "id": "kh7b4gz0h054denfck1cwtwh118bm0jf",
+    "name": "offer-architect",
+    "version": 4,
+    "bodyHash": "4b6a29f9e051e81b57d807f8eec3591199385f25c3af457c34146b302e4512f7",
+    "status": "active"
+  },
+  "foreignBefore": {
+    "tenantId": "kn73kmcdzqxem7mkq4n5b9x2b18abrnq",
+    "candidateIdVisible": false,
+    "effective": {
+      "scope": "global",
+      "id": "kh7b4gz0h054denfck1cwtwh118bm0jf",
+      "name": "offer-architect",
+      "version": 4,
+      "bodyHash": "4b6a29f9e051e81b57d807f8eec3591199385f25c3af457c34146b302e4512f7",
+      "status": "active"
+    }
+  },
+  "browserRef": {
+    "attachmentName": "phase21-candidate-ref.json",
+    "candidateId": "qx73bwshbfds5nk7hd40vsf5y18cm7z0",
+    "publishedAt": "2026-08-17T13:12:02.886Z"
+  }
+}
