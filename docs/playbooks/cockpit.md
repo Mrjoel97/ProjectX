@@ -5,6 +5,22 @@
 > filter its `dispatchMedia` sibling needs. **No cockpit behaviour changed.** The subsystem entry
 > is in `agent-runtime.md`.
 
+> Last verified: 2026-08-18 (**the scene/block fallback guard now means what its comment always
+> said.** dispatch 98/98, backend 2034/2034, typecheck clean, mutation-proven red-then-green.)
+>
+> **`persistStoryboard`'s fallback is guarded on `no_deck` ALONE, and that code finally means "no
+> SCENE DECK heading".** It used to also come back when the heading WAS there and only the table
+> could not be read, so those bodies fell through to `parseBlockDeck`, missed the BLOCK DECK heading
+> too, and the owner got the BLOCK contract's sentence — "it never wrote a block deck" — about a
+> scene deck written in full. The table-shaped refusals are `unreadable_deck` now and stop here,
+> like every other non-`no_deck` scene refusal already did. The guard's CODE is unchanged; what
+> changed is that the claim above it is now true.
+>
+> **A REASON CODE READ BY A BRANCH IS A CONTRACT.** Adding an early return to either parser means
+> deciding which side of this branch it belongs on. Do not trust a code by its name — `grep` every
+> `return fail("<code>")` first. `no_deck` had three call sites and two of them meant the opposite
+> of what this branch assumed, through three separate fixing sessions.
+
 > Last verified: 2026-08-17 (owner-reported, seen on the owner's own screen — **THE DIRECT VIDEO
 > ROUTE WAS SPEAKING TO THE MODEL, IN FRONT OF THE USER.** runCockpitAgent 34/34, backend
 > 2033/2033, typecheck clean, both new guards mutation-proven red-then-green.)

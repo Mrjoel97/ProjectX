@@ -1,5 +1,51 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-08-18 (the THIRD gate, found by shipping the second and watching production
+> — **`no_deck` MEANS THE HEADING IS ABSENT, AND NOTHING ELSE.** storyboard 127/127, @pikar/core
+> 1044/1044, dispatch 98/98, backend 2034/2034, three typechecks clean, mutation-proven.)
+>
+> **THE DEFECT — a reason code that lied, and a branch that read it.** `parseSceneDeck` returned
+> `no_deck` from THREE places: the heading (`headingAt`), the table's header row, and a missing
+> required column. `parseBlockDeck` did the same. Only the FIRST means "this body has no deck".
+> `persistStoryboard` falls back to `parseBlockDeck` on `no_deck` ALONE and its comment says that
+> guard means *"this body has no SCENE DECK heading at all"* — **true of the intent, false of the
+> code.** So a scene deck with one renamed column (`Shot`/`Length`/`Scene`/`Script` instead of
+> `Visual`/`Seconds`/`Description`/`Narration`) fell through to the block contract, found no BLOCK
+> DECK heading either, and the owner was told **"it never wrote a block deck"** about a deck sitting
+> fully written in the response.
+>
+> The four table-shaped returns are **`unreadable_deck`** now, in both contracts, and both refusal
+> tables name the COLUMNS — the only thing the code can mean and the only thing anyone can act on.
+> The fallback guard is unchanged in form and now true in fact.
+>
+> **THIS WAS THE THIRD GATE IN A ROW.** heading (`no_deck`) → target duration
+> (`bad_target_duration`) → columns (`no_deck` again). Each fix was green, mutation-proven, and
+> changed nothing the owner could see, because the next gate below it refused the same body.
+> **Before calling a parser fix done, walk EVERY gate below the one you fixed with a
+> realistically-decorated body** — a ten-line vitest printing reason-per-fixture finds in seconds
+> what a production round-trip finds in twenty minutes and real money.
+>
+> **A REASON CODE READ BY A BRANCH IS A CONTRACT.** If you add an early return to either parser,
+> ask which of the two it is. `grep` every `return fail("<code>")` before trusting what the name
+> says — that is what nobody did for `no_deck`, through three separate sessions of fixing it.
+>
+> **STILL NOT PROVEN: what production's columns actually are.** `unreadable_deck` is inferred from
+> a local walk that reproduces the symptom exactly, not from the specialist's body, which is still
+> never persisted. The next live refusal will say it in words. If it IS renamed columns, the choice
+> is synonyms in `col(...)` vs. tightening `media-director.md` — a decision, not a bug fix.
+
+> **The "UNVERIFIED WORK IN THE TREE" note that stood here is RESOLVED, by the lane that owned it.**
+> It named `storyboard.ts`, `storyboard.test.ts`, `dispatch.ts` and `dispatch.test.ts` and asked
+> their owner to run the suite and bump the line themselves. Done — see the 2026-08-18 entry at the
+> top of this file, and its predecessor below. The note was right to exist and right not to bump.
+>
+> Its two operational observations are kept, because they outlive the work that prompted them:
+> **(1)** A warning left in a playbook is not a durable channel between concurrent lanes — an
+> earlier copy of that note was overwritten when this file was rewritten. **That was this lane, and
+> it was avoidable**: entries are INSERTED at the top, never written over a region someone else may
+> hold. **(2)** `packages/backend/convex/_generated/api.d.ts` moves whenever anyone's `convex dev`
+> pushes. It is codegen output — do not read it as authored work, and never `git add -A` here.
+>
 > Last verified: 2026-08-17 (the SECOND gate on the same body — **A DECORATED LABEL IS THE SAME
 > LABEL.** Source + live production repro + `storyboard.test.ts` 122/122, @pikar/core 1039/1039,
 > backend 2031/2031, both typechecks clean. No live media run — nothing was generated or charged.)

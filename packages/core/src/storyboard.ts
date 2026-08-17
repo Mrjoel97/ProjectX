@@ -85,8 +85,10 @@ export type ParsedDeck =
   | { ok: true; clipSeconds: number; blocks: Block[] }
   | {
       ok: false;
-      reason:
+      reason: // HEADING ABSENT, and nothing else. See `unreadable_deck` — these two were one code, and
+      // `persistStoryboard` branches on the difference.
         | "no_deck"
+        | "unreadable_deck"
         | "empty_deck"
         | "unknown_shot_type"
         | "bad_duration"
@@ -373,7 +375,8 @@ export function parseBlockDeck(body: string): ParsedDeck {
     .map(cellsOf)
     .filter((c) => !isSeparatorRow(c));
   const header = rows.shift();
-  if (!header) return fail("no_deck");
+  // `unreadable_deck`, NOT `no_deck`: the BLOCK DECK heading matched above, so the deck IS here.
+  if (!header) return fail("unreadable_deck");
 
   // Map columns BY NAME, so a reordered or extra column is not a silent mis-read.
   const col = (...names: string[]) =>
@@ -385,7 +388,7 @@ export function parseBlockDeck(body: string): ParsedDeck {
   // Only an explicit DURATION column, never a `Time` column: a model's start-time arithmetic is
   // not an input to a timeline (windowStartMs is derived) and must not be read as a duration.
   const iSeconds = col("seconds", "secs", "duration");
-  if (iType < 0 || iDesc < 0 || iNarr < 0) return fail("no_deck");
+  if (iType < 0 || iDesc < 0 || iNarr < 0) return fail("unreadable_deck");
   if (rows.length === 0) return fail("empty_deck");
 
   const blocks: Block[] = [];
@@ -612,8 +615,10 @@ export type ParsedSceneDeck =
     }
   | {
       ok: false;
-      reason:
+      reason: // HEADING ABSENT, and nothing else. See `unreadable_deck` — these two were one code, and
+      // `persistStoryboard` branches on the difference.
         | "no_deck"
+        | "unreadable_deck"
         | "empty_deck"
         | "bad_target_duration"
         | "unknown_visual_kind"
@@ -661,6 +666,12 @@ export type DeckContract = "scene" | "block";
 
 export const BLOCK_REFUSAL_WHY: Record<string, string> = {
   no_deck: "it never wrote a block deck",
+  // Names the COLUMNS, because that is the only thing this code can mean and the only thing anyone
+  // can act on. "It never wrote a deck" was the sentence this case used to borrow, about a deck
+  // sitting fully written in the response.
+  unreadable_deck:
+    "the block deck is there, but its table could not be read — the columns must include " +
+    "Type, Description and Narration",
   empty_deck: "the block deck came back empty",
   unknown_shot_type: "one of the blocks used a shot type the renderer does not have",
   bad_duration: "the block length was not one of the generation model's supported durations",
@@ -672,6 +683,9 @@ export const BLOCK_REFUSAL_WHY: Record<string, string> = {
 
 export const SCENE_REFUSAL_WHY: Record<string, string> = {
   no_deck: "it never wrote a scene deck",
+  unreadable_deck:
+    "the scene deck is there, but its table could not be read — the columns must include " +
+    "Visual, Seconds, Description and Narration",
   empty_deck: "the scene deck came back empty",
   bad_target_duration: "the reel length was not one of the supported 15, 30 or 60 seconds",
   unknown_visual_kind: "a scene asked for a kind of visual the renderer does not have",
@@ -794,7 +808,8 @@ export function parseSceneDeck(body: string): ParsedSceneDeck {
     .map(cellsOf)
     .filter((c) => !isSeparatorRow(c));
   const header = rows.shift();
-  if (!header) return sceneFail("no_deck");
+  // `unreadable_deck`, NOT `no_deck`: the SCENE DECK heading matched above, so the deck IS here.
+  if (!header) return sceneFail("unreadable_deck");
 
   const col = (...names: string[]) =>
     header.findIndex((h) => names.includes(h.toLowerCase().replace(/[*#]/g, "").trim()));
@@ -806,7 +821,7 @@ export function parseSceneDeck(body: string): ParsedSceneDeck {
   const iAsset = col("asset", "source", "file");
   // `Seconds` is REQUIRED now, where the block contract treated it as an optional cross-check. A
   // scene deck without per-row durations is the uniform contract wearing new column names.
-  if (iVisual < 0 || iSeconds < 0 || iDesc < 0 || iNarr < 0) return sceneFail("no_deck");
+  if (iVisual < 0 || iSeconds < 0 || iDesc < 0 || iNarr < 0) return sceneFail("unreadable_deck");
   if (rows.length === 0) return sceneFail("empty_deck");
 
   // 33-12: repair off-grid generated clips BEFORE the row loop, because the seconds they give
