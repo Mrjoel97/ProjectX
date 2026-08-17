@@ -1,8 +1,8 @@
 # Playbook: Production Beta Readiness (25-10)
 
 > Last verified: 2026-08-17 (25-10 Tasks 1 **and 3** — the environment manifest, the drift scan, the
-> owner readiness surface, and durable-origin enforcement. **Task 2's ADR-022 is written but
-> `Proposed`, awaiting owner acceptance.**)
+> owner readiness surface, and durable-origin enforcement. **Task 2's ADR-022 was ACCEPTED by the
+> owner on 2026-08-17; Gate 2 is closed.**)
 >
 > **ADR-022 is the durable-domain posture, and it is numbered 022 because 017 COLLIDES** with the
 > Accepted `017-direct-wan-visuals-openai-audio.md`; ADRs are immutable (§9). It also drops the
@@ -93,7 +93,7 @@ directory; without `--prod` it targets the local dev deployment rather than the 
 
 ## Known gaps & deferred work
 
-1. **Task 2 IS WRITTEN as ADR-022 but sits at `Proposed` — the owner has not accepted it.** The plan's framing is stale and the ADR says why: 25-10 poses
+1. **Task 2 shipped as ADR-022, ACCEPTED by the owner 2026-08-17 — this gap is CLOSED.** The plan's framing is stale and the ADR says why: 25-10 poses
    an A/B decision where Branch B is "no user-shareable URL ships". The 25-00 baseline found that
    decision **already made and shipped**: `docs/decisions/020-production-opened-without-an-admission-gate.md`
    is Accepted and records `https://www.pikar-ai.com` live with the full platform.

@@ -1,6 +1,26 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-08-16 (**TWO OF THE DISCLOSURES CORRECTED IN THE ENTRY BELOW WERE STILL WRONG,
+> Last verified: 2026-08-17 (25-06 Gate 1 — **THE CONNECTIONS-SURFACE GUARD WAS WEAKER THAN IT
+> LOOKED, AND A WRONG-PORTAL DISCONNECT COPY SHIPPED THROUGH IT.**
+> `connectionsSurface.test.ts`'s "never claims a revocation it cannot perform" test asserted
+> `msConfirmCopy` matches `/My Apps/`. That is satisfied by copy naming **only** the work/school
+> portal — which is what `DisconnectMicrosoft.tsx` shipped, misdirecting every personal-account
+> user. The test was mechanism coverage, not behaviour coverage: it proved a *string was mentioned*,
+> not that *both supported routes were named*.
+>
+> **The guard is now tightened, not relaxed:** it requires both `account.microsoft.com` and
+> `myapps.microsoft.com`. Mutation-proven red-then-green against the old wording.
+>
+> **Note the asymmetry this exposed.** `DataControls.tsx` has carried the correct pair as
+> `MS_CONSENT_PERSONAL` / `MS_CONSENT_WORK` all along, and the privacy page links both. Only the
+> disconnect component disagreed with the rest of the app. When adding a consent-removal
+> instruction, match those constants — three surfaces now state the same two URLs, and a fourth that
+> invents its own is the bug this entry records.
+>
+> Verified: `connectionsSurface.test.ts` 30/30, `@pikar/core` 1032/1032, `@pikar/web` 432/432,
+> `dataControls.test.ts` green within the web run, web typecheck exit 0.
+>
+> Prior entry — 2026-08-16 (**TWO OF THE DISCLOSURES CORRECTED IN THE ENTRY BELOW WERE STILL WRONG,
 > AND ONLY PRODUCTION CONFIG COULD SHOW IT.** Both were resolved by reading the live deployment with
 > `npx convex env get … --prod`, which is the step the source-only sweep could not take.
 >

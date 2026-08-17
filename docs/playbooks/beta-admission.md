@@ -68,7 +68,7 @@
 > used while the last owner is the one locked out — the Convex dashboard is the only way back in.
 
 > **25-10 Task 3 note, 2026-08-17 — the readiness section now also names non-durable origins**
-> (ADR-022, `Proposed`). Relevant to admission for one reason: the invite link the owner copies from
+> (ADR-022, **Accepted 2026-08-17**). Relevant to admission for one reason: the invite link the owner copies from
 > this page is built from `window.location.origin`, and every OAuth redirect an invited user
 > traverses is built from `CONVEX_SITE_URL`. If either is a preview build, an invite mailed today
 > stops working on the next push — with no missing-name to show for it. `/admin` now says so.

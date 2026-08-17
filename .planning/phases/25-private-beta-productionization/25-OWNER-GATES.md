@@ -2,14 +2,15 @@
 phase: 25-private-beta-productionization
 purpose: "The blocking owner checkpoints, staged: what to run, what it proves, what blocks it"
 prepared: 2026-08-17
-status: none_run
+status: two_closed_five_open
+updated: 2026-08-17
 ---
 
 # Phase 25 — the owner gates
 
-Seven blocking checkpoints across five plans. **None has been run.** Each needs something no
-automated run can produce: a real provider consent, a live browser, a production release, or a
-judgement call.
+Seven blocking checkpoints across five plans. **Gates 1 and 2 were decided 2026-08-17; five remain.**
+Each of the five needs something no automated run can produce: a real provider consent, a live
+browser, a production release, or a judgement call.
 
 They are listed in the only order the dependencies allow.
 
@@ -17,23 +18,35 @@ They are listed in the only order the dependencies allow.
 
 ## GATE 1 — 25-06 Task 2 · the Microsoft disconnect posture *(decision, no cost)*
 
-**Blocks:** the disconnect COPY in the UI, which is deliberately unwritten because the wording *is*
-the decision.
+> **STATUS 2026-08-17: DECIDED — POSTURE A.** Evidence re-verified the same day: two Microsoft
+> claims confirmed verbatim, and **one user-facing URL found wrong**. The prepared packet pointed
+> personal-account users at `myaccount.microsoft.com/permissions`, which is neither supported route;
+> the shipped `DisconnectMicrosoft.tsx` copy points *everyone* at "Microsoft My Apps", which is the
+> work/school portal only. Correct routes: `https://account.microsoft.com/privacy/app-access`
+> (personal) and `https://myapps.microsoft.com/` (work/school).
+>
+> **CLOSED COMPLETELY.** The owner approved the wording and it LANDED 2026-08-17: three strings in
+> `DisconnectMicrosoft.tsx` plus the `useState<string | null>` → `useState<ReactNode | null>`
+> widening so the note carries real anchors. `connectionsSurface.test.ts` was tightened from
+> "mentions My Apps" to "names both hostnames" and mutation-proven red-then-green (30/30).
 
-**Do:** read `.planning/phases/25-private-beta-productionization/25-MAIL-MIGRATION-EVIDENCE.md`,
+**Blocked, originally:** the disconnect COPY in the UI, which was deliberately unwritten because the
+wording *is* the decision.
+
+**Was:** read `.planning/phases/25-private-beta-productionization/25-MAIL-MIGRATION-EVIDENCE.md`,
 re-verify the three Microsoft docs links (they move), choose Posture A or B, fill in the decision
-block at the bottom.
+block at the bottom. All four done.
 
-**Costs nothing and blocks nothing else.** Do it first.
+**Cost nothing and blocked nothing else.**
 
 ---
 
 ## GATE 2 — 25-10 Task 2 · the durable-domain ADR *(decision, no cost)*
 
-> **STATUS 2026-08-17: the ADR is WRITTEN and sits at `Proposed` —
-> `docs/decisions/022-beta-domain-posture.md`. It needs your acceptance, nothing more.** Task 3's
+> **STATUS 2026-08-17: CLOSED. The owner ACCEPTED `docs/decisions/022-beta-domain-posture.md` on
+> 2026-08-17; its Status line now reads `Accepted`.** Task 3's
 > enforcement is already wired and green (`ops.envCheck` → `nonDurableOrigins`, surfaced on
-> `/admin`). Read the ADR; if you accept it, change `Status: Proposed` → `Accepted` and date it.
+> `/admin`). Nothing further is required on this gate.
 > The two corrections below are the reasons it does not follow the plan verbatim, and they are
 > already written into it.
 

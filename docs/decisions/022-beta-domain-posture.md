@@ -1,6 +1,6 @@
 # ADR-022: The beta domain posture — durable, not custom, and already in force
 
-- **Status**: **Proposed** — awaiting owner acceptance (25-10 Task 2 is a blocking checkpoint)
+- **Status**: **Accepted** — owner accepted 2026-08-17 (25-10 Task 2, the blocking checkpoint, is closed)
 - **Recorded**: 2026-08-17, during Phase 25 execution
 - **Requirements**: BETA-01, DLVR-02 (both depend on stable user-shareable origins)
 - **Phases**: 25 (Private Beta Productionization)

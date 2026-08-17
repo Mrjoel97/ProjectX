@@ -1,6 +1,28 @@
 # Playbook: Persona Onboarding & Business Profile
 
-> Last verified: 2026-08-17 (owner-reported defect — **THE INTAKE MODALITIES NO LONGER VANISH AFTER
+> Last verified: 2026-08-17 (25-06 Gate 1 — **THE MICROSOFT DISCONNECT COPY WAS SENDING MOST USERS
+> TO THE WRONG PORTAL.** `DisconnectMicrosoft.tsx` told every user to remove Pikar in "Microsoft My
+> Apps". My Apps is the **work/school** portal; a personal Microsoft account holder who follows that
+> lands somewhere that will never list Pikar. The private beta is expected to be mostly personal
+> accounts, so the majority path was the broken one — and the surface's whole reason to exist is
+> that `disconnectMicrosoft` returns a hard `revokedAtProvider: false`, making "here is where you
+> finish the job" the only honest thing it can say.
+>
+> **Fixed 2026-08-17, owner-approved wording (Posture A, `25-MAIL-MIGRATION-EVIDENCE.md`).** The
+> confirm names both routes; the success note LINKS both —
+> `account.microsoft.com/privacy/app-access` (personal) and `myapps.microsoft.com` (work/school),
+> the same URLs `DataControls.tsx` and the privacy page already shipped. `note` widened from
+> `string` to `ReactNode` to carry the anchors; that widening is the entire mechanical change.
+>
+> **Invariant, and the reason the old copy passed review:** `connectionsSurface.test.ts` asserted
+> only `/My Apps/` — a substring the wrong copy satisfied. It now requires BOTH hostnames.
+> Mutation-proven: restoring the old wording turns that named test red. **Never describe this
+> disconnect as a revocation, and never name only one portal.**
+>
+> Verified: `connectionsSurface.test.ts` 30/30, `@pikar/core` 1032/1032, `@pikar/web` 432/432,
+> web typecheck exit 0. No live browser run.
+>
+> Prior entry — 2026-08-17 (owner-reported defect — **THE INTAKE MODALITIES NO LONGER VANISH AFTER
 > THE FIRST TYPED TURN.** Source + typecheck + `page.test.ts` (4/4); no live browser run.)
 >
 > **The defect, exactly.** The composer's control row was wrapped in `{!profile && (…)}`. The first
