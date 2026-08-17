@@ -1319,7 +1319,7 @@ const MEDIA_UNDERWAY_REPLY =
   "conversation. Nothing has been generated and nothing has been charged: generating the clips, " +
   "the voiceover and the render happens only when the user approves the card. Tell the user the " +
   "proposal is being put together and carry on.";
-const MEDIA_REFUSAL_REPLY: Record<
+export const MEDIA_REFUSAL_REPLY: Record<
   | "reel_in_flight"
   | "render_in_flight"
   | "draft_in_progress"
@@ -1351,6 +1351,57 @@ const MEDIA_REFUSAL_REPLY: Record<
     "it. Nothing was started. Tell the user plainly, and offer to make the reel once the draft is " +
     "sent or discarded.",
 };
+/**
+ * The SAME outcomes, addressed to the USER — for the one caller that has no model to read them.
+ *
+ * Every string above is driver-plane: second person, addressed to the MODEL, ending in an
+ * instruction it is supposed to carry out ("Tell the user…", "Ask whether to drop the image; if
+ * they say yes, call `resetPlan`"). That is correct for the tool-loop, where the model reads the
+ * result and writes its own sentence. But `runCockpitAgent`'s `directVideo` route invokes
+ * `dispatchMedia` DIRECTLY and returns the tool's string as the reply — no model in between — so
+ * the owner was shown "you do not have it yet, so do not describe it, do not wait for it" as if it
+ * were Pikar speaking to them, and a refusing run would have told them to call a tool they have no
+ * way to call. Observed on production 2026-08-17.
+ *
+ * Keyed on the CONSTANTS THEMSELVES, never on copies of their text: edit a driver string and the
+ * key moves with it, so the two planes cannot drift into disagreeing about the same outcome. An
+ * unmapped string falls through unchanged — a missing translation must never blank the reply.
+ */
+export const USER_FACING_MEDIA_REPLY: ReadonlyMap<string, string> = new Map([
+  [
+    MEDIA_UNDERWAY_REPLY,
+    "I'm putting the reel proposal together — a script, an art direction and the shot deck. " +
+      "It'll land on the canvas as a card for you to review. Nothing has been generated and " +
+      "nothing has been charged; that starts only when you approve it.",
+  ],
+  [
+    MEDIA_REFUSAL_REPLY.dispatch_in_flight,
+    "Something is already being written on this conversation and it hasn't landed yet, so I " +
+      "didn't start another. Give it a moment.",
+  ],
+  [
+    MEDIA_REFUSAL_REPLY.image_proposal_pending,
+    "There's an image proposal on this conversation's card that you haven't generated yet, and " +
+      "starting a reel would discard it. I didn't start one. Tell me if you'd like to drop the " +
+      "image and I'll clear it first.",
+  ],
+  [
+    MEDIA_REFUSAL_REPLY.reel_in_flight,
+    "A reel is already being generated on this conversation and its clips are already paid for, " +
+      "so I didn't start another. A second reel needs a new conversation.",
+  ],
+  [
+    MEDIA_REFUSAL_REPLY.render_in_flight,
+    "This conversation's reel is being assembled right now, so I didn't start another. A second " +
+      "reel needs a new conversation.",
+  ],
+  [
+    MEDIA_REFUSAL_REPLY.draft_in_progress,
+    "There's an email draft on this conversation's card, and starting a reel would discard it. I " +
+      "didn't start one — send or discard the draft and ask me again.",
+  ],
+]);
+
 const IMAGE_PROPOSED_REPLY =
   "The image prompt is staged on a plan card for the user to review. Nothing has been generated " +
   "and nothing has been charged; generation starts only when the user clicks Generate image.";
@@ -4759,9 +4810,12 @@ export const runCockpitAgent = internalAction({
         });
       let phase: "done" | "error" = "error";
       try {
-        const reply = await invokeTool(tools, "dispatchMedia", { brief: text });
+        const driverReply = await invokeTool(tools, "dispatchMedia", { brief: text });
         phase = "done";
-        return { reply, costUsd: 0 };
+        // TRANSLATE. There is no model on this route, so the tool's driver-plane string would
+        // otherwise reach the user verbatim — see USER_FACING_MEDIA_REPLY. Unmapped falls through
+        // rather than blanking: a missing translation must degrade to the old wording, not silence.
+        return { reply: USER_FACING_MEDIA_REPLY.get(driverReply) ?? driverReply, costUsd: 0 };
       } finally {
         if (turnId !== undefined)
           await ctx.runMutation(internal.agentSteps.finish, {

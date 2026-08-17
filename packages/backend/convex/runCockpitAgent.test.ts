@@ -25,7 +25,12 @@ import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 // A node-env vitest file can import this "use node" module directly — the cockpitTools.test.ts
 // precedent. Importing the CHOOSER is what makes the 45s default assertable rather than assumed.
-import { callTimeoutMsFor, runSpecialistTurn } from "./llm";
+import {
+  callTimeoutMsFor,
+  MEDIA_REFUSAL_REPLY,
+  runSpecialistTurn,
+  USER_FACING_MEDIA_REPLY,
+} from "./llm";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
@@ -165,6 +170,24 @@ test("an email-dependent turn requests Gmail only when the disconnected user ask
   expect(res.reply).toMatch(/rest of the cockpit remains available/i);
 });
 
+// The `directVideo` route returns a tool's string to the user with NO model in between. Every
+// media string the tool can return is written for the MODEL, so each one needs a translation —
+// and the DRIFT is the risk: add a refusal reason, forget the translation, and that reason ships
+// "Tell the user…" to a human. This asserts coverage against the source record, not a count.
+test("every driver-plane media reply has a user-facing translation, and none of them leak", () => {
+  for (const [reason, driver] of Object.entries(MEDIA_REFUSAL_REPLY)) {
+    expect(USER_FACING_MEDIA_REPLY.has(driver), `no user-facing reply for "${reason}"`).toBe(true);
+  }
+  for (const [driver, user] of USER_FACING_MEDIA_REPLY) {
+    // The driver string is the thing being replaced; the translation must not BE it.
+    expect(user).not.toBe(driver);
+    // Nothing addressed to a model, and no tool name, may survive into a user's reply.
+    expect(user, user).not.toMatch(/\bTell the user\b|\bAsk whether\b|\bdo not (describe|wait)\b/i);
+    expect(user, user).not.toMatch(/resetPlan|`[a-z]+Plan`|\bcall `/i);
+    expect(user.trim()).not.toMatch(/carry on\.$/i);
+  }
+});
+
 test("an explicit video request stages the media dispatch instead of invoking a withheld tool", async () => {
   const { t, planId } = await setup();
 
@@ -177,8 +200,15 @@ test("an explicit video request stages the media dispatch instead of invoking a 
   });
 
   expect(res.costUsd).toBe(0);
-  expect(res.reply).toMatch(/media director has started/i);
-  expect(res.reply).toMatch(/nothing has been generated/i);
+  // The reply reaches the user with NO model in between, so it must be addressed to the user.
+  // This assertion used to require `/media director has started/` — the driver-plane string the
+  // tool returns for the MODEL to read — which is exactly how the owner came to be shown
+  // "you do not have it yet, so do not describe it, do not wait for it" on production 2026-08-17.
+  expect(res.reply).toMatch(/reel proposal/i);
+  expect(res.reply).toMatch(/nothing has been (generated|charged)/i);
+  // The load-bearing half: no instruction addressed to a model may survive onto the screen.
+  expect(res.reply).not.toMatch(/do not describe it|do not wait for it|carry on\.?$/i);
+  expect(res.reply).not.toMatch(/\bTell the user\b|\bAsk whether\b|`?resetPlan`?/i);
 
   const plan = await readPlan(t, planId);
   expect(plan).toMatchObject({ kind: "memo", status: "collecting" });
