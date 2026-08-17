@@ -720,6 +720,39 @@ export const mediaDispatchCountForThread = internalQuery({
 });
 
 /**
+ * The harness's `imageProposalCount` read — how many times the agent called `proposeImage` on this
+ * thread. The SIBLING of `mediaDispatchCountForThread`, and it exists because the golden set could
+ * not express the difference between a still image and a reel at all.
+ *
+ * `proposeImage` shipped wired into the executive's tools with a whole reservation path behind it
+ * (`stageImagePlan` → `mediaMode:"image"` → `generateImage`), and the registry body never named it —
+ * so every ad and every image request became a storyboard. The eval set could not CATCH that: with
+ * no key for this tool, an image ask routed to `dispatchMedia` looked like a pass, and the 40
+ * fixtures were all green while the image door was unreachable. **A tool with no assertion key is a
+ * tool the golden set certifies nothing about.**
+ *
+ * NOT read from the plan row, for `mediaDispatchCountForThread`'s structural reason: `plans.by_thread`
+ * is `.unique()` and `stageImagePlan` RECYCLES that row, so plan state can say "an image plan
+ * exists" and can never say the tool was called twice. `agentSteps` writes a row per call.
+ *
+ * No `dispatch:` discriminator, unlike its sibling, and the asymmetry is real rather than an
+ * oversight: `proposeImage` is not a specialist route — it has no `stepTool` in `SPECIALISTS`, so
+ * `dispatch.ts` never writes this tool name and only the cockpit loop does. Adding the filter would
+ * be cargo-culted from a function whose second writer this one does not have.
+ */
+export const imageProposalCountForThread = internalQuery({
+  args: { tenantId: v.string(), threadId: v.string() },
+  handler: async (ctx, { tenantId, threadId }): Promise<number> =>
+    await ctx.db
+      .query("agentSteps")
+      .withIndex("by_tenant_tool_startedAt", (q) =>
+        q.eq("tenantId", tenantId).eq("tool", "proposeImage"),
+      )
+      .collect()
+      .then((rows) => rows.filter((r) => r.threadId === threadId).length),
+});
+
+/**
  * 20.1-02 (VALT-15): the eval harness's `driveReadToolCount` read — how many times the agent
  * called EITHER Drive read tool (`findInDrive`, `listDriveFolders`) on this thread.
  *

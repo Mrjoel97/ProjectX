@@ -1,5 +1,34 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-08-17 (**THE §4 SCAN WAS TRUNCATING, AND IT REPORTED GREEN ON TEXT IT NEVER
+> READ.** llmRedaction 61/61, mutation-verified both directions. Found while adding a payload field
+> and reviewing it against this very guard.)
+>
+> **The defect.** Nine scans in `llmRedaction.test.ts` extracted payloads with
+> `payload:s*{[^}]*}`. `[^}]*` stops at the FIRST closing brace, so any payload carrying a
+> NESTED object literal was silently cut short and everything after it went unscanned. **Two of
+> dispatch.ts's twelve payloads are exactly that shape** —
+> `...("blockIndex" in deck ? { blockIndex, chars } : {})` — so every field after the ternary was
+> unguarded. Measured, not argued: with `leakedReply: res.body` planted immediately after that
+> ternary, the OLD scan found **0** leaks and the balanced one finds **1**.
+>
+> **A truncating guard is worse than no guard, because it is trusted.** This one is the enforcement
+> for CLAUDE.md §4 — the rule that keeps the audit log from becoming a PII honeypot — and it had
+> been passing for every payload written after a conditional spread.
+>
+> Fixed once, at the root: `payloadsIn(src)` (a brace counter) and `payloadAfter(src, anchor)`
+> replace all nine copies. **Use them; do not write another `[^}]*` payload regex.** They are a
+> counter and not a parser — braces inside strings/templates/regexes are not understood, which no
+> payload literal in `convex/` contains today and the count assertions in that file catch if it
+> changes.
+>
+> Also landed: `media.deck_refused` carries `deckTokenCounts` (four numbers — `bodyChars` and three
+> token counts) so `no_deck` can say WHICH of its two causes fired. Reviewed in the guard's own
+> comment block per its protocol, and the counts-only claim is proved by a test against distinctive
+> prose rather than trusted by name — which is now doubly worth having, since the scan that was
+> supposed to back it up could not see two of the three sites.
+
+
 > **25-06 note, 2026-08-16 — `RECONNECT` gained `holdMessage`, one string per provider.** The
 > notification plane raises `microsoft_calendar_reconnect` from the CALENDAR expiry cron, and its
 > copy says so. Since 25-05 a Microsoft **mail** send can also park a request at `awaiting_reauth`,

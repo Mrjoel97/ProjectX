@@ -12,6 +12,46 @@ import { expect, test } from "vitest";
 const convexDir = dirname(fileURLToPath(import.meta.url));
 const readSource = (file: string): string => readFileSync(join(convexDir, file), "utf8");
 
+/**
+ * Every `payload: { … }` literal in `src`, BRACE-BALANCED.
+ *
+ * This file used `payload:\\s*\\{[^}]*\\}` for the job, and `[^}]*` stops at the FIRST closing
+ * brace — so any payload carrying a nested object literal was silently TRUNCATED and everything
+ * after it went unscanned. Two of dispatch.ts's twelve payloads are exactly that shape
+ * (`...("blockIndex" in deck ? { blockIndex, chars } : {})`), so a field added after the ternary was
+ * unguarded while this file reported green. **These scans ARE the §4 enforcement; a truncating one
+ * is worse than no scan, because it is trusted.** Found 2026-08-17.
+ *
+ * ponytail: a brace counter, not a parser. It does not understand braces inside strings, template
+ * literals or regexes — no payload literal in convex/ contains one, and this file's `toHaveLength`
+ * / `toBe` count assertions fail loudly if that stops being true. Upgrade path: a real tokenizer.
+ */
+function payloadsIn(src: string): string[] {
+  const out: string[] = [];
+  const re = /payload:\s*\{/g;
+  for (let m = re.exec(src); m !== null; m = re.exec(src)) {
+    const start = m.index + m[0].length - 1;
+    let depth = 0;
+    for (let i = start; i < src.length; i++) {
+      if (src[i] === "{") depth += 1;
+      else if (src[i] === "}") {
+        depth -= 1;
+        if (depth === 0) {
+          out.push(src.slice(start, i + 1));
+          break;
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/** The first balanced payload literal AFTER `anchor`, or "". The anchored scans' shared read. */
+function payloadAfter(src: string, anchor: RegExp): string {
+  const m = anchor.exec(src);
+  return m === null ? "" : (payloadsIn(src.slice(m.index))[0] ?? "");
+}
+
 /** Every hand-written convex source, comment-stripped, as [relative path, code]. Recursive so
  *  `lib/` and `render/` are covered; `_generated/` and tests are not source. Added by plan 20-06 for
  *  the two whole-tree pins at the bottom of this file (terminal writers, storage.getUrl). */
@@ -154,10 +194,8 @@ test("gmail.ts mailbox.searched audit payload is refs-only ({ queryHash, resultC
   // The ONLY new read-side audit (Plan 03) records that a search happened — a hash of the name +
   // a count, NEVER the name/address/subject/messageId itself (CLAUDE.md §4 / SC3).
   const src = readSource("gmail.ts");
-  const m = src.match(/eventType:\s*["']mailbox\.searched["'][\s\S]*?payload:\s*(\{[^}]*\})/);
-  expect(m, "mailbox.searched audit payload not found").not.toBeNull();
-  const payload = m?.[1];
-  if (payload === undefined) throw new Error("mailbox.searched audit payload not found");
+  const payload = payloadAfter(src, /eventType:\s*["']mailbox\.searched["']/);
+  expect(payload, "audit payload not found").not.toBe("");
   expect(payload).toMatch(/queryHash/);
   expect(payload).toMatch(/resultCount/);
   // queryHash: contentHash(name) is a HASH of the name (refs-only) — strip the wrapper, then the
@@ -175,9 +213,8 @@ test("gmail.ts mailbox.listed audit payload is refs-only ({ range, resultCount }
   // (an enum from the tool's inputSchema, never user prose) + a count. A sender/subject/snippet
   // here would turn the audit into the PII honeypot §4 exists to prevent.
   const src = readSource("gmail.ts");
-  const m = src.match(/eventType:\s*["']mailbox\.listed["'][\s\S]*?payload:\s*(\{[^}]*\})/);
-  expect(m, "mailbox.listed audit payload not found").not.toBeNull();
-  const payload = m![1];
+  const payload = payloadAfter(src, /eventType:\s*["']mailbox\.listed["']/);
+  expect(payload, "audit payload not found").not.toBe("");
   expect(payload).toMatch(/range/);
   expect(payload).toMatch(/resultCount/);
   expect(payload, `mailbox.listed payload leaks a raw mailbox field: ${payload}`).not.toMatch(
@@ -386,10 +423,8 @@ test("llm.ts briefing.created audit payload is refs-only ({ briefingId, range, l
   // Clone of the mailbox.searched/mailbox.listed discipline: ids + counts ONLY. A gist or sender
   // here would make the audit log the PII honeypot §4 exists to prevent.
   const src = readSource("llm.ts");
-  const m = src.match(/eventType:\s*["']briefing\.created["'][\s\S]*?payload:\s*(\{[^}]*\})/);
-  expect(m, "briefing.created audit payload not found").not.toBeNull();
-  const payload = m?.[1];
-  if (payload === undefined) throw new Error("briefing.created audit payload not found");
+  const payload = payloadAfter(src, /eventType:\s*["']briefing\.created["']/);
+  expect(payload, "briefing.created audit payload not found").not.toBe("");
   expect(payload).toMatch(/briefingId/);
   expect(payload).toMatch(/listedCount/);
   expect(payload).toMatch(/digestedCount/);
@@ -433,14 +468,11 @@ test("the digest synopsis rides the briefings row ONLY — never the loop return
     ).not.toMatch(/synopsis/);
   }
   // And it must NOT appear in the briefing.created audit payload object.
-  const auditPayload = block.match(
-    /eventType:\s*["']briefing\.created["'][\s\S]*?payload:\s*(\{[^}]*\})/,
+  const auditPayload = payloadAfter(block, /eventType:\s*["']briefing\.created["']/);
+  expect(auditPayload, "briefing.created payload not found in briefInbox").not.toBe("");
+  expect(auditPayload, "synopsis leaked into the refs-only briefing.created payload").not.toMatch(
+    /synopsis/,
   );
-  expect(auditPayload, "briefing.created payload not found in briefInbox").not.toBeNull();
-  expect(
-    auditPayload![1],
-    "synopsis leaked into the refs-only briefing.created payload",
-  ).not.toMatch(/synopsis/);
 });
 
 // ── 03.11-04 (RPLY-01): the replyToMessage toolless-ingestion boundary (§2-D / SC-2) ──────────────
@@ -617,7 +649,7 @@ test("recipientBodies (per-recipient content) never reaches an audit/DLQ/telemet
   // surfaces (llm.ts / cockpit.ts / plans.ts) for any audit/deadLetters/telemetry write carrying it.
   for (const file of ["llm.ts", "cockpit.ts", "plans.ts"]) {
     const src = readSource(file);
-    for (const p of src.match(/payload:\s*\{[^}]*\}/g) ?? []) {
+    for (const p of payloadsIn(src)) {
       expect(p, `${file} log payload leaks recipientBodies: ${p}`).not.toMatch(/recipientBodies/);
     }
     for (const ins of src.match(
@@ -780,7 +812,7 @@ test("cockpit's only delivery-audit crossing (workflow.start context payload) ca
   // ref ({ planId }) — never the raw subject/body/recipient/bodyIntent/draft/goal — or the
   // fan-out audit becomes a PII honeypot (CLAUDE.md §4).
   const src = readSource("cockpit.ts");
-  const payloads = src.match(/payload:\s*\{[^}]*\}/g) ?? [];
+  const payloads = payloadsIn(src);
   expect(payloads.length).toBeGreaterThan(0);
   for (const p of payloads) {
     expect(p, `cockpit context payload leaks raw content: ${p}`).not.toMatch(
@@ -816,7 +848,7 @@ test("scheduling fields (sendAt / scheduledFunctionId) never reach an audit/DLQ/
   // plans.ts) for any audit/deadLetters/telemetry write carrying them.
   for (const file of ["llm.ts", "cockpit.ts", "plans.ts"]) {
     const src = readSource(file);
-    for (const p of src.match(/payload:\s*\{[^}]*\}/g) ?? []) {
+    for (const p of payloadsIn(src)) {
       expect(p, `${file} log payload leaks a scheduling field: ${p}`).not.toMatch(
         /sendAt|scheduledFunctionId/,
       );
@@ -841,7 +873,7 @@ test("scheduling fields (sendAt / scheduledFunctionId) never reach an audit/DLQ/
 
 test("voice.ts session audit payloads are refs/counts-only ({sessionId}+counts, no transcript/callId/secret) — §4", () => {
   const src = readSource("voice.ts");
-  const payloads = [...src.matchAll(/payload:\s*(\{[^}]*\})/g)].map((m) => m[1] ?? "");
+  const payloads = payloadsIn(src);
   // Present at all: the started + clean-ended + abnormal-ended audits (a removal must fail loudly).
   expect(
     payloads.length,
@@ -876,7 +908,7 @@ test("dispatch.ts lineage payloads reference no specialist output (reply/body/te
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/\/\/[^\n]*/g, "");
 
-  const payloads = [...src.matchAll(/payload:\s*(\{[^}]*\})/g)].map((m) => m[1] ?? "");
+  const payloads = payloadsIn(src);
   // refused / dispatched / completed, plus 15-04's thrown-turn `subagent.refused` — the one place
   // an EXCEPTION reaches the audit plane, and therefore the one most likely to be handed
   // `err.message`. 16-07 adds the FIFTH: `research.persist_failed`, the vault-write failure, which
@@ -1063,7 +1095,7 @@ test("voiceDoc.ts: EVERY payload object is free of report content (SC4)", () => 
   // Comments stripped: the prose in this module legitimately NAMES these identifiers (it explains
   // the very ban being enforced). Code may not.
   const src = readSource("voiceDoc.ts").replace(/\/\/[^\n]*/g, "");
-  const payloads = [...src.matchAll(/payload:\s*(\{[^}]*\})/g)].map((m) => m[1] ?? "");
+  const payloads = payloadsIn(src);
 
   // Presence first: a file-wide scan over zero payloads passes vacuously and proves nothing.
   expect(payloads.length, "no voiceDoc payloads found - the scan is vacuous").toBe(2);

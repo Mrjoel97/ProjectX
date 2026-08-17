@@ -1,5 +1,10 @@
 # Playbook: Email Chat Cockpit
 
+> Touched 2026-08-17 — `agentSteps.test.ts` gained the `imageProposalCountForThread` block (4
+> tests, 24/24) pinning the still-image observable and the deliberate absence of the `dispatch:`
+> filter its `dispatchMedia` sibling needs. **No cockpit behaviour changed.** The subsystem entry
+> is in `agent-runtime.md`.
+
 > Last verified: 2026-08-17 (owner-reported — **the media refusal's diagnosability, and `res.body`
 > vs the §4 scan.** dispatch 93/93, llmRedaction guard green, backend 2026/2026; no live run.)
 >

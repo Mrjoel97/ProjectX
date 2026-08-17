@@ -289,6 +289,20 @@ const EXPECT_KEYS = new Set([
   // instead (`createdDocCount`), because a bare `mediaDispatchCount: 0` passes on a turn where
   // the agent did nothing at all.
   "mediaDispatchCount",
+  // `imageProposalCount` — how many times the agent called `proposeImage` on the thread, read
+  // from smoke:imageProposalCountForThread (`agentSteps` rows), never from the reply or the plan.
+  //
+  // Added 2026-08-17 because its ABSENCE was a hole in this whole set: `proposeImage` shipped
+  // wired to the executive with a reservation path behind it, the registry body never named it, and
+  // so every image and every ad request became a storyboard. All 40 fixtures stayed green through
+  // that, because none of them could express "this should have been an image" — an image ask
+  // routed to `dispatchMedia` was indistinguishable from a pass. A TOOL WITH NO ASSERTION KEY IS A
+  // TOOL THIS SET CERTIFIES NOTHING ABOUT; add the key with the tool, not after the incident.
+  //
+  // Equality and pairable-zero, exactly like `mediaDispatchCount`, and for the same two reasons:
+  // a second proposal recycles the one `by_thread` plan row, and a bare zero passes on a turn
+  // where the agent did nothing at all.
+  "imageProposalCount",
   // 20.1-02 (VALT-15): `driveReadToolCount` — how many times the agent called EITHER Drive read
   // tool (`findInDrive`, `listDriveFolders`) on the thread, read from
   // smoke:driveReadCountForThread (`agentSteps` rows), never from the reply.
@@ -452,9 +466,30 @@ function validateFixture(fx, source) {
     if (!Number.isInteger(fx.expect.mediaDispatchCount) || fx.expect.mediaDispatchCount < 0) {
       fail("expect.mediaDispatchCount must be an integer >= 0");
     }
-    if (fx.expect.mediaDispatchCount === 0 && fx.expect.createdDocCount === undefined) {
+    if (
+      fx.expect.mediaDispatchCount === 0 &&
+      fx.expect.createdDocCount === undefined &&
+      fx.expect.imageProposalCount === undefined
+    ) {
       fail(
-        "expect.mediaDispatchCount:0 requires createdDocCount (a bare zero passes on a turn that did nothing)",
+        "expect.mediaDispatchCount:0 requires createdDocCount or imageProposalCount (a bare zero passes on a turn that did nothing)",
+      );
+    }
+  }
+  // The same paired-zero rule, and the pair may be EITHER positive proof: an image fixture proves
+  // routing with `imageProposalCount`, a video fixture with `mediaDispatchCount`, a document one
+  // with `createdDocCount`. A bare zero still asserts nothing.
+  if (fx.expect.imageProposalCount !== undefined) {
+    if (!Number.isInteger(fx.expect.imageProposalCount) || fx.expect.imageProposalCount < 0) {
+      fail("expect.imageProposalCount must be an integer >= 0");
+    }
+    if (
+      fx.expect.imageProposalCount === 0 &&
+      fx.expect.createdDocCount === undefined &&
+      fx.expect.mediaDispatchCount === undefined
+    ) {
+      fail(
+        "expect.imageProposalCount:0 requires createdDocCount or mediaDispatchCount (a bare zero passes on a turn that did nothing)",
       );
     }
   }
@@ -1017,6 +1052,13 @@ function evaluateExpect(
   /** @param driveReadToolCount smoke:driveReadCountForThread (0 when unasked — read skipped).
    *  0 is the FAIL-CLOSED direction: an unread key must never satisfy the floor. */
   driveReadToolCount = 0,
+  // LAST on purpose. `evaluateExpect` is called POSITIONALLY, including by selfCheck()'s own
+  // cases, so inserting a parameter mid-list silently shifts every argument after it — which is
+  // exactly what happened on the first attempt here: driveReadToolCount started reading the image
+  // count and a green self-check went red. A new observable goes on the END.
+  /** @param imageProposalCount smoke:imageProposalCountForThread (0 when unasked — read skipped).
+   *  0 is the FAIL-CLOSED direction: an unread key must never manufacture a staged image. */
+  imageProposalCount = 0,
 ) {
   const failures = [];
   const miss = (key, expected, actual) => failures.push({ key, expected, actual });
@@ -1102,6 +1144,12 @@ function evaluateExpect(
         // thread is a real defect (it recycles the plan row the first proposal is being written
         // into), and a floor would pass on it.
         if (mediaDispatchCount !== expected) miss(key, expected, mediaDispatchCount);
+        break;
+      case "imageProposalCount":
+        // Equality, mediaDispatchCount's rule and not driveReadToolCount's: `stageImagePlan`
+        // recycles the one by_thread plan row, so a second proposal overwrites the first and is a
+        // real defect rather than extra diligence.
+        if (imageProposalCount !== expected) miss(key, expected, imageProposalCount);
         break;
       case "driveReadToolCount":
         // A FLOOR, not equality — the deliberate inverse of mediaDispatchCount's rule. A second
@@ -1572,6 +1620,66 @@ function selfCheck() {
     ).length,
     1,
     "mediaDispatchCount:0 MUST FAIL when a slide-deck request reached the video specialist",
+  );
+
+  // 2f-quater. `imageProposalCount` is in the vocabulary, is graded off the READ (arg 16,
+  // smoke:imageProposalCountForThread) rather than the plan row, takes mediaDispatchCount's
+  // EQUALITY rule, and its zero is PAIRED. Added with the key itself: the reason the image door
+  // was unreachable in production for so long is that nothing here could assert it either way.
+  assert.ok(
+    validateFixture({ ...base, expect: { imageProposalCount: 1 } }, "<synthetic>"),
+    "imageProposalCount must be an accepted expect key",
+  );
+  assert.throws(
+    () => validateFixture({ ...base, expect: { imageProposalCount: 0 } }, "<synthetic>"),
+    /requires createdDocCount or mediaDispatchCount/,
+    "a BARE zero image-proposal count passes on a turn that did nothing at all",
+  );
+  assert.ok(
+    validateFixture(
+      { ...base, expect: { imageProposalCount: 0, mediaDispatchCount: 1 } },
+      "<synthetic>",
+    ),
+    "fixture 38 pairs the zero with the video dispatch — a video ask must not become a still",
+  );
+  assert.ok(
+    validateFixture(
+      { ...base, expect: { mediaDispatchCount: 0, imageProposalCount: 1 } },
+      "<synthetic>",
+    ),
+    "fixture 41 pairs the OTHER way — a still ask must not become a reel",
+  );
+  assert.throws(
+    () => validateFixture({ ...base, expect: { imageProposalCount: -1 } }, "<synthetic>"),
+    /integer >= 0/,
+    "a negative image-proposal count is not a thing that can be observed",
+  );
+  const grade16 = (expect, image) =>
+    evaluateExpect(expect, collecting, 0, false, 0, 0, 0, "", 0, false, 0, false, 0, 0, 0, image)
+      .length;
+  assert.equal(
+    grade16({ imageProposalCount: 1 }, 1),
+    0,
+    "imageProposalCount:1 passes when the thread really carries one proposeImage step",
+  );
+  // The load-bearing negative, the same shape as mediaDispatchCount's and the same reason this key
+  // is not read off the plan row: the agent answered in PROSE ("I'll put a poster together") and
+  // never called the tool.
+  assert.equal(
+    grade16({ imageProposalCount: 1 }, 0),
+    1,
+    "imageProposalCount:1 MUST FAIL when proposeImage never ran (a prose-only answer)",
+  );
+  assert.equal(
+    grade16({ imageProposalCount: 1 }, 2),
+    1,
+    "imageProposalCount:1 MUST FAIL on a SECOND proposal — stageImagePlan recycles the one row",
+  );
+  // The production defect itself, in one offline assertion.
+  assert.equal(
+    grade16({ imageProposalCount: 0, mediaDispatchCount: 0 }, 1),
+    1,
+    "imageProposalCount:0 MUST FAIL when a video ask was answered with a staged still",
   );
 
   // 2f-ter. 20.1-02 (VALT-15): `driveReadToolCount` is in the vocabulary, is graded off the READ
@@ -2866,6 +2974,14 @@ function attemptCase(fixture, tenant, pins, tenantSkillIds = {}) {
       : parse(
           must("smoke:mediaDispatchCountForThread", { tenantId: tenant, threadId }, RETRY_READ),
         );
+  // Same skipped-unless-asked rule as its sibling: a fixture that never mentions a picture pays no
+  // extra hop and sees the fail-closed 0.
+  const imageProposalCount =
+    fixture.expect.imageProposalCount === undefined
+      ? 0
+      : parse(
+          must("smoke:imageProposalCountForThread", { tenantId: tenant, threadId }, RETRY_READ),
+        );
   const driveReadToolCount =
     fixture.expect.driveReadToolCount === undefined
       ? 0
@@ -2886,6 +3002,7 @@ function attemptCase(fixture, tenant, pins, tenantSkillIds = {}) {
     createdDocCount,
     mediaDispatchCount,
     driveReadToolCount,
+    imageProposalCount,
   );
   // Standing invariants: zero requests rows + refs-only needle scan (throws on violation).
   try {

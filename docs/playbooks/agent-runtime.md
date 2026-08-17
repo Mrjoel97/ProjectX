@@ -1,5 +1,35 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-08-17 (owner-reported — **THE GOLDEN SET COULD NOT SEE THE IMAGE DOOR.**
+> `--self-check` PASSED, 41 fixtures valid; backend typecheck + agentSteps 24/24. **No paid run.**)
+>
+> **A TOOL WITH NO ASSERTION KEY IS A TOOL THIS SET CERTIFIES NOTHING ABOUT.** `proposeImage` has
+> shipped wired to the executive with a whole reservation path behind it, and the EXPECT vocabulary
+> had no key for it. So when the registry body failed to name the tool and every image/ad request
+> became a storyboard, **all 40 fixtures stayed green** — an image ask routed to `dispatchMedia`
+> was indistinguishable from a pass. The set could catch the change BREAKING something and
+> structurally could not confirm it FIXING anything. Add the key with the tool, not after the
+> incident.
+>
+> Added: `imageProposalCount` (graded off `smoke:imageProposalCountForThread`, `agentSteps` rows —
+> never the reply, never the plan row, because `plans.by_thread` is `.unique()` and
+> `stageImagePlan` RECYCLES it, so plan state can never say the tool ran twice). EQUALITY like
+> `mediaDispatchCount`, not a floor. Its zero is PAIRED and the pair may be either positive proof —
+> `mediaDispatchCount` OR `createdDocCount`; `mediaDispatchCount:0` now accepts
+> `imageProposalCount` as its pair too. Fixture **41-image-proposal** asserts a still ask does not
+> become a reel; fixture **38** gained the mirror (`imageProposalCount: 0`) so the routing decision
+> is pinned from BOTH sides.
+>
+> **`evaluateExpect` IS CALLED POSITIONALLY — a new observable goes on the END of the signature.**
+> Inserting `imageProposalCount` mid-list silently shifted `driveReadToolCount` and reddened a
+> green self-check. `--self-check` caught it for free, before a cent moved; that is what the free
+> command is for, and it is why it runs immediately before `runLive` with ZERO convex calls.
+>
+> **`imageProposalCountForThread` has NO `dispatch:` filter and its sibling does.** Deliberate:
+> `proposeImage` is not a specialist route (no `stepTool` in `SPECIALISTS`), so `dispatch.ts` never
+> writes that tool name and the second writer the filter exists to exclude does not exist here. Do
+> not cargo-cult the filter across. Pinned in `agentSteps.test.ts`.
+
 > Last verified: 2026-08-16 (**DEPLOYED FROM A CLEAN WORKTREE — `agentSteps.refuse` and the
 > `{ calls, refusals }` shape are live on production.** This supersedes the "NOT DEPLOYED" line in
 > `f7c0cab`'s commit message, true when written.
