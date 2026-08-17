@@ -160,8 +160,9 @@ function parsePrompts(section: string): Map<number, string> {
       current = Number(head[1]);
       continue;
     }
-    const p = /^\s*[*-]?\s*(?:\*\*)?Prompt(?:\*\*)?\s*:\s*(.+)$/i.exec(line);
-    if (p && current !== undefined && !out.has(current)) out.set(current, (p[1] ?? "").trim());
+    const p = labelAt("Prompt", line);
+    if (p && current !== undefined && !out.has(current))
+      out.set(current, (p[1] ?? "").replace(/[*_\s]+$/, "").trim());
   }
   return out;
 }
@@ -216,6 +217,48 @@ const HEAD = "[#*_ \\t]*";
 const headingAt = (token: string, body: string): RegExpExecArray | null =>
   new RegExp(`^${HEAD}(?:\\d+\\.[ \\t]*)?${token}\\b.*$`, "im").exec(body);
 
+/**
+ * `HEAD`, one family down: what may sit between the start of a line and a LABEL.
+ *
+ * `-` joins the class because a labelled field is the shape a model writes as a bullet
+ * (`- Target duration: 30`) far more often than a heading is.
+ */
+const LEAD = "[-*_# \\t]*";
+
+/**
+ * Decoration that may hug a label on EITHER side of its separator.
+ *
+ * This is the whole point of the helper. Every one of the five label matchers this replaces wrote
+ * `(?:\\*\\*)?LABEL(?:\\*\\*)?[ \\t]*:` — bold around the LABEL, colon outside the asterisks. But
+ * `**Target duration:** 30` puts the colon INSIDE, and that is the most ordinary way markdown
+ * writes a labelled field. The two numeric matchers hard-refused it (`(\\d+)` cannot match `*`),
+ * and `fieldOf` was worse: it matched and captured `"** warm"`, feeding decoration into an art
+ * direction that goes on to buy video. A separator is a separator whichever side the bold is on.
+ */
+const MARK = "[*_]*";
+
+/**
+ * The one label matcher, shared by every `LABEL: value` read in this file.
+ *
+ * ONE function for the same reason `headingAt` is one function: five copies drifted into three
+ * tolerances, and the two with the NARROWEST tolerance — `Clip seconds` and `Target duration` —
+ * are the two that gate an entire deck. A model that decorates its headings decorates its labels
+ * in the same body, so widening the headings alone just moved the refusal one gate down
+ * (`no_deck` -> `bad_target_duration`, the owner's 2026-08-17 reel, twice).
+ *
+ * `value` is the caller's: `(.+)$` for prose (anchored — a label owns its whole line), `(\\d+)`
+ * for the two duration reads (unanchored, so `Target duration: 30 seconds` still parses). Like
+ * `HEAD`, neither `LEAD` nor `MARK` can match a letter, so neither can eat the label it hugs.
+ */
+const labelAt = (label: string, text: string, value = "(.+)$"): RegExpExecArray | null =>
+  new RegExp(`^${LEAD}${label}${MARK}[ \\t]*(?:[—:-])[ \\t]*${MARK}[ \\t]*${value}`, "im").exec(
+    text,
+  );
+
+/** A label's value with any trailing decoration removed — `**Mood:** warm**` is `warm`. */
+const labelValue = (label: string, text: string): string =>
+  (labelAt(label, text)?.[1] ?? "").replace(/[*_\s]+$/, "").trim();
+
 function sectionOf(body: string, heading: string): string {
   const at = headingAt(heading, body);
   if (!at) return "";
@@ -252,14 +295,8 @@ export type ArtDirection = {
 
 /** `- **Palette** — 3-5 colours…` → the text after the label. Tolerates `-`/`*` bullets, bold or
  *  bare labels, and either an em-dash or a colon as the separator, because a model will produce
- *  all of them and none of the differences mean anything. */
-function fieldOf(section: string, label: string): string {
-  const re = new RegExp(
-    `^[ \\t]*[*-]?[ \\t]*(?:\\*\\*)?${label}(?:\\*\\*)?[ \\t]*(?:[—:-])[ \\t]*(.+)$`,
-    "im",
-  );
-  return (re.exec(section)?.[1] ?? "").trim();
-}
+ *  all of them and none of the differences mean anything. See `labelAt`. */
+const fieldOf = (section: string, label: string): string => labelValue(label, section);
 
 /** A comma/semicolon/backtick-separated list into trimmed entries. */
 const listOf = (s: string): string[] =>
@@ -326,7 +363,7 @@ export function parseBlockDeck(body: string): ParsedDeck {
     ? parsePrompts(afterDeck.slice(promptsAt.index))
     : new Map<number, string>();
 
-  const declared = /^[ \t]*(?:\*\*)?Clip seconds(?:\*\*)?[ \t]*:[ \t]*(\d+)/im.exec(section);
+  const declared = labelAt("Clip seconds", section, "(\\d+)");
   const clipSeconds = declared ? Number(declared[1]) : Number.NaN;
   if (!CLIP_SECONDS_SET.has(clipSeconds)) return fail("bad_duration");
 
@@ -701,9 +738,9 @@ function sceneSourcesOf(section: string): {
       current = Number(head[1]);
       continue;
     }
-    const s = /^\s*[*-]?\s*(?:\*\*)?Source(?:\*\*)?\s*:\s*(.+)$/i.exec(line);
+    const s = labelAt("Source", line);
     if (!s || current === undefined || sources.has(current)) continue;
-    const value = (s[1] ?? "").trim();
+    const value = (s[1] ?? "").replace(/[*_\s]+$/, "").trim();
     if (/^unverified$/i.test(value)) {
       sources.set(current, "unverified");
       continue;
@@ -747,7 +784,7 @@ export function parseSceneDeck(body: string): ParsedSceneDeck {
     return { ok: false, reason: "malformed_source", sceneIndex: malformed - 1 };
   }
 
-  const declared = /^[ \t]*(?:\*\*)?Target duration(?:\*\*)?[ \t]*:[ \t]*(\d+)/im.exec(section);
+  const declared = labelAt("Target duration", section, "(\\d+)");
   const targetDurationSeconds = declared ? Number(declared[1]) : Number.NaN;
   if (!TARGET_SET.has(targetDurationSeconds)) return sceneFail("bad_target_duration");
 

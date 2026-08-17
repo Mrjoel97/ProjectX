@@ -2893,15 +2893,17 @@ describe("deckTokenCounts — §4: counts, never content", () => {
     "Topic: Zawadi ships handmade leather satchels to Nairobi boutiques",
     "**VARIATION A**",
     "**SCENE DECK**",
+    "**Target duration:** 30",
     "| 1 | animated_image | 15 | A workbench at dawn | We stitch every seam by hand. | | |",
   ].join("\n");
 
-  test("returns four finite numbers and nothing else", () => {
+  test("returns five finite numbers and nothing else", () => {
     const out = deckTokenCounts(BODY);
     expect(Object.keys(out).sort()).toEqual([
       "blockDeckTokens",
       "bodyChars",
       "sceneDeckTokens",
+      "targetDurationTokens",
       "variationTokens",
     ]);
     for (const v of Object.values(out)) expect(Number.isFinite(v)).toBe(true);
@@ -2919,5 +2921,14 @@ describe("deckTokenCounts — §4: counts, never content", () => {
     expect(out.sceneDeckTokens).toBe(1); // a deck WAS written — the heading is what failed
     expect(out.variationTokens).toBe(1);
     expect(deckTokenCounts("I think an ad would work well here.").sceneDeckTokens).toBe(0);
+  });
+
+  test("counts the token that tells the two bad_target_duration causes apart", () => {
+    // Non-zero: the target WAS declared, so the value (or the reading of it) is what refused.
+    expect(deckTokenCounts(BODY).targetDurationTokens).toBe(1);
+    // Zero: the specialist never declared one at all — a different bug, a different fix.
+    expect(
+      deckTokenCounts("SCENE DECK\n| 1 | text_card | 15 | … | … | | |").targetDurationTokens,
+    ).toBe(0);
   });
 });

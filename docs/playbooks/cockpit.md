@@ -5,6 +5,22 @@
 > filter its `dispatchMedia` sibling needs. **No cockpit behaviour changed.** The subsystem entry
 > is in `agent-runtime.md`.
 
+> Last verified: 2026-08-17 (owner-reported, second pass — **`deckTokenCounts` is FIVE numbers
+> now.** dispatch 97/97, llmRedaction guard green, backend 2031/2031, typecheck clean; no live run.)
+>
+> **`targetDurationTokens` joined the four.** `bad_target_duration` had the same two-indistinguish-
+> able-causes problem `no_deck` had, and the entry below missed it: the specialist declared no
+> target, or declared one this codebase could not read. Non-zero means it WAS declared and the value
+> or its markdown decoration is what failed; zero means none was written. The owner's reel refused
+> twice on this code with the audit row unable to say which — the same blind spot, one reason along.
+>
+> **Everything about HOW it was added below still applies, unchanged:** called into a `const` and
+> spread, never inlined into the payload literal; the §4 review recorded in `llmRedaction.test.ts`'s
+> own comment block; the counts-only claim proved by test against distinctive prose. **A sixth
+> number gets the same treatment, not a quiet append.**
+>
+> **The payload COUNT assertion (`toBe(12)`) still holds** — the same three payloads were extended.
+
 > Last verified: 2026-08-17 (owner-reported — **the media refusal's diagnosability, and `res.body`
 > vs the §4 scan.** dispatch 93/93, llmRedaction guard green, backend 2026/2026; no live run.)
 >
