@@ -15,6 +15,29 @@ export default function SignIn() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  /**
+   * The OAuth button used to be `onClick={() => void signIn(…)}`. `void` discards the promise, so a
+   * rejection went nowhere: no redirect, no message, no console entry — a button that did nothing,
+   * which a user cannot tell apart from a dead page.
+   *
+   * SCOPE, HONESTLY: this reports failures raised while STARTING the flow. A failure inside
+   * `/api/auth/callback/<provider>` is a server-side 500 with no redirect and no error parameter
+   * (`@convex-dev/auth` rewrites the destination only on success), so it cannot surface here — the
+   * browser never comes back to this page. Those are found in the Convex logs.
+   */
+  async function onOAuth(provider: string, label: string) {
+    setError(null);
+    setBusy(true);
+    try {
+      await signIn(provider, { redirectTo: "/dashboard" });
+      // `busy` deliberately stays set on success: the browser is leaving for the provider, and
+      // re-enabling the button would flash it live again mid-navigation.
+    } catch {
+      setError(`Could not start ${label} sign-in. Please try again.`);
+      setBusy(false);
+    }
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -74,9 +97,10 @@ export default function SignIn() {
       <button
         type="button"
         className="auth-google"
-        onClick={() => void signIn("google", { redirectTo: "/dashboard" })}
+        disabled={busy}
+        onClick={() => void onOAuth("google", "Google")}
       >
-        <GoogleIcon /> Continue with Google
+        <GoogleIcon /> {busy ? "Connecting…" : "Continue with Google"}
       </button>
 
       <p className="auth-switch">
