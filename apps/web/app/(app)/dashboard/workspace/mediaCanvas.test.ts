@@ -1370,6 +1370,26 @@ describe("adjustmentNotes — every second the parser moved", () => {
     expect(note).not.toContain("rebalance");
   });
 
+  // The narration repair moves seconds in PAIRS — one scene grows so its line can finish, another
+  // pays for it — and the two halves must not read as the same event. A donor that claimed "so its
+  // line has room" would be describing a scene that has no line.
+  test("the NARRATION reason distinguishes the scene that grew from the one that paid", () => {
+    const [grew, paid] = adjustmentNotes(
+      [
+        { sceneIndex: 0, fromSeconds: 8, toSeconds: 15, why: "narration" },
+        { sceneIndex: 2, fromSeconds: 10, toSeconds: 3, why: "narration" },
+      ],
+      30,
+    );
+    expect(grew).toMatch(/lengthened .*8s.*15s/);
+    expect(grew).toContain("line");
+    expect(paid).toMatch(/shortened .*10s.*3s/);
+    expect(paid).toContain("above");
+    // The support code never reaches the page — 33-08's rule, same as grid and rebalance.
+    expect(grew).not.toContain("narration");
+    expect(paid).not.toContain("narration");
+  });
+
   test("with no declared reel length it still discloses, without inventing one", () => {
     const note = adjustmentNotes([REPAIR[1] as (typeof REPAIR)[number]], null)[0];
     expect(note).toContain("20s");
