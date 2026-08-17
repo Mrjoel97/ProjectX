@@ -1,5 +1,73 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-08-18 (**the refusal counts had no reader — `audit:recentByType` is it.**
+> audit 2/2, both order and window assertions mutation-verified. No write path changed; the
+> insert-only rule (§3) and `auditImmutability.test.ts` are untouched — this adds a READ.)
+>
+> **The gap.** `media.deck_refused` carries five numbers (`bodyChars`, three deck tokens, and
+> `targetDurationTokens`) for exactly one reason: on the refusal path the specialist's raw body is
+> NEVER persisted — `landStoryboardRefusal` stores the COMPOSED refusal, not the model's prose — so
+> those counts are the ENTIRE evidence of which of a reason code's two causes fired. They were being
+> written to prod and read by nobody. The only reader was a browser session against the deployment:
+> `wormCursor.auditSince` is oldest-first from a cursor over every row in a window, built for the
+> WORM export, and answers a different question.
+>
+> `audit.recentByType({eventType, sinceMs?, limit?})` returns the newest payloads of one event type
+> as `{ts, tenantId, correlationId, payload}`, cross-tenant:
+>
+>     npx convex run --prod audit:recentByType '{"eventType":"media.deck_refused"}'
+>
+> **Cross-tenant is the point, not an oversight.** A tenant-scoped variant would make the owner look
+> up a tenantId first — which is the browser session this replaces. `audit.by_ts` is already the
+> named exception in `isolation.test.ts` for exactly this consumer class ("a named internal/owner-
+> plane consumer with no tenant-facing caller"), and this is an `internalQuery`: never
+> client-callable.
+>
+> **`sinceMs` is the scan bound, NOT `limit`.** Convex `.filter()` post-filters the index range, so
+> for a rare eventType `.take()` alone walks the table backwards to row one. The default window is 7
+> days. If that stops being enough, add a `by_eventType_ts` index — do not widen the default.
+>
+> Returning `payload` verbatim needs no redaction step, and that is §4 paying out: the table's
+> contract is refs/hashes/ids/counts ONLY, enforced redact-then-WRITE. A read surface is cheap to
+> add here precisely because the write surface was never permissive.
+
+> Last verified: 2026-08-17 (**THE §4 SCAN WAS TRUNCATING, AND IT REPORTED GREEN ON TEXT IT NEVER
+> READ.** llmRedaction 61/61, mutation-verified both directions. Found while adding a payload field
+> and reviewing it against this very guard.)
+>
+> **The defect.** Nine scans in `llmRedaction.test.ts` extracted payloads with
+> `payload:s*{[^}]*}`. `[^}]*` stops at the FIRST closing brace, so any payload carrying a
+> NESTED object literal was silently cut short and everything after it went unscanned. **Two of
+> dispatch.ts's twelve payloads are exactly that shape** —
+> `...("blockIndex" in deck ? { blockIndex, chars } : {})` — so every field after the ternary was
+> unguarded. Measured, not argued: with `leakedReply: res.body` planted immediately after that
+> ternary, the OLD scan found **0** leaks and the balanced one finds **1**.
+>
+> **A truncating guard is worse than no guard, because it is trusted.** This one is the enforcement
+> for CLAUDE.md §4 — the rule that keeps the audit log from becoming a PII honeypot — and it had
+> been passing for every payload written after a conditional spread.
+>
+> Fixed once, at the root: `payloadsIn(src)` (a brace counter) and `payloadAfter(src, anchor)`
+> replace all nine copies. **Use them; do not write another `[^}]*` payload regex.** They are a
+> counter and not a parser — braces inside strings/templates/regexes are not understood, which no
+> payload literal in `convex/` contains today and the count assertions in that file catch if it
+> changes.
+>
+> Also landed: `media.deck_refused` carries `deckTokenCounts` (four numbers — `bodyChars` and three
+> token counts) so `no_deck` can say WHICH of its two causes fired. Reviewed in the guard's own
+> comment block per its protocol, and the counts-only claim is proved by a test against distinctive
+> prose rather than trusted by name — which is now doubly worth having, since the scan that was
+> supposed to back it up could not see two of the three sites.
+
+
+> **25-06 note, 2026-08-16 — `RECONNECT` gained `holdMessage`, one string per provider.** The
+> notification plane raises `microsoft_calendar_reconnect` from the CALENDAR expiry cron, and its
+> copy says so. Since 25-05 a Microsoft **mail** send can also park a request at `awaiting_reauth`,
+> and reusing the calendar sentence for that hold describes the wrong subsystem to the user. The
+> proactive (`message`) and reactive (`holdMessage`) strings are now separate fields because they
+> are different facts. **No notification KIND was added and no audit payload changed** — this is
+> presentation copy only. See `cockpit.md` for the provider-partitioning fix it belongs to.
+
 > Last verified: 2026-08-16 (**erasure now deletes the Convex Auth binding too — it was leaving
 > the erased person permanently unable to sign in.**)
 >
@@ -199,7 +267,7 @@ request to a `failed` terminal state, and surfaces in the app shell's red badge.
 
 - `packages/backend/convex/schema.ts` — `audit`, `deadLetters`, `exportCursors` tables; raw content lives ONLY in `requests`/`plans`
 - `packages/contracts/src/audit.ts` — `AuditPayload` type: refs/hashes/numbers/bools/string[] only, no nested objects
-- `packages/backend/convex/audit.ts` — the SOLE audit write surface: `log` (internalMutation) + count helpers. No patch/replace/delete exists.
+- `packages/backend/convex/audit.ts` — the SOLE audit write surface: `log` (internalMutation) + the read helpers `countAudit` and `recentByType` (newest payloads of one eventType, cross-tenant, CLI-diagnosable). No patch/replace/delete exists.
 - `packages/backend/convex/deadLetter.ts` — DLQ **writers**: `onPipelineComplete` (workflow onComplete), `deadLetterRecipient` (per-recipient fan-out isolation)
 - `packages/backend/convex/deadLetters.ts` — DLQ **operator read/resolve** surface: `newCount`, `listNew`, `markResolved` (tenant-scoped). Distinct file from `deadLetter.ts` — writers vs. readers.
 - `packages/backend/convex/notifications.ts` — the OPSG-05 **notify choke point**: `notify` inserts the in-app row (always) then schedules the external channel. `list`/`markRead` are the tenant-scoped read surface.
