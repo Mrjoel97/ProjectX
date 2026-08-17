@@ -1,5 +1,36 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-08-18 (**the refusal counts had no reader — `audit:recentByType` is it.**
+> audit 2/2, both order and window assertions mutation-verified. No write path changed; the
+> insert-only rule (§3) and `auditImmutability.test.ts` are untouched — this adds a READ.)
+>
+> **The gap.** `media.deck_refused` carries five numbers (`bodyChars`, three deck tokens, and
+> `targetDurationTokens`) for exactly one reason: on the refusal path the specialist's raw body is
+> NEVER persisted — `landStoryboardRefusal` stores the COMPOSED refusal, not the model's prose — so
+> those counts are the ENTIRE evidence of which of a reason code's two causes fired. They were being
+> written to prod and read by nobody. The only reader was a browser session against the deployment:
+> `wormCursor.auditSince` is oldest-first from a cursor over every row in a window, built for the
+> WORM export, and answers a different question.
+>
+> `audit.recentByType({eventType, sinceMs?, limit?})` returns the newest payloads of one event type
+> as `{ts, tenantId, correlationId, payload}`, cross-tenant:
+>
+>     npx convex run --prod audit:recentByType '{"eventType":"media.deck_refused"}'
+>
+> **Cross-tenant is the point, not an oversight.** A tenant-scoped variant would make the owner look
+> up a tenantId first — which is the browser session this replaces. `audit.by_ts` is already the
+> named exception in `isolation.test.ts` for exactly this consumer class ("a named internal/owner-
+> plane consumer with no tenant-facing caller"), and this is an `internalQuery`: never
+> client-callable.
+>
+> **`sinceMs` is the scan bound, NOT `limit`.** Convex `.filter()` post-filters the index range, so
+> for a rare eventType `.take()` alone walks the table backwards to row one. The default window is 7
+> days. If that stops being enough, add a `by_eventType_ts` index — do not widen the default.
+>
+> Returning `payload` verbatim needs no redaction step, and that is §4 paying out: the table's
+> contract is refs/hashes/ids/counts ONLY, enforced redact-then-WRITE. A read surface is cheap to
+> add here precisely because the write surface was never permissive.
+
 > Last verified: 2026-08-17 (**THE §4 SCAN WAS TRUNCATING, AND IT REPORTED GREEN ON TEXT IT NEVER
 > READ.** llmRedaction 61/61, mutation-verified both directions. Found while adding a payload field
 > and reviewing it against this very guard.)
@@ -262,7 +293,7 @@ request to a `failed` terminal state, and surfaces in the app shell's red badge.
 
 - `packages/backend/convex/schema.ts` — `audit`, `deadLetters`, `exportCursors` tables; raw content lives ONLY in `requests`/`plans`
 - `packages/contracts/src/audit.ts` — `AuditPayload` type: refs/hashes/numbers/bools/string[] only, no nested objects
-- `packages/backend/convex/audit.ts` — the SOLE audit write surface: `log` (internalMutation) + count helpers. No patch/replace/delete exists.
+- `packages/backend/convex/audit.ts` — the SOLE audit write surface: `log` (internalMutation) + the read helpers `countAudit` and `recentByType` (newest payloads of one eventType, cross-tenant, CLI-diagnosable). No patch/replace/delete exists.
 - `packages/backend/convex/deadLetter.ts` — DLQ **writers**: `onPipelineComplete` (workflow onComplete), `deadLetterRecipient` (per-recipient fan-out isolation)
 - `packages/backend/convex/deadLetters.ts` — DLQ **operator read/resolve** surface: `newCount`, `listNew`, `markResolved` (tenant-scoped). Distinct file from `deadLetter.ts` — writers vs. readers.
 - `packages/backend/convex/notifications.ts` — the OPSG-05 **notify choke point**: `notify` inserts the in-app row (always) then schedules the external channel. `list`/`markRead` are the tenant-scoped read surface.

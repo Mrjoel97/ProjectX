@@ -45,3 +45,68 @@ test("audit.log inserts exactly one row that round-trips", async () => {
   expect(row.payload).toEqual(args.payload);
   expect(typeof row.ts).toBe("number");
 });
+
+// The READ side of a refusal diagnosis. The claim under test is the one the query exists for:
+// hand it an eventType and the five `deckTokenCounts` numbers come back, newest first, WITHOUT
+// knowing a tenantId — because the alternative was a browser session against the deployment.
+//
+// Rows are inserted through `ctx.db` rather than `internal.audit.log` on purpose: `log` stamps
+// `ts: Date.now()`, and every assertion here is about ORDER and the `sinceMs` window, which needs
+// the timestamps chosen. The aggregate is untouched for the same reason — this query never reads it.
+test("recentByType returns one eventType's payloads, newest first, bounded by the window", async () => {
+  const t = convexTest(schema, modules);
+
+  const row = (ts: number, eventType: string, tenantId: string, payload: unknown) => ({
+    tenantId,
+    correlationId: `corr_${ts}`,
+    eventType,
+    actor: "system",
+    payload,
+    ts,
+  });
+  // Two tenants and a decoy eventType, so "returns everything in the window" cannot pass this.
+  const counts = (targetDurationTokens: number) => ({
+    reason: "bad_target_duration",
+    bodyChars: 900,
+    sceneDeckTokens: 1,
+    blockDeckTokens: 0,
+    variationTokens: 0,
+    targetDurationTokens,
+  });
+  await t.run(async (ctx) => {
+    await ctx.db.insert("audit", row(100, "media.deck_refused", "tenant_a", counts(0)));
+    await ctx.db.insert("audit", row(200, "plan.approved", "tenant_a", { planId: "p1" }));
+    await ctx.db.insert("audit", row(300, "media.deck_refused", "tenant_b", counts(1)));
+    await ctx.db.insert("audit", row(50, "media.deck_refused", "tenant_a", counts(9)));
+  });
+
+  const all = await t.query(internal.audit.recentByType, {
+    eventType: "media.deck_refused",
+    sinceMs: 0,
+  });
+
+  // Newest first, decoy eventType absent, and BOTH tenants present — no tenantId was supplied.
+  expect(all.map((r) => r.ts)).toEqual([300, 100, 50]);
+  expect(all.map((r) => r.tenantId)).toEqual(["tenant_b", "tenant_a", "tenant_a"]);
+
+  // The whole point: the counts survive the trip, so the two causes of one reason code are
+  // distinguishable from the CLI. `targetDurationTokens: 0` = no target was ever declared;
+  // non-zero = the line was written and its value is what failed.
+  expect(all[0]!.payload).toEqual(counts(1));
+  expect(all[2]!.payload.targetDurationTokens).toBe(9);
+  expect(all[0]!.correlationId).toBe("corr_300"); // the lineage handle to join the rest of the run
+
+  // `sinceMs` is STRICTLY greater-than, and it is the scan bound — not `limit`.
+  const windowed = await t.query(internal.audit.recentByType, {
+    eventType: "media.deck_refused",
+    sinceMs: 100,
+  });
+  expect(windowed.map((r) => r.ts)).toEqual([300]);
+
+  const limited = await t.query(internal.audit.recentByType, {
+    eventType: "media.deck_refused",
+    sinceMs: 0,
+    limit: 2,
+  });
+  expect(limited.map((r) => r.ts)).toEqual([300, 100]);
+});
