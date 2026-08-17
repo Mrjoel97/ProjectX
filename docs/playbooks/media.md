@@ -1,5 +1,35 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-08-17 (owner-reported `no_deck` on production — **A DECORATED HEADING IS THE
+> SAME HEADING.** Source + repro + `storyboard.test.ts` 115/115 + @pikar/core 1032/1032; no live
+> media run.)
+>
+> **THE DEFECT.** All SIX heading matchers in `@pikar/core/storyboard` were `[ 	]*#*[ 	]*` —
+> they accepted `SCENE DECK` and `## SCENE DECK` and rejected `**SCENE DECK**`. A model that
+> decorated its headings (routine markdown, and the body asks for a BARE line) had `parseVariations`
+> return `kind:"one"`, `parseSceneDeck` return `no_deck`, `persistStoryboard` fall through to
+> `parseBlockDeck`, and the owner told **"it never wrote a block deck"** — the BLOCK contract's
+> sentence — while a complete scene deck sat in the response. Fixed at the root: ONE `HEAD`
+> constant + one `headingAt` helper, shared by `sectionOf`, both deck contracts, both prompt
+> sections and the variation splitter. **Add a heading matcher and you use `headingAt`** — six
+> copies of one pattern is what let the tolerance drift, and the class cannot match a letter so it
+> can never eat the token it precedes.
+>
+> **The refusal must STILL refuse.** A body with genuinely no deck is the OTHER cause of the same
+> code; widening the heading must not swallow it. Pinned by test.
+>
+> **`no_deck` HAS TWO CAUSES AND THEY WERE INDISTINGUISHABLE.** The raw specialist body is never
+> persisted on the refusal path — `landStoryboardRefusal` stores the COMPOSED refusal, not the
+> prose — so after the run nothing said which cause it was. `media.deck_refused` now also carries
+> `deckTokenCounts`: `{bodyChars, sceneDeckTokens, blockDeckTokens, variationTokens}`, four
+> numbers. **A non-zero token count beside `reason:"no_deck"` means the deck WAS written and the
+> heading is what failed.** §4-reviewed in `llmRedaction.test.ts`'s own comment block, per that
+> guard's protocol, and proved by test rather than trusted by name.
+>
+> **Unchanged:** the price table, `VISUAL_KINDS`, the 15/30/60 targets, the 4/8/12 generated grid,
+> the job cap, and the rule that a scene deck failing for any reason OTHER than `no_deck` is
+> refused as a scene deck rather than re-read under the block contract.
+
 > Touched 2026-08-17 to clear the §9 Stop hook — **ACKNOWLEDGEMENT ONLY, NOT A VERIFICATION**, and
 > deliberately NOT a `Last verified` bump. The Phase-25 session that touched this file wrote none
 > of the code that triggered the check and has not reviewed it.

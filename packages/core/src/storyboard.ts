@@ -194,13 +194,35 @@ const SECTION_TOKENS = [
   "BRIEF",
 ];
 
+/**
+ * What may sit between the start of a line and a heading token.
+ *
+ * `#` for a markdown heading, and **`*`/`_` because a model told to write a bare `SCENE DECK` line
+ * writes `**SCENE DECK**` about as often as it writes the bare form** — a decorated heading is the
+ * SAME heading, not a different contract. Spaces are in the class rather than around it so
+ * `## **SCENE DECK**` (both decorations, interleaved) matches too.
+ *
+ * ONE constant, shared by every heading matcher in this file, because the tolerance MUST NOT drift
+ * between the two deck contracts, their prompt sections and the variation splitter. It did: all six
+ * matchers accepted `#` and none accepted `*`, so a bolded `SCENE DECK` read as "this body has no
+ * scene deck at all", fell through to `parseBlockDeck`, and refused a deck the model had actually
+ * written — reported to the owner as "it never wrote a block deck".
+ *
+ * It cannot match a letter, so it can never eat into the token it precedes.
+ */
+const HEAD = "[#*_ \\t]*";
+
+/** The one heading matcher. `4.`-style numbering stays tolerated (§-numbered bodies). */
+const headingAt = (token: string, body: string): RegExpExecArray | null =>
+  new RegExp(`^${HEAD}(?:\\d+\\.[ \\t]*)?${token}\\b.*$`, "im").exec(body);
+
 function sectionOf(body: string, heading: string): string {
-  const at = new RegExp(`^[ \\t]*#*[ \\t]*(?:\\d+\\.[ \\t]*)?${heading}\\b.*$`, "im").exec(body);
+  const at = headingAt(heading, body);
   if (!at) return "";
   const after = body.slice(at.index + at[0].length);
   const others = SECTION_TOKENS.filter((t) => t !== heading).join("|");
   const next = new RegExp(
-    `^[ \\t]*(?:#{1,6}[ \\t]*\\S|#*[ \\t]*(?:\\d+\\.[ \\t]*)?(?:${others})\\b)`,
+    `^[ \\t]*(?:#{1,6}[ \\t]*\\S|${HEAD}(?:\\d+\\.[ \\t]*)?(?:${others})\\b)`,
     "im",
   ).exec(after);
   return (next ? after.slice(0, next.index) : after).trim();
@@ -294,11 +316,11 @@ export function parseArtDirection(body: string): ArtDirection | null {
 }
 
 export function parseBlockDeck(body: string): ParsedDeck {
-  const deckAt = /^[ \t]*#*[ \t]*BLOCK DECK\b.*$/im.exec(body);
+  const deckAt = headingAt("BLOCK DECK", body);
   if (!deckAt) return fail("no_deck");
 
   const afterDeck = body.slice(deckAt.index + deckAt[0].length);
-  const promptsAt = /^[ \t]*#*[ \t]*BLOCK PROMPTS\b.*$/im.exec(afterDeck);
+  const promptsAt = headingAt("BLOCK PROMPTS", afterDeck);
   const section = promptsAt ? afterDeck.slice(0, promptsAt.index) : afterDeck;
   const prompts = promptsAt
     ? parsePrompts(afterDeck.slice(promptsAt.index))
@@ -708,11 +730,11 @@ function sceneSourcesOf(section: string): {
  * sum assert already works in ms.
  */
 export function parseSceneDeck(body: string): ParsedSceneDeck {
-  const deckAt = /^[ \t]*#*[ \t]*SCENE DECK\b.*$/im.exec(body);
+  const deckAt = headingAt("SCENE DECK", body);
   if (!deckAt) return sceneFail("no_deck");
 
   const afterDeck = body.slice(deckAt.index + deckAt[0].length);
-  const promptsAt = /^[ \t]*#*[ \t]*SCENE PROMPTS\b.*$/im.exec(afterDeck);
+  const promptsAt = headingAt("SCENE PROMPTS", afterDeck);
   const section = promptsAt ? afterDeck.slice(0, promptsAt.index) : afterDeck;
   const prompts = promptsAt
     ? parsePrompts(afterDeck.slice(promptsAt.index))
@@ -995,7 +1017,7 @@ export type ParsedVariations =
     };
 
 const variationHeading = (letter: "A" | "B", body: string) =>
-  new RegExp(`^[ \\t]*#*[ \\t]*(?:\\d+\\.[ \\t]*)?VARIATION ${letter}\\b.*$`, "im").exec(body);
+  headingAt(`VARIATION ${letter}`, body);
 
 /**
  * Split a two-variation body at its VARIATION A / VARIATION B headings and run the EXISTING

@@ -26,7 +26,7 @@ import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/s
 import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { buildSpecialistPrompt, type DispatchResult } from "./dispatch";
+import { buildSpecialistPrompt, type DispatchResult, deckTokenCounts } from "./dispatch";
 import { contentHash } from "./lib/hash";
 import { buildCockpitTools, runSpecialistTurn } from "./llm";
 import schema from "./schema";
@@ -2881,5 +2881,43 @@ describe("33-03 — the variations terminal: parseVariations runs FIRST", () => 
     expect(plan?.shots?.[0]?.source).toEqual({ docId: "k57abc123", title: "t" });
     expect(plan?.shots?.[0]?.needsConfirmation).toBe(true);
     expect(plan?.shots?.[0]?.confirmedAt).toBeUndefined();
+  });
+});
+
+describe("deckTokenCounts — §4: counts, never content", () => {
+  // The audit payload claim, PROVEN rather than trusted. A future edit that returned an excerpt
+  // "just for debugging" would redden this, which is the whole point: the §4 scan in
+  // llmRedaction.test.ts can only see that a const was spread, not what the const holds.
+  const BODY = [
+    "BRIEF",
+    "Topic: Zawadi ships handmade leather satchels to Nairobi boutiques",
+    "**VARIATION A**",
+    "**SCENE DECK**",
+    "| 1 | animated_image | 15 | A workbench at dawn | We stitch every seam by hand. | | |",
+  ].join("\n");
+
+  test("returns four finite numbers and nothing else", () => {
+    const out = deckTokenCounts(BODY);
+    expect(Object.keys(out).sort()).toEqual([
+      "blockDeckTokens",
+      "bodyChars",
+      "sceneDeckTokens",
+      "variationTokens",
+    ]);
+    for (const v of Object.values(out)) expect(Number.isFinite(v)).toBe(true);
+  });
+
+  test("leaks no substring of the body — no word of it survives into a value", () => {
+    const serialized = JSON.stringify(deckTokenCounts(BODY));
+    for (const word of ["Zawadi", "satchels", "Nairobi", "stitch", "workbench"]) {
+      expect(serialized).not.toContain(word);
+    }
+  });
+
+  test("counts the tokens that tell the two no_deck causes apart", () => {
+    const out = deckTokenCounts(BODY);
+    expect(out.sceneDeckTokens).toBe(1); // a deck WAS written — the heading is what failed
+    expect(out.variationTokens).toBe(1);
+    expect(deckTokenCounts("I think an ad would work well here.").sceneDeckTokens).toBe(0);
   });
 });

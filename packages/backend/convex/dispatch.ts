@@ -658,6 +658,33 @@ function variationRefusalBody(bad: Extract<ParsedVariations, { kind: "refused" }
 }
 
 /**
+ * Why a deck refusal happened, as COUNTS — §4 holds: never the body, never a line of it, never a
+ * narration cell. Only how long the answer was and how many times each structural token appeared.
+ *
+ * `no_deck` has TWO causes that were indistinguishable after the fact, and the difference is the
+ * whole diagnosis: the specialist wrote no deck at all, or it wrote one under a heading the parser
+ * did not recognise. The raw body is never persisted on this path — `landStoryboardRefusal` stores
+ * the COMPOSED refusal, not the model's prose — so every `no_deck` was unexplainable once the run
+ * was over. That is what left the owner's 2026-08-17 failure a coin-flip between two very different
+ * bugs. A NON-ZERO token count beside `reason: "no_deck"` now says it plainly: the deck was there
+ * and the heading is what failed.
+ *
+ * Exported ONLY so `dispatch.test.ts` can prove the claim rather than trust the name: every value
+ * it returns is a finite number, and no value is a substring of the body it was given.
+ *
+ * ALWAYS call it into a `const` and spread THAT — never inline into a payload literal. The §4 scan
+ * in `llmRedaction.test.ts` forbids the token `body` inside a payload literal on purpose, and that
+ * rule is worth keeping sharp: the guarantee here comes from this function's return type, and the
+ * scan stays able to catch the next person who reaches for `res.body` directly.
+ */
+export const deckTokenCounts = (body: string) => ({
+  bodyChars: body.length,
+  sceneDeckTokens: (body.match(/SCENE DECK/gi) ?? []).length,
+  blockDeckTokens: (body.match(/BLOCK DECK/gi) ?? []).length,
+  variationTokens: (body.match(/VARIATION [AB]\b/gi) ?? []).length,
+});
+
+/**
  * The storyboard terminal (MEDIA-01), bolted onto a media dispatch AFTER `dispatchAndLand` has
  * returned — `persistResearchFindings`' ordering argument verbatim: the memo card is already landed
  * by the time this runs, so the user has the specialist's prose whatever happens here.
@@ -722,6 +749,7 @@ async function persistSceneDeck(
   } = {},
 ): Promise<void> {
   if (!scene.ok) {
+    const shape = deckTokenCounts(body); // counts only — see the helper, and §4's scan
     await ctx.runMutation(internal.plans.landStoryboardRefusal, {
       tenantId: args.tenantId,
       planId: args.planId,
@@ -744,6 +772,7 @@ async function persistSceneDeck(
         ...("sceneIndex" in scene ? { sceneIndex: scene.sceneIndex } : {}),
         ...("chars" in scene ? { chars: scene.chars } : {}),
         ...("totalSeconds" in scene ? { totalSeconds: scene.totalSeconds } : {}),
+        ...shape,
       },
     });
     return;
@@ -829,6 +858,7 @@ async function persistStoryboard(
    * existing two-contract read byte-for-byte unchanged.
    */
   const variations = parseVariations(res.body);
+  const shape = deckTokenCounts(res.body); // counts only — see the helper, and §4's scan
   if (variations.kind === "refused") {
     await ctx.runMutation(internal.plans.landStoryboardRefusal, {
       tenantId: args.tenantId,
@@ -844,7 +874,12 @@ async function persistStoryboard(
       eventType: "media.deck_refused",
       actor: "system",
       // Refs and COUNTS only (§4): the inner reason CODE and WHICH variation carried it.
-      payload: { ...lineageRefs(args), reason: variations.reason, variation: variations.variation },
+      payload: {
+        ...lineageRefs(args),
+        reason: variations.reason,
+        variation: variations.variation,
+        ...shape,
+      },
     });
     return res;
   }
@@ -914,6 +949,9 @@ async function persistStoryboard(
         ...lineageRefs(args),
         reason: deck.reason,
         ...("blockIndex" in deck ? { blockIndex: deck.blockIndex, chars: deck.chars } : {}),
+        // The branch the owner hit: BOTH parsers returned `no_deck`. These counts are what say
+        // whether the specialist wrote nothing or wrote a deck this file failed to recognise.
+        ...shape,
       },
     });
     return res;
