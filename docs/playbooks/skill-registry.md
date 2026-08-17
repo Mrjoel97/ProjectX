@@ -1,5 +1,29 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-17 (owner-reported — **the executive could not route to `proposeImage`,
+> because its body never mentioned it.** Body edit STAGED, byte-sync 22/22, contracts 31/31 —
+> **NOT SEEDED, NOT ACTIVATED, NO EVAL RUN.**)
+>
+> **A TOOL WIRED IN CODE AND ABSENT FROM THE BODY IS A TOOL THAT DOES NOT EXIST.** `proposeImage`
+> has shipped in `llm.ts` for some time — staged into `buildCockpitTools`, granted to the executive,
+> with a clear description and a whole reservation path behind it (`stageImagePlan` → `mediaMode:
+> "image"` → `generateImage` → gpt-image-2). It appeared **ZERO times** in `cockpit-agent.md`. The
+> body's routing list offered three doors (`generateAttachment`/`createDocument`/`dispatchMedia`)
+> and its section literally titled "Creating images and video" taught only video — enumerating
+> **"an ad"** as `dispatchMedia`. So every ad and every image request became a storyboard, exactly
+> as instructed. **When auditing a tool, grep the BODY for its name, not just the code.**
+>
+> Staged in this commit: a fourth routing door for a single still image, an opener that splits VIDEO
+> from IMAGE and says "an ad" is by itself neither, and a `### A single still image` section
+> (staging free, generating is the user's click, one image at a time, one picture — not a set).
+>
+> **NOT DONE, and required before this changes any behaviour:** seed + activate through the eval
+> gate, and A/B the prior version first. A body edit shifts the model's tool args on UNRELATED
+> fixtures — that has bitten this repo before. **The body's own `(v2)` label was deliberately left
+> alone**: the live registry version is `maxVersion+1` at seed time and optimizer dry-run candidates
+> occupy numbers, so pinning a label from source is how the wrong row gets read back. Verify which
+> version carries this body in the LIVE DB before trusting an eval result.
+
 > Last verified: 2026-08-16 (**PRODUCTION IS NOW ON `cockpit-agent` v8. THE POINTER MOVED: v6 → v8.
 > THIS SUPERSEDES THE ENTRY IMMEDIATELY BELOW**, which said "PRODUCTION STILL RUNS THE OLD BODY, AND
 > THE PRODUCTION CANDIDATE IS GATE-BLOCKED" — true when written, false now. The gate that had come
