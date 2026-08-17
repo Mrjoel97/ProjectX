@@ -929,6 +929,16 @@ test("dispatch.ts lineage payloads reference no specialist output (reply/body/te
   // reason}` carries refs plus THREE values from closed unions — `kept`/`lost` are the literals
   // "a"/"b" (which deck, never its contents) and `reason` is a code from the scene parser's closed
   // set. No deck body, prompt, narration, scene description or source title. §4-clean.
+  // 2026-08-17 REVIEWED, and it EXTENDS three of the twelve rather than adding a thirteenth:
+  // `media.deck_refused` (all three arms) now also carries `deckTokenCounts(<the body>)` —
+  // `{bodyChars, sceneDeckTokens, blockDeckTokens, variationTokens}`, FOUR NUMBERS. It exists
+  // because `no_deck` had two indistinguishable causes (no deck written vs. a deck under a
+  // heading the parser missed) and the body is never persisted on this path, so the owner's
+  // failure could not be explained after the fact. §4-clean: a LENGTH and three MATCH COUNTS of
+  // fixed literal tokens. No narration, no prompt, no scene text, and no substring of the body —
+  // `dispatch.test.ts` proves that last claim against a body of distinctive prose rather than
+  // leaving it to the name. The helper is called into a `const` at each site and the const is
+  // spread, so the scan below stays able to catch a future `res.body` reaching a payload.
   // A THIRTEENTH is a new §4 surface and gets the same treatment, not a renumber.
   expect(payloads.length, "dispatch.ts audit payload count changed").toBe(12);
   // All of them SPREAD one shared refs object (15-04 made it the `lineageRefs` helper so the throw

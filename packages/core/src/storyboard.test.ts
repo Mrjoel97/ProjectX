@@ -1398,3 +1398,50 @@ describe("deckRefusalClause (33-13)", () => {
     expect(deckRefusalClause("block", "")).toBe(GENERIC_DECK_REFUSAL);
   });
 });
+
+/**
+ * The production `no_deck` defect, 2026-08-17.
+ *
+ * All six heading matchers accepted `#` and none accepted `*`. A model that wrote `**SCENE DECK**`
+ * — routine markdown for a heading the body asks for as a bare line — had its deck read as "this
+ * body has no scene deck at all", fell through to `parseBlockDeck`, and was refused to the owner as
+ * "it never wrote a block deck" while the deck sat fully written in the response.
+ *
+ * The refusal path must still refuse: a body with genuinely no deck is the OTHER cause of the same
+ * code, and widening the heading must not swallow it.
+ */
+describe("a decorated heading is the SAME heading", () => {
+  const bold = (body: string, token: string) => body.replace(token, `**${token}**`);
+
+  it("parses a bolded SCENE DECK heading", () => {
+    expect(parseSceneDeck(bold(sceneDeck(SCENES), "SCENE DECK")).ok).toBe(true);
+  });
+
+  it("parses a bolded BLOCK DECK heading — the fix is shared, not scene-only", () => {
+    expect(parseBlockDeck(bold(deck(THREE), "BLOCK DECK")).ok).toBe(true);
+  });
+
+  it("tolerates a markdown heading and bold TOGETHER", () => {
+    const body = sceneDeck(SCENES).replace("SCENE DECK", "## **SCENE DECK**");
+    expect(parseSceneDeck(body).ok).toBe(true);
+  });
+
+  it("splits bolded VARIATION headings instead of reading the pair as one deck", () => {
+    const one = sceneDeck(SCENES);
+    const body = ["**VARIATION A**", one, "**VARIATION B**", one].join("\n\n");
+    const v = parseVariations(body);
+    expect(v.kind).toBe("two");
+  });
+
+  it("leaves a bare heading parsing exactly as before", () => {
+    expect(parseSceneDeck(sceneDeck(SCENES)).ok).toBe(true);
+    expect(parseVariations(sceneDeck(SCENES)).kind).toBe("one");
+  });
+
+  it("STILL refuses a body that carries no deck at all", () => {
+    const r = parseSceneDeck("Here's my idea for the ad. It should feel warm and unhurried.");
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.reason).toBe("no_deck");
+  });
+});

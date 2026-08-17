@@ -1,5 +1,23 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-17 (owner-reported — **the media refusal's diagnosability, and `res.body`
+> vs the §4 scan.** dispatch 93/93, llmRedaction guard green, backend 2026/2026; no live run.)
+>
+> **`media.deck_refused` gained four COUNTS, and how it was added is the part to copy.** All three
+> refusal arms in `persistStoryboard`/`persistSceneDeck` now spread `deckTokenCounts(<body>)` —
+> `{bodyChars, sceneDeckTokens, blockDeckTokens, variationTokens}` — because `no_deck` had two
+> causes and the body is never persisted on that path. **Call it into a `const` and spread the
+> const; never inline it into the payload literal.** `llmRedaction.test.ts` scans payload literals
+> for `(reply|body|text|output)` and an inline `deckTokenCounts(res.body)` reddens it — that
+> guard is deliberate and stays sharp, so the §4 guarantee comes from the helper's return type
+> (four numbers, test-proven to leak no substring of the body) and the scan keeps catching the next
+> person who reaches for `res.body` directly. The review note is recorded in the guard's own
+> comment block, which is what its protocol requires — a new §4 surface is REVIEWED there, never
+> silently renumbered.
+>
+> **The payload COUNT assertion (`toBe(12)`) still holds** — three existing payloads were extended,
+> no thirteenth surface was added.
+
 > Last verified: 2026-08-16 (33-13 — **the cockpit's plan-kind switch gained ONE branch, and the
 > canvas gained a SECOND `useSendCockpitMessage` caller. Nothing else about the cockpit changed.**)
 >
