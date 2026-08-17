@@ -1,5 +1,42 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-08-17 (the SECOND gate on the same body — **A DECORATED LABEL IS THE SAME
+> LABEL.** Source + live production repro + `storyboard.test.ts` 122/122, @pikar/core 1039/1039,
+> backend 2031/2031, both typechecks clean. No live media run — nothing was generated or charged.)
+>
+> **THE DEFECT.** The entry below fixed six HEADING matchers and stopped there. FIVE label matchers
+> carried THREE different tolerances, and not one of them accepted `**Target duration:** 30` — the
+> colon INSIDE the bold, which is the most ordinary way markdown writes a labelled field. A model
+> that decorates its headings decorates its labels in the same body, so the owner's reel cleared the
+> widened heading gate and refused at the very next one: `no_deck` became `bad_target_duration`,
+> **twice, with the heading fix already live in production.** The two matchers carrying the
+> NARROWEST tolerance — `Clip seconds` and `Target duration` — are the two that gate an entire deck.
+>
+> **`fieldOf` failed SILENTLY, which is worse than refusing.** It MATCHED `**Mood:** warm` and
+> captured `"** warm"`, feeding markdown decoration into an art direction that goes on to buy video.
+> A refusal is loud and someone reports it; a corrupted capture just renders.
+>
+> Fixed at the root, following the `headingAt` precedent one family down: ONE `LEAD` constant, ONE
+> `MARK` constant and one `labelAt` helper, shared by `fieldOf`, `parsePrompts`, `sceneSourcesOf`,
+> `parseBlockDeck` and `parseSceneDeck`. **Add a `LABEL: value` read and you use `labelAt`** — five
+> copies of one pattern is what let the tolerance drift, exactly as six copies did for headings, and
+> neither class can match a letter so neither can eat the label it hugs. `labelValue` strips
+> trailing decoration so a captured value can never carry `**` into a prompt.
+>
+> **The refusals must STILL refuse.** A deck that declares no target at all, and a target off the
+> 15/30/60 grid, are both still `bad_target_duration` — pinned by test, the same discipline the
+> heading fix used for `no_deck`.
+>
+> **`bad_target_duration` HAD TWO CAUSES TOO, and the first fix missed it.** `deckTokenCounts` now
+> carries a FIFTH number, `targetDurationTokens`: non-zero beside `reason:"bad_target_duration"`
+> means the target WAS declared and the value or its decoration is what failed; zero means the
+> specialist never declared one. §4-reviewed in `llmRedaction.test.ts`'s own comment block per that
+> guard's protocol, and proved by test rather than trusted by name.
+>
+> **STILL OPEN, not fixed here:** nothing injects a target duration into the specialist prompt — the
+> model picks it, steered only by the skill body. An off-grid number remains a live failure mode,
+> and `targetDurationTokens` is what will tell it apart from this defect next time.
+
 > Last verified: 2026-08-17 (owner-reported `no_deck` on production — **A DECORATED HEADING IS THE
 > SAME HEADING.** Source + repro + `storyboard.test.ts` 115/115 + @pikar/core 1032/1032; no live
 > media run.)

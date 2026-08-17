@@ -669,6 +669,12 @@ function variationRefusalBody(bad: Extract<ParsedVariations, { kind: "refused" }
  * bugs. A NON-ZERO token count beside `reason: "no_deck"` now says it plainly: the deck was there
  * and the heading is what failed.
  *
+ * `bad_target_duration` has the SAME two-cause problem, and the first fix missed it: the specialist
+ * never declared a target, or it declared one this file could not read. `targetDurationTokens`
+ * separates them — non-zero means the line was written and the VALUE or its decoration is what
+ * failed, zero means no target was declared at all. It was added after the 2026-08-17 reel refused
+ * twice with `bad_target_duration` and the audit row could not say which.
+ *
  * Exported ONLY so `dispatch.test.ts` can prove the claim rather than trust the name: every value
  * it returns is a finite number, and no value is a substring of the body it was given.
  *
@@ -682,6 +688,7 @@ export const deckTokenCounts = (body: string) => ({
   sceneDeckTokens: (body.match(/SCENE DECK/gi) ?? []).length,
   blockDeckTokens: (body.match(/BLOCK DECK/gi) ?? []).length,
   variationTokens: (body.match(/VARIATION [AB]\b/gi) ?? []).length,
+  targetDurationTokens: (body.match(/Target duration/gi) ?? []).length,
 });
 
 /**

@@ -1445,3 +1445,74 @@ describe("a decorated heading is the SAME heading", () => {
     expect(r.reason).toBe("no_deck");
   });
 });
+
+/**
+ * The production `bad_target_duration` defect, 2026-08-17 — the SECOND gate on the same body.
+ *
+ * Widening the six heading matchers let a bolded body past `no_deck` and straight into the next
+ * matcher written the same narrow way. Five label matchers carried three different tolerances and
+ * not one of them accepted `**Label:** value` — the colon INSIDE the bold, which is the most
+ * ordinary way markdown writes a labelled field. The two with the narrowest tolerance,
+ * `Clip seconds` and `Target duration`, are the two that gate an entire deck, so the owner's reel
+ * refused twice in a row with the heading fix already live.
+ *
+ * `fieldOf` failed differently and worse: it MATCHED `**Mood:** warm` and captured `"** warm"`,
+ * feeding decoration into an art direction that goes on to buy video. A refusal is loud; that one
+ * was silent.
+ */
+describe("a decorated label is the SAME label", () => {
+  it("reads a Target duration whose colon is inside the bold — the owner's live refusal", () => {
+    expect(parseSceneDeck(sceneDeck(SCENES, "**Target duration:** 30")).ok).toBe(true);
+  });
+
+  it("reads a bulleted Target duration", () => {
+    expect(parseSceneDeck(sceneDeck(SCENES, "- Target duration: 30")).ok).toBe(true);
+  });
+
+  it("reads Clip seconds the same way — the fix is shared, not scene-only", () => {
+    expect(parseBlockDeck(deck(THREE, "**Clip seconds:** 10")).ok).toBe(true);
+    expect(parseBlockDeck(deck(THREE, "- Clip seconds: 10")).ok).toBe(true);
+  });
+
+  it("leaves the bare and bold-around-label forms parsing exactly as before", () => {
+    expect(parseSceneDeck(sceneDeck(SCENES, "Target duration: 30")).ok).toBe(true);
+    expect(parseSceneDeck(sceneDeck(SCENES, "**Target duration**: 30")).ok).toBe(true);
+    expect(parseSceneDeck(sceneDeck(SCENES, "Target duration: 30 seconds")).ok).toBe(true);
+  });
+
+  it("keeps decoration OUT of a captured value instead of matching and corrupting it", () => {
+    const art = [
+      "ART DIRECTION",
+      "- **Palette:** #0F172A, #F8FAFC",
+      "- **Mood:** warm and unhurried",
+      "- **Lighting:** low side light",
+      "- **Composition:** centred, shallow depth",
+      "- **Environment:** a small workshop",
+      "- **Texture:** grain, soft cloth",
+      "- **References:** none",
+      "- **Do NOT:** no stock footage",
+      "",
+      "SCENE DECK",
+    ].join("\n");
+    const a = parseArtDirection(art);
+    expect(a).not.toBeNull();
+    // The pre-fix capture was "** warm and unhurried" — matched, and wrong.
+    expect(a?.mood).toBe("warm and unhurried");
+    expect(a?.palette).toEqual(["#0F172A", "#F8FAFC"]);
+    expect(a?.avoid).toBe("no stock footage");
+  });
+
+  it("STILL refuses a deck that declares no target at all", () => {
+    const r = parseSceneDeck(sceneDeck(SCENES, ""));
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.reason).toBe("bad_target_duration");
+  });
+
+  it("STILL refuses a target that is off the 15/30/60 grid", () => {
+    const r = parseSceneDeck(sceneDeck(SCENES, "**Target duration:** 20"));
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.reason).toBe("bad_target_duration");
+  });
+});

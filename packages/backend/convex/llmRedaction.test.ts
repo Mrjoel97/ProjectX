@@ -931,10 +931,13 @@ test("dispatch.ts lineage payloads reference no specialist output (reply/body/te
   // set. No deck body, prompt, narration, scene description or source title. §4-clean.
   // 2026-08-17 REVIEWED, and it EXTENDS three of the twelve rather than adding a thirteenth:
   // `media.deck_refused` (all three arms) now also carries `deckTokenCounts(<the body>)` —
-  // `{bodyChars, sceneDeckTokens, blockDeckTokens, variationTokens}`, FOUR NUMBERS. It exists
+  // `{bodyChars, sceneDeckTokens, blockDeckTokens, variationTokens, targetDurationTokens}`, FIVE
+  // NUMBERS (`targetDurationTokens` added 2026-08-17 in the same review — `bad_target_duration`
+  // had the same two indistinguishable causes, no target declared vs. one declared and unread).
+  // It exists
   // because `no_deck` had two indistinguishable causes (no deck written vs. a deck under a
   // heading the parser missed) and the body is never persisted on this path, so the owner's
-  // failure could not be explained after the fact. §4-clean: a LENGTH and three MATCH COUNTS of
+  // failure could not be explained after the fact. §4-clean: a LENGTH and four MATCH COUNTS of
   // fixed literal tokens. No narration, no prompt, no scene text, and no substring of the body —
   // `dispatch.test.ts` proves that last claim against a body of distinctive prose rather than
   // leaving it to the name. The helper is called into a `const` at each site and the const is
