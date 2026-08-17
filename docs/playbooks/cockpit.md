@@ -1,5 +1,36 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-17 (owner-reported, seen on the owner's own screen — **THE DIRECT VIDEO
+> ROUTE WAS SPEAKING TO THE MODEL, IN FRONT OF THE USER.** runCockpitAgent 34/34, backend
+> 2033/2033, typecheck clean, both new guards mutation-proven red-then-green.)
+>
+> **THE DEFECT.** `runCockpitAgent`'s `directVideo` branch invokes `dispatchMedia` and returns the
+> tool's string as `reply` — **there is no model on that route**. Every media string the tool can
+> return is driver-plane: second person, addressed to the MODEL, ending in an instruction it is
+> meant to carry out. So asking for a video ad on production showed the owner *"you do not have it
+> yet, so do not describe it, do not wait for it, and do not ask for a reel again on this
+> conversation"* as though Pikar were talking to them. The refusal arms were worse and unshipped
+> only by luck: `image_proposal_pending` would have told the USER to *"call `resetPlan`"*.
+>
+> **The fix is a TRANSLATION AT THE BOUNDARY, not a rewrite of the driver strings.** The tool-loop
+> still needs them exactly as they are — a model that reads "Tell the user it is underway and carry
+> on" is being steered correctly. `USER_FACING_MEDIA_REPLY` maps each one to the same outcome
+> addressed to the user, and the `directVideo` branch translates on the way out. **Keyed on the
+> CONSTANTS THEMSELVES, never on copies of their text**, so editing a driver string moves the key
+> with it and the two planes cannot drift into describing the same outcome differently. An unmapped
+> string falls through unchanged — a missing translation degrades to the old wording, never to a
+> blank reply.
+>
+> **ADD A MEDIA REFUSAL REASON AND YOU ADD ITS TRANSLATION.** `runCockpitAgent.test.ts` asserts
+> coverage against `MEDIA_REFUSAL_REPLY` itself, not against a count, so a new reason with no
+> user-facing string fails the suite by name. Both constants are exported ONLY for that guard (the
+> `deckTokenCounts` precedent). Proven by mutation: bypassing the translation reddens the video
+> test, deleting one map entry reddens the coverage test with the reason named.
+>
+> **Any OTHER code-owned route that returns a tool string straight to `reply` has this same bug.**
+> `IMAGE_PROPOSED_REPLY` and `IMAGE_REFUSAL_REPLY` are the same driver-plane shape; they are not
+> reached by a modelless route today, and that is the only reason they are not also leaking.
+
 > Last verified: 2026-08-17 (owner-reported, second pass — **`deckTokenCounts` is FIVE numbers
 > now.** dispatch 97/97, llmRedaction guard green, backend 2031/2031, typecheck clean; no live run.)
 >
