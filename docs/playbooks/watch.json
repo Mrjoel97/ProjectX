@@ -217,6 +217,7 @@
     "packages/backend/convex/skills.ts",
     "packages/contracts/src/skill.ts",
     "packages/contracts/src/skillAuthoring.test.ts",
+    "packages/backend/convex/skills.test.ts",
     "packages/contracts/src/skills/",
     "packages/contracts/skills/",
     "packages/backend/scripts/run-seed.mjs",

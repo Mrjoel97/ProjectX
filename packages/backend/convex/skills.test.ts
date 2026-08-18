@@ -1,10 +1,12 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
+  AGENT_AUTHORABLE_SKILLS,
   COCKPIT_AGENT_SKILL,
   CONTENT_DRAFTER_SKILL,
   composeUserSkillBody,
   type EvalEvidenceTenantTarget,
+  EXECUTIVE_AGENT_AUTHOR_ID,
   hasPassingEvidence,
   hasPassingTenantEvidence,
   isGatedSkill,
@@ -2614,5 +2616,177 @@ describe("owner activation + rollback of tenant candidates (21-04)", () => {
     // The candidate queue is cross-tenant and open-ended; a full scan is a page that only gets
     // slower. Named mutation that turns this red: replace either take with `.collect()`.
     expect(region).not.toContain(".collect(");
+  });
+});
+
+// 23-01 (SKILL-02): the tenantSkills DATA VOCABULARY for agent-authored rows. No writer, no tool,
+// no activation path exists yet — these fixtures pin what the ONE tenant overlay can REPRESENT, and
+// which cross-field combinations are legal, because the validator deliberately cannot express
+// "required only when author === agent" without invalidating every row already written.
+describe("tenantSkills: agent provenance and owner approval (Phase 23)", () => {
+  const AGENT_NAME = AGENT_AUTHORABLE_SKILLS[0];
+  const THREAD = "thread_zq7agent";
+  const TURN = "turn_zq7agent_0001";
+
+  const setup = async () => {
+    const t = convexTest(schema, modules);
+    const userA = await t.run((ctx) => ctx.db.insert("users", {}));
+    const userB = await t.run((ctx) => ctx.db.insert("users", {}));
+    const ownerId = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
+    return { t, tenantA: String(userA), tenantB: String(userB), ownerId };
+  };
+
+  const base = (tenantId: string, version: number) => ({
+    tenantId,
+    name: AGENT_NAME,
+    version,
+    body: `composed body v${version}`,
+    authoredBody: `adaptation v${version}`,
+    basedOnScope: "global" as const,
+    basedOnName: AGENT_NAME,
+    basedOnVersion: 7,
+    rollbackEligible: false,
+    createdAt: version,
+  });
+
+  test("legacy system and Phase-21 user rows still validate with ZERO agent fields present", async () => {
+    const { t, tenantA } = await setup();
+
+    const ids = await t.run(async (ctx) => [
+      await ctx.db.insert("tenantSkills", {
+        ...base(tenantA, 1),
+        authoredBody: "",
+        status: "active",
+        author: "system",
+      }),
+      await ctx.db.insert("tenantSkills", {
+        ...base(tenantA, 2),
+        status: "candidate",
+        author: "user",
+        authorUserId: tenantA as Id<"users">,
+      }),
+    ]);
+
+    const rows = await t.run(async (ctx) => Promise.all(ids.map((id) => ctx.db.get(id))));
+    // No migration, no backfill, and no accidental defaulting: the new columns are genuinely
+    // ABSENT on an old row rather than present-and-empty.
+    for (const row of rows) {
+      expect(row?.authorAgentId).toBeUndefined();
+      expect(row?.sourceThreadId).toBeUndefined();
+      expect(row?.sourceTurnId).toBeUndefined();
+      expect(row?.ownerApproval).toBeUndefined();
+    }
+    expect(rows.map((r) => r?.author)).toEqual(["system", "user"]);
+  });
+
+  test("an agent row is representable as a candidate carrying lineage and NO approval", async () => {
+    const { t, tenantA } = await setup();
+
+    const id = await t.run((ctx) =>
+      ctx.db.insert("tenantSkills", {
+        ...base(tenantA, 3),
+        status: "candidate",
+        author: "agent",
+        authorAgentId: EXECUTIVE_AGENT_AUTHOR_ID,
+        sourceThreadId: THREAD,
+        sourceTurnId: TURN,
+      }),
+    );
+
+    const row = await t.run((ctx) => ctx.db.get(id));
+    expect(row?.author).toBe("agent");
+    // Server-stamped constant, never a model id and never a tool argument.
+    expect(row?.authorAgentId).toBe("executive-agent");
+    expect(row?.sourceThreadId).toBe(THREAD);
+    expect(row?.sourceTurnId).toBe(TURN);
+    // The state Phase 23 exists to make ordinary: authored, inert, unapproved.
+    expect(row?.ownerApproval).toBeUndefined();
+    expect(row?.authorUserId).toBeUndefined();
+  });
+
+  test("approval carries EXACTLY three refs and nothing a model could have written", async () => {
+    const { t, tenantA, ownerId } = await setup();
+
+    const id = await t.run((ctx) =>
+      ctx.db.insert("tenantSkills", {
+        ...base(tenantA, 4),
+        status: "active",
+        author: "agent",
+        authorAgentId: EXECUTIVE_AGENT_AUTHOR_ID,
+        sourceThreadId: THREAD,
+        sourceTurnId: TURN,
+        ownerApproval: {
+          ownerUserId: ownerId,
+          approvedAt: 1_700_000_000_000,
+          evalRunId: "de976d8e",
+        },
+      }),
+    );
+
+    const row = await t.run((ctx) => ctx.db.get(id));
+    // Exhaustive key check, not a spot check: a rationale/note/summary field added later is a place
+    // for model-influenced prose to enter the approval record, and this test is what refuses it.
+    expect(Object.keys(row?.ownerApproval ?? {}).sort()).toEqual([
+      "approvedAt",
+      "evalRunId",
+      "ownerUserId",
+    ]);
+    expect(row?.ownerApproval?.ownerUserId).toBe(ownerId);
+    expect(row?.ownerApproval?.evalRunId).toBe("de976d8e");
+  });
+
+  test("by_tenant_source_turn answers idempotence EXACTLY and never across tenants", async () => {
+    const { t, tenantA, tenantB } = await setup();
+
+    // Tenant B mints from a turn with the SAME ids. In a thread/turn-only index these two collide
+    // and B's row answers A's idempotence read — which is a cross-tenant existence oracle.
+    await t.run(async (ctx) => {
+      await ctx.db.insert("tenantSkills", {
+        ...base(tenantA, 5),
+        status: "candidate",
+        author: "agent",
+        authorAgentId: EXECUTIVE_AGENT_AUTHOR_ID,
+        sourceThreadId: THREAD,
+        sourceTurnId: TURN,
+      });
+      await ctx.db.insert("tenantSkills", {
+        ...base(tenantB, 5),
+        status: "candidate",
+        author: "agent",
+        authorAgentId: EXECUTIVE_AGENT_AUTHOR_ID,
+        sourceThreadId: THREAD,
+        sourceTurnId: TURN,
+      });
+    });
+
+    const bySourceTurn = (tenantId: string) =>
+      t.run((ctx) =>
+        ctx.db
+          .query("tenantSkills")
+          .withIndex("by_tenant_source_turn", (q) =>
+            q.eq("tenantId", tenantId).eq("sourceThreadId", THREAD).eq("sourceTurnId", TURN),
+          )
+          .collect(),
+      );
+
+    const forA = await bySourceTurn(tenantA);
+    const forB = await bySourceTurn(tenantB);
+    // `.map` rather than `forA[0]` so the length and the identity are one assertion each and
+    // neither needs an index access the compiler cannot prove safe.
+    expect(forA.map((r) => r.tenantId)).toEqual([tenantA]);
+    expect(forB.map((r) => r.tenantId)).toEqual([tenantB]);
+    expect(forA.map((r) => r._id)).not.toEqual(forB.map((r) => r._id));
+
+    // A different turn in the same thread is a DIFFERENT authoring act: the index must miss, or a
+    // second genuine request would silently return the first request's row.
+    const otherTurn = await t.run((ctx) =>
+      ctx.db
+        .query("tenantSkills")
+        .withIndex("by_tenant_source_turn", (q) =>
+          q.eq("tenantId", tenantA).eq("sourceThreadId", THREAD).eq("sourceTurnId", "turn_other"),
+        )
+        .collect(),
+    );
+    expect(otherTurn).toHaveLength(0);
   });
 });

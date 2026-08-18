@@ -227,10 +227,38 @@ export default defineSchema({
       v.literal("rolled_back"),
       v.literal("archived"),
     ),
-    // Phase 23 may append "agent" here without granting it activation.
-    author: v.union(v.literal("system"), v.literal("user")),
+    // Phase 23 (SKILL-02) appended "agent". Appearing here grants NO activation path: an agent row
+    // is minted `candidate` by one narrow internal writer, and the only transition to `active` is
+    // an ownerMutation that demands current passing eval evidence AND writes `ownerApproval` in the
+    // same transaction. Widening this union is a data-vocabulary change, not a capability change.
+    author: v.union(v.literal("system"), v.literal("user"), v.literal("agent")),
     // Required when author === "user"; derived from authenticated identity, never from args.
     authorUserId: v.optional(v.id("users")),
+    // ---- Agent provenance (Phase 23). OPTIONAL AT SCHEMA LEVEL so every legacy and Phase-21
+    // system/user row stays valid with no migration and no backfill; the ALLOWED cross-field
+    // combinations are pinned behaviourally in `skills.test.ts`, not by the validator. A schema
+    // that could express "required only when author === agent" does not exist here, and inventing
+    // a discriminated union would invalidate every row already written.
+    //
+    // All three are SERVER FACTS. The model supplies none of them: `authorAgentId` is the code-owned
+    // `EXECUTIVE_AGENT_AUTHOR_ID` constant, and the thread/turn refs come from the trusted turn
+    // lineage the runtime already holds — never from tool arguments. Refs only (CLAUDE.md §4): no
+    // prompt, no draft, no tool call, no model output travels in these fields.
+    authorAgentId: v.optional(v.string()),
+    sourceThreadId: v.optional(v.string()),
+    sourceTurnId: v.optional(v.string()),
+    // ---- The owner's approval of ONE agent candidate, bound to ONE eval run (Phase 23).
+    // Written ONLY by the agent-activation transaction, in the same patch as `status: "active"` —
+    // so an active agent row carrying no approval is impossible by construction rather than by
+    // policy, and a failed mutation can leave neither half behind. Three refs and a timestamp; no
+    // rationale, note, or summary field exists for a model to have influenced.
+    ownerApproval: v.optional(
+      v.object({
+        ownerUserId: v.id("users"),
+        approvedAt: v.number(),
+        evalRunId: v.string(),
+      }),
+    ),
     basedOnScope: v.union(v.literal("global"), v.literal("tenant")),
     basedOnName: v.string(),
     basedOnVersion: v.number(),
@@ -252,7 +280,13 @@ export default defineSchema({
     // baseline out of the window and be offered nothing (observed live at 12 versions, 21-08).
     .index("by_tenant_name_rollbackEligible", ["tenantId", "name", "rollbackEligible"])
     // The bounded owner review queue across tenants.
-    .index("by_status_createdAt", ["status", "createdAt"]),
+    .index("by_status_createdAt", ["status", "createdAt"])
+    // Phase 23: exact recovery of "did THIS agent turn already mint a row here?" — the idempotence
+    // read the candidate writer does before inserting, and the refs-only live inspection path.
+    // TENANT-SCOPED FIRST on purpose: a thread/turn-only index would answer the same question
+    // ACROSS tenants and hand any caller holding a turn ref a cross-tenant existence oracle. It is
+    // an index, not a public query; no read surface is opened by adding it.
+    .index("by_tenant_source_turn", ["tenantId", "sourceThreadId", "sourceTurnId"]),
 
   // "Routine v0" (Phase 21, SKILL-01): saved cockpit prompt text, INERT AT REST.
   //

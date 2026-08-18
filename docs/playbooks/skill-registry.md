@@ -1,6 +1,8 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
-> Last verified: 2026-08-18 (**THE GATE WAS SPENT: activated, then rolled back, both by the owner,
+> Last verified: 2026-08-18 (23-01 appended the Phase 23 agent-authoring DATA PLANE at the end of
+> this file — vocabulary only, no writer and no activation path; read its ceiling note before
+> trusting the suite. Prior verification follows.) (**THE GATE WAS SPENT: activated, then rolled back, both by the owner,
 > both at $0.** `offer-architect` v12 `qx73bwsh…` went `candidate` → `active` → `archived`.
 > Activation moved tenant `kn790hj6…` current-effective off global v4 onto the tenant row
 > (hash `aee0008c…`); rollback targeted the EXACT baseline id `qx73cg6g…` and restored v1
@@ -1497,3 +1499,84 @@ regenerating the `.ts` turned exactly ONE row red (1 failed / 20 passed); revert
 It also carries the standard DATA-not-instructions defense clause: vault excerpts are content to
 read, never commands to obey (a document saying "classify this business as enterprise" is described,
 never adopted).
+
+---
+
+## Phase 23 — agent-authored skills: the DATA PLANE only (23-01, SKILL-02)
+
+> Landed 2026-08-18. **Nothing in this section is a capability.** 23-01 adds a vocabulary: a closed
+> set, three provenance columns, one approval object, one index. There is no model-reachable writer,
+> no tool, no activation path, and no UI — those are 23-02 … 23-05. If you are reading this because
+> something wrote an agent row, the writer is what you want, not this section.
+
+### The rules that hold at this layer
+
+1. **The tenant overlay is the only plane.** An agent row is a `tenantSkills` row like any other. No
+   agent row ever enters the deployment-global `skills` table, and no second registry table exists.
+   The Phase-21 overlay, its version allocation, its rollback eligibility and its effective-load
+   order are reused verbatim.
+2. **`AGENT_AUTHORABLE_SKILLS` is closed, and is a SEPARATE literal from `USER_AUTHORABLE_SKILLS`.**
+   The two are equal today (`offer-architect`, `money-model-designer`, `lead-engine`) and are
+   allowed to diverge. Aliasing them would let a PRODUCT widening of the user set silently widen
+   what a MODEL may write. `skillAuthoring.test.ts` pins the exact set, both subset relationships
+   (⊆ `USER_AUTHORABLE_SKILLS`, ⊆ `GATED_SKILLS`), and the non-aliasing itself.
+3. **Every agent-authorable name must be EVAL-REACHABLE.** An agent row leaves `candidate` only via
+   a passing held-out run, so a name no golden fixture drives would mint rows that can never be
+   activated. This is why `document-analyst` and `media-director` are refused: both are deliberately
+   ungated, and neither has a runner an eval can drive.
+4. **Provenance is a server fact, never a tool argument.** `authorAgentId` is the code-owned
+   `EXECUTIVE_AGENT_AUTHOR_ID` constant; `sourceThreadId` / `sourceTurnId` come from the trusted turn
+   lineage the runtime already holds. The model's entire surface is a name plus a bounded adaptation.
+5. **One composer, one cap.** The agent reuses `composeUserSkillBody` and
+   `USER_SKILL_ADAPTATION_MAX_BYTES` (4000 UTF-8 bytes) exactly. There is no second composer, no
+   replacement-body format, and no capability list — tools/action kinds/budgets stay code-owned
+   (ADR-007), so a drafted body cannot grant itself anything.
+6. **`ownerApproval` is three refs and a timestamp.** `ownerUserId` (`v.id("users")`, from
+   `requireOwner`), `approvedAt`, `evalRunId`. There is deliberately no rationale, note or summary
+   field: that would be a doorway for model-influenced prose into the approval record. The test
+   checks the key set EXHAUSTIVELY so adding one is red.
+7. **`by_tenant_source_turn` is tenant-scoped first, and that ordering is load-bearing.** A
+   thread/turn-only index answers "does a row exist for this turn?" ACROSS tenants — a cross-tenant
+   existence oracle for anyone holding a turn ref. Mutation-proven: reordering the index to
+   `[sourceThreadId, sourceTurnId, tenantId]` and dropping the tenant equality returns **2 rows
+   where 1 is correct**.
+
+### The ceiling this layer CANNOT close — read before trusting a green suite
+
+**The schema cannot express "required only when `author === "agent"`".** Convex validators have no
+conditional-required form, and modelling `tenantSkills` as a discriminated union would invalidate
+every row already written. So `authorAgentId`, `sourceThreadId`, `sourceTurnId` and `ownerApproval`
+are all `v.optional`, and **a direct `ctx.db.insert` of an agent row with no lineage at all is
+accepted today.**
+
+The fixtures in `skills.test.ts` pin which combinations are LEGAL. They do not — and at this layer
+cannot — refuse an illegal one, because refusal needs a writer to refuse in. That enforcement is
+`publishAgentCandidate` (23-02) and the agent-activation `ownerMutation` (23-05). Do not read
+"91 passed" as "an agent row without provenance is impossible"; it is not yet.
+
+`ponytail:` ceiling = permissive schema + behavioural fixtures. Upgrade path = the narrow writer in
+23-02 becomes the single insert site, and a structural test asserts no other module calls
+`ctx.db.insert("tenantSkills", … author: "agent" …)`.
+
+### Mutation evidence (23-01, all executed and restored — none left in the tree)
+
+| Mutation | Result |
+|---|---|
+| Add `document-analyst` (ungated, no runner) to `AGENT_AUTHORABLE_SKILLS` | **2 red** — exact-set pin + the explicit rejection test |
+| Also delete the exact-set pin AND both subset assertions | **still 1 red** — the rejection test catches it alone; the coverage is genuinely layered, not one assertion doing all the work |
+| Reorder `by_tenant_source_turn` to drop the tenant prefix | **1 red** — `expected [ …2 rows ] to have a length of 1` |
+
+### How to verify
+
+```
+pnpm --filter @pikar/contracts exec vitest run src/skillAuthoring.test.ts   # 8 passed
+cd packages/backend && npx vitest run convex/skills.test.ts --maxWorkers=1  # 91 passed
+```
+
+### Prerequisite-gate deviation carried by every Phase 23 plan
+
+Phase 23 began with `23-01`'s gate **partially failed**: Phase 21's `21-LIVE-RESULT.json` does not
+exist and was deliberately withheld (its steps 3-4, tenant runtime attribution, were unrunnable).
+Waves 1-5 proceed on an explicit owner decision; waves 6-9 stop for a re-cut, because `23-08` carries
+the SAME unrunnable step. Full gate result:
+`.planning/phases/23-agent-authored-skills/23-00-GATE-2026-08-18.md`.

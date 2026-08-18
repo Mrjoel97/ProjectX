@@ -324,6 +324,80 @@ export function isUserAuthorableSkill(name: string): name is UserAuthorableSkill
 }
 
 /**
+ * The v0 set the EXECUTIVE AGENT may draft a business adaptation for (Phase 23, SKILL-02).
+ *
+ * DELIBERATELY A SEPARATE LITERAL — not `= USER_AUTHORABLE_SKILLS`, not a filter over it. The two
+ * sets answer different questions and must be able to move independently: user-authorability is a
+ * PRODUCT decision ("we can honestly explain this skill to a user"), agent-authorability is a
+ * CAPABILITY decision ("we are willing for a model to draft a body here at all"). Aliasing them
+ * would mean a later product widening of the user set SILENTLY widens what a model can write, and
+ * capability minimization by construction is the whole Phase 23 thesis — the narrowing has to be
+ * able to exist before it is needed. `skillAuthoring.test.ts` pins the exact set AND its subset
+ * relationship to BOTH `USER_AUTHORABLE_SKILLS` and `GATED_SKILLS`, so a widening past either is a
+ * red test rather than a review catch.
+ *
+ * Every member must be EVAL-REACHABLE. An agent-minted row can only ever leave `candidate` through
+ * a passing held-out run plus owner approval, so a name no fixture drives would mint rows that are
+ * structurally un-activatable — the `document-analyst` / `media-director` deadlock recorded above.
+ * These three are the dispatched business specialists (`dispatch.runSpecialist` ->
+ * `llm.runSpecialistTurn`), each driven by exactly one held-out golden fixture.
+ */
+export const AGENT_AUTHORABLE_SKILLS = [
+  OFFER_ARCHITECT_SKILL,
+  MONEY_MODEL_DESIGNER_SKILL,
+  LEAD_ENGINE_SKILL,
+] as const;
+
+/** A registry name the Executive Agent may draft an adaptation for. */
+export type AgentAuthorableSkill = (typeof AGENT_AUTHORABLE_SKILLS)[number];
+
+/** Whether the Executive Agent may draft an adaptation for this registry name. */
+export function isAgentAuthorableSkill(name: string): name is AgentAuthorableSkill {
+  return (AGENT_AUTHORABLE_SKILLS as readonly string[]).includes(name);
+}
+
+/**
+ * The single code-owned identity for the Executive Agent AS AN AUTHOR. Not a user id, not a model
+ * id, and never model- or client-supplied: the candidate writer stamps this constant server-side,
+ * so an `author === "agent"` row cannot be forged into looking like some other agent, and swapping
+ * the underlying model never rewrites authorship history.
+ */
+export const EXECUTIVE_AGENT_AUTHOR_ID = "executive-agent" as const;
+
+/**
+ * WHICH agent turn drafted an agent-authored row (Phase 23, SKILL-02). Refs ONLY (CLAUDE.md §4):
+ * ids, never the prompt, the draft, the tool call, or any model output.
+ *
+ * This doubles as the idempotence key: one source turn may mint at most one candidate, so an
+ * identical retry of the same turn recovers the same row instead of minting a second one.
+ */
+export type AgentSkillSource = {
+  /** Always `EXECUTIVE_AGENT_AUTHOR_ID` in v1 — stamped by the server, never by the model. */
+  authorAgentId: string;
+  /** The cockpit thread the authoring turn belongs to. */
+  sourceThreadId: string;
+  /** The exact turn within that thread. Thread + turn IS the retry identity. */
+  sourceTurnId: string;
+};
+
+/**
+ * The owner's approval of ONE agent-authored candidate, bound to ONE eval run (Phase 23, SKILL-02).
+ *
+ * Activation of an agent row needs BOTH halves, and they are written in the SAME transaction as the
+ * status change — so an `active` agent row without recorded owner + eval evidence is impossible by
+ * construction rather than by policy. Three refs and a timestamp: no prose, no rationale field,
+ * nothing a model could ever have influenced.
+ */
+export type SkillOwnerApproval = {
+  /** The `users` row id of the approving owner. Derived from `requireOwner`, never from args. */
+  ownerUserId: string;
+  /** Epoch ms of the approving transaction. */
+  approvedAt: number;
+  /** The exact eval run whose passing evidence sat on the row at approval time. */
+  evalRunId: string;
+};
+
+/**
  * UTF-8 byte cap on ONE authored adaptation. Bounds both the stored row and the per-turn prompt
  * cost the adaptation adds. BYTES, not characters: a character cap lets one multibyte paste carry
  * ~4x the tokens the number implies.
