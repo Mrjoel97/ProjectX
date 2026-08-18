@@ -1,5 +1,48 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-18 (**THE FIRST TENANT-PINNED GATE EVER TO PASS. `de976d8e`, 41/41,
+> `$0.4947`.** Evidence recorded on `offer-architect` v12, row `qx73bwsh…`, tenant `kn790hj6…`.
+> Confirmed on `/ops` in a browser: that card alone reads "Evaluation passed — ready for owner
+> activation"; every sibling still reads "No eval run recorded for this row yet".)
+>
+> **EVIDENCE IS NOT ACTIVATION, and the runner says so out loud.** The row is still
+> `status: candidate`. `gatePassed: true`, `evidenceState: passing`, `bodyHash aee0008c…` identical
+> to the bytes Plan 21-06 froze, `evidenceTarget` exactly this row's own id/tenant/name/version.
+> Nothing is live. The owner's separate act is still required.
+>
+> **EVERY HISTORICAL GREEN RUN IN THIS FILE WAS GLOBAL-PINNED** (`cockpit-agent@8`, `@26`). None had
+> ever exercised the `--tenant-skill`-only path, which is exactly why that path's two defects
+> survived to cost real money to find (`a745d36`): `runCockpitAgent`'s args validator did not know
+> the second pin scope (0/41 twice, `$0.0000`, the model never reached), and
+> `isPinnedCockpitEvaluation` did not either, so a tenant-only run lost the Gmail rail and scored
+> 21/41 for `$0.4157` while measuring the harness rather than the candidate.
+>
+> **MEASURED COST OF A TENANT-PINNED GATE — seven attempts, `$2.5363` total.** The fixture floor is
+> **41**. A full run costs `$0.45`–`$0.60`. Per-run failures ran ~1.5, so a clean sweep is roughly
+> one run in four, and it took seven attempts (two of them `$0.0000` crashes) to bank one.
+>
+> | run | result | cost |
+> |---|---|---|
+> | `6e021dce` | 0/41 — validator refused `tenantSkillIds` at the door | `$0.0000` |
+> | `e35a0bb4` | 0/41 — same, against a stale watcher serving day-old code | `$0.0000` |
+> | (run 3, id unrecorded) | 21/41 — Gmail rail withheld; measured the harness | `$0.4157` |
+> | `d0afcca9` | 39/41 — `08-bounce-then-correct`, `33-research-insufficient-evidence` | `$0.5731` |
+> | `c9e18e2b` | 40/41 — `28-healthy-no-gaps` | `$0.4637` |
+> | `a88a4597` | 39/41 — `04-edit-remove-recipient`, `28-healthy-no-gaps` | `$0.5224` |
+> | **`de976d8e`** | **41/41** (retried `20-reset-and-honesty`, `35-create-document`) | **`$0.4947`** |
+>
+> `29-gap-dispatch-offer-architect` — the ONLY fixture that exercises this candidate — passed on
+> every run that reached it, 4 for 4. No failing evidence was ever recorded against
+> `offer-architect@12`.
+>
+> **A FILTERED PROBE OF AN EMAIL FIXTURE MUST CARRY A PIN, OR IT MEASURES NOTHING.** `--only
+> 04-edit-remove` unpinned failed 3/3 with `recipients: []` and a tool list of
+> `{proposeCalendarEvent, stageCrmWrite}` — no recipient tool present at all. That is the run-3
+> Gmail-rail signature, not a fixture fault: with neither `--skill` nor `--tenant-skill`,
+> `isPinnedCockpitEvaluation` is false and the disconnected eval tenant loses the email rail. The
+> same probe WITH `--tenant-skill` passed 3/3. Diagnosing `04` off the unpinned runs would have
+> chased a regression that does not exist.
+
 > Last verified: 2026-08-18 (**the owner's rollback list was empty on a tenant that has a baseline
 > — take-then-filter.** backend 2042 passed / 24 skipped across 87 files, typecheck exit 0, biome
 > exit 0, fix mutation-proven and confirmed in a real browser before and after.)

@@ -1,0 +1,107 @@
+{
+  "schema": "phase21-eval-evidence.v1",
+  "handoffSha256": "30c9062a53562b26c0504fb328abab46ad2c2ab42fb0e267e2f28a8fd9805eb2",
+  "deploymentHash": "b8c08f7d1a5e16e1c80eb69ccdd1c9870a923d4479387c1f1c28439bc39a49bf",
+  "recordedAt": "2026-08-18T02:50:12.816Z",
+  "authorization": {
+    "ownerWords": "One run, ~$0.50 (run 6, selected at the checkpoint); then, for run 7: \"i want you to use the claude in Chrome and the necessary tools to finish up this phase. Do it yourself.\"",
+    "attemptBudget": 1,
+    "ceilingUsd": 2,
+    "note": "Run 6 spent the owner-set attemptBudget of 1 and parked red. Run 7 was authorized by the owner directive above, under an assistant-announced cap of 3 attempts / ~$1.60; it went green on the first of those, so 2 were never spent."
+  },
+  "attempts": [
+    {
+      "runId": "6e021dce",
+      "passed": 0,
+      "total": 41,
+      "costUsd": 0,
+      "failedFixtures": [
+        "ALL — ArgumentValidationError: runCockpitAgent args validator had no tenantSkillIds; the model was never reached"
+      ]
+    },
+    {
+      "runId": "e35a0bb4",
+      "passed": 0,
+      "total": 41,
+      "costUsd": 0,
+      "failedFixtures": [
+        "ALL — same validator error; the local convex dev watcher was serving day-old code"
+      ]
+    },
+    {
+      "runId": "unrecorded-2026-08-17-run3",
+      "passed": 21,
+      "total": 41,
+      "costUsd": 0.4157,
+      "failedFixtures": [
+        "20 fixtures — isPinnedCockpitEvaluation knew only the GLOBAL pin scope, so a --tenant-skill-only run lost the Gmail rail. Measured the harness, not the candidate."
+      ]
+    },
+    {
+      "runId": "d0afcca9",
+      "passed": 39,
+      "total": 41,
+      "costUsd": 0.5731,
+      "failedFixtures": [
+        "08-bounce-then-correct",
+        "33-research-insufficient-evidence"
+      ]
+    },
+    {
+      "runId": "c9e18e2b",
+      "passed": 40,
+      "total": 41,
+      "costUsd": 0.4637,
+      "failedFixtures": [
+        "28-healthy-no-gaps"
+      ]
+    },
+    {
+      "runId": "a88a4597",
+      "passed": 39,
+      "total": 41,
+      "costUsd": 0.5224,
+      "failedFixtures": [
+        "04-edit-remove-recipient",
+        "28-healthy-no-gaps"
+      ]
+    },
+    {
+      "runId": "de976d8e",
+      "passed": 41,
+      "total": 41,
+      "costUsd": 0.49466045,
+      "failedFixtures": []
+    }
+  ],
+  "greenRun": {
+    "runId": "de976d8e",
+    "caseCount": 41,
+    "retryCount": 2,
+    "costUsd": 0.49466045,
+    "model": "openai/gpt-4o-mini",
+    "candidate": {
+      "id": "qx73bwshbfds5nk7hd40vsf5y18cm7z0",
+      "tenantId": "kn790hj6pxay64s1pzrhrv6j2s8cep8s",
+      "name": "offer-architect",
+      "version": 12,
+      "bodyHash": "aee0008ce849cdac5456b3e45a6ca69e10609a5ca6b4c083d875781a7a50d1a0"
+    },
+    "evidenceTarget": {
+      "candidateId": "qx73bwshbfds5nk7hd40vsf5y18cm7z0",
+      "registryTenantId": "kn790hj6pxay64s1pzrhrv6j2s8cep8s",
+      "name": "offer-architect",
+      "version": 12
+    },
+    "gatePassed": true
+  },
+  "candidateAfter": {
+    "id": "qx73bwshbfds5nk7hd40vsf5y18cm7z0",
+    "version": 12,
+    "bodyHash": "aee0008ce849cdac5456b3e45a6ca69e10609a5ca6b4c083d875781a7a50d1a0",
+    "status": "candidate",
+    "evidenceState": "passing",
+    "gatePassed": true,
+    "rollbackEligible": false
+  }
+}
