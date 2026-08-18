@@ -703,6 +703,22 @@ export default defineSchema({
     proposalRefusal: v.optional(
       v.object({ reason: v.string(), contract: v.string(), variation: v.optional(v.string()) }),
     ),
+    /**
+     * WHAT THE SPECIALIST ACTUALLY WROTE when no deck could be read out of it.
+     *
+     * `proposalRefusal` above carries the CODE and `media.deck_refused` carries the token COUNTS,
+     * and between them they answer "was a deck written?" — but neither can answer "then what WAS
+     * this?", and §4 forbids ever asking the audit to. Production 2026-08-18: three `no_deck` rows
+     * of 1,007 / 1,218 / 1,270 characters, and nothing in the system could say what any of them
+     * said. This is that answer, kept where the schema already says raw content belongs — on the
+     * plan, never in `audit`/`deadLetters`.
+     *
+     * It is EVIDENCE, not copy: `body` above is still the composed sentence the user reads, and
+     * nothing renders this. Cleared by `persistDeck` like every other deck field — a kept body
+     * outliving the refusal it explains would have the next reader diagnosing a run that is no
+     * longer on this row.
+     */
+    refusedBody: v.optional(v.string()),
     /** Set when Generate first buys against the picked deck; `switchDeck` and `editBrief`
      *  refuse from then on (`deck_locked`) — post-Generate change is canvas-only, on the paid
      *  rail. */

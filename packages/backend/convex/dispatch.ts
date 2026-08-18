@@ -37,6 +37,7 @@ import {
   parseVariations,
   type Scene,
   sceneNarrationChars,
+  TARGET_DURATIONS,
 } from "@pikar/core/storyboard";
 import type { GenericActionCtx } from "convex/server";
 import { v } from "convex/values";
@@ -99,6 +100,50 @@ const TASK_LINE =
   "two are your only sources. Produce the concrete next step for that one constraint. Say plainly " +
   "where the data is thin — never invent a figure.";
 const NO_SNAPSHOT = "There is no evaluation on file for this conversation yet.";
+
+/** The legal reel lengths, from the SAME constant the parser validates against, so this sentence
+ *  can never name a set `parseSceneDeck` would refuse. The `adjustmentNotes` idiom. */
+const LEGAL_DURATIONS = TARGET_DURATIONS.join(", ").replace(/, (\d+)$/, " or $1");
+/** What a brief that names no length gets. A member of `TARGET_DURATIONS` BY CONSTRUCTION rather
+ *  than by a literal that could drift out of the set — and it is the length every deck ever
+ *  persisted in production actually used. */
+const DEFAULT_TARGET_DURATION = TARGET_DURATIONS[1];
+
+/**
+ * THE MEDIA TASK LINE — the third prompt shape the question branch's `ponytail:` note anticipated.
+ *
+ * A brief is a SUBJECT, not a task. The question branch was written for RESEARCH, where the
+ * question genuinely is the task ("what do competitors charge?" needs no further instruction), and
+ * `runMedia` reused it — so a media specialist's whole user turn was the executive's free-text
+ * brief and nothing else. The 20k-character registry body teaches the FORMAT; only a user turn can
+ * say DO IT NOW, and no user turn ever did.
+ *
+ * Measured in production 2026-08-18, which is why this exists rather than being a tidier prompt:
+ * the identical brief ("Create a short video ad for my business.") produced a 5-shot deck on one
+ * run and 1,270 characters of prose with ZERO deck tokens on another — same skill version 5, same
+ * body hash, `incomplete: false` both times. That is what "no task line" looks like from outside:
+ * a coin flip. It also explains two symptoms nobody had connected to it — `bad_target_duration` on
+ * a 6,331-character deck that never wrote the line, and `variations: 1` on EVERY deck ever
+ * persisted live, meaning the A/B contract had never once been honoured in production.
+ *
+ * DRIVER-PLANE, not a skill (§5 does not apply) — the same standing `TASK_LINE` has above, and for
+ * the same reason: the SYSTEM prompt is still the registry row `runSpecialistTurn` loads. It must
+ * not re-teach anything `media-director.md` owns (the deck's columns, the citation rule, the
+ * narration budget). It says only WHEN and WHETHER — produce it now, produce both, declare the
+ * length — because those are the three things a system prompt structurally cannot compel.
+ *
+ * Assembled from SHORT pieces: `skills.test.ts` refuses any inline string over 200 characters
+ * anywhere in `convex/` (§5, no hardcoded prompts), the same reason the refusal bodies below are
+ * concatenated.
+ */
+export const MEDIA_TASK_LINE = [
+  "Write the storyboard now. Do not ask questions and do not describe what you would make —",
+  "the only useful answer is the deck itself.",
+  "Produce BOTH proposals in full: VARIATION A and VARIATION B, each a complete storyboard",
+  "with its own SCENE DECK.",
+  `Declare \`Target duration:\` on each, in seconds — ${LEGAL_DURATIONS} —`,
+  `using the length the brief asks for, or ${DEFAULT_TARGET_DURATION} when it does not say.`,
+].join(" ");
 /** Cap the injected snapshot the way evaluateBusiness caps its synopsis: a large evaluation
  *  must not blow the specialist's context (and the loop's cost) on carried prose. */
 const MAX_FINDINGS = 8;
@@ -284,7 +329,20 @@ export async function buildSpecialistPrompt(
   // ponytail: an `if`, not a per-route prompt-builder table. There are exactly TWO prompt shapes
   // and a table keyed on route for two entries is the abstraction §8 forbids. Upgrade path: at a
   // THIRD shape, a `Record<route, builder>` table.
-  if (a.question !== undefined) return withBriefing(cap(a.question, MAX_QUESTION_CHARS));
+  //
+  // THE THIRD SHAPE ARRIVED — as a suffix, not a table. `media` shares this branch's INPUT (a
+  // free-text string that replaces the snapshot) and differs only in whether that string is the
+  // task or merely the subject, so one appended sentence is the whole difference. A
+  // `Record<route, builder>` here would be two nearly identical builders to keep in step. Upgrade
+  // path unchanged: a route needing a genuinely different SHAPE gets the table.
+  //
+  // The CAP is applied to the brief ALONE and the instruction appended after. Capping the joined
+  // string would truncate the instruction away on exactly the long briefs that most need it —
+  // `dispatch.test.ts` pins that ordering.
+  if (a.question !== undefined) {
+    const brief = cap(a.question, MAX_QUESTION_CHARS);
+    return withBriefing(a.route === "media" ? `${brief}\n\n${MEDIA_TASK_LINE}` : brief);
+  }
 
   const evaluation = await ctx.runQuery(internal.evaluations.lastForThread, {
     tenantId: a.tenantId,
@@ -770,6 +828,9 @@ async function persistSceneDeck(
       // instead of a memo card with Approve/Save over a reel that does not exist.
       reason: scene.reason,
       contract: "scene",
+      // The raw output, on the PLAN row only — the counts below say whether a deck was written,
+      // this says what was written instead. Never forwarded to the audit payload (§4).
+      specialistBody: body,
     });
     await ctx.runMutation(internal.audit.log, {
       tenantId: args.tenantId,
@@ -885,6 +946,7 @@ async function persistStoryboard(
       reason: variations.reason,
       contract: "scene",
       variation: variations.variation,
+      specialistBody: res.body,
     });
     await ctx.runMutation(internal.audit.log, {
       tenantId: args.tenantId,
@@ -961,6 +1023,9 @@ async function persistStoryboard(
       body: deckRefusalBody(deck),
       reason: deck.reason,
       contract: "block",
+      // The branch the owner hit live on 2026-08-18 — both parsers returned `no_deck` on a body
+      // that was 1,270 characters of something. This is the only place that something survives.
+      specialistBody: res.body,
     });
     await ctx.runMutation(internal.audit.log, {
       tenantId: args.tenantId,
