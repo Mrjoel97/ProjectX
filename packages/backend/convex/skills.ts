@@ -19,6 +19,7 @@ import {
   DOCUMENT_CLASSIFIER_SKILL,
   DOCUMENT_DRAFTER_SKILL,
   EMAIL_DRAFTER_SKILL,
+  EXECUTIVE_AGENT_AUTHOR_ID,
   EXECUTIVE_ROUTER_SKILL,
   FOLDER_DIGEST_SKILL,
   GATED_SKILLS,
@@ -27,6 +28,7 @@ import {
   hasPassingEvidence,
   hasPassingTenantEvidence,
   INBOX_DIGEST_SKILL,
+  isAgentAuthorableSkill,
   isGatedSkill,
   isUserAuthorableSkill,
   LEAD_ENGINE_SKILL,
@@ -791,6 +793,74 @@ function lineageOf(base: EffectiveSkill) {
 }
 
 /**
+ * The READ half of a tenant publish, shared by the user writer (21-02) and the agent writer
+ * (23-02). Extracted so the two cannot drift on the three rules that actually matter: compose
+ * against the GLOBAL core (never the tenant's own active body — that would append the previous
+ * draft to the new one on every re-edit, forever), record lineage against the tenant's EFFECTIVE
+ * row, and read the version history with ONE descending indexed `take(1)` rather than a
+ * `.collect()` of an open-ended history (research pitfall 12).
+ *
+ * Throws before returning on a blank / over-cap adaptation, so no caller can reach an insert with
+ * an unvalidated body.
+ */
+async function readTenantPublishState(
+  ctx: MutationCtx,
+  tenantId: string,
+  name: string,
+  authoredBody: string,
+) {
+  const core = await loadSkill(ctx, name); // fails closed on an unseeded skill
+  const base = await loadEffectiveSkill(ctx, tenantId, name);
+  // Blank / over-cap THROWS here, before any write: the composer never returns a partial body.
+  const body = composeUserSkillBody(core.body, authoredBody);
+  // ONE descending indexed read serving BOTH next-version allocation and idempotence.
+  const newestRows = await ctx.db
+    .query("tenantSkills")
+    .withIndex("by_tenant_name_version", (q) => q.eq("tenantId", tenantId).eq("name", name))
+    .order("desc")
+    .take(1);
+  return { core, base, body, authored: authoredBody.trim(), newest: newestRows[0] ?? null };
+}
+
+/**
+ * The first-customization rollback baseline (research pitfall 8): a server-owned byte copy of what
+ * was effective, archived and rollback-eligible, so a later activation has something
+ * evidence-exempt to fall back to. Returns whichever row the version allocator should treat as
+ * prior — the existing newest row, or the baseline just written.
+ *
+ * Author is `system`, NOT the publisher: the baseline is the code's copy of the code's own core,
+ * and attributing it to a user or to the agent would put an authorship claim on bytes neither of
+ * them wrote.
+ */
+async function ensureRollbackBaseline(
+  ctx: MutationCtx,
+  tenantId: string,
+  name: string,
+  core: LoadedSkill,
+  base: EffectiveSkill,
+  newest: Doc<"tenantSkills"> | null,
+): Promise<{ version: number }> {
+  if (newest !== null) return newest;
+  const baseline = allocateImmutableVersion(null, false);
+  await ctx.db.insert("tenantSkills", {
+    tenantId,
+    name,
+    version: baseline.version,
+    // The tenant's frozen copy of the code-owned core — the evidence-exempt rollback target.
+    body: core.body,
+    authoredBody: "",
+    status: "archived",
+    author: "system",
+    basedOnName: name,
+    basedOnVersion: base.version,
+    ...lineageOf(base),
+    rollbackEligible: true,
+    createdAt: Date.now(),
+  });
+  return baseline;
+}
+
+/**
  * Publish a user's business adaptation as an immutable tenant CANDIDATE (SKILL-01).
  *
  * The args are the whole authorization story: `name` and `authoredBody`, nothing else. Tenant,
@@ -825,22 +895,12 @@ export const publishUserCandidate = tenantMutation({
     // The closed v0 product set — deliberately NARROWER than GATED_SKILLS. Refused before any read.
     if (!isUserAuthorableSkill(name)) throw new Error(`NOT_USER_AUTHORABLE: ${name}`);
 
-    const core = await loadSkill(ctx, name); // fails closed on an unseeded skill
-    const base = await loadEffectiveSkill(ctx, ctx.tenantId, name);
-    // Blank / over-cap THROWS here, before any write: the composer never returns a partial body.
-    const body = composeUserSkillBody(core.body, authoredBody);
-    const authored = authoredBody.trim();
-
-    // ONE descending indexed read for BOTH next-version allocation and idempotence. A tenant's
-    // authoring history is open-ended, so it is never read wholesale (research pitfall 12) — and
-    // `skills.test.ts` scans this exact region for an unbounded read, so keep it out of the
-    // comments too.
-    const newestRows = await ctx.db
-      .query("tenantSkills")
-      .withIndex("by_tenant_name_version", (q) => q.eq("tenantId", ctx.tenantId).eq("name", name))
-      .order("desc")
-      .take(1);
-    const newest = newestRows[0] ?? null;
+    const { core, base, body, authored, newest } = await readTenantPublishState(
+      ctx,
+      ctx.tenantId,
+      name,
+      authoredBody,
+    );
     // Idempotence compares the TRIMMED stored text and the exact base lineage — the same
     // adaptation against a NEW base is a real new candidate, not a repost.
     const duplicate =
@@ -851,26 +911,7 @@ export const publishUserCandidate = tenantMutation({
       newest.basedOnScope === base.scope &&
       newest.basedOnVersion === base.version;
 
-    let prior: { version: number } | null = newest;
-    if (newest === null) {
-      const baseline = allocateImmutableVersion(null, false);
-      await ctx.db.insert("tenantSkills", {
-        tenantId: ctx.tenantId,
-        name,
-        version: baseline.version,
-        // The tenant's frozen copy of the code-owned core — the evidence-exempt rollback target.
-        body: core.body,
-        authoredBody: "",
-        status: "archived",
-        author: "system",
-        basedOnName: name,
-        basedOnVersion: base.version,
-        ...lineageOf(base),
-        rollbackEligible: true,
-        createdAt: Date.now(),
-      });
-      prior = baseline;
-    }
+    const prior = await ensureRollbackBaseline(ctx, ctx.tenantId, name, core, base, newest);
 
     const { version, inserted } = allocateImmutableVersion(prior, duplicate);
     // `duplicate` already implies `newest !== null`; the re-test is what narrows it for the
@@ -925,6 +966,188 @@ export const publishUserCandidate = tenantMutation({
     });
 
     return { name, version, status: "candidate" as const, inserted: true, tenantSkillId };
+  },
+});
+
+/**
+ * Mint an Executive-Agent-authored tenant CANDIDATE (SKILL-02). INTERNAL, and that is the whole
+ * safety story: there is no public API, no tenant wrapper and no HTTP route reaching this. The
+ * later cockpit tool (23-03) calls it from a trusted action context.
+ *
+ * WHAT THE MODEL SUPPLIES: `name` and `authoredBody`. Nothing else, ever. `tenantId`,
+ * `sourceThreadId` and `sourceTurnId` come from the trusted turn envelope the runtime already
+ * holds — they are server args here because an internal mutation has no `ctx.tenantId`, NOT because
+ * a caller may choose them. `author`, `authorAgentId`, `status`, `version`, `body`,
+ * `rollbackEligible`, evidence and approval are all derived or hardcoded, so this validator has no
+ * field a model could set to promote its own row or forge provenance.
+ *
+ * THERE IS NO CODE PATH FROM THIS MUTATION TO AN ACTIVATION FUNCTION. It inserts `candidate` and
+ * returns; `skills.test.ts` scans this region to keep it that way.
+ *
+ * TWO REFUSALS, in this order, and the order is the contract:
+ *  1. EXACT RETRY is resolved FIRST, off `by_tenant_source_turn`. One source turn may own at most
+ *     one row, so a re-fired turn recovers its row instead of minting a second immutable version.
+ *     Same turn + different draft is a CONFLICT, not an update: patching would mutate an immutable
+ *     row, and inserting would give one turn two.
+ *  2. THE v1 PENDING RULE. A changed draft while ANY candidate is pending for this tenant/name is
+ *     refused outright — including a candidate the USER authored. It is never archived, never
+ *     superseded, and zero rows change. Superseding a never-active candidate would silently discard
+ *     something a human may be about to review, and archiving it would hand a rollback-ineligible
+ *     row a state it never earned.
+ *
+ * Idempotence is the SOURCE TURN, never the bytes. Two different turns that produce identical text
+ * are two different authoring acts, and collapsing them would return a row whose `sourceTurnId`
+ * names a turn that did not ask for it — exactly the provenance the live handoff artifacts pin. So
+ * the version allocator is called with `duplicate: false` deliberately.
+ */
+export const publishAgentCandidate = internalMutation({
+  args: {
+    tenantId: v.string(),
+    sourceThreadId: v.string(),
+    sourceTurnId: v.string(),
+    name: v.string(),
+    authoredBody: v.string(),
+  },
+  handler: async (ctx, { tenantId, sourceThreadId, sourceTurnId, name, authoredBody }) => {
+    // The closed agent set — allowed to be narrower than the user set, and eval-reachable by
+    // construction. Refused before any read.
+    if (!isAgentAuthorableSkill(name)) throw new Error(`NOT_AGENT_AUTHORABLE: ${name}`);
+
+    const authored = authoredBody.trim();
+
+    // (1) Exact retry.
+    const forTurn = await ctx.db
+      .query("tenantSkills")
+      .withIndex("by_tenant_source_turn", (q) =>
+        q
+          .eq("tenantId", tenantId)
+          .eq("sourceThreadId", sourceThreadId)
+          .eq("sourceTurnId", sourceTurnId),
+      )
+      .take(1);
+    const ownedByTurn = forTurn[0] ?? null;
+    if (ownedByTurn !== null) {
+      if (ownedByTurn.name !== name || ownedByTurn.authoredBody !== authored)
+        throw new Error(`AGENT_SOURCE_TURN_CONFLICT: ${sourceTurnId}`);
+      return {
+        name: ownedByTurn.name,
+        version: ownedByTurn.version,
+        // The row's REAL status, not the literal "candidate": a retry fired after an owner already
+        // activated the row must not report it as still pending.
+        status: ownedByTurn.status,
+        inserted: false,
+        tenantSkillId: ownedByTurn._id,
+      };
+    }
+
+    // (2) The pending rule. Indexed, bounded, and read before any write.
+    const pending = await ctx.db
+      .query("tenantSkills")
+      .withIndex("by_tenant_name_status", (q) =>
+        q.eq("tenantId", tenantId).eq("name", name).eq("status", "candidate"),
+      )
+      .take(1);
+    if (pending.length > 0) throw new Error(`AGENT_CANDIDATE_PENDING: ${name}`);
+
+    const { core, base, body, newest } = await readTenantPublishState(
+      ctx,
+      tenantId,
+      name,
+      authoredBody,
+    );
+    const prior = await ensureRollbackBaseline(ctx, tenantId, name, core, base, newest);
+    const { version } = allocateImmutableVersion(prior, false);
+
+    const tenantSkillId = await ctx.db.insert("tenantSkills", {
+      tenantId,
+      name,
+      version,
+      body,
+      authoredBody: authored,
+      // CANDIDATE, always.
+      status: "candidate",
+      author: "agent",
+      // Hardcoded server-side. Not an argument, not a model id.
+      authorAgentId: EXECUTIVE_AGENT_AUTHOR_ID,
+      sourceThreadId,
+      sourceTurnId,
+      basedOnName: name,
+      basedOnVersion: base.version,
+      ...lineageOf(base),
+      // A candidate that was never active has nothing to roll back to.
+      rollbackEligible: false,
+      createdAt: Date.now(),
+    });
+
+    // CLAUDE.md §4: refs, hashes, ids and counts ONLY. The adaptation and the composed body never
+    // reach this payload; `skills.test.ts` pins the key set by EQUALITY and needle-scans audit +
+    // deadLetters, so adding a body field fails on purpose.
+    await ctx.runMutation(internal.audit.log, {
+      tenantId,
+      correlationId: String(tenantSkillId),
+      eventType: "skill.agent_candidate_published",
+      actor: "agent",
+      payload: {
+        skillName: name,
+        tenantSkillId: String(tenantSkillId),
+        version,
+        baseScope: base.scope,
+        baseSkillId: String(base.skillId),
+        baseVersion: base.version,
+        author: "agent",
+        authorAgentId: EXECUTIVE_AGENT_AUTHOR_ID,
+        sourceThreadId,
+        sourceTurnId,
+        bodyHash: await contentHash(body),
+        authoredBytes: new TextEncoder().encode(authored).length,
+      },
+    });
+
+    return { name, version, status: "candidate" as const, inserted: true, tenantSkillId };
+  },
+});
+
+/**
+ * Refs-only inspection of ONE tenant skill row, for the live handoff/UAT artifacts (23-06 … 23-08)
+ * which must pin exact state without ever transcribing a prompt into a planning file.
+ *
+ * INTERNAL and content-free by construction: it returns ids, status, provenance, a body HASH and a
+ * byte COUNT. It never returns `body` or `authoredBody` — the base and composed registry prompts
+ * are an owner-only disclosure boundary (research pitfall 4), and an artifact that quoted one would
+ * put a live prompt in git.
+ */
+export const inspectAgentCandidate = internalQuery({
+  args: { tenantSkillId: v.id("tenantSkills") },
+  handler: async (ctx, { tenantSkillId }) => {
+    const row = await ctx.db.get(tenantSkillId);
+    if (row === null) return null;
+    return {
+      tenantSkillId: String(row._id),
+      tenantId: row.tenantId,
+      name: row.name,
+      version: row.version,
+      status: row.status,
+      author: row.author,
+      authorAgentId: row.authorAgentId ?? null,
+      sourceThreadId: row.sourceThreadId ?? null,
+      sourceTurnId: row.sourceTurnId ?? null,
+      basedOnScope: row.basedOnScope,
+      basedOnVersion: row.basedOnVersion,
+      rollbackEligible: row.rollbackEligible,
+      bodyHash: await contentHash(row.body),
+      authoredBytes: new TextEncoder().encode(row.authoredBody).length,
+      // Presence, never content: raw evidence carries fixture ids the authoring agent must not see.
+      hasEvidence: row.evidence !== undefined,
+      ownerApproval:
+        row.ownerApproval === undefined
+          ? null
+          : {
+              ownerUserId: String(row.ownerApproval.ownerUserId),
+              approvedAt: row.ownerApproval.approvedAt,
+              evalRunId: row.ownerApproval.evalRunId,
+            },
+      createdAt: row.createdAt,
+    };
   },
 });
 

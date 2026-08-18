@@ -40,7 +40,7 @@ import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { contentHash } from "./lib/hash";
 import schema from "./schema";
-import { loadSkill } from "./skills";
+import { loadEffectiveSkill, loadSkill } from "./skills";
 
 // Register every convex module so internal.* function references resolve.
 // `import.meta.glob` is a Vite feature; its type is not in the Convex tsconfig
@@ -1330,12 +1330,16 @@ describe("publishUserCandidate — tenant candidate authoring (21-02)", () => {
 
   test("the tenant allocation reads ONE descending indexed row — never a history .collect()", () => {
     const src = readFileSync(fileURLToPath(new URL("./skills.ts", import.meta.url)), "utf8");
-    const from = src.indexOf("export const publishUserCandidate");
+    // 23-02 moved the read half into `readTenantPublishState`, shared by the user and agent
+    // writers. The region therefore starts at the HELPER, not at the user writer — so this guard
+    // still covers the read where it now lives, and covers BOTH writers below it.
+    const from = src.indexOf("async function readTenantPublishState");
     const to = src.indexOf("export const myUserSkills");
     expect(from).toBeGreaterThan(-1);
     expect(to).toBeGreaterThan(from);
     const region = src.slice(from, to);
     expect(region.length).toBeGreaterThan(800); // non-vacuity: the real publisher was found
+    expect(region).toContain("export const publishUserCandidate");
 
     // POSITIVE: the bounded read the many-version case above depends on.
     expect(region).toContain("by_tenant_name_version");
@@ -2788,5 +2792,371 @@ describe("tenantSkills: agent provenance and owner approval (Phase 23)", () => {
         .collect(),
     );
     expect(otherTurn).toHaveLength(0);
+  });
+});
+
+// 23-02 (SKILL-02): the candidate-only Executive-Agent writer. Still unreachable from any model —
+// no tool exists until 23-03 — so every test here drives the internal mutation directly, which is
+// the strongest position an attacker could ever be in and is therefore the right threat model.
+describe("publishAgentCandidate — the inert agent writer (23-02)", () => {
+  const AGENT_NAME = AGENT_AUTHORABLE_SKILLS[0];
+  const GLOBAL_CORE = "GLOBAL OFFER ARCHITECT CORE v7";
+  const NEEDLE = "ZQ7AGENT9c4e17b2";
+  const DRAFT = `Price in AUD, never discount past 20%. ${NEEDLE}`;
+  const OTHER_DRAFT = "Bundle onboarding into every retainer.";
+  const THREAD = "thread_zq7";
+  const TURN = "turn_zq7_0001";
+
+  const setup = async () => {
+    const t = convexTest(schema, modules);
+    t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+    // Global active at v7 so `basedOnVersion: 7` cannot be an accident of everything being v1.
+    const globalId = await t.run((ctx) =>
+      ctx.db.insert("skills", {
+        name: AGENT_NAME,
+        version: 7,
+        body: GLOBAL_CORE,
+        status: "active",
+        createdAt: 0,
+      }),
+    );
+    const userA = await t.run((ctx) => ctx.db.insert("users", {}));
+    const userB = await t.run((ctx) => ctx.db.insert("users", {}));
+    return { t, globalId, tenantA: String(userA), tenantB: String(userB) };
+  };
+
+  const publish = (
+    t: TestConvex<typeof schema>,
+    args: {
+      tenantId: string;
+      sourceThreadId?: string;
+      sourceTurnId?: string;
+      name?: string;
+      authoredBody?: string;
+    },
+  ) =>
+    t.mutation(internal.skills.publishAgentCandidate, {
+      tenantId: args.tenantId,
+      sourceThreadId: args.sourceThreadId ?? THREAD,
+      sourceTurnId: args.sourceTurnId ?? TURN,
+      name: args.name ?? AGENT_NAME,
+      authoredBody: args.authoredBody ?? DRAFT,
+    });
+
+  const rows = (t: TestConvex<typeof schema>) =>
+    t.run((ctx) => ctx.db.query("tenantSkills").collect());
+  const audits = (t: TestConvex<typeof schema>) => t.run((ctx) => ctx.db.query("audit").collect());
+
+  test("mints ONE inert candidate plus the rollback baseline, with server-owned provenance", async () => {
+    const { t, globalId, tenantA } = await setup();
+
+    const res = await publish(t, { tenantId: tenantA });
+    expect(res).toMatchObject({
+      name: AGENT_NAME,
+      version: 2,
+      status: "candidate",
+      inserted: true,
+    });
+
+    const all = await rows(t);
+    expect(all).toHaveLength(2);
+
+    const baseline = all.find((r) => r.version === 1);
+    const candidate = all.find((r) => r.version === 2);
+    // The baseline is the CODE's copy of the code's own core — attributing it to the agent would
+    // put an authorship claim on bytes the agent never wrote.
+    expect(baseline).toMatchObject({
+      author: "system",
+      status: "archived",
+      body: GLOBAL_CORE,
+      authoredBody: "",
+      rollbackEligible: true,
+    });
+    expect(baseline?.authorAgentId).toBeUndefined();
+
+    expect(candidate).toMatchObject({
+      tenantId: tenantA,
+      status: "candidate",
+      author: "agent",
+      authorAgentId: "executive-agent",
+      sourceThreadId: THREAD,
+      sourceTurnId: TURN,
+      basedOnScope: "global",
+      basedOnName: AGENT_NAME,
+      basedOnVersion: 7,
+      basedOnGlobalSkillId: globalId,
+      rollbackEligible: false,
+      authoredBody: DRAFT,
+    });
+    // The three absences that make it inert. A candidate row positively witnesses each.
+    expect(candidate?.evidence).toBeUndefined();
+    expect(candidate?.ownerApproval).toBeUndefined();
+    expect(candidate?.authorUserId).toBeUndefined();
+    // Composed against the GLOBAL core, never the tenant's own active body.
+    expect(candidate?.body).toBe(composeUserSkillBody(GLOBAL_CORE, DRAFT));
+
+    // NOTHING went live: no active tenant row exists at all.
+    expect(all.filter((r) => r.status === "active")).toHaveLength(0);
+  });
+
+  test("refuses a non-agent-authorable name before any read or write", async () => {
+    const { t, tenantA } = await setup();
+
+    await expect(publish(t, { tenantId: tenantA, name: COCKPIT_AGENT_SKILL })).rejects.toThrow(
+      "NOT_AGENT_AUTHORABLE",
+    );
+    // Not even the rollback baseline: the refusal is ahead of every read.
+    expect(await rows(t)).toHaveLength(0);
+    expect(await audits(t)).toHaveLength(0);
+  });
+
+  test("refuses blank and over-cap adaptations before an insert", async () => {
+    const { t, tenantA } = await setup();
+
+    await expect(publish(t, { tenantId: tenantA, authoredBody: "  \n\t " })).rejects.toThrow(
+      "USER_SKILL_ADAPTATION_REQUIRED",
+    );
+    const overCap = "e".repeat(USER_SKILL_ADAPTATION_MAX_BYTES + 1);
+    await expect(
+      publish(t, { tenantId: tenantA, sourceTurnId: "turn_over", authoredBody: overCap }),
+    ).rejects.toThrow("USER_SKILL_ADAPTATION_TOO_LARGE");
+
+    // The composer throws inside `readTenantPublishState`, which runs BEFORE the baseline insert,
+    // so a rejected draft leaves no half-written history behind.
+    expect(await rows(t)).toHaveLength(0);
+  });
+
+  test("an EXACT same-turn retry returns the same row and mints no second version or audit", async () => {
+    const { t, tenantA } = await setup();
+
+    const first = await publish(t, { tenantId: tenantA });
+    const retry = await publish(t, { tenantId: tenantA });
+
+    expect(retry).toMatchObject({ inserted: false, version: first.version, status: "candidate" });
+    expect(retry.tenantSkillId).toBe(first.tenantSkillId);
+    expect(await rows(t)).toHaveLength(2); // baseline + the one candidate
+    expect(await audits(t)).toHaveLength(1);
+  });
+
+  test("the SAME turn with a different draft is a conflict, and changes zero rows", async () => {
+    const { t, tenantA } = await setup();
+
+    await publish(t, { tenantId: tenantA });
+    const before = await rows(t);
+
+    await expect(publish(t, { tenantId: tenantA, authoredBody: OTHER_DRAFT })).rejects.toThrow(
+      "AGENT_SOURCE_TURN_CONFLICT",
+    );
+    // A different NAME under the same turn is the same conflict — the turn owns one row, period.
+    await expect(
+      publish(t, { tenantId: tenantA, name: AGENT_AUTHORABLE_SKILLS[1] }),
+    ).rejects.toThrow("AGENT_SOURCE_TURN_CONFLICT");
+
+    // Byte-equivalent state: not patched, not superseded, not archived.
+    expect(await rows(t)).toEqual(before);
+  });
+
+  test("a NEW turn while any candidate is pending is refused — never superseded or archived", async () => {
+    const { t, tenantA } = await setup();
+
+    await publish(t, { tenantId: tenantA });
+    const before = await rows(t);
+
+    await expect(
+      publish(t, { tenantId: tenantA, sourceTurnId: "turn_zq7_0002", authoredBody: OTHER_DRAFT }),
+    ).rejects.toThrow("AGENT_CANDIDATE_PENDING");
+
+    expect(await rows(t)).toEqual(before);
+    // The pending row keeps its status: archiving it would hand a never-active row a state it
+    // never earned, and superseding it would discard a draft a human may be about to review.
+    expect(before.filter((r) => r.status === "candidate")).toHaveLength(1);
+  });
+
+  test("a pending USER candidate blocks the agent too", async () => {
+    const { t, tenantA } = await setup();
+
+    await t.run((ctx) =>
+      ctx.db.insert("tenantSkills", {
+        tenantId: tenantA,
+        name: AGENT_NAME,
+        version: 1,
+        body: "user composed",
+        authoredBody: "a human's pending draft",
+        status: "candidate",
+        author: "user",
+        authorUserId: tenantA as Id<"users">,
+        basedOnScope: "global",
+        basedOnName: AGENT_NAME,
+        basedOnVersion: 7,
+        rollbackEligible: false,
+        createdAt: 1,
+      }),
+    );
+
+    await expect(publish(t, { tenantId: tenantA })).rejects.toThrow("AGENT_CANDIDATE_PENDING");
+    expect(await rows(t)).toHaveLength(1);
+  });
+
+  test("two tenants firing the SAME thread/turn ids never cross-read, dedupe, or share a baseline", async () => {
+    const { t, tenantA, tenantB } = await setup();
+
+    const a = await publish(t, { tenantId: tenantA });
+    const b = await publish(t, { tenantId: tenantB });
+
+    // Both INSERTED. If the source-turn read leaked across tenants, B would have recovered A's row.
+    expect(a.inserted).toBe(true);
+    expect(b.inserted).toBe(true);
+    expect(a.tenantSkillId).not.toBe(b.tenantSkillId);
+    // Each tenant allocates from its OWN history: both are v2 over their own v1 baseline.
+    expect([a.version, b.version]).toEqual([2, 2]);
+
+    const all = await rows(t);
+    expect(all).toHaveLength(4);
+    expect(all.filter((r) => r.tenantId === tenantA)).toHaveLength(2);
+    expect(all.filter((r) => r.tenantId === tenantB)).toHaveLength(2);
+  });
+
+  test("the validator has NO authority field — an extra key is refused at the boundary", async () => {
+    const { t, tenantA } = await setup();
+
+    await expect(
+      t.mutation(internal.skills.publishAgentCandidate, {
+        tenantId: tenantA,
+        sourceThreadId: THREAD,
+        sourceTurnId: TURN,
+        name: AGENT_NAME,
+        authoredBody: DRAFT,
+        // Convex rejects an unexpected key outright, so the refusal is at the boundary rather
+        // than in a check a later edit could forget.
+        status: "active",
+      } as never),
+    ).rejects.toThrow();
+    expect(await rows(t)).toHaveLength(0);
+  });
+
+  test("the writer region contains no activation, evidence, approval, or patch call", () => {
+    const src = readFileSync(fileURLToPath(new URL("./skills.ts", import.meta.url)), "utf8");
+    const from = src.indexOf("export const publishAgentCandidate");
+    const to = src.indexOf("export const inspectAgentCandidate");
+    expect(from).toBeGreaterThan(-1);
+    expect(to).toBeGreaterThan(from);
+    const region = src.slice(from, to);
+    expect(region.length).toBeGreaterThan(800); // non-vacuity: the real writer was found
+    expect(region).toContain('status: "candidate"');
+
+    // Capability minimization, asserted structurally. Named mutations that turn this red are in
+    // the summary; each of these is a way for the writer to promote its own row.
+    for (const forbidden of [
+      "transitionSkillActivation",
+      "activateSkillVersion",
+      "activateTenantCandidate",
+      "recordTenantEvalEvidence",
+      "ownerApproval",
+      "ctx.db.patch",
+      "ctx.db.replace",
+      "ctx.db.delete",
+      'status: "active"',
+      "rollbackEligible: true",
+    ]) {
+      expect(region).not.toContain(forbidden);
+    }
+  });
+
+  test("the agent audit row is refs-only, and the draft reaches no log plane", async () => {
+    const { t, globalId, tenantA } = await setup();
+
+    const res = await publish(t, { tenantId: tenantA });
+    const events = await audits(t);
+    expect(events).toHaveLength(1); // the positive witness for the scan below
+    const row = events[0]!;
+    expect(row.tenantId).toBe(tenantA);
+    expect(row.actor).toBe("agent");
+    expect(row.eventType).toBe("skill.agent_candidate_published");
+
+    const payload = row.payload as Record<string, unknown>;
+    // KEY-SET EQUALITY. Adding `authoredBody` or `body` here fails on purpose.
+    expect(Object.keys(payload).sort()).toEqual([
+      "author",
+      "authorAgentId",
+      "authoredBytes",
+      "baseScope",
+      "baseSkillId",
+      "baseVersion",
+      "bodyHash",
+      "skillName",
+      "sourceThreadId",
+      "sourceTurnId",
+      "tenantSkillId",
+      "version",
+    ]);
+    expect(payload).toMatchObject({
+      skillName: AGENT_NAME,
+      tenantSkillId: res.tenantSkillId,
+      version: 2,
+      baseScope: "global",
+      baseSkillId: globalId,
+      baseVersion: 7,
+      author: "agent",
+      authorAgentId: "executive-agent",
+      sourceThreadId: THREAD,
+      sourceTurnId: TURN,
+      authoredBytes: new TextEncoder().encode(DRAFT).length,
+    });
+    expect(String(payload.bodyHash)).toMatch(/^[0-9a-f]{64}$/);
+
+    const everything = JSON.stringify([
+      events,
+      await t.run((ctx) => ctx.db.query("deadLetters").collect()),
+    ]);
+    expect(everything).not.toContain(NEEDLE);
+    expect(everything).not.toContain(GLOBAL_CORE);
+    expect(everything).not.toContain(USER_SKILL_ADAPTATION_SECTION);
+    // Non-vacuity: the scan really did read the row asserted above.
+    expect(everything).toContain(String(payload.bodyHash));
+  });
+
+  test("inspectAgentCandidate returns refs only — never a body or an adaptation", async () => {
+    const { t, tenantA } = await setup();
+
+    const res = await publish(t, { tenantId: tenantA });
+    const view = await t.query(internal.skills.inspectAgentCandidate, {
+      tenantSkillId: res.tenantSkillId,
+    });
+
+    expect(view).toMatchObject({
+      tenantId: tenantA,
+      name: AGENT_NAME,
+      version: 2,
+      status: "candidate",
+      author: "agent",
+      authorAgentId: "executive-agent",
+      sourceThreadId: THREAD,
+      sourceTurnId: TURN,
+      rollbackEligible: false,
+      hasEvidence: false,
+      ownerApproval: null,
+    });
+    expect(String(view?.bodyHash)).toMatch(/^[0-9a-f]{64}$/);
+    expect(view?.authoredBytes).toBe(new TextEncoder().encode(DRAFT).length);
+
+    // The disclosure boundary, asserted over the WHOLE serialized view rather than key by key —
+    // a new field carrying content would slip past a key-name check.
+    const serialized = JSON.stringify(view);
+    expect(serialized).not.toContain(NEEDLE);
+    expect(serialized).not.toContain(GLOBAL_CORE);
+    expect(serialized).not.toContain(USER_SKILL_ADAPTATION_SECTION);
+    expect(serialized).toContain(String(view?.bodyHash)); // non-vacuity
+  });
+
+  test("publishing leaves the tenant's effective row exactly where it was", async () => {
+    const { t, tenantA } = await setup();
+
+    const before = await t.run((ctx) => loadEffectiveSkill(ctx, tenantA, AGENT_NAME));
+    await publish(t, { tenantId: tenantA });
+    const after = await t.run((ctx) => loadEffectiveSkill(ctx, tenantA, AGENT_NAME));
+
+    expect(after).toEqual(before);
+    expect(after.scope).toBe("global");
+    expect(after.body).toBe(GLOBAL_CORE);
   });
 });

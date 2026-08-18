@@ -1,6 +1,8 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
-> Last verified: 2026-08-18 (23-01 appended the Phase 23 agent-authoring DATA PLANE at the end of
+> Last verified: 2026-08-18 (23-02 added `publishAgentCandidate`, the inert candidate-only writer —
+> internal, no activation path, source-turn idempotence, v1 pending refusal. 23-01 appended the
+> Phase 23 agent-authoring DATA PLANE at the end of
 > this file — vocabulary only, no writer and no activation path; read its ceiling note before
 > trusting the suite. Prior verification follows.) (**THE GATE WAS SPENT: activated, then rolled back, both by the owner,
 > both at $0.** `offer-architect` v12 `qx73bwsh…` went `candidate` → `active` → `archived`.
@@ -1580,3 +1582,59 @@ exist and was deliberately withheld (its steps 3-4, tenant runtime attribution, 
 Waves 1-5 proceed on an explicit owner decision; waves 6-9 stop for a re-cut, because `23-08` carries
 the SAME unrunnable step. Full gate result:
 `.planning/phases/23-agent-authored-skills/23-00-GATE-2026-08-18.md`.
+
+### 23-02 — `publishAgentCandidate`, the inert writer
+
+`internalMutation`. No public API, no tenant wrapper, no HTTP route. Args are
+`{tenantId, sourceThreadId, sourceTurnId, name, authoredBody}` — but **the model supplies only
+`name` and `authoredBody`**; the other three come from the trusted turn envelope and are args only
+because an internal mutation has no `ctx.tenantId`. `author`, `authorAgentId`, `status`, `version`,
+`body`, `rollbackEligible`, evidence and approval are derived or hardcoded, so the validator has no
+field a model could set. Convex rejects an unexpected key outright, which is why the refusal is at
+the boundary rather than in a check.
+
+**Two refusals, and the ORDER is the contract.**
+
+1. **Exact retry, resolved FIRST** off `by_tenant_source_turn`. One source turn owns at most one
+   row. A re-fired turn recovers its row (`inserted: false`, same id/version, the row's REAL status
+   — not a hardcoded `"candidate"`, because a retry after activation must not report it as pending).
+   Same turn + different draft or different name → `AGENT_SOURCE_TURN_CONFLICT`, zero rows changed.
+   Patching would mutate an immutable row; inserting would give one turn two.
+2. **The v1 pending rule.** A new turn while ANY candidate is pending for that tenant/name —
+   **including one the USER authored** — → `AGENT_CANDIDATE_PENDING`, zero rows changed. The pending
+   row is never archived and never superseded: superseding would silently discard a draft a human
+   may be about to review, and archiving would hand a rollback-ineligible row a state it never
+   earned.
+
+**Idempotence is the SOURCE TURN, never the bytes.** `allocateImmutableVersion` is called with
+`duplicate: false` deliberately. Two different turns producing identical text are two different
+authoring acts, and collapsing them would return a row whose `sourceTurnId` names a turn that never
+asked for it — the exact provenance the live handoff artifacts are supposed to pin.
+
+**The shared seam.** `readTenantPublishState` (compose against the GLOBAL core, lineage against the
+tenant's EFFECTIVE row, ONE descending indexed `take(1)`) and `ensureRollbackBaseline` (the
+first-customization `system`/`archived`/rollback-eligible baseline) are now used by BOTH writers.
+`publishUserCandidate`'s public args, returns and behaviour are unchanged — the refactor was run
+against the suite before and after as its own step. The bounded-read structural guard was
+re-anchored to start at `readTenantPublishState` so it still covers the read where it now lives,
+plus both writers below it.
+
+**`inspectAgentCandidate`** is the refs-only read for the later live artifacts: ids, status,
+provenance, `bodyHash`, `authoredBytes`, `hasEvidence` as a BOOLEAN, `ownerApproval` or null. It
+never returns `body` or `authoredBody`, and the test asserts that over the whole serialized view
+rather than key by key — a new field carrying content would slip past a key-name check.
+
+**Audit:** one row, `skill.agent_candidate_published`, `actor: "agent"`, key set pinned by EQUALITY:
+`author, authorAgentId, authoredBytes, baseScope, baseSkillId, baseVersion, bodyHash, skillName,
+sourceThreadId, sourceTurnId, tenantSkillId, version`. Needle-scanned across every audit row and
+every dead letter.
+
+#### Mutation evidence (23-02, all executed and restored)
+
+| Mutation | Result |
+|---|---|
+| Writer inserts `status: "active"` | **6 red**, including the structural region scan |
+| Add a caller-supplied `status` to the validator | **1 red** — the boundary test |
+| Drop `sourceTurnId` from the source-turn predicate | **1 red** — a new turn recovers the wrong row |
+| Drop the **tenant** predicate | **COMPILE ERROR**, not a test failure: `Argument of type '"sourceThreadId"' is not assignable to parameter of type '"tenantId"'`. Convex index predicates must be given in field order, so tenant-first makes the scoping structurally unskippable |
+| Archive the pending candidate instead of refusing | **3 red** — both behavioural tests and the `ctx.db.patch` structural scan caught it independently |
