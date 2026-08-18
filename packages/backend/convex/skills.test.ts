@@ -929,14 +929,35 @@ describe("no hardcoded agent prompts in convex/", () => {
     // backtick branch spans lines (that IS how a real hardcoded prompt would look).
     const stringLiteral = /"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`/g;
 
+    // COMMENTS ARE NOT SOURCE. The apostrophe fix above closed this hole for '…' and "…" but left
+    // it open for backticks, which still span lines by design — so a pair of MARKDOWN backticks in
+    // JSDoc prose swallows every line between them and reports the result as an inline prompt.
+    // Measured on `cockpitCapabilities.ts`: `a745d36` took it from 1 backtick to 29 by explaining
+    // itself well, and the scan went from 0 offenders to 3, the longest a 3292-char span that
+    // starts mid-regex on line 28 and ends inside a sentence about the eval harness. §5 forbids a
+    // hardcoded prompt the runtime LOADS; a prompt sitting in a comment is not loaded and is not
+    // that. Stripping first makes the detector match the rule — the anti-vacuity test below proves
+    // it still catches the real thing.
+    const stripComments = (s: string) =>
+      s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+
+    const scan = (text: string) =>
+      [...stripComments(text).matchAll(stringLiteral)]
+        .map((m) => m[0].length - 2)
+        .filter((n) => n > MAX_INLINE_STRING);
+
+    // ANTI-VACUITY. Stripping comments must not blind the guard, so prove all three directions on
+    // synthetic input before trusting it on the tree. Delete `stripComments` and case 2 reddens;
+    // weaken the scan and case 1 reddens.
+    const long = "x".repeat(MAX_INLINE_STRING + 50);
+    expect(scan(`const prompt = \`${long}\`;`)).toHaveLength(1); // 1. a REAL hardcoded prompt, still caught
+    expect(scan(`/** doc: \`${long}\` and \`more\` */\nconst a = 1;`)).toHaveLength(0); // 2. prose, correctly ignored
+    expect(scan(`const u = "https://ex.com/${long}";`)).toHaveLength(1); // 3. `://` is not a comment
+
     const offenders: string[] = [];
     for (const file of sourceFiles) {
-      const src = readFileSync(file, "utf8");
-      for (const match of src.matchAll(stringLiteral)) {
-        const inner = match[0].slice(1, -1);
-        if (inner.length > MAX_INLINE_STRING) {
-          offenders.push(`${file}: ${inner.length}-char inline string`);
-        }
+      for (const length of scan(readFileSync(file, "utf8"))) {
+        offenders.push(`${file}: ${length}-char inline string`);
       }
     }
 
