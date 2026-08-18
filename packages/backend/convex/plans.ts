@@ -439,6 +439,9 @@ export const persistDeck = internalMutation({
       // 33-13, same whole-deck-write rule: a deck that parsed CLEARS the previous refusal, so the
       // canvas never shows a failure card over the storyboard that replaced it.
       proposalRefusal: undefined,
+      // …and the body that refusal explained goes with it. Evidence for a run this row no longer
+      // carries is worse than no evidence — it is a wrong answer to the next diagnosis.
+      refusedBody: undefined,
       ...(a.brief === undefined ? {} : { brief: a.brief }),
       /** When the deck(s) on this row were proposed — `briefChangedAt > deckProposedAt` is the
        *  stale badge. */
@@ -522,6 +525,10 @@ export const stageImagePlan = internalMutation({
  *  so nothing downstream reads this row as a reel — and 33-13 puts the refusal CODE on the row
  *  beside the prose, which is what lets the canvas render this as a FAILURE CARD with a retry
  *  rather than as a memo offering Approve and Save over a reel that does not exist. */
+/** The ceiling on a stored refused body. Generous on purpose — the point is diagnosis, and a
+ *  truncated body is a worse witness than a long one. Observed bodies run 1,007-6,331 characters. */
+const MAX_REFUSED_BODY_CHARS = 20_000;
+
 export const landStoryboardRefusal = internalMutation({
   args: {
     tenantId: v.string(),
@@ -534,14 +541,25 @@ export const landStoryboardRefusal = internalMutation({
     contract: v.union(v.literal("scene"), v.literal("block")),
     /** Set only when a VARIATION carried the refusal. */
     variation: v.optional(v.string()),
+    /** The specialist's RAW output — what it wrote instead of a deck. Content plane (`plans` is
+     *  where raw content lives, per schema.ts); it must never be forwarded to an audit payload. */
+    specialistBody: v.optional(v.string()),
   },
-  handler: async (ctx, { tenantId, planId, body, reason, contract, variation }): Promise<null> => {
+  handler: async (
+    ctx,
+    { tenantId, planId, body, reason, contract, variation, specialistBody },
+  ): Promise<null> => {
     const plan = await ctx.db.get(planId);
     if (!plan || plan.tenantId !== tenantId) return null;
     await ctx.db.patch(planId, {
       body,
       status: "proposed",
       proposalRefusal: { reason, contract, ...(variation === undefined ? {} : { variation }) },
+      // Capped at the trust boundary (§8: never lazy about validation where a model's output
+      // enters storage). Bodies run ~1-6k in practice, so this truncates nothing real and bounds
+      // a pathological one. `undefined` CLEARS, which is the right behaviour for a refusal that
+      // arrives without one.
+      refusedBody: specialistBody?.slice(0, MAX_REFUSED_BODY_CHARS),
     });
     return null;
   },

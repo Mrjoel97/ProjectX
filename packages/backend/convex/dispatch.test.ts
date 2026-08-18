@@ -12,6 +12,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { INCOMPLETE_MARKER, serializeProfile } from "@pikar/core";
+import { TARGET_DURATIONS } from "@pikar/core/storyboard";
 import { CHEAP_MODEL, DEFAULT_MODEL, RESEARCH_FALLBACK_MODEL, RESEARCH_MODEL } from "@pikar/cost";
 import { APICallError } from "ai";
 import { convexTest, type TestConvex } from "convex-test";
@@ -26,7 +27,12 @@ import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/s
 import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { buildSpecialistPrompt, type DispatchResult, deckTokenCounts } from "./dispatch";
+import {
+  buildSpecialistPrompt,
+  type DispatchResult,
+  deckTokenCounts,
+  MEDIA_TASK_LINE,
+} from "./dispatch";
 import { contentHash } from "./lib/hash";
 import { buildCockpitTools, runSpecialistTurn } from "./llm";
 import schema from "./schema";
@@ -1131,6 +1137,84 @@ describe("the question-prompt seam (16-06 Task 1)", () => {
   });
 });
 
+/**
+ * THE THIRD PROMPT SHAPE, and the defect it closes.
+ *
+ * The question branch was built for RESEARCH, where the question genuinely IS the task. `runMedia`
+ * reused it (`llm.ts` passes `question: brief`), so a media specialist's whole user turn was the
+ * executive's free-text brief and NOTHING ELSE — no instruction to produce the deck. The 20k-char
+ * system prompt teaches the FORMAT; only a user turn can say DO IT NOW.
+ *
+ * Measured in production 2026-08-18: the identical brief ("Create a short video ad for my
+ * business.") produced a 5-shot deck on one run and 1,270 characters of prose with zero deck
+ * tokens on another — same skill version, same body hash, `incomplete: false` both times. A coin
+ * flip is what "no task line" looks like from the outside.
+ */
+describe("the MEDIA prompt shape — a brief is a SUBJECT, not a task (the third builder)", () => {
+  const BRIEF = "Create a short video ad for my business.";
+  const promptForRoute = (t: T, route: string, question: string) =>
+    t.run(async (ctx) =>
+      buildSpecialistPrompt(ctx as never, {
+        tenantId: TENANT,
+        threadId: THREAD,
+        gapIndex: 0,
+        route,
+        question,
+      }),
+    );
+
+  test("a media brief is FOLLOWED by the task line; a research question is left alone", async () => {
+    const { t } = await setupDispatched();
+
+    const media = await promptForRoute(t, "media", BRIEF);
+    const research = await promptForRoute(t, "research", BRIEF);
+
+    // The brief still reaches the specialist verbatim — this ADDS an instruction, it replaces
+    // nothing.
+    expect(media).toContain(BRIEF);
+    expect(media).toContain(MEDIA_TASK_LINE);
+
+    // Research is the branch's original tenant and must not inherit a storyboard instruction.
+    expect(research).toContain(BRIEF);
+    expect(research).not.toContain(MEDIA_TASK_LINE);
+  });
+
+  test("the instruction survives an over-long brief — the CAP applies to the brief, not the task", async () => {
+    // Ordering bug this pins: cap(brief + task) would truncate the instruction away on exactly the
+    // long briefs that most need it. cap(brief) + task cannot.
+    const { t } = await setupDispatched();
+    const long = `${"x".repeat(900)}END`;
+
+    const out = await promptForRoute(t, "media", long);
+    expect(out).not.toContain("END"); // the brief really was capped
+    expect(out).toContain("…");
+    expect(out).toContain(MEDIA_TASK_LINE); // …and the instruction is still there
+  });
+
+  test("the task line names what the two contracts actually refuse over", async () => {
+    // Not decoration: `bad_target_duration` fired in production on a 6,331-char deck that never
+    // wrote a Target duration line, and `variations: 1` is true of EVERY deck ever persisted —
+    // the A/B contract has never once been honoured live. Both are things only the user turn can
+    // demand, so if this sentence stops demanding them the fix is gone.
+    expect(MEDIA_TASK_LINE).toContain("Target duration");
+    expect(MEDIA_TASK_LINE).toContain("VARIATION A");
+    expect(MEDIA_TASK_LINE).toContain("VARIATION B");
+    for (const seconds of TARGET_DURATIONS) {
+      expect(MEDIA_TASK_LINE).toContain(String(seconds));
+    }
+  });
+
+  test("an EMPTY brief still takes the question branch, and still gets the instruction", async () => {
+    const { t } = await setupDispatched();
+    const empty = await promptForRoute(t, "media", "");
+    // `question: ""` is still a question (`!== undefined`), so the branch is chosen on PRESENCE,
+    // not truthiness. An `if (a.question)` regression would send an empty brief down the snapshot
+    // path and brief the media specialist on a business gap instead.
+    expect(empty).not.toContain("Binding constraint:");
+    expect(empty).toContain(MEDIA_TASK_LINE);
+  });
+});
+
 describe("runResearch — the scheduled entry point inherits every guard (16-06 Task 1)", () => {
   test("search call errors: retryable failures fall back, non-retryable failures propagate", async () => {
     const { t, planId } = await setup();
@@ -1970,6 +2054,37 @@ describe("20-08 — a media dispatch proposes a deck and spends nothing but toke
     expect(audit).toHaveLength(1);
     const payload = audit[0]?.payload as Record<string, unknown> | undefined;
     expect(payload?.reason).toBe("no_deck");
+  });
+
+  /**
+   * WHAT THE MODEL ACTUALLY WROTE, kept where raw content is allowed to live.
+   *
+   * The counts on the audit row say a deck was or was not written; they cannot say WHAT was written
+   * instead, and `deckTokenCounts` must never be asked to — §4 keeps the audit refs-and-counts only.
+   * `schema.ts` is equally explicit that raw content lives in `requests`/`plans`, so the plan row is
+   * where a refused body belongs. Production 2026-08-18 is the argument: three `no_deck` rows of
+   * 1,007 / 1,218 / 1,270 characters, and nothing in the system could say what any of them said.
+   */
+  test("the specialist's raw body is kept ON THE PLAN, and never reaches the audit", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    const PROSE = "I wrote some prose and forgot the table. Here is what I would make instead.";
+    ok(
+      await t.action(
+        internal.dispatch.__runSpecialistWithScript,
+        mediaArgs(planId, { primary: [{ ...textStep(PROSE), usage: SPEND_8_CENTS }] }),
+      ),
+    );
+
+    const plan = await readPlan(t, planId);
+    expect(plan?.refusedBody).toBe(PROSE);
+    // The COMPOSED refusal is still what the user reads — the kept body is evidence, not copy.
+    expect(plan?.body).toContain("never wrote a block deck");
+    expect(plan?.body).not.toContain("forgot the table");
+
+    // §4 holds at the only boundary that matters: the whole audit lineage, not just this payload.
+    const lineage = await readLineage(t);
+    expect(JSON.stringify(lineage)).not.toContain("forgot the table");
   });
 
   test("a SCENE deck the parser cannot read refuses as a SCENE deck — it does not fall through to the block contract", async () => {
@@ -2821,7 +2936,10 @@ describe("33-03 — the variations terminal: parseVariations runs FIRST", () => 
     const { t } = await setup();
     const planId = await stagedMediaPlan(t);
     await t.run((ctx) =>
-      ctx.db.patch(planId, { proposalRefusal: { reason: "no_deck", contract: "block" } }),
+      ctx.db.patch(planId, {
+        proposalRefusal: { reason: "no_deck", contract: "block" },
+        refusedBody: "the prose the previous run wrote instead of a deck",
+      }),
     );
     await t.action(
       internal.dispatch.__runSpecialistWithScript,
@@ -2833,6 +2951,9 @@ describe("33-03 — the variations terminal: parseVariations runs FIRST", () => 
     expect(plan?.kind).toBe("media");
     // A card apologising for the deck this one replaced is worse than no card at all.
     expect(plan?.proposalRefusal).toBeUndefined();
+    // The kept body belongs to the refusal it explains — a stale one would have the next reader
+    // diagnosing a run that no longer exists on this row.
+    expect(plan?.refusedBody).toBeUndefined();
   });
 
   test("a single-deck revision DISCARDS the parked alternate and still lands brief + citations", async () => {

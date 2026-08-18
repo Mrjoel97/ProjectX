@@ -1,5 +1,70 @@
 # Playbook: Email Chat Cockpit
 
+> Last verified: 2026-08-18 (**A BRIEF IS A SUBJECT, NOT A TASK — the media specialist was never
+> told to produce the deck.** dispatch 103/103, backend 87 files / 2041 passed, tsc clean. All four
+> claims mutation-proven.)
+>
+> **The defect, measured in production rather than argued.** `buildSpecialistPrompt` has two prompt
+> shapes. The QUESTION branch (`dispatch.ts`, 16-06) was built for RESEARCH, where the question
+> genuinely IS the task — "what do competitors charge?" needs no further instruction. `runMedia`
+> reused it: `llm.ts` passes `question: brief`, so a media specialist's ENTIRE user turn was the
+> executive's free-text brief, capped at 500 characters, and nothing else. The 20,041-character
+> registry body teaches the deck FORMAT; only a user turn can say DO IT NOW, and none ever did.
+>
+> **What that looked like live.** The identical brief — "Create a short video ad for my business."
+> — produced a 5-shot deck on one run and 1,270 characters of prose with ZERO deck tokens on
+> another. Same skill version 5, same body hash `4f41120c…`, `incomplete: false` and
+> `declaredUnsupported: false` on both. **A coin flip is what "no task line" looks like from
+> outside the model.** Diagnosed off `audit:recentByType` + `plans:getById` in four calls, with no
+> browser session.
+>
+> **One root cause, four symptoms nobody had connected.** The `no_deck` coin flips;
+> `bad_target_duration` on a 6,331-character deck that never wrote the line; **`variations: 1` on
+> EVERY deck ever persisted in production** — the A/B contract had never once been honoured live;
+> and "nothing injects a target duration into the specialist prompt". All the same missing sentence.
+>
+> **The fix: `MEDIA_TASK_LINE`, appended for `route === "media"` only.** Driver-plane, not a skill
+> (§5 does not apply — same standing `TASK_LINE` has, and the SYSTEM prompt is still the registry
+> row). It deliberately re-teaches NOTHING `media-director.md` owns — not the columns, not the
+> citation rule, not the narration budget. It says only WHEN and WHETHER: produce it now, produce
+> BOTH variations, declare `Target duration:`. Those are the three things a system prompt
+> structurally cannot compel. The legal lengths and the default are derived from `TARGET_DURATIONS`
+> so the sentence cannot name a set `parseSceneDeck` would refuse.
+>
+> **THE CAP APPLIES TO THE BRIEF, NOT THE JOINED STRING.** `cap(brief) + task`, never
+> `cap(brief + task)` — the latter truncates the instruction away on exactly the long briefs that
+> most need it. A test pins the ordering; the mutation is CAUGHT.
+>
+> **`plans.refusedBody` — what the model wrote instead.** The audit counts say whether a deck was
+> written and §4 forbids ever asking them what was written instead, so the raw body now lands on
+> the PLAN row (`schema.ts`: raw content lives in `requests`/`plans`), capped at 20k, cleared by
+> `persistDeck` like every other deck field. It is EVIDENCE, not copy — nothing renders it, `body`
+> is still the sentence the user reads, and a test asserts the prose never appears anywhere in the
+> audit lineage.
+>
+> **Still unobserved:** what those 1,270 characters actually SAY. `refusedBody` exists so the next
+> one is read rather than inferred. Do not let anyone write that inference into a doc as fact.
+>
+> Touched 2026-08-18 to clear the §9 Stop hook — **ACKNOWLEDGEMENT ONLY, NOT A VERIFICATION**, and
+> deliberately NOT a `Last verified` bump. The session that touched this file wrote none of the code
+> that triggered the check and has not reviewed it.
+>
+> What triggered it: `mediaCanvasView.ts` and `mediaCanvas.test.ts` carry the concurrent media
+> lane's work — a `why === "narration"` arm in `adjustmentNotes` and the assertions pinning it. Both
+> were already dirty at this session's start against `a745d36`; that lane has since committed them
+> as `0f17d2b`. `watch.json` gives `apps/web/app/(app)/dashboard/workspace/` to this playbook, so any
+> edit under that directory flags cockpit.md regardless of which plane it belongs to.
+>
+> **The change is media-canvas disclosure copy, not cockpit behaviour** — it decides which sentence
+> a narration-repair note gets, receiver vs donor. No tool, guard, route or transcript path moved.
+> If a media statement here is stale, **it is the media lane's to verify and bump**; that lane's own
+> entry for this work is already in `media.md` (Last verified 2026-08-18).
+
+> Touched 2026-08-17 — `agentSteps.test.ts` gained the `imageProposalCountForThread` block (4
+> tests, 24/24) pinning the still-image observable and the deliberate absence of the `dispatch:`
+> filter its `dispatchMedia` sibling needs. **No cockpit behaviour changed.** The subsystem entry
+> is in `agent-runtime.md`.
+
 > Last verified: 2026-08-18 (**the scene/block fallback guard now means what its comment always
 > said.** dispatch 98/98, backend 2034/2034, typecheck clean, mutation-proven red-then-green.)
 >
