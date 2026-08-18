@@ -713,3 +713,92 @@ export const assertMigrationRan = internalQuery({
     return { ok: true, name: status.name, processed: status.processed, state: status.state };
   },
 });
+
+/**
+ * 23-04 (SKILL-02): the AUTHORING-STATE ORACLE the golden runner reads instead of assistant prose.
+ *
+ * A fixture that asserted "the reply mentions a skill update" would pass on a model that said the
+ * words and wrote nothing, and fail on a model that wrote the row and phrased it differently. The
+ * only trustworthy oracle for an authoring case is the DURABLE STATE, scoped to the exact turn.
+ *
+ * REFS, COUNTS, ENUMS AND BOOLEANS ONLY (CLAUDE.md §4). It never returns `body` or `authoredBody`:
+ * the runner writes this snapshot into its console output and its own assertions, and a fixture's
+ * adversarial needle or a live registry prompt appearing there would put both in the run log.
+ *
+ * Scoped by `sourceThreadId` because that is what a fixture case owns — one eval case is one
+ * thread. `sourceTurnId` narrows further when the caller knows it.
+ */
+export const agentAuthoringStateForThread = internalQuery({
+  args: {
+    tenantId: v.string(),
+    sourceThreadId: v.string(),
+    sourceTurnId: v.optional(v.string()),
+  },
+  handler: async (ctx, { tenantId, sourceThreadId, sourceTurnId }) => {
+    const rows = await ctx.db
+      .query("tenantSkills")
+      .withIndex("by_tenant_source_turn", (q) =>
+        sourceTurnId === undefined
+          ? q.eq("tenantId", tenantId).eq("sourceThreadId", sourceThreadId)
+          : q
+              .eq("tenantId", tenantId)
+              .eq("sourceThreadId", sourceThreadId)
+              .eq("sourceTurnId", sourceTurnId),
+      )
+      .collect();
+
+    // Every tenant row, so "the active row did not move" is answerable without a second read.
+    const all = await ctx.db
+      .query("tenantSkills")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .collect();
+    const active = all.filter((r) => r.status === "active");
+
+    // The zero-send invariant, per tenant: an authoring turn must never reach a send path.
+    const requests = await ctx.db
+      .query("requests")
+      .withIndex("by_tenant_status", (q) => q.eq("tenantId", tenantId))
+      .collect();
+
+    // The POSITIVE WITNESS every absence assertion in the runner pairs with: did the tool actually
+    // RUN this turn? A bound or an absence on a turn where the model never called the tool asserts
+    // nothing, and that is the one way an authoring gate goes quietly green forever.
+    // `by_tenant_tool_startedAt`, NOT a thread index: `agentSteps` has none, and this prefix is
+    // tighter anyway — one tenant's authoring steps only. The thread filter runs in code over that
+    // already-tiny set. (Each authoring fixture gets its own throwaway tenant, so this is a handful
+    // of rows, never the trace of a whole run.)
+    const steps = await ctx.db
+      .query("agentSteps")
+      .withIndex("by_tenant_tool_startedAt", (q) =>
+        q.eq("tenantId", tenantId).eq("tool", "authorSkillCandidate"),
+      )
+      .collect();
+    const authoringToolCalls = steps.filter((r) => r.threadId === sourceThreadId).length;
+
+    return {
+      authoringToolCalls,
+      // What THIS turn authored.
+      candidateCount: rows.length,
+      candidates: rows.map((r) => ({
+        tenantSkillId: String(r._id),
+        name: r.name,
+        version: r.version,
+        status: r.status,
+        author: r.author,
+        authorAgentId: r.authorAgentId ?? null,
+        sourceTurnId: r.sourceTurnId ?? null,
+        rollbackEligible: r.rollbackEligible,
+        // PRESENCE, never content: raw evidence carries held-out fixture ids, and an approval
+        // record carries an owner's user id. Both are booleans here on purpose.
+        hasEvidence: r.evidence !== undefined,
+        hasOwnerApproval: r.ownerApproval !== undefined,
+      })),
+      // The tenant's whole overlay, as refs — the "nothing went live" half.
+      activeCount: active.length,
+      activeIds: active.map((r) => String(r._id)).sort(),
+      totalRowCount: all.length,
+      // The outward-effect half.
+      requestCount: requests.length,
+    };
+  },
+});

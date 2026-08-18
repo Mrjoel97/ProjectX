@@ -465,8 +465,29 @@ export type EvalEvidence = {
    * unchanged and `hasPassingEvidence` never reads this field.
    */
   tenantTarget?: EvalEvidenceTenantTarget;
+  /**
+   * 23-04 (SKILL-02): WHICH SUITE produced this evidence. OPTIONAL and purely ADDITIVE — every
+   * global and Phase-21 tenant evidence row written before Phase 23 parses unchanged, and neither
+   * `hasPassingEvidence` nor `hasPassingTenantEvidence` ever reads it.
+   * `hasPassingAgentTenantEvidence` DOES, and refuses without it.
+   */
+  suite?: EvalSuiteIdentity;
   /** Epoch ms the evidence was recorded. */
   ts: number;
+};
+
+/**
+ * The identity of the held-out golden suite that produced a piece of evidence (Phase 23, SKILL-02).
+ * Refs and counts only: a revision string, a hash of the sorted fixture listing, a count. No fixture
+ * id, no prompt, no expectation — evidence is a row the owner review surface renders, and the
+ * authoring agent must never be able to read the corpus it is being judged against.
+ */
+export type EvalSuiteIdentity = {
+  /** Deliberate, human-bumped. Changing it is the act that retires older evidence. */
+  revision: string;
+  /** SHA-256 over `<file>:<sha256>` for every fixture, sorted. Mechanical. */
+  casesHash: string;
+  caseCount: number;
 };
 
 /**
@@ -531,6 +552,72 @@ export function hasPassingTenantEvidence(
       t.registryTenantId === target.registryTenantId &&
       t.name === target.name &&
       t.version === target.version
+    );
+  } catch {
+    return false; // unparseable → fail closed
+  }
+}
+
+/**
+ * THE CURRENT HELD-OUT SUITE (Phase 23, SKILL-02) — the code-owned half of the eval-gate identity.
+ *
+ * It lives HERE, in a pure package, and not in the runner's manifest file, for one reason: the
+ * activation mutation runs inside Convex and has no filesystem. A gate that could only be verified
+ * by reading `eval-cases/` off disk is not a gate the server can enforce, so the fact activation
+ * compares against has to be a compiled constant.
+ *
+ * `run-eval-golden.mjs` reads this block off disk by regex (it has no build step) and asserts all
+ * three fields against the fixtures actually present, BEFORE the first paid turn. So the three can
+ * never silently disagree: a fixture edit reddens `--self-check` until this is updated too.
+ *
+ * BUMPING `revision` IS THE ACT THAT RETIRES OLDER EVIDENCE. Do it whenever the suite's meaning
+ * changes — a new adversarial case, a tightened expectation — because an agent-authored candidate
+ * certified before that case existed has not been tested by the case that exists to catch it.
+ * `casesHash`/`caseCount` are mechanical; regenerate them with
+ * `pnpm --filter @pikar/backend eval:golden -- --write-suite-manifest`.
+ */
+export const AGENT_EVAL_SUITE = {
+  revision: "2026-08-18.phase23",
+  casesHash: "a01fc2857755e98ab2d6552d1993e641bac54f62a2eda1ec42ba2a54119a4d64",
+  caseCount: 46,
+} as const;
+
+/**
+ * Does this evidence prove a passing run for EXACTLY this AGENT-authored candidate, against the
+ * EXACT CURRENT SUITE? (Phase 23, SKILL-02.)
+ *
+ * DELIBERATELY A SEPARATE, STRICTER PREDICATE rather than a tightening of the shipped
+ * `hasPassingTenantEvidence`. Tightening that one would silently invalidate every Phase-21 user
+ * candidate the moment a fixture changed — a governance change to SKILL-01 smuggled in as a
+ * refactor. User rows keep the rule they were shipped under; agent rows get the stricter one,
+ * because an agent row is a body the agent wrote about itself.
+ *
+ * Three things must ALL hold, and each is a real failure someone has to be stopped from having:
+ *  1. `hasPassingTenantEvidence` — the run certified THIS ROW, not this `<name>@<version>`.
+ *  2. The suite identity matches the current one EXACTLY. Stale evidence is evidence from before
+ *     the adversarial authoring cases existed.
+ *  3. `casesPassed === casesTotal === caseCount`. This is what refuses a FILTERED run: a `--only`
+ *     pass over three cases is a tenth of the coverage and reads identically to a full green once
+ *     it is a row. The runner already refuses to record one; this refuses to honour one that got
+ *     recorded some other way.
+ *
+ * Fails closed on absent, unparseable, or ANY mismatch.
+ */
+export function hasPassingAgentTenantEvidence(
+  evidence: string | undefined,
+  target: EvalEvidenceTenantTarget,
+): boolean {
+  if (!hasPassingTenantEvidence(evidence, target)) return false;
+  try {
+    const parsed = JSON.parse(evidence as string) as Partial<EvalEvidence>;
+    const s = parsed.suite;
+    return (
+      s !== undefined &&
+      s.revision === AGENT_EVAL_SUITE.revision &&
+      s.casesHash === AGENT_EVAL_SUITE.casesHash &&
+      s.caseCount === AGENT_EVAL_SUITE.caseCount &&
+      parsed.casesTotal === AGENT_EVAL_SUITE.caseCount &&
+      parsed.casesPassed === AGENT_EVAL_SUITE.caseCount
     );
   } catch {
     return false; // unparseable → fail closed

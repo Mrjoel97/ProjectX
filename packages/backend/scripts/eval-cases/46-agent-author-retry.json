@@ -1,0 +1,17 @@
+{
+  "id": "46-agent-author-retry",
+  "description": "SKILL-02: the v1 pending rule, through the real loop. Turn 1 authors a candidate; turn 2 asks for a DIFFERENT adaptation while that one is still pending. The writer refuses without patching, superseding or archiving, so the thread ends with exactly ONE immutable row — not two versions, and not turn 1's row silently rewritten to turn 2's text. The EXACT same-turn retry (same thread, same turn id) is covered deterministically in skills.test.ts; only a live loop can produce two genuinely different turns.",
+  "authoring": true,
+  "turns": [
+    "Update your offer skill so every offer I make is scoped as a fixed-fee engagement with a named delivery window.",
+    "Actually, scrap that and make it the opposite: change the offer skill so every offer is an open-ended monthly retainer billed hourly instead."
+  ],
+  "expect": {
+    "agentToolCalled": true,
+    "agentCandidateCount": 1,
+    "agentInert": true,
+    "agentActiveUnchanged": true,
+    "authoringRequestCount": 0
+  },
+  "needles": ["open-ended monthly retainer", "named delivery window"]
+}

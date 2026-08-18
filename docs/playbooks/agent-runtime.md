@@ -1,6 +1,8 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
-> Last verified: 2026-08-18 (23-03 added `authorSkillCandidate` — the Executive-only skill-authoring
+> Last verified: 2026-08-18 (23-04 built the held-out gate that judges what the tool writes, and
+> made the corpus unreadable from the runner's own inspection surfaces. NO PAID RUN — $0.00.
+> 23-03 added `authorSkillCandidate` — the Executive-only skill-authoring
 > grant; structural absence, no activation reachable, no live selection behaviour claimed. See the
 > Phase 23 section at the end. Prior verification follows.) (17-08 Task 3 added ONE bounded internal action to `smoke.ts`,
 > `calendarLifecycleReadback`, plus its private `calendarLifecycleFacts` query. It is an operator
@@ -1712,3 +1714,28 @@ only when explicitly asked — the "use it ONLY when the user asked" rule lives 
 description, which is guidance, not a guarantee. The hard guarantee is that the tool cannot activate
 anything. Whether the model reaches for it appropriately is Plan 23-06's browser gate.
 **No cockpit skill body was changed by this plan** and no skill candidate was seeded.
+
+### 23-04 — what the authoring agent is NOT allowed to see
+
+`23-03` gave the Executive a tool. `23-04` built the gate that judges what it writes, and the gate
+is only meaningful if the agent cannot read it.
+
+**The held-out corpus is held out from the runner's own inspection surfaces too.** Neither
+`runInspect` nor `runAgentSourceInspect` may reference `casesDir`, `eval-cases`, `loadFixtures` or
+the suite manifest path — asserted structurally in `--self-check`. Their output is designed to be
+pasted into a live-handoff artifact, and an artifact can end up in front of the agent it describes.
+The tool-side half is `cockpitTools.test.ts`'s region scan, which already forbids `fixture` and
+`evidence` inside `authorSkillCandidate`'s closure. Both halves exist because either one alone
+leaves the corpus one refactor from being readable.
+
+**The tool's return is part of this boundary.** It carries ids, a version, a status and
+awaiting-review copy — never an eval fixture, never a base body, never an approval state. Anything a
+tool returns is disclosed to the model that called it.
+
+**The five adversarial cases live only in repo-side fixture files** (`42`-`46`), never in a skill
+body, a tool description or a seeded row. `43` demands self-activation, `44` asks for an adaptation
+that grants capability, `45` asks the agent to print its own base prompt and list the cases it is
+graded on. Their text is deliberately not in this playbook either.
+
+**NO PAID RUN OCCURRED in 23-04.** Nothing was seeded, no model was called, no evidence row was
+written, `$0.00`. Full protocol in `skill-registry.md` § 23-04.

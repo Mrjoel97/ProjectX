@@ -1,0 +1,191 @@
+{
+  "suiteRevision": "2026-08-18.phase23",
+  "caseCount": 46,
+  "casesHash": "a01fc2857755e98ab2d6552d1993e641bac54f62a2eda1ec42ba2a54119a4d64",
+  "cases": [
+    {
+      "file": "01-happy-single.json",
+      "sha256": "9d0a8a7d8f97ff1730672de0118749b9ec13a922bf46e1149b5af35586661141"
+    },
+    {
+      "file": "02-happy-multi-individual.json",
+      "sha256": "191014490496c6018d3a4c79533c43c5d7ddb2c61863ff51dbc7acd5d2327451"
+    },
+    {
+      "file": "03-happy-group.json",
+      "sha256": "9059381e782eb867f778d6f3b4b42db513ee8266854a9323ea2fabcd356e819e"
+    },
+    {
+      "file": "04-edit-remove-recipient.json",
+      "sha256": "678ea90f298e92e880a40133eb6432254eb6924599bedbaaffe1ac30a7fe9319"
+    },
+    {
+      "file": "05-edit-make-formal.json",
+      "sha256": "bb4f677736790c833e090b7384af8fbf9402d40f3e330a7cab553877bc067612"
+    },
+    {
+      "file": "06-edit-change-subject.json",
+      "sha256": "6b3a8205bd4879be2e7c9055fedb9e63d8a4f030c1f27f369c7f3258e1e1fbf7"
+    },
+    {
+      "file": "07-bounce-invalid-address.json",
+      "sha256": "a059c691af14ad4cba1fa2938c944843fe53532b62efc293249c12273f433b0f"
+    },
+    {
+      "file": "08-bounce-then-correct.json",
+      "sha256": "35f17eb1fddd992c9c34d9767d53b6eac3e99cda1078461bc202b256240a67f0"
+    },
+    {
+      "file": "09-resolve-degradation.json",
+      "sha256": "771973f83267f26aeb27406014f1ff1e9017f4b81dd4c0d14e9526c2ab03cb3e"
+    },
+    {
+      "file": "10-attach-document.json",
+      "sha256": "706d506f850c6be79be245ee927c279bf79776dfdb00567dbb7eabd4396a8e50"
+    },
+    {
+      "file": "11-attach-regenerate.json",
+      "sha256": "13f9869cb7fccd17e9008ea8808faee2c7853abddcf4da7ef70699c4923398b0"
+    },
+    {
+      "file": "12-attach-remove.json",
+      "sha256": "44237adccfc3435369522b07c2a2722a0a5836b77f6a7bc2ffb20c7e5b176a0d"
+    },
+    {
+      "file": "13-injection-probe.json",
+      "sha256": "f6f61a0aa4d4f8f1c1821ab73de776efacd101c402ed5e4ef90109d7c7aaf9e9"
+    },
+    {
+      "file": "14-injection-embedded.json",
+      "sha256": "8f2a0630abfa38f8c8322d24bae0934422b1cbeb9405702eff83f6bde5eedcb0"
+    },
+    {
+      "file": "15-no-send-time-default.json",
+      "sha256": "3025cc6006204a6d244a88a3ccb4ad949e2663f868a20fa8ad0f8e12a8c07b8b"
+    },
+    {
+      "file": "16-briefing-happy.json",
+      "sha256": "ad0ce8e4fb749ee4cc10801ce3352466389a79cbe77023b5c96cbef5b1fdea32"
+    },
+    {
+      "file": "17-briefing-injection-probe.json",
+      "sha256": "f4ea1bf55f4540edd5da4b1c4431158f6e563b5e21bc53f9f2253709458a30d5"
+    },
+    {
+      "file": "18-briefing-then-action.json",
+      "sha256": "8523b9073232ca452af09ba62998c35546638865effea954d701a7519c8152da"
+    },
+    {
+      "file": "19-stalled-resolution-recovery.json",
+      "sha256": "7bec871558ddb5b733558fb94a9b973b83b7d33edcde0291159970bd587b059f"
+    },
+    {
+      "file": "20-reset-and-honesty.json",
+      "sha256": "a244a04c35db87e7d0b1a35c24f6ebb4e0f351160ee67698fefb00976d37c6ae"
+    },
+    {
+      "file": "21-fragment-answer-absorbed.json",
+      "sha256": "635b940c82b1804aacfc117061593772927ec5cb0cd7043de98fa2c9638921d1"
+    },
+    {
+      "file": "23-reply-happy.json",
+      "sha256": "984c49d3cd0b9505be549c50f93bae7f4b42e2aa1a2c058c065f1e4b91a9b950"
+    },
+    {
+      "file": "24-reply-injection.json",
+      "sha256": "73d72e5bac06ff614e4c2cb6be0b49dd7f8458ec506ddde341ad986ca785ecaf"
+    },
+    {
+      "file": "25-vault-grounded.json",
+      "sha256": "6a760ab36a70ba3058352c87db086d4dac73c664187c176cafb223f10b7da9eb"
+    },
+    {
+      "file": "26-vault-empty.json",
+      "sha256": "ad015799acf0c90fb31895f7ee250567c618722ac035a6ff200d1f72600e9bf1"
+    },
+    {
+      "file": "27-grounded-assessment.json",
+      "sha256": "55bb310e3ff86be23c89abab4dbfad6451a0ac6d3c4071b8b48dc43a27b3c2fe"
+    },
+    {
+      "file": "28-healthy-no-gaps.json",
+      "sha256": "5e497fc7acbb072cb9744d5cab1010977eebce5dd67e9fe5053b93e238d9d0bf"
+    },
+    {
+      "file": "29-gap-dispatch-offer-architect.json",
+      "sha256": "d4fa76126bd2a6c8b98117c306cdf8425013f6f5cc754054588d8f8ffde2be52"
+    },
+    {
+      "file": "30-gap-dispatch-money-model.json",
+      "sha256": "988f1cc512e2e9371025e1b136eef85f2a3b4abb0d2d12f50ed1231f63ce3172"
+    },
+    {
+      "file": "31-gap-dispatch-lead-engine.json",
+      "sha256": "e0dcdd0fd7ed8c5d2740c8a55aeb1b4854291689ee5a7265c57b21954a48c308"
+    },
+    {
+      "file": "32-research-grounded.json",
+      "sha256": "332a7a51801fefffedad43597896b592b96a8874a34451ba1eb014438cbe7c53"
+    },
+    {
+      "file": "33-research-insufficient-evidence.json",
+      "sha256": "afdd5f11477845de8aabe095d2202e45e63c4b9376132519bf7c15a7b36ef33d"
+    },
+    {
+      "file": "34-research-injection.json",
+      "sha256": "7f9735a7354dd3a891581c7469ae7c9203be775fe6ddf54326a25bc034a73244"
+    },
+    {
+      "file": "35-create-document.json",
+      "sha256": "4eed1cc0fabd3c4d3d6adf45f1f000c2a4ec46d6dc6e80bed1ee067aeafdb9c4"
+    },
+    {
+      "file": "36-crm-follow-up.json",
+      "sha256": "699464c81884099120a96830becc3ef6bc2a66e15735762a3beab681064529f4"
+    },
+    {
+      "file": "37-finance-update.json",
+      "sha256": "022b6212b738e9423b09da881ecadf35727d0cfcf5b29eba14bfc479fd5ac39c"
+    },
+    {
+      "file": "38-media-dispatch.json",
+      "sha256": "2055cb98670776373d0d0ccb0760a3b91669d9cc7607e1acce235484e03431c4"
+    },
+    {
+      "file": "38b-media-not-a-document.json",
+      "sha256": "4364bc4cee1700d1e1b214a4f9d9d09e9c5aceca9e69ec6516340a3ecd026791"
+    },
+    {
+      "file": "39-drive-read.json",
+      "sha256": "97d35bd37b85c814f4706b1ae2949a726ed97c17120d3ada32d38de1a08bc300"
+    },
+    {
+      "file": "40-calendar-stage.json",
+      "sha256": "a06521c90643dadf8e810e24f2f139b65fa64fdfd0ffd31627626f53b0a3e583"
+    },
+    {
+      "file": "41-image-proposal.json",
+      "sha256": "6faf676f8a5cfd9f8639725e120d98a50170aa3fa9fdea7b519bc563cd86e69a"
+    },
+    {
+      "file": "42-agent-author-happy.json",
+      "sha256": "170966915d3c76fe6d9754dae6bc62a1a6a835c81e6031e9ed1e9ce5ef18ed51"
+    },
+    {
+      "file": "43-agent-author-self-activate.json",
+      "sha256": "23bad9865f22ee9febb12fbf21c9d63a997729ad891e0edaf7ed063b0e9227ed"
+    },
+    {
+      "file": "44-agent-author-capability-escalation.json",
+      "sha256": "6c415522835a090710dbca7f963a0673ed6022b21ba8b39847562ada6bae00e8"
+    },
+    {
+      "file": "45-agent-author-embedded-instruction.json",
+      "sha256": "d9ce71765486117d09fed2d1bf8ea915b2b2c75380589442b923c890a8c53881"
+    },
+    {
+      "file": "46-agent-author-retry.json",
+      "sha256": "398a0f7bde4eee6996c70ca52ea0e3832390b37c077fbf0bfec0a42fcc3ff6c7"
+    }
+  ]
+}

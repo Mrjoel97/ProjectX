@@ -1,6 +1,8 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
-> Last verified: 2026-08-18 (23-02 added `publishAgentCandidate`, the inert candidate-only writer —
+> Last verified: 2026-08-18 (23-04 versioned the golden suite and added the five held-out
+> adversarial authoring fixtures + `hasPassingAgentTenantEvidence`. NO PAID RUN OCCURRED — offline
+> validation only, $0.00. 23-02 added `publishAgentCandidate`, the inert candidate-only writer —
 > internal, no activation path, source-turn idempotence, v1 pending refusal. 23-01 appended the
 > Phase 23 agent-authoring DATA PLANE at the end of
 > this file — vocabulary only, no writer and no activation path; read its ceiling note before
@@ -1638,3 +1640,101 @@ every dead letter.
 | Drop `sourceTurnId` from the source-turn predicate | **1 red** — a new turn recovers the wrong row |
 | Drop the **tenant** predicate | **COMPILE ERROR**, not a test failure: `Argument of type '"sourceThreadId"' is not assignable to parameter of type '"tenantId"'`. Convex index predicates must be given in field order, so tenant-first makes the scoping structurally unskippable |
 | Archive the pending candidate instead of refusing | **3 red** — both behavioural tests and the `ctx.db.patch` structural scan caught it independently |
+
+### 23-04 — the eval gate an agent row must clear
+
+**Phase-21 evidence answers "did a passing run certify THIS ROW". That is not enough for an agent
+row.** The run must ALSO have been the current, whole suite — otherwise a candidate certified before
+the adversarial authoring fixtures existed reads as gate-passed forever, and the cases that exist
+specifically to catch a self-serving skill body never ran against it.
+
+#### The suite-manifest protocol
+
+Two artifacts, deliberately, with different update costs:
+
+| Artifact | Nature | How to update |
+|---|---|---|
+| `packages/backend/scripts/eval-suite-manifest.json` | **Mechanical.** Sorted filenames + SHA-256 per fixture + a hash of the listing | `pnpm --filter @pikar/backend eval:golden -- --write-suite-manifest` |
+| `AGENT_EVAL_SUITE` in `packages/contracts/src/skill.ts` | **Deliberate.** `{revision, casesHash, caseCount}` — the one activation reads | Hand-edit, and **bump `revision`** |
+
+It lives in contracts because the activation mutation runs inside Convex with **no filesystem**: a
+gate that can only be checked by reading `eval-cases/` off disk is not a gate the server can
+enforce. The runner reads the block off disk by regex (it has no build step) and asserts all three
+fields against the fixtures actually present, before the first paid turn — so the three can never
+silently disagree.
+
+**Editing a fixture costs a regeneration AND a contracts edit AND a revision bump.** That asymmetry
+is the point: the cheap half is bookkeeping, the expensive half is the decision that older evidence
+stops counting. `--write-suite-manifest` deliberately does NOT touch the contracts constant.
+
+#### `hasPassingAgentTenantEvidence`
+
+A **separate, stricter predicate**, not a tightening of the shipped `hasPassingTenantEvidence`.
+Tightening that one would silently invalidate every Phase-21 user candidate the moment a fixture
+changed — a governance change to SKILL-01 smuggled in as a refactor. User rows keep the rule they
+shipped under. Three things must all hold:
+
+1. `hasPassingTenantEvidence` — the run certified THIS ROW, not this `<name>@<version>`.
+2. The suite identity matches the current one exactly (revision **and** hash **and** count).
+3. `casesPassed === casesTotal === caseCount` — this is what refuses a `--only` run. A 3-of-46
+   green reads identically to a full green once it is a row; the runner refuses to record one, and
+   this refuses to honour one that arrived some other way.
+
+#### The held-out authoring fixtures (42-46)
+
+`42-agent-author-happy`, `43-agent-author-self-activate`,
+`44-agent-author-capability-escalation`, `45-agent-author-embedded-instruction`,
+`46-agent-author-retry`. Named individually in the self-check, not just counted — a floor lets five
+trivial cases replace five adversarial ones.
+
+**Each runs in its own throwaway subtenant `eval-<runId>-<case>-a<attempt>`, and the attempt number
+is load-bearing.** The v1 writer correctly refuses a changed draft while a candidate is pending, so
+on one shared tenant fixture 42 would author a row and 43-46 would each be refused by 42's leftover
+— a suite measuring its own first case four more times. The flake policy's single re-run would fail
+the same way. **No purge, patch, archive or test-only delete exists**: immutability holds precisely
+because nothing is ever cleaned up. Ordinary fixtures keep the one shared seeded tenant.
+
+#### The expectation vocabulary, and its one rule
+
+`agentToolCalled` · `agentCandidateCount` · `agentCandidateAtMost` · `agentInert` ·
+`agentActiveUnchanged` · `authoringRequestCount`, all read from
+`smokeAssert:agentAuthoringStateForThread` — **durable state, never reply prose**. A fixture
+asserting "the reply mentions a skill update" passes on a model that says the words and writes
+nothing.
+
+**THE RULE: every bound and every absence requires `agentToolCalled: true`.** A bound on a turn
+where the tool never ran asserts nothing, and that is the single most likely way this gate goes
+quietly green forever. `validateFixture` refuses a fixture that omits it.
+
+`agentInert` is ONE key asserting FOUR facts over EVERY row a thread produced — status is
+`candidate`, no evidence, no owner approval, not rollback-eligible. Deliberately not four keys: a
+fixture must not be able to assert three and drop the fourth, and under adversarial pressure the
+dropped one is always the one that mattered. `agentActiveUnchanged` is a **snapshot pair**, not
+`activeCount: 0` — a count of zero is satisfied by a tenant that never had an active row.
+
+#### Holdout boundary
+
+Neither read-only inspector (`runInspect`, `runAgentSourceInspect`) may reference `casesDir`,
+`eval-cases`, `loadFixtures` or the manifest path — their output ends up in a live-handoff artifact
+and, through it, potentially in front of the agent being evaluated. A corpus the author can read is
+not held out. The tool-side half of the same boundary is `cockpitTools.test.ts`'s region scan.
+
+`--inspect-agent-source <tenantId>:<sourceThreadId>` is tenant-qualified on purpose: a bare thread
+id would need a cross-tenant scan, which is both unbounded and an existence oracle.
+
+#### Mutation evidence (23-04, all executed and restored)
+
+| Mutation | Result |
+|---|---|
+| Drop the row-identity check from agent evidence | **1 red** (contracts) |
+| Accept a stale revision / drifted hash | **1 red** |
+| Honour a filtered (`--only`) run | **1 red** |
+| Edit a fixture without regenerating the manifest | **self-check red**, naming `42-agent-author-happy.json` |
+| Regenerate the manifest but leave `AGENT_EVAL_SUITE` stale | **self-check red** on the hash |
+| Remove the pre-live `selfCheck()` call | **self-check red** — "must run the free self-check before entering the paid/provider path" |
+| Read the fixture corpus inside the agent-source inspector | **self-check red** — holdout boundary |
+
+#### NO PAID RUN OCCURRED
+
+This plan is implementation and offline validation only. Nothing was seeded, no model was called,
+no evidence row was written, and `$0.00` was spent. `--self-check` is the whole gate here.
