@@ -52,10 +52,15 @@ pnpm --filter @pikar/backend eval:golden -- --self-check
   free gate, and two identical exact-id inspection snapshots must produce one immutable refs-only
   handoff. Any red, skipped mutation, dirty mutation hunk, identity mismatch, or unrun command blocks
   Wave 6 and spend.
-- **Before/after the Wave 6 (21-07) live checkpoint:** machine-compare the handoff to a fresh
+- **Before/after the Wave 6 (21-07) PAID checkpoint:** machine-compare the handoff to a fresh
   zero-spend exact-id snapshot; afterward machine-read exact evidence, final state, handoff-bound
   recursively closed/forbidden-content result, correlation-scoped A/B runtime attribution, and
-  authenticated prompt/thread/privacy refs before changing completion docs.
+  authenticated prompt/thread/privacy refs before changing completion docs. **The old single Wave-6
+  plan was re-cut into two:** 21-07 buys the gate (the only paid, only flake-prone step) and Wave 7
+  21-08 runs the free deterministic owner/runtime/rollback state machine, so a fixture flake
+  re-costs the eval and nothing else. Every handoff-to-live comparison in BOTH plans goes through
+  `packages/backend/scripts/compare-refs.mjs`; artifact schemas through
+  `packages/backend/scripts/check-phase21-artifacts.mjs`. Neither is re-inlined.
 
 ---
 
@@ -84,9 +89,12 @@ pnpm --filter @pikar/backend eval:golden -- --self-check
 | 21-06-01 | 06 | 5 | SKILL-01 | authenticated authoring + pinned fresh-thread browser behavior | `pnpm --filter web exec playwright test e2e/skill-authoring.spec.ts --project=chromium --workers=1` | ❌ task creates | ⬜ pending |
 | 21-06-02 | 06 | 5 | SKILL-01 | fast smoke then full free regression/privacy gate | exact focused smoke above, then full free gate | ✅ infrastructure | ⬜ pending |
 | 21-06-03 | 06 | 5 | SKILL-01 | two identical exact-id snapshots freeze candidate/baseline/effective/foreign refs | inspector JSON + schema/key/content validation of `21-LIVE-HANDOFF.json` | ❌ task creates handoff | ⬜ pending |
-| 21-07-01 | 07 | 6 | SKILL-01 | zero-spend deployment state still byte-matches immutable handoff | exact inspector JSON maps current state to handoff pre-state | ✅ after 21-06 | ⬜ pending |
-| 21-07-02 | 07 | 6 | SKILL-01 | exact snapshotted candidate completes authorized live eval/owner/runtime/rollback gate without republish | blocking human checkpoint; exact-id machine assertions and refs-only result | n/a manual/live | ⬜ pending |
-| 21-07-03 | 07 | 6 | SKILL-01 | recursive closed-schema/content rejection plus fresh evidence/global/foreign/runtime/prompt/thread/privacy readback before truthful completion | Node exact-key/forbidden scan + inspector + A/B `smoke:userSkillRuntimeAttribution` + read-only Playwright result readback + handoff SHA-256 + playbook/diff checks | ✅ after 21-03/06 | ⬜ pending |
+| 21-07-01 | 07 | 6 | SKILL-01 | zero-spend deployment state still byte-matches immutable handoff | `compare-refs.mjs` --pair maps handoff to a fresh inspector snapshot (--self-check first) | ✅ after 21-06 | ⬜ pending |
+| 21-07-02 | 07 | 6 | SKILL-01 | the exact snapshotted candidate passes ONE authorized unfiltered held-out gate without republish; red attempts leave it byte-intact and are ledgered | blocking human checkpoint (PAID); exact-id inspection + refs-only attempt ledger | n/a manual/live | ⬜ pending |
+| 21-07-03 | 07 | 6 | SKILL-01 | the purchased evidence is bound to the immutable handoff and the row is STILL `candidate` — evidence is not activation | `check-phase21-artifacts.mjs --handoff --evidence` (self-checked: 2 fixtures green, 16 mutations red) | ✅ script committed | ⬜ pending |
+| 21-08-01 | 08 | 7 | SKILL-01 | the purchased gate is still on the frozen row before any state moves | `compare-refs.mjs` + inspector --expect-evidence passing, at $0 | ✅ after 21-07 | ⬜ pending |
+| 21-08-02 | 08 | 7 | SKILL-01 | non-owner refusal, owner activation, A/B runtime attribution and exact-baseline rollback, all at $0 and freely re-runnable | blocking human checkpoint (FREE); exact-id machine assertions and refs-only result | n/a manual/live | ⬜ pending |
+| 21-08-03 | 08 | 7 | SKILL-01 | recursive closed-schema/content rejection plus fresh evidence/global/foreign/runtime/prompt/thread/privacy readback before truthful completion | `check-phase21-artifacts.mjs --handoff --evidence --result` + inspector + A/B `smoke:userSkillRuntimeAttribution` + read-only Playwright result readback + playbook/diff checks | ✅ after 21-03/06 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -225,8 +233,9 @@ remains blocking even though machine readbacks surround it.
 
 ## Validation Sign-Off
 
-- [x] All 24 tasks across plans 21-01 through 21-07 are represented.
-- [x] Waves match executable plans: 1=`01`; 2=`02`; 3=`03`+`05`; 4=`04`; 5=`06`; 6=`07`.
+- [x] All 24 tasks across plans 21-01 through 21-08 are represented (Wave 6 re-cut 2026-08-18: the
+      old 21-07 Task 2 split into 21-07 paid + 21-08 free; task COUNT is unchanged, the boundary moved).
+- [x] Waves match executable plans: 1=`01`; 2=`02`; 3=`03`+`05`; 4=`04`; 5=`06`; 6=`07`; 7=`08`.
 - [x] Every automatic task has a concrete automated command; the live human task has machine checks
   immediately before and after it.
 - [x] Existing infrastructure makes Wave 0 complete; new TDD files are task-owned outputs.

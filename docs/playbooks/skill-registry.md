@@ -1,5 +1,42 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-18 (**the Phase-21 live gate now has TWO committed, self-checked tools
+> instead of five hand-inlined comparisons.** `compare-refs.mjs` 14 assertions green;
+> `check-phase21-artifacts.mjs` 2 valid fixtures green + 16 mutations red; both exercised through
+> the CLI on the real `21-LIVE-HANDOFF.json` bytes and on file-backed fixtures. No product code,
+> no schema, no capability changed — these are gate tooling.)
+>
+> **THE DEFECT CLASS THEY EXIST TO KILL.** Plan 21-07 hand-wrote its state comparison as
+> `ConvertTo-Json -Compress` string equality in three places, and every copy was broken the same
+> two ways: it compared the handoff’s `deploymentUrlHash` against the inspector’s
+> `deploymentHash` (right-hand side always `$null`, so a HEALTHY deployment always reported
+> drift), and it string-compared documents whose key ORDER and key SET both legitimately differ.
+> Sorting keys before stringifying would have fixed the second half and left the first — which is
+> exactly how one broken idiom became three copies. `compare-refs.mjs` walks the tree and never
+> builds a string, so both die at once.
+>
+> **THE COMPARISON RULES ARE ASYMMETRIC ON PURPOSE.** The expected side is a FROZEN record; the
+> live side may legitimately carry more. Every key the freeze recorded must be present and match
+> (ABSENT is its own failure, never `undefined == null`); a live-only `null` passes; a live-only
+> NON-NULL key escalates to failure unless named in `--allow-extra`. Exactly one is allow-listed
+> today — `rollbackBaseline.scope`, which `baselineRefs` (`skills.ts:1123`) writes as a hardcoded
+> literal and never reads from the row, so it cannot drift. Escalate-by-default is the point: the
+> only way to know that key was benign was to look at it.
+>
+> **WHY A FILE AND NOT A `node -e` ONE-LINER.** The old result validator was a ~4KB blob inside an
+> XML-ish `<automated>` tag, needing `&lt;`/`&amp;&amp;` escaping to sit there — a paste-and-run
+> produced a syntax error, not a verdict — and it had NEVER BEEN EXECUTED, because it was the last
+> block of a plan that always parked before reaching it. A committed script gets a `--self-check`,
+> and that self-check immediately found two real bugs in its own author’s code: a malformed handoff
+> crashed the validator instead of reporting, and both scripts called `main()` at import time so
+> importing one exited the process. Neither would have surfaced from another inline copy.
+>
+> **HOW TO CHANGE THEM SAFELY.** Add a rule, then add the mutation that proves it red. The mutation
+> list in `check-phase21-artifacts.mjs` is the specification — each entry names the real defect it
+> stands for (B resolving A’s candidate id, rollback claiming it needed an eval, evidence recorded
+> as `active`, an empty attempt ledger). Never widen `--allow-extra` without first verifying the
+> key cannot vary, and record WHY in the plan that passes the flag.
+
 > Last verified: 2026-08-17 (owner-reported — **the executive could not route to `proposeImage`,
 > because its body never mentioned it.** Body edit STAGED, byte-sync 22/22, contracts 31/31 —
 > **NOT SEEDED, NOT ACTIVATED, NO EVAL RUN.**)

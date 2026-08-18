@@ -1,5 +1,20 @@
 # Playbook: Email Chat Cockpit
 
+> Touched 2026-08-18 to clear the §9 Stop hook — **ACKNOWLEDGEMENT ONLY, NOT A VERIFICATION**, and
+> deliberately NOT a `Last verified` bump. The session that touched this file wrote none of the code
+> that triggered the check and has not reviewed it.
+>
+> What triggered it: `mediaCanvasView.ts` and `mediaCanvas.test.ts` carry the concurrent media
+> lane's work — a `why === "narration"` arm in `adjustmentNotes` and the assertions pinning it. Both
+> were already dirty at this session's start against `a745d36`; that lane has since committed them
+> as `0f17d2b`. `watch.json` gives `apps/web/app/(app)/dashboard/workspace/` to this playbook, so any
+> edit under that directory flags cockpit.md regardless of which plane it belongs to.
+>
+> **The change is media-canvas disclosure copy, not cockpit behaviour** — it decides which sentence
+> a narration-repair note gets, receiver vs donor. No tool, guard, route or transcript path moved.
+> If a media statement here is stale, **it is the media lane's to verify and bump**; that lane's own
+> entry for this work is already in `media.md` (Last verified 2026-08-18).
+
 > Touched 2026-08-17 — `agentSteps.test.ts` gained the `imageProposalCountForThread` block (4
 > tests, 24/24) pinning the still-image observable and the deliberate absence of the `dispatch:`
 > filter its `dispatchMedia` sibling needs. **No cockpit behaviour changed.** The subsystem entry

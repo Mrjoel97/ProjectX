@@ -1,7 +1,5 @@
 {
-  "_unassigned": [
-    "packages/backend/vitest.diag.setup.ts"
-  ],
+  "_unassigned": ["packages/backend/vitest.diag.setup.ts"],
   "ci-gate.md": [
     ".github/workflows/ci.yml",
     "package.json",
@@ -219,6 +217,8 @@
     "packages/contracts/src/skills/",
     "packages/contracts/skills/",
     "packages/backend/scripts/run-seed.mjs",
+    "packages/backend/scripts/compare-refs.mjs",
+    "packages/backend/scripts/check-phase21-artifacts.mjs",
     "packages/backend/convex/feedback.ts",
     "packages/backend/convex/optimizerConfig.ts",
     "packages/backend/convex/optimizerEligibility.ts",
