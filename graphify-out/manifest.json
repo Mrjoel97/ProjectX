@@ -125,13 +125,13 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/schema.ts": {
-    "mtime": 1786911993.963438,
-    "ast_hash": "88ceda5b95fa9a43be29245d9c0867f1",
+    "mtime": 1787015286.96511,
+    "ast_hash": "6b243bfbec94b5dd859f45faa8bb9df6",
     "semantic_hash": ""
   },
   "packages/backend/convex/skills.test.ts": {
-    "mtime": 1786402309.5043468,
-    "ast_hash": "e3e7cfc02e81c07b600c5ed022e77cf4",
+    "mtime": 1787013253.6012993,
+    "ast_hash": "2a21eedcde3f48114b425fbf76c2c795",
     "semantic_hash": ""
   },
   "packages/backend/convex/skills.ts": {
@@ -1445,8 +1445,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/plans.ts": {
-    "mtime": 1786913411.3027146,
-    "ast_hash": "a247b6353f2e48b1a51b5769624198fe",
+    "mtime": 1787015684.1798623,
+    "ast_hash": "ecaaed5331a9f5f59fb416fc3bd42566",
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/workspace/SplitPane.tsx": {
@@ -1545,8 +1545,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/watch.json": {
-    "mtime": 1786914953.0054064,
-    "ast_hash": "28e6db291019bab759adbd07b197094a",
+    "mtime": 1787010746.8959315,
+    "ast_hash": "5933ad30957ac4fce53079d1853f184f",
     "semantic_hash": ""
   },
   "scripts/check-playbooks.mjs": {
@@ -1585,13 +1585,13 @@
     "semantic_hash": ""
   },
   "docs/playbooks/cockpit.md": {
-    "mtime": 1787009763.1984103,
-    "ast_hash": "95084de425d108c834c580aee3799229",
+    "mtime": 1787015954.7491426,
+    "ast_hash": "aea5adfe492ac2a17b0bebf45fc6bdd4",
     "semantic_hash": ""
   },
   "docs/playbooks/skill-registry.md": {
-    "mtime": 1786968678.3211596,
-    "ast_hash": "7b915ad8ed84ec76dbc0137e1a137bb9",
+    "mtime": 1787011271.8777034,
+    "ast_hash": "e29775f7fb8c41ede68edf880bbb092b",
     "semantic_hash": ""
   },
   "scripts/extract-convex-edges.mjs": {
@@ -4535,13 +4535,13 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/dispatch.test.ts": {
-    "mtime": 1787001617.6498451,
-    "ast_hash": "d082f2c41acf800da100133a96a22cb0",
+    "mtime": 1787016052.3101645,
+    "ast_hash": "78e0619c5161207cb97c47a92b4efe53",
     "semantic_hash": ""
   },
   "packages/backend/convex/dispatch.ts": {
-    "mtime": 1787001443.1493552,
-    "ast_hash": "d0847e3944041baa3b8d6f5f0af04194",
+    "mtime": 1787015684.1127498,
+    "ast_hash": "28ffb2fb38f73a2658465b21c090ef2b",
     "semantic_hash": ""
   },
   "packages/backend/convex/dispatchGuard.test.ts": {
@@ -8720,13 +8720,13 @@
     "semantic_hash": ""
   },
   ".planning/phases/21-user-authored-skills-and-routines/21-07-PLAN.md": {
-    "mtime": 1787010118.1707413,
-    "ast_hash": "c98b9ebb28ffd152776dd5063eea3368",
+    "mtime": 1787011619.436288,
+    "ast_hash": "34863c6d2f24e87a041f4f0a403fb800",
     "semantic_hash": ""
   },
   ".planning/phases/21-user-authored-skills-and-routines/21-VALIDATION.md": {
-    "mtime": 1786575018.6672878,
-    "ast_hash": "8cc331ca19e013e49af469fc2377405a",
+    "mtime": 1787010672.7157712,
+    "ast_hash": "50c5c97cf0551ea1bd065c688fa38f8e",
     "semantic_hash": ""
   },
   "docs/governance/iso-9001-conformance-map.md": {
@@ -9805,8 +9805,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/21-user-authored-skills-and-routines/21-PRECHECK-2026-08-17.md": {
-    "mtime": 1787007850.897565,
-    "ast_hash": "ecf0bcf6c2dfb0bf8bf4e8ae4933e622",
+    "mtime": 1787014848.3494291,
+    "ast_hash": "9c961edf3bcd94ad4b747da847054aae",
     "semantic_hash": ""
   },
   "apps/web/test-results/skill-authoring-candidate--4eb00-response-and-a-fresh-thread-chromium/error-context.md": {
@@ -9815,8 +9815,18 @@
     "semantic_hash": ""
   },
   "packages/backend/scripts/compare-refs.mjs": {
-    "mtime": 1787009921.6158977,
-    "ast_hash": "710002e922729101d70354b224681d2c",
+    "mtime": 1787010518.0630436,
+    "ast_hash": "1d9e6940c490c1205ae2d8fb3419a0c1",
+    "semantic_hash": ""
+  },
+  "packages/backend/scripts/check-phase21-artifacts.mjs": {
+    "mtime": 1787010577.2718537,
+    "ast_hash": "6ddb2b940032190746fb3fd3523dea4b",
+    "semantic_hash": ""
+  },
+  ".planning/phases/21-user-authored-skills-and-routines/21-08-PLAN.md": {
+    "mtime": 1787011588.5125146,
+    "ast_hash": "a61c2387a0dcd8e623a5db04450151ad",
     "semantic_hash": ""
   }
 }

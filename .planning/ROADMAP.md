@@ -331,7 +331,7 @@ forward.** Recorded rather than silently assumed — it is an open owner decisio
 **Goal:** Creating a reel becomes a guided, honest, verifiable experience over the shipped scene-deck pipeline: chat + brief-chip intake, two distinct-concept storyboard variations, a reel-first canvas whose hero tracks the unattended run to a captioned vault-saved final, plain-language failure cards with governed retry, and per-scene vault citations with an owner-confirmation gate before any money moves.
 **Requirements**: 33-INTAKE, 33-VARIA, 33-REEL, 33-CANVAS, 33-FAIL, 33-CITE (minted at planning; the UX face of MEDIA-01)
 **Depends on:** Phase 32
-**Plans:** 9/10 plans executed
+**Plans:** 10/10 plans executed — CLOSED 2026-08-18 (owner browser gate passed: two storyboards produced and viewed, no error). Closing it took two production defects no offline gate could find — see 33-10-SUMMARY.md.
 
 Plans:
 - [x] 33-01-PLAN.md — Core deck contracts: brief §-parser, two-variation parse, per-scene citations (Wave 1)
@@ -343,7 +343,7 @@ Plans:
 - [x] 33-07-PLAN.md — Brief chips, stale badge + free re-propose, side-by-side variation switcher (Wave 7)
 - [x] 33-08-PLAN.md — Citation/confirm UI + failure cards with fix menu and sunk-cost honesty (Wave 8)
 - [x] 33-09-PLAN.md — media-director v3 body + round-trip drift guard (Wave 9)
-- [ ] 33-10-PLAN.md — Live seed + read-back, e2e on prod build, full gates, owner UAT (Wave 10)
+- [x] 33-10-PLAN.md — Live seed + read-back, e2e on prod build, full gates, owner UAT (Wave 10)
 
 ---
 
