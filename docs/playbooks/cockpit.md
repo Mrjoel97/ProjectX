@@ -1,3 +1,37 @@
+> Last verified: 2026-08-18 (17-08 Task 1 — **the durable managed-event registry**. calendarEvents
+> + calendar 54/54, backend 88 files / 2053 passed, tsc clean. Five mutations, all CAUGHT.)
+>
+> **What a registry row buys.** Without `{provider, externalEventId, etag}` recorded at CREATE time,
+> a later update is a read-modify-write against a version nobody wrote down. `calendarEvents.ts` is
+> that record, and `manageability` (@pikar/core) is the pre-provider gate that reads it — every
+> refusal it can return (`not_found`, `attendees_present`, `needs_inspection`) traces to a fact
+> stored here rather than to a provider round trip.
+>
+> **ORDER IS THE GUARANTEE in `onCreateComplete`.** The registry row is written BEFORE the plan is
+> marked done. Marking the plan first would leave a done plan whose event exists on a real calendar
+> with nothing recording its provider/id/etag — an event Pikar created and can never manage, with no
+> signal anything is missing. If the insert throws, the mutation rolls back and the retrier
+> redelivers against a plan still at `delivering`. Mutation-proven.
+>
+> **The tenant comes FIRST in the composite index, and that is isolation not tidiness.** Two tenants
+> can legitimately hold the same provider event id (a shared calendar, a restored backup, a
+> fixture). Convex requires index prefixes to be equated in order, which makes the tenant predicate
+> unwritable-to-forget rather than merely wrong to omit.
+>
+> **A missing etag means UNKNOWN VERSION, never "no concurrency check needed".** The create terminal
+> drops the key rather than storing null, so `manageability` reports `needs_inspection`. The legacy
+> migration refuses three temptations: no network to discover the etag, no invented placeholder
+> (a fabricated If-Match turns a refusal into a silent overwrite), and no invented event — a legacy
+> plan with no staged title/instant is SKIPPED and counted, because an invented time on a real
+> calendar is the worst available repair.
+>
+> **A test that passed for the wrong reason, caught by mutation and worth remembering.** The replay
+> assertion ran through `onCreateComplete`, which short-circuits on `status !== "delivering"` — so
+> it proved the STATUS GUARD and left the upsert's own dedupe unproven. Disabling the dedupe changed
+> nothing. `upsertManaged` is now tested directly; the contract matters on its own terms because
+> `stagingSnapshot` and the migration both call `.unique()` on that index, and `.unique()` THROWS on
+> a duplicate — a second row is a permanently broken lookup, not a cosmetic problem.
+>
 > Last verified: 2026-08-18 (**A BRIEF IS A SUBJECT, NOT A TASK — the media specialist was never
 > told to produce the deck.** dispatch 103/103, backend 87 files / 2041 passed, tsc clean. All four
 > claims mutation-proven.)

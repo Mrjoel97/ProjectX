@@ -75,6 +75,37 @@ export const onCreateComplete = internalMutation({
       }
 
       if (value.outcome === "created") {
+        // 17-08 Task 1: the durable registry row is written BEFORE the plan is marked done, and the
+        // order is the guarantee. Marking the plan first would leave a done plan whose event exists
+        // on a real calendar with nothing recording its provider/id/etag — an event Pikar created
+        // and can never manage, with no signal that anything is missing. If this insert throws, the
+        // mutation rolls back and the retrier redelivers against a plan still at `delivering`.
+        //
+        // The row is built from the plan's OWN staged fields, never from anything the model or the
+        // provider echoed back: the title and instant a human approved are the only ones that may
+        // become a durable record.
+        if (
+          plan.eventTitle !== undefined &&
+          plan.eventStartMs !== undefined &&
+          plan.eventDurationMs !== undefined &&
+          plan.eventTz !== undefined
+        ) {
+          await ctx.runMutation(internal.calendarEvents.upsertManaged, {
+            tenantId: value.tenantId,
+            sourcePlanId: value.planId,
+            provider: value.provider,
+            externalEventId: value.eventId,
+            // `null` from the wire means "unknown version" — drop the key rather than store null,
+            // so `manageability` reports `needs_inspection` instead of reading a falsy etag.
+            ...(value.etag === null ? {} : { etag: value.etag }),
+            title: plan.eventTitle,
+            startMs: plan.eventStartMs,
+            durationMs: plan.eventDurationMs,
+            tz: plan.eventTz,
+            // The create writer has never been able to send guests (17-04's attendee scan).
+            attendeeFree: true,
+          });
+        }
         await ctx.db.patch(value.planId, {
           status: "done",
           calendarEventId: value.eventId,
