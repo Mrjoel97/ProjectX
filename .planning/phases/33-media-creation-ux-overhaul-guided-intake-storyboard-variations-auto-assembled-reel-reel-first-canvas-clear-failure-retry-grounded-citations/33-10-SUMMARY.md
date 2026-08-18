@@ -151,11 +151,15 @@ sign-off on those five items.**
 - **What the 1,270-character bodies actually SAY is still unobserved.** The inference is that the
   model asked a clarifying question; that is an inference and must not be written down as fact.
   `plans.refusedBody` exists so the next occurrence is read rather than guessed.
-- **The working branch `closure/phases-14-25` is RED and `main` is green.** `a745d36` (another
-  lane's 21-03 fix) puts three >200-character literals in `convex/cockpitCapabilities.ts`, failing
-  the §5 scan in `skills.test.ts`. Merging this branch to main would fail CI, and the deploy would
-  then show as `skipped` rather than failed. Not this plan's to fix; recorded because it is a
-  loaded gun pointed at the next deploy.
+- **RESOLVED — and the correction matters more than the original finding.** Mid-session the branch
+  was red on the §5 scan and I recorded it as another lane's defect. It was not: **the GUARD was
+  wrong.** The scan read JSDoc backticks as template literals, so `a745d36` merely *explaining
+  itself in comments* took `cockpitCapabilities.ts` from 1 backtick to 29 and tripped a false
+  positive. Fixed at the root by `4ef7646` (`stripComments()` before scanning); `skills.test.ts`
+  is 87/87. A crude regex I wrote to "independently confirm" the literal count had the identical
+  comment-blindness and agreed with the broken guard — two derivations sharing one assumption are
+  not corroboration. **Merging this branch to main is still wrong**, for the unrelated and
+  unchanged reason: it carries the BETA-01 invite gate and would close production signup.
 - **The variation compare region is still a switcher, by decision.** The alternate gets a summary
   card and the user switches to see it in full; an expand-both accordion was considered and
   deliberately not built, because "which deck is picked" is the same state as "which deck gets
