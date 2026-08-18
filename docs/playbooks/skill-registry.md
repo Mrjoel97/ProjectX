@@ -1,5 +1,42 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-18 (**the owner's rollback list was empty on a tenant that has a baseline
+> — take-then-filter.** backend 2042 passed / 24 skipped across 87 files, typecheck exit 0, biome
+> exit 0, fix mutation-proven and confirmed in a real browser before and after.)
+>
+> **THE DEFECT, found by looking at `/ops` rather than by any test.** Every one of the eleven
+> `offer-architect` cards read *"No earlier version has ever been live for this tenant"* while
+> `inspectTenantSkill` reported that tenant's v1 baseline `archived` and `rollbackEligible: true`.
+> Both were describing the same rows. `tenantCandidatesForReview` walked
+> `by_tenant_name_version` DESC, `.take(ROLLBACK_CHOICE_LIMIT)` = ten, and filtered for eligibility
+> **afterwards**. With twelve versions in play the take returned v12…v3 — ten CANDIDATES, none of
+> them eligible — and the single eligible row was already gone.
+>
+> **THE SHAPE IS THE POINT: every candidate a user authors pushes their own recovery baseline
+> further out of the window.** The comment directly above that read says rollback is
+> "evidence-EXEMPT by design — a broken eval harness must never block this path". A crowded
+> candidate list blocked it anyway, and rollback is UI-only by design (no `convex run` door), so
+> there was no second route to the baseline. It would have stopped Plan 21-08's rollback step dead.
+>
+> **THE FIX:** eligibility is INDEXED, never filtered after a take — new
+> `by_tenant_name_rollbackEligible` on `["tenantId","name","rollbackEligible"]`, `.take(LIMIT + 1)`
+> (at most one row in the eligible set can be the ACTIVE one, excluded afterwards), then slice to
+> LIMIT. Additive index, no migration. **Whenever you bound a read whose rows must then satisfy a
+> predicate, the predicate belongs in the index or the bound is a lie.**
+>
+> **WHY NOTHING CAUGHT IT, which is the more useful half.** The sibling test
+> *"the owner review queue is a bounded indexed read"* asserted the source contains
+> `.take(ROLLBACK_CHOICE_LIMIT)` and stayed GREEN throughout — it proved the read was BOUNDED,
+> which was always true, and never that it RETURNED THE ROW. The behavioural tests existed too, but
+> seeded three or four versions; the bug needs eleven. `a tenant past the take-limit is STILL
+> offered its recovery baseline` is the replacement, and on the exact pre-fix code it fails with
+> `expected [] to include 1` while the entire rest of the suite stays green. Restoring the index
+> but dropping the eligibility predicate instead fails with
+> `expected [ 14, 13, 12, … ] to include 1` — the live symptom, reproduced.
+>
+> **When you add a bounded list to this file's surfaces, seed PAST the bound in the test.** Three
+> rows prove the mapping; they cannot prove the window.
+
 > Last verified: 2026-08-18 (**the Phase-21 live gate now has TWO committed, self-checked tools
 > instead of five hand-inlined comparisons.** `compare-refs.mjs` 14 assertions green;
 > `check-phase21-artifacts.mjs` 2 valid fixtures green + 16 mutations red; both exercised through

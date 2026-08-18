@@ -247,6 +247,10 @@ export default defineSchema({
     .index("by_tenant_name_version", ["tenantId", "name", "version"])
     // The tenant's own bounded authoring history.
     .index("by_tenant_createdAt", ["tenantId", "createdAt"])
+    // The owner's rollback choices. Eligibility is INDEXED, not filtered after a `.take()` — a
+    // tenant with more candidates than the take-limit would otherwise crowd their own recovery
+    // baseline out of the window and be offered nothing (observed live at 12 versions, 21-08).
+    .index("by_tenant_name_rollbackEligible", ["tenantId", "name", "rollbackEligible"])
     // The bounded owner review queue across tenants.
     .index("by_status_createdAt", ["status", "createdAt"]),
 

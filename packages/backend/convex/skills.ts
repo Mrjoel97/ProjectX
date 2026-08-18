@@ -1305,13 +1305,24 @@ export const tenantCandidatesForReview = ownerQuery({
       const effective = await loadEffectiveSkill(ctx, row.tenantId, row.name);
       // Bounded rollback choices for this exact tenant+name. `rollbackEligible` is the only proof
       // of prior activation (see planTenantActivation) — status is not offered as a substitute.
+      //
+      // ELIGIBILITY IS INDEXED, NEVER FILTERED AFTER THE TAKE. This read used to walk
+      // `by_tenant_name_version` desc, take ten, and *then* keep the eligible ones. Observed live
+      // on 2026-08-18: the tenant held twelve versions, so the take returned v12…v3 — ten
+      // CANDIDATES, none of them eligible — and the one real baseline (v1, archived, eligible) was
+      // already discarded. The owner saw "No earlier version has ever been live for this tenant"
+      // on a tenant that has one, and rollback is UI-only by design, so there was no other door.
+      // Every candidate a user authors pushed their own recovery further out of reach.
+      //
+      // `+ 1` because at most one row in the eligible set can be the ACTIVE one, which is excluded
+      // below — restoring the row that is already live is not a rollback.
       const priors = await ctx.db
         .query("tenantSkills")
-        .withIndex("by_tenant_name_version", (q) =>
-          q.eq("tenantId", row.tenantId).eq("name", row.name),
+        .withIndex("by_tenant_name_rollbackEligible", (q) =>
+          q.eq("tenantId", row.tenantId).eq("name", row.name).eq("rollbackEligible", true),
         )
         .order("desc")
-        .take(ROLLBACK_CHOICE_LIMIT);
+        .take(ROLLBACK_CHOICE_LIMIT + 1);
       const gatePassed = hasPassingTenantEvidence(row.evidence, tenantTargetOf(row));
 
       out.push({
@@ -1335,7 +1346,9 @@ export const tenantCandidatesForReview = ownerQuery({
         evidenceState: row.evidence === undefined ? "absent" : gatePassed ? "passing" : "failing",
         evidenceSummary: evidenceSummaryOf(row.evidence),
         rollbackTargets: priors
-          .filter((p) => p.rollbackEligible === true && p.status !== "active")
+          // Eligibility came from the index; liveness is the only thing left to exclude.
+          .filter((p) => p.status !== "active")
+          .slice(0, ROLLBACK_CHOICE_LIMIT)
           .map((p) => ({
             id: p._id,
             version: p.version,

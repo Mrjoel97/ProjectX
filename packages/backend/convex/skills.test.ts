@@ -2464,6 +2464,42 @@ describe("owner activation + rollback of tenant candidates (21-04)", () => {
     expect(fourth.rollbackTargets.map((r) => r.author)).toEqual(["user", "system"]);
   });
 
+  test("a tenant past the take-limit is STILL offered its recovery baseline", async () => {
+    // OBSERVED LIVE 2026-08-18, in a browser, on a healthy deployment: a tenant holding twelve
+    // versions of one skill saw "No earlier version has ever been live for this tenant" on every
+    // card — while the inspector reported its v1 baseline archived and rollbackEligible. The read
+    // walked versions DESC, took ten, and filtered for eligibility afterwards, so ten candidates
+    // filled the window and the one eligible row never survived to the filter. Authoring more
+    // candidates pushed the tenant's own recovery further out of reach, and rollback is UI-only
+    // by design, so nothing else could reach it.
+    //
+    // The sibling source-scan test asserted `.take(ROLLBACK_CHOICE_LIMIT)` throughout and stayed
+    // green: it proved the read was bounded, which was true, and never that it returned the row.
+    const ROLLBACK_LIMIT = 10; // mirrors ROLLBACK_CHOICE_LIMIT in skills.ts
+    const w = await world();
+
+    for (let i = 0; i < ROLLBACK_LIMIT + 2; i++) {
+      await w.asA.mutation(api.skills.publishUserCandidate, {
+        name: OFFER_ARCHITECT_SKILL,
+        authoredBody: `Iteration ${i}. ${NEEDLE_A}`,
+      });
+    }
+
+    const mine = (await w.asOwner.query(api.skills.tenantCandidatesForReview, {})).filter(
+      (c) => c.tenantId === w.tenantA,
+    );
+    // The precondition is the whole point — without more candidates than the limit there is no bug.
+    expect(mine.length).toBeGreaterThan(ROLLBACK_LIMIT);
+
+    for (const c of mine) {
+      expect(c.rollbackTargets.map((r) => r.version)).toContain(1);
+    }
+    // …and it is still a BOUNDED read, not a collect wearing a filter.
+    for (const c of mine) {
+      expect(c.rollbackTargets.length).toBeLessThanOrEqual(ROLLBACK_LIMIT);
+    }
+  });
+
   test("the review queue is bounded: more candidates than the cap returns the cap, newest first", async () => {
     const w = await world();
     // 40 candidates across the deployment, well past TENANT_REVIEW_LIMIT. Inserted directly: this
@@ -2570,7 +2606,11 @@ describe("owner activation + rollback of tenant candidates (21-04)", () => {
     expect(region).toContain("by_status_createdAt");
     expect(region).toContain('.order("desc")');
     expect(region).toContain(".take(TENANT_REVIEW_LIMIT)");
-    expect(region).toContain(".take(ROLLBACK_CHOICE_LIMIT)");
+    // Eligibility is INDEXED, so the take is over eligible rows only. `+ 1` leaves room for the
+    // one active row excluded afterwards. NOTE: this assertion is mechanism coverage and it stayed
+    // GREEN through the whole live outage below — the behaviour test is what catches that class.
+    expect(region).toContain("by_tenant_name_rollbackEligible");
+    expect(region).toContain(".take(ROLLBACK_CHOICE_LIMIT + 1)");
     // The candidate queue is cross-tenant and open-ended; a full scan is a page that only gets
     // slower. Named mutation that turns this red: replace either take with `.collect()`.
     expect(region).not.toContain(".collect(");
