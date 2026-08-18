@@ -487,7 +487,15 @@ export default defineSchema({
     scheduledFunctionId: v.optional(v.id("_scheduled_functions")),
     // Phase-26 Approvals. Missing provenance on a legacy canceled row means a historical
     // scheduled cancellation; every new cancel writes the discriminator explicitly.
-    cancelKind: v.optional(v.union(v.literal("scheduled_cancel"), v.literal("discarded"))),
+    // 17-08 added `refused`: the SYSTEM stopped this act, the user did not. It is a third literal
+    // rather than a reuse of `discarded` because `approvals.ts` surfaces this value as the
+    // cancellation's provenance — reporting a provider-limitation refusal or a version conflict as
+    // a user discard would attribute the decision to the wrong actor, which is a defect class this
+    // codebase has already shipped three times. `reschedulePlan` excludes it alongside `discarded`:
+    // a refused management act is terminal, and re-arming it would re-run a write that was refused.
+    cancelKind: v.optional(
+      v.union(v.literal("scheduled_cancel"), v.literal("discarded"), v.literal("refused")),
+    ),
     canceledAt: v.optional(v.number()),
     // Delivery terminals own these counters. `counterComplete` is the honesty bit: absent/false
     // keeps legacy reads on the bounded partial projection instead of inventing exact progress.

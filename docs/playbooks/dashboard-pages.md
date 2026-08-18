@@ -1,5 +1,13 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-18 (17-08 Task 3 widened `plans.cancelKind` with a THIRD literal,
+> `refused`, and updated the Phase-26 schema pin in `dashboardSchema.test.ts` to match in full. The
+> Approvals surface reads this field as the cancellation's PROVENANCE (`{state:"known", kind}`), so
+> the widening is what keeps a system refusal — a Microsoft cancel the provider cannot do safely, or
+> a version conflict — from being reported as a user `discarded`. A `refused` row carries
+> `calendarFailureCode` alongside it; the card copy keyed off that code is 17-09-03's work, so until
+> then the Approvals list shows the kind and nothing more. No index, query or page changed.)
+>
 > Last verified: 2026-08-17 (25-06 Gate 1 — **THE CONNECTIONS-SURFACE GUARD WAS WEAKER THAN IT
 > LOOKED, AND A WRONG-PORTAL DISCONNECT COPY SHIPPED THROUGH IT.**
 > `connectionsSurface.test.ts`'s "never claims a revocation it cannot perform" test asserted

@@ -256,17 +256,40 @@ describe("executePlan calendar arm (ACTN-02)", () => {
     expect(await t.run((ctx) => ctx.db.query("mediaJobs").collect())).toHaveLength(0);
   });
 
-  // ── 17-05: THE INERT calendar_manage TARGET ────────────────────────────────────────────────
+  // ── 17-08 Task 3: THE REAL calendar_manage TARGET ──────────────────────────────────────────
   //
-  // `calendar_manage` is bound to the `externalAction` arm so the four gap-closure waves after
-  // this one compile, but its `EXTERNAL_TARGETS` member is a stub that throws until Plan 17-08.
-  // Nothing can stage such a plan (no tool writes the kind until 17-09), so this is reached only
-  // by a MANUALLY seeded row — which is precisely what makes it worth asserting: the claim is
-  // that if it is ever reached, it fails LOUDLY and leaves nothing behind.
+  // 17-05 shipped this member as a stub that threw `calendar manage not wired (17-08)`. It is now
+  // the real `retrier.run(ctx, internal.calendar.manageEvent, …)` thunk, and the assertions below
+  // replace the stub's — one member, one edit, one place, exactly the hand-off 17-05 promised.
   //
-  // Named mutation that turns this RED: replace the stub's `throw` with `Promise.resolve("run_x")`.
-  test("a manually seeded calendar_manage plan throws loudly and starts nothing", async () => {
-    const t = withDelivery();
+  // The plan carries a registry ref and a staged etag but NO Google grant, so `manageEvent` reaches
+  // its reauth branch without a network call. That makes the run deterministic AND proves the arm
+  // really started the action rather than merely writing a run id.
+  async function seedManagePlan(t: ReturnType<typeof convexTest>, operation: "update" | "delete") {
+    const managedEventId = await t.run(async (ctx) => {
+      const sourcePlanId = await ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: `manage_src_${crypto.randomUUID()}`,
+        kind: "calendar_event" as const,
+        status: "done" as const,
+        createdAt: Date.now(),
+      });
+      return ctx.db.insert("calendarEvents", {
+        tenantId: TENANT,
+        provider: "google" as const,
+        externalEventId: "cockpit-managed-event",
+        etag: 'W/"cockpit-v1"',
+        title: "Governed planning review",
+        startMs: Date.UTC(2026, 7, 3, 13, 0),
+        durationMs: 30 * 60_000,
+        tz: "Africa/Dar_es_Salaam",
+        sourcePlanId,
+        attendeeFree: true,
+        status: "active" as const,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+    });
     const planId = await t.run((ctx) =>
       ctx.db.insert("plans", {
         tenantId: TENANT,
@@ -274,63 +297,110 @@ describe("executePlan calendar arm (ACTN-02)", () => {
         kind: "calendar_manage" as const,
         status: "proposed" as const,
         calendarProvider: "google" as const,
-        calendarOperation: "delete" as const,
+        calendarOperation: operation,
+        calendarManagedEventId: managedEventId,
+        calendarExpectedEtag: 'W/"cockpit-v1"',
+        eventTitle: "Moved planning review",
         createdAt: Date.now(),
       }),
     );
+    return { planId, managedEventId };
+  }
 
-    await expect(
-      t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId }),
-    ).rejects.toThrow(/calendar manage not wired \(17-08\)/);
+  test("approving a calendar_manage plan starts ONE retrier run on the calendar column", async () => {
+    const t = withDelivery();
+    const { planId } = await seedManagePlan(t, "update");
+
+    const result = await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, {
+      planId,
+    });
     await t.finishInProgressScheduledFunctions();
 
-    // A throw aborts the whole Convex mutation, so the `status: "approved"` patch that runs BEFORE
-    // the target thunk rolls back with it. That rollback — not an ordering guess — is what makes
-    // "no plan-state patch" true, and this is the assertion that holds it.
+    expect(result).toEqual({ ok: true });
     const plan = await t.run((ctx) => ctx.db.get(planId));
-    expect(plan?.status).toBe("proposed");
-    expect(plan?.correlationId).toBeUndefined();
-    expect(plan?.calendarRunId).toBeUndefined();
+    expect(plan?.calendarRunId).toEqual(expect.any(String));
+    expect(plan?.calendarRunId).not.toHaveLength(0);
+    expect(plan?.correlationId).toEqual(expect.any(String));
+    // The run id went to CALENDAR's column. `calendarComplete` resolves through `by_calendar_run`
+    // and would happily match a media run written into it.
     expect(plan?.mediaRunId).toBeUndefined();
-    expect(plan?.calendarEventId).toBeUndefined();
-    // No provider action, no gmail fan-out, no media reservation, no registry row.
+    expect(plan?.renderStatus).toBeUndefined();
+    // Never the gmail fan-out, never a media reservation.
     expect(await countRequests(t)).toHaveLength(0);
     expect(plan?.workflowId).toBeUndefined();
     expect(await t.run((ctx) => ctx.db.query("mediaJobs").collect())).toHaveLength(0);
-    expect(await t.run((ctx) => ctx.db.query("calendarEvents").collect())).toHaveLength(0);
+  });
+
+  test("a second approval no-ops and preserves the first run id", async () => {
+    const t = withDelivery();
+    const { planId } = await seedManagePlan(t, "update");
+    const asTenant = t.withIdentity({ subject: TENANT });
+
+    expect(await asTenant.mutation(api.cockpit.executePlan, { planId })).toEqual({ ok: true });
+    const first = await t.run((ctx) => ctx.db.get(planId));
+    const second = await asTenant.mutation(api.cockpit.executePlan, { planId });
+    await t.finishInProgressScheduledFunctions();
+
+    expect(second).toEqual({ ok: true, alreadyStarted: true });
+    expect(first?.calendarRunId).toEqual(expect.any(String));
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.calendarRunId).toBe(first?.calendarRunId);
   });
 
   // The shipped CREATE path must be untouched by the gap closure — 17-VERIFICATION.md uses it as
   // the positive regression anchor for every plan from 17-05 to 17-11. A `calendar_manage` row
-  // that could reach `internal.calendar.createEvent` would be the worst possible version of this
+  // that reached `internal.calendar.createEvent` would be the worst possible version of this
   // change: a management proposal quietly creating a NEW event.
-  test("the inert manage target cannot reach the shipped calendar_event create path", async () => {
+  test("a manage approval never reaches the shipped create path, and create still works", async () => {
     const t = withDelivery();
     const createId = await seedCalendarPlan(t, "proposed");
-    const manageId = await t.run((ctx) =>
-      ctx.db.insert("plans", {
-        tenantId: TENANT,
-        threadId: `calendar_manage_thread_${crypto.randomUUID()}`,
-        kind: "calendar_manage" as const,
-        status: "proposed" as const,
-        createdAt: Date.now(),
-      }),
-    );
+    const { planId: manageId, managedEventId } = await seedManagePlan(t, "delete");
+    const asTenant = t.withIdentity({ subject: TENANT });
 
-    await expect(
-      t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, { planId: manageId }),
-    ).rejects.toThrow(/17-08/);
-    // …and the create plan on the SAME tenant still approves normally. Anti-vacuity floor: without
-    // this the test above would pass just as well against an arm that broke calendar entirely.
-    expect(
-      await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, {
-        planId: createId,
-      }),
-    ).toEqual({ ok: true });
+    expect(await asTenant.mutation(api.cockpit.executePlan, { planId: manageId })).toEqual({
+      ok: true,
+    });
+    // Anti-vacuity floor: without this, the assertions above would pass just as well against an
+    // arm that broke calendar entirely.
+    expect(await asTenant.mutation(api.cockpit.executePlan, { planId: createId })).toEqual({
+      ok: true,
+    });
     await t.finishInProgressScheduledFunctions();
 
+    // `calendarEventId` is the CREATE terminal's column. A manage plan must never acquire one, and
+    // no second registry row may appear — management edits the row it was pointed at.
+    expect((await t.run((ctx) => ctx.db.get(manageId)))?.calendarEventId).toBeUndefined();
     expect((await t.run((ctx) => ctx.db.get(createId)))?.calendarRunId).toEqual(expect.any(String));
-    expect((await t.run((ctx) => ctx.db.get(manageId)))?.calendarRunId).toBeUndefined();
+    const rows = await t.run((ctx) => ctx.db.query("calendarEvents").collect());
+    expect(rows.map((r) => r._id)).toEqual([managedEventId]);
+  });
+
+  test("calendar_manage approval does not require a connected mailbox", async () => {
+    const t = withDelivery();
+    const { planId } = await seedManagePlan(t, "update");
+
+    const result = await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, {
+      planId,
+    });
+    await t.finishInProgressScheduledFunctions();
+
+    expect(result).not.toEqual({ ok: false, reason: "gmail_not_connected" });
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.calendarRunId).toEqual(expect.any(String));
+  });
+
+  test("an escalated manage plan is refused before the arm starts", async () => {
+    const t = withDelivery();
+    const { planId } = await seedManagePlan(t, "delete");
+    await t.run((ctx) => ctx.db.patch(planId, { escalated: true }));
+
+    const result = await t.withIdentity({ subject: TENANT }).mutation(api.cockpit.executePlan, {
+      planId,
+    });
+    await t.finishInProgressScheduledFunctions();
+
+    expect(result).toEqual({ ok: false, reason: "review_escalated" });
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan?.status).toBe("proposed");
+    expect(plan?.calendarRunId).toBeUndefined();
   });
   test("deliverApprovedPlan.ts is byte-unchanged — it is the EMAIL entry point, not a dispatcher", async () => {
     // Routing an external action through it would make the gmail fan-out reachable from calendar

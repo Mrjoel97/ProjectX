@@ -24,7 +24,7 @@ import {
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import { internalAction } from "./_generated/server";
+import { type ActionCtx, internalAction } from "./_generated/server";
 import { freshAccessToken } from "./gmail";
 
 const FREEBUSY_ENDPOINT = "https://www.googleapis.com/calendar/v3/freeBusy";
@@ -393,7 +393,11 @@ export type ManageEventResult = {
   | { outcome: "terminal"; status: number; reason: string }
 );
 
-type InspectOutcome =
+/** Exported so `smoke.ts` can ANNOTATE its readback local. Convex's generated `internal` object is
+ *  `typeof import(...)`, so `smoke → calendar.inspectEvent` plus the shipped
+ *  `calendar → smoke.getCalendarFixture` is a real type cycle — TS gives up and silently degrades
+ *  unrelated inference to `any` across the package. An explicit annotation breaks it. */
+export type InspectOutcome =
   | { outcome: "ok"; inspection: CalendarInspection }
   | { outcome: "reauth" }
   | { outcome: "terminal"; status: number; reason: string };
@@ -413,6 +417,23 @@ type GoogleEventBody = {
   end?: { dateTime?: unknown };
   attendees?: unknown;
 };
+
+/**
+ * The ONE Google Calendar-write credential path: stored grant → SCOPE CHECK → shared refresh root.
+ * `null` means "reconnect", never "try anyway".
+ *
+ * Scope BEFORE refresh, because a refresh succeeds even when the grant cannot call Calendar —
+ * checking after would make a permanent reconnect condition look like a provider failure. Shared by
+ * `manageEvent` and `inspectEvent` so there is exactly one place that ordering can be wrong.
+ */
+async function googleCalendarToken(ctx: ActionCtx, tenantId: string): Promise<string | null> {
+  const stored: Doc<"gmailTokens"> | null = await ctx.runQuery(internal.gmailAuth.getTokens, {
+    tenantId,
+  });
+  if (!stored || !hasScope(stored.scope, CALENDAR_EVENTS_SCOPE)) return null;
+  const access = await freshAccessToken(ctx, tenantId);
+  return access.ok ? access.token : null;
+}
 
 /** Google's RFC3339 carries its own offset, unlike Graph's zone-less `dateTime`. */
 function googleInstant(slot: { dateTime?: unknown } | undefined): number | null {
@@ -623,18 +644,10 @@ export const manageEvent = internalAction({
     if (expectedEtag !== row.etag) return { ...refs, outcome: "refused", code: "conflict" };
 
     // 6. Google's token, once, for whichever calls follow. Microsoft's actions own their own.
-    let googleToken: string | null = null;
-    if (provider === "google") {
-      const stored: Doc<"gmailTokens"> | null = await ctx.runQuery(internal.gmailAuth.getTokens, {
-        tenantId,
-      });
-      // Scope BEFORE refresh: a refresh succeeds even when the grant cannot call Calendar.
-      if (!stored || !hasScope(stored.scope, CALENDAR_EVENTS_SCOPE)) {
-        return { ...refs, outcome: "reauth", provider };
-      }
-      const access = await freshAccessToken(ctx, tenantId);
-      if (!access.ok) return { ...refs, outcome: "reauth", provider };
-      googleToken = access.token;
+    // Google's token, once, for whichever calls follow. Microsoft's actions own their own grant.
+    const googleToken = provider === "google" ? await googleCalendarToken(ctx, tenantId) : null;
+    if (provider === "google" && googleToken === null) {
+      return { ...refs, outcome: "reauth", provider };
     }
 
     const nowMs = Date.now();
@@ -717,5 +730,31 @@ export const manageEvent = internalAction({
     if (res.outcome === "refused") return { ...refs, outcome: "refused", code: res.code };
     if (res.outcome === "terminal") return stop(res.status, res.reason);
     return stop(0, "unexpected_update_outcome");
+  },
+});
+
+/**
+ * READ-ONLY provider inspection, provider-neutral, for the readback probe (17-08 Task 3) and for
+ * 17-09's staging refresh. It writes nothing anywhere and has no write endpoint in reach.
+ *
+ * It exists as its own action because `manageEvent` inspects with a token it already holds, while
+ * an external caller has none — and the alternative (letting the readback build its own Graph/Google
+ * request) would be a SECOND place that decides what a narrow projection is.
+ */
+export const inspectEvent = internalAction({
+  args: {
+    tenantId: v.string(),
+    provider: v.union(v.literal("google"), v.literal("microsoft")),
+    externalEventId: v.string(),
+  },
+  handler: async (ctx, { tenantId, provider, externalEventId }): Promise<InspectOutcome> => {
+    if (provider === "microsoft") {
+      return await ctx.runAction(internal.microsoftCalendar.inspectEvent, {
+        tenantId,
+        externalEventId,
+        nowMs: Date.now(),
+      });
+    }
+    return await googleInspect(await googleCalendarToken(ctx, tenantId), externalEventId);
   },
 });

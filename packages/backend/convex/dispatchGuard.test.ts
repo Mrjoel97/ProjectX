@@ -125,6 +125,14 @@ test("calendar write modules are absent from llm.ts while the governed freeBusy 
     /\b(?:internal|api)\.calendar\.createEvent\b/,
     /\b(?:internal|api)\.calendarComplete\.onCreateComplete\b/,
     /\b(?:internal|api)\.calendarComplete\b/,
+    // 17-08: management is a WRITE behind the same Approve gate, so it inherits the same absence.
+    // The model may propose a change (17-09 stages one); it may never perform it, and it may never
+    // reach the terminal that records one as having happened.
+    /\b(?:internal|api)\.calendar\.manageEvent\b/,
+    /\b(?:internal|api)\.microsoftCalendar\.patchEvent\b/,
+    // The registry WRITERS. A tool that could patch `calendarEvents` could make the row disagree
+    // with the provider — and every refusal `manageability` returns reads from that row.
+    /\b(?:internal|api)\.calendarEvents\.(?:upsertManaged|applyUpdate|markDeleted|migrateLegacyCalendarEvents)\b/,
   ]) {
     expect(
       src.match(ref) ?? [],
@@ -260,6 +268,11 @@ test("the externalAction arm wires each occupant's OWN retrier action and non-No
     // 20-07: media's pair. The arm's SECOND occupant must get its OWN target, never calendar's.
     "internal.media.submitBatch",
     "onComplete: internal.mediaComplete.onSubmitComplete",
+    // 17-08: management's pair. The arm's THIRD occupant. Its terminal is separate from
+    // `onCreateComplete` because the two write different tables, different audit names and
+    // different terminal states — a shared one would let a manage result mark a create done.
+    "internal.calendar.manageEvent",
+    "onComplete: internal.calendarComplete.onManageComplete",
   ]) {
     expect(
       table,
@@ -267,6 +280,18 @@ test("the externalAction arm wires each occupant's OWN retrier action and non-No
         `internal.calendar.createEvent, and a media approval silently books a calendar event.`,
     ).toContain(required);
   }
+
+  // Three occupants, three DISTINCT pairs. The required strings above prove each one is PRESENT;
+  // only counting distinct values proves none was REUSED — a manage thunk pointed at
+  // `onCreateComplete` would satisfy every `toContain` above.
+  const targets = [...table.matchAll(/internal\.\w+\.\w+,/g)].map((m) => m[0]);
+  const terminals = [...table.matchAll(/onComplete: internal\.\w+\.\w+/g)].map((m) => m[0]);
+  expect(new Set(targets).size, `EXTERNAL_TARGETS reuses a retrier action: ${targets}`).toBe(3);
+  expect(
+    new Set(terminals).size,
+    `EXTERNAL_TARGETS reuses a terminal: ${terminals} — mutation: point calendar_manage at ` +
+      `onCreateComplete, and a management result marks a CREATE plan done.`,
+  ).toBe(3);
 
   // The arm dispatches THROUGH the table rather than naming a target itself — that is what makes a
   // third occupant a compile error at `Record<ExternalActionType, …>` instead of a missed branch.
@@ -465,4 +490,127 @@ test("the Drive audit payload cannot carry a file or folder NAME", () => {
       ).toBe(false);
     }
   }
+});
+
+// ── 17-08 Task 3: the management write surface, pinned by construction ────────────────────────
+//
+// ADR-023 makes an ABSENCE the product decision: Microsoft cancel/delete is not merely unused, it
+// must be unreachable. An absence is exactly the thing a future executor "fixes" without noticing,
+// so these read the source rather than the behaviour.
+
+const CALENDAR_MODULES = [
+  "calendar.ts",
+  "microsoftCalendar.ts",
+  "calendarComplete.ts",
+  "calendarEvents.ts",
+];
+
+test("no calendar module can reach a provider CANCELLATION endpoint", () => {
+  for (const file of CALENDAR_MODULES) {
+    const src = readExecutableCode(file);
+    // Graph's `/cancel` and Google's `sendUpdates` both EMAIL the attendees on the app's behalf —
+    // an outbound external communication with no plan row, no audit event, no dead letter and no
+    // redaction pass. They are out of the vocabulary entirely, not guarded by a parameter default.
+    expect(
+      src,
+      `${file} contains /cancel — mutation: map a Microsoft delete to the /cancel action. It mails ` +
+        `every attendee outside the governed send path.`,
+    ).not.toContain("/cancel");
+    expect(
+      src,
+      `${file} contains sendUpdates — mutation: add sendUpdates: "all" to a Calendar write.`,
+    ).not.toContain("sendUpdates");
+  }
+});
+
+test("microsoftCalendar.ts issues NO Graph DELETE outside the disposable probe", () => {
+  const src = readExecutableCode("microsoftCalendar.ts");
+  const probeAt = src.indexOf("export const graphConcurrencyProbe");
+  expect(probeAt, "graphConcurrencyProbe is gone — the scan below has no landmark").toBeGreaterThan(
+    0,
+  );
+
+  const deletes = [...src.matchAll(/method:\s*["']DELETE["']/g)].map((m) => m.index ?? -1);
+  // Anti-vacuity: the probe DOES delete (it cleans up after itself), so a zero here means the
+  // landmark moved or the scan stopped matching, not that the module got safer.
+  expect(
+    deletes.length,
+    "no DELETE found in microsoftCalendar.ts at all — the probe cleans up after itself, so this " +
+      "scan is no longer reading what it thinks it is.",
+  ).toBeGreaterThan(0);
+  for (const at of deletes) {
+    expect(
+      at,
+      "microsoftCalendar.ts has a Graph DELETE outside graphConcurrencyProbe — mutation: let a " +
+        "Microsoft delete fall through to a Graph DELETE. ADR-023: the 17-07 probe measured " +
+        "staleDeleteStatus 204 with staleDeletePreserved false, so Graph IGNORES If-Match on event " +
+        "DELETE and a stale delete destroys the event anyway. There is no safe version of this call.",
+    ).toBeGreaterThan(probeAt);
+  }
+});
+
+test("the Graph CALENDAR paths have exactly one non-test owner", () => {
+  // Scoped to the CALENDAR paths, not the Graph base URL: `graph.ts` legitimately owns
+  // `/me/sendMail` (DLVR-02, the Microsoft send adapter), and ADR-018 is precisely the decision
+  // that ONE grant serves both planes from two modules. What must stay singular is the calendar
+  // surface — otherwise "no Graph DELETE exists" is a claim about one file while another writes.
+  const owners = readdirSync(convexDir)
+    .filter((file) => file.endsWith(".ts") && !file.endsWith(".test.ts"))
+    .filter((file) => {
+      const src = readFileSync(join(convexDir, file), "utf8");
+      return src.includes("me/calendar/events") || src.includes("me/calendarView");
+    });
+  expect(
+    owners,
+    "a Graph calendar path has another outbound owner — mutation: paste the events URL into a " +
+      "second Convex module. microsoftCalendar.ts must be its sole owner, or 'no Graph DELETE " +
+      "exists' becomes a claim about one file while another one writes.",
+  ).toEqual(["microsoftCalendar.ts"]);
+});
+
+test("the Microsoft PATCH body carries no guest, notification or content field", () => {
+  const src = readExecutableCode("microsoftCalendar.ts");
+  const at = src.indexOf("export const patchEvent");
+  expect(at, "patchEvent is gone — this scan has nothing to read").toBeGreaterThan(0);
+  // Scoped to the SERIALIZED EVENT OBJECT, not the whole function: the fetch init has its own
+  // `body:` property (the request body), so a naive scan for "body:" flags the correct code.
+  const fn = src.slice(at);
+  const payloadAt = fn.indexOf("JSON.stringify({");
+  expect(payloadAt, "patchEvent no longer serializes an event object").toBeGreaterThan(0);
+  const body = fn.slice(payloadAt, fn.indexOf("}),", payloadAt));
+  expect(
+    body,
+    "patchEvent no longer sends subject: — the field-absence scan below is not reading a real body.",
+  ).toContain("subject:");
+  for (const forbidden of ["attendees", "isReminderOn", "responseRequested", "body:", "location"]) {
+    expect(
+      body,
+      `patchEvent sets ${forbidden} — mutation: add it to the PATCH body. A PATCH that adds guests ` +
+        `mails them an invitation from an approved plan that never mentioned anyone.`,
+    ).not.toContain(forbidden);
+  }
+  // The whole point of the write, and it lives in the HEADERS, not the serialized body.
+  expect(
+    fn,
+    'patchEvent lost its If-Match header — mutation: drop "If-Match" and PATCH unconditionally. ' +
+      "ADR-023 names this forbidden: the gap between the read and the write IS the race.",
+  ).toContain('"If-Match"');
+});
+
+test("the Microsoft update gate is read from the probe, not from a constant", () => {
+  const src = readExecutableCode("microsoftCalendar.ts");
+  for (const required of ["microsoftUpdateEnabled", "parseGraphProbe", "PHASE17_GRAPH_PROBE"]) {
+    expect(
+      src,
+      `microsoftCalendar.ts no longer references ${required} — mutation: replace the gate with ` +
+        `\`const enabled = true\`, and Microsoft writes on a deployment nothing was ever measured on.`,
+    ).toContain(required);
+  }
+  // `providerSupports` decides Microsoft DELETE and must NOT be reachable from the probe gate —
+  // ADR-023 requires a superseding ADR to widen delete, never a measurement.
+  expect(
+    readExecutableCode("calendar.ts"),
+    "calendar.ts no longer calls providerSupports — mutation: delete the call, and a Microsoft " +
+      "cancel falls through to the provider branch instead of refusing before any token.",
+  ).toContain("providerSupports(");
 });
