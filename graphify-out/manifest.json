@@ -125,18 +125,18 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/schema.ts": {
-    "mtime": 1787015286.96511,
-    "ast_hash": "6b243bfbec94b5dd859f45faa8bb9df6",
+    "mtime": 1787059057.3861032,
+    "ast_hash": "d5d6beb66f56ee79eb2dfe19a28689f1",
     "semantic_hash": ""
   },
   "packages/backend/convex/skills.test.ts": {
-    "mtime": 1787013253.6012993,
-    "ast_hash": "2a21eedcde3f48114b425fbf76c2c795",
+    "mtime": 1787017966.6971147,
+    "ast_hash": "aaf6a6e6a58b1ca59574aa8a052c7d55",
     "semantic_hash": ""
   },
   "packages/backend/convex/skills.ts": {
-    "mtime": 1786973966.18673,
-    "ast_hash": "77935a2baa514d845958adea6b660359",
+    "mtime": 1787018920.1224928,
+    "ast_hash": "75562d8d40e1570545051dea30614aec",
     "semantic_hash": ""
   },
   "packages/backend/convex/tenant.test.ts": {
@@ -250,18 +250,18 @@
     "semantic_hash": ""
   },
   ".planning/REQUIREMENTS.md": {
-    "mtime": 1786896173.3446598,
-    "ast_hash": "de9d0b02e550fd484af20179d2546335",
+    "mtime": 1787061785.140589,
+    "ast_hash": "cc50a403ac9590812fa66bda951043cc",
     "semantic_hash": ""
   },
   ".planning/ROADMAP.md": {
-    "mtime": 1786971983.4654622,
-    "ast_hash": "8dc27d6c747141981db89caac256e2e9",
+    "mtime": 1787061785.1345448,
+    "ast_hash": "1b172427449ace979f8526f37fe529fa",
     "semantic_hash": ""
   },
   ".planning/STATE.md": {
-    "mtime": 1786896423.278432,
-    "ast_hash": "110baf0c8ef86583353770f774c707e1",
+    "mtime": 1787019085.228235,
+    "ast_hash": "6819df29e8f99dc50afc81360f9bf451",
     "semantic_hash": ""
   },
   ".planning/phases/01-foundation-governance-substrate/01-01-PLAN.md": {
@@ -1545,8 +1545,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/watch.json": {
-    "mtime": 1787010746.8959315,
-    "ast_hash": "5933ad30957ac4fce53079d1853f184f",
+    "mtime": 1787052379.273836,
+    "ast_hash": "e4198489a2e082091ed292433bba55e6",
     "semantic_hash": ""
   },
   "scripts/check-playbooks.mjs": {
@@ -1585,13 +1585,13 @@
     "semantic_hash": ""
   },
   "docs/playbooks/cockpit.md": {
-    "mtime": 1787015954.7491426,
-    "ast_hash": "aea5adfe492ac2a17b0bebf45fc6bdd4",
+    "mtime": 1787061486.6821003,
+    "ast_hash": "961343bf11a418e39a73045c881bc011",
     "semantic_hash": ""
   },
   "docs/playbooks/skill-registry.md": {
-    "mtime": 1787011271.8777034,
-    "ast_hash": "e29775f7fb8c41ede68edf880bbb092b",
+    "mtime": 1787021482.7724433,
+    "ast_hash": "85d7b346e04c86a3b0c8245f3f6e9082",
     "semantic_hash": ""
   },
   "scripts/extract-convex-edges.mjs": {
@@ -4545,8 +4545,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/dispatchGuard.test.ts": {
-    "mtime": 1786575001.6683466,
-    "ast_hash": "7137d6ac70d711d9a8423381ecc6ea5d",
+    "mtime": 1787060123.024721,
+    "ast_hash": "bdc4f2657ce3940e104b70643f97ebc3",
     "semantic_hash": ""
   },
   ".planning/phases/15-sub-agent-dispatch-action-executor/deferred-items.md": {
@@ -5780,18 +5780,18 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/calendar.test.ts": {
-    "mtime": 1786732804.1268435,
-    "ast_hash": "e93e05944e672d9f9fc0040932f574d0",
+    "mtime": 1787061343.7984397,
+    "ast_hash": "f23037ed20554ce7632f1ae4b6d3674a",
     "semantic_hash": ""
   },
   "packages/backend/convex/calendar.ts": {
-    "mtime": 1786751940.6309056,
-    "ast_hash": "ca93433109f95657db9ef147d76b651a",
+    "mtime": 1787060815.5767512,
+    "ast_hash": "6c10031005eaf0e65a534e9ca266a857",
     "semantic_hash": ""
   },
   "packages/backend/convex/calendarComplete.ts": {
-    "mtime": 1786731491.6242921,
-    "ast_hash": "6c8b4cb05ffcdfe70808f9266b6c4351",
+    "mtime": 1787051794.4357548,
+    "ast_hash": "143001d484f3dae32faf22425dc85050",
     "semantic_hash": ""
   },
   "packages/backend/convex/cockpitBlueprint.test.ts": {
@@ -6870,8 +6870,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/_generated/api.d.ts": {
-    "mtime": 1786999391.9447086,
-    "ast_hash": "c65ca5b9ec7a1b84ad98b6a6ccc841a1",
+    "mtime": 1787050489.6005368,
+    "ast_hash": "f99dad4888c38017bf569c50882e2329",
     "semantic_hash": ""
   },
   "packages/backend/convex/_generated/api.js": {
@@ -8755,8 +8755,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/17-calendar-actions/17-08-PLAN.md": {
-    "mtime": 1786575019.2747023,
-    "ast_hash": "ae31edc150758f2f55d1fba725c23ae7",
+    "mtime": 1787020913.8955123,
+    "ast_hash": "6bf6f9be708d4eedb343a9637142a832",
     "semantic_hash": ""
   },
   ".planning/phases/17-calendar-actions/17-09-PLAN.md": {
@@ -8870,13 +8870,13 @@
     "semantic_hash": ""
   },
   "packages/core/src/calendarManagement.test.ts": {
-    "mtime": 1786403099.9294915,
-    "ast_hash": "1489e56e17e63c01ec7aa8c02c0995f4",
+    "mtime": 1787061106.2133558,
+    "ast_hash": "cd70f73764c4a3c743363363ed7bd02e",
     "semantic_hash": ""
   },
   "packages/core/src/calendarManagement.ts": {
-    "mtime": 1786403099.92449,
-    "ast_hash": "bf7aaad79a0fd04420d6306a6497d927",
+    "mtime": 1787060284.1575754,
+    "ast_hash": "f49d7df95a513363f15304166baed374",
     "semantic_hash": ""
   },
   "apps/web/app/(app)/ops/tenantSkillReview.test.ts": {
@@ -9195,13 +9195,13 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/microsoftCalendar.test.ts": {
-    "mtime": 1786734158.5432675,
-    "ast_hash": "43c18e58286f87cc5f15839502b1ac5a",
+    "mtime": 1787059242.0497868,
+    "ast_hash": "e944a21a69152abc22f47848ca0df5c8",
     "semantic_hash": ""
   },
   "packages/backend/convex/microsoftCalendar.ts": {
-    "mtime": 1786734028.583502,
-    "ast_hash": "b1eb32ff3ce98b6d835410110d98946a",
+    "mtime": 1787060681.821302,
+    "ast_hash": "e05a72f2d6caa37e570a66b4b37499e6",
     "semantic_hash": ""
   },
   "packages/backend/scripts/eval-cases/38-media-dispatch.json": {
@@ -9745,8 +9745,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/lib/env.ts": {
-    "mtime": 1786919487.8716967,
-    "ast_hash": "e314ef962a258851e054f5d7dd4a57bf",
+    "mtime": 1787059875.5742526,
+    "ast_hash": "3288e9e22ff916624cd170627d4d4a7c",
     "semantic_hash": ""
   },
   "packages/backend/convex/ops.ts": {
@@ -9760,8 +9760,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/production-beta.md": {
-    "mtime": 1786997374.1957517,
-    "ast_hash": "e577dc61baa42960b80765fa72c25f83",
+    "mtime": 1787061500.2816079,
+    "ast_hash": "114675e0f4c4a349afab4ba1a9548018",
     "semantic_hash": ""
   },
   ".planning/phases/25-private-beta-productionization/25-OWNER-GATES.md": {
@@ -9780,8 +9780,8 @@
     "semantic_hash": ""
   },
   ".planning/v2.0-phases-14-25-GAP-LEDGER.md": {
-    "mtime": 1787007865.2374496,
-    "ast_hash": "575062f941c812b3f954faef95906640",
+    "mtime": 1787020958.7979674,
+    "ast_hash": "89e91fa9ce9e216315b6bf7a800f341a",
     "semantic_hash": ""
   },
   "docs/decisions/023-microsoft-calendar-is-update-only.md": {
@@ -9827,6 +9827,36 @@
   ".planning/phases/21-user-authored-skills-and-routines/21-08-PLAN.md": {
     "mtime": 1787011588.5125146,
     "ast_hash": "a61c2387a0dcd8e623a5db04450151ad",
+    "semantic_hash": ""
+  },
+  ".planning/phases/33-media-creation-ux-overhaul-guided-intake-storyboard-variations-auto-assembled-reel-reel-first-canvas-clear-failure-retry-grounded-citations/33-10-SUMMARY.md": {
+    "mtime": 1787019085.2438796,
+    "ast_hash": "9af3e0ebbceb2abd44020a5bdd1995a3",
+    "semantic_hash": ""
+  },
+  ".planning/phases/21-user-authored-skills-and-routines/21-EVAL-EVIDENCE.json": {
+    "mtime": 1787021412.8244045,
+    "ast_hash": "86d12ada9863a75f9f737f86945ae752",
+    "semantic_hash": ""
+  },
+  ".planning/phases/21-user-authored-skills-and-routines/21-07-SUMMARY.md": {
+    "mtime": 1787021528.4508667,
+    "ast_hash": "7d6a0e2146fb9a8262661398fa63aa33",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/calendarEvents.test.ts": {
+    "mtime": 1787051865.6386063,
+    "ast_hash": "1fd3379edb6d28786af777e34f79fa98",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/calendarEvents.ts": {
+    "mtime": 1787052371.5355754,
+    "ast_hash": "8db33a93da2f0ba8ad0bccdd036d17e1",
+    "semantic_hash": ""
+  },
+  ".planning/phases/21-user-authored-skills-and-routines/21-LIVE-PARTIAL-2026-08-18.md": {
+    "mtime": 1787061190.6331482,
+    "ast_hash": "11baec0eff341d2cd455aa5a3116c3ae",
     "semantic_hash": ""
   }
 }

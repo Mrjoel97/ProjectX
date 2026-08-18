@@ -156,7 +156,7 @@ Private Beta section above and land in this milestone's **final** stage (S4) —
 ### S3 — Creation & Self-Extension
 
 - [ ] **MEDIA-01**: A media-creation canvas produces images and video — a finished short-form reel assembled from clips of ≤15 s each, capped at 60 s by BUDGET rather than by capability — via a server-to-server provider API (fal.ai) behind a deployment secret, as async governed jobs with a separate capped budget; generation is wrapped, not rebuilt. **Corrected 2026-08-03 (plan 20-11).** The original wording carried two premises the Phase-20 spike refuted: no model generates 3 minutes (the ceiling is 15 s across 28 models from eight labs), and the Pikar-Ai MCP is a claude.ai CLIENT-side account connector, structurally unreachable from a Convex action (ADR-011). The re-scope then PARTLY UN-REFUTED the first: a 12-block reel IS two minutes and is refused only by `MEDIA_JOB_CAP_USD`, not by the models (ADR-012). So the honest line is neither the original nor a flat "5 or 10 seconds"
-- [ ] **SKILL-01**: The user can author skills adapted to their business through the eval-gated skills registry
+- [x] **SKILL-01**: The user can author skills adapted to their business through the eval-gated skills registry
 - [ ] **SKILL-02**: The agent can author skills as candidates only — structurally unable to self-activate; activation requires the eval gate plus owner approval
 
 ### S4 — Governance & Open the Beta
@@ -347,7 +347,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ACTN-04 | Phase 18 | Pending |
 | ACTN-05 | Phase 19 | Complete (2026-08-10) |
 | MEDIA-01 | Phase 20 (+ Phase 20.2 Scene Timeline, registered 2026-08-14) | Pending — Phase 20 has 20-11/20-12 unexecuted and `20-VALIDATION.md` is `in_progress` with the owner-run fal/render gate unpaid; Phase 20.2 replaces the uniform block deck with the scene timeline and is part-executed (20.2-01…06) but still `status: proposed` |
-| SKILL-01 | Phase 21 | Pending |
+| SKILL-01 | Phase 21 | Complete (2026-08-18) - proven live end to end: authored candidate `qx73bwsh...` (`offer-architect` v12, tenant `kn790hj6...`, author=user) left `candidate` ONLY through the passing eval `de976d8e` recorded on the row; owner activation made it current-effective; rollback to the exact baseline `qx73cg6g...` v1 worked with NO eval; a real non-owner (`kn735m0c...`, admitted through the BETA-01 invite door) got `OWNER_REQUIRED` with zero state change and could see neither the candidate nor its body nor the pinned prompt. **Recorded limit:** tenant RUNTIME attribution - which registry row a specialist run actually used - was NOT observed. The author tenant is a synthetic e2e row with no recoverable password, the only existing attribution rows belong to the harness tenants `eval-de976d8e`/`eval-a88a4597`, and a fresh specialist turn is a paid model call. See `21-LIVE-PARTIAL-2026-08-18.md` |
 | GOVN-01 | Phase 22 | Complete (2026-08-16) — `22-VERIFICATION.md` `status: passed`, GOVN-01 row SATISFIED. All three Phase-8 functions are owner-wrapped at source: `setOptimizerEnabled` (`optimizerConfig.ts:93`), `activateCandidate` (`skills.ts:371`), `candidatesForReview` (`skills.ts:391`). The `/ops` presentation half closed at `29103e9` via `opsPresentation.test.ts` — React component/mount evidence across exact-owner/false/null/loading, **not** a live-DOM or browser observation; `22-VERIFICATION.md` records that limit itself |
 | SKILL-02 | Phase 23 | Pending |
 | GOVN-02 | Phase 24 | Pending |

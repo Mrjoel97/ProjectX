@@ -1,3 +1,56 @@
+> Last verified: 2026-08-18 (17-08 Task 2 — **conditional management, minus Microsoft delete**.
+> calendar 71/71 · microsoftCalendar 62/62 · calendarEvents + dispatchGuard green, backend 88 files
+> / 2099 passed, core 1063/1063, tsc clean. FIFTEEN mutations, all CAUGHT.)
+>
+> **One decision tree, two providers.** `calendar.manageEvent` owns the ownership guards, the
+> attendee refusal, the desired-state reconciliation and the conflict handling ONCE; the provider
+> modules contribute only HTTP. A second copy of "refuse if attendees > 0" is a second place for it
+> to be missing.
+>
+> **THE GET ANSWERS THREE QUESTIONS AND NOTHING ELSE**: does the event exist, did it grow guests, is
+> the desired state already there. Version arbitration stays server-side, in the provider's 412
+> against the etag the HUMAN approved (`plans.calendarExpectedEtag`) — never the freshly-read one.
+> Sending the fresh etag would make every write succeed: that is a read-modify-write race with the
+> comparison moved client-side, which ADR-023 names as forbidden. Mutation-proven (M5).
+>
+> **Microsoft cancel/delete is refused before a token is fetched, and that refusal is a PRODUCT
+> SURFACE** (ADR-023: the probe measured `staleDeleteStatus: 204` / `staleDeletePreserved: false` —
+> Graph ignores `If-Match` on event DELETE and the stale delete destroyed the event anyway).
+> `providerSupports(provider, operation)` in @pikar/core returns `provider_unsupported`, and **its
+> signature takes no probe argument** — deliberately, so no measurement can widen it. ADR-023 says a
+> later work/school probe showing a 412 on DELETE justifies a superseding ADR, never an automatic
+> widening, and an argument that does not exist cannot be threaded through by accident. There is no
+> Graph delete writer in `microsoftCalendar.ts` at all; a test pins that a generous probe unlocks
+> the PATCH branch and nothing else.
+>
+> **Microsoft UPDATE is probe-gated, and the gate lives on the WRITER.** `patchEvent` refuses before
+> the token when `PHASE17_GRAPH_PROBE` is missing, blank, malformed, wrong-schema, fails the
+> `stalePatchStatus === 412 && stalePatchPreserved` PAIR, or carries hashes bound to another
+> deployment or account. The pair is read APART from the artifact's collapsed `supported` boolean —
+> that boolean ANDed patch and delete together and could only report the worse of them, which is why
+> a provably-safe PATCH sat unreachable behind an unsafe DELETE. Gating the writer rather than the
+> caller costs the refused path one extra inspection GET (a read of the user's own calendar) and
+> buys a guard nothing can route around.
+>
+> **Exactly-once is reconciliation, not optimism.** A retry after a lost success response finds the
+> provider already holding the desired state and reports success — the etag moved precisely BECAUSE
+> our earlier write landed, so a blind conditional re-write would report a false conflict. `tz` is
+> deliberately excluded from that comparison: Graph is asked to speak UTC and echoes UTC back, so a
+> registry zone of `Africa/Dar_es_Salaam` would never compare equal and every Microsoft update would
+> be forced into a PATCH that changes nothing. The absolute instant is the fact; the zone rides the
+> write payload.
+>
+> **The `attendees` static guard was NARROWED, not relaxed** (`dispatchGuard.test.ts`). Management
+> must READ the guest list to refuse an event that grew one, so the blanket ban would have forbidden
+> the very check that protects people. What stays banned is the WRITE form — `attendees` as an
+> object-literal key — plus `sendUpdates` anywhere, plus an anti-vacuity assertion that
+> `body.attendees` is still actually read. Both halves are mutation-proven (M6, M13).
+>
+> **A survived mutant found a real gap.** The first pass tested only the pre-flight 404 (the GET says
+> the event is gone). The RACE — it existed at the GET and was gone by the DELETE — was untested, and
+> that branch's answers differ by verb: already-gone is idempotent SUCCESS for a delete and
+> `not_found` for an update. Both are now pinned.
+>
 > Last verified: 2026-08-18 (17-08 Task 1 — **the durable managed-event registry**. calendarEvents
 > + calendar 54/54, backend 88 files / 2053 passed, tsc clean. Five mutations, all CAUGHT.)
 >
@@ -4115,8 +4168,19 @@ only job is to make 17-06 … 17-09 additive.
 8. **`calendarEvents`' composite index is TENANT-FIRST** (`by_tenant_provider_external`). Two
    tenants can legitimately hold the same provider event id, and a Convex index query must eq its
    prefix in order — so the tenant predicate is unwritable-to-forget, not merely conventional.
-9. **Failure reaches the user as a CODE, never provider prose.** `CALENDAR_FAILURE_CODES` has seven
+9. **Failure reaches the user as a CODE, never provider prose.** `CALENDAR_FAILURE_CODES` has eight
    members. A Google 400 or a Graph 412 body can echo the event summary straight back (§4).
+10. **Microsoft management is UPDATE-only, and the missing verb is NAMED** (ADR-023). Google keeps
+    create · update · delete; Microsoft gets create · update · —. A Microsoft cancel produces
+    `provider_unsupported` before any token, GET or write: never a no-op, never a best-effort
+    delete, never a fallback that leaves the event live. ACTN-02 closes as *"management, minus
+    Microsoft delete"*, in those words, wherever it is ticked.
+11. **`provider_unsupported` is NOT `provider_error`.** The catch-all means "the provider said no
+    this time" and a card may offer a retry; this one means "we will never send this request".
+    Rendering them the same way promises the user a retry that cannot exist.
+12. **Microsoft UPDATE is reachable only behind a probe bound to THIS deployment and THIS account.**
+    `PHASE17_GRAPH_PROBE` unset is the normal, safe state; setting it enables nothing by itself,
+    because the deployment and tenant hashes inside must match the ones recomputed at call time.
 
 ### The inert seam, and who replaces it
 
@@ -4124,7 +4188,8 @@ only job is to make 17-06 … 17-09 additive.
 |---|---|---|
 | `EXTERNAL_TARGETS.calendar_manage` (`cockpit.ts`) | throws `calendar manage not wired (17-08)` | **17-08** replaces this exact member with the real `retrier.run` thunk + terminal |
 | `microsoftCalendarTokens` | table exists, nothing writes it | **17-06** (OAuth flow) |
-| `calendarEvents` | table exists, nothing writes it | **17-08** (create landing + legacy migration) |
+| `calendarEvents` | written by the create terminal; read by `manageEvent` (17-08 Tasks 1-2) | **17-08 Task 3** (the management terminal writes it back on success) |
+| `internal.calendar.manageEvent` | implemented and mutation-proven, but nothing STARTS it | **17-08 Task 3** (the Approve-only retrier arm) |
 | `listManagedCalendarEvents` / `proposeCalendarChange` trace literals + VERBs | reserved, no tool emits them | **17-09** (the tools) |
 | `calendar-manage-plan-card` | renders provider, operation, managed-event REFERENCE and desired fields | **17-09-03** (registry-backed original event) |
 

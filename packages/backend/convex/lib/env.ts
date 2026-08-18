@@ -175,6 +175,15 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
     tier: "fixture",
     whatBreaks: "Nothing. Set = the Graph concurrency probe may run against a disposable account.",
   },
+  {
+    // The probe artifact itself, as JSON. UNSET is the safe state and the normal one: Microsoft
+    // calendar UPDATE simply refuses. Setting it does not "enable" anything by itself either — the
+    // deployment and tenant hashes inside must match the ones recomputed at call time, so a probe
+    // measured elsewhere binds to nothing. Microsoft DELETE is unaffected in every case (ADR-023).
+    name: "PHASE17_GRAPH_PROBE",
+    tier: "feature",
+    whatBreaks: "Microsoft calendar UPDATE. Unset = refused with `provider_unsupported`.",
+  },
 ];
 
 /** Names a healthy hosted deployment must have. */

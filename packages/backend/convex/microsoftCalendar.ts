@@ -15,7 +15,16 @@
 //     returns events, so the content-stripping below is load-bearing rather than tidy.
 //  2. **Microsoft ROTATES refresh tokens.** Google does not. Dropping a rotated token leaves the
 //     stored one dead and the connection unrecoverable without re-consent.
-import { type AvailabilityRange, availabilityWindow, eventIdFor, toRfc3339 } from "@pikar/core";
+import {
+  type AvailabilityRange,
+  availabilityWindow,
+  type CalendarFailureCode,
+  type CalendarInspection,
+  eventIdFor,
+  microsoftUpdateEnabled,
+  parseGraphProbe,
+  toRfc3339,
+} from "@pikar/core";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -348,6 +357,203 @@ export const createEvent = internalAction({
   },
 });
 
+// ── 17-08 Task 2: inspection, and the probe-gated conditional PATCH ────────────────────────────
+//
+// THERE IS NO DELETE WRITER IN THIS MODULE, and its absence is the feature (ADR-023). The 17-07
+// probe measured `staleDeleteStatus: 204` with `staleDeletePreserved: false`: Graph IGNORES
+// `If-Match` on event DELETE and the stale delete destroyed the event anyway. Two racing cancels —
+// or a cancel racing an edit — would destroy an event whose state the caller never saw. The refusal
+// is raised in `calendar.manageEvent` before a token is fetched; nothing here can be reached to
+// perform it, and no probe result may add it back (a superseding ADR would, an executor may not).
+
+const EVENT_URL = (id: string) => `${EVENTS_ENDPOINT}/${encodeURIComponent(id)}`;
+
+/** The deployment identity the probe binds itself to. ONE implementation, used by the probe that
+ *  writes the hash and by the gate that checks it, so the two cannot drift apart. */
+async function deploymentUrlHash(): Promise<string> {
+  return contentHash(process.env.CONVEX_SITE_URL ?? process.env.CONVEX_CLOUD_URL ?? "unknown");
+}
+
+export type MicrosoftInspectResult =
+  | { outcome: "ok"; inspection: CalendarInspection }
+  | { outcome: "reauth" }
+  | { outcome: "terminal"; status: number; reason: string };
+
+export type MicrosoftPatchResult =
+  | { outcome: "updated"; etag: string | null }
+  | { outcome: "refused"; code: CalendarFailureCode }
+  | { outcome: "reauth" }
+  | { outcome: "terminal"; status: number; reason: string };
+
+/**
+ * Read the current state of ONE event, narrowly.
+ *
+ * `$select` is the content firewall and it is asserted on the REQUEST, because a stub answers
+ * whatever it was told: subject is the only text requested, and location, organizer, body and
+ * onlineMeeting are never asked for, so they cannot be logged, returned or leaked. Attendees ARE
+ * requested — the write must refuse an event that grew guests — but only their COUNT survives this
+ * function. The response object is discarded at the `return`; nothing downstream ever sees it.
+ */
+export const inspectEvent = internalAction({
+  args: { tenantId: v.string(), externalEventId: v.string(), nowMs: v.number() },
+  handler: async (ctx, { tenantId, externalEventId, nowMs }): Promise<MicrosoftInspectResult> => {
+    const access = await freshGraphToken(ctx, tenantId, nowMs);
+    if (!access.ok) {
+      if (access.reason === "transient") throw new Error("microsoft_calendar_transient:inspect");
+      return access.reason === "unavailable"
+        ? { outcome: "terminal", status: 0, reason: "token_unavailable" }
+        : { outcome: "reauth" };
+    }
+
+    const url = new URL(EVENT_URL(externalEventId));
+    url.searchParams.set("$select", "id,subject,start,end,attendees");
+
+    let res: Response;
+    try {
+      res = await fetch(url.toString(), {
+        headers: {
+          Authorization: `Bearer ${access.token}`,
+          Prefer: 'outlook.timezone="UTC"',
+        },
+      });
+    } catch {
+      throw new Error("microsoft_calendar_transient:inspect");
+    }
+
+    if (res.status === 429 || res.status >= 500) {
+      throw new Error(`microsoft_calendar_transient:inspect:${res.status}`);
+    }
+    if (res.status === 401 || res.status === 403) return { outcome: "reauth" };
+    // A DEFINITE absence, not a failure: the delete path reads this as "already done" and the
+    // update path as `not_found`. Deciding that here would collapse two different right answers.
+    if (res.status === 404 || res.status === 410) {
+      return { outcome: "ok", inspection: { exists: false } };
+    }
+    if (!res.ok) return { outcome: "terminal", status: res.status, reason: "inspect_rejected" };
+
+    let body: {
+      id?: string;
+      "@odata.etag"?: string;
+      subject?: string;
+      start?: { dateTime?: string; timeZone?: string };
+      end?: { dateTime?: string; timeZone?: string };
+      attendees?: unknown[];
+    };
+    try {
+      body = (await res.json()) as typeof body;
+    } catch {
+      return { outcome: "terminal", status: res.status, reason: "malformed_inspect_response" };
+    }
+
+    const startMs = graphInstant(body.start);
+    const endMs = graphInstant(body.end);
+    if (!body.id || startMs === null || endMs === null || endMs <= startMs) {
+      // An event we cannot pin to an instant is one we must not compute a desired state against.
+      return { outcome: "terminal", status: res.status, reason: "inspect_unparseable" };
+    }
+
+    return {
+      outcome: "ok",
+      inspection: {
+        exists: true,
+        externalEventId: body.id,
+        ...(typeof body["@odata.etag"] === "string" ? { etag: body["@odata.etag"] } : {}),
+        title: body.subject ?? "",
+        startMs,
+        durationMs: endMs - startMs,
+        // A COUNT (§4). Enough to refuse the write, never enough to name a guest.
+        attendeeCount: Array.isArray(body.attendees) ? body.attendees.length : 0,
+      },
+    };
+  },
+});
+
+/**
+ * Conditionally move/retitle ONE event. THE PROBE GATE RUNS FIRST — before the token, before the
+ * network — so a deployment with no measurement makes no Graph write at all.
+ *
+ * Why the gate lives on the WRITER and not on the caller: a caller that forgot it would be a silent
+ * widening, and there would be no single place to read to know whether Microsoft writes are
+ * possible here. It costs the refused path one extra inspection GET (a read of the user's own
+ * calendar, which is harmless), and buys a guard nothing can route around.
+ */
+export const patchEvent = internalAction({
+  args: {
+    tenantId: v.string(),
+    externalEventId: v.string(),
+    /** The If-Match value the HUMAN approved against. Never model-supplied — see plans.ts. */
+    expectedEtag: v.string(),
+    title: v.string(),
+    startMs: v.number(),
+    durationMs: v.number(),
+    nowMs: v.number(),
+  },
+  handler: async (
+    ctx,
+    { tenantId, externalEventId, expectedEtag, title, startMs, durationMs, nowMs },
+  ): Promise<MicrosoftPatchResult> => {
+    // THE GATE. Missing, blank, malformed, wrong-schema, a stale PATCH that was not refused, a 412
+    // that still wrote, or a measurement bound to another deployment or account — every one of them
+    // is "no evidence", and no evidence means no Microsoft write.
+    const enabled = microsoftUpdateEnabled({
+      probe: parseGraphProbe(process.env.PHASE17_GRAPH_PROBE),
+      deploymentUrlHash: await deploymentUrlHash(),
+      accountIdHash: await contentHash(tenantId),
+    });
+    if (!enabled) return { outcome: "refused", code: "provider_unsupported" };
+
+    const access = await freshGraphToken(ctx, tenantId, nowMs);
+    if (!access.ok) {
+      if (access.reason === "transient") throw new Error("microsoft_calendar_transient:patch");
+      return access.reason === "unavailable"
+        ? { outcome: "terminal", status: 0, reason: "token_unavailable" }
+        : { outcome: "reauth" };
+    }
+
+    let res: Response;
+    try {
+      res = await fetch(EVENT_URL(externalEventId), {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${access.token}`,
+          "Content-Type": "application/json",
+          // The whole point. Without it this is a read-modify-write race.
+          "If-Match": expectedEtag,
+        },
+        body: JSON.stringify({
+          subject: title,
+          start: { dateTime: toRfc3339(startMs), timeZone: "UTC" },
+          end: { dateTime: toRfc3339(startMs + durationMs), timeZone: "UTC" },
+          // No attendees, no body, no location, no reminder/notification option — the same boundary
+          // createEvent holds. A PATCH that added guests would mail them an invitation.
+        }),
+      });
+    } catch {
+      throw new Error("microsoft_calendar_transient:patch");
+    }
+
+    if (res.status === 429 || res.status >= 500) {
+      throw new Error(`microsoft_calendar_transient:patch:${res.status}`);
+    }
+    if (res.status === 401 || res.status === 403) return { outcome: "reauth" };
+    // The version moved under us. NEVER retried and never force-overwritten: the human approved
+    // against a state that no longer exists, so the right answer is to restage, not to insist.
+    if (res.status === 412) return { outcome: "refused", code: "conflict" };
+    if (res.status === 404 || res.status === 410) return { outcome: "refused", code: "not_found" };
+    if (!res.ok) return { outcome: "terminal", status: res.status, reason: "patch_rejected" };
+
+    let etag: string | null = null;
+    try {
+      const body = (await res.json()) as { "@odata.etag"?: unknown };
+      if (typeof body["@odata.etag"] === "string") etag = body["@odata.etag"];
+    } catch {
+      // A successful PATCH with an unreadable body still moved the event; a null version means
+      // "management must re-read first", which is honest. It must never mean "any version will do".
+    }
+    return { outcome: "updated", etag };
+  },
+});
+
 // ── The Graph event-concurrency probe (17-07 Task 1, the gate on 17-08) ────────────────────────
 //
 // WHY THIS EXISTS AT ALL. Microsoft documents `changeKey` as the event version and a GET event
@@ -392,7 +598,8 @@ export const graphConcurrencyProbe = internalAction({
     // A unique marker so a leaked event is identifiable and never collides with real work.
     const marker = `pikar-probe-${eventIdFor(`${tenantId}:${nowMs}`)}`;
     const startMs = nowMs + 86_400_000;
-    const eventUrl = (id: string) => `${EVENTS_ENDPOINT}/${encodeURIComponent(id)}`;
+    // The SAME url builder the 17-08 writers use, so a probe cannot measure a path they do not take.
+    const eventUrl = EVENT_URL;
 
     let eventId: string | null = null;
     let freshEtag: string | null = null;
@@ -496,9 +703,10 @@ export const graphConcurrencyProbe = internalAction({
 
     return {
       schema: "phase17-graph-concurrency-probe.v1",
-      deploymentUrlHash: await contentHash(
-        process.env.CONVEX_SITE_URL ?? process.env.CONVEX_CLOUD_URL ?? "unknown",
-      ),
+      // The SAME hash the 17-08 update gate recomputes and compares against. One implementation:
+      // a probe whose deployment identity is computed differently from the gate's would bind to
+      // nothing, and the failure mode would be a silently-refused (or silently-enabled) writer.
+      deploymentUrlHash: await deploymentUrlHash(),
       // The PIKAR tenant that owns the grant, hashed. Deliberately NOT the Microsoft account id:
       // reading `/me` needs `User.Read`, and widening the ADR-018 grant to label a probe artifact
       // would be a permission asked for by bookkeeping. This still answers "which connection".

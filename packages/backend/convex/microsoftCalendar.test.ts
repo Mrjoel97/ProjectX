@@ -9,6 +9,7 @@ import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import { internal } from "./_generated/api";
+import { contentHash } from "./lib/hash";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
@@ -564,5 +565,259 @@ describe("createEvent — subject and UTC times ONLY, with a retry-safe key", ()
   test("a 2xx without an id is terminal rather than a silent success", async () => {
     const { result } = await create({ "@odata.etag": 'W/"1"' }, 201);
     expect(result).toMatchObject({ outcome: "terminal", reason: "create_without_id" });
+  });
+});
+
+// ── 17-08 Task 2: inspection and the probe-gated conditional PATCH ─────────────────────────────
+//
+// There is deliberately no `deleteEvent` in this module and no test asks for one. ADR-023: the
+// 17-07 probe measured `staleDeleteStatus: 204` with `staleDeletePreserved: false` — Graph IGNORES
+// `If-Match` on event DELETE and the stale delete destroyed the event anyway. The refusal is raised
+// in `calendar.manageEvent` before a token is ever fetched; see calendar.test.ts.
+
+const DEPLOYMENT = "https://probe-deployment.convex.cloud";
+
+/** The committed 17-07 measurement, re-bound to whatever this test run's deployment/tenant hash is
+ *  — the SHAPE is the artifact's, the hashes are computed the same way the runtime computes them. */
+async function probeEnv(
+  over: Partial<{
+    schema: string;
+    deploymentUrlHash: string;
+    accountIdHash: string;
+    stalePatchStatus: number;
+    stalePatchPreserved: boolean;
+  }> = {},
+) {
+  return JSON.stringify({
+    schema: "phase17-graph-concurrency-probe.v1",
+    deploymentUrlHash: over.deploymentUrlHash ?? (await contentHash(DEPLOYMENT)),
+    accountIdHash: over.accountIdHash ?? (await contentHash(TENANT)),
+    stalePatchStatus: over.stalePatchStatus ?? 412,
+    stalePatchPreserved: over.stalePatchPreserved ?? true,
+    // Carried verbatim from the real artifact so the fixture cannot drift into an optimistic one.
+    staleDeleteStatus: 204,
+    staleDeletePreserved: false,
+    supported: false,
+    ...(over.schema ? { schema: over.schema } : {}),
+  });
+}
+
+/** A Graph event body with every field the projection must NOT carry out of this module. */
+const FAT_EVENT = {
+  id: "AAMkFat",
+  "@odata.etag": 'W/"v7"',
+  subject: "Board sync",
+  start: { dateTime: "2026-04-24T09:00:00.0000000", timeZone: "UTC" },
+  end: { dateTime: "2026-04-24T09:45:00.0000000", timeZone: "UTC" },
+  attendees: [
+    { emailAddress: { address: "cfo@contoso.example", name: "Dana Reed" }, type: "required" },
+  ],
+  location: { displayName: "Contoso HQ, room 4" },
+  organizer: { emailAddress: { address: "owner@contoso.example" } },
+  body: { content: "<p>the confidential agenda</p>", contentType: "html" },
+  onlineMeeting: { joinUrl: "https://teams.example/xyz" },
+};
+
+describe("inspectEvent — a narrow projection, and the body is discarded", () => {
+  test("asks for the five allowlisted fields in UTC and nothing else", async () => {
+    const t = harness();
+    await seedToken(t);
+    const fetchMock = always({ ...FAT_EVENT, attendees: [] }, 200);
+    vi.stubGlobal("fetch", fetchMock);
+
+    await t.action(internal.microsoftCalendar.inspectEvent, {
+      tenantId: TENANT,
+      externalEventId: "AAMkFat",
+      nowMs: NOW,
+    });
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const parsed = new URL(url);
+    expect(parsed.origin + parsed.pathname).toBe(
+      "https://graph.microsoft.com/v1.0/me/calendar/events/AAMkFat",
+    );
+    expect(parsed.searchParams.get("$select")).toBe("id,subject,start,end,attendees");
+    expect(init.method ?? "GET").toBe("GET");
+    expect((init.headers as Record<string, string>).Prefer).toBe('outlook.timezone="UTC"');
+    // `/cancel` mails attendees on the app's behalf. It is never a URL this module builds.
+    expect(url).not.toContain("/cancel");
+  });
+
+  test("returns the allowlisted keys ONLY — subject is the title, everything else is dropped", async () => {
+    const t = harness();
+    await seedToken(t);
+    vi.stubGlobal("fetch", always(FAT_EVENT, 200));
+
+    const result = await t.action(internal.microsoftCalendar.inspectEvent, {
+      tenantId: TENANT,
+      externalEventId: "AAMkFat",
+      nowMs: NOW,
+    });
+
+    expect(result).toEqual({
+      outcome: "ok",
+      inspection: {
+        exists: true,
+        externalEventId: "AAMkFat",
+        etag: 'W/"v7"',
+        title: "Board sync",
+        startMs: Date.parse("2026-04-24T09:00:00Z"),
+        durationMs: 45 * 60_000,
+        attendeeCount: 1,
+      },
+    });
+    // The guest is a COUNT, never an identity — and no location, organizer, body or join URL.
+    const wire = JSON.stringify(result);
+    for (const leak of [
+      "cfo@contoso.example",
+      "Dana Reed",
+      "Contoso HQ",
+      "owner@contoso.example",
+      "confidential agenda",
+      "teams.example",
+    ]) {
+      expect(wire, leak).not.toContain(leak);
+    }
+  });
+
+  test("a 404 is a definite absence, not a failure — the delete path reads it as done", async () => {
+    const t = harness();
+    await seedToken(t);
+    vi.stubGlobal("fetch", always({ error: { code: "ErrorItemNotFound" } }, 404));
+    expect(
+      await t.action(internal.microsoftCalendar.inspectEvent, {
+        tenantId: TENANT,
+        externalEventId: "gone",
+        nowMs: NOW,
+      }),
+    ).toEqual({ outcome: "ok", inspection: { exists: false } });
+  });
+
+  test.each([401, 403])("a %i is a reconnect outcome", async (status) => {
+    const t = harness();
+    await seedToken(t);
+    vi.stubGlobal("fetch", always({ error: { message: "contoso directory" } }, status));
+    expect(
+      await t.action(internal.microsoftCalendar.inspectEvent, {
+        tenantId: TENANT,
+        externalEventId: "AAMk",
+        nowMs: NOW,
+      }),
+    ).toEqual({ outcome: "reauth" });
+  });
+
+  test.each([429, 500, 503])("a %i THROWS for the retrier", async (status) => {
+    const t = harness();
+    await seedToken(t);
+    vi.stubGlobal("fetch", always({ error: { message: "contoso" } }, status));
+    await expect(
+      t.action(internal.microsoftCalendar.inspectEvent, {
+        tenantId: TENANT,
+        externalEventId: "AAMk",
+        nowMs: NOW,
+      }),
+    ).rejects.toThrow(/microsoft_calendar_transient/);
+  });
+});
+
+describe("patchEvent — the probe gate, then a CONDITIONAL write and nothing else", () => {
+  const patchArgs = {
+    tenantId: TENANT,
+    externalEventId: "AAMkFat",
+    expectedEtag: 'W/"v7"',
+    title: "Board sync — moved",
+    startMs: Date.parse("2026-04-25T09:00:00Z"),
+    durationMs: 45 * 60_000,
+    nowMs: NOW,
+  };
+
+  beforeEach(() => {
+    vi.stubEnv("CONVEX_SITE_URL", DEPLOYMENT);
+  });
+
+  test("with the measured probe bound to this deployment and account, it PATCHes conditionally", async () => {
+    const t = harness();
+    await seedToken(t);
+    vi.stubEnv("PHASE17_GRAPH_PROBE", await probeEnv());
+    const fetchMock = always({ id: "AAMkFat", "@odata.etag": 'W/"v8"' }, 200);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await t.action(internal.microsoftCalendar.patchEvent, patchArgs);
+    expect(result).toEqual({ outcome: "updated", etag: 'W/"v8"' });
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://graph.microsoft.com/v1.0/me/calendar/events/AAMkFat");
+    expect(init.method).toBe("PATCH");
+    // THE WHOLE POINT. Without If-Match this is a lost update wearing a seatbelt.
+    expect((init.headers as Record<string, string>)["If-Match"]).toBe('W/"v7"');
+    const sent = JSON.parse(init.body as string);
+    expect(Object.keys(sent).sort()).toEqual(["end", "start", "subject"]);
+    expect(sent.start).toEqual({ dateTime: "2026-04-25T09:00:00.000Z", timeZone: "UTC" });
+    expect(sent.end).toEqual({ dateTime: "2026-04-25T09:45:00.000Z", timeZone: "UTC" });
+    expect(sent.attendees).toBeUndefined();
+    expect(sent.isReminderOn).toBeUndefined();
+    expect(url).not.toContain("/cancel");
+  });
+
+  test("a 412 is a CONFLICT the retrier must not retry", async () => {
+    const t = harness();
+    await seedToken(t);
+    vi.stubEnv("PHASE17_GRAPH_PROBE", await probeEnv());
+    vi.stubGlobal("fetch", always({ error: { message: "contoso precondition" } }, 412));
+    const result = await t.action(internal.microsoftCalendar.patchEvent, patchArgs);
+    expect(result).toEqual({ outcome: "refused", code: "conflict" });
+    expect(JSON.stringify(result)).not.toContain("contoso");
+  });
+
+  test("a 404 between inspect and write is not_found, not a silent success", async () => {
+    const t = harness();
+    await seedToken(t);
+    vi.stubEnv("PHASE17_GRAPH_PROBE", await probeEnv());
+    vi.stubGlobal("fetch", always({}, 404));
+    expect(await t.action(internal.microsoftCalendar.patchEvent, patchArgs)).toEqual({
+      outcome: "refused",
+      code: "not_found",
+    });
+  });
+
+  // Each of these is the gate refusing, and the assertion that matters in every one is the same:
+  // NO NETWORK CALL AT ALL. Refusing after a token fetch would still be a refusal, but it would
+  // prove the gate runs somewhere rather than proving it runs FIRST.
+  test.each([
+    ["missing", undefined],
+    ["blank", "   "],
+    ["malformed", "{not json"],
+    ["a different schema version", "schema"],
+    ["a stale PATCH that was NOT refused", "status"],
+    ["a 412 that still wrote", "preserved"],
+    ["bound to another deployment", "deployment"],
+    ["bound to another account", "account"],
+  ] as const)("refuses when the probe is %s, before any token or network", async (_label, kind) => {
+    const t = harness();
+    await seedToken(t);
+    const value =
+      kind === undefined
+        ? undefined
+        : kind === "   " || kind === "{not json"
+          ? kind
+          : kind === "schema"
+            ? await probeEnv({ schema: "phase17-graph-concurrency-probe.v2" })
+            : kind === "status"
+              ? await probeEnv({ stalePatchStatus: 200 })
+              : kind === "preserved"
+                ? await probeEnv({ stalePatchPreserved: false })
+                : kind === "deployment"
+                  ? await probeEnv({ deploymentUrlHash: "deadbeef" })
+                  : await probeEnv({ accountIdHash: "deadbeef" });
+    if (value === undefined) vi.stubEnv("PHASE17_GRAPH_PROBE", "");
+    else vi.stubEnv("PHASE17_GRAPH_PROBE", value);
+
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await t.action(internal.microsoftCalendar.patchEvent, patchArgs)).toEqual({
+      outcome: "refused",
+      code: "provider_unsupported",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

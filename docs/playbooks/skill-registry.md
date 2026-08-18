@@ -1,5 +1,33 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-18 (**THE GATE WAS SPENT: activated, then rolled back, both by the owner,
+> both at $0.** `offer-architect` v12 `qx73bwsh…` went `candidate` → `active` → `archived`.
+> Activation moved tenant `kn790hj6…` current-effective off global v4 onto the tenant row
+> (hash `aee0008c…`); rollback targeted the EXACT baseline id `qx73cg6g…` and restored v1
+> (hash `4b6a29f9…`). The candidate kept its own hash, its `passing` evidence and its self-
+> `evidenceTarget` throughout — rolling back changes WHICH ROW IS EFFECTIVE, it never mutates the
+> row you roll away from. **`requiredEval: false`** — the structural exemption is only observable
+> by noticing that nothing was purchased.)
+>
+> **The owner boundary was proven against a REAL non-owner for the first time.**
+> `kn735m0c…` (admitted through the BETA-01 invite door) called `activateTenantCandidate` on the
+> candidate and got `OWNER_REQUIRED` (request `c868a28876ec1d28`) with zero state change, while
+> `owner:viewer` returned `{isOwner:false}` in the same batch — without that second call the
+> refusal is equally consistent with a dead session. `myUserSkills` and `savedPrompts:list` both
+> returned `[]`: no candidate, no authored body, no other tenant’s pinned prompt.
+>
+> **NOT PROVEN, AND NOT PROVABLE ON THIS ROW — do not let a later phase assume otherwise.**
+> Tenant RUNTIME attribution (which registry row a specialist run actually used) was never
+> observed for the author tenant. `kn790hj6…` is `e2e-wave6@pikar.test`, a SYNTHETIC row with no
+> recoverable password and no reset flow, and `smoke.ts` has no entrypoint that runs the agent
+> loop for an arbitrary tenant — so nobody can execute anything in that workspace at any price.
+> The only rows attributing a run to `qx73bwsh…` sit under `eval-de976d8e` / `eval-a88a4597`, the
+> harness’s per-run tenants, and `userSkillRuntimeAttribution` re-checks tenant equality, so the
+> author-tenant query correctly returns `null`. **Structural lesson: a candidate minted in a
+> synthetic e2e tenant can never have its runtime observed.** Mint phase artifacts in a tenant
+> someone can sign into. See `.planning/phases/21-user-authored-skills-and-routines/
+> 21-LIVE-PARTIAL-2026-08-18.md`.
+
 > Last verified: 2026-08-18 (**THE FIRST TENANT-PINNED GATE EVER TO PASS. `de976d8e`, 41/41,
 > `$0.4947`.** Evidence recorded on `offer-architect` v12, row `qx73bwsh…`, tenant `kn790hj6…`.
 > Confirmed on `/ops` in a browser: that card alone reads "Evaluation passed — ready for owner

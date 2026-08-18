@@ -1,5 +1,14 @@
 # Playbook: Production Beta Readiness (25-10)
 
+> Last verified: 2026-08-18 (17-08 Task 2 added ONE `feature`-tier manifest name,
+> `PHASE17_GRAPH_PROBE` — the Graph concurrency-probe artifact as JSON. **Unset is the normal,
+> healthy state**: Microsoft calendar UPDATE simply refuses with `provider_unsupported`, and nothing
+> else changes. Setting it does not enable anything by itself either — the deployment and tenant
+> hashes inside the artifact must match the ones recomputed at call time, so a probe measured on
+> another deployment or against another account binds to nothing. Microsoft calendar DELETE is
+> unaffected in every case; it is forbidden outright, not gated (ADR-023). No `required`-tier name
+> was added, so the readiness surface is unchanged for a healthy deployment.)
+>
 > Last verified: 2026-08-17 (25-10 Tasks 1 **and 3** — the environment manifest, the drift scan, the
 > owner readiness surface, and durable-origin enforcement. **Task 2's ADR-022 was ACCEPTED by the
 > owner on 2026-08-17; Gate 2 is closed.**)

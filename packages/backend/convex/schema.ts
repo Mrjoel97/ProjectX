@@ -593,6 +593,11 @@ export default defineSchema({
         v.literal("attendees_present"),
         v.literal("needs_inspection"),
         v.literal("not_managed"),
+        // 17-08 / ADR-023: the Microsoft cancel/delete refusal. A DISTINCT code from
+        // `provider_error` on purpose — that one means "the provider said no this time" and a card
+        // may offer a retry; this one means "we will never send this request", and the two must
+        // never render the same way.
+        v.literal("provider_unsupported"),
         v.literal("provider_error"),
       ),
     ),

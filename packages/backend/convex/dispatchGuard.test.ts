@@ -173,13 +173,32 @@ test("calendar event bodies cannot address guests or configure Google invitation
     src,
     "calendar.ts no longer contains summary:, so the guest-field absence scan is not reading a real event body.",
   ).toContain("summary:");
-  for (const forbidden of ["attendees", "sendUpdates"]) {
-    expect(
-      src,
-      `calendar.ts contains ${forbidden} — mutation: add sendUpdates: "none". events.insert guest ` +
-        `delivery is an outbound communication with no plan, requests row, audit event, DLQ, or PII scan.`,
-    ).not.toContain(forbidden);
-  }
+
+  // `sendUpdates` has no legitimate read use — Google accepts it only as a REQUEST parameter, and
+  // its only effect is to email people. Absent from the module entirely.
+  expect(
+    src,
+    'calendar.ts contains sendUpdates — mutation: add sendUpdates: "none". Guest delivery is an ' +
+      "outbound communication with no plan, requests row, audit event, DLQ, or PII scan.",
+  ).not.toContain("sendUpdates");
+
+  // `attendees` is NARROWER since 17-08, and deliberately so: management must READ the guest list
+  // to refuse an event that grew one, so a blanket ban would forbid the very check that protects
+  // people. What stays banned is the WRITE form — `attendees` as an object-literal key, which is
+  // the only shape that can address anyone. `attendees?:` (a type field) and `body.attendees` (a
+  // read) do not match; `attendees: [...]` in a request body does.
+  expect(
+    src,
+    "calendar.ts uses attendees as an object-literal key — mutation: put attendees: [...] in an " +
+      "event body. Reading the guest COUNT is the refusal; writing a guest list is an invitation.",
+  ).not.toMatch(/attendees\s*:/);
+  // Anti-vacuity: the read must actually still be there, or the ban above is guarding nothing and
+  // the attendee refusal has silently stopped inspecting anything.
+  expect(
+    src,
+    "calendar.ts no longer reads body.attendees — the attendee refusal cannot be inspecting a real " +
+      "guest list, so the write-form ban above is vacuous.",
+  ).toContain("body.attendees");
 });
 
 test("both Calendar actions check stored scope before the shared token refresh", () => {
