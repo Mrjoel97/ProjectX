@@ -1993,6 +1993,13 @@ const VERB: Record<string, [running: string, done: string]> = {
   // card and applies nothing, so this must never read "Saved" or "Updated your figures" — the
   // write happens on Approve, and BRAND §1 forbids claiming an action that did not happen.
   stageFinanceWrite: ["Preparing a figure update…", "Figure update ready to approve"],
+  // Phase-23 (SKILL-02): MANDATORY beside the schema literal — traceParity.test.ts asserts set
+  // equality BOTH ways, so either half alone is RED. The done state is the PROMISE the tool keeps:
+  // it writes a CANDIDATE that is structurally incapable of going live, so this must never read
+  // "Learned", "Updated how I work" or anything implying the change took effect. Activation needs
+  // a passing eval AND the owner's own click; BRAND §1 forbids claiming an action that did not
+  // happen, and "it changed how I work" would be exactly that claim.
+  authorSkillCandidate: ["Drafting a skill update…", "Skill update ready for review"],
 };
 const FALLBACK: [string, string] = ["Working…", "Done"];
 

@@ -26,6 +26,7 @@ import { ActionCache } from "@convex-dev/action-cache";
 import { draftSchema } from "@pikar/contracts/drafting";
 import { parseRouting, type RoutingDecision, routingSchema } from "@pikar/contracts/routing";
 import {
+  AGENT_AUTHORABLE_SKILLS,
   COCKPIT_AGENT_SKILL,
   CONTENT_DRAFTER_SKILL,
   DOCUMENT_DRAFTER_SKILL,
@@ -1588,6 +1589,14 @@ export function buildCockpitTools(
   agentContext?: {
     grantWebResearch?: boolean;
     grantDispatch?: boolean;
+    /**
+     * SKILL-02 (Phase 23). The EXECUTIVE-ONLY skill-authoring grant. Derived in `runAgentLoop`
+     * from `toolNames === undefined`, never read from `toolNames` here — `toolNames` is simply not
+     * in scope in this function. Kept SEPARATE from `grantDispatch` even though both derive from
+     * the same expression today: they are different capabilities, and collapsing them would mean
+     * a future context that legitimately needs one silently receives both.
+     */
+    grantSkillAuthoring?: boolean;
     threadId?: string;
     rootRequestId?: string;
     /** True only for an explicit email route backed by a live Gmail grant. */
@@ -1970,6 +1979,96 @@ export function buildCockpitTools(
     }),
   };
 
+  // Phase-23 (SKILL-02). THE MOST GOVERNANCE-SENSITIVE TOOL IN THE RECORD, and the smallest.
+  //
+  // Built ONLY under `grantSkillAuthoring` + a real turn identity, in the same conditional-spread
+  // idiom as dispatchResearch/dispatchMedia above — structural absence, not a filter. A
+  // withheld-but-CONSTRUCTED closure stays reachable through `invokeTool`, so a specialist whose
+  // allow-list happened to contain this literal string would otherwise reach it. The closure is
+  // never built in that context, so there is nothing to reach.
+  //
+  // THE MODEL'S ENTIRE SURFACE IS `{name, authoredBody}` — a closed enum of three names and one
+  // bounded string. tenant, thread and turn are injected from the trusted envelope below;
+  // `author`, `status`, `version`, the composed body, evidence and owner approval are all decided
+  // by `publishAgentCandidate` server-side. There is no argument here a model could set to promote
+  // its own row, and no second call it could chain to: this tool's only downstream is the one
+  // internal mutation, which itself has no path to any activation function.
+  //
+  // The RETURN is inert too. It carries ids, a version, a status and awaiting-review copy — never
+  // the base body, never the composed body, never an eval fixture, never an approval state. A tool
+  // return is model-visible text, so anything disclosed here is disclosed to the author of the
+  // draft, and the base registry prompt is an owner-only boundary (research pitfall 4).
+  const skillAuthoringTool = {
+    authorSkillCandidate: tool({
+      description:
+        "Propose an adaptation to one of your own business skills, so it fits this business " +
+        "better next time. Use it ONLY when the user has explicitly asked you to change how you " +
+        "work — never on your own initiative, and never as a side effect of another request. " +
+        "What you write is a CANDIDATE for review: it does not take effect now, it does not " +
+        "change this turn, and it goes live only if it passes an evaluation and the owner " +
+        "approves it. Say so plainly when you use it; do not tell the user you have learned " +
+        "something or changed how you work.",
+      inputSchema: jsonSchema<{ name: string; authoredBody: string }>({
+        type: "object",
+        properties: {
+          name: {
+            type: "string",
+            // The closed set, sourced from the ONE contract rather than re-listed here: a second
+            // copy of these names is how the enum and the server check drift apart.
+            enum: [...AGENT_AUTHORABLE_SKILLS],
+            description: "Which of your business skills to adapt.",
+          },
+          authoredBody: {
+            type: "string",
+            description:
+              "The adaptation only — what should be true about this business that the base " +
+              "skill does not already say. Never a replacement for the whole skill.",
+          },
+        },
+        required: ["name", "authoredBody"],
+        additionalProperties: false,
+      }),
+      execute: async ({ name, authoredBody }): Promise<string> => {
+        // Non-null asserted: the whole record key is absent unless both are present (the gate
+        // below), exactly as dispatchResearch does it.
+        const threadId = agentContext?.threadId as string;
+        const rootRequestId = agentContext?.rootRequestId as string;
+        try {
+          const res = await ctx.runMutation(internal.skills.publishAgentCandidate, {
+            tenantId,
+            sourceThreadId: threadId,
+            sourceTurnId: rootRequestId,
+            name,
+            authoredBody,
+          });
+          return res.inserted
+            ? `Drafted ${res.name} v${res.version} as a candidate (id ${res.tenantSkillId}). It is ` +
+                "NOT live: it needs a passing evaluation and the owner's approval before it takes " +
+                "effect. Tell the user it is waiting for review."
+            : `That same request already drafted ${res.name} v${res.version} (id ` +
+                `${res.tenantSkillId}); nothing new was written. It is still awaiting review.`;
+        } catch (e) {
+          // Conversational, never a throw — a governed stop is a paused conversation (the
+          // dispatch-refusal precedent above). The message names the REASON and nothing else --
+          // never another draft's row id, never a body, never anything from the held-out corpus.
+          const reason = e instanceof Error ? e.message : String(e);
+          if (reason.startsWith("AGENT_CANDIDATE_PENDING"))
+            return (
+              "There is already a skill update waiting for review for that skill, so a second " +
+              "one cannot be drafted yet. Tell the user the earlier one has to be reviewed first."
+            );
+          if (reason.startsWith("AGENT_SOURCE_TURN_CONFLICT"))
+            return "This request already drafted a different skill update; nothing was written.";
+          if (reason.startsWith("NOT_AGENT_AUTHORABLE"))
+            return "That is not a skill you can adapt. Nothing was written.";
+          if (reason.startsWith("USER_SKILL_ADAPTATION_"))
+            return "That adaptation is empty or too long, so nothing was written.";
+          throw e;
+        }
+      },
+    }),
+  };
+
   const allTools = {
     resolveContacts: tool({
       // Split literals keep each chunk under the §5 no-hardcoded-prompt scan ceiling (200 chars).
@@ -2113,6 +2212,14 @@ export function buildCockpitTools(
     ...(agentContext?.grantDispatch && agentContext.threadId && agentContext.rootRequestId
       ? { ...dispatchResearchTool, ...dispatchMediaTool, ...proposeImageTool }
       : ({} as typeof dispatchResearchTool & typeof dispatchMediaTool & typeof proposeImageTool)),
+    // SKILL-02: a SEPARATE flag from `grantDispatch`, deliberately. Both are derived from
+    // `toolNames === undefined` today, but they are different capabilities — dispatching a
+    // specialist spends money, authoring a skill changes what every future turn is told to be —
+    // and one flag would mean the next context that legitimately needs one silently gets both.
+    // Same one-type-both-branches trick as every gate above.
+    ...(agentContext?.grantSkillAuthoring && agentContext.threadId && agentContext.rootRequestId
+      ? skillAuthoringTool
+      : ({} as typeof skillAuthoringTool)),
     setSubject: tool({
       description: "Set the email subject line.",
       inputSchema: jsonSchema<{ subject: string }>({
@@ -3972,6 +4079,11 @@ async function runAgentLoop(
     {
       grantWebResearch: toolNames?.includes("webResearch") ?? false,
       grantDispatch: toolNames === undefined,
+      // SKILL-02: the executive is the only agent that may author a skill, for the same reason it
+      // is the only one that dispatches — and derived from `toolNames === undefined`, NEVER from
+      // `toolNames.includes("authorSkillCandidate")`. An allow-list is a REQUEST from the caller;
+      // reading one here would let a specialist ask for the capability by name and receive it.
+      grantSkillAuthoring: toolNames === undefined,
       threadId,
       rootRequestId: turnId,
       gmailEnabled,

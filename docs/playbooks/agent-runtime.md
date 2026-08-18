@@ -1,5 +1,18 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-08-18 (23-03 added `authorSkillCandidate` — the Executive-only skill-authoring
+> grant; structural absence, no activation reachable, no live selection behaviour claimed. See the
+> Phase 23 section at the end. Prior verification follows.) (17-08 Task 3 added ONE bounded internal action to `smoke.ts`,
+> `calendarLifecycleReadback`, plus its private `calendarLifecycleFacts` query. It is an operator
+> probe for the 17-11 owner gate, reachable only by `npx convex run` — no tool, no agent loop, no
+> skill references it, and `dispatchGuard.test.ts` pins that llm.ts holds no Calendar write or
+> registry-writer reference at all. It READS four planes (plan row, registry row, provider, audit)
+> and writes nothing. **The one runtime-shaped lesson worth carrying:** it calls
+> `internal.smoke.calendarLifecycleFacts` from inside smoke.ts, and without an explicit return type
+> on the HANDLER that self-reference degrades inference to `any` ACROSS THE PACKAGE — 40+ TS7006s in
+> files the change never touched. `runFailingPipeline` already carried the same annotation for the
+> same reason (Convex guidelines §96); annotating the RESULT LOCAL is not enough.)
+>
 > Last verified: 2026-08-17 (owner-reported — **THE GOLDEN SET COULD NOT SEE THE IMAGE DOOR.**
 > `--self-check` PASSED, 41 fixtures valid; backend typecheck + agentSteps 24/24. **No paid run.**)
 >
@@ -1642,3 +1655,60 @@ must imply the label, so if the plumbing breaks anywhere across the six hops the
 and the fixture reddens at the seam instead of shipping a broken pipe green. `insufficientEvidence`
 alone would NOT close the hole: it is a disjunction, so a run that searched, got zero citations and
 then confabulated satisfies it off the counter leg without ever making a judgement.
+
+---
+
+## Phase 23 — `authorSkillCandidate`: the Executive's skill-authoring grant (23-03, SKILL-02)
+
+> Landed 2026-08-18. The model can now reach candidate creation. It still cannot reach activation.
+
+**The grant is `grantSkillAuthoring`, and it is a SEPARATE flag from `grantDispatch`.** Both derive
+from `toolNames === undefined` in `runAgentLoop` today, and they are deliberately not merged:
+dispatching a specialist spends money, authoring a skill changes what every future turn is told to
+be. One flag would mean the next context that legitimately needs one silently receives both.
+
+**Derived from `toolNames === undefined`, NEVER from `toolNames.includes("authorSkillCandidate")`.**
+An allow-list is a REQUEST from the caller. Reading one here would let a specialist ask for the
+capability by name and be given it — which is precisely the attack the offline test drives.
+
+**Structural absence, not a filter.** The closure is built only inside the granted branch
+(`grantSkillAuthoring && threadId && rootRequestId`), in the same conditional-spread,
+one-type-both-branches idiom as `dispatchResearch`/`dispatchMedia`. A withheld-but-constructed
+closure stays reachable through `invokeTool`; a never-constructed one does not exist to reach.
+**No lineage ⇒ no tool**: a row whose provenance cannot name the turn that produced it is exactly
+what the `by_tenant_source_turn` index exists to prevent.
+
+**The model's entire surface is `{name, authoredBody}`** — a closed enum of three names sourced
+from `AGENT_AUTHORABLE_SKILLS` (never re-listed here; a second copy is how the model-visible set and
+the server check drift apart) plus one bounded string, `required` both, `additionalProperties:false`.
+tenant/thread/turn are injected from the trusted envelope. There is no argument a model can set.
+
+**The RETURN is inert.** Ids, a version, a status and awaiting-review copy. Never the base body,
+never the composed body, never anything from the held-out corpus, never an approval state — a tool
+return is model-visible text, so anything disclosed there is disclosed to the author of the draft.
+Refusals come back conversationally (`AGENT_CANDIDATE_PENDING`, `AGENT_SOURCE_TURN_CONFLICT`,
+`NOT_AGENT_AUTHORABLE`, the adaptation-size errors), never as a throw — the dispatch-refusal
+precedent.
+
+**Trace literal `authorSkillCandidate` was added to `agentSteps.tool` and to `cards.tsx`'s `VERB` in
+the same commit**, because `traceParity.test.ts` asserts set equality both ways and because a
+missing literal makes `agentSteps:record` throw inside an AI-SDK callback the SDK silently swallows.
+The verb reads *"Drafting a skill update… / Skill update ready for review"* — never "Learned" or
+"Updated how I work". Activation needs a passing eval AND the owner's click; BRAND §1 forbids
+claiming an action that did not happen.
+
+### Mutation evidence (23-03, all executed and restored)
+
+| Mutation | Result |
+|---|---|
+| Spread the tool unconditionally | **3 red** — both grant-absence tests and the specialist real-loop test |
+| Derive the grant from `toolNames.includes("authorSkillCandidate")` | **1 red** — the specialist obtains it by asking |
+| Add an `activateTenantCandidate` call to the tool | **1 red** — `the authoring tool region reaches activateTenantCandidate` |
+
+### Ceiling
+
+**No live selection behaviour is claimed.** Nothing here proves a real model *chooses* this tool
+only when explicitly asked — the "use it ONLY when the user asked" rule lives in the tool
+description, which is guidance, not a guarantee. The hard guarantee is that the tool cannot activate
+anything. Whether the model reaches for it appropriately is Plan 23-06's browser gate.
+**No cockpit skill body was changed by this plan** and no skill candidate was seeded.

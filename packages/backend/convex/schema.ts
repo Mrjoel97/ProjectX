@@ -1243,6 +1243,14 @@ export default defineSchema({
       // whole suite stays green. Lands in the SAME commit as its cards.tsx VERB entry, because
       // traceParity.test.ts asserts the two sets equal BOTH ways and either half alone is RED.
       v.literal("stageFinanceWrite"),
+      // Phase-23 (SKILL-02): the Executive's skill-authoring tool. A LOCAL executable tool, so
+      // `onToolExecutionStart` DOES fire and this literal IS required — without it the step insert
+      // throws inside an AI-SDK callback the SDK SILENTLY swallows, and prod loses the one trace
+      // row that tells a human the agent just wrote itself a skill. That is the loudest possible
+      // case of the swallow trap this union has already been bitten by at searchVault,
+      // evaluateBusiness and recordScorecardAnswer. Still no text field: the adaptation the model
+      // drafted has nowhere to go here, which is how CLAUDE.md §4 stays enforced on this path.
+      v.literal("authorSkillCandidate"),
     ),
     phase: v.union(v.literal("running"), v.literal("done"), v.literal("error")),
     startedAt: v.number(),

@@ -9,7 +9,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CONTENT_DRAFTER_SKILL } from "@pikar/contracts/skill";
+import { AGENT_AUTHORABLE_SKILLS, CONTENT_DRAFTER_SKILL } from "@pikar/contracts/skill";
 import {
   ACTION_TYPES,
   type ActionType,
@@ -2640,4 +2640,127 @@ test("buildAgentContext describes a finance_write plan as figures, NEVER as an e
   // The same promise the crm_write arm makes: approving writes the user's OWN records, and the
   // model must not offer to send it to anyone.
   expect(ctxText).toMatch(/not an email/i);
+});
+
+// ── Phase-23 (SKILL-02): the skill-authoring tool exists ONLY under the Executive grant ────────
+//
+// The governance property this whole phase rests on is CAPABILITY MINIMIZATION BY CONSTRUCTION,
+// not by instruction. These tests assert the tool's ABSENCE in every context that is not a real
+// Executive turn — and absence is asserted on the RETURNED RECORD, because that record is what
+// `invokeTool` can reach. A withheld-but-constructed closure would still be callable.
+
+const authoringGrant = (over?: Record<string, unknown>) => ({
+  grantWebResearch: false,
+  grantDispatch: false,
+  grantSkillAuthoring: true,
+  threadId: "thread1",
+  rootRequestId: "turn1",
+  ...over,
+});
+
+test("authorSkillCandidate is ABSENT without the grant, and absent with the grant but no lineage", () => {
+  const stubCtx = {} as Parameters<typeof buildCockpitTools>[0];
+  const planId = "plan-stub" as Id<"plans">;
+  const keys = (agentContext?: Parameters<typeof buildCockpitTools>[6]) =>
+    Object.keys(
+      buildCockpitTools(stubCtx, "t1", planId, undefined, undefined, undefined, agentContext),
+    );
+
+  // No agentContext at all — the default every legacy caller gets.
+  expect(keys()).not.toContain("authorSkillCandidate");
+  // Granted, but with no turn identity to attribute the authorship to. A row whose provenance
+  // cannot name the turn that produced it is exactly what 23-01's index exists to prevent.
+  expect(keys(authoringGrant({ threadId: undefined }))).not.toContain("authorSkillCandidate");
+  expect(keys(authoringGrant({ rootRequestId: undefined }))).not.toContain("authorSkillCandidate");
+  // Lineage present but the grant withheld — the specialist's shape.
+  expect(keys(authoringGrant({ grantSkillAuthoring: false }))).not.toContain(
+    "authorSkillCandidate",
+  );
+  // All three present: the Executive's shape, and the ONLY shape that yields the key.
+  expect(keys(authoringGrant())).toContain("authorSkillCandidate");
+});
+
+test("the authoring grant is SEPARATE from the dispatch grant in both directions", () => {
+  const stubCtx = {} as Parameters<typeof buildCockpitTools>[0];
+  const planId = "plan-stub" as Id<"plans">;
+  const keys = (agentContext: Parameters<typeof buildCockpitTools>[6]) =>
+    Object.keys(
+      buildCockpitTools(stubCtx, "t1", planId, undefined, undefined, undefined, agentContext),
+    );
+
+  // Dispatch without authoring: the tool is absent, dispatchResearch is present.
+  const dispatchOnly = keys(authoringGrant({ grantDispatch: true, grantSkillAuthoring: false }));
+  expect(dispatchOnly).toContain("dispatchResearch");
+  expect(dispatchOnly).not.toContain("authorSkillCandidate");
+
+  // Authoring without dispatch: the mirror. One flag can never imply the other — dispatching a
+  // specialist spends money, authoring a skill changes what every future turn is told to be.
+  const authoringOnly = keys(authoringGrant({ grantDispatch: false }));
+  expect(authoringOnly).toContain("authorSkillCandidate");
+  expect(authoringOnly).not.toContain("dispatchResearch");
+});
+
+test("authorSkillCandidate exposes EXACTLY {name, authoredBody} over the closed agent set", () => {
+  const tools = buildCockpitTools(
+    {} as Parameters<typeof buildCockpitTools>[0],
+    "t1",
+    "plan-stub" as Id<"plans">,
+    undefined,
+    undefined,
+    undefined,
+    authoringGrant(),
+  );
+  const schema = tools.authorSkillCandidate.inputSchema as unknown as {
+    jsonSchema: {
+      properties: Record<string, { enum?: string[] }>;
+      required: string[];
+      additionalProperties: boolean;
+    };
+  };
+
+  // KEY-SET EQUALITY. A tenantId, status, version, author or evidence property appearing here
+  // would be a field the MODEL could set — the entire authorization story of this tool is that no
+  // such field exists.
+  expect(Object.keys(schema.jsonSchema.properties).sort()).toEqual(["authoredBody", "name"]);
+  expect([...schema.jsonSchema.required].sort()).toEqual(["authoredBody", "name"]);
+  expect(schema.jsonSchema.additionalProperties).toBe(false);
+  // The enum is SOURCED from the contract, not re-listed: a second copy of these names is how the
+  // model-visible set and the server-side check drift apart.
+  expect(schema.jsonSchema.properties.name?.enum).toEqual([...AGENT_AUTHORABLE_SKILLS]);
+});
+
+test("the authoring tool's region reaches nothing but publishAgentCandidate", () => {
+  const src = readLlmSource();
+  const from = src.indexOf("  const skillAuthoringTool = {");
+  const to = src.indexOf("  const allTools = {", from);
+  expect(from).toBeGreaterThan(-1);
+  expect(to).toBeGreaterThan(from);
+  const region = src.slice(from, to);
+  expect(region.length).toBeGreaterThan(800); // non-vacuity: the real closure was found
+
+  // The ONE downstream. Named mutation that turns this red: point execute at any other mutation.
+  expect(region).toContain("internal.skills.publishAgentCandidate");
+
+  // Everything this tool must NOT be able to reach. Activation and evidence are the governance
+  // boundary; scheduler/plans/delivery are how a tool turns into an outward action; the eval
+  // fixtures are what the authoring agent must never see (it would be marking its own homework).
+  for (const forbidden of [
+    "activateTenantCandidate",
+    "activateCandidate",
+    "activateSkillVersion",
+    "transitionSkillActivation",
+    "recordTenantEvalEvidence",
+    "recordEvalEvidence",
+    "ownerApproval",
+    "requireOwner",
+    "ctx.scheduler",
+    "internal.plans",
+    "internal.delivery",
+    "internal.gmail",
+    "buildCockpitTools",
+    "evidence",
+    "fixture",
+  ]) {
+    expect(region, `the authoring tool region reaches ${forbidden}`).not.toContain(forbidden);
+  }
 });

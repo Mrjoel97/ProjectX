@@ -1114,3 +1114,113 @@ test("21-03: runCockpitAgent accepts a tenant pin AND forwards it to the dispatc
   expect(media, "the explicit-video route must schedule dispatch:runMedia").toBeTruthy();
   expect(media?.args[0]).toMatchObject({ tenantSkillIds: { media: candidateId } });
 });
+
+// ── Phase-23 (SKILL-02): the REAL loop authors a candidate, and only the Executive can ─────────
+//
+// The scripted seam drives `runCockpitAgent -> runAgentLoop -> buildCockpitTools` — the production
+// path, not `__invokeCockpitTool`, which bypasses the loop and is exactly how a disconnected tool
+// plane once looked healthy for a whole phase (`clock-plane-dead-in-production`).
+
+const AUTHORED = "Quote in AUD and never discount past 20%. ZQ7LOOP4b81e6c2";
+
+// `setup()` registers only the rate-limiter. `publishAgentCandidate` writes ONE refs-only audit
+// row, and `audit.log` mirrors every insert into the auditCounts aggregate (OPSG-01) — without the
+// component the mutation throws inside the tool, the SDK records an error step, and the loop
+// carries on with no row. That failure mode is exactly why this test asserts the ROW, not the reply.
+async function authoringSetup(): Promise<{ t: T; planId: Id<"plans"> }> {
+  const t = convexTest(schema, modules);
+  t.registerComponent("rateLimiter", rateLimiterSchema, rateLimiterModules);
+  t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+  await t.mutation(internal.skills.seedSkills, {});
+  const planId = await t.mutation(internal.plans.insertPlan, {
+    tenantId: "t1",
+    threadId: "thread1",
+  });
+  return { t, planId };
+}
+
+test("mock loop: the Executive authors ONE inert candidate carrying the real turn's lineage", async () => {
+  const { t, planId } = await authoringSetup();
+
+  await t.action(internal.llm.__runCockpitAgentWithScript, {
+    tenantId: "t1",
+    planId,
+    threadId: "thread1",
+    turnId: "turn-author-1",
+    primary: [
+      toolStep("authorSkillCandidate", {
+        name: OFFER_ARCHITECT_SKILL,
+        authoredBody: AUTHORED,
+      }),
+      textStep("I have drafted a skill update; it is waiting for review.", 0, 0),
+    ],
+  });
+
+  const rows = await t.run((ctx) => ctx.db.query("tenantSkills").collect());
+  const candidate = rows.find((r) => r.author === "agent");
+  expect(candidate, "the real loop wrote no agent row").toBeDefined();
+  expect(candidate).toMatchObject({
+    tenantId: "t1",
+    name: OFFER_ARCHITECT_SKILL,
+    status: "candidate",
+    author: "agent",
+    authorAgentId: "executive-agent",
+    // THE POINT OF THIS TEST: the ids come from the REAL loop, not from a test literal handed to
+    // the mutation. A tool that failed to thread lineage would produce a row with the wrong turn.
+    sourceThreadId: "thread1",
+    sourceTurnId: "turn-author-1",
+    rollbackEligible: false,
+    authoredBody: AUTHORED,
+  });
+  expect(candidate?.ownerApproval).toBeUndefined();
+  expect(candidate?.evidence).toBeUndefined();
+
+  // NOTHING went live.
+  expect(rows.filter((r) => r.status === "active")).toHaveLength(0);
+
+  // The activity step exists — the closed-union swallow trap, checked on the real emitter rather
+  // than inferred from the schema literal being present.
+  const steps = await t.run((ctx) => ctx.db.query("agentSteps").collect());
+  const authored = steps.filter((s) => s.tool === "authorSkillCandidate");
+  expect(authored.length).toBeGreaterThan(0);
+
+  // §4: the adaptation reaches no log plane and no activity row.
+  const planes = JSON.stringify([
+    steps,
+    await t.run((ctx) => ctx.db.query("audit").collect()),
+    await t.run((ctx) => ctx.db.query("deadLetters").collect()),
+  ]);
+  expect(planes).not.toContain("ZQ7LOOP4b81e6c2");
+});
+
+test("mock loop: a specialist allow-list naming the tool STILL cannot reach it", async () => {
+  const { t, planId } = await authoringSetup();
+
+  // The strongest form of the attack available offline: the caller explicitly asks for the tool by
+  // its exact name. `toolNames` is an allow-list applied to the BUILT record, and the closure was
+  // never built in this context — so the filter finds nothing to let through.
+  //
+  // The assertion is the ROW, deliberately, NOT a rejection: ai@7 does not necessarily throw out
+  // of the loop on an unknown tool name, and asserting on the error would make this test pass for
+  // a reason that has nothing to do with the capability boundary.
+  await t.action(internal.llm.__runCockpitAgentWithScript, {
+    tenantId: "t1",
+    planId,
+    threadId: "thread1",
+    turnId: "turn-author-2",
+    toolNames: ["authorSkillCandidate"],
+    primary: [
+      toolStep("authorSkillCandidate", {
+        name: OFFER_ARCHITECT_SKILL,
+        authoredBody: AUTHORED,
+      }),
+      textStep("done", 0, 0),
+    ],
+  });
+
+  const rows = await t.run((ctx) => ctx.db.query("tenantSkills").collect());
+  expect(rows.filter((r) => r.author === "agent")).toHaveLength(0);
+  // Non-vacuity: the SAME script under the Executive grant DOES write a row (the test above), so
+  // an empty result here is the grant boundary and not a broken script.
+  expect(rows).toHaveLength(0);
+});

@@ -1,3 +1,52 @@
+> Last verified: 2026-08-18 (23-03 added the Executive-only `authorSkillCandidate` tool + its trace
+> verb; explicit-intent-only is PROMPT guidance, the candidate-only boundary is code. See the Phase
+> 23 section at the end. Prior verification follows.) (17-08 Task 3 — **the Approve-only arm, the management terminal and the
+> lifecycle readback**. calendar 88/88 · cockpit 73/73 · dispatchGuard 20/20, backend 88 files /
+> 2124 passed, core 1063/1063, tsc clean. ELEVEN mutations, all CAUGHT.)
+>
+> **`calendar_manage` is the externalAction arm's THIRD occupant**, replacing 17-05's
+> `calendar manage not wired (17-08)` stub. Same arm, same human Approve gate, same
+> `proposed → approved` CAS — so "a second approval no-ops" is inherited, not re-implemented. The run
+> id lands in `calendarRunId` through the EXISTING patch (management is simply not `media`), and both
+> Calendar terminals resolve a failed run through `by_calendar_run`.
+>
+> **Its terminal is a SEPARATE function** (`onManageComplete`), and `dispatchGuard.test.ts` now
+> counts DISTINCT targets and terminals rather than only asserting each is present — a manage thunk
+> pointed at `onCreateComplete` satisfies every `toContain` while marking CREATE plans done.
+>
+> **ORDER IS THE GUARANTEE, again.** The registry is written BEFORE the plan is marked done, and the
+> state written is recomputed from the PLAN's own staged fields, never echoed out of the provider
+> result. An absent staged field means "leave it alone".
+>
+> **A refusal is `canceled` + `cancelKind: "refused"` + `calendarFailureCode`.** The third literal is
+> new and deliberate: `approvals.ts` surfaces `cancelKind` as the cancellation's PROVENANCE, so
+> reporting a provider-limitation refusal or a version conflict as a user `discarded` would attribute
+> the decision to the wrong actor — the defect class this codebase has shipped three times.
+> `reschedulePlan` excludes `refused` alongside `discarded`: re-arming it would re-run a write the
+> system already declined.
+>
+> **Refusal copy is STATIC, keyed off the code.** A conflict message that quoted the event or the
+> etag would put the one moving part into a row the user reads (§4). The Microsoft-delete message
+> NAMES the limitation and says the event is still there, because ADR-023 requires the absence to be
+> a visible product surface.
+>
+> **Reauth is provider-specific and NON-terminal** — `RECONNECT[provider]`, the same table `llm.ts`
+> uses. A Microsoft outage that wrote `gmail_reconnect` would send the user to the Google consent
+> screen to fix an Outlook connection. The plan stays `delivering`, mirroring `onCreateComplete`.
+>
+> **`smoke.calendarLifecycleReadback` reads FOUR planes independently** — plan row, registry row,
+> provider, audit log — so none vouches for the others. It returns refs, codes, counts, key names,
+> hashes and booleans only. `contentLeak`/`tokenLeak` are MEASURED by substring search against the
+> tenant's real titles and real credentials, and `contentChecked`/`tokensChecked` report how many
+> strings the check had to look for — zero would mean the booleans proved nothing. A negative-control
+> test forces `contentLeak: true` so the detector is known to be able to fire.
+>
+> **A survivor worth remembering: `cockpit.ts`'s `_ARM_TABLE` is TYPE-LEVEL ONLY.** Flipping
+> `calendar_manage` to `"workflow"` there changed nothing at runtime and the whole suite stayed
+> green — the runtime table is `ARMS`/`armFor` in `@pikar/core/actionType.ts`. If you are reasoning
+> about which arm a plan kind takes, read the core file; the cockpit copy only derives the type that
+> makes `EXTERNAL_TARGETS` incomplete at compile time.
+>
 > Last verified: 2026-08-18 (17-08 Task 2 — **conditional management, minus Microsoft delete**.
 > calendar 71/71 · microsoftCalendar 62/62 · calendarEvents + dispatchGuard green, backend 88 files
 > / 2099 passed, core 1063/1063, tsc clean. FIFTEEN mutations, all CAUGHT.)
@@ -4186,10 +4235,10 @@ only job is to make 17-06 … 17-09 additive.
 
 | Seam | State today | Owner |
 |---|---|---|
-| `EXTERNAL_TARGETS.calendar_manage` (`cockpit.ts`) | throws `calendar manage not wired (17-08)` | **17-08** replaces this exact member with the real `retrier.run` thunk + terminal |
+| `EXTERNAL_TARGETS.calendar_manage` (`cockpit.ts`) | the REAL `retrier.run(internal.calendar.manageEvent)` thunk + `onManageComplete` | **DONE** (17-08 Task 3) |
 | `microsoftCalendarTokens` | table exists, nothing writes it | **17-06** (OAuth flow) |
-| `calendarEvents` | written by the create terminal; read by `manageEvent` (17-08 Tasks 1-2) | **17-08 Task 3** (the management terminal writes it back on success) |
-| `internal.calendar.manageEvent` | implemented and mutation-proven, but nothing STARTS it | **17-08 Task 3** (the Approve-only retrier arm) |
+| `calendarEvents` | written by BOTH terminals, read by `manageEvent`, listed by `listManaged` | **17-09** (the listing/staging tools) |
+| `internal.calendar.manageEvent` | started ONLY by a human Approve on a `calendar_manage` plan | **DONE** (17-08 Task 3) |
 | `listManagedCalendarEvents` / `proposeCalendarChange` trace literals + VERBs | reserved, no tool emits them | **17-09** (the tools) |
 | `calendar-manage-plan-card` | renders provider, operation, managed-event REFERENCE and desired fields | **17-09-03** (registry-backed original event) |
 
@@ -4220,3 +4269,36 @@ result at all (66.2s / 71.8s / 55.3s). It gives the run a hard wall clock, kills
 exit 0, `numTotalTests > 0` and `numPassedTests === numTotalTests`. **A timeout is diagnosed, never
 converted into a pass.** At HEAD on 2026-08-11 the file passes 39/39 in 9.6–14.5s cold and warm, so
 those verifier timeouts are recorded as environmental, not as a Calendar defect.
+
+---
+
+## Phase 23 — the cockpit can draft a skill update (23-03, SKILL-02)
+
+> Landed 2026-08-18. Backend + trace only. No browser observation yet.
+
+One new Executive-only tool, `authorSkillCandidate`. Full mechanism in `agent-runtime.md` §Phase 23;
+what belongs here is the **cockpit-surface** contract.
+
+**The v1 rule is EXPLICIT INTENT ONLY.** The tool description says to use it only when the user has
+asked to change how the agent works — never on the agent's own initiative and never as a side effect
+of another request. **That is guidance in a prompt, not a guarantee**, and this playbook says so
+rather than implying otherwise. The guarantee is narrower and harder: whatever the model drafts is a
+`candidate` that no code path in the cockpit can activate.
+
+**The activity trace gained one verb**, and its wording is load-bearing:
+
+```
+authorSkillCandidate: ["Drafting a skill update…", "Skill update ready for review"]
+```
+
+It must never read *"Learned"*, *"Updated how I work"*, or anything implying the change took effect.
+Activation requires a passing eval AND the owner's own click; BRAND §1 forbids claiming an action
+that did not happen, and the whole point of Phase 23 is that the agent's self-modification is
+visibly pending rather than silently applied. The tool's own return text tells the model the same
+thing, so the reply the user reads should say it is waiting for review.
+
+**No cockpit skill body was changed.** `cockpit-agent`'s registry row is untouched by 23-03 — the
+tool description carries the usage guidance, and the hard boundary stays in code.
+
+**Not yet observed:** that a real model picks this tool only on an explicit request, and what the
+user actually sees in the workspace trace when it does. Plan 23-06's browser gate owns both.
