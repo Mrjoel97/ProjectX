@@ -35,7 +35,7 @@ key-decisions:
 patterns-established:
   - Activation exports discriminate candidate author before entering the single shared archive/activate transition.
   - Agent approval records bind ownerUserId, approvedAt, and evalRunId to the activated row.
-requirements-completed: [SKILL-02]
+requirements-completed: []
 duration: 41m
 completed: 2026-08-20
 ---
@@ -112,6 +112,7 @@ The planned deliberate backend wrapper downgrade (`ownerMutation` to `tenantMuta
 ## Next Phase Readiness
 
 - Phase 23-06 can consume the strict agent activation boundary and bounded review projections.
+- This plan advances `SKILL-02` but does not close it; plans 23-06 through 23-09 and phase verification remain mandatory.
 - No product implementation blocker remains.
 
 ## Self-Check: PASSED
