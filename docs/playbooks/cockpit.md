@@ -1,4 +1,11 @@
-> Last verified: 2026-08-18 (23-03 added the Executive-only `authorSkillCandidate` tool + its trace
+> Last verified: 2026-08-20 (17-09 added bounded managed-event discovery and inspect-then-stage
+> update/delete proposals. The tool accepts only a tenant-checked registry ref, parses time from the
+> trusted client clock, refreshes title/time/etag/attendee count before one atomic proposal mutation,
+> and cannot name a provider writer or Approve gate. The management card reads the refreshed
+> registry snapshot and distinguishes update from destructive removal. Verification was source-only
+> in this checkout because dependencies were absent; exact blocked commands are in 17-09-SUMMARY.)
+>
+> Prior verification: 2026-08-18 (23-03 added the Executive-only `authorSkillCandidate` tool + its trace
 > verb; explicit-intent-only is PROMPT guidance, the candidate-only boundary is code. See the Phase
 > 23 section at the end. Prior verification follows.) (17-08 Task 3 — **the Approve-only arm, the management terminal and the
 > lifecycle readback**. calendar 88/88 · cockpit 73/73 · dispatchGuard 20/20, backend 88 files /
@@ -4237,10 +4244,42 @@ only job is to make 17-06 … 17-09 additive.
 |---|---|---|
 | `EXTERNAL_TARGETS.calendar_manage` (`cockpit.ts`) | the REAL `retrier.run(internal.calendar.manageEvent)` thunk + `onManageComplete` | **DONE** (17-08 Task 3) |
 | `microsoftCalendarTokens` | table exists, nothing writes it | **17-06** (OAuth flow) |
-| `calendarEvents` | written by BOTH terminals, read by `manageEvent`, listed by `listManaged` | **17-09** (the listing/staging tools) |
+| `calendarEvents` | written by BOTH terminals, read by `manageEvent`, listed by `listManageable`; `stageChange` refreshes it atomically with the proposal | **DONE** (17-09) |
 | `internal.calendar.manageEvent` | started ONLY by a human Approve on a `calendar_manage` plan | **DONE** (17-08 Task 3) |
-| `listManagedCalendarEvents` / `proposeCalendarChange` trace literals + VERBs | reserved, no tool emits them | **17-09** (the tools) |
-| `calendar-manage-plan-card` | renders provider, operation, managed-event REFERENCE and desired fields | **17-09-03** (registry-backed original event) |
+| `listManagedCalendarEvents` / `proposeCalendarChange` trace literals + VERBs | local executable tools; trace rows render code-owned verbs | **DONE** (17-09) |
+| `calendar-manage-plan-card` | renders provider, operation, refreshed original event and only changed desired fields | **DONE** (17-09 Task 3) |
+
+### Discovery and staging order (17-09)
+
+`listManagedCalendarEvents` is a read of `calendarEvents`, never a provider search and never a lazy
+migration. It scans at most 100 active tenant rows, applies the shared `manageability()` gate, sorts
+by start descending, and returns at most **20** rows. Each row carries the stable Convex
+`managedEventId` plus provider/title/start/duration/tz. Omitted unsafe rows are counts only;
+truncation is explicit. Deleted, foreign, attendee-bearing and etag-less rows never cross into the
+model turn. Title/time are content-plane values already visible on the plan card and never enter
+audit, trace, notification or telemetry payloads.
+
+`proposeCalendarChange` accepts that opaque ref and the closed `update | delete` operation. It does
+not accept a provider event id, etag, epoch, timezone or cancellation comment. The order is:
+
+1. refuse delete content, empty updates, and ambiguous/past/unsupported natural-language time;
+2. tenant-check the registry ref and recover provider + external id server-side;
+3. run the provider-neutral **inspect-only** action;
+4. refuse missing, reconnect-needed, attendee-bearing or etag-less snapshots with no plan proposal;
+5. run exactly one `calendarEvents.stageChange` mutation, which re-checks tenant/active/plan state,
+   refuses if another in-app stage changed the stored etag during inspection, refreshes the registry
+   snapshot and writes `kind: calendar_manage`, `status: proposed`, fresh `calendarExpectedEtag`,
+   operation/ref and actual desired overrides atomically.
+
+There is no call after step 5. In particular the tool slice names no create/manage provider writer,
+retrial terminal or `executePlan`. Provider-side changes after staging remain protected by the
+existing approval-time `If-Match`; the fresh etag is the version the human sees and approves.
+
+The card reads the refreshed registry through tenant-scoped `calendarEvents.forCard`. Update shows a
+CURRENT EVENT block and a PROPOSED CHANGES block containing only changed fields. Delete has no
+proposed-content block, uses the established destructive button treatment, and says the event
+remains until Approve without promising attendee notifications. `calendarFailureCode` renders
+static conflict/attendee/reconnect/unsupported copy and an explicit restage or reconnect path.
 
 A throw inside `executePlan` aborts the whole Convex mutation, so the `status: "approved"` patch
 that runs before the target thunk rolls back with it. That rollback — not statement ordering — is

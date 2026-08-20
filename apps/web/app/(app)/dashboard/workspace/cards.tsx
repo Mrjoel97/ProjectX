@@ -461,6 +461,12 @@ function MailboxPicker({ plan }: { plan: Plan }) {
 function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
   const execute = useMutation(api.cockpit.executePlan);
   const setSendTime = useMutation(api.plans.setPlanSendTime);
+  const managedEvent = useQuery(
+    api.calendarEvents.forCard,
+    plan.kind === "calendar_manage" && plan.calendarManagedEventId
+      ? { managedEventId: plan.calendarManagedEventId }
+      : "skip",
+  );
   const [busy, setBusy] = useState(false);
   // The governed-refusal note, typed off `PlanNote` so the entry's own `link.label` rides along.
   // A refusal LEAVES the plan `proposed`, which is the only reason a note in this component's
@@ -774,11 +780,9 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
   // the memo/CRM/calendar reason — recipients, mode, the send-time picker and "Send to N
   // recipients" are all lies on a calendar change.
   //
-  // NOTHING CAN STAGE THIS PLAN YET. Plan 17-09 owns the staging tool, and 17-09-03 owns the
-  // registry-backed version of this card. What is deliberately NOT rendered here is the ORIGINAL
-  // event's title and time: they live in the `calendarEvents` registry row, this component only
-  // receives the plan, and inventing them from the desired state would be exactly the
-  // provenance-laundering failure this codebase keeps having. The reference is shown instead.
+  // The registry snapshot was refreshed in the SAME transaction that proposed this plan. It is the
+  // exact before-state the fresh etag names; reading it here avoids reconstructing an original from
+  // desired values (provenance laundering) and avoids adding duplicate snapshot fields to schema.
   if (plan.kind === "calendar_manage") {
     const removing = plan.calendarOperation === "delete";
     const providerName =
@@ -790,48 +794,74 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
       ? []
       : (
           [
-            ["New title", plan.eventTitle],
-            ["New time", plan.eventStartMs ? formatAbsolute(plan.eventStartMs) : undefined],
+            ["Title", plan.eventTitle],
+            ["Time", plan.eventStartMs ? formatAbsolute(plan.eventStartMs) : undefined],
             [
-              "New length",
+              "Duration",
               plan.eventDurationMs ? `${Math.round(plan.eventDurationMs / 60000)} min` : undefined,
             ],
           ] as [string, string | undefined][]
         ).filter((row): row is [string, string] => Boolean(row[1]));
     return (
       <div style={box} data-testid="calendar-manage-plan-card">
-        <div style={label}>CALENDAR CHANGE</div>
+        <div style={label}>CALENDAR MANAGEMENT</div>
         <div style={{ margin: "0.5rem 0" }}>
           <strong>
             {removing ? "Remove an event from your calendar" : "Update an event on your calendar"}
           </strong>
         </div>
         <div style={dim}>Calendar: {providerName}</div>
-        {/* The REFERENCE, not a reconstructed title: this card cannot read the registry row, and a
-            title it made up would be worse than an id it can prove. */}
-        <div style={dim}>Event reference: {plan.calendarManagedEventId ?? "—"}</div>
-        {changes.map(([name, value]) => (
-          <div key={name} style={dim}>
-            {name}: {value}
+        <div
+          data-testid="calendar-manage-original"
+          style={{ margin: "0.75rem 0", padding: "0.65rem", borderLeft: "3px solid var(--rule)" }}
+        >
+          <div style={label}>CURRENT EVENT</div>
+          {managedEvent === undefined ? (
+            <div style={dim}>Loading the event you are changing…</div>
+          ) : managedEvent === null ? (
+            <div style={dim}>This managed event is no longer available. Ask Pikar to list it again.</div>
+          ) : (
+            <>
+              <div style={{ marginTop: "0.25rem" }}>
+                <strong>{managedEvent.title || "(untitled event)"}</strong>
+              </div>
+              <div style={dim}>Time: {formatAbsolute(managedEvent.startMs)}</div>
+              <div style={dim}>
+                Duration: {Math.round(managedEvent.durationMs / 60000)} min
+              </div>
+            </>
+          )}
+        </div>
+        {!removing && changes.length > 0 && (
+          <div data-testid="calendar-manage-proposed" style={{ margin: "0.75rem 0" }}>
+            <div style={label}>PROPOSED CHANGES</div>
+            {changes.map(([name, value]) => (
+              <div key={name} style={dim}>
+                {name}: {value}
+              </div>
+            ))}
           </div>
-        ))}
+        )}
         {!removing && changes.length === 0 && (
           <div style={dim}>No change has been staged yet, so there is nothing to approve.</div>
         )}
         <p style={{ ...dim, margin: "0.75rem 0" }}>
           {removing
-            ? `Approving takes this event off your ${providerName}. Nothing is sent to anyone.`
-            : `Approving changes this event on your ${providerName}. Nothing is sent to anyone.`}
+            ? `This event remains on your ${providerName}. Approve to remove exactly this event; ` +
+              "Pikar does not promise attendee notifications."
+            : `The current event stays unchanged until you Approve these exact changes on ${providerName}.`}
         </p>
         <button
           type="button"
-          disabled={busy}
+          disabled={busy || managedEvent == null || (!removing && changes.length === 0)}
           onClick={() => void approve()}
           style={{
             ...btn,
-            background: "var(--teal-600)",
-            color: "#fff",
-            border: "none",
+            background: removing ? "transparent" : "var(--teal-600)",
+            color: removing ? "var(--danger-text)" : "var(--card)",
+            border: removing
+              ? "1px solid color-mix(in srgb, var(--danger-text) 45%, var(--rule))"
+              : "none",
             fontWeight: 600,
           }}
         >
@@ -989,6 +1019,55 @@ function CanceledCard({ plan }: { plan: Plan; threadId?: string }) {
   const [note, setNote] = useState<string | null>(null);
   const sendAt = plan.sendAt;
   const futureSet = Boolean(sendAt && sendAt > Date.now());
+
+  if (plan.kind === "calendar_manage" && plan.calendarFailureCode) {
+    const reconnectHref =
+      plan.calendarProvider === "microsoft" ? "/connect-microsoft" : "/connect-gmail";
+    const reason = (() => {
+      switch (plan.calendarFailureCode) {
+        case "conflict":
+          return (
+            "The event changed after this proposal was staged. Pikar did not overwrite it. " +
+            "List managed events again, then restage the change."
+          );
+        case "attendees_present":
+          return "The event now has attendees, so Pikar refused to change it. Nothing was removed or updated.";
+        case "reauth":
+          return (
+            "The calendar connection needs attention. Reconnect it, list the event again, then " +
+            "restage the change."
+          );
+        case "provider_unsupported":
+          return "Microsoft event removal is not supported safely. The event is still on the calendar.";
+        case "not_found":
+        case "not_managed":
+          return (
+            "That managed event is no longer available. List managed events again before " +
+            "proposing another change."
+          );
+        case "needs_inspection":
+          return "The event needs a fresh calendar snapshot. List it again, then restage the change.";
+        default:
+          return (
+            "The calendar provider refused this change. The event was not changed; list it again " +
+            "before restaging."
+          );
+      }
+    })();
+    return (
+      <div style={box} data-testid="calendar-manage-refusal">
+        <div style={label}>CALENDAR CHANGE REFUSED</div>
+        <p role="alert" style={{ color: "var(--danger-text)", margin: "0.5rem 0" }}>
+          {reason}
+        </p>
+        {plan.calendarFailureCode === "reauth" && (
+          <Link href={reconnectHref} style={{ color: "var(--teal-900)", fontWeight: 600 }}>
+            Reconnect calendar →
+          </Link>
+        )}
+      </div>
+    );
+  }
 
   async function doReschedule() {
     if (busy || !futureSet) return;
