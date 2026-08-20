@@ -130,13 +130,22 @@ stages an update, checks the CURRENT EVENT and PROPOSED CHANGES blocks, then sta
 checks the destructive button and remains-until-Approve copy. It also seeds both code-owned trace
 verbs and asserts the card contains no recipient/subject/email-preview chrome.
 
-**Execution ceiling:** Playwright was not available in this checkout, so the spec did not run and no
-screenshots were produced. This summary makes no visual or browser-runtime pass claim.
+**Execution ceiling:** the restored repo-local Playwright binary launched Chromium successfully.
+From `apps/web`, `& .\node_modules\.bin\playwright.CMD test e2e/calendar-management.spec.ts`
+reached the configured authentication setup, then stopped because `E2E_USER_EMAIL` and
+`E2E_USER_PASSWORD` are not set for a seeded local user. The feature test therefore did not run and
+no screenshots were produced. This summary makes no visual or browser-runtime pass claim.
 
 ## Verification
 
 ### Passed
 
+- `npx vitest run convex/calendarEvents.test.ts convex/cockpitTools.test.ts
+  convex/traceParity.test.ts convex/dispatchGuard.test.ts` from `packages/backend` — 4 files,
+  190/190 tests passed in 39.88s.
+- `pnpm --filter @pikar/web typecheck` — exit 0.
+- `node scripts/check-playbooks.mjs` after the owned cockpit verification update — exit 0 with no
+  decision block.
 - `node --experimental-strip-types --check` on all six changed `.ts`/`.spec.ts` files — exit 0.
 - Source invariant script — PASS: inspection precedes the single stage mutation; no provider writer,
   approval, terminal, retrier, or direct fetch is named; cap/race/attendee/card anchors are present.
@@ -144,17 +153,15 @@ screenshots were produced. This summary makes no visual or browser-runtime pass 
 - Trace parity source readback — both tool literals remain in `schema.ts` and both code-owned verbs
   remain in `cards.tsx`.
 
-### Blocked by the checkout
+### Authenticated browser gate still blocked
 
-- Backend Vitest gate: `vitest` not found.
-- Web typecheck: `tsc` not found.
-- Playwright gate: `playwright` not found.
-- Biome gate: `biome` not found.
-- `node scripts/check-playbooks.mjs` evaluated this plan's `cockpit.md` update, then returned `block`
-  only for concurrent, out-of-scope changes requiring `authorization.md` and `skill-registry.md`.
-  Those files were not touched or falsely re-verified here.
+- Playwright and Chromium are available, but the configured `auth.setup.ts` refuses before the
+  feature spec without `E2E_USER_EMAIL` and `E2E_USER_PASSWORD` for a seeded local Convex user.
+- The exact failure was: `E2E_USER_EMAIL / E2E_USER_PASSWORD must be set to a seeded test user in
+  the local Convex deployment`. One setup test failed; the calendar-management test did not run.
 
-No dependencies were installed and no live or paid provider/model call was made.
+Dependencies were restored outside this plan before the verification follow-up. No live or paid
+provider/model call was made by this plan.
 
 ## Deviations from Plan
 
@@ -180,31 +187,41 @@ No dependencies were installed and no live or paid provider/model call was made.
 - **Verification:** no `calendarOriginal*` reference remains; static card/source checks pass.
 - **Committed in:** `19b3594`, `85f578f`
 
+**3. [Rule 1 - Bug] Corrected restored-runtime fixtures and delete-card disclaimer**
+- **Found during:** dependency-restored verification follow-up
+- **Issue:** the new Google inspection tests modeled only the provider GET even though the shipped
+  adapter always performs the shared OAuth refresh first. Separately, the card's disclaimer named
+  the very attendee-notification surface that `traceParity.test.ts` forbids the card from exposing.
+- **Fix:** queued a token response followed by exactly one inspection response, asserted the GET on
+  the inspection call, and replaced the disclaimer with a delivery-neutral statement.
+- **Files modified:** `cockpitTools.test.ts`, `cards.tsx`, `cockpit.md`
+- **Verification:** focused backend 190/190, web typecheck, playbook check, and diff-check pass.
+- **Committed in:** `c7924e6`
+
 ---
 
-**Total deviations:** 2 auto-fixed blocking issues. **Impact:** no scope expansion, no schema edit,
-and no weakening of the provider-write or human-approval boundary.
+**Total deviations:** 3 auto-fixed issues. **Impact:** no scope expansion, no schema edit, and no
+weakening of the provider-write or human-approval boundary.
 
 ## Issues Encountered
 
-- The dependency installation is incomplete, so the requested Vitest, TypeScript, Playwright, and
-  Biome executables are unavailable. Runtime/browser verification transfers to a dependency-complete
-  checkout; source checks are not presented as substitutes.
+- The authenticated Playwright gate still requires a seeded local user and its two E2E credential
+  variables. Browser availability is proven; authenticated card behavior is not.
 - The shared tree contains unrelated concurrent edits. Commits used explicit plan-owned path lists;
   no README, schema, generated API, graphify, gap-ledger, superpower-doc, or other lane file was staged.
 
 ## Next Phase Readiness
 
 - 17-10 and 17-11 remain. Do not run phase-completion or malformed `STATE.md` update commands yet.
-- Before the live owner gate, restore dependencies and run the exact backend, web typecheck,
-  Playwright, Biome, and playbook gates recorded above.
+- Before the live owner gate, provide the seeded E2E credentials and run the exact Playwright gate
+  recorded above; the focused backend, web typecheck, playbook, and diff gates are green.
 - 17-11 may now exercise list -> stage -> Approve against both providers, retaining ADR-023's
   Microsoft-delete refusal.
 
 ## Self-Check: PASSED
 
-All eight implementation/test/playbook files and this summary exist. Commits `19b3594` and
-`85f578f` resolve as commits in repository history.
+All eight implementation/test/playbook files and this summary exist. Commits `19b3594`, `85f578f`,
+and `c7924e6` resolve as commits in repository history.
 
 ---
 *Phase: 17-calendar-actions*
