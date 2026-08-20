@@ -407,6 +407,7 @@ export const recordRender = internalMutation({
         await ctx.db.patch(a.planId, { renderRetriedAt: Date.now() });
         await ctx.scheduler.runAfter(0, internal.render.renderReel.renderReel, {
           tenantId: a.tenantId,
+          planId: a.planId,
           batchId: a.batchId,
         });
         // Refs and codes ONLY (§4). No dead letter on the retried attempt — an operator page for
@@ -751,13 +752,30 @@ type RouteSuccess = {
  * the same refusal in fixture mode as in production.
  */
 export const renderReel = internalAction({
-  args: { tenantId: v.string(), batchId: v.string() },
+  // `planId` (25.1-01, D1): the schedule sites all know it, and the refusal terminal below needs it
+  // even when the batch has no rows at all — `batchToRender` cannot name a plan for `empty_batch`.
+  args: { tenantId: v.string(), planId: v.id("plans"), batchId: v.string() },
   handler: async (ctx, a): Promise<{ ok: boolean; reason?: string }> => {
     const secret = requireEnvMedia("MEDIA_RENDER_SECRET");
     const routeUrl = requireEnvMedia("MEDIA_RENDER_URL");
 
-    const batch = await ctx.runQuery(internal.render.renderReel.batchToRender, a);
-    if (!batch.ok) return { ok: false, reason: batch.reason };
+    const batch = await ctx.runQuery(internal.render.renderReel.batchToRender, {
+      tenantId: a.tenantId,
+      batchId: a.batchId,
+    });
+    if (!batch.ok) {
+      // 25.1-01 (D1): a refusal is a TERMINAL, never a silent return. Before this, the plan sat at
+      // "rendering" forever — the canvas said "assembling" and `retryRender` refused `not_failed`.
+      // `recordRender`'s failure arm is the ONE terminal writer (failed + reason + dead letter);
+      // refusal codes are outside `TRANSIENT_RENDER_CODES`, so none of them buys the auto-retry.
+      await ctx.runMutation(internal.render.renderReel.recordRender, {
+        tenantId: a.tenantId,
+        planId: a.planId,
+        batchId: a.batchId,
+        result: { ok: false, reason: batch.reason },
+      });
+      return { ok: false, reason: batch.reason };
+    }
     const { planId, targetSeconds, scenes, inputs, cards } = batch.value;
 
     await ctx.runMutation(internal.render.renderReel.markRendering, { planId });

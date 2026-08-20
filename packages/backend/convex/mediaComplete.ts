@@ -238,6 +238,7 @@ export async function evaluateRenderTrigger(
     await ctx.db.patch(a.planId, { renderStatus: "rendering" });
     await ctx.scheduler.runAfter(0, internal.render.renderReel.renderReel, {
       tenantId: a.tenantId,
+      planId: a.planId,
       batchId: a.batchId,
     });
     return;

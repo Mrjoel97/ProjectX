@@ -2579,6 +2579,7 @@ export const retryRender = tenantMutation({
     await ctx.db.patch(planId, { renderStatus: "rendering", renderReason: undefined });
     await ctx.scheduler.runAfter(0, internal.render.renderReel.renderReel, {
       tenantId: ctx.tenantId,
+      planId,
       batchId: latest.batchId,
     });
     // Insert-only, refs only (§4): WHICH plan and WHICH batch — never a reason string the user

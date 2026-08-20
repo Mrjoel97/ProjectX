@@ -3078,10 +3078,10 @@ describe("renderReel: fail-closed on the secret, then the offline seam", () => {
     vi.stubGlobal("fetch", fetchMock);
     stubRenderEnv();
     vi.stubEnv("MEDIA_RENDER_SECRET", "");
-    const { batchId } = await seedRenderable(t);
+    const { planId, batchId } = await seedRenderable(t);
 
     await expect(
-      t.action(internal.render.renderReel.renderReel, { tenantId: A, batchId }),
+      t.action(internal.render.renderReel.renderReel, { tenantId: A, planId, batchId }),
     ).rejects.toThrow(/MEDIA_RENDER_SECRET/);
     // The assertion that matters: a COUNT of zero, not merely the right message.
     expect(fetchMock).toHaveBeenCalledTimes(0);
@@ -3093,9 +3093,9 @@ describe("renderReel: fail-closed on the secret, then the offline seam", () => {
     vi.stubGlobal("fetch", fetchMock);
     stubRenderEnv();
     vi.stubEnv("MEDIA_RENDER_URL", "");
-    const { batchId } = await seedRenderable(t);
+    const { planId, batchId } = await seedRenderable(t);
     await expect(
-      t.action(internal.render.renderReel.renderReel, { tenantId: A, batchId }),
+      t.action(internal.render.renderReel.renderReel, { tenantId: A, planId, batchId }),
     ).rejects.toThrow(/MEDIA_RENDER_URL/);
     expect(fetchMock).toHaveBeenCalledTimes(0);
   });
@@ -3120,7 +3120,7 @@ describe("renderReel: fail-closed on the secret, then the offline seam", () => {
       }),
     );
 
-    const out = await t.action(internal.render.renderReel.renderReel, { tenantId: A, batchId });
+    const out = await t.action(internal.render.renderReel.renderReel, { tenantId: A, planId, batchId });
     expect(out).toEqual({ ok: true });
     expect(fetchMock).toHaveBeenCalledTimes(0);
 
@@ -3157,7 +3157,7 @@ describe("renderReel: fail-closed on the secret, then the offline seam", () => {
       }),
     );
 
-    const out = await t.action(internal.render.renderReel.renderReel, { tenantId: A, batchId });
+    const out = await t.action(internal.render.renderReel.renderReel, { tenantId: A, planId, batchId });
     expect(out).toEqual({ ok: false, reason: "sidecar_rejected_on_return" });
     const plan = await planRow(t, planId);
     expect(plan?.renderStatus).toBe("failed");
@@ -3175,7 +3175,7 @@ describe("renderReel: fail-closed on the secret, then the offline seam", () => {
       JSON.stringify({ ok: false, code: "speech_out_of_window" }),
     );
 
-    const out = await t.action(internal.render.renderReel.renderReel, { tenantId: A, batchId });
+    const out = await t.action(internal.render.renderReel.renderReel, { tenantId: A, planId, batchId });
     expect(out).toEqual({ ok: false, reason: "speech_out_of_window" });
     const plan = await planRow(t, planId);
     expect(plan?.renderStatus).toBe("failed");
@@ -3188,7 +3188,7 @@ describe("renderReel: fail-closed on the secret, then the offline seam", () => {
     const t = harness();
     vi.stubGlobal("fetch", vi.fn());
     stubRenderEnv();
-    const { batchId } = await seedRenderable(t);
+    const { planId, batchId } = await seedRenderable(t);
     const sidecarStorageId = await storeBlob(t, RENDER_SIDECAR, "application/json");
     const mp4StorageId = await storeBlob(t, new Uint8Array([1]), "video/mp4");
     vi.stubEnv(
@@ -3202,7 +3202,7 @@ describe("renderReel: fail-closed on the secret, then the offline seam", () => {
         sceneCount: 2,
       }),
     );
-    await t.action(internal.render.renderReel.renderReel, { tenantId: A, batchId });
+    await t.action(internal.render.renderReel.renderReel, { tenantId: A, planId, batchId });
 
     const audit = (await auditRows(t)).filter((r) => r.eventType === "media.rendered");
     expect(audit).toHaveLength(1);
@@ -3222,9 +3222,9 @@ describe("renderReel: fail-closed on the secret, then the offline seam", () => {
     const t = harness();
     vi.stubGlobal("fetch", vi.fn());
     stubRenderEnv();
-    const { batchId } = await seedRenderable(t);
+    const { planId, batchId } = await seedRenderable(t);
     vi.stubEnv("MEDIA_SANDBOX_FIXTURE", JSON.stringify({ ok: false, code: "decode_failed" }));
-    await t.action(internal.render.renderReel.renderReel, { tenantId: A, batchId });
+    await t.action(internal.render.renderReel.renderReel, { tenantId: A, planId, batchId });
     expect((await auditRows(t)).filter((r) => r.eventType === "media.rendered")).toHaveLength(0);
   });
 });
@@ -4204,7 +4204,7 @@ describe("D12(b) RETENTION: delete on success, KEEP on failure", () => {
     vi.stubGlobal("fetch", vi.fn());
     stubRenderEnv();
     vi.stubEnv("MEDIA_SANDBOX_FIXTURE", JSON.stringify(fixture));
-    await t.action(internal.render.renderReel.renderReel, { tenantId: A, batchId });
+    await t.action(internal.render.renderReel.renderReel, { tenantId: A, planId, batchId });
     const rows = await t.run(async (ctx) => await ctx.db.query("mediaJobs").collect());
     return { planId, rows };
   }
@@ -5127,7 +5127,7 @@ describe("the NARROWED retention rule (plan 20-17 over 20-16)", () => {
         sceneCount: 2,
       }),
     );
-    await t.action(internal.render.renderReel.renderReel, { tenantId: A, batchId });
+    await t.action(internal.render.renderReel.renderReel, { tenantId: A, planId, batchId });
     return { planId, batchId, sttJobId };
   }
 
@@ -5174,7 +5174,7 @@ describe("the NARROWED retention rule (plan 20-17 over 20-16)", () => {
 
   test("with captions NOT reserved, the render deletes them exactly as 20-16 did", async () => {
     const t = harness();
-    const { batchId } = await seedRenderable(t, { blocks: 2 });
+    const { planId, batchId } = await seedRenderable(t, { blocks: 2 });
     const mp4 = await storeBlob(t, new Uint8Array([1, 2, 3]), "video/mp4");
     const sidecar = await storeBlob(t, sidecarFor(2), "application/json");
     vi.stubGlobal("fetch", vi.fn());
@@ -5190,7 +5190,7 @@ describe("the NARROWED retention rule (plan 20-17 over 20-16)", () => {
         sceneCount: 2,
       }),
     );
-    await t.action(internal.render.renderReel.renderReel, { tenantId: A, batchId });
+    await t.action(internal.render.renderReel.renderReel, { tenantId: A, planId, batchId });
 
     const rows = await t.run(async (ctx) => await ctx.db.query("mediaJobs").collect());
     expect(rows.length).toBeGreaterThan(0);

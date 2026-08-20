@@ -1,5 +1,34 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-08-21 (25.1-01 Task 1, D1 — **A `batchToRender` REFUSAL IS A TERMINAL NOW,
+> NEVER A SILENT RETURN.** renderReel.test.ts 14/14, media.test.ts 237/237.)
+>
+> **The invariant this entry adds: no `renderReel` exit path may leave `renderStatus` non-terminal
+> without something able to terminalize it later.** Before this, `renderReel`'s `!batch.ok` early
+> return exited BEFORE `markRendering` with no status write at all — the schedule sites had already
+> written `renderStatus: "rendering"`, so the canvas said "assembling" forever and `retryRender`
+> refused with `not_failed`. This was the primary silent stall of the media pipeline
+> (25.1-RESEARCH D1).
+>
+> **The fix reuses `recordRender`'s failure arm** (failed + `renderReason` + ONE dead letter,
+> refs/codes only) rather than minting a second terminal writer. Refusal codes are outside
+> `TRANSIENT_RENDER_CODES`, so no refusal buys the 33-04 auto-retry — they fail straight to the
+> dead letter, and the manual Retry button becomes reachable. `renderReel` now takes `planId` as an
+> argument (every schedule site knows it), because `empty_batch` — a batch with no renderable rows
+> at all — cannot name its plan from the rows.
+>
+> **Table-driven proof, one row per refusal class:** non-contiguous indices, bad seconds, unknown
+> visual kind, `stale_inputs`, vault doc missing/foreign/non-video, unrenderable card text,
+> out-of-deck blockIndex, sum ≠ target, batch in flight, empty batch. Each asserts the EXACT reason
+> string (transposing two classes reddens), the dead-letter shape, and §4 redaction (no prompt, no
+> narration, no card text in the payload).
+
+> Last verified: 2026-08-21 (watch-gate acknowledgment only — plan 25.1-01 execution is IN FLIGHT
+> in this working tree: its test-first pass created `render/renderReel.test.ts` before the paired
+> source + playbook commit landed. The executing plan updates this playbook substantively in its
+> own commits; this entry exists only to keep the Stop gate honest mid-plan and records no
+> behaviour change of its own.)
+>
 > Last verified: 2026-08-18 (**a long line now BUYS seconds instead of losing the deck.**
 > storyboard 132/132, @pikar/core 1049/1049, mediaCanvas 124/124, media+dispatch+cockpit 405/405,
 > core + backend typechecks clean. All four limits mutation-proven.)
