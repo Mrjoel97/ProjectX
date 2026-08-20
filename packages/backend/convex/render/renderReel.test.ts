@@ -11,6 +11,7 @@
 // Everything runs offline at $0 through `MEDIA_SANDBOX_FIXTURE` (see media.test.ts — the seam is
 // mandatory in every suite; a real `Sandbox.create` on Hobby is an outage, not a bill).
 import { MEDIA_DEFAULT_VIDEO, MEDIA_DEFAULT_VOICE } from "@pikar/cost/media";
+import type { RunId } from "@convex-dev/action-retrier";
 import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import retrierTest from "@convex-dev/action-retrier/test";
@@ -428,5 +429,131 @@ describe("D1: a batchToRender refusal writes a failed terminal + dead letter, ne
     expect(out).toEqual({ ok: true });
     expect((await planRow(t, planId))?.renderStatus).toBe("rendered");
     expect(await deadLetters(t)).toHaveLength(0);
+  });
+});
+
+// ── D2: renderReel runs under the ActionRetrier — a crash after markRendering terminalizes ──────
+
+describe("D2: onRenderComplete — the retrier terminal for a crashed renderReel run", () => {
+  const RUN_ID = "render-run-1" as RunId;
+  const seedPlanAt = (t: T, over: Record<string, unknown> = {}) =>
+    t.run(
+      async (ctx) =>
+        await ctx.db.insert("plans", {
+          tenantId: A,
+          threadId: "thread_1",
+          status: "proposed",
+          renderStatus: "rendering",
+          renderRunId: RUN_ID,
+          createdAt: Date.now(),
+          ...over,
+        }),
+    );
+
+  test("a FAILED run terminalizes a still-rendering plan: failed + render_crashed + dead letter", async () => {
+    const t = harness();
+    const planId = await seedPlanAt(t);
+
+    await t.mutation(internal.mediaComplete.onRenderComplete, {
+      runId: RUN_ID,
+      // The retrier's error string can carry a URL or an env name — it must NEVER be persisted.
+      result: { type: "failed", error: "fetch https://secret.example failed OPENAI_API_KEY" },
+    });
+
+    const plan = await planRow(t, planId);
+    expect(plan?.renderStatus).toBe("failed");
+    expect(plan?.renderReason).toBe("render_crashed"); // a CODE, never the error string
+    expect(plan?.renderedAt).toBeDefined();
+
+    const rows = await deadLetters(t);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      tenantId: A,
+      workflowId: "media.render",
+      status: "new",
+      error: "render_crashed",
+    });
+    expect(Object.keys((rows[0]?.payload ?? {}) as object).sort()).toEqual(
+      ["planId", "reasonCode"].sort(),
+    );
+    // §4: nothing from the retrier's error crosses into the log plane.
+    expect(JSON.stringify(rows[0])).not.toMatch(/http|OPENAI|secret\.example/i);
+  });
+
+  test("a CANCELED run writes its own code", async () => {
+    const t = harness();
+    const planId = await seedPlanAt(t);
+    await t.mutation(internal.mediaComplete.onRenderComplete, {
+      runId: RUN_ID,
+      result: { type: "canceled" },
+    });
+    expect((await planRow(t, planId))?.renderReason).toBe("render_canceled");
+  });
+
+  test("a SUCCESS result writes nothing — renderReel owns its own terminals", async () => {
+    const t = harness();
+    const planId = await seedPlanAt(t);
+    await t.mutation(internal.mediaComplete.onRenderComplete, {
+      runId: RUN_ID,
+      result: { type: "success", returnValue: { ok: true } },
+    });
+    expect((await planRow(t, planId))?.renderStatus).toBe("rendering"); // untouched
+    expect(await deadLetters(t)).toHaveLength(0);
+  });
+
+  test.each(["failed", "rendered"] as const)(
+    "IDEMPOTENT: a plan already at '%s' is left alone — no second terminal, no dead letter",
+    async (renderStatus) => {
+      const t = harness();
+      const planId = await seedPlanAt(t, { renderStatus, renderReason: "route_rejected" });
+      await t.mutation(internal.mediaComplete.onRenderComplete, {
+        runId: RUN_ID,
+        result: { type: "failed", error: "late delivery" },
+      });
+      const plan = await planRow(t, planId);
+      expect(plan?.renderStatus).toBe(renderStatus);
+      expect(plan?.renderReason).toBe("route_rejected"); // the FIRST terminal's reason stands
+      expect(await deadLetters(t)).toHaveLength(0);
+    },
+  );
+
+  test("an unknown runId resolves no plan and writes nothing", async () => {
+    const t = harness();
+    await seedPlanAt(t); // a plan exists, but under a DIFFERENT run id
+    await t.mutation(internal.mediaComplete.onRenderComplete, {
+      runId: "some-other-run" as RunId,
+      result: { type: "failed", error: "x" },
+    });
+    expect(await deadLetters(t)).toHaveLength(0);
+  });
+});
+
+describe("D2: a non-JSON 200 from the render route is a failed terminal, not an uncaught throw", () => {
+  test.each([
+    ["an HTML error page", "<html>bad gateway</html>"],
+    ["a JSON body that is not an object", "null"],
+  ])("%s → failed + route_bad_response + dead letter", async (_name, body) => {
+    const t = harness();
+    stubRenderEnv();
+    // NO fixture: the real fetch path runs, and the route answers 200 with an unusable body.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(body, { status: 200 })),
+    );
+    const { planId, batchId } = await seedMidRender(t);
+
+    const out = await t.action(internal.render.renderReel.renderReel, {
+      tenantId: A,
+      planId,
+      batchId,
+    });
+    expect(out).toEqual({ ok: false, reason: "route_bad_response" });
+
+    const plan = await planRow(t, planId);
+    expect(plan?.renderStatus).toBe("failed");
+    expect(plan?.renderReason).toBe("route_bad_response");
+    const rows = await deadLetters(t);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.error).toBe("route_bad_response");
   });
 });
