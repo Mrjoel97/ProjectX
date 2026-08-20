@@ -1,3 +1,10 @@
+> Last verified: 2026-08-20 (23-05 source-separated the Executive's
+> `authorSkillCandidate` tool from both activation exports. The tool still reaches only
+> `publishAgentCandidate`; activation lives only in the owner-mounted `/ops` review panel, with a
+> distinct user vs agent exact-id mutation selected from the server's closed author discriminant.
+> The workspace history shows inert author/status labels and no activation control. Source/static
+> verification only because dependencies are absent; no live state changed and `$0.00` was spent.)
+>
 > Last verified: 2026-08-20 (17-09 added bounded managed-event discovery and inspect-then-stage
 > update/delete proposals. The tool accepts only a tenant-checked registry ref, parses time from the
 > trusted client clock, refreshes title/time/etag/attendee count before one atomic proposal mutation,

@@ -1,5 +1,13 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-20 (23-05 added the separate exact-id
+> `activateAgentCandidate` owner mutation. Agent activation requires the current full-suite
+> `hasPassingAgentTenantEvidence` predicate and writes server-derived `ownerApproval` with
+> `status: active` in the one transition patch. Phase-21 user activation refuses agent rows; the
+> agent door refuses user rows. Rollback remains owner-only, evidence-exempt, and changes no body,
+> evidence, approval or lineage. Offline/source verification only in this dependency-less checkout;
+> no live state changed and `$0.00` was spent.)
+>
 > Last verified: 2026-08-18 (23-04 versioned the golden suite and added the five held-out
 > adversarial authoring fixtures + `hasPassingAgentTenantEvidence`. NO PAID RUN OCCURRED — offline
 > validation only, $0.00. 23-02 added `publishAgentCandidate`, the inert candidate-only writer —
@@ -1738,3 +1746,27 @@ id would need a cross-tenant scan, which is both unbounded and an existence orac
 
 This plan is implementation and offline validation only. Nothing was seeded, no model was called,
 no evidence row was written, and `$0.00` was spent. `--self-check` is the whole gate here.
+
+### 23-05 — the human-owner half of the agent gate
+
+`activateAgentCandidate` is a distinct `ownerMutation` accepting exactly one `candidateId`. It is
+not an alias for `activateTenantCandidate`: the user door requires `author: user` and the agent door
+requires `author: agent`, `status: candidate`, no prior approval, and current-suite exact-row
+evidence. The evidence's own `runId`, `ctx.userId`, and server time form `ownerApproval`; no client
+or model field can supply any of them.
+
+The shared `transitionSkillActivation` still owns the module's single active-status patch. For an
+agent row that patch carries `rollbackEligible: true`, `ownerApproval`, and `status: active`
+together. A failed gate throws before the plan exists, and Convex transaction atomicity means an
+audit failure cannot strand approval without activation either.
+
+The owner review queue remains a fixed newest-first window and now returns a closed `author`
+discriminant. Agent rows add Executive/source refs, current-base/candidate diff, eval counts/run,
+and approval state; fixture prompts, expected outputs and raw evidence never enter the projection.
+The workspace history includes both user- and agent-authored adaptations, but still returns no row
+id, full/base body, raw evidence, owner identity, source refs or activation control.
+
+Rollback is deliberately unchanged: only a non-active `rollbackEligible` row can be selected, it
+is owner-only and evidence-exempt, and the transaction changes the status/eligibility plane only.
+An agent row keeps its original evidence and `ownerApproval` after it is rolled away from and later
+restored. `skill.agent_candidate_activated` is the distinct refs-only activation event.

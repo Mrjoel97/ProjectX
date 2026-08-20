@@ -73,6 +73,8 @@ describe("SkillAuthoringPanel — the publish path exists and is candidate-only"
   test("there is NO activation control, API or word anywhere in the panel", () => {
     for (const forbidden of [
       "activateCandidate",
+      "activateAgentCandidate",
+      "activateTenantCandidate",
       "activateSkill",
       "candidatesForReview",
       "recordEvalEvidence",

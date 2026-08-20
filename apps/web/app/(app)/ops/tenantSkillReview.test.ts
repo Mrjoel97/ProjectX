@@ -40,6 +40,8 @@ describe("tenant skill review surface — the panel exists and is wired", () => 
     expect(panel.text).toContain("useQuery(api.skills.tenantCandidatesForReview, {})");
     expect(panel.text).toContain("useMutation(api.skills.activateTenantCandidate)");
     expect(panel.text).toContain("useMutation(api.skills.activateAgentCandidate)");
+    expect(code.split("api.skills.activateTenantCandidate").length - 1).toBe(1);
+    expect(code.split("api.skills.activateAgentCandidate").length - 1).toBe(1);
     expect(panel.text).toContain("useMutation(api.skills.rollbackTenantSkill)");
     // The GLOBAL optimizer endpoints belong to OptimizerPanel; this panel must not reach them.
     expect(panel.text).not.toContain("api.skills.activateCandidate");

@@ -1,5 +1,12 @@
 # Playbook: Authorization (tenancy + ownership)
 
+> Last verified: 2026-08-20 (23-05 added `skills.activateAgentCandidate`, a separate
+> `ownerMutation` whose exact-id agent row must also carry current full-suite exact-row evidence.
+> Owner identity/time and the eval run id are server-derived and written with active status in one
+> transition patch. User and agent activation exports refuse each other's rows; rollback remains
+> owner-only and evidence-exempt. Source/static verification only because package executables are
+> absent in this checkout; no live state changed and `$0.00` was spent.)
+>
 > **25-02 note, 2026-08-16 — Phase 22's outstanding owner/non-owner DOM evidence is closed at the
 > COMPONENT level, not in a browser.** `/admin` follows `/ops`'s mount-gate pattern exactly (the
 > whole view is conditional so its hooks never subscribe), and
@@ -251,9 +258,9 @@ patch `owner:true` → ONE `owner.granted` audit event → return `{changed:true
    evidence-exempt rollback.
 10. **The protected endpoints are pinned BY NAME** in `importGuard.test.ts`
     (`owner-gated endpoints stay owner-gated`). Adding an admin endpoint means adding a row. There
-    are **seven** as of 21-04: `getOptimizerStatus`, `setOptimizerEnabled`, `activateCandidate`,
+    are **eight** as of 23-05: `getOptimizerStatus`, `setOptimizerEnabled`, `activateCandidate`,
     `candidatesForReview`, `tenantCandidatesForReview`, `activateTenantCandidate`,
-    `rollbackTenantSkill`.
+    `activateAgentCandidate`, `rollbackTenantSkill`.
 11. **A TENANT skill row goes live only through the owner boundary** (21-04, SKILL-01). A user can
     publish a `candidate` and an eval run can certify it; neither changes what any model runs.
     `activateTenantCandidate` is the only door, and it needs BOTH gates. Proven by a four-cell truth
@@ -262,8 +269,13 @@ patch `owner:true` → ONE `owner.granted` audit event → return `{changed:true
     to `tenantMutation` lets the candidate's **own author** activate it (`changed: true`).
 12. **`requireOwner` is never inside `transitionSkillActivation`.** That helper is also the
     identity-free path for the eval runner and seeding. The wrapper is the authority; the helper is
-    the transition. This is invariant 9 restated for the tenant scope, and it is why the helper
-    takes no user id and the audit write lives in the public wrapper.
+    the transition. Agent mode receives the already-authenticated `ctx.userId` only to stamp the
+    approval patch; it does not perform authorization and the global/internal modes remain
+    identity-free. The audit write stays in the public wrapper.
+13. **Agent approval is a conjunction, not a second name for activation.**
+    `activateAgentCandidate` requires `author: agent`, candidate status, absent prior approval, and
+    `hasPassingAgentTenantEvidence` for the current full suite. `activateTenantCandidate` refuses
+    agent rows even when evidence is valid, and the agent endpoint refuses user rows.
 
 ### The tenant overlay's owner surface (21-04)
 
@@ -271,9 +283,10 @@ patch `owner:true` → ONE `owner.granted` audit event → return `{changed:true
 |---|---|---|---|
 | `skills.tenantCandidatesForReview` | `ownerQuery` | none | — (read) |
 | `skills.activateTenantCandidate` | `ownerMutation` | `{candidateId}` | exact passing tenant evidence |
+| `skills.activateAgentCandidate` | `ownerMutation` | `{candidateId}` | exact passing current-suite agent evidence + absent approval |
 | `skills.rollbackTenantSkill` | `ownerMutation` | `{targetId}` | `rollbackEligible === true` + archived/rolled_back |
 
-**All three take a ROW ID, never `(name, version)`.** Two tenants can each own `offer-architect@2`,
+**Every write takes a ROW ID, never `(name, version)`.** Two tenants can each own `offer-architect@2`,
 so a name/version activation is a coin flip between going live for the right tenant and going live
 for a stranger's draft.
 
@@ -283,12 +296,14 @@ prompts), across every tenant on the deployment. The `ownerQuery` refusal happen
 ctx factory, **before the handler reads a single row**. It is bounded — `by_status_createdAt` with a
 fixed `.take()`, newest first — because the deployment's candidate history is open-ended.
 
-**Ordinary tenant APIs are unchanged.** `myUserSkills` still returns no row id, no base body and no
-raw evidence, and the workspace authoring panel still has no activation control. A user cannot even
-name the row they would want activated.
+**Ordinary tenant authority is unchanged.** The history projection now includes the tenant's
+agent-authored adaptations with a closed author label and strict gate boolean, but still returns no
+row id, base/full body, raw evidence, owner identity or source refs. The workspace panel has no
+activation control. A tenant still cannot name the row they would want activated.
 
 **Audit.** One refs-only row per REAL transition (idempotent and failed attempts write nothing):
-`skill.user_candidate_activated` / `skill.user_skill_rolled_back`, `actor: "owner"`, payload key set
+`skill.user_candidate_activated` / `skill.agent_candidate_activated` /
+`skill.user_skill_rolled_back`, `actor: "owner"`, payload key set
 exactly `author, evalRunId, fromTenantSkillId, fromVersion, ownerUserId, skillName, tenantSkillId,
 version`. The row belongs to the TENANT whose runtime changed, on that candidate's own
 `correlationId` lineage — not to the owner. No body, no adaptation, no prose (CLAUDE.md §4).

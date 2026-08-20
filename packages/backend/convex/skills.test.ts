@@ -3064,6 +3064,7 @@ describe("publishAgentCandidate — the inert agent writer (23-02)", () => {
       "transitionSkillActivation",
       "activateSkillVersion",
       "activateTenantCandidate",
+      "activateAgentCandidate",
       "recordTenantEvalEvidence",
       "ownerApproval",
       "ctx.db.patch",
@@ -3493,5 +3494,29 @@ describe("owner activation + immutable rollback of agent candidates (23-05)", ()
     ]) {
       expect(tenantKeys).not.toContain(forbidden);
     }
+  });
+
+  test("the authoring tool cannot name either activation door, and the agent door stays owner-wrapped", () => {
+    const llm = readFileSync(fileURLToPath(new URL("./llm.ts", import.meta.url)), "utf8").replace(
+      /\/\*[\s\S]*?\*\/|\/\/.*/g,
+      "",
+    );
+    const toolFrom = llm.indexOf("const skillAuthoringTool =");
+    const toolTo = llm.indexOf("const allTools =", toolFrom);
+    expect(toolFrom).toBeGreaterThan(-1);
+    expect(toolTo).toBeGreaterThan(toolFrom);
+    const toolRegion = llm.slice(toolFrom, toolTo);
+    expect(toolRegion).toContain("internal.skills.publishAgentCandidate");
+    expect(toolRegion).not.toContain("activateTenantCandidate");
+    expect(toolRegion).not.toContain("activateAgentCandidate");
+
+    const skills = readFileSync(fileURLToPath(new URL("./skills.ts", import.meta.url)), "utf8");
+    const exportFrom = skills.indexOf("export const activateAgentCandidate =");
+    const exportTo = skills.indexOf("export const rollbackTenantSkill =", exportFrom);
+    expect(exportFrom).toBeGreaterThan(-1);
+    expect(exportTo).toBeGreaterThan(exportFrom);
+    const exportRegion = skills.slice(exportFrom, exportTo);
+    expect(exportRegion).toContain("ownerMutation({");
+    expect(exportRegion).not.toContain("tenantMutation({");
   });
 });
