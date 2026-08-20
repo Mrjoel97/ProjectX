@@ -604,6 +604,7 @@ export default defineSchema({
     // ref or a run id. Do not add them to patchPlan speculatively.
     calendarEventId: v.optional(v.string()), // the Google event ref, set on success. A ref, not content.
     mediaRunId: v.optional(v.string()), // 20-07: the media submit run — see by_media_run below
+    renderRunId: v.optional(v.string()), // 25.1-01: the RENDER run (renderReel under the retrier) — see by_render_run below
     calendarRunId: v.optional(v.string()), // the action-retrier RunId — the ONLY correlation the
     // retrier's onComplete gets on a FAILED run (it carries {runId, result} and no context).
     // ── 17-05 (ACTN-02 gap closure) the calendar_manage PROPOSAL plane ───────────────────────
@@ -873,7 +874,12 @@ export default defineSchema({
     // failing. Deliberately a SECOND column rather than a reuse of `calendarRunId` — that one is
     // calendar-named and read by `calendarComplete`; overloading it would make a media retry
     // resolvable as a calendar plan.
-    .index("by_media_run", ["mediaRunId"]),
+    .index("by_media_run", ["mediaRunId"])
+    // 25.1-01 (D2). The SAME reason a THIRD time, for the render run: `onRenderComplete` receives
+    // only {runId, result}, and this index is what lets a crashed renderReel run terminalize its
+    // own plan. A separate column again — the submit run and the render run are different
+    // lifecycles of the same plan, and each terminal must only ever resolve its own run.
+    .index("by_render_run", ["renderRunId"]),
 
   // ── Phase-3.7 inbox-briefing plane (CKPT-04) ───────────────────────────────
   // New tables only → no migration (prior-phase discipline).

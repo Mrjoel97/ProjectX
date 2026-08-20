@@ -27,6 +27,9 @@ import type { MutationCtx } from "./_generated/server";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { hmacHex } from "./gmailAuth";
 import { rateLimiter } from "./guardrails";
+// 25.1-01 (D2): renderReel runs under the ActionRetrier — the `submitBatch` idiom
+// (cockpit.ts EXTERNAL_TARGETS) — so a throw after `markRendering` still terminalizes.
+import { retrier } from "./index";
 // The plain-function half of the ledger writer: the limiter movement and its row must commit
 // or fail together (FIN-01). A separate ctx.runMutation would be a second transaction.
 import { recordMovement } from "./spendLedger";
@@ -235,12 +238,16 @@ export async function evaluateRenderTrigger(
   const deckReady = (shots ?? []).every((s) => hasAssetSource(s));
 
   if (deckReady && renderable.filter(needed).every((s) => s.status === "succeeded")) {
-    await ctx.db.patch(a.planId, { renderStatus: "rendering" });
-    await ctx.scheduler.runAfter(0, internal.render.renderReel.renderReel, {
-      tenantId: a.tenantId,
-      planId: a.planId,
-      batchId: a.batchId,
-    });
+    // 25.1-01 (D2): under the retrier, never a bare runAfter — a renderReel crash after
+    // `markRendering` used to strand the plan at "rendering" forever. The run id lands on the
+    // plan in the SAME mutation, so `onRenderComplete` can resolve its own plan (`by_render_run`).
+    const runId = await retrier.run(
+      ctx,
+      internal.render.renderReel.renderReel,
+      { tenantId: a.tenantId, planId: a.planId, batchId: a.batchId },
+      { onComplete: internal.mediaComplete.onRenderComplete },
+    );
+    await ctx.db.patch(a.planId, { renderStatus: "rendering", renderRunId: String(runId) });
     return;
   }
 
@@ -566,5 +573,49 @@ export const onSubmitComplete = internalMutation({
       });
     }
     await ctx.db.patch(plan._id, { renderStatus: "failed", renderReason: code });
+  },
+});
+
+/**
+ * The action-retrier terminal for the RENDER run (25.1-01, D2 — `onSubmitComplete`'s sibling).
+ *
+ * `renderReel` writes its own terminal through `recordRender` on every HANDLED failure; this
+ * callback exists for the unhandled ones — a throw after `markRendering` (upload-URL mint, storage
+ * read, an exhausted retrier) that would otherwise strand the plan at `"rendering"` forever, with
+ * the canvas saying "assembling" and `retryRender` refusing `not_failed`.
+ *
+ * Idempotent by the status guard: a run whose action already terminalized the plan (failed or
+ * rendered) finds it non-`rendering` and writes nothing — and a STALE run cannot fire at all,
+ * because every new schedule overwrites `renderRunId` and the lookup below misses.
+ */
+export const onRenderComplete = internalMutation({
+  args: onCompleteValidator,
+  handler: async (ctx, { runId, result }): Promise<void> => {
+    if (result.type === "success") return;
+
+    const plan = await ctx.db
+      .query("plans")
+      .withIndex("by_render_run", (q) => q.eq("renderRunId", String(runId)))
+      .unique();
+    if (!plan) return;
+    if (plan.renderStatus !== "rendering") return; // already terminalized — nothing to correct
+
+    // A CODE, never the retrier's error string — it can carry a URL or an env name (§4).
+    const code = result.type === "canceled" ? "render_canceled" : "render_crashed";
+    await ctx.db.patch(plan._id, {
+      renderStatus: "failed",
+      renderReason: code,
+      renderedAt: Date.now(),
+    });
+    // ONE dead letter, refs and codes ONLY (§4) — the `recordRender` failure-arm shape.
+    await ctx.db.insert("deadLetters", {
+      tenantId: plan.tenantId,
+      correlationId: String(runId),
+      workflowId: "media.render",
+      payload: { planId: plan._id, reasonCode: code },
+      error: code,
+      status: "new",
+      createdAt: Date.now(),
+    });
   },
 });

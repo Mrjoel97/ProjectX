@@ -1,3 +1,13 @@
+> Last verified: 2026-08-21 (25.1-01 Task 2, D2 — **NO cockpit.ts CHANGE WAS NEEDED, recorded so
+> the plan's premise dies here.** The plan expected `EXTERNAL_TARGETS` to gain a renderReel thunk;
+> it does not — `EXTERNAL_TARGETS.media` stays `submitBatch`, permanently, per 20-16's decision
+> above. What DID change is that the render stage now runs under the SAME ActionRetrier component
+> the cockpit's external arm uses: all three renderReel schedule sites (`evaluateRenderTrigger`,
+> `media.retryRender`, `recordRender`'s auto-retry) are `retrier.run(…, { onComplete:
+> internal.mediaComplete.onRenderComplete })`, with the run id on `plans.renderRunId` — the
+> `calendarRunId`/`mediaRunId` correlation pattern a third time. Details live in media.md; this
+> entry exists because the cockpit playbook documents the EXTERNAL_TARGETS idiom that was copied.)
+>
 > Last verified: 2026-08-20 (23-05 source-separated the Executive's
 > `authorSkillCandidate` tool from both activation exports. The tool still reaches only
 > `publishAgentCandidate`; activation lives only in the owner-mounted `/ops` review panel, with a

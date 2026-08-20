@@ -1394,7 +1394,9 @@ test("media audit payloads are refs-only — every key is on the allow-list", ()
   // `media.render_retry_manual` (planId + batchId) — refs and a closed-union code, no new keys.
   // -> 11 at 33-05: `media.reel_saved` (planId + docId + citations count). TWO new keys, both
   // refs-only by the §4 test: the vault doc the reel became, and how many citations rode with it.
-  expect(literals.length, "no media audit payloads found - the scan is vacuous").toBe(11);
+  // -> 12 at 25.1-01: `onRenderComplete`'s dead letter in mediaComplete.ts (planId + reasonCode,
+  // both pre-existing allow-listed refs) — the retrier terminal for a crashed renderReel run.
+  expect(literals.length, "no media audit payloads found - the scan is vacuous").toBe(12);
   for (const [file, literal] of literals) {
     for (const key of keysOf(literal)) {
       expect(
@@ -1424,16 +1426,16 @@ test("no prompt text and no narration text reaches the media log plane — only 
         /\bprompt\b(?!Hash)|narration/,
       );
     }
-    // ...and no other log-plane sink exists in these modules at all — EXCEPT the render
-    // terminal's single dead letter, which 20-16 requires: a failed render does not retry, so the
-    // dead letter is the only durable record that it happened. Its keys are pinned by
-    // MEDIA_AUDIT_ALLOWED above AND by an exact-key assertion in media.test.ts, so it is governed
-    // rather than exempt. The ban still holds absolutely for the submit and landing planes.
-    if (file !== "render/renderReel.ts") {
-      expect(code, `${file} writes a deadLetters row`).not.toMatch(
-        /\.insert\(\s*["']deadLetters["']/,
-      );
-    }
+    // ...and the dead-letter sites are COUNTED per module rather than banned outright — each is a
+    // governed log-plane row whose keys are pinned by MEDIA_AUDIT_ALLOWED above. renderReel.ts has
+    // TWO (the 20-16 render terminal and the 20-17 caption terminal); mediaComplete.ts gained ONE
+    // at 25.1-01 (`onRenderComplete`, the retrier terminal for a crashed render run). The ban
+    // still holds absolutely for the submit plane and for any THIRD site appearing anywhere.
+    const deadLetterSites = [...code.matchAll(/\.insert\(\s*["']deadLetters["']/g)].length;
+    expect(
+      deadLetterSites,
+      `${file} dead-letter site count moved — was the new payload reviewed?`,
+    ).toBe(file === "render/renderReel.ts" ? 2 : file === "mediaComplete.ts" ? 1 : 0);
     expect(code, `${file} writes a telemetry row`).not.toMatch(/\.insert\(\s*["']telemetry["']/);
   }
 });

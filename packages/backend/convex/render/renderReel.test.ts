@@ -10,11 +10,12 @@
 //
 // Everything runs offline at $0 through `MEDIA_SANDBOX_FIXTURE` (see media.test.ts — the seam is
 // mandatory in every suite; a real `Sandbox.create` on Hobby is an outage, not a bill).
-import { MEDIA_DEFAULT_VIDEO, MEDIA_DEFAULT_VOICE } from "@pikar/cost/media";
+
 import type { RunId } from "@convex-dev/action-retrier";
+import retrierTest from "@convex-dev/action-retrier/test";
+import { MEDIA_DEFAULT_VIDEO, MEDIA_DEFAULT_VOICE } from "@pikar/cost/media";
 import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import retrierTest from "@convex-dev/action-retrier/test";
 import aggregateSchema from "../../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import rateLimiterSchema from "../../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import workflowSchema from "../../node_modules/@convex-dev/workflow/src/component/schema.js";
@@ -359,7 +360,7 @@ describe("D1: a batchToRender refusal writes a failed terminal + dead letter, ne
     expect(Object.keys((rows[0]?.payload ?? {}) as object).sort()).toEqual(
       ["batchId", "planId", "reasonCode"].sort(),
     );
-    expect((rows[0]?.payload as { reasonCode: string }).reasonCode).toBe(reason);
+    expect((rows[0]?.payload as { reasonCode?: string })?.reasonCode).toBe(reason);
     const serialized = JSON.stringify(rows[0]);
     expect(serialized).not.toMatch(/prompt \d|x{10,}|scene \d/); // deck content stays out
     expect(serialized).not.toMatch(new RegExp(CARD_TEXT));
@@ -402,8 +403,7 @@ describe("D1: a batchToRender refusal writes a failed terminal + dead letter, ne
       })),
     });
     const sidecarStorageId = await t.run(
-      async (ctx) =>
-        await ctx.storage.store(new Blob([sidecar], { type: "application/json" })),
+      async (ctx) => await ctx.storage.store(new Blob([sidecar], { type: "application/json" })),
     );
     const mp4StorageId = await t.run(
       async (ctx) =>
@@ -501,21 +501,21 @@ describe("D2: onRenderComplete — the retrier terminal for a crashed renderReel
     expect(await deadLetters(t)).toHaveLength(0);
   });
 
-  test.each(["failed", "rendered"] as const)(
-    "IDEMPOTENT: a plan already at '%s' is left alone — no second terminal, no dead letter",
-    async (renderStatus) => {
-      const t = harness();
-      const planId = await seedPlanAt(t, { renderStatus, renderReason: "route_rejected" });
-      await t.mutation(internal.mediaComplete.onRenderComplete, {
-        runId: RUN_ID,
-        result: { type: "failed", error: "late delivery" },
-      });
-      const plan = await planRow(t, planId);
-      expect(plan?.renderStatus).toBe(renderStatus);
-      expect(plan?.renderReason).toBe("route_rejected"); // the FIRST terminal's reason stands
-      expect(await deadLetters(t)).toHaveLength(0);
-    },
-  );
+  test.each([
+    "failed",
+    "rendered",
+  ] as const)("IDEMPOTENT: a plan already at '%s' is left alone — no second terminal, no dead letter", async (renderStatus) => {
+    const t = harness();
+    const planId = await seedPlanAt(t, { renderStatus, renderReason: "route_rejected" });
+    await t.mutation(internal.mediaComplete.onRenderComplete, {
+      runId: RUN_ID,
+      result: { type: "failed", error: "late delivery" },
+    });
+    const plan = await planRow(t, planId);
+    expect(plan?.renderStatus).toBe(renderStatus);
+    expect(plan?.renderReason).toBe("route_rejected"); // the FIRST terminal's reason stands
+    expect(await deadLetters(t)).toHaveLength(0);
+  });
 
   test("an unknown runId resolves no plan and writes nothing", async () => {
     const t = harness();

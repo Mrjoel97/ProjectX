@@ -1,5 +1,37 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-08-21 (25.1-01 Task 2, D2 — **renderReel RUNS UNDER THE ActionRetrier NOW,
+> AND A CRASH AFTER `markRendering` TERMINALIZES.** renderReel.test.ts 22/22, media.test.ts
+> 237/237, llmRedaction 61/61, cockpit 73/73, backend tsc clean.)
+>
+> **All three schedule sites** — the landing trigger (`evaluateRenderTrigger`), the manual
+> `retryRender`, and the 33-04 auto-retry inside `recordRender` — now go through
+> `retrier.run(internal.render.renderReel.renderReel, …, { onComplete:
+> internal.mediaComplete.onRenderComplete })`, the `submitBatch` idiom. Each writes the run id to
+> `plans.renderRunId` in the SAME mutation (new column + `by_render_run` index — the
+> `mediaRunId`/`by_media_run` pattern a third time), because the retrier's onComplete receives only
+> `{runId, result}`.
+>
+> **`onRenderComplete` (mediaComplete.ts, beside `onSubmitComplete`)** acts ONLY on a failed or
+> canceled run whose plan still says `"rendering"`: it writes `renderStatus: "failed"` +
+> `renderReason: "render_crashed"` (or `"render_canceled"`) + one refs-only dead letter. A plan the
+> action already terminalized is left alone, and a STALE run cannot fire at all — every new
+> schedule overwrites `renderRunId`, so the old run's lookup misses. The retrier's error string is
+> NEVER persisted (it can carry a URL or an env name — §4).
+>
+> **The non-JSON 200 at the route response is also closed:** `response.json()` is guarded, and a
+> body that is not a JSON object terminalizes inline as `route_bad_response` (a new
+> `RenderRefusal` member) rather than throwing — inline, deliberately, because the sandbox already
+> ran and a retrier retry would buy a second one to learn the same thing. HANDLED failures still
+> return normally (the retrier sees success), so the no-retry-past-the-terminal money rule holds;
+> only genuine crashes retry (maxFailures 4, the component default).
+>
+> **Log-plane pins moved deliberately (llmRedaction.test.ts):** media payload-literal count 11 →
+> 12, and the per-module dead-letter ban became a per-module COUNT (renderReel.ts 2,
+> mediaComplete.ts 1, media.ts 0). Tests observe scheduling as `plans.renderRunId` now — the
+> retrier schedules inside its component, so the parent's `_scheduled_functions` no longer names
+> renderReel.
+
 > Last verified: 2026-08-21 (25.1-01 Task 1, D1 — **A `batchToRender` REFUSAL IS A TERMINAL NOW,
 > NEVER A SILENT RETURN.** renderReel.test.ts 14/14, media.test.ts 237/237.)
 >

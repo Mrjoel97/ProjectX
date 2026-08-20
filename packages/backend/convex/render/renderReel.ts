@@ -29,6 +29,7 @@ import { internal } from "./../_generated/api";
 import type { Doc, Id } from "./../_generated/dataModel";
 import type { MutationCtx } from "./../_generated/server";
 import { internalAction, internalMutation, internalQuery } from "./../_generated/server";
+import { retrier } from "./../index";
 import { contentHash } from "./../lib/hash";
 import { requireEnvMedia } from "./../media";
 import { maybeBurnCaptions } from "./../mediaComplete";
@@ -45,6 +46,7 @@ export type RenderRefusal =
   | "stale_inputs"
   | "route_unreachable"
   | "route_rejected"
+  | "route_bad_response" // 25.1-01: a 200 whose body is not a JSON object — not a route DECISION
   | "sidecar_rejected_on_return";
 
 /**
@@ -404,12 +406,15 @@ export const recordRender = internalMutation({
       // the render line is doubled at `MEDIA_SANDBOX_USD_PER_RENDER` for exactly this.
       const plan = await ctx.db.get(a.planId);
       if (plan && isTransientRenderCode(a.result.reason) && plan.renderRetriedAt === undefined) {
-        await ctx.db.patch(a.planId, { renderRetriedAt: Date.now() });
-        await ctx.scheduler.runAfter(0, internal.render.renderReel.renderReel, {
-          tenantId: a.tenantId,
-          planId: a.planId,
-          batchId: a.batchId,
-        });
+        // 25.1-01 (D2): under the retrier, never a bare runAfter — the run id rides the SAME
+        // patch as the CAS, so a crashed retry still terminalizes (`onRenderComplete`).
+        const runId = await retrier.run(
+          ctx,
+          internal.render.renderReel.renderReel,
+          { tenantId: a.tenantId, planId: a.planId, batchId: a.batchId },
+          { onComplete: internal.mediaComplete.onRenderComplete },
+        );
+        await ctx.db.patch(a.planId, { renderRetriedAt: Date.now(), renderRunId: String(runId) });
         // Refs and codes ONLY (§4). No dead letter on the retried attempt — an operator page for
         // a failure the system is about to handle itself would be noise; the SECOND failure pages.
         await ctx.runMutation(internal.audit.log, {
@@ -834,7 +839,18 @@ export const renderReel = internalAction({
         });
         return { ok: false, reason: "route_unreachable" };
       }
-      outcome = (await response.json()) as RouteSuccess | { ok: false; code: string };
+      // 25.1-01 (D2): a 200 whose body is not a JSON object used to THROW here unguarded —
+      // swallowed by the bare scheduler, plan stuck at "rendering". Terminalize inline instead:
+      // the sandbox already ran, so a retrier retry would buy a second one to learn the same thing.
+      try {
+        const parsed: unknown = await response.json();
+        outcome =
+          parsed !== null && typeof parsed === "object"
+            ? (parsed as RouteSuccess | { ok: false; code: string })
+            : { ok: false, code: "route_bad_response" };
+      } catch {
+        outcome = { ok: false, code: "route_bad_response" };
+      }
     }
 
     if (!outcome.ok) {

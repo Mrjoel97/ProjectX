@@ -52,6 +52,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { getGuardrailConfig, mediaRemainingCentsInner, rateLimiter } from "./guardrails";
+import { retrier } from "./index";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
 import { evaluateRenderTrigger } from "./mediaComplete";
@@ -2576,11 +2577,18 @@ export const retryRender = tenantMutation({
     );
     if (!latest) return { ok: false as const, reason: "nothing_to_render" as const };
 
-    await ctx.db.patch(planId, { renderStatus: "rendering", renderReason: undefined });
-    await ctx.scheduler.runAfter(0, internal.render.renderReel.renderReel, {
-      tenantId: ctx.tenantId,
-      planId,
-      batchId: latest.batchId,
+    // 25.1-01 (D2): under the retrier, never a bare runAfter — the run id lands on the plan in the
+    // SAME mutation so a crashed retry still terminalizes (`mediaComplete.onRenderComplete`).
+    const runId = await retrier.run(
+      ctx,
+      internal.render.renderReel.renderReel,
+      { tenantId: ctx.tenantId, planId, batchId: latest.batchId },
+      { onComplete: internal.mediaComplete.onRenderComplete },
+    );
+    await ctx.db.patch(planId, {
+      renderStatus: "rendering",
+      renderReason: undefined,
+      renderRunId: String(runId),
     });
     // Insert-only, refs only (§4): WHICH plan and WHICH batch — never a reason string the user
     // typed, never a URL.

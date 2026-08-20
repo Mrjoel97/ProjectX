@@ -5,6 +5,7 @@
 // Every assertion here is $0: nothing in this file calls fal, OpenAI or Vercel. The `node`
 // environment matches the research.test.ts / dispatch.test.ts harness idiom — convex-test's lazy
 // module loader pulls every convex module, and some of them are "use node".
+import retrierTest from "@convex-dev/action-retrier/test";
 import type { Block, Scene, ShotType } from "@pikar/core/storyboard";
 import { maxCharsFor, minCharsFor } from "@pikar/core/storyboard";
 import {
@@ -70,6 +71,8 @@ function harness(): T {
   // 33-05: the vault save at the pipeline terminals calls `startIngest` (workflow.start).
   t.registerComponent("workflow", workflowSchema, workflowModules);
   t.registerComponent("workflow/workpool", workpoolSchema, workpoolModules);
+  // 25.1-01 (D2): every render is scheduled through the ActionRetrier now.
+  retrierTest.register(t);
   return t;
 }
 
@@ -3120,7 +3123,11 @@ describe("renderReel: fail-closed on the secret, then the offline seam", () => {
       }),
     );
 
-    const out = await t.action(internal.render.renderReel.renderReel, { tenantId: A, planId, batchId });
+    const out = await t.action(internal.render.renderReel.renderReel, {
+      tenantId: A,
+      planId,
+      batchId,
+    });
     expect(out).toEqual({ ok: true });
     expect(fetchMock).toHaveBeenCalledTimes(0);
 
@@ -3157,7 +3164,11 @@ describe("renderReel: fail-closed on the secret, then the offline seam", () => {
       }),
     );
 
-    const out = await t.action(internal.render.renderReel.renderReel, { tenantId: A, planId, batchId });
+    const out = await t.action(internal.render.renderReel.renderReel, {
+      tenantId: A,
+      planId,
+      batchId,
+    });
     expect(out).toEqual({ ok: false, reason: "sidecar_rejected_on_return" });
     const plan = await planRow(t, planId);
     expect(plan?.renderStatus).toBe("failed");
@@ -3175,7 +3186,11 @@ describe("renderReel: fail-closed on the secret, then the offline seam", () => {
       JSON.stringify({ ok: false, code: "speech_out_of_window" }),
     );
 
-    const out = await t.action(internal.render.renderReel.renderReel, { tenantId: A, planId, batchId });
+    const out = await t.action(internal.render.renderReel.renderReel, {
+      tenantId: A,
+      planId,
+      batchId,
+    });
     expect(out).toEqual({ ok: false, reason: "speech_out_of_window" });
     const plan = await planRow(t, planId);
     expect(plan?.renderStatus).toBe("failed");
@@ -4330,14 +4345,15 @@ describe("33-04: the one auto-retry CAS and the manual retryRender", () => {
         result: { ok: false, reason },
       }),
     );
-  // STATE-AGNOSTIC on purpose: convex-test starts a runAfter(0) action as soon as the event loop
-  // yields, and with no render env stubbed it dies at `requireEnvMedia` BEFORE any write — which
-  // is exactly the harmless outcome these tests want. What is asserted is that the schedule
-  // HAPPENED (and against which batch), not the scheduled run's fate.
-  const pendingRenders = async (t: T) =>
-    (await t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect())).filter((s) =>
-      String(s.name).includes("renderReel:renderReel"),
-    );
+  // 25.1-01: renders are scheduled through the ActionRetrier COMPONENT, so the parent app's
+  // `_scheduled_functions` no longer names renderReel. The observable is the run id the schedule
+  // writes onto the plan row in the SAME mutation — a new schedule is a new `renderRunId`, and no
+  // schedule leaves it untouched. The scheduled run itself still dies harmlessly at
+  // `requireEnvMedia` with no render env stubbed (the retrier retries, then `onRenderComplete`
+  // finds the plan already terminalized or not-`rendering` and writes nothing that these tests
+  // read before their assertions run).
+  const renderRunOf = async (t: T, planId: Id<"plans">) =>
+    (await planRowOf(t, planId))?.renderRunId;
   const deadLetterRows = (t: T) => t.run((ctx) => ctx.db.query("deadLetters").collect());
   const auditsOf = (t: T, eventType: string) =>
     t.run((ctx) =>
@@ -4358,9 +4374,8 @@ describe("33-04: the one auto-retry CAS and the manual retryRender", () => {
     expect(plan?.renderRetriedAt).toBeDefined(); // the CAS is set in the SAME mutation
     expect(await deadLetterRows(t)).toHaveLength(0); // the retried attempt is not an operator page
 
-    const scheduled = await pendingRenders(t);
-    expect(scheduled).toHaveLength(1);
-    expect(scheduled[0]?.args?.[0]).toMatchObject({ tenantId: A, batchId }); // the SAME batch
+    // The reschedule is a retrier run, recorded on the row; the audit row below pins WHICH batch.
+    expect(await renderRunOf(t, planId)).toEqual(expect.any(String));
 
     // ONE audit row, refs/codes only (§4).
     const audits = await auditsOf(t, "media.render_retried");
@@ -4374,6 +4389,8 @@ describe("33-04: the one auto-retry CAS and the manual retryRender", () => {
     const { planId, batchId } = await seedMidRender(t);
 
     await failWith(t, planId, batchId, "render_failed"); // the retry
+    const retryRun = await renderRunOf(t, planId);
+    expect(retryRun).toEqual(expect.any(String));
     await failWith(t, planId, batchId, "render_failed"); // the retried attempt failing again
 
     // A version of this code that retries twice leaves the plan at `rendering` with a second
@@ -4382,14 +4399,14 @@ describe("33-04: the one auto-retry CAS and the manual retryRender", () => {
     expect(plan?.renderStatus).toBe("failed");
     expect(plan?.renderReason).toBe("render_failed");
     expect(await deadLetterRows(t)).toHaveLength(1); // ONE dead letter, from the SECOND failure only
-    expect(await pendingRenders(t)).toHaveLength(1); // still just the first retry — nothing new scheduled
+    expect(await renderRunOf(t, planId)).toBe(retryRun); // still just the first retry's run
     expect(await auditsOf(t, "media.render_retried")).toHaveLength(1);
 
     // …and from `failed`, the manual button works: the user decides to spend the third sandbox.
     expect(await asA(t).mutation(api.media.retryRender, { planId })).toEqual({ ok: true });
     expect((await planRowOf(t, planId))?.renderStatus).toBe("rendering");
     expect((await planRowOf(t, planId))?.renderReason).toBeUndefined();
-    expect(await pendingRenders(t)).toHaveLength(2);
+    expect(await renderRunOf(t, planId)).not.toBe(retryRun); // the manual retry is its OWN run
     expect(await auditsOf(t, "media.render_retry_manual")).toHaveLength(1);
   });
 
@@ -4404,7 +4421,7 @@ describe("33-04: the one auto-retry CAS and the manual retryRender", () => {
     expect(plan?.renderReason).toBe("duration_mismatch");
     expect(plan?.renderRetriedAt).toBeUndefined(); // the one retry is still unspent
     expect(await deadLetterRows(t)).toHaveLength(1);
-    expect(await pendingRenders(t)).toHaveLength(0);
+    expect(await renderRunOf(t, planId)).toBeUndefined(); // nothing was scheduled
     expect(await auditsOf(t, "media.render_retried")).toHaveLength(0);
   });
 
@@ -4426,7 +4443,8 @@ describe("33-04: the one auto-retry CAS and the manual retryRender", () => {
       ok: false,
       reason: "nothing_to_render",
     });
-    expect(await pendingRenders(t)).toHaveLength(0);
+    expect(await renderRunOf(t, planId)).toBeUndefined();
+    expect(await renderRunOf(t, bare)).toBeUndefined();
   });
 
   test("retryRender re-fires the LATEST batch when a regenerate minted a newer one", async () => {
@@ -4457,9 +4475,10 @@ describe("33-04: the one auto-retry CAS and the manual retryRender", () => {
     });
 
     expect(await asA(t).mutation(api.media.retryRender, { planId })).toEqual({ ok: true });
-    const scheduled = await pendingRenders(t);
-    expect(scheduled).toHaveLength(1);
-    expect(scheduled[0]?.args?.[0]).toMatchObject({ tenantId: A, batchId: "batch_newer" });
+    expect(await renderRunOf(t, planId)).toEqual(expect.any(String));
+    // WHICH batch: the manual-retry audit row records it in the same mutation as the schedule.
+    const audits = await auditsOf(t, "media.render_retry_manual");
+    expect(audits[0]?.payload).toMatchObject({ planId, batchId: "batch_newer" });
   });
 });
 
@@ -4472,10 +4491,10 @@ describe("33-04: the one auto-retry CAS and the manual retryRender", () => {
 // wasted (the locked "landed sibling work waits" decision).
 
 describe("33-04: fix-menu re-arm — free fixes resume the held reel", () => {
-  const scheduledRenders = async (t: T) =>
-    (await t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect())).filter((s) =>
-      String(s.name).includes("renderReel:renderReel"),
-    );
+  // 25.1-01: renders go through the ActionRetrier component (see `renderRunOf` above), so
+  // "scheduled" is observed as the run id the trigger writes onto the plan row.
+  const renderRunOf = async (t: T, planId: Id<"plans">) =>
+    (await planRowOf(t, planId))?.renderRunId;
 
   /** A scene-deck plan mid-pipeline: batch submitted, ready for landings to drive the REAL
    *  trigger. Rows per the deck: video@0, image@1, (card@2 has no job), video@3, tts everywhere. */
@@ -4610,7 +4629,7 @@ describe("33-04: fix-menu re-arm — free fixes resume the held reel", () => {
     const held = await planRowOf(t, planId);
     expect(held?.renderStatus).toBe("failed");
     expect(held?.renderReason).toBe("incomplete_batch");
-    expect(await scheduledRenders(t)).toHaveLength(0);
+    expect(held?.renderRunId).toBeUndefined();
 
     // The FREE fix: scene 0 becomes a text card. No new landing exists — the mutation itself must
     // re-arm the trigger in the same transaction.
@@ -4626,9 +4645,9 @@ describe("33-04: fix-menu re-arm — free fixes resume the held reel", () => {
     const rearmed = await planRowOf(t, planId);
     expect(rearmed?.renderStatus).toBe("rendering"); // re-armed AND scheduled, not just reset
     expect(rearmed?.renderReason).toBeUndefined();
-    const scheduled = await scheduledRenders(t);
-    expect(scheduled).toHaveLength(1);
-    expect(scheduled[0]?.args?.[0]).toMatchObject({ tenantId: A, batchId });
+    expect(rearmed?.renderRunId).toEqual(expect.any(String)); // a real retrier run was started
+    // …against WHICH batch is proven behaviorally just below: batchToRender over this batch
+    // succeeds, which is what the scheduled run will read.
 
     // …and the render it scheduled can actually BUILD: batchToRender reads the fixed deck, takes
     // the landed siblings (fresh — the fix was content-class) and the failed clip's absence is
@@ -4659,7 +4678,7 @@ describe("33-04: fix-menu re-arm — free fixes resume the held reel", () => {
     const stillHeld = await planRowOf(t, planId);
     expect(stillHeld?.renderStatus).toBe("failed");
     expect(stillHeld?.renderReason).toBe("incomplete_batch");
-    expect(await scheduledRenders(t)).toHaveLength(0);
+    expect(stillHeld?.renderRunId).toBeUndefined();
 
     // Fix arm 2: the vault pick — the asset arrives, and THIS mutation re-arms the render.
     const videoId = await t.run(async (ctx) =>
@@ -4687,9 +4706,7 @@ describe("33-04: fix-menu re-arm — free fixes resume the held reel", () => {
 
     const resumed = await planRowOf(t, planId);
     expect(resumed?.renderStatus).toBe("rendering");
-    const scheduled = await scheduledRenders(t);
-    expect(scheduled).toHaveLength(1);
-    expect(scheduled[0]?.args?.[0]).toMatchObject({ tenantId: A, batchId });
+    expect(resumed?.renderRunId).toEqual(expect.any(String));
 
     const batch = await t.run((ctx) =>
       ctx.runQuery(internal.render.renderReel.batchToRender, { tenantId: A, batchId }),
@@ -4710,7 +4727,7 @@ describe("33-04: fix-menu re-arm — free fixes resume the held reel", () => {
       }),
     ).toEqual({ ok: true });
     expect((await planRowOf(t, planId))?.renderStatus).toBe("pending");
-    expect(await scheduledRenders(t)).toHaveLength(0);
+    expect(await renderRunOf(t, planId)).toBeUndefined();
   });
 });
 
