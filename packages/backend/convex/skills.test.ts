@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   AGENT_AUTHORABLE_SKILLS,
+  AGENT_EVAL_SUITE,
   COCKPIT_AGENT_SKILL,
   CONTENT_DRAFTER_SKILL,
   composeUserSkillBody,
@@ -3158,5 +3159,251 @@ describe("publishAgentCandidate — the inert agent writer (23-02)", () => {
     expect(after).toEqual(before);
     expect(after.scope).toBe("global");
     expect(after.body).toBe(GLOBAL_CORE);
+  });
+});
+
+// 23-05 (SKILL-02): an agent row has a DIFFERENT activation door from a user row. The strict
+// suite-bound evidence and the human owner's identity meet only inside `activateAgentCandidate`;
+// neither can be supplied by the authoring tool or borrowed from Phase 21's user path.
+describe("owner activation + immutable rollback of agent candidates (23-05)", () => {
+  const NAME = AGENT_AUTHORABLE_SKILLS[0];
+  const GLOBAL = "GLOBAL AGENT-AUTHORABLE CORE v7";
+  const DRAFT_A = "Quote in AUD and cap discounts at 20%. ZQ72305A";
+  const DRAFT_B = "Bundle onboarding with every retainer. ZQ72305B";
+
+  const targetOf = (id: Id<"tenantSkills">, tenantId: string, version: number) => ({
+    candidateId: String(id),
+    registryTenantId: tenantId,
+    name: NAME,
+    version,
+  });
+
+  const evidenceFor = (
+    id: Id<"tenantSkills">,
+    tenantId: string,
+    version: number,
+    over: Record<string, unknown> = {},
+  ) =>
+    JSON.stringify({
+      runner: "eval:golden",
+      runId: "run-23-05-agent-owner",
+      pass: true,
+      casesPassed: AGENT_EVAL_SUITE.caseCount,
+      casesTotal: AGENT_EVAL_SUITE.caseCount,
+      retriedCases: [],
+      costUsd: 0,
+      model: "offline-fixture",
+      skillVersions: {},
+      tenantTarget: targetOf(id, tenantId, version),
+      suite: { ...AGENT_EVAL_SUITE },
+      ts: 1_700_000_000_000,
+      ...over,
+    });
+
+  const world = async () => {
+    const t = convexTest(schema, modules);
+    t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+    await t.run((ctx) =>
+      ctx.db.insert("skills", {
+        name: NAME,
+        version: 7,
+        body: GLOBAL,
+        status: "active",
+        createdAt: 0,
+      }),
+    );
+    const ownerId = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
+    const userA = await t.run((ctx) => ctx.db.insert("users", {}));
+    const userB = await t.run((ctx) => ctx.db.insert("users", {}));
+    const asOwner = t.withIdentity({ subject: `${ownerId}|session_owner` });
+    const asA = t.withIdentity({ subject: `${userA}|session_a` });
+    const asB = t.withIdentity({ subject: `${userB}|session_b` });
+    const a = await t.mutation(internal.skills.publishAgentCandidate, {
+      tenantId: String(userA),
+      sourceThreadId: "thread-agent-a",
+      sourceTurnId: "turn-agent-a-1",
+      name: NAME,
+      authoredBody: DRAFT_A,
+    });
+    const b = await t.mutation(internal.skills.publishAgentCandidate, {
+      tenantId: String(userB),
+      sourceThreadId: "thread-agent-b",
+      sourceTurnId: "turn-agent-b-1",
+      name: NAME,
+      authoredBody: DRAFT_B,
+    });
+    expect(a.version).toBe(b.version); // the name@version collision is real
+    return {
+      t,
+      ownerId,
+      tenantA: String(userA),
+      tenantB: String(userB),
+      asOwner,
+      asA,
+      asB,
+      idA: a.tenantSkillId as Id<"tenantSkills">,
+      idB: b.tenantSkillId as Id<"tenantSkills">,
+      version: a.version,
+    };
+  };
+
+  const row = (t: TestConvex<typeof schema>, id: Id<"tenantSkills">) =>
+    t.run((ctx) => ctx.db.get(id));
+  const state = (t: TestConvex<typeof schema>) =>
+    t.run(async (ctx) => ({
+      rows: await ctx.db.query("tenantSkills").collect(),
+      audit: await ctx.db.query("audit").collect(),
+    }));
+  const certify = (
+    t: TestConvex<typeof schema>,
+    id: Id<"tenantSkills">,
+    tenantId: string,
+    version: number,
+    over: Record<string, unknown> = {},
+  ) =>
+    t.mutation(internal.skills.recordTenantEvalEvidence, {
+      candidateId: id,
+      evidence: evidenceFor(id, tenantId, version, over),
+    });
+
+  test("the four cells are non-vacuous: exact current eval AND a real owner are both required", async () => {
+    // no eval + non-owner: the positive candidate witness remains byte-identical
+    const noNo = await world();
+    const noNoBefore = await state(noNo.t);
+    expect((await row(noNo.t, noNo.idA))?.status).toBe("candidate");
+    await expect(
+      noNo.asA.mutation(api.skills.activateAgentCandidate, { candidateId: noNo.idA }),
+    ).rejects.toThrow(/OWNER_REQUIRED/);
+    expect(await state(noNo.t)).toEqual(noNoBefore);
+
+    // eval + non-owner: authorization, not the eval gate, is the refusal
+    const yesNo = await world();
+    await certify(yesNo.t, yesNo.idA, yesNo.tenantA, yesNo.version);
+    const yesNoBefore = await state(yesNo.t);
+    await expect(
+      yesNo.asA.mutation(api.skills.activateAgentCandidate, { candidateId: yesNo.idA }),
+    ).rejects.toThrow(/OWNER_REQUIRED/);
+    expect(await state(yesNo.t)).toEqual(yesNoBefore);
+
+    // no eval + owner: authority cannot mint approval ahead of the strict suite gate
+    const noYes = await world();
+    const noYesBefore = await state(noYes.t);
+    await expect(
+      noYes.asOwner.mutation(api.skills.activateAgentCandidate, { candidateId: noYes.idA }),
+    ).rejects.toThrow(/EVAL_GATE/);
+    expect(await state(noYes.t)).toEqual(noYesBefore);
+    expect((await row(noYes.t, noYes.idA))?.ownerApproval).toBeUndefined();
+
+    // eval + owner: the exact row becomes live with approval derived in the same mutation
+    const yesYes = await world();
+    await certify(yesYes.t, yesYes.idA, yesYes.tenantA, yesYes.version);
+    await yesYes.asOwner.mutation(api.skills.activateAgentCandidate, { candidateId: yesYes.idA });
+    const active = await row(yesYes.t, yesYes.idA);
+    expect(active).toMatchObject({ status: "active", rollbackEligible: true });
+    expect(active?.ownerApproval).toMatchObject({
+      ownerUserId: yesYes.ownerId,
+      evalRunId: "run-23-05-agent-owner",
+    });
+    expect(active?.ownerApproval?.approvedAt).toBeGreaterThan(0);
+  });
+
+  test("user and agent activation exports refuse each other's rows", async () => {
+    const w = await world();
+    await certify(w.t, w.idA, w.tenantA, w.version);
+    const beforeAgent = await state(w.t);
+    await expect(
+      w.asOwner.mutation(api.skills.activateTenantCandidate, { candidateId: w.idA }),
+    ).rejects.toThrow(/NOT_USER_AUTHORED/);
+    expect(await state(w.t)).toEqual(beforeAgent);
+
+    const user = await w.asA.mutation(api.skills.publishUserCandidate, {
+      name: NAME,
+      authoredBody: "A separate user-authored candidate.",
+    });
+    const beforeUser = await state(w.t);
+    await expect(
+      w.asOwner.mutation(api.skills.activateAgentCandidate, {
+        candidateId: user.tenantSkillId as Id<"tenantSkills">,
+      }),
+    ).rejects.toThrow(/NOT_AGENT_AUTHORED/);
+    expect(await state(w.t)).toEqual(beforeUser);
+  });
+
+  test("stale-suite and foreign-tenant evidence refuse without approval or cross-tenant change", async () => {
+    const w = await world();
+    const bBefore = await row(w.t, w.idB);
+
+    await certify(w.t, w.idA, w.tenantA, w.version, {
+      suite: { ...AGENT_EVAL_SUITE, revision: "stale-suite" },
+    });
+    await expect(
+      w.asOwner.mutation(api.skills.activateAgentCandidate, { candidateId: w.idA }),
+    ).rejects.toThrow(/EVAL_GATE/);
+    expect((await row(w.t, w.idA))?.ownerApproval).toBeUndefined();
+    expect(await row(w.t, w.idB)).toEqual(bBefore);
+
+    await w.t.run((ctx) =>
+      ctx.db.patch(w.idA, {
+        evidence: evidenceFor(w.idB, w.tenantB, w.version),
+      }),
+    );
+    const before = await state(w.t);
+    await expect(
+      w.asOwner.mutation(api.skills.activateAgentCandidate, { candidateId: w.idA }),
+    ).rejects.toThrow(/EVAL_GATE/);
+    expect(await state(w.t)).toEqual(before);
+  });
+
+  test("rollback changes only status/eligibility and preserves approval, evidence, bodies and lineage", async () => {
+    const w = await world();
+    await certify(w.t, w.idA, w.tenantA, w.version);
+    await w.asOwner.mutation(api.skills.activateAgentCandidate, { candidateId: w.idA });
+
+    const next = await w.t.mutation(internal.skills.publishAgentCandidate, {
+      tenantId: w.tenantA,
+      sourceThreadId: "thread-agent-a",
+      sourceTurnId: "turn-agent-a-2",
+      name: NAME,
+      authoredBody: "A second immutable agent adaptation. ZQ72305A2",
+    });
+    const nextId = next.tenantSkillId as Id<"tenantSkills">;
+    await certify(w.t, nextId, w.tenantA, next.version);
+    await w.asOwner.mutation(api.skills.activateAgentCandidate, { candidateId: nextId });
+
+    const oldBefore = await row(w.t, w.idA);
+    const nextBefore = await row(w.t, nextId);
+    const approval = oldBefore?.ownerApproval;
+    await w.asOwner.mutation(api.skills.rollbackTenantSkill, { targetId: w.idA });
+    expect(await row(w.t, w.idA)).toEqual({ ...oldBefore, status: "active" });
+    expect(await row(w.t, nextId)).toEqual({ ...nextBefore, status: "archived" });
+    expect((await row(w.t, w.idA))?.ownerApproval).toEqual(approval);
+
+    // Status laundering still fails: B was never active, even if somebody manually archives it.
+    await w.t.run((ctx) => ctx.db.patch(w.idB, { status: "archived" }));
+    await expect(
+      w.asOwner.mutation(api.skills.rollbackTenantSkill, { targetId: w.idB }),
+    ).rejects.toThrow(/ROLLBACK_NOT_ELIGIBLE/);
+  });
+
+  test("activation emits one distinct refs-only agent event", async () => {
+    const w = await world();
+    await certify(w.t, w.idA, w.tenantA, w.version);
+    await w.asOwner.mutation(api.skills.activateAgentCandidate, { candidateId: w.idA });
+    const events = (await w.t.run((ctx) => ctx.db.query("audit").collect())).filter(
+      (r) => r.eventType === "skill.agent_candidate_activated",
+    );
+    expect(events).toHaveLength(1);
+    expect(Object.keys(events[0]!.payload).sort()).toEqual([
+      "author",
+      "evalRunId",
+      "fromTenantSkillId",
+      "fromVersion",
+      "ownerUserId",
+      "skillName",
+      "tenantSkillId",
+      "version",
+    ]);
+    expect(JSON.stringify(events)).not.toContain(DRAFT_A);
+    expect(JSON.stringify(events)).not.toContain(GLOBAL);
   });
 });
