@@ -3316,14 +3316,27 @@ describe("owner activation + immutable rollback of agent candidates (23-05)", ()
     ).rejects.toThrow(/NOT_USER_AUTHORED/);
     expect(await state(w.t)).toEqual(beforeAgent);
 
-    const user = await w.asA.mutation(api.skills.publishUserCandidate, {
-      name: NAME,
-      authoredBody: "A separate user-authored candidate.",
-    });
+    const userId = await w.t.run((ctx) =>
+      ctx.db.insert("tenantSkills", {
+        tenantId: w.tenantA,
+        name: NAME,
+        version: w.version + 1,
+        body: "user composed candidate",
+        authoredBody: "A separate user-authored candidate.",
+        status: "candidate",
+        author: "user",
+        authorUserId: w.tenantA as Id<"users">,
+        basedOnScope: "global",
+        basedOnName: NAME,
+        basedOnVersion: 7,
+        rollbackEligible: false,
+        createdAt: 2,
+      }),
+    );
     const beforeUser = await state(w.t);
     await expect(
       w.asOwner.mutation(api.skills.activateAgentCandidate, {
-        candidateId: user.tenantSkillId as Id<"tenantSkills">,
+        candidateId: userId,
       }),
     ).rejects.toThrow(/NOT_AGENT_AUTHORED/);
     expect(await state(w.t)).toEqual(beforeUser);

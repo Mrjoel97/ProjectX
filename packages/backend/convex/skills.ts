@@ -25,6 +25,7 @@ import {
   GATED_SKILLS,
   GRAPH_EXTRACTOR_SKILL,
   GROWTH_OS_DIAGNOSTIC_SKILL,
+  hasPassingAgentTenantEvidence,
   hasPassingEvidence,
   hasPassingTenantEvidence,
   INBOX_DIGEST_SKILL,
@@ -126,7 +127,15 @@ export const getActiveSkill = internalQuery({
  */
 type ActivationTarget =
   | { scope: "global"; name: string; version: number }
-  | { scope: "tenant"; candidateId: Id<"tenantSkills">; mode: "activate" | "rollback" };
+  | { scope: "tenant"; candidateId: Id<"tenantSkills">; mode: "activate-user" | "rollback" }
+  | {
+      scope: "tenant";
+      candidateId: Id<"tenantSkills">;
+      mode: "activate-agent";
+      ownerUserId: Id<"users">;
+    };
+
+type OwnerApproval = NonNullable<Doc<"tenantSkills">["ownerApproval"]>;
 
 /**
  * The resolved, gate-cleared transition — everything the ONE patch block needs and nothing it can
@@ -145,6 +154,10 @@ type ActivationPlan = {
   currentVersion: number | null;
   /** Refs-only: which eval run authorized this, for the audit payload. */
   evalRunId: string | null;
+  /** The row's closed provenance discriminant, copied into refs-only audit. */
+  author: Doc<"tenantSkills">["author"] | null;
+  /** Agent activation only: approval patched with active status in THE one target write. */
+  ownerApproval: OwnerApproval | null;
   /**
    * `rollbackEligible` is a `tenantSkills` COLUMN — the global registry has no such field, and its
    * rollback exemption is status-only (see below). Empty for the global scope by construction.
@@ -164,6 +177,7 @@ type ActivationResult = {
   fromId: string | null;
   fromVersion: number | null;
   evalRunId: string | null;
+  author: Doc<"tenantSkills">["author"] | null;
 };
 
 /**
@@ -213,6 +227,8 @@ async function planGlobalActivation(
     currentId: current?._id ?? null,
     currentVersion: current?.version ?? null,
     evalRunId: evidenceRefs(target.evidence)?.runId ?? null,
+    author: null,
+    ownerApproval: null,
     provenActive: {},
   };
 }
@@ -237,18 +253,20 @@ async function planGlobalActivation(
 async function planTenantActivation(
   ctx: MutationCtx,
   candidateId: Id<"tenantSkills">,
-  mode: "activate" | "rollback",
+  mode: "activate-user" | "activate-agent" | "rollback",
+  ownerUserId?: Id<"users">,
 ): Promise<ActivationPlan> {
   const row = await loadTenantCandidate(ctx, candidateId);
+  let ownerApproval: OwnerApproval | null = null;
 
-  // Idempotence is decided FIRST: re-activating the exact row that is already live is a no-op, and
-  // must not trip the `status === "candidate"` requirement below.
-  if (row.status !== "active") {
-    if (mode === "activate") {
-      // Phase 23 may append `author: "agent"`; it must not inherit activation by doing so.
-      if (row.author !== "user") {
-        throw new Error(`NOT_USER_AUTHORED: ${candidateId} was written by ${row.author}`);
-      }
+  if (mode === "activate-user") {
+    // Author-path separation is checked even on an already-active row. An agent row never becomes
+    // reachable through Phase 21's weaker suite-less predicate by calling the user export twice.
+    if (row.author !== "user") {
+      throw new Error(`NOT_USER_AUTHORED: ${candidateId} was written by ${row.author}`);
+    }
+    // User re-activation retains Phase 21's shipped idempotence semantics.
+    if (row.status !== "active") {
       if (row.status !== "candidate") {
         throw new Error(`NOT_A_CANDIDATE: ${candidateId} is ${row.status}`);
       }
@@ -257,18 +275,37 @@ async function planTenantActivation(
           `EVAL_GATE: tenant candidate ${candidateId} has no recorded passing eval run pinning this EXACT row (run pnpm eval:golden --tenant-skill ${candidateId})`,
         );
       }
-    } else {
-      // Rollback is evidence-EXEMPT and must survive a broken eval harness mid-incident — but
-      // exemption is not a hole: only a row that was genuinely live (or the server baseline) is
-      // eligible, and the flag is the proof. Status is checked too, never instead.
-      if (row.rollbackEligible !== true) {
-        throw new Error(`ROLLBACK_NOT_ELIGIBLE: ${candidateId} was never active`);
-      }
-      if (row.status !== "archived" && row.status !== "rolled_back") {
-        throw new Error(
-          `ROLLBACK_NOT_ELIGIBLE: ${candidateId} is ${row.status}, not a prior state`,
-        );
-      }
+    }
+  } else if (mode === "activate-agent") {
+    if (row.author !== "agent") {
+      throw new Error(`NOT_AGENT_AUTHORED: ${candidateId} was written by ${row.author}`);
+    }
+    // Unlike the user path, this is an approval act, not an idempotent "make active" request.
+    if (row.status !== "candidate") {
+      throw new Error(`NOT_A_CANDIDATE: ${candidateId} is ${row.status}`);
+    }
+    if (row.ownerApproval !== undefined) {
+      throw new Error(`ALREADY_APPROVED: ${candidateId}`);
+    }
+    if (!hasPassingAgentTenantEvidence(row.evidence, tenantTargetOf(row))) {
+      throw new Error(
+        `EVAL_GATE: agent candidate ${candidateId} has no recorded passing current-suite eval run pinning this EXACT row`,
+      );
+    }
+    const evalRunId = evidenceRefs(row.evidence)?.runId;
+    if (typeof evalRunId !== "string" || evalRunId.trim() === "" || ownerUserId === undefined) {
+      throw new Error(`EVAL_GATE: agent candidate ${candidateId} has incomplete evidence refs`);
+    }
+    ownerApproval = { ownerUserId, approvedAt: Date.now(), evalRunId };
+  } else if (row.status !== "active") {
+    // Rollback is evidence-EXEMPT and must survive a broken eval harness mid-incident — but
+    // exemption is not a hole: only a row that was genuinely live (or the server baseline) is
+    // eligible, and the flag is the proof. Status is checked too, never instead.
+    if (row.rollbackEligible !== true) {
+      throw new Error(`ROLLBACK_NOT_ELIGIBLE: ${candidateId} was never active`);
+    }
+    if (row.status !== "archived" && row.status !== "rolled_back") {
+      throw new Error(`ROLLBACK_NOT_ELIGIBLE: ${candidateId} is ${row.status}, not a prior state`);
     }
   }
 
@@ -290,6 +327,8 @@ async function planTenantActivation(
     currentId: current?._id ?? null,
     currentVersion: current?.version ?? null,
     evalRunId: evidenceRefs(row.evidence)?.runId ?? null,
+    author: row.author,
+    ownerApproval,
     provenActive: { rollbackEligible: true },
   };
 }
@@ -311,7 +350,12 @@ async function transitionSkillActivation(
   const plan =
     target.scope === "global"
       ? await planGlobalActivation(ctx, target.name, target.version)
-      : await planTenantActivation(ctx, target.candidateId, target.mode);
+      : await planTenantActivation(
+          ctx,
+          target.candidateId,
+          target.mode,
+          target.mode === "activate-agent" ? target.ownerUserId : undefined,
+        );
 
   // ── THE archive/activate patch block. One transaction, two patches, no third. ────────────────
   if (plan.currentId !== null && plan.currentId !== plan.targetId) {
@@ -319,7 +363,11 @@ async function transitionSkillActivation(
     await ctx.db.patch(plan.currentId, { status: "archived", ...plan.provenActive });
   }
   if (!plan.alreadyActive) {
-    await ctx.db.patch(plan.targetId, { status: "active", ...plan.provenActive });
+    await ctx.db.patch(plan.targetId, {
+      status: "active",
+      ...plan.provenActive,
+      ...(plan.ownerApproval === null ? {} : { ownerApproval: plan.ownerApproval }),
+    });
   }
 
   return {
@@ -332,6 +380,7 @@ async function transitionSkillActivation(
     fromId: plan.currentId === null ? null : String(plan.currentId),
     fromVersion: plan.currentVersion,
     evalRunId: plan.evalRunId,
+    author: plan.author,
   };
 }
 
@@ -1155,7 +1204,8 @@ export const inspectAgentCandidate = internalQuery({
 const MY_USER_SKILLS_LIMIT = 50;
 
 /**
- * The user's own adaptations and their honest states. Takes NO arguments — there is no id a caller
+ * The tenant's own user- and agent-authored adaptations and their honest states. Takes NO
+ * arguments — there is no id a caller
  * could pass to reach another tenant's row.
  *
  * THE DISCLOSURE BOUNDARY: this returns the label, the user's OWN adaptation, and status/lineage
@@ -1173,7 +1223,7 @@ export const myUserSkills = tenantQuery({
       .take(MY_USER_SKILLS_LIMIT);
 
     return rows
-      .filter((r) => r.author === "user")
+      .filter((r) => r.author === "user" || r.author === "agent")
       .map((r) => ({
         name: r.name,
         // Labels come from the ONE shared metadata record, so a UI never re-lists registry names.
@@ -1181,6 +1231,8 @@ export const myUserSkills = tenantQuery({
           ? USER_AUTHORABLE_SKILL_METADATA[r.name].label
           : r.name,
         authoredBody: r.authoredBody,
+        // Closed, inert provenance label. No author ids or source refs cross this tenant surface.
+        author: r.author as "user" | "agent",
         version: r.version,
         status: r.status,
         baseScope: r.basedOnScope,
@@ -1191,7 +1243,10 @@ export const myUserSkills = tenantQuery({
         // for the run's GLOBAL pins only — which for a tenant-only run is `{}` — so a genuinely
         // certified candidate read `false` here forever and the panel's "Evaluation passed" state
         // was unreachable for the same reason "Live" is. Now it asks the tenant question.
-        gatePassed: hasPassingTenantEvidence(r.evidence, tenantTargetOf(r)),
+        gatePassed:
+          r.author === "agent"
+            ? hasPassingAgentTenantEvidence(r.evidence, tenantTargetOf(r))
+            : hasPassingTenantEvidence(r.evidence, tenantTargetOf(r)),
         createdAt: r.createdAt,
       }));
   },
@@ -1372,7 +1427,10 @@ export const inspectTenantSkill = internalQuery({
   handler: async (ctx, { candidateId, foreignTenantId }) => {
     const row = await loadTenantCandidate(ctx, candidateId);
     const target = tenantTargetOf(row);
-    const gatePassed = hasPassingTenantEvidence(row.evidence, target);
+    const gatePassed =
+      row.author === "agent"
+        ? hasPassingAgentTenantEvidence(row.evidence, target)
+        : hasPassingTenantEvidence(row.evidence, target);
     const refs = evidenceRefs(row.evidence);
     const baseline = await rollbackBaselineOf(ctx, row);
 
@@ -1495,7 +1553,7 @@ const evidenceSummaryOf = (evidence: string | undefined) => {
 };
 
 /**
- * The bounded owner review queue for USER-authored tenant candidates (21-04).
+ * The bounded owner review queue for USER- and AGENT-authored tenant candidates (23-05).
  *
  * OWNER-ONLY, and the refusal is the disclosure boundary: `candidateBody` and `baseBody` are raw
  * prompts and `authoredBody` is another tenant's business writing, so a non-owner must be rejected
@@ -1520,9 +1578,9 @@ export const tenantCandidatesForReview = ownerQuery({
 
     const out = [];
     for (const row of rows) {
-      // Only a HUMAN tenant author's row is reviewable here. A `system` baseline is never a
-      // candidate, and Phase 23's agent author must arrive through its own deliberate surface.
-      if (row.author !== "user") continue;
+      // Closed discriminant. A `system` baseline is never reviewable, even if a malformed fixture
+      // gave it candidate status.
+      if (row.author !== "user" && row.author !== "agent") continue;
 
       // The diff context: what this tenant runs TODAY (their active overlay, else the global core).
       const effective = await loadEffectiveSkill(ctx, row.tenantId, row.name);
@@ -1546,13 +1604,20 @@ export const tenantCandidatesForReview = ownerQuery({
         )
         .order("desc")
         .take(ROLLBACK_CHOICE_LIMIT + 1);
-      const gatePassed = hasPassingTenantEvidence(row.evidence, tenantTargetOf(row));
+      const gatePassed =
+        row.author === "agent"
+          ? hasPassingAgentTenantEvidence(row.evidence, tenantTargetOf(row))
+          : hasPassingTenantEvidence(row.evidence, tenantTargetOf(row));
 
       out.push({
         // The EXACT row. Every mutation below takes this and nothing derived from it.
         candidateId: row._id,
         tenantId: row.tenantId,
+        author: row.author,
         authorUserId: row.authorUserId === undefined ? null : String(row.authorUserId),
+        authorAgentId: row.authorAgentId ?? null,
+        sourceThreadId: row.sourceThreadId ?? null,
+        sourceTurnId: row.sourceTurnId ?? null,
         name: row.name,
         label: isUserAuthorableSkill(row.name)
           ? USER_AUTHORABLE_SKILL_METADATA[row.name].label
@@ -1568,6 +1633,14 @@ export const tenantCandidatesForReview = ownerQuery({
         // absent | passing | failing — a stale or unparseable pin reads `failing`, never `absent`.
         evidenceState: row.evidence === undefined ? "absent" : gatePassed ? "passing" : "failing",
         evidenceSummary: evidenceSummaryOf(row.evidence),
+        ownerApproval:
+          row.ownerApproval === undefined
+            ? null
+            : {
+                ownerUserId: String(row.ownerApproval.ownerUserId),
+                approvedAt: row.ownerApproval.approvedAt,
+                evalRunId: row.ownerApproval.evalRunId,
+              },
         rollbackTargets: priors
           // Eligibility came from the index; liveness is the only thing left to exclude.
           .filter((p) => p.status !== "active")
@@ -1599,12 +1672,32 @@ export const activateTenantCandidate = ownerMutation({
     const res = await transitionSkillActivation(ctx, {
       scope: "tenant",
       candidateId,
-      mode: "activate",
+      mode: "activate-user",
     });
 
     // Only a REAL transition is an event. An idempotent re-activation changed nothing, and a
     // refusal threw before reaching here — neither may leave a governance row saying otherwise.
     if (res.changed) await logTenantActivation(ctx, "skill.user_candidate_activated", res);
+    return { ok: true as const, ...res };
+  },
+});
+
+/**
+ * The separate human-owner approval door for an AGENT-authored row (23-05). It accepts one exact
+ * id and no approval fields: owner identity and time come from the wrapper context, while eval run
+ * id comes from the same strict current-suite evidence that clears the transition. Approval and
+ * active status are therefore one Convex transaction and one target-row patch.
+ */
+export const activateAgentCandidate = ownerMutation({
+  args: { candidateId: v.id("tenantSkills") },
+  handler: async (ctx, { candidateId }) => {
+    const res = await transitionSkillActivation(ctx, {
+      scope: "tenant",
+      candidateId,
+      mode: "activate-agent",
+      ownerUserId: ctx.userId,
+    });
+    if (res.changed) await logTenantActivation(ctx, "skill.agent_candidate_activated", res);
     return { ok: true as const, ...res };
   },
 });
@@ -1642,7 +1735,10 @@ export const rollbackTenantSkill = ownerMutation({
  */
 async function logTenantActivation(
   ctx: MutationCtx & { userId: Id<"users"> },
-  eventType: "skill.user_candidate_activated" | "skill.user_skill_rolled_back",
+  eventType:
+    | "skill.user_candidate_activated"
+    | "skill.agent_candidate_activated"
+    | "skill.user_skill_rolled_back",
   res: ActivationResult,
 ): Promise<void> {
   await ctx.runMutation(internal.audit.log, {
@@ -1654,7 +1750,7 @@ async function logTenantActivation(
       skillName: res.name,
       tenantSkillId: res.targetId,
       version: res.version,
-      author: "user",
+      author: res.author,
       fromTenantSkillId: res.fromId,
       fromVersion: res.fromVersion,
       evalRunId: res.evalRunId,
