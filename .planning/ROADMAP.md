@@ -1405,9 +1405,15 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 ### Phase 25.1: Consistency and Reliability Hardening (INSERTED)
 
 **Goal:** Every governed background job reaches an honest terminal state the user can see — no silent stalls, no vanishing media, no mute Approve button. Scope (Consistency Audit rev 2, G1/G2/G3/G9/G11/G12): terminal on every batchToRender refusal; renderReel under the action retrier with onComplete; a stuck-work watchdog cron (submitted/rendering/transcribing/collecting); image vault save (none exists) + reel save at the render terminal + reelVaultDocId cleared on reset + second-image refusal fixed; approvals persistent success/refusal feedback + an honest image arm; memo-card markdown rendering + research sources block; env-manifest completion, dead fal-webhook removal, Sora-cutover ADR, DLQ visibility.
-**Requirements**: TBD
+**Requirements**: none minted (inserted hardening phase) — plans map to the verified defect inventory D1-D14 in 25.1-RESEARCH.md
 **Depends on:** nothing new - it hardens already-shipped subsystems (media pipeline, dispatch, approvals, workspace cards) and runs ahead of Phase 25's release gates, not behind them
-**Plans:** 0 plans
+**Plans:** 7 plans (one wave each — shared files serialize on the wave field)
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 25.1 to break down)
+- [ ] 25.1-01-PLAN.md — Honest render terminals + renderReel under the ActionRetrier (D1, D2)
+- [ ] 25.1-02-PLAN.md — Stuck-work watchdog cron: submitted/rendering/transcribing/collecting (D3, D4)
+- [ ] 25.1-03-PLAN.md — Media vault persistence: image save, reel save at render terminal, resetPlan, second-image guard (D5-D8)
+- [ ] 25.1-04-PLAN.md — Approvals feedback: persistent success, notice on top, honest image-plan copy (D9, D10)
+- [ ] 25.1-05-PLAN.md — Memo-card markdown + research sources block (D11)
+- [ ] 25.1-06-PLAN.md — Hygiene: env manifest, dead fal removal, Sora-cutover ADR, DLQ listing (D12-D14)
+- [ ] 25.1-07-PLAN.md — CHECKPOINT: owner-adjudicated live reel end-to-end + approvals feedback
