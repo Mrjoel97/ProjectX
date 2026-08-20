@@ -2375,6 +2375,8 @@ describe("owner activation + rollback of tenant candidates (21-04)", () => {
     // refs summary (measured: without this line that mutation is invisible).
     expect(Object.keys(a).sort()).toEqual([
       "authorUserId",
+      "author",
+      "authorAgentId",
       "authoredBody",
       "baseBody",
       "baseScope",
@@ -2387,7 +2389,10 @@ describe("owner activation + rollback of tenant candidates (21-04)", () => {
       "gatePassed",
       "label",
       "name",
+      "ownerApproval",
       "rollbackTargets",
+      "sourceThreadId",
+      "sourceTurnId",
       "status",
       "tenantId",
       "version",
@@ -2399,6 +2404,11 @@ describe("owner activation + rollback of tenant candidates (21-04)", () => {
       label: USER_AUTHORABLE_SKILL_METADATA[OFFER_ARCHITECT_SKILL].label,
       version: w.version,
       status: "candidate",
+      author: "user",
+      authorAgentId: null,
+      sourceThreadId: null,
+      sourceTurnId: null,
+      ownerApproval: null,
       gatePassed: false,
       evidenceState: "absent",
       evidenceSummary: null,
@@ -2595,6 +2605,9 @@ describe("owner activation + rollback of tenant candidates (21-04)", () => {
     // …and both tenant exports call it directly with an exact row id.
     expect(
       region("export const activateTenantCandidate =", "export const rollbackTenantSkill ="),
+    ).toContain("transitionSkillActivation(ctx, {");
+    expect(
+      region("export const activateAgentCandidate =", "export const rollbackTenantSkill ="),
     ).toContain("transitionSkillActivation(ctx, {");
     expect(
       region("export const rollbackTenantSkill =", "async function logTenantActivation"),
@@ -3418,5 +3431,67 @@ describe("owner activation + immutable rollback of agent candidates (23-05)", ()
     ]);
     expect(JSON.stringify(events)).not.toContain(DRAFT_A);
     expect(JSON.stringify(events)).not.toContain(GLOBAL);
+  });
+
+  test("bounded owner and tenant projections include agent state without widening disclosure", async () => {
+    const w = await world();
+
+    const ownerRows = await w.asOwner.query(api.skills.tenantCandidatesForReview, {});
+    const a = ownerRows.find((candidate) => String(candidate.candidateId) === String(w.idA))!;
+    expect(a).toMatchObject({
+      author: "agent",
+      authorUserId: null,
+      authorAgentId: EXECUTIVE_AGENT_AUTHOR_ID,
+      sourceThreadId: "thread-agent-a",
+      sourceTurnId: "turn-agent-a-1",
+      gatePassed: false,
+      evidenceState: "absent",
+      ownerApproval: null,
+    });
+    expect(a.rollbackTargets.every((target) => target.status !== "active")).toBe(true);
+
+    await certify(w.t, w.idA, w.tenantA, w.version, {
+      suite: { ...AGENT_EVAL_SUITE, revision: "stale-suite" },
+    });
+    const stale = (await w.asOwner.query(api.skills.tenantCandidatesForReview, {})).find(
+      (candidate) => String(candidate.candidateId) === String(w.idA),
+    )!;
+    expect(stale).toMatchObject({ gatePassed: false, evidenceState: "failing" });
+    await certify(w.t, w.idA, w.tenantA, w.version);
+    const current = (await w.asOwner.query(api.skills.tenantCandidatesForReview, {})).find(
+      (candidate) => String(candidate.candidateId) === String(w.idA),
+    )!;
+    expect(current).toMatchObject({ gatePassed: true, evidenceState: "passing" });
+
+    const mine = await w.asA.query(api.skills.myUserSkills, {});
+    expect(mine).toHaveLength(1);
+    expect(mine[0]).toMatchObject({ author: "agent", gatePassed: true, authoredBody: DRAFT_A });
+    const tenantKeys = Object.keys(mine[0]!).sort();
+    expect(tenantKeys).toEqual([
+      "author",
+      "authoredBody",
+      "baseScope",
+      "baseVersion",
+      "createdAt",
+      "gatePassed",
+      "label",
+      "name",
+      "status",
+      "version",
+    ]);
+    for (const forbidden of [
+      "candidateId",
+      "tenantId",
+      "body",
+      "evidence",
+      "ownerApproval",
+      "authorUserId",
+      "authorAgentId",
+      "sourceThreadId",
+      "sourceTurnId",
+      "rollbackEligible",
+    ]) {
+      expect(tenantKeys).not.toContain(forbidden);
+    }
   });
 });

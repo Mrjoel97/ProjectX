@@ -19,7 +19,7 @@ import {
   USER_SKILL_ADAPTATION_MAX_BYTES,
 } from "@pikar/contracts/skill";
 import { describe, expect, test } from "vitest";
-import { adaptationBytes, skillStateLabel } from "./SkillAuthoringPanel";
+import { adaptationBytes, skillAuthorLabel, skillStateLabel } from "./SkillAuthoringPanel";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const panelSource = readFileSync(join(here, "SkillAuthoringPanel.tsx"), "utf8");
@@ -138,6 +138,7 @@ describe("SkillAuthoringPanel — the publish path exists and is candidate-only"
     // …while the honest state it DOES read goes through the one labeller, whose input is exactly
     // the two fields the server derives.
     expect(panel).toContain("skillStateLabel(s)");
+    expect(panel).toContain("skillAuthorLabel(s.author)");
     expect(panel).toContain("status: string");
     expect(panel).toContain("gatePassed: boolean");
   });
@@ -173,6 +174,10 @@ describe("SkillAuthoringPanel — the publish path exists and is candidate-only"
 // The two pure bits the panel does own. They are small, but they are the difference between a
 // truthful status line and a UI that says "live" about a draft.
 describe("skillStateLabel + adaptationBytes", () => {
+  test("the closed author discriminant is rendered honestly without an identity", () => {
+    expect(skillAuthorLabel("user")).toBe("Authored by you");
+    expect(skillAuthorLabel("agent")).toBe("Authored with Executive");
+  });
   test("a candidate NEVER reads as live, evaluated or approved", () => {
     const draft = skillStateLabel({ status: "candidate", gatePassed: false });
     expect(draft).toContain("Draft");

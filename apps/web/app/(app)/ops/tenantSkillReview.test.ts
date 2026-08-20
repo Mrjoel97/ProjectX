@@ -19,9 +19,9 @@ const page = readFileSync(fileURLToPath(new URL("./page.tsx", import.meta.url)),
 // documentation: a comment explaining why there is no raw-evidence render reads exactly like one.
 const code = page.replace(/\/\*[\s\S]*?\*\/|\{\s*\/\*[\s\S]*?\*\/\s*\}|\/\/.*/g, "");
 
-/** The `UserCandidatesPanel` component body, from its declaration to the next top-level one. */
+/** The tenant-candidate owner component body, from its declaration to the next top-level one. */
 const panel = (() => {
-  const from = code.indexOf("function UserCandidatesPanel()");
+  const from = code.indexOf("function TenantCandidatesPanel()");
   const to = code.indexOf("export default function OpsPage", from + 1);
   return { from, to, text: code.slice(from, to) };
 })();
@@ -39,6 +39,7 @@ describe("tenant skill review surface — the panel exists and is wired", () => 
   test("it calls the three owner-gated tenant endpoints and nothing else skill-shaped", () => {
     expect(panel.text).toContain("useQuery(api.skills.tenantCandidatesForReview, {})");
     expect(panel.text).toContain("useMutation(api.skills.activateTenantCandidate)");
+    expect(panel.text).toContain("useMutation(api.skills.activateAgentCandidate)");
     expect(panel.text).toContain("useMutation(api.skills.rollbackTenantSkill)");
     // The GLOBAL optimizer endpoints belong to OptimizerPanel; this panel must not reach them.
     expect(panel.text).not.toContain("api.skills.activateCandidate");
@@ -50,7 +51,7 @@ describe("tenant skill review surface — the panel exists and is wired", () => 
 
   test("the panel is mounted, and only inside the isOwner branch", () => {
     // A component with no call site is invisible to every green suite here.
-    expect(code).toContain("<UserCandidatesPanel />");
+    expect(code).toContain("<TenantCandidatesPanel />");
     const gate = code.indexOf("{isOwner && (");
     const gateEnd = code.indexOf("</section>", gate);
     expect(gate).toBeGreaterThan(-1);
@@ -58,15 +59,15 @@ describe("tenant skill review surface — the panel exists and is wired", () => 
     const guarded = code.slice(gate, gateEnd);
     // Non-vacuity floor: the slice really is the owner section (it also holds OptimizerPanel).
     expect(guarded).toContain("<OptimizerPanel />");
-    expect(guarded).toContain("<UserCandidatesPanel />");
+    expect(guarded).toContain("<TenantCandidatesPanel />");
     // …and there is exactly ONE mount, so a second unguarded one cannot hide elsewhere.
-    expect(code.split("<UserCandidatesPanel />").length - 1).toBe(1);
+    expect(code.split("<TenantCandidatesPanel />").length - 1).toBe(1);
   });
 
   test("global optimizer candidates and user candidates are separately labelled", () => {
     // Two `caps-label` headings, not one merged queue: an optimizer rewrite of the global registry
     // and one tenant's own adaptation are different objects with different correct actions.
-    expect(code).toContain("User-authored candidates");
+    expect(code).toContain("Tenant skill candidates");
     expect(code).toContain("Optimizer");
     expect(code.split('className="caps-label"').length - 1).toBeGreaterThanOrEqual(4);
   });
@@ -74,11 +75,13 @@ describe("tenant skill review surface — the panel exists and is wired", () => 
 
 describe("tenant skill review surface — exact-id calls, never name@version", () => {
   test("activate is called with the exact candidate id", () => {
-    expect(panel.text).toContain("activate({ candidateId: c.candidateId })");
+    expect(panel.text).toContain("activateUser({ candidateId: c.candidateId })");
+    expect(panel.text).toContain("activateAgent({ candidateId: c.candidateId })");
+    expect(panel.text).toContain('c.author === "agent"');
     // The global panel activates by `{ name, version }`. Two tenants can hold the same pair, so
     // that call shape must not appear here at all.
-    expect(panel.text).not.toContain("activate({ name");
-    expect(panel.text).not.toMatch(/activate\(\{[^}]*version/);
+    expect(panel.text).not.toContain("activateUser({ name");
+    expect(panel.text).not.toContain("activateAgent({ name");
   });
 
   test("rollback is called with an id taken from the server's own eligible list", () => {
@@ -111,8 +114,8 @@ describe("tenant skill review surface — honest state words", () => {
   });
 
   test("loading and empty states are honest and distinct", () => {
-    expect(panel.text).toContain("Loading user-authored candidates…");
-    expect(panel.text).toContain("No user-authored candidates awaiting review.");
+    expect(panel.text).toContain("Loading tenant skill candidates…");
+    expect(panel.text).toContain("No tenant skill candidates awaiting review.");
     expect(panel.text).toContain("No earlier version has ever been live for this tenant.");
   });
 
@@ -140,9 +143,18 @@ describe("tenant skill review surface — disclosure boundaries", () => {
   test("provenance is refs: ids, never a name or an email", () => {
     expect(panel.text).toContain("{c.tenantId}");
     expect(panel.text).toContain("{c.authorUserId ?? ");
+    expect(panel.text).toContain("{c.authorAgentId ?? ");
+    expect(panel.text).toContain("shortRef(c.sourceThreadId)");
+    expect(panel.text).toContain("shortRef(c.sourceTurnId)");
     for (const field of ["email", "displayName", ".name}", "avatar"]) {
       expect(panel.text, `panel renders ${field}`).not.toContain(field);
     }
+  });
+
+  test("agent approval state is explicit but raw evidence and fixtures remain absent", () => {
+    expect(panel.text).toContain("Owner approval: not recorded");
+    expect(panel.text).toContain("c.ownerApproval.evalRunId");
+    expect(panel.text).not.toMatch(/c\.evidence(?![A-Za-z])/);
   });
 });
 
@@ -175,7 +187,7 @@ describe("tenant skill review surface — BRAND compliance", () => {
     expect(panel.text).not.toMatch(/<(div|span|li)\b[^>]*onClick/);
     // …and every onClick in the panel belongs to a <button>.
     const onClicks = panel.text.split("onClick=").length - 1;
-    expect(onClicks).toBe(2); // Activate, Roll back
+    expect(onClicks).toBe(2); // Author-specific Activate, Roll back
     expect(panel.text.split("<button").length - 1).toBe(2);
   });
 });
