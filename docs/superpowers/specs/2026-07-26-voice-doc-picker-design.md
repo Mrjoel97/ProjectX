@@ -1,7 +1,12 @@
 # Attach a vault document from the voice pre-flight screen
 
 - **Date:** 2026-07-26
-- **Status:** Approved (owner), ready for implementation
+- **Status:** Implemented and verified in canonical GSD Phase 14
+- **GSD phase:** `14-flagship-voice-doc-workflow`
+- **Requirements:** `DOCV-01`
+- **Execution state:** `verified`
+- **Canonical evidence:** [Phase 14 verification](../../../.planning/phases/14-flagship-voice-doc-workflow/14-VERIFICATION.md) · [Phase 14 closing summary](../../../.planning/phases/14-flagship-voice-doc-workflow/14-09-SUMMARY.md) · [voice playbook implementation/gate record](../../playbooks/voice.md#the-pre-flight-picker-14-10)
+- **Numbering reconciliation:** This spec and its implementation plan called the picker `14-07`, but canonical GSD `14-07` already names the separate vault-entry/in-call-context work ([14-07 summary](../../../.planning/phases/14-flagship-voice-doc-workflow/14-07-SUMMARY.md)). The shipped picker is therefore recorded retroactively as `14-10` in the voice playbook; no standalone `14-10-PLAN.md` or `14-10-SUMMARY.md` exists, so Phase 14 verification is the status authority.
 - **Related:** CLAUDE.md §1 (pure literals in packages), §2 (tenant wrappers), §9 (playbooks),
   §10 (BRAND), playbooks `docs/playbooks/voice.md` + `docs/playbooks/vault.md`, Phase 14 DOCV-01
 

@@ -1,7 +1,12 @@
 # Bulk contact import (CSV) — design
 
 **Date:** 2026-08-10
-**Status:** approved, not yet planned
+**Status:** implemented and verified in canonical GSD Phase 19.1
+**GSD phase:** `19.1-bulk-contact-import-csv`
+**Requirements:** `ACTN-05`, `PIPE-01`
+**Execution state:** `verified`
+**Canonical evidence:** [19.1 closing summary](../../../.planning/phases/19.1-bulk-contact-import-csv/19.1-07-SUMMARY.md) · [19.1 owner gate/validation](../../../.planning/phases/19.1-bulk-contact-import-csv/19.1-VALIDATION.md) · [19.1 verification](../../../.planning/phases/19.1-bulk-contact-import-csv/19.1-VERIFICATION.md)
+**Remaining gates:** none. Verification retains one explicitly unobserved consent-chip comparison that the owner closed in favor of the visible Origin-column distinction; it is not a code or phase blocker.
 **Scope:** the first of four contact-acquisition subsystems (see *Decomposition*)
 
 ---

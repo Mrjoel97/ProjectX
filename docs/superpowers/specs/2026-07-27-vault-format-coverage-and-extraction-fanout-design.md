@@ -1,8 +1,13 @@
 # Vault: Universal Format Recognition + Extraction Fan-Out
 
-> Status: DESIGN — awaiting owner review
+> Status: IMPLEMENTED AND VERIFIED — canonical GSD Phase 15.2
 > Date: 2026-07-27
 > Subsystem: Knowledge Vault (`docs/playbooks/vault.md`)
+> GSD phase: `15.2-vault-universal-format-recognition-and-extraction-fan-out`
+> Requirements: owner-approved design contract `SC#1`–`SC#7` (no standalone `REQUIREMENTS.md` ID)
+> Execution state: `verified` (`passed_with_observations`)
+> Evidence: [15.2 closing summary](../../../.planning/phases/15.2-vault-universal-format-recognition-and-extraction-fan-out/15.2-08-SUMMARY.md) · [15.2 verification](../../../.planning/phases/15.2-vault-universal-format-recognition-and-extraction-fan-out/15.2-VERIFICATION.md)
+> Remaining observation: a real Excel-authored date-cell rendering remains unobserved; this is non-blocking and the legacy XLS numeric extraction was live-approved.
 > Phase 2 (folders, 1.5 GB uploads, folder-level comprehension) is deliberately OUT of scope —
 > see [Out of scope](#out-of-scope).
 
