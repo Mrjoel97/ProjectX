@@ -1401,3 +1401,13 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | **Milestone: Marketing (pulled pre-beta 2026-08-07, ADR-015)** | | | |
 | 31. Marketing Surface & Funnel v0 (tranche A) | 0/TBD | Not started — schedulable; depends on Phase 19 | - |
 | 32. Channel Connection, Publishing & Metrics (tranche B) | 0/TBD | **BLOCKED — legal entity not started.** Do not plan | - |
+
+### Phase 25.1: Consistency and Reliability Hardening (INSERTED)
+
+**Goal:** Every governed background job reaches an honest terminal state the user can see — no silent stalls, no vanishing media, no mute Approve button. Scope (Consistency Audit rev 2, G1/G2/G3/G9/G11/G12): terminal on every batchToRender refusal; renderReel under the action retrier with onComplete; a stuck-work watchdog cron (submitted/rendering/transcribing/collecting); image vault save (none exists) + reel save at the render terminal + reelVaultDocId cleared on reset + second-image refusal fixed; approvals persistent success/refusal feedback + an honest image arm; memo-card markdown rendering + research sources block; env-manifest completion, dead fal-webhook removal, Sora-cutover ADR, DLQ visibility.
+**Requirements**: TBD
+**Depends on:** nothing new - it hardens already-shipped subsystems (media pipeline, dispatch, approvals, workspace cards) and runs ahead of Phase 25's release gates, not behind them
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 25.1 to break down)
