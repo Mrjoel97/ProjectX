@@ -342,3 +342,273 @@ describe("17-08 Task 1 — the bounded legacy migration is explicit, never autom
     expect(out.done).toBe(true);
   });
 });
+
+// ── 17-09 Task 1: the listing the cockpit tool reads ────────────────────────────────────────────
+//
+// The listing is the model's ONLY route to a managed-event ref, so what it omits is the real
+// contract: a row the manage path would refuse must not appear here, or the model proposes a change
+// that dies at the provider gate after the user has been told it was staged.
+
+/** Insert a registry row directly. Everything the listing decides on is a stored fact. */
+async function managedRow(
+  t: T,
+  o: Partial<{
+    tenantId: string;
+    externalEventId: string;
+    title: string;
+    startMs: number;
+    etag: string | undefined;
+    attendeeFree: boolean;
+    status: "active" | "deleted";
+  }> = {},
+): Promise<Id<"calendarEvents">> {
+  const sourcePlanId = await deliveringPlan(t, o.tenantId ?? TENANT);
+  const etag = "etag" in o ? o.etag : '"v1"';
+  return await t.run(async (ctx) =>
+    ctx.db.insert("calendarEvents", {
+      tenantId: o.tenantId ?? TENANT,
+      provider: "google" as const,
+      externalEventId: o.externalEventId ?? `evt_${Math.random()}`,
+      ...(etag === undefined ? {} : { etag }),
+      title: o.title ?? "Quarterly review",
+      startMs: o.startMs ?? BASE_MS,
+      durationMs: 30 * 60 * 1000,
+      tz: TZ,
+      sourcePlanId,
+      attendeeFree: o.attendeeFree ?? true,
+      status: o.status ?? ("active" as const),
+      createdAt: BASE_MS,
+      updatedAt: BASE_MS,
+    }),
+  );
+}
+
+describe("17-09 Task 1 — the bounded, manageable-only listing", () => {
+  test("only rows the manage path would ACCEPT are listed; the rest are counted, not named", async () => {
+    const t = harness();
+    await managedRow(t, { title: "Manageable" });
+    await managedRow(t, { title: "Legacy", etag: undefined }); // needs_inspection
+    await managedRow(t, { title: "Has guests", attendeeFree: false }); // attendees_present
+    await managedRow(t, { title: "Gone", status: "deleted" }); // not_found
+
+    const out = await t.query(internal.calendarEvents.listManageable, { tenantId: TENANT });
+
+    expect(out.events.map((e) => e.title)).toEqual(["Manageable"]);
+    // Counts, never titles — an omitted row is reported as a NUMBER so the model can say "2 more I
+    // can't change" without being handed content it was not allowed to list.
+    //
+    // TWO, not three, and the difference is worth pinning: `omitted` counts rows the scan SAW and
+    // `manageability` then refused. A DELETED row is equated away by the index and never reaches
+    // the filter at all — it is not "an event you can't change", it is not an event any more.
+    expect(out.omitted).toBe(2);
+    expect(JSON.stringify(out)).not.toMatch(/Legacy|Has guests|Gone/);
+  });
+
+  test("a FOREIGN tenant's manageable row is absent — the listing is the isolation boundary", async () => {
+    const t = harness();
+    await managedRow(t, { tenantId: OTHER, title: "Someone else's event" });
+    const out = await t.query(internal.calendarEvents.listManageable, { tenantId: TENANT });
+    expect(out.events).toEqual([]);
+    expect(out.omitted).toBe(0);
+  });
+
+  test("the page is capped at 20 and NEWEST START FIRST, with truncation disclosed", async () => {
+    const t = harness();
+    // 22 manageable rows, inserted oldest-start first so creation order and start order disagree —
+    // a listing that just took the index order would pass a weaker version of this test.
+    for (let i = 0; i < 22; i++) {
+      await managedRow(t, { title: `Event ${i}`, startMs: BASE_MS + i * 86_400_000 });
+    }
+
+    const out = await t.query(internal.calendarEvents.listManageable, { tenantId: TENANT });
+
+    expect(out.events).toHaveLength(20);
+    expect(out.events[0]?.title).toBe("Event 21");
+    expect(out.truncated).toBe(true);
+    const starts = out.events.map((e) => e.startMs);
+    expect([...starts].sort((a, b) => b - a)).toEqual(starts);
+  });
+
+  test("an empty registry lists nothing and truncates nothing", async () => {
+    const t = harness();
+    const out = await t.query(internal.calendarEvents.listManageable, { tenantId: TENANT });
+    expect(out).toEqual({ events: [], omitted: 0, truncated: false });
+  });
+});
+
+// ── 17-09 Task 2: one fresh-snapshot staging transaction ──────────────────────────────────────
+
+async function collectingPlan(t: T, tenantId = TENANT): Promise<Id<"plans">> {
+  return await t.run((ctx) =>
+    ctx.db.insert("plans", {
+      tenantId,
+      threadId: `thread_stage_${tenantId}`,
+      status: "collecting",
+      createdAt: BASE_MS,
+    }),
+  );
+}
+
+const stageArgs = (
+  planId: Id<"plans">,
+  managedEventId: Id<"calendarEvents">,
+  over: Partial<{
+    tenantId: string;
+    operation: "update" | "delete";
+    etag: string | undefined;
+    attendeeCount: number;
+    desired: { title?: string; startMs?: number; durationMs?: number } | undefined;
+  }> = {},
+) => ({
+  tenantId: over.tenantId ?? TENANT,
+  planId,
+  managedEventId,
+  operation: over.operation ?? ("update" as const),
+  storedEtag: '"v1"',
+  ...(over.etag === undefined && "etag" in over ? {} : { etag: over.etag ?? '"fresh"' }),
+  observed: {
+    title: "Provider title",
+    startMs: BASE_MS + 60_000,
+    durationMs: 45 * 60_000,
+    attendeeCount: over.attendeeCount ?? 0,
+  },
+  ...(over.desired === undefined && "desired" in over
+    ? {}
+    : { desired: over.desired ?? { title: "New title" } }),
+});
+
+describe("17-09 Task 2 — stageChange is atomic, tenant-safe, and etag-pinned", () => {
+  test("copies the fresh provider snapshot into the registry and proposes only actual overrides", async () => {
+    const t = harness();
+    const managedEventId = await managedRow(t);
+    const planId = await collectingPlan(t);
+
+    const out = await t.mutation(
+      internal.calendarEvents.stageChange,
+      stageArgs(planId, managedEventId, {
+        desired: { title: "New title", startMs: BASE_MS + 3_600_000 },
+      }),
+    );
+
+    expect(out).toEqual({ ok: true, changed: ["title", "startMs"] });
+    const row = await t.run((ctx) => ctx.db.get(managedEventId));
+    expect(row).toMatchObject({
+      etag: '"fresh"',
+      title: "Provider title",
+      startMs: BASE_MS + 60_000,
+      durationMs: 45 * 60_000,
+      attendeeFree: true,
+    });
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan).toMatchObject({
+      kind: "calendar_manage",
+      status: "proposed",
+      calendarManagedEventId: managedEventId,
+      calendarExpectedEtag: '"fresh"',
+      calendarOperation: "update",
+      eventTitle: "New title",
+      eventStartMs: BASE_MS + 3_600_000,
+    });
+    expect(plan?.eventDurationMs).toBeUndefined();
+  });
+
+  test("missing and foreign refs collapse to not_managed and write no plan proposal", async () => {
+    const t = harness();
+    const foreign = await managedRow(t, { tenantId: OTHER });
+    const own = await managedRow(t);
+    const planId = await collectingPlan(t);
+
+    const foreignOut = await t.mutation(
+      internal.calendarEvents.stageChange,
+      stageArgs(planId, foreign),
+    );
+    expect(foreignOut).toEqual({ ok: false, code: "not_managed" });
+
+    await t.run((ctx) => ctx.db.delete(own));
+    const missingOut = await t.mutation(
+      internal.calendarEvents.stageChange,
+      stageArgs(planId, own),
+    );
+    expect(missingOut).toEqual(foreignOut);
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("collecting");
+  });
+
+  test("a fresh attendee count refuses before refreshing either registry or plan", async () => {
+    const t = harness();
+    const managedEventId = await managedRow(t, { title: "Stored title" });
+    const planId = await collectingPlan(t);
+
+    const out = await t.mutation(
+      internal.calendarEvents.stageChange,
+      stageArgs(planId, managedEventId, { attendeeCount: 1 }),
+    );
+
+    expect(out).toEqual({ ok: false, code: "attendees_present" });
+    expect((await t.run((ctx) => ctx.db.get(managedEventId)))?.title).toBe("Stored title");
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("collecting");
+  });
+
+  test("a missing fresh etag refuses instead of staging an unconditional write", async () => {
+    const t = harness();
+    const managedEventId = await managedRow(t);
+    const planId = await collectingPlan(t);
+
+    const out = await t.mutation(
+      internal.calendarEvents.stageChange,
+      stageArgs(planId, managedEventId, { etag: undefined }),
+    );
+
+    expect(out).toEqual({ ok: false, code: "needs_inspection" });
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("collecting");
+  });
+
+  test("an unchanged update and a delete carrying desired content both write nothing", async () => {
+    const t = harness();
+    const managedEventId = await managedRow(t);
+    const unchangedPlan = await collectingPlan(t);
+    const deletePlan = await collectingPlan(t);
+
+    expect(
+      await t.mutation(
+        internal.calendarEvents.stageChange,
+        stageArgs(unchangedPlan, managedEventId, {
+          desired: { title: "Provider title", startMs: BASE_MS + 60_000 },
+        }),
+      ),
+    ).toEqual({ ok: false, code: "empty_update" });
+    expect(
+      await t.mutation(
+        internal.calendarEvents.stageChange,
+        stageArgs(deletePlan, managedEventId, {
+          operation: "delete",
+          desired: { title: "Must not ride a delete" },
+        }),
+      ),
+    ).toEqual({ ok: false, code: "delete_has_desired" });
+    expect((await t.run((ctx) => ctx.db.get(unchangedPlan)))?.status).toBe("collecting");
+    expect((await t.run((ctx) => ctx.db.get(deletePlan)))?.status).toBe("collecting");
+  });
+
+  test("a stale row or superseded plan is re-checked inside the mutation", async () => {
+    const t = harness();
+    const deleted = await managedRow(t, { status: "deleted" });
+    const planId = await collectingPlan(t);
+    expect(
+      await t.mutation(internal.calendarEvents.stageChange, stageArgs(planId, deleted)),
+    ).toEqual({ ok: false, code: "not_found" });
+
+    const raced = await managedRow(t);
+    await t.run((ctx) => ctx.db.patch(raced, { etag: '"newer-app-stage"' }));
+    expect(
+      await t.mutation(internal.calendarEvents.stageChange, stageArgs(planId, raced)),
+    ).toEqual({ ok: false, code: "conflict" });
+    expect((await t.run((ctx) => ctx.db.get(raced)))?.etag).toBe('"newer-app-stage"');
+
+    await t.run((ctx) => ctx.db.patch(planId, { kind: "finance_write", status: "proposed" }));
+    const live = await managedRow(t);
+    expect(
+      await t.mutation(internal.calendarEvents.stageChange, stageArgs(planId, live)),
+    ).toEqual({ ok: false, code: "plan_mismatch" });
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.kind).toBe("finance_write");
+  });
+});

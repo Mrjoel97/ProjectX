@@ -2539,6 +2539,237 @@ export function buildCockpitTools(
         return "Plan proposed — the user can now review and Approve it.";
       },
     }),
+    // ── Calendar management discovery + staging (17-09, ACTN-02) ─────────────────────────────
+    listManagedCalendarEvents: tool({
+      description:
+        "List the user's Pikar-managed calendar events that are currently safe to change. " +
+        "Returns stable event references plus titles and times, at most 20. This is read-only.",
+      inputSchema: jsonSchema<Record<string, never>>({
+        type: "object",
+        properties: {},
+        additionalProperties: false,
+      }),
+      execute: async (): Promise<string> => {
+        const listed = await ctx.runQuery(internal.calendarEvents.listManageable, { tenantId });
+        if (listed.events.length === 0) {
+          const omitted =
+            listed.omitted > 0
+              ? ` ${listed.omitted} other event(s) are not safe to change.`
+              : "";
+          return `No Pikar-managed calendar events are currently available to change.${omitted}`;
+        }
+        const lines = listed.events.map(
+          (event, index) =>
+            `#${index + 1} ref=${event.managedEventId} | ${event.provider} | ${event.title} | ` +
+            `${fmtSendInstant(event.startMs, event.tz)} | ${Math.round(event.durationMs / 60_000)} min`,
+        );
+        const limits = [
+          listed.truncated ? "Only the newest 20 manageable events are shown." : null,
+          listed.omitted > 0
+            ? `${listed.omitted} other event(s) were omitted because they are not safe to change.`
+            : null,
+        ]
+          .filter((line): line is string => line !== null)
+          .join(" ");
+        return (
+          `${listed.events.length} Pikar-managed event(s):\n${lines.join("\n")}` +
+          `${limits ? `\n${limits}` : ""}`
+        );
+      },
+    }),
+    proposeCalendarChange: tool({
+      description:
+        "Stage an update or removal of one Pikar-managed calendar event for approval. " +
+        "Use only a stable reference returned by listManagedCalendarEvents. " +
+        "This refreshes the event but performs no calendar write and never approves the plan.",
+      inputSchema: jsonSchema<{
+        managedEventId: string;
+        operation: "update" | "delete";
+        title?: string;
+        when?: string;
+        durationMinutes?: number;
+      }>({
+        type: "object",
+        properties: {
+          managedEventId: {
+            type: "string",
+            description: "The stable ref returned by listManagedCalendarEvents.",
+          },
+          operation: { type: "string", enum: ["update", "delete"] },
+          title: { type: "string", description: "A replacement title for an update." },
+          when: {
+            type: "string",
+            description: "The user's natural-language replacement time for an update.",
+          },
+          durationMinutes: {
+            type: "number",
+            description: "A replacement duration in minutes for an update.",
+          },
+        },
+        required: ["managedEventId", "operation"],
+        additionalProperties: false,
+      }),
+      execute: async ({
+        managedEventId,
+        operation,
+        title,
+        when,
+        durationMinutes,
+      }): Promise<string> => {
+        const hasTitle = title !== undefined;
+        const hasWhen = when !== undefined;
+        const hasDuration = durationMinutes !== undefined;
+        if (operation === "delete" && (hasTitle || hasWhen || hasDuration)) {
+          return "A removal cannot also carry a new title, time, or duration. Nothing was staged.";
+        }
+        if (operation === "update" && !hasTitle && !hasWhen && !hasDuration) {
+          return "Name at least one title, time, or duration change. Nothing was staged.";
+        }
+        if (hasTitle && title.trim().length === 0) {
+          return "The replacement title is empty. Ask for the intended title; nothing was staged.";
+        }
+
+        let startMs: number | undefined;
+        if (hasWhen) {
+          if (!clientContext) {
+            return "I couldn't read your local time and timezone, so I can't stage that calendar change yet.";
+          }
+          const parsed = parseSendTime(
+            when,
+            clientContext.nowMs,
+            clientContext.tz,
+            CALENDAR_HORIZON_MS,
+          );
+          switch (parsed.kind) {
+            case "resolved":
+              startMs = parsed.epochMs;
+              break;
+            case "ambiguous":
+              return (
+                "That replacement time is ambiguous — ask which day and time they meant. " +
+                "Nothing was staged."
+              );
+            case "past":
+              return "That replacement time has already passed — ask for a future time. Nothing was staged.";
+            case "tooFar":
+              return "That replacement time is too far out to stage safely. Nothing was staged.";
+            case "none":
+              return (
+                "I didn't detect a specific replacement time — ask for the day and time. " +
+                "Nothing was staged."
+              );
+          }
+        }
+        const durationMs =
+          durationMinutes === undefined
+            ? undefined
+            : Math.min(480, Math.max(15, Math.round(durationMinutes))) * 60_000;
+
+        const blocking = otherKindStaged(await readPlan(), "calendar_manage");
+        if (blocking) return otherKindRefusal(blocking);
+
+        // The model supplies only the opaque registry ref. Provider and external id are recovered
+        // server-side after the tenant check, so a model can never redirect the inspection.
+        const snapshot = await ctx.runQuery(internal.calendarEvents.stagingSnapshot, {
+          tenantId,
+          managedEventId,
+        });
+        if (!snapshot) {
+          return (
+            "That managed calendar event was not found. Refresh the list and try again; " +
+            "nothing was staged."
+          );
+        }
+        if (!snapshot.manageable) {
+          return snapshot.code === "attendees_present"
+            ? "That event has attendees, so Pikar will not change it. Nothing was staged."
+            : "That event is not currently safe to change. Refresh or reconnect, then try again; " +
+              "nothing was staged.";
+        }
+        if (!snapshot.etag) {
+          return "That event has no safe version marker. Refresh it before proposing a change; nothing was staged.";
+        }
+
+        // Inspect-only. The next and LAST call is one atomic local mutation; no provider write,
+        // approval mutation or terminal is reachable from this tool.
+        const inspected = await ctx.runAction(internal.calendar.inspectEvent, {
+          tenantId,
+          provider: snapshot.provider,
+          externalEventId: snapshot.externalEventId,
+        });
+        if (inspected.outcome === "reauth") {
+          const name = snapshot.provider === "microsoft" ? "Microsoft" : "Google";
+          return `Reconnect ${name} Calendar, then restage this change. Nothing was staged.`;
+        }
+        if (inspected.outcome === "terminal") {
+          return "The calendar could not be refreshed safely. Try again later; nothing was staged.";
+        }
+        const observed = inspected.inspection;
+        if (!observed.exists) {
+          return (
+            "That managed calendar event was not found. Refresh the list and try again; " +
+            "nothing was staged."
+          );
+        }
+        if (observed.attendeeCount > 0) {
+          return "That event now has attendees, so Pikar will not change it. Nothing was staged.";
+        }
+
+        const desired =
+          operation === "delete"
+            ? undefined
+            : {
+                ...(title === undefined ? {} : { title: title.trim() }),
+                ...(startMs === undefined ? {} : { startMs }),
+                ...(durationMs === undefined ? {} : { durationMs }),
+              };
+        const staged = await ctx.runMutation(internal.calendarEvents.stageChange, {
+          tenantId,
+          planId,
+          managedEventId: snapshot.managedEventId,
+          operation,
+          storedEtag: snapshot.etag,
+          ...(observed.etag === undefined ? {} : { etag: observed.etag }),
+          observed: {
+            title: observed.title,
+            startMs: observed.startMs,
+            durationMs: observed.durationMs,
+            attendeeCount: observed.attendeeCount,
+          },
+          ...(desired === undefined ? {} : { desired }),
+        });
+        if (!staged.ok) {
+          if (staged.code === "empty_update")
+            return (
+              "Those values already match the event, so there is no change to approve. " +
+              "Nothing was staged."
+            );
+          if (staged.code === "attendees_present")
+            return "That event now has attendees, so Pikar will not change it. Nothing was staged.";
+          if (staged.code === "provider_unsupported")
+            return (
+              "Microsoft Calendar event removal is not supported safely. The event is still " +
+              "there and nothing was staged."
+            );
+          return (
+            "The event changed while it was being prepared. Refresh the list and restage it; " +
+            "nothing was staged."
+          );
+        }
+
+        const provider = snapshot.provider === "microsoft" ? "Microsoft" : "Google";
+        if (operation === "delete") {
+          return (
+            `Removal staged for “${observed.title}” on ${provider} Calendar. ` +
+            "It remains on the calendar until the user Approves."
+          );
+        }
+        return (
+          `Calendar update staged for “${observed.title}” on ${provider} Calendar ` +
+          `(${staged.changed.join(", ")}). It changes only after the user Approves.`
+        );
+      },
+    }),
     // ── Calendar availability (ACTN-02) — READ-ONLY, busy ranges only ─────────────────────────
     checkAvailability: tool({
       // Split literal keeps each chunk under the §5 no-hardcoded-prompt scan ceiling (200 chars).

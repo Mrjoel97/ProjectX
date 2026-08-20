@@ -318,6 +318,36 @@ test("the externalAction arm wires each occupant's OWN retrier action and non-No
   }
 });
 
+test("proposeCalendarChange is inspect-then-stage only; no provider writer or Approve gate is reachable", () => {
+  const src = readExecutableCode("llm.ts");
+  const start = src.indexOf("proposeCalendarChange: tool({");
+  expect(start, "llm.ts has no proposeCalendarChange tool").toBeGreaterThanOrEqual(0);
+  const end = src.indexOf("checkAvailability: tool({", start);
+  expect(end, "calendar-management tool has no bounded source slice").toBeGreaterThan(start);
+  const toolBody = src.slice(start, end);
+
+  const inspect = toolBody.indexOf("internal.calendar.inspectEvent");
+  const stage = toolBody.indexOf("internal.calendarEvents.stageChange");
+  expect(inspect, "mutation: skip provider inspection and stage the stored etag").toBeGreaterThan(0);
+  expect(stage, "mutation: inspect but never persist the fresh snapshot").toBeGreaterThan(inspect);
+  expect(toolBody.match(/internal\.calendarEvents\.stageChange/g)).toHaveLength(1);
+
+  for (const forbidden of [
+    "internal.calendar.createEvent",
+    "internal.calendar.manageEvent",
+    "internal.cockpit.executePlan",
+    "internal.calendarComplete",
+    "retrier.run",
+    "fetch(",
+  ]) {
+    expect(
+      toolBody,
+      `calendar staging names ${forbidden} — a model-reachable proposal must perform no provider ` +
+        "write, terminal transition, or approval",
+    ).not.toContain(forbidden);
+  }
+});
+
 // ── SC #4: the human Approve gate is a tenantMutation, never a tool ───────────────────────────
 //
 // The standing v2.0 architecture rule: every capability is ONE of two shapes — a read-only tool

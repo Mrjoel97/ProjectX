@@ -1583,6 +1583,203 @@ test("proposeCalendarEvent without clientContext refuses and leaves the plan unt
   await expectCalendarStageEmpty(t, planId);
 });
 
+// ── 17-09: managed-event discovery and inspect-then-stage management ──────────────────────────
+
+async function seedManagedToolEvent(
+  t: T,
+  planId: Id<"plans">,
+  over: Partial<{
+    tenantId: string;
+    title: string;
+    startMs: number;
+    etag: string | undefined;
+    attendeeFree: boolean;
+  }> = {},
+) {
+  const etag = "etag" in over ? over.etag : '"stored"';
+  return await t.mutation(internal.calendarEvents.upsertManaged, {
+    tenantId: over.tenantId ?? "t1",
+    sourcePlanId: planId,
+    provider: "google",
+    externalEventId: `evt_${over.title ?? Math.random()}`,
+    ...(etag === undefined ? {} : { etag }),
+    title: over.title ?? "Quarterly review",
+    startMs: over.startMs ?? PIN_CLOCK.nowMs + 3_600_000,
+    durationMs: 30 * 60_000,
+    tz: PIN_CLOCK.tz,
+    attendeeFree: over.attendeeFree ?? true,
+  });
+}
+
+async function seedGoogleCalendarGrant(t: T) {
+  await t.run((ctx) =>
+    ctx.db.insert("gmailTokens", {
+      tenantId: "t1",
+      refreshToken: "refresh-token",
+      accessToken: "access-token",
+      expiresAt: Date.now() + 3_600_000,
+      scope: "https://www.googleapis.com/auth/calendar.events",
+      updatedAt: Date.now(),
+    }),
+  );
+}
+
+const inspectedGoogleEvent = (over: { attendees?: unknown[]; etag?: string } = {}) =>
+  new Response(
+    JSON.stringify({
+      id: "evt_provider",
+      etag: over.etag ?? '"fresh"',
+      summary: "Provider title",
+      start: { dateTime: new Date(PIN_CLOCK.nowMs + 3_600_000).toISOString() },
+      end: { dateTime: new Date(PIN_CLOCK.nowMs + 5_400_000).toISOString() },
+      attendees: over.attendees ?? [],
+    }),
+    { status: 200, headers: { "Content-Type": "application/json" } },
+  );
+
+test("listManagedCalendarEvents is bounded, stable-ref based, and strictly read-only", async () => {
+  const { t, planId } = await setup();
+  const newest = await seedManagedToolEvent(t, planId, {
+    title: "Newest",
+    startMs: PIN_CLOCK.nowMs + 50 * 3_600_000,
+  });
+  await seedManagedToolEvent(t, planId, { title: "Needs inspection", etag: undefined });
+  await seedManagedToolEvent(t, planId, { title: "Has guests", attendeeFree: false });
+  await seedManagedToolEvent(t, planId, { tenantId: "t2", title: "Foreign" });
+  const fetchMock = vi.fn(() => {
+    throw new Error("managed-event listing must never call a provider");
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  try {
+    const reply = await call(t, planId, "listManagedCalendarEvents", {});
+    expect(reply).toContain(`ref=${newest}`);
+    expect(reply).toContain("Newest");
+    expect(reply).not.toMatch(/Needs inspection|Has guests|Foreign/);
+    expect(reply).toMatch(/2 other event\(s\).*omitted/i);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await t.run((ctx) => ctx.db.query("audit").collect())).toEqual([]);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+test("listManagedCalendarEvents reports an honest empty result", async () => {
+  const { t, planId } = await setup();
+  expect(await call(t, planId, "listManagedCalendarEvents", {})).toMatch(
+    /no Pikar-managed calendar events/i,
+  );
+});
+
+test("proposeCalendarChange inspects once, copies the fresh etag, and only proposes", async () => {
+  const { t, planId } = await setup();
+  const managedEventId = await seedManagedToolEvent(t, planId);
+  await seedGoogleCalendarGrant(t);
+  const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(inspectedGoogleEvent()));
+  vi.stubGlobal("fetch", fetchMock);
+
+  try {
+    const reply = await callClock(t, planId, "proposeCalendarChange", {
+      managedEventId: String(managedEventId),
+      operation: "update",
+      title: "Updated title",
+      when: "in 3 hours",
+      durationMinutes: 45,
+    });
+    expect(reply).toMatch(/staged|approve/i);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const firstCall = fetchMock.mock.calls[0] as unknown as [unknown, RequestInit | undefined];
+    expect(firstCall[1]?.method).toBeUndefined(); // inspection GET, never a write
+
+    const plan = await readPlan(t, planId);
+    expect(plan).toMatchObject({
+      kind: "calendar_manage",
+      status: "proposed",
+      calendarManagedEventId: managedEventId,
+      calendarExpectedEtag: '"fresh"',
+      calendarOperation: "update",
+      eventTitle: "Updated title",
+      eventStartMs: PIN_CLOCK.nowMs + 3 * 3_600_000,
+      eventDurationMs: 45 * 60_000,
+    });
+    expect(plan?.calendarRunId).toBeUndefined();
+    expect(plan?.status).not.toMatch(/approved|delivering|done/);
+    expect(await t.run((ctx) => ctx.db.query("audit").collect())).toEqual([]);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+test("proposeCalendarChange refuses ambiguous time and delete content before inspection", async () => {
+  for (const input of [
+    { operation: "update", when: "4am" },
+    { operation: "delete", title: "Must not ride a delete" },
+  ] as const) {
+    const { t, planId } = await setup();
+    const managedEventId = await seedManagedToolEvent(t, planId);
+    const fetchMock = vi.fn(() => {
+      throw new Error("invalid proposal must stop before provider inspection");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const reply = await callClock(t, planId, "proposeCalendarChange", {
+        managedEventId: String(managedEventId),
+        ...input,
+      });
+      expect(reply).toMatch(/nothing was staged/i);
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect((await readPlan(t, planId))?.status).toBe("collecting");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  }
+});
+
+test("fresh attendees and reconnect both leave the plan untouched", async () => {
+  const attendeeCase = await setup();
+  const attendeeId = await seedManagedToolEvent(attendeeCase.t, attendeeCase.planId);
+  await seedGoogleCalendarGrant(attendeeCase.t);
+  vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(inspectedGoogleEvent({ attendees: [{}] }))));
+  try {
+    expect(
+      await callClock(attendeeCase.t, attendeeCase.planId, "proposeCalendarChange", {
+        managedEventId: String(attendeeId),
+        operation: "delete",
+      }),
+    ).toMatch(/attendees/i);
+    expect((await readPlan(attendeeCase.t, attendeeCase.planId))?.status).toBe("collecting");
+  } finally {
+    vi.unstubAllGlobals();
+  }
+
+  const reconnectCase = await setup();
+  const reconnectId = await seedManagedToolEvent(reconnectCase.t, reconnectCase.planId);
+  expect(
+    await callClock(reconnectCase.t, reconnectCase.planId, "proposeCalendarChange", {
+      managedEventId: String(reconnectId),
+      operation: "delete",
+    }),
+  ).toMatch(/reconnect/i);
+  expect((await readPlan(reconnectCase.t, reconnectCase.planId))?.status).toBe("collecting");
+});
+
+test("foreign and missing managed-event refs are indistinguishable", async () => {
+  const { t, planId } = await setup();
+  const foreign = await seedManagedToolEvent(t, planId, { tenantId: "t2" });
+  const missing = String(foreign).replace(/.$/, (last) => (last === "a" ? "b" : "a"));
+
+  const foreignReply = await callClock(t, planId, "proposeCalendarChange", {
+    managedEventId: String(foreign),
+    operation: "delete",
+  });
+  const missingReply = await callClock(t, planId, "proposeCalendarChange", {
+    managedEventId: missing,
+    operation: "delete",
+  });
+  expect(foreignReply).toBe(missingReply);
+  expect((await readPlan(t, planId))?.status).toBe("collecting");
+});
+
 // ── Phase 18 (ACTN-04): the createDocument tool ───────────────────────────────
 // The surface the model actually calls. Everything before it in this phase is machinery; these
 // rows pin what the machinery is FOR: one governed artifact in the tenant's vault, a sentence back
