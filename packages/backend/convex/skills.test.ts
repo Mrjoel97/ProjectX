@@ -1274,6 +1274,7 @@ describe("publishUserCandidate — tenant candidate authoring (21-02)", () => {
     expect(serialized).not.toContain(GLOBAL_BODY);
     expect(serialized).not.toContain(USER_SKILL_ADAPTATION_SECTION);
     expect(Object.keys(mine[0]!).sort()).toEqual([
+      "author",
       "authoredBody",
       "baseScope",
       "baseVersion",
