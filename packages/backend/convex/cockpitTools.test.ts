@@ -1675,7 +1675,10 @@ test("proposeCalendarChange inspects once, copies the fresh etag, and only propo
   const { t, planId } = await setup();
   const managedEventId = await seedManagedToolEvent(t, planId);
   await seedGoogleCalendarGrant(t);
-  const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(inspectedGoogleEvent()));
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce(Response.json({ access_token: "fresh-access-token", expires_in: 3600 }))
+    .mockResolvedValueOnce(inspectedGoogleEvent());
   vi.stubGlobal("fetch", fetchMock);
 
   try {
@@ -1687,9 +1690,9 @@ test("proposeCalendarChange inspects once, copies the fresh etag, and only propo
       durationMinutes: 45,
     });
     expect(reply).toMatch(/staged|approve/i);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const firstCall = fetchMock.mock.calls[0] as unknown as [unknown, RequestInit | undefined];
-    expect(firstCall[1]?.method).toBeUndefined(); // inspection GET, never a write
+    expect(fetchMock).toHaveBeenCalledTimes(2); // one OAuth refresh, then one provider inspection
+    const inspectCall = fetchMock.mock.calls[1] as unknown as [unknown, RequestInit | undefined];
+    expect(inspectCall[1]?.method).toBeUndefined(); // inspection GET, never a provider write
 
     const plan = await readPlan(t, planId);
     expect(plan).toMatchObject({
@@ -1739,7 +1742,13 @@ test("fresh attendees and reconnect both leave the plan untouched", async () => 
   const attendeeCase = await setup();
   const attendeeId = await seedManagedToolEvent(attendeeCase.t, attendeeCase.planId);
   await seedGoogleCalendarGrant(attendeeCase.t);
-  vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(inspectedGoogleEvent({ attendees: [{}] }))));
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockResolvedValueOnce(Response.json({ access_token: "fresh-access-token", expires_in: 3600 }))
+      .mockResolvedValueOnce(inspectedGoogleEvent({ attendees: [{}] })),
+  );
   try {
     expect(
       await callClock(attendeeCase.t, attendeeCase.planId, "proposeCalendarChange", {

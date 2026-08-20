@@ -848,7 +848,7 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
         <p style={{ ...dim, margin: "0.75rem 0" }}>
           {removing
             ? `This event remains on your ${providerName}. Approve to remove exactly this event; ` +
-              "Pikar does not promise attendee notifications."
+              "Pikar makes no additional delivery promises."
             : `The current event stays unchanged until you Approve these exact changes on ${providerName}.`}
         </p>
         <button

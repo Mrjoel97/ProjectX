@@ -9,8 +9,10 @@
 > update/delete proposals. The tool accepts only a tenant-checked registry ref, parses time from the
 > trusted client clock, refreshes title/time/etag/attendee count before one atomic proposal mutation,
 > and cannot name a provider writer or Approve gate. The management card reads the refreshed
-> registry snapshot and distinguishes update from destructive removal. Verification was source-only
-> in this checkout because dependencies were absent; exact blocked commands are in 17-09-SUMMARY.)
+> registry snapshot and distinguishes update from destructive removal. Restored runtime verification:
+> the focused Calendar/tool/trace/dispatch suite passes 190/190 and `@pikar/web` typecheck is clean.
+> The Playwright browser launches, but authenticated execution remains gated on the seeded local
+> `E2E_USER_EMAIL`/`E2E_USER_PASSWORD`; exact evidence is in 17-09-SUMMARY.)
 >
 > Prior verification: 2026-08-18 (23-03 added the Executive-only `authorSkillCandidate` tool + its trace
 > verb; explicit-intent-only is PROMPT guidance, the candidate-only boundary is code. See the Phase
