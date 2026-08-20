@@ -2374,9 +2374,9 @@ describe("owner activation + rollback of tenant candidates (21-04)", () => {
     // reads this page. Named mutation that turns this red: return `row.evidence` alongside the
     // refs summary (measured: without this line that mutation is invisible).
     expect(Object.keys(a).sort()).toEqual([
-      "authorUserId",
       "author",
       "authorAgentId",
+      "authorUserId",
       "authoredBody",
       "baseBody",
       "baseScope",

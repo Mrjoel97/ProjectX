@@ -395,7 +395,7 @@ function OptimizerPanel() {
   );
 }
 
-// SKILL-01 (21-04): the owner's review surface for USER-authored tenant candidates. A different
+// SKILL-01/02: the owner's review surface for USER- and AGENT-authored tenant candidates. A different
 // queue from the optimizer's above and deliberately NOT merged into it — those are global registry
 // rows the optimizer wrote, these are one tenant's own business adaptation of one skill, and the
 // only correct action on them is per-row and per-tenant.
@@ -404,9 +404,15 @@ function OptimizerPanel() {
 // `rollbackTenantSkill` are all owner-wrapped, and activation additionally needs eval evidence
 // pinning the exact row. This component's `disabled` is a courtesy that saves a round trip — the
 // wrapper is the gate (docs/playbooks/authorization.md).
-function UserCandidatesPanel() {
+function shortRef(value: string | null): string {
+  if (value === null) return "—";
+  return value.length <= 12 ? value : `${value.slice(0, 6)}…${value.slice(-4)}`;
+}
+
+function TenantCandidatesPanel() {
   const candidates = useQuery(api.skills.tenantCandidatesForReview, {});
-  const activate = useMutation(api.skills.activateTenantCandidate);
+  const activateUser = useMutation(api.skills.activateTenantCandidate);
+  const activateAgent = useMutation(api.skills.activateAgentCandidate);
   const rollback = useMutation(api.skills.rollbackTenantSkill);
   const [busy, setBusy] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -428,11 +434,11 @@ function UserCandidatesPanel() {
   }
 
   if (candidates === undefined)
-    return <p style={{ margin: 0, color: "var(--ink-soft)" }}>Loading user-authored candidates…</p>;
+    return <p style={{ margin: 0, color: "var(--ink-soft)" }}>Loading tenant skill candidates…</p>;
   if (candidates.length === 0)
     return (
       <p style={{ margin: 0, color: "var(--ink-soft)" }}>
-        No user-authored candidates awaiting review.
+        No tenant skill candidates awaiting review.
       </p>
     );
 
@@ -485,13 +491,24 @@ function UserCandidatesPanel() {
                 fontFamily: "var(--font-mono), ui-monospace, monospace",
               }}
             >
-              tenant <code>{c.tenantId}</code> · user <code>{c.authorUserId ?? "—"}</code> · row{" "}
-              <code>{key}</code> · base {c.baseScope}
+              tenant <code>{c.tenantId}</code> · row <code>{key}</code> · base {c.baseScope}
+              {c.author === "agent" ? (
+                <>
+                  {" "}
+                  · Executive <code>{c.authorAgentId ?? "—"}</code> · source{" "}
+                  <code>{shortRef(c.sourceThreadId)}</code> / <code>{shortRef(c.sourceTurnId)}</code>
+                </>
+              ) : (
+                <>
+                  {" "}
+                  · user <code>{c.authorUserId ?? "—"}</code>
+                </>
+              )}
             </div>
 
             <details>
               <summary style={{ cursor: "pointer", fontSize: "0.82rem", color: "var(--ink-soft)" }}>
-                What the user wrote
+                {c.author === "agent" ? "What Executive drafted" : "What the user wrote"}
               </summary>
               <pre
                 style={{
@@ -558,6 +575,18 @@ function UserCandidatesPanel() {
                 : ""}
             </div>
 
+            {c.author === "agent" ? (
+              <div style={{ fontSize: "0.78rem", color: "var(--ink-soft)" }}>
+                {c.ownerApproval === null ? (
+                  "Owner approval: not recorded"
+                ) : (
+                  <>
+                    Owner approval: recorded · run <code>{c.ownerApproval.evalRunId}</code>
+                  </>
+                )}
+              </div>
+            ) : null}
+
             <div style={{ display: "flex", gap: "0.6rem", alignItems: "center", flexWrap: "wrap" }}>
               <button
                 type="button"
@@ -567,7 +596,13 @@ function UserCandidatesPanel() {
                     ? undefined
                     : "Activation needs a passing eval run pinning this exact row."
                 }
-                onClick={() => void run(key, () => activate({ candidateId: c.candidateId }))}
+                onClick={() =>
+                  void run(key, () =>
+                    c.author === "agent"
+                      ? activateAgent({ candidateId: c.candidateId })
+                      : activateUser({ candidateId: c.candidateId }),
+                  )
+                }
                 style={{
                   padding: "0.55rem 1.2rem",
                   borderRadius: "999px",
@@ -705,15 +740,15 @@ export default function OpsPage() {
             Optimizer
           </p>
           <OptimizerPanel />
-          {/* A SEPARATE queue under the same owner gate (21-04). Global optimizer candidates above
+          {/* A SEPARATE queue under the same owner gate. Global optimizer candidates above
               are registry-wide prompt rewrites; these are one tenant's own adaptation of one skill,
-              acted on per row. Same mounting rule as the section itself: UserCandidatesPanel owns
+              acted on per row. Same mounting rule as the section itself: TenantCandidatesPanel owns
               its owner-only hooks, so mounting it is what subscribes to other tenants' authored
               text — it must never move outside this `isOwner` branch. */}
           <p className="caps-label" style={{ margin: "0.5rem 0 0" }}>
-            User-authored candidates
+            Tenant skill candidates
           </p>
-          <UserCandidatesPanel />
+          <TenantCandidatesPanel />
         </section>
       )}
 
