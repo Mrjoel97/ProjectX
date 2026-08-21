@@ -3458,6 +3458,136 @@ describe("standalone image: one reviewed prompt through the existing media rail"
   });
 });
 
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+// 25.1-03 (D5) — a generated IMAGE reaches the vault, or it is unreachable the moment the
+// thread's plan row is recycled. Before this the bytes lived ONLY on `mediaJobs.assetStorageId`.
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+
+const imageDocs = (t: T) =>
+  t.run(async (ctx) =>
+    (await ctx.db.query("vaultDocuments").collect()).filter((d) => d.kind === "image"),
+  );
+
+/** Land one image row through the REAL `landResult`, as the webhook would. */
+const landImage = async (t: T, jobId: Id<"mediaJobs">, mimeType = "image/png") => {
+  const bytes = new Uint8Array([7, 7, 7, 7]);
+  return await t.run(async (ctx) => {
+    const assetStorageId = await ctx.storage.store(new Blob([bytes], { type: mimeType }));
+    await ctx.runMutation(internal.mediaComplete.landResult, {
+      jobId,
+      outcome: {
+        ok: true,
+        assetStorageId,
+        assetHash: "e".repeat(64),
+        mimeType,
+        bytes: bytes.byteLength,
+        moderation: null,
+      },
+    });
+    return assetStorageId;
+  });
+};
+
+/** A standalone-image plan with its ONE reserved row, ready to land — through the real
+ *  `generateImage` money gate, so the row is exactly the one production creates. */
+async function seedImageInFlight(t: T, tenantId = A, prompt = "A sunlit baobab at dawn") {
+  const { planId } = await seedImagePlan(t, tenantId, prompt);
+  const res = await (tenantId === A ? asA(t) : asB(t)).mutation(api.media.generateImage, {
+    planId,
+  });
+  expect(res.ok).toBe(true);
+  const row = await t.run(async (ctx) =>
+    (await ctx.db.query("mediaJobs").collect()).find((r) => r.planId === planId),
+  );
+  return { planId, prompt, jobId: row?._id as Id<"mediaJobs"> };
+}
+
+describe("25.1-03 (D5) the generated image becomes a durable vault asset at its landing", () => {
+  test("the landing saves ONE tenant-scoped doc: prompt as text, image bytes, job pointer", async () => {
+    const t = harness();
+    const { planId, prompt, jobId } = await seedImageInFlight(t);
+    const stored = await landImage(t, jobId);
+
+    const docs = await imageDocs(t);
+    expect(docs).toHaveLength(1);
+    const doc = docs[0];
+    expect(doc?.tenantId).toBe(A);
+    // The ROW is markdown (the prompt rides the embed rail); the BYTES are the image.
+    expect(doc?.mimeType).toBe("text/markdown");
+    expect(doc?.storedMimeType).toBe("image/png");
+    expect(doc?.storageId).toBe(stored);
+    expect(doc?.category).toBe("images");
+    expect(doc?.text).toBe(prompt);
+    expect(doc?.contentHash).toBe(await contentHash(prompt));
+    expect(doc?.title).toContain(prompt);
+    expect(doc?.status).toBe("processing");
+    expect(doc?.sourcePlanId).toBe(planId);
+    // The JOB carries the pointer — per JOB, not per plan: after D8 a plan holds several images.
+    expect(await t.run(async (ctx) => (await ctx.db.get(jobId))?.vaultDocId)).toBe(doc?._id);
+    // Refs and counts ONLY (§4) — never the prompt.
+    const saved = (await auditRows(t)).filter((r) => r.eventType === "media.image_saved");
+    expect(saved).toHaveLength(1);
+    expect(Object.keys(saved[0]?.payload as object).sort()).toEqual(["docId", "jobId", "planId"]);
+    expect(JSON.stringify(saved[0]?.payload)).not.toContain("baobab");
+  });
+
+  test("a SECOND landing of the same job saves nothing more — the pointer is the guard", async () => {
+    const t = harness();
+    const { jobId } = await seedImageInFlight(t);
+    await landImage(t, jobId);
+    const first = await imageDocs(t);
+    expect(first).toHaveLength(1);
+
+    // The landing's own idempotency is the TERMINAL status check, so it is removed here: without
+    // the doc pointer this second pass would file a second copy of the same image.
+    await t.run(async (ctx) => await ctx.db.patch(jobId, { status: "submitted" }));
+    await landImage(t, jobId);
+
+    const after = await imageDocs(t);
+    expect(after).toHaveLength(1);
+    expect(after[0]?._id).toBe(first[0]?._id);
+  });
+
+  test("a REEL's scene still is NEVER vaulted — those bytes are a deleted intermediate", async () => {
+    const t = harness();
+    // No `mediaMode: "image"` — this is a reel whose scene happens to be a still. Its asset is
+    // deleted by `deleteIntermediates` at the render terminal, so a doc would point at nothing.
+    const { planId } = await seedDeck(t, { blocks: 1 });
+    const jobId = await t.run(async (ctx) =>
+      ctx.db.insert("mediaJobs", {
+        tenantId: A,
+        planId,
+        batchId: "batch_scene_still",
+        blockIndex: 0,
+        provider: "openai",
+        kind: "image",
+        model: MEDIA_DEFAULT_IMAGE.model,
+        spec: {
+          kind: "image",
+          width: MEDIA_DEFAULT_IMAGE.width,
+          height: MEDIA_DEFAULT_IMAGE.height,
+        },
+        promptHash: "0".repeat(64),
+        status: "submitted",
+        estUsd: 0.01,
+        createdAt: T0,
+        updatedAt: T0,
+      }),
+    );
+    await landImage(t, jobId);
+    expect(await imageDocs(t)).toHaveLength(0);
+  });
+
+  test("the doc belongs to the JOB's tenant, never the reader's", async () => {
+    const t = harness();
+    const { jobId } = await seedImageInFlight(t, B, "An indigo studio portrait");
+    await landImage(t, jobId);
+    const docs = await imageDocs(t);
+    expect(docs).toHaveLength(1);
+    expect(docs[0]?.tenantId).toBe(B);
+  });
+});
+
 describe("the canvas READ plane: two states per block, and a url only when it is earned", () => {
   // ── 20.2 wave 6: what a SCENE tile needs, and what it must not have to guess ─────────────────
   test("byPlan projects each scene's own kind, place and length — never index x clipSeconds", async () => {
