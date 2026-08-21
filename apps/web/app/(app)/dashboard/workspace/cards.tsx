@@ -458,6 +458,98 @@ function MailboxPicker({ plan }: { plan: Plan }) {
   );
 }
 
+/** One page a research specialist actually retrieved (`plans.sources`, written at landing). */
+type MemoSource = NonNullable<Plan["sources"]>[number];
+
+/** The retrieval stamp, in the card's own words. Mirrored by `memoCard.test.ts` — changing the
+ *  format is a deliberate act, not a silent one. */
+const retrievedLabel = (ms: number) =>
+  `Retrieved ${new Date(ms).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}`;
+
+/**
+ * The memo card's READABLE half: the specialist's document, rendered, and the pages it read.
+ *
+ * TWO DEFECTS, ONE COMPONENT (D11). The body used to print through a `white-space: pre-wrap`
+ * paragraph, so the product of a paid specialist turn showed the reader literal `#` and `**` —
+ * finished work looking broken. And the sources, which were retrieved, deduped, billed for and
+ * written into the vault document, never reached the card at all, so the findings were unverifiable
+ * exactly where the human decides.
+ *
+ * Hook-free and EXPORTED so `renderToStaticMarkup` can assert against real markup (the
+ * `GroundedSources` / `AwaitingCardBody` precedent): a regex over this file cannot tell a rendered
+ * heading from a printed `#`.
+ *
+ * ponytail: `MarkdownDocument` in its existing `compact` form (the same renderer the chat bubbles
+ * and the artifact preview use) — no second renderer, no tokenizer change. The references are a
+ * plain always-visible list rather than a `<details>` fold: a research turn returns a handful of
+ * URLs, and `GroundedSources`' fold exists for a list that accumulates across a whole thread.
+ * Upgrade path if a real memo ever carries dozens: reuse that fold verbatim.
+ */
+export function MemoCardBody({ body, sources }: { body: string; sources?: readonly MemoSource[] }) {
+  return (
+    <>
+      <div style={{ margin: "0.5rem 0 0.75rem", color: "var(--ink)", fontSize: "0.9rem" }}>
+        <MarkdownDocument markdown={body} compact />
+      </div>
+      {sources && sources.length > 0 && (
+        <section
+          aria-label="Sources"
+          style={{
+            margin: "0 0 0.75rem",
+            paddingTop: "0.6rem",
+            borderTop: "1px solid var(--rule)",
+          }}
+        >
+          {/* BRAND §3's tracked-caps section label. `--ink-soft`, not `--teal-600`: §6 bars teal-600
+              as small text on white (~2.9:1). */}
+          <div
+            style={{
+              fontSize: "0.68rem",
+              fontWeight: 700,
+              letterSpacing: "0.18em",
+              textTransform: "uppercase",
+              color: "var(--ink-soft)",
+            }}
+          >
+            Sources
+          </div>
+          <ul
+            style={{
+              listStyle: "none",
+              margin: "0.4rem 0 0",
+              padding: 0,
+              display: "grid",
+              gap: "0.4rem",
+            }}
+          >
+            {sources.map((source) => (
+              <li key={source.url} style={{ minWidth: 0, overflowWrap: "anywhere" }}>
+                {/* `--teal-900` for link text (BRAND §6). `noopener` because these are pages the
+                    MODEL chose to fetch, not links the product vouches for. */}
+                <a
+                  href={source.url}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  data-testid="memo-source"
+                  style={{ color: "var(--teal-900)", fontWeight: 600, fontSize: "0.85rem" }}
+                >
+                  {source.title.trim() || source.url}
+                </a>
+                {/* The URL is READ, not merely hovered — checking a finding must not need a mouse.
+                    Suppressed when the title fell back to it, so it is never printed twice. */}
+                <div style={{ ...dim, fontSize: "0.75rem" }}>
+                  {source.title.trim() ? `${source.url} · ` : ""}
+                  {retrievedLabel(source.retrievedAt)}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </>
+  );
+}
+
 function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
   const execute = useMutation(api.cockpit.executePlan);
   const setSendTime = useMutation(api.plans.setPlanSendTime);
@@ -561,16 +653,7 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
     return (
       <div style={box} data-testid="memo-plan-card">
         <div style={label}>NEXT-STEP MEMO</div>
-        <p
-          style={{
-            whiteSpace: "pre-wrap",
-            margin: "0.5rem 0 0.75rem",
-            color: "var(--ink)",
-            fontSize: "0.9rem",
-          }}
-        >
-          {body}
-        </p>
+        <MemoCardBody body={body} sources={plan.sources} />
         <p style={{ ...dim, margin: "0 0 0.75rem" }}>
           Approving saves this to your knowledge vault. Nothing is sent to anyone.
         </p>
@@ -819,16 +902,16 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
           {managedEvent === undefined ? (
             <div style={dim}>Loading the event you are changing…</div>
           ) : managedEvent === null ? (
-            <div style={dim}>This managed event is no longer available. Ask Pikar to list it again.</div>
+            <div style={dim}>
+              This managed event is no longer available. Ask Pikar to list it again.
+            </div>
           ) : (
             <>
               <div style={{ marginTop: "0.25rem" }}>
                 <strong>{managedEvent.title || "(untitled event)"}</strong>
               </div>
               <div style={dim}>Time: {formatAbsolute(managedEvent.startMs)}</div>
-              <div style={dim}>
-                Duration: {Math.round(managedEvent.durationMs / 60000)} min
-              </div>
+              <div style={dim}>Duration: {Math.round(managedEvent.durationMs / 60000)} min</div>
             </>
           )}
         </div>

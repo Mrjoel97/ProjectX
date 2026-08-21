@@ -1,5 +1,26 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-21 (25.1-05, D11 — **THE HELD CARD SHOWS WORDS, NOT MARKUP.** A plan body
+> is MARKDOWN (a specialist writes `# Findings` and `**$25**`) and this page printed a raw 320-char
+> slice of it, so the first thing a human read at the approval gate was the markup. `previewText`
+> strips headings, bullets and emphasis and collapses the blank lines, THEN cuts at
+> `PREVIEW_CHARS` — strip-before-slice, because a cut lands anywhere including mid-`**`, and
+> slicing first spends the budget on characters nobody sees. It is a strip, NOT a render: feeding an
+> arbitrary slice to `MarkdownDocument` would produce a correct document on some bodies and a broken
+> one on others, which is not a failure mode a preview may have. The full document renders on the
+> memo card (`MemoCardBody`, cockpit.md), one click away.
+>
+> **THE SIBLING CALLER IS THE PART WORTH REMEMBERING.** `titleFor` builds a memo's headline from
+> `plan.body.split("\n")[0]` — which is that body's markdown H1 — so the CARD TITLE carried the
+> marker as well, one element above the preview that was being fixed. It was found only because the
+> preview's rendered assertion failed on a string the preview no longer produced. Both sites now go
+> through the one strip. When you fix a rendering defect here, grep every other place that reads the
+> same field before calling it done.
+>
+> The headline pin asserts `">Pricing findings</h3>"` WITH the leading `>`: without it the
+> assertion matches `"># Pricing findings</h3>"` too and stays green against the defect. Verified by
+> mutation, not by reading.)
+
 > Last verified: 2026-08-21 (25.1-04 — **THE APPROVALS PAGE NOW ENDS EVERY CLICK IN A VISIBLE
 > TRUTH (D9, D10).** Three defects, one rule: a surface that stages an action must be able to
 > report what the action did.

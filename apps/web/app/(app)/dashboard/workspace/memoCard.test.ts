@@ -6,6 +6,9 @@
 // heading — it just shows the reader a literal `#` — and a references block that is coded but
 // never reached looks identical to one that renders. On real markup "the logic was deleted" and
 // "the element is absent" are the same observation.
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
@@ -47,6 +50,18 @@ describe("MemoCardBody — the memo reads as a document", () => {
 
   test("an empty body renders nothing rather than crashing the card", () => {
     expect(render({ body: "" })).not.toContain("<h1>");
+  });
+
+  // WIRING is the half a rendered test cannot see: `PlanCard` needs live Convex hooks, so nothing
+  // above proves the MEMO CARD reaches this component rather than keeping its own paragraph.
+  test("the memo plan card renders through this component, and the pre-wrap paragraph is gone", () => {
+    const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "cards.tsx"), "utf8");
+    const at = source.indexOf('data-testid="memo-plan-card"');
+    expect(at, "the memo card is gone — this test is scanning nothing").toBeGreaterThan(0);
+    const branch = source.slice(at, at + 700);
+    expect(branch).toContain("<MemoCardBody");
+    expect(branch).toContain("sources={plan.sources}");
+    expect(branch, "the raw pre-wrap paragraph is still there").not.toContain("pre-wrap");
   });
 });
 

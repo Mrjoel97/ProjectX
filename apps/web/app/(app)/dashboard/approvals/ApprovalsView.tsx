@@ -153,6 +153,32 @@ export function refusalMessage(reason: string): string {
 export const STALE_PLAN_MESSAGE =
   "This card was out of date — the plan it showed was already handled or replaced. Nothing new was started.";
 
+/** How much of a plan body the held card previews. Unchanged from the shipped slice. */
+export const PREVIEW_CHARS = 320;
+
+/**
+ * 25.1-05 (D11). The plan body is MARKDOWN — a specialist writes `# Findings` and `**$25**` — and
+ * this card printed a raw slice of it, so the first thing a human read at the approval gate was the
+ * markup rather than the words.
+ *
+ * STRIP, DON'T RENDER, and strip BEFORE slicing. A 320-character cut lands anywhere, including
+ * mid-table and mid-`**`, so feeding the slice to `MarkdownDocument` would render a broken document
+ * on some bodies and a correct one on others — a preview must not have that failure mode. Slicing
+ * first would also spend the budget on characters the reader never sees.
+ *
+ * ponytail: four replaces and a slice, not a truncating parser. The full document is one click away
+ * on the memo card, which DOES render (`MemoCardBody`); this is a glance, not a reader.
+ */
+export function previewText(body: string): string {
+  const flat = body
+    .replace(/^\s{0,3}#{1,6}\s+/gm, "") // headings — the marker, never the words
+    .replace(/^\s{0,3}[-*+]\s+/gm, "") // bullets (`**bold**` is untouched: no space after the *)
+    .replace(/\*\*([^*]+)\*\*/g, "$1") // emphasis
+    .replace(/\s+/g, " ") // the blank lines that separated the blocks are now noise
+    .trim();
+  return flat.length > PREVIEW_CHARS ? `${flat.slice(0, PREVIEW_CHARS)}…` : flat;
+}
+
 /**
  * 25.1-04 (D10). `executePlan`'s media arm reserves against a SHOT DECK (`sceneDeckOf` /
  * `deckOf`); a standalone image plan has neither, so the arm returns `no_deck` on every click that
@@ -327,7 +353,10 @@ function titleFor(plan: Plan): string {
     return plan.calendarOperation === "delete"
       ? "Remove an event from your calendar"
       : "Update an event on your calendar";
-  if (plan.kind === "memo") return plan.body?.split("\n")[0] || "Next-step memo";
+  // 25.1-05 (D11): the memo's own first line, which is a MARKDOWN HEADING — so the card headline
+  // read `# Pricing findings`. The same strip as the preview below, because it is the same defect
+  // one element up; found by the preview test failing on this string.
+  if (plan.kind === "memo") return previewText(plan.body?.split("\n")[0] ?? "") || "Next-step memo";
   if (plan.kind === "crm_write") {
     const count = Array.isArray(plan.crmOperations) ? plan.crmOperations.length : 0;
     return `${count} change${count === 1 ? "" : "s"} to your records`;
@@ -580,12 +609,7 @@ export function AwaitingCardBody({
         </Link>
       </div>
 
-      {plan.body && (
-        <p style={{ ...muted, whiteSpace: "pre-wrap" }}>
-          {plan.body.slice(0, 320)}
-          {plan.body.length > 320 ? "…" : ""}
-        </p>
-      )}
+      {plan.body && <p style={muted}>{previewText(plan.body)}</p>}
       <EmailApprovalDetails plan={plan} />
       {plan.kind === "calendar_event" && (
         <p style={muted}>

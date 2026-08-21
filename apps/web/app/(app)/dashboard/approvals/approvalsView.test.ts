@@ -13,9 +13,9 @@ import {
   emailBusinessAction,
   formatAbsoluteInstant,
   IMAGE_CANVAS_NOTE,
+  PREVIEW_CHARS,
   parseScheduleInput,
   persistentOutcomes,
-  PREVIEW_CHARS,
   previewText,
   ResolvedOutcomeCard,
   refusalMessage,
@@ -337,6 +337,25 @@ describe("Approvals connected state contracts", () => {
     expect(html).not.toContain("## What");
     expect(html).not.toContain("**$25");
     expect(html).not.toContain("- Six-week");
+  });
+
+  // The SIBLING CALLER, found by the test above failing on `# Pricing` after the preview was
+  // already fixed: `titleFor` takes a memo's first line, which is its markdown H1 — so the card
+  // HEADLINE carried the marker too. One strip, both sites.
+  test("the memo card headline is the memo's words, not its heading marker", () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        AwaitingCardBody,
+        bodyProps({
+          item: { ...bodyProps().item, kind: "memo" },
+          plan: { kind: "memo", body: MEMO_MARKDOWN } as unknown as BodyProps["plan"],
+        }),
+      ),
+    );
+    // The `>` is load-bearing: `toContain("Pricing findings</h3>")` matches the DEFECT too, because
+    // `># Pricing findings</h3>` contains it. Mutation-checked — without the `>` this test stays
+    // green with the strip removed.
+    expect(html).toContain(">Pricing findings</h3>");
   });
 
   test("previewText keeps the whole document under the cap and truncates only past it", () => {

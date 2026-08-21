@@ -1,3 +1,26 @@
+> Last verified: 2026-08-21 (25.1-05 Task 2, D11 — **THE MEMO CARD RENDERS ITS DOCUMENT AND SHOWS
+> ITS SOURCES.** `MemoCardBody` (exported from `cards.tsx`, hook-free) replaces the memo branch's
+> `white-space: pre-wrap` paragraph: the body goes through the EXISTING `MarkdownDocument` in its
+> `compact` form — the same renderer the chat bubbles and the artifact preview already use, no
+> second renderer and no tokenizer change — and `plan.sources` renders below it as a references
+> block, one row per page with its title, its URL as READABLE text (checking a paid finding must not
+> require a mouse) and its own retrieval date.
+>
+> **THE BLOCK RENDERS ON PRESENCE AND HIDES NOTHING.** No sources ⇒ no block, not an empty heading;
+> a source whose title came back empty links its URL rather than rendering a blank anchor
+> (`sourcesFromToolOutput` defaults a missing title to `""`, a real shape). It is a plain list, NOT
+> a `GroundedSources`-style `<details>` fold — that fold exists for a list accumulated across a
+> whole thread, while a research turn returns a handful. If a memo ever carries dozens, reuse that
+> fold verbatim rather than inventing a cap: **a `.slice()` here would destroy provenance**, and the
+> test that guards it renders nine sources and counts nine anchors.
+>
+> BRAND: `--teal-900` for the link text and `--ink-soft` for the caps section label — §6 bars
+> `--teal-600` as small text on white (~2.9:1), which is why `capsTeal` was NOT reused here.
+> Exported and hook-free for the `AwaitingCardBody` reason: a regex over this file cannot tell a
+> rendered heading from a printed `#`. `memoCard.test.ts` renders real markup for the behaviour and
+> keeps ONE source scan for the wiring the render cannot see — that `PlanCard`'s memo branch reaches
+> this component at all.)
+>
 > Last verified: 2026-08-21 (25.1-05, D11 — **THE DISPATCH LANDING NOW CARRIES SOURCES, AND THE
 > §4 BOUNDARY MOVED WITH IT.** `dispatchAndLand`'s landing object gained `sources`
 > (`{title, url, retrievedAt}[]`, omitted when empty) and `evaluations.landSpecialistResult`
