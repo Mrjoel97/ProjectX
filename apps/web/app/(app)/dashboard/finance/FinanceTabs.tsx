@@ -81,7 +81,26 @@ export function FinanceTabs() {
   const current = FINANCE_TABS.find((t) => t.id === active);
 
   return (
-    <div style={{ display: "grid", gap: "1.5rem", padding: "1.5rem 0" }}>
+    // `minmax(0, 1fr)` — NOT the default implicit track. A grid's implicit column is `auto`, which
+    // sizes to its widest item and REFUSES to go below it, and grid items default to
+    // `min-width: auto` on top of that. So the Cost Console panel (a wide ledger table) widened this
+    // one column to 441px at a 390px viewport, and every sibling stretched to match: the h1, the
+    // eyebrow, the description and the tab strip all rendered 425px and clipped mid-word. The page
+    // itself never scrolled — `document.documentElement.scrollWidth` stayed exactly 390 — which is
+    // why a page-level overflow check reported clean and only a screenshot caught it.
+    //
+    // `minmax(0, 1fr)` lets the track shrink to the viewport; the tables then scroll inside their
+    // own `scroller` wrappers (see FinanceView's `scroller`, which needs its own `minWidth: 0` for
+    // the same reason). Measured at 390×844 on ?tab=spend: 103 elements past the edge before, 0
+    // after, with the ledger still horizontally scrollable rather than truncated.
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "minmax(0, 1fr)",
+        gap: "1.5rem",
+        padding: "1.5rem 0",
+      }}
+    >
       <header style={{ display: "grid", gap: "0.65rem" }}>
         <p
           style={{
