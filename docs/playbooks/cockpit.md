@@ -103,6 +103,11 @@
 > Details in media.md. `plans.test.ts`'s `DECK_AND_RENDER` list is the pin, and it reddens if the
 > clear is removed.)
 >
+> Last verified: 2026-08-21 (**TEST-ONLY ADDITION, NO COCKPIT BEHAVIOUR CHANGED.** Two mock fetch
+> responses (`W/"mutation-write"` provider replies) were appended to the two 17-08 manageEvent
+> completion-terminal cases in `calendar.test.ts` so each staged mutation's provider write has a
+> queued response. No source module changed; this entry exists to keep the watch-gate honest.)
+>
 > Last verified: 2026-08-20 (23-05 source-separated the Executive's
 > `authorSkillCandidate` tool from both activation exports. The tool still reaches only
 > `publishAgentCandidate`; activation lives only in the owner-mounted `/ops` review panel, with a

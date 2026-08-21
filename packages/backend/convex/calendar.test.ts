@@ -1661,6 +1661,7 @@ describe("calendar management (17-08) — manageEvent and its completion termina
       Response.json(
         eventBody({ etag: 'W/"already-v2"', summary: NEW_TITLE, startMs: NEW_START_MS }),
       ),
+      Response.json({ id: "managed-event-1", etag: 'W/"mutation-write"' }),
     );
 
     expect(await run(t, planId)).toMatchObject({
@@ -1700,6 +1701,7 @@ describe("calendar management (17-08) — manageEvent and its completion termina
       Response.json(
         eventBody({ attendees: [{ email: "guest@example.test", responseStatus: "accepted" }] }),
       ),
+      Response.json({ id: "managed-event-1", etag: 'W/"mutation-write"' }),
     );
 
     const result = await run(t, planId);
