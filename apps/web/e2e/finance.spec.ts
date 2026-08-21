@@ -374,9 +374,7 @@ test("connected cost console: coverage, rails, unlanded meaning and the owner bo
   );
   await expect(page.getByText(/still expected to land/)).toBeVisible();
   // media: reserved 300 − actual 110 = 190 that is NEVER coming back.
-  await expect(page.locator('[data-unlanded="media"]')).toContainText(
-    `${expectedMedia} unlanded`,
-  );
+  await expect(page.locator('[data-unlanded="media"]')).toContainText(`${expectedMedia} unlanded`);
   // SCOPED to the unlanded list item, not a bare text match. The same sentence is deliberately
   // rendered twice — once on the rail's own `<li data-unlanded="media">` and once in the Media job
   // ledger — so `getByText(/no refund path/)` is a strict-mode violation. The rail explanation is
