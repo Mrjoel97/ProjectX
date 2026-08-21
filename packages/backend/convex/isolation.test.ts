@@ -168,6 +168,10 @@ const NON_TENANT_LEADING: Record<string, string> = {
   "requests.by_plan": "join from a plan row already tenant-checked by its own reader",
   "plans.by_calendar_run": "workflow-engine callback keyed by an opaque run id",
   "plans.by_media_run": "workflow-engine callback keyed by an opaque run id",
+  // 25.1-01 (D2) added the third of these when renderReel went under the ActionRetrier. Same
+  // shape and same reason as its two siblings: `onRenderComplete` receives only {runId, result},
+  // so the lookup is by an opaque, server-minted run id and has no tenant-facing caller.
+  "plans.by_render_run": "workflow-engine callback keyed by an opaque run id",
   "attachments.by_request": "join from a request row already tenant-checked by its own reader",
   "telemetry.by_correlation": "correlation trace, internal",
   "vaultDocuments.by_kind": "internal corpus maintenance; no tenant-facing caller",
