@@ -6995,7 +6995,13 @@ describe("33-05 the OLD final is held until the new one lands", () => {
     expect(await blobExists(t, mp4B)).toBe(true);
   });
 
-  test("captions OWED: the vault doc HOLDS the old final until the burn repoints it", async () => {
+  // 25.1-03 (D6) CHANGED THIS TEST'S SUBJECT. It used to assert that a re-render with captions
+  // pending left the vault doc on the PREVIOUS captioned cut until the burn landed. With the
+  // render terminal saving unconditionally, the doc now tracks the plan's CURRENT final at every
+  // terminal — vault and plan can no longer disagree — and the superseded cut is released one
+  // terminal earlier. What is still pinned, and is the part that matters: ONE doc per plan, and
+  // never a blob deleted while the plan or the doc still points at it.
+  test("captions OWED: the vault doc tracks the plan's current final at BOTH terminals", async () => {
     const t = harness();
     const { planId, reelId } = await seedSaveable(t);
     // Pipeline #1 completes at the caption terminal; the vault doc points at capA.
@@ -7045,15 +7051,17 @@ describe("33-05 the OLD final is held until the new one lands", () => {
       }),
     );
     expect((await planRowOf(t, planId))?.renderStorageId).toBe(mp4B);
-    expect((await reelDocs(t))[0]?.storageId).toBe(capA); // the doc still holds the old final
-    expect(await blobExists(t, capA)).toBe(true); // …so the blob is NOT deleted
+    expect(await reelDocs(t)).toHaveLength(1); // still ONE doc — the upsert converged
+    expect((await reelDocs(t))[0]?.storageId).toBe(mp4B); // …repointed at what the plan now says
+    expect(await blobExists(t, capA)).toBe(false); // the superseded cut: nothing points at it
+    expect(await blobExists(t, mp4B)).toBe(true); // the live one is never a delete candidate
 
-    // The burn completes: plan and doc repoint to capB; capA and the uncaptioned mp4B both go.
+    // The burn completes: plan and doc repoint to capB, and the uncaptioned mp4B goes.
     const capB = await storeBlob(t, new Uint8Array([3]), "video/mp4");
     await burn(t, planId, { ok: true, captionedStorageId: capB, renderMs: 1 });
     expect((await planRowOf(t, planId))?.renderStorageId).toBe(capB);
+    expect(await reelDocs(t)).toHaveLength(1);
     expect((await reelDocs(t))[0]?.storageId).toBe(capB);
-    expect(await blobExists(t, capA)).toBe(false);
     expect(await blobExists(t, mp4B)).toBe(false);
     expect(await blobExists(t, capB)).toBe(true);
   });

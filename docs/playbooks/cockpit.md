@@ -32,6 +32,14 @@
 > `calendarRunId`/`mediaRunId` correlation pattern a third time. Details live in media.md; this
 > entry exists because the cockpit playbook documents the EXTERNAL_TARGETS idiom that was copied.)
 >
+> Last verified: 2026-08-21 (25.1-03, D7 — **`plans.resetPlan`'s clear-set gained
+> `reelVaultDocId`.** The contract this playbook records for `resetPlan` is unchanged in kind — a
+> composition reset wipes the deck AND the render plane — but one render-plane field had been
+> missing since 33-05 shipped the vault save, and it was the one that could DESTROY prior work
+> rather than merely show it under the wrong proposal: the pointer `saveReelToVault` upserts on.
+> Details in media.md. `plans.test.ts`'s `DECK_AND_RENDER` list is the pin, and it reddens if the
+> clear is removed.)
+>
 > Last verified: 2026-08-20 (23-05 source-separated the Executive's
 > `authorSkillCandidate` tool from both activation exports. The tool still reaches only
 > `publishAgentCandidate`; activation lives only in the owner-mounted `/ops` review panel, with a

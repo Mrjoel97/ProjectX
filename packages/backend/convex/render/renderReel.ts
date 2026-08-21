@@ -506,28 +506,23 @@ export const recordRender = internalMutation({
     if (!(await captionsStillOwed(ctx, a.tenantId, a.batchId))) {
       await deleteIntermediates(ctx, a.tenantId, a.batchId);
     }
-    // 33-05: SAVE AT THIS TERMINAL only when no caption terminal will ever run — a deck whose
-    // batch reserved no `stt` line (`maybeStartCaptions`' own gate: captions were never bought),
-    // or one whose caption pass already failed before the render landed. Otherwise the burn
-    // terminal is the one save per completion, over the captioned artifact of record.
-    const sttReserved = (
-      await ctx.db
-        .query("mediaJobs")
-        .withIndex("by_batch", (q) => q.eq("tenantId", a.tenantId).eq("batchId", a.batchId))
-        .collect()
-    ).some((r) => r.kind === "stt");
-    const captionsComing = sttReserved && before?.captionStatus !== "failed";
-    let orphanedDoc: Id<"_storage"> | null = null;
-    if (!captionsComing) {
-      orphanedDoc = await saveReelToVault(ctx, {
-        tenantId: a.tenantId,
-        planId: a.planId,
-        correlationId: a.batchId,
-      });
-    }
+    // 33-05: SAVE AT THIS TERMINAL. 25.1-03 (D6) REMOVED the `!captionsComing` gate that used to
+    // wrap this: captions are pinned on for every reel (`cockpit.ts`, `media.ts`), so
+    // `captionsComing` was TRUE at every render terminal that has ever run — the gate never opened
+    // once in production, and a caption pass that stalls, fails its transcript or is swept by the
+    // 25.1-02 watchdog never reaches the burn terminal. The result was a published reel that
+    // reached the vault only if its captions happened to succeed.
+    //
+    // The reel is a deliverable the moment it is published, so it is saved the moment it is
+    // published. The burn terminal's own save still runs and the upsert converges: it PATCHES this
+    // same doc onto the captioned cut and hands the uncaptioned blob back for deletion.
+    const orphanedDoc = await saveReelToVault(ctx, {
+      tenantId: a.tenantId,
+      planId: a.planId,
+      correlationId: a.batchId,
+    });
     // Repoint plan (the patch above) → repoint vault doc (the save) → delete what nothing
-    // references. When captions ARE coming the vault doc still points at the old final, so the
-    // live-set check keeps it — the burn terminal repoints and deletes it.
+    // references.
     await deleteOrphanedFinals(ctx, a.planId, [oldFinal, orphanedDoc]);
     // The reel is published either way. The burn, if one is owed, is triggered from here because
     // the transcript may well have landed while the render was still running.

@@ -942,6 +942,12 @@ export const resetPlan = internalMutation({
       sidecarHash: undefined,
       renderReason: undefined,
       renderedAt: undefined,
+      // 25.1-03 (D7), and the worst omission of this whole clear-set: `saveReelToVault` UPSERTS on
+      // this pointer, so a surviving `reelVaultDocId` made the next reel in this thread PATCH the
+      // PREVIOUS reel's vault doc — and `deleteOrphanedFinals` then deleted the previous mp4,
+      // because nothing referenced it any more. The user's finished deliverable was destroyed by
+      // asking for another one. Cleared here, reel #2 inserts its own doc and reel #1 stands.
+      reelVaultDocId: undefined,
     });
   },
 });

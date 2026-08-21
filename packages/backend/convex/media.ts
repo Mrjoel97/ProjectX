@@ -2485,11 +2485,15 @@ export const generateImage = tenantMutation({
       .query("mediaJobs")
       .withIndex("by_plan", (q) => q.eq("tenantId", ctx.tenantId).eq("planId", planId))
       .collect();
+    // IN-FLIGHT ONLY (25.1-03, D8). `succeeded` used to sit in this set, and NOTHING ever deletes a
+    // `mediaJobs` row — so the first image a plan produced locked the button for ever, with the
+    // canvas saying only "already started" about work that had finished. A finished image is
+    // history (the `failed`/`blocked` reasoning in the doc comment above, one rung further); it is
+    // now durably in the vault (D5), so generating another cannot lose it either. The double-click
+    // guard this exists for lives entirely in the two non-terminal states.
     if (
       rows.some(
-        (row) =>
-          row.kind === "image" &&
-          (row.status === "queued" || row.status === "submitted" || row.status === "succeeded"),
+        (row) => row.kind === "image" && (row.status === "queued" || row.status === "submitted"),
       )
     ) {
       return { ok: false as const, reason: "already_started" as const };

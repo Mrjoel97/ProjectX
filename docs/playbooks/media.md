@@ -1,5 +1,29 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-08-21 (25.1-03, D6/D7/D8 — **NOTHING A USER GENERATED CAN BE SILENTLY
+> DESTROYED OR STRANDED BY GENERATING AGAIN.** media + plans + renderReel suites 293 passed,
+> four guards mutation-verified.)
+>
+> - **D6 — the reel saves at the RENDER terminal, unconditionally.** The `!captionsComing` gate is
+>   gone. Captions are pinned on for every reel, so that gate was TRUE at every render terminal
+>   that has ever run: the only save site in practice was the caption burn, and a caption pass that
+>   stalls, loses its transcript or is swept by the 25.1-02 watchdog never reaches it. The burn's own
+>   save still runs — the upsert converges, patching the same doc onto the captioned cut.
+> - **CONSEQUENCE, recorded because a test changed subject to say it:** the vault doc now tracks the
+>   plan's CURRENT final at every terminal, so on a RE-RENDER the previously captioned cut is
+>   released one terminal earlier than before. Vault and plan can no longer disagree. The ordering
+>   contract is unchanged — repoint plan, repoint doc, then delete what nothing references.
+> - **D7 — `plans.resetPlan` clears `reelVaultDocId`.** `saveReelToVault` upserts on that pointer, so
+>   a surviving one made the next reel in the thread PATCH the previous reel's doc, and
+>   `deleteOrphanedFinals` then deleted the previous mp4 because nothing referenced it any more. A
+>   second reel destroyed the first. `deleteOrphanedFinals` itself needed no change: it reads the
+>   live set fresh, so once reel #2 has its own doc, reel #1's blob is never a candidate.
+> - **D8 — the second-image refusal is scoped to `queued|submitted`.** `succeeded` was in that set
+>   and nothing ever deletes a `mediaJobs` row, so the first image a plan produced locked the button
+>   for ever behind an "already started" message about work that had finished. The double-click
+>   guard lives entirely in the two non-terminal states; a finished image is history, and D5 means
+>   it is durably in the vault before another one is bought.
+>
 > Last verified: 2026-08-21 (25.1-03, D5 — **A GENERATED IMAGE NOW REACHES THE VAULT.**
 > media.test.ts D5 block 5/5, four guards mutation-verified.)
 >
