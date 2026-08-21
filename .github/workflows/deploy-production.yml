@@ -45,9 +45,18 @@ jobs:
     # Convex and Vercel to production unattended, ~2.5 minutes after the merge, with no human in
     # the loop. That is what this clause closes.
     #
-    # Promotion is now OPT-IN PER MERGE: put `[deploy]` in the merge commit message to promote.
+    # Promotion is OPT-IN PER MERGE: the merge commit SUBJECT must START with `[deploy]`.
     # A merge without it lands on main, runs the full `ci` gate, and stops there. Landing code and
     # shipping it are separate decisions and should read as separate decisions.
+    #
+    # `startsWith`, NOT `contains`, AND THAT IS NOT A STYLE CHOICE. The first version of this gate
+    # used `contains`, and the very merge that introduced it nearly defeated it: the merge body read
+    # "No [deploy]-marker, so production is not promoted by this merge" — a sentence about the
+    # marker's ABSENCE, containing the marker. A substring test has no notion of surrounding words,
+    # and commit messages discuss deploying constantly, so `contains` fires on prose that means the
+    # opposite of what it matches. `startsWith` confines the marker to the head of the subject line,
+    # where only a deliberate act can put it — a merge body can say the word "[deploy]" as often as
+    # it likes. Do not relax this back to `contains` for convenience.
     #
     # Deleting this one line restores the previous auto-deploy behaviour. If the plan ever gains
     # environment protection, prefer the real reviewer gate and drop this — a commit-message
@@ -58,7 +67,7 @@ jobs:
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main' &&
       github.event.workflow_run.head_repository.full_name == github.repository &&
-      contains(github.event.workflow_run.head_commit.message, '[deploy]')
+      startsWith(github.event.workflow_run.head_commit.message, '[deploy]')
     runs-on: ubuntu-latest
     timeout-minutes: 35
     environment:
