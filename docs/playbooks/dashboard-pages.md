@@ -1,5 +1,39 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-21 (26-10 Task 1 — **THE FINANCE BROWSER GATE HAS NOW ACTUALLY RUN, and
+> the Cost Console passed it.** Executed against local `convex dev` + a PRODUCTION build on
+> `:3111`, from `apps/web`: `npx playwright test e2e/finance.spec.ts`. **Task 2, the blocking owner
+> UAT, has NOT happened — 26-10 is not closed.** Full record in 26-10-SUMMARY.md.)
+>
+> - **GREEN, and this is the FIN-01 substance:** `connected cost console: coverage, rails, unlanded
+>   meaning and the owner boundary` (35.1s), plus the two short tests above it. Proven in a real
+>   browser against a real backend: coverage renders **Unknown, never `$0`**; every seeded movement
+>   lands exactly once and the replay is deduped; the two unlanded sentences say different things on
+>   one page; the enforcement clock is labelled UTC; a non-owner sees no Operator tab and **not one
+>   deployment ceiling** in the page source; and the live cross-origin call to `finance:controls` is
+>   refused with **OWNER_REQUIRED**. Every movement was seeded through the real `spendLedger:record`
+>   writer — **it proves nothing about a provider**, and no seeded `actual` row may be cited as
+>   evidence that money reached OpenAI or fal.
+> - **THE IDENTITY IS NOT THE OBVIOUS ONE.** `.env`'s `user_email` is the owner's Google account — a
+>   `google` provider row with **no password credential**, so the `/signin` form can never
+>   authenticate it whatever the password is. The run used `joel.feruzi+phase21b@gmail.com`, a
+>   password-auth NON-OWNER already on the deployment from the phase-21b invite path. Strictly better
+>   than the owner account: the boundary assertions test a genuinely non-owner identity instead of a
+>   temporarily demoted owner, and the deployment owner is never touched. Check `authAccounts` for
+>   the PROVIDER before assuming an email+password pair means password auth.
+> - **FIVE SPEC DEFECTS, none of them product defects**, found only by running it: `getByLabel`
+>   substring-matching the input AND `aria-label="Save …"` (loose 2, exact 1); `getByText` matching
+>   two deliberate renderings of one sentence; section 5 asserting literal dollar figures that are
+>   WINDOW TOTALS and accumulate (predicted to the cent by the pre-flight audit — the tenant reached
+>   10 `spendEvents` rows and it failed exactly there); `page.content()` snapshotting the owner
+>   ceilings before `globalRails` resolved, catching `Loading cost…`; and a `revokeOwner` placed in
+>   `seedOnboarded`, which the boundary test never calls.
+> - **TWO STILL RED, characterised and out of 26-10 scope.** The Cash-side panel test passes alone,
+>   passes after test 2, fails after test 1 and survives a 120s timeout — characterised, NOT
+>   explained. `an owner gets the Operator tab` times out although the account IS an owner (the audit
+>   shows revoke → grant → revoke), after test 4's ~8 `convexRun` calls — matching this repo's own
+>   "every `convex run` invalidates the browser session" note.
+
 > Last verified: 2026-08-21 (26-10 pre-flight — **`finance.spec.ts` IS NO LONGER SINGLE-USE, AND
 > NO LONGER LEAVES A DEPLOYMENT-WIDE SWITCH ON WHEN IT FAILS.** Nothing about the Finance page
 > changed; two properties of the spec that guards it did. `owner.test.ts` 16/16,
