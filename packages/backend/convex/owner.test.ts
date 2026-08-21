@@ -171,3 +171,126 @@ describe("owner.bootstrapOwner — exact, idempotent, audited once", () => {
     expect((await t.run((ctx) => ctx.db.get(other)))?.owner).toBeUndefined();
   });
 });
+
+describe("owner.revokeOwner — the inverse, equally exact and idempotent", () => {
+  test("true -> false on the first run, no-op on the second, with exactly one audit row", async () => {
+    const t = harness();
+    const userId = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
+
+    const first = await t.mutation(internal.owner.revokeOwner, { userId });
+    expect(first).toEqual({ changed: true, userId });
+    expect(await t.run((ctx) => ctx.db.get(userId))).toMatchObject({ owner: false });
+
+    const second = await t.mutation(internal.owner.revokeOwner, { userId });
+    expect(second).toEqual({ changed: false, userId });
+    expect(await t.run((ctx) => ctx.db.get(userId))).toMatchObject({ owner: false });
+
+    const revoked = await t.run((ctx) =>
+      ctx.db
+        .query("audit")
+        .filter((q) => q.eq(q.field("eventType"), "owner.revoked"))
+        .collect(),
+    );
+    expect(revoked).toHaveLength(1);
+  });
+
+  test("the audit payload key set is exactly owner,userId (CLAUDE.md §4)", async () => {
+    const t = harness();
+    const userId = await t.run((ctx) =>
+      ctx.db.insert("users", { owner: true, email: "owner@example.com", name: "Real Name" }),
+    );
+
+    await t.mutation(internal.owner.revokeOwner, { userId });
+
+    const revoked = await t.run((ctx) =>
+      ctx.db
+        .query("audit")
+        .filter((q) => q.eq(q.field("eventType"), "owner.revoked"))
+        .collect(),
+    );
+    expect(revoked).toHaveLength(1);
+    const event = revoked[0]!;
+    expect(Object.keys(event.payload).sort()).toEqual(["owner", "userId"]);
+    expect(event.payload).toEqual({ owner: false, userId });
+
+    const serialized = JSON.stringify(event);
+    expect(serialized).not.toContain("owner@example.com");
+    expect(serialized).not.toContain("Real Name");
+  });
+
+  test("a never-owner row is a no-op and mints NO audit event", async () => {
+    const t = harness();
+    const userId = await t.run((ctx) => ctx.db.insert("users", {}));
+
+    expect(await t.mutation(internal.owner.revokeOwner, { userId })).toEqual({
+      changed: false,
+      userId,
+    });
+
+    // Anti-vacuity: the row is untouched — still no `owner` field at all, not a written false.
+    const row = await t.run((ctx) => ctx.db.get(userId));
+    expect(row).not.toBeNull();
+    expect(row?.owner).toBeUndefined();
+    // A revoke that never happened must not appear in the authority history.
+    expect(await t.run((ctx) => ctx.db.query("audit").collect())).toHaveLength(0);
+  });
+
+  test("a missing row throws NO_SUCH_USER and revokes nobody", async () => {
+    const t = harness();
+    const bystander = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
+    const ghost = await t.run(async (ctx) => {
+      const id = await ctx.db.insert("users", {});
+      await ctx.db.delete(id);
+      return id;
+    });
+
+    await expect(t.mutation(internal.owner.revokeOwner, { userId: ghost })).rejects.toThrow(
+      /NO_SUCH_USER/,
+    );
+
+    // Anti-vacuity: the failure must not have demoted some other row instead.
+    expect(await t.run((ctx) => ctx.db.get(bystander))).toMatchObject({ owner: true });
+    expect(await t.run((ctx) => ctx.db.query("audit").collect())).toHaveLength(0);
+  });
+
+  test("revoking one owner never touches another", async () => {
+    const t = harness();
+    const target = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
+    const other = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
+
+    await t.mutation(internal.owner.revokeOwner, { userId: target });
+
+    expect(await t.run((ctx) => ctx.db.get(target))).toMatchObject({ owner: false });
+    expect(await t.run((ctx) => ctx.db.get(other))).toMatchObject({ owner: true });
+  });
+
+  test("THE POINT: grant -> revoke -> grant, and viewer follows every step", async () => {
+    // This is the property the whole function exists for. Before the revoke existed, an
+    // account promoted once could never demonstrate the non-owner boundary again, which made
+    // `finance.spec.ts` single-use against the only identities this deployment has.
+    const t = harness();
+    const userId = await t.run((ctx) => ctx.db.insert("users", {}));
+    const asUser = t.withIdentity({ subject: `${userId}|s` });
+
+    expect(await asUser.query(api.owner.viewer, {})).toEqual({ isOwner: false });
+
+    await t.mutation(internal.owner.bootstrapOwner, { userId });
+    expect(await asUser.query(api.owner.viewer, {})).toEqual({ isOwner: true });
+
+    await t.mutation(internal.owner.revokeOwner, { userId });
+    expect(await asUser.query(api.owner.viewer, {})).toEqual({ isOwner: false });
+
+    // Re-granting after a revoke must report a real transition, not a no-op: `bootstrapOwner`
+    // short-circuits on `owner === true`, and the revoke wrote an explicit false.
+    expect(await t.mutation(internal.owner.bootstrapOwner, { userId })).toEqual({
+      changed: true,
+      userId,
+    });
+    expect(await asUser.query(api.owner.viewer, {})).toEqual({ isOwner: true });
+
+    // The authority history reads as the round trip actually happened: grant, revoke, grant.
+    const events = await t.run((ctx) => ctx.db.query("audit").collect());
+    expect(events.filter((e) => e.eventType === "owner.granted")).toHaveLength(2);
+    expect(events.filter((e) => e.eventType === "owner.revoked")).toHaveLength(1);
+  });
+});

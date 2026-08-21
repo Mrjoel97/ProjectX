@@ -1,5 +1,28 @@
 # Playbook: Authorization (tenancy + ownership)
 
+> Last verified: 2026-08-21 (26-10 pre-flight — **THE GRANT NOW HAS AN INVERSE.**
+> `owner:revokeOwner` ships beside `bootstrapOwner`. `owner.test.ts` 16/16, `isolation.test.ts` 32/32.)
+>
+> - **Why it stopped being deferrable.** "No revoke mutation" is recorded under Known gaps below as
+>   deliberate — *"a lockout risk with no caller"*. It HAD a caller, and had had one since the
+>   Finance console landed: `apps/web/e2e/finance.spec.ts` promotes the shared E2E identity in order
+>   to prove the owner boundary, and with no inverse that made the spec **single-use**. One run
+>   spent the non-owner state of one of the two loggable accounts this deployment has, permanently
+>   — taking with it both the spec's re-runnability and the state a human needs in order to REVIEW
+>   the boundary during a UAT. The gap was not costless; it was costing the evidence.
+> - **The lockout risk is real, and is accepted rather than designed away.** Revoking the last owner
+>   leaves owner endpoints unreachable until `bootstrapOwner` is re-run — by the same operator, at
+>   the same terminal, with the command printed directly above it in this file. A last-owner guard
+>   would need an unindexed scan of `users` for `owner: true` to prevent a state that un-does itself
+>   in one command. Revisit if a second operator ever shares a deployment.
+> - **Symmetric to the grant by construction:** `internalMutation`, exact `users._id`,
+>   `NO_SUCH_USER` on a missing row, idempotent (`changed:false`), ONE `owner.revoked` audit event
+>   on the transition only, payload key set exactly `owner,userId`. Mutation-tested before it was
+>   believed: removing the no-op short-circuit reddens 2 tests, dropping the audit event reddens 3.
+> - **It writes `owner: false`, it does not delete the field.** `viewer` already treats absent and
+>   explicit-false identically, so this is a readability choice, not a behavioural one: an explicit
+>   false is a row somebody DECIDED about.
+
 > Last verified: 2026-08-21 (25.1-06, D13 — **`/ops` GAINED AN OWNER-ONLY SECTION**, and the
 > self-growing owner-surface guard caught it. isolation.test.ts 31/32 — the one red is 23-05's
 > `skills.activateAgentCandidate` fixture, pre-existing and untouched here.)
@@ -258,6 +281,10 @@ disagrees with itself fails open.
 row read → missing? throw `NO_SUCH_USER` → already owner? return `{changed:false}` →
 patch `owner:true` → ONE `owner.granted` audit event → return `{changed:true}`.
 
+**Revoke:** operator runs `npx convex run owner:revokeOwner '{"userId":"<users._id>"}'` →
+row read → missing? throw `NO_SUCH_USER` → not currently owner? return `{changed:false}` →
+patch `owner:false` → ONE `owner.revoked` audit event → return `{changed:true}`.
+
 ## Invariants — what must never break
 
 1. **Identity comes from `getAuthUserId`, never from a parser we maintain.** Enforced by
@@ -276,9 +303,13 @@ patch `owner:true` → ONE `owner.granted` audit event → return `{changed:true
 5. **The server wrapper is the trust boundary; hiding UI is presentation only.** A non-owner who
    calls a protected function directly must still be refused. `owner.viewer` exists to decide
    whether to MOUNT a control, never to decide whether to ALLOW an operation.
-6. **`bootstrapOwner` is `internalMutation`.** There is no client-callable path to self-promotion.
-7. **The grant audit payload key set is exactly `owner,userId`** (CLAUDE.md §4 — refs and flags
-   only). Enforced by a sorted-key-set assertion plus a serialized-row scan for the email/name.
+6. **`bootstrapOwner` AND `revokeOwner` are `internalMutation`.** There is no client-callable path
+   to self-promotion — nor to demoting anyone else, which is the same hole pointed the other way.
+   Both take an exact `users._id` and neither ever selects a row itself.
+7. **The grant AND revoke audit payload key sets are exactly `owner,userId`** (CLAUDE.md §4 — refs
+   and flags only). Enforced on both by a sorted-key-set assertion plus a serialized-row scan for
+   the email/name. A de-escalation is at least as worth recording as an escalation: the pair is
+   what lets you reconstruct who held authority at a given time.
 8. **There is deliberately no `ownerAction`.** An action has no `ctx.db`, so it cannot read the
    row the check depends on. An owner-only action must call an owner-gated mutation/query.
 9. **Owner authorization and the skill EVAL_GATE are INDEPENDENT gates.** `requireOwner` asks
@@ -368,7 +399,9 @@ Then re-run the full backend suite, not just these tests.
 **Adding a second owner** — run `bootstrapOwner` against that exact `users._id`. The model is
 already multi-owner; nothing assumes exactly one.
 
-**Revoking** — there is deliberately no revoke mutation (see Known gaps).
+**Revoking** — run `npx convex run owner:revokeOwner '{"userId":"<users._id>"}'` from
+`packages/backend`. Same shape as the grant, same operator-only reach. If it is the LAST owner,
+owner endpoints go unreachable until `bootstrapOwner` is re-run — see the header note.
 
 ## How to verify
 
@@ -495,13 +528,21 @@ tenant scope as *offline-proven*, not *observed*.
 - **Resolve the exact `users._id` from deployment data and confirm it before granting.** Do not
   infer from registration order and do not select by an unverified email. If the deployment, the
   row, or the first/second result is ambiguous: stop. Never grant a guessed account.
-- Running `bootstrapOwner` twice is safe and is the intended idempotence proof.
+- Running `bootstrapOwner` twice is safe and is the intended idempotence proof. So is running
+  `revokeOwner` twice, and so is running it against an account that never held owner — it reports
+  `changed:false` and mints no audit event. That is what lets `finance.spec.ts` call it
+  unconditionally on every run without caring what the previous run left behind.
 
 ## Known gaps & deferred work
 
-- **No revoke mutation.** Deliberate: the only current owner is the operator, and a revoke path
-  is a lockout risk with no caller. Revoking today is a `convex run` patch. Add a real revoke when
-  Phase 25 admits a second owner.
+- **~~No revoke mutation.~~ CLOSED 2026-08-21** by `owner:revokeOwner` (see the header note). The
+  original reasoning — *"a lockout risk with no caller"* — was half right: the lockout risk is real
+  and is now an accepted, one-command-recoverable state. The "no caller" half was wrong, and had
+  been since the Finance E2E started promoting the shared identity to prove the owner boundary.
+- **No last-owner guard on `revokeOwner`.** `ponytail:` the ceiling is that revoking the final
+  owner makes owner endpoints unreachable; the upgrade path is a guard that counts `owner: true`
+  rows, which wants an index `users` does not have. Left out because the recovery is the command
+  immediately above it in this playbook. Reconsider when a deployment has two operators.
 - **`requireOwner` has no behavioural test in 22-01** — `ownerQuery`/`ownerMutation` are exported
   but unconsumed until 22-02, which exercises them through the real protected endpoints. A
   public test-only owner function was deliberately NOT added; a test-only public surface is

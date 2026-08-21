@@ -70,3 +70,56 @@ export const bootstrapOwner = internalMutation({
     return { changed: true, userId: args.userId };
   },
 });
+
+/**
+ * Revoke owner from ONE exact user row — the inverse `bootstrapOwner` shipped without.
+ *
+ *   npx convex run owner:revokeOwner '{"userId":"<users._id>"}'
+ *
+ * WHY THIS EXISTS. A grant with no inverse makes the NON-OWNER state unobservable: once an
+ * account is promoted, nothing in the deployment can ever demonstrate the boundary from it
+ * again. That cost lands on the only evidence that proves the boundary holds — the E2E run
+ * and the owner UAT — and it lands PERMANENTLY, because this deployment has exactly one
+ * loggable human account plus one seeded E2E identity. Without a revoke, `finance.spec.ts`
+ * is a single-use test: run it once and its own non-owner assertions can never pass again.
+ *
+ * Same trust level as the grant, deliberately: `internalMutation`, so there is no
+ * client-callable path — a browser cannot self-promote, and equally cannot demote anyone
+ * else. It takes an exact `users._id` and never selects a row itself.
+ *
+ * Writes `owner: false` rather than deleting the field. `viewer` already treats absent and
+ * explicit-false identically, so this is not a behaviour difference — it is a readable one:
+ * an explicit false is a row that was DECIDED about, which is what an operator wants to see
+ * when they are working out who holds authority.
+ *
+ * ponytail: no last-owner guard. Revoking the final owner leaves owner endpoints unreachable
+ * until someone re-runs `bootstrapOwner` — recoverable by the operation directly above this
+ * one, by the same operator, at the same terminal. A guard would need a scan of `users` for
+ * `owner: true` with no index to serve it, to prevent a state that un-does itself in one
+ * command. Add it if a second operator ever shares the deployment.
+ */
+export const revokeOwner = internalMutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    // Same loud failure as the grant: a typo'd id must not read as a successful revoke.
+    if (!user) throw new Error("NO_SUCH_USER");
+
+    if (user.owner !== true) return { changed: false, userId: args.userId };
+
+    await ctx.db.patch(args.userId, { owner: false });
+
+    // One audit event, on the transition only — mirroring the grant, including the §4 key
+    // set (`owner,userId` and nothing else). A de-escalation is at least as worth recording
+    // as an escalation: it is how you reconstruct who held authority at a given time.
+    await ctx.runMutation(internal.audit.log, {
+      tenantId: String(args.userId),
+      correlationId: `owner-revoke:${args.userId}`,
+      eventType: "owner.revoked",
+      actor: "operator",
+      payload: { owner: false, userId: args.userId },
+    });
+
+    return { changed: true, userId: args.userId };
+  },
+});
