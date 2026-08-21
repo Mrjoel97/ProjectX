@@ -1,5 +1,34 @@
 # Playbook: Production Beta Readiness (25-10)
 
+> Last verified: 2026-08-21 (26-10 pre-flight — **PRODUCTION HAD NO HUMAN PROMOTION GATE, AND
+> THE PIPELINE BELIEVED IT DID.** `deploy-production.yml` now requires `[deploy]` in the merge
+> commit message. Verified: `environments/production` returns `protection_rules: []`, and the
+> pipeline succeeded unattended twice on 2026-08-21 alone — 2m33s at 14:36 and 2m31s at 13:06.)
+>
+> - **What was actually true.** The workflow declares `environment: production` and its header says
+>   *"configure required reviewers there when an explicit human promotion gate is desired."* Nobody
+>   ever configured them, and **an `environment:` block with no rules provisioned does not fail
+>   closed — it deploys silently.** So every merge to main promoted BOTH Convex and Vercel to
+>   production, unattended, about 2.5 minutes later. The gate was designed, documented, and absent.
+> - **Why the recommended fix is unavailable here, measured not assumed.** GitHub environment
+>   protection rules need a PAID plan on a PRIVATE repo. This is a private repo on a free personal
+>   account. Both rules were attempted on 2026-08-21 via `gh api --method PUT`:
+>   `reviewers` → 422 *"ensure the billing plan supports the required reviewers protection rule"*;
+>   `wait_timer` → 422, same shape. The environment was left at `protection_rules: []` — the calls
+>   set nothing. **Do not re-attempt without checking the plan first.**
+> - **The gate that replaced it.** One clause on the deploy job's existing `if:`:
+>   `contains(github.event.workflow_run.head_commit.message, '[deploy]')`. Promotion is opt-in per
+>   merge; a merge without the marker lands on main, runs the full `ci` gate, and stops. The
+>   verified-SHA checkout and the fork-safety conditions are untouched. **It gates its own
+>   introduction**: `workflow_run` always runs the workflow file from the default branch HEAD, so
+>   the moment this merges, main carries the gated version and evaluates it against that very merge.
+> - **This is a weaker gate than an enforced approval and is chosen only because the enforced one is
+>   unreachable.** A commit-message convention can be typed by anyone with merge rights and carries
+>   no audit trail beyond git. If the plan ever gains environment protection, provision the real
+>   reviewer gate and delete the clause. Deleting that one line restores auto-deploy.
+> - **To deploy now:** put `[deploy]` in the merge commit message, or re-run the `deploy-production`
+>   workflow manually against the desired SHA.
+
 > Last verified: 2026-08-18 (17-08 Task 2 added ONE `feature`-tier manifest name,
 > `PHASE17_GRAPH_PROBE` — the Graph concurrency-probe artifact as JSON. **Unset is the normal,
 > healthy state**: Microsoft calendar UPDATE simply refuses with `provider_unsupported`, and nothing

@@ -1,4 +1,13 @@
-> Last verified: 2026-08-21 (25.1-06, D14 — **`http.ts` LOST A ROUTE.** `POST /fal/callback/*`, the
+> Last verified: 2026-08-21 (26-10 pre-flight — **`apps/web/e2e/` CHANGED, NO COCKPIT BEHAVIOUR DID.**
+> This playbook watches the whole `apps/web/e2e/` prefix, so it sees `finance.spec.ts`. Two spec
+> properties changed and are written up in full in `dashboard-pages.md`: the owner grant gained an
+> inverse (`owner:revokeOwner`) so the spec stopped being single-use against the shared E2E
+> identity, and the media kill-switch toggle gained a `try`/`finally` so a failed assertion can no
+> longer leave `guardrailConfig.mediaKillSwitch` ON deployment-wide. **The note below stating that
+> `owner:bootstrapOwner` "has no inverse" is history as of this entry.** No cockpit turn, tool,
+> gate, skill or stored row changed.)
+>
+> Prior: 2026-08-21 (25.1-06, D14 — **`http.ts` LOST A ROUTE.** `POST /fal/callback/*`, the
 > FOURTH route 20-06 added, is deleted: the route, its HMAC path segment, its ±300 s replay window,
 > its `fal.media`/`fal.ai`/`fal.run` asset-host allow-list and the `mediaComplete.resolveJob` lookup
 > behind it. `FAL_WEBHOOK_SECRET` went with them and is out of `ENV_MANIFEST`. **The entries below
@@ -2018,8 +2027,9 @@
 > that one property — and it does NOT stop ledger instrumentation, which must keep running whatever
 > the UI does. Two things in the new spec are worth
 > copying rather than rediscovering: it asserts the NON-OWNER boundary **before** calling
-> `owner:bootstrapOwner`, because that grant has no inverse and the boundary becomes unobservable
-> from the account once it is the owner; and it seeds through the real `spendLedger:record` writer,
+> `owner:bootstrapOwner` (**superseded 2026-08-21** — the grant now has an inverse, so that ordering
+> is a convenience rather than a one-way door; the spec revokes on every run and in `afterAll`); and
+> it seeds through the real `spendLedger:record` writer,
 > so a green run proves the projection and the role gate and proves **nothing** about a provider —
 > no model call, fal job or invoice is involved, and no seeded `actual` row may be cited as evidence
 > that money reached OpenAI or fal.

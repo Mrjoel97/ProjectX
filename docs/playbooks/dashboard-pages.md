@@ -1,5 +1,33 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-21 (26-10 pre-flight — **`finance.spec.ts` IS NO LONGER SINGLE-USE, AND
+> NO LONGER LEAVES A DEPLOYMENT-WIDE SWITCH ON WHEN IT FAILS.** Nothing about the Finance page
+> changed; two properties of the spec that guards it did. `owner.test.ts` 16/16,
+> `isolation.test.ts` 32/32, `apps/web` typecheck clean, spec lists 5 tests + setup.)
+>
+> - **The grant now has an inverse** — `owner:revokeOwner`, see `authorization.md`. `seedOnboarded`
+>   calls it unconditionally, so every non-owner assertion starts from a genuinely non-owner account
+>   whatever the last run left behind, and `afterAll` hands the identity back. Before this, one run
+>   promoted the shared E2E identity **for ever**: the spec's own non-owner assertions could never
+>   pass again, and — because this deployment has exactly two loggable accounts — neither could a
+>   human SEE the non-owner state during a UAT. The three comment blocks in the spec that stated
+>   *"`owner:bootstrapOwner` has no inverse"* are corrected; the serial ordering stays, because a
+>   revoke repairs state BETWEEN runs and cannot repair a race WITHIN one.
+> - **The media kill-switch toggle is now `try`/`finally`.** It was a bare on → assert → assert →
+>   off sequence: a failure at either assertion aborted the test leaving
+>   `guardrailConfig.mediaKillSwitch` **ON for every tenant** until a human noticed. The revert
+>   reloads first (clearing any half-armed confirm, so it works from whichever click died) and waits
+>   for the control to render before asking `isVisible()`, which does not auto-wait — a premature
+>   `false` there would skip the revert and recreate the bug. The revert's own failure is caught and
+>   shouted rather than rethrown: a throwing `finally` REPLACES the original error, which would hide
+>   the real defect.
+> - **Two claims below are corrected in place, not appended to.** The resume block quoted
+>   `pnpm --filter @pikar/web test:e2e -- e2e/finance.spec.ts`, which this same playbook records at
+>   ~line 648 as not filtering at all; and it said the nav item stays `Soon` and that the spec
+>   asserts the nav link's ABSENCE. Both were already false — the item carries an `href` and the
+>   spec asserts presence. **SCOPE: the spec, `owner.ts`, and these notes. No page, query,
+>   projection, control or nav entry changed.**
+
 > Last verified: 2026-08-21 (25.1-05, D11 — **THE HELD CARD SHOWS WORDS, NOT MARKUP.** A plan body
 > is MARKDOWN (a specialist writes `# Findings` and `**$25**`) and this page printed a raw 320-char
 > slice of it, so the first thing a human read at the approval gate was the markup. `previewText`
@@ -1905,12 +1933,20 @@ external charge. With local `convex dev` (not `--once`) plus Next on `:3111` and
 exported, resume exactly:
 
 ```text
-pnpm --filter @pikar/web test:e2e -- e2e/finance.spec.ts
+cd apps/web && npx playwright test e2e/finance.spec.ts
 ```
 
-The nav item stays `Soon` until that run and the blocking owner UAT both pass; the route is reachable
-directly at `/dashboard/finance` in the meantime, and the spec asserts the absence of the nav link so
-activation cannot happen by accident.
+**Corrected 2026-08-21.** This block previously quoted `pnpm --filter @pikar/web test:e2e -- <file>`,
+which the note at ~line 648 of this same playbook already records as NOT filtering — the `--` is
+swallowed and all 59 tests queue. The form above lists setup + exactly the 5 finance tests.
+
+It also previously said *"the nav item stays `Soon` until that run and the blocking owner UAT both
+pass … the spec asserts the absence of the nav link so activation cannot happen by accident."*
+**Both halves were false when written down.** The nav item carries `href: "/dashboard/finance"`
+(activated on owner direction 2026-08-09, see the Rollout-state block below) and the spec asserts the
+link's PRESENCE. The route is reachable at `/dashboard/finance` either way. What is genuinely still
+owed is recorded in that Rollout-state block: the executed browser run, and the three UAT items named
+there as not observed.
 
 ### The connected Pipeline route (19-07)
 

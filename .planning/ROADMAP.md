@@ -77,19 +77,19 @@ Decimal phases appear between their surrounding integers in numeric order.
   5. Reports provides bounded business, operations and governance projections, a server-sanitized audit view, owner-only WORM/skill/deployment facts, and a governed board-pack artifact path.
   6. Pipeline ships with — and never duplicates — Phase 19's tenant-scoped contacts/follow-up/consent/suppression substrate; the send-path suppression guard remains the trust boundary.
   7. Command Center v2 composes stable page summaries and deterministic next-move/health logic after the source pages land; every page passes package tests, typechecks, production build, playbook watchers and authenticated responsive UAT before its nav item becomes live.
-**Plans:** 8/20 plans executed
+**Plans:** 10/20 plans executed
 
 Plans:
 - [x] 26-01-PLAN.md — Shared result/window/money contracts and dashboard playbook ownership (Wave 1)
 - [x] 26-02-PLAN.md — Single-owner additive schema and index foundation (Wave 1)
 - [x] 26-03-PLAN.md — Approvals discard, schedule move and progress state machines (Wave 2)
 - [x] 26-04-PLAN.md — Bounded tenant-safe Approvals read models (Wave 2)
-- [ ] 26-05-PLAN.md — Connected Approvals route, executed browser gate, owner UAT, then nav activation (Wave 3)
-- [ ] 26-06-PLAN.md — Append-only spend ledger and coverage-start core (Wave 4)
-- [ ] 26-07-PLAN.md — Reasoning and ingest ledger instrumentation (Wave 5)
-- [ ] 26-08-PLAN.md — Media reserve/actual/refund/unlanded instrumentation (Wave 5)
-- [ ] 26-09-PLAN.md — Tenant Finance projections and owner-only controls (Wave 6)
-- [ ] 26-10-PLAN.md — Connected Finance route, executed browser gate, owner UAT, then nav activation (Wave 7)
+- [x] 26-05-PLAN.md — Connected Approvals route, executed browser gate, owner UAT, then nav activation (Wave 3)
+- [x] 26-06-PLAN.md — Append-only spend ledger and coverage-start core (Wave 4)
+- [x] 26-07-PLAN.md — Reasoning and ingest ledger instrumentation (Wave 5)
+- [x] 26-08-PLAN.md — Media reserve/actual/refund/unlanded instrumentation (Wave 5)
+- [x] 26-09-PLAN.md — Tenant Finance projections and owner-only controls (Wave 6)
+- [ ] 26-10-PLAN.md — Connected Finance route: executed browser gate + owner UAT (Wave 7) — **REPLANNED 2026-08-21**; implementation landed, nav already active ahead of SC#7 on owner direction 2026-08-09, three UAT items outstanding
 - [ ] 26-11-PLAN.md — Artifact provenance and idempotent promotion (Wave 8)
 - [ ] 26-12-PLAN.md — Bounded Content union, safe URLs, reuse and Refresh Research terminals (Wave 9)
 - [ ] 26-13-PLAN.md — Connected Content route, executed browser gate, owner UAT, then nav activation (Wave 10)
@@ -97,7 +97,7 @@ Plans:
 - [ ] 26-15-PLAN.md — Sanitized governance projection and owner-only operational facts (Wave 11)
 - [ ] 26-16-PLAN.md — Immutable board-pack snapshot/render artifact (Wave 12)
 - [ ] 26-17-PLAN.md — Connected Reports route, privacy gate, owner UAT, then nav activation (Wave 13)
-- [ ] 26-18-PLAN.md — External Phase 19 Pipeline safety/UAT gate and nav integration only (Wave 14)
+- [x] 26-18-PLAN.md — External Phase 19 Pipeline safety/UAT gate and nav integration only (Wave 14)
 - [ ] 26-19-PLAN.md — Deterministic home priority, health, briefing and source-summary composition (Wave 15)
 - [ ] 26-20-PLAN.md — Command Center v2, full repository gates and blocking owner UAT (Wave 16)
 
