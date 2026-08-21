@@ -68,6 +68,12 @@ type T = TestConvex<typeof schema>;
  *  See the afterEach below for why that matters. */
 const liveHarnesses: T[] = [];
 
+/** Yield-then-drain passes `afterEach` makes per harness. One clears a single-hop tail; a chain
+ *  needs a pass per hop. Measured on this file: the live-job count is 0 from the first pass and 3
+ *  leaves headroom for a deeper chain. A CEILING, not a target — a pass after the tail is empty
+ *  costs one resolved timer. */
+const SCHEDULED_TAIL_DRAIN_PASSES = 3;
+
 function harness(): T {
   const t = convexTest(schema, modules);
   t.registerComponent("rateLimiter", rateLimiterSchema, rateLimiterModules);
@@ -1038,12 +1044,36 @@ afterEach(async () => {
   // keeps each test's async tail inside its own test. `finishInProgressScheduledFunctions` and not
   // `finishAllScheduledFunctions`: the media pollers reschedule themselves on a 10s delay, and
   // chasing those would never terminate.
+  //
+  // THE YIELD IS LOAD-BEARING: without it the drain above is usually a NO-OP. convex-test schedules
+  // with `setTimeout(() => { const promise = …; scheduler.add(promise) }, delay)` — a job registers
+  // as in-progress INSIDE its timer callback, not when it is scheduled. A test that ends right
+  // after scheduling therefore leaves `_inFlight` EMPTY, and
+  // `finishInProgressScheduledFunctions` is a `while (_inFlight.size > 0)` loop, so it returns
+  // having done nothing whatsoever. The timer fires later, inside another test. That is why
+  // 44c9c3a moved the symptom from "got 2" to "got 1" instead of to zero: it awaited what had
+  // already started and could not see what was merely armed.
+  //
+  // One macrotask turn is exactly when every DUE timer fires and registers itself, so the drain
+  // then has something to await. Repeated, because a drained action schedules the next hop of its
+  // own chain. Bounded, so this can never hang — and a zero-delay yield never reaches the media
+  // pollers' 10s self-reschedule, which is the whole reason `finishAllScheduledFunctions` was
+  // unusable here.
+  //
+  // MEASURED, because the obvious proxy lies. Counting `processTimers` stack frames in stderr
+  // shows ~90 per run and does NOT move when this is fixed — those are scheduled functions running
+  // normally inside their own test, not leaks. The honest metric is how many jobs are still
+  // `pending`/`inProgress` when a test ends, read via `ctx.db.system.query("_scheduled_functions")`:
+  // 17 live jobs across 17 tests before this change, 0 across 0 after.
   for (const t of liveHarnesses.splice(0)) {
-    try {
-      await t.finishInProgressScheduledFunctions();
-    } catch {
-      // A drained action may legitimately throw (a test that deliberately stubbed no render env).
-      // Running it HERE rather than inside the next test is the entire point.
+    for (let pass = 0; pass < SCHEDULED_TAIL_DRAIN_PASSES; pass++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      try {
+        await t.finishInProgressScheduledFunctions();
+      } catch {
+        // A drained action may legitimately throw (a test that deliberately stubbed no render env).
+        // Running it HERE rather than inside the next test is the entire point.
+      }
     }
   }
   vi.unstubAllEnvs();

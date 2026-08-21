@@ -1,4 +1,13 @@
-> Last verified: 2026-08-21 (26-10 pre-flight — **`apps/web/e2e/` CHANGED, NO COCKPIT BEHAVIOUR DID.**
+> Last verified: 2026-08-21 (`apps/web/e2e/` changed again — **NO COCKPIT BEHAVIOUR DID.** This
+> playbook watches that whole prefix, so it sees `finance.spec.ts`. 26-10 Task 1 executed the
+> Finance browser gate for the first time; five spec defects were fixed and the connected cost
+> console passed. Two tests remain red and the blocking owner UAT has not happened. Full record in
+> `dashboard-pages.md` and 26-10-SUMMARY.md. One item is worth copying rather than rediscovering:
+> `.env`'s `user_email` is a `google` provider row with no password credential, so the `/signin`
+> form cannot authenticate it — the run used a password-auth non-owner from the invite path. No
+> cockpit turn, tool, gate, skill or stored row changed.)
+>
+> Prior: > Last verified: 2026-08-21 (26-10 pre-flight — **`apps/web/e2e/` CHANGED, NO COCKPIT BEHAVIOUR DID.**
 > This playbook watches the whole `apps/web/e2e/` prefix, so it sees `finance.spec.ts`. Two spec
 > properties changed and are written up in full in `dashboard-pages.md`: the owner grant gained an
 > inverse (`owner:revokeOwner`) so the spec stopped being single-use against the shared E2E

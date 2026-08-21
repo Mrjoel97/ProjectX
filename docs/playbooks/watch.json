@@ -271,6 +271,7 @@
     "packages/core/src/render.ts",
     "packages/core/src/captions.ts",
     "packages/backend/convex/media.ts",
+    "packages/backend/convex/media.test.ts",
     "packages/backend/convex/mediaComplete.ts",
     "packages/backend/convex/render/",
     "apps/web/app/api/media/",

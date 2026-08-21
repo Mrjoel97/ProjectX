@@ -1,5 +1,32 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-08-21 (**THIS PLAYBOOK NOW WATCHES `media.test.ts`, AND THE SCHEDULED-TAIL
+> DRAIN ACTUALLY DRAINS.** No product behaviour changed — a test-harness defect and a coverage gap.)
+>
+> - **The gap.** `watch.json`'s entry here listed `media.ts`, `mediaComplete.ts` and `render/` but
+>   NOT `media.test.ts`, so the largest test file in the backend was watched by no playbook at all.
+>   Sibling playbooks watch their test files (`authorization.md` → `owner.test.ts`,
+>   `dashboard-pages.md` → `finance.test.ts`), so this was an omission rather than a decision. It
+>   mattered twice in one day: `44c9c3a` and the fix below both changed that file and the §9 Stop
+>   hook could not see either, because it only flags CREATED files as uncovered — **a modified file
+>   that no playbook watches is invisible to it.** Now added.
+> - **The drain was usually a no-op, and it read as correct.** `44c9c3a` tracked every harness and
+>   called `finishInProgressScheduledFunctions` in `afterEach`; the symptom went from "got 2" to
+>   "got 1" and stopped there. convex-test schedules with
+>   `setTimeout(() => { …; scheduler.add(promise) }, delay)` — a job registers as IN PROGRESS inside
+>   its timer callback, not when scheduled. That function is a `while (_inFlight.size > 0)` loop, so
+>   a test ending right after scheduling leaves the set EMPTY and the drain does nothing whatsoever.
+>   One macrotask yield before each pass is when due timers fire and register, so there is something
+>   to await. Three passes for chains; bounded; a zero-delay yield never reaches the pollers' 10s
+>   self-reschedule, which is why `finishAllScheduledFunctions` is still unusable here.
+> - **Verify it with the defect STATE, not with repetition.** The failure does not reproduce
+>   locally (4/4 baseline runs green), so "N clean runs after the fix" proves nothing. Counting
+>   `processTimers` stack frames looks like a leak metric and is NOT — ~90 per run, unmoved by the
+>   fix, because those are scheduled functions running normally inside their own test. The real
+>   metric is jobs still `pending`/`inProgress` when a test ends, read with
+>   `ctx.db.system.query("_scheduled_functions")` (which convex-test supports): **17 live jobs
+>   across 17 tests before, 0 across 0 after.** Use that probe if this ever regresses.
+
 > Last verified: 2026-08-21 (25.1-06, D12/D14 — **THE PROVIDER TRUTH, AND THE DELETION OF THE fal
 > WEBHOOK.** Read this before the plan-by-plan narrative below, which is HISTORY and still describes
 > fal in the present tense in a hundred places. media.test.ts 227 passed; ADR-024 is the record.)
