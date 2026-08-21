@@ -64,6 +64,10 @@ type T = TestConvex<typeof schema>;
 /** A harness with the rate-limiter component registered — every reserve touches it. `auditCounts`
  *  joined it in 20-06: the landing writes an audit row, and `audit.log` mirrors every insert into
  *  the aggregate (calendar.test.ts carries the same pair of lines). */
+/** Every harness handed out in this file, so `afterEach` can drain each one's scheduled tail.
+ *  See the afterEach below for why that matters. */
+const liveHarnesses: T[] = [];
+
 function harness(): T {
   const t = convexTest(schema, modules);
   t.registerComponent("rateLimiter", rateLimiterSchema, rateLimiterModules);
@@ -73,6 +77,7 @@ function harness(): T {
   t.registerComponent("workflow/workpool", workpoolSchema, workpoolModules);
   // 25.1-01 (D2): every render is scheduled through the ActionRetrier now.
   retrierTest.register(t);
+  liveHarnesses.push(t);
   return t;
 }
 
@@ -1021,7 +1026,26 @@ function stubMediaEnv() {
   vi.stubEnv("CONVEX_SITE_URL", "https://example.convex.site");
 }
 
-afterEach(() => {
+afterEach(async () => {
+  // CROSS-TEST LEAK, and it is this file's own doing: 25.1-01 (D2) made every render a RETRIER
+  // run, and a retrier run is a SCHEDULED FUNCTION. A test that asserts a render was scheduled and
+  // then ends leaves that action in flight — it executes during a LATER test and calls the global
+  // `fetch` that the later test stubbed for its own assertion. The symptom is a test that never
+  // touches the network failing with "expected fetch 0 times, got 2", non-deterministically,
+  // depending on which test happened to be running when the tail landed.
+  //
+  // Draining here — BEFORE the unstubs, so any call lands on the mock of the test that caused it —
+  // keeps each test's async tail inside its own test. `finishInProgressScheduledFunctions` and not
+  // `finishAllScheduledFunctions`: the media pollers reschedule themselves on a 10s delay, and
+  // chasing those would never terminate.
+  for (const t of liveHarnesses.splice(0)) {
+    try {
+      await t.finishInProgressScheduledFunctions();
+    } catch {
+      // A drained action may legitimately throw (a test that deliberately stubbed no render env).
+      // Running it HERE rather than inside the next test is the entire point.
+    }
+  }
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
