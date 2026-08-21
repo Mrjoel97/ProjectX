@@ -14,6 +14,10 @@ The endpoint (23-05) takes a required `candidateId` and has no entry in `OWNER_A
 non-owner call dies on the validator before the owner check runs — **the owner gate on that
 endpoint is currently unproven.**
 
+**UPDATE 2026-08-21 — part 1 CLOSED, part 2 still OPEN (commit `d143951`).** The fixture was added
+(`"skills.activateAgentCandidate": { candidateId: "id:tenantSkills" }`), `isolation.test.ts` is 32/32,
+and the endpoint **does** refuse a non-owner — the gate was unproven, not broken. Part 2 below stands.
+
 **The guard that should have caught this is vacuous by construction.** `REQUIRES_ARGS` is derived
 from `Object.keys(OWNER_ARGS)`, so the test "every owner endpoint with required args has a fixture"
 can only ever flag an endpoint that already has a fixture. The honest fix reads each function's
