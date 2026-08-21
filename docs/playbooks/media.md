@@ -1,5 +1,29 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-08-21 (25.1-06, D12/D14 — **THE PROVIDER TRUTH, AND THE DELETION OF THE fal
+> WEBHOOK.** Read this before the plan-by-plan narrative below, which is HISTORY and still describes
+> fal in the present tense in a hundred places. media.test.ts 227 passed; ADR-024 is the record.)
+>
+> - **OpenAI is the provider for every media kind.** Video `sora-2` 720p 4 s via
+>   `POST /v1/videos` (polled, then `/content`); image `gpt-image-2` 1024x1536 via
+>   `/v1/images/generations` returning `b64_json` inline; voice `tts-1` via `/v1/audio/speech`;
+>   transcript `whisper-1` via `/v1/audio/transcriptions`. Pins live in `packages/cost/src/media.ts`.
+> - **`POST /fal/callback/*` NO LONGER EXISTS.** The route, its HMAC path segment, its ±300 s replay
+>   window, its `fal.media`/`fal.ai`/`fal.run` SSRF allow-list, `mediaComplete.resolveJob` and
+>   `FAL_WEBHOOK_SECRET` were all deleted at 25.1-06. **Everything below about the webhook —
+>   sections on the 401 ladder, the JWKS upgrade path, the callback URL shape — is a record of code
+>   that is gone.** It was verified dead before removal, not assumed: `submitLine`'s webhook
+>   parameter had been unused since the ADR-017 cutover, so nothing had minted a callback URL for
+>   any provider to call; `resolveJob` had one caller (the route) and `FAL_WEBHOOK_SECRET` had one
+>   reader (`resolveJob`).
+> - **`FAL_FIXTURE` survives and is still live.** The name is a fossil; the seam still
+>   short-circuits `media.ts`'s submit and is what keeps the offline suites at $0.
+> - **The legacy Wan poller is retained but is provably vestigial.** `pollWanTask` is scheduled only
+>   by its own retry — no submit path enqueues it. Not removed here (different lane); see ADR-024 §3
+>   and deferred item 5. Its two env names are now in `ENV_MANIFEST` so their absence is visible.
+> - **`MEDIA_RENDER_URL` is now in `ENV_MANIFEST`** (D12). It is read via `requireEnvMedia`, which
+>   the drift scan could not see, and it is read INSIDE the scheduled `renderReel` action — so unset
+>   it threw where no user was waiting and left the plan at `rendering` while readiness read green.
 > Last verified: 2026-08-21 (25.1-03, D6/D7/D8 — **NOTHING A USER GENERATED CAN BE SILENTLY
 > DESTROYED OR STRANDED BY GENERATING AGAIN.** media + plans + renderReel suites 293 passed,
 > four guards mutation-verified.)

@@ -93,6 +93,31 @@ describe("the manifest covers every name source actually reads", () => {
     ).toEqual([]);
   });
 
+  test("D14: FAL_WEBHOOK_SECRET is gone from BOTH the manifest and source", () => {
+    // Not just delisted — unread. Asserting only the manifest half would pass against a codebase
+    // that still had the route, which is the thing this plan removed.
+    expect(ENV_MANIFEST.map((e) => e.name)).not.toContain("FAL_WEBHOOK_SECRET");
+    expect(consumed).not.toContain("FAL_WEBHOOK_SECRET");
+    // `FAL_FIXTURE` is NOT dead and must survive: it still short-circuits `media.ts`'s submit.
+    expect(consumed).toContain("FAL_FIXTURE");
+  });
+
+  test("D14: no source file routes, signs or fetches for a fal callback any more", () => {
+    const offenders = Object.entries(sources)
+      .filter(([path]) => !path.endsWith(".test.ts") && !path.includes("/_generated/"))
+      .filter(([, content]) =>
+        // Code only: the tombstone comments that explain the removal name the route on purpose.
+        /fal[_/]?(callback|webhook)/i.test(
+          content
+            .split("\n")
+            .filter((line) => !line.trim().startsWith("//") && !line.trim().startsWith("*"))
+            .join("\n"),
+        ),
+      )
+      .map(([path]) => path);
+    expect(offenders).toEqual([]);
+  });
+
   test("every entry says what breaks, in words an operator can act on", () => {
     for (const entry of ENV_MANIFEST) {
       expect(entry.whatBreaks.length).toBeGreaterThan(20);

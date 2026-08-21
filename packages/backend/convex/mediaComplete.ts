@@ -1,5 +1,7 @@
 /**
- * The media LANDING plane (MEDIA-01, D10, plan 20-06) — the terminal for a fal callback.
+ * The media LANDING plane (MEDIA-01, D10, plan 20-06) — the terminal a finished media job lands
+ * through. It was written for a fal callback; since ADR-024 its callers are `media.ts`'s OpenAI
+ * poll-and-store path and `reliabilitySweep.ts`'s watchdog, and the callback route is gone.
  *
  * A sibling terminal module, the `calendarComplete.ts` rule: `media.ts` owns the submit and this
  * file owns the landing, so the two halves of a job's lifecycle can be reasoned about — and
@@ -12,8 +14,8 @@
  * `media.ts` must be able to write `blocked`/`failed`. Both halves are pinned by a scan in
  * `llmRedaction.test.ts`.
  *
- * NOT "use node" — this is an internalQuery + an internalMutation, and `http.ts` (which holds the
- * route) cannot be "use node" either.
+ * NOT "use node" — these are internalMutations reached from scheduled actions and from the
+ * ActionRetrier's `onComplete`, neither of which needs a node runtime here.
  */
 import { onCompleteValidator } from "@convex-dev/action-retrier";
 import { deckStillNeedsJob } from "@pikar/core/render";
@@ -25,8 +27,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
-import { internalMutation, internalQuery } from "./_generated/server";
-import { hmacHex } from "./gmailAuth";
+import { internalMutation } from "./_generated/server";
 import { rateLimiter } from "./guardrails";
 // 25.1-01 (D2): renderReel runs under the ActionRetrier — the `submitBatch` idiom
 // (cockpit.ts EXTERNAL_TARGETS) — so a throw after `markRendering` still terminalizes.
@@ -43,56 +44,10 @@ import { startIngest } from "./vaultIngest";
  *  policy is undocumented, so at-least-once is the only safe assumption. */
 const TERMINAL = new Set<Doc<"mediaJobs">["status"]>(["succeeded", "failed", "blocked"]);
 
-export type ResolvedJob = {
-  jobId: Id<"mediaJobs">;
-  tenantId: string;
-  planId: Id<"plans">;
-  batchId: string;
-  kind: Doc<"mediaJobs">["kind"];
-  model: string;
-  terminal: boolean;
-};
-
-/**
- * Prove the caller knows the secret we minted for THIS job, then hand the route the row's own
- * facts. Returns `null` for every refusal — the route turns that into one 401 with no detail.
- *
- * **Everything security-relevant comes from the ROW.** `tenantId`, `planId`, `kind` and `model` are
- * read here and never taken from the callback body — the `/skillopt/writeback` rule verbatim
- * (`http.ts:123-129`): a body-supplied tenant is attacker-controllable and is a cross-tenant write.
- */
-export const resolveJob = internalQuery({
-  args: { raw: v.string(), digest: v.string() },
-  handler: async (ctx, { raw, digest }): Promise<ResolvedJob | null> => {
-    // FAIL CLOSED on the env, and this is the ONLY copy of that guard on purpose. A second one at
-    // the route would make the mutation check for this one vacuous, and this is the place that
-    // matters: without it `hmacHex(raw, "")` still yields a digest, which anyone can compute.
-    const secret = process.env.FAL_WEBHOOK_SECRET;
-    if (!secret) return null;
-
-    // A malformed or FOREIGN-TABLE id must never reach `ctx.db.get` — `normalizeId` returning null
-    // is the fail-closed shape (`schema.ts:1034`, where 20-02 recorded this exact contract).
-    const jobId = ctx.db.normalizeId("mediaJobs", raw);
-    if (!jobId) return null;
-
-    // `gmailAuth.verifyState:70`'s comparison verbatim, including the plain `===`. That precedent
-    // has guarded the OAuth `state` in production since Phase 2; introducing a second, different
-    // HMAC-comparison idiom here would be the thing to justify, not this.
-    if (digest !== (await hmacHex(raw, secret))) return null;
-
-    const row = await ctx.db.get(jobId);
-    if (!row) return null;
-    return {
-      jobId,
-      tenantId: row.tenantId,
-      planId: row.planId,
-      batchId: row.batchId,
-      kind: row.kind,
-      model: row.model,
-      terminal: TERMINAL.has(row.status),
-    };
-  },
-});
+// `ResolvedJob` and `resolveJob` — the fal webhook's HMAC-guarded row lookup — were REMOVED at
+// 25.1-06 (D14) together with the `/fal/callback/*` route, their only caller. `FAL_WEBHOOK_SECRET`
+// died with them and is out of `ENV_MANIFEST`. `landResult` below is unchanged and is now reached
+// only from `media.ts` (the OpenAI poll-and-store path) and `reliabilitySweep.ts` (the watchdog).
 
 /**
  * Kinds whose spend is a pure function of what WE SUBMITTED, so actual == estimate BY CONSTRUCTION.

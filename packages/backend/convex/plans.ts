@@ -199,9 +199,10 @@ const LIVE_RENDER_STATUS: ReadonlySet<string> = new Set(["pending", "rendering"]
  *
  *  - a plan with **non-terminal `mediaJobs` rows** is refused as `reel_in_flight`. Those lines are
  *    already PAID FOR: the whole job was reserved in one transaction before a single request
- *    existed (20-04), and fal will call back to `/fal/callback/*` whichever plan row the thread
- *    happens to point at afterwards. Recycling the row would strand a landing on a plan that has
- *    since become something else, and the money is gone either way.
+ *    existed (20-04), and the poller will land whichever plan row the thread happens to point at
+ *    afterwards. Recycling the row would strand a landing on a plan that has since become something
+ *    else, and the money is gone either way. (The provider CALLBACK this used to name went away with
+ *    the fal route at 25.1-06; the hazard did not — `landResult` is still reached asynchronously.)
  *  - a plan with a **live `renderStatus`** is refused for the same reason one step later: a sandbox
  *    is running, and its terminal will write `renderStorageId` onto whatever this row has become.
  *  - the two are checked SEPARATELY because they fail at different times — every job can be

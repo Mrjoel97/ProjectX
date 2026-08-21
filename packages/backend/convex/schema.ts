@@ -2032,19 +2032,20 @@ export default defineSchema({
   // ONE table for the job AND the asset it produces: a job yields at most one asset, so a second
   // `mediaAssets` table would be a 1:1 join forever. A new table needs no migration.
   //
-  // THERE IS NO URL FIELD ON THIS TABLE, DELIBERATELY. The webhook downloads fal's bytes and
-  // stores them via `ctx.storage`; the signed fal URL is never persisted anywhere. A signed URL in
-  // a row is both a content leak and a live credential.
+  // THERE IS NO URL FIELD ON THIS TABLE, DELIBERATELY. The landing path downloads the provider's
+  // bytes and stores them via `ctx.storage`; the signed provider URL is never persisted anywhere. A
+  // signed URL in a row is both a content leak and a live credential.
   //
   // `promptHash`, NOT the prompt. Prompt and narration text are content-plane and live on
   // `plans.shots` — this table carries refs, hashes, ids and counts only (§4).
   //
   // DELIBERATE DEVIATION from research §5.2: no stored `callbackHash` and no `by_callback` index.
-  // The webhook path segment is `${jobId}.${hmacHex(jobId, FAL_WEBHOOK_SECRET)}`; plan 20-06
-  // resolves the row with `ctx.db.normalizeId("mediaJobs", raw)` and RE-DERIVES the HMAC — exactly
-  // what `gmailAuth.verifyState` already does for the OAuth `state`, in an httpAction, in
-  // production today. Storing the digest buys nothing and costs a field plus an index.
-  // `normalizeId` returning null for a malformed or foreign-table id is the fail-closed shape.
+  // That deviation OUTLIVED its subject — the webhook whose path segment it declined to store was
+  // removed at 25.1-06 (D14) along with `FAL_WEBHOOK_SECRET`, so there is no callback digest to
+  // store at all now. Recorded rather than deleted because the reasoning still binds the next
+  // provider callback anyone is tempted to add: resolve the row from the id and RE-DERIVE, the way
+  // `gmailAuth.verifyState` has for the OAuth `state` since Phase 2. `normalizeId` returning null
+  // for a malformed or foreign-table id is the fail-closed shape.
   mediaJobs: defineTable({
     tenantId: v.string(),
     planId: v.id("plans"),

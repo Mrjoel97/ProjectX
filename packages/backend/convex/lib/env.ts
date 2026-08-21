@@ -132,16 +132,18 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
     whatBreaks: "Media rendering; the render callback cannot be authenticated.",
   },
   {
+    // Read INSIDE the scheduled `renderReel` action, so unset it throws where no user is waiting.
+    // Invisible to this manifest for its whole life until 25.1-06 (D12).
     name: "MEDIA_RENDER_URL",
     tier: "feature",
     whatBreaks:
-      "Media rendering, SILENTLY. It is read inside the scheduled `renderReel` action, so an unset value throws where no user is waiting: the plan sits at `rendering` forever. 25.1-06 (D12) is why it is here — it was invisible to this manifest for its whole life.",
+      "Media rendering, SILENTLY: the render action throws off-thread and the plan sits at `rendering` for ever.",
   },
-  {
-    name: "FAL_WEBHOOK_SECRET",
-    tier: "feature",
-    whatBreaks: "fal.ai render callbacks cannot be verified, so renders never complete.",
-  },
+  // FAL_WEBHOOK_SECRET was here until 25.1-06 (D12/D14). Its only reader was
+  // `mediaComplete.resolveJob`, whose only caller was the `/fal/callback/*` route; all three are
+  // gone. Listing it made a readiness screen demand a secret that unlocked nothing — the exact
+  // dead-entry failure the second drift check exists to catch. `FAL_FIXTURE` stays: it is still a
+  // live short-circuit in `media.ts`'s submit path, whatever its name says.
   {
     // Read only by the LEGACY Wan poller, retained for tasks submitted before the OpenAI cutover
     // (ADR-024). A deployment with no such task in flight needs neither name, which is why both are

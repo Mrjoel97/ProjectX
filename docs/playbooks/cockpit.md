@@ -1,3 +1,19 @@
+> Last verified: 2026-08-21 (25.1-06, D14 — **`http.ts` LOST A ROUTE.** `POST /fal/callback/*`, the
+> FOURTH route 20-06 added, is deleted: the route, its HMAC path segment, its ±300 s replay window,
+> its `fal.media`/`fal.ai`/`fal.run` asset-host allow-list and the `mediaComplete.resolveJob` lookup
+> behind it. `FAL_WEBHOOK_SECRET` went with them and is out of `ENV_MANIFEST`. **The entries below
+> that describe that route — including the 20-15 comparison that says "NO HMAC path segment, unlike
+> `/fal/callback/*`" — are history.** No cockpit turn, tool, gate or plan-row behaviour changed.
+>
+> VERIFIED DEAD BEFORE DELETION, not assumed: `submitLine`'s webhook parameter had been unused since
+> the ADR-017 cutover, so nothing had minted a callback URL for a provider to call; `resolveJob` had
+> exactly one caller (the route) and `FAL_WEBHOOK_SECRET` exactly one reader (`resolveJob`). The
+> route's only reachable caller was therefore somebody holding the secret, for whom it offered an
+> outbound fetch and a terminal `succeeded` write. Provider truth and the removal record: ADR-024.
+>
+> `http.ts` now holds the OAuth callbacks, `/skillopt/*`, `GET /media/blob/*` and the unsubscribe
+> pair. `contacts.ts`'s unsubscribe token is the last living copy of the 20-06 stateless-token
+> pattern, and its comment says so rather than pointing at the deleted route.
 > Last verified: 2026-08-21 (25.1-05 Task 2, D11 — **THE MEMO CARD RENDERS ITS DOCUMENT AND SHOWS
 > ITS SOURCES.** `MemoCardBody` (exported from `cards.tsx`, hook-free) replaces the memo branch's
 > `white-space: pre-wrap` paragraph: the body goes through the EXISTING `MarkdownDocument` in its

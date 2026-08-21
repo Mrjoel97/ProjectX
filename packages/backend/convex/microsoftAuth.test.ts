@@ -365,8 +365,10 @@ describe("25-06: no second OAuth surface exists, and mail readiness is derived n
 
   test("there is exactly ONE Microsoft OAuth callback route, not two", () => {
     const routes = [...httpSource.matchAll(/http\.route\(/g)].length;
-    // Pinned exactly: a new route of ANY kind fails this and has to be justified deliberately.
-    expect(routes).toBe(8);
+    // Pinned exactly: a route added or removed, of ANY kind, fails here and has to be justified
+    // deliberately. 8 -> 7 at 25.1-06 (D14): `POST /fal/callback/*` was deleted. This pin is the
+    // guard working — a route disappearing is exactly as worth noticing as one appearing.
+    expect(routes).toBe(7);
     const microsoftCallbacks = [...httpSource.matchAll(/microsoft/gi)].length;
     expect(microsoftCallbacks).toBeGreaterThan(0);
     // One path literal, however many times it is mentioned.

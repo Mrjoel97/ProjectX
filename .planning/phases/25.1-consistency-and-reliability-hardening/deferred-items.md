@@ -58,3 +58,30 @@ whose payloads have no runtime scan inherit that false comfort. The honest fix i
 rule (an `http`/URL-literal scan over payload sources, the `media` payload scan at :1412 already does
 this) rather than a longer identifier list — an identifier blacklist can only ban names someone
 already thought of. Owning lane: governance/§4, not media.
+
+## 5. `pollWanTask` is unreachable — the "pre-cutover tasks" retention has silently expired
+
+Found during 25.1-06 while verifying the fal-removal premise. `media.pollWanTask` (`media.ts:1226`)
+is scheduled from **exactly two places, both inside itself**: its own transient-error retry
+(`:1241`, `:1277`), capped at 60 attempts ≈ 10 minutes. No submit path enqueues it —
+`submitBatch` schedules `pollOpenAiVideoTask` (`:1546`). Its reachability therefore depended entirely
+on Convex's scheduler queue at the moment of the ADR-017 cutover (2026-08-13), and that queue drained
+within minutes. **`wanBaseUrl`, `WAN_API_BASE_URL` and `Video_and_image_API_Key` are dead in exactly
+the sense the fal callback route was.**
+
+**Deliberately NOT removed.** The plan named the poller as the thing not to break, and unlike the fal
+route it is an `internalAction` with no HTTP surface and no external caller — a dead code question,
+not a security one. Both env names are now CLASSIFIED (`ENV_MANIFEST`, D12) so their absence is at
+least honest rather than invisible, and ADR-024 §3 records the finding.
+
+The removal is a media-lane change: delete `pollWanTask`, `wanBaseUrl`, the two env entries, the
+`WAN task landing` describe in `media.test.ts` (which calls the action directly, so it will keep
+passing regardless — that test cannot see this), and the two `vi.stubEnv` pairs in `media.test.ts`
+/ `renderReel.test.ts`. Do it only after confirming no `mediaJobs` row anywhere carries a Wan
+`providerRequestId` at `submitted`.
+
+## 6. `llmRedaction.test.ts` still bans `FAL_WEBHOOK_SECRET` by name
+
+Harmless (a denylist entry for a name that no longer exists is a negative assertion that can only
+stay true), and left in place at 25.1-06 rather than churned. Worth knowing it is a fossil if that
+list is ever read as an inventory of live secrets — it is not one.

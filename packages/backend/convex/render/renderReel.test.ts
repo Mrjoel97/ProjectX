@@ -73,7 +73,6 @@ function stubRenderEnv() {
   vi.stubEnv("Video_and_image_API_Key", "test-key");
   vi.stubEnv("WAN_API_BASE_URL", "https://workspace.ap-southeast-1.maas.aliyuncs.com");
   vi.stubEnv("OPENAI_API_KEY", "openai-test-key");
-  vi.stubEnv("FAL_WEBHOOK_SECRET", "test-secret");
   vi.stubEnv("CONVEX_SITE_URL", "https://example.convex.site");
   vi.stubEnv("MEDIA_RENDER_SECRET", "test-render-secret");
   vi.stubEnv("MEDIA_RENDER_URL", "https://app.example.com/api/media/render");

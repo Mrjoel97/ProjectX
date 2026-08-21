@@ -1,6 +1,10 @@
 # ADR-017: Direct Wan visuals and OpenAI audio supersede fal
 
-Status: Accepted — 2026-08-13
+Status: Accepted — 2026-08-13; **the VISUAL half and the callback-retention clause are superseded by
+[ADR-024](024-openai-sora-is-the-media-provider.md)** (2026-08-21). The audio decision below still
+stands. Status line only, per `docs/README.md`; the body is byte-unchanged and is deliberately NOT
+corrected in place — including the "it does not receive prompts for visual jobs" line, which ADR-024
+names as false as of the OpenAI cutover.
 
 Supersedes the provider selection in ADR-011 while preserving its preflight pricing and spend-rail
 requirements.

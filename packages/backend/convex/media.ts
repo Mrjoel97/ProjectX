@@ -946,11 +946,7 @@ function decodeBase64(value: string): Uint8Array<ArrayBuffer> {
 
 /** Submit one new visual line to OpenAI. Images return their bytes synchronously; Sora returns an
  *  asynchronous video id which `pollOpenAiVideoTask` owns. */
-export async function submitLine(
-  spec: VisualSpec,
-  text: string,
-  _webhookUrl?: string,
-): Promise<SubmitResult> {
+export async function submitLine(spec: VisualSpec, text: string): Promise<SubmitResult> {
   const key = requireEnvMedia("OPENAI_API_KEY");
 
   if (process.env.MEDIA_PROVIDER_FIXTURE || process.env.FAL_FIXTURE) {
@@ -982,8 +978,8 @@ export async function submitLine(
       });
     }
   } catch {
-    // The thrown error's message can carry the URL — and therefore the webhook's HMAC segment. A
-    // code only; the exception itself is dropped on the floor.
+    // The thrown error's message can carry the request URL and its auth context. A code only; the
+    // exception itself is dropped on the floor.
     return { ok: false, code: "transport_error", blocked: false };
   }
 
@@ -1127,8 +1123,8 @@ export const claimLine = internalMutation({
 });
 
 /** The submit outcome onto the row. A CODE reaches `failureReason` — never provider prose, never
- *  the prompt, never the narration (CLAUDE.md §4). No fal URL is stored: plan 20-06 re-derives the
- *  webhook segment from the jobId, so there is nothing to leak. */
+ *  the prompt, never the narration (CLAUDE.md §4). No provider URL is stored: the poller re-derives
+ *  everything it needs from the jobId and the stored request id, so there is nothing to leak. */
 export const recordSubmission = internalMutation({
   args: {
     jobId: v.id("mediaJobs"),
