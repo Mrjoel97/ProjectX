@@ -168,6 +168,36 @@ describe("the cron actually registers the sweep", () => {
     expect(s).toMatch(/internal\.reliabilitySweep\.runSweep/);
   });
 
+  // The cron is registered and fires; the ARMING GATE decides whether it writes. Both arms are
+  // asserted because "ships dormant" is a claim about production behaviour, and an unproven guard
+  // is exactly the vacuous pattern this phase kept finding (25.1-02, -03, -05, -06).
+  test("runSweep is DORMANT unless RELIABILITY_SWEEP_ARMED is exactly \"1\"", async () => {
+    const t = harness();
+    const now = Date.now();
+    const planId = await seedPlan(t, {
+      kind: "media",
+      renderStatus: "pending",
+      createdAt: now - 2 * SUBMITTED_STALL_MS,
+    });
+    const jobId = await seedJob(t, planId, { updatedAt: now - SUBMITTED_STALL_MS - 1 });
+
+    // Unset: the cron still walks into the handler and returns without writing.
+    vi.stubEnv("RELIABILITY_SWEEP_ARMED", "");
+    await t.mutation(internal.reliabilitySweep.runSweep, {});
+    expect((await getJob(t, jobId))?.status).toBe("submitted");
+    expect(await watchdogNotifications(t)).toHaveLength(0);
+
+    // Any other value is still dormant — only the exact literal arms it.
+    vi.stubEnv("RELIABILITY_SWEEP_ARMED", "true");
+    await t.mutation(internal.reliabilitySweep.runSweep, {});
+    expect((await getJob(t, jobId))?.status).toBe("submitted");
+
+    // Armed: the same stuck row now terminalizes.
+    vi.stubEnv("RELIABILITY_SWEEP_ARMED", "1");
+    await t.mutation(internal.reliabilitySweep.runSweep, {});
+    expect((await getJob(t, jobId))?.status).toBe("failed");
+  });
+
   test("crons.ts holds exactly FIVE jobs — a sixth is a deliberate edit here", () => {
     // A COUNT, not a ">= 1". A cron is unattended spend and unattended writes; the number of them
     // is a fact worth having to change on purpose.

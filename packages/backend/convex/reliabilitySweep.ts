@@ -338,6 +338,20 @@ export const sweepStuckPlans = migrations.define({
 export const runSweep = internalMutation({
   args: {},
   handler: async (ctx): Promise<null> => {
+    // ARMING GATE — owner decision, 2026-08-21, first production promotion of this watchdog.
+    //
+    // This sweep WRITES FAILURE TERMINALS to live rows, and it has never run against a real
+    // deployment: every threshold in this file was calibrated against fixtures. A false positive
+    // here does not fail safe — it marks a healthy, slow-but-progressing Sora render as failed,
+    // which manufactures exactly the silent-inconsistency this phase existed to remove.
+    //
+    // So it ships dormant and is armed deliberately, after a real render has been watched end to
+    // end in production:
+    //     cd packages/backend && npx convex env set --prod RELIABILITY_SWEEP_ARMED 1
+    // Unset (or any other value) = the cron still fires on its 30-minute interval, walks in here,
+    // and does nothing. Remove this gate once the first armed passes are observed to be clean.
+    if (process.env.RELIABILITY_SWEEP_ARMED !== "1") return null;
+
     await migrations.runOne(ctx, internal.reliabilitySweep.sweepStuckMediaJobs, { reset: true });
     await migrations.runOne(ctx, internal.reliabilitySweep.sweepStuckPlans, { reset: true });
     return null;

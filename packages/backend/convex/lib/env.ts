@@ -125,6 +125,19 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
     whatBreaks: "Web research; the cockpit falls back to asking the user.",
   },
 
+  // ── Reliability ─────────────────────────────────────────────────────────────────────────────
+  {
+    // The arming gate on `reliabilitySweep.runSweep`, added for the 2026-08-21 production
+    // promotion. UNSET IS THE SAFE STATE and the deliberate default: the cron still fires every 30
+    // minutes, walks into the handler, and returns without writing. Set to "1" only after a real
+    // render has been watched end to end in production, because an unproven watchdog that
+    // terminalizes a healthy slow render manufactures the very defect it was built to catch.
+    name: "RELIABILITY_SWEEP_ARMED",
+    tier: "feature",
+    whatBreaks:
+      "Nothing, while unset — the stuck-work watchdog stays dormant and stalled rows keep needing a human to notice them. Set it to `1` to arm the sweep.",
+  },
+
   // ── Media ───────────────────────────────────────────────────────────────────────────────────
   {
     name: "MEDIA_RENDER_SECRET",
