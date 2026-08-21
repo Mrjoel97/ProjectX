@@ -637,6 +637,11 @@ describe("SC#3 — the call tree reconstructs from audit.by_correlation(rootRequ
       "https://pricing.example/chicago-session-rates",
       "https://market.example/trainer-benchmarks",
     ];
+    // D11 (25.1-05): staged so the LANDING runs too. Without this the plan row never receives the
+    // sources, and "no URL reached the audit plane" would be true of a run in which no URL went
+    // anywhere at all — the vacuous half of a §4 assertion. The row check at the end of this test
+    // is what makes the scan below mean something.
+    await t.run((ctx) => ctx.db.patch(planId, { kind: "memo", status: "collecting", body: "" }));
     await t.action(internal.dispatch.__runSpecialistWithScript, {
       ...RESEARCH,
       planId,
@@ -687,6 +692,12 @@ describe("SC#3 — the call tree reconstructs from audit.by_correlation(rootRequ
         }
       }
     }
+
+    // THE §4 BOUNDARY IN ONE LINE (D11). The URLs DID travel this run — they are on the plan row
+    // the memo card reads, which is the content plane — and not one of them reached an audit
+    // payload. Delete this and the scan above passes just as happily on a run that retrieved
+    // nothing; move `sources` into any payload and the scan above goes red.
+    expect((await readPlan(t, planId))?.sources?.map((s) => s.url)).toEqual(urls);
   });
 });
 
@@ -1349,6 +1360,69 @@ describe("runResearch — the scheduled entry point inherits every guard (16-06 
     expect(res.retrievedAt).toBeGreaterThan(0);
     expect(res.spentCents).toBeGreaterThan(0);
     expect((await readSteps(t)).map((s) => s.tool)).toContain("dispatchResearch");
+  });
+
+  // D11 (25.1-05): the sources were retrieved, deduped, billed for and written into the VAULT
+  // document — and then dropped one hop short of the row the user actually reads. The memo card
+  // could show findings it could not attribute to anything.
+  //
+  // MUTATION that turns this RED: drop `sources` from `dispatchAndLand`'s landing object (i.e.
+  // re-introduce the exact defect), or drop the `ctx.db.patch` in `landSpecialistResult`.
+  test("a research landing carries its sources onto the plan row — and none when nothing was retrieved", async () => {
+    const { t, planId } = await setup();
+    t.registerComponent("workflow", workflowSchema, workflowModules);
+    t.registerComponent("workflow/workpool", workpoolSchema, workpoolModules);
+    // The row the dispatcher lands on: `landSpecialistResult` writes only a `collecting` memo.
+    await t.run((ctx) => ctx.db.patch(planId, { kind: "memo", status: "collecting", body: "" }));
+
+    const before = Date.now();
+    await t.action(internal.dispatch.__runSpecialistWithScript, {
+      ...RESEARCH,
+      planId,
+      primary: searchedSteps(REPLY, [
+        "https://pricing.example/chicago-session-rates",
+        "https://market.example/trainer-benchmarks",
+      ]),
+      research: true,
+    });
+
+    const plan = await readPlan(t, planId);
+    // Titles AND urls, in the order the search returned them — the card renders a title per link,
+    // so a title/url transposition or a dropped row is user-visible provenance damage.
+    expect(plan?.sources).toEqual([
+      {
+        title: "Source 0",
+        url: "https://pricing.example/chicago-session-rates",
+        retrievedAt: expect.any(Number),
+      },
+      {
+        title: "Source 1",
+        url: "https://market.example/trainer-benchmarks",
+        retrievedAt: expect.any(Number),
+      },
+    ]);
+    // A real stamp from THIS run, not a zero or a legacy default.
+    expect(plan?.sources?.[0]?.retrievedAt).toBeGreaterThanOrEqual(before);
+
+    // Pitfall-6 class (the `recipientNames`/staged-event precedent): sources surviving a "start
+    // over" would attribute the NEXT memo in this thread to pages nobody read for it.
+    await t.mutation(internal.plans.resetPlan, { planId });
+    expect((await readPlan(t, planId))?.sources).toBeUndefined();
+
+    // …and a run that retrieved nothing leaves the field ABSENT rather than an empty array — the
+    // card renders the references block on PRESENCE, so an empty array is a heading over nothing.
+    const { t: t2, planId: planId2 } = await setup();
+    await t2.run((ctx) => ctx.db.patch(planId2, { kind: "memo", status: "collecting", body: "" }));
+    await t2.action(internal.dispatch.__runSpecialistWithScript, {
+      ...RESEARCH,
+      planId: planId2,
+      primary: [REPLY_STEP],
+    });
+    const bare = await readPlan(t2, planId2);
+    expect(bare?.body, "the landing did not run at all — the assertion below is vacuous").toContain(
+      REPLY,
+    );
+    expect(bare?.sources).toBeUndefined();
   });
 
   // 22.1: the search COUNT was computed, billed against and audited, then dropped one function
