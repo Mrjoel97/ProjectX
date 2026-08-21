@@ -95,6 +95,56 @@ export default defineSchema({
     .index("email", ["email"])
     .index("phone", ["phone"]),
 
+  // BETA-01 admission plane. These two tables are the ONLY tenant-less rows outside the
+  // Convex Auth spread, and that is deliberate: they exist to decide whether a tenant may be
+  // created at all, so they cannot be keyed by one. `25-03`'s isolation gate classifies them as
+  // auth-plane exceptions for exactly this reason — an index here leading with `tenantId` would
+  // be an index on a column that must not exist.
+  //
+  // Neither table ever holds tenant-owned content: an email, a self-asserted name, one free-text
+  // referral line, and the redemption facts. No plan, no message, no document.
+  betaWaitlist: defineTable({
+    /** Normalized: trim + lowercase. The idempotency key — one row per address, forever. */
+    email: v.string(),
+    name: v.optional(v.string()),
+    /** "how did you hear about us" — bounded, self-asserted, never used for authorization. */
+    referral: v.optional(v.string()),
+    status: v.union(v.literal("pending"), v.literal("approved")),
+    requestedAt: v.number(),
+    approvedAt: v.optional(v.number()),
+  })
+    .index("by_email", ["email"])
+    .index("by_status_requested", ["status", "requestedAt"]),
+
+  // ONE invite per approved address. Single-use, email-matched at first redemption, then bound
+  // forever to the provider-qualified subject that redeemed it.
+  betaInvites: defineTable({
+    /** Normalized, and the FIRST-redemption matching key only — never the authorization root. */
+    email: v.string(),
+    /**
+     * The raw code, not a digest.
+     *
+     * A digest would be the reflex, and it buys nothing here while costing the one property the
+     * owner surface depends on: `invites.approve` must be replay-safe and hand back the SAME
+     * `/signup?invite=…` link on every call (25-02), which a digest cannot do. And the code is
+     * not a credential on its own — it admits nobody without a provider-VERIFIED matching email,
+     * so a leaked code is not a leaked account. What actually protects admission is the email
+     * binding in `auth.ts`, not the storage form of this string.
+     * ponytail: raw code + email binding; move to a digest only if the code ever becomes
+     * sufficient on its own (i.e. if email matching is ever dropped).
+     */
+    code: v.string(),
+    createdAt: v.number(),
+    /** IMMUTABLE once written. The three redemption fields are only ever patched together. */
+    redeemedAt: v.optional(v.number()),
+    /** `${provider.id}|${oauthSubject}` — provider-qualified, so the same `sub` on two providers
+     *  is two different subjects. NOT the typed email, which is self-asserted for password. */
+    redeemedSubject: v.optional(v.string()),
+    redeemedUserId: v.optional(v.id("users")),
+  })
+    .index("by_email", ["email"])
+    .index("by_code", ["code"]),
+
   // Insert-only audit log. `payload` holds refs/hashes ONLY — never raw content
   // (redaction-safe). The audit module exposes no patch/replace/delete (see CLAUDE.md).
   audit: defineTable({
@@ -177,10 +227,38 @@ export default defineSchema({
       v.literal("rolled_back"),
       v.literal("archived"),
     ),
-    // Phase 23 may append "agent" here without granting it activation.
-    author: v.union(v.literal("system"), v.literal("user")),
+    // Phase 23 (SKILL-02) appended "agent". Appearing here grants NO activation path: an agent row
+    // is minted `candidate` by one narrow internal writer, and the only transition to `active` is
+    // an ownerMutation that demands current passing eval evidence AND writes `ownerApproval` in the
+    // same transaction. Widening this union is a data-vocabulary change, not a capability change.
+    author: v.union(v.literal("system"), v.literal("user"), v.literal("agent")),
     // Required when author === "user"; derived from authenticated identity, never from args.
     authorUserId: v.optional(v.id("users")),
+    // ---- Agent provenance (Phase 23). OPTIONAL AT SCHEMA LEVEL so every legacy and Phase-21
+    // system/user row stays valid with no migration and no backfill; the ALLOWED cross-field
+    // combinations are pinned behaviourally in `skills.test.ts`, not by the validator. A schema
+    // that could express "required only when author === agent" does not exist here, and inventing
+    // a discriminated union would invalidate every row already written.
+    //
+    // All three are SERVER FACTS. The model supplies none of them: `authorAgentId` is the code-owned
+    // `EXECUTIVE_AGENT_AUTHOR_ID` constant, and the thread/turn refs come from the trusted turn
+    // lineage the runtime already holds — never from tool arguments. Refs only (CLAUDE.md §4): no
+    // prompt, no draft, no tool call, no model output travels in these fields.
+    authorAgentId: v.optional(v.string()),
+    sourceThreadId: v.optional(v.string()),
+    sourceTurnId: v.optional(v.string()),
+    // ---- The owner's approval of ONE agent candidate, bound to ONE eval run (Phase 23).
+    // Written ONLY by the agent-activation transaction, in the same patch as `status: "active"` —
+    // so an active agent row carrying no approval is impossible by construction rather than by
+    // policy, and a failed mutation can leave neither half behind. Three refs and a timestamp; no
+    // rationale, note, or summary field exists for a model to have influenced.
+    ownerApproval: v.optional(
+      v.object({
+        ownerUserId: v.id("users"),
+        approvedAt: v.number(),
+        evalRunId: v.string(),
+      }),
+    ),
     basedOnScope: v.union(v.literal("global"), v.literal("tenant")),
     basedOnName: v.string(),
     basedOnVersion: v.number(),
@@ -197,8 +275,18 @@ export default defineSchema({
     .index("by_tenant_name_version", ["tenantId", "name", "version"])
     // The tenant's own bounded authoring history.
     .index("by_tenant_createdAt", ["tenantId", "createdAt"])
+    // The owner's rollback choices. Eligibility is INDEXED, not filtered after a `.take()` — a
+    // tenant with more candidates than the take-limit would otherwise crowd their own recovery
+    // baseline out of the window and be offered nothing (observed live at 12 versions, 21-08).
+    .index("by_tenant_name_rollbackEligible", ["tenantId", "name", "rollbackEligible"])
     // The bounded owner review queue across tenants.
-    .index("by_status_createdAt", ["status", "createdAt"]),
+    .index("by_status_createdAt", ["status", "createdAt"])
+    // Phase 23: exact recovery of "did THIS agent turn already mint a row here?" — the idempotence
+    // read the candidate writer does before inserting, and the refs-only live inspection path.
+    // TENANT-SCOPED FIRST on purpose: a thread/turn-only index would answer the same question
+    // ACROSS tenants and hand any caller holding a turn ref a cross-tenant existence oracle. It is
+    // an index, not a public query; no read surface is opened by adding it.
+    .index("by_tenant_source_turn", ["tenantId", "sourceThreadId", "sourceTurnId"]),
 
   // "Routine v0" (Phase 21, SKILL-01): saved cockpit prompt text, INERT AT REST.
   //
@@ -296,6 +384,21 @@ export default defineSchema({
     // feedback rating is attributable to the exact skill version that produced this response.
     // Optional → no migration (the threadId/inReplyTo copy precedent).
     skillVersion: v.optional(v.number()),
+    /**
+     * DLVR-02: which mailbox delivers this row. Copied from the plan at executePlan, exactly like
+     * `skillVersion` above.
+     *
+     * OPTIONAL, AND ABSENCE MEANS GOOGLE. That is what makes this a widening with no migration and
+     * no backfill: every row written before 25-05 predates the second provider, and every one of
+     * them was a Gmail send. `delivery.send` reads `mailProvider ?? "google"` and legacy rows keep
+     * delivering unchanged.
+     *
+     * NOTE this is NOT a discriminator on the token tables — `gmailTokens` and
+     * `microsoftCalendarTokens` stay two separate tenant-keyed tables (see the note beside them,
+     * and ADR-018). This field says which mailbox a MESSAGE goes out through, nothing about
+     * credentials.
+     */
+    mailProvider: v.optional(v.union(v.literal("google"), v.literal("microsoft"))),
     createdAt: v.number(),
   })
     .index("by_tenant", ["tenantId"])
@@ -329,6 +432,18 @@ export default defineSchema({
     subject: v.optional(v.string()),
     bodyIntent: v.optional(v.string()), // the user's goal → drafter turns it into `body`
     body: v.optional(v.string()), // drafted wording (filled at "ready")
+    // 25.1-05 (D11): the web pages a RESEARCH specialist actually retrieved, landed with the memo
+    // body so the card can attribute its own findings. CONTENT-PLANE ONLY (§4): a URL may reach
+    // this row, the vault document and the card — NEVER an `audit`/`deadLetters`/`telemetry`
+    // payload, which get `sourceCount`. Written ONLY by `landSpecialistResult`, by direct
+    // `ctx.db.patch` and deliberately NOT through `patchPlan`: these are provenance, and nothing
+    // reachable from the MODEL may claim a page was read (the `calendarEventId` rule). They come
+    // from the search tool's own RESULT parts (`sourcesFromToolOutput`), never from model prose.
+    // `retrievedAt` is per-source so a future per-result stamp needs no migration; today every
+    // entry carries the landing time. Optional → no migration; `resetPlan` clears it.
+    sources: v.optional(
+      v.array(v.object({ title: v.string(), url: v.string(), retrievedAt: v.number() })),
+    ),
     // Generated outbound attachments (CKPT-02). Inline on the plan = pre-approval source of truth
     // for the PLAN card; executePlan materializes attachments-table rows at fan-out. All optional → no migration.
     attachments: v.optional(
@@ -384,7 +499,15 @@ export default defineSchema({
     scheduledFunctionId: v.optional(v.id("_scheduled_functions")),
     // Phase-26 Approvals. Missing provenance on a legacy canceled row means a historical
     // scheduled cancellation; every new cancel writes the discriminator explicitly.
-    cancelKind: v.optional(v.union(v.literal("scheduled_cancel"), v.literal("discarded"))),
+    // 17-08 added `refused`: the SYSTEM stopped this act, the user did not. It is a third literal
+    // rather than a reuse of `discarded` because `approvals.ts` surfaces this value as the
+    // cancellation's provenance — reporting a provider-limitation refusal or a version conflict as
+    // a user discard would attribute the decision to the wrong actor, which is a defect class this
+    // codebase has already shipped three times. `reschedulePlan` excludes it alongside `discarded`:
+    // a refused management act is terminal, and re-arming it would re-run a write that was refused.
+    cancelKind: v.optional(
+      v.union(v.literal("scheduled_cancel"), v.literal("discarded"), v.literal("refused")),
+    ),
     canceledAt: v.optional(v.number()),
     // Delivery terminals own these counters. `counterComplete` is the honesty bit: absent/false
     // keeps legacy reads on the bounded partial projection instead of inventing exact progress.
@@ -493,6 +616,7 @@ export default defineSchema({
     // ref or a run id. Do not add them to patchPlan speculatively.
     calendarEventId: v.optional(v.string()), // the Google event ref, set on success. A ref, not content.
     mediaRunId: v.optional(v.string()), // 20-07: the media submit run — see by_media_run below
+    renderRunId: v.optional(v.string()), // 25.1-01: the RENDER run (renderReel under the retrier) — see by_render_run below
     calendarRunId: v.optional(v.string()), // the action-retrier RunId — the ONLY correlation the
     // retrier's onComplete gets on a FAILED run (it carries {runId, result} and no context).
     // ── 17-05 (ACTN-02 gap closure) the calendar_manage PROPOSAL plane ───────────────────────
@@ -524,6 +648,11 @@ export default defineSchema({
         v.literal("attendees_present"),
         v.literal("needs_inspection"),
         v.literal("not_managed"),
+        // 17-08 / ADR-023: the Microsoft cancel/delete refusal. A DISTINCT code from
+        // `provider_error` on purpose — that one means "the provider said no this time" and a card
+        // may offer a retry; this one means "we will never send this request", and the two must
+        // never render the same way.
+        v.literal("provider_unsupported"),
         v.literal("provider_error"),
       ),
     ),
@@ -737,6 +866,9 @@ export default defineSchema({
     // skill that drafted this plan, then copied onto the per-recipient `requests` rows at
     // executePlan. Optional → no migration (the sendAt/attachments precedent).
     skillVersion: v.optional(v.number()),
+    /** DLVR-02: the mailbox this plan will send through, chosen before approval and copied onto
+     *  every per-recipient `requests` row at executePlan. Optional; absence means Google. */
+    mailProvider: v.optional(v.union(v.literal("google"), v.literal("microsoft"))),
     correlationId: v.optional(v.string()), // set on executePlan (not the per-recipient cids)
     workflowId: v.optional(v.string()), // set on executePlan
     createdAt: v.number(),
@@ -754,7 +886,12 @@ export default defineSchema({
     // failing. Deliberately a SECOND column rather than a reuse of `calendarRunId` — that one is
     // calendar-named and read by `calendarComplete`; overloading it would make a media retry
     // resolvable as a calendar plan.
-    .index("by_media_run", ["mediaRunId"]),
+    .index("by_media_run", ["mediaRunId"])
+    // 25.1-01 (D2). The SAME reason a THIRD time, for the render run: `onRenderComplete` receives
+    // only {runId, result}, and this index is what lets a crashed renderReel run terminalize its
+    // own plan. A separate column again — the submit run and the render run are different
+    // lifecycles of the same plan, and each terminal must only ever resolve its own run.
+    .index("by_render_run", ["renderRunId"]),
 
   // ── Phase-3.7 inbox-briefing plane (CKPT-04) ───────────────────────────────
   // New tables only → no migration (prior-phase discipline).
@@ -1132,6 +1269,14 @@ export default defineSchema({
       // whole suite stays green. Lands in the SAME commit as its cards.tsx VERB entry, because
       // traceParity.test.ts asserts the two sets equal BOTH ways and either half alone is RED.
       v.literal("stageFinanceWrite"),
+      // Phase-23 (SKILL-02): the Executive's skill-authoring tool. A LOCAL executable tool, so
+      // `onToolExecutionStart` DOES fire and this literal IS required — without it the step insert
+      // throws inside an AI-SDK callback the SDK SILENTLY swallows, and prod loses the one trace
+      // row that tells a human the agent just wrote itself a skill. That is the loudest possible
+      // case of the swallow trap this union has already been bitten by at searchVault,
+      // evaluateBusiness and recordScorecardAnswer. Still no text field: the adaptation the model
+      // drafted has nowhere to go here, which is how CLAUDE.md §4 stays enforced on this path.
+      v.literal("authorSkillCandidate"),
     ),
     phase: v.union(v.literal("running"), v.literal("done"), v.literal("error")),
     startedAt: v.number(),
@@ -1887,19 +2032,20 @@ export default defineSchema({
   // ONE table for the job AND the asset it produces: a job yields at most one asset, so a second
   // `mediaAssets` table would be a 1:1 join forever. A new table needs no migration.
   //
-  // THERE IS NO URL FIELD ON THIS TABLE, DELIBERATELY. The webhook downloads fal's bytes and
-  // stores them via `ctx.storage`; the signed fal URL is never persisted anywhere. A signed URL in
-  // a row is both a content leak and a live credential.
+  // THERE IS NO URL FIELD ON THIS TABLE, DELIBERATELY. The landing path downloads the provider's
+  // bytes and stores them via `ctx.storage`; the signed provider URL is never persisted anywhere. A
+  // signed URL in a row is both a content leak and a live credential.
   //
   // `promptHash`, NOT the prompt. Prompt and narration text are content-plane and live on
   // `plans.shots` — this table carries refs, hashes, ids and counts only (§4).
   //
   // DELIBERATE DEVIATION from research §5.2: no stored `callbackHash` and no `by_callback` index.
-  // The webhook path segment is `${jobId}.${hmacHex(jobId, FAL_WEBHOOK_SECRET)}`; plan 20-06
-  // resolves the row with `ctx.db.normalizeId("mediaJobs", raw)` and RE-DERIVES the HMAC — exactly
-  // what `gmailAuth.verifyState` already does for the OAuth `state`, in an httpAction, in
-  // production today. Storing the digest buys nothing and costs a field plus an index.
-  // `normalizeId` returning null for a malformed or foreign-table id is the fail-closed shape.
+  // That deviation OUTLIVED its subject — the webhook whose path segment it declined to store was
+  // removed at 25.1-06 (D14) along with `FAL_WEBHOOK_SECRET`, so there is no callback digest to
+  // store at all now. Recorded rather than deleted because the reasoning still binds the next
+  // provider callback anyone is tempted to add: resolve the row from the id and RE-DERIVE, the way
+  // `gmailAuth.verifyState` has for the OAuth `state` since Phase 2. `normalizeId` returning null
+  // for a malformed or foreign-table id is the fail-closed shape.
   mediaJobs: defineTable({
     tenantId: v.string(),
     planId: v.id("plans"),
@@ -1955,6 +2101,13 @@ export default defineSchema({
     mimeType: v.optional(v.string()),
     bytes: v.optional(v.number()),
     failureReason: v.optional(v.string()), // a CODE only (the calendar.ts reasonCode idiom) — never provider prose
+    /** 25.1-03 (D5): the vault doc this job's asset was SAVED as, as a doc REF (the `asset.docId`
+     *  rule — never a URL, never bytes). Written by `mediaComplete.landResult`'s image save and
+     *  read back as its idempotency guard: set ⇒ this job's bytes are already filed, so a second
+     *  landing files nothing. Deliberately PER JOB rather than per plan — after D8 one plan can
+     *  hold several successful images, and a per-plan pointer would make the second one
+     *  unsaveable. Optional ⇒ widen-only, no migration and no backfill. */
+    vaultDocId: v.optional(v.id("vaultDocuments")),
     createdAt: v.number(),
     updatedAt: v.number(),
   })

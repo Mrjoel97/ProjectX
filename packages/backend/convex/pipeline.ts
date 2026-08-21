@@ -371,12 +371,13 @@ export const pipelineWorkflow = workflow.define({
       break;
     }
 
-    // 4. DELIVER — gmail.send owns awaiting_reauth (dead token → returns, no throw); the
-    //    workflow ends in that hold state and delivery re-fires on reconnect. Otherwise
-    //    the pipeline owns the `sent` transition + its telemetry. A 5xx throws → workflow
-    //    retries (workpool default), then onComplete → failed terminal.
+    // 4. DELIVER — DLVR-02: `delivery.send` routes on the row's `mailProvider` (absent ⇒ Google).
+    //    The chosen provider owns awaiting_reauth (dead token → returns, no throw); the workflow
+    //    ends in that hold state and delivery re-fires on reconnect. Otherwise the pipeline owns
+    //    the `sent` transition + its telemetry. A 5xx throws → workflow retries (workpool
+    //    default), then onComplete → failed terminal.
     await setStatusStep("delivering");
-    const result = await step.runAction(internal.gmail.send, { requestId });
+    const result = await step.runAction(internal.delivery.send, { requestId });
     if (!result.delivered) {
       // 19-05: this lane is the SECOND caller of gmail.send (the cockpit's deliverApprovedPlan is
       // the other), so the new `suppressed` refusal reaches it too. It is PERMANENT, unlike the

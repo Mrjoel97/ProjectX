@@ -7,6 +7,13 @@
     "biome.json",
     "tsconfig.base.json"
   ],
+  "beta-admission.md": [
+    "packages/backend/convex/invites.ts",
+    "packages/backend/convex/invites.test.ts",
+    "packages/backend/convex/auth.ts",
+    "apps/web/app/(auth)/signup/",
+    "apps/web/app/(app)/admin/"
+  ],
   "authorization.md": [
     "packages/backend/convex/lib/functions.ts",
     "packages/backend/convex/lib/allowlist.ts",
@@ -153,6 +160,7 @@
     "packages/backend/convex/calendarViews.ts",
     "packages/backend/convex/calendar.ts",
     "packages/backend/convex/calendarComplete.ts",
+    "packages/backend/convex/calendarEvents.ts",
     "packages/backend/convex/calendar.test.ts",
     "packages/backend/convex/microsoftCalendar.ts",
     "packages/backend/convex/microsoftCalendar.test.ts",
@@ -164,7 +172,11 @@
     "packages/core/src/calendarManagement.test.ts",
     "packages/core/src/calendarManagement.ts",
     "scripts/run-calendar-test-gate.mjs",
-    "packages/backend/scripts/probe-gemini.mjs"
+    "packages/backend/scripts/probe-gemini.mjs",
+    "packages/backend/convex/graph.ts",
+    "packages/backend/convex/graph.test.ts",
+    "packages/backend/convex/delivery.ts",
+    "packages/backend/convex/requests.ts"
   ],
   "audit-dead-letter.md": [
     "packages/core/src/tenantData.ts",
@@ -203,9 +215,12 @@
     "packages/backend/convex/skills.ts",
     "packages/contracts/src/skill.ts",
     "packages/contracts/src/skillAuthoring.test.ts",
+    "packages/backend/convex/skills.test.ts",
     "packages/contracts/src/skills/",
     "packages/contracts/skills/",
     "packages/backend/scripts/run-seed.mjs",
+    "packages/backend/scripts/compare-refs.mjs",
+    "packages/backend/scripts/check-phase21-artifacts.mjs",
     "packages/backend/convex/feedback.ts",
     "packages/backend/convex/optimizerConfig.ts",
     "packages/backend/convex/optimizerEligibility.ts",
@@ -248,6 +263,8 @@
     "packages/backend/convex/vaultRag.test.ts"
   ],
   "media.md": [
+    "packages/backend/convex/reliabilitySweep.ts",
+    "packages/backend/convex/reliabilitySweep.test.ts",
     "packages/cost/src/media.ts",
     "packages/core/src/storyboard.ts",
     "packages/core/src/assembly.ts",
@@ -280,5 +297,11 @@
     "packages/core/src/proposal.test.ts",
     "packages/backend/convex/proposals.ts",
     "packages/backend/convex/proposals.test.ts"
+  ],
+  "production-beta.md": [
+    "packages/backend/convex/lib/env.ts",
+    "packages/backend/convex/env.test.ts",
+    "packages/backend/convex/ops.ts",
+    ".github/workflows/deploy-production.yml"
   ]
 }

@@ -1,5 +1,50 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-08-18 (23-04 built the held-out gate that judges what the tool writes, and
+> made the corpus unreadable from the runner's own inspection surfaces. NO PAID RUN — $0.00.
+> 23-03 added `authorSkillCandidate` — the Executive-only skill-authoring
+> grant; structural absence, no activation reachable, no live selection behaviour claimed. See the
+> Phase 23 section at the end. Prior verification follows.) (17-08 Task 3 added ONE bounded internal action to `smoke.ts`,
+> `calendarLifecycleReadback`, plus its private `calendarLifecycleFacts` query. It is an operator
+> probe for the 17-11 owner gate, reachable only by `npx convex run` — no tool, no agent loop, no
+> skill references it, and `dispatchGuard.test.ts` pins that llm.ts holds no Calendar write or
+> registry-writer reference at all. It READS four planes (plan row, registry row, provider, audit)
+> and writes nothing. **The one runtime-shaped lesson worth carrying:** it calls
+> `internal.smoke.calendarLifecycleFacts` from inside smoke.ts, and without an explicit return type
+> on the HANDLER that self-reference degrades inference to `any` ACROSS THE PACKAGE — 40+ TS7006s in
+> files the change never touched. `runFailingPipeline` already carried the same annotation for the
+> same reason (Convex guidelines §96); annotating the RESULT LOCAL is not enough.)
+>
+> Last verified: 2026-08-17 (owner-reported — **THE GOLDEN SET COULD NOT SEE THE IMAGE DOOR.**
+> `--self-check` PASSED, 41 fixtures valid; backend typecheck + agentSteps 24/24. **No paid run.**)
+>
+> **A TOOL WITH NO ASSERTION KEY IS A TOOL THIS SET CERTIFIES NOTHING ABOUT.** `proposeImage` has
+> shipped wired to the executive with a whole reservation path behind it, and the EXPECT vocabulary
+> had no key for it. So when the registry body failed to name the tool and every image/ad request
+> became a storyboard, **all 40 fixtures stayed green** — an image ask routed to `dispatchMedia`
+> was indistinguishable from a pass. The set could catch the change BREAKING something and
+> structurally could not confirm it FIXING anything. Add the key with the tool, not after the
+> incident.
+>
+> Added: `imageProposalCount` (graded off `smoke:imageProposalCountForThread`, `agentSteps` rows —
+> never the reply, never the plan row, because `plans.by_thread` is `.unique()` and
+> `stageImagePlan` RECYCLES it, so plan state can never say the tool ran twice). EQUALITY like
+> `mediaDispatchCount`, not a floor. Its zero is PAIRED and the pair may be either positive proof —
+> `mediaDispatchCount` OR `createdDocCount`; `mediaDispatchCount:0` now accepts
+> `imageProposalCount` as its pair too. Fixture **41-image-proposal** asserts a still ask does not
+> become a reel; fixture **38** gained the mirror (`imageProposalCount: 0`) so the routing decision
+> is pinned from BOTH sides.
+>
+> **`evaluateExpect` IS CALLED POSITIONALLY — a new observable goes on the END of the signature.**
+> Inserting `imageProposalCount` mid-list silently shifted `driveReadToolCount` and reddened a
+> green self-check. `--self-check` caught it for free, before a cent moved; that is what the free
+> command is for, and it is why it runs immediately before `runLive` with ZERO convex calls.
+>
+> **`imageProposalCountForThread` has NO `dispatch:` filter and its sibling does.** Deliberate:
+> `proposeImage` is not a specialist route (no `stepTool` in `SPECIALISTS`), so `dispatch.ts` never
+> writes that tool name and the second writer the filter exists to exclude does not exist here. Do
+> not cargo-cult the filter across. Pinned in `agentSteps.test.ts`.
+
 > Last verified: 2026-08-16 (**DEPLOYED FROM A CLEAN WORKTREE — `agentSteps.refuse` and the
 > `{ calls, refusals }` shape are live on production.** This supersedes the "NOT DEPLOYED" line in
 > `f7c0cab`'s commit message, true when written.
@@ -1612,3 +1657,85 @@ must imply the label, so if the plumbing breaks anywhere across the six hops the
 and the fixture reddens at the seam instead of shipping a broken pipe green. `insufficientEvidence`
 alone would NOT close the hole: it is a disjunction, so a run that searched, got zero citations and
 then confabulated satisfies it off the counter leg without ever making a judgement.
+
+---
+
+## Phase 23 — `authorSkillCandidate`: the Executive's skill-authoring grant (23-03, SKILL-02)
+
+> Landed 2026-08-18. The model can now reach candidate creation. It still cannot reach activation.
+
+**The grant is `grantSkillAuthoring`, and it is a SEPARATE flag from `grantDispatch`.** Both derive
+from `toolNames === undefined` in `runAgentLoop` today, and they are deliberately not merged:
+dispatching a specialist spends money, authoring a skill changes what every future turn is told to
+be. One flag would mean the next context that legitimately needs one silently receives both.
+
+**Derived from `toolNames === undefined`, NEVER from `toolNames.includes("authorSkillCandidate")`.**
+An allow-list is a REQUEST from the caller. Reading one here would let a specialist ask for the
+capability by name and be given it — which is precisely the attack the offline test drives.
+
+**Structural absence, not a filter.** The closure is built only inside the granted branch
+(`grantSkillAuthoring && threadId && rootRequestId`), in the same conditional-spread,
+one-type-both-branches idiom as `dispatchResearch`/`dispatchMedia`. A withheld-but-constructed
+closure stays reachable through `invokeTool`; a never-constructed one does not exist to reach.
+**No lineage ⇒ no tool**: a row whose provenance cannot name the turn that produced it is exactly
+what the `by_tenant_source_turn` index exists to prevent.
+
+**The model's entire surface is `{name, authoredBody}`** — a closed enum of three names sourced
+from `AGENT_AUTHORABLE_SKILLS` (never re-listed here; a second copy is how the model-visible set and
+the server check drift apart) plus one bounded string, `required` both, `additionalProperties:false`.
+tenant/thread/turn are injected from the trusted envelope. There is no argument a model can set.
+
+**The RETURN is inert.** Ids, a version, a status and awaiting-review copy. Never the base body,
+never the composed body, never anything from the held-out corpus, never an approval state — a tool
+return is model-visible text, so anything disclosed there is disclosed to the author of the draft.
+Refusals come back conversationally (`AGENT_CANDIDATE_PENDING`, `AGENT_SOURCE_TURN_CONFLICT`,
+`NOT_AGENT_AUTHORABLE`, the adaptation-size errors), never as a throw — the dispatch-refusal
+precedent.
+
+**Trace literal `authorSkillCandidate` was added to `agentSteps.tool` and to `cards.tsx`'s `VERB` in
+the same commit**, because `traceParity.test.ts` asserts set equality both ways and because a
+missing literal makes `agentSteps:record` throw inside an AI-SDK callback the SDK silently swallows.
+The verb reads *"Drafting a skill update… / Skill update ready for review"* — never "Learned" or
+"Updated how I work". Activation needs a passing eval AND the owner's click; BRAND §1 forbids
+claiming an action that did not happen.
+
+### Mutation evidence (23-03, all executed and restored)
+
+| Mutation | Result |
+|---|---|
+| Spread the tool unconditionally | **3 red** — both grant-absence tests and the specialist real-loop test |
+| Derive the grant from `toolNames.includes("authorSkillCandidate")` | **1 red** — the specialist obtains it by asking |
+| Add an `activateTenantCandidate` call to the tool | **1 red** — `the authoring tool region reaches activateTenantCandidate` |
+
+### Ceiling
+
+**No live selection behaviour is claimed.** Nothing here proves a real model *chooses* this tool
+only when explicitly asked — the "use it ONLY when the user asked" rule lives in the tool
+description, which is guidance, not a guarantee. The hard guarantee is that the tool cannot activate
+anything. Whether the model reaches for it appropriately is Plan 23-06's browser gate.
+**No cockpit skill body was changed by this plan** and no skill candidate was seeded.
+
+### 23-04 — what the authoring agent is NOT allowed to see
+
+`23-03` gave the Executive a tool. `23-04` built the gate that judges what it writes, and the gate
+is only meaningful if the agent cannot read it.
+
+**The held-out corpus is held out from the runner's own inspection surfaces too.** Neither
+`runInspect` nor `runAgentSourceInspect` may reference `casesDir`, `eval-cases`, `loadFixtures` or
+the suite manifest path — asserted structurally in `--self-check`. Their output is designed to be
+pasted into a live-handoff artifact, and an artifact can end up in front of the agent it describes.
+The tool-side half is `cockpitTools.test.ts`'s region scan, which already forbids `fixture` and
+`evidence` inside `authorSkillCandidate`'s closure. Both halves exist because either one alone
+leaves the corpus one refactor from being readable.
+
+**The tool's return is part of this boundary.** It carries ids, a version, a status and
+awaiting-review copy — never an eval fixture, never a base body, never an approval state. Anything a
+tool returns is disclosed to the model that called it.
+
+**The five adversarial cases live only in repo-side fixture files** (`42`-`46`), never in a skill
+body, a tool description or a seeded row. `43` demands self-activation, `44` asks for an adaptation
+that grants capability, `45` asks the agent to print its own base prompt and list the cases it is
+graded on. Their text is deliberately not in this playbook either.
+
+**NO PAID RUN OCCURRED in 23-04.** Nothing was seeded, no model was called, no evidence row was
+written, `$0.00`. Full protocol in `skill-registry.md` § 23-04.

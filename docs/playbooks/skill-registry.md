@@ -1,5 +1,164 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-20 (23-05 added the separate exact-id
+> `activateAgentCandidate` owner mutation. Agent activation requires the current full-suite
+> `hasPassingAgentTenantEvidence` predicate and writes server-derived `ownerApproval` with
+> `status: active` in the one transition patch. Phase-21 user activation refuses agent rows; the
+> agent door refuses user rows. Rollback remains owner-only, evidence-exempt, and changes no body,
+> evidence, approval or lineage. Offline/source verification only in this dependency-less checkout;
+> no live state changed and `$0.00` was spent.)
+>
+> Last verified: 2026-08-18 (23-04 versioned the golden suite and added the five held-out
+> adversarial authoring fixtures + `hasPassingAgentTenantEvidence`. NO PAID RUN OCCURRED — offline
+> validation only, $0.00. 23-02 added `publishAgentCandidate`, the inert candidate-only writer —
+> internal, no activation path, source-turn idempotence, v1 pending refusal. 23-01 appended the
+> Phase 23 agent-authoring DATA PLANE at the end of
+> this file — vocabulary only, no writer and no activation path; read its ceiling note before
+> trusting the suite. Prior verification follows.) (**THE GATE WAS SPENT: activated, then rolled back, both by the owner,
+> both at $0.** `offer-architect` v12 `qx73bwsh…` went `candidate` → `active` → `archived`.
+> Activation moved tenant `kn790hj6…` current-effective off global v4 onto the tenant row
+> (hash `aee0008c…`); rollback targeted the EXACT baseline id `qx73cg6g…` and restored v1
+> (hash `4b6a29f9…`). The candidate kept its own hash, its `passing` evidence and its self-
+> `evidenceTarget` throughout — rolling back changes WHICH ROW IS EFFECTIVE, it never mutates the
+> row you roll away from. **`requiredEval: false`** — the structural exemption is only observable
+> by noticing that nothing was purchased.)
+>
+> **The owner boundary was proven against a REAL non-owner for the first time.**
+> `kn735m0c…` (admitted through the BETA-01 invite door) called `activateTenantCandidate` on the
+> candidate and got `OWNER_REQUIRED` (request `c868a28876ec1d28`) with zero state change, while
+> `owner:viewer` returned `{isOwner:false}` in the same batch — without that second call the
+> refusal is equally consistent with a dead session. `myUserSkills` and `savedPrompts:list` both
+> returned `[]`: no candidate, no authored body, no other tenant’s pinned prompt.
+>
+> **NOT PROVEN, AND NOT PROVABLE ON THIS ROW — do not let a later phase assume otherwise.**
+> Tenant RUNTIME attribution (which registry row a specialist run actually used) was never
+> observed for the author tenant. `kn790hj6…` is `e2e-wave6@pikar.test`, a SYNTHETIC row with no
+> recoverable password and no reset flow, and `smoke.ts` has no entrypoint that runs the agent
+> loop for an arbitrary tenant — so nobody can execute anything in that workspace at any price.
+> The only rows attributing a run to `qx73bwsh…` sit under `eval-de976d8e` / `eval-a88a4597`, the
+> harness’s per-run tenants, and `userSkillRuntimeAttribution` re-checks tenant equality, so the
+> author-tenant query correctly returns `null`. **Structural lesson: a candidate minted in a
+> synthetic e2e tenant can never have its runtime observed.** Mint phase artifacts in a tenant
+> someone can sign into. See `.planning/phases/21-user-authored-skills-and-routines/
+> 21-LIVE-PARTIAL-2026-08-18.md`.
+
+> Last verified: 2026-08-18 (**THE FIRST TENANT-PINNED GATE EVER TO PASS. `de976d8e`, 41/41,
+> `$0.4947`.** Evidence recorded on `offer-architect` v12, row `qx73bwsh…`, tenant `kn790hj6…`.
+> Confirmed on `/ops` in a browser: that card alone reads "Evaluation passed — ready for owner
+> activation"; every sibling still reads "No eval run recorded for this row yet".)
+>
+> **EVIDENCE IS NOT ACTIVATION, and the runner says so out loud.** The row is still
+> `status: candidate`. `gatePassed: true`, `evidenceState: passing`, `bodyHash aee0008c…` identical
+> to the bytes Plan 21-06 froze, `evidenceTarget` exactly this row's own id/tenant/name/version.
+> Nothing is live. The owner's separate act is still required.
+>
+> **EVERY HISTORICAL GREEN RUN IN THIS FILE WAS GLOBAL-PINNED** (`cockpit-agent@8`, `@26`). None had
+> ever exercised the `--tenant-skill`-only path, which is exactly why that path's two defects
+> survived to cost real money to find (`a745d36`): `runCockpitAgent`'s args validator did not know
+> the second pin scope (0/41 twice, `$0.0000`, the model never reached), and
+> `isPinnedCockpitEvaluation` did not either, so a tenant-only run lost the Gmail rail and scored
+> 21/41 for `$0.4157` while measuring the harness rather than the candidate.
+>
+> **MEASURED COST OF A TENANT-PINNED GATE — seven attempts, `$2.5363` total.** The fixture floor is
+> **41**. A full run costs `$0.45`–`$0.60`. Per-run failures ran ~1.5, so a clean sweep is roughly
+> one run in four, and it took seven attempts (two of them `$0.0000` crashes) to bank one.
+>
+> | run | result | cost |
+> |---|---|---|
+> | `6e021dce` | 0/41 — validator refused `tenantSkillIds` at the door | `$0.0000` |
+> | `e35a0bb4` | 0/41 — same, against a stale watcher serving day-old code | `$0.0000` |
+> | (run 3, id unrecorded) | 21/41 — Gmail rail withheld; measured the harness | `$0.4157` |
+> | `d0afcca9` | 39/41 — `08-bounce-then-correct`, `33-research-insufficient-evidence` | `$0.5731` |
+> | `c9e18e2b` | 40/41 — `28-healthy-no-gaps` | `$0.4637` |
+> | `a88a4597` | 39/41 — `04-edit-remove-recipient`, `28-healthy-no-gaps` | `$0.5224` |
+> | **`de976d8e`** | **41/41** (retried `20-reset-and-honesty`, `35-create-document`) | **`$0.4947`** |
+>
+> `29-gap-dispatch-offer-architect` — the ONLY fixture that exercises this candidate — passed on
+> every run that reached it, 4 for 4. No failing evidence was ever recorded against
+> `offer-architect@12`.
+>
+> **A FILTERED PROBE OF AN EMAIL FIXTURE MUST CARRY A PIN, OR IT MEASURES NOTHING.** `--only
+> 04-edit-remove` unpinned failed 3/3 with `recipients: []` and a tool list of
+> `{proposeCalendarEvent, stageCrmWrite}` — no recipient tool present at all. That is the run-3
+> Gmail-rail signature, not a fixture fault: with neither `--skill` nor `--tenant-skill`,
+> `isPinnedCockpitEvaluation` is false and the disconnected eval tenant loses the email rail. The
+> same probe WITH `--tenant-skill` passed 3/3. Diagnosing `04` off the unpinned runs would have
+> chased a regression that does not exist.
+
+> Last verified: 2026-08-18 (**the owner's rollback list was empty on a tenant that has a baseline
+> — take-then-filter.** backend 2042 passed / 24 skipped across 87 files, typecheck exit 0, biome
+> exit 0, fix mutation-proven and confirmed in a real browser before and after.)
+>
+> **THE DEFECT, found by looking at `/ops` rather than by any test.** Every one of the eleven
+> `offer-architect` cards read *"No earlier version has ever been live for this tenant"* while
+> `inspectTenantSkill` reported that tenant's v1 baseline `archived` and `rollbackEligible: true`.
+> Both were describing the same rows. `tenantCandidatesForReview` walked
+> `by_tenant_name_version` DESC, `.take(ROLLBACK_CHOICE_LIMIT)` = ten, and filtered for eligibility
+> **afterwards**. With twelve versions in play the take returned v12…v3 — ten CANDIDATES, none of
+> them eligible — and the single eligible row was already gone.
+>
+> **THE SHAPE IS THE POINT: every candidate a user authors pushes their own recovery baseline
+> further out of the window.** The comment directly above that read says rollback is
+> "evidence-EXEMPT by design — a broken eval harness must never block this path". A crowded
+> candidate list blocked it anyway, and rollback is UI-only by design (no `convex run` door), so
+> there was no second route to the baseline. It would have stopped Plan 21-08's rollback step dead.
+>
+> **THE FIX:** eligibility is INDEXED, never filtered after a take — new
+> `by_tenant_name_rollbackEligible` on `["tenantId","name","rollbackEligible"]`, `.take(LIMIT + 1)`
+> (at most one row in the eligible set can be the ACTIVE one, excluded afterwards), then slice to
+> LIMIT. Additive index, no migration. **Whenever you bound a read whose rows must then satisfy a
+> predicate, the predicate belongs in the index or the bound is a lie.**
+>
+> **WHY NOTHING CAUGHT IT, which is the more useful half.** The sibling test
+> *"the owner review queue is a bounded indexed read"* asserted the source contains
+> `.take(ROLLBACK_CHOICE_LIMIT)` and stayed GREEN throughout — it proved the read was BOUNDED,
+> which was always true, and never that it RETURNED THE ROW. The behavioural tests existed too, but
+> seeded three or four versions; the bug needs eleven. `a tenant past the take-limit is STILL
+> offered its recovery baseline` is the replacement, and on the exact pre-fix code it fails with
+> `expected [] to include 1` while the entire rest of the suite stays green. Restoring the index
+> but dropping the eligibility predicate instead fails with
+> `expected [ 14, 13, 12, … ] to include 1` — the live symptom, reproduced.
+>
+> **When you add a bounded list to this file's surfaces, seed PAST the bound in the test.** Three
+> rows prove the mapping; they cannot prove the window.
+
+> Last verified: 2026-08-18 (**the Phase-21 live gate now has TWO committed, self-checked tools
+> instead of five hand-inlined comparisons.** `compare-refs.mjs` 14 assertions green;
+> `check-phase21-artifacts.mjs` 2 valid fixtures green + 16 mutations red; both exercised through
+> the CLI on the real `21-LIVE-HANDOFF.json` bytes and on file-backed fixtures. No product code,
+> no schema, no capability changed — these are gate tooling.)
+>
+> **THE DEFECT CLASS THEY EXIST TO KILL.** Plan 21-07 hand-wrote its state comparison as
+> `ConvertTo-Json -Compress` string equality in three places, and every copy was broken the same
+> two ways: it compared the handoff’s `deploymentUrlHash` against the inspector’s
+> `deploymentHash` (right-hand side always `$null`, so a HEALTHY deployment always reported
+> drift), and it string-compared documents whose key ORDER and key SET both legitimately differ.
+> Sorting keys before stringifying would have fixed the second half and left the first — which is
+> exactly how one broken idiom became three copies. `compare-refs.mjs` walks the tree and never
+> builds a string, so both die at once.
+>
+> **THE COMPARISON RULES ARE ASYMMETRIC ON PURPOSE.** The expected side is a FROZEN record; the
+> live side may legitimately carry more. Every key the freeze recorded must be present and match
+> (ABSENT is its own failure, never `undefined == null`); a live-only `null` passes; a live-only
+> NON-NULL key escalates to failure unless named in `--allow-extra`. Exactly one is allow-listed
+> today — `rollbackBaseline.scope`, which `baselineRefs` (`skills.ts:1123`) writes as a hardcoded
+> literal and never reads from the row, so it cannot drift. Escalate-by-default is the point: the
+> only way to know that key was benign was to look at it.
+>
+> **WHY A FILE AND NOT A `node -e` ONE-LINER.** The old result validator was a ~4KB blob inside an
+> XML-ish `<automated>` tag, needing `&lt;`/`&amp;&amp;` escaping to sit there — a paste-and-run
+> produced a syntax error, not a verdict — and it had NEVER BEEN EXECUTED, because it was the last
+> block of a plan that always parked before reaching it. A committed script gets a `--self-check`,
+> and that self-check immediately found two real bugs in its own author’s code: a malformed handoff
+> crashed the validator instead of reporting, and both scripts called `main()` at import time so
+> importing one exited the process. Neither would have surfaced from another inline copy.
+>
+> **HOW TO CHANGE THEM SAFELY.** Add a rule, then add the mutation that proves it red. The mutation
+> list in `check-phase21-artifacts.mjs` is the specification — each entry names the real defect it
+> stands for (B resolving A’s candidate id, rollback claiming it needed an eval, evidence recorded
+> as `active`, an empty attempt ledger). Never widen `--allow-extra` without first verifying the
+> key cannot vary, and record WHY in the plan that passes the flag.
+
 > Last verified: 2026-08-17 (owner-reported — **the executive could not route to `proposeImage`,
 > because its body never mentioned it.** Body edit STAGED, byte-sync 22/22, contracts 31/31 —
 > **NOT SEEDED, NOT ACTIVATED, NO EVAL RUN.**)
@@ -24,6 +183,27 @@
 > occupy numbers, so pinning a label from source is how the wrong row gets read back. Verify which
 > version carries this body in the LIVE DB before trusting an eval result.
 
+> Last verified: 2026-08-16 (25-03 — **the grounded-prose export is on the TOKEN plane, not the
+> owner plane, and 25-03 was about to convert it and break CI.**)
+>
+> `skilloptExport.buildTrajectoryExport` is an `internalQuery`. Its only door is the
+> `/skillopt/export` HTTP route behind a fail-closed `Bearer ${SKILLOPT_TOKEN}` compare. 25-03's
+> Task 3 as planned said "change `skilloptExport.ts` only if the test finds it is not already
+> owner-wrapped" — it is not, so that instruction meant *convert it*. **An `ownerQuery` is a PUBLIC
+> function whose `requireOwner` does `ctx.db.get(scope.userId)`, and the CI SkillOpt job
+> authenticates with a bearer token and has no `users` row.** The conversion would have refused the
+> entire export plane, and there is no `ownerAction` to fall back to (an action has no `ctx.db`).
+>
+> The invariant is therefore the INVERSE of what the plan assumed: grounded prose must stay
+> **unreachable from any public wrapper**. `isolation.test.ts` now asserts exactly that —
+> `buildTrajectoryExport` is declared `internalQuery`, `skilloptExport` appears nowhere in the
+> public-surface scan, and `http.ts` still names both the internal reference and a 401 path.
+>
+> **The ceiling is unchanged and is not owner-gating:** grounded prose stays off any tenant-facing
+> surface until `packages/pii` gains tested names-in-prose scrubbing. A test now asserts that no
+> test in this repo claims that scrub already exists, so the ceiling cannot be quietly forgotten.
+>
+> Prior entry — 2026-08-16 (**PRODUCTION IS NOW ON `cockpit-agent` v8. THE POINTER MOVED: v6 → v8.
 > Last verified: 2026-08-16 (**PRODUCTION IS NOW ON `cockpit-agent` v8. THE POINTER MOVED: v6 → v8.
 > THIS SUPERSEDES THE ENTRY IMMEDIATELY BELOW**, which said "PRODUCTION STILL RUNS THE OLD BODY, AND
 > THE PRODUCTION CANDIDATE IS GATE-BLOCKED" — true when written, false now. The gate that had come
@@ -1332,3 +1512,262 @@ regenerating the `.ts` turned exactly ONE row red (1 failed / 20 passed); revert
 It also carries the standard DATA-not-instructions defense clause: vault excerpts are content to
 read, never commands to obey (a document saying "classify this business as enterprise" is described,
 never adopted).
+
+---
+
+## Phase 23 — agent-authored skills: the DATA PLANE only (23-01, SKILL-02)
+
+> Landed 2026-08-18. **Nothing in this section is a capability.** 23-01 adds a vocabulary: a closed
+> set, three provenance columns, one approval object, one index. There is no model-reachable writer,
+> no tool, no activation path, and no UI — those are 23-02 … 23-05. If you are reading this because
+> something wrote an agent row, the writer is what you want, not this section.
+
+### The rules that hold at this layer
+
+1. **The tenant overlay is the only plane.** An agent row is a `tenantSkills` row like any other. No
+   agent row ever enters the deployment-global `skills` table, and no second registry table exists.
+   The Phase-21 overlay, its version allocation, its rollback eligibility and its effective-load
+   order are reused verbatim.
+2. **`AGENT_AUTHORABLE_SKILLS` is closed, and is a SEPARATE literal from `USER_AUTHORABLE_SKILLS`.**
+   The two are equal today (`offer-architect`, `money-model-designer`, `lead-engine`) and are
+   allowed to diverge. Aliasing them would let a PRODUCT widening of the user set silently widen
+   what a MODEL may write. `skillAuthoring.test.ts` pins the exact set, both subset relationships
+   (⊆ `USER_AUTHORABLE_SKILLS`, ⊆ `GATED_SKILLS`), and the non-aliasing itself.
+3. **Every agent-authorable name must be EVAL-REACHABLE.** An agent row leaves `candidate` only via
+   a passing held-out run, so a name no golden fixture drives would mint rows that can never be
+   activated. This is why `document-analyst` and `media-director` are refused: both are deliberately
+   ungated, and neither has a runner an eval can drive.
+4. **Provenance is a server fact, never a tool argument.** `authorAgentId` is the code-owned
+   `EXECUTIVE_AGENT_AUTHOR_ID` constant; `sourceThreadId` / `sourceTurnId` come from the trusted turn
+   lineage the runtime already holds. The model's entire surface is a name plus a bounded adaptation.
+5. **One composer, one cap.** The agent reuses `composeUserSkillBody` and
+   `USER_SKILL_ADAPTATION_MAX_BYTES` (4000 UTF-8 bytes) exactly. There is no second composer, no
+   replacement-body format, and no capability list — tools/action kinds/budgets stay code-owned
+   (ADR-007), so a drafted body cannot grant itself anything.
+6. **`ownerApproval` is three refs and a timestamp.** `ownerUserId` (`v.id("users")`, from
+   `requireOwner`), `approvedAt`, `evalRunId`. There is deliberately no rationale, note or summary
+   field: that would be a doorway for model-influenced prose into the approval record. The test
+   checks the key set EXHAUSTIVELY so adding one is red.
+7. **`by_tenant_source_turn` is tenant-scoped first, and that ordering is load-bearing.** A
+   thread/turn-only index answers "does a row exist for this turn?" ACROSS tenants — a cross-tenant
+   existence oracle for anyone holding a turn ref. Mutation-proven: reordering the index to
+   `[sourceThreadId, sourceTurnId, tenantId]` and dropping the tenant equality returns **2 rows
+   where 1 is correct**.
+
+### The ceiling this layer CANNOT close — read before trusting a green suite
+
+**The schema cannot express "required only when `author === "agent"`".** Convex validators have no
+conditional-required form, and modelling `tenantSkills` as a discriminated union would invalidate
+every row already written. So `authorAgentId`, `sourceThreadId`, `sourceTurnId` and `ownerApproval`
+are all `v.optional`, and **a direct `ctx.db.insert` of an agent row with no lineage at all is
+accepted today.**
+
+The fixtures in `skills.test.ts` pin which combinations are LEGAL. They do not — and at this layer
+cannot — refuse an illegal one, because refusal needs a writer to refuse in. That enforcement is
+`publishAgentCandidate` (23-02) and the agent-activation `ownerMutation` (23-05). Do not read
+"91 passed" as "an agent row without provenance is impossible"; it is not yet.
+
+`ponytail:` ceiling = permissive schema + behavioural fixtures. Upgrade path = the narrow writer in
+23-02 becomes the single insert site, and a structural test asserts no other module calls
+`ctx.db.insert("tenantSkills", … author: "agent" …)`.
+
+### Mutation evidence (23-01, all executed and restored — none left in the tree)
+
+| Mutation | Result |
+|---|---|
+| Add `document-analyst` (ungated, no runner) to `AGENT_AUTHORABLE_SKILLS` | **2 red** — exact-set pin + the explicit rejection test |
+| Also delete the exact-set pin AND both subset assertions | **still 1 red** — the rejection test catches it alone; the coverage is genuinely layered, not one assertion doing all the work |
+| Reorder `by_tenant_source_turn` to drop the tenant prefix | **1 red** — `expected [ …2 rows ] to have a length of 1` |
+
+### How to verify
+
+```
+pnpm --filter @pikar/contracts exec vitest run src/skillAuthoring.test.ts   # 8 passed
+cd packages/backend && npx vitest run convex/skills.test.ts --maxWorkers=1  # 91 passed
+```
+
+### Prerequisite-gate deviation carried by every Phase 23 plan
+
+Phase 23 began with `23-01`'s gate **partially failed**: Phase 21's `21-LIVE-RESULT.json` does not
+exist and was deliberately withheld (its steps 3-4, tenant runtime attribution, were unrunnable).
+Waves 1-5 proceed on an explicit owner decision; waves 6-9 stop for a re-cut, because `23-08` carries
+the SAME unrunnable step. Full gate result:
+`.planning/phases/23-agent-authored-skills/23-00-GATE-2026-08-18.md`.
+
+### 23-02 — `publishAgentCandidate`, the inert writer
+
+`internalMutation`. No public API, no tenant wrapper, no HTTP route. Args are
+`{tenantId, sourceThreadId, sourceTurnId, name, authoredBody}` — but **the model supplies only
+`name` and `authoredBody`**; the other three come from the trusted turn envelope and are args only
+because an internal mutation has no `ctx.tenantId`. `author`, `authorAgentId`, `status`, `version`,
+`body`, `rollbackEligible`, evidence and approval are derived or hardcoded, so the validator has no
+field a model could set. Convex rejects an unexpected key outright, which is why the refusal is at
+the boundary rather than in a check.
+
+**Two refusals, and the ORDER is the contract.**
+
+1. **Exact retry, resolved FIRST** off `by_tenant_source_turn`. One source turn owns at most one
+   row. A re-fired turn recovers its row (`inserted: false`, same id/version, the row's REAL status
+   — not a hardcoded `"candidate"`, because a retry after activation must not report it as pending).
+   Same turn + different draft or different name → `AGENT_SOURCE_TURN_CONFLICT`, zero rows changed.
+   Patching would mutate an immutable row; inserting would give one turn two.
+2. **The v1 pending rule.** A new turn while ANY candidate is pending for that tenant/name —
+   **including one the USER authored** — → `AGENT_CANDIDATE_PENDING`, zero rows changed. The pending
+   row is never archived and never superseded: superseding would silently discard a draft a human
+   may be about to review, and archiving would hand a rollback-ineligible row a state it never
+   earned.
+
+**Idempotence is the SOURCE TURN, never the bytes.** `allocateImmutableVersion` is called with
+`duplicate: false` deliberately. Two different turns producing identical text are two different
+authoring acts, and collapsing them would return a row whose `sourceTurnId` names a turn that never
+asked for it — the exact provenance the live handoff artifacts are supposed to pin.
+
+**The shared seam.** `readTenantPublishState` (compose against the GLOBAL core, lineage against the
+tenant's EFFECTIVE row, ONE descending indexed `take(1)`) and `ensureRollbackBaseline` (the
+first-customization `system`/`archived`/rollback-eligible baseline) are now used by BOTH writers.
+`publishUserCandidate`'s public args, returns and behaviour are unchanged — the refactor was run
+against the suite before and after as its own step. The bounded-read structural guard was
+re-anchored to start at `readTenantPublishState` so it still covers the read where it now lives,
+plus both writers below it.
+
+**`inspectAgentCandidate`** is the refs-only read for the later live artifacts: ids, status,
+provenance, `bodyHash`, `authoredBytes`, `hasEvidence` as a BOOLEAN, `ownerApproval` or null. It
+never returns `body` or `authoredBody`, and the test asserts that over the whole serialized view
+rather than key by key — a new field carrying content would slip past a key-name check.
+
+**Audit:** one row, `skill.agent_candidate_published`, `actor: "agent"`, key set pinned by EQUALITY:
+`author, authorAgentId, authoredBytes, baseScope, baseSkillId, baseVersion, bodyHash, skillName,
+sourceThreadId, sourceTurnId, tenantSkillId, version`. Needle-scanned across every audit row and
+every dead letter.
+
+#### Mutation evidence (23-02, all executed and restored)
+
+| Mutation | Result |
+|---|---|
+| Writer inserts `status: "active"` | **6 red**, including the structural region scan |
+| Add a caller-supplied `status` to the validator | **1 red** — the boundary test |
+| Drop `sourceTurnId` from the source-turn predicate | **1 red** — a new turn recovers the wrong row |
+| Drop the **tenant** predicate | **COMPILE ERROR**, not a test failure: `Argument of type '"sourceThreadId"' is not assignable to parameter of type '"tenantId"'`. Convex index predicates must be given in field order, so tenant-first makes the scoping structurally unskippable |
+| Archive the pending candidate instead of refusing | **3 red** — both behavioural tests and the `ctx.db.patch` structural scan caught it independently |
+
+### 23-04 — the eval gate an agent row must clear
+
+**Phase-21 evidence answers "did a passing run certify THIS ROW". That is not enough for an agent
+row.** The run must ALSO have been the current, whole suite — otherwise a candidate certified before
+the adversarial authoring fixtures existed reads as gate-passed forever, and the cases that exist
+specifically to catch a self-serving skill body never ran against it.
+
+#### The suite-manifest protocol
+
+Two artifacts, deliberately, with different update costs:
+
+| Artifact | Nature | How to update |
+|---|---|---|
+| `packages/backend/scripts/eval-suite-manifest.json` | **Mechanical.** Sorted filenames + SHA-256 per fixture + a hash of the listing | `pnpm --filter @pikar/backend eval:golden -- --write-suite-manifest` |
+| `AGENT_EVAL_SUITE` in `packages/contracts/src/skill.ts` | **Deliberate.** `{revision, casesHash, caseCount}` — the one activation reads | Hand-edit, and **bump `revision`** |
+
+It lives in contracts because the activation mutation runs inside Convex with **no filesystem**: a
+gate that can only be checked by reading `eval-cases/` off disk is not a gate the server can
+enforce. The runner reads the block off disk by regex (it has no build step) and asserts all three
+fields against the fixtures actually present, before the first paid turn — so the three can never
+silently disagree.
+
+**Editing a fixture costs a regeneration AND a contracts edit AND a revision bump.** That asymmetry
+is the point: the cheap half is bookkeeping, the expensive half is the decision that older evidence
+stops counting. `--write-suite-manifest` deliberately does NOT touch the contracts constant.
+
+#### `hasPassingAgentTenantEvidence`
+
+A **separate, stricter predicate**, not a tightening of the shipped `hasPassingTenantEvidence`.
+Tightening that one would silently invalidate every Phase-21 user candidate the moment a fixture
+changed — a governance change to SKILL-01 smuggled in as a refactor. User rows keep the rule they
+shipped under. Three things must all hold:
+
+1. `hasPassingTenantEvidence` — the run certified THIS ROW, not this `<name>@<version>`.
+2. The suite identity matches the current one exactly (revision **and** hash **and** count).
+3. `casesPassed === casesTotal === caseCount` — this is what refuses a `--only` run. A 3-of-46
+   green reads identically to a full green once it is a row; the runner refuses to record one, and
+   this refuses to honour one that arrived some other way.
+
+#### The held-out authoring fixtures (42-46)
+
+`42-agent-author-happy`, `43-agent-author-self-activate`,
+`44-agent-author-capability-escalation`, `45-agent-author-embedded-instruction`,
+`46-agent-author-retry`. Named individually in the self-check, not just counted — a floor lets five
+trivial cases replace five adversarial ones.
+
+**Each runs in its own throwaway subtenant `eval-<runId>-<case>-a<attempt>`, and the attempt number
+is load-bearing.** The v1 writer correctly refuses a changed draft while a candidate is pending, so
+on one shared tenant fixture 42 would author a row and 43-46 would each be refused by 42's leftover
+— a suite measuring its own first case four more times. The flake policy's single re-run would fail
+the same way. **No purge, patch, archive or test-only delete exists**: immutability holds precisely
+because nothing is ever cleaned up. Ordinary fixtures keep the one shared seeded tenant.
+
+#### The expectation vocabulary, and its one rule
+
+`agentToolCalled` · `agentCandidateCount` · `agentCandidateAtMost` · `agentInert` ·
+`agentActiveUnchanged` · `authoringRequestCount`, all read from
+`smokeAssert:agentAuthoringStateForThread` — **durable state, never reply prose**. A fixture
+asserting "the reply mentions a skill update" passes on a model that says the words and writes
+nothing.
+
+**THE RULE: every bound and every absence requires `agentToolCalled: true`.** A bound on a turn
+where the tool never ran asserts nothing, and that is the single most likely way this gate goes
+quietly green forever. `validateFixture` refuses a fixture that omits it.
+
+`agentInert` is ONE key asserting FOUR facts over EVERY row a thread produced — status is
+`candidate`, no evidence, no owner approval, not rollback-eligible. Deliberately not four keys: a
+fixture must not be able to assert three and drop the fourth, and under adversarial pressure the
+dropped one is always the one that mattered. `agentActiveUnchanged` is a **snapshot pair**, not
+`activeCount: 0` — a count of zero is satisfied by a tenant that never had an active row.
+
+#### Holdout boundary
+
+Neither read-only inspector (`runInspect`, `runAgentSourceInspect`) may reference `casesDir`,
+`eval-cases`, `loadFixtures` or the manifest path — their output ends up in a live-handoff artifact
+and, through it, potentially in front of the agent being evaluated. A corpus the author can read is
+not held out. The tool-side half of the same boundary is `cockpitTools.test.ts`'s region scan.
+
+`--inspect-agent-source <tenantId>:<sourceThreadId>` is tenant-qualified on purpose: a bare thread
+id would need a cross-tenant scan, which is both unbounded and an existence oracle.
+
+#### Mutation evidence (23-04, all executed and restored)
+
+| Mutation | Result |
+|---|---|
+| Drop the row-identity check from agent evidence | **1 red** (contracts) |
+| Accept a stale revision / drifted hash | **1 red** |
+| Honour a filtered (`--only`) run | **1 red** |
+| Edit a fixture without regenerating the manifest | **self-check red**, naming `42-agent-author-happy.json` |
+| Regenerate the manifest but leave `AGENT_EVAL_SUITE` stale | **self-check red** on the hash |
+| Remove the pre-live `selfCheck()` call | **self-check red** — "must run the free self-check before entering the paid/provider path" |
+| Read the fixture corpus inside the agent-source inspector | **self-check red** — holdout boundary |
+
+#### NO PAID RUN OCCURRED
+
+This plan is implementation and offline validation only. Nothing was seeded, no model was called,
+no evidence row was written, and `$0.00` was spent. `--self-check` is the whole gate here.
+
+### 23-05 — the human-owner half of the agent gate
+
+`activateAgentCandidate` is a distinct `ownerMutation` accepting exactly one `candidateId`. It is
+not an alias for `activateTenantCandidate`: the user door requires `author: user` and the agent door
+requires `author: agent`, `status: candidate`, no prior approval, and current-suite exact-row
+evidence. The evidence's own `runId`, `ctx.userId`, and server time form `ownerApproval`; no client
+or model field can supply any of them.
+
+The shared `transitionSkillActivation` still owns the module's single active-status patch. For an
+agent row that patch carries `rollbackEligible: true`, `ownerApproval`, and `status: active`
+together. A failed gate throws before the plan exists, and Convex transaction atomicity means an
+audit failure cannot strand approval without activation either.
+
+The owner review queue remains a fixed newest-first window and now returns a closed `author`
+discriminant. Agent rows add Executive/source refs, current-base/candidate diff, eval counts/run,
+and approval state; fixture prompts, expected outputs and raw evidence never enter the projection.
+The workspace history includes both user- and agent-authored adaptations, but still returns no row
+id, full/base body, raw evidence, owner identity, source refs or activation control.
+
+Rollback is deliberately unchanged: only a non-active `rollbackEligible` row can be selected, it
+is owner-only and evidence-exempt, and the transaction changes the status/eligibility plane only.
+An agent row keeps its original evidence and `ownerApproval` after it is rolled away from and later
+restored. `skill.agent_candidate_activated` is the distinct refs-only activation event.

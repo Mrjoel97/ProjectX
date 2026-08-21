@@ -41,9 +41,14 @@ describe("Phase 26 additive dashboard schema", () => {
   test("pins cancellation, progress, and the tenant/status/time Approvals index", () => {
     const plans = compact(tableBlock("plans"));
 
+    // 17-08 added the THIRD literal, `refused`: the SYSTEM stopped the act, the user did not.
+    // Pinned in full rather than by `toContain("discarded")`, because the whole value of this
+    // assertion is that a fourth member is a DELIBERATE edit here — `approvals.ts` surfaces this
+    // field as the cancellation's provenance, so a member added without thought misreports who
+    // decided.
     expect(dense(plans)).toContain(
       dense(
-        'cancelKind: v.optional(v.union(v.literal("scheduled_cancel"), v.literal("discarded")))',
+        'cancelKind: v.optional(v.union(v.literal("scheduled_cancel"), v.literal("discarded"), v.literal("refused")))',
       ),
     );
     for (const field of [

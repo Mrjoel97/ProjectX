@@ -52,6 +52,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { getGuardrailConfig, mediaRemainingCentsInner, rateLimiter } from "./guardrails";
+import { retrier } from "./index";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
 import { evaluateRenderTrigger } from "./mediaComplete";
@@ -945,11 +946,7 @@ function decodeBase64(value: string): Uint8Array<ArrayBuffer> {
 
 /** Submit one new visual line to OpenAI. Images return their bytes synchronously; Sora returns an
  *  asynchronous video id which `pollOpenAiVideoTask` owns. */
-export async function submitLine(
-  spec: VisualSpec,
-  text: string,
-  _webhookUrl?: string,
-): Promise<SubmitResult> {
+export async function submitLine(spec: VisualSpec, text: string): Promise<SubmitResult> {
   const key = requireEnvMedia("OPENAI_API_KEY");
 
   if (process.env.MEDIA_PROVIDER_FIXTURE || process.env.FAL_FIXTURE) {
@@ -981,8 +978,8 @@ export async function submitLine(
       });
     }
   } catch {
-    // The thrown error's message can carry the URL — and therefore the webhook's HMAC segment. A
-    // code only; the exception itself is dropped on the floor.
+    // The thrown error's message can carry the request URL and its auth context. A code only; the
+    // exception itself is dropped on the floor.
     return { ok: false, code: "transport_error", blocked: false };
   }
 
@@ -1126,8 +1123,8 @@ export const claimLine = internalMutation({
 });
 
 /** The submit outcome onto the row. A CODE reaches `failureReason` — never provider prose, never
- *  the prompt, never the narration (CLAUDE.md §4). No fal URL is stored: plan 20-06 re-derives the
- *  webhook segment from the jobId, so there is nothing to leak. */
+ *  the prompt, never the narration (CLAUDE.md §4). No provider URL is stored: the poller re-derives
+ *  everything it needs from the jobId and the stored request id, so there is nothing to leak. */
 export const recordSubmission = internalMutation({
   args: {
     jobId: v.id("mediaJobs"),
@@ -2484,11 +2481,15 @@ export const generateImage = tenantMutation({
       .query("mediaJobs")
       .withIndex("by_plan", (q) => q.eq("tenantId", ctx.tenantId).eq("planId", planId))
       .collect();
+    // IN-FLIGHT ONLY (25.1-03, D8). `succeeded` used to sit in this set, and NOTHING ever deletes a
+    // `mediaJobs` row — so the first image a plan produced locked the button for ever, with the
+    // canvas saying only "already started" about work that had finished. A finished image is
+    // history (the `failed`/`blocked` reasoning in the doc comment above, one rung further); it is
+    // now durably in the vault (D5), so generating another cannot lose it either. The double-click
+    // guard this exists for lives entirely in the two non-terminal states.
     if (
       rows.some(
-        (row) =>
-          row.kind === "image" &&
-          (row.status === "queued" || row.status === "submitted" || row.status === "succeeded"),
+        (row) => row.kind === "image" && (row.status === "queued" || row.status === "submitted"),
       )
     ) {
       return { ok: false as const, reason: "already_started" as const };
@@ -2576,10 +2577,18 @@ export const retryRender = tenantMutation({
     );
     if (!latest) return { ok: false as const, reason: "nothing_to_render" as const };
 
-    await ctx.db.patch(planId, { renderStatus: "rendering", renderReason: undefined });
-    await ctx.scheduler.runAfter(0, internal.render.renderReel.renderReel, {
-      tenantId: ctx.tenantId,
-      batchId: latest.batchId,
+    // 25.1-01 (D2): under the retrier, never a bare runAfter — the run id lands on the plan in the
+    // SAME mutation so a crashed retry still terminalizes (`mediaComplete.onRenderComplete`).
+    const runId = await retrier.run(
+      ctx,
+      internal.render.renderReel.renderReel,
+      { tenantId: ctx.tenantId, planId, batchId: latest.batchId },
+      { onComplete: internal.mediaComplete.onRenderComplete },
+    );
+    await ctx.db.patch(planId, {
+      renderStatus: "rendering",
+      renderReason: undefined,
+      renderRunId: String(runId),
     });
     // Insert-only, refs only (§4): WHICH plan and WHICH batch — never a reason string the user
     // typed, never a URL.

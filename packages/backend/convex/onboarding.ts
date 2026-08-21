@@ -593,6 +593,65 @@ export async function currentProfileDoc(
  * `personaConfirmed: true` is DELETED rather than corrected: the audit table is append-only, so a
  * historical row that claimed a confirmation cannot be repaired; the fix is to stop writing it.
  */
+/**
+ * BETA-03: is this tenant ready to be offered a first governed send, and to what address.
+ *
+ * A PROJECTION, NOT STATE. There is deliberately no onboarding-progress table, no `firstSendDone`
+ * column and no checklist row — the whole answer is derived from rows that already exist, so
+ * refreshing, navigating back, or signing in on another device cannot produce a stale checklist
+ * that outlives the thing it describes. Phase 11/15.1's completion contract is untouched:
+ * `missingSlots`, `canComplete`, `converse.done` and the saveFacts→commitProfile ordering all mean
+ * exactly what they meant before.
+ *
+ * THE ADDRESS IS READ FROM THE AUTHENTICATED IDENTITY AND IS NOT AN ARGUMENT. This query takes no
+ * args at all, which is the point: a first-send offer that accepted a recipient would be an open
+ * relay wearing an onboarding hat.
+ *
+ * `users.email` is `v.optional`, so it can legitimately be absent — an OAuth profile that carried
+ * no email claim, or a row created before the field was written. An absent address makes the offer
+ * INELIGIBLE rather than falling back to anything; there is nothing safe to fall back to.
+ *
+ * `emailVerified` is reported, not enforced. A password signup's address is self-asserted
+ * (`auth.ts` records email verification as the security fast-follow), and the first send goes to
+ * that same self-asserted address — which is the one recipient for whom that is acceptable, since
+ * it is the account holder writing to themselves. The flag exists so the UI can say so and so a
+ * later plan can tighten it without having to rediscover the fact.
+ */
+export const firstSendOffer = tenantQuery({
+  args: {},
+  handler: async (
+    ctx,
+  ): Promise<{
+    eligible: boolean;
+    recipient: string | null;
+    emailVerified: boolean;
+    reason: "ok" | "onboarding_incomplete" | "no_address";
+  }> => {
+    const user = await ctx.db.get(ctx.userId);
+    const email = user?.email?.trim() ?? "";
+    // Same predicate as `status.needsOnboarding` — IS that read, not a second copy of it.
+    const onboarded = Boolean(await currentProfileDoc(ctx, ctx.tenantId));
+
+    if (!onboarded) {
+      return {
+        eligible: false,
+        recipient: null,
+        emailVerified: false,
+        reason: "onboarding_incomplete",
+      };
+    }
+    if (!email) {
+      return { eligible: false, recipient: null, emailVerified: false, reason: "no_address" };
+    }
+    return {
+      eligible: true,
+      recipient: email,
+      emailVerified: typeof user?.emailVerificationTime === "number",
+      reason: "ok",
+    };
+  },
+});
+
 export const commitProfile = tenantMutation({
   args: { profile: vProfile },
   handler: async (ctx, { profile }): Promise<{ vaultDocId: Id<"vaultDocuments"> }> => {

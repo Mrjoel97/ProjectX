@@ -506,6 +506,11 @@ describe("resetPlan clears the media deck AND the render plane (20-02 MEDIA-01)"
     "sidecarHash",
     "renderReason",
     "renderedAt",
+    // 25.1-03 (D7). The worst member of this list to omit, and it WAS omitted: `saveReelToVault`
+    // upserts on this key, so a surviving pointer made the NEXT reel in the thread PATCH the
+    // previous reel's vault doc and `deleteOrphanedFinals` then delete the previous mp4 — the
+    // user's finished deliverable destroyed by asking for another one.
+    "reelVaultDocId",
   ] as const;
 
   test("a staged deck and a finished reel never survive a reset", async () => {
@@ -552,6 +557,20 @@ describe("resetPlan clears the media deck AND the render plane (20-02 MEDIA-01)"
         sidecarHash: "sha256:deadbeef",
         renderReason: "ok",
         renderedAt: Date.now(),
+        reelVaultDocId: await ctx.db.insert("vaultDocuments", {
+          tenantId: TENANT,
+          title: "Reel: the first one",
+          kind: "reel",
+          category: "workspace-docs",
+          source: "media",
+          mimeType: "text/markdown",
+          storedMimeType: "video/mp4",
+          storageId,
+          size: 1,
+          contentHash: "a".repeat(64),
+          status: "processing",
+          createdAt: Date.now(),
+        }),
       });
       return id;
     });

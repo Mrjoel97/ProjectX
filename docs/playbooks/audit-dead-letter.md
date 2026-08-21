@@ -1,5 +1,58 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-08-21 (25.1-06, D13 — **THE OWNER CAN NOW SEE DEAD LETTERS THAT ARE NOT HIS.**
+> deadLetters.test.ts 11/11, seven mutations, one of them fatal to a claim this entry corrects.)
+>
+> **First, a research premise corrected.** 25.1-RESEARCH said the DLQ has *"no consumer, no listing
+> surface, no re-drive"*. Two thirds of that was wrong about this repo: `deadLetters.listNew` +
+> `newCount` have existed since 02-06 and `/ops` has rendered them, with a Mark-resolved button,
+> ever since. **What was actually missing is the OPERATOR's read.** Every insert site stamps the
+> FAILING TENANT's id, and `listNew` is a `tenantQuery` — so in a multi-tenant beta the failures the
+> owner most needs to see were exactly the ones no surface could show him.
+>
+> `deadLetters.listAll` (`ownerQuery`, 25.1-06) is that read and only that read:
+>
+> - **Cross-tenant, `status: "new"` only, newest first, through the `by_status` index** — which had
+>   existed with no reader since 02-06. No new index; `.order("desc")` is insertion order, which
+>   equals `createdAt` order because all six insert sites stamp `Date.now()` at insert. A backfill
+>   that wrote historical `createdAt` values would break that equality; the upgrade path is an
+>   additive `by_status_createdAt` compound index.
+> - **Bounded: default 50, server ceiling 200, `take(cap + 1)`** so `truncated` is KNOWN rather than
+>   guessed. **The read-bound is pinned in SOURCE, not by a response assertion, and that is a
+>   finding worth carrying:** swapping `.take(cap + 1)` for `.collect()` leaves every response
+>   assertion green — same rows, same order, same `truncated` — because the slice still caps the
+>   payload. The hazard is the READ, and no response can see it.
+> - **READ ONLY, and that is a separate decision from being able to see.** Re-drive stays deferred;
+> `markResolved` stays `tenantMutation`, so the owner cannot resolve another tenant's row even by
+>   hand. A source scan asserts no `ownerMutation` or `internalMutation` exists in the module.
+> - **The projection is a pinned KEY SET** (id, tenantId, workflowId, correlationId, error, status,
+>   createdAt, payload) and the payload passes through byte-identical. The risk that pin guards is
+>   not the stored payload — §4 already governs that — but a future "helpful" join putting a tenant's
+>   NAME, a user's email or a request's subject onto an operator screen that today shows only refs.
+> - **The module is still insert-only from the pipeline's side.** `deadLetter.ts` writes; this module
+>   reads and (per tenant) resolves. Nothing here deletes or replays.
+
+> Last verified: 2026-08-21 (25.1-02 — **crons.ts HOLDS FIVE JOBS NOW**, and the count is pinned by
+> a test. reliabilitySweep.test.ts 23/23.)
+>
+> The fifth is `crons.interval("reliability-sweep", {minutes: 30})` to
+> `internal.reliabilitySweep.runSweep` (D3/D4 stuck-work watchdog; behaviour lives in media.md and
+> cockpit.md). It is the first `interval` job here — the other four are `daily`/`weekly` — because
+> its promise is "no non-terminal state outlives one sweep interval", and a daily cron makes that
+> promise a day long.
+>
+> **Its notification kind, `watchdog.stalled`, is DELIBERATELY ABSENT from `NOTIFICATION_KINDS`**
+> (`packages/core/src/notificationTemplates.ts`). That list is what arms `notifyExternal.dispatch`,
+> which reaches `freshAccessToken` and sends MAIL; a "a background job stalled" notice is an in-app
+> fact and has no business holding a Gmail token. Same reasoning that keeps the two review kinds and
+> the reconnect kinds out. `NotificationsBanner` renders an unregistered kind as plain text, so the
+> in-app half needs nothing added. The copy is a static label carrying no ids and no content (§4).
+>
+> **Log plane unchanged.** The sweep writes no audit row and no dead letter of its own: the job half
+> routes through `mediaComplete.landResult`, whose single `media.landed` line already carries the
+> reason code, and the plan half writes only plan-row status fields. The `audit` table is READ (by
+> correlation, for the manual-retry clock) and never written here.
+
 > Last verified: 2026-08-18 (**the refusal counts had no reader — `audit:recentByType` is it.**
 > audit 2/2, both order and window assertions mutation-verified. No write path changed; the
 > insert-only rule (§3) and `auditImmutability.test.ts` are untouched — this adds a READ.)
@@ -99,6 +152,34 @@
 > the other seven green. 41/41 green across `tenantDelete`, `tenantExport` and `isolation`;
 > `pnpm --filter @pikar/backend typecheck` clean.
 
+> Last verified: 2026-08-16 (25-01 — **the table registry gained a FIFTH category,
+> `admission_plane`, and the schema went 43 → 45 tables.**)
+>
+> `betaWaitlist` and `betaInvites` (BETA-01) are **personal data that is not tenant data**, and
+> none of the four existing categories could say that truthfully. `global` asserts "contains no
+> tenant data" and every consumer reports it with that meaning — filing an email-bearing table
+> under it would have made the export manifest's own omission reason false. So the union grew
+> rather than the classification being bent to fit.
+>
+> **Three files move together whenever a category is added, and the third is the one that rots
+> silently:** `TENANT_TABLE_CLASSIFICATION`, the count literal in `tenantData.test.ts`, and
+> `tenantExport.ts` — whose `omittedReason` narrows the category union **and** whose omission loop
+> enumerates categories explicitly (`if (category === "global" || ...)`) rather than defaulting.
+> A new category that is not added to that loop is neither exported nor listed as omitted: it just
+> vanishes from the manifest. Adding the table alone would have shipped that hole.
+>
+> **These rows are excluded from `deletableTables()` by construction**, like `audit` — they are
+> keyed by email and precede every tenant, so neither deletion scope (`identity` by `users._id`,
+> `tenant_index` by `tenantId`) can address them.
+>
+> **OPEN, AND DELIBERATELY NOT DECIDED BY 25-01: erasure does not reach the admission plane.** A
+> tenant deletion removes the `users` row and leaves that person's email in `betaWaitlist` /
+> `betaInvites`. That is a real Art. 17 question, but tenant deletion is this playbook's owned,
+> irreversible surface, and widening it from an admission plan would be an out-of-scope edit to a
+> destructive path. Recorded for the owner in `tenantData.ts` and in `beta-admission.md`; **not**
+> claimed as resolved anywhere.
+>
+> Prior entry — 2026-08-16 (**THE AUDIT-IMMUTABILITY INVARIANT IS NOW PROVEN AGAINST PRODUCTION,
 
 > Last verified: 2026-08-16 (**THE AUDIT-IMMUTABILITY INVARIANT IS NOW PROVEN AGAINST PRODUCTION,
 > not against fixtures.** Live erasure request `a73023088f58ea6e` on SHA `1ca7c6f` removed **1,538

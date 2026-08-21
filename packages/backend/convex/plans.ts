@@ -67,6 +67,11 @@ export const insertPlan = internalMutation({
       threadId,
       status: "collecting",
       recipients: [],
+      // DLVR-02: written EXPLICITLY at creation rather than left absent, even though absent means
+      // the same thing. A row whose provider is unset is indistinguishable from a pre-25-05 legacy
+      // row, and that ambiguity is what would make a later "which of these actually chose Google?"
+      // question unanswerable. 25-06 lets the user change it before approval.
+      mailProvider: "google",
       createdAt: Date.now(),
     }),
 });
@@ -194,9 +199,10 @@ const LIVE_RENDER_STATUS: ReadonlySet<string> = new Set(["pending", "rendering"]
  *
  *  - a plan with **non-terminal `mediaJobs` rows** is refused as `reel_in_flight`. Those lines are
  *    already PAID FOR: the whole job was reserved in one transaction before a single request
- *    existed (20-04), and fal will call back to `/fal/callback/*` whichever plan row the thread
- *    happens to point at afterwards. Recycling the row would strand a landing on a plan that has
- *    since become something else, and the money is gone either way.
+ *    existed (20-04), and the poller will land whichever plan row the thread happens to point at
+ *    afterwards. Recycling the row would strand a landing on a plan that has since become something
+ *    else, and the money is gone either way. (The provider CALLBACK this used to name went away with
+ *    the fal route at 25.1-06; the hazard did not — `landResult` is still reached asynchronously.)
  *  - a plan with a **live `renderStatus`** is refused for the same reason one step later: a sandbox
  *    is running, and its terminal will write `renderStorageId` onto whatever this row has become.
  *  - the two are checked SEPARATELY because they fail at different times — every job can be
@@ -694,6 +700,37 @@ export const setPlanSendTime = tenantMutation({
   },
 });
 
+/**
+ * DLVR-02: choose which mailbox this plan sends through, BEFORE approval.
+ *
+ * Modelled on `setPlanSendTime` directly above, including its cross-tenant guard. Per-PLAN and
+ * never per-tenant: there is deliberately no "active provider" row anywhere. A deployment-wide or
+ * tenant-wide active provider would make a second plan's mailbox depend on the last thing someone
+ * clicked on a different plan, and would silently re-route a proposal the user is still reading.
+ *
+ * Refuses once the plan has left `proposed`. `executePlan` copies `mailProvider` onto every
+ * per-recipient `requests` row at approval, so a change afterwards would edit the plan while the
+ * already-seeded rows kept delivering through the old mailbox — the display and the delivery would
+ * disagree, which is worse than refusing.
+ *
+ * Does NOT check that the provider is connected. `graph.send`/`gmail.send` own that, and they own
+ * it at the moment of sending rather than the moment of choosing — a grant can die in between.
+ */
+export const setPlanMailProvider = tenantMutation({
+  args: {
+    planId: v.id("plans"),
+    mailProvider: v.union(v.literal("google"), v.literal("microsoft")),
+  },
+  handler: async (ctx, { planId, mailProvider }) => {
+    const plan = await ctx.db.get(planId);
+    if (!plan || plan.tenantId !== ctx.tenantId) throw new Error("plan not found"); // no cross-tenant write
+    if (plan.status !== "proposed" && plan.status !== "collecting") {
+      throw new Error("PLAN_ALREADY_APPROVED");
+    }
+    await ctx.db.patch(planId, { mailProvider });
+  },
+});
+
 /** Terminal/CAS-friendly status setter (executePlan → approved; fan-out → done). */
 export const setPlanStatus = internalMutation({
   args: { planId: v.id("plans"), status: PLAN_STATUS },
@@ -832,6 +869,10 @@ export const resetPlan = internalMutation({
       subject: undefined,
       bodyIntent: undefined,
       body: undefined,
+      // 25.1-05 (D11): the memo's references go with the body they attribute. Same Pitfall-6 class
+      // as `recipientNames` below — a source list surviving a "start over" would sit under the NEXT
+      // memo in this thread as if those pages had been read for it.
+      sources: undefined,
       attachments: undefined,
       attachmentError: undefined,
       candidates: undefined,
@@ -906,6 +947,12 @@ export const resetPlan = internalMutation({
       sidecarHash: undefined,
       renderReason: undefined,
       renderedAt: undefined,
+      // 25.1-03 (D7), and the worst omission of this whole clear-set: `saveReelToVault` UPSERTS on
+      // this pointer, so a surviving `reelVaultDocId` made the next reel in this thread PATCH the
+      // PREVIOUS reel's vault doc — and `deleteOrphanedFinals` then deleted the previous mp4,
+      // because nothing referenced it any more. The user's finished deliverable was destroyed by
+      // asking for another one. Cleared here, reel #2 inserts its own doc and reel #1 stands.
+      reelVaultDocId: undefined,
     });
   },
 });

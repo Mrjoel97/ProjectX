@@ -1,5 +1,7 @@
 /**
- * The media LANDING plane (MEDIA-01, D10, plan 20-06) — the terminal for a fal callback.
+ * The media LANDING plane (MEDIA-01, D10, plan 20-06) — the terminal a finished media job lands
+ * through. It was written for a fal callback; since ADR-024 its callers are `media.ts`'s OpenAI
+ * poll-and-store path and `reliabilitySweep.ts`'s watchdog, and the callback route is gone.
  *
  * A sibling terminal module, the `calendarComplete.ts` rule: `media.ts` owns the submit and this
  * file owns the landing, so the two halves of a job's lifecycle can be reasoned about — and
@@ -12,79 +14,40 @@
  * `media.ts` must be able to write `blocked`/`failed`. Both halves are pinned by a scan in
  * `llmRedaction.test.ts`.
  *
- * NOT "use node" — this is an internalQuery + an internalMutation, and `http.ts` (which holds the
- * route) cannot be "use node" either.
+ * NOT "use node" — these are internalMutations reached from scheduled actions and from the
+ * ActionRetrier's `onComplete`, neither of which needs a node runtime here.
  */
 import { onCompleteValidator } from "@convex-dev/action-retrier";
 import { deckStillNeedsJob } from "@pikar/core/render";
 import { hasAssetSource } from "@pikar/core/storyboard";
 import type { MediaSpec, VideoRes } from "@pikar/cost/media";
 import { estimateMediaUsd } from "@pikar/cost/media";
+import { categoryFor } from "@pikar/vault";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
-import { internalMutation, internalQuery } from "./_generated/server";
-import { hmacHex } from "./gmailAuth";
+import { internalMutation } from "./_generated/server";
 import { rateLimiter } from "./guardrails";
+// 25.1-01 (D2): renderReel runs under the ActionRetrier — the `submitBatch` idiom
+// (cockpit.ts EXTERNAL_TARGETS) — so a throw after `markRendering` still terminalizes.
+import { retrier } from "./index";
+import { contentHash } from "./lib/hash";
 // The plain-function half of the ledger writer: the limiter movement and its row must commit
 // or fail together (FIN-01). A separate ctx.runMutation would be a second transaction.
 import { recordMovement } from "./spendLedger";
+// The SOLE legal way to start an ingest workflow (it wires the onComplete that prevents a
+// stranded `processing` row) — the `saveReelToVault` precedent, verbatim.
+import { startIngest } from "./vaultIngest";
 
 /** A row past this point is finished. Re-delivery of its webhook must change NOTHING — fal's retry
  *  policy is undocumented, so at-least-once is the only safe assumption. */
 const TERMINAL = new Set<Doc<"mediaJobs">["status"]>(["succeeded", "failed", "blocked"]);
 
-export type ResolvedJob = {
-  jobId: Id<"mediaJobs">;
-  tenantId: string;
-  planId: Id<"plans">;
-  batchId: string;
-  kind: Doc<"mediaJobs">["kind"];
-  model: string;
-  terminal: boolean;
-};
-
-/**
- * Prove the caller knows the secret we minted for THIS job, then hand the route the row's own
- * facts. Returns `null` for every refusal — the route turns that into one 401 with no detail.
- *
- * **Everything security-relevant comes from the ROW.** `tenantId`, `planId`, `kind` and `model` are
- * read here and never taken from the callback body — the `/skillopt/writeback` rule verbatim
- * (`http.ts:123-129`): a body-supplied tenant is attacker-controllable and is a cross-tenant write.
- */
-export const resolveJob = internalQuery({
-  args: { raw: v.string(), digest: v.string() },
-  handler: async (ctx, { raw, digest }): Promise<ResolvedJob | null> => {
-    // FAIL CLOSED on the env, and this is the ONLY copy of that guard on purpose. A second one at
-    // the route would make the mutation check for this one vacuous, and this is the place that
-    // matters: without it `hmacHex(raw, "")` still yields a digest, which anyone can compute.
-    const secret = process.env.FAL_WEBHOOK_SECRET;
-    if (!secret) return null;
-
-    // A malformed or FOREIGN-TABLE id must never reach `ctx.db.get` — `normalizeId` returning null
-    // is the fail-closed shape (`schema.ts:1034`, where 20-02 recorded this exact contract).
-    const jobId = ctx.db.normalizeId("mediaJobs", raw);
-    if (!jobId) return null;
-
-    // `gmailAuth.verifyState:70`'s comparison verbatim, including the plain `===`. That precedent
-    // has guarded the OAuth `state` in production since Phase 2; introducing a second, different
-    // HMAC-comparison idiom here would be the thing to justify, not this.
-    if (digest !== (await hmacHex(raw, secret))) return null;
-
-    const row = await ctx.db.get(jobId);
-    if (!row) return null;
-    return {
-      jobId,
-      tenantId: row.tenantId,
-      planId: row.planId,
-      batchId: row.batchId,
-      kind: row.kind,
-      model: row.model,
-      terminal: TERMINAL.has(row.status),
-    };
-  },
-});
+// `ResolvedJob` and `resolveJob` — the fal webhook's HMAC-guarded row lookup — were REMOVED at
+// 25.1-06 (D14) together with the `/fal/callback/*` route, their only caller. `FAL_WEBHOOK_SECRET`
+// died with them and is out of `ENV_MANIFEST`. `landResult` below is unchanged and is now reached
+// only from `media.ts` (the OpenAI poll-and-store path) and `reliabilitySweep.ts` (the watchdog).
 
 /**
  * Kinds whose spend is a pure function of what WE SUBMITTED, so actual == estimate BY CONSTRUCTION.
@@ -235,11 +198,16 @@ export async function evaluateRenderTrigger(
   const deckReady = (shots ?? []).every((s) => hasAssetSource(s));
 
   if (deckReady && renderable.filter(needed).every((s) => s.status === "succeeded")) {
-    await ctx.db.patch(a.planId, { renderStatus: "rendering" });
-    await ctx.scheduler.runAfter(0, internal.render.renderReel.renderReel, {
-      tenantId: a.tenantId,
-      batchId: a.batchId,
-    });
+    // 25.1-01 (D2): under the retrier, never a bare runAfter — a renderReel crash after
+    // `markRendering` used to strand the plan at "rendering" forever. The run id lands on the
+    // plan in the SAME mutation, so `onRenderComplete` can resolve its own plan (`by_render_run`).
+    const runId = await retrier.run(
+      ctx,
+      internal.render.renderReel.renderReel,
+      { tenantId: a.tenantId, planId: a.planId, batchId: a.batchId },
+      { onComplete: internal.mediaComplete.onRenderComplete },
+    );
+    await ctx.db.patch(a.planId, { renderStatus: "rendering", renderRunId: String(runId) });
     return;
   }
 
@@ -345,6 +313,75 @@ async function afterCaptionLanding(ctx: MutationCtx, row: Doc<"mediaJobs">): Pro
   await ctx.db.patch(row.planId, {
     captionStatus: "failed",
     captionReason: fresh?.failureReason ?? "transcript_failed",
+  });
+}
+
+/**
+ * THE IMAGE VAULT SAVE (25.1-03, D5) — `saveReelToVault`'s twin for the other media kind.
+ *
+ * Before this, a generated image existed ONLY as `mediaJobs.assetStorageId`. The canvas reads that
+ * through the plan row, so recycling the thread's plan (`plans.resetPlan`) made the user's finished
+ * image unreachable from every surface at once — bytes still billed for, still stored, and gone.
+ *
+ * It lives HERE rather than beside the storage write in `media.ts` because `landResult` is the ONE
+ * terminal every image landing routes through: the fal webhook, the OpenAI inline `storeAndLand`,
+ * and the 25.1-02 watchdog sweep. A save on any single caller would miss the others.
+ *
+ * **SCOPED TO THE STANDALONE IMAGE** (`plans.mediaMode === "image"`), which is the same
+ * discriminator `batchToSubmit` and `imageEstimate` already read. A reel's scene still is the same
+ * `kind: "image"` row but its bytes are an INTERMEDIATE: `deleteIntermediates` deletes them at the
+ * render terminal, so a vault doc for one would point at a blob that is about to vanish. The reel's
+ * own deliverable is vaulted by `saveReelToVault`.
+ *
+ * Idempotent through `mediaJobs.vaultDocId` — per JOB, because after D8 one plan can hold several
+ * successful images and a per-plan pointer would make the second one unsaveable.
+ */
+async function saveImageToVault(
+  ctx: MutationCtx,
+  row: Doc<"mediaJobs">,
+  asset: { storageId: Id<"_storage">; mimeType: string },
+): Promise<void> {
+  if (row.kind !== "image" || row.vaultDocId) return;
+  const plan = await ctx.db.get(row.planId);
+  // The prompt is CONTENT-PLANE text the human reviewed before clicking Generate. It is the doc's
+  // body (this is the user's own vault, §4's audit rule is about the LOG) and it is what makes the
+  // image findable by search months later — an image with no text is a thumbnail with no handle.
+  const prompt = plan?.mediaMode === "image" ? plan.imagePrompt?.trim() : undefined;
+  if (!plan || plan.tenantId !== row.tenantId || !prompt) return;
+
+  const docId = await ctx.db.insert("vaultDocuments", {
+    tenantId: row.tenantId,
+    title: `Image: ${prompt.length > 80 ? `${prompt.slice(0, 80)}…` : prompt}`,
+    kind: "image", // the queryable class marker (`kind` is v.string() — a code-owned token)
+    // The BYTES decide, and `categoryFor` says so itself ("an uploaded image is still an image"):
+    // a user hunting for the picture they made looks under Images, not under Workspace docs.
+    category: categoryFor({ source: "agent", mimeType: asset.mimeType }),
+    source: "media",
+    mimeType: "text/markdown", // SEARCHABLE_MIME ⇒ the prompt is chunked + embedded
+    storedMimeType: asset.mimeType, // what the BYTES are — the PreviewModal render branch
+    storageId: asset.storageId,
+    size: new TextEncoder().encode(prompt).length,
+    contentHash: await contentHash(prompt),
+    text: prompt,
+    status: "processing",
+    sourcePlanId: row.planId, // Phase-26 provenance: this IS an authoritative write site
+    createdAt: Date.now(),
+  });
+  // The pointer BEFORE the ingest start: the guard must be set even if the workflow start throws,
+  // or a retried landing files a duplicate.
+  await ctx.db.patch(row._id, { vaultDocId: docId });
+  await startIngest(ctx, {
+    vaultDocId: docId,
+    tenantId: row.tenantId,
+    correlationId: row.batchId,
+  });
+  // Refs and counts ONLY (§4) — no prompt, no title, no url.
+  await ctx.runMutation(internal.audit.log, {
+    tenantId: row.tenantId,
+    correlationId: row.batchId,
+    eventType: "media.image_saved",
+    actor: "media",
+    payload: { planId: row.planId, jobId: row._id, docId: String(docId) },
   });
 }
 
@@ -517,6 +554,12 @@ export const landResult = internalMutation({
     // of a depth-tracking parser — the code bends to make the guard cheap, not the other way round.
     const resolution = resolutionRef(row, outcome.actual);
     await audit({ assetHash: outcome.assetHash, verdict, actualCents, reconciled, resolution });
+    // D5: the bytes reach the VAULT before any trigger fires — a save that ran after the render
+    // trigger would be racing a terminal that deletes intermediates.
+    await saveImageToVault(ctx, row, {
+      storageId: outcome.assetStorageId,
+      mimeType: outcome.mimeType,
+    });
     await maybeStartRender(ctx, row);
     await afterCaptionLanding(ctx, row);
     return null;
@@ -565,5 +608,49 @@ export const onSubmitComplete = internalMutation({
       });
     }
     await ctx.db.patch(plan._id, { renderStatus: "failed", renderReason: code });
+  },
+});
+
+/**
+ * The action-retrier terminal for the RENDER run (25.1-01, D2 — `onSubmitComplete`'s sibling).
+ *
+ * `renderReel` writes its own terminal through `recordRender` on every HANDLED failure; this
+ * callback exists for the unhandled ones — a throw after `markRendering` (upload-URL mint, storage
+ * read, an exhausted retrier) that would otherwise strand the plan at `"rendering"` forever, with
+ * the canvas saying "assembling" and `retryRender` refusing `not_failed`.
+ *
+ * Idempotent by the status guard: a run whose action already terminalized the plan (failed or
+ * rendered) finds it non-`rendering` and writes nothing — and a STALE run cannot fire at all,
+ * because every new schedule overwrites `renderRunId` and the lookup below misses.
+ */
+export const onRenderComplete = internalMutation({
+  args: onCompleteValidator,
+  handler: async (ctx, { runId, result }): Promise<void> => {
+    if (result.type === "success") return;
+
+    const plan = await ctx.db
+      .query("plans")
+      .withIndex("by_render_run", (q) => q.eq("renderRunId", String(runId)))
+      .unique();
+    if (!plan) return;
+    if (plan.renderStatus !== "rendering") return; // already terminalized — nothing to correct
+
+    // A CODE, never the retrier's error string — it can carry a URL or an env name (§4).
+    const code = result.type === "canceled" ? "render_canceled" : "render_crashed";
+    await ctx.db.patch(plan._id, {
+      renderStatus: "failed",
+      renderReason: code,
+      renderedAt: Date.now(),
+    });
+    // ONE dead letter, refs and codes ONLY (§4) — the `recordRender` failure-arm shape.
+    await ctx.db.insert("deadLetters", {
+      tenantId: plan.tenantId,
+      correlationId: String(runId),
+      workflowId: "media.render",
+      payload: { planId: plan._id, reasonCode: code },
+      error: code,
+      status: "new",
+      createdAt: Date.now(),
+    });
   },
 });

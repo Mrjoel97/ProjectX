@@ -1,8 +1,13 @@
 # The Business Blueprint — a standing spine for every agent
 
-> Status: DESIGN — awaiting owner review
+> Status: IMPLEMENTATION PARTIAL — 9/10 GSD plans complete; verification remains open
 > Date: 2026-07-27
 > Subsystems: Knowledge Vault (`docs/playbooks/vault.md`), Onboarding / Business Profile
+> GSD phase: `17.1-business-blueprint-corpus-synthesis-and-agent-spine`
+> Requirements: `BLPR-01`, `BLPR-02`
+> Execution state: `implemented` (partial; do not treat as verified)
+> Evidence: [17.1-09 implementation summary](../../../.planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-09-SUMMARY.md) · [open 17.1-10 plan](../../../.planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-10-PLAN.md) · [17.1-10 gate audit](../../../.planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-10-GATE-AUDIT.md)
+> Remaining gate: complete `17.1-10` (owner L1/L7 observations and a certifying L6 live golden eval), then write `17.1-10-SUMMARY.md` and phase `17.1-VERIFICATION.md`; neither closing artifact exists yet.
 > Scope pieces A (folder ingest) and D (visual rendering) are deliberately OUT — see
 > [Out of scope](#9-out-of-scope).
 

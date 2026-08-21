@@ -4,7 +4,6 @@ import { internal } from "./_generated/api";
 import { httpAction } from "./_generated/server";
 import { auth } from "./auth";
 import { verifyState } from "./gmailAuth";
-import { contentHash } from "./lib/hash";
 import { MICROSOFT_TOKEN_ENDPOINT, verifyMicrosoftState } from "./microsoftAuth";
 
 const http = httpRouter();
@@ -256,207 +255,15 @@ http.route({
   }),
 });
 
-// ── The fal webhook (MEDIA-01, plan 20-06) ───────────────────────────────────────────────────
+// ── The fal webhook: REMOVED (25.1-06, D14) ──────────────────────────────────────────────────
 //
-// The landing half of the media spine. It proves the caller knows a secret we minted for THIS job,
-// downloads the asset bytes HERE, stores them under the tenant, and discards the URL.
-//
-// **Downloading inside the webhook is what makes CLAUDE.md §4 structural instead of a promise.** A
-// signed fal URL is BOTH a content leak and a live credential; by fetching and storing here there is
-// nowhere in the schema for one to live, and the §4 scans in `llmRedaction.test.ts` pin that.
-//
-// ponytail: HMAC path segment, not Ed25519/JWKS. The segment proves the caller knows a secret we
-// minted for THIS job; it does NOT prove fal sent it. Upgrade path when that matters: verify
-// `X-Fal-Webhook-Signature` (Ed25519 over `request_id\nuser_id\ntimestamp\nsha256(body)`) against
-// fal's JWKS at `https://rest.fal.ai/.well-known/jwks.json`, cached <=24 h. FIRST confirm the Convex
-// default runtime's `crypto.subtle` supports Ed25519 — UNVERIFIED, research Open Question 3,
-// deliberately deferred out of this phase — and note that a file holding an `http.route` cannot be
-// "use node", so `node:crypto` is only reachable via an extra `runAction` hop.
-const FAL_TIMESTAMP_TOLERANCE_S = 300;
-/** Hosts an asset may be downloaded from. The URL comes from a third party, so an unguarded fetch
- *  here is an SSRF into whatever the caller names — and the caller only had to know ONE job's
- *  digest. Suffix match, so `v3.fal.media` passes and `fal.media.evil.com` does not. */
-const FAL_ASSET_HOSTS = ["fal.media", "fal.ai", "fal.run"];
-/** ~4 MB is a typical 10 s 480p clip (playbook: ~55 MB across a 13-line job). This is an abuse
- *  ceiling, not a budget: a provider that returns something enormous fails the line loudly. */
-const MAX_ASSET_BYTES = 32 * 1024 * 1024;
-
-/** ONE arm per kind, keyed on the ROW's kind — never on the payload's shape. `stt` is added by plan
- *  20-17; until then an unhandled kind fails with a code, because "find whatever url is in this body"
- *  is a third party choosing what we download. */
-const ASSET_PATH: Record<string, (p: Record<string, unknown>) => unknown> = {
-  video: (p) => (p.video as Record<string, unknown> | undefined)?.url,
-  image: (p) => (p.images as Array<Record<string, unknown>> | undefined)?.[0]?.url,
-  // 20-14. `fal-ai/inworld-tts` returns `{ audio: { url, content_type, file_name, file_size } }` —
-  // no duration, no character count, and no moderation field. Everything downstream of this line is
-  // the SAME code a video take walks; that sameness is the plan's whole argument.
-  tts: (p) => (p.audio as Record<string, unknown> | undefined)?.url,
-};
-
-/**
- * Kinds whose asset arrives INLINE in the callback rather than as a URL to fetch (plan 20-17).
- *
- * `scribe-v2` returns `{ words: [{ text, start, end, type, speaker_id }] }` in the payload itself —
- * there is no file and no URL, so the whole fetch-and-host-check path below simply does not apply.
- * Storing it is still the right move: the transcript is the burn stage's input, and a payload that
- * lived only in this request would have to be re-bought to be re-burned.
- *
- * Re-serialised rather than stored verbatim: the bytes that reach storage are then a value WE
- * produced from a shape we checked, not a provider's response body echoed onto disk.
- */
-const INLINE_ASSET: Record<
-  string,
-  // `Uint8Array<ArrayBuffer>`, not a bare `Uint8Array`: TS 5.9 made the view generic over its
-  // buffer, and the bare form is the SharedArrayBuffer-permitting supertype that `Blob` rejects.
-  (p: Record<string, unknown>) => { bytes: Uint8Array<ArrayBuffer>; mimeType: string } | null
-> = {
-  stt: (p) => {
-    if (!Array.isArray(p.words)) return null;
-    const words = p.words.flatMap((w) => {
-      const o = w as Record<string, unknown>;
-      if (typeof o.text !== "string") return [];
-      if (typeof o.start !== "number" || typeof o.end !== "number") return [];
-      // `type` absent means a plain word: the provider omits it on some rows and captions must not
-      // silently lose those. Anything else is carried through and dropped by the .ass writer.
-      return [{ text: o.text, start: o.start, end: o.end, type: String(o.type ?? "word") }];
-    });
-    return {
-      bytes: new TextEncoder().encode(JSON.stringify({ words })),
-      mimeType: "application/json",
-    };
-  },
-};
-
-/** The provider's checker, or `null` when it said nothing at all. `null` is NOT `false`. */
-function moderationOf(p: Record<string, unknown>): boolean | null {
-  const flags = p.has_nsfw_concepts;
-  if (!Array.isArray(flags) || flags.length === 0) return null;
-  return flags.some((f) => f === true);
-}
-
-/** What fal says it actually produced, by kind. Absent fields stay absent — the submitted spec then
- *  stands, and `landResult` records that as a re-price rather than a guess. */
-function actualOf(kind: string, p: Record<string, unknown>): Record<string, unknown> | undefined {
-  if (kind !== "image") return undefined;
-  const first = (p.images as Array<Record<string, unknown>> | undefined)?.[0];
-  const width = typeof first?.width === "number" ? first.width : undefined;
-  const height = typeof first?.height === "number" ? first.height : undefined;
-  return width === undefined && height === undefined ? undefined : { width, height };
-}
-
-/** A CODE from the provider's error, never its prose — the `calendar.ts:84` reasonCode idiom. A
- *  multi-word message fails the pattern and collapses to `provider_error`, which is the point. */
-function errorCode(body: { error?: unknown }): string {
-  const e = body.error;
-  return typeof e === "string" && /^[A-Za-z][A-Za-z0-9_.-]{0,79}$/.test(e) ? e : "provider_error";
-}
-
-http.route({
-  // `pathPrefix`, not a glob: Convex's router has no `*` syntax, so `path: "/fal/callback/*"` would
-  // match nothing at all.
-  pathPrefix: "/fal/callback/",
-  method: "POST",
-  handler: httpAction(async (ctx, req) => {
-    const unauthorized = () => new Response("unauthorized", { status: 401 });
-
-    // 1. REPLAY WINDOW. Three lines, and they kill replay of a captured URL + body. fal sends unix
-    //    SECONDS. An absent or unparseable header is a refusal, not a pass.
-    const ts = Number(req.headers.get("x-fal-webhook-timestamp"));
-    if (!Number.isFinite(ts) || Math.abs(Date.now() / 1000 - ts) > FAL_TIMESTAMP_TOLERANCE_S) {
-      return unauthorized();
-    }
-
-    // 2. The path segment — `gmailAuth.verifyState:66-71`'s shape verbatim, `lastIndexOf(".")`.
-    const segment = new URL(req.url).pathname.split("/").pop() ?? "";
-    const dot = segment.lastIndexOf(".");
-    if (dot <= 0) return unauthorized();
-    const job = await ctx.runQuery(internal.mediaComplete.resolveJob, {
-      raw: segment.slice(0, dot),
-      digest: segment.slice(dot + 1),
-    });
-    if (!job) return unauthorized();
-
-    // 3. IDEMPOTENCY. fal's retry policy is undocumented, so delivery is assumed at-least-once.
-    if (job.terminal) return new Response("ok", { status: 200 });
-
-    const body = (await req.json().catch(() => null)) as {
-      status?: unknown;
-      error?: unknown;
-      payload?: unknown;
-    } | null;
-    if (!body) return new Response("bad request", { status: 400 });
-
-    // Every failure below lands the row and returns 200: the row is terminal afterwards, so a fal
-    // retry is a no-op, and a non-2xx would only buy redeliveries that change nothing.
-    const failLand = async (code: string) => {
-      await ctx.runMutation(internal.mediaComplete.landResult, {
-        jobId: job.jobId,
-        outcome: { ok: false, code },
-      });
-      return new Response("ok", { status: 200 });
-    };
-
-    if (body.status !== "OK") return await failLand(errorCode(body));
-
-    const payload = (body.payload ?? {}) as Record<string, unknown>;
-    const inline = INLINE_ASSET[job.kind];
-    const extract = ASSET_PATH[job.kind];
-    if (!inline && !extract) return await failLand("unhandled_kind");
-
-    let bytes: Uint8Array<ArrayBuffer>;
-    let mimeType: string;
-    if (inline) {
-      // No fetch, no host check, no URL — there is nothing to SSRF into. The payload came through
-      // the HMAC-guarded route and is turned into bytes right here.
-      const asset = inline(payload);
-      if (!asset) return await failLand("no_asset_payload");
-      if (asset.bytes.byteLength === 0) return await failLand("asset_empty");
-      bytes = asset.bytes;
-      mimeType = asset.mimeType;
-    } else {
-      const rawUrl = extract?.(payload);
-      if (typeof rawUrl !== "string") return await failLand("no_asset_url");
-
-      let assetUrl: URL;
-      try {
-        assetUrl = new URL(rawUrl);
-      } catch {
-        return await failLand("bad_asset_url");
-      }
-      if (
-        assetUrl.protocol !== "https:" ||
-        !FAL_ASSET_HOSTS.some((h) => assetUrl.hostname === h || assetUrl.hostname.endsWith(`.${h}`))
-      ) {
-        return await failLand("asset_host_refused");
-      }
-
-      const assetRes = await fetch(assetUrl).catch(() => null);
-      if (!assetRes?.ok) return await failLand("asset_fetch_failed");
-      const buf = await assetRes.arrayBuffer();
-      if (buf.byteLength === 0) return await failLand("asset_empty");
-      if (buf.byteLength > MAX_ASSET_BYTES) return await failLand("asset_too_large");
-      bytes = new Uint8Array(buf);
-      mimeType = assetRes.headers.get("content-type") ?? "application/octet-stream";
-    }
-    const assetStorageId = await ctx.storage.store(new Blob([bytes], { type: mimeType }));
-
-    // THE URL DIES HERE. It is not passed to `landResult`, not logged, not stored — the row carries
-    // a storage id and a content hash, and there is no schema field it could live in.
-    await ctx.runMutation(internal.mediaComplete.landResult, {
-      jobId: job.jobId,
-      outcome: {
-        ok: true,
-        assetStorageId,
-        assetHash: await contentHash(bytes),
-        mimeType,
-        bytes: bytes.byteLength,
-        moderation: moderationOf(payload),
-        actual: actualOf(job.kind, payload),
-      },
-    });
-    return new Response("ok", { status: 200 });
-  }),
-});
+// The `/fal/callback/*` route, its HMAC path segment, its SSRF host allow-list and
+// `mediaComplete.resolveJob` all died here. ADR-017 retired fal as a provider and ADR-024 records
+// the second cutover to OpenAI; `submitLine` has not handed a webhook URL to anyone since. No
+// provider could reach the route, so the only caller it could ever have had was somebody holding
+// `FAL_WEBHOOK_SECRET` — a landing that writes a terminal `succeeded` and fetches an attacker-named
+// URL, kept alive for nothing. Assets now land through `media.ts`'s poll-and-store path, which is
+// where the "download here, never store the URL" rule (CLAUDE.md §4) lives today.
 
 // ── The render BLOB route (MEDIA-01, plan 20-15) ──────────────────────────────────────────────
 //
@@ -480,10 +287,10 @@ http.route({
 // satisfy. Upgrade path if the render ever runs somewhere we do not control: short-lived scoped
 // read tokens, which is a real design rather than a URL.
 //
-// NO HMAC PATH SEGMENT, unlike `/fal/callback/*`, and the difference is the caller. fal is a THIRD
-// PARTY that holds no secret of ours, so the segment is the only thing that can authenticate it.
-// Here the caller already proves knowledge of `MEDIA_RENDER_SECRET` in the header — and an HMAC
-// keyed on that same secret is derivable by anyone who has it. It would be ceremony, not defence.
+// NO HMAC PATH SEGMENT. The reasoning is preserved from when the fal callback above did have one:
+// a THIRD PARTY holds no secret of ours, so a per-job segment is the only thing that can
+// authenticate it. Here the caller already proves knowledge of `MEDIA_RENDER_SECRET` in the header
+// — and an HMAC keyed on that same secret is derivable by anyone who has it. Ceremony, not defence.
 http.route({
   // `pathPrefix`, not a glob: Convex's router has no `*` syntax (the 20-06 lesson).
   pathPrefix: "/media/blob/",

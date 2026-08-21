@@ -370,9 +370,195 @@ export const PLAN_REFUSALS: Record<string, PlanNote> = {
   },
 };
 
+/**
+ * WHICH MAILBOXES THIS TENANT MAY SEND THROUGH, and what the picker should say about it.
+ *
+ * Pure and exported so the branching is testable without a Convex transport — the same reason
+ * `reconnectLines` is.
+ *
+ * THE LOAD-BEARING RULE: Microsoft is offered on `mailReady`, NEVER on `connected`. A 17-05-era
+ * grant is connected, refreshable and real, and simply cannot send mail (ADR-018 put Calendar and
+ * Mail on ONE grant, so a pre-widening consent carries only the calendar half). Offering it would
+ * walk the user into `mail_scope_missing` at approve time instead of into re-consent now.
+ *
+ * There is deliberately no "active provider" anywhere: the choice is per-plan, so a second plan
+ * never inherits what someone clicked on a different one.
+ */
+export function mailboxOptions(input: {
+  googleConnected: boolean;
+  microsoftConnected: boolean;
+  microsoftMailReady: boolean;
+}): {
+  options: ("google" | "microsoft")[];
+  /** Shown when a Microsoft grant exists but predates the mail scope. */
+  microsoftNeedsReconsent: boolean;
+} {
+  const options: ("google" | "microsoft")[] = [];
+  if (input.googleConnected) options.push("google");
+  if (input.microsoftMailReady) options.push("microsoft");
+  return {
+    options,
+    microsoftNeedsReconsent: input.microsoftConnected && !input.microsoftMailReady,
+  };
+}
+
+const MAILBOX_LABEL: Record<"google" | "microsoft", string> = {
+  google: "Gmail",
+  microsoft: "Outlook",
+};
+
+/** The per-plan mailbox choice. Renders nothing when there is only one option and it is already
+ *  the plan's — a picker with one entry is noise. */
+function MailboxPicker({ plan }: { plan: Plan }) {
+  const gmail = useQuery(api.gmailAuth.gmailStatus, {});
+  const microsoft = useQuery(api.microsoftAuth.microsoftStatus, {});
+  const setProvider = useMutation(api.plans.setPlanMailProvider);
+
+  if (gmail === undefined || microsoft === undefined) return null;
+
+  const { options, microsoftNeedsReconsent } = mailboxOptions({
+    googleConnected: gmail.connected,
+    microsoftConnected: microsoft.connected,
+    microsoftMailReady: microsoft.mailReady,
+  });
+  // Absence means Google — the same default `delivery.send` applies to the row itself.
+  const chosen = plan.mailProvider ?? "google";
+
+  // Nothing to choose between, and nothing to warn about.
+  if (options.length < 2 && !microsoftNeedsReconsent) return null;
+
+  return (
+    <div style={{ margin: "0 0 0.75rem" }}>
+      <div style={label}>SEND FROM</div>
+      <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.35rem", flexWrap: "wrap" }}>
+        {options.map((provider) => (
+          <button
+            key={provider}
+            type="button"
+            aria-pressed={chosen === provider}
+            onClick={() => void setProvider({ planId: plan._id, mailProvider: provider })}
+            style={{
+              ...btn,
+              border: chosen === provider ? "1px solid var(--teal-600)" : "1px solid #e5e5e5",
+              background: chosen === provider ? "var(--teal-50, #f0fdfa)" : "#fff",
+              fontWeight: chosen === provider ? 700 : 500,
+            }}
+          >
+            {MAILBOX_LABEL[provider]}
+          </button>
+        ))}
+      </div>
+      {microsoftNeedsReconsent && (
+        <p style={{ ...dim, margin: "0.35rem 0 0" }}>
+          Your Microsoft connection covers calendar only.{" "}
+          <Link href="/connect-microsoft">Reconnect Microsoft</Link> to send mail from Outlook.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** One page a research specialist actually retrieved (`plans.sources`, written at landing). */
+type MemoSource = NonNullable<Plan["sources"]>[number];
+
+/** The retrieval stamp, in the card's own words. Mirrored by `memoCard.test.ts` — changing the
+ *  format is a deliberate act, not a silent one. */
+const retrievedLabel = (ms: number) =>
+  `Retrieved ${new Date(ms).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}`;
+
+/**
+ * The memo card's READABLE half: the specialist's document, rendered, and the pages it read.
+ *
+ * TWO DEFECTS, ONE COMPONENT (D11). The body used to print through a `white-space: pre-wrap`
+ * paragraph, so the product of a paid specialist turn showed the reader literal `#` and `**` —
+ * finished work looking broken. And the sources, which were retrieved, deduped, billed for and
+ * written into the vault document, never reached the card at all, so the findings were unverifiable
+ * exactly where the human decides.
+ *
+ * Hook-free and EXPORTED so `renderToStaticMarkup` can assert against real markup (the
+ * `GroundedSources` / `AwaitingCardBody` precedent): a regex over this file cannot tell a rendered
+ * heading from a printed `#`.
+ *
+ * ponytail: `MarkdownDocument` in its existing `compact` form (the same renderer the chat bubbles
+ * and the artifact preview use) — no second renderer, no tokenizer change. The references are a
+ * plain always-visible list rather than a `<details>` fold: a research turn returns a handful of
+ * URLs, and `GroundedSources`' fold exists for a list that accumulates across a whole thread.
+ * Upgrade path if a real memo ever carries dozens: reuse that fold verbatim.
+ */
+export function MemoCardBody({ body, sources }: { body: string; sources?: readonly MemoSource[] }) {
+  return (
+    <>
+      <div style={{ margin: "0.5rem 0 0.75rem", color: "var(--ink)", fontSize: "0.9rem" }}>
+        <MarkdownDocument markdown={body} compact />
+      </div>
+      {sources && sources.length > 0 && (
+        <section
+          aria-label="Sources"
+          style={{
+            margin: "0 0 0.75rem",
+            paddingTop: "0.6rem",
+            borderTop: "1px solid var(--rule)",
+          }}
+        >
+          {/* BRAND §3's tracked-caps section label. `--ink-soft`, not `--teal-600`: §6 bars teal-600
+              as small text on white (~2.9:1). */}
+          <div
+            style={{
+              fontSize: "0.68rem",
+              fontWeight: 700,
+              letterSpacing: "0.18em",
+              textTransform: "uppercase",
+              color: "var(--ink-soft)",
+            }}
+          >
+            Sources
+          </div>
+          <ul
+            style={{
+              listStyle: "none",
+              margin: "0.4rem 0 0",
+              padding: 0,
+              display: "grid",
+              gap: "0.4rem",
+            }}
+          >
+            {sources.map((source) => (
+              <li key={source.url} style={{ minWidth: 0, overflowWrap: "anywhere" }}>
+                {/* `--teal-900` for link text (BRAND §6). `noopener` because these are pages the
+                    MODEL chose to fetch, not links the product vouches for. */}
+                <a
+                  href={source.url}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  data-testid="memo-source"
+                  style={{ color: "var(--teal-900)", fontWeight: 600, fontSize: "0.85rem" }}
+                >
+                  {source.title.trim() || source.url}
+                </a>
+                {/* The URL is READ, not merely hovered — checking a finding must not need a mouse.
+                    Suppressed when the title fell back to it, so it is never printed twice. */}
+                <div style={{ ...dim, fontSize: "0.75rem" }}>
+                  {source.title.trim() ? `${source.url} · ` : ""}
+                  {retrievedLabel(source.retrievedAt)}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </>
+  );
+}
+
 function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
   const execute = useMutation(api.cockpit.executePlan);
   const setSendTime = useMutation(api.plans.setPlanSendTime);
+  const managedEvent = useQuery(
+    api.calendarEvents.forCard,
+    plan.kind === "calendar_manage" && plan.calendarManagedEventId
+      ? { managedEventId: plan.calendarManagedEventId }
+      : "skip",
+  );
   const [busy, setBusy] = useState(false);
   // The governed-refusal note, typed off `PlanNote` so the entry's own `link.label` rides along.
   // A refusal LEAVES the plan `proposed`, which is the only reason a note in this component's
@@ -467,16 +653,7 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
     return (
       <div style={box} data-testid="memo-plan-card">
         <div style={label}>NEXT-STEP MEMO</div>
-        <p
-          style={{
-            whiteSpace: "pre-wrap",
-            margin: "0.5rem 0 0.75rem",
-            color: "var(--ink)",
-            fontSize: "0.9rem",
-          }}
-        >
-          {body}
-        </p>
+        <MemoCardBody body={body} sources={plan.sources} />
         <p style={{ ...dim, margin: "0 0 0.75rem" }}>
           Approving saves this to your knowledge vault. Nothing is sent to anyone.
         </p>
@@ -686,11 +863,9 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
   // the memo/CRM/calendar reason — recipients, mode, the send-time picker and "Send to N
   // recipients" are all lies on a calendar change.
   //
-  // NOTHING CAN STAGE THIS PLAN YET. Plan 17-09 owns the staging tool, and 17-09-03 owns the
-  // registry-backed version of this card. What is deliberately NOT rendered here is the ORIGINAL
-  // event's title and time: they live in the `calendarEvents` registry row, this component only
-  // receives the plan, and inventing them from the desired state would be exactly the
-  // provenance-laundering failure this codebase keeps having. The reference is shown instead.
+  // The registry snapshot was refreshed in the SAME transaction that proposed this plan. It is the
+  // exact before-state the fresh etag names; reading it here avoids reconstructing an original from
+  // desired values (provenance laundering) and avoids adding duplicate snapshot fields to schema.
   if (plan.kind === "calendar_manage") {
     const removing = plan.calendarOperation === "delete";
     const providerName =
@@ -702,48 +877,74 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
       ? []
       : (
           [
-            ["New title", plan.eventTitle],
-            ["New time", plan.eventStartMs ? formatAbsolute(plan.eventStartMs) : undefined],
+            ["Title", plan.eventTitle],
+            ["Time", plan.eventStartMs ? formatAbsolute(plan.eventStartMs) : undefined],
             [
-              "New length",
+              "Duration",
               plan.eventDurationMs ? `${Math.round(plan.eventDurationMs / 60000)} min` : undefined,
             ],
           ] as [string, string | undefined][]
         ).filter((row): row is [string, string] => Boolean(row[1]));
     return (
       <div style={box} data-testid="calendar-manage-plan-card">
-        <div style={label}>CALENDAR CHANGE</div>
+        <div style={label}>CALENDAR MANAGEMENT</div>
         <div style={{ margin: "0.5rem 0" }}>
           <strong>
             {removing ? "Remove an event from your calendar" : "Update an event on your calendar"}
           </strong>
         </div>
         <div style={dim}>Calendar: {providerName}</div>
-        {/* The REFERENCE, not a reconstructed title: this card cannot read the registry row, and a
-            title it made up would be worse than an id it can prove. */}
-        <div style={dim}>Event reference: {plan.calendarManagedEventId ?? "—"}</div>
-        {changes.map(([name, value]) => (
-          <div key={name} style={dim}>
-            {name}: {value}
+        <div
+          data-testid="calendar-manage-original"
+          style={{ margin: "0.75rem 0", padding: "0.65rem", borderLeft: "3px solid var(--rule)" }}
+        >
+          <div style={label}>CURRENT EVENT</div>
+          {managedEvent === undefined ? (
+            <div style={dim}>Loading the event you are changing…</div>
+          ) : managedEvent === null ? (
+            <div style={dim}>
+              This managed event is no longer available. Ask Pikar to list it again.
+            </div>
+          ) : (
+            <>
+              <div style={{ marginTop: "0.25rem" }}>
+                <strong>{managedEvent.title || "(untitled event)"}</strong>
+              </div>
+              <div style={dim}>Time: {formatAbsolute(managedEvent.startMs)}</div>
+              <div style={dim}>Duration: {Math.round(managedEvent.durationMs / 60000)} min</div>
+            </>
+          )}
+        </div>
+        {!removing && changes.length > 0 && (
+          <div data-testid="calendar-manage-proposed" style={{ margin: "0.75rem 0" }}>
+            <div style={label}>PROPOSED CHANGES</div>
+            {changes.map(([name, value]) => (
+              <div key={name} style={dim}>
+                {name}: {value}
+              </div>
+            ))}
           </div>
-        ))}
+        )}
         {!removing && changes.length === 0 && (
           <div style={dim}>No change has been staged yet, so there is nothing to approve.</div>
         )}
         <p style={{ ...dim, margin: "0.75rem 0" }}>
           {removing
-            ? `Approving takes this event off your ${providerName}. Nothing is sent to anyone.`
-            : `Approving changes this event on your ${providerName}. Nothing is sent to anyone.`}
+            ? `This event remains on your ${providerName}. Approve to remove exactly this event; ` +
+              "Pikar makes no additional delivery promises."
+            : `The current event stays unchanged until you Approve these exact changes on ${providerName}.`}
         </p>
         <button
           type="button"
-          disabled={busy}
+          disabled={busy || managedEvent == null || (!removing && changes.length === 0)}
           onClick={() => void approve()}
           style={{
             ...btn,
-            background: "var(--teal-600)",
-            color: "#fff",
-            border: "none",
+            background: removing ? "transparent" : "var(--teal-600)",
+            color: removing ? "var(--danger-text)" : "var(--card)",
+            border: removing
+              ? "1px solid color-mix(in srgb, var(--danger-text) 45%, var(--rule))"
+              : "none",
             fontWeight: 600,
           }}
         >
@@ -789,6 +990,7 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
           Send to {recipients.length} recipient{recipients.length === 1 ? "" : "s"} ({mode})
         </li>
       </ol>
+      <MailboxPicker plan={plan} />
       <div style={{ margin: "0 0 0.75rem" }}>
         <div style={label}>SEND TIME</div>
         <input
@@ -900,6 +1102,55 @@ function CanceledCard({ plan }: { plan: Plan; threadId?: string }) {
   const [note, setNote] = useState<string | null>(null);
   const sendAt = plan.sendAt;
   const futureSet = Boolean(sendAt && sendAt > Date.now());
+
+  if (plan.kind === "calendar_manage" && plan.calendarFailureCode) {
+    const reconnectHref =
+      plan.calendarProvider === "microsoft" ? "/connect-microsoft" : "/connect-gmail";
+    const reason = (() => {
+      switch (plan.calendarFailureCode) {
+        case "conflict":
+          return (
+            "The event changed after this proposal was staged. Pikar did not overwrite it. " +
+            "List managed events again, then restage the change."
+          );
+        case "attendees_present":
+          return "The event now has attendees, so Pikar refused to change it. Nothing was removed or updated.";
+        case "reauth":
+          return (
+            "The calendar connection needs attention. Reconnect it, list the event again, then " +
+            "restage the change."
+          );
+        case "provider_unsupported":
+          return "Microsoft event removal is not supported safely. The event is still on the calendar.";
+        case "not_found":
+        case "not_managed":
+          return (
+            "That managed event is no longer available. List managed events again before " +
+            "proposing another change."
+          );
+        case "needs_inspection":
+          return "The event needs a fresh calendar snapshot. List it again, then restage the change.";
+        default:
+          return (
+            "The calendar provider refused this change. The event was not changed; list it again " +
+            "before restaging."
+          );
+      }
+    })();
+    return (
+      <div style={box} data-testid="calendar-manage-refusal">
+        <div style={label}>CALENDAR CHANGE REFUSED</div>
+        <p role="alert" style={{ color: "var(--danger-text)", margin: "0.5rem 0" }}>
+          {reason}
+        </p>
+        {plan.calendarFailureCode === "reauth" && (
+          <Link href={reconnectHref} style={{ color: "var(--teal-900)", fontWeight: 600 }}>
+            Reconnect calendar →
+          </Link>
+        )}
+      </div>
+    );
+  }
 
   async function doReschedule() {
     if (busy || !futureSet) return;
@@ -1904,6 +2155,13 @@ const VERB: Record<string, [running: string, done: string]> = {
   // card and applies nothing, so this must never read "Saved" or "Updated your figures" — the
   // write happens on Approve, and BRAND §1 forbids claiming an action that did not happen.
   stageFinanceWrite: ["Preparing a figure update…", "Figure update ready to approve"],
+  // Phase-23 (SKILL-02): MANDATORY beside the schema literal — traceParity.test.ts asserts set
+  // equality BOTH ways, so either half alone is RED. The done state is the PROMISE the tool keeps:
+  // it writes a CANDIDATE that is structurally incapable of going live, so this must never read
+  // "Learned", "Updated how I work" or anything implying the change took effect. Activation needs
+  // a passing eval AND the owner's own click; BRAND §1 forbids claiming an action that did not
+  // happen, and "it changed how I work" would be exactly that claim.
+  authorSkillCandidate: ["Drafting a skill update…", "Skill update ready for review"],
 };
 const FALLBACK: [string, string] = ["Working…", "Done"];
 

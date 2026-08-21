@@ -9,7 +9,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CONTENT_DRAFTER_SKILL } from "@pikar/contracts/skill";
+import { AGENT_AUTHORABLE_SKILLS, CONTENT_DRAFTER_SKILL } from "@pikar/contracts/skill";
 import {
   ACTION_TYPES,
   type ActionType,
@@ -1583,6 +1583,214 @@ test("proposeCalendarEvent without clientContext refuses and leaves the plan unt
   await expectCalendarStageEmpty(t, planId);
 });
 
+// ── 17-09: managed-event discovery and inspect-then-stage management ──────────────────────────
+
+async function seedManagedToolEvent(
+  t: T,
+  planId: Id<"plans">,
+  over: Partial<{
+    tenantId: string;
+    title: string;
+    startMs: number;
+    etag: string | undefined;
+    attendeeFree: boolean;
+  }> = {},
+) {
+  const etag = "etag" in over ? over.etag : '"stored"';
+  return await t.mutation(internal.calendarEvents.upsertManaged, {
+    tenantId: over.tenantId ?? "t1",
+    sourcePlanId: planId,
+    provider: "google",
+    externalEventId: `evt_${over.title ?? Math.random()}`,
+    ...(etag === undefined ? {} : { etag }),
+    title: over.title ?? "Quarterly review",
+    startMs: over.startMs ?? PIN_CLOCK.nowMs + 3_600_000,
+    durationMs: 30 * 60_000,
+    tz: PIN_CLOCK.tz,
+    attendeeFree: over.attendeeFree ?? true,
+  });
+}
+
+async function seedGoogleCalendarGrant(t: T) {
+  await t.run((ctx) =>
+    ctx.db.insert("gmailTokens", {
+      tenantId: "t1",
+      refreshToken: "refresh-token",
+      accessToken: "access-token",
+      expiresAt: Date.now() + 3_600_000,
+      scope: "https://www.googleapis.com/auth/calendar.events",
+      updatedAt: Date.now(),
+    }),
+  );
+}
+
+const inspectedGoogleEvent = (over: { attendees?: unknown[]; etag?: string } = {}) =>
+  new Response(
+    JSON.stringify({
+      id: "evt_provider",
+      etag: over.etag ?? '"fresh"',
+      summary: "Provider title",
+      start: { dateTime: new Date(PIN_CLOCK.nowMs + 3_600_000).toISOString() },
+      end: { dateTime: new Date(PIN_CLOCK.nowMs + 5_400_000).toISOString() },
+      attendees: over.attendees ?? [],
+    }),
+    { status: 200, headers: { "Content-Type": "application/json" } },
+  );
+
+test("listManagedCalendarEvents is bounded, stable-ref based, and strictly read-only", async () => {
+  const { t, planId } = await setup();
+  const newest = await seedManagedToolEvent(t, planId, {
+    title: "Newest",
+    startMs: PIN_CLOCK.nowMs + 50 * 3_600_000,
+  });
+  await seedManagedToolEvent(t, planId, { title: "Needs inspection", etag: undefined });
+  await seedManagedToolEvent(t, planId, { title: "Has guests", attendeeFree: false });
+  await seedManagedToolEvent(t, planId, { tenantId: "t2", title: "Foreign" });
+  const fetchMock = vi.fn(() => {
+    throw new Error("managed-event listing must never call a provider");
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  try {
+    const reply = await call(t, planId, "listManagedCalendarEvents", {});
+    expect(reply).toContain(`ref=${newest}`);
+    expect(reply).toContain("Newest");
+    expect(reply).not.toMatch(/Needs inspection|Has guests|Foreign/);
+    expect(reply).toMatch(/2 other event\(s\).*omitted/i);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await t.run((ctx) => ctx.db.query("audit").collect())).toEqual([]);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+test("listManagedCalendarEvents reports an honest empty result", async () => {
+  const { t, planId } = await setup();
+  expect(await call(t, planId, "listManagedCalendarEvents", {})).toMatch(
+    /no Pikar-managed calendar events/i,
+  );
+});
+
+test("proposeCalendarChange inspects once, copies the fresh etag, and only proposes", async () => {
+  const { t, planId } = await setup();
+  const managedEventId = await seedManagedToolEvent(t, planId);
+  await seedGoogleCalendarGrant(t);
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce(Response.json({ access_token: "fresh-access-token", expires_in: 3600 }))
+    .mockResolvedValueOnce(inspectedGoogleEvent());
+  vi.stubGlobal("fetch", fetchMock);
+
+  try {
+    const reply = await callClock(t, planId, "proposeCalendarChange", {
+      managedEventId: String(managedEventId),
+      operation: "update",
+      title: "Updated title",
+      when: "in 3 hours",
+      durationMinutes: 45,
+    });
+    expect(reply).toMatch(/staged|approve/i);
+    expect(fetchMock).toHaveBeenCalledTimes(2); // one OAuth refresh, then one provider inspection
+    const inspectCall = fetchMock.mock.calls[1] as unknown as [unknown, RequestInit | undefined];
+    expect(inspectCall[1]?.method).toBeUndefined(); // inspection GET, never a provider write
+
+    const plan = await readPlan(t, planId);
+    expect(plan).toMatchObject({
+      kind: "calendar_manage",
+      status: "proposed",
+      calendarManagedEventId: managedEventId,
+      calendarExpectedEtag: '"fresh"',
+      calendarOperation: "update",
+      eventTitle: "Updated title",
+      eventStartMs: PIN_CLOCK.nowMs + 3 * 3_600_000,
+      eventDurationMs: 45 * 60_000,
+    });
+    expect(plan?.calendarRunId).toBeUndefined();
+    expect(plan?.status).not.toMatch(/approved|delivering|done/);
+    expect(await t.run((ctx) => ctx.db.query("audit").collect())).toEqual([]);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+test("proposeCalendarChange refuses ambiguous time and delete content before inspection", async () => {
+  for (const input of [
+    { operation: "update", when: "4am" },
+    { operation: "delete", title: "Must not ride a delete" },
+  ] as const) {
+    const { t, planId } = await setup();
+    const managedEventId = await seedManagedToolEvent(t, planId);
+    const fetchMock = vi.fn(() => {
+      throw new Error("invalid proposal must stop before provider inspection");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const reply = await callClock(t, planId, "proposeCalendarChange", {
+        managedEventId: String(managedEventId),
+        ...input,
+      });
+      expect(reply).toMatch(/nothing was staged/i);
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect((await readPlan(t, planId))?.status).toBe("collecting");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  }
+});
+
+test("fresh attendees and reconnect both leave the plan untouched", async () => {
+  const attendeeCase = await setup();
+  const attendeeId = await seedManagedToolEvent(attendeeCase.t, attendeeCase.planId);
+  await seedGoogleCalendarGrant(attendeeCase.t);
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({ access_token: "fresh-access-token", expires_in: 3600 }),
+      )
+      .mockResolvedValueOnce(inspectedGoogleEvent({ attendees: [{}] })),
+  );
+  try {
+    expect(
+      await callClock(attendeeCase.t, attendeeCase.planId, "proposeCalendarChange", {
+        managedEventId: String(attendeeId),
+        operation: "delete",
+      }),
+    ).toMatch(/attendees/i);
+    expect((await readPlan(attendeeCase.t, attendeeCase.planId))?.status).toBe("collecting");
+  } finally {
+    vi.unstubAllGlobals();
+  }
+
+  const reconnectCase = await setup();
+  const reconnectId = await seedManagedToolEvent(reconnectCase.t, reconnectCase.planId);
+  expect(
+    await callClock(reconnectCase.t, reconnectCase.planId, "proposeCalendarChange", {
+      managedEventId: String(reconnectId),
+      operation: "delete",
+    }),
+  ).toMatch(/reconnect/i);
+  expect((await readPlan(reconnectCase.t, reconnectCase.planId))?.status).toBe("collecting");
+});
+
+test("foreign and missing managed-event refs are indistinguishable", async () => {
+  const { t, planId } = await setup();
+  const foreign = await seedManagedToolEvent(t, planId, { tenantId: "t2" });
+  const missing = String(foreign).replace(/.$/, (last) => (last === "a" ? "b" : "a"));
+
+  const foreignReply = await callClock(t, planId, "proposeCalendarChange", {
+    managedEventId: String(foreign),
+    operation: "delete",
+  });
+  const missingReply = await callClock(t, planId, "proposeCalendarChange", {
+    managedEventId: missing,
+    operation: "delete",
+  });
+  expect(foreignReply).toBe(missingReply);
+  expect((await readPlan(t, planId))?.status).toBe("collecting");
+});
+
 // ── Phase 18 (ACTN-04): the createDocument tool ───────────────────────────────
 // The surface the model actually calls. Everything before it in this phase is machinery; these
 // rows pin what the machinery is FOR: one governed artifact in the tenant's vault, a sentence back
@@ -2640,4 +2848,127 @@ test("buildAgentContext describes a finance_write plan as figures, NEVER as an e
   // The same promise the crm_write arm makes: approving writes the user's OWN records, and the
   // model must not offer to send it to anyone.
   expect(ctxText).toMatch(/not an email/i);
+});
+
+// ── Phase-23 (SKILL-02): the skill-authoring tool exists ONLY under the Executive grant ────────
+//
+// The governance property this whole phase rests on is CAPABILITY MINIMIZATION BY CONSTRUCTION,
+// not by instruction. These tests assert the tool's ABSENCE in every context that is not a real
+// Executive turn — and absence is asserted on the RETURNED RECORD, because that record is what
+// `invokeTool` can reach. A withheld-but-constructed closure would still be callable.
+
+const authoringGrant = (over?: Record<string, unknown>) => ({
+  grantWebResearch: false,
+  grantDispatch: false,
+  grantSkillAuthoring: true,
+  threadId: "thread1",
+  rootRequestId: "turn1",
+  ...over,
+});
+
+test("authorSkillCandidate is ABSENT without the grant, and absent with the grant but no lineage", () => {
+  const stubCtx = {} as Parameters<typeof buildCockpitTools>[0];
+  const planId = "plan-stub" as Id<"plans">;
+  const keys = (agentContext?: Parameters<typeof buildCockpitTools>[6]) =>
+    Object.keys(
+      buildCockpitTools(stubCtx, "t1", planId, undefined, undefined, undefined, agentContext),
+    );
+
+  // No agentContext at all — the default every legacy caller gets.
+  expect(keys()).not.toContain("authorSkillCandidate");
+  // Granted, but with no turn identity to attribute the authorship to. A row whose provenance
+  // cannot name the turn that produced it is exactly what 23-01's index exists to prevent.
+  expect(keys(authoringGrant({ threadId: undefined }))).not.toContain("authorSkillCandidate");
+  expect(keys(authoringGrant({ rootRequestId: undefined }))).not.toContain("authorSkillCandidate");
+  // Lineage present but the grant withheld — the specialist's shape.
+  expect(keys(authoringGrant({ grantSkillAuthoring: false }))).not.toContain(
+    "authorSkillCandidate",
+  );
+  // All three present: the Executive's shape, and the ONLY shape that yields the key.
+  expect(keys(authoringGrant())).toContain("authorSkillCandidate");
+});
+
+test("the authoring grant is SEPARATE from the dispatch grant in both directions", () => {
+  const stubCtx = {} as Parameters<typeof buildCockpitTools>[0];
+  const planId = "plan-stub" as Id<"plans">;
+  const keys = (agentContext: Parameters<typeof buildCockpitTools>[6]) =>
+    Object.keys(
+      buildCockpitTools(stubCtx, "t1", planId, undefined, undefined, undefined, agentContext),
+    );
+
+  // Dispatch without authoring: the tool is absent, dispatchResearch is present.
+  const dispatchOnly = keys(authoringGrant({ grantDispatch: true, grantSkillAuthoring: false }));
+  expect(dispatchOnly).toContain("dispatchResearch");
+  expect(dispatchOnly).not.toContain("authorSkillCandidate");
+
+  // Authoring without dispatch: the mirror. One flag can never imply the other — dispatching a
+  // specialist spends money, authoring a skill changes what every future turn is told to be.
+  const authoringOnly = keys(authoringGrant({ grantDispatch: false }));
+  expect(authoringOnly).toContain("authorSkillCandidate");
+  expect(authoringOnly).not.toContain("dispatchResearch");
+});
+
+test("authorSkillCandidate exposes EXACTLY {name, authoredBody} over the closed agent set", () => {
+  const tools = buildCockpitTools(
+    {} as Parameters<typeof buildCockpitTools>[0],
+    "t1",
+    "plan-stub" as Id<"plans">,
+    undefined,
+    undefined,
+    undefined,
+    authoringGrant(),
+  );
+  const schema = tools.authorSkillCandidate.inputSchema as unknown as {
+    jsonSchema: {
+      properties: Record<string, { enum?: string[] }>;
+      required: string[];
+      additionalProperties: boolean;
+    };
+  };
+
+  // KEY-SET EQUALITY. A tenantId, status, version, author or evidence property appearing here
+  // would be a field the MODEL could set — the entire authorization story of this tool is that no
+  // such field exists.
+  expect(Object.keys(schema.jsonSchema.properties).sort()).toEqual(["authoredBody", "name"]);
+  expect([...schema.jsonSchema.required].sort()).toEqual(["authoredBody", "name"]);
+  expect(schema.jsonSchema.additionalProperties).toBe(false);
+  // The enum is SOURCED from the contract, not re-listed: a second copy of these names is how the
+  // model-visible set and the server-side check drift apart.
+  expect(schema.jsonSchema.properties.name?.enum).toEqual([...AGENT_AUTHORABLE_SKILLS]);
+});
+
+test("the authoring tool's region reaches nothing but publishAgentCandidate", () => {
+  const src = readLlmSource();
+  const from = src.indexOf("  const skillAuthoringTool = {");
+  const to = src.indexOf("  const allTools = {", from);
+  expect(from).toBeGreaterThan(-1);
+  expect(to).toBeGreaterThan(from);
+  const region = src.slice(from, to);
+  expect(region.length).toBeGreaterThan(800); // non-vacuity: the real closure was found
+
+  // The ONE downstream. Named mutation that turns this red: point execute at any other mutation.
+  expect(region).toContain("internal.skills.publishAgentCandidate");
+
+  // Everything this tool must NOT be able to reach. Activation and evidence are the governance
+  // boundary; scheduler/plans/delivery are how a tool turns into an outward action; the eval
+  // fixtures are what the authoring agent must never see (it would be marking its own homework).
+  for (const forbidden of [
+    "activateTenantCandidate",
+    "activateCandidate",
+    "activateSkillVersion",
+    "transitionSkillActivation",
+    "recordTenantEvalEvidence",
+    "recordEvalEvidence",
+    "ownerApproval",
+    "requireOwner",
+    "ctx.scheduler",
+    "internal.plans",
+    "internal.delivery",
+    "internal.gmail",
+    "buildCockpitTools",
+    "evidence",
+    "fixture",
+  ]) {
+    expect(region, `the authoring tool region reaches ${forbidden}`).not.toContain(forbidden);
+  }
 });

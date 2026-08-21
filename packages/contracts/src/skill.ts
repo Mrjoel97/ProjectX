@@ -324,6 +324,80 @@ export function isUserAuthorableSkill(name: string): name is UserAuthorableSkill
 }
 
 /**
+ * The v0 set the EXECUTIVE AGENT may draft a business adaptation for (Phase 23, SKILL-02).
+ *
+ * DELIBERATELY A SEPARATE LITERAL — not `= USER_AUTHORABLE_SKILLS`, not a filter over it. The two
+ * sets answer different questions and must be able to move independently: user-authorability is a
+ * PRODUCT decision ("we can honestly explain this skill to a user"), agent-authorability is a
+ * CAPABILITY decision ("we are willing for a model to draft a body here at all"). Aliasing them
+ * would mean a later product widening of the user set SILENTLY widens what a model can write, and
+ * capability minimization by construction is the whole Phase 23 thesis — the narrowing has to be
+ * able to exist before it is needed. `skillAuthoring.test.ts` pins the exact set AND its subset
+ * relationship to BOTH `USER_AUTHORABLE_SKILLS` and `GATED_SKILLS`, so a widening past either is a
+ * red test rather than a review catch.
+ *
+ * Every member must be EVAL-REACHABLE. An agent-minted row can only ever leave `candidate` through
+ * a passing held-out run plus owner approval, so a name no fixture drives would mint rows that are
+ * structurally un-activatable — the `document-analyst` / `media-director` deadlock recorded above.
+ * These three are the dispatched business specialists (`dispatch.runSpecialist` ->
+ * `llm.runSpecialistTurn`), each driven by exactly one held-out golden fixture.
+ */
+export const AGENT_AUTHORABLE_SKILLS = [
+  OFFER_ARCHITECT_SKILL,
+  MONEY_MODEL_DESIGNER_SKILL,
+  LEAD_ENGINE_SKILL,
+] as const;
+
+/** A registry name the Executive Agent may draft an adaptation for. */
+export type AgentAuthorableSkill = (typeof AGENT_AUTHORABLE_SKILLS)[number];
+
+/** Whether the Executive Agent may draft an adaptation for this registry name. */
+export function isAgentAuthorableSkill(name: string): name is AgentAuthorableSkill {
+  return (AGENT_AUTHORABLE_SKILLS as readonly string[]).includes(name);
+}
+
+/**
+ * The single code-owned identity for the Executive Agent AS AN AUTHOR. Not a user id, not a model
+ * id, and never model- or client-supplied: the candidate writer stamps this constant server-side,
+ * so an `author === "agent"` row cannot be forged into looking like some other agent, and swapping
+ * the underlying model never rewrites authorship history.
+ */
+export const EXECUTIVE_AGENT_AUTHOR_ID = "executive-agent" as const;
+
+/**
+ * WHICH agent turn drafted an agent-authored row (Phase 23, SKILL-02). Refs ONLY (CLAUDE.md §4):
+ * ids, never the prompt, the draft, the tool call, or any model output.
+ *
+ * This doubles as the idempotence key: one source turn may mint at most one candidate, so an
+ * identical retry of the same turn recovers the same row instead of minting a second one.
+ */
+export type AgentSkillSource = {
+  /** Always `EXECUTIVE_AGENT_AUTHOR_ID` in v1 — stamped by the server, never by the model. */
+  authorAgentId: string;
+  /** The cockpit thread the authoring turn belongs to. */
+  sourceThreadId: string;
+  /** The exact turn within that thread. Thread + turn IS the retry identity. */
+  sourceTurnId: string;
+};
+
+/**
+ * The owner's approval of ONE agent-authored candidate, bound to ONE eval run (Phase 23, SKILL-02).
+ *
+ * Activation of an agent row needs BOTH halves, and they are written in the SAME transaction as the
+ * status change — so an `active` agent row without recorded owner + eval evidence is impossible by
+ * construction rather than by policy. Three refs and a timestamp: no prose, no rationale field,
+ * nothing a model could ever have influenced.
+ */
+export type SkillOwnerApproval = {
+  /** The `users` row id of the approving owner. Derived from `requireOwner`, never from args. */
+  ownerUserId: string;
+  /** Epoch ms of the approving transaction. */
+  approvedAt: number;
+  /** The exact eval run whose passing evidence sat on the row at approval time. */
+  evalRunId: string;
+};
+
+/**
  * UTF-8 byte cap on ONE authored adaptation. Bounds both the stored row and the per-turn prompt
  * cost the adaptation adds. BYTES, not characters: a character cap lets one multibyte paste carry
  * ~4x the tokens the number implies.
@@ -391,8 +465,29 @@ export type EvalEvidence = {
    * unchanged and `hasPassingEvidence` never reads this field.
    */
   tenantTarget?: EvalEvidenceTenantTarget;
+  /**
+   * 23-04 (SKILL-02): WHICH SUITE produced this evidence. OPTIONAL and purely ADDITIVE — every
+   * global and Phase-21 tenant evidence row written before Phase 23 parses unchanged, and neither
+   * `hasPassingEvidence` nor `hasPassingTenantEvidence` ever reads it.
+   * `hasPassingAgentTenantEvidence` DOES, and refuses without it.
+   */
+  suite?: EvalSuiteIdentity;
   /** Epoch ms the evidence was recorded. */
   ts: number;
+};
+
+/**
+ * The identity of the held-out golden suite that produced a piece of evidence (Phase 23, SKILL-02).
+ * Refs and counts only: a revision string, a hash of the sorted fixture listing, a count. No fixture
+ * id, no prompt, no expectation — evidence is a row the owner review surface renders, and the
+ * authoring agent must never be able to read the corpus it is being judged against.
+ */
+export type EvalSuiteIdentity = {
+  /** Deliberate, human-bumped. Changing it is the act that retires older evidence. */
+  revision: string;
+  /** SHA-256 over `<file>:<sha256>` for every fixture, sorted. Mechanical. */
+  casesHash: string;
+  caseCount: number;
 };
 
 /**
@@ -457,6 +552,72 @@ export function hasPassingTenantEvidence(
       t.registryTenantId === target.registryTenantId &&
       t.name === target.name &&
       t.version === target.version
+    );
+  } catch {
+    return false; // unparseable → fail closed
+  }
+}
+
+/**
+ * THE CURRENT HELD-OUT SUITE (Phase 23, SKILL-02) — the code-owned half of the eval-gate identity.
+ *
+ * It lives HERE, in a pure package, and not in the runner's manifest file, for one reason: the
+ * activation mutation runs inside Convex and has no filesystem. A gate that could only be verified
+ * by reading `eval-cases/` off disk is not a gate the server can enforce, so the fact activation
+ * compares against has to be a compiled constant.
+ *
+ * `run-eval-golden.mjs` reads this block off disk by regex (it has no build step) and asserts all
+ * three fields against the fixtures actually present, BEFORE the first paid turn. So the three can
+ * never silently disagree: a fixture edit reddens `--self-check` until this is updated too.
+ *
+ * BUMPING `revision` IS THE ACT THAT RETIRES OLDER EVIDENCE. Do it whenever the suite's meaning
+ * changes — a new adversarial case, a tightened expectation — because an agent-authored candidate
+ * certified before that case existed has not been tested by the case that exists to catch it.
+ * `casesHash`/`caseCount` are mechanical; regenerate them with
+ * `pnpm --filter @pikar/backend eval:golden -- --write-suite-manifest`.
+ */
+export const AGENT_EVAL_SUITE = {
+  revision: "2026-08-18.phase23",
+  casesHash: "a01fc2857755e98ab2d6552d1993e641bac54f62a2eda1ec42ba2a54119a4d64",
+  caseCount: 46,
+} as const;
+
+/**
+ * Does this evidence prove a passing run for EXACTLY this AGENT-authored candidate, against the
+ * EXACT CURRENT SUITE? (Phase 23, SKILL-02.)
+ *
+ * DELIBERATELY A SEPARATE, STRICTER PREDICATE rather than a tightening of the shipped
+ * `hasPassingTenantEvidence`. Tightening that one would silently invalidate every Phase-21 user
+ * candidate the moment a fixture changed — a governance change to SKILL-01 smuggled in as a
+ * refactor. User rows keep the rule they were shipped under; agent rows get the stricter one,
+ * because an agent row is a body the agent wrote about itself.
+ *
+ * Three things must ALL hold, and each is a real failure someone has to be stopped from having:
+ *  1. `hasPassingTenantEvidence` — the run certified THIS ROW, not this `<name>@<version>`.
+ *  2. The suite identity matches the current one EXACTLY. Stale evidence is evidence from before
+ *     the adversarial authoring cases existed.
+ *  3. `casesPassed === casesTotal === caseCount`. This is what refuses a FILTERED run: a `--only`
+ *     pass over three cases is a tenth of the coverage and reads identically to a full green once
+ *     it is a row. The runner already refuses to record one; this refuses to honour one that got
+ *     recorded some other way.
+ *
+ * Fails closed on absent, unparseable, or ANY mismatch.
+ */
+export function hasPassingAgentTenantEvidence(
+  evidence: string | undefined,
+  target: EvalEvidenceTenantTarget,
+): boolean {
+  if (!hasPassingTenantEvidence(evidence, target)) return false;
+  try {
+    const parsed = JSON.parse(evidence as string) as Partial<EvalEvidence>;
+    const s = parsed.suite;
+    return (
+      s !== undefined &&
+      s.revision === AGENT_EVAL_SUITE.revision &&
+      s.casesHash === AGENT_EVAL_SUITE.casesHash &&
+      s.caseCount === AGENT_EVAL_SUITE.caseCount &&
+      parsed.casesTotal === AGENT_EVAL_SUITE.caseCount &&
+      parsed.casesPassed === AGENT_EVAL_SUITE.caseCount
     );
   } catch {
     return false; // unparseable → fail closed

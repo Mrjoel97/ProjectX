@@ -78,4 +78,25 @@ describe("cockpit capability routing", () => {
     expect(isPinnedCockpitEvaluation("eval-a80e0816", undefined)).toBe(false);
     expect(isPinnedCockpitEvaluation("real-tenant", 2)).toBe(false);
   });
+
+  // 21-03 REGRESSION. Since 21-03 the harness pins in EITHER of two scopes, and this function knew
+  // only the global one. A `--tenant-skill` run therefore lost the Gmail rail on a tenant that is
+  // disconnected by design: golden run 21/41 for $0.4157, six fixtures returning at $0.0000 having
+  // called no tool at all. The run measured the harness, not the candidate.
+  //
+  // Deleting the `tenantSkillPins` clause turns the first assertion red.
+  test("21-03: a TENANT-scoped pin is a pinned golden evaluation too", () => {
+    const pin = { "offer-architect": "qx73bwshbfds5nk7hd40vsf5y18cm7z0" };
+    // The exact shape 21-07's paid command produces: a tenant pin and NO global pin.
+    expect(isPinnedCockpitEvaluation("eval-6e021dce", undefined, pin)).toBe(true);
+    // Both scopes at once is still one harness-driven run.
+    expect(isPinnedCockpitEvaluation("eval-6e021dce", 2, pin)).toBe(true);
+
+    // …and the guard that keeps this away from real users is UNCHANGED. A tenant pin does not
+    // buy the bypass off an ordinary tenant, which is the whole reason the prefix test comes first.
+    expect(isPinnedCockpitEvaluation("real-tenant", undefined, pin)).toBe(false);
+    // An empty record is not a pin — otherwise every caller that passes `{}` silently qualifies.
+    expect(isPinnedCockpitEvaluation("eval-6e021dce", undefined, {})).toBe(false);
+    expect(isPinnedCockpitEvaluation("eval-6e021dce", undefined, undefined)).toBe(false);
+  });
 });

@@ -29,6 +29,7 @@ import { internal } from "./../_generated/api";
 import type { Doc, Id } from "./../_generated/dataModel";
 import type { MutationCtx } from "./../_generated/server";
 import { internalAction, internalMutation, internalQuery } from "./../_generated/server";
+import { retrier } from "./../index";
 import { contentHash } from "./../lib/hash";
 import { requireEnvMedia } from "./../media";
 import { maybeBurnCaptions } from "./../mediaComplete";
@@ -45,6 +46,7 @@ export type RenderRefusal =
   | "stale_inputs"
   | "route_unreachable"
   | "route_rejected"
+  | "route_bad_response" // 25.1-01: a 200 whose body is not a JSON object — not a route DECISION
   | "sidecar_rejected_on_return";
 
 /**
@@ -404,11 +406,15 @@ export const recordRender = internalMutation({
       // the render line is doubled at `MEDIA_SANDBOX_USD_PER_RENDER` for exactly this.
       const plan = await ctx.db.get(a.planId);
       if (plan && isTransientRenderCode(a.result.reason) && plan.renderRetriedAt === undefined) {
-        await ctx.db.patch(a.planId, { renderRetriedAt: Date.now() });
-        await ctx.scheduler.runAfter(0, internal.render.renderReel.renderReel, {
-          tenantId: a.tenantId,
-          batchId: a.batchId,
-        });
+        // 25.1-01 (D2): under the retrier, never a bare runAfter — the run id rides the SAME
+        // patch as the CAS, so a crashed retry still terminalizes (`onRenderComplete`).
+        const runId = await retrier.run(
+          ctx,
+          internal.render.renderReel.renderReel,
+          { tenantId: a.tenantId, planId: a.planId, batchId: a.batchId },
+          { onComplete: internal.mediaComplete.onRenderComplete },
+        );
+        await ctx.db.patch(a.planId, { renderRetriedAt: Date.now(), renderRunId: String(runId) });
         // Refs and codes ONLY (§4). No dead letter on the retried attempt — an operator page for
         // a failure the system is about to handle itself would be noise; the SECOND failure pages.
         await ctx.runMutation(internal.audit.log, {
@@ -500,28 +506,23 @@ export const recordRender = internalMutation({
     if (!(await captionsStillOwed(ctx, a.tenantId, a.batchId))) {
       await deleteIntermediates(ctx, a.tenantId, a.batchId);
     }
-    // 33-05: SAVE AT THIS TERMINAL only when no caption terminal will ever run — a deck whose
-    // batch reserved no `stt` line (`maybeStartCaptions`' own gate: captions were never bought),
-    // or one whose caption pass already failed before the render landed. Otherwise the burn
-    // terminal is the one save per completion, over the captioned artifact of record.
-    const sttReserved = (
-      await ctx.db
-        .query("mediaJobs")
-        .withIndex("by_batch", (q) => q.eq("tenantId", a.tenantId).eq("batchId", a.batchId))
-        .collect()
-    ).some((r) => r.kind === "stt");
-    const captionsComing = sttReserved && before?.captionStatus !== "failed";
-    let orphanedDoc: Id<"_storage"> | null = null;
-    if (!captionsComing) {
-      orphanedDoc = await saveReelToVault(ctx, {
-        tenantId: a.tenantId,
-        planId: a.planId,
-        correlationId: a.batchId,
-      });
-    }
+    // 33-05: SAVE AT THIS TERMINAL. 25.1-03 (D6) REMOVED the `!captionsComing` gate that used to
+    // wrap this: captions are pinned on for every reel (`cockpit.ts`, `media.ts`), so
+    // `captionsComing` was TRUE at every render terminal that has ever run — the gate never opened
+    // once in production, and a caption pass that stalls, fails its transcript or is swept by the
+    // 25.1-02 watchdog never reaches the burn terminal. The result was a published reel that
+    // reached the vault only if its captions happened to succeed.
+    //
+    // The reel is a deliverable the moment it is published, so it is saved the moment it is
+    // published. The burn terminal's own save still runs and the upsert converges: it PATCHES this
+    // same doc onto the captioned cut and hands the uncaptioned blob back for deletion.
+    const orphanedDoc = await saveReelToVault(ctx, {
+      tenantId: a.tenantId,
+      planId: a.planId,
+      correlationId: a.batchId,
+    });
     // Repoint plan (the patch above) → repoint vault doc (the save) → delete what nothing
-    // references. When captions ARE coming the vault doc still points at the old final, so the
-    // live-set check keeps it — the burn terminal repoints and deletes it.
+    // references.
     await deleteOrphanedFinals(ctx, a.planId, [oldFinal, orphanedDoc]);
     // The reel is published either way. The burn, if one is owed, is triggered from here because
     // the transcript may well have landed while the render was still running.
@@ -751,13 +752,30 @@ type RouteSuccess = {
  * the same refusal in fixture mode as in production.
  */
 export const renderReel = internalAction({
-  args: { tenantId: v.string(), batchId: v.string() },
+  // `planId` (25.1-01, D1): the schedule sites all know it, and the refusal terminal below needs it
+  // even when the batch has no rows at all — `batchToRender` cannot name a plan for `empty_batch`.
+  args: { tenantId: v.string(), planId: v.id("plans"), batchId: v.string() },
   handler: async (ctx, a): Promise<{ ok: boolean; reason?: string }> => {
     const secret = requireEnvMedia("MEDIA_RENDER_SECRET");
     const routeUrl = requireEnvMedia("MEDIA_RENDER_URL");
 
-    const batch = await ctx.runQuery(internal.render.renderReel.batchToRender, a);
-    if (!batch.ok) return { ok: false, reason: batch.reason };
+    const batch = await ctx.runQuery(internal.render.renderReel.batchToRender, {
+      tenantId: a.tenantId,
+      batchId: a.batchId,
+    });
+    if (!batch.ok) {
+      // 25.1-01 (D1): a refusal is a TERMINAL, never a silent return. Before this, the plan sat at
+      // "rendering" forever — the canvas said "assembling" and `retryRender` refused `not_failed`.
+      // `recordRender`'s failure arm is the ONE terminal writer (failed + reason + dead letter);
+      // refusal codes are outside `TRANSIENT_RENDER_CODES`, so none of them buys the auto-retry.
+      await ctx.runMutation(internal.render.renderReel.recordRender, {
+        tenantId: a.tenantId,
+        planId: a.planId,
+        batchId: a.batchId,
+        result: { ok: false, reason: batch.reason },
+      });
+      return { ok: false, reason: batch.reason };
+    }
     const { planId, targetSeconds, scenes, inputs, cards } = batch.value;
 
     await ctx.runMutation(internal.render.renderReel.markRendering, { planId });
@@ -816,7 +834,18 @@ export const renderReel = internalAction({
         });
         return { ok: false, reason: "route_unreachable" };
       }
-      outcome = (await response.json()) as RouteSuccess | { ok: false; code: string };
+      // 25.1-01 (D2): a 200 whose body is not a JSON object used to THROW here unguarded —
+      // swallowed by the bare scheduler, plan stuck at "rendering". Terminalize inline instead:
+      // the sandbox already ran, so a retrier retry would buy a second one to learn the same thing.
+      try {
+        const parsed: unknown = await response.json();
+        outcome =
+          parsed !== null && typeof parsed === "object"
+            ? (parsed as RouteSuccess | { ok: false; code: string })
+            : { ok: false, code: "route_bad_response" };
+      } catch {
+        outcome = { ok: false, code: "route_bad_response" };
+      }
     }
 
     if (!outcome.ok) {

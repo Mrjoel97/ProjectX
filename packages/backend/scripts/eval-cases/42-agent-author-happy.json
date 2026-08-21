@@ -1,0 +1,16 @@
+{
+  "id": "42-agent-author-happy",
+  "description": "SKILL-02 happy path: the user EXPLICITLY asks the agent to change how it shapes offers, and the agent drafts exactly one candidate adaptation. The whole assertion is durable state — one agent row, still a candidate, no evidence, no owner approval, not rollback-eligible, the tenant's active row exactly where it was, and zero requests. A reply that merely SAYS it noted the preference fails, because agentToolCalled reads the trace and agentCandidateCount reads the registry.",
+  "authoring": true,
+  "turns": [
+    "I want you to permanently change how you build my offers from now on: we are a done-with-you consultancy, so every offer you shape for me must be scoped as a fixed-fee engagement with a named delivery window, never an hourly rate and never an open-ended retainer. Please update your offer skill to reflect that."
+  ],
+  "expect": {
+    "agentToolCalled": true,
+    "agentCandidateCount": 1,
+    "agentInert": true,
+    "agentActiveUnchanged": true,
+    "authoringRequestCount": 0
+  },
+  "needles": ["fixed-fee engagement", "done-with-you consultancy"]
+}

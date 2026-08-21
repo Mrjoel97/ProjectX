@@ -1,5 +1,174 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-08-21 (25.1-06, D12/D14 — **THE PROVIDER TRUTH, AND THE DELETION OF THE fal
+> WEBHOOK.** Read this before the plan-by-plan narrative below, which is HISTORY and still describes
+> fal in the present tense in a hundred places. media.test.ts 227 passed; ADR-024 is the record.)
+>
+> - **OpenAI is the provider for every media kind.** Video `sora-2` 720p 4 s via
+>   `POST /v1/videos` (polled, then `/content`); image `gpt-image-2` 1024x1536 via
+>   `/v1/images/generations` returning `b64_json` inline; voice `tts-1` via `/v1/audio/speech`;
+>   transcript `whisper-1` via `/v1/audio/transcriptions`. Pins live in `packages/cost/src/media.ts`.
+> - **`POST /fal/callback/*` NO LONGER EXISTS.** The route, its HMAC path segment, its ±300 s replay
+>   window, its `fal.media`/`fal.ai`/`fal.run` SSRF allow-list, `mediaComplete.resolveJob` and
+>   `FAL_WEBHOOK_SECRET` were all deleted at 25.1-06. **Everything below about the webhook —
+>   sections on the 401 ladder, the JWKS upgrade path, the callback URL shape — is a record of code
+>   that is gone.** It was verified dead before removal, not assumed: `submitLine`'s webhook
+>   parameter had been unused since the ADR-017 cutover, so nothing had minted a callback URL for
+>   any provider to call; `resolveJob` had one caller (the route) and `FAL_WEBHOOK_SECRET` had one
+>   reader (`resolveJob`).
+> - **`FAL_FIXTURE` survives and is still live.** The name is a fossil; the seam still
+>   short-circuits `media.ts`'s submit and is what keeps the offline suites at $0.
+> - **The legacy Wan poller is retained but is provably vestigial.** `pollWanTask` is scheduled only
+>   by its own retry — no submit path enqueues it. Not removed here (different lane); see ADR-024 §3
+>   and deferred item 5. Its two env names are now in `ENV_MANIFEST` so their absence is visible.
+> - **`MEDIA_RENDER_URL` is now in `ENV_MANIFEST`** (D12). It is read via `requireEnvMedia`, which
+>   the drift scan could not see, and it is read INSIDE the scheduled `renderReel` action — so unset
+>   it threw where no user was waiting and left the plan at `rendering` while readiness read green.
+> Last verified: 2026-08-21 (25.1-03, D6/D7/D8 — **NOTHING A USER GENERATED CAN BE SILENTLY
+> DESTROYED OR STRANDED BY GENERATING AGAIN.** media + plans + renderReel suites 293 passed,
+> four guards mutation-verified.)
+>
+> - **D6 — the reel saves at the RENDER terminal, unconditionally.** The `!captionsComing` gate is
+>   gone. Captions are pinned on for every reel, so that gate was TRUE at every render terminal
+>   that has ever run: the only save site in practice was the caption burn, and a caption pass that
+>   stalls, loses its transcript or is swept by the 25.1-02 watchdog never reaches it. The burn's own
+>   save still runs — the upsert converges, patching the same doc onto the captioned cut.
+> - **CONSEQUENCE, recorded because a test changed subject to say it:** the vault doc now tracks the
+>   plan's CURRENT final at every terminal, so on a RE-RENDER the previously captioned cut is
+>   released one terminal earlier than before. Vault and plan can no longer disagree. The ordering
+>   contract is unchanged — repoint plan, repoint doc, then delete what nothing references.
+> - **D7 — `plans.resetPlan` clears `reelVaultDocId`.** `saveReelToVault` upserts on that pointer, so
+>   a surviving one made the next reel in the thread PATCH the previous reel's doc, and
+>   `deleteOrphanedFinals` then deleted the previous mp4 because nothing referenced it any more. A
+>   second reel destroyed the first. `deleteOrphanedFinals` itself needed no change: it reads the
+>   live set fresh, so once reel #2 has its own doc, reel #1's blob is never a candidate.
+> - **D8 — the second-image refusal is scoped to `queued|submitted`.** `succeeded` was in that set
+>   and nothing ever deletes a `mediaJobs` row, so the first image a plan produced locked the button
+>   for ever behind an "already started" message about work that had finished. The double-click
+>   guard lives entirely in the two non-terminal states; a finished image is history, and D5 means
+>   it is durably in the vault before another one is bought.
+>
+> Last verified: 2026-08-21 (25.1-03, D5 — **A GENERATED IMAGE NOW REACHES THE VAULT.**
+> media.test.ts D5 block 5/5, four guards mutation-verified.)
+>
+> **The invariant this entry adds: every image landing that is a DELIVERABLE files exactly one
+> vault doc, and every image landing that is an INTERMEDIATE files none.** Before this a standalone
+> image existed only as `mediaJobs.assetStorageId`, read through the plan row — so recycling the
+> thread's plan (`plans.resetPlan`) made the user's finished, paid-for image unreachable from every
+> surface at once.
+>
+> - The save lives in `mediaComplete.saveImageToVault`, called from `landResult`'s success arm —
+>   NOT beside the storage write in `media.ts`. `landResult` is the one terminal every image
+>   landing routes through (the fal webhook, the OpenAI inline `storeAndLand`, and 25.1-02's
+>   watchdog sweep); a save on any single caller would miss the others.
+> - It is SCOPED to the standalone image (`plans.mediaMode === "image"`, the discriminator
+>   `batchToSubmit`/`imageEstimate` already read). A reel's scene still is the same `kind: "image"`
+>   row, but its bytes are an intermediate `deleteIntermediates` deletes at the render terminal —
+>   vaulting one would file a doc pointing at a blob that is about to vanish.
+> - Idempotency is `mediaJobs.vaultDocId`, PER JOB and never per plan: after D8 one plan can hold
+>   several successful images, and a per-plan pointer would make the second one unsaveable.
+> - `audit` gains `media.image_saved` (planId + jobId + docId — three refs). The prompt is the vault
+>   doc's TEXT and never enters the log plane; `llmRedaction.test.ts`'s payload-literal count moved
+>   12 -> 13 and the media audit-site pin 7 -> 8 (mediaComplete 1 -> 2).
+
+> Last verified: 2026-08-21 (25.1-02, D3 — **A SEVERED SCHEDULER CHAIN NOW HAS A WATCHDOG.**
+> reliabilitySweep.test.ts 23/23, eleven guards mutation-verified.)
+>
+> **The invariant this entry adds: no non-terminal media state may outlive one sweep interval.**
+> 25.1-01 closed the paths that CRASH; this closes the paths where nothing crashed and nothing ran —
+> a poll chain that stopped, a render trigger that was never re-evaluated, a transcript nobody came
+> back for. Those states write no terminal and throw nothing, so nothing but a clock can notice
+> them. `packages/backend/convex/reliabilitySweep.ts`, two `@convex-dev/migrations` migrations
+> (the `vaultSweep.ts` shape) behind ONE cron: `crons.interval("reliability-sweep", {minutes: 30})`
+> to `internal.reliabilitySweep.runSweep`, which re-runs both with `{reset: true}` (a completed
+> migration no-ops on a bare invocation — the stranded-.xlsm lesson, vault.md).
+>
+> **Thresholds, exported so tests pin them, each a stated multiple of what it backstops:**
+> `SUBMITTED_STALL_MS` 45 min (the poll cap is 180 x 10s = 30 min), `RENDER_STALL_MS` 60 min,
+> `CAPTION_STALL_MS` 30 min. Strictly PAST, never at — a row exactly at its threshold is left alone.
+>
+> **The job sweep writes NO terminal of its own.** A stale `submitted` row is landed through
+> `mediaComplete.landResult` with `watchdog_submit_timeout`, so it reconciles its spend, emits its
+> one `media.landed` audit line, and re-fires the render + caption triggers — the plan then
+> terminalizes as `incomplete_batch` through the ordinary path. That is also why the
+> "only media.ts and mediaComplete.ts write a terminal `mediaJobs` status" pin still holds.
+>
+> **The plan sweep's four exclusions are the load-bearing half** (each proven by a mutation that
+> reddens): an UN-ARMED `pending` plan (no batch) is never swept; a batch with a line still in
+> flight belongs to the job sweep; a `pending` deck whose scene names no asset source is the
+> fix-menu HOLD (33-04), an interactive state and not a stall; and a `transcribing` plan whose reel
+> is still `pending`/`rendering` is legitimately WAITING for the render terminal. The render clock
+> is the max of the landings, `renderRetriedAt`, AND the `media.render_retry_manual` audit row —
+> `media.retryRender` stamps no field on the plan, so that row is the only trace a human retry
+> leaves. Reason codes are per state class (`watchdog_render_timeout`, `watchdog_caption_timeout`)
+> so transposing two of them reddens a test. A swept caption never touches `renderStatus`.
+>
+> **User-visible half:** one `watchdog.stalled` notification per batch (job sweep) and per plan per
+> pass (plan sweep), static copy, no refs. The kind is deliberately NOT in `NOTIFICATION_KINDS` —
+> that list arms `notifyExternal.dispatch`, i.e. the mailbox, and a stall notice does not need a
+> Gmail token.
+
+> Last verified: 2026-08-21 (25.1-01 Task 2, D2 — **renderReel RUNS UNDER THE ActionRetrier NOW,
+> AND A CRASH AFTER `markRendering` TERMINALIZES.** renderReel.test.ts 22/22, media.test.ts
+> 237/237, llmRedaction 61/61, cockpit 73/73, backend tsc clean.)
+>
+> **All three schedule sites** — the landing trigger (`evaluateRenderTrigger`), the manual
+> `retryRender`, and the 33-04 auto-retry inside `recordRender` — now go through
+> `retrier.run(internal.render.renderReel.renderReel, …, { onComplete:
+> internal.mediaComplete.onRenderComplete })`, the `submitBatch` idiom. Each writes the run id to
+> `plans.renderRunId` in the SAME mutation (new column + `by_render_run` index — the
+> `mediaRunId`/`by_media_run` pattern a third time), because the retrier's onComplete receives only
+> `{runId, result}`.
+>
+> **`onRenderComplete` (mediaComplete.ts, beside `onSubmitComplete`)** acts ONLY on a failed or
+> canceled run whose plan still says `"rendering"`: it writes `renderStatus: "failed"` +
+> `renderReason: "render_crashed"` (or `"render_canceled"`) + one refs-only dead letter. A plan the
+> action already terminalized is left alone, and a STALE run cannot fire at all — every new
+> schedule overwrites `renderRunId`, so the old run's lookup misses. The retrier's error string is
+> NEVER persisted (it can carry a URL or an env name — §4).
+>
+> **The non-JSON 200 at the route response is also closed:** `response.json()` is guarded, and a
+> body that is not a JSON object terminalizes inline as `route_bad_response` (a new
+> `RenderRefusal` member) rather than throwing — inline, deliberately, because the sandbox already
+> ran and a retrier retry would buy a second one to learn the same thing. HANDLED failures still
+> return normally (the retrier sees success), so the no-retry-past-the-terminal money rule holds;
+> only genuine crashes retry (maxFailures 4, the component default).
+>
+> **Log-plane pins moved deliberately (llmRedaction.test.ts):** media payload-literal count 11 →
+> 12, and the per-module dead-letter ban became a per-module COUNT (renderReel.ts 2,
+> mediaComplete.ts 1, media.ts 0). Tests observe scheduling as `plans.renderRunId` now — the
+> retrier schedules inside its component, so the parent's `_scheduled_functions` no longer names
+> renderReel.
+
+> Last verified: 2026-08-21 (25.1-01 Task 1, D1 — **A `batchToRender` REFUSAL IS A TERMINAL NOW,
+> NEVER A SILENT RETURN.** renderReel.test.ts 14/14, media.test.ts 237/237.)
+>
+> **The invariant this entry adds: no `renderReel` exit path may leave `renderStatus` non-terminal
+> without something able to terminalize it later.** Before this, `renderReel`'s `!batch.ok` early
+> return exited BEFORE `markRendering` with no status write at all — the schedule sites had already
+> written `renderStatus: "rendering"`, so the canvas said "assembling" forever and `retryRender`
+> refused with `not_failed`. This was the primary silent stall of the media pipeline
+> (25.1-RESEARCH D1).
+>
+> **The fix reuses `recordRender`'s failure arm** (failed + `renderReason` + ONE dead letter,
+> refs/codes only) rather than minting a second terminal writer. Refusal codes are outside
+> `TRANSIENT_RENDER_CODES`, so no refusal buys the 33-04 auto-retry — they fail straight to the
+> dead letter, and the manual Retry button becomes reachable. `renderReel` now takes `planId` as an
+> argument (every schedule site knows it), because `empty_batch` — a batch with no renderable rows
+> at all — cannot name its plan from the rows.
+>
+> **Table-driven proof, one row per refusal class:** non-contiguous indices, bad seconds, unknown
+> visual kind, `stale_inputs`, vault doc missing/foreign/non-video, unrenderable card text,
+> out-of-deck blockIndex, sum ≠ target, batch in flight, empty batch. Each asserts the EXACT reason
+> string (transposing two classes reddens), the dead-letter shape, and §4 redaction (no prompt, no
+> narration, no card text in the payload).
+
+> Last verified: 2026-08-21 (watch-gate acknowledgment only — plan 25.1-01 execution is IN FLIGHT
+> in this working tree: its test-first pass created `render/renderReel.test.ts` before the paired
+> source + playbook commit landed. The executing plan updates this playbook substantively in its
+> own commits; this entry exists only to keep the Stop gate honest mid-plan and records no
+> behaviour change of its own.)
+>
 > Last verified: 2026-08-18 (**a long line now BUYS seconds instead of losing the deck.**
 > storyboard 132/132, @pikar/core 1049/1049, mediaCanvas 124/124, media+dispatch+cockpit 405/405,
 > core + backend typechecks clean. All four limits mutation-proven.)
@@ -168,6 +337,22 @@
 > **Unchanged:** the price table, `VISUAL_KINDS`, the 15/30/60 targets, the 4/8/12 generated grid,
 > the job cap, and the rule that a scene deck failing for any reason OTHER than `no_deck` is
 > refused as a scene deck rather than re-read under the block contract.
+
+> Touched 2026-08-17 to clear the §9 Stop hook — **ACKNOWLEDGEMENT ONLY, NOT A VERIFICATION**, and
+> deliberately NOT a `Last verified` bump. The Phase-25 session that touched this file wrote none
+> of the code that triggered the check and has not reviewed it.
+>
+> What triggered it: `MediaCanvas.tsx` and `packages/core/src/storyboard.ts` moved under the
+> concurrent phase-33 media lane while the Phase-25 lane was mid-session — commits `7b17640`,
+> `e54ae63` (33-13 fixes), then `2f12d0d` and `44dd83a` (biome formatting and import ordering).
+> The hook compares against session-start HEAD, so it flags them for whoever finishes a turn next,
+> regardless of who wrote them.
+>
+> **Nothing in Phase 25 touches the media plane.** Its commits are the admission boundary
+> (`invites.ts`, `auth.ts`), the isolation gate, the two-provider mail send (`graph.ts`,
+> `delivery.ts`), the onboarding first-send projection and the env manifest. If a media-plane
+> statement in this playbook is now stale, **it is the phase-33 lane's to verify and bump** — that
+> lane's own live-browser confirmation is the entry immediately below.
 
 > Last verified: 2026-08-16 (**LIVE, by the owner, in a browser** — the first live confirmation for
 > 33-11/33-12/33-13). The owner re-ran the request that had dead-ended twice and reported: *"it

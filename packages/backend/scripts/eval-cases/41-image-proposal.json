@@ -1,0 +1,15 @@
+{
+  "id": "41-image-proposal",
+  "description": "The fixture the set was missing, and its absence is the reason a real defect stayed invisible. `proposeImage` shipped wired into the executive with a full reservation path behind it (`stageImagePlan` -> `mediaMode:\"image\"` -> `generateImage` -> gpt-image-2), and the registry body never named the tool once — so the owner asked for ads and images and got 15/30/60-second storyboards every time, exactly as the body instructed. All 40 fixtures were GREEN throughout, because none of them could express 'this should have been an image': with no `imageProposalCount` key, an image ask routed to `dispatchMedia` was indistinguishable from a pass. Turn 1 asks for a still in ordinary language and DELIBERATELY never names the tool — a turn that said 'use proposeImage' would be a compliance test, not a routing one. It also says nothing about video, motion or seconds, so a dispatch here is a routing defect and not an ambiguous ask. `imageProposalCount: 1` is graded off `agentSteps`, so it fails on the defect no reply assertion can catch: the agent answering in prose ('I'll put a poster together for you') while never calling the tool. Equality rather than a floor is load-bearing for `mediaDispatchCount`'s reason — `stageImagePlan` recycles the single `plans.by_thread` row, so a second proposal overwrites the first and 'exactly one' is the assertion. `mediaDispatchCount: 0` is the paired negative that carries the actual regression teeth: it fails the moment a still-image request reaches the video specialist, which is the production behaviour this fixture was written to close. `recipientCount: 0` and `attachmentCount: 0` keep the other half of the contract — an image request must never be reframed as an email. `statusAtMost: proposed` allows the staged card and refuses anything further: the harness never clicks Generate image, so no provider job and no image spend can exist on this run.",
+  "turns": [
+    "We're launching the benchmark-IMG1 collection next week — can you make me a poster for it? Just one still I can put up on the shop wall and post as a single image."
+  ],
+  "expect": {
+    "imageProposalCount": 1,
+    "mediaDispatchCount": 0,
+    "statusAtMost": "proposed",
+    "recipientCount": 0,
+    "attachmentCount": 0
+  },
+  "needles": ["benchmark-IMG1", "poster"]
+}

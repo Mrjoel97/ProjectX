@@ -525,7 +525,8 @@ export const setFollowUpStatus = tenantMutation({
 // ── The unsubscribe token ─────────────────────────────────────────────────────
 // ONE opaque key over the recipient string AS STORED (in group mode that is the comma-joined
 // string), so the footer of a group send carries a single link. Stateless: no token table, no
-// expiry bookkeeping, nothing to clean up — the `convex/http.ts` fal-webhook pattern (20-06).
+// expiry bookkeeping, nothing to clean up. The pattern came from the media webhook 20-06 put in
+// `convex/http.ts`; that route was removed at 25.1-06 and this is now its only living use.
 
 /** The signing secret. A link that lives forever in a recipient's inbox must NOT share the OAuth
  *  signing key, so this is its own deployment env var. Absent ⇒ null ⇒ every path fails CLOSED. */
@@ -563,7 +564,9 @@ export type ResolvedUnsub = { tenantId: string; addresses: string[] };
 
 /** The ONE verifier. Both `resolveUnsubToken` (the landing page's GET) and
  *  `suppressFromUnsubscribe` (the confirm POST) call this, so the POST can never trust a decode
- *  the caller supplied. Copies `mediaComplete.resolveJob`'s rules, including the plain `===`. */
+ *  the caller supplied. Copies the rules the removed `mediaComplete.resolveJob` carried (25.1-06),
+ *  including the plain `===`: fail closed on an unset secret, `normalizeId`-shaped refusals, and a
+ *  digest RE-DERIVED from the raw part rather than read off the request. */
 async function verifyUnsubToken(raw: string, digest: string): Promise<ResolvedUnsub | null> {
   // FAIL CLOSED on the env, and this is the ONLY copy of that guard on the verify path. A second
   // one at the HTTP route would make this one vacuous, and this is the place that matters:

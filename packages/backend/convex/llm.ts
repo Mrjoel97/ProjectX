@@ -26,6 +26,7 @@ import { ActionCache } from "@convex-dev/action-cache";
 import { draftSchema } from "@pikar/contracts/drafting";
 import { parseRouting, type RoutingDecision, routingSchema } from "@pikar/contracts/routing";
 import {
+  AGENT_AUTHORABLE_SKILLS,
   COCKPIT_AGENT_SKILL,
   CONTENT_DRAFTER_SKILL,
   DOCUMENT_DRAFTER_SKILL,
@@ -1588,11 +1589,27 @@ export function buildCockpitTools(
   agentContext?: {
     grantWebResearch?: boolean;
     grantDispatch?: boolean;
+    /**
+     * SKILL-02 (Phase 23). The EXECUTIVE-ONLY skill-authoring grant. Derived in `runAgentLoop`
+     * from `toolNames === undefined`, never read from `toolNames` here — `toolNames` is simply not
+     * in scope in this function. Kept SEPARATE from `grantDispatch` even though both derive from
+     * the same expression today: they are different capabilities, and collapsing them would mean
+     * a future context that legitimately needs one silently receives both.
+     */
+    grantSkillAuthoring?: boolean;
     threadId?: string;
     rootRequestId?: string;
     /** True only for an explicit email route backed by a live Gmail grant. */
     gmailEnabled?: boolean;
   },
+  // 21-03 (SKILL-01). Append-only 8th arg, `skillVersions`' orthogonal twin one scope down: an
+  // EXACT `tenantSkills` row id per skill name, where `skillVersions` names a GLOBAL `<name>@<n>`.
+  // Both must ride to the specialists this record dispatches, for the identical reason 16-09
+  // recorded for `skillVersions`: a dispatched specialist that silently loads the ACTIVE row while
+  // the evidence claims the pin certifies a body that never executed. Accepting a pin here and not
+  // forwarding it would be exactly that defect — which is the one this argument's absence at
+  // `runCockpitAgent` already caused once (run `6e021dce`, 0/41).
+  tenantSkillIds?: Record<string, Id<"tenantSkills">>,
 ) {
   const webResearchTool = buildWebResearchTool();
 
@@ -1702,6 +1719,9 @@ export function buildCockpitTools(
           // The eval runner's pins reach the RESEARCH specialist only through here. Without it a
           // `--skill research-specialist@2` run certifies a body in which v1 actually executed.
           skillVersions,
+          // 21-03: and the tenant twin, for the same reason at the row scope. `dispatchArgs`
+          // already validates it; dropping it HERE is the silent half of the same defect.
+          tenantSkillIds,
         });
         return RESEARCH_UNDERWAY_REPLY;
       },
@@ -1754,6 +1774,8 @@ export function buildCockpitTools(
           envelopeCents: 0, // the ROOT signal — governedDispatch derives the real envelope
           spentCents: 0,
           skillVersions,
+          // 21-03: same pair, same reason — see the research tool above.
+          tenantSkillIds,
         });
         return MEDIA_UNDERWAY_REPLY;
       },
@@ -1957,6 +1979,96 @@ export function buildCockpitTools(
     }),
   };
 
+  // Phase-23 (SKILL-02). THE MOST GOVERNANCE-SENSITIVE TOOL IN THE RECORD, and the smallest.
+  //
+  // Built ONLY under `grantSkillAuthoring` + a real turn identity, in the same conditional-spread
+  // idiom as dispatchResearch/dispatchMedia above — structural absence, not a filter. A
+  // withheld-but-CONSTRUCTED closure stays reachable through `invokeTool`, so a specialist whose
+  // allow-list happened to contain this literal string would otherwise reach it. The closure is
+  // never built in that context, so there is nothing to reach.
+  //
+  // THE MODEL'S ENTIRE SURFACE IS `{name, authoredBody}` — a closed enum of three names and one
+  // bounded string. tenant, thread and turn are injected from the trusted envelope below;
+  // `author`, `status`, `version`, the composed body, evidence and owner approval are all decided
+  // by `publishAgentCandidate` server-side. There is no argument here a model could set to promote
+  // its own row, and no second call it could chain to: this tool's only downstream is the one
+  // internal mutation, which itself has no path to any activation function.
+  //
+  // The RETURN is inert too. It carries ids, a version, a status and awaiting-review copy — never
+  // the base body, never the composed body, never an eval fixture, never an approval state. A tool
+  // return is model-visible text, so anything disclosed here is disclosed to the author of the
+  // draft, and the base registry prompt is an owner-only boundary (research pitfall 4).
+  const skillAuthoringTool = {
+    authorSkillCandidate: tool({
+      description:
+        "Propose an adaptation to one of your own business skills, so it fits this business " +
+        "better next time. Use it ONLY when the user has explicitly asked you to change how you " +
+        "work — never on your own initiative, and never as a side effect of another request. " +
+        "What you write is a CANDIDATE for review: it does not take effect now, it does not " +
+        "change this turn, and it goes live only if it passes an evaluation and the owner " +
+        "approves it. Say so plainly when you use it; do not tell the user you have learned " +
+        "something or changed how you work.",
+      inputSchema: jsonSchema<{ name: string; authoredBody: string }>({
+        type: "object",
+        properties: {
+          name: {
+            type: "string",
+            // The closed set, sourced from the ONE contract rather than re-listed here: a second
+            // copy of these names is how the enum and the server check drift apart.
+            enum: [...AGENT_AUTHORABLE_SKILLS],
+            description: "Which of your business skills to adapt.",
+          },
+          authoredBody: {
+            type: "string",
+            description:
+              "The adaptation only — what should be true about this business that the base " +
+              "skill does not already say. Never a replacement for the whole skill.",
+          },
+        },
+        required: ["name", "authoredBody"],
+        additionalProperties: false,
+      }),
+      execute: async ({ name, authoredBody }): Promise<string> => {
+        // Non-null asserted: the whole record key is absent unless both are present (the gate
+        // below), exactly as dispatchResearch does it.
+        const threadId = agentContext?.threadId as string;
+        const rootRequestId = agentContext?.rootRequestId as string;
+        try {
+          const res = await ctx.runMutation(internal.skills.publishAgentCandidate, {
+            tenantId,
+            sourceThreadId: threadId,
+            sourceTurnId: rootRequestId,
+            name,
+            authoredBody,
+          });
+          return res.inserted
+            ? `Drafted ${res.name} v${res.version} as a candidate (id ${res.tenantSkillId}). It is ` +
+                "NOT live: it needs a passing evaluation and the owner's approval before it takes " +
+                "effect. Tell the user it is waiting for review."
+            : `That same request already drafted ${res.name} v${res.version} (id ` +
+                `${res.tenantSkillId}); nothing new was written. It is still awaiting review.`;
+        } catch (e) {
+          // Conversational, never a throw — a governed stop is a paused conversation (the
+          // dispatch-refusal precedent above). The message names the REASON and nothing else --
+          // never another draft's row id, never a body, never anything from the held-out corpus.
+          const reason = e instanceof Error ? e.message : String(e);
+          if (reason.startsWith("AGENT_CANDIDATE_PENDING"))
+            return (
+              "There is already a skill update waiting for review for that skill, so a second " +
+              "one cannot be drafted yet. Tell the user the earlier one has to be reviewed first."
+            );
+          if (reason.startsWith("AGENT_SOURCE_TURN_CONFLICT"))
+            return "This request already drafted a different skill update; nothing was written.";
+          if (reason.startsWith("NOT_AGENT_AUTHORABLE"))
+            return "That is not a skill you can adapt. Nothing was written.";
+          if (reason.startsWith("USER_SKILL_ADAPTATION_"))
+            return "That adaptation is empty or too long, so nothing was written.";
+          throw e;
+        }
+      },
+    }),
+  };
+
   const allTools = {
     resolveContacts: tool({
       // Split literals keep each chunk under the §5 no-hardcoded-prompt scan ceiling (200 chars).
@@ -2100,6 +2212,14 @@ export function buildCockpitTools(
     ...(agentContext?.grantDispatch && agentContext.threadId && agentContext.rootRequestId
       ? { ...dispatchResearchTool, ...dispatchMediaTool, ...proposeImageTool }
       : ({} as typeof dispatchResearchTool & typeof dispatchMediaTool & typeof proposeImageTool)),
+    // SKILL-02: a SEPARATE flag from `grantDispatch`, deliberately. Both are derived from
+    // `toolNames === undefined` today, but they are different capabilities — dispatching a
+    // specialist spends money, authoring a skill changes what every future turn is told to be —
+    // and one flag would mean the next context that legitimately needs one silently gets both.
+    // Same one-type-both-branches trick as every gate above.
+    ...(agentContext?.grantSkillAuthoring && agentContext.threadId && agentContext.rootRequestId
+      ? skillAuthoringTool
+      : ({} as typeof skillAuthoringTool)),
     setSubject: tool({
       description: "Set the email subject line.",
       inputSchema: jsonSchema<{ subject: string }>({
@@ -2417,6 +2537,235 @@ export function buildCockpitTools(
         if (result?.escalated)
           return "This plan has been revised too many times, so I've escalated it for review — I can't keep redrafting or send it. Please start a new plan if you still need changes.";
         return "Plan proposed — the user can now review and Approve it.";
+      },
+    }),
+    // ── Calendar management discovery + staging (17-09, ACTN-02) ─────────────────────────────
+    listManagedCalendarEvents: tool({
+      description:
+        "List the user's Pikar-managed calendar events that are currently safe to change. " +
+        "Returns stable event references plus titles and times, at most 20. This is read-only.",
+      inputSchema: jsonSchema<Record<string, never>>({
+        type: "object",
+        properties: {},
+        additionalProperties: false,
+      }),
+      execute: async (): Promise<string> => {
+        const listed = await ctx.runQuery(internal.calendarEvents.listManageable, { tenantId });
+        if (listed.events.length === 0) {
+          const omitted =
+            listed.omitted > 0 ? ` ${listed.omitted} other event(s) are not safe to change.` : "";
+          return `No Pikar-managed calendar events are currently available to change.${omitted}`;
+        }
+        const lines = listed.events.map(
+          (event, index) =>
+            `#${index + 1} ref=${event.managedEventId} | ${event.provider} | ${event.title} | ` +
+            `${fmtSendInstant(event.startMs, event.tz)} | ${Math.round(event.durationMs / 60_000)} min`,
+        );
+        const limits = [
+          listed.truncated ? "Only the newest 20 manageable events are shown." : null,
+          listed.omitted > 0
+            ? `${listed.omitted} other event(s) were omitted because they are not safe to change.`
+            : null,
+        ]
+          .filter((line): line is string => line !== null)
+          .join(" ");
+        return (
+          `${listed.events.length} Pikar-managed event(s):\n${lines.join("\n")}` +
+          `${limits ? `\n${limits}` : ""}`
+        );
+      },
+    }),
+    proposeCalendarChange: tool({
+      description:
+        "Stage an update or removal of one Pikar-managed calendar event for approval. " +
+        "Use only a stable reference returned by listManagedCalendarEvents. " +
+        "This refreshes the event but performs no calendar write and never approves the plan.",
+      inputSchema: jsonSchema<{
+        managedEventId: string;
+        operation: "update" | "delete";
+        title?: string;
+        when?: string;
+        durationMinutes?: number;
+      }>({
+        type: "object",
+        properties: {
+          managedEventId: {
+            type: "string",
+            description: "The stable ref returned by listManagedCalendarEvents.",
+          },
+          operation: { type: "string", enum: ["update", "delete"] },
+          title: { type: "string", description: "A replacement title for an update." },
+          when: {
+            type: "string",
+            description: "The user's natural-language replacement time for an update.",
+          },
+          durationMinutes: {
+            type: "number",
+            description: "A replacement duration in minutes for an update.",
+          },
+        },
+        required: ["managedEventId", "operation"],
+        additionalProperties: false,
+      }),
+      execute: async ({
+        managedEventId,
+        operation,
+        title,
+        when,
+        durationMinutes,
+      }): Promise<string> => {
+        const hasTitle = title !== undefined;
+        const hasWhen = when !== undefined;
+        const hasDuration = durationMinutes !== undefined;
+        if (operation === "delete" && (hasTitle || hasWhen || hasDuration)) {
+          return "A removal cannot also carry a new title, time, or duration. Nothing was staged.";
+        }
+        if (operation === "update" && !hasTitle && !hasWhen && !hasDuration) {
+          return "Name at least one title, time, or duration change. Nothing was staged.";
+        }
+        if (hasTitle && title.trim().length === 0) {
+          return "The replacement title is empty. Ask for the intended title; nothing was staged.";
+        }
+
+        let startMs: number | undefined;
+        if (hasWhen) {
+          if (!clientContext) {
+            return "I couldn't read your local time and timezone, so I can't stage that calendar change yet.";
+          }
+          const parsed = parseSendTime(
+            when,
+            clientContext.nowMs,
+            clientContext.tz,
+            CALENDAR_HORIZON_MS,
+          );
+          switch (parsed.kind) {
+            case "resolved":
+              startMs = parsed.epochMs;
+              break;
+            case "ambiguous":
+              return (
+                "That replacement time is ambiguous — ask which day and time they meant. " +
+                "Nothing was staged."
+              );
+            case "past":
+              return "That replacement time has already passed — ask for a future time. Nothing was staged.";
+            case "tooFar":
+              return "That replacement time is too far out to stage safely. Nothing was staged.";
+            case "none":
+              return (
+                "I didn't detect a specific replacement time — ask for the day and time. " +
+                "Nothing was staged."
+              );
+          }
+        }
+        const durationMs =
+          durationMinutes === undefined
+            ? undefined
+            : Math.min(480, Math.max(15, Math.round(durationMinutes))) * 60_000;
+
+        const blocking = otherKindStaged(await readPlan(), "calendar_manage");
+        if (blocking) return otherKindRefusal(blocking);
+
+        // The model supplies only the opaque registry ref. Provider and external id are recovered
+        // server-side after the tenant check, so a model can never redirect the inspection.
+        const snapshot = await ctx.runQuery(internal.calendarEvents.stagingSnapshot, {
+          tenantId,
+          managedEventId,
+        });
+        if (!snapshot) {
+          return (
+            "That managed calendar event was not found. Refresh the list and try again; " +
+            "nothing was staged."
+          );
+        }
+        if (!snapshot.manageable) {
+          return snapshot.code === "attendees_present"
+            ? "That event has attendees, so Pikar will not change it. Nothing was staged."
+            : "That event is not currently safe to change. Refresh or reconnect, then try again; " +
+                "nothing was staged.";
+        }
+        if (!snapshot.etag) {
+          return "That event has no safe version marker. Refresh it before proposing a change; nothing was staged.";
+        }
+
+        // Inspect-only. The next and LAST call is one atomic local mutation; no provider write,
+        // approval mutation or terminal is reachable from this tool.
+        const inspected = await ctx.runAction(internal.calendar.inspectEvent, {
+          tenantId,
+          provider: snapshot.provider,
+          externalEventId: snapshot.externalEventId,
+        });
+        if (inspected.outcome === "reauth") {
+          const name = snapshot.provider === "microsoft" ? "Microsoft" : "Google";
+          return `Reconnect ${name} Calendar, then restage this change. Nothing was staged.`;
+        }
+        if (inspected.outcome === "terminal") {
+          return "The calendar could not be refreshed safely. Try again later; nothing was staged.";
+        }
+        const observed = inspected.inspection;
+        if (!observed.exists) {
+          return (
+            "That managed calendar event was not found. Refresh the list and try again; " +
+            "nothing was staged."
+          );
+        }
+        if (observed.attendeeCount > 0) {
+          return "That event now has attendees, so Pikar will not change it. Nothing was staged.";
+        }
+
+        const desired =
+          operation === "delete"
+            ? undefined
+            : {
+                ...(title === undefined ? {} : { title: title.trim() }),
+                ...(startMs === undefined ? {} : { startMs }),
+                ...(durationMs === undefined ? {} : { durationMs }),
+              };
+        const staged = await ctx.runMutation(internal.calendarEvents.stageChange, {
+          tenantId,
+          planId,
+          managedEventId: snapshot.managedEventId,
+          operation,
+          storedEtag: snapshot.etag,
+          ...(observed.etag === undefined ? {} : { etag: observed.etag }),
+          observed: {
+            title: observed.title,
+            startMs: observed.startMs,
+            durationMs: observed.durationMs,
+            attendeeCount: observed.attendeeCount,
+          },
+          ...(desired === undefined ? {} : { desired }),
+        });
+        if (!staged.ok) {
+          if (staged.code === "empty_update")
+            return (
+              "Those values already match the event, so there is no change to approve. " +
+              "Nothing was staged."
+            );
+          if (staged.code === "attendees_present")
+            return "That event now has attendees, so Pikar will not change it. Nothing was staged.";
+          if (staged.code === "provider_unsupported")
+            return (
+              "Microsoft Calendar event removal is not supported safely. The event is still " +
+              "there and nothing was staged."
+            );
+          return (
+            "The event changed while it was being prepared. Refresh the list and restage it; " +
+            "nothing was staged."
+          );
+        }
+
+        const provider = snapshot.provider === "microsoft" ? "Microsoft" : "Google";
+        if (operation === "delete") {
+          return (
+            `Removal staged for “${observed.title}” on ${provider} Calendar. ` +
+            "It remains on the calendar until the user Approves."
+          );
+        }
+        return (
+          `Calendar update staged for “${observed.title}” on ${provider} Calendar ` +
+          `(${staged.changed.join(", ")}). It changes only after the user Approves.`
+        );
       },
     }),
     // ── Calendar availability (ACTN-02) — READ-ONLY, busy ranges only ─────────────────────────
@@ -3959,6 +4308,11 @@ async function runAgentLoop(
     {
       grantWebResearch: toolNames?.includes("webResearch") ?? false,
       grantDispatch: toolNames === undefined,
+      // SKILL-02: the executive is the only agent that may author a skill, for the same reason it
+      // is the only one that dispatches — and derived from `toolNames === undefined`, NEVER from
+      // `toolNames.includes("authorSkillCandidate")`. An allow-list is a REQUEST from the caller;
+      // reading one here would let a specialist ask for the capability by name and receive it.
+      grantSkillAuthoring: toolNames === undefined,
       threadId,
       rootRequestId: turnId,
       gmailEnabled,
@@ -4675,6 +5029,24 @@ export const runCockpitAgent = internalAction({
     // never supply it, §2-D analog): the eval runner pins the CANDIDATE row it evaluates. A missing
     // (name, version) FAILS CLOSED (getSkillVersion throws) — never silently falls back to active.
     skillVersions: v.optional(v.record(v.string(), v.number())),
+    // 21-03 (SKILL-01): the harness's EXACT tenant-candidate pins, name → `tenantSkills` row id.
+    // `dispatchArgs` in dispatch.ts declares the identical validator — the same pair of scopes,
+    // stated the same way, so neither entry point can drift from the other.
+    //
+    // THIS FIELD WAS MISSING UNTIL 2026-08-17 AND IT COST A WHOLE GOLDEN RUN. `d2374bf` threaded
+    // the pin through SCHEDULED DISPATCH and proved it there (`dispatch.test.ts`), but the eval
+    // runner reaches the system through THIS action. In Convex the `args` validator is the runtime
+    // contract, so an extra field is refused BEFORE the handler — run `6e021dce` died 0/41 at the
+    // door with `ArgumentValidationError: extra field tenantSkillIds`, having never called a model.
+    // The internal loop's type (`runSpecialistTurn`, :4211) had declared it the whole time; only
+    // the door was shut. Do not remove it, and do not add a caller-facing pin anywhere without
+    // adding it to EVERY entry point that caller can reach.
+    //
+    // The cockpit's OWN body is deliberately not resolved from this: `cockpit-agent` is not in
+    // USER_AUTHORABLE_SKILLS (see :4273), so there can be no tenant candidate for it. This action
+    // ACCEPTS the pin to FORWARD it to the specialists it dispatches — nothing here reads it for
+    // itself.
+    tenantSkillIds: v.optional(v.record(v.string(), v.id("tenantSkills"))),
     // Activity trace (CKPT-05): the turn identity the DRIVER mints (cockpit.ts) and owns. Optional
     // so every existing caller keeps working; absent ⇒ this turn emits no step rows.
     turnId: v.optional(v.string()),
@@ -4705,6 +5077,7 @@ export const runCockpitAgent = internalAction({
       model,
       clientContext,
       skillVersions,
+      tenantSkillIds,
       turnId,
       history,
       omitRecipientEdits,
@@ -4754,6 +5127,9 @@ export const runCockpitAgent = internalAction({
     const pinnedGoldenEvaluation = isPinnedCockpitEvaluation(
       tenantId,
       skillVersions?.[COCKPIT_AGENT_SKILL],
+      // 21-03: a `--tenant-skill` run pins in the OTHER scope and is just as much a harness-driven
+      // evaluation. Omitting this is what made a tenant-pinned golden run 21/41.
+      tenantSkillIds,
     );
     // No grant read at all on a non-email route. Gmail is not even a dependency of ordinary
     // business work, rather than merely a check whose negative result happens to be ignored.
@@ -4792,6 +5168,9 @@ export const runCockpitAgent = internalAction({
             }
           : {}),
       },
+      // 21-03: forward the tenant pin the eval runner sent. Nothing here reads it for the cockpit's
+      // own body (`cockpit-agent` is not authorable) — it exists to reach dispatched specialists.
+      tenantSkillIds,
     );
     // The direct call stages only the FREE media-director proposal. Paid clip/voice/render work is
     // still unreachable until the human approves the resulting card. Keep mixed email requests in

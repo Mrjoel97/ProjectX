@@ -51,6 +51,11 @@ export function skillStateLabel(state: { status: string; gatePassed: boolean }):
     : "Draft saved — waiting to be evaluated. Nothing has changed yet.";
 }
 
+/** Closed author copy only; identity/source refs remain on the owner surface. */
+export function skillAuthorLabel(author: "user" | "agent"): string {
+  return author === "agent" ? "Authored with Executive" : "Authored by you";
+}
+
 /** UTF-8 bytes, matching the server's cap exactly — a character count would under-report a paste. */
 export const adaptationBytes = (text: string) => new TextEncoder().encode(text.trim()).length;
 
@@ -213,6 +218,7 @@ export function SkillAuthoringPanel({ onClose }: { onClose: () => void }) {
                 <p style={{ margin: 0, fontSize: "0.85rem", fontWeight: 600 }}>
                   {s.label} · version {s.version}
                 </p>
+                <p style={dim}>{skillAuthorLabel(s.author)}</p>
                 <p style={dim}>{skillStateLabel(s)}</p>
                 <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem" }}>{s.authoredBody}</p>
               </li>

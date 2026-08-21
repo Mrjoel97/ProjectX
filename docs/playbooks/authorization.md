@@ -1,5 +1,125 @@
 # Playbook: Authorization (tenancy + ownership)
 
+> Last verified: 2026-08-21 (25.1-06, D13 — **`/ops` GAINED AN OWNER-ONLY SECTION**, and the
+> self-growing owner-surface guard caught it. isolation.test.ts 31/32 — the one red is 23-05's
+> `skills.activateAgentCandidate` fixture, pre-existing and untouched here.)
+>
+> - **`deadLetters.listAll` is the 16th owner endpoint** and the SIXTH module with one
+>   (`deadLetters` joins finance, invites, ops, optimizerConfig, skills). `isolation.test.ts`'s
+>   module-set and count pins went red the moment it was added, which is the entire reason they are
+>   pinned rather than derived — and the endpoint inherited the loop's automatic
+>   "rejects a non-owner with OWNER_REQUIRED" case for free.
+> - **`/ops` is now mixed-purpose in THREE ways, not two.** Eval signals and the tenant dead-letter
+>   section stay tenant-visible; Optimizer, Tenant skill candidates and now **Dead letters — all
+>   tenants** are inside `{isOwner && …}`.
+> - **THE MOUNTING RULE APPLIES TO THE NEW SECTION IDENTICALLY.** `AllTenantDeadLetters` owns the
+>   `listAll` hook, so MOUNTING it is what subscribes to other tenants' rows. Hiding it with CSS,
+>   `hidden`, opacity, or an early return INSIDE the component would each still run the hook and
+>   leak through the subscription, the loading state or the error boundary. It must never move
+>   outside the `isOwner` branch.
+> - **The client boolean is still not the boundary.** `api.owner.viewer` is a courtesy that saves a
+>   flash; `ownerQuery`'s `requireOwner` refuses before the handler reads a row.
+> - **Seeing is not acting.** The owner-only section is read-only by construction: `markResolved`
+>   remains a `tenantMutation` and the module has no owner-scoped mutation at all.
+> - **`opsPresentation.test.ts` is the mount guard, and it CAUGHT this change.** Its fixture throws
+>   on an unrecognised query, so adding an owner-only hook to the page turned it red until
+>   `deadLetters:listAll` was registered as owner-only in BOTH halves — mounted for `{isOwner:true}`,
+>   never mounted for `false`/`null`/`undefined`. The fixture deliberately returns a NON-EMPTY row:
+>   an empty result renders the "no dead letters" paragraph, which is indistinguishable from the
+>   section never mounting, so the owner assertion would have passed against a deleted section.
+> - **A slice bug fixed in passing.** `tenantSkillReview.test.ts` sliced the panel body "to the next
+>   top-level declaration" in prose and to `OpsPage` in code, so it silently swallowed anything
+>   declared in between — its BRAND hex assertion went red over a colour belonging to a different
+>   component. It now really does stop at the next top-level declaration.
+
+> Last verified: 2026-08-20 (23-05 added `skills.activateAgentCandidate`, a separate
+> `ownerMutation` whose exact-id agent row must also carry current full-suite exact-row evidence.
+> Owner identity/time and the eval run id are server-derived and written with active status in one
+> transition patch. User and agent activation exports refuse each other's rows; rollback remains
+> owner-only and evidence-exempt. Source/static verification only because package executables are
+> absent in this checkout; no live state changed and `$0.00` was spent.)
+>
+> **25-02 note, 2026-08-16 — Phase 22's outstanding owner/non-owner DOM evidence is closed at the
+> COMPONENT level, not in a browser.** `/admin` follows `/ops`'s mount-gate pattern exactly (the
+> whole view is conditional so its hooks never subscribe), and
+> `apps/web/app/(app)/admin/adminPresentation.test.ts` proves it by recording every hook reference
+> — mutation-proven against the `<div hidden>` anti-pattern. **A Playwright two-identity spec was
+> not written and could not be**: the harness has one storage state and one seeded user, `owner` is
+> hand-granted only, and the `(app)` onboarding redirect would have made the non-owner assertion
+> pass for the wrong reason. See `beta-admission.md` for the full statement of that limitation.
+
+> Last verified: 2026-08-16 (25-03 — **`isolation.test.ts` is the BETA-02/BETA-05 gate, and it is
+> derived rather than enumerated: a new table, index, public function or owner endpoint is covered
+> automatically or reddens the suite.**)
+>
+> **"ALL THREE OWNER-GATED FUNCTIONS" WAS 14.** The count in `25-CONTEXT.md`/`25-VALIDATION.md` is a
+> stale Phase-8 figure. Measured: `finance.ts` ×5 (**including `setMasterKillSwitch` and
+> `setMediaKillSwitch`, the global spend kill switches**), `optimizerConfig.ts` ×2, `skills.ts` ×5,
+> `invites.ts` ×2. `importGuard.test.ts` pins only 7 of them and **all five finance owner endpoints
+> were pinned by nothing** — a silent downgrade of the global kill switch to `tenantMutation` broke
+> no test. `isolation.test.ts` now derives the list from a source scan and loops the
+> `OWNER_REQUIRED` assertion over it. Mutation-proven: downgrading `setMasterKillSwitch` reddens it.
+>
+> **ARGUMENT VALIDATION RUNS BEFORE `requireOwner`.** Measured, and contrary to what the gate first
+> assumed: calling an owner endpoint with `{}` throws `Validator error: Missing required field`,
+> never `OWNER_REQUIRED`. A test passing empty args would have "passed" on 8 of the 14 while proving
+> nothing about authorization. Every owner endpoint in the gate gets real, schema-valid arguments,
+> and a separate assertion fails if a new one is added without them.
+>
+> **THE INDEX RULE KEYS ON `tenantId`, NOT ON THE REGISTRY CATEGORY.** Filtering to
+> `tenant_owned`/`tenant_credential` silently skipped `audit` and `deadLetters` — both
+> `audit_immutable`, both carrying `tenantId`, with 3 non-tenant-leading indexes between them.
+> **Found by mutation: deleting `audit.by_ts` from the exception list left the suite green.** The
+> exception criterion is also widened from "a cross-tenant range is impossible by construction" to
+> "a named internal/owner-plane consumer with no tenant-facing caller", because for several of these
+> the cross-tenant range IS the point (`audit.by_ts` is what the WORM export cron scans).
+>
+> **THE PUBLIC-SURFACE SCAN COVERS RAW BUILDERS, not just the five wrapper names.** Since 25-01 the
+> repo has PUBLIC raw-builder functions, and a wrapper-only regex would be blind to precisely the
+> unauthenticated internet-reachable endpoints an admission-gated beta most needs pinned. Each one
+> must be allow-listed AND carry a written reason; "it needed to be callable" is not a reason.
+>
+> Prior entry — 2026-08-16 (25-01 — **the raw-builder allowlist gained its first genuinely PUBLIC
+> entry, and `importGuard.test.ts` gained a guard against the two-allowlist divergence.**)
+>
+> **`packages/backend/convex/invites.ts` and `invites.test.ts` have MOVED to
+> `docs/playbooks/beta-admission.md`**, which now owns the admission boundary end to end and is the
+> file to read before changing it. The provisional registration recorded below (by the concurrent
+> media lane, for work it had not written) is therefore superseded: the module is now landed,
+> tested and documented. This playbook keeps `lib/functions.ts`, `lib/allowlist.ts`, `owner.ts` and
+> `importGuard.test.ts`.
+>
+> **What changed here.** `RAW_BUILDER_ALLOWLIST` previously described itself, accurately, as a list
+> of INTERNAL-only modules that are "never client-callable with a tenant identity". `invites.ts`
+> breaks that sentence and the comment now says so explicitly rather than letting the next reader
+> generalise from it: a beta signup page is used by people who have **no identity yet**, which no
+> tenant wrapper can express — `tenantQuery` throws `UNAUTHENTICATED` by design. **The bar for a
+> public entry is not "it needed to be callable".** It is that the function reads and returns no
+> tenant-owned data and no secret: `requestAccess` writes one email-keyed row, and `preflight`
+> returns a boolean plus a masked address, reporting an unknown code and a spent code identically
+> so it cannot be used as an oracle. Meet that bar and say so in a comment, or use a wrapper.
+>
+> **Also enforced now:** a module exempted from the runtime scan but NOT from Biome's
+> `noRestrictedImports` override in `biome.json` passes `pnpm test` and fails `biome ci`. The new
+> divergence test in `importGuard.test.ts` catches it; see `ci-gate.md` for why that matters to the
+> production deploy.
+>
+> Prior note — touched 2026-08-16 to clear the §9 Stop hook — **REGISTRATION ONLY, NOT A
+> VERIFICATION**, and
+> deliberately not a `Last verified` bump. `packages/backend/convex/invites.ts` + `invites.test.ts`
+> are NEW and UNCOMMITTED work from the concurrent BETA-01 / Phase-25 lane; this session (the media
+> lane) neither wrote nor reviewed them. They are registered here rather than left unwatched or
+> parked in `_unassigned` because the module is by its own description **an authorization trust
+> boundary**: `admitIdentity` runs inside the `auth:store` mutation before any account, session or
+> verification code is written, and it is the first genuinely PUBLIC entry on the raw-builder
+> allowlist (§2) — which this playbook already owns via `lib/allowlist.ts`. The same lane also has
+> `auth.ts`, `lib/allowlist.ts` and `schema.ts` modified in the tree.
+>
+> **The owning lane still owes this playbook a real entry and a real `Last verified` line**
+> covering the issuance/admission split, why two public functions are safe on the allowlist, and
+> what the preflight deliberately does not authorize. Nothing below covers it. Registering the path
+> only means the hook will protect it from here on; it is not a claim that anyone has checked it.
+
 > Last verified: 2026-08-16 (**what `owner` does NOT gate.** `users.owner` is the deployment-owner
 > grant (GOVN-01): the optimizer, skill activation/rollback, the owner-only finance rails and
 > `/ops`. It is NOT a general "may act destructively" flag, and `tenantDelete.ts` learned that in
@@ -170,9 +290,9 @@ patch `owner:true` → ONE `owner.granted` audit event → return `{changed:true
    evidence-exempt rollback.
 10. **The protected endpoints are pinned BY NAME** in `importGuard.test.ts`
     (`owner-gated endpoints stay owner-gated`). Adding an admin endpoint means adding a row. There
-    are **seven** as of 21-04: `getOptimizerStatus`, `setOptimizerEnabled`, `activateCandidate`,
+    are **eight** as of 23-05: `getOptimizerStatus`, `setOptimizerEnabled`, `activateCandidate`,
     `candidatesForReview`, `tenantCandidatesForReview`, `activateTenantCandidate`,
-    `rollbackTenantSkill`.
+    `activateAgentCandidate`, `rollbackTenantSkill`.
 11. **A TENANT skill row goes live only through the owner boundary** (21-04, SKILL-01). A user can
     publish a `candidate` and an eval run can certify it; neither changes what any model runs.
     `activateTenantCandidate` is the only door, and it needs BOTH gates. Proven by a four-cell truth
@@ -181,8 +301,13 @@ patch `owner:true` → ONE `owner.granted` audit event → return `{changed:true
     to `tenantMutation` lets the candidate's **own author** activate it (`changed: true`).
 12. **`requireOwner` is never inside `transitionSkillActivation`.** That helper is also the
     identity-free path for the eval runner and seeding. The wrapper is the authority; the helper is
-    the transition. This is invariant 9 restated for the tenant scope, and it is why the helper
-    takes no user id and the audit write lives in the public wrapper.
+    the transition. Agent mode receives the already-authenticated `ctx.userId` only to stamp the
+    approval patch; it does not perform authorization and the global/internal modes remain
+    identity-free. The audit write stays in the public wrapper.
+13. **Agent approval is a conjunction, not a second name for activation.**
+    `activateAgentCandidate` requires `author: agent`, candidate status, absent prior approval, and
+    `hasPassingAgentTenantEvidence` for the current full suite. `activateTenantCandidate` refuses
+    agent rows even when evidence is valid, and the agent endpoint refuses user rows.
 
 ### The tenant overlay's owner surface (21-04)
 
@@ -190,9 +315,10 @@ patch `owner:true` → ONE `owner.granted` audit event → return `{changed:true
 |---|---|---|---|
 | `skills.tenantCandidatesForReview` | `ownerQuery` | none | — (read) |
 | `skills.activateTenantCandidate` | `ownerMutation` | `{candidateId}` | exact passing tenant evidence |
+| `skills.activateAgentCandidate` | `ownerMutation` | `{candidateId}` | exact passing current-suite agent evidence + absent approval |
 | `skills.rollbackTenantSkill` | `ownerMutation` | `{targetId}` | `rollbackEligible === true` + archived/rolled_back |
 
-**All three take a ROW ID, never `(name, version)`.** Two tenants can each own `offer-architect@2`,
+**Every write takes a ROW ID, never `(name, version)`.** Two tenants can each own `offer-architect@2`,
 so a name/version activation is a coin flip between going live for the right tenant and going live
 for a stranger's draft.
 
@@ -202,12 +328,14 @@ prompts), across every tenant on the deployment. The `ownerQuery` refusal happen
 ctx factory, **before the handler reads a single row**. It is bounded — `by_status_createdAt` with a
 fixed `.take()`, newest first — because the deployment's candidate history is open-ended.
 
-**Ordinary tenant APIs are unchanged.** `myUserSkills` still returns no row id, no base body and no
-raw evidence, and the workspace authoring panel still has no activation control. A user cannot even
-name the row they would want activated.
+**Ordinary tenant authority is unchanged.** The history projection now includes the tenant's
+agent-authored adaptations with a closed author label and strict gate boolean, but still returns no
+row id, base/full body, raw evidence, owner identity or source refs. The workspace panel has no
+activation control. A tenant still cannot name the row they would want activated.
 
 **Audit.** One refs-only row per REAL transition (idempotent and failed attempts write nothing):
-`skill.user_candidate_activated` / `skill.user_skill_rolled_back`, `actor: "owner"`, payload key set
+`skill.user_candidate_activated` / `skill.agent_candidate_activated` /
+`skill.user_skill_rolled_back`, `actor: "owner"`, payload key set
 exactly `author, evalRunId, fromTenantSkillId, fromVersion, ownerUserId, skillName, tenantSkillId,
 version`. The row belongs to the TENANT whose runtime changed, on that candidate's own
 `correlationId` lineage — not to the owner. No body, no adaptation, no prose (CLAUDE.md §4).

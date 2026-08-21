@@ -1064,6 +1064,13 @@ export const landSpecialistResult = internalMutation({
      *  LOST_CONTEXT_MEMO's "the evaluation it was based on is no longer on file" is FALSE for it.
      *  The gap path (`runSpecialist`) passes nothing, so it stays byte-identical. */
     fallbackBody: v.optional(v.string()),
+    /** 25.1-05 (D11): the pages the specialist actually retrieved, so the memo card can attribute
+     *  the findings it is showing. CONTENT PLANE (§4) — this mutation writes them to the plan row
+     *  and to nothing else; every audit payload on this path stays counts-only. Absent on the gap
+     *  path and on any turn that retrieved nothing. */
+    sources: v.optional(
+      v.array(v.object({ title: v.string(), url: v.string(), retrievedAt: v.number() })),
+    ),
   },
   handler: async (ctx, a): Promise<void> => {
     const plan = await ctx.db.get(a.planId);
@@ -1102,6 +1109,18 @@ export const landSpecialistResult = internalMutation({
     }
     // patchPlan, not resetPlan: we are FILLING a staged row, and resetPlan would clear `kind: memo`.
     await ctx.runMutation(internal.plans.patchPlan, { planId: a.planId, body, status: "proposed" });
+    // 25.1-05 (D11): the references, written by DIRECT `ctx.db.patch` and deliberately NOT added as
+    // a `patchPlan` arg. `patchPlan` is the door the model's own cockpit tools write through, and a
+    // source list is a PROVENANCE claim — "these pages were read for this memo". Nothing reachable
+    // from the model may make it (the `calendarEventId`/`calendarRunId` rule in plans.ts, and the
+    // provenance-laundering class this repo has already shipped three times). These arrive from the
+    // search tool's own result parts via the internal dispatch args, which the model cannot supply.
+    // Guarded on non-empty so a turn that retrieved nothing leaves the field absent rather than
+    // writing a heading over an empty list — and so a later re-land cannot silently blank a filled
+    // one. Same transaction as the patch above.
+    if (a.sources && a.sources.length > 0) {
+      await ctx.db.patch(a.planId, { sources: a.sources });
+    }
   },
 });
 

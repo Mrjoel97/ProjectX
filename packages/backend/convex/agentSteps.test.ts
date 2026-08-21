@@ -232,6 +232,58 @@ describe("mediaDispatchCountForThread — the AGENT's calls, not the specialist'
   });
 });
 
+// The sibling read, added 2026-08-17 with the `imageProposalCount` eval key it serves. It has NO
+// `dispatch:` filter and that asymmetry is deliberate rather than an omission: `proposeImage` is
+// not a specialist route (no `stepTool` in SPECIALISTS), so `dispatch.ts` never writes this tool
+// name and the second writer its sibling must exclude does not exist here. Pinned so a future
+// reader does not "fix" the asymmetry by cargo-culting the filter across.
+describe("imageProposalCountForThread — the still-image door", () => {
+  const imageStep = (t: T, over: { stepKey: string; threadId?: string; tenantId?: string }) =>
+    t.mutation(internal.agentSteps.record, {
+      tenantId: over.tenantId ?? TENANT,
+      threadId: over.threadId ?? THREAD,
+      turnId: TURN,
+      stepKey: over.stepKey,
+      tool: "proposeImage",
+      startedAt: NOW,
+    });
+  const count = (t: T, threadId = THREAD, tenantId = TENANT) =>
+    t.query(internal.smoke.imageProposalCountForThread, { tenantId, threadId });
+
+  test("one proposeImage call counts ONE", async () => {
+    const t = convexTest(schema, modules);
+    await imageStep(t, { stepKey: "call_img" });
+    expect(await count(t)).toBe(1);
+  });
+
+  test("a SECOND proposal is visible — stageImagePlan recycles the one by_thread row", async () => {
+    const t = convexTest(schema, modules);
+    await imageStep(t, { stepKey: "call_img" });
+    await imageStep(t, { stepKey: "call_img2" });
+    expect(await count(t)).toBe(2);
+  });
+
+  test("a prose-only turn counts ZERO, and no other thread or tenant leaks in", async () => {
+    const t = convexTest(schema, modules);
+    await imageStep(t, { stepKey: "call_img", threadId: "other_thread" });
+    await imageStep(t, { stepKey: "call_img", tenantId: OTHER });
+    expect(await count(t)).toBe(0);
+  });
+
+  test("a dispatchMedia turn does NOT count as an image — the routing defect, offline", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.agentSteps.record, {
+      tenantId: TENANT,
+      threadId: THREAD,
+      turnId: TURN,
+      stepKey: "call_reel",
+      tool: "dispatchMedia",
+      startedAt: NOW,
+    });
+    expect(await count(t)).toBe(0);
+  });
+});
+
 // ── The called-vs-never-called read (2026-08-16) ──────────────────────────────────────────────
 //
 // `mediaDispatchCountForThread` above answers ONE hardcoded tool, and `driveReadCountForThread`

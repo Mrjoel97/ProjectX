@@ -70,19 +70,37 @@ export const REVIEW_FAILED_MESSAGE =
 export const RECONNECT_PROVIDERS = ["google", "microsoft"] as const;
 export type ReconnectProvider = (typeof RECONNECT_PROVIDERS)[number];
 
+/**
+ * `message` is the PROACTIVE notification copy (a cron noticed the grant is expiring).
+ * `holdMessage` is the REACTIVE copy for a request parked at `awaiting_reauth`.
+ *
+ * They are separate fields because the two states are different facts about different things, and
+ * conflating them ships the wrong sentence. Microsoft is the case that proves it: its notification
+ * is raised by the CALENDAR expiry cron ("keep calendar access working"), but since 25-05 a
+ * Microsoft MAIL send can also hold — and telling someone whose email is stuck that their calendar
+ * needs attention describes the wrong subsystem entirely.
+ */
 export const RECONNECT: Record<
   ReconnectProvider,
-  { readonly kind: string; readonly message: string; readonly href: string; readonly cta: string }
+  {
+    readonly kind: string;
+    readonly message: string;
+    readonly holdMessage: string;
+    readonly href: string;
+    readonly cta: string;
+  }
 > = {
   google: {
     kind: "gmail_reconnect",
-    message: "Reconnect Gmail to send this",
+    message: "Reconnect Gmail to keep delivery running",
+    holdMessage: "Reconnect Gmail to send this",
     href: "/connect-gmail",
     cta: "Reconnect",
   },
   microsoft: {
     kind: "microsoft_calendar_reconnect",
     message: "Reconnect Microsoft to keep calendar access working",
+    holdMessage: "Reconnect Microsoft to send this",
     href: "/connect-microsoft",
     cta: "Reconnect",
   },

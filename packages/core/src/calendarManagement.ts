@@ -161,6 +161,14 @@ export const CALENDAR_FAILURE_CODES = [
   "needs_inspection",
   /** Not a Pikar-created row — arbitrary mailbox events stay out of reach. */
   "not_managed",
+  /**
+   * The provider cannot do this operation SAFELY AT ALL, so we never ask (ADR-023: Graph ignores
+   * `If-Match` on event DELETE). Deliberately its own code rather than `provider_error`: that one
+   * means "the provider said no this time" and invites a retry, while this one means "we will never
+   * send this request", and rendering them the same way would promise the user a retry that cannot
+   * exist. This is the code behind the ONE product surface ADR-023 requires to be visible.
+   */
+  "provider_unsupported",
   /** Bounded catch-all. A CODE, deliberately without the provider's words. */
   "provider_error",
 ] as const;
@@ -195,3 +203,120 @@ export function manageability(
   if (!row.etag) return { ok: false, code: "needs_inspection" };
   return { ok: true };
 }
+
+// ── 17-08: which (provider, operation) pairs may be ATTEMPTED, and the Graph probe gate ────────
+
+/**
+ * Is this operation attemptable on this provider AT ALL?
+ *
+ * **Microsoft + delete is the single refusal, and it is NOT probe-gated (ADR-023).** The 17-07 probe
+ * measured `staleDeleteStatus: 204` with `staleDeletePreserved: false` — Graph IGNORES `If-Match` on
+ * event DELETE and the stale delete destroyed the event anyway. There is no optimistic-concurrency
+ * protection of any kind on that path, so two racing cancels destroy an event whose state the caller
+ * never saw.
+ *
+ * NOTE THE SIGNATURE: `(provider, operation)` and nothing else. A probe cannot widen this because
+ * there is nowhere to pass one. That is deliberate and load-bearing — ADR-023 records that a later
+ * work/school-account probe showing a 412 on DELETE would justify a SUPERSEDING ADR, never an
+ * automatic widening, and an argument that does not exist cannot be threaded through by accident.
+ */
+export function providerSupports(
+  provider: CalendarProvider,
+  operation: CalendarManageOperation,
+): { ok: true } | { ok: false; code: CalendarFailureCode } {
+  if (provider === "microsoft" && operation === "delete") {
+    return { ok: false, code: "provider_unsupported" };
+  }
+  return { ok: true };
+}
+
+/** The exact schema string 17-07's probe stamps. A different version is a different measurement. */
+export const GRAPH_PROBE_SCHEMA = "phase17-graph-concurrency-probe.v1";
+
+/** The probe fields the UPDATE gate reads. The other measured fields stay in the artifact; nothing
+ *  here may read `staleDelete*` or the collapsed `supported` boolean. */
+export type GraphConcurrencyProbe = {
+  schema: string;
+  deploymentUrlHash: string;
+  accountIdHash: string;
+  stalePatchStatus: number;
+  stalePatchPreserved: boolean;
+};
+
+/**
+ * Parse a stored probe artifact. Returns `null` for missing, blank, malformed, wrong-schema, or
+ * wrong-typed input — every unusable state collapses to the same "no evidence" value, because the
+ * ONLY safe reading of an unparseable probe is that no measurement exists.
+ *
+ * Deliberately returns null rather than throwing: an operator pasting a truncated JSON blob should
+ * darken the Microsoft update branch, not crash a governed action mid-delivery.
+ */
+export function parseGraphProbe(raw: string | undefined | null): GraphConcurrencyProbe | null {
+  if (typeof raw !== "string" || raw.trim() === "") return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  const p = parsed as Record<string, unknown>;
+  if (p.schema !== GRAPH_PROBE_SCHEMA) return null;
+  if (typeof p.deploymentUrlHash !== "string" || typeof p.accountIdHash !== "string") return null;
+  if (typeof p.stalePatchStatus !== "number" || typeof p.stalePatchPreserved !== "boolean") {
+    return null;
+  }
+  return {
+    schema: p.schema,
+    deploymentUrlHash: p.deploymentUrlHash,
+    accountIdHash: p.accountIdHash,
+    stalePatchStatus: p.stalePatchStatus,
+    stalePatchPreserved: p.stalePatchPreserved,
+  };
+}
+
+/**
+ * May Microsoft event UPDATE run, here, for this account?
+ *
+ * THE PAIR, READ APART FROM `supported`. 17-07 shipped a single `supported` boolean that ANDed the
+ * patch and delete results together, so it could only ever report the worse of them — which is why a
+ * PATCH that provably refuses stale writes sat unreachable behind a DELETE that does not. This reads
+ * `stalePatchStatus === 412` (Graph enforced `If-Match`) AND `stalePatchPreserved` (the refused
+ * write changed nothing) and never consults `supported`. A 412 that still wrote is worse than no 412
+ * at all, which is why both halves are required.
+ *
+ * THE BINDING is the other half of the gate. A measurement is evidence about the deployment and the
+ * grant it ran against, and nothing else: a passing dev probe pasted into production, or one
+ * tenant's probe vouching for another's grant, are exactly the transplants this refuses.
+ */
+export function microsoftUpdateEnabled(args: {
+  probe: GraphConcurrencyProbe | null;
+  deploymentUrlHash: string;
+  accountIdHash: string;
+}): boolean {
+  const { probe, deploymentUrlHash, accountIdHash } = args;
+  if (!probe) return false;
+  if (probe.deploymentUrlHash !== deploymentUrlHash) return false;
+  if (probe.accountIdHash !== accountIdHash) return false;
+  return probe.stalePatchStatus === 412 && probe.stalePatchPreserved;
+}
+
+/**
+ * What a provider GET may hand back to the governed layer, and the whole of it.
+ *
+ * Location, organizer, body, attendee IDENTITIES and the raw response have no home in this type, so
+ * an adapter that wanted to leak one would have to widen the contract in this file first. The
+ * attendee count is a COUNT (§4) — enough to refuse the write, never enough to name a guest.
+ */
+export type CalendarInspection =
+  | { exists: false }
+  | {
+      exists: true;
+      externalEventId: string;
+      /** ABSENT means "unknown version", never "no concurrency check needed". */
+      etag?: string;
+      title: string;
+      startMs: number;
+      durationMs: number;
+      attendeeCount: number;
+    };

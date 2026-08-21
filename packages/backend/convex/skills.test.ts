@@ -1,10 +1,13 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
+  AGENT_AUTHORABLE_SKILLS,
+  AGENT_EVAL_SUITE,
   COCKPIT_AGENT_SKILL,
   CONTENT_DRAFTER_SKILL,
   composeUserSkillBody,
   type EvalEvidenceTenantTarget,
+  EXECUTIVE_AGENT_AUTHOR_ID,
   hasPassingEvidence,
   hasPassingTenantEvidence,
   isGatedSkill,
@@ -38,7 +41,7 @@ import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { contentHash } from "./lib/hash";
 import schema from "./schema";
-import { loadSkill } from "./skills";
+import { loadEffectiveSkill, loadSkill } from "./skills";
 
 // Register every convex module so internal.* function references resolve.
 // `import.meta.glob` is a Vite feature; its type is not in the Convex tsconfig
@@ -929,14 +932,35 @@ describe("no hardcoded agent prompts in convex/", () => {
     // backtick branch spans lines (that IS how a real hardcoded prompt would look).
     const stringLiteral = /"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`/g;
 
+    // COMMENTS ARE NOT SOURCE. The apostrophe fix above closed this hole for '…' and "…" but left
+    // it open for backticks, which still span lines by design — so a pair of MARKDOWN backticks in
+    // JSDoc prose swallows every line between them and reports the result as an inline prompt.
+    // Measured on `cockpitCapabilities.ts`: `a745d36` took it from 1 backtick to 29 by explaining
+    // itself well, and the scan went from 0 offenders to 3, the longest a 3292-char span that
+    // starts mid-regex on line 28 and ends inside a sentence about the eval harness. §5 forbids a
+    // hardcoded prompt the runtime LOADS; a prompt sitting in a comment is not loaded and is not
+    // that. Stripping first makes the detector match the rule — the anti-vacuity test below proves
+    // it still catches the real thing.
+    const stripComments = (s: string) =>
+      s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+
+    const scan = (text: string) =>
+      [...stripComments(text).matchAll(stringLiteral)]
+        .map((m) => m[0].length - 2)
+        .filter((n) => n > MAX_INLINE_STRING);
+
+    // ANTI-VACUITY. Stripping comments must not blind the guard, so prove all three directions on
+    // synthetic input before trusting it on the tree. Delete `stripComments` and case 2 reddens;
+    // weaken the scan and case 1 reddens.
+    const long = "x".repeat(MAX_INLINE_STRING + 50);
+    expect(scan(`const prompt = \`${long}\`;`)).toHaveLength(1); // 1. a REAL hardcoded prompt, still caught
+    expect(scan(`/** doc: \`${long}\` and \`more\` */\nconst a = 1;`)).toHaveLength(0); // 2. prose, correctly ignored
+    expect(scan(`const u = "https://ex.com/${long}";`)).toHaveLength(1); // 3. `://` is not a comment
+
     const offenders: string[] = [];
     for (const file of sourceFiles) {
-      const src = readFileSync(file, "utf8");
-      for (const match of src.matchAll(stringLiteral)) {
-        const inner = match[0].slice(1, -1);
-        if (inner.length > MAX_INLINE_STRING) {
-          offenders.push(`${file}: ${inner.length}-char inline string`);
-        }
+      for (const length of scan(readFileSync(file, "utf8"))) {
+        offenders.push(`${file}: ${length}-char inline string`);
       }
     }
 
@@ -1250,6 +1274,7 @@ describe("publishUserCandidate — tenant candidate authoring (21-02)", () => {
     expect(serialized).not.toContain(GLOBAL_BODY);
     expect(serialized).not.toContain(USER_SKILL_ADAPTATION_SECTION);
     expect(Object.keys(mine[0]!).sort()).toEqual([
+      "author",
       "authoredBody",
       "baseScope",
       "baseVersion",
@@ -1307,12 +1332,16 @@ describe("publishUserCandidate — tenant candidate authoring (21-02)", () => {
 
   test("the tenant allocation reads ONE descending indexed row — never a history .collect()", () => {
     const src = readFileSync(fileURLToPath(new URL("./skills.ts", import.meta.url)), "utf8");
-    const from = src.indexOf("export const publishUserCandidate");
+    // 23-02 moved the read half into `readTenantPublishState`, shared by the user and agent
+    // writers. The region therefore starts at the HELPER, not at the user writer — so this guard
+    // still covers the read where it now lives, and covers BOTH writers below it.
+    const from = src.indexOf("async function readTenantPublishState");
     const to = src.indexOf("export const myUserSkills");
     expect(from).toBeGreaterThan(-1);
     expect(to).toBeGreaterThan(from);
     const region = src.slice(from, to);
     expect(region.length).toBeGreaterThan(800); // non-vacuity: the real publisher was found
+    expect(region).toContain("export const publishUserCandidate");
 
     // POSITIVE: the bounded read the many-version case above depends on.
     expect(region).toContain("by_tenant_name_version");
@@ -2346,6 +2375,8 @@ describe("owner activation + rollback of tenant candidates (21-04)", () => {
     // reads this page. Named mutation that turns this red: return `row.evidence` alongside the
     // refs summary (measured: without this line that mutation is invisible).
     expect(Object.keys(a).sort()).toEqual([
+      "author",
+      "authorAgentId",
       "authorUserId",
       "authoredBody",
       "baseBody",
@@ -2359,7 +2390,10 @@ describe("owner activation + rollback of tenant candidates (21-04)", () => {
       "gatePassed",
       "label",
       "name",
+      "ownerApproval",
       "rollbackTargets",
+      "sourceThreadId",
+      "sourceTurnId",
       "status",
       "tenantId",
       "version",
@@ -2371,6 +2405,11 @@ describe("owner activation + rollback of tenant candidates (21-04)", () => {
       label: USER_AUTHORABLE_SKILL_METADATA[OFFER_ARCHITECT_SKILL].label,
       version: w.version,
       status: "candidate",
+      author: "user",
+      authorAgentId: null,
+      sourceThreadId: null,
+      sourceTurnId: null,
+      ownerApproval: null,
       gatePassed: false,
       evidenceState: "absent",
       evidenceSummary: null,
@@ -2441,6 +2480,42 @@ describe("owner activation + rollback of tenant candidates (21-04)", () => {
     )!;
     expect(fourth.rollbackTargets.map((r) => r.version)).toEqual([w.version, 1]);
     expect(fourth.rollbackTargets.map((r) => r.author)).toEqual(["user", "system"]);
+  });
+
+  test("a tenant past the take-limit is STILL offered its recovery baseline", async () => {
+    // OBSERVED LIVE 2026-08-18, in a browser, on a healthy deployment: a tenant holding twelve
+    // versions of one skill saw "No earlier version has ever been live for this tenant" on every
+    // card — while the inspector reported its v1 baseline archived and rollbackEligible. The read
+    // walked versions DESC, took ten, and filtered for eligibility afterwards, so ten candidates
+    // filled the window and the one eligible row never survived to the filter. Authoring more
+    // candidates pushed the tenant's own recovery further out of reach, and rollback is UI-only
+    // by design, so nothing else could reach it.
+    //
+    // The sibling source-scan test asserted `.take(ROLLBACK_CHOICE_LIMIT)` throughout and stayed
+    // green: it proved the read was bounded, which was true, and never that it returned the row.
+    const ROLLBACK_LIMIT = 10; // mirrors ROLLBACK_CHOICE_LIMIT in skills.ts
+    const w = await world();
+
+    for (let i = 0; i < ROLLBACK_LIMIT + 2; i++) {
+      await w.asA.mutation(api.skills.publishUserCandidate, {
+        name: OFFER_ARCHITECT_SKILL,
+        authoredBody: `Iteration ${i}. ${NEEDLE_A}`,
+      });
+    }
+
+    const mine = (await w.asOwner.query(api.skills.tenantCandidatesForReview, {})).filter(
+      (c) => c.tenantId === w.tenantA,
+    );
+    // The precondition is the whole point — without more candidates than the limit there is no bug.
+    expect(mine.length).toBeGreaterThan(ROLLBACK_LIMIT);
+
+    for (const c of mine) {
+      expect(c.rollbackTargets.map((r) => r.version)).toContain(1);
+    }
+    // …and it is still a BOUNDED read, not a collect wearing a filter.
+    for (const c of mine) {
+      expect(c.rollbackTargets.length).toBeLessThanOrEqual(ROLLBACK_LIMIT);
+    }
   });
 
   test("the review queue is bounded: more candidates than the cap returns the cap, newest first", async () => {
@@ -2533,6 +2608,9 @@ describe("owner activation + rollback of tenant candidates (21-04)", () => {
       region("export const activateTenantCandidate =", "export const rollbackTenantSkill ="),
     ).toContain("transitionSkillActivation(ctx, {");
     expect(
+      region("export const activateAgentCandidate =", "export const rollbackTenantSkill ="),
+    ).toContain("transitionSkillActivation(ctx, {");
+    expect(
       region("export const rollbackTenantSkill =", "async function logTenantActivation"),
     ).toContain("transitionSkillActivation(ctx, {");
   });
@@ -2549,9 +2627,897 @@ describe("owner activation + rollback of tenant candidates (21-04)", () => {
     expect(region).toContain("by_status_createdAt");
     expect(region).toContain('.order("desc")');
     expect(region).toContain(".take(TENANT_REVIEW_LIMIT)");
-    expect(region).toContain(".take(ROLLBACK_CHOICE_LIMIT)");
+    // Eligibility is INDEXED, so the take is over eligible rows only. `+ 1` leaves room for the
+    // one active row excluded afterwards. NOTE: this assertion is mechanism coverage and it stayed
+    // GREEN through the whole live outage below — the behaviour test is what catches that class.
+    expect(region).toContain("by_tenant_name_rollbackEligible");
+    expect(region).toContain(".take(ROLLBACK_CHOICE_LIMIT + 1)");
     // The candidate queue is cross-tenant and open-ended; a full scan is a page that only gets
     // slower. Named mutation that turns this red: replace either take with `.collect()`.
     expect(region).not.toContain(".collect(");
+  });
+});
+
+// 23-01 (SKILL-02): the tenantSkills DATA VOCABULARY for agent-authored rows. No writer, no tool,
+// no activation path exists yet — these fixtures pin what the ONE tenant overlay can REPRESENT, and
+// which cross-field combinations are legal, because the validator deliberately cannot express
+// "required only when author === agent" without invalidating every row already written.
+describe("tenantSkills: agent provenance and owner approval (Phase 23)", () => {
+  const AGENT_NAME = AGENT_AUTHORABLE_SKILLS[0];
+  const THREAD = "thread_zq7agent";
+  const TURN = "turn_zq7agent_0001";
+
+  const setup = async () => {
+    const t = convexTest(schema, modules);
+    const userA = await t.run((ctx) => ctx.db.insert("users", {}));
+    const userB = await t.run((ctx) => ctx.db.insert("users", {}));
+    const ownerId = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
+    return { t, tenantA: String(userA), tenantB: String(userB), ownerId };
+  };
+
+  const base = (tenantId: string, version: number) => ({
+    tenantId,
+    name: AGENT_NAME,
+    version,
+    body: `composed body v${version}`,
+    authoredBody: `adaptation v${version}`,
+    basedOnScope: "global" as const,
+    basedOnName: AGENT_NAME,
+    basedOnVersion: 7,
+    rollbackEligible: false,
+    createdAt: version,
+  });
+
+  test("legacy system and Phase-21 user rows still validate with ZERO agent fields present", async () => {
+    const { t, tenantA } = await setup();
+
+    const ids = await t.run(async (ctx) => [
+      await ctx.db.insert("tenantSkills", {
+        ...base(tenantA, 1),
+        authoredBody: "",
+        status: "active",
+        author: "system",
+      }),
+      await ctx.db.insert("tenantSkills", {
+        ...base(tenantA, 2),
+        status: "candidate",
+        author: "user",
+        authorUserId: tenantA as Id<"users">,
+      }),
+    ]);
+
+    const rows = await t.run(async (ctx) => Promise.all(ids.map((id) => ctx.db.get(id))));
+    // No migration, no backfill, and no accidental defaulting: the new columns are genuinely
+    // ABSENT on an old row rather than present-and-empty.
+    for (const row of rows) {
+      expect(row?.authorAgentId).toBeUndefined();
+      expect(row?.sourceThreadId).toBeUndefined();
+      expect(row?.sourceTurnId).toBeUndefined();
+      expect(row?.ownerApproval).toBeUndefined();
+    }
+    expect(rows.map((r) => r?.author)).toEqual(["system", "user"]);
+  });
+
+  test("an agent row is representable as a candidate carrying lineage and NO approval", async () => {
+    const { t, tenantA } = await setup();
+
+    const id = await t.run((ctx) =>
+      ctx.db.insert("tenantSkills", {
+        ...base(tenantA, 3),
+        status: "candidate",
+        author: "agent",
+        authorAgentId: EXECUTIVE_AGENT_AUTHOR_ID,
+        sourceThreadId: THREAD,
+        sourceTurnId: TURN,
+      }),
+    );
+
+    const row = await t.run((ctx) => ctx.db.get(id));
+    expect(row?.author).toBe("agent");
+    // Server-stamped constant, never a model id and never a tool argument.
+    expect(row?.authorAgentId).toBe("executive-agent");
+    expect(row?.sourceThreadId).toBe(THREAD);
+    expect(row?.sourceTurnId).toBe(TURN);
+    // The state Phase 23 exists to make ordinary: authored, inert, unapproved.
+    expect(row?.ownerApproval).toBeUndefined();
+    expect(row?.authorUserId).toBeUndefined();
+  });
+
+  test("approval carries EXACTLY three refs and nothing a model could have written", async () => {
+    const { t, tenantA, ownerId } = await setup();
+
+    const id = await t.run((ctx) =>
+      ctx.db.insert("tenantSkills", {
+        ...base(tenantA, 4),
+        status: "active",
+        author: "agent",
+        authorAgentId: EXECUTIVE_AGENT_AUTHOR_ID,
+        sourceThreadId: THREAD,
+        sourceTurnId: TURN,
+        ownerApproval: {
+          ownerUserId: ownerId,
+          approvedAt: 1_700_000_000_000,
+          evalRunId: "de976d8e",
+        },
+      }),
+    );
+
+    const row = await t.run((ctx) => ctx.db.get(id));
+    // Exhaustive key check, not a spot check: a rationale/note/summary field added later is a place
+    // for model-influenced prose to enter the approval record, and this test is what refuses it.
+    expect(Object.keys(row?.ownerApproval ?? {}).sort()).toEqual([
+      "approvedAt",
+      "evalRunId",
+      "ownerUserId",
+    ]);
+    expect(row?.ownerApproval?.ownerUserId).toBe(ownerId);
+    expect(row?.ownerApproval?.evalRunId).toBe("de976d8e");
+  });
+
+  test("by_tenant_source_turn answers idempotence EXACTLY and never across tenants", async () => {
+    const { t, tenantA, tenantB } = await setup();
+
+    // Tenant B mints from a turn with the SAME ids. In a thread/turn-only index these two collide
+    // and B's row answers A's idempotence read — which is a cross-tenant existence oracle.
+    await t.run(async (ctx) => {
+      await ctx.db.insert("tenantSkills", {
+        ...base(tenantA, 5),
+        status: "candidate",
+        author: "agent",
+        authorAgentId: EXECUTIVE_AGENT_AUTHOR_ID,
+        sourceThreadId: THREAD,
+        sourceTurnId: TURN,
+      });
+      await ctx.db.insert("tenantSkills", {
+        ...base(tenantB, 5),
+        status: "candidate",
+        author: "agent",
+        authorAgentId: EXECUTIVE_AGENT_AUTHOR_ID,
+        sourceThreadId: THREAD,
+        sourceTurnId: TURN,
+      });
+    });
+
+    const bySourceTurn = (tenantId: string) =>
+      t.run((ctx) =>
+        ctx.db
+          .query("tenantSkills")
+          .withIndex("by_tenant_source_turn", (q) =>
+            q.eq("tenantId", tenantId).eq("sourceThreadId", THREAD).eq("sourceTurnId", TURN),
+          )
+          .collect(),
+      );
+
+    const forA = await bySourceTurn(tenantA);
+    const forB = await bySourceTurn(tenantB);
+    // `.map` rather than `forA[0]` so the length and the identity are one assertion each and
+    // neither needs an index access the compiler cannot prove safe.
+    expect(forA.map((r) => r.tenantId)).toEqual([tenantA]);
+    expect(forB.map((r) => r.tenantId)).toEqual([tenantB]);
+    expect(forA.map((r) => r._id)).not.toEqual(forB.map((r) => r._id));
+
+    // A different turn in the same thread is a DIFFERENT authoring act: the index must miss, or a
+    // second genuine request would silently return the first request's row.
+    const otherTurn = await t.run((ctx) =>
+      ctx.db
+        .query("tenantSkills")
+        .withIndex("by_tenant_source_turn", (q) =>
+          q.eq("tenantId", tenantA).eq("sourceThreadId", THREAD).eq("sourceTurnId", "turn_other"),
+        )
+        .collect(),
+    );
+    expect(otherTurn).toHaveLength(0);
+  });
+});
+
+// 23-02 (SKILL-02): the candidate-only Executive-Agent writer. Still unreachable from any model —
+// no tool exists until 23-03 — so every test here drives the internal mutation directly, which is
+// the strongest position an attacker could ever be in and is therefore the right threat model.
+describe("publishAgentCandidate — the inert agent writer (23-02)", () => {
+  const AGENT_NAME = AGENT_AUTHORABLE_SKILLS[0];
+  const GLOBAL_CORE = "GLOBAL OFFER ARCHITECT CORE v7";
+  const NEEDLE = "ZQ7AGENT9c4e17b2";
+  const DRAFT = `Price in AUD, never discount past 20%. ${NEEDLE}`;
+  const OTHER_DRAFT = "Bundle onboarding into every retainer.";
+  const THREAD = "thread_zq7";
+  const TURN = "turn_zq7_0001";
+
+  const setup = async () => {
+    const t = convexTest(schema, modules);
+    t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+    // Global active at v7 so `basedOnVersion: 7` cannot be an accident of everything being v1.
+    const globalId = await t.run((ctx) =>
+      ctx.db.insert("skills", {
+        name: AGENT_NAME,
+        version: 7,
+        body: GLOBAL_CORE,
+        status: "active",
+        createdAt: 0,
+      }),
+    );
+    const userA = await t.run((ctx) => ctx.db.insert("users", {}));
+    const userB = await t.run((ctx) => ctx.db.insert("users", {}));
+    return { t, globalId, tenantA: String(userA), tenantB: String(userB) };
+  };
+
+  const publish = (
+    t: TestConvex<typeof schema>,
+    args: {
+      tenantId: string;
+      sourceThreadId?: string;
+      sourceTurnId?: string;
+      name?: string;
+      authoredBody?: string;
+    },
+  ) =>
+    t.mutation(internal.skills.publishAgentCandidate, {
+      tenantId: args.tenantId,
+      sourceThreadId: args.sourceThreadId ?? THREAD,
+      sourceTurnId: args.sourceTurnId ?? TURN,
+      name: args.name ?? AGENT_NAME,
+      authoredBody: args.authoredBody ?? DRAFT,
+    });
+
+  const rows = (t: TestConvex<typeof schema>) =>
+    t.run((ctx) => ctx.db.query("tenantSkills").collect());
+  const audits = (t: TestConvex<typeof schema>) => t.run((ctx) => ctx.db.query("audit").collect());
+
+  test("mints ONE inert candidate plus the rollback baseline, with server-owned provenance", async () => {
+    const { t, globalId, tenantA } = await setup();
+
+    const res = await publish(t, { tenantId: tenantA });
+    expect(res).toMatchObject({
+      name: AGENT_NAME,
+      version: 2,
+      status: "candidate",
+      inserted: true,
+    });
+
+    const all = await rows(t);
+    expect(all).toHaveLength(2);
+
+    const baseline = all.find((r) => r.version === 1);
+    const candidate = all.find((r) => r.version === 2);
+    // The baseline is the CODE's copy of the code's own core — attributing it to the agent would
+    // put an authorship claim on bytes the agent never wrote.
+    expect(baseline).toMatchObject({
+      author: "system",
+      status: "archived",
+      body: GLOBAL_CORE,
+      authoredBody: "",
+      rollbackEligible: true,
+    });
+    expect(baseline?.authorAgentId).toBeUndefined();
+
+    expect(candidate).toMatchObject({
+      tenantId: tenantA,
+      status: "candidate",
+      author: "agent",
+      authorAgentId: "executive-agent",
+      sourceThreadId: THREAD,
+      sourceTurnId: TURN,
+      basedOnScope: "global",
+      basedOnName: AGENT_NAME,
+      basedOnVersion: 7,
+      basedOnGlobalSkillId: globalId,
+      rollbackEligible: false,
+      authoredBody: DRAFT,
+    });
+    // The three absences that make it inert. A candidate row positively witnesses each.
+    expect(candidate?.evidence).toBeUndefined();
+    expect(candidate?.ownerApproval).toBeUndefined();
+    expect(candidate?.authorUserId).toBeUndefined();
+    // Composed against the GLOBAL core, never the tenant's own active body.
+    expect(candidate?.body).toBe(composeUserSkillBody(GLOBAL_CORE, DRAFT));
+
+    // NOTHING went live: no active tenant row exists at all.
+    expect(all.filter((r) => r.status === "active")).toHaveLength(0);
+  });
+
+  test("refuses a non-agent-authorable name before any read or write", async () => {
+    const { t, tenantA } = await setup();
+
+    await expect(publish(t, { tenantId: tenantA, name: COCKPIT_AGENT_SKILL })).rejects.toThrow(
+      "NOT_AGENT_AUTHORABLE",
+    );
+    // Not even the rollback baseline: the refusal is ahead of every read.
+    expect(await rows(t)).toHaveLength(0);
+    expect(await audits(t)).toHaveLength(0);
+  });
+
+  test("refuses blank and over-cap adaptations before an insert", async () => {
+    const { t, tenantA } = await setup();
+
+    await expect(publish(t, { tenantId: tenantA, authoredBody: "  \n\t " })).rejects.toThrow(
+      "USER_SKILL_ADAPTATION_REQUIRED",
+    );
+    const overCap = "e".repeat(USER_SKILL_ADAPTATION_MAX_BYTES + 1);
+    await expect(
+      publish(t, { tenantId: tenantA, sourceTurnId: "turn_over", authoredBody: overCap }),
+    ).rejects.toThrow("USER_SKILL_ADAPTATION_TOO_LARGE");
+
+    // The composer throws inside `readTenantPublishState`, which runs BEFORE the baseline insert,
+    // so a rejected draft leaves no half-written history behind.
+    expect(await rows(t)).toHaveLength(0);
+  });
+
+  test("an EXACT same-turn retry returns the same row and mints no second version or audit", async () => {
+    const { t, tenantA } = await setup();
+
+    const first = await publish(t, { tenantId: tenantA });
+    const retry = await publish(t, { tenantId: tenantA });
+
+    expect(retry).toMatchObject({ inserted: false, version: first.version, status: "candidate" });
+    expect(retry.tenantSkillId).toBe(first.tenantSkillId);
+    expect(await rows(t)).toHaveLength(2); // baseline + the one candidate
+    expect(await audits(t)).toHaveLength(1);
+  });
+
+  test("the SAME turn with a different draft is a conflict, and changes zero rows", async () => {
+    const { t, tenantA } = await setup();
+
+    await publish(t, { tenantId: tenantA });
+    const before = await rows(t);
+
+    await expect(publish(t, { tenantId: tenantA, authoredBody: OTHER_DRAFT })).rejects.toThrow(
+      "AGENT_SOURCE_TURN_CONFLICT",
+    );
+    // A different NAME under the same turn is the same conflict — the turn owns one row, period.
+    await expect(
+      publish(t, { tenantId: tenantA, name: AGENT_AUTHORABLE_SKILLS[1] }),
+    ).rejects.toThrow("AGENT_SOURCE_TURN_CONFLICT");
+
+    // Byte-equivalent state: not patched, not superseded, not archived.
+    expect(await rows(t)).toEqual(before);
+  });
+
+  test("a NEW turn while any candidate is pending is refused — never superseded or archived", async () => {
+    const { t, tenantA } = await setup();
+
+    await publish(t, { tenantId: tenantA });
+    const before = await rows(t);
+
+    await expect(
+      publish(t, { tenantId: tenantA, sourceTurnId: "turn_zq7_0002", authoredBody: OTHER_DRAFT }),
+    ).rejects.toThrow("AGENT_CANDIDATE_PENDING");
+
+    expect(await rows(t)).toEqual(before);
+    // The pending row keeps its status: archiving it would hand a never-active row a state it
+    // never earned, and superseding it would discard a draft a human may be about to review.
+    expect(before.filter((r) => r.status === "candidate")).toHaveLength(1);
+  });
+
+  test("a pending USER candidate blocks the agent too", async () => {
+    const { t, tenantA } = await setup();
+
+    await t.run((ctx) =>
+      ctx.db.insert("tenantSkills", {
+        tenantId: tenantA,
+        name: AGENT_NAME,
+        version: 1,
+        body: "user composed",
+        authoredBody: "a human's pending draft",
+        status: "candidate",
+        author: "user",
+        authorUserId: tenantA as Id<"users">,
+        basedOnScope: "global",
+        basedOnName: AGENT_NAME,
+        basedOnVersion: 7,
+        rollbackEligible: false,
+        createdAt: 1,
+      }),
+    );
+
+    await expect(publish(t, { tenantId: tenantA })).rejects.toThrow("AGENT_CANDIDATE_PENDING");
+    expect(await rows(t)).toHaveLength(1);
+  });
+
+  test("two tenants firing the SAME thread/turn ids never cross-read, dedupe, or share a baseline", async () => {
+    const { t, tenantA, tenantB } = await setup();
+
+    const a = await publish(t, { tenantId: tenantA });
+    const b = await publish(t, { tenantId: tenantB });
+
+    // Both INSERTED. If the source-turn read leaked across tenants, B would have recovered A's row.
+    expect(a.inserted).toBe(true);
+    expect(b.inserted).toBe(true);
+    expect(a.tenantSkillId).not.toBe(b.tenantSkillId);
+    // Each tenant allocates from its OWN history: both are v2 over their own v1 baseline.
+    expect([a.version, b.version]).toEqual([2, 2]);
+
+    const all = await rows(t);
+    expect(all).toHaveLength(4);
+    expect(all.filter((r) => r.tenantId === tenantA)).toHaveLength(2);
+    expect(all.filter((r) => r.tenantId === tenantB)).toHaveLength(2);
+  });
+
+  test("the validator has NO authority field — an extra key is refused at the boundary", async () => {
+    const { t, tenantA } = await setup();
+
+    await expect(
+      t.mutation(internal.skills.publishAgentCandidate, {
+        tenantId: tenantA,
+        sourceThreadId: THREAD,
+        sourceTurnId: TURN,
+        name: AGENT_NAME,
+        authoredBody: DRAFT,
+        // Convex rejects an unexpected key outright, so the refusal is at the boundary rather
+        // than in a check a later edit could forget.
+        status: "active",
+      } as never),
+    ).rejects.toThrow();
+    expect(await rows(t)).toHaveLength(0);
+  });
+
+  test("the writer region contains no activation, evidence, approval, or patch call", () => {
+    const src = readFileSync(fileURLToPath(new URL("./skills.ts", import.meta.url)), "utf8");
+    const from = src.indexOf("export const publishAgentCandidate");
+    const to = src.indexOf("export const inspectAgentCandidate");
+    expect(from).toBeGreaterThan(-1);
+    expect(to).toBeGreaterThan(from);
+    const region = src.slice(from, to);
+    expect(region.length).toBeGreaterThan(800); // non-vacuity: the real writer was found
+    expect(region).toContain('status: "candidate"');
+
+    // Capability minimization, asserted structurally. Named mutations that turn this red are in
+    // the summary; each of these is a way for the writer to promote its own row.
+    for (const forbidden of [
+      "transitionSkillActivation",
+      "activateSkillVersion",
+      "activateTenantCandidate",
+      "activateAgentCandidate",
+      "recordTenantEvalEvidence",
+      "ownerApproval",
+      "ctx.db.patch",
+      "ctx.db.replace",
+      "ctx.db.delete",
+      'status: "active"',
+      "rollbackEligible: true",
+    ]) {
+      expect(region).not.toContain(forbidden);
+    }
+  });
+
+  test("the agent audit row is refs-only, and the draft reaches no log plane", async () => {
+    const { t, globalId, tenantA } = await setup();
+
+    const res = await publish(t, { tenantId: tenantA });
+    const events = await audits(t);
+    expect(events).toHaveLength(1); // the positive witness for the scan below
+    const row = events[0]!;
+    expect(row.tenantId).toBe(tenantA);
+    expect(row.actor).toBe("agent");
+    expect(row.eventType).toBe("skill.agent_candidate_published");
+
+    const payload = row.payload as Record<string, unknown>;
+    // KEY-SET EQUALITY. Adding `authoredBody` or `body` here fails on purpose.
+    expect(Object.keys(payload).sort()).toEqual([
+      "author",
+      "authorAgentId",
+      "authoredBytes",
+      "baseScope",
+      "baseSkillId",
+      "baseVersion",
+      "bodyHash",
+      "skillName",
+      "sourceThreadId",
+      "sourceTurnId",
+      "tenantSkillId",
+      "version",
+    ]);
+    expect(payload).toMatchObject({
+      skillName: AGENT_NAME,
+      tenantSkillId: res.tenantSkillId,
+      version: 2,
+      baseScope: "global",
+      baseSkillId: globalId,
+      baseVersion: 7,
+      author: "agent",
+      authorAgentId: "executive-agent",
+      sourceThreadId: THREAD,
+      sourceTurnId: TURN,
+      authoredBytes: new TextEncoder().encode(DRAFT).length,
+    });
+    expect(String(payload.bodyHash)).toMatch(/^[0-9a-f]{64}$/);
+
+    const everything = JSON.stringify([
+      events,
+      await t.run((ctx) => ctx.db.query("deadLetters").collect()),
+    ]);
+    expect(everything).not.toContain(NEEDLE);
+    expect(everything).not.toContain(GLOBAL_CORE);
+    expect(everything).not.toContain(USER_SKILL_ADAPTATION_SECTION);
+    // Non-vacuity: the scan really did read the row asserted above.
+    expect(everything).toContain(String(payload.bodyHash));
+  });
+
+  test("inspectAgentCandidate returns refs only — never a body or an adaptation", async () => {
+    const { t, tenantA } = await setup();
+
+    const res = await publish(t, { tenantId: tenantA });
+    const view = await t.query(internal.skills.inspectAgentCandidate, {
+      tenantSkillId: res.tenantSkillId,
+    });
+
+    expect(view).toMatchObject({
+      tenantId: tenantA,
+      name: AGENT_NAME,
+      version: 2,
+      status: "candidate",
+      author: "agent",
+      authorAgentId: "executive-agent",
+      sourceThreadId: THREAD,
+      sourceTurnId: TURN,
+      rollbackEligible: false,
+      hasEvidence: false,
+      ownerApproval: null,
+    });
+    expect(String(view?.bodyHash)).toMatch(/^[0-9a-f]{64}$/);
+    expect(view?.authoredBytes).toBe(new TextEncoder().encode(DRAFT).length);
+
+    // The disclosure boundary, asserted over the WHOLE serialized view rather than key by key —
+    // a new field carrying content would slip past a key-name check.
+    const serialized = JSON.stringify(view);
+    expect(serialized).not.toContain(NEEDLE);
+    expect(serialized).not.toContain(GLOBAL_CORE);
+    expect(serialized).not.toContain(USER_SKILL_ADAPTATION_SECTION);
+    expect(serialized).toContain(String(view?.bodyHash)); // non-vacuity
+  });
+
+  test("publishing leaves the tenant's effective row exactly where it was", async () => {
+    const { t, tenantA } = await setup();
+
+    const before = await t.run((ctx) => loadEffectiveSkill(ctx, tenantA, AGENT_NAME));
+    await publish(t, { tenantId: tenantA });
+    const after = await t.run((ctx) => loadEffectiveSkill(ctx, tenantA, AGENT_NAME));
+
+    expect(after).toEqual(before);
+    expect(after.scope).toBe("global");
+    expect(after.body).toBe(GLOBAL_CORE);
+  });
+});
+
+// 23-05 (SKILL-02): an agent row has a DIFFERENT activation door from a user row. The strict
+// suite-bound evidence and the human owner's identity meet only inside `activateAgentCandidate`;
+// neither can be supplied by the authoring tool or borrowed from Phase 21's user path.
+describe("owner activation + immutable rollback of agent candidates (23-05)", () => {
+  const NAME = AGENT_AUTHORABLE_SKILLS[0];
+  const GLOBAL = "GLOBAL AGENT-AUTHORABLE CORE v7";
+  const DRAFT_A = "Quote in AUD and cap discounts at 20%. ZQ72305A";
+  const DRAFT_B = "Bundle onboarding with every retainer. ZQ72305B";
+
+  const targetOf = (id: Id<"tenantSkills">, tenantId: string, version: number) => ({
+    candidateId: String(id),
+    registryTenantId: tenantId,
+    name: NAME,
+    version,
+  });
+
+  const evidenceFor = (
+    id: Id<"tenantSkills">,
+    tenantId: string,
+    version: number,
+    over: Record<string, unknown> = {},
+  ) =>
+    JSON.stringify({
+      runner: "eval:golden",
+      runId: "run-23-05-agent-owner",
+      pass: true,
+      casesPassed: AGENT_EVAL_SUITE.caseCount,
+      casesTotal: AGENT_EVAL_SUITE.caseCount,
+      retriedCases: [],
+      costUsd: 0,
+      model: "offline-fixture",
+      skillVersions: {},
+      tenantTarget: targetOf(id, tenantId, version),
+      suite: { ...AGENT_EVAL_SUITE },
+      ts: 1_700_000_000_000,
+      ...over,
+    });
+
+  const world = async () => {
+    const t = convexTest(schema, modules);
+    t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+    await t.run((ctx) =>
+      ctx.db.insert("skills", {
+        name: NAME,
+        version: 7,
+        body: GLOBAL,
+        status: "active",
+        createdAt: 0,
+      }),
+    );
+    const ownerId = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
+    const userA = await t.run((ctx) => ctx.db.insert("users", {}));
+    const userB = await t.run((ctx) => ctx.db.insert("users", {}));
+    const asOwner = t.withIdentity({ subject: `${ownerId}|session_owner` });
+    const asA = t.withIdentity({ subject: `${userA}|session_a` });
+    const asB = t.withIdentity({ subject: `${userB}|session_b` });
+    const a = await t.mutation(internal.skills.publishAgentCandidate, {
+      tenantId: String(userA),
+      sourceThreadId: "thread-agent-a",
+      sourceTurnId: "turn-agent-a-1",
+      name: NAME,
+      authoredBody: DRAFT_A,
+    });
+    const b = await t.mutation(internal.skills.publishAgentCandidate, {
+      tenantId: String(userB),
+      sourceThreadId: "thread-agent-b",
+      sourceTurnId: "turn-agent-b-1",
+      name: NAME,
+      authoredBody: DRAFT_B,
+    });
+    expect(a.version).toBe(b.version); // the name@version collision is real
+    return {
+      t,
+      ownerId,
+      tenantA: String(userA),
+      tenantB: String(userB),
+      asOwner,
+      asA,
+      asB,
+      idA: a.tenantSkillId as Id<"tenantSkills">,
+      idB: b.tenantSkillId as Id<"tenantSkills">,
+      version: a.version,
+    };
+  };
+
+  const row = (t: TestConvex<typeof schema>, id: Id<"tenantSkills">) =>
+    t.run((ctx) => ctx.db.get(id));
+  const state = (t: TestConvex<typeof schema>) =>
+    t.run(async (ctx) => ({
+      rows: await ctx.db.query("tenantSkills").collect(),
+      audit: await ctx.db.query("audit").collect(),
+    }));
+  const certify = (
+    t: TestConvex<typeof schema>,
+    id: Id<"tenantSkills">,
+    tenantId: string,
+    version: number,
+    over: Record<string, unknown> = {},
+  ) =>
+    t.mutation(internal.skills.recordTenantEvalEvidence, {
+      candidateId: id,
+      evidence: evidenceFor(id, tenantId, version, over),
+    });
+
+  test("the four cells are non-vacuous: exact current eval AND a real owner are both required", async () => {
+    // no eval + non-owner: the positive candidate witness remains byte-identical
+    const noNo = await world();
+    const noNoBefore = await state(noNo.t);
+    expect((await row(noNo.t, noNo.idA))?.status).toBe("candidate");
+    await expect(
+      noNo.asA.mutation(api.skills.activateAgentCandidate, { candidateId: noNo.idA }),
+    ).rejects.toThrow(/OWNER_REQUIRED/);
+    expect(await state(noNo.t)).toEqual(noNoBefore);
+
+    // eval + non-owner: authorization, not the eval gate, is the refusal
+    const yesNo = await world();
+    await certify(yesNo.t, yesNo.idA, yesNo.tenantA, yesNo.version);
+    const yesNoBefore = await state(yesNo.t);
+    await expect(
+      yesNo.asA.mutation(api.skills.activateAgentCandidate, { candidateId: yesNo.idA }),
+    ).rejects.toThrow(/OWNER_REQUIRED/);
+    expect(await state(yesNo.t)).toEqual(yesNoBefore);
+
+    // no eval + owner: authority cannot mint approval ahead of the strict suite gate
+    const noYes = await world();
+    const noYesBefore = await state(noYes.t);
+    await expect(
+      noYes.asOwner.mutation(api.skills.activateAgentCandidate, { candidateId: noYes.idA }),
+    ).rejects.toThrow(/EVAL_GATE/);
+    expect(await state(noYes.t)).toEqual(noYesBefore);
+    expect((await row(noYes.t, noYes.idA))?.ownerApproval).toBeUndefined();
+
+    // eval + owner: the exact row becomes live with approval derived in the same mutation
+    const yesYes = await world();
+    await certify(yesYes.t, yesYes.idA, yesYes.tenantA, yesYes.version);
+    await yesYes.asOwner.mutation(api.skills.activateAgentCandidate, { candidateId: yesYes.idA });
+    const active = await row(yesYes.t, yesYes.idA);
+    expect(active).toMatchObject({ status: "active", rollbackEligible: true });
+    expect(active?.ownerApproval).toMatchObject({
+      ownerUserId: yesYes.ownerId,
+      evalRunId: "run-23-05-agent-owner",
+    });
+    expect(active?.ownerApproval?.approvedAt).toBeGreaterThan(0);
+  });
+
+  test("user and agent activation exports refuse each other's rows", async () => {
+    const w = await world();
+    await certify(w.t, w.idA, w.tenantA, w.version);
+    const beforeAgent = await state(w.t);
+    await expect(
+      w.asOwner.mutation(api.skills.activateTenantCandidate, { candidateId: w.idA }),
+    ).rejects.toThrow(/NOT_USER_AUTHORED/);
+    expect(await state(w.t)).toEqual(beforeAgent);
+
+    const userId = await w.t.run((ctx) =>
+      ctx.db.insert("tenantSkills", {
+        tenantId: w.tenantA,
+        name: NAME,
+        version: w.version + 1,
+        body: "user composed candidate",
+        authoredBody: "A separate user-authored candidate.",
+        status: "candidate",
+        author: "user",
+        authorUserId: w.tenantA as Id<"users">,
+        basedOnScope: "global",
+        basedOnName: NAME,
+        basedOnVersion: 7,
+        rollbackEligible: false,
+        createdAt: 2,
+      }),
+    );
+    const beforeUser = await state(w.t);
+    await expect(
+      w.asOwner.mutation(api.skills.activateAgentCandidate, {
+        candidateId: userId,
+      }),
+    ).rejects.toThrow(/NOT_AGENT_AUTHORED/);
+    expect(await state(w.t)).toEqual(beforeUser);
+  });
+
+  test("stale-suite and foreign-tenant evidence refuse without approval or cross-tenant change", async () => {
+    const w = await world();
+    const bBefore = await row(w.t, w.idB);
+
+    await certify(w.t, w.idA, w.tenantA, w.version, {
+      suite: { ...AGENT_EVAL_SUITE, revision: "stale-suite" },
+    });
+    await expect(
+      w.asOwner.mutation(api.skills.activateAgentCandidate, { candidateId: w.idA }),
+    ).rejects.toThrow(/EVAL_GATE/);
+    expect((await row(w.t, w.idA))?.ownerApproval).toBeUndefined();
+    expect(await row(w.t, w.idB)).toEqual(bBefore);
+
+    await w.t.run((ctx) =>
+      ctx.db.patch(w.idA, {
+        evidence: evidenceFor(w.idB, w.tenantB, w.version),
+      }),
+    );
+    const before = await state(w.t);
+    await expect(
+      w.asOwner.mutation(api.skills.activateAgentCandidate, { candidateId: w.idA }),
+    ).rejects.toThrow(/EVAL_GATE/);
+    expect(await state(w.t)).toEqual(before);
+  });
+
+  test("rollback changes only status/eligibility and preserves approval, evidence, bodies and lineage", async () => {
+    const w = await world();
+    await certify(w.t, w.idA, w.tenantA, w.version);
+    await w.asOwner.mutation(api.skills.activateAgentCandidate, { candidateId: w.idA });
+
+    const next = await w.t.mutation(internal.skills.publishAgentCandidate, {
+      tenantId: w.tenantA,
+      sourceThreadId: "thread-agent-a",
+      sourceTurnId: "turn-agent-a-2",
+      name: NAME,
+      authoredBody: "A second immutable agent adaptation. ZQ72305A2",
+    });
+    const nextId = next.tenantSkillId as Id<"tenantSkills">;
+    await certify(w.t, nextId, w.tenantA, next.version);
+    await w.asOwner.mutation(api.skills.activateAgentCandidate, { candidateId: nextId });
+
+    const oldBefore = await row(w.t, w.idA);
+    const nextBefore = await row(w.t, nextId);
+    const approval = oldBefore?.ownerApproval;
+    await w.asOwner.mutation(api.skills.rollbackTenantSkill, { targetId: w.idA });
+    expect(await row(w.t, w.idA)).toEqual({ ...oldBefore, status: "active" });
+    expect(await row(w.t, nextId)).toEqual({ ...nextBefore, status: "archived" });
+    expect((await row(w.t, w.idA))?.ownerApproval).toEqual(approval);
+
+    // Status laundering still fails: B was never active, even if somebody manually archives it.
+    await w.t.run((ctx) => ctx.db.patch(w.idB, { status: "archived" }));
+    await expect(
+      w.asOwner.mutation(api.skills.rollbackTenantSkill, { targetId: w.idB }),
+    ).rejects.toThrow(/ROLLBACK_NOT_ELIGIBLE/);
+  });
+
+  test("activation emits one distinct refs-only agent event", async () => {
+    const w = await world();
+    await certify(w.t, w.idA, w.tenantA, w.version);
+    await w.asOwner.mutation(api.skills.activateAgentCandidate, { candidateId: w.idA });
+    const events = (await w.t.run((ctx) => ctx.db.query("audit").collect())).filter(
+      (r) => r.eventType === "skill.agent_candidate_activated",
+    );
+    expect(events).toHaveLength(1);
+    expect(Object.keys(events[0]!.payload).sort()).toEqual([
+      "author",
+      "evalRunId",
+      "fromTenantSkillId",
+      "fromVersion",
+      "ownerUserId",
+      "skillName",
+      "tenantSkillId",
+      "version",
+    ]);
+    expect(JSON.stringify(events)).not.toContain(DRAFT_A);
+    expect(JSON.stringify(events)).not.toContain(GLOBAL);
+  });
+
+  test("bounded owner and tenant projections include agent state without widening disclosure", async () => {
+    const w = await world();
+
+    const ownerRows = await w.asOwner.query(api.skills.tenantCandidatesForReview, {});
+    const a = ownerRows.find((candidate) => String(candidate.candidateId) === String(w.idA))!;
+    expect(a).toMatchObject({
+      author: "agent",
+      authorUserId: null,
+      authorAgentId: EXECUTIVE_AGENT_AUTHOR_ID,
+      sourceThreadId: "thread-agent-a",
+      sourceTurnId: "turn-agent-a-1",
+      gatePassed: false,
+      evidenceState: "absent",
+      ownerApproval: null,
+    });
+    expect(a.rollbackTargets.every((target) => target.status !== "active")).toBe(true);
+
+    await certify(w.t, w.idA, w.tenantA, w.version, {
+      suite: { ...AGENT_EVAL_SUITE, revision: "stale-suite" },
+    });
+    const stale = (await w.asOwner.query(api.skills.tenantCandidatesForReview, {})).find(
+      (candidate) => String(candidate.candidateId) === String(w.idA),
+    )!;
+    expect(stale).toMatchObject({ gatePassed: false, evidenceState: "failing" });
+    await certify(w.t, w.idA, w.tenantA, w.version);
+    const current = (await w.asOwner.query(api.skills.tenantCandidatesForReview, {})).find(
+      (candidate) => String(candidate.candidateId) === String(w.idA),
+    )!;
+    expect(current).toMatchObject({ gatePassed: true, evidenceState: "passing" });
+
+    const mine = await w.asA.query(api.skills.myUserSkills, {});
+    expect(mine).toHaveLength(1);
+    expect(mine[0]).toMatchObject({ author: "agent", gatePassed: true, authoredBody: DRAFT_A });
+    const tenantKeys = Object.keys(mine[0]!).sort();
+    expect(tenantKeys).toEqual([
+      "author",
+      "authoredBody",
+      "baseScope",
+      "baseVersion",
+      "createdAt",
+      "gatePassed",
+      "label",
+      "name",
+      "status",
+      "version",
+    ]);
+    for (const forbidden of [
+      "candidateId",
+      "tenantId",
+      "body",
+      "evidence",
+      "ownerApproval",
+      "authorUserId",
+      "authorAgentId",
+      "sourceThreadId",
+      "sourceTurnId",
+      "rollbackEligible",
+    ]) {
+      expect(tenantKeys).not.toContain(forbidden);
+    }
+  });
+
+  test("the authoring tool cannot name either activation door, and the agent door stays owner-wrapped", () => {
+    const llm = readFileSync(fileURLToPath(new URL("./llm.ts", import.meta.url)), "utf8").replace(
+      /\/\*[\s\S]*?\*\/|\/\/.*/g,
+      "",
+    );
+    const toolFrom = llm.indexOf("const skillAuthoringTool =");
+    const toolTo = llm.indexOf("const allTools =", toolFrom);
+    expect(toolFrom).toBeGreaterThan(-1);
+    expect(toolTo).toBeGreaterThan(toolFrom);
+    const toolRegion = llm.slice(toolFrom, toolTo);
+    expect(toolRegion).toContain("internal.skills.publishAgentCandidate");
+    expect(toolRegion).not.toContain("activateTenantCandidate");
+    expect(toolRegion).not.toContain("activateAgentCandidate");
+
+    const skills = readFileSync(fileURLToPath(new URL("./skills.ts", import.meta.url)), "utf8");
+    const exportFrom = skills.indexOf("export const activateAgentCandidate =");
+    const exportTo = skills.indexOf("export const rollbackTenantSkill =", exportFrom);
+    expect(exportFrom).toBeGreaterThan(-1);
+    expect(exportTo).toBeGreaterThan(exportFrom);
+    const exportRegion = skills.slice(exportFrom, exportTo);
+    expect(exportRegion).toContain("ownerMutation({");
+    expect(exportRegion).not.toContain("tenantMutation({");
   });
 });

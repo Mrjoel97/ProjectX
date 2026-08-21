@@ -555,7 +555,14 @@ async function governedDispatch(
 /** What `landSpecialistResult` needs to know: either the specialist PRODUCED something, or it did
  *  not and the memo falls back — never both, never neither. */
 type Landing =
-  | { body: string; incomplete: boolean; incompleteReason?: "cost" | "steps" | "clock" }
+  | {
+      body: string;
+      incomplete: boolean;
+      incompleteReason?: "cost" | "steps" | "clock";
+      /** 25.1-05 (D11): the pages this turn retrieved, travelling with the body they support.
+       *  CONTENT PLANE — they ride the landing mutation and the plan row, never a payload (§4). */
+      sources?: { title: string; url: string; retrievedAt: number }[];
+    }
   | { incomplete: boolean; fallbackReason: string };
 
 /**
@@ -596,6 +603,19 @@ async function dispatchAndLand(
           ...(result.incompleteReason === undefined
             ? {}
             : { incompleteReason: result.incompleteReason }),
+          // 25.1-05 (D11). Omitted rather than sent empty: the card renders its references block on
+          // PRESENCE, and an empty array would be a "Sources" heading over nothing. `retrievedAt`
+          // is the landing stamp the turn already computed — per-source because the shape can then
+          // absorb a real per-result time later without a migration.
+          ...(result.sources.length === 0
+            ? {}
+            : {
+                sources: result.sources.map((s) => ({
+                  title: s.title,
+                  url: s.url,
+                  retrievedAt: result.retrievedAt,
+                })),
+              }),
         }
       : // A governed refusal is a paused conversation, not an error — the user still gets the
         // deterministic memo, worded honestly for THIS reason (never the code itself).
@@ -1094,8 +1114,10 @@ async function persistStoryboard(
  * has never DLQ'd a user-facing turn.
  *
  * Deliberately NOT inside `governedDispatch` (that would put a route conditional in the shared
- * spine) and NOT inside `landSpecialistResult` (that would thread `sources`/`retrievedAt` through a
- * mutation with no business knowing about them).
+ * spine). It is also not the only consumer of `sources` any more: 25.1-05 (D11) threads them
+ * through `landSpecialistResult` as well, so the CARD can attribute its own findings without
+ * waiting on this terminal — which is skipped entirely on a zero-search run and swallowed on a
+ * persist failure. Same URLs, two content-plane destinations, still no audit payload (§4).
  *
  * It is a MUTATION called from an ACTION: actions cannot write, and each `runMutation` commits
  * immediately — which is what pushes the new document to live `useQuery` subscribers while the

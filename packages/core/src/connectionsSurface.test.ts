@@ -214,7 +214,14 @@ describe("every user-facing surface names every capability in the Microsoft gran
   // in the v2 delegated flow, so every surface must say the grant survives on the user's account.
   // A future edit that copies DisconnectGoogle's wording wholesale turns this red.
   test("the Microsoft disconnect never claims a revocation it cannot perform", () => {
-    expect(msConfirmCopy).toMatch(/My Apps/);
+    // 25-06 Task 2, decided 2026-08-17: naming "My Apps" ALONE used to satisfy this test, and it
+    // was WRONG for most users. My Apps is the work/school portal; a personal Microsoft account
+    // holder sent there lands somewhere that will never list Pikar. The private beta is expected to
+    // be mostly personal accounts, so the old assertion passed while the majority path misdirected.
+    // BOTH routes must be named — this is strictly stronger than the assertion it replaces, and it
+    // matches what `DataControls.tsx` and the privacy page already shipped.
+    expect(msConfirmCopy).toMatch(/account\.microsoft\.com/i);
+    expect(msConfirmCopy).toMatch(/myapps\.microsoft\.com/i);
     expect(msConfirmCopy).toMatch(/does NOT remove|still lists Pikar/i);
     // And it must not borrow Google's revocation destination.
     expect(msConfirmCopy).not.toContain("myaccount.google.com");

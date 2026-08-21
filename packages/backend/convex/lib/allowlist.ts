@@ -1,10 +1,20 @@
 // Explicit allow-list of convex module basenames permitted to import the raw
-// builders from _generated/server. These are INTERNAL-only modules (audit,
-// dead-letter, skills, review/timeout race, WORM export, smoke tests, auth,
-// http) that must use `internalQuery`/`internalMutation`/`internalAction` —
+// builders from _generated/server. Almost all of these are INTERNAL-only modules
+// (audit, dead-letter, skills, review/timeout race, WORM export, smoke tests,
+// auth, http) that must use `internalQuery`/`internalMutation`/`internalAction` —
 // the sanctioned exception to the tenant-wrapper rule, since they run from the
 // scheduler / onComplete / http layer and are never client-callable with a
 // tenant identity.
+//
+// `invites.ts` (25-01) IS THE ONE EXCEPTION TO THAT SENTENCE, and it is a
+// different kind of exception, so do not read the paragraph above as covering it.
+// Its `requestAccess` and `preflight` are genuinely PUBLIC and UNAUTHENTICATED:
+// a beta signup page is used by people who have no identity yet, which no tenant
+// wrapper can express (`tenantQuery` throws UNAUTHENTICATED by design). What
+// makes it safe is not internality but scope — neither function reads or returns
+// tenant-owned data, and neither returns a code, an id, a subject or an unmasked
+// address. Before adding another public entry here, satisfy that same bar and say
+// so in its own comment; "it needed to be callable" is not the bar.
 //
 // NOTE: `internalQuery`/`internalMutation`/`internalAction` are NOT banned by
 // the guard (the regex only matches lowercase `query`/`mutation`). This list
@@ -30,4 +40,6 @@ export const RAW_BUILDER_ALLOWLIST: readonly string[] = [
   // + internalMutation, not tenant wrappers). Both are internal-only.
   "migrations.ts",
   "pipeline.ts",
+  // BETA-01 admission. Public + unauthenticated by necessity — see the note above.
+  "invites.ts",
 ];

@@ -2,7 +2,12 @@
 
 import { api } from "@pikar/backend/api";
 import { useAction, useQuery } from "convex/react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
+
+// ponytail: an inline style object, not a class — this file already styles every element inline and
+// the app has no CSS-module or component-library pattern to reuse (BRAND §5). `--ink` against the
+// note's `--ink-soft` is what makes it read as a link; it is a token, never a hex.
+const LINK = { color: "var(--ink)", textDecoration: "underline" };
 
 // ONE writer for the Microsoft disconnect copy, mirroring DisconnectGoogle. It owns its OWN
 // `microsoftStatus` subscription for the same reason: `disconnectMicrosoft` deletes the token row
@@ -16,11 +21,36 @@ import { useState } from "react";
 // returns a hard `revokedAtProvider: false` and this component ALWAYS tells the user that removing
 // consent is a separate step on their side. Inventing a revoke call against a non-existent endpoint
 // would be worse than the honest gap: it would report success for nothing. GOVN-03 inherits this.
+// TWO portals, not one, and the distinction is load-bearing. 25-06 Task 2's re-verification
+// (2026-08-17) found the original copy sent EVERY user to "Microsoft My Apps" — which is the
+// work/school portal only. A personal-account holder following that lands somewhere that will never
+// list Pikar, so the honest instruction reads as a broken one. The private beta is expected to be
+// mostly personal accounts, so that was the majority path.
+const REMOVAL_LINKS = (
+  <>
+    <a
+      href="https://account.microsoft.com/privacy/app-access"
+      target="_blank"
+      rel="noreferrer"
+      style={LINK}
+    >
+      Microsoft account → App access
+    </a>{" "}
+    for a personal account, or{" "}
+    <a href="https://myapps.microsoft.com/" target="_blank" rel="noreferrer" style={LINK}>
+      My Apps
+    </a>{" "}
+    for a work or school account.
+  </>
+);
+
 export function DisconnectMicrosoft() {
   const status = useQuery(api.microsoftAuth.microsoftStatus);
   const disconnect = useAction(api.microsoftAuth.disconnectMicrosoft);
   const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
+  // `ReactNode`, not `string`: the removal instruction has to LINK the two portals, and 25-06 Task 2
+  // measured why naming them in prose is not enough — see REMOVAL_LINKS below.
+  const [note, setNote] = useState<ReactNode | null>(null);
 
   const onDisconnect = async () => {
     // ponytail: window.confirm — this app has no dialog pattern (BRAND §5 defines none), matching
@@ -32,8 +62,9 @@ export function DisconnectMicrosoft() {
     // "revoked everywhere" and here it is not.
     const ok = window.confirm(
       "Disconnect Microsoft? Pikar will lose access to your calendar AND to Outlook mail. " +
-        "This deletes Pikar's copy of your token, but it does NOT remove Pikar from your Microsoft " +
-        "account — do that in Microsoft My Apps, or ask your admin in Entra for a work account.",
+        "This deletes Pikar's copy of your token. It does NOT remove Pikar from your Microsoft " +
+        "account — that is a separate step you take at account.microsoft.com (personal account) " +
+        "or myapps.microsoft.com (work or school account).",
     );
     if (!ok) return;
     setBusy(true);
@@ -44,11 +75,17 @@ export function DisconnectMicrosoft() {
       // the provider-side grant is gone, so there is no path where staying quiet would be honest.
       if (!revokedAtProvider) {
         setNote(
-          deleted
-            ? "Pikar's copy of your token is deleted. Microsoft still lists Pikar on your account — " +
-                "remove it at Microsoft My Apps (or in Entra for a work or school account) to be certain."
-            : "There was no stored Microsoft connection to delete. If Microsoft still lists Pikar on " +
-                "your account, remove it at Microsoft My Apps.",
+          deleted ? (
+            <>
+              Pikar's copy of your token is deleted. Microsoft still lists Pikar on your account —
+              we have no way to remove it for you. Remove it yourself at {REMOVAL_LINKS}
+            </>
+          ) : (
+            <>
+              There was no stored Microsoft connection to delete. If Microsoft still lists Pikar on
+              your account, remove it at {REMOVAL_LINKS}
+            </>
+          ),
         );
       }
     } catch {

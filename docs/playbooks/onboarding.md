@@ -1,5 +1,28 @@
 # Playbook: Persona Onboarding & Business Profile
 
+> Last verified: 2026-08-17 (25-06 Gate 1 — **THE MICROSOFT DISCONNECT COPY WAS SENDING MOST USERS
+> TO THE WRONG PORTAL.** `DisconnectMicrosoft.tsx` told every user to remove Pikar in "Microsoft My
+> Apps". My Apps is the **work/school** portal; a personal Microsoft account holder who follows that
+> lands somewhere that will never list Pikar. The private beta is expected to be mostly personal
+> accounts, so the majority path was the broken one — and the surface's whole reason to exist is
+> that `disconnectMicrosoft` returns a hard `revokedAtProvider: false`, making "here is where you
+> finish the job" the only honest thing it can say.
+>
+> **Fixed 2026-08-17, owner-approved wording (Posture A, `25-MAIL-MIGRATION-EVIDENCE.md`).** The
+> confirm names both routes; the success note LINKS both —
+> `account.microsoft.com/privacy/app-access` (personal) and `myapps.microsoft.com` (work/school),
+> the same URLs `DataControls.tsx` and the privacy page already shipped. `note` widened from
+> `string` to `ReactNode` to carry the anchors; that widening is the entire mechanical change.
+>
+> **Invariant, and the reason the old copy passed review:** `connectionsSurface.test.ts` asserted
+> only `/My Apps/` — a substring the wrong copy satisfied. It now requires BOTH hostnames.
+> Mutation-proven: restoring the old wording turns that named test red. **Never describe this
+> disconnect as a revocation, and never name only one portal.**
+>
+> Verified: `connectionsSurface.test.ts` 30/30, `@pikar/core` 1032/1032, `@pikar/web` 432/432,
+> web typecheck exit 0. No live browser run.
+>
+> Prior entry — 2026-08-17 (owner-reported defect — **THE INTAKE MODALITIES NO LONGER VANISH AFTER
 > Last verified: 2026-08-17 (owner-reported defect — **THE INTAKE MODALITIES NO LONGER VANISH AFTER
 > THE FIRST TYPED TURN.** Source + typecheck + `page.test.ts` (4/4); no live browser run.)
 >
@@ -28,6 +51,46 @@
 > are untouched. Two source-level regression tests in `page.test.ts` pin both halves: the control row
 > contains no `!profile &&` guard, and the poll effect dispatches `submitIntake`.
 >
+> Prior entry — 2026-08-17 (25-04 — **the BETA-03 first-send offer, and a CORRECTION to the entry
+> below it.**)
+>
+> **THE ENTRY IMMEDIATELY BELOW IS WRONG ON A FACT, and is left in place rather than deleted so the
+> correction is visible.** It states that `writeProfileDoc` and `currentProfileDoc` are both
+> exported. Measured at `onboarding.ts`: **only `currentProfileDoc` is** (:560). `writeProfileDoc`
+> (:466) is a private `async function` whose own doc comment says "NOT exported", and the single
+> legal write door is **`validateAndWriteProfile`** (:521). The claim about the proposals applier
+> writing "through its ONE existing writer" is still true — that writer is
+> `validateAndWriteProfile`, not `writeProfileDoc`. Anyone reaching for `writeProfileDoc` on the
+> strength of that sentence would be reaching for a symbol that is not there.
+>
+> **`onboarding.firstSendOffer` (BETA-03) is a PROJECTION, not state.** No onboarding-progress
+> table, no `firstSendDone` column, no checklist row — the answer is derived from rows that already
+> exist, so a refresh or a second device cannot show a completed offer for something that never
+> happened. A test asserts two calls write nothing anywhere.
+>
+> **It takes NO ARGUMENTS, and that is the security property.** The recipient is read from the
+> authenticated identity's own `users` row. A first-send offer that accepted a recipient would be
+> an open relay wearing an onboarding hat; the arg validator refuses one outright.
+>
+> **`users.email` is `v.optional` and its absence makes the offer INELIGIBLE** — an OAuth profile
+> can legitimately carry no email claim, and there is nothing safe to fall back to. Mutation-proven
+> (removing the guard reddens that case; removing the onboarding gate reddens the other).
+>
+> **`emailVerified` is REPORTED, not enforced.** A password signup's address is self-asserted
+> (`auth.ts` records verification as the security fast-follow), and the first send goes to that
+> same address — the one recipient for whom that is acceptable, since it is the account holder
+> writing to themselves. The flag exists so the UI can say so and so a later plan can tighten it.
+>
+> **Phase 11/15.1's completion contract is UNTOUCHED.** `missingSlots`, `canComplete`,
+> `converse.done` and the saveFacts→commitProfile ordering all mean what they meant before. Note
+> for anyone writing fixtures here: **`persona` is not an input at any layer** — `ProfileInput`
+> omits it and `vProfile` has no such key, so a fixture carrying one fails both typecheck and the
+> runtime validator. It is DERIVED from the tier row. And entering onboarding needs only
+> `oneLineDescription`, while COMPLETING it additionally needs the tier row plus all six
+> `REQUIRED_SLOTS`.
+>
+> Prior entry — 2026-08-15, **CONTAINS THE ERROR CORRECTED ABOVE** (cash-business-finance lane's
+> in-flight applier wiring, read and
 > Prior entry — 2026-08-15 (cash-business-finance lane's in-flight applier wiring, read and
 > attested by the phase-33 planning session — **`writeProfileDoc` and `currentProfileDoc` are now
 > `export`ed** (visibility only, zero behaviour change) so the new proposals applier

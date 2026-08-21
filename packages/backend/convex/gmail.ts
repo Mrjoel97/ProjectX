@@ -12,6 +12,7 @@ import { BODY_TRUNCATE_CHARS, type InboxMessageMeta } from "@pikar/core";
 // approved draft is preserved and delivery resumes after the user reconnects).
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
 import { internalAction } from "./_generated/server";
 import { contentHash } from "./lib/hash";
@@ -147,6 +148,87 @@ export function base64Url(s: string): string {
     .replace(/=+$/, "");
 }
 
+/** What `getForDelivery` projects. Named so the shared preparation below can be typed without
+ *  re-deriving it through the internal-api graph (guidelines §96). */
+export type DeliveryRequest = {
+  tenantId: string;
+  correlationId: string;
+  recipient: string;
+  subject: string;
+  body: string;
+  attachments: { filename: string; mimeType: string; storageId: Id<"_storage"> }[];
+  threadId?: string;
+  inReplyTo?: string;
+  references?: string;
+};
+
+/**
+ * EVERY GOVERNANCE GUARD BETWEEN AN APPROVED ROW AND RAW MIME BYTES, IN ONE PLACE.
+ *
+ * Extracted at 25-05 so the Microsoft arm (`graph.ts`) reuses it instead of restating it. That is
+ * not tidiness — the CAN-SPAM footer and the suppression check are the two things in this codebase
+ * that must be UNBYPASSABLE, and "two providers, two copies of the guard" is precisely how a
+ * bypass appears: the second copy drifts, or the third provider only gets one of them. One
+ * function, two callers, no way to send without passing through it.
+ *
+ * The footer is still concatenated AT THE buildMime CALL SITE, which is what the long-standing
+ * comment in `send` requires — this function IS that call site now, for both providers.
+ * `notifyExternal.ts` deliberately does NOT come through here: it sends a static service notice to
+ * the user's own mailbox, which must carry no footer and has nobody to unsubscribe.
+ *
+ * Returns `suppressed` rather than throwing, because suppression is a PERMANENT governed refusal
+ * that both callers terminate on, not an error.
+ */
+export async function prepareGovernedMessage(
+  ctx: ActionCtx,
+  req: DeliveryRequest,
+): Promise<{ ok: true; mime: string } | { ok: false; reason: "suppressed" }> {
+  // Reads `suppressions` and never `contacts`, so a contacts bug cannot un-suppress anyone.
+  if (
+    await ctx.runQuery(internal.contacts.isSuppressed, {
+      tenantId: req.tenantId,
+      recipient: req.recipient,
+    })
+  ) {
+    return { ok: false, reason: "suppressed" };
+  }
+
+  // A missing/deleted storage blob is a HARD failure → throw → retrier → onComplete DLQ: never
+  // silently send the message without the promised attachment.
+  const parts: MimeAttachment[] = [];
+  for (const a of req.attachments) {
+    const blob = await ctx.storage.get(a.storageId);
+    if (!blob) throw new Error(`send: attachment blob ${a.storageId} missing`);
+    parts.push({
+      filename: a.filename,
+      mimeType: a.mimeType,
+      base64: Buffer.from(await blob.arrayBuffer()).toString("base64"),
+    });
+  }
+
+  const threading = req.inReplyTo
+    ? { inReplyTo: req.inReplyTo, references: req.references ?? req.inReplyTo }
+    : undefined;
+
+  const footer = await ctx.runQuery(internal.contacts.footerFor, {
+    tenantId: req.tenantId,
+    recipient: req.recipient,
+  });
+  // Fail CLOSED, mirroring the missing-attachment throw above. The message names BOTH causes
+  // because footerFor collapses them into one null.
+  if (!footer) {
+    throw new Error(
+      "send: no unsubscribe footer could be built — set the tenant's postal address on " +
+        "/dashboard/profile, and check the deployment's UNSUBSCRIBE_SECRET and CONVEX_SITE_URL",
+    );
+  }
+
+  return {
+    ok: true,
+    mime: buildMime(req.recipient, req.subject, req.body + footer.text, parts, threading),
+  };
+}
+
 // Explicit return type: keeps `send` out of the internal-graph type-inference cycle.
 // Inferring it from the body forces resolution of `internal.{pipeline,gmailAuth,audit}`,
 // which (with llm.ts's actions doing the same) tips TS past its circular-inference limit
@@ -163,25 +245,17 @@ export const send = internalAction({
     const req = await ctx.runQuery(internal.gmailAuth.getForDelivery, { requestId });
     if (!req) throw new Error(`gmail.send: request ${requestId} not found`);
 
-    // 19-05 SC#5 — THE TRUST BOUNDARY. This is the ONE place every product send converges, and it
-    // has TWO production callers, not one: `deliverApprovedPlan.ts:37` and `pipeline.ts:379`. Both
-    // handle the `suppressed` terminal explicitly. An earlier version of this comment claimed a
-    // sole caller and that false convergence claim is exactly what stopped three reviewers
-    // checking — grep the callers, do not trust this sentence. executePlan's approve-time filter
-    // is the better UX because it can drop ONE address out of a list and still send to the rest;
-    // THIS is what makes it unbypassable. A suppression created after approve but before a
-    // SCHEDULED fire is invisible to that filter — startScheduledDelivery re-fires a requestIds
-    // list frozen at approve time — and is caught only here. Both are needed; neither is redundant.
+    // 19-05 SC#5 — THE TRUST BOUNDARY. Every product send converges on
+    // `prepareGovernedMessage` (below), which since 25-05 is shared with the Microsoft arm in
+    // `graph.ts` so the suppression check and the CAN-SPAM footer have exactly ONE implementation
+    // across both providers. Production callers reach a provider through `internal.delivery.send`,
+    // never directly. Both terminate on `suppressed` explicitly.
     //
-    // Reads `suppressions` and never `contacts`, so a contacts bug cannot un-suppress anyone.
-    if (
-      await ctx.runQuery(internal.contacts.isSuppressed, {
-        tenantId: req.tenantId,
-        recipient: req.recipient,
-      })
-    ) {
-      return { delivered: false, reason: "suppressed" };
-    }
+    // executePlan's approve-time filter is the better UX because it can drop ONE address out of a
+    // list and still send to the rest; THIS is what makes it unbypassable. A suppression created
+    // after approve but before a SCHEDULED fire is invisible to that filter —
+    // startScheduledDelivery re-fires a requestIds list frozen at approve time — and is caught
+    // only here. Both are needed; neither is redundant.
 
     // ponytail: SMOKE::fail sentinel — deterministic offline terminal throw for the fan-out
     // isolation smoke (mirrors llm.ts's fail=primary). The message carries no PII, and real
@@ -189,6 +263,9 @@ export const send = internalAction({
     if (req.subject.startsWith("SMOKE::fail")) {
       throw new Error("SMOKE_FAILURE: forced fan-out send failure");
     }
+
+    const prepared = await prepareGovernedMessage(ctx, req);
+    if (!prepared.ok) return { delivered: false, reason: prepared.reason };
 
     // One refresh root (shared with search). A dead/disconnected token → awaiting_reauth
     // WITHOUT throwing: throwing would burn retrier attempts and eventually DLQ an approved
@@ -199,55 +276,9 @@ export const send = internalAction({
       return { delivered: false, reason: access.reason };
     }
 
-    // Load each resolved attachment's bytes from storage and STANDARD-base64 them for the MIME
-    // part (buildMime wraps at 76). A missing/deleted storage blob is a HARD failure → throw →
-    // retrier → onComplete DLQ: never silently send the message without the promised attachment.
-    const parts: MimeAttachment[] = [];
-    for (const a of req.attachments) {
-      const blob = await ctx.storage.get(a.storageId);
-      if (!blob) throw new Error(`gmail.send: attachment blob ${a.storageId} missing`);
-      parts.push({
-        filename: a.filename,
-        mimeType: a.mimeType,
-        base64: Buffer.from(await blob.arrayBuffer()).toString("base64"),
-      });
-    }
-
-    // Deliver via the Gmail REST API. 03.11 RPLY-01: a reply row carries the threading anchor
-    // (getForDelivery projected it from the request). In-Reply-To/References ride the raw bytes (the
-    // load-bearing hard requirement); threadId is reinforcement in the POST body (Pitfall 1 — verified
-    // live in Plan 06, not asserted here). Absent on every non-reply row → byte-identical legacy send.
-    const threading = req.inReplyTo
-      ? { inReplyTo: req.inReplyTo, references: req.references ?? req.inReplyTo }
-      : undefined;
-    // 19-05 SC#6 — the CAN-SPAM footer, at the buildMime CALL SITE and deliberately NOT inside
-    // buildMime. Two reasons, both load-bearing: `notifyExternal.ts` is a SECOND buildMime caller
-    // sending a static service notice to the user's OWN mailbox (which must carry no footer and
-    // has nobody to unsubscribe), and `gmail.test.ts`'s V4 tests pin buildMime's zero-attachment
-    // bytes. It cannot live any earlier either: the model's output flows
-    // plans.body → plans.recipientBodies → requests.draft, and getForDelivery reads
-    // `editedBody ?? draft`, so EVERY earlier stage is a bypass. A prompt instruction would be the
-    // "classifier being right" failure mode, and CLAUDE.md §5 forbids hardcoding it in one anyway.
-    //
-    // `req.body` is ALREADY the resolved per-recipient body, so personalization is covered for
-    // free, and buildMime does its own multipart branching, so attachments need no special case.
-    const footer = await ctx.runQuery(internal.contacts.footerFor, {
-      tenantId: req.tenantId,
-      recipient: req.recipient,
-    });
-    // Fail CLOSED, mirroring the missing-attachment-blob throw above: never silently send without
-    // the promised part. The message names BOTH causes because footerFor collapses them into one
-    // null — an operator told only "no postal address" would hunt a field that is already set
-    // while the real fault is an unset deployment secret (19-02's "sending stopped working").
-    if (!footer) {
-      throw new Error(
-        "gmail.send: no unsubscribe footer could be built — set the tenant's postal address on " +
-          "/dashboard/profile, and check the deployment's UNSUBSCRIBE_SECRET and CONVEX_SITE_URL",
-      );
-    }
-    const raw = base64Url(
-      buildMime(req.recipient, req.subject, req.body + footer.text, parts, threading),
-    );
+    // Gmail wants URL-SAFE base64 of the raw MIME; Graph wants standard. That one-line difference
+    // is the entire divergence between the two transports — everything above it is shared.
+    const raw = base64Url(prepared.mime);
     const sendRes = await fetch(SEND_ENDPOINT, {
       method: "POST",
       headers: {

@@ -16,21 +16,24 @@ export default function SignIn() {
   const [busy, setBusy] = useState(false);
 
   /**
-   * The OAuth button used to be `onClick={() => void signIn(…)}`. `void` discards the promise, so a
-   * rejection went nowhere: no redirect, no message, no console entry — a button that did nothing,
-   * which a user cannot tell apart from a dead page.
+   * The OAuth buttons used to be `onClick={() => void signIn(…)}`. `void` discards the promise, so
+   * a rejection went nowhere: no redirect, no message, no console entry — a button that did
+   * nothing, indistinguishable from a dead page. /signup avoids one shape of this by not rendering
+   * a provider button unless `authProviders` says the deployment holds its credentials, but that
+   * only covers a MISSING provider — every other start-time refusal still lands here, and this page
+   * has no such guard at all.
    *
-   * SCOPE, HONESTLY: this reports failures raised while STARTING the flow. A failure inside
+   * SCOPE, HONESTLY: this catches failures raised while STARTING the flow. A failure inside
    * `/api/auth/callback/<provider>` is a server-side 500 with no redirect and no error parameter
-   * (`@convex-dev/auth` rewrites the destination only on success), so it cannot surface here — the
-   * browser never comes back to this page. Those are found in the Convex logs.
+   * (`@convex-dev/auth` only rewrites the destination on success), so it cannot be reported from
+   * here — the browser simply never comes back. Read the Convex logs for those.
    */
   async function onOAuth(provider: string, label: string) {
     setError(null);
     setBusy(true);
     try {
       await signIn(provider, { redirectTo: "/dashboard" });
-      // `busy` deliberately stays set on success: the browser is leaving for the provider, and
+      // Deliberately NOT clearing `busy` on success: the browser is leaving for the provider, and
       // re-enabling the button would flash it live again mid-navigation.
     } catch {
       setError(`Could not start ${label} sign-in. Please try again.`);

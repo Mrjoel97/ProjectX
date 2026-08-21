@@ -40,6 +40,56 @@ describe("import guard: raw builders are scoped-unavoidable (SC-2)", () => {
   }
 });
 
+// TWO INDEPENDENT ALLOWLISTS GUARD THE SAME RULE, and nothing made them agree until this test.
+//
+// `RAW_BUILDER_ALLOWLIST` (above) exempts a module from the RUNTIME scan. Biome's
+// `style/noRestrictedImports` is exempted by a SEPARATE `overrides[].includes` array in
+// biome.json. A module on the first list but not the second passes `pnpm test` and then fails
+// `biome ci --diagnostic-level=error` in CI — and a red CI run means the workflow_run-gated
+// production deploy never fires. That is exactly what happened while 25-01 was being written.
+//
+// Most allowlist entries never need the Biome override because they import the CAPITALISED
+// `internalQuery`/`internalMutation`/`internalAction`, which neither guard bans. Only a module
+// that really does import the lowercase public builders needs both, so that — not list equality
+// — is what this asserts.
+describe("the runtime allowlist and the Biome override cannot silently diverge", () => {
+  const biomeConfig = import.meta.glob("../../../biome.json", {
+    query: "?raw",
+    import: "default",
+    eager: true,
+  }) as Record<string, string>;
+
+  const overrideIncludes: string[] = Object.values(biomeConfig).flatMap((raw) =>
+    (JSON.parse(raw).overrides ?? []).flatMap(
+      (o: { linter?: { rules?: { style?: Record<string, string> } }; includes?: string[] }) =>
+        o.linter?.rules?.style?.noRestrictedImports === "off" ? (o.includes ?? []) : [],
+    ),
+  );
+
+  test("biome.json was actually read, so this suite cannot pass vacuously", () => {
+    expect(Object.keys(biomeConfig)).toHaveLength(1);
+    expect(overrideIncludes).toContain("packages/backend/convex/lib/functions.ts");
+  });
+
+  const publicBuilderImporters = Object.entries(sources)
+    .filter(([path, content]) => !basename(path).endsWith(".test.ts") && BANNED.test(content))
+    .map(([path]) => `packages/backend/convex/${path.replace(/^\.\//, "")}`);
+
+  test("every module importing a raw public builder is exempt in BOTH places", () => {
+    // Non-empty by construction: lib/functions.ts always imports them.
+    expect(publicBuilderImporters.length).toBeGreaterThan(0);
+    for (const module of publicBuilderImporters) {
+      // Biome is the gate that actually fails CI, so EVERY such module must be listed there.
+      expect(overrideIncludes).toContain(module);
+      // The runtime scan exempts `lib/functions.ts` by its own dedicated filter above rather
+      // than by basename, so only the other modules have to appear in the basename list.
+      if (!module.endsWith("lib/functions.ts")) {
+        expect(RAW_BUILDER_ALLOWLIST).toContain(basename(module));
+      }
+    }
+  });
+});
+
 // The wrapper module must derive identity from the auth package's OFFICIAL adapter, not
 // from a subject parser we maintain ourselves. This is a SOURCE guard rather than a
 // behavioural one because the behaviours (stable-per-user scope, cross-user isolation) are

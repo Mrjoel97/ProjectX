@@ -1,5 +1,13 @@
 # Playbook: Contacts, CRM & follow-ups
 
+> Touched 2026-08-21 (25.1-06) — **COMMENT-ONLY, no CRM behaviour changed.** Two doc comments in
+> `contacts.ts` cited `convex/http.ts`'s fal-webhook as the precedent for the stateless unsubscribe
+> token and for `verifyUnsubToken`'s rules. That route was deleted at 25.1-06 (ADR-024), so the
+> citations pointed at nothing; they are now self-contained and state the rules they inherited —
+> fail closed on an unset secret, `normalizeId`-shaped refusals, and a digest RE-DERIVED from the
+> raw part rather than read off the request. **The unsubscribe token is now the last living copy of
+> that pattern in the repo.** Not a verification of this playbook's contents.
+
 > Touched 2026-08-16 (eval-gate session) to clear the §9 Stop hook — **NOT a verification**, and
 > deliberately not a `Last verified` line.
 > `apps/web/app/(app)/dashboard/pipeline/pipelineView.test.ts` changed under another lane and

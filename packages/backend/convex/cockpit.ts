@@ -670,27 +670,30 @@ const EXTERNAL_TARGETS = {
       { onComplete: internal.mediaComplete.onSubmitComplete },
     ),
   /**
-   * 17-05 — AN INTENTIONALLY UNREACHABLE STUB, and the 17-01 inert-arm precedent verbatim.
+   * 17-08 Task 3 — the real target, replacing 17-05's `calendar manage not wired (17-08)` stub.
+   * One member, one edit, one place, exactly the hand-off 17-05 promised.
    *
-   * `calendar_manage` is bound to `externalAction` in `_ARM_TABLE` above, so the DERIVED
-   * `ExternalActionType` makes this table incomplete without a member here — a COMPILE error,
-   * which is the whole point of deriving it. The alternative was to leave the arm bind out until
-   * 17-08, which would have meant four waves of code that does not compile.
+   * IT IS THE SAME ARM AS `calendar_event` AND THAT IS THE POINT: management is a governed
+   * external side effect behind the SAME human Approve gate, with the same CAS above making it
+   * exactly-once. Its terminal is a SEPARATE function (`onManageComplete`) because the two write
+   * different tables, different audit names and different terminal states — a shared terminal
+   * would make "did the shipped create path change?" un-answerable by a diff.
    *
-   * It is unreachable TODAY because nothing can stage a `calendar_manage` plan: no tool writes
-   * `kind: "calendar_manage"` until Plan 17-09. If it is ever reached it THROWS, and a throw
-   * inside `executePlan` aborts the whole Convex mutation — so the `status: "approved"` patch a
-   * few lines below rolls back with it and the plan is left exactly as the human found it. That
-   * rollback is the mechanism behind "no run id and no plan-state patch", and `cockpit.test.ts`
-   * asserts it against a manually seeded row rather than trusting the sentence.
+   * The run id lands in `calendarRunId` via the existing patch below — `calendar_manage` is simply
+   * not `media`, so it needs no new branch there. `calendarRunId` is the COMMON Calendar run
+   * correlation column, and both terminals resolve a failed run through `by_calendar_run`.
    *
-   * **PLAN 17-08 REPLACES THIS EXACT MEMBER** with the real `retrier.run(ctx,
-   * internal.calendar.manageEvent, ...)` thunk plus its `onComplete` terminal. One member, one
-   * edit, one place — the same hand-off 17-01 made to 17-04 for `calendar_event`.
+   * Nothing STAGES a `calendar_manage` plan yet (no tool writes the kind until 17-09), so this is
+   * still reached only by a seeded row today. What changed is that reaching it now performs the
+   * approved act instead of throwing.
    */
-  calendar_manage: () => {
-    throw new Error("calendar manage not wired (17-08)");
-  },
+  calendar_manage: (ctx: MutationCtx, a: ExternalArgs) =>
+    retrier.run(
+      ctx,
+      internal.calendar.manageEvent,
+      { planId: a.planId, tenantId: a.tenantId, correlationId: a.correlationId },
+      { onComplete: internal.calendarComplete.onManageComplete },
+    ),
 } satisfies Record<ExternalActionType, (ctx: MutationCtx, a: ExternalArgs) => Promise<unknown>>;
 
 type ExternalArgs = {
@@ -1042,6 +1045,12 @@ export const executePlan = tenantMutation({
         // seeded row (set at propose) so a feedback rating on this delivered response resolves to the
         // exact version that produced it. Optional → a plan with no skillVersion copies none.
         skillVersion: plan.skillVersion,
+        // DLVR-02: the plan's chosen mailbox rides onto every seeded row, exactly like
+        // skillVersion and the reply anchor above — the same Pitfall-4 shape, and the same
+        // consequence if it is ever dropped: `delivery.send` reads the REQUEST, not the plan, so a
+        // row that does not carry the provider silently delivers through Google no matter what the
+        // user picked. `?? "google"` covers a legacy plan row written before 25-05.
+        mailProvider: plan.mailProvider ?? "google",
         planId,
         createdAt: Date.now(),
       });
@@ -1226,7 +1235,14 @@ export const reschedulePlan = tenantMutation({
   > => {
     const plan = await ctx.db.get(planId);
     if (!plan || plan.tenantId !== ctx.tenantId) throw new Error("plan not found"); // no cross-tenant reschedule
-    if (plan.status !== "canceled" || plan.cancelKind === "discarded") {
+    // 17-08 added `refused` beside `discarded`: both are TERMINAL. Re-arming a refused management
+    // act would re-run a write the system already declined — a Microsoft cancel it will never
+    // perform, or an approval staged against a version that no longer exists.
+    if (
+      plan.status !== "canceled" ||
+      plan.cancelKind === "discarded" ||
+      plan.cancelKind === "refused"
+    ) {
       return { ok: true, alreadyResolved: true };
     }
     // The re-ask: a reschedule OUT of canceled requires a future time — write NOTHING on a past/absent

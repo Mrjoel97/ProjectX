@@ -395,7 +395,7 @@ function OptimizerPanel() {
   );
 }
 
-// SKILL-01 (21-04): the owner's review surface for USER-authored tenant candidates. A different
+// SKILL-01/02: the owner's review surface for USER- and AGENT-authored tenant candidates. A different
 // queue from the optimizer's above and deliberately NOT merged into it — those are global registry
 // rows the optimizer wrote, these are one tenant's own business adaptation of one skill, and the
 // only correct action on them is per-row and per-tenant.
@@ -404,9 +404,15 @@ function OptimizerPanel() {
 // `rollbackTenantSkill` are all owner-wrapped, and activation additionally needs eval evidence
 // pinning the exact row. This component's `disabled` is a courtesy that saves a round trip — the
 // wrapper is the gate (docs/playbooks/authorization.md).
-function UserCandidatesPanel() {
+function shortRef(value: string | null): string {
+  if (value === null) return "—";
+  return value.length <= 12 ? value : `${value.slice(0, 6)}…${value.slice(-4)}`;
+}
+
+function TenantCandidatesPanel() {
   const candidates = useQuery(api.skills.tenantCandidatesForReview, {});
-  const activate = useMutation(api.skills.activateTenantCandidate);
+  const activateUser = useMutation(api.skills.activateTenantCandidate);
+  const activateAgent = useMutation(api.skills.activateAgentCandidate);
   const rollback = useMutation(api.skills.rollbackTenantSkill);
   const [busy, setBusy] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -428,11 +434,11 @@ function UserCandidatesPanel() {
   }
 
   if (candidates === undefined)
-    return <p style={{ margin: 0, color: "var(--ink-soft)" }}>Loading user-authored candidates…</p>;
+    return <p style={{ margin: 0, color: "var(--ink-soft)" }}>Loading tenant skill candidates…</p>;
   if (candidates.length === 0)
     return (
       <p style={{ margin: 0, color: "var(--ink-soft)" }}>
-        No user-authored candidates awaiting review.
+        No tenant skill candidates awaiting review.
       </p>
     );
 
@@ -485,13 +491,25 @@ function UserCandidatesPanel() {
                 fontFamily: "var(--font-mono), ui-monospace, monospace",
               }}
             >
-              tenant <code>{c.tenantId}</code> · user <code>{c.authorUserId ?? "—"}</code> · row{" "}
-              <code>{key}</code> · base {c.baseScope}
+              tenant <code>{c.tenantId}</code> · row <code>{key}</code> · base {c.baseScope}
+              {c.author === "agent" ? (
+                <>
+                  {" "}
+                  · Executive <code>{c.authorAgentId ?? "—"}</code> · source{" "}
+                  <code>{shortRef(c.sourceThreadId)}</code> /{" "}
+                  <code>{shortRef(c.sourceTurnId)}</code>
+                </>
+              ) : (
+                <>
+                  {" "}
+                  · user <code>{c.authorUserId ?? "—"}</code>
+                </>
+              )}
             </div>
 
             <details>
               <summary style={{ cursor: "pointer", fontSize: "0.82rem", color: "var(--ink-soft)" }}>
-                What the user wrote
+                {c.author === "agent" ? "What Executive drafted" : "What the user wrote"}
               </summary>
               <pre
                 style={{
@@ -558,6 +576,18 @@ function UserCandidatesPanel() {
                 : ""}
             </div>
 
+            {c.author === "agent" ? (
+              <div style={{ fontSize: "0.78rem", color: "var(--ink-soft)" }}>
+                {c.ownerApproval === null ? (
+                  "Owner approval: not recorded"
+                ) : (
+                  <>
+                    Owner approval: recorded · run <code>{c.ownerApproval.evalRunId}</code>
+                  </>
+                )}
+              </div>
+            ) : null}
+
             <div style={{ display: "flex", gap: "0.6rem", alignItems: "center", flexWrap: "wrap" }}>
               <button
                 type="button"
@@ -567,7 +597,13 @@ function UserCandidatesPanel() {
                     ? undefined
                     : "Activation needs a passing eval run pinning this exact row."
                 }
-                onClick={() => void run(key, () => activate({ candidateId: c.candidateId }))}
+                onClick={() =>
+                  void run(key, () =>
+                    c.author === "agent"
+                      ? activateAgent({ candidateId: c.candidateId })
+                      : activateUser({ candidateId: c.candidateId }),
+                  )
+                }
                 style={{
                   padding: "0.55rem 1.2rem",
                   borderRadius: "999px",
@@ -652,6 +688,127 @@ function UserCandidatesPanel() {
   );
 }
 
+/** "4m" / "3h" / "2d". An age reads as an incident; a timestamp reads as a log line. */
+function age(createdAt: number, now: number): string {
+  const s = Math.max(0, Math.round((now - createdAt) / 1000));
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86_400) return `${Math.floor(s / 3600)}h`;
+  return `${Math.floor(s / 86_400)}d`;
+}
+
+// D13 (25.1-06): the OPERATOR's dead-letter read, across EVERY tenant.
+//
+// The section below this one has shown the SIGNED-IN TENANT's dead letters since 02-06. This is the
+// half that was missing: every writer stamps the row with the failing tenant's id, so in a
+// multi-tenant beta the failures the owner most needs to see are precisely the ones that section
+// cannot show.
+//
+// SAME MOUNTING RULE AS THE OPTIMIZER PANEL, and for the same reason: this component owns the
+// owner-only hook, so MOUNTING it is what subscribes to other tenants' rows. An early return inside
+// it, `hidden`, or CSS would each still run the hook. It must stay inside the `isOwner` branch.
+//
+// The rows are refs only — tenant id, workflow id, correlation id, a reason code and the stored
+// redaction-safe payload (CLAUDE.md §4). Nothing here resolves a tenant to a person: the
+// tenant-candidates panel above already settled that this page renders WHICH ACCOUNT, never WHO.
+function AllTenantDeadLetters() {
+  const result = useQuery(api.deadLetters.listAll, {});
+  // One clock for the whole render, so two rows one line apart cannot disagree about "now".
+  const now = Date.now();
+
+  if (result === undefined) {
+    return <p style={{ margin: 0, color: "var(--ink-soft)" }}>Loading…</p>;
+  }
+  if (result.rows.length === 0) {
+    return (
+      <p style={{ margin: 0, color: "var(--ink-soft)" }}>
+        No unresolved dead letters on this deployment.
+      </p>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        background: "var(--card)",
+        borderRadius: "1rem",
+        borderLeft: "3px solid #dc2626",
+        boxShadow: cardShadow,
+        padding: "1.25rem",
+        display: "grid",
+        gap: "0.75rem",
+      }}
+    >
+      <div style={{ fontWeight: 700, color: "var(--ink)" }}>
+        {result.rows.length} unresolved
+        {result.truncated ? (
+          <span style={{ fontWeight: 400, color: "var(--ink-soft)" }}>
+            {" "}
+            — showing the newest {result.cap}, there are more
+          </span>
+        ) : null}
+      </div>
+
+      <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: "0.6rem" }}>
+        {result.rows.map((d) => (
+          <li
+            key={d.id}
+            style={{
+              display: "grid",
+              gap: "0.3rem",
+              paddingTop: "0.6rem",
+              borderTop: "1px solid var(--rule)",
+            }}
+          >
+            <div
+              style={{ display: "flex", gap: "0.6rem", alignItems: "baseline", flexWrap: "wrap" }}
+            >
+              <span style={{ fontWeight: 700, color: "#991b1b" }}>{d.error}</span>
+              <span style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>
+                {age(d.createdAt, now)} old
+              </span>
+            </div>
+            <div
+              style={{
+                fontSize: "0.75rem",
+                color: "var(--ink-soft)",
+                fontFamily: "var(--font-mono), ui-monospace, monospace",
+              }}
+            >
+              tenant <code>{d.tenantId}</code> · workflow <code>{d.workflowId || "—"}</code> ·
+              correlation <code>{d.correlationId}</code>
+            </div>
+            <details>
+              <summary style={{ cursor: "pointer", fontSize: "0.78rem", color: "var(--ink-soft)" }}>
+                Payload (refs and counts only)
+              </summary>
+              <pre
+                style={{
+                  margin: "0.4rem 0 0",
+                  fontSize: "0.72rem",
+                  fontFamily: "var(--font-mono), ui-monospace, monospace",
+                  background: "var(--canvas)",
+                  border: "1px solid var(--rule)",
+                  borderRadius: "0.6rem",
+                  padding: "0.6rem",
+                  overflowX: "auto",
+                }}
+              >
+                {JSON.stringify(d.payload, null, 2)}
+              </pre>
+            </details>
+          </li>
+        ))}
+      </ul>
+
+      <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--ink-soft)" }}>
+        Read-only. Re-drive is deferred, and resolving another tenant's row is deliberately not
+        possible from here — the section below acts on your own tenant only.
+      </p>
+    </div>
+  );
+}
+
 // OPSG-07: the operator dead-letter surface — a failure nobody sees is a failure nobody
 // fixes. Tenant-scoped (not owner-gated — CONTEXT). Rows are redaction-safe: refs, hashes,
 // ids, counts ONLY — never raw user content or PII (CLAUDE.md §4). Ships resolve only;
@@ -705,21 +862,34 @@ export default function OpsPage() {
             Optimizer
           </p>
           <OptimizerPanel />
-          {/* A SEPARATE queue under the same owner gate (21-04). Global optimizer candidates above
+          {/* A SEPARATE queue under the same owner gate. Global optimizer candidates above
               are registry-wide prompt rewrites; these are one tenant's own adaptation of one skill,
-              acted on per row. Same mounting rule as the section itself: UserCandidatesPanel owns
+              acted on per row. Same mounting rule as the section itself: TenantCandidatesPanel owns
               its owner-only hooks, so mounting it is what subscribes to other tenants' authored
               text — it must never move outside this `isOwner` branch. */}
           <p className="caps-label" style={{ margin: "0.5rem 0 0" }}>
-            User-authored candidates
+            Tenant skill candidates
           </p>
-          <UserCandidatesPanel />
+          <TenantCandidatesPanel />
+        </section>
+      )}
+
+      {/* OWNER-ONLY (D13), and the WHOLE section is conditional for the same reason the optimizer
+          section is: AllTenantDeadLetters owns the `listAll` hook, so mounting it is what
+          subscribes to other tenants' rows. Above the tenant section because an operator triaging
+          a deployment reads the deployment first. */}
+      {isOwner && (
+        <section style={{ display: "grid", gap: "0.9rem" }}>
+          <p className="caps-label" style={{ margin: 0 }}>
+            Dead letters — all tenants
+          </p>
+          <AllTenantDeadLetters />
         </section>
       )}
 
       <section style={{ display: "grid", gap: "0.9rem" }}>
         <p className="caps-label" style={{ margin: 0 }}>
-          Dead letters
+          Dead letters — your tenant
         </p>
         {deadLetters === undefined ? (
           <p style={{ margin: 0, color: "var(--ink-soft)" }}>Loading…</p>

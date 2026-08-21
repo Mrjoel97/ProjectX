@@ -1,3 +1,265 @@
+> Last verified: 2026-08-21 (25.1-06, D14 — **`http.ts` LOST A ROUTE.** `POST /fal/callback/*`, the
+> FOURTH route 20-06 added, is deleted: the route, its HMAC path segment, its ±300 s replay window,
+> its `fal.media`/`fal.ai`/`fal.run` asset-host allow-list and the `mediaComplete.resolveJob` lookup
+> behind it. `FAL_WEBHOOK_SECRET` went with them and is out of `ENV_MANIFEST`. **The entries below
+> that describe that route — including the 20-15 comparison that says "NO HMAC path segment, unlike
+> `/fal/callback/*`" — are history.** No cockpit turn, tool, gate or plan-row behaviour changed.
+>
+> VERIFIED DEAD BEFORE DELETION, not assumed: `submitLine`'s webhook parameter had been unused since
+> the ADR-017 cutover, so nothing had minted a callback URL for a provider to call; `resolveJob` had
+> exactly one caller (the route) and `FAL_WEBHOOK_SECRET` exactly one reader (`resolveJob`). The
+> route's only reachable caller was therefore somebody holding the secret, for whom it offered an
+> outbound fetch and a terminal `succeeded` write. Provider truth and the removal record: ADR-024.
+>
+> `http.ts` now holds the OAuth callbacks, `/skillopt/*`, `GET /media/blob/*` and the unsubscribe
+> pair. `contacts.ts`'s unsubscribe token is the last living copy of the 20-06 stateless-token
+> pattern, and its comment says so rather than pointing at the deleted route.
+> Last verified: 2026-08-21 (25.1-05 Task 2, D11 — **THE MEMO CARD RENDERS ITS DOCUMENT AND SHOWS
+> ITS SOURCES.** `MemoCardBody` (exported from `cards.tsx`, hook-free) replaces the memo branch's
+> `white-space: pre-wrap` paragraph: the body goes through the EXISTING `MarkdownDocument` in its
+> `compact` form — the same renderer the chat bubbles and the artifact preview already use, no
+> second renderer and no tokenizer change — and `plan.sources` renders below it as a references
+> block, one row per page with its title, its URL as READABLE text (checking a paid finding must not
+> require a mouse) and its own retrieval date.
+>
+> **THE BLOCK RENDERS ON PRESENCE AND HIDES NOTHING.** No sources ⇒ no block, not an empty heading;
+> a source whose title came back empty links its URL rather than rendering a blank anchor
+> (`sourcesFromToolOutput` defaults a missing title to `""`, a real shape). It is a plain list, NOT
+> a `GroundedSources`-style `<details>` fold — that fold exists for a list accumulated across a
+> whole thread, while a research turn returns a handful. If a memo ever carries dozens, reuse that
+> fold verbatim rather than inventing a cap: **a `.slice()` here would destroy provenance**, and the
+> test that guards it renders nine sources and counts nine anchors.
+>
+> BRAND: `--teal-900` for the link text and `--ink-soft` for the caps section label — §6 bars
+> `--teal-600` as small text on white (~2.9:1), which is why `capsTeal` was NOT reused here.
+> Exported and hook-free for the `AwaitingCardBody` reason: a regex over this file cannot tell a
+> rendered heading from a printed `#`. `memoCard.test.ts` renders real markup for the behaviour and
+> keeps ONE source scan for the wiring the render cannot see — that `PlanCard`'s memo branch reaches
+> this component at all.)
+>
+> Last verified: 2026-08-21 (25.1-05, D11 — **THE DISPATCH LANDING NOW CARRIES SOURCES, AND THE
+> §4 BOUNDARY MOVED WITH IT.** `dispatchAndLand`'s landing object gained `sources`
+> (`{title, url, retrievedAt}[]`, omitted when empty) and `evaluations.landSpecialistResult`
+> writes them to the plan row, so the memo card can attribute the findings it is already showing.
+> Until now the URLs reached the vault document only — through `persistResearchFindings`, which is
+> SKIPPED entirely on a zero-search run and swallowed on a persist failure — so the card the user
+> reads could show findings it could not attribute to anything.
+>
+> **THE RULE THAT DID NOT CHANGE: a URL is CONTENT PLANE.** It may reach `plans.sources`, the vault
+> document and the card; it may NEVER reach an `audit`/`deadLetters`/`telemetry` payload, which get
+> `sourceCount`/`webSearchCalls`. `dispatch.ts`'s audit payload count is UNCHANGED at 12 and no
+> payload gained a field, so `llmRedaction.test.ts`'s pins are untouched. Mutation-checked both
+> ways: adding `sourceUrls: turn.sources.map(s => s.url)` to the `subagent.completed` payload
+> reddens `dispatch.test.ts`'s §4 scan — **and leaves `llmRedaction.test.ts` GREEN**, because that
+> static scan bans `reply|body|text|output` by name and knows nothing about a URL. The runtime scan
+> is the one that guards this; do not treat the static pin as cover.
+>
+> **WRITTEN BY DIRECT `ctx.db.patch`, DELIBERATELY NOT THROUGH `patchPlan`.** `patchPlan` is the
+> door the model's own cockpit tools write through, and a source list is a PROVENANCE claim — "these
+> pages were read for this memo". It comes from the search tool's own RESULT parts
+> (`sourcesFromToolOutput`), never from model prose, and nothing reachable from the model may add to
+> it — the `calendarEventId`/`calendarRunId` rule, verbatim. `plans.resetPlan` clears it with the
+> body it attributes (Pitfall-6 class).)
+>
+> Last verified: 2026-08-21 (25.1-02, D4 — **A DEAD SPECIALIST DISPATCH IS VISIBLE NOW.**
+> reliabilitySweep.test.ts 23/23. No cockpit.ts, plans.ts, dispatch.ts or evaluations.ts change —
+> the sweep patches the row from outside.)
+>
+> **The failure this closes.** `actOnGap` / `stageResearchPlan` / `stageMediaPlan` all park the
+> thread's plan row at `status: "collecting", kind: "memo", body: ""` and schedule the specialist;
+> `dispatchAndLand`'s `finally` is what returns it to `proposed`. If that action never reaches its
+> handler at all (a dropped job, a deployment restart), the `finally` never runs — and `PlanCard`
+> renders only at `proposed`, so the row is INVISIBLE FOR EVER: no card, no error, no way back.
+>
+> **The terminal chosen is an EXISTING one, not a new status member.** `reliabilitySweep`'s plan
+> sweep flips such a row to `proposed` with a fixed `COLLECTING_FALLBACK_BODY` — a system notice in
+> its own voice that claims no findings and attributes nothing to the specialist (the
+> `LOST_CONTEXT_MEMO` precedent) — plus one `watchdog.stalled` notification.
+>
+> **Two guards, and both are load-bearing.** (1) `collecting` + `kind: "memo"` is the DISPATCH-OWNED
+> discriminator — the same pair `plans.stageResearchPlan` already uses for `research_in_flight`. An
+> ordinary conversation's `collecting` row carries no kind and is NEVER touched: a week-old live
+> chat is still a live chat. (2) Liveness is read from `_scheduled_functions` — a `pending` or
+> `inProgress` run carrying this `planId` is a live turn and is left alone; `success`/`failed`/
+> `canceled` are not liveness, they are the defect. Matched by `args.planId`, not by function name,
+> so a fourth dispatch entry point is covered the day it is written. `COLLECTING_STALL_MS` (30 min)
+> is only a cheap pre-filter that keeps that scan off every plan in the table.
+
+> Last verified: 2026-08-21 (25.1-01 Task 2, D2 — **NO cockpit.ts CHANGE WAS NEEDED, recorded so
+> the plan's premise dies here.** The plan expected `EXTERNAL_TARGETS` to gain a renderReel thunk;
+> it does not — `EXTERNAL_TARGETS.media` stays `submitBatch`, permanently, per 20-16's decision
+> above. What DID change is that the render stage now runs under the SAME ActionRetrier component
+> the cockpit's external arm uses: all three renderReel schedule sites (`evaluateRenderTrigger`,
+> `media.retryRender`, `recordRender`'s auto-retry) are `retrier.run(…, { onComplete:
+> internal.mediaComplete.onRenderComplete })`, with the run id on `plans.renderRunId` — the
+> `calendarRunId`/`mediaRunId` correlation pattern a third time. Details live in media.md; this
+> entry exists because the cockpit playbook documents the EXTERNAL_TARGETS idiom that was copied.)
+>
+> Last verified: 2026-08-21 (25.1-03, D7 — **`plans.resetPlan`'s clear-set gained
+> `reelVaultDocId`.** The contract this playbook records for `resetPlan` is unchanged in kind — a
+> composition reset wipes the deck AND the render plane — but one render-plane field had been
+> missing since 33-05 shipped the vault save, and it was the one that could DESTROY prior work
+> rather than merely show it under the wrong proposal: the pointer `saveReelToVault` upserts on.
+> Details in media.md. `plans.test.ts`'s `DECK_AND_RENDER` list is the pin, and it reddens if the
+> clear is removed.)
+>
+> Last verified: 2026-08-21 (**TEST-ONLY ADDITION, NO COCKPIT BEHAVIOUR CHANGED.** Two mock fetch
+> responses (`W/"mutation-write"` provider replies) were appended to the two 17-08 manageEvent
+> completion-terminal cases in `calendar.test.ts` so each staged mutation's provider write has a
+> queued response. No source module changed; this entry exists to keep the watch-gate honest.)
+>
+> Last verified: 2026-08-20 (23-05 source-separated the Executive's
+> `authorSkillCandidate` tool from both activation exports. The tool still reaches only
+> `publishAgentCandidate`; activation lives only in the owner-mounted `/ops` review panel, with a
+> distinct user vs agent exact-id mutation selected from the server's closed author discriminant.
+> The workspace history shows inert author/status labels and no activation control. Source/static
+> verification only because dependencies are absent; no live state changed and `$0.00` was spent.)
+>
+> Last verified: 2026-08-20 (17-09 added bounded managed-event discovery and inspect-then-stage
+> update/delete proposals. The tool accepts only a tenant-checked registry ref, parses time from the
+> trusted client clock, refreshes title/time/etag/attendee count before one atomic proposal mutation,
+> and cannot name a provider writer or Approve gate. The management card reads the refreshed
+> registry snapshot and distinguishes update from destructive removal. Restored runtime verification:
+> the focused Calendar/tool/trace/dispatch suite passes 190/190 and `@pikar/web` typecheck is clean.
+> The Playwright browser launches, but authenticated execution remains gated on the seeded local
+> `E2E_USER_EMAIL`/`E2E_USER_PASSWORD`; exact evidence is in 17-09-SUMMARY.)
+>
+> Prior verification: 2026-08-18 (23-03 added the Executive-only `authorSkillCandidate` tool + its trace
+> verb; explicit-intent-only is PROMPT guidance, the candidate-only boundary is code. See the Phase
+> 23 section at the end. Prior verification follows.) (17-08 Task 3 — **the Approve-only arm, the management terminal and the
+> lifecycle readback**. calendar 88/88 · cockpit 73/73 · dispatchGuard 20/20, backend 88 files /
+> 2124 passed, core 1063/1063, tsc clean. ELEVEN mutations, all CAUGHT.)
+>
+> **`calendar_manage` is the externalAction arm's THIRD occupant**, replacing 17-05's
+> `calendar manage not wired (17-08)` stub. Same arm, same human Approve gate, same
+> `proposed → approved` CAS — so "a second approval no-ops" is inherited, not re-implemented. The run
+> id lands in `calendarRunId` through the EXISTING patch (management is simply not `media`), and both
+> Calendar terminals resolve a failed run through `by_calendar_run`.
+>
+> **Its terminal is a SEPARATE function** (`onManageComplete`), and `dispatchGuard.test.ts` now
+> counts DISTINCT targets and terminals rather than only asserting each is present — a manage thunk
+> pointed at `onCreateComplete` satisfies every `toContain` while marking CREATE plans done.
+>
+> **ORDER IS THE GUARANTEE, again.** The registry is written BEFORE the plan is marked done, and the
+> state written is recomputed from the PLAN's own staged fields, never echoed out of the provider
+> result. An absent staged field means "leave it alone".
+>
+> **A refusal is `canceled` + `cancelKind: "refused"` + `calendarFailureCode`.** The third literal is
+> new and deliberate: `approvals.ts` surfaces `cancelKind` as the cancellation's PROVENANCE, so
+> reporting a provider-limitation refusal or a version conflict as a user `discarded` would attribute
+> the decision to the wrong actor — the defect class this codebase has shipped three times.
+> `reschedulePlan` excludes `refused` alongside `discarded`: re-arming it would re-run a write the
+> system already declined.
+>
+> **Refusal copy is STATIC, keyed off the code.** A conflict message that quoted the event or the
+> etag would put the one moving part into a row the user reads (§4). The Microsoft-delete message
+> NAMES the limitation and says the event is still there, because ADR-023 requires the absence to be
+> a visible product surface.
+>
+> **Reauth is provider-specific and NON-terminal** — `RECONNECT[provider]`, the same table `llm.ts`
+> uses. A Microsoft outage that wrote `gmail_reconnect` would send the user to the Google consent
+> screen to fix an Outlook connection. The plan stays `delivering`, mirroring `onCreateComplete`.
+>
+> **`smoke.calendarLifecycleReadback` reads FOUR planes independently** — plan row, registry row,
+> provider, audit log — so none vouches for the others. It returns refs, codes, counts, key names,
+> hashes and booleans only. `contentLeak`/`tokenLeak` are MEASURED by substring search against the
+> tenant's real titles and real credentials, and `contentChecked`/`tokensChecked` report how many
+> strings the check had to look for — zero would mean the booleans proved nothing. A negative-control
+> test forces `contentLeak: true` so the detector is known to be able to fire.
+>
+> **A survivor worth remembering: `cockpit.ts`'s `_ARM_TABLE` is TYPE-LEVEL ONLY.** Flipping
+> `calendar_manage` to `"workflow"` there changed nothing at runtime and the whole suite stayed
+> green — the runtime table is `ARMS`/`armFor` in `@pikar/core/actionType.ts`. If you are reasoning
+> about which arm a plan kind takes, read the core file; the cockpit copy only derives the type that
+> makes `EXTERNAL_TARGETS` incomplete at compile time.
+>
+> Last verified: 2026-08-18 (17-08 Task 2 — **conditional management, minus Microsoft delete**.
+> calendar 71/71 · microsoftCalendar 62/62 · calendarEvents + dispatchGuard green, backend 88 files
+> / 2099 passed, core 1063/1063, tsc clean. FIFTEEN mutations, all CAUGHT.)
+>
+> **One decision tree, two providers.** `calendar.manageEvent` owns the ownership guards, the
+> attendee refusal, the desired-state reconciliation and the conflict handling ONCE; the provider
+> modules contribute only HTTP. A second copy of "refuse if attendees > 0" is a second place for it
+> to be missing.
+>
+> **THE GET ANSWERS THREE QUESTIONS AND NOTHING ELSE**: does the event exist, did it grow guests, is
+> the desired state already there. Version arbitration stays server-side, in the provider's 412
+> against the etag the HUMAN approved (`plans.calendarExpectedEtag`) — never the freshly-read one.
+> Sending the fresh etag would make every write succeed: that is a read-modify-write race with the
+> comparison moved client-side, which ADR-023 names as forbidden. Mutation-proven (M5).
+>
+> **Microsoft cancel/delete is refused before a token is fetched, and that refusal is a PRODUCT
+> SURFACE** (ADR-023: the probe measured `staleDeleteStatus: 204` / `staleDeletePreserved: false` —
+> Graph ignores `If-Match` on event DELETE and the stale delete destroyed the event anyway).
+> `providerSupports(provider, operation)` in @pikar/core returns `provider_unsupported`, and **its
+> signature takes no probe argument** — deliberately, so no measurement can widen it. ADR-023 says a
+> later work/school probe showing a 412 on DELETE justifies a superseding ADR, never an automatic
+> widening, and an argument that does not exist cannot be threaded through by accident. There is no
+> Graph delete writer in `microsoftCalendar.ts` at all; a test pins that a generous probe unlocks
+> the PATCH branch and nothing else.
+>
+> **Microsoft UPDATE is probe-gated, and the gate lives on the WRITER.** `patchEvent` refuses before
+> the token when `PHASE17_GRAPH_PROBE` is missing, blank, malformed, wrong-schema, fails the
+> `stalePatchStatus === 412 && stalePatchPreserved` PAIR, or carries hashes bound to another
+> deployment or account. The pair is read APART from the artifact's collapsed `supported` boolean —
+> that boolean ANDed patch and delete together and could only report the worse of them, which is why
+> a provably-safe PATCH sat unreachable behind an unsafe DELETE. Gating the writer rather than the
+> caller costs the refused path one extra inspection GET (a read of the user's own calendar) and
+> buys a guard nothing can route around.
+>
+> **Exactly-once is reconciliation, not optimism.** A retry after a lost success response finds the
+> provider already holding the desired state and reports success — the etag moved precisely BECAUSE
+> our earlier write landed, so a blind conditional re-write would report a false conflict. `tz` is
+> deliberately excluded from that comparison: Graph is asked to speak UTC and echoes UTC back, so a
+> registry zone of `Africa/Dar_es_Salaam` would never compare equal and every Microsoft update would
+> be forced into a PATCH that changes nothing. The absolute instant is the fact; the zone rides the
+> write payload.
+>
+> **The `attendees` static guard was NARROWED, not relaxed** (`dispatchGuard.test.ts`). Management
+> must READ the guest list to refuse an event that grew one, so the blanket ban would have forbidden
+> the very check that protects people. What stays banned is the WRITE form — `attendees` as an
+> object-literal key — plus `sendUpdates` anywhere, plus an anti-vacuity assertion that
+> `body.attendees` is still actually read. Both halves are mutation-proven (M6, M13).
+>
+> **A survived mutant found a real gap.** The first pass tested only the pre-flight 404 (the GET says
+> the event is gone). The RACE — it existed at the GET and was gone by the DELETE — was untested, and
+> that branch's answers differ by verb: already-gone is idempotent SUCCESS for a delete and
+> `not_found` for an update. Both are now pinned.
+>
+> Last verified: 2026-08-18 (17-08 Task 1 — **the durable managed-event registry**. calendarEvents
+> + calendar 54/54, backend 88 files / 2053 passed, tsc clean. Five mutations, all CAUGHT.)
+>
+> **What a registry row buys.** Without `{provider, externalEventId, etag}` recorded at CREATE time,
+> a later update is a read-modify-write against a version nobody wrote down. `calendarEvents.ts` is
+> that record, and `manageability` (@pikar/core) is the pre-provider gate that reads it — every
+> refusal it can return (`not_found`, `attendees_present`, `needs_inspection`) traces to a fact
+> stored here rather than to a provider round trip.
+>
+> **ORDER IS THE GUARANTEE in `onCreateComplete`.** The registry row is written BEFORE the plan is
+> marked done. Marking the plan first would leave a done plan whose event exists on a real calendar
+> with nothing recording its provider/id/etag — an event Pikar created and can never manage, with no
+> signal anything is missing. If the insert throws, the mutation rolls back and the retrier
+> redelivers against a plan still at `delivering`. Mutation-proven.
+>
+> **The tenant comes FIRST in the composite index, and that is isolation not tidiness.** Two tenants
+> can legitimately hold the same provider event id (a shared calendar, a restored backup, a
+> fixture). Convex requires index prefixes to be equated in order, which makes the tenant predicate
+> unwritable-to-forget rather than merely wrong to omit.
+>
+> **A missing etag means UNKNOWN VERSION, never "no concurrency check needed".** The create terminal
+> drops the key rather than storing null, so `manageability` reports `needs_inspection`. The legacy
+> migration refuses three temptations: no network to discover the etag, no invented placeholder
+> (a fabricated If-Match turns a refusal into a silent overwrite), and no invented event — a legacy
+> plan with no staged title/instant is SKIPPED and counted, because an invented time on a real
+> calendar is the worst available repair.
+>
+> **A test that passed for the wrong reason, caught by mutation and worth remembering.** The replay
+> assertion ran through `onCreateComplete`, which short-circuits on `status !== "delivering"` — so
+> it proved the STATUS GUARD and left the upsert's own dedupe unproven. Disabling the dedupe changed
+> nothing. `upsertManaged` is now tested directly; the contract matters on its own terms because
+> `stagingSnapshot` and the migration both call `.unique()` on that index, and `.unique()` THROWS on
+> a duplicate — a second row is a permanently broken lookup, not a cosmetic problem.
+>
 # Playbook: Email Chat Cockpit
 
 > Last verified: 2026-08-18 (**A BRIEF IS A SUBJECT, NOT A TASK — the media specialist was never
@@ -146,6 +408,108 @@
 > **The payload COUNT assertion (`toBe(12)`) still holds** — three existing payloads were extended,
 > no thirteenth surface was added.
 
+> Last verified: 2026-08-16 (25-06 — **the per-plan mailbox choice, and the reauth banner bug that
+> 25-05 created.**)
+>
+> **THE REAUTH HOLD SURFACE IS NOW PROVIDER-AWARE — this was a real bug, introduced by 25-05.**
+> Before it, `awaiting_reauth` could only be set by `gmail.send`, so `ReconnectBanner` hardcoded
+> "a hold means Google". `graph.send` sets it too, so a held **Microsoft** send was about to tell
+> the user to reconnect **Gmail** — the wrong consent screen, with the real problem left standing.
+> Holds now partition on `mailProvider` (absent ⇒ google, the same default `delivery.send` uses).
+> The branching moved into an exported pure `reconnectLines()` because the component renders
+> nothing until its seen-set loads after mount, so a render test would have asserted on an empty
+> string and proved nothing. Mutation-proven: restoring the hardcoded-Google hold reddens 4.
+>
+> **A second, quieter defect fixed with it:** `RECONNECT.microsoft.message` is the CALENDAR expiry
+> cron's copy ("keep calendar access working"). Reusing it for a mail hold describes the wrong
+> subsystem, so `RECONNECT` now carries a separate `holdMessage` per provider.
+>
+> **THE MAILBOX CHOICE IS PER-PLAN, GATED ON `mailReady` — NEVER ON `connected`.**
+> `plans.setPlanMailProvider` (modelled on `setPlanSendTime`, same cross-tenant guard) refuses once
+> the plan leaves `proposed`/`collecting`, because `executePlan` has by then copied the provider
+> onto every `requests` row and a later change would make the display and the delivery disagree.
+> There is deliberately **no tenant-wide or deployment-wide "active provider"**: it would make one
+> plan's mailbox depend on the last thing clicked on a different plan.
+>
+> `mailboxOptions()` is exported and pure for the same testability reason. **A 17-05-era
+> calendar-only grant is `connected`, refreshable and completely real, and cannot send mail** —
+> offering it would walk the user into `mail_scope_missing` at approve time instead of into
+> re-consent now. Mutation-proven: gating on `connected` reddens that case.
+>
+> **NO SECOND OAUTH SURFACE WAS ADDED, and a test asserts it** — `microsoftAuth.test.ts` pins
+> `http.route(` at exactly 8 and at most one Microsoft callback path. 17-06 built the authorize
+> URL, callback, consent page and token row; a plan named "provider lifecycle" is precisely the one
+> that would quietly add a second, so the absence is measured rather than assumed.
+>
+> **UNRESOLVED, DELIBERATELY NOT DECIDED HERE:** 17-06 shipped `/connect-microsoft` as its own page
+> beside `/connect-gmail`. Two connection pages is the landed reality. Merging them into one
+> connections surface is a UX decision with its own plan — not a side effect of this one.
+>
+> **BLOCKING OWNER CHECKPOINT — DECIDED 2026-08-17, POSTURE A:** the Microsoft disconnect support posture.
+> `disconnectMicrosoft` returns `revokedAtProvider: false` and that is the honest value — Entra
+> exposes no per-app revocation under a delegated grant. The evidence and the A/B choice are in
+> `.planning/phases/25-private-beta-productionization/25-MAIL-MIGRATION-EVIDENCE.md`. **The
+> owner chose **Posture A**: the honest local disconnect, never labelled as remote revocation. Evidence
+> re-verified 2026-08-17 — two claims confirmed verbatim, and **the user-facing portal URL was found
+> WRONG**: `myaccount.microsoft.com/permissions` is neither route. Personal accounts use
+> `https://account.microsoft.com/privacy/app-access`; work/school accounts use
+> `https://myapps.microsoft.com/`. The shipped `DisconnectMicrosoft.tsx` copy names only "Microsoft My
+> Apps" (work/school) for both, so it misdirected personal-account users. **FIXED and LANDED
+> 2026-08-17** — the confirm names both routes and the success note LINKS both; `note` widened from
+> `string` to `ReactNode` to carry the anchors. `connectionsSurface.test.ts`'s guard was TIGHTENED:
+> it accepted the bare string "My Apps" before (which is how the wrong portal passed review) and now
+> requires both hostnames. Mutation-proven red-then-green. Superseded text follows: **The approved
+> replacement copy is drafted in the evidence doc and NOT YET LANDED (`copy_landed: false`).**
+> **GOVN-03's provider-revocation clause stays OPEN; 25-06 does not close it.**
+>
+> Prior entry — 2026-08-16 (25-05 — **THE SEND PATH IS NOW TWO-ARMED. `internal.gmail.send` is no
+> longer what the production callers invoke; `internal.delivery.send` is.**)
+>
+> **The seam.** `delivery.ts` is a ~10-line dispatcher reading one field — `requests.mailProvider`
+> — and handing off to `internal.gmail.send` or `internal.graph.send`. Both production callers
+> (`deliverApprovedPlan.ts`, `pipeline.ts`) point at it. Their terminal handling is UNCHANGED,
+> because both arms return the same `suppressed`/reauth vocabulary.
+>
+> **ABSENCE MEANS GOOGLE, and that is the entire migration story.** `mailProvider` is optional on
+> both `plans` and `requests`. Every row written before 25-05 predates the second provider and was
+> a Gmail send, so legacy rows keep delivering with **no backfill, no index, and no discriminator
+> column on `gmailTokens`** — `gmailTokens` and `microsoftCalendarTokens` remain two separate
+> tenant-keyed tables (ADR-018; a discriminator would make every existing `by_tenant` `.unique()`
+> read ambiguous). Mutation-proven: flipping the default to Microsoft reddens the legacy test.
+>
+> **THE GOVERNANCE SPINE IS SHARED, ON PURPOSE.** `gmail.ts` now exports
+> `prepareGovernedMessage(ctx, req)` — suppression check, attachment resolution, CAN-SPAM footer,
+> `buildMime` — and BOTH arms call it. The footer is still concatenated at the `buildMime` call
+> site, which that function now is for both providers. **Two providers with two copies of an
+> unbypassable guard is how a bypass gets built**: the second copy drifts, or the third provider
+> only inherits one of them. `graph.test.ts` asserts BYTE PARITY — the two arms hand their provider
+> the identical MIME for the same row — and mutation-proving it (bypassing the shared prep) reddens
+> 4 tests including that one. `notifyExternal.ts` deliberately stays outside: it sends a static
+> service notice to the user's OWN mailbox, which carries no footer and has nobody to unsubscribe.
+>
+> **What is Microsoft-specific, and why each exists.** STANDARD base64, not URL-safe (the one
+> byte-level divergence, and a copy-paste of the Gmail arm is exactly how the wrong alphabet would
+> arrive). `text/plain` content type. A **scope check BEFORE the token round trip** —
+> `microsoftMailReady(scope)` via the new `microsoftAuth.grantedScope` internalQuery, which returns
+> the scope string and never token material — so a 17-05-era **calendar-only grant** is refused as
+> `mail_scope_missing` rather than surfacing as an opaque Graph 403 on the delivery path. A 3 MB
+> MIME ceiling. And **`messageId: ""`**: Graph's `sendMail` returns 202 with an EMPTY body, so
+> there is no id — the audit row records `{requestId, provider}` and fabricating an id would put a
+> lie in the log.
+>
+> **`graph.ts` NEVER refreshes or writes `microsoftCalendarTokens`.** `freshGraphToken` in
+> `microsoftCalendar.ts` is the one refresh root over that row. A second refresh path is a
+> rotation race: two concurrent refreshes POST the same refresh_token, Microsoft rotates it on the
+> first, and the second persists a token the provider has already invalidated.
+>
+> **OPEN, AND OWNED BY 25-06 — the reauth HOLD surface is still hardcoded Google.**
+> `ReconnectBanner.tsx` was generalized by 17-06 for the NOTIFICATION half only; its hold half
+> assumes `awaiting_reauth` means Gmail, and its in-source comment says so because no Microsoft
+> send path existed yet. **It does now.** A Microsoft send held at `awaiting_reauth` will currently
+> tell the user to reconnect *Gmail*. Not fixed here because `ReconnectBanner.tsx` is outside this
+> plan's owned files; recorded so 25-06 cannot miss it.
+>
+> Prior entry — 2026-08-16 (33-13 — **the cockpit's plan-kind switch gained ONE branch, and the
 > Last verified: 2026-08-16 (33-13 — **the cockpit's plan-kind switch gained ONE branch, and the
 > canvas gained a SECOND `useSendCockpitMessage` caller. Nothing else about the cockpit changed.**)
 >
@@ -678,7 +1042,9 @@
 > - **`disconnectMicrosoft` is NOT parity with `disconnectGoogle` and must never be described as if
 >   it were.** The v2 delegated flow used here has no revocation endpoint, so this deletes the local
 >   row and audits `revokedAtProvider: false` as a HARD false. Removing consent stays a separate user
->   action in Microsoft My Apps or Entra. **GOVN-03 inherits this limitation and must state it.**
+>   action the user takes at `account.microsoft.com/privacy/app-access` (personal) or
+>   `myapps.microsoft.com` (work/school) — **two different portals; naming only one misdirects half
+>   the users.** **GOVN-03 inherits this limitation and must state it.**
 > - The table keeps its 17-05 name `microsoftCalendarTokens` though it now holds the union grant —
 >   the `gmailTokens` precedent: renaming a Convex table is a migration for cosmetic gain.
 >
@@ -3980,18 +4346,62 @@ only job is to make 17-06 … 17-09 additive.
 8. **`calendarEvents`' composite index is TENANT-FIRST** (`by_tenant_provider_external`). Two
    tenants can legitimately hold the same provider event id, and a Convex index query must eq its
    prefix in order — so the tenant predicate is unwritable-to-forget, not merely conventional.
-9. **Failure reaches the user as a CODE, never provider prose.** `CALENDAR_FAILURE_CODES` has seven
+9. **Failure reaches the user as a CODE, never provider prose.** `CALENDAR_FAILURE_CODES` has eight
    members. A Google 400 or a Graph 412 body can echo the event summary straight back (§4).
+10. **Microsoft management is UPDATE-only, and the missing verb is NAMED** (ADR-023). Google keeps
+    create · update · delete; Microsoft gets create · update · —. A Microsoft cancel produces
+    `provider_unsupported` before any token, GET or write: never a no-op, never a best-effort
+    delete, never a fallback that leaves the event live. ACTN-02 closes as *"management, minus
+    Microsoft delete"*, in those words, wherever it is ticked.
+11. **`provider_unsupported` is NOT `provider_error`.** The catch-all means "the provider said no
+    this time" and a card may offer a retry; this one means "we will never send this request".
+    Rendering them the same way promises the user a retry that cannot exist.
+12. **Microsoft UPDATE is reachable only behind a probe bound to THIS deployment and THIS account.**
+    `PHASE17_GRAPH_PROBE` unset is the normal, safe state; setting it enables nothing by itself,
+    because the deployment and tenant hashes inside must match the ones recomputed at call time.
 
 ### The inert seam, and who replaces it
 
 | Seam | State today | Owner |
 |---|---|---|
-| `EXTERNAL_TARGETS.calendar_manage` (`cockpit.ts`) | throws `calendar manage not wired (17-08)` | **17-08** replaces this exact member with the real `retrier.run` thunk + terminal |
+| `EXTERNAL_TARGETS.calendar_manage` (`cockpit.ts`) | the REAL `retrier.run(internal.calendar.manageEvent)` thunk + `onManageComplete` | **DONE** (17-08 Task 3) |
 | `microsoftCalendarTokens` | table exists, nothing writes it | **17-06** (OAuth flow) |
-| `calendarEvents` | table exists, nothing writes it | **17-08** (create landing + legacy migration) |
-| `listManagedCalendarEvents` / `proposeCalendarChange` trace literals + VERBs | reserved, no tool emits them | **17-09** (the tools) |
-| `calendar-manage-plan-card` | renders provider, operation, managed-event REFERENCE and desired fields | **17-09-03** (registry-backed original event) |
+| `calendarEvents` | written by BOTH terminals, read by `manageEvent`, listed by `listManageable`; `stageChange` refreshes it atomically with the proposal | **DONE** (17-09) |
+| `internal.calendar.manageEvent` | started ONLY by a human Approve on a `calendar_manage` plan | **DONE** (17-08 Task 3) |
+| `listManagedCalendarEvents` / `proposeCalendarChange` trace literals + VERBs | local executable tools; trace rows render code-owned verbs | **DONE** (17-09) |
+| `calendar-manage-plan-card` | renders provider, operation, refreshed original event and only changed desired fields | **DONE** (17-09 Task 3) |
+
+### Discovery and staging order (17-09)
+
+`listManagedCalendarEvents` is a read of `calendarEvents`, never a provider search and never a lazy
+migration. It scans at most 100 active tenant rows, applies the shared `manageability()` gate, sorts
+by start descending, and returns at most **20** rows. Each row carries the stable Convex
+`managedEventId` plus provider/title/start/duration/tz. Omitted unsafe rows are counts only;
+truncation is explicit. Deleted, foreign, attendee-bearing and etag-less rows never cross into the
+model turn. Title/time are content-plane values already visible on the plan card and never enter
+audit, trace, notification or telemetry payloads.
+
+`proposeCalendarChange` accepts that opaque ref and the closed `update | delete` operation. It does
+not accept a provider event id, etag, epoch, timezone or cancellation comment. The order is:
+
+1. refuse delete content, empty updates, and ambiguous/past/unsupported natural-language time;
+2. tenant-check the registry ref and recover provider + external id server-side;
+3. run the provider-neutral **inspect-only** action;
+4. refuse missing, reconnect-needed, attendee-bearing or etag-less snapshots with no plan proposal;
+5. run exactly one `calendarEvents.stageChange` mutation, which re-checks tenant/active/plan state,
+   refuses if another in-app stage changed the stored etag during inspection, refreshes the registry
+   snapshot and writes `kind: calendar_manage`, `status: proposed`, fresh `calendarExpectedEtag`,
+   operation/ref and actual desired overrides atomically.
+
+There is no call after step 5. In particular the tool slice names no create/manage provider writer,
+retrial terminal or `executePlan`. Provider-side changes after staging remain protected by the
+existing approval-time `If-Match`; the fresh etag is the version the human sees and approves.
+
+The card reads the refreshed registry through tenant-scoped `calendarEvents.forCard`. Update shows a
+CURRENT EVENT block and a PROPOSED CHANGES block containing only changed fields. Delete has no
+proposed-content block, uses the established destructive button treatment, and says the event
+remains until Approve without promising attendee notifications. `calendarFailureCode` renders
+static conflict/attendee/reconnect/unsupported copy and an explicit restage or reconnect path.
 
 A throw inside `executePlan` aborts the whole Convex mutation, so the `status: "approved"` patch
 that runs before the target thunk rolls back with it. That rollback — not statement ordering — is
@@ -4020,3 +4430,36 @@ result at all (66.2s / 71.8s / 55.3s). It gives the run a hard wall clock, kills
 exit 0, `numTotalTests > 0` and `numPassedTests === numTotalTests`. **A timeout is diagnosed, never
 converted into a pass.** At HEAD on 2026-08-11 the file passes 39/39 in 9.6–14.5s cold and warm, so
 those verifier timeouts are recorded as environmental, not as a Calendar defect.
+
+---
+
+## Phase 23 — the cockpit can draft a skill update (23-03, SKILL-02)
+
+> Landed 2026-08-18. Backend + trace only. No browser observation yet.
+
+One new Executive-only tool, `authorSkillCandidate`. Full mechanism in `agent-runtime.md` §Phase 23;
+what belongs here is the **cockpit-surface** contract.
+
+**The v1 rule is EXPLICIT INTENT ONLY.** The tool description says to use it only when the user has
+asked to change how the agent works — never on the agent's own initiative and never as a side effect
+of another request. **That is guidance in a prompt, not a guarantee**, and this playbook says so
+rather than implying otherwise. The guarantee is narrower and harder: whatever the model drafts is a
+`candidate` that no code path in the cockpit can activate.
+
+**The activity trace gained one verb**, and its wording is load-bearing:
+
+```
+authorSkillCandidate: ["Drafting a skill update…", "Skill update ready for review"]
+```
+
+It must never read *"Learned"*, *"Updated how I work"*, or anything implying the change took effect.
+Activation requires a passing eval AND the owner's own click; BRAND §1 forbids claiming an action
+that did not happen, and the whole point of Phase 23 is that the agent's self-modification is
+visibly pending rather than silently applied. The tool's own return text tells the model the same
+thing, so the reply the user reads should say it is waiting for review.
+
+**No cockpit skill body was changed.** `cockpit-agent`'s registry row is untouched by 23-03 — the
+tool description carries the usage guidance, and the hard boundary stays in code.
+
+**Not yet observed:** that a real model picks this tool only on an explicit request, and what the
+user actually sees in the workspace trace when it does. Plan 23-06's browser gate owns both.

@@ -24,6 +24,7 @@ import {
   internalQuery,
   type QueryCtx,
 } from "./_generated/server";
+import type { InspectOutcome } from "./calendar";
 import { DAILY_BUDGET_CENTS, rateLimiter } from "./guardrails";
 import { workflow } from "./index";
 import { contentHash } from "./lib/hash";
@@ -720,6 +721,39 @@ export const mediaDispatchCountForThread = internalQuery({
 });
 
 /**
+ * The harness's `imageProposalCount` read — how many times the agent called `proposeImage` on this
+ * thread. The SIBLING of `mediaDispatchCountForThread`, and it exists because the golden set could
+ * not express the difference between a still image and a reel at all.
+ *
+ * `proposeImage` shipped wired into the executive's tools with a whole reservation path behind it
+ * (`stageImagePlan` → `mediaMode:"image"` → `generateImage`), and the registry body never named it —
+ * so every ad and every image request became a storyboard. The eval set could not CATCH that: with
+ * no key for this tool, an image ask routed to `dispatchMedia` looked like a pass, and the 40
+ * fixtures were all green while the image door was unreachable. **A tool with no assertion key is a
+ * tool the golden set certifies nothing about.**
+ *
+ * NOT read from the plan row, for `mediaDispatchCountForThread`'s structural reason: `plans.by_thread`
+ * is `.unique()` and `stageImagePlan` RECYCLES that row, so plan state can say "an image plan
+ * exists" and can never say the tool was called twice. `agentSteps` writes a row per call.
+ *
+ * No `dispatch:` discriminator, unlike its sibling, and the asymmetry is real rather than an
+ * oversight: `proposeImage` is not a specialist route — it has no `stepTool` in `SPECIALISTS`, so
+ * `dispatch.ts` never writes this tool name and only the cockpit loop does. Adding the filter would
+ * be cargo-culted from a function whose second writer this one does not have.
+ */
+export const imageProposalCountForThread = internalQuery({
+  args: { tenantId: v.string(), threadId: v.string() },
+  handler: async (ctx, { tenantId, threadId }): Promise<number> =>
+    await ctx.db
+      .query("agentSteps")
+      .withIndex("by_tenant_tool_startedAt", (q) =>
+        q.eq("tenantId", tenantId).eq("tool", "proposeImage"),
+      )
+      .collect()
+      .then((rows) => rows.filter((r) => r.threadId === threadId).length),
+});
+
+/**
  * 20.1-02 (VALT-15): the eval harness's `driveReadToolCount` read — how many times the agent
  * called EITHER Drive read tool (`findInDrive`, `listDriveFolders`) on this thread.
  *
@@ -1227,5 +1261,284 @@ export const assertSubmitRateLimited = internalMutation({
       await rateLimiter.reset(ctx, "submitRequest", { key });
     }
     return { ok: true };
+  },
+});
+
+// ── 17-08 Task 3: the calendar-lifecycle READBACK ──────────────────────────────────────────────
+//
+// A live probe for the 17-11 owner gate. It answers "did the approved management act actually land,
+// exactly once, with the right audit shape and no leak?" from FOUR independent planes — the plan
+// row, the registry row, the provider, and the audit log — instead of from one of them vouching for
+// the others.
+//
+// EVERYTHING IT RETURNS IS A REF, A CODE, A COUNT, A KEY NAME, A HASH OR A BOOLEAN. No title, no
+// time, no body, no attendee identity, no raw provider response, no token, no scope string, no
+// notification prose, and no audit payload VALUES. Etags are returned deliberately: a version
+// marker is the fact the whole concurrency story turns on, and it is not content.
+//
+//   npx convex run smoke:calendarLifecycleReadback '{"tenantId":"…","provider":"google",
+//     "planId":"…","managedEventId":"…","correlationId":"…"}'
+
+/** Hard cap on the audit rows one readback may read. A correlation should carry a handful; a probe
+ *  that scanned an unbounded set would be a different kind of function. */
+const READBACK_AUDIT_CAP = 50;
+
+/** Drop absent/blank entries. A zero-length secret would make `includes` match everything. */
+const nonEmpty = (xs: (string | undefined)[]): string[] =>
+  xs.filter((s): s is string => typeof s === "string" && s.length > 0);
+
+/**
+ * The facts shape, NAMED and annotated on both sides.
+ *
+ * `calendarLifecycleReadback` calls `internal.smoke.calendarLifecycleFacts` — a reference from
+ * smoke.ts into smoke.ts's own generated api type. Without an explicit annotation TS must infer the
+ * module's exports in order to type a call made while inferring them, gives up, and silently
+ * degrades inference to `any` ACROSS THE PACKAGE (measured: 40+ unrelated TS7006s in files this
+ * change never touched). Two annotations cost less than one afternoon of that.
+ */
+type CalendarLifecycleFacts = {
+  plan: {
+    status: string;
+    kind: string | null;
+    cancelKind: string | null;
+    failureCode: string | null;
+    operation: string | null;
+    provider: string | null;
+    approvedEtag: string | null;
+    calendarRunId: string | null;
+    managedEventRef: Id<"calendarEvents"> | null;
+  } | null;
+  row: {
+    provider: "google" | "microsoft";
+    externalEventId: string;
+    etag: string | null;
+    status: "active" | "deleted";
+    attendeeFree: boolean;
+  } | null;
+  auditShapes: { eventType: string; keys: string[]; count: number }[];
+  auditRowCount: number;
+  auditCapped: boolean;
+  forbiddenContent: string[];
+  forbiddenTokens: string[];
+};
+
+/**
+ * The DB half, bounded to exactly the rows named in the args.
+ *
+ * `forbidden` is the load-bearing oddity: it carries the exact content and credential strings this
+ * tenant holds, so the action can PROVE their absence from the assembled payload by substring
+ * search. It never appears in the readback's return value — a probe that hardcoded
+ * `contentLeak: false` would assert the very thing it exists to measure.
+ */
+export const calendarLifecycleFacts = internalQuery({
+  args: {
+    tenantId: v.string(),
+    planId: v.id("plans"),
+    managedEventId: v.id("calendarEvents"),
+    correlationId: v.string(),
+  },
+  handler: async (
+    ctx,
+    { tenantId, planId, managedEventId, correlationId },
+  ): Promise<CalendarLifecycleFacts> => {
+    const planRow = await ctx.db.get(planId);
+    const plan = planRow && planRow.tenantId === tenantId ? planRow : null;
+    const rowDoc = await ctx.db.get(managedEventId);
+    const row = rowDoc && rowDoc.tenantId === tenantId ? rowDoc : null;
+
+    const auditRows = await ctx.db
+      .query("audit")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId))
+      .take(READBACK_AUDIT_CAP + 1);
+    const capped = auditRows.length > READBACK_AUDIT_CAP;
+
+    // eventType + the sorted KEY SET of the payload. Never a value.
+    const shapes = new Map<string, { eventType: string; keys: string[]; count: number }>();
+    for (const r of auditRows.slice(0, READBACK_AUDIT_CAP)) {
+      if (r.tenantId !== tenantId) continue;
+      const keys = Object.keys((r.payload ?? {}) as Record<string, unknown>).sort();
+      const mapKey = `${r.eventType}|${keys.join(",")}`;
+      const seen = shapes.get(mapKey);
+      if (seen) seen.count++;
+      else shapes.set(mapKey, { eventType: r.eventType, keys, count: 1 });
+    }
+
+    const google = await ctx.db
+      .query("gmailTokens")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .unique();
+    const microsoft = await ctx.db
+      .query("microsoftCalendarTokens")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .unique();
+
+    return {
+      plan: plan && {
+        status: plan.status,
+        kind: plan.kind ?? null,
+        cancelKind: plan.cancelKind ?? null,
+        failureCode: plan.calendarFailureCode ?? null,
+        operation: plan.calendarOperation ?? null,
+        provider: plan.calendarProvider ?? null,
+        approvedEtag: plan.calendarExpectedEtag ?? null,
+        calendarRunId: plan.calendarRunId ?? null,
+        managedEventRef: plan.calendarManagedEventId ?? null,
+      },
+      row: row && {
+        provider: row.provider,
+        externalEventId: row.externalEventId,
+        etag: row.etag ?? null,
+        status: row.status,
+        attendeeFree: row.attendeeFree,
+      },
+      auditShapes: [...shapes.values()],
+      auditRowCount: Math.min(auditRows.length, READBACK_AUDIT_CAP),
+      auditCapped: capped,
+      // Kept as TWO arrays, not one sliced by index: `.filter` collapses the absent entries, so a
+      // tenant with no staged title would silently shift a token into the "content" half.
+      forbiddenContent: nonEmpty([plan?.eventTitle, row?.title]),
+      forbiddenTokens: nonEmpty([
+        google?.accessToken,
+        google?.refreshToken,
+        google?.scope,
+        microsoft?.accessToken,
+        microsoft?.refreshToken,
+        microsoft?.scope,
+      ]),
+    };
+  },
+});
+
+/**
+ * The readback's exact shape, NAMED so the handler can be annotated.
+ *
+ * `calendarLifecycleReadback` calls `internal.smoke.calendarLifecycleFacts` — a reference from
+ * smoke.ts into smoke.ts's own generated api type. Without an explicit return type on the HANDLER
+ * this module's api type becomes self-referential and TS silently degrades inference to `any`
+ * across the whole package (measured while writing this: 40+ TS7006s in files the change never
+ * touched). `runFailingPipeline` above carries the same annotation for the same reason — Convex
+ * guidelines §96. Annotating the RESULT LOCAL is not enough; the return type is what breaks it.
+ */
+type CalendarLifecycleReadback = {
+  schema: string;
+  deploymentUrlHash: string;
+  tenantIdHash: string;
+  providerArg: "google" | "microsoft";
+  providerOnRow: string | null;
+  providerMatches: boolean;
+  planId: Id<"plans">;
+  managedEventId: Id<"calendarEvents">;
+  correlationId: string;
+  calendarRunId: string | null;
+  externalEventId: string | null;
+  managedEventRefOnPlan: Id<"calendarEvents"> | null;
+  planKind: string | null;
+  planStatus: string | null;
+  planCancelKind: string | null;
+  planFailureCode: string | null;
+  planOperation: string | null;
+  approvedEtag: string | null;
+  registryEtag: string | null;
+  providerEtag: string | null;
+  registryStatus: string | null;
+  registryAttendeeFree: boolean | null;
+  providerOutcome: string;
+  providerExists: boolean | null;
+  providerAttendeeCount: number | null;
+  audit: { eventType: string; keys: string[]; count: number }[];
+  auditRowCount: number;
+  auditCapped: boolean;
+  duplicateEventTypes: string[];
+  contentLeak: boolean;
+  tokenLeak: boolean;
+  contentChecked: number;
+  tokensChecked: number;
+};
+
+export const calendarLifecycleReadback = internalAction({
+  args: {
+    tenantId: v.string(),
+    provider: v.union(v.literal("google"), v.literal("microsoft")),
+    planId: v.id("plans"),
+    managedEventId: v.id("calendarEvents"),
+    correlationId: v.string(),
+  },
+  handler: async (ctx, a): Promise<CalendarLifecycleReadback> => {
+    const facts: CalendarLifecycleFacts = await ctx.runQuery(
+      internal.smoke.calendarLifecycleFacts,
+      {
+        tenantId: a.tenantId,
+        planId: a.planId,
+        managedEventId: a.managedEventId,
+        correlationId: a.correlationId,
+      },
+    );
+
+    // The REGISTRY's provider drives the inspection, never the operator's argument. A mismatch is
+    // reported rather than resolved: sending a Graph-shaped read at a Google event because someone
+    // typed the wrong flag is exactly the class of error this probe exists to catch.
+    const providerMatches = facts.row?.provider === a.provider;
+    const inspected: InspectOutcome | null = facts.row
+      ? await ctx.runAction(internal.calendar.inspectEvent, {
+          tenantId: a.tenantId,
+          provider: facts.row.provider,
+          externalEventId: facts.row.externalEventId,
+        })
+      : null;
+    const view =
+      inspected?.outcome === "ok" && inspected.inspection.exists ? inspected.inspection : null;
+
+    const payload = {
+      schema: "phase17-calendar-lifecycle-readback.v1",
+      deploymentUrlHash: await contentHash(
+        process.env.CONVEX_SITE_URL ?? process.env.CONVEX_CLOUD_URL ?? "unknown",
+      ),
+      tenantIdHash: await contentHash(a.tenantId),
+      providerArg: a.provider,
+      providerOnRow: facts.row?.provider ?? null,
+      providerMatches,
+      // Refs, exactly as stored.
+      planId: a.planId,
+      managedEventId: a.managedEventId,
+      correlationId: a.correlationId,
+      calendarRunId: facts.plan?.calendarRunId ?? null,
+      externalEventId: facts.row?.externalEventId ?? null,
+      managedEventRefOnPlan: facts.plan?.managedEventRef ?? null,
+      // Plan-plane codes.
+      planKind: facts.plan?.kind ?? null,
+      planStatus: facts.plan?.status ?? null,
+      planCancelKind: facts.plan?.cancelKind ?? null,
+      planFailureCode: facts.plan?.failureCode ?? null,
+      planOperation: facts.plan?.operation ?? null,
+      // PRE and POST versions: what the human approved against, what the registry now holds, and
+      // what the provider actually reports. Three planes, three answers, compared by the reader.
+      approvedEtag: facts.plan?.approvedEtag ?? null,
+      registryEtag: facts.row?.etag ?? null,
+      providerEtag: view?.etag ?? null,
+      registryStatus: facts.row?.status ?? null,
+      registryAttendeeFree: facts.row?.attendeeFree ?? null,
+      providerOutcome: inspected?.outcome ?? "not_inspected",
+      providerExists: inspected?.outcome === "ok" ? inspected.inspection.exists : null,
+      providerAttendeeCount: view?.attendeeCount ?? null,
+      // Exact audit event names and payload KEY SETS with counts. A count above one on a success
+      // event is the exactly-once claim failing.
+      audit: facts.auditShapes,
+      auditRowCount: facts.auditRowCount,
+      auditCapped: facts.auditCapped,
+      duplicateEventTypes: facts.auditShapes.filter((s) => s.count > 1).map((s) => s.eventType),
+    };
+
+    // MEASURED, not asserted. The forbidden strings are the tenant's real titles and real
+    // credentials; if any one of them appears anywhere in the assembled payload, this says so.
+    const wire = JSON.stringify(payload);
+    return {
+      ...payload,
+      contentLeak: facts.forbiddenContent.some((s) => wire.includes(s)),
+      tokenLeak: facts.forbiddenTokens.some((s) => wire.includes(s)),
+      // How many strings the check actually had to look for. ZERO means the check was VACUOUS —
+      // there was no title and no stored grant to find, so `contentLeak: false` proved nothing.
+      contentChecked: facts.forbiddenContent.length,
+      tokensChecked: facts.forbiddenTokens.length,
+    };
   },
 });

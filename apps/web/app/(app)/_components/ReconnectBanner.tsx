@@ -22,6 +22,41 @@ function readSeen(): Set<string> {
   }
 }
 
+/**
+ * WHICH PROVIDER LINES TO SHOW. Exported and pure so it can be tested against real inputs — the
+ * component itself renders nothing until its seen-set loads after mount, so a render test would
+ * assert on an empty string and prove nothing.
+ *
+ * 17-06 (ADR-018) generalized the NOTIFICATION half by provider. The HOLD half stayed hardcoded
+ * Google, correctly at the time: `awaiting_reauth` could only ever be set by `gmail.send`.
+ * **25-05 ended that.** `graph.send` sets it too, so a hold no longer implies Google — it implies
+ * whichever mailbox the ROW was routed to. Getting this wrong sends a user to the wrong consent
+ * screen while the real problem stands.
+ *
+ * `mailProvider` absent ⇒ google, the same legacy default `delivery.send` applies.
+ *
+ * A HOLD outranks a notification for the same provider: a stuck message is a concrete thing the
+ * user is waiting on; an expiry warning is not yet. The two carry different copy because they are
+ * different facts — Microsoft's notification is raised by the CALENDAR cron, and reusing it for a
+ * mail hold would describe the wrong subsystem.
+ */
+export function reconnectLines(
+  holds: readonly { mailProvider?: "google" | "microsoft" }[],
+  unread: readonly { kind: string }[],
+): { provider: ReconnectProvider; message: string }[] {
+  const lines: { provider: ReconnectProvider; message: string }[] = [];
+  for (const provider of ["google", "microsoft"] as const) {
+    const held = holds.filter((r) => (r.mailProvider ?? "google") === provider).length;
+    const warned = unread.filter((n) => n.kind === RECONNECT[provider].kind).length;
+    if (held === 0 && warned === 0) continue;
+    lines.push({
+      provider,
+      message: held > 0 ? RECONNECT[provider].holdMessage : RECONNECT[provider].message,
+    });
+  }
+  return lines;
+}
+
 // DLVR-03 reactive loop. The banner surfaces when Gmail delivery is (or is about to be)
 // blocked, so a dead token is a visible prompt rather than a silent failure:
 //   - reactive: a request sits in `awaiting_reauth` (gmail.send hit a dead token and held
@@ -48,26 +83,7 @@ export function ReconnectBanner() {
   const unread = [...googleUnread, ...microsoftUnread];
   if (holds.length === 0 && unread.length === 0) return null;
 
-  // 17-06 (ADR-018): generalized by PROVIDER, and the two do not merge.
-  //
-  // A held request is Gmail-specific — `awaiting_reauth` is set by `gmail.send` and there is no
-  // Microsoft send path yet — so a hold always means Google. A Microsoft notification must NOT
-  // borrow that copy or that link: telling a user to "Reconnect Gmail" because their CALENDAR
-  // token is expiring sends them to the wrong consent screen and leaves the real problem standing.
-  //
-  // So the banner shows the GOOGLE line whenever there is a hold or a Google notification, and adds
-  // a separate MICROSOFT line when there is a Microsoft notification. Each carries its own href.
-  const lines: { provider: ReconnectProvider; message: string }[] = [];
-  if (holds.length > 0 || googleUnread.length > 0) {
-    lines.push({
-      provider: "google",
-      message:
-        holds.length > 0 ? RECONNECT.google.message : "Reconnect Gmail to keep delivery running",
-    });
-  }
-  if (microsoftUnread.length > 0) {
-    lines.push({ provider: "microsoft", message: RECONNECT.microsoft.message });
-  }
+  const lines = reconnectLines(holds, [...googleUnread, ...microsoftUnread]);
 
   const dismiss = () => {
     for (const n of unread) void markRead({ notificationId: n._id });

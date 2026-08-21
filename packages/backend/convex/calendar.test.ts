@@ -11,6 +11,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import { buildAuthorizeUrl } from "./gmailAuth";
+import { contentHash } from "./lib/hash";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
@@ -1277,5 +1278,1067 @@ describe("calendarEvents registry (17-05 — tenant-scoped identity, reset-proof
     expect((await t.run((ctx) => ctx.db.get(legacy)))?.etag).toBeUndefined();
     expect((await t.run((ctx) => ctx.db.get(guests)))?.attendeeFree).toBe(false);
     expect((await t.run((ctx) => ctx.db.get(gone)))?.status).toBe("deleted");
+  });
+});
+
+// ── 17-08 Task 2: manageEvent — one decision tree, two providers ───────────────────────────────
+//
+// The assertions that matter most here are about what was NOT sent: no request at all on a refusal,
+// no PATCH when the provider already holds the desired state, no `sendUpdates`, no `attendees`, and
+// — the ADR-023 pin — no Graph request of any kind for a Microsoft cancel.
+describe("calendar management (17-08) — manageEvent and its completion terminal", () => {
+  const MANAGE_TENANT = "tenant_manage";
+  const OTHER_TENANT = "tenant_manage_other";
+  const APPROVED_ETAG = 'W/"approved-v1"';
+  const MANAGE_DEPLOYMENT = "https://manage-deployment.convex.cloud";
+
+  /** The committed 17-07 measurement, re-bound to this run's deployment and tenant. The two
+   *  `staleDelete*` fields are carried verbatim so the fixture cannot drift into an optimistic one
+   *  — and they still unlock nothing, which is the point. */
+  async function manageProbeEnv(tenantId: string) {
+    return JSON.stringify({
+      schema: "phase17-graph-concurrency-probe.v1",
+      deploymentUrlHash: await contentHash(MANAGE_DEPLOYMENT),
+      accountIdHash: await contentHash(tenantId),
+      stalePatchStatus: 412,
+      stalePatchPreserved: true,
+      staleDeleteStatus: 204,
+      staleDeletePreserved: false,
+      supported: false,
+    });
+  }
+  const NEW_TITLE = "Moved offsite";
+  const NEW_START_MS = BASE_MS + 259_200_000;
+
+  async function seedManaged(
+    t: ReturnType<typeof harness>,
+    over: Partial<{
+      tenantId: string;
+      provider: "google" | "microsoft";
+      etag: string | undefined;
+      status: "active" | "deleted";
+      attendeeFree: boolean;
+      externalEventId: string;
+    }> = {},
+  ) {
+    const tenantId = over.tenantId ?? MANAGE_TENANT;
+    return t.run(async (ctx) => {
+      const sourcePlanId = await ctx.db.insert("plans", {
+        tenantId,
+        threadId: `manage_src_${crypto.randomUUID()}`,
+        kind: "calendar_event" as const,
+        status: "done" as const,
+        createdAt: BASE_MS,
+      });
+      return ctx.db.insert("calendarEvents", {
+        tenantId,
+        provider: over.provider ?? "google",
+        externalEventId: over.externalEventId ?? "managed-event-1",
+        ...("etag" in over
+          ? over.etag === undefined
+            ? {}
+            : { etag: over.etag }
+          : { etag: APPROVED_ETAG }),
+        title: SECRET_TITLE,
+        startMs: EVENT_START_MS,
+        durationMs: EVENT_DURATION_MS,
+        tz: "Africa/Dar_es_Salaam",
+        sourcePlanId,
+        attendeeFree: over.attendeeFree ?? true,
+        status: over.status ?? "active",
+        createdAt: BASE_MS,
+        updatedAt: BASE_MS,
+      });
+    });
+  }
+
+  async function seedManagePlan(
+    t: ReturnType<typeof harness>,
+    managedEventId: Awaited<ReturnType<typeof seedManaged>> | undefined,
+    over: Partial<{
+      tenantId: string;
+      status: PlanStatus;
+      kind: "calendar_manage" | "calendar_event";
+      operation: "update" | "delete" | undefined;
+      expectedEtag: string | undefined;
+      provider: "google" | "microsoft";
+      eventTitle: string;
+      eventStartMs: number;
+    }> = {},
+  ) {
+    const tenantId = over.tenantId ?? MANAGE_TENANT;
+    return t.run((ctx) =>
+      ctx.db.insert("plans", {
+        tenantId,
+        threadId: `manage_thread_${tenantId}`,
+        kind: over.kind ?? ("calendar_manage" as const),
+        status: over.status ?? ("delivering" as const),
+        ...(managedEventId ? { calendarManagedEventId: managedEventId } : {}),
+        ...("operation" in over
+          ? over.operation === undefined
+            ? {}
+            : { calendarOperation: over.operation }
+          : { calendarOperation: "update" as const }),
+        ...("expectedEtag" in over
+          ? over.expectedEtag === undefined
+            ? {}
+            : { calendarExpectedEtag: over.expectedEtag }
+          : { calendarExpectedEtag: APPROVED_ETAG }),
+        ...(over.provider ? { calendarProvider: over.provider } : {}),
+        ...(over.eventTitle === undefined ? {} : { eventTitle: over.eventTitle }),
+        ...(over.eventStartMs === undefined ? {} : { eventStartMs: over.eventStartMs }),
+        createdAt: BASE_MS,
+      }),
+    );
+  }
+
+  const run = (
+    t: ReturnType<typeof harness>,
+    planId: Awaited<ReturnType<typeof seedManagePlan>>,
+    tenantId = MANAGE_TENANT,
+  ) => t.action(internal.calendar.manageEvent, { planId, tenantId, correlationId: "manage-c" });
+
+  /** Google always refreshes first (`freshAccessToken`), so the token response leads every queue. */
+  function googleFetch(...responses: Response[]) {
+    const mock = vi.fn();
+    mock.mockResolvedValueOnce(Response.json({ access_token: "a", expires_in: 3600 }));
+    for (const r of responses) mock.mockResolvedValueOnce(r);
+    vi.stubGlobal("fetch", mock);
+    return mock;
+  }
+
+  const eventBody = (
+    over: Partial<{ etag: string; summary: string; startMs: number; attendees: unknown[] }> = {},
+  ) => ({
+    id: "managed-event-1",
+    etag: over.etag ?? APPROVED_ETAG,
+    summary: over.summary ?? SECRET_TITLE,
+    start: { dateTime: new Date(over.startMs ?? EVENT_START_MS).toISOString() },
+    end: {
+      dateTime: new Date((over.startMs ?? EVENT_START_MS) + EVENT_DURATION_MS).toISOString(),
+    },
+    ...(over.attendees ? { attendees: over.attendees } : {}),
+  });
+
+  // ── Refusals that must cost NOTHING: no token, no provider round trip ───────────────────────
+  test.each([
+    ["a plan of the wrong kind", { kind: "calendar_event" as const }, "wrong_kind"],
+    ["a plan that is no longer delivering", { status: "proposed" as const }, "not_delivering"],
+  ])("%s is terminal before any network work", async (_label, over, reason) => {
+    const t = harness();
+    await seedCalendarGrant(t, MANAGE_TENANT);
+    const managedEventId = await seedManaged(t);
+    const planId = await seedManagePlan(t, managedEventId, over);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(await run(t, planId)).toMatchObject({ outcome: "terminal", reason });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test("a plan belonging to another tenant is a tenant mismatch, not a managed event", async () => {
+    const t = harness();
+    const managedEventId = await seedManaged(t);
+    const planId = await seedManagePlan(t, managedEventId);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(await run(t, planId, OTHER_TENANT)).toMatchObject({
+      outcome: "terminal",
+      reason: "tenant_mismatch",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  // THE ISOLATION CASE. A plan in tenant A pointing at tenant B's registry row must resolve to
+  // NOTHING — the `_id` alone is a global handle, and the tenant is part of the identity.
+  test("a registry ref owned by another tenant resolves to nothing", async () => {
+    const t = harness();
+    await seedCalendarGrant(t, MANAGE_TENANT);
+    const foreignRow = await seedManaged(t, { tenantId: OTHER_TENANT });
+    const planId = await seedManagePlan(t, foreignRow);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(await run(t, planId)).toMatchObject({ outcome: "refused", code: "not_managed" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ["a deleted row", { status: "deleted" as const }, "not_found"],
+    ["a row that grew guests", { attendeeFree: false }, "attendees_present"],
+    ["a legacy row with no etag", { etag: undefined }, "needs_inspection"],
+  ])("%s is refused from STORED FACTS, before a provider round trip", async (_l, over, code) => {
+    const t = harness();
+    await seedCalendarGrant(t, MANAGE_TENANT);
+    const managedEventId = await seedManaged(t, over);
+    const planId = await seedManagePlan(t, managedEventId);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(await run(t, planId)).toMatchObject({ outcome: "refused", code });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test("an approval staged against a version the registry has moved past is a conflict", async () => {
+    const t = harness();
+    await seedCalendarGrant(t, MANAGE_TENANT);
+    const managedEventId = await seedManaged(t, { etag: 'W/"registry-v2"' });
+    const planId = await seedManagePlan(t, managedEventId, { expectedEtag: APPROVED_ETAG });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(await run(t, planId)).toMatchObject({ outcome: "refused", code: "conflict" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  // ── ADR-023: the Microsoft cancel refusal ───────────────────────────────────────────────────
+  test("a Microsoft DELETE is refused before any token, GET or write — no Graph request at all", async () => {
+    const t = harness();
+    // Both grants exist and both are irrelevant: the refusal is about the PROVIDER's semantics,
+    // never about whether a token happens to be available.
+    await seedCalendarGrant(t, MANAGE_TENANT);
+    await t.run((ctx) =>
+      ctx.db.insert("microsoftCalendarTokens", {
+        tenantId: MANAGE_TENANT,
+        refreshToken: "ms-refresh",
+        accessToken: "ms-access",
+        expiresAt: FUTURE_TOKEN_EXPIRY_MS,
+        scope: "offline_access Calendars.ReadWrite",
+        updatedAt: BASE_MS,
+      }),
+    );
+    const managedEventId = await seedManaged(t, { provider: "microsoft" });
+    const planId = await seedManagePlan(t, managedEventId, { operation: "delete" });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(await run(t, planId)).toMatchObject({
+      outcome: "refused",
+      code: "provider_unsupported",
+    });
+    // Not a no-op, not a best-effort delete, not a fallback that leaves the event live: NOTHING
+    // was sent. The event on the user's calendar is untouched and the refusal is nameable.
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test("the SAME registry row accepts an update — the refusal is per-operation, not per-provider", async () => {
+    const t = harness();
+    await t.run((ctx) =>
+      ctx.db.insert("microsoftCalendarTokens", {
+        tenantId: MANAGE_TENANT,
+        refreshToken: "ms-refresh",
+        accessToken: "ms-access",
+        expiresAt: FUTURE_TOKEN_EXPIRY_MS,
+        scope: "offline_access Calendars.ReadWrite",
+        updatedAt: BASE_MS,
+      }),
+    );
+    vi.stubEnv("CONVEX_SITE_URL", MANAGE_DEPLOYMENT);
+    vi.stubEnv("PHASE17_GRAPH_PROBE", await manageProbeEnv(MANAGE_TENANT));
+    const managedEventId = await seedManaged(t, { provider: "microsoft" });
+    const planId = await seedManagePlan(t, managedEventId, {
+      operation: "update",
+      eventTitle: NEW_TITLE,
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          id: "managed-event-1",
+          "@odata.etag": APPROVED_ETAG,
+          subject: SECRET_TITLE,
+          start: { dateTime: "2020-01-03T12:00:00.0000000", timeZone: "UTC" },
+          end: { dateTime: "2020-01-03T13:00:00.0000000", timeZone: "UTC" },
+        }),
+      )
+      .mockResolvedValueOnce(Response.json({ "@odata.etag": 'W/"graph-v2"' }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(await run(t, planId)).toMatchObject({
+      outcome: "updated",
+      provider: "microsoft",
+      etag: 'W/"graph-v2"',
+    });
+    const hosts = fetchMock.mock.calls.map((c) => new URL(String(c[0])).host);
+    expect(hosts).toEqual(["graph.microsoft.com", "graph.microsoft.com"]);
+    const methods = fetchMock.mock.calls.map((c) => (c[1] as RequestInit | undefined)?.method);
+    expect(methods).not.toContain("DELETE");
+  });
+
+  test("a Microsoft update on a deployment with no probe refuses and issues NO write", async () => {
+    const t = harness();
+    await t.run((ctx) =>
+      ctx.db.insert("microsoftCalendarTokens", {
+        tenantId: MANAGE_TENANT,
+        refreshToken: "ms-refresh",
+        accessToken: "ms-access",
+        expiresAt: FUTURE_TOKEN_EXPIRY_MS,
+        scope: "offline_access Calendars.ReadWrite",
+        updatedAt: BASE_MS,
+      }),
+    );
+    vi.stubEnv("PHASE17_GRAPH_PROBE", "");
+    const managedEventId = await seedManaged(t, { provider: "microsoft" });
+    const planId = await seedManagePlan(t, managedEventId, { eventTitle: NEW_TITLE });
+    const fetchMock = vi.fn().mockResolvedValue(
+      Response.json({
+        id: "managed-event-1",
+        "@odata.etag": APPROVED_ETAG,
+        subject: SECRET_TITLE,
+        start: { dateTime: "2020-01-03T12:00:00.0000000", timeZone: "UTC" },
+        end: { dateTime: "2020-01-03T13:00:00.0000000", timeZone: "UTC" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(await run(t, planId)).toMatchObject({
+      outcome: "refused",
+      code: "provider_unsupported",
+    });
+    const methods = fetchMock.mock.calls.map(
+      (c) => (c[1] as RequestInit | undefined)?.method ?? "GET",
+    );
+    expect(methods).not.toContain("PATCH");
+    expect(methods).not.toContain("DELETE");
+  });
+
+  // ── Google update ───────────────────────────────────────────────────────────────────────────
+  test("a real change GETs narrowly, then PATCHes with the HUMAN-APPROVED If-Match", async () => {
+    const t = harness();
+    await seedCalendarGrant(t, MANAGE_TENANT);
+    const managedEventId = await seedManaged(t);
+    const planId = await seedManagePlan(t, managedEventId, {
+      eventTitle: NEW_TITLE,
+      eventStartMs: NEW_START_MS,
+    });
+    // The provider has ALREADY moved on to a newer version. The conditional write must still carry
+    // the version the human approved — using the freshly-read one would be a read-modify-write race
+    // with the comparison moved client-side, which is exactly what ADR-023 forbids.
+    const fetchMock = googleFetch(
+      Response.json(eventBody({ etag: 'W/"provider-v9"' })),
+      Response.json({ id: "managed-event-1", etag: 'W/"provider-v10"' }),
+    );
+
+    expect(await run(t, planId)).toMatchObject({
+      outcome: "updated",
+      provider: "google",
+      etag: 'W/"provider-v10"',
+    });
+
+    const [getUrl, getInit] = fetchMock.mock.calls[1] as [string, RequestInit | undefined];
+    expect(new URL(getUrl).searchParams.get("fields")).toBe("id,etag,summary,start,end,attendees");
+    expect(getInit?.method ?? "GET").toBe("GET");
+
+    const [patchUrl, patchInit] = fetchMock.mock.calls[2] as [string, RequestInit];
+    expect(patchInit.method).toBe("PATCH");
+    expect((patchInit.headers as Record<string, string>)["If-Match"]).toBe(APPROVED_ETAG);
+    const sent = JSON.parse(patchInit.body as string);
+    expect(Object.keys(sent).sort()).toEqual(["end", "start", "summary"]);
+    expect(sent.summary).toBe(NEW_TITLE);
+    expect(sent.start).toEqual({
+      dateTime: new Date(NEW_START_MS).toISOString(),
+      timeZone: "Africa/Dar_es_Salaam",
+    });
+    // Either of these would make Google email people outside the governed send path.
+    expect(sent.attendees).toBeUndefined();
+    expect(patchUrl).not.toContain("sendUpdates");
+    expect(patchUrl).not.toContain("/cancel");
+  });
+
+  // EXACTLY-ONCE. The retrier lost the success response and redelivered; the provider already holds
+  // the desired state, so the honest answer is success — not the false conflict a blind conditional
+  // re-write would produce, because the etag moved precisely BECAUSE our earlier write landed.
+  test("a retry after a lost success reconciles instead of reporting a false conflict", async () => {
+    const t = harness();
+    await seedCalendarGrant(t, MANAGE_TENANT);
+    const managedEventId = await seedManaged(t);
+    const planId = await seedManagePlan(t, managedEventId, {
+      eventTitle: NEW_TITLE,
+      eventStartMs: NEW_START_MS,
+    });
+    const fetchMock = googleFetch(
+      Response.json(
+        eventBody({ etag: 'W/"already-v2"', summary: NEW_TITLE, startMs: NEW_START_MS }),
+      ),
+      Response.json({ id: "managed-event-1", etag: 'W/"mutation-write"' }),
+    );
+
+    expect(await run(t, planId)).toMatchObject({
+      outcome: "updated",
+      provider: "google",
+      etag: 'W/"already-v2"',
+    });
+    // Token + GET, and NOTHING else. A PATCH here would bump the version for no change.
+    expect(fetchMock.mock.calls).toHaveLength(2);
+    const methods = fetchMock.mock.calls.map((c) => (c[1] as RequestInit | undefined)?.method);
+    expect(methods).not.toContain("PATCH");
+  });
+
+  test("a 412 on the conditional PATCH is a conflict, and carries no provider prose", async () => {
+    const t = harness();
+    await seedCalendarGrant(t, MANAGE_TENANT);
+    const managedEventId = await seedManaged(t);
+    const planId = await seedManagePlan(t, managedEventId, { eventTitle: NEW_TITLE });
+    googleFetch(
+      Response.json(eventBody()),
+      Response.json({ error: { message: `conflict on ${SECRET_TITLE}` } }, { status: 412 }),
+    );
+
+    const result = await run(t, planId);
+    expect(result).toMatchObject({ outcome: "refused", code: "conflict" });
+    expect(JSON.stringify(result)).not.toContain(SECRET_TITLE);
+  });
+
+  // The registry said attendee-free at CREATE time; the event grew guests since. The refusal has to
+  // come from the LIVE read, or a stale stored boolean would authorise a write that mails people.
+  test("guests added at the provider refuse the write, even though the registry says attendee-free", async () => {
+    const t = harness();
+    await seedCalendarGrant(t, MANAGE_TENANT);
+    const managedEventId = await seedManaged(t, { attendeeFree: true });
+    const planId = await seedManagePlan(t, managedEventId, { eventTitle: NEW_TITLE });
+    const fetchMock = googleFetch(
+      Response.json(
+        eventBody({ attendees: [{ email: "guest@example.test", responseStatus: "accepted" }] }),
+      ),
+      Response.json({ id: "managed-event-1", etag: 'W/"mutation-write"' }),
+    );
+
+    const result = await run(t, planId);
+    expect(result).toMatchObject({ outcome: "refused", code: "attendees_present" });
+    expect(fetchMock.mock.calls).toHaveLength(2); // token + GET; no write was attempted
+    expect(JSON.stringify(result)).not.toContain("guest@example.test");
+  });
+
+  test("an event that vanished cannot be updated", async () => {
+    const t = harness();
+    await seedCalendarGrant(t, MANAGE_TENANT);
+    const managedEventId = await seedManaged(t);
+    const planId = await seedManagePlan(t, managedEventId, { eventTitle: NEW_TITLE });
+    googleFetch(new Response("", { status: 404 }));
+    expect(await run(t, planId)).toMatchObject({ outcome: "refused", code: "not_found" });
+  });
+
+  // ── Google delete ───────────────────────────────────────────────────────────────────────────
+  test("a delete sends a conditional DELETE with no body and no notification option", async () => {
+    const t = harness();
+    await seedCalendarGrant(t, MANAGE_TENANT);
+    const managedEventId = await seedManaged(t);
+    const planId = await seedManagePlan(t, managedEventId, { operation: "delete" });
+    // A 204 must be constructed with a NULL body — Google's real delete response has none.
+    const fetchMock = googleFetch(Response.json(eventBody()), new Response(null, { status: 204 }));
+
+    expect(await run(t, planId)).toMatchObject({
+      outcome: "deleted",
+      provider: "google",
+      managedEventId,
+    });
+    const [url, init] = fetchMock.mock.calls[2] as [string, RequestInit];
+    expect(init.method).toBe("DELETE");
+    expect((init.headers as Record<string, string>)["If-Match"]).toBe(APPROVED_ETAG);
+    expect(init.body).toBeUndefined();
+    expect(url).not.toContain("sendUpdates");
+    // Google's `sendUpdates` and Graph's `/cancel` both EMAIL attendees on the app's behalf.
+    expect(url).not.toContain("/cancel");
+  });
+
+  test("an event already gone is an idempotent delete success, with no DELETE issued", async () => {
+    const t = harness();
+    await seedCalendarGrant(t, MANAGE_TENANT);
+    const managedEventId = await seedManaged(t);
+    const planId = await seedManagePlan(t, managedEventId, { operation: "delete" });
+    const fetchMock = googleFetch(new Response("", { status: 404 }));
+
+    expect(await run(t, planId)).toMatchObject({ outcome: "deleted", provider: "google" });
+    expect(fetchMock.mock.calls).toHaveLength(2);
+    const methods = fetchMock.mock.calls.map((c) => (c[1] as RequestInit | undefined)?.method);
+    expect(methods).not.toContain("DELETE");
+  });
+
+  // THE RACE, not the replay: the event still existed at the GET and was gone by the DELETE —
+  // someone cancelled it in the Calendar UI, or a second run of this same plan won. Already-gone is
+  // still the desired end state, so this is success. Reported as a failure it would send the user
+  // to fix something that is already exactly as they asked.
+  test("an event that disappears BETWEEN the GET and the DELETE is still an idempotent success", async () => {
+    const t = harness();
+    await seedCalendarGrant(t, MANAGE_TENANT);
+    const managedEventId = await seedManaged(t);
+    const planId = await seedManagePlan(t, managedEventId, { operation: "delete" });
+    const fetchMock = googleFetch(Response.json(eventBody()), new Response(null, { status: 404 }));
+
+    expect(await run(t, planId)).toMatchObject({ outcome: "deleted", provider: "google" });
+    // The DELETE really was attempted — this is the race, not the pre-flight short-circuit.
+    expect(fetchMock.mock.calls).toHaveLength(3);
+    const [, deleteInit] = fetchMock.mock.calls[2] as [string, RequestInit];
+    expect(deleteInit.method).toBe("DELETE");
+  });
+
+  // The mirror case for update, and the answer is the OPPOSITE: there is nothing left to move, so
+  // an update must not claim success over an event that no longer exists.
+  test("an event that disappears BETWEEN the GET and the PATCH is not_found, not a success", async () => {
+    const t = harness();
+    await seedCalendarGrant(t, MANAGE_TENANT);
+    const managedEventId = await seedManaged(t);
+    const planId = await seedManagePlan(t, managedEventId, { eventTitle: NEW_TITLE });
+    const fetchMock = googleFetch(Response.json(eventBody()), new Response(null, { status: 404 }));
+
+    expect(await run(t, planId)).toMatchObject({ outcome: "refused", code: "not_found" });
+    const [, patchInit] = fetchMock.mock.calls[2] as [string, RequestInit];
+    expect(patchInit.method).toBe("PATCH");
+  });
+
+  test("a 412 on the conditional DELETE refuses rather than forcing", async () => {
+    const t = harness();
+    await seedCalendarGrant(t, MANAGE_TENANT);
+    const managedEventId = await seedManaged(t);
+    const planId = await seedManagePlan(t, managedEventId, { operation: "delete" });
+    googleFetch(Response.json(eventBody()), new Response("", { status: 412 }));
+    expect(await run(t, planId)).toMatchObject({ outcome: "refused", code: "conflict" });
+  });
+
+  // ── Transport ───────────────────────────────────────────────────────────────────────────────
+  test.each([429, 500, 503])("a %i THROWS so the retrier owns it", async (status) => {
+    const t = harness();
+    await seedCalendarGrant(t, MANAGE_TENANT);
+    const managedEventId = await seedManaged(t);
+    const planId = await seedManagePlan(t, managedEventId, { eventTitle: NEW_TITLE });
+    googleFetch(Response.json({ error: { message: SECRET_TITLE } }, { status }));
+    await expect(run(t, planId)).rejects.toThrow(/calendar_manage_transient/);
+  });
+
+  test("a 401 anywhere in the flow is a reconnect, not a terminal failure", async () => {
+    const t = harness();
+    await seedCalendarGrant(t, MANAGE_TENANT);
+    const managedEventId = await seedManaged(t);
+    const planId = await seedManagePlan(t, managedEventId, { eventTitle: NEW_TITLE });
+    googleFetch(new Response("", { status: 401 }));
+    expect(await run(t, planId)).toMatchObject({ outcome: "reauth", provider: "google" });
+  });
+
+  test("a Google grant without the Calendar scope reauths before the network", async () => {
+    const t = harness();
+    await t.run((ctx) =>
+      ctx.db.insert("gmailTokens", {
+        tenantId: MANAGE_TENANT,
+        refreshToken: "r",
+        accessToken: "a",
+        expiresAt: FUTURE_TOKEN_EXPIRY_MS,
+        scope: GMAIL_MODIFY_SCOPE, // Mail only — a refresh would succeed and the write would 403.
+        updatedAt: BASE_MS,
+      }),
+    );
+    const managedEventId = await seedManaged(t);
+    const planId = await seedManagePlan(t, managedEventId, { eventTitle: NEW_TITLE });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(await run(t, planId)).toMatchObject({ outcome: "reauth", provider: "google" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  // §4: the result crosses the retrier boundary and is stored in its run record. The event TITLE is
+  // content and must never be in it — the terminal recomputes desired state from the plan instead.
+  test("no successful result carries the event title", async () => {
+    const t = harness();
+    await seedCalendarGrant(t, MANAGE_TENANT);
+    const managedEventId = await seedManaged(t);
+    const planId = await seedManagePlan(t, managedEventId, { eventTitle: NEW_TITLE });
+    googleFetch(
+      Response.json(eventBody()),
+      Response.json({ id: "managed-event-1", etag: 'W/"v2"' }),
+    );
+
+    const wire = JSON.stringify(await run(t, planId));
+    expect(wire).not.toContain(SECRET_TITLE);
+    expect(wire).not.toContain(NEW_TITLE);
+  });
+
+  // ── 17-08 Task 3: onManageComplete — the SINGLE writer of the management outcome ─────────────
+  //
+  // The terminal never reads content out of the retrier result. Every durable fact it writes comes
+  // from the PLAN's own staged fields (the create terminal's rule verbatim), so a result forged or
+  // replayed from a previous deploy cannot put a title on a registry row.
+  describe("onManageComplete", () => {
+    const manageReturn = (
+      planId: Awaited<ReturnType<typeof seedManagePlan>>,
+      managedEventId: Awaited<ReturnType<typeof seedManaged>>,
+      over: Record<string, unknown> = {},
+    ) => ({
+      planId,
+      tenantId: MANAGE_TENANT,
+      correlationId: "manage-c",
+      outcome: "updated",
+      managedEventId,
+      provider: "google",
+      etag: 'W/"provider-v2"',
+      ...over,
+    });
+
+    const complete = (t: ReturnType<typeof harness>, runId: string, returnValue: unknown) =>
+      t.mutation(internal.calendarComplete.onManageComplete, {
+        runId: runId as RunId,
+        result: { type: "success", returnValue },
+      });
+
+    const auditRows = (t: ReturnType<typeof harness>) =>
+      t.run((ctx) => ctx.db.query("audit").collect());
+    const notifications = (t: ReturnType<typeof harness>) =>
+      t.run((ctx) => ctx.db.query("notifications").collect());
+
+    test("an update success writes the registry FIRST, then finishes the plan", async () => {
+      const t = harness();
+      const managedEventId = await seedManaged(t);
+      const planId = await seedManagePlan(t, managedEventId, {
+        eventTitle: NEW_TITLE,
+        eventStartMs: NEW_START_MS,
+      });
+
+      await complete(t, "manage-run-updated", manageReturn(planId, managedEventId));
+
+      const row = await t.run((ctx) => ctx.db.get(managedEventId));
+      // The new version AND the state we actually sent — recomputed from the plan, never echoed
+      // out of the provider result.
+      expect(row).toMatchObject({
+        etag: 'W/"provider-v2"',
+        title: NEW_TITLE,
+        startMs: NEW_START_MS,
+        status: "active",
+      });
+      // An absent staged field means "leave it alone", so the duration is still the registry's.
+      expect(row?.durationMs).toBe(EVENT_DURATION_MS);
+      expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("done");
+
+      const updated = (await auditRows(t)).filter((r) => r.eventType === "calendar.event.updated");
+      expect(updated).toHaveLength(1);
+      expect(Object.keys(updated[0]?.payload as Record<string, unknown>).sort()).toEqual([
+        "managedEventId",
+        "operation",
+        "planId",
+        "provider",
+      ]);
+      expect(updated[0]?.payload).toEqual({
+        planId,
+        managedEventId,
+        provider: "google",
+        operation: "update",
+      });
+      // §4: not the title, not the etag, not a provider body.
+      expect(JSON.stringify(await auditRows(t))).not.toContain(NEW_TITLE);
+      expect(JSON.stringify(await auditRows(t))).not.toContain("provider-v2");
+      expect(await t.run((ctx) => ctx.db.query("deadLetters").collect())).toEqual([]);
+    });
+
+    test("a Google delete success marks the registry deleted and finishes the plan", async () => {
+      const t = harness();
+      const managedEventId = await seedManaged(t);
+      const planId = await seedManagePlan(t, managedEventId, { operation: "delete" });
+
+      await complete(
+        t,
+        "manage-run-deleted",
+        manageReturn(planId, managedEventId, { outcome: "deleted", etag: undefined }),
+      );
+
+      const row = await t.run((ctx) => ctx.db.get(managedEventId));
+      // MARKED, never removed: "Pikar put this on a calendar and later took it off" is the point.
+      expect(row?.status).toBe("deleted");
+      expect(row?.title).toBe(SECRET_TITLE);
+      expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("done");
+
+      const deleted = (await auditRows(t)).filter((r) => r.eventType === "calendar.event.deleted");
+      expect(deleted).toHaveLength(1);
+      expect(deleted[0]?.payload).toEqual({
+        planId,
+        managedEventId,
+        provider: "google",
+        operation: "delete",
+      });
+    });
+
+    // ADR-023, at the terminal. The refusal must be VISIBLE and must change nothing.
+    test("a Microsoft delete refusal is terminal, named, and touches neither row nor event", async () => {
+      const t = harness();
+      const managedEventId = await seedManaged(t, { provider: "microsoft" });
+      const before = await t.run((ctx) => ctx.db.get(managedEventId));
+      const planId = await seedManagePlan(t, managedEventId, { operation: "delete" });
+
+      await complete(
+        t,
+        "manage-run-refused",
+        manageReturn(planId, managedEventId, {
+          outcome: "refused",
+          code: "provider_unsupported",
+          etag: undefined,
+          provider: undefined,
+        }),
+      );
+
+      const plan = await t.run((ctx) => ctx.db.get(planId));
+      expect(plan?.status).toBe("canceled");
+      // NOT `discarded` — the user did not throw this away, the system refused it. Reporting a
+      // refusal as a discard would attribute the decision to the wrong actor.
+      expect(plan?.cancelKind).toBe("refused");
+      expect(plan?.calendarFailureCode).toBe("provider_unsupported");
+
+      // Byte-unchanged. Never a no-op, never a best-effort delete, never a row quietly marked gone.
+      expect(await t.run((ctx) => ctx.db.get(managedEventId))).toEqual(before);
+
+      const notes = await notifications(t);
+      expect(notes).toHaveLength(1);
+      expect(notes[0]?.kind).toBe("calendar_manage_refused");
+      expect(notes[0]?.message).toMatch(/Microsoft/i);
+      // No success audit may exist for an act that did not happen.
+      const rows = await auditRows(t);
+      expect(rows.filter((r) => r.eventType.startsWith("calendar.event."))).toEqual([]);
+    });
+
+    test("a conflict is bounded, preserves both planes, and tells the user to restage", async () => {
+      const t = harness();
+      const managedEventId = await seedManaged(t);
+      const before = await t.run((ctx) => ctx.db.get(managedEventId));
+      const planId = await seedManagePlan(t, managedEventId, { eventTitle: NEW_TITLE });
+
+      await complete(
+        t,
+        "manage-run-conflict",
+        manageReturn(planId, managedEventId, {
+          outcome: "refused",
+          code: "conflict",
+          etag: undefined,
+          provider: undefined,
+        }),
+      );
+
+      const plan = await t.run((ctx) => ctx.db.get(planId));
+      expect(plan?.status).toBe("canceled");
+      expect(plan?.calendarFailureCode).toBe("conflict");
+      expect(await t.run((ctx) => ctx.db.get(managedEventId))).toEqual(before);
+
+      const notes = await notifications(t);
+      expect(notes).toHaveLength(1);
+      // STATIC copy keyed off the code. A message that quoted the event or the etag would put
+      // content into a notification row (§4) — and the etag is exactly what moved.
+      expect(notes[0]?.message).not.toContain(SECRET_TITLE);
+      expect(notes[0]?.message).not.toContain(NEW_TITLE);
+      expect(notes[0]?.message).not.toContain(APPROVED_ETAG);
+    });
+
+    test.each([
+      ["google", "gmail_reconnect"],
+      ["microsoft", "microsoft_calendar_reconnect"],
+    ] as const)("a %s reauth raises THAT provider's reconnect", async (provider, kind) => {
+      const t = harness();
+      const managedEventId = await seedManaged(t, { provider });
+      const planId = await seedManagePlan(t, managedEventId, { eventTitle: NEW_TITLE });
+
+      await complete(
+        t,
+        `manage-run-reauth-${provider}`,
+        manageReturn(planId, managedEventId, { outcome: "reauth", provider, etag: undefined }),
+      );
+
+      const notes = await notifications(t);
+      expect(notes).toHaveLength(1);
+      // A Microsoft outage that wrote `gmail_reconnect` would send the user to the Google consent
+      // screen to fix an Outlook connection: the banner clears, the real problem stands.
+      expect(notes[0]?.kind).toBe(kind);
+      // Recoverable, not terminal — nothing was written to either plane.
+      expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("delivering");
+      expect((await t.run((ctx) => ctx.db.get(managedEventId)))?.status).toBe("active");
+    });
+
+    test("a terminal provider failure writes a refs/status-only dead letter", async () => {
+      const t = harness();
+      const managedEventId = await seedManaged(t);
+      const before = await t.run((ctx) => ctx.db.get(managedEventId));
+      const planId = await seedManagePlan(t, managedEventId, { eventTitle: NEW_TITLE });
+
+      await complete(
+        t,
+        "manage-run-terminal",
+        manageReturn(planId, managedEventId, {
+          outcome: "terminal",
+          status: 400,
+          reason: "badRequest",
+          etag: undefined,
+          provider: undefined,
+        }),
+      );
+
+      const dlq = await t.run((ctx) => ctx.db.query("deadLetters").collect());
+      expect(dlq).toHaveLength(1);
+      expect(Object.keys(dlq[0]?.payload as Record<string, unknown>).sort()).toEqual([
+        "planId",
+        "status",
+      ]);
+      expect(JSON.stringify(dlq)).not.toContain(SECRET_TITLE);
+      expect(await t.run((ctx) => ctx.db.get(managedEventId))).toEqual(before);
+      expect((await auditRows(t)).filter((r) => r.eventType === "deadletter.written")).toHaveLength(
+        1,
+      );
+    });
+
+    // Every one of these is a completion the terminal must IGNORE. Without them a replayed or
+    // cross-tenant result could patch a registry row that no approval ever pointed at.
+    test.each([
+      ["a foreign tenant", { tenantId: OTHER_TENANT }],
+      ["a plan that already finished", { status: "done" as const }],
+      ["a plan of the create kind", { kind: "calendar_event" as const }],
+    ])("%s completion writes NOTHING", async (_label, over) => {
+      const t = harness();
+      const managedEventId = await seedManaged(t, {
+        tenantId: (over as { tenantId?: string }).tenantId ?? MANAGE_TENANT,
+      });
+      const before = await t.run((ctx) => ctx.db.get(managedEventId));
+      const planId = await seedManagePlan(t, managedEventId, {
+        ...over,
+        eventTitle: NEW_TITLE,
+      } as Parameters<typeof seedManagePlan>[2]);
+      const planBefore = await t.run((ctx) => ctx.db.get(planId));
+
+      // The result always claims MANAGE_TENANT — that is the forged/stale half of the case.
+      await complete(t, "manage-run-stale", manageReturn(planId, managedEventId));
+
+      expect(await t.run((ctx) => ctx.db.get(planId))).toEqual(planBefore);
+      expect(await t.run((ctx) => ctx.db.get(managedEventId))).toEqual(before);
+      expect(await auditRows(t)).toEqual([]);
+      expect(await notifications(t)).toEqual([]);
+      expect(await t.run((ctx) => ctx.db.query("deadLetters").collect())).toEqual([]);
+    });
+
+    // The retrier can deliver the same success twice. The second delivery finds the plan at `done`
+    // and stops — which is what makes the registry patch and the audit row exactly-once.
+    test("a redelivered success is a no-op — one audit row, one registry state", async () => {
+      const t = harness();
+      const managedEventId = await seedManaged(t);
+      const planId = await seedManagePlan(t, managedEventId, { eventTitle: NEW_TITLE });
+
+      await complete(t, "manage-run-replay", manageReturn(planId, managedEventId));
+      const afterFirst = await t.run((ctx) => ctx.db.get(managedEventId));
+      await complete(t, "manage-run-replay", manageReturn(planId, managedEventId));
+
+      expect(await t.run((ctx) => ctx.db.get(managedEventId))).toEqual(afterFirst);
+      expect(
+        (await auditRows(t)).filter((r) => r.eventType === "calendar.event.updated"),
+      ).toHaveLength(1);
+    });
+
+    test("a failed run resolves its plan through calendarRunId and dead-letters", async () => {
+      const t = harness();
+      const managedEventId = await seedManaged(t);
+      const planId = await seedManagePlan(t, managedEventId, { eventTitle: NEW_TITLE });
+      await t.run((ctx) => ctx.db.patch(planId, { calendarRunId: "manage-run-failed" }));
+
+      await t.mutation(internal.calendarComplete.onManageComplete, {
+        runId: "manage-run-failed" as RunId,
+        result: { type: "failed", error: "boom" },
+      });
+
+      const dlq = await t.run((ctx) => ctx.db.query("deadLetters").collect());
+      expect(dlq).toHaveLength(1);
+      expect(dlq[0]?.workflowId).toBe("manage-run-failed");
+      expect(JSON.stringify(dlq)).not.toContain(SECRET_TITLE);
+    });
+
+    // An unparseable result is DROPPED, never guessed at. Writing a "probably updated" row from a
+    // shape we could not read is how a registry stops describing the calendar.
+    test("a result that does not parse writes nothing", async () => {
+      const t = harness();
+      const managedEventId = await seedManaged(t);
+      const before = await t.run((ctx) => ctx.db.get(managedEventId));
+      const planId = await seedManagePlan(t, managedEventId, { eventTitle: NEW_TITLE });
+
+      await complete(t, "manage-run-garbage", { planId, tenantId: MANAGE_TENANT });
+
+      expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("delivering");
+      expect(await t.run((ctx) => ctx.db.get(managedEventId))).toEqual(before);
+      expect(await auditRows(t)).toEqual([]);
+    });
+  });
+
+  // ── 17-08 Task 3: the lifecycle READBACK ─────────────────────────────────────────────────────
+  //
+  // Four planes, read independently: the plan row, the registry row, the provider, and the audit
+  // log. The point is that none of them vouches for the others.
+  describe("smoke.calendarLifecycleReadback", () => {
+    const CORRELATION = "readback-correlation";
+
+    async function seedCompletedUpdate(t: ReturnType<typeof harness>, title = SECRET_TITLE) {
+      await seedCalendarGrant(t, MANAGE_TENANT);
+      const managedEventId = await seedManaged(t);
+      await t.run((ctx) => ctx.db.patch(managedEventId, { title, etag: 'W/"registry-v2"' }));
+      const planId = await seedManagePlan(t, managedEventId, {
+        status: "done" as PlanStatus,
+        eventTitle: title,
+      });
+      await t.run((ctx) => ctx.db.patch(planId, { calendarRunId: "readback-run" }));
+      await t.run((ctx) =>
+        ctx.db.insert("audit", {
+          tenantId: MANAGE_TENANT,
+          correlationId: CORRELATION,
+          eventType: "calendar.event.updated",
+          actor: "system",
+          payload: { planId, managedEventId, provider: "google", operation: "update" },
+          ts: BASE_MS,
+        }),
+      );
+      return { planId, managedEventId };
+    }
+
+    const runReadback = (
+      t: ReturnType<typeof harness>,
+      planId: Awaited<ReturnType<typeof seedManagePlan>>,
+      managedEventId: Awaited<ReturnType<typeof seedManaged>>,
+    ) =>
+      t.action(internal.smoke.calendarLifecycleReadback, {
+        tenantId: MANAGE_TENANT,
+        provider: "google",
+        planId,
+        managedEventId,
+        correlationId: CORRELATION,
+      });
+
+    test("reports every plane in refs, codes and counts — and nothing else", async () => {
+      const t = harness();
+      const { planId, managedEventId } = await seedCompletedUpdate(t);
+      googleFetch(Response.json(eventBody({ etag: 'W/"registry-v2"' })));
+
+      const out = await runReadback(t, planId, managedEventId);
+
+      // The EXACT surface. A field added without thought is a field that could carry content.
+      expect(Object.keys(out).sort()).toEqual([
+        "approvedEtag",
+        "audit",
+        "auditCapped",
+        "auditRowCount",
+        "calendarRunId",
+        "contentChecked",
+        "contentLeak",
+        "correlationId",
+        "deploymentUrlHash",
+        "duplicateEventTypes",
+        "externalEventId",
+        "managedEventId",
+        "managedEventRefOnPlan",
+        "planCancelKind",
+        "planFailureCode",
+        "planId",
+        "planKind",
+        "planOperation",
+        "planStatus",
+        "providerArg",
+        "providerAttendeeCount",
+        "providerEtag",
+        "providerExists",
+        "providerMatches",
+        "providerOnRow",
+        "providerOutcome",
+        "registryAttendeeFree",
+        "registryEtag",
+        "registryStatus",
+        "schema",
+        "tenantIdHash",
+        "tokenLeak",
+        "tokensChecked",
+      ]);
+
+      expect(out).toMatchObject({
+        schema: "phase17-calendar-lifecycle-readback.v1",
+        providerArg: "google",
+        providerOnRow: "google",
+        providerMatches: true,
+        planStatus: "done",
+        planKind: "calendar_manage",
+        planOperation: "update",
+        calendarRunId: "readback-run",
+        registryStatus: "active",
+        providerOutcome: "ok",
+        providerExists: true,
+        providerAttendeeCount: 0,
+        auditRowCount: 1,
+        auditCapped: false,
+        duplicateEventTypes: [],
+      });
+      // Three planes, three version answers, compared by the reader rather than by the probe.
+      expect(out.approvedEtag).toBe(APPROVED_ETAG);
+      expect(out.registryEtag).toBe('W/"registry-v2"');
+      expect(out.providerEtag).toBe('W/"registry-v2"');
+      // Exact audit event names and payload KEY SETS with counts — never a value.
+      expect(out.audit).toEqual([
+        {
+          eventType: "calendar.event.updated",
+          keys: ["managedEventId", "operation", "planId", "provider"],
+          count: 1,
+        },
+      ]);
+
+      expect(out.contentLeak).toBe(false);
+      expect(out.tokenLeak).toBe(false);
+      // ANTI-VACUITY. `contentLeak: false` proves nothing if there was no title and no stored grant
+      // to look for; these are the counts of strings the check actually had to search against.
+      expect(out.contentChecked).toBeGreaterThan(0);
+      expect(out.tokensChecked).toBeGreaterThan(0);
+      const wire = JSON.stringify(out);
+      expect(wire).not.toContain(SECRET_TITLE);
+      expect(wire).not.toContain("calendar-access-token");
+      expect(wire).not.toContain("calendar-refresh-token");
+      expect(wire).not.toContain(MANAGE_TENANT); // the tenant travels as a hash
+    });
+
+    // THE NEGATIVE CONTROL. The leak detector is only worth its boolean if it can go true — so the
+    // registry title is set to a string the payload provably DOES contain (the event's own id).
+    // Without this, `contentLeak: false` could be a hardcoded constant and no test would notice.
+    test("the leak detector actually fires when content IS present", async () => {
+      const t = harness();
+      const { planId, managedEventId } = await seedCompletedUpdate(t, "managed-event-1");
+      googleFetch(Response.json(eventBody()));
+
+      const out = await runReadback(t, planId, managedEventId);
+      expect(out.externalEventId).toBe("managed-event-1");
+      expect(out.contentLeak).toBe(true);
+    });
+
+    test("a foreign tenant's ids resolve to nothing rather than to a row", async () => {
+      const t = harness();
+      const { planId, managedEventId } = await seedCompletedUpdate(t);
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+
+      const out = await t.action(internal.smoke.calendarLifecycleReadback, {
+        tenantId: OTHER_TENANT,
+        provider: "google",
+        planId,
+        managedEventId,
+        correlationId: CORRELATION,
+      });
+
+      expect(out.planStatus).toBeNull();
+      expect(out.registryStatus).toBeNull();
+      expect(out.providerOutcome).toBe("not_inspected");
+      // No registry row means no external id to inspect — so no token was fetched and no provider
+      // request was made on another tenant's behalf.
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(out.audit).toEqual([]);
+    });
+
+    test("a provider argument that disagrees with the row is REPORTED, not resolved", async () => {
+      const t = harness();
+      const { planId, managedEventId } = await seedCompletedUpdate(t);
+      googleFetch(Response.json(eventBody({ etag: 'W/"registry-v2"' })));
+
+      const out = await t.action(internal.smoke.calendarLifecycleReadback, {
+        tenantId: MANAGE_TENANT,
+        provider: "microsoft",
+        planId,
+        managedEventId,
+        correlationId: CORRELATION,
+      });
+
+      expect(out.providerMatches).toBe(false);
+      expect(out.providerOnRow).toBe("google");
+      // The ROW drove the read: sending a Graph-shaped request at a Google event because someone
+      // typed the wrong flag is the class of error this probe exists to catch, not to commit.
+      expect(out.providerOutcome).toBe("ok");
+    });
   });
 });

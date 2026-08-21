@@ -12,6 +12,46 @@ import { expect, test } from "vitest";
 const convexDir = dirname(fileURLToPath(import.meta.url));
 const readSource = (file: string): string => readFileSync(join(convexDir, file), "utf8");
 
+/**
+ * Every `payload: { … }` literal in `src`, BRACE-BALANCED.
+ *
+ * This file used `payload:\\s*\\{[^}]*\\}` for the job, and `[^}]*` stops at the FIRST closing
+ * brace — so any payload carrying a nested object literal was silently TRUNCATED and everything
+ * after it went unscanned. Two of dispatch.ts's twelve payloads are exactly that shape
+ * (`...("blockIndex" in deck ? { blockIndex, chars } : {})`), so a field added after the ternary was
+ * unguarded while this file reported green. **These scans ARE the §4 enforcement; a truncating one
+ * is worse than no scan, because it is trusted.** Found 2026-08-17.
+ *
+ * ponytail: a brace counter, not a parser. It does not understand braces inside strings, template
+ * literals or regexes — no payload literal in convex/ contains one, and this file's `toHaveLength`
+ * / `toBe` count assertions fail loudly if that stops being true. Upgrade path: a real tokenizer.
+ */
+function payloadsIn(src: string): string[] {
+  const out: string[] = [];
+  const re = /payload:\s*\{/g;
+  for (let m = re.exec(src); m !== null; m = re.exec(src)) {
+    const start = m.index + m[0].length - 1;
+    let depth = 0;
+    for (let i = start; i < src.length; i++) {
+      if (src[i] === "{") depth += 1;
+      else if (src[i] === "}") {
+        depth -= 1;
+        if (depth === 0) {
+          out.push(src.slice(start, i + 1));
+          break;
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/** The first balanced payload literal AFTER `anchor`, or "". The anchored scans' shared read. */
+function payloadAfter(src: string, anchor: RegExp): string {
+  const m = anchor.exec(src);
+  return m === null ? "" : (payloadsIn(src.slice(m.index))[0] ?? "");
+}
+
 /** Every hand-written convex source, comment-stripped, as [relative path, code]. Recursive so
  *  `lib/` and `render/` are covered; `_generated/` and tests are not source. Added by plan 20-06 for
  *  the two whole-tree pins at the bottom of this file (terminal writers, storage.getUrl). */
@@ -154,10 +194,8 @@ test("gmail.ts mailbox.searched audit payload is refs-only ({ queryHash, resultC
   // The ONLY new read-side audit (Plan 03) records that a search happened — a hash of the name +
   // a count, NEVER the name/address/subject/messageId itself (CLAUDE.md §4 / SC3).
   const src = readSource("gmail.ts");
-  const m = src.match(/eventType:\s*["']mailbox\.searched["'][\s\S]*?payload:\s*(\{[^}]*\})/);
-  expect(m, "mailbox.searched audit payload not found").not.toBeNull();
-  const payload = m?.[1];
-  if (payload === undefined) throw new Error("mailbox.searched audit payload not found");
+  const payload = payloadAfter(src, /eventType:\s*["']mailbox\.searched["']/);
+  expect(payload, "audit payload not found").not.toBe("");
   expect(payload).toMatch(/queryHash/);
   expect(payload).toMatch(/resultCount/);
   // queryHash: contentHash(name) is a HASH of the name (refs-only) — strip the wrapper, then the
@@ -175,9 +213,8 @@ test("gmail.ts mailbox.listed audit payload is refs-only ({ range, resultCount }
   // (an enum from the tool's inputSchema, never user prose) + a count. A sender/subject/snippet
   // here would turn the audit into the PII honeypot §4 exists to prevent.
   const src = readSource("gmail.ts");
-  const m = src.match(/eventType:\s*["']mailbox\.listed["'][\s\S]*?payload:\s*(\{[^}]*\})/);
-  expect(m, "mailbox.listed audit payload not found").not.toBeNull();
-  const payload = m![1];
+  const payload = payloadAfter(src, /eventType:\s*["']mailbox\.listed["']/);
+  expect(payload, "audit payload not found").not.toBe("");
   expect(payload).toMatch(/range/);
   expect(payload).toMatch(/resultCount/);
   expect(payload, `mailbox.listed payload leaks a raw mailbox field: ${payload}`).not.toMatch(
@@ -386,10 +423,8 @@ test("llm.ts briefing.created audit payload is refs-only ({ briefingId, range, l
   // Clone of the mailbox.searched/mailbox.listed discipline: ids + counts ONLY. A gist or sender
   // here would make the audit log the PII honeypot §4 exists to prevent.
   const src = readSource("llm.ts");
-  const m = src.match(/eventType:\s*["']briefing\.created["'][\s\S]*?payload:\s*(\{[^}]*\})/);
-  expect(m, "briefing.created audit payload not found").not.toBeNull();
-  const payload = m?.[1];
-  if (payload === undefined) throw new Error("briefing.created audit payload not found");
+  const payload = payloadAfter(src, /eventType:\s*["']briefing\.created["']/);
+  expect(payload, "briefing.created audit payload not found").not.toBe("");
   expect(payload).toMatch(/briefingId/);
   expect(payload).toMatch(/listedCount/);
   expect(payload).toMatch(/digestedCount/);
@@ -433,14 +468,11 @@ test("the digest synopsis rides the briefings row ONLY — never the loop return
     ).not.toMatch(/synopsis/);
   }
   // And it must NOT appear in the briefing.created audit payload object.
-  const auditPayload = block.match(
-    /eventType:\s*["']briefing\.created["'][\s\S]*?payload:\s*(\{[^}]*\})/,
+  const auditPayload = payloadAfter(block, /eventType:\s*["']briefing\.created["']/);
+  expect(auditPayload, "briefing.created payload not found in briefInbox").not.toBe("");
+  expect(auditPayload, "synopsis leaked into the refs-only briefing.created payload").not.toMatch(
+    /synopsis/,
   );
-  expect(auditPayload, "briefing.created payload not found in briefInbox").not.toBeNull();
-  expect(
-    auditPayload![1],
-    "synopsis leaked into the refs-only briefing.created payload",
-  ).not.toMatch(/synopsis/);
 });
 
 // ── 03.11-04 (RPLY-01): the replyToMessage toolless-ingestion boundary (§2-D / SC-2) ──────────────
@@ -617,7 +649,7 @@ test("recipientBodies (per-recipient content) never reaches an audit/DLQ/telemet
   // surfaces (llm.ts / cockpit.ts / plans.ts) for any audit/deadLetters/telemetry write carrying it.
   for (const file of ["llm.ts", "cockpit.ts", "plans.ts"]) {
     const src = readSource(file);
-    for (const p of src.match(/payload:\s*\{[^}]*\}/g) ?? []) {
+    for (const p of payloadsIn(src)) {
       expect(p, `${file} log payload leaks recipientBodies: ${p}`).not.toMatch(/recipientBodies/);
     }
     for (const ins of src.match(
@@ -780,7 +812,7 @@ test("cockpit's only delivery-audit crossing (workflow.start context payload) ca
   // ref ({ planId }) — never the raw subject/body/recipient/bodyIntent/draft/goal — or the
   // fan-out audit becomes a PII honeypot (CLAUDE.md §4).
   const src = readSource("cockpit.ts");
-  const payloads = src.match(/payload:\s*\{[^}]*\}/g) ?? [];
+  const payloads = payloadsIn(src);
   expect(payloads.length).toBeGreaterThan(0);
   for (const p of payloads) {
     expect(p, `cockpit context payload leaks raw content: ${p}`).not.toMatch(
@@ -816,7 +848,7 @@ test("scheduling fields (sendAt / scheduledFunctionId) never reach an audit/DLQ/
   // plans.ts) for any audit/deadLetters/telemetry write carrying them.
   for (const file of ["llm.ts", "cockpit.ts", "plans.ts"]) {
     const src = readSource(file);
-    for (const p of src.match(/payload:\s*\{[^}]*\}/g) ?? []) {
+    for (const p of payloadsIn(src)) {
       expect(p, `${file} log payload leaks a scheduling field: ${p}`).not.toMatch(
         /sendAt|scheduledFunctionId/,
       );
@@ -841,7 +873,7 @@ test("scheduling fields (sendAt / scheduledFunctionId) never reach an audit/DLQ/
 
 test("voice.ts session audit payloads are refs/counts-only ({sessionId}+counts, no transcript/callId/secret) — §4", () => {
   const src = readSource("voice.ts");
-  const payloads = [...src.matchAll(/payload:\s*(\{[^}]*\})/g)].map((m) => m[1] ?? "");
+  const payloads = payloadsIn(src);
   // Present at all: the started + clean-ended + abnormal-ended audits (a removal must fail loudly).
   expect(
     payloads.length,
@@ -876,7 +908,7 @@ test("dispatch.ts lineage payloads reference no specialist output (reply/body/te
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/\/\/[^\n]*/g, "");
 
-  const payloads = [...src.matchAll(/payload:\s*(\{[^}]*\})/g)].map((m) => m[1] ?? "");
+  const payloads = payloadsIn(src);
   // refused / dispatched / completed, plus 15-04's thrown-turn `subagent.refused` — the one place
   // an EXCEPTION reaches the audit plane, and therefore the one most likely to be handed
   // `err.message`. 16-07 adds the FIFTH: `research.persist_failed`, the vault-write failure, which
@@ -1066,7 +1098,7 @@ test("voiceDoc.ts: EVERY payload object is free of report content (SC4)", () => 
   // Comments stripped: the prose in this module legitimately NAMES these identifiers (it explains
   // the very ban being enforced). Code may not.
   const src = readSource("voiceDoc.ts").replace(/\/\/[^\n]*/g, "");
-  const payloads = [...src.matchAll(/payload:\s*(\{[^}]*\})/g)].map((m) => m[1] ?? "");
+  const payloads = payloadsIn(src);
 
   // Presence first: a file-wide scan over zero payloads passes vacuously and proves nothing.
   expect(payloads.length, "no voiceDoc payloads found - the scan is vacuous").toBe(2);
@@ -1362,7 +1394,11 @@ test("media audit payloads are refs-only — every key is on the allow-list", ()
   // `media.render_retry_manual` (planId + batchId) — refs and a closed-union code, no new keys.
   // -> 11 at 33-05: `media.reel_saved` (planId + docId + citations count). TWO new keys, both
   // refs-only by the §4 test: the vault doc the reel became, and how many citations rode with it.
-  expect(literals.length, "no media audit payloads found - the scan is vacuous").toBe(11);
+  // -> 12 at 25.1-01: `onRenderComplete`'s dead letter in mediaComplete.ts (planId + reasonCode,
+  // both pre-existing allow-listed refs) — the retrier terminal for a crashed renderReel run.
+  // -> 13 at 25.1-03 (D5): `media.image_saved` in mediaComplete.ts (planId + jobId + docId). No new
+  // keys — three refs. The PROMPT is the vault doc's text and never enters the log plane.
+  expect(literals.length, "no media audit payloads found - the scan is vacuous").toBe(13);
   for (const [file, literal] of literals) {
     for (const key of keysOf(literal)) {
       expect(
@@ -1392,16 +1428,16 @@ test("no prompt text and no narration text reaches the media log plane — only 
         /\bprompt\b(?!Hash)|narration/,
       );
     }
-    // ...and no other log-plane sink exists in these modules at all — EXCEPT the render
-    // terminal's single dead letter, which 20-16 requires: a failed render does not retry, so the
-    // dead letter is the only durable record that it happened. Its keys are pinned by
-    // MEDIA_AUDIT_ALLOWED above AND by an exact-key assertion in media.test.ts, so it is governed
-    // rather than exempt. The ban still holds absolutely for the submit and landing planes.
-    if (file !== "render/renderReel.ts") {
-      expect(code, `${file} writes a deadLetters row`).not.toMatch(
-        /\.insert\(\s*["']deadLetters["']/,
-      );
-    }
+    // ...and the dead-letter sites are COUNTED per module rather than banned outright — each is a
+    // governed log-plane row whose keys are pinned by MEDIA_AUDIT_ALLOWED above. renderReel.ts has
+    // TWO (the 20-16 render terminal and the 20-17 caption terminal); mediaComplete.ts gained ONE
+    // at 25.1-01 (`onRenderComplete`, the retrier terminal for a crashed render run). The ban
+    // still holds absolutely for the submit plane and for any THIRD site appearing anywhere.
+    const deadLetterSites = [...code.matchAll(/\.insert\(\s*["']deadLetters["']/g)].length;
+    expect(
+      deadLetterSites,
+      `${file} dead-letter site count moved — was the new payload reviewed?`,
+    ).toBe(file === "render/renderReel.ts" ? 2 : file === "mediaComplete.ts" ? 1 : 0);
     expect(code, `${file} writes a telemetry row`).not.toMatch(/\.insert\(\s*["']telemetry["']/);
   }
 });
@@ -1412,19 +1448,24 @@ test("the media log-plane surface is PINNED: exactly 7 audit sites across the th
   // against MEDIA_AUDIT_ALLOWED above. 1 -> 2 at 20-15: the render terminal. 4 -> 6 at 33-04:
   // the auto-retry event in the render terminal and the manual retry mutation. 6 -> 7 at 33-05:
   // `media.reel_saved`, in `saveReelToVault` — the one place the finished reel becomes a vault doc.
+  // 7 -> 8 at 25.1-03 (D5): `media.image_saved`, in `saveImageToVault` — the same event for the
+  // other media kind, at the LANDING terminal instead of the render terminal.
   const sites = MEDIA_MODULES.map(
     (f) => [...stripCode(readSource(f)).matchAll(/internal\.audit\.log\b/g)].length,
   );
   expect(
     sites.reduce((a, b) => a + b, 0),
     "media audit call-site count changed - is the new payload refs-only? (20-09/20-16/20-17/33-04 each bump this)",
-  ).toBe(7);
+  ).toBe(8);
   // And WHERE they live: the three job terminals — the fal landing, render and caption burn — plus
   // 33-02's explicit user confirmation event, 33-04's auto-retry event beside the render terminal,
   // and 33-04's manual-retry event. `media.ts` still has no job-path log sink: its two audit sites
   // are `confirmClaim` and `retryRender`, whose payloads are the refs-only literals reviewed above.
   expect(sites[0], "media.ts holds the claim-confirmation and manual-retry audit sites").toBe(2);
-  expect(sites[1], "mediaComplete.ts is the landing terminal").toBe(1);
+  expect(
+    sites[1],
+    "mediaComplete.ts is the landing terminal, plus 25.1-03's image vault save",
+  ).toBe(2);
   expect(
     sites[2],
     "render/renderReel.ts holds the render terminal, its auto-retry event, the caption terminal, and 33-05's reel_saved",
