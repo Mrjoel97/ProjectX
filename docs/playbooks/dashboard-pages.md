@@ -1,5 +1,39 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-22 (26-10 Task 2 — **THE OWNER UAT FOUND A REAL DEFECT AND IT IS FIXED:
+> the Cost Console clipped its own copy at mobile.** Items 1 and 3 pass; item 2, the responsive
+> breakpoints the 2026-08-09 UAT recorded as NOT observed, is where it was hiding.)
+>
+> - **The bug.** At 390×844 on `?tab=spend` the page cut sentences mid-word — "three daily budg…",
+>   "from the lim…", "whether the next call w…". Desktop 1440 and tablet 834 were clean, and the
+>   Business tab was never affected. **It was grid intrinsic sizing, not the tables.** Every
+>   container here is `display: grid` with no explicit columns, so the implicit track is `auto` —
+>   it sizes to its widest item and refuses to go below it — and grid items default to
+>   `min-width: auto` as well. The ledger widened its column to 441px inside a 339px `main`, and
+>   every sibling stretched to match: h1, eyebrow, description and tab strip all rendered 425px.
+>   The three `scroller` wrappers already had `overflow-x: auto` and were **useless**, because an
+>   element that cannot shrink never scrolls — it expands.
+> - **The fix is three properties, no markup change:** `scroller` gains `minWidth: 0`; `stack`,
+>   the FinanceTabs page container and FinanceView's outer grid each gain
+>   `gridTemplateColumns: "minmax(0, 1fr)"`. Do not remove them as tidy-up.
+> - **WHY NOTHING CAUGHT IT, and this generalises past Finance.** The page never scrolled
+>   horizontally — `document.documentElement.scrollWidth` stayed exactly 390, because the content
+>   CLIPPED rather than scrolled. A page-level overflow assertion therefore reports CLEAN while the
+>   pixels are broken, and the first probe written for this did exactly that. **The metric that
+>   works is per-container** (`main.scrollWidth` vs `main.clientWidth`) plus classifying each
+>   overflowing element by whether it sits inside a real horizontal scroller. Use that if a
+>   responsive regression is ever suspected on any of these pages.
+> - **Measured**, 390×844, `?tab=spend`: before 441/339 with 103 past the edge and 103 genuinely
+>   clipped; after 339/339 with 50 past the edge and **0 clipped** — those 50 are inside the ledger's
+>   scroller, which is the intended behaviour. financeView + cashView 70/70; the three 26-10
+>   evidence e2e tests still pass.
+> - **UAT items 1 and 3 passed.** Non-owner: 0 Operator tabs, no deployment ceiling anywhere in the
+>   DOM, and `finance:controls` refused with `OWNER_REQUIRED`. Owner (same account promoted, then
+>   put back): three separate ceilings $50/$100/$250, "there is no single combined limit", all
+>   three controls rendered with arm-then-confirm on the kill switches. Tenant caps ($5/$10/$25)
+>   stay distinct from deployment ceilings, and the two unlanded sentences differ as designed —
+>   ingest "still expected to land", media "permanent — not pending".
+
 > Last verified: 2026-08-21 (26-10 Task 1 — **THE FINANCE BROWSER GATE HAS NOW ACTUALLY RUN, and
 > the Cost Console passed it.** Executed against local `convex dev` + a PRODUCTION build on
 > `:3111`, from `apps/web`: `npx playwright test e2e/finance.spec.ts`. **Task 2, the blocking owner
