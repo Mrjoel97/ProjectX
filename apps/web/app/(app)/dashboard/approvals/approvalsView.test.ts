@@ -7,11 +7,16 @@ import { describe, expect, test } from "vitest";
 import {
   ApprovalKindBadge,
   ApprovalsStateNotice,
+  AwaitingCardBody,
+  IMAGE_CANVAS_NOTE,
+  ResolvedOutcomeCard,
+  STALE_PLAN_MESSAGE,
   actionLabel,
   emailApprovalActionLabel,
   emailBusinessAction,
   formatAbsoluteInstant,
   parseScheduleInput,
+  persistentOutcomes,
   refusalMessage,
   withheldSuffix,
 } from "./ApprovalsView";
@@ -157,6 +162,145 @@ describe("Approvals connected state contracts", () => {
     const gate = source.match(/([\s\S]{0,260})Schedule…/);
     expect(gate?.[1]).toMatch(/item\.kind === "email" &&/);
     expect(gate?.[1]).not.toContain("finance_write");
+  });
+
+  // ---- 25.1-04 (D9/D10): every Approve click must end in a visible truth ----
+  //
+  // These render REAL markup. `AwaitingCardBody` is the presentational half of `AwaitingCard` —
+  // the split exists so the two guarantees below (notice ORDER, and the absence of the image
+  // Approve button) can be asserted against a DOM instead of a regex over a 130-line JSX blob.
+  // A source scan would have gone green on a notice that never rendered at all.
+
+  type BodyProps = Parameters<typeof AwaitingCardBody>[0];
+  const reelPlan = { kind: "media", artDirection: "cinematic" } as unknown as BodyProps["plan"];
+  const imagePlan = {
+    kind: "media",
+    mediaMode: "image",
+    imagePrompt: "Teal product hero",
+  } as unknown as BodyProps["plan"];
+
+  function bodyProps(overrides: Partial<BodyProps> = {}): BodyProps {
+    return {
+      item: {
+        planId: "plan_a",
+        threadId: "thread_a",
+        kind: "reel",
+        createdAt: Date.parse("2026-08-21T09:00:00.000Z"),
+        recipientCount: 0,
+        attachmentCount: 0,
+      },
+      plan: reelPlan,
+      busy: false,
+      result: null,
+      attachmentsOpen: false,
+      attachments: undefined,
+      scheduleOpen: false,
+      confirmDiscard: false,
+      onApprove: () => {},
+      onSchedule: async () => {},
+      onDiscard: () => {},
+      onToggleAttachments: () => {},
+      onToggleSchedule: () => {},
+      onRequestDiscard: () => {},
+      ...overrides,
+    };
+  }
+
+  // D9: the refusal used to render BELOW the discard fieldset, off the bottom of the card. It is
+  // now the FIRST child of the article — above the held pill and above every action button.
+  test("the outcome notice renders at the top of the card, above every action button", () => {
+    const html = renderToStaticMarkup(
+      createElement(AwaitingCardBody, bodyProps({ result: refusalMessage("no_deck") })),
+    );
+    const noticeAt = html.indexOf('role="status"');
+    const heldPillAt = html.indexOf("Held ");
+    const firstButtonAt = html.indexOf("<button");
+
+    expect(noticeAt).toBeGreaterThanOrEqual(0);
+    expect(heldPillAt).toBeGreaterThanOrEqual(0);
+    expect(firstButtonAt).toBeGreaterThanOrEqual(0);
+    expect(noticeAt).toBeLessThan(heldPillAt);
+    expect(noticeAt).toBeLessThan(firstButtonAt);
+    // The card stays usable behind its refusal — the buttons are not disabled by the notice.
+    expect(html).toContain("Approve governed generation");
+  });
+
+  // D10: `executePlan`'s media arm reads a SHOT DECK. An image plan has none, so that button
+  // returns `no_deck` on every click that has ever been made or ever will be.
+  test("an image plan offers no Approve button, only the honest canvas route", () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        AwaitingCardBody,
+        bodyProps({
+          item: { ...bodyProps().item, kind: "image" },
+          plan: imagePlan,
+        }),
+      ),
+    );
+    expect(html).not.toContain("Approve governed generation");
+    expect(html).toContain(IMAGE_CANVAS_NOTE);
+    // Everything else the card could do is untouched.
+    expect(html).toContain("Edit in cockpit");
+    expect(html).toContain("Discard");
+  });
+
+  test("a reel plan still offers its Approve button", () => {
+    const html = renderToStaticMarkup(createElement(AwaitingCardBody, bodyProps()));
+    expect(html).toContain("Approve governed generation");
+    expect(html).not.toContain(IMAGE_CANVAS_NOTE);
+  });
+
+  // D9: a successful approve IS the `proposed → approved` transition, so `listAwaiting` drops the
+  // row and the card that set the message unmounts before anyone reads it. The message therefore
+  // lives in the SECTION, and is rendered as a standalone card once its row is gone.
+  test("an outcome survives only once its row has left the awaiting list, and only for its own plan", () => {
+    const outcomes = {
+      plan_a: "Approval accepted. The governed action is now in flight.",
+      plan_b: "Discarded. This plan cannot be re-armed.",
+    };
+    // Both rows still live: their own cards carry the notice, so nothing is shown twice.
+    expect(persistentOutcomes(outcomes, new Set(["plan_a", "plan_b"]))).toEqual([]);
+    // plan_a's row dropped off the reactive list — its outcome must still be on screen…
+    expect(persistentOutcomes(outcomes, new Set(["plan_b"]))).toEqual([["plan_a", outcomes.plan_a]]);
+    // …and it must be plan_a's message, never plan_b's.
+    expect(persistentOutcomes(outcomes, new Set(["plan_a"]))).toEqual([["plan_b", outcomes.plan_b]]);
+  });
+
+  test("a cleared outcome is not resurrected", () => {
+    expect(persistentOutcomes({ plan_a: null }, new Set())).toEqual([]);
+  });
+
+  test("the surviving outcome card names the plan and reads as cleared, never as held", () => {
+    const html = renderToStaticMarkup(
+      createElement(ResolvedOutcomeCard, {
+        planId: "plan_a",
+        message: "Approval accepted. The governed action is now in flight.",
+      }),
+    );
+    expect(html).toContain('data-plan-id="plan_a"');
+    expect(html).toContain('role="status"');
+    expect(html).toContain("The governed action is now in flight");
+    expect(html).not.toContain("Held ");
+  });
+
+  // D9: `executePlan` returns `{ok:true, alreadyStarted:true}` for ANY non-proposed status —
+  // discarded and canceled included — so the old copy asserted a start that may never have
+  // happened. The one thing it can promise is that THIS click did nothing new.
+  test("the stale-card message never claims the plan the user clicked started", () => {
+    expect(STALE_PLAN_MESSAGE).toBe(
+      "This card was out of date — the plan it showed was already handled or replaced. Nothing new was started.",
+    );
+    expect(STALE_PLAN_MESSAGE).not.toContain("This plan already started");
+    expect(source).not.toContain("This plan already started");
+    expect(source).toMatch(/alreadyStarted[\s\S]{0,80}STALE_PLAN_MESSAGE/);
+  });
+
+  // The persistence guarantee is WIRING, and wiring is the half a rendered test cannot see: the
+  // card must not own the message it produces, because the card is what disappears.
+  test("the approve outcome is owned by the section, not by the card that unmounts", () => {
+    expect(source).toMatch(/function AwaitingCard\(\{[\s\S]{0,160}onOutcome/);
+    expect(source).toMatch(/function AwaitingSection[\s\S]*?setOutcomes\(/);
+    expect(source).toMatch(/function AwaitingSection[\s\S]*?persistentOutcomes\(/);
   });
 
   // 19-05 SC#5: a partial send is a SUCCESS that still has to name who was left out and why.
