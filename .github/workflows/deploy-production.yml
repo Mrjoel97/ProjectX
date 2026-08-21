@@ -33,11 +33,32 @@ jobs:
   deploy:
     # `workflow_run` can expose environment secrets even when the triggering workflow came from a
     # fork. Restrict deployment to a successful push whose verified head branch is exactly main.
+    #
+    # THE LAST CLAUSE IS THE HUMAN PROMOTION GATE, and it is here because the one this file
+    # originally recommended does not exist on this repo. The header says "configure required
+    # reviewers there when an explicit human promotion gate is desired" — but GitHub environment
+    # protection rules (required reviewers AND wait timers alike) need a PAID plan on a PRIVATE
+    # repo, and this is a private repo on a free personal account. Both were attempted on
+    # 2026-08-21 and both returned 422 "ensure the billing plan supports…", leaving
+    # `environments/production` with `protection_rules: []`. An `environment:` block with no rules
+    # provisioned does not fail closed — it deploys silently — so every merge to main promoted
+    # Convex and Vercel to production unattended, ~2.5 minutes after the merge, with no human in
+    # the loop. That is what this clause closes.
+    #
+    # Promotion is now OPT-IN PER MERGE: put `[deploy]` in the merge commit message to promote.
+    # A merge without it lands on main, runs the full `ci` gate, and stops there. Landing code and
+    # shipping it are separate decisions and should read as separate decisions.
+    #
+    # Deleting this one line restores the previous auto-deploy behaviour. If the plan ever gains
+    # environment protection, prefer the real reviewer gate and drop this — a commit-message
+    # convention is a weaker gate than an approval GitHub enforces, and it is chosen only because
+    # the enforced one is unavailable.
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main' &&
-      github.event.workflow_run.head_repository.full_name == github.repository
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      contains(github.event.workflow_run.head_commit.message, '[deploy]')
     runs-on: ubuntu-latest
     timeout-minutes: 35
     environment:
