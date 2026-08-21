@@ -42,3 +42,19 @@ Carried forward from 25.1-01 and 25.1-02: `render_crashed`, `render_canceled`,
 `route_bad_response`, `watchdog_render_timeout`, `watchdog_caption_timeout`,
 `watchdog_submit_timeout` all render through the generic failure clause plus the raw `detailCode`.
 Honest, but wordless. Cosmetic follow-up.
+
+## 4. `llmRedaction.test.ts`'s dispatch scan cannot see a URL leak
+
+Found during 25.1-05 by mutation B5. Adding `sourceUrls: turn.sources.map(s => s.url)` to
+`dispatch.ts`'s `subagent.completed` audit payload leaves `llmRedaction.test.ts` **fully green** —
+that scan bans the identifiers `reply|body|text|output` by NAME (`/\b(reply|body|text|output)\b/`)
+and knows nothing about a URL, a title, an address or any other content that happens to be called
+something else. The leak was caught only by `dispatch.test.ts`'s RUNTIME scan, which walks every
+audit row of a real research run for the literal URLs.
+
+Not fixed here: `dispatch.ts` IS covered by that runtime scan, so nothing is currently exposed on
+this path. The gap is that the STATIC pin reads as broader protection than it gives, and the modules
+whose payloads have no runtime scan inherit that false comfort. The honest fix is a value-shaped
+rule (an `http`/URL-literal scan over payload sources, the `media` payload scan at :1412 already does
+this) rather than a longer identifier list — an identifier blacklist can only ban names someone
+already thought of. Owning lane: governance/§4, not media.
