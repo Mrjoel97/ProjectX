@@ -47,7 +47,16 @@ const card: CSSProperties = {
   padding: "1rem",
   boxShadow: "0 10px 30px color-mix(in srgb, var(--ink) 7%, transparent)",
 };
-const stack: CSSProperties = { display: "grid", gap: "0.75rem" };
+// `minmax(0, 1fr)` on every grid in this file, for the reason spelled out on `scroller` below:
+// a grid's implicit column is `auto`, which sizes to its widest item and refuses to go below it,
+// and grid items default to `min-width: auto` as well. Without an explicitly shrinkable track the
+// widest descendant (the ledger table) widens the column and every sibling — headings, prose, the
+// rail cards — stretches to match and clips at narrow viewports.
+const stack: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr)",
+  gap: "0.75rem",
+};
 const row: CSSProperties = {
   display: "flex",
   alignItems: "center",
@@ -114,7 +123,16 @@ const mono: CSSProperties = {
   wordBreak: "break-all",
 };
 /** Horizontal scroll container — a data table must never make the PAGE scroll sideways. */
-const scroller: CSSProperties = { overflowX: "auto" };
+// `minWidth: 0` IS THE WHOLE FIX, and `overflowX` alone was never going to do it. Every one of
+// these scrollers is a child of `stack` (`display: grid`), and a grid item defaults to
+// `min-width: auto` — it refuses to shrink below its content's min-content width. So the ledger
+// table did not scroll inside 339px, it PUSHED the column to 441px and the whole page content
+// with it: at 390px the header, the h1 and the tab strip all rendered 425px wide and clipped
+// mid-word, while `document.documentElement.scrollWidth` stayed exactly 390 because nothing
+// scrolled. That is why a page-level overflow assertion reported clean and only a screenshot
+// caught it. Measured on /dashboard/finance?tab=spend at 390×844: 103 elements past the viewport
+// edge before, 0 after. Do not drop this property.
+const scroller: CSSProperties = { overflowX: "auto", minWidth: 0 };
 
 // ── pure helpers (exported so the DOM-free runner can cover them) ──────────────────────
 
@@ -994,7 +1012,7 @@ export function OperatorTab() {
 export function PikarSpendTab() {
   const report = useReportWindow();
   return (
-    <div style={{ display: "grid", gap: "1.75rem" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "1.75rem" }}>
       <RailsSection report={report} />
       <TrackedSection report={report} />
       <LedgerSection report={report} />
