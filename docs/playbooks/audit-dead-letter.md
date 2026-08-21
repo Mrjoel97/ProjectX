@@ -180,6 +180,8 @@
 > claimed as resolved anywhere.
 >
 > Prior entry — 2026-08-16 (**THE AUDIT-IMMUTABILITY INVARIANT IS NOW PROVEN AGAINST PRODUCTION,
+
+> Last verified: 2026-08-16 (**THE AUDIT-IMMUTABILITY INVARIANT IS NOW PROVEN AGAINST PRODUCTION,
 > not against fixtures.** Live erasure request `a73023088f58ea6e` on SHA `1ca7c6f` removed **1,538
 > rows across 24 tables** for tenant `qd76g6zsn8…cb233` (agentSteps 382, spendEvents 298, graphNodes
 > 265, graphEdges 261, vaultDocuments 97, vaultSources 65, mediaJobs 69, plans 45, …) and

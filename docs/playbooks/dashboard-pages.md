@@ -82,6 +82,7 @@
 > `dataControls.test.ts` green within the web run, web typecheck exit 0.
 >
 > Prior entry — 2026-08-16 (**TWO OF THE DISCLOSURES CORRECTED IN THE ENTRY BELOW WERE STILL WRONG,
+> Last verified: 2026-08-16 (**TWO OF THE DISCLOSURES CORRECTED IN THE ENTRY BELOW WERE STILL WRONG,
 > AND ONLY PRODUCTION CONFIG COULD SHOW IT.** Both were resolved by reading the live deployment with
 > `npx convex env get … --prod`, which is the step the source-only sweep could not take.
 >

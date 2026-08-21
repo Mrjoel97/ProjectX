@@ -204,6 +204,7 @@
 > test in this repo claims that scrub already exists, so the ceiling cannot be quietly forgotten.
 >
 > Prior entry — 2026-08-16 (**PRODUCTION IS NOW ON `cockpit-agent` v8. THE POINTER MOVED: v6 → v8.
+> Last verified: 2026-08-16 (**PRODUCTION IS NOW ON `cockpit-agent` v8. THE POINTER MOVED: v6 → v8.
 > THIS SUPERSEDES THE ENTRY IMMEDIATELY BELOW**, which said "PRODUCTION STILL RUNS THE OLD BODY, AND
 > THE PRODUCTION CANDIDATE IS GATE-BLOCKED" — true when written, false now. The gate that had come
 > back 39/40 three times went **40/40** once the defect behind it was found, and it was NOT in the

@@ -23,6 +23,7 @@
 > web typecheck exit 0. No live browser run.
 >
 > Prior entry — 2026-08-17 (owner-reported defect — **THE INTAKE MODALITIES NO LONGER VANISH AFTER
+> Last verified: 2026-08-17 (owner-reported defect — **THE INTAKE MODALITIES NO LONGER VANISH AFTER
 > THE FIRST TYPED TURN.** Source + typecheck + `page.test.ts` (4/4); no live browser run.)
 >
 > **The defect, exactly.** The composer's control row was wrapped in `{!profile && (…)}`. The first
@@ -90,6 +91,7 @@
 >
 > Prior entry — 2026-08-15, **CONTAINS THE ERROR CORRECTED ABOVE** (cash-business-finance lane's
 > in-flight applier wiring, read and
+> Prior entry — 2026-08-15 (cash-business-finance lane's in-flight applier wiring, read and
 > attested by the phase-33 planning session — **`writeProfileDoc` and `currentProfileDoc` are now
 > `export`ed** (visibility only, zero behaviour change) so the new proposals applier
 > (`packages/backend/convex/proposals.ts`, registered under `dashboard-pages.md`) writes the profile

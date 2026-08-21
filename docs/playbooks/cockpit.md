@@ -260,6 +260,8 @@
 > `stagingSnapshot` and the migration both call `.unique()` on that index, and `.unique()` THROWS on
 > a duplicate — a second row is a permanently broken lookup, not a cosmetic problem.
 >
+# Playbook: Email Chat Cockpit
+
 > Last verified: 2026-08-18 (**A BRIEF IS A SUBJECT, NOT A TASK — the media specialist was never
 > told to produce the deck.** dispatch 103/103, backend 87 files / 2041 passed, tsc clean. All four
 > claims mutation-proven.)
@@ -508,6 +510,7 @@
 > plan's owned files; recorded so 25-06 cannot miss it.
 >
 > Prior entry — 2026-08-16 (33-13 — **the cockpit's plan-kind switch gained ONE branch, and the
+> Last verified: 2026-08-16 (33-13 — **the cockpit's plan-kind switch gained ONE branch, and the
 > canvas gained a SECOND `useSendCockpitMessage` caller. Nothing else about the cockpit changed.**)
 >
 > `PlanCard` in `cards.tsx` now branches on `plan.proposalRefusal` **ahead of the memo card**: a
