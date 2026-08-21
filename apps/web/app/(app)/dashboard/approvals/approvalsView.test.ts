@@ -15,6 +15,8 @@ import {
   IMAGE_CANVAS_NOTE,
   parseScheduleInput,
   persistentOutcomes,
+  PREVIEW_CHARS,
+  previewText,
   ResolvedOutcomeCard,
   refusalMessage,
   STALE_PLAN_MESSAGE,
@@ -305,6 +307,47 @@ describe("Approvals connected state contracts", () => {
     expect(source).toMatch(/function AwaitingCard\(\{[\s\S]{0,160}onOutcome/);
     expect(source).toMatch(/function AwaitingSection[\s\S]*?setOutcomes\(/);
     expect(source).toMatch(/function AwaitingSection[\s\S]*?persistentOutcomes\(/);
+  });
+
+  // ---- 25.1-05 (D11): the held card's preview shows WORDS, not markup ----
+  //
+  // The preview is a 320-char slice of a body the specialist wrote in Markdown, printed through a
+  // pre-wrap paragraph — so the first thing a user read at the approval gate was `# Pricing
+  // findings` and `**$25–$40**`. Rendered, not scanned: the markers are still IN the string either
+  // way, so only the markup can tell a stripped preview from an unstripped one.
+  const MEMO_MARKDOWN =
+    "# Pricing findings\n\n## What the market charges\n\nGroup classes run **$25–$40** per session.\n\n- Six-week packages are common\n";
+
+  test("the awaiting preview strips markdown markers instead of showing them", () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        AwaitingCardBody,
+        bodyProps({
+          item: { ...bodyProps().item, kind: "memo" },
+          plan: { kind: "memo", body: MEMO_MARKDOWN } as unknown as BodyProps["plan"],
+        }),
+      ),
+    );
+    // The WORDS survive — stripping must not cost the reader the content.
+    expect(html).toContain("Pricing findings");
+    expect(html).toContain("$25–$40");
+    expect(html).toContain("Six-week packages are common");
+    // …and the markers do not.
+    expect(html).not.toContain("# Pricing");
+    expect(html).not.toContain("## What");
+    expect(html).not.toContain("**$25");
+    expect(html).not.toContain("- Six-week");
+  });
+
+  test("previewText keeps the whole document under the cap and truncates only past it", () => {
+    // Strip THEN slice: slicing first spends the 320 characters on markers.
+    expect(previewText("plain body")).toBe("plain body");
+    const long = `# Heading\n\n${"word ".repeat(200)}`;
+    expect(previewText(long).length).toBeLessThanOrEqual(PREVIEW_CHARS + 1);
+    expect(previewText(long).startsWith("Heading")).toBe(true);
+    expect(previewText(long).endsWith("…")).toBe(true);
+    // A body that only just fits is NOT given a false ellipsis.
+    expect(previewText("x".repeat(PREVIEW_CHARS))).not.toContain("…");
   });
 
   // 19-05 SC#5: a partial send is a SUCCESS that still has to name who was left out and why.
