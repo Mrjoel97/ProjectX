@@ -21,6 +21,16 @@
 >   flash; `ownerQuery`'s `requireOwner` refuses before the handler reads a row.
 > - **Seeing is not acting.** The owner-only section is read-only by construction: `markResolved`
 >   remains a `tenantMutation` and the module has no owner-scoped mutation at all.
+> - **`opsPresentation.test.ts` is the mount guard, and it CAUGHT this change.** Its fixture throws
+>   on an unrecognised query, so adding an owner-only hook to the page turned it red until
+>   `deadLetters:listAll` was registered as owner-only in BOTH halves — mounted for `{isOwner:true}`,
+>   never mounted for `false`/`null`/`undefined`. The fixture deliberately returns a NON-EMPTY row:
+>   an empty result renders the "no dead letters" paragraph, which is indistinguishable from the
+>   section never mounting, so the owner assertion would have passed against a deleted section.
+> - **A slice bug fixed in passing.** `tenantSkillReview.test.ts` sliced the panel body "to the next
+>   top-level declaration" in prose and to `OpsPage` in code, so it silently swallowed anything
+>   declared in between — its BRAND hex assertion went red over a colour belonging to a different
+>   component. It now really does stop at the next top-level declaration.
 
 > Last verified: 2026-08-20 (23-05 added `skills.activateAgentCandidate`, a separate
 > `ownerMutation` whose exact-id agent row must also carry current full-suite exact-row evidence.

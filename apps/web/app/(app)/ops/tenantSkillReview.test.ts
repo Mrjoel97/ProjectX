@@ -19,10 +19,19 @@ const page = readFileSync(fileURLToPath(new URL("./page.tsx", import.meta.url)),
 // documentation: a comment explaining why there is no raw-evidence render reads exactly like one.
 const code = page.replace(/\/\*[\s\S]*?\*\/|\{\s*\/\*[\s\S]*?\*\/\s*\}|\/\/.*/g, "");
 
-/** The tenant-candidate owner component body, from its declaration to the next top-level one. */
+/**
+ * The tenant-candidate owner component body, from its declaration to the next top-level one.
+ *
+ * 25.1-06: the doc line above was already right and the CODE was not — it sliced all the way to
+ * `OpsPage`, so it silently swallowed anything declared in between. Adding `AllTenantDeadLetters`
+ * there is what revealed it: this panel's BRAND hex assertion went red over a colour belonging to
+ * a different component. Now it really does stop at the next top-level declaration.
+ */
 const panel = (() => {
   const from = code.indexOf("function TenantCandidatesPanel()");
-  const to = code.indexOf("export default function OpsPage", from + 1);
+  const rest = code.slice(from + 1);
+  const next = rest.search(/^(?:export\s+)?(?:default\s+)?(?:function|const)\s/m);
+  const to = next === -1 ? code.length : from + 1 + next;
   return { from, to, text: code.slice(from, to) };
 })();
 

@@ -69,6 +69,26 @@ function render(viewer: Viewer): { html: string; queries: string[]; mutations: s
         return signals;
       case "deadLetters:listNew":
         return [];
+      // 25.1-06 (D13). Deliberately NON-EMPTY: an empty result renders the "no dead letters"
+      // paragraph, which is indistinguishable from the section never mounting at all — so the
+      // owner assertion below would pass against a deleted section.
+      case "deadLetters:listAll":
+        return {
+          cap: 50,
+          truncated: false,
+          rows: [
+            {
+              id: "dl_1",
+              tenantId: "kn7other",
+              workflowId: "media.render",
+              correlationId: "batch_9",
+              error: "route_bad_response",
+              status: "new",
+              createdAt: Date.now() - 5 * 60_000,
+              payload: { batchId: "batch_9", planId: "plan_1" },
+            },
+          ],
+        };
       case "optimizerConfig:getOptimizerStatus":
         return { enabled: false };
       case "skills:candidatesForReview":
@@ -119,6 +139,20 @@ describe("/ops owner presentation boundary", () => {
         "skills:rollbackTenantSkill",
       ]),
     );
+
+    // D13: the cross-tenant dead-letter section is owner-only on the SAME mounting rule.
+    expect(result.html).toContain(">Dead letters — all tenants</p>");
+    expect(result.queries).toContain("deadLetters:listAll");
+    // A row belonging to a tenant that is not the viewer's actually reaches the markup — the whole
+    // point of the section, and what a "renders the heading" assertion alone would not prove.
+    expect(result.html).toContain("route_bad_response");
+    expect(result.html).toContain("kn7other");
+    expect(result.html).toContain("5m old");
+    // Read-only: no dead-letter mutation is mounted BY THIS SECTION. `markResolved` is the tenant
+    // section's and is expected; nothing owner-scoped joins it.
+    expect(result.mutations.filter((m) => m.startsWith("deadLetters:"))).toEqual([
+      "deadLetters:markResolved",
+    ]);
   });
 
   test.each([
@@ -139,6 +173,10 @@ describe("/ops owner presentation boundary", () => {
       "skills:tenantCandidatesForReview",
       "skills:activateTenantCandidate",
       "skills:rollbackTenantSkill",
+      // D13. The sharpest of the set: mounting this one subscribes a non-owner to OTHER TENANTS'
+      // failure rows. The server `ownerQuery` would refuse it, but a refused subscription is still
+      // an error boundary and a loading state on somebody's screen.
+      "deadLetters:listAll",
     ]) {
       expect(mountedHooks, `${ownerOnly} mounted for ${_state}`).not.toContain(ownerOnly);
     }
@@ -147,8 +185,10 @@ describe("/ops owner presentation boundary", () => {
     // the negative assertions pass vacuously; these positive rendered assertions prevent that.
     expect(result.html).toContain(">Eval signals</p>");
     expect(result.html).toContain(">DLQ</p>");
-    expect(result.html).toContain(">Dead letters</p>");
+    expect(result.html).toContain(">Dead letters — your tenant</p>");
     expect(result.html).toContain("No unresolved dead letters.");
+    // …and the owner-only sibling section is absent entirely, not merely empty.
+    expect(result.html).not.toContain(">Dead letters — all tenants</p>");
     expect(result.queries).toEqual(
       expect.arrayContaining(["owner:viewer", "opsSignals:evalSignals", "deadLetters:listNew"]),
     );
