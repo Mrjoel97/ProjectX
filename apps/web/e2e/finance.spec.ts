@@ -13,9 +13,12 @@ import { expect, type Page, test } from "@playwright/test";
 // requires separately executed live evidence, recorded in the plan summary — never inferred from a
 // green run here.
 //
-// The owner half is deliberately ordered: the NON-owner assertions run FIRST, because
-// `owner:bootstrapOwner` has no inverse and once this user is the owner the boundary can no longer
-// be observed from this account.
+// The owner half is deliberately ordered: the NON-owner assertions run FIRST, then the promotion.
+// That ordering is now a convenience rather than a one-way door — `owner:revokeOwner` (added
+// alongside `bootstrapOwner`) makes the grant reversible, so `seedOnboarded` can put this shared
+// identity back to non-owner on every run and `afterAll` leaves it that way. Before that inverse
+// existed this spec was SINGLE-USE: one run promoted the only E2E identity for ever, and the
+// non-owner boundary — the thing these assertions exist to prove — became unobservable.
 
 const backendDir =
   process.env.PIKAR_E2E_BACKEND_DIR ??
@@ -82,10 +85,11 @@ const record = (tenantId: string, movement: Movement) =>
 
 // `playwright.config.ts` sets `fullyParallel: true`, which otherwise gives NO guarantee that tests
 // in this file run in declaration order or in the same worker. Every test below shares one signed-in
-// identity (the same `storageState` file), and `owner:bootstrapOwner` has no inverse — so without
-// forcing serial order, a non-owner assertion could race an owner-promoting test and observe a
-// boundary that has already been crossed. This is what actually enforces "non-owner first, owner
-// last," not the file order alone.
+// identity (the same `storageState` file), and the owner grant is deployment-wide state — so
+// without forcing serial order, a non-owner assertion could race an owner-promoting test and
+// observe a boundary that has already been crossed. This is what actually enforces "non-owner
+// first, owner last," not the file order alone. The revoke below repairs state BETWEEN runs; it
+// cannot repair a race WITHIN one, so this stays serial.
 test.describe.configure({ mode: "serial" });
 
 /**
@@ -96,13 +100,31 @@ test.describe.configure({ mode: "serial" });
  * `toHaveCount(0)`/`not.toBeVisible()` assertion pass VACUOUSLY — absent because the page never
  * rendered at all, not because the boundary the test means to check actually holds.
  */
+// The shared identity this file promotes, remembered so `afterAll` can hand it back a non-owner.
+let promotedUserId: string | null = null;
+
 async function seedOnboarded(page: Page): Promise<void> {
   await page.goto(`${appOrigin}${ROUTE}`);
   const token = await tokenFor(page);
   const tenantId = tenantIdFrom(token);
   convexRun("onboarding:__seedOnboardedTenant", { tenantId });
+  // Start every non-owner assertion from a genuinely non-owner account, whatever a previous run
+  // left behind. `revokeOwner` is idempotent (`changed:false` on an account that never held it),
+  // so this is one no-op CLI call on a clean deployment and a rescue on a dirty one. It is the
+  // difference between a spec that can be RE-run and one that can be run exactly once.
+  promotedUserId = tenantId;
+  convexRun("owner:revokeOwner", { userId: tenantId });
   await page.reload();
 }
+
+// Leave the deployment as we found it. Non-owner is not merely this spec's precondition — it is the
+// state a human must be able to SEE to review the boundary during a UAT, and there is exactly one
+// other loggable account here. A run that exits leaving this identity an owner spends that for
+// everyone, which is precisely the cost that made this file single-use before the inverse existed.
+test.afterAll(() => {
+  if (promotedUserId === null) return;
+  convexRun("owner:revokeOwner", { userId: promotedUserId });
+});
 
 test("the Finance page opens on Business, and a non-owner is offered no Operator tab", async ({
   page,
@@ -312,17 +334,41 @@ test("connected cost console: coverage, rails, unlanded meaning and the owner bo
 
   // A deployment-wide pause takes two deliberate clicks, and the second is explicitly a confirm.
   const mediaToggle = page.locator('[data-control="Media kill switch"]');
-  await mediaToggle.getByRole("button", { name: /^Turn on$/ }).click();
-  await mediaToggle.getByRole("button", { name: /^Confirm — Turn on$/ }).click();
-  await expect(mediaToggle.getByText("On — paid generation is paused.")).toBeVisible();
-  // The master switch is INDEPENDENT: pausing generation must not pause the email cockpit.
-  await expect(
-    page.locator('[data-control="Master kill switch"]').getByText("Off — model calls permitted"),
-  ).toBeVisible();
-
-  // Put it back, so a shared deployment is not left paused by a test run.
-  await mediaToggle.getByRole("button", { name: /^Turn off$/ }).click();
-  await mediaToggle.getByRole("button", { name: /^Confirm — Turn off$/ }).click();
+  try {
+    await mediaToggle.getByRole("button", { name: /^Turn on$/ }).click();
+    await mediaToggle.getByRole("button", { name: /^Confirm — Turn on$/ }).click();
+    await expect(mediaToggle.getByText("On — paid generation is paused.")).toBeVisible();
+    // The master switch is INDEPENDENT: pausing generation must not pause the email cockpit.
+    await expect(
+      page.locator('[data-control="Master kill switch"]').getByText("Off — model calls permitted"),
+    ).toBeVisible();
+  } finally {
+    // `mediaKillSwitch` is deployment-wide `guardrailConfig`, NOT test state. Without this block a
+    // failed assertion above aborts the test with paid generation still paused for EVERY tenant,
+    // until a human notices. Reload first: it clears any half-armed confirm, so the revert works
+    // from whichever of the two clicks we died on.
+    // ponytail: reverted through the UI because `setMediaKillSwitch` is an ownerMutation and
+    // `convex run` carries no user identity; an internal revert helper is the upgrade path.
+    try {
+      await page.reload();
+      await page.getByRole("tab", { name: "Operator" }).click();
+      // `isVisible()` does not auto-wait — ask only once the control has actually rendered, or a
+      // premature `false` skips the revert and re-creates the bug this block exists to prevent.
+      await mediaToggle
+        .getByText(/^(On|Off) — paid generation/)
+        .waitFor({ state: "visible", timeout: 20_000 });
+      if (await mediaToggle.getByText("On — paid generation is paused.").isVisible()) {
+        await mediaToggle.getByRole("button", { name: /^Turn off$/ }).click();
+        await mediaToggle.getByRole("button", { name: /^Confirm — Turn off$/ }).click();
+      }
+    } catch (revertError) {
+      // Swallowing would hide the real failure; rethrowing would REPLACE it. Shout instead.
+      console.error(
+        "[finance.spec] MEDIA KILL SWITCH MAY STILL BE ON deployment-wide — revert failed:",
+        revertError,
+      );
+    }
+  }
   await expect(mediaToggle.getByText("Off — paid generation permitted.")).toBeVisible();
 
   // ── 8. Responsive + keyboard, at the two breakpoints the UAT also checks ────────────
@@ -344,9 +390,9 @@ test("connected cost console: coverage, rails, unlanded meaning and the owner bo
 });
 
 // Runs AFTER the test above, which is what promotes this browser's user to owner via
-// `owner:bootstrapOwner`. That grant has no inverse, so an owner-tab assertion placed before it
-// would observe nothing and one placed in an earlier file/worker could poison the non-owner
-// assertions above — hence one file, one ordering, owner last. Deliberately does NOT call
+// `owner:bootstrapOwner`. An owner-tab assertion placed before it would observe nothing, and one
+// placed in an earlier file/worker could poison the non-owner assertions above — hence one file,
+// one ordering, owner last; `afterAll` hands the account back after. Deliberately does NOT call
 // `seedOnboarded` again: the connected test above already cleared the onboarding gate for this
 // same signed-in tenant, and that state does not un-set itself.
 test("an owner gets the Operator tab, and the deployment controls live there", async ({ page }) => {
