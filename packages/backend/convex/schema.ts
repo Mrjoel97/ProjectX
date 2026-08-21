@@ -2088,6 +2088,13 @@ export default defineSchema({
     mimeType: v.optional(v.string()),
     bytes: v.optional(v.number()),
     failureReason: v.optional(v.string()), // a CODE only (the calendar.ts reasonCode idiom) — never provider prose
+    /** 25.1-03 (D5): the vault doc this job's asset was SAVED as, as a doc REF (the `asset.docId`
+     *  rule — never a URL, never bytes). Written by `mediaComplete.landResult`'s image save and
+     *  read back as its idempotency guard: set ⇒ this job's bytes are already filed, so a second
+     *  landing files nothing. Deliberately PER JOB rather than per plan — after D8 one plan can
+     *  hold several successful images, and a per-plan pointer would make the second one
+     *  unsaveable. Optional ⇒ widen-only, no migration and no backfill. */
+    vaultDocId: v.optional(v.id("vaultDocuments")),
     createdAt: v.number(),
     updatedAt: v.number(),
   })

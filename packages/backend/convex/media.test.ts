@@ -3576,6 +3576,16 @@ describe("25.1-03 (D5) the generated image becomes a durable vault asset at its 
     );
     await landImage(t, jobId);
     expect(await imageDocs(t)).toHaveLength(0);
+
+    // …and the MODE is what excludes it, not the absence of a prompt. `stageMediaPlan` resets the
+    // row before staging a reel, so a reel carrying a leftover `imagePrompt` is unreachable today —
+    // this pins the discriminator so a refactor that leans on the prompt alone reddens here.
+    await t.run(async (ctx) =>
+      ctx.db.patch(planId, { mediaMode: "reel", imagePrompt: "a leftover image prompt" }),
+    );
+    await t.run(async (ctx) => await ctx.db.patch(jobId, { status: "submitted" }));
+    await landImage(t, jobId);
+    expect(await imageDocs(t)).toHaveLength(0);
   });
 
   test("the doc belongs to the JOB's tenant, never the reader's", async () => {
@@ -3585,6 +3595,36 @@ describe("25.1-03 (D5) the generated image becomes a durable vault asset at its 
     const docs = await imageDocs(t);
     expect(docs).toHaveLength(1);
     expect(docs[0]?.tenantId).toBe(B);
+  });
+
+  test("a job pointing at a FOREIGN plan saves nothing — the prompt is never crossed over", async () => {
+    const t = harness();
+    // Only reachable through a bug, and that is the point: the doc's TEXT is the plan's prompt, so
+    // a row whose tenant and whose plan disagree must file nothing rather than pick a side.
+    const { planId } = await seedImagePlan(t, B, "B's private brief");
+    const jobId = await t.run(async (ctx) =>
+      ctx.db.insert("mediaJobs", {
+        tenantId: A,
+        planId,
+        batchId: "batch_crossed",
+        blockIndex: 0,
+        provider: "openai",
+        kind: "image",
+        model: MEDIA_DEFAULT_IMAGE.model,
+        spec: {
+          kind: "image",
+          width: MEDIA_DEFAULT_IMAGE.width,
+          height: MEDIA_DEFAULT_IMAGE.height,
+        },
+        promptHash: "0".repeat(64),
+        status: "submitted",
+        estUsd: 0.01,
+        createdAt: T0,
+        updatedAt: T0,
+      }),
+    );
+    await landImage(t, jobId);
+    expect(await imageDocs(t)).toHaveLength(0);
   });
 });
 

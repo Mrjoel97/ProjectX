@@ -1,5 +1,28 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-08-21 (25.1-03, D5 — **A GENERATED IMAGE NOW REACHES THE VAULT.**
+> media.test.ts D5 block 5/5, four guards mutation-verified.)
+>
+> **The invariant this entry adds: every image landing that is a DELIVERABLE files exactly one
+> vault doc, and every image landing that is an INTERMEDIATE files none.** Before this a standalone
+> image existed only as `mediaJobs.assetStorageId`, read through the plan row — so recycling the
+> thread's plan (`plans.resetPlan`) made the user's finished, paid-for image unreachable from every
+> surface at once.
+>
+> - The save lives in `mediaComplete.saveImageToVault`, called from `landResult`'s success arm —
+>   NOT beside the storage write in `media.ts`. `landResult` is the one terminal every image
+>   landing routes through (the fal webhook, the OpenAI inline `storeAndLand`, and 25.1-02's
+>   watchdog sweep); a save on any single caller would miss the others.
+> - It is SCOPED to the standalone image (`plans.mediaMode === "image"`, the discriminator
+>   `batchToSubmit`/`imageEstimate` already read). A reel's scene still is the same `kind: "image"`
+>   row, but its bytes are an intermediate `deleteIntermediates` deletes at the render terminal —
+>   vaulting one would file a doc pointing at a blob that is about to vanish.
+> - Idempotency is `mediaJobs.vaultDocId`, PER JOB and never per plan: after D8 one plan can hold
+>   several successful images, and a per-plan pointer would make the second one unsaveable.
+> - `audit` gains `media.image_saved` (planId + jobId + docId — three refs). The prompt is the vault
+>   doc's TEXT and never enters the log plane; `llmRedaction.test.ts`'s payload-literal count moved
+>   12 -> 13 and the media audit-site pin 7 -> 8 (mediaComplete 1 -> 2).
+
 > Last verified: 2026-08-21 (25.1-02, D3 — **A SEVERED SCHEDULER CHAIN NOW HAS A WATCHDOG.**
 > reliabilitySweep.test.ts 23/23, eleven guards mutation-verified.)
 >

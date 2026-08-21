@@ -1396,7 +1396,9 @@ test("media audit payloads are refs-only — every key is on the allow-list", ()
   // refs-only by the §4 test: the vault doc the reel became, and how many citations rode with it.
   // -> 12 at 25.1-01: `onRenderComplete`'s dead letter in mediaComplete.ts (planId + reasonCode,
   // both pre-existing allow-listed refs) — the retrier terminal for a crashed renderReel run.
-  expect(literals.length, "no media audit payloads found - the scan is vacuous").toBe(12);
+  // -> 13 at 25.1-03 (D5): `media.image_saved` in mediaComplete.ts (planId + jobId + docId). No new
+  // keys — three refs. The PROMPT is the vault doc's text and never enters the log plane.
+  expect(literals.length, "no media audit payloads found - the scan is vacuous").toBe(13);
   for (const [file, literal] of literals) {
     for (const key of keysOf(literal)) {
       expect(
@@ -1446,19 +1448,24 @@ test("the media log-plane surface is PINNED: exactly 7 audit sites across the th
   // against MEDIA_AUDIT_ALLOWED above. 1 -> 2 at 20-15: the render terminal. 4 -> 6 at 33-04:
   // the auto-retry event in the render terminal and the manual retry mutation. 6 -> 7 at 33-05:
   // `media.reel_saved`, in `saveReelToVault` — the one place the finished reel becomes a vault doc.
+  // 7 -> 8 at 25.1-03 (D5): `media.image_saved`, in `saveImageToVault` — the same event for the
+  // other media kind, at the LANDING terminal instead of the render terminal.
   const sites = MEDIA_MODULES.map(
     (f) => [...stripCode(readSource(f)).matchAll(/internal\.audit\.log\b/g)].length,
   );
   expect(
     sites.reduce((a, b) => a + b, 0),
     "media audit call-site count changed - is the new payload refs-only? (20-09/20-16/20-17/33-04 each bump this)",
-  ).toBe(7);
+  ).toBe(8);
   // And WHERE they live: the three job terminals — the fal landing, render and caption burn — plus
   // 33-02's explicit user confirmation event, 33-04's auto-retry event beside the render terminal,
   // and 33-04's manual-retry event. `media.ts` still has no job-path log sink: its two audit sites
   // are `confirmClaim` and `retryRender`, whose payloads are the refs-only literals reviewed above.
   expect(sites[0], "media.ts holds the claim-confirmation and manual-retry audit sites").toBe(2);
-  expect(sites[1], "mediaComplete.ts is the landing terminal").toBe(1);
+  expect(
+    sites[1],
+    "mediaComplete.ts is the landing terminal, plus 25.1-03's image vault save",
+  ).toBe(2);
   expect(
     sites[2],
     "render/renderReel.ts holds the render terminal, its auto-retry event, the caption terminal, and 33-05's reel_saved",

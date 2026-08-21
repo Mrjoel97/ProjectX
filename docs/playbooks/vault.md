@@ -1,5 +1,23 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Last verified: 2026-08-21 (25.1-03, D5 — **a new agent-written doc kind: `image`.**
+> The generated-media plane now files BOTH of its deliverables here.)
+>
+> - `kind: "image"` joins `kind: "reel"` as a code-owned token (`vaultDocuments.kind` is
+>   `v.string()`, so there is no union to widen and no migration). Written by exactly one site,
+>   `mediaComplete.saveImageToVault`, at the media landing terminal.
+> - The row mirrors the reel's two-mime shape: `mimeType: "text/markdown"` (the artifact of record —
+>   the PROMPT is the text, so the image is searchable and groundable, and it rides the ordinary
+>   embed rail through `startIngest`) with `storedMimeType` naming the actual image bytes in
+>   `storageId`, which is what `PreviewModal`'s `storedMimeType ?? mimeType` renders.
+> - **It files under `images`, not `workspace-docs`, and that is a deliberate divergence from the
+>   reel.** `categoryFor` is called with the BYTES' mime and its own rule decides ("an uploaded
+>   image is still an image"): a user hunting for the picture they made looks under Images. The
+>   reel's `workspace-docs` filing predates this and is left alone.
+> - `origin` is NOT set, exactly as `saveReelToVault` leaves it — an `origin: "agent"` row is one
+>   that is never ingested, and both media docs ARE ingested. Provenance for these rows is
+>   `source: "media"` + `sourcePlanId`.
+
 > Last verified: 2026-08-15 (Drive root error boundary). Both root-level `files.list` calls are
 > load-bearing: if either fails, `listDriveFolders` returns `drive_error` instead of presenting an
 > incomplete response as an empty Drive. The optional `drives.list` shared-drive probe may still
@@ -7,7 +25,7 @@
 
 > Touched 2026-08-15 (phase 14→25 gap-audit session) to clear the §9 Stop hook — **NOT a
 > verification.** **This session changed no product code at all** — only
-> `.planning/phases/25-private-beta-productionization/25-PREREQUISITE-EVIDENCE.md`.
+
 > `packages/backend/convex/vaultDrive.ts` and `vaultDrive.test.ts` are *still* carrying the same
 > uncommitted in-flight changes from the concurrent Drive/media lane that `f885a82` named earlier
 > today — now uncovered for the third session running. That work remains unread and unattested

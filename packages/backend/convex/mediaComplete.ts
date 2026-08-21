@@ -20,6 +20,7 @@ import { deckStillNeedsJob } from "@pikar/core/render";
 import { hasAssetSource } from "@pikar/core/storyboard";
 import type { MediaSpec, VideoRes } from "@pikar/cost/media";
 import { estimateMediaUsd } from "@pikar/cost/media";
+import { categoryFor } from "@pikar/vault";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -30,9 +31,13 @@ import { rateLimiter } from "./guardrails";
 // 25.1-01 (D2): renderReel runs under the ActionRetrier — the `submitBatch` idiom
 // (cockpit.ts EXTERNAL_TARGETS) — so a throw after `markRendering` still terminalizes.
 import { retrier } from "./index";
+import { contentHash } from "./lib/hash";
 // The plain-function half of the ledger writer: the limiter movement and its row must commit
 // or fail together (FIN-01). A separate ctx.runMutation would be a second transaction.
 import { recordMovement } from "./spendLedger";
+// The SOLE legal way to start an ingest workflow (it wires the onComplete that prevents a
+// stranded `processing` row) — the `saveReelToVault` precedent, verbatim.
+import { startIngest } from "./vaultIngest";
 
 /** A row past this point is finished. Re-delivery of its webhook must change NOTHING — fal's retry
  *  policy is undocumented, so at-least-once is the only safe assumption. */
@@ -356,6 +361,75 @@ async function afterCaptionLanding(ctx: MutationCtx, row: Doc<"mediaJobs">): Pro
   });
 }
 
+/**
+ * THE IMAGE VAULT SAVE (25.1-03, D5) — `saveReelToVault`'s twin for the other media kind.
+ *
+ * Before this, a generated image existed ONLY as `mediaJobs.assetStorageId`. The canvas reads that
+ * through the plan row, so recycling the thread's plan (`plans.resetPlan`) made the user's finished
+ * image unreachable from every surface at once — bytes still billed for, still stored, and gone.
+ *
+ * It lives HERE rather than beside the storage write in `media.ts` because `landResult` is the ONE
+ * terminal every image landing routes through: the fal webhook, the OpenAI inline `storeAndLand`,
+ * and the 25.1-02 watchdog sweep. A save on any single caller would miss the others.
+ *
+ * **SCOPED TO THE STANDALONE IMAGE** (`plans.mediaMode === "image"`), which is the same
+ * discriminator `batchToSubmit` and `imageEstimate` already read. A reel's scene still is the same
+ * `kind: "image"` row but its bytes are an INTERMEDIATE: `deleteIntermediates` deletes them at the
+ * render terminal, so a vault doc for one would point at a blob that is about to vanish. The reel's
+ * own deliverable is vaulted by `saveReelToVault`.
+ *
+ * Idempotent through `mediaJobs.vaultDocId` — per JOB, because after D8 one plan can hold several
+ * successful images and a per-plan pointer would make the second one unsaveable.
+ */
+async function saveImageToVault(
+  ctx: MutationCtx,
+  row: Doc<"mediaJobs">,
+  asset: { storageId: Id<"_storage">; mimeType: string },
+): Promise<void> {
+  if (row.kind !== "image" || row.vaultDocId) return;
+  const plan = await ctx.db.get(row.planId);
+  // The prompt is CONTENT-PLANE text the human reviewed before clicking Generate. It is the doc's
+  // body (this is the user's own vault, §4's audit rule is about the LOG) and it is what makes the
+  // image findable by search months later — an image with no text is a thumbnail with no handle.
+  const prompt = plan?.mediaMode === "image" ? plan.imagePrompt?.trim() : undefined;
+  if (!plan || plan.tenantId !== row.tenantId || !prompt) return;
+
+  const docId = await ctx.db.insert("vaultDocuments", {
+    tenantId: row.tenantId,
+    title: `Image: ${prompt.length > 80 ? `${prompt.slice(0, 80)}…` : prompt}`,
+    kind: "image", // the queryable class marker (`kind` is v.string() — a code-owned token)
+    // The BYTES decide, and `categoryFor` says so itself ("an uploaded image is still an image"):
+    // a user hunting for the picture they made looks under Images, not under Workspace docs.
+    category: categoryFor({ source: "agent", mimeType: asset.mimeType }),
+    source: "media",
+    mimeType: "text/markdown", // SEARCHABLE_MIME ⇒ the prompt is chunked + embedded
+    storedMimeType: asset.mimeType, // what the BYTES are — the PreviewModal render branch
+    storageId: asset.storageId,
+    size: new TextEncoder().encode(prompt).length,
+    contentHash: await contentHash(prompt),
+    text: prompt,
+    status: "processing",
+    sourcePlanId: row.planId, // Phase-26 provenance: this IS an authoritative write site
+    createdAt: Date.now(),
+  });
+  // The pointer BEFORE the ingest start: the guard must be set even if the workflow start throws,
+  // or a retried landing files a duplicate.
+  await ctx.db.patch(row._id, { vaultDocId: docId });
+  await startIngest(ctx, {
+    vaultDocId: docId,
+    tenantId: row.tenantId,
+    correlationId: row.batchId,
+  });
+  // Refs and counts ONLY (§4) — no prompt, no title, no url.
+  await ctx.runMutation(internal.audit.log, {
+    tenantId: row.tenantId,
+    correlationId: row.batchId,
+    eventType: "media.image_saved",
+    actor: "media",
+    payload: { planId: row.planId, jobId: row._id, docId: String(docId) },
+  });
+}
+
 export const landResult = internalMutation({
   args: {
     jobId: v.id("mediaJobs"),
@@ -525,6 +599,12 @@ export const landResult = internalMutation({
     // of a depth-tracking parser — the code bends to make the guard cheap, not the other way round.
     const resolution = resolutionRef(row, outcome.actual);
     await audit({ assetHash: outcome.assetHash, verdict, actualCents, reconciled, resolution });
+    // D5: the bytes reach the VAULT before any trigger fires — a save that ran after the render
+    // trigger would be racing a terminal that deletes intermediates.
+    await saveImageToVault(ctx, row, {
+      storageId: outcome.assetStorageId,
+      mimeType: outcome.mimeType,
+    });
     await maybeStartRender(ctx, row);
     await afterCaptionLanding(ctx, row);
     return null;
