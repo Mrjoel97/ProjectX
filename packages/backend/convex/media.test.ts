@@ -3416,6 +3416,31 @@ describe("standalone image: one reviewed prompt through the existing media rail"
     expect((await rows(t)).filter((row) => row.kind === "image")).toHaveLength(2);
   });
 
+  test("25.1-03 (D8): a SUCCEEDED image never blocks the next one — only in-flight work does", async () => {
+    const t = harness();
+    const { planId } = await seedImagePlan(t);
+    const first = await asA(t).mutation(api.media.generateImage, { planId });
+    expect(first.ok).toBe(true);
+    const [row] = await rows(t);
+
+    // Nothing ever deletes `mediaJobs` rows, so a `succeeded` row is a PERMANENT lock: one image
+    // per thread, for ever, with no message explaining why the button stopped working.
+    await t.run((ctx) => ctx.db.patch(row!._id, { status: "succeeded", updatedAt: T0 + 1 }));
+    expect(await asA(t).mutation(api.media.generateImage, { planId })).toMatchObject({ ok: true });
+    expect((await rows(t)).filter((r) => r.kind === "image")).toHaveLength(2);
+
+    // …and the guard still holds on GENUINELY in-flight work, in both of its states.
+    for (const status of ["queued", "submitted"] as const) {
+      const active = (await rows(t)).find((r) => r.status !== "succeeded");
+      await t.run((ctx) => ctx.db.patch(active!._id, { status, updatedAt: T0 + 2 }));
+      expect(await asA(t).mutation(api.media.generateImage, { planId })).toEqual({
+        ok: false,
+        reason: "already_started",
+      });
+      expect((await rows(t)).filter((r) => r.kind === "image")).toHaveLength(2);
+    }
+  });
+
   test("proposal staging is free and reset clears both image fields", async () => {
     const t = harness();
     const planId = await t.mutation(internal.plans.insertPlan, {
@@ -6745,7 +6770,12 @@ describe("33-05 saveReelToVault: one vault doc per plan, at every pipeline termi
     expect(docs[0]?.storageId).toBe(mp4);
   });
 
-  test("captions OWED → the render terminal does NOT save; the burn terminal will", async () => {
+  // 25.1-03 (D6): this test asserted the OPPOSITE until the reel-vault gate was found to be a
+  // guaranteed miss. Captions are pinned on for every reel (`cockpit.ts`, `media.ts`), so
+  // `captionsComing` was true at every render terminal that ever ran — and a caption pass that
+  // stalls or is swept never reaches the burn terminal, so the reel was published and NEVER
+  // vaulted. The save now happens at the render terminal too; the upsert makes the two converge.
+  test("captions OWED → the render terminal SAVES ANYWAY, and the burn RE-POINTS the same doc", async () => {
     const t = harness();
     const { planId, batchId } = await seedRenderable(t, { blocks: 2 });
     await t.run(async (ctx) => {
@@ -6784,7 +6814,92 @@ describe("33-05 saveReelToVault: one vault doc per plan, at every pipeline termi
         },
       }),
     );
-    expect(await reelDocs(t)).toHaveLength(0);
+    const atRender = await reelDocs(t);
+    expect(atRender).toHaveLength(1);
+    expect(atRender[0]?.storageId).toBe(mp4);
+
+    // The burn lands later over the captioned cut: the SAME doc repoints, and the uncaptioned
+    // blob it used to hold is deleted — one doc per plan, no second row, no leaked mp4.
+    const captioned = await storeBlob(t, new Uint8Array([2]), "video/mp4");
+    await t.run(async (ctx) =>
+      ctx.runMutation(internal.render.renderReel.recordCaptionBurn, {
+        tenantId: A,
+        planId,
+        batchId,
+        result: { ok: true, captionedStorageId: captioned, renderMs: 1 },
+      }),
+    );
+    const afterBurn = await reelDocs(t);
+    expect(afterBurn).toHaveLength(1);
+    expect(afterBurn[0]?._id).toBe(atRender[0]?._id);
+    expect(afterBurn[0]?.storageId).toBe(captioned);
+    expect(await blobExists(t, mp4)).toBe(false);
+  });
+
+  // ── 25.1-03 (D7): a SECOND reel in the same thread must not destroy the first ───────────────
+  test("after a reset the next reel gets its OWN doc — reel #1's doc and mp4 both survive", async () => {
+    const t = harness();
+    const { planId, batchId } = await seedRenderable(t, { blocks: 2 });
+    const render = (mp4: Id<"_storage">) =>
+      t.run(async (ctx) =>
+        ctx.runMutation(internal.render.renderReel.recordRender, {
+          tenantId: A,
+          planId,
+          batchId,
+          result: {
+            ok: true,
+            renderStorageId: mp4,
+            sidecarStorageId: await ctx.storage.store(
+              new Blob([RENDER_SIDECAR], { type: "application/json" }),
+            ),
+            sidecarHash: "c".repeat(64),
+            sceneCount: 2,
+            renderMs: 1,
+            gatesPassed: 1,
+            summary: { durationS: 20, sceneCount: 2, gates: ["g"] },
+          },
+        }),
+      );
+
+    const mp4One = await storeBlob(t, new Uint8Array([1]), "video/mp4");
+    await render(mp4One);
+    const [docOne] = await reelDocs(t);
+    expect(docOne?.storageId).toBe(mp4One);
+
+    // "Start over" in the same thread. `stageMediaPlan` recycles the row through `resetPlan`, and
+    // the deck the next proposal writes lands on the very same plan.
+    await t.mutation(internal.plans.resetPlan, { planId });
+    const { shots } = await t.run(async (ctx) => {
+      const plan = await ctx.db.get(planId);
+      return { shots: plan?.shots };
+    });
+    expect(shots).toBeUndefined();
+    await t.run(async (ctx) =>
+      ctx.db.patch(planId, {
+        clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
+        shots: [
+          {
+            index: 0,
+            type: "AI",
+            seconds: MEDIA_DEFAULT_VIDEO.seconds,
+            windowStartMs: 0,
+            description: "a different reel entirely",
+            narration: "the second reel",
+            prompt: "p",
+          },
+        ],
+      }),
+    );
+
+    const mp4Two = await storeBlob(t, new Uint8Array([2]), "video/mp4");
+    await render(mp4Two);
+
+    const docs = await reelDocs(t);
+    expect(docs).toHaveLength(2);
+    const first = docs.find((d) => d._id === docOne?._id);
+    expect(first?.storageId).toBe(mp4One); // never repointed at the new reel
+    expect(await blobExists(t, mp4One)).toBe(true); // …and never eaten by the orphan cleanup
+    expect(docs.find((d) => d._id !== docOne?._id)?.storageId).toBe(mp4Two);
   });
 });
 
