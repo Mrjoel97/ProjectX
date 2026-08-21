@@ -2,6 +2,7 @@
 
 **Captured:** 2026-08-21, owner-directed ("gain deep understanding then draft its plan").
 **Status:** DESIGN CAPTURE, pre-phase. Registered as gap G13 in the Consistency Audit (rev 4). Not scheduled; prerequisites below. Every factual claim here was verified against source on branch `closure/phases-14-25` with file:line evidence (verification sweep 2026-08-21).
+**Companion:** §5 — the **Business Ledger** (living dossier), owner-raised and accepted 2026-08-21. Same design family, same prerequisites: the ledger is where the brain's orientation persists.
 **What it is:** the missing orient-and-propose layer — a persistent model of the user's business goals that senses state, holds an agenda, and proactively stages governed proposals through the existing approval gate to advance those goals. The system today has "sense" and "act"; it has no "orient" and almost no initiative.
 
 ---
@@ -51,7 +52,43 @@
 
 **New ADRs required:** autonomy tiers (v2); agenda persistence + gap lifecycle (v0); goal-write proposal flow vs §10 (v1).
 
-## 5. Sequencing and prerequisites
+## 5. Companion concept — the Business Ledger (living dossier)
+
+Owner-raised 2026-08-21 and accepted into this design family: the vault gains a business-shaped structure whose documents the *system* maintains as the business evolves, each carrying references back to the raw sources that justify it. This is the substrate the brain orients **on** — the Goal Engine's memory architecture.
+
+**Two distinct ideas; build the second and let it imply the first.**
+1. *Organized storage* — business-shaped folders (foundational, operations, sales, financial) maintained by the agent rather than the user. A filing improvement.
+2. *Living documents* — system-authored, template-shaped artifacts continuously updated as the business changes, each citing its sources. This is the difference between a filing cabinet and a **general ledger**, and it is the part worth building.
+
+**What it plugs into (all verified, §1 evidence applies):**
+- **The blueprint is already the first living document** — segment-anchored, carrying the intention plane, and *generated* into the agent's context on every turn via `spineForTenant`. The pattern being proposed already exists in one place; this generalizes it.
+- **The framework already supplies the taxonomy.** The evaluation engine ranks gaps by gate order (Market → Offer → Money → Leads → Scale, `gateOrder(rx.gate)`). Those gates *are* the section structure — do not invent a parallel folder ontology from filing habits.
+- **A provenance-tagged claim store already exists**: the scorecard plus `fieldProvenance` (ADR-021) records, per dot-path, who asserted a value, from what source, and when.
+- **Vault folders exist** (Phase 15.3) and citations/`retrievedAt` plumbing exists on research documents.
+
+### Invariant 1 — a living document is a RENDERED VIEW over provenance-tagged claims, never a free-text file the agent edits
+
+A document the agent "always monitors and grows" is a document with no stable author, and this is the most dangerous possible surface for the provenance-laundering defect class (shipped three times here). Concretely: if the agent writes *"our CAC is $47"* into a foundational document, and next month the evaluation engine reads that document as ground truth, the system has silently promoted its own guess into a fact and will reason from it forever.
+
+So: the document is generated from the claim store, exactly as the blueprint spine already is. "The agent updates the document" must mean *the agent proposes a claim; confirmed claims re-render the view* — never *the agent overwrites the truth*. This also delivers the thing that makes a ledger valuable: the ability to ask **what changed, and on whose authority**. It inherits, unmodified, the existing guards — `userProvided` stays literal, an agent write drops the path from it, `actor` is stamped from the door it came through.
+
+### Invariant 2 — the raw source is never replaced by the structured version
+
+Information lands in the templates *as well as* raw, never instead of. Extraction in this repo is documented as lossy on purpose (`CONCERNS.md:27` — "treat extraction/render results as lossy and keep originals downloadable"); if the structured view ever becomes the only copy, evidence has been destroyed silently. Originals stay immutable; the structured layer references them.
+
+### Scope discipline — auto-filing is suggest-first, and it is deferred longest
+
+Moving a user's existing documents without asking is a trust event; people have opinions about their filing, and overnight reorganization feels invasive even when it is correct. The lazy, safer path: the agent **suggests placement at ingest** ("this looks like a financial document — file it under Financial?") and the structure grows from new documents. Same destination in two months, without the "where did my files go" moment. Mass migration of existing files is explicitly out of v0/v1.
+
+### Why this is the Goal Engine's other half
+
+Today the brain would have nowhere to put what it learns: gaps live in the latest evaluation row (thread-scoped, last-write-wins), goals live in a table the agent may not write, research lands as flat markdown. Nothing accumulates "what we know about this business" coherently over time. The ledger is that place — where **orientation persists**.
+
+And for the idea-stage user it closes the loop the owner described: the framework's sections start empty → each empty section is a gap → each gap becomes a question the agent asks in conversation → each answer is stored as a provenance-tagged claim (the existing quiet `recordScorecardAnswer` path) → the foundational documents materialize as a *byproduct of the interview* rather than as a demand made up front. The business system builds itself as a side effect of the agent doing its job.
+
+**Build staging:** ledger v0 = render one living document (the foundational/business dossier) from the existing claim store, read-only, citing sources — no new claim types, no filing changes. v1 = section-per-gate coverage plus "what changed and on whose authority" history. v2 = suggest-at-ingest placement. Mass re-filing: not scheduled. Same prerequisite chain as the rest of this family — *a system that maintains documents unreliably is worse than one that does not maintain them at all*, so honest terminals (25.1) come first.
+
+## 6. Sequencing and prerequisites
 
 This is the capstone, and its prerequisites are the reason for much of the current queue:
 1. **Phase 25.1 (in execution)** — a brain acting unprompted on a pipeline with silent failure states would destroy trust instantly; honest terminals are its precondition.
