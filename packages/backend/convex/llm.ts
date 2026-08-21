@@ -2553,9 +2553,7 @@ export function buildCockpitTools(
         const listed = await ctx.runQuery(internal.calendarEvents.listManageable, { tenantId });
         if (listed.events.length === 0) {
           const omitted =
-            listed.omitted > 0
-              ? ` ${listed.omitted} other event(s) are not safe to change.`
-              : "";
+            listed.omitted > 0 ? ` ${listed.omitted} other event(s) are not safe to change.` : "";
           return `No Pikar-managed calendar events are currently available to change.${omitted}`;
         }
         const lines = listed.events.map(
@@ -2684,7 +2682,7 @@ export function buildCockpitTools(
           return snapshot.code === "attendees_present"
             ? "That event has attendees, so Pikar will not change it. Nothing was staged."
             : "That event is not currently safe to change. Refresh or reconnect, then try again; " +
-              "nothing was staged.";
+                "nothing was staged.";
         }
         if (!snapshot.etag) {
           return "That event has no safe version marker. Refresh it before proposing a change; nothing was staged.";

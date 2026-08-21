@@ -176,7 +176,7 @@ describe("the cron actually registers the sweep", () => {
   // The cron is registered and fires; the ARMING GATE decides whether it writes. Both arms are
   // asserted because "ships dormant" is a claim about production behaviour, and an unproven guard
   // is exactly the vacuous pattern this phase kept finding (25.1-02, -03, -05, -06).
-  test("runSweep is DORMANT unless RELIABILITY_SWEEP_ARMED is exactly \"1\"", async () => {
+  test('runSweep is DORMANT unless RELIABILITY_SWEEP_ARMED is exactly "1"', async () => {
     const t = harness();
     const now = Date.now();
     const planId = await seedPlan(t, {

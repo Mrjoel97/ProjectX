@@ -28,7 +28,12 @@ const LINK = { color: "var(--ink)", textDecoration: "underline" };
 // mostly personal accounts, so that was the majority path.
 const REMOVAL_LINKS = (
   <>
-    <a href="https://account.microsoft.com/privacy/app-access" target="_blank" rel="noreferrer" style={LINK}>
+    <a
+      href="https://account.microsoft.com/privacy/app-access"
+      target="_blank"
+      rel="noreferrer"
+      style={LINK}
+    >
       Microsoft account → App access
     </a>{" "}
     for a personal account, or{" "}
@@ -72,8 +77,8 @@ export function DisconnectMicrosoft() {
         setNote(
           deleted ? (
             <>
-              Pikar's copy of your token is deleted. Microsoft still lists Pikar on your account — we
-              have no way to remove it for you. Remove it yourself at {REMOVAL_LINKS}
+              Pikar's copy of your token is deleted. Microsoft still lists Pikar on your account —
+              we have no way to remove it for you. Remove it yourself at {REMOVAL_LINKS}
             </>
           ) : (
             <>

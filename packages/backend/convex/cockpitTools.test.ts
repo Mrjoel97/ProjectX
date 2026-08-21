@@ -1746,7 +1746,9 @@ test("fresh attendees and reconnect both leave the plan untouched", async () => 
     "fetch",
     vi
       .fn()
-      .mockResolvedValueOnce(Response.json({ access_token: "fresh-access-token", expires_in: 3600 }))
+      .mockResolvedValueOnce(
+        Response.json({ access_token: "fresh-access-token", expires_in: 3600 }),
+      )
       .mockResolvedValueOnce(inspectedGoogleEvent({ attendees: [{}] })),
   );
   try {

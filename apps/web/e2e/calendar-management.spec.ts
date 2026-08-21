@@ -70,10 +70,7 @@ function seedManaged(
 }
 
 function seedTrace(tenantId: string, threadId: string, turnId: string) {
-  for (const [index, tool] of [
-    "listManagedCalendarEvents",
-    "proposeCalendarChange",
-  ].entries()) {
+  for (const [index, tool] of ["listManagedCalendarEvents", "proposeCalendarChange"].entries()) {
     const stepKey = `${turnId}:${index}`;
     convexRun("agentSteps:record", {
       tenantId,
@@ -141,7 +138,9 @@ test("offline list → update/delete stage renders truthful management cards bef
   await expect(proposed).toContainText("45 min");
   await expect(proposed).not.toContainText("Time:"); // unchanged fields are not repeated as changed
   await expect(updateCard).not.toContainText(/recipient|subject|email preview/i);
-  await expect(updateCard.getByRole("button", { name: /Approve & update calendar/i })).toBeEnabled();
+  await expect(
+    updateCard.getByRole("button", { name: /Approve & update calendar/i }),
+  ).toBeEnabled();
   const trace = workspace.getByTestId("activity-card");
   await expect(trace).toContainText("Found events I can change");
   await expect(trace).toContainText("Calendar change ready to approve");

@@ -599,16 +599,17 @@ describe("17-09 Task 2 — stageChange is atomic, tenant-safe, and etag-pinned",
 
     const raced = await managedRow(t);
     await t.run((ctx) => ctx.db.patch(raced, { etag: '"newer-app-stage"' }));
-    expect(
-      await t.mutation(internal.calendarEvents.stageChange, stageArgs(planId, raced)),
-    ).toEqual({ ok: false, code: "conflict" });
+    expect(await t.mutation(internal.calendarEvents.stageChange, stageArgs(planId, raced))).toEqual(
+      { ok: false, code: "conflict" },
+    );
     expect((await t.run((ctx) => ctx.db.get(raced)))?.etag).toBe('"newer-app-stage"');
 
     await t.run((ctx) => ctx.db.patch(planId, { kind: "finance_write", status: "proposed" }));
     const live = await managedRow(t);
-    expect(
-      await t.mutation(internal.calendarEvents.stageChange, stageArgs(planId, live)),
-    ).toEqual({ ok: false, code: "plan_mismatch" });
+    expect(await t.mutation(internal.calendarEvents.stageChange, stageArgs(planId, live))).toEqual({
+      ok: false,
+      code: "plan_mismatch",
+    });
     expect((await t.run((ctx) => ctx.db.get(planId)))?.kind).toBe("finance_write");
   });
 });

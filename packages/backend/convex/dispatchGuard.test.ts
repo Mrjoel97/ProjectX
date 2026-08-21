@@ -328,7 +328,9 @@ test("proposeCalendarChange is inspect-then-stage only; no provider writer or Ap
 
   const inspect = toolBody.indexOf("internal.calendar.inspectEvent");
   const stage = toolBody.indexOf("internal.calendarEvents.stageChange");
-  expect(inspect, "mutation: skip provider inspection and stage the stored etag").toBeGreaterThan(0);
+  expect(inspect, "mutation: skip provider inspection and stage the stored etag").toBeGreaterThan(
+    0,
+  );
   expect(stage, "mutation: inspect but never persist the fresh snapshot").toBeGreaterThan(inspect);
   expect(toolBody.match(/internal\.calendarEvents\.stageChange/g)).toHaveLength(1);
 

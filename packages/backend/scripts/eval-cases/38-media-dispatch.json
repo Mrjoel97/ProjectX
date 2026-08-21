@@ -11,8 +11,5 @@
     "recipientCount": 0,
     "attachmentCount": 0
   },
-  "needles": [
-    "benchmark-MD1",
-    "rebrand"
-  ]
+  "needles": ["benchmark-MD1", "rebrand"]
 }
