@@ -36,7 +36,12 @@ import {
 import schema from "./schema";
 
 beforeEach(() => vi.useFakeTimers());
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  // The arming-gate test stubs RELIABILITY_SWEEP_ARMED; without this the last stub ("1") outlives
+  // it and any later test that walks into `runSweep` would silently be testing an ARMED sweep.
+  vi.unstubAllEnvs();
+});
 
 // Raw sources for the cron-registration scan (the `worm.test.ts` idiom — edge-runtime has no
 // node:fs, so Vite's raw loader is how a test reads a sibling module's text).
