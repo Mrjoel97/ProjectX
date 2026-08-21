@@ -20,6 +20,10 @@ const sources = import.meta.glob("./**/*.ts", {
 
 describe("the manifest covers every name source actually reads", () => {
   const consumed = new Set<string>();
+  /** Names reached through a LITERAL `process.env.X`. */
+  const literal = new Set<string>();
+  /** Names reached through `requireEnvMedia("X")` — a `process.env[name]` indirection. */
+  const indirect = new Set<string>();
   for (const [path, content] of Object.entries(sources)) {
     if (path.endsWith(".test.ts") || path.includes("/_generated/")) continue;
     // Strip comments, because this module's OWN doc comment writes `process.env.X` as an example
@@ -36,6 +40,20 @@ describe("the manifest covers every name source actually reads", () => {
       .join("\n")
       .replace(/\/\*[\s\S]*?\*\//g, "");
     for (const [, name] of code.matchAll(/process\.env\.([A-Z_][A-Z_0-9]*)/g)) {
+      literal.add(name as string);
+      consumed.add(name as string);
+    }
+    // 25.1-06 (D12): THE SECOND WAY THIS CODEBASE READS AN ENV VAR. `requireEnvMedia("X")`
+    // (media.ts) is a `process.env[name]` lookup behind a helper, so the literal scan above cannot
+    // see a single one of its names — and every name it hid was a MEDIA name whose absence stalls a
+    // render inside a bare scheduled action while `envCheck` goes on reporting the deployment ready.
+    // Adding the call sites' string literals puts those names under BOTH drift checks below.
+    //
+    // Deliberately matches the STRING LITERAL, not a `[A-Z_]` shape: `Video_and_image_API_Key` is
+    // mixed-case (Alibaba's own name for the key, ADR-017) and a shape rule would silently drop it —
+    // which is how a scan gets a name wrong rather than missing.
+    for (const [, name] of code.matchAll(/requireEnvMedia\(\s*"([^"]+)"\s*\)/g)) {
+      indirect.add(name as string);
       consumed.add(name as string);
     }
   }
@@ -44,6 +62,21 @@ describe("the manifest covers every name source actually reads", () => {
     expect(consumed.size).toBeGreaterThan(20);
     expect(consumed).toContain("UNSUBSCRIBE_SECRET");
     expect(consumed).toContain("CONVEX_SITE_URL");
+  });
+
+  test("D12: the INDIRECT media reads are discovered, and the literal scan could NOT see them", () => {
+    // The second half is what makes this test load-bearing rather than decorative. If any of these
+    // names were ALSO read as a literal `process.env.X` somewhere, the extension above would be
+    // redundant and its removal would go unnoticed — so the absence is asserted, not assumed.
+    for (const name of ["MEDIA_RENDER_URL", "WAN_API_BASE_URL", "Video_and_image_API_Key"]) {
+      expect(indirect, `${name} is not read through requireEnvMedia`).toContain(name);
+      expect(
+        literal,
+        `${name} is now a literal read — the requireEnvMedia scan is no longer load-bearing`,
+      ).not.toContain(name);
+    }
+    // A floor, so a broken regex reads as failure rather than as "nothing indirect exists".
+    expect(indirect.size).toBeGreaterThanOrEqual(5);
   });
 
   test("every consumed name is classified — an unclassified addition fails here", () => {
