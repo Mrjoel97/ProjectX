@@ -13,15 +13,14 @@ provides:
   - An explicit record of the SC#7 nav-activation deviation
 affects: [26-11, finance, cash]
 
-status: PARTIAL — Task 1 executed, Task 2 (blocking owner UAT) NOT performed
+status: COMPLETE — Task 1 executed, Task 2 approved by the owner 2026-08-22, Task 3 recorded
 ---
 
-# 26-10 — Connected Finance route: the evidence, and what is still owed
+# 26-10 — Connected Finance route: executed browser gate, owner UAT, closure
 
-**This plan is NOT closed.** Task 1 ran and produced real evidence. Task 2 is a
-`gate="blocking"` human checkpoint and **has not happened**, so Task 3's closure is
-deliberately not claimed. This summary exists because the run produced findings worth
-recording now rather than after the checkpoint.
+**Closed 2026-08-22.** Task 1 ran, Task 2's blocking owner checkpoint was performed and
+**approved by the owner**, and this records Task 3. The UAT found one real defect, which was
+fixed and re-verified before approval — see "The UAT found a defect" below.
 
 ## The plan was replanned first, on evidence
 
@@ -103,11 +102,61 @@ outstanding (commit `d5d4841`, whose own body says three items "were never obser
 an **accepted deviation with a date and an authoriser**, not a satisfied criterion. It is also why
 26-18 (wave 14) closed while 26-10 (wave 7) did not.
 
-## Still owed
+## Task 2 — the blocking owner UAT, performed 2026-08-22
 
-- **Task 2, the blocking owner UAT.** Three items: the non-owner view (now observable for the first
-  time via `owner:revokeOwner` → observe → `bootstrapOwner`), the responsive/keyboard breakpoints,
-  and a human review of the Task 1 run rather than merely a green tick.
+All three items the 2026-08-09 record named as *not observed and not claimed* were observed.
+Evidence was gathered against local `convex dev` + a production build on `:3111`, as
+`joel.feruzi+phase21b@gmail.com` — a password-auth NON-OWNER. **The deployment owner was never
+demoted**: that account was promoted and put back instead, which the audit log shows as
+`owner-revoke` → `owner-grant` → `owner-revoke`.
+
+**Item 1 — the non-owner view.** Reachable for the first time, because `owner:revokeOwner` now
+exists. Operator tab count `0`; tabs offered exactly `Business, Pikar spend`; **not one** of
+`$50.00`/`$100.00`/`$250.00` anywhere in the DOM; no deployment-controls heading; and
+`finance:controls` refused over the wire with `OWNER_REQUIRED`. Promoted, the same account shows
+the Operator tab, all three ceilings, the "there is no single combined limit" copy, and all three
+controls with arm-then-confirm on the kill switches. Restored to non-owner afterwards
+(`revokeChanged: true`).
+
+**Item 2 — responsive and keyboard.** Desktop 1440 and tablet 834 clean. **Mobile 390 was broken**
+— see below.
+
+**Item 3 — rails and one movement per phase.** Tenant caps ($5/$10/$25) stay distinct from
+deployment ceilings ($50/$100/$250); they are never merged into one number. The two unlanded
+sentences genuinely differ: ingest *"Reserved and not yet settled — still expected to land"*, media
+*"Reserved and never returned… no refund path, so the difference is permanent — not pending."*
+
+## The UAT found a defect, and this is a DEVIATION from Task 3
+
+Task 3 says to leave the landed source untouched. **That was not possible and was not done.** The
+responsive item found the Cost Console clipping its own copy at 390×844 on `?tab=spend` —
+"three daily budg…", "from the lim…", "whether the next call w…". A checkpoint that finds a defect
+and then declines to fix it is not a checkpoint, so the fix landed before approval and the owner
+approved the fixed state.
+
+**Root cause was grid intrinsic sizing, not the tables.** Every container is `display: grid` with
+no explicit columns, so the implicit track is `auto` — it sizes to its widest item and refuses to
+go below it — and grid items default to `min-width: auto`. The ledger widened its column to 441px
+inside a 339px `main` and every sibling stretched to match. The three `scroller` wrappers already
+had `overflow-x: auto` and were **useless**: an element that cannot shrink never scrolls, it
+expands. Fixed with three properties and no markup change — `minWidth: 0` on `scroller`, and
+`gridTemplateColumns: "minmax(0, 1fr)"` on `stack`, the FinanceTabs page container and
+FinanceView's outer grid.
+
+**Why nothing caught it, which generalises past Finance.** The page never scrolled horizontally:
+`document.documentElement.scrollWidth` stayed exactly 390 because the content CLIPPED. A
+page-level overflow assertion therefore reports clean on a visibly broken page — the first probe
+written for this did exactly that. The metric that works is per-container (`main.scrollWidth` vs
+`main.clientWidth`) plus classifying each overflowing element by whether it sits inside a real
+horizontal scroller. Recorded in `dashboard-pages.md` for every page there, not just this one.
+
+Measured at 390×844 on `?tab=spend`: before 441/339 with 103 past the edge and 103 genuinely
+clipped; after 339/339 with 50 past the edge and **0 clipped** — the 50 are inside the ledger's
+scroller, which is intended. `financeView` + `cashView` 70/70; the three 26-10 evidence e2e tests
+still pass; `biome ci .` 638 files exit 0.
+
+## Still owed elsewhere
+
 - **Two red tests, characterised and out of 26-10 scope.**
   - `a number entered in the panel appears as a business figure` (Cash-side): passes alone, passes
     after test 2, fails after test 1, survives a 120s timeout so it is not budget. Characterised,
