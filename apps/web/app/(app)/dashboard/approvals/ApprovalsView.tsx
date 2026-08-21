@@ -25,6 +25,7 @@ type DecisionPage = FunctionReturnType<typeof api.approvals.listDecisions>;
 type DecisionItem = DecisionPage["items"][number];
 type Plan = NonNullable<FunctionReturnType<typeof api.plans.byThread>>;
 type PlanKind = AwaitingItem["kind"];
+type AttachmentLinks = FunctionReturnType<typeof api.plans.attachmentUrls>;
 
 const PAGE_SIZE = 25;
 const CLEARED_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
@@ -139,6 +140,45 @@ export function refusalMessage(reason: string): string {
       "This figure update was malformed and was not applied. Nothing changed.",
   };
   return messages[reason] ?? `The governed action refused (${reason}). Nothing was sent.`;
+}
+
+/**
+ * 25.1-04 (D9). `executePlan` returns `{ok: true, alreadyStarted: true}` for ANY status that is
+ * not `proposed` — `discarded`, `canceled` and `done` included — because its CAS only knows that
+ * it did not win the transition. The awaiting list is a reactive cache, so the click that lands
+ * here is a click on a card that no longer describes reality. The old copy ("This plan already
+ * started") asserted a start that may never have happened. The one thing this return CAN promise
+ * is that this click created nothing.
+ */
+export const STALE_PLAN_MESSAGE =
+  "This card was out of date — the plan it showed was already handled or replaced. Nothing new was started.";
+
+/**
+ * 25.1-04 (D10). `executePlan`'s media arm reserves against a SHOT DECK (`sceneDeckOf` /
+ * `deckOf`); a standalone image plan has neither, so the arm returns `no_deck` on every click that
+ * has ever been made here. Images are produced by `api.media.generateImage`, which only the
+ * workspace canvas calls. An Approve button on this card is structurally incapable of succeeding,
+ * so the card says where the working route is instead of offering a mute one.
+ */
+export const IMAGE_CANVAS_NOTE =
+  "Images are generated from the workspace canvas, not from this gate. Open the thread to generate or re-generate this image.";
+
+/**
+ * 25.1-04 (D9). A successful approve IS the `proposed → approved` transition, and
+ * `approvals.listAwaiting` paginates `proposed` only — so the card that produced the message is
+ * unmounted by the very mutation that produced it, and the user sees a row vanish with no outcome
+ * (indistinguishable from a broken button). The outcome is therefore held by the SECTION, keyed by
+ * plan, and rendered as a standalone card once its row has left the list. While the row is still
+ * live its own card shows the message, which is why a live id is filtered out here rather than
+ * shown twice. `null` means "cleared before a retry" and must not resurrect.
+ */
+export function persistentOutcomes(
+  outcomes: Record<string, string | null>,
+  liveIds: ReadonlySet<string>,
+): [string, string][] {
+  return Object.entries(outcomes).filter(
+    (entry): entry is [string, string] => entry[1] !== null && !liveIds.has(entry[0]),
+  );
 }
 
 /** 19-05 SC#5: a partial send comes back `ok: true` and must STILL name who was dropped and why.
@@ -322,7 +362,11 @@ export function actionLabel(kind: PlanKind, plan?: EmailApprovalPresentation): s
   return plan ? emailApprovalActionLabel(plan) : "Approve & send";
 }
 
-function PlanMeta({ item }: { item: AwaitingItem | ScheduledItem | InFlightItem }) {
+/** The three lane rows all satisfy this; stated structurally so `AwaitingCardBody` can be rendered
+ *  from a test fixture without minting Convex ids. */
+type PlanMetaFields = { createdAt: number; recipientCount: number; attachmentCount: number };
+
+function PlanMeta({ item }: { item: PlanMetaFields }) {
   return (
     <div
       style={{ display: "flex", gap: "0.8rem", flexWrap: "wrap", ...muted, fontSize: "0.82rem" }}
@@ -465,103 +509,63 @@ function ScheduleComposer({
   );
 }
 
-function AwaitingCard({ item }: { item: AwaitingItem }) {
-  const plan = useQuery(api.plans.byThread, { threadId: item.threadId });
-  const execute = useMutation(api.cockpit.executePlan);
-  const discard = useMutation(api.cockpit.discardPlan);
-  const setSendTime = useMutation(api.plans.setPlanSendTime);
-  const [busy, setBusy] = useState(false);
-  const [scheduleOpen, setScheduleOpen] = useState(false);
-  const [confirmDiscard, setConfirmDiscard] = useState(false);
-  const [attachmentsOpen, setAttachmentsOpen] = useState(false);
-  const [result, setResult] = useState<string | null>(null);
-  const attachments = useQuery(
-    api.plans.attachmentUrls,
-    attachmentsOpen ? { planId: item.planId } : "skip",
-  );
-
-  if (plan === undefined)
-    return <ApprovalsStateNotice state="loading">Loading plan details…</ApprovalsStateNotice>;
-  if (plan === null)
-    return (
-      <ApprovalsStateNotice state="error">
-        This plan is stale or no longer available.
-      </ApprovalsStateNotice>
-    );
-
-  async function approve() {
-    if (busy) return;
-    setBusy(true);
-    setResult(null);
-    try {
-      const response = await execute({ planId: item.planId });
-      if (!response.ok) setResult(refusalMessage(response.reason));
-      else if (response.alreadyStarted)
-        setResult("This plan already started. No duplicate action was created.");
-      else if (response.scheduled)
-        setResult(
-          `The absolute schedule is armed. Nothing runs before it fires.${withheldSuffix(response.withheld)}`,
-        );
-      // finance_write, `applied: 0`: every claim was older than the figure already stored, so the
-      // approval succeeded and NOTHING moved. "The governed action is now in flight" would imply a
-      // write that did not happen.
-      else if (response.applied === 0)
-        setResult("Your figures were already up to date, so nothing changed.");
-      else
-        setResult(
-          `Approval accepted. The governed action is now in flight.${withheldSuffix(response.withheld)}`,
-        );
-    } catch (error) {
-      setResult(error instanceof Error ? error.message : "Approval failed. Nothing was sent.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function schedule(epochMs: number) {
-    if (busy) return;
-    setBusy(true);
-    setResult(null);
-    try {
-      await setSendTime({ planId: item.planId, sendAt: epochMs });
-      const response = await execute({ planId: item.planId });
-      if (!response.ok) setResult(refusalMessage(response.reason));
-      else if (response.alreadyStarted)
-        setResult("This plan already moved. No duplicate schedule was created.");
-      else
-        setResult(
-          `Scheduled for ${formatAbsoluteInstant(epochMs, browserTimeZone())}.${withheldSuffix(response.withheld)}`,
-        );
-    } catch (error) {
-      setResult(error instanceof Error ? error.message : "Scheduling failed. Nothing was sent.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function doDiscard() {
-    if (busy) return;
-    setBusy(true);
-    try {
-      const response = await discard({ planId: item.planId });
-      setResult(
-        response.discarded
-          ? "Discarded. This plan cannot be re-armed."
-          : "This plan already moved; no second discard was written.",
-      );
-    } catch (error) {
-      setResult(error instanceof Error ? error.message : "Discard failed.");
-    } finally {
-      setBusy(false);
-      setConfirmDiscard(false);
-    }
-  }
-
+/**
+ * The presentational half of the awaiting card, split out of the connected component below so the
+ * two guarantees 25.1-04 closed can be asserted against RENDERED MARKUP rather than a regex over a
+ * 130-line JSX blob: the outcome notice is the FIRST child of the article (it used to sit under
+ * the discard fieldset, off the bottom of a card nobody scrolls), and an image plan renders no
+ * Approve button at all. `apps/web` has no jsdom, but `renderToStaticMarkup` needs none — the only
+ * thing it cannot run is `useQuery`, which is the whole reason the hooks stayed upstairs.
+ */
+export function AwaitingCardBody({
+  item,
+  plan,
+  busy,
+  result,
+  attachments,
+  attachmentsOpen,
+  scheduleOpen,
+  confirmDiscard,
+  onApprove,
+  onSchedule,
+  onDiscard,
+  onToggleAttachments,
+  onToggleSchedule,
+  onRequestDiscard,
+}: {
+  item: PlanMetaFields & { planId: string; threadId: string; kind: PlanKind };
+  plan: Plan;
+  busy: boolean;
+  result: string | null;
+  attachments: AttachmentLinks | undefined;
+  attachmentsOpen: boolean;
+  scheduleOpen: boolean;
+  confirmDiscard: boolean;
+  onApprove: () => void;
+  onSchedule: (epochMs: number) => Promise<void>;
+  onDiscard: () => void;
+  onToggleAttachments: () => void;
+  onToggleSchedule: () => void;
+  onRequestDiscard: (open: boolean) => void;
+}) {
+  // D10's ONE discriminator. `approvals.ts`'s `planKind` splits `plans.kind === "media"` into
+  // reel/image on `mediaMode` alone, so a reel is unaffected here by construction.
+  const imagePlan = item.kind === "image";
+  const threadHref = `/dashboard/workspace?thread=${encodeURIComponent(item.threadId)}`;
   return (
     <article
       style={{ ...card, borderLeft: "0.3rem solid var(--held-text)", ...stack }}
       data-plan-id={item.planId}
     >
+      {/* D9: the FIRST child of the card. This notice used to render below the discard fieldset —
+          the last thing in a card the eye never reaches — and on a SUCCESS it never rendered at
+          all, because the approve unmounted the card (see `persistentOutcomes`). */}
+      {result && (
+        <ApprovalsStateNotice state={result.includes("Nothing") ? "refusal" : "partial"}>
+          {result}
+        </ApprovalsStateNotice>
+      )}
+
       <div style={row}>
         <div style={{ ...stack, gap: "0.35rem", minWidth: 0 }}>
           <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
@@ -571,10 +575,7 @@ function AwaitingCard({ item }: { item: AwaitingItem }) {
           <h3 style={{ ...cardTitle, overflowWrap: "anywhere" }}>{titleFor(plan)}</h3>
           <PlanMeta item={item} />
         </div>
-        <Link
-          href={`/dashboard/workspace?thread=${encodeURIComponent(item.threadId)}`}
-          style={{ ...button, textDecoration: "none" }}
-        >
+        <Link href={threadHref} style={{ ...button, textDecoration: "none" }}>
           Open in cockpit ↗
         </Link>
       </div>
@@ -597,7 +598,7 @@ function AwaitingCard({ item }: { item: AwaitingItem }) {
 
       {item.attachmentCount > 0 && (
         <div style={stack}>
-          <button type="button" style={button} onClick={() => setAttachmentsOpen((open) => !open)}>
+          <button type="button" style={button} onClick={onToggleAttachments}>
             {attachmentsOpen
               ? "Hide attachments"
               : `Open ${item.attachmentCount} attachment${item.attachmentCount === 1 ? "" : "s"}`}
@@ -621,24 +622,21 @@ function AwaitingCard({ item }: { item: AwaitingItem }) {
         </div>
       )}
 
+      {/* D10: the honest route, in place of a button whose only possible answer is `no_deck`. */}
+      {imagePlan && <p style={{ ...muted, fontSize: "0.86rem" }}>{IMAGE_CANVAS_NOTE}</p>}
+
       <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
-        <button type="button" style={primary} disabled={busy} onClick={() => void approve()}>
-          {busy ? "Working…" : actionLabel(item.kind, plan)}
-        </button>
+        {!imagePlan && (
+          <button type="button" style={primary} disabled={busy} onClick={onApprove}>
+            {busy ? "Working…" : actionLabel(item.kind, plan)}
+          </button>
+        )}
         {item.kind === "email" && (
-          <button
-            type="button"
-            style={button}
-            disabled={busy}
-            onClick={() => setScheduleOpen((open) => !open)}
-          >
+          <button type="button" style={button} disabled={busy} onClick={onToggleSchedule}>
             Schedule…
           </button>
         )}
-        <Link
-          href={`/dashboard/workspace?thread=${encodeURIComponent(item.threadId)}`}
-          style={{ ...button, textDecoration: "none" }}
-        >
+        <Link href={threadHref} style={{ ...button, textDecoration: "none" }}>
           {item.kind === "calendar_event"
             ? "Change time in cockpit"
             : item.kind === "email"
@@ -649,13 +647,13 @@ function AwaitingCard({ item }: { item: AwaitingItem }) {
           type="button"
           style={destructive}
           disabled={busy}
-          onClick={() => setConfirmDiscard(true)}
+          onClick={() => onRequestDiscard(true)}
         >
           Discard
         </button>
       </div>
 
-      {scheduleOpen && <ScheduleComposer busy={busy} onConfirm={schedule} />}
+      {scheduleOpen && <ScheduleComposer busy={busy} onConfirm={onSchedule} />}
       {confirmDiscard && (
         <fieldset
           aria-label="Confirm discard"
@@ -673,31 +671,155 @@ function AwaitingCard({ item }: { item: AwaitingItem }) {
           </legend>
           <p style={muted}>It will not be eligible for rescheduling.</p>
           <div style={{ display: "flex", gap: "0.5rem" }}>
-            <button
-              type="button"
-              style={destructive}
-              disabled={busy}
-              onClick={() => void doDiscard()}
-            >
+            <button type="button" style={destructive} disabled={busy} onClick={onDiscard}>
               Yes, discard it
             </button>
             <button
               type="button"
               style={button}
               disabled={busy}
-              onClick={() => setConfirmDiscard(false)}
+              onClick={() => onRequestDiscard(false)}
             >
               Keep plan
             </button>
           </div>
         </fieldset>
       )}
-      {result && (
-        <ApprovalsStateNotice state={result.includes("Nothing") ? "refusal" : "partial"}>
-          {result}
-        </ApprovalsStateNotice>
-      )}
     </article>
+  );
+}
+
+/** D9: what is left on screen once the approved row has dropped off `listAwaiting`. Green stripe
+ *  (BRAND §2 `--released` = cleared), never amber — amber is the gate's alone — and the label is
+ *  `--ink-soft` text rather than `--released` text, which is only ~3.3:1 on paper (BRAND §6). */
+export function ResolvedOutcomeCard({ planId, message }: { planId: string; message: string }) {
+  return (
+    <article
+      style={{ ...card, borderLeft: "0.3rem solid var(--released)", ...stack }}
+      data-plan-id={planId}
+    >
+      <p style={caps}>Cleared from the gate</p>
+      <ApprovalsStateNotice state="partial">{message}</ApprovalsStateNotice>
+    </article>
+  );
+}
+
+function AwaitingCard({
+  item,
+  result,
+  onOutcome,
+}: {
+  item: AwaitingItem;
+  result: string | null;
+  /** D9: the message belongs to the SECTION, because the card is what disappears. */
+  onOutcome: (message: string | null) => void;
+}) {
+  const plan = useQuery(api.plans.byThread, { threadId: item.threadId });
+  const execute = useMutation(api.cockpit.executePlan);
+  const discard = useMutation(api.cockpit.discardPlan);
+  const setSendTime = useMutation(api.plans.setPlanSendTime);
+  const [busy, setBusy] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [attachmentsOpen, setAttachmentsOpen] = useState(false);
+  const attachments = useQuery(
+    api.plans.attachmentUrls,
+    attachmentsOpen ? { planId: item.planId } : "skip",
+  );
+
+  if (plan === undefined)
+    return <ApprovalsStateNotice state="loading">Loading plan details…</ApprovalsStateNotice>;
+  if (plan === null)
+    return (
+      <ApprovalsStateNotice state="error">
+        This plan is stale or no longer available.
+      </ApprovalsStateNotice>
+    );
+
+  async function approve() {
+    if (busy) return;
+    setBusy(true);
+    onOutcome(null);
+    try {
+      const response = await execute({ planId: item.planId });
+      if (!response.ok) onOutcome(refusalMessage(response.reason));
+      else if (response.alreadyStarted) onOutcome(STALE_PLAN_MESSAGE);
+      else if (response.scheduled)
+        onOutcome(
+          `The absolute schedule is armed. Nothing runs before it fires.${withheldSuffix(response.withheld)}`,
+        );
+      // finance_write, `applied: 0`: every claim was older than the figure already stored, so the
+      // approval succeeded and NOTHING moved. "The governed action is now in flight" would imply a
+      // write that did not happen.
+      else if (response.applied === 0)
+        onOutcome("Your figures were already up to date, so nothing changed.");
+      else
+        onOutcome(
+          `Approval accepted. The governed action is now in flight.${withheldSuffix(response.withheld)}`,
+        );
+    } catch (error) {
+      onOutcome(error instanceof Error ? error.message : "Approval failed. Nothing was sent.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function schedule(epochMs: number) {
+    if (busy) return;
+    setBusy(true);
+    onOutcome(null);
+    try {
+      await setSendTime({ planId: item.planId, sendAt: epochMs });
+      const response = await execute({ planId: item.planId });
+      if (!response.ok) onOutcome(refusalMessage(response.reason));
+      else if (response.alreadyStarted)
+        onOutcome("This plan already moved. No duplicate schedule was created.");
+      else
+        onOutcome(
+          `Scheduled for ${formatAbsoluteInstant(epochMs, browserTimeZone())}.${withheldSuffix(response.withheld)}`,
+        );
+    } catch (error) {
+      onOutcome(error instanceof Error ? error.message : "Scheduling failed. Nothing was sent.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function doDiscard() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const response = await discard({ planId: item.planId });
+      onOutcome(
+        response.discarded
+          ? "Discarded. This plan cannot be re-armed."
+          : "This plan already moved; no second discard was written.",
+      );
+    } catch (error) {
+      onOutcome(error instanceof Error ? error.message : "Discard failed.");
+    } finally {
+      setBusy(false);
+      setConfirmDiscard(false);
+    }
+  }
+
+  return (
+    <AwaitingCardBody
+      item={item}
+      plan={plan}
+      busy={busy}
+      result={result}
+      attachments={attachments}
+      attachmentsOpen={attachmentsOpen}
+      scheduleOpen={scheduleOpen}
+      confirmDiscard={confirmDiscard}
+      onApprove={() => void approve()}
+      onSchedule={schedule}
+      onDiscard={() => void doDiscard()}
+      onToggleAttachments={() => setAttachmentsOpen((open) => !open)}
+      onToggleSchedule={() => setScheduleOpen((open) => !open)}
+      onRequestDiscard={setConfirmDiscard}
+    />
   );
 }
 
@@ -1022,18 +1144,34 @@ function Pager({
 
 function AwaitingSection({ total }: { total: number }) {
   const [cursor, setCursor] = useState<string | null>(null);
+  // D9. Held HERE and not in the card, because a successful approve IS the transition that drops
+  // the row out of `listAwaiting` — the card that produced the message is unmounted by the very
+  // mutation that produced it. See `persistentOutcomes`.
+  const [outcomes, setOutcomes] = useState<Record<string, string | null>>({});
   const page = useQuery(api.approvals.listAwaiting, {
     paginationOpts: { numItems: PAGE_SIZE, cursor },
   });
+  const liveIds = new Set<string>(page?.items.map((item) => item.planId) ?? []);
+  const resolved = persistentOutcomes(outcomes, liveIds);
   return (
     <Section label="Awaiting you" count={total}>
       {page === undefined ? (
         <ApprovalsStateNotice state="loading" />
-      ) : page.items.length === 0 ? (
+      ) : page.items.length === 0 && resolved.length === 0 ? (
         <ApprovalsStateNotice state="empty" />
       ) : (
-        page.items.map((item) => <AwaitingCard key={item.planId} item={item} />)
+        page.items.map((item) => (
+          <AwaitingCard
+            key={item.planId}
+            item={item}
+            result={outcomes[item.planId] ?? null}
+            onOutcome={(message) => setOutcomes((prev) => ({ ...prev, [item.planId]: message }))}
+          />
+        ))
       )}
+      {resolved.map(([planId, message]) => (
+        <ResolvedOutcomeCard key={planId} planId={planId} message={message} />
+      ))}
       {page?.bound.partial && <ApprovalsStateNotice state="partial" />}
       {page && (
         <Pager

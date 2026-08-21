@@ -1,5 +1,37 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-21 (25.1-04 — **THE APPROVALS PAGE NOW ENDS EVERY CLICK IN A VISIBLE
+> TRUTH (D9, D10).** Three defects, one rule: a surface that stages an action must be able to
+> report what the action did.
+> **(1) THE SUCCESS MESSAGE WAS UNREADABLE BY CONSTRUCTION.** The 19-12 entry below NAMED this —
+> "any state produced BY a status transition must not live in a component gated ON that status" —
+> and then left the transient copy in place. It is fixed now, not documented. The outcome state
+> moved out of `AwaitingCard` and into `AwaitingSection` as `Record<planId, string|null>`;
+> `persistentOutcomes(outcomes, liveIds)` returns the entries whose row has LEFT `listAwaiting`,
+> and each renders as a `ResolvedOutcomeCard` (green `--released` stripe, never amber — BRAND §2 —
+> with `--ink-soft` label text, because `--released` is ~3.3:1 on paper, BRAND §6). A row that is
+> still live is filtered OUT, so its own card carries the message rather than a second one. Discard
+> and schedule ride the same channel: they drop the row for the same reason and were equally mute.
+> **(2) THE NOTICE IS THE FIRST CHILD OF THE CARD.** It used to render below the discard fieldset —
+> the last thing in a card the eye never reaches.
+> **(3) THE STALE COPY NO LONGER ASSERTS A START.** `executePlan` returns `alreadyStarted` for ANY
+> status that is not `proposed`, `discarded` and `canceled` included, so `STALE_PLAN_MESSAGE` says
+> only what is certainly true: the card was out of date and this click created nothing.
+> `cockpit.ts` was deliberately NOT touched — a distinct return code would widen a money-path
+> mutation contract for copy that is already honest.
+> **(4) D10 — AN IMAGE PLAN RENDERS NO APPROVE BUTTON.** `executePlan`s media arm reserves against
+> a SHOT DECK (`sceneDeckOf`/`deckOf`); a standalone image plan has neither, so that button
+> returned `no_deck` on every click it has ever received. `IMAGE_CANVAS_NOTE` replaces it and
+> points at the workspace canvas, which is where `api.media.generateImage` already works.
+> `approvals.ts` is UNCHANGED: the card still lists, only the mute button goes. The reel path keys
+> off the same `mediaMode` discriminator `planKind` uses, so it is unaffected by construction.
+> **STRUCTURAL: `AwaitingCard` is now a connected shell over the exported presentational
+> `AwaitingCardBody`.** `apps/web` has no jsdom, but `renderToStaticMarkup` needs none — the split
+> is what lets notice ORDER and the absent image button be asserted against REAL MARKUP instead of
+> a regex over a 130-line JSX blob, which is the shape every vacuous test in this phase took.
+> Eight mutations run, each reddening only its own test.)
+
+
 > Last verified: 2026-08-18 (17-08 Task 3 widened `plans.cancelKind` with a THIRD literal,
 > `refused`, and updated the Phase-26 schema pin in `dashboardSchema.test.ts` to match in full. The
 > Approvals surface reads this field as the cancellation's PROVENANCE (`{state:"known", kind}`), so

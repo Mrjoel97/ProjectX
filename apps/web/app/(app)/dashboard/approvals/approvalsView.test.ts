@@ -8,16 +8,16 @@ import {
   ApprovalKindBadge,
   ApprovalsStateNotice,
   AwaitingCardBody,
-  IMAGE_CANVAS_NOTE,
-  ResolvedOutcomeCard,
-  STALE_PLAN_MESSAGE,
   actionLabel,
   emailApprovalActionLabel,
   emailBusinessAction,
   formatAbsoluteInstant,
+  IMAGE_CANVAS_NOTE,
   parseScheduleInput,
   persistentOutcomes,
+  ResolvedOutcomeCard,
   refusalMessage,
+  STALE_PLAN_MESSAGE,
   withheldSuffix,
 } from "./ApprovalsView";
 
@@ -261,9 +261,13 @@ describe("Approvals connected state contracts", () => {
     // Both rows still live: their own cards carry the notice, so nothing is shown twice.
     expect(persistentOutcomes(outcomes, new Set(["plan_a", "plan_b"]))).toEqual([]);
     // plan_a's row dropped off the reactive list — its outcome must still be on screen…
-    expect(persistentOutcomes(outcomes, new Set(["plan_b"]))).toEqual([["plan_a", outcomes.plan_a]]);
+    expect(persistentOutcomes(outcomes, new Set(["plan_b"]))).toEqual([
+      ["plan_a", outcomes.plan_a],
+    ]);
     // …and it must be plan_a's message, never plan_b's.
-    expect(persistentOutcomes(outcomes, new Set(["plan_a"]))).toEqual([["plan_b", outcomes.plan_b]]);
+    expect(persistentOutcomes(outcomes, new Set(["plan_a"]))).toEqual([
+      ["plan_b", outcomes.plan_b],
+    ]);
   });
 
   test("a cleared outcome is not resurrected", () => {
