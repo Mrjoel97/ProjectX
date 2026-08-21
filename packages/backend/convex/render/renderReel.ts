@@ -35,6 +35,10 @@ import { requireEnvMedia } from "./../media";
 import { maybeBurnCaptions } from "./../mediaComplete";
 import { startIngest } from "./../vaultIngest";
 
+/** What a finished reel's BYTES are. Drives both `storedMimeType` and the vault CATEGORY —
+ *  they must never disagree, which is how a reel came to sit in the Docs tab. */
+const REEL_BYTES_MIME = "video/mp4";
+
 /** Every way a render can be refused or can fail, as a CODE. `renderReason` on the plan row is a
  *  reasonCode field and never ffmpeg's prose — the schema comment says so and this union is what
  *  keeps it true from this side. The runner's own codes (`@pikar/core/render`) arrive as strings
@@ -663,6 +667,9 @@ export async function saveReelToVault(
       size,
       reelMeta,
       status,
+      // Also on the PATCH path: a row written before the category fix is misfiled under
+      // workspace-docs, and a re-render is the natural moment to correct it.
+      category: categoryFor({ source: "agent", mimeType: REEL_BYTES_MIME }),
     });
     docId = existing._id;
   } else {
@@ -670,10 +677,16 @@ export async function saveReelToVault(
       tenantId: a.tenantId,
       title: `Reel: ${(plan.brief?.topic ?? plan.subject ?? "untitled").trim()}`,
       kind: "reel", // the queryable class marker (`kind` is v.string() — a code-owned token)
-      category: categoryFor({ source: "agent" }),
+      // The category describes the BYTES, not the author. `categoryFor`'s own contract is that
+      // image and video mime types win over the source; passing no mimeType at all fell through
+      // to source:"agent" and filed a 30s mp4 under workspace-docs (owner-reported 2026-08-21).
+      // NB: do not write the mime globs literally here — a slash-star in a line comment reads as
+      // a block-comment opener to llmRedaction.test.ts's stripCode, which silently swallows the
+      // audit sites below it and weakens the SS4 scan.
+      category: categoryFor({ source: "agent", mimeType: REEL_BYTES_MIME }),
       source: "media",
       mimeType: "text/markdown", // SEARCHABLE_MIME ⇒ the transcript is chunked + embedded
-      storedMimeType: "video/mp4", // what the BYTES are — the final mp4 in `storageId`
+      storedMimeType: REEL_BYTES_MIME, // what the BYTES are — the final mp4 in `storageId`
       storageId: plan.renderStorageId,
       size,
       contentHash: hash,

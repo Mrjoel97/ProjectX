@@ -89,3 +89,23 @@ passing regardless — that test cannot see this), and the two `vi.stubEnv` pair
 Harmless (a denylist entry for a name that no longer exists is a negative assertion that can only
 stay true), and left in place at 25.1-06 rather than churned. Worth knowing it is a fossil if that
 list is ever read as an inventory of live secrets — it is not one.
+
+## 7. `stripCode` in `llmRedaction.test.ts` mis-reads a slash-star inside a LINE comment
+
+Found 2026-08-21 while fixing the reel vault category. `stripCode` removes block comments before
+line comments:
+
+    src.replace(/\*[\s\S]*?\*\//g, "").replace(/(^|\s)\/\/.*$/gm, "$1")
+
+A `//` line comment that merely MENTIONS a mime glob (the characters slash-star) therefore reads as
+a block-comment OPENER, and the non-greedy match runs forward to the next close marker — silently
+swallowing whatever code sits between, including `internal.audit.log` call sites.
+
+Observed exactly that: adding a comment quoting the mime globs to `render/renderReel.ts` dropped the
+scan from 8 audit sites to 7 and from 13 payload literals to 12. **The pinned COUNTS caught it** —
+which is the whole argument for counts over `>= 1` — but a change that both swallowed a site AND
+was written to match the lower count would pass, and the §4 scan would be quietly weaker.
+
+Not fixed here: the honest repair is a real comment-stripper (or stripping line comments FIRST), and
+that belongs with whoever next owns the redaction scan. The immediate hazard is documented in a
+comment at the call site so the next author does not re-trip it.
