@@ -6,6 +6,56 @@ import { v } from "convex/values";
 // Compile-time proof the Convex bundler resolves source-export workspace packages.
 void CONTRACTS_PACKAGE_NAME;
 
+// ┌──────────────────────────────────────────────────────────────────────────────┐
+// │ SCHEMA TABLE INDEX — 45 tables, grouped by domain.                         │
+// │ Line numbers are approximate; use Find to jump.                            │
+// │                                                                            │
+// │ ── Identity & Auth (Convex Auth + beta admission) ──────── ~L85            │
+// │   users, betaWaitlist, betaInvites                                         │
+// │                                                                            │
+// │ ── Governance & Audit ──────────────────────────────────── ~L150           │
+// │   audit, deadLetters, skills, tenantSkills, savedPrompts,                  │
+// │   pendingTimeouts, exportCursors, guardrailConfig                          │
+// │                                                                            │
+// │ ── Content & Pipeline ──────────────────────────────────── ~L334           │
+// │   requests, plans, briefings, intakeArtifacts, attachments,                │
+// │   telemetry, demoItems                                                     │
+// │                                                                            │
+// │ ── Agent ───────────────────────────────────────────────── ~L998           │
+// │   evaluations, agentSteps                                                  │
+// │                                                                            │
+// │ ── Calendar ────────────────────────────────────────────── ~L932           │
+// │   calendarViews, calendarFixtures, calendarEvents                          │
+// │                                                                            │
+// │ ── Connections (OAuth tokens) ──────────────────────────── ~L1425          │
+// │   notifications, gmailTokens, microsoftCalendarTokens                      │
+// │                                                                            │
+// │ ── Vault (Document Store) ──────────────────────────────── ~L956           │
+// │   vaultSources, vaultDocuments, vaultFolders                               │
+// │                                                                            │
+// │ ── Knowledge Graph ─────────────────────────────────────── ~L1772          │
+// │   graphNodes, graphEdges                                                   │
+// │                                                                            │
+// │ ── Voice ───────────────────────────────────────────────── ~L1808          │
+// │   voiceSessions                                                            │
+// │                                                                            │
+// │ ── Business Domain ─────────────────────────────────────── ~L1842          │
+// │   feedback, optimizerConfig, tenantProfiles, goals,                        │
+// │   inboxFixtures                                                            │
+// │                                                                            │
+// │ ── Finance ─────────────────────────────────────────────── ~L1981          │
+// │   spendEvents, spendCoverage, financeInputs                                │
+// │                                                                            │
+// │ ── Media ───────────────────────────────────────────────── ~L2030          │
+// │   mediaJobs                                                                │
+// │                                                                            │
+// │ ── CRM ─────────────────────────────────────────────────── ~L2104          │
+// │   contacts, followUps, suppressions                                        │
+// │                                                                            │
+// │ ── Proposals ───────────────────────────────────────────── ~L2238          │
+// │   proposals                                                                │
+// └──────────────────────────────────────────────────────────────────────────────┘
+
 /**
  * WHY a cockpit tool call ended without doing its work — see `agentSteps.refusal`.
  *

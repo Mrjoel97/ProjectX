@@ -143,6 +143,11 @@ is the only authority. This is not theoretical — eight genuinely unformatted f
 after `biome ci` had been run locally and read as clean. If you are on Linux, WSL, or an LF checkout,
 `pnpm gate:lint` is trustworthy and worth running. To fix what it finds: `pnpm format`.
 
+**WSL2 workaround (optional).** If you want trustworthy local lint on Windows, clone the repo
+inside WSL2 (Ubuntu). WSL checkouts are LF-native, so `pnpm gate:lint` works correctly there.
+The `.editorconfig` at the repo root also enforces LF in editors that support it (VS Code, JetBrains,
+Vim) — it won't fix existing checkouts but prevents new CRLF introductions.
+
 ---
 
 ## Dev tooling — build discipline & repo knowledge graph
