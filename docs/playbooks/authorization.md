@@ -1,5 +1,27 @@
 # Playbook: Authorization (tenancy + ownership)
 
+> Last verified: 2026-08-21 (25.1-06, D13 — **`/ops` GAINED AN OWNER-ONLY SECTION**, and the
+> self-growing owner-surface guard caught it. isolation.test.ts 31/32 — the one red is 23-05's
+> `skills.activateAgentCandidate` fixture, pre-existing and untouched here.)
+>
+> - **`deadLetters.listAll` is the 16th owner endpoint** and the SIXTH module with one
+>   (`deadLetters` joins finance, invites, ops, optimizerConfig, skills). `isolation.test.ts`'s
+>   module-set and count pins went red the moment it was added, which is the entire reason they are
+>   pinned rather than derived — and the endpoint inherited the loop's automatic
+>   "rejects a non-owner with OWNER_REQUIRED" case for free.
+> - **`/ops` is now mixed-purpose in THREE ways, not two.** Eval signals and the tenant dead-letter
+>   section stay tenant-visible; Optimizer, Tenant skill candidates and now **Dead letters — all
+>   tenants** are inside `{isOwner && …}`.
+> - **THE MOUNTING RULE APPLIES TO THE NEW SECTION IDENTICALLY.** `AllTenantDeadLetters` owns the
+>   `listAll` hook, so MOUNTING it is what subscribes to other tenants' rows. Hiding it with CSS,
+>   `hidden`, opacity, or an early return INSIDE the component would each still run the hook and
+>   leak through the subscription, the loading state or the error boundary. It must never move
+>   outside the `isOwner` branch.
+> - **The client boolean is still not the boundary.** `api.owner.viewer` is a courtesy that saves a
+>   flash; `ownerQuery`'s `requireOwner` refuses before the handler reads a row.
+> - **Seeing is not acting.** The owner-only section is read-only by construction: `markResolved`
+>   remains a `tenantMutation` and the module has no owner-scoped mutation at all.
+
 > Last verified: 2026-08-20 (23-05 added `skills.activateAgentCandidate`, a separate
 > `ownerMutation` whose exact-id agent row must also carry current full-suite exact-row evidence.
 > Owner identity/time and the eval run id are server-derived and written with active status in one

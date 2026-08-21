@@ -336,11 +336,13 @@ const REQUIRES_ARGS = new Set(Object.keys(OWNER_ARGS));
 
 describe("owner endpoints reject a non-owner, and the list grows by itself", () => {
   test("the owner surface spans every module that has one", () => {
-    // 14 at 25-03, 15 once 25-10 added `ops.envCheck`. THIS ASSERTION DID ITS JOB: adding that
-    // endpoint turned it red, which is the entire reason the count and the module set are pinned
-    // rather than derived-and-forgotten. Update it deliberately when the surface grows.
-    expect(OWNER_SURFACE.length).toBeGreaterThanOrEqual(15);
+    // 14 at 25-03, 15 once 25-10 added `ops.envCheck`, 16 once 25.1-06 added
+    // `deadLetters.listAll`. THIS ASSERTION HAS NOW DONE ITS JOB TWICE: each new owner endpoint
+    // turned it red, which is the entire reason the count and the module set are pinned rather than
+    // derived-and-forgotten. Update it deliberately when the surface grows.
+    expect(OWNER_SURFACE.length).toBeGreaterThanOrEqual(16);
     expect([...new Set(OWNER_SURFACE.map((f) => f.module))].sort()).toEqual([
+      "deadLetters",
       "finance",
       "invites",
       "ops",

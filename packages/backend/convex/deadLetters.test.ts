@@ -116,7 +116,7 @@ describe("D13: the owner can enumerate dead letters ACROSS tenants", () => {
     expect(result.rows.map((r) => r.error)).toEqual(["unresolved"]);
   });
 
-  test("the listing is BOUNDED and says so — an unbounded read of a failing deployment is a second outage", async () => {
+  test("the RESPONSE is capped from the newest end, and says when there is more", async () => {
     const t = convexTest(schema, modules);
     const owner = await asOwner(t);
     for (let i = 0; i < 6; i++) {
@@ -126,7 +126,7 @@ describe("D13: the owner can enumerate dead letters ACROSS tenants", () => {
     const result = await owner.query(api.deadLetters.listAll, { limit: 4 });
     expect(result.rows).toHaveLength(4);
     expect(result.truncated).toBe(true);
-    // Bounded from the NEWEST end — a cap that returned the oldest four would hide the incident
+    // Capped from the NEWEST end — a cap that returned the oldest four would hide the incident
     // that is happening right now.
     expect(result.rows.map((r) => r.error)).toEqual(["e5", "e4", "e3", "e2"]);
 
@@ -134,6 +134,26 @@ describe("D13: the owner can enumerate dead letters ACROSS tenants", () => {
     const greedy = await owner.query(api.deadLetters.listAll, { limit: 100_000 });
     expect(greedy.cap).toBe(200);
     expect(greedy.rows).toHaveLength(6);
+  });
+
+  test("the READ is bounded too — which no response assertion above can see", () => {
+    // FOUND BY MUTATION, and the reason this test exists as a separate, structural one. Swapping
+    // `.take(cap + 1)` for `.collect()` leaves EVERY assertion in the test above GREEN: the slice
+    // still caps the payload, `truncated` is still computed correctly, the order is still right.
+    // The response is identical. What changes is the READ — and on the deployment where this
+    // listing matters most (fifty thousand dead letters) an unbounded scan is a second outage on
+    // the screen you are diagnosing the first one from.
+    //
+    // A behaviour that is invisible in the response has to be pinned where it IS visible. This is a
+    // mechanism test and is labelled as one rather than dressed up as a behaviour test.
+    const src = readFileSync(new URL("./deadLetters.ts", import.meta.url), "utf8");
+    const body = src.slice(
+      src.indexOf("export const listAll"),
+      src.indexOf("export const markResolved"),
+    );
+    expect(body, "the listAll body was not found — this scan is vacuous").toContain("ownerQuery");
+    expect(body).toMatch(/\.take\(cap \+ 1\)/);
+    expect(body).not.toMatch(/\.collect\(\)/);
   });
 
   test("a non-owner is refused with OWNER_REQUIRED, exactly like every other ops query", async () => {
@@ -181,7 +201,9 @@ describe("D13: the owner can enumerate dead letters ACROSS tenants", () => {
     // (`api.deadLetters` is a generated proxy — `Object.keys` on it is empty, so it cannot be the
     // oracle. This scan reads the module.)
     const src = readFileSync(new URL("./deadLetters.ts", import.meta.url), "utf8");
-    expect(src.match(/export const (\w+) = ownerQuery/g)).toEqual(["export const listAll = ownerQuery"]);
+    expect(src.match(/export const (\w+) = ownerQuery/g)).toEqual([
+      "export const listAll = ownerQuery",
+    ]);
     expect(src).not.toMatch(/ownerMutation|internalMutation/);
     // `markResolved` stays TENANT-scoped: the caller can only ever resolve their own row.
     expect(src).toMatch(/export const markResolved = tenantMutation/);

@@ -1,5 +1,37 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-08-21 (25.1-06, D13 — **THE OWNER CAN NOW SEE DEAD LETTERS THAT ARE NOT HIS.**
+> deadLetters.test.ts 11/11, seven mutations, one of them fatal to a claim this entry corrects.)
+>
+> **First, a research premise corrected.** 25.1-RESEARCH said the DLQ has *"no consumer, no listing
+> surface, no re-drive"*. Two thirds of that was wrong about this repo: `deadLetters.listNew` +
+> `newCount` have existed since 02-06 and `/ops` has rendered them, with a Mark-resolved button,
+> ever since. **What was actually missing is the OPERATOR's read.** Every insert site stamps the
+> FAILING TENANT's id, and `listNew` is a `tenantQuery` — so in a multi-tenant beta the failures the
+> owner most needs to see were exactly the ones no surface could show him.
+>
+> `deadLetters.listAll` (`ownerQuery`, 25.1-06) is that read and only that read:
+>
+> - **Cross-tenant, `status: "new"` only, newest first, through the `by_status` index** — which had
+>   existed with no reader since 02-06. No new index; `.order("desc")` is insertion order, which
+>   equals `createdAt` order because all six insert sites stamp `Date.now()` at insert. A backfill
+>   that wrote historical `createdAt` values would break that equality; the upgrade path is an
+>   additive `by_status_createdAt` compound index.
+> - **Bounded: default 50, server ceiling 200, `take(cap + 1)`** so `truncated` is KNOWN rather than
+>   guessed. **The read-bound is pinned in SOURCE, not by a response assertion, and that is a
+>   finding worth carrying:** swapping `.take(cap + 1)` for `.collect()` leaves every response
+>   assertion green — same rows, same order, same `truncated` — because the slice still caps the
+>   payload. The hazard is the READ, and no response can see it.
+> - **READ ONLY, and that is a separate decision from being able to see.** Re-drive stays deferred;
+> `markResolved` stays `tenantMutation`, so the owner cannot resolve another tenant's row even by
+>   hand. A source scan asserts no `ownerMutation` or `internalMutation` exists in the module.
+> - **The projection is a pinned KEY SET** (id, tenantId, workflowId, correlationId, error, status,
+>   createdAt, payload) and the payload passes through byte-identical. The risk that pin guards is
+>   not the stored payload — §4 already governs that — but a future "helpful" join putting a tenant's
+>   NAME, a user's email or a request's subject onto an operator screen that today shows only refs.
+> - **The module is still insert-only from the pipeline's side.** `deadLetter.ts` writes; this module
+>   reads and (per tenant) resolves. Nothing here deletes or replays.
+
 > Last verified: 2026-08-21 (25.1-02 — **crons.ts HOLDS FIVE JOBS NOW**, and the count is pinned by
 > a test. reliabilitySweep.test.ts 23/23.)
 >
