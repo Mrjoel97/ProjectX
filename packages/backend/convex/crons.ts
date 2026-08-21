@@ -48,4 +48,16 @@ crons.daily(
     reset: true,
   },
 );
+// 25.1-02 (D3 + D4): the stuck-work watchdog. A severed scheduler chain writes no terminal and
+// throws nothing, so nothing else will ever notice it — this is the only thing that does. The four
+// states it closes and the reasoning behind each threshold live in `reliabilitySweep.ts`.
+//
+// `interval`, not `daily`, and that is the whole point of the job: the promise is "no non-terminal
+// state outlives one sweep interval", and a daily cron would make that promise a DAY of a canvas
+// saying "assembling" over a render that died at 09:01. Thirty minutes is the shortest cadence that
+// is still free — the sweep does nothing at all unless something is genuinely past its threshold.
+//
+// `runSweep` re-runs BOTH migrations with `{ reset: true }` internally; that reset is required, not
+// decorative (a completed migration no-ops on a bare invocation — the vault-sweep lesson above).
+crons.interval("reliability-sweep", { minutes: 30 }, internal.reliabilitySweep.runSweep, {});
 export default crons;

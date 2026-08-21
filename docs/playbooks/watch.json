@@ -265,6 +265,8 @@
     "packages/backend/convex/vaultRag.test.ts"
   ],
   "media.md": [
+    "packages/backend/convex/reliabilitySweep.ts",
+    "packages/backend/convex/reliabilitySweep.test.ts",
     "packages/cost/src/media.ts",
     "packages/core/src/storyboard.ts",
     "packages/core/src/assembly.ts",

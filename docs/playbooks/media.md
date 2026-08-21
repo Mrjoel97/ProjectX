@@ -1,5 +1,42 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-08-21 (25.1-02, D3 — **A SEVERED SCHEDULER CHAIN NOW HAS A WATCHDOG.**
+> reliabilitySweep.test.ts 23/23, eleven guards mutation-verified.)
+>
+> **The invariant this entry adds: no non-terminal media state may outlive one sweep interval.**
+> 25.1-01 closed the paths that CRASH; this closes the paths where nothing crashed and nothing ran —
+> a poll chain that stopped, a render trigger that was never re-evaluated, a transcript nobody came
+> back for. Those states write no terminal and throw nothing, so nothing but a clock can notice
+> them. `packages/backend/convex/reliabilitySweep.ts`, two `@convex-dev/migrations` migrations
+> (the `vaultSweep.ts` shape) behind ONE cron: `crons.interval("reliability-sweep", {minutes: 30})`
+> to `internal.reliabilitySweep.runSweep`, which re-runs both with `{reset: true}` (a completed
+> migration no-ops on a bare invocation — the stranded-.xlsm lesson, vault.md).
+>
+> **Thresholds, exported so tests pin them, each a stated multiple of what it backstops:**
+> `SUBMITTED_STALL_MS` 45 min (the poll cap is 180 x 10s = 30 min), `RENDER_STALL_MS` 60 min,
+> `CAPTION_STALL_MS` 30 min. Strictly PAST, never at — a row exactly at its threshold is left alone.
+>
+> **The job sweep writes NO terminal of its own.** A stale `submitted` row is landed through
+> `mediaComplete.landResult` with `watchdog_submit_timeout`, so it reconciles its spend, emits its
+> one `media.landed` audit line, and re-fires the render + caption triggers — the plan then
+> terminalizes as `incomplete_batch` through the ordinary path. That is also why the
+> "only media.ts and mediaComplete.ts write a terminal `mediaJobs` status" pin still holds.
+>
+> **The plan sweep's four exclusions are the load-bearing half** (each proven by a mutation that
+> reddens): an UN-ARMED `pending` plan (no batch) is never swept; a batch with a line still in
+> flight belongs to the job sweep; a `pending` deck whose scene names no asset source is the
+> fix-menu HOLD (33-04), an interactive state and not a stall; and a `transcribing` plan whose reel
+> is still `pending`/`rendering` is legitimately WAITING for the render terminal. The render clock
+> is the max of the landings, `renderRetriedAt`, AND the `media.render_retry_manual` audit row —
+> `media.retryRender` stamps no field on the plan, so that row is the only trace a human retry
+> leaves. Reason codes are per state class (`watchdog_render_timeout`, `watchdog_caption_timeout`)
+> so transposing two of them reddens a test. A swept caption never touches `renderStatus`.
+>
+> **User-visible half:** one `watchdog.stalled` notification per batch (job sweep) and per plan per
+> pass (plan sweep), static copy, no refs. The kind is deliberately NOT in `NOTIFICATION_KINDS` —
+> that list arms `notifyExternal.dispatch`, i.e. the mailbox, and a stall notice does not need a
+> Gmail token.
+
 > Last verified: 2026-08-21 (25.1-01 Task 2, D2 — **renderReel RUNS UNDER THE ActionRetrier NOW,
 > AND A CRASH AFTER `markRendering` TERMINALIZES.** renderReel.test.ts 22/22, media.test.ts
 > 237/237, llmRedaction 61/61, cockpit 73/73, backend tsc clean.)

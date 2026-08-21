@@ -1,5 +1,26 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-08-21 (25.1-02 — **crons.ts HOLDS FIVE JOBS NOW**, and the count is pinned by
+> a test. reliabilitySweep.test.ts 23/23.)
+>
+> The fifth is `crons.interval("reliability-sweep", {minutes: 30})` to
+> `internal.reliabilitySweep.runSweep` (D3/D4 stuck-work watchdog; behaviour lives in media.md and
+> cockpit.md). It is the first `interval` job here — the other four are `daily`/`weekly` — because
+> its promise is "no non-terminal state outlives one sweep interval", and a daily cron makes that
+> promise a day long.
+>
+> **Its notification kind, `watchdog.stalled`, is DELIBERATELY ABSENT from `NOTIFICATION_KINDS`**
+> (`packages/core/src/notificationTemplates.ts`). That list is what arms `notifyExternal.dispatch`,
+> which reaches `freshAccessToken` and sends MAIL; a "a background job stalled" notice is an in-app
+> fact and has no business holding a Gmail token. Same reasoning that keeps the two review kinds and
+> the reconnect kinds out. `NotificationsBanner` renders an unregistered kind as plain text, so the
+> in-app half needs nothing added. The copy is a static label carrying no ids and no content (§4).
+>
+> **Log plane unchanged.** The sweep writes no audit row and no dead letter of its own: the job half
+> routes through `mediaComplete.landResult`, whose single `media.landed` line already carries the
+> reason code, and the plan half writes only plan-row status fields. The `audit` table is READ (by
+> correlation, for the manual-retry clock) and never written here.
+
 > Last verified: 2026-08-18 (**the refusal counts had no reader — `audit:recentByType` is it.**
 > audit 2/2, both order and window assertions mutation-verified. No write path changed; the
 > insert-only rule (§3) and `auditImmutability.test.ts` are untouched — this adds a READ.)

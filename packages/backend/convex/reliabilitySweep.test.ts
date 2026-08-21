@@ -38,6 +38,14 @@ import schema from "./schema";
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
+// Raw sources for the cron-registration scan (the `worm.test.ts` idiom — edge-runtime has no
+// node:fs, so Vite's raw loader is how a test reads a sibling module's text).
+const sources = import.meta.glob("./**/*.ts", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
+
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 const migrationsModules = import.meta.glob(
   "../node_modules/@convex-dev/migrations/src/component/**/!(*.test).ts",
@@ -141,6 +149,33 @@ test("the four thresholds are the pinned constants", () => {
 test("each state class carries its OWN reason code", () => {
   const codes = [WATCHDOG_JOB_REASON, WATCHDOG_RENDER_REASON, WATCHDOG_CAPTION_REASON];
   expect(new Set(codes).size).toBe(codes.length);
+});
+
+// THE SWEEP IS ONLY REAL IF SOMETHING RUNS IT. Every behaviour below is driven by hand, so without
+// this scan the whole suite could stay green while the watchdog never fires in production once —
+// the `crons.ts registers worm-export` idiom (worm.test.ts), for the same reason.
+describe("the cron actually registers the sweep", () => {
+  const cronsSrc = (): string => {
+    const entry = Object.entries(sources).find(([p]) => p.endsWith("/crons.ts"));
+    if (!entry) throw new Error("missing convex source: crons.ts");
+    return entry[1];
+  };
+
+  test("crons.ts runs reliability-sweep on an interval against internal.reliabilitySweep.runSweep", () => {
+    const s = cronsSrc();
+    expect(s).toMatch(/\.interval\(\s*["']reliability-sweep["']/);
+    expect(s).toMatch(/\{\s*minutes:\s*30\s*\}/);
+    expect(s).toMatch(/internal\.reliabilitySweep\.runSweep/);
+  });
+
+  test("crons.ts holds exactly FIVE jobs — a sixth is a deliberate edit here", () => {
+    // A COUNT, not a ">= 1". A cron is unattended spend and unattended writes; the number of them
+    // is a fact worth having to change on purpose.
+    const jobs = [
+      ...cronsSrc().matchAll(/\bcrons\.(daily|weekly|interval|hourly|monthly|cron)\(/g),
+    ];
+    expect(jobs).toHaveLength(5);
+  });
 });
 
 describe("sweepStuckMediaJobs (D3 — severed poll chains)", () => {

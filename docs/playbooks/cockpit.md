@@ -1,3 +1,27 @@
+> Last verified: 2026-08-21 (25.1-02, D4 — **A DEAD SPECIALIST DISPATCH IS VISIBLE NOW.**
+> reliabilitySweep.test.ts 23/23. No cockpit.ts, plans.ts, dispatch.ts or evaluations.ts change —
+> the sweep patches the row from outside.)
+>
+> **The failure this closes.** `actOnGap` / `stageResearchPlan` / `stageMediaPlan` all park the
+> thread's plan row at `status: "collecting", kind: "memo", body: ""` and schedule the specialist;
+> `dispatchAndLand`'s `finally` is what returns it to `proposed`. If that action never reaches its
+> handler at all (a dropped job, a deployment restart), the `finally` never runs — and `PlanCard`
+> renders only at `proposed`, so the row is INVISIBLE FOR EVER: no card, no error, no way back.
+>
+> **The terminal chosen is an EXISTING one, not a new status member.** `reliabilitySweep`'s plan
+> sweep flips such a row to `proposed` with a fixed `COLLECTING_FALLBACK_BODY` — a system notice in
+> its own voice that claims no findings and attributes nothing to the specialist (the
+> `LOST_CONTEXT_MEMO` precedent) — plus one `watchdog.stalled` notification.
+>
+> **Two guards, and both are load-bearing.** (1) `collecting` + `kind: "memo"` is the DISPATCH-OWNED
+> discriminator — the same pair `plans.stageResearchPlan` already uses for `research_in_flight`. An
+> ordinary conversation's `collecting` row carries no kind and is NEVER touched: a week-old live
+> chat is still a live chat. (2) Liveness is read from `_scheduled_functions` — a `pending` or
+> `inProgress` run carrying this `planId` is a live turn and is left alone; `success`/`failed`/
+> `canceled` are not liveness, they are the defect. Matched by `args.planId`, not by function name,
+> so a fourth dispatch entry point is covered the day it is written. `COLLECTING_STALL_MS` (30 min)
+> is only a cheap pre-filter that keeps that scan off every plan in the table.
+
 > Last verified: 2026-08-21 (25.1-01 Task 2, D2 — **NO cockpit.ts CHANGE WAS NEEDED, recorded so
 > the plan's premise dies here.** The plan expected `EXTERNAL_TARGETS` to gain a renderReel thunk;
 > it does not — `EXTERNAL_TARGETS.media` stays `submitBatch`, permanently, per 20-16's decision
