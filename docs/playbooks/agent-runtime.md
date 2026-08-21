@@ -1,5 +1,13 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-08-21 (**FORMATTER-ONLY, NO RUNTIME OR CORPUS BEHAVIOUR CHANGED.** The
+> watched file `scripts/eval-cases/38-media-dispatch.json` had its `needles` array collapsed onto
+> one line by `biome format`. It was one of NINE real format errors that CI caught under 86 local
+> CRLF diagnostics on a Windows checkout — git normalises line endings into the index, so those
+> nine survived onto CI's LF checkout and failed the lint gate, which would have meant a red `ci`
+> on main and a `deploy-production` that silently never fires. The case's needles, expectations and
+> semantics are byte-identical in meaning; no eval was re-run and $0.00 was spent.)
+>
 > Last verified: 2026-08-18 (23-04 built the held-out gate that judges what the tool writes, and
 > made the corpus unreadable from the runner's own inspection surfaces. NO PAID RUN — $0.00.
 > 23-03 added `authorSkillCandidate` — the Executive-only skill-authoring
