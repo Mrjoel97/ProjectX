@@ -1,5 +1,19 @@
 # Playbook: Business Evaluation Engine
 
+> Last verified: 2026-08-21 (25.1-05, D11 — **`landSpecialistResult` now writes the memo's
+> REFERENCES, not just its body.** New optional arg `sources` (`{title, url, retrievedAt}[]`),
+> passed by `dispatch.ts`'s landing and written to the plan row by a DIRECT `ctx.db.patch` in the
+> same transaction as the `patchPlan` that flips `collecting → proposed`. Guarded on non-empty, so
+> a turn that retrieved nothing leaves the field ABSENT (the card renders its block on presence) and
+> a later re-land cannot blank a filled one.
+>
+> **Not through `patchPlan`, and that is the invariant**: `patchPlan` is the model-reachable door,
+> and a source list is a provenance claim. These values come from the search tool's own result
+> parts, never from prose — the same distinction this playbook's 2026-08-15 entry drew between
+> `user-provided` and `agent-relayed`. §4 is unchanged: `evaluation.ran` and every dispatch audit
+> stay counts-only, and `dispatch.test.ts` scans every audit row of a real research run for the
+> URLs. The gap path passes no `sources`, so it is byte-identical.)
+
 > Last verified: 2026-08-15 (**the provenance split lost its join, and the engine went silent about
 > figures it had just been given** — root-caused, fixed and LIVE-verified). `runEvaluation` seeded
 > its findings-provenance map from `userProvided`, but `5523f3e` (21-01, same day) had made that

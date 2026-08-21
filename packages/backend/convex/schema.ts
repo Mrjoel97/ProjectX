@@ -432,6 +432,18 @@ export default defineSchema({
     subject: v.optional(v.string()),
     bodyIntent: v.optional(v.string()), // the user's goal → drafter turns it into `body`
     body: v.optional(v.string()), // drafted wording (filled at "ready")
+    // 25.1-05 (D11): the web pages a RESEARCH specialist actually retrieved, landed with the memo
+    // body so the card can attribute its own findings. CONTENT-PLANE ONLY (§4): a URL may reach
+    // this row, the vault document and the card — NEVER an `audit`/`deadLetters`/`telemetry`
+    // payload, which get `sourceCount`. Written ONLY by `landSpecialistResult`, by direct
+    // `ctx.db.patch` and deliberately NOT through `patchPlan`: these are provenance, and nothing
+    // reachable from the MODEL may claim a page was read (the `calendarEventId` rule). They come
+    // from the search tool's own RESULT parts (`sourcesFromToolOutput`), never from model prose.
+    // `retrievedAt` is per-source so a future per-result stamp needs no migration; today every
+    // entry carries the landing time. Optional → no migration; `resetPlan` clears it.
+    sources: v.optional(
+      v.array(v.object({ title: v.string(), url: v.string(), retrievedAt: v.number() })),
+    ),
     // Generated outbound attachments (CKPT-02). Inline on the plan = pre-approval source of truth
     // for the PLAN card; executePlan materializes attachments-table rows at fan-out. All optional → no migration.
     attachments: v.optional(

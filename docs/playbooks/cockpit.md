@@ -1,3 +1,27 @@
+> Last verified: 2026-08-21 (25.1-05, D11 — **THE DISPATCH LANDING NOW CARRIES SOURCES, AND THE
+> §4 BOUNDARY MOVED WITH IT.** `dispatchAndLand`'s landing object gained `sources`
+> (`{title, url, retrievedAt}[]`, omitted when empty) and `evaluations.landSpecialistResult`
+> writes them to the plan row, so the memo card can attribute the findings it is already showing.
+> Until now the URLs reached the vault document only — through `persistResearchFindings`, which is
+> SKIPPED entirely on a zero-search run and swallowed on a persist failure — so the card the user
+> reads could show findings it could not attribute to anything.
+>
+> **THE RULE THAT DID NOT CHANGE: a URL is CONTENT PLANE.** It may reach `plans.sources`, the vault
+> document and the card; it may NEVER reach an `audit`/`deadLetters`/`telemetry` payload, which get
+> `sourceCount`/`webSearchCalls`. `dispatch.ts`'s audit payload count is UNCHANGED at 12 and no
+> payload gained a field, so `llmRedaction.test.ts`'s pins are untouched. Mutation-checked both
+> ways: adding `sourceUrls: turn.sources.map(s => s.url)` to the `subagent.completed` payload
+> reddens `dispatch.test.ts`'s §4 scan — **and leaves `llmRedaction.test.ts` GREEN**, because that
+> static scan bans `reply|body|text|output` by name and knows nothing about a URL. The runtime scan
+> is the one that guards this; do not treat the static pin as cover.
+>
+> **WRITTEN BY DIRECT `ctx.db.patch`, DELIBERATELY NOT THROUGH `patchPlan`.** `patchPlan` is the
+> door the model's own cockpit tools write through, and a source list is a PROVENANCE claim — "these
+> pages were read for this memo". It comes from the search tool's own RESULT parts
+> (`sourcesFromToolOutput`), never from model prose, and nothing reachable from the model may add to
+> it — the `calendarEventId`/`calendarRunId` rule, verbatim. `plans.resetPlan` clears it with the
+> body it attributes (Pitfall-6 class).)
+>
 > Last verified: 2026-08-21 (25.1-02, D4 — **A DEAD SPECIALIST DISPATCH IS VISIBLE NOW.**
 > reliabilitySweep.test.ts 23/23. No cockpit.ts, plans.ts, dispatch.ts or evaluations.ts change —
 > the sweep patches the row from outside.)

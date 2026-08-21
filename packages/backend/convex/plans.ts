@@ -868,6 +868,10 @@ export const resetPlan = internalMutation({
       subject: undefined,
       bodyIntent: undefined,
       body: undefined,
+      // 25.1-05 (D11): the memo's references go with the body they attribute. Same Pitfall-6 class
+      // as `recipientNames` below — a source list surviving a "start over" would sit under the NEXT
+      // memo in this thread as if those pages had been read for it.
+      sources: undefined,
       attachments: undefined,
       attachmentError: undefined,
       candidates: undefined,
