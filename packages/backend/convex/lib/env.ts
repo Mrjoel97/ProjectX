@@ -8,9 +8,15 @@
 // `{missing: string[]}` — a readiness surface that echoed a secret to prove it was set would be a
 // worse leak than the misconfiguration it reports.
 //
-// HOW TO KEEP THIS HONEST: `env.test.ts` scans the repo for `process.env.X` and fails when a name
-// is consumed by source but classified by nobody here. A manifest that has to be remembered is a
-// manifest that goes stale, so it is derived-checked instead.
+// HOW TO KEEP THIS HONEST: `env.test.ts` scans the repo for `process.env.X` AND for
+// `requireEnvMedia("X")` — the media helper is a `process.env[name]` indirection, so a literal-only
+// scan was blind to every name it reads (25.1-06, D12) — and fails when a name is consumed by
+// source but classified by nobody here. A manifest that has to be remembered is a manifest that
+// goes stale, so it is derived-checked instead.
+//
+// A THIRD indirection would be invisible again. If you add one, add its regex to that scan in the
+// same commit; the scan asserts that the media names are NOT reachable as literals, so removing the
+// extension reds rather than quietly narrowing the guard.
 
 export type EnvTier =
   /** The deployment cannot serve its core promise without this. */
@@ -126,9 +132,32 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
     whatBreaks: "Media rendering; the render callback cannot be authenticated.",
   },
   {
+    name: "MEDIA_RENDER_URL",
+    tier: "feature",
+    whatBreaks:
+      "Media rendering, SILENTLY. It is read inside the scheduled `renderReel` action, so an unset value throws where no user is waiting: the plan sits at `rendering` forever. 25.1-06 (D12) is why it is here — it was invisible to this manifest for its whole life.",
+  },
+  {
     name: "FAL_WEBHOOK_SECRET",
     tier: "feature",
     whatBreaks: "fal.ai render callbacks cannot be verified, so renders never complete.",
+  },
+  {
+    // Read only by the LEGACY Wan poller, retained for tasks submitted before the OpenAI cutover
+    // (ADR-024). A deployment with no such task in flight needs neither name, which is why both are
+    // `feature` rather than `required` — reported as dark, never as broken.
+    name: "WAN_API_BASE_URL",
+    tier: "feature",
+    whatBreaks:
+      "The legacy Wan task poller (pre-cutover jobs only, ADR-024). A deployment with no pre-cutover job in flight needs it for nothing.",
+  },
+  {
+    // Alibaba Model Studio's own mixed-case name for the key (ADR-017). It is spelled exactly this
+    // way in `convex env` and in source; a shape-based scan would drop it.
+    name: "Video_and_image_API_Key",
+    tier: "feature",
+    whatBreaks:
+      "The legacy Wan task poller's credential (pre-cutover jobs only, ADR-024). New visual jobs go to OpenAI on OPENAI_API_KEY.",
   },
 
   // ── Compliance and operations ───────────────────────────────────────────────────────────────

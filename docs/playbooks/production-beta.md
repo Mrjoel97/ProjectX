@@ -70,12 +70,21 @@ its absence costs, surfaced to the owner on `/admin` as **names only**.
    `process.env.NAME` and fails on a consumed-but-unclassified name AND on a classified-but-dead
    entry. A manifest maintained by remembering to update it goes stale silently, and in the
    direction that matters: a new required key nobody classified reads as "ready".
+8. **The scan follows `requireEnvMedia("X")` as well as `process.env.X`** (25.1-06, D12). That
+   helper is a `process.env[name]` lookup, so a literal-only scan was blind to every media name it
+   reads — `MEDIA_RENDER_URL`, `WAN_API_BASE_URL` and `Video_and_image_API_Key` were unclassified
+   for their whole lives. `MEDIA_RENDER_URL` is the sharp one: it is read inside the scheduled
+   `renderReel` action, so unset it throws where no user is waiting and the plan sits at
+   `rendering` forever while this screen reports ready. **A THIRD indirection would be invisible
+   again** — add its regex in the same commit that adds the helper. The test asserts those names
+   are NOT reachable as literals, so deleting the extension reds instead of quietly narrowing the
+   guard.
 
 ## How to verify
 
 | Command | Proves |
 | --- | --- |
-| `pnpm --filter @pikar/backend exec vitest run convex/env.test.ts` | The manifest matches source, reports names only, and `envCheck` refuses a non-owner, and no origin is ephemeral. 18 tests. |
+| `pnpm --filter @pikar/backend exec vitest run convex/env.test.ts` | The manifest matches source, reports names only, and `envCheck` refuses a non-owner, and no origin is ephemeral. 19 tests. |
 | Sign in as owner → `/admin` | The readiness section against the REAL deployment env. This is the easy path. |
 | `cd packages/backend && npx convex run --prod ops:envCheck --identity '{"subject":"<ownerUserId>\|cli"}'` | The same, from the CLI. **All three parts are required** — see below. |
 
@@ -99,6 +108,15 @@ directory; without `--prod` it targets the local dev deployment rather than the 
 - **`NEXT_PUBLIC_CONVEX_URL` and the Vercel-side names are deliberately NOT in this manifest.**
   They are web-build variables validated by `deploy-production.yml`, which is the right place.
   The dead-entry check caught `NEXT_PUBLIC_CONVEX_URL` being listed here and it was removed.
+- **`MEDIA_SANDBOX_SNAPSHOT_ID` is the same class and is deliberately NOT here either** (25.1-06
+  re-checked it: the only reader in the repo is `apps/web/app/api/media/render/route.ts`, a Vercel
+  variable no Convex process can see). Listing it would make `envCheck` report a name missing on
+  every healthy deployment — a readiness screen that cries wolf is worse than one blind spot.
+  `deploy-production.yml` already asserts it alongside `NEXT_PUBLIC_CONVEX_URL` and
+  `MEDIA_RENDER_SECRET`, and that check is the coverage. **Its absence bites in a different
+  place**: unset, the render route returns `not_configured`, which is not in
+  `TRANSIENT_RENDER_CODES` and so goes straight to a dead letter — visible on `/ops` (see
+  `docs/playbooks/audit-dead-letter.md`), not here.
 
 ## Known gaps & deferred work
 
