@@ -1,5 +1,31 @@
 # Playbook: Production Beta Readiness (25-10)
 
+> Last verified: 2026-08-21 (the promotion gate is `startsWith`, not `contains` — **AND THE FIRST
+> VERSION NEARLY DEPLOYED PRODUCTION BY ACCIDENT ON ITS OWN INTRODUCING MERGE.** Read this before
+> touching the clause.)
+>
+> - **What happened.** The gate landed as
+>   `contains(...head_commit.message, '[deploy]')`. PR #25 was then merged with the body *"No
+>   [deploy]-marker, so production is not promoted by this merge"* — a sentence written to state the
+>   marker's ABSENCE, which contains the marker. `contains` is a substring test with no notion of
+>   surrounding words, so the gate evaluated TRUE on the merge that created it.
+> - **What caught it.** A `grep -c '[deploy]'` run against the actual merge commit on main,
+>   expecting `0` and getting `1`, inside the ~4-minute `ci` window before `deploy-production`
+>   fires. `gh workflow disable deploy-production.yml` stopped it. **Production was not promoted.**
+>   Checking the artifact rather than trusting the intent is the only reason this is a near-miss and
+>   not an incident.
+> - **The lesson, which generalises past this one clause.** Commit messages discuss deploying
+>   constantly — "do not deploy", "revert the deploy", "[deploy] gate added". A substring marker
+>   fires on prose that means the OPPOSITE of what it matches, and the more carefully someone writes
+>   about not deploying, the likelier they trip it. `startsWith` confines the marker to the head of
+>   the subject line, where only a deliberate act puts it; the body may then say "[deploy]" freely.
+> - **Do not relax this back to `contains`.** It also closes a residual edge: merge `dcb4183`'s
+>   message permanently contains `[deploy]`, so under `contains` a manual re-run of `ci` against
+>   that SHA would have promoted production at any point in the future. Under `startsWith` it cannot
+>   — that subject begins `Merge pull request #25`.
+> - **To deploy:** make the merge commit SUBJECT begin with `[deploy]`, or re-run the
+>   `deploy-production` workflow manually against the SHA you want.
+
 > Last verified: 2026-08-21 (26-10 pre-flight — **PRODUCTION HAD NO HUMAN PROMOTION GATE, AND
 > THE PIPELINE BELIEVED IT DID.** `deploy-production.yml` now requires `[deploy]` in the merge
 > commit message. Verified: `environments/production` returns `protection_rules: []`, and the
