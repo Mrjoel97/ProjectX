@@ -324,6 +324,7 @@ const OWNER_ARGS: Record<string, Record<string, unknown>> = {
   // `id:<table>` is a sentinel: the test inserts a real row of that table and substitutes its id,
   // because `v.id()` validation would reject a hand-made string and we would be back to a
   // validator error masquerading as an authorization one.
+  "skills.activateAgentCandidate": { candidateId: "id:tenantSkills" },
   "skills.activateTenantCandidate": { candidateId: "id:tenantSkills" },
   "skills.rollbackTenantSkill": { targetId: "id:tenantSkills" },
   "invites.approve": { waitlistId: "id:betaWaitlist" },
