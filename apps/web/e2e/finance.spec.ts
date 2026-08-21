@@ -83,6 +83,37 @@ type Movement = {
 const record = (tenantId: string, movement: Movement) =>
   convexRun<string>("spendLedger:record", { tenantId, ...movement });
 
+/**
+ * The unlanded cents this rail ALREADY shows, read from the rendered page.
+ *
+ * The unlanded figures are WINDOW TOTALS over 30 days, not per-run numbers. Section 5 used to
+ * assert the literal "$5.00"/"$1.90" this run's seeds produce, which is only true on a tenant that
+ * has never been used: a second run inside the window reads $10.00/$3.80, a third $15.00/$5.70.
+ * Measured — this tenant reached 10 `spendEvents` rows and the literal assertion failed there.
+ * Asserting the DELTA makes the spec re-runnable on any tenant, dirty or fresh, which is what a
+ * gate has to be.
+ *
+ * Read from the DOM rather than from `finance:summary`: that query takes `windowArgs`, and calling
+ * it with `{}` returns an error whose shape is easy to mistake for "nothing unlanded" — which is
+ * exactly the silent 0 that made the first version of this helper assert `$1.90` against a page
+ * showing `$5.70`. The page is the thing under test, so read the page.
+ *
+ * ABSENT means zero and is fine: the rail renders no `[data-unlanded]` item when nothing is
+ * outstanding. PRESENT-but-unparseable throws, because that is a changed contract, not a zero.
+ */
+async function unlandedShown(page: Page, rail: "ingest" | "media"): Promise<number> {
+  const item = page.locator(`[data-unlanded="${rail}"]`);
+  if ((await item.count()) === 0) return 0;
+  const text = await item.first().innerText();
+  const match = text.match(/\$([\d,]+\.\d{2}) unlanded/);
+  if (!match) {
+    throw new Error(`[data-unlanded="${rail}"] carries no "$X.YZ unlanded" figure: ${text}`);
+  }
+  return Math.round(Number(match[1]!.replace(/,/g, "")) * 100);
+}
+
+const usd = (cents: number) => "$" + (cents / 100).toFixed(2);
+
 // `playwright.config.ts` sets `fullyParallel: true`, which otherwise gives NO guarantee that tests
 // in this file run in declaration order or in the same worker. Every test below shares one signed-in
 // identity (the same `storageState` file), and the owner grant is deployment-wide state — so
@@ -108,12 +139,6 @@ async function seedOnboarded(page: Page): Promise<void> {
   const token = await tokenFor(page);
   const tenantId = tenantIdFrom(token);
   convexRun("onboarding:__seedOnboardedTenant", { tenantId });
-  // Start every non-owner assertion from a genuinely non-owner account, whatever a previous run
-  // left behind. `revokeOwner` is idempotent (`changed:false` on an account that never held it),
-  // so this is one no-op CLI call on a clean deployment and a rescue on a dirty one. It is the
-  // difference between a spec that can be RE-run and one that can be run exactly once.
-  promotedUserId = tenantId;
-  convexRun("owner:revokeOwner", { userId: tenantId });
   await page.reload();
 }
 
@@ -121,6 +146,31 @@ async function seedOnboarded(page: Page): Promise<void> {
 // state a human must be able to SEE to review the boundary during a UAT, and there is exactly one
 // other loggable account here. A run that exits leaving this identity an owner spends that for
 // everyone, which is precisely the cost that made this file single-use before the inverse existed.
+// ONCE PER FILE, BEFORE ANY TEST, AND NOT INSIDE `seedOnboarded`.
+//
+// The non-owner assertions live in the connected test at the bottom, and that test does NOT call
+// `seedOnboarded` — only the three short tests above it do. A revoke hidden inside that helper
+// therefore never ran for the very test whose boundary it exists to protect: running with
+// `-g "connected cost console"` after a previous run left the account promoted made section 2 fail
+// with "Operator tab: expected 0, received 1". Measured, and it is why this is a `beforeAll`.
+//
+// The identity comes from the storageState `auth.setup.ts` just wrote, so this needs no page and
+// no browser — which is what lets it run before the first test rather than inside one.
+test.beforeAll(() => {
+  const stateFile = resolve(dirname(fileURLToPath(import.meta.url)), ".auth/user.json");
+  const state = JSON.parse(readFileSync(stateFile, "utf8")) as {
+    origins?: { localStorage?: { name: string; value: string }[] }[];
+  };
+  const entry = (state.origins ?? [])
+    .flatMap((origin) => origin.localStorage ?? [])
+    .find((item) => item.name.startsWith("__convexAuthJWT"));
+  if (!entry) throw new Error("storageState carries no Convex Auth JWT — did auth.setup.ts run?");
+  promotedUserId = tenantIdFrom(entry.value);
+  // Idempotent: `changed:false` on an account that never held owner, so this is a no-op on a clean
+  // deployment and a rescue on one a previous run left promoted.
+  convexRun("owner:revokeOwner", { userId: promotedUserId });
+});
+
 test.afterAll(() => {
   if (promotedUserId === null) return;
   convexRun("owner:revokeOwner", { userId: promotedUserId });
@@ -151,9 +201,15 @@ test("a number entered in the panel appears as a business figure", async ({ page
   await seedOnboarded(page);
   // Seeds through the real mutation, so this proves the panel → mutation → derivation → render
   // path end to end. It proves nothing about any external system.
-  await page.getByLabel("Cash on hand").fill("60000");
+  // `{ exact: true }` is REQUIRED, not tidiness. `getByLabel` substring-matches by default, and
+  // `InputRow` gives its Save button `aria-label={`Save ${spec.label}`}` — so the loose form
+  // resolves to TWO elements (the input `cash-input-cashOnHand` AND the button "Save Cash on
+  // hand") and `fill()` dies on a strict-mode violation. Measured on the live page: loose 2,
+  // exact 1. The failure reads as "waiting for getByLabel(…)" until it times out, which points at
+  // the page rather than at the locator and is why this looked like a missing field.
+  await page.getByLabel("Cash on hand", { exact: true }).fill("60000");
   await page.getByRole("button", { name: /save cash on hand/i }).click();
-  await page.getByLabel("Monthly operating cost").fill("10000");
+  await page.getByLabel("Monthly operating cost", { exact: true }).fill("10000");
   await page.getByRole("button", { name: /save monthly operating cost/i }).click();
   await expect(page.getByText(/6 months/i)).toBeVisible();
 });
@@ -240,6 +296,10 @@ test("connected cost console: coverage, rails, unlanded meaning and the owner bo
   }
 
   // ── 4. One controlled movement per rail and phase ───────────────────────────────────
+  // BASELINE FIRST — everything section 5 asserts is a delta on top of what this tenant already
+  // carried. Read before a single `record` call, or the baseline would include this run.
+  const ingestBefore = await unlandedShown(page, "ingest");
+  const mediaBefore = await unlandedShown(page, "media");
   const at = now - 60 * 60 * 1000;
   record(tenantId, {
     rail: "reasoning",
@@ -302,11 +362,26 @@ test("connected cost console: coverage, rails, unlanded meaning and the owner bo
 
   // ── 5. Unlanded says two different things, on one page ──────────────────────────────
   // ingest: reserved 900 − refunded 400 = 500 still out, and it can still resolve.
-  await expect(page.getByText(/\$5\.00 unlanded/)).toBeVisible();
+  // DELTAS, not literals — see `unlandedByRail`. This run adds ingest 900−400 = 500 still out
+  // and media 300−110 = 190 that never comes back; the page shows those ON TOP of whatever the
+  // tenant already held. The arithmetic under test is identical; only the assumption that the
+  // tenant started empty is gone. Scoped to the rail's own `[data-unlanded]` item so the figure
+  // cannot be matched from the ledger's copy of the same sentence.
+  const expectedIngest = usd(ingestBefore + 500);
+  const expectedMedia = usd(mediaBefore + 190);
+  await expect(page.locator('[data-unlanded="ingest"]')).toContainText(
+    `${expectedIngest} unlanded`,
+  );
   await expect(page.getByText(/still expected to land/)).toBeVisible();
   // media: reserved 300 − actual 110 = 190 that is NEVER coming back.
-  await expect(page.getByText(/\$1\.90 unlanded/)).toBeVisible();
-  await expect(page.getByText(/no refund path/)).toBeVisible();
+  await expect(page.locator('[data-unlanded="media"]')).toContainText(
+    `${expectedMedia} unlanded`,
+  );
+  // SCOPED to the unlanded list item, not a bare text match. The same sentence is deliberately
+  // rendered twice — once on the rail's own `<li data-unlanded="media">` and once in the Media job
+  // ledger — so `getByText(/no refund path/)` is a strict-mode violation. The rail explanation is
+  // the one this assertion means, and `data-unlanded` already names it.
+  await expect(page.locator('[data-unlanded="media"]')).toContainText(/no refund path/);
 
   // Coverage is open now, so the window states a confident figure rather than Unknown.
   await expect(page.getByRole("row", { name: /All rails/ })).toBeVisible();
@@ -327,6 +402,11 @@ test("connected cost console: coverage, rails, unlanded meaning and the owner bo
     timeout: 20_000,
   });
   // Three separate ceilings, never one combined number.
+  // WAIT FOR THE FIRST CEILING BEFORE SNAPSHOTTING. The static copy asserted above renders
+  // immediately; the ceilings arrive one async hop later with `globalRails`. `page.content()` is a
+  // single instant with no auto-wait, so capturing it here caught a skeleton still showing
+  // "Loading cost…" and none of the three figures — measured, this is exactly how it failed.
+  await expect(page.getByText("$50.00").first()).toBeVisible({ timeout: 20_000 });
   const ownerHtml = await page.content();
   for (const ceiling of ["$50.00", "$100.00", "$250.00"]) {
     expect(ownerHtml).toContain(ceiling);
