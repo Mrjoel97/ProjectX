@@ -5830,6 +5830,11 @@ describe("33-05 saveReelToVault: one vault doc per plan, at every pipeline termi
     // The ROW is markdown (searchable — rides the embed rail); the BYTES are the final mp4.
     expect(doc?.mimeType).toBe("text/markdown");
     expect(doc?.storedMimeType).toBe("video/mp4");
+    // OWNER-REPORTED (2026-08-21): the reel landed under the vault's Docs tab, not Videos.
+    // `categoryFor` already says video wins over source — "image/* and video/* win over source" —
+    // but this call site passed no mimeType at all, so it fell through to source:"agent" and filed
+    // a 30-second mp4 as a workspace document. The category must describe the BYTES.
+    expect(doc?.category).toBe("videos");
     expect(doc?.storageId).toBe(capId);
     expect(doc?.status).toBe("processing");
     expect(doc?.title).toContain("Autumn launch teaser");
