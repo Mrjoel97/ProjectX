@@ -1,5 +1,38 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-22 (26-13.1 — **THE IMAGE LANE IS BACK, AND THE SHELF IS SEARCHABLE.**
+> `kind: "image"` joins the whitelist and the false comment that excluded it is DELETED, replaced by
+> what the write site actually says: `mediaComplete.saveImageToVault` is scoped to
+> `plans.mediaMode === "image"` and is `saveReelToVault`'s twin, while a reel's scene image never
+> becomes a vault document at all because `deleteIntermediates` removes its bytes at the render
+> terminal. Both halves are now pinned by tests — a standalone image appears with bytes, provenance
+> and `promotion: not-applicable`; a bare `mediaJobs` row produces NO shelf card.
+>
+> **SEARCH NARROWS WHAT IS SHOWN, NEVER WHAT IS LOOKED AT.** The window is sliced to `limit` first
+> and the title match runs over that page, so a page can honestly return 3 items and still say there
+> is more. Two consequences are load-bearing: (1) the cursor comes from the last row of the WINDOW,
+> not the last row RETURNED — otherwise a page whose every row was filtered out reports
+> `nextCursor: null` and strands the rest of the shelf behind a search term (mutation-checked);
+> (2) the result line carries the denominator — *"3 of the 24 newest artifacts match"* — because a
+> bare match count has no scale and "nothing found" would be indistinguishable from "nothing found
+> ON THIS PAGE", which is the exact failure the bound contract exists to prevent.
+> ponytail ceiling, named at the call site: a substring match over the page, not a search index.
+> Upgrade path is `withSearchIndex` on (tenantId, title) — a schema change and a second ranking to
+> reason about; take it when the shelf outgrows a few pages.
+>
+> **ONE SOURCE-SCAN ASSERTION WAS LOOSENED ON PURPOSE, and the reasoning matters more than the
+> line.** `contentView.test.ts` asserted `api.vault.vaultDownloadUrl` appeared NOWHERE in the view.
+> The thumbnail needs it. A flat ban would have been the easy assertion and the wrong one: it
+> forbids the FEATURE rather than the FAILURE, and the failure is a URL minted for a row nobody
+> looked at. It now asserts the call appears EXACTLY ONCE, inside `ImageThumb`, and that `ImageThumb`
+> renders only on the image lane — so a shelf of 24 documents still subscribes to nothing.
+>
+> Evidence: backend content 25/25 with 4/4 new mutants caught (drop the image lane; cursor from the
+> returned rows; the match count as denominator; filter before slicing) — component 27/27 —
+> `e2e/content.spec.ts` **9/9 EXECUTED** on a rebuilt `:3111` — web suite 30 files / 480, backend 92
+> files / 2268 — web typecheck, prod build and watcher clean.)
+>
+
 > Last verified: 2026-08-22 (26-13 Tasks 2+3 — **OWNER UAT APPROVED AND THE CONTENT NAV IS LIVE.**
 > Verdict verbatim: *"The page is minimalistic. It works great."* Task 3 replaced the disabled
 > `Soon` item with `{ label: "Content", href: "/dashboard/content" }`; the branch keys off `href`,

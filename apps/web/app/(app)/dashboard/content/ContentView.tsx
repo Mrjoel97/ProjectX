@@ -130,6 +130,7 @@ export type ContentState = keyof typeof CONTENT_STATE_COPY;
 export const LANE_LABELS: Record<LaneFilter, string> = {
   all: "All",
   document: "Documents",
+  image: "Images",
   memo: "Memos",
   reel: "Reels",
 };
@@ -165,16 +166,24 @@ export function formatBytes(size: number): string {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+const LANE_BADGE: Record<Lane, string> = {
+  document: "Doc",
+  image: "Image",
+  memo: "Memo",
+  reel: "Reel",
+};
+
 /** The type badge: what the row IS, plus what the bytes are when those differ. */
 export function typeBadge(card: ArtifactCardData): string {
   const suffix = card.bytes.state === "available" ? bytesLabel(card.bytes.mimeType) : null;
-  const lane = card.lane === "document" ? "Doc" : card.lane === "memo" ? "Memo" : "Reel";
+  const lane = LANE_BADGE[card.lane];
   return suffix === null ? lane : `${lane} · ${suffix}`;
 }
 
 function bytesLabel(mimeType: string): string {
   if (mimeType === "application/pdf") return "PDF";
   if (mimeType === "video/mp4") return "MP4";
+  if (mimeType.startsWith("image/")) return mimeType.slice("image/".length).toUpperCase();
   if (mimeType.startsWith("text/")) return "Text";
   return mimeType.split("/").pop()?.toUpperCase() ?? "File";
 }
@@ -257,6 +266,7 @@ export function LaneFilters({
   const counts: Record<LaneFilter, { count: number; capped: boolean } | null> = {
     all: summary ? summary.total : null,
     document: summary ? summary.lanes.document : null,
+    image: summary ? summary.lanes.image : null,
     memo: summary ? summary.lanes.memo : null,
     reel: summary ? summary.lanes.reel : null,
   };
@@ -276,7 +286,7 @@ export function LaneFilters({
         minWidth: 0,
       }}
     >
-      {(["all", "document", "memo", "reel"] as const).map((lane) => {
+      {(["all", "document", "image", "memo", "reel"] as const).map((lane) => {
         const entry = counts[lane];
         const selected = lane === active;
         return (
@@ -313,6 +323,50 @@ export function LaneFilters({
   );
 }
 
+/**
+ * The honest result line for a filtered page.
+ *
+ * "3 matches" is a number with no scale. The shelf reads a bounded window and matches inside it, so
+ * the sentence has to say how much was looked at — otherwise "nothing found" is indistinguishable
+ * from "nothing found ON THIS PAGE", which is the exact failure the bound contract exists to stop.
+ */
+export function searchSummary(matched: number, scanned: number, more: boolean): string {
+  const head =
+    matched === 0
+      ? `No titles match in the ${scanned} newest`
+      : `${matched} of the ${scanned} newest ${scanned === 1 ? "artifact matches" : "artifacts match"}`;
+  return more ? `${head} — there are older ones on the next page.` : `${head}.`;
+}
+
+/** Title search. A plain controlled input; the debounce is the query's own reactivity. */
+export function SearchBox({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  return (
+    <label style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+      <span style={{ ...caps, fontSize: "0.62rem" }}>Search</span>
+      <input
+        type="search"
+        value={value}
+        placeholder="Titles…"
+        data-testid="content-search"
+        onChange={(event) => onChange(event.target.value)}
+        style={{
+          ...button,
+          cursor: "text",
+          fontWeight: 400,
+          minWidth: "11rem",
+          maxWidth: "100%",
+        }}
+      />
+    </label>
+  );
+}
+
 export type ArtifactActions = {
   open: (card: ArtifactCardData) => void;
   play: (card: ArtifactCardData) => void;
@@ -334,6 +388,7 @@ export function ArtifactCard({
   note,
   playing,
   player,
+  thumbnail,
 }: {
   card: ArtifactCardData;
   actions: ArtifactActions;
@@ -343,6 +398,8 @@ export function ArtifactCard({
   note: string | null;
   playing: boolean;
   player?: ReactNode;
+  /** Rendered for an image card only, and only by a parent that fetched its URL on demand. */
+  thumbnail?: ReactNode;
 }) {
   const promotable = item.promotion.state === "eligible" || item.promotion.state === "retry";
   const proved = item.reel?.playback.state === "proved";
@@ -367,6 +424,8 @@ export function ArtifactCard({
             </span>
           ) : null}
         </div>
+
+        {item.lane === "image" ? thumbnail : null}
 
         <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, letterSpacing: "-0.01em" }}>
           {item.title}
@@ -550,10 +609,58 @@ function ReelPlayer({ planId }: { planId: string }) {
   );
 }
 
+/**
+ * An image card's preview.
+ *
+ * The URL is minted PER VISIBLE CARD, through the Vault's own ownership-checked reader, and only
+ * for the image lane — a card the user has actually been shown. That is the same rule the modal and
+ * the reel player follow, one step earlier: a shelf of 24 documents subscribes to nothing, and a
+ * shelf of 24 images subscribes to exactly the 24 it is drawing. A null URL means the metadata
+ * points at bytes that are gone, and the card says so rather than drawing a broken frame.
+ */
+function ImageThumb({ vaultDocId, title }: { vaultDocId: string; title: string }) {
+  const url = useQuery(api.vault.vaultDownloadUrl, {
+    vaultDocId: vaultDocId as never,
+  });
+  if (url === undefined) {
+    return (
+      <div
+        style={{ height: "8rem", borderRadius: "0.65rem", background: "var(--canvas)" }}
+        aria-hidden="true"
+      />
+    );
+  }
+  if (url === null) {
+    return (
+      <ContentStateNotice state="refusal">The picture is no longer stored.</ContentStateNotice>
+    );
+  }
+  return (
+    // A signed, short-lived storage URL is not a static asset: next/image would need the Convex
+    // host whitelisted in next.config and would then cache a URL that expires. The Vault's own
+    // PreviewModal renders stored images the same way, for the same reason.
+    // biome-ignore lint/performance/noImgElement: signed storage URL, not an optimisable asset
+    <img
+      src={url}
+      alt={title}
+      data-testid="image-thumb"
+      style={{
+        width: "100%",
+        height: "8rem",
+        objectFit: "cover",
+        borderRadius: "0.65rem",
+        display: "block",
+        background: "var(--canvas)",
+      }}
+    />
+  );
+}
+
 const PAGE_SIZE = 24;
 
 function ContentShelf() {
   const [lane, setLane] = useState<LaneFilter>("all");
+  const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
@@ -567,6 +674,7 @@ function ContentShelf() {
     limit: PAGE_SIZE,
     ...(lane === "all" ? {} : { lane }),
     ...(cursor === null ? {} : { cursor }),
+    ...(query.trim() === "" ? {} : { query }),
   });
 
   // The single guarded promotion surface, called directly (26-11), and its caller-side audit row.
@@ -578,6 +686,13 @@ function ContentShelf() {
     setCursor(null); // a cursor from one lane means nothing in another
     setConfirmingId(null);
     setNote(null);
+  }
+
+  function search(next: string) {
+    setQuery(next);
+    // Same rule as the lane filter: a cursor names a position in one result set, so carrying it
+    // into another would page through a shelf the user is no longer looking at.
+    setCursor(null);
   }
 
   async function confirmPromote(item: ArtifactCardData) {
@@ -619,11 +734,31 @@ function ContentShelf() {
 
   return (
     <div style={stack}>
-      <LaneFilters summary={summary} active={lane} onSelect={selectLane} />
+      <div
+        style={{
+          display: "flex",
+          gap: "0.65rem",
+          flexWrap: "wrap",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <LaneFilters summary={summary} active={lane} onSelect={selectLane} />
+        <SearchBox value={query} onChange={search} />
+      </div>
       <WhereItLivesNote />
 
       {page === undefined ? <ContentStateNotice state="loading" /> : null}
-      {page !== undefined && page.items.length === 0 ? <ContentStateNotice state="empty" /> : null}
+      {page !== undefined && page.items.length === 0 ? (
+        <ContentStateNotice state="empty">
+          {query.trim() === "" ? undefined : searchSummary(page.items.length, page.scanned, true)}
+        </ContentStateNotice>
+      ) : null}
+      {page !== undefined && page.items.length > 0 && query.trim() !== "" ? (
+        <p style={{ ...muted, fontSize: "0.82rem" }} data-testid="search-summary">
+          {searchSummary(page.items.length, page.scanned, page.bound.partial)}
+        </p>
+      ) : null}
 
       {page !== undefined && page.items.length > 0 ? (
         <div
@@ -645,6 +780,11 @@ function ContentShelf() {
               playing={playingId === item.vaultDocId}
               player={
                 item.reel?.planId ? <ReelPlayer planId={item.reel.planId as string} /> : undefined
+              }
+              thumbnail={
+                item.lane === "image" ? (
+                  <ImageThumb vaultDocId={item.vaultDocId} title={item.title} />
+                ) : undefined
               }
             />
           ))}

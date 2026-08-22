@@ -1569,6 +1569,7 @@ export const seedContentShelf = internalAction({
     memoTitle: string;
     provedReelTitle: string;
     unprovedReelTitle: string;
+    imageTitle: string;
     provedThreadId: string;
   }> => {
     // `ctx.storage.store` is action-only (the `storeSmokePdf` precedent), which is the whole reason
@@ -1580,11 +1581,20 @@ export const seedContentShelf = internalAction({
         type: "application/json",
       }),
     );
+    // A 1x1 PNG, so the shelf's image thumbnail has real bytes with a real image mime to resolve.
+    const pngBytes = Uint8Array.from(
+      atob(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      ),
+      (c) => c.charCodeAt(0),
+    );
+    const imageStorageId = await ctx.storage.store(new Blob([pngBytes], { type: "image/png" }));
     return await ctx.runMutation(internal.smoke.insertShelfFixtures, {
       tenant,
       marker,
       renderStorageId,
       sidecarStorageId,
+      imageStorageId,
       size: finalBytes.byteLength,
     });
   },
@@ -1596,20 +1606,23 @@ export const insertShelfFixtures = internalMutation({
     marker: v.string(),
     renderStorageId: v.id("_storage"),
     sidecarStorageId: v.id("_storage"),
+    imageStorageId: v.id("_storage"),
     size: v.number(),
   },
   handler: async (
     ctx,
-    { tenant, marker, renderStorageId, sidecarStorageId, size },
+    { tenant, marker, renderStorageId, sidecarStorageId, imageStorageId, size },
   ): Promise<{
     memoTitle: string;
     provedReelTitle: string;
     unprovedReelTitle: string;
+    imageTitle: string;
     provedThreadId: string;
   }> => {
     const memoTitle = `Next step — close the Offer gate (${marker})`;
     const provedReelTitle = `Reel: launch (${marker})`;
     const unprovedReelTitle = `Reel: teaser (${marker})`;
+    const imageTitle = `Image: a teal launch banner (${marker})`;
     const provedThreadId = `smoke-content-proved-${marker}`;
     const now = Date.now();
 
@@ -1698,6 +1711,25 @@ export const insertShelfFixtures = internalMutation({
     });
     await ctx.db.patch(unprovedPlan, { reelVaultDocId: unprovedReel });
 
-    return { memoTitle, provedReelTitle, unprovedReelTitle, provedThreadId };
+    // 26-13.1: THE STANDALONE IMAGE. `saveImageToVault`'s row shape, minus the ingest it starts —
+    // this fixture has no business buying an embedding. It is the lane 26-12 wrongly excluded.
+    await ctx.db.insert("vaultDocuments", {
+      tenantId: tenant,
+      title: imageTitle,
+      kind: "image",
+      category: categoryFor({ source: "agent", mimeType: "image/png" }),
+      source: "media",
+      mimeType: "text/markdown",
+      storedMimeType: "image/png",
+      storageId: imageStorageId,
+      size: 68,
+      contentHash: await contentHash(imageTitle),
+      text: "a teal launch banner",
+      status: "ready",
+      sourceThreadId: `smoke-content-image-${marker}`,
+      createdAt: now - 500,
+    });
+
+    return { memoTitle, provedReelTitle, unprovedReelTitle, imageTitle, provedThreadId };
   },
 });

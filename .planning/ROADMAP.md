@@ -77,7 +77,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   5. Reports provides bounded business, operations and governance projections, a server-sanitized audit view, owner-only WORM/skill/deployment facts, and a governed board-pack artifact path.
   6. Pipeline ships with — and never duplicates — Phase 19's tenant-scoped contacts/follow-up/consent/suppression substrate; the send-path suppression guard remains the trust boundary.
   7. Command Center v2 composes stable page summaries and deterministic next-move/health logic after the source pages land; every page passes package tests, typechecks, production build, playbook watchers and authenticated responsive UAT before its nav item becomes live.
-**Plans:** 14/21 plans executed (26-13.1 added 2026-08-22)
+**Plans:** 15/21 plans executed
 
 Plans:
 - [x] 26-01-PLAN.md — Shared result/window/money contracts and dashboard playbook ownership (Wave 1)
@@ -93,7 +93,7 @@ Plans:
 - [x] 26-11-PLAN.md — Artifact provenance and idempotent promotion (Wave 8) — **closed 2026-08-22**
 - [x] 26-12-PLAN.md — Bounded Content union, safe URLs and reuse terminals (Wave 9) — **closed 2026-08-22**. Title corrected: *Refresh Research* is NOT a Content terminal (CONT-01 amended 2026-08-22 — research briefs belong to the Knowledge Vault), and the plan body already excluded it
 - [x] 26-13-PLAN.md — Connected Content route, executed browser gate, owner UAT, then nav activation (Wave 10) — **closed 2026-08-22, owner UAT APPROVED** ("the page is minimalistic, it works great"); nav is live, `e2e/content.spec.ts` executed 7/7 both before and after activation
-- [ ] 26-13.1-PLAN.md — The image lane, title search and thumbnails (Wave 10.1) — **a repair, not a feature**: 26-12 excluded `kind:"image"` from the shelf on a FALSE premise (those rows are standalone finished images, not media intermediates). Owner-directed 2026-08-22
+- [x] 26-13.1-PLAN.md — The image lane, title search and thumbnails (Wave 10.1) — **closed 2026-08-22; a repair, not a feature**: 26-12 excluded `kind:"image"` from the shelf on a FALSE premise (those rows are standalone finished images, not media intermediates). Owner-directed 2026-08-22
 - [ ] 26-14-PLAN.md — Business/operations reporting semantics and bounded projections (Wave 11)
 - [ ] 26-15-PLAN.md — Sanitized governance projection and owner-only operational facts (Wave 11)
 - [ ] 26-16-PLAN.md — Immutable board-pack snapshot/render artifact (Wave 12)

@@ -1,5 +1,11 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-08-22 (26-13.1 — `smoke.seedContentShelf` gained a FOURTH fixture: a
+> standalone image (a real 1x1 PNG, so the shelf's thumbnail resolves a genuine signed URL against
+> genuine bytes). Same caveat as its siblings — a terminal row that proves a UI state, with no
+> provider run, no embedding bought and no ingest started. No runtime behaviour changed.)
+>
+
 > Last verified: 2026-08-22 (26-13 — **SMOKE GAINED ONE E2E FIXTURE SEAM; NO RUNTIME BEHAVIOUR
 > CHANGED.** `smoke.seedContentShelf` (an `internalAction`, because `ctx.storage.store` is
 > action-only — the `storeSmokePdf` precedent) plus its `insertShelfFixtures` mutation seed the

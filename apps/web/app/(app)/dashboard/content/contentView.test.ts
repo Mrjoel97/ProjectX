@@ -25,6 +25,8 @@ import {
   LaneFilters,
   PROMOTION_ONE_WAY,
   reelUnprovedCopy,
+  SearchBox,
+  searchSummary,
   typeBadge,
   WhereItLivesNote,
 } from "./ContentView";
@@ -248,16 +250,19 @@ describe("the filter chips and the moved surfaces", () => {
       summary: {
         lanes: {
           document: { count: 11, capped: false },
+          image: { count: 4, capped: false },
           memo: { count: 1, capped: false },
           reel: { count: 50, capped: true },
         },
-        total: { count: 62, capped: true },
+        total: { count: 66, capped: true },
       },
       active: "reel",
       onSelect: noop,
     });
     expect(html).toContain("Documents");
+    expect(html).toContain("Images");
     expect(html).toContain(">11<");
+    expect(html).toContain(">4<");
     expect(html).toContain(">50+<");
     expect(html).toMatch(/data-lane="reel"[^>]*/);
     expect(html).toContain('aria-pressed="true"');
@@ -276,6 +281,53 @@ describe("the filter chips and the moved surfaces", () => {
     expect(html).toContain("/dashboard/vault");
     // Reports has no route yet, so it is named and NOT linked — the nav's own no-dead-links rule.
     expect(html).not.toContain("/dashboard/reports");
+  });
+});
+
+describe("the image lane and search (26-13.1)", () => {
+  test("an image card carries its thumbnail and is never offered promotion", () => {
+    const html = render(
+      ArtifactCard,
+      cardProps(
+        {
+          lane: "image",
+          title: "Image: a teal launch banner",
+          bytes: { state: "available", mimeType: "image/png" },
+          promotion: { state: "not-applicable" },
+        },
+        { thumbnail: "THUMBNAIL-SLOT" },
+      ),
+    );
+    expect(html).toContain("Image · PNG");
+    expect(html).toContain("THUMBNAIL-SLOT");
+    expect(html).not.toContain('data-testid="promote-artifact"');
+    expect(html).not.toContain('data-testid="play-reel"');
+  });
+
+  test("a non-image card is handed no thumbnail slot at all", () => {
+    const html = render(ArtifactCard, cardProps({}, { thumbnail: "THUMBNAIL-SLOT" }));
+    expect(html).not.toContain("THUMBNAIL-SLOT");
+  });
+
+  test("a search result says how much was looked at, not just how much matched", () => {
+    // "3 matches" is a number with no scale, and "no results" must never be confusable with
+    // "no results on this page" — the bound contract's whole point.
+    expect(searchSummary(3, 24, true)).toBe(
+      "3 of the 24 newest artifacts match — there are older ones on the next page.",
+    );
+    expect(searchSummary(3, 24, false)).toBe("3 of the 24 newest artifacts match.");
+    expect(searchSummary(0, 24, true)).toBe(
+      "No titles match in the 24 newest — there are older ones on the next page.",
+    );
+    expect(searchSummary(1, 1, false)).toBe("1 of the 1 newest artifact matches.");
+  });
+
+  test("the search box is a labelled control, not a bare input", () => {
+    const html = render(SearchBox, { value: "north", onChange: noop });
+    expect(html).toContain('data-testid="content-search"');
+    expect(html).toContain('type="search"');
+    expect(html).toContain("north");
+    expect(html).toContain("<label");
   });
 });
 
@@ -325,10 +377,17 @@ describe("the surfaces CONT-01 moved away are absent from the page (source scan)
     expect(viewSource).toContain("api.contentAudit.recordPromotion");
   });
 
-  test("no URL is minted eagerly: the modal and the player mount only when opened", () => {
-    // The card carries ids. `vault.vaultDoc` (which the modal uses to reach a signed URL) and
-    // `media.reel` must not be subscribed for every row on the shelf.
-    expect(viewSource).not.toMatch(/api\.vault\.vaultDownloadUrl/);
+  test("no URL is minted eagerly: the modal, the player and the thumbnail are all gated", () => {
+    // The card carries ids, never URLs. Each of the three capability reads is behind its own gate:
+    // the modal on an open card, the player on a playing card, the thumbnail on the IMAGE lane —
+    // so a shelf of 24 documents subscribes to nothing at all.
+    //
+    // 26-13.1 loosened this from "vaultDownloadUrl appears nowhere" to "it appears once, inside the
+    // thumbnail". A flat ban would have been the easy assertion and the wrong one: it forbids the
+    // feature rather than the failure, and the failure is a URL minted for a row nobody looked at.
+    expect(viewSource.match(/api\.vault\.vaultDownloadUrl/g) ?? []).toHaveLength(1);
+    expect(viewSource).toMatch(/function ImageThumb\([\s\S]{0,400}api\.vault\.vaultDownloadUrl/);
+    expect(viewSource).toMatch(/item\.lane === "image" \? \(\s*<ImageThumb/);
     expect(viewSource).toMatch(/openId !== null \? <ArtifactModal/);
     expect(viewSource).toMatch(/playing \? player : null/);
   });

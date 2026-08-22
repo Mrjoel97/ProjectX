@@ -55,6 +55,7 @@ let tenantId = "";
 let memoTitle = "";
 let provedReelTitle = "";
 let unprovedReelTitle = "";
+let imageTitle = "";
 
 test.beforeAll(() => {
   const state = JSON.parse(
@@ -98,10 +99,12 @@ test.beforeAll(() => {
     memoTitle: string;
     provedReelTitle: string;
     unprovedReelTitle: string;
+    imageTitle: string;
   };
   memoTitle = parsed.memoTitle;
   provedReelTitle = parsed.provedReelTitle;
   unprovedReelTitle = parsed.unprovedReelTitle;
+  imageTitle = parsed.imageTitle;
 });
 
 test("the Content route is live in the nav and lights up when you are on it", async ({ page }) => {
@@ -119,19 +122,21 @@ test("the Content route is live in the nav and lights up when you are on it", as
   await expect(page.locator(".rail-item.is-soon", { hasText: "Content" })).toHaveCount(0);
 });
 
-test("all three shelf kinds render, and the moved surfaces are named rather than dropped", async ({
+test("all four shelf kinds render, and the moved surfaces are named rather than dropped", async ({
   page,
 }) => {
   await page.goto(ROUTE);
   await expect(page.getByRole("heading", { name: "Your content library" })).toBeVisible();
 
-  // One shelf, three lanes.
+  // One shelf, four lanes. The image lane is here because 26-12 wrongly excluded it and 26-13.1
+  // repaired that — a standalone generated image is a finished artifact, not an intermediate.
   await expect(page.getByText(PROMOTABLE, { exact: false })).toBeVisible();
   await expect(page.getByText(memoTitle, { exact: false })).toBeVisible();
   await expect(page.getByText(provedReelTitle, { exact: false })).toBeVisible();
+  await expect(page.getByText(imageTitle, { exact: false })).toBeVisible();
 
   // The chips exist and carry counts.
-  for (const lane of ["all", "document", "memo", "reel"]) {
+  for (const lane of ["all", "document", "image", "memo", "reel"]) {
     await expect(page.locator(`button[data-lane="${lane}"]`)).toHaveCount(1);
   }
 
@@ -146,6 +151,52 @@ test("all three shelf kinds render, and the moved surfaces are named rather than
   const html = await page.content();
   expect(html).not.toMatch(/Refresh Research/i);
   expect(html).not.toMatch(/recipients?/i);
+});
+
+test("the image lane shows the picture and opens it, and its bytes are fetched per card", async ({
+  page,
+}) => {
+  await page.goto(ROUTE);
+  await page.locator('button[data-lane="image"]').click();
+
+  const card = page.locator('[data-testid="artifact-card"]', { hasText: imageTitle });
+  await expect(card).toBeVisible();
+  // The thumbnail resolves to a real signed URL — minted for THIS card, by the image lane only.
+  await expect(card.getByTestId("image-thumb")).toHaveAttribute("src", /.+/);
+  // An image is not promotable (no `origin`) and is not a reel.
+  await expect(card.getByTestId("promote-artifact")).toHaveCount(0);
+  await expect(card.getByTestId("play-reel")).toHaveCount(0);
+
+  await card.getByTestId("open-artifact").click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+});
+
+test("search narrows the shelf and says how much it looked at", async ({ page }) => {
+  await page.goto(ROUTE);
+  const box = page.getByTestId("content-search");
+  await box.fill("Northfield");
+
+  await expect(
+    page.locator('[data-testid="artifact-card"]', { hasText: PROMOTABLE }),
+  ).toBeVisible();
+  await expect(page.locator('[data-testid="artifact-card"]', { hasText: imageTitle })).toHaveCount(
+    0,
+  );
+  // The result line carries the denominator: "N of the M newest…", never a bare match count.
+  await expect(page.getByTestId("search-summary")).toContainText(/of the \d+ newest/);
+
+  // A term that matches nothing says so honestly, scoped to what was read.
+  await box.fill("zzzznotarealtitle");
+  await expect(page.locator('[data-content-state="empty"]')).toContainText(
+    "No titles match in the",
+  );
+
+  // Clearing restores the shelf.
+  await box.fill("");
+  await expect(
+    page.locator('[data-testid="artifact-card"]', { hasText: imageTitle }),
+  ).toBeVisible();
 });
 
 test("a document opens in place, and a legacy one is offered no conversation to reopen", async ({

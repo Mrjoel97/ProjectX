@@ -154,7 +154,7 @@ describe("Content shelf — the trust boundary", () => {
     expect(counts.total.count).toBe(1);
   });
 
-  test("the shelf is a POSITIVE kind whitelist: research, digests, uploads and images stay out", async () => {
+  test("the shelf is a POSITIVE kind whitelist: research, digests and uploads stay out", async () => {
     const t = convexTest(schema, modules);
     // In: the three shelf lanes.
     await seedDoc(t, { kind: "created_document", createdAt: 10, origin: "agent" });
@@ -165,20 +165,28 @@ describe("Content shelf — the trust boundary", () => {
     //   web_research → the Knowledge Vault owns cited grounding material that goes stale (26-11).
     //   folder_digest / business_profile / upload → never "something Pikar made for you to reuse".
     //   image → a media intermediate, not a shelf artifact.
-    const brief = await seedDoc(t, { kind: "web_research", createdAt: 14 });
-    await seedDoc(t, { kind: "folder_digest", createdAt: 15, origin: "folder_digest" });
-    await seedDoc(t, { kind: "business_profile", createdAt: 16 });
-    await seedDoc(t, { kind: "upload", createdAt: 17 });
-    await seedDoc(t, { kind: "image", createdAt: 18 });
+    // 26-13.1: an image is a FINISHED artifact, not an intermediate - see the module comment.
+    await seedDoc(t, { kind: "image", createdAt: 14 });
+    const brief = await seedDoc(t, { kind: "web_research", createdAt: 15 });
+    await seedDoc(t, { kind: "folder_digest", createdAt: 16, origin: "folder_digest" });
+    await seedDoc(t, { kind: "business_profile", createdAt: 17 });
+    await seedDoc(t, { kind: "upload", createdAt: 18 });
 
     const page = await asTenant(t).query(api.content.listArtifacts, { limit: 50 });
-    expect(page.items.map((i) => i.lane).sort()).toEqual(["document", "document", "memo", "reel"]);
+    expect(page.items.map((i) => i.lane).sort()).toEqual([
+      "document",
+      "document",
+      "image",
+      "memo",
+      "reel",
+    ]);
 
     const counts = await asTenant(t).query(api.content.summary, {});
-    expect(counts.total.count).toBe(4);
+    expect(counts.total.count).toBe(5);
     expect(counts.lanes.document.count).toBe(2);
     expect(counts.lanes.memo.count).toBe(1);
     expect(counts.lanes.reel.count).toBe(1);
+    expect(counts.lanes.image.count).toBe(1);
 
     // A research brief is not addressable through Content either — the detail read applies the
     // same whitelist, so Content can never become a second door onto the Vault's own surfaces.
@@ -552,6 +560,140 @@ describe("Content shelf — promotion is OFFERED here and GUARDED in exactly one
     const [fromList] = (await asTenant(t).query(api.content.listArtifacts, { limit: 10 })).items;
     const fromId = await asTenant(t).query(api.content.artifactById, { vaultDocId: id });
     expect(fromId).toEqual(fromList);
+  });
+});
+
+describe("Content shelf — the image lane (26-13.1, repairing 26-12)", () => {
+  test("a standalone generated image is a shelf artifact with bytes, provenance and no promotion", async () => {
+    const t = convexTest(schema, modules);
+    const storageId = await seedBytes(t, "png");
+    const planId = await seedReelPlan(t, { threadId: "thread-image" });
+    await seedDoc(t, {
+      kind: "image",
+      createdAt: 10,
+      title: "Image: a teal launch banner",
+      storageId,
+      storedMimeType: "image/png",
+      sourceThreadId: "thread-image",
+      sourcePlanId: planId,
+      text: "PROMPT-TEXT-THAT-MUST-NOT-TRAVEL",
+    });
+
+    const page = await asTenant(t).query(api.content.listArtifacts, { limit: 10, lane: "image" });
+    expect(page.items).toHaveLength(1);
+    const card = page.items[0];
+    expect(card?.lane).toBe("image");
+    expect(card?.bytes).toEqual({ state: "available", mimeType: "image/png" });
+    expect(card?.reuse).toEqual({
+      state: "available",
+      href: "/dashboard/workspace?thread=thread-image",
+    });
+    // An image carries no `origin` and `saveImageToVault` already starts its own ingest, so there
+    // is nothing to promote — the same reason a memo reads not-applicable.
+    expect(card?.promotion).toEqual({ state: "not-applicable" });
+    expect(card?.reel).toBeNull();
+    // The prompt is the row's text and must not ride the card.
+    expect(JSON.stringify(page)).not.toContain("PROMPT-TEXT-THAT-MUST-NOT-TRAVEL");
+  });
+
+  test("a reel's scene image never reaches the shelf, because it never becomes a vault row", async () => {
+    // The premise 26-12 got wrong, pinned as a test: intermediates live in `mediaJobs`, and
+    // `saveImageToVault` returns early for anything that is not `mediaMode: "image"`. A mediaJobs
+    // row alone must produce NO shelf card.
+    const t = convexTest(schema, modules);
+    const planId = await seedReelPlan(t, { threadId: "thread-reel-scene" });
+    await t.run(async (ctx) =>
+      ctx.db.insert("mediaJobs", {
+        tenantId: TENANT,
+        planId,
+        batchId: "batch-1",
+        blockIndex: 0,
+        provider: "openai",
+        kind: "image",
+        model: "gpt-image-1",
+        spec: { kind: "image", width: 1024, height: 1024 },
+        promptHash: "hash",
+        estUsd: 0,
+        status: "succeeded",
+        createdAt: 10,
+        updatedAt: 10,
+      }),
+    );
+    const page = await asTenant(t).query(api.content.listArtifacts, { limit: 10 });
+    expect(page.items).toHaveLength(0);
+    const counts = await asTenant(t).query(api.content.summary, {});
+    expect(counts.total.count).toBe(0);
+  });
+});
+
+describe("Content shelf — bounded title search (26-13.1)", () => {
+  test("search narrows what is SHOWN without changing what was LOOKED AT", async () => {
+    const t = convexTest(schema, modules);
+    await seedDoc(t, { kind: "created_document", createdAt: 30, title: "Northfield pricing" });
+    await seedDoc(t, { kind: "created_document", createdAt: 20, title: "Westbrook scope" });
+    await seedDoc(t, { kind: "next_step_memo", createdAt: 10, title: "Northfield next step" });
+
+    const hit = await asTenant(t).query(api.content.listArtifacts, {
+      limit: 10,
+      query: "northfield",
+    });
+    expect(hit.items.map((i) => i.title)).toEqual(["Northfield pricing", "Northfield next step"]);
+    // The denominator is the window, not the match count — otherwise a filtered page is a number
+    // with no scale.
+    expect(hit.scanned).toBe(3);
+    expect(hit.bound.returned).toBe(2);
+
+    const miss = await asTenant(t).query(api.content.listArtifacts, { limit: 10, query: "zzz" });
+    expect(miss.items).toHaveLength(0);
+    expect(miss.scanned).toBe(3);
+  });
+
+  test("a search that filters a whole page away still hands back a cursor", async () => {
+    // THE FAILURE THIS EXISTS FOR: taking the cursor from the last RETURNED row means a page whose
+    // every row was filtered out reports `nextCursor: null` and strands the rest of the shelf
+    // behind the search term. The cursor comes from the WINDOW.
+    const t = convexTest(schema, modules);
+    for (let i = 0; i < 4; i++) {
+      await seedDoc(t, { kind: "created_document", createdAt: 100 + i, title: `Filler ${i}` });
+    }
+    await seedDoc(t, { kind: "created_document", createdAt: 1, title: "Needle" });
+
+    const first = await asTenant(t).query(api.content.listArtifacts, { limit: 2, query: "needle" });
+    expect(first.items).toHaveLength(0);
+    expect(first.nextCursor).not.toBeNull();
+
+    let cursor = first.nextCursor;
+    const found: string[] = [];
+    for (let guard = 0; guard < 5 && cursor !== null; guard++) {
+      const next: { items: { title: string }[]; nextCursor: string | null } = await asTenant(
+        t,
+      ).query(api.content.listArtifacts, { limit: 2, query: "needle", cursor });
+      found.push(...next.items.map((i) => i.title));
+      cursor = next.nextCursor;
+    }
+    expect(found).toEqual(["Needle"]);
+  });
+
+  test("search composes with the lane filter and never widens what a tenant can see", async () => {
+    const t = convexTest(schema, modules);
+    await seedDoc(t, { kind: "created_document", createdAt: 20, title: "Launch plan" });
+    await seedDoc(t, { kind: "reel", createdAt: 10, title: "Launch reel" });
+    await seedDoc(t, {
+      tenantId: OTHER,
+      kind: "created_document",
+      createdAt: 30,
+      title: "Launch SECRET",
+    });
+
+    const reels = await asTenant(t).query(api.content.listArtifacts, {
+      limit: 10,
+      lane: "reel",
+      query: "launch",
+    });
+    expect(reels.items.map((i) => i.title)).toEqual(["Launch reel"]);
+
+    const all = await asTenant(t).query(api.content.listArtifacts, { limit: 10, query: "launch" });
+    expect(JSON.stringify(all)).not.toContain("SECRET");
   });
 });
 

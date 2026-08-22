@@ -36,22 +36,36 @@ import { tenantQuery } from "./lib/functions";
  * THE SHELF IS A POSITIVE WHITELIST, never a set of exclusions.
  *
  * `vaultDocuments.kind` is `v.string()` and grows every phase, so "everything except the ones I
- * thought of" silently admits the next writer's rows. Naming the four kinds that ARE artifacts
- * means a new kind lands outside the shelf until somebody adds it here on purpose — the same
- * reasoning as `promoteToReference`'s positive `origin` check (26-11).
+ * thought of" silently admits the next writer's rows. Naming the kinds that ARE artifacts means a
+ * new kind lands outside the shelf until somebody adds it here on purpose — the same reasoning as
+ * `promoteToReference`'s positive `origin` check (26-11).
+ *
+ * **`image` BELONGS HERE, and 26-12 wrongly left it out.** That exclusion was justified by a comment
+ * calling these rows "media intermediates", which is false, and the correction is worth stating at
+ * the write site rather than the field name: `mediaComplete.saveImageToVault` is explicitly *scoped
+ * to the standalone image* (`plans.mediaMode === "image"`) and is `saveReelToVault`'s twin. A reel's
+ * scene image is the same `mediaJobs.kind` token but it NEVER becomes a vault document at all —
+ * `deleteIntermediates` deletes its bytes at the render terminal, which is exactly why no doc is
+ * written for one. So every `kind: "image"` VAULT row is a finished, standalone deliverable, and a
+ * shelf of "everything Pikar has made" that omits it is missing one of the two things Pikar makes.
+ * Found by the owner at the 26-13 UAT; repaired in 26-13.1.
+ *
+ * The general lesson, since this is the second whitelist in two plans: a membership decision
+ * justified by a claim about another module is only as true as that claim. Check the write site.
  *
  * What is deliberately absent, and why:
  *   • `web_research` → the Knowledge Vault owns cited grounding material that goes stale, and the
  *     Vault already renders staleness (CONT-01 as amended, 2026-08-22).
  *   • sent mail → Reports owns the record of what happened; `requests` is not read by this module.
  *   • `folder_digest`, `business_profile`, uploads → never "something Pikar made for you to reuse".
- *   • `image` / `video` → media intermediates, not shelf deliverables (the reel is the artifact).
+ *   • `video` → there is no such vault `kind`. The finished video IS the `reel` row.
  */
 const LANE_BY_KIND = {
   created_document: "document",
   created_content: "document",
   next_step_memo: "memo",
   reel: "reel",
+  image: "image",
 } as const;
 
 type ShelfKind = keyof typeof LANE_BY_KIND;
@@ -62,9 +76,15 @@ const KINDS_BY_LANE: Record<Lane, ShelfKind[]> = {
   document: ["created_document", "created_content"],
   memo: ["next_step_memo"],
   reel: ["reel"],
+  image: ["image"],
 };
 
-const laneArg = v.union(v.literal("document"), v.literal("memo"), v.literal("reel"));
+const laneArg = v.union(
+  v.literal("document"),
+  v.literal("memo"),
+  v.literal("reel"),
+  v.literal("image"),
+);
 
 const PAGE_LIMIT_DEFAULT = 24;
 const PAGE_LIMIT_MAX = 48;
@@ -218,6 +238,18 @@ function branch(
  * ("drive the cursor off the index range itself") as its own upgrade path, and the shelf has the
  * index for it, so it starts there.
  *
+ * **`query` NARROWS WHAT IS SHOWN, NEVER WHAT IS LOOKED AT.** The window is sliced to `limit`
+ * FIRST and the title match runs over that page, so paging stays stable and the counts stay
+ * honest: a page can legitimately return 3 items and still say "there is more", because 24
+ * artifacts were read and 3 matched. The cursor is therefore taken from the last row of the
+ * WINDOW, not the last row RETURNED — otherwise a page whose every row was filtered out would
+ * report no next cursor and strand the rest of the shelf behind a search term.
+ *
+ * ponytail: a substring match over the page, not a search index. The ceiling is real and worth
+ * naming — a term that matches nothing in the first window looks like "no results" until you page.
+ * Upgrade path: Convex's `withSearchIndex` on (tenantId, title), which is a schema change and a
+ * second ranking to reason about; take it when the shelf outgrows a few pages, not before.
+ *
  * ponytail: a page can skip rows only if MORE THAN `limit` artifacts of ONE kind share a single
  * millisecond — each insert is its own transaction, so that needs 24 writes inside one tick.
  * Upgrade path if it ever happens: widen the per-branch window by the number of boundary ties.
@@ -227,8 +259,9 @@ export const listArtifacts = tenantQuery({
     lane: v.optional(laneArg),
     limit: v.optional(v.number()),
     cursor: v.optional(v.string()),
+    query: v.optional(v.string()),
   },
-  handler: async (ctx, { lane, limit: requested, cursor }) => {
+  handler: async (ctx, { lane, limit: requested, cursor, query }) => {
     const limit = clampLimit(requested);
     // Throws on a forged or oversized cursor — a trust boundary, not a fallback. Silently
     // restarting the page would look like duplicated rows to the caller.
@@ -243,8 +276,12 @@ export const listArtifacts = tenantQuery({
       .filter((doc) => after === null || compareDashboardOrder(orderKey(doc), after) > 0)
       .sort((a, b) => compareDashboardOrder(orderKey(a), orderKey(b)));
 
-    const items = merged.slice(0, limit);
-    const last = items.at(-1);
+    // THE WINDOW is what was read; ITEMS is what matched. Keeping them separate is what makes the
+    // cursor survive a search that filters a whole page away.
+    const window = merged.slice(0, limit);
+    const term = query?.trim().toLowerCase();
+    const items = term ? window.filter((doc) => doc.title.toLowerCase().includes(term)) : window;
+    const last = window.at(-1);
     // A branch that filled its window may hold more even when the merge did not overflow, so both
     // conditions count. Over-reporting costs one empty follow-up page; under-reporting loses a tail.
     const more = merged.length > limit || branches.some((rows) => rows.length > limit);
@@ -253,6 +290,10 @@ export const listArtifacts = tenantQuery({
     return {
       items: await Promise.all(items.map((doc) => card(ctx, doc))),
       nextCursor,
+      // `scanned` is the honest denominator behind a filtered page: "3 of the 24 newest matched".
+      // Without it a search result is a count with no scale, and "no results" is indistinguishable
+      // from "none on this page".
+      scanned: window.length,
       bound: createDashboardBound({
         returned: items.length,
         limit,

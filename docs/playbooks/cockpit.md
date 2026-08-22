@@ -1,3 +1,10 @@
+> Last verified: 2026-08-22 (26-13.1 — **WATCH-GATE ONLY, no cockpit behaviour changed.** This
+> playbook watches `apps/web/e2e/`, and `content.spec.ts` gained two tests: the image lane renders
+> and opens, and title search narrows the shelf. The cockpit-facing fact below is unchanged — an
+> image card's Reuse is the same `/dashboard/workspace?thread=…` link every other artifact carries,
+> and the shelf still holds no other way to act on a conversation.)
+>
+
 > Last verified: 2026-08-22 (26-13 Task 3 — **WATCH-GATE ONLY, no cockpit behaviour changed.**
 > `apps/web/e2e/content.spec.ts` changed one assertion when the owner's UAT approval activated the
 > Content nav item: the spec asserted a disabled `Soon` rail item before the gate, and asserts a
