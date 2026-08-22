@@ -1,5 +1,18 @@
 # Playbook: Business Evaluation Engine
 
+> Last verified: 2026-08-23 (FORMATTING ONLY — **no engine behaviour, contract or invariant
+> changed.** `evaluations.test.ts` was reformatted by `biome format --write` as part of the Phase 26
+> merge gate: nine committed files differed from Biome's formatting output, which reddened
+> `pnpm lint` (`biome ci .`) and blocked the PR. Not one assertion, fixture or expectation in that
+> file was altered — verified by running it rather than assuming: the backend vault/cockpitTools/
+> dispatch/evaluations selection passed 519/519 after the reformat.
+>
+> Recorded here only because this playbook watches `evaluations.test.ts` and CLAUDE.md §9 requires a
+> touched subsystem's playbook to move with it. Worth knowing WHY the debt existed: five of the nine
+> files were carried in by the earlier Phase 26 commits (26-14 to 26-17), which had never faced a
+> main-branch CI run because none of that stack had been merged. Formatting drift accumulates
+> silently on a long-lived branch — the gate only speaks at the merge.)
+
 > Last verified: 2026-08-22 (26-14 — **one import; no engine behaviour changed.** `runEvaluation`'s
 > local `gapKey` arrow is deleted and the identical function is imported from `@pikar/core`
 > (`reports.ts`), which the RPRT-01 report plane also uses to diff two snapshots. The engine writes
