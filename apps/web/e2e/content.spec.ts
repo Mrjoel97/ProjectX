@@ -104,18 +104,19 @@ test.beforeAll(() => {
   unprovedReelTitle = parsed.unprovedReelTitle;
 });
 
-test("the Content route is reachable directly while its nav item is still disabled", async ({
-  page,
-}) => {
+test("the Content route is live in the nav and lights up when you are on it", async ({ page }) => {
   await page.goto(ROUTE);
   await expect(page.getByRole("heading", { name: "Your content library" })).toBeVisible();
 
-  // Nav activation is Task 3, AFTER owner UAT. Until then the rail offers a "Soon" item and no
-  // link — hiding a control is presentation, but a link that works before its gate is a claim.
-  const rail = page.locator(".rail-item", { hasText: "Content" });
+  // BEFORE Task 3 this test asserted the opposite — a `Soon` item with `aria-disabled="true"` and
+  // no href anywhere in the DOM — and that is what the browser gate proved on 2026-08-22 before the
+  // UAT. Task 3 flipped it on owner approval, so the assertion flips with it: the record of "the
+  // nav was still dark when the gate ran" lives in 26-13-SUMMARY.md and the playbook, not in a test
+  // that would now be asserting a state the product deliberately left behind.
+  const rail = page.locator('a[href="/dashboard/content"]');
   await expect(rail).toHaveCount(1);
-  await expect(rail).toHaveAttribute("aria-disabled", "true");
-  await expect(page.locator('a[href="/dashboard/content"]')).toHaveCount(0);
+  await expect(rail).toHaveClass(/is-active/);
+  await expect(page.locator(".rail-item.is-soon", { hasText: "Content" })).toHaveCount(0);
 });
 
 test("all three shelf kinds render, and the moved surfaces are named rather than dropped", async ({

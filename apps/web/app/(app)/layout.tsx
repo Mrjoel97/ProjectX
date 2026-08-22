@@ -45,7 +45,16 @@ const NAV: Array<{ label: string; icon: ReactNode; href?: string; soon?: boolean
   // writers, coverage start and enforcement limiters keep running regardless (the non-negotiable
   // rule in docs/playbooks/dashboard-pages.md: a dark window is a permanent hole in the record).
   { label: "Finance", href: "/dashboard/finance", icon: <WalletIcon /> },
-  { label: "Content", icon: <FileIcon />, soon: true },
+  // Activated 26-13 Task 3 after the owner's UAT approval, 2026-08-22 ("the page is minimalistic,
+  // it works great"). Same mechanism as Finance above: the branch below keys off `href`, so adding
+  // it IS the activation and ROLLBACK IS DELETING THIS href.
+  //
+  // What rollback does NOT touch, and must not: an artifact's `origin`. A promoted document stays
+  // `agent_promoted` whether or not this page is reachable — promotion is a trust decision the user
+  // made about their own reference material, not a property of a route. Silently demoting on
+  // rollback would rewrite a decision the user took, and `patchCreatedDoc` would then let the agent
+  // revise a document it had already been told to treat as a source.
+  { label: "Content", href: "/dashboard/content", icon: <FileIcon /> },
   { label: "Sales Pipeline", href: "/dashboard/pipeline", icon: <TrendIcon /> },
   { label: "Compliance", href: "/ops", icon: <ShieldIcon size={18} /> },
   { label: "My Workspace", href: "/dashboard/workspace", icon: <BoltIcon size={18} /> },

@@ -1,5 +1,38 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-22 (26-13 Tasks 2+3 — **OWNER UAT APPROVED AND THE CONTENT NAV IS LIVE.**
+> Verdict verbatim: *"The page is minimalistic. It works great."* Task 3 replaced the disabled
+> `Soon` item with `{ label: "Content", href: "/dashboard/content" }`; the branch keys off `href`,
+> so adding it IS the activation and **rollback is deleting that href**. Re-verified after the flip:
+> web typecheck clean, prod build clean, `e2e/content.spec.ts` **7/7 executed again** on a rebuilt
+> `:3111`, watcher silent.
+>
+> **THE ROLLBACK BOUNDARY, and it is the one thing this page must never get wrong.** Deleting the
+> href hides the route. It does NOT touch an artifact's `origin`. A promoted document stays
+> `agent_promoted` whether or not the page is reachable, because promotion is a trust decision the
+> USER took about their own reference material — not a property of a route. A rollback that demoted
+> would rewrite a decision the user made, and `patchCreatedDoc` would then let the agent revise a
+> document it had already been told to treat as a source. Same shape as Finance's rule one entry
+> down: a UI rollback must never stop the instrumentation or reverse the record.
+>
+> **ONE E2E ASSERTION WAS INVERTED ON PURPOSE, not quietly.** Test 1 asserted the nav item was
+> `aria-disabled` with no href anywhere in the DOM, and that is what the gate proved *before* the
+> UAT. After Task 3 it asserts the opposite. The record of "the nav was still dark when the browser
+> gate ran" lives here and in `26-13-SUMMARY.md`; leaving a test asserting a state the product
+> deliberately left behind would have been the dishonest option.
+>
+> **THE OWNER ALSO FOUND A DEFECT I SHIPPED IN 26-12, and it is not a scope question.** The Content
+> whitelist excludes `kind: "image"` with a comment calling those rows "media intermediates". That
+> is FALSE: `mediaComplete.saveImageToVault` is explicitly *"scoped to the STANDALONE IMAGE"*
+> (`plans.mediaMode === "image"`) and is `saveReelToVault`'s twin — a reel's scene images never
+> become vault docs at all, because `deleteIntermediates` removes them at the render terminal. So
+> every `kind: "image"` vault row IS a finished deliverable, and the shelf of "everything Pikar has
+> made" is missing one of the two things Pikar makes. Owner directed the fix as its own follow-up
+> plan (26-13.1) alongside title search and thumbnails. **The lesson is the comment, not the line:**
+> a whitelist entry justified by a claim about another module is only as true as that claim, and
+> mine was written from the field name rather than from the write site.)
+>
+
 > Last verified: 2026-08-22 (26-13 Task 1 — **THE CONTENT ROUTE IS BUILT AND ITS BROWSER GATE HAS
 > ACTUALLY RUN: `e2e/content.spec.ts`, 7/7, executed against a rebuilt `:3111` and the local
 > backend. NAVIGATION IS STILL DISABLED — Task 2 (owner UAT) is open and Task 3 has not run.**

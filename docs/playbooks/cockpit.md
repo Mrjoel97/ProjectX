@@ -1,3 +1,10 @@
+> Last verified: 2026-08-22 (26-13 Task 3 — **WATCH-GATE ONLY, no cockpit behaviour changed.**
+> `apps/web/e2e/content.spec.ts` changed one assertion when the owner's UAT approval activated the
+> Content nav item: the spec asserted a disabled `Soon` rail item before the gate, and asserts a
+> live `/dashboard/content` link after it. The cockpit-facing fact recorded in the entry below is
+> unchanged — Reuse is still a link into `/dashboard/workspace?thread=…` and nothing else.)
+>
+
 > Last verified: 2026-08-22 (26-13 — **WATCH-GATE PLUS ONE REAL COCKPIT-ADJACENT FACT.** This
 > playbook watches the whole `apps/web/e2e/` prefix, so it sees the new `e2e/content.spec.ts`. That
 > spec exercises the Content library and touches NO cockpit behaviour — but the surface it links to
