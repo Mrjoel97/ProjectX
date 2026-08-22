@@ -1,5 +1,45 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-22 (26-17 Task 1 — **THE REPORTS ROUTE, BUILT AND NAV-DARK.**
+> `/dashboard/reports` is reachable directly; its rail item is still `soon: true`. Task 3 activates
+> it only on the owner's UAT verdict, and rollback is deleting the href — no artifact is touched,
+> because a generated pack is an ordinary vault row.
+>
+> **THE ONE DECISION EVERYTHING ELSE HANGS OFF: THE WINDOW ANCHOR IS PINNED AT MOUNT.**
+> `const [anchorMs] = useState(() => Date.now())`, and a source-scan test asserts `Date.now()`
+> appears EXACTLY ONCE in the module. A live clock in render would be wrong twice: every re-render
+> mints a new `untilMs`, so every Convex subscription gets a new query key and the page refetches
+> forever instead of staying reactive; and `reportPackData.landPack`'s replay key is the CONTENT
+> hash, so a drifting upper bound makes every click a different report and fills the vault with
+> near-duplicate packs. Pinning is what makes "generate twice, get one artifact" true in a browser
+> and not only in a unit test. Changing the period recomputes `sinceMs` from the SAME anchor, and
+> all three sections plus the pack action receive ONE `args` object (asserted by name), so they
+> cannot drift a window apart.
+>
+> **THE DISPLAYED WINDOW IS THE ONE THE SERVER RESOLVED** — `auditPage` echoes its
+> `resolveDashboardWindow` output and the header renders that, so "every section shows the same
+> resolved window" is checkable rather than assumed.
+>
+> **THE COVERAGE VOCABULARY IS IMPORTED, NEVER RE-WRITTEN.** `countCell`, `coverageWord`,
+> `floorCell`, `fmtDate` and `fmtDateTime` are now exported from `@pikar/core` and used by BOTH
+> the PDF builder and this screen. A page that said "0" where the pack says "not measured" is the
+> 26-14 defect (a fix that never reached the renderer) inverted, and two surfaces drift by each
+> owning a copy.
+>
+> **A NON-OWNER NEVER CALLS AN OWNER QUERY.** `useQuery(..., isOwner ? {} : "skip")` — hiding a
+> control is presentation, not the boundary. The WORM card renders `lastCursorAdvanceMs` and NO
+> health word; a component test bans "Healthy"/"Degraded"/"OK" from that card, because 26-15
+> removed exactly that claim from the backend and the mockup.
+>
+> **NOT YET EXECUTED, and this line is the reason the plan is not closed:** `e2e/reports.spec.ts`
+> is written (7 tests: nav-dark gate, one-window synchronization, per-section render, a PRIVACY
+> sweep that seeds hostile audit payloads and scans the DOM, the owner/non-owner split via
+> `bootstrapOwner`/`revokeOwner`, and a real generate→download→replay) but has NOT run — the
+> stored `e2e/.auth/user.json` JWT expired 2026-08-22T11:43Z and `auth.setup.ts` needs
+> `E2E_USER_EMAIL`/`E2E_USER_PASSWORD`. Component 22/22, web typecheck and prod build clean.
+> Treat the browser claims as UNPROVEN until this line says otherwise.)
+>
+
 > Last verified: 2026-08-22 (26-16 — **THE BOARD PACK: ONE TRANSACTION, ONE ARTIFACT, NO SNAPSHOT
 > TABLE.** `convex/reportPack.ts` (`"use node"`, actions only) + `convex/reportPackData.ts` (its DB
 > half) + `buildBoardPackMarkdown` / `BoardPackInput` in `packages/core/src/reports.ts`.

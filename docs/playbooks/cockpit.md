@@ -1,3 +1,23 @@
+> Last verified: 2026-08-22 (26-17 Task 1 — **WATCH-GATE ONLY, no cockpit behaviour changed.**
+> This playbook watches `apps/web/e2e/`, and `reports.spec.ts` is new. Two things in it are worth
+> knowing before writing the next spec in this directory:
+>
+> - **It stages hostile data on purpose.** Two audit rows carry a recipient address and a prose
+>   draft under keys the viewer's allowlist does not name, and one carries prose under a key it
+>   DOES name. The test then scans `page.content()` for those exact strings. An absence assertion
+>   is worthless without a matching presence assertion, so it also asserts the allowlisted refs
+>   (`plan-<marker>`, `sha256:<marker>`) DID render — otherwise the sweep passes on an empty table.
+> - **It flips the owner bit and restores it in a `finally`.** `owner:bootstrapOwner` then
+>   `owner:revokeOwner` on the e2e tenant is what makes the role split real browser evidence rather
+>   than a component-test claim (26-08's "owner-vs-non-owner needs a second account" is no longer
+>   true). A leaked owner bit would silently make every later run's non-owner assertion vacuous,
+>   which is why the revoke is in `finally` and not at the end of the test body.
+>
+> **THE SPEC HAS NOT RUN.** The stored `e2e/.auth/user.json` JWT expired 2026-08-22T11:43Z and
+> `auth.setup.ts` requires `E2E_USER_EMAIL`/`E2E_USER_PASSWORD`, which are in no env file in this
+> repo. Nothing in this entry may be cited as executed browser evidence until it is.)
+>
+
 > Last verified: 2026-08-22 (26-14 — **A SHIPPED DEFECT IN `plans.reportForPlan`, CORRECTED.** It
 > joined delivery proof with `.filter(eq(eventType, "gmail.sent"))` only, while the Microsoft arm
 > writes `graph.sent` (`graph.ts:122`) — so EVERY Microsoft send has been reading as undelivered in

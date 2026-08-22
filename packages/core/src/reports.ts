@@ -320,7 +320,7 @@ const UNKNOWN_COVERAGE: Record<Extract<CoverageLabel, { state: "unknown" }>["rea
  * `toLocaleDateString()` with the ambient locale would render the same window differently on two
  * machines, and the content hash is the replay key — a drifting format is a duplicate artifact.
  */
-const fmtDate = (ms: number, timeZone: string): string =>
+export const fmtDate = (ms: number, timeZone: string): string =>
   new Intl.DateTimeFormat("en-CA", {
     timeZone,
     year: "numeric",
@@ -328,7 +328,7 @@ const fmtDate = (ms: number, timeZone: string): string =>
     day: "2-digit",
   }).format(new Date(ms));
 
-const fmtDateTime = (ms: number, timeZone: string): string =>
+export const fmtDateTime = (ms: number, timeZone: string): string =>
   `${fmtDate(ms, timeZone)} ${new Intl.DateTimeFormat("en-CA", {
     timeZone,
     hour: "2-digit",
@@ -337,7 +337,7 @@ const fmtDateTime = (ms: number, timeZone: string): string =>
   }).format(new Date(ms))}`;
 
 /** The floor half on its own, for the one count that has a bound but no coverage (dead letters). */
-const floorCell = (count: number, bound: DashboardBound): string =>
+export const floorCell = (count: number, bound: DashboardBound): string =>
   bound.partial ? `at least ${count} (${DASHBOARD_STATE_COPY.partial.label})` : `${count}`;
 
 /**
@@ -349,7 +349,7 @@ const floorCell = (count: number, bound: DashboardBound): string =>
  *  2. A capped scan is a FLOOR. `at least N`, never a bare `N`.
  *  3. A partial coverage says since when, so the reader can see the denominator start late.
  */
-function countCell(
+export function countCell(
   count: number,
   bound: DashboardBound,
   coverage: CoverageLabel,
@@ -362,7 +362,7 @@ function countCell(
     : value;
 }
 
-const coverageWord = (coverage: CoverageLabel, timeZone: string): string => {
+export const coverageWord = (coverage: CoverageLabel, timeZone: string): string => {
   if (coverage.state === "unknown") return UNKNOWN_COVERAGE[coverage.reason];
   if (coverage.state === "partial")
     return `partial since ${fmtDate(coverage.coveredSinceMs, timeZone)}`;
