@@ -174,7 +174,16 @@ export const vaultGroundHydrated = internalAction({
   handler: async (
     ctx,
     { tenantId, query },
-  ): Promise<{ docIds: string[]; titles: string[]; chunks: string[]; spine: string | null }> => {
+  ): Promise<{
+    docIds: string[];
+    titles: string[];
+    /** 26-11: parallel to docIds. "agent_promoted" ⇒ the AGENT wrote it and the owner promoted it,
+     *  so a citation must not read as the owner's own word. LABELLING ONLY — no caller may use
+     *  this to filter what is retrieved (the origin predicate is banned in retrieval). */
+    origins: string[];
+    chunks: string[];
+    spine: string | null;
+  }> => {
     const { docIds, matchedByDoc } = await runVaultGround(ctx, tenantId, query);
 
     // Titles: one tenant-scoped batch read; map _id → title so titles stay parallel to docIds.
@@ -183,13 +192,17 @@ export const vaultGroundHydrated = internalAction({
       docIds: docIds as Id<"vaultDocuments">[],
     });
     const titleById = new Map(meta.map((m) => [m._id as string, m.title]));
+    // Same batch read, one more field off it — the origin was already fetched and thrown away.
+    const originById = new Map(meta.map((m) => [m._id as string, m.origin ?? ""]));
 
     // Chunks: per-doc + running-total char budget so a large corpus never blows the loop context.
     const titles: string[] = [];
+    const origins: string[] = [];
     const chunks: string[] = [];
     let used = 0;
     for (const docId of docIds) {
       titles.push(titleById.get(docId) ?? "");
+      origins.push(originById.get(docId) ?? "");
       const remaining = TOTAL_CHAR_CAP - used;
       if (remaining <= 0) {
         chunks.push("");
@@ -226,6 +239,6 @@ export const vaultGroundHydrated = internalAction({
     } catch {
       spine = null;
     }
-    return { docIds, titles, chunks, spine };
+    return { docIds, titles, origins, chunks, spine };
   },
 });

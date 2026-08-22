@@ -2796,6 +2796,12 @@ describe("25.1-03 (D5) the generated image becomes a durable vault asset at its 
     expect(doc?.title).toContain(prompt);
     expect(doc?.status).toBe("processing");
     expect(doc?.sourcePlanId).toBe(planId);
+    // 26-11 (CONT-01): the PAIR, not just the plan. A rendered image is on the artifact shelf, and
+    // `sourcePlanId` alone cannot answer "which conversation produced this" -- a half-written
+    // provenance pair reads downstream as legacy absence rather than as a missed write site.
+    expect(doc?.sourceThreadId).toBe(
+      await t.run(async (ctx) => (await ctx.db.get(planId))?.threadId),
+    );
     // The JOB carries the pointer — per JOB, not per plan: after D8 a plan holds several images.
     expect(await t.run(async (ctx) => (await ctx.db.get(jobId))?.vaultDocId)).toBe(doc?._id);
     // Refs and counts ONLY (§4) — never the prompt.
@@ -5873,6 +5879,11 @@ describe("33-05 saveReelToVault: one vault doc per plan, at every pipeline termi
     expect(doc?.contentHash).toBe(await contentHash("line 0\n\nline 1\n\nline 2\n\nline 3"));
     // Refs-only citation metadata (§4): ids, hashes and timestamps — never the claim text.
     expect(doc?.reelMeta?.planId).toBe(planId);
+    // 26-11 (CONT-01): the reel carries its thread too -- see the image-landing test for why the
+    // pair is written together.
+    expect(doc?.sourceThreadId).toBe(
+      await t.run(async (ctx) => (await ctx.db.get(planId))?.threadId),
+    );
     expect(doc?.reelMeta?.citations).toEqual([
       {
         sceneIndex: 0,

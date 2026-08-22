@@ -804,12 +804,21 @@ export const ownedDocsMeta = internalQuery({
   handler: async (
     ctx,
     { tenantId, docIds },
-  ): Promise<{ _id: Id<"vaultDocuments">; title: string; category: string }[]> => {
-    const out: { _id: Id<"vaultDocuments">; title: string; category: string }[] = [];
+  ): Promise<
+    { _id: Id<"vaultDocuments">; title: string; category: string; origin?: string }[]
+  > => {
+    const out: {
+      _id: Id<"vaultDocuments">;
+      title: string;
+      category: string;
+      origin?: string;
+    }[] = [];
     for (const id of docIds) {
       const doc = await ctx.db.get(id);
       if (doc && doc.tenantId === tenantId) {
-        out.push({ _id: doc._id, title: doc.title, category: doc.category });
+        // 26-11: `origin` rides along so a CITATION can say who wrote the thing. A closed enum,
+        // so the refs-only contract holds. It labels; it must never filter what is retrieved.
+        out.push({ _id: doc._id, title: doc.title, category: doc.category, origin: doc.origin });
       }
     }
     return out;
@@ -1173,6 +1182,71 @@ export const ingestFromAttachment = internalMutation({
  * Renders NOTHING: `storageId` (the derived PDF, long-form only) is written STRAIGHT THROUGH from
  * args. The PDF is produced in the tool — pdf-lib is not usable from a non-"use node" mutation.
  */
+/**
+ * 26-11 (CONT-01) — promote ONE agent-authored artifact into the retrieval corpus.
+ *
+ * This is the door the block comment on `insertCreatedDoc` above describes, and it is the ONLY
+ * place model-authored text becomes groundable. The exclusion it lifts is STRUCTURAL, not a
+ * predicate: an un-promoted `origin:"agent"` row has no rag entry and no graph node, so nothing
+ * in retrieval filters on `origin` and nothing here adds such a filter. Promotion IS the ingest.
+ *
+ * `tenantMutation` injects `ctx.tenantId` from the identity and scopes NOTHING about `ctx.db.get`
+ * — the isolation guarantee is the `doc.tenantId !== ctx.tenantId` comparison written below.
+ *
+ * ponytail: no version column, no retry loop, no index. A Convex mutation is a serializable
+ * transaction with OCC retry, so get + guard + patch inside this one handler IS the compare-and-
+ * swap; a second transaction re-reads "agent_promoted" and no-ops. Precedent: cockpit.ts:975.
+ *
+ * Promotion is ONE-WAY: `patchCreatedDoc` refuses any row whose `origin !== "agent"`, so a promoted
+ * artifact can never be revised in-thread again and the only reversal is deleting it. Widening that
+ * guard is NOT the fix — it would leave a stale rag entry keyed on the superseded content hash.
+ * Recorded as an accepted ceiling in docs/playbooks/vault.md and ADR-025.
+ */
+export const promoteToReference = tenantMutation({
+  args: { vaultDocId: v.id("vaultDocuments") },
+  handler: async (
+    ctx,
+    { vaultDocId },
+  ): Promise<
+    { ok: true; state: "processing" | "already_promoted" } | { ok: false; reason: "ineligible" }
+  > => {
+    const doc = await ctx.db.get(vaultDocId);
+    // Tenant term FIRST, and every foreign/missing outcome collapses to the SAME result — a throw
+    // (or a distinct reason) would be an existence oracle for another tenant's ids.
+    if (!doc || doc.tenantId !== ctx.tenantId) return { ok: false, reason: "ineligible" };
+    // POSITIVE whitelist, never a negation. `origin` ABSENT means user-supplied, and
+    // "folder_digest" is already ingested — `origin !== undefined` would wrongly accept it and
+    // start a second ingest for a row that already has a rag entry.
+    if (doc.origin !== "agent" && doc.origin !== "agent_promoted")
+      return { ok: false, reason: "ineligible" };
+    // Re-promotion is allowed for exactly one reason: a promoted row whose ingest FAILED is
+    // otherwise unrecoverable — retryStuckIngests skips non-"processing" rows and patchCreatedDoc
+    // refuses a promoted row, so nothing else could ever bring it back. CAS on status, not origin.
+    if (doc.origin === "agent_promoted" && doc.status !== "failed")
+      return { ok: true, state: "already_promoted" };
+
+    const correlationId = `vault:promote:${vaultDocId}`;
+    // `status: "processing"` is NOT cosmetic: created docs are inserted at "ready", and
+    // `onIngestComplete` early-returns on any row not in "processing" — so without this flip a
+    // failed ingest would be completely silent and the artifact would strand at "ready".
+    await ctx.db.patch(vaultDocId, {
+      origin: "agent_promoted",
+      status: "processing",
+      failureReason: undefined,
+    });
+    await startIngest(ctx, { vaultDocId, tenantId: ctx.tenantId, correlationId });
+    // NO AUDIT ROW IS WRITTEN HERE, AND THE ABSENCE IS THE POINT.
+    // `vaultRedaction.test.ts` scans this module for any log-plane call or insert (the audit,
+    // deadLetters and telemetry tables):
+    // the vault content plane is the one place raw document text lives, so it is kept log-free BY
+    // CONSTRUCTION rather than by inspecting a payload. A carefully-shaped payload here would be
+    // one careless edit away from carrying `doc.title`; an absent call site cannot be.
+    // The CALLER audits instead -- the shipped precedent is `vault.searched`, written by llm.ts
+    // and not by this module. 26-13 owns the promotion audit when it builds the control.
+    return { ok: true, state: "processing" };
+  },
+});
+
 export const insertCreatedDoc = internalMutation({
   args: {
     tenantId: v.string(),
@@ -1181,10 +1255,16 @@ export const insertCreatedDoc = internalMutation({
     markdown: v.string(),
     contentHash: v.string(),
     storageId: v.optional(v.id("_storage")),
+    // 26-11 (CONT-01): which conversation produced this artifact. BOTH are v.optional -- the nine
+    // createdDocs.test.ts call sites and the over-the-wire e2e call pass neither, and a legacy row
+    // carrying neither must keep validating (dashboardSchema.test.ts). The caller takes them from
+    // its own `readPlan()` row, never from a model-supplied tool argument.
+    sourceThreadId: v.optional(v.string()),
+    sourcePlanId: v.optional(v.id("plans")),
   },
   handler: async (
     ctx,
-    { tenantId, title, form, markdown, contentHash: hash, storageId },
+    { tenantId, title, form, markdown, contentHash: hash, storageId, sourceThreadId, sourcePlanId },
   ): Promise<Id<"vaultDocuments">> =>
     await ctx.db.insert("vaultDocuments", {
       tenantId,
@@ -1207,6 +1287,8 @@ export const insertCreatedDoc = internalMutation({
       // Only `long` renders a PDF, so `storageId` present ⇒ those bytes are one.
       storedMimeType: storageId ? "application/pdf" : undefined,
       origin: "agent", // the provenance + deferred-promotion discriminator
+      sourceThreadId,
+      sourcePlanId,
       status: "ready", // ready WITHOUT ingest — see the block comment above
       createdAt: Date.now(),
     }),

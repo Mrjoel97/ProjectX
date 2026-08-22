@@ -411,3 +411,33 @@ test("the projection carries storedMimeType to the browser — the preview canno
   const row = docs.find((d) => d._id === docId);
   expect(row?.storedMimeType).toBe("application/pdf");
 });
+
+// 26-11 (CONT-01): the artifact shelf must be able to say WHICH conversation produced a document.
+// The provenance is taken from the plan row the tool already read (llm.ts `readPlan()`), NEVER from
+// a model-supplied tool argument -- otherwise the model could stamp its output with another
+// thread's provenance. Both fields are v.optional: the nine call sites above pass neither, and a
+// legacy row carrying neither still validates (dashboardSchema.test.ts).
+test("a created document stores the thread and plan it was written in", async () => {
+  const t = convexTest(schema, modules);
+  const planId: Id<"plans"> = await t.run(async (ctx) =>
+    ctx.db.insert("plans", {
+      tenantId: "tenant_a",
+      threadId: "thread_prov",
+      status: "proposed",
+      createdAt: Date.now(),
+    } as never),
+  );
+
+  const docId = await t.mutation(internal.vault.insertCreatedDoc, {
+    tenantId: "tenant_a",
+    title: "A's provenanced one-pager",
+    form: "short",
+    markdown: "# A written in a thread",
+    contentHash: "hash_prov",
+    sourceThreadId: "thread_prov",
+    sourcePlanId: planId,
+  });
+
+  const doc = await t.run(async (ctx) => ctx.db.get(docId));
+  expect(doc).toMatchObject({ sourceThreadId: "thread_prov", sourcePlanId: planId });
+});

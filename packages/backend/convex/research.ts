@@ -146,6 +146,11 @@ export const persistFindings = internalMutation({
     /** D7's freshness stamp: a STORED, QUERYABLE number, not a date mentioned inside markdown. */
     retrievedAt: v.number(),
     rootRequestId: v.string(),
+    /** 26-11 (CONT-01): the THREAD and PLAN this run belongs to. `rootRequestId` above is a
+     *  per-turn correlation key and is NOT a thread id -- writing it into `sourceThreadId` would
+     *  poison the field the Phase-26 artifact shelf joins on. v.optional: no backfill. */
+    sourceThreadId: v.optional(v.string()),
+    sourcePlanId: v.optional(v.id("plans")),
     incomplete: v.boolean(),
     incompleteReason: v.optional(
       v.union(v.literal("cost"), v.literal("steps"), v.literal("clock")),
@@ -176,6 +181,8 @@ export const persistFindings = internalMutation({
       text: markdown,
       status: "processing",
       retrievedAt: a.retrievedAt,
+      sourceThreadId: a.sourceThreadId,
+      sourcePlanId: a.sourcePlanId,
       createdAt: Date.now(),
     });
     // The SOLE legal way to start ingest — it wires the `onComplete` that prevents a stranded

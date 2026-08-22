@@ -239,7 +239,10 @@ describe("vaultGroundHydrated (identity-less internalAction — real titles + ca
       query: `SMOKE::${docA}`,
     });
 
-    expect(out).toEqual({ docIds: [], titles: [], chunks: [], spine: null });
+    // 26-11 added `origins` as a fifth parallel field. Kept as an EXHAUSTIVE toEqual on
+    // purpose: a foreign tenant must get empty arrays and nothing else, so a future field
+    // that leaks a value across the boundary reddens here rather than passing unnoticed.
+    expect(out).toEqual({ docIds: [], titles: [], origins: [], chunks: [], spine: null });
   });
 });
 

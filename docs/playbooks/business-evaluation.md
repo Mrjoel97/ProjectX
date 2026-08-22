@@ -1,5 +1,17 @@
 # Playbook: Business Evaluation Engine
 
+> Last verified: 2026-08-22 (26-11 -- **the approved memo carries its provenance, and a promoted
+> artifact is no longer cited as the owner's own word.** `persistNextStepMemo` writes
+> `sourceThreadId`/`sourcePlanId` from the `plans` row it already holds. More importantly,
+> `fillVault` used to stamp EVERY grounded chunk `{confidence:"high", source:"vault"}` -- the same
+> label the owner's own uploaded P&L gets -- so once promotion existed, a figure the model invented
+> in its own `createDocument` output would be scanned by the financial patterns, written into the
+> Scorecard and cited back to the owner as their own source. That is the provenance-laundering
+> class. A chunk whose `origins[i] === "agent_promoted"` is now cited `source: "agent-relayed"`, the
+> union member that already meant "the owner STATED it, the agent WROTE it". `confidence` stays
+> "high" ON PURPOSE: the owner promoted the artifact deliberately, so only the ATTRIBUTION changes,
+> never the weight. See ADR-025.)
+>
 > Last verified: 2026-08-21 (25.1-05, D11 — **`landSpecialistResult` now writes the memo's
 > REFERENCES, not just its body.** New optional arg `sources` (`{title, url, retrievedAt}[]`),
 > passed by `dispatch.ts`'s landing and written to the plan row by a DIRECT `ctx.db.patch` in the

@@ -3629,9 +3629,10 @@ export function buildCockpitTools(
         // a throw out of the governed loop (the listInbox/mailboxUnavailable precedent).
         let docIds: string[];
         let titles: string[];
+        let origins: string[];
         let chunks: string[];
         try {
-          ({ docIds, titles, chunks } = await ctx.runAction(
+          ({ docIds, titles, origins, chunks } = await ctx.runAction(
             internal.vaultGround.vaultGroundHydrated,
             { tenantId, query },
           ));
@@ -3675,7 +3676,17 @@ export function buildCockpitTools(
         // titles were computed here only to label the UI source card and never reached the model:
         // the instruction was structurally unsatisfiable, so every grounded memo cited nothing.
         // Same array, same index, same tenant-scoped read — no new call, no new plane.
-        const labelled = chunks.map((c, i) => `[${titles[i] || "untitled document"}]\n${c}`);
+        // 26-11 (CONT-01): a PROMOTED chunk is text the ASSISTANT wrote and the owner later
+        // promoted into the corpus. Un-promoted agent output is structurally unreachable here,
+        // but promotion re-opens exactly the self-grounding loop that exclusion exists to break —
+        // so the label the model reads says who wrote it. Marked ONLY inside the fence: `titles`
+        // is labels-to-UI for the source card and its PreviewModal target, and suffixing that
+        // array would corrupt the stored content-plane row.
+        const promotedNote = " — written by the assistant, promoted by you";
+        const labelled = chunks.map(
+          (c, i) =>
+            `[${titles[i] || "untitled document"}${origins[i] === "agent_promoted" ? promotedNote : ""}]\n${c}`,
+        );
         return (
           fenceOpen +
           `\n${labelled.join("\n\n")}\n</vault_context>\n` +
@@ -3814,7 +3825,15 @@ export function buildCockpitTools(
         // because there the user may genuinely mean a document that is simply numbered differently.
         const effectiveReplace = docIds.length === 0 ? undefined : replace;
         if (effectiveReplace === undefined) {
-          const docId = await ctx.runMutation(internal.vault.insertCreatedDoc, docArgs);
+          // 26-11 (CONT-01): provenance goes on the INSERT ONLY, never into `docArgs` -- that
+          // object is also spread into `patchCreatedDoc` below, whose validator has no such fields
+          // (a typecheck failure, not a test failure). Both values come from the PLAN ROW
+          // `readPlan()` returned, so the model cannot stamp a document with another thread's id.
+          const docId = await ctx.runMutation(internal.vault.insertCreatedDoc, {
+            ...docArgs,
+            sourceThreadId: plan.threadId,
+            sourcePlanId: planId,
+          });
           docIds = [...docIds, docId];
           titles = [...titles, draft.title];
         } else {

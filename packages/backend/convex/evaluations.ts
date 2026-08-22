@@ -285,10 +285,12 @@ export const runEvaluation = internalAction({
       // ── Ground (reuse vaultGroundHydrated — FAIL OPEN, SC1) ────────────────────────────────────
       let docIds: string[] = [];
       let titles: string[] = [];
+      // 26-11: parallel to docIds — who WROTE each grounded document (see the citation stamp below).
+      let origins: string[] = [];
       let chunks: string[] = [];
       let spine: string | null = null;
       try {
-        ({ docIds, titles, chunks, spine } = await ctx.runAction(
+        ({ docIds, titles, origins, chunks, spine } = await ctx.runAction(
           internal.vaultGround.vaultGroundHydrated,
           { tenantId, query: query ?? DEFAULT_QUERY },
         ));
@@ -371,7 +373,14 @@ export const runEvaluation = internalAction({
           // which by design re-runs weekly on ONE pinned thread. First writer of the citation wins
           // so a pre-seeded user-provided entry is never downgraded to a vault cite.
           if (!provenance.has(path)) {
-            provenance.set(path, { docId, title, confidence: "high", source: "vault" });
+            // 26-11 (CONT-01): a PROMOTED artifact was written by the agent and merely endorsed by
+            // the owner, so citing it as an unqualified `vault` source credits the owner with the
+            // model's own words — the provenance-laundering class. `agent-relayed` already means
+            // exactly this ("the owner STATED it, the agent WROTE it"), one plane over.
+            // `confidence` deliberately stays "high": the owner promoted it on purpose, so only the
+            // ATTRIBUTION changes, never the weight.
+            const source = origins[i] === "agent_promoted" ? "agent-relayed" : "vault";
+            provenance.set(path, { docId, title, confidence: "high", source });
           }
         };
 
@@ -1149,6 +1158,10 @@ export async function persistNextStepMemo(
     contentHash: await contentHash(markdown),
     text: markdown,
     status: "processing",
+    // 26-11 (CONT-01): provenance from the PLAN ROW this function already holds -- never from a
+    // model-supplied argument. Both fields are v.optional on the table; legacy memos stay bare.
+    sourceThreadId: plan.threadId,
+    sourcePlanId: plan._id,
     createdAt: Date.now(),
   });
   await startIngest(ctx, {

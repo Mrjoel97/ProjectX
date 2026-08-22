@@ -700,16 +700,47 @@
 > for free. They will NEVER match `vault.vaultSearch` — same rag primitive — because they are
 > deliberately never ingested. **That absence IS the retrieval exclusion**, not an oversight.
 >
-> **Do NOT close this by ingesting them.** The upgrade path, if it is ever wanted, is a ~3-line
-> title-substring fallback unioned into `hitIds` right at that site. Whether to take it is an OPEN
-> OWNER QUESTION parked at 18-09’s gate — ingesting agent-authored text would put model output back
-> into the retrieval corpus that grounds the model, which is the loop this exclusion exists to break.
+> **SUPERSEDED 2026-08-22 by plan 26-11 (ADR-025), on an explicit owner decision.** What the note
+> above refused was BLANKET ingestion of agent output, and that refusal still stands: nothing
+> ingests an `origin:"agent"` row automatically, ever. What 26-11 ships is the other thing --
+> `vault.promoteToReference`, an EXPLICIT, HUMAN-INITIATED, PER-ROW promotion. `schema.ts` says
+> both `origin` literals were created for exactly this ("the DEFERRED promote control is a patch +
+> a button"), and the open owner question parked at 18-09's gate is now CLOSED. Un-promoted agent
+> output remains structurally excluded, unchanged: no rag entry, no graph node, nothing to filter.
+>
+> The ~3-line title-substring fallback named above was NOT taken and is no longer the upgrade path
+> for retrievability -- promotion is. It remains available if agent-created documents should be
+> findable in the SEARCH BOX without entering the grounding corpus; those are different questions.
+>
+> **Accepted ceiling 1 -- promotion is a ONE-WAY DOOR.** `patchCreatedDoc` refuses any row whose
+> `origin !== "agent"`, so once promoted an artifact can never be revised in-thread again, and the
+> only reversal is `deleteVaultDoc`, which destroys it. Widening that guard is NOT the fix: it
+> would leave a stale rag entry keyed on the superseded content hash. Every UAT promotion must
+> therefore target a FRESH created document.
+>
+> **Accepted ceiling 2 -- no dedup on the created-document rail.** `insertCreatedDoc` is the only
+> vault writer with no content-hash dedup, so two byte-identical created documents, both promoted,
+> share ONE rag entry whose `metadata.vaultDocId` points at the first. Harmless (the text is
+> identical) but the citation names the other copy.
+>
+> Do NOT repeat the schema's claim that `origin:"agent"` rows are excluded from the blueprint
+> drift signal -- `blueprint.ts` selects on `status === "ready"` with no origin term, so they
+> already count. Promotion's `ready -> processing -> ready` transition makes that counter wobble
+> briefly, which is expected and not a defect.
 >
 > Related, and the same principle one plane over: 16-09’s floor refuses to write a `web_research`
 > document at all when `webSearchCalls === 0`, because a never-searched answer must not become
 > retrievable. See `cockpit.md`. The `startIngest` call-site count in `vault.ts` remains the counted
-> exclusion invariant at **5** — `onboarding:__seedOnboardedTenant` was written to avoid becoming a
+> exclusion invariant, now at **6** -- `vault.promoteToReference` is the legitimate sixth, and — `onboarding:__seedOnboardedTenant` was written to avoid becoming a
 > sixth.
+>
+> Last verified: 2026-08-22 (26-11 -- **`vault.promoteToReference` ships: agent-authored artifacts
+> can now enter the retrieval corpus, one row at a time, by an explicit human act.** The KNOWN
+> CEILING block above is SUPERSEDED, the counted `startIngest` invariant moves 5 -> 6, two accepted
+> ceilings are recorded (promotion is one-way; the created-document rail has no content-hash
+> dedup), and `insertCreatedDoc` now carries `sourceThreadId`/`sourcePlanId`. Attribution follows
+> the text: `ownedDocsMeta.origin` -> `vaultGroundHydrated.origins` -> an `agent-relayed` citation.
+> See ADR-025.)
 >
 > Last verified: 2026-08-02 (22.1-03 — ⚠ **date bumped for a BEHAVIOUR-FREE sweep; the
 > subsystem below was NOT re-verified.**) The dead-directive sweep (`72dd652`) deleted one line
@@ -1279,6 +1310,8 @@ Verify with `pnpm --filter @pikar/vault test`,
 
 ## Invariants — what must never break
 
+- **Only a tenant-owned `origin:"agent"` row is promotable, and promotion is the ONE door through which model-authored text enters the retrieval corpus (26-11).** The guard in `vault.promoteToReference` is a POSITIVE equality (`origin === "agent"` / `"agent_promoted"`), never a negation: `origin` ABSENT means USER-SUPPLIED, and `"folder_digest"` is already ingested, so `origin !== undefined` would wrongly accept both. Promotion is one-way and human-initiated; a promoted row whose ingest FAILED may be re-promoted (nothing else can recover it -- `retryStuckIngests` skips non-`processing` rows and `patchCreatedDoc` refuses it). The ingest-once evidence is a counted `workflow.start` spy and NOTHING else -- `origin === "agent_promoted"` is inert, `ragEntryId` is deduped by content hash, and spendLedger writes nothing at $0, so all three pass while promotion is broken. A Convex mutation IS the compare-and-swap: get + guard + patch in one handler, no version column, no retry loop, no index. **`promoteToReference` writes NO audit row**, because `vaultRedaction.test.ts` scans this whole plane for log-plane calls and inserts and the guarantee is structural rather than payload-shaped -- the CALLER audits (`vault.searched` in llm.ts is the precedent), and 26-13 owns the promotion audit.
+- **A promoted artifact stays ATTRIBUTABLE wherever it is cited (26-11).** `ownedDocsMeta` carries `origin`, `vaultGroundHydrated` returns a parallel `origins` array, the evaluation engine cites `source: "agent-relayed"` instead of `"vault"`, and the cockpit's `searchVault` fence suffixes the in-fence label. `origins` LABELS; it must never FILTER what is retrieved -- an origin predicate in retrieval is banned (the exclusion is the absent `startIngest`, not a query term).
 - **Domain logic in `@pikar/vault`, thin `convex/vault*` adapters (§1)** — the pure package has ZERO Convex imports; enforced by the colocated `packages/vault` tests running with no backend.
 - **`namespace = tenantId` per-user isolation (VALT-03)** — every rag `add/search/delete` is namespaced by the tenant; reads/writes go through the `tenantQuery/tenantMutation/tenantAction` wrappers.
 - **rag runtime split** — `rag.add/search/delete` are ACTION-only; `addAsync/deleteAsync/list/getEntry/findEntryByContentHash` are mutation/query-safe.

@@ -295,7 +295,10 @@ test("cross-tenant: tenant B never retrieves tenant A's committed profile (SC#3)
 
   // Tenant B grounding over tenant A's doc id — an explicit foreign tenantId yields nothing.
   const out = await hydrate(t, "tenant_b", vaultDocId);
-  expect(out).toEqual({ docIds: [], titles: [], chunks: [], spine: null });
+  // 26-11 added `origins` as a fifth parallel field. Kept EXHAUSTIVE on purpose: a foreign
+  // tenant must get empty arrays and nothing else, so any future field that leaks a value
+  // across the boundary reddens here instead of passing unnoticed.
+  expect(out).toEqual({ docIds: [], titles: [], origins: [], chunks: [], spine: null });
 
   // And tenant B's own gate is still open (A's profile is invisible to B).
   expect(await asTenant(t, "tenant_b").query(api.onboarding.status, {})).toEqual({

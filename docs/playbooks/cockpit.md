@@ -1,3 +1,20 @@
+> Last verified: 2026-08-22 (26-11 -- **REAL cockpit behaviour changed, twice.** (1) `createDocument`
+> now stamps the artifact with the thread and plan it was written in: `insertCreatedDoc` gained
+> optional `sourceThreadId`/`sourcePlanId`, and `llm.ts` passes both AT THE INSERT CALL SITE ONLY --
+> never into the shared `docArgs` object, which is also spread into `patchCreatedDoc`, whose
+> validator has no such fields (a typecheck failure, not a test failure). Both values come from the
+> `readPlan()` row, never from a model-supplied tool argument, so the model cannot stamp a document
+> with another thread's provenance. `persistResearchFindings` does the same through `dispatch.ts`;
+> `rootRequestId` stays the CORRELATION key and is NOT a thread id. (2) The `searchVault` fence now
+> tells the model who wrote what it retrieved: a chunk from a PROMOTED artifact is labelled
+> "written by the assistant, promoted by you". Marked ONLY inside the fence -- the `titles` array is
+> labels-to-UI for the source card and suffixing it would corrupt the stored content-plane row.
+>
+> **The sentence 26-13's promotion control must show the user:** *"Promoting a document makes it
+> reference material the assistant can cite -- it can no longer be rewritten in this conversation."*
+> That is not UX polish: `patchCreatedDoc` refuses any row whose `origin !== "agent"`, so promotion
+> genuinely ends in-thread revision for that artifact and the only reversal is deleting it.)
+>
 > Last verified: 2026-08-21 (`apps/web/e2e/` changed again — **NO COCKPIT BEHAVIOUR DID.** This
 > playbook watches that whole prefix, so it sees `finance.spec.ts`. 26-10 Task 1 executed the
 > Finance browser gate for the first time; five spec defects were fixed and the connected cost

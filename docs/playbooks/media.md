@@ -1,5 +1,14 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-08-22 (26-11 -- **both rendered-media write sites now stamp `sourceThreadId`
+> beside the `sourcePlanId` they already wrote** (`mediaComplete.ts` for a landed image,
+> `render/renderReel.ts` for a finished reel). Both already held the tenant-checked `plans` row, so
+> the thread id was one property away. WHY THE PAIR IS WRITTEN TOGETHER: rendered media sits on the
+> Phase-26 artifact shelf, and `sourcePlanId` alone cannot answer "which conversation produced
+> this" -- a half-written provenance pair reads downstream as LEGACY ABSENCE rather than as a
+> missed write site, which is precisely the bug the shelf's known/unknown-provenance tests would
+> then bake in. No behaviour else changed; no backfill.)
+>
 > Last verified: 2026-08-21 (**THIS PLAYBOOK NOW WATCHES `media.test.ts`, AND THE SCHEDULED-TAIL
 > DRAIN ACTUALLY DRAINS.** No product behaviour changed — a test-harness defect and a coverage gap.)
 >
