@@ -1,5 +1,21 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-08-22 (26-13 — **SMOKE GAINED ONE E2E FIXTURE SEAM; NO RUNTIME BEHAVIOUR
+> CHANGED.** `smoke.seedContentShelf` (an `internalAction`, because `ctx.storage.store` is
+> action-only — the `storeSmokePdf` precedent) plus its `insertShelfFixtures` mutation seed the
+> Content shelf's three lanes for `apps/web/e2e/content.spec.ts`: a next-step memo, a PROVED reel
+> (the plan keeps the whole artifact triple and its `reelVaultDocId` points at the row) and an
+> UNPROVED one (bytes on the row, no sidecar on the plan — the state a regenerate leaves behind).
+> They exist because only ONE of the three lanes is reachable from a shipped function:
+> `vault:insertCreatedDoc` writes a document, while a memo comes from a plain TypeScript function
+> and a reel from a render terminal, neither callable from the CLI.
+>
+> **THESE ARE TERMINAL ROWS AND THEY PROVE UI STATES ONLY.** The "mp4" is a handful of bytes with
+> the right mime and the sidecar is a marker; no provider ran, nothing was embedded, no credit was
+> spent. The seed deliberately does NOT call `startIngest` for the memo — a UI fixture has no
+> business buying an embedding. Nothing in the agent loop reads these rows.)
+>
+
 > Last verified: 2026-08-21 (**FORMATTER-ONLY, NO RUNTIME OR CORPUS BEHAVIOUR CHANGED.** The
 > watched file `scripts/eval-cases/38-media-dispatch.json` had its `needles` array collapsed onto
 > one line by `biome format`. It was one of NINE real format errors that CI caught under 86 local

@@ -90,6 +90,8 @@
     "packages/backend/convex/proposals.ts",
     "packages/backend/convex/content.ts",
     "packages/backend/convex/content.test.ts",
+    "packages/backend/convex/contentAudit.ts",
+    "packages/backend/convex/contentAudit.test.ts",
     "packages/backend/convex/reportsBusiness.ts",
     "packages/backend/convex/reportsBusiness.test.ts",
     "packages/backend/convex/reportsGovernance.ts",

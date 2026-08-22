@@ -1,3 +1,21 @@
+> Last verified: 2026-08-22 (26-13 — **WATCH-GATE PLUS ONE REAL COCKPIT-ADJACENT FACT.** This
+> playbook watches the whole `apps/web/e2e/` prefix, so it sees the new `e2e/content.spec.ts`. That
+> spec exercises the Content library and touches NO cockpit behaviour — but the surface it links to
+> is this one, and that is the part worth recording here: **the Content shelf's "Reuse" control is a
+> LINK into the cockpit and nothing else.** `/dashboard/workspace?thread=<id>` for a document or
+> memo, `&view=canvas` for a reel — both hrefs are built server-side in `content.ts`, from the
+> artifact's own `sourceThreadId`, and the page holds no other way to act on a conversation. There is
+> no duplicate, no attachment, no send and no dispatch: `content.ts` exports only `tenantQuery`s, so
+> a reuse-side write is not something the module could do. The workspace's own `?thread=` deep link
+> (the VOIC-04 handoff) is what receives it, unchanged — `openThread` re-opens the conversation at
+> whatever gate it already stands at, and every approval boundary still applies.
+>
+> Also here because the cockpit owns the artifact: the shelf opens documents and memos through the
+> Vault's `PreviewModal`, reached by id exactly as `workspace/cards.tsx`'s `VaultDocModal` does. A
+> reel is deliberately NOT opened that way — the modal would play the row's own bytes, and Content
+> plays only through `api.media.reel`, whose non-null url is the validated-assembly guarantee.)
+>
+
 > Last verified: 2026-08-22 (26-11 -- **REAL cockpit behaviour changed, twice.** (1) `createDocument`
 > now stamps the artifact with the thread and plan it was written in: `insertCreatedDoc` gained
 > optional `sourceThreadId`/`sourcePlanId`, and `llm.ts` passes both AT THE INSERT CALL SITE ONLY --

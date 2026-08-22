@@ -1,5 +1,62 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-22 (26-13 Task 1 — **THE CONTENT ROUTE IS BUILT AND ITS BROWSER GATE HAS
+> ACTUALLY RUN: `e2e/content.spec.ts`, 7/7, executed against a rebuilt `:3111` and the local
+> backend. NAVIGATION IS STILL DISABLED — Task 2 (owner UAT) is open and Task 3 has not run.**
+> The spec asserts that itself: the rail's Content item carries `aria-disabled="true"` and there is
+> no `a[href="/dashboard/content"]` anywhere in the DOM, while the route answers directly.
+>
+> **THE PAGE ADDS NO BACKEND SURFACE.** Every action ends in a function that already existed:
+> `vault.vaultDoc` + the Vault's own `PreviewModal` for open/download, `media.reel` for playback,
+> `vault.promoteToReference` for promotion. The card carries the ref each one needs and nothing more
+> — no storage id reaches the browser, and no signed URL is minted for a card nobody clicked
+> (asserted by source scan: the modal and the player mount only behind their own open state).
+> Opening a document BY ID through `PreviewModal` is `workspace/cards.tsx`'s shipped `VaultDocModal`
+> pattern, copied rather than re-invented. A REEL is deliberately NOT opened that way: the modal
+> would play the row's own bytes, and Content plays only through `media.reel`, whose non-null `url`
+> IS the validated-assembly guarantee (D8). Vault shows you your files; Content presents governed
+> artifacts, and the difference is a Play button that is absent rather than dead.
+>
+> **PROMOTION EXPLAINS ITSELF BEFORE IT HAPPENS, AND IT IS ONE-WAY.** The control opens a confirm
+> block carrying the sentence verbatim — *"Promoting a document makes it reference material the
+> assistant can cite — it can no longer be rewritten in this conversation"* — plus "this cannot be
+> undone". That is a real consequence, not a caution: `patchCreatedDoc` refuses any row whose
+> `origin !== "agent"`, so the only reversal is deleting the artifact (ADR-025 records the ceiling).
+> The transition then renders from the ROW's own `status`, never from the click.
+>
+> **THE `vault.promoted` AUDIT ROW LANDED, AND IT NEEDED A NEW MODULE.**
+> `packages/backend/convex/contentAudit.ts` holds one `tenantMutation`, and the header explains why
+> it is not in any of the three obvious homes: `vault.ts` is kept log-free by construction
+> (`vaultRedaction.test.ts`), `content.ts` is read-only by construction (`content.test.ts`), and
+> `audit.ts` states it exposes no client-callable builder — a `tenantMutation` there would have
+> slipped past `auditImmutability.test.ts`, whose `PUBLIC_BUILDER` regex only matches the raw
+> builders, which is a reason to respect the stated invariant rather than a licence. Only the doc id
+> crosses the wire; `sourceThreadId`/`sourcePlanId` are read off the row this tenant was just
+> verified to own. Verified live in the deployment:
+> `{result:"processing", sourceThreadId:"…", sourcePlanId:null, vaultDocId:"…"}`, actor `user`,
+> correlation `vault:promote:<docId>` — the same id the ingest workflow carries, so the two join.
+>
+> **THE E2E'S FIRST RUN FAILED, AND THE FAILURE WAS REAL.** Test 6 asserted only that the card said
+> "Reference material" — which appears the moment the reactive query sees the patched row, WHILE the
+> caller-side audit call is still in flight. The test ended, Playwright tore the context down
+> mid-mutation, and test 7 then found an empty audit table for a promotion that had genuinely
+> happened. The fix is a sequencing point, not a sleep: the confirm block is removed only after
+> `recordPromotion` resolves, so waiting for it to detach proves the whole chain ran. **A
+> fire-and-forget follow-up call is not observable through the state the first call changes.**
+>
+> **TWO DEVIATIONS FROM THE PLAN'S `files_modified`, both recorded in 26-13-SUMMARY.md.** (1) The
+> component test is `contentView.test.ts`, not `.tsx` — `apps/web/vitest.config.mts` includes
+> `app/**/*.test.ts` ONLY, and its own header records that a `.tsx` there is silently skipped, which
+> is exactly how a test file becomes decoration. (2) `contentAudit.ts`/`.test.ts` and a
+> `smoke.seedContentShelf` fixture seam are backend files this web-only plan did not list; both are
+> registered in `watch.json` (the audit module here, the smoke seam under `agent-runtime.md`).
+>
+> **SEEDED ROWS PROVE UI STATES ONLY.** The spec's "reel" is a few bytes with a video mime and its
+> sidecar is a marker. Nothing rendered, nothing embedded, no provider ran, no cent was spent. A
+> green run says the page reads the shelf, the guards and the states correctly — it says nothing
+> about fal, ffmpeg or a real assembly, and any such claim needs separately executed live evidence.)
+>
+
 > Last verified: 2026-08-22 (26-12 — **THE CONTENT SHELF IS A READ PLANE, AND THAT IS ENFORCED BY
 > CONSTRUCTION RATHER THAN BY PROMISE.** `packages/backend/convex/content.ts` ships three
 > `tenantQuery`s (`listArtifacts`, `summary`, `artifactById`) and NOTHING ELSE: no mutation, no

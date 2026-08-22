@@ -1542,3 +1542,162 @@ export const calendarLifecycleReadback = internalAction({
     };
   },
 });
+
+// --- 26-13 (CONT-01): the Content shelf's E2E fixtures ---------------------------------------
+//
+// The shelf has three lanes and only ONE of them can be seeded through a shipped function:
+// `vault:insertCreatedDoc` writes an agent-authored document. A memo is written by
+// `evaluations.persistNextStepMemo` (a plain function, not a Convex one) and a reel by
+// `render/renderReel.saveReelToVault` at a render terminal — neither is reachable from the CLI,
+// and a reel additionally needs STORED BYTES plus its plan's artifact triple.
+//
+// These are TERMINAL ROWS, and they prove UI STATES ONLY. Nothing here rendered a video, called a
+// provider or spent a cent: the "mp4" is a few bytes with the right mime, and the sidecar is a
+// marker. A green browser run over these rows says the page reads the shelf correctly — it says
+// NOTHING about fal, ffmpeg or an assembly ever having happened.
+//
+// Both reels are seeded on purpose. The proved one carries the whole triple AND the
+// `reelVaultDocId` pointer; the unproved one deliberately lacks the sidecar, which is the state a
+// regenerate leaves behind and the reason `content.listArtifacts` refuses to offer Play.
+
+export const seedContentShelf = internalAction({
+  args: { tenant: v.string(), marker: v.string() },
+  handler: async (
+    ctx,
+    { tenant, marker },
+  ): Promise<{
+    memoTitle: string;
+    provedReelTitle: string;
+    unprovedReelTitle: string;
+    provedThreadId: string;
+  }> => {
+    // `ctx.storage.store` is action-only (the `storeSmokePdf` precedent), which is the whole reason
+    // this seed is an action wrapping a mutation rather than one mutation.
+    const finalBytes = new TextEncoder().encode(`ftypmp42-${marker}`);
+    const renderStorageId = await ctx.storage.store(new Blob([finalBytes], { type: "video/mp4" }));
+    const sidecarStorageId = await ctx.storage.store(
+      new Blob([new TextEncoder().encode(`{"assembly":"${marker}"}`)], {
+        type: "application/json",
+      }),
+    );
+    return await ctx.runMutation(internal.smoke.insertShelfFixtures, {
+      tenant,
+      marker,
+      renderStorageId,
+      sidecarStorageId,
+      size: finalBytes.byteLength,
+    });
+  },
+});
+
+export const insertShelfFixtures = internalMutation({
+  args: {
+    tenant: v.string(),
+    marker: v.string(),
+    renderStorageId: v.id("_storage"),
+    sidecarStorageId: v.id("_storage"),
+    size: v.number(),
+  },
+  handler: async (
+    ctx,
+    { tenant, marker, renderStorageId, sidecarStorageId, size },
+  ): Promise<{
+    memoTitle: string;
+    provedReelTitle: string;
+    unprovedReelTitle: string;
+    provedThreadId: string;
+  }> => {
+    const memoTitle = `Next step — close the Offer gate (${marker})`;
+    const provedReelTitle = `Reel: launch (${marker})`;
+    const unprovedReelTitle = `Reel: teaser (${marker})`;
+    const provedThreadId = `smoke-content-proved-${marker}`;
+    const now = Date.now();
+
+    // A memo: `persistNextStepMemo`'s row shape, minus the ingest workflow it starts (nothing here
+    // needs a rag entry, and starting one would spend embedding credits for a UI fixture).
+    await ctx.db.insert("vaultDocuments", {
+      tenantId: tenant,
+      title: memoTitle,
+      kind: "next_step_memo",
+      category: categoryFor({ source: "agent" }),
+      source: "evaluation",
+      mimeType: "text/markdown",
+      size: 64,
+      contentHash: await contentHash(memoTitle),
+      text: "Your binding constraint is the offer. Close it before spending on traffic.",
+      status: "ready",
+      sourceThreadId: `smoke-content-memo-${marker}`,
+      createdAt: now,
+    });
+
+    // The PROVED reel: the plan keeps the whole artifact triple and its pointer names this row.
+    const provedPlan = await ctx.db.insert("plans", {
+      tenantId: tenant,
+      threadId: provedThreadId,
+      status: "done",
+      recipients: [],
+      subject: provedReelTitle,
+      body: "",
+      createdAt: now,
+      renderStatus: "rendered",
+      renderStorageId,
+      sidecarStorageId,
+      sidecarHash: marker,
+      renderSummary: { durationS: 28, sceneCount: 6, gates: [] },
+    });
+    const provedReel = await ctx.db.insert("vaultDocuments", {
+      tenantId: tenant,
+      title: provedReelTitle,
+      kind: "reel",
+      category: categoryFor({ source: "agent", mimeType: "video/mp4" }),
+      source: "media",
+      mimeType: "text/markdown",
+      storedMimeType: "video/mp4",
+      storageId: renderStorageId,
+      size,
+      contentHash: await contentHash(provedReelTitle),
+      text: "Ship faster, bill sooner.",
+      status: "ready",
+      sourcePlanId: provedPlan,
+      sourceThreadId: provedThreadId,
+      reelMeta: { planId: provedPlan, citations: [] },
+      createdAt: now - 1_000,
+    });
+    await ctx.db.patch(provedPlan, { reelVaultDocId: provedReel });
+
+    // The UNPROVED reel: bytes on the row, but the plan carries no sidecar — the state a
+    // regenerate leaves behind, and the one the shelf must refuse to play.
+    const unprovedPlan = await ctx.db.insert("plans", {
+      tenantId: tenant,
+      threadId: `smoke-content-unproved-${marker}`,
+      status: "done",
+      recipients: [],
+      subject: unprovedReelTitle,
+      body: "",
+      createdAt: now,
+      renderStatus: "pending",
+      renderStorageId,
+    });
+    const unprovedReel = await ctx.db.insert("vaultDocuments", {
+      tenantId: tenant,
+      title: unprovedReelTitle,
+      kind: "reel",
+      category: categoryFor({ source: "agent", mimeType: "video/mp4" }),
+      source: "media",
+      mimeType: "text/markdown",
+      storedMimeType: "video/mp4",
+      storageId: renderStorageId,
+      size,
+      contentHash: await contentHash(unprovedReelTitle),
+      text: "Join the beta.",
+      status: "ready",
+      sourcePlanId: unprovedPlan,
+      sourceThreadId: `smoke-content-unproved-${marker}`,
+      reelMeta: { planId: unprovedPlan, citations: [] },
+      createdAt: now - 2_000,
+    });
+    await ctx.db.patch(unprovedPlan, { reelVaultDocId: unprovedReel });
+
+    return { memoTitle, provedReelTitle, unprovedReelTitle, provedThreadId };
+  },
+});
