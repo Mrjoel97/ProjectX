@@ -1,3 +1,26 @@
+> Last verified: 2026-08-23 (26-19 Task 2 — **`briefings.ts` gains ONE reader,
+> `briefings.latestForTenant`, for the Command Center's briefing card.** Append-only writer
+> untouched; `byThread` untouched.
+>
+> It reads the EXISTING `by_tenant_createdAt` index — no schema change — and returns a BOUNDED
+> projection (max 5 items) or `null`. Rows are append-only, so index order IS recency: `.order("desc")
+> .first()` is the whole "latest" story, no scan. `null` for a tenant with no briefing is a real
+> answer, not a throw and not an empty object.
+>
+> **Model-owned prose is LABELLED, not laundered.** The row mixes code-owned facts (`id`, `sender`,
+> `subject`, `ts`) with model-authored text (`gist`, `synopsis`, `deadline`). The adversarial pass
+> caught `synopsis` riding into a Command Center projection carrying nothing to distinguish it from
+> the facts rendered beside it — this repo's documented provenance-laundering class, where
+> agent-written text gets presented as the owner's own word. The projection now ships a code-owned
+> `synopsisOrigin: "model"` literal and the card renders it under an explicit "Pikar summary"
+> attribution, asserted on the rendered string. `deadline` stays a rendered SUGGESTION, never parsed
+> into an action.
+>
+> **Briefing affordances are workspace LINKS ONLY.** Every row anchor goes to `/dashboard/workspace`.
+> No row may offer to reply, send or schedule — asserted by scanning every `<a>`/`<button>` label in
+> the rendered card against those verbs, not by checking one known button. A briefing card that
+> promises an action it cannot perform is the failure mode this rule exists to stop.)
+
 > Last verified: 2026-08-22 (26-17 Task 3 — **WATCH-GATE ONLY, no cockpit behaviour changed.**
 > `e2e/reports.spec.ts` gained an `expand()` helper and its nav assertion flipped from dark to
 > live on the owner's UAT verdict. The helper exists because the governance and deployment cards are
@@ -35,6 +58,15 @@
 >
 > **EXECUTED 7/7** against a rebuilt `:3111` on 2026-08-22, after seeding a fresh e2e account
 > through the real invite-gated signup form (`invites.__seedInvite` → `e2e/seed-user.setup.ts`).)
+>
+
+> Last verified: 2026-08-22 (Foglamp tracing — **NO COCKPIT BEHAVIOUR CHANGED.** `llm.ts` and
+> `dispatch.ts` gained trace bindings only: 16 `fogIntegration({ agentName })` properties on the
+> existing `generateText`/`generateObject` calls, plus `traced()` around `runAgentLoop` and
+> `runSpecialistTurn` so the SHARED loop carries the CALLER agent identity (`cockpit-agent`,
+> `research-specialist`, `media-director`, `growth-specialist`). That indirection is forced:
+> `agentName` must be a static literal and one call site serves six agents. Rules, invariants and
+> the untraceable calls: `docs/playbooks/tracing.md`.)
 >
 
 > Last verified: 2026-08-22 (26-14 — **A SHIPPED DEFECT IN `plans.reportForPlan`, CORRECTED.** It

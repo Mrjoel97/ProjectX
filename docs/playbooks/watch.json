@@ -1,5 +1,7 @@
 {
-  "_unassigned": ["packages/backend/vitest.diag.setup.ts"],
+  "_unassigned": [
+    "packages/backend/vitest.diag.setup.ts"
+  ],
   "ci-gate.md": [
     ".github/workflows/ci.yml",
     "package.json",
@@ -101,6 +103,8 @@
     "packages/backend/convex/reportPack.ts",
     "packages/backend/convex/reportPackData.ts",
     "packages/backend/convex/reportPack.test.ts",
+    "packages/core/src/home.ts",
+    "packages/core/src/home.test.ts",
     "packages/backend/convex/home.ts",
     "packages/backend/convex/home.test.ts",
     "apps/web/app/(app)/dashboard/approvals/",
@@ -112,7 +116,7 @@
     "apps/web/app/(app)/dashboard/CommandCenter.tsx",
     "apps/web/app/(app)/dashboard/MarkdownDocument.tsx",
     "apps/web/app/(app)/dashboard/MarkdownDocument.test.ts",
-    "apps/web/app/(app)/dashboard/commandCenter.test.tsx",
+    "apps/web/app/(app)/dashboard/commandCenter.test.ts",
     "apps/web/app/(app)/layout.tsx",
     "apps/web/e2e/approvals.spec.ts",
     "apps/web/e2e/finance.spec.ts",

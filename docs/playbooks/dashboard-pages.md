@@ -1,5 +1,124 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-23 (26-19 Task 2 + 26-20 + ADVERSARIAL REMEDIATION — **HOME-01's backend
+> and Command Center v2 both exist; v2 IS NOT THE SURFACE A TENANT LANDS ON, and its browser gate
+> has NEVER RUN.** Read the last two paragraphs before believing anything is finished.
+>
+> **The composition.** `convex/home.ts` exposes TWO independent `tenantQuery` subscriptions —
+> `home.summary` and `home.health` — never one fat query, so a Pipeline failure cannot erase the
+> approvals/content/delivered sections. Every source read goes through ONE `orElse` degrade helper:
+> a throw or absence becomes that section's `unavailable` discriminant and NEVER the number 0.
+> `pipeline` composes `contacts.pipelineTiles` and nothing else (counts + `partial: "row-cap"`; no
+> opportunities, stages, value or raw contact rows). `home.health` only GATHERS narrow signals — the
+> verdict is delegated to core's `rollUpHealth`, so "healthy" has exactly one definition in the repo.
+>
+> **A CAPPED READ IS NEVER `ok`.** The adversarial pass found `scheduled-risk` failing OPEN: it read
+> one ~50-row page of `approvals.listScheduled`, discarded that page's own `nextCursor`, and reported
+> `ok` — a positive health claim — for a truncated read, so a risky send past the cap rendered under
+> a "healthy" badge. `home.ts` now returns `unknownSignal("scheduled-risk")` whenever
+> `page.nextCursor !== null` and no risk was found inside the page, and DROPS count/at so a floor can
+> never render as evidence. The rule generalises: **a bounded read may report `triggered`, but it may
+> only report `ok` when it can see the whole set.** Apply it to any signal added here.
+>
+> **`recommendNextMove` had the mirror-image bug and it is the one to remember.** `rollUpHealth` was
+> correctly fail-closed, but `recommendNextMove` scanned only for `triggered` and otherwise fell
+> through to the `workspace` fallback — whose copy is an all-clear. So a tenant whose sources FAILED
+> saw health "Unknown" and "Nothing needs your decision right now" on the same screen. Two
+> fail-closed rules had drifted apart because only one of them was written down. `HomeRecommendation`
+> now carries a REQUIRED `certain: boolean` (required, not `?:` — an optional field can never be
+> mutation-checked by the compiler), false exactly when `rollUpHealth` says unknown, and the
+> uncertain fallback renders `HOME_UNCERTAIN_COPY`. **Nothing triggered is an all-clear only when
+> everything reported.**
+>
+> **One copy map cannot do two jobs.** `HOME_PRIORITY_COPY.label` holds imperative NEXT-MOVE
+> headlines. The health card reused them as status ROW labels, so it commanded six actions while
+> declaring nothing blocked ("Connect your mailbox — Clear"). Row labels now come from
+> `HOME_SIGNAL_LABEL` (neutral noun phrases) and state words from `SIGNAL_STATE_WORD`.
+>
+> **`connection-failure` copy says "Connect", not "Reconnect".** Its only evidence is
+> `gmailStatus.connected`, which is `!!row` — a tenant who NEVER connected is indistinguishable from
+> one whose connection broke, and "reconnect"/"restored" asserted a connection that may never have
+> existed. Splitting the code needs a real "was connected, now broken" probe in `gmailAuth` that does
+> not exist; the copy is true of both cases and cost nothing. NOTE the unresolved tension recorded
+> under Known gaps: v2 ranks this signal FIRST, which sits against the shipped cockpit invariant that
+> the dashboard never leads with the email channel.
+>
+> **`CommandCenter.tsx` derives, it does not trust.** `HealthCard` recomputes the verdict with
+> `rollUpHealth(signals)`; the wire's `health.state` is never the rendered source of truth. It had
+> been rendered verbatim, so `{ state: "healthy", signals: [] }` printed "Healthy / Nothing is
+> blocked." above six rows all reading Unknown — and no test could tell, because every fixture failed
+> the shape guard on a MISSING key, so not one had a `state` that DISAGREED with its `signals`.
+> When you fixture a discriminated payload, fixture the DISAGREEING case or you have tested nothing.
+>
+> **OWNER-APPROVED 2026-08-23; THE SWITCH IS GONE.** `/dashboard` renders `CommandCenter.tsx` and
+> nothing else. The one-line `COMMAND_CENTER_V2` boolean, `LegacyDashboard.tsx` and the TRIPWIRE
+> test that pinned the flag OFF were all deleted on approval — a fork kept past its decision is a
+> second home nobody renders. Two tests now assert the route mounts the Command Center with no
+> fork, no build-time env switch and no orphaned legacy file. **Rollback is no longer a flag:**
+> revert the approval commit. The source queries are untouched by that revert and every source page
+> works either way — presentation is reversible, stored data is unaffected.
+>
+> Note for whoever edits `dashboard/page.tsx` next: those two tests read its SOURCE TEXT, so
+> naming the removed symbols even in a comment fails them. Describe them in prose.
+>
+> **THE BROWSER GATE HAS NOW RUN: 8/8, twice, 2026-08-23.** `e2e/command-center.spec.ts` executed
+> against the local deployment with a production build on :3111 and the flag ON. Re-run it with
+> `26-20-UAT-SCRIPT.md`. Four things it caught that 3,900 unit tests, three typechecks and a
+> production build all missed — every one a live-integration fact a `convex-test` suite cannot see:
+>
+> 1. **The functions were never deployed.** `convex/lib/foglamp.ts` (uncommitted tracing work, not
+>    from these plans) sits under `convex/` without a `"use node"` directive, so `foglamp`'s
+>    `node:http` import failed to resolve and ABORTED EVERY PUSH. `home.js:summary`,
+>    `home.js:health` and `briefings.js:latestForTenant` were simply absent and all five sections
+>    rendered `error`. **Before trusting any browser gate here, run
+>    `npx convex function-spec | grep <module>`.** Green suites say nothing about what reached :3210.
+> 2. **The spec assumed ABSENCE as a fixture on a database that persists across runs** — three
+>    times, in three tables. It expected `scheduled-risk` and got `stale-approval` because the
+>    tenant holds 1056 `proposed` plans days old; it expected `scheduled-risk` to clear when it
+>    cancelled its own plan, but other `scheduled` rows remain. The product was right every time.
+>    The ladder now asserts MONOTONIC DESCENT plus at least one strict advance, and asserts `Clear`
+>    ONLY on signals whose absence the spec itself guarantees (`connection-failure`,
+>    `diagnostic-blocker`). Never assert a signal you do not own on a lived-in tenant.
+> 3. **"7 listed of 2 in this window."** The briefing card rendered `listedCount` and `itemCount`
+>    swapped and mislabelled — a part larger than its whole — and THE SPEC PINNED THAT EXACT STRING,
+>    so the gate was green over it. Both fixtures used numbers that read plausibly; the unit
+>    fixture was itself impossible (`listedCount: 2, itemCount: 9`). Now "Summarized N of M" with
+>    `summarized <= listed` asserted. A test that pins wrong output defends the defect.
+> 4. **A reflow race read as a clip.** `setViewportSize` resolves before CSS grid re-lays-out, so
+>    `boundingBox` returned the previous breakpoint's geometry — `right: 402` at 390px where a
+>    settled probe measured `374`. Fixed with a double-rAF barrier plus `expect.poll`. A genuine
+>    hang-off still fails on the timeout.
+>
+> **WHAT STILL HAS NO EVIDENCE.** the BLOCKING owner UAT (26-20 Task 2) — the human
+> judgement the browser cannot make: whether the ranking matches how the owner wants a morning
+> ranked, whether the copy reads true, and the standing conflict below. The flag is back OFF and
+> `26-20-SUMMARY.md` stays unwritten until the owner approves. The four gates that DID run are real and green:
+> core 1123/1123, backend 96 files/2369 tests, web 568/568, all three typechecks + the production
+> build (`/dashboard` present in the route manifest).)
+
+
+> Last verified: 2026-08-22 (26-19 Task 1 — **THE COMMAND CENTER PRIORITY ORDER IS PINNED IN PURE
+> CORE.** `packages/core/src/home.ts` owns the ONE total order — connection-failure >
+> unresolved-dead-letters > stale-approval > scheduled-risk > diagnostic-blocker >
+> binding-constraint > workspace — plus `HOME_PRIORITY_COPY`, `recommendNextMove` and
+> `rollUpHealth`. Two invariants, both mutation-proven (27 tests after the 26-20 remediation pass):
+>
+> **Every rendered string is code-owned.** `recommendNextMove` never spreads the signal; it reads
+> label/reason/route out of `HOME_PRIORITY_COPY[code]` where `code` comes from the frozen order, and
+> passes count/at through a finite-number guard. An injected `label`/`reason`/`route`/`subject` on a
+> signal, or a string `count`, cannot reach the output. Do not add an interpolated field here.
+>
+> **Health is fail-closed and `unknown` dominates `triggered`.** `rollUpHealth` returns "healthy"
+> only when all six `REQUIRED_HOME_SIGNALS` reported and every report is `ok`; a missing, malformed
+> or off-contract report returns "unknown" even when another signal is triggered. Absence is not
+> health — an empty or short array is "unknown". A source that can only ever report "unknown"
+> therefore pins the global verdict to "unknown" forever, so every required code needs a real
+> backing fact before it is added to `REQUIRED_HOME_SIGNALS`.
+>
+> Verify: `cd packages/core && npx vitest run home` (19 tests). The copy strings are duplicated as
+> literals in `home.test.ts` on purpose — asserting against `HOME_PRIORITY_COPY` itself would pass
+> no matter what the strings say.)
+
 > Last verified: 2026-08-22 (26-17 Tasks 2–3 — **OWNER UAT APPROVED AND THE REPORTS NAV IS LIVE.**
 > Verdict: *"The report interface is okay"*, with one change requested and made.
 >

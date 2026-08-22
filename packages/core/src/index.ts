@@ -18,6 +18,7 @@ export * from "./emailIntent";
 export * from "./fallback";
 export * from "./financeClaim";
 export * from "./goals";
+export * from "./home";
 export * from "./logger";
 export * from "./microsoft";
 export * from "./notificationTemplates";

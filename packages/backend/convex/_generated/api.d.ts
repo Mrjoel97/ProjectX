@@ -40,6 +40,7 @@ import type * as gmailAuth from "../gmailAuth.js";
 import type * as goals from "../goals.js";
 import type * as graph from "../graph.js";
 import type * as guardrails from "../guardrails.js";
+import type * as home from "../home.js";
 import type * as http from "../http.js";
 import type * as index from "../index.js";
 import type * as intake from "../intake.js";
@@ -148,6 +149,7 @@ declare const fullApi: ApiFromModules<{
   goals: typeof goals;
   graph: typeof graph;
   guardrails: typeof guardrails;
+  home: typeof home;
   http: typeof http;
   index: typeof index;
   intake: typeof intake;

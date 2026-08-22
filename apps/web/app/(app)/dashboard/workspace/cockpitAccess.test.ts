@@ -1,19 +1,24 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
+import { RecommendationCard } from "../CommandCenter";
 import { COCKPIT_STARTERS } from "./ChatPane";
 import { PLAN_REFUSALS } from "./cards";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const pageSource = readFileSync(join(here, "page.tsx"), "utf8");
 const chatSource = readFileSync(join(here, "ChatPane.tsx"), "utf8");
-const dashboardSource = readFileSync(join(here, "..", "page.tsx"), "utf8");
+// `LegacyDashboard.tsx` was deleted on owner approval (2026-08-23), so the legacy half of this
+// guard went with it. Command Center v2 IS the surface a tenant lands on, and the invariant is
+// asserted against its own rendered hero below.
+const dashboardEntry = readFileSync(join(here, "..", "page.tsx"), "utf8");
 const stripComments = (source: string) =>
   source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 const page = stripComments(pageSource);
 const chat = stripComments(chatSource);
-const dashboard = stripComments(dashboardSource);
 
 describe("cockpit access is independent of Gmail", () => {
   test("the workspace never queries Gmail or swaps the composer for a connection gate", () => {
@@ -24,18 +29,77 @@ describe("cockpit access is independent of Gmail", () => {
     expect(page).not.toContain("Connect Gmail to start planning");
   });
 
-  test("the dashboard always recommends business work, even while email is disconnected", () => {
-    const nextMove = dashboard.slice(
-      dashboard.indexOf("const nextMove ="),
-      dashboard.indexOf("const count ="),
-    );
-    expect(nextMove.length).toBeGreaterThan(250);
-    expect(nextMove).toContain('href: "/dashboard/workspace"');
-    expect(nextMove).toContain('cta: "Open workspace"');
-    expect(nextMove).not.toContain("gmail");
-    expect(nextMove).not.toContain("connect-gmail");
-    // Gmail remains represented honestly as one optional channel status.
-    expect(dashboard).toContain('label="Email channel"');
+  test("the dashboard route mounts the cockpit-independent Command Center", () => {
+    // The legacy `nextMove` object this once inspected is deleted. What remains assertable at the
+    // ROUTE level is that /dashboard has no second home and no Gmail gate of its own; the real
+    // "never lead with Gmail" claim is now made against v2's rendered hero, immediately below.
+    expect(dashboardEntry).toContain("return <CommandCenter />;");
+    expect(dashboardEntry).not.toContain("LegacyDashboard");
+    expect(dashboardEntry).not.toContain("api.gmailAuth.gmailStatus");
+    expect(dashboardEntry).not.toContain('href="/connect-gmail"');
+  });
+});
+
+// ── the same invariant, restated against Command Center v2 ────────────────────
+// v2 ranks `connection-failure` FIRST by contract, so "never lead with Gmail" cannot be carried
+// over verbatim — it becomes: v2 leads with Gmail ONLY when the mailbox signal is TRIGGERED, and
+// the moment it is not, the hero is business work again. Asserted on the RENDERED hero, so a
+// renamed copy constant cannot leave the visible symptom standing.
+//
+// OPEN, AND NOT FIXABLE FROM THIS SIDE: `packages/backend/convex/home.ts` sets that signal to
+// `triggered` on `!gmailStatus.connected` alone, and `gmailStatus` is `connected: !!row` — so a
+// tenant who NEVER connected a mailbox is indistinguishable from one whose connection broke, and
+// gets "Connect your mailbox" for a connection that never existed. A `HomeSignal` carries a code
+// and a state and nothing else, so no component can tell the two apart; the fix belongs in
+// `home.ts`, not here, and these tests are written so it does not need restating when it lands.
+
+const heroOf = (connection: "ok" | "triggered" | "unknown"): string =>
+  renderToStaticMarkup(
+    createElement(RecommendationCard, {
+      health: {
+        state: connection === "ok" ? "healthy" : "degraded",
+        signals: [
+          { code: "connection-failure", state: connection },
+          { code: "unresolved-dead-letters", state: "ok" },
+          { code: "stale-approval", state: "ok" },
+          { code: "scheduled-risk", state: "ok" },
+          { code: "diagnostic-blocker", state: "ok" },
+          { code: "binding-constraint", state: "ok" },
+        ],
+      },
+    } as never),
+  );
+
+describe("Command Center v2 leads with Gmail only when the mailbox connection has failed", () => {
+  test("a connected mailbox puts business work in the hero, never a connection prompt", () => {
+    const hero = heroOf("ok");
+    expect(hero).toContain('data-cc-priority="workspace"');
+    expect(hero).toContain("Open the workspace");
+    expect(hero).toContain('href="/dashboard/workspace"');
+    expect(hero).not.toContain("Connect your mailbox");
+    expect(hero).not.toContain("connect-gmail");
+    expect(hero.toLowerCase()).not.toContain("mailbox");
+  });
+
+  test("a mailbox that did NOT report is not treated as a broken one", () => {
+    // `unknown` is what `home.ts` returns when the Gmail read throws. An unread source is not a
+    // failure, so it must not produce reconnect copy — and it must not produce an all-clear either.
+    const hero = heroOf("unknown");
+    expect(hero).not.toContain("Connect your mailbox");
+    expect(hero).not.toContain("connect-gmail");
+    expect(hero).toContain("Some checks did not report");
+  });
+
+  test("a genuinely failed connection DOES lead — the guard above is not blanket suppression", () => {
+    const hero = heroOf("triggered");
+    expect(hero).toContain('data-cc-priority="connection-failure"');
+    expect(hero).toContain("Connect your mailbox");
+    expect(hero).toContain('href="/connect-gmail"');
+  });
+
+  test("Gmail is one rung, not a gate: clearing it hands the hero back to business work", () => {
+    expect(heroOf("triggered")).toContain('data-cc-priority="connection-failure"');
+    expect(heroOf("ok")).toContain('data-cc-priority="workspace"');
   });
 });
 
