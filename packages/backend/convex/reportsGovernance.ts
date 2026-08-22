@@ -24,11 +24,13 @@ import { projectAuditRow } from "@pikar/contracts/auditProjection";
 import { GATED_SKILLS } from "@pikar/contracts/skill";
 import {
   compareDashboardOrder,
+  type DashboardWindow,
   dashboardCursorFor,
   parseDashboardCursor,
   resolveDashboardWindow,
 } from "@pikar/core";
 import { v } from "convex/values";
+import type { QueryCtx } from "./_generated/server";
 import { ownerQuery, tenantQuery } from "./lib/functions";
 import { MAX_WINDOW_MS } from "./reportsBusiness";
 import { REGISTRY_SKILL_NAMES } from "./skills";
@@ -56,7 +58,72 @@ const clampPage = (requested: number | undefined): number =>
  * at page one. Ceiling, inherited from that helper and real: a page can skip rows only if more than
  * `limit` of ONE tenant's audit rows share a single millisecond and sort ahead of the cursor id.
  * Upgrade path if that ever happens: widen the fetch by the number of boundary ties.
+ *
+ * EXPORTED for `reportPackData.ts` (26-16): a PLAIN function, not an internalQuery — a tenantQuery
+ * cannot `runQuery` an internal one, and a second reader of these rows is how two surfaces come to
+ * disagree (the `blueprint.readLiveForTenant` shape). `projectAuditRow` and the `unsafeDrops` warn
+ * stay INSIDE it, so the raw row still cannot escape by any caller.
  */
+export async function readAuditPage(
+  ctx: QueryCtx,
+  tenantId: string,
+  window: DashboardWindow,
+  limit: number,
+  cursor: string | undefined,
+) {
+  const after = cursor === undefined ? null : parseDashboardCursor(cursor);
+
+  // The cursor narrows the RANGE (one contiguous read on `by_tenant_ts`) and the id tiebreak is
+  // settled by the filter below — `lte` on the millisecond, because rows sharing the cursor's ms
+  // are still ahead of it until the id says otherwise.
+  const upperExclusive =
+    after === null ? window.untilMs : Math.min(window.untilMs, after.createdAt + 1);
+  const fetched = await ctx.db
+    .query("audit")
+    .withIndex("by_tenant_ts", (q) =>
+      q.eq("tenantId", tenantId).gte("ts", window.sinceMs).lt("ts", upperExclusive),
+    )
+    .order("desc")
+    .take(limit + 1);
+
+  const ordered = fetched.filter(
+    (r) => after === null || compareDashboardOrder({ createdAt: r.ts, id: r._id }, after) > 0,
+  );
+  const page = ordered.slice(0, limit);
+  const rows = page.map((r) =>
+    projectAuditRow({
+      ts: r.ts,
+      eventType: r.eventType,
+      actor: r.actor,
+      correlationId: r.correlationId,
+      payload: r.payload,
+    }),
+  );
+
+  // THE INVARIANT SIGNAL, and its scope is deliberate. A key that is not allowlisted is the
+  // contract WORKING and is silent; `unsafeDrops` counts only keys we promised were refs whose
+  // value was not one — i.e. a write site drifting from §4. Every field logged is code-owned:
+  // `unsafeDrops > 0` requires a KNOWN event, so `eventType` is a key of the allowlist table, and
+  // the count is a count. No key names, no values, nothing off the row.
+  const dropped = rows.filter((r) => r.unsafeDrops > 0);
+  if (dropped.length > 0) {
+    const total = dropped.reduce((n, r) => n + r.unsafeDrops, 0);
+    const events = [...new Set(dropped.map((r) => r.eventType))].sort().join(",");
+    console.warn(
+      `[reportsGovernance] audit projection refused ${total} ref(s) on ${events} — an allowlisted key carried a non-ref value`,
+    );
+  }
+
+  const last = page.at(-1);
+  const nextCursor =
+    fetched.length > limit && last !== undefined
+      ? dashboardCursorFor({ createdAt: last.ts, id: last._id })
+      : null;
+
+  return { window, rows, nextCursor };
+}
+
+/** The tenant-facing page. A ONE-LINE caller on purpose: the read is `readAuditPage`, only there. */
 export const auditPage = tenantQuery({
   args: {
     sinceMs: v.number(),
@@ -65,68 +132,27 @@ export const auditPage = tenantQuery({
     limit: v.optional(v.number()),
     cursor: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
-    const window = resolveDashboardWindow({
-      sinceMs: args.sinceMs,
-      untilMs: args.untilMs,
-      browserTimeZone: args.browserTimeZone,
-      maxSpanMs: MAX_WINDOW_MS,
-    });
-    const limit = clampPage(args.limit);
-    const after = args.cursor === undefined ? null : parseDashboardCursor(args.cursor);
-
-    // The cursor narrows the RANGE (one contiguous read on `by_tenant_ts`) and the id tiebreak is
-    // settled by the filter below — `lte` on the millisecond, because rows sharing the cursor's ms
-    // are still ahead of it until the id says otherwise.
-    const upperExclusive =
-      after === null ? window.untilMs : Math.min(window.untilMs, after.createdAt + 1);
-    const fetched = await ctx.db
-      .query("audit")
-      .withIndex("by_tenant_ts", (q) =>
-        q.eq("tenantId", ctx.tenantId).gte("ts", window.sinceMs).lt("ts", upperExclusive),
-      )
-      .order("desc")
-      .take(limit + 1);
-
-    const ordered = fetched.filter(
-      (r) => after === null || compareDashboardOrder({ createdAt: r.ts, id: r._id }, after) > 0,
-    );
-    const page = ordered.slice(0, limit);
-    const rows = page.map((r) =>
-      projectAuditRow({
-        ts: r.ts,
-        eventType: r.eventType,
-        actor: r.actor,
-        correlationId: r.correlationId,
-        payload: r.payload,
+  handler: async (ctx, args) =>
+    readAuditPage(
+      ctx,
+      ctx.tenantId,
+      resolveDashboardWindow({
+        sinceMs: args.sinceMs,
+        untilMs: args.untilMs,
+        browserTimeZone: args.browserTimeZone,
+        maxSpanMs: MAX_WINDOW_MS,
       }),
-    );
-
-    // THE INVARIANT SIGNAL, and its scope is deliberate. A key that is not allowlisted is the
-    // contract WORKING and is silent; `unsafeDrops` counts only keys we promised were refs whose
-    // value was not one — i.e. a write site drifting from §4. Every field logged is code-owned:
-    // `unsafeDrops > 0` requires a KNOWN event, so `eventType` is a key of the allowlist table, and
-    // the count is a count. No key names, no values, nothing off the row.
-    const dropped = rows.filter((r) => r.unsafeDrops > 0);
-    if (dropped.length > 0) {
-      const total = dropped.reduce((n, r) => n + r.unsafeDrops, 0);
-      const events = [...new Set(dropped.map((r) => r.eventType))].sort().join(",");
-      console.warn(
-        `[reportsGovernance] audit projection refused ${total} ref(s) on ${events} — an allowlisted key carried a non-ref value`,
-      );
-    }
-
-    const last = page.at(-1);
-    const nextCursor =
-      fetched.length > limit && last !== undefined
-        ? dashboardCursorFor({ createdAt: last.ts, id: last._id })
-        : null;
-
-    return { window, rows, nextCursor };
-  },
+      clampPage(args.limit),
+      args.cursor,
+    ),
 });
 
 /**
+ * DELIBERATELY NOT LIFTED (26-16): neither this nor `activeSkills` may enter a tenant's board pack.
+ * `wormExport` reads `audit.by_ts` with NO tenant predicate and `activeSkills` is deployment-global
+ * registry state, while a stored vault artifact is tenant-owned with no owner predicate anywhere in
+ * retrieval — an owner-gated fact placed in one is permanently readable with no gate left to apply.
+ *
  * OWNER-ONLY. Where the WORM export cursor stands — NOT whether the export is healthy.
  *
  * Every field name here is chosen so a later page cannot render a durability claim off it.

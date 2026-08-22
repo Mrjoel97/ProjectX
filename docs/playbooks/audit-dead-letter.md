@@ -1,5 +1,29 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-08-22 (26-16 — **a new event: `report.pack_generated`.**)
+>
+> - **Written by `convex/reportPack.ts` — the ACTION, not the vault module.** The vault content
+>   plane is log-free BY CONSTRUCTION (`vaultRedaction.test.ts` scans `vault.ts` for any audit
+>   call), so the caller audits; the shipped precedents are `llm.ts`'s `document.created` and
+>   `contentAudit.ts`'s `vault.promoted`. The action is also the only place that knows the byte
+>   length.
+> - `correlationId` is `report:pack:<vaultDocId>` (mirroring `vault:promote:<vaultDocId>`), actor
+>   `system`, and the payload is exactly fourteen keys: `vaultDocId`, `packHash`, `sinceMs`,
+>   `untilMs`, `timeZone`, `timeZoneSource`, `result`, `bytes`, `partialSections`, `sentCount`,
+>   `reviewCount`, `deadLetterCount`, `feedbackCount`, `auditRowCount`. Refs, ids, counts, the
+>   resolved window and the outcome — never a title, never a recipient, never a line of the pack's
+>   own prose. All fourteen are allowlisted in `packages/contracts/src/auditProjection.ts` and every
+>   value passes `SAFE_REF` (the timezone is an IANA name, `timeZoneSource` is `browser-fallback`,
+>   `result` is `generated` / `replayed`).
+> - **The row is written ONLY when an artifact exists** (generated or replayed). A render failure has
+>   no `vaultDocId` to reference, an empty-string ref would be DROPPED and counted as an
+>   `unsafeDrop`, and `createDocument`'s shipped precedent is log-the-reason-without-an-audit-row —
+>   so a failed render logs the error NAME to the console and writes nothing here.
+> - The `report` CATEGORY appears in `AUDIT_VIEWER_CATEGORIES` automatically: it is DERIVED from the
+>   event namespace at read time, never hand-typed beside the table. Nothing was added for it.
+>
+
+
 > Last verified: 2026-08-22 (26-15 — **THE AUDIT VIEWER IS SAFE BY FILTERING, NOT BY SCHEMA, AND
 > THE MOCKUP SAID OTHERWISE.** `docs/design/mockups/pending-pages.html` promised the governance
 > table "carries refs, hashes, ids and counts only — that is a schema property, so this viewer is

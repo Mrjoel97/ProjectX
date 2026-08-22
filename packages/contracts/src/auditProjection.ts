@@ -178,6 +178,25 @@ export const AUDIT_VIEWER_EVENTS: Readonly<Record<string, readonly string[]>> = 
   "plan.canceled": ["planId"],
   "plan.discarded": ["planId", "kind"],
   "plan.rescheduled": ["planId"],
+  // 26-16 board pack. Refs, ids, counts, the resolved window and the outcome — never a title, never
+  // a recipient, never a figure from the pack itself. `timeZone` is an IANA name and `timeZoneSource`
+  // is `browser-fallback`; both pass SAFE_REF because `/` and `-` are in its charset.
+  "report.pack_generated": [
+    "vaultDocId",
+    "packHash",
+    "sinceMs",
+    "untilMs",
+    "timeZone",
+    "timeZoneSource",
+    "result",
+    "bytes",
+    "partialSections",
+    "sentCount",
+    "reviewCount",
+    "deadLetterCount",
+    "feedbackCount",
+    "auditRowCount",
+  ],
   "request.redacted": ["requestId", "safeTextHash"],
   "request.rejected": ["reason", "retryAfterMs", "goalHash", "attachmentCount"],
   "research.persist_failed": [...LINEAGE, "reason"],

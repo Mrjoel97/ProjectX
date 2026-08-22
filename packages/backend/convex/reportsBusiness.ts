@@ -24,6 +24,7 @@ import {
   completenessOver,
   coverageLabel,
   createDashboardBound,
+  type DashboardWindow,
   deserializeBlueprint,
   type EvaluationSnapshot,
   firstGap,
@@ -34,6 +35,7 @@ import {
 } from "@pikar/core";
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
+import type { QueryCtx } from "./_generated/server";
 import { readLiveForTenant } from "./blueprint";
 import { tenantQuery } from "./lib/functions";
 import { REVIEW_DECISIONS } from "./review";
@@ -137,90 +139,95 @@ function toSnapshot(row: Doc<"evaluations">): EvaluationSnapshot {
  * Reading the tenant's two newest rows instead would interleave the cron thread, arbitrary cockpit
  * threads and per-session voice-doc threads, and routinely diff a document review against a
  * business diagnosis. `compareSnapshots` refuses that anyway; this makes it not arise.
+ *
+ * EXPORTED for `reportPackData.ts` (26-16): a PLAIN function, not an internalQuery. A tenantQuery
+ * cannot `runQuery` an internal one, and a second reader of the same rows is how two surfaces come
+ * to disagree — the `blueprint.readLiveForTenant` shape, for the same two reasons.
  */
+export async function readBusiness(ctx: QueryCtx, tenantId: string, window: DashboardWindow) {
+  const [live, pair] = await Promise.all([
+    readLiveForTenant(ctx, tenantId),
+    ctx.db
+      .query("evaluations")
+      .withIndex("by_tenant_thread", (q) =>
+        q.eq("tenantId", tenantId).eq("threadId", REVIEW_THREAD_ID),
+      )
+      .order("desc")
+      .take(2),
+  ]);
+
+  const blueprint: BusinessBlueprint | null = live ? deserializeBlueprint(live.text) : null;
+
+  const [newer, older] = pair;
+  const snapshot = newer === undefined ? null : toSnapshot(newer);
+  const findings: Doc<"evaluations">["findings"] = newer?.findings ?? [];
+
+  return {
+    window,
+    blueprint:
+      blueprint === null
+        ? { state: "not-built" as const }
+        : {
+            state: "live" as const,
+            // A CLOSED, ORDERED key set — never Object.keys. `BusinessBlueprint` is a total
+            // mapped type, so a key count reads 11/11 for a completely blank blueprint.
+            facts: completenessOver(BLUEPRINT_FIELDS, (f) => blueprint[f] !== null),
+            // `{filled, total}` per segment, never a percentage: `leads` has `total === 0` today,
+            // and averaging per-segment percentages would divide by nothing and weight unequal
+            // segments equally. One denominator or none.
+            segments: BLUEPRINT_SEGMENTS.map((segment) => ({
+              id: segment.id,
+              label: segment.label,
+              ...segmentFill(blueprint, segment),
+            })),
+            nextGapSegmentId: firstGap(blueprint)?.id ?? null,
+          },
+    evaluation:
+      snapshot === null
+        ? // NOT "never-run" — this read is the weekly REVIEW THREAD only, and a tenant who has
+          // run the business evaluation ten times from the cockpit has none of those rows here.
+          // Saying "never run" about that tenant is a false statement about their own history,
+          // so the state names its population instead (must_haves: metrics name their population).
+          { state: "no-review-run" as const, population: REVIEW_THREAD_ID }
+        : {
+            state: "run" as const,
+            population: REVIEW_THREAD_ID,
+            framework: snapshot.framework,
+            verdict: snapshot.verdict,
+            findingCount: snapshot.findingCount,
+            createdAt: snapshot.createdAt,
+            // The LEADING constraint, not a gap count: `diagnose()` emits at most one gap per
+            // run, so "3 open gaps" is not a number this engine can produce.
+            leadingConstraint:
+              snapshot.gaps[0] === undefined
+                ? null
+                : {
+                    route: snapshot.gaps[0].route,
+                    playbook: snapshot.gaps[0].playbook,
+                    leverageRank: snapshot.gaps[0].leverageRank,
+                  },
+            // Where the cited observations came from. `agent-relayed` is its own bucket on
+            // purpose — the owner stated it and the agent wrote it down, which is neither the
+            // owner's own confirmed entry nor a vault fact.
+            sources: {
+              vault: findings.filter((f) => f.source === "vault").length,
+              userProvided: findings.filter((f) => f.source === "user-provided").length,
+              agentRelayed: findings.filter((f) => f.source === "agent-relayed").length,
+            },
+            scorecard: completenessOver(SCORECARD_PATHS, (p) =>
+              isFilled(pathValue(newer?.scorecard, p)),
+            ),
+            // Movement, or the reason there is none. NEVER recomputed from the gap arrays when
+            // the newer run could not assess — see `compareSnapshots`.
+            movement: compareSnapshots(snapshot, older ? toSnapshot(older) : null),
+          },
+  };
+}
+
+/** The tenant-facing card. A ONE-LINE caller on purpose: the read is `readBusiness` and only there. */
 export const business = tenantQuery({
   args: windowArgs,
-  handler: async (ctx, args) => {
-    const window = resolve(args);
-
-    const [live, pair] = await Promise.all([
-      readLiveForTenant(ctx, ctx.tenantId),
-      ctx.db
-        .query("evaluations")
-        .withIndex("by_tenant_thread", (q) =>
-          q.eq("tenantId", ctx.tenantId).eq("threadId", REVIEW_THREAD_ID),
-        )
-        .order("desc")
-        .take(2),
-    ]);
-
-    const blueprint: BusinessBlueprint | null = live ? deserializeBlueprint(live.text) : null;
-
-    const [newer, older] = pair;
-    const snapshot = newer === undefined ? null : toSnapshot(newer);
-    const findings: Doc<"evaluations">["findings"] = newer?.findings ?? [];
-
-    return {
-      window,
-      blueprint:
-        blueprint === null
-          ? { state: "not-built" as const }
-          : {
-              state: "live" as const,
-              // A CLOSED, ORDERED key set — never Object.keys. `BusinessBlueprint` is a total
-              // mapped type, so a key count reads 11/11 for a completely blank blueprint.
-              facts: completenessOver(BLUEPRINT_FIELDS, (f) => blueprint[f] !== null),
-              // `{filled, total}` per segment, never a percentage: `leads` has `total === 0` today,
-              // and averaging per-segment percentages would divide by nothing and weight unequal
-              // segments equally. One denominator or none.
-              segments: BLUEPRINT_SEGMENTS.map((segment) => ({
-                id: segment.id,
-                label: segment.label,
-                ...segmentFill(blueprint, segment),
-              })),
-              nextGapSegmentId: firstGap(blueprint)?.id ?? null,
-            },
-      evaluation:
-        snapshot === null
-          ? // NOT "never-run" — this read is the weekly REVIEW THREAD only, and a tenant who has
-            // run the business evaluation ten times from the cockpit has none of those rows here.
-            // Saying "never run" about that tenant is a false statement about their own history,
-            // so the state names its population instead (must_haves: metrics name their population).
-            { state: "no-review-run" as const, population: REVIEW_THREAD_ID }
-          : {
-              state: "run" as const,
-              population: REVIEW_THREAD_ID,
-              framework: snapshot.framework,
-              verdict: snapshot.verdict,
-              findingCount: snapshot.findingCount,
-              createdAt: snapshot.createdAt,
-              // The LEADING constraint, not a gap count: `diagnose()` emits at most one gap per
-              // run, so "3 open gaps" is not a number this engine can produce.
-              leadingConstraint:
-                snapshot.gaps[0] === undefined
-                  ? null
-                  : {
-                      route: snapshot.gaps[0].route,
-                      playbook: snapshot.gaps[0].playbook,
-                      leverageRank: snapshot.gaps[0].leverageRank,
-                    },
-              // Where the cited observations came from. `agent-relayed` is its own bucket on
-              // purpose — the owner stated it and the agent wrote it down, which is neither the
-              // owner's own confirmed entry nor a vault fact.
-              sources: {
-                vault: findings.filter((f) => f.source === "vault").length,
-                userProvided: findings.filter((f) => f.source === "user-provided").length,
-                agentRelayed: findings.filter((f) => f.source === "agent-relayed").length,
-              },
-              scorecard: completenessOver(SCORECARD_PATHS, (p) =>
-                isFilled(pathValue(newer?.scorecard, p)),
-              ),
-              // Movement, or the reason there is none. NEVER recomputed from the gap arrays when
-              // the newer run could not assess — see `compareSnapshots`.
-              movement: compareSnapshots(snapshot, older ? toSnapshot(older) : null),
-            },
-    };
-  },
+  handler: async (ctx, args) => readBusiness(ctx, ctx.tenantId, resolve(args)),
 });
 
 // ── OPERATIONS ────────────────────────────────────────────────────────────────────────
@@ -266,210 +273,213 @@ async function earliestAt<T extends { createdAt: number }>(rows: T[]): Promise<n
   return rows[0]?.createdAt ?? null;
 }
 
-export const operations = tenantQuery({
-  args: windowArgs,
-  handler: async (ctx, args) => {
-    const window = resolve(args);
+/**
+ * EXPORTED for `reportPackData.ts` (26-16): a PLAIN function, not an internalQuery. A tenantQuery
+ * cannot `runQuery` an internal one, and a second reader of the same rows is how two surfaces come
+ * to disagree — the `blueprint.readLiveForTenant` shape, for the same two reasons.
+ */
+export async function readOperations(ctx: QueryCtx, tenantId: string, window: DashboardWindow) {
+  const telemetryQuery = (order: "asc" | "desc" | "range") =>
+    ctx.db
+      .query("telemetry")
+      .withIndex("by_tenant_created", (q) =>
+        order === "range"
+          ? q
+              .eq("tenantId", tenantId)
+              .gte("createdAt", window.sinceMs)
+              .lt("createdAt", window.untilMs)
+          : q.eq("tenantId", tenantId),
+      );
 
-    const telemetryQuery = (order: "asc" | "desc" | "range") =>
-      ctx.db
-        .query("telemetry")
-        .withIndex("by_tenant_created", (q) =>
-          order === "range"
-            ? q
-                .eq("tenantId", ctx.tenantId)
-                .gte("createdAt", window.sinceMs)
-                .lt("createdAt", window.untilMs)
-            : q.eq("tenantId", ctx.tenantId),
-        );
+  const [
+    terminals,
+    oldestTelemetry,
+    sends,
+    oldestSend,
+    dlq,
+    feedbackRows,
+    oldestFeedback,
+    spendStartedAt,
+  ] = await Promise.all([
+    telemetryQuery("range").take(TELEMETRY_CAP + 1),
+    telemetryQuery("asc").order("asc").take(1),
+    ctx.db
+      .query("requests")
+      .withIndex("by_tenant_status_createdAt", (q) =>
+        q
+          .eq("tenantId", tenantId)
+          .eq("status", "sent")
+          .gte("createdAt", window.sinceMs)
+          .lt("createdAt", window.untilMs),
+      )
+      .take(SEND_CAP + 1),
+    // THE FLOOR IS THE OLDEST REQUEST OF ANY STATUS, NOT THE OLDEST SENT ONE. `status` is
+    // mutated in place along the pipeline, so eq'ing "sent" here would make the coverage floor a
+    // fact about SUCCESSES rather than about the source — and a tenant with 90 days of drafted,
+    // rejected or expired requests and zero deliveries would be told "we were not watching" when
+    // the truth is "we were watching and nothing was sent". That is the exact conflation the
+    // whole module exists to refuse. The windowed COUNT above stays filtered to sent.
+    // `by_tenant` (not `by_tenant_status_createdAt`): this table has no tenant+createdAt index,
+    // and ascending index order within the tenant is oldest-first, which is the floor we want.
+    ctx.db
+      .query("requests")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .order("asc")
+      .take(1),
+    // POINT IN TIME, not windowed: `deadLetters` has no (tenantId, createdAt) index, and adding
+    // one for a card nobody asked for is speculative. "Open right now" is a true statement about
+    // now; it is deliberately NOT labelled as belonging to the window.
+    ctx.db
+      .query("deadLetters")
+      .withIndex("by_tenant_status", (q) => q.eq("tenantId", tenantId).eq("status", "new"))
+      .take(DLQ_CAP + 1),
+    ctx.db
+      .query("feedback")
+      .withIndex("by_tenant_createdAt", (q) =>
+        q.eq("tenantId", tenantId).gte("createdAt", window.sinceMs).lt("createdAt", window.untilMs),
+      )
+      .take(FEEDBACK_CAP + 1),
+    ctx.db
+      .query("feedback")
+      .withIndex("by_tenant_createdAt", (q) => q.eq("tenantId", tenantId))
+      .order("asc")
+      .take(1),
+    spendCoverageFor(ctx, tenantId),
+  ]);
 
-    const [
-      terminals,
-      oldestTelemetry,
-      sends,
-      oldestSend,
-      dlq,
-      feedbackRows,
-      oldestFeedback,
-      spendStartedAt,
-    ] = await Promise.all([
-      telemetryQuery("range").take(TELEMETRY_CAP + 1),
-      telemetryQuery("asc").order("asc").take(1),
+  // PER-TOOL, NEWEST-FIRST, AND CAPPED BY THE FILE'S OWN IDIOM. Two things this read got wrong
+  // when it was `.take(STEP_CAP)` on the default ascending index order:
+  //   1. it kept the OLDEST 400 rows per tool, so a busy tenant's p95 described the first days of
+  //      a 90-day window and a late regression was invisible; and
+  //   2. `take(CAP)` cannot tell "exactly 400 rows" from "400 of 5,000", so the truncation never
+  //      reached the payload — `percentile`'s `excluded` counts only values it was HANDED, and
+  //      can never disclose rows the query never returned.
+  // `capped()` is applied PER TOOL (the flat array can legitimately reach 6 × 400) and the six
+  // partial flags are OR'd into one bound that ships beside the number.
+  const perTool = await Promise.all(
+    TIMED_TOOLS.map((tool) =>
       ctx.db
-        .query("requests")
-        .withIndex("by_tenant_status_createdAt", (q) =>
+        .query("agentSteps")
+        .withIndex("by_tenant_tool_startedAt", (q) =>
           q
-            .eq("tenantId", ctx.tenantId)
-            .eq("status", "sent")
-            .gte("createdAt", window.sinceMs)
-            .lt("createdAt", window.untilMs),
+            .eq("tenantId", tenantId)
+            .eq("tool", tool)
+            .gte("startedAt", window.sinceMs)
+            .lt("startedAt", window.untilMs),
         )
-        .take(SEND_CAP + 1),
-      // THE FLOOR IS THE OLDEST REQUEST OF ANY STATUS, NOT THE OLDEST SENT ONE. `status` is
-      // mutated in place along the pipeline, so eq'ing "sent" here would make the coverage floor a
-      // fact about SUCCESSES rather than about the source — and a tenant with 90 days of drafted,
-      // rejected or expired requests and zero deliveries would be told "we were not watching" when
-      // the truth is "we were watching and nothing was sent". That is the exact conflation the
-      // whole module exists to refuse. The windowed COUNT above stays filtered to sent.
-      // `by_tenant` (not `by_tenant_status_createdAt`): this table has no tenant+createdAt index,
-      // and ascending index order within the tenant is oldest-first, which is the floor we want.
-      ctx.db
-        .query("requests")
-        .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
-        .order("asc")
-        .take(1),
-      // POINT IN TIME, not windowed: `deadLetters` has no (tenantId, createdAt) index, and adding
-      // one for a card nobody asked for is speculative. "Open right now" is a true statement about
-      // now; it is deliberately NOT labelled as belonging to the window.
-      ctx.db
-        .query("deadLetters")
-        .withIndex("by_tenant_status", (q) => q.eq("tenantId", ctx.tenantId).eq("status", "new"))
-        .take(DLQ_CAP + 1),
-      ctx.db
-        .query("feedback")
-        .withIndex("by_tenant_createdAt", (q) =>
-          q
-            .eq("tenantId", ctx.tenantId)
-            .gte("createdAt", window.sinceMs)
-            .lt("createdAt", window.untilMs),
-        )
-        .take(FEEDBACK_CAP + 1),
-      ctx.db
-        .query("feedback")
-        .withIndex("by_tenant_createdAt", (q) => q.eq("tenantId", ctx.tenantId))
-        .order("asc")
-        .take(1),
-      spendCoverageFor(ctx, ctx.tenantId),
-    ]);
+        .order("desc")
+        .take(STEP_CAP + 1),
+    ),
+  );
+  const stepPages = perTool.map((rows) => capped(rows, STEP_CAP));
+  const steps = stepPages.flatMap((page) => page.counted);
+  const stepsTruncated = stepPages.some((page) => page.bound.partial);
 
-    // PER-TOOL, NEWEST-FIRST, AND CAPPED BY THE FILE'S OWN IDIOM. Two things this read got wrong
-    // when it was `.take(STEP_CAP)` on the default ascending index order:
-    //   1. it kept the OLDEST 400 rows per tool, so a busy tenant's p95 described the first days of
-    //      a 90-day window and a late regression was invisible; and
-    //   2. `take(CAP)` cannot tell "exactly 400 rows" from "400 of 5,000", so the truncation never
-    //      reached the payload — `percentile`'s `excluded` counts only values it was HANDED, and
-    //      can never disclose rows the query never returned.
-    // `capped()` is applied PER TOOL (the flat array can legitimately reach 6 × 400) and the six
-    // partial flags are OR'd into one bound that ships beside the number.
-    const perTool = await Promise.all(
-      TIMED_TOOLS.map((tool) =>
-        ctx.db
-          .query("agentSteps")
-          .withIndex("by_tenant_tool_startedAt", (q) =>
-            q
-              .eq("tenantId", ctx.tenantId)
-              .eq("tool", tool)
-              .gte("startedAt", window.sinceMs)
-              .lt("startedAt", window.untilMs),
-          )
-          .order("desc")
-          .take(STEP_CAP + 1),
-      ),
-    );
-    const stepPages = perTool.map((rows) => capped(rows, STEP_CAP));
-    const steps = stepPages.flatMap((page) => page.counted);
-    const stepsTruncated = stepPages.some((page) => page.bound.partial);
+  const terminal = capped(terminals, TELEMETRY_CAP);
+  const sent = capped(sends, SEND_CAP);
+  const open = capped(dlq, DLQ_CAP);
+  const rated = capped(feedbackRows, FEEDBACK_CAP);
 
-    const terminal = capped(terminals, TELEMETRY_CAP);
-    const sent = capped(sends, SEND_CAP);
-    const open = capped(dlq, DLQ_CAP);
-    const rated = capped(feedbackRows, FEEDBACK_CAP);
-
-    // Gate decisions, summed over the CORRECTED key set. A decision literal outside the set is
-    // counted as `other` rather than dropped, because a silent drop is exactly the shipped defect
-    // this constant exists to stop repeating.
-    const decisions: Record<string, number> = {};
-    let otherDecisions = 0;
-    for (const row of terminal.counted) {
-      for (const [key, count] of Object.entries(row.decisionCounts ?? {})) {
-        if (typeof count !== "number") continue;
-        if (DECISION_KEYS.includes(key)) {
-          decisions[key] = (decisions[key] ?? 0) + count;
-        } else {
-          otherDecisions += count;
-        }
+  // Gate decisions, summed over the CORRECTED key set. A decision literal outside the set is
+  // counted as `other` rather than dropped, because a silent drop is exactly the shipped defect
+  // this constant exists to stop repeating.
+  const decisions: Record<string, number> = {};
+  let otherDecisions = 0;
+  for (const row of terminal.counted) {
+    for (const [key, count] of Object.entries(row.decisionCounts ?? {})) {
+      if (typeof count !== "number") continue;
+      if (DECISION_KEYS.includes(key)) {
+        decisions[key] = (decisions[key] ?? 0) + count;
+      } else {
+        otherDecisions += count;
       }
     }
+  }
 
-    const outcomes: Record<string, number> = {};
-    for (const row of terminal.counted) {
-      outcomes[row.reviewOutcome] = (outcomes[row.reviewOutcome] ?? 0) + 1;
-    }
+  const outcomes: Record<string, number> = {};
+  for (const row of terminal.counted) {
+    outcomes[row.reviewOutcome] = (outcomes[row.reviewOutcome] ?? 0) + 1;
+  }
 
-    return {
-      window,
-      delivery: {
-        // The SENT-MAIL record's headline. RPRT-01 took ownership of it from CONT-01 on 2026-08-22:
-        // delivery is a record of what happened, and a sent message cannot be "reused" without
-        // re-sending it — the one thing the Content lane forbids.
-        sentCount: sent.counted.length,
-        bound: sent.bound,
-        coverage: coverageLabel({
-          sinceMs: window.sinceMs,
-          untilMs: window.untilMs,
-          earliestRowAtMs: await earliestAt(oldestSend),
-        }),
-      },
-      review: {
-        terminals: terminal.counted.length,
-        outcomes,
-        decisions,
-        // Named, not hidden: a decision literal this build does not know about still moves a
-        // number, and the reader can see that it did.
-        otherDecisions,
-        bound: terminal.bound,
-        coverage: coverageLabel({
-          sinceMs: window.sinceMs,
-          untilMs: window.untilMs,
-          earliestRowAtMs: await earliestAt(oldestTelemetry),
-        }),
-      },
-      latency: {
-        ...percentile({
-          // NOT `telemetry.durationMs`: the delivery terminal writes `durationMs: 0` and
-          // `usages: []` outright, so a cockpit-only tenant would get a confident and flattering
-          // 0 ms. Agent steps carry a real measured duration, and `percentile` drops the
-          // unmeasured ones by name.
-          values: steps.map((step) => step.durationMs),
-          p: 0.95,
-          population: `p95 over ${TIMED_TOOLS.length} timed tools`,
-        }),
-        // A p95 over a truncated sample is the newest `STEP_CAP` per tool, not the window. Said
-        // out loud rather than left to look complete.
-        truncated: stepsTruncated,
-      },
-      deadLetters: {
-        openNow: open.counted.length,
-        bound: open.bound,
-        // Deliberately absent: a windowed dead-letter count. See the read above.
-        windowed: false as const,
-      },
-      feedback: {
-        rated: rated.counted.length,
-        positive: rated.counted.filter((row) => row.rating === "up").length,
-        negative: rated.counted.filter((row) => row.rating === "down").length,
-        bound: rated.bound,
-        coverage: coverageLabel({
-          sinceMs: window.sinceMs,
-          untilMs: window.untilMs,
-          earliestRowAtMs: await earliestAt(oldestFeedback),
-        }),
-      },
-      // Reasoning cost is NOT summed here. It belongs to the append-only ledger with its own
-      // coverage start (`finance.summary`), and a second sum over a different source is how two
-      // surfaces come to disagree about what the tenant spent. What this page reports is whether
-      // the window is inside coverage at all, so the card can link out honestly.
-      spend: {
-        coverage: coverageLabel({
-          sinceMs: window.sinceMs,
-          untilMs: window.untilMs,
-          earliestRowAtMs: null,
-          coverageStartedAtMs: spendStartedAt,
-        }),
-        readAt: "/dashboard/finance?tab=spend" as const,
-      },
-    };
-  },
+  return {
+    window,
+    delivery: {
+      // The SENT-MAIL record's headline. RPRT-01 took ownership of it from CONT-01 on 2026-08-22:
+      // delivery is a record of what happened, and a sent message cannot be "reused" without
+      // re-sending it — the one thing the Content lane forbids.
+      sentCount: sent.counted.length,
+      bound: sent.bound,
+      coverage: coverageLabel({
+        sinceMs: window.sinceMs,
+        untilMs: window.untilMs,
+        earliestRowAtMs: await earliestAt(oldestSend),
+      }),
+    },
+    review: {
+      terminals: terminal.counted.length,
+      outcomes,
+      decisions,
+      // Named, not hidden: a decision literal this build does not know about still moves a
+      // number, and the reader can see that it did.
+      otherDecisions,
+      bound: terminal.bound,
+      coverage: coverageLabel({
+        sinceMs: window.sinceMs,
+        untilMs: window.untilMs,
+        earliestRowAtMs: await earliestAt(oldestTelemetry),
+      }),
+    },
+    latency: {
+      ...percentile({
+        // NOT `telemetry.durationMs`: the delivery terminal writes `durationMs: 0` and
+        // `usages: []` outright, so a cockpit-only tenant would get a confident and flattering
+        // 0 ms. Agent steps carry a real measured duration, and `percentile` drops the
+        // unmeasured ones by name.
+        values: steps.map((step) => step.durationMs),
+        p: 0.95,
+        population: `p95 over ${TIMED_TOOLS.length} timed tools`,
+      }),
+      // A p95 over a truncated sample is the newest `STEP_CAP` per tool, not the window. Said
+      // out loud rather than left to look complete.
+      truncated: stepsTruncated,
+    },
+    deadLetters: {
+      openNow: open.counted.length,
+      bound: open.bound,
+      // Deliberately absent: a windowed dead-letter count. See the read above.
+      windowed: false as const,
+    },
+    feedback: {
+      rated: rated.counted.length,
+      positive: rated.counted.filter((row) => row.rating === "up").length,
+      negative: rated.counted.filter((row) => row.rating === "down").length,
+      bound: rated.bound,
+      coverage: coverageLabel({
+        sinceMs: window.sinceMs,
+        untilMs: window.untilMs,
+        earliestRowAtMs: await earliestAt(oldestFeedback),
+      }),
+    },
+    // Reasoning cost is NOT summed here. It belongs to the append-only ledger with its own
+    // coverage start (`finance.summary`), and a second sum over a different source is how two
+    // surfaces come to disagree about what the tenant spent. What this page reports is whether
+    // the window is inside coverage at all, so the card can link out honestly.
+    spend: {
+      coverage: coverageLabel({
+        sinceMs: window.sinceMs,
+        untilMs: window.untilMs,
+        earliestRowAtMs: null,
+        coverageStartedAtMs: spendStartedAt,
+      }),
+      readAt: "/dashboard/finance?tab=spend" as const,
+    },
+  };
+}
+
+/** The tenant-facing card. A ONE-LINE caller on purpose: the read is `readOperations`, only there. */
+export const operations = tenantQuery({
+  args: windowArgs,
+  handler: async (ctx, args) => readOperations(ctx, ctx.tenantId, resolve(args)),
 });
 
 const SENT_MAIL_PAGE = 50;

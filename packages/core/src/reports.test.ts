@@ -3,7 +3,10 @@
 // Every test here exists because a naive implementation of the same metric would report a number
 // that is NOT TRUE. The names say which lie is being prevented.
 import { describe, expect, test } from "vitest";
+import { DASHBOARD_STATE_COPY, type DashboardBound } from "./dashboard";
 import {
+  type BoardPackInput,
+  buildBoardPackMarkdown,
   compareSnapshots,
   completenessOver,
   coverageLabel,
@@ -259,5 +262,309 @@ describe("coverage — a window a source cannot answer for says so", () => {
     expect(
       coverageLabel({ ...window, earliestRowAtMs: 5 * DAY, coverageStartedAtMs: 9 * DAY }),
     ).toEqual({ state: "covered" });
+  });
+});
+
+// ── BOARD PACK (26-16) ────────────────────────────────────────────────────────────────
+//
+// The pack LEAVES the product, so every test here names a sentence the pack must never print.
+// A number with no coverage beside it is the defect this phase keeps re-shipping.
+
+const PACK_TZ = "UTC";
+const PACK_WINDOW = {
+  sinceMs: 10 * DAY,
+  untilMs: 20 * DAY,
+  timeZone: PACK_TZ,
+  timeZoneSource: "browser-fallback" as const,
+};
+
+const bound = (over: Partial<DashboardBound> = {}): DashboardBound => ({
+  returned: 3,
+  limit: 10,
+  nextCursor: null,
+  partial: false,
+  ...over,
+});
+
+const covered = { state: "covered" } as const;
+
+/** A fully covered, flag-free pack. Every test overrides exactly the one thing it is about. */
+function input(
+  over: {
+    business?: Partial<BoardPackInput["business"]>;
+    operations?: Partial<BoardPackInput["operations"]>;
+    audit?: BoardPackInput["audit"];
+  } = {},
+): BoardPackInput {
+  return {
+    asOf: PACK_WINDOW.untilMs,
+    window: PACK_WINDOW,
+    business: {
+      blueprint: { state: "not-built" },
+      evaluation: { state: "no-review-run" },
+      ...over.business,
+    },
+    operations: {
+      delivery: { sentCount: 3, bound: bound(), coverage: covered },
+      review: {
+        terminals: 2,
+        decisions: { approve: 2, edit_text: 1 },
+        otherDecisions: 0,
+        bound: bound(),
+        coverage: covered,
+      },
+      latency: {
+        state: "known",
+        value: 1200,
+        included: 9,
+        excluded: 1,
+        population: "p95 over 6 timed tools",
+        truncated: false,
+      },
+      deadLetters: { openNow: 0, bound: bound({ returned: 0 }), windowed: false },
+      feedback: { rated: 4, positive: 3, negative: 1, bound: bound(), coverage: covered },
+      spend: { coverage: covered, readAt: "/dashboard/finance?tab=spend" },
+      ...over.operations,
+    },
+    audit: over.audit ?? { rows: [], nextCursor: null },
+  };
+}
+
+const lineWith = (markdown: string, needle: string): string =>
+  markdown.split("\n").find((l) => l.includes(needle)) ?? "";
+
+describe("buildBoardPackMarkdown", () => {
+  test("a count whose coverage is UNKNOWN renders the reason and never a number", () => {
+    // "0 sent" and "we were not watching" are the same bytes and different facts. This pack is a
+    // file the owner forwards to someone else — the wrong one of those is a claim they repeat.
+    for (const [reason, phrase] of [
+      ["not-started", "instrumentation had not started"],
+      ["window-precedes-coverage", "the window ends before measurement began"],
+    ] as const) {
+      const { markdown } = buildBoardPackMarkdown(
+        input({
+          operations: {
+            ...input().operations,
+            delivery: {
+              sentCount: 0,
+              bound: bound({ returned: 0 }),
+              coverage: { state: "unknown", reason },
+            },
+          },
+        }),
+      );
+      const line = lineWith(markdown, "Messages sent in the window:");
+      expect(line).toContain(phrase);
+      expect(line).not.toMatch(/\d/);
+    }
+  });
+
+  test("a PARTIAL bound renders a floor, never a bare number", () => {
+    const { markdown } = buildBoardPackMarkdown(
+      input({
+        operations: {
+          ...input().operations,
+          delivery: {
+            sentCount: 1000,
+            bound: bound({ returned: 1000, limit: 1000, partial: true, partialReason: "row-cap" }),
+            coverage: covered,
+          },
+        },
+      }),
+    );
+    const line = lineWith(markdown, "Messages sent in the window:");
+    expect(line).toContain("at least 1000");
+    expect(line).toContain(DASHBOARD_STATE_COPY.partial.label);
+    expect(line).not.toBe("Messages sent in the window: 1000.");
+  });
+
+  test("a PARTIAL coverage says since when, so a late denominator is visible", () => {
+    const { markdown } = buildBoardPackMarkdown(
+      input({
+        operations: {
+          ...input().operations,
+          feedback: {
+            rated: 4,
+            positive: 3,
+            negative: 1,
+            bound: bound(),
+            coverage: { state: "partial", reason: "coverage-gap", coveredSinceMs: 15 * DAY },
+          },
+        },
+      }),
+    );
+    expect(lineWith(markdown, "Rated in the window:")).toContain("partial since 1970-01-16");
+  });
+
+  test("dead letters render as OPEN NOW, never as a window count", () => {
+    // `windowed: false` is a type-level statement. Printing this number inside a window section
+    // would claim the tenant had N failures during those days; it is point-in-time.
+    const { markdown } = buildBoardPackMarkdown(input());
+    expect(lineWith(markdown, "open right now")).toContain("open right now (not a window count)");
+  });
+
+  test("an UNKNOWN latency prints its `needs` string and never a millisecond figure", () => {
+    const { markdown } = buildBoardPackMarkdown(
+      input({
+        operations: {
+          ...input().operations,
+          latency: {
+            state: "unknown",
+            needs: "at least 5 measured values",
+            included: 2,
+            excluded: 0,
+            population: "p95 over 6 timed tools",
+            truncated: false,
+          },
+        },
+      }),
+    );
+    const line = lineWith(markdown, "p95 tool latency:");
+    expect(line).toContain("at least 5 measured values");
+    expect(line).not.toMatch(/\d+\s*ms/);
+  });
+
+  test("the review table is DERIVED from the decisions record, and otherDecisions is never dropped", () => {
+    // 26-14 shipped a permanent `edit: 0` by hand-typing a copy of a closed set. The pack must
+    // inherit the derivation, and a literal this build does not know must still be visible.
+    const { markdown } = buildBoardPackMarkdown(
+      input({
+        operations: {
+          ...input().operations,
+          review: {
+            terminals: 7,
+            decisions: { send_as_is: 4, edit_text: 2 },
+            otherDecisions: 1,
+            bound: bound(),
+            coverage: covered,
+          },
+        },
+      }),
+    );
+    expect(markdown).toContain("| send_as_is | 4 |");
+    expect(markdown).toContain("| edit_text | 2 |");
+    expect(markdown).toContain("| other (unrecognised literal) | 1 |");
+    // A key nothing wrote must not appear with a manufactured zero.
+    expect(markdown).not.toContain("| edit | 0 |");
+    // Sorted, so the bytes are stable regardless of insertion order.
+    expect(markdown.indexOf("| edit_text |")).toBeLessThan(markdown.indexOf("| send_as_is |"));
+  });
+
+  test("a segment with no fields renders `Not tracked yet`, never 0/0", () => {
+    const { markdown } = buildBoardPackMarkdown(
+      input({
+        business: {
+          blueprint: {
+            state: "live",
+            facts: { filled: 2, total: 11, missing: ["offer", "pricing"] },
+            segments: [
+              { id: "leads", label: "Leads", filled: 0, total: 0 },
+              { id: "offer", label: "Offer", filled: 1, total: 3 },
+            ],
+          },
+          evaluation: { state: "no-review-run" },
+        },
+      }),
+    );
+    expect(markdown).toContain("| Leads | Not tracked yet |");
+    expect(markdown).toContain("| Offer | 1 of 3 |");
+    expect(markdown).not.toContain("0 of 0");
+  });
+
+  test("an INCOMPARABLE movement prints its reason and never reads as stability", () => {
+    const { markdown } = buildBoardPackMarkdown(
+      input({
+        business: {
+          blueprint: { state: "not-built" },
+          evaluation: {
+            state: "run",
+            framework: "growth-os",
+            verdict: "gaps",
+            findingCount: 6,
+            createdAt: 12 * DAY,
+            scorecard: { filled: 5, total: 8, missing: ["financials.cac"] },
+            movement: { state: "incomparable", reason: "verdict-insufficient" },
+          },
+        },
+      }),
+    );
+    const line = lineWith(markdown, "Movement since the previous run:");
+    expect(line).toContain("not comparable (verdict-insufficient)");
+    expect(markdown).not.toContain("no change");
+  });
+
+  test("spend renders coverage and the readAt pointer, and NEVER a total", () => {
+    // A second sum over a different source is how two surfaces come to disagree about what the
+    // tenant spent. The pack points at the ledger instead of restating it.
+    const { markdown } = buildBoardPackMarkdown(input());
+    const line = lineWith(markdown, "Coverage:");
+    expect(line).toContain("/dashboard/finance?tab=spend");
+    expect(markdown).not.toContain("$");
+    expect(markdown.toLowerCase()).not.toContain("cents");
+  });
+
+  test("the markdown is byte-identical for the same input", () => {
+    // The content hash is the replay key. Any clock, ambient locale or unordered iteration in the
+    // builder would silently turn every regeneration into a second artifact.
+    const a = buildBoardPackMarkdown(input());
+    const b = buildBoardPackMarkdown(input());
+    expect(a.markdown).toBe(b.markdown);
+    expect(a.title).toBe(b.title);
+  });
+
+  test("partialSections counts every raised flag EXACTLY once", () => {
+    expect(buildBoardPackMarkdown(input()).partialSections).toBe(0);
+
+    const three = buildBoardPackMarkdown(
+      input({
+        operations: {
+          ...input().operations,
+          // flag 1: a capped scan
+          review: {
+            terminals: 2000,
+            decisions: {},
+            otherDecisions: 0,
+            bound: bound({ returned: 2000, limit: 2000, partial: true, partialReason: "row-cap" }),
+            coverage: covered,
+          },
+          // flag 2: a truncated latency sample
+          latency: {
+            state: "known",
+            value: 900,
+            included: 400,
+            excluded: 0,
+            population: "p95 over 6 timed tools",
+            truncated: true,
+          },
+        },
+        // flag 3: more governance rows than one page
+        audit: { rows: [], nextCursor: "v1:123:abc" },
+      }),
+    );
+    expect(three.partialSections).toBe(3);
+    expect(three.markdown).toContain("3 figure(s) below are a floor");
+  });
+
+  test("governance rows carry when/event/actor only, and a next page says so", () => {
+    const { markdown } = buildBoardPackMarkdown(
+      input({
+        audit: {
+          rows: [{ ts: 12 * DAY, eventType: "gmail.sent", actor: "you" }],
+          nextCursor: "v1:123:abc",
+        },
+      }),
+    );
+    expect(markdown).toContain("| 1970-01-13 00:00 | gmail.sent | you |");
+    expect(markdown).toContain("More events not shown");
+  });
+
+  test("an empty section says so in the code-owned words, never with a bare zero", () => {
+    const { markdown } = buildBoardPackMarkdown(input());
+    expect(markdown).toContain(
+      `${DASHBOARD_STATE_COPY.empty.label} — no blueprint has been confirmed.`,
+    );
+    expect(markdown).toContain(
+      `${DASHBOARD_STATE_COPY.empty.label} — no governance events in this window.`,
+    );
   });
 });

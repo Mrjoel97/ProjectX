@@ -1,5 +1,41 @@
 # Playbook: Knowledge Vault & GraphRAG
 
+> Last verified: 2026-08-22 (26-16 — **the board pack lands on the created-doc rail, unchanged.**)
+>
+> - A board pack is written through `vault.insertCreatedDoc` with NO edit to that mutation:
+>   `origin: "agent"`, `status: "ready"`, `mimeType: "text/markdown"` as the artifact of record,
+>   `storedMimeType: "application/pdf"` for the bytes in `storageId`, and
+>   `kind: "created_document"` — already inside `content.ts`'s POSITIVE `LANE_BY_KIND` whitelist, so
+>   the Content shelf, the preview and the promotion control all work with zero new code. A new
+>   `kind: "board_pack"` would have landed OUTSIDE that whitelist and been silently absent from the
+>   shelf: the 26-13 "images missing from the shelf" defect, repeated.
+> - **Non-groundability remains the ABSENT `startIngest`**, never an origin predicate in retrieval.
+>   `reportPack.ts` / `reportPackData.ts` must never call it; a scan checks the modules' CODE (with
+>   comment lines stripped, so the prose that documents the invariant does not fail the scan) and a
+>   behavioural test pins `status: "ready"`, `ragEntryId` undefined and zero `graphNodes` /
+>   `vaultSources`. WARNING: `_scheduled_functions` is NOT the discriminator on this rail —
+>   `workflow.start` schedules INSIDE the workflow component, so the ROOT scheduler stays empty for a
+>   real ingest too (measured, not assumed). The non-vacuity proof is a sibling test that PROMOTES
+>   the pack and shows the same fields flip to `agent_promoted` / `processing`. The `startIngest`
+>   call-site count is UNCHANGED.
+> - `reportPackData.landPack` adds a content-hash dedup this rail previously lacked, which NARROWS
+>   (does not remove) the ceiling documented further down this file: two byte-identical packs are now
+>   ONE row. **The scope is `origin === "agent"` OR `"agent_promoted"`, and admitting only
+>   `"agent"` was a real bug caught in review:** `promoteToReference` patches this very row's
+>   origin, so a guard admitting only `"agent"` stops recognising the pack the moment the user
+>   promotes it — regenerate the same window and it inserts a DUPLICATE, and every regeneration
+>   after that inserts another. Promotion is a trust decision the user took ABOUT the artifact,
+>   not a change of authorship. The lookup is `.take()` + `.find()` rather than `.first()` for the
+>   same reason one step out: `.first()` returns whatever the index orders first, so one foreign
+>   row sharing the hash would mask ours. A byte-identical user upload is still never a pack.
+> - **No audit row is written from `vault.ts`** — the vault content plane stays log-free by
+>   construction (`vaultRedaction.test.ts` scans for it) and the CALLER audits. `reportPack.ts`
+>   writes `report.pack_generated`.
+> - Download reuses `api.vault.vaultDownloadUrl` unchanged; there is no new URL surface, and a
+>   foreign tenant gets `null` rather than a distinguishable error (no existence oracle).
+>
+
+
 > Last verified: 2026-08-21 (25.1-03, D5 — **a new agent-written doc kind: `image`.**
 > The generated-media plane now files BOTH of its deliverables here.)
 >

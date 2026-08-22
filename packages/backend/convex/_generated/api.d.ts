@@ -72,6 +72,8 @@ import type * as reliabilitySweep from "../reliabilitySweep.js";
 import type * as render_assembleScript from "../render/assembleScript.js";
 import type * as render_burnCapsScript from "../render/burnCapsScript.js";
 import type * as render_renderReel from "../render/renderReel.js";
+import type * as reportPack from "../reportPack.js";
+import type * as reportPackData from "../reportPackData.js";
 import type * as reportsBusiness from "../reportsBusiness.js";
 import type * as reportsGovernance from "../reportsGovernance.js";
 import type * as requests from "../requests.js";
@@ -178,6 +180,8 @@ declare const fullApi: ApiFromModules<{
   "render/assembleScript": typeof render_assembleScript;
   "render/burnCapsScript": typeof render_burnCapsScript;
   "render/renderReel": typeof render_renderReel;
+  reportPack: typeof reportPack;
+  reportPackData: typeof reportPackData;
   reportsBusiness: typeof reportsBusiness;
   reportsGovernance: typeof reportsGovernance;
   requests: typeof requests;

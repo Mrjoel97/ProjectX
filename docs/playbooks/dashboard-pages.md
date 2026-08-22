@@ -1,5 +1,80 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-22 (26-16 — **THE BOARD PACK: ONE TRANSACTION, ONE ARTIFACT, NO SNAPSHOT
+> TABLE.** `convex/reportPack.ts` (`"use node"`, actions only) + `convex/reportPackData.ts` (its DB
+> half) + `buildBoardPackMarkdown` / `BoardPackInput` in `packages/core/src/reports.ts`.
+>
+> **THE SNAPSHOT IS A TRANSACTION, NOT A TABLE.** 26-02 decided it and this plan implements it:
+> Convex read transactions are serializable, so ONE `internalQuery` (`reportPackData.snapshot`)
+> across all three planes IS the immutable input. It calls PLAIN lifted functions —
+> `readBusiness` / `readOperations` (`reportsBusiness.ts`) and `readAuditPage`
+> (`reportsGovernance.ts`) — the `blueprint.readLiveForTenant` shape, for its two stated reasons: a
+> tenantQuery cannot `runQuery` an internalQuery, and a second reader of the same rows is how two
+> surfaces come to disagree. **The tenantQuery wrappers must stay one-liners.** If read logic ever
+> creeps back into a handler, the pack and the page start drifting apart silently.
+> A source scan pins `ctx.runQuery` to EXACTLY ONE call in `reportPack.ts`; that scan, not the
+> Promise.all race test, is what carries the atomicity claim (a deterministic scheduler can make the
+> race observe "neither" forever, and that is said out loud in the test).
+>
+> **TWO MODULES, AND THE SPLIT IS FORCED.** `markdownToPdf` lives in `llm.ts` behind a top-level
+> `node:crypto` import, so `reportPack.ts` must be `"use node"` — and a node module may hold ONLY
+> actions. The internalQuery and internalMutation therefore live in `reportPackData.ts`. Same split
+> as `media.ts` / `mediaComplete.ts`; do not try to merge them.
+>
+> **`asOf = window.untilMs`, NEVER A WALL CLOCK.** A `Date.now()` asOf makes every regeneration
+> produce different markdown, different bytes and a different hash — which destroys the replay key
+> and turns every double-click into a second artifact. Pinned to the window, the markdown is a pure
+> function of (window, data), and `markdownToPdf` is already byte-deterministic. The generation
+> instant lives on the vault row's `createdAt`, where a fact about the render belongs.
+>
+> **REPLAY = CONTENT HASH, CHECKED INSIDE THE WRITE TRANSACTION.** `landPack` looks up
+> `by_tenant_contentHash` (shipped index, no new field, no new table) and returns the existing
+> `vaultDocId` with `replayed: true`; the action then deletes the orphan blob it had already staged.
+> The `origin === "agent" && storageId` narrowing stops a byte-identical USER UPLOAD from being
+> handed back as a pack. Consequence to know: the key is the CONTENT, so two clicks with different
+> `untilMs` are two different reports by definition — a caller must pass ONE resolved absolute
+> window per page render, or the vault fills with near-duplicates.
+>
+> **HONEST NUMBERS ARE ENFORCED BY TYPE.** Every count in `BoardPackInput` is declared beside its
+> `DashboardBound` and its `CoverageLabel`, and `snapshot` ends in `satisfies BoardPackInput`: if
+> the read plane ever drops a bound, the BUILD breaks. The builder renders the coverage REASON
+> instead of a number when coverage is unknown, `at least N` (+ `DASHBOARD_STATE_COPY.partial.label`)
+> for a capped scan, "open right now (not a window count)" for the point-in-time dead-letter figure,
+> `Percentile.needs` verbatim for an unmeasurable p95, "Not tracked yet" for a zero-field segment,
+> the movement REASON for an incomparable pair, and spend's coverage + a POINTER but never a total.
+> The review table is derived from `Object.entries(decisions)` with an `otherDecisions` row — no
+> decision literal is typed in the builder (the 26-14 permanent `edit: 0`). `partialSections` is
+> counted ONCE by the builder and reused by the audit payload.
+>
+> **WHAT THE PACK DELIBERATELY EXCLUDES, and why.** `wormExport` (reads `audit.by_ts` with NO tenant
+> predicate — its figures aggregate other tenants) and `activeSkills` (deployment-global registry
+> state): once bytes are inside a vault row they are tenant-owned, retrieval is tenant-scoped and
+> there is no owner predicate on a vault doc, so an owner-gated fact placed there is permanently
+> readable with no gate left to apply — and re-gating later means DELETING stored artifacts. There
+> is also no `ownerAction` to authorize one (`lib/functions.ts`: an action has no `ctx.db`). The
+> `sentMail` rows are out too: a 50-row page rendered against a 1000-row `sentCount` prints a floor
+> as a ratio, and the recipient address is a personal identifier in a file that leaves the product.
+> A scan asserts neither pack module even names those surfaces.
+>
+> **FAILURE.** A render failure stores nothing, writes no vault row and no audit row, logs the error
+> NAME only, and returns `{ok:false, reason:"render_failed"}`. An impossible window is
+> `window_invalid`, produced by resolving the window in the action BEFORE the read — so a DB failure
+> can never be reported as a bad window. The refusal union has exactly those two members: a
+> `generation_disabled` reason nothing can produce would be a lie in a discriminated union.
+>
+> **RETENTION AND ROLLBACK.** There is no feature flag and no kill-switch env var here. Generation
+> is disabled at the route/nav (26-17) or by reverting these modules; existing packs are ordinary
+> tenant vault rows that nothing on this rail patches, replaces or deletes — scan-enforced in
+> `reportPack.test.ts` — and audit is insert-only by module. So "disable generation while existing
+> artifacts stay immutable" is a property of the code, not a promise.
+>
+> **VERIFY:** `cd packages/backend && npx vitest run convex/reportPack.test.ts` (19),
+> `npx vitest run convex/reportsBusiness.test.ts convex/reportsGovernance.test.ts` — those two must
+> stay green UNMODIFIED, which is the proof the lift was behaviour-preserving —
+> `cd packages/core && npx vitest run src/reports.test.ts` (33), then `npx tsc --noEmit`.)
+>
+
+
 > Last verified: 2026-08-22 (26-15 — **THE GOVERNANCE READ PLANE.**
 > `convex/reportsGovernance.ts`: `auditPage` (tenantQuery, cursor-paginated over
 > `audit.by_tenant_ts`, every row through `projectAuditRow` BEFORE it can be serialized — there is

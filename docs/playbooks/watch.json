@@ -99,6 +99,7 @@
     "packages/backend/convex/reportsGovernance.ts",
     "packages/backend/convex/reportsGovernance.test.ts",
     "packages/backend/convex/reportPack.ts",
+    "packages/backend/convex/reportPackData.ts",
     "packages/backend/convex/reportPack.test.ts",
     "packages/backend/convex/home.ts",
     "packages/backend/convex/home.test.ts",
