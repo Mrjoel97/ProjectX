@@ -1037,6 +1037,8 @@ describe("the dashboard route mounts the Command Center", () => {
 
   test("the legacy dashboard file is deleted, not orphaned beside the live one", () => {
     // An unrendered second home is a maintenance trap and a source of "which one is real?".
-    expect(existsSync(fileURLToPath(new URL("./LegacyDashboard.tsx", import.meta.url)))).toBe(false);
+    expect(existsSync(fileURLToPath(new URL("./LegacyDashboard.tsx", import.meta.url)))).toBe(
+      false,
+    );
   });
 });

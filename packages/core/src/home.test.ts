@@ -331,10 +331,7 @@ describe("rollUpHealth", () => {
  * page, "Nothing needs your decision right now." These tests are the acceptance property.
  */
 describe("recommendNextMove never all-clears over an incomplete signal set", () => {
-  const ALL_CLEAR_COPY = [
-    EXPECTED_COPY.workspace.label,
-    EXPECTED_COPY.workspace.reason,
-  ];
+  const ALL_CLEAR_COPY = [EXPECTED_COPY.workspace.label, EXPECTED_COPY.workspace.reason];
   const allOk = (): HomeSignal[] =>
     REQUIRED_HOME_SIGNALS.map((code) => ({ code, state: "ok" as const }));
   const rendered = (rec: { label: string; reason: string }) => `${rec.label}

@@ -815,10 +815,12 @@ describe("26-11 promoteToReference", () => {
     // `origin` ABSENT is exactly what a user upload is — seedDoc's default.
     const docId = await seedDoc(t);
 
-    expect(await asTenant(t).mutation(api.vault.promoteToReference, { vaultDocId: docId })).toEqual({
-      ok: false,
-      reason: "ineligible",
-    });
+    expect(await asTenant(t).mutation(api.vault.promoteToReference, { vaultDocId: docId })).toEqual(
+      {
+        ok: false,
+        reason: "ineligible",
+      },
+    );
     expect(started).toHaveLength(0);
   });
 
@@ -828,10 +830,12 @@ describe("26-11 promoteToReference", () => {
     // already ingested; promoting it would start a second ingest for the same row.
     const docId = await seedDoc(t, { origin: "folder_digest", status: "ready" });
 
-    expect(await asTenant(t).mutation(api.vault.promoteToReference, { vaultDocId: docId })).toEqual({
-      ok: false,
-      reason: "ineligible",
-    });
+    expect(await asTenant(t).mutation(api.vault.promoteToReference, { vaultDocId: docId })).toEqual(
+      {
+        ok: false,
+        reason: "ineligible",
+      },
+    );
     expect(started).toHaveLength(0);
   });
 

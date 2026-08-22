@@ -804,9 +804,7 @@ export const ownedDocsMeta = internalQuery({
   handler: async (
     ctx,
     { tenantId, docIds },
-  ): Promise<
-    { _id: Id<"vaultDocuments">; title: string; category: string; origin?: string }[]
-  > => {
+  ): Promise<{ _id: Id<"vaultDocuments">; title: string; category: string; origin?: string }[]> => {
     const out: {
       _id: Id<"vaultDocuments">;
       title: string;

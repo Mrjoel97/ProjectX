@@ -390,8 +390,10 @@ describe("runEvaluation (BEVL-01 — grounded assessment persists a cited row)",
       threadId: `${THREAD}_promoted`,
     });
     const cited = (row?.findings ?? []).filter((f) => f.citationDocId === docId);
-    expect(cited.length, "nothing cited the promoted doc — the assertion below is vacuous").
-      toBeGreaterThanOrEqual(1);
+    expect(
+      cited.length,
+      "nothing cited the promoted doc — the assertion below is vacuous",
+    ).toBeGreaterThanOrEqual(1);
     for (const f of cited) {
       expect(f.source).toBe("agent-relayed");
       expect(f.confidence).toBe("high");

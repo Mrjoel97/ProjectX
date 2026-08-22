@@ -1457,7 +1457,10 @@ describe("runResearch — the scheduled entry point inherits every guard (16-06 
     const brief = (await t.run((ctx) => ctx.db.query("vaultDocuments").collect())).find(
       (d) => d.kind === "web_research",
     );
-    expect(brief, "no research brief was persisted -- the assertions below would be vacuous").toBeDefined();
+    expect(
+      brief,
+      "no research brief was persisted -- the assertions below would be vacuous",
+    ).toBeDefined();
     expect(brief?.sourceThreadId).toBe(THREAD);
     expect(brief?.sourceThreadId).not.toBe(ROOT);
     expect(brief?.sourcePlanId).toBe(planId);

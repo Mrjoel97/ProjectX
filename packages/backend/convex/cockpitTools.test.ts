@@ -1829,9 +1829,7 @@ test("createDocument(long) saves ONE governed vault artifact with a derived PDF 
   // thread's provenance. MUTATION: drop the two fields at the insertCreatedDoc call site in llm.ts
   // and this reddens while createdDocs.test.ts stays green. That asymmetry is the whole point.
   expect(doc.sourcePlanId).toBe(planId);
-  expect(doc.sourceThreadId).toBe(
-    await t.run(async (ctx) => (await ctx.db.get(planId))?.threadId),
-  );
+  expect(doc.sourceThreadId).toBe(await t.run(async (ctx) => (await ctx.db.get(planId))?.threadId));
   expect(doc.storageId).toBeDefined(); // ⇒ PreviewModal's canDownload is true, for free
   expect(await t.run((ctx) => ctx.storage.getUrl(doc.storageId!))).not.toBeNull();
 

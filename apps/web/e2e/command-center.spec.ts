@@ -153,7 +153,11 @@ const LADDER = [
   { code: "stale-approval", label: "Answer the waiting approval", route: "/dashboard/approvals" },
   { code: "scheduled-risk", label: "Check the scheduled sends", route: "/dashboard/approvals" },
   { code: "diagnostic-blocker", label: "Fix the failing gate", route: "/dashboard/reports" },
-  { code: "binding-constraint", label: "Name your binding constraint", route: "/dashboard/profile" },
+  {
+    code: "binding-constraint",
+    label: "Name your binding constraint",
+    route: "/dashboard/profile",
+  },
   { code: "workspace", label: "Open the workspace", route: "/dashboard/workspace" },
 ] as const;
 
