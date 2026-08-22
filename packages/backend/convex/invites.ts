@@ -21,7 +21,7 @@
 import type { AnyDataModel, GenericMutationCtx } from "convex/server";
 import { v } from "convex/values";
 import type { DataModel, Id } from "./_generated/dataModel";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { ownerMutation, ownerQuery } from "./lib/functions";
 
 /** Crockford-style: no I, L, O or U, so a code read off a screen cannot be mistyped into another
@@ -246,6 +246,43 @@ export const approve = ownerMutation({
     });
     await ctx.db.patch(args.waitlistId, { status: "approved", approvedAt: Date.now() });
     return { inviteId, code, email: row.email };
+  },
+});
+
+/**
+ * E2E SEAM (26-17): mint an invite for one address without an owner session.
+ *
+ * WHY IT EXISTS: `/signup` is invite-gated (BETA-01), and the only issuance path is
+ * `approve`, an `ownerMutation`. Playwright's `auth.setup.ts` signs in through the real form
+ * and therefore needs an account it can create, but `npx convex run` is unauthenticated, so it
+ * can never call `approve`. Without this seam the browser gate is unrunnable on a fresh
+ * deployment — which is exactly where it was on 2026-08-22 when the stored storageState expired.
+ *
+ * **THIS IS NOT AN AUTHORIZATION HOLE, and the reason is structural rather than a promise:**
+ * `internalMutation` is not client-callable (`isolation.test.ts` scans for exactly that), so it
+ * is reachable only from the CLI against a deployment someone already has credentials for. It also
+ * mints nothing new — it writes the same `betaInvites` row `approve` writes, using the same
+ * `mintCode()`, so an invite from here is indistinguishable downstream and `admitIdentity`
+ * remains the boundary. The `__` prefix and this comment are the convention
+ * `onboarding.__seedOnboardedTenant` established.
+ *
+ * Idempotent per normalized address: re-running returns the existing code rather than a second row,
+ * so a re-seed cannot leave two invites and make `by_email`'s `.unique()` throw forever after.
+ */
+export const __seedInvite = internalMutation({
+  args: { email: v.string() },
+  handler: async (ctx, args) => {
+    const email = normalizeEmail(args.email);
+    if (!email) throw new Error("INVALID_EMAIL");
+    const existing = await ctx.db
+      .query("betaInvites")
+      .withIndex("by_email", (q) => q.eq("email", email))
+      .unique();
+    if (existing) return { code: existing.code, email, reused: true };
+
+    const code = mintCode();
+    await ctx.db.insert("betaInvites", { email, code, createdAt: Date.now() });
+    return { code, email, reused: false };
   },
 });
 

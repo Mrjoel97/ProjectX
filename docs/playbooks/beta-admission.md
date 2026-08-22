@@ -1,5 +1,35 @@
 # Playbook: Beta Admission (BETA-01)
 
+> Last verified: 2026-08-22 (26-17 — **ONE TEST SEAM, AND THE INVITE GATE IS UNMOVED.**
+> `invites.__seedInvite` is a new `internalMutation` that mints a `betaInvites` row for one
+> address without an owner session.
+>
+> **WHY IT HAD TO EXIST.** `/signup` is invite-gated, and the only issuance path is `approve`, an
+> `ownerMutation`. Playwright's `auth.setup.ts` signs in through the REAL form and therefore needs
+> an account it can create, but `npx convex run` is unauthenticated and can never call `approve`.
+> So on any deployment without a pre-seeded user whose password someone still knows, the browser
+> gate is structurally unrunnable — which is exactly where 26-17 landed when the stored
+> `e2e/.auth/user.json` JWT expired on 2026-08-22.
+>
+> **WHY IT IS NOT A HOLE, structurally rather than by promise:** an `internalMutation` is not
+> client-callable (`isolation.test.ts` scans for exactly that), so it is reachable only from the
+> CLI by someone who already holds deployment credentials. It mints nothing new either — the same
+> `betaInvites` row `approve` writes, via the same `mintCode()` — so an invite from this seam is
+> indistinguishable downstream, and **`admitIdentity` inside the auth transaction remains the
+> boundary**, exactly as this playbook has always said. The `__` prefix and the header comment are
+> the convention `onboarding.__seedOnboardedTenant` established.
+>
+> Idempotent per normalized address: re-running returns the existing code rather than inserting a
+> second row, because `by_email` is read with `.unique()` and a duplicate would throw there
+> forever after.
+>
+> **NOT YET EXERCISED.** The seam is written and typechecked but has never run against a
+> deployment: the Convex push has been failing since 2026-08-22 ~19:0x for an unrelated reason
+> (`convex/lib/foglamp.ts` carries no `"use node"` directive, so the V8 bundle pulls in
+> `foglamp`'s `node:http` import and every push fails). Nothing here may be cited as verified
+> until a push succeeds and `e2e/reports.spec.ts` runs.)
+>
+
 > Last verified: 2026-08-17 (**the OAuth buttons no longer swallow their own failures.**)
 >
 > All three OAuth call sites on `/signin` and `/signup` were `onClick={() => void signIn(…)}`.
