@@ -24,6 +24,7 @@ import {
   OperationsSection,
   OwnerSection,
   PERIODS,
+  Section,
   windowFor,
 } from "./ReportsView";
 
@@ -314,6 +315,76 @@ describe("the owner card reports a cursor position, never a health verdict", () 
     expect(html).toContain("cockpit-agent");
     expect(html).toContain("v14");
     expect(html).toContain("gated");
+  });
+});
+
+describe("the two space-hungry cards collapse (owner UAT, 2026-08-22)", () => {
+  const source = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "ReportsView.tsx"),
+    "utf8",
+  );
+
+  test("collapse is the NATIVE element, not a hand-rolled toggle", () => {
+    // <details>/<summary> brings keyboard operation, the disclosure triangle, AT semantics and the
+    // open/closed state for free. A useState toggle would re-implement all four and get the third
+    // one wrong.
+    expect(source).toContain("<details");
+    expect(source).toContain("<summary");
+  });
+
+  test("exactly the two cards the owner named are collapsible", () => {
+    // Business, Operations and Board pack stay open: the owner asked for two, and collapsing a
+    // section nobody complained about hides a number they expect to see on arrival.
+    // Counted by split rather than by regex: a bare `collapsible` also appears in the prop type
+    // and the destructure, so the count has to be of the CALL SITES.
+    expect(source.split("        collapsible").length - 1).toBe(2);
+    expect(source).toContain('testId="section-governance"');
+    expect(source).toContain('testId="section-deployment"');
+  });
+
+  test("a collapsible section starts CLOSED — no `open` attribute is ever written", () => {
+    // The whole point of the change: the page must not be dominated by these two on arrival.
+    expect(source).not.toContain("<details open");
+    expect(source).not.toContain("open={");
+  });
+
+  test("a collapsible section RENDERS as a closed details with its hint in the summary", () => {
+    // ASSERTED ON THE OUTPUT, not on the source. The first version of this test matched the word
+    // "shown" anywhere in the module — which the explanatory COMMENT above the hint satisfied, so
+    // deleting the hint entirely left it green. A test that a prose comment can satisfy is not a
+    // test. Hiding content is fine; hiding the EXISTENCE of content would make an empty governance
+    // record and a full one look identical.
+    const html = render(Section, {
+      title: "Governance record",
+      loading: false,
+      collapsible: true,
+      hint: "3 shown, more available",
+      testId: "section-governance",
+      children: "the rows",
+    });
+    expect(html).toContain("<details");
+    expect(html).not.toContain("open=");
+    expect(html).toContain("3 shown, more available");
+    // The hint sits in the SUMMARY, so it survives collapse; the body does not need to.
+    expect(html.slice(0, html.indexOf("</summary>"))).toContain("3 shown, more available");
+  });
+
+  test("a non-collapsible section is a plain section, with no disclosure control", () => {
+    const html = render(Section, { title: "Operations", loading: false, children: "metrics" });
+    expect(html).toContain("<section");
+    expect(html).not.toContain("<details");
+    expect(html).not.toContain("<summary");
+  });
+
+  test("a collapsible section still shows its loading state, not an empty box", () => {
+    const html = render(Section, {
+      title: "Deployment (owner only)",
+      loading: true,
+      collapsible: true,
+      children: "never rendered while loading",
+    });
+    expect(html).toContain("Loading deployment (owner only)…");
+    expect(html).not.toContain("never rendered while loading");
   });
 });
 

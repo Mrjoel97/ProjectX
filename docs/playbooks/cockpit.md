@@ -1,3 +1,16 @@
+> Last verified: 2026-08-22 (26-17 Task 3 — **WATCH-GATE ONLY, no cockpit behaviour changed.**
+> `e2e/reports.spec.ts` gained an `expand()` helper and its nav assertion flipped from dark to
+> live on the owner's UAT verdict. The helper exists because the governance and deployment cards are
+> now native `<details>` that start CLOSED, so any assertion about their CONTENTS must open them
+> first — and it CLICKS THE SUMMARY rather than setting `open` from script, because the click is
+> the path a user takes and the property is what the assertion then checks.
+>
+> Worth knowing for the next spec here: `page.content()` still contains a collapsed `<details>`'s
+> body, so a DOM needle-scan for leaked content works whether or not the card is open — but
+> `toBeVisible()` does not. The privacy sweep deliberately relies on the first and expands for the
+> second.)
+>
+
 > Last verified: 2026-08-22 (26-17 Task 1 — **WATCH-GATE ONLY, no cockpit behaviour changed.**
 > This playbook watches `apps/web/e2e/`, and `reports.spec.ts` is new. Two things in it are worth
 > knowing before writing the next spec in this directory:

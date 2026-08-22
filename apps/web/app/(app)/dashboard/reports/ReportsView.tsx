@@ -140,23 +140,67 @@ function Metric({ label, value, note }: { label: string; value: string; note?: s
   );
 }
 
-/** Loading is its OWN state. `undefined` from `useQuery` is "not answered yet", never "nothing". */
-function Section({
+const summaryStyle: CSSProperties = { cursor: "pointer", listStylePosition: "outside" };
+const hintStyle: CSSProperties = {
+  color: "var(--ink-soft)",
+  fontSize: "0.78rem",
+  fontWeight: 500,
+  marginLeft: "0.5rem",
+};
+
+/**
+ * One report section.
+ *
+ * Loading is its OWN state: `undefined` from `useQuery` is "not answered yet", never "nothing".
+ *
+ * **COLLAPSIBLE SECTIONS ARE `<details>`/`<summary>`, not a `useState` toggle** (owner UAT,
+ * 2026-08-22: the governance and deployment cards were taking the whole page). The native element
+ * brings keyboard operation, the disclosure triangle, correct AT semantics and the open/closed
+ * state for free — a hand-rolled toggle would be re-implementing all four and getting the third
+ * one wrong. `open` is deliberately absent, so a collapsible section starts CLOSED.
+ *
+ * A collapsed card still says whether it has anything in it, via `hint`. Hiding the content is
+ * fine; hiding the *existence* of content would make an empty governance record and a full one
+ * look identical, which is the same class of lie this page exists to avoid.
+ */
+export function Section({
   title,
   children,
   loading,
+  collapsible = false,
+  hint,
+  testId,
 }: {
   title: string;
   children: React.ReactNode;
   loading: boolean;
+  collapsible?: boolean;
+  hint?: string;
+  testId?: string;
 }) {
+  const body = (
+    <div style={{ marginTop: "0.7rem" }}>
+      {loading ? <p style={muted}>Loading {title.toLowerCase()}…</p> : children}
+    </div>
+  );
+
+  if (!collapsible) {
+    return (
+      <section style={card} aria-busy={loading} data-testid={testId}>
+        <p style={caps}>{title}</p>
+        {body}
+      </section>
+    );
+  }
+
   return (
-    <section style={card} aria-busy={loading}>
-      <p style={caps}>{title}</p>
-      <div style={{ marginTop: "0.7rem" }}>
-        {loading ? <p style={muted}>Loading {title.toLowerCase()}…</p> : children}
-      </div>
-    </section>
+    <details style={card} aria-busy={loading} data-testid={testId}>
+      <summary style={summaryStyle}>
+        <span style={{ ...caps, display: "inline" }}>{title}</span>
+        {hint ? <span style={hintStyle}>{hint}</span> : null}
+      </summary>
+      {body}
+    </details>
   );
 }
 
@@ -501,7 +545,20 @@ export function ReportsView() {
         {operations ? <OperationsSection data={operations} timeZone={timeZone} /> : null}
       </Section>
 
-      <Section title="Governance record" loading={audit === undefined}>
+      {/* COLLAPSED BY DEFAULT (owner UAT). The hint is what stops a closed card from hiding
+          whether there is anything inside it — "0 shown" and "25 shown, more available" are
+          different facts and a bare title states neither. */}
+      <Section
+        title="Governance record"
+        loading={audit === undefined}
+        collapsible
+        testId="section-governance"
+        hint={
+          audit === undefined
+            ? undefined
+            : `${audit.rows.length} shown${audit.nextCursor === null ? "" : ", more available"}`
+        }
+      >
         {audit ? (
           <GovernanceSection
             page={audit}
@@ -516,6 +573,9 @@ export function ReportsView() {
         <Section
           title="Deployment (owner only)"
           loading={worm === undefined || skills === undefined}
+          collapsible
+          testId="section-deployment"
+          hint={skills === undefined ? undefined : `${skills.length} active skills`}
         >
           {worm && skills ? <OwnerSection worm={worm} skills={skills} timeZone={timeZone} /> : null}
         </Section>

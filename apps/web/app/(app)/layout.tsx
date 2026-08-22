@@ -59,7 +59,10 @@ const NAV: Array<{ label: string; icon: ReactNode; href?: string; soon?: boolean
   { label: "Compliance", href: "/ops", icon: <ShieldIcon size={18} /> },
   { label: "My Workspace", href: "/dashboard/workspace", icon: <BoltIcon size={18} /> },
   { label: "Live Voice", href: "/dashboard/voice", icon: <MicIcon size={18} /> },
-  { label: "Reports", icon: <PieIcon />, soon: true },
+  // 26-17 Task 3: LIVE on the owner UAT verdict, 2026-08-22 ("The report interface is okay").
+  // The branch keys off `href`, so ROLLBACK IS DELETING IT — and rollback touches no data: a
+  // generated board pack is an ordinary vault row, and nothing on that rail rewrites one.
+  { label: "Reports", href: "/dashboard/reports", icon: <PieIcon /> },
   { label: "Knowledge Vault", href: "/dashboard/vault", icon: <VaultIcon /> },
   { label: "Join Community", icon: <GlobeIcon />, soon: true },
 ];

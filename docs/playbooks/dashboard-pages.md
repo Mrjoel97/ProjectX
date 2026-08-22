@@ -1,5 +1,37 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-22 (26-17 Tasks 2–3 — **OWNER UAT APPROVED AND THE REPORTS NAV IS LIVE.**
+> Verdict: *"The report interface is okay"*, with one change requested and made.
+>
+> **THE CHANGE: the Governance and Deployment cards collapse, and arrive CLOSED.** They were taking
+> the whole page. They are native `<details>`/`<summary>` — NOT a `useState` toggle — because the
+> element brings keyboard operation, the disclosure triangle, correct AT semantics and the
+> open/closed state for free; a hand-rolled toggle re-implements all four and gets the third wrong.
+> Only those two collapse: Business, Operations and Board pack stay open, because collapsing a
+> section nobody complained about hides a number the reader expects on arrival.
+>
+> **A CLOSED CARD STILL DISCLOSES WHETHER IT HAS ANYTHING**, via a `hint` in the summary
+> ("3 shown, more available", "12 active skills"). Hiding content is fine; hiding the EXISTENCE of
+> content would make an empty governance record and a full one look identical — the same class of
+> lie the rest of this page is built to avoid.
+>
+> **TASK 3: the rail item's `soon: true` became an `href`.** The branch keys off `href`, so
+> ROLLBACK IS DELETING IT, and rollback touches no data: a generated board pack is an ordinary vault
+> row and nothing on that rail rewrites one. `e2e/reports.spec.ts` test 1 flipped with it — it
+> asserted the nav was DARK before the UAT and asserts it is LIVE after; the record of the dark run
+> lives in 26-17-SUMMARY.md, not in a test asserting a state the product left behind (the 26-13 move).
+>
+> **A TEST THAT A PROSE COMMENT COULD SATISFY IS NOT A TEST.** The first hint assertion was
+> `expect(source).toContain("shown")` — and the explanatory COMMENT above the hint satisfied it, so
+> deleting the hint left the suite green. It now renders `Section` and asserts the hint appears
+> INSIDE `</summary>` (mutation-verified: moving it into the body turns the test red). The
+> call-site hints are covered by the browser gate's `getByText(/shown/)`, not by the component
+> suite — stated here because "covered" and "covered where" are different facts.
+>
+> EVIDENCE: component **28/28**, `e2e/reports.spec.ts` **EXECUTED 7/7** against a rebuilt `:3111`
+> with the nav live, web typecheck + prod build clean, watcher clean.)
+>
+
 > Last verified: 2026-08-22 (26-17 Task 1 — **THE REPORTS ROUTE, BUILT AND NAV-DARK.**
 > `/dashboard/reports` is reachable directly; its rail item is still `soon: true`. Task 3 activates
 > it only on the owner's UAT verdict, and rollback is deleting the href — no artifact is touched,

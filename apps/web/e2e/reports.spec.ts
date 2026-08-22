@@ -47,6 +47,20 @@ function tenantIdFrom(token: string): string {
   return userId;
 }
 
+/**
+ * Open one collapsible card. The governance and deployment sections are native
+ * `<details>` and start CLOSED (owner UAT, 2026-08-22), so any assertion about their CONTENTS
+ * has to open them first — and clicking the summary is the real user path, which is why this is a
+ * click rather than setting `open` from script.
+ */
+async function expand(page: import("@playwright/test").Page, testId: string) {
+  const card = page.getByTestId(testId);
+  if (!(await card.evaluate((el) => (el as HTMLDetailsElement).open))) {
+    await card.locator("summary").click();
+  }
+  await expect(card).toHaveJSProperty("open", true);
+}
+
 test.describe.configure({ mode: "serial" });
 
 const MARKER = `e2e${Date.now().toString(36)}`;
@@ -104,15 +118,20 @@ test.beforeAll(() => {
   });
 });
 
-test("the route is reachable directly while its nav item stays dark", async ({ page }) => {
+test("the Reports route is live in the nav", async ({ page }) => {
   await page.goto(ROUTE);
   await expect(page.getByRole("heading", { name: "Reports" })).toBeVisible();
 
-  // THE GATE. Task 3 activates the nav only after the owner's UAT verdict; until then no link to
-  // this route may exist anywhere in the DOM, and the rail item must announce itself as disabled.
-  await expect(page.locator('a[href="/dashboard/reports"]')).toHaveCount(0);
+  // BEFORE Task 3 this test asserted the OPPOSITE — a `Soon` item with `aria-disabled="true"` and
+  // no href anywhere in the DOM — and that is what the browser gate proved on 2026-08-22 before the
+  // UAT. Task 3 flipped it on the owner's verdict, so the assertion flips with it: the record of
+  // "the nav was still dark when the gate ran" lives in 26-17-SUMMARY.md and the playbook, not in a
+  // test that would now assert a state the product deliberately left behind. Same move as 26-13.
+  const rail = page.locator('a[href="/dashboard/reports"]');
+  await expect(rail).toHaveCount(1);
+  await expect(rail).toBeVisible();
   await expect(page.locator('[aria-disabled="true"]').filter({ hasText: "Reports" })).toHaveCount(
-    1,
+    0,
   );
 });
 
@@ -179,12 +198,20 @@ test("every section renders, and each one names what it cannot measure", async (
   // The e2e tenant has no telemetry, so this is the assertion that matters most: an unmeasured
   // source says so in words. A "0" here would be the defect this whole phase exists to prevent.
   await expect(page.getByText(/not measured/).first()).toBeVisible();
+
+  // OWNER UAT 2026-08-22: the two space-hungry cards arrive CLOSED, so the page is not dominated
+  // by them. Their titles are still on screen — collapsing hides the content, never the card.
+  await expect(page.getByTestId("section-governance")).toHaveJSProperty("open", false);
+  await expect(page.getByText("Governance record", { exact: true })).toBeVisible();
+  // …and the hint tells you whether opening it is worth the click.
+  await expect(page.getByText(/shown/).first()).toBeVisible();
 });
 
 test("PRIVACY: no unsafe payload value reaches the DOM, and the unknown event is a shell", async ({
   page,
 }) => {
   await page.goto(ROUTE);
+  await expand(page, "section-governance");
   await expect(page.getByText("plan.discarded").first()).toBeVisible();
 
   const dom = (await page.content()) ?? "";
@@ -255,6 +282,7 @@ test("ROLE SPLIT: the deployment card is absent for a non-owner and present for 
     // line; the loose locator matches both. The ABSENCE assertion above stays loose on purpose —
     // for a non-owner neither the title nor the loading line may exist.
     await expect(page.getByText("Deployment (owner only)", { exact: true })).toBeVisible();
+    await expand(page, "section-deployment");
     await expect(page.getByText("Last cursor advance")).toBeVisible();
     // The correction 26-15 made to the mockup, verified in the rendered page.
     expect(await page.content()).not.toContain("Healthy");
