@@ -17,7 +17,7 @@ created: 2026-08-05
 |----------|-------|
 | **Framework** | Vitest 3.2.7 + convex-test; Playwright 1.61.1; Next 16 production build |
 | **Config files** | Package Vitest configs; `apps/web/playwright.config.ts` |
-| **Quick run command** | `pnpm --filter @pikar/backend test -- <surface>` |
+| **Quick run command** | `pnpm --filter @pikar/backend test <surface>` — **no `--`**; with it pnpm forwards the separator literally and vitest runs the WHOLE suite (measured, 26-11) |
 | **Full suite command** | `pnpm --filter @pikar/backend test && pnpm --filter @pikar/web test && pnpm --filter @pikar/backend typecheck && pnpm --filter @pikar/web typecheck && pnpm --filter @pikar/web build && node scripts/check-playbooks.mjs` |
 | **Estimated runtime** | ~15 minutes plus focused authenticated Playwright and owner checkpoints |
 
@@ -45,7 +45,7 @@ created: 2026-08-05
 | 26-09 | 6 | FIN-01 | tenant/owner finance projections and controls | `pnpm --filter @pikar/backend test -- finance` | ✅ green (15/15) |
 | 26-10 | 7 | FIN-01 | honest coverage UI + owner/non-owner browser flow | `pnpm --filter @pikar/web test -- finance` then, from `apps/web`, `npx playwright test e2e/finance.spec.ts` | ✅ green — connected cost console + owner boundary pass; owner UAT approved 2026-08-22 (found and fixed a mobile clip); 2 unrelated red characterised in 26-10-SUMMARY |
 | 26-11 | 8 | CONT-01 | provenance pair at 4 write sites; promote = one guarded tx + one counted `workflow.start`; agent-relayed citation | `pnpm --filter @pikar/backend test vault.test createdDocs cockpitTools dispatch.test research.test evaluations.test cockpit.test media.test vaultDigest vaultGround` | ✅ green — full backend suite 90 files / 2237 passed / 0 failed; backend typecheck clean; 5/5 promotion mutants caught + the citation mutant; playbook gate verified live |
-| 26-12 | 9 | CONT-01 | union pagination, signed URL ownership and sidecar proof | `pnpm --filter @pikar/backend test -- content media plans requests` | ⬜ pending |
+| 26-12 | 9 | CONT-01 | union pagination, signed URL ownership and sidecar proof | `pnpm --filter @pikar/backend test content` (the `--` REMOVED — it does not filter) then the full `pnpm --filter @pikar/backend test` | ✅ green — content 20/20; full backend suite 91 files / 2258 passed / 0 failed; backend typecheck clean; 9/9 mutants caught (one only after the missing test was written); playbook gate verified live |
 | 26-13 | 10 | CONT-01 | every artifact kind, reuse deep link and promotion lifecycle | `pnpm --filter @pikar/web test -- content && pnpm --filter @pikar/web test:e2e -- e2e/content.spec.ts` | ⬜ pending |
 | 26-14 | 11 | RPRT-01 | comparable metrics, window and completeness semantics | `pnpm --filter @pikar/core test -- reports && pnpm --filter @pikar/backend test -- reportsBusiness` | ⬜ pending |
 | 26-15 | 11 | RPRT-01 | unsafe audit payload omission and owner rejection | `pnpm --filter @pikar/backend test -- reportsGovernance audit worm skills` | ⬜ pending |

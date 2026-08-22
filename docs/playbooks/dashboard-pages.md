@@ -1,5 +1,63 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-22 (26-12 — **THE CONTENT SHELF IS A READ PLANE, AND THAT IS ENFORCED BY
+> CONSTRUCTION RATHER THAN BY PROMISE.** `packages/backend/convex/content.ts` ships three
+> `tenantQuery`s (`listArtifacts`, `summary`, `artifactById`) and NOTHING ELSE: no mutation, no
+> scheduler call, no signed-URL minting, no log-plane write. `content.test.ts` scans the module for
+> each of those, plus a check that every `export const` binds a `tenantQuery`. That is what makes
+> *"Reuse opens the cockpit and never duplicates, attaches, sends or dispatches"* a fact about the
+> module's shape instead of a claim a handler makes about itself — the `vaultRedaction.test.ts`
+> pattern, applied to a page adapter. Reuse is a code-owned `/dashboard/workspace?thread=…` link
+> (`&view=canvas` for a reel), and a query cannot write, so there is no reuse-side write to test for.
+>
+> **THREE TERMINALS WERE ALREADY BUILT, SO NONE OF THEM WAS REBUILT HERE.** The card carries a
+> `vaultDocId` and, for a reel, a `planId`; the page asks the existing ownership-checked readers for
+> a capability only when the user acts. Download/open is `api.vault.vaultDownloadUrl`; playback is
+> `api.media.reel` (whose non-null `url` IS the validated-sidecar guarantee); promotion is
+> `api.vault.promoteToReference` — 26-11's single guarded surface, called directly per the owner
+> decision of 2026-08-22. `content.ts` reads `origin` only to decide what to OFFER. The projection
+> and the mutation are checked against each other in one test, so the page can never grow a button
+> that always refuses (or hide one that would work).
+>
+> **THE SHELF IS A POSITIVE KIND WHITELIST** — `created_document`, `created_content`,
+> `next_step_memo`, `reel` — because `vaultDocuments.kind` is `v.string()` and grows every phase, so
+> "everything except the ones I thought of" silently admits the next writer's rows. Research briefs
+> (`web_research`) stay with the Knowledge Vault and sent mail stays with Reports (CONT-01 as
+> amended); `requests` is never queried by this module and a test pins that too.
+>
+> **A REEL PLAYS ONLY ON THREE TERMS, AND THE THIRD IS THE ONE A NAIVE CHECK MISSES.** Bytes on the
+> row, the live artifact triple on the plan (`renderStorageId` + `sidecarStorageId` +
+> `renderSummary`), AND `plan.reelVaultDocId === doc._id`. Without that last term a thread that
+> re-rendered would serve reel #2's video under reel #1's title — `resetPlan` clears both the triple
+> and the pointer, `saveReelToVault` upserts through the pointer, so the pointer is what says which
+> reel the plan's bytes ARE. Unproved is never silent: `no-plan` / `no-bytes` / `no-sidecar` /
+> `superseded` ride on the card and the canvas link still opens.
+>
+> **SCHEMA: `by_tenant_kind` GAINED `createdAt` (a third field on an existing index, not a fifth
+> index).** The union is four kind partitions merged into one newest-first order, so its cursor needs
+> a RANGE on the same read; without it the page would over-fetch and discard rows that each carry a
+> `text` blob — the read-cap fault this table's own comments keep pointing at. Safe for the one
+> production caller: `onboarding.currentProfileDoc` `.collect()`s its partition and re-sorts in
+> memory, so it never depended on the implicit `_creationTime` ordering this replaces.
+>
+> **NINE MUTANTS APPLIED AND REVERTED, NINE CAUGHT — AND ONE OF THEM ONLY AFTER A TEST WAS ADDED.**
+> Dropping the tenant term on the reel's plan join SURVIVED the first pass: the join reads
+> `reelMeta.planId`, a field on a row the tenant owns, and the code TRUSTED that the plan it names is
+> theirs. Nothing asserted it. A test now seeds a reel row pointing at another tenant's rendered
+> plan and requires `no-plan` plus no foreign thread id anywhere in the card. Ask what the code
+> trusts, not only what it checks.
+>
+> **THE VERIFY COMMANDS IN THIS PLAYBOOK WERE ALL THE NON-FILTERING FORM AND ARE CORRECTED BELOW.**
+> `pnpm --filter <pkg> test` followed by a bare `--` and filter terms forwards that separator
+> literally, which collapses vitest's filter matching and runs the WHOLE suite — slower, appears
+> to do more, and passes. 26-11 measured it; every affected line under "How to verify" has had the
+> separator removed. The Playwright lines went further: `test:e2e <file>` does not filter EITHER
+> (this playbook already recorded that under "Corrected 2026-08-21" while the code block below
+> still quoted the broken form), so the connected-page block now quotes `npx playwright test
+> <file>` run from `apps/web`. The three historical entries that quote the broken form on purpose
+> were left exactly as they were.)
+>
+
 > Last verified: 2026-08-22 (26-10 Task 2 — **THE OWNER UAT FOUND A REAL DEFECT AND IT IS FIXED:
 > the Cost Console clipped its own copy at mobile.** Items 1 and 3 pass; item 2, the responsive
 > breakpoints the 2026-08-09 UAT recorded as NOT observed, is where it was hiding.)
@@ -1002,7 +1060,9 @@ additive data, safety instrumentation or provenance.
 - `packages/backend/convex/approvals.ts` — bounded plan/decision projections.
 - `packages/backend/convex/spendLedger.ts` — append-only reporting movements and coverage start.
 - `packages/backend/convex/finance.ts` — tenant and owner finance projections.
-- `packages/backend/convex/content.ts` — bounded artifact union and governed artifact actions.
+- `packages/backend/convex/content.ts` — the bounded artifact union. READ-ONLY: three
+  `tenantQuery`s and no write surface; the artifact ACTIONS stay on `vault.vaultDownloadUrl`,
+  `media.reel` and `vault.promoteToReference`, which this module only decides whether to offer.
 - `packages/backend/convex/reportsBusiness.ts` — comparable business/operations period projections.
 - `packages/backend/convex/reportsGovernance.ts` — sanitized audit and owner-only governance views.
 - `packages/backend/convex/reportPack.ts` — one-snapshot board-pack generation.
@@ -1764,7 +1824,7 @@ the owner-preview navigation link is active only to make that verification reach
 Resume with both runtimes active and credentials set:
 
 ```text
-pnpm --filter @pikar/web test:e2e -- e2e/approvals.spec.ts
+npx playwright test e2e/approvals.spec.ts   # from apps/web
 ```
 
 The spec seeds plan rows for UI-state evidence only. Public mutations prove schedule replay,
@@ -2076,7 +2136,7 @@ adapter module of its own**, because PIPE-01's whole worry is a second CRM data 
 ### Pure contracts and operational ownership
 
 ```text
-pnpm --filter @pikar/core test -- dashboard
+pnpm --filter @pikar/core test dashboard
 pnpm --filter @pikar/core typecheck
 node scripts/check-playbooks.mjs
 ```
@@ -2084,14 +2144,14 @@ node scripts/check-playbooks.mjs
 ### Focused backend gates
 
 ```text
-pnpm --filter @pikar/backend test -- approvals
-pnpm --filter @pikar/backend test -- spendLedger
-pnpm --filter @pikar/backend test -- finance
-pnpm --filter @pikar/backend test -- content
-pnpm --filter @pikar/core test -- reports
-pnpm --filter @pikar/backend test -- reportsBusiness reportsGovernance reportPack
-pnpm --filter @pikar/core test -- home
-pnpm --filter @pikar/backend test -- home briefings
+pnpm --filter @pikar/backend test approvals
+pnpm --filter @pikar/backend test spendLedger
+pnpm --filter @pikar/backend test finance
+pnpm --filter @pikar/backend test content
+pnpm --filter @pikar/core test reports
+pnpm --filter @pikar/backend test reportsBusiness reportsGovernance reportPack
+pnpm --filter @pikar/core test home
+pnpm --filter @pikar/backend test home briefings
 ```
 
 These prove adapter authorization/isolation, caps/cursors, ledger replay, safe projection, one-snapshot
@@ -2100,15 +2160,18 @@ packs and composed priority/health semantics. Subsystem plans add their terminal
 ### Connected page gates
 
 ```text
-pnpm --filter @pikar/web test -- approvals
-pnpm --filter @pikar/web test:e2e -- e2e/approvals.spec.ts
-pnpm --filter @pikar/web test -- finance
-pnpm --filter @pikar/web test:e2e -- e2e/finance.spec.ts
-pnpm --filter @pikar/web test -- content
-pnpm --filter @pikar/web test:e2e -- e2e/content.spec.ts
-pnpm --filter @pikar/web test -- reports
-pnpm --filter @pikar/web test:e2e -- e2e/reports.spec.ts
-pnpm --filter @pikar/web test:e2e -- e2e/command-center.spec.ts
+pnpm --filter @pikar/web test approvals
+pnpm --filter @pikar/web test finance
+pnpm --filter @pikar/web test content
+pnpm --filter @pikar/web test reports
+
+# One spec at a time, FROM apps/web. `pnpm ... test:e2e -- <file>` and `test:e2e <file>` both
+# swallow the filter and run the whole ~8-minute suite (recorded under "Corrected 2026-08-21").
+npx playwright test e2e/approvals.spec.ts
+npx playwright test e2e/finance.spec.ts
+npx playwright test e2e/content.spec.ts
+npx playwright test e2e/reports.spec.ts
+npx playwright test e2e/command-center.spec.ts
 ```
 
 Playwright requires the documented authenticated local Convex/Next runtime. A listed spec is not

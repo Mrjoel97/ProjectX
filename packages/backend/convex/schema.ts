@@ -1747,7 +1747,16 @@ export default defineSchema({
     // `kind`. On `by_tenant` that read `.collect()`s the tenant's whole vault INCLUDING every
     // `text` blob — which blew the 1s query budget once a tenant's vault grew past a handful of
     // documents. Narrowing to (tenantId, kind) turns it into a read of the profile docs alone.
-    .index("by_tenant_kind", ["tenantId", "kind"])
+    //
+    // Phase-26 (CONT-01) APPENDED `createdAt` rather than adding a fifth index. The Content shelf
+    // (`content.ts`) is a newest-first union over four kind partitions, so its cursor needs a RANGE
+    // on the same read — `.eq(tenantId).eq(kind).lte(createdAt, …)` — and without it the page would
+    // have to over-fetch and discard rows that each carry a `text` blob (the read-cap fault this
+    // table's own comments keep pointing at). Appending is safe for the one production caller:
+    // `onboarding.currentProfileDoc` `.collect()`s its partition and re-sorts in memory, so it
+    // never depended on the implicit `_creationTime` ordering this replaces. Convex rebuilds the
+    // index on push; the convex-migration-helper skill lists index changes under "When Not to Use".
+    .index("by_tenant_kind", ["tenantId", "kind", "createdAt"])
     // Phase-15.3. Serves BOTH the drill-in listing and the digest's stale set-difference, which is
     // why there is no separate `by_tenant_folder_status` — completion is counted on the folder row
     // (§2.5), never by a status query. ⚠ Read it with a bounded `.take()` and project `text` away;
