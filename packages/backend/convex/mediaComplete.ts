@@ -365,6 +365,9 @@ async function saveImageToVault(
     text: prompt,
     status: "processing",
     sourcePlanId: row.planId, // Phase-26 provenance: this IS an authoritative write site
+    // 26-11: the PAIR. `sourcePlanId` alone cannot answer "which conversation produced this", and
+    // a half-written pair reads downstream as legacy absence rather than as a missed write site.
+    sourceThreadId: plan.threadId,
     createdAt: Date.now(),
   });
   // The pointer BEFORE the ingest start: the guard must be set even if the workflow start throws,

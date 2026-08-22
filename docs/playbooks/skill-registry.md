@@ -1,5 +1,21 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-22 (26-15 — **ONE REFACTOR, NO BEHAVIOUR CHANGE.** `seedSkills`' `seeds`
+> array is lifted to module scope as `SEEDS`, and `REGISTRY_SKILL_NAMES` is DERIVED from it. Same
+> array, same rows, same APPEND-ONLY rule — a new skill goes at the END; do not reorder. The reason
+> it moved: `reportsGovernance.activeSkills` needs the enumeration to drive one
+> `by_name_status` `.eq(name).eq("active")` read per skill instead of collecting every version ever
+> published, and a second hand-typed list of these names is exactly the drift that shipped 26-14's
+> permanent `edit: 0`. **`activeSkills` is `ownerQuery` and returns name/version/status/gated with
+> NO BODY** — same refusal boundary `candidatesForReview` documents: reject before a registry row is
+> read, rather than trimming fields off one that was. `status` is read off the ROW even though the
+> index range already pinned it to "active", because a field asserting a value the row could
+> contradict is the 26-14 defect in miniature. A skill with no active version is ABSENT, not
+> reported at version 0 — ponytail: surfacing "no active version" is real (an unseeded
+> `document-classifier` makes `classifyDoc` fail closed and every document classify as
+> `unclassified`); the upgrade path is returning the registry with `version: null` for the gaps.)
+>
+
 > Last verified: 2026-08-20 (23-05 added the separate exact-id
 > `activateAgentCandidate` owner mutation. Agent activation requires the current full-suite
 > `hasPassingAgentTenantEvidence` predicate and writes server-derived `ownerApproval` with

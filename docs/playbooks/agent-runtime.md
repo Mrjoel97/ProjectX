@@ -1,5 +1,39 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-08-22 (26-14 — **A SHIPPED DEFECT IN `opsSignals.evalSignals`, CORRECTED.**
+> `DECISION_KEYS` was hand-typed as `["approve","edit","reject","regenerate"]`. Nothing writes
+> `"edit"` — `review.ts`'s `reviewDecisionValidator` says `edit_text`, and `pipeline.ts` writes
+> `decisionCounts[evt.decision]` verbatim. Because the fold only sums keys present in that list, the
+> `/ops` card rendered a permanent `edit: 0` as truth AND silently discarded every real
+> edit-with-changes decision. **`opsSignals.test.ts` seeded the same fiction** (`{ edit: 1 }`), so it
+> only ever proved the fold sums whatever you hand it. Fixture corrected to the real literal, and
+> the zero-init is now derived from the same list the fold reads, so the card can never again show a
+> key nothing writes or omit one that does. A hand-typed copy of a closed union is how the two came
+> apart; keep these literals identical to the validator's.)
+>
+
+> Last verified: 2026-08-22 (26-13.1 — `smoke.seedContentShelf` gained a FOURTH fixture: a
+> standalone image (a real 1x1 PNG, so the shelf's thumbnail resolves a genuine signed URL against
+> genuine bytes). Same caveat as its siblings — a terminal row that proves a UI state, with no
+> provider run, no embedding bought and no ingest started. No runtime behaviour changed.)
+>
+
+> Last verified: 2026-08-22 (26-13 — **SMOKE GAINED ONE E2E FIXTURE SEAM; NO RUNTIME BEHAVIOUR
+> CHANGED.** `smoke.seedContentShelf` (an `internalAction`, because `ctx.storage.store` is
+> action-only — the `storeSmokePdf` precedent) plus its `insertShelfFixtures` mutation seed the
+> Content shelf's three lanes for `apps/web/e2e/content.spec.ts`: a next-step memo, a PROVED reel
+> (the plan keeps the whole artifact triple and its `reelVaultDocId` points at the row) and an
+> UNPROVED one (bytes on the row, no sidecar on the plan — the state a regenerate leaves behind).
+> They exist because only ONE of the three lanes is reachable from a shipped function:
+> `vault:insertCreatedDoc` writes a document, while a memo comes from a plain TypeScript function
+> and a reel from a render terminal, neither callable from the CLI.
+>
+> **THESE ARE TERMINAL ROWS AND THEY PROVE UI STATES ONLY.** The "mp4" is a handful of bytes with
+> the right mime and the sidecar is a marker; no provider ran, nothing was embedded, no credit was
+> spent. The seed deliberately does NOT call `startIngest` for the memo — a UI fixture has no
+> business buying an embedding. Nothing in the agent loop reads these rows.)
+>
+
 > Last verified: 2026-08-21 (**FORMATTER-ONLY, NO RUNTIME OR CORPUS BEHAVIOUR CHANGED.** The
 > watched file `scripts/eval-cases/38-media-dispatch.json` had its `needles` array collapsed onto
 > one line by `biome format`. It was one of NINE real format errors that CI caught under 86 local

@@ -1,5 +1,43 @@
 # Playbook: Business Evaluation Engine
 
+> Last verified: 2026-08-23 (FORMATTING ONLY — **no engine behaviour, contract or invariant
+> changed.** `evaluations.test.ts` was reformatted by `biome format --write` as part of the Phase 26
+> merge gate: nine committed files differed from Biome's formatting output, which reddened
+> `pnpm lint` (`biome ci .`) and blocked the PR. Not one assertion, fixture or expectation in that
+> file was altered — verified by running it rather than assuming: the backend vault/cockpitTools/
+> dispatch/evaluations selection passed 519/519 after the reformat.
+>
+> Recorded here only because this playbook watches `evaluations.test.ts` and CLAUDE.md §9 requires a
+> touched subsystem's playbook to move with it. Worth knowing WHY the debt existed: five of the nine
+> files were carried in by the earlier Phase 26 commits (26-14 to 26-17), which had never faced a
+> main-branch CI run because none of that stack had been merged. Formatting drift accumulates
+> silently on a long-lived branch — the gate only speaks at the merge.)
+
+> Last verified: 2026-08-22 (26-14 — **one import; no engine behaviour changed.** `runEvaluation`'s
+> local `gapKey` arrow is deleted and the identical function is imported from `@pikar/core`
+> (`reports.ts`), which the RPRT-01 report plane also uses to diff two snapshots. The engine writes
+> `evaluations.delta` with it and the report reads that delta; shipping a COPY left two live
+> definitions of "the same gap", which is the drift the core function's own doc comment claims to
+> prevent. Same `${route}/${playbook}` key, same exclusion of `leverageRank`.
+>
+> Also relevant to this engine, decided in 26-14 and NOT changed here: the report's snapshot diff
+> disqualifies an `insufficient` row on EITHER side. This module has two insufficient paths and they
+> disagree — `findings.length === 0` clears `gaps`, `!skillOk` leaves them as they were — so a
+> reader must check the verdict AND the zero-findings condition, on both rows. backend 2294/2294.)
+>
+
+> Last verified: 2026-08-22 (26-11 -- **the approved memo carries its provenance, and a promoted
+> artifact is no longer cited as the owner's own word.** `persistNextStepMemo` writes
+> `sourceThreadId`/`sourcePlanId` from the `plans` row it already holds. More importantly,
+> `fillVault` used to stamp EVERY grounded chunk `{confidence:"high", source:"vault"}` -- the same
+> label the owner's own uploaded P&L gets -- so once promotion existed, a figure the model invented
+> in its own `createDocument` output would be scanned by the financial patterns, written into the
+> Scorecard and cited back to the owner as their own source. That is the provenance-laundering
+> class. A chunk whose `origins[i] === "agent_promoted"` is now cited `source: "agent-relayed"`, the
+> union member that already meant "the owner STATED it, the agent WROTE it". `confidence` stays
+> "high" ON PURPOSE: the owner promoted the artifact deliberately, so only the ATTRIBUTION changes,
+> never the weight. See ADR-025.)
+>
 > Last verified: 2026-08-21 (25.1-05, D11 — **`landSpecialistResult` now writes the memo's
 > REFERENCES, not just its body.** New optional arg `sources` (`{title, url, retrievedAt}[]`),
 > passed by `dispatch.ts`'s landing and written to the plan row by a DIRECT `ctx.db.patch` in the

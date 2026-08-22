@@ -1267,7 +1267,7 @@ test("the assemble script is NOT a skills registry row (delta pitfall 17 — the
 
   // Non-vacuity floor: if `readSource` or the comment-strip ever returns nothing, the four
   // assertions above pass by finding nothing. The seeds array must still be in there.
-  expect(seeds).toMatch(/const seeds = \[/);
+  expect(seeds).toMatch(/const SEEDS = \[/);
 });
 
 test("the voice-doc UI never turns a finding excerpt into a log field", () => {

@@ -30,6 +30,19 @@ export const reviewDecisionValidator = v.union(
   v.literal("reject"),
 );
 
+/**
+ * The same union as a runtime array — the ONE place any reader may get the decision literals.
+ *
+ * 26-14: `opsSignals.ts` shipped a hand-typed copy of this list containing `"edit"`, a key nothing
+ * writes (the real literal is `"edit_text"`). Because that fold only summed keys present in its own
+ * list, the `/ops` card rendered a permanent `edit: 0` as truth AND silently discarded every real
+ * edit-with-changes decision. Deriving is the fix; a second hand-typed copy would only move the
+ * defect. `pipeline.ts` writes `decisionCounts[evt.decision]` verbatim, so this union IS the key set.
+ */
+export const REVIEW_DECISIONS: readonly string[] = reviewDecisionValidator.members.map(
+  (m) => m.value,
+);
+
 /** The gate's event: a real typed decision OR the scheduled-timeout marker. */
 export const reviewEventValidator = v.union(
   v.object({

@@ -106,6 +106,8 @@ async function seedDoc(
   options: {
     title?: string;
     kind?: "brief" | "business_blueprint" | "business_profile" | "web_research";
+    /** 26-11: "agent_promoted" ⇒ the AGENT wrote this and the owner promoted it into the corpus. */
+    origin?: "agent" | "agent_promoted" | "folder_digest";
   } = {},
 ): Promise<Id<"vaultDocuments">> {
   return t.run(async (ctx) =>
@@ -120,6 +122,7 @@ async function seedDoc(
       contentHash: `hash_${Math.random().toString(36).slice(2)}`,
       text,
       status: "ready",
+      origin: options.origin,
       createdAt: Date.now(),
     }),
   );
@@ -355,6 +358,46 @@ describe("runEvaluation (BEVL-01 — grounded assessment persists a cited row)",
     }
     // A grounded finding cites the seed doc.
     expect(row?.findings.some((f) => f.citationDocId === docId && f.source === "vault")).toBe(true);
+  });
+
+  // 26-11 (CONT-01) — THE PROVENANCE-LAUNDERING GUARD.
+  //
+  // Promotion (api.vault.promoteToReference) is the one door through which text the ASSISTANT wrote
+  // enters the retrieval corpus. `fillVault` used to stamp every grounded chunk `source: "vault"`,
+  // the same label the owner's own uploaded P&L gets — so a figure the model invented in its own
+  // createDocument output would be scanned by the financial patterns, written into the Scorecard,
+  // and cited back to the owner as their own source. `agent-relayed` already exists for exactly
+  // this ("the owner STATED it, the agent WROTE it"), one plane over.
+  //
+  // `confidence` deliberately stays "high" — the owner promoted the artifact on purpose. Only the
+  // ATTRIBUTION changes; the defect is crediting the owner, not using the value.
+  test("a figure grounded from a promoted artifact is cited as agent-relayed, not as the owner's own vault source", async () => {
+    const t = newTest();
+    await t.mutation(internal.skills.seedSkills, {});
+    const docId = await seedDoc(t, TENANT, profileDocText(true), {
+      title: "Agent-written pricing memo",
+      origin: "agent_promoted",
+    });
+
+    const result = await t.action(internal.evaluations.runEvaluation, {
+      tenantId: TENANT,
+      threadId: `${THREAD}_promoted`,
+      query: `SMOKE::${docId}`,
+    });
+    expect(result.findingCount).toBeGreaterThanOrEqual(1);
+
+    const row = await t.withIdentity({ subject: TENANT }).query(api.evaluations.byThread, {
+      threadId: `${THREAD}_promoted`,
+    });
+    const cited = (row?.findings ?? []).filter((f) => f.citationDocId === docId);
+    expect(
+      cited.length,
+      "nothing cited the promoted doc — the assertion below is vacuous",
+    ).toBeGreaterThanOrEqual(1);
+    for (const f of cited) {
+      expect(f.source).toBe("agent-relayed");
+      expect(f.confidence).toBe("high");
+    }
   });
 });
 
@@ -1122,6 +1165,9 @@ describe("Act on this → dispatch → approvable (DISP-01)", () => {
     expect(memos).toHaveLength(1);
     expect(memos[0]?.text).toBe(proposed?.body);
     expect(memos[0]?.tenantId).toBe(TENANT);
+    // 26-11 (CONT-01): the memo carries the thread and plan it was approved from, taken from the
+    // `plans` row `persistNextStepMemo` already holds -- so the artifact shelf can trace it back.
+    expect(memos[0]).toMatchObject({ sourceThreadId: THREAD, sourcePlanId: planId });
 
     // 5. The 12-05 structural property SURVIVES dispatch: zero requests rows on the whole path, so
     //    deliverApprovedPlan / gmail.send stayed unreachable — not merely unused.

@@ -161,7 +161,8 @@ function indexesOf(table: string): { indexDescriptor: string; fields: string[] }
  */
 const NON_TENANT_LEADING: Record<string, string> = {
   "audit.by_correlation": "correlation trace; internal + owner plane, joins one workflow's rows",
-  "audit.by_ts": "the OPSG-03 WORM export cron scans this ACROSS tenants by design",
+  "audit.by_ts":
+    "the OPSG-03 WORM export cron scans this ACROSS tenants by design; 26-15 added reportsGovernance.wormExport, an ownerQuery with no tenant-facing caller, reading the same range for lag",
   "deadLetters.by_status": "DLQ triage on the compliance surface; owner-plane only",
   "tenantSkills.by_status_createdAt": "owner candidate-review queue across tenants",
   "requests.by_correlation": "correlation trace, internal",
@@ -338,16 +339,18 @@ const REQUIRES_ARGS = new Set(Object.keys(OWNER_ARGS));
 describe("owner endpoints reject a non-owner, and the list grows by itself", () => {
   test("the owner surface spans every module that has one", () => {
     // 14 at 25-03, 15 once 25-10 added `ops.envCheck`, 16 once 25.1-06 added
-    // `deadLetters.listAll`. THIS ASSERTION HAS NOW DONE ITS JOB TWICE: each new owner endpoint
+    // `deadLetters.listAll`, 18 once 26-15 added the two `reportsGovernance` owner reads. THIS
+    // ASSERTION HAS NOW DONE ITS JOB THREE TIMES: each new owner endpoint
     // turned it red, which is the entire reason the count and the module set are pinned rather than
     // derived-and-forgotten. Update it deliberately when the surface grows.
-    expect(OWNER_SURFACE.length).toBeGreaterThanOrEqual(16);
+    expect(OWNER_SURFACE.length).toBeGreaterThanOrEqual(18);
     expect([...new Set(OWNER_SURFACE.map((f) => f.module))].sort()).toEqual([
       "deadLetters",
       "finance",
       "invites",
       "ops",
       "optimizerConfig",
+      "reportsGovernance",
       "skills",
     ]);
     // The kill switches specifically: the highest-consequence owner endpoints in the repo.

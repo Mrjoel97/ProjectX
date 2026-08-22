@@ -1451,6 +1451,20 @@ describe("runResearch — the scheduled entry point inherits every guard (16-06 
     );
     expect(persisted?.payload).toMatchObject({ webSearchCalls: 1, evidenceVerdict: "sourced" });
 
+    // 26-11 (CONT-01): the dispatcher hands `persistFindings` the THREAD and PLAN, not the request
+    // id. `rootRequestId` is a per-turn correlation key; writing it into `sourceThreadId` would
+    // poison the field the Phase-26 artifact shelf joins on -- so assert it is NOT that value.
+    const brief = (await t.run((ctx) => ctx.db.query("vaultDocuments").collect())).find(
+      (d) => d.kind === "web_research",
+    );
+    expect(
+      brief,
+      "no research brief was persisted -- the assertions below would be vacuous",
+    ).toBeDefined();
+    expect(brief?.sourceThreadId).toBe(THREAD);
+    expect(brief?.sourceThreadId).not.toBe(ROOT);
+    expect(brief?.sourcePlanId).toBe(planId);
+
     // …and a run that never searched is carried as such, not as an empty search.
     //
     // 16-09 CHANGED HOW, NOT WHETHER. This half used to assert a `research.persisted` row carrying

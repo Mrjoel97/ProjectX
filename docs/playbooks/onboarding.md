@@ -1,5 +1,14 @@
 # Playbook: Persona Onboarding & Business Profile
 
+> Last verified: 2026-08-22 (26-14 — **ONE EXPORT, NO BEHAVIOUR CHANGE.** `readLiveForTenant` (the
+> plain function behind the `liveForTenant` internalQuery) is now exported so `reportsBusiness.ts`
+> can read the live blueprint inside a `tenantQuery` — a tenantQuery cannot `runQuery` an internal
+> one, and a second hand-rolled reader of the same row is how two surfaces come to disagree about
+> what "live" means. The blueprint plane itself is untouched. Reports counts completeness with
+> `completenessOver(BLUEPRINT_FIELDS, f => blueprint[f] !== null)` and NEVER `Object.keys`:
+> `BusinessBlueprint` is a total mapped type, so a key count reads 11/11 for a blank blueprint.)
+>
+
 > Last verified: 2026-08-17 (25-06 Gate 1 — **THE MICROSOFT DISCONNECT COPY WAS SENDING MOST USERS
 > TO THE WRONG PORTAL.** `DisconnectMicrosoft.tsx` told every user to remove Pikar in "Microsoft My
 > Apps". My Apps is the **work/school** portal; a personal Microsoft account holder who follows that

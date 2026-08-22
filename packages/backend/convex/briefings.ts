@@ -59,3 +59,91 @@ export const byThread = tenantQuery({
       .order("desc")
       .first(),
 });
+
+/** The Command Center's briefing card. Max rows before it says so rather than growing unbounded. */
+const LATEST_ITEM_CAP = 5;
+
+/**
+ * A BOUNDED PROJECTION of one briefing row — NOT the row. `byThread` above returns the raw `Doc`
+ * because the workspace card was written against it; copying that here would quietly ship every
+ * future column to a second surface (the `savedPrompts` rule).
+ *
+ * THE ONE MODEL-OWNED FIELD is `synopsis`, and it is labelled as such by `synopsisOrigin` below.
+ *
+ * WHAT IS DELIBERATELY ABSENT, and why: `gist`, `category` and `deadline` are MODEL-OWNED prose
+ * (schema.ts calls `deadline` "a model-extracted SUGGESTION string — rendered, never parsed into
+ * an action"). This card is a summary with a LINK BACK TO THE WORKSPACE, so none of them appears
+ * next to anything that reads like a control, and there is no affordance here that promises an
+ * action: the chat → PLAN → Approve gate stays the only route to acting on a briefing (SC-4).
+ * `id`/`sender`/`subject`/`ts`/`bucket` are code-owned Gmail facts (ADR-004), never model output.
+ *
+ * This is a READ. It writes nothing — no log-plane row (the module property asserted statically in
+ * llmRedaction.test.ts), and no "seen" marker either.
+ */
+export type LatestBriefing = {
+  createdAt: number;
+  range: string;
+  tz: string;
+  listedCount: number;
+  itemCount: number;
+  synopsis: string | null;
+  /**
+   * CODE-OWNED PROVENANCE for the field above, constant by construction and never read from the
+   * row: `synopsis` is the MODEL's cross-message lede (written at `llm.ts` from `digestInbox`),
+   * unlike every other field here, which is a Gmail/DB fact. It ships because the card renders
+   * the lede; it ships MARKED so no renderer can present a model sentence as the owner's own
+   * word without the wire having said otherwise.
+   */
+  synopsisOrigin: "model";
+  items: {
+    id: string;
+    bucket: "today" | "yesterday" | "thisWeek";
+    sender: string;
+    subject: string;
+    ts: number;
+    needsReply: boolean;
+  }[];
+  capped: boolean;
+};
+
+/**
+ * The tenant's newest briefing across every thread → the Command Center card.
+ *
+ * `by_tenant_createdAt` (already on the table; no schema change) and NOT `by_thread`: a tenant-only
+ * prefix on `by_thread` orders by `threadId`, which would return the alphabetically-last thread's
+ * briefing and call it the newest. This orders on the WRITTEN `createdAt`, which is also the field
+ * the recency assertion below reads — `byThread`'s `_creationTime` order can disagree with it for a
+ * back-dated row, so the two readers are deliberately indexed on different columns.
+ */
+export const latestForTenant = tenantQuery({
+  args: {},
+  handler: async (ctx): Promise<LatestBriefing | null> => {
+    const row = await ctx.db
+      .query("briefings")
+      .withIndex("by_tenant_createdAt", (q) => q.eq("tenantId", ctx.tenantId))
+      .order("desc")
+      .first();
+    // `null`, never `{}`: "this tenant has never been briefed" is a state the card renders, not a
+    // failure and not an empty briefing.
+    if (row === null) return null;
+    return {
+      createdAt: row.createdAt,
+      range: row.range,
+      tz: row.tz,
+      listedCount: row.listedCount,
+      // The row's TRUE item count, kept beside the capped projection so "5 of 12" is sayable.
+      itemCount: row.items.length,
+      synopsis: row.synopsis ?? null,
+      synopsisOrigin: "model",
+      items: row.items.slice(0, LATEST_ITEM_CAP).map((item) => ({
+        id: item.id,
+        bucket: item.bucket,
+        sender: item.sender,
+        subject: item.subject,
+        ts: item.ts,
+        needsReply: item.needsReply,
+      })),
+      capped: row.items.length > LATEST_ITEM_CAP,
+    };
+  },
+});

@@ -1178,6 +1178,9 @@ async function persistResearchFindings(
       webSearchCalls: res.webSearchCalls,
       declaredUnsupported: res.declaredUnsupported,
       retrievedAt: res.retrievedAt,
+      // 26-11 (CONT-01): the THREAD and PLAN, not `rootRequestId` (which stays the correlation key).
+      sourceThreadId: args.threadId,
+      sourcePlanId: args.planId,
       rootRequestId: args.rootRequestId,
       incomplete: res.incomplete,
       incompleteReason: res.incompleteReason,

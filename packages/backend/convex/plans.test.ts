@@ -586,6 +586,71 @@ describe("resetPlan clears the media deck AND the render plane (20-02 MEDIA-01)"
   });
 });
 
+describe("reportForPlan delivery proof (26-14: gmail.sent OR graph.sent)", () => {
+  test("A MICROSOFT SEND IS DELIVERED — the join counts graph.sent, and a missing id is not a no", async () => {
+    // THE SHIPPED DEFECT: this join filtered `eventType === "gmail.sent"` only, while the Graph
+    // arm writes `graph.sent`, so the Microsoft proof row was invisible to the cockpit's own
+    // report card. Reverting to the single literal turns `delivered` false for cid_ms and fails
+    // here — which the original correction had no test to do, because its only consumer was
+    // `messageId` and Graph deliberately returns none, making the widening a silent no-op.
+    const t = convexTest(schema, modules);
+    const { planId } = await t.run(async (ctx) => {
+      const planId = await ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: "thread_ms",
+        status: "delivering",
+        recipients: ["g@example.com", "m@example.com", "n@example.com"],
+        createdAt: Date.now(),
+      });
+      for (const [correlationId, recipient] of [
+        ["cid_g", "g@example.com"],
+        ["cid_ms", "m@example.com"],
+        ["cid_none", "n@example.com"],
+      ] as const) {
+        await ctx.db.insert("requests", {
+          tenantId: TENANT,
+          correlationId,
+          goal: "g",
+          recipient,
+          status: "sent",
+          attachmentRefs: [],
+          planId,
+          createdAt: Date.now(),
+        });
+      }
+      await ctx.db.insert("audit", {
+        tenantId: TENANT,
+        correlationId: "cid_g",
+        eventType: "gmail.sent",
+        actor: "system",
+        payload: { messageId: "gmail-abc" },
+        ts: Date.now(),
+      });
+      // Graph: 202 with an empty body — a proof row that deliberately carries NO message id.
+      await ctx.db.insert("audit", {
+        tenantId: TENANT,
+        correlationId: "cid_ms",
+        eventType: "graph.sent",
+        actor: "system",
+        payload: { requestId: "req-1", provider: "microsoft" },
+        ts: Date.now(),
+      });
+      return { planId };
+    });
+
+    const report = await t
+      .withIdentity({ subject: TENANT })
+      .query(api.plans.reportForPlan, { planId });
+    const by = Object.fromEntries(report.map((r) => [r.recipient, r]));
+
+    expect(by["g@example.com"]).toMatchObject({ delivered: true, messageId: "gmail-abc" });
+    // The Microsoft row is DELIVERED with no id — the two facts are independent.
+    expect(by["m@example.com"]).toMatchObject({ delivered: true, messageId: null });
+    // And no proof row at all is the only thing that means undelivered.
+    expect(by["n@example.com"]).toMatchObject({ delivered: false, messageId: null });
+  });
+});
+
 describe("reportForPlan attachment extension (per-recipient delivered attachment url)", () => {
   test("each report row gains attachments derived from the request's attachmentRefs", async () => {
     const t = convexTest(schema, modules);

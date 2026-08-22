@@ -1,5 +1,20 @@
 # Playbook: Authorization (tenancy + ownership)
 
+> Last verified: 2026-08-22 (26-14 — **the /ops gate-decision tile read a key the backend never
+> wrote.** No authorization boundary changed: the owner-only mount rule, the `ownerQuery` refusals
+> and the `deadLetters:listAll` subscription guard are all untouched, and `opsPresentation.test.ts`
+> still proves a non-owner never mounts them. What changed is inside the TENANT-visible half of the
+> page. `EvalSignals` rendered `dc.edit`, while `review.ts`'s validator union says `edit_text` and
+> `pipeline.ts` writes `decisionCounts[evt.decision]` verbatim — so the tile showed a permanent
+> `edit 0` and every real edit-with-changes decision was invisible. It now reads `dc.edit_text` and
+> appends `otherDecisions` when a literal this build does not know about moved a number.
+>
+> **The mock was seeding the fiction.** `decisionCounts: { approve: 2, edit: 0, reject: 0 }` — a key
+> nothing writes, at the one value that cannot distinguish a correct read from a broken one. It now
+> carries the real literals with NON-ZERO counts and the test asserts the rendered string, so
+> reverting the tile to `dc.edit` turns three tests red. 21/21 in `app/(app)/ops`.)
+>
+
 > Last verified: 2026-08-21 (26-10 pre-flight — **THE GRANT NOW HAS AN INVERSE.**
 > `owner:revokeOwner` ships beside `bootstrapOwner`. `owner.test.ts` 16/16, `isolation.test.ts` 32/32.)
 >

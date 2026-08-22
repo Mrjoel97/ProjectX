@@ -10,7 +10,10 @@
 import { v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
 
-const CURSOR_NAME = "worm-audit";
+/** The one WORM cursor row. EXPORTED for `reportsGovernance.wormExport` — the owner-facing read
+ *  must name the same row the exporter advances, and a second copy of this literal is how a report
+ *  comes to describe a cursor nobody is writing. */
+export const CURSOR_NAME = "worm-audit";
 
 /** Last audit ts exported to immutable storage; 0 baseline until the first export. */
 export const getCursor = internalQuery({

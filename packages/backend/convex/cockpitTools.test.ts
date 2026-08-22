@@ -1822,6 +1822,14 @@ test("createDocument(long) saves ONE governed vault artifact with a derived PDF 
   expect(doc.mimeType).toBe("text/markdown");
   expect(doc.origin).toBe("agent");
   expect(doc.status).toBe("ready");
+  // 26-11 (CONT-01): the THREADING ITSELF, not merely the validator shape. createdDocs.test.ts
+  // calls insertCreatedDoc directly, so it can only prove the two args exist; this asserts that
+  // llm.ts actually passes the plan's own ids THROUGH the tool. Both come from `readPlan()`, never
+  // from a model-supplied argument -- otherwise the model could stamp a document with another
+  // thread's provenance. MUTATION: drop the two fields at the insertCreatedDoc call site in llm.ts
+  // and this reddens while createdDocs.test.ts stays green. That asymmetry is the whole point.
+  expect(doc.sourcePlanId).toBe(planId);
+  expect(doc.sourceThreadId).toBe(await t.run(async (ctx) => (await ctx.db.get(planId))?.threadId));
   expect(doc.storageId).toBeDefined(); // ⇒ PreviewModal's canDownload is true, for free
   expect(await t.run((ctx) => ctx.storage.getUrl(doc.storageId!))).not.toBeNull();
 

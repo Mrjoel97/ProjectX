@@ -1,3 +1,133 @@
+> Last verified: 2026-08-23 (26-19 Task 2 — **`briefings.ts` gains ONE reader,
+> `briefings.latestForTenant`, for the Command Center's briefing card.** Append-only writer
+> untouched; `byThread` untouched.
+>
+> It reads the EXISTING `by_tenant_createdAt` index — no schema change — and returns a BOUNDED
+> projection (max 5 items) or `null`. Rows are append-only, so index order IS recency: `.order("desc")
+> .first()` is the whole "latest" story, no scan. `null` for a tenant with no briefing is a real
+> answer, not a throw and not an empty object.
+>
+> **Model-owned prose is LABELLED, not laundered.** The row mixes code-owned facts (`id`, `sender`,
+> `subject`, `ts`) with model-authored text (`gist`, `synopsis`, `deadline`). The adversarial pass
+> caught `synopsis` riding into a Command Center projection carrying nothing to distinguish it from
+> the facts rendered beside it — this repo's documented provenance-laundering class, where
+> agent-written text gets presented as the owner's own word. The projection now ships a code-owned
+> `synopsisOrigin: "model"` literal and the card renders it under an explicit "Pikar summary"
+> attribution, asserted on the rendered string. `deadline` stays a rendered SUGGESTION, never parsed
+> into an action.
+>
+> **Briefing affordances are workspace LINKS ONLY.** Every row anchor goes to `/dashboard/workspace`.
+> No row may offer to reply, send or schedule — asserted by scanning every `<a>`/`<button>` label in
+> the rendered card against those verbs, not by checking one known button. A briefing card that
+> promises an action it cannot perform is the failure mode this rule exists to stop.)
+
+> Last verified: 2026-08-22 (26-17 Task 3 — **WATCH-GATE ONLY, no cockpit behaviour changed.**
+> `e2e/reports.spec.ts` gained an `expand()` helper and its nav assertion flipped from dark to
+> live on the owner's UAT verdict. The helper exists because the governance and deployment cards are
+> now native `<details>` that start CLOSED, so any assertion about their CONTENTS must open them
+> first — and it CLICKS THE SUMMARY rather than setting `open` from script, because the click is
+> the path a user takes and the property is what the assertion then checks.
+>
+> Worth knowing for the next spec here: `page.content()` still contains a collapsed `<details>`'s
+> body, so a DOM needle-scan for leaked content works whether or not the card is open — but
+> `toBeVisible()` does not. The privacy sweep deliberately relies on the first and expands for the
+> second.)
+>
+
+> Last verified: 2026-08-22 (26-17 Task 1 — **WATCH-GATE ONLY, no cockpit behaviour changed.**
+> This playbook watches `apps/web/e2e/`, and `reports.spec.ts` is new. Two things in it are worth
+> knowing before writing the next spec in this directory:
+>
+> - **It stages hostile data on purpose.** Two audit rows carry a recipient address and a prose
+>   draft under keys the viewer's allowlist does not name, and one carries prose under a key it
+>   DOES name. The test then scans `page.content()` for those exact strings. An absence assertion
+>   is worthless without a matching presence assertion, so it also asserts the allowlisted refs
+>   (`plan-<marker>`, `sha256:<marker>`) DID render — otherwise the sweep passes on an empty table.
+> - **It flips the owner bit and restores it in a `finally`.** `owner:bootstrapOwner` then
+>   `owner:revokeOwner` on the e2e tenant is what makes the role split real browser evidence rather
+>   than a component-test claim (26-08's "owner-vs-non-owner needs a second account" is no longer
+>   true). A leaked owner bit would silently make every later run's non-owner assertion vacuous,
+>   which is why the revoke is in `finally` and not at the end of the test body.
+>
+> - **ORDER IS LOAD-BEARING IN THIS DIRECTORY, and it cost a debugging cycle to learn twice.**
+>   `convex run` ENDS THE BROWSER SESSION on a local deployment (already recorded in
+>   `e2e/README.md`), so the role-split test — the only one calling it mid-test — must run LAST.
+>   With it in the middle, every later test loaded the page unauthenticated and `auditPage` simply
+>   never resolved, which presents as a hung query, not as a dead session. If a spec here ever hangs
+>   on a query that works in isolation, check what ran before it.
+>
+> **EXECUTED 7/7** against a rebuilt `:3111` on 2026-08-22, after seeding a fresh e2e account
+> through the real invite-gated signup form (`invites.__seedInvite` → `e2e/seed-user.setup.ts`).)
+>
+
+> Last verified: 2026-08-22 (Foglamp tracing — **NO COCKPIT BEHAVIOUR CHANGED.** `llm.ts` and
+> `dispatch.ts` gained trace bindings only: 16 `fogIntegration({ agentName })` properties on the
+> existing `generateText`/`generateObject` calls, plus `traced()` around `runAgentLoop` and
+> `runSpecialistTurn` so the SHARED loop carries the CALLER agent identity (`cockpit-agent`,
+> `research-specialist`, `media-director`, `growth-specialist`). That indirection is forced:
+> `agentName` must be a static literal and one call site serves six agents. Rules, invariants and
+> the untraceable calls: `docs/playbooks/tracing.md`.)
+>
+
+> Last verified: 2026-08-22 (26-14 — **A SHIPPED DEFECT IN `plans.reportForPlan`, CORRECTED.** It
+> joined delivery proof with `.filter(eq(eventType, "gmail.sent"))` only, while the Microsoft arm
+> writes `graph.sent` (`graph.ts:122`) — so EVERY Microsoft send has been reading as undelivered in
+> the cockpit'''s own REPORT card since the provider landed. A provider was added without this join
+> following it. Both literals now count. The rule the new Reports plane applies for the same fact:
+> **delivery is proven by the EXISTENCE of a proof row, never by a message id** — Graph returns 202
+> with an empty body and deliberately records no id, so `messageIdPresent` is reported separately
+> as a fact about the provider'''s response shape rather than about delivery.)
+>
+
+> Last verified: 2026-08-22 (26-13.1 — **WATCH-GATE ONLY, no cockpit behaviour changed.** This
+> playbook watches `apps/web/e2e/`, and `content.spec.ts` gained two tests: the image lane renders
+> and opens, and title search narrows the shelf. The cockpit-facing fact below is unchanged — an
+> image card's Reuse is the same `/dashboard/workspace?thread=…` link every other artifact carries,
+> and the shelf still holds no other way to act on a conversation.)
+>
+
+> Last verified: 2026-08-22 (26-13 Task 3 — **WATCH-GATE ONLY, no cockpit behaviour changed.**
+> `apps/web/e2e/content.spec.ts` changed one assertion when the owner's UAT approval activated the
+> Content nav item: the spec asserted a disabled `Soon` rail item before the gate, and asserts a
+> live `/dashboard/content` link after it. The cockpit-facing fact recorded in the entry below is
+> unchanged — Reuse is still a link into `/dashboard/workspace?thread=…` and nothing else.)
+>
+
+> Last verified: 2026-08-22 (26-13 — **WATCH-GATE PLUS ONE REAL COCKPIT-ADJACENT FACT.** This
+> playbook watches the whole `apps/web/e2e/` prefix, so it sees the new `e2e/content.spec.ts`. That
+> spec exercises the Content library and touches NO cockpit behaviour — but the surface it links to
+> is this one, and that is the part worth recording here: **the Content shelf's "Reuse" control is a
+> LINK into the cockpit and nothing else.** `/dashboard/workspace?thread=<id>` for a document or
+> memo, `&view=canvas` for a reel — both hrefs are built server-side in `content.ts`, from the
+> artifact's own `sourceThreadId`, and the page holds no other way to act on a conversation. There is
+> no duplicate, no attachment, no send and no dispatch: `content.ts` exports only `tenantQuery`s, so
+> a reuse-side write is not something the module could do. The workspace's own `?thread=` deep link
+> (the VOIC-04 handoff) is what receives it, unchanged — `openThread` re-opens the conversation at
+> whatever gate it already stands at, and every approval boundary still applies.
+>
+> Also here because the cockpit owns the artifact: the shelf opens documents and memos through the
+> Vault's `PreviewModal`, reached by id exactly as `workspace/cards.tsx`'s `VaultDocModal` does. A
+> reel is deliberately NOT opened that way — the modal would play the row's own bytes, and Content
+> plays only through `api.media.reel`, whose non-null url is the validated-assembly guarantee.)
+>
+
+> Last verified: 2026-08-22 (26-11 -- **REAL cockpit behaviour changed, twice.** (1) `createDocument`
+> now stamps the artifact with the thread and plan it was written in: `insertCreatedDoc` gained
+> optional `sourceThreadId`/`sourcePlanId`, and `llm.ts` passes both AT THE INSERT CALL SITE ONLY --
+> never into the shared `docArgs` object, which is also spread into `patchCreatedDoc`, whose
+> validator has no such fields (a typecheck failure, not a test failure). Both values come from the
+> `readPlan()` row, never from a model-supplied tool argument, so the model cannot stamp a document
+> with another thread's provenance. `persistResearchFindings` does the same through `dispatch.ts`;
+> `rootRequestId` stays the CORRELATION key and is NOT a thread id. (2) The `searchVault` fence now
+> tells the model who wrote what it retrieved: a chunk from a PROMOTED artifact is labelled
+> "written by the assistant, promoted by you". Marked ONLY inside the fence -- the `titles` array is
+> labels-to-UI for the source card and suffixing it would corrupt the stored content-plane row.
+>
+> **The sentence 26-13's promotion control must show the user:** *"Promoting a document makes it
+> reference material the assistant can cite -- it can no longer be rewritten in this conversation."*
+> That is not UX polish: `patchCreatedDoc` refuses any row whose `origin !== "agent"`, so promotion
+> genuinely ends in-thread revision for that artifact and the only reversal is deleting it.)
+>
 > Last verified: 2026-08-21 (`apps/web/e2e/` changed again — **NO COCKPIT BEHAVIOUR DID.** This
 > playbook watches that whole prefix, so it sees `finance.spec.ts`. 26-10 Task 1 executed the
 > Finance browser gate for the first time; five spec defects were fixed and the connected cost

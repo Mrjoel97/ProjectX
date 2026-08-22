@@ -15,7 +15,7 @@ import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/s
 import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { vaultIngestPool } from "./index";
+import { vaultIngestPool, workflow } from "./index";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
@@ -710,4 +710,193 @@ describe("onIngestComplete (ingest failure handler)", () => {
     });
     expect(await status(t, doc)).toBe("ready");
   });
+});
+
+// ── 26-11 (CONT-01): promoteToReference, the explicit trust transition ────────────────────────────
+//
+// Phase 18 left agent-created artifacts structurally unreachable by retrieval: `insertCreatedDoc`
+// deliberately does not call `startIngest`, so there is no rag entry and no graph node to exclude.
+// Promotion is the ONE door through which model-authored text enters the corpus, and a human opens
+// it one row at a time.
+//
+// THE COUNTING RULE: ingest-once evidence is the `workflow.start` spy count and NOTHING else.
+// `origin === "agent_promoted"` is inert (the schema pre-registers the literal and no retrieval
+// path reads it), `ragEntryId` is never set in this file (fake timers — the workflow never runs),
+// and spendLedger writes nothing at $0. Each of those would pass while promotion was broken.
+describe("26-11 promoteToReference", () => {
+  /** Every ingest workflow start, in call order. THE ingest-once evidence. */
+  const started: { vaultDocId: string }[] = [];
+  /** Local: the sibling describe's WF_ID is block-scoped to it. */
+  const WF_ID = "wf-test" as never;
+
+  beforeEach(() => {
+    started.length = 0;
+    vi.spyOn(workflow, "start").mockImplementation((async (
+      _ctx: unknown,
+      _fn: unknown,
+      fnArgs: { vaultDocId?: unknown },
+    ) => {
+      started.push({ vaultDocId: String(fnArgs?.vaultDocId) });
+      return "wf_test" as never;
+    }) as never);
+    // The file-level afterEach(vi.restoreAllMocks) already restores this.
+  });
+
+  /** An agent-created artifact as `insertCreatedDoc` writes it: origin "agent", ready, NO ingest. */
+  const seedAgentDoc = (t: ReturnType<typeof convexTest>, tenantId = TENANT) =>
+    seedDoc(
+      t,
+      {
+        title: "Q3 pricing one-pager",
+        kind: "created_document",
+        source: "agent",
+        category: "workspace-docs",
+        mimeType: "text/markdown",
+        text: "Raise the retainer to $4,200.",
+        origin: "agent",
+        status: "ready",
+        sourceThreadId: "thread_prov",
+      },
+      tenantId,
+    );
+
+  const rowOf = (t: ReturnType<typeof convexTest>, id: Id<"vaultDocuments">) =>
+    t.run(async (ctx) => ctx.db.get(id));
+
+  test("promoting a created document flips origin, moves it to processing and starts ingest exactly once", async () => {
+    const t = withIngest();
+    const docId = await seedAgentDoc(t);
+
+    const res = await asTenant(t).mutation(api.vault.promoteToReference, { vaultDocId: docId });
+
+    expect(res).toEqual({ ok: true, state: "processing" });
+    const row = await rowOf(t, docId);
+    expect(row?.origin).toBe("agent_promoted");
+    // NOT cosmetic: onIngestComplete early-returns on any row not in "processing", so without this
+    // a failed ingest would be completely silent (see the failure test below).
+    expect(row?.status).toBe("processing");
+    expect(started).toEqual([{ vaultDocId: docId }]);
+  });
+
+  test("a replayed promote starts no second ingest and returns already_promoted", async () => {
+    const t = withIngest();
+    const docId = await seedAgentDoc(t);
+
+    const first = await asTenant(t).mutation(api.vault.promoteToReference, { vaultDocId: docId });
+    // SEQUENTIAL, not concurrent: convex-test serializes mutations and this suite has no
+    // concurrency primitive. A Convex mutation IS a serializable transaction, so the second call
+    // re-reads "agent_promoted" and no-ops — that is the whole compare-and-swap.
+    const second = await asTenant(t).mutation(api.vault.promoteToReference, { vaultDocId: docId });
+
+    expect(first).toEqual({ ok: true, state: "processing" });
+    expect(second).toEqual({ ok: true, state: "already_promoted" });
+    expect(started).toHaveLength(1);
+  });
+
+  test("another tenant's created document is ineligible and is left untouched", async () => {
+    const t = withIngest();
+    const foreign = await seedAgentDoc(t, "tenant_b");
+
+    // A RETURN VALUE, never a throw — the deleteVaultDoc precedent. A throw would also leak that
+    // the id exists; every foreign/missing outcome collapses to the same result.
+    const res = await asTenant(t, TENANT).mutation(api.vault.promoteToReference, {
+      vaultDocId: foreign,
+    });
+
+    expect(res).toEqual({ ok: false, reason: "ineligible" });
+    const row = await rowOf(t, foreign);
+    expect(row?.origin).toBe("agent");
+    expect(row?.status).toBe("ready");
+    expect(started).toHaveLength(0);
+  });
+
+  test("a user upload is ineligible", async () => {
+    const t = withIngest();
+    // `origin` ABSENT is exactly what a user upload is — seedDoc's default.
+    const docId = await seedDoc(t);
+
+    expect(await asTenant(t).mutation(api.vault.promoteToReference, { vaultDocId: docId })).toEqual(
+      {
+        ok: false,
+        reason: "ineligible",
+      },
+    );
+    expect(started).toHaveLength(0);
+  });
+
+  test("a folder digest is ineligible", async () => {
+    const t = withIngest();
+    // THE case a negation-shaped guard (`origin !== undefined`) would wrongly accept. A digest is
+    // already ingested; promoting it would start a second ingest for the same row.
+    const docId = await seedDoc(t, { origin: "folder_digest", status: "ready" });
+
+    expect(await asTenant(t).mutation(api.vault.promoteToReference, { vaultDocId: docId })).toEqual(
+      {
+        ok: false,
+        reason: "ineligible",
+      },
+    );
+    expect(started).toHaveLength(0);
+  });
+
+  test("an unpromoted created document starts no ingest", async () => {
+    const t = withIngest();
+    await seedAgentDoc(t);
+    // The structural exclusion itself: nobody promoted it, so nothing was ever ingested and there
+    // is no rag entry for retrieval to reach. No origin predicate is involved anywhere.
+    expect(started).toHaveLength(0);
+  });
+
+  test("a failed promotion ingest is visible and re-promotable", async () => {
+    const t = withIngest();
+    const docId = await seedAgentDoc(t);
+    await asTenant(t).mutation(api.vault.promoteToReference, { vaultDocId: docId });
+    expect((await rowOf(t, docId))?.status).toBe("processing");
+
+    await t.mutation(internal.vaultIngest.onIngestComplete, {
+      workflowId: WF_ID,
+      result: { kind: "failed", error: "embed step died" },
+      context: { tenantId: TENANT, vaultDocId: docId, correlationId: "cid" },
+    });
+
+    const failed = await rowOf(t, docId);
+    expect(failed?.status).toBe("failed");
+    expect(failed?.failureReason).toBeTruthy();
+
+    // Without this clause the artifact is lost for good: retryStuckIngests skips non-"processing"
+    // rows, the origin guard refuses an already-promoted row, and patchCreatedDoc refuses it too.
+    const retry = await asTenant(t).mutation(api.vault.promoteToReference, { vaultDocId: docId });
+    expect(retry).toEqual({ ok: true, state: "processing" });
+    expect(started).toHaveLength(2);
+    expect((await rowOf(t, docId))?.status).toBe("processing");
+  });
+
+  test("a promoted document can no longer be revised in-thread", async () => {
+    const t = withIngest();
+    const docId = await seedAgentDoc(t);
+    await asTenant(t).mutation(api.vault.promoteToReference, { vaultDocId: docId });
+
+    // patchCreatedDoc refuses any row whose origin !== "agent". Promotion is therefore a ONE-WAY
+    // door, and the only reversal is deleting the artifact. This is an accepted ceiling, recorded
+    // in vault.md — widening the guard would leave a stale rag entry on the old content hash.
+    const res = await t.mutation(internal.vault.patchCreatedDoc, {
+      tenantId: TENANT,
+      threadId: "thread_prov",
+      index: 1,
+      title: "revised",
+      form: "short" as const,
+      markdown: "# revised",
+      contentHash: "hash_revised",
+    });
+    expect(res).toMatchObject({ ok: false });
+    expect(docId).toBeTruthy();
+  });
+
+  // NO "the promotion audit row carries refs only" TEST, because there is no audit row.
+  // `promoteToReference` deliberately writes none: vaultRedaction.test.ts scans the vault content
+  // plane for log-plane calls and inserts, and keeping that module log-free BY CONSTRUCTION is a
+  // stronger §4 guarantee than any payload assertion could be -- vault.ts is the one module holding
+  // raw document text, so the absence of the call site is the property worth protecting. The CALLER
+  // audits (the shipped `vault.searched` precedent lives in llm.ts); 26-13 owns that when it builds
+  // the promotion control. The invariant is enforced in vaultRedaction.test.ts, not here.
 });

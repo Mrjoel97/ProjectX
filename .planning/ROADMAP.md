@@ -77,7 +77,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   5. Reports provides bounded business, operations and governance projections, a server-sanitized audit view, owner-only WORM/skill/deployment facts, and a governed board-pack artifact path.
   6. Pipeline ships with — and never duplicates — Phase 19's tenant-scoped contacts/follow-up/consent/suppression substrate; the send-path suppression guard remains the trust boundary.
   7. Command Center v2 composes stable page summaries and deterministic next-move/health logic after the source pages land; every page passes package tests, typechecks, production build, playbook watchers and authenticated responsive UAT before its nav item becomes live.
-**Plans:** 11/20 plans executed
+**Plans:** 15/21 plans executed
 
 Plans:
 - [x] 26-01-PLAN.md — Shared result/window/money contracts and dashboard playbook ownership (Wave 1)
@@ -90,10 +90,11 @@ Plans:
 - [x] 26-08-PLAN.md — Media reserve/actual/refund/unlanded instrumentation (Wave 5)
 - [x] 26-09-PLAN.md — Tenant Finance projections and owner-only controls (Wave 6)
 - [x] 26-10-PLAN.md — Connected Finance route: executed browser gate + owner UAT (Wave 7) — replanned 2026-08-21, **closed 2026-08-22**. Owner UAT approved; it found and fixed a mobile clip in the Cost Console. Nav went live ahead of SC#7 on owner direction 2026-08-09 — recorded as an accepted deviation in 26-10-SUMMARY.md
-- [ ] 26-11-PLAN.md — Artifact provenance and idempotent promotion (Wave 8)
-- [ ] 26-12-PLAN.md — Bounded Content union, safe URLs, reuse and Refresh Research terminals (Wave 9)
-- [ ] 26-13-PLAN.md — Connected Content route, executed browser gate, owner UAT, then nav activation (Wave 10)
-- [ ] 26-14-PLAN.md — Business/operations reporting semantics and bounded projections (Wave 11)
+- [x] 26-11-PLAN.md — Artifact provenance and idempotent promotion (Wave 8) — **closed 2026-08-22**
+- [x] 26-12-PLAN.md — Bounded Content union, safe URLs and reuse terminals (Wave 9) — **closed 2026-08-22**. Title corrected: *Refresh Research* is NOT a Content terminal (CONT-01 amended 2026-08-22 — research briefs belong to the Knowledge Vault), and the plan body already excluded it
+- [x] 26-13-PLAN.md — Connected Content route, executed browser gate, owner UAT, then nav activation (Wave 10) — **closed 2026-08-22, owner UAT APPROVED** ("the page is minimalistic, it works great"); nav is live, `e2e/content.spec.ts` executed 7/7 both before and after activation
+- [x] 26-13.1-PLAN.md — The image lane, title search and thumbnails (Wave 10.1) — **closed 2026-08-22; a repair, not a feature**: 26-12 excluded `kind:"image"` from the shelf on a FALSE premise (those rows are standalone finished images, not media intermediates). Owner-directed 2026-08-22
+- [x] 26-14-PLAN.md — Business/operations reporting semantics and bounded projections (Wave 11) — **closed 2026-08-22.** A prior session had written it all, left it uncommitted and green; a 43-agent adversarial audit confirmed 25 findings (13 distinct defects) in that draft. The headline: **Defect 1 was fixed backend-only — `/ops` still rendered `edit 0`**, the entire user-visible symptom, behind a green suite. Root-caused at `review.ts` (`REVIEW_DECISIONS` derived from the validator union); two speculative reads DELETED (the audit-firehose `confirmedInWindow` scan, and `bucketWindow` with zero callers). core 1083, backend 2294, web ops 21, 4 mutation-verified guards
 - [ ] 26-15-PLAN.md — Sanitized governance projection and owner-only operational facts (Wave 11)
 - [ ] 26-16-PLAN.md — Immutable board-pack snapshot/render artifact (Wave 12)
 - [ ] 26-17-PLAN.md — Connected Reports route, privacy gate, owner UAT, then nav activation (Wave 13)
@@ -233,7 +234,9 @@ Plans:
 
 ## EXTERNAL BLOCKER (non-code, unscheduled): the legal entity
 
-**Status as of 2026-08-07: NOT STARTED.** Recorded here as a first-class roadmap item because it is
+**Status as of 2026-08-22: STILL NOT STARTED** (owner reconfirmed during the 26-13 UAT, when they
+asked for the social-accounts tab this blocks). First recorded 2026-08-07. Kept as a first-class
+roadmap item because it is
 not a coding task and therefore has never had a phase, yet it gates more product surface than any
 single phase does. `.planning/design/growth-surfaces-canvas-funnels-connections.md` §5.8 calls it
 "the highest-leverage non-code task in the project."

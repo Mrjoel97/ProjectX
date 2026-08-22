@@ -77,7 +77,11 @@ function EvalSignals() {
         icon={<ShieldIcon size={16} />}
         value={
           <span style={{ fontSize: "1rem" }}>
-            {`approve ${dc.approve ?? 0} · edit ${dc.edit ?? 0} · reject ${dc.reject ?? 0}`}
+            {/* 26-14: `dc.edit_text`, NOT `dc.edit`. The backend key is the review validator's
+                literal; this tile read `dc.edit` and so rendered a permanent `edit 0` — the
+                user-visible half of the defect, which a backend-only correction leaves standing. */}
+            {`approve ${dc.approve ?? 0} · edit ${dc.edit_text ?? 0} · reject ${dc.reject ?? 0}`}
+            {signals.otherDecisions > 0 ? ` · other ${signals.otherDecisions}` : ""}
           </span>
         }
         caption={`Regenerates: ${signals.regenerateTotal}. Legacy pipeline lane only — cockpit rows carry no gate decisions.`}

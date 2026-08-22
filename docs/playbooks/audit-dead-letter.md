@@ -1,5 +1,73 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-08-22 (26-16 — **a new event: `report.pack_generated`.**)
+>
+> - **Written by `convex/reportPack.ts` — the ACTION, not the vault module.** The vault content
+>   plane is log-free BY CONSTRUCTION (`vaultRedaction.test.ts` scans `vault.ts` for any audit
+>   call), so the caller audits; the shipped precedents are `llm.ts`'s `document.created` and
+>   `contentAudit.ts`'s `vault.promoted`. The action is also the only place that knows the byte
+>   length.
+> - `correlationId` is `report:pack:<vaultDocId>` (mirroring `vault:promote:<vaultDocId>`), actor
+>   `system`, and the payload is exactly fourteen keys: `vaultDocId`, `packHash`, `sinceMs`,
+>   `untilMs`, `timeZone`, `timeZoneSource`, `result`, `bytes`, `partialSections`, `sentCount`,
+>   `reviewCount`, `deadLetterCount`, `feedbackCount`, `auditRowCount`. Refs, ids, counts, the
+>   resolved window and the outcome — never a title, never a recipient, never a line of the pack's
+>   own prose. All fourteen are allowlisted in `packages/contracts/src/auditProjection.ts` and every
+>   value passes `SAFE_REF` (the timezone is an IANA name, `timeZoneSource` is `browser-fallback`,
+>   `result` is `generated` / `replayed`).
+> - **The row is written ONLY when an artifact exists** (generated or replayed). A render failure has
+>   no `vaultDocId` to reference, an empty-string ref would be DROPPED and counted as an
+>   `unsafeDrop`, and `createDocument`'s shipped precedent is log-the-reason-without-an-audit-row —
+>   so a failed render logs the error NAME to the console and writes nothing here.
+> - The `report` CATEGORY appears in `AUDIT_VIEWER_CATEGORIES` automatically: it is DERIVED from the
+>   event namespace at read time, never hand-typed beside the table. Nothing was added for it.
+>
+
+
+> Last verified: 2026-08-22 (26-15 — **THE AUDIT VIEWER IS SAFE BY FILTERING, NOT BY SCHEMA, AND
+> THE MOCKUP SAID OTHERWISE.** `docs/design/mockups/pending-pages.html` promised the governance
+> table "carries refs, hashes, ids and counts only — that is a schema property, so this viewer is
+> safe by construction, not by filtering". It is not a schema property. `audit.log` declares
+> `payload: v.any()` and then assigns it to an `AuditPayload` — an interface, erased at runtime,
+> assigned straight out of `any` with no check — and ~96 write sites feed it. **A nested object is
+> in the table today:** `piiCounts: Record<string, number>` (`intake.ts:253`, `pipeline.ts:196`,
+> `vaultExtract.ts:497`), a shape `AuditPayload` calls "not representable". It is representable;
+> it is simply not TYPED. So the boundary is `packages/contracts/src/auditProjection.ts` and it has
+> TWO independent gates: a per-event KEY allowlist (an event with no row yields a shell — this fails
+> CLOSED, showing less rather than more), then a SHAPE check on every surviving value (bounded,
+> whitespace-free, markup-free primitives and string arrays; objects, arrays of objects and
+> oversized strings are DROPPED, never truncated and never stringified). Three keys are deliberately
+> absent and the reasons are the useful part: `piiCounts` (nested — kept out of the KEY gate so
+> `unsafeDrops` stays a real signal rather than firing on every redaction row), `userId` /
+> `ownerUserId` (a raw identity walking around the actor normalizer), and `tenant.deleted`'s
+> `deleted_<table>` counts (key names computed from `deletableTables()` at runtime, so they cannot
+> be enumerated honestly).
+>
+> **A GUARANTEE THAT HAD ZERO COVERAGE UNTIL A MUTANT FOUND IT.** "Never stringify the payload as a
+> fallback" was tested twice and neither test reached the code: both fed a nested object under a
+> key the ALLOWLIST already refuses, so the shape gate was never entered. A `JSON.stringify`
+> fallback survived the whole suite. Fixed by putting an object in an ALLOWLISTED key, and the
+> injection sweep now feeds every needle three ways — bare, object-wrapped, array-wrapped. **A test
+> that refuses input at gate 1 proves nothing about gate 2.**
+>
+> **WHAT THE PROJECTION DOES NOT CLAIM.** The guarantee is SHAPE. A credential-shaped token
+> (`sk-live-0000`) is character-for-character indistinguishable from a document id, so a write site
+> that puts one in an allowlisted key defeats this and no projection can see it. Redact-then-write
+> (§4) is still the primary control; this is the second one.
+>
+> **THE WORM CARD IS A CURSOR POSITION, NOT A HEALTH VERDICT** — the mockup's second false claim
+> ("Healthy · lag 5h"). `exportCursors` holds one number: the ts the exporter last said it had
+> written. No S3 object is read back and no Object Lock retention is checked, and a cron that died
+> mid-upload after advancing looks identical. `reportsGovernance.wormExport` therefore returns
+> `lastCursorAdvanceMs` (null until it has ever advanced — a different fact from "0 rows behind")
+> and returns NO `healthy` and NO `status` field; a test asserts those keys are absent, because a
+> verdict this data cannot support must not be inventable downstream. `rowsAwaitingExport` is a
+> FLOOR (`take(CAP+1)` → slice); `oldestAwaitingMs` is exact and is the honest "lag".
+> `CURSOR_NAME` is now exported from `wormCursor.ts` so the reader names the same row the exporter
+> advances. Evidence: contracts 21/21 with 5/5 mutants caught, backend `reportsGovernance` 17/17
+> with 6/6 caught.)
+>
+
 > Last verified: 2026-08-21 (25.1-06, D13 — **THE OWNER CAN NOW SEE DEAD LETTERS THAT ARE NOT HIS.**
 > deadLetters.test.ts 11/11, seven mutations, one of them fatal to a claim this entry corrects.)
 >

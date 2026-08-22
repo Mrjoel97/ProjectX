@@ -693,6 +693,7 @@ export async function saveReelToVault(
       text,
       status,
       sourcePlanId: a.planId, // Phase-26 provenance: this IS an authoritative write site
+      sourceThreadId: plan.threadId, // 26-11: the pair -- see mediaComplete.ts for why
       reelMeta,
       createdAt: Date.now(),
     });

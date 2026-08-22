@@ -1,5 +1,575 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-23 (26-19 Task 2 + 26-20 + ADVERSARIAL REMEDIATION — **HOME-01's backend
+> and Command Center v2 both exist; v2 IS NOT THE SURFACE A TENANT LANDS ON, and its browser gate
+> has NEVER RUN.** Read the last two paragraphs before believing anything is finished.
+>
+> **The composition.** `convex/home.ts` exposes TWO independent `tenantQuery` subscriptions —
+> `home.summary` and `home.health` — never one fat query, so a Pipeline failure cannot erase the
+> approvals/content/delivered sections. Every source read goes through ONE `orElse` degrade helper:
+> a throw or absence becomes that section's `unavailable` discriminant and NEVER the number 0.
+> `pipeline` composes `contacts.pipelineTiles` and nothing else (counts + `partial: "row-cap"`; no
+> opportunities, stages, value or raw contact rows). `home.health` only GATHERS narrow signals — the
+> verdict is delegated to core's `rollUpHealth`, so "healthy" has exactly one definition in the repo.
+>
+> **A CAPPED READ IS NEVER `ok`.** The adversarial pass found `scheduled-risk` failing OPEN: it read
+> one ~50-row page of `approvals.listScheduled`, discarded that page's own `nextCursor`, and reported
+> `ok` — a positive health claim — for a truncated read, so a risky send past the cap rendered under
+> a "healthy" badge. `home.ts` now returns `unknownSignal("scheduled-risk")` whenever
+> `page.nextCursor !== null` and no risk was found inside the page, and DROPS count/at so a floor can
+> never render as evidence. The rule generalises: **a bounded read may report `triggered`, but it may
+> only report `ok` when it can see the whole set.** Apply it to any signal added here.
+>
+> **`recommendNextMove` had the mirror-image bug and it is the one to remember.** `rollUpHealth` was
+> correctly fail-closed, but `recommendNextMove` scanned only for `triggered` and otherwise fell
+> through to the `workspace` fallback — whose copy is an all-clear. So a tenant whose sources FAILED
+> saw health "Unknown" and "Nothing needs your decision right now" on the same screen. Two
+> fail-closed rules had drifted apart because only one of them was written down. `HomeRecommendation`
+> now carries a REQUIRED `certain: boolean` (required, not `?:` — an optional field can never be
+> mutation-checked by the compiler), false exactly when `rollUpHealth` says unknown, and the
+> uncertain fallback renders `HOME_UNCERTAIN_COPY`. **Nothing triggered is an all-clear only when
+> everything reported.**
+>
+> **One copy map cannot do two jobs.** `HOME_PRIORITY_COPY.label` holds imperative NEXT-MOVE
+> headlines. The health card reused them as status ROW labels, so it commanded six actions while
+> declaring nothing blocked ("Connect your mailbox — Clear"). Row labels now come from
+> `HOME_SIGNAL_LABEL` (neutral noun phrases) and state words from `SIGNAL_STATE_WORD`.
+>
+> **`connection-failure` copy says "Connect", not "Reconnect".** Its only evidence is
+> `gmailStatus.connected`, which is `!!row` — a tenant who NEVER connected is indistinguishable from
+> one whose connection broke, and "reconnect"/"restored" asserted a connection that may never have
+> existed. Splitting the code needs a real "was connected, now broken" probe in `gmailAuth` that does
+> not exist; the copy is true of both cases and cost nothing. NOTE the unresolved tension recorded
+> under Known gaps: v2 ranks this signal FIRST, which sits against the shipped cockpit invariant that
+> the dashboard never leads with the email channel.
+>
+> **`CommandCenter.tsx` derives, it does not trust.** `HealthCard` recomputes the verdict with
+> `rollUpHealth(signals)`; the wire's `health.state` is never the rendered source of truth. It had
+> been rendered verbatim, so `{ state: "healthy", signals: [] }` printed "Healthy / Nothing is
+> blocked." above six rows all reading Unknown — and no test could tell, because every fixture failed
+> the shape guard on a MISSING key, so not one had a `state` that DISAGREED with its `signals`.
+> When you fixture a discriminated payload, fixture the DISAGREEING case or you have tested nothing.
+>
+> **OWNER-APPROVED 2026-08-23; THE SWITCH IS GONE.** `/dashboard` renders `CommandCenter.tsx` and
+> nothing else. The one-line `COMMAND_CENTER_V2` boolean, `LegacyDashboard.tsx` and the TRIPWIRE
+> test that pinned the flag OFF were all deleted on approval — a fork kept past its decision is a
+> second home nobody renders. Two tests now assert the route mounts the Command Center with no
+> fork, no build-time env switch and no orphaned legacy file. **Rollback is no longer a flag:**
+> revert the approval commit. The source queries are untouched by that revert and every source page
+> works either way — presentation is reversible, stored data is unaffected.
+>
+> Note for whoever edits `dashboard/page.tsx` next: those two tests read its SOURCE TEXT, so
+> naming the removed symbols even in a comment fails them. Describe them in prose.
+>
+> **THE BROWSER GATE HAS NOW RUN: 8/8, twice, 2026-08-23.** `e2e/command-center.spec.ts` executed
+> against the local deployment with a production build on :3111 and the flag ON. Re-run it with
+> `26-20-UAT-SCRIPT.md`. Four things it caught that 3,900 unit tests, three typechecks and a
+> production build all missed — every one a live-integration fact a `convex-test` suite cannot see:
+>
+> 1. **The functions were never deployed.** `convex/lib/foglamp.ts` (uncommitted tracing work, not
+>    from these plans) sits under `convex/` without a `"use node"` directive, so `foglamp`'s
+>    `node:http` import failed to resolve and ABORTED EVERY PUSH. `home.js:summary`,
+>    `home.js:health` and `briefings.js:latestForTenant` were simply absent and all five sections
+>    rendered `error`. **Before trusting any browser gate here, run
+>    `npx convex function-spec | grep <module>`.** Green suites say nothing about what reached :3210.
+> 2. **The spec assumed ABSENCE as a fixture on a database that persists across runs** — three
+>    times, in three tables. It expected `scheduled-risk` and got `stale-approval` because the
+>    tenant holds 1056 `proposed` plans days old; it expected `scheduled-risk` to clear when it
+>    cancelled its own plan, but other `scheduled` rows remain. The product was right every time.
+>    The ladder now asserts MONOTONIC DESCENT plus at least one strict advance, and asserts `Clear`
+>    ONLY on signals whose absence the spec itself guarantees (`connection-failure`,
+>    `diagnostic-blocker`). Never assert a signal you do not own on a lived-in tenant.
+> 3. **"7 listed of 2 in this window."** The briefing card rendered `listedCount` and `itemCount`
+>    swapped and mislabelled — a part larger than its whole — and THE SPEC PINNED THAT EXACT STRING,
+>    so the gate was green over it. Both fixtures used numbers that read plausibly; the unit
+>    fixture was itself impossible (`listedCount: 2, itemCount: 9`). Now "Summarized N of M" with
+>    `summarized <= listed` asserted. A test that pins wrong output defends the defect.
+> 4. **A reflow race read as a clip.** `setViewportSize` resolves before CSS grid re-lays-out, so
+>    `boundingBox` returned the previous breakpoint's geometry — `right: 402` at 390px where a
+>    settled probe measured `374`. Fixed with a double-rAF barrier plus `expect.poll`. A genuine
+>    hang-off still fails on the timeout.
+>
+> **WHAT STILL HAS NO EVIDENCE.** the BLOCKING owner UAT (26-20 Task 2) — the human
+> judgement the browser cannot make: whether the ranking matches how the owner wants a morning
+> ranked, whether the copy reads true, and the standing conflict below. The flag is back OFF and
+> `26-20-SUMMARY.md` stays unwritten until the owner approves. The four gates that DID run are real and green:
+> core 1123/1123, backend 96 files/2369 tests, web 568/568, all three typechecks + the production
+> build (`/dashboard` present in the route manifest).)
+
+
+> Last verified: 2026-08-22 (26-19 Task 1 — **THE COMMAND CENTER PRIORITY ORDER IS PINNED IN PURE
+> CORE.** `packages/core/src/home.ts` owns the ONE total order — connection-failure >
+> unresolved-dead-letters > stale-approval > scheduled-risk > diagnostic-blocker >
+> binding-constraint > workspace — plus `HOME_PRIORITY_COPY`, `recommendNextMove` and
+> `rollUpHealth`. Two invariants, both mutation-proven (27 tests after the 26-20 remediation pass):
+>
+> **Every rendered string is code-owned.** `recommendNextMove` never spreads the signal; it reads
+> label/reason/route out of `HOME_PRIORITY_COPY[code]` where `code` comes from the frozen order, and
+> passes count/at through a finite-number guard. An injected `label`/`reason`/`route`/`subject` on a
+> signal, or a string `count`, cannot reach the output. Do not add an interpolated field here.
+>
+> **Health is fail-closed and `unknown` dominates `triggered`.** `rollUpHealth` returns "healthy"
+> only when all six `REQUIRED_HOME_SIGNALS` reported and every report is `ok`; a missing, malformed
+> or off-contract report returns "unknown" even when another signal is triggered. Absence is not
+> health — an empty or short array is "unknown". A source that can only ever report "unknown"
+> therefore pins the global verdict to "unknown" forever, so every required code needs a real
+> backing fact before it is added to `REQUIRED_HOME_SIGNALS`.
+>
+> Verify: `cd packages/core && npx vitest run home` (19 tests). The copy strings are duplicated as
+> literals in `home.test.ts` on purpose — asserting against `HOME_PRIORITY_COPY` itself would pass
+> no matter what the strings say.)
+
+> Last verified: 2026-08-22 (26-17 Tasks 2–3 — **OWNER UAT APPROVED AND THE REPORTS NAV IS LIVE.**
+> Verdict: *"The report interface is okay"*, with one change requested and made.
+>
+> **THE CHANGE: the Governance and Deployment cards collapse, and arrive CLOSED.** They were taking
+> the whole page. They are native `<details>`/`<summary>` — NOT a `useState` toggle — because the
+> element brings keyboard operation, the disclosure triangle, correct AT semantics and the
+> open/closed state for free; a hand-rolled toggle re-implements all four and gets the third wrong.
+> Only those two collapse: Business, Operations and Board pack stay open, because collapsing a
+> section nobody complained about hides a number the reader expects on arrival.
+>
+> **A CLOSED CARD STILL DISCLOSES WHETHER IT HAS ANYTHING**, via a `hint` in the summary
+> ("3 shown, more available", "12 active skills"). Hiding content is fine; hiding the EXISTENCE of
+> content would make an empty governance record and a full one look identical — the same class of
+> lie the rest of this page is built to avoid.
+>
+> **TASK 3: the rail item's `soon: true` became an `href`.** The branch keys off `href`, so
+> ROLLBACK IS DELETING IT, and rollback touches no data: a generated board pack is an ordinary vault
+> row and nothing on that rail rewrites one. `e2e/reports.spec.ts` test 1 flipped with it — it
+> asserted the nav was DARK before the UAT and asserts it is LIVE after; the record of the dark run
+> lives in 26-17-SUMMARY.md, not in a test asserting a state the product left behind (the 26-13 move).
+>
+> **A TEST THAT A PROSE COMMENT COULD SATISFY IS NOT A TEST.** The first hint assertion was
+> `expect(source).toContain("shown")` — and the explanatory COMMENT above the hint satisfied it, so
+> deleting the hint left the suite green. It now renders `Section` and asserts the hint appears
+> INSIDE `</summary>` (mutation-verified: moving it into the body turns the test red). The
+> call-site hints are covered by the browser gate's `getByText(/shown/)`, not by the component
+> suite — stated here because "covered" and "covered where" are different facts.
+>
+> EVIDENCE: component **28/28**, `e2e/reports.spec.ts` **EXECUTED 7/7** against a rebuilt `:3111`
+> with the nav live, web typecheck + prod build clean, watcher clean.)
+>
+
+> Last verified: 2026-08-22 (26-17 Task 1 — **THE REPORTS ROUTE, BUILT AND NAV-DARK.**
+> `/dashboard/reports` is reachable directly; its rail item is still `soon: true`. Task 3 activates
+> it only on the owner's UAT verdict, and rollback is deleting the href — no artifact is touched,
+> because a generated pack is an ordinary vault row.
+>
+> **THE ONE DECISION EVERYTHING ELSE HANGS OFF: THE WINDOW ANCHOR IS PINNED AT MOUNT.**
+> `const [anchorMs] = useState(() => Date.now())`, and a source-scan test asserts `Date.now()`
+> appears EXACTLY ONCE in the module. A live clock in render would be wrong twice: every re-render
+> mints a new `untilMs`, so every Convex subscription gets a new query key and the page refetches
+> forever instead of staying reactive; and `reportPackData.landPack`'s replay key is the CONTENT
+> hash, so a drifting upper bound makes every click a different report and fills the vault with
+> near-duplicate packs. Pinning is what makes "generate twice, get one artifact" true in a browser
+> and not only in a unit test. Changing the period recomputes `sinceMs` from the SAME anchor, and
+> all three sections plus the pack action receive ONE `args` object (asserted by name), so they
+> cannot drift a window apart.
+>
+> **THE DISPLAYED WINDOW IS THE ONE THE SERVER RESOLVED** — `auditPage` echoes its
+> `resolveDashboardWindow` output and the header renders that, so "every section shows the same
+> resolved window" is checkable rather than assumed.
+>
+> **THE COVERAGE VOCABULARY IS IMPORTED, NEVER RE-WRITTEN.** `countCell`, `coverageWord`,
+> `floorCell`, `fmtDate` and `fmtDateTime` are now exported from `@pikar/core` and used by BOTH
+> the PDF builder and this screen. A page that said "0" where the pack says "not measured" is the
+> 26-14 defect (a fix that never reached the renderer) inverted, and two surfaces drift by each
+> owning a copy.
+>
+> **A NON-OWNER NEVER CALLS AN OWNER QUERY.** `useQuery(..., isOwner ? {} : "skip")` — hiding a
+> control is presentation, not the boundary. The WORM card renders `lastCursorAdvanceMs` and NO
+> health word; a component test bans "Healthy"/"Degraded"/"OK" from that card, because 26-15
+> removed exactly that claim from the backend and the mockup.
+>
+> **EXECUTED: `e2e/reports.spec.ts` 7/7 IN THE BROWSER** against a rebuilt `:3111` and the local
+> backend — nav-dark gate, one-window synchronization, per-section render, the PRIVACY sweep, a
+> real generate→download→replay, and the owner/non-owner split. Component 22/22, web typecheck and
+> prod build clean.
+>
+> **THE BOARD PACK IS THE ONE NON-SEEDED CLAIM IN THAT RUN.** Its rows are seeded and prove UI
+> states only, but `generateBoardPack` executed the real `markdownToPdf` (pdf-lib, deterministic,
+> no network, no provider, no cent) and the real `ctx.storage.store`; the download href was a
+> minted `https:` storage URL, and the second click returned "Already generated for this window".
+> That is 26-16's content-hash replay observed end to end from a browser.
+>
+> **THREE THINGS THE RUN TAUGHT, all now written into the spec:**
+> (1) the window line must be waited for by PATTERN, never by "it changed" — switching periods hands
+> every subscription new args, so `useQuery` returns undefined and the header honestly reads
+> "Resolving the window…"; reading at the moment it merely differs captures that intermediate state.
+> All three sections blank together on the same args change, so no stale number ever sits under a
+> new header. (2) The timezone assertion must not hardcode a zone — the first draft asserted "UTC"
+> and failed a CORRECT page on a runner reporting `Africa/Dar_es_Salaam`; what the contract
+> promises is a named IANA zone plus the `(from your browser)` disclosure. (3) **`convex run` ENDS
+> THE BROWSER SESSION**, so the one test that calls it mid-test (the owner bootstrap/revoke) must
+> run LAST — with it in the middle every later test loaded the page unauthenticated and
+> `auditPage` never resolved, which reads as a hung query rather than a dead session.)
+>
+
+> Last verified: 2026-08-22 (26-16 — **THE BOARD PACK: ONE TRANSACTION, ONE ARTIFACT, NO SNAPSHOT
+> TABLE.** `convex/reportPack.ts` (`"use node"`, actions only) + `convex/reportPackData.ts` (its DB
+> half) + `buildBoardPackMarkdown` / `BoardPackInput` in `packages/core/src/reports.ts`.
+>
+> **THE SNAPSHOT IS A TRANSACTION, NOT A TABLE.** 26-02 decided it and this plan implements it:
+> Convex read transactions are serializable, so ONE `internalQuery` (`reportPackData.snapshot`)
+> across all three planes IS the immutable input. It calls PLAIN lifted functions —
+> `readBusiness` / `readOperations` (`reportsBusiness.ts`) and `readAuditPage`
+> (`reportsGovernance.ts`) — the `blueprint.readLiveForTenant` shape, for its two stated reasons: a
+> tenantQuery cannot `runQuery` an internalQuery, and a second reader of the same rows is how two
+> surfaces come to disagree. **The tenantQuery wrappers must stay one-liners.** If read logic ever
+> creeps back into a handler, the pack and the page start drifting apart silently.
+> A source scan pins `ctx.runQuery` to EXACTLY ONE call in `reportPack.ts`; that scan, not the
+> Promise.all race test, is what carries the atomicity claim (a deterministic scheduler can make the
+> race observe "neither" forever, and that is said out loud in the test).
+>
+> **TWO MODULES, AND THE SPLIT IS FORCED.** `markdownToPdf` lives in `llm.ts` behind a top-level
+> `node:crypto` import, so `reportPack.ts` must be `"use node"` — and a node module may hold ONLY
+> actions. The internalQuery and internalMutation therefore live in `reportPackData.ts`. Same split
+> as `media.ts` / `mediaComplete.ts`; do not try to merge them.
+>
+> **`asOf = window.untilMs`, NEVER A WALL CLOCK.** A `Date.now()` asOf makes every regeneration
+> produce different markdown, different bytes and a different hash — which destroys the replay key
+> and turns every double-click into a second artifact. Pinned to the window, the markdown is a pure
+> function of (window, data), and `markdownToPdf` is already byte-deterministic. The generation
+> instant lives on the vault row's `createdAt`, where a fact about the render belongs.
+>
+> **REPLAY = CONTENT HASH, CHECKED INSIDE THE WRITE TRANSACTION.** `landPack` looks up
+> `by_tenant_contentHash` (shipped index, no new field, no new table) and returns the existing
+> `vaultDocId` with `replayed: true`; the action then deletes the orphan blob it had already staged.
+> The `origin === "agent" && storageId` narrowing stops a byte-identical USER UPLOAD from being
+> handed back as a pack. Consequence to know: the key is the CONTENT, so two clicks with different
+> `untilMs` are two different reports by definition — a caller must pass ONE resolved absolute
+> window per page render, or the vault fills with near-duplicates.
+>
+> **HONEST NUMBERS ARE ENFORCED BY TYPE.** Every count in `BoardPackInput` is declared beside its
+> `DashboardBound` and its `CoverageLabel`, and `snapshot` ends in `satisfies BoardPackInput`: if
+> the read plane ever drops a bound, the BUILD breaks. The builder renders the coverage REASON
+> instead of a number when coverage is unknown, `at least N` (+ `DASHBOARD_STATE_COPY.partial.label`)
+> for a capped scan, "open right now (not a window count)" for the point-in-time dead-letter figure,
+> `Percentile.needs` verbatim for an unmeasurable p95, "Not tracked yet" for a zero-field segment,
+> the movement REASON for an incomparable pair, and spend's coverage + a POINTER but never a total.
+> The review table is derived from `Object.entries(decisions)` with an `otherDecisions` row — no
+> decision literal is typed in the builder (the 26-14 permanent `edit: 0`). `partialSections` is
+> counted ONCE by the builder and reused by the audit payload.
+>
+> **WHAT THE PACK DELIBERATELY EXCLUDES, and why.** `wormExport` (reads `audit.by_ts` with NO tenant
+> predicate — its figures aggregate other tenants) and `activeSkills` (deployment-global registry
+> state): once bytes are inside a vault row they are tenant-owned, retrieval is tenant-scoped and
+> there is no owner predicate on a vault doc, so an owner-gated fact placed there is permanently
+> readable with no gate left to apply — and re-gating later means DELETING stored artifacts. There
+> is also no `ownerAction` to authorize one (`lib/functions.ts`: an action has no `ctx.db`). The
+> `sentMail` rows are out too: a 50-row page rendered against a 1000-row `sentCount` prints a floor
+> as a ratio, and the recipient address is a personal identifier in a file that leaves the product.
+> A scan asserts neither pack module even names those surfaces.
+>
+> **FAILURE.** A render failure stores nothing, writes no vault row and no audit row, logs the error
+> NAME only, and returns `{ok:false, reason:"render_failed"}`. An impossible window is
+> `window_invalid`, produced by resolving the window in the action BEFORE the read — so a DB failure
+> can never be reported as a bad window. The refusal union has exactly those two members: a
+> `generation_disabled` reason nothing can produce would be a lie in a discriminated union.
+>
+> **RETENTION AND ROLLBACK.** There is no feature flag and no kill-switch env var here. Generation
+> is disabled at the route/nav (26-17) or by reverting these modules; existing packs are ordinary
+> tenant vault rows that nothing on this rail patches, replaces or deletes — scan-enforced in
+> `reportPack.test.ts` — and audit is insert-only by module. So "disable generation while existing
+> artifacts stay immutable" is a property of the code, not a promise.
+>
+> **VERIFY:** `cd packages/backend && npx vitest run convex/reportPack.test.ts` (19),
+> `npx vitest run convex/reportsBusiness.test.ts convex/reportsGovernance.test.ts` — those two must
+> stay green UNMODIFIED, which is the proof the lift was behaviour-preserving —
+> `cd packages/core && npx vitest run src/reports.test.ts` (33), then `npx tsc --noEmit`.)
+>
+
+
+> Last verified: 2026-08-22 (26-15 — **THE GOVERNANCE READ PLANE.**
+> `convex/reportsGovernance.ts`: `auditPage` (tenantQuery, cursor-paginated over
+> `audit.by_tenant_ts`, every row through `projectAuditRow` BEFORE it can be serialized — there is
+> no raw mode and no debug flag, because a second path that returns the unfiltered row is how the
+> first stops being the boundary), plus `wormExport` and `activeSkills` as `ownerQuery`s.
+> The window ceiling is IMPORTED (`MAX_WINDOW_MS`, now exported from `reportsBusiness.ts`) rather
+> than re-typed, so Reports cannot grow two definitions of how far back it will look. The cursor is
+> `@pikar/core`'s shared dashboard cursor — the same one the Content shelf pages on — so a
+> malformed cursor THROWS instead of silently restarting at page one; a cursor pointing PAST the
+> window is not malformed and is still honoured, which is how a stale tab resumes.
+> **The invariant signal is scoped so it can stay meaningful:** a key that is not allowlisted is the
+> contract working and is silent; only an ALLOWLISTED key whose value is not a ref raises a
+> `console.warn`, and every field in it is code-owned (the count, and an `eventType` that is by
+> construction a key of the allowlist table — never a key name, never a value). A test asserts a
+> clean page logs nothing, because a warning that fires on every page is not a warning.)
+>
+
+> Last verified: 2026-08-22 (26-14 — **REPORT SEMANTICS. The read plane, three shipped defects it
+> found, and — after an adversarial audit of this plan's own first draft — five defects the first
+> draft ADDED.** `packages/core/src/reports.ts` (five pure functions) + `convex/reportsBusiness.ts`
+> (three `tenantQuery`s: `business`, `operations`, `sentMail`).
+>
+> **THE RULE THE WHOLE PAGE IS BUILT AROUND: "no rows" and "nothing happened" are the same bytes and
+> different facts.** A table with no rows in a window supports "0 failures" and "we were not
+> watching" equally well, and only one is safe to render. Every windowed source therefore pairs its
+> count with `coverageLabel(...)` derived from the OLDEST row that tenant has — one ascending
+> `.take(1)` — so a window starting before it reports `partial` (with `coveredSinceMs`) or
+> `unknown`, never a confident zero. This is `spendCoverage` generalised to the tables that have no
+> coverage row to ask. **The floor is the oldest row of ANY status.** Reading it off `status:
+> "sent"` made it a fact about SUCCESSES: a tenant with 90 days of drafted-but-never-sent requests
+> was told "we were not watching" when the truth was "we were watching and nothing was sent" — the
+> same conflation, one level down. The windowed COUNT stays status-filtered; the floor does not.
+>
+> **COMPARABLE MEANS SAME THREAD AND SAME FRAMEWORK.** `evaluations` rows land on at least three
+> thread kinds — the weekly review cron, arbitrary cockpit threads, and never-reused
+> `voice-doc:<session>` threads — and the table's only newest-first read interleaves all of them, so
+> "the tenant's last two rows" routinely diffs a DOCUMENT REVIEW against a business diagnosis. The
+> pair is read from `by_tenant_thread` on the review thread, and `compareSnapshots` refuses the rest.
+> Because that read is ONE thread wide, the empty state is `no-review-run` **and ships its
+> `population`** — it used to say `never-run`, which is a false statement about a tenant who has
+> evaluated their business ten times from the cockpit.
+>
+> **AN UNASSESSED RUN IS NEITHER A RESULT NOR A BASELINE, AND THE GUARD IS SYMMETRIC.** When
+> grounding fails the engine clears `gaps` AND sets `verdict: "insufficient"`, so every open gap
+> looks CLOSED and a hiccup renders as a clean sweep. The first draft guarded only the NEWER row,
+> which leaves the mirror image live: week 2 hiccups, week 3 reproduces week 1 byte for byte, and
+> diffing 3 against 2 reports "8 new findings, 1 gap opened" for a week in which nothing moved.
+> Both rows are now disqualified, and both conditions are checked on each — the engine has TWO
+> insufficient paths and they disagree: `findings.length === 0` clears gaps, `!skillOk` does NOT.
+>
+> **DEFECT 1, SHIPPED AND NOW CORRECTED IN BOTH HALVES: `DECISION_KEYS` contained `"edit"`, a key
+> nothing writes.** `review.ts`'s `reviewDecisionValidator` says `edit_text` and `pipeline.ts` writes
+> `decisionCounts[evt.decision]` verbatim. Because the fold only sums keys present in its own list,
+> the `/ops` card rendered a permanent `edit: 0` as truth AND silently discarded every real
+> edit-with-changes decision. **The test seeded the fiction too** (`decisionCounts: { edit: 1 }`), so
+> it proved the fold sums whatever you hand it. Three things were needed and the first draft did
+> only one: (a) the literal, (b) **`apps/web/app/(app)/ops/page.tsx`, which read `dc.edit` and so
+> rendered `edit 0` unchanged — a backend-only correction left the entire user-visible symptom
+> standing**, and (c) the root cause. `review.ts` now exports `REVIEW_DECISIONS =
+> reviewDecisionValidator.members.map(m => m.value)` and both readers import it, because correcting
+> one hand-typed copy into another leaves the same drift one edit away. An unrecognised literal is
+> now counted as `otherDecisions` and rendered, never dropped.
+>
+> **DEFECT 2, SHIPPED AND NOW CORRECTED — AND THE FIRST DRAFT'S FIX WAS A NO-OP.**
+> `plans.reportForPlan` filtered `eventType === "gmail.sent"` only, while the Microsoft arm writes
+> `graph.sent`. Widening the filter alone changed NO byte of output: the join's only consumer was
+> `messageId`, and Graph returns 202 with an empty body and deliberately records none — so a
+> Microsoft row read `messageId: null` before and after, and no test could go red. The row now
+> carries `delivered: sent !== null`, which is what makes the proof observable, and
+> `plans.test.ts` pins all three cases (gmail with id, graph without one, no proof row at all).
+> `sentMail` draws the same distinction: existence of the audit row is delivery, `messageIdPresent`
+> is a separate fact about the provider's response shape.
+>
+> **A STRUCTURAL ZERO IS NOT A MEASUREMENT — AND NEITHER IS A TRUNCATED SAMPLE.**
+> `deliverApprovedPlan` writes `durationMs: 0` and `usages: []` outright, so a p95 over
+> `telemetry.durationMs` gives a cockpit-only tenant a confident **0 ms** — wrong *and flattering*.
+> Latency comes from `agentSteps.durationMs` over a CLOSED, NAMED six-tool subset (the index eq's
+> `tool` before the time range, so "all activity" costs ~40 queries), and `percentile` excludes
+> absent/zero/negative values and ships the excluded count. **The first draft then broke the file's
+> own cap rule on that one read**: `.take(STEP_CAP)` with no `+1`, on the default ASCENDING index
+> order. That kept the OLDEST 400 rows per tool — so a busy tenant's p95 described the first days of
+> a 90-day window — and `take(CAP)` cannot tell "exactly 400" from "400 of 5,000", so the cut never
+> reached the payload (`percentile.excluded` counts only values it was HANDED). Now
+> `.order("desc").take(STEP_CAP + 1)` per tool, `capped()` per tool, and `latency.truncated` ships
+> beside the number. Reasoning cost is NOT re-summed here at all — the ledger owns it, and a second
+> sum over a different source is how two surfaces come to disagree about what a tenant spent.
+>
+> **NO NEW INDEX, AND ONE CARD DELETED TO KEEP IT THAT WAY.** Every evaluation fact is a single-row
+> snapshot; `deadLetters` has no `(tenantId, createdAt)` index so its count is explicitly
+> point-in-time and flagged `windowed: false`. A windowed `blueprint.confirmed` count WAS built and
+> has been **removed**: `audit` is indexed `by_tenant_ts` only, so selecting one `eventType` is a
+> post-index `.filter()` that scans every audit row in the range, and `.take(51)` never
+> short-circuits because a tenant confirms a blueprint a handful of times in its life. Over the
+> module's own 90-day ceiling that walks the firehose (~90 `internal.audit.*` call sites feed it)
+> and trips Convex's per-query scan limit — so the card would have thrown for exactly the active
+> tenants it was for, and never in a fixture-seeded test. Nobody asked for the series, so it is no
+> card; add `(tenantId, eventType, ts)` if a confirm trend is ever wanted. `bucketWindow` was
+> deleted on the same reasoning: exported, doc-commented and unit-tested with **zero callers**.
+>
+> **`gapKey` IS NOW ACTUALLY LIFTED.** It shipped as a COPY, with `evaluations.ts`'s local arrow left
+> in place — two live definitions of gap identity, which is precisely the drift its own doc comment
+> claimed to prevent. `evaluations.ts` imports it.
+>
+> Evidence: core 1083 passed (40 files), backend 2294 passed (93 files), web ops 21 passed, both typechecks clean, biome
+> clean on every touched file, watcher clean. Four guards were mutation-verified by reverting the
+> fix and confirming red: the `/ops` tile, the symmetric snapshot guard, the `graph.sent` join, and
+> the latency truncation.)
+
+> Last verified: 2026-08-22 (26-13.1 — **THE IMAGE LANE IS BACK, AND THE SHELF IS SEARCHABLE.**
+> `kind: "image"` joins the whitelist and the false comment that excluded it is DELETED, replaced by
+> what the write site actually says: `mediaComplete.saveImageToVault` is scoped to
+> `plans.mediaMode === "image"` and is `saveReelToVault`'s twin, while a reel's scene image never
+> becomes a vault document at all because `deleteIntermediates` removes its bytes at the render
+> terminal. Both halves are now pinned by tests — a standalone image appears with bytes, provenance
+> and `promotion: not-applicable`; a bare `mediaJobs` row produces NO shelf card.
+>
+> **SEARCH NARROWS WHAT IS SHOWN, NEVER WHAT IS LOOKED AT.** The window is sliced to `limit` first
+> and the title match runs over that page, so a page can honestly return 3 items and still say there
+> is more. Two consequences are load-bearing: (1) the cursor comes from the last row of the WINDOW,
+> not the last row RETURNED — otherwise a page whose every row was filtered out reports
+> `nextCursor: null` and strands the rest of the shelf behind a search term (mutation-checked);
+> (2) the result line carries the denominator — *"3 of the 24 newest artifacts match"* — because a
+> bare match count has no scale and "nothing found" would be indistinguishable from "nothing found
+> ON THIS PAGE", which is the exact failure the bound contract exists to prevent.
+> ponytail ceiling, named at the call site: a substring match over the page, not a search index.
+> Upgrade path is `withSearchIndex` on (tenantId, title) — a schema change and a second ranking to
+> reason about; take it when the shelf outgrows a few pages.
+>
+> **ONE SOURCE-SCAN ASSERTION WAS LOOSENED ON PURPOSE, and the reasoning matters more than the
+> line.** `contentView.test.ts` asserted `api.vault.vaultDownloadUrl` appeared NOWHERE in the view.
+> The thumbnail needs it. A flat ban would have been the easy assertion and the wrong one: it
+> forbids the FEATURE rather than the FAILURE, and the failure is a URL minted for a row nobody
+> looked at. It now asserts the call appears EXACTLY ONCE, inside `ImageThumb`, and that `ImageThumb`
+> renders only on the image lane — so a shelf of 24 documents still subscribes to nothing.
+>
+> Evidence: backend content 25/25 with 4/4 new mutants caught (drop the image lane; cursor from the
+> returned rows; the match count as denominator; filter before slicing) — component 27/27 —
+> `e2e/content.spec.ts` **9/9 EXECUTED** on a rebuilt `:3111` — web suite 30 files / 480, backend 92
+> files / 2268 — web typecheck, prod build and watcher clean.)
+>
+
+> Last verified: 2026-08-22 (26-13 Tasks 2+3 — **OWNER UAT APPROVED AND THE CONTENT NAV IS LIVE.**
+> Verdict verbatim: *"The page is minimalistic. It works great."* Task 3 replaced the disabled
+> `Soon` item with `{ label: "Content", href: "/dashboard/content" }`; the branch keys off `href`,
+> so adding it IS the activation and **rollback is deleting that href**. Re-verified after the flip:
+> web typecheck clean, prod build clean, `e2e/content.spec.ts` **7/7 executed again** on a rebuilt
+> `:3111`, watcher silent.
+>
+> **THE ROLLBACK BOUNDARY, and it is the one thing this page must never get wrong.** Deleting the
+> href hides the route. It does NOT touch an artifact's `origin`. A promoted document stays
+> `agent_promoted` whether or not the page is reachable, because promotion is a trust decision the
+> USER took about their own reference material — not a property of a route. A rollback that demoted
+> would rewrite a decision the user made, and `patchCreatedDoc` would then let the agent revise a
+> document it had already been told to treat as a source. Same shape as Finance's rule one entry
+> down: a UI rollback must never stop the instrumentation or reverse the record.
+>
+> **ONE E2E ASSERTION WAS INVERTED ON PURPOSE, not quietly.** Test 1 asserted the nav item was
+> `aria-disabled` with no href anywhere in the DOM, and that is what the gate proved *before* the
+> UAT. After Task 3 it asserts the opposite. The record of "the nav was still dark when the browser
+> gate ran" lives here and in `26-13-SUMMARY.md`; leaving a test asserting a state the product
+> deliberately left behind would have been the dishonest option.
+>
+> **THE OWNER ALSO FOUND A DEFECT I SHIPPED IN 26-12, and it is not a scope question.** The Content
+> whitelist excludes `kind: "image"` with a comment calling those rows "media intermediates". That
+> is FALSE: `mediaComplete.saveImageToVault` is explicitly *"scoped to the STANDALONE IMAGE"*
+> (`plans.mediaMode === "image"`) and is `saveReelToVault`'s twin — a reel's scene images never
+> become vault docs at all, because `deleteIntermediates` removes them at the render terminal. So
+> every `kind: "image"` vault row IS a finished deliverable, and the shelf of "everything Pikar has
+> made" is missing one of the two things Pikar makes. Owner directed the fix as its own follow-up
+> plan (26-13.1) alongside title search and thumbnails. **The lesson is the comment, not the line:**
+> a whitelist entry justified by a claim about another module is only as true as that claim, and
+> mine was written from the field name rather than from the write site.)
+>
+
+> Last verified: 2026-08-22 (26-13 Task 1 — **THE CONTENT ROUTE IS BUILT AND ITS BROWSER GATE HAS
+> ACTUALLY RUN: `e2e/content.spec.ts`, 7/7, executed against a rebuilt `:3111` and the local
+> backend. NAVIGATION IS STILL DISABLED — Task 2 (owner UAT) is open and Task 3 has not run.**
+> The spec asserts that itself: the rail's Content item carries `aria-disabled="true"` and there is
+> no `a[href="/dashboard/content"]` anywhere in the DOM, while the route answers directly.
+>
+> **THE PAGE ADDS NO BACKEND SURFACE.** Every action ends in a function that already existed:
+> `vault.vaultDoc` + the Vault's own `PreviewModal` for open/download, `media.reel` for playback,
+> `vault.promoteToReference` for promotion. The card carries the ref each one needs and nothing more
+> — no storage id reaches the browser, and no signed URL is minted for a card nobody clicked
+> (asserted by source scan: the modal and the player mount only behind their own open state).
+> Opening a document BY ID through `PreviewModal` is `workspace/cards.tsx`'s shipped `VaultDocModal`
+> pattern, copied rather than re-invented. A REEL is deliberately NOT opened that way: the modal
+> would play the row's own bytes, and Content plays only through `media.reel`, whose non-null `url`
+> IS the validated-assembly guarantee (D8). Vault shows you your files; Content presents governed
+> artifacts, and the difference is a Play button that is absent rather than dead.
+>
+> **PROMOTION EXPLAINS ITSELF BEFORE IT HAPPENS, AND IT IS ONE-WAY.** The control opens a confirm
+> block carrying the sentence verbatim — *"Promoting a document makes it reference material the
+> assistant can cite — it can no longer be rewritten in this conversation"* — plus "this cannot be
+> undone". That is a real consequence, not a caution: `patchCreatedDoc` refuses any row whose
+> `origin !== "agent"`, so the only reversal is deleting the artifact (ADR-025 records the ceiling).
+> The transition then renders from the ROW's own `status`, never from the click.
+>
+> **THE `vault.promoted` AUDIT ROW LANDED, AND IT NEEDED A NEW MODULE.**
+> `packages/backend/convex/contentAudit.ts` holds one `tenantMutation`, and the header explains why
+> it is not in any of the three obvious homes: `vault.ts` is kept log-free by construction
+> (`vaultRedaction.test.ts`), `content.ts` is read-only by construction (`content.test.ts`), and
+> `audit.ts` states it exposes no client-callable builder — a `tenantMutation` there would have
+> slipped past `auditImmutability.test.ts`, whose `PUBLIC_BUILDER` regex only matches the raw
+> builders, which is a reason to respect the stated invariant rather than a licence. Only the doc id
+> crosses the wire; `sourceThreadId`/`sourcePlanId` are read off the row this tenant was just
+> verified to own. Verified live in the deployment:
+> `{result:"processing", sourceThreadId:"…", sourcePlanId:null, vaultDocId:"…"}`, actor `user`,
+> correlation `vault:promote:<docId>` — the same id the ingest workflow carries, so the two join.
+>
+> **THE E2E'S FIRST RUN FAILED, AND THE FAILURE WAS REAL.** Test 6 asserted only that the card said
+> "Reference material" — which appears the moment the reactive query sees the patched row, WHILE the
+> caller-side audit call is still in flight. The test ended, Playwright tore the context down
+> mid-mutation, and test 7 then found an empty audit table for a promotion that had genuinely
+> happened. The fix is a sequencing point, not a sleep: the confirm block is removed only after
+> `recordPromotion` resolves, so waiting for it to detach proves the whole chain ran. **A
+> fire-and-forget follow-up call is not observable through the state the first call changes.**
+>
+> **TWO DEVIATIONS FROM THE PLAN'S `files_modified`, both recorded in 26-13-SUMMARY.md.** (1) The
+> component test is `contentView.test.ts`, not `.tsx` — `apps/web/vitest.config.mts` includes
+> `app/**/*.test.ts` ONLY, and its own header records that a `.tsx` there is silently skipped, which
+> is exactly how a test file becomes decoration. (2) `contentAudit.ts`/`.test.ts` and a
+> `smoke.seedContentShelf` fixture seam are backend files this web-only plan did not list; both are
+> registered in `watch.json` (the audit module here, the smoke seam under `agent-runtime.md`).
+>
+> **SEEDED ROWS PROVE UI STATES ONLY.** The spec's "reel" is a few bytes with a video mime and its
+> sidecar is a marker. Nothing rendered, nothing embedded, no provider ran, no cent was spent. A
+> green run says the page reads the shelf, the guards and the states correctly — it says nothing
+> about fal, ffmpeg or a real assembly, and any such claim needs separately executed live evidence.)
+>
+
+> Last verified: 2026-08-22 (26-12 — **THE CONTENT SHELF IS A READ PLANE, AND THAT IS ENFORCED BY
+> CONSTRUCTION RATHER THAN BY PROMISE.** `packages/backend/convex/content.ts` ships three
+> `tenantQuery`s (`listArtifacts`, `summary`, `artifactById`) and NOTHING ELSE: no mutation, no
+> scheduler call, no signed-URL minting, no log-plane write. `content.test.ts` scans the module for
+> each of those, plus a check that every `export const` binds a `tenantQuery`. That is what makes
+> *"Reuse opens the cockpit and never duplicates, attaches, sends or dispatches"* a fact about the
+> module's shape instead of a claim a handler makes about itself — the `vaultRedaction.test.ts`
+> pattern, applied to a page adapter. Reuse is a code-owned `/dashboard/workspace?thread=…` link
+> (`&view=canvas` for a reel), and a query cannot write, so there is no reuse-side write to test for.
+>
+> **THREE TERMINALS WERE ALREADY BUILT, SO NONE OF THEM WAS REBUILT HERE.** The card carries a
+> `vaultDocId` and, for a reel, a `planId`; the page asks the existing ownership-checked readers for
+> a capability only when the user acts. Download/open is `api.vault.vaultDownloadUrl`; playback is
+> `api.media.reel` (whose non-null `url` IS the validated-sidecar guarantee); promotion is
+> `api.vault.promoteToReference` — 26-11's single guarded surface, called directly per the owner
+> decision of 2026-08-22. `content.ts` reads `origin` only to decide what to OFFER. The projection
+> and the mutation are checked against each other in one test, so the page can never grow a button
+> that always refuses (or hide one that would work).
+>
+> **THE SHELF IS A POSITIVE KIND WHITELIST** — `created_document`, `created_content`,
+> `next_step_memo`, `reel` — because `vaultDocuments.kind` is `v.string()` and grows every phase, so
+> "everything except the ones I thought of" silently admits the next writer's rows. Research briefs
+> (`web_research`) stay with the Knowledge Vault and sent mail stays with Reports (CONT-01 as
+> amended); `requests` is never queried by this module and a test pins that too.
+>
+> **A REEL PLAYS ONLY ON THREE TERMS, AND THE THIRD IS THE ONE A NAIVE CHECK MISSES.** Bytes on the
+> row, the live artifact triple on the plan (`renderStorageId` + `sidecarStorageId` +
+> `renderSummary`), AND `plan.reelVaultDocId === doc._id`. Without that last term a thread that
+> re-rendered would serve reel #2's video under reel #1's title — `resetPlan` clears both the triple
+> and the pointer, `saveReelToVault` upserts through the pointer, so the pointer is what says which
+> reel the plan's bytes ARE. Unproved is never silent: `no-plan` / `no-bytes` / `no-sidecar` /
+> `superseded` ride on the card and the canvas link still opens.
+>
+> **SCHEMA: `by_tenant_kind` GAINED `createdAt` (a third field on an existing index, not a fifth
+> index).** The union is four kind partitions merged into one newest-first order, so its cursor needs
+> a RANGE on the same read; without it the page would over-fetch and discard rows that each carry a
+> `text` blob — the read-cap fault this table's own comments keep pointing at. Safe for the one
+> production caller: `onboarding.currentProfileDoc` `.collect()`s its partition and re-sorts in
+> memory, so it never depended on the implicit `_creationTime` ordering this replaces.
+>
+> **NINE MUTANTS APPLIED AND REVERTED, NINE CAUGHT — AND ONE OF THEM ONLY AFTER A TEST WAS ADDED.**
+> Dropping the tenant term on the reel's plan join SURVIVED the first pass: the join reads
+> `reelMeta.planId`, a field on a row the tenant owns, and the code TRUSTED that the plan it names is
+> theirs. Nothing asserted it. A test now seeds a reel row pointing at another tenant's rendered
+> plan and requires `no-plan` plus no foreign thread id anywhere in the card. Ask what the code
+> trusts, not only what it checks.
+>
+> **THE VERIFY COMMANDS IN THIS PLAYBOOK WERE ALL THE NON-FILTERING FORM AND ARE CORRECTED BELOW.**
+> `pnpm --filter <pkg> test` followed by a bare `--` and filter terms forwards that separator
+> literally, which collapses vitest's filter matching and runs the WHOLE suite — slower, appears
+> to do more, and passes. 26-11 measured it; every affected line under "How to verify" has had the
+> separator removed. The Playwright lines went further: `test:e2e <file>` does not filter EITHER
+> (this playbook already recorded that under "Corrected 2026-08-21" while the code block below
+> still quoted the broken form), so the connected-page block now quotes `npx playwright test
+> <file>` run from `apps/web`. The three historical entries that quote the broken form on purpose
+> were left exactly as they were.)
+>
+
 > Last verified: 2026-08-22 (26-10 Task 2 — **THE OWNER UAT FOUND A REAL DEFECT AND IT IS FIXED:
 > the Cost Console clipped its own copy at mobile.** Items 1 and 3 pass; item 2, the responsive
 > breakpoints the 2026-08-09 UAT recorded as NOT observed, is where it was hiding.)
@@ -1002,7 +1572,9 @@ additive data, safety instrumentation or provenance.
 - `packages/backend/convex/approvals.ts` — bounded plan/decision projections.
 - `packages/backend/convex/spendLedger.ts` — append-only reporting movements and coverage start.
 - `packages/backend/convex/finance.ts` — tenant and owner finance projections.
-- `packages/backend/convex/content.ts` — bounded artifact union and governed artifact actions.
+- `packages/backend/convex/content.ts` — the bounded artifact union. READ-ONLY: three
+  `tenantQuery`s and no write surface; the artifact ACTIONS stay on `vault.vaultDownloadUrl`,
+  `media.reel` and `vault.promoteToReference`, which this module only decides whether to offer.
 - `packages/backend/convex/reportsBusiness.ts` — comparable business/operations period projections.
 - `packages/backend/convex/reportsGovernance.ts` — sanitized audit and owner-only governance views.
 - `packages/backend/convex/reportPack.ts` — one-snapshot board-pack generation.
@@ -1764,7 +2336,7 @@ the owner-preview navigation link is active only to make that verification reach
 Resume with both runtimes active and credentials set:
 
 ```text
-pnpm --filter @pikar/web test:e2e -- e2e/approvals.spec.ts
+npx playwright test e2e/approvals.spec.ts   # from apps/web
 ```
 
 The spec seeds plan rows for UI-state evidence only. Public mutations prove schedule replay,
@@ -2076,7 +2648,7 @@ adapter module of its own**, because PIPE-01's whole worry is a second CRM data 
 ### Pure contracts and operational ownership
 
 ```text
-pnpm --filter @pikar/core test -- dashboard
+pnpm --filter @pikar/core test dashboard
 pnpm --filter @pikar/core typecheck
 node scripts/check-playbooks.mjs
 ```
@@ -2084,14 +2656,14 @@ node scripts/check-playbooks.mjs
 ### Focused backend gates
 
 ```text
-pnpm --filter @pikar/backend test -- approvals
-pnpm --filter @pikar/backend test -- spendLedger
-pnpm --filter @pikar/backend test -- finance
-pnpm --filter @pikar/backend test -- content
-pnpm --filter @pikar/core test -- reports
-pnpm --filter @pikar/backend test -- reportsBusiness reportsGovernance reportPack
-pnpm --filter @pikar/core test -- home
-pnpm --filter @pikar/backend test -- home briefings
+pnpm --filter @pikar/backend test approvals
+pnpm --filter @pikar/backend test spendLedger
+pnpm --filter @pikar/backend test finance
+pnpm --filter @pikar/backend test content
+pnpm --filter @pikar/core test reports
+pnpm --filter @pikar/backend test reportsBusiness reportsGovernance reportPack
+pnpm --filter @pikar/core test home
+pnpm --filter @pikar/backend test home briefings
 ```
 
 These prove adapter authorization/isolation, caps/cursors, ledger replay, safe projection, one-snapshot
@@ -2100,15 +2672,18 @@ packs and composed priority/health semantics. Subsystem plans add their terminal
 ### Connected page gates
 
 ```text
-pnpm --filter @pikar/web test -- approvals
-pnpm --filter @pikar/web test:e2e -- e2e/approvals.spec.ts
-pnpm --filter @pikar/web test -- finance
-pnpm --filter @pikar/web test:e2e -- e2e/finance.spec.ts
-pnpm --filter @pikar/web test -- content
-pnpm --filter @pikar/web test:e2e -- e2e/content.spec.ts
-pnpm --filter @pikar/web test -- reports
-pnpm --filter @pikar/web test:e2e -- e2e/reports.spec.ts
-pnpm --filter @pikar/web test:e2e -- e2e/command-center.spec.ts
+pnpm --filter @pikar/web test approvals
+pnpm --filter @pikar/web test finance
+pnpm --filter @pikar/web test content
+pnpm --filter @pikar/web test reports
+
+# One spec at a time, FROM apps/web. `pnpm ... test:e2e -- <file>` and `test:e2e <file>` both
+# swallow the filter and run the whole ~8-minute suite (recorded under "Corrected 2026-08-21").
+npx playwright test e2e/approvals.spec.ts
+npx playwright test e2e/finance.spec.ts
+npx playwright test e2e/content.spec.ts
+npx playwright test e2e/reports.spec.ts
+npx playwright test e2e/command-center.spec.ts
 ```
 
 Playwright requires the documented authenticated local Convex/Next runtime. A listed spec is not
