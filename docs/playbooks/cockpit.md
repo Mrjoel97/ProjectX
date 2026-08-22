@@ -13,9 +13,15 @@
 >   true). A leaked owner bit would silently make every later run's non-owner assertion vacuous,
 >   which is why the revoke is in `finally` and not at the end of the test body.
 >
-> **THE SPEC HAS NOT RUN.** The stored `e2e/.auth/user.json` JWT expired 2026-08-22T11:43Z and
-> `auth.setup.ts` requires `E2E_USER_EMAIL`/`E2E_USER_PASSWORD`, which are in no env file in this
-> repo. Nothing in this entry may be cited as executed browser evidence until it is.)
+> - **ORDER IS LOAD-BEARING IN THIS DIRECTORY, and it cost a debugging cycle to learn twice.**
+>   `convex run` ENDS THE BROWSER SESSION on a local deployment (already recorded in
+>   `e2e/README.md`), so the role-split test — the only one calling it mid-test — must run LAST.
+>   With it in the middle, every later test loaded the page unauthenticated and `auditPage` simply
+>   never resolved, which presents as a hung query, not as a dead session. If a spec here ever hangs
+>   on a query that works in isolation, check what ran before it.
+>
+> **EXECUTED 7/7** against a rebuilt `:3111` on 2026-08-22, after seeding a fresh e2e account
+> through the real invite-gated signup form (`invites.__seedInvite` → `e2e/seed-user.setup.ts`).)
 >
 
 > Last verified: 2026-08-22 (26-14 — **A SHIPPED DEFECT IN `plans.reportForPlan`, CORRECTED.** It

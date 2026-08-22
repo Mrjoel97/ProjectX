@@ -121,23 +121,49 @@ test("one period selection moves every section to the same resolved window", asy
   const windowLine = page.getByTestId("reports-window");
   await expect(windowLine).not.toContainText("Resolving");
 
+  await expect(windowLine).toHaveText(/\d{4}-\d{2}-\d{2} → \d{4}-\d{2}-\d{2}/);
   const thirty = (await windowLine.textContent()) ?? "";
   // The window line is the SERVER's resolved window, echoed back from `auditPage`. Every section
   // is fed the same args object, so one line is the honest label for all four.
-  expect(thirty).toContain("UTC");
+  //
+  // NOT hardcoded to a zone: the first draft asserted "UTC" and the runner's browser reports
+  // Africa/Dar_es_Salaam, which failed a CORRECT page. What the contract actually promises is a
+  // named IANA zone plus the disclosure that it came from the browser rather than a tenant setting
+  // — `timeZoneSource: "browser-fallback"` is the documented temporary state, and hiding it would
+  // be the report claiming a precision it does not have.
+  const browserZone = await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
+  expect(thirty).toContain(browserZone);
+  expect(thirty).toContain("(from your browser)");
+  expect(thirty).toMatch(/\d{4}-\d{2}-\d{2} → \d{4}-\d{2}-\d{2}/);
+
+  // WAIT FOR THE RESOLVED LINE, never merely for a CHANGED one. Switching periods hands every
+  // subscription new args, so `useQuery` returns undefined and the header honestly reads
+  // "Resolving the window…" until the server answers. Reading the text at the moment it merely
+  // DIFFERS captures that intermediate state — which is what a naive assertion did here first.
+  // (All three sections blank together on the same args change, so no stale number ever sits
+  // under a new header.)
+  const resolvedLine = async (): Promise<string> => {
+    await expect(windowLine).toHaveText(/\d{4}-\d{2}-\d{2} → \d{4}-\d{2}-\d{2}/);
+    return (await windowLine.textContent()) ?? "";
+  };
 
   await page.getByRole("button", { name: "7 days" }).click();
   await expect(windowLine).not.toHaveText(thirty);
-  const seven = (await windowLine.textContent()) ?? "";
+  const seven = await resolvedLine();
 
   await page.getByRole("button", { name: "90 days" }).click();
   await expect(windowLine).not.toHaveText(seven);
 
   // Same upper bound throughout — the anchor is pinned at mount, so only the start moves.
-  const ninety = (await windowLine.textContent()) ?? "";
+  const ninety = await resolvedLine();
   const upperOf = (line: string) => line.split("→")[1]?.trim().split(" ")[0];
+  expect(upperOf(seven), "the 7-day line never resolved").toBeDefined();
   expect(upperOf(ninety)).toBe(upperOf(seven));
   expect(upperOf(ninety)).toBe(upperOf(thirty));
+  // …and the START really moved, so the assertion above is about a pinned anchor rather than a
+  // page that ignored the click.
+  const lowerOf = (line: string) => line.split("→")[0]?.trim();
+  expect(new Set([lowerOf(seven), lowerOf(thirty), lowerOf(ninety)]).size).toBe(3);
 
   await expect(page.getByRole("button", { name: "90 days" })).toHaveAttribute(
     "aria-pressed",
@@ -169,37 +195,26 @@ test("PRIVACY: no unsafe payload value reaches the DOM, and the unknown event is
   expect(dom).toContain(`plan-${MARKER}`);
   expect(dom).toContain(`sha256:${MARKER}`);
 
-  // The unknown event is present as a shell rather than missing.
-  await expect(page.getByText("brand.new_event")).toBeVisible();
-  await expect(page.getByText("no detail — this build does not describe this event")).toBeVisible();
-});
-
-test("ROLE SPLIT: the deployment card is absent for a non-owner and present for the owner", async ({
-  page,
-}) => {
-  await page.goto(ROUTE);
-  await expect(page.getByText("Deployment (owner only)")).toHaveCount(0);
-  // Not merely hidden: a non-owner never CALLS the owner queries, so their figures are nowhere.
-  expect(await page.content()).not.toContain("Last cursor advance");
-
-  convexRun("owner:bootstrapOwner", { userId: tenantId });
-  try {
-    await page.reload();
-    await expect(page.getByText("Deployment (owner only)")).toBeVisible();
-    await expect(page.getByText("Last cursor advance")).toBeVisible();
-    // The correction 26-15 made to the mockup, verified in the rendered page.
-    expect(await page.content()).not.toContain("Healthy");
-  } finally {
-    // Restore the fixture whatever the assertions did — a leaked owner bit would silently make
-    // every later run's non-owner assertion vacuous.
-    convexRun("owner:revokeOwner", { userId: tenantId });
-  }
+  // The unknown event is present as a shell rather than missing. `.first()` because the seed is
+  // additive — every run of this file appends another row, and a strict locator would turn a
+  // SECOND run red for a reason that has nothing to do with the product.
+  await expect(page.getByText("brand.new_event").first()).toBeVisible();
+  await expect(
+    page.getByText("no detail — this build does not describe this event").first(),
+  ).toBeVisible();
 });
 
 test("a board pack generates real bytes, and generating it again is the SAME pack", async ({
   page,
 }) => {
+  test.setTimeout(120_000); // two real pdf-lib renders and two storage writes
   await page.goto(ROUTE);
+  // SETTLE FIRST. Every section re-renders as its subscription resolves, and clicking into that
+  // churn detaches the button mid-click. The resolved window line is the honest "all queries have
+  // answered" signal — a networkidle wait would be a guess about a reactive socket that never idles.
+  await expect(page.getByTestId("reports-window")).toHaveText(/\d{4}-\d{2}-\d{2} → /, {
+    timeout: 30_000,
+  });
   await page.getByRole("button", { name: "Generate board pack" }).click();
 
   const result = page.getByTestId("pack-result");
@@ -217,4 +232,35 @@ test("a board pack generates real bytes, and generating it again is the SAME pac
   // already there. This is `landPack`'s dedup observed end to end rather than in a unit test.
   await page.getByRole("button", { name: "Generate board pack" }).click();
   await expect(result).toContainText("Already generated for this window", { timeout: 30_000 });
+});
+
+// ORDER IS LOAD-BEARING, and the reason is written at the top of this file: **`convex run` ENDS
+// THE BROWSER SESSION on a local deployment.** The role-split test is the only one that calls it
+// mid-test (bootstrapOwner/revokeOwner), so it must run LAST — with it in the middle, every
+// later test loaded the page unauthenticated and `auditPage` never resolved, which reads as a
+// hung query rather than as a dead session. Measured 2026-08-22.
+
+test("ROLE SPLIT: the deployment card is absent for a non-owner and present for the owner", async ({
+  page,
+}) => {
+  await page.goto(ROUTE);
+  await expect(page.getByText("Deployment (owner only)")).toHaveCount(0);
+  // Not merely hidden: a non-owner never CALLS the owner queries, so their figures are nowhere.
+  expect(await page.content()).not.toContain("Last cursor advance");
+
+  convexRun("owner:bootstrapOwner", { userId: tenantId });
+  try {
+    await page.reload();
+    // `exact` because the section renders its title AND a "Loading deployment (owner only)…"
+    // line; the loose locator matches both. The ABSENCE assertion above stays loose on purpose —
+    // for a non-owner neither the title nor the loading line may exist.
+    await expect(page.getByText("Deployment (owner only)", { exact: true })).toBeVisible();
+    await expect(page.getByText("Last cursor advance")).toBeVisible();
+    // The correction 26-15 made to the mockup, verified in the rendered page.
+    expect(await page.content()).not.toContain("Healthy");
+  } finally {
+    // Restore the fixture whatever the assertions did — a leaked owner bit would silently make
+    // every later run's non-owner assertion vacuous.
+    convexRun("owner:revokeOwner", { userId: tenantId });
+  }
 });

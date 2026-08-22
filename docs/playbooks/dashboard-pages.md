@@ -31,13 +31,28 @@
 > health word; a component test bans "Healthy"/"Degraded"/"OK" from that card, because 26-15
 > removed exactly that claim from the backend and the mockup.
 >
-> **NOT YET EXECUTED, and this line is the reason the plan is not closed:** `e2e/reports.spec.ts`
-> is written (7 tests: nav-dark gate, one-window synchronization, per-section render, a PRIVACY
-> sweep that seeds hostile audit payloads and scans the DOM, the owner/non-owner split via
-> `bootstrapOwner`/`revokeOwner`, and a real generate→download→replay) but has NOT run — the
-> stored `e2e/.auth/user.json` JWT expired 2026-08-22T11:43Z and `auth.setup.ts` needs
-> `E2E_USER_EMAIL`/`E2E_USER_PASSWORD`. Component 22/22, web typecheck and prod build clean.
-> Treat the browser claims as UNPROVEN until this line says otherwise.)
+> **EXECUTED: `e2e/reports.spec.ts` 7/7 IN THE BROWSER** against a rebuilt `:3111` and the local
+> backend — nav-dark gate, one-window synchronization, per-section render, the PRIVACY sweep, a
+> real generate→download→replay, and the owner/non-owner split. Component 22/22, web typecheck and
+> prod build clean.
+>
+> **THE BOARD PACK IS THE ONE NON-SEEDED CLAIM IN THAT RUN.** Its rows are seeded and prove UI
+> states only, but `generateBoardPack` executed the real `markdownToPdf` (pdf-lib, deterministic,
+> no network, no provider, no cent) and the real `ctx.storage.store`; the download href was a
+> minted `https:` storage URL, and the second click returned "Already generated for this window".
+> That is 26-16's content-hash replay observed end to end from a browser.
+>
+> **THREE THINGS THE RUN TAUGHT, all now written into the spec:**
+> (1) the window line must be waited for by PATTERN, never by "it changed" — switching periods hands
+> every subscription new args, so `useQuery` returns undefined and the header honestly reads
+> "Resolving the window…"; reading at the moment it merely differs captures that intermediate state.
+> All three sections blank together on the same args change, so no stale number ever sits under a
+> new header. (2) The timezone assertion must not hardcode a zone — the first draft asserted "UTC"
+> and failed a CORRECT page on a runner reporting `Africa/Dar_es_Salaam`; what the contract
+> promises is a named IANA zone plus the `(from your browser)` disclosure. (3) **`convex run` ENDS
+> THE BROWSER SESSION**, so the one test that calls it mid-test (the owner bootstrap/revoke) must
+> run LAST — with it in the middle every later test loaded the page unauthenticated and
+> `auditPage` never resolved, which reads as a hung query rather than a dead session.)
 >
 
 > Last verified: 2026-08-22 (26-16 — **THE BOARD PACK: ONE TRANSACTION, ONE ARTIFACT, NO SNAPSHOT
