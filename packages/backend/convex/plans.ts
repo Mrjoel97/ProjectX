@@ -1039,7 +1039,14 @@ export const reportForPlan = tenantQuery({
       const sent = await ctx.db
         .query("audit")
         .withIndex("by_correlation", (q) => q.eq("correlationId", r.correlationId))
-        .filter((q) => q.eq(q.field("eventType"), "gmail.sent"))
+        // CORRECTED 26-14: `graph.sent` too. The Microsoft arm writes that literal, so this join
+        // saw nothing at all for a Graph send — the provider was added without the join following
+        // it. Widening the filter alone was a NO-OP, because the only consumer was `messageId` and
+        // Graph deliberately records none (202, empty body): both before and after, a Microsoft row
+        // reported `messageId: null`. `delivered` below is what makes the proof observable.
+        .filter((q) =>
+          q.or(q.eq(q.field("eventType"), "gmail.sent"), q.eq(q.field("eventType"), "graph.sent")),
+        )
         .first();
       // Per-recipient delivered attachment(s): re-download the EXACT sent bytes. Storage is
       // immutable per id, so we resolve the persisted send-time refs — never regenerate (§4: url never logged).
@@ -1057,6 +1064,10 @@ export const reportForPlan = tenantQuery({
         recipient: r.recipient,
         status: r.status,
         correlationId: r.correlationId,
+        // DELIVERY IS PROVEN BY THE AUDIT ROW, NOT BY A MESSAGE ID. `messageId: null` means the
+        // provider returned none, which for Graph is every single send — inferring "not delivered"
+        // from it is a category error. Same distinction `reportsBusiness.sentMail` draws.
+        delivered: sent !== null,
         messageId: (sent?.payload as { messageId?: string } | undefined)?.messageId ?? null,
         attachments,
       });

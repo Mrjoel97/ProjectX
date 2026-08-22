@@ -23,6 +23,7 @@ export * from "./microsoft";
 export * from "./notificationTemplates";
 export * from "./optimizerBreach";
 export * from "./proposal";
+export * from "./reports";
 export * from "./result";
 export * from "./retention";
 export * from "./reviewThreshold";

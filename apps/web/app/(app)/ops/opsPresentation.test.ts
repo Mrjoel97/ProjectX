@@ -41,7 +41,11 @@ const shellSource = readFileSync(fileURLToPath(new URL("../layout.tsx", import.m
 
 const signals = {
   reviewOutcomes: { sent: 3, rejected: 0, expired: 0, failed: 0, blocked: 0 },
-  decisionCounts: { approve: 2, edit: 0, reject: 0 },
+  // 26-14: the REAL literals the backend emits (`review.ts`'s validator union), with NON-ZERO
+  // counts. This mock said `edit: 0` — a key nothing writes, at the one value that cannot tell a
+  // correct read from a broken one — so the tile could read `dc.edit` forever and stay green.
+  decisionCounts: { approve: 2, edit_text: 3, regenerate: 0, reject: 1 },
+  otherDecisions: 0,
   regenerateTotal: 0,
   fallbackCount: 0,
   dlqNew: 1,
@@ -184,6 +188,11 @@ describe("/ops owner presentation boundary", () => {
     // These are the mixed-purpose tenant surface. Removing the owner branch altogether can make
     // the negative assertions pass vacuously; these positive rendered assertions prevent that.
     expect(result.html).toContain(">Eval signals</p>");
+    // 26-14 REGRESSION GUARD. The gate tile must render the backend's OWN key. Reading `dc.edit`
+    // (the shipped defect) renders "edit 0" against this fixture's `edit_text: 3`, so a
+    // backend-only correction — the exact half-fix this plan first shipped — fails here.
+    expect(result.html).toContain("approve 2 · edit 3 · reject 1");
+    expect(result.html).not.toContain("edit 0");
     expect(result.html).toContain(">DLQ</p>");
     expect(result.html).toContain(">Dead letters — your tenant</p>");
     expect(result.html).toContain("No unresolved dead letters.");

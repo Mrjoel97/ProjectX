@@ -21,6 +21,7 @@ import {
 import {
   deserializeProfile,
   type FieldProvenance,
+  gapKey,
   resolveSpecialist,
   specialistMemoBody,
   type Tier,
@@ -506,7 +507,6 @@ export const runEvaluation = internalAction({
       // `playbook` is a code-owned string literal, never LLM prose — the objection to keying on
       // `label` does not apply to it. Arrays (not a scalar) so a future multi-prescription
       // diagnose() needs no shape change.
-      const gapKey = (g: { route: string; playbook: string }) => `${g.route}/${g.playbook}`;
       const prevKeys = new Set((last?.gaps ?? []).map(gapKey));
       const nextKeys = new Set(gaps.map(gapKey));
       const delta: EvaluationDelta | undefined =

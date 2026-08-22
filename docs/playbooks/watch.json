@@ -72,6 +72,8 @@
     "packages/core/src/dashboard.test.ts",
     "packages/core/src/spend.ts",
     "packages/core/src/spend.test.ts",
+    "packages/core/src/reports.ts",
+    "packages/core/src/reports.test.ts",
     "packages/backend/convex/dashboardSchema.test.ts",
     "packages/backend/convex/approvals.ts",
     "packages/backend/convex/approvals.test.ts",

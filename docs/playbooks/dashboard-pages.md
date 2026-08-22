@@ -1,5 +1,96 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-22 (26-14 — **REPORT SEMANTICS. The read plane, three shipped defects it
+> found, and — after an adversarial audit of this plan's own first draft — five defects the first
+> draft ADDED.** `packages/core/src/reports.ts` (five pure functions) + `convex/reportsBusiness.ts`
+> (three `tenantQuery`s: `business`, `operations`, `sentMail`).
+>
+> **THE RULE THE WHOLE PAGE IS BUILT AROUND: "no rows" and "nothing happened" are the same bytes and
+> different facts.** A table with no rows in a window supports "0 failures" and "we were not
+> watching" equally well, and only one is safe to render. Every windowed source therefore pairs its
+> count with `coverageLabel(...)` derived from the OLDEST row that tenant has — one ascending
+> `.take(1)` — so a window starting before it reports `partial` (with `coveredSinceMs`) or
+> `unknown`, never a confident zero. This is `spendCoverage` generalised to the tables that have no
+> coverage row to ask. **The floor is the oldest row of ANY status.** Reading it off `status:
+> "sent"` made it a fact about SUCCESSES: a tenant with 90 days of drafted-but-never-sent requests
+> was told "we were not watching" when the truth was "we were watching and nothing was sent" — the
+> same conflation, one level down. The windowed COUNT stays status-filtered; the floor does not.
+>
+> **COMPARABLE MEANS SAME THREAD AND SAME FRAMEWORK.** `evaluations` rows land on at least three
+> thread kinds — the weekly review cron, arbitrary cockpit threads, and never-reused
+> `voice-doc:<session>` threads — and the table's only newest-first read interleaves all of them, so
+> "the tenant's last two rows" routinely diffs a DOCUMENT REVIEW against a business diagnosis. The
+> pair is read from `by_tenant_thread` on the review thread, and `compareSnapshots` refuses the rest.
+> Because that read is ONE thread wide, the empty state is `no-review-run` **and ships its
+> `population`** — it used to say `never-run`, which is a false statement about a tenant who has
+> evaluated their business ten times from the cockpit.
+>
+> **AN UNASSESSED RUN IS NEITHER A RESULT NOR A BASELINE, AND THE GUARD IS SYMMETRIC.** When
+> grounding fails the engine clears `gaps` AND sets `verdict: "insufficient"`, so every open gap
+> looks CLOSED and a hiccup renders as a clean sweep. The first draft guarded only the NEWER row,
+> which leaves the mirror image live: week 2 hiccups, week 3 reproduces week 1 byte for byte, and
+> diffing 3 against 2 reports "8 new findings, 1 gap opened" for a week in which nothing moved.
+> Both rows are now disqualified, and both conditions are checked on each — the engine has TWO
+> insufficient paths and they disagree: `findings.length === 0` clears gaps, `!skillOk` does NOT.
+>
+> **DEFECT 1, SHIPPED AND NOW CORRECTED IN BOTH HALVES: `DECISION_KEYS` contained `"edit"`, a key
+> nothing writes.** `review.ts`'s `reviewDecisionValidator` says `edit_text` and `pipeline.ts` writes
+> `decisionCounts[evt.decision]` verbatim. Because the fold only sums keys present in its own list,
+> the `/ops` card rendered a permanent `edit: 0` as truth AND silently discarded every real
+> edit-with-changes decision. **The test seeded the fiction too** (`decisionCounts: { edit: 1 }`), so
+> it proved the fold sums whatever you hand it. Three things were needed and the first draft did
+> only one: (a) the literal, (b) **`apps/web/app/(app)/ops/page.tsx`, which read `dc.edit` and so
+> rendered `edit 0` unchanged — a backend-only correction left the entire user-visible symptom
+> standing**, and (c) the root cause. `review.ts` now exports `REVIEW_DECISIONS =
+> reviewDecisionValidator.members.map(m => m.value)` and both readers import it, because correcting
+> one hand-typed copy into another leaves the same drift one edit away. An unrecognised literal is
+> now counted as `otherDecisions` and rendered, never dropped.
+>
+> **DEFECT 2, SHIPPED AND NOW CORRECTED — AND THE FIRST DRAFT'S FIX WAS A NO-OP.**
+> `plans.reportForPlan` filtered `eventType === "gmail.sent"` only, while the Microsoft arm writes
+> `graph.sent`. Widening the filter alone changed NO byte of output: the join's only consumer was
+> `messageId`, and Graph returns 202 with an empty body and deliberately records none — so a
+> Microsoft row read `messageId: null` before and after, and no test could go red. The row now
+> carries `delivered: sent !== null`, which is what makes the proof observable, and
+> `plans.test.ts` pins all three cases (gmail with id, graph without one, no proof row at all).
+> `sentMail` draws the same distinction: existence of the audit row is delivery, `messageIdPresent`
+> is a separate fact about the provider's response shape.
+>
+> **A STRUCTURAL ZERO IS NOT A MEASUREMENT — AND NEITHER IS A TRUNCATED SAMPLE.**
+> `deliverApprovedPlan` writes `durationMs: 0` and `usages: []` outright, so a p95 over
+> `telemetry.durationMs` gives a cockpit-only tenant a confident **0 ms** — wrong *and flattering*.
+> Latency comes from `agentSteps.durationMs` over a CLOSED, NAMED six-tool subset (the index eq's
+> `tool` before the time range, so "all activity" costs ~40 queries), and `percentile` excludes
+> absent/zero/negative values and ships the excluded count. **The first draft then broke the file's
+> own cap rule on that one read**: `.take(STEP_CAP)` with no `+1`, on the default ASCENDING index
+> order. That kept the OLDEST 400 rows per tool — so a busy tenant's p95 described the first days of
+> a 90-day window — and `take(CAP)` cannot tell "exactly 400" from "400 of 5,000", so the cut never
+> reached the payload (`percentile.excluded` counts only values it was HANDED). Now
+> `.order("desc").take(STEP_CAP + 1)` per tool, `capped()` per tool, and `latency.truncated` ships
+> beside the number. Reasoning cost is NOT re-summed here at all — the ledger owns it, and a second
+> sum over a different source is how two surfaces come to disagree about what a tenant spent.
+>
+> **NO NEW INDEX, AND ONE CARD DELETED TO KEEP IT THAT WAY.** Every evaluation fact is a single-row
+> snapshot; `deadLetters` has no `(tenantId, createdAt)` index so its count is explicitly
+> point-in-time and flagged `windowed: false`. A windowed `blueprint.confirmed` count WAS built and
+> has been **removed**: `audit` is indexed `by_tenant_ts` only, so selecting one `eventType` is a
+> post-index `.filter()` that scans every audit row in the range, and `.take(51)` never
+> short-circuits because a tenant confirms a blueprint a handful of times in its life. Over the
+> module's own 90-day ceiling that walks the firehose (~90 `internal.audit.*` call sites feed it)
+> and trips Convex's per-query scan limit — so the card would have thrown for exactly the active
+> tenants it was for, and never in a fixture-seeded test. Nobody asked for the series, so it is no
+> card; add `(tenantId, eventType, ts)` if a confirm trend is ever wanted. `bucketWindow` was
+> deleted on the same reasoning: exported, doc-commented and unit-tested with **zero callers**.
+>
+> **`gapKey` IS NOW ACTUALLY LIFTED.** It shipped as a COPY, with `evaluations.ts`'s local arrow left
+> in place — two live definitions of gap identity, which is precisely the drift its own doc comment
+> claimed to prevent. `evaluations.ts` imports it.
+>
+> Evidence: core 1083 passed (40 files), backend 2294 passed (93 files), web ops 21 passed, both typechecks clean, biome
+> clean on every touched file, watcher clean. Four guards were mutation-verified by reverting the
+> fix and confirming red: the `/ops` tile, the symmetric snapshot guard, the `graph.sent` join, and
+> the latency truncation.)
+
 > Last verified: 2026-08-22 (26-13.1 — **THE IMAGE LANE IS BACK, AND THE SHELF IS SEARCHABLE.**
 > `kind: "image"` joins the whitelist and the false comment that excluded it is DELETED, replaced by
 > what the write site actually says: `mediaComplete.saveImageToVault` is scoped to

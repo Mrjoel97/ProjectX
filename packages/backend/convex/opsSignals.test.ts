@@ -104,7 +104,11 @@ async function seedTelemetryFixture(t: T) {
     reviewOutcome: "sent",
   });
   await seedTelemetry(t, TENANT, requestId, {
-    decisionCounts: { edit: 1 },
+    // 26-14: the REAL literal. This fixture seeded `edit`, which `review.ts`'s validator does
+    // not contain and `pipeline.ts` therefore never writes — so the test proved only that the
+    // fold sums whatever you hand it, while the shipped card silently dropped every real
+    // edit-with-changes decision and rendered a permanent `edit: 0` as truth.
+    decisionCounts: { edit_text: 1 },
     costUsd: 0.02,
     reviewOutcome: "sent",
   });
@@ -132,7 +136,7 @@ describe("opsSignals.evalSignals (EVAL-02 read side)", () => {
       .query(api.opsSignals.evalSignals, { sinceMs: SINCE });
 
     expect(s.requestCount).toBe(4);
-    expect(s.decisionCounts).toEqual({ approve: 1, edit: 1, reject: 1, regenerate: 2 });
+    expect(s.decisionCounts).toEqual({ approve: 1, edit_text: 1, reject: 1, regenerate: 2 });
     expect(s.reviewOutcomes).toEqual({ sent: 3, rejected: 1 });
     expect(s.regenerateTotal).toBe(2);
     expect(s.totalCostUsd).toBeCloseTo(0.06, 10);
@@ -181,7 +185,7 @@ describe("opsSignals.evalSignals (EVAL-02 read side)", () => {
       .query(api.opsSignals.evalSignals, { sinceMs: SINCE });
 
     expect(s.requestCount).toBe(0);
-    expect(s.decisionCounts).toEqual({ approve: 0, edit: 0, reject: 0, regenerate: 0 });
+    expect(s.decisionCounts).toEqual({ approve: 0, edit_text: 0, reject: 0, regenerate: 0 });
     expect(s.reviewOutcomes).toEqual({});
     expect(s.regenerateTotal).toBe(0);
     expect(s.fallbackCount).toBe(0);

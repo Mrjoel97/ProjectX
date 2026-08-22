@@ -2214,6 +2214,14 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
+Last session: 2026-08-22T16:30:00.000Z
+Stopped at: 26-14 CLOSED. The work already existed, uncommitted and green, from a prior session — and a
+43-agent adversarial audit found 25 confirmed findings in it (13 distinct defects). **Defect 1 had been
+fixed backend-only: `/ops` still rendered `edit 0`** — a green suite over an unchanged user-visible
+symptom, the exact class `green-tests-over-broken-capability` records. Root-caused at review.ts;
+`confirmedInWindow` (audit-firehose scan → read-cap throw for active tenants only) and `bucketWindow`
+(zero callers) DELETED. core 1083 / backend 2294 / web ops 21, 4 guards mutation-verified. Next: 26-15.
+
 Last session: 2026-08-22T01:20:00.000Z
 Stopped at: 26-10 CLOSED — owner UAT approved; it found and fixed a mobile clip in the Cost Console. Production promotion gate added and hardened. Next: 26-11.
 Last session: 2026-08-21T19:30:00.000Z

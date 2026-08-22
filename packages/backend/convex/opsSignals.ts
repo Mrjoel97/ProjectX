@@ -15,10 +15,19 @@
 // The ops card labels each metric against these realities (Pitfall 6).
 import { v } from "convex/values";
 import { tenantQuery } from "./lib/functions";
+import { REVIEW_DECISIONS } from "./review";
 
 const DEFAULT_WINDOW_MS = 30 * 24 * 60 * 60 * 1000; // 30 days — window shown in the card label
 
-const DECISION_KEYS = ["approve", "edit", "reject", "regenerate"] as const;
+// CORRECTED 26-14, AT THE ROOT. This list was hand-typed as ["approve", "edit", "reject",
+// "regenerate"] and "edit" IS WRITTEN BY NOTHING: `review.ts`'s `reviewDecisionValidator` says
+// "edit_text", and `pipeline.ts` writes `decisionCounts[evt.decision]` verbatim. Because the fold
+// below only sums keys present in THIS list, the card rendered a permanent `edit: 0` as truth AND
+// silently discarded every real edit-with-changes decision.
+//
+// DERIVED, not re-typed. Correcting one hand-typed copy into another hand-typed copy leaves the
+// same drift one edit away — a fifth literal in the validator would repeat the defect verbatim.
+const DECISION_KEYS = REVIEW_DECISIONS;
 
 /**
  * Tenant-scoped, time-windowed eval signals. Returns counts/rates ONLY —
@@ -37,21 +46,25 @@ export const evalSignals = tenantQuery({
       .withIndex("by_tenant_created", (q) => q.eq("tenantId", ctx.tenantId).gte("createdAt", since))
       .collect();
 
-    const decisionCounts: Record<string, number> = {
-      approve: 0,
-      edit: 0,
-      reject: 0,
-      regenerate: 0,
-    };
+    // Zero-initialised from the SAME closed list the fold reads, so the card can never show a
+    // key nothing writes (it showed `edit: 0` for months) or omit one that does.
+    const decisionCounts: Record<string, number> = Object.fromEntries(
+      DECISION_KEYS.map((key) => [key, 0]),
+    );
     const reviewOutcomes: Record<string, number> = {};
+    // A decision literal this build does not know about still MOVED a number, so it is named
+    // rather than dropped. Dropping is what made the `edit` defect invisible for months: the card
+    // under-reported its own total and nothing in the payload said so.
+    let otherDecisions = 0;
     let regenerateTotal = 0;
     let totalCostUsd = 0;
     let deliveredCount = 0;
     for (const row of telemetryRows) {
       const dc = (row.decisionCounts ?? {}) as Record<string, unknown>;
-      for (const key of DECISION_KEYS) {
-        const n = dc[key];
-        if (typeof n === "number") decisionCounts[key] = (decisionCounts[key] ?? 0) + n;
+      for (const [key, n] of Object.entries(dc)) {
+        if (typeof n !== "number") continue;
+        if (DECISION_KEYS.includes(key)) decisionCounts[key] = (decisionCounts[key] ?? 0) + n;
+        else otherDecisions += n;
       }
       regenerateTotal += row.regenerateCount;
       totalCostUsd += row.costUsd;
@@ -83,6 +96,7 @@ export const evalSignals = tenantQuery({
       windowStartMs: since,
       requestCount,
       decisionCounts,
+      otherDecisions,
       reviewOutcomes,
       regenerateTotal,
       fallbackCount,
