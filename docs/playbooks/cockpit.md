@@ -1,3 +1,13 @@
+> Last verified: 2026-08-22 (26-14 — **A SHIPPED DEFECT IN `plans.reportForPlan`, CORRECTED.** It
+> joined delivery proof with `.filter(eq(eventType, "gmail.sent"))` only, while the Microsoft arm
+> writes `graph.sent` (`graph.ts:122`) — so EVERY Microsoft send has been reading as undelivered in
+> the cockpit'''s own REPORT card since the provider landed. A provider was added without this join
+> following it. Both literals now count. The rule the new Reports plane applies for the same fact:
+> **delivery is proven by the EXISTENCE of a proof row, never by a message id** — Graph returns 202
+> with an empty body and deliberately records no id, so `messageIdPresent` is reported separately
+> as a fact about the provider'''s response shape rather than about delivery.)
+>
+
 > Last verified: 2026-08-22 (26-13.1 — **WATCH-GATE ONLY, no cockpit behaviour changed.** This
 > playbook watches `apps/web/e2e/`, and `content.spec.ts` gained two tests: the image lane renders
 > and opens, and title search narrows the shelf. The cockpit-facing fact below is unchanged — an

@@ -1,5 +1,17 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-08-22 (26-14 — **A SHIPPED DEFECT IN `opsSignals.evalSignals`, CORRECTED.**
+> `DECISION_KEYS` was hand-typed as `["approve","edit","reject","regenerate"]`. Nothing writes
+> `"edit"` — `review.ts`'s `reviewDecisionValidator` says `edit_text`, and `pipeline.ts` writes
+> `decisionCounts[evt.decision]` verbatim. Because the fold only sums keys present in that list, the
+> `/ops` card rendered a permanent `edit: 0` as truth AND silently discarded every real
+> edit-with-changes decision. **`opsSignals.test.ts` seeded the same fiction** (`{ edit: 1 }`), so it
+> only ever proved the fold sums whatever you hand it. Fixture corrected to the real literal, and
+> the zero-init is now derived from the same list the fold reads, so the card can never again show a
+> key nothing writes or omit one that does. A hand-typed copy of a closed union is how the two came
+> apart; keep these literals identical to the validator's.)
+>
+
 > Last verified: 2026-08-22 (26-13.1 — `smoke.seedContentShelf` gained a FOURTH fixture: a
 > standalone image (a real 1x1 PNG, so the shelf's thumbnail resolves a genuine signed URL against
 > genuine bytes). Same caveat as its siblings — a terminal row that proves a UI state, with no

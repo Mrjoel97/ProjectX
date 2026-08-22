@@ -207,7 +207,13 @@ type LiveBlueprint = {
   confirmedAt: number | null;
 };
 
-async function readLiveForTenant(ctx: QueryCtx, tenantId: string): Promise<LiveBlueprint | null> {
+/** EXPORTED for `reportsBusiness.ts` (26-14): a plain function, not the `liveForTenant`
+ *  internalQuery beside it — a tenantQuery cannot `runQuery` an internal one, and a second
+ *  reader of the same row is how two surfaces come to disagree about what 'live' means. */
+export async function readLiveForTenant(
+  ctx: QueryCtx,
+  tenantId: string,
+): Promise<LiveBlueprint | null> {
   try {
     const profile = await ctx.db
       .query("tenantProfiles")
