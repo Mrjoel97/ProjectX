@@ -519,6 +519,104 @@ export const getSkillVersion = internalQuery({
 });
 
 /**
+ * THE REGISTRY, at module scope so its NAMES can be read without its bodies.
+ *
+ * Lifted out of `seedSkills`'s handler by 26-15: `reportsGovernance.activeSkills` needs the
+ * enumeration to drive one `by_name_status` read per skill, and a second hand-typed copy of
+ * these names is precisely the drift that shipped 26-14's permanent `edit: 0`. Same array,
+ * same APPEND-ONLY rule as before — a new row goes at the END; do not reorder.
+ */
+const SEEDS = [
+  { name: EXECUTIVE_ROUTER_SKILL, body: executiveRouterSkillBody },
+  { name: EMAIL_DRAFTER_SKILL, body: emailDrafterSkillBody },
+  { name: COCKPIT_AGENT_SKILL, body: cockpitAgentSkillBody },
+  { name: DOCUMENT_DRAFTER_SKILL, body: documentDrafterSkillBody },
+  { name: ATTACHMENT_EXTRACTOR_SKILL, body: attachmentExtractorSkillBody },
+  { name: GRAPH_EXTRACTOR_SKILL, body: graphExtractorSkillBody },
+  { name: INBOX_DIGEST_SKILL, body: inboxDigestSkillBody },
+  { name: REPLY_DRAFTER_SKILL, body: replyDrafterSkillBody },
+  // UNGATED (RESEARCH OQ3): a free-form voice persona the eval gate cannot meaningfully assert.
+  { name: VOICE_SESSION_SKILL, body: voiceSessionSkillBody },
+  // UNGATED (RESEARCH OQ3): its output is a vault document, not tool-state.
+  { name: VOICE_BRIEF_SKILL, body: voiceBriefSkillBody },
+  // UNGATED (14-01, DOCV-01): the voice-doc "discuss this report" persona. Same reason as
+  // voice-session above — run-eval-golden.mjs drives runCockpitAgent over text fixtures and
+  // hard-validates --skill against a closed name list, so it structurally cannot exercise a
+  // Realtime voice persona; gating would deadlock this skill at v1 on its first body edit.
+  { name: DOCUMENT_ANALYST_SKILL, body: documentAnalystSkillBody },
+  // UNGATED (11-01): output is a vault-doc profile a human confirms (SC#1), not tool-state.
+  { name: BUSINESS_PROFILE_SKILL, body: businessProfileSkillBody },
+  // UNGATED (15.1-06, Q6): the conversational onboarding system prompt (design §6). Same
+  // rationale as `business-profile` above — an onboarding turn a human answers, not tool-state
+  // — and the guarantee that actually matters is CODE: `onboarding.converse` picks the next
+  // question from `missingSlots` and computes `done` from `canComplete`, so no body edit can
+  // make the conversation finish with a required slot empty. `converse` loads it FAIL-CLOSED.
+  { name: ONBOARDING_AGENT_SKILL, body: onboardingAgentSkillBody },
+  // GATED (12-02, BEVL-01): the 4 evaluation-framework rubrics the engine loads to assess a
+  // business, + the 3 specialist skills an approved gap-action names (execution deferred to
+  // Phase 15+). Bootstrap seeds each v1 ACTIVE; a body edit publishes a candidate the eval
+  // gate must clear before it goes live (SC #4).
+  { name: GROWTH_OS_DIAGNOSTIC_SKILL, body: growthOsDiagnosticSkillBody },
+  { name: SWOT_SKILL, body: swotSkillBody },
+  { name: LEAN_CANVAS_SKILL, body: leanCanvasSkillBody },
+  { name: BMC_SKILL, body: bmcSkillBody },
+  { name: OFFER_ARCHITECT_SKILL, body: offerArchitectSkillBody },
+  { name: MONEY_MODEL_DESIGNER_SKILL, body: moneyModelDesignerSkillBody },
+  { name: LEAD_ENGINE_SKILL, body: leadEngineSkillBody },
+  // Phase 16 (DISP-02/ACTN-03). APPEND-ONLY — do not reorder or touch the rows above.
+  { name: RESEARCH_SPECIALIST_SKILL, body: researchSpecialistSkillBody },
+  // UNGATED (15.1-05, Q6): the three behaviour-preset style overlays (design §7). They change
+  // HOW a specialist speaks, never what it may do or claim — the capability grant stays
+  // code-owned (ADR-007) — so they match `business-profile`, not the gated rubrics above.
+  // `dispatch.ts` reads the one the tenant's `behaviorPreset` names and prepends it to the
+  // specialist's prompt, FAIL-OPEN: an unseeded overlay costs voice, never a dispatch.
+  { name: STYLE_DIRECT_SKILL, body: styleDirectSkillBody },
+  { name: STYLE_COACHING_SKILL, body: styleCoachingSkillBody },
+  { name: STYLE_CONCISE_SKILL, body: styleConciseSkillBody },
+  // UNGATED (17.1-02, BLPR-01): output is candidate fields for a vault-doc blueprint a human
+  // confirms (D2), not tool-state — the `business-profile` rationale verbatim. And the golden
+  // runner hard-validates --skill against a closed name list it cannot extend to the synthesis
+  // path, so gating would deadlock this skill at v1 on its first body edit.
+  { name: BUSINESS_BLUEPRINT_SKILL, body: businessBlueprintSkillBody },
+  // UNGATED (18-03, ACTN-04): the short-form drafter (hook / length / platform voice).
+  // This row is WHY Phase 18 added a new skill instead of editing `document-drafter`: a name
+  // with no prior rows takes the `rows.length === 0` branch below and is inserted at v1
+  // `status: "active"` — no eval cycle, no paid run. `document-drafter` IS in GATED_SKILLS, so
+  // editing its body would have minted a candidate needing a passing eval first, and no golden
+  // fixture reaches the drafting path to clear it. Its body stays byte-unchanged.
+  { name: CONTENT_DRAFTER_SKILL, body: contentDrafterSkillBody },
+  // UNGATED (20-03, MEDIA-01): the media specialist. Same deadlock as document-analyst — the
+  // golden runner drives runCockpitAgent over TEXT fixtures and cannot exercise a
+  // script/art-direction/storyboard turn, so gating would strand this at v1 on its first body
+  // edit. The guarantees that matter are CODE: searchVault is its only grant, so it cannot
+  // spend a cent; the narration band is enforced by the parser; the model comes from a price
+  // table the body cannot name into.
+  // There is deliberately NO assembler-script entry here, and there must never be one — the
+  // ffmpeg assembler is a repo file, and a runtime-mutable shell script executed in a VM is
+  // remote code execution (llmRedaction.test.ts scans for exactly that).
+  { name: MEDIA_DIRECTOR_SKILL, body: mediaDirectorSkillBody },
+  // UNGATED (15.3-06, VALT-08): the folder-digest synthesis body. APPEND-ONLY — this row goes
+  // LAST; do not reorder or touch the rows above. Same deadlock as content-drafter: the golden
+  // runner's --skill list is derived from GATED_SKILLS and it drives runCockpitAgent over TEXT
+  // fixtures, and no fixture can assemble a folder manifest plus per-member excerpts, so gating
+  // this would strand it at v1 on its first body edit. As a new name it takes the
+  // `rows.length === 0` branch below and lands at v1 `active` — no eval cycle, no paid run.
+  { name: FOLDER_DIGEST_SKILL, body: folderDigestSkillBody },
+  // UNGATED (15.3-08, VALT-12): the per-document classifier body. APPEND-ONLY — a new row goes
+  // at the END of this array; do not reorder or touch the rows above. Same deadlock as
+  // folder-digest: the golden runner's --skill list is derived from GATED_SKILLS and it drives
+  // runCockpitAgent over TEXT fixtures, and no fixture reaches vault ingest, so gating this
+  // would strand it at v1 on its first body edit. As a new name it takes the
+  // `rows.length === 0` branch below and lands at v1 `active` — no eval cycle, no paid run.
+  // SEED BEFORE THIS SHIPS: `classifyDoc` loads it fail-closed, and on an unseeded deployment
+  // every document classifies as `unclassified` (degraded label, never a failed document).
+  { name: DOCUMENT_CLASSIFIER_SKILL, body: documentClassifierSkillBody },
+];
+
+/** Every seeded skill name. Derived from `SEEDS`, never typed a second time. */
+export const REGISTRY_SKILL_NAMES: readonly string[] = SEEDS.map((s) => s.name);
+
+/**
  * Seed + PUBLISH the agent skills from the registry-bound markdown sources (via
  * the derived constants) — no agent prompt is hardcoded here. First run inserts
  * each as v1/active (bootstrap — a fresh clone must never fail closed). Re-running
@@ -532,94 +630,7 @@ export const getSkillVersion = internalQuery({
 export const seedSkills = internalMutation({
   args: {},
   handler: async (ctx) => {
-    const seeds = [
-      { name: EXECUTIVE_ROUTER_SKILL, body: executiveRouterSkillBody },
-      { name: EMAIL_DRAFTER_SKILL, body: emailDrafterSkillBody },
-      { name: COCKPIT_AGENT_SKILL, body: cockpitAgentSkillBody },
-      { name: DOCUMENT_DRAFTER_SKILL, body: documentDrafterSkillBody },
-      { name: ATTACHMENT_EXTRACTOR_SKILL, body: attachmentExtractorSkillBody },
-      { name: GRAPH_EXTRACTOR_SKILL, body: graphExtractorSkillBody },
-      { name: INBOX_DIGEST_SKILL, body: inboxDigestSkillBody },
-      { name: REPLY_DRAFTER_SKILL, body: replyDrafterSkillBody },
-      // UNGATED (RESEARCH OQ3): a free-form voice persona the eval gate cannot meaningfully assert.
-      { name: VOICE_SESSION_SKILL, body: voiceSessionSkillBody },
-      // UNGATED (RESEARCH OQ3): its output is a vault document, not tool-state.
-      { name: VOICE_BRIEF_SKILL, body: voiceBriefSkillBody },
-      // UNGATED (14-01, DOCV-01): the voice-doc "discuss this report" persona. Same reason as
-      // voice-session above — run-eval-golden.mjs drives runCockpitAgent over text fixtures and
-      // hard-validates --skill against a closed name list, so it structurally cannot exercise a
-      // Realtime voice persona; gating would deadlock this skill at v1 on its first body edit.
-      { name: DOCUMENT_ANALYST_SKILL, body: documentAnalystSkillBody },
-      // UNGATED (11-01): output is a vault-doc profile a human confirms (SC#1), not tool-state.
-      { name: BUSINESS_PROFILE_SKILL, body: businessProfileSkillBody },
-      // UNGATED (15.1-06, Q6): the conversational onboarding system prompt (design §6). Same
-      // rationale as `business-profile` above — an onboarding turn a human answers, not tool-state
-      // — and the guarantee that actually matters is CODE: `onboarding.converse` picks the next
-      // question from `missingSlots` and computes `done` from `canComplete`, so no body edit can
-      // make the conversation finish with a required slot empty. `converse` loads it FAIL-CLOSED.
-      { name: ONBOARDING_AGENT_SKILL, body: onboardingAgentSkillBody },
-      // GATED (12-02, BEVL-01): the 4 evaluation-framework rubrics the engine loads to assess a
-      // business, + the 3 specialist skills an approved gap-action names (execution deferred to
-      // Phase 15+). Bootstrap seeds each v1 ACTIVE; a body edit publishes a candidate the eval
-      // gate must clear before it goes live (SC #4).
-      { name: GROWTH_OS_DIAGNOSTIC_SKILL, body: growthOsDiagnosticSkillBody },
-      { name: SWOT_SKILL, body: swotSkillBody },
-      { name: LEAN_CANVAS_SKILL, body: leanCanvasSkillBody },
-      { name: BMC_SKILL, body: bmcSkillBody },
-      { name: OFFER_ARCHITECT_SKILL, body: offerArchitectSkillBody },
-      { name: MONEY_MODEL_DESIGNER_SKILL, body: moneyModelDesignerSkillBody },
-      { name: LEAD_ENGINE_SKILL, body: leadEngineSkillBody },
-      // Phase 16 (DISP-02/ACTN-03). APPEND-ONLY — do not reorder or touch the rows above.
-      { name: RESEARCH_SPECIALIST_SKILL, body: researchSpecialistSkillBody },
-      // UNGATED (15.1-05, Q6): the three behaviour-preset style overlays (design §7). They change
-      // HOW a specialist speaks, never what it may do or claim — the capability grant stays
-      // code-owned (ADR-007) — so they match `business-profile`, not the gated rubrics above.
-      // `dispatch.ts` reads the one the tenant's `behaviorPreset` names and prepends it to the
-      // specialist's prompt, FAIL-OPEN: an unseeded overlay costs voice, never a dispatch.
-      { name: STYLE_DIRECT_SKILL, body: styleDirectSkillBody },
-      { name: STYLE_COACHING_SKILL, body: styleCoachingSkillBody },
-      { name: STYLE_CONCISE_SKILL, body: styleConciseSkillBody },
-      // UNGATED (17.1-02, BLPR-01): output is candidate fields for a vault-doc blueprint a human
-      // confirms (D2), not tool-state — the `business-profile` rationale verbatim. And the golden
-      // runner hard-validates --skill against a closed name list it cannot extend to the synthesis
-      // path, so gating would deadlock this skill at v1 on its first body edit.
-      { name: BUSINESS_BLUEPRINT_SKILL, body: businessBlueprintSkillBody },
-      // UNGATED (18-03, ACTN-04): the short-form drafter (hook / length / platform voice).
-      // This row is WHY Phase 18 added a new skill instead of editing `document-drafter`: a name
-      // with no prior rows takes the `rows.length === 0` branch below and is inserted at v1
-      // `status: "active"` — no eval cycle, no paid run. `document-drafter` IS in GATED_SKILLS, so
-      // editing its body would have minted a candidate needing a passing eval first, and no golden
-      // fixture reaches the drafting path to clear it. Its body stays byte-unchanged.
-      { name: CONTENT_DRAFTER_SKILL, body: contentDrafterSkillBody },
-      // UNGATED (20-03, MEDIA-01): the media specialist. Same deadlock as document-analyst — the
-      // golden runner drives runCockpitAgent over TEXT fixtures and cannot exercise a
-      // script/art-direction/storyboard turn, so gating would strand this at v1 on its first body
-      // edit. The guarantees that matter are CODE: searchVault is its only grant, so it cannot
-      // spend a cent; the narration band is enforced by the parser; the model comes from a price
-      // table the body cannot name into.
-      // There is deliberately NO assembler-script entry here, and there must never be one — the
-      // ffmpeg assembler is a repo file, and a runtime-mutable shell script executed in a VM is
-      // remote code execution (llmRedaction.test.ts scans for exactly that).
-      { name: MEDIA_DIRECTOR_SKILL, body: mediaDirectorSkillBody },
-      // UNGATED (15.3-06, VALT-08): the folder-digest synthesis body. APPEND-ONLY — this row goes
-      // LAST; do not reorder or touch the rows above. Same deadlock as content-drafter: the golden
-      // runner's --skill list is derived from GATED_SKILLS and it drives runCockpitAgent over TEXT
-      // fixtures, and no fixture can assemble a folder manifest plus per-member excerpts, so gating
-      // this would strand it at v1 on its first body edit. As a new name it takes the
-      // `rows.length === 0` branch below and lands at v1 `active` — no eval cycle, no paid run.
-      { name: FOLDER_DIGEST_SKILL, body: folderDigestSkillBody },
-      // UNGATED (15.3-08, VALT-12): the per-document classifier body. APPEND-ONLY — a new row goes
-      // at the END of this array; do not reorder or touch the rows above. Same deadlock as
-      // folder-digest: the golden runner's --skill list is derived from GATED_SKILLS and it drives
-      // runCockpitAgent over TEXT fixtures, and no fixture reaches vault ingest, so gating this
-      // would strand it at v1 on its first body edit. As a new name it takes the
-      // `rows.length === 0` branch below and lands at v1 `active` — no eval cycle, no paid run.
-      // SEED BEFORE THIS SHIPS: `classifyDoc` loads it fail-closed, and on an unseeded deployment
-      // every document classifies as `unclassified` (degraded label, never a failed document).
-      { name: DOCUMENT_CLASSIFIER_SKILL, body: documentClassifierSkillBody },
-    ];
-
-    for (const { name, body } of seeds) {
+    for (const { name, body } of SEEDS) {
       const rows = await ctx.db
         .query("skills")
         .withIndex("by_name_status", (q) => q.eq("name", name))

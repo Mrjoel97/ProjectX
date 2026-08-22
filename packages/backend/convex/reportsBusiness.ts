@@ -40,7 +40,7 @@ import { REVIEW_DECISIONS } from "./review";
 import { coverageFor as spendCoverageFor } from "./spendLedger";
 
 /** 90-day preset plus a day of slack. The SERVER owns the ceiling; a browser cannot ask for more. */
-const MAX_WINDOW_MS = 91 * 24 * 60 * 60 * 1000;
+export const MAX_WINDOW_MS = 91 * 24 * 60 * 60 * 1000;
 
 const windowArgs = {
   sinceMs: v.number(),

@@ -200,6 +200,8 @@
     "packages/core/src/retention.ts",
     "packages/core/src/notificationTemplates.ts",
     "packages/contracts/src/audit.ts",
+    "packages/contracts/src/auditProjection.ts",
+    "packages/contracts/src/auditProjection.test.ts",
     "packages/pii/",
     "apps/web/app/(app)/_components/NotificationsBanner.tsx"
   ],

@@ -1,5 +1,22 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-22 (26-15 — **THE GOVERNANCE READ PLANE.**
+> `convex/reportsGovernance.ts`: `auditPage` (tenantQuery, cursor-paginated over
+> `audit.by_tenant_ts`, every row through `projectAuditRow` BEFORE it can be serialized — there is
+> no raw mode and no debug flag, because a second path that returns the unfiltered row is how the
+> first stops being the boundary), plus `wormExport` and `activeSkills` as `ownerQuery`s.
+> The window ceiling is IMPORTED (`MAX_WINDOW_MS`, now exported from `reportsBusiness.ts`) rather
+> than re-typed, so Reports cannot grow two definitions of how far back it will look. The cursor is
+> `@pikar/core`'s shared dashboard cursor — the same one the Content shelf pages on — so a
+> malformed cursor THROWS instead of silently restarting at page one; a cursor pointing PAST the
+> window is not malformed and is still honoured, which is how a stale tab resumes.
+> **The invariant signal is scoped so it can stay meaningful:** a key that is not allowlisted is the
+> contract working and is silent; only an ALLOWLISTED key whose value is not a ref raises a
+> `console.warn`, and every field in it is code-owned (the count, and an `eventType` that is by
+> construction a key of the allowlist table — never a key name, never a value). A test asserts a
+> clean page logs nothing, because a warning that fires on every page is not a warning.)
+>
+
 > Last verified: 2026-08-22 (26-14 — **REPORT SEMANTICS. The read plane, three shipped defects it
 > found, and — after an adversarial audit of this plan's own first draft — five defects the first
 > draft ADDED.** `packages/core/src/reports.ts` (five pure functions) + `convex/reportsBusiness.ts`

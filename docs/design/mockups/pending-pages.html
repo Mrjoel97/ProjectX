@@ -833,13 +833,13 @@ body.show-src .srckey{display:flex}
           </tbody>
         </table>
         <p style="font-size:.76rem;color:var(--ink-soft);margin:.9rem 0 0">
-          Rows carry <b>refs, hashes, ids and counts only</b> — never message bodies, addresses or PII. That is a schema property, so this viewer is safe by construction, not by filtering.</p>
+          Rows carry <b>refs, hashes, ids and counts only</b> — never message bodies, addresses or PII. That is enforced by a <b>server-side projection</b> (allowlisted keys per event, then a shape check), <b>not</b> by the schema: <code>audit.payload</code> is <code>v.any()</code> and a nested object already lives in it. An event with no allowlist row renders as a shell — timestamp, actor, correlation, no detail. <i>Corrected 26-15: this card previously claimed the viewer was safe by construction.</i></p>
       </div>
       <div class="split">
         <div class="card"><p class="caps" style="margin-bottom:.5rem">WORM export</p>
           <div style="display:flex;align-items:center;gap:.7rem;flex-wrap:wrap">
-            <span class="pill pill-done">Healthy</span><span class="muted" style="font-size:.83rem">Last export 06 Aug 03:00 · 412 rows · lag 5h</span></div>
-          <div class="stat-cap" style="margin-top:.4rem">Immutability lives outside Convex — S3 Object Lock. This is the only place you can see it is actually running.</div>
+            <span class="muted" style="font-size:.83rem">Cursor last advanced 06 Aug 03:00 · oldest row not yet exported 5h old · 412+ behind</span></div>
+          <div class="stat-cap" style="margin-top:.4rem">Immutability lives outside Convex — S3 Object Lock. <b>This is a CURSOR POSITION, not a durability receipt:</b> nothing here reads an S3 object back, so a run that died mid-upload after advancing looks identical. No health pill — the data cannot support one. <i>Corrected 26-15.</i></div>
           <span class="src new">exportCursors read — table exists, no UI</span></div>
         <div class="card"><p class="caps" style="margin-bottom:.5rem">Active skill versions</p>
           <table class="ledger"><tbody>
