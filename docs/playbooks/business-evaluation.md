@@ -1,5 +1,18 @@
 # Playbook: Business Evaluation Engine
 
+> Last verified: 2026-08-22 (26-14 — **one import; no engine behaviour changed.** `runEvaluation`'s
+> local `gapKey` arrow is deleted and the identical function is imported from `@pikar/core`
+> (`reports.ts`), which the RPRT-01 report plane also uses to diff two snapshots. The engine writes
+> `evaluations.delta` with it and the report reads that delta; shipping a COPY left two live
+> definitions of "the same gap", which is the drift the core function's own doc comment claims to
+> prevent. Same `${route}/${playbook}` key, same exclusion of `leverageRank`.
+>
+> Also relevant to this engine, decided in 26-14 and NOT changed here: the report's snapshot diff
+> disqualifies an `insufficient` row on EITHER side. This module has two insufficient paths and they
+> disagree — `findings.length === 0` clears `gaps`, `!skillOk` leaves them as they were — so a
+> reader must check the verdict AND the zero-findings condition, on both rows. backend 2294/2294.)
+>
+
 > Last verified: 2026-08-22 (26-11 -- **the approved memo carries its provenance, and a promoted
 > artifact is no longer cited as the owner's own word.** `persistNextStepMemo` writes
 > `sourceThreadId`/`sourcePlanId` from the `plans` row it already holds. More importantly,
