@@ -1,5 +1,29 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-08-23 (27-08 — **`smoke.ts` GAINED A PACK-EVAL TENANT SEEDER AND A RUN-FACTS
+> READ.** No runtime behaviour changed; both are internal test-support surfaces for
+> `run-workflow-pack-evals.mjs`, and the runtime contracts in this playbook are untouched.
+>
+> `seedPackEvalTenant` exists because a pack run's PREFLIGHT is resolved in code from tenant state
+> (`probeSources`), so an eval case that expects `finance-inputs: available` can only be judged on a
+> tenant that really has a figure. It is guarded to `packeval-<8hex>-<case>` tenants only (the
+> `seedGoldenEvalBlueprint` posture) and writes a figure through `cash.writeFigureRow` — the ONE
+> writer — a manageable `calendarEvents` row, and a Gmail-only `gmailTokens` row.
+>
+> **The token carries NO Drive scope, and that is deliberate.** Inbox reads take the `inboxFixtures`
+> seam BEFORE the token, so a fixture mailbox is real and offline; Drive has no such seam, so a
+> Drive-scoped token would make the preflight promise a plane every call 403s. `drive` is therefore
+> honestly `unavailable` on every eval case.
+>
+> `packRunFacts` is a refs-only read of one run's `workflowPackEvents` rows and counts — no reply
+> text, no prose. Tool traces still come from the existing `toolCallsForThread`; nothing new emits a
+> cost or latency number (`spendEvents` and `agentSteps` remain their owners).
+>
+> Related, in `smokeAssert.ts`: `assertEvalCaseClean`'s needle scan now covers `workflowPackEvents`
+> alongside audit / deadLetters / telemetry. That table is `audit_immutable`, so a field that ever
+> carried raw user content could never be corrected or erased — leaving it out of the leak scan meant
+> certifying every plane except the one that cannot be fixed.)
+
 > Last verified: 2026-08-22 (26-14 — **A SHIPPED DEFECT IN `opsSignals.evalSignals`, CORRECTED.**
 > `DECISION_KEYS` was hand-typed as `["approve","edit","reject","regenerate"]`. Nothing writes
 > `"edit"` — `review.ts`'s `reviewDecisionValidator` says `edit_text`, and `pipeline.ts` writes
