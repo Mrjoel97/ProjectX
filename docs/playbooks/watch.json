@@ -1,10 +1,6 @@
 {
-  "_unassigned": [
-    "packages/backend/vitest.diag.setup.ts"
-  ],
-  "tracing.md": [
-    "packages/backend/convex/lib/foglamp.ts"
-  ],
+  "_unassigned": ["packages/backend/vitest.diag.setup.ts"],
+  "tracing.md": ["packages/backend/convex/lib/foglamp.ts"],
   "ci-gate.md": [
     ".github/workflows/ci.yml",
     "package.json",
