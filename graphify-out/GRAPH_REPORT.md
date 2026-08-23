@@ -1,16 +1,16 @@
 # Graph Report - Pikar-Ai  (2026-08-23)
 
 ## Corpus Check
-- 2036 files · ~3,971,029 words
+- 2055 files · ~3,986,493 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 8765 nodes · 13761 edges · 601 communities (522 shown, 79 thin omitted)
+- 8823 nodes · 13774 edges · 629 communities (548 shown, 81 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 83 edges (avg confidence: 0.71)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `e0a2adab`
+- Built from commit: `0f9affed`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -379,13 +379,38 @@
 - withheldNote
 - page.tsx
 - Output Template
+- ReelCanvas
+- notificationMessage
+- cockpitBlueprint.test.ts
+- Phase 27 Plan 01: Upstream Pin and Provenance Summary
+- calendarCard.test.ts
+- failureCards
+- vaultGround.test.ts
+- ADR-011: Media generation goes to fal.ai on Wan 2.5 — a per-second USD price is the binding criterion, not model prestige
 - Growth OS — Hormozi Skill Suite Design Spec
+- contentAudit.test.ts
+- vaultGraph.test.ts
+- routing.ts
+- groundedSources.test.ts
+- mailboxOptions
+- freshAccessToken
 - Design
 - reportPack.test.ts
 - Task 4: Canvas Pulse — Breathing, Dimming, Readout
 - 2. SegmentAnatomy.tsx
 - Task 7 Report — Solvency (runway, net burn, MRR/ARR, working capital)
+- importGuard.test.ts
+- vaultGraph.test.ts
+- worm.test.ts
+- Process / SOP Builder (v1)
 - FinanceTabs.tsx
+- routing.ts
+- reviewThreshold.ts
+- briefings.test.ts
+- metering.ts
+- Proactive weekly review (BEVL-03, 13-02)
+- deletableTables
+- CommandCenter
 - scorecard.py
 - Research Specialist (v1)
 - ADR-012: The `media` route ships a FINISHED REEL — a dispatchable specialist whose product costs money and which cannot spend any
@@ -577,7 +602,6 @@
 - task-7-brief.md
 - task-8-brief.md
 - goals-slice-ledger-archive.md
-- isFallbackEligible
 - assertSuiteIdentity
 - runInspect
 - content.spec.ts
@@ -606,29 +630,29 @@
   apps/web/app/(app)/dashboard/CommandCenter.tsx → packages/core/src/home.ts
 - `isPrivateOrGenerated()` --indirect_call--> `segment()`  [INFERRED]
   apps/web/app/(app)/dashboard/onboarding/onboardingFolder.ts → packages/core/src/blueprintSegments.test.ts
+- `BlueprintCanvas()` --indirect_call--> `segment()`  [INFERRED]
+  apps/web/app/(app)/dashboard/profile/BlueprintCanvas.tsx → packages/core/src/blueprintSegments.test.ts
 - `AbnormalBriefBanner()` --indirect_call--> `text()`  [INFERRED]
   apps/web/app/(app)/dashboard/voice/AbnormalBriefBanner.tsx → packages/core/src/contacts.ts
 - `buildCockpitTools()` --indirect_call--> `today()`  [INFERRED]
   packages/backend/convex/llm.ts → apps/web/app/(app)/dashboard/voice/PostCall.tsx
-- `useVoiceSession()` --indirect_call--> `text()`  [INFERRED]
-  apps/web/app/(app)/dashboard/voice/useVoiceSession.ts → packages/core/src/contacts.ts
 
 ## Import Cycles
 - None detected.
 
-## Communities (601 total, 79 thin omitted)
+## Communities (629 total, 81 thin omitted)
 
 ### Community 0 - "functions.ts"
-Cohesion: 0.08
-Nodes (23): ArtifactActions, ArtifactCardData, browserTimeZone(), button, caps, card, ContentShelf(), ContentState (+15 more)
+Cohesion: 0.05
+Nodes (42): ArtifactActions, ArtifactCard(), ArtifactCardData, browserTimeZone(), button, bytesLabel(), caps, card (+34 more)
 
 ### Community 1 - "package.json"
 Cohesion: 0.03
-Nodes (79): box, btn, Mode, prepare, retrier, vaultIngestPool, workflow, draft (+71 more)
+Nodes (73): box, btn, Mode, prepare, retrier, vaultIngestPool, workflow, draft (+65 more)
 
 ### Community 2 - "page.tsx"
-Cohesion: 0.05
-Nodes (41): spineForTenant, tenantAction, GenerateBoardPackResult, landPack, snapshot, graphEdges (table), graphNodes (table), countTerminal() (+33 more)
+Cohesion: 0.06
+Nodes (33): spineForTenant, graphEdges (table), graphNodes (table), getDoc, markReady, ownedDocsMeta, sealedDocIds, EDGE (+25 more)
 
 ### Community 3 - "biome.json"
 Cohesion: 0.07
@@ -636,7 +660,7 @@ Nodes (29): 23-04 — what the authoring agent is NOT allowed to see, Ceiling, D
 
 ### Community 4 - "v1 Requirements"
 Cohesion: 0.03
-Nodes (98): briefingSheet, capsTeal, snippetSheet, traceText, typeBadge, VaultDocButton(), ArtDirection, Block (+90 more)
+Nodes (102): briefingSheet, capsTeal, snippetSheet, traceText, typeBadge, VaultDocButton(), ArtDirection, Block (+94 more)
 
 ### Community 5 - "skills.ts"
 Cohesion: 0.04
@@ -644,15 +668,15 @@ Nodes (48): 1. One loop, one router, code-owned pack registry, 2. Complete opera
 
 ### Community 6 - "Phase 03.2 Plan 03: Gmail Headers-Only Search Summary"
 Cohesion: 0.05
-Nodes (48): persistNextStepMemo(), MutationCtx, preCall, contentHash(), storeAndLand(), saveImageToVault(), writeProfileDoc(), saveReelToVault() (+40 more)
+Nodes (47): persistNextStepMemo(), preCall, draftVoiceBrief, batchToRender, burnCaptions, captionsToBurn, markRendering, recordCaptionBurn (+39 more)
 
 ### Community 7 - "Playbook: Email Chat Cockpit"
 Cohesion: 0.06
 Nodes (34): 23-02 — `publishAgentCandidate`, the inert writer, 23-04 — the eval gate an agent row must clear, 23-05 — the human-owner half of the agent gate, Data flow, Dependencies & blast radius, `hasPassingAgentTenantEvidence`, Holdout boundary, How to change safely (+26 more)
 
 ### Community 8 - "ADR-001: Convex as the data + orchestration plane, with thin adapters over pure-TS packages"
-Cohesion: 0.15
-Nodes (13): ADR-0011, DEFAULT_CONFIG, getSafeTextByHash, ingestRemainingCents, mediaRemainingCents, refundableCents(), remainingDailyCents, saveInstruction (+5 more)
+Cohesion: 0.10
+Nodes (27): ADR-0011, DEFAULT_CONFIG, FolderReserveRefusal, FolderReserveResult, getSafeTextByHash, ingestRemainingCents, ingestRemainingCentsInner(), mediaRemainingCents (+19 more)
 
 ### Community 9 - "emailIntent.ts"
 Cohesion: 0.06
@@ -660,23 +684,23 @@ Nodes (31): aggregateModules, BASE, __dirname, DISPATCH_STEP_TOOLS, MEDIA_BODY, 
 
 ### Community 10 - "Project State"
 Cohesion: 0.04
-Nodes (48): RFC-2045, RFC-2047, DeliveryResult, send, modules, runEvaluation, internalAction, base64Url() (+40 more)
+Nodes (48): RFC-2045, RFC-2047, googleCalendarToken(), footerFor, isSuppressed, DeliveryResult, send, ActionCtx (+40 more)
 
 ### Community 11 - "scan.ts"
-Cohesion: 0.09
-Nodes (38): salvageNote(), buildSpecialistPrompt(), cap(), Ctx, deckRefusalBody(), deckTokenCounts(), dispatchAndLand(), DispatchArgs (+30 more)
+Cohesion: 0.08
+Nodes (39): salvageNote(), buildSpecialistPrompt(), cap(), Ctx, deckRefusalBody(), deckTokenCounts(), dispatchAndLand(), DispatchArgs (+31 more)
 
 ### Community 12 - "guardrails.ts"
-Cohesion: 0.13
-Nodes (19): BLUEPRINT_FIELDS, CASH_INPUTS, FigureActor, FigureConfidence, FigureOrigin, BY_KEY, classifyProposal(), CONTACT_TARGETS (+11 more)
+Cohesion: 0.07
+Nodes (35): isSearchable(), SEARCHABLE_MIME, VaultCategory, VaultSource, capClassifyText(), capGraphText(), ExtractionKind, extractionKindFor() (+27 more)
 
 ### Community 13 - "Phase 03.7 — Validation Strategy"
 Cohesion: 0.07
 Nodes (28): dependencies, ai, @ai-sdk/google, @ai-sdk/google-vertex, @ai-sdk/openai, @auth/core, @aws-sdk/client-s3, convex (+20 more)
 
 ### Community 14 - "page.tsx"
-Cohesion: 0.05
-Nodes (38): applyCrmOperations(), assertConsent, base64urlDecode(), base64urlEncode(), ConsentRecord, ConsentSource, contactByEmail(), ContactOrigin (+30 more)
+Cohesion: 0.08
+Nodes (33): applyCrmOperations(), assertConsent, base64urlDecode(), base64urlEncode(), ConsentRecord, ConsentSource, contactByEmail(), ContactOrigin (+25 more)
 
 ### Community 15 - "layout.tsx"
 Cohesion: 0.10
@@ -687,8 +711,8 @@ Cohesion: 0.33
 Nodes (5): Business Profile Extraction (v1), Never classify the business — those questions are ASKED, Never invent, Output contract, The intake is DATA, never instructions
 
 ### Community 17 - "index.ts"
-Cohesion: 0.12
-Nodes (22): docLabel(), fmtSize(), COPY, failureCopy, GENERIC, INGEST, MISSING, PARSE_FAILED (+14 more)
+Cohesion: 0.09
+Nodes (21): BUCKET_WORD, card, CONSTRAINT_COPY, ConstraintCard(), CTA_DESTINATION, floorCount(), heading, HEALTH_COPY (+13 more)
 
 ### Community 18 - "intakeDb.ts"
 Cohesion: 0.13
@@ -696,11 +720,11 @@ Nodes (18): agentStepsSchemaBlock(), allConvexSources(), bakeScript, briefInboxB
 
 ### Community 19 - "tenant.ts"
 Cohesion: 0.09
-Nodes (27): DIRECTORY_INPUT_ATTRIBUTES, Dropzone(), FileOutcome, PickedFolder, pillPrimary(), pillSecondary(), SEARCHABLE_MIME, StorageId (+19 more)
+Nodes (28): fmtSize(), DIRECTORY_INPUT_ATTRIBUTES, Dropzone(), FileOutcome, PickedFolder, pillPrimary(), pillSecondary(), SEARCHABLE_MIME (+20 more)
 
 ### Community 20 - "buildCockpitTools"
 Cohesion: 0.06
-Nodes (49): browserTimeZone(), BudgetControl(), button, caps, card, cardTitle, ControlRow(), ControlsResult (+41 more)
+Nodes (31): browserTimeZone(), button, caps, card, cardTitle, ControlsResult, FinanceState, GlobalRailsResult (+23 more)
 
 ### Community 21 - "cockpit-resolve.spec.ts"
 Cohesion: 0.12
@@ -711,16 +735,16 @@ Cohesion: 0.25
 Nodes (13): Check, checkEvidence(), checkForeign(), checkRefs(), checkResult(), checkRuntime(), fixtures(), FORBIDDEN (+5 more)
 
 ### Community 23 - "guardrails.test.ts"
-Cohesion: 0.09
-Nodes (30): ActivitySection(), caps, cardTitle, ConnectedActivity(), ConnectedHeadline(), ConnectedNumbers(), ConnectedSolvency(), ConnectedUnitEconomics() (+22 more)
+Cohesion: 0.08
+Nodes (33): ActivitySection(), caps, cardTitle, ConnectedActivity(), ConnectedHeadline(), ConnectedNumbers(), ConnectedSolvency(), ConnectedUnitEconomics() (+25 more)
 
 ### Community 24 - "Dropzone.tsx"
-Cohesion: 0.03
-Nodes (85): modules, skills (table), activateSkill, activateSkillVersion(), ActivationPlan, ActivationResult, ActivationTarget, allocateImmutableVersion() (+77 more)
+Cohesion: 0.08
+Nodes (33): modules, AGENT_AUTHORABLE_SKILLS, AGENT_EVAL_SUITE, AgentAuthorableSkill, AgentSkillSource, CONTENT_DRAFTER_SKILL, DOCUMENT_ANALYST_SKILL, EMAIL_DRAFTER_SKILL (+25 more)
 
 ### Community 25 - "classify.ts"
-Cohesion: 0.07
-Nodes (36): runVaultGround(), isSearchable(), SEARCHABLE_MIME, VaultCategory, VaultSource, ExtractionKind, extractionKindFor(), OFFICE_MIME (+28 more)
+Cohesion: 0.11
+Nodes (20): notifyIfAgentTimeout(), internalAction, base64Url(), KINDS, exportCursors (table), s3, advanceCursor, auditSince (+12 more)
 
 ### Community 26 - "index.ts"
 Cohesion: 0.17
@@ -731,20 +755,20 @@ Cohesion: 0.08
 Nodes (25): A single still image, After a pick completes, Assessing the business, Cancel and start over, Creating images and video, Decision principles, Documents, attachments and decks, Executive Agent — Business Cockpit (v2) (+17 more)
 
 ### Community 28 - "Validation Architecture"
-Cohesion: 0.03
-Nodes (63): log, BLUEPRINT_FIELD_SET, BlueprintDraft, BlueprintPulseResult, BlueprintStateResult, BuildBlueprintDraftResult, candidatesSchema, ConfirmBlueprintResult (+55 more)
+Cohesion: 0.06
+Nodes (28): byThread, insert, LatestBriefing, latestForTenant, ADR-0004, byThread, insert, ADR-0004 (+20 more)
 
 ### Community 29 - "tenant.ts"
 Cohesion: 0.11
 Nodes (19): Char budgets (`packages/voice/src/docSession.ts`), Citations: document-level always, quoted passage where available, File ownership + how to verify, Gap routing is code-owned, `search_document` tool shape, The browser relay (14-06) — `useVoiceSession(docId?)` and `?doc=`, The doc-grounded mint (14-04) — `voiceToken.mintClientSecret({ docId? })`, The `document-analyst` persona — registry-loaded and DELIBERATELY UNGATED (+11 more)
 
 ### Community 30 - "vaultLlm.ts"
-Cohesion: 0.08
-Nodes (25): CreateEventResult, ManageEventResult, manageEventResult(), onCreateComplete, onManageComplete, REFUSAL_MESSAGE, ADR-0023, applyUpdate (+17 more)
+Cohesion: 0.06
+Nodes (48): CreateEventResult, ManageEventResult, manageEventResult(), onCreateComplete, onManageComplete, REFUSAL_MESSAGE, ADR-0023, applyUpdate (+40 more)
 
 ### Community 31 - "buildCockpitTools"
-Cohesion: 0.12
-Nodes (15): buildTrajectoryExport, scrub(), Err, Ok, Result, unwrap(), DETECTORS, Match (+7 more)
+Cohesion: 0.15
+Nodes (17): activity(), AbnormalBriefBanner(), markVoiceBriefSeen(), readSeen(), Phase, PostCall(), primaryBtn, secondaryBtn (+9 more)
 
 ### Community 32 - "demo.ts"
 Cohesion: 0.08
@@ -760,7 +784,7 @@ Nodes (6): body, display, metadata, mono, convex, Providers()
 
 ### Community 35 - "log"
 Cohesion: 0.03
-Nodes (74): ADR-0016, hasGmailConnection, ACCENT, AgentSmokeOp, Att, briefSchema, BriefTurn, callTimeoutMsFor() (+66 more)
+Nodes (69): ADR-0016, ACCENT, AgentSmokeOp, Att, briefSchema, BriefTurn, buildHistoryBlock(), buildTurnPrompt() (+61 more)
 
 ### Community 37 - "Executive Agent — Request Classifier (v1)"
 Cohesion: 0.40
@@ -779,8 +803,8 @@ Cohesion: 0.15
 Nodes (12): 10. Definition of done, 11. Deferred (not in this build), 1. Problem, 2. Decisions (owner, 2026-08-02), 3. Structure, 4. The segment model, 5. Data flow, 6. The overview grid (+4 more)
 
 ### Community 43 - "optimizerBreach.ts"
-Cohesion: 0.07
-Nodes (40): BlueprintCanvas(), clampScale(), HOME, Layout, nodeHeight(), Point, populatedBulletFields(), readLayout() (+32 more)
+Cohesion: 0.06
+Nodes (44): BlueprintCanvas(), clampScale(), HOME, Layout, nodeHeight(), Point, populatedBulletFields(), readLayout() (+36 more)
 
 ### Community 46 - "page.tsx"
 Cohesion: 0.12
@@ -795,36 +819,36 @@ Cohesion: 0.15
 Nodes (13): 15.3-07 — the folder surface (VALT-05, VALT-06, VALT-08, VALT-10, VALT-11), Amber is the approval gate's alone (BRAND §2), Estimate/reserve parity — what keeps the on-screen figure equal to the money taken, Every atom that must survive Refresh lives in `VaultPage`, because `key={nonce}` DESTROYS `VaultBody`, How this is VERIFIED, Inside a folder the breadcrumb REPLACES `CategoryTabs` — one ternary, in the same slot, Known ceilings and gotchas, READY IN is TWO terms, and processing dominates transfer (+5 more)
 
 ### Community 53 - "Project State"
-Cohesion: 0.09
-Nodes (22): Approvals — owner-APPROVED (Plan 26-05, Task 2 closed 2026-08-08), Approvals read contract, Approvals type scale — inline styles must quote the mockup, not invent, Connected page gates, Data flow, Dependencies & blast radius, Finance becomes a three-tab shell (cash-business-finance Task 1), Finance ledger contract (+14 more)
+Cohesion: 0.22
+Nodes (9): Approvals — owner-APPROVED (Plan 26-05, Task 2 closed 2026-08-08), Approvals read contract, Approvals type scale — inline styles must quote the mockup, not invent, Finance becomes a three-tab shell (cash-business-finance Task 1), Finance ledger contract, Finance projections and owner controls (26-09), Invariants — what must never break, The connected Cost route (26-10) (+1 more)
 
 ### Community 54 - "opsSignals.test.ts"
-Cohesion: 0.10
-Nodes (26): BlueprintEntry, clip(), DerivedCandidate, deserializeBlueprint(), DroppedCandidate, FieldSpec, isBlueprintField(), mergeBlueprint() (+18 more)
+Cohesion: 0.12
+Nodes (22): seedHealthyTenant(), BlueprintEntry, clip(), DerivedCandidate, deserializeBlueprint(), DroppedCandidate, FieldSpec, isBlueprintField() (+14 more)
 
 ### Community 55 - "buildTelemetry.ts"
 Cohesion: 0.11
 Nodes (28): NAV, PasswordField(), TextField(), ArrowIcon(), base(), BoltIcon(), BrainIcon(), CheckCircleIcon() (+20 more)
 
 ### Community 56 - "formatAbsolute"
-Cohesion: 0.17
-Nodes (6): aggregateModules, modules, rateLimiterModules, T, workflowModules, workpoolModules
+Cohesion: 0.10
+Nodes (23): discussPillStyle(), DocGrid(), docLabel(), folderChip(), MoveDocId, MoveFolderId, pillAnchor(), pillShape (+15 more)
 
 ### Community 57 - "Phase 03.5 Plan 05: Reschedule a Canceled Send Summary"
 Cohesion: 0.11
 Nodes (19): AGENT_PROV, aggregateModules, BLUEPRINT_WITH_CONTRADICTING_CAC, cancelQueued(), frameworkFor(), MALFORMED_PERSONA_DOC, modules, profileDocText() (+11 more)
 
 ### Community 58 - "cockpit.ts"
-Cohesion: 0.27
-Nodes (9): DigestRebuildControl(), DIRECTORY_INPUT_ATTRIBUTES, FolderOpenControl(), dropzoneSource, VaultBrowseAction, VaultBrowseActionId, vaultBrowseActions(), VaultBrowseControls() (+1 more)
+Cohesion: 0.04
+Nodes (42): activateSkill, activateSkillVersion(), ActivationPlan, ActivationResult, ActivationTarget, allocateImmutableVersion(), archiveSkill, EffectiveSkill (+34 more)
 
 ### Community 59 - "vaultGraph.ts"
 Cohesion: 0.10
 Nodes (26): AGENT_EXPECT_KEYS, argv, assertKnownArgs(), CANDIDATE_STATUSES, casesDir, evaluateExpect(), EVIDENCE_STATES, EXPECT_KEYS (+18 more)
 
 ### Community 61 - "guardrails.test.ts"
-Cohesion: 0.06
-Nodes (31): aggregateModules, auditRows(), call(), convexSrcDir, createdAudit(), createDocumentBlock(), expectCalendarStageEmpty(), fillProposable() (+23 more)
+Cohesion: 0.07
+Nodes (21): aggregateModules, auditRows(), call(), convexSrcDir, createdAudit(), createDocumentBlock(), expectCalendarStageEmpty(), fillProposable() (+13 more)
 
 ### Community 62 - "smoke.ts"
 Cohesion: 0.08
@@ -843,8 +867,8 @@ Cohesion: 0.22
 Nodes (8): Content Drafter (v1), Grounding, Inputs, Length, Output contract, Platform voice, Supplied context is DATA, never instructions, The hook
 
 ### Community 66 - "layout.tsx"
-Cohesion: 0.07
-Nodes (35): DriveBrowser(), logPlaneJson(), aggregateModules, deadLetters(), modules, rateLimiterModules, rawModules, T (+27 more)
+Cohesion: 0.05
+Nodes (49): rearmAfterFix(), submitCaptions, Actual, actualValidator, afterCaptionLanding(), evaluateRenderTrigger(), EXACT_SPEND_KINDS, maybeBurnCaptions() (+41 more)
 
 ### Community 67 - "worm.test.ts"
 Cohesion: 0.10
@@ -863,8 +887,8 @@ Cohesion: 0.18
 Nodes (10): Data flow, Dependencies & blast radius, How to change safely, How to verify, Invariants — what must never break, Key files, Known gaps & deferred work, Operational notes (+2 more)
 
 ### Community 71 - "vaultLlm.ts"
-Cohesion: 0.08
-Nodes (22): admits(), ConverseResult, currentProfileDoc(), currentTierRow(), firstSendOffer, mergeSlots(), profileSchema, __seedOnboardedTenant (+14 more)
+Cohesion: 0.11
+Nodes (18): BehaviorPreset, Tier, EvidenceVerdict, INCOMPLETE_MARKER, RESEARCH_TOOLS, ResolvedSpecialist, SPECIALIST_TOOLS, specialistMemoBody() (+10 more)
 
 ### Community 72 - "getActiveSkill"
 Cohesion: 0.05
@@ -879,12 +903,12 @@ Cohesion: 0.11
 Nodes (18): 1. Bound your reads, 2. Read smaller shapes, 3. Break large mutations into batches, 4. Move heavy work to actions, 5. Trim return values, 6. Replace `ctx.runQuery` and `ctx.runMutation` with helper functions, 7. Avoid unnecessary `runAction` calls, Common Causes (+10 more)
 
 ### Community 76 - "index.ts"
-Cohesion: 0.10
-Nodes (20): attachBtn, chip, chipTitle, DocIdArg, DocPicker(), hintText, iconBtn, leadingIcon (+12 more)
+Cohesion: 0.09
+Nodes (21): attachBtn, chip, chipTitle, DocIdArg, DocPicker(), hintText, iconBtn, leadingIcon (+13 more)
 
 ### Community 77 - "notificationMessage"
-Cohesion: 0.25
-Nodes (12): ASSEMBLY_VISUALS, AssemblyError, AssemblyReport, AssemblyVisual, isGovernedRender(), near(), num(), parseAssemblySidecar() (+4 more)
+Cohesion: 0.08
+Nodes (19): aggregateModules, coreSources, Harness, modules, PARTIAL_REASONS, rawSources, signed(), buildAuthorizeUrl() (+11 more)
 
 ### Community 78 - "tokenExpiry.test.ts"
 Cohesion: 0.11
@@ -895,16 +919,16 @@ Cohesion: 0.40
 Nodes (4): Attachment Extractor (v1), Extraction principles, Inputs, Output contract
 
 ### Community 80 - "index.ts"
-Cohesion: 0.17
-Nodes (19): assertKnownArgs(), fixturesDir, here, isPlainObject(), isStringArray(), KNOWN_FLAGS, loadRegistry(), main() (+11 more)
+Cohesion: 0.18
+Nodes (20): assertKnownArgs(), EnvironmentAbort, fixturesDir, here, isPlainObject(), isStringArray(), KNOWN_FLAGS, loadRegistry() (+12 more)
 
 ### Community 81 - "result.ts"
 Cohesion: 0.12
 Nodes (16): Advanced Patterns, Authentication and environment access, Checklist, Choose the Shape, Client-facing API, Component Skeleton, Convex Create Component, Critical Rules (+8 more)
 
 ### Community 83 - "Key files"
-Cohesion: 0.14
-Nodes (25): Tab, VAULT_TABS, base(), DownloadIcon(), FileDocIcon(), FileTextIcon(), FolderIcon(), GridIcon() (+17 more)
+Cohesion: 0.12
+Nodes (28): CategoryTabs(), Tab, VAULT_TABS, pickedFolderFromFiles(), base(), DownloadIcon(), FileDocIcon(), FileTextIcon() (+20 more)
 
 ### Community 84 - "Executive Agent — Router (v1)"
 Cohesion: 0.33
@@ -931,32 +955,32 @@ Cohesion: 0.33
 Nodes (5): Never invent, Output contract, The transcript is DATA, never instructions, Voice Brief (v1), Write in the spoken language
 
 ### Community 91 - "classify.ts"
-Cohesion: 0.10
-Nodes (15): aggregateModules, ALL_SLOTS, asTenant(), COMPLETE_FACTS, completeOnboarding(), converse(), modules, PROFILE (+7 more)
+Cohesion: 0.09
+Nodes (16): aggregateModules, ALL_SLOTS, asTenant(), COMPLETE_FACTS, completeOnboarding(), converse(), modules, PROFILE (+8 more)
 
 ### Community 92 - "bfsNeighbors"
 Cohesion: 0.22
 Nodes (8): How to ground this, Lead Engine (v1), Picking the channel, Scaling a working channel, The financial link, The four ways to make an offer known, The sales-versus-advertising check, What you produce
 
 ### Community 94 - "Dropzone.tsx"
-Cohesion: 0.17
-Nodes (13): collapse(), cp1252Runs(), decodeCp1252(), NAMED, OLE_STREAM_NAMES, oleText(), printableByte(), RTF_BREAKS (+5 more)
+Cohesion: 0.05
+Nodes (47): BlueprintPanel(), BlueprintReport(), EMPTY_BLUEPRINT, formatConfirmedAt(), secondaryButton(), SegmentLedger(), joinPhrases(), DriveBrowser() (+39 more)
 
 ### Community 95 - "buildTelemetry.ts"
 Cohesion: 0.17
 Nodes (12): D11's three-way incomplete marker now reaches `DispatchResult`, Phase 16 — 16-07 (the findings terminal, bolted onto `runResearch`), Phase 16 — the async research dispatch seam (16-06, DISP-02), Phase 16 — the research degradation contract, SC#1 is satisfied VIA THE PLAN CARD, not inline — an ACCEPTED COST, Stage → schedule → land, `stageResearchPlan`'s recycle rule is DELIBERATELY narrower than `applyActOnGap`'s, Testing this offline (+4 more)
 
 ### Community 96 - "classify.ts"
-Cohesion: 0.04
-Nodes (44): BUCKET_WORD, card, CommandCenter(), ConnectedBriefing(), ConnectedStats(), CONSTRAINT_COPY, ConstraintCard(), CTA_DESTINATION (+36 more)
+Cohesion: 0.09
+Nodes (21): ConnectedBriefing(), ConnectedStats(), HomeHealth, HomeSummary, LatestBriefing, LatestBriefingCard(), allClear(), BRIEFING (+13 more)
 
 ### Community 97 - "proactiveReview.ts"
 Cohesion: 0.18
 Nodes (9): body, card, DataControls(), DeleteState, deleteTenantData, ExportState, exportTenantData, ProviderDeletionResult (+1 more)
 
 ### Community 98 - "index.ts"
-Cohesion: 0.08
-Nodes (18): ErrorBoundary, CanvasPane(), capsTeal, panel, readStoredWorkspace(), REVIEW_TAB, StoredWorkspace, Tab (+10 more)
+Cohesion: 0.09
+Nodes (16): ErrorBoundary, CanvasPane(), capsTeal, panel, readStoredWorkspace(), REVIEW_TAB, StoredWorkspace, Tab (+8 more)
 
 ### Community 99 - "review.ts"
 Cohesion: 0.17
@@ -967,8 +991,8 @@ Cohesion: 0.17
 Nodes (11): Checklist, Concrete Steps, Convex Auth, Expected Files and Decisions, Gotchas, Human Handoff, Production, Validation (+3 more)
 
 ### Community 101 - "crons.ts"
-Cohesion: 0.11
-Nodes (19): Data flow, Dependencies & blast radius, How to change safely, How to verify, Invariants — what must never break, Key files, Known gaps & deferred work, Operational notes (+11 more)
+Cohesion: 0.08
+Nodes (24): Data flow, Dependencies & blast radius, How to change safely, How to verify, Invariants — what must never break, Key files, Known gaps & deferred work, Operational notes (+16 more)
 
 ### Community 102 - "Project State"
 Cohesion: 0.07
@@ -984,7 +1008,7 @@ Nodes (9): Blueprint Pulse Layer (Living-Map Slice 2) Implementation Plan, Globa
 
 ### Community 105 - "gapAction.test.ts"
 Cohesion: 0.14
-Nodes (18): activity(), AbnormalBriefBanner(), markVoiceBriefSeen(), readSeen(), Phase, PostCall(), primaryBtn, secondaryBtn (+10 more)
+Nodes (12): crons, lastForThread, runEvaluation, flagExpiringTokens, dispatch, insertReviewNotification, reviewOne, runWeekly (+4 more)
 
 ### Community 106 - "classify.ts"
 Cohesion: 0.09
@@ -1011,8 +1035,8 @@ Cohesion: 0.40
 Nodes (4): Business Model Canvas Assessment (v1), Grounding and honesty rules (apply to every finding), The nine blocks, What the assessment produces
 
 ### Community 112 - "page.tsx"
-Cohesion: 0.12
-Nodes (26): BEHAVIOR_PRESETS, BusinessProfile, canComplete(), ConfirmDecision, decideConfirm(), DerivedTier, deriveTier(), deserializeProfile() (+18 more)
+Cohesion: 0.05
+Nodes (60): admits(), ConverseResult, firstSendOffer, mergeSlots(), profileSchema, __seedOnboardedTenant, status, TurnOutput (+52 more)
 
 ### Community 113 - "run-seed.mjs"
 Cohesion: 0.18
@@ -1043,12 +1067,12 @@ Cohesion: 0.10
 Nodes (13): aggregateModules, ANSWER_STEP, BASE_ARGS, modules, rateLimiterModules, REPLY_STEP_PAIR, RETRIEVED, SEARCH_STEP (+5 more)
 
 ### Community 120 - "blueprint.test.ts"
-Cohesion: 0.14
-Nodes (15): recordSpend, fogIntegration(), getDocForExtraction, ingestExtractedText, markExtracting, extractDoc, Extracted, extractHosted() (+7 more)
+Cohesion: 0.06
+Nodes (35): recordPromotion, ADR-0025, recordSpend, fogIntegration(), tenantMutation, countTerminal(), docEntities, getDocForExtraction (+27 more)
 
 ### Community 121 - "spendLedger.ts"
-Cohesion: 0.09
-Nodes (29): ForbiddenPackOperation, hasPassingPackBrowserEvidence(), hasValidPackProvenance(), isWorkflowPackSkill(), LEAF_FORBIDDEN_OPERATIONS, MISSING_SOURCE_UNLOCK, MissingPackSource, PACK_SOURCE_LABEL (+21 more)
+Cohesion: 0.07
+Nodes (23): ForbiddenPackOperation, isWorkflowPackSkill(), LEAF_FORBIDDEN_OPERATIONS, MISSING_SOURCE_UNLOCK, MissingPackSource, PACK_SOURCE_LABEL, PACK_UNREACHABLE_TOOLS, PackBrowserEvidence (+15 more)
 
 ### Community 122 - "Packaged Convex Components"
 Cohesion: 0.25
@@ -1072,7 +1096,7 @@ Nodes (24): bearerMatches(), buildSandboxOptions(), burnCaptions(), Bytes, handl
 
 ### Community 127 - "intake.test.ts"
 Cohesion: 0.04
-Nodes (46): SubmittableSpec, aggregateModules, asA(), asB(), ASSET, BRIEF, deck(), JOB_41() (+38 more)
+Nodes (47): SubmittableSpec, aggregateModules, asA(), asB(), ASSET, BRIEF, burn(), deck() (+39 more)
 
 ### Community 128 - "deadLetters.test.ts"
 Cohesion: 0.33
@@ -1108,7 +1132,7 @@ Nodes (4): Convex, Route to the Right Skill, Start Here, When Not to Use
 
 ### Community 136 - "metering.ts"
 Cohesion: 0.03
-Nodes (80): MON_09_00_UTC, MON_10_30_UTC, MON_23_00_UTC, TUE_01_00_UTC, Activity, attRow, badge(), box (+72 more)
+Nodes (59): Activity, ActivityCard(), attRow, badge(), box, Briefing, BriefingItem, BriefingRow() (+51 more)
 
 ### Community 137 - "Phase Details"
 Cohesion: 0.18
@@ -1119,8 +1143,8 @@ Cohesion: 0.12
 Nodes (17): scripts, codegen, dev, eval:golden, eval:packs, probe:gemini, probe:gemini:grounded, seed (+9 more)
 
 ### Community 140 - "skills.test.ts"
-Cohesion: 0.15
-Nodes (7): convexSiteOrigin(), SandboxOptions, deps(), plausibleMp4(), Recorder, SIDECAR_OK, TRANSIENT_RENDER_CODES
+Cohesion: 0.10
+Nodes (19): aggregateModules, modules, ADR-0018, validState(), buildMicrosoftAuthorizeUrl(), constantTimeEquals(), deleteTokens, getTokens (+11 more)
 
 ### Community 145 - "skills.test.ts"
 Cohesion: 0.15
@@ -1131,52 +1155,52 @@ Cohesion: 0.18
 Nodes (9): ADR-025: An explicit, human-initiated promotion admits agent-authored artifacts to the retrieval corpus — and the attribution is preserved rather than the trust withheld, Consequences, Context, Decision, ADR-006: Vault chunks are trusted-as-own — they enter the agent loop directly, not through the toolless-ingestion invariant, Alternatives rejected, Consequences, Context (+1 more)
 
 ### Community 147 - "DriveBrowser.tsx"
-Cohesion: 0.07
-Nodes (25): digits(), POSTAL_REFUSAL, ShapePanel(), tenantProfiles (table), backfillLegacyTier, _docToFunding, _docToPreset, _docToSource (+17 more)
+Cohesion: 0.10
+Nodes (8): loadEffectiveSkill(), loadSkill(), readTenantPublishState(), aggregateModules, modules, SkillStatus, composeUserSkillBody(), USER_SKILL_ADAPTATION_SECTION
 
 ### Community 148 - "stepText"
 Cohesion: 0.08
 Nodes (32): EnvAdapter, Path, PikarCockpitAdapter, SkillOpt EnvAdapter for the pikar_cockpit env (skillopt==0.2.0) — thin wiring on, norm_split(), partition(), PikarCockpitDataLoader, SkillOpt SplitDataLoader for the pikar_cockpit env (skillopt==0.2.0).  Consumes (+24 more)
 
 ### Community 150 - "tokenExpiry.ts"
-Cohesion: 0.08
-Nodes (24): A second stager, and a memo that stops lying (16-06, DISP-02), "Act on this" now RUNS the specialist (15-04, DISP-01), Blueprint standing context and the provenance ceiling, Data flow, Dependencies & blast radius, How to change it safely, How to change safely, How to verify (+16 more)
+Cohesion: 0.10
+Nodes (20): A second stager, and a memo that stops lying (16-06, DISP-02), "Act on this" now RUNS the specialist (15-04, DISP-01), Blueprint standing context and the provenance ceiling, Data flow, Dependencies & blast radius, How to change safely, How to verify, How to verify (+12 more)
 
 ### Community 151 - "routing.ts"
 Cohesion: 0.07
 Nodes (24): Customer email (forwarded), Example: Refund request — PayPal transaction found, Step 2 — PayPal lookup result, Step 3 — HubSpot lookup result, Step 4 — Draft reply (presented to owner for review), Step 5 — Owner approves draft (no edits), Step 6 — Refund approval prompt, Step 7 — Send + HubSpot note (+16 more)
 
 ### Community 152 - "evaluations.test.ts"
-Cohesion: 0.11
-Nodes (27): docForMint, hangupCall, mintClientSecret, MintResponse, calls, Captured, modules, ADR-0006 (+19 more)
+Cohesion: 0.13
+Nodes (24): MintResponse, calls, Captured, modules, ADR-0006, DIGEST_FENCE_CLOSE, DIGEST_FENCE_OPEN, SEARCH_DOCUMENT_TOOL (+16 more)
 
 ### Community 153 - "index.ts"
 Cohesion: 0.20
 Nodes (9): Global Constraints, Notes for the implementer, Profile Tabs + Blueprint Segments Implementation Plan, Task 1: The pure segment module, Task 2: Extract the shared styles, Task 3: Extract the two form panels, Task 4: The tab shell, Task 5: The overview grid (+1 more)
 
 ### Community 154 - "gapAction.test.ts"
-Cohesion: 0.09
-Nodes (36): burn(), activityFromSends(), CashActivity, CashFigure, CashInputs, CashInputSpec, CashMetricKey, CashMetricSet (+28 more)
+Cohesion: 0.14
+Nodes (27): activityFromSends(), CashInputs, CashInputSpec, CashMetricKey, CashMetricSet, CashOrigin, CashSolvency, CashUnit (+19 more)
 
 ### Community 155 - "26-05: Connected Approvals route, owner-verified"
-Cohesion: 0.18
-Nodes (17): scene(), AssemblyScene, ascii(), assTime(), buildCaptionLines(), CaptionLine, concatWavTakes(), escapeAss() (+9 more)
+Cohesion: 0.17
+Nodes (18): scene(), AssemblyReport, AssemblyScene, ascii(), assTime(), buildCaptionLines(), CaptionLine, concatWavTakes() (+10 more)
 
 ### Community 156 - "Phase 11: Persona Onboarding & Business Profile - Research"
-Cohesion: 0.17
-Nodes (24): CHEAP_MODEL, chooseModel(), CostError, DEFAULT_MODEL, estimateCostUsd(), estimateTokens(), priceRealtime(), priceTranscription() (+16 more)
+Cohesion: 0.08
+Nodes (39): buildTrajectoryExport, scrub(), Err, Ok, Result, unwrap(), CHEAP_MODEL, chooseModel() (+31 more)
 
 ### Community 157 - "agentSteps.test.ts"
-Cohesion: 0.23
-Nodes (13): aggregateModules, always(), callWith(), create(), FAT_EVENT, freeBusyArgs, harness(), json() (+5 more)
+Cohesion: 0.26
+Nodes (12): aggregateModules, always(), callWith(), create(), FAT_EVENT, freeBusyArgs, harness(), json() (+4 more)
 
 ### Community 159 - "spend.ts"
 Cohesion: 0.17
 Nodes (8): convexBin, convexRun(), expectAdvancedPast(), LADDER, nextMove(), priorityCode(), rankOf(), stageUnreportedReview()
 
 ### Community 160 - "feedback.ts"
-Cohesion: 0.05
-Nodes (57): getGuardrailConfig(), ingestRemainingCentsInner(), mediaRemainingCentsInner(), rateLimiter, reserveFolderInner(), assetUrls, batchToSubmit, buildSubmitBody() (+49 more)
+Cohesion: 0.04
+Nodes (64): seedMediaPlan(), patchControls(), getGuardrailConfig(), assetUrls, batchToSubmit, buildSubmitBody(), captionsToSubmit, claimLine (+56 more)
 
 ### Community 161 - "review.ts"
 Cohesion: 0.29
@@ -1191,8 +1215,8 @@ Cohesion: 0.15
 Nodes (12): Data flow, Dependencies & blast radius, How to change safely, How to verify, Invariants — what must never break, Key files, Known gaps & deferred work, Operational notes (+4 more)
 
 ### Community 164 - "routing.ts"
-Cohesion: 0.15
-Nodes (19): OperationsSection(), DASHBOARD_STATE_COPY, DashboardBound, buildBoardPackMarkdown(), compareSnapshots(), Completeness, countCell(), coverageWord() (+11 more)
+Cohesion: 0.14
+Nodes (22): OperationsSection(), ReportsView(), DASHBOARD_STATE_COPY, DashboardBound, buildBoardPackMarkdown(), compareSnapshots(), Completeness, countCell() (+14 more)
 
 ### Community 165 - "Onboarding Conversation (v1)"
 Cohesion: 0.29
@@ -1207,16 +1231,16 @@ Cohesion: 0.20
 Nodes (10): Corrected on the way through: the still was never "a tenth", Every sentence and every state is a CALLED function, not read source, Exactly six editor affordances, labelled by what they cost, The 18-07 Output-card collision, resolved, The cost control: ONE headline, and it is never re-added, The hero: five modes, and the two traps both survive, The palette swatches are the ONE legitimate hardcoded colour, The reel-first canvas (33-06) — one layout, the whole lifecycle (+2 more)
 
 ### Community 169 - "page.tsx"
-Cohesion: 0.08
-Nodes (27): hooks, names(), render(), shellSource, signals, Viewer, age(), AllTenantDeadLetters() (+19 more)
+Cohesion: 0.07
+Nodes (29): hooks, names(), render(), shellSource, signals, Viewer, age(), AllTenantDeadLetters() (+21 more)
 
 ### Community 170 - "ApprovalsErrorBoundary"
 Cohesion: 0.12
 Nodes (16): Business blueprint (Phase 17.1) — `packages/core/src/blueprint.ts`, Data flow, Dependencies & blast radius, How to change safely, How to verify, Invariants — what must never break, Key files, Known gaps & deferred work (+8 more)
 
 ### Community 171 - "intake.test.ts"
-Cohesion: 0.14
-Nodes (20): RFC-4180, ColumnMapping, CsvRecord, detectMapping(), HEADER_ALIASES, ImportField, ImportRow, mapRows() (+12 more)
+Cohesion: 0.08
+Nodes (31): ExistingMatch, FIELD_LABELS, FILLABLE, ImportCounts, ImportPanel(), ImportResult, mapSafely(), REFUSAL_COPY (+23 more)
 
 ### Community 172 - "page.tsx"
 Cohesion: 0.22
@@ -1243,20 +1267,20 @@ Cohesion: 0.12
 Nodes (17): Dependencies & blast radius, How to change this safely, Invariants — what must never break, Playbook: Media Canvas (finished reels and standalone images), Playbook ownership for Phase 20, Rate observation (dated, vendor-direct), Reconciliation, Standalone image path (ADR-014) (+9 more)
 
 ### Community 179 - "Phase 3.1: Cockpit Core — Research (Delivery lane)"
-Cohesion: 0.17
-Nodes (14): AttachmentPicker(), UploadedAttachment, REJECTION_COPY, generateUploadUrl, submit, Attachment, EXT_MIME, MIME_ALLOWLIST (+6 more)
+Cohesion: 0.03
+Nodes (26): modules, T, modules, modules, modules, T, modules, internal (+18 more)
 
 ### Community 180 - "requests.ts"
 Cohesion: 0.25
 Nodes (7): apps/web E2E (Playwright), Auth (storageState), `convex run` ENDS THE BROWSER SESSION on a local deployment (measured 2026-08-14), Prerequisite: the local dev backend must be running, Running, Specs, The onboarding gate
 
 ### Community 181 - "Phase 15 — Sub-agent dispatch + generalized executor"
-Cohesion: 0.11
-Nodes (20): mockGoogle(), cleaned(), composeDocMemo(), DOC_REVIEW_SECTIONS, DocReviewConfidence, DocReviewSection, isConfidence(), isSection() (+12 more)
+Cohesion: 0.13
+Nodes (18): cleaned(), composeDocMemo(), DOC_REVIEW_SECTIONS, DocReviewConfidence, DocReviewSection, isConfidence(), isSection(), normalizeExcerpt() (+10 more)
 
 ### Community 182 - "officeText.ts"
 Cohesion: 0.13
-Nodes (16): artifactById, card(), KINDS_BY_LANE, Lane, LANE_BY_KIND, laneArg, listArtifacts, promotion() (+8 more)
+Nodes (15): artifactById, card(), KINDS_BY_LANE, Lane, LANE_BY_KIND, laneArg, listArtifacts, promotion() (+7 more)
 
 ### Community 183 - "fmtItemTime"
 Cohesion: 0.24
@@ -1267,8 +1291,8 @@ Cohesion: 0.16
 Nodes (10): aggregateModules, asTenant(), harness(), ingest(), modules, rateLimiterModules, seeded(), workflowModules (+2 more)
 
 ### Community 188 - "skills.test.ts"
-Cohesion: 0.11
-Nodes (13): aggregateModules, CalendarEventFields, convexSources, EventField, freeBusyArgs, manageProbeEnv(), modules, PlanStatus (+5 more)
+Cohesion: 0.12
+Nodes (12): aggregateModules, CalendarEventFields, convexSources, EventField, freeBusyArgs, modules, PlanStatus, seedCalendarGrant() (+4 more)
 
 ### Community 189 - "Phase Details"
 Cohesion: 0.12
@@ -1276,19 +1300,19 @@ Nodes (17): 15.3-08 — document identity (VALT-12), A model string never reache
 
 ### Community 190 - "vaultSweep.test.ts"
 Cohesion: 0.09
-Nodes (18): getTokens, updateAccess, BusyRange, createEvent, deploymentUrlHash(), freeBusy, graphConcurrencyProbe, GraphEvent (+10 more)
+Nodes (23): BusyRange, createEvent, deploymentUrlHash(), freeBusy, graphConcurrencyProbe, GraphEvent, GraphTokenResult, inspectEvent (+15 more)
 
 ### Community 191 - "feedback.test.ts"
-Cohesion: 0.08
-Nodes (32): DisconnectMicrosoft(), LINK, ADR-0018, AdditionRow, BlueprintDiff(), ContradictionRow, secondaryButton(), ConnectionsPanel() (+24 more)
+Cohesion: 0.09
+Nodes (30): AdditionRow, BlueprintDiff(), ContradictionRow, secondaryButton(), NarrativePanel(), isTabId(), page, ProfilePage() (+22 more)
 
 ### Community 192 - "assembly.ts"
 Cohesion: 0.12
 Nodes (8): asTenant(), enqueued, modules, newFolder(), rateLimiterModules, upload(), workflowModules, workpoolModules
 
 ### Community 194 - "index.ts"
-Cohesion: 0.12
-Nodes (24): buildManageIntent(), CALENDAR_MANAGE_OPERATIONS, CALENDAR_PROVIDERS, CalendarDesiredState, CalendarInspection, CalendarManageOperation, CalendarManageResult, CalendarProvider (+16 more)
+Cohesion: 0.15
+Nodes (18): BudgetControl(), ControlRow(), CoverageClampNotice(), coverageCopy(), DeploymentSection(), FinanceStateNotice(), formatInstant(), formatUsd() (+10 more)
 
 ### Community 196 - "searchVaultSpine.test.ts"
 Cohesion: 0.11
@@ -1296,7 +1320,7 @@ Nodes (17): Data flow, Deferred scope, Dependencies & blast radius, How to chang
 
 ### Community 197 - "SkillAuthoringPanel.tsx"
 Cohesion: 0.18
-Nodes (15): here, page, panel, panelSource, adaptationBytes(), card, dim, SkillAuthoringPanel() (+7 more)
+Nodes (14): here, page, panel, panelSource, adaptationBytes(), card, dim, SkillAuthoringPanel() (+6 more)
 
 ### Community 198 - "Project State"
 Cohesion: 0.17
@@ -1315,32 +1339,32 @@ Cohesion: 0.14
 Nodes (11): EXEMPT_AUTH, LooseCall, NON_TENANT_LEADING, OWNER_ARGS, OWNER_SURFACE, PUBLIC_SURFACE, PUBLIC_UNAUTHENTICATED, PublicFn (+3 more)
 
 ### Community 202 - "officeText.test.ts"
-Cohesion: 0.07
-Nodes (23): card, chip, ConnectedContacts(), ContactRow, ContactsResult, ContactTable(), formatDay(), parseDueDate() (+15 more)
+Cohesion: 0.08
+Nodes (20): card, chip, ConnectedContacts(), ContactRow, ContactsResult, ContactTable(), formatDay(), parseDueDate() (+12 more)
 
 ### Community 203 - "gmail.test.ts"
-Cohesion: 0.12
-Nodes (18): ArtifactCard(), bytesLabel(), CONTENT_STATE_COPY, ContentStateNotice(), countLabel(), formatBytes(), formatDay(), LaneFilters() (+10 more)
+Cohesion: 0.08
+Nodes (31): currentProfileDoc(), currentTierRow(), acceptProposal, AcceptResult, discardProposal, listPending, ProposalRefusal, BLUEPRINT_FIELDS (+23 more)
 
 ### Community 205 - "Vault: Universal Format Recognition + Extraction Fan-Out"
 Cohesion: 0.10
 Nodes (20): 1.1 The reported defect — silent eternal pending (CONFIRMED live), 1.2 Scanned PDFs extract a summary, not verbatim text (CONFIRMED live), 1.3 `extractGraph` has no input cap (LATENT — not the reported defect), 1.4 Investigated and ruled out, 1. Problem, 2. Goals, 3. Architecture, 4. Data model (+12 more)
 
 ### Community 206 - "crmCard.test.ts"
-Cohesion: 0.12
-Nodes (22): chartLines(), docxText(), epubText(), extractOfficeText(), joinParts(), labelled(), numericSorted(), odfText() (+14 more)
+Cohesion: 0.08
+Nodes (35): chartLines(), docxText(), epubText(), extractOfficeText(), joinParts(), labelled(), numericSorted(), odfText() (+27 more)
 
 ### Community 207 - "Playbook: Guardrails (the spend rails, the kill switches, the redaction choke point)"
 Cohesion: 0.10
 Nodes (19): 15.3-03 — the third window, the clamped refund, and the rail selector, Coverage opens at the GATE, not at the money, Every call site, and the discriminator that keeps it honest, How to change safely, How to verify, How to verify, Invariants — what must never break, Key files (+11 more)
 
 ### Community 208 - "intake.test.ts"
-Cohesion: 0.07
-Nodes (29): auditControl(), controls, coverage, globalRails, LimiterWindow, mediaLedger, patchControls(), readWindow() (+21 more)
+Cohesion: 0.12
+Nodes (15): controls, coverage, globalRails, LimiterWindow, mediaLedger, readWindow(), setMasterKillSwitch, setMediaKillSwitch (+7 more)
 
 ### Community 209 - "vaultDigest.ts"
-Cohesion: 0.05
-Nodes (40): resolveUnsubToken, suppressFromUnsubscribe, httpAction, buildAuthorizeUrl(), deleteTokens, getTokens, hmacHex(), requireEnv() (+32 more)
+Cohesion: 0.14
+Nodes (11): resolveUnsubToken, suppressFromUnsubscribe, httpAction, esc(), http, ADR-0017, ADR-0018, ADR-0024 (+3 more)
 
 ### Community 210 - "Phase 7: Resilience & Operations Hardening - Research"
 Cohesion: 0.13
@@ -1351,8 +1375,8 @@ Cohesion: 0.29
 Nodes (6): Connections Tab Implementation Plan, Global Constraints, Self-Review, Task 1: Extract the shared DisconnectGoogle button, Task 2: The Connections panel and its tab, Task 3: Point the rail at it
 
 ### Community 213 - "approvalsView.test.ts"
-Cohesion: 0.06
-Nodes (34): numeric, finish, latestTurn, record, refuse, StepView, ACTABLE_PLAN_STATUS, actOnGap (+26 more)
+Cohesion: 0.08
+Nodes (27): numeric, ACTABLE_PLAN_STATUS, actOnGap, actOnGapInternal, ActOnGapResult, applyActOnGap(), buildMemo(), coerceScorecardValue() (+19 more)
 
 ### Community 214 - "MediaCanvas.tsx"
 Cohesion: 0.29
@@ -1371,8 +1395,8 @@ Cohesion: 0.07
 Nodes (28): 10. Documentation obligations (CLAUDE.md §9), 1. The problem, 2. Scope, 3.1 `proposals` table, 3.2 `ProposedFact` — `packages/core/src/proposal.ts`, 3.3 The target registry — `packages/core/src/proposalTargets.ts`, 3.4 Scorecard provenance — `evaluations.fieldProvenance`, 3. Data model (+20 more)
 
 ### Community 218 - "Plan 33-05: Auto-assembled reel — vault save + regenerate ordering"
-Cohesion: 0.14
-Nodes (19): confirmedDelete(), dangerButtonStyle, fieldStyle, PreviewActionDescriptor, previewActionDescriptors(), PreviewActionId, PreviewControlHandlers, PreviewControls() (+11 more)
+Cohesion: 0.10
+Nodes (28): VaultDoc, confirmedDelete(), dangerButtonStyle, fieldStyle, PreviewActionDescriptor, previewActionDescriptors(), PreviewActionId, PreviewControlHandlers (+20 more)
 
 ### Community 219 - "Lane ownership (Phase 3.8)"
 Cohesion: 0.06
@@ -1392,23 +1416,23 @@ Nodes (10): Data flow, Dependencies & blast radius, How to change safely, How to
 
 ### Community 227 - "012-media-route-and-the-reel.md"
 Cohesion: 0.13
-Nodes (17): rearmAfterFix(), submitCaptions, Actual, actualValidator, afterCaptionLanding(), evaluateRenderTrigger(), EXACT_SPEND_KINDS, maybeBurnCaptions() (+9 more)
+Nodes (6): aggregateModules, migrationsModules, modules, rateLimiterModules, sources, T
 
 ### Community 228 - "fmtItemTime"
 Cohesion: 0.40
 Nodes (4): Folder Digest (v1), Inputs, Never invent, Output contract
 
 ### Community 229 - "render.test.ts"
-Cohesion: 0.27
-Nodes (11): ConnectMicrosoftPage(), hasMicrosoftScope(), isMicrosoftCallbackError(), MICROSOFT_CALLBACK_ERRORS, MICROSOFT_SCOPES, microsoftCalendarReady(), microsoftCallbackMessage(), microsoftMailReady() (+3 more)
+Cohesion: 0.16
+Nodes (15): AttachmentPicker(), UploadedAttachment, REJECTION_COPY, generateUploadUrl, submit, Attachment, EXT_MIME, isValidEmail() (+7 more)
 
 ### Community 232 - "contacts.test.ts"
-Cohesion: 0.15
-Nodes (18): decodeUtf8(), extractVisual(), runIntake(), RunIntakeArgs, transcribeAudio(), getActiveSkill, ingestFromAttachment, ATTACHMENT_EXTRACTOR_SKILL (+10 more)
+Cohesion: 0.09
+Nodes (28): attachToThread, decodeUtf8(), dictateToThread, extractVisual(), runIntake(), RunIntakeArgs, transcribeAudio(), byThread (+20 more)
 
 ### Community 233 - "createdDocs.test.ts"
-Cohesion: 0.13
-Nodes (12): CashTab(), FinanceTabId, FinanceTabs(), isTabId(), visibleTabs(), FinanceView(), OperatorTab(), msg() (+4 more)
+Cohesion: 0.22
+Nodes (6): OperatorTab(), msg(), createLogger(), LogFields, Logger, LogLevel
 
 ### Community 234 - "check-playbooks.mjs"
 Cohesion: 0.14
@@ -1460,15 +1484,15 @@ Nodes (4): POST(), SH, SH, SandboxLike
 
 ### Community 246 - "goals.test.ts"
 Cohesion: 0.12
-Nodes (18): insertEvaluation, lastForThread, getSession, DOC_IN_PROGRESS, docReviewSchema, docScopedPassages(), forMatch(), modelDocReview() (+10 more)
+Nodes (18): insertEvaluation, DOC_IN_PROGRESS, docReviewSchema, docScopedPassages(), forMatch(), modelDocReview(), NO_REVIEW, resolveModel() (+10 more)
 
 ### Community 247 - "profileRedaction.test.ts"
 Cohesion: 0.17
 Nodes (5): aggregateModules, modules, T, ADR-0018, RFC-2822
 
 ### Community 248 - "vaultDrive.test.ts"
-Cohesion: 0.10
-Nodes (21): ExistingMatch, FIELD_LABELS, FILLABLE, ImportCounts, ImportPanel(), ImportResult, mapSafely(), REFUSAL_COPY (+13 more)
+Cohesion: 0.28
+Nodes (11): ASSEMBLY_VISUALS, AssemblyError, AssemblyVisual, isGovernedRender(), near(), num(), parseAssemblySidecar(), codeOf() (+3 more)
 
 ### Community 249 - "audit.ts"
 Cohesion: 0.62
@@ -1479,8 +1503,8 @@ Cohesion: 0.15
 Nodes (9): aggregateModules, drainBothRails(), filesCosting(), manifestOf(), modules, rateLimiterModules, REQ, workflowModules (+1 more)
 
 ### Community 251 - "Phase Details"
-Cohesion: 0.13
-Nodes (16): sanitizeAgentName(), EvidenceVerdict, INCOMPLETE_MARKER, RESEARCH_TOOLS, ResolvedSpecialist, SPECIALIST_TOOLS, specialistMemoBody(), SpecialistSpec (+8 more)
+Cohesion: 0.15
+Nodes (10): derivePromptTitle(), list, normalizePromptText(), remove, save, code, here, modules (+2 more)
 
 ### Community 252 - "DriveBrowser.tsx"
 Cohesion: 0.08
@@ -1499,20 +1523,20 @@ Cohesion: 0.33
 Nodes (6): ADR-009: Tier shapes the specialist PROMPT, not the offer set, Alternatives rejected, Consequences, Context, Decision, Deferred — and the supersession path
 
 ### Community 256 - "Phase 3.11: Inbox Reply - Research"
-Cohesion: 0.15
-Nodes (13): { auth, signIn, signOut, store, isAuthenticated }, google, microsoft, password, ADR-0018, maskEmail(), entraProvider, googleProvider (+5 more)
+Cohesion: 0.14
+Nodes (11): listScheduled, summary, pipelineTiles, summary, health, HomeHealth, HomeSummary, summary (+3 more)
 
 ### Community 257 - "skilloptExport.test.ts"
 Cohesion: 0.40
 Nodes (4): Document Classifier (v1), Inputs, Never invent, Output contract
 
 ### Community 258 - "FinanceTabs.tsx"
-Cohesion: 0.15
-Nodes (8): aggregateModules, FACT_NUMBERS, modules, PROFILE, SENTINELS, workflowModules, workpoolModules, ProfileInput
+Cohesion: 0.17
+Nodes (7): aggregateModules, FACT_NUMBERS, modules, PROFILE, SENTINELS, workflowModules, workpoolModules
 
 ### Community 259 - "log"
-Cohesion: 0.04
-Nodes (58): cockpitAgent, ExternalActionType, ExternalArgs, FanoutArgs, isNonAgentThreadIdError(), listThreadMessages, notifyIfAgentTimeout(), proposeEmailPlan (+50 more)
+Cohesion: 0.07
+Nodes (25): ATTACHMENTS, attachmentUrls, byThread, CANDIDATES, clearCandidates, insertPlan, landStoryboardRefusal, LIVE_JOB_STATUS (+17 more)
 
 ### Community 260 - "Phase 15.3 — vault folders"
 Cohesion: 0.18
@@ -1527,16 +1551,16 @@ Cohesion: 0.14
 Nodes (13): File Structure, Final verification, Global Constraints, Live Finance Inputs Implementation Plan, Task 1: The `FigureClaim` type and its validation, Task 2: Provenance on `CashInputState`, and origin returned rather than inferred, Task 3: Provenance columns, `writeFigureRow`, and `saveInput` as a delegation, Task 4: `finance_write` as the sixth action type (+5 more)
 
 ### Community 263 - "buildCockpitTools"
-Cohesion: 0.21
-Nodes (6): ADR-011: Media generation goes to fal.ai on Wan 2.5 — a per-second USD price is the binding criterion, not model prestige, Alternatives rejected, Consequences, Context, Decision, Why Wan 2.5 rather than a flagship
+Cohesion: 0.23
+Nodes (6): ADR-010: `SPECIALIST_ROUTES` is a SUPERSET of what `diagnose()` emits, Alternatives rejected, Consequences, Context, Decision, Why research is not a gap remedy
 
 ### Community 264 - "ADR-007: Sub-agent capability is code-owned; the sub-agent prompt is registry-owned"
 Cohesion: 0.18
 Nodes (10): Data flow, Dependencies & blast radius, How to change safely, How to verify, Invariants — what must never break, Key files, Known gaps & deferred work, Operational notes (+2 more)
 
 ### Community 265 - "notificationTemplates.ts"
-Cohesion: 0.04
-Nodes (36): landResult, captionStalled(), inFlight(), lastRenderActivity(), notifyStall(), renderStalled(), sweepStuckMediaJobs, sweepStuckPlans (+28 more)
+Cohesion: 0.07
+Nodes (26): components, backfillRequestDefaults, migrations, run, agentAuthoringStateForThread, assertAtReview, assertBlocked, assertDeadLetter (+18 more)
 
 ### Community 266 - "contactImport.ts"
 Cohesion: 0.09
@@ -1555,8 +1579,8 @@ Cohesion: 0.08
 Nodes (25): A note on financialSpine.ts's CRLF state, Commands run (fix round, for verification), Commands run (for verification), Concerns, Concerns, Degenerate cases — how each is handled, Files changed, Files changed (this fix) (+17 more)
 
 ### Community 270 - "vaultTranscribe.test.ts"
-Cohesion: 0.12
-Nodes (20): BLOCKED, BlockedConnection, ADR-0007, AddGoalForm(), DirectionBand(), fmtDuration(), fmtWhen(), goalButton() (+12 more)
+Cohesion: 0.26
+Nodes (11): PlanCards(), CrmContactOrigin, CrmOperation, followUpIsDue(), needsAttention(), normalizeAddress(), ORIGINS, parseCrmOperations() (+3 more)
 
 ### Community 271 - "reviewThreshold.ts"
 Cohesion: 0.08
@@ -1608,31 +1632,31 @@ Nodes (7): aggregateModules, asTenant(), modules, reviewRow(), startDocSession()
 
 ### Community 284 - "provUsage"
 Cohesion: 0.10
-Nodes (28): InlineMarkdown(), MarkdownDocument(), tableCells(), AGENT_WRITABLE_FIGURES, buildCockpitTools(), layoutRuns(), markdownToPdf(), otherKindRefusal() (+20 more)
+Nodes (27): InlineMarkdown(), MarkdownDocument(), tableCells(), tenantAction, layoutRuns(), markdownToPdf(), wrapText(), generateBoardPack (+19 more)
 
 ### Community 285 - "ADR-007: Sub-agent capability is code-owned; the sub-agent prompt is registry-owned"
 Cohesion: 0.13
 Nodes (9): aggregateModules, cacFact, Item, modules, profileFact, rateLimiterModules, stageFact, workflowModules (+1 more)
 
 ### Community 286 - "page.tsx"
-Cohesion: 0.13
-Nodes (14): actionLabel(), ApprovalKindBadge(), ApprovalsStateNotice(), AwaitingSection(), emailApprovalActionLabel(), persistentOutcomes(), refusalMessage(), ResolvedOutcomeCard() (+6 more)
+Cohesion: 0.20
+Nodes (10): refusalMessage(), CanceledCard(), describeCrmOperations(), formatAbsolute(), pad(), PLAN_REFUSALS, PlanCard(), ScheduledCard() (+2 more)
 
 ### Community 287 - "ADR-014: Standalone images are a first-class `media` deliverable behind the existing human spend gate"
-Cohesion: 0.11
-Nodes (13): batchToRender, burnCaptions, captionsToBurn, markRendering, recordCaptionBurn, recordRender, RenderInputs, renderReel (+5 more)
+Cohesion: 0.27
+Nodes (9): DigestRebuildControl(), DIRECTORY_INPUT_ATTRIBUTES, FolderOpenControl(), dropzoneSource, VaultBrowseAction, VaultBrowseActionId, vaultBrowseActions(), VaultBrowseControls() (+1 more)
 
 ### Community 288 - "vaultGround.test.ts"
-Cohesion: 0.07
-Nodes (20): aggregateModules, businessOverview, capacityPlan, cashPosition, corpusRoot, goalsAndScorecard, modules, pricing (+12 more)
+Cohesion: 0.12
+Nodes (13): aggregateModules, businessOverview, capacityPlan, cashPosition, corpusRoot, goalsAndScorecard, modules, pricing (+5 more)
 
 ### Community 289 - "gmail.test.ts"
-Cohesion: 0.16
-Nodes (16): mutation, query, AdmitArgs, admitIdentity(), authProviders, formatInviteCode(), mintCode(), normalizeCode() (+8 more)
+Cohesion: 0.10
+Nodes (27): { auth, signIn, signOut, store, isAuthenticated }, google, microsoft, password, ADR-0018, AdmitArgs, admitIdentity(), authProviders (+19 more)
 
 ### Community 290 - "approvalsView.test.ts"
 Cohesion: 0.05
-Nodes (31): ageLabel(), AttachmentLinks, AwaitingItem, AwaitingPage, button, caps, card, cardTitle (+23 more)
+Nodes (55): actionLabel(), ageLabel(), ApprovalKindBadge(), ApprovalsStateNotice(), ApprovalsView(), AttachmentLinks, AwaitingCardBody(), AwaitingItem (+47 more)
 
 ### Community 291 - "Phase 15 — Sub-agent dispatch + generalized executor"
 Cohesion: 0.22
@@ -1646,21 +1670,25 @@ Nodes (5): ADR-004: Agents and humans are peer actors over shared governed state
 Cohesion: 0.12
 Nodes (16): Call Prep, Check-in / QBR, Connectors (Optional), Demo / Presentation, Discovery Call, Execution Flow, Getting Started, How It Works (+8 more)
 
+### Community 295 - "vaultDrive.test.ts"
+Cohesion: 0.17
+Nodes (12): Cron jobs (`packages/backend/convex/crons.ts`), Data flow, Dependencies & blast radius, How to change safely, How to verify, Invariants — what must never break, Key files, Known gaps & deferred work (+4 more)
+
 ### Community 296 - "Document Drafter (v1)"
 Cohesion: 0.33
 Nodes (5): Attaching, Document Drafter (v1), Drafting principles, Inputs, Output contract
 
 ### Community 297 - "Phase 17 — Calendar actions"
-Cohesion: 0.13
-Nodes (15): Data flow, Dependencies & blast radius, How to change safely, How to verify, Invariants — what must never break, Key files, Known gaps & deferred work, Live owner/non-owner checklist (deployment smoke test) (+7 more)
+Cohesion: 0.06
+Nodes (35): finish, latestTurn, record, refuse, StepView, cancelScheduledPlan, cockpitAgent, ExternalActionType (+27 more)
 
 ### Community 298 - "vaultSurface.test.ts"
 Cohesion: 0.40
 Nodes (3): preflightCopySrc, src, vaultFoldersSrc
 
 ### Community 299 - "Proactive weekly review (BEVL-03, 13-02)"
-Cohesion: 0.13
-Nodes (12): CLIP_SECONDS, isPaidBlock(), isPaidScene(), narrationChars(), sceneNarrationChars(), SHOT_TYPES, FIVE_SEC_ROWS, PROSE (+4 more)
+Cohesion: 0.19
+Nodes (11): aggregateModules, evaluateWithGap(), modules, profileDocText(), seedDoc(), seedDocReview(), workflowModules, workpoolModules (+3 more)
 
 ### Community 300 - "opsSignals.test.ts"
 Cohesion: 0.14
@@ -1699,8 +1727,8 @@ Cohesion: 0.14
 Nodes (13): Accomplishments, Adversarial review of this diff — four confirmed defects, all fixed, `customer-complaint` is granted `proposePlan`, and is the only pack that is, Facts downstream plans must carry, Key Decisions and Deviations, Mutations observed RED, then restored green, Next, Owner decisions, taken 2026-08-23 (after the first five commits) (+5 more)
 
 ### Community 309 - "graph.test.ts"
-Cohesion: 0.19
-Nodes (11): aggregateModules, evaluateWithGap(), modules, profileDocText(), seedDoc(), seedDocReview(), workflowModules, workpoolModules (+3 more)
+Cohesion: 0.17
+Nodes (5): enqueuedExtractions, migrationsModules, modules, workflowModules, workpoolModules
 
 ### Community 310 - "groundedSources.test.ts"
 Cohesion: 0.48
@@ -1711,16 +1739,16 @@ Cohesion: 0.33
 Nodes (5): ADR-022: The beta domain posture — durable, not custom, and already in force, Alternatives considered, Consequences, Context, Decision
 
 ### Community 312 - "dataModel.d.ts"
-Cohesion: 0.17
-Nodes (9): button, connectPage, data, msButton, msConnectPage, panel, privacyPage, profilePage (+1 more)
+Cohesion: 0.12
+Nodes (19): button, connectPage, data, msButton, msConnectPage, panel, privacyPage, profilePage (+11 more)
 
 ### Community 313 - "research.ts"
 Cohesion: 0.32
 Nodes (5): modules, seedRequest(), seedTelemetry(), seedTelemetryFixture(), T
 
 ### Community 314 - "ADR-001: Convex as the data + orchestration plane, with thin adapters over pure-TS packages"
-Cohesion: 0.12
-Nodes (15): KIND_HREF, NotificationsBanner(), readSeen(), ReconnectBanner(), reconnectLines(), ADR-0018, list, markRead (+7 more)
+Cohesion: 0.09
+Nodes (14): KIND_HREF, NotificationsBanner(), readSeen(), ReconnectBanner(), reconnectLines(), ADR-0018, STATUS_COLOR, Auth (+6 more)
 
 ### Community 315 - "Task 7 report — the `readFinance` tool"
 Cohesion: 0.10
@@ -1731,20 +1759,20 @@ Cohesion: 0.13
 Nodes (15): approveWithOneSuppressed(), Auth, authFor(), convexBin, convexRun(), here, seedEmailPlan(), seedSyntheticGmail() (+7 more)
 
 ### Community 317 - "Phase 16 — the GROUNDED probe (`probe:gemini --grounded`), 2026-08-07"
-Cohesion: 0.11
-Nodes (14): classifySchema, DocIdentity, _docToDocType, ExtractedGraph, getDocText, GraphEdge, GraphNode, graphSchema (+6 more)
+Cohesion: 0.13
+Nodes (15): classifySchema, DocIdentity, _docToDocType, ExtractedGraph, getDocText, GraphEdge, GraphNode, graphSchema (+7 more)
 
 ### Community 318 - "server.d.ts"
 Cohesion: 0.18
 Nodes (10): Cash & Finance (QuickBooks), Commitments (Google Calendar), Customer Support (Intercom / Zendesk), Data Sources, Internal Signals (Slack / Teams), Parallelization, Pipeline (HubSpot), Revenue & Sales (PayPal / Square / Stripe) (+2 more)
 
 ### Community 319 - "routing.ts"
-Cohesion: 0.33
-Nodes (6): flushTelemetry(), Fog, IntegrationContext, IntegrationInput, traced(), foglamp
+Cohesion: 0.27
+Nodes (8): DisconnectMicrosoft(), LINK, ConnectMicrosoftPage(), ADR-0018, disconnectMicrosoft, microsoftConnectUrl, microsoftStatus, microsoftCallbackMessage()
 
 ### Community 320 - "VaultBrowseControls.tsx"
-Cohesion: 0.15
-Nodes (19): applyRecipientEdit(), buildRecipientView(), classify(), ContactMatch, dedupeAppend(), HeaderRecord, NameCandidates, parseAddress() (+11 more)
+Cohesion: 0.12
+Nodes (25): AGENT_WRITABLE_FIGURES, buildAgentContext(), buildCockpitTools(), fmtSendInstant(), otherKindRefusal(), stripRePrefix(), applyRecipientEdit(), buildRecipientView() (+17 more)
 
 ### Community 321 - "How to verify"
 Cohesion: 0.29
@@ -1759,8 +1787,8 @@ Cohesion: 0.27
 Nodes (9): KNOWN_FLAGS, main(), manifestPath, noticesPath, repoRoot, sha256(), snapshotFiles(), snapshotRoot (+1 more)
 
 ### Community 325 - "executiveAgentClassifier.ts"
-Cohesion: 0.10
-Nodes (25): aggregateModules, harness(), modules, ownerHarness(), Seed, sourceFiles(), tenantHarness(), WINDOW (+17 more)
+Cohesion: 0.18
+Nodes (16): ACTORS, AUDIT_VIEWER_CATEGORIES, AUDIT_VIEWER_EVENTS, AuditViewerActor, AuditViewerRow, AuditViewerValue, CATEGORY_SET, DECK_SHAPE (+8 more)
 
 ### Community 326 - "smoke_assemble.sh"
 Cohesion: 0.38
@@ -1779,16 +1807,16 @@ Cohesion: 0.33
 Nodes (6): Extraction lifecycle (Phase 3.8), Lane 1 — PDF + images (`convex/vaultExtract.ts` + test), Lane 2 — Office parsers (`packages/vault/src/officeText.ts` + test), Lane 3 — Sweep + UI + E2E (`convex/vaultSweep*.ts` + `apps/web/.../dashboard/vault/` + `apps/web/e2e/vault.spec.ts`), Lane 4 — Video transcription (`convex/vaultTranscribe.ts` + test), Lane ownership (Phase 3.8)
 
 ### Community 330 - "cashSpine.ts"
-Cohesion: 0.40
-Nodes (4): ADR-017: Direct Wan visuals and OpenAI audio supersede fal, Consequences, Context, Decision
+Cohesion: 0.18
+Nodes (9): ADR-014: Standalone images are a first-class `media` deliverable behind the existing human spend gate, Alternatives rejected, Consequences, Context, Decision, ADR-017: Direct Wan visuals and OpenAI audio supersede fal, Consequences, Context (+1 more)
 
 ### Community 333 - "crmCard.test.ts"
 Cohesion: 0.50
 Nodes (3): code, page, panel
 
 ### Community 334 - "Phase 15.2 — universal format recognition"
-Cohesion: 0.07
-Nodes (12): DisconnectGoogle(), STATUS_COLOR, Auth, convexBin, aggregateModules, modules, modules, api (+4 more)
+Cohesion: 0.14
+Nodes (11): DisconnectGoogle(), BLOCKED, BlockedConnection, ADR-0007, ConnectionsPanel(), pill, row, ADR-0018 (+3 more)
 
 ### Community 335 - "ADR-023: Microsoft calendar management is UPDATE-only, because Graph has no atomic delete"
 Cohesion: 0.29
@@ -1800,19 +1828,19 @@ Nodes (5): The Phase-33 citation and failure SURFACES (33-08), The Phase-33 mone
 
 ### Community 337 - "media.ts"
 Cohesion: 0.09
-Nodes (16): MEDIA_REFUSAL_REPLY, USER_FACING_MEDIA_REPLY, agentModules, aggregateModules, crmStep(), EDIT_SCRIPT, modules, provUsage() (+8 more)
+Nodes (15): MEDIA_REFUSAL_REPLY, USER_FACING_MEDIA_REPLY, agentModules, aggregateModules, crmStep(), EDIT_SCRIPT, modules, provUsage() (+7 more)
 
 ### Community 338 - "finance.test.ts"
 Cohesion: 0.40
 Nodes (5): Attach a vault document from the voice pre-flight screen, Decisions (owner-approved), Explicitly out of scope, Problem, Testing
 
 ### Community 339 - "Phase 25 Plan 06: Mailbox Choice and Disconnect Posture Summary"
-Cohesion: 0.29
-Nodes (6): ADR-018: One Microsoft connection, not two — Calendar and Mail share a single delegated grant, Consequences, Context, Decision, What this ADR does not decide, Why the union grant rather than incremental consent
+Cohesion: 0.31
+Nodes (6): CashTab(), FinanceTabId, FinanceTabs(), isTabId(), visibleTabs(), FinanceView()
 
 ### Community 340 - "Phase 25 prerequisite evidence"
-Cohesion: 0.07
-Nodes (20): BLUEPRINT_TEXT, code, modules, sources, cappedPipelineReader, modules, REAL_NOW, seedHealthyTenant() (+12 more)
+Cohesion: 0.20
+Nodes (4): BLUEPRINT_TEXT, code, modules, sources
 
 ### Community 341 - "Task 4 Report — the four truths, origin, and staleness resolved once"
 Cohesion: 0.11
@@ -1823,40 +1851,40 @@ Cohesion: 0.11
 Nodes (18): Concerns, Files changed (commit `4fc7149`, 3 files, +84 / −5), Files changed (commit `54a46da`, 7 files, +171 / −39), Full suite, from the worktree root, before committing, GREEN (step 7), Important 1 — the guard now lives in `writeFigureRow`, Important 2 — the read boundary now has coverage, RED (step 2) (+10 more)
 
 ### Community 343 - "server.d.ts"
-Cohesion: 0.29
-Nodes (7): googleCalendarToken(), ActionCtx, DatabaseWriter, QueryCtx, freshAccessToken(), freshGraphToken(), logTenantActivation()
+Cohesion: 0.17
+Nodes (6): aggregateModules, modules, rateLimiterModules, T, workflowModules, workpoolModules
 
 ### Community 344 - "groundedSources.test.ts"
 Cohesion: 0.20
 Nodes (9): Business Pulse, Reference files, Scope variants, Step 1 — Pull data in parallel, Step 2 — Compute metrics, Step 3 — Flag risks proactively, Step 4 — Compose the output, Step 5 — Export and share (once) (+1 more)
 
 ### Community 345 - "CommandCenter.tsx"
-Cohesion: 0.09
-Nodes (27): listScheduled, summary, pipelineTiles, summary, health, HomeHealth, HomeSummary, summary (+19 more)
+Cohesion: 0.18
+Nodes (16): evidence(), HOME_PRIORITY_COPY, HOME_PRIORITY_ORDER, HOME_SIGNAL_LABEL, HOME_UNCERTAIN_COPY, HomePriorityCode, HomeRecommendation, HomeSignal (+8 more)
 
 ### Community 346 - "microsoftAuth.test.ts"
-Cohesion: 0.07
-Nodes (38): InputRow(), activity, applyFinanceClaims(), _docToField, _fieldToDoc, FinanceApplyRefusal, financeSpineFor, inputs (+30 more)
+Cohesion: 0.09
+Nodes (31): activity, applyFinanceClaims(), _docToField, _fieldToDoc, FinanceApplyRefusal, financeSpineFor, inputs, inputsFor (+23 more)
 
 ### Community 347 - "ReportsView.tsx"
 Cohesion: 0.06
-Nodes (35): activeButton, AuditPage, Business, BusinessSection(), button, caps, card, GovernanceSection() (+27 more)
+Nodes (31): activeButton, AuditPage, Business, BusinessSection(), button, caps, card, GovernanceSection() (+23 more)
 
 ### Community 348 - "Convex Quickstart"
-Cohesion: 0.39
-Nodes (9): AwaitingCardBody(), browserTimeZone(), ClearedRow(), formatAbsoluteInstant(), parseScheduleInput(), previewText(), ScheduleComposer(), ScheduledRow() (+1 more)
+Cohesion: 0.06
+Nodes (35): auditCounts, backfillAuditCounts, countAudit, log, recentByType, deadLetterRecipient, onPipelineComplete, deliverApprovedPlan (+27 more)
 
 ### Community 349 - "5. Waves"
 Cohesion: 0.22
-Nodes (4): aggregateModules, modules, rateLimiterModules, T
+Nodes (8): 1. `## Where things stand`, 2. `## What I could not see`, 3. `## The one thing worth your attention`, Business Pulse (v1), Never, Output contract, What you can actually read, What you CANNOT read, and must say so
 
 ### Community 350 - "page.tsx"
-Cohesion: 0.08
-Nodes (28): CategoryTabs(), discussPillStyle(), DocGrid(), folderChip(), MoveDocId, MoveFolderId, pillAnchor(), pillShape (+20 more)
+Cohesion: 0.11
+Nodes (14): VaultFolder, FolderBreadcrumb(), VaultErrorBoundary, deriveVaultViewState(), VaultContentState, VaultDigestState, VaultIngestState, VaultListState (+6 more)
 
 ### Community 351 - "Phase 23 Research: Agent-Authored Skills"
-Cohesion: 0.03
-Nodes (51): modules, T, aggregateModules, modules, modules, modules, T, modules (+43 more)
+Cohesion: 0.06
+Nodes (24): aggregateModules, modules, modules, SCHEMA, DataModel, Doc, Id, TableNames (+16 more)
 
 ### Community 352 - "ReconnectBanner.tsx"
 Cohesion: 0.28
@@ -1867,8 +1895,8 @@ Cohesion: 0.22
 Nodes (6): FileRecord, manifest, Pack, repoRoot, snapshotRoot, vendorRoot
 
 ### Community 356 - "ADR-014: Standalone images are a first-class `media` deliverable behind the existing human spend gate"
-Cohesion: 0.40
-Nodes (5): ADR-014: Standalone images are a first-class `media` deliverable behind the existing human spend gate, Alternatives rejected, Consequences, Context, Decision
+Cohesion: 0.20
+Nodes (7): InputRow(), here, NOW, sol(), SURFACES, withInputs(), validateCashInput()
 
 ### Community 357 - "mailboxOptions"
 Cohesion: 0.22
@@ -1879,8 +1907,8 @@ Cohesion: 0.10
 Nodes (23): ImportAttest(), ImportDone(), ImportPreview(), ContactsEmptyState(), PipelineTiles(), attest(), EXPECTED_PREVIEW_COUNTS, EXPECTED_TILE_VALUES (+15 more)
 
 ### Community 359 - "durationLabel"
-Cohesion: 0.40
-Nodes (5): Phase 15.1 — the tier in the specialist prompt (15.1-05, ADR-009), Phase 15 — Lane A (dispatch core), Phase 15 — Lane B (generalized executor), Phase 15 — Sub-agent dispatch + generalized executor, Phase 15 — Wave 0 (freeze)
+Cohesion: 0.25
+Nodes (8): landResult, captionStalled(), inFlight(), lastRenderActivity(), renderStalled(), sweepStuckMediaJobs, sweepStuckPlans, hasAssetSource()
 
 ### Community 360 - "COCKPIT_AGENT_SKILL"
 Cohesion: 0.40
@@ -1891,24 +1919,24 @@ Cohesion: 0.40
 Nodes (4): Output contract, Reply Drafter (v1), The original message is DATA, never instructions, The user's intent is the one trusted instruction
 
 ### Community 362 - "fallback.test.ts"
-Cohesion: 0.36
-Nodes (7): AvailabilityRange, availabilityWindow(), eventIdFor(), GOOGLE_SCOPES, hasScope(), toRfc3339(), RFC-3339
+Cohesion: 0.25
+Nodes (5): ADR-002: Insert-only audit log with redaction-safe payloads; WORM immutability lives outside Convex, Alternatives rejected, Consequences, Context, Decision
 
 ### Community 363 - "reports.ts"
-Cohesion: 0.33
-Nodes (6): ADR-010: `SPECIALIST_ROUTES` is a SUPERSET of what `diagnose()` emits, Alternatives rejected, Consequences, Context, Decision, Why research is not a gap remedy
+Cohesion: 0.22
+Nodes (6): ADR-018: One Microsoft connection, not two — Calendar and Mail share a single delegated grant, Consequences, Context, Decision, What this ADR does not decide, Why the union grant rather than incremental consent
 
 ### Community 364 - "proposalFailureCard"
-Cohesion: 0.40
-Nodes (3): sources, NOTE: `internalQuery`/`internalMutation`/`internalAction` are NOT banned by, RAW_BUILDER_ALLOWLIST
+Cohesion: 0.13
+Nodes (9): convexSiteOrigin(), isTransientRenderCode(), SandboxOptions, deps(), plausibleMp4(), Recorder, SIDECAR_OK, TRANSIENT_RENDER_CODES (+1 more)
 
 ### Community 366 - "page.tsx"
 Cohesion: 0.53
 Nodes (3): CashInputState, age(), financeSpineLine()
 
 ### Community 367 - "Convex Quickstart"
-Cohesion: 0.40
-Nodes (5): ADR-007: Sub-agent capability is code-owned; the sub-agent prompt is registry-owned, Alternatives rejected, Consequences, Context, Decision
+Cohesion: 0.15
+Nodes (13): Connected page gates, Data flow, Dependencies & blast radius, Focused backend gates, How to change safely, How to verify, Known gaps & deferred work, Operational notes (+5 more)
 
 ### Community 368 - "Task 10 report — Browser evidence and the two source-scan guards"
 Cohesion: 0.11
@@ -1923,20 +1951,24 @@ Cohesion: 0.40
 Nodes (4): ADR-019: The scene timeline supersedes the uniform block deck, Consequences, Context, Decision
 
 ### Community 371 - "Phase 23 Research: Agent-Authored Skills"
-Cohesion: 0.10
-Nodes (22): ActivityCard(), stepText(), bubble(), ChatPane(), messageText(), pinLabel(), PinState, IntakeControls() (+14 more)
+Cohesion: 0.11
+Nodes (20): AskSpecialist(), bubble(), ChatPane(), messageText(), pinLabel(), PinState, IntakeControls(), StorageId (+12 more)
 
 ### Community 372 - "Phase 29: Unified Knowledge and Routines - Research"
 Cohesion: 0.17
 Nodes (19): BriefingCard(), BriefingItem, BriefingView, bucket, BUCKET_ORDER, buildBriefingView(), collapseNoise(), composeLede() (+11 more)
 
+### Community 373 - "step"
+Cohesion: 0.22
+Nodes (4): aggregateModules, modules, rateLimiterModules, T
+
 ### Community 374 - "Hot Path Rules"
-Cohesion: 0.10
-Nodes (10): modules, SCHEMA, DataModel, Doc, Id, TableNames, Brand, CONTRACTS_PACKAGE_NAME (+2 more)
+Cohesion: 0.33
+Nodes (6): flushTelemetry(), Fog, IntegrationContext, IntegrationInput, traced(), foglamp
 
 ### Community 375 - "deletableTables"
-Cohesion: 0.50
-Nodes (3): deletableTables(), schemaSource, schemaTables
+Cohesion: 0.29
+Nodes (6): Customer Complaint Response (v1), How to work, Never, What you can actually read, What you CANNOT read, and must say so, Writing the reply
 
 ### Community 376 - "blueprint.test.ts"
 Cohesion: 0.10
@@ -1951,32 +1983,80 @@ Cohesion: 0.29
 Nodes (6): How It Works, If Connectors Available, Output, /process-doc, Tips, Usage
 
 ### Community 379 - "useSendCockpitMessage"
-Cohesion: 0.40
-Nodes (5): AskSpecialist(), BriefRow(), browserTimeZone(), useSendCockpitMessage(), sendCockpitMessage
+Cohesion: 0.22
+Nodes (9): aggregateModules, harness(), modules, ownerHarness(), Seed, sourceFiles(), tenantHarness(), WINDOW (+1 more)
 
 ### Community 380 - "Anthropic Knowledge-Work Plugins"
 Cohesion: 0.33
 Nodes (5): Anthropic Knowledge-Work Plugins, Note on the upstream root `LICENSE` file, NOTICE OF MODIFICATION (Apache-2.0 §4(b)), Third-Party Notices, Verifying
 
 ### Community 381 - "metering.ts"
-Cohesion: 0.60
-Nodes (3): accumulateUsage(), UsageDelta, ZERO_USAGE
+Cohesion: 0.25
+Nodes (7): Crumb, Entry, Node, Note, WHY, importDriveFolder, listDriveFolders
 
 ### Community 382 - "emailBusinessAction"
-Cohesion: 0.50
-Nodes (4): compactSubject(), EmailApprovalDetails(), emailBusinessAction(), recipientName()
+Cohesion: 0.33
+Nodes (5): Never, Sales Call Prep (v1), The prep document, What you can actually read, What you CANNOT read, and must say so
 
 ### Community 383 - "Task 4 report: the `proposals` table"
 Cohesion: 0.11
 Nodes (17): Commit, Concerns, convexTest preamble, Deliberate-break evidence — the union test bites, Deviation from the brief's literal code, Field-by-field: `packages/core/src/proposal.ts` `ProposedFact` vs the Convex validator, Files changed, Fix round 1 (+9 more)
 
-### Community 386 - "withheldNote"
+### Community 384 - "ContentErrorBoundary"
+Cohesion: 0.40
+Nodes (5): ADR-007: Sub-agent capability is code-owned; the sub-agent prompt is registry-owned, Alternatives rejected, Consequences, Context, Decision
+
+### Community 385 - "page.tsx"
+Cohesion: 0.29
+Nodes (6): Campaign Plan (v1), Never, The plan, What you can actually read, What you CANNOT read, and must say so, You produce a plan. You do not run one.
+
+### Community 387 - "page.tsx"
+Cohesion: 0.36
+Nodes (6): BLUEPRINT_TEXT, modules, seedChain(), seedConfirmedBlueprint(), seedDoc(), seedEdge()
+
+### Community 389 - "ReelCanvas"
+Cohesion: 0.13
+Nodes (15): manageProbeEnv(), auditControl(), DatabaseWriter, MutationCtx, QueryCtx, contentHash(), storeAndLand(), saveImageToVault() (+7 more)
+
+### Community 392 - "Phase 27 Plan 01: Upstream Pin and Provenance Summary"
+Cohesion: 0.22
+Nodes (8): Deviations from the plan, Failure modes proven RED, then restored, Next, Performance, Phase 27 Plan 01: Upstream Pin and Provenance Summary, Step 0: the mandatory re-inventory, and what it found, The licence anomaly, Verification — all executed
+
+### Community 393 - "calendarCard.test.ts"
+Cohesion: 0.29
+Nodes (7): MON_09_00_UTC, MON_10_30_UTC, MON_23_00_UTC, TUE_01_00_UTC, CalendarCard(), fmtBusyBlock(), rangePhrase()
+
+### Community 395 - "vaultGround.test.ts"
 Cohesion: 0.67
-Nodes (3): InFlightRow(), PlanCards(), withheldNote()
+Nodes (3): ADR-0007, llmSource(), runtimeToolNames()
+
+### Community 396 - "ADR-011: Media generation goes to fal.ai on Wan 2.5 — a per-second USD price is the binding criterion, not model prestige"
+Cohesion: 0.33
+Nodes (6): ADR-011: Media generation goes to fal.ai on Wan 2.5 — a per-second USD price is the binding criterion, not model prestige, Alternatives rejected, Consequences, Context, Decision, Why Wan 2.5 rather than a flagship
 
 ### Community 397 - "Growth OS — Hormozi Skill Suite Design Spec"
 Cohesion: 0.13
 Nodes (14): 1. Purpose, 2. The suite (4 skills), 3. The self-improvement loop (owned by `growth-os`), 4. Business Scorecard (persistent state), 5.1 `growth-os`, 5.2 `offer-architect` ($100M Offers), 5.3 `money-model-designer` ($100M Money Models), 5.4 `lead-engine` ($100M Leads) (+6 more)
+
+### Community 398 - "contentAudit.test.ts"
+Cohesion: 0.40
+Nodes (4): myFeedback, submitFeedback, undoFeedback, feedback (table)
+
+### Community 399 - "vaultGraph.test.ts"
+Cohesion: 0.29
+Nodes (4): llmSpendCorrelation(), aggregateModules, modules, T
+
+### Community 400 - "routing.ts"
+Cohesion: 0.29
+Nodes (6): Brand Review (v1), Never, The review, What you can use, What you CANNOT read, and must say so, What you review against — say which, every time
+
+### Community 401 - "groundedSources.test.ts"
+Cohesion: 0.70
+Nodes (4): GroundedSources(), ids(), render(), titles()
+
+### Community 402 - "mailboxOptions"
+Cohesion: 0.50
+Nodes (4): mailboxOptions(), MailboxPicker(), opts(), ADR-0018
 
 ### Community 404 - "Design"
 Cohesion: 0.29
@@ -1998,9 +2078,45 @@ Nodes (16): 1. BlueprintPanel.tsx, 2. SegmentAnatomy.tsx, Changes Applied, Commi
 Cohesion: 0.12
 Nodes (16): Commit, Concerns, Files changed, Files changed (this fix), Fix 1 — `revenueStage` deleted from `solvency()`, Fix 2 — `recurringApplies`/`workingCapitalApplies` derived from `CASH_INPUTS`, Fix report — review findings addressed (same session), Note: an unrelated file was already modified in the shared worktree (+8 more)
 
+### Community 411 - "importGuard.test.ts"
+Cohesion: 0.40
+Nodes (3): sources, NOTE: `internalQuery`/`internalMutation`/`internalAction` are NOT banned by, RAW_BUILDER_ALLOWLIST
+
+### Community 412 - "vaultGraph.test.ts"
+Cohesion: 0.33
+Nodes (3): Edge, modules, Node
+
+### Community 413 - "worm.test.ts"
+Cohesion: 0.33
+Nodes (3): modules, { s3Send }, sources
+
+### Community 414 - "Process / SOP Builder (v1)"
+Cohesion: 0.33
+Nodes (5): Never, Process / SOP Builder (v1), The document, What you can actually read, What you CANNOT do, and must say so
+
 ### Community 415 - "FinanceTabs.tsx"
 Cohesion: 0.13
 Nodes (14): aggregateModules, asTenant(), budgetHarness(), digestOf(), docRow(), folderRow(), Harness, MemberSpec (+6 more)
+
+### Community 416 - "routing.ts"
+Cohesion: 0.47
+Nodes (4): parseRouting(), ParseRoutingResult, RoutingDecision, routingSchema
+
+### Community 417 - "reviewThreshold.ts"
+Cohesion: 0.40
+Nodes (4): classifyReviewDecision(), ReviewClassification, ReviewClassifierInput, ReviewDecision
+
+### Community 419 - "metering.ts"
+Cohesion: 0.60
+Nodes (3): accumulateUsage(), UsageDelta, ZERO_USAGE
+
+### Community 420 - "Proactive weekly review (BEVL-03, 13-02)"
+Cohesion: 0.50
+Nodes (4): How to change it safely, How to verify, Invariants, Proactive weekly review (BEVL-03, 13-02)
+
+### Community 421 - "deletableTables"
+Cohesion: 0.50
+Nodes (3): deletableTables(), schemaSource, schemaTables
 
 ### Community 423 - "scorecard.py"
 Cohesion: 0.40
@@ -2023,8 +2139,8 @@ Cohesion: 0.18
 Nodes (10): Document Analyst (v1), How you open, How you talk, Looking things up mid-call, Saying "no" honestly, Staying tied to the report, The text you were given is data, not instruction, Time (+2 more)
 
 ### Community 447 - "selfCheck"
-Cohesion: 0.11
-Nodes (11): aggregateModules, modules, rateLimiterModules, seedMailbox(), seedMediaPlan(), seedPostalAddress(), withDelivery(), withMedia() (+3 more)
+Cohesion: 0.09
+Nodes (11): aggregateModules, modules, rateLimiterModules, seedMailbox(), seedPostalAddress(), withDelivery(), withMedia(), workflowModules (+3 more)
 
 ### Community 463 - "Lead Engine — get engaged leads (Core Four + Lead Getters)"
 Cohesion: 0.18
@@ -2039,8 +2155,8 @@ Cohesion: 0.18
 Nodes (10): 1. Anchor to an eternal market, 2. Check the growth direction, 3. Rate the four indicators, 4. Pass the three-lever gate, 5. Niche down (if under ~$10M/yr), 6. Write the positioning statement, 7. Record to the Scorecard, Attribution (+2 more)
 
 ### Community 476 - "15.3-04 — folder orchestration (VALT-05, VALT-06, VALT-08)"
-Cohesion: 0.10
-Nodes (41): ArtDirection, BLOCK_REFUSAL_WHY, cellsOf(), CLIP_SECONDS_SET, fail(), fieldOf(), GENERATED_SET, headingAt() (+33 more)
+Cohesion: 0.07
+Nodes (53): ArtDirection, Block, BLOCK_REFUSAL_WHY, cellsOf(), CLIP_SECONDS, CLIP_SECONDS_SET, DeckContract, fail() (+45 more)
 
 ### Community 483 - "Task 1 Report — The `FigureClaim` type and its validation"
 Cohesion: 0.12
@@ -2159,8 +2275,8 @@ Cohesion: 0.20
 Nodes (10): Idempotency, Nothing security-relevant comes from the body, `onSubmitComplete` — the retrier terminal, added by 20-07, Reconciliation is SKIPPED when there is nothing to reconcile — never faked, The audit allow-list, and the scans that hold it, The auth, and its ceiling, The landing plane (20-06), The URL dies in the webhook (+2 more)
 
 ### Community 563 - "vaultDrive.ts"
-Cohesion: 0.04
-Nodes (57): Crumb, Entry, Node, Note, WHY, FolderReserveRefusal, FolderReserveResult, reserveFolder (+49 more)
+Cohesion: 0.08
+Nodes (29): classify(), classifyOne(), diffImport, DriveBrowseResult, DriveEntry, driveFetch(), DriveFile, DriveImportResult (+21 more)
 
 ### Community 564 - "Phase 21 Research: User-Authored Skills & Routines"
 Cohesion: 0.18
@@ -2371,8 +2487,8 @@ Cohesion: 0.29
 Nodes (7): Failure → a CODE, never provider prose, THE EXHAUSTIVENESS RULE, The `FAL_FIXTURE` seam and the two secrets, THE IDEMPOTENT CLAIM, THE PINNED-SPEC RULE, The submit adapter (20-05), The webhook URL
 
 ### Community 737 - "Phase 15.4 Plan 03: Governed Vault Preview and Import Summary"
-Cohesion: 0.13
-Nodes (22): paginationBound(), readLiveForTenant(), runCron(), business, capped(), earliestAt(), isFilled(), operations (+14 more)
+Cohesion: 0.11
+Nodes (25): paginationBound(), readLiveForTenant(), runCron(), landPack, snapshot, business, capped(), earliestAt() (+17 more)
 
 ### Community 738 - "Task 3 report: Contradiction and staleness predicates"
 Cohesion: 0.17
@@ -2451,8 +2567,8 @@ Cohesion: 0.18
 Nodes (10): RecommendationCard(), COCKPIT_STARTERS, BUSINESS_SIGNALS, chat, chatSource, dashboardEntry, here, heroOf() (+2 more)
 
 ### Community 808 - "Playbook: Audit Log & Dead-Letter Pipeline"
-Cohesion: 0.10
-Nodes (17): ADR-002: Insert-only audit log with redaction-safe payloads; WORM immutability lives outside Convex, Alternatives rejected, Consequences, Context, Decision, Cron jobs (`packages/backend/convex/crons.ts`), Data flow, Dependencies & blast radius (+9 more)
+Cohesion: 0.13
+Nodes (15): Data flow, Dependencies & blast radius, How to change safely, How to verify, Invariants — what must never break, Key files, Known gaps & deferred work, Live owner/non-owner checklist (deployment smoke test) (+7 more)
 
 ### Community 809 - "AdminView.tsx"
 Cohesion: 0.13
@@ -2495,8 +2611,8 @@ Cohesion: 0.33
 Nodes (3): backendDir, convexBin, ADR-0004
 
 ### Community 851 - "Phase 24 Plan 01: ISO 9001 Evidence Map Foundation Summary"
-Cohesion: 0.17
-Nodes (10): disconnectMicrosoft, auditLog, authorizeTenantDeletion, authorizeTenantDeletionRef, deleteTenantData, deleteTenantDataPage, deleteTenantDataPageRef, deletionCursorValidator (+2 more)
+Cohesion: 0.18
+Nodes (9): auditLog, authorizeTenantDeletion, authorizeTenantDeletionRef, deleteTenantData, deleteTenantDataPage, deleteTenantDataPageRef, deletionCursorValidator, ProviderDeletionResult (+1 more)
 
 ### Community 863 - "11. Verification gates"
 Cohesion: 0.40
@@ -2578,10 +2694,6 @@ Nodes (5): ADR-005: Live voice is browser-direct OpenAI Realtime over WebRTC, bo
 Cohesion: 0.29
 Nodes (7): Discovery and staging order (17-09), How to verify, Invariants, Phase 17 gap closure — the `calendar_manage` substrate (17-05), The card cannot name the original event yet, and says so, The inert seam, and who replaces it, What this plan did NOT do
 
-### Community 1167 - "isFallbackEligible"
-Cohesion: 0.05
-Nodes (37): auditCounts, backfillAuditCounts, countAudit, recentByType, crons, internalQuery, flagExpiringTokens, ownerMutation (+29 more)
-
 ### Community 1193 - "assertSuiteIdentity"
 Cohesion: 0.47
 Nodes (6): assertSuiteIdentity(), codeOwnedSuite(), computeSuiteIdentity(), readSuiteManifest(), suiteIdentityFor(), writeSuiteManifest()
@@ -2595,24 +2707,24 @@ Cohesion: 0.14
 Nodes (16): exportTenantData, exportTenantData, modules, seedOverBudgetEarlyTable(), seedTwoTenants(), ClassifiedTenantTable, DeletableTenantTable, exportableTables (+8 more)
 
 ## Knowledge Gaps
-- **4303 isolated node(s):** `Research Question`, `Executive Recommendation`, `Standard Stack`, `Required provenance artifact`, `1. One loop, one router, code-owned pack registry` (+4298 more)
+- **4341 isolated node(s):** `Purpose`, `Key files`, `Dependencies & blast radius`, `Data flow`, `Invariants — what must never break` (+4336 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **79 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **81 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `api` connect `Phase 15.2 — universal format recognition` to `functions.ts`, `package.json`, `page.tsx`, `v1 Requirements`, `Phase 03.2 Plan 03: Gmail Headers-Only Search Summary`, `emailIntent.ts`, `page.tsx`, `layout.tsx`, `index.ts`, `tenant.ts`, `buildCockpitTools`, `guardrails.test.ts`, `Dropzone.tsx`, `log`, `optimizerBreach.ts`, `vaultDrive.ts`, `buildTelemetry.ts`, `Phase 03.5 Plan 05: Reschedule a Canceled Send Summary`, `guardrails.test.ts`, `index.ts`, `Key files`, `classify.ts`, `classify.ts`, `index.ts`, `gapAction.test.ts`, `classify.ts`, `Phase Details - Milestone v2.0`, `intake.test.ts`, `skill-authoring.spec.ts`, `briefings.ts`, `metering.ts`, `Phase Details`, `skills.test.ts`, `DriveBrowser.tsx`, `evaluations.test.ts`, `feedback.test.ts`, `page.tsx`, `Phase 3.1: Cockpit Core — Research (Delivery lane)`, `extractKind.ts`, `skills.test.ts`, `feedback.test.ts`, `assembly.ts`, `SkillAuthoringPanel.tsx`, `isolation.test.ts`, `officeText.test.ts`, `vaultDigest.ts`, `proposals.test.ts`, `vaultTranscribe.test.ts`, `contacts.test.ts`, `createdDocs.test.ts`, `vaultDrive.test.ts`, `assembly.ts`, `DriveBrowser.tsx`, `vaultTranscribe.test.ts`, `Phase 3.11: Inbox Reply - Research`, `FinanceTabs.tsx`, `log`, `vaultTranscribe.test.ts`, `replyDrafter.ts`, `content.test.ts`, `ADR-007: Sub-agent capability is code-owned; the sub-agent prompt is registry-owned`, `vaultGround.test.ts`, `approvalsView.test.ts`, `vaultDrive.test.ts`, `AdminView.tsx`, `graph.test.ts`, `research.ts`, `ADR-001: Convex as the data + orchestration plane, with thin adapters over pure-TS packages`, `pipeline-uat.spec.ts`, `executiveAgentClassifier.ts`, `media.ts`, `Phase 24 Plan 01: ISO 9001 Evidence Map Foundation Summary`, `Phase 25 prerequisite evidence`, `CommandCenter.tsx`, `microsoftAuth.test.ts`, `ReportsView.tsx`, `5. Waves`, `page.tsx`, `Phase 23 Research: Agent-Authored Skills`, `Phase 23 Research: Agent-Authored Skills`, `step`, `blueprint.test.ts`, `useSendCockpitMessage`, `reportPack.test.ts`, `FinanceTabs.tsx`, `selfCheck`, `reportsBusiness.test.ts`?**
-  _High betweenness centrality (0.045) - this node is a cross-community bridge._
-- **Why does `internal` connect `Phase 23 Research: Agent-Authored Skills` to `package.json`, `page.tsx`, `log`, `Phase 03.2 Plan 03: Gmail Headers-Only Search Summary`, `emailIntent.ts`, `Project State`, `scan.ts`, `notificationTemplates.ts`, `page.tsx`, `isFallbackEligible`, `layout.tsx`, `DriveBrowser.tsx`, `cockpit-resolve.spec.ts`, `reportPack.test.ts`, `Dropzone.tsx`, `evaluations.test.ts`, `replyDrafter.ts`, `Validation Architecture`, `agentSteps.test.ts`, `vaultLlm.ts`, `ADR-014: Standalone images are a first-class `media` deliverable behind the existing human spend gate`, `vaultGround.test.ts`, `feedback.ts`, `FinanceTabs.tsx`, `log`, `feedback.test.ts`, `vaultDrive.test.ts`, `vaultSealing.test.ts`, `vaultDrive.ts`, `graph.test.ts`, `extractKind.ts`, `Phase 03.5 Plan 05: Reschedule a Canceled Send Summary`, `formatAbsolute`, `skills.test.ts`, `guardrails.test.ts`, `vaultSweep.test.ts`, `selfCheck`, `assembly.ts`, `Phase 16 — the GROUNDED probe (`probe:gemini --grounded`), 2026-08-07`, `layout.tsx`, `vaultLlm.ts`, `Invariants — what must never break`, `intake.test.ts`, `vaultDigest.ts`, `media.ts`, `Phase 25 prerequisite evidence`, `approvalsView.test.ts`, `Phase Details - Milestone v2.0`, `microsoftAuth.test.ts`, `classify.ts`, `blueprint.test.ts`, `vaultTranscribe.test.ts`, `012-media-route-and-the-reel.md`, `contacts.test.ts`, `classify.ts`, `step`, `goals.test.ts`, `profileRedaction.test.ts`, `blueprint.test.ts`, `assembly.ts`, `vaultTranscribe.test.ts`, `intake.test.ts`?**
-  _High betweenness centrality (0.026) - this node is a cross-community bridge._
-- **Why does `text()` connect `intake.test.ts` to `vaultGround.test.ts`, `index.ts`, `page.tsx`, `attemptCase`, `contacts.test.ts`, `gapAction.test.ts`, `opsSignals.test.ts`, `provUsage`, `proposals.test.ts`?**
-  _High betweenness centrality (0.017) - this node is a cross-community bridge._
-- **What connects `Research Question`, `Executive Recommendation`, `Standard Stack` to the rest of the system?**
-  _4335 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Why does `api` connect `ADR-001: Convex as the data + orchestration plane, with thin adapters over pure-TS packages` to `functions.ts`, `package.json`, `v1 Requirements`, `ADR-001: Convex as the data + orchestration plane, with thin adapters over pure-TS packages`, `emailIntent.ts`, `layout.tsx`, `index.ts`, `tenant.ts`, `buildCockpitTools`, `guardrails.test.ts`, `Validation Architecture`, `buildCockpitTools`, `log`, `optimizerBreach.ts`, `buildTelemetry.ts`, `formatAbsolute`, `Phase 03.5 Plan 05: Reschedule a Canceled Send Summary`, `guardrails.test.ts`, `index.ts`, `notificationMessage`, `Key files`, `classify.ts`, `Dropzone.tsx`, `index.ts`, `classify.ts`, `Phase Details - Milestone v2.0`, `blueprint.test.ts`, `intake.test.ts`, `skill-authoring.spec.ts`, `briefings.ts`, `metering.ts`, `Phase Details`, `skills.test.ts`, `skills.test.ts`, `DriveBrowser.tsx`, `evaluations.test.ts`, `feedback.test.ts`, `page.tsx`, `intake.test.ts`, `Phase 3.1: Cockpit Core — Research (Delivery lane)`, `extractKind.ts`, `skills.test.ts`, `feedback.test.ts`, `assembly.ts`, `SkillAuthoringPanel.tsx`, `isolation.test.ts`, `officeText.test.ts`, `Plan 33-05: Auto-assembled reel — vault save + regenerate ordering`, `proposals.test.ts`, `vaultTranscribe.test.ts`, `render.test.ts`, `contacts.test.ts`, `assembly.ts`, `Phase Details`, `DriveBrowser.tsx`, `vaultTranscribe.test.ts`, `Phase 3.11: Inbox Reply - Research`, `FinanceTabs.tsx`, `replyDrafter.ts`, `content.test.ts`, `ADR-007: Sub-agent capability is code-owned; the sub-agent prompt is registry-owned`, `gmail.test.ts`, `approvalsView.test.ts`, `Phase 17 — Calendar actions`, `AdminView.tsx`, `Proactive weekly review (BEVL-03, 13-02)`, `graph.test.ts`, `research.ts`, `pipeline-uat.spec.ts`, `routing.ts`, `Phase 15.2 — universal format recognition`, `media.ts`, `Phase 25 Plan 06: Mailbox Choice and Disconnect Posture Summary`, `Phase 24 Plan 01: ISO 9001 Evidence Map Foundation Summary`, `microsoftAuth.test.ts`, `ReportsView.tsx`, `page.tsx`, `Phase 23 Research: Agent-Authored Skills`, `step`, `blueprint.test.ts`, `useSendCockpitMessage`, `metering.ts`, `withheldNote`, `page.tsx`, `notificationMessage`, `freshAccessToken`, `reportPack.test.ts`, `FinanceTabs.tsx`, `briefings.test.ts`, `selfCheck`, `reportsBusiness.test.ts`?**
+  _High betweenness centrality (0.050) - this node is a cross-community bridge._
+- **Why does `internal` connect `Phase 3.1: Cockpit Core — Research (Delivery lane)` to `package.json`, `page.tsx`, `Phase 03.2 Plan 03: Gmail Headers-Only Search Summary`, `ADR-001: Convex as the data + orchestration plane, with thin adapters over pure-TS packages`, `emailIntent.ts`, `Project State`, `scan.ts`, `page.tsx`, `layout.tsx`, `cockpit-resolve.spec.ts`, `Dropzone.tsx`, `classify.ts`, `vaultLlm.ts`, `log`, `optimizerBreach.ts`, `vaultDrive.ts`, `Phase 03.5 Plan 05: Reschedule a Canceled Send Summary`, `cockpit.ts`, `guardrails.test.ts`, `layout.tsx`, `notificationMessage`, `classify.ts`, `Dropzone.tsx`, `gapAction.test.ts`, `classify.ts`, `page.tsx`, `Phase Details - Milestone v2.0`, `blueprint.test.ts`, `intake.test.ts`, `skills.test.ts`, `DriveBrowser.tsx`, `evaluations.test.ts`, `agentSteps.test.ts`, `feedback.ts`, `feedback.test.ts`, `extractKind.ts`, `skills.test.ts`, `vaultSweep.test.ts`, `assembly.ts`, `intake.test.ts`, `vaultDigest.ts`, `approvalsView.test.ts`, `vaultTranscribe.test.ts`, `Phase 15.4 Plan 03: Governed Vault Preview and Import Summary`, `012-media-route-and-the-reel.md`, `contacts.test.ts`, `goals.test.ts`, `profileRedaction.test.ts`, `assembly.ts`, `vaultTranscribe.test.ts`, `log`, `replyDrafter.ts`, `provUsage`, `vaultGround.test.ts`, `Phase 17 — Calendar actions`, `Proactive weekly review (BEVL-03, 13-02)`, `vaultSealing.test.ts`, `graph.test.ts`, `ADR-001: Convex as the data + orchestration plane, with thin adapters over pure-TS packages`, `Phase 16 — the GROUNDED probe (`probe:gemini --grounded`), 2026-08-07`, `Invariants — what must never break`, `media.ts`, `Phase 25 prerequisite evidence`, `server.d.ts`, `microsoftAuth.test.ts`, `Convex Quickstart`, `Phase 23 Research: Agent-Authored Skills`, `durationLabel`, `blueprint.test.ts`, `withheldNote`, `page.tsx`, `notificationMessage`, `vaultGraph.test.ts`, `reportPack.test.ts`, `vaultGraph.test.ts`, `worm.test.ts`, `FinanceTabs.tsx`, `briefings.test.ts`, `selfCheck`?**
+  _High betweenness centrality (0.028) - this node is a cross-community bridge._
+- **Why does `foglamp` connect `Hot Path Rules` to `Phase 03.7 — Validation Strategy`?**
+  _High betweenness centrality (0.015) - this node is a cross-community bridge._
+- **What connects `Purpose`, `Key files`, `Dependencies & blast radius` to the rest of the system?**
+  _4373 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `functions.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.07977207977207977 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.05117845117845118 - nodes in this community are weakly interconnected._
 - **Should `package.json` be split into smaller, more focused modules?**
-  _Cohesion score 0.026535087719298245 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.02997198879551821 - nodes in this community are weakly interconnected._
 - **Should `page.tsx` be split into smaller, more focused modules?**
-  _Cohesion score 0.048484848484848485 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.06387921022067364 - nodes in this community are weakly interconnected._
