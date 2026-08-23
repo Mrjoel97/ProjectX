@@ -123,13 +123,13 @@ catalogue or parallel runtime.
 **Plans:** 9 plans across 5 waves
 
 Plans:
-- [ ] 27-01-PLAN.md — Pin upstream sources, Apache-2.0 provenance and reviewed-update controls (Wave 1)
-- [ ] 27-02-PLAN.md — Native pack contracts, code-owned grants, candidate lifecycle and fixture runner (Wave 1)
-- [ ] 27-03-PLAN.md — Privacy-bounded workflow outcome measurement (Wave 2)
-- [ ] 27-04-PLAN.md — Business Pulse and Campaign Plan adaptations/evals (Wave 2)
-- [ ] 27-05-PLAN.md — Complaint Response and Sales Call Prep adaptations/evals (Wave 2)
-- [ ] 27-06-PLAN.md — Process/SOP and Brand Review adaptations/evals (Wave 2)
-- [ ] 27-07-PLAN.md — Executive Agent runtime and real terminal-event integration (Wave 3)
+- [x] 27-01-PLAN.md — Pin upstream sources, Apache-2.0 provenance and reviewed-update controls (Wave 1)
+- [x] 27-02-PLAN.md — Native pack contracts, code-owned grants, candidate lifecycle and fixture runner (Wave 1)
+- [x] 27-03-PLAN.md — Privacy-bounded workflow outcome measurement (Wave 2)
+- [x] 27-04-PLAN.md — Business Pulse and Campaign Plan adaptations/evals (Wave 2)
+- [x] 27-05-PLAN.md — Complaint Response and Sales Call Prep adaptations/evals (Wave 2)
+- [x] 27-06-PLAN.md — Process/SOP and Brand Review adaptations/evals (Wave 2)
+- [x] 27-07-PLAN.md — Executive Agent runtime and real terminal-event integration (Wave 3)
 - [ ] 27-08-PLAN.md — Final provenance/parity, candidate publication and exact-version evals (Wave 4)
 - [ ] 27-09-PLAN.md — Authenticated browser evidence, owner gate, activation and rollback (Wave 5)
 

@@ -33,7 +33,7 @@ import { DEFAULT_MODEL } from "@pikar/cost";
 import { paginationOptsValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
 import { api, components, internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { type ActionCtx, internalMutation, type MutationCtx } from "./_generated/server";
 // 2026-08-10: the FINANCE terminal, direct-called for exactly the reasons the CRM one below is.
 import { applyFinanceClaims, type FinanceApplyRefusal } from "./cash";
@@ -87,6 +87,190 @@ async function notifyIfAgentTimeout(ctx: ActionCtx, tenantId: string, e: unknown
   }
 }
 
+// ── Workflow-pack plan decisions (27-07, PACK-04) ─────────────────────────────────────────────
+//
+// A pack run and an Executive Agent turn SHARE the thread's single `plans` row, so "this plan was
+// approved" is not by itself evidence that a pack produced it. Attribution therefore keys on the
+// `plan_proposed` event a pack run wrote WHILE IT WAS IN FLIGHT — not on the plan row and not on
+// the thread. Consequences, both deliberate:
+//
+//   * An analysis-only pack (business-pulse holds no `proposePlan`) can never be credited with a
+//     later email approval on the same thread, because it never staged anything.
+//   * An ordinary executive plan on a thread that once ran a pack emits nothing here.
+//
+// `customer-complaint` is the only pack granted `proposePlan` (@pikar/core), so today it is the only
+// pack that can reach these rows at all. That is the honest denominator, not a gap.
+
+/** Bounded page — a plan row accumulates a handful of pack events, never a stream. */
+const PACK_PLAN_EVENT_SCAN = 50;
+
+type PackRunRef = { packId: Doc<"workflowPackEvents">["packId"]; runId: string };
+
+/**
+ * Which pack run, if any, owns a decision on this plan row: `live` is a run still in flight (nothing
+ * terminal written yet — the only state in which a fresh propose belongs to a pack), `staged` is the
+ * run that actually left the row awaiting human approval.
+ */
+async function packRunsForPlan(
+  ctx: MutationCtx,
+  tenantId: string,
+  planId: Id<"plans">,
+): Promise<{ live: PackRunRef | null; staged: PackRunRef | null }> {
+  const rows = await ctx.db
+    .query("workflowPackEvents")
+    .withIndex("by_tenant_plan", (q) => q.eq("tenantId", tenantId).eq("planId", planId))
+    .order("desc")
+    .take(PACK_PLAN_EVENT_SCAN);
+  const newest = rows[0];
+  const proposed = rows.find((r) => r.event === "plan_proposed");
+  const ref = (r: Doc<"workflowPackEvents">): PackRunRef => ({ packId: r.packId, runId: r.runId });
+  return {
+    live:
+      newest && newest.event !== "run_completed" && newest.event !== "run_failed"
+        ? ref(newest)
+        : null,
+    staged: proposed ? ref(proposed) : null,
+  };
+}
+
+/**
+ * Emit ONE plan-decision event, or nothing at all when no pack owns this row. Routed through
+ * `workflowPackEventLog.record` rather than a direct insert, because that module is the SOLE write
+ * surface for an `audit_immutable` table and a second inserter would make the classification a lie.
+ */
+async function recordPackPlanDecision(
+  ctx: MutationCtx,
+  tenantId: string,
+  planId: Id<"plans">,
+  event: "plan_proposed" | "plan_edited" | "plan_approved" | "plan_rejected",
+): Promise<void> {
+  const runs = await packRunsForPlan(ctx, tenantId, planId);
+  // A first propose belongs to the run that is executing RIGHT NOW; every later decision belongs to
+  // the run that staged the row, which may be several turns behind.
+  const owner = event === "plan_proposed" ? runs.live : runs.staged;
+  if (!owner) return;
+  await ctx.runMutation(internal.workflowPackEventLog.record, {
+    tenantId,
+    packId: owner.packId,
+    runId: owner.runId,
+    event,
+    planId,
+  });
+}
+
+/**
+ * The thread + its single `plans` row, created on first use. Extracted verbatim from
+ * `sendCockpitMessage` so the pack driver below reaches the SAME row rather than minting a second
+ * one: `plans.byThread` is a `by_thread` unique read, so two creators would make it throw.
+ *
+ * `runSpecialistTurn` REQUIRES a `planId` even for an analysis-only run. The row starts at
+ * `collecting` with no `kind`, which is exactly right for one: nothing arms and nothing delivers.
+ */
+async function ensureThreadAndPlan(
+  ctx: ActionCtx & { tenantId: string },
+  threadId: string | undefined,
+  firstMessage: string,
+): Promise<{ threadId: string; planId: Id<"plans"> }> {
+  let tid = threadId;
+  if (!tid) {
+    // Title the thread from the first message so the header's past-chats menu (listThreads)
+    // has a real label across reloads — the session tab strip is derived the same way.
+    const title = firstMessage.trim().replace(/\s+/g, " ").slice(0, 60) || "New chat";
+    const created = await cockpitAgent.createThread(ctx, { userId: ctx.tenantId, title });
+    tid = created.threadId;
+    await ctx.runMutation(internal.plans.insertPlan, { tenantId: ctx.tenantId, threadId: tid });
+  }
+  const plan = await ctx.runQuery(api.plans.byThread, { threadId: tid });
+  if (!plan) throw new Error("cockpit: plan row missing for thread");
+  return { threadId: tid, planId: plan._id };
+}
+
+/**
+ * Run ONE curated knowledge-work pack (27-07, PACK-02/PACK-03) — `sendCockpitMessage`'s shape with
+ * one substitution: the governed loop runs the pack body under the pack's code-owned tool allow-list
+ * instead of the Executive Agent's full record. Everything else (the thread, the plan row, the
+ * `thinking` trace floor, the saved turns, the safe error reply) is the same driver.
+ *
+ * It is a SEPARATE entry point rather than a flag on `sendCockpitMessage`, because a pack turn is a
+ * different agent: an allow-listed one, which `runAgentLoop` makes structurally unable to dispatch a
+ * specialist or author a skill. Folding it into the conversation action would put that distinction
+ * behind an argument the caller could forget.
+ */
+export const startWorkflowPack = tenantAction({
+  args: {
+    /** Validated by `resolveWorkflowPack` in the binding — an unknown id is REFUSED, never defaulted. */
+    packId: v.string(),
+    threadId: v.optional(v.string()),
+    text: v.string(),
+    /** Pairs the run back to the recommendation card that offered it (27-09). */
+    recommendationId: v.optional(v.string()),
+  },
+  handler: async (
+    ctx,
+    { packId, threadId, text, recommendationId },
+  ): Promise<{ threadId: string; ok: boolean; outcome?: string }> => {
+    const { threadId: tid, planId } = await ensureThreadAndPlan(ctx, threadId, text);
+    await cockpitAgent.saveMessage(ctx, { threadId: tid, prompt: text, skipEmbeddings: true });
+
+    // The trace floor, for the same reason `sendCockpitMessage` writes one: the registry load and
+    // the first model round-trip both happen before any tool event could fire, and a pack turn that
+    // calls no tool at all would otherwise show nothing for its whole duration. `runId` is the
+    // `turnId`, so this row joins the loop's own step rows and the run's `spendEvents`.
+    const runId = crypto.randomUUID();
+    await ctx.runMutation(internal.agentSteps.record, {
+      tenantId: ctx.tenantId,
+      threadId: tid,
+      turnId: runId,
+      stepKey: "thinking",
+      tool: "thinking",
+      startedAt: Date.now(),
+    });
+    let reply: string;
+    let outcome: string | undefined;
+    let ok = true;
+    try {
+      const res = await ctx.runAction(internal.workflowPackBinding.runWorkflowPack, {
+        tenantId: ctx.tenantId,
+        packId,
+        threadId: tid,
+        planId,
+        text,
+        runId,
+        ...(recommendationId === undefined ? {} : { recommendationId }),
+      });
+      if (res.ok) {
+        reply = res.reply;
+        outcome = res.outcome;
+      } else {
+        // A governed refusal, surfaced as a reply rather than a throw. It names no pack id back to
+        // the caller — an id the system refused is an id it must not echo into the thread.
+        ok = false;
+        reply = "That workflow isn't available. Pick one of the workflows shown in your workspace.";
+      }
+    } catch (e) {
+      ok = false;
+      reply = "Something went wrong on my side — nothing was sent. Please try that again.";
+      await notifyIfAgentTimeout(ctx, ctx.tenantId, e);
+    } finally {
+      // `finally`, for the reason `sendCockpitMessage` documents: a step that starts must always end,
+      // including on the governed-stop path that returns as DATA and never touches the catch.
+      await ctx.runMutation(internal.agentSteps.finish, {
+        tenantId: ctx.tenantId,
+        turnId: runId,
+        stepKey: "thinking",
+        phase: "done",
+        endedAt: Date.now(),
+      });
+    }
+    await cockpitAgent.saveMessage(ctx, {
+      threadId: tid,
+      message: { role: "assistant", content: reply },
+      skipEmbeddings: true,
+    });
+    return { threadId: tid, ok, ...(outcome === undefined ? {} : { outcome }) };
+  },
+});
+
 /**
  * The conversation turn (SC2/SC3). Thin driver over the governed Executive Agent tool-loop:
  * (1) ensure a thread + its single plans row on the first turn; (2) save the user's turn to the
@@ -107,17 +291,7 @@ export const sendCockpitMessage = tenantAction({
   },
   handler: async (ctx, { threadId, text, clientContext }): Promise<{ threadId: string }> => {
     // 1. Ensure a thread + its single plans row (first turn creates both; userId = tenantId).
-    let tid = threadId;
-    if (!tid) {
-      // Title the thread from the first message so the header's past-chats menu (listThreads)
-      // has a real label across reloads — the session tab strip is derived the same way.
-      const title = text.trim().replace(/\s+/g, " ").slice(0, 60) || "New chat";
-      const created = await cockpitAgent.createThread(ctx, { userId: ctx.tenantId, title });
-      tid = created.threadId;
-      await ctx.runMutation(internal.plans.insertPlan, { tenantId: ctx.tenantId, threadId: tid });
-    }
-    const plan = await ctx.runQuery(api.plans.byThread, { threadId: tid });
-    if (!plan) throw new Error("cockpit: plan row missing for thread");
+    const { threadId: tid, planId } = await ensureThreadAndPlan(ctx, threadId, text);
 
     // 2. Fetch the prior turns BEFORE saving the current one (UAT-E) — otherwise the current turn
     //    appears twice (as the last history row AND as "The user says:"). A fresh thread yields [].
@@ -151,7 +325,7 @@ export const sendCockpitMessage = tenantAction({
       const res = await ctx.runAction(internal.llm.runCockpitAgent, {
         tenantId: ctx.tenantId,
         threadId: tid,
-        planId: plan._id,
+        planId,
         text,
         clientContext,
         turnId,
@@ -507,6 +681,9 @@ export const proposeEmailPlan = internalMutation({
         reviseCount: regenerateCount + 1,
         skillVersion,
       });
+      // 27-07: a redraft of a pack-staged plan IS the pilot's `plan_edited` decision — the user read
+      // the draft and asked for something different. Inert for every plan no pack staged.
+      await recordPackPlanDecision(ctx, plan.tenantId, planId, "plan_edited");
       return undefined;
     }
     await ctx.db.patch(planId, {
@@ -517,6 +694,9 @@ export const proposeEmailPlan = internalMutation({
       status: "proposed",
       skillVersion,
     });
+    // Attributed only while a pack run is IN FLIGHT on this row (see `recordPackPlanDecision`), so a
+    // later Executive Agent propose on the same thread is not credited to the pack.
+    if (plan) await recordPackPlanDecision(ctx, plan.tenantId, planId, "plan_proposed");
     return undefined;
   },
 });
@@ -975,6 +1155,14 @@ export const executePlan = tenantMutation({
     // CAS: flip first. A second concurrent tx re-reads "approved" above and no-ops.
     await ctx.db.patch(planId, { status: "approved" });
 
+    // 27-07: the ONE place a pack-staged plan can be approved. `proposePlan` is granted to exactly
+    // one pack (`customer-complaint`) and it writes an EMAIL plan, so this arm is the only reachable
+    // approval terminal for the pilot — and the emission sits AFTER the CAS flip and after every
+    // governed stop above it (gmail_not_connected, send_time_too_far, all_recipients_suppressed),
+    // so a refused approve records nothing. Emitting at the top of `executePlan` instead would count
+    // each of those refusals as an approval. Inert for every plan no pack staged.
+    await recordPackPlanDecision(ctx, ctx.tenantId, planId, "plan_approved");
+
     const mode = plan.mode ?? "individual";
     const subject = plan.subject ?? "";
     const body = plan.body ?? "";
@@ -1150,6 +1338,8 @@ export const discardPlan = tenantMutation({
       actor: ctx.tenantId,
       payload: { planId, kind: "discarded" },
     });
+    // 27-07: the pilot's `plan_rejected`. Inert for every plan no pack staged.
+    await recordPackPlanDecision(ctx, ctx.tenantId, planId, "plan_rejected");
     return { ok: true, discarded: true };
   },
 });

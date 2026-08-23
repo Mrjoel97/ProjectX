@@ -1,5 +1,15 @@
 # Playbook: Persona Onboarding & Business Profile
 
+> Last verified: 2026-08-23 (27-07 — **ONE EXPORT, NO BEHAVIOUR CHANGE.** `onboardingCompletedAt`
+> joins `currentProfileDoc` in `convex/onboarding.ts`, reading the same `by_tenant_kind` index with
+> the same `failed` filter. It returns the OLDEST committed profile doc's `createdAt`, deliberately
+> NOT the newest: onboarding completes once, while `/dashboard/profile` edits the same concept for
+> the life of the account, so reading the newest would move the origin forward with every edit and
+> make any measure anchored to onboarding shrink. Its first consumer is Phase 27's
+> `timeToFirstUsefulOutcome`, which would otherwise report a real earlier outcome as
+> `useful_precedes_onboarding` — a reason reserved for a broken clock.)
+>
+
 > Last verified: 2026-08-22 (26-14 — **ONE EXPORT, NO BEHAVIOUR CHANGE.** `readLiveForTenant` (the
 > plain function behind the `liveForTenant` internalQuery) is now exported so `reportsBusiness.ts`
 > can read the live blueprint inside a `tenantQuery` — a tenantQuery cannot `runQuery` an internal

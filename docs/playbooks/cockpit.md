@@ -1,3 +1,28 @@
+> Last verified: 2026-08-23 (27-07 — **A SECOND ENTRY POINT ON THE SAME DRIVER.**
+> `cockpit.startWorkflowPack` is `sendCockpitMessage`'s shape with ONE substitution: it drives
+> `internal.workflowPackBinding.runWorkflowPack` (the governed loop under a pack's code-owned tool
+> allow-list) instead of `internal.llm.runCockpitAgent`. Same thread, same single `plans` row, same
+> `thinking` trace floor, same safe error reply, same `finally`. It is a SEPARATE action rather than
+> a flag, because an allow-listed agent is structurally unable to dispatch a specialist or author a
+> skill (`llm.ts` derives both grants from `toolNames === undefined`) and that distinction must not
+> sit behind an argument a caller can forget.
+>
+> `ensureThreadAndPlan` is extracted from `sendCockpitMessage` verbatim and shared by both, so the
+> pack driver reaches the SAME `plans` row. `plans.byThread` is a `by_thread` unique read — two
+> creators would make it throw.
+>
+> **Three pack plan-decision emissions were added to existing terminals, and each is inert unless a
+> pack run staged that plan row.** `proposeEmailPlan` (both branches), `executePlan`'s EMAIL-arm CAS
+> flip, and `discardPlan`. The approve emission sits AFTER the CAS and after every governed stop
+> above it (`gmail_not_connected`, `send_time_too_far`, `no_postal_address`,
+> `all_recipients_suppressed`); emitting at the top of `executePlan` would count each of those
+> refusals as an approval. `customer-complaint` is the only pack granted `proposePlan`, so it is the
+> only pack that can reach these rows at all.
+>
+> `llm.ts` is BYTE-UNCHANGED by this plan. The binding calls the exported `runSpecialistTurn` and
+> observes created artifacts through `internal.vaultSources.latestCreated`, so no tool wrapper and no
+> loop argument moved.)
+>
 > Last verified: 2026-08-23 (NOT MY CHANGE — recording ONE verified fact about the in-progress
 > foglamp tracing work that touches `llm.ts` and `dispatch.ts`. The tracing work itself is
 > uncommitted, unreviewed here, and belongs to another session; this entry does not vouch for it.

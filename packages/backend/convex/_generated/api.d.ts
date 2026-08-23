@@ -108,7 +108,9 @@ import type * as vaultTranscribe from "../vaultTranscribe.js";
 import type * as voice from "../voice.js";
 import type * as voiceDoc from "../voiceDoc.js";
 import type * as voiceToken from "../voiceToken.js";
+import type * as workflowPackBinding from "../workflowPackBinding.js";
 import type * as workflowPackEventLog from "../workflowPackEventLog.js";
+import type * as workflowPackOutcomes from "../workflowPackOutcomes.js";
 import type * as worm from "../worm.js";
 import type * as wormCursor from "../wormCursor.js";
 
@@ -219,7 +221,9 @@ declare const fullApi: ApiFromModules<{
   voice: typeof voice;
   voiceDoc: typeof voiceDoc;
   voiceToken: typeof voiceToken;
+  workflowPackBinding: typeof workflowPackBinding;
   workflowPackEventLog: typeof workflowPackEventLog;
+  workflowPackOutcomes: typeof workflowPackOutcomes;
   worm: typeof worm;
   wormCursor: typeof wormCursor;
 }>;

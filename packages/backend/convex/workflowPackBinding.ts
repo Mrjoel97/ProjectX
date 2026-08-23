@@ -1,0 +1,385 @@
+"use node";
+// ^ REQUIRED. This module imports `runSpecialistTurn` from `llm.ts` and `traced` from
+// `lib/foglamp.ts`, and foglamp reaches `node:async_hooks`. A default-runtime module importing
+// either fails to BUNDLE — a deploy error, not a caught exception (see lib/foglamp.ts). It also
+// means this file may hold ONLY actions; every query it needs lives in a V8 module.
+
+// The workflow-pack BINDING (Phase 27, PACK-02/PACK-03).
+//
+// THIS IS NOT A RUNTIME, AND THE FILE NAME WAS CHOSEN TO SAY SO. `runSpecialistTurn` (`llm.ts`)
+// ALREADY IS the swappable `(skill body, tool-set)` seam: it loads the section-5 registry body
+// itself (fail-closed on NO_ACTIVE_SKILL / NO_SUCH_SKILL_VERSION) and `runAgentLoop` already
+// filters the built tool record to the exact `toolNames`. Everything here is the map from a closed
+// pack id to `{ skillName, toolNames, prompt, planId }`, plus the governed gate, the preflight, the
+// trace binding and the event terminals. There is NO second agent loop, NO router and NO second
+// store in this file, and `workflowPackBinding.test.ts` asserts that structurally.
+//
+// A PACK IS A LEAF AGENT, BY CONSTRUCTION (owner decision B, 2026-08-23). `runAgentLoop` derives
+// `grantDispatch: toolNames === undefined` and `grantSkillAuthoring: toolNames === undefined`, and
+// a pack ALWAYS supplies an array — so specialist dispatch, skill authoring and the paid image door
+// are never BUILT for a pack, let alone withheld by wording. Campaign Plan therefore PRODUCES A
+// PLAN; it does not orchestrate the work in the plan. Do not try to re-grant dispatch here: reading
+// `toolNames.includes(...)` at that gate would let an allow-list ask for the capability by name.
+//
+// `runId` IS THE CORRELATION ID, and that is what makes cost and latency joinable without this
+// plane ever re-emitting them. It is passed as `turnId`, which `runAgentLoop` uses as the
+// `spendEvents.correlationId` and as the `agentSteps.turnId` for the whole run.
+// `workflowPackOutcomes.ts` joins on exactly that. See `PACK_DERIVED_METRIC_SOURCES` in @pikar/core.
+
+import {
+  DRIVE_READONLY_SCOPE,
+  hasScope,
+  MISSING_SOURCE_UNLOCK,
+  PACK_SOURCE_LABEL,
+  type PackOutcome,
+  type PackPreflight,
+  packPreflight,
+  type ReachablePackSource,
+  resolveWorkflowPack,
+  type SourceState,
+  toolsForWorkflowPack,
+  type WorkflowPackId,
+} from "@pikar/core";
+import type { GenericActionCtx } from "convex/server";
+import { v } from "convex/values";
+import { internal } from "./_generated/api";
+import type { DataModel, Id } from "./_generated/dataModel";
+import { internalAction } from "./_generated/server";
+import { traced } from "./lib/foglamp";
+import { runSpecialistTurn } from "./llm";
+
+/** A governed stop RETURNS; only bugs throw. The `DispatchResult` posture, one lane over. */
+export type PackRunResult =
+  | { ok: false; reason: "unknown_pack" }
+  | {
+      ok: true;
+      runId: string;
+      packId: WorkflowPackId;
+      reply: string;
+      outcome: PackOutcome;
+      costUsd: number;
+      skillVersion?: number;
+      blocked?: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted";
+    };
+
+/** The paused reply for a governed stop — `llm.ts`'s `PAUSED_REPLY` contract, one lane over. */
+const PACK_PAUSED_REPLY =
+  "I've paused for a moment — I'm briefly unavailable. Please try that again shortly.";
+
+/**
+ * Resolve, IN CODE and BEFORE the model call, which of this tenant's connection-gated planes can
+ * answer. The model is TOLD the result; it never decides which sources exist.
+ *
+ * ONLY the connection-gated planes are probed, deliberately. `vault` and `web` need no tenant grant
+ * — an empty vault, or a search that finds nothing, is a result the tool itself reports and the body
+ * already has to state honestly, so a second "is it empty" probe here would duplicate that at the
+ * cost of a read on every run. What preflight is FOR is the gap a tool cannot report gracefully: a
+ * mailbox, a Drive or a calendar that was never connected, which otherwise surfaces mid-run as a
+ * tool error after the money is spent.
+ *
+ * `partial` means "the plane answered, with nothing in it". `packPreflight` counts only
+ * `unavailable` as missing, so an empty calendar is not reported as a capability gap.
+ */
+async function probeSources(
+  ctx: GenericActionCtx<DataModel>,
+  tenantId: string,
+): Promise<Partial<Record<ReachablePackSource, SourceState>>> {
+  const [gmailConnected, token, calendarEvents, financeLine] = await Promise.all([
+    ctx.runQuery(internal.gmailAuth.hasGmailConnection, { tenantId }),
+    ctx.runQuery(internal.gmailAuth.getTokens, { tenantId }),
+    ctx.runQuery(internal.calendarEvents.listManageable, { tenantId }),
+    ctx.runQuery(internal.cash.financeSpineFor, { tenantId }),
+  ]);
+  // The SAME ordering `vaultDrive.ts` uses and for the same reason: a grant issued before the Drive
+  // scope widening refreshes perfectly happily, so `connected` alone would report Drive readable to
+  // a tenant every Drive call will 403.
+  const driveReady = token !== null && hasScope(token.scope, DRIVE_READONLY_SCOPE);
+  return {
+    // No tenant grant gates either of these; emptiness is the tool's own honest answer.
+    vault: "available",
+    web: "available",
+    inbox: gmailConnected ? "available" : "unavailable",
+    drive: driveReady ? "available" : "unavailable",
+    calendar: calendarEvents.events.length > 0 ? "available" : "partial",
+    "finance-inputs": financeLine === null ? "unavailable" : "available",
+  };
+}
+
+/**
+ * The code-owned preflight paragraph. Built from `PACK_SOURCE_LABEL` and `MISSING_SOURCE_UNLOCK` so
+ * six bodies cannot each name a source differently, and placed ABOVE the user's request so the
+ * untrusted text stays the FINAL line (the `buildTurnPrompt` convention).
+ */
+export function preflightPrompt(pre: PackPreflight, request: string): string {
+  const lines = pre.sources.map(({ source, state }) => `- ${PACK_SOURCE_LABEL[source]}: ${state}`);
+  const unlocks = pre.missingKnown.map(
+    (s) => `- ${PACK_SOURCE_LABEL[s]} — would need ${MISSING_SOURCE_UNLOCK[s]}`,
+  );
+  return [
+    "Source availability for this run, resolved in code. This is the truth about what you can see;",
+    "do not contradict it, and never claim a source listed as unavailable answered.",
+    ...lines,
+    ...(unlocks.length > 0 ? ["", "Unreadable in this workflow at all:", ...unlocks] : []),
+    "",
+    "The user asks:",
+    request,
+  ].join("\n");
+}
+
+/**
+ * Terminal outcome, DERIVED from what actually happened rather than judged from the prose.
+ *
+ * `useful` is the pilot's headline measure (`timeToFirstUsefulOutcome`), so it is deliberately the
+ * NARROWEST arm: the run finished, said something, was not truncated, did not declare its evidence
+ * insufficient, and every plane it could have read did answer. Anything short of that is `partial`,
+ * which is an honest outcome and not a failure — many pilot runs are partial by construction.
+ */
+export function outcomeFor(res: {
+  reply: string;
+  truncated: boolean;
+  declaredUnsupported: boolean;
+  runtimeMissing: number;
+}): PackOutcome {
+  if (res.reply.trim().length === 0) return "no_findings";
+  if (res.truncated || res.declaredUnsupported || res.runtimeMissing > 0) return "partial";
+  return "useful";
+}
+
+/**
+ * The ids this run added to the thread's cumulative created-artifact card. A pre-existing document
+ * is NOT this run's artifact — crediting one would let a single created document be re-counted by
+ * every later pack run on the same thread, which is the direction that quietly inflates the pilot's
+ * headline numbers. Exported because it is the whole rule, and it is testable without a model.
+ */
+export function newArtifactIds<T>(before: readonly T[], after: readonly T[]): T[] {
+  const seen = new Set(before);
+  return after.filter((id) => !seen.has(id));
+}
+
+const packArgs = {
+  tenantId: v.string(),
+  /** Deliberately `v.string()`, NOT a closed union: `resolveWorkflowPack` is the fail-closed door,
+   *  and an id it refuses must be REACHABLE from the caller or the refusal is untestable. */
+  packId: v.string(),
+  threadId: v.string(),
+  planId: v.id("plans"),
+  text: v.string(),
+  /** Server-minted per run, and the correlation id for cost and latency (see the header). */
+  runId: v.optional(v.string()),
+  /** Pairs a run back to the recommendation that offered it (27-09's discovery surface). */
+  recommendationId: v.optional(v.string()),
+  /** 27-08: the eval runner MUST be able to pin the exact candidate, or a run certifies the ACTIVE
+   *  body while the evidence row names the candidate. `internalAction` ⇒ never model-supplied. */
+  skillVersions: v.optional(v.record(v.string(), v.number())),
+};
+
+type PackTurnArgs = {
+  tenantId: string;
+  packId: string;
+  threadId: string;
+  planId: Id<"plans">;
+  text: string;
+  runId?: string;
+  recommendationId?: string;
+  skillVersions?: Record<string, number>;
+};
+
+/**
+ * ONE pack turn, end to end. Shared by the production entry point and the offline shim below, so a
+ * test drives THIS path — the gate, the preflight, the trace, the events and the outcome — rather
+ * than a twin of it (the `__runSpecialistWithScript` precedent in dispatch.ts).
+ */
+async function runPackTurn(
+  ctx: GenericActionCtx<DataModel>,
+  args: PackTurnArgs,
+  mockScript?: { primary: unknown[]; fallback?: unknown[] },
+): Promise<PackRunResult> {
+  const resolved = resolveWorkflowPack(args.packId);
+  // Refused BEFORE anything is recorded, and NOTHING is recorded for it: `workflowPackEvents.packId`
+  // is a closed union, so an unknown id structurally cannot be written to the plane. That is the
+  // honest state — there is no pack to attribute the refusal to.
+  if (!resolved.ok) return { ok: false, reason: "unknown_pack" };
+  const { packId, spec } = resolved;
+  const { tenantId, threadId, planId } = args;
+  const runId = args.runId ?? crypto.randomUUID();
+
+  // The acceptance lands BEFORE the run: it is a fact about the offer the user answered, and it must
+  // survive a run that then fails. `recommendation_shown` is emitted by the discovery surface that
+  // renders the card (27-09) — emitting it from HERE would pair every impression with its own
+  // acceptance and make `recommendationAcceptance` a constant 100%.
+  if (args.recommendationId !== undefined) {
+    await ctx.runMutation(internal.workflowPackEventLog.record, {
+      tenantId,
+      packId,
+      runId,
+      event: "recommendation_accepted",
+      recommendationId: args.recommendationId,
+      threadId,
+    });
+  }
+  await ctx.runMutation(internal.workflowPackEventLog.record, {
+    tenantId,
+    packId,
+    runId,
+    event: "run_started",
+    threadId,
+    planId,
+  });
+
+  // The SAME governed gate the Executive Agent takes (`llm.ts` step 1). Without it a pack run is the
+  // one paid model path that ignores the kill switch and the daily budget.
+  const pre = await ctx.runMutation(internal.guardrails.preCall, { tenantId });
+  if (!pre.ok) {
+    await ctx.runMutation(internal.workflowPackEventLog.record, {
+      tenantId,
+      packId,
+      runId,
+      event: "run_failed",
+      outcome: "blocked",
+      threadId,
+    });
+    return {
+      ok: true,
+      runId,
+      packId,
+      reply: PACK_PAUSED_REPLY,
+      outcome: "blocked",
+      costUsd: 0,
+      blocked: pre.reason,
+    };
+  }
+
+  const flight = packPreflight(packId, await probeSources(ctx, tenantId));
+  await ctx.runMutation(internal.workflowPackEventLog.record, {
+    tenantId,
+    packId,
+    runId,
+    event: "preflight_completed",
+    threadId,
+    sourceExpectedCount: flight.sources.length,
+    sourceAvailableCount: flight.sources.filter((s) => s.state !== "unavailable").length,
+    // The two counts `missingSourceSurprise` compares, emitted on EXACTLY ONE event kind: it counts
+    // one run per event carrying both, so repeating them on the terminal row would double every run.
+    preflightMissingCount: flight.missingKnown.length,
+    runtimeMissingCount: flight.missingRuntime.length,
+  });
+  // ONE row per run that hit a TENANT-specific gap, not one per missing source. A matrix-missing
+  // source is announced up front and carried by the body — that is the honest-partial contract
+  // working, not an incident — and the table has no field to say WHICH source anyway (CLAUDE.md
+  // section 4), so a row per source would be an uncountable pile. The detail is in the counts above.
+  if (flight.missingRuntime.length > 0) {
+    await ctx.runMutation(internal.workflowPackEventLog.record, {
+      tenantId,
+      packId,
+      runId,
+      event: "capability_missing",
+      threadId,
+    });
+  }
+
+  // Artifacts are observed at the seam that already exists rather than by editing `createDocument`:
+  // `vaultSources` carries ONE cumulative card per thread, so the ids this run added are exactly the
+  // difference between the card before and the card after. `llm.ts` stays byte-unchanged.
+  const before =
+    (await ctx.runQuery(internal.vaultSources.latestCreated, { tenantId, threadId }))?.docIds ?? [];
+
+  try {
+    const res = await traced(
+      {
+        agentName: "workflow-pack",
+        workflowName: "workflow-pack-run",
+        workflowRunId: runId,
+        sessionId: threadId,
+      },
+      () =>
+        runSpecialistTurn(ctx, {
+          tenantId,
+          planId,
+          skillName: spec.skillName,
+          // THE grant, derived from 27-02's operation matrix. Never hand-typed, never widened here.
+          toolNames: toolsForWorkflowPack(packId),
+          prompt: preflightPrompt(flight, args.text),
+          // `turnId` IS `runId` — the join key for spend and steps (see the header).
+          turnId: runId,
+          threadId,
+          ...(args.skillVersions === undefined ? {} : { skillVersions: args.skillVersions }),
+          ...(mockScript === undefined ? {} : { mockScript }),
+        }),
+    );
+
+    const after = await ctx.runQuery(internal.vaultSources.latestCreated, { tenantId, threadId });
+    for (const artifactId of newArtifactIds(before, after?.docIds ?? [])) {
+      await ctx.runMutation(internal.workflowPackEventLog.record, {
+        tenantId,
+        packId,
+        runId,
+        event: "artifact_created",
+        skillVersion: res.skillVersion,
+        threadId,
+        artifactId,
+      });
+    }
+
+    const outcome = outcomeFor({
+      reply: res.reply,
+      truncated: res.truncated,
+      declaredUnsupported: res.declaredUnsupported,
+      runtimeMissing: flight.missingRuntime.length,
+    });
+    await ctx.runMutation(internal.workflowPackEventLog.record, {
+      tenantId,
+      packId,
+      runId,
+      event: "run_completed",
+      outcome,
+      skillVersion: res.skillVersion,
+      threadId,
+      planId,
+    });
+    return {
+      ok: true,
+      runId,
+      packId,
+      reply: res.reply,
+      outcome,
+      costUsd: res.costUsd,
+      skillVersion: res.skillVersion,
+    };
+  } catch (err) {
+    // The terminal lands on EVERY exit — a run that started and never terminated is a hole in every
+    // denominator. Then RETHROW: the driver owns the conversational error turn, and swallowing a bug
+    // here would hide it behind a tidy `failed` row.
+    await ctx.runMutation(internal.workflowPackEventLog.record, {
+      tenantId,
+      packId,
+      runId,
+      event: "run_failed",
+      outcome: "failed",
+      threadId,
+    });
+    throw err;
+  }
+}
+
+/**
+ * PRODUCTION entry point. `internalAction`, so the model can never supply the tenant, the plan or a
+ * version pin (the `runSpecialist` precedent, ADR-008). The public door is
+ * `cockpit.startWorkflowPack`, which owns the thread, the plan row and the reply turn.
+ */
+export const runWorkflowPack = internalAction({
+  args: packArgs,
+  handler: async (ctx, args): Promise<PackRunResult> => runPackTurn(ctx, args),
+});
+
+/**
+ * The offline twin. A `LanguageModel` is not Convex-serializable, so the production action can never
+ * be driven offline; this shim swaps ONLY the model and shares every other line above.
+ */
+export const __runWorkflowPackWithScript = internalAction({
+  args: { ...packArgs, primary: v.array(v.any()), fallback: v.optional(v.array(v.any())) },
+  handler: async (ctx, args): Promise<PackRunResult> =>
+    runPackTurn(ctx, args, {
+      primary: args.primary,
+      ...(args.fallback === undefined ? {} : { fallback: args.fallback }),
+    }),
+});

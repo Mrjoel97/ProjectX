@@ -572,6 +572,31 @@ export async function currentProfileDoc(
 }
 
 /**
+ * WHEN this tenant finished onboarding — the FIRST committed profile doc, or `null` if none is.
+ *
+ * The OLDEST, deliberately, and NOT `currentProfileDoc().createdAt`. Onboarding completes once;
+ * `/dashboard/profile` then edits the same concept for the life of the account, and the newest doc
+ * moves forward with every edit. Reading the newest would make every measure that starts at
+ * onboarding shrink each time the user touched their profile — and, in Phase 27's
+ * `timeToFirstUsefulOutcome`, would report a real earlier outcome as `useful_precedes_onboarding`,
+ * a reason reserved for a broken clock.
+ *
+ * Same index and same `failed` filter as `currentProfileDoc` above, for the reason recorded there:
+ * `by_tenant_kind`, never `by_tenant`.
+ */
+export async function onboardingCompletedAt(
+  ctx: QueryCtx | MutationCtx,
+  tenantId: string,
+): Promise<number | null> {
+  const profiles = await ctx.db
+    .query("vaultDocuments")
+    .withIndex("by_tenant_kind", (q) => q.eq("tenantId", tenantId).eq("kind", PROFILE_KIND))
+    .collect();
+  const committed = profiles.filter((d) => d.status !== "failed").map((d) => d.createdAt);
+  return committed.length === 0 ? null : Math.min(...committed);
+}
+
+/**
  * ONBD-02 commit — and the design §6 COMPLETION GATE.
  *
  * The reviewed profile becomes a `business_profile` vault doc and is embedded via startIngest —

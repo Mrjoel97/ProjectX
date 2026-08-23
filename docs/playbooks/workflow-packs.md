@@ -1,5 +1,38 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
+> Last verified: 2026-08-23 (27-07 — **THE PACKS ARE NOW EXECUTABLE, AND STILL DARK.**
+> `convex/workflowPackBinding.ts` binds a pack id onto the EXISTING `runSpecialistTurn` seam and
+> `convex/workflowPackOutcomes.ts` projects the measures over `workflowPackEvents`. No pack row
+> exists in any deployment; 27-08 publishes the candidates and 27-09 activates them.
+>
+> **`runId` IS the correlation id, and that is the whole cost/latency design.** The binding passes it
+> as the loop's `turnId`, so `spendEvents` and `agentSteps` both carry it and the projection JOINS
+> rather than re-emitting. The pack plane still has no cost or latency field and must never grow one.
+> One caveat is written into the code: `runAgentLoop` charges under `agentloop:<runId>:a<attempt>`
+> (plus a `:search` sibling), NOT the bare run id, so `ledgerCorrelationIds` rebuilds those four ids.
+> The test asserts the projection's total equals the ledger's own rows for a real run, so a format
+> change in `llm.ts` reddens it instead of silently reporting no cost.
+>
+> **A tool allow-list is proven at the LOOP, not read off the registry.** The suite scripts a model
+> that asks for all 19 tools any pack could want plus every tool no pack may hold, then reads which
+> ones actually executed off the `agentSteps` trace — `ai@7` rejects a name that is not a key of the
+> record before `execute`, so an absent tool never fires `onToolExecutionStart`. The same script runs
+> first through the EXECUTIVE record as a control, which is what makes the negatives falsifiable.
+> **The probe is CHUNKED at six calls, and that is load-bearing:** `stopWhen: stepCountIs(8)` stops a
+> 19-call script after the seventh, and every tool past it would read as absent — a green
+> "exactly its grant" over a truncated run.
+>
+> **Plan decisions are attributed to the run that STAGED the plan, never to the thread.** A pack run
+> and an Executive Agent turn share the thread's single `plans` row, so `cockpit.ts` only emits
+> `plan_approved` / `plan_rejected` / `plan_edited` when a `plan_proposed` pack event exists for that
+> row, and `plan_proposed` only while a pack run is still in flight. An analysis-only pack can
+> therefore never be credited with a later email approval on the same thread.
+>
+> **A pack run takes the same `guardrails.preCall` gate as every other paid model path** and a
+> governed stop records `run_failed` / `blocked` before the preflight probes, so a killed switch
+> spends nothing and reads nothing.)
+>
+
 > Last verified: 2026-08-23 (27-06 — **THE LAST TWO BODIES; ALL SIX PACKS NOW EXIST.**
 > `pack-process-sop.md` and `pack-brand-review.md` land as `.md` + derived `.ts` pairs registered in
 > `skillBodies.test.ts`, with five fixtures each. The corpus is 30 fixtures across six packs, and
@@ -353,6 +386,21 @@ as a gate: it reads stdin at module top and every terminal path is `process.exit
   without the second leaves a draft at `collecting`: visible, read-only, approvable by nobody.
 
 ## Known gaps & deferred work
+
+- **`citationCoverage` and `unsupportedClaimRate` have no emitter.** Nothing writes `claimCount` /
+  `citedClaimCount` / `unsupportedClaimCount`, so both report `not_applicable: no_data` — which is
+  the honest answer, not a bug. Scoring a body's claims is grading, and the only plane that grades a
+  pack body is 27-08's eval runner. They light up unchanged once it records the counts.
+- **`recommendation_shown` has no caller yet.** The binding emits `recommendation_accepted` when a
+  run carries a `recommendationId`; the impression belongs to the surface that renders the card
+  (27-09). Until then `recommendationAcceptance` reads `no_data` rather than a fake 100%.
+- **`artifact_created` is proven only in the negative direction offline.** The diff over the thread's
+  cumulative `vaultSources` created-card is unit-tested both ways and the run-level test proves a
+  PRE-EXISTING document is not re-counted. The positive direction needs a real `createDocument`,
+  which calls a model — so it is covered by 27-08's live eval and 27-09's browser evidence, not here.
+- **`PACK_DERIVED_METRIC_SOURCES.latency.index` names `by_correlation` on `agentSteps`, which does
+  not exist.** That table's join is `by_turn` (`[tenantId, turnId]`), which is what the projection
+  actually uses. The constant is documentation, read by nobody at runtime.
 
 - **`bodySha256` is shape-checked, not byte-checked, on the server.** A Convex mutation has no
   synchronous digest. `scripts/verify-knowledge-work-provenance.mjs --check` (27-08) is the

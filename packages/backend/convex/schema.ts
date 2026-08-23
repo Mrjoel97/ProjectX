@@ -2459,7 +2459,14 @@ export default defineSchema({
   })
     .index("by_tenant_createdAt", ["tenantId", "createdAt"])
     .index("by_tenant_pack_createdAt", ["tenantId", "packId", "createdAt"])
-    .index("by_tenant_run", ["tenantId", "runId"]),
+    .index("by_tenant_run", ["tenantId", "runId"])
+    // 27-07: the plan-decision join. `cockpit.ts`'s approve / discard / re-propose terminals must
+    // answer "was THIS plan row staged by a pack run?" on every ordinary email plan too, so the
+    // alternative is a bounded scan of recent pack events on a hot mutation path for tenants that
+    // never ran a pack. An index is not a write path and Convex backfills it — the same reasoning
+    // `telemetry.by_tenant` records. `planId` is optional; rows without one simply do not appear
+    // under a planId prefix, which is exactly the wanted semantics.
+    .index("by_tenant_plan", ["tenantId", "planId"]),
   // NO bare `by_tenant` index, and that absence is tied to the classification: it would exist only
   // to satisfy `tenantDelete.ts` / `tenantExport.ts`, which call `.withIndex("by_tenant", ...)` on
   // every name `deletableTables()` returns — and `audit_immutable` is not one of them. Every
