@@ -36,11 +36,36 @@
 > `apps/web/app/(app)/dashboard/workspace/cockpitAccess.test.ts` · `apps/web/e2e/command-center.spec.ts`
 > (`LADDER`). `convex/home.test.ts` sorts its codes alphabetically and is order-independent.
 >
-> **The e2e ladder changed shape, and has NOT been run in a browser.** Connecting the mailbox no
-> longer advances the hero — it clears a rung nothing was waiting on — so that step now asserts a
-> NON-event: the health row flips to Clear and `priorityCode` is unchanged. Rung 1 asserts the hero
-> is NOT `connection-failure` while the mailbox is genuinely broken. Both need a live stack; treat
-> them as unverified until `command-center.spec.ts` runs green.)
+> **The e2e ladder changed shape, and it RAN — 9/9 green in a real browser, 2026-08-23** against
+> `next build` + `next start -p 3111` on the local Convex backend. Connecting the mailbox no longer
+> advances the hero (it clears a rung nothing was waiting on), so that step asserts a NON-event: the
+> health row flips to Clear and `priorityCode` is unchanged. Rung 1 asserts the hero is NOT
+> `connection-failure` while the mailbox is genuinely broken.
+>
+> **The browser gate is falsifiable, and was proven so.** Reverting `HOME_PRIORITY_ORDER` to
+> mailbox-first, rebuilding and re-running fails rung 1 with *"a broken mailbox outranked the
+> business work"* — the live defect, caught in the browser rather than by a constant agreeing with
+> itself. Restoring and rebuilding returns 9/9. That round trip is the reason to trust this spec at
+> all; unit-only mutation proof would not have covered the renderer.
+>
+> **ONE ASSERTION HAD TO BE WEAKENED, and it is a fixture limit rather than a regression.** The
+> ladder test used to demand at least one STRICT advance. That was only ever satisfiable because
+> `connection-failure` sat at priority 0 and the spec OWNS the mailbox (its `finally` deletes the
+> token row), so connecting it always bought exactly one advance. With the channel at sixth, the
+> two rungs above where the hero rests are the two the spec's own header already documents as
+> undrivable from a browser — `unresolved-dead-letters` needs a `v.id("requests")` with no seam to
+> mint it, and `stale-approval` needs a backdated `createdAt` that `plans:patchPlan` will not
+> accept. This deployment's 1056 day-old `proposed` plans keep `stale-approval` triggered
+> permanently, so the hero is pinned at rank 1 and CANNOT descend: the observed walk is
+> `stale-approval -> stale-approval -> stale-approval -> stale-approval`. Demanding an advance
+> there would assert the fixture, not the product, so it became a disjunction — either a clear
+> walked the hero strictly down, or it stayed put AND the code holding it still reports "Needs
+> attention". A hero frozen on a signal reading Clear still fails. Strict ORDERING is proven where
+> it is drivable: the mutation-verified ladder walk in `commandCenter.test.ts`.
+>
+> To restore full strict descent from a browser, add a seam that backdates `plans.createdAt` (or
+> one that mints a `deadLetters` row for a real tenant) — until then the top two rungs are
+> unreachable by any browser test.)
 
 
 > Last verified: 2026-08-23 (26-19 Task 2 + 26-20 + ADVERSARIAL REMEDIATION — **HOME-01's backend
