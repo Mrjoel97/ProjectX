@@ -21,6 +21,8 @@ import { mediaDirectorSkillBody } from "./mediaDirector";
 import { moneyModelDesignerSkillBody } from "./moneyModelDesigner";
 import { offerArchitectSkillBody } from "./offerArchitect";
 import { onboardingAgentSkillBody } from "./onboardingAgent";
+import { packBusinessPulseSkillBody } from "./packBusinessPulse";
+import { packCampaignPlanSkillBody } from "./packCampaignPlan";
 import { researchSpecialistSkillBody } from "./researchSpecialist";
 import { styleCoachingSkillBody } from "./styleCoaching";
 import { styleConciseSkillBody } from "./styleConcise";
@@ -79,6 +81,14 @@ const bodies: [string, string][] = [
   // measured the OLD body). It is the most-edited body in the repo; it belongs here most.
   ["cockpit-agent", cockpitAgentSkillBody],
   ["document-classifier", documentClassifierSkillBody],
+  // Phase 27 (PACK-02): the curated knowledge-work pack bodies. This row is not optional
+  // bookkeeping — there is NO generator for the derived `.ts`, so it is the ONLY thing that turns
+  // an edit to one side into a failure rather than a silently stale constant. It matters more here
+  // than for most: 27-01's manifest hashes pin the `.md`, and `publishPackCandidate` ships the
+  // `.ts`, so a drifted pair means the body we certified and the body we published are different
+  // files. 27-05 and 27-06 append their four here.
+  ["pack-business-pulse", packBusinessPulseSkillBody],
+  ["pack-campaign-plan", packCampaignPlanSkillBody],
 ];
 
 describe("evaluation/specialist skill bodies (BEVL-01) — md ↔ ts no-drift", () => {

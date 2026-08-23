@@ -133,13 +133,16 @@ export function validateFixture(fx, file, packs) {
   if (!isPlainObject(fx)) fail("fixture is not an object");
   if (typeof fx.id !== "string" || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(fx.id))
     fail("id must be stable kebab-case");
-  if (`${fx.id}.json` !== file) fail(`id "${fx.id}" does not match its filename`);
   if (typeof fx.description !== "string" || fx.description.length < 8)
     fail("description is missing or too short to explain what the case proves");
 
   const pack = packs.get(fx.pack);
   if (pack === undefined) fail(`pack "${fx.pack}" is not in the registry`);
   if (!fx.id.startsWith(`${fx.pack}-`)) fail(`id must start with its pack id, "${fx.pack}-"`);
+  // One FILE per pack, holding an array of cases: `business-pulse.json` carries every
+  // business-pulse case. The file name is therefore the pack id, and a case that names a different
+  // pack is in the wrong file — which would make `--packs` silently skip it.
+  if (`${fx.pack}.json` !== file) fail(`pack "${fx.pack}" does not match its file name`);
 
   if (!isStringArray(fx.turns) || fx.turns.length === 0)
     fail("turns must be a non-empty array of non-empty strings");
@@ -225,13 +228,15 @@ export function validateCorpus(fixtures, packs) {
 
   // A needle is how a run proves raw content did NOT leak into a log or an event. Two fixtures
   // sharing one makes a leak attributable to either, so the assertion stops meaning anything.
+  // Keyed on the CASE id, not the file. With one file per pack a file-keyed check stopped seeing
+  // collisions between two cases in the SAME file, which is where they are now most likely.
   const needleOwner = new Map();
   for (const { fx, file } of fixtures) {
     for (const needle of fx.needles ?? []) {
       const owner = needleOwner.get(needle);
-      if (owner !== undefined && owner !== file)
-        throw new Error(`${file}: needle "${needle}" is also used by ${owner}`);
-      needleOwner.set(needle, file);
+      if (owner !== undefined && owner !== fx.id)
+        throw new Error(`${file}: needle "${needle}" is used by both ${owner} and ${fx.id}`);
+      needleOwner.set(needle, fx.id);
     }
   }
 
@@ -263,10 +268,13 @@ function readFixtures(packFilter, packs) {
   } catch {
     files = []; // the lanes have not written any yet — an empty corpus is valid, not an abort
   }
-  const all = files.map((file) => ({
-    file,
-    fx: JSON.parse(readFileSync(join(fixturesDir, file), "utf8")),
-  }));
+  const all = [];
+  for (const file of files) {
+    const parsed = JSON.parse(readFileSync(join(fixturesDir, file), "utf8"));
+    if (!Array.isArray(parsed) || parsed.length === 0)
+      throw new Error(`${file}: a pack fixture file must be a non-empty ARRAY of cases`);
+    for (const fx of parsed) all.push({ file, fx });
+  }
   if (packFilter === null) return all;
 
   const wanted = new Set(
@@ -308,7 +316,7 @@ function selfTest(packs) {
     },
     needles: ["zzq-selftest-needle"],
   });
-  const file = "brand-review-01-generic.json";
+  const file = "brand-review.json";
 
   // The accepting case first: if THIS breaks, every rejection below is meaningless.
   validateFixture(good(), file, packs);
@@ -328,12 +336,12 @@ function selfTest(packs) {
   mutate("is not in the registry", (fx) => {
     fx.pack = "not-a-pack";
   });
-  mutate("does not match its filename", (fx) => {
-    fx.id = "brand-review-99-other";
+  mutate("does not match its file name", (fx) => {
+    fx.pack = "process-sop";
+    fx.id = "process-sop-01-x";
   });
   mutate("must start with its pack id", (fx) => {
-    fx.id = "brand-review-01-generic";
-    fx.pack = "process-sop";
+    fx.id = "campaign-plan-01-generic";
   });
   mutate("is not one of useful", (fx) => {
     fx.expect.outcome = "great";
@@ -411,7 +419,7 @@ function selfTest(packs) {
             artifactCreated: true,
           },
         },
-        "business-pulse-01-x.json",
+        "business-pulse.json",
         packs,
       ),
     /output contract is a briefing/,
@@ -424,11 +432,11 @@ function selfTest(packs) {
       validateCorpus(
         [
           { file, fx: good() },
-          { file: "brand-review-02-b.json", fx: { ...good(), id: "brand-review-02-b" } },
+          { file, fx: { ...good(), id: "brand-review-02-b" } },
         ],
         packs,
       ),
-    /is also used by/,
+    /is used by both/,
     "two fixtures sharing a needle were ACCEPTED",
   );
   rejections++;

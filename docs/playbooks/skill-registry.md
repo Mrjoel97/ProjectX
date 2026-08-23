@@ -1,5 +1,35 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-23 (27-04 — **THE FIRST TWO PACK BODIES.** `pack-business-pulse.md` and
+> `pack-campaign-plan.md` land as canonical `.md` + hand-derived `.ts` pairs, both registered in
+> `skillBodies.test.ts`'s `bodies` array, with five fixtures each.
+>
+> **Business Pulse is the honest-partial contract's hardest case.** Its upstream source is almost
+> entirely connector-driven — QuickBooks, PayPal, Square, HubSpot, Gmail, Slack — and Pikar can reach
+> NONE of them. What survives is `readFinance` and `searchVault`, so the body's mandatory middle
+> section is "What I could not see", and the pack is instructed never to state, estimate or imply a
+> figure it did not read, and never to call one data point a trend.
+>
+> **Campaign Plan produces a document, and its body says so in its own second paragraph** — the
+> boundary is enforced in code (no allow-listed agent can dispatch), and the body must not promise
+> what the runtime cannot keep.
+>
+> **TWO CORRECTIONS TO EARLIER PLANS, both made here rather than worked around:**
+> 1. `workflowPacks.test.ts` required "0 or 6 bodies, never a half corpus". That was wrong about how
+>    this phase lands: 27-04/05/06 are three INDEPENDENT lanes writing TWO bodies each, so the rule
+>    reddened the moment the first lane committed and made wave 2 unlandable. The per-body
+>    "every granted tool is TAUGHT" check stays and now bites per body; completeness is enforced
+>    where it can actually be satisfied — 27-01's manifest refuses a half-populated adapted set.
+> 2. The fixture runner took ONE FILE PER CASE; 27-04/05/06 all name ONE FILE PER PACK in their
+>    `files_modified`. The runner now reads each `<packId>.json` as an ARRAY of cases. Needle
+>    uniqueness moved from file-keyed to case-keyed with it, because a file-keyed check stopped
+>    seeing collisions between two cases in the same file — which is where they are now most likely.
+>
+> Gates proven red: a byte appended to a body (drift), a granted tool removed from a body (taught),
+> a case in the wrong pack file, a `toolsForbidden` naming a tool the pack holds, and `--packs` for
+> a lane that has not landed yet.)
+>
+
 > Last verified: 2026-08-23 (27-01 — **THE UPSTREAM MATERIAL IS PINNED, SNAPSHOTTED AND HASHED.**
 > `third_party/knowledge-work-plugins/` now holds the exact bytes the six Phase-27 pack bodies will
 > be adapted FROM, at commit `5267cf7bff3031921d4474b8e8f86ad02d2b8f6d`, with a per-file SHA-256 and
