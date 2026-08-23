@@ -106,3 +106,11 @@ Skills/*.pdf
 # registered worktrees and was not, so it leaked into every `git status` and broke `pnpm lint`
 # with a nested biome root config (also excluded in biome.json).
 .tmp/
+
+# Tool/evidence scratch, same class as `output/` and `.playwright-mcp/` above: regenerable,
+# binary-heavy, and one `git add -A` from permanent history in a tree parallel lanes share.
+# `.foglamp/` is the foglamp CLI's scan/plan/apply output; `.uat-*/` are per-phase UAT screenshot
+# dumps (the evidence JSON that MATTERS is summarised in the phase SUMMARY, not these PNGs).
+# Verified against `git ls-files`: both patterns match ZERO tracked files.
+.foglamp/
+.uat-*/
