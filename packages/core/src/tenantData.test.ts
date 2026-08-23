@@ -32,6 +32,15 @@ describe("tenant table classification registry", () => {
     expect(credentialTables).toEqual(["gmailTokens", "microsoftCalendarTokens"]);
   });
 
+  // OWNER DECISION 2026-08-23 (27-02). Asserted POSITIVELY and by name, because the derived
+  // equality in the next test reads the classification itself and would stay green if the category
+  // silently flipped back. The property being pinned is a product one: one tenant's erasure must
+  // not be able to rewrite the denominator of every pack measure.
+  test("workflow-pack events sit on the audit plane — erasure and export cannot reach them", () => {
+    expect(TENANT_TABLE_CLASSIFICATION.workflowPackEvents).toBe("audit_immutable");
+    expect(deletableTables()).not.toContain("workflowPackEvents");
+  });
+
   test("exposes only tenant-owned and credential tables to deletion, with identity last", () => {
     const tables = deletableTables();
 

@@ -82,19 +82,24 @@ export const TENANT_TABLE_CLASSIFICATION = {
    * generated prose, no customer name, no financial value (CLAUDE.md §4, enforced by the table
    * having nowhere to put any of them).
    *
-   * ponytail: classified `tenant_owned`, which is not a neutral label — it enrols the table in the
-   * tenant EXPORT and DELETION walks automatically (`deletableTables()` below), so today tenant
-   * erasure DOES remove a tenant's pack events and export DOES return them. That is the ceiling,
-   * and it is the defensible default for rows keyed by `tenantId`.
+   * OWNER DECISION 2026-08-23: `audit_immutable`, NOT `tenant_owned`. These rows are the pilot's
+   * only record of whether the pack model worked, and under `tenant_owned` one tenant's erasure
+   * silently rewrote the denominator of every measure computed from them. They now sit on the same
+   * plane as `audit` and `deadLetters`: same refs-only shape, same immutability, same exclusion
+   * from both the deletion walk and the export walk BY CONSTRUCTION rather than by an `if`.
    *
-   * OPEN, AND DELIBERATELY NOT DECIDED HERE — see docs/playbooks/workflow-packs.md. The inverse of
-   * the `admission_plane` question above: should measurement rows survive erasure the way `audit`
-   * does? They are the phase's only record of whether the pilot worked, and erasing one tenant
-   * silently rewrites the pilot's denominator. Reclassifying to `audit_immutable` would keep them —
-   * a one-token change — but it takes rows out of an Art. 17 walk, which is the owner's call and
-   * not an implementation detail a pack plan may settle. Recorded for the owner, not resolved.
+   * TWO OBLIGATIONS TRAVEL WITH THAT CATEGORY, and they are not optional:
+   *   1. The writer must be INSERT-ONLY (CLAUDE.md §3). A `patch`/`replace`/`delete` on this table
+   *      would make the category a lie. 27-03 owns the module; `docs/playbooks/workflow-packs.md`
+   *      carries the invariant.
+   *   2. Nothing here may ever become personal data. `audit_immutable` is what the privacy policy
+   *      describes as holding "references, identifiers, hashes, and counts only" — a text field
+   *      added to this table later would put user content beyond the reach of an erasure request.
+   *
+   * The export omission reason is the generic `audit_immutable` one ("refs-only audit/compliance
+   * operational records are not tenant content"), which is accurate for this shape.
    */
-  workflowPackEvents: "tenant_owned",
+  workflowPackEvents: "audit_immutable",
 } as const satisfies Readonly<Record<string, TenantTableCategory>>;
 
 export type ClassifiedTenantTable = keyof typeof TENANT_TABLE_CLASSIFICATION;

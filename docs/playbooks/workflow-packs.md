@@ -1,5 +1,23 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
+> Last verified: 2026-08-23 (27-02 follow-up — **OWNER DECISION: `workflowPackEvents` is
+> `audit_immutable`, not `tenant_owned`.** Under `tenant_owned` the table was enrolled in the tenant
+> deletion and export walks automatically, so erasing one tenant silently rewrote the denominator of
+> every measure computed from the pilot. It now sits on the same plane as `audit` and `deadLetters`:
+> same refs-only shape, excluded from both walks BY CONSTRUCTION rather than by an `if`, and covered
+> by the existing export omission reason for that category.
+>
+> Two obligations came with the category and are now invariants 11 and 12 below: the writer must be
+> insert-only, and no field on this table may ever become personal data. The bare `by_tenant` index
+> was REMOVED in the same change — it existed only to satisfy the `deletableTables()` walk, and
+> every tenant-scoped read is already served by the `by_tenant_createdAt` prefix. If the table is
+> ever reclassified `tenant_owned`, that index must return in the same commit or the backend does
+> not typecheck.
+>
+> Regression evidence for the reclassification: backend 96 files / 2381 tests green, core
+> 42 / 1150, four typechecks clean, `biome ci` clean.)
+>
+
 > Last verified: 2026-08-23 (27-02 — the contract half only. This plan built the registry, the
 > candidate-only publication door, the pack activation gate, the `workflowPackEvents` table and the
 > offline fixture validator. **No pack body exists yet, no pack row exists in any deployment, and
@@ -25,7 +43,7 @@ pack DARK until it has earned three independent kinds of evidence.
   derived tool grant, the preflight computation, and the three pack-gate predicates.
 - `packages/core/src/workflowPacks.test.ts` — whole-registry assertions, plus the cross-file scans
   that pin the registry to `convex/llm.ts` and `convex/schema.ts`.
-- `packages/core/src/tenantData.ts` — classifies `workflowPackEvents` (`tenant_owned`).
+- `packages/core/src/tenantData.ts` — classifies `workflowPackEvents` (`audit_immutable`).
 
 **Backend**
 - `packages/backend/convex/schema.ts` — `workflowPackEvents`, and the `provenance` /
@@ -71,7 +89,8 @@ Run `graphify query "workflow packs"` for the current subgraph. Couplings graphi
 6. **Run** — 27-07 resolves the pack id, computes `packPreflight` in code, and calls the agent loop
    with `toolsForWorkflowPack(packId)` as `toolNames`.
 7. **Measure** — 27-03 writes `workflowPackEvents` rows: lifecycle, plan decisions, missing-source
-   surprise, recommendation impressions. Refs, enums and counts only.
+   surprise, recommendation impressions. Refs, enums and counts only, insert-only, on the audit
+   plane — so one tenant's erasure cannot rewrite the denominator of every pack measure.
 
 ## Invariants — what must never break
 
@@ -105,6 +124,15 @@ Run `graphify query "workflow packs"` for the current subgraph. Couplings graphi
 10. **`workflowPackEvents` holds refs, enums and counts only.** There is nowhere in the table to put
     text — that absence is the enforcement. It re-emits neither cost (`spendEvents`) nor latency
     (`telemetry.durationMs` / `agentSteps`).
+11. **The `workflowPackEvents` writer must be INSERT-ONLY.** The table is classified
+    `audit_immutable` (owner decision 2026-08-23), which is a claim about immutability, not just a
+    filing category. A `patch` / `replace` / `delete` on this table would make the classification a
+    lie. 27-03 owns the module; CLAUDE.md §3 is the general rule.
+12. **Nothing in `workflowPackEvents` may ever become personal data.** `audit_immutable` rows are
+    outside both the tenant deletion walk and the tenant export, which is exactly what the privacy
+    policy describes as "references, identifiers, hashes, and counts only". A text field added here
+    later would put user content beyond the reach of an erasure request. Adding one is not a schema
+    tweak; it is a compliance change.
 
 ## How to change safely
 
@@ -165,11 +193,6 @@ as a gate: it reads stdin at module top and every terminal path is `process.exit
   generator.** It is hand-written, and the only drift guards are two hand-maintained tables
   (`skillBodies.test.ts` and `skills.test.ts`). A pack body added to neither table has zero drift
   protection — 27-04/05/06 must add each body to one of them.
-- **`workflowPackEvents` erasure is an OPEN owner question.** `tenant_owned` enrols the table in the
-  tenant export and deletion walks, so erasure removes a tenant's pack events today and export
-  returns them. Whether measurement rows should instead survive erasure the way `audit` does — at
-  the cost of leaving an Art. 17 walk — is recorded in `packages/core/src/tenantData.ts` for the
-  owner, not resolved here.
 - **The fixture runner needs Node >= 22.6.** It imports the registry as TypeScript rather than
   regex-parsing it. CI's test job pins Node 20 and never runs the script.
 - **No rollback-to-dark path exists.** `skills.ts` has one active-patch site and no owner-facing

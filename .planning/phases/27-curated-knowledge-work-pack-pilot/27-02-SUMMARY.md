@@ -9,7 +9,7 @@ provides:
   - Six closed workflow pack ids with a total existing/missing/forbidden operation matrix
   - A code-owned tool grant derived from the matrix, pinned to real llm.ts tool names
   - Candidate-only first publication plus a three-plane pack activation gate
-  - The workflowPackEvents table, classified and tenant-scoped
+  - The workflowPackEvents table, tenant-scoped and on the immutable audit plane
   - An offline fixture schema and validator with a self-proving --self-test
 affects: [skills-registry, agent-runtime, tenant-data-plane, eval-harness]
 
@@ -87,8 +87,8 @@ and the only door out of candidacy demands three independently-pinned kinds of e
   by. No branch inside it can produce an active row. `seedSkills` is byte-unchanged.
 - **A three-plane activation gate** (`provenance` + `evidence` + `browserEvidence`, each pinning the
   exact `(name, version)`), with the rollback exemption preserved by status.
-- **`workflowPackEvents`**, classified `tenant_owned`, refs/enums/counts only, re-emitting neither
-  cost nor latency.
+- **`workflowPackEvents`**, classified `audit_immutable`, refs/enums/counts only, re-emitting
+  neither cost nor latency.
 - **An offline fixture validator** that refuses a fixture asserting something the matrix forbids,
   with a `--self-test` that proves 18 rejections before trusting itself.
 
@@ -98,6 +98,8 @@ and the only door out of candidacy demands three independently-pinned kinds of e
 2. **Task 1: the registry, matrix and grant** — `5191e02` (feat)
 3. **Task 2 (registry half): candidate-only publication and the pack gate** — `a9d5b07` (feat)
 4. **Task 3: the offline fixture validator** — `15ddd3c` (feat)
+5. **The tenant-overlay bypass, pinned shut** (test)
+6. **The owner's reclassification of `workflowPackEvents`** (refactor)
 
 Committed in dependency order rather than task order, so every intermediate HEAD compiles: the core
 registry test scans `schema.ts` for the `packId` union, and `skills.ts` imports the core predicates.
@@ -105,15 +107,11 @@ registry test scans `schema.ts` for the `packId` union, and `skills.ts` imports 
 ## Verification — all executed
 
 ```
-cd packages/core && npx vitest run                          42 files / 1150 passed
+cd packages/core && npx vitest run                          42 files / 1151 passed
 cd packages/core && npx tsc --noEmit                        clean
 cd packages/backend && npx tsc --noEmit                     clean
 cd packages/contracts && npx tsc --noEmit                   clean
-cd packages/backend && npx vitest run convex/skills.test.ts             122 passed
-cd packages/backend && npx vitest run convex/isolation.test.ts \
-    convex/tenantExport.test.ts convex/tenantDelete.test.ts \
-    convex/dashboardSchema.test.ts convex/auditImmutability.test.ts \
-    convex/importGuard.test.ts                                          279 passed
+cd packages/backend && npx vitest run                        96 files / 2381 passed (FULL suite)
 cd packages/backend && node scripts/run-workflow-pack-evals.mjs --fixtures-only --self-test
 npx biome ci . --diagnostic-level=error --max-diagnostics=none          672 files, clean
 ```
@@ -126,6 +124,7 @@ npx biome ci . --diagnostic-level=error --max-diagnostics=none          672 file
 | the pack branch of `planGlobalActivation` disabled | 2 tests red |
 | a malformed fixture placed on disk | runner exits 1 with the exact violation |
 | one validator check deleted from the runner | `--self-test` exits 1 naming the unchecked rule |
+| a pack name added to `USER_AUTHORABLE_SKILLS` | the overlay-bypass guard reddens |
 
 ## Key Decisions and Deviations
 
@@ -170,13 +169,34 @@ npx biome ci . --diagnostic-level=error --max-diagnostics=none          672 file
   is `packages/contracts/src/skill.ts` (there is no `packages/backend/convex/skill.ts`), and the
   `rows.length === 0` branch is named by `skills.ts:583/603/610`, not `:557`.
 
-## Open for the owner
+## Owner decision, taken 2026-08-23 (after the first five commits)
 
-- **Should `workflowPackEvents` survive tenant erasure?** `tenant_owned` enrols the table in the
-  export and deletion walks, so erasure removes a tenant's pack events today — which silently
-  rewrites the pilot's denominator. Reclassifying to `audit_immutable` keeps them at the cost of
-  leaving an Art. 17 walk. Recorded in `packages/core/src/tenantData.ts` and the playbook; not
-  resolved.
+- **`workflowPackEvents` is `audit_immutable`, not `tenant_owned`.** The table first landed
+  `tenant_owned`, which enrols it in the tenant deletion and export walks automatically — so erasing
+  one tenant silently rewrote the denominator of every measure computed from the pilot. The owner
+  ruled it onto the audit plane, beside `audit` and `deadLetters`: same refs-only shape, excluded
+  from both walks BY CONSTRUCTION, covered by the existing export omission reason for the category.
+
+  Three consequences, all landed in the same commit rather than left implied:
+  1. **The bare `by_tenant` index was REMOVED.** Its only justification was `tenantExport`/
+     `tenantDelete` calling `.withIndex("by_tenant")` on every `deletableTables()` name, and an
+     `audit_immutable` table is not one of them. Every tenant-scoped read is served by the
+     `by_tenant_createdAt` prefix. Reclassifying back means restoring it in the same commit or the
+     backend does not typecheck.
+  2. **The writer must be INSERT-ONLY** (CLAUDE.md §3) — the category is a claim about
+     immutability, not a filing label. 27-03 owns the module; it is now invariant 11 in the playbook.
+  3. **No field on this table may ever become personal data** — `audit_immutable` rows are beyond
+     the reach of an erasure request. Invariant 12.
+
+  Pinned positively by `tenantData.test.ts` "workflow-pack events sit on the audit plane", because
+  the derived `deletableTables()` equality reads the classification itself and would stay green if
+  the category silently flipped back.
+
+  Verified against the WHOLE backend, not just the touched files: 96 files / 2381 tests green.
+  Checked by hand before changing: `worm.ts` exports only `audit` (hardcoded, unaffected);
+  `tenantExport`'s omission reason for the category is generic and accurate for this shape;
+  `isolation.test.ts`'s cross-tenant index rule keys on the presence of a `tenantId` COLUMN rather
+  than on the category, so the table is still scanned and all three indexes lead with `tenantId`.
 
 ## Next
 

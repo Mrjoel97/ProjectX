@@ -1,7 +1,13 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
 > Last verified: 2026-08-23 (27-02 — **ONE NEW TABLE ON THE REFS-ONLY PLANE: `workflowPackEvents`,
-> classified `tenant_owned` in `packages/core/src/tenantData.ts`.** A separate table rather than an
+> classified `audit_immutable` in `packages/core/src/tenantData.ts`.** It first landed
+> `tenant_owned`; the owner reclassified it the same day, because `tenant_owned` enrols a table in
+> the tenant deletion and export walks automatically, and erasing one tenant then silently rewrote
+> the denominator of every measure computed from the pack pilot. It now sits beside `audit` and
+> `deadLetters` — excluded from both walks BY CONSTRUCTION, and carrying the same two obligations
+> those two carry: the writer is INSERT-ONLY (CLAUDE.md §3), and no field may ever hold personal
+> data, because `audit_immutable` rows are beyond the reach of an erasure request.** A separate table rather than an
 > extension of `telemetry`, because `telemetry` is one write-once terminal row per `requests` row and
 > a pack run creates no request row — extending it would fabricate request rows or break that
 > semantics.
@@ -12,16 +18,17 @@
 > NEITHER cost nor latency — `spendEvents` owns cost and `telemetry.durationMs` / `agentSteps` own
 > latency, and a second number that can disagree with the billing plane is worse than no number.
 >
-> **`by_tenant` over `["tenantId"]` is not optional and not redundant with the compound indexes.**
-> `tenantDelete.ts` and `tenantExport.ts` walk `deletableTables()` and call `.withIndex("by_tenant")`
-> on every name it returns, so a `tenant_owned` table without an index of exactly that name does not
-> typecheck. `tenantData.test.ts`'s table count moved 45 → 46; that count is a TRIPWIRE, and it is
-> what makes classifying a new table unskippable.
+> **THE INDEX RULE, AND WHY THIS TABLE HAS NO BARE `by_tenant`.** `tenantDelete.ts` and
+> `tenantExport.ts` walk `deletableTables()` and call `.withIndex("by_tenant")` on every name it
+> returns, so a `tenant_owned` table without an index of exactly that name does not typecheck. That
+> requirement does NOT apply to an `audit_immutable` table, so the bare index was removed: every
+> tenant-scoped read is served by the `by_tenant_createdAt` prefix. Reclassifying this table back to
+> `tenant_owned` means restoring that index in the same commit.
 >
-> OPEN, AND DELIBERATELY NOT DECIDED: `tenant_owned` means tenant erasure removes a tenant's pack
-> events and export returns them. Whether measurement rows should instead survive erasure the way
-> `audit` does is recorded for the owner in `tenantData.ts` and in
-> `docs/playbooks/workflow-packs.md`. Not resolved here.)
+> `tenantData.test.ts`'s table count moved 45 → 46; that count is a TRIPWIRE, and it is what makes
+> classifying a new table unskippable. Note that the cross-tenant index rule in `isolation.test.ts`
+> keys on the presence of a `tenantId` COLUMN, not on the category — so this table is still scanned,
+> and all three of its indexes lead with `tenantId`.)
 >
 
 > Last verified: 2026-08-22 (26-16 — **a new event: `report.pack_generated`.**)

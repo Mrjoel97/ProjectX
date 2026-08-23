@@ -2459,10 +2459,11 @@ export default defineSchema({
   })
     .index("by_tenant_createdAt", ["tenantId", "createdAt"])
     .index("by_tenant_pack_createdAt", ["tenantId", "packId", "createdAt"])
-    .index("by_tenant_run", ["tenantId", "runId"])
-    // NOT optional, and not a duplicate of the compound index above: `tenantDelete.ts` and
-    // `tenantExport.ts` walk `deletableTables()` and call `.withIndex("by_tenant", ...)` on every
-    // name it returns, so a `tenant_owned` table without an index of exactly this name does not
-    // typecheck — and would fail erasure and export at runtime.
-    .index("by_tenant", ["tenantId"]),
+    .index("by_tenant_run", ["tenantId", "runId"]),
+  // NO bare `by_tenant` index, and that absence is tied to the classification: it would exist only
+  // to satisfy `tenantDelete.ts` / `tenantExport.ts`, which call `.withIndex("by_tenant", ...)` on
+  // every name `deletableTables()` returns — and `audit_immutable` is not one of them. Every
+  // tenant-scoped read is already served by the `by_tenant_createdAt` prefix. If this table is ever
+  // reclassified `tenant_owned`, the bare index must come back in the same commit or the backend
+  // does not typecheck.
 });
