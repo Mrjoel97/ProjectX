@@ -98,8 +98,11 @@ and the only door out of candidacy demands three independently-pinned kinds of e
 2. **Task 1: the registry, matrix and grant** — `5191e02` (feat)
 3. **Task 2 (registry half): candidate-only publication and the pack gate** — `a9d5b07` (feat)
 4. **Task 3: the offline fixture validator** — `15ddd3c` (feat)
-5. **The tenant-overlay bypass, pinned shut** (test)
-6. **The owner's reclassification of `workflowPackEvents`** (refactor)
+5. **The tenant-overlay bypass, pinned shut** — `1c6a285` (test)
+6. **Owner ruling: `workflowPackEvents` to the audit plane** — `12e46e0` (refactor)
+7. **The `--packs` gate could not go red** — `353c34d` (fix)
+8. **Owner ruling: the complaint pack could draft a reply nobody could approve** — `6849340` (fix)
+9. **Three traps the review's skeptic refuted but that hold up** — `cd9c09b` (fix)
 
 Committed in dependency order rather than task order, so every intermediate HEAD compiles: the core
 registry test scans `schema.ts` for the `packId` union, and `skills.ts` imports the core predicates.
@@ -107,11 +110,11 @@ registry test scans `schema.ts` for the `packId` union, and `skills.ts` imports 
 ## Verification — all executed
 
 ```
-cd packages/core && npx vitest run                          42 files / 1151 passed
+cd packages/core && npx vitest run                          42 files / 1152 passed
 cd packages/core && npx tsc --noEmit                        clean
 cd packages/backend && npx tsc --noEmit                     clean
 cd packages/contracts && npx tsc --noEmit                   clean
-cd packages/backend && npx vitest run                        96 files / 2381 passed (FULL suite)
+cd packages/backend && npx vitest run                        96 files / 2382 passed (FULL suite)
 cd packages/backend && node scripts/run-workflow-pack-evals.mjs --fixtures-only --self-test
 npx biome ci . --diagnostic-level=error --max-diagnostics=none          672 files, clean
 ```
@@ -125,6 +128,8 @@ npx biome ci . --diagnostic-level=error --max-diagnostics=none          672 file
 | a malformed fixture placed on disk | runner exits 1 with the exact violation |
 | one validator check deleted from the runner | `--self-test` exits 1 naming the unchecked rule |
 | a pack name added to `USER_AUTHORABLE_SKILLS` | the overlay-bypass guard reddens |
+| a second pack granted `proposePlan` | 3 tests red |
+| the provenance version-pin guard disabled | the publication refusal test reddens |
 
 ## Key Decisions and Deviations
 
@@ -185,6 +190,19 @@ Three were in the fixture runner and one was a real design defect in the matrix.
    can never produce, and the mirror of two rules the validator already enforced.
 4. **The `draft_reply` contract could not reach the Approve gate it claimed to stop at** — see the
    owner decision below.
+
+Three further findings the review's own skeptic REFUTED were re-read and held up (`cd9c09b`). A
+skeptic refuting on "it fails closed" can still be dismissing a real operational trap:
+
+5. **A mispinned manifest created a permanently unactivatable immutable row.** Provenance is written
+   at insert and never patched, and the gate requires it to pin exactly that version — so a manifest
+   pinning v1 stored on a v2 row could never be activated by anyone, and the only remedy was
+   publishing a third version. Now refused at publication with a named error.
+6. **The runner's documented exit-code contract was false**: an unloadable registry exited 1 (a
+   fixture failure) rather than 2 (an environment abort), which would send a lane hunting through
+   its corpus for a defect that is not there.
+7. **The self-test's tally counts CASES, not rules**, so deleting a validator rule that had no case
+   left it green. Coverage went 19 → 25 and the floor is now a tripwire at 25.
 
 ## Owner decisions, taken 2026-08-23 (after the first five commits)
 
