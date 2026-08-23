@@ -81,6 +81,11 @@ import { styleDirectSkillBody } from "@pikar/contracts/skills/styleDirect";
 import { swotSkillBody } from "@pikar/contracts/skills/swot";
 import { voiceBriefSkillBody } from "@pikar/contracts/skills/voiceBrief";
 import { voiceSessionSkillBody } from "@pikar/contracts/skills/voiceSession";
+import {
+  hasPassingPackBrowserEvidence,
+  hasValidPackProvenance,
+  isWorkflowPackSkill,
+} from "@pikar/core";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -211,6 +216,13 @@ async function planGlobalActivation(
     throw new Error(
       `EVAL_GATE: ${name} v${version} has no recorded passing eval run (run pnpm eval:golden --skill ${name}@${version})`,
     );
+  }
+
+  // PACK GATE (27-02, PACK-02). A SECOND, stricter choke point at the same place, keyed on the
+  // closed pack id set rather than on `GATED_SKILLS` — see the pack lane below for why the two
+  // lists must stay apart. Same `status === "candidate"` condition, so the same rollback exemption.
+  if (isWorkflowPackSkill(name) && target.status === "candidate") {
+    assertPackActivationEvidence(target, name, version);
   }
 
   const current = await ctx.db
@@ -776,6 +788,126 @@ export const archiveSkill = internalMutation({
     return { archived: true };
   },
 });
+
+// ── THE WORKFLOW-PACK LANE (Phase 27, PACK-02) ───────────────────────────────────────────────
+//
+// The pilot ships six curated knowledge-work packs DARK. Both existing publication branches are
+// hostile to that, which is the whole reason this lane exists:
+//
+//   `seedSkills` (above) inserts `version: 1, status: "active"` when `rows.length === 0`,
+//   REGARDLESS of gating, and `package.json`'s `dev` script runs it on every dev boot. Six pack
+//   names in `SEEDS` would go live, at v1, un-evaluated, on the next boot.
+//
+//   `insertCandidate` (above) throws `NOT_GATED` for an ungated name and then `NO_ACTIVE_SKILL`
+//   when there are zero rows. It cannot publish a first-ever candidate at all.
+//
+// So the pack bodies stay OUT of `SEEDS` entirely and get their own first-publication mutation
+// that can only ever mint a candidate. The general `rows.length === 0` branch is UNCHANGED —
+// `packages/contracts/src/skill.ts` and three `SEEDS` comments lean on it by name, and CLAUDE.md §7
+// requires a fresh clone to boot.
+//
+// The pack names are also deliberately ABSENT from `GATED_SKILLS`: `run-eval-golden.mjs` derives
+// its `--skill` allow-list from that array and drives `runCockpitAgent` over TEXT fixtures, so
+// gating a name that runner cannot drive mints candidates no eval run could ever certify (the
+// `document-analyst` / `media-director` deadlock). Packs carry their own, STRICTER gate below,
+// satisfied by their own runner.
+
+/** Refused when a non-pack name is pushed through the pack door. Kept short (§ literal-length scan). */
+export const NOT_A_PACK_ERROR = "NOT_A_PACK";
+/** Refused when a pack candidate is missing any one of its three evidence planes. */
+export const PACK_GATE_ERROR = "PACK_GATE";
+
+/**
+ * Publish a pack body as a CANDIDATE. The only door the six pack names may enter the registry by.
+ *
+ * ALWAYS `status: "candidate"` — there is no branch here that can produce an active row, including
+ * the first-ever publication. That is the single property this mutation exists for.
+ *
+ * IDEMPOTENT against the newest row's (body, provenance) pair, so re-running publication never
+ * mints candidate N+1. Provenance participates in the identity deliberately: it is written at
+ * INSERT and never patched, so a corrected manifest is a new immutable candidate rather than a
+ * silent rewrite of what a published version claims about itself.
+ *
+ * `body` is an ARGUMENT, exactly as `insertCandidate` takes one: the CALLER reads the derived
+ * `@pikar/contracts/skills/<name>` constant the way `SEEDS` does (CLAUDE.md §5 — never a hardcoded
+ * prompt), and the provenance manifest hashes the canonical `.md`, not the derived `.ts`.
+ */
+export const publishPackCandidate = internalMutation({
+  args: { name: v.string(), body: v.string(), provenance: v.string() },
+  handler: async (ctx, { name, body, provenance }) => {
+    if (!isWorkflowPackSkill(name)) {
+      throw new Error(`${NOT_A_PACK_ERROR}: ${name} is not a workflow pack`);
+    }
+
+    const rows = await ctx.db
+      .query("skills")
+      .withIndex("by_name_status", (q) => q.eq("name", name))
+      .collect();
+    const newest =
+      rows.length === 0 ? null : rows.reduce((a, b) => (b.version > a.version ? b : a));
+
+    // The SHARED allocation rule (`allocateImmutableVersion` above), not a second copy of it:
+    // `newest === null` already yields v1, which is precisely the case `insertCandidate` refuses.
+    const duplicate = newest !== null && newest.body === body && newest.provenance === provenance;
+    const { version, inserted } = allocateImmutableVersion(newest, duplicate);
+    if (!inserted) return { name, version, inserted: false };
+
+    await ctx.db.insert("skills", {
+      name,
+      version,
+      body,
+      provenance,
+      status: "candidate",
+      createdAt: Date.now(),
+    });
+    return { name, version, inserted: true };
+  },
+});
+
+/**
+ * Record a passing browser gate on the exact (name, version) row (27-09). The second evidence
+ * plane, written the way `recordEvalEvidence` writes the first — `browserEvidence` is a patchable
+ * field because it is recorded ABOUT a row after the fact, unlike `provenance`, which is part of
+ * what the version IS. Payload is refs/counts-only JSON (CLAUDE.md §4).
+ */
+export const recordPackBrowserEvidence = internalMutation({
+  args: { name: v.string(), version: v.number(), browserEvidence: v.string() },
+  handler: async (ctx, { name, version, browserEvidence }) => {
+    if (!isWorkflowPackSkill(name)) {
+      throw new Error(`${NOT_A_PACK_ERROR}: ${name} is not a workflow pack`);
+    }
+    const row = await ctx.db
+      .query("skills")
+      .withIndex("by_name_version", (q) => q.eq("name", name).eq("version", version))
+      .unique();
+    if (row === null) throw new Error(`${NO_SUCH_SKILL_VERSION_ERROR}: ${name} v${version}`);
+    await ctx.db.patch(row._id, { browserEvidence });
+  },
+});
+
+/**
+ * THE PACK GATE. Three independent planes must all name EXACTLY this (name, version):
+ *
+ *   provenance      the body is the reviewed adaptation of a pinned upstream source (27-01/27-08)
+ *   evidence        an eval run scored it (27-08) — the same `hasPassingEvidence` the global
+ *                   EVAL_GATE uses, so packs and gated skills answer the same question
+ *   browserEvidence an authenticated person reached it at more than one viewport (27-09)
+ *
+ * Called from `planGlobalActivation` ONLY for a `candidate` row, so the rollback exemption is
+ * inherited unchanged: `archived` / `rolled_back` were active before and stay exempt BY STATUS.
+ * Rollback must work mid-incident and must never be blocked by a broken eval or browser harness.
+ */
+function assertPackActivationEvidence(target: Doc<"skills">, name: string, version: number): void {
+  const missing = [
+    hasValidPackProvenance(target.provenance, name, version) ? null : "provenance",
+    hasPassingEvidence(target.evidence, name, version) ? null : "eval",
+    hasPassingPackBrowserEvidence(target.browserEvidence, name, version) ? null : "browser",
+  ].filter((plane): plane is string => plane !== null);
+
+  if (missing.length > 0) {
+    throw new Error(`${PACK_GATE_ERROR}: ${name} v${version} lacks ${missing.join(", ")} evidence`);
+  }
+}
 
 // ── THE TENANT OVERLAY (Phase 21, SKILL-01) ──────────────────────────────────────────────────
 //

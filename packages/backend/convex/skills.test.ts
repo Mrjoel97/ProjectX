@@ -30,6 +30,7 @@ import { inboxDigestSkillBody } from "@pikar/contracts/skills/inboxDigest";
 import { replyDrafterSkillBody } from "@pikar/contracts/skills/replyDrafter";
 import { voiceBriefSkillBody } from "@pikar/contracts/skills/voiceBrief";
 import { voiceSessionSkillBody } from "@pikar/contracts/skills/voiceSession";
+import { WORKFLOW_PACK_IDS } from "@pikar/core";
 import { convexTest, type TestConvex } from "convex-test";
 import { describe, expect, test } from "vitest";
 // 21-02: `publishUserCandidate` writes ONE refs-only audit row, and `audit.log` mirrors every
@@ -3519,5 +3520,308 @@ describe("owner activation + immutable rollback of agent candidates (23-05)", ()
     const exportRegion = skills.slice(exportFrom, exportTo);
     expect(exportRegion).toContain("ownerMutation({");
     expect(exportRegion).not.toContain("tenantMutation({");
+  });
+});
+
+// ── Phase 27 (PACK-02): the workflow-pack candidate lane ─────────────────────────────────────
+//
+// The pilot ships DARK. Both existing publication branches were hostile to that — `seedSkills`
+// auto-activates an unseeded name at v1, and `insertCandidate` refuses one outright — so the pack
+// lane is the third door, and the ONLY property that matters about it is that no branch inside it
+// can produce an active row.
+describe("workflow-pack candidate lifecycle", () => {
+  const PACK = "pack-brand-review";
+
+  const provenanceFor = (version: number, name = PACK, over: Record<string, unknown> = {}) =>
+    JSON.stringify({
+      sourceRepo: "https://github.com/anthropics/knowledge-work-plugins",
+      sourceCommit: "5267cf7000000000000000000000000000000000",
+      sourcePaths: ["small-business/skills/brand-review/SKILL.md"],
+      bodySha256: "b".repeat(64),
+      license: "Apache-2.0",
+      modificationNotice: "rewritten for Pikar; see NOTICE",
+      skillVersions: { [name]: version },
+      ts: 1,
+      ...over,
+    });
+
+  const evalFor = (version: number, name = PACK) =>
+    JSON.stringify({
+      runner: "eval:packs",
+      runId: "e1",
+      pass: true,
+      casesPassed: 6,
+      casesTotal: 6,
+      retriedCases: [],
+      costUsd: 0.02,
+      model: "openai/gpt-4o-mini",
+      skillVersions: { [name]: version },
+      ts: 1,
+    });
+
+  const browserFor = (version: number, name = PACK, over: Record<string, unknown> = {}) =>
+    JSON.stringify({
+      runner: "playwright:pack",
+      runId: "b1",
+      pass: true,
+      skillVersions: { [name]: version },
+      authenticated: true,
+      viewports: 2,
+      casesPassed: 4,
+      casesTotal: 4,
+      deploymentRef: "dev",
+      ts: 1,
+      ...over,
+    });
+
+  const packRows = (t: TestConvex<typeof schema>, name = PACK) =>
+    t.run((ctx) =>
+      ctx.db
+        .query("skills")
+        .withIndex("by_name_status", (q) => q.eq("name", name))
+        .collect(),
+    );
+
+  // THE CENTRAL PROPERTY OF THE PHASE, asserted from the direction that would actually break it:
+  // a dev boot runs `convex dev --run skills:seedSkills`, so if a pack body ever reached `SEEDS`
+  // it would be live at v1, active and un-evaluated before any test ran.
+  test("a dev boot leaves ZERO pack rows — no pack body is in SEEDS", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.skills.seedSkills, {});
+
+    for (const id of WORKFLOW_PACK_IDS) {
+      expect(await packRows(t, `pack-${id}`), `pack-${id} was seeded`).toEqual([]);
+    }
+  });
+
+  test("first publication mints a CANDIDATE at v1, never an active row", async () => {
+    const t = convexTest(schema, modules);
+    const out = await t.mutation(internal.skills.publishPackCandidate, {
+      name: PACK,
+      body: "# brand review",
+      provenance: provenanceFor(1),
+    });
+    expect(out).toEqual({ name: PACK, version: 1, inserted: true });
+
+    const rows = await packRows(t);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.status).toBe("candidate");
+    expect(rows[0]?.version).toBe(1);
+    expect(rows[0]?.provenance).toBe(provenanceFor(1));
+    // And it is invisible to ordinary discovery, which reads the ACTIVE row.
+    await expect(t.run((ctx) => loadSkill(ctx, PACK))).rejects.toThrow();
+  });
+
+  test("re-running first publication is a no-op — it never mints candidate N+1", async () => {
+    const t = convexTest(schema, modules);
+    const args = { name: PACK, body: "# brand review", provenance: provenanceFor(1) };
+    await t.mutation(internal.skills.publishPackCandidate, args);
+    const again = await t.mutation(internal.skills.publishPackCandidate, args);
+
+    expect(again).toEqual({ name: PACK, version: 1, inserted: false });
+    expect(await packRows(t)).toHaveLength(1);
+  });
+
+  // Provenance is part of what a version IS, so a corrected manifest is a NEW immutable candidate
+  // rather than a silent rewrite of what an already-published version claims about itself.
+  test("a changed body OR changed provenance publishes the next candidate, never a patch", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.skills.publishPackCandidate, {
+      name: PACK,
+      body: "# v1",
+      provenance: provenanceFor(1),
+    });
+    await t.mutation(internal.skills.publishPackCandidate, {
+      name: PACK,
+      body: "# v2",
+      provenance: provenanceFor(2),
+    });
+    // Same body, different provenance → still a new version.
+    await t.mutation(internal.skills.publishPackCandidate, {
+      name: PACK,
+      body: "# v2",
+      provenance: provenanceFor(3, PACK, {
+        sourcePaths: ["small-business/skills/brand-review/x.md"],
+      }),
+    });
+
+    const rows = (await packRows(t)).sort((a, b) => a.version - b.version);
+    expect(rows.map((r) => [r.version, r.status, r.body])).toEqual([
+      [1, "candidate", "# v1"],
+      [2, "candidate", "# v2"],
+      [3, "candidate", "# v2"],
+    ]);
+  });
+
+  test("the pack door refuses a name that is not a pack", async () => {
+    const t = convexTest(schema, modules);
+    await expect(
+      t.mutation(internal.skills.publishPackCandidate, {
+        name: COCKPIT_AGENT_SKILL,
+        body: "x",
+        provenance: provenanceFor(1, COCKPIT_AGENT_SKILL),
+      }),
+    ).rejects.toThrow(/NOT_A_PACK/);
+  });
+
+  // Each plane is asserted ALONE as the blocker, so a gate that silently stopped reading one of
+  // them would redden here rather than pass on the strength of the other two.
+  test("activation refuses a pack candidate missing ANY of its three evidence planes", async () => {
+    const planes: [string, Record<string, string | undefined>][] = [
+      ["provenance", { evidence: evalFor(1), browserEvidence: browserFor(1) }],
+      ["eval", { provenance: provenanceFor(1), browserEvidence: browserFor(1) }],
+      ["browser", { provenance: provenanceFor(1), evidence: evalFor(1) }],
+    ];
+    for (const [absent, present] of planes) {
+      const t = convexTest(schema, modules);
+      await t.mutation(internal.skills.publishPackCandidate, {
+        name: PACK,
+        body: "# b",
+        provenance: provenanceFor(1),
+      });
+      await t.run(async (ctx) => {
+        const row = await ctx.db
+          .query("skills")
+          .withIndex("by_name_version", (q) => q.eq("name", PACK).eq("version", 1))
+          .unique();
+        if (row === null) throw new Error("candidate row missing");
+        // Provenance is cleared explicitly when it is the plane under test — it is written at
+        // insert, so leaving it in place would make that case assert nothing.
+        await ctx.db.patch(row._id, {
+          provenance: present.provenance,
+          evidence: present.evidence,
+          browserEvidence: present.browserEvidence,
+        });
+      });
+
+      await expect(
+        t.mutation(internal.skills.activateSkill, { name: PACK, version: 1 }),
+        `missing ${absent} did not block activation`,
+      ).rejects.toThrow(new RegExp(`PACK_GATE.*${absent}`));
+    }
+  });
+
+  test("activation succeeds once all three planes pin the exact version", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.skills.publishPackCandidate, {
+      name: PACK,
+      body: "# b",
+      provenance: provenanceFor(1),
+    });
+    await t.mutation(internal.skills.recordEvalEvidence, {
+      name: PACK,
+      version: 1,
+      evidence: evalFor(1),
+    });
+    await t.mutation(internal.skills.recordPackBrowserEvidence, {
+      name: PACK,
+      version: 1,
+      browserEvidence: browserFor(1),
+    });
+    await t.mutation(internal.skills.activateSkill, { name: PACK, version: 1 });
+
+    const loaded = await t.run((ctx) => loadSkill(ctx, PACK));
+    expect(loaded.version).toBe(1);
+  });
+
+  // Evidence for v1 must never open v2. The exact-version pin, tested at the GATE rather than only
+  // in the pure predicate.
+  test("evidence pinning a DIFFERENT version cannot activate this one", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.skills.publishPackCandidate, {
+      name: PACK,
+      body: "# v1",
+      provenance: provenanceFor(1),
+    });
+    await t.mutation(internal.skills.publishPackCandidate, {
+      name: PACK,
+      body: "# v2",
+      provenance: provenanceFor(2),
+    });
+    // All three planes present on v2 — but every one of them names v1.
+    await t.mutation(internal.skills.recordEvalEvidence, {
+      name: PACK,
+      version: 2,
+      evidence: evalFor(1),
+    });
+    await t.mutation(internal.skills.recordPackBrowserEvidence, {
+      name: PACK,
+      version: 2,
+      browserEvidence: browserFor(1),
+    });
+    await t.run(async (ctx) => {
+      const row = await ctx.db
+        .query("skills")
+        .withIndex("by_name_version", (q) => q.eq("name", PACK).eq("version", 2))
+        .unique();
+      if (row === null) throw new Error("v2 row missing");
+      await ctx.db.patch(row._id, { provenance: provenanceFor(1) });
+    });
+
+    await expect(
+      t.mutation(internal.skills.activateSkill, { name: PACK, version: 2 }),
+    ).rejects.toThrow(/PACK_GATE/);
+  });
+
+  // THE ROLLBACK EXEMPTION, preserved. A version that was active before is exempt BY STATUS —
+  // rollback must work mid-incident and must never be blocked by a broken eval or browser harness.
+  test("rollback to a previously-active pack version needs no evidence at all", async () => {
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      // v1 was live and has since been rolled back; v2 is live now. Neither carries evidence.
+      await ctx.db.insert("skills", {
+        name: PACK,
+        version: 1,
+        body: "# v1",
+        status: "rolled_back",
+        createdAt: 1,
+      });
+      await ctx.db.insert("skills", {
+        name: PACK,
+        version: 2,
+        body: "# v2",
+        status: "active",
+        createdAt: 2,
+      });
+    });
+
+    await t.mutation(internal.skills.activateSkill, { name: PACK, version: 1 });
+    const loaded = await t.run((ctx) => loadSkill(ctx, PACK));
+    expect(loaded.version).toBe(1);
+  });
+
+  test("the browser-evidence writer refuses a non-pack name and an unknown version", async () => {
+    const t = convexTest(schema, modules);
+    await expect(
+      t.mutation(internal.skills.recordPackBrowserEvidence, {
+        name: COCKPIT_AGENT_SKILL,
+        version: 1,
+        browserEvidence: browserFor(1, COCKPIT_AGENT_SKILL),
+      }),
+    ).rejects.toThrow(/NOT_A_PACK/);
+
+    await expect(
+      t.mutation(internal.skills.recordPackBrowserEvidence, {
+        name: PACK,
+        version: 9,
+        browserEvidence: browserFor(9),
+      }),
+    ).rejects.toThrow(/NO_SUCH_SKILL_VERSION/);
+  });
+
+  // The two lists must stay apart: `run-eval-golden.mjs` derives its --skill allow-list from
+  // GATED_SKILLS and drives runCockpitAgent over TEXT fixtures, so a gated pack name would mint
+  // candidates no eval run could ever certify (the document-analyst / media-director deadlock).
+  test("no pack name is in GATED_SKILLS, and none is in SEEDS", () => {
+    const src = readFileSync(fileURLToPath(new URL("./skills.ts", import.meta.url)), "utf8");
+    const seeds = src.slice(
+      src.indexOf("const SEEDS = ["),
+      src.indexOf("export const REGISTRY_SKILL_NAMES"),
+    );
+    expect(seeds.length, "SEEDS block not found — did it move?").toBeGreaterThan(500);
+    for (const id of WORKFLOW_PACK_IDS) {
+      expect(isGatedSkill(`pack-${id}`), `pack-${id} is gated`).toBe(false);
+      expect(seeds.includes(`pack-${id}`), `pack-${id} is in SEEDS`).toBe(false);
+    }
   });
 });

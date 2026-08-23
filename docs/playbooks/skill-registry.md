@@ -1,5 +1,39 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-23 (27-02 — **A THIRD PUBLICATION DOOR, AND A SECOND ACTIVATION GATE.**
+> `publishPackCandidate` is the only way the six `pack-*` names may enter the registry, and no
+> branch inside it can produce an active row: it reuses `allocateImmutableVersion` (whose
+> `newest === null` arm already yields v1) and always writes `status: "candidate"`. It is idempotent
+> against the newest row's **(body, provenance) pair** — provenance participates in the identity
+> because it is written at INSERT and never patched, so a corrected manifest is a new immutable
+> candidate rather than a silent rewrite of what a published version claims about itself.
+>
+> **`seedSkills` IS UNCHANGED, deliberately.** Its `rows.length === 0` branch is depended on by name
+> by three `SEEDS` comments and by `packages/contracts/src/skill.ts`, and CLAUDE.md §7 requires a
+> fresh clone to boot. The pack bodies simply never enter `SEEDS` — asserted from the direction that
+> would actually break it (`t.mutation(seedSkills)` then zero rows for all six names), because
+> `package.json`'s `dev` script runs the seed on every dev boot.
+>
+> **`planGlobalActivation` gained a pack branch beside the EVAL_GATE**, on the same
+> `status === "candidate"` condition, so the rollback exemption is inherited unchanged: `archived` /
+> `rolled_back` were active before and stay exempt BY STATUS. The pack branch requires THREE planes,
+> each pinning the exact `(name, version)` — `provenance`, `evidence`, `browserEvidence` — and the
+> test asserts each one ALONE as the blocker, so a gate that stopped reading one of them reddens
+> rather than passing on the strength of the other two. `skills` gained two optional columns for the
+> two new planes; `provenance` is write-at-insert, `browserEvidence` is patchable like `evidence`.
+>
+> **THE PACK NAMES ARE NOT IN `GATED_SKILLS`, AND MUST NOT BE.** `run-eval-golden.mjs` derives its
+> `--skill` allow-list from that array and drives `runCockpitAgent` over TEXT fixtures, so gating a
+> name that runner cannot drive mints candidates no eval run could ever certify — the
+> `document-analyst` / `media-director` deadlock. Packs carry their own stricter gate and their own
+> runner. Both facts are asserted in `skills.test.ts` and in `packages/core`.
+>
+> MUTATION-VERIFIED: flipping the inserted status to `"active"` reddens four tests; disabling the
+> pack branch reddens two. NOTE: keeping packs out of `SEEDS` also keeps them out of
+> `reportsGovernance.activeSkills`, which iterates `REGISTRY_SKILL_NAMES` — recorded as a known gap
+> in `docs/playbooks/workflow-packs.md`, not fixed here.)
+>
+
 > Last verified: 2026-08-22 (26-15 — **ONE REFACTOR, NO BEHAVIOUR CHANGE.** `seedSkills`' `seeds`
 > array is lifted to module scope as `SEEDS`, and `REGISTRY_SKILL_NAMES` is DERIVED from it. Same
 > array, same rows, same APPEND-ONLY rule — a new skill goes at the END; do not reorder. The reason
