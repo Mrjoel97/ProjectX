@@ -10,7 +10,9 @@ import {
   EXECUTIVE_AGENT_AUTHOR_ID,
   hasPassingEvidence,
   hasPassingTenantEvidence,
+  isAgentAuthorableSkill,
   isGatedSkill,
+  isUserAuthorableSkill,
   LEAD_ENGINE_SKILL,
   OFFER_ARCHITECT_SKILL,
   USER_AUTHORABLE_SKILL_METADATA,
@@ -3807,6 +3809,18 @@ describe("workflow-pack candidate lifecycle", () => {
         browserEvidence: browserFor(9),
       }),
     ).rejects.toThrow(/NO_SUCH_SKILL_VERSION/);
+  });
+
+  // THE OVERLAY BYPASS, closed by assertion. The pack gate guards the GLOBAL `skills` table, but
+  // `loadEffectiveSkill` prefers a tenant's active `tenantSkills` row over the global one — so a
+  // pack name that could ever reach a tenant overlay would run a body that never passed the gate.
+  // Both overlay doors refuse before any read today; this is what keeps that true.
+  // MUTATION that must turn this RED: add a pack name to USER_AUTHORABLE_SKILLS.
+  test("no pack name is user- or agent-authorable — the overlay cannot bypass the pack gate", () => {
+    for (const id of WORKFLOW_PACK_IDS) {
+      expect(isUserAuthorableSkill(`pack-${id}`), `pack-${id} is user-authorable`).toBe(false);
+      expect(isAgentAuthorableSkill(`pack-${id}`), `pack-${id} is agent-authorable`).toBe(false);
+    }
   });
 
   // The two lists must stay apart: `run-eval-golden.mjs` derives its --skill allow-list from
