@@ -21,9 +21,11 @@ import { mediaDirectorSkillBody } from "./mediaDirector";
 import { moneyModelDesignerSkillBody } from "./moneyModelDesigner";
 import { offerArchitectSkillBody } from "./offerArchitect";
 import { onboardingAgentSkillBody } from "./onboardingAgent";
+import { packBrandReviewSkillBody } from "./packBrandReview";
 import { packBusinessPulseSkillBody } from "./packBusinessPulse";
 import { packCampaignPlanSkillBody } from "./packCampaignPlan";
 import { packCustomerComplaintSkillBody } from "./packCustomerComplaint";
+import { packProcessSopSkillBody } from "./packProcessSop";
 import { packSalesCallPrepSkillBody } from "./packSalesCallPrep";
 import { researchSpecialistSkillBody } from "./researchSpecialist";
 import { styleCoachingSkillBody } from "./styleCoaching";
@@ -94,6 +96,10 @@ const bodies: [string, string][] = [
   // 27-05: the two best-supported packs — their primary inputs are real agent tools.
   ["pack-customer-complaint", packCustomerComplaintSkillBody],
   ["pack-sales-call-prep", packSalesCallPrepSkillBody],
+  // 27-06: the last two. Brand Review is the most capability-starved pack in the pilot and ships
+  // anyway, with its blind spot stated in its own first output section.
+  ["pack-process-sop", packProcessSopSkillBody],
+  ["pack-brand-review", packBrandReviewSkillBody],
 ];
 
 describe("evaluation/specialist skill bodies (BEVL-01) — md ↔ ts no-drift", () => {

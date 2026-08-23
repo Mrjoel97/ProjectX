@@ -1,5 +1,29 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
+> Last verified: 2026-08-23 (27-06 — **THE LAST TWO BODIES; ALL SIX PACKS NOW EXIST.**
+> `pack-process-sop.md` and `pack-brand-review.md` land as `.md` + derived `.ts` pairs registered in
+> `skillBodies.test.ts`, with five fixtures each. The corpus is 30 fixtures across six packs, and
+> `workflowPacks.test.ts`'s "every granted tool is TAUGHT" check now covers every pack.
+>
+> **Brand Review is the most capability-starved pack in the pilot and ships anyway.** There is no
+> tenant brand store — `brandVoice` is a per-plan optional string, not a queryable one, and no agent
+> tool reads it; the content shelf is `tenantQuery`-only. So the body has exactly TWO possible
+> sources (guidance the owner states in the turn, and material `searchVault` returns) and its FIRST
+> output section is "What I reviewed against", naming which one it had. With neither, it reviews
+> against general writing principles and says so. The body bans the sentences that would imply a
+> stored standard — "deviates from your brand voice", "inconsistent with your guidelines",
+> "off-pillar" — because a generic review presented as a brand check is a false claim about work the
+> owner will act on. The load-bearing fixture is the no-guidance one, and its pass condition is that
+> the review RUNS and states its basis, not that it declines.
+>
+> **Process/SOP will not invent authority.** A step whose owner the user never stated reads
+> `Unassigned` and appears in a mandatory "What is not settled" section — never a plausible role.
+> An invented owner or deadline is not a helpful default; it is authority made up and written into a
+> document people follow. There is no task system, no publishing tool and no design tool, and the
+> body is forbidden from describing one as available: `createDocument` writes markdown plus a
+> derived PDF into the vault and nothing else.)
+>
+
 > Last verified: 2026-08-23 (27-05 — **THE TWO BEST-SUPPORTED PACKS.** `pack-customer-complaint.md`
 > and `pack-sales-call-prep.md` land as `.md` + derived `.ts` pairs registered in
 > `skillBodies.test.ts`, with five fixtures each. These are the only two packs whose primary inputs
