@@ -1,0 +1,4 @@
+# The snapshot is hashed BYTE-FOR-BYTE and the hashes are checked from the WORKING TREE, so git
+# must never translate line endings here. The repo root sets `* text=auto`, which would rewrite
+# these files on a Windows checkout and break every sha256 in manifest.json.
+* -text

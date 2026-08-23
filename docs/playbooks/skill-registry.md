@@ -1,5 +1,41 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-23 (27-01 — **THE UPSTREAM MATERIAL IS PINNED, SNAPSHOTTED AND HASHED.**
+> `third_party/knowledge-work-plugins/` now holds the exact bytes the six Phase-27 pack bodies will
+> be adapted FROM, at commit `5267cf7bff3031921d4474b8e8f86ad02d2b8f6d`, with a per-file SHA-256 and
+> the upstream git blob sha in `manifest.json`. `THIRD_PARTY_NOTICES.md` carries the Apache-2.0
+> attribution and the §4(b) modification notice.
+>
+> **HOW THIS RELATES TO THE REGISTRY.** The snapshot is REFERENCE INPUT, never a runtime dependency:
+> nothing loads it, and no registry row reads it. The chain is
+> `source-snapshot/<upstream path>` → (human adaptation, 27-04/05/06) →
+> `packages/contracts/skills/pack-<id>.md` → the derived `.ts` constant → `publishPackCandidate`.
+> Every manifest hash pins the CANONICAL `.md`, never the auto-derived `.ts` under
+> `packages/contracts/src/skills/` — hashing the derived copy would pin the mirror rather than the
+> original, and `skillBodies.test.ts` is what keeps the pair identical.
+>
+> **THE INVENTORY IN THE PLANNING FILES WAS WRONG, AND THE MANIFEST SUPERSEDES IT.** Both
+> `27-RESEARCH.md` and `27-READINESS.md` searched only `small-business/`. Consequences, all verified
+> against the full recursive tree at the pinned commit (1657 entries, untruncated):
+> `ticket-deflector` **does** exist (the audit says it does not) and is the right source for
+> Customer Complaint Response; Sales Call Prep and Process/SOP Builder were "never inventoried"
+> only because they live at `sales/skills/call-prep` and `operations/skills/process-doc`. Four of
+> the six pack ids are exact upstream skill names. **No pack needed an `upstreamSource: null`.**
+>
+> Also recorded: the repository ROOT `LICENSE` at this commit carries ~249 bytes of unrelated text
+> after the end of the Apache-2.0 appendix. It is snapshotted verbatim (a snapshot tidied on the way
+> in can never be diffed against upstream again) and the copy we redistribute under is the clean
+> per-plugin Apache-2.0 text, which `marketing/LICENSE` and `sales/LICENSE` ship identically.
+>
+> **UPDATES ARE REVIEWED DIFFS.** Nothing auto-syncs. Bumping the pin means re-fetching, re-running
+> `node scripts/verify-knowledge-work-provenance.mjs --check-source`, and reading the diff — and an
+> upstream change can still only enter the registry as a NEW candidate through
+> `publishPackCandidate`, which cannot produce an active row. Adapted-body hashes are `null` until
+> 27-08; the verifier refuses a HALF-populated manifest, so an unfinished adaptation cannot look
+> complete. Five failure modes proven red: a mutated source byte, a mutated manifest hash, a
+> floating ref, an undeclared file smuggled into the snapshot, and a half-populated adapted set.)
+>
+
 > Last verified: 2026-08-23 (27-02 — **A THIRD PUBLICATION DOOR, AND A SECOND ACTIVATION GATE.**
 > `publishPackCandidate` is the only way the six `pack-*` names may enter the registry, and no
 > branch inside it can produce an active row: it reuses `allocateImmutableVersion` (whose

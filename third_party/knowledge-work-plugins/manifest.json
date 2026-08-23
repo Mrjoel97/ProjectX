@@ -1,0 +1,212 @@
+{
+  "$comment": "AUTHORITATIVE UPSTREAM INVENTORY for Phase 27. This file SUPERSEDES the source-selection table in .planning/phases/27-curated-knowledge-work-pack-pilot/27-RESEARCH.md, which was never verified at the pinned commit. See inventoryCorrections below.",
+  "schemaVersion": 1,
+  "upstream": {
+    "repo": "https://github.com/anthropics/knowledge-work-plugins",
+    "commit": "5267cf7bff3031921d4474b8e8f86ad02d2b8f6d",
+    "commitDate": "2026-08-20T19:55:20Z",
+    "commitSubject": "bump(bigdata-com): 74ec89c9 -> 2a52a001 (#980)",
+    "treeSha": "97af63c49527410eb99bf4b0d2093d19ad7e5a5b",
+    "resolvedFrom": "5267cf7",
+    "$comment": "An EXACT 40-character commit. Never a branch, never a tag, never main - a floating ref makes every hash below unfalsifiable."
+  },
+  "license": {
+    "id": "Apache-2.0",
+    "redistributedCopy": "third_party/knowledge-work-plugins/LICENSE",
+    "$comment": "The redistributed copy is byte-identical to the CLEAN per-plugin Apache-2.0 text (marketing/LICENSE == sales/LICENSE). The repository ROOT LICENSE at this commit is NOT clean - see rootLicenseAnomaly - so it is snapshotted as received but is not the copy we redistribute under.",
+    "rootLicenseAnomaly": {
+      "path": "LICENSE",
+      "sha256": "a6946284993aeec75c7d75906064b66210c46051e562077efb30eb6dcfe72e26",
+      "bytes": 11607,
+      "finding": "The root LICENSE carries about 249 bytes of unrelated text appended AFTER the end of the Apache-2.0 appendix (beginning 'Syntax-file, code seperations,'). It is recorded verbatim rather than cleaned, because a snapshot tidied on the way in can never be diffed against upstream again.",
+      "effect": "None on the grant. The Apache-2.0 text itself is complete and unmodified above the trailing lines, and the plugin roots we draw from either ship their own clean copy (marketing, sales) or are governed by this one (small-business, operations)."
+    },
+    "perPluginLicenses": {
+      "marketing": "marketing/LICENSE",
+      "sales": "sales/LICENSE",
+      "small-business": null,
+      "operations": null,
+      "$comment": "null means the plugin root ships no LICENSE of its own at this commit, so the repository root LICENSE governs it."
+    }
+  },
+  "inventoryCorrections": [
+    "27-RESEARCH.md and 27-READINESS.md both restricted the search to small-business/. That is why Sales Call Prep and Process/SOP Builder appeared to have no upstream counterpart: they live at sales/skills/call-prep and operations/skills/process-doc.",
+    "27-READINESS.md states that small-business/skills/ticket-deflector/ does NOT exist at 5267cf7. THAT IS FALSE - it exists with 3 files and it IS the correct source for Customer Complaint Response. Verified by listing the full recursive tree at the pinned commit (1657 entries, untruncated).",
+    "small-business/skills/handle-complaint also exists and was considered and REJECTED as the source: it is a router that chains two other skills, and a Pikar pack carries a tool allow-list so it structurally cannot dispatch. ticket-deflector is the substantive complaint-response workflow.",
+    "Four of the six Pikar pack ids are exact upstream skill names (business-pulse, campaign-plan, brand-review) or near-exact (sales-call-prep -> call-prep). No pack required an upstreamSource of null."
+  ],
+  "packs": [
+    {
+      "packId": "business-pulse",
+      "skillName": "pack-business-pulse",
+      "upstreamSource": "small-business/skills/business-pulse",
+      "upstreamPluginRoot": "small-business",
+      "governingLicense": "LICENSE",
+      "adaptedDestination": "packages/contracts/skills/pack-business-pulse.md",
+      "adaptedBodySha256": null,
+      "plannedModifications": "Connector sections (QuickBooks/PayPal/Square/HubSpot) removed: those sources are MISSING in Pikar and are named to the user instead. Output is an in-thread briefing, not a saved report.",
+      "files": [
+        {
+          "path": "small-business/skills/business-pulse/SKILL.md",
+          "bytes": 6253,
+          "sha256": "50feedf201218b878268d34c795b2f1b6de218e2bf2e9b9f4c85c4e57d5179e9",
+          "gitBlobSha": "7f2ddfd23ceddbd56b2d06899035a760fdd8e337"
+        },
+        {
+          "path": "small-business/skills/business-pulse/reference/data_sources.md",
+          "bytes": 4336,
+          "sha256": "199e24b24fe276ee606da2570a05fcdf36594cd34fb5ac55a4cbc1e74fb61bb0",
+          "gitBlobSha": "de0d3249942cfa96786b963a84f782f79dd01f33"
+        },
+        {
+          "path": "small-business/skills/business-pulse/reference/gotchas.md",
+          "bytes": 3268,
+          "sha256": "cfb512a24558174e49290129cf7bfcdb65096c05c1888f152874d19f4ff1d4d8",
+          "gitBlobSha": "b6cd51615d4ad64fb33bb3d28f41df5a30e9e643"
+        },
+        {
+          "path": "small-business/skills/business-pulse/reference/output_template.md",
+          "bytes": 3555,
+          "sha256": "a298437231c47017f4f18bfa42f75061404c231a4e50d73ab3c4af1c0116ed7f",
+          "gitBlobSha": "4ad20bd1f55e5457acffb5f3d97ae1883d405db0"
+        },
+        {
+          "path": "small-business/skills/business-pulse/reference/thresholds.md",
+          "bytes": 1988,
+          "sha256": "e86f6a6bf0910b1be201bfbcafd5a5737ae560b01d17de947628127385e4713b",
+          "gitBlobSha": "ae0f8ee049a2cce854db641a66ad269060281dd3"
+        }
+      ]
+    },
+    {
+      "packId": "campaign-plan",
+      "skillName": "pack-campaign-plan",
+      "upstreamSource": "marketing/skills/campaign-plan",
+      "upstreamPluginRoot": "marketing",
+      "governingLicense": "marketing/LICENSE",
+      "adaptedDestination": "packages/contracts/skills/pack-campaign-plan.md",
+      "adaptedBodySha256": null,
+      "plannedModifications": "Rewritten to PRODUCE a plan only. The upstream brief implies executing the campaign; a Pikar pack carries a tool allow-list and structurally cannot dispatch a specialist or send anything.",
+      "files": [
+        {
+          "path": "marketing/skills/campaign-plan/SKILL.md",
+          "bytes": 14153,
+          "sha256": "f0b146074b64ee0fd52f7864e30191eab83878c8c1e3e7cf24754e13c7dbfad3",
+          "gitBlobSha": "087001892894890bf7fd84e0c9f999e0a68831ab"
+        }
+      ]
+    },
+    {
+      "packId": "customer-complaint",
+      "skillName": "pack-customer-complaint",
+      "upstreamSource": "small-business/skills/ticket-deflector",
+      "upstreamPluginRoot": "small-business",
+      "governingLicense": "LICENSE",
+      "adaptedDestination": "packages/contracts/skills/pack-customer-complaint.md",
+      "adaptedBodySha256": null,
+      "plannedModifications": "Refund issuance and every send removed. Pikar drafts a reply through replyToMessage and stages it with proposePlan for the one human Approve gate; order/refund and CRM history are MISSING.",
+      "files": [
+        {
+          "path": "small-business/skills/ticket-deflector/SKILL.md",
+          "bytes": 5002,
+          "sha256": "69ef24938ab685cb54faea79a5d7a6e55aba2527d4cbf03a1313fd611c74cfb8",
+          "gitBlobSha": "00b90a1c38e095b8f6d3e9b1ca39f84e56e58cc8"
+        },
+        {
+          "path": "small-business/skills/ticket-deflector/reference/examples/respond-refund-request.md",
+          "bytes": 1982,
+          "sha256": "fe1ad9375db434147db51992969dd082f635543c20229a72ec213329f4bc88e8",
+          "gitBlobSha": "6607640a570600283a4c388ac5da75ba0db3f30c"
+        },
+        {
+          "path": "small-business/skills/ticket-deflector/reference/gotchas.md",
+          "bytes": 2200,
+          "sha256": "9bf84e58265c461541d46ab2fcdc0a8777a76e0a79015c85724c885536285ef0",
+          "gitBlobSha": "9545f9919b2a43b8758eb0459dbed5cd8626f10d"
+        }
+      ]
+    },
+    {
+      "packId": "sales-call-prep",
+      "skillName": "pack-sales-call-prep",
+      "upstreamSource": "sales/skills/call-prep",
+      "upstreamPluginRoot": "sales",
+      "governingLicense": "sales/LICENSE",
+      "adaptedDestination": "packages/contracts/skills/pack-sales-call-prep.md",
+      "adaptedBodySha256": null,
+      "plannedModifications": "CRM account/deal lookups removed and named as MISSING. Keeps the standalone user-input plus web-research path, which is what Pikar can actually serve.",
+      "files": [
+        {
+          "path": "sales/skills/call-prep/SKILL.md",
+          "bytes": 8492,
+          "sha256": "51b075cf1a1cecdd1022034de5a552971917a1fea2304f564bb550bdc6dbbf72",
+          "gitBlobSha": "5ca7e2c708b5430e9c8bcc205e959d36de88573a"
+        }
+      ]
+    },
+    {
+      "packId": "process-sop",
+      "skillName": "pack-process-sop",
+      "upstreamSource": "operations/skills/process-doc",
+      "upstreamPluginRoot": "operations",
+      "governingLicense": "LICENSE",
+      "adaptedDestination": "packages/contracts/skills/pack-process-sop.md",
+      "adaptedBodySha256": null,
+      "plannedModifications": "Publishing, task-system export and owner assignment removed and named as MISSING. Produces a durable vault document only.",
+      "files": [
+        {
+          "path": "operations/skills/process-doc/SKILL.md",
+          "bytes": 2503,
+          "sha256": "fceeeddb363e813ba831f9f2de1adb4c7e45ad179366bbb9ea9e40377abe96a9",
+          "gitBlobSha": "ebba066e504478dd00e07afe81f606aab7ae6fca"
+        }
+      ]
+    },
+    {
+      "packId": "brand-review",
+      "skillName": "pack-brand-review",
+      "upstreamSource": "marketing/skills/brand-review",
+      "upstreamPluginRoot": "marketing",
+      "governingLicense": "marketing/LICENSE",
+      "adaptedDestination": "packages/contracts/skills/pack-brand-review.md",
+      "adaptedBodySha256": null,
+      "plannedModifications": "Rewritten to review against general principles, because Pikar has no tenant brand store; the pack says so and names what would unlock the stronger review.",
+      "files": [
+        {
+          "path": "marketing/skills/brand-review/SKILL.md",
+          "bytes": 12936,
+          "sha256": "759f29397a908c32521080247292a4e1c52ac01643bea70ccd6e807e86c1fa4b",
+          "gitBlobSha": "25ae9d95120b8eda4a61cb91da67cb48c15d3132"
+        }
+      ]
+    }
+  ],
+  "adaptedBodies": {
+    "status": "pending",
+    "$comment": "Adapted-body hashes pin the canonical .md under packages/contracts/skills/, NEVER the auto-derived .ts under packages/contracts/src/skills/ (skillBodies.test.ts asserts the pair is byte-identical). The bodies do not exist yet: 27-04/05/06 author them. 27-01's own text defers this to 'Plan 07', but 27-08-PLAN.md Task 1 is the plan that owns this file and the final hashes - recorded here so the next reader does not chase Plan 07 for it."
+  },
+  "updatePolicy": {
+    "howToUpdate": "Bump upstream.commit, re-fetch the selected sources, re-run the verifier, and review the resulting diff BY HAND as an ordinary GSD change.",
+    "$comment": "Nothing auto-syncs. An upstream change can only enter through a reviewed diff that publishes a NEW candidate; it can never auto-publish and it can never auto-activate. The activation gate is assertPackActivationEvidence in packages/backend/convex/skills.ts."
+  },
+  "licenseFiles": [
+    {
+      "path": "LICENSE",
+      "bytes": 11607,
+      "sha256": "a6946284993aeec75c7d75906064b66210c46051e562077efb30eb6dcfe72e26",
+      "gitBlobSha": "f53c679acba79cbb292961fd9fb9e87ca20eab22"
+    },
+    {
+      "path": "marketing/LICENSE",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "gitBlobSha": "d645695673349e3947e8e5ae42332d0ac3164cd7"
+    },
+    {
+      "path": "sales/LICENSE",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "gitBlobSha": "d645695673349e3947e8e5ae42332d0ac3164cd7"
+    }
+  ]
+}

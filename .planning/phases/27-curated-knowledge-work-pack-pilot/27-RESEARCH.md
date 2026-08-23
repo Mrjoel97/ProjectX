@@ -56,6 +56,22 @@ Do not add a dependency. Markdown, JSON, Node's built-in crypto/hash support, ex
 
 ## Upstream Source and Provenance
 
+> **CORRECTED 2026-08-23 by 27-01 — THE SOURCE-SELECTION TABLE BELOW IS SUPERSEDED.** The
+> authoritative inventory is now `third_party/knowledge-work-plugins/manifest.json`, built by
+> listing the full recursive tree at the pinned commit `5267cf7bff3031921d4474b8e8f86ad02d2b8f6d`
+> (1657 entries, untruncated). Three corrections, all verified:
+>
+> 1. This section searched only `small-business/`. **Sales Call Prep and Process/SOP Builder are not
+>    missing** — they are `sales/skills/call-prep` and `operations/skills/process-doc`.
+> 2. `27-READINESS.md` claims `small-business/skills/ticket-deflector/` does not exist at that SHA.
+>    **It does**, with three files, and it IS the correct Customer Complaint Response source.
+> 3. `small-business/skills/handle-complaint` also exists and was considered and REJECTED: it is a
+>    router that chains two skills, and a Pikar pack carries a tool allow-list so it structurally
+>    cannot dispatch.
+>
+> No pack required an `upstreamSource: null` record. Left corrected rather than deleted, so the next
+> reader does not re-derive the wrong table.
+
 Anthropic describes the repository as file-based plugins composed of Markdown skills/workflows plus connector configuration. The root repository is Apache-2.0 licensed and explicitly presents these workflows as generic starting points to customize. Sources:
 
 - Repository: <https://github.com/anthropics/knowledge-work-plugins>
