@@ -125,18 +125,18 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/schema.ts": {
-    "mtime": 1787486768.722565,
+    "mtime": 1787491595.8470716,
     "ast_hash": "0958f3b96d5e6ee5c8f26f3f50943565",
     "semantic_hash": ""
   },
   "packages/backend/convex/skills.test.ts": {
-    "mtime": 1787485767.049369,
-    "ast_hash": "52955a5c1693420ddb46f40d16955067",
+    "mtime": 1787490076.4929972,
+    "ast_hash": "19238fdc5c60ee4c24aa210d548dbb1a",
     "semantic_hash": ""
   },
   "packages/backend/convex/skills.ts": {
-    "mtime": 1787486083.2545743,
-    "ast_hash": "f81ce56d0b9e1709ca6cdc7987fe8a7a",
+    "mtime": 1787490263.4843967,
+    "ast_hash": "7294a7b2a034df4a15010c0bd736f429",
     "semantic_hash": ""
   },
   "packages/backend/convex/tenant.test.ts": {
@@ -205,8 +205,8 @@
     "semantic_hash": ""
   },
   "packages/core/src/index.ts": {
-    "mtime": 1787483465.669222,
-    "ast_hash": "1091491c2ca5d781142e7d7e0a8db7ee",
+    "mtime": 1787491118.8076067,
+    "ast_hash": "7b1b3dc22c108876f03021e5ab5b8e6e",
     "semantic_hash": ""
   },
   "packages/core/src/logger.ts": {
@@ -6870,8 +6870,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/_generated/api.d.ts": {
-    "mtime": 1787441198.0652926,
-    "ast_hash": "30f3e7dddb790c420cdc97fc496b305a",
+    "mtime": 1787491222.059699,
+    "ast_hash": "4dd4aca75735d9cb82587dbc6e0074ca",
     "semantic_hash": ""
   },
   "packages/backend/convex/_generated/api.js": {
@@ -10450,8 +10450,8 @@
     "semantic_hash": ""
   },
   "packages/backend/scripts/run-workflow-pack-evals.mjs": {
-    "mtime": 1787489116.556786,
-    "ast_hash": "b0c24fb9da3cbb924ea9102d43a75a21",
+    "mtime": 1787490049.7838016,
+    "ast_hash": "ddcc8ef219e979fe8c42fd006e4199e6",
     "semantic_hash": ""
   },
   "packages/core/src/workflowPacks.test.ts": {
@@ -10460,18 +10460,38 @@
     "semantic_hash": ""
   },
   "packages/core/src/workflowPacks.ts": {
-    "mtime": 1787489739.3546941,
-    "ast_hash": "328e0599e9f7436630cdb76ce0634b02",
+    "mtime": 1787490012.9076066,
+    "ast_hash": "ded60c04997af66070bbef4397e2eda2",
     "semantic_hash": ""
   },
   "docs/playbooks/workflow-packs.md": {
-    "mtime": 1787489770.9214277,
-    "ast_hash": "22fc24cda59b2ea4e23f88e86df546fa",
+    "mtime": 1787491720.6643617,
+    "ast_hash": "5d3bb3c7c5f8778b237f40b85a7e2653",
     "semantic_hash": ""
   },
   ".planning/phases/27-curated-knowledge-work-pack-pilot/27-02-SUMMARY.md": {
-    "mtime": 1787489908.1069767,
-    "ast_hash": "d1a245d1d4fbe83437978bcd4e2d4d34",
+    "mtime": 1787490684.6390626,
+    "ast_hash": "5c6e5f64b13a9cda330965f22851292c",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/workflowPackEventLog.test.ts": {
+    "mtime": 1787491649.03766,
+    "ast_hash": "b649afbb8fe33087e14178ae2dc2d326",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/workflowPackEventLog.ts": {
+    "mtime": 1787491595.9819252,
+    "ast_hash": "07f41422b7c82349726ab37fb11edc2d",
+    "semantic_hash": ""
+  },
+  "packages/core/src/workflowPackMetrics.test.ts": {
+    "mtime": 1787491125.144114,
+    "ast_hash": "a4021da6a7ffa557f168e7b127c195b7",
+    "semantic_hash": ""
+  },
+  "packages/core/src/workflowPackMetrics.ts": {
+    "mtime": 1787491125.0908334,
+    "ast_hash": "5c91875bb23ed962df3507092f48347d",
     "semantic_hash": ""
   }
 }

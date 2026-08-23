@@ -2,6 +2,23 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
+current_phase: 27
+current_plan: 2 of 9 executed (27-02, 27-03); next is 27-01
+status: executing
+stopped_at: "PHASE 27 STARTED AT 27-02, NOT 27-01 (the readiness audit's ordering: 27-02 is the load-bearing engineering every downstream plan reads, and it is entirely offline). **27-02 AND 27-03 ARE COMPLETE, COMMITTED AND GREEN. NOTHING IS DEPLOYED AND NO PACK EXISTS IN ANY DEPLOYMENT -- the pilot is dark by construction, which is the point.** 27-02 shipped: the six-id pack registry with a total existing/missing/forbidden operation matrix (packages/core/src/workflowPacks.ts), a tool grant DERIVED from that matrix, `publishPackCandidate` (the third publication door, no branch in which can produce an active row), a three-plane activation gate (provenance + eval + browserEvidence, each pinning the exact name@version), the `workflowPackEvents` table, and an offline fixture validator. 27-03 shipped the measurement plane: eight pure metric definitions and the sole append-only recorder. **TWO OWNER RULINGS LANDED MID-PLAN, both after the first five commits.** (1) `workflowPackEvents` is `audit_immutable`, NOT `tenant_owned` -- under tenant_owned the table joined the tenant deletion and export walks automatically, so erasing one tenant silently rewrote the denominator of every pilot measure. Consequences landed with it: the bare `by_tenant` index was REMOVED (its only justification was the deletableTables() walk; restoring the classification means restoring the index in the same commit or the backend does not typecheck), the writer must be INSERT-ONLY, and no field may ever become personal data. (2) `customer-complaint` is granted `proposePlan` and is the ONLY pack that is -- `replyToMessage` never writes `status`, `proposePlan` is the only email-path writer of `proposed`, and PlanCard renders only at that status, so the draft_reply contract terminated at `collecting`: visible, read-only, approvable by nobody. **AN ADVERSARIAL REVIEW OF 27-02's OWN DIFF FOUND FOUR CONFIRMED DEFECTS AND THREE MORE THAT ITS OWN SKEPTIC WRONGLY REFUTED; ALL SEVEN ARE FIXED.** The sharpest: the `--packs` fixture gate could not go red (the guard read `kept.length === 0 && all.length > 0`, so with an empty corpus `--packs anything` exited 0 -- and that command is 27-04/05/06's ONLY blocking automated evidence), and a mispinned provenance manifest created a permanently unactivatable immutable row discoverable only at the gate. **THE LESSON THIS PHASE KEEPS RE-TEACHING: mechanism coverage is not behaviour coverage.** The output-contract test asserted `replyToMessage` was GRANTED and could not see that the resulting plan was unapprovable; the runner's self-test counted CASES not RULES, so a rule with no case was invisible; a bounded-read test seeded 5 rows and asked for 1,000,000. All three now bite. EVIDENCE: core 43 files/1174, backend 97 files/2404, four typechecks clean, biome ci clean over 676 files, runner self-test 25 rejections. Eleven mutations observed RED and restored across both plans. **NEXT IS 27-01, AND IT IS NOW THE CRITICAL PATH**: 27-04/05/06 all declare depends_on [27-01, 27-02], so no pack body can be authored until it lands. It is also the one plan 27-CONTEXT says HALTS ON ITS FIRST TASK AS WRITTEN -- its source table names `small-business/skills/ticket-deflector/`, absent at pinned SHA 5267cf7 (the tree has customer-pulse / customer-pulse-check), and Sales Call Prep + Process/SOP Builder were never inventoried. Re-inventory the upstream tree at that SHA BEFORE running it; it also needs the phase's one network fetch. Working branch feat/27-02-pack-contracts."
+last_updated: "2026-08-23T16:35:00.000Z"
+progress:
+  total_phases: 53
+  completed_phases: 34
+  total_plans: 413
+  completed_plans: 308
+  percent: 75
+---
+
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: - Platform -> Private Beta
 current_phase: 26
 current_plan: 21 of 21 executed (26-01..26-20) -- PHASE COMPLETE, deployed to production
 status: phase_complete
