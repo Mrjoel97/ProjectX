@@ -91,7 +91,7 @@ Commit a canonical manifest such as `third_party/knowledge-work-plugins/manifest
       "sourceFiles": [
         { "path": "small-business/skills/business-pulse/SKILL.md", "sha256": "..." }
       ],
-      "adaptedBody": "packages/contracts/src/skills/packBusinessPulse.md",
+      "adaptedBody": "packages/contracts/skills/pack-business-pulse.md",
       "adaptedSha256": "...",
       "modified": true,
       "modificationSummary": "Rewritten for Pikar's provider-neutral tools, Blueprint/Vault context, partial-source states, and plan gate."
@@ -483,9 +483,18 @@ pnpm --filter @pikar/backend test
 pnpm --filter @pikar/backend eval:golden -- --skill <pack>@<version>
 pnpm --filter @pikar/web typecheck
 pnpm --filter @pikar/web build
-pnpm --filter @pikar/web test:e2e -- <pack spec>
-node scripts/check-playbooks.mjs
+cd apps/web && npx playwright test e2e/<pack spec>.spec.ts --project=chromium
 ```
+
+> **CORRECTED 2026-08-23 (see `27-READINESS.md`).** Two commands were removed from this block
+> because neither can fail. `pnpm --filter <pkg> test -- <name>` **does not filter** — the `--` is
+> swallowed and the whole suite runs (measured: a nonexistent filter ran 1123 tests green), so it
+> reports green whether or not the named test exists. And `node scripts/check-playbooks.mjs` reads
+> stdin at module top (blocking forever if run bare) and exits 0 on every terminal path — it signals
+> via JSON on stdout, so as a shell gate it is unconditionally green. Playbook currency is enforced
+> by the Stop hook and by naming the playbook in each plan's `files_modified`, not by that command.
+> Any verify command in this file that still uses `pnpm --filter X test -- <name>` is wrong; the
+> correct form is `cd <pkg> && npx vitest run <path>`.
 
 The live eval commands must use versions read back from the deployment after candidate publication. Never assume `v1`; optimizer/candidate activity can consume version numbers, and a fresh deployment's bootstrap behavior is exactly the trap this phase is changing for pack skills.
 
@@ -493,7 +502,12 @@ The live eval commands must use versions read back from the deployment after can
 
 Before execution reaches integration/exposure:
 
-- Phase 25 must provide the private-beta identity baseline the roadmap names.
+- ~~Phase 25 must provide the private-beta identity baseline the roadmap names.~~ **WITHDRAWN
+  2026-08-23 — THIS DEPENDENCY IS FALSE** (`27-READINESS.md`). Seven Phase 25 SUMMARYs exist and
+  their code is live (`invites.ts` `requestAccess`/`preflight`/`approve`, `betaWaitlist`/`betaInvites`,
+  `beta-admission.md`), and grepping all nine Phase 27 plans for a Phase 25 artifact returns zero.
+  ROADMAP's `25. | 0/14 | Planned` cell is stale bookkeeping. Phase 25 is downstream of the same
+  unfinished lanes Phase 27 consumes, so treating it as a gate is a cycle. Do not reinstate it.
 - Phase 26 Business Pulse summaries and Command Center deterministic priority must be complete and browser-approved.
 - Phase 16 must be model-gate complete before pack claims web research as available.
 - Phase 17 calendar reads/staging and owner UAT must be complete before Sales Call Prep advertises calendar context/action.

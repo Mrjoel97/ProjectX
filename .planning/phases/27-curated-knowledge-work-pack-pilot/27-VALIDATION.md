@@ -17,9 +17,9 @@ Phase 27 is proven at five layers: pure registry/provenance contracts, backend c
 
 | Plan | Focused automated evidence | Blocking evidence |
 |---|---|---|
-| 27-01 | `pnpm vitest run scripts/knowledge-work-provenance.test.ts` and `--check-source` | Exact commit, committed selected-source snapshot/hashes, Apache-2.0 notices, reviewed-diff-only update path |
+| 27-01 | `cd packages/contracts && npx vitest run src/skills/knowledgeWorkProvenance.test.ts`, and `node scripts/verify-knowledge-work-provenance.mjs --check-source` | Exact commit, committed selected-source snapshot/hashes, Apache-2.0 notices, reviewed-diff-only update path |
 | 27-02 | Core/backend candidate tests and fixture-runner self-test | Total operation matrix; code-owned exact tool sets; first publication seam remains candidate; fixture validation exists before adaptation lanes |
-| 27-03 | `pnpm --filter @pikar/backend test -- workflowPackTelemetry` | Refs/counts/enums-only events and exact metric semantics |
+| 27-03 | `cd packages/backend && npx vitest run convex/workflowPackEvents.test.ts` | Refs/counts/enums-only events and exact metric semantics |
 | 27-04 | `node scripts/run-workflow-pack-evals.mjs --packs business-pulse,campaign-plan --fixtures-only` | Positive, missing-source, partial, injection, and forbidden-write cases |
 | 27-05 | `node scripts/run-workflow-pack-evals.mjs --packs customer-complaint,sales-call-prep --fixtures-only` | Raw inbox/web content cannot choose tools; zero send/calendar/CRM mutation |
 | 27-06 | `node scripts/run-workflow-pack-evals.mjs --packs process-sop,brand-review --fixtures-only` | Cited artifacts, honest absent guidance, zero external publishing |
