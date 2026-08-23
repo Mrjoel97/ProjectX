@@ -314,5 +314,11 @@
     "packages/backend/convex/env.test.ts",
     "packages/backend/convex/ops.ts",
     ".github/workflows/deploy-production.yml"
+  ],
+  "workflow-packs.md": [
+    "packages/core/src/workflowPack",
+    "packages/backend/convex/workflowPack",
+    "packages/backend/scripts/run-workflow-pack-evals.mjs",
+    "packages/backend/scripts/workflow-pack-fixtures/"
   ]
 }
