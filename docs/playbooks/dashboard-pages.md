@@ -1,5 +1,48 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-08-23 (**THE EMAIL CHANNEL NO LONGER OUTRANKS THE BUSINESS WORK.**
+> `HOME_PRIORITY_ORDER` is now unresolved-dead-letters > stale-approval > scheduled-risk >
+> diagnostic-blocker > binding-constraint > **connection-failure** > workspace. This SUPERSEDES the
+> order recorded in the 26-19 Task 1 entry below, which is kept for history.
+>
+> **Why.** 26-19/26-20 shipped `connection-failure` at priority 0 and it went live on 2026-08-23,
+> which put "Connect your mailbox" above every pending decision, blocked job and imminent send. That
+> contradicts the invariant the cockpit has held since the legacy home: the workspace is the
+> next-move surface, and email is ONE optional execution channel — reported honestly, never ranked
+> above the work. Owner ruled on it the same day.
+>
+> A disconnected mailbox is still a REAL blocker and still leads, just only once no business signal
+> is triggered. It sits immediately ABOVE the always-satisfiable `workspace` fallback, so "nothing
+> to decide, but your channel is down" surfaces instead of resolving to an all-clear.
+>
+> **How this shipped green the first time, and what now stops it.** Every render-layer test held the
+> five business signals at `ok` and varied only the mailbox — so all of them passed under BOTH
+> orders, and the ordering defect had a fully green suite over it. Mechanism coverage, not behaviour
+> coverage. The gate that actually pins it is `cockpitAccess.test.ts` → "a triggered business signal
+> OUTRANKS a broken mailbox", which triggers the mailbox AND a business signal together; it is
+> mutation-verified (reverting `HOME_PRIORITY_ORDER` fails it, plus the ladder walk in
+> `commandCenter.test.ts`, and nothing else in either file). If you reorder this list, those two
+> fail — that is the point of them.
+>
+> **Deliberately NOT special-cased:** a scheduled send due soon while the mailbox is down. The hero
+> says "Check the scheduled sends" and the health card says "Mailbox connection — Needs attention"
+> in the same view — two true facts rather than one clever ranking rule. Add the coupling only if a
+> real tenant is observed missing it.
+>
+> **Files that re-declare the order** and must move together (none import it — each is retyped so a
+> change that never reaches the renderer fails instead of agreeing with itself):
+> `packages/core/src/home.ts` (the source of truth) · `packages/core/src/home.test.ts` ·
+> `apps/web/app/(app)/dashboard/commandCenter.test.ts` (`SOURCE_CODES` + the ladder walk) ·
+> `apps/web/app/(app)/dashboard/workspace/cockpitAccess.test.ts` · `apps/web/e2e/command-center.spec.ts`
+> (`LADDER`). `convex/home.test.ts` sorts its codes alphabetically and is order-independent.
+>
+> **The e2e ladder changed shape, and has NOT been run in a browser.** Connecting the mailbox no
+> longer advances the hero — it clears a rung nothing was waiting on — so that step now asserts a
+> NON-event: the health row flips to Clear and `priorityCode` is unchanged. Rung 1 asserts the hero
+> is NOT `connection-failure` while the mailbox is genuinely broken. Both need a live stack; treat
+> them as unverified until `command-center.spec.ts` runs green.)
+
+
 > Last verified: 2026-08-23 (26-19 Task 2 + 26-20 + ADVERSARIAL REMEDIATION — **HOME-01's backend
 > and Command Center v2 both exist; v2 IS NOT THE SURFACE A TENANT LANDS ON, and its browser gate
 > has NEVER RUN.** Read the last two paragraphs before believing anything is finished.
@@ -98,9 +141,11 @@
 
 
 > Last verified: 2026-08-22 (26-19 Task 1 — **THE COMMAND CENTER PRIORITY ORDER IS PINNED IN PURE
-> CORE.** `packages/core/src/home.ts` owns the ONE total order — connection-failure >
+> CORE.** `packages/core/src/home.ts` owns the ONE total order — ~~connection-failure >
 > unresolved-dead-letters > stale-approval > scheduled-risk > diagnostic-blocker >
-> binding-constraint > workspace — plus `HOME_PRIORITY_COPY`, `recommendNextMove` and
+> binding-constraint > workspace~~ **SUPERSEDED 2026-08-23 by the entry at the top of this file:
+> `connection-failure` moved to sixth, below every business signal. The rest of this entry stands.**
+> — plus `HOME_PRIORITY_COPY`, `recommendNextMove` and
 > `rollUpHealth`. Two invariants, both mutation-proven (27 tests after the 26-20 remediation pass):
 >
 > **Every rendered string is code-owned.** `recommendNextMove` never spreads the signal; it reads

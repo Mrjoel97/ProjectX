@@ -107,13 +107,16 @@ const signal = (code: string, state: "ok" | "triggered" | "unknown", count?: num
 
 type HomeSignal = NonNullable<HomeHealth>["signals"][number];
 
+/** The required sources in PRIORITY order — business work first, the email channel second-to-last.
+ *  Mirrors `REQUIRED_HOME_SIGNALS`, retyped rather than imported so a reorder that never reaches
+ *  the renderer fails the ladder walk below instead of agreeing with itself. */
 const SOURCE_CODES = [
-  "connection-failure",
   "unresolved-dead-letters",
   "stale-approval",
   "scheduled-risk",
   "diagnostic-blocker",
   "binding-constraint",
+  "connection-failure",
 ] as const;
 
 /** Every required source reporting ok — the only input that may reach the all-clear sentence. */
@@ -252,28 +255,36 @@ describe("the recommended next move renders code-owned copy and a real deep link
 
   test("clearing blockers in order walks the recommendation down the priority ladder", () => {
     // Each step clears exactly the blocker the previous step recommended.
+    // Peeled from the TOP of the priority order, one rung per step. `connection-failure` is the
+    // last blocker standing rather than the first, so the walk also proves the reorder reached the
+    // renderer: under the old order every one of these rows returned "Connect your mailbox".
     const ladder = [
       withTriggered(...SOURCE_CODES),
       withTriggered(
-        "unresolved-dead-letters",
         "stale-approval",
         "scheduled-risk",
         "diagnostic-blocker",
         "binding-constraint",
+        "connection-failure",
       ),
-      withTriggered("stale-approval", "scheduled-risk", "diagnostic-blocker", "binding-constraint"),
-      withTriggered("scheduled-risk", "diagnostic-blocker", "binding-constraint"),
-      withTriggered("diagnostic-blocker", "binding-constraint"),
-      withTriggered("binding-constraint"),
+      withTriggered(
+        "scheduled-risk",
+        "diagnostic-blocker",
+        "binding-constraint",
+        "connection-failure",
+      ),
+      withTriggered("diagnostic-blocker", "binding-constraint", "connection-failure"),
+      withTriggered("binding-constraint", "connection-failure"),
+      withTriggered("connection-failure"),
       allClear(),
     ];
     const expected = [
-      EXPECTED["connection-failure"].label,
       EXPECTED["unresolved-dead-letters"].label,
       EXPECTED["stale-approval"].label,
       EXPECTED["scheduled-risk"].label,
       EXPECTED["diagnostic-blocker"].label,
       EXPECTED["binding-constraint"].label,
+      EXPECTED["connection-failure"].label,
       EXPECTED.workspace.label,
     ];
 

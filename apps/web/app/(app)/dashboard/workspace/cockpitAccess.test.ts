@@ -41,10 +41,18 @@ describe("cockpit access is independent of Gmail", () => {
 });
 
 // ── the same invariant, restated against Command Center v2 ────────────────────
-// v2 ranks `connection-failure` FIRST by contract, so "never lead with Gmail" cannot be carried
-// over verbatim — it becomes: v2 leads with Gmail ONLY when the mailbox signal is TRIGGERED, and
-// the moment it is not, the hero is business work again. Asserted on the RENDERED hero, so a
+// v2 ranks `connection-failure` SIXTH — below every business signal, above the `workspace`
+// fallback only (owner ruling 2026-08-23; the reasoning is on `HOME_PRIORITY_ORDER`). So the
+// legacy "never lead with Gmail" claim carries over almost verbatim: the hero leads with Gmail
+// ONLY when the mailbox is TRIGGERED **and no business signal is**, and the moment either of
+// those stops holding, the hero is business work again. Asserted on the RENDERED hero, so a
 // renamed copy constant cannot leave the visible symptom standing.
+//
+// The last test in this block is the one that pins the ORDER rather than the copy: with the
+// mailbox broken AND a business signal triggered, the business signal must win. Every other
+// assertion here passes under BOTH the old and new order, because they hold the five business
+// signals at `ok` and vary only the mailbox — which is exactly how the shipped-first ordering
+// went live under a green suite.
 //
 // OPEN, AND NOT FIXABLE FROM THIS SIDE: `packages/backend/convex/home.ts` sets that signal to
 // `triggered` on `!gmailStatus.connected` alone, and `gmailStatus` is `connected: !!row` — so a
@@ -53,18 +61,29 @@ describe("cockpit access is independent of Gmail", () => {
 // and a state and nothing else, so no component can tell the two apart; the fix belongs in
 // `home.ts`, not here, and these tests are written so it does not need restating when it lands.
 
-const heroOf = (connection: "ok" | "triggered" | "unknown"): string =>
+const BUSINESS_SIGNALS = [
+  "unresolved-dead-letters",
+  "stale-approval",
+  "scheduled-risk",
+  "diagnostic-blocker",
+  "binding-constraint",
+] as const;
+
+/** The mailbox in the named state; every business signal `ok` unless listed in `alsoTriggered`. */
+const heroOf = (
+  connection: "ok" | "triggered" | "unknown",
+  ...alsoTriggered: (typeof BUSINESS_SIGNALS)[number][]
+): string =>
   renderToStaticMarkup(
     createElement(RecommendationCard, {
       health: {
-        state: connection === "ok" ? "healthy" : "degraded",
+        state: connection === "ok" && alsoTriggered.length === 0 ? "healthy" : "degraded",
         signals: [
           { code: "connection-failure", state: connection },
-          { code: "unresolved-dead-letters", state: "ok" },
-          { code: "stale-approval", state: "ok" },
-          { code: "scheduled-risk", state: "ok" },
-          { code: "diagnostic-blocker", state: "ok" },
-          { code: "binding-constraint", state: "ok" },
+          ...BUSINESS_SIGNALS.map((code) => ({
+            code,
+            state: alsoTriggered.includes(code) ? "triggered" : "ok",
+          })),
         ],
       },
     } as never),
@@ -100,6 +119,27 @@ describe("Command Center v2 leads with Gmail only when the mailbox connection ha
   test("Gmail is one rung, not a gate: clearing it hands the hero back to business work", () => {
     expect(heroOf("triggered")).toContain('data-cc-priority="connection-failure"');
     expect(heroOf("ok")).toContain('data-cc-priority="workspace"');
+  });
+
+  test("a triggered business signal OUTRANKS a broken mailbox — this is what the order is FOR", () => {
+    // THE REGRESSION THIS PINS. 26-19/26-20 shipped `connection-failure` at priority 0, so a
+    // tenant with a decision waiting AND a disconnected mailbox was told to "Connect your mailbox"
+    // while the approval sat there. Went live 2026-08-23 under a fully green suite, because every
+    // other test in this file holds the business signals at `ok`.
+    const hero = heroOf("triggered", "stale-approval");
+    expect(hero).toContain('data-cc-priority="stale-approval"');
+    expect(hero).toContain("Answer the waiting approval");
+    expect(hero).not.toContain("Connect your mailbox");
+    expect(hero).not.toContain("connect-gmail");
+
+    // Not just the loudest one: the LOWEST-ranked business signal still outranks the mailbox, which
+    // is the difference between "email is one rung" and "email is nearly a gate".
+    expect(heroOf("triggered", "binding-constraint")).toContain(
+      'data-cc-priority="binding-constraint"',
+    );
+
+    // ...and the mailbox is still REPORTED, not suppressed — it leads the moment nothing else does.
+    expect(heroOf("triggered")).toContain('data-cc-priority="connection-failure"');
   });
 });
 

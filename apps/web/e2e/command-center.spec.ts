@@ -148,7 +148,6 @@ const nextMove = (page: Page) => page.locator(".next-move");
  * that never reaches the renderer fails here instead of passing against its own constant.
  */
 const LADDER = [
-  { code: "connection-failure", label: "Connect your mailbox", route: "/connect-gmail" },
   { code: "unresolved-dead-letters", label: "Clear the blocked work", route: "/ops" },
   { code: "stale-approval", label: "Answer the waiting approval", route: "/dashboard/approvals" },
   { code: "scheduled-risk", label: "Check the scheduled sends", route: "/dashboard/approvals" },
@@ -158,6 +157,8 @@ const LADDER = [
     label: "Name your binding constraint",
     route: "/dashboard/profile",
   },
+  // SIXTH, not first. Business work outranks the email channel — see `HOME_PRIORITY_ORDER`.
+  { code: "connection-failure", label: "Connect your mailbox", route: "/connect-gmail" },
   { code: "workspace", label: "Open the workspace", route: "/dashboard/workspace" },
 ] as const;
 
@@ -443,8 +444,8 @@ test("HEALTH: one source that did not report makes the verdict Unknown, and the 
     page.locator("[data-cc-section='health']").getByText(/did not report/),
   ).toBeVisible();
 
-  // THE HERO AGREES INSTEAD OF CONTRADICTING. `connection-failure` is triggered, so the move still
-  // leads with the real blocker rather than being suppressed — but the incomplete set is STATED,
+  // THE HERO AGREES INSTEAD OF CONTRADICTING. Blockers are triggered, so the move still leads with
+  // a real one rather than being suppressed — but the incomplete set is STATED,
   // because a higher-priority source that could not be read may hold something worse. The hero
   // claiming "nothing needs your decision" over unread sources is the defect this exists to close.
   await expect(nextMove(page).locator("[data-cc-uncertain='true']")).toHaveCount(1);
@@ -707,16 +708,28 @@ test("PRIORITY LADDER: clearing blockers in order walks the recommendation down 
   });
 
   try {
-    // ── RUNG 1 — connection-failure (priority 0) ────────────────────────────────────────────
+    // ── RUNG 1 — a BUSINESS blocker, with the mailbox broken throughout ────────────────────────
     await signIn(page);
     await openCommandCenter(page);
-    // Rung 1 IS pinned exactly: connection-failure is priority 0, so nothing can outrank it, and
-    // the fixture (no `gmailTokens` row) is an absence this spec's own `finally` guarantees.
+    // NOT pinned to an exact code (the tenant is lived-in — see `expectAdvancedPast`), but pinned
+    // to the thing the order exists to guarantee: the mailbox is BROKEN here (`finally` deletes the
+    // token row, so its absence is this spec's own fixture) and it STILL does not lead, because
+    // `binding-constraint` is triggered from the first assertion to the last and outranks it.
+    //
+    // This is the live-browser half of the 26-19/26-20 regression gate: that ordering shipped with
+    // `connection-failure` at priority 0 and told an owner to "Connect your mailbox" while an
+    // approval sat waiting. `cockpitAccess.test.ts` pins the same claim on the rendered hero.
     const ranks: number[] = [];
-    let rank = await expectAdvancedPast(page, -1, "the top blocker is not the mailbox");
+    let rank = await expectAdvancedPast(page, -1, "the top blocker is not a business blocker");
     ranks.push(rank);
-    expect(await priorityCode(page), "the top blocker is not the mailbox").toBe(
+    expect(await priorityCode(page), "a broken mailbox outranked the business work").not.toBe(
       "connection-failure",
+    );
+    expect(rank, "the hero ranked at or below the email channel").toBeLessThan(
+      rankOf("connection-failure"),
+    );
+    await expect(page.locator("[data-cc-signal='connection-failure']")).toHaveText(
+      "Needs attention",
     );
     // The silent source has now reported, so the verdict moves off Unknown — and lands on Degraded,
     // never on the all-clear, because blockers remain.
@@ -729,10 +742,10 @@ test("PRIORITY LADDER: clearing blockers in order walks the recommendation down 
     // GONE. It tracks the signal set; it is not decoration bolted to every recommendation.
     await expect(nextMove(page).locator("[data-cc-uncertain]")).toHaveCount(0);
 
-    // ── clear it → RUNG 2 ───────────────────────────────────────────────────────────────────
-    // Whatever the tenant's lived-in data makes the next triggered code, it must rank BELOW
-    // connection-failure and its copy must match it. (Was pinned to `scheduled-risk` on the
-    // false assumption that priorities 1-2 are always clear — see `expectAdvancedPast`.)
+    // ── connect the mailbox → THE HERO MUST NOT MOVE ───────────────────────────────────────────
+    // The sharpest assertion in this file, and it is a NON-event: fixing the email channel changes
+    // the health row and NOTHING ELSE, because the channel never outranked the work. Under the
+    // shipped-first ordering this step advanced the ladder a full rung; now it must not.
     convexRun("gmailAuth:store", {
       tenantId,
       refreshToken: `e2e-refresh-${MARKER}`,
@@ -742,11 +755,18 @@ test("PRIORITY LADDER: clearing blockers in order walks the recommendation down 
     });
     await signIn(page);
     await openCommandCenter(page);
-    rank = await expectAdvancedPast(page, rank, "clearing the mailbox did not advance the ladder");
+    const beforeMailbox = LADDER[rank]?.code;
+    rank = await expectAdvancedPast(page, rank, "connecting the mailbox moved the hero UP");
     ranks.push(rank);
+    // The row flipped...
     await expect(page.locator("[data-cc-signal='connection-failure']")).toHaveText("Clear");
+    // ...and the recommendation did not, because a lower rung clearing cannot promote anything.
+    expect(
+      await priorityCode(page),
+      "connecting the mailbox changed the recommended next move",
+    ).toBe(beforeMailbox);
 
-    // ── clear it → RUNG 3 — diagnostic-blocker (priority 4) ─────────────────────────────────
+    // ── clear the scheduled send → the NEXT business rung ──────────────────────────────────────
     convexRun("plans:setPlanStatus", { planId: scheduledPlanId, status: "done" });
     await signIn(page);
     await openCommandCenter(page);
@@ -763,7 +783,7 @@ test("PRIORITY LADDER: clearing blockers in order walks the recommendation down 
     // (`evaluations.byThread` reads the newest row, so appending one IS control). Asserting Clear
     // on a signal the test does not own is how the previous three revisions of this file failed.
 
-    // ── clear it → RUNG 4 — binding-constraint (priority 5) ─────────────────────────────────
+    // ── clear the failing gate → the next business rung again ──────────────────────────────────
     // `evaluations.byThread` reads the LATEST row, so a healthy re-run clears the gate without
     // deleting history — the same append-only shape the product itself uses.
     convexRun("evaluations:insertEvaluation", {
@@ -811,8 +831,8 @@ test("PRIORITY LADDER: clearing blockers in order walks the recommendation down 
     );
   } finally {
     // Restore the fixture whatever the assertions did. A leaked grant row would silently make the
-    // NEXT run's opening rung wrong — the ladder would start at scheduled-risk and the
-    // connection-failure assertion would fail for a reason that has nothing to do with the product.
+    // NEXT run's mailbox assertions wrong — rung 1 would find the channel already Clear, and the
+    // "connecting it does not move the hero" step would prove nothing, having nothing to connect.
     convexRun("gmailAuth:deleteTokens", { tenantId });
     convexRun("plans:setPlanStatus", { planId: scheduledPlanId, status: "canceled" });
   }

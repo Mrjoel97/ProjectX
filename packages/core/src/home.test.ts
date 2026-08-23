@@ -61,12 +61,15 @@ const EXPECTED_COPY: Record<HomePriorityCode, { label: string; reason: string; r
 };
 
 const LOCKED_ORDER: HomePriorityCode[] = [
-  "connection-failure",
   "unresolved-dead-letters",
   "stale-approval",
   "scheduled-risk",
   "diagnostic-blocker",
   "binding-constraint",
+  // The email channel ranks BELOW every business signal and above the fallback only.
+  // Owner ruling 2026-08-23; see HOME_PRIORITY_ORDER's comment for why this is a product
+  // decision and not an ordering detail.
+  "connection-failure",
   "workspace",
 ];
 
@@ -85,12 +88,12 @@ describe("HOME_PRIORITY_ORDER", () => {
 
   test("required health signals are the order minus the always-satisfiable fallback", () => {
     expect([...REQUIRED_HOME_SIGNALS]).toEqual([
-      "connection-failure",
       "unresolved-dead-letters",
       "stale-approval",
       "scheduled-risk",
       "diagnostic-blocker",
       "binding-constraint",
+      "connection-failure",
     ]);
     expect(REQUIRED_HOME_SIGNALS).not.toContain("workspace");
   });
@@ -129,12 +132,12 @@ describe("recommendNextMove", () => {
     }
 
     expect(walked).toEqual([
-      "connection-failure",
       "unresolved-dead-letters",
       "stale-approval",
       "scheduled-risk",
       "diagnostic-blocker",
       "binding-constraint",
+      "connection-failure",
       "workspace",
     ]);
   });
@@ -149,7 +152,7 @@ describe("recommendNextMove", () => {
     for (const rec of [backwards, shuffled, duplicated]) {
       expect(rec).toEqual(forwards);
     }
-    expect(forwards.code).toBe("connection-failure");
+    expect(forwards.code).toBe("unresolved-dead-letters");
   });
 
   test("a lower-priority trigger only wins when everything above it is ok", () => {

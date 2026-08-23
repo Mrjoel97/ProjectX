@@ -48,13 +48,40 @@ export type HomeRecommendation = {
   certain: boolean;
 };
 
+/**
+ * BUSINESS WORK OUTRANKS THE EMAIL CHANNEL, and that ordering is the product decision this list
+ * exists to encode — not an implementation detail to be tidied.
+ *
+ * `connection-failure` shipped FIRST (26-19/26-20) and went live on 2026-08-23, which put
+ * "Connect your mailbox" above every pending decision, blocked job and imminent send. That
+ * contradicted the invariant the cockpit has held since the legacy home: the workspace is always
+ * the next-move surface, and email is ONE optional execution channel that is reported honestly but
+ * never outranks the work. Owner ruled on it the same day.
+ *
+ * TWO tests fail if this list is reordered, and they are the ONLY two — verified by reverting this
+ * array and watching exactly them go red: `cockpitAccess.test.ts` → "a triggered business signal
+ * OUTRANKS a broken mailbox", and the ladder walk in `commandCenter.test.ts`. Every OTHER
+ * render-layer test holds the five business signals at `ok` and varies only the mailbox, so it
+ * passes under either order — which is precisely how the wrong order shipped green in 26-19/26-20.
+ * Any new test of this ordering must trigger a business signal AND the mailbox together, or it is
+ * asserting nothing.
+ *
+ * A disconnected mailbox is still a REAL blocker and still leads — just only once no business
+ * signal is triggered. It sits immediately above the always-satisfiable `workspace` fallback, so
+ * "nothing to decide, but your channel is down" surfaces rather than resolving to an all-clear.
+ *
+ * Deliberately NOT special-cased: a scheduled send due soon while the mailbox is down. The hero
+ * says "Check the scheduled sends" and the health card says "Mailbox connection — Needs attention"
+ * in the same view, which is two true facts rather than one clever ranking rule. Add the coupling
+ * only if a real tenant is observed missing it.
+ */
 export const HOME_PRIORITY_ORDER: readonly HomePriorityCode[] = [
-  "connection-failure",
   "unresolved-dead-letters",
   "stale-approval",
   "scheduled-risk",
   "diagnostic-blocker",
   "binding-constraint",
+  "connection-failure",
   "workspace",
 ];
 
