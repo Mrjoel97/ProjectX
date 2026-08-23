@@ -125,18 +125,18 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/schema.ts": {
-    "mtime": 1787441184.9683378,
-    "ast_hash": "729cfc4f2ddd5a7de4587d6c1279c675",
+    "mtime": 1787484102.4877558,
+    "ast_hash": "94b5a0e2db275f119528bdefdb4fb2fc",
     "semantic_hash": ""
   },
   "packages/backend/convex/skills.test.ts": {
-    "mtime": 1787223239.3693042,
-    "ast_hash": "4fc6b733f6798208dd8fc325dd6fd398",
+    "mtime": 1787484486.2590222,
+    "ast_hash": "25850ce62ff42b81b1c5e87f70cfbb12",
     "semantic_hash": ""
   },
   "packages/backend/convex/skills.ts": {
-    "mtime": 1787441184.9714482,
-    "ast_hash": "945a16d4aee62eac8b57d089755cf880",
+    "mtime": 1787484606.8038466,
+    "ast_hash": "f81ce56d0b9e1709ca6cdc7987fe8a7a",
     "semantic_hash": ""
   },
   "packages/backend/convex/tenant.test.ts": {
@@ -150,8 +150,8 @@
     "semantic_hash": ""
   },
   "packages/backend/package.json": {
-    "mtime": 1787444653.6941295,
-    "ast_hash": "a743bcc87c9adbd9080c83100cde1911",
+    "mtime": 1787484917.580512,
+    "ast_hash": "9f5c1bb28da8431c3c83004a3acdb8b6",
     "semantic_hash": ""
   },
   "packages/backend/tsconfig.json": {
@@ -205,8 +205,8 @@
     "semantic_hash": ""
   },
   "packages/core/src/index.ts": {
-    "mtime": 1787441184.9876378,
-    "ast_hash": "2d627c0bffbc20e34b1f6b457807f3dd",
+    "mtime": 1787483465.669222,
+    "ast_hash": "1091491c2ca5d781142e7d7e0a8db7ee",
     "semantic_hash": ""
   },
   "packages/core/src/logger.ts": {
@@ -255,13 +255,13 @@
     "semantic_hash": ""
   },
   ".planning/ROADMAP.md": {
-    "mtime": 1787441184.789737,
-    "ast_hash": "abc087ecc340fb97117d5f5d808a1e80",
+    "mtime": 1787455530.9153419,
+    "ast_hash": "1631c6f64ae73afd85b4d57d9094d117",
     "semantic_hash": ""
   },
   ".planning/STATE.md": {
-    "mtime": 1787441184.7930923,
-    "ast_hash": "6c4e8b0d93dc4a10e6fb7ec95fc244b0",
+    "mtime": 1787455160.3459654,
+    "ast_hash": "d7e6fe6bf481466dfbd63204ea244ffe",
     "semantic_hash": ""
   },
   ".planning/phases/01-foundation-governance-substrate/01-01-PLAN.md": {
@@ -1545,8 +1545,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/watch.json": {
-    "mtime": 1787441502.3896906,
-    "ast_hash": "79412d9f7820217eebe9c94f8e508688",
+    "mtime": 1787485050.2556188,
+    "ast_hash": "31dac8645f4a03b9771e4a499e8cea18",
     "semantic_hash": ""
   },
   "scripts/check-playbooks.mjs": {
@@ -1580,8 +1580,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/audit-dead-letter.md": {
-    "mtime": 1787441184.8411868,
-    "ast_hash": "3916a75f91194044ee870d39fddc6fed",
+    "mtime": 1787485045.1289074,
+    "ast_hash": "4d636c12606f12aeeca8fab45d1716ca",
     "semantic_hash": ""
   },
   "docs/playbooks/cockpit.md": {
@@ -1590,8 +1590,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/skill-registry.md": {
-    "mtime": 1787441184.8725154,
-    "ast_hash": "3d36d6642afa4b4d6545756095dc7bd6",
+    "mtime": 1787485045.1202788,
+    "ast_hash": "a2c630666c50431e383a51b9d313b4df",
     "semantic_hash": ""
   },
   "scripts/extract-convex-edges.mjs": {
@@ -7125,8 +7125,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/dashboard-pages.md": {
-    "mtime": 1787445313.6293154,
-    "ast_hash": "0b92b69ec898adc5238d4e67890441bd",
+    "mtime": 1787446983.0313706,
+    "ast_hash": "eb14e6361edb45425bad7ab65a993e21",
     "semantic_hash": ""
   },
   ".planning/phases/26-pending-product-pages-and-vault-redesign-integration/26-01-SUMMARY.md": {
@@ -7180,8 +7180,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/27-curated-knowledge-work-pack-pilot/27-CONTEXT.md": {
-    "mtime": 1785887939.4997425,
-    "ast_hash": "9caabaa58d4465fc9b22aa367b790311",
+    "mtime": 1787480898.496858,
+    "ast_hash": "616c74ddf69fe93e12a67e6a0a20107e",
     "semantic_hash": ""
   },
   ".planning/phases/28-connector-backed-revenue-pack/28-CONTEXT.md": {
@@ -7200,53 +7200,53 @@
     "semantic_hash": ""
   },
   ".planning/phases/27-curated-knowledge-work-pack-pilot/27-01-PLAN.md": {
-    "mtime": 1785890356.7207463,
-    "ast_hash": "342a7d2f243a1e986567466edbec9862",
+    "mtime": 1787479712.33791,
+    "ast_hash": "7701b97a3dc69be07a3757fab2a21d16",
     "semantic_hash": ""
   },
   ".planning/phases/27-curated-knowledge-work-pack-pilot/27-02-PLAN.md": {
-    "mtime": 1785890359.171258,
-    "ast_hash": "1c642d9a085ba43afd05dae6d4f3dd6f",
+    "mtime": 1787480898.498897,
+    "ast_hash": "f82f30368b24bd32ed06572b3487b260",
     "semantic_hash": ""
   },
   ".planning/phases/27-curated-knowledge-work-pack-pilot/27-03-PLAN.md": {
-    "mtime": 1785889970.0183816,
-    "ast_hash": "9909107690adee306038ba5027608347",
+    "mtime": 1787479828.7468004,
+    "ast_hash": "33e1e07d6731651c2a08d586398a5e33",
     "semantic_hash": ""
   },
   ".planning/phases/27-curated-knowledge-work-pack-pilot/27-04-PLAN.md": {
-    "mtime": 1785890362.2342095,
-    "ast_hash": "cce956c0b407d475171390f2fc0a9acb",
+    "mtime": 1787479965.0825822,
+    "ast_hash": "4de45ebfe7a7094db7fab17f0b9a9e0f",
     "semantic_hash": ""
   },
   ".planning/phases/27-curated-knowledge-work-pack-pilot/27-05-PLAN.md": {
-    "mtime": 1785890364.4690392,
-    "ast_hash": "06a978cfda428d18fc4ab27a298435e6",
+    "mtime": 1787480020.0154192,
+    "ast_hash": "eca65783592677aff24450a07a38235e",
     "semantic_hash": ""
   },
   ".planning/phases/27-curated-knowledge-work-pack-pilot/27-06-PLAN.md": {
-    "mtime": 1785890366.817371,
-    "ast_hash": "d6d90eaee9961242033054161a6e5cd6",
+    "mtime": 1787480125.8136406,
+    "ast_hash": "bee1ad87befc3f0afffea22bed3c17cc",
     "semantic_hash": ""
   },
   ".planning/phases/27-curated-knowledge-work-pack-pilot/27-07-PLAN.md": {
-    "mtime": 1785890598.396854,
-    "ast_hash": "a82ce58feb64a2b059548c49ebce8352",
+    "mtime": 1787480244.9243095,
+    "ast_hash": "8918e7a38c576b17cd4215ad3fae9bc5",
     "semantic_hash": ""
   },
   ".planning/phases/27-curated-knowledge-work-pack-pilot/27-08-PLAN.md": {
-    "mtime": 1785890659.040163,
-    "ast_hash": "3633d006853af0c4c829fa7f1290bd56",
+    "mtime": 1787480325.6399944,
+    "ast_hash": "515ed833bcc0696fbea303e806b8b8c1",
     "semantic_hash": ""
   },
   ".planning/phases/27-curated-knowledge-work-pack-pilot/27-RESEARCH.md": {
-    "mtime": 1785888748.4559612,
-    "ast_hash": "5535a01717c04c7b6174dd5f4973004f",
+    "mtime": 1787480836.8859448,
+    "ast_hash": "933efa28e417d76ccc65660f04484f98",
     "semantic_hash": ""
   },
   ".planning/phases/27-curated-knowledge-work-pack-pilot/27-VALIDATION.md": {
-    "mtime": 1785891017.0115323,
-    "ast_hash": "af16a77dfc5e268405b49e59e41ac14b",
+    "mtime": 1787480836.8817606,
+    "ast_hash": "5b8c1ae75f840a6d19839ab5877c2cc5",
     "semantic_hash": ""
   },
   ".planning/phases/28-connector-backed-revenue-pack/28-01-PLAN.md": {
@@ -7475,8 +7475,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/27-curated-knowledge-work-pack-pilot/27-09-PLAN.md": {
-    "mtime": 1785890662.2482538,
-    "ast_hash": "c2dbf8e5e002424dc39d80226d1ae495",
+    "mtime": 1787480414.487658,
+    "ast_hash": "0e8797b130ed8d93e85e18ca3b65d425",
     "semantic_hash": ""
   },
   ".planning/phases/28-connector-backed-revenue-pack/28-17-PLAN.md": {
@@ -7875,8 +7875,8 @@
     "semantic_hash": ""
   },
   "apps/web/e2e/.auth/user.json": {
-    "mtime": 1787434210.252869,
-    "ast_hash": "1dbca8782c2361a6ac4e66460a85aedd",
+    "mtime": 1787446892.7549129,
+    "ast_hash": "0837a35c42adc59c6fcd995a71bcd49c",
     "semantic_hash": ""
   },
   "packages/backend/convex/contacts.test.ts": {
@@ -9500,13 +9500,13 @@
     "semantic_hash": ""
   },
   "packages/core/src/tenantData.test.ts": {
-    "mtime": 1786906333.6747344,
-    "ast_hash": "c12cf73088e5517bb033535dce9c0845",
+    "mtime": 1787484167.1386414,
+    "ast_hash": "d386987cddd3efa559394d437e08740e",
     "semantic_hash": ""
   },
   "packages/core/src/tenantData.ts": {
-    "mtime": 1786906302.6310184,
-    "ast_hash": "9bd543bc0154eaac548ee36af294dfe6",
+    "mtime": 1787484127.8105588,
+    "ast_hash": "c0f6c3626a5d1a6ae4763f3b99987cc0",
     "semantic_hash": ""
   },
   "packages/backend/convex/tenantExport.test.ts": {
@@ -9650,7 +9650,7 @@
     "semantic_hash": ""
   },
   "apps/web/test-results/.last-run.json": {
-    "mtime": 1787440750.332394,
+    "mtime": 1787446949.7968118,
     "ast_hash": "f196824657d8858bc7fa44eecbba38b1",
     "semantic_hash": ""
   },
@@ -9960,8 +9960,8 @@
     "semantic_hash": ""
   },
   "apps/web/e2e/command-center.spec.ts": {
-    "mtime": 1787445166.3278906,
-    "ast_hash": "c2c151e67bfec12abfe99ff34e733ced",
+    "mtime": 1787446502.2870245,
+    "ast_hash": "db4c06073761d349c425b661be723209",
     "semantic_hash": ""
   },
   "apps/web/e2e/content.spec.ts": {
@@ -10110,7 +10110,7 @@
     "semantic_hash": ""
   },
   "packages/core/src/home.ts": {
-    "mtime": 1787445313.6337268,
+    "mtime": 1787446783.7376387,
     "ast_hash": "aca35df9f23e58c2f0aee263632e30a9",
     "semantic_hash": ""
   },
@@ -10442,6 +10442,31 @@
   ".uat-2610/owner-operator-tab.png": {
     "mtime": 1787347914.992096,
     "ast_hash": "2f0952540e2cd63ce8d6889d5773a03b",
+    "semantic_hash": ""
+  },
+  ".planning/phases/27-curated-knowledge-work-pack-pilot/27-READINESS.md": {
+    "mtime": 1787459176.9781673,
+    "ast_hash": "b50bdebbee155e82fffd16c818191b14",
+    "semantic_hash": ""
+  },
+  "packages/backend/scripts/run-workflow-pack-evals.mjs": {
+    "mtime": 1787484923.9810822,
+    "ast_hash": "66da4cf8cec70d8ad430e15cb7f11edb",
+    "semantic_hash": ""
+  },
+  "packages/core/src/workflowPacks.test.ts": {
+    "mtime": 1787484159.6671863,
+    "ast_hash": "5ed5c4fed2a5bf3bbb1b017112fe39e5",
+    "semantic_hash": ""
+  },
+  "packages/core/src/workflowPacks.ts": {
+    "mtime": 1787483643.0448136,
+    "ast_hash": "f24c371870dc72fa92c25324b469157d",
+    "semantic_hash": ""
+  },
+  "docs/playbooks/workflow-packs.md": {
+    "mtime": 1787485008.878008,
+    "ast_hash": "6e126ecc36f3ed1163d6764698729e79",
     "semantic_hash": ""
   }
 }
