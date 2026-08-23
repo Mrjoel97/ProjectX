@@ -159,7 +159,12 @@ export type PackOperation =
 export type ForbiddenPackOperation = Extract<PackOperation, { state: "forbidden" }>;
 
 export type WorkflowPackSpec = {
-  /** The §5 registry row that carries this pack's body. Derived from the id — never hand-typed. */
+  /**
+   * The §5 registry row that carries this pack's body. Written out per spec rather than computed,
+   * so the record stays a plain readable table — but it is NOT free-form: `workflowPacks.test.ts`
+   * asserts every one equals `pack-<id>`, so a typo or a rename fails there rather than resolving
+   * to a registry row that does not exist.
+   */
   readonly skillName: string;
   readonly output: PackOutput;
   readonly operations: readonly PackOperation[];

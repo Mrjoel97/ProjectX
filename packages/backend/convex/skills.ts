@@ -816,6 +816,8 @@ export const archiveSkill = internalMutation({
 export const NOT_A_PACK_ERROR = "NOT_A_PACK";
 /** Refused when a pack candidate is missing any one of its three evidence planes. */
 export const PACK_GATE_ERROR = "PACK_GATE";
+/** Refused when supplied provenance does not pin the version this publication is about to mint. */
+export const PROVENANCE_PIN_ERROR = "PROVENANCE_PIN";
 
 /**
  * Publish a pack body as a CANDIDATE. The only door the six pack names may enter the registry by.
@@ -851,6 +853,17 @@ export const publishPackCandidate = internalMutation({
     const duplicate = newest !== null && newest.body === body && newest.provenance === provenance;
     const { version, inserted } = allocateImmutableVersion(newest, duplicate);
     if (!inserted) return { name, version, inserted: false };
+
+    // REFUSE A MISPINNED MANIFEST HERE, where it is one retry, rather than at activation, where it
+    // is unfixable. Provenance is written at insert and never patched, and the pack gate requires it
+    // to pin EXACTLY this (name, version) — so a manifest pinning v1 stored on a v2 row produces an
+    // immutable candidate that can never be activated by anyone, discovered weeks later at the gate,
+    // with "publish a third version" as the only remedy. The error names the version to pin.
+    if (!hasValidPackProvenance(provenance, name, version)) {
+      throw new Error(
+        `${PROVENANCE_PIN_ERROR}: provenance must be valid and pin ${name} v${version}`,
+      );
+    }
 
     await ctx.db.insert("skills", {
       name,

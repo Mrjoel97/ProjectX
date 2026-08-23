@@ -3655,6 +3655,37 @@ describe("workflow-pack candidate lifecycle", () => {
     ]);
   });
 
+  // A mispinned manifest is refused at PUBLICATION, where it costs one retry — not at activation,
+  // where provenance is immutable and the only remedy is publishing a third version. This is the
+  // difference between a loud, actionable refusal and a dead row discovered weeks later.
+  test("publication refuses provenance that does not pin the version it is about to mint", async () => {
+    const t = convexTest(schema, modules);
+    // v1 exists; the next body should mint v2, but the manifest still claims v1.
+    await t.mutation(internal.skills.publishPackCandidate, {
+      name: PACK,
+      body: "# v1",
+      provenance: provenanceFor(1),
+    });
+    await expect(
+      t.mutation(internal.skills.publishPackCandidate, {
+        name: PACK,
+        body: "# v2",
+        provenance: provenanceFor(1),
+      }),
+    ).rejects.toThrow(/PROVENANCE_PIN/);
+    // …and the refusal wrote nothing: the registry still holds exactly the one good row.
+    expect(await packRows(t)).toHaveLength(1);
+
+    // Malformed provenance is refused by the same door, for the same reason.
+    await expect(
+      t.mutation(internal.skills.publishPackCandidate, {
+        name: PACK,
+        body: "# v3",
+        provenance: provenanceFor(2, PACK, { license: "MIT" }),
+      }),
+    ).rejects.toThrow(/PROVENANCE_PIN/);
+  });
+
   test("the pack door refuses a name that is not a pack", async () => {
     const t = convexTest(schema, modules);
     await expect(

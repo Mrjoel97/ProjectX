@@ -1,5 +1,26 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
+> Last verified: 2026-08-23 (27-02 follow-up 4 — three defects the review's own skeptic REFUTED, and
+> which held up on a second reading. A skeptic that refutes on "it fails closed" can still be
+> dismissing a real operational trap.
+>
+> **`publishPackCandidate` now refuses a manifest that does not pin the version it is minting.**
+> Provenance is written at insert and NEVER patched, and the pack gate requires it to pin exactly
+> that `(name, version)` — so a manifest pinning v1 stored on a v2 row produced an immutable
+> candidate nobody could ever activate, discovered at the gate weeks later, with "publish a third
+> version" as the only remedy. It is now one loud, named refusal (`PROVENANCE_PIN`) at publication
+> time, and the refusal writes nothing. Mutation-verified.
+>
+> **The runner's exit-code contract is now true.** An unloadable registry is an ENVIRONMENT abort
+> and exits 2, not 1 — reporting it as a fixture failure would send a lane hunting through its
+> corpus for a defect that is not there. Proven by pointing the registry path at a missing file.
+>
+> **The self-test covers its shape rules too.** It exercised 19 rejections against more rules than
+> that, so deleting an uncovered rule left it green — the tally counts CASES, and a rule with no
+> case is invisible to it. Now 25, with the floor raised to 25 as a tripwire so deleting a case
+> fails loudly.)
+>
+
 > Last verified: 2026-08-23 (27-02 follow-up 3 — **OWNER DECISION: `customer-complaint` is granted
 > `proposePlan`, and it is the only pack that is.** Adversarial review found that the `draft_reply`
 > output contract could not reach the gate the code claimed it stopped at: `replyToMessage` never

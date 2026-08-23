@@ -71,11 +71,16 @@ function valueFlag(argv, flag) {
   return hit.includes("=") ? hit.slice(hit.indexOf("=") + 1) : argv[argv.indexOf(hit) + 1];
 }
 
+/** Marks a failure as an ENVIRONMENT abort (exit 2) rather than a fixture failure (exit 1). */
+class EnvironmentAbort extends Error {}
+
 async function loadRegistry() {
   try {
     return await import(`file://${registryPath.split("\\").join("/")}`);
   } catch (err) {
-    throw new Error(
+    // Exit 2, not 1: a Node too old to strip types is an environment problem, and reporting it as a
+    // fixture failure would send a lane hunting through its corpus for a defect that is not there.
+    throw new EnvironmentAbort(
       `cannot load the pack registry (${registryPath}). This script strips TypeScript types ` +
         `natively and needs Node >= 22.6; this is ${process.version}. Original: ${err.message}`,
     );
@@ -366,6 +371,26 @@ function selfTest(packs) {
   mutate("artifactCreated must be a boolean", (fx) => {
     fx.expect.artifactCreated = "yes";
   });
+  // The remaining shape rules. Each had no case, which meant deleting that rule from the validator
+  // left the self-test green — the tally counts CASES, so a rule with no case is invisible to it.
+  mutate("too short to explain what the case proves", (fx) => {
+    fx.description = "short";
+  });
+  mutate("id must be stable kebab-case", (fx) => {
+    fx.id = "Brand Review 01";
+  });
+  mutate("expect is missing", (fx) => {
+    fx.expect = "not an object";
+  });
+  mutate("must name at least one operation id", (fx) => {
+    fx.expect.operations = [];
+  });
+  mutate("must name at least one granted tool", (fx) => {
+    fx.expect.toolsAllowed = [];
+  });
+  mutate("needles, when present, must be an array", (fx) => {
+    fx.needles = "one-needle";
+  });
 
   // A pack whose output contract is a briefing cannot create an artifact.
   rejections++;
@@ -432,7 +457,10 @@ function selfTest(packs) {
   validateCorpus([{ file, fx: good() }], packs);
   // Counted, never hardcoded: a self-test that reports a number it does not derive is the first
   // step to a self-test that reports a number it no longer earns.
-  assert.ok(rejections >= 15, `self-test only exercised ${rejections} rejections`);
+  // A TRIPWIRE, like the table count in tenantData.test.ts: the floor equals what the self-test
+  // exercises today, so DELETING a case fails here and forces the deleter to say why. Adding one is
+  // free. Without it, `rejections` is only a number printed to a log nobody diffs.
+  assert.ok(rejections >= 25, `self-test only exercised ${rejections} rejections, expected >= 25`);
   console.log(`self-test: ${rejections} validator rejections and 2 acceptances verified`);
 }
 
@@ -470,5 +498,6 @@ async function main() {
 
 main().catch((err) => {
   console.error(`FAIL ${err.message}`);
-  process.exit(1);
+  // The documented contract: 0 all green · 1 a fixture (or self-test) failed · 2 environment abort.
+  process.exit(err instanceof EnvironmentAbort ? 2 : 1);
 });
