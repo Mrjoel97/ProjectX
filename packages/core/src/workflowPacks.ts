@@ -320,10 +320,27 @@ export const WORKFLOW_PACKS: Readonly<Record<WorkflowPackId, WorkflowPackSpec>> 
         state: "existing",
         // The message and the recipient are resolved SERVER-SIDE — the model never sees an address
         // or a message id, so an instruction planted in a complaint cannot redirect the reply.
-        // Nothing sends: the plan still stops at the one human Approve gate.
         summary: "Draft a reply to the message the user points to. It is staged, never sent.",
         reads: null,
         tools: ["replyToMessage"],
+      },
+      {
+        id: "stage-for-approval",
+        state: "existing",
+        // THE SECOND HALF OF THE DRAFT, and it is not optional. `replyToMessage` patches recipients,
+        // subject, threading and body onto the plan row and never touches `status` — and
+        // `proposePlan` is the ONLY tool on the email path that writes `status: "proposed"`, which
+        // is the only state where the Approve control renders (`cards.tsx` gates `PlanCard` on it)
+        // and the only state `executePlan` will act on. Without this row the drafted reply
+        // terminates at `collecting`: visible as a read-only draft, approvable by nobody.
+        //
+        // THE ONE PACK THAT HOLDS IT — pinned by name in `workflowPacks.test.ts`. It STAGES; it does
+        // not send. `executePlan`'s human Approve remains a compare-and-swap no agent can reach, so
+        // the containment is unchanged: an instruction injected into a complaint can influence what
+        // the human is shown, never what leaves the building.
+        summary: "Stage the drafted reply for the user to review and Approve. It is not sent.",
+        reads: null,
+        tools: ["proposePlan"],
       },
       missing("read-complaint-history", "crm-facts", "Read this customer's prior contact history."),
       missing(

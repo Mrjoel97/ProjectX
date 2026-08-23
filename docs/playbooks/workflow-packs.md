@@ -1,5 +1,22 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
+> Last verified: 2026-08-23 (27-02 follow-up 3 — **OWNER DECISION: `customer-complaint` is granted
+> `proposePlan`, and it is the only pack that is.** Adversarial review found that the `draft_reply`
+> output contract could not reach the gate the code claimed it stopped at: `replyToMessage` never
+> writes `status`, `proposePlan` is the only email-path writer of `"proposed"`, and `PlanCard` — the
+> only Approve surface — renders solely at that status. The drafted reply terminated at `collecting`,
+> where `executePlan` returns `{ alreadyStarted: true }` having sent nothing. The output-contract
+> test could not see it: it checked that `replyToMessage` was GRANTED, which is mechanism coverage,
+> not behaviour coverage.
+>
+> `proposePlan` STAGES. `executePlan`'s human compare-and-swap is still the only sender, and the
+> injection posture is unchanged because `replyToMessage` resolves the message and the recipient
+> server-side — the model never sees an address, so a planted instruction can influence what the
+> human is SHOWN, never what leaves the building. The grant is pinned to exactly one pack by name
+> ("exactly one pack may stage a plan for approval"), mutation-verified: giving a second pack
+> `proposePlan` reddens three tests.)
+>
+
 > Last verified: 2026-08-23 (27-02 follow-up 2 — **THREE FIXTURE-GATE DEFECTS FOUND BY ADVERSARIAL
 > REVIEW OF THE 27-02 DIFF, ALL CONFIRMED AND FIXED.** Two of them made the `--packs` gate that
 > 27-04/05/06 depend on report green over no coverage at all:
@@ -200,8 +217,12 @@ as a gate: it reads stdin at module top and every terminal path is `process.exit
 - `runSpecialistTurn` also does not pass `clientContext`, so any date-dependent tool takes its
   no-clock refusal. None of the six grants depends on a clock today; a future one would.
 - `createDocument` is the only granted tool that persists a durable artifact with no approval gate
-  (`insertCreatedDoc` fires inside the loop). Every other write stages `status: "proposed"` and
-  waits for the human Approve arm.
+  (`insertCreatedDoc` fires inside the loop).
+- **Drafting a reply is TWO tools, not one.** `replyToMessage` patches recipients, subject, threading
+  and body onto the plan row and never touches `status`; `proposePlan` is the only tool on the email
+  path that writes `status: "proposed"`, and that status is the only state in which `PlanCard` — the
+  Approve control — renders, and the only state `executePlan` acts on. A pack granted the first
+  without the second leaves a draft at `collecting`: visible, read-only, approvable by nobody.
 
 ## Known gaps & deferred work
 

@@ -169,9 +169,52 @@ npx biome ci . --diagnostic-level=error --max-diagnostics=none          672 file
   is `packages/contracts/src/skill.ts` (there is no `packages/backend/convex/skill.ts`), and the
   `rows.length === 0` branch is named by `skills.ts:583/603/610`, not `:557`.
 
-## Owner decision, taken 2026-08-23 (after the first five commits)
+## Adversarial review of this diff — four confirmed defects, all fixed
 
-- **`workflowPackEvents` is `audit_immutable`, not `tenant_owned`.** The table first landed
+A six-lens review of the committed diff produced four findings that survived a refutation pass.
+Three were in the fixture runner and one was a real design defect in the matrix.
+
+1. **The `--packs` gate could not go red** (`353c34d`). The typo'd-filter guard read
+   `kept.length === 0 && all.length > 0`, so with no fixtures on disk `--packs anything` validated
+   zero cases and exited 0 — and `--packs <two packs> --fixtures-only` is 27-04/05/06's ONLY
+   blocking automated evidence. A lane that wrote nothing would have passed it. Now per requested
+   name and never conditioned on corpus size.
+2. **A mixed filter passed if any name matched**, leaving a typo'd pack unvalidated. Each name is
+   now checked against the registry and against the corpus.
+3. **`expect.sources` accepted a matrix-MISSING source as `"available"`** — a state `packPreflight`
+   can never produce, and the mirror of two rules the validator already enforced.
+4. **The `draft_reply` contract could not reach the Approve gate it claimed to stop at** — see the
+   owner decision below.
+
+## Owner decisions, taken 2026-08-23 (after the first five commits)
+
+### `customer-complaint` is granted `proposePlan`, and is the only pack that is
+
+`replyToMessage` patches recipients, subject, threading and body onto the plan row and NEVER writes
+`status`. `proposePlan` is the only tool on the email path that writes `status: "proposed"`, and
+that status is the only state in which `PlanCard` — the sole Approve surface — renders, and the only
+state `executePlan` acts on. The pack's headline deliverable therefore terminated at `collecting`:
+visible as a read-only draft, approvable by nobody, with `executePlan` returning
+`{ alreadyStarted: true }` having sent nothing. My comment claiming the plan "still stops at the one
+human Approve gate" was false — it never reached the gate.
+
+**The output-contract test could not see this.** It asserted `replyToMessage` was GRANTED, which is
+mechanism coverage, not behaviour coverage — the same class as phase 26's five render tests that
+passed under both orderings.
+
+The owner chose to grant the staging step rather than downgrade the contract. `proposePlan` STAGES;
+`executePlan`'s human compare-and-swap remains the only sender, and the injection posture is
+unchanged because `replyToMessage` resolves the message and the recipient server-side, so a planted
+instruction can influence what the human is SHOWN, never what leaves the building. `proposePlan` was
+removed from the blanket deny-list and pinned to exactly one pack BY NAME instead
+("exactly one pack may stage a plan for approval"), and the output-contract test now requires BOTH
+halves. Mutation-verified: giving a second pack `proposePlan` reddens three tests.
+
+
+
+### `workflowPackEvents` is `audit_immutable`, not `tenant_owned`
+
+- The table first landed
   `tenant_owned`, which enrols it in the tenant deletion and export walks automatically — so erasing
   one tenant silently rewrote the denominator of every measure computed from the pilot. The owner
   ruled it onto the audit plane, beside `audit` and `deadLetters`: same refs-only shape, excluded

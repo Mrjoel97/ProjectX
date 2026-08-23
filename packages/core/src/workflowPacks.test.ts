@@ -150,7 +150,10 @@ describe("the grant is code-owned and exact", () => {
       ["campaign-plan", ["createDocument", "declareUnsupported", "searchVault", "webResearch"]],
       // `replyToMessage` resolves the message and the recipient SERVER-SIDE; the model never sees
       // an address. Nothing here sends: the plan still stops at the one human Approve gate.
-      ["customer-complaint", ["briefInbox", "listInbox", "replyToMessage", "searchVault"]],
+      [
+        "customer-complaint",
+        ["briefInbox", "listInbox", "proposePlan", "replyToMessage", "searchVault"],
+      ],
       [
         "sales-call-prep",
         [
@@ -216,7 +219,13 @@ describe("the grant is code-owned and exact", () => {
       expect(tools.includes("createDocument"), `${id} output=${output}`).toBe(
         output === "document",
       );
+      // BOTH halves, because either alone is a broken contract: `replyToMessage` without
+      // `proposePlan` drafts something nobody can approve, and `proposePlan` without a drafter
+      // would stage an empty plan.
       expect(tools.includes("replyToMessage"), `${id} output=${output}`).toBe(
+        output === "draft_reply",
+      );
+      expect(tools.includes("proposePlan"), `${id} output=${output}`).toBe(
         output === "draft_reply",
       );
     }
@@ -242,7 +251,6 @@ describe("the grant is code-owned and exact", () => {
       "setMode",
       "draftBody",
       "personalizeRecipient",
-      "proposePlan",
       "generateAttachment",
       "regenerateAttachment",
       "removeAttachment",
@@ -266,6 +274,18 @@ describe("the grant is code-owned and exact", () => {
         `${id}`,
       ).toEqual([]);
     }
+  });
+
+  // `proposePlan` is NOT on the list above, and its absence there is a decision rather than an
+  // oversight — so it is pinned BY NAME instead. It is the only tool on the email path that writes
+  // `status: "proposed"`, and that status is the only state in which the Approve control renders,
+  // so a pack that drafts a reply and cannot stage it produces something approvable by nobody.
+  // It STAGES; `executePlan`'s human compare-and-swap is still the only sender.
+  // MUTATION that must turn this RED: grant proposePlan to a second pack.
+  test("exactly one pack may stage a plan for approval", () => {
+    expect(
+      WORKFLOW_PACK_IDS.filter((id) => toolsForWorkflowPack(id).includes("proposePlan")),
+    ).toEqual(["customer-complaint"]);
   });
 });
 
