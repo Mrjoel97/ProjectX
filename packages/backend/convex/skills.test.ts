@@ -15,6 +15,8 @@ import {
   isUserAuthorableSkill,
   LEAD_ENGINE_SKILL,
   OFFER_ARCHITECT_SKILL,
+  PACK_EVAL_RUNNER,
+  PACK_EVAL_SUITE,
   USER_AUTHORABLE_SKILL_METADATA,
   USER_SKILL_ADAPTATION_MAX_BYTES,
   USER_SKILL_ADAPTATION_SECTION,
@@ -29,6 +31,11 @@ import { executiveAgentClassifierSkillBody } from "@pikar/contracts/skills/execu
 import { executiveRouterSkillBody } from "@pikar/contracts/skills/executiveRouter";
 import { graphExtractorSkillBody } from "@pikar/contracts/skills/graphExtractor";
 import { inboxDigestSkillBody } from "@pikar/contracts/skills/inboxDigest";
+import {
+  KNOWLEDGE_WORK_PINNED_AT,
+  KNOWLEDGE_WORK_PROVENANCE,
+} from "@pikar/contracts/skills/knowledgeWorkProvenance";
+import { packBusinessPulseSkillBody } from "@pikar/contracts/skills/packBusinessPulse";
 import { replyDrafterSkillBody } from "@pikar/contracts/skills/replyDrafter";
 import { voiceBriefSkillBody } from "@pikar/contracts/skills/voiceBrief";
 import { voiceSessionSkillBody } from "@pikar/contracts/skills/voiceSession";
@@ -3547,18 +3554,27 @@ describe("workflow-pack candidate lifecycle", () => {
       ...over,
     });
 
-  const evalFor = (version: number, name = PACK) =>
+  // 27-08: the eval plane of the pack gate is `hasPassingPackEvalEvidence`, NOT the global
+  // `hasPassingEvidence` — so a valid row must also name the pack runner and pin this pack's exact
+  // current fixture file. A blob that satisfies the global predicate alone is exactly the stale /
+  // foreign-suite evidence the pack gate exists to refuse, and is asserted as refused below.
+  const suiteFor = (name = PACK) =>
+    PACK_EVAL_SUITE.packs[name as keyof typeof PACK_EVAL_SUITE.packs];
+
+  const evalFor = (version: number, name = PACK, over: Record<string, unknown> = {}) =>
     JSON.stringify({
-      runner: "eval:packs",
+      runner: PACK_EVAL_RUNNER,
       runId: "e1",
       pass: true,
-      casesPassed: 6,
-      casesTotal: 6,
+      casesPassed: suiteFor(name).caseCount,
+      casesTotal: suiteFor(name).caseCount,
       retriedCases: [],
       costUsd: 0.02,
       model: "openai/gpt-4o-mini",
       skillVersions: { [name]: version },
+      suite: { revision: PACK_EVAL_SUITE.revision, ...suiteFor(name) },
       ts: 1,
+      ...over,
     });
 
   const browserFor = (version: number, name = PACK, over: Record<string, unknown> = {}) =>
@@ -3794,6 +3810,174 @@ describe("workflow-pack candidate lifecycle", () => {
     await expect(
       t.mutation(internal.skills.activateSkill, { name: PACK, version: 2 }),
     ).rejects.toThrow(/PACK_GATE/);
+  });
+
+  // ── 27-08 Task 2: the six-pack seeder ────────────────────────────────────────────────────────
+  //
+  // `seedPackCandidates` is the door the PILOT actually walks through: one invocation, six code-owned
+  // bodies, six code-owned provenance records, six candidates. Everything asserted about
+  // `publishPackCandidate` above still holds — this only checks the properties that are about the
+  // SET rather than about one publication.
+  describe("seeding all six pack candidates", () => {
+    const seed = (t: TestConvex<typeof schema>) =>
+      t.mutation(internal.skills.seedPackCandidates, {});
+
+    test("mints exactly six v1 CANDIDATES, and none of them is discoverable", async () => {
+      const t = convexTest(schema, modules);
+      const out = await seed(t);
+
+      expect(out).toHaveLength(WORKFLOW_PACK_IDS.length);
+      for (const id of WORKFLOW_PACK_IDS) {
+        const name = `pack-${id}`;
+        expect(out, `${name} was not published`).toContainEqual({
+          name,
+          version: 1,
+          inserted: true,
+        });
+        const rows = await packRows(t, name);
+        expect(rows).toHaveLength(1);
+        expect(rows[0]?.status, `${name} is not a candidate`).toBe("candidate");
+        // Ordinary discovery reads the ACTIVE row. There is none, so it must throw rather than
+        // fall back to the candidate — the whole pilot is dark until 27-09 activates.
+        await expect(t.run((ctx) => loadSkill(ctx, name))).rejects.toThrow();
+      }
+    });
+
+    test("the published body and provenance are the code-owned ones, not a hand-typed copy", async () => {
+      const t = convexTest(schema, modules);
+      await seed(t);
+
+      const rows = await packRows(t, "pack-business-pulse");
+      expect(rows[0]?.body).toBe(packBusinessPulseSkillBody);
+      const prov = JSON.parse(rows[0]?.provenance ?? "{}") as Record<string, unknown>;
+      const mirror = KNOWLEDGE_WORK_PROVENANCE["pack-business-pulse"];
+      expect(prov.bodySha256).toBe(mirror?.bodySha256);
+      expect(prov.sourceCommit).toBe(mirror?.sourceCommit);
+      expect(prov.sourcePaths).toEqual([...(mirror?.sourcePaths ?? [])]);
+      expect(prov.skillVersions).toEqual({ "pack-business-pulse": 1 });
+      // NOT a wall clock. A `Date.now()` here would make the provenance string differ on every run,
+      // which would defeat the duplicate check and mint candidate N+1 forever — see the next test.
+      expect(prov.ts).toBe(KNOWLEDGE_WORK_PINNED_AT);
+    });
+
+    test("re-seeding an unchanged repo mints NOTHING", async () => {
+      const t = convexTest(schema, modules);
+      await seed(t);
+      const again = await seed(t);
+
+      expect(again.every((r) => r.inserted === false)).toBe(true);
+      expect(again.map((r) => r.version)).toEqual(again.map(() => 1));
+      for (const id of WORKFLOW_PACK_IDS) {
+        expect(await packRows(t, `pack-${id}`), `pack-${id} gained a version`).toHaveLength(1);
+      }
+    });
+
+    // A CHANGED body is a new immutable candidate, never a rewrite of what v1 claims about itself.
+    test("a changed body mints v2 and leaves v1 exactly as published", async () => {
+      const t = convexTest(schema, modules);
+      await seed(t);
+      const before = (await packRows(t, PACK))[0];
+
+      await t.mutation(internal.skills.publishPackCandidate, {
+        name: PACK,
+        body: "# a hand-published revision",
+        provenance: provenanceFor(2),
+      });
+
+      const rows = (await packRows(t, PACK)).sort((a, b) => a.version - b.version);
+      expect(rows.map((r) => r.version)).toEqual([1, 2]);
+      expect(rows[0]?.body).toBe(before?.body);
+      expect(rows[0]?.provenance).toBe(before?.provenance);
+      expect(rows.every((r) => r.status === "candidate")).toBe(true);
+    });
+
+    // INDEPENDENT FAILURE. One pack's bad publication must not disturb another's row — the same
+    // property the per-pack eval runs rely on (27-VALIDATION: a failing pack blocks only that pack).
+    test("a refused publication leaves every other pack's row untouched", async () => {
+      const t = convexTest(schema, modules);
+      await seed(t);
+
+      await expect(
+        t.mutation(internal.skills.publishPackCandidate, {
+          name: PACK,
+          body: "# revised",
+          // Pins v1 while v2 is what would be minted — refused at publication, not at activation.
+          provenance: provenanceFor(1),
+        }),
+      ).rejects.toThrow(/PROVENANCE_PIN/);
+
+      for (const id of WORKFLOW_PACK_IDS) {
+        const rows = await packRows(t, `pack-${id}`);
+        expect(rows, `pack-${id} was disturbed`).toHaveLength(1);
+        expect(rows[0]?.version).toBe(1);
+      }
+    });
+
+    // The read-back this plan owes its SUMMARY, asserted as a shape rather than trusted.
+    test("the read-back is content-free and reports all three gate planes", async () => {
+      const t = convexTest(schema, modules);
+      await seed(t);
+      const rows = await t.query(internal.skills.inspectPackCandidates, {});
+
+      expect(rows).toHaveLength(WORKFLOW_PACK_IDS.length);
+      for (const row of rows) {
+        expect(row.present).toBe(true);
+        if (!row.present) continue;
+        expect(row.version).toBe(1);
+        expect(row.status).toBe("candidate");
+        expect(row.bodyHash).toMatch(/^[0-9a-f]{16,}$/);
+        expect(row.bodyBytes).toBeGreaterThan(500);
+        // Provenance lands at publication; the other two planes are earned later and must read
+        // FALSE here, or a dark candidate would look gate-ready.
+        expect(row.provenanceValid, `${row.name} provenance`).toBe(true);
+        expect(row.evidenceValid, `${row.name} eval evidence`).toBe(false);
+        expect(row.browserValid, `${row.name} browser evidence`).toBe(false);
+        // Content-free: no body, no provenance text, no notice.
+        expect(Object.keys(row)).not.toContain("body");
+        expect(JSON.stringify(row)).not.toContain("apache");
+      }
+    });
+  });
+
+  // ── 27-08 Task 3: the eval plane is SUITE-BOUND ──────────────────────────────────────────────
+  //
+  // Global-scope evidence carries no suite identity, so `hasPassingEvidence` alone cannot tell a
+  // pack run from an `eval:golden` run, nor a current corpus from a rewritten one. These are the
+  // rows the gate must refuse even though every one of them satisfies the GLOBAL predicate.
+  test.each([
+    ["written by the golden runner", { runner: "eval:golden" }],
+    ["carrying no suite identity", { suite: undefined }],
+    ["naming a retired suite revision", { suite: { revision: "2019-01-01.old" } }],
+    ["naming a rewritten fixture file", { suite: { casesHash: "0".repeat(64) } }],
+    ["from a filtered partial run", { casesPassed: 2, casesTotal: 2 }],
+  ])("activation refuses eval evidence %s", async (_label, over) => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.skills.publishPackCandidate, {
+      name: PACK,
+      body: "# b",
+      provenance: provenanceFor(1),
+    });
+    const suite = { revision: PACK_EVAL_SUITE.revision, ...suiteFor() };
+    const patched =
+      "suite" in over && over.suite === undefined
+        ? { suite: undefined }
+        : "suite" in over
+          ? { suite: { ...suite, ...(over.suite as Record<string, unknown>) } }
+          : over;
+    await t.mutation(internal.skills.recordEvalEvidence, {
+      name: PACK,
+      version: 1,
+      evidence: evalFor(1, PACK, patched),
+    });
+    await t.mutation(internal.skills.recordPackBrowserEvidence, {
+      name: PACK,
+      version: 1,
+      browserEvidence: browserFor(1),
+    });
+
+    await expect(
+      t.mutation(internal.skills.activateSkill, { name: PACK, version: 1 }),
+    ).rejects.toThrow(/PACK_GATE.*eval/);
   });
 
   // THE ROLLBACK EXEMPTION, preserved. A version that was active before is exempt BY STATUS —

@@ -7,23 +7,34 @@
 // an unreviewed drift fail rather than pass quietly.
 //
 // Invocation:
-//   node scripts/verify-knowledge-work-provenance.mjs --check-source   full check, exit non-zero on drift
-//   node scripts/verify-knowledge-work-provenance.mjs --diff-report    same checks, but reports every
-//                                                                     discrepancy instead of stopping
-//                                                                     at the first, and never exits 0
+//   node scripts/verify-knowledge-work-provenance.mjs --check-source   source snapshot only
+//   node scripts/verify-knowledge-work-provenance.mjs --check          THE FULL GATE (27-08)
+//   node scripts/verify-knowledge-work-provenance.mjs --diff-report    source checks, reporting every
+//                                                                     discrepancy rather than the
+//                                                                     first, and never exiting 0
 //                                                                     while any exist
 //
 // Exit codes: 0 everything matches · 1 drift, a missing file, or a malformed manifest.
 //
-// WHAT IT DELIBERATELY DOES NOT CHECK: the ADAPTED body hashes. Those pin
-// `packages/contracts/skills/pack-*.md`, which 27-04/05/06 author and 27-08 finalises. The manifest
-// records them as `null` and this script asserts they are still `null` OR fully valid — never
-// half-populated, which would let a partially-finished adaptation look complete.
+// `--check-source` VERSUS `--check`. 27-01 shipped the source half alone, because the adapted
+// bodies did not exist yet: it accepts `adaptedBodySha256: null` as long as ALL six are null (never
+// half, which would let an unfinished adaptation look complete). `--check` is the 27-08 gate and
+// accepts no such pending state — every body must exist, be hashed, match, be attributed in
+// THIRD_PARTY_NOTICES.md with a stated modification, and agree with its derived `.ts` constant.
+// The source half is a subset of it, so `--check` runs every source check too.
+//
+// THE ADAPTED HASH IS OVER LF-NORMALIZED BYTES, and that is not a convenience. The repo root
+// `.gitattributes` sets `* text=auto`, so `packages/contracts/skills/*.md` is checked out CRLF on a
+// Windows clone with `core.autocrlf=true` and LF everywhere else — a raw-byte hash would be a
+// different number per machine and the gate would be unfalsifiable. LF is also exactly what SHIPS:
+// the published body is the derived `.ts` constant, which is LF, and `skillBodies.test.ts` compares
+// the pair LF-normalized. The SNAPSHOT hashes stay raw-byte, because the vendored tree carries its
+// own `.gitattributes` with `* -text` and is guaranteed verbatim on every checkout.
 
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const vendorRoot = join(repoRoot, "third_party", "knowledge-work-plugins");
@@ -31,8 +42,24 @@ const manifestPath = join(vendorRoot, "manifest.json");
 const snapshotRoot = join(vendorRoot, "source-snapshot");
 const noticesPath = join(repoRoot, "THIRD_PARTY_NOTICES.md");
 
-const KNOWN_FLAGS = new Set(["--check-source", "--diff-report"]);
+const KNOWN_FLAGS = new Set(["--check-source", "--check", "--diff-report"]);
 const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
+/** The checkout-independent body identity — see the LF note in the header. */
+const lf = (s) => s.replace(/\r\n/g, "\n");
+
+/**
+ * The derived constant that MIRRORS a canonical `.md` body: `pack-business-pulse.md` ships as
+ * `packages/contracts/src/skills/packBusinessPulse.ts` exporting `packBusinessPulseSkillBody`.
+ * There is no generator — the `.ts` is hand-derived — which is exactly why the pair is checked.
+ */
+function derivedConstantFor(packId) {
+  const camel = packId.replace(/-([a-z0-9])/g, (_, c) => c.toUpperCase());
+  const base = `pack${camel[0].toUpperCase()}${camel.slice(1)}`;
+  return {
+    path: join(repoRoot, "packages", "contracts", "src", "skills", `${base}.ts`),
+    exportName: `${base}SkillBody`,
+  };
+}
 
 /** Every file under the snapshot, as upstream-relative POSIX paths. */
 function snapshotFiles(dir = snapshotRoot) {
@@ -45,14 +72,33 @@ function snapshotFiles(dir = snapshotRoot) {
   return out.sort();
 }
 
-function main(argv) {
+/**
+ * Import a hand-derived `.ts` body constant. The file is type-free by construction (a comment and
+ * one exported string), so Node's native type stripping loads it as-is — but that stripping is a
+ * Node >= 22.6 feature, so the failure names the requirement instead of surfacing as "cannot find
+ * module". ponytail: no bundler and no second parser; a hand-rolled decode of a JS string literal
+ * is exactly the kind of copy that can disagree with the module it is checking.
+ */
+async function loadDerived(path) {
+  try {
+    return await import(pathToFileURL(path).href);
+  } catch (err) {
+    throw new Error(
+      `cannot load the derived constant ${path}. This check strips TypeScript types natively and ` +
+        `needs Node >= 22.6; this is ${process.version}. Original: ${err.message}`,
+    );
+  }
+}
+
+async function main(argv) {
   const problems = [];
   const fail = (msg) => problems.push(msg);
 
   for (const arg of argv) {
     if (!KNOWN_FLAGS.has(arg)) throw new Error(`unknown flag ${arg}`);
   }
-  if (argv.length === 0) throw new Error("pass --check-source (or --diff-report)");
+  if (argv.length === 0) throw new Error("pass --check (or --check-source / --diff-report)");
+  const final = argv.includes("--check");
 
   if (!existsSync(manifestPath)) throw new Error(`manifest.json is missing at ${manifestPath}`);
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
@@ -135,7 +181,7 @@ function main(argv) {
       fail(`${path}: gitBlobSha is not a 40-character sha`);
   }
 
-  // ── adapted bodies are all-pending or all-present, never half ─────────────
+  // ── adapted bodies ────────────────────────────────────────────────────────
   const packs = manifest.packs ?? [];
   const withHash = packs.filter((p) => typeof p.adaptedBodySha256 === "string");
   if (withHash.length !== 0 && withHash.length !== packs.length)
@@ -143,6 +189,19 @@ function main(argv) {
       `${withHash.length} of ${packs.length} adapted bodies are hashed — a half-populated manifest ` +
         "makes an unfinished adaptation look complete",
     );
+  // THE FULL GATE ACCEPTS NO PENDING STATE. Under `--check-source` the all-null corpus is a legal
+  // recorded state; under `--check` it is the whole thing being checked, so "pending" is a failure
+  // rather than a fact — otherwise the 27-08 gate passes on a manifest that pins nothing at all.
+  if (final) {
+    if (manifest.adaptedBodies?.status !== "final")
+      fail(
+        `adaptedBodies.status is "${manifest.adaptedBodies?.status}" — --check requires "final"`,
+      );
+    for (const p of packs) {
+      if (typeof p.adaptedBodySha256 !== "string")
+        fail(`${p.packId}: adaptedBodySha256 is still pending, and --check is the final gate`);
+    }
+  }
   for (const p of withHash) {
     if (!/^[0-9a-f]{64}$/.test(p.adaptedBodySha256))
       fail(`${p.packId}: adaptedBodySha256 is not a sha256`);
@@ -152,9 +211,38 @@ function main(argv) {
         `${p.packId}: adaptedDestination must be a canonical .md under packages/contracts/skills/`,
       );
     const body = join(repoRoot, ...p.adaptedDestination.split("/"));
-    if (!existsSync(body)) fail(`${p.packId}: adapted body ${p.adaptedDestination} is absent`);
-    else if (sha256(readFileSync(body)) !== p.adaptedBodySha256)
+    if (!existsSync(body)) {
+      fail(`${p.packId}: adapted body ${p.adaptedDestination} is absent`);
+      continue;
+    }
+    const canonical = lf(readFileSync(body, "utf8"));
+    if (sha256(canonical) !== p.adaptedBodySha256)
       fail(`${p.packId}: adapted body does not match its manifest hash`);
+
+    if (!final) continue;
+
+    // Apache-2.0 §4(b) in the redistributed artifact, not only in the machine-readable manifest:
+    // the notices file a human reads must name the pack AND say what changed.
+    if (typeof p.plannedModifications !== "string" || p.plannedModifications.length < 40)
+      fail(`${p.packId}: plannedModifications is missing or too short to be a modification notice`);
+    const notices = existsSync(noticesPath) ? readFileSync(noticesPath, "utf8") : "";
+    if (!notices.includes(p.packId))
+      fail(`THIRD_PARTY_NOTICES.md does not name the adapted pack ${p.packId}`);
+
+    // THE DRIFT CHECK. The `.md` is canonical and is what the hash pins, but the `.ts` constant is
+    // what actually SHIPS (the Convex runtime cannot read repo files) and it is hand-derived with
+    // no generator. If the pair has drifted, this manifest pins bytes nobody runs — so the gate
+    // fails rather than certifying whichever file it happened to open.
+    const derived = derivedConstantFor(p.packId);
+    if (!existsSync(derived.path)) fail(`${p.packId}: derived constant ${derived.path} is absent`);
+    else {
+      const mod = await loadDerived(derived.path);
+      const shipped = mod[derived.exportName];
+      if (typeof shipped !== "string")
+        fail(`${p.packId}: ${derived.exportName} is not exported as a string`);
+      else if (lf(shipped) !== canonical)
+        fail(`${p.packId}: the derived .ts constant has DRIFTED from ${p.adaptedDestination}`);
+    }
   }
 
   if (problems.length > 0) {
@@ -162,16 +250,20 @@ function main(argv) {
     for (const p of problems) console.error(`  - ${p}`);
     return 1;
   }
-  const pending = withHash.length === 0 ? " (adapted bodies pending, as recorded)" : "";
+  const state = final
+    ? " (adapted bodies final, hashed and mirrored)"
+    : withHash.length === 0
+      ? " (adapted bodies pending, as recorded)"
+      : "";
   console.log(
-    `provenance OK: ${declared.size} files at ${commit.slice(0, 12)}, ${packs.length} packs${pending}`,
+    `provenance OK: ${declared.size} files at ${commit.slice(0, 12)}, ${packs.length} packs${state}`,
   );
   return 0;
 }
 
-try {
-  process.exit(main(process.argv.slice(2)));
-} catch (err) {
-  console.error(`FAIL ${err.message}`);
-  process.exit(1);
-}
+main(process.argv.slice(2))
+  .then((code) => process.exit(code))
+  .catch((err) => {
+    console.error(`FAIL ${err.message}`);
+    process.exit(1);
+  });

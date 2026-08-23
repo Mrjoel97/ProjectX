@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
+import { KNOWLEDGE_WORK_PINNED_AT, KNOWLEDGE_WORK_PROVENANCE } from "./knowledgeWorkProvenance";
 
 // 27-01 (PACK-01). The upstream material Phase 27's packs are adapted from is pinned to ONE exact
 // commit, snapshotted byte-for-byte, and hashed. This is the vitest-resident half of that gate:
@@ -30,13 +31,16 @@ type Pack = {
 };
 
 const manifest = JSON.parse(readFileSync(join(vendorRoot, "manifest.json"), "utf8")) as {
-  upstream: { repo: string; commit: string };
+  upstream: { repo: string; commit: string; commitDate: string };
   license: { id: string; rootLicenseAnomaly?: FileRecord & { finding: string } };
   packs: Pack[];
+  adaptedBodies: { status: string };
   licenseFiles: FileRecord[];
 };
 
-const sha256 = (buf: Buffer) => createHash("sha256").update(buf).digest("hex");
+const sha256 = (buf: Buffer | string) => createHash("sha256").update(buf).digest("hex");
+/** The checkout-independent body identity — see the adapted-body test for why this is not raw bytes. */
+const lf = (s: string) => s.replace(/\r\n/g, "\n");
 
 function walk(dir: string): string[] {
   const out: string[] = [];
@@ -150,17 +154,62 @@ describe("every pack has a real, reproducible source record", () => {
     }
   });
 
-  // 27-04/05/06 author the bodies and 27-08 finalises the hashes. Until then every entry is `null`;
-  // what must never happen is a HALF-populated manifest, which would make an unfinished adaptation
-  // look complete. This assertion holds in both states and tightens as the bodies land.
-  test("adapted body hashes are all pending or all present — never half", () => {
-    const hashed = manifest.packs.filter((p) => typeof p.adaptedBodySha256 === "string");
-    expect(hashed.length === 0 || hashed.length === manifest.packs.length).toBe(true);
-    for (const pack of hashed) {
-      expect(pack.adaptedBodySha256).toMatch(/^[0-9a-f]{64}$/);
+  // 27-04/05/06 authored the bodies and 27-08 finalised the hashes. This was "all pending or all
+  // present — never half" while the corpus was being written; it is now the FINAL state, because a
+  // pending entry after 27-08 means a pack was published against bytes nothing pins.
+  //
+  // THE HASH IS OVER LF-NORMALIZED BYTES. The repo root `.gitattributes` sets `* text=auto`, so a
+  // raw-byte hash of a `.md` is a different number on a CRLF Windows checkout than on CI — the gate
+  // would then fail or pass by machine rather than by content. LF is also what actually ships: the
+  // published body is the derived `.ts` constant, which `skillBodies.test.ts` compares LF-normalized.
+  test("every adapted body is final, hashed, and matches its manifest hash", () => {
+    expect(manifest.adaptedBodies.status).toBe("final");
+    for (const pack of manifest.packs) {
+      expect(pack.adaptedBodySha256, `${pack.packId} is still pending`).toMatch(/^[0-9a-f]{64}$/);
       const body = join(repoRoot, ...pack.adaptedDestination.split("/"));
       expect(existsSync(body), `${pack.adaptedDestination} is hashed but absent`).toBe(true);
-      expect(sha256(readFileSync(body))).toBe(pack.adaptedBodySha256);
+      expect(sha256(lf(readFileSync(body, "utf8"))), `${pack.packId} body hash`).toBe(
+        pack.adaptedBodySha256,
+      );
+    }
+  });
+
+  // 27-08 Task 2. `skills.ts` runs inside Convex and has NO FILESYSTEM, so the provenance it attaches
+  // to a published candidate cannot be read from `manifest.json` — it comes from the code-owned
+  // mirror in `knowledgeWorkProvenance.ts`. This is the drift row that makes the mirror a copy rather
+  // than a second, independent claim: without it, a corrected manifest and a stale constant would
+  // publish six immutable candidates whose recorded source record contradicts the repo's own.
+  test("the code-owned provenance mirror agrees with manifest.json field for field", () => {
+    expect(Object.keys(KNOWLEDGE_WORK_PROVENANCE).sort()).toEqual(
+      manifest.packs.map((p) => p.skillName).sort(),
+    );
+    expect(KNOWLEDGE_WORK_PINNED_AT).toBe(Date.parse(manifest.upstream.commitDate));
+    for (const pack of manifest.packs) {
+      const mirror = KNOWLEDGE_WORK_PROVENANCE[pack.skillName];
+      if (mirror === undefined) throw new Error(`no mirrored provenance for ${pack.skillName}`);
+      expect(mirror.sourceRepo).toBe(manifest.upstream.repo);
+      expect(mirror.sourceCommit).toBe(manifest.upstream.commit);
+      expect(mirror.bodySha256, `${pack.packId} body hash`).toBe(pack.adaptedBodySha256);
+      expect(mirror.modificationNotice, `${pack.packId} notice`).toBe(pack.plannedModifications);
+      expect(mirror.license).toBe(manifest.license.id);
+      // Every declared source file, in the manifest's own order — a mirror that carried a SUBSET
+      // would still satisfy `hasValidPackProvenance` (which only requires a non-empty array), so
+      // the completeness has to be asserted here or nowhere.
+      expect([...mirror.sourcePaths], `${pack.packId} source paths`).toEqual(
+        pack.files.map((f) => f.path),
+      );
+    }
+  });
+
+  // Apache-2.0 §4(b) again, but for the ADAPTATION rather than the source: the notices file a human
+  // reads must name each pack and state what changed. The manifest's `plannedModifications` is the
+  // machine-readable half and is checked above; a modification recorded ONLY in a JSON file nobody
+  // ships to a reader is attribution that exists for the repo, not for the licence.
+  test("THIRD_PARTY_NOTICES.md names every adapted pack and its modification", () => {
+    const notices = readFileSync(join(repoRoot, "THIRD_PARTY_NOTICES.md"), "utf8");
+    expect(notices).toMatch(/NOTICE OF MODIFICATION/i);
+    for (const pack of manifest.packs) {
+      expect(notices, `${pack.packId} is not named in the notices`).toContain(pack.packId);
     }
   });
 });

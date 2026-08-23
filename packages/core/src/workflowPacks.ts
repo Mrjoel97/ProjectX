@@ -113,6 +113,37 @@ export const MISSING_SOURCE_UNLOCK: Readonly<Record<MissingPackSource, string>> 
   "task-system": "a connected task or publishing system",
 };
 
+/**
+ * PHRASES THAT COUNT AS NAMING A MISSING SOURCE (27-08). The honest-partial statement is the
+ * primary deliverable of this pilot, and an eval that could not tell whether a reply made it would
+ * be grading everything except the thing the phase is for.
+ *
+ * This is deliberately a small set of ALTERNATIVES per source, matched case-insensitively as
+ * substrings, not one exact sentence: six bodies word the same gap differently on purpose ("Their
+ * saved content" / "your saved content shelf"), and a scorer that demanded `PACK_SOURCE_LABEL`
+ * verbatim would be grading obedience to one phrasing rather than whether the user was told.
+ *
+ * It is a heuristic, and it is the ONLY prose-shaped assertion in the pack eval gate — everything
+ * else the runner scores is a trace fact or an event count. Loosen a phrase when a body legitimately
+ * says it another way; never delete a source's entry, because an empty list would silently pass.
+ */
+export const MISSING_SOURCE_MENTIONS: Readonly<Record<MissingPackSource, readonly string[]>> = {
+  "phase26-summaries": ["operations summaries", "business and operations", "reports summaries"],
+  "content-shelf": ["content shelf", "saved content", "published content", "content you"],
+  "crm-facts": ["contacts and pipeline", "crm", "contact record", "pipeline", "deal"],
+  "connector-financials": [
+    "sales and accounting",
+    "accounting",
+    "payment processor",
+    "invoicing",
+    "connected system",
+    "no revenue",
+  ],
+  "tenant-brand-guidance": ["brand guidance", "brand guidelines", "confirmed brand", "brand rules"],
+  "org-roles": ["who owns", "who does what", "unassigned", "real owner", "role"],
+  "task-system": ["task system", "publishing", "schedule", "task or publishing"],
+};
+
 /** Why a pack must never perform an operation. A closed enum: a model cannot relabel a refusal. */
 export type PackRefusal =
   | "specialist_dispatch"
@@ -455,6 +486,31 @@ export function toolsForWorkflowPack(packId: WorkflowPackId): readonly string[] 
 
 /** How well a source answered for THIS tenant on THIS run. Absence is never "available". */
 export type SourceState = "available" | "partial" | "unavailable";
+
+/**
+ * WHAT THE PROBE CAN ACTUALLY RETURN, per source (27-08). `probeSources` in
+ * `convex/workflowPackBinding.ts` is the only writer of these states, and it does not resolve every
+ * source across all three: `vault` and `web` need no tenant grant and are CONSTANTLY `available`
+ * (an empty vault is the tool's own honest answer, not a preflight fact), an empty calendar is
+ * `partial` rather than `unavailable`, and the finance spine is a row that either exists or does not.
+ *
+ * This exists because 27-04/05/06 authored the eval corpus against the three-word SourceState
+ * vocabulary while 27-07 wrote the probe afterwards, and 21 of the 30 fixtures ended up asserting a
+ * state no run could ever produce — a whole class of case that could only ever fail, or (worse) be
+ * quietly skipped by a runner that noticed. A fixture may only expect a state that is in this list;
+ * the pack eval runner refuses one that is not, and `workflowPacks.test.ts` scans `probeSources`
+ * so this record cannot drift away from the function it describes.
+ */
+export const PACK_SOURCE_PROBE_STATES: Readonly<
+  Record<ReachablePackSource, readonly SourceState[]>
+> = {
+  vault: ["available"],
+  web: ["available"],
+  inbox: ["available", "unavailable"],
+  drive: ["available", "unavailable"],
+  calendar: ["available", "partial"],
+  "finance-inputs": ["available", "unavailable"],
+};
 
 export type PackPreflight = {
   readonly packId: WorkflowPackId;

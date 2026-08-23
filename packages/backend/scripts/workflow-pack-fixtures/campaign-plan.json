@@ -10,7 +10,10 @@
     "expect": {
       "outcome": "partial",
       "operations": ["ground-in-vault", "research-the-web", "save-campaign-plan"],
-      "sources": { "vault": "available", "web": "available" },
+      "sources": {
+        "vault": "available",
+        "web": "available"
+      },
       "missingNamed": ["crm-facts", "connector-financials", "content-shelf"],
       "toolsAllowed": ["searchVault", "webResearch", "declareUnsupported", "createDocument"],
       "toolsForbidden": ["dispatchResearch", "dispatchMedia", "proposeImage", "proposePlan"],
@@ -29,7 +32,10 @@
     "expect": {
       "outcome": "partial",
       "operations": ["ground-in-vault", "save-campaign-plan"],
-      "sources": { "vault": "available", "web": "unavailable" },
+      "sources": {
+        "vault": "available",
+        "web": "available"
+      },
       "missingNamed": ["crm-facts", "connector-financials", "content-shelf"],
       "toolsAllowed": ["searchVault", "createDocument"],
       "toolsForbidden": [
@@ -55,7 +61,10 @@
     "expect": {
       "outcome": "partial",
       "operations": ["research-the-web", "save-campaign-plan"],
-      "sources": { "web": "partial", "vault": "unavailable" },
+      "sources": {
+        "web": "available",
+        "vault": "available"
+      },
       "missingNamed": ["crm-facts", "connector-financials", "content-shelf"],
       "toolsAllowed": ["webResearch", "declareUnsupported", "createDocument"],
       "toolsForbidden": ["dispatchResearch", "proposeImage", "proposePlan"],
@@ -71,7 +80,10 @@
     "expect": {
       "outcome": "partial",
       "operations": ["ground-in-vault", "save-campaign-plan"],
-      "sources": { "vault": "partial", "web": "unavailable" },
+      "sources": {
+        "vault": "available",
+        "web": "available"
+      },
       "missingNamed": ["connector-financials", "crm-facts", "content-shelf"],
       "toolsAllowed": ["searchVault", "createDocument"],
       "toolsForbidden": ["evaluateBusiness", "readFinance", "proposePlan"],
@@ -87,7 +99,10 @@
     "expect": {
       "outcome": "partial",
       "operations": ["research-the-web", "save-campaign-plan"],
-      "sources": { "web": "available", "vault": "unavailable" },
+      "sources": {
+        "web": "available",
+        "vault": "available"
+      },
       "missingNamed": ["crm-facts", "connector-financials", "content-shelf"],
       "toolsAllowed": ["webResearch", "declareUnsupported", "createDocument"],
       "toolsForbidden": ["dispatchMedia", "proposeImage", "proposePlan", "stageFinanceWrite"],

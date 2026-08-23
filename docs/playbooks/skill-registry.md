@@ -1,5 +1,44 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-23 (27-08 — **PROVENANCE IS FINAL AND THE SIX CANDIDATES HAVE A PUBLISHER.**
+> `manifest.json` now pins all six adapted bodies and
+> `node scripts/verify-knowledge-work-provenance.mjs --check` is the gate that keeps it honest:
+> `--check-source` still accepts the all-null pending state 27-01 shipped, `--check` accepts none.
+>
+> **THE ADAPTED HASH IS OVER LF-NORMALIZED BYTES, and that is not tidiness.** The repo root
+> `.gitattributes` sets `* text=auto`, so a raw-byte hash of a `.md` differs between a CRLF Windows
+> checkout and CI — the gate would pass or fail by machine. LF is also what SHIPS: the published body
+> is the derived `.ts` constant. `--check` additionally imports that constant and refuses a `.md`/`.ts`
+> pair that has DRIFTED, because a manifest pinning bytes nobody runs is provenance for the wrong
+> artifact. All three failure modes were mutation-proven red before the task was called done.
+>
+> **`skills.seedPackCandidates` is the door the pilot walks through** — `publishPackCandidate` six
+> times over the code-owned bodies and the code-owned provenance, with no branch that can produce an
+> active row. Two things about it are load-bearing and easy to break:
+>
+> - **No wall clock in the provenance.** `publishPack` treats `(body, provenance)` as the identity of
+>   a version, so a `Date.now()` would make every re-run a non-duplicate and mint candidate N+1
+>   forever. The recorded `ts` is the pinned UPSTREAM COMMIT's timestamp; the publication moment is
+>   `skills.createdAt`, which the row already carries.
+> - **The version is resolved BEFORE the provenance is built,** because the provenance pins it and the
+>   publisher refuses a mispin. Predicting `newest.version + 1` unconditionally produces a
+>   permanently-failing loop: the duplicate check declines to mint v2, then the pin check rejects
+>   provenance naming v2, on every retry.
+>
+> Convex has no filesystem, so the provenance the publisher attaches comes from
+> `packages/contracts/src/skills/knowledgeWorkProvenance.ts` — a MIRROR of `manifest.json`, kept
+> honest by a drift row in `knowledgeWorkProvenance.test.ts` that compares it field for field
+> (including the full `sourcePaths` list, which `hasValidPackProvenance` would accept as a subset).
+>
+> **The six pack names are still ABSENT from `GATED_SKILLS`, and must stay so** — `run-eval-golden.mjs`
+> derives its `--skill` allow-list from that array and drives `runCockpitAgent` over TEXT fixtures, so
+> gating a name that runner cannot drive mints candidates no eval run could certify. Packs have their
+> own runner and their own, stricter gate; `skills.test.ts` asserts the absence directly.
+>
+> `skills.inspectPackCandidates` is the refs-only read-back: ids, status, a body HASH, a byte count
+> and which of the three gate planes hold for that exact version. It never returns a body — the
+> registry prompts are an owner-only disclosure boundary.)
+
 > Last verified: 2026-08-23 (27-06 — **THE LAST TWO BODIES; ALL SIX PACKS NOW EXIST.**
 > `pack-process-sop.md` and `pack-brand-review.md` land as `.md` + derived `.ts` pairs registered in
 > `skillBodies.test.ts`, with five fixtures each. The corpus is 30 fixtures across six packs, and

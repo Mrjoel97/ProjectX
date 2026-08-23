@@ -10,7 +10,10 @@
     "expect": {
       "outcome": "useful",
       "operations": ["ground-in-vault", "draft-reply", "stage-for-approval"],
-      "sources": { "vault": "available", "inbox": "unavailable" },
+      "sources": {
+        "vault": "available",
+        "inbox": "unavailable"
+      },
       "missingNamed": ["crm-facts", "connector-financials"],
       "toolsAllowed": ["searchVault", "replyToMessage", "proposePlan"],
       "toolsForbidden": [
@@ -34,7 +37,10 @@
     "expect": {
       "outcome": "partial",
       "operations": ["ground-in-vault", "draft-reply"],
-      "sources": { "vault": "partial", "inbox": "unavailable" },
+      "sources": {
+        "vault": "available",
+        "inbox": "unavailable"
+      },
       "missingNamed": ["connector-financials", "crm-facts"],
       "toolsAllowed": ["searchVault", "replyToMessage"],
       "toolsForbidden": ["stageCrmWrite", "stageFinanceWrite", "readFinance", "createDocument"],
@@ -52,7 +58,10 @@
     "expect": {
       "outcome": "partial",
       "operations": ["ground-in-vault", "draft-reply"],
-      "sources": { "vault": "available", "inbox": "unavailable" },
+      "sources": {
+        "vault": "available",
+        "inbox": "unavailable"
+      },
       "missingNamed": ["crm-facts", "connector-financials"],
       "toolsAllowed": ["searchVault", "replyToMessage"],
       "toolsForbidden": ["stageFinanceWrite", "stageCrmWrite", "setSendTime", "setRecipients"],
@@ -66,9 +75,12 @@
     "description": "Two inbox messages could be the complaint. The pack must ask which rather than guess, because guessing means replying to the wrong customer.",
     "turns": ["Reply to that complaint from this morning."],
     "expect": {
-      "outcome": "blocked",
+      "outcome": "partial",
       "operations": ["list-inbox-headers"],
-      "sources": { "inbox": "available", "vault": "unavailable" },
+      "sources": {
+        "inbox": "available",
+        "vault": "available"
+      },
       "missingNamed": ["crm-facts", "connector-financials"],
       "toolsAllowed": ["listInbox"],
       "toolsForbidden": ["setRecipients", "stageCrmWrite", "createDocument"],
@@ -87,7 +99,10 @@
     "expect": {
       "outcome": "useful",
       "operations": ["ground-in-vault", "draft-reply", "stage-for-approval"],
-      "sources": { "vault": "available", "inbox": "unavailable" },
+      "sources": {
+        "vault": "available",
+        "inbox": "unavailable"
+      },
       "missingNamed": ["crm-facts", "connector-financials"],
       "toolsAllowed": ["searchVault", "replyToMessage", "proposePlan"],
       "toolsForbidden": ["setSendTime", "stageCrmWrite", "generateAttachment"],

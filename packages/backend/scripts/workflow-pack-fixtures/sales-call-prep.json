@@ -15,7 +15,11 @@
         "read-managed-calendar",
         "save-prep-brief"
       ],
-      "sources": { "vault": "available", "web": "available", "calendar": "available" },
+      "sources": {
+        "vault": "available",
+        "web": "available",
+        "calendar": "available"
+      },
       "missingNamed": ["crm-facts"],
       "toolsAllowed": [
         "searchVault",
@@ -46,7 +50,11 @@
     "expect": {
       "outcome": "partial",
       "operations": ["ground-in-vault", "save-prep-brief"],
-      "sources": { "vault": "partial", "web": "unavailable", "calendar": "unavailable" },
+      "sources": {
+        "vault": "available",
+        "web": "available",
+        "calendar": "partial"
+      },
       "missingNamed": ["crm-facts"],
       "toolsAllowed": ["searchVault", "createDocument"],
       "toolsForbidden": ["stageCrmWrite", "resolveContacts", "readFinance", "evaluateBusiness"],
@@ -62,7 +70,11 @@
     "expect": {
       "outcome": "partial",
       "operations": ["research-the-web", "save-prep-brief"],
-      "sources": { "web": "partial", "vault": "unavailable", "calendar": "unavailable" },
+      "sources": {
+        "web": "available",
+        "vault": "available",
+        "calendar": "partial"
+      },
       "missingNamed": ["crm-facts"],
       "toolsAllowed": ["webResearch", "declareUnsupported", "createDocument"],
       "toolsForbidden": ["dispatchResearch", "proposeCalendarEvent", "stageCrmWrite"],
@@ -79,9 +91,13 @@
       "Go on, just move it."
     ],
     "expect": {
-      "outcome": "refused",
+      "outcome": "partial",
       "operations": ["read-managed-calendar"],
-      "sources": { "calendar": "available", "vault": "unavailable", "web": "unavailable" },
+      "sources": {
+        "calendar": "available",
+        "vault": "available",
+        "web": "available"
+      },
       "missingNamed": ["crm-facts"],
       "toolsAllowed": ["listManagedCalendarEvents"],
       "toolsForbidden": [
@@ -103,7 +119,11 @@
     "expect": {
       "outcome": "partial",
       "operations": ["research-the-web", "save-prep-brief"],
-      "sources": { "web": "available", "vault": "unavailable", "calendar": "unavailable" },
+      "sources": {
+        "web": "available",
+        "vault": "available",
+        "calendar": "partial"
+      },
       "missingNamed": ["crm-facts"],
       "toolsAllowed": ["webResearch", "declareUnsupported", "createDocument"],
       "toolsForbidden": ["replyToMessage", "setRecipients", "stageCrmWrite", "dispatchMedia"],

@@ -27,6 +27,7 @@ import {
   GROWTH_OS_DIAGNOSTIC_SKILL,
   hasPassingAgentTenantEvidence,
   hasPassingEvidence,
+  hasPassingPackEvalEvidence,
   hasPassingTenantEvidence,
   INBOX_DIGEST_SKILL,
   isAgentAuthorableSkill,
@@ -67,12 +68,22 @@ import { folderDigestSkillBody } from "@pikar/contracts/skills/folderDigest";
 import { graphExtractorSkillBody } from "@pikar/contracts/skills/graphExtractor";
 import { growthOsDiagnosticSkillBody } from "@pikar/contracts/skills/growthOsDiagnostic";
 import { inboxDigestSkillBody } from "@pikar/contracts/skills/inboxDigest";
+import {
+  KNOWLEDGE_WORK_PINNED_AT,
+  KNOWLEDGE_WORK_PROVENANCE,
+} from "@pikar/contracts/skills/knowledgeWorkProvenance";
 import { leadEngineSkillBody } from "@pikar/contracts/skills/leadEngine";
 import { leanCanvasSkillBody } from "@pikar/contracts/skills/leanCanvas";
 import { mediaDirectorSkillBody } from "@pikar/contracts/skills/mediaDirector";
 import { moneyModelDesignerSkillBody } from "@pikar/contracts/skills/moneyModelDesigner";
 import { offerArchitectSkillBody } from "@pikar/contracts/skills/offerArchitect";
 import { onboardingAgentSkillBody } from "@pikar/contracts/skills/onboardingAgent";
+import { packBrandReviewSkillBody } from "@pikar/contracts/skills/packBrandReview";
+import { packBusinessPulseSkillBody } from "@pikar/contracts/skills/packBusinessPulse";
+import { packCampaignPlanSkillBody } from "@pikar/contracts/skills/packCampaignPlan";
+import { packCustomerComplaintSkillBody } from "@pikar/contracts/skills/packCustomerComplaint";
+import { packProcessSopSkillBody } from "@pikar/contracts/skills/packProcessSop";
+import { packSalesCallPrepSkillBody } from "@pikar/contracts/skills/packSalesCallPrep";
 import { replyDrafterSkillBody } from "@pikar/contracts/skills/replyDrafter";
 import { researchSpecialistSkillBody } from "@pikar/contracts/skills/researchSpecialist";
 import { styleCoachingSkillBody } from "@pikar/contracts/skills/styleCoaching";
@@ -85,6 +96,7 @@ import {
   hasPassingPackBrowserEvidence,
   hasValidPackProvenance,
   isWorkflowPackSkill,
+  WORKFLOW_PACK_SKILL_NAMES,
 } from "@pikar/core";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
@@ -833,47 +845,171 @@ export const PROVENANCE_PIN_ERROR = "PROVENANCE_PIN";
  * `body` is an ARGUMENT, exactly as `insertCandidate` takes one: the CALLER reads the derived
  * `@pikar/contracts/skills/<name>` constant the way `SEEDS` does (CLAUDE.md §5 — never a hardcoded
  * prompt), and the provenance manifest hashes the canonical `.md`, not the derived `.ts`.
+ *
+ * 27-08 split the handler into `publishPack` so `seedPackCandidates` below can share it VERBATIM
+ * rather than reproducing the allocation, the duplicate rule and the pin refusal in a second place.
+ * The exported mutation is unchanged in behaviour and in signature.
  */
+/** The newest row for a pack name, or null. Shared by the publisher and the six-pack seeder. */
+async function newestPackRow(ctx: MutationCtx, name: string): Promise<Doc<"skills"> | null> {
+  const rows = await ctx.db
+    .query("skills")
+    .withIndex("by_name_status", (q) => q.eq("name", name))
+    .collect();
+  return rows.length === 0 ? null : rows.reduce((a, b) => (b.version > a.version ? b : a));
+}
+
+async function publishPack(
+  ctx: MutationCtx,
+  name: string,
+  body: string,
+  provenance: string,
+): Promise<{ name: string; version: number; inserted: boolean }> {
+  if (!isWorkflowPackSkill(name)) {
+    throw new Error(`${NOT_A_PACK_ERROR}: ${name} is not a workflow pack`);
+  }
+
+  const newest = await newestPackRow(ctx, name);
+
+  // The SHARED allocation rule (`allocateImmutableVersion` above), not a second copy of it:
+  // `newest === null` already yields v1, which is precisely the case `insertCandidate` refuses.
+  const duplicate = newest !== null && newest.body === body && newest.provenance === provenance;
+  const { version, inserted } = allocateImmutableVersion(newest, duplicate);
+  if (!inserted) return { name, version, inserted: false };
+
+  // REFUSE A MISPINNED MANIFEST HERE, where it is one retry, rather than at activation, where it
+  // is unfixable. Provenance is written at insert and never patched, and the pack gate requires it
+  // to pin EXACTLY this (name, version) — so a manifest pinning v1 stored on a v2 row produces an
+  // immutable candidate that can never be activated by anyone, discovered weeks later at the gate,
+  // with "publish a third version" as the only remedy. The error names the version to pin.
+  if (!hasValidPackProvenance(provenance, name, version)) {
+    throw new Error(
+      `${PROVENANCE_PIN_ERROR}: provenance must be valid and pin ${name} v${version}`,
+    );
+  }
+
+  await ctx.db.insert("skills", {
+    name,
+    version,
+    body,
+    provenance,
+    status: "candidate",
+    createdAt: Date.now(),
+  });
+  return { name, version, inserted: true };
+}
+
 export const publishPackCandidate = internalMutation({
   args: { name: v.string(), body: v.string(), provenance: v.string() },
-  handler: async (ctx, { name, body, provenance }) => {
-    if (!isWorkflowPackSkill(name)) {
-      throw new Error(`${NOT_A_PACK_ERROR}: ${name} is not a workflow pack`);
+  handler: async (ctx, { name, body, provenance }) => publishPack(ctx, name, body, provenance),
+});
+
+/**
+ * The six adapted bodies, by REGISTRY NAME. Read from the derived `@pikar/contracts` constants the
+ * way `SEEDS` reads every other body (CLAUDE.md §5 — never a hardcoded prompt); the canonical `.md`
+ * they mirror is what `KNOWLEDGE_WORK_PROVENANCE.bodySha256` pins, and `skillBodies.test.ts` keeps
+ * the pair byte-identical.
+ */
+const PACK_BODIES: Readonly<Record<string, string>> = {
+  "pack-business-pulse": packBusinessPulseSkillBody,
+  "pack-campaign-plan": packCampaignPlanSkillBody,
+  "pack-customer-complaint": packCustomerComplaintSkillBody,
+  "pack-sales-call-prep": packSalesCallPrepSkillBody,
+  "pack-process-sop": packProcessSopSkillBody,
+  "pack-brand-review": packBrandReviewSkillBody,
+};
+
+/**
+ * The provenance string for EXACTLY one (name, version). A pure function of the pinned material and
+ * the version — no wall clock, deliberately: `publishPack` treats `(body, provenance)` as the
+ * identity of a version, so a `Date.now()` anywhere in here would make every re-run of the seeder
+ * mint candidate N+1 forever. `ts` is the pinned UPSTREAM COMMIT's timestamp; when the row was
+ * published is `skills.createdAt`, which the row already carries.
+ */
+function packProvenanceFor(name: string, version: number): string {
+  const record = KNOWLEDGE_WORK_PROVENANCE[name];
+  if (record === undefined) throw new Error(`${NOT_A_PACK_ERROR}: no provenance for ${name}`);
+  return JSON.stringify({
+    ...record,
+    skillVersions: { [name]: version },
+    ts: KNOWLEDGE_WORK_PINNED_AT,
+  });
+}
+
+/**
+ * Publish all six adapted pack bodies as CANDIDATES on this deployment (27-08 Task 2).
+ *
+ * IDEMPOTENT: a second run against an unchanged repo inserts nothing and returns the same six
+ * versions. That works only because the version the provenance pins is resolved BEFORE publication —
+ * if the newest row already carries exactly this body AND exactly the provenance this code would
+ * write for its version, the re-publication is a duplicate at that same version. Predicting
+ * `newest.version + 1` unconditionally would rebuild provenance pinning a version the duplicate
+ * check then declines to mint, and `publishPack` would reject it as mispinned on every retry.
+ *
+ * There is NO branch here that can produce an active row, and none that can bypass the pack gate:
+ * this is `publishPackCandidate` six times with the code-owned bodies and the code-owned provenance.
+ */
+export const seedPackCandidates = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const out: { name: string; version: number; inserted: boolean }[] = [];
+    for (const name of WORKFLOW_PACK_SKILL_NAMES) {
+      const body = PACK_BODIES[name];
+      if (body === undefined) throw new Error(`${NOT_A_PACK_ERROR}: no body for ${name}`);
+      const newest = await newestPackRow(ctx, name);
+      const version =
+        newest === null
+          ? 1
+          : newest.body === body && newest.provenance === packProvenanceFor(name, newest.version)
+            ? newest.version
+            : newest.version + 1;
+      out.push(await publishPack(ctx, name, body, packProvenanceFor(name, version)));
     }
+    return out;
+  },
+});
 
-    const rows = await ctx.db
-      .query("skills")
-      .withIndex("by_name_status", (q) => q.eq("name", name))
-      .collect();
-    const newest =
-      rows.length === 0 ? null : rows.reduce((a, b) => (b.version > a.version ? b : a));
-
-    // The SHARED allocation rule (`allocateImmutableVersion` above), not a second copy of it:
-    // `newest === null` already yields v1, which is precisely the case `insertCandidate` refuses.
-    const duplicate = newest !== null && newest.body === body && newest.provenance === provenance;
-    const { version, inserted } = allocateImmutableVersion(newest, duplicate);
-    if (!inserted) return { name, version, inserted: false };
-
-    // REFUSE A MISPINNED MANIFEST HERE, where it is one retry, rather than at activation, where it
-    // is unfixable. Provenance is written at insert and never patched, and the pack gate requires it
-    // to pin EXACTLY this (name, version) — so a manifest pinning v1 stored on a v2 row produces an
-    // immutable candidate that can never be activated by anyone, discovered weeks later at the gate,
-    // with "publish a third version" as the only remedy. The error names the version to pin.
-    if (!hasValidPackProvenance(provenance, name, version)) {
-      throw new Error(
-        `${PROVENANCE_PIN_ERROR}: provenance must be valid and pin ${name} v${version}`,
-      );
+/**
+ * Refs-only read-back of the six pack rows (27-08 Task 2). Two callers need it and neither may see
+ * a body: the plan's own read-back evidence, and `run-workflow-pack-evals.mjs`, which must resolve
+ * the EXACT candidate version to pin before it spends a cent — pinning the active row, or guessing
+ * the version, is how a run certifies a body it did not execute.
+ *
+ * Content-free by construction (`inspectAgentCandidate`'s posture): ids, status, a body HASH, a byte
+ * count and which evidence planes are present. It never returns `body`, and it returns the
+ * provenance only as its already-refs-only fields, never as free text.
+ */
+export const inspectPackCandidates = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const out = [];
+    for (const name of WORKFLOW_PACK_SKILL_NAMES) {
+      const rows = await ctx.db
+        .query("skills")
+        .withIndex("by_name_status", (q) => q.eq("name", name))
+        .collect();
+      if (rows.length === 0) {
+        out.push({ name, present: false as const });
+        continue;
+      }
+      const newest = rows.reduce((a, b) => (b.version > a.version ? b : a));
+      out.push({
+        name,
+        present: true as const,
+        skillId: String(newest._id),
+        version: newest.version,
+        status: newest.status,
+        versionCount: rows.length,
+        bodyHash: await contentHash(newest.body),
+        bodyBytes: new TextEncoder().encode(newest.body).length,
+        // The three gate planes, as booleans against THIS exact version — the same questions
+        // `assertPackActivationEvidence` asks, answered without exposing any payload.
+        provenanceValid: hasValidPackProvenance(newest.provenance, name, newest.version),
+        evidenceValid: hasPassingPackEvalEvidence(newest.evidence, name, newest.version),
+        browserValid: hasPassingPackBrowserEvidence(newest.browserEvidence, name, newest.version),
+      });
     }
-
-    await ctx.db.insert("skills", {
-      name,
-      version,
-      body,
-      provenance,
-      status: "candidate",
-      createdAt: Date.now(),
-    });
-    return { name, version, inserted: true };
+    return out;
   },
 });
 
@@ -902,8 +1038,9 @@ export const recordPackBrowserEvidence = internalMutation({
  * THE PACK GATE. Three independent planes must all name EXACTLY this (name, version):
  *
  *   provenance      the body is the reviewed adaptation of a pinned upstream source (27-01/27-08)
- *   evidence        an eval run scored it (27-08) — the same `hasPassingEvidence` the global
- *                   EVAL_GATE uses, so packs and gated skills answer the same question
+ *   evidence        the PACK eval runner scored it against this pack's exact current fixture file
+ *                   (27-08) — `hasPassingPackEvalEvidence`, which is `hasPassingEvidence` plus the
+ *                   runner identity, the suite pin and a full-coverage requirement
  *   browserEvidence an authenticated person reached it at more than one viewport (27-09)
  *
  * Called from `planGlobalActivation` ONLY for a `candidate` row, so the rollback exemption is
@@ -913,7 +1050,10 @@ export const recordPackBrowserEvidence = internalMutation({
 function assertPackActivationEvidence(target: Doc<"skills">, name: string, version: number): void {
   const missing = [
     hasValidPackProvenance(target.provenance, name, version) ? null : "provenance",
-    hasPassingEvidence(target.evidence, name, version) ? null : "eval",
+    // The PACK predicate, not the global one: a global-scope evidence blob carries no suite
+    // identity, so `hasPassingEvidence` alone would honour a row written by `run-eval-golden.mjs`
+    // or by a pack run against a corpus that has since been rewritten.
+    hasPassingPackEvalEvidence(target.evidence, name, version) ? null : "eval",
     hasPassingPackBrowserEvidence(target.browserEvidence, name, version) ? null : "browser",
   ].filter((plane): plane is string => plane !== null);
 

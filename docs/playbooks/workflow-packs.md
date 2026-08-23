@@ -1,5 +1,82 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
+> Last verified: 2026-08-23 (27-08 — **THE CORPUS AND THE RUNTIME DID NOT AGREE, AND THE EVAL RUNNER
+> IS WHERE THAT SURFACED.** 27-04/05/06 authored the 30 fixtures against the *contract* vocabulary;
+> 27-07 wrote the deriving code afterwards. 24 of the 30 asserted something no run could produce:
+>
+> - **21 named a `vault`/`web` state the probe cannot return.** `probeSources` hardcodes both to
+>   `available` on purpose — an empty vault is the tool's own honest answer, not a preflight fact.
+> - **3 expected an outcome `outcomeFor` never derives.** `blocked` is a guardrail stop, `failed` is
+>   a thrown bug, and **nothing anywhere emits `refused`**.
+>
+> The owner's ruling was FIX THE CORPUS, not widen the runtime, so `workflowPackBinding.ts` is
+> byte-unchanged and the fixtures were reconciled (see `27-08-SUMMARY.md` for the 36 edits). What
+> keeps them reconciled is code, not memory: `PACK_SOURCE_PROBE_STATES` (@pikar/core) declares what
+> the probe can return per source, `workflowPacks.test.ts` SCANS `probeSources`' own return block so
+> the declaration cannot drift from it, and the runner refuses any fixture asserting a state or an
+> outcome outside them. **A case that can only ever fail is worse than no case** — it makes an honest
+> red run indistinguishable from a broken pack.
+>
+> **HOW TO RUN A PACK EVAL — ONE PACK PER INVOCATION, DEV ONLY, IT COSTS MONEY.**
+>
+> ```
+> cd packages/backend
+> node scripts/run-workflow-pack-evals.mjs --self-test                    # free, always first
+> node scripts/run-workflow-pack-evals.mjs --packs business-pulse --candidate
+> ```
+>
+> Never `--all` and never two ids: `COST_CAP_USD` is 1.0 PER INVOCATION, evidence writes only on an
+> all-green full run, and one teardown crash discards the whole gate. Six packs = six invocations,
+> six verdicts, six evidence rows. A failing pack blocks only that pack (27-VALIDATION); record it as
+> failing and move on. Budget ~$0.10–1.00 per pack (measured rates: ~$0.017/case plain, ~$0.21/case
+> when research dispatches). It needs a verified-stable `convex dev` — not `--once`: a network blip
+> destabilises the deployment into a retry storm that reads as case FAILURES at $0.0000 rather than
+> as an env abort.
+>
+> **WHAT THE GATE ACTUALLY GRADES.** Eight of the nine per-case assertions are facts of the run —
+> the terminal event's own `outcome`, `agentSteps` tool traces for operations / forbidden tools / the
+> allow-list itself, `artifact_created` rows, the preflight event's own source counts, and a per-case
+> needle asserted ABSENT from every structured log plane (`workflowPackEvents` joined that scan in
+> this plan; it is `audit_immutable`, so a leak there could never be corrected). The ninth is the
+> honest-partial statement, which is prose by nature and is the deliverable of the phase: the reply
+> must NAME each missing source, matched against `MISSING_SOURCE_MENTIONS`. That map is the ONLY
+> heuristic in the gate — loosen a phrase when a body legitimately says it another way, never delete
+> a source's entry, because an empty list would silently pass.
+>
+> **EVERY CASE GETS ITS OWN TENANT, SEEDED FROM ITS OWN `expect.sources`.** The preflight is resolved
+> from tenant state, so cases wanting different source states cannot share one. `smoke.seedPackEvalTenant`
+> seeds a figure (finance), a manageable event (calendar) and a Gmail-only token (inbox); the mailbox
+> itself is `smoke.seedInboxFixture`, which the read tools consult BEFORE the token. **The token
+> carries no Drive scope, deliberately** — there is no Drive fixture seam, so a Drive grant would make
+> the preflight promise a plane every call 403s. `drive` is therefore honestly `unavailable` on every
+> eval case, and `findInDrive` / `listDriveFolders` have NO eval coverage. Stated, not papered over.
+>
+> **EVIDENCE IS SUITE-BOUND, AND IT HAD TO BECOME SO.** A global-scope `evidence` blob carries no
+> suite identity, so `hasPassingEvidence` alone cannot tell a pack run from an `eval:golden` run, nor
+> a current corpus from a rewritten one — stale pack evidence would have gated an activation
+> silently. The pack gate now reads `hasPassingPackEvalEvidence`, which additionally requires
+> `runner: "eval:pack"`, `PACK_EVAL_SUITE.revision`, this pack's exact fixture-file hash and count,
+> and `casesPassed === casesTotal === caseCount` (which is what refuses a filtered run). Editing a
+> fixture therefore reddens `packEvalSuite.test.ts` and the runner's own `--self-test` BEFORE any
+> money is spent; regenerate the hash in `packages/contracts/src/skill.ts` and bump `revision` when
+> the suite's MEANING changes, because that is the act that retires older evidence.
+>
+> Thresholds live at `scripts/workflow-pack-fixtures/thresholds.json` — inside the fixtures directory
+> because that prefix is what `watch.json` registers. An absent pack there is an ABORT, never a
+> default. `maxUnsupportedFigures` is 0 everywhere: the eval tenant holds exactly ONE seeded figure
+> (cac 1400), so any other currency amount in a reply came from nowhere.
+>
+> **A PROVIDER FAILURE IS NOT A PACK FAILURE, and the runner now says so.** An exhausted OpenAI
+> balance surfaces as every case failing at $0.0000 — indistinguishable from six broken bodies unless
+> something classifies it. `PROVIDER_ABORT` re-throws quota / billing / 429 / socket failures as an
+> EnvironmentAbort (exit 2), and a tenant that could not be seeded aborts the same way. Note that
+> seeding is not entirely free either: `vaultSmoke:seedCorpus` embeds through the OpenAI embeddings
+> API, so a case that grounds in the vault makes a (tiny) paid network call before the model turn.
+> It gets ONE retry, because a transient keep-alive timeout should not discard a paid pack gate.
+>
+> **STILL DARK.** Recording evidence changes nothing about what runs — the row stays `candidate`, and
+> activation needs the third plane (browser, 27-09) on top of provenance and eval.)
+
 > Last verified: 2026-08-23 (27-07 — **THE PACKS ARE NOW EXECUTABLE, AND STILL DARK.**
 > `convex/workflowPackBinding.ts` binds a pack id onto the EXISTING `runSpecialistTurn` seam and
 > `convex/workflowPackOutcomes.ts` projects the measures over `workflowPackEvents`. No pack row

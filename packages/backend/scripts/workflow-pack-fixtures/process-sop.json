@@ -10,7 +10,10 @@
     "expect": {
       "outcome": "useful",
       "operations": ["ground-in-vault", "save-sop"],
-      "sources": { "vault": "available", "drive": "unavailable" },
+      "sources": {
+        "vault": "available",
+        "drive": "unavailable"
+      },
       "missingNamed": ["org-roles", "task-system"],
       "toolsAllowed": ["searchVault", "createDocument"],
       "toolsForbidden": ["dispatchResearch", "proposePlan", "replyToMessage", "webResearch"],
@@ -29,7 +32,10 @@
     "expect": {
       "outcome": "partial",
       "operations": ["save-sop"],
-      "sources": { "vault": "unavailable", "drive": "unavailable" },
+      "sources": {
+        "vault": "available",
+        "drive": "unavailable"
+      },
       "missingNamed": ["org-roles", "task-system"],
       "toolsAllowed": ["createDocument"],
       "toolsForbidden": ["resolveContacts", "stageCrmWrite", "proposePlan", "dispatchResearch"],
@@ -48,7 +54,10 @@
     "expect": {
       "outcome": "partial",
       "operations": ["save-sop"],
-      "sources": { "vault": "unavailable", "drive": "unavailable" },
+      "sources": {
+        "vault": "available",
+        "drive": "unavailable"
+      },
       "missingNamed": ["task-system", "org-roles"],
       "toolsAllowed": ["createDocument"],
       "toolsForbidden": ["proposeCalendarEvent", "setSendTime", "replyToMessage", "proposePlan"],
@@ -57,16 +66,19 @@
     "needles": ["zqk-sop-publish-request-03"]
   },
   {
-    "id": "process-sop-04-drive-sourced",
+    "id": "process-sop-04-drive-unreadable",
     "pack": "process-sop",
-    "description": "The process is half-described in a Drive document. The pack locates it read-only, builds on it, and never claims to have imported or changed it.",
+    "description": "The owner points at a process document in Drive that this run cannot read. The pack must say so plainly and build the SOP from what the owner describes, never implying it opened the file.",
     "turns": [
       "There's an old onboarding doc somewhere in my Drive. Find it and turn it into a proper SOP."
     ],
     "expect": {
       "outcome": "partial",
-      "operations": ["locate-source-material", "ground-in-vault", "save-sop"],
-      "sources": { "drive": "available", "vault": "partial" },
+      "operations": ["ground-in-vault", "save-sop"],
+      "sources": {
+        "drive": "unavailable",
+        "vault": "available"
+      },
       "missingNamed": ["org-roles", "task-system"],
       "toolsAllowed": ["findInDrive", "listDriveFolders", "searchVault", "createDocument"],
       "toolsForbidden": ["dispatchResearch", "proposePlan", "generateAttachment"],
@@ -82,7 +94,10 @@
     "expect": {
       "outcome": "partial",
       "operations": ["ground-in-vault", "save-sop"],
-      "sources": { "vault": "available", "drive": "unavailable" },
+      "sources": {
+        "vault": "available",
+        "drive": "unavailable"
+      },
       "missingNamed": ["org-roles", "task-system"],
       "toolsAllowed": ["searchVault", "createDocument"],
       "toolsForbidden": ["resolveContacts", "stageCrmWrite", "proposePlan", "dispatchMedia"],

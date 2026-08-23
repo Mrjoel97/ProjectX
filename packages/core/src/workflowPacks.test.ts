@@ -8,6 +8,7 @@ import {
   MISSING_PACK_SOURCES,
   MISSING_SOURCE_UNLOCK,
   PACK_SOURCE_LABEL,
+  PACK_SOURCE_PROBE_STATES,
   PACK_UNREACHABLE_TOOLS,
   packPreflight,
   REACHABLE_PACK_SOURCES,
@@ -107,6 +108,55 @@ describe("the workflow-pack registry is total", () => {
         );
       }
     }
+  });
+
+  // 27-08 Task 1. TOTAL STATIC PARITY: every operation id maps to EXACTLY ONE of the three classes.
+  // The per-pack check below is the local half; the cross-registry check is the one that matters,
+  // because the fixture corpus and the eval runner key on the BARE id — `expect.operations:
+  // ["ground-in-vault"]` is written once and means the same thing in six files. An id that were
+  // `existing` in one pack and `missing` in another would make that assertion silently pack-dependent:
+  // the same fixture line would certify a real read in one place and an apology in another.
+  test("every operation id maps to exactly one class, within a pack and across the registry", () => {
+    const globalState = new Map<string, { state: string; tools: string; packId: string }>();
+
+    for (const id of WORKFLOW_PACK_IDS) {
+      const ops = WORKFLOW_PACKS[id].operations;
+      const byClass = {
+        existing: ops.filter((op) => op.state === "existing").map((op) => op.id),
+        missing: ops.filter((op) => op.state === "missing").map((op) => op.id),
+        forbidden: ops.filter((op) => op.state === "forbidden").map((op) => op.id),
+      };
+      // TOTALITY: the three classes cover every operation and nothing else. A fourth state, or an
+      // operation the union misses, would leave an id the fixture validator can neither accept nor
+      // reject by class — it would fall through to "not an operation of this pack".
+      const covered = [...byClass.existing, ...byClass.missing, ...byClass.forbidden].sort();
+      expect(covered, `${id}: the three classes do not cover its operations exactly`).toEqual(
+        ops.map((op) => op.id).sort(),
+      );
+      // DISJOINTNESS. `covered.length` counts an id once per class it appears in, so an id listed
+      // twice under different states makes this length exceed the distinct count.
+      expect(new Set(covered).size, `${id}: an operation id appears in two classes`).toBe(
+        covered.length,
+      );
+
+      for (const op of ops) {
+        // The tool set is part of the identity: `research-the-web` granting a different pair in a
+        // second pack would make `expect.toolsAllowed` mean something else there too.
+        const tools = op.state === "existing" ? [...op.tools].sort().join(",") : "";
+        const seen = globalState.get(op.id);
+        if (seen === undefined) {
+          globalState.set(op.id, { state: op.state, tools, packId: id });
+          continue;
+        }
+        expect(
+          `${op.state}|${tools}`,
+          `operation "${op.id}" is ${op.state} in ${id} but ${seen.state} in ${seen.packId}`,
+        ).toBe(`${seen.state}|${seen.tools}`);
+      }
+    }
+
+    // Non-vacuity floor: the loop above passes trivially over an empty registry.
+    expect(globalState.size).toBeGreaterThan(10);
   });
 
   test("the source vocabulary is disjoint, fully used, and fully described", () => {
@@ -389,6 +439,40 @@ describe("the honest-partial contract is in the matrix, not in prose", () => {
       ).toBe(true);
     }
   });
+});
+
+// 27-08. `PACK_SOURCE_PROBE_STATES` is a hand-written record of what `probeSources` returns, and a
+// hand-written record of another module's behaviour is a claim, not a fact — the "verify
+// cross-module claims" class. So it is checked against the probe's own `return` block: every state
+// literal the probe can yield for a key must be declared, and nothing else may be.
+test("the declared probe states are exactly what probeSources returns", () => {
+  const src = readFileSync(
+    new URL("../../backend/convex/workflowPackBinding.ts", import.meta.url),
+    "utf8",
+  ).replace(/\r\n/g, "\n");
+  // The probe's single `return { ... };` — anchored on the function so an unrelated object
+  // literal elsewhere in the file cannot be scanned by accident.
+  const probe = /async function probeSources[\s\S]*?\n {2}return \{\n([\s\S]*?)\n {2}\};/.exec(src);
+  expect(probe, "probeSources' return block was not found — did it move or change shape?").not.toBe(
+    null,
+  );
+
+  const found = new Map<string, Set<string>>();
+  for (const line of (probe?.[1] ?? "").split("\n")) {
+    const key = /^\s*"?([a-z-]+)"?:/.exec(line);
+    if (key === null) continue;
+    const states = [...line.matchAll(/"(available|partial|unavailable)"/g)].map((m) => m[1] ?? "");
+    found.set(key[1] ?? "", new Set(states));
+  }
+
+  // Non-vacuity floor: an unparsed block yields an empty map, and every comparison below would
+  // then be against nothing at all.
+  expect([...found.keys()].sort()).toEqual([...REACHABLE_PACK_SOURCES].sort());
+  for (const source of REACHABLE_PACK_SOURCES) {
+    expect([...(found.get(source) ?? [])].sort(), `${source} probe states`).toEqual(
+      [...PACK_SOURCE_PROBE_STATES[source]].sort(),
+    );
+  }
 });
 
 describe("preflight is computed in code, before the model call", () => {

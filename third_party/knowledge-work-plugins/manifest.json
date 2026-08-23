@@ -43,7 +43,7 @@
       "upstreamPluginRoot": "small-business",
       "governingLicense": "LICENSE",
       "adaptedDestination": "packages/contracts/skills/pack-business-pulse.md",
-      "adaptedBodySha256": null,
+      "adaptedBodySha256": "9a28d1a047ff5511ce8d4f7a877c30d5c8fb2e75c8e1c895602fafc4cd4b19a4",
       "plannedModifications": "Connector sections (QuickBooks/PayPal/Square/HubSpot) removed: those sources are MISSING in Pikar and are named to the user instead. Output is an in-thread briefing, not a saved report.",
       "files": [
         {
@@ -85,7 +85,7 @@
       "upstreamPluginRoot": "marketing",
       "governingLicense": "marketing/LICENSE",
       "adaptedDestination": "packages/contracts/skills/pack-campaign-plan.md",
-      "adaptedBodySha256": null,
+      "adaptedBodySha256": "4bcee6bffb91299674a0485e5b21bf1a1e1dc6bdbb591fb15c882319eab2f4c1",
       "plannedModifications": "Rewritten to PRODUCE a plan only. The upstream brief implies executing the campaign; a Pikar pack carries a tool allow-list and structurally cannot dispatch a specialist or send anything.",
       "files": [
         {
@@ -103,7 +103,7 @@
       "upstreamPluginRoot": "small-business",
       "governingLicense": "LICENSE",
       "adaptedDestination": "packages/contracts/skills/pack-customer-complaint.md",
-      "adaptedBodySha256": null,
+      "adaptedBodySha256": "73b156baeb93e3f885e7a781bcf258cefa399cb8885a0c7db74cd2fd31911442",
       "plannedModifications": "Refund issuance and every send removed. Pikar drafts a reply through replyToMessage and stages it with proposePlan for the one human Approve gate; order/refund and CRM history are MISSING.",
       "files": [
         {
@@ -133,7 +133,7 @@
       "upstreamPluginRoot": "sales",
       "governingLicense": "sales/LICENSE",
       "adaptedDestination": "packages/contracts/skills/pack-sales-call-prep.md",
-      "adaptedBodySha256": null,
+      "adaptedBodySha256": "a3ff998f7135aae1f15d1489597217b53341b4d4525801f4a38b859492bd096a",
       "plannedModifications": "CRM account/deal lookups removed and named as MISSING. Keeps the standalone user-input plus web-research path, which is what Pikar can actually serve.",
       "files": [
         {
@@ -151,7 +151,7 @@
       "upstreamPluginRoot": "operations",
       "governingLicense": "LICENSE",
       "adaptedDestination": "packages/contracts/skills/pack-process-sop.md",
-      "adaptedBodySha256": null,
+      "adaptedBodySha256": "e49bdac203fbe0af87677299dfd61a2d61295dcf3f9c341555820568f0fc4ba5",
       "plannedModifications": "Publishing, task-system export and owner assignment removed and named as MISSING. Produces a durable vault document only.",
       "files": [
         {
@@ -169,7 +169,7 @@
       "upstreamPluginRoot": "marketing",
       "governingLicense": "marketing/LICENSE",
       "adaptedDestination": "packages/contracts/skills/pack-brand-review.md",
-      "adaptedBodySha256": null,
+      "adaptedBodySha256": "53bcde000497a094bb8812842b78001ec34c7359a43b7dfc94e1b5d9247a4919",
       "plannedModifications": "Rewritten to review against general principles, because Pikar has no tenant brand store; the pack says so and names what would unlock the stronger review.",
       "files": [
         {
@@ -182,8 +182,10 @@
     }
   ],
   "adaptedBodies": {
-    "status": "pending",
-    "$comment": "Adapted-body hashes pin the canonical .md under packages/contracts/skills/, NEVER the auto-derived .ts under packages/contracts/src/skills/ (skillBodies.test.ts asserts the pair is byte-identical). The bodies do not exist yet: 27-04/05/06 author them. 27-01's own text defers this to 'Plan 07', but 27-08-PLAN.md Task 1 is the plan that owns this file and the final hashes - recorded here so the next reader does not chase Plan 07 for it."
+    "status": "final",
+    "finalizedBy": "27-08 Task 1",
+    "hashedBytes": "LF-normalized UTF-8 of the canonical .md",
+    "$comment": "Adapted-body hashes pin the canonical .md under packages/contracts/skills/, NEVER the auto-derived .ts under packages/contracts/src/skills/. The hash is over LF-NORMALIZED bytes: the repo root .gitattributes sets `* text=auto`, so a raw-byte hash of a .md would differ between a CRLF Windows checkout and every other machine, and LF is also what actually ships (the derived .ts constant the Convex runtime loads). scripts/verify-knowledge-work-provenance.mjs --check re-hashes each body, refuses any pending entry, and additionally refuses a .md/.ts pair that has drifted - so this manifest can never pin bytes nobody runs. Finalized by 27-08 Task 1; the bodies themselves were authored by 27-04/05/06."
   },
   "updatePolicy": {
     "howToUpdate": "Bump upstream.commit, re-fetch the selected sources, re-run the verifier, and review the resulting diff BY HAND as an ordinary GSD change.",

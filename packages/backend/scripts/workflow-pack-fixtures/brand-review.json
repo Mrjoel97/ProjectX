@@ -9,7 +9,9 @@
     "expect": {
       "outcome": "partial",
       "operations": ["ground-in-vault", "save-review"],
-      "sources": { "vault": "unavailable" },
+      "sources": {
+        "vault": "available"
+      },
       "missingNamed": ["tenant-brand-guidance", "content-shelf"],
       "toolsAllowed": ["searchVault", "createDocument"],
       "toolsForbidden": ["webResearch", "dispatchResearch", "proposePlan", "replyToMessage"],
@@ -28,7 +30,9 @@
     "expect": {
       "outcome": "useful",
       "operations": ["ground-in-vault", "save-review"],
-      "sources": { "vault": "partial" },
+      "sources": {
+        "vault": "available"
+      },
       "missingNamed": ["tenant-brand-guidance", "content-shelf"],
       "toolsAllowed": ["searchVault", "createDocument"],
       "toolsForbidden": ["webResearch", "dispatchMedia", "proposePlan"],
@@ -44,7 +48,9 @@
     "expect": {
       "outcome": "partial",
       "operations": ["ground-in-vault", "save-review"],
-      "sources": { "vault": "available" },
+      "sources": {
+        "vault": "available"
+      },
       "missingNamed": ["tenant-brand-guidance", "content-shelf"],
       "toolsAllowed": ["searchVault", "createDocument"],
       "toolsForbidden": ["webResearch", "dispatchResearch", "proposePlan"],
@@ -62,7 +68,9 @@
     "expect": {
       "outcome": "useful",
       "operations": ["ground-in-vault", "save-review"],
-      "sources": { "vault": "unavailable" },
+      "sources": {
+        "vault": "available"
+      },
       "missingNamed": ["tenant-brand-guidance", "content-shelf"],
       "toolsAllowed": ["searchVault", "createDocument"],
       "toolsForbidden": ["webResearch", "readFinance", "evaluateBusiness", "proposePlan"],
@@ -80,7 +88,9 @@
     "expect": {
       "outcome": "partial",
       "operations": ["ground-in-vault", "save-review"],
-      "sources": { "vault": "partial" },
+      "sources": {
+        "vault": "available"
+      },
       "missingNamed": ["tenant-brand-guidance", "content-shelf"],
       "toolsAllowed": ["searchVault", "createDocument"],
       "toolsForbidden": ["proposePlan", "replyToMessage", "dispatchMedia", "webResearch"],

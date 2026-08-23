@@ -582,6 +582,99 @@ export const AGENT_EVAL_SUITE = {
   caseCount: 46,
 } as const;
 
+/** The runner that writes pack eval evidence. A global-scope `evidence` blob carries no suite
+ *  identity of its own, so without this the gate cannot tell a pack run from an `eval:golden` one. */
+export const PACK_EVAL_RUNNER = "eval:pack";
+
+/**
+ * THE PACK EVAL SUITE (Phase 27, PACK-03) — per pack, because packs are evaluated and gated ONE AT
+ * A TIME. A whole-corpus run is over `run-eval-golden.mjs`'s cost cap and is all-or-nothing, so each
+ * pack gets its own invocation, its own verdict and its own evidence row; the identity that
+ * certifies `pack-brand-review` must therefore be brand-review's fixture file, not the corpus.
+ *
+ * IT EXISTS BECAUSE GLOBAL-SCOPE EVIDENCE HAS NO SUITE BINDING. `hasPassingEvidence` asks only
+ * "does this blob say pass and pin this version" — a row written by `run-eval-golden.mjs`, or by a
+ * pack run against a corpus that has since been rewritten, answers yes to both. Stale pack evidence
+ * would then gate an activation silently, which is the failure mode this phase has already shipped
+ * five times in other shapes.
+ *
+ * `revision` is DELIBERATE and human-bumped: changing it retires every older pack evidence row at
+ * once. `casesHash`/`caseCount` are MECHANICAL — sha256 of the LF-normalized fixture file and its
+ * case count — and `packages/core/src/workflowPacks.test.ts` hashes the files on disk and asserts
+ * they equal these, so a fixture edit reddens a test rather than silently invalidating a gate.
+ */
+export const PACK_EVAL_SUITE = {
+  revision: "2026-08-23.phase27",
+  packs: {
+    "pack-business-pulse": {
+      casesHash: "9b272f2b2dd5835faabba4030008a8eadbc243c201f8ffe3c4abe4a99a9b92d0",
+      caseCount: 5,
+    },
+    "pack-campaign-plan": {
+      casesHash: "c5344c5644df324b89f0a41081fa35549de51494626ab142753897ea13dfd3ef",
+      caseCount: 5,
+    },
+    "pack-customer-complaint": {
+      casesHash: "d67fcfeee41f7f17edda2962371f80a4f386e85751eafcd88f0904acc72975eb",
+      caseCount: 5,
+    },
+    "pack-sales-call-prep": {
+      casesHash: "9c9a47d8ee569e3254448e1b9d26fa3ca74221c9e1363a529e061cc44fb424af",
+      caseCount: 5,
+    },
+    "pack-process-sop": {
+      casesHash: "0138add4a16d3de4649ec900b5cde2cd1ce6fc471c9c41a471c0ba8becb9f4b8",
+      caseCount: 5,
+    },
+    "pack-brand-review": {
+      casesHash: "2db8fef128eebf32f21858afc52b483bf8dd9860b854100fabb32a1f62ab2165",
+      caseCount: 5,
+    },
+  },
+} as const;
+
+/**
+ * Does this evidence prove a passing PACK eval run of EXACTLY this candidate, against EXACTLY this
+ * pack's current fixture file? The eval plane of the pack gate (`assertPackActivationEvidence`).
+ *
+ * STRICTER THAN `hasPassingEvidence`, and separate from it for the reason
+ * `hasPassingAgentTenantEvidence` is separate: tightening the shipped predicate would change the
+ * rule every gated skill was certified under. Four things must all hold:
+ *  1. `hasPassingEvidence` — a passing run pinning THIS (name, version).
+ *  2. The runner is the pack runner. An `eval:golden` row cannot certify a pack.
+ *  3. The suite identity matches this pack's current fixtures exactly — revision, hash and count.
+ *  4. `casesPassed === casesTotal === caseCount`. This is what refuses a FILTERED run: a green
+ *     two-case run reads identically to a full one once it is a row.
+ *
+ * Fails closed on absent, unparseable, or ANY mismatch.
+ */
+export function hasPassingPackEvalEvidence(
+  evidence: string | undefined,
+  name: string,
+  version: number,
+): boolean {
+  if (!hasPassingEvidence(evidence, name, version)) return false;
+  const suite = (PACK_EVAL_SUITE.packs as Record<string, { casesHash: string; caseCount: number }>)[
+    name
+  ];
+  if (suite === undefined) return false; // not a pack name → not a pack gate
+  try {
+    const parsed = JSON.parse(evidence as string) as Partial<EvalEvidence>;
+    const s = parsed.suite;
+    return (
+      parsed.runner === PACK_EVAL_RUNNER &&
+      s !== undefined &&
+      s.revision === PACK_EVAL_SUITE.revision &&
+      s.casesHash === suite.casesHash &&
+      s.caseCount === suite.caseCount &&
+      parsed.casesTotal === suite.caseCount &&
+      parsed.casesPassed === suite.caseCount
+    );
+  } catch {
+    return false; // unparseable → fail closed
+  }
+}
+
 /**
  * Does this evidence prove a passing run for EXACTLY this AGENT-authored candidate, against the
  * EXACT CURRENT SUITE? (Phase 23, SKILL-02.)

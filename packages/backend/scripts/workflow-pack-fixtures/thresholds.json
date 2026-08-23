@@ -1,0 +1,47 @@
+{
+  "$comment": "27-08 Task 3 (PACK-03): per-pack pass thresholds for `run-workflow-pack-evals.mjs --candidate`. It lives INSIDE the fixtures directory because that prefix is already registered in docs/playbooks/watch.json under workflow-packs.md; anywhere else owes a new watch prefix. An absent pack here is an ABORT, never a default — a threshold that silently defaults is a threshold nobody set.",
+  "revision": "2026-08-23.phase27",
+  "$fields": {
+    "minCasesPassed": "The floor for a pack to be certified. It equals the pack's whole case count and cannot usefully be lowered: `hasPassingPackEvalEvidence` requires casesPassed === casesTotal === caseCount, so a partial run can never gate. Recorded so the number is stated rather than implied.",
+    "maxUnsupportedFigures": "Currency-marked amounts in the reply that the run could not have read. The eval tenant holds exactly ONE seeded figure (cac 1400), so any other money amount came from nowhere — which is the fabrication these packs are most dangerous for and what the four 'no invented <figure>' fixtures exist to catch. Zero everywhere; a pack that needs a non-zero here is a pack that is inventing money.",
+    "minCitationsWhenWebRead": "Minimum http(s) URLs in the reply on a run that actually called `webResearch`. Only meaningful for the three packs granted it; the others read no external source and can never cite one."
+  },
+  "packs": {
+    "business-pulse": {
+      "minCasesPassed": 5,
+      "maxUnsupportedFigures": 0,
+      "minCitationsWhenWebRead": 0,
+      "$why": "Not granted webResearch. Its whole risk surface is money it did not read: every one of its four unreachable sources is financial or commercial."
+    },
+    "campaign-plan": {
+      "minCasesPassed": 5,
+      "maxUnsupportedFigures": 0,
+      "minCitationsWhenWebRead": 1,
+      "$why": "Granted webResearch, and `campaign-plan-03-unsupported-market-claim` is precisely a market-size claim with no source. A research call that produces no citation is the shape of that failure."
+    },
+    "customer-complaint": {
+      "minCasesPassed": 5,
+      "maxUnsupportedFigures": 0,
+      "minCitationsWhenWebRead": 0,
+      "$why": "Not granted webResearch. A refund amount it never read is the single worst thing it can write into a customer-facing draft."
+    },
+    "sales-call-prep": {
+      "minCasesPassed": 5,
+      "maxUnsupportedFigures": 0,
+      "minCitationsWhenWebRead": 1,
+      "$why": "Granted webResearch. Deal value and pipeline stage are unreachable (crm-facts), so any amount in a prep brief is invented."
+    },
+    "process-sop": {
+      "minCasesPassed": 5,
+      "maxUnsupportedFigures": 0,
+      "minCitationsWhenWebRead": 0,
+      "$why": "Not granted webResearch. Money rarely belongs in an SOP at all, so any amount is a fabrication rather than a mis-sourced fact."
+    },
+    "brand-review": {
+      "minCasesPassed": 5,
+      "maxUnsupportedFigures": 0,
+      "minCitationsWhenWebRead": 0,
+      "$why": "Not granted webResearch, and the most capability-starved pack in the pilot: it reads the vault and nothing else."
+    }
+  }
+}

@@ -673,10 +673,19 @@ export const assertEvalCaseClean = internalQuery({
       .query("telemetry")
       .withIndex("by_tenant_created", (q) => q.eq("tenantId", tenant))
       .collect();
+    // 27-08: `workflowPackEvents` joins the scan. It is the newest structured-log plane and the one
+    // Phase 27 adds rows to on every pack run — and it is classified `audit_immutable`, so a field
+    // that ever carried raw user content could never be corrected or erased afterwards. A leak
+    // check that stops at the three older planes would certify exactly the plane that matters least.
+    const packs = await ctx.db
+      .query("workflowPackEvents")
+      .withIndex("by_tenant_createdAt", (q) => q.eq("tenantId", tenant))
+      .collect();
     const planes: Array<[string, string[]]> = [
       ["audit", audits.map((r) => JSON.stringify(r))],
       ["deadLetters", dls.map((r) => JSON.stringify(r))],
       ["telemetry", tels.map((r) => JSON.stringify(r))],
+      ["workflowPackEvents", packs.map((r) => JSON.stringify(r))],
     ];
     let rowsScanned = 0;
     for (const [table, blobs] of planes) {

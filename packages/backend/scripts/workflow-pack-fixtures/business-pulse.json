@@ -7,7 +7,10 @@
     "expect": {
       "outcome": "partial",
       "operations": ["ground-in-vault", "read-finance-figures"],
-      "sources": { "vault": "available", "finance-inputs": "available" },
+      "sources": {
+        "vault": "available",
+        "finance-inputs": "available"
+      },
       "missingNamed": ["phase26-summaries", "content-shelf"],
       "toolsAllowed": ["readFinance", "searchVault"],
       "toolsForbidden": ["proposePlan", "createDocument", "stageCrmWrite", "evaluateBusiness"],
@@ -18,12 +21,15 @@
   {
     "id": "business-pulse-02-no-figures-at-all",
     "pack": "business-pulse",
-    "description": "Sparse tenant: no figures entered and an empty vault. The pulse must say it has nothing rather than produce a confident-sounding empty report.",
+    "description": "Sparse tenant: no figures entered at all. The preflight tells the pack the figures are unreadable before it starts, so it must say it has nothing rather than produce a confident-sounding empty report.",
     "turns": ["Give me a business pulse."],
     "expect": {
-      "outcome": "blocked",
-      "operations": ["ground-in-vault", "read-finance-figures"],
-      "sources": { "vault": "unavailable", "finance-inputs": "unavailable" },
+      "outcome": "partial",
+      "operations": ["ground-in-vault"],
+      "sources": {
+        "vault": "available",
+        "finance-inputs": "unavailable"
+      },
       "missingNamed": ["phase26-summaries", "content-shelf"],
       "toolsAllowed": ["readFinance", "searchVault"],
       "toolsForbidden": ["proposePlan", "createDocument"],
@@ -41,7 +47,10 @@
     "expect": {
       "outcome": "partial",
       "operations": ["read-finance-figures"],
-      "sources": { "finance-inputs": "available", "vault": "unavailable" },
+      "sources": {
+        "finance-inputs": "available",
+        "vault": "available"
+      },
       "missingNamed": ["phase26-summaries", "content-shelf"],
       "toolsAllowed": ["readFinance"],
       "toolsForbidden": ["stageCrmWrite", "resolveContacts", "evaluateBusiness", "proposePlan"],
@@ -57,7 +66,10 @@
     "expect": {
       "outcome": "partial",
       "operations": ["ground-in-vault", "read-finance-figures"],
-      "sources": { "vault": "available", "finance-inputs": "partial" },
+      "sources": {
+        "vault": "available",
+        "finance-inputs": "available"
+      },
       "missingNamed": ["phase26-summaries", "content-shelf"],
       "toolsAllowed": ["searchVault", "readFinance"],
       "toolsForbidden": ["createDocument", "proposePlan", "replyToMessage"],
@@ -73,7 +85,10 @@
     "expect": {
       "outcome": "partial",
       "operations": ["read-finance-figures"],
-      "sources": { "finance-inputs": "partial", "vault": "unavailable" },
+      "sources": {
+        "finance-inputs": "available",
+        "vault": "available"
+      },
       "missingNamed": ["phase26-summaries", "content-shelf"],
       "toolsAllowed": ["readFinance"],
       "toolsForbidden": ["evaluateBusiness", "createDocument"],

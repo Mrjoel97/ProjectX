@@ -25,6 +25,7 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import type { InspectOutcome } from "./calendar";
+import { writeFigureRow } from "./cash";
 import { DAILY_BUDGET_CENTS, rateLimiter } from "./guardrails";
 import { workflow } from "./index";
 import { contentHash } from "./lib/hash";
@@ -1731,5 +1732,128 @@ export const insertShelfFixtures = internalMutation({
     });
 
     return { memoTitle, provedReelTitle, unprovedReelTitle, imageTitle, provedThreadId };
+  },
+});
+
+// ── 27-08 Task 3: the pack eval tenant ───────────────────────────────────────────────────────
+//
+// A pack run's PREFLIGHT is resolved in code from the tenant's own state (`probeSources`), so a
+// fixture that expects `finance-inputs: available` can only be evaluated on a tenant that really
+// has a figure. Every case therefore gets its OWN throwaway tenant, seeded to exactly the source
+// states its `expect.sources` declares — which is what makes those expectations facts about the run
+// instead of decoration.
+//
+// WHAT THIS DELIBERATELY CANNOT SEED. There is no Drive fixture seam (unlike `inboxFixtures`), so a
+// token carrying the Drive scope would make the preflight promise a plane every call 403s. This
+// mints a GMAIL-ONLY scope: inbox is reachable through the offline fixture the read tools already
+// ride, and `drive` stays honestly unavailable for every eval case.
+
+/** Only ever a throwaway pack-eval tenant. The `seedGoldenEvalBlueprint` posture, one lane over. */
+const PACK_EVAL_TENANT = /^packeval-[0-9a-f]{8}-[a-z0-9-]+$/;
+/** Gmail read + send, and NOTHING else — no Drive scope, deliberately (see above). */
+const PACK_EVAL_GMAIL_SCOPE =
+  "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send";
+
+export const seedPackEvalTenant = internalMutation({
+  args: {
+    tenantId: v.string(),
+    /** A figure, so `cash.financeSpineFor` returns a line and the probe reports `available`. */
+    finance: v.boolean(),
+    /** One manageable event, so the probe reports `available` rather than `partial`. */
+    calendar: v.boolean(),
+    /** A token row, so `gmailAuth.hasGmailConnection` is true. The MESSAGES come from
+     *  `seedInboxFixture`, which the read tools consult BEFORE the token. */
+    inbox: v.boolean(),
+  },
+  handler: async (ctx, { tenantId, finance, calendar, inbox }) => {
+    if (!PACK_EVAL_TENANT.test(tenantId)) throw new Error("PACK_EVAL_TENANT_REQUIRED");
+
+    if (finance) {
+      // Through the ONE writer (`writeFigureRow`), never a direct row insert: the store routing is
+      // its rule to own, and a second copy of it here would be a second chance to disagree.
+      await writeFigureRow(ctx.db, tenantId, {
+        field: "cac",
+        value: 1400,
+        origin: "stated",
+        actor: "user",
+        basis: "pack eval fixture",
+        observedAt: Date.now(),
+        confidence: "high",
+      });
+    }
+
+    if (calendar) {
+      const planId = await ctx.db.insert("plans", {
+        tenantId,
+        threadId: `packeval-calendar-${tenantId}`,
+        status: "collecting",
+        createdAt: Date.now(),
+      });
+      await ctx.db.insert("calendarEvents", {
+        tenantId,
+        provider: "google",
+        externalEventId: `packeval-${tenantId}`,
+        etag: '"packeval-etag"',
+        title: "Prospect intro call",
+        startMs: Date.now() + 86_400_000,
+        durationMs: 1_800_000,
+        tz: "UTC",
+        sourcePlanId: planId,
+        attendeeFree: true,
+        status: "active",
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+    }
+
+    if (inbox) {
+      const existing = await ctx.db
+        .query("gmailTokens")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+        .unique();
+      if (existing === null) {
+        await ctx.db.insert("gmailTokens", {
+          tenantId,
+          // Never usable: every inbox READ takes the fixture seam before the token, and there is no
+          // send path without an approved plan, which no eval run ever produces.
+          refreshToken: "packeval-not-a-real-token",
+          scope: PACK_EVAL_GMAIL_SCOPE,
+          updatedAt: Date.now(),
+        });
+      }
+    }
+
+    return { tenantId, finance, calendar, inbox };
+  },
+});
+
+/**
+ * Everything the pack eval scorer needs about ONE run, in one refs-only read: the event stream the
+ * binding wrote, and the counts it carries. Tool traces come from `toolCallsForThread` (which
+ * already exists and is per-thread, and each eval case owns its thread).
+ *
+ * No reply text, no prose, no artifact bytes — the runner grades the REPLY it already holds in
+ * memory from the action's return value, and the DB half stays refs and counts (CLAUDE.md §4).
+ */
+export const packRunFacts = internalQuery({
+  args: { tenantId: v.string(), runId: v.string() },
+  handler: async (ctx, { tenantId, runId }) => {
+    const rows = await ctx.db
+      .query("workflowPackEvents")
+      .withIndex("by_tenant_run", (q) => q.eq("tenantId", tenantId).eq("runId", runId))
+      .collect();
+    return {
+      events: rows.map((r) => ({
+        event: r.event,
+        outcome: r.outcome ?? null,
+        skillVersion: r.skillVersion ?? null,
+        sourceExpectedCount: r.sourceExpectedCount ?? null,
+        sourceAvailableCount: r.sourceAvailableCount ?? null,
+        preflightMissingCount: r.preflightMissingCount ?? null,
+        runtimeMissingCount: r.runtimeMissingCount ?? null,
+        createdAt: r.createdAt,
+      })),
+      artifactCount: rows.filter((r) => r.event === "artifact_created").length,
+    };
   },
 });
