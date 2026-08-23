@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 2: Thin End-to-End Slice** - Text request â plan â human review â Gmail delivery â live status + full audit trail
 - [ ] **Phase 3: Guardrails** - PII redaction, cost estimate/downgrade, tenant-namespaced cache, fallback, rate-limit + cost kill-switch
 - [ ] **Phase 3.1: Cockpit Core** (INSERTED) - Two-pane chat cockpit: guided slot-filling conversation â single plan-approval â hands-off multi-recipient governed send â live per-recipient report; reuses the Phase 2 engine, retires the /submit form + /review queue
-- [ ] **Phase 3.2: Inbox Reading** (INSERTED) - Agent searches/reads the connected mailbox (gmail.modify already granted) to find people and context for a request
+- [x] **Phase 3.2: Inbox Reading** (INSERTED) - Agent searches/reads the connected mailbox (gmail.modify already granted) to find people and context for a request
 - [x] **Phase 3.2.1: Agent-Driven Cockpit** (INSERTED) â 2026-07-13 - Replace the deterministic FSM cockpit with an Executive Agent governed tool-loop so the conversation is flexible ("remove Bob", "make it formal, add Jane") while every governance invariant survives; must land before 3.3 (attachment builds on the agent engine)
 - [x] **Phase 3.3: Attachment Generation** (INSERTED) — 2026-07-14 - Agent generates a document and attaches it to an outgoing email
 - [x] **Phase 3.4: Per-Recipient Personalization** (INSERTED) - Tailored wording per recipient in a multi-recipient send (beyond slice-1 same-content) (4/4 plans; CKPT-03 human-verified 2026-07-14, incl. multi-name resolution gap-closure)
@@ -95,12 +95,12 @@ Plans:
 - [x] 26-13-PLAN.md — Connected Content route, executed browser gate, owner UAT, then nav activation (Wave 10) — **closed 2026-08-22, owner UAT APPROVED** ("the page is minimalistic, it works great"); nav is live, `e2e/content.spec.ts` executed 7/7 both before and after activation
 - [x] 26-13.1-PLAN.md — The image lane, title search and thumbnails (Wave 10.1) — **closed 2026-08-22; a repair, not a feature**: 26-12 excluded `kind:"image"` from the shelf on a FALSE premise (those rows are standalone finished images, not media intermediates). Owner-directed 2026-08-22
 - [x] 26-14-PLAN.md — Business/operations reporting semantics and bounded projections (Wave 11) — **closed 2026-08-22.** A prior session had written it all, left it uncommitted and green; a 43-agent adversarial audit confirmed 25 findings (13 distinct defects) in that draft. The headline: **Defect 1 was fixed backend-only — `/ops` still rendered `edit 0`**, the entire user-visible symptom, behind a green suite. Root-caused at `review.ts` (`REVIEW_DECISIONS` derived from the validator union); two speculative reads DELETED (the audit-firehose `confirmedInWindow` scan, and `bucketWindow` with zero callers). core 1083, backend 2294, web ops 21, 4 mutation-verified guards
-- [ ] 26-15-PLAN.md — Sanitized governance projection and owner-only operational facts (Wave 11)
-- [ ] 26-16-PLAN.md — Immutable board-pack snapshot/render artifact (Wave 12)
-- [ ] 26-17-PLAN.md — Connected Reports route, privacy gate, owner UAT, then nav activation (Wave 13)
+- [x] 26-15-PLAN.md — Sanitized governance projection and owner-only operational facts (Wave 11) — **closed 2026-08-22**
+- [x] 26-16-PLAN.md — Immutable board-pack snapshot/render artifact (Wave 12) — **closed 2026-08-22**. The content-hash replay was later observed end to end from a browser during 26-17's gate (a second generate returned *Already generated for this window*)
+- [x] 26-17-PLAN.md — Connected Reports route, privacy gate, owner UAT, then nav activation (Wave 13) — **closed 2026-08-22, owner UAT APPROVED** ("The report interface is okay") and the Reports nav is LIVE. One UAT change: the Governance and Deployment cards collapse and arrive CLOSED, via native `<details>`/`<summary>`
 - [x] 26-18-PLAN.md — External Phase 19 Pipeline safety/UAT gate and nav integration only (Wave 14)
-- [ ] 26-19-PLAN.md — Deterministic home priority, health, briefing and source-summary composition (Wave 15)
-- [ ] 26-20-PLAN.md — Command Center v2, full repository gates and blocking owner UAT (Wave 16)
+- [x] 26-19-PLAN.md — Deterministic home priority, health, briefing and source-summary composition (Wave 15) — **closed 2026-08-23**
+- [x] 26-20-PLAN.md — Command Center v2, full repository gates and blocking owner UAT (Wave 16) — **closed 2026-08-23, owner-approved (HOME-01)**; `/dashboard` renders `CommandCenter.tsx`. **A FOLLOW-UP FIX SHIPPED THE SAME DAY:** the priority order put `connection-failure` FIRST, so the live hero told owners to "Connect your mailbox" above every pending approval and imminent send. Business work now outranks the email channel (`85daa4b`), pinned by a mutation-verified unit gate AND a browser gate
 
 ## Post-Beta Knowledge-Work Expansion (Phases 27-30)
 
@@ -1356,6 +1356,14 @@ duration — taken knowingly:
 Numeric order is not execution order and has not been for some time (Phase 26 established the
 precedent). Phases 31-32 are numbered after 30 and execute before 25.
 
+> **THIS TABLE IS NOT AUTHORITATIVE FOR THE EARLY PHASES — `.planning/STATE.md` IS.** Rows 1, 2, 3 and
+> 3.1 still read *In progress* / *Planned* (Phase 3 Guardrails at `0/5`) and have since July, because
+> GSD's `phase complete` silently no-ops this file — only STATE advances. Those four phases demonstrably
+> shipped: PII redaction, cost downgrade, rate limiting and the cockpit are all live in production. The
+> rows were left rather than guessed at, because the true per-plan counts are not recoverable from here
+> (the phase directories were archived). STATE's `progress` block is the number to trust: 34/53 phases,
+> 306/413 plans. Verify any row against STATE before planning against it.
+
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation & Governance Substrate | 7/9 | In progress | - |
@@ -1400,7 +1408,7 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | 23. Agent-Authored Skills | 0/TBD | Not started | - |
 | 24. ISO 9001 Conformance Map | 0/TBD | Not started | - |
 | 25. Private Beta Productionization | 0/14 | Planned — execution blocked on 25-00 prerequisite evidence; two lanes (19, 31) run ahead of it | - |
-| 26. Connected Product Pages | 8/20 | In Progress|  |
+| 26. Connected Product Pages | 21/21 | **Complete — deployed to production** (`8f76aac`; CI green, `deploy-production` succeeded, www.pikar-ai.com 200) | 2026-08-23 |
 | **Milestone: Marketing (pulled pre-beta 2026-08-07, ADR-015)** | | | |
 | 31. Marketing Surface & Funnel v0 (tranche A) | 0/TBD | Not started — schedulable; depends on Phase 19 | - |
 | 32. Channel Connection, Publishing & Metrics (tranche B) | 0/TBD | **BLOCKED — legal entity not started.** Do not plan | - |
