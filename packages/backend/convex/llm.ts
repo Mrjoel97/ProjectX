@@ -115,6 +115,7 @@ import {
   isPinnedCockpitEvaluation,
   shouldUseGmailCapability,
 } from "./cockpitCapabilities";
+import { fogIntegration, traced } from "./lib/foglamp";
 import { contentHash } from "./lib/hash";
 import { isExplicitVideoCreationRequest } from "./mediaIntent";
 
@@ -546,6 +547,7 @@ export const probeGemini = internalAction({
     let result: Awaited<ReturnType<typeof generateText>>;
     try {
       result = await generateText({
+        telemetry: { integrations: [fogIntegration({ traceName: "gemini-probe" })] },
         model: resolved,
         // Fixed, tiny, and verifiable: a wrong answer is as diagnostic as an error, and the token
         // count stays small enough that a probe is never a meaningful cost.
@@ -801,6 +803,7 @@ export const routeUncached = internalAction({
 
     try {
       const { object, usage } = await generateObject({
+        telemetry: { integrations: [fogIntegration({ agentName: "request-router" })] },
         model: resolveModel(model),
         schema: routingSchema,
         system: skill.body,
@@ -827,6 +830,7 @@ export const routeUncached = internalAction({
         },
       });
       const { object, usage } = await generateObject({
+        telemetry: { integrations: [fogIntegration({ agentName: "request-router" })] },
         model: resolveModel(CHEAP_MODEL),
         schema: routingSchema,
         system: skill.body,
@@ -897,6 +901,7 @@ export const draftUncached = internalAction({
         };
       }
       const { object, usage } = await generateObject({
+        telemetry: { integrations: [fogIntegration({ agentName: "email-drafter" })] },
         model: resolveModel(model),
         schema: draftSchema,
         system: skill.body,
@@ -929,6 +934,7 @@ export const draftUncached = internalAction({
           generatedAt: Date.now(),
         };
       const { object, usage } = await generateObject({
+        telemetry: { integrations: [fogIntegration({ agentName: "email-drafter" })] },
         model: resolveModel(CHEAP_MODEL),
         schema: draftSchema,
         system: skill.body,
@@ -996,6 +1002,7 @@ export const draftCockpit = internalAction({
         return { subject: "Smoke Subject", body: `${greeting}Smoke draft for ${safeTextHash}` };
       }
       const { object } = await generateObject({
+        telemetry: { integrations: [fogIntegration({ agentName: "email-drafter" })] },
         model: resolveModel(DEFAULT_MODEL),
         schema: draftSchema,
         system: skill.body,
@@ -1008,6 +1015,7 @@ export const draftCockpit = internalAction({
       if (!isFallbackEligible(e)) throw e;
       if (smoke) return { subject: "Smoke Fallback Subject", body: "smoke fallback" };
       const { object } = await generateObject({
+        telemetry: { integrations: [fogIntegration({ agentName: "email-drafter" })] },
         model: resolveModel(CHEAP_MODEL),
         schema: draftSchema,
         system: skill.body,
@@ -4396,6 +4404,7 @@ async function runAgentLoop(
     fallbackModelId: string;
   }> => {
     const res = await generateText({
+      telemetry: { integrations: [fogIntegration({ traceName: "agent-loop" })] },
       model: m.model,
       system,
       prompt,
@@ -5295,27 +5304,39 @@ export const runCockpitAgent = internalAction({
     } catch {
       finance = null;
     }
-    const { reply, costUsd } = await runAgentLoop(ctx, {
-      tenantId,
-      planId,
-      system: skill.body,
-      // History ABOVE the plan context; "The user says:" stays the FINAL line (the current turn).
-      prompt: buildTurnPrompt({ spine, finance, history, plan, tz: clientContext?.tz, text }),
-      primary: { model: forceTimeout ? timeoutModel() : resolveModel(primaryId), id: primaryId },
-      fallback: {
-        model: forceTimeout ? timeoutModel() : resolveModel(CHEAP_MODEL),
-        id: CHEAP_MODEL,
+    const { reply, costUsd } = await traced(
+      {
+        agentName: "cockpit-agent",
+        workflowName: "cockpit-turn",
+        workflowRunId: turnId,
+        sessionId: threadId,
       },
-      skillVersions, // the loop builds its OWN tools — the drafter pin must ride there too
-      turnId, // activity trace (CKPT-05) — undefined ⇒ the loop emits nothing
-      threadId,
-      // 19-11: the trusted clock (§2-D). `effectiveClientContext`, not `clientContext`, so the
-      // loop and the SMOKE path above agree on the instant rather than diverging by which branch
-      // ran. Without this the tools the loop builds refuse every dated request.
-      clientContext: effectiveClientContext,
-      omitRecipientEdits, // UAT-F2 — the loop's own tool build must honor the withholding
-      gmailEnabled,
-    });
+      () =>
+        runAgentLoop(ctx, {
+          tenantId,
+          planId,
+          system: skill.body,
+          // History ABOVE the plan context; "The user says:" stays the FINAL line (the current turn).
+          prompt: buildTurnPrompt({ spine, finance, history, plan, tz: clientContext?.tz, text }),
+          primary: {
+            model: forceTimeout ? timeoutModel() : resolveModel(primaryId),
+            id: primaryId,
+          },
+          fallback: {
+            model: forceTimeout ? timeoutModel() : resolveModel(CHEAP_MODEL),
+            id: CHEAP_MODEL,
+          },
+          skillVersions, // the loop builds its OWN tools — the drafter pin must ride there too
+          turnId, // activity trace (CKPT-05) — undefined ⇒ the loop emits nothing
+          threadId,
+          // 19-11: the trusted clock (§2-D). `effectiveClientContext`, not `clientContext`, so the
+          // loop and the SMOKE path above agree on the instant rather than diverging by which branch
+          // ran. Without this the tools the loop builds refuse every dated request.
+          clientContext: effectiveClientContext,
+          omitRecipientEdits, // UAT-F2 — the loop's own tool build must honor the withholding
+          gmailEnabled,
+        }),
+    );
     return { reply, costUsd };
   },
 });
@@ -5458,19 +5479,21 @@ export const __runCockpitAgentWithScript = internalAction({
         })
       : new MockLanguageModelV4({ doGenerate: primary as never });
     const fallbackModel = new MockLanguageModelV4({ doGenerate: (fallback ?? primary) as never });
-    const res = await runAgentLoop(ctx, {
-      tenantId,
-      planId,
-      system: skill.body,
-      prompt: `${buildAgentContext(plan ?? {})}\n\nThe user says: drive the plan to a proposal.`,
-      primary: { model: primaryModel as unknown as LanguageModel, id: DEFAULT_MODEL },
-      fallback: { model: fallbackModel as unknown as LanguageModel, id: CHEAP_MODEL },
-      skillVersions,
-      turnId,
-      threadId,
-      toolNames,
-      clientContext,
-    });
+    const res = await traced({ traceName: "offline-harness" }, () =>
+      runAgentLoop(ctx, {
+        tenantId,
+        planId,
+        system: skill.body,
+        prompt: `${buildAgentContext(plan ?? {})}\n\nThe user says: drive the plan to a proposal.`,
+        primary: { model: primaryModel as unknown as LanguageModel, id: DEFAULT_MODEL },
+        fallback: { model: fallbackModel as unknown as LanguageModel, id: CHEAP_MODEL },
+        skillVersions,
+        turnId,
+        threadId,
+        toolNames,
+        clientContext,
+      }),
+    );
     return { ...res, skillVersion: skill.version };
   },
 });
@@ -5671,6 +5694,7 @@ export const draftDocument = internalAction({
         };
       }
       const { object } = await generateObject({
+        telemetry: { integrations: [fogIntegration({ agentName: "document-drafter" })] },
         model: resolveModel(DEFAULT_MODEL),
         schema: documentSchema,
         system: skill.body,
@@ -5684,6 +5708,7 @@ export const draftDocument = internalAction({
       if (smoke)
         return { title: "Smoke Fallback Document", markdown: "# Smoke Fallback\n\nfallback body" };
       const { object } = await generateObject({
+        telemetry: { integrations: [fogIntegration({ agentName: "document-drafter" })] },
         model: resolveModel(CHEAP_MODEL),
         schema: documentSchema,
         system: skill.body,
@@ -5841,6 +5866,7 @@ export const digestInbox = internalAction({
     // path: thread a spend accumulator through buildCockpitTools into runAgentLoop's costUsd.
     try {
       const { object, usage } = await generateObject({
+        telemetry: { integrations: [fogIntegration({ agentName: "inbox-digest" })] },
         model: resolveModel(DEFAULT_MODEL),
         schema: digestSchema,
         system: skill.body,
@@ -5863,6 +5889,7 @@ export const digestInbox = internalAction({
     } catch (e) {
       if (!isFallbackEligible(e)) throw e;
       const { object, usage } = await generateObject({
+        telemetry: { integrations: [fogIntegration({ agentName: "inbox-digest" })] },
         model: resolveModel(CHEAP_MODEL),
         schema: digestSchema,
         system: skill.body,
@@ -5941,6 +5968,7 @@ export const draftReply = internalAction({
     // generateText with NO tools — the toolless-ingestion invariant, STRUCTURAL (agent-runtime.md #10).
     try {
       const { text, usage } = await generateText({
+        telemetry: { integrations: [fogIntegration({ agentName: "reply-drafter" })] },
         model: resolveModel(DEFAULT_MODEL),
         system: skill.body,
         prompt,
@@ -5960,6 +5988,7 @@ export const draftReply = internalAction({
     } catch (e) {
       if (!isFallbackEligible(e)) throw e;
       const { text, usage } = await generateText({
+        telemetry: { integrations: [fogIntegration({ agentName: "reply-drafter" })] },
         model: resolveModel(CHEAP_MODEL),
         system: skill.body,
         prompt,
@@ -6050,6 +6079,7 @@ export const draftVoiceBrief = internalAction({
 
     try {
       const { object, usage } = await generateObject({
+        telemetry: { integrations: [fogIntegration({ agentName: "voice-brief-drafter" })] },
         model: resolveModel(DEFAULT_MODEL),
         schema: briefSchema,
         system: skill.body,
@@ -6070,6 +6100,7 @@ export const draftVoiceBrief = internalAction({
     } catch (e) {
       if (!isFallbackEligible(e)) throw e;
       const { object, usage } = await generateObject({
+        telemetry: { integrations: [fogIntegration({ agentName: "voice-brief-drafter" })] },
         model: resolveModel(CHEAP_MODEL),
         schema: briefSchema,
         system: skill.body,

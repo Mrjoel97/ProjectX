@@ -44,6 +44,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
+import { traced } from "./lib/foglamp";
 import { runSpecialistTurn } from "./llm";
 
 /** Depth 1 = executive → specialist. A specialist can never dispatch anything, which makes
@@ -662,17 +663,27 @@ export const runSpecialist = internalAction({
   args: dispatchArgs,
   handler: async (ctx, args): Promise<DispatchResult> =>
     dispatchAndLand(ctx, args, (a) =>
-      runSpecialistTurn(ctx, {
-        // `...a` FIRST, explicit fields last. With the spread last, a `tenantId` key present-but-
-        // undefined on `a` (it is read as `a.tenantId` elsewhere in this file) silently CLOBBERS
-        // the good value, and the failure surfaces far away as `guardrails:recordSpend` rejecting
-        // `{costUsd: 0.0021}` for a missing tenantId — mid-dispatch, after the model was billed.
-        ...a,
-        tenantId: args.tenantId,
-        planId: args.planId,
-        skillVersions: args.skillVersions,
-        tenantSkillIds: args.tenantSkillIds,
-      }),
+      traced(
+        {
+          agentName: "growth-specialist",
+          workflowName: "sub-agent-dispatch",
+          workflowRunId: args.rootRequestId,
+          sessionId: args.threadId,
+          metadata: { route: args.route },
+        },
+        () =>
+          runSpecialistTurn(ctx, {
+            // `...a` FIRST, explicit fields last. With the spread last, a `tenantId` key present-but-
+            // undefined on `a` (it is read as `a.tenantId` elsewhere in this file) silently CLOBBERS
+            // the good value, and the failure surfaces far away as `guardrails:recordSpend` rejecting
+            // `{costUsd: 0.0021}` for a missing tenantId — mid-dispatch, after the model was billed.
+            ...a,
+            tenantId: args.tenantId,
+            planId: args.planId,
+            skillVersions: args.skillVersions,
+            tenantSkillIds: args.tenantSkillIds,
+          }),
+      ),
     ),
 });
 
@@ -1217,15 +1228,24 @@ export const runResearch = internalAction({
         ctx,
         args,
         (a) =>
-          runSpecialistTurn(ctx, {
-            // `...a` FIRST — see the gap-dispatch runner above. This is the RESEARCH path, where
-            // the clobber was actually observed (run 3a1e37f3, fixture 34).
-            ...a,
-            tenantId: args.tenantId,
-            planId: args.planId,
-            skillVersions: args.skillVersions,
-            tenantSkillIds: args.tenantSkillIds,
-          }),
+          traced(
+            {
+              agentName: "research-specialist",
+              workflowName: "sub-agent-dispatch",
+              workflowRunId: args.rootRequestId,
+              sessionId: args.threadId,
+            },
+            () =>
+              runSpecialistTurn(ctx, {
+                // `...a` FIRST — see the gap-dispatch runner above. This is the RESEARCH path, where
+                // the clobber was actually observed (run 3a1e37f3, fixture 34).
+                ...a,
+                tenantId: args.tenantId,
+                planId: args.planId,
+                skillVersions: args.skillVersions,
+                tenantSkillIds: args.tenantSkillIds,
+              }),
+          ),
         RESEARCH_FAILED_MEMO,
       ),
     ),
@@ -1250,14 +1270,23 @@ export const runMedia = internalAction({
         ctx,
         args,
         (a) =>
-          runSpecialistTurn(ctx, {
-            // `...a` FIRST — the clobber lesson the research path records above.
-            ...a,
-            tenantId: args.tenantId,
-            planId: args.planId,
-            skillVersions: args.skillVersions,
-            tenantSkillIds: args.tenantSkillIds,
-          }),
+          traced(
+            {
+              agentName: "media-director",
+              workflowName: "sub-agent-dispatch",
+              workflowRunId: args.rootRequestId,
+              sessionId: args.threadId,
+            },
+            () =>
+              runSpecialistTurn(ctx, {
+                // `...a` FIRST — the clobber lesson the research path records above.
+                ...a,
+                tenantId: args.tenantId,
+                planId: args.planId,
+                skillVersions: args.skillVersions,
+                tenantSkillIds: args.tenantSkillIds,
+              }),
+          ),
         MEDIA_FAILED_MEMO,
       ),
     ),
@@ -1297,20 +1326,22 @@ export const __runSpecialistWithScript = internalAction({
       ctx,
       args,
       (a) =>
-        runSpecialistTurn(ctx, {
-          // `...a` FIRST — same reason as the two runners above. `mockScript` stays LAST because
-          // this offline twin deliberately overrides it.
-          ...a,
-          tenantId: args.tenantId,
-          planId: args.planId,
-          skillVersions: args.skillVersions,
-          tenantSkillIds: args.tenantSkillIds,
-          mockScript: {
-            primary: args.primary,
-            fallback: args.fallback,
-            softCutoffMs: args.softCutoffMs,
-          },
-        }),
+        traced({ traceName: "offline-harness" }, () =>
+          runSpecialistTurn(ctx, {
+            // `...a` FIRST — same reason as the two runners above. `mockScript` stays LAST because
+            // this offline twin deliberately overrides it.
+            ...a,
+            tenantId: args.tenantId,
+            planId: args.planId,
+            skillVersions: args.skillVersions,
+            tenantSkillIds: args.tenantSkillIds,
+            mockScript: {
+              primary: args.primary,
+              fallback: args.fallback,
+              softCutoffMs: args.softCutoffMs,
+            },
+          }),
+        ),
       args.research === true
         ? RESEARCH_FAILED_MEMO
         : args.media === true

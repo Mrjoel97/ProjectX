@@ -39,6 +39,7 @@ import { PDFDocument } from "pdf-lib";
 import { internal } from "./_generated/api";
 import type { DataModel, Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
+import { fogIntegration } from "./lib/foglamp";
 
 // Pitfall 1: unpdf bundles pdf.js 5.x, which needs Promise.withResolvers (Node >= 22); Convex
 // node actions default to Node 20. Local Node 24 masks the bug — ONLY the live smoke proves it
@@ -122,6 +123,7 @@ async function extractHosted(
     name: ATTACHMENT_EXTRACTOR_SKILL,
   });
   const { text, usage } = await generateText({
+    telemetry: { integrations: [fogIntegration({ agentName: "attachment-extractor" })] },
     model: openai("gpt-4o-mini"),
     system: skill.body,
     messages: [{ role: "user", content: [{ type: "file", data: bytes, mediaType: mimeType }] }],

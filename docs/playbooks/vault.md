@@ -1,3 +1,10 @@
+> Last verified: 2026-08-22 (Foglamp tracing — **NO VAULT BEHAVIOUR CHANGED.** The hosted-OCR
+> `generateText` in `vaultExtract.ts` is bound to the `attachment-extractor` agent. `vaultLlm.ts`,
+> `vaultDigest.ts` and `vaultTranscribe.ts` are NOT traced and cannot be — the first two are
+> V8-runtime modules holding query/mutation builders, so they can never import `lib/foglamp.ts`,
+> and transcribe has no telemetry option. See `docs/playbooks/tracing.md`.)
+>
+
 # Playbook: Knowledge Vault & GraphRAG
 
 > Last verified: 2026-08-22 (26-16 — **the board pack lands on the created-doc rail, unchanged.**)

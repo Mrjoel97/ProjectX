@@ -1,3 +1,24 @@
+> Last verified: 2026-08-23 (NOT MY CHANGE — recording ONE verified fact about the in-progress
+> foglamp tracing work that touches `llm.ts` and `dispatch.ts`. The tracing work itself is
+> uncommitted, unreviewed here, and belongs to another session; this entry does not vouch for it.
+>
+> **THE FACT, first-hand: `convex/lib/foglamp.ts` without a `"use node"` directive ABORTS EVERY
+> PUSH TO THE DEPLOYMENT.** Convex bundles every module under `convex/` for the V8 runtime unless it
+> declares otherwise, and `foglamp` statically imports `node:http` / `node:async_hooks`, which do not
+> exist there. The bundle error fails the whole push — not just that module. While it stood,
+> `home.js:summary`, `home.js:health` and `briefings.js:latestForTenant` never reached the backend
+> and the Command Center rendered five `error` cards, with every unit suite (3,900+ tests), all
+> three typechecks and the production build GREEN. `convex-test` runs in process and can never see
+> that a function failed to REACH the deployment.
+>
+> The file's own header already said "ONLY `"use node"` MODULES MAY IMPORT THIS FILE" — it just
+> never said it about itself. Adding the directive fixed it; that one line is in the working tree,
+> uncommitted, with the tracing work it belongs to.
+>
+> **The operational rule this leaves behind, for anyone touching the cockpit spine:** after changing
+> a `convex/` module, confirm the push LANDED — `npx convex function-spec | grep <module>` — before
+> trusting any green suite. A stale deployment and a healthy CI look identical from the test runner.)
+
 > Last verified: 2026-08-23 (26-19 Task 2 — **`briefings.ts` gains ONE reader,
 > `briefings.latestForTenant`, for the Command Center's briefing card.** Append-only writer
 > untouched; `byThread` untouched.

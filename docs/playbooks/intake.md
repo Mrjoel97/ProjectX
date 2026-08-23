@@ -1,3 +1,9 @@
+> Last verified: 2026-08-22 (Foglamp tracing — **NO INTAKE BEHAVIOUR CHANGED.** The vision-OCR
+> `generateText` in `extractVisual` is now bound to the `attachment-extractor` agent. The
+> `transcribe()` call is NOT traced and CANNOT be: on `ai@7.0.20` transcribe takes no `telemetry`
+> option at all. See `docs/playbooks/tracing.md`.)
+>
+
 # Playbook: Attachment & Voice-Dictation Intake
 
 > Last verified: 2026-08-08 (26-07 follow-up — **both intake charges now name themselves in the

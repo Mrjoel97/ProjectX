@@ -48,6 +48,7 @@ import type * as intakeDb from "../intakeDb.js";
 import type * as invites from "../invites.js";
 import type * as lib_allowlist from "../lib/allowlist.js";
 import type * as lib_env from "../lib/env.js";
+import type * as lib_foglamp from "../lib/foglamp.js";
 import type * as lib_functions from "../lib/functions.js";
 import type * as lib_hash from "../lib/hash.js";
 import type * as llm from "../llm.js";
@@ -157,6 +158,7 @@ declare const fullApi: ApiFromModules<{
   invites: typeof invites;
   "lib/allowlist": typeof lib_allowlist;
   "lib/env": typeof lib_env;
+  "lib/foglamp": typeof lib_foglamp;
   "lib/functions": typeof lib_functions;
   "lib/hash": typeof lib_hash;
   llm: typeof llm;

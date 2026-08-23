@@ -24,6 +24,7 @@ import type { GenericActionCtx } from "convex/server";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
 import type { DataModel, Id } from "./_generated/dataModel";
+import { fogIntegration } from "./lib/foglamp";
 import { tenantAction } from "./lib/functions";
 
 // Per-call wall-clock ceiling (mirrors llm.ts's CALL_TIMEOUT_MS).
@@ -113,6 +114,7 @@ async function extractVisual(
     name: ATTACHMENT_EXTRACTOR_SKILL,
   });
   const { text, usage } = await generateText({
+    telemetry: { integrations: [fogIntegration({ agentName: "attachment-extractor" })] },
     model: openai("gpt-4o-mini"),
     system: skill.body,
     messages: [{ role: "user", content: [{ type: "file", data: bytes, mediaType: mimeType }] }],

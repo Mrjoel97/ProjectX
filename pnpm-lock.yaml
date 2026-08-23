@@ -161,6 +161,9 @@ importers:
       convex-helpers:
         specifier: 0.1.120
         version: 0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@5.9.3)(zod@4.4.3)
+      foglamp:
+        specifier: 0.9.0
+        version: 0.9.0(ai@7.0.20(zod@4.4.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       pdf-lib:
         specifier: 1.17.1
         version: 1.17.1
@@ -1500,6 +1503,19 @@ packages:
   fflate@0.8.3:
     resolution: {integrity: sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==}
 
+  foglamp@0.9.0:
+    resolution: {integrity: sha512-T/V6JZrky/1hcPmsrtHwd2+x4fRfH/xBN3GhT7qs2TILZQJu43eAjUBQgdjVVPqbin7GTVWZmYaV7zTCciGS0g==}
+    hasBin: true
+    peerDependencies:
+      ai: ^4 || ^5 || ^6 || ^7.0.0-beta.1
+      react: ^18 || ^19
+      react-dom: ^18 || ^19
+    peerDependenciesMeta:
+      react:
+        optional: true
+      react-dom:
+        optional: true
+
   formdata-polyfill@4.0.10:
     resolution: {integrity: sha512-buewHzMvYL29jdeQTVILecSaZKnt/RJWjoZCF5OW60Z67/GmSLBkOFM7qh1PI3zFNtJbaZL5eQu1vLfazOwj4g==}
     engines: {node: '>=12.20.0'}
@@ -1805,6 +1821,10 @@ packages:
     peerDependenciesMeta:
       '@napi-rs/canvas':
         optional: true
+
+  uuidv7@1.2.1:
+    resolution: {integrity: sha512-4kPkK3/XTQW9Hbm4CaqfICn+kY9LJtDVEOfgsRRra/+n2Ofg4NqzRFceAkxvQ/Ud/6BpHOPzj8cirqM7TzTN5Q==}
+    hasBin: true
 
   vite-node@3.2.4:
     resolution: {integrity: sha512-EbKSKh+bh1E1IFxeO0pg1n4dvoOTt0UDiXMd/qn++r98+jPO1xtJilvXldeuQ8giIB5IkpjCgMleHMNEsGH6pg==}
@@ -2966,6 +2986,14 @@ snapshots:
 
   fflate@0.8.3: {}
 
+  foglamp@0.9.0(ai@7.0.20(zod@4.4.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
+    dependencies:
+      ai: 7.0.20(zod@4.4.3)
+      uuidv7: 1.2.1
+    optionalDependencies:
+      react: 19.2.7
+      react-dom: 19.2.7(react@19.2.7)
+
   formdata-polyfill@4.0.10:
     dependencies:
       fetch-blob: 3.2.0
@@ -3321,6 +3349,8 @@ snapshots:
   undici@7.29.0: {}
 
   unpdf@1.6.2: {}
+
+  uuidv7@1.2.1: {}
 
   vite-node@3.2.4(@types/node@26.1.1):
     dependencies:
