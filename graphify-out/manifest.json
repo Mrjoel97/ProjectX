@@ -260,8 +260,8 @@
     "semantic_hash": ""
   },
   ".planning/STATE.md": {
-    "mtime": 1787455160.3459654,
-    "ast_hash": "d7e6fe6bf481466dfbd63204ea244ffe",
+    "mtime": 1787492039.6713762,
+    "ast_hash": "145fd02ad056fd0f168707cb0884a8e4",
     "semantic_hash": ""
   },
   ".planning/phases/01-foundation-governance-substrate/01-01-PLAN.md": {
@@ -1590,8 +1590,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/skill-registry.md": {
-    "mtime": 1787485045.1202788,
-    "ast_hash": "a2c630666c50431e383a51b9d313b4df",
+    "mtime": 1787493501.8649967,
+    "ast_hash": "f5143e20f49f562fb87d03430a135c61",
     "semantic_hash": ""
   },
   "scripts/extract-convex-edges.mjs": {
@@ -7240,8 +7240,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/27-curated-knowledge-work-pack-pilot/27-RESEARCH.md": {
-    "mtime": 1787480836.8859448,
-    "ast_hash": "933efa28e417d76ccc65660f04484f98",
+    "mtime": 1787493501.8649967,
+    "ast_hash": "150f4e75f5a5ffa22d8949ffb1bddd3d",
     "semantic_hash": ""
   },
   ".planning/phases/27-curated-knowledge-work-pack-pilot/27-VALIDATION.md": {
@@ -10492,6 +10492,91 @@
   "packages/core/src/workflowPackMetrics.ts": {
     "mtime": 1787491125.0908334,
     "ast_hash": "5c91875bb23ed962df3507092f48347d",
+    "semantic_hash": ""
+  },
+  ".planning/phases/27-curated-knowledge-work-pack-pilot/27-03-SUMMARY.md": {
+    "mtime": 1787492006.574967,
+    "ast_hash": "28a20de2eb75702186afc68935e69f87",
+    "semantic_hash": ""
+  },
+  "packages/contracts/src/skills/knowledgeWorkProvenance.test.ts": {
+    "mtime": 1787493374.194475,
+    "ast_hash": "4447496387b8edd2b4a2accb4daec969",
+    "semantic_hash": ""
+  },
+  "scripts/verify-knowledge-work-provenance.mjs": {
+    "mtime": 1787493467.2950928,
+    "ast_hash": "0ea38f200a1686f64b037df9aa5a917e",
+    "semantic_hash": ""
+  },
+  "third_party/knowledge-work-plugins/manifest.json": {
+    "mtime": 1787493322.8296492,
+    "ast_hash": "bd91e52b1117702f9924cef2976ed8a5",
+    "semantic_hash": ""
+  },
+  "THIRD_PARTY_NOTICES.md": {
+    "mtime": 1787493418.0261433,
+    "ast_hash": "53833e005c5f23cc26ac2ae710f55df6",
+    "semantic_hash": ""
+  },
+  "third_party/knowledge-work-plugins/source-snapshot/marketing/skills/brand-review/SKILL.md": {
+    "mtime": 1787493280.730834,
+    "ast_hash": "b834c64ea09a50d8bfb73a4d4d9b5cfc",
+    "semantic_hash": ""
+  },
+  "third_party/knowledge-work-plugins/source-snapshot/marketing/skills/campaign-plan/SKILL.md": {
+    "mtime": 1787493046.2147117,
+    "ast_hash": "3c24bb5e62c5ff6ad942a5f396b595da",
+    "semantic_hash": ""
+  },
+  "third_party/knowledge-work-plugins/source-snapshot/operations/skills/process-doc/SKILL.md": {
+    "mtime": 1787493048.9561014,
+    "ast_hash": "447338feffcc772c3414b83bb11d8d11",
+    "semantic_hash": ""
+  },
+  "third_party/knowledge-work-plugins/source-snapshot/sales/skills/call-prep/SKILL.md": {
+    "mtime": 1787493412.0118203,
+    "ast_hash": "f109c0382a1bc9779a6d095fcfb1a25e",
+    "semantic_hash": ""
+  },
+  "third_party/knowledge-work-plugins/source-snapshot/small-business/skills/business-pulse/SKILL.md": {
+    "mtime": 1787493037.645707,
+    "ast_hash": "d503f9a56deb8454115646095fc8f1d2",
+    "semantic_hash": ""
+  },
+  "third_party/knowledge-work-plugins/source-snapshot/small-business/skills/business-pulse/reference/data_sources.md": {
+    "mtime": 1787493038.2687309,
+    "ast_hash": "a513ce05a77da95975ce0e5b0380ecb3",
+    "semantic_hash": ""
+  },
+  "third_party/knowledge-work-plugins/source-snapshot/small-business/skills/business-pulse/reference/gotchas.md": {
+    "mtime": 1787493038.8908806,
+    "ast_hash": "0247a71fb7d5b546ea2a1751ee3e047e",
+    "semantic_hash": ""
+  },
+  "third_party/knowledge-work-plugins/source-snapshot/small-business/skills/business-pulse/reference/output_template.md": {
+    "mtime": 1787493039.5668988,
+    "ast_hash": "5ec6de56e438db65145b04f3c1e73d76",
+    "semantic_hash": ""
+  },
+  "third_party/knowledge-work-plugins/source-snapshot/small-business/skills/business-pulse/reference/thresholds.md": {
+    "mtime": 1787493045.9149177,
+    "ast_hash": "1450f8ded2e0c1cd9170b3b83f3161c5",
+    "semantic_hash": ""
+  },
+  "third_party/knowledge-work-plugins/source-snapshot/small-business/skills/ticket-deflector/SKILL.md": {
+    "mtime": 1787493046.5000386,
+    "ast_hash": "59194b1fab05c6b6ef9d3a1b36d5ac4f",
+    "semantic_hash": ""
+  },
+  "third_party/knowledge-work-plugins/source-snapshot/small-business/skills/ticket-deflector/reference/examples/respond-refund-request.md": {
+    "mtime": 1787493047.160518,
+    "ast_hash": "38dcf995a27e38b1210521925a6d05f5",
+    "semantic_hash": ""
+  },
+  "third_party/knowledge-work-plugins/source-snapshot/small-business/skills/ticket-deflector/reference/gotchas.md": {
+    "mtime": 1787493048.3538475,
+    "ast_hash": "4ec1e5bfbc3e7518a02f7d2b45b4568c",
     "semantic_hash": ""
   }
 }
