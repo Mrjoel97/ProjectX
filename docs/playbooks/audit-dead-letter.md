@@ -1,5 +1,29 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-08-23 (27-02 — **ONE NEW TABLE ON THE REFS-ONLY PLANE: `workflowPackEvents`,
+> classified `tenant_owned` in `packages/core/src/tenantData.ts`.** A separate table rather than an
+> extension of `telemetry`, because `telemetry` is one write-once terminal row per `requests` row and
+> a pack run creates no request row — extending it would fabricate request rows or break that
+> semantics.
+>
+> §4 is enforced STRUCTURALLY, not by review: `packId`, `event` and `outcome` are closed `v.literal`
+> unions and everything else is an id, a ref or a count, so there is nowhere in the table to put a
+> prompt, a citation excerpt, generated prose, a customer name or a financial value. It re-emits
+> NEITHER cost nor latency — `spendEvents` owns cost and `telemetry.durationMs` / `agentSteps` own
+> latency, and a second number that can disagree with the billing plane is worse than no number.
+>
+> **`by_tenant` over `["tenantId"]` is not optional and not redundant with the compound indexes.**
+> `tenantDelete.ts` and `tenantExport.ts` walk `deletableTables()` and call `.withIndex("by_tenant")`
+> on every name it returns, so a `tenant_owned` table without an index of exactly that name does not
+> typecheck. `tenantData.test.ts`'s table count moved 45 → 46; that count is a TRIPWIRE, and it is
+> what makes classifying a new table unskippable.
+>
+> OPEN, AND DELIBERATELY NOT DECIDED: `tenant_owned` means tenant erasure removes a tenant's pack
+> events and export returns them. Whether measurement rows should instead survive erasure the way
+> `audit` does is recorded for the owner in `tenantData.ts` and in
+> `docs/playbooks/workflow-packs.md`. Not resolved here.)
+>
+
 > Last verified: 2026-08-22 (26-16 — **a new event: `report.pack_generated`.**)
 >
 > - **Written by `convex/reportPack.ts` — the ACTION, not the vault module.** The vault content

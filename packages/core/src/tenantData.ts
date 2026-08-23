@@ -77,6 +77,24 @@ export const TENANT_TABLE_CLASSIFICATION = {
   proposals: "tenant_owned",
   betaWaitlist: "admission_plane",
   betaInvites: "admission_plane",
+  /**
+   * Phase-27 workflow-pack outcome events (PACK-02). Refs, enums and counts only — no prompt, no
+   * generated prose, no customer name, no financial value (CLAUDE.md §4, enforced by the table
+   * having nowhere to put any of them).
+   *
+   * ponytail: classified `tenant_owned`, which is not a neutral label — it enrols the table in the
+   * tenant EXPORT and DELETION walks automatically (`deletableTables()` below), so today tenant
+   * erasure DOES remove a tenant's pack events and export DOES return them. That is the ceiling,
+   * and it is the defensible default for rows keyed by `tenantId`.
+   *
+   * OPEN, AND DELIBERATELY NOT DECIDED HERE — see docs/playbooks/workflow-packs.md. The inverse of
+   * the `admission_plane` question above: should measurement rows survive erasure the way `audit`
+   * does? They are the phase's only record of whether the pilot worked, and erasing one tenant
+   * silently rewrites the pilot's denominator. Reclassifying to `audit_immutable` would keep them —
+   * a one-token change — but it takes rows out of an Art. 17 walk, which is the owner's call and
+   * not an implementation detail a pack plan may settle. Recorded for the owner, not resolved.
+   */
+  workflowPackEvents: "tenant_owned",
 } as const satisfies Readonly<Record<string, TenantTableCategory>>;
 
 export type ClassifiedTenantTable = keyof typeof TENANT_TABLE_CLASSIFICATION;

@@ -240,6 +240,22 @@ export default defineSchema({
       v.literal("archived"),
     ),
     evidence: v.optional(v.string()),
+    // Phase 27 (PACK-02). The pack candidate gate's two EXTRA evidence planes, both refs/counts
+    // only (CLAUDE.md §4) and both canonical JSON strings, exactly like `evidence` above.
+    //
+    //   provenance      immutable upstream identity of an adapted body — repo, exact commit,
+    //                   selected paths, the SHA-256 of the canonical `.md`, the licence and the
+    //                   modification notice. WRITTEN AT INSERT, never patched: it is part of what
+    //                   the version IS, so a correction is a new candidate, not an edit.
+    //   browserEvidence a passing, AUTHENTICATED, multi-viewport browser run of this exact
+    //                   version. Patchable like `evidence` — it is recorded ABOUT a row after the
+    //                   fact, not part of the body's identity. No screenshot bytes, page text,
+    //                   tenant identity or generated prose (§4).
+    //
+    // Both are OPTIONAL and purely ADDITIVE: every row written before Phase 27 reads unchanged, and
+    // only `isWorkflowPackSkill` names ever require them.
+    provenance: v.optional(v.string()),
+    browserEvidence: v.optional(v.string()),
     createdAt: v.number(),
   })
     .index("by_name_status", ["name", "status"])
@@ -2365,4 +2381,88 @@ export default defineSchema({
     // Re-ingesting the same document supersedes its prior pending proposal (§6.3).
     .index("by_tenant", ["tenantId"])
     .index("by_tenant_source", ["tenantId", "sourceKind", "sourceRef"]),
+
+  // ── Phase-27 workflow-pack outcome plane (PACK-02) ──────────────────────────
+  //
+  // APPEND-ONLY measurement rows for the pack pilot. A SEPARATE table rather than an extension of
+  // `telemetry`, deliberately: `telemetry` is one write-once terminal row per `requests` row, and a
+  // pack run creates no request row — extending it would either fabricate request rows or break its
+  // one-row-per-request semantics.
+  //
+  // REFS, ENUMS, BOOLEANS AND COUNTS ONLY (CLAUDE.md §4). There is nowhere in this table to put a
+  // prompt, an input, a citation excerpt or URL, generated prose, a customer name or a financial
+  // value — that absence IS the enforcement, the `agentSteps` argument (":435-439: a
+  // `count: v.number()` literally cannot hold a subject line").
+  //
+  // NO `costUsd`, AND NO `durationMs`. Cost is owned by `spendEvents` (rail `reasoning`, joined
+  // `by_correlation`) and latency by `telemetry.durationMs` / `agentSteps`. A second number that
+  // can disagree with the billing plane is worse than no number, and the read model in 27-03 joins
+  // to the owners rather than re-emitting them.
+  workflowPackEvents: defineTable({
+    tenantId: v.string(),
+    // CLOSED union — the same six ids as `WORKFLOW_PACK_IDS` in @pikar/core. A source scan in
+    // `packages/core/src/workflowPacks.test.ts` pins the two lists together, because a pack id with
+    // no literal here makes the insert throw `ArgumentValidationError` and the event silently
+    // vanishes — the closed-union trap `agentSteps.tool` has now sprung three times.
+    packId: v.union(
+      v.literal("business-pulse"),
+      v.literal("campaign-plan"),
+      v.literal("customer-complaint"),
+      v.literal("sales-call-prep"),
+      v.literal("process-sop"),
+      v.literal("brand-review"),
+    ),
+    /** Server-minted per pack run — the join key across every event of one run. */
+    runId: v.string(),
+    /** The EXACT skill version that ran. Evidence and outcome must name the same body. */
+    skillVersion: v.optional(v.number()),
+    event: v.union(
+      v.literal("recommendation_shown"),
+      v.literal("recommendation_accepted"),
+      v.literal("run_started"),
+      v.literal("preflight_completed"),
+      v.literal("plan_proposed"),
+      v.literal("plan_approved"),
+      v.literal("plan_edited"),
+      v.literal("plan_rejected"),
+      v.literal("capability_missing"),
+      v.literal("artifact_created"),
+      v.literal("run_completed"),
+      v.literal("run_failed"),
+    ),
+    /** Terminal outcome, closed so a model can never relabel a refusal as success. */
+    outcome: v.optional(
+      v.union(
+        v.literal("useful"),
+        v.literal("partial"),
+        v.literal("blocked"),
+        v.literal("refused"),
+        v.literal("failed"),
+        v.literal("no_findings"),
+      ),
+    ),
+    /** Pairs `recommendation_accepted` back to the `recommendation_shown` it answered. */
+    recommendationId: v.optional(v.string()),
+    threadId: v.optional(v.string()),
+    planId: v.optional(v.id("plans")),
+    artifactId: v.optional(v.id("vaultDocuments")),
+    /** Sources the pack touches, and how many answered — the honest-partial numbers. */
+    sourceExpectedCount: v.optional(v.number()),
+    sourceAvailableCount: v.optional(v.number()),
+    /** Known before the run (announced) vs discovered during it. The SURPRISE is runtime > preflight. */
+    preflightMissingCount: v.optional(v.number()),
+    runtimeMissingCount: v.optional(v.number()),
+    claimCount: v.optional(v.number()),
+    citedClaimCount: v.optional(v.number()),
+    unsupportedClaimCount: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_tenant_createdAt", ["tenantId", "createdAt"])
+    .index("by_tenant_pack_createdAt", ["tenantId", "packId", "createdAt"])
+    .index("by_tenant_run", ["tenantId", "runId"])
+    // NOT optional, and not a duplicate of the compound index above: `tenantDelete.ts` and
+    // `tenantExport.ts` walk `deletableTables()` and call `.withIndex("by_tenant", ...)` on every
+    // name it returns, so a `tenant_owned` table without an index of exactly this name does not
+    // typecheck — and would fail erasure and export at runtime.
+    .index("by_tenant", ["tenantId"]),
 });

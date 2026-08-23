@@ -7,7 +7,7 @@ const schemaSource = readFileSync(
   "utf8",
 );
 
-const schemaTables = [...schemaSource.matchAll(/^  ([A-Za-z][A-Za-z0-9]*): defineTable\(/gm)].map(
+const schemaTables = [...schemaSource.matchAll(/^ {2}([A-Za-z][A-Za-z0-9]*): defineTable\(/gm)].map(
   ([, name]) => name,
 );
 
@@ -15,8 +15,10 @@ describe("tenant table classification registry", () => {
   test("classifies every explicit schema table exactly once, in both directions", () => {
     const classifiedTables = Object.keys(TENANT_TABLE_CLASSIFICATION);
 
-    // 43 + the two BETA-01 admission tables (25-01).
-    expect(schemaTables).toHaveLength(45);
+    // 43 + the two BETA-01 admission tables (25-01) + workflowPackEvents (27-02, PACK-02).
+    // This count is a TRIPWIRE, not bookkeeping: a new table cannot reach the export/deletion
+    // walks without someone deliberately bumping it and classifying the table on the way past.
+    expect(schemaTables).toHaveLength(46);
     expect(new Set(schemaTables).size).toBe(schemaTables.length);
     expect(classifiedTables.sort()).toEqual([...schemaTables].sort());
   });
