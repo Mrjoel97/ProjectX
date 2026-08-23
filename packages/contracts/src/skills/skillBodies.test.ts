@@ -23,6 +23,8 @@ import { offerArchitectSkillBody } from "./offerArchitect";
 import { onboardingAgentSkillBody } from "./onboardingAgent";
 import { packBusinessPulseSkillBody } from "./packBusinessPulse";
 import { packCampaignPlanSkillBody } from "./packCampaignPlan";
+import { packCustomerComplaintSkillBody } from "./packCustomerComplaint";
+import { packSalesCallPrepSkillBody } from "./packSalesCallPrep";
 import { researchSpecialistSkillBody } from "./researchSpecialist";
 import { styleCoachingSkillBody } from "./styleCoaching";
 import { styleConciseSkillBody } from "./styleConcise";
@@ -89,6 +91,9 @@ const bodies: [string, string][] = [
   // files. 27-05 and 27-06 append their four here.
   ["pack-business-pulse", packBusinessPulseSkillBody],
   ["pack-campaign-plan", packCampaignPlanSkillBody],
+  // 27-05: the two best-supported packs — their primary inputs are real agent tools.
+  ["pack-customer-complaint", packCustomerComplaintSkillBody],
+  ["pack-sales-call-prep", packSalesCallPrepSkillBody],
 ];
 
 describe("evaluation/specialist skill bodies (BEVL-01) — md ↔ ts no-drift", () => {

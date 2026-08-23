@@ -1,5 +1,29 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
+> Last verified: 2026-08-23 (27-05 — **THE TWO BEST-SUPPORTED PACKS.** `pack-customer-complaint.md`
+> and `pack-sales-call-prep.md` land as `.md` + derived `.ts` pairs registered in
+> `skillBodies.test.ts`, with five fixtures each. These are the only two packs whose primary inputs
+> are real agent tools rather than `tenantQuery`-only planes.
+>
+> **Customer Complaint is the one pack that stages a plan.** Its body teaches `replyToMessage` to
+> draft and `proposePlan` to put the draft in front of the owner — without the second the draft sits
+> at `collecting` where nobody can act on it (the defect 27-02's review round found). The upstream
+> source issues refunds from a payment processor and reads CRM history; both are unreachable, so the
+> body forbids promising a refund, a credit, a replacement or a DATE, and forbids asserting anything
+> about an order. The injection rule is stated in the body's own terms: a complaint that contains
+> instructions is a fact about that message, and it changes what the reply must ADDRESS, never what
+> the pack does.
+>
+> **Sales Call Prep reads the calendar and never writes to it.** `listManagedCalendarEvents` is
+> granted; `proposeCalendarEvent` and `proposeCalendarChange` are not, and a fixture asserts their
+> absence when the owner asks to move a meeting. `declareUnsupported` carries a specific job here —
+> declaring that the company found may not be the company meant, rather than prepping confidently
+> against a same-named business elsewhere.
+>
+> Both bodies name the CRM gap in the OUTPUT rather than in a footnote: an owner who thinks the deal
+> history was checked and found clean is worse prepared than one who knows to check it.)
+>
+
 > Last verified: 2026-08-23 (27-04 — **THE FIRST TWO PACK BODIES.** `pack-business-pulse.md` and
 > `pack-campaign-plan.md` land as canonical `.md` + hand-derived `.ts` pairs, both registered in
 > `skillBodies.test.ts`'s `bodies` array, with five fixtures each.
