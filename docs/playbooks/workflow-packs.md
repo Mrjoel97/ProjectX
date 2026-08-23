@@ -1,5 +1,30 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
+> Last verified: 2026-08-23 (27-03 — **THE MEASUREMENT PLANE.** `packages/core/src/
+> workflowPackMetrics.ts` defines every success measure as a pure function over the closed event
+> vocabulary, and `packages/backend/convex/workflowPackEventLog.ts` is the SOLE write surface for
+> the `workflowPackEvents` table 27-02 created. No table, schema or classification change here —
+> 27-02 owns those.
+>
+> **A measure with no data says so.** Every ratio returns `not_applicable` on a zero denominator
+> rather than 1.0 or 0.0: "0 of 0 claims were cited" is as wrong reported as perfect as it is
+> reported as terrible, and this repo shipped a permanent invented zero once already (26-14's
+> `edit: 0`). `not_applicable` also distinguishes `zero_denominator` from `no_data` — measured
+> nothing and measured zero are different answers.
+>
+> **Cost and latency are structurally absent.** `PackMetricEvent` has no field for either, so no
+> function in the module can produce one; `PACK_DERIVED_METRIC_SOURCES` names where they really live
+> (`spendEvents` rail `reasoning` by `correlationId`, `telemetry.durationMs` / `agentSteps`).
+>
+> **PRIVACY IS DEFENDED TWICE, and that was measured rather than assumed.** Widening the recorder's
+> ARGS validator alone does not open the hole — `record` spreads its args into `ctx.db.insert`, so
+> the table's own closed validator refuses the field a second time. A text field becomes storable
+> only if BOTH are widened; the test goes red only when both are, verified by mutating each in turn.
+>
+> **The emission gate is 27-07's**, where the call sites land. This plan proves the plane exists and
+> is privacy-bounded; it does not prove real runs write to it.)
+>
+
 > Last verified: 2026-08-23 (27-02 follow-up 4 — three defects the review's own skeptic REFUTED, and
 > which held up on a second reading. A skeptic that refutes on "it fails closed" can still be
 > dismissing a real operational trap.
@@ -125,6 +150,10 @@ Run `graphify query "workflow packs"` for the current subgraph. Couplings graphi
 - **The tool record is filtered by exact name and never widened.** An allow-list entry that is not
   a key of `buildCockpitTools` is silently dropped — no throw, no log, just a smaller tool set.
   The registry-to-`llm.ts` name scan is the only thing that catches a typo.
+- **`workflowPackEventLog.ts` is the SOLE write surface for `workflowPackEvents`.** The table is
+  classified `audit_immutable`, which is a claim about immutability — a `patch`/`replace`/`delete`
+  in that module would make the classification a lie and would leave rows that are outside the
+  tenant deletion walk yet still rewritable. Enforced by a source scan in its own test.
 - **`workflowPackEvents.packId` is a closed `v.literal` union.** A pack id with no literal makes the
   insert throw inside an AI-SDK callback that swallows it: the event vanishes in prod while the
   suite stays green. Pinned by a source scan in `workflowPacks.test.ts`.

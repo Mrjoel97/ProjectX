@@ -31,4 +31,5 @@ export * from "./reviewThreshold";
 export * from "./specialists";
 export * from "./spend";
 export * from "./validateSubmit";
+export * from "./workflowPackMetrics";
 export * from "./workflowPacks";
