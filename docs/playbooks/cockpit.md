@@ -23,6 +23,14 @@
 > call site, because `startWorkflowPack -> runWorkflowPack` is the one link the binding's own suite
 > cannot see, and an argument that stops at the action is the clock-plane-dead-in-production defect.
 >
+> **THE WORKSPACE NOW RENDERS QUICK STARTS** (`WorkflowPackQuickStarts` / `WorkflowPackPreflight`,
+> colocated under the route), on a FRESH workspace only — once a conversation is open, six cards
+> above it compete with the thread the user is already in. They call `startWorkflowPack` directly,
+> and that required NARROWING the "no component constructs the raw cockpit action" guard, which used
+> to ban `useAction(` outright. The narrowing is paid for: the exemption is now conditional on
+> `startWorkflowPack` having no `clientContext` argument, so the day it grows one the test demands a
+> hook. An exemption that outlives its reason is how the clock plane died the first time.
+>
 > **KNOWN GAP, bounded and stated:** the pack path still sends no `clientContext`, so `briefInbox`
 > buckets its 7-day window in UTC rather than the owner's zone (`llm.ts` documents that degradation
 > as cosmetic and it is the only granted pack tool that reads a clock — `replyToMessage` does not).

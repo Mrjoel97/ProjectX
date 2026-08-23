@@ -13,6 +13,13 @@
 > via `activateSkill`, and turning the cockpit agent dark from a browser button is a different and
 > much larger decision. A non-pack name is refused with `NOT_A_PACK` before any patch.
 >
+> **IT IS NOT REACHABLE FROM THE PRODUCT YET, and that is worth saying out loud.** It is an
+> `ownerMutation`, so `npx convex run` — which carries no identity — cannot call it either. Today
+> the only caller that could exist is an owner-authenticated browser control, and 27-09 has not
+> shipped one. So the dark path is BUILT and TESTED but undrilled; the operator fallback is still
+> `archiveSkill`, with the sign-out side effect intact. What closes it is a Turn-off control in the
+> workspace. Do not record a rollback-to-dark drill until one exists.
+>
 > It is an `ownerMutation` — the same trust boundary, not a hidden control — patches `status` and
 > nothing else, and is idempotent (`{ deactivated: false }` when nothing is active, because an owner
 > clicking twice during an incident must not see a failure). The archived row keeps its body,

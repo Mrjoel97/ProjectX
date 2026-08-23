@@ -159,6 +159,34 @@ describe("the workflow-pack registry is total", () => {
     expect(globalState.size).toBeGreaterThan(10);
   });
 
+  // 27-09: the discovery surface renders these. Code-owned so the quick start, the preflight
+  // paragraph and the body cannot each name the same workflow differently.
+  test("every pack has a title and a blurb, and no blurb promises orchestration", () => {
+    for (const id of WORKFLOW_PACK_IDS) {
+      const { title, blurb } = WORKFLOW_PACKS[id];
+      expect(title.length, `${id} title`).toBeGreaterThan(4);
+      expect(blurb.length, `${id} blurb`).toBeGreaterThan(30);
+      // Packs are LEAF AGENTS. A quick start that implies a pack hands work to another agent is a
+      // promise `runAgentLoop` structurally cannot keep — `grantDispatch` is never built for one.
+      expect(blurb.toLowerCase(), `${id} blurb implies dispatch`).not.toMatch(
+        /specialist|another agent|hands off|delegat/,
+      );
+    }
+    // The opener is sent AS THE USER's first message, so it must read like something a person
+    // would say — never an instruction addressed to a model, which would put a second prompt
+    // outside the registry (CLAUDE.md section 5).
+    for (const id of WORKFLOW_PACK_IDS) {
+      const { opener } = WORKFLOW_PACKS[id];
+      expect(opener.length, `${id} opener`).toBeGreaterThan(15);
+      expect(opener.toLowerCase(), `${id} opener addresses the model`).not.toMatch(
+        /you are|your task|system:|instruction/,
+      );
+    }
+    // Titles are what a user picks between, so two packs sharing one is a real defect.
+    const titles = WORKFLOW_PACK_IDS.map((id) => WORKFLOW_PACKS[id].title);
+    expect(new Set(titles).size).toBe(titles.length);
+  });
+
   test("the source vocabulary is disjoint, fully used, and fully described", () => {
     const missing = new Set<string>(MISSING_PACK_SOURCES);
     for (const source of REACHABLE_PACK_SOURCES) {
@@ -447,7 +475,7 @@ describe("the honest-partial contract is in the matrix, not in prose", () => {
 // literal the probe can yield for a key must be declared, and nothing else may be.
 test("the declared probe states are exactly what probeSources returns", () => {
   const src = readFileSync(
-    new URL("../../backend/convex/workflowPackBinding.ts", import.meta.url),
+    new URL("../../backend/convex/workflowPackDiscovery.ts", import.meta.url),
     "utf8",
   ).replace(/\r\n/g, "\n");
   // The probe's single `return { ... };` — anchored on the function so an unrelated object

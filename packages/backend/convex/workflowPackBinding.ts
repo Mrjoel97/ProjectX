@@ -27,16 +27,12 @@
 // `workflowPackOutcomes.ts` joins on exactly that. See `PACK_DERIVED_METRIC_SOURCES` in @pikar/core.
 
 import {
-  DRIVE_READONLY_SCOPE,
-  hasScope,
   MISSING_SOURCE_UNLOCK,
   PACK_SOURCE_LABEL,
   type PackOutcome,
   type PackPreflight,
   packPreflight,
-  type ReachablePackSource,
   resolveWorkflowPack,
-  type SourceState,
   toolsForWorkflowPack,
   type WorkflowPackId,
 } from "@pikar/core";
@@ -66,44 +62,11 @@ export type PackRunResult =
 const PACK_PAUSED_REPLY =
   "I've paused for a moment — I'm briefly unavailable. Please try that again shortly.";
 
-/**
- * Resolve, IN CODE and BEFORE the model call, which of this tenant's connection-gated planes can
- * answer. The model is TOLD the result; it never decides which sources exist.
- *
- * ONLY the connection-gated planes are probed, deliberately. `vault` and `web` need no tenant grant
- * — an empty vault, or a search that finds nothing, is a result the tool itself reports and the body
- * already has to state honestly, so a second "is it empty" probe here would duplicate that at the
- * cost of a read on every run. What preflight is FOR is the gap a tool cannot report gracefully: a
- * mailbox, a Drive or a calendar that was never connected, which otherwise surfaces mid-run as a
- * tool error after the money is spent.
- *
- * `partial` means "the plane answered, with nothing in it". `packPreflight` counts only
- * `unavailable` as missing, so an empty calendar is not reported as a capability gap.
- */
-async function probeSources(
-  ctx: GenericActionCtx<DataModel>,
-  tenantId: string,
-): Promise<Partial<Record<ReachablePackSource, SourceState>>> {
-  const [gmailConnected, token, calendarEvents, financeLine] = await Promise.all([
-    ctx.runQuery(internal.gmailAuth.hasGmailConnection, { tenantId }),
-    ctx.runQuery(internal.gmailAuth.getTokens, { tenantId }),
-    ctx.runQuery(internal.calendarEvents.listManageable, { tenantId }),
-    ctx.runQuery(internal.cash.financeSpineFor, { tenantId }),
-  ]);
-  // The SAME ordering `vaultDrive.ts` uses and for the same reason: a grant issued before the Drive
-  // scope widening refreshes perfectly happily, so `connected` alone would report Drive readable to
-  // a tenant every Drive call will 403.
-  const driveReady = token !== null && hasScope(token.scope, DRIVE_READONLY_SCOPE);
-  return {
-    // No tenant grant gates either of these; emptiness is the tool's own honest answer.
-    vault: "available",
-    web: "available",
-    inbox: gmailConnected ? "available" : "unavailable",
-    drive: driveReady ? "available" : "unavailable",
-    calendar: calendarEvents.events.length > 0 ? "available" : "partial",
-    "finance-inputs": financeLine === null ? "unavailable" : "available",
-  };
-}
+// `probeSources` USED TO LIVE HERE, as a private function, and that was the reason the browser had
+// no way to ask the same question: this module is `"use node"` and may hold only actions. 27-09
+// moved it to `workflowPackDiscovery.ts` (a V8 module) so the preflight a user is SHOWN before a run
+// and the preflight the model is TOLD during it are one resolution rather than two that agree until
+// one is edited. The behaviour here is unchanged — the call is the same, one hop further out.
 
 /**
  * The code-owned preflight paragraph. Built from `PACK_SOURCE_LABEL` and `MISSING_SOURCE_UNLOCK` so
@@ -249,7 +212,10 @@ async function runPackTurn(
     };
   }
 
-  const flight = packPreflight(packId, await probeSources(ctx, tenantId));
+  const flight = packPreflight(
+    packId,
+    await ctx.runQuery(internal.workflowPackDiscovery.probeSources, { tenantId }),
+  );
   await ctx.runMutation(internal.workflowPackEventLog.record, {
     tenantId,
     packId,

@@ -322,6 +322,10 @@ const OWNER_ARGS: Record<string, Record<string, unknown>> = {
   "finance.setPerRequestBudget": { budgetUsd: 1 },
   "optimizerConfig.setOptimizerEnabled": { enabled: false },
   "skills.activateCandidate": { name: "no-such-skill", version: 1 },
+  // 27-09. A REAL pack name, not "no-such-skill": `deactivatePack` refuses a non-pack name with
+  // NOT_A_PACK, and that refusal happens after the owner wrapper — so a bogus name here would still
+  // pass this test while proving nothing about authorization on the path a real caller takes.
+  "skills.deactivatePack": { name: "pack-brand-review" },
   // `id:<table>` is a sentinel: the test inserts a real row of that table and substitutes its id,
   // because `v.id()` validation would reject a hand-made string and we would be back to a
   // validator error masquerading as an authorization one.
@@ -339,11 +343,11 @@ const REQUIRES_ARGS = new Set(Object.keys(OWNER_ARGS));
 describe("owner endpoints reject a non-owner, and the list grows by itself", () => {
   test("the owner surface spans every module that has one", () => {
     // 14 at 25-03, 15 once 25-10 added `ops.envCheck`, 16 once 25.1-06 added
-    // `deadLetters.listAll`, 18 once 26-15 added the two `reportsGovernance` owner reads. THIS
-    // ASSERTION HAS NOW DONE ITS JOB THREE TIMES: each new owner endpoint
+    // `deadLetters.listAll`, 18 once 26-15 added the two `reportsGovernance` owner reads, 19 once
+    // 27-09 added `skills.deactivatePack`. THIS ASSERTION HAS NOW DONE ITS JOB FOUR TIMES: each new owner endpoint
     // turned it red, which is the entire reason the count and the module set are pinned rather than
     // derived-and-forgotten. Update it deliberately when the surface grows.
-    expect(OWNER_SURFACE.length).toBeGreaterThanOrEqual(18);
+    expect(OWNER_SURFACE.length).toBeGreaterThanOrEqual(19);
     expect([...new Set(OWNER_SURFACE.map((f) => f.module))].sort()).toEqual([
       "deadLetters",
       "finance",

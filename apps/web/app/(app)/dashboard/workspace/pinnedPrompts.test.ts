@@ -130,17 +130,61 @@ describe("page.tsx — the Pinned prompts menu and the fresh-thread Run", () => 
     expect(run).not.toContain("api.plans");
   });
 
-  test("NO component constructs the raw cockpit action", () => {
+  test("NO component constructs the raw cockpit send action", () => {
     // `useSendCockpitMessage` is the ONE browser send door: it supplies the trusted IANA timezone
     // and the call-time clock that every phase-17 calendar and phase-19 CRM tool refuses without.
     // Named mutation that turns this red: swap the hook for `useAction(api.cockpit.sendCockpitMessage)`.
     for (const source of [page, chat]) {
       expect(source).not.toContain("api.cockpit.sendCockpitMessage");
-      expect(source).not.toContain("useAction(");
     }
     // Positive witnesses on the same two files: both really do call the hook.
     expect(page).toContain("useSendCockpitMessage()");
     expect(chat).toContain("useSendCockpitMessage()");
+  });
+
+  // 27-09 NARROWED THE RULE ABOVE, and this is what pays for the narrowing.
+  //
+  // It used to ban `useAction(` outright, which is a proxy for the real property: a browser turn
+  // that CAN carry the trusted clock must not be built without it. `cockpit.startWorkflowPack` is a
+  // second turn-starting action and it takes NO `clientContext` at all — there is nothing for a hook
+  // to supply, so a hook around it would be ceremony that protects nothing.
+  //
+  // The exemption is therefore CONDITIONAL ON THE FACT THAT JUSTIFIES IT: the moment
+  // `startWorkflowPack` grows a `clientContext` argument, this test demands the hook. An exemption
+  // that outlives its reason is how the clock plane died the first time.
+  test("the workflow-pack action is exempt only while it cannot carry a clock", () => {
+    const backend = readFileSync(
+      join(here, "../../../../../../packages/backend/convex/cockpit.ts"),
+      "utf8",
+    ).replace(/\r\n/g, "\n");
+
+    const startPack = backend.slice(
+      backend.indexOf("export const startWorkflowPack"),
+      // The NEXT export, not a distant one: `sendCockpitMessage` immediately follows and DOES take
+      // `clientContext`, so a wider slice would read its argument as this action's and permanently
+      // take the wrong branch.
+      backend.indexOf("export const sendCockpitMessage"),
+    );
+    expect(startPack.length, "startWorkflowPack was not found in cockpit.ts").toBeGreaterThan(500);
+
+    if (startPack.includes("clientContext")) {
+      // It can carry a clock now. The page must stop constructing it raw.
+      expect(
+        page,
+        "startWorkflowPack now takes clientContext — route it through a hook like useSendCockpitMessage",
+      ).not.toContain("useAction(api.cockpit.startWorkflowPack)");
+    } else {
+      // It cannot. The raw construction is the honest option, and this is the only one allowed.
+      const rawActions = [...page.matchAll(/useAction\((api\.[\w.]+)\)/g)].map((m) => m[1]);
+      expect(rawActions).toEqual(["api.cockpit.startWorkflowPack"]);
+    }
+  });
+
+  // The quick starts must never be able to reach a DARK row. `previewVersion` is the owner-only
+  // candidate pin, checked server-side — a browser surface that sent one would be asking the server
+  // to refuse it, and a future owner-aware page must not quietly start sending it from here.
+  test("the quick starts never send an owner preview pin", () => {
+    expect(page).not.toContain("previewVersion");
   });
 
   test("the menu has honest Loading, empty, running, deleting and error states", () => {

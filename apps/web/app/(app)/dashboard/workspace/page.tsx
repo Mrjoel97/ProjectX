@@ -3,7 +3,7 @@
 import { api } from "@pikar/backend/api";
 // BEVL-03: the ONE deterministic thread the weekly review writes to, per tenant.
 import { REVIEW_THREAD_ID } from "@pikar/core";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { BrainIcon, ClockIcon, DotsIcon, StarIcon, TrashIcon } from "../../../(auth)/icons";
 import { ChatPane } from "./ChatPane";
@@ -13,6 +13,7 @@ import { CanvasPane } from "./MediaCanvas";
 import { SkillAuthoringPanel } from "./SkillAuthoringPanel";
 import { SplitPane } from "./SplitPane";
 import { useSendCockpitMessage } from "./useSendCockpitMessage";
+import { WorkflowPackQuickStarts } from "./WorkflowPackQuickStarts";
 
 // The cockpit, wired (plan 08 over the plan-05 shell). LEFT = the live chat pane (guided
 // questions + drafted-plan copy via the agent thread); RIGHT = the PLAN/DRAFT/REPORT card
@@ -387,6 +388,40 @@ export default function WorkspacePage() {
     }
   };
 
+  // 27-09 (PACK-02/PACK-04): the curated workflow quick starts.
+  //
+  // `listPacks` is ACTIVE-ONLY on the server, so during the dark pilot this list is empty and the
+  // section renders nothing at all. There is no client-side filter to get wrong.
+  //
+  // It goes through `cockpit.startWorkflowPack`, NOT `useSendCockpitMessage`: a pack turn is a
+  // different agent — allow-listed, structurally unable to dispatch a specialist — and folding it
+  // into the conversation action would put that distinction behind an argument a caller can forget.
+  // No `previewVersion` is ever sent from here; the owner's candidate preview is a separate,
+  // server-checked path and this surface must never be able to reach a dark row.
+  //
+  // The opener is code-owned in `@pikar/core` and sent as the USER's first message, because pressing
+  // Start IS the request. The conversation continues normally afterwards.
+  const packs = useQuery(api.workflowPackDiscovery.listPacks);
+  const startPack = useAction(api.cockpit.startWorkflowPack);
+  const [startingPack, setStartingPack] = useState<string | null>(null);
+  const [packNotice, setPackNotice] = useState<string | null>(null);
+  const onStartPack = (packId: string) => {
+    const pack = packs?.find((p) => p.packId === packId);
+    if (pack === undefined || sending || startingPack !== null) return;
+    setPackNotice(null);
+    setSending(true);
+    setStartingPack(packId);
+    void startPack({ packId, text: pack.opener })
+      .then((res) => registerThread(res.threadId, pack.title))
+      // The notice lands next to the control the user pressed. It never names the pack id — an id
+      // the server refused is an id this surface must not echo back.
+      .catch(() => setPackNotice("That workflow could not be started. Nothing ran — try again."))
+      .finally(() => {
+        setSending(false);
+        setStartingPack(null);
+      });
+  };
+
   const newChat = () => setThreadId(undefined);
   const clearWorkspace = () => {
     window.sessionStorage.removeItem(WORKSPACE_SESSION_KEY);
@@ -594,6 +629,25 @@ export default function WorkspacePage() {
                 suppressed. Do NOT loosen that backend guard instead — it protects the real cockpit.
                 Gmail is deliberately absent from this gate: the cockpit is useful before any
                 delivery channel is connected. */}
+            {/* Discovery belongs to a FRESH workspace: once a conversation is open, six cards above
+                it are clutter competing with the thread the user is already in. The section renders
+                nothing at all when no pack is active, which is every deployment until 27-09's gate
+                passes — so this is invisible rather than empty during the pilot. */}
+            {threadId === undefined && (
+              <ErrorBoundary label="workflow-packs" fallback={null}>
+                <WorkflowPackQuickStarts
+                  packs={packs}
+                  onStart={onStartPack}
+                  busy={sending}
+                  starting={startingPack}
+                />
+                {packNotice !== null && (
+                  <p role="status" style={{ color: "var(--ink-soft)", fontSize: "0.85rem" }}>
+                    {packNotice}
+                  </p>
+                )}
+              </ErrorBoundary>
+            )}
             {threadId === REVIEW_THREAD_ID ? (
               <p style={{ color: "var(--ink-soft)", margin: 0, fontSize: "0.9rem" }}>
                 This is your weekly business review. Start a new chat to act on anything here.

@@ -189,7 +189,28 @@ export type PackOperation =
 /** The forbidden arm of the union, named so the shared list can be typed to it exactly. */
 export type ForbiddenPackOperation = Extract<PackOperation, { state: "forbidden" }>;
 
-export type WorkflowPackSpec = {
+/**
+ * What a pack is CALLED and what it promises, in the user's words (27-09). Code-owned for the same
+ * reason the source labels are: the discovery surface, the preflight paragraph and six skill bodies
+ * must not each name the same workflow differently.
+ *
+ * `blurb` states what the pack PRODUCES, never what it orchestrates — packs are leaf agents, and a
+ * quick start that implies otherwise is a promise the runtime structurally cannot keep.
+ */
+export type WorkflowPackPresentation = {
+  readonly title: string;
+  readonly blurb: string;
+  /**
+   * The first message a quick start sends AS THE USER. Pressing Start IS the request, so this is
+   * the user's words rather than a system prompt — CLAUDE.md §5 governs the agent body, which still
+   * comes from the registry and is not here. It is code-owned so six cards cannot ask six subtly
+   * different questions of the same workflow, and it is deliberately short: the conversation
+   * continues normally afterwards, so the opener starts the work rather than trying to specify it.
+   */
+  readonly opener: string;
+};
+
+export type WorkflowPackSpec = WorkflowPackPresentation & {
   /**
    * The §5 registry row that carries this pack's body. Written out per spec rather than computed,
    * so the record stays a plain readable table — but it is NOT free-form: `workflowPacks.test.ts`
@@ -291,6 +312,10 @@ export const WORKFLOW_PACKS: Readonly<Record<WorkflowPackId, WorkflowPackSpec>> 
   // reordered on 2026-08-23 (85daa4b) and five files re-declare it as a literal without importing it.
   "business-pulse": {
     skillName: "pack-business-pulse",
+    title: "Business pulse",
+    opener: "Give me a quick read on how my business is doing right now.",
+    blurb:
+      "One honest read on where the business stands, and the single thing most worth your attention today.",
     output: "briefing",
     operations: [
       groundInVault,
@@ -315,6 +340,10 @@ export const WORKFLOW_PACKS: Readonly<Record<WorkflowPackId, WorkflowPackSpec>> 
   // connector-backed execution is Phase 28.
   "campaign-plan": {
     skillName: "pack-campaign-plan",
+    title: "Campaign plan",
+    opener: "Help me plan a marketing campaign.",
+    blurb:
+      "A written campaign plan you can act on. It produces the plan; it does not run the campaign.",
     output: "document",
     operations: [
       groundInVault,
@@ -334,6 +363,10 @@ export const WORKFLOW_PACKS: Readonly<Record<WorkflowPackId, WorkflowPackSpec>> 
   // Pasted text is the first-class input. Inbox context goes through the real seam; drafts only.
   "customer-complaint": {
     skillName: "pack-customer-complaint",
+    title: "Customer complaint reply",
+    opener: "I need to reply to an unhappy customer.",
+    blurb:
+      "A drafted reply to an unhappy customer, staged for you to review and approve. Nothing is sent.",
     output: "draft_reply",
     operations: [
       {
@@ -391,6 +424,9 @@ export const WORKFLOW_PACKS: Readonly<Record<WorkflowPackId, WorkflowPackSpec>> 
   // Works from user / Vault / web context, plus the meetings Pikar itself manages.
   "sales-call-prep": {
     skillName: "pack-sales-call-prep",
+    title: "Sales call prep",
+    opener: "Help me prepare for an upcoming sales call.",
+    blurb: "A prep brief for an upcoming call, saved to your vault.",
     output: "document",
     operations: [
       groundInVault,
@@ -415,6 +451,10 @@ export const WORKFLOW_PACKS: Readonly<Record<WorkflowPackId, WorkflowPackSpec>> 
   // Produces a durable document and says plainly what it could not wire up.
   "process-sop": {
     skillName: "pack-process-sop",
+    title: "Process / SOP",
+    opener: "Help me write up a process I do repeatedly.",
+    blurb:
+      "A written standard operating procedure for something you do repeatedly, saved to your vault.",
     output: "document",
     operations: [
       groundInVault,
@@ -436,6 +476,9 @@ export const WORKFLOW_PACKS: Readonly<Record<WorkflowPackId, WorkflowPackSpec>> 
   // because no tenant brand guidance exists yet — and names what would unlock the stronger review.
   "brand-review": {
     skillName: "pack-brand-review",
+    title: "Brand review",
+    opener: "Review a piece of my copy.",
+    blurb: "A review of a piece of your copy, saying plainly what it was reviewed against.",
     output: "document",
     operations: [
       groundInVault,

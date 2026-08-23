@@ -1,5 +1,46 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
+> Last verified: 2026-08-23 (27-09 — **THE DISCOVERY SURFACE, AND THE PROBE MOVED TO REACH IT.**
+> `workflowPackDiscovery.ts` is a new DEFAULT-RUNTIME (V8) module holding two things: the source
+> probe, and `listPacks`.
+>
+> **`probeSources` used to be a private function inside `workflowPackBinding.ts`**, which is
+> `"use node"` and may hold only actions — so the browser had no way to ask the same question, and a
+> second implementation for the UI would have agreed with it only until one of them was edited.
+> It now lives in the V8 module and the binding calls it, so the preflight a user is SHOWN before a
+> run and the preflight the model is TOLD during it are one resolution. The binding's behaviour is
+> unchanged (its 31 tests are untouched and green), and the `PACK_SOURCE_PROBE_STATES` scan test in
+> `workflowPacks.test.ts` now targets the new file.
+>
+> **`listPacks` is ACTIVE-ONLY, on the server.** It reads `by_name_status` with an exact `active`
+> — never "the newest row", which would have put all six candidates in front of every user the
+> moment 27-08 published them. There is deliberately NO client-side filter and no `showCandidates`
+> prop: a filter in the browser is a filter a future caller can pass `false` to. Mutation-proven —
+> swapping the exact-status read for `.first()` reddens three tests.
+>
+> **The quick starts show their gaps.** Every pack in this pilot has at least one matrix-missing
+> source, so a card that rendered a title with no preflight would be advertising work while hiding
+> the thing the user most needs to know about it. Two kinds of gap, distinguished by the SERVER's
+> `unlock` field and never re-derived in the browser: a RUNTIME gap is a connection the user can
+> make, a MATRIX gap is a limit with the thing that would lift it named.
+>
+> **The UI is deliberately thin: no marketplace, no install state, no enable toggle, no tool picker.**
+> A pack's capability is code-owned (`toolsForWorkflowPack`), so a control that appeared to widen it
+> would be describing something the runtime cannot do. Asserted over the rendered markup, and again
+> over the real page in the e2e spec.
+>
+> `title`, `blurb` and `opener` are code-owned in `@pikar/core` beside the operation matrix. The
+> opener is sent AS THE USER's first message — pressing Start IS the request — and a test refuses
+> one that reads like an instruction to a model, which would put a second prompt outside the
+> registry (CLAUDE.md §5).
+>
+> **`apps/web/e2e/workflow-pack-pilot.spec.ts` EXISTS AND HAS NEVER BEEN RUN GREEN.** It was authored
+> against a deployment with no model balance. Its `@dark` and `@discovery` tags are free; `@run`
+> spends. Do not read it as coverage, and do not record browser evidence from a partial pass. Its
+> `@drill` block records BOTH rollback drills as owed, with the reason: `deactivatePack` is an
+> `ownerMutation` and `convex run` carries no identity, so the dark drill needs an owner-facing
+> control that does not exist yet.)
+
 > Last verified: 2026-08-23 (27-08 — **THE CORPUS AND THE RUNTIME DID NOT AGREE, AND THE EVAL RUNNER
 > IS WHERE THAT SURFACED.** 27-04/05/06 authored the 30 fixtures against the *contract* vocabulary;
 > 27-07 wrote the deriving code afterwards. 24 of the 30 asserted something no run could produce:
