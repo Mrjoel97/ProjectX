@@ -165,6 +165,13 @@ export function validateFixture(fx, file, packs) {
       fail(`expect.sources names "${source}", not a source of this pack`);
     if (!SOURCE_STATES.includes(state))
       fail(`expect.sources.${source} = "${state}" is not one of ${SOURCE_STATES.join("|")}`);
+    // The symmetric rule, which the two checks below already enforce in their own direction: a
+    // source the MATRIX calls missing cannot resolve as anything but unavailable, so a fixture
+    // asserting one is "available" asserts a state `packPreflight` can never produce.
+    if (pack.missingSources.has(source) && state !== "unavailable")
+      fail(
+        `expect.sources.${source} = "${state}", but the matrix says it is MISSING for this pack`,
+      );
   }
 
   // THE HONEST-PARTIAL ASSERTION. A named missing source must be one the MATRIX calls missing —
@@ -242,7 +249,7 @@ export function validateCorpus(fixtures, packs) {
   return fixtures;
 }
 
-function readFixtures(packFilter) {
+function readFixtures(packFilter, packs) {
   let files;
   try {
     files = readdirSync(fixturesDir)
@@ -263,12 +270,19 @@ function readFixtures(packFilter) {
       .map((s) => s.trim())
       .filter(Boolean),
   );
-  const kept = all.filter(({ fx }) => wanted.has(fx.pack));
-  // A filter that matches nothing is an error. The shipped lesson: a typo'd filter silently shrinks
-  // a gate to zero cases and then reports all green.
-  if (kept.length === 0 && all.length > 0)
-    throw new Error(`--packs ${packFilter} matched no fixture of ${all.length}`);
-  return kept;
+  if (wanted.size === 0) throw new Error("--packs was given an empty list");
+  // PER NAME, and NEVER conditioned on the corpus being non-empty. The first version of this guard
+  // read `kept.length === 0 && all.length > 0`, which made it silent in exactly the case it exists
+  // for: with no fixtures on disk, `--packs anything-at-all` validated zero cases and exited 0, so
+  // a lane that wrote no fixture would pass its only automated gate. Checking each requested name
+  // against the registry AND against the corpus is what makes the gate red until that pack really
+  // has coverage — while still allowing the lanes to land one pack at a time.
+  for (const id of wanted) {
+    if (!packs.has(id)) throw new Error(`--packs names "${id}", which is not a pack id`);
+    if (!all.some(({ fx }) => fx.pack === id))
+      throw new Error(`--packs names "${id}", which has no fixture of the ${all.length} on disk`);
+  }
+  return all.filter(({ fx }) => wanted.has(fx.pack));
 }
 
 /** The runnable check. Proves the validator goes RED on each malformed shape before it is trusted. */
@@ -336,6 +350,9 @@ function selfTest(packs) {
   });
   mutate("which is NOT missing for this pack", (fx) => {
     fx.expect.missingNamed = ["vault"];
+  });
+  mutate("the matrix says it is MISSING for this pack", (fx) => {
+    fx.expect.sources["tenant-brand-guidance"] = "available";
   });
   mutate("which this pack is not granted", (fx) => {
     fx.expect.toolsAllowed = ["stageCrmWrite"];
@@ -435,7 +452,7 @@ async function main() {
   if (argv.includes("--self-test")) selfTest(packs);
 
   const fixtures = validateCorpus(
-    readFixtures(valueFlag(argv, "--packs")).map(({ file, fx }) => ({
+    readFixtures(valueFlag(argv, "--packs"), packs).map(({ file, fx }) => ({
       file,
       fx: validateFixture(fx, file, packs),
     })),

@@ -1,5 +1,25 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
+> Last verified: 2026-08-23 (27-02 follow-up 2 — **THREE FIXTURE-GATE DEFECTS FOUND BY ADVERSARIAL
+> REVIEW OF THE 27-02 DIFF, ALL CONFIRMED AND FIXED.** Two of them made the `--packs` gate that
+> 27-04/05/06 depend on report green over no coverage at all:
+>
+> 1. The typo'd-filter guard read `kept.length === 0 && all.length > 0`, so it was silent in exactly
+>    the case it existed for — with no fixtures on disk, `--packs anything` validated zero cases and
+>    exited 0. **A lane that wrote no fixture would have passed its only automated gate.** The guard
+>    is now per requested name and never conditioned on corpus size.
+> 2. A filter naming one real pack and one typo passed as long as ANY name matched, so the typo'd
+>    pack was never validated. Each name is now checked against the registry and against the corpus.
+> 3. `expect.sources` accepted a matrix-MISSING source as `"available"` — an expectation
+>    `packPreflight` can never produce, and the mirror of two rules the validator already enforced.
+>
+> **The `--packs` gate is now RED until the named pack actually has fixtures.** That is deliberate:
+> `--packs business-pulse,campaign-plan --fixtures-only` is 27-04's blocking evidence, and it has to
+> fail while that lane's corpus is empty. A run with NO `--packs` over an empty corpus stays green,
+> which is what 27-02's own verify uses. Self-test is now 19 rejections, counted rather than
+> hardcoded; every rule above was also proven red against a real fixture written to disk.)
+>
+
 > Last verified: 2026-08-23 (27-02 follow-up — **OWNER DECISION: `workflowPackEvents` is
 > `audit_immutable`, not `tenant_owned`.** Under `tenant_owned` the table was enrolled in the tenant
 > deletion and export walks automatically, so erasing one tenant silently rewrote the denominator of
@@ -149,6 +169,10 @@ Run `graphify query "workflow packs"` for the current subgraph. Couplings graphi
   observed failing is not a gate.
 
 ## How to verify
+
+The `--packs` filter is a GATE, not a convenience: every name in it must be a real pack id AND must
+already have at least one fixture, whatever the size of the corpus. A lane's blocking evidence is
+`--packs <its two packs> --fixtures-only`, and that command is red until both packs are covered.
 
 ```
 cd packages/core && npx vitest run src/workflowPacks.test.ts     # registry, matrix, cross-file scans
