@@ -44,7 +44,7 @@ import { applyCrmOperations } from "./contacts";
 // The memo terminal (12-05): a memo-plan's Approve saves a vault doc instead of fanning out email.
 import { persistNextStepMemo } from "./evaluations";
 import { retrier, workflow } from "./index";
-import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
+import { requireOwnerAction, tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 // 20-07 MEDIA-01: the whole-reel reservation, called DIRECTLY (not via runMutation) so it lands in
 // the same serializable transaction as the proposed -> approved CAS. See its doc comment.
 import {
@@ -195,6 +195,18 @@ async function ensureThreadAndPlan(
  * different agent: an allow-listed one, which `runAgentLoop` makes structurally unable to dispatch a
  * specialist or author a skill. Folding it into the conversation action would put that distinction
  * behind an argument the caller could forget.
+ *
+ * `previewVersion` (27-09) EXISTS TO BREAK A DEADLOCK, and it is worth stating plainly because the
+ * shape looks like a debug affordance and is not. The pack activation gate requires browser
+ * evidence; browser evidence requires running the pack in a browser; running it requires an ACTIVE
+ * registry row — and no pack has one, by design, until the gate passes. Without a way to pin the
+ * candidate from the browser, `runSpecialistTurn` fails closed on `NO_ACTIVE_SKILL` and the gate can
+ * never be satisfied by anyone.
+ *
+ * It is OWNER-ONLY, checked server-side (`requireOwnerAction`), and checked ONLY when supplied —
+ * this action is every user's door to a pack, so an `ownerAction` wrapper would lock the product
+ * out of its own feature. A non-owner who sends the argument is REFUSED, not silently ignored:
+ * ignoring it would let the caller believe a candidate ran when the active row did.
  */
 export const startWorkflowPack = tenantAction({
   args: {
@@ -204,11 +216,17 @@ export const startWorkflowPack = tenantAction({
     text: v.string(),
     /** Pairs the run back to the recommendation card that offered it (27-09). */
     recommendationId: v.optional(v.string()),
+    /** OWNER-ONLY candidate pin (27-09). Absent ⇒ the active row, exactly as before. */
+    previewVersion: v.optional(v.number()),
   },
   handler: async (
     ctx,
-    { packId, threadId, text, recommendationId },
+    { packId, threadId, text, recommendationId, previewVersion },
   ): Promise<{ threadId: string; ok: boolean; outcome?: string }> => {
+    // BEFORE the thread, the plan row and the saved message: a refused preview must leave no trace
+    // of a turn that never ran. `requireOwnerAction` throws `OWNER_REQUIRED`.
+    if (previewVersion !== undefined) await requireOwnerAction(ctx);
+
     const { threadId: tid, planId } = await ensureThreadAndPlan(ctx, threadId, text);
     await cockpitAgent.saveMessage(ctx, { threadId: tid, prompt: text, skipEmbeddings: true });
 
@@ -237,6 +255,12 @@ export const startWorkflowPack = tenantAction({
         text,
         runId,
         ...(recommendationId === undefined ? {} : { recommendationId }),
+        // The registry NAME, derived — `resolveWorkflowPack` owns the id→name mapping and a second
+        // `pack-${packId}` literal here would be a second place for it to drift. An unknown id
+        // never reaches this line as a pin: the binding refuses it before the loop.
+        ...(previewVersion === undefined
+          ? {}
+          : { skillVersions: { [`pack-${packId}`]: previewVersion } }),
       });
       if (res.ok) {
         reply = res.reply;

@@ -3980,6 +3980,108 @@ describe("workflow-pack candidate lifecycle", () => {
     ).rejects.toThrow(/PACK_GATE.*eval/);
   });
 
+  // ── 27-09: the owner-facing deactivate ───────────────────────────────────────────────────────
+  //
+  // It exists because the ONLY dark path the registry had was `npx convex run skills:archiveSkill`,
+  // and one `convex run` against the local deployment signs the browser out (measured, recorded in
+  // `apps/web/e2e/README.md`). An owner watching a pack misbehave must not have to choose between
+  // turning it off and staying signed in.
+  describe("deactivatePack", () => {
+    /** An owner-authenticated client. `ownerMutation` reads `users.owner === true` and nothing else. */
+    const asOwner = async (t: TestConvex<typeof schema>, owner = true) => {
+      const userId = await t.run((ctx) => ctx.db.insert("users", { owner }));
+      return t.withIdentity({ subject: userId });
+    };
+
+    const activate = async (t: TestConvex<typeof schema>, version: number) =>
+      t.run(async (ctx) => {
+        const row = await ctx.db
+          .query("skills")
+          .withIndex("by_name_version", (q) => q.eq("name", PACK).eq("version", version))
+          .unique();
+        if (row === null) throw new Error("row missing");
+        await ctx.db.patch(row._id, { status: "active" });
+      });
+
+    test("an owner archives the active pack row and nothing else about it moves", async () => {
+      const t = convexTest(schema, modules);
+      await t.mutation(internal.skills.publishPackCandidate, {
+        name: PACK,
+        body: "# b",
+        provenance: provenanceFor(1),
+      });
+      await activate(t, 1);
+      const before = (await packRows(t))[0];
+
+      const out = await (await asOwner(t)).mutation(api.skills.deactivatePack, { name: PACK });
+      expect(out).toEqual({ name: PACK, deactivated: true, version: 1 });
+
+      const after = (await packRows(t))[0];
+      expect(after?.status).toBe("archived");
+      // The body and the provenance are what a version IS. Deactivation is a STATUS flip; a
+      // deactivate that could touch either would make "archived" a different skill than the one
+      // that was reviewed.
+      expect(after?.body).toBe(before?.body);
+      expect(after?.provenance).toBe(before?.provenance);
+      expect(after?.version).toBe(before?.version);
+      // And it is genuinely dark: ordinary discovery reads the ACTIVE row.
+      await expect(t.run((ctx) => loadSkill(ctx, PACK))).rejects.toThrow();
+    });
+
+    // Idempotent: an owner clicking twice during an incident must not see a failure.
+    test("deactivating with nothing active is a no-op, not an error", async () => {
+      const t = convexTest(schema, modules);
+      await t.mutation(internal.skills.publishPackCandidate, {
+        name: PACK,
+        body: "# b",
+        provenance: provenanceFor(1),
+      });
+      const owner = await asOwner(t);
+      expect(await owner.mutation(api.skills.deactivatePack, { name: PACK })).toEqual({
+        name: PACK,
+        deactivated: false,
+        version: null,
+      });
+      // The candidate is untouched — deactivate must never reach a row that was never live.
+      expect((await packRows(t))[0]?.status).toBe("candidate");
+    });
+
+    // THE TRUST BOUNDARY, asserted from the direction that would actually break it.
+    test("a non-owner and an anonymous caller are both refused", async () => {
+      const t = convexTest(schema, modules);
+      await t.mutation(internal.skills.publishPackCandidate, {
+        name: PACK,
+        body: "# b",
+        provenance: provenanceFor(1),
+      });
+      await activate(t, 1);
+
+      await expect(
+        (await asOwner(t, false)).mutation(api.skills.deactivatePack, { name: PACK }),
+      ).rejects.toThrow(/OWNER_REQUIRED/);
+      await expect(t.mutation(api.skills.deactivatePack, { name: PACK })).rejects.toThrow();
+      // Still live — a refused call must change nothing.
+      expect((await packRows(t))[0]?.status).toBe("active");
+    });
+
+    // NARROW BY DESIGN. Every other gated skill rolls back THROUGH a prior version; turning the
+    // cockpit agent dark from a browser button is a different and much larger decision.
+    test("it refuses any name that is not a workflow pack", async () => {
+      const t = convexTest(schema, modules);
+      await t.mutation(internal.skills.seedSkills, {});
+      const owner = await asOwner(t);
+
+      for (const name of [COCKPIT_AGENT_SKILL, "not-a-skill-at-all"]) {
+        await expect(
+          owner.mutation(api.skills.deactivatePack, { name }),
+          `${name} was accepted by the pack deactivate`,
+        ).rejects.toThrow(/NOT_A_PACK/);
+      }
+      // The cockpit agent is still active — the refusal happened before any patch.
+      expect((await t.run((ctx) => loadSkill(ctx, COCKPIT_AGENT_SKILL))).version).toBeGreaterThan(0);
+    });
+  });
+
   // THE ROLLBACK EXEMPTION, preserved. A version that was active before is exempt BY STATUS —
   // rollback must work mid-incident and must never be blocked by a broken eval or browser harness.
   test("rollback to a previously-active pack version needs no evidence at all", async () => {

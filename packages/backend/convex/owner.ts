@@ -7,7 +7,7 @@
 
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalMutation } from "./_generated/server";
+import { internalMutation, internalQuery } from "./_generated/server";
 import { tenantQuery } from "./lib/functions";
 
 /**
@@ -29,6 +29,24 @@ export const viewer = tenantQuery({
     const user = await ctx.db.get(ctx.userId);
     return { isOwner: user?.owner === true };
   },
+});
+
+/**
+ * The owner check an ACTION can make (27-09). Actions have no `ctx.db`, which is why
+ * `lib/functions.ts` carried "there is deliberately no `ownerAction`" until this shipped — the
+ * resolution is not to weaken the check but to move the ROW READ into a query the action calls.
+ *
+ * Same rule as `requireOwner`, byte for byte: exact `true` only, so an absent field, an explicit
+ * `false` and an orphan identity whose row no longer exists all read as NOT owner. It takes an
+ * exact `users._id` and never resolves an identity itself — the caller's wrapper does that once,
+ * from the authenticated session, so this cannot be handed a userId a model chose.
+ *
+ * `internalQuery`, so it is not client-callable: the browser-facing boolean is `viewer`, which is
+ * presentation support and says so. This one is the trust boundary's read half.
+ */
+export const ownsDeployment = internalQuery({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => ({ isOwner: (await ctx.db.get(userId))?.owner === true }),
 });
 
 /**

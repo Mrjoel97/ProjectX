@@ -1014,6 +1014,46 @@ export const inspectPackCandidates = internalQuery({
 });
 
 /**
+ * TURN A PACK OFF, from the product, as the owner (27-09).
+ *
+ * WHY THIS EXISTS RATHER THAN `npx convex run skills:archiveSkill`. That is the only dark path the
+ * registry had, and it is an operator command — which on this stack has a measured side effect that
+ * makes it unusable mid-incident and unusable mid-drill: **one `convex run` against the local
+ * deployment kills the browser's saved `storageState` and the next navigation lands on `/signin`**
+ * (`apps/web/e2e/README.md`, 2026-08-14). An owner watching a pack misbehave should not have to
+ * choose between turning it off and staying signed in.
+ *
+ * SCOPE IS DELIBERATELY NARROW — packs only, `isWorkflowPackSkill`. This is not a general
+ * "deactivate any skill" surface: every other gated skill has a rollback story that goes THROUGH a
+ * prior version (`activateSkill`), and turning the cockpit agent dark from a browser button is a
+ * different, much larger decision than turning off a pilot workflow.
+ *
+ * `ownerMutation`, so the check is the same trust boundary `requireOwner` enforces everywhere else
+ * — not a hidden control. It patches `status` and NOTHING else: `status` is one of the two
+ * sanctioned patchable fields, the body stays immutable, and the archived row keeps its provenance
+ * and evidence so the decision remains auditable.
+ *
+ * Idempotent: no active row is `{ deactivated: false }`, not an error. An owner clicking twice
+ * during an incident must not see a failure.
+ */
+export const deactivatePack = ownerMutation({
+  args: { name: v.string() },
+  handler: async (ctx, { name }) => {
+    if (!isWorkflowPackSkill(name)) {
+      throw new Error(`${NOT_A_PACK_ERROR}: ${name} is not a workflow pack`);
+    }
+    const active = await ctx.db
+      .query("skills")
+      .withIndex("by_name_status", (q) => q.eq("name", name).eq("status", "active"))
+      .unique();
+    if (active === null) return { name, deactivated: false, version: null };
+
+    await ctx.db.patch(active._id, { status: "archived" });
+    return { name, deactivated: true, version: active.version };
+  },
+});
+
+/**
  * Record a passing browser gate on the exact (name, version) row (27-09). The second evidence
  * plane, written the way `recordEvalEvidence` writes the first — `browserEvidence` is a patchable
  * field because it is recorded ABOUT a row after the fact, unlike `provenance`, which is part of

@@ -15,9 +15,17 @@ import {
   customMutation,
   customQuery,
 } from "convex-helpers/server/customFunctions";
+import { internal } from "../_generated/api";
 // This is the ONLY sanctioned raw-builder import site (biome noRestrictedImports
 // is turned off for this file via an override in biome.json).
-import { action, type MutationCtx, mutation, type QueryCtx, query } from "../_generated/server";
+import {
+  type ActionCtx,
+  action,
+  type MutationCtx,
+  mutation,
+  type QueryCtx,
+  query,
+} from "../_generated/server";
 
 /**
  * Resolve the caller's scope from the authenticated identity. Fails closed:
@@ -47,8 +55,12 @@ async function requireScope(ctx: Parameters<typeof getAuthUserId>[0]) {
  * whose row no longer exists, and an unauthenticated caller all fail closed.
  *
  * This is the TRUST BOUNDARY. Hiding a control in the UI is presentation only — every
- * admin-ish public function must start here. There is deliberately no `ownerAction`:
- * an action has no `ctx.db`, so it cannot read the row this check depends on.
+ * admin-ish public function must start here.
+ *
+ * 27-09 CORRECTED THIS COMMENT. It used to end "there is deliberately no `ownerAction`: an action
+ * has no `ctx.db`, so it cannot read the row this check depends on." True about `ctx.db`, wrong as
+ * a conclusion — and the gap it left is what made the pack candidate preview reach for an ad-hoc
+ * check in one handler. An action reads the row through a query instead; see `requireOwnerAction`.
  */
 export async function requireOwner(ctx: QueryCtx | MutationCtx) {
   const scope = await requireScope(ctx);
@@ -73,8 +85,34 @@ export const tenantMutation = customMutation(mutation, customCtx(requireScope));
  */
 export const tenantAction = customAction(action, customCtx(requireScope));
 
+/**
+ * The ACTION half of the owner primitive (27-09). Identical rule to `requireOwner` — exact
+ * `owner === true`, everything else fails closed — but the row read happens in
+ * `owner.ownsDeployment`, an `internalQuery`, because an action has no `ctx.db`.
+ *
+ * Exported as a FUNCTION as well as a builder because the first real consumer is CONDITIONAL:
+ * `cockpit.startWorkflowPack` is a `tenantAction` every user calls, and only the optional
+ * candidate-preview pin is owner-gated. Wrapping the whole action would lock every user out of
+ * running a pack at all. A whole-action owner surface should use `ownerAction` below.
+ */
+export async function requireOwnerAction(ctx: ActionCtx) {
+  const scope = await requireScope(ctx);
+  const { isOwner } = await ctx.runQuery(internal.owner.ownsDeployment, { userId: scope.userId });
+  if (!isOwner) throw new Error("OWNER_REQUIRED");
+  return scope;
+}
+
 /** Owner-only query builder. Rejects a non-owner BEFORE the handler reads anything. */
 export const ownerQuery = customQuery(query, customCtx(requireOwner));
 
 /** Owner-only mutation builder. Rejects a non-owner BEFORE the handler writes anything. */
 export const ownerMutation = customMutation(mutation, customCtx(requireOwner));
+
+/**
+ * Owner-only action builder. Rejects a non-owner BEFORE the handler runs anything.
+ *
+ * It exists for SYMMETRY with `ownerQuery`/`ownerMutation`, and the asymmetry was not free: having
+ * two of the three is exactly why the pack preview had nowhere to put its check. A future
+ * owner-only action must use this rather than re-deriving the rule in a handler.
+ */
+export const ownerAction = customAction(action, customCtx(requireOwnerAction));

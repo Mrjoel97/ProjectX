@@ -1,5 +1,23 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-23 (27-09 — **`deactivatePack`: the registry finally has an owner-facing
+> way to turn something OFF.** Until now the only dark path was `npx convex run skills:archiveSkill`,
+> an operator command with a measured side effect that makes it unusable exactly when it is needed:
+> **one `convex run` against the local deployment kills the browser session and the next navigation
+> lands on `/signin`** (`apps/web/e2e/README.md`). An owner watching a pack misbehave should not have
+> to choose between turning it off and staying signed in — and a rollback drill cannot interleave
+> `convex run` with navigation at all.
+>
+> **Scope is deliberately narrow: workflow packs only** (`isWorkflowPackSkill`). This is NOT a
+> general "deactivate any skill" surface. Every other gated skill rolls back THROUGH a prior version
+> via `activateSkill`, and turning the cockpit agent dark from a browser button is a different and
+> much larger decision. A non-pack name is refused with `NOT_A_PACK` before any patch.
+>
+> It is an `ownerMutation` — the same trust boundary, not a hidden control — patches `status` and
+> nothing else, and is idempotent (`{ deactivated: false }` when nothing is active, because an owner
+> clicking twice during an incident must not see a failure). The archived row keeps its body,
+> provenance and evidence, so the decision stays auditable and the version stays immutable.)
+
 > Last verified: 2026-08-23 (27-08 — **PROVENANCE IS FINAL AND THE SIX CANDIDATES HAVE A PUBLISHER.**
 > `manifest.json` now pins all six adapted bodies and
 > `node scripts/verify-knowledge-work-provenance.mjs --check` is the gate that keeps it honest:

@@ -1,3 +1,33 @@
+> Last verified: 2026-08-23 (27-09 — **`startWorkflowPack` GAINED AN OWNER-ONLY `previewVersion`,
+> AND IT EXISTS TO BREAK A DEADLOCK.** The shape looks like a debug affordance and is not: the pack
+> activation gate requires browser evidence, browser evidence requires running the pack in a
+> browser, and running it requires an ACTIVE registry row — which no pack has, by design, until the
+> gate passes. `runSpecialistTurn` fails closed on `NO_ACTIVE_SKILL`, so without a way to pin the
+> candidate from the browser the gate could never be satisfied by anyone.
+>
+> Three properties, each of which is a real way to get this wrong:
+>
+> - **Owner-only, server-side.** `requireOwnerAction` (see `authorization.md`), not a hidden button.
+> - **Checked only when SUPPLIED.** This action is every user's door to a pack; an `ownerAction`
+>   wrapper would lock the product out of its own feature.
+> - **Refused, never ignored.** A non-owner who sends the argument gets `OWNER_REQUIRED`. Silently
+>   dropping it would run the ACTIVE row while the caller believed a candidate ran — which is the
+>   exact confusion the pin exists to prevent.
+>
+> The check runs BEFORE `ensureThreadAndPlan` and before the message is saved, so a refused preview
+> leaves no thread, no plan row and no pack event. Moving it later reddens a test on purpose.
+>
+> **The pin is keyed by REGISTRY NAME** (`pack-${packId}`), derived at the call site rather than
+> hand-typed, because `runSpecialistTurn` loads by name — a pin keyed on the bare pack id would be
+> accepted by the validator and then silently ignored by the loader. A source-scan test holds that
+> call site, because `startWorkflowPack -> runWorkflowPack` is the one link the binding's own suite
+> cannot see, and an argument that stops at the action is the clock-plane-dead-in-production defect.
+>
+> **KNOWN GAP, bounded and stated:** the pack path still sends no `clientContext`, so `briefInbox`
+> buckets its 7-day window in UTC rather than the owner's zone (`llm.ts` documents that degradation
+> as cosmetic and it is the only granted pack tool that reads a clock — `replyToMessage` does not).
+> Threading a clock would mean changing `runSpecialistTurn`'s signature, which is out of scope here.)
+
 > Last verified: 2026-08-23 (27-07 — **A SECOND ENTRY POINT ON THE SAME DRIVER.**
 > `cockpit.startWorkflowPack` is `sendCockpitMessage`'s shape with ONE substitution: it drives
 > `internal.workflowPackBinding.runWorkflowPack` (the governed loop under a pack's code-owned tool

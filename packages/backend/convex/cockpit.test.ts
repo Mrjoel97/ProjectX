@@ -2133,3 +2133,86 @@ describe("executePlan finance_write arm", () => {
     expect(await t.run((ctx) => ctx.db.query("audit").collect())).toHaveLength(0);
   });
 });
+
+// ── 27-09: the OWNER-ONLY candidate preview pin on startWorkflowPack ─────────────────────────────
+//
+// It exists to break a deadlock, not as a debug affordance. The pack activation gate requires
+// browser evidence, browser evidence requires running the pack in a browser, and running it
+// requires an ACTIVE registry row — which no pack has, by design, until the gate passes. Pinning
+// the candidate from the browser is the only way anyone can ever satisfy it.
+//
+// That makes it authorization surface on the product's own hot path, so it is tested from the
+// direction that would break it: a non-owner must be REFUSED, not quietly downgraded to the active
+// row, and the refusal must leave nothing behind.
+describe("startWorkflowPack candidate preview (27-09)", () => {
+  const PACK_ID = "brand-review";
+
+  const seedUser = (t: ReturnType<typeof convexTest>, owner: boolean) =>
+    t.run((ctx) => ctx.db.insert("users", { owner }));
+
+  test("a non-owner supplying a preview version is REFUSED, and leaves no thread or plan", async () => {
+    const t = convexTest(schema, modules);
+    const userId = await seedUser(t, false);
+
+    await expect(
+      t.withIdentity({ subject: userId }).action(api.cockpit.startWorkflowPack, {
+        packId: PACK_ID,
+        text: "review this tagline",
+        previewVersion: 1,
+      }),
+    ).rejects.toThrow(/OWNER_REQUIRED/);
+
+    // The check runs BEFORE `ensureThreadAndPlan` and before the message is saved. A refused
+    // preview that still minted a plan row would leave a turn that never ran looking like one that
+    // did — and `plans` is what the approval surface reads.
+    expect(await t.run((ctx) => ctx.db.query("plans").collect())).toEqual([]);
+    expect(await t.run((ctx) => ctx.db.query("workflowPackEvents").collect())).toEqual([]);
+  });
+
+  // Silently ignoring the argument would be worse than refusing it: the owner would believe a
+  // candidate ran when the ACTIVE row did — which is the whole failure the pin exists to prevent.
+  test("the refusal is explicit — a non-owner's pack run is not downgraded to the active row", async () => {
+    const t = convexTest(schema, modules);
+    const userId = await seedUser(t, false);
+    const asUser = t.withIdentity({ subject: userId });
+
+    await expect(
+      asUser.action(api.cockpit.startWorkflowPack, {
+        packId: PACK_ID,
+        text: "review this tagline",
+        previewVersion: 1,
+      }),
+    ).rejects.toThrow(/OWNER_REQUIRED/);
+  });
+
+  // An unauthenticated caller never reaches the owner check — `tenantAction` fails closed first.
+  test("an anonymous caller is refused before any owner read", async () => {
+    const t = convexTest(schema, modules);
+    await expect(
+      t.action(api.cockpit.startWorkflowPack, { packId: PACK_ID, text: "x", previewVersion: 1 }),
+    ).rejects.toThrow();
+  });
+
+  // THE THREAD ITSELF. `previewVersion` reaching `startWorkflowPack` and stopping there is the
+  // clock-plane-dead-in-production defect: a cockpit argument that satisfies every unit test while
+  // the loop never receives it. `runWorkflowPack`'s own `skillVersions` handling is covered by
+  // `workflowPackBinding.test.ts`; the ONE link those tests cannot see is this call site, so it is
+  // asserted against the source — the `workflowPacks.test.ts` cross-module scan idiom.
+  test("the pin is actually forwarded to the binding, keyed by registry name", () => {
+    const src = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "cockpit.ts"),
+      "utf8",
+    ).replace(/\r\n/g, "\n");
+    const call = /internal\.workflowPackBinding\.runWorkflowPack,\s*\{([\s\S]*?)\n {6}\}\)/.exec(
+      src,
+    );
+    expect(call, "the runWorkflowPack call site was not found — did it move?").not.toBe(null);
+    const args = call?.[1] ?? "";
+    expect(args).toContain("skillVersions");
+    // Keyed by `pack-${packId}`, derived rather than hand-typed: the binding loads the registry row
+    // by NAME, so a pin keyed on the bare pack id would be silently ignored by `runSpecialistTurn`.
+    expect(args).toContain("`pack-${packId}`");
+    // And it is spread away when absent, so every pre-27-09 caller is byte-identical.
+    expect(args).toContain("previewVersion === undefined");
+  });
+});

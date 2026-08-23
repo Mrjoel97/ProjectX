@@ -1,5 +1,32 @@
 # Playbook: Authorization (tenancy + ownership)
 
+> Last verified: 2026-08-23 (27-09 — **`ownerAction` NOW EXISTS, AND THE COMMENT SAYING IT
+> DELIBERATELY DID NOT WAS WRONG.** It read: "there is deliberately no `ownerAction`: an action has
+> no `ctx.db`, so it cannot read the row this check depends on." The premise is true; the conclusion
+> was not. An action reads the row through a query — `owner.ownsDeployment`, an `internalQuery`
+> applying the SAME `owner === true` rule, with absence, an explicit `false` and an orphan identity
+> all failing closed exactly as `requireOwner` does.
+>
+> **The asymmetry was not free.** Having `ownerQuery` and `ownerMutation` but no action sibling is
+> precisely why the pack candidate preview had nowhere to put its check, and an ad-hoc check in one
+> handler is how an authorization rule starts drifting from the primitive. Two surfaces ship:
+>
+> - `requireOwnerAction(ctx)` — the FUNCTION, for a CONDITIONAL gate. Its first consumer is
+>   `cockpit.startWorkflowPack`, a `tenantAction` every user calls where only the optional
+>   owner-preview pin is gated. Wrapping that whole action would lock every user out of running a
+>   pack at all, which is why the function is exported and not only the builder.
+> - `ownerAction` — the BUILDER, for a whole action that is owner-only. Use this rather than
+>   re-deriving the rule in a handler.
+>
+> `owner.viewer` is unchanged and still says what it is: presentation support, never the trust
+> boundary. `ownsDeployment` is the trust boundary's read half and is `internalQuery`, so it is not
+> client-callable; it takes an exact `users._id` and never resolves an identity itself, so it cannot
+> be handed a userId that a caller or a model chose.
+>
+> **Mutation-proven, not asserted:** deleting the gate from `startWorkflowPack` reddens two tests,
+> and MOVING it after the thread/plan creation reddens too — a refused preview must leave no plan
+> row behind, because `plans` is what the approval surface reads.)
+
 > Last verified: 2026-08-22 (26-14 — **the /ops gate-decision tile read a key the backend never
 > wrote.** No authorization boundary changed: the owner-only mount rule, the `ownerQuery` refusals
 > and the `deadLetters:listAll` subscription guard are all untouched, and `opsPresentation.test.ts`
