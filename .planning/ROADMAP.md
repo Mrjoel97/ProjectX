@@ -130,7 +130,7 @@ Plans:
 - [x] 27-05-PLAN.md — Complaint Response and Sales Call Prep adaptations/evals (Wave 2)
 - [x] 27-06-PLAN.md — Process/SOP and Brand Review adaptations/evals (Wave 2)
 - [x] 27-07-PLAN.md — Executive Agent runtime and real terminal-event integration (Wave 3)
-- [ ] 27-08-PLAN.md — Final provenance/parity, candidate publication and exact-version evals (Wave 4)
+- [~] 27-08-PLAN.md — Final provenance/parity, candidate publication and exact-version evals (Wave 4) — PARTIAL: provenance final + six DEV candidates published; the six paid eval runs are blocked on an exhausted OpenAI balance
 - [ ] 27-09-PLAN.md — Authenticated browser evidence, owner gate, activation and rollback (Wave 5)
 
 ### Phase 28: Connector-Backed Revenue Pack
