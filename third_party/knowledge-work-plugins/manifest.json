@@ -43,7 +43,7 @@
       "upstreamPluginRoot": "small-business",
       "governingLicense": "LICENSE",
       "adaptedDestination": "packages/contracts/skills/pack-business-pulse.md",
-      "adaptedBodySha256": "9a28d1a047ff5511ce8d4f7a877c30d5c8fb2e75c8e1c895602fafc4cd4b19a4",
+      "adaptedBodySha256": "7d0c9b03b1ca6f4e0ad408f79a4d60acdbd440663d5ab7d2ec6668a3ab58eea0",
       "plannedModifications": "Connector sections (QuickBooks/PayPal/Square/HubSpot) removed: those sources are MISSING in Pikar and are named to the user instead. Output is an in-thread briefing, not a saved report.",
       "files": [
         {

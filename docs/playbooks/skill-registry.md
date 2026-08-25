@@ -1,5 +1,48 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-25 (**`pack-business-pulse` v2 — THE BODY NEVER TOLD THE MODEL TO CALL ITS
+> TOOLS, AND ITS OWN OUTPUT CONTRACT DEPENDED ON IT.**
+>
+> business-pulse case 02 (`no-figures-at-all`) failed `operation:ground-in-vault` with `got []` —
+> ZERO tools called — **3/3 on ox-alpha and again on gemini-3.5-flash-lite**. A stable-fail on two
+> unrelated models is a defect, not a model, which is exactly the call `--repeat` was added to make.
+>
+> THE DEFECT: unlike `pack-customer-complaint`, this body has NO procedure section — only "What you
+> can actually read / CANNOT read / Output contract / Never". It says "You have exactly two tools. Use
+> them; there are no others" and then never says to actually call them. Handed a preflight that
+> declares `finance-inputs` unavailable, the model wrote the whole report from the preflight alone.
+>
+> **THE CONTRACT ALREADY REQUIRED THE SEARCH, WHICH IS WHY THE FIXTURE WAS RIGHT.** Section 1 says "If
+> the owner has entered no figures AND THE VAULT HOLDS NOTHING RELEVANT, say exactly that" — a claim
+> about what was SEARCHED, which cannot be made honestly without looking. Section 3 must be "drawn
+> only from what you could read". The body demanded a grounded answer and omitted the step that
+> grounds it.
+>
+> FIXED by adding one paragraph to "What you can actually read": call both tools before writing, every
+> time, because "no figures entered" and "no figures and nothing in your documents either" are
+> different findings and the owner cannot be told which is true without looking.
+>
+> **THE FULL PROVENANCE CHAIN MOVED TOGETHER**, and it is four artefacts, not one: the canonical
+> `.md`; the AUTO-DERIVED `packBusinessPulse.ts` constant (regenerated, byte-identical LF, same
+> single-quote style — there is NO generator script, it is hand-maintained and byte-asserted by
+> `skillBodies.test.ts`); `bodySha256` in the code-owned `knowledgeWorkProvenance.ts` mirror; and
+> `adaptedBodySha256` in `third_party/.../manifest.json`, which is the authority. `9a28d1a047ff` ->
+> `7d0c9b03b1ca` in both hash sites. `verify-knowledge-work-provenance.mjs --check` and the contracts
+> suite (93 tests) both green. `seedPackCandidates` then minted **v2 for business-pulse ONLY** — every
+> other pack stayed at v1, which is the `(body, provenance)` version identity behaving as documented.
+>
+> **VERIFIED ONCE, NOT STABLE-VERIFIED, AND THE FIX HAS A COST.** Case 02 PASSED on v2 (56.3 s). But
+> v2 runs 28.8-56.3 s per case against v1's 15-22 s — roughly double, which is what an extra tool call
+> costs — and that pushes individual calls past `CALL_TIMEOUT_MS` (45 s) on the current fallback model.
+> Three `--repeat` runs and one plain run all ABORTED with `agent_timeout` before finishing the pack.
+>
+> **SO THE DEFECT IS FIXED AND THE PACK IS NOT YET CERTIFIABLE** — it is now blocked by the
+> pre-existing wall-clock decision (docs/playbooks/workflow-packs.md), not by this case. Do not read
+> the single PASS as a stable result; re-measure with `--repeat 3` once the timeout question is
+> settled or a faster primary is funded. The `--repeat` guard reported this correctly rather than
+> summarising a partial batch: "every one of the 3 runs aborted — that is an environment or
+> model-availability problem, not a stability measurement".)
+
 > Last verified: 2026-08-25 (**`PACK_EVAL_SUITE` REVISION AND FOUR `casesHash` VALUES MOVED** —
 > `revision` `2026-08-23.phase27` → `2026-08-25.phase27`, and the hashes for `pack-business-pulse`,
 > `pack-customer-complaint`, `pack-process-sop` and `pack-brand-review` recomputed.

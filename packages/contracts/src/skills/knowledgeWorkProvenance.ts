@@ -49,7 +49,7 @@ export const KNOWLEDGE_WORK_PROVENANCE: Readonly<Record<string, KnowledgeWorkPro
       "small-business/skills/business-pulse/reference/output_template.md",
       "small-business/skills/business-pulse/reference/thresholds.md",
     ],
-    bodySha256: "9a28d1a047ff5511ce8d4f7a877c30d5c8fb2e75c8e1c895602fafc4cd4b19a4",
+    bodySha256: "7d0c9b03b1ca6f4e0ad408f79a4d60acdbd440663d5ab7d2ec6668a3ab58eea0",
     license: "Apache-2.0",
     modificationNotice:
       "Connector sections (QuickBooks/PayPal/Square/HubSpot) removed: those sources are MISSING in Pikar and are named to the user instead. Output is an in-thread briefing, not a saved report.",
