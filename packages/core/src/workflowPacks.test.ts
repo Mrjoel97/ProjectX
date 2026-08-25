@@ -6,6 +6,7 @@ import {
   isWorkflowPackSkill,
   LEAF_FORBIDDEN_OPERATIONS,
   MISSING_PACK_SOURCES,
+  MISSING_SOURCE_MENTIONS,
   MISSING_SOURCE_UNLOCK,
   PACK_SOURCE_LABEL,
   PACK_SOURCE_PROBE_STATES,
@@ -577,6 +578,67 @@ test("every granted tool is taught in its pack's canonical body, for each body t
       expect(
         body.includes(tool),
         `pack-${id}.md never mentions \`${tool}\`, which it is granted — a withheld tool by omission`,
+      ).toBe(true);
+    }
+  }
+});
+
+// THE PHRASE TABLE MUST SPEAK EACH BODY'S OWN LANGUAGE (2026-08-25).
+//
+// `MISSING_SOURCE_MENTIONS` is the ONLY prose-shaped assertion in the pack eval gate, and it is
+// matched as a case-insensitive SUBSTRING against what the model wrote. The model's vocabulary comes
+// from its body. So if a body teaches one wording for a gap and this table lists another, the eval
+// fails a run that did exactly what it was told — which is what happened: `missingNamed:crm-facts`
+// reddened 3 of 5 customer-complaint cases on TWO unrelated models before the table was widened.
+//
+// This test closes that loop by construction. It asserts the pack's own body contains at least one
+// accepted phrase for each source the matrix calls missing for that pack — so a body edit that
+// rephrases a gap, or a new pack whose author writes naturally, reddens HERE rather than as a
+// mystery eval failure that reads like a model defect.
+//
+// It checks the BODY, not a model reply: the body is the thing under our control, and a body that
+// cannot express its own gaps in accepted words cannot be rescued by a better model.
+test("every pack body can name its missing sources in words the eval accepts", () => {
+  const bodyFor = (id: WorkflowPackId) =>
+    new URL(`../../contracts/skills/pack-${id}.md`, import.meta.url);
+  // SCOPED TO THE GAP SECTION, NOT THE WHOLE BODY — and this correction is the point of the test.
+  // The first version matched the whole file and was VACUOUS: pack-customer-complaint.md contains
+  // "a CRM" (describing what a human rep can do) and "the contact record" (in "Never write to the
+  // contact record"), so it passed on two mentions that are not the gap statement at all, while the
+  // gap statement itself used none of the accepted words. Proven by mutation: removing the widened
+  // phrases left the whole-body version GREEN.
+  //
+  // The section that teaches the model how to WORD a gap is the one that must contain the wording.
+  const gapSection = (body: string): string | null => {
+    const start = body.search(/^## what you cannot (read|do)/im);
+    if (start === -1) return null;
+    const rest = body.slice(start);
+    const next = rest.slice(1).search(/^## /m);
+    return next === -1 ? rest : rest.slice(0, next + 1);
+  };
+  for (const id of WORKFLOW_PACK_IDS.filter((p) => existsSync(bodyFor(p)))) {
+    const raw = readFileSync(bodyFor(id), "utf8");
+    const section = gapSection(raw);
+    const missing = WORKFLOW_PACKS[id].operations
+      .filter((op) => op.state === "missing" && op.reads !== null)
+      .map((op) => op.reads as keyof typeof MISSING_SOURCE_MENTIONS);
+    if (missing.length > 0)
+      expect(
+        section !== null,
+        `pack-${id}.md has no "## What you CANNOT read/do, and must say so" section, but the matrix ` +
+          `says ${[...new Set(missing)].join(", ")} is missing for this pack. The model is never ` +
+          `taught to name the gap, so \`missingNamed\` can only fail.`,
+      ).toBe(true);
+    const body = (section ?? "").toLowerCase();
+    for (const source of new Set(missing)) {
+      const phrases = MISSING_SOURCE_MENTIONS[source] ?? [];
+      expect(
+        phrases.some((phrase) => body.includes(phrase.toLowerCase())),
+        `pack-${id}.md's gap section never uses ANY phrase MISSING_SOURCE_MENTIONS accepts for ` +
+          `"${source}" ` +
+          `(${phrases.join(" | ")}). The body teaches the model how to word this gap, so the eval ` +
+          `will fail a run that followed its instructions. Widen the phrase list to the body's own ` +
+          `wording — never narrow the body to the list, and never add a phrase the body FORBIDS.`,
       ).toBe(true);
     }
   }

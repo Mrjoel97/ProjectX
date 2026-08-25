@@ -604,10 +604,14 @@ export const PACK_EVAL_RUNNER = "eval:pack";
  * they equal these, so a fixture edit reddens a test rather than silently invalidating a gate.
  */
 export const PACK_EVAL_SUITE = {
-  revision: "2026-08-23.phase27",
+  // Bumped 2026-08-25: 11 of the 30 fixtures had an `expect.outcome` no run of their pack could
+  // produce, and correcting them changes four fixture files. A revision bump retires every pack
+  // evidence row written against the old corpus — correct here, and cheap, because no pack was ever
+  // activated and no passing pack evidence exists to invalidate.
+  revision: "2026-08-25.phase27",
   packs: {
     "pack-business-pulse": {
-      casesHash: "9b272f2b2dd5835faabba4030008a8eadbc243c201f8ffe3c4abe4a99a9b92d0",
+      casesHash: "cc7c6bcadf3bbc52c2020ec2e1821e5a1aae4237140e22b7d6d9688ffee3f958",
       caseCount: 5,
     },
     "pack-campaign-plan": {
@@ -615,7 +619,7 @@ export const PACK_EVAL_SUITE = {
       caseCount: 5,
     },
     "pack-customer-complaint": {
-      casesHash: "d67fcfeee41f7f17edda2962371f80a4f386e85751eafcd88f0904acc72975eb",
+      casesHash: "d18a9d2564dcaab5438f3e041ebd9923eb8057b1373a8f8b2b1078b61cb46faa",
       caseCount: 5,
     },
     "pack-sales-call-prep": {
@@ -623,11 +627,11 @@ export const PACK_EVAL_SUITE = {
       caseCount: 5,
     },
     "pack-process-sop": {
-      casesHash: "0138add4a16d3de4649ec900b5cde2cd1ce6fc471c9c41a471c0ba8becb9f4b8",
+      casesHash: "6afe979e22f54b2fc34becf7c07f33786fd4febcaedd05ea582ea940d625ecb2",
       caseCount: 5,
     },
     "pack-brand-review": {
-      casesHash: "2db8fef128eebf32f21858afc52b483bf8dd9860b854100fabb32a1f62ab2165",
+      casesHash: "4efad67b617442ddaf4c0ab00bf154bdb1672d9f81861abb586541e381956a2a",
       caseCount: 5,
     },
   },

@@ -27,6 +27,32 @@ export const GEMINI_CHEAP_MODEL = "google/gemini-3.5-flash-lite";
 export const OPENAI_DEFAULT_MODEL = "openai/gpt-4o-mini";
 export const OPENAI_CHEAP_MODEL = "openai/gpt-4.1-nano";
 
+// **OX-ALPHA TRIAL, 2026-08-24 (owner decision).** A stealth model on OpenRouter: 1M context,
+// $0 in and out during its preview, OpenAI-wire-compatible so `resolveModel` reaches it through the
+// ALREADY-INSTALLED @ai-sdk/openai with a different baseURL — no new dependency.
+//
+// WHY IT IS HERE AT ALL: the dev OpenAI key returns `credit_balance_exhausted`, which is what blocks
+// 27-08's six paid pack evals and therefore 27-09's activation. A $0 model unblocks the gate without
+// a top-up. That is the whole reason — not a benchmark preference.
+//
+// THREE PROPERTIES OF THIS ID THAT ARE NOT LIKE THE OTHERS, all deliberate:
+//   • **The PRICING row below is 0/0, and that is CORRECT, not a missing row.** `priceUsage` returns
+//     ok(0) rather than Err(unknown_model), so spend telemetry reads $0.00 honestly. The daily rail
+//     still throttles: `chooseModel` floors every request at `Math.max(1, …)` = 1 cent.
+//   • **GRDL-03's downgrade goes DORMANT while this is the default.** `chooseModel` tries
+//     [DEFAULT_MODEL, CHEAP_MODEL] in order and a free model always fits, so it never reaches the
+//     cheap pin. cost.test.ts records this as the live behaviour rather than asserting a downgrade
+//     that can no longer happen.
+//   • **It can be withdrawn without notice** (OpenRouter Stealth EULA), and its prompts are RETAINED
+//     and shared with an anonymous provider "to train, evaluate, and improve" the model. Eval
+//     fixtures are synthetic, so the trial is clean; moving TENANT traffic onto it is a separate
+//     §4 decision that has NOT been taken.
+//
+// Reverting is the two-line edit this file keeps promising: point DEFAULT_MODEL and RESEARCH_MODEL
+// back at their OPENAI_ ids. The PRICING row stays either way — a stale row cannot mis-bill a model
+// nothing selects, but a missing one silently under-draws the moment something does.
+export const OX_ALPHA_MODEL = "stealth/ox-alpha";
+
 // Aliases, deliberately — NOT second string literals. Two literals spelling the same model is how a
 // PRICING row and a pin drift apart, and `PRICING` is keyed by computed property, so duplicate
 // literals would silently collapse into one entry and hide the drift.
@@ -39,6 +65,29 @@ export const OPENAI_CHEAP_MODEL = "openai/gpt-4.1-nano";
 // per model** (`generate_content_free_tier_requests`, named verbatim in its own 429), and a golden
 // gate run is far denser than that — one research case alone can exceed it. That cap, not any
 // application bug, produced most of 2026-08-07's eval failures and two destabilised backends.
+// **THE OX-ALPHA TRIAL IS OVER AND THE PIN CAME BACK (2026-08-25). `OX_ALPHA_MODEL` STAYS FULLY
+// WIRED AND IS ONE LINE FROM BEING SELECTED — read this before re-pointing it.**
+//
+// A $0 model does not merely make spend telemetry read zero. It DISABLES TWO SAFETY PROPERTIES,
+// both silently, both measured:
+//   1. **GRDL-03's downgrade becomes unreachable.** `chooseModel` tries [DEFAULT_MODEL, CHEAP_MODEL]
+//      in order and a free model fits every positive budget, so it never reaches the cheap pin.
+//   2. **Folder ingest reserves NOTHING.** `estimateFolderCents` -> `perDocumentUsd` is
+//      `EMBED_USD_PER_MTOK (0) + modelUsd(DEFAULT_MODEL)`, so a free default makes every document
+//      estimate at 0 cents and the "never starve the cockpit" isolation stops isolating.
+//      `ingestEstimate.ts` ALREADY forbids this outcome in words — "estimating it at 0 would reserve
+//      nothing and strand the folder mid-run" — but it guarded only against a model ABSENT from
+//      PRICING. A model priced AT zero walked straight through. That hole is now floored shut there,
+//      so this class of failure cannot come back, but the rails are still healthier on a priced pin.
+//
+// The MEASURED case for ox-alpha as a default was also weak on its own terms: three of the six
+// workflow packs (the web-research and document-creating ones) abort at `CALL_TIMEOUT_MS`, needing
+// 113-164 s against a 45 s budget, and at 180 s they returned EMPTY replies. See
+// docs/playbooks/workflow-packs.md.
+//
+// To run an ox-alpha experiment: point this line (and `RESEARCH_MODEL`) at `OX_ALPHA_MODEL`, and
+// move `EVAL_MODEL` in BOTH runners with it. Everything else — the provider, the `stealth/` branch in
+// `resolveModel`, the `OPENROUTER_API_KEY` manifest row, the PRICING row — is already in place.
 export const DEFAULT_MODEL = OPENAI_DEFAULT_MODEL;
 
 // SAME-VENDOR AS THE DEFAULT, now that OpenAI leads again (2026-08-08). `CHEAP_MODEL` is both the
@@ -69,7 +118,30 @@ export const DEFAULT_MODEL = OPENAI_DEFAULT_MODEL;
 // door — `GOOGLE_GENERATIVE_AI_API_KEY` is set, so `resolveModel` never reached Vertex, which is
 // still refused for billing on project project-c3a75795-f866-4b37-8ec.
 // GROUNDING IS A SEPARATE QUESTION AND IT IS STILL RED — see RESEARCH_MODEL below.
-export const CHEAP_MODEL = OPENAI_CHEAP_MODEL;
+// **REPOINTED TO GEMINI 2026-08-24, AND THIS IS THE LOAD-BEARING HALF OF THE OX-ALPHA TRIAL.**
+//
+// MEASURED, not assumed: with this pin on OpenAI, every workflow-pack eval died with
+// `AI_APICallError: You have no credits remaining` — and that error is a LIE about what happened.
+// The primary (ox-alpha) had failed first with `AI_APICallError: Provider returned error` after 3
+// retries; `isFallbackEligible` (APICallError.isRetryable) rolled it over to this pin, the dead
+// OpenAI account refused, and ONLY the billing message reached the caller. That is precisely the
+// "failures become UNDIAGNOSABLE" inversion the 2026-08-07 note above describes, reproduced exactly.
+//
+// **ox-alpha is INTERMITTENT.** The same grounded probe returned a full, correct, tool-calling answer
+// once and `provider_refused` minutes later. It is a free stealth preview under load; flakes are the
+// normal case, not the exception. So the fallback is not decoration here — it is the thing that
+// decides whether a 5-case pack run completes or dies on case 1.
+//
+// GEMINI IS THE ONLY FUNDED-AND-WORKING DOOR: free-tier eligible on the key this deployment already
+// holds (proven live today — `vaultSmoke:seedCorpus` and `vaultGround:vaultGroundHydrated` both
+// embedded through `gemini-embedding-001`), and plain generation was live-proven on both ids
+// 2026-08-07. THE PRICING IS UNCHANGED BY THIS EDIT: GEMINI_CHEAP_MODEL and OPENAI_CHEAP_MODEL carry
+// identical rows (0.1 / 0.4 per MTok), so no budget, reserve, ceiling or ledger number moves.
+//
+// THE KNOWN CEILING: the Gemini free tier caps `generate_content` at 20 requests/minute/model, which
+// a dense golden run exceeds on its own. That is survivable for a FALLBACK (only flakes land here)
+// and would not be for a primary — do not promote this pin without re-reading that note above.
+export const CHEAP_MODEL = GEMINI_CHEAP_MODEL;
 
 // Phase-16 (ACTN-03/D8). The research specialist gets its OWN model pin, NOT DEFAULT_MODEL /
 // CHEAP_MODEL: global model constants have repo-wide blast radius, and only these two were PROVEN
@@ -105,6 +177,9 @@ export const OPENAI_RESEARCH_FALLBACK_MODEL = "openai/gpt-4.1-mini";
 //     golden-gate run exceeds easily. That cap — not an application bug — produced most of that
 //     day's eval failures.
 // Neither applies to Tavily, which is why research no longer depends on either.
+// Back with DEFAULT_MODEL (2026-08-25) — see the block there. It stays a SEPARATE constant so a
+// later change to DEFAULT_MODEL cannot silently move research onto a model nobody probed; that both
+// pins name the same id today is a coincidence of the lineup, not a synonym.
 export const RESEARCH_MODEL = OPENAI_RESEARCH_MODEL;
 // **THE VENDOR-MATCHING CONSTRAINT IS RETIRED (2026-08-07).** This block used to say research was
 // the one pair that could not cross vendors, because `buildWebResearchTool` picked OpenAI's
@@ -115,7 +190,12 @@ export const RESEARCH_MODEL = OPENAI_RESEARCH_MODEL;
 // `webResearch` is now a LOCAL Tavily-backed tool, so it is not a vendor's tool at all and any model
 // can call it. These two pins may cross vendors freely whenever that becomes useful; they stay on
 // one today only because OpenAI is the funded door, not because the tool requires it.
-export const RESEARCH_FALLBACK_MODEL = OPENAI_RESEARCH_FALLBACK_MODEL;
+// Gemini for the same reason as CHEAP_MODEL (2026-08-24): an OpenAI fallback is a dead account, so
+// it converts every ox-alpha flake into a hard failure carrying someone else's billing message.
+// Deliberately GEMINI_MODEL (flash) and not GEMINI_CHEAP_MODEL — cost.test.ts asserts this pin is not
+// the repo-wide CHEAP_MODEL, and that assertion is still worth keeping: research is the densest,
+// most tool-heavy path and should not silently degrade to the cheapest tier on every hiccup.
+export const RESEARCH_FALLBACK_MODEL = GEMINI_MODEL;
 
 // **A GROWTH-SPECIALIST PIN WAS TRIED AND REVERTED 2026-08-08 — do not re-derive it.** Fixtures
 // 29/30/31 assert `citesVaultDoc` (the seeded vault needle must reach the specialist's memo), and
@@ -187,6 +267,9 @@ export const PRICING: Record<string, { inPerMTok: number; outPerMTok: number }> 
   [OPENAI_DEFAULT_MODEL]: { inPerMTok: 0.15, outPerMTok: 0.6 },
   [OPENAI_CHEAP_MODEL]: { inPerMTok: 0.1, outPerMTok: 0.4 },
   [OPENAI_RESEARCH_FALLBACK_MODEL]: { inPerMTok: 0.4, outPerMTok: 1.6 },
+  // Stealth via OpenRouter — free during the preview. A REAL row at 0/0, not an omission: see
+  // OX_ALPHA_MODEL above for why zero is the honest number and what still throttles.
+  [OX_ALPHA_MODEL]: { inPerMTok: 0, outPerMTok: 0 },
   // Gemini via Vertex — the current pins.
   [GEMINI_MODEL]: { inPerMTok: 0.3, outPerMTok: 2.5 },
   [GEMINI_CHEAP_MODEL]: { inPerMTok: 0.1, outPerMTok: 0.4 },

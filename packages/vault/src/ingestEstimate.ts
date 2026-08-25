@@ -154,7 +154,20 @@ function estimateFile(f: EstimateInput): { cents: number; reason: string; skippe
   }
 
   // 3. Every document that ingests ALSO pays the embed + graph recordSpend, whatever its rail.
-  return { cents: extractCents + centsFor(perDocumentUsd()), reason, skipped: false };
+  //
+  // **FLOORED AT ONE CENT (2026-08-25), AND `modelUsd`'s THROW WAS NOT ENOUGH.** That guard refuses a
+  // model ABSENT from PRICING precisely because "estimating it at 0 would reserve nothing and strand
+  // the folder mid-run". A model priced AT zero produces the identical outcome and walked straight
+  // through it: with `DEFAULT_MODEL` on a free model and `EMBED_USD_PER_MTOK` already 0,
+  // `perDocumentUsd()` is exactly 0, every document estimated at 0 cents, and the folder-ingest
+  // reservation stopped reserving — so the "never starve the cockpit" isolation silently stopped
+  // isolating. Measured: eight guardrails tests went from real cent counts to `estCents: 0`.
+  //
+  // The floor is the same fail-closed bias `chooseModel` already applies ("a sub-cent estimate still
+  // costs >= 1 cent of budget"), and it is on the PER-DOCUMENT term rather than the folder total so a
+  // 500-file folder cannot round down to a single cent. A document that ingests is never free: it
+  // always runs an embed and a graph extract, whatever they happen to cost today.
+  return { cents: extractCents + Math.max(1, centsFor(perDocumentUsd())), reason, skipped: false };
 }
 
 /**

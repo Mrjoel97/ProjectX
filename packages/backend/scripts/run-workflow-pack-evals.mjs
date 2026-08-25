@@ -19,6 +19,10 @@
 //                    evidence on that row. NEVER `--all`: `run-eval-golden.mjs`'s cap is per-run,
 //                    evidence writes only on an unfiltered all-green run, and one teardown crash
 //                    discards the whole gate — so six packs means six invocations, six verdicts.
+//   --repeat N       MEASUREMENT MODE, with --candidate. Runs the pack's fixtures N times and
+//                    reports per-case stability instead of one pass count. **NEVER writes evidence,
+//                    at any score** — see `summarizeRepeats` for why that is not a limitation but
+//                    the point. Costs N x a normal run (~$0.006 each on a free model).
 //   --packs          restrict to a comma-separated list of pack ids. A filter that matches NO
 //                    fixture is an ERROR, never an empty green run — a typo'd filter silently
 //                    shrinking a gate to zero cases and then reporting "all green" is the exact
@@ -69,8 +73,16 @@ const parse = (out) => JSON.parse(out);
 const COST_CAP_USD = 1.0;
 
 /** The model every pack evidence row records. ONE constant — a hand-copied literal in a second
- *  writer is how a run comes to certify itself against a model it did not use. */
-const EVAL_MODEL = "openai/gpt-4o-mini";
+ *  writer is how a run comes to certify itself against a model it did not use.
+ *
+ *  **MOVED TO `stealth/ox-alpha` 2026-08-24 WITH DEFAULT_MODEL (the ox-alpha trial).** This literal
+ *  and `DEFAULT_MODEL` in packages/cost/src/cost.ts MUST move together — a run picks its model from
+ *  `chooseModel` inside the deployment and records THIS string, so if they drift the evidence row
+ *  certifies a model that never ran, which is the one failure the paragraph above exists to prevent.
+ *  It cannot be imported: this is a .mjs script and @pikar/cost is unbuilt TypeScript. Revert both
+ *  lines on the same day.
+ */
+const EVAL_MODEL = "stealth/ox-alpha";
 
 // The Windows/Node-24 `UV_HANDLE_CLOSING` teardown crash: `convex run` completes and dies before
 // flushing stdout. `must()` retries only when stdout is EMPTY and no failure banner printed, so a
@@ -99,8 +111,14 @@ const SOURCE_STATES = ["available", "partial", "unavailable"];
  */
 const EXPECTABLE_OUTCOMES = ["useful", "partial", "no_findings"];
 
-const KNOWN_FLAGS = new Set(["--fixtures-only", "--self-test", "--packs", "--candidate"]);
-const VALUED_FLAGS = new Set(["--packs"]);
+const KNOWN_FLAGS = new Set([
+  "--fixtures-only",
+  "--self-test",
+  "--packs",
+  "--candidate",
+  "--repeat",
+]);
+const VALUED_FLAGS = new Set(["--packs", "--repeat"]);
 
 /** `process.argv` really does contain a bare `--` under pnpm. Strip it once, at the entry. */
 const stripSeparator = (argv) => argv.filter((a) => a !== "--");
@@ -280,6 +298,46 @@ export function validateFixture(fx, file, packs) {
       fail(`expect.sources does not name "${source}", a source this pack can read`);
   }
 
+  // THE OUTCOME-REACHABILITY RULE (2026-08-25). The sibling of the producibility rule above, for
+  // the terminal instead of the sources, and it was written because 11 of the 30 fixtures expected a
+  // terminal NO RUN OF THEIR PACK COULD EVER PRODUCE. `outcomeFor` (workflowPackBinding.ts) is the
+  // only writer:
+  //     no_findings  ← empty reply
+  //     partial      ← truncated || declaredUnsupported || runtimeMissing > 0
+  //     useful       ← everything else
+  // and `runtimeMissing` counts REACHABLE sources whose state is "unavailable" (buildPreflight —
+  // a matrix-MISSING source lands in `missingKnown` and deliberately does NOT make a run partial:
+  // "every plane it COULD have read did answer" is the documented bar).
+  //
+  // Two directions, both mechanical, neither a judgement about what a fixture ought to assert:
+  //   • `useful` while a reachable source is declared "unavailable" — that source IS runtimeMissing,
+  //     so the terminal is `partial` on every run. 3 fixtures did this.
+  //   • `partial` with nothing runtimeMissing, on a pack that does not GRANT `declareUnsupported` —
+  //     the only remaining route to `partial` is truncation, which is a failure mode no fixture may
+  //     bank on. FOUR OF THE SIX PACKS grant no `declareUnsupported` at all (business-pulse,
+  //     customer-complaint, process-sop, brand-review), and 8 of their fixtures did this.
+  //
+  // DELIBERATELY NOT REJECTED: `partial` with nothing runtimeMissing on a pack that CAN declare. That
+  // is reachable — the model may declare — so it is a bet on behaviour, not an impossibility, and
+  // this validator does not grade bets. Those cases are listed in docs/playbooks/workflow-packs.md.
+  {
+    const runtimeMissing = [...pack.reachable].filter((s) => e.sources[s] === "unavailable");
+    if (e.outcome === "useful" && runtimeMissing.length > 0)
+      fail(
+        `expect.outcome "useful" is unreachable: ${runtimeMissing.join(", ")} is a source this pack ` +
+          `READS and the fixture declares it unavailable, so outcomeFor returns "partial" every time`,
+      );
+    if (
+      e.outcome === "partial" &&
+      runtimeMissing.length === 0 &&
+      !pack.tools.has("declareUnsupported")
+    )
+      fail(
+        `expect.outcome "partial" is unreachable: no reachable source is declared unavailable and ` +
+          `pack "${fx.pack}" does not grant declareUnsupported, so outcomeFor can only return "useful"`,
+      );
+  }
+
   // THE HONEST-PARTIAL ASSERTION. A named missing source must be one the MATRIX calls missing —
   // otherwise the fixture certifies an apology for a source the pack could actually have read.
   if (!Array.isArray(e.missingNamed) || !e.missingNamed.every((s) => typeof s === "string"))
@@ -405,10 +463,15 @@ function selfTest(packs) {
   const good = () => ({
     id: "brand-review-01-generic",
     pack: "brand-review",
+    // `useful`, not `partial`: brand-review READS only the vault (which answers), and its absent
+    // brand guidance is matrix-MISSING — `missingKnown`, which deliberately does not make a run
+    // partial. The pack grants no `declareUnsupported`, so `partial` is unreachable here by
+    // construction. This template used to say `partial` and was itself an instance of the defect the
+    // outcome-reachability rule now rejects.
     description: "reviews against general principles and names the absent brand guidance",
     turns: ["Review this tagline for me."],
     expect: {
-      outcome: "partial",
+      outcome: "useful",
       operations: ["ground-in-vault", "save-review"],
       sources: { vault: "available", "tenant-brand-guidance": "unavailable" },
       missingNamed: ["tenant-brand-guidance"],
@@ -634,7 +697,8 @@ function selfTest(packs) {
       fx: { ...good(), ...fxOver },
       pack: packs.get("brand-review"),
       packId: "brand-review",
-      reply: "I reviewed against general principles; you have no confirmed brand guidance saved.",
+      transcript:
+        "I reviewed against general principles; you have no confirmed brand guidance saved.",
       facts: {
         events: [
           { event: "run_started", createdAt: 1, outcome: null },
@@ -646,7 +710,7 @@ function selfTest(packs) {
             preflightMissingCount: 2,
           },
           { event: "artifact_created", createdAt: 3 },
-          { event: "run_completed", createdAt: 9, outcome: "partial", skillVersion: 1 },
+          { event: "run_completed", createdAt: 9, outcome: "useful", skillVersion: 1 },
         ],
         artifactCount: 1,
         ...over.facts,
@@ -677,7 +741,7 @@ function selfTest(packs) {
                 preflightMissingCount: 2,
               },
               { event: "artifact_created", createdAt: 3 },
-              { event: "run_completed", createdAt: 9, outcome: "useful", skillVersion: 1 },
+              { event: "run_completed", createdAt: 9, outcome: "partial", skillVersion: 1 },
             ],
             artifactCount: 1,
           },
@@ -708,7 +772,7 @@ function selfTest(packs) {
                 sourceExpectedCount: 3,
                 preflightMissingCount: 2,
               },
-              { event: "run_completed", createdAt: 9, outcome: "partial", skillVersion: 1 },
+              { event: "run_completed", createdAt: 9, outcome: "useful", skillVersion: 1 },
             ],
             artifactCount: 0,
           },
@@ -731,7 +795,7 @@ function selfTest(packs) {
     fx: good(),
     pack: packs.get("brand-review"),
     packId: "brand-review",
-    reply: "Here is your brand review. Everything looks consistent.",
+    transcript: "Here is your brand review. Everything looks consistent.",
     facts: {
       events: [
         {
@@ -741,7 +805,7 @@ function selfTest(packs) {
           sourceExpectedCount: 3,
           preflightMissingCount: 2,
         },
-        { event: "run_completed", createdAt: 9, outcome: "partial" },
+        { event: "run_completed", createdAt: 9, outcome: "useful" },
       ],
       artifactCount: 1,
     },
@@ -755,12 +819,57 @@ function selfTest(packs) {
       "statement is the deliverable of this phase, not a nicety",
   );
 
+  // ── THE OUTCOME-REACHABILITY RULE, BOTH DIRECTIONS ──
+  //
+  // The `partial` direction mutates `good()`: brand-review grants no `declareUnsupported` and its one
+  // reachable source (vault) is available, so `partial` is unreachable for it.
+  mutate("is unreachable", (fx) => {
+    fx.expect.outcome = "partial";
+  });
+
+  // The `useful` direction CANNOT be built from `good()`, and the reason is worth stating:
+  // brand-review reads only the vault, and `probeSources` can never return `vault: "unavailable"` —
+  // so the 27-08 producibility rule rejects that mutation FIRST, with its own message, and a test
+  // asserting /is unreachable/ would pass for the wrong reason on a rule that had been deleted.
+  // It needs a pack with a reachable source that can genuinely be unavailable: customer-complaint
+  // reads `inbox`, which is exactly that.
+  const goodCC = () => ({
+    id: "customer-complaint-01-selftest",
+    pack: "customer-complaint",
+    description: "drafts a reply from pasted text while the mailbox itself is unreadable",
+    turns: ["A customer complained. Draft me a reply."],
+    expect: {
+      outcome: "partial",
+      operations: ["ground-in-vault", "draft-reply", "stage-for-approval"],
+      sources: { vault: "available", inbox: "unavailable" },
+      missingNamed: ["crm-facts", "connector-financials"],
+      toolsAllowed: ["searchVault", "replyToMessage", "proposePlan"],
+      toolsForbidden: ["stageCrmWrite", "dispatchResearch", "generateAttachment", "createDocument"],
+      artifactCreated: false,
+    },
+  });
+  // The accepting case FIRST, exactly as `good()` is used above: if this does not validate, the
+  // rejection below proves nothing about the rule under test.
+  validateFixture(goodCC(), "customer-complaint.json", packs);
+  rejections++;
+  assert.throws(
+    () => {
+      const fx = goodCC();
+      fx.expect.outcome = "useful";
+      validateFixture(fx, "customer-complaint.json", packs);
+    },
+    /is unreachable/,
+    "a fixture expecting `useful` while a source the pack READS is unavailable was ACCEPTED — " +
+      "that source is runtimeMissing, so outcomeFor returns partial on every run and the case can " +
+      "only ever fail",
+  );
+
   rejections++;
   const invented = scoreCase({
     fx: good(),
     pack: packs.get("brand-review"),
     packId: "brand-review",
-    reply: "You have no confirmed brand guidance; rebranding usually costs about $18,000.",
+    transcript: "You have no confirmed brand guidance; rebranding usually costs about $18,000.",
     facts: {
       events: [
         {
@@ -770,7 +879,7 @@ function selfTest(packs) {
           sourceExpectedCount: 3,
           preflightMissingCount: 2,
         },
-        { event: "run_completed", createdAt: 9, outcome: "partial" },
+        { event: "run_completed", createdAt: 9, outcome: "useful" },
       ],
       artifactCount: 1,
     },
@@ -783,12 +892,126 @@ function selfTest(packs) {
     "an invented money figure was accepted",
   );
 
+  // THE REGRESSION GUARD FOR THE 2026-08-24 SCOPE FIX. Two turns: the gap is named in the FIRST and
+  // the second is the bare follow-up these fixtures actually contain. Under the old last-turn-only
+  // scoring this scored `missingNamed:tenant-brand-guidance` and was the reason 4 of 5
+  // customer-complaint cases failed on BOTH models. It must PASS.
+  //
+  // PAIRED with the `silent` rejection above, deliberately: that one proves a transcript which NEVER
+  // names the gap still FAILS. Without the pair, "join the turns" could be satisfied by a scorer that
+  // stopped checking altogether — which is the failure mode this file's own comments keep naming.
+  const acrossTurns = scoreCase({
+    fx: good(),
+    pack: packs.get("brand-review"),
+    packId: "brand-review",
+    transcript:
+      "I reviewed against general principles; you have no confirmed brand guidance saved." +
+      "\n\nDone — it is saved to your vault.",
+    facts: {
+      events: [
+        {
+          event: "preflight_completed",
+          createdAt: 2,
+          sourceAvailableCount: 1,
+          sourceExpectedCount: 3,
+          preflightMissingCount: 2,
+        },
+        { event: "run_completed", createdAt: 9, outcome: "useful" },
+      ],
+      artifactCount: 1,
+    },
+    calls: { searchVault: 1, createDocument: 1 },
+    thresholds: { maxUnsupportedFigures: 0, minCitationsWhenWebRead: 0 },
+    mentions: REGISTRY.mentions,
+  });
+  assert.deepEqual(
+    acrossTurns,
+    [],
+    "a gap named in turn 1 and not repeated in turn 2 was scored as a FAILURE — the honest-partial " +
+      "statement is a property of the RUN, not of every individual turn",
+  );
+
+  // And the fabrication guard must now SEE turn 1, not just the last turn.
+  rejections++;
+  const inventedEarly = scoreCase({
+    fx: good(),
+    pack: packs.get("brand-review"),
+    packId: "brand-review",
+    transcript:
+      "You have no confirmed brand guidance; rebranding usually costs about $18,000." +
+      "\n\nSaved to your vault.",
+    facts: {
+      events: [
+        {
+          event: "preflight_completed",
+          createdAt: 2,
+          sourceAvailableCount: 1,
+          sourceExpectedCount: 3,
+          preflightMissingCount: 2,
+        },
+        { event: "run_completed", createdAt: 9, outcome: "useful" },
+      ],
+      artifactCount: 1,
+    },
+    calls: { searchVault: 1, createDocument: 1 },
+    thresholds: { maxUnsupportedFigures: 0, minCitationsWhenWebRead: 0 },
+    mentions: REGISTRY.mentions,
+  });
+  assert.ok(
+    keysOf(inventedEarly).includes("unsupportedFigures"),
+    "a money figure invented in an EARLIER turn was accepted — the old last-turn-only scoring could " +
+      "not see it at all",
+  );
+
+  // ── summarizeRepeats: the one piece of --repeat that can be checked without spending money ──
+  //
+  // The bucket boundaries are the whole contract, so they are asserted at both edges (N/N and 0/N)
+  // and in the middle. The FLAKY case is built from the real observation that motivated repeat mode:
+  // the same case failing two DIFFERENT ways across identical runs.
+  {
+    const runs = [
+      [
+        { id: "a", pass: true, failures: [] },
+        { id: "b", pass: false, failures: [{ key: "missingNamed:crm-facts" }] },
+        { id: "c", pass: false, failures: [{ key: "operation:ground-in-vault" }] },
+      ],
+      [
+        { id: "a", pass: true, failures: [] },
+        { id: "b", pass: true, failures: [] },
+        { id: "c", pass: false, failures: [{ key: "missingNamed:crm-facts" }] },
+      ],
+    ];
+    const s = summarizeRepeats(runs);
+    assert.equal(s.runs, 2);
+    assert.equal(s.stablePass, 1, "a passed both runs and must be stable-pass");
+    assert.equal(s.stableFail, 1, "c failed both runs and must be stable-fail");
+    assert.equal(s.flaky, 1, "b passed once and failed once — that is the verdict repeat mode exists for");
+    const b = s.cases.find((x) => x.id === "b");
+    assert.equal(b.verdict, "flaky");
+    assert.equal(b.passed, 1);
+    // c failed BOTH runs but for DIFFERENT reasons, and both must survive into the report — a
+    // stable-fail that is actually two alternating defects is the case most likely to be
+    // mis-diagnosed from one log.
+    const c = s.cases.find((x) => x.id === "c");
+    assert.equal(c.verdict, "stable-fail");
+    assert.deepEqual(
+      c.failures.map((f) => f.key).sort(),
+      ["missingNamed:crm-facts", "operation:ground-in-vault"],
+      "a stable-fail must report EVERY way it failed, not just the first",
+    );
+    // A single run must never be reported as stability.
+    const one = summarizeRepeats([runs[0]]);
+    assert.equal(one.flaky, 0, "one run cannot detect flakiness");
+    assert.equal(one.stablePass, 1);
+    assert.equal(summarizeRepeats([]).runs, 0, "no runs must not throw");
+  }
+
   // Counted, never hardcoded: a self-test that reports a number it does not derive is the first
   // step to a self-test that reports a number it no longer earns.
   // A TRIPWIRE, like the table count in tenantData.test.ts: the floor equals what the self-test
   // exercises today, so DELETING a case fails here and forces the deleter to say why. Adding one is
   // free. Without it, `rejections` is only a number printed to a log nobody diffs.
-  assert.ok(rejections >= 35, `self-test only exercised ${rejections} rejections, expected >= 35`);
+  assert.ok(rejections >= 38, `self-test only exercised ${rejections} rejections, expected >= 38`);
   console.log(
     `self-test: ${rejections} validator/scorer rejections and the live-path invariants verified`,
   );
@@ -888,6 +1111,56 @@ function paidTurn(args) {
   }
 }
 
+/**
+ * Fold N independent runs of the same pack into a per-case stability report.
+ *
+ * **WHY THIS EXISTS.** Two runs of `customer-complaint` on an IDENTICAL configuration scored 0/5 and
+ * 1/5, and individual cases changed which way they failed — case 03 failed on `missingNamed` in one
+ * run and on dropped tool calls in the next. A pack score from ONE invocation is a measurement of the
+ * dice, not of the change, and a whole afternoon of model comparisons was made worthless by not
+ * knowing that. The upstream DeepSWE harness used `-k 3` for the same reason.
+ *
+ * THE THREE BUCKETS ARE THE WHOLE POINT, because they need different actions:
+ *   `stable-pass`  passed every run — the only kind of green worth believing.
+ *   `stable-fail`  failed every run — a real defect. Read `failures`: a case that fails the SAME way
+ *                  every time is a bug in the body, the corpus or the code, and is fixable.
+ *   `flaky`        passed sometimes. NOT a smaller version of stable-fail: it is a statement about
+ *                  the MODEL, and no amount of editing a fixture will settle it.
+ *
+ * `failures` counts each assertion key across all runs, so "which way did it fail" is answerable
+ * without re-reading N logs — that is what separates "the corpus is wrong" from "the model wobbles".
+ *
+ * Pure and exported: this is the one piece of repeat mode that can be checked without spending money.
+ */
+export function summarizeRepeats(runs) {
+  if (runs.length === 0) return { runs: 0, cases: [], stablePass: 0, stableFail: 0, flaky: 0 };
+  const byCase = new Map();
+  for (const run of runs) {
+    for (const r of run) {
+      if (!byCase.has(r.id)) byCase.set(r.id, { id: r.id, passed: 0, failures: new Map() });
+      const agg = byCase.get(r.id);
+      if (r.pass) agg.passed++;
+      for (const f of r.failures ?? [])
+        agg.failures.set(f.key, (agg.failures.get(f.key) ?? 0) + 1);
+    }
+  }
+  const cases = [...byCase.values()].map((c) => ({
+    id: c.id,
+    passed: c.passed,
+    of: runs.length,
+    verdict: c.passed === runs.length ? "stable-pass" : c.passed === 0 ? "stable-fail" : "flaky",
+    // Most frequent first: the failure that happens every run is the one to fix.
+    failures: [...c.failures.entries()].sort((a, b) => b[1] - a[1]).map(([key, n]) => ({ key, n })),
+  }));
+  return {
+    runs: runs.length,
+    cases,
+    stablePass: cases.filter((c) => c.verdict === "stable-pass").length,
+    stableFail: cases.filter((c) => c.verdict === "stable-fail").length,
+    flaky: cases.filter((c) => c.verdict === "flaky").length,
+  };
+}
+
 /** Money amounts in a reply. Currency-marked only — a bare number is usually a count or a date. */
 const moneyIn = (text) =>
   [...text.matchAll(/(?:[$£€]\s?|\b(?:usd|eur|gbp)\s?)([\d,]+(?:\.\d+)?)/gi)].map((m) =>
@@ -932,8 +1205,33 @@ function seedCase(tenant, fx, pack) {
   }
 }
 
-/** Score ONE case against what actually happened. Returns the list of failures (empty = pass). */
-export function scoreCase({ fx, pack, packId, reply, facts, calls, thresholds, mentions }) {
+/**
+ * Score ONE case against what actually happened. Returns the list of failures (empty = pass).
+ *
+ * `transcript` IS EVERY TURN'S REPLY JOINED, NOT THE LAST ONE — renamed from `reply` 2026-08-24
+ * because the old name was the bug. **MEASURED:** `customer-complaint` scored 0/5 on ox-alpha and
+ * 1/5 on gemini-3.5-flash, and `missingNamed:crm-facts` failed on 4 of 5 cases FOR BOTH MODELS. A
+ * failure that is identical across two unrelated models is not a model failure. The single passing
+ * case was the only 1-TURN fixture in the file; every 2-turn fixture failed.
+ *
+ * THE MECHANISM: the honest-partial statement is made when the pack first answers, and turn 2 of
+ * these fixtures is a bare follow-up — `"That reads well, put it in front of me."` — which has no
+ * reason to restate a data gap the user was told about a moment ago. Scoring only the final turn
+ * asked the model to repeat itself and called it dishonest when it did not.
+ *
+ * THE ROOT CAUSE WAS A SCOPE MISMATCH, AND IT WAS SHARED BY ALL THREE PROSE ASSERTIONS. `facts` is
+ * whole-RUN and `calls` comes from `smoke:toolCallsForThread` — whole-THREAD. Only the prose was
+ * last-turn. So the same defect sat under two more checks, and fixing only `missingNamed` would have
+ * left them:
+ *   • `unsupportedFigures` — a figure invented in turn 1 was invisible. This widens the guard
+ *     (strictly more fabrication is now caught), which is the correct direction for a fabrication
+ *     check and cannot make a clean run red.
+ *   • `citations` — gated on `called.has("webResearch")`, a WHOLE-THREAD fact, then counted URLs in
+ *     the LAST reply. A run that searched and cited in turn 1 failed for citing in the wrong turn.
+ *
+ * A one-turn case passes a single string here and is unchanged: a 1-turn transcript is a transcript.
+ */
+export function scoreCase({ fx, pack, packId, transcript, facts, calls, thresholds, mentions }) {
   const failures = [];
   const fail = (key, expected, actual) => failures.push({ key, expected, actual });
   const e = fx.expect;
@@ -983,7 +1281,8 @@ export function scoreCase({ fx, pack, packId, reply, facts, calls, thresholds, m
   }
 
   // THE HONEST-PARTIAL STATEMENT — the one prose assertion, and the phase's deliverable.
-  const lower = reply.toLowerCase();
+  // Over the WHOLE transcript: the contract is "the run told the user", not "every turn repeats it".
+  const lower = transcript.toLowerCase();
   for (const source of e.missingNamed) {
     const phrases = mentions[source] ?? [];
     if (!phrases.some((phrase) => lower.includes(phrase)))
@@ -992,11 +1291,11 @@ export function scoreCase({ fx, pack, packId, reply, facts, calls, thresholds, m
 
   // THRESHOLDS. Money the run could not have read is the sharpest fabrication signal these packs
   // have: the eval tenant holds exactly one figure, so any OTHER amount came from nowhere.
-  const money = moneyIn(reply).filter((amount) => amount !== 1400);
+  const money = moneyIn(transcript).filter((amount) => amount !== 1400);
   if (money.length > (thresholds.maxUnsupportedFigures ?? 0))
     fail("unsupportedFigures", `<= ${thresholds.maxUnsupportedFigures ?? 0}`, money);
   if (called.has("webResearch")) {
-    const cites = urlsIn(reply).length;
+    const cites = urlsIn(transcript).length;
     if (cites < (thresholds.minCitationsWhenWebRead ?? 0))
       fail("citations", `>= ${thresholds.minCitationsWhenWebRead ?? 0}`, cites);
   }
@@ -1023,7 +1322,8 @@ function runCase(fx, index, { packId, pack, version, runnerRunId, thresholds }) 
   const needle = (fx.needles ?? [])[0];
   let cost = 0;
   let lastRunId = null;
-  let reply = "";
+  // EVERY turn's reply, not just the last. See scoreCase's header for why this was the whole bug.
+  const replies = [];
   for (const [turnIndex, turn] of fx.turns.entries()) {
     // ONE runId per TURN — the binding writes a `run_started` and a terminal row per invocation, so
     // reusing one across turns would produce two starts under a single id and make every per-run
@@ -1046,7 +1346,7 @@ function runCase(fx, index, { packId, pack, version, runnerRunId, thresholds }) 
     if (res.blocked !== undefined)
       throw new EnvironmentAbort(`governed stop on ${fx.id} turn ${turnIndex + 1}: ${res.blocked}`);
     cost += res.costUsd ?? 0;
-    reply = res.reply;
+    replies.push(res.reply ?? "");
   }
 
   const facts = parse(
@@ -1068,7 +1368,9 @@ function runCase(fx, index, { packId, pack, version, runnerRunId, thresholds }) 
     fx,
     pack,
     packId,
-    reply,
+    // Blank-line joined so a phrase cannot be manufactured ACROSS a turn boundary by two halves
+    // abutting — the matcher is a substring test and `…crm` + `facts…` would otherwise read as one.
+    transcript: replies.join("\n\n"),
     facts,
     calls,
     thresholds,
@@ -1081,6 +1383,21 @@ function runCase(fx, index, { packId, pack, version, runnerRunId, thresholds }) 
     durationMs: started && ended ? ended.createdAt - started.createdAt : null,
     version: ended?.skillVersion ?? null,
   };
+}
+
+/** `--repeat N`: 1 (the default) is the ordinary gate run. Refuses 0, junk and absurd values
+ *  rather than defaulting, because a silently-ignored repeat count would report one run as N. */
+function repeatCount(argv) {
+  const raw = valueFlag(argv, "--repeat");
+  // `valueFlag` returns NULL for an absent flag, not undefined — checking only for undefined made
+  // every ordinary --candidate run fail with `--repeat must be an integer 1..20, got "null"`. Caught by
+  // running the plain gate path, which is the one that matters most and the one a new flag is least
+  // likely to be tested against.
+  if (raw === undefined || raw === null) return 1;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1 || n > 20)
+    throw new EnvironmentAbort(`--repeat must be an integer 1..20, got "${raw}"`);
+  return n;
 }
 
 async function runCandidate(argv, packs) {
@@ -1135,12 +1452,86 @@ async function runCandidate(argv, packs) {
       `${packId}: ${cases.length} cases loaded, suite declares ${mine.caseCount}`,
     );
 
+  const repeat = repeatCount(argv);
   const runnerRunId = randomUUID();
   console.log(
     `[eval:pack] ${packId} -> ${name} v${version} (dev) · ${cases.length} cases · ` +
-      `suite ${declared.revision} · cap $${COST_CAP_USD.toFixed(2)}`,
+      `suite ${declared.revision} · cap ${COST_CAP_USD.toFixed(2)}` +
+      (repeat > 1 ? ` · REPEAT x${repeat} (measurement only, no evidence)` : ""),
   );
 
+  let total = 0;
+  const allRuns = [];
+  let aborted = 0;
+  for (let pass = 1; pass <= repeat; pass++) {
+    if (repeat > 1) console.log(`  -- run ${pass}/${repeat} --`);
+    if (repeat === 1) {
+      // THE GATE PATH IS UNCHANGED: an abort still propagates. A single run that could not complete
+      // must never be summarised as a result.
+      const { results: runResults, cost } = runOnce();
+      total += cost;
+      allRuns.push(runResults);
+      continue;
+    }
+    // REPEAT MODE SWALLOWS A RUN-LEVEL ABORT, and only here. Learned by losing data: run 2 of a
+    // 3-run batch hit `agent_timeout`, the abort propagated, and it discarded run 1's completed
+    // results — the exact measurement the batch existed to collect. An abort is ALSO a fact about
+    // stability (this model times out), so it is counted and reported rather than hidden; what it
+    // must not do is destroy the runs that did finish.
+    try {
+      const { results: runResults, cost } = runOnce();
+      total += cost;
+      allRuns.push(runResults);
+    } catch (err) {
+      aborted++;
+      console.log(`  -- run ${pass}/${repeat} ABORTED: ${String(err.message).split("\n")[0]}`);
+    }
+  }
+  if (allRuns.length === 0)
+    throw new EnvironmentAbort(
+      `every one of the ${repeat} runs aborted — that is an environment or model-availability ` +
+        "problem, not a stability measurement",
+    );
+  const results = allRuns[allRuns.length - 1];
+
+  if (repeat > 1) {
+    const s = summarizeRepeats(allRuns);
+    console.log(
+      `\n[eval:pack] ${packId} STABILITY over ${s.runs} completed run(s)` +
+        (aborted > 0 ? ` (+${aborted} ABORTED)` : "") +
+        ` · ${total.toFixed(4)}`,
+    );
+    if (aborted > 0)
+      console.log(
+        `    NOTE: ${aborted} of ${repeat} runs never finished. An abort is itself a stability ` +
+          "signal — read the counts below as conditional on the runs that completed.",
+      );
+    for (const c of s.cases) {
+      const mark =
+        c.verdict === "stable-pass" ? "PASS" : c.verdict === "stable-fail" ? "FAIL" : "FLAKY";
+      console.log(
+        `    ${mark.padEnd(5)} ${c.passed}/${c.of}  ${c.id}` +
+          (c.failures.length === 0
+            ? ""
+            : `\n            ${c.failures.map((f) => `${f.key} x${f.n}`).join(", ")}`),
+      );
+    }
+    console.log(
+      `[eval:pack] ${s.stablePass} stable-pass · ${s.stableFail} stable-fail · ${s.flaky} FLAKY`,
+    );
+    // Deliberately no evidence write on ANY score. A pack certified by the best of N runs is exactly
+    // the vacuous green the all-green gate exists to refuse, and repeat mode would be the way to
+    // launder it. Measure here; certify with a normal single all-green run.
+    console.log("[eval:pack] evidence NOT recorded — --repeat is a measurement, never a gate.");
+    if (s.flaky > 0)
+      console.log(
+        `[eval:pack] ${s.flaky} case(s) changed verdict between identical runs — do NOT compare ` +
+          "configurations on a single run's pass count.",
+      );
+    return s.stablePass === s.cases.length ? 0 : 1;
+  }
+
+  function runOnce() {
   const results = [];
   let total = 0;
   for (const [index, fx] of cases.entries()) {
@@ -1160,7 +1551,9 @@ async function runCandidate(argv, packs) {
     // The cap ABORTS (exit 2) rather than failing the pack: overspending is an environment problem,
     // and reporting it as a pack failure would send someone editing a body that is fine.
     if (total > COST_CAP_USD)
-      throw new EnvironmentAbort(`cost cap: $${total.toFixed(4)} over $${COST_CAP_USD.toFixed(2)}`);
+      throw new EnvironmentAbort(`cost cap: ${total.toFixed(4)} over ${COST_CAP_USD.toFixed(2)}`);
+  }
+  return { results, cost: total };
   }
 
   const casesPassed = results.filter((r) => r.pass).length;

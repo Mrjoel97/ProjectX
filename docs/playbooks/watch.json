@@ -301,7 +301,9 @@
   "guardrails.md": [
     "packages/backend/convex/guardrails.ts",
     "packages/backend/scripts/run-smoke-guardrails.mjs",
-    "packages/cost/src/cost.ts"
+    "packages/cost/src/cost.ts",
+    "packages/core/src/fallback.ts",
+    "packages/core/src/fallback.test.ts"
   ],
   "proposals.md": [
     "packages/core/src/proposal.ts",

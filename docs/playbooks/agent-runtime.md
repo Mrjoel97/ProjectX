@@ -1,5 +1,26 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-08-24 (ox-alpha trial — **`EVAL_MODEL` MOVED, AND IT IS A HAND-COPIED LITERAL
+> THAT MUST MOVE WITH `DEFAULT_MODEL` OR THE EVIDENCE PLANE LIES.** `run-eval-golden.mjs` records
+> `EVAL_MODEL` on every evidence row, while the model that actually RUNS is chosen inside the
+> deployment by `chooseModel` → `DEFAULT_MODEL`. Those are two different sources of truth for one
+> fact. It was repointed to `stealth/ox-alpha` alongside the pin; if they ever drift, an evidence row
+> certifies a model that never ran — the exact failure the constant's own docstring names.
+>
+> IT CANNOT BE IMPORTED AND THAT IS NOT LAZINESS: the runner is a `.mjs` script and `@pikar/cost`
+> ships unbuilt TypeScript (`exports` points straight at `./src/index.ts`, there is no `dist`). The
+> comment at the constant now carries the revert instruction explicitly.
+>
+> **NO GOLDEN RUN HAS HAPPENED ON THIS MODEL YET.** The trial exercised the PACK runner only. Fixtures
+> 29/30/31 (vault grounding) and 25/26 are the ones that carry the embedding A/B — see
+> `docs/playbooks/vault.md`. Note also that a FILTERED golden run does not write evidence, which is
+> what makes a trial run safe.
+>
+> **RELEVANT WHEN READING ANY GROUNDED RESULT FROM TODAY:** the `probe:gemini --grounded` search
+> counter is stale for the local Tavily tool and false-fails (`no_search_call`) even on a model that
+> searched correctly. `runAgentLoop` is NOT affected — it counts `toolName === "webResearch"`, so
+> search fees are still drawn. Details and the fix in `docs/playbooks/cockpit.md`.)
+
 > Last verified: 2026-08-23 (27-08 — **`smoke.ts` GAINED A PACK-EVAL TENANT SEEDER AND A RUN-FACTS
 > READ.** No runtime behaviour changed; both are internal test-support surfaces for
 > `run-workflow-pack-evals.mjs`, and the runtime contracts in this playbook are untouched.

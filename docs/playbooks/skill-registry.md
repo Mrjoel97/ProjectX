@@ -1,5 +1,24 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-25 (**`PACK_EVAL_SUITE` REVISION AND FOUR `casesHash` VALUES MOVED** —
+> `revision` `2026-08-23.phase27` → `2026-08-25.phase27`, and the hashes for `pack-business-pulse`,
+> `pack-customer-complaint`, `pack-process-sop` and `pack-brand-review` recomputed.
+>
+> WHY: 11 of the 30 pack fixtures expected a terminal `outcomeFor` cannot produce for their pack, and
+> correcting them changed four fixture files. The full derivation is in
+> `docs/playbooks/workflow-packs.md`; what matters HERE is the gate contract, which behaved exactly
+> as its docstring promises — `casesHash` is MECHANICAL, so the edit reddened
+> `core/src/workflowPacks.test.ts` rather than silently invalidating a gate, and the runner's own
+> `--self-test` refused to pass until the declaration matched disk.
+>
+> **THE REVISION BUMP IS THE DELIBERATE HALF AND IT RETIRES EVERY OLDER PACK EVIDENCE ROW AT ONCE.**
+> That is the intended blast radius of a corpus change and it costs nothing today: no pack has ever
+> been activated and no PASSING pack evidence exists on any deployment. It would NOT be free later —
+> after activation, a bump dark-fails every pack until each is re-evaluated, which is the point.
+>
+> `hasPassingPackEvalEvidence` is unchanged. Nothing about the four-part rule moved; only the
+> identity it compares against.)
+
 > Last verified: 2026-08-23 (27-09 — **`deactivatePack`: the registry finally has an owner-facing
 > way to turn something OFF.** Until now the only dark path was `npx convex run skills:archiveSkill`,
 > an operator command with a measured side effect that makes it unusable exactly when it is needed:

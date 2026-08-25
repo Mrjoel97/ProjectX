@@ -1,5 +1,113 @@
 # Playbook: Guardrails (the spend rails, the kill switches, the redaction choke point)
 
+> Last verified: 2026-08-25 (**THE OX-ALPHA TRIAL IS OVER: `DEFAULT_MODEL` AND `RESEARCH_MODEL` ARE
+> BACK ON `openai/gpt-4o-mini`. THE REASON IS NOT THE MODEL'S QUALITY — IT IS THAT A $0 PIN DISABLES
+> TWO SAFETY PROPERTIES, SILENTLY.**
+>
+>   1. **GRDL-03's downgrade becomes unreachable.** `chooseModel` tries [DEFAULT_MODEL, CHEAP_MODEL]
+>      in order and a free model fits every positive budget, so the cheap branch is never taken.
+>   2. **Folder ingest reserves NOTHING.** `estimateFolderCents` -> `perDocumentUsd` is
+>      `EMBED_USD_PER_MTOK + modelUsd(DEFAULT_MODEL)`, and `EMBED_USD_PER_MTOK` is already 0. A free
+>      default made the whole term 0, so every document estimated at 0 cents and the "never starve the
+>      cockpit" isolation stopped isolating. Eight guardrails tests read `estCents: 0`.
+>
+> **THAT SECOND ONE IS THE INTERESTING DEFECT, BECAUSE THE CODE ALREADY FORBADE IT IN WORDS.**
+> `modelUsd` throws for a model ABSENT from `PRICING` and says why — "estimating it at 0 would reserve
+> nothing and strand the folder mid-run". A model priced AT zero is a different code path with an
+> IDENTICAL outcome, and it walked straight through the guard. `ok(0)` and `Err(unknown_model)` are
+> genuinely different (cost.test.ts pins that), but here the distinction did not help: zero is the
+> harmful value however it arrives. Floored shut in `ingestEstimate.ts`; see `docs/playbooks/vault.md`.
+>
+> **WHAT STAYS.** Everything that makes ox-alpha reachable: `OX_ALPHA_MODEL`, its `PRICING` row, the
+> `stealth/` branch in `resolveModel`, `@openrouter/ai-sdk-provider`, the `OPENROUTER_API_KEY` manifest
+> row. Re-running the trial is: point these two pins at `OX_ALPHA_MODEL` and move `EVAL_MODEL` in BOTH
+> runners with them.
+>
+> **THE FALLBACK PINS STAY ON GEMINI** (`CHEAP_MODEL` = flash-lite, `RESEARCH_FALLBACK_MODEL` = flash).
+> That is the one unambiguous win of the trial and it costs nothing: the Gemini and OpenAI cheap rows
+> carry IDENTICAL prices (0.1 / 0.4 per MTok), so no budget, reserve, ceiling or ledger number moves —
+> while the OpenAI account is the exhausted one, so an eligible failure that rolled over to it turned
+> a recoverable hiccup into a hard failure carrying someone else's billing message.
+>
+> TWO TESTS WERE KEPT FROM THE TRIAL RATHER THAN REVERTED, because both encode something that was NOT
+> obvious before it cost a day: that priced-at-zero and unpriced are different, and that GRDL-03's
+> downgrade branch is only reachable while the default costs something (asserted directly, so a future
+> repoint reds with the reason attached instead of leaving a vacuous test over a dead path).
+>
+> **FULL BACKEND SUITE 2475/2475, 100/100 FILES** — green, and one better than the pre-trial baseline.)
+
+> Last verified: 2026-08-25 (**A 503 DELIVERED INSIDE AN HTTP 200 WAS CLASSIFIED AS "OUR BUG" AND
+> NEVER ROLLED OVER. FIXED IN `isFallbackEligible`, WHICH THIS PLAYBOOK NOW WATCHES.**
+> `packages/core/src/fallback.ts` (+ its test) were added to `watch.json` under this playbook: the
+> file's own header calls itself GRDL-05, so this was always its home and nothing covered it.
+>
+> **THE SHAPE.** OpenRouter reports UPSTREAM provider failures inside an HTTP **200** body —
+> `{"error": {"code": 503, "message": "The service is currently unavailable"}}` — not as a 5xx status.
+> `@openrouter/ai-sdk-provider` faithfully throws `APICallError` with `statusCode: 200`, and the AI
+> SDK's default rule (retryable iff 408/409/429/>=500) then computes `isRetryable: false`. The
+> classifier was CORRECT about everything it could see and still reached the wrong answer.
+>
+> **CONFIRMED BY ABSENCE, WHICH IS THE CHEAPEST PROOF AVAILABLE HERE:** three consecutive workflow-pack
+> runs died on that error and the `audit` table contained NOT ONE `llm.fallback` row. The cross-vendor
+> failover was not slow or unlucky — it never ran.
+>
+> **THE FIX READS A NUMBER, NEVER TEXT.** `bodyDeliveredRetryable` applies the SAME 408/409/429/>=500
+> rule to `data.error.code` / `data.code` (both shapes, because providers differ on whether `data` is
+> the error object or the envelope). It is consulted ONLY after `isRetryable` is already false, so it
+> can only ever widen. The §4 promise at the top of that file — never read error message text — is
+> intact and was the binding constraint on the design.
+>
+> **THREE WAYS IT REFUSES TO OVER-WIDEN**, each pinned by a test:
+>   • `statusCode !== 200` returns false, so a body code can never PROMOTE a genuine 4xx into a
+>     cross-vendor retry. **This guard was untested until mutation testing found it** — deleting it
+>     left all twenty other assertions green.
+>   • A body-delivered 400/401 is still NOT retryable, so a config error dead-letters instead of
+>     burning a second vendor. (`reasoning: {enabled:false}` returns exactly that from this provider.)
+>   • A non-numeric code (`"insufficient_quota"`) is NOT retryable — guessing from an unknown string is
+>     how a billing failure becomes an infinite cross-vendor retry, which is the 2026-08-07 lesson in a
+>     new costume.
+>
+> fallback.test.ts 9 -> 21 assertions. MUTATION-VERIFIED three ways: disabling the helper, deleting the
+> status guard, and widening it to "any body error is retryable" each turn the suite RED.
+>
+> **WHAT THIS DOES NOT FIX.** It makes the rollover FIRE; it does not make the fallback succeed. The
+> fallback pins are Gemini and its free tier caps `generate_content` at 20 requests/minute/model, so a
+> dense run that rolls over often will meet that ceiling instead. And a pack whose PRIMARY is
+> unavailable for the whole run still costs the wall clock of every failed attempt before the fallback
+> gets its turn — see `docs/playbooks/workflow-packs.md` on `agent_timeout`.)
+
+> Last verified: 2026-08-24 (ox-alpha trial — **A FREE `DEFAULT_MODEL` SILENTLY RETIRES MOST OF THIS
+> PLAYBOOK'S SUBJECT MATTER. READ THIS BEFORE PINNING ANY $0 MODEL.**
+>
+> `OX_ALPHA_MODEL = "stealth/ox-alpha"` was added with a REAL `PRICING` row of 0/0 — an honest zero,
+> not an omission. The distinction is load-bearing and is now pinned by a test: a priced-at-zero model
+> returns `ok(0)` from `priceUsage`, an UNKNOWN model returns `Err(unknown_model)`. Only the second is
+> the silent-under-draw failure this file exists to prevent.
+>
+> **MEASURED CONSEQUENCE, AND IT IS BIGGER THAN IT LOOKS.** Pinning `DEFAULT_MODEL`/`RESEARCH_MODEL`
+> at the free id turned 24 backend tests red (baseline on the same six files: 1 pre-existing failure;
+> with the pin: 25). Nothing in the product breaks — the ≥1-cent floor in `chooseModel`
+> (`Math.max(1, …)`) keeps the daily rail drawing down — but every assertion that derives cents from
+> `DEFAULT_MODEL` degenerates: folder-ingest reserve/refund, the shared root-request cost envelope,
+> cost-ceiling partial-output markers, ledger parity, and GRDL-03 itself. **GRDL-03's downgrade branch
+> becomes UNREACHABLE**: `chooseModel` tries `[DEFAULT_MODEL, CHEAP_MODEL]` in order and a free model
+> fits every positive budget, so it never reaches the cheap pin. `cost.test.ts` now records that
+> dormancy explicitly rather than asserting a downgrade that cannot happen — and carries the
+> instruction to restore the CHEAP_MODEL assertion on the same day the pin reverts, so the revert
+> cannot ship with an untested rail. THE 24 RED TESTS WERE NOT REWRITTEN TO AGREE; the recommendation
+> is a narrower per-call-site seam instead of a global repoint.
+>
+> **THE FALLBACK PINS MOVED TO GEMINI, AND THAT PART IS UNAMBIGUOUSLY CORRECT.** `CHEAP_MODEL` →
+> `gemini-3.5-flash-lite`, `RESEARCH_FALLBACK_MODEL` → `gemini-3.5-flash`. **NO COST NUMBER MOVES:**
+> `GEMINI_CHEAP_MODEL` and `OPENAI_CHEAP_MODEL` carry identical rows (0.1 / 0.4 per MTok). The reason
+> is diagnostic, not economic, and it was measured: with the fallback on the exhausted OpenAI account,
+> every workflow-pack eval died with `You have no credits remaining` — an error about the WRONG
+> VENDOR. ox-alpha had failed first (`Provider returned error`, 3 retries), `isFallbackEligible`
+> rolled it over, and only the billing message reached the caller. That is the 2026-08-07
+> "failures become UNDIAGNOSABLE" inversion reproduced exactly. With a live fallback the same pack ran
+> all 5 cases to completion. THE KNOWN CEILING: the Gemini free tier caps `generate_content` at 20
+> req/min/model — survivable for a fallback that only absorbs flakes, NOT for a primary.)
+
 > Last verified: 2026-08-12 (production release-gate formatting pass — the watched cost table had
 > only an extra blank line removed; model pricing, search fees, budget math, and kill-switch
 > behavior are unchanged.)

@@ -1,3 +1,89 @@
+> Last verified: 2026-08-25 (**`@openrouter/ai-sdk-provider` 3.0.0 ADOPTED (exact pin), REPLACING THE
+> `createOpenAI` + baseURL SHIM FOR `stealth/` IDS. The second SDK is a CORRECTNESS fix, not a
+> convenience** — OpenRouter is OpenAI-wire-compatible for the request body and NOT for the two things
+> this model needs: @ai-sdk/openai silently DROPPED `reasoningEffort` (it gates that parameter on its
+> own capability table, which has never heard of `stealth/ox-alpha`) and does not round-trip
+> `reasoning_details`, which OpenRouter requires to be passed back unmodified for a reasoning chain to
+> survive across turns. The old path also defaulted to `/responses` rather than `/chat/completions`.
+> Settings ride the MODEL (`openRouter().chat(id, OX_ALPHA_SETTINGS)`), not per-call providerOptions.
+>
+> **THE DIAL NOW DEMONSTRABLY WORKS AND IS DELIBERATELY LEFT UNSET.** `OX_ALPHA_SETTINGS` is `{}`. The
+> probe's output fell from ~16-20 tokens to 3 once the parameter actually reached the wire, and in
+> isolation `effort: low` is 2488 ms / 55 output tokens against a default of 6556 ms / 105. But the
+> PACK evidence does not support setting it: single `customer-complaint` runs scored low 1/5,
+> medium 2/5, default 0/5 — **and a REPEAT of the default config scored 1/5**, with individual cases
+> changing which way they failed. Run-to-run variance is at least +/-1 case, so all three settings sit
+> inside the noise, and reading that spread as a gradient would be inventing a finding. Repeats, not
+> another single run, are what would settle it — the upstream DeepSWE harness used `-k 3` for exactly
+> this reason.
+>
+> `reasoning: {enabled: false}` is HTTP 400: "Reasoning is mandatory for this endpoint and cannot be
+> disabled." That is the authoritative statement of the constraint.)
+
+> Last verified: 2026-08-25 (**`stealth/` MODELS NOW RESOLVE THROUGH `.chat(...)`, AND THE REASON IS
+> A PARAMETER THAT WAS BEING SILENTLY DISCARDED.**
+>
+> `resolveModel` returned `openRouter()(id)` — the bare callable — which in @ai-sdk/openai@4.0.11
+> means OpenAI's **Responses API**. Two things went wrong there, both without an error:
+>   1. the request went to `/responses`, not `/chat/completions`; and
+>   2. `providerOptions.openai.reasoningEffort` was DROPPED, with only a console warning
+>      ("reasoningEffort is not supported for non-reasoning models"), because the provider gates that
+>      parameter on its own model-capability table and has never heard of `stealth/ox-alpha`.
+> OBSERVED ON THE WIRE with a spying `fetch`: `reasoning_effort=undefined` via /responses,
+> `reasoning_effort="low"` via /chat/completions. **A dial that is silently discarded is worse than no
+> dial** — the first attempt at this looked applied, changed nothing, and would have been recorded as
+> "reasoning effort does not help" if the wire had not been inspected.
+>
+> `reasoningOptionsFor(id)` sets `reasoningEffort: "low"` for `stealth/` ids ONLY, keyed on the id of
+> the model that actually runs so a fallback attempt does not inherit the primary's dial. Gated rather
+> than global: sent to a non-reasoning OpenAI chat model it is a 400.
+>
+> **MEASURED AGAINST THE API DIRECTLY** (no SDK, same prompt), and the dial is real:
+>     default                       6556ms  out=105
+>     reasoning_effort: low         3160ms  out=55
+>     reasoning: {effort: low}      2488ms  out=55
+>     reasoning: {max_tokens: 256}  2230ms  out=50
+>     reasoning: {enabled: false}   HTTP 400 "Reasoning is mandatory for this endpoint and cannot be
+>                                   disabled."
+> That 400 is the authoritative statement of the constraint: reasoning cannot be turned off on this
+> model, only turned down. Through the SDK's chat path the model honoured it too — output tokens fell
+> 235 → 44 on the same prompt.
+>
+> **AND IT DID NOT FIX THE PACKS.** All three heavy packs still abort at `CALL_TIMEOUT_MS` — see
+> `docs/playbooks/workflow-packs.md` for the numbers. Keep the dial (it is free and it halves output),
+> but do not record it as the fix. `CALL_TIMEOUT_MS` is UNCHANGED at 45_000; it was raised to 180_000
+> for one measurement and reverted in the same session.)
+
+> Last verified: 2026-08-24 (ox-alpha trial — **`resolveModel` GAINED A THIRD BRANCH, AND THE
+> GROUNDED PROBE'S SEARCH COUNTER IS STALE.** `stealth/` ids now route to OpenRouter through
+> `createOpenAI({baseURL})` — the ALREADY-INSTALLED @ai-sdk/openai, because OpenRouter is
+> OpenAI-wire-compatible. No new dependency, no second SDK. The provider is lazy + memoised like the
+> Google ones, so a deployment with no `OPENROUTER_API_KEY` that never routes there still boots. The
+> FULL id is passed through unstripped (unlike the `openai/` and `google/` branches): OpenRouter
+> wants `stealth/ox-alpha` and `PRICING` is keyed on the same string, so resolve and price agree.
+>
+> **LIVE-VERIFIED:** `node scripts/probe-gemini.mjs stealth/ox-alpha` → PASS, in=94 out=16, $0.000000.
+> The probe's `google/`-only prefix guard was widened to accept `stealth/` (the plain `openai/` lane
+> stays excluded on purpose — it is the funded path every eval already exercises, so probing it
+> proves nothing and costs money). The file name is still probe-gemini.mjs: renaming it would touch a
+> BY-POSITION exclusion in `dispatchGuard.test.ts` for no behavioural gain.
+>
+> **TWO STALE THINGS WERE FOUND AND ONE IS STILL OPEN.**
+> 1. FIXED: the `tool_vendor_mismatch` verdict was deleted. It refused a grounded probe whose vendor
+>    differed from `RESEARCH_MODEL`'s, on the premise that `buildWebResearchTool` picks a hosted tool
+>    off that pin. It picks nothing — the tool is a LOCAL Tavily fetch taking no arguments and reading
+>    no model constant. Left standing it would have false-refused every grounded probe the moment
+>    `RESEARCH_MODEL` moved off `google/`. A headstone comment sits at the deletion site.
+> 2. **STILL OPEN — `probeGemini` MISCOUNTS SEARCHES AND WILL FALSE-FAIL ANY MODEL.** It counts
+>    `toolCalls.filter(c => c.providerExecuted)` and reads sources off `result.sources`. Both are
+>    hosted-tool shapes. `webResearch` is local, so `providerExecuted` is false on every part and
+>    `result.sources` is empty — the probe returns `no_search_call` even when the model searched
+>    correctly. OBSERVED: ox-alpha made two correct `webResearch` calls returning real URLs and was
+>    still graded `no_search_call`. **THE PRODUCT IS NOT AFFECTED — `runAgentLoop` was fixed for local
+>    tools on 2026-08-07 and counts `toolName === "webResearch"` (llm.ts, the `webSearchCalls` line),
+>    so no search fee is mis-billed.** It is the probe that never followed. Fix it to count by name and
+>    to read sources through the exported `sourcesFromToolOutput`; do NOT relax the verdict.)
+
 > Last verified: 2026-08-23 (27-09 — **`startWorkflowPack` GAINED AN OWNER-ONLY `previewVersion`,
 > AND IT EXISTS TO BREAK A DEADLOCK.** The shape looks like a debug affordance and is not: the pack
 > activation gate requires browser evidence, browser evidence requires running the pack in a

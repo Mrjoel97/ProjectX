@@ -117,7 +117,17 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
   {
     name: "GOOGLE_GENERATIVE_AI_API_KEY",
     tier: "feature",
-    whatBreaks: "The Gemini model lane.",
+    whatBreaks: "The Gemini model lane AND vault embeddings — vaultRag.ts pins Gemini embeddings.",
+  },
+  {
+    // "required" rather than "feature" because DEFAULT_MODEL and RESEARCH_MODEL both point at
+    // `stealth/ox-alpha` (the 2026-08-24 trial, packages/cost/src/cost.ts). While that is true this
+    // key IS the model lane, and a readiness screen that called it optional would be lying. It drops
+    // back to "feature" the moment the pins revert.
+    name: "OPENROUTER_API_KEY",
+    tier: "required",
+    whatBreaks:
+      "Every agent turn and every eval, while the model pins sit on stealth/ox-alpha. The OpenAI fallback absorbs nothing here — that account is the exhausted one.",
   },
   {
     name: "TAVILY_API_KEY",

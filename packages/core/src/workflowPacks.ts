@@ -130,7 +130,39 @@ export const MISSING_SOURCE_UNLOCK: Readonly<Record<MissingPackSource, string>> 
 export const MISSING_SOURCE_MENTIONS: Readonly<Record<MissingPackSource, readonly string[]>> = {
   "phase26-summaries": ["operations summaries", "business and operations", "reports summaries"],
   "content-shelf": ["content shelf", "saved content", "published content", "content you"],
-  "crm-facts": ["contacts and pipeline", "crm", "contact record", "pipeline", "deal"],
+  // WIDENED 2026-08-25 for `pack-customer-complaint`, which is the ONE body that names these two
+  // gaps in words no entry here matched. Every other body already uses this vocabulary verbatim —
+  // business-pulse and campaign-plan both write "Their contacts and pipeline" and "connected sales
+  // and accounting systems", sales-call-prep writes "The account, the deal, the pipeline. There is no
+  // CRM read here" — so this was not a general looseness problem, it was one body's diction.
+  //
+  // MEASURED: `missingNamed:crm-facts` failed on 3 of 5 customer-complaint cases on BOTH ox-alpha and
+  // gemini-3.5-flash, while the body was doing exactly what it was written to do. The model was
+  // obeying its instructions and the scorer could not see it.
+  //
+  // customer-complaint says: "**This customer's history with the business.** You cannot look up prior
+  // contact, past tickets, previous complaints, or their value as a customer." — no "crm", no
+  // "pipeline", no "deal". And: "**The order, the payment, the refund status.** No processor is
+  // connected here." — "payment processor" does not appear as a substring of "No processor is
+  // connected", which is the kind of near-miss a substring matcher is worst at.
+  //
+  // These are the body's OWN terms, kept narrow enough to stay specific to the source. Deliberately
+  // NOT added: anything matching a phrase a body FORBIDS. brand-review, for instance, legitimately
+  // says "no stored brand voice" while explicitly banning the model from writing "deviates from your
+  // brand voice" — adding "brand voice" here would reward the output that body exists to prevent.
+  "crm-facts": [
+    "contacts and pipeline",
+    "crm",
+    "contact record",
+    "pipeline",
+    "deal",
+    // pack-customer-complaint's diction for the same gap.
+    "prior contact",
+    "past ticket",
+    "previous complaint",
+    "customer's history",
+    "customer history",
+  ],
   "connector-financials": [
     "sales and accounting",
     "accounting",
@@ -138,8 +170,24 @@ export const MISSING_SOURCE_MENTIONS: Readonly<Record<MissingPackSource, readonl
     "invoicing",
     "connected system",
     "no revenue",
+    // pack-customer-complaint again: "No processor is connected here."
+    "processor",
+    "payment system",
   ],
-  "tenant-brand-guidance": ["brand guidance", "brand guidelines", "confirmed brand", "brand rules"],
+  // pack-brand-review's gap section says "no stored brand voice, style guide, terminology list or
+  // messaging pillar set" and "there is no brand record to compare it to" — none of which the
+  // original four phrases matched. It passed live ONLY because the model echoed "brand guidance"
+  // out of the PREFLIGHT text, which is luck, not design: the body is what teaches the wording.
+  // "brand voice" is deliberately NOT accepted — that body bans the model from writing "deviates
+  // from your brand voice", so accepting it would reward the exact output the body forbids.
+  "tenant-brand-guidance": [
+    "brand guidance",
+    "brand guidelines",
+    "confirmed brand",
+    "brand rules",
+    "brand record",
+    "style guide",
+  ],
   "org-roles": ["who owns", "who does what", "unassigned", "real owner", "role"],
   "task-system": ["task system", "publishing", "schedule", "task or publishing"],
 };

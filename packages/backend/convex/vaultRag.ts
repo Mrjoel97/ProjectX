@@ -38,8 +38,23 @@ import { internalAction } from "./_generated/server";
 // corpus is a measurable question, not a preference. Keep both until the fixtures answer it.
 const OPENAI_EMBEDDING_MODEL = "text-embedding-3-small";
 const GEMINI_EMBEDDING_MODEL = "gemini-embedding-001";
-/** The ACTIVE provider. One line — everything below routes off it. */
-const EMBEDDING_MODEL: string = OPENAI_EMBEDDING_MODEL;
+/** The ACTIVE provider. One line — everything below routes off it.
+ *
+ *  **BACK ON GEMINI 2026-08-24, and this time the reason is a trial, not an outage.** The dev OpenAI
+ *  key is exhausted again (`credit_balance_exhausted`), which made `vaultSmoke:seedCorpus` — the one
+ *  step of an eval run that embeds — the last paid dependency in a gate the ox-alpha trial otherwise
+ *  makes free. Gemini embeddings are free-tier eligible on the key the deployment already holds.
+ *
+ *  **THE OPEN A/B FROM 2026-08-08 IS NOW THE POINT, NOT A SIDE EFFECT.** That day's gate failed
+ *  `citesVaultDoc` on fixtures 29/30/31 in the OpenAI-model + Gemini-embeddings pairing: the seeded
+ *  needle (`evalgrd`, a meaningless token, which is exactly where two embedding models diverge most)
+ *  stopped reaching the specialist's memo. This flip pairs Gemini embeddings with a THIRD chat model,
+ *  so 29/30/31 are the fixtures that answer whether that was a retrieval fault or a model-pairing
+ *  one. Read them as the embedding verdict, not only as the ox-alpha verdict.
+ *
+ *  `embeddingContentHash` folds this name into every key, so the flip re-embeds the corpus
+ *  automatically — there is no migration to run and no stale-vector window. */
+const EMBEDDING_MODEL: string = GEMINI_EMBEDDING_MODEL;
 export const EMBEDDING_DIM = 1536; // MUST equal the model output AND stay ≤ Convex's 2048 cap (Pitfall 2)
 
 const usingGemini = (): boolean => EMBEDDING_MODEL === GEMINI_EMBEDDING_MODEL;

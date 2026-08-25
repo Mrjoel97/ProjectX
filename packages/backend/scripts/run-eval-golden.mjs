@@ -86,8 +86,16 @@ const COST_CAP_USD = 2.0;
 
 /** The model every evidence row records. ONE constant for both scopes (21-03): the global and
  *  tenant writers used to be one block and are now two, and a hand-copied literal in the second is
- *  exactly how a run comes to certify itself against a model it did not use. */
-const EVAL_MODEL = "openai/gpt-4o-mini";
+ *  exactly how a run comes to certify itself against a model it did not use.
+ *
+ *  **MOVED TO `stealth/ox-alpha` 2026-08-24 WITH DEFAULT_MODEL (the ox-alpha trial).** This literal
+ *  and `DEFAULT_MODEL` in packages/cost/src/cost.ts MUST move together — a run picks its model from
+ *  `chooseModel` inside the deployment and records THIS string, so if they drift the evidence row
+ *  certifies a model that never ran, which is the one failure the paragraph above exists to prevent.
+ *  It cannot be imported: this is a .mjs script and @pikar/cost is unbuilt TypeScript. Revert both
+ *  lines on the same day.
+ */
+const EVAL_MODEL = "stealth/ox-alpha";
 
 // 15-06: how long a tapped gap's SCHEDULED specialist dispatch gets to leave `collecting`.
 // `landSpecialistResult` runs in a `finally` on every outcome (success, overrun, the four governed

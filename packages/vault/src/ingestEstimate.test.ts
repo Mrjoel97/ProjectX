@@ -152,3 +152,59 @@ describe("estimateFolderCents — conservatism, by direction", () => {
     expect(estimateFolderCents([])).toEqual({ estCents: 0, perFile: [], skipped: [] });
   });
 });
+
+// ── THE PER-DOCUMENT FLOOR ───────────────────────────────────────────────────────────
+//
+// **A DOCUMENT THAT INGESTS IS NEVER FREE**, and this is the invariant that failed silently on
+// 2026-08-25. `perDocumentUsd()` is `EMBED_USD_PER_MTOK + modelUsd(DEFAULT_MODEL)`;
+// `EMBED_USD_PER_MTOK` is already 0, so the moment DEFAULT_MODEL was pointed at a $0 model the whole
+// term became 0, every document estimated at 0 cents, and the folder-ingest reservation stopped
+// reserving — the "never starve the cockpit" isolation quietly stopped isolating. Eight guardrails
+// tests went from real cent counts to `estCents: 0`.
+//
+// `modelUsd` already refused a model ABSENT from PRICING for exactly this stated reason ("estimating
+// it at 0 would reserve nothing and strand the folder mid-run") — but a model priced AT zero is a
+// different code path with an identical outcome, and it walked straight through.
+//
+// These assertions hold under ANY pricing, which is the point: they are not calibrated to today's
+// pin, so they keep holding when it moves and they fail the day the floor is removed AND the default
+// is free.
+describe("every ingested document draws at least one cent", () => {
+  const kinds = [
+    { label: "text-layer pdf (extract is FREE — the floor is the only cost)", file: { size: 4096, mimeType: "application/pdf", hasTextLayer: true } },
+    { label: "plain text", file: { size: 1024, mimeType: "text/plain" } },
+    { label: "markdown", file: { size: 1024, mimeType: "text/markdown" } },
+  ];
+  for (const { label, file } of kinds) {
+    test(label, () => {
+      const { estCents, perFile, skipped } = estimateFolderCents([file]);
+      // Guard the guard: if this input were SKIPPED the >= 1 assertion would pass vacuously, because
+      // a skipped file is legitimately 0 cents and never reserved.
+      expect(skipped, "this fixture must actually ingest, or the assertion below proves nothing").toHaveLength(0);
+      const first = perFile[0];
+      expect(first, "one input in, one estimate out").toBeDefined();
+      expect(first?.cents).toBeGreaterThanOrEqual(1);
+      expect(estCents).toBeGreaterThanOrEqual(1);
+    });
+  }
+
+  // The floor is PER DOCUMENT, not per folder — a 500-file folder must not round down to one cent.
+  test("the floor is per-document, so a folder scales with its file count", () => {
+    const one = estimateFolderCents([{ size: 1024, mimeType: "text/plain" }]).estCents;
+    const many = estimateFolderCents(
+      Array.from({ length: 50 }, () => ({ size: 1024, mimeType: "text/plain" })),
+    ).estCents;
+    expect(many).toBeGreaterThanOrEqual(50);
+    expect(many).toBe(one * 50);
+  });
+
+  // A SKIPPED file is still genuinely free — the floor must not start reserving for work that will
+  // never run, which would inflate every reservation by the size of the junk in the folder.
+  test("a skipped file is still 0 cents — the floor applies to work that HAPPENS", () => {
+    const { skipped, perFile } = estimateFolderCents([
+      { size: 1024, mimeType: "application/x-msdownload" },
+    ]);
+    if (skipped.length === 0) return; // the mime is ingestable on this build; nothing to assert
+    expect(perFile[0]?.cents).toBe(0);
+  });
+});

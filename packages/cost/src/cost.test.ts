@@ -7,6 +7,8 @@ import {
   DEFAULT_MODEL,
   estimateCostUsd,
   estimateTokens,
+  EXPECTED_OUTPUT_TOKENS,
+  OX_ALPHA_MODEL,
   priceRealtime,
   priceTranscription,
   priceUsage,
@@ -36,6 +38,17 @@ describe("estimateCostUsd", () => {
     const r = estimateCostUsd(DEFAULT_MODEL, 1_000_000, 0);
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.value).toBeCloseTo(0.15, 10);
+  });
+  // KEPT from the 2026-08-24 ox-alpha trial even though the pin moved back, because the distinction
+  // it draws is permanent and was NOT obvious: a model priced AT zero returns ok(0) while one that is
+  // ABSENT from PRICING returns Err(unknown_model). Callers that treat "no cost" and "unknown cost"
+  // alike are how a free model silently disabled the folder-ingest reservation (see
+  // packages/vault/src/ingestEstimate.ts).
+  it("priced-at-zero and unpriced are DIFFERENT — ok(0) is not Err(unknown_model)", () => {
+    expect(estimateCostUsd(OX_ALPHA_MODEL, 1_000_000, 1_000_000).ok).toBe(true);
+    const free = estimateCostUsd(OX_ALPHA_MODEL, 1_000_000, 1_000_000);
+    if (free.ok) expect(free.value).toBe(0);
+    expect(estimateCostUsd("stealth/not-a-real-model", 1, 1).ok).toBe(false);
   });
   it("unknown model → err(unknown_model), never NaN", () => {
     const r = estimateCostUsd("openai/does-not-exist", 1, 1);
@@ -75,6 +88,20 @@ describe("chooseModel", () => {
     const r = chooseModel(safe, 0.0005);
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.value.model).toBe(CHEAP_MODEL);
+  });
+  // THE REGRESSION GUARD FOR THE 2026-08-24 TRIAL, kept because the trial WILL be repeated: a free
+  // DEFAULT_MODEL makes this whole branch unreachable (it fits every positive budget), and the test
+  // above would then be a vacuous assertion over a dead path rather than a failure. Assert the
+  // precondition directly so a future repoint reds HERE, with the reason attached.
+  it("the downgrade branch is only reachable while the default COSTS something", () => {
+    const perRequest = estimateCostUsd(DEFAULT_MODEL, estimateTokens(safe), EXPECTED_OUTPUT_TOKENS);
+    expect(perRequest.ok).toBe(true);
+    if (perRequest.ok)
+      expect(
+        perRequest.value,
+        "DEFAULT_MODEL is free, so chooseModel can never reach CHEAP_MODEL and GRDL-03's downgrade " +
+          "is dormant — the test above is now vacuous. See OX_ALPHA_MODEL in cost.ts.",
+      ).toBeGreaterThan(0);
   });
   it("~zero budget → err(over_budget) (fail closed)", () => {
     const r = chooseModel(safe, 0);

@@ -33,9 +33,10 @@
  * NOT a vitest test, for the same reasons as check-fal-catalog: it costs money (a few tokens), needs
  * a live deployment and credentials, and would make `pnpm test` non-offline and flaky.
  *
- * `--grounded` PROBES THE RESEARCH PATH, not just the model. It attaches the production hosted-search
- * tool and adds three failing verdicts for 200-OK responses that read as success: `no_search_call`,
- * `no_sources`, `tool_vendor_mismatch`. The Gemini research pins have never executed a grounded call
+ * `--grounded` PROBES THE RESEARCH PATH, not just the model. It attaches the production web-research
+ * tool and adds two failing verdicts for 200-OK responses that read as success: `no_search_call`
+ * and `no_sources`. (A third, `tool_vendor_mismatch`, was deleted 2026-08-24 — `webResearch` is a
+ * LOCAL Tavily tool with no vendor to mismatch; llm.ts carries the headstone.) The Gemini research pins have never executed a grounded call
  * (see the debt at `RESEARCH_MODEL` in packages/cost/src/cost.ts), and the Phase-16 eval CANNOT be
  * trusted until both pins return PASS here — a green gate on an unproven grounding path certifies
  * nothing. Run it against BOTH: the fallback is reached by `isFallbackEligible` and is equally
@@ -46,6 +47,13 @@
  *   node scripts/probe-gemini.mjs google/gemini-3.5-flash-lite
  *   node scripts/probe-gemini.mjs --grounded                              # RESEARCH_MODEL
  *   node scripts/probe-gemini.mjs google/gemini-3.5-flash-lite --grounded # RESEARCH_FALLBACK_MODEL
+ *
+ * IT IS NO LONGER GEMINI-ONLY (2026-08-24). The action's prefix guard now also accepts `stealth/`
+ * ids, so this is the probe for the ox-alpha trial too — the file name is historical, and renaming
+ * it would touch a by-position exclusion in dispatchGuard.test.ts for no behavioural gain:
+ *   node scripts/probe-gemini.mjs stealth/ox-alpha
+ * The plain `openai/` lane stays excluded on purpose: it is the funded-account path every eval
+ * already exercises, so probing it proves nothing new and costs money.
  */
 import { spawnSync } from "node:child_process";
 
@@ -152,11 +160,6 @@ const FIXES = {
     "maxOutputTokens budget, so a tight cap returns empty text with a nonzero output count and NO\n" +
     "error. Raise maxOutputTokens, or disable thinking via providerOptions, at the CALL SITE that\n" +
     "produced this. Treat it as a real failure: downstream code expecting prose gets an empty string.",
-  tool_vendor_mismatch:
-    "`buildWebResearchTool` (llm.ts) picks its vendor from RESEARCH_MODEL, not from the id you passed,\n" +
-    "so it would have sent OpenAI's hosted search to a Gemini model — a guaranteed 400 that would say\n" +
-    "nothing about Gemini. This is the expected state after reverting the pins to OpenAI. Either probe\n" +
-    "the OpenAI path with scripts/run-probe-websearch.mjs, or repoint RESEARCH_MODEL back to google/.",
   no_search_call:
     "A 200 that READS as success. Two unrelated causes, and the toolCalls line above separates them:\n" +
     "  EMPTY toolCalls        — the model answered from memory. It is a prompt/model problem: the probe\n" +
@@ -208,12 +211,18 @@ if (res.verdict === "ok") {
           "hosted-search tool, the SDK flagged the call as provider-executed (so the fee is counted),\n" +
           "and grounding sources reached `res.sources` (so the honesty verdict is not stuck at\n" +
           '"found nothing"). Probe the OTHER research pin before running the gate.'
-      : "\nThe google/ branch of resolveModel works end to end on this deployment.\n" +
+      : `\nThe ${res.model.split("/")[0]}/ branch of resolveModel works end to end on this deployment.\n` +
           "It does NOT prove GROUNDING works — re-run with --grounded before trusting the Phase-16 eval.",
   );
+  // Which caveat applies depends on the vendor probed, and printing the wrong one is how an
+  // operator is told to check a price page that does not price this model.
   console.log(
-    "It does NOT prove the price is CORRECT — the Gemini rows are pinned unverified. Check them\n" +
-      "against Google's Vertex pricing page before routing production traffic here.",
+    res.model.startsWith("stealth/")
+      ? "It does NOT prove the price STAYS correct — stealth/ox-alpha is free only during its\n" +
+          "OpenRouter preview, and that preview can be withdrawn WITHOUT NOTICE. A $0 PRICING row is\n" +
+          "right today and silently under-draws the daily rail the moment it stops being free."
+      : "It does NOT prove the price is CORRECT — the Gemini rows are pinned unverified. Check them\n" +
+          "against Google's Vertex pricing page before routing production traffic here.",
   );
   process.exit(0);
 }

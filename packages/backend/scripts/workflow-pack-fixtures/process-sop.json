@@ -8,7 +8,7 @@
       "Save it."
     ],
     "expect": {
-      "outcome": "useful",
+      "outcome": "partial",
       "operations": ["ground-in-vault", "save-sop"],
       "sources": {
         "vault": "available",

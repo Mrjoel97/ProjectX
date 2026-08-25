@@ -1,5 +1,28 @@
 # Playbook: Production Beta Readiness (25-10)
 
+> Last verified: 2026-08-24 (ox-alpha trial — **ONE NEW `required`-TIER MANIFEST NAME:
+> `OPENROUTER_API_KEY`.** Added to `ENV_MANIFEST` in `convex/lib/env.ts`. The manifest is
+> derived-checked — `env.test.ts` scans source for `process.env.X` and reds when a consumed name is
+> classified by nobody — so the row is mandatory, not documentation.
+>
+> **THE TIER IS `required` DELIBERATELY, AND IT IS CONDITIONAL ON A PIN.** While
+> `DEFAULT_MODEL`/`RESEARCH_MODEL` point at `stealth/ox-alpha` (packages/cost/src/cost.ts) this key IS
+> the model lane: absent, every agent turn and every eval fails, and the OpenAI fallback absorbs
+> nothing because that account is the exhausted one. A readiness screen calling it `feature` would be
+> lying to an operator. **It must drop back to `feature` on the same edit that reverts those pins** —
+> a `required` row for a key nothing routes to would red a healthy production for no reason.
+>
+> `GOOGLE_GENERATIVE_AI_API_KEY`'s `whatBreaks` was corrected in the same pass: it is no longer only
+> "the Gemini model lane". It now also carries VAULT EMBEDDINGS (`vaultRag.ts` pins
+> `gemini-embedding-001`) and BOTH fallback pins. On this deployment it is the single credential
+> whose absence would take out ingest, retrieval and every model failover at once.
+>
+> **PRODUCTION HAS NOT BEEN TOLD ANY OF THIS.** The key is set on the LOCAL dev deployment only, and
+> per the standing deploy gate nothing here is a licence to deploy — the pins, the tier, and the
+> Stealth-EULA data question (prompts are retained and shared with an ANONYMOUS provider) are all
+> open. Eval fixtures are synthetic so the trial is clean; tenant traffic is a separate §4 decision
+> that has NOT been taken.)
+
 > Last verified: 2026-08-21 (the promotion gate is `startsWith`, not `contains` — **AND THE FIRST
 > VERSION NEARLY DEPLOYED PRODUCTION BY ACCIDENT ON ITS OWN INTRODUCING MERGE.** Read this before
 > touching the clause.)

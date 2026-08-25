@@ -1,3 +1,55 @@
+> Last verified: 2026-08-25 (**A DOCUMENT THAT INGESTS IS NEVER FREE — `estimateFile` now floors the
+> per-document term at ONE CENT, and the hole it closes was open in plain sight.**
+>
+> `perDocumentUsd()` is `EMBED_USD_PER_MTOK + modelUsd(DEFAULT_MODEL)`. `EMBED_USD_PER_MTOK` is
+> already 0, so the moment `DEFAULT_MODEL` was pointed at a $0 model (the 2026-08-24 ox-alpha trial)
+> the whole term became 0, every document estimated at 0 cents, and the folder-ingest reservation
+> stopped reserving. The rail did not error — it just stopped protecting the cockpit from a large
+> folder. MEASURED: eight guardrails tests went from real cent counts to `estCents: 0`.
+>
+> **`modelUsd` ALREADY REFUSED THIS OUTCOME AND STILL MISSED IT.** Its throw for an unpriced model is
+> justified in the file with exactly the right sentence — "estimating it at 0 would reserve nothing and
+> strand the folder mid-run (the A7 defect, one rail over)". It guarded the ABSENT case. The
+> priced-at-zero case reaches the same end through a different path. **When a comment names an outcome
+> as forbidden, guard the OUTCOME, not the one route to it you happened to think of.**
+>
+> The floor is `Math.max(1, centsFor(perDocumentUsd()))` — the same fail-closed bias `chooseModel`
+> already applies ("a sub-cent estimate still costs >= 1 cent of budget") — and it sits on the
+> PER-DOCUMENT term, not the folder total, so a 500-file folder cannot round down to a single cent.
+>
+> `ingestEstimate.test.ts` 13 -> 18 assertions, all written to hold under ANY pricing so they are not
+> calibrated to today's pin: every non-skipped document is >= 1 cent, a 50-file folder is >= 50, and a
+> SKIPPED file is still 0 (the floor must not start reserving for work that never runs). Each also
+> asserts the fixture actually ingests, so the >= 1 claim cannot pass vacuously on a skipped file.
+> **MUTATION-VERIFIED under a simulated free default: without the floor all four fail; with it all four
+> pass** and only the pre-existing OCR price pins red, which is those pins doing their job.)
+
+> Last verified: 2026-08-24 (ox-alpha trial — **EMBEDDINGS ARE BACK ON GEMINI, AND THE 2026-08-08 A/B
+> IS NOW THE POINT RATHER THAN A SIDE EFFECT.** `vaultRag.ts`'s one-line `EMBEDDING_MODEL` switched
+> `text-embedding-3-small` → `gemini-embedding-001`. Same 1536 dims, so the Convex vector index and
+> the schema are untouched; `MAX_EMBEDDINGS_PER_CALL` moves with the provider (2048 → 100) because
+> Google refuses batches over 100; the unit-normalisation path is already in place for Gemini's
+> Matryoshka truncation (L2 ≈ 0.6976 at 1536, re-scaled).
+>
+> WHY: the dev OpenAI key is exhausted again, and `vaultSmoke:seedCorpus` — the one step of an eval
+> run that embeds — was the last paid dependency in a gate the trial otherwise makes free.
+>
+> **NO MIGRATION IS NEEDED AND THAT IS BY CONSTRUCTION**: `embeddingContentHash` folds the model name
+> into every key, so the flip re-embeds automatically with no stale-vector window.
+>
+> **LIVE-VERIFIED TODAY**, which is more than the previous flip got: the deployment log shows both
+> `vaultSmoke:seedCorpus` (5 batches) and `vaultGround:vaultGroundHydrated` running through
+> `google.embedding / gemini-embedding-001`, with a `vault.searched` audit row at `resultCount: 5` —
+> so ingest AND retrieval both work on the free key.
+>
+> **THE OPEN QUESTION THIS IS THE INSTRUMENT FOR.** The 2026-08-08 gate failed `citesVaultDoc` on
+> fixtures 29/30/31 in the OpenAI-model + Gemini-embeddings pairing: the seeded needle (`evalgrd`, a
+> meaningless token — exactly where two embedding models diverge most) stopped reaching the
+> specialist's memo. Neither provider is dead code; this is a live A/B and it is still unresolved.
+> Running 29/30/31 now pairs Gemini embeddings with a THIRD chat model, which separates "retrieval
+> fault" from "model-pairing fault". Read those three fixtures as the EMBEDDING verdict, not only as
+> the chat-model verdict.)
+
 > Last verified: 2026-08-22 (Foglamp tracing — **NO VAULT BEHAVIOUR CHANGED.** The hosted-OCR
 > `generateText` in `vaultExtract.ts` is bound to the `attachment-extractor` agent. `vaultLlm.ts`,
 > `vaultDigest.ts` and `vaultTranscribe.ts` are NOT traced and cannot be — the first two are

@@ -8,7 +8,7 @@
       "That reads well, put it in front of me."
     ],
     "expect": {
-      "outcome": "useful",
+      "outcome": "partial",
       "operations": ["ground-in-vault", "draft-reply", "stage-for-approval"],
       "sources": {
         "vault": "available",
@@ -75,7 +75,7 @@
     "description": "Two inbox messages could be the complaint. The pack must ask which rather than guess, because guessing means replying to the wrong customer.",
     "turns": ["Reply to that complaint from this morning."],
     "expect": {
-      "outcome": "partial",
+      "outcome": "useful",
       "operations": ["list-inbox-headers"],
       "sources": {
         "inbox": "available",
@@ -97,7 +97,7 @@
       "Too apologetic. We did nothing wrong here. Redo it and show me again."
     ],
     "expect": {
-      "outcome": "useful",
+      "outcome": "partial",
       "operations": ["ground-in-vault", "draft-reply", "stage-for-approval"],
       "sources": {
         "vault": "available",

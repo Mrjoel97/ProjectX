@@ -1,5 +1,293 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
+> Last verified: 2026-08-25 (**`--repeat N` — THE PACK GATE CAN NOW MEASURE STABILITY INSTEAD OF
+> ROLLING DICE.** `run-workflow-pack-evals.mjs --packs <id> --candidate --repeat 3` runs the fixtures
+> N times and reports each case as `stable-pass` (N/N), `stable-fail` (0/N) or `FLAKY`, with a count
+> of every assertion key that fired across all runs.
+>
+> **THE THREE BUCKETS EXIST BECAUSE THEY NEED DIFFERENT ACTIONS**, and conflating them is what wasted
+> most of 2026-08-24/25: `stable-fail` is a real defect and is fixable (read the failure keys — a case
+> that fails the SAME way every time is a bug in the body, the corpus or the code); `FLAKY` is a
+> statement about the MODEL, and no amount of editing a fixture will settle it. A single run cannot
+> tell them apart, and every model comparison made from one invocation this week was inside the noise.
+>
+> **`--repeat` NEVER WRITES EVIDENCE, AT ANY SCORE.** A pack certified by the best of N runs is
+> exactly the vacuous green the all-green gate exists to refuse, and repeat mode would be the obvious
+> way to launder it. Measure with `--repeat`; certify with a normal single all-green run.
+>
+> **IT SURVIVES AN ABORTED RUN, AND THAT WAS LEARNED BY LOSING DATA.** The first 3-run batch had run 2
+> hit `agent_timeout`; the abort propagated and discarded run 1's completed results — the exact
+> measurement the batch existed to collect. Repeat mode now catches a run-level abort, counts it,
+> reports it (`+N ABORTED`, with a NOTE that the counts are conditional on the runs that finished) and
+> carries on. The single-run GATE path is deliberately unchanged: there, an abort must still
+> propagate, because a run that could not complete must never be summarised as a result. All runs
+> aborting is itself an abort — an environment problem, not a stability measurement.
+>
+> `summarizeRepeats` is pure and exported, with an assert-based self-test covering all three buckets,
+> the "same case fails two DIFFERENT ways" shape that motivated it, and the one-run case (which must
+> report zero flakiness). MUTATION-VERIFIED: collapsing the flaky bucket into stable-pass reds it.
+>
+> **NO STABILITY NUMBER WAS OBTAINED, BECAUSE OX-ALPHA WENT DOWN MID-MEASUREMENT.** The first batch's
+> run 1 scored 3/5 — against 0/5 and 1/5 from identical single runs an hour earlier, which is the
+> variance thesis in one line. Every subsequent run then aborted with
+> `AI_APICallError: The service is currently unavailable` and `Provider returned error`. A free stealth
+> preview is not a stable measurement platform: **comparisons across TIME are as untrustworthy as
+> comparisons from a single run**, so a config A/B must interleave its runs, not run A then B.
+>
+> Worth chasing separately: those errors reached the caller UNCAUGHT. A 503-class `AI_APICallError`
+> should be `isFallbackEligible` and roll over to the Gemini fallback rather than failing the pack.)
+
+> Last verified: 2026-08-25 (**THE PACK SCORE IS TOO NOISY TO A/B A MODEL SETTING ON ONE RUN, AND
+> THIS IS THE MOST IMPORTANT THING LEARNED TODAY ABOUT USING THIS GATE.**
+>
+> Two runs of `customer-complaint` on the IDENTICAL configuration scored **0/5 and 1/5**, and the
+> per-case failure modes moved: case 03 failed on `missingNamed` in one run and on dropped tool calls
+> in the next; case 05 failed then passed. Every model/setting comparison made from a single
+> invocation — including the low/medium/default reasoning sweep recorded in
+> `docs/playbooks/cockpit.md` — is therefore inside the noise.
+>
+> **THIS RETROSPECTIVELY QUALIFIES AN EARLIER CLAIM IN THIS FILE.** The "1/5 -> 3/5" attributed to the
+> phrase-table widening is not a clean measurement of that change. The MECHANISM is still sound and is
+> proven independently: the phrase fix is deterministic string matching, guarded by a test that was
+> mutation-verified RED, and the specific `missingNamed:crm-facts` failures did disappear from the
+> cases that had them. What is NOT established is the pack-score delta. Same for the ox-alpha vs
+> gemini A/B (0/5 vs 1/5) — one run each, one case apart, inside the noise.
+>
+> **WHAT IS ESTABLISHED IS THE DETERMINISTIC WORK**, because none of it depends on a sample:
+>   • the scorer scope fix (prose was graded on the last turn while trace facts were whole-run) —
+>     mutation-verified;
+>   • the 11 corrected fixtures + the outcome-reachability validator rule — both directions
+>     mutation-verified, and the `outcome` failures disappeared and STAYED gone across every
+>     subsequent run;
+>   • the phrase table matching the bodies' own vocabulary — guarded, mutation-verified.
+>
+> **HOW TO USE THIS GATE FROM NOW ON:** a pack score from ONE invocation is a data point about the
+> dice, not about the change. Compare configurations with repeats, or compare them on the
+> deterministic planes (which assertion fired, and why) rather than on the pass count. A single green
+> run is also not evidence of a fix — which is what the activation gate's all-green requirement has
+> been protecting against all along.)
+
+> Last verified: 2026-08-25 (**THE HEAVY PACKS NEED 113-164 SECONDS AND THE BUDGET IS 45. MEASURED,
+> BY RAISING `CALL_TIMEOUT_MS` TO 180_000 FOR ONE RUN AND REVERTING IT.**
+>
+> With the clock raised, `sales-call-prep` completed all five cases instead of aborting on case 1:
+>     01  127.1s   02  145.8s   03  164.4s   04   16.8s   05  113.0s
+> Against a 45 s budget that is not marginal, it is 3-4x. `CALL_TIMEOUT_MS` was sized in the
+> gpt-4o-mini era and D12's reasoning still holds — raising it would make the wall-clock marker the
+> ROUTINE outcome rather than a rare safety net — so it was PUT BACK. This is a product decision about
+> what a pack is allowed to cost in seconds, and it belongs to the owner, not to a session.
+>
+> Turning reasoning down did not rescue them: `reasoningEffort: "low"` now genuinely reaches the wire
+> (see `docs/playbooks/cockpit.md` — it was being silently discarded before) and all three heavy packs
+> still abort at 45 s.
+>
+> **AND MORE CLOCK IS NOT SUFFICIENT EITHER — THIS IS THE FINDING THAT MATTERS.** Given 180 s,
+> sales-call-prep still scored 0/5, and the dominant failure changed shape: three cases returned
+> `outcome: no_findings`, which is `outcomeFor`'s verdict for an EMPTY REPLY. The model ran for two
+> minutes, called its tools, and produced nothing — with `citations: expected >= 1, got 0` alongside,
+> consistent with an empty body. That is the `empty_text` failure the Gemini probe was built to catch,
+> now on a different model: **reasoning consuming the output budget**. So the heavy research packs have
+> a second, independent problem, and buying them more seconds would only make them fail slower.
+>
+> WHERE THIS LEAVES THE SIX PACKS, all fixes in place, nothing recorded, all dark:
+>     business-pulse      4/5   (sole failure: case 02 drops its tool calls)
+>     customer-complaint  3/5   (case 02 drops tool calls; case 04 asks a clarifying question)
+>     brand-review        aborts at 45 s
+>     campaign-plan       aborts at 45 s
+>     sales-call-prep     aborts at 45 s — and 0/5 even at 180 s, on empty replies
+>     process-sop         case 01 drops tool calls, then aborts
+> The two packs that PASS things are the two that do no web research and create no documents.)
+
+> Last verified: 2026-08-25 (**`missingNamed` WAS A VOCABULARY MISMATCH, NOT A MODEL DEFECT.**
+> `MISSING_SOURCE_MENTIONS` is matched as a case-insensitive SUBSTRING against what the model wrote,
+> and the model's wording comes from its body. Four of the six bodies already use the table's
+> vocabulary verbatim — business-pulse and campaign-plan both write "Their contacts and pipeline" and
+> "connected sales and accounting systems", sales-call-prep writes "The account, the deal, the
+> pipeline. There is no CRM read here". **pack-customer-complaint is the one body that does not**, and
+> it is the pack that kept failing: its gap section says "You cannot look up prior contact, past
+> tickets, previous complaints" and "No processor is connected here" — and "payment processor" is not
+> a substring of "No processor is connected", the near-miss a substring matcher is worst at. The model
+> was following its instructions and the scorer could not see it, on BOTH models.
+>
+> Widened to the bodies' own terms, per the table's own standing instruction ("loosen a phrase when a
+> body legitimately says it another way; never delete a source's entry"). `tenant-brand-guidance` was
+> widened too, with `brand record` and `style guide`.
+>
+> **ONE PHRASE WAS DELIBERATELY REFUSED: `brand voice`.** pack-brand-review's gap section legitimately
+> says "no stored brand voice", but that same body BANS the model from writing "deviates from your
+> brand voice". Accepting the phrase would have rewarded the exact output the body exists to prevent.
+> A phrase list is not just a matcher — it is an incentive.
+>
+> **THE NEW GUARD, AND THE TWO WAYS IT WAS WRONG FIRST.** `workflowPacks.test.ts` now asserts every
+> pack body's gap section contains at least one accepted phrase for each source the matrix calls
+> missing. Both mistakes are instructive:
+>   1. **Whole-body matching was VACUOUS.** pack-customer-complaint.md contains "a CRM" (describing
+>      what a human rep can do) and "the contact record" (inside "Never write to the contact record"),
+>      so it passed on two mentions that are not the gap statement. Proven by mutation: removing the
+>      widened phrases left the whole-body version GREEN. Scoped to the gap section, it goes RED.
+>   2. **The section regex matched only "cannot read".** pack-process-sop heads its section "What you
+>      CANNOT **do**" — its gaps are actions (assign an owner, publish) rather than reads — so the
+>      guard reported a missing section that was there and covered. Widened to `read|do`. **This is
+>      why process-sop-01's `missingNamed` failure was NEVER a wording problem:** its section already
+>      contains "who does what", "unassigned", "role", "task system", "publishing" and "schedule". It
+>      failed because the RUN failed.
+> MUTATION-VERIFIED RED for the customer-complaint case it was written for.
+>
+> **A LIMIT OF THE GUARD, STATED BECAUSE IT NEARLY MISLED.** brand-review passed live BEFORE its
+> phrases were widened, because the model echoed "brand guidance" out of the PREFLIGHT text
+> (`PACK_SOURCE_LABEL` + `MISSING_SOURCE_UNLOCK` reach the prompt via `preflightPrompt`), not out of
+> the body. So a body can fail this guard and still pass live on luck. The guard checks the body
+> anyway: the body is the half we control, and `crm-facts` proves preflight coverage is NOT sufficient
+> — `PACK_SOURCE_LABEL["crm-facts"]` contains the accepted word "pipeline" and the runs still failed.
+>
+> **MEASURED, live, ox-alpha primary + gemini fallback: customer-complaint 1/5 → 3/5** (01 and 05 both
+> flipped to PASS). Full sweep with every fix in place:
+>   business-pulse     4/5 — sole failure is case 02 dropping its tool calls
+>   customer-complaint 3/5 — case 02 dropped tool calls; case 04 is the ambiguous-message case, where
+>                            the model asks a clarifying question and so never reaches naming a gap
+>   process-sop        case 01 dropped tool calls, then an abort
+>   brand-review / campaign-plan / sales-call-prep — ALL THREE ABORTED ON CASE 1 with
+>                            `ConvexError {kind: "agent_timeout"}`
+> Nothing recorded; every pack stays dark.
+>
+> **THE BINDING CONSTRAINT HAS MOVED, AND IT IS NO LONGER THE CORPUS OR THE SCORER.** It is ox-alpha
+> latency: the three packs that abort are the heavy ones (webResearch, document creation), and the
+> ones that complete run 15–22 s per case. Dropped tool calls and `agent_timeout` are very likely ONE
+> root cause — reasoning is MANDATORY on this model and cannot be disabled, only turned down, and
+> `@ai-sdk/openai` does not round-trip OpenRouter's `reasoning_details` between tool-loop steps, so the
+> model re-reasons from scratch on every step. The cheap first experiment is
+> `providerOptions.openai.reasoningEffort: "low"`; the structural one is
+> `@openrouter/ai-sdk-provider@3.0.0` (peers `ai ^7`, we run 7.0.20). NEITHER HAS BEEN TRIED.)
+
+> Last verified: 2026-08-25 (**11 OF THE 30 FIXTURES EXPECTED A TERMINAL NO RUN OF THEIR PACK COULD
+> PRODUCE. CORRECTED, AND THE RULE THAT LETS THEM SHIP IS NOW IN THE VALIDATOR.**
+>
+> `outcomeFor` (workflowPackBinding.ts) is the only writer of a pack terminal: `partial` when
+> `truncated || declaredUnsupported || runtimeMissing > 0`, `useful` otherwise. `runtimeMissing`
+> counts REACHABLE sources whose state is "unavailable"; a matrix-MISSING source lands in
+> `missingKnown` and deliberately does NOT make a run partial ("every plane it COULD have read did
+> answer" is the documented bar). Two consequences nobody had derived:
+>   • `useful` is impossible when the fixture declares a source the pack READS unavailable — 3 cases
+>     (customer-complaint 01 and 05 on `inbox`, process-sop 01 on `drive`).
+>   • `partial` is impossible when nothing is runtimeMissing AND the pack grants no
+>     `declareUnsupported`. **FOUR OF THE SIX PACKS GRANT NONE** — business-pulse,
+>     customer-complaint, process-sop, brand-review — and 8 of their fixtures did this.
+>
+> **NOT REJECTED, DELIBERATELY:** `partial` with nothing runtimeMissing on campaign-plan or
+> sales-call-prep, which DO grant `declareUnsupported`. That is reachable — the model may declare —
+> so it is a bet on behaviour, not an impossibility, and the validator does not grade bets. The four
+> such cases are campaign-plan-02/04 and sales-call-prep-02/04.
+>
+> THE CORPUS EDIT IS 11 VALUES AND NOTHING ELSE (11 insertions, 11 deletions across four files). A
+> first attempt rewrote the JSON with `JSON.stringify` and produced a 428-line reformat for an
+> 11-value change; it was thrown away and redone surgically, asserting per case that the id occurs
+> exactly once and that the outcome found is the one predicted.
+>
+> **THE SELF-TEST'S OWN `good()` TEMPLATE WAS AN INSTANCE OF THE DEFECT** — brand-review,
+> `outcome: "partial"`, nothing runtimeMissing — so the new rule rejected it and eight paired fact
+> rows had to move with it. Worth knowing before editing that template: every `scored()` fact row
+> must AGREE with `good().expect.outcome` except the `outcome` mutation, which must disagree.
+>
+> **THE `useful` DIRECTION CANNOT BE TESTED FROM `good()`, AND THAT IS A TRAP WORTH NAMING.**
+> brand-review reads only `vault`, and `probeSources` can never return `vault: "unavailable"`, so the
+> 27-08 producibility rule rejects that mutation FIRST with its own message — a test asserting
+> /is unreachable/ would have passed for the wrong reason on a rule that had been deleted. It needs a
+> pack with a reachable source that can genuinely be unavailable, so the self-test carries an inline
+> `goodCC()` (customer-complaint, which reads `inbox`) with its accepting case asserted first.
+> Rejections 36 → 38, tripwire floor raised to match. **BOTH HALVES MUTATION-VERIFIED RED.**
+>
+> **SUITE IDENTITY BUMPED — a fixture edit MUST retire old evidence.** `PACK_EVAL_SUITE.revision` →
+> `2026-08-25.phase27` and four `casesHash` values recomputed (campaign-plan and sales-call-prep are
+> untouched and their hashes are unchanged, which is the check that the edit went where it was aimed).
+> Retires nothing load-bearing: no pack was ever activated and no passing pack evidence exists.
+>
+> **MEASURED, live, ox-alpha primary + gemini fallback. EVERY `outcome` FAILURE IS GONE.**
+>   customer-complaint 1/5 (was 1/5, but all 3 outcome failures cleared — what remains is
+>                            `missingNamed` on 3 cases and dropped tool calls on 1)
+>   business-pulse     4/5 — the only failure is case 02 dropping its tool calls
+>   brand-review       case 01 PASS, then an `agent_timeout` abort
+>   process-sop        case 01 fails on tool calls + `missingNamed`, then an `agent_timeout` abort
+> Nothing was recorded; every pack stays dark. The aborts are `ConvexError {kind: "agent_timeout"}` —
+> ox-alpha latency (one case took 54.7 s), not a corpus fault.
+>
+> **WHAT IS LEFT IS NOT THE CORPUS.** Two things, and neither is a fixture defect: (1) `missingNamed`
+> — the model is TOLD the gap (`PACK_SOURCE_LABEL["crm-facts"]` = "your contact and pipeline records"
+> reaches the prompt through `preflightPrompt`, and the accepted phrases include bare "crm",
+> "pipeline" and "deal") and still does not say it, on both models, so it is a SKILL-BODY question;
+> (2) dropped tool calls, which is ox-alpha's known weakness and is 1 case per pack.)
+
+> Last verified: 2026-08-25 (**THE PACK SCORER GRADED PROSE AGAINST THE WRONG SCOPE, AND IT COST
+> 6 OF 8 `missingNamed` FAILURES.** `scoreCase` took a `reply` parameter that was only the FINAL
+> turn's text, while `facts` is whole-run and `calls` comes from `smoke:toolCallsForThread` —
+> whole-thread. Renamed to `transcript` (every turn joined with a blank line, so a phrase cannot be
+> manufactured across a turn boundary by two halves abutting).
+>
+> **HOW IT WAS FOUND, AND WHY THE METHOD MATTERS MORE THAN THE FIX.** An A/B on the same pack:
+> ox-alpha 0/5, gemini-3.5-flash 1/5, with `missingNamed:crm-facts` failing on 4 of 5 cases FOR BOTH
+> MODELS and cases 01 and 04 failing IDENTICALLY. A failure identical across two unrelated models is
+> not a model failure. The one passing case was the only 1-TURN fixture in the file; every 2-turn
+> fixture failed. The mechanism: the honest-partial statement is made when the pack first answers,
+> and turn 2 of these fixtures is a bare follow-up (`"That reads well, put it in front of me."`) with
+> no reason to restate a gap. The scorer was asking the model to repeat itself and calling it
+> dishonest when it did not.
+>
+> **THE SAME SCOPE BUG SAT UNDER TWO MORE CHECKS** — fixing only `missingNamed` would have left them:
+> `unsupportedFigures` could not see a figure invented in turn 1 (this widens a fabrication guard,
+> which cannot make a clean run red), and `citations` gated on a WHOLE-THREAD `webResearch` call then
+> counted URLs in the LAST reply, so a run that searched and cited in turn 1 failed for citing in the
+> wrong turn.
+>
+> **MEASURED, same pack, same model, scorer the only change: 0/5 → 1/5, `missingNamed` failures 5
+> cases → 2.** Case 03 flipped to PASS; cases 01 and 02 lost their `missingNamed` failures entirely.
+> Guarded by a new self-test pair (36 rejections, floor raised from 35): one case where the gap is
+> named in turn 1 and NOT repeated in turn 2 must PASS, paired with the pre-existing `silent` case
+> where a transcript that never names the gap must still FAIL — without the pair, "join the turns"
+> could be satisfied by a scorer that stopped checking. **MUTATION-VERIFIED:** reverting the scorer to
+> last-turn-only was observed RED on that assertion.
+>
+> **WHAT REMAINS IS NOT THE SCORER, AND ONE PIECE OF IT IS UNREACHABLE BY CONSTRUCTION.**
+> `expect.outcome: "useful"` CANNOT EVER HOLD for a fixture that declares a reachable source
+> unavailable. `buildPreflight` pushes any reachable source whose runtime state is `unavailable` into
+> `missingRuntime`, and `outcomeFor` returns `partial` whenever `runtimeMissing > 0`. Cases 01 and 05
+> declare `inbox: "unavailable"` AND expect `useful` — both got `partial` on both models on every run.
+> This is the same defect class 27-08 found in 24 of 30 wave-2 fixtures (a fixture asserting a state
+> no run can produce), it is MECHANICALLY DERIVABLE, and `validateFixture` should reject it the way it
+> already rejects `missingNamed` naming a source that is not missing for the pack. NOT FIXED HERE —
+> 27-08's owner ruling on this class was FIX THE CORPUS, so it wants the same ruling, not a quiet
+> edit. Case 04 is the inverse (expects `partial`, got `useful`). The only genuinely model-shaped
+> failure left is case 02 on ox-alpha: zero tool calls where gemini managed one.)
+
+> Last verified: 2026-08-24 (ox-alpha trial — **THE PACK GATE RAN LIVE FOR THE FIRST TIME. IT
+> COMPLETED, AND IT SCORED 0/5. NOTHING WAS ACTIVATED AND NO EVIDENCE WAS WRITTEN.**
+>
+> `run-workflow-pack-evals.mjs`'s `EVAL_MODEL` moved to `stealth/ox-alpha` with `DEFAULT_MODEL`, for
+> the same evidence-honesty reason recorded in `docs/playbooks/agent-runtime.md`.
+>
+> **RUN 1 AND 2 DIED ON A LIE, AND THE LIE IS WORTH REMEMBERING.** Both aborted with
+> `AI_APICallError: You have no credits remaining … platform.openai.com` — an error about a vendor the
+> pack was not using. ox-alpha had failed first (`Provider returned error`, 3 retries),
+> `isFallbackEligible` rolled over to the then-OpenAI `CHEAP_MODEL`, and only the dead account's
+> billing message survived to the caller. **A pack failure naming a vendor is not evidence that the
+> vendor ran.** Fixed by repointing the fallbacks to Gemini (see `docs/playbooks/guardrails.md`).
+>
+> **RUN 3, `--packs customer-complaint --candidate`: 5/5 cases EXECUTED, 0/5 passed, $0.0063, 18–26 s
+> per case.** Evidence correctly NOT recorded — it writes only on all-green, so the pack stays dark.
+>
+> **DO NOT READ 0/5 AS A MODEL VERDICT. THE CORPUS HAS NEVER BEEN RUN LIVE ON ANY MODEL** — 27-08's
+> six paid runs never happened, so there is no baseline showing these fixtures pass on gpt-4o-mini
+> either. The dominant failure is UNIFORM across all five cases
+> (`missingNamed:crm-facts — expected "the reply names it", got "not named"`), and a failure identical
+> on every case is the signature of a corpus/prompt mismatch rather than model quality — the same
+> class 27-08 already found in 24 of 30 wave-2 fixtures. `missingNamed` asks the model to NAME an
+> unavailable source in prose; that is elicited behaviour, and no fixture edit has ever been validated
+> against a real turn. ONE case (`02-no-order-history`) failed differently — `operation:ground-in-vault
+> expected "searchVault", got []` — and that one IS a dropped tool call, the known ox-alpha weakness,
+> but it is 1 of 5.
+>
+> **THE ONE EXPERIMENT THAT SETTLES IT** (~$0.03, not yet run): re-run this same pack with Gemini as
+> PRIMARY. Same corpus, same harness, different model. If it also scores ~0/5 the corpus is wrong; if
+> it passes, the model is.)
+
 > Last verified: 2026-08-23 (27-09 — **THE DISCOVERY SURFACE, AND THE PROBE MOVED TO REACH IT.**
 > `workflowPackDiscovery.ts` is a new DEFAULT-RUNTIME (V8) module holding two things: the source
 > probe, and `listPacks`.
