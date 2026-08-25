@@ -143,6 +143,10 @@ const RESEARCH_CALL_TIMEOUT_MS = 180_000;
  *  (keeping its partial findings) instead of being killed mid-step and discarding them. */
 const RESEARCH_STEP_SLACK_MS = 60_000;
 
+/** Per-call output ceiling for the agent loop. See the note at its use site in `runAgentLoop`:
+ *  unbounded, a reasoning model can spend the whole budget thinking and return EMPTY text. */
+const MAX_OUTPUT_TOKENS = 8_192;
+
 /**
  * D10 + D12. The SECOND ceiling, not the binding one — the soft clock binds first.
  * Sized against the SOFT cutoff (180s − 60s = 120s), NOT against the 180s wall clock: sizing
@@ -316,6 +320,11 @@ const resolveModel = (id: string): LanguageModel => {
   // tokens fell 235 -> 44 on the same prompt. A dial that is silently discarded is worse than no
   // dial: the first attempt at this looked applied and changed nothing.
   if (id.startsWith("stealth/")) return openRouter().chat(id, OX_ALPHA_SETTINGS);
+  // OpenRouter-routed vendor models. The `or/` prefix is the ROUTE and is stripped here; the full id
+  // stays the PRICING/audit key, so `or/openai/gpt-4o-mini` and `openai/gpt-4o-mini` price and audit
+  // as the different billing paths they are. No per-model settings: unlike ox-alpha these are not
+  // reasoning-mandatory, and the 45 s lane is the one place reasoning has actually cost us runs.
+  if (id.startsWith("or/")) return openRouter().chat(id.slice(3));
   if (!id.startsWith("google/")) return openai(id.replace(/^openai\//, ""));
   const bare = id.replace(/^google\//, "");
   // AI Studio if a key is set, else Vertex. `googleVertex()` still throws its own worded error when
@@ -4483,6 +4492,7 @@ async function runAgentLoop(
       // Two conditions, whichever fires first. The soft clock stops BETWEEN steps and keeps the
       // partial findings; the hard abort below stays as the backstop for a single hung step.
       stopWhen: [stepCountIs(stepBudget), outOfClock],
+      maxOutputTokens: MAX_OUTPUT_TOKENS,
       abortSignal: AbortSignal.timeout(budgetMs),
       maxRetries,
       // ── The activity trace (CKPT-05) — this IS the whole emitter ──────────────────────────────

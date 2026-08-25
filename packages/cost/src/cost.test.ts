@@ -31,10 +31,13 @@ describe("estimateCostUsd", () => {
   // The literal is a deliberate PIN on whatever DEFAULT_MODEL currently is, not a fixture: a model
   // repoint SHOULD break this and force a conscious re-read of the rate. It did exactly that on
   // 2026-08-07 when DEFAULT_MODEL moved gpt-4o-mini ($0.15/MTok in) → gemini-3.5-flash ($0.30), and
-  // again on 2026-08-08 when the OpenAI balance was topped up and the pin moved BACK to $0.15.
+  // again on 2026-08-08 when the OpenAI balance was topped up and the pin moved BACK to $0.15. On
+  // 2026-08-26 the pin moved to `or/openai/gpt-4o-mini` — a ROUTE change (OpenRouter is the funded
+  // door) at an IDENTICAL rate, which is why this literal did not move. A gpt-4.1 default was tried
+  // the same day and reverted: same pack score, 15x the cost, and it broke the ingest caps.
   // Keep it a literal for that reason — reading the rate back out of PRICING would make the test
   // agree with itself and assert nothing.
-  it("default 1M input tokens → $0.15 (gpt-4o-mini)", () => {
+  it("default 1M input tokens → $0.15 (or/openai/gpt-4o-mini)", () => {
     const r = estimateCostUsd(DEFAULT_MODEL, 1_000_000, 0);
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.value).toBeCloseTo(0.15, 10);
@@ -58,6 +61,8 @@ describe("estimateCostUsd", () => {
 });
 
 describe("priceUsage", () => {
+  // Same PIN discipline as the DEFAULT_MODEL literal above: 2026-08-26 moved CHEAP_MODEL off the
+  // (mispriced) gemini-3.5-flash-lite row back onto gpt-4.1-nano's $0.10 + $0.40, via OpenRouter.
   it("cheap 1M in + 1M out → $0.50", () => {
     const r = priceUsage(CHEAP_MODEL, { inputTokens: 1_000_000, outputTokens: 1_000_000 });
     expect(r.ok).toBe(true);

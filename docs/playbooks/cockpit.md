@@ -1,4 +1,33 @@
-> Last verified: 2026-08-25 (**`@openrouter/ai-sdk-provider` 3.0.0 ADOPTED (exact pin), REPLACING THE
+> Last verified: 2026-08-26 (**`or/` IS NOW A ROUTE PREFIX IN `resolveModel`, AND `runAgentLoop` HAS
+> AN OUTPUT CEILING. THE 45 s WALL IS CLEARED — the heavy packs no longer abort.**
+>
+> `if (id.startsWith("or/")) return openRouter().chat(id.slice(3));` — same provider as the
+> `stealth/` branch (adopted for the reasons in the previous entry), but the prefix is STRIPPED
+> because OpenRouter wants the vendor id, while `PRICING` keeps the full `or/` key so
+> `or/openai/gpt-4o-mini` and `openai/gpt-4o-mini` price and audit as the different billing paths
+> they are. No per-model settings: unlike ox-alpha these are not reasoning-mandatory.
+>
+> **`MAX_OUTPUT_TOKENS = 8_192`, newly applied to the `runAgentLoop` `generateText` call.** It was
+> UNSET, so every call reserved the model's full max (65,536 on the gpt-5.x family). Unbounded output
+> is exactly what "reasoning consuming the output budget" ate when the heavy packs returned EMPTY
+> replies at 180 s. Sized off measurement: the longest memo in the 2026-08-26 audit was ~1,390 words
+> (~2.1k tokens), so this is ~4x headroom. The empty-text detector for the Gemini case already
+> existed; this is the matching ceiling.
+>
+> **MEASURED RESULT, live `--candidate` runs:**
+>     business-pulse   on gpt-4.1      **5/5**, $0.0665, 6.2-13.2 s/case — evidence RECORDED (was 4/5)
+>     business-pulse   on gpt-4o-mini  **5/5**, $0.0044, 5.8-11.7 s/case — SAME score, 15x cheaper
+>     sales-call-prep  on gpt-4.1      0/5,     $0.2187, 2.7-26.5 s/case — **but every case COMPLETED**
+> The A/B is why `DEFAULT_MODEL` shipped as gpt-4o-mini and not gpt-4.1 (see guardrails.md).
+> sales-call-prep previously aborted at 45 s and scored 0/5 even at 180 s on EMPTY replies. It now
+> finishes every case well inside the budget and fails on ASSERTIONS instead: `outcome` expected
+> `partial` got `useful` (4/5), `citations >= 1` got 0 (3/5), `artifactCreated` got 0 (2/5).
+> **THE LATENCY PROBLEM IS SOLVED; WHAT REMAINS IS A BODY/CORPUS DEFECT.** That was predicted before
+> the run: six models — gpt-4o-mini, gpt-4.1, luna, haiku-4.5, grok-4.6, gemini-3-flash — ALL return
+> `useful` instead of `partial` on this pack, and all fail or coin-flip `missingNamed:crm-facts`.
+> Do not chase it with another model swap.
+>
+> PREVIOUS: 2026-08-25 (**`@openrouter/ai-sdk-provider` 3.0.0 ADOPTED (exact pin), REPLACING THE
 > `createOpenAI` + baseURL SHIM FOR `stealth/` IDS. The second SDK is a CORRECTNESS fix, not a
 > convenience** — OpenRouter is OpenAI-wire-compatible for the request body and NOT for the two things
 > this model needs: @ai-sdk/openai silently DROPPED `reasoningEffort` (it gates that parameter on its

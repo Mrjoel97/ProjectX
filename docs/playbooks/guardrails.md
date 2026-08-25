@@ -1,6 +1,46 @@
 # Playbook: Guardrails (the spend rails, the kill switches, the redaction choke point)
 
-> Last verified: 2026-08-25 (**THE OX-ALPHA TRIAL IS OVER: `DEFAULT_MODEL` AND `RESEARCH_MODEL` ARE
+> Last verified: 2026-08-26 (**THE PINS MOVED TO OPENROUTER AS A ROUTE-ONLY CHANGE AT IDENTICAL
+> RATES, PLUS ONE DELIBERATE QUALITY UPGRADE ON RESEARCH. TWO PRICING ROWS THAT WERE WRONG BY A WHOLE
+> GENERATION WERE CORRECTED.** `DEFAULT_MODEL` = `or/openai/gpt-4o-mini` (0.15/0.60, unchanged rate),
+> `CHEAP_MODEL` = `or/openai/gpt-4.1-nano` (0.10/0.40, unchanged), `RESEARCH_FALLBACK_MODEL` =
+> `or/openai/gpt-4.1-mini` (0.40/1.60, unchanged), and **`RESEARCH_MODEL` = `or/openai/gpt-5.6-luna`
+> (0.20/1.20) — the one pin that actually moves.** OpenRouter's rates for these ids are IDENTICAL to
+> direct OpenAI's, so nothing downstream recalibrates: this changes the FUNDING DOOR, not the economics. The OpenAI account was exhausted; OpenRouter is now the funded door and one
+> balance backs every pin, which is what finally makes cross-vendor fallback safe (see the
+> 2026-08-07 incident block below — that precondition disappears rather than being managed).
+>
+> **THE PRICING BUG, WHICH WAS LATENT AND HAD JUST GONE LIVE.** `[GEMINI_MODEL]` carried
+> `0.3/2.5` and `[GEMINI_CHEAP_MODEL]` carried `0.1/0.4` — those are gemini-**2.5**'s published
+> rates sitting on gemini-**3.5** ids. Real rates, read off OpenRouter's live `/models`: 1.5/9.0 and
+> 0.3/2.5. That is a **5x and 6.25x UNDER-draw**, the exact silent under-billing this file's own
+> comments exist to prevent, and the block above even claimed the rows were "deliberately rounded UP
+> where uncertain" — they were rounded DOWN. Harmless while nothing selected them; **live the moment
+> `CHEAP_MODEL` and `RESEARCH_FALLBACK_MODEL` were pointed at them.** Both rows corrected.
+>
+> **A gpt-4.1 DEFAULT WAS TRIED THE SAME DAY AND REVERTED ON EVIDENCE — do not re-derive it.**
+> `business-pulse` passed **5/5 on BOTH**: gpt-4.1 at $0.0665, gpt-4o-mini at $0.0044. **15x the cost
+> for an identical score** — the 5/5 came from the v2 body fix (34c42aa), not from the model. It also
+> broke calibration the rails depend on: folder-ingest estimates rose ~7x (a 3-file folder 3c -> 21c;
+> one job reached 17,507c and went OVER its cap) and **13 backend tests reddened**, the same shape as
+> the ox-alpha `estCents: 0` breakage recorded below. GRDL-03's gap would have widened 1.5x -> 13x,
+> and at ~$0.14/turn `DAILY_BUDGET_CENTS = 500` buys ~36 turns/day against ~450 today.
+> **THE LESSON, and it generalises: `DEFAULT_MODEL` is a VOLUME pin** — ingest, classification,
+> routing — where extra capability buys nothing measurable and a 13x rate breaks caps that were
+> calibrated around $0.15/$0.60. "Quality over cost" is a decision to make PER LANE, on the pins
+> whose output a human actually reads. That is why `RESEARCH_MODEL` moved and the default did not.
+>
+> **HOW THE MODELS WERE CHOSEN — measured 2026-08-26, not selected on price.** Governance suite
+> (forbidden-tool discipline, honest-partial, injection resistance, near-miss fabrication, buried
+> rule + strict JSON) plus a research-memo audit graded by a blind judge that was not a candidate.
+> Every frontier model scored 10/10 on governance, so **governance stopped discriminating** and the
+> decision fell to latency and faithfulness. `google/gemini-3-flash-preview` was the FASTEST model
+> measured (4.7 s) and is **rejected**: asked for a memo it invented "80%+ gross margin" and "120%+
+> NRR" against retrieved evidence saying 74% and 104%. A short refusal test cannot see that; only a
+> long-form audit can. Price predicted nothing — `gpt-5.6-sol` ($2/$10) was 4x slower than
+> `gemini-3-flash-preview` ($0.50/$3) and no more capable.
+>
+> PREVIOUS: 2026-08-25 (**THE OX-ALPHA TRIAL IS OVER: `DEFAULT_MODEL` AND `RESEARCH_MODEL` ARE
 > BACK ON `openai/gpt-4o-mini`. THE REASON IS NOT THE MODEL'S QUALITY — IT IS THAT A $0 PIN DISABLES
 > TWO SAFETY PROPERTIES, SILENTLY.**
 >

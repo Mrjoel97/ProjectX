@@ -53,6 +53,36 @@ export const OPENAI_CHEAP_MODEL = "openai/gpt-4.1-nano";
 // nothing selects, but a missing one silently under-draws the moment something does.
 export const OX_ALPHA_MODEL = "stealth/ox-alpha";
 
+// OpenRouter-routed ids (2026-08-26). The `or/` prefix is the ROUTE — `resolveModel` strips it
+// before the wire — while the FULL id stays the pricing/audit key, so an OpenRouter gpt-4o-mini can
+// never be confused with the direct-OpenAI one that bills a different account. Rates read from
+// OpenRouter's live /models endpoint, not from memory.
+//
+// WHY THESE THREE, measured 2026-08-26 against the pack fixture shape and a research-memo audit
+// scored by a blind judge that was NOT a candidate:
+//   • gpt-4o-mini    THE DEFAULT, and gpt-4.1 was tried here first and REVERTED on evidence. Both
+//                    score 5/5 on the pack; `business-pulse` passed **5/5 on each** — gpt-4.1 at
+//                    $0.0665, gpt-4o-mini at $0.0044, 15x cheaper for the SAME result. The 5/5 came
+//                    from the v2 body fix, not from the model. gpt-4.1 also broke calibration the
+//                    rails depend on: folder-ingest estimates rose 7x (a 3-file folder 3c -> 21c,
+//                    one job to 17,507c and over its cap) and 13 backend tests reddened. The default
+//                    pin is a VOLUME pin — ingest, classification, routing — where extra capability
+//                    buys nothing and 13x rate breaks caps. Quality goes on the pins whose output a
+//                    human READS. Rates through OpenRouter are IDENTICAL to direct OpenAI, so this
+//                    route changes the funding door and nothing else.
+//   • gpt-4.1-nano   the cheaper rung, so the GRDL-03 downgrade still has somewhere to go.
+//   • gpt-5.6-luna   THE ONE DELIBERATE UPGRADE (research only): deepest sourced memos (8-9
+//                    searches, 460-1390 words) inside the 120 s research soft clock, faithful 5/5 on
+//                    repeats. Research output is READ by the owner, so it earns the richer pin.
+// REJECTED, and the reason is worth keeping: `google/gemini-3-flash-preview` is the FASTEST model
+// measured (4.7 s) and passes every short-form governance test — then FABRICATES under generative
+// pressure. Asked for a memo, it invented "80%+ gross margin" and "120%+ NRR" against retrieved
+// evidence that said 74% and 104%. A short refusal test cannot see this; only a long-form audit can.
+export const OR_DEFAULT_MODEL = "or/openai/gpt-4o-mini";
+export const OR_CHEAP_MODEL = "or/openai/gpt-4.1-nano";
+export const OR_RESEARCH_MODEL = "or/openai/gpt-5.6-luna";
+export const OR_RESEARCH_FALLBACK_MODEL = "or/openai/gpt-4.1-mini";
+
 // Aliases, deliberately — NOT second string literals. Two literals spelling the same model is how a
 // PRICING row and a pin drift apart, and `PRICING` is keyed by computed property, so duplicate
 // literals would silently collapse into one entry and hide the drift.
@@ -88,7 +118,7 @@ export const OX_ALPHA_MODEL = "stealth/ox-alpha";
 // To run an ox-alpha experiment: point this line (and `RESEARCH_MODEL`) at `OX_ALPHA_MODEL`, and
 // move `EVAL_MODEL` in BOTH runners with it. Everything else — the provider, the `stealth/` branch in
 // `resolveModel`, the `OPENROUTER_API_KEY` manifest row, the PRICING row — is already in place.
-export const DEFAULT_MODEL = OPENAI_DEFAULT_MODEL;
+export const DEFAULT_MODEL = OR_DEFAULT_MODEL;
 
 // SAME-VENDOR AS THE DEFAULT, now that OpenAI leads again (2026-08-08). `CHEAP_MODEL` is both the
 // budget downgrade AND the failure-fallback target, and `runAgentLoop` runs primary → fallback on an
@@ -141,7 +171,7 @@ export const DEFAULT_MODEL = OPENAI_DEFAULT_MODEL;
 // THE KNOWN CEILING: the Gemini free tier caps `generate_content` at 20 requests/minute/model, which
 // a dense golden run exceeds on its own. That is survivable for a FALLBACK (only flakes land here)
 // and would not be for a primary — do not promote this pin without re-reading that note above.
-export const CHEAP_MODEL = GEMINI_CHEAP_MODEL;
+export const CHEAP_MODEL = OR_CHEAP_MODEL;
 
 // Phase-16 (ACTN-03/D8). The research specialist gets its OWN model pin, NOT DEFAULT_MODEL /
 // CHEAP_MODEL: global model constants have repo-wide blast radius, and only these two were PROVEN
@@ -180,7 +210,7 @@ export const OPENAI_RESEARCH_FALLBACK_MODEL = "openai/gpt-4.1-mini";
 // Back with DEFAULT_MODEL (2026-08-25) — see the block there. It stays a SEPARATE constant so a
 // later change to DEFAULT_MODEL cannot silently move research onto a model nobody probed; that both
 // pins name the same id today is a coincidence of the lineup, not a synonym.
-export const RESEARCH_MODEL = OPENAI_RESEARCH_MODEL;
+export const RESEARCH_MODEL = OR_RESEARCH_MODEL;
 // **THE VENDOR-MATCHING CONSTRAINT IS RETIRED (2026-08-07).** This block used to say research was
 // the one pair that could not cross vendors, because `buildWebResearchTool` picked OpenAI's
 // `webSearch` or Vertex's `googleSearch` from RESEARCH_MODEL's prefix and `runAgentLoop` reused that
@@ -195,7 +225,7 @@ export const RESEARCH_MODEL = OPENAI_RESEARCH_MODEL;
 // Deliberately GEMINI_MODEL (flash) and not GEMINI_CHEAP_MODEL — cost.test.ts asserts this pin is not
 // the repo-wide CHEAP_MODEL, and that assertion is still worth keeping: research is the densest,
 // most tool-heavy path and should not silently degrade to the cheapest tier on every hiccup.
-export const RESEARCH_FALLBACK_MODEL = GEMINI_MODEL;
+export const RESEARCH_FALLBACK_MODEL = OR_RESEARCH_FALLBACK_MODEL;
 
 // **A GROWTH-SPECIALIST PIN WAS TRIED AND REVERTED 2026-08-08 — do not re-derive it.** Fixtures
 // 29/30/31 assert `citesVaultDoc` (the seeded vault needle must reach the specialist's memo), and
@@ -271,8 +301,13 @@ export const PRICING: Record<string, { inPerMTok: number; outPerMTok: number }> 
   // OX_ALPHA_MODEL above for why zero is the honest number and what still throttles.
   [OX_ALPHA_MODEL]: { inPerMTok: 0, outPerMTok: 0 },
   // Gemini via Vertex — the current pins.
-  [GEMINI_MODEL]: { inPerMTok: 0.3, outPerMTok: 2.5 },
-  [GEMINI_CHEAP_MODEL]: { inPerMTok: 0.1, outPerMTok: 0.4 },
+  [GEMINI_MODEL]: { inPerMTok: 1.5, outPerMTok: 9.0 },
+  [GEMINI_CHEAP_MODEL]: { inPerMTok: 0.3, outPerMTok: 2.5 },
+  // OpenRouter-routed. Verified against OpenRouter's live /models on 2026-08-26.
+  [OR_DEFAULT_MODEL]: { inPerMTok: 0.15, outPerMTok: 0.6 },
+  [OR_CHEAP_MODEL]: { inPerMTok: 0.1, outPerMTok: 0.4 },
+  [OR_RESEARCH_MODEL]: { inPerMTok: 0.2, outPerMTok: 1.2 },
+  [OR_RESEARCH_FALLBACK_MODEL]: { inPerMTok: 0.4, outPerMTok: 1.6 },
 };
 
 // ponytail: chars/4 heuristic — feeds a budget THRESHOLD, not billing; real cost
