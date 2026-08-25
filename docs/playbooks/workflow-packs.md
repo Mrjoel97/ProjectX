@@ -1,5 +1,43 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
+> Last verified: 2026-08-25 (**THE GATE NOW REFUSES TO CERTIFY A RUN WHOSE MODEL IS NOT THE ONE
+> EVIDENCE WILL NAME — AND THE FIRST LIVE RUN AFTER THE FIX PROVED THE GAP WAS ACTIVE, NOT
+> THEORETICAL.**
+>
+> The runner already refused when the executed SKILL VERSION differed from the pin ("recording
+> evidence would certify a body that did not run"). There was no equivalent for the MODEL.
+> `EVAL_MODEL` derives from `DEFAULT_MODEL`, which is what the deployment CHOOSES — not what
+> answered. An eligible primary failure rolls over to `CHEAP_MODEL` and **the run still succeeds**.
+>
+> **MEASURED, on this deployment, with the primary on an exhausted key and the fallback on a funded
+> one:** every business-pulse case reported `google/gemini-3.5-flash-lite` while `EVAL_MODEL` derived
+> to `openai/gpt-4o-mini`. Before this change an all-green run would have written a row certifying
+> Gemini's work under OpenAI's name — the same dishonesty as the drifted literal, one field over and
+> structural rather than a typo.
+>
+> `smoke.modelsForRun` reads `spendEvents.model`, which is ground truth because `recordModelSpend`
+> writes it AFTER each call returns, once per attempt — **a fallback is a SEPARATE row, which is
+> exactly what makes it visible**. Keyed `agentloop:<runId>:a<attempt>` and read as a PREFIX RANGE
+> rather than the two known ids, so a third attempt could never slip past.
+>
+> **ZERO SPEND ROWS IS A FAILURE, NOT A PASS.** `recordModelSpend` returns early WITHOUT writing when
+> `priceUsage` rejects the id, so "no rows" means either nothing ran or something UNPRICED did.
+> Neither proves the pin ran, and reading absence as agreement is the vacuous green this file exists
+> to refuse.
+>
+> **THE EXECUTING MODEL IS PRINTED ON EVERY CASE LINE, ALWAYS** — not only on a mismatch, and not only
+> when the pack is green. The run that quietly executed something else is the one nobody thinks to
+> check, and the gate itself only fires on an all-green run, which is the rarest path here.
+>
+> `assertRanModel` is PURE and exported for that reason: a gate that can only be exercised by success
+> is a gate nobody has seen work. Self-test rejections 38 -> 42, covering the pin match, a plain
+> mismatch, the live fallback shape, a PARTIAL fallback (only some cases rolled over), and zero rows.
+> Both halves MUTATION-VERIFIED RED.
+>
+> INCIDENTAL BUT USEFUL: business-pulse case 02 fails `operation:ground-in-vault` on GEMINI too, not
+> just ox-alpha. A stable-fail on two unrelated models is a defect in the body, the fixture or the
+> code — it is the next thing to fix, and it is now known not to be model-specific.)
+
 > Last verified: 2026-08-25 (**THE FIRST TRUSTWORTHY MEASUREMENTS. `--repeat 3`, ox-alpha, $0.028
 > for 30 case-runs — AND THE HEADLINE IS THAT FLAKINESS IS PACK-SPECIFIC, NOT A PROPERTY OF THE
 > MODEL.**

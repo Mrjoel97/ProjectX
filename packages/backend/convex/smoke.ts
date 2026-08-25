@@ -1835,6 +1835,44 @@ export const seedPackEvalTenant = internalMutation({
  * No reply text, no prose, no artifact bytes — the runner grades the REPLY it already holds in
  * memory from the action's return value, and the DB half stays refs and counts (CLAUDE.md §4).
  */
+/**
+ * WHICH MODELS ACTUALLY RAN for one pack run — the model half of the evidence check.
+ *
+ * The pack runner already refuses to record evidence when the executed SKILL VERSION differs from
+ * the pin ("recording evidence would certify a body that did not run"). There was no equivalent for
+ * the MODEL, and the gap is not theoretical: with `DEFAULT_MODEL` on an exhausted key and
+ * `CHEAP_MODEL` on a funded vendor, every run fails its primary with a retryable 429, succeeds on the
+ * FALLBACK, and writes an evidence row naming the primary. Same dishonesty, one field over.
+ *
+ * `spendEvents.model` is the ground truth because `recordModelSpend` writes it AFTER the call
+ * returns, once per attempt — a fallback is a SEPARATE row, which is exactly what makes it visible.
+ * The reasoning loop keys those rows `agentloop:<turnId>:a<attempt>`, and the pack binding passes
+ * `turnId = runId`, so the run's rows are the `agentloop:<runId>:` prefix. Read as a RANGE rather
+ * than the two exact ids so a third attempt could never slip past unseen.
+ *
+ * Refs only (§4): model ids and a count, no content. Tenant-filtered after the index because
+ * `by_correlation` does not carry the tenant — a correlation id is already tenant-unique (a uuid),
+ * so this is belt-and-braces rather than the isolation boundary.
+ */
+export const modelsForRun = internalQuery({
+  args: { tenantId: v.string(), runId: v.string() },
+  handler: async (ctx, { tenantId, runId }) => {
+    const prefix = `agentloop:${runId}:`;
+    const rows = await ctx.db
+      .query("spendEvents")
+      .withIndex("by_correlation", (q) =>
+        // "\uffff" is the standard upper sentinel for a string prefix range.
+        q.gte("correlationId", prefix).lt("correlationId", `${prefix}\uffff`),
+      )
+      .collect();
+    const mine = rows.filter((r) => r.tenantId === tenantId);
+    return {
+      models: [...new Set(mine.map((r) => r.model).filter((m): m is string => typeof m === "string"))].sort(),
+      rowCount: mine.length,
+    };
+  },
+});
+
 export const packRunFacts = internalQuery({
   args: { tenantId: v.string(), runId: v.string() },
   handler: async (ctx, { tenantId, runId }) => {

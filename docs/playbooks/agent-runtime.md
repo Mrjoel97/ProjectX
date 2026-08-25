@@ -1,5 +1,22 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-08-25 (**`smoke.modelsForRun` — a read-only test-support query answering "which
+> models actually ran for this run", from `spendEvents` rather than from what the code intended.**
+>
+> Added for the pack gate's model-verification refusal (see `docs/playbooks/workflow-packs.md`); the
+> same seam answers the question for any correlation-keyed run. `recordModelSpend` writes
+> `spendEvents.model` AFTER each call returns and once per ATTEMPT, so a fallback shows up as its own
+> row — the property the whole check rests on. Rows are keyed `agentloop:<turnId>:a<attempt>` by the
+> reasoning loop, and the pack binding passes `turnId = runId`, so a run's rows are that prefix.
+>
+> Read through the `by_correlation` index as a PREFIX RANGE, not as the two attempt ids that exist
+> today, so a future third attempt cannot slip past unseen. Tenant is filtered AFTER the index because
+> `by_correlation` does not carry it; a correlation id is already a uuid and therefore tenant-unique,
+> so that filter is belt-and-braces rather than the isolation boundary.
+>
+> Refs only (§4): model ids and a row count, never content. No runtime behaviour changed — this is an
+> `internalQuery` in the smoke module, in the same family as `packRunFacts`.)
+
 > Last verified: 2026-08-25 (**`EVAL_MODEL` IS NOW DERIVED FROM `DEFAULT_MODEL` INSTEAD OF
 > HAND-COPIED, BECAUSE THE HAND-COPY DRIFTED WITHIN A DAY — AND SHIPPED.**
 >

@@ -1029,12 +1029,66 @@ function selfTest(packs) {
     assert.equal(summarizeRepeats([]).runs, 0, "no runs must not throw");
   }
 
+  // ── assertRanModel: the model half of "did the thing we are certifying actually run" ──
+  {
+    const ok = [
+      { id: "a", ranModels: ["openai/gpt-4o-mini"], spendRows: 2 },
+      { id: "b", ranModels: ["openai/gpt-4o-mini"], spendRows: 1 },
+    ];
+    assert.doesNotThrow(
+      () => assertRanModel(ok, "openai/gpt-4o-mini"),
+      "a run that executed exactly the pinned model was refused",
+    );
+
+    rejections++;
+    assert.throws(
+      () => assertRanModel(ok, "stealth/ox-alpha"),
+      /executed model\(s\)/,
+      "evidence naming a model the run never executed was ACCEPTED",
+    );
+
+    // THE LIVE SHAPE: primary exhausted, fallback answered, run still green.
+    rejections++;
+    assert.throws(
+      () =>
+        assertRanModel(
+          [{ id: "a", ranModels: ["google/gemini-3.5-flash-lite"], spendRows: 1 }],
+          "openai/gpt-4o-mini",
+        ),
+      /A fallback almost certainly fired/,
+      "a run carried entirely by the FALLBACK was certified under the primary's name",
+    );
+
+    // A mixed run is not "mostly the pin" — it is two models, and neither is what evidence says.
+    rejections++;
+    assert.throws(
+      () =>
+        assertRanModel(
+          [
+            { id: "a", ranModels: ["openai/gpt-4o-mini"], spendRows: 1 },
+            { id: "b", ranModels: ["google/gemini-3.5-flash-lite"], spendRows: 1 },
+          ],
+          "openai/gpt-4o-mini",
+        ),
+      /executed model\(s\)/,
+      "a run where only SOME cases fell back was accepted",
+    );
+
+    // Absence must never read as agreement.
+    rejections++;
+    assert.throws(
+      () => assertRanModel([{ id: "a", ranModels: [], spendRows: 0 }], "openai/gpt-4o-mini"),
+      /no model-spend rows/,
+      "a case with NO spend rows was treated as proof the pinned model ran",
+    );
+  }
+
   // Counted, never hardcoded: a self-test that reports a number it does not derive is the first
   // step to a self-test that reports a number it no longer earns.
   // A TRIPWIRE, like the table count in tenantData.test.ts: the floor equals what the self-test
   // exercises today, so DELETING a case fails here and forces the deleter to say why. Adding one is
   // free. Without it, `rejections` is only a number printed to a log nobody diffs.
-  assert.ok(rejections >= 38, `self-test only exercised ${rejections} rejections, expected >= 38`);
+  assert.ok(rejections >= 42, `self-test only exercised ${rejections} rejections, expected >= 42`);
   console.log(
     `self-test: ${rejections} validator/scorer rejections and the live-path invariants verified`,
   );
@@ -1132,6 +1186,41 @@ function paidTurn(args) {
     }
     throw err;
   }
+}
+
+/**
+ * Refuse to certify a run whose MODEL is not the one evidence will name.
+ *
+ * The runner already refuses when the executed SKILL VERSION differs from the pin — "recording
+ * evidence would certify a body that did not run". This is the same sentence for the other half of
+ * the identity, and the gap it closes is live rather than theoretical: `EVAL_MODEL` is derived from
+ * `DEFAULT_MODEL`, which is what the deployment CHOOSES, not what answered. An eligible primary
+ * failure rolls over to `CHEAP_MODEL` and the run still SUCCEEDS. With a primary on an exhausted key
+ * and a fallback on a funded one — the exact dev configuration — every green run would certify the
+ * fallback's work under the primary's name.
+ *
+ * **ZERO SPEND ROWS IS A FAILURE, NOT A PASS.** `recordModelSpend` returns early WITHOUT writing when
+ * `priceUsage` rejects the id, so "no rows" means either nothing ran or something unpriced did.
+ * Neither is evidence that the pin ran, and reading absence as agreement is the vacuous green this
+ * file exists to refuse.
+ *
+ * Pure and exported so it is checked by `--self-test` rather than only on the rare all-green run —
+ * a gate that can only be exercised by success is a gate nobody has seen work.
+ */
+export function assertRanModel(results, evalModel) {
+  const noSpend = results.filter((r) => (r.spendRows ?? 0) === 0).map((r) => r.id);
+  if (noSpend.length > 0)
+    throw new EnvironmentAbort(
+      `no model-spend rows for ${noSpend.join(", ")} — cannot prove which model ran, so evidence ` +
+        "would be a claim rather than a record",
+    );
+  const ran = [...new Set(results.flatMap((r) => r.ranModels ?? []))].sort();
+  if (ran.length !== 1 || ran[0] !== evalModel)
+    throw new EnvironmentAbort(
+      `the runs executed model(s) ${ran.join(", ") || "none"} but evidence would record ` +
+        `"${evalModel}" (derived from DEFAULT_MODEL). A fallback almost certainly fired — fund or ` +
+        "repoint the primary, or run the gate on the model you intend to certify.",
+    );
 }
 
 /**
@@ -1375,6 +1464,11 @@ function runCase(fx, index, { packId, pack, version, runnerRunId, thresholds }) 
   const facts = parse(
     must("smoke:packRunFacts", { tenantId: tenant, runId: lastRunId }, RETRY_READ),
   );
+  // THE MODEL HALF of "did the thing we are about to certify actually run". Read from spend rows,
+  // which record the model AFTER each call returns, so a fallback attempt is its own row.
+  const ran = parse(
+    must("smoke:modelsForRun", { tenantId: tenant, runId: lastRunId }, RETRY_READ),
+  );
   const { calls } = parse(
     must("smoke:toolCallsForThread", { tenantId: tenant, threadId }, RETRY_READ),
   );
@@ -1405,6 +1499,9 @@ function runCase(fx, index, { packId, pack, version, runnerRunId, thresholds }) 
     cost,
     durationMs: started && ended ? ended.createdAt - started.createdAt : null,
     version: ended?.skillVersion ?? null,
+    // Surfaced per case so the all-green check can refuse a mismatch before writing evidence.
+    ranModels: ran.models ?? [],
+    spendRows: ran.rowCount ?? 0,
   };
 }
 
@@ -1562,9 +1659,12 @@ async function runCandidate(argv, packs) {
     total += out.cost;
     results.push({ id: fx.id, ...out });
     console.log(
-      `    ${out.pass ? "PASS" : "FAIL"} ${fx.id} · $${out.cost.toFixed(4)} · ` +
+      `    ${out.pass ? "PASS" : "FAIL"} ${fx.id} · ${out.cost.toFixed(4)} · ` +
         `${out.durationMs === null ? "?" : out.durationMs}ms` +
-        (out.version === null ? "" : ` · v${out.version}`),
+        (out.version === null ? "" : ` · v${out.version}`) +
+        // Printed ALWAYS, not only on a mismatch: the run that quietly executed a different model is
+        // the one nobody thinks to check, and it is invisible on a pack that is not green.
+        (out.ranModels.length > 0 ? ` · ${out.ranModels.join("+")}` : " · NO SPEND ROWS"),
     );
     for (const f of out.failures) {
       console.log(
@@ -1598,6 +1698,8 @@ async function runCandidate(argv, packs) {
         "recording evidence would certify a body that did not run",
     );
   }
+
+  assertRanModel(results, EVAL_MODEL);
 
   // Suite-bound evidence: refs and counts only (CLAUDE.md §4). The `suite` block is what lets the
   // pack gate tell this row from an `eval:golden` row, and from a run against an older corpus.
