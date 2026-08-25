@@ -1,5 +1,28 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-08-25 (**`EVAL_MODEL` IS NOW DERIVED FROM `DEFAULT_MODEL` INSTEAD OF
+> HAND-COPIED, BECAUSE THE HAND-COPY DRIFTED WITHIN A DAY — AND SHIPPED.**
+>
+> The literal moved to `stealth/ox-alpha` with the pins on 2026-08-24. When the pins moved back on
+> 2026-08-25 it did NOT, and commit `f5b29b1` went in with `DEFAULT_MODEL = openai/gpt-4o-mini` and
+> `EVAL_MODEL = "stealth/ox-alpha"` in BOTH runners. A green gate run would then have written an
+> evidence row certifying a model that never executed — the precise failure the old docstring at that
+> constant described, committed by the same hand that wrote the description. **A comment saying "these
+> must move together" is not a mechanism.**
+>
+> `codeOwnedDefaultModel()` reads `packages/cost/src/cost.ts` by regex and resolves one level of
+> aliasing (`DEFAULT_MODEL = OPENAI_DEFAULT_MODEL` -> the string literal), the same idiom
+> `codeOwnedPackSuite` already uses against `skill.ts` — these are `.mjs` scripts and `@pikar/cost`
+> ships unbuilt TypeScript, so there is no import to make. It THROWS on an unresolvable pin rather
+> than guessing: a runner that refuses to start beats an evidence row naming the wrong model.
+>
+> VERIFIED BOTH WAYS: it resolves to `openai/gpt-4o-mini` today, and a simulated repoint of
+> `DEFAULT_MODEL` to `OX_ALPHA_MODEL` made it return `stealth/ox-alpha` without touching either runner.
+> Drift is now impossible rather than merely discouraged.
+>
+> The same fix landed in `run-workflow-pack-evals.mjs`; there is no shared module because a new file
+> under `packages/` needs playbook coverage of its own and the derivation is fifteen lines.)
+
 > Last verified: 2026-08-24 (ox-alpha trial — **`EVAL_MODEL` MOVED, AND IT IS A HAND-COPIED LITERAL
 > THAT MUST MOVE WITH `DEFAULT_MODEL` OR THE EVIDENCE PLANE LIES.** `run-eval-golden.mjs` records
 > `EVAL_MODEL` on every evidence row, while the model that actually RUNS is chosen inside the

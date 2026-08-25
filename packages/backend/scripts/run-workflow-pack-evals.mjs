@@ -58,6 +58,7 @@ const thresholdsPath = join(fixturesDir, "thresholds.json");
 /** `PACK_EVAL_SUITE` lives in @pikar/contracts (Convex has no filesystem); this script has no build
  *  step, so it READS the constant off disk — the `gatedSkillNames()` idiom, one runner over. */
 const skillSrcPath = resolve(here, "../../contracts/src/skill.ts");
+const costSrcPath = resolve(here, "../../cost/src/cost.ts");
 
 /** Registry-wide facts, set by `projectRegistry`. Null until the registry is loaded. */
 let REGISTRY = null;
@@ -72,17 +73,39 @@ const parse = (out) => JSON.parse(out);
  */
 const COST_CAP_USD = 1.0;
 
-/** The model every pack evidence row records. ONE constant — a hand-copied literal in a second
- *  writer is how a run comes to certify itself against a model it did not use.
+/**
+ * The model every evidence row records — **DERIVED FROM `DEFAULT_MODEL`, NEVER HAND-COPIED.**
  *
- *  **MOVED TO `stealth/ox-alpha` 2026-08-24 WITH DEFAULT_MODEL (the ox-alpha trial).** This literal
- *  and `DEFAULT_MODEL` in packages/cost/src/cost.ts MUST move together — a run picks its model from
- *  `chooseModel` inside the deployment and records THIS string, so if they drift the evidence row
- *  certifies a model that never ran, which is the one failure the paragraph above exists to prevent.
- *  It cannot be imported: this is a .mjs script and @pikar/cost is unbuilt TypeScript. Revert both
- *  lines on the same day.
+ * IT WAS A LITERAL AND IT DRIFTED WITHIN A DAY. On 2026-08-24 the pins moved to `stealth/ox-alpha`
+ * and this literal moved with them; on 2026-08-25 the pins moved back and this did not — so a run
+ * would have executed `openai/gpt-4o-mini` and written evidence claiming `stealth/ox-alpha`. That is
+ * precisely the failure the previous docstring here warned about, shipped by the same hand that
+ * wrote the warning. **A comment saying "these must move together" is not a mechanism.**
+ *
+ * A run picks its model INSIDE the deployment (`chooseModel` -> `DEFAULT_MODEL`), so the only honest
+ * source is `packages/cost/src/cost.ts`. Read by regex, exactly as `codeOwnedPackSuite` reads
+ * `PACK_EVAL_SUITE` out of `skill.ts`: this is a `.mjs` script and `@pikar/cost` ships unbuilt
+ * TypeScript, so there is no import to make.
+ *
+ * Resolves ONE level of aliasing, the shape cost.ts uses
+ * (`DEFAULT_MODEL = OPENAI_DEFAULT_MODEL` -> `OPENAI_DEFAULT_MODEL = "openai/gpt-4o-mini"`), and
+ * THROWS rather than guessing: a run that refuses to start is better than an evidence row naming a
+ * model that never ran.
  */
-const EVAL_MODEL = "stealth/ox-alpha";
+function codeOwnedDefaultModel() {
+  const src = readFileSync(costSrcPath, "utf8");
+  const pin = /^export const DEFAULT_MODEL = ([A-Za-z_][A-Za-z0-9_]*);/m.exec(src);
+  if (!pin)
+    throw new EnvironmentAbort(`DEFAULT_MODEL not found (or not an alias) in ${costSrcPath}`);
+  const lit = new RegExp(`^export const ${pin[1]} = "([^"]+)";`, "m").exec(src);
+  if (!lit)
+    throw new EnvironmentAbort(
+      `DEFAULT_MODEL aliases ${pin[1]}, which is not a string literal in ${costSrcPath} — ` +
+        "resolve it by hand rather than letting evidence name a model that never ran",
+    );
+  return lit[1];
+}
+const EVAL_MODEL = codeOwnedDefaultModel();
 
 // The Windows/Node-24 `UV_HANDLE_CLOSING` teardown crash: `convex run` completes and dies before
 // flushing stdout. `must()` retries only when stdout is EMPTY and no failure banner printed, so a

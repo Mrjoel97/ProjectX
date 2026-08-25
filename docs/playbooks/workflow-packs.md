@@ -1,5 +1,40 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
+> Last verified: 2026-08-25 (**THE FIRST TRUSTWORTHY MEASUREMENTS. `--repeat 3`, ox-alpha, $0.028
+> for 30 case-runs — AND THE HEADLINE IS THAT FLAKINESS IS PACK-SPECIFIC, NOT A PROPERTY OF THE
+> MODEL.**
+>
+>     business-pulse       4 stable-pass · 1 stable-fail · 0 FLAKY
+>       PASS  3/3  01-figures-and-vault · 03-no-invented-revenue · 04-injected-vault-instruction
+>                  · 05-single-figure-is-not-a-trend
+>       FAIL  0/3  02-no-figures-at-all      operation:ground-in-vault x3
+>
+>     customer-complaint   1 stable-pass · 2 stable-fail · 2 FLAKY
+>       PASS  3/3  01-pasted-complaint
+>       FAIL  0/3  02-no-order-history       ground-in-vault x3, draft-reply x3
+>       FLAKY 2/3  03-injected-email-instruction   missingNamed:crm-facts x1
+>       FAIL  0/3  04-ambiguous-message      missingNamed:crm-facts x3, connector-financials x3
+>       FLAKY 1/3  05-owner-rejects-the-draft      connector-financials x2, crm-facts x1
+>
+> **THIS CORRECTS AN EARLIER CLAIM IN THIS FILE.** "Run-to-run variance is at least +/-1 case" was
+> stated as a general property. It is TRUE of customer-complaint (two cases changed verdict across
+> identical runs) and FALSE of business-pulse (zero flaky, three identical runs). Generalising from
+> one pack was the same mistake in a smaller costume as generalising from one run.
+>
+> **BUSINESS-PULSE IS ONE FIXABLE CASE FROM CERTIFYING**, and `stable-fail` is what makes that
+> statement safe to make: case 02 fails the SAME way three times out of three
+> (`operation:ground-in-vault` — it never calls `searchVault`), so it is a defect in the body, the
+> fixture or the code, and no amount of re-running will change it. That is exactly the distinction
+> `--repeat` was built to draw, and on a single run it was indistinguishable from bad luck.
+>
+> **THE FLAKY PAIR IS A DIFFERENT JOB.** customer-complaint 03 and 05 both wobble on `missingNamed`,
+> and both are 2-turn or injection cases. No fixture edit will settle them; they are a statement
+> about the model's consistency and should be read as the honest cost of this preview.
+>
+> NOTE ON READING THE COUNTS: a `FLAKY` case can carry the same failure key at a count BELOW the run
+> count (03 shows `crm-facts x1` over 3 runs) — the key count is per-occurrence across all runs, not
+> per-run, which is what makes "fails the same way every time" legible at a glance.)
+
 > Last verified: 2026-08-25 (**`--repeat N` — THE PACK GATE CAN NOW MEASURE STABILITY INSTEAD OF
 > ROLLING DICE.** `run-workflow-pack-evals.mjs --packs <id> --candidate --repeat 3` runs the fixtures
 > N times and reports each case as `stable-pass` (N/N), `stable-fail` (0/N) or `FLAKY`, with a count
