@@ -73,8 +73,13 @@ function assemblerKindOf(shot: {
     case undefined:
     case "generated_video":
     case "uploaded_video":
+    // A stock clip is a clip on disk. It arrives by a third route — fetched from a free library
+    // onto a `mediaJobs` row, rather than generated (job) or owned (vault doc) — and by the time
+    // the assembler sees it that difference has been fully erased. Three intents, one picture.
+    case "stock_video":
       return "video";
     case "animated_image":
+    case "stock_image":
       return "image";
     case "text_card":
       return "card";

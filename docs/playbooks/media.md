@@ -1,5 +1,17 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-08-26 (**FREE STOCK FOOTAGE — two new `VisualKind`s, one $0 provider, and
+> the assembler untouched.** `stock_video` and `stock_image` are fetched from a free library at job
+> time and land on ordinary `mediaJobs` rows. THE THING THAT NEEDED THOUGHT: this is a $0 line that
+> is the OPPOSITE shape to the music bed. Music buys no provider call and gets NO row (a `queued`
+> row would deadlock `batchToRender` forever); stock buys BYTES, so it must have a row for them to
+> land on. "Costs nothing" and "buys nothing" came apart here. TWO COMPILE-SILENT HOLES were found
+> and closed on the way — `deckStillNeedsJob` and the canvas's `buysPicture` both enumerate visual
+> kinds by string comparison, so neither went red when the closed set widened; the first would have
+> fired the render before the fetch landed, the second would have hidden the button that performs
+> it. `deckStillNeedsJob` now carries a test that iterates `VISUAL_KINDS`. NOT VERIFIED AGAINST THE
+> LIVE API — see "what is still unproven" in the stock section.)
+
 > Last verified: 2026-08-26 (**THE MUSIC BED — a $0 PRICED LINE, one baked library, one amix.**
 > `assemble_final.sh` gained `--music <slug>`, which was on its own DELIBERATELY-NOT-HARVESTED list;
 > taking it off that list is the scope decision the list demands, and `assembleScript.test.ts`'s
@@ -1687,6 +1699,142 @@ from the same few beds, so two reels in the same niche can sound alike. The upgr
 licensed catalogue API **if and only if it bills a flat rate per track** — at which point
 `MEDIA_MUSIC_PRICING` gains a row per tier and nothing else in the rail moves. A per-second or
 per-compute-second music vendor is not an upgrade path; it is a different rail.
+
+## Free stock footage (the other $0 line, and the opposite shape)
+
+`stock_video` and `stock_image` put a real clip or photograph from a free library into a scene at
+no cost. They are the biggest cost lever in the rail: a 4-second generated clip is $0.40 and a
+60-second all-generated reel is over the whole-job cap before a word is voiced, while the same 60
+seconds of stock is $0.
+
+### The one thing to understand before changing anything here
+
+**A $0 line is not one pattern.** This rail now has two, and they are opposites:
+
+| | music bed | stock |
+|---|---|---|
+| price | $0 | $0 |
+| `mediaJobs` row | **none** | **one, per scene** |
+| why | buys no provider call; a `queued` row would deadlock `batchToRender`, which refuses a batch unless every row reached `succeeded` | buys BYTES; the render cannot read them unless they landed on a row |
+| where the bytes are | baked into the sandbox snapshot | fetched at job time into `_storage` |
+| fails how | degrades — a missing track WARNs and the reel renders bedless | refuses the scene — the fix menu swaps it |
+
+If you add a third free capability, decide which of these two it is FIRST. Getting it wrong is not
+a pricing bug, it is a reel that either never renders or silently renders wrong.
+
+### Where the two vocabularies meet, and why the row stayed four members
+
+`mediaJobs.kind` says **what the bytes are**. `MediaSpec.kind` says **what the money is**. They
+agree for every bought kind and deliberately diverge for stock:
+
+* the SPEC is `{ kind: "stock", model: "pexels/v1", media, seconds }`, priced from its own
+  `MEDIA_STOCK_PRICING` table;
+* the ROW is `kind: "video"` or `kind: "image"`, with `provider: "stock"`.
+
+That is the whole reason `renderReel` needed no stock case at all: its `renderable` filter, its
+`byIndex` slot map and `deckStillNeedsJob` all read `kind`, and to every one of them a stock clip
+is simply a clip. `assemblerKindOf` gained two `case` labels and nothing else.
+
+**Do not fold the two price tables together.** A `$0` row inside `MEDIA_VIDEO_PRICING` would mean
+one mistyped model string prices a real generated clip at nothing — undetectable, because the job
+would reserve cheap and succeed. Two tables cost one extra `case`; one table costs a silent hole.
+
+### Two constants that are the ASSEMBLER's, not the fetcher's taste
+
+Both live on `MEDIA_DEFAULT_STOCK` beside the price, because both are things `assemble_final.sh`
+hard-fails or silently mis-renders on:
+
+1. **`orientation: "portrait"`.** The assembler probes `W`/`H`/`FPS` off the FIRST video scene
+   ("GEOMETRY comes from the first VIDEO scene"). Stock libraries are landscape by default, so a
+   deck whose opening video scene is stock would silently retune the WHOLE reel to 1920x1080 and
+   letterbox every still and card after it. Nothing errors. `pickStockVideo` also re-sorts portrait
+   renditions first, because a portrait-filtered search can still return a landscape file.
+2. **`minDurationSlackSeconds: 0.5`.** The assembler ERRORs when a clip is shorter than its scene
+   by more than 0.5s ("a held still frame is not a scene"). A generated clip is always exactly its
+   grid length and a vault upload is the tenant's own pick, so nothing had ever reached that gate.
+   `pickStockVideo` filters on it at SEARCH time, so a too-short match is a refused scene the fix
+   menu can swap — not a hard render failure after every other input has already landed.
+
+### The routing rule
+
+`submitBatch` branches on **`provider === "stock"` BEFORE `toSubmittable`**, and `toSubmittable`
+independently refuses any line whose provider is stock. Both halves are load-bearing, in opposite
+directions: without the branch a stock row is skipped and sits `queued` forever (proven by
+mutation — the test goes red with `expected 'queued' to be 'succeeded'`); without the guard a row
+whose model is `pexels/v1` could be POSTed to OpenAI as a paid generation.
+
+### How a scene becomes stock, and the two-click flow
+
+* the specialist proposes it (the deck's `Visual` cell), or
+* the fix menu's **"Swap it for free stock footage"** arm — which is `setSceneVisual` then
+  `regenerateBlock`, the identical two-step the "animated still" arm already used. No new mutation
+  and no new write path.
+
+`buysPicture` in `MediaCanvas.tsx` **must** include both stock kinds or the second click has no
+button. It is a string-comparison list, so widening `VISUAL_KINDS` does not make it red.
+
+### The prompt IS the search
+
+A stock scene's `prompt` is handed to the library as a query, not to a generator as a description.
+`hasAssetSource` therefore refuses a stock scene with a blank prompt at the money gate — and that
+check is real rather than defensive: `parseSceneDeck` falls `prompt` back to the `Description`
+cell, which is only ever trimmed and never required to be non-empty. A blank one would ask the
+library for `""` and land whatever its default ranking returns.
+
+### Money
+
+* Every stock scene is a reserved line at $0 inside the existing whole-job reservation. No second
+  rail, no bypass, no post-hoc recording.
+* **A wholly-free batch still reserves 1 cent.** `chooseMediaBatch` floors with `Math.max(1, ...)`.
+  That is existing fail-closed behaviour and it was not weakened to make stock look free.
+* The estimate prints a `stock` line **at zero** when the deck uses it — the same deliberate
+  exception the music line takes. A kind the deck does not use has no line; a kind it DOES use that
+  happens to cost nothing still belongs on the invoice.
+
+### Licensing
+
+The Pexels licence permits commercial use inside a composed work with no attribution required, and
+forbids redistributing assets UNALTERED as a standalone product. A reel is a composed work, and
+this pipeline never delivers a stock asset on its own. The provider id is kept on the row as
+`providerRequestId` (`pexels:<id>`) so any frame in any finished reel can be traced back to what it
+was cut from.
+
+### Secrets
+
+`PEXELS_API_KEY` is a **Convex deployment env var** — `npx convex env set PEXELS_API_KEY <key>`
+from `packages/backend`. Never Vercel, never `.env.local`, never a client-visible variable. Free
+tier, no card. Read through `requireEnvMedia`.
+
+### What is still unproven
+
+**Nothing here has been run against the live API.** The environment this was built in has no
+outbound network, so `pickStockVideo` / `pickStockPhoto` are pinned against the response shape the
+adapter *encodes*, not one that was ever observed. The unit suite passing is not evidence that the
+integration works.
+
+Before trusting it, once, by hand:
+
+1. `npx convex env set PEXELS_API_KEY <key>` from `packages/backend`.
+2. Propose a deck with one `stock_video` and one `stock_image`, press Generate, and confirm both
+   rows reach `succeeded` with bytes.
+3. Confirm the finished reel is **720x1280**. If it came out landscape, the orientation parameter
+   is not doing what this playbook claims and `MEDIA_DEFAULT_STOCK` is where to look.
+4. Check the sidecar's scene count and asserted duration are unchanged.
+
+If the response shape has moved, the symptom is `stock_bad_response` on the row (a changed API),
+which is deliberately a different code from `stock_no_match` (a search that found nothing) — the
+two send you to completely different levers.
+
+### Ceiling and upgrade path
+
+ponytail: ONE provider, priced flat at its free tier, chosen for covering both photo and video
+behind a single key. The ceiling is that a rate-limited or unreachable library fails the scene — no
+cent is at risk, because none was reserved, and the fix menu swaps it for a card or a still. The
+upgrade path is a second row in `MEDIA_STOCK_PRICING` plus a second fetcher branch. It is **not** a
+scoring router or a provider-selection abstraction; that is scope this has not earned. A paid tier
+is an upgrade path only if it bills per ASSET at a published rate — per-compute-second or
+per-bandwidth billing is not pre-computable and does not belong in this table.
+
 
 ## The budget rail (20-04)
 

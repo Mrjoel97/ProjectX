@@ -83,6 +83,32 @@ export const MEDIA_MUSIC_PRICING: Record<string, number> = {
   "library/v1": 0,
 };
 
+/**
+ * USD per FETCHED ASSET, FLAT. A stock library's billing unit is the request, and the free tier's
+ * rate for it is zero — published, not negotiated, and knowable before the job exists. That is the
+ * whole of rule 3, and it is the same argument `MEDIA_MUSIC_PRICING` makes.
+ *
+ * **$0 IS A PRICE HERE, NOT AN ABSENCE OF ONE**, and the distinction has teeth: unlike the music
+ * bed, a stock line DOES get a `mediaJobs` row, because bytes must be fetched and landed in
+ * `_storage` before `assemble_final.sh` can read them. "Costs nothing" and "buys nothing" came
+ * apart at this table. A stock scene buys a real asset, through the real pipeline, at zero.
+ *
+ * **KEPT SEPARATE FROM `MEDIA_VIDEO_PRICING` DELIBERATELY.** A `$0` row inside the paid video
+ * table would mean one mistyped model string prices a Sora clip at nothing — the exact direction
+ * of error the whole module is arranged against, and undetectable because the job would simply
+ * reserve cheap and succeed. Two tables cost one extra `case`; one table costs a silent hole.
+ *
+ * ponytail: ONE provider, priced flat at its free tier. The ceiling is that a rate-limited or
+ * unreachable library fails the scene (the fix menu then swaps it for a card or a still — no cent
+ * is at risk, because none was reserved). The upgrade path is a second row here plus a second
+ * fetcher branch — NOT a scoring router or a provider-selection abstraction, which is scope this
+ * has not earned. A paid tier is an upgrade path only if it bills per ASSET at a published rate;
+ * per-compute-second or per-bandwidth billing is not pre-computable and does not belong here.
+ */
+export const MEDIA_STOCK_PRICING: Record<string, number> = {
+  "pexels/v1": 0,
+};
+
 /** D10 — the ceiling on the WHOLE job: clips + voice + STT + render. Supersedes D4's
  *  per-request budget; there is deliberately no $1.00 constant left in this file to pull. */
 export const MEDIA_JOB_CAP_USD = 3.5;
@@ -132,6 +158,29 @@ export const MEDIA_DEFAULT_MUSIC = {
   model: "library/v1",
 } as const;
 
+/**
+ * The stock library, PINNED like every other provider spec.
+ *
+ * `orientation` and `minDurationSlackSeconds` are HERE rather than at the fetch site because both
+ * are things `assemble_final.sh` will hard-fail on, and a constant the assembler's behaviour
+ * depends on belongs beside the price it is pinned with:
+ *
+ *  * **`orientation: "portrait"`** — the assembler probes `W`/`H`/`FPS` off the FIRST video scene
+ *    (`assemble_final.sh`, "GEOMETRY comes from the first VIDEO scene"). Stock libraries are
+ *    landscape by default, so a deck whose opening video scene is stock would silently retune the
+ *    WHOLE reel to 1920x1080 and letterbox every still and card after it. Nothing would error.
+ *  * **`minDurationSlackSeconds`** — the assembler ERRORS when a clip is shorter than its scene by
+ *    more than 0.5s ("a held still frame is not a scene"). A generated clip is always exactly its
+ *    grid length and an upload is the tenant's own pick, so nothing has ever reached that gate.
+ *    Stock is whatever the library has, so the SEARCH must exclude anything too short — matching
+ *    the assembler's own tolerance exactly, from one constant, rather than two numbers that drift.
+ */
+export const MEDIA_DEFAULT_STOCK = {
+  model: "pexels/v1",
+  orientation: "portrait",
+  minDurationSlackSeconds: 0.5,
+} as const;
+
 export type MediaSpec =
   | { kind: "video"; model: string; resolution: VideoRes; seconds: number }
   | { kind: "image"; model: string; width: number; height: number }
@@ -142,6 +191,11 @@ export type MediaSpec =
    *  nothing. Like `render` it buys no provider call, so it gets no `mediaJobs` row — see
    *  `reserveSceneJobInner`. */
   | { kind: "music"; model: string; mood: string }
+  /** One fetched stock asset. `media` is what the BYTES are — it becomes the `mediaJobs.kind`, so
+   *  `renderReel`'s slot map keeps reading `video`/`image` and needs no stock case at all.
+   *  `seconds` is the scene's window: the fetcher uses it to exclude clips the assembler would
+   *  refuse as too short, and it is carried on the row so a re-submit asks the same question. */
+  | { kind: "stock"; model: string; media: "video" | "image"; seconds: number }
   | { kind: "render" } // the flat sandbox constant — a cost line, not a provider call
   | { kind: "free" }; // a scene whose picture costs nothing — see SCENE_VISUAL_LINE
 
@@ -211,6 +265,15 @@ export function estimateMediaUsd(spec: MediaSpec): Result<number, MediaCostError
       }
       return ok(perTrack);
     }
+    case "stock": {
+      const perAsset = MEDIA_STOCK_PRICING[spec.model];
+      if (perAsset === undefined) return err({ code: "unknown_model" });
+      // A stock CLIP has to cover its scene, and the length is the only submitted dimension that
+      // can make it unpriceable — an infinite or negative window names no search we could run.
+      // Checked for both media so a still's window stays a real number on the row.
+      if (!counted(spec.seconds)) return err({ code: "illegal_duration" });
+      return ok(perAsset);
+    }
     case "render":
       return ok(MEDIA_SANDBOX_USD_PER_RENDER);
     case "free":
@@ -277,11 +340,16 @@ export const SCENE_VISUAL_LINE = {
   animated_image: "image",
   uploaded_video: null,
   text_card: null,
-} as const satisfies Record<VisualKind, "video" | "image" | null>;
+  // NOT `null`. A stock scene buys nothing in money and a real asset in bytes, so it needs a LINE
+  // (to reserve, to submit, to land) at a price of zero. `null` here would mean no `mediaJobs` row,
+  // no fetch, and a render that refuses `incomplete_blocks` forever with no way to fix it.
+  stock_video: "stock",
+  stock_image: "stock",
+} as const satisfies Record<VisualKind, "video" | "image" | "stock" | null>;
 
 /** The picture line a scene buys. `render`/`tts`/`stt`/`free` are deck-wide or narration-driven and
  *  are therefore NOT scene-kind decisions. */
-export type SceneVisualSpec = Extract<MediaSpec, { kind: "video" | "image" }>;
+export type SceneVisualSpec = Extract<MediaSpec, { kind: "video" | "image" | "stock" }>;
 
 /**
  * Prices ONE scene's picture: the spec to submit and its fractional USD, or `null` for a kind that
@@ -300,19 +368,28 @@ export function sceneVisualSpec(
   const line = SCENE_VISUAL_LINE[visual];
   if (line === null) return ok(null);
   const spec: SceneVisualSpec =
-    line === "video"
+    line === "stock"
       ? {
-          kind: "video",
-          model: MEDIA_DEFAULT_VIDEO.model,
-          resolution: MEDIA_DEFAULT_VIDEO.resolution,
+          kind: "stock",
+          model: MEDIA_DEFAULT_STOCK.model,
+          // The BYTES, off the deck kind — this becomes `mediaJobs.kind`, which is why the row
+          // stays a four-member union and the render's slot map never learns the word "stock".
+          media: visual === "stock_video" ? "video" : "image",
           seconds,
         }
-      : {
-          kind: "image",
-          model: MEDIA_DEFAULT_IMAGE.model,
-          width: MEDIA_DEFAULT_IMAGE.width,
-          height: MEDIA_DEFAULT_IMAGE.height,
-        };
+      : line === "video"
+        ? {
+            kind: "video",
+            model: MEDIA_DEFAULT_VIDEO.model,
+            resolution: MEDIA_DEFAULT_VIDEO.resolution,
+            seconds,
+          }
+        : {
+            kind: "image",
+            model: MEDIA_DEFAULT_IMAGE.model,
+            width: MEDIA_DEFAULT_IMAGE.width,
+            height: MEDIA_DEFAULT_IMAGE.height,
+          };
   const priced = estimateMediaUsd(spec);
   return priced.ok ? ok({ spec, usd: priced.value }) : err(priced.error);
 }

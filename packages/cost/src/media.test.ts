@@ -8,6 +8,7 @@ import {
   estimateMediaUsd,
   MEDIA_DEFAULT_IMAGE,
   MEDIA_DEFAULT_MUSIC,
+  MEDIA_DEFAULT_STOCK,
   MEDIA_DEFAULT_STT,
   MEDIA_DEFAULT_VIDEO,
   MEDIA_DEFAULT_VOICE,
@@ -15,6 +16,7 @@ import {
   MEDIA_JOB_CAP_USD,
   MEDIA_MUSIC_PRICING,
   MEDIA_SANDBOX_USD_PER_RENDER,
+  MEDIA_STOCK_PRICING,
   MEDIA_STT_PRICING,
   MEDIA_TTS_PRICING,
   MEDIA_VIDEO_PRICING,
@@ -423,5 +425,127 @@ describe("the music bed — $0 is a PRICE, not an absence", () => {
       /perSecond|per_second|seconds/i,
     );
     expect(Object.values(MEDIA_MUSIC_PRICING).every((n) => n === 0)).toBe(true);
+  });
+});
+
+describe("stock: a $0 line that still BUYS an asset", () => {
+  const stockSpec = (media: "video" | "image", seconds = 6): MediaSpec => ({
+    kind: "stock",
+    model: MEDIA_DEFAULT_STOCK.model,
+    media,
+    seconds,
+  });
+
+  it("prices a stock clip and a stock still at exactly zero", () => {
+    expect(estimateMediaUsd(stockSpec("video"))).toEqual({ ok: true, value: 0 });
+    expect(estimateMediaUsd(stockSpec("image"))).toEqual({ ok: true, value: 0 });
+  });
+
+  it("refuses an unpriced library — fail closed, never a silent free pass", () => {
+    const res = estimateMediaUsd({ kind: "stock", model: "shutterstock/v9", media: "video", seconds: 6 });
+    expect(res).toEqual({ ok: false, error: { code: "unknown_model" } });
+  });
+
+  it("refuses an unpriceable window rather than searching for a nonsense length", () => {
+    for (const seconds of [Number.POSITIVE_INFINITY, Number.NaN, -4]) {
+      expect(estimateMediaUsd(stockSpec("video", seconds))).toEqual({
+        ok: false,
+        error: { code: "illegal_duration" },
+      });
+    }
+  });
+
+  it("IS PRICED SEPARATELY FROM THE PAID VIDEO TABLE — the hole a shared table would open", () => {
+    // If `pexels/v1` were a $0 row inside MEDIA_VIDEO_PRICING, a video spec naming it would price
+    // a REAL generated clip at nothing. It must not resolve there at all.
+    expect(MEDIA_VIDEO_PRICING[MEDIA_DEFAULT_STOCK.model]).toBeUndefined();
+    expect(MEDIA_IMAGE_PRICING[MEDIA_DEFAULT_STOCK.model]).toBeUndefined();
+    expect(
+      estimateMediaUsd({
+        kind: "video",
+        model: MEDIA_DEFAULT_STOCK.model,
+        resolution: "720p",
+        seconds: 4,
+      }),
+    ).toEqual({ ok: false, error: { code: "unknown_model" } });
+    // ...and symmetrically, a paid model cannot be laundered through the stock table.
+    expect(MEDIA_STOCK_PRICING[MEDIA_DEFAULT_VIDEO.model]).toBeUndefined();
+  });
+
+  it("the stock table has no per-second term — the rule-3 scan the music table gets", () => {
+    const src = MEDIA_SRC.split("export const MEDIA_STOCK_PRICING")[1]?.split("};")[0] ?? "";
+    expect(src.length, "the stock table must be found in source").toBeGreaterThan(0);
+    expect(src, "the stock table must not gain a per-second term").not.toMatch(
+      /perSecond|per_second|perCompute/i,
+    );
+    expect(Object.values(MEDIA_STOCK_PRICING).every((n) => n === 0)).toBe(true);
+  });
+
+  it("the deck kind decides the BYTES, and sceneVisualSpec carries the scene window through", () => {
+    const clip = sceneVisualSpec("stock_video", 7);
+    expect(clip.ok && clip.value?.spec).toEqual({
+      kind: "stock",
+      model: MEDIA_DEFAULT_STOCK.model,
+      media: "video",
+      seconds: 7,
+    });
+    const still = sceneVisualSpec("stock_image", 7);
+    expect(still.ok && still.value?.spec).toEqual({
+      kind: "stock",
+      model: MEDIA_DEFAULT_STOCK.model,
+      media: "image",
+      seconds: 7,
+    });
+    expect(clip.ok && clip.value?.usd).toBe(0);
+    expect(still.ok && still.value?.usd).toBe(0);
+  });
+
+  it("a stock scene is a LINE, not a null — `null` would mean no row, no fetch, no picture", () => {
+    // The distinction the music bed does NOT share: music is a spec with no row, stock is a spec
+    // WITH one. `null` here is what `uploaded_video` and `text_card` get, and it means the render
+    // expects nothing to land. A stock scene must never be told that.
+    expect(SCENE_VISUAL_LINE.stock_video).toBe("stock");
+    expect(SCENE_VISUAL_LINE.stock_image).toBe("stock");
+    expect(SCENE_VISUAL_LINE.uploaded_video).toBeNull();
+    expect(SCENE_VISUAL_LINE.text_card).toBeNull();
+  });
+
+  it("a whole deck of stock still reserves — free pictures, and the render line is what is left", () => {
+    const scenes: VisualKind[] = ["stock_video", "stock_image", "stock_video"];
+    const specs = scenes.map((k) => {
+      const line = sceneVisualSpec(k, 5);
+      if (!line.ok || line.value === null) throw new Error("expected a stock line");
+      return line.value.spec;
+    });
+    const batch = chooseMediaBatch([...specs, { kind: "render" }], MEDIA_JOB_CAP_USD);
+    expect(batch.ok && batch.value.estUsd).toBe(MEDIA_SANDBOX_USD_PER_RENDER);
+    // The cents floor happens ONCE on the total, so three free pictures add nothing at all —
+    // they do not each floor to a cent. That is D12(a), and stock is where it pays off most.
+    expect(batch.ok && batch.value.estCents).toBe(
+      Math.max(1, Math.ceil(MEDIA_SANDBOX_USD_PER_RENDER * 100)),
+    );
+  });
+
+  it("swapping a generated clip for stock is the whole cost lever, measured", () => {
+    const generated = sceneVisualSpec("generated_video", 4);
+    const stock = sceneVisualSpec("stock_video", 4);
+    if (!generated.ok || generated.value === null) throw new Error("expected a video line");
+    if (!stock.ok || stock.value === null) throw new Error("expected a stock line");
+    expect(generated.value.usd).toBeGreaterThan(0);
+    expect(stock.value.usd).toBe(0);
+    // A SIXTY-SECOND reel is where the lever stops being an optimisation. All-generated it is 15
+    // four-second clips — over the whole-job cap before a word is voiced — which is the
+    // arithmetic `storyboard.ts` cites for why every legal reel mixes kinds. All-stock it is $0,
+    // and the cap stops being the binding constraint on length at all.
+    const allGeneratedAt60s = (generated.value.usd / 4) * 60;
+    expect(allGeneratedAt60s).toBeGreaterThan(MEDIA_JOB_CAP_USD);
+    expect((stock.value.usd / 4) * 60).toBe(0);
+  });
+
+  it("pins the two constants the ASSEMBLER depends on, not just the price", () => {
+    // Both of these are things `assemble_final.sh` hard-fails or silently mis-renders on, so they
+    // are pinned here rather than left as fetch-site defaults. See MEDIA_DEFAULT_STOCK.
+    expect(MEDIA_DEFAULT_STOCK.orientation).toBe("portrait");
+    expect(MEDIA_DEFAULT_STOCK.minDurationSlackSeconds).toBe(0.5);
   });
 });

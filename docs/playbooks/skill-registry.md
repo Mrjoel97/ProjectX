@@ -1,5 +1,18 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-26 (**`media-director` -> v5: free stock footage.** The `Visual` set goes
+> from four members to SIX — `stock_video` and `stock_image` — and the body gained the rule that
+> matters more than the kinds themselves: **a stock scene's SCENE PROMPT is a SEARCH, not a
+> description of an imagined shot.** It is the one kind whose prompt is not read by a generator, so
+> the body now tells the model to write the few plain words someone would type to find the footage
+> and to omit camera moves, lighting and grades, which narrow a library search to nothing. The
+> "reach for `animated_image` first" economy rule was rewritten as an explicit ORDER — stock, then
+> still, then a generated clip only where the shot must show something specific to this business.
+> Worked example A now uses a `stock_video` with a three-word prompt; example B deliberately uses
+> NO stock and says why, because its art direction forbids photographs and cheapness must not
+> overrule the brief. Mirror regenerated and byte-identical; re-seed required. See
+> docs/playbooks/media.md, "Free stock footage".)
+
 > Last verified: 2026-08-26 (**`media-director` -> v4: the music bed.** The body's NOT-DO list said
 > outright that the system does not do "music, a sung track"; it now teaches an OPTIONAL `Music:`
 > field in ART DIRECTION carrying ONE word from a four-member closed set, and still forbids naming a

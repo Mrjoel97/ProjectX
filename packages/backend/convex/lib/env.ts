@@ -177,6 +177,12 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
       "The legacy Wan task poller (pre-cutover jobs only, ADR-024). A deployment with no pre-cutover job in flight needs it for nothing.",
   },
   {
+    name: "PEXELS_API_KEY",
+    tier: "feature",
+    whatBreaks:
+      "Free stock scenes (`stock_video` / `stock_image`). Absent, those scenes fail with a governed code and the fix menu can swap them for a card or a still — no cent is at risk, because a stock line reserves $0. Everything else in the media rail is unaffected.",
+  },
+  {
     // Alibaba Model Studio's own mixed-case name for the key (ADR-017). It is spelled exactly this
     // way in `convex env` and in source; a shape-based scan would drop it.
     name: "Video_and_image_API_Key",

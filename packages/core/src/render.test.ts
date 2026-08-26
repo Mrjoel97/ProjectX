@@ -13,6 +13,7 @@
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { VISUAL_KINDS } from "./storyboard";
 import { describe, expect, it } from "vitest";
 import {
   buildSandboxOptions,
@@ -844,6 +845,34 @@ describe("deckStillNeedsJob: a terminal job row holds the reel only while the de
   });
   it("a row whose scene the deck no longer has is history, not a hold", () => {
     expect(deckStillNeedsJob(undefined, "video")).toBe(false);
+  });
+
+  it("a STOCK scene needs its landed row exactly as a bought one does", () => {
+    // The bytes are free and they are still fetched, stored and awaited. Answering `false` here
+    // would let the render trigger fire before the fetch landed and hold the reel forever.
+    expect(deckStillNeedsJob({ visual: "stock_video", narration: "x" }, "video")).toBe(true);
+    expect(deckStillNeedsJob({ visual: "stock_image", narration: "x" }, "image")).toBe(true);
+    // ...and each stays in its OWN slot, so a stock clip is never satisfied by a still.
+    expect(deckStillNeedsJob({ visual: "stock_video", narration: "x" }, "image")).toBe(false);
+    expect(deckStillNeedsJob({ visual: "stock_image", narration: "x" }, "video")).toBe(false);
+  });
+
+  it("EVERY VisualKind is decided here — the guard against the next kind being missed", () => {
+    // THE POINT OF THIS TEST. `deckStillNeedsJob` string-compares `visual`, so it is compile-SILENT:
+    // adding a member to VISUAL_KINDS is a type error in `PAID_VISUAL` and `SCENE_VISUAL_LINE` and
+    // is NOT one here. `stock_video` and `stock_image` were both missed exactly this way, and the
+    // symptom is not a crash — it is a reel held at `incomplete_blocks` with no lever, because a
+    // scene that buys bytes reported that it was waiting for none.
+    //
+    // A kind must appear in exactly one column: it lands a video row, an image row, or no row at
+    // all (its picture is drawn, or already the tenant's). Anything else is undecided.
+    const LANDS_NO_ROW = new Set(["uploaded_video", "text_card"]);
+    for (const kind of VISUAL_KINDS) {
+      const video = deckStillNeedsJob({ visual: kind, narration: "x" }, "video");
+      const image = deckStillNeedsJob({ visual: kind, narration: "x" }, "image");
+      const decided = LANDS_NO_ROW.has(kind) ? !video && !image : video !== image;
+      expect(decided, `${kind} is not accounted for in deckStillNeedsJob`).toBe(true);
+    }
   });
 });
 

@@ -406,9 +406,22 @@ export function deckStillNeedsJob(
 ): boolean {
   if (shot === undefined) return false;
   if (kind === "tts") return shot.narration.trim() !== "";
-  if (kind === "image") return shot.visual === "animated_image";
-  return shot.visual === undefined || shot.visual === "generated_video";
+  if (kind === "image") return WANTS_IMAGE_ROW.has(shot.visual ?? "");
+  return shot.visual === undefined || WANTS_VIDEO_ROW.has(shot.visual);
 }
+
+/* Which deck kinds expect a LANDED `mediaJobs` row of each sort. Sets rather than a `||` chain
+ * because this predicate is compile-SILENT: it string-compares `visual`, so a new `VisualKind`
+ * that buys a row is not a type error here — it is a deck whose scene reports "needs no job",
+ * which lets the render trigger fire before its bytes have landed and holds the reel at
+ * `incomplete_blocks` with no lever. That is exactly what `stock_video`/`stock_image` would have
+ * done. `renderInputName.test.ts` iterates `VISUAL_KINDS` against these two sets so the next kind
+ * is caught by a red test instead of by a held reel.
+ *
+ * The kinds absent from BOTH are the ones that land no bytes at all: `uploaded_video` (resolved
+ * from the vault at render time) and `text_card` (drawn in the sandbox). */
+const WANTS_VIDEO_ROW = new Set(["generated_video", "stock_video"]);
+const WANTS_IMAGE_ROW = new Set(["animated_image", "stock_image"]);
 
 // ── The RUNNER: the route handler's whole body, with the SDK injected ──────────────────────────
 //

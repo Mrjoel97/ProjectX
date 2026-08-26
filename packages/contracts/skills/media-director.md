@@ -1,4 +1,4 @@
-# Media Director (v4)
+# Media Director (v5)
 
 Prompt shapes adapted from timkoda/koda-stack (MIT) — `skills/{script,art-direction,storyboard,generate}/SKILL.md`, fetched 2026-08-01.
 
@@ -123,14 +123,27 @@ order: `#`, `Visual`, `Seconds`, `Description`, `Narration`, `Text overlay`, `As
 
 ### The rules that are not negotiable
 
-- **`Visual` is a CLOSED set of four, and every one of them renders.** Nothing else parses.
+- **`Visual` is a CLOSED set of six, and every one of them renders.** Nothing else parses.
   - `generated_video` — a clip the system generates. The expensive one.
   - `animated_image` — ONE still, slowly panned across the whole scene. About **forty times
     cheaper** than a generated clip of the same length, and it can be any length at all.
+  - `stock_video` — a real clip from a free library, found from this scene's own SCENE PROMPT.
+    **Free, and it is moving footage.** Any length. Use it wherever the shot is something the world
+    already contains — a city street at dawn, hands on a keyboard, coffee being poured, traffic,
+    weather, a crowd. The library will not have your product, your team or your premises.
+  - `stock_image` — a real photograph from the same free library, panned like an
+    `animated_image`. Free, any length.
   - `text_card` — words drawn on the art direction's palette. Free. **Its `Text overlay` cell is
     what gets drawn, so a `text_card` with an empty overlay is refused.**
   - `uploaded_video` — footage the business already owns. Free, but the `Asset` cell must name a
     real document `searchVault` returned. **If you cannot name one, do not use this kind.**
+- **A stock scene's SCENE PROMPT is the SEARCH, not a description of an imagined shot.** This is
+  the one kind where the prompt is not read by a generator, and writing it the usual way is how a
+  stock scene comes back wrong. Write the few plain words someone would type to find that footage:
+  `city street at dawn`, `hands typing on a laptop`, `coffee poured into a white cup`. Do NOT write
+  a camera move, a lighting note, a colour grade or a brand name — the library either has the
+  shot or it does not, and a long prompt narrows it to nothing. **A stock scene with an empty
+  prompt is refused before anything is bought.**
 - **Declare `Target duration:` and it must be 15, 30 or 60** — and it must be the duration the
   BRIEF declares, in BOTH variations. Two variations of different lengths are two different asks.
 - **The `Seconds` column must add up to the target EXACTLY.** Whole seconds only. A deck that
@@ -140,8 +153,13 @@ order: `#`, `Visual`, `Seconds`, `Description`, `Narration`, `Text overlay`, `As
   there is nothing in between. **The other three kinds are any length, and that is not a detail:
   4, 8 and 12 are all multiples of four, so a reel built ONLY from generated clips cannot hit 15
   or 30 seconds at all, and a 60-second one costs more than the whole job is allowed to.** Every
-  legal reel therefore mixes kinds. Reach for `animated_image` first and spend a generated clip
-  only where motion is the point.
+  legal reel therefore mixes kinds.
+- **THE ORDER TO REACH IN.** `stock_video` or `stock_image` first, when the shot is something the
+  world already contains. Then `animated_image`, which costs about a fortieth of a clip and can be
+  anything you can describe. Spend a `generated_video` only where the shot must show something
+  specific to THIS business that no library holds, and where motion is the point. A deck that
+  reaches for a generated clip out of habit is a deck that will be refused for cost while a free
+  kind was sitting right there.
 - **Budget: at most three or four `generated_video` scenes in a reel**, and fewer is better. The
   whole job — pictures, voice, captions and render — is capped, and a deck over the cap is
   refused after you have written it rather than trimmed for you.
@@ -230,10 +248,14 @@ token — refuses the whole deck. Use one of the two forms above, or leave the l
 - Are they genuinely different CONCEPTS — a different angle AND a different visual treatment —
   rather than one script shot twice?
 - Does each deck declare the brief's duration, and does each `Seconds` column add up to it EXACTLY?
-- Is every `Visual` from the closed set of four, is every `generated_video` scene 4, 8 or 12
+- Is every `Visual` from the closed set of six, is every `generated_video` scene 4, 8 or 12
   seconds, does every `text_card` carry a `Text overlay`, and does every `uploaded_video` name a
   document you actually found?
-- Does each deck MIX kinds rather than reaching for `generated_video` every time?
+- Is every `stock_video` / `stock_image` prompt a SEARCH — a few plain words, no camera move, no
+  lighting note, no brand name — and is it a shot the world already contains rather than
+  something specific to this business?
+- Does each deck MIX kinds, and did you reach past a `generated_video` for a free kind wherever the
+  shot did not have to be generated?
 - Did you count each narration cell against the window it actually has, and does at least one
   scene in each deck speak?
 - Does every line that states a fact carry a `Source:` line — a real `[doc:...]` id you were
@@ -284,7 +306,7 @@ Target duration: 30
 |---|--------|---------|-------------|-----------|--------------|-------|
 | 1 | generated_video | 4 | Founder alone in a quiet office before opening, laptop shut, coffee steaming | Founders lose ninety minutes a day to the inbox. | NINETY MINUTES | |
 | 2 | animated_image | 6 | A single thread unfolding into one clean card, everything else fading back | Pikar reads the whole thread overnight and drafts the reply in your voice. | | |
-| 3 | animated_image | 8 | The same reply, written out four times across four mornings | Most of it is replies you have written a hundred times before, in slightly different words. | | |
+| 3 | stock_video | 8 | Hands typing steadily at a laptop, the same motion over and over | Most of it is replies you have written a hundred times before, in slightly different words. | | |
 | 4 | text_card | 4 | A held beat on the promise, no picture competing with it | | YOU APPROVE | |
 | 5 | generated_video | 8 | Hand closing a laptop in warm evening light, desk already clear | Nothing sends until you approve it, and every send is written down. | | |
 
@@ -302,9 +324,7 @@ Negative prompt: text, watermark, cluttered background
 Settings: 9:16, 1080x1920
 
 Scene 3
-Prompt: Four near-identical typed replies laid side by side on matte paper, overhead, flat morning light, shallow depth of field, editorial quality.
-Negative prompt: text, watermark, legible body copy
-Settings: 9:16, 1080x1920
+Prompt: hands typing on a laptop keyboard
 Source: unverified
 
 Scene 4
@@ -313,7 +333,7 @@ Settings: 9:16, 1080x1920
 
 VARIATION B
 
-The arithmetic, told as a printed page. No footage at all, so it costs a fortieth of A.
+The arithmetic, told as a printed page. No footage at all, so it costs a fortieth of A. Note that it uses no stock either, and that is a decision rather than an oversight: this variation's art direction forbids photographs, and a free kind is only free if it is still the reel you meant. Cheapness never overrules the art direction.
 
 SCRIPT
 

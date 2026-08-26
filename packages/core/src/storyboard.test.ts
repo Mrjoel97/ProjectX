@@ -783,6 +783,26 @@ describe("hasAssetSource — does this row name what its picture is built FROM? 
     expect(hasAssetSource(scene({ visual: "animated_image" }))).toBe(true);
   });
 
+  it("a STOCK kind needs its PROMPT — because the prompt is the search, and the parser does not require one", () => {
+    // The reason this is checked rather than assumed: `parseSceneDeck` falls `prompt` back to the
+    // `Description` cell, and that cell is only trimmed, never required to be non-empty. A blank
+    // one would ask a stock library for "" and land whatever its default ranking returns — a
+    // picture nobody chose, inside a reel someone approved.
+    for (const visual of ["stock_video", "stock_image"] as const) {
+      expect(hasAssetSource(scene({ visual, prompt: "" }))).toBe(false);
+      expect(hasAssetSource(scene({ visual, prompt: "   " }))).toBe(false);
+      expect(hasAssetSource(scene({ visual, prompt: "hands typing on a laptop" }))).toBe(true);
+    }
+    // An empty prompt is NOT fatal for the kinds whose picture comes from somewhere else — the
+    // guard has to be narrow or it starts refusing decks it has no business refusing.
+    expect(hasAssetSource(scene({ visual: "text_card", overlay: "WORDS", prompt: "" }))).toBe(true);
+    expect(
+      hasAssetSource(
+        scene({ visual: "uploaded_video", asset: { source: "vault", docId: "d" }, prompt: "" }),
+      ),
+    ).toBe(true);
+  });
+
   it("is NOT the paid flag — that equivalence is exactly what wave 5 removed", () => {
     // A free scene that names its source is renderable; a paid one is not automatically so.
     const card = scene({ visual: "text_card", overlay: "words" });

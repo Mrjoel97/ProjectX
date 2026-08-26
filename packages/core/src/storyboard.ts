@@ -523,6 +523,15 @@ export const VISUAL_KINDS = [
   "animated_image",
   "uploaded_video",
   "text_card",
+  /** Stock library footage and stills — free, third-party, fetched at job time. Deliberately NOT
+   *  folded into `uploaded_video`: that kind means "the tenant already owns these bytes" and
+   *  resolves through a `vaultDocuments` row whose OWNERSHIP is checked against the calling tenant
+   *  (`renderReel.batchToRender`'s vault branch). Stock bytes belong to neither the tenant nor us,
+   *  arrive over the network and land in `_storage` on a `mediaJobs` row like any bought asset.
+   *  Widening `uploaded_video` would put "which sort of upload is this" inside the one branch that
+   *  guards a model-authored id against naming any document in the deployment. */
+  "stock_video",
+  "stock_image",
 ] as const;
 export type VisualKind = (typeof VISUAL_KINDS)[number];
 
@@ -581,6 +590,11 @@ const PAID_VISUAL = {
   animated_image: true, // one still generation, then ffmpeg pan/zoom — paid, but ~10x cheaper
   uploaded_video: false, // the tenant already owns the bytes
   text_card: false, // drawtext in the sandbox
+  // FREE, and unlike the two above it still buys a `mediaJobs` row: the bytes have to be fetched
+  // and landed before the assembler can read them. "Unpaid" and "no provider line" came apart
+  // here — see MEDIA_STOCK_PRICING for why $0 is a PRICE and not an absence of one.
+  stock_video: false,
+  stock_image: false,
 } as const satisfies Record<VisualKind, boolean>;
 
 export const isPaidScene = (s: Scene): boolean => PAID_VISUAL[s.visual];
@@ -599,6 +613,12 @@ export const isPaidScene = (s: Scene): boolean => PAID_VISUAL[s.visual];
  *     Only the picture is missing, which is the failure `assemble_final.sh` refuses to ship by
  *     probing for a font rather than trusting one. Same reasoning, one step earlier and for free.
  *   * `generated_video` / `animated_image` — the prompt, which the parser already requires.
+ *   * `stock_video` / `stock_image` — the prompt, and here it is checked rather than assumed. A
+ *     stock scene's prompt IS its search query, and the parser does NOT guarantee one: `prompt`
+ *     falls back to the `Description` cell (`parseSceneDeck`), and that cell is only ever `.trim()`ed
+ *     — never required to be non-empty. So a deck with a blank description and no SCENE PROMPTS
+ *     entry would reach the fetcher asking a stock library for `""` and pull back whatever its
+ *     default ranking returns. That is a picture nobody chose, in a reel someone approved.
  */
 // Structurally typed (33-04): the same question is asked of parser `Scene`s at the money gate and
 // of stored `plans.shots` rows at the render trigger's re-arm, and the two shapes differ only in
@@ -607,9 +627,13 @@ export const hasAssetSource = (s: {
   visual?: string;
   overlay?: string;
   asset?: unknown;
+  prompt?: string;
 }): boolean => {
   if (s.visual === "uploaded_video") return s.asset !== undefined;
   if (s.visual === "text_card") return (s.overlay ?? "").trim() !== "";
+  if (s.visual === "stock_video" || s.visual === "stock_image") {
+    return (s.prompt ?? "").trim() !== "";
+  }
   return true;
 };
 
