@@ -1,6 +1,24 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
-> Last verified: 2026-08-26 (**A PACK BODY LIVES IN FOUR PLACES AND THE PROVENANCE SCRIPT CHECKS
+> Last verified: 2026-08-27 (**THE LABEL CONTRACT NOW COVERS ALL SIX PACKS.** `pack-business-pulse`
+> and `pack-sales-call-prep` were the last two without it. Their `missingNamed` assertions passed
+> WITHOUT it, which is exactly why this was worth closing rather than leaving: the scorer accepts a
+> synonym list, so a body that says "your reports" instead of `your business and operations
+> summaries` passes until the model picks a paraphrase nobody listed — the failure that cost
+> campaign-plan four runs and three near-misses.
+>
+> The labels are CODE-OWNED in `PACK_SOURCE_LABEL` (`@pikar/core`) and must be copied from there
+> verbatim, never invented to match a body: business-pulse names `your business and operations
+> summaries`, `your saved content shelf`, `your contact and pipeline records`, `your connected sales
+> and accounting systems`; sales-call-prep names `your contact and pipeline records`.
+>
+> Re-pinning TWO bodies is eight places, and the mirror is still the one `--check` passes over.
+> Regenerate the `.ts`, re-pin `bodySha256` in `knowledgeWorkProvenance.ts` AND `adaptedBodySha256`
+> in the manifest, `biome check --write` the derived literal (JSON.stringify emits double quotes;
+> biome rewrites a body containing an apostrophe to single), then run the CONTRACTS SUITE — the
+> provenance script alone will report green over a stale mirror.
+>
+> PREVIOUS: 2026-08-26 (**A PACK BODY LIVES IN FOUR PLACES AND THE PROVENANCE SCRIPT CHECKS
 > ONLY THREE.** `pack-process-sop.md` changed (its save trigger was a judgement the model got wrong
 > — see the workflow-packs playbook). Re-pinning it means: the canonical `.md`, the auto-derived
 > `.ts` constant, `bodySha256` in the code-owned `knowledgeWorkProvenance.ts` MIRROR, and

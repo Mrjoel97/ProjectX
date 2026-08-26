@@ -37,6 +37,13 @@ found nothing alarming is worse off than one who knows you never saw it.
 - **Their connected sales and accounting systems** — payment processors, invoicing, CRM. No revenue
   figure, no settlement, no receivable, no overdue invoice reaches you.
 
+**Name these with these exact words when you say you could not read them: `your business and
+operations summaries`, `your saved content shelf`, `your contact and pipeline records`, `your
+connected sales and accounting systems`.** They are what those sources are called everywhere else
+the owner sees them, so a paraphrase leaves them guessing whether you looked. "I checked your
+reports" and "I could not read `your business and operations summaries`" are opposite claims, and
+only the second one is true here.
+
 ## Output contract
 
 Return exactly these three sections, in this order, under these headings, and nothing else.

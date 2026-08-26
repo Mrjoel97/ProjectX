@@ -62,6 +62,11 @@ on it.
   value, the close date, who owns it, what was discussed last time, or whether this is a first call
   or a fifth.
 
+**Name this with these exact words when you say you could not read it: `your contact and pipeline
+records`.** That is what it is called everywhere else the owner sees it, so a paraphrase leaves them
+guessing whether you looked. Saying you could not read `your contact and pipeline records` is the
+OPPOSITE of claiming you consulted them — it is the sentence that stops the owner assuming you did.
+
 Say that in one line at the top of every prep you produce — the saved document IS your reply: the
 prep is built from the owner's own material and public research, not from their records. An owner who
 thinks you checked the deal history and found nothing worrying is worse prepared than one who knows

@@ -49,7 +49,7 @@ export const KNOWLEDGE_WORK_PROVENANCE: Readonly<Record<string, KnowledgeWorkPro
       "small-business/skills/business-pulse/reference/output_template.md",
       "small-business/skills/business-pulse/reference/thresholds.md",
     ],
-    bodySha256: "7d0c9b03b1ca6f4e0ad408f79a4d60acdbd440663d5ab7d2ec6668a3ab58eea0",
+    bodySha256: "9f0472b5acf6c83949e25fe0680df2ce1ce949d6f3ba5f743dd008b6b1957cd5",
     license: "Apache-2.0",
     modificationNotice:
       "Connector sections (QuickBooks/PayPal/Square/HubSpot) removed: those sources are MISSING in Pikar and are named to the user instead. Output is an in-thread briefing, not a saved report.",
@@ -80,7 +80,7 @@ export const KNOWLEDGE_WORK_PROVENANCE: Readonly<Record<string, KnowledgeWorkPro
     sourceRepo: REPO,
     sourceCommit: COMMIT,
     sourcePaths: ["sales/skills/call-prep/SKILL.md"],
-    bodySha256: "9843a2d0277d9e0e53caa97eb1cd4283d12d95759b1178c720c9469617eb914b",
+    bodySha256: "eae50f259e402bd244dbd11d5898545ea91f8f517d27044ef2e3b7c2d0c3ab60",
     license: "Apache-2.0",
     modificationNotice:
       "CRM account/deal lookups removed and named as MISSING. Keeps the standalone user-input plus web-research path, which is what Pikar can actually serve.",

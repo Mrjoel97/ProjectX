@@ -1,6 +1,18 @@
 # Playbook: Authorization (tenancy + ownership)
 
-> Last verified: 2026-08-26 (**AN EMAIL IS NOT AN IDENTITY ON THIS DEPLOYMENT, and
+> Last verified: 2026-08-27 (**`inspectUsersByEmail` — a READ-ONLY census of the rows sharing one
+> address.** `findUserIdByEmail` deliberately refuses to pick between duplicates, which left an
+> operator holding a count and no way to see what they were choosing between. This is that view:
+> ids, the owner flag, creation time. **Refs and flags only (§4)** — never the address it was asked
+> about, never a name. An operator already knows the address; echoing identity into logs is how a
+> diagnostic becomes a PII honeypot.
+>
+> **IT CANNOT DELETE, AND THAT IS THE POINT.** `tenantId` IS the Convex Auth user id
+> (`requireScope`), so every row it returns is a TENANT — a "duplicate" may own real data written
+> while someone was signed in as it. Whether one is safe to remove is a human judgement about what
+> that tenant holds, not something a query should decide.
+>
+> PREVIOUS: 2026-08-26 (**AN EMAIL IS NOT AN IDENTITY ON THIS DEPLOYMENT, and
 > `findUserIdByEmail` assumed it was.** It used `.unique()`, which THROWS on more than one row, and
 > production has several `users` rows per address (Convex Auth writes one per identity, so a Google
 > sign-in and a password sign-in are two rows). The opaque "unique() returned more than one result"

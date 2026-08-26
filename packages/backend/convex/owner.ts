@@ -101,6 +101,42 @@ export const findUserIdByEmail = internalQuery({
   },
 });
 
+/**
+ * READ-ONLY census of the rows sharing one address. `internalQuery`, grants nothing, changes
+ * nothing — the operator counterpart to `findUserIdByEmail`'s deliberate refusal to guess.
+ *
+ * WHY IT EXISTS. Production has SEVERAL `users` rows for one address (Convex Auth writes a row per
+ * identity, so a Google sign-in and a password sign-in are two rows). `findUserIdByEmail` correctly
+ * refuses to pick one, which left an operator with a count and no way to see what they were picking
+ * BETWEEN. This is that view.
+ *
+ * REFS AND FLAGS ONLY (CLAUDE.md §4): ids, the owner flag, and creation time. Never the address it
+ * was asked about, never a name, never a token — an operator already knows the address, they typed
+ * it, and echoing identity into logs is how a diagnostic becomes a PII honeypot.
+ *
+ * **A DUPLICATE ROW IS NOT OBVIOUSLY DELETABLE, and this query deliberately cannot delete one.**
+ * `tenantId` IS the Convex Auth user id (`requireScope`), so every row here is a TENANT, and a
+ * "duplicate" may own real data written while someone was signed in as it. Deciding is a human
+ * judgement over what each tenant holds; this only shows that the choice exists.
+ */
+export const inspectUsersByEmail = internalQuery({
+  args: { email: v.string() },
+  handler: async (ctx, { email }) => {
+    const rows = await ctx.db
+      .query("users")
+      .withIndex("email", (q) => q.eq("email", email.trim().toLowerCase()))
+      .collect();
+    return {
+      count: rows.length,
+      rows: rows.map((u) => ({
+        userId: u._id,
+        owner: u.owner === true,
+        createdAt: u._creationTime,
+      })),
+    };
+  },
+});
+
 export const bootstrapOwner = internalMutation({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
