@@ -1,6 +1,44 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
-> Last verified: 2026-08-26 (**THE BROWSER EVIDENCE PLANE IS GREEN. ALL SIX PACKS NOW CARRY ALL
+> Last verified: 2026-08-26 (**ALL SIX PACKS ARE LIVE, AND ROLLBACK-TO-DARK IS PROVEN BY A CLICK.**
+> Activation went through `skills.activateSkill` -> `assertPackActivationEvidence`, so the gate
+> itself accepted all three planes for every (name, version); it would have thrown `PACK_GATE`
+> naming the missing one otherwise.
+>
+> **THE UNDO PATH EXISTS NOW.** `WorkflowPackOwnerControls` is an owner-only "Live workflows" section
+> whose Turn off button calls `skills.deactivatePack`. That closes the gap `deactivatePack`'s own
+> docstring named: the registry's only other dark path is `npx convex run skills:archiveSkill`, and
+> one `convex run` DESTROYS the browser session — so an owner mid-incident had to choose between
+> turning a pack off and staying signed in, and the drill could not be a browser assertion at all.
+> The `@drill` test is no longer `fixme`: it proves the pack is really on offer, clicks Turn off,
+> proves it leaves the surface every user sees, and **proves it comes back as a CANDIDATE** — without
+> that last assertion, "it vanished" would pass just as well if the row had been destroyed.
+>
+> **`@dark` COULD NEVER FAIL, AND THAT WAS THE MOST IMPORTANT FINDING OF THE WHOLE EXERCISE.**
+> `expect(locator).toHaveCount(0)` SUCCEEDS ON ITS FIRST POLL, and on first paint the count is 0
+> because the Convex query has not resolved. So the phase's central property — the pilot is invisible
+> — was asserted by a test that passed with all six packs ACTIVE and offered. **Absence needs a
+> settle signal exactly as much as presence does.** `settlePackQueries` waits for whichever owner
+> section is rendered (candidates while dark, live controls once active) before any assertion runs.
+>
+> **IT WAS THEN FALSIFIED IN BOTH DIRECTIONS, which is the only reason to believe it now:** with the
+> packs live `@dark` went RED, and with them archived it went GREEN. A guard that has never been
+> observed failing is decoration.
+>
+> The `@dark` name check is SCOPED PAST THE OWNER SECTIONS. The owner's preview shows pack names by
+> design while dark — that is what it is for, and it says "Not live". The property is that no pack is
+> OFFERED, so every occurrence must be accounted for by an owner-only region; a name anywhere else
+> still fails.
+>
+> **AND `@discovery` HAD THE SAME STRICT-MODE DEFECT AS `@preview`** — `getByRole("listitem")`
+> matching the preflight's per-source `<li>`s, and a `getByText` regex resolving to four elements.
+> It could never have passed either. Scoped to `li.pack-quickstart` and asserting over the card's
+> `innerText`. Every block in this spec now asserts something.
+>
+> STILL OWED: rollback-to-a-prior-VERSION, which needs two activated versions of one pack. Left
+> `fixme` rather than faked.
+>
+> PREVIOUS: 2026-08-26 (**THE BROWSER EVIDENCE PLANE IS GREEN. ALL SIX PACKS NOW CARRY ALL
 > THREE: provenance, eval and browser.** `workflow-pack-pilot.spec.ts` had NEVER been run; running
 > it found six defects, five of them in the spec and the harness rather than the product.
 >

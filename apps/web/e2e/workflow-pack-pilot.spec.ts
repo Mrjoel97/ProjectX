@@ -62,6 +62,29 @@ const openWorkspace = async (page: Page) => {
   await expect(page.getByTestId("workspace-pane")).toBeVisible();
 };
 
+/**
+ * WAIT UNTIL THE PACK QUERIES HAVE ANSWERED, before asserting anything about what is or is not on
+ * the page.
+ *
+ * **This is the difference between a guard and decoration, and it was measured.** `@dark` asserts
+ * `toHaveCount(0)`, which SUCCEEDS ON ITS FIRST POLL — and on first paint the count is 0 because
+ * the Convex query has not resolved. So `@dark` passed with all six packs ACTIVE and offered: the
+ * central property of the phase was asserted by a test that could never fail. Absence needs a
+ * settle signal exactly as much as presence does.
+ *
+ * The signal is a positive one: for the OWNER exactly one of the two owner sections is always
+ * rendered once the queries land — candidates while the pilot is dark, live controls once anything
+ * is active. Waiting for either proves the data arrived without assuming which state we are in.
+ * Falls through after the timeout rather than throwing, so a non-owner run still asserts (it just
+ * cannot settle on this signal, and says so by being slow rather than by being wrong).
+ */
+const settlePackQueries = async (page: Page) => {
+  await Promise.race([
+    candidates(page).waitFor({ state: "visible", timeout: 20_000 }),
+    ownerControls(page).waitFor({ state: "visible", timeout: 20_000 }),
+  ]).catch(() => undefined);
+};
+
 const quickStarts = (page: Page) => page.getByRole("region", { name: "Guided workflows" });
 
 /** The OWNER's candidate preview (27-11). A DIFFERENT region from the quick starts on purpose: the
@@ -96,6 +119,11 @@ const rememberSeen = (title: string, version: number) => {
   writeFileSync(SEEN_PATH, JSON.stringify(all, null, 2));
 };
 
+/** The OWNER's live-pack controls (27-11) — the turn-off switch, and the settle signal that tells
+ *  `@dark` the pack queries have answered when something IS active. */
+const ownerControls = (page: Page) =>
+  page.getByRole("region", { name: "Live workflows — owner controls" });
+
 /** Card TITLE -> pack id. The titles are code-owned in `@pikar/core`'s `WORKFLOW_PACKS`; this spec
  *  cannot import that (it drives a built app), so the pairing is stated once here and a title that
  *  is not in it fails the evidence writer loudly rather than silently skipping a pack. */
@@ -114,8 +142,16 @@ test.describe("@dark the pilot is invisible while every pack is a candidate", ()
   // at the query. Six candidates exist on this deployment right now; not one may be offered.
   test("no guided workflow is offered at all", async ({ page }) => {
     await openWorkspace(page);
+    await settlePackQueries(page);
     await expect(quickStarts(page)).toHaveCount(0);
-    // And no pack name leaks into the page some other way — a heading, a menu item, a tooltip.
+    // And no pack name leaks into the ORDINARY surface some other way — a heading, a menu item, a
+    // tooltip.
+    //
+    // SCOPED PAST THE OWNER SECTIONS since 27-11, and the distinction is the property itself. The
+    // owner's candidate preview shows pack names BY DESIGN while the pilot is dark — that is what it
+    // is for, and it says "Not live" on it. What must never happen is a pack being OFFERED, so every
+    // occurrence of a pack name has to be accounted for by an owner-only region. A name appearing
+    // anywhere else still fails, which is what this is guarding.
     for (const title of [
       "Business pulse",
       "Campaign plan",
@@ -124,7 +160,14 @@ test.describe("@dark the pilot is invisible while every pack is a candidate", ()
       "Process / SOP",
       "Brand review",
     ]) {
-      await expect(page.getByText(title, { exact: true })).toHaveCount(0);
+      const everywhere = await page.getByText(title, { exact: true }).count();
+      const inOwnerOnly =
+        (await candidates(page).getByText(title, { exact: true }).count()) +
+        (await ownerControls(page).getByText(title, { exact: true }).count());
+      expect(
+        everywhere - inOwnerOnly,
+        `"${title}" appears outside the owner-only sections while the pilot is dark`,
+      ).toBe(0);
     }
   });
 
@@ -132,6 +175,7 @@ test.describe("@dark the pilot is invisible while every pack is a candidate", ()
   // heading is still an exposure decision nobody made.
   test("there is no empty guided-workflows shell", async ({ page }) => {
     await openWorkspace(page);
+    await settlePackQueries(page);
     await expect(page.getByText("Guided workflows")).toHaveCount(0);
   });
 });
@@ -144,24 +188,33 @@ test.describe("@dark the pilot is invisible while every pack is a candidate", ()
 test.describe("@discovery an active pack is offered honestly", () => {
   test.beforeEach(async ({ page }) => {
     await openWorkspace(page);
+    await settlePackQueries(page);
     const shown = await quickStarts(page).count();
     test.skip(shown === 0, "no pack is active on this deployment — nothing to assert yet");
   });
 
   test("every offered pack states what it produces and what it cannot see", async ({ page }) => {
-    const cards = quickStarts(page).getByRole("listitem");
+    // SCOPED TO THE CARD, not `getByRole("listitem")`: `WorkflowPackPreflight` renders an <li> per
+    // SOURCE inside each card, so the role query matches the cards AND every source row.
+    const cards = quickStarts(page).locator("li.pack-quickstart");
     const n = await cards.count();
     expect(n).toBeGreaterThan(0);
 
     for (let i = 0; i < n; i++) {
-      const card = cards.nth(i);
+      // READ THE CARD'S TEXT rather than locating by it. A preflight lists several sources, so a
+      // `getByText` regex resolves to MANY elements and dies of strict mode instead of asserting —
+      // measured: this test could never have passed, which is why it had never been run green.
+      const cardText = await cards.nth(i).innerText();
       // The output contract, before the run — one of the three code-owned promises.
-      await expect(
-        card.getByText(/Answers here in the chat|Saves a document to your vault|nothing is sent/),
-      ).toBeVisible();
+      expect(
+        cardText,
+        `a quick start states no output contract: ${cardText.slice(0, 120)}`,
+      ).toMatch(/Answers here in the chat|Saves a document to your vault|nothing is sent/);
       // The preflight. Every pack in this pilot has at least one matrix-missing source, so a card
       // with no "cannot read" line is a card hiding the phase's primary deliverable.
-      await expect(card.getByText(/cannot read|partly readable|can read/)).toBeVisible();
+      expect(cardText, `a quick start states no preflight: ${cardText.slice(0, 120)}`).toMatch(
+        /cannot read|partly readable|can read/,
+      );
     }
   });
 
@@ -199,6 +252,7 @@ test.describe("@discovery an active pack is offered honestly", () => {
 test.describe("@run starting a pack really runs the pack", () => {
   test.beforeEach(async ({ page }) => {
     await openWorkspace(page);
+    await settlePackQueries(page);
     test.skip((await quickStarts(page).count()) === 0, "no pack is active");
   });
 
@@ -364,23 +418,55 @@ test.describe("@evidence record what the browser established", () => {
 });
 
 test.describe("@drill rollback", () => {
-  // ROLLBACK-TO-DARK IS OWED AND CANNOT BE DRILLED YET, and that is a real gap rather than a
-  // scheduling detail. `skills.deactivatePack` is the product's dark path and it is an
-  // `ownerMutation`, so `convex run` — which carries no identity — cannot call it. The only CLI
-  // route left is the internal `archiveSkill`, and that is the command whose side effect
-  // (`storageState` destroyed, next navigation lands on `/signin`) makes it unusable inside a spec.
+  // ROLLBACK-TO-DARK, DRIVEN BY AN OWNER IN THE BROWSER. This was `fixme` until 27-11 because the
+  // only dark path was `npx convex run skills:archiveSkill`, and one `convex run` against the local
+  // deployment DESTROYS the browser session — the next navigation lands on /signin. So the drill
+  // could not be a browser assertion at all, and rollback-to-dark was proven by NOTHING while six
+  // packs sat one owner click away from being live. `skills.deactivatePack` + the owner control in
+  // the workspace make it a click like every other assertion in this file.
   //
-  // What closes this: an owner-facing deactivate CONTROL in the workspace, so the drill is a click
-  // like every other browser assertion above. Until then, do not fake it — a green drill that never
-  // turned a pack off is worse than a recorded gap.
-  test.fixme("rollback-to-dark, driven by an owner in the browser", async ({ page }) => {
+  // IT IS A REAL ROUND TRIP: the pack must be live at the start, gone from the quick starts after,
+  // and the run must leave the deployment as it found it.
+  test("an owner can turn a live pack off, and everyone stops being offered it", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
     await openWorkspace(page);
-    // …click the owner's Turn off control, then assert the pack leaves `quickStarts`.
-    expect(convexRun).toBeDefined();
+
+    const controls = page.getByRole("region", { name: "Live workflows — owner controls" });
+    await controls.waitFor({ state: "visible", timeout: 20_000 }).catch(() => undefined);
+    test.skip(
+      (await controls.count()) === 0,
+      "no pack is live, or this browser is not the owner — nothing to roll back",
+    );
+
+    // The pack we are about to darken, by name, so the assertion afterwards is about THIS one.
+    const row = controls.locator("li.pack-owner-control").first();
+    const title = (await row.innerText()).split("·")[0]?.trim() ?? "";
+    expect(title.length).toBeGreaterThan(2);
+
+    // It really is on offer to everyone right now — otherwise "it left" proves nothing.
+    const offered = quickStarts(page).getByRole("button", { name: `Start ${title}` });
+    await expect(offered).toBeVisible({ timeout: 20_000 });
+
+    await row.getByRole("button", { name: `Turn off ${title}` }).click();
+
+    // GONE from the surface every user sees, and the owner is told plainly.
+    await expect(offered).toHaveCount(0, { timeout: 30_000 });
+    await expect(page.getByText(new RegExp(`${title} is off`, "i"))).toBeVisible();
+
+    // And it is BACK as a candidate — turning off archives the active row, it does not delete the
+    // version, so the owner can preview and re-activate it.
+    const preview = candidates(page);
+    await preview.waitFor({ state: "visible", timeout: 20_000 }).catch(() => undefined);
+    await expect(
+      preview.getByRole("button", { name: `Preview ${title}` }),
+      "a turned-off pack must come back as a candidate, not vanish",
+    ).toBeVisible({ timeout: 20_000 });
   });
 
   // ROLLBACK-TO-PRIOR-VERSION is supported by the registry today (`activateSkill` on an earlier
-  // version) and needs no CLI inside the browser session — but it needs a SECOND activated version
-  // to roll back to, which no pack has while the pilot is dark.
+  // version) but still needs a SECOND activated version to roll back to. It stays owed rather than
+  // faked: a green drill that never rolled anything back is worse than a recorded gap.
   test.fixme("rollback to a prior pack version, once two versions have been activated", () => {});
 });
