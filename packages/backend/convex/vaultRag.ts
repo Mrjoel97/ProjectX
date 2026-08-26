@@ -139,7 +139,7 @@ export const isRetriableEmbedStatus = (status: number): boolean => status === 42
 export const embedBackoffMs = (attempt: number, retryAfterSeconds: number, jitter = 0): number =>
   Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
     ? Math.min(retryAfterSeconds * 1000, 30_000)
-    : Math.min(2 ** attempt * 500, 8_000) + Math.floor(jitter * 250);
+    : Math.min(2 ** attempt * 500, 30_000) + Math.floor(jitter * 250);
 
 export const embeddingContentHash = (contentHash: string): string =>
   `${EMBEDDING_MODEL}:${contentHash}`;
@@ -192,7 +192,12 @@ const embeddingV2 = {
     // Honours `Retry-After` when the provider sends one — it knows its own window better than a
     // guess does — and otherwise backs off exponentially with jitter so parallel callers do not
     // re-collide in lockstep.
-    const MAX_ATTEMPTS = 5;
+    // SIX ATTEMPTS AT A 30s CEILING, so the retries can outlast a WHOLE per-minute window:
+    // 1+2+4+8+16+30 ≈ 61s. The first version capped at 8s over 5 attempts (~23s total) and STILL
+    // failed every time — measured against production, where the rate limit is per-minute and a
+    // window that has not rolled over yet returns 429 to every one of those attempts. A backoff
+    // that cannot span the limiter's window is not a retry, it is a slower failure.
+    const MAX_ATTEMPTS = 6;
     let res!: Response;
     for (let attempt = 1; ; attempt++) {
       res = await fetchOnce();

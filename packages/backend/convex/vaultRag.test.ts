@@ -129,7 +129,10 @@ test("backs off exponentially, with a ceiling, when no header is given", () => {
   expect(embedBackoffMs(2, noHeader)).toBe(2000);
   expect(embedBackoffMs(3, noHeader)).toBe(4000);
   // Ceiling holds however many attempts have failed.
-  expect(embedBackoffMs(9, noHeader)).toBe(8000);
+  // Ceiling is 30s, NOT 8s: the limiter is per-minute, so a backoff that tops out below the
+  // window just fails more slowly. Six attempts at this curve span ~61s.
+  expect(embedBackoffMs(5, noHeader)).toBe(16_000);
+  expect(embedBackoffMs(9, noHeader)).toBe(30_000);
 });
 
 test("adds jitter so parallel callers do not re-collide in lockstep", () => {

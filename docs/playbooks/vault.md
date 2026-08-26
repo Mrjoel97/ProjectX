@@ -1,4 +1,16 @@
-> Last verified: 2026-08-27 (**EMBEDDING HAD NO RATE-LIMIT RETRY, AND PRODUCTION PROVED IT.** A burst
+> Last verified: 2026-08-27 (**THE FIRST RETRY CEILING WAS TOO LOW TO WORK, and production proved
+> that too.** 5 attempts capped at 8s is ~23s of total backoff. The limiter here is PER-MINUTE — a
+> single embed succeeds while a burst 429s — so every one of those attempts landed inside the same
+> unexpired window and the call failed exactly as it had without any retry at all.
+>
+> **A backoff that cannot span the limiter's window is not a retry, it is a slower failure.** Now 6
+> attempts at a 30s ceiling: 1+2+4+8+16+30 ≈ 61s, which outlasts a whole minute window. Verified the
+> distinction with a single `embedContent` call — it returned 3072 dims WHILE the seeding burst was
+> being rejected, which is what identifies a rate limit rather than an exhausted daily quota. Make
+> that probe before concluding anything about embedding 429s; "wait until tomorrow" and "back off
+> harder" are opposite fixes and the error text alone does not tell them apart.
+>
+> PREVIOUS: 2026-08-27 (**EMBEDDING HAD NO RATE-LIMIT RETRY, AND PRODUCTION PROVED IT.** A burst
 > of vault seeds against prod returned `vault: embeddings API 429` ON CONTACT and every caller failed
 > outright — `doEmbed` surfaced the provider's 429 straight to the caller as a hard throw.
 >
