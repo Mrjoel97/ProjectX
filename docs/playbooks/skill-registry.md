@@ -1,5 +1,37 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-26 (**A PACK BODY LIVES IN FOUR PLACES AND THE PROVENANCE SCRIPT CHECKS
+> ONLY THREE.** `pack-process-sop.md` changed (its save trigger was a judgement the model got wrong
+> — see the workflow-packs playbook). Re-pinning it means: the canonical `.md`, the auto-derived
+> `.ts` constant, `bodySha256` in the code-owned `knowledgeWorkProvenance.ts` MIRROR, and
+> `adaptedBodySha256` in `third_party/knowledge-work-plugins/manifest.json`.
+>
+> `verify-knowledge-work-provenance.mjs --check` reported **green with the mirror still stale** — it
+> compares the `.md` against the manifest and the derived `.ts`, and passes over the mirror.
+> `knowledgeWorkProvenance.test.ts` is what caught it (`expected '9498fd70…' to be 'bf1166a4…'`).
+> **Run the contracts suite after any body edit; the provenance script alone is not sufficient.**
+>
+> One more trap: the derived `.ts` is a quoted literal, and `JSON.stringify` emits DOUBLE quotes
+> while biome reformats a body containing an apostrophe to SINGLE quotes. Regenerate, then
+> `biome check --write`, then re-run the sync test — the value is unchanged, but CI fails on format.
+>
+> PREVIOUS: 2026-08-26 (**WATCH-GATE ACKNOWLEDGMENT ONLY — this bump does NOT cover the pack
+> bodies that triggered it.** The Stop hook fired on `pack-brand-review.md`, `packBrandReview.ts`
+> and `knowledgeWorkProvenance.ts`, which belong to a concurrent lane and are already committed as
+> `12ea37c`. The session that wrote this line was working on the media rail in a separate worktree
+> (`feat/media-rail-gaps`, commit e2b281f) and touched none of them; its OWN skill-registry entry —
+> `media-director` -> v4, the music bed, and the re-bake-before-re-seed ordering — lives in that
+> worktree's copy of this file and is NOT in this tree yet.
+>
+> **Nothing here was re-read against `12ea37c`.** `scripts/check-playbooks.mjs` reads the whole
+> working tree and cannot be scoped to one session's diff, so it demanded this of the wrong
+> session; the owner asked for the turn to be unblocked. The §9 obligation for the pack-body change
+> is STILL OPEN and belongs to the lane that made it.
+>
+> NOTE for whoever reads the history: the equivalent disclaimer this session added to
+> `cockpit.md` was swept INTO `12ea37c` by that lane's `git add`, so it now appears inside a commit
+> it explicitly disclaims. That is the hook's collision, not a claim by either lane.)
+>
 > Last verified: 2026-08-26 (**Pack bodies are NOT published by `seedSkills` — they go through
 > `skills:seedPackCandidates`, and calling the wrong one looks exactly like a stale bundle.**
 >

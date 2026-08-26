@@ -1,4 +1,29 @@
-> Last verified: 2026-08-26 (**WATCH-GATE ACKNOWLEDGMENT ONLY — this bump does NOT cover the
+> Last verified: 2026-08-26 (**THE PACK E2E HARNESS CAN NOW TARGET A DEPLOYMENT IT IS NOT SERVING
+> LOCALLY, and three defects had to be fixed before it could be trusted to.**
+>
+> 1. **`convexRun` in `workflow-pack-pilot.spec.ts` passed NO deployment flag** — a second copy of
+>    the defect already fixed in `smokeRun.mjs`. Pointing the browser at production would have driven
+>    the PROD app and written its evidence to the DEV skills row: a run certifying a deployment it
+>    never touched. `PIKAR_CONVEX_TARGET=prod` now threads `--prod`; unflagged still means dev.
+> 2. **A VOID RETURN READ AS A FAILURE.** `recordPackBrowserEvidence` returns nothing, so
+>    `convex run` prints an empty stdout and `JSON.parse("")` throws. The rescue only fired when
+>    stderr carried the Windows/Node-24 `UV_HANDLE_CLOSING` assertion — which dev always produced and
+>    prod did not. **Dev did not pass that path, it accidentally satisfied it.** `CLI_FAILURE` is what
+>    decides failure; empty stdout without it is now success.
+> 3. **`pack-seen.json` WAS SHARED ACROSS DEPLOYMENTS.** It survives between runs, so the prod
+>    evidence writer read dev's observations — dev versions (campaign-plan v5, sales-call-prep v10)
+>    against a prod registry that is all v1. Most would have failed the version pin, but
+>    `business-pulse: 1` exists on BOTH, so the writer was one unrelated crash away from recording a
+>    DEV browser run against PROD's row. The file is now keyed by origin.
+>
+> `baseURL` and `storageState` are env-overridable (`PIKAR_E2E_BASE_URL`, `PIKAR_E2E_STORAGE_STATE`),
+> and supplying a storageState SKIPS the `setup` sign-in — a deployment whose only human account is a
+> Google identity cannot be driven through the local password form. `e2e/capture-prod-session.mjs`
+> captures that session by WATCHING a human sign in; it types nothing and reads no credential.
+> **Chrome 136+ SILENTLY IGNORES `--remote-debugging-port` on the DEFAULT profile** — no error, no
+> port. Use a separate `--user-data-dir`. Check `ProductVersion` before diagnosing anything else.
+>
+> PREVIOUS: 2026-08-26 (**WATCH-GATE ACKNOWLEDGMENT ONLY — this bump does NOT cover the
 > workspace diff that triggered it.** The Stop hook fired on
 > `WorkflowPackOwnerControls.tsx`, `workspace/page.tsx` and `workflowPackDiscovery.ts`, which were
 > UNCOMMITTED in the shared working tree and belong to a concurrent lane, not to the session that

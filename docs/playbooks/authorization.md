@@ -1,6 +1,24 @@
 # Playbook: Authorization (tenancy + ownership)
 
-> Last verified: 2026-08-26 (**`owner.findUserIdByEmail` — a new READ in the owner module, and the
+> Last verified: 2026-08-26 (**AN EMAIL IS NOT AN IDENTITY ON THIS DEPLOYMENT, and
+> `findUserIdByEmail` assumed it was.** It used `.unique()`, which THROWS on more than one row, and
+> production has several `users` rows per address (Convex Auth writes one per identity, so a Google
+> sign-in and a password sign-in are two rows). The opaque "unique() returned more than one result"
+> told an operator nothing. It now collects and, on more than one match, throws
+> `AMBIGUOUS_EMAIL: <n> user rows` — **a count, never the ids or addresses of the others** (§4).
+>
+> **IT STILL REFUSES TO SELECT, which is the property that must not be weakened.** With several
+> matches it names the count and stops rather than returning "the newest" or "the first". Choosing
+> here would put the choice of who becomes owner back into data the owner does not control — exactly
+> what `bootstrapOwner`'s no-selection rule exists to prevent.
+>
+> **PRODUCTION HAD NO OWNER UNTIL TODAY.** `bootstrapOwner` had never been run there. Owner was
+> granted to the row the browser SESSION authenticates as, derived from the captured session's JWT
+> subject (`sub` before `|`, per `requireScope`) rather than from an address — with several rows
+> sharing one address, the email would have been a guess. `changed: true` then `isOwner: true`
+> confirms the transition happened exactly once, which is what the idempotent design is for.
+>
+> PREVIOUS: 2026-08-26 (**`owner.findUserIdByEmail` — a new READ in the owner module, and the
 > line it must not cross.**
 >
 > `bootstrapOwner` takes an exact `users._id` and REFUSES TO SELECT A ROW ITSELF: no first-user

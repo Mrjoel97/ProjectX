@@ -79,11 +79,25 @@ export const ownsDeployment = internalQuery({
 export const findUserIdByEmail = internalQuery({
   args: { email: v.string() },
   handler: async (ctx, { email }) => {
-    const user = await ctx.db
+    // `.unique()` THROWS when an address has more than one row, and production HAS such rows
+    // (observed 2026-08-26: one human, several `users` rows for one address — Convex Auth writes a
+    // row per identity, so a Google sign-in and a password sign-in are two rows). The opaque
+    // "unique() returned more than one result" that produced says nothing an operator can act on.
+    //
+    // It still REFUSES TO SELECT, which is the rule this helper must not weaken: with several
+    // matches it names the count and stops, rather than handing back "the newest" or "the first".
+    // Picking one here would put the choice of who becomes owner back into data the owner does not
+    // control — exactly what `bootstrapOwner` exists to prevent. The operator disambiguates by id.
+    const rows = await ctx.db
       .query("users")
       .withIndex("email", (q) => q.eq("email", email.trim().toLowerCase()))
-      .unique();
-    return user === null ? null : { userId: user._id, owner: user.owner === true };
+      .collect();
+    if (rows.length > 1) {
+      // Count only, never the addresses or ids of the other rows (CLAUDE.md §4).
+      throw new Error(`AMBIGUOUS_EMAIL: ${rows.length} user rows share this address`);
+    }
+    const user = rows[0];
+    return user === undefined ? null : { userId: user._id, owner: user.owner === true };
   },
 });
 

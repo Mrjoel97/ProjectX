@@ -37,12 +37,27 @@ const convexBin = resolve(backendDir, "node_modules/convex/bin/main.js");
 const CLI_FAILURE = /Failed to run function|Uncaught Error|isn't running|not listening/;
 const appOrigin = process.env.PIKAR_E2E_BASE_URL ?? "http://127.0.0.1:3111";
 
+/**
+ * 27-12: the SECOND copy of the deployment-target defect already fixed in `smokeRun.mjs`. This
+ * helper spawned `convex run` with NO deployment flag, so a browser-evidence run pointed at
+ * production by `PIKAR_E2E_BASE_URL` would have driven the PROD app and then written its evidence
+ * to the DEV skills row — a run that certifies a deployment it never touched, which is the exact
+ * failure the per-deployment rule exists to prevent. It is a separate copy because a .ts spec
+ * cannot import the .mjs helper (see the note at the pinned-prompt pairing below).
+ * Unflagged still means dev, so nothing reaches production without asking for it.
+ */
+const TARGET_ARGS = process.env.PIKAR_CONVEX_TARGET === "prod" ? ["--prod"] : [];
+
 /** ⚠️ ENDS THE BROWSER SESSION. Never call this before a navigation you still need. */
 function convexRun<T>(fn: string, args: Record<string, unknown>): T {
-  const result = spawnSync(process.execPath, [convexBin, "run", fn, JSON.stringify(args)], {
-    cwd: backendDir,
-    encoding: "utf8",
-  });
+  const result = spawnSync(
+    process.execPath,
+    [convexBin, "run", ...TARGET_ARGS, fn, JSON.stringify(args)],
+    {
+      cwd: backendDir,
+      encoding: "utf8",
+    },
+  );
   if (result.error) throw new Error(`spawn failed for ${fn}: ${result.error.message}`);
   const stderr = result.stderr ?? "";
   if (CLI_FAILURE.test(stderr)) {
@@ -51,8 +66,14 @@ function convexRun<T>(fn: string, args: Record<string, unknown>): T {
   try {
     return JSON.parse(result.stdout.trim()) as T;
   } catch {
-    // The Windows/Node-24 libuv closing-handle assertion prints a valid result then exits non-zero.
-    if (!result.stdout.trim() && /UV_HANDLE_CLOSING/.test(stderr)) return undefined as T;
+    // A VOID FUNCTION PRINTS NOTHING, and that is a SUCCESS, not a failure. `recordPackBrowserEvidence`
+    // returns no value, so `convex run` writes an empty stdout — `JSON.parse("")` then throws and the
+    // call looks failed. This used to be masked on dev by the Windows/Node-24 libuv closing-handle
+    // assertion below, which reliably dirtied stderr and tripped the rescue; production returned a
+    // CLEAN stderr and the throw escaped, failing a write that had in fact succeeded.
+    // `CLI_FAILURE` above is what decides failure. Reaching here with empty stdout and no failure
+    // signature means the CLI ran the function and it returned nothing.
+    if (!result.stdout.trim()) return undefined as T;
     throw new Error(`${fn} returned no valid result:\n${stderr.trim()}\n${result.stdout.trim()}`);
   }
 }
@@ -102,7 +123,22 @@ const candidates = (page: Page) =>
  *  resets module-level variables — measured: the viewport tests filled a `Map`, one unrelated test
  *  failed, and the evidence writer then found an empty map and skipped itself. A file survives the
  *  worker; the run id in it is what ties the rows to one browser run. */
-const SEEN_PATH = resolve(dirname(fileURLToPath(import.meta.url)), ".auth/pack-seen.json");
+/**
+ * PER DEPLOYMENT, and that is not tidiness — it is the same per-deployment rule the whole pack gate
+ * rests on. This file survives between runs, so a single shared name let a PROD evidence run read a
+ * DEV run's observations: on 2026-08-26 it held dev's versions (campaign-plan v5, sales-call-prep
+ * v10) while prod was all v1. Most would have failed the version pin, but `business-pulse: 1` exists
+ * on BOTH — so the writer was one crash away from recording, against prod's row, a browser run that
+ * happened on dev. Evidence naming a deployment it never visited is precisely what this plane exists
+ * to make impossible.
+ *
+ * Keying on the origin means a run can only ever read back what a browser pointed at THAT origin
+ * wrote. A stale file for another deployment is now unreadable rather than silently authoritative.
+ */
+const SEEN_PATH = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  `.auth/pack-seen-${appOrigin.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.json`,
+);
 
 const readSeen = (): Record<string, number> => {
   try {

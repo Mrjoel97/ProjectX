@@ -89,7 +89,7 @@ export const KNOWLEDGE_WORK_PROVENANCE: Readonly<Record<string, KnowledgeWorkPro
     sourceRepo: REPO,
     sourceCommit: COMMIT,
     sourcePaths: ["operations/skills/process-doc/SKILL.md"],
-    bodySha256: "9498fd70ff87d221e4407a7155738417450bc194b7f3524128eebe9986a917d3",
+    bodySha256: "bf1166a452a52858f6b0838a9c124d4bfd30b7474ed32746e993fd637b167386",
     license: "Apache-2.0",
     modificationNotice:
       "Publishing, task-system export and owner assignment removed and named as MISSING. Produces a durable vault document only.",

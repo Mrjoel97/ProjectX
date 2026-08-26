@@ -1,6 +1,35 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
-> Last verified: 2026-08-26 (**BOTH ROLLBACK PATHS ARE NOW PROVEN FROM THE BROWSER. No `fixme`
+> Last verified: 2026-08-26 (**THE SIX PACKS ARE CERTIFIED ON PRODUCTION'S EVAL PLANE AND STILL
+> DARK THERE.** Prod candidates seeded at v1 — note they are v1 while dev carries v4/v5/v10/v11:
+> versions are PER DEPLOYMENT and a version number is never a cross-deployment identifier. Six gates
+> run with `PIKAR_CONVEX_TARGET=prod`, 30/30, ~$0.41. `campaign-plan` passed FIRST TRY on prod after
+> costing four runs on dev — the corpus and body fixes, not luck.
+>
+> **SINGLE-RUN CERTIFICATION DOES NOT MEASURE RELIABILITY, and every pack — dev AND prod — was
+> certified on one run.** `process-sop` was caught only because a gate run happened to fail: over
+> `--repeat 3` it scored **3/5** on `process-sop-03`, failing with `operation:save-sop: expected
+> "saveAsDocument", got []` in ~2.5s at $0.0012 — the model answering in prose and never calling the
+> save tool. **A green gate run proves a pack CAN pass, never that it DOES.** The other five have not
+> been repeat-measured; that is unknown, not proven. Use `--repeat` before trusting a pass count, and
+> never compare two bodies on one run each.
+>
+> **THE FIX WAS THE INSTRUCTION, NOT THE MODEL.** Step 1 asked "is this turn going to produce an
+> SOP?" — a judgement the model gets wrong when the turn is dominated by things the pack CANNOT do
+> ("write it up, then assign the steps and set a quarterly review"). It concluded no and skipped the
+> save. The step now names the trigger concretely and states that unsatisfiable extras NEVER cancel
+> the save; they are gap lines in section 6. Re-pinning a pack body means FOUR places, and `--check`
+> only catches three: canonical `.md`, derived `.ts`, `bodySha256` in the code-owned
+> `knowledgeWorkProvenance.ts` mirror, and `adaptedBodySha256` in the manifest. The MIRROR is the one
+> the provenance script passes over — `knowledgeWorkProvenance.test.ts` is what fails, and it did.
+>
+> **PRODUCTION HAD NO OWNER AT ALL.** `bootstrapOwner` had never been run there, so the owner regions
+> never rendered, `@discovery`/`@preview` skipped, and the browser plane could not be earned by
+> anyone. The address also has SEVERAL `users` rows (Convex Auth writes one per identity), so an
+> email is not an identity here. The row was derived from the captured session's own JWT subject
+> (`sub` before `|`) — the row the browser actually authenticates as — and granted by exact id.
+>
+> PREVIOUS: 2026-08-26 (**BOTH ROLLBACK PATHS ARE NOW PROVEN FROM THE BROWSER. No `fixme`
 > remains in `@drill`.**
 >
 > **ROLLBACK TO A PRIOR VERSION.** `listPackPriorVersions` (`ownerQuery`) returns each pack's newest
