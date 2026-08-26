@@ -1,4 +1,11 @@
-> Last verified: 2026-08-25 (**A DOCUMENT THAT INGESTS IS NEVER FREE — `estimateFile` now floors the
+> Last verified: 2026-08-26 (**FORMATTING ONLY — no vault behaviour was read or changed.**
+> `packages/vault/src/ingestEstimate.test.ts` was reformatted by `biome check --write` as part of
+> clearing five PRE-EXISTING lint errors that were failing `pnpm lint --diagnostic-level=error`, and
+> therefore CI, on `feat/27-02-pack-contracts`. Ten lines, whitespace only; the assertions are
+> untouched and the suite is unchanged. Nothing in this playbook was re-verified against the vault
+> code, and this bump must not be read as if it had been.
+>
+> PREVIOUS: 2026-08-25 (**A DOCUMENT THAT INGESTS IS NEVER FREE — `estimateFile` now floors the
 > per-document term at ONE CENT, and the hole it closes was open in plain sight.**
 >
 > `perDocumentUsd()` is `EMBED_USD_PER_MTOK + modelUsd(DEFAULT_MODEL)`. `EMBED_USD_PER_MTOK` is
