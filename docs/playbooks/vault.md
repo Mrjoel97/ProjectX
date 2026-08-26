@@ -1,4 +1,29 @@
-> Last verified: 2026-08-26 (**FORMATTING ONLY — no vault behaviour was read or changed.**
+> Last verified: 2026-08-27 (**EMBEDDING HAD NO RATE-LIMIT RETRY, AND PRODUCTION PROVED IT.** A burst
+> of vault seeds against prod returned `vault: embeddings API 429` ON CONTACT and every caller failed
+> outright — `doEmbed` surfaced the provider's 429 straight to the caller as a hard throw.
+>
+> **This is a USER-FACING defect, not an eval-harness quirk.** `embedDoc` drives the same path, so
+> anyone importing more than a trickle of documents hit the same wall and saw the ingest fail. It was
+> invisible until now only because the pack evals are the heaviest embedding workload ever pointed at
+> production — and because, until the same day, a stray carriage return in
+> `GOOGLE_GENERATIVE_AI_API_KEY` meant the call died at the HTTP header and never reached Google at
+> all. **Hitting a quota was PROGRESS.**
+>
+> Now retries 429 and 5xx, up to 5 attempts. **429/5xx ONLY, deliberately:** a 400/401/403 is a
+> request or credential fault that retrying cannot fix, and retrying a bad key five times per chunk
+> burns the action's budget before failing identically. Honours `Retry-After` when the provider sends
+> one, capped at 30s so a hostile or broken header cannot park an action; otherwise exponential with
+> jitter so parallel callers that collided once do not re-collide in lockstep.
+>
+> The two decisions are PURE and EXPORTED (`isRetriableEmbedStatus`, `embedBackoffMs`), matching this
+> file's existing "pure; exported for the offline test" idiom — the retry loop itself needs a live
+> socket to exercise, but the policy that makes it right or wrong does not.
+>
+> One narrowing trap worth keeping: moving the `fetch` into a closure LOST TypeScript's narrowing of
+> `apiKey` from the guard above it, because TS cannot know when a hoisted function runs. Capture the
+> narrowed value in a `const` before the closure.
+>
+> PREVIOUS: 2026-08-26 (**FORMATTING ONLY — no vault behaviour was read or changed.**
 > `packages/vault/src/ingestEstimate.test.ts` was reformatted by `biome check --write` as part of
 > clearing five PRE-EXISTING lint errors that were failing `pnpm lint --diagnostic-level=error`, and
 > therefore CI, on `feat/27-02-pack-contracts`. Ten lines, whitespace only; the assertions are

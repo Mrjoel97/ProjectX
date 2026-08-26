@@ -119,6 +119,29 @@ export const buildOpenAIEmbedRequest = (values: string[]) => ({
  * saves real money on re-ingest) exactly as it was. The `key` stays the bare content hash, so the
  * re-embed REPLACES the stale entry in place instead of orphaning it.
  */
+/**
+ * Is this embedding-API status worth retrying? Pure; exported for the offline test.
+ *
+ * 429 and 5xx ONLY. A 400/401/403 is a REQUEST or CREDENTIAL fault — retrying cannot fix it and
+ * just burns the deployment's time before failing identically. Getting this set wrong in either
+ * direction is expensive: too narrow and a rate limit kills an ingest, too wide and a bad key
+ * retries five times on every chunk.
+ */
+export const isRetriableEmbedStatus = (status: number): boolean =>
+  status === 429 || status >= 500;
+
+/**
+ * How long to wait before retry `attempt`. Pure; exported for the offline test.
+ *
+ * Honours the provider's own `Retry-After` when it sends one — it knows its window better than a
+ * guess — capped so a hostile or absurd value cannot park an action for minutes. Otherwise
+ * exponential with jitter, so parallel callers that collided once do not re-collide in lockstep.
+ */
+export const embedBackoffMs = (attempt: number, retryAfterSeconds: number, jitter = 0): number =>
+  Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+    ? Math.min(retryAfterSeconds * 1000, 30_000)
+    : Math.min(2 ** attempt * 500, 8_000) + Math.floor(jitter * 250);
+
 export const embeddingContentHash = (contentHash: string): string =>
   `${EMBEDDING_MODEL}:${contentHash}`;
 
@@ -152,27 +175,53 @@ const embeddingV2 = {
         `vault: ${gemini ? "GOOGLE_GENERATIVE_AI_API_KEY" : "OPENAI_API_KEY"} unset for embeddings`,
       );
     }
+    // Narrowed BEFORE the closure below. The `if (!apiKey) throw` above narrows `apiKey` in this
+    // scope, but that narrowing does not reach inside `fetchOnce` — TypeScript cannot know when a
+    // hoisted function runs, so it widens back to `string | undefined` there.
+    const key: string = apiKey;
     const url = gemini
       ? `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_EMBEDDING_MODEL}:batchEmbedContents`
       : "https://api.openai.com/v1/embeddings";
-    const res = await fetch(url, {
-      method: "POST",
-      // `...headers` FIRST: the auth and content-type below are TRANSPORT-level and must win over
-      // anything the caller injects. With the spread last, a caller-supplied auth key — including
-      // present-but-undefined — silently replaces or blanks our key, and the call 401s from a line
-      // that reads as though it set the auth header. `headers` is the optional bag from the
-      // @convex-dev/rag `doEmbed` contract, so nothing populates it today; this is the same
-      // spread-after-explicit shape that cost a paid eval fixture at dispatch.ts (5460a81).
-      headers: {
-        ...headers,
-        "Content-Type": "application/json",
-        ...(gemini ? { "x-goog-api-key": apiKey } : { Authorization: `Bearer ${apiKey}` }),
-      },
-      body: JSON.stringify(
-        gemini ? buildGeminiEmbedRequest(values) : buildOpenAIEmbedRequest(values),
-      ),
-      signal: abortSignal,
-    });
+    // RETRY ON RATE LIMIT, because the provider WILL rate-limit and a hard throw here loses the
+    // whole ingest. Measured on production 2026-08-27: a burst of vault seeds returned
+    // `embeddings API 429` on contact and every caller failed outright. That is not an eval-harness
+    // quirk — a user importing a batch of documents drives the SAME path, so without this the vault
+    // silently stops accepting work whenever someone ingests more than a trickle.
+    //
+    // 429 and 5xx only. A 400/401/403 is a REQUEST or CREDENTIAL fault: retrying cannot fix it,
+    // and retrying a bad key just burns the deployment's time before failing identically.
+    // Honours `Retry-After` when the provider sends one — it knows its own window better than a
+    // guess does — and otherwise backs off exponentially with jitter so parallel callers do not
+    // re-collide in lockstep.
+    const MAX_ATTEMPTS = 5;
+    let res!: Response;
+    for (let attempt = 1; ; attempt++) {
+      res = await fetchOnce();
+      if (res.ok || !isRetriableEmbedStatus(res.status) || attempt === MAX_ATTEMPTS) break;
+      const wait = embedBackoffMs(attempt, Number(res.headers.get("retry-after")), Math.random());
+      await new Promise((r) => setTimeout(r, wait));
+    }
+
+    async function fetchOnce() {
+      return await fetch(url, {
+        method: "POST",
+        // `...headers` FIRST: the auth and content-type below are TRANSPORT-level and must win over
+        // anything the caller injects. With the spread last, a caller-supplied auth key — including
+        // present-but-undefined — silently replaces or blanks our key, and the call 401s from a line
+        // that reads as though it set the auth header. `headers` is the optional bag from the
+        // @convex-dev/rag `doEmbed` contract, so nothing populates it today; this is the same
+        // spread-after-explicit shape that cost a paid eval fixture at dispatch.ts (5460a81).
+        headers: {
+          ...headers,
+          "Content-Type": "application/json",
+          ...(gemini ? { "x-goog-api-key": key } : { Authorization: `Bearer ${key}` }),
+        },
+        body: JSON.stringify(
+          gemini ? buildGeminiEmbedRequest(values) : buildOpenAIEmbedRequest(values),
+        ),
+        signal: abortSignal,
+      });
+    }
     if (!res.ok) throw new Error(`vault: embeddings API ${res.status} ${await res.text()}`);
     const json = (await res.json()) as {
       embeddings?: Array<{ values: number[] }>;

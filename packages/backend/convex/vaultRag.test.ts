@@ -13,7 +13,9 @@ import {
   buildGeminiEmbedRequest,
   buildOpenAIEmbedRequest,
   EMBEDDING_DIM,
+  embedBackoffMs,
   embeddingContentHash,
+  isRetriableEmbedStatus,
   l2Normalize,
 } from "./vaultRag";
 
@@ -99,4 +101,39 @@ test("embeddingContentHash scopes dedup to the MODEL, so a provider swap re-embe
   expect(embeddingContentHash(sha)).toContain(sha);
   // The whole point: same text, different model ⇒ different dedup identity.
   expect(embeddingContentHash(sha)).not.toBe(sha);
+});
+
+// A burst of vault seeds against production returned `embeddings API 429` on contact and every
+// caller failed outright. The same path serves a user importing documents, so the retry is the
+// difference between a slow ingest and a failed one.
+test("retries a rate limit and a server fault, and NOTHING else", () => {
+  expect(isRetriableEmbedStatus(429)).toBe(true);
+  expect(isRetriableEmbedStatus(500)).toBe(true);
+  expect(isRetriableEmbedStatus(503)).toBe(true);
+  // A credential or request fault cannot be fixed by asking again.
+  expect(isRetriableEmbedStatus(400)).toBe(false);
+  expect(isRetriableEmbedStatus(401)).toBe(false);
+  expect(isRetriableEmbedStatus(403)).toBe(false);
+  expect(isRetriableEmbedStatus(404)).toBe(false);
+});
+
+test("prefers the provider's Retry-After, but will not be parked by an absurd one", () => {
+  expect(embedBackoffMs(1, 3)).toBe(3000);
+  // 10 minutes from a hostile or broken header must not hold the action open.
+  expect(embedBackoffMs(1, 600)).toBe(30_000);
+});
+
+test("backs off exponentially, with a ceiling, when no header is given", () => {
+  const noHeader = Number.NaN;
+  expect(embedBackoffMs(1, noHeader)).toBe(1000);
+  expect(embedBackoffMs(2, noHeader)).toBe(2000);
+  expect(embedBackoffMs(3, noHeader)).toBe(4000);
+  // Ceiling holds however many attempts have failed.
+  expect(embedBackoffMs(9, noHeader)).toBe(8000);
+});
+
+test("adds jitter so parallel callers do not re-collide in lockstep", () => {
+  const noHeader = Number.NaN;
+  expect(embedBackoffMs(1, noHeader, 0)).toBe(1000);
+  expect(embedBackoffMs(1, noHeader, 0.999)).toBe(1249);
 });
