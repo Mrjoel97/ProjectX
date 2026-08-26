@@ -1,6 +1,52 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
-> Last verified: 2026-08-25 (**THE GATE NOW REFUSES TO CERTIFY A RUN WHOSE MODEL IS NOT THE ONE
+> Last verified: 2026-08-26 (**`expect.outcome: "partial"` IS STRUCTURALLY UNREACHABLE FOR A PACK
+> THAT RESEARCHES AND MUST CITE — the validator's documented "bet on behaviour" is not a bet there,
+> it is an impossibility, and it cost sales-call-prep 5 of 5 cases across eight models.**
+>
+> `outcomeFor` returns `partial` only on `truncated || declaredUnsupported || runtimeMissing > 0`.
+> For `sales-call-prep` every reachable source (vault, web, calendar) is hardcoded available or
+> `partial`, so `runtimeMissing` is permanently 0 — and `runAgentLoop` computes
+> `declaredUnsupported = declaredQuestionScope && sources.length === 0`. **A run that called
+> `webResearch` and got results can therefore never be `partial`, and a run that got NO results
+> fails `minCitationsWhenWebRead: 1`.** The two conditions exclude each other. `validateFixture`'s
+> note — "`partial` with nothing runtimeMissing on a pack that CAN declare is reachable, so this
+> validator does not grade bets" — holds only for a pack whose research may legitimately come back
+> empty. **`pack-campaign-plan` carries the identical losing bet on all five of its fixtures** (vault
+> + web, both always available, `minCitationsWhenWebRead: 1`); it has never been run, and correcting
+> its corpus is the first thing its run should do rather than rediscover.
+>
+> **THE OTHER CORPUS DEFECT, same file: two fixtures asserted research about a prospect their own
+> turns never named.** `-02` said "What stage is this deal at" and `-05` said "Research them
+> properly" — no antecedent exists in a fresh thread, so the model invented one, once out of the
+> eval's own `[ref zqk-…]` needle (it researched Quiksilver, ticker ZQK, and printed its financials
+> into the prep). Both turns now name the company. A fixture that asserts an operation has to put
+> that operation's subject in the input.
+>
+> **AND `-04` demanded the CRM disclosure on a turn that produces no prep** ("move Thursday's
+> meeting"). `missingNamed` is `[]` there now: the honest-partial line belongs to a prep, not to a
+> refusal.
+>
+> **STILL OPEN, AND THE ONE THING BLOCKING CERTIFICATION — `createDocument` CANNOT CARRY CONTENT.**
+> The tool takes a `topic` string, and a SECOND model (`document-drafter`) writes the document from
+> that string alone: it never sees the searches, the reply or the thread. So a pack whose deliverable
+> is a researched brief must transcribe the whole brief into a tool argument, and `gpt-4o-mini` will
+> not. Measured over eleven graded runs of six bodies: cases `-02` and `-03` saved nothing, 0/3 and
+> 0/3; and on the "Save that so I can read it in the car" follow-up the model saved **the preflight
+> preamble** — the text nearest the pronoun — 4 runs out of 4, while the eval scored
+> `artifactCreated: true` and PASSED. **`artifactCreated` is a vacuous assertion today: it proves a
+> document exists, never that it is the one the owner read.** Three prose fixes were tried and
+> measured — a body step, the `createDocument` trigger-clause change (kept, it is correct), and a
+> disclaimer in `preflightPrompt` (reverted, it moved nothing). **THE REAL FIX IS STRUCTURAL AND IT
+> IS AN OWNER DECISION:** for a pack whose `output` contract is `document`, the BINDING should save
+> the run's own reply as the document — deterministic, exactly what the owner read, and one drafter
+> call cheaper — which makes `save-prep-brief` satisfied by the ARTIFACT rather than by the tool
+> call, and the operation matrix and the scorer have to say so. Do not spend another run on wording.
+>
+> `--dump <path>` was added to the runner for exactly this: the scorer says `citations: got 0`, and
+> only the transcript says whether the prose went to the reply, into the document, or nowhere.
+>
+> PREVIOUS: 2026-08-25 (**THE GATE NOW REFUSES TO CERTIFY A RUN WHOSE MODEL IS NOT THE ONE
 > EVIDENCE WILL NAME — AND THE FIRST LIVE RUN AFTER THE FIX PROVED THE GAP WAS ACTIVE, NOT
 > THEORETICAL.**
 >

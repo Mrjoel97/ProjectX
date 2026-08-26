@@ -1,4 +1,23 @@
-> Last verified: 2026-08-26 (**`or/` IS NOW A ROUTE PREFIX IN `resolveModel`, AND `runAgentLoop` HAS
+> Last verified: 2026-08-26 (**`createDocument`'s TRIGGER CLAUSE IS NOW PER-CALLER — it is the one
+> thing in that record that was ever false for one.**
+>
+> "Create directly when the user asks for one; when creating one is YOUR idea, say what you would
+> write and wait for a yes" is a rule for THIS surface, where an unasked-for document is a surprise.
+> For a workflow pack whose `output` contract IS a saved document the sentence is simply wrong — the
+> owner asked for the document by starting the pack — **and it wins over the skill body**: three
+> `pack-sales-call-prep` bodies told the model to save, in three wordings, and across nine graded
+> runs it saved only when the user's own words said "save that".
+>
+> `buildCockpitTools` now takes `agentContext.documentIsDeliverable`, derived in `runSpecialistTurn`
+> from `packOutputIsDocument(skillName)` and passed through `runAgentLoop` untouched. **Derived from
+> the skill NAME, never from `toolNames`** — the `grantDispatch` rule: an allow-list is a request
+> from the caller, and reading one here would let any specialist granted `createDocument` relax its
+> own trigger rule by holding the tool. It is false for every non-pack name, and for
+> `pack-business-pulse` (a briefing) and `pack-customer-complaint` (a draft reply), so the executive
+> cockpit and the golden suite get a byte-identical description. Pinned in `cockpitTools.test.ts` on
+> the STRING, both directions, with the derivation asserted separately and mutation-checked.
+>
+> PREVIOUS: 2026-08-26 (**`or/` IS NOW A ROUTE PREFIX IN `resolveModel`, AND `runAgentLoop` HAS
 > AN OUTPUT CEILING. THE 45 s WALL IS CLEARED — the heavy packs no longer abort.**
 >
 > `if (id.startsWith("or/")) return openRouter().chat(id.slice(3));` — same provider as the

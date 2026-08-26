@@ -1,6 +1,50 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
-> Last verified: 2026-08-25 (**`pack-business-pulse` v2 — THE BODY NEVER TOLD THE MODEL TO CALL ITS
+> Last verified: 2026-08-26 (**`pack-sales-call-prep` v6 — THE BODY SENT ITS WHOLE DELIVERABLE
+> SOMEWHERE NEITHER THE OWNER NOR THE GRADER READS, AND NEVER SAID TO CALL A TOOL.** 0/5 -> a stable
+> 3/5, with every prose assertion (`citations`, `missingNamed`, `unsupportedFigures`) now passing
+> and `--repeat 3` reporting no flake on them.
+>
+> Four defects, each the shape business-pulse v2 already taught — an output contract with no
+> procedure under it:
+> 1. **NO PROCEDURE.** Case `-04` refused to move a meeting without ever calling
+>    `listManagedCalendarEvents`. There is now a numbered "How to run this": calendar, vault, web,
+>    write, save.
+> 2. **"Put that in the document, near the top".** The honest-partial line and every research URL
+>    were directed into the saved document — so the REPLY, which is what the owner reads first and
+>    the only plane the scorer sees, carried neither. The prep is written in the reply now, in full.
+> 3. **`createDocument`'s REAL contract was never taught.** It hands a `topic` string to a separate
+>    drafter that sees nothing else, so "save the prep as a document" produced documents titled
+>    "Pikar Access Overview" and "Source Availability Overview". The body now says what `topic` is,
+>    and step 4 writes the prep INTO the call rather than after it — that ordering alone took case
+>    `-05` from 0/3 to 2/3.
+> 4. **NO IDENTITY DISCIPLINE.** Asked to prep "Harrow Plumbing", it researched **Harrow, Inc.**
+>    (ticker HROW, pharmaceuticals) and printed that company's quarterly revenue into a plumber's
+>    prep, cited, under a "please confirm the correct entity" caveat. The body now finds the
+>    company's own site first, must confirm the business matches what the owner described before
+>    writing a word about it, and **may not put a money figure in a prep at all** — deal value lives
+>    in the records it cannot read, and a public figure about a company it has not positively
+>    identified is worse than no figure.
+>
+> **A CLAUSE IN A TOOL DESCRIPTION OUTVOTES A SKILL BODY.** `createDocument` ended "when creating one
+> is YOUR idea, say what you would write and wait for a yes" — written for the executive cockpit,
+> false for a pack whose `output` contract IS a document. Three bodies instructed the model to save,
+> three ways, and across nine graded runs it saved only when the fixture's own words said "save
+> that". The clause is now selected by `packOutputIsDocument(skillName)`; see cockpit.md.
+>
+> **WHAT DID NOT WORK, so nobody re-derives it:** telling the body "do not wait for a yes" (the model
+> obeys the tool, not the body); and a disclaimer in `preflightPrompt` saying the preamble is never
+> the content of anything saved (reverted — 4/4 runs still saved the preamble). The remaining blocker
+> is that `createDocument` cannot carry content, not wording: see workflow-packs.md.
+>
+> Provenance moved as four artefacts, as always: the canonical `.md`, the auto-derived
+> `packSalesCallPrep.ts` constant, the `bodySha256` mirror and `manifest.json`'s
+> `adaptedBodySha256`. `seedPackCandidates` minted **v6 for sales-call-prep only**; the fixture edits
+> also moved `PACK_EVAL_SUITE.packs["pack-sales-call-prep"].casesHash`. `revision` was deliberately
+> NOT bumped — a bump retires every pack evidence row, and business-pulse's 5/5 row is the only one
+> in existence.
+>
+> PREVIOUS: 2026-08-25 (**`pack-business-pulse` v2 — THE BODY NEVER TOLD THE MODEL TO CALL ITS
 > TOOLS, AND ITS OWN OUTPUT CONTRACT DEPENDED ON IT.**
 >
 > business-pulse case 02 (`no-figures-at-all`) failed `operation:ground-in-vault` with `got []` —

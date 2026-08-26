@@ -23,6 +23,10 @@
 //                    reports per-case stability instead of one pass count. **NEVER writes evidence,
 //                    at any score** — see `summarizeRepeats` for why that is not a limitation but
 //                    the point. Costs N x a normal run (~$0.006 each on a free model).
+//   --dump <path>    DIAGNOSTIC, with --candidate. Writes every case's replies and tool calls to
+//                    <path> as JSON, one write per case so an abort still leaves what ran. The
+//                    scorer says `citations: expected >= 1, got 0`; only this says WHERE the prose
+//                    went. It holds model output, so it is a local file and never part of a gate.
 //   --packs          restrict to a comma-separated list of pack ids. A filter that matches NO
 //                    fixture is an ERROR, never an empty green run — a typo'd filter silently
 //                    shrinking a gate to zero cases and then reporting "all green" is the exact
@@ -46,7 +50,7 @@
 
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { must } from "./smokeRun.mjs";
@@ -113,6 +117,18 @@ const EVAL_MODEL = codeOwnedDefaultModel();
 // from `run-eval-golden.mjs`: a duplicated turn bills ~$0.01, the hard fail it replaces discards a
 // whole pack gate.
 const RETRY_TURN = { retryOnEmpty: true };
+
+/**
+ * `--dump <path>`: every case's REPLIES and tool calls, written as JSON after each case.
+ *
+ * The scorer reports `citations: expected >= 1, got 0` and nothing about WHERE the prose went — and
+ * a pack whose deliverable is a saved document has two planes it could have gone to. Diagnosing
+ * that from the failure list alone is guesswork; this is the transcript. Written per case (not at
+ * the end) so an abort mid-pack still leaves the cases that ran. Off by default: it holds model
+ * prose, so it is a local debugging file, never part of the gate.
+ */
+let DUMP_PATH = null;
+const DUMP = [];
 const RETRY_READ = { retryOnEmpty: true };
 
 /** Closed outcome vocabulary. Mirrors `workflowPackEvents.outcome` in convex/schema.ts. */
@@ -140,8 +156,9 @@ const KNOWN_FLAGS = new Set([
   "--packs",
   "--candidate",
   "--repeat",
+  "--dump",
 ]);
-const VALUED_FLAGS = new Set(["--packs", "--repeat"]);
+const VALUED_FLAGS = new Set(["--packs", "--repeat", "--dump"]);
 
 /** `process.argv` really does contain a bare `--` under pnpm. Strip it once, at the entry. */
 const stripSeparator = (argv) => argv.filter((a) => a !== "--");
@@ -1493,6 +1510,10 @@ function runCase(fx, index, { packId, pack, version, runnerRunId, thresholds }) 
     thresholds,
     mentions: REGISTRY.mentions,
   });
+  if (DUMP_PATH !== null) {
+    DUMP.push({ id: fx.id, failures, replies, calls, artifactCount: facts.artifactCount });
+    writeFileSync(DUMP_PATH, JSON.stringify(DUMP, null, 2));
+  }
   return {
     pass: failures.length === 0,
     failures,
@@ -1573,6 +1594,7 @@ async function runCandidate(argv, packs) {
     );
 
   const repeat = repeatCount(argv);
+  DUMP_PATH = valueFlag(argv, "--dump");
   const runnerRunId = randomUUID();
   console.log(
     `[eval:pack] ${packId} -> ${name} v${version} (dev) · ${cases.length} cases · ` +

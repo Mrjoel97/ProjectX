@@ -15,6 +15,7 @@ import {
   type ActionType,
   CALENDAR_HORIZON_MS,
   PLAN_ATTACHMENT_CAP_BYTES,
+  packOutputIsDocument,
   parseSendTime,
   SPECIALISTS,
 } from "@pikar/core";
@@ -544,6 +545,44 @@ test("buildCockpitTools withholds addRecipients/setRecipients/removeRecipient ON
   expect(withheld).toContain("resolveContacts");
   // The withholding removes EXACTLY the three recipient-mutating keys — nothing else changes.
   expect(full.filter((n) => !RECIPIENT_TOOLS.includes(n)).sort()).toEqual([...withheld].sort());
+});
+
+test("createDocument drops the wait-for-a-yes clause ONLY when the document IS the deliverable (27-10)", () => {
+  // The eval evidence behind this: three `pack-sales-call-prep` bodies told the model to save, and
+  // across nine graded runs it saved only when the user's own words said "save that". The tool
+  // description sitting beside the call outvotes the body, so the description has to stop being
+  // wrong for this caller. Asserted on the STRING because the string is the whole mechanism.
+  const stubCtx = {} as Parameters<typeof buildCockpitTools>[0];
+  const planId = "plan-stub" as Id<"plans">;
+  const describe = (documentIsDeliverable?: boolean) => {
+    const rec = buildCockpitTools(stubCtx, "t1", planId, undefined, undefined, undefined, {
+      ...(documentIsDeliverable === undefined ? {} : { documentIsDeliverable }),
+    });
+    return String((rec.createDocument as { description?: unknown }).description ?? "");
+  };
+
+  // Every existing caller — the executive cockpit included — keeps the ask-first rule.
+  expect(describe()).toContain("wait for a yes");
+  expect(describe(false)).toContain("wait for a yes");
+  // A document-output pack does not: the owner asked for the document by starting the pack.
+  expect(describe(true)).not.toContain("wait for a yes");
+  expect(describe(true)).toContain("without asking");
+  // The flag moves ONE clause. Everything the tool says about itself is unchanged.
+  expect(describe(true)).toContain("It writes markdown and a PDF");
+  expect(describe(true)).toContain("It saves only");
+});
+
+test("packOutputIsDocument is what selects it, and only for document-output packs (27-10)", () => {
+  // The flag is derived from the trusted skill NAME in runSpecialistTurn, never from `toolNames` —
+  // a specialist must not be able to relax its own trigger rule by holding the tool. This pins the
+  // derivation itself: `pack-business-pulse` is a BRIEFING and must keep the ask-first rule even
+  // though it is a pack, and no non-pack name may ever select the pack clause.
+  expect(packOutputIsDocument("pack-sales-call-prep")).toBe(true);
+  expect(packOutputIsDocument("pack-business-pulse")).toBe(false);
+  expect(packOutputIsDocument("pack-customer-complaint")).toBe(false);
+  expect(packOutputIsDocument("cockpit-agent")).toBe(false);
+  expect(packOutputIsDocument("document-drafter")).toBe(false);
+  expect(packOutputIsDocument("pack-not-a-real-pack")).toBe(false);
 });
 
 // ── 12-04 (BEVL-01): the evaluation tools are registered in the cockpit set ────────────────────

@@ -671,6 +671,28 @@ export function isWorkflowPackSkill(name: string): boolean {
 }
 
 /**
+ * Is a SAVED DOCUMENT this registry name's whole deliverable?
+ *
+ * `createDocument`'s tool description ends "when creating one is YOUR idea, say what you would write
+ * and wait for a yes" — a rule written for the executive cockpit, where an unasked-for document is
+ * a surprise. For a pack whose `output` contract IS a document it is simply false: the owner asked
+ * to be got ready for a call, and the document is the thing they asked for.
+ *
+ * **MEASURED, and the reason this exists in code rather than in a body:** three successive
+ * `pack-sales-call-prep` bodies told the model to save, in three different wordings, and across
+ * nine graded runs it saved only when the fixture's own text said "save that" — 7 of 9 otherwise
+ * skipped it. Body prose cannot outvote the tool description sitting next to the call; the
+ * description has to stop being wrong for this caller. Derived from the trusted skill NAME, never
+ * from the tool allow-list: an allow-list is a request from the caller, and a specialist must not
+ * be able to ask for a rule to be relaxed by naming a tool.
+ */
+export function packOutputIsDocument(skillName: string): boolean {
+  if (!isWorkflowPackSkill(skillName)) return false;
+  const resolved = resolveWorkflowPack(skillName.slice("pack-".length));
+  return resolved.ok && resolved.spec.output === "document";
+}
+
+/**
  * Evidence that an AUTHENTICATED browser drove this exact pack version at more than one viewport
  * (27-09). Refs, counts and flags only (CLAUDE.md §4) — no screenshot bytes, page text, tenant
  * identity or generated prose. It is the SECOND, independent half of the pack gate: eval evidence

@@ -69,6 +69,7 @@ import {
   isFallbackEligible,
   isNeedsYou,
   joinDigest,
+  packOutputIsDocument,
   parseAddress,
   parseCalendarProvider,
   parseCrmOperations,
@@ -1685,6 +1686,13 @@ export function buildCockpitTools(
      * a future context that legitimately needs one silently receives both.
      */
     grantSkillAuthoring?: boolean;
+    /**
+     * 27-10. True only for a workflow pack whose `output` contract IS a saved document, derived in
+     * `runSpecialistTurn` from the SKILL NAME (`packOutputIsDocument`). It selects `createDocument`'s
+     * trigger clause and nothing else — see the description for the measurement behind it. Never
+     * derived from `toolNames`: an allow-list is a request from the caller.
+     */
+    documentIsDeliverable?: boolean;
     threadId?: string;
     rootRequestId?: string;
     /** True only for an explicit email route backed by a live Gmail grant. */
@@ -3807,8 +3815,18 @@ export function buildCockpitTools(
         // reported creating a deck "in PowerPoint format" that never existed.
         "It writes markdown and a PDF — never PowerPoint, Word or slides. " +
         "The finished document appears in the workspace as well as the vault. " +
-        "Create directly when the user asks for one; when creating one is YOUR idea, say what you " +
-        "would write and wait for a yes.",
+        // THE TRIGGER CLAUSE, and the ONE thing in this record that is not true for every caller.
+        // "Wait for a yes" is a rule for the executive cockpit, where an unasked-for document is a
+        // surprise. For a workflow pack whose OUTPUT CONTRACT is a document the same sentence is
+        // simply false — the owner asked for the document by starting the pack — and it wins:
+        // three pack bodies instructed the model to save, three different ways, and across nine
+        // graded runs it saved only when the user's own words said "save that". The flag is
+        // derived from the trusted SKILL NAME in `runSpecialistTurn`, never from `toolNames`.
+        (agentContext?.documentIsDeliverable === true
+          ? "Saving the finished piece is what this workflow is for, so it is never merely your " +
+            "idea: create it without asking, on the turn you write it."
+          : "Create directly when the user asks for one; when creating one is YOUR idea, say what " +
+            "you would write and wait for a yes."),
       inputSchema: jsonSchema<{ topic: string; form: "short" | "long"; replace?: number }>({
         type: "object",
         properties: {
@@ -4352,6 +4370,10 @@ async function runAgentLoop(
     // every existing caller keeps working. A specialist is a swapped (system, tools) pair through
     // THIS function; there is no second loop.
     toolNames?: readonly string[];
+    // 27-10. Append-only optional. A property of WHICH SPECIALIST is running, so it is derived
+    // from `skillName` at the `runSpecialistTurn` seam (the `maxSteps`/`timeoutMs` precedent) and
+    // simply travels through here to `buildCockpitTools`. Absent => today, byte-identical.
+    documentIsDeliverable?: boolean;
     // Phase-16 (D10). Append-only optional — `?? 8` preserves today EXACTLY for every existing
     // caller. A research run decomposes into several searches and needs a deliberately larger,
     // route-specific budget (16-05 sets it); a silently truncated multi-search run presented as
@@ -4394,6 +4416,7 @@ async function runAgentLoop(
     omitRecipientEdits,
     gmailEnabled,
     toolNames,
+    documentIsDeliverable,
     maxSteps,
     timeoutMs,
     softCutoffMs,
@@ -4420,6 +4443,9 @@ async function runAgentLoop(
       // `toolNames.includes("authorSkillCandidate")`. An allow-list is a REQUEST from the caller;
       // reading one here would let a specialist ask for the capability by name and receive it.
       grantSkillAuthoring: toolNames === undefined,
+      // 27-10: passed through, NEVER derived here. `toolNames.includes("createDocument")` would let
+      // any specialist granted the tool relax its own trigger rule by holding it.
+      documentIsDeliverable,
       threadId,
       rootRequestId: turnId,
       gmailEnabled,
@@ -4871,6 +4897,11 @@ export async function runSpecialistTurn(
     turnId,
     threadId,
     toolNames,
+    // 27-10: derived HERE from the skill name, beside the model pin and the step budget, for the
+    // reason stated above — it is a property of WHICH SPECIALIST is running, not a request the
+    // caller can make. `packOutputIsDocument` is false for every non-pack name, so every other
+    // caller keeps today's description byte-identically.
+    documentIsDeliverable: packOutputIsDocument(skillName),
     // D10: decompose -> several deliberately varied searches -> synthesise does not fit the
     // cockpit's 8 steps. Raised for THIS route only; a run that still exhausts it comes back
     // MARKED (truncated), never as a confident partial answer.

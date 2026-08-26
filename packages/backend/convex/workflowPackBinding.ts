@@ -81,6 +81,15 @@ export function preflightPrompt(pre: PackPreflight, request: string): string {
   return [
     "Source availability for this run, resolved in code. This is the truth about what you can see;",
     "do not contradict it, and never claim a source listed as unavailable answered.",
+    // THIS BLOCK IS PREPENDED TO EVERY TURN, WHICH MAKES IT THE ANTECEDENT OF THE USER'S PRONOUNS.
+    // Measured on `pack-sales-call-prep` case 01, whose turn 2 is "Save that so I can read it in
+    // the car": FOUR runs out of four saved a document whose entire body was this paragraph — "that"
+    // binds to the nearest preceding text, which is this, not the prep written a turn earlier. The
+    // eval scores `artifactCreated: true` and PASSES, so today's gate would certify a pack that
+    // saves its own preamble. A disclaimer sentence here ("never the content of anything you save")
+    // was tried on 2026-08-26 and did NOT move it — the cause is `createDocument`'s contract, which
+    // makes the model re-emit the whole document into `topic`, and no wording survives that. Left
+    // undone deliberately rather than patched with a placebo; see docs/playbooks/workflow-packs.md.
     ...lines,
     ...(unlocks.length > 0 ? ["", "Unreadable in this workflow at all:", ...unlocks] : []),
     "",
