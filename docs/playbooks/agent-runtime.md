@@ -1,6 +1,25 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
-> Last verified: 2026-08-25 (**`smoke.modelsForRun` — a read-only test-support query answering "which
+> Last verified: 2026-08-26 (**`smoke:seedInboxFixture` gained an OPT-IN `complaint` message, and
+> the opt-in is the whole point.**
+>
+> `pack-customer-complaint` stages its draft through `replyToMessage`, which resolves its target
+> SERVER-SIDE against this mailbox and, by the no-guess discipline, writes NOTHING on 0 matches.
+> `proposePlan` then refuses with "no recipients are set", and `resolveContacts` is not granted to
+> that pack. So with no complaint in this fixture the pack could not stage anything BY ANY ROUTE —
+> measured 0/5, with four cases failing because `replyToMessage` was never called, because there was
+> no message to call it about. Adding `fix-complaint` (Dana Whitfield, fully replyable: `threadId`
+> plus an RFC 5322 `messageId`, like `fix-reply`) is what makes that pack's own output contract
+> reachable.
+>
+> **IT IS GATED BEHIND `complaint: true` AND ONLY `run-workflow-pack-evals.mjs` PASSES IT.** This
+> fixture is shared by `run-eval-golden.mjs`, `gmail.test.ts`, `cockpitTools.test.ts` and two cockpit
+> e2e specs; a sixth message appearing unconditionally would change the mailbox every one of them was
+> written against. Default-off keeps the blast radius at zero — verified by gmail + cockpitTools
+> staying 186/186 green. **Any future message added here takes the same treatment unless every
+> consumer genuinely wants it.**
+>
+> PREVIOUS: 2026-08-25 (**`smoke.modelsForRun` — a read-only test-support query answering "which
 > models actually ran for this run", from `spendEvents` rather than from what the code intended.**
 >
 > Added for the pack gate's model-verification refusal (see `docs/playbooks/workflow-packs.md`); the

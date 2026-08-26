@@ -1329,7 +1329,10 @@ function seedCase(tenant, fx, pack) {
   if (src.inbox === "available") {
     // The MESSAGES. The read tools take this seam before the token, so the mailbox is real and
     // offline; `seedPackEvalTenant`'s token row is only what makes the PREFLIGHT agree with them.
-    must("smoke:seedInboxFixture", { tenantId: tenant, offlineDigest: false });
+    // `complaint: true` is OPT-IN and only this runner passes it. `pack-customer-complaint` stages
+    // through `replyToMessage`, which resolves its target server-side against this mailbox — with no
+    // complaint in it the pack cannot stage anything by any route (measured 0/5, 2026-08-26).
+    must("smoke:seedInboxFixture", { tenantId: tenant, offlineDigest: false, complaint: true });
   }
   // The vault corpus is seeded for cases that expect the pack to ground in it. There is no
   // `expect.sources.vault` signal to use — the probe reports `vault: available` unconditionally,

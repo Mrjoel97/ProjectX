@@ -103,7 +103,7 @@
       "upstreamPluginRoot": "small-business",
       "governingLicense": "LICENSE",
       "adaptedDestination": "packages/contracts/skills/pack-customer-complaint.md",
-      "adaptedBodySha256": "73b156baeb93e3f885e7a781bcf258cefa399cb8885a0c7db74cd2fd31911442",
+      "adaptedBodySha256": "b512c3e69fd6b1a970e2fe75ae9b435566890f17b2dfd2060baabafd5e4407ab",
       "plannedModifications": "Refund issuance and every send removed. Pikar drafts a reply through replyToMessage and stages it with proposePlan for the one human Approve gate; order/refund and CRM history are MISSING.",
       "files": [
         {

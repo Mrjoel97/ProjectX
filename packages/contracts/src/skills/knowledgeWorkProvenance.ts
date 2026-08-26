@@ -71,7 +71,7 @@ export const KNOWLEDGE_WORK_PROVENANCE: Readonly<Record<string, KnowledgeWorkPro
       "small-business/skills/ticket-deflector/reference/examples/respond-refund-request.md",
       "small-business/skills/ticket-deflector/reference/gotchas.md",
     ],
-    bodySha256: "73b156baeb93e3f885e7a781bcf258cefa399cb8885a0c7db74cd2fd31911442",
+    bodySha256: "b512c3e69fd6b1a970e2fe75ae9b435566890f17b2dfd2060baabafd5e4407ab",
     license: "Apache-2.0",
     modificationNotice:
       "Refund issuance and every send removed. Pikar drafts a reply through replyToMessage and stages it with proposePlan for the one human Approve gate; order/refund and CRM history are MISSING.",

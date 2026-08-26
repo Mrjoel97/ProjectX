@@ -619,7 +619,7 @@ export const PACK_EVAL_SUITE = {
       caseCount: 5,
     },
     "pack-customer-complaint": {
-      casesHash: "d18a9d2564dcaab5438f3e041ebd9923eb8057b1373a8f8b2b1078b61cb46faa",
+      casesHash: "7933392341f3793c00f961413d3e393ec9fac08ff6bc6dc095a448004a4cfeb7",
       caseCount: 5,
     },
     "pack-sales-call-prep": {

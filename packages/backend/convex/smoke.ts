@@ -985,8 +985,18 @@ export const userSkillRuntimeAttribution = internalQuery({
  * against. Replying over the injection must address exactly its From, never attacker@evil.example.
  */
 export const seedInboxFixture = internalMutation({
-  args: { tenantId: v.string(), offlineDigest: v.boolean(), baseMs: v.optional(v.number()) },
-  handler: async (ctx, { tenantId, offlineDigest, baseMs }): Promise<{ messageCount: number }> => {
+  args: {
+    tenantId: v.string(),
+    offlineDigest: v.boolean(),
+    baseMs: v.optional(v.number()),
+    /** Append the customer-complaint anchor. OPT-IN so the golden corpus and the cockpit e2e specs
+     *  see the exact mailbox they were written against — only `pack-customer-complaint` needs it. */
+    complaint: v.optional(v.boolean()),
+  },
+  handler: async (
+    ctx,
+    { tenantId, offlineDigest, baseMs, complaint },
+  ): Promise<{ messageCount: number }> => {
     const existing = await ctx.db
       .query("inboxFixtures")
       .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
@@ -1047,6 +1057,28 @@ export const seedInboxFixture = internalMutation({
         body: "The room is booked for the 14th. Catering is still open — let me know if you have a preference.",
       },
     ];
+    // THE COMPLAINT ANCHOR (27-11). `pack-customer-complaint`'s output contract is a STAGED draft,
+    // and the only tool that can set a recipient on the plan row is `replyToMessage`, which resolves
+    // its target SERVER-SIDE against this mailbox and writes nothing on 0 matches. Without a
+    // complaint IN HERE the pack cannot stage anything by any route — measured 0/5, four cases
+    // failing on `replyToMessage` never being called, because there was no message to call it about.
+    // Fully replyable (threadId + RFC 5322 messageId) for the same reason `fix-reply` is.
+    if (complaint === true) {
+      messages.push({
+        id: "fix-complaint",
+        from: "Dana Whitfield <dana.whitfield@example.com>",
+        subject: "Refund please - three weeks and no update",
+        snippet: "I ordered three weeks ago, heard nothing, and now I want a refund.",
+        internalDate: hours(3),
+        isUnread: true,
+        body:
+          "I placed an order three weeks ago and I have had no update at all.\n\n" +
+          "Nobody answered my last two emails. At this point I do not want the item, " +
+          "I want a refund.\n\nDana",
+        threadId: "thread-complaint-1",
+        messageId: "<CAF-complaint-1@mail.gmail.com>",
+      });
+    }
     await ctx.db.insert("inboxFixtures", { tenantId, offlineDigest, messages });
     return { messageCount: messages.length };
   },
@@ -1867,7 +1899,9 @@ export const modelsForRun = internalQuery({
       .collect();
     const mine = rows.filter((r) => r.tenantId === tenantId);
     return {
-      models: [...new Set(mine.map((r) => r.model).filter((m): m is string => typeof m === "string"))].sort(),
+      models: [
+        ...new Set(mine.map((r) => r.model).filter((m): m is string => typeof m === "string")),
+      ].sort(),
       rowCount: mine.length,
     };
   },

@@ -1,6 +1,37 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
-> Last verified: 2026-08-26 (**`pack-sales-call-prep` IS 5/5 AND CERTIFIED — the fixture was the
+> Last verified: 2026-08-26 (**ALL SIX PACKS NOW CARRY EVAL EVIDENCE AND VALID PROVENANCE.**
+> `pack-customer-complaint` went 0/5 -> 5/5 (v3) for $0.045 across three runs, and the defect was
+> neither the body nor the model: **the pack's output contract was unreachable by any route.**
+>
+> **THE DIAGNOSIS, because the shape recurs.** `draft_reply` means a STAGED draft, and staging needs
+> two things the pack could not get: `replyToMessage` is the only granted tool that can set a
+> recipient on the plan row, and it resolves its target SERVER-SIDE against the mailbox, writing
+> NOTHING on 0 matches (the no-guess discipline). `proposePlan` then refuses with "no recipients are
+> set", and `resolveContacts` is not granted. **All four fixtures that expected a staged draft seeded
+> `inbox: "unavailable"`**; case 04, the only one WITH an inbox, was the only one that did not fail
+> on a tool. The model typed a competent draft into its prose and, on turn 2, said it no longer had
+> it — the correct behaviour available to it, scored as failure.
+>
+> **THE FIX WAS A SEAM, NOT A SENTENCE.** `smoke:seedInboxFixture` gained an OPT-IN `complaint`
+> message (Dana Whitfield, fully replyable) and cases 01/02/03/05 now point at it with the inbox
+> available. Four of five cases passed on the FIRST run afterwards. With inbox and vault both
+> reachable this pack has no unavailable reachable source, so its outcome is `useful` — the old
+> `partial` was produced by the very gap that made the pack inoperable. Case 01's id was
+> `-pasted-complaint` and is now `-inbox-complaint`, because an id that lies is worse than a rename.
+>
+> **THE RULE THIS ADDS, and it is different from the subject-less fixture:** before blaming a body,
+> check that the pack's OUTPUT CONTRACT is reachable with the tools it is granted and the state the
+> fixture seeds. Read the granted tools' preconditions — `replyToMessage` needs a resolvable message,
+> `proposePlan` needs recipients/subject/body already on the row. A contract no tool can fulfil
+> produces a confident, well-written failure every single time, and no prompt will move it.
+>
+> A COROLLARY, seen twice now: a required gap statement must be part of the OUTPUT STRUCTURE, not
+> guidance prose. Case 01 emitted `your connected sales and accounting systems` verbatim but dropped
+> the CRM half from a terse summary, exactly as `process-sop-02` dropped its task-system line.
+> Naming both as a fixed pair in the procedure's last step fixed it.
+>
+> PREVIOUS: 2026-08-26 (**`pack-sales-call-prep` IS 5/5 AND CERTIFIED — the fixture was the
 > defect, exactly as this playbook predicted, and the fix was three words.**
 >
 > `-02-no-crm-invention` had failed EIGHT model runs across THREE body versions. Its turn 1 named
