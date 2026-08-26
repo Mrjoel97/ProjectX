@@ -1,6 +1,35 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
-> Last verified: 2026-08-26 (**NO PACK HOLDS `createDocument` ANY MORE. A pack whose `output`
+> Last verified: 2026-08-26 (**`artifactCreated` WAS READING THE WRONG TURN, and it was scoring the
+> exact opposite of the behaviour the bodies teach.**
+>
+> `packRunFacts` is keyed by runId and the runner mints ONE RUN PER TURN, so a two-turn fixture read
+> only the FINAL turn's facts. A pack that saved its brief on the turn that WROTE it — which is what
+> every document pack's body now instructs, and what makes the saved bytes correct — recorded its
+> `artifact_created` under turn 1 and was scored as never having saved. MEASURED, in both
+> directions: `gpt-5.6-luna` saved the prep on turn 1 of case 01 and FAILED the case, while
+> `gpt-4o-mini` PASSED the same case by saving the follow-up turn's reply, which was a recital of the
+> preflight preamble. The green run had the wrong bytes and the red run had the right ones. The tally
+> is now summed across every turn's runId; the terminal row, the preflight counts and the outcome
+> stay last-turn facts, because those are per-run by definition.
+>
+> This is the third scope mismatch this scorer has shipped (last-turn prose, then per-run artifacts).
+> **The rule, if a fourth is ever added: ask which PLANE the fixture's question lives in.** "Did this
+> case produce a document" is a case-level question; "what outcome did the run reach" is a run-level
+> one. They cannot share a read.
+>
+> **WHERE THE PACK STANDS: 4/5, on the pack lane's own model.** Cases 01, 03, 04 and 05 pass;
+> `-02-no-crm-invention` is the one holdout and its cause is pinned, not guessed. Its turn 1 asks an
+> unanswerable CRM question and its turn 2 says "get me ready for the call" — naming the company only
+> in turn 1, while the eval's own `[ref zqk-…]` needle sits beside the turn-2 request. luna answers
+> "I can't identify the prospect from the reference marker alone" and asks instead of prepping. Three
+> body versions were spent on it (save-first ordering, "handing the turn back is not an answer", "a
+> name they gave you a turn ago is still the name") and it moved the other four cases but not this
+> one. **It is now the FIXTURE that is under-specified**: it asserts a prep about a prospect it names
+> once, two turns earlier. Name the company in turn 2 or assert less; do not spend a fourth body
+> version.
+>
+> PREVIOUS: 2026-08-26 (**NO PACK HOLDS `createDocument` ANY MORE. A pack whose `output`
 > contract is a document holds `saveAsDocument`, which carries NO CONTENT ARGUMENT — the model
 > decides whether there is a deliverable and titles it; `workflowPackBinding` writes the run's own
 > reply.**

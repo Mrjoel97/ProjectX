@@ -96,20 +96,25 @@ const COST_CAP_USD = 1.0;
  * THROWS rather than guessing: a run that refuses to start is better than an evidence row naming a
  * model that never ran.
  */
-function codeOwnedDefaultModel() {
+function codeOwnedPackModel() {
   const src = readFileSync(costSrcPath, "utf8");
-  const pin = /^export const DEFAULT_MODEL = ([A-Za-z_][A-Za-z0-9_]*);/m.exec(src);
+  // 27-10: **`PACK_MODEL`, not `DEFAULT_MODEL`.** This runner certifies PACK runs, and
+  // `runSpecialistTurn` now resolves a pack to its own lane — so reading the default here would
+  // record evidence naming a model no pack executed, which is the exact dishonesty the docstring
+  // above was written about, one lane over. The regex shape is unchanged, so a pack pin that stops
+  // being a single-literal alias still THROWS rather than guessing.
+  const pin = /^export const PACK_MODEL = ([A-Za-z_][A-Za-z0-9_]*);/m.exec(src);
   if (!pin)
-    throw new EnvironmentAbort(`DEFAULT_MODEL not found (or not an alias) in ${costSrcPath}`);
+    throw new EnvironmentAbort(`PACK_MODEL not found (or not an alias) in ${costSrcPath}`);
   const lit = new RegExp(`^export const ${pin[1]} = "([^"]+)";`, "m").exec(src);
   if (!lit)
     throw new EnvironmentAbort(
-      `DEFAULT_MODEL aliases ${pin[1]}, which is not a string literal in ${costSrcPath} — ` +
+      `PACK_MODEL aliases ${pin[1]}, which is not a string literal in ${costSrcPath} — ` +
         "resolve it by hand rather than letting evidence name a model that never ran",
     );
   return lit[1];
 }
-const EVAL_MODEL = codeOwnedDefaultModel();
+const EVAL_MODEL = codeOwnedPackModel();
 
 // The Windows/Node-24 `UV_HANDLE_CLOSING` teardown crash: `convex run` completes and dies before
 // flushing stdout. `must()` retries only when stdout is EMPTY and no failure banner printed, so a
@@ -1451,6 +1456,8 @@ function runCase(fx, index, { packId, pack, version, runnerRunId, thresholds }) 
   const needle = (fx.needles ?? [])[0];
   let cost = 0;
   let lastRunId = null;
+  /** Every turn's runId, in order — `artifact_created` rows are keyed per run, one run per turn. */
+  const runIds = [];
   // EVERY turn's reply, not just the last. See scoreCase's header for why this was the whole bug.
   const replies = [];
   for (const [turnIndex, turn] of fx.turns.entries()) {
@@ -1475,12 +1482,26 @@ function runCase(fx, index, { packId, pack, version, runnerRunId, thresholds }) 
     if (res.blocked !== undefined)
       throw new EnvironmentAbort(`governed stop on ${fx.id} turn ${turnIndex + 1}: ${res.blocked}`);
     cost += res.costUsd ?? 0;
+    runIds.push(lastRunId);
     replies.push(res.reply ?? "");
   }
 
   const facts = parse(
     must("smoke:packRunFacts", { tenantId: tenant, runId: lastRunId }, RETRY_READ),
   );
+  // ARTIFACTS ARE COUNTED ACROSS EVERY TURN, NOT JUST THE LAST — the same scope mismatch that once
+  // made `missingNamed` score only the final reply, one plane over, and here it was scoring the
+  // OPPOSITE of the behaviour the bodies teach. `packRunFacts` is keyed by runId and there is one
+  // runId PER TURN, so a pack that saved its brief on the turn that WROTE it recorded that
+  // `artifact_created` under turn 1 — and a two-turn fixture then read turn 2's facts, saw zero, and
+  // failed the case. MEASURED: `gpt-5.6-luna` saved the prep on turn 1 of case 01 and was scored as
+  // never having saved at all, while `gpt-4o-mini` "passed" the same case by saving the FOLLOW-UP
+  // turn's reply — the wrong bytes, scored green. The terminal row, the preflight counts and the
+  // outcome stay LAST-TURN facts, because those are per-run by definition; only the artifact tally
+  // is cumulative, because the fixture asks "did this case produce one", not "on which turn".
+  const artifactCount = runIds
+    .map((id) => parse(must("smoke:packRunFacts", { tenantId: tenant, runId: id }, RETRY_READ)))
+    .reduce((n, f) => n + f.artifactCount, 0);
   // THE MODEL HALF of "did the thing we are about to certify actually run". Read from spend rows,
   // which record the model AFTER each call returns, so a fallback attempt is its own row.
   const ran = parse(
@@ -1505,13 +1526,13 @@ function runCase(fx, index, { packId, pack, version, runnerRunId, thresholds }) 
     // Blank-line joined so a phrase cannot be manufactured ACROSS a turn boundary by two halves
     // abutting — the matcher is a substring test and `…crm` + `facts…` would otherwise read as one.
     transcript: replies.join("\n\n"),
-    facts,
+    facts: { ...facts, artifactCount },
     calls,
     thresholds,
     mentions: REGISTRY.mentions,
   });
   if (DUMP_PATH !== null) {
-    DUMP.push({ id: fx.id, failures, replies, calls, artifactCount: facts.artifactCount });
+    DUMP.push({ id: fx.id, failures, replies, calls, artifactCount });
     writeFileSync(DUMP_PATH, JSON.stringify(DUMP, null, 2));
   }
   return {

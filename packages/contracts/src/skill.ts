@@ -623,7 +623,7 @@ export const PACK_EVAL_SUITE = {
       caseCount: 5,
     },
     "pack-sales-call-prep": {
-      casesHash: "7669fa82a5662d4613f2e8e9c3da30126d544336c7c3c04d0bb297b41354d9e7",
+      casesHash: "8df01148ceac3e6218b4afa2d860fcaa71b12c490af5891779152c0e8d420189",
       caseCount: 5,
     },
     "pack-process-sop": {

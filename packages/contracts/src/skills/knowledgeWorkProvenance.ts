@@ -80,7 +80,7 @@ export const KNOWLEDGE_WORK_PROVENANCE: Readonly<Record<string, KnowledgeWorkPro
     sourceRepo: REPO,
     sourceCommit: COMMIT,
     sourcePaths: ["sales/skills/call-prep/SKILL.md"],
-    bodySha256: "b6c4410c5cee9977c1e45877b8c6ac86136bef9d28ef6e5ee10ea44f3489d812",
+    bodySha256: "9843a2d0277d9e0e53caa97eb1cd4283d12d95759b1178c720c9469617eb914b",
     license: "Apache-2.0",
     modificationNotice:
       "CRM account/deal lookups removed and named as MISSING. Keeps the standalone user-input plus web-research path, which is what Pikar can actually serve.",

@@ -1,6 +1,40 @@
 # Playbook: Guardrails (the spend rails, the kill switches, the redaction choke point)
 
-> Last verified: 2026-08-26 (**THE PINS MOVED TO OPENROUTER AS A ROUTE-ONLY CHANGE AT IDENTICAL
+> Last verified: 2026-08-26 (**A THIRD MODEL LANE: `PACK_MODEL` / `PACK_FALLBACK_MODEL`, pinned to
+> `or/openai/gpt-5.6-luna` + `or/openai/gpt-4.1-mini`, and the A/B was run in BOTH directions before
+> the pin was kept.**
+>
+> `DEFAULT_MODEL` is a VOLUME pin — ingest, classification, routing — where capability buys nothing
+> and the cost caps are calibrated around $0.15/$0.60. A workflow-pack run is the opposite: one
+> deliberate turn whose output a human reads, which is the same argument that moved `RESEARCH_MODEL`
+> on 2026-08-25. The lane is derived from the SKILL NAME in `runSpecialistTurn`
+> (`isWorkflowPackSkill`), beside the model pin and the step budget, exactly where the file already
+> says such decisions belong.
+>
+> **MEASURED, same body (v9), same corpus, same scorer, `--repeat 3` each way:**
+>
+>                           gpt-4o-mini      gpt-5.6-luna
+>       stable-pass                   1                 3
+>       stable-fail                   1                 0
+>       FLAKY                         3                 2
+>       $ / 3 runs                0.1701            0.3496
+>
+> **Zero stable failures is what decided it** — every case is reachable on luna, so an all-green run
+> exists to be had, while gpt-4o-mini could not save the deliverable at all on three different cases.
+> `pack-business-pulse` re-certified 5/5 on the new lane for $0.0089 (it was $0.0044), so the one
+> pack with evidence stayed certified at 2x a trivial cost.
+>
+> **THE CLOCK MOVED WITH IT.** `callTimeoutMsFor` now gives every pack the RESEARCH timeout (180 s),
+> not the cockpit's 45 s. Not belt-and-braces: luna took 82.9 s on one case and 30-65 s routinely, and
+> `pack-business-pulse` v2 had already blown the 45 s wall the moment its body added one tool call.
+> Without this the lane would fail for the clock rather than for the answer.
+>
+> **A GAP, NAMED:** `hasPassingPackEvalEvidence` does NOT compare the evidence row's model to the
+> lane's pin. The runner refuses to WRITE a row whose executed model is not `EVAL_MODEL`, so every
+> row is honest when written — but a later pin change silently keeps old rows valid. Moving either
+> pack pin means re-running every certified pack, and nothing enforces that yet.
+>
+> PREVIOUS: 2026-08-26 (**THE PINS MOVED TO OPENROUTER AS A ROUTE-ONLY CHANGE AT IDENTICAL
 > RATES, PLUS ONE DELIBERATE QUALITY UPGRADE ON RESEARCH. TWO PRICING ROWS THAT WERE WRONG BY A WHOLE
 > GENERATION WERE CORRECTED.** `DEFAULT_MODEL` = `or/openai/gpt-4o-mini` (0.15/0.60, unchanged rate),
 > `CHEAP_MODEL` = `or/openai/gpt-4.1-nano` (0.10/0.40, unchanged), `RESEARCH_FALLBACK_MODEL` =

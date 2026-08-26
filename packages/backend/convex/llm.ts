@@ -68,6 +68,7 @@ import {
   inlineRuns,
   isFallbackEligible,
   isNeedsYou,
+  isWorkflowPackSkill,
   joinDigest,
   packOutputIsDocument,
   parseAddress,
@@ -87,6 +88,8 @@ import {
   CHEAP_MODEL,
   DEFAULT_MODEL,
   GEMINI_MODEL,
+  PACK_FALLBACK_MODEL,
+  PACK_MODEL,
   priceUsage,
   RESEARCH_FALLBACK_MODEL,
   RESEARCH_MODEL,
@@ -167,7 +170,16 @@ const RESEARCH_MAX_STEPS = 12;
  * exists to disprove. The test knob is `softCutoffMs`, which touches only the SOFT stop.
  */
 export function callTimeoutMsFor(skillName: string): number {
-  return skillName === RESEARCH_SPECIALIST_SKILL ? RESEARCH_CALL_TIMEOUT_MS : CALL_TIMEOUT_MS;
+  // 27-10: a workflow pack takes the RESEARCH clock, not the cockpit's 45 s. Two reasons, both
+  // measured. Its turn is tool-dense in the same way research is — calendar, vault, one search per
+  // sub-question, then a long-form brief — and `pack-business-pulse` v2 already blew the 45 s wall
+  // the moment its body added ONE tool call (28.8-56.3 s per case, every run aborting with
+  // `agent_timeout`). The pack lane now also runs a 5.x model, which is slower per call than the
+  // volume pin it replaced, so keeping 45 s here would fail the lane for the clock rather than for
+  // the answer.
+  return skillName === RESEARCH_SPECIALIST_SKILL || isWorkflowPackSkill(skillName)
+    ? RESEARCH_CALL_TIMEOUT_MS
+    : CALL_TIMEOUT_MS;
 }
 
 // Google Gemini via Vertex AI (2026-08-07). LAZY AND MEMOIZED, and both properties are
@@ -5022,12 +5034,19 @@ export async function runSpecialistTurn(
   // resolved; a `models?` / `maxSteps?` arg would be a second mechanism for a decision with exactly
   // one owner, and would drag dispatch.ts into model selection for no gain.
   const isResearch = skillName === RESEARCH_SPECIALIST_SKILL;
-  // A TWO-TIER LOOKUP rather than a ternary: research has its own pair, everything else takes the
-  // repo defaults. A growth-specialist third tier was tried and reverted on 2026-08-08 — see the
-  // tombstone at RESEARCH_FALLBACK_MODEL in @pikar/cost for the measurements, so nobody re-derives it.
+  // 27-10: THE THIRD TIER, and the second one ever tried here. A growth-specialist tier was reverted
+  // on 2026-08-08 as noise (the tombstone at RESEARCH_FALLBACK_MODEL in @pikar/cost has the four
+  // configurations), so this one arrives with its own measurement and its own abort condition — see
+  // `PACK_MODEL`. Derived from the skill NAME like every other decision at this seam.
+  const isPack = isWorkflowPackSkill(skillName);
+  // A THREE-TIER LOOKUP rather than nested ternaries: each lane names its own pair, and everything
+  // else takes the repo defaults. Order matters only in that the lanes are disjoint by construction —
+  // a pack skill name can never be the research specialist's.
   const [primaryId, fallbackId] = isResearch
     ? [RESEARCH_MODEL, RESEARCH_FALLBACK_MODEL]
-    : [DEFAULT_MODEL, CHEAP_MODEL];
+    : isPack
+      ? [PACK_MODEL, PACK_FALLBACK_MODEL]
+      : [DEFAULT_MODEL, CHEAP_MODEL];
   const res = await runAgentLoop(ctx, {
     tenantId,
     planId,

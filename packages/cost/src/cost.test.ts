@@ -5,10 +5,12 @@ import {
   CHEAP_MODEL,
   chooseModel,
   DEFAULT_MODEL,
+  EXPECTED_OUTPUT_TOKENS,
   estimateCostUsd,
   estimateTokens,
-  EXPECTED_OUTPUT_TOKENS,
   OX_ALPHA_MODEL,
+  PACK_FALLBACK_MODEL,
+  PACK_MODEL,
   priceRealtime,
   priceTranscription,
   priceUsage,
@@ -204,6 +206,24 @@ describe("research model pins (16-02)", () => {
   it("RESEARCH_FALLBACK_MODEL is priced", () => {
     const r = priceUsage(RESEARCH_FALLBACK_MODEL, { inputTokens: 1, outputTokens: 1 });
     expect(r.ok, `${RESEARCH_FALLBACK_MODEL} has no PRICING row`).toBe(true);
+  });
+
+  // 27-10: the pack lane, same two obligations as research. An unpriced pin bills $0 against both
+  // the daily rail and the eval runner's cost cap — silently, which is the whole reason this block
+  // exists — and a fallback that IS the repo-wide cheap tier degrades the most tool-heavy path in
+  // the product on any hiccup, which is the rule RESEARCH_FALLBACK_MODEL already states.
+  it("PACK_MODEL and PACK_FALLBACK_MODEL are priced, and the fallback is not the cheap tier", () => {
+    for (const id of [PACK_MODEL, PACK_FALLBACK_MODEL]) {
+      expect(
+        priceUsage(id, { inputTokens: 1, outputTokens: 1 }).ok,
+        `${id} has no PRICING row`,
+      ).toBe(true);
+    }
+    expect(PACK_FALLBACK_MODEL).not.toBe(CHEAP_MODEL);
+    // And the lane is a LANE: reading DEFAULT_MODEL for a pack run is the bug this pin prevents,
+    // so the two must be free to differ. Asserted as an inequality because they do differ today —
+    // if a future lineup makes them the same id, delete this line deliberately, do not weaken it.
+    expect(PACK_MODEL).not.toBe(DEFAULT_MODEL);
   });
 
   // The per-call hosted-search fee is charged on TOP of tokens; omitting it under-reports every

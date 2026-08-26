@@ -82,6 +82,11 @@ export const OR_DEFAULT_MODEL = "or/openai/gpt-4o-mini";
 export const OR_CHEAP_MODEL = "or/openai/gpt-4.1-nano";
 export const OR_RESEARCH_MODEL = "or/openai/gpt-5.6-luna";
 export const OR_RESEARCH_FALLBACK_MODEL = "or/openai/gpt-4.1-mini";
+// 27-10. The WORKFLOW-PACK lane. Same ids as the research pair today, and SEPARATE constants for
+// exactly the reason RESEARCH_MODEL states about DEFAULT_MODEL: a later change to one lane must not
+// silently move another. See PACK_MODEL below for the measurement that bought this lane.
+export const OR_PACK_MODEL = "or/openai/gpt-5.6-luna";
+export const OR_PACK_FALLBACK_MODEL = "or/openai/gpt-4.1-mini";
 
 // Aliases, deliberately — NOT second string literals. Two literals spelling the same model is how a
 // PRICING row and a pin drift apart, and `PRICING` is keyed by computed property, so duplicate
@@ -227,6 +232,58 @@ export const RESEARCH_MODEL = OR_RESEARCH_MODEL;
 // most tool-heavy path and should not silently degrade to the cheapest tier on every hiccup.
 export const RESEARCH_FALLBACK_MODEL = OR_RESEARCH_FALLBACK_MODEL;
 
+/**
+ * **THE WORKFLOW-PACK LANE (27-10).** A third tier, and the third tier this file has ever carried —
+ * the growth-specialist one below was tried and reverted, so this one states its evidence up front.
+ *
+ * WHY A LANE AT ALL. `DEFAULT_MODEL` is a VOLUME pin: ingest, classification, routing, where
+ * capability buys nothing and the cost caps are calibrated around $0.15/$0.60. A pack run is the
+ * opposite — one deliberate turn whose OUTPUT A HUMAN READS, which is the same argument that moved
+ * `RESEARCH_MODEL` here on 2026-08-25. "Quality over cost" is a per-lane decision; this is a lane.
+ *
+ * WHY IT WAS NEEDED, MEASURED. `pack-sales-call-prep` on `gpt-4o-mini`, `--repeat 3` at v9 with the
+ * body and corpus defects all fixed: 2 cases stable-pass, 2 FLAKY, 1 stable-fail — and every single
+ * remaining failure was **a granted tool the model did not call** (`saveAsDocument` twice, and on
+ * other runs `webResearch` and `searchVault`, which have nothing to do with saving). Six body
+ * versions moved the prose and could not move that; a five-step tool procedure is simply near the
+ * ceiling of a small model.
+ *
+ * WHY THESE IDS. `gpt-5.6-luna` is already the pin this repo chose for its read-by-a-human lane, is
+ * already priced and verified against OpenRouter's live /models, and is ~1.3x input / 2x output of
+ * the default — cents per pack run. `gpt-4.1-mini` is the vetted capable fallback; deliberately NOT
+ * `CHEAP_MODEL`, for the reason stated at RESEARCH_FALLBACK_MODEL: the densest, most tool-heavy path
+ * must not silently degrade to the cheapest tier on a hiccup.
+ *
+ * THE ABORT CONDITION was stated before the first run so it could not be rationalised afterwards:
+ * this pin holds only if it beats gpt-4o-mini over `--repeat 3`. **IT DOES, and the A/B was run in
+ * both directions on the same body, the same corpus and the same scorer** — the lane was pointed
+ * back at the defaults, measured, and pointed forward again:
+ *
+ *                       gpt-4o-mini      gpt-5.6-luna
+ *     stable-pass                 1                 3
+ *     stable-fail                 1                 0
+ *     FLAKY                       3                 2
+ *     $ / 3 runs              0.1701            0.3496
+ *
+ * Zero stable failures is the number that decided it: every case is REACHABLE on luna, so an
+ * all-green run exists to be had, while gpt-4o-mini could not save the brief at all on three
+ * different cases (`save-prep-brief` missing on 2 or 3 of 3 runs each). ~2x the money on a lane that
+ * runs once per deliberate user request and produces something a human reads.
+ *
+ * IT ALSO NEEDED THE CLOCK. `callTimeoutMsFor` gives packs the research timeout, and that is not
+ * belt-and-braces: luna took 82.9 s on one case and 30-55 s routinely, so at the cockpit's 45 s wall
+ * this lane would have failed for the clock rather than for the answer.
+ *
+ * If a later lineup makes this look wrong, revert is two lines — point both constants back at
+ * `DEFAULT_MODEL`/`CHEAP_MODEL` — and leave a tombstone here with the numbers. The lane stays
+ * correct even when the model in it is not.
+ *
+ * `run-workflow-pack-evals.mjs` derives `EVAL_MODEL` from THIS pin, not from `DEFAULT_MODEL`: it
+ * certifies pack runs, and evidence must name the model that actually answered.
+ */
+export const PACK_MODEL = OR_PACK_MODEL;
+export const PACK_FALLBACK_MODEL = OR_PACK_FALLBACK_MODEL;
+
 // **A GROWTH-SPECIALIST PIN WAS TRIED AND REVERTED 2026-08-08 — do not re-derive it.** Fixtures
 // 29/30/31 assert `citesVaultDoc` (the seeded vault needle must reach the specialist's memo), and
 // they looked model-dependent: a fully-Gemini run passed 3/3 while OpenAI failed 0/3. Pinning ONLY
@@ -308,6 +365,10 @@ export const PRICING: Record<string, { inPerMTok: number; outPerMTok: number }> 
   [OR_CHEAP_MODEL]: { inPerMTok: 0.1, outPerMTok: 0.4 },
   [OR_RESEARCH_MODEL]: { inPerMTok: 0.2, outPerMTok: 1.2 },
   [OR_RESEARCH_FALLBACK_MODEL]: { inPerMTok: 0.4, outPerMTok: 1.6 },
+  // NO PACK ROWS, and that is deliberate rather than an omission: the pack lane names the same two
+  // ids as research today, so a row per pin would be a duplicate computed key (TS1117) and the
+  // literal would silently keep the last one. The obligation moves to cost.test.ts, which asserts
+  // BOTH pack pins price — so pointing either at a new id fails a test instead of billing $0.
 };
 
 // ponytail: chars/4 heuristic — feeds a budget THRESHOLD, not billing; real cost

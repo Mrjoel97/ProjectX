@@ -10,7 +10,7 @@
 //      back to CHEAP_MODEL.
 
 import { OFFER_ARCHITECT_SKILL, RESEARCH_SPECIALIST_SKILL } from "@pikar/contracts/skill";
-import { SPECIALISTS } from "@pikar/core";
+import { SPECIALISTS, WORKFLOW_PACK_SKILL_NAMES } from "@pikar/core";
 import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
 // The cockpit DRIVERS (sendCockpitMessage / resolveRecipients) additionally touch the agent thread
@@ -727,6 +727,13 @@ test("draftDocument pin: loads the pinned drafter version, fails closed on a mis
 // exception is that it changes NOTHING for any other path.
 test("callTimeoutMsFor: research gets its own clock, everything else keeps 45s", () => {
   expect(callTimeoutMsFor(RESEARCH_SPECIALIST_SKILL)).toBe(180_000);
+  // 27-10: a workflow pack takes the SAME longer clock — its turn is tool-dense in the way research
+  // is, and `pack-business-pulse` v2 blew the 45 s wall the moment its body added one tool call.
+  // Every pack name, not one sample: the lane is derived from `isWorkflowPackSkill`, so a pack that
+  // somehow missed it would fail here rather than at 45 s in front of an owner.
+  for (const name of WORKFLOW_PACK_SKILL_NAMES) expect(callTimeoutMsFor(name)).toBe(180_000);
+  // A name that merely LOOKS like a pack is not one — the registry is the door, not the prefix.
+  expect(callTimeoutMsFor("pack-not-a-real-pack")).toBe(45_000);
   // A LITERAL 45_000, never the CALL_TIMEOUT_MS symbol — an assertion written against the symbol
   // tracks the very refactor it exists to catch, and would stay green while the default moved.
   expect(callTimeoutMsFor("offer-architect")).toBe(45_000);
