@@ -202,8 +202,9 @@ export type PackRefusal =
 
 /**
  * What a pack hands back. Bound to the grant by `workflowPacks.test.ts`: `document` packs hold
- * `createDocument`, `draft_reply` holds `replyToMessage`, `briefing` holds neither — so a pack
- * cannot promise a durable artifact it has no tool to write.
+ * `saveAsDocument`, `draft_reply` holds `replyToMessage`, `briefing` holds neither — so a pack
+ * cannot promise a durable artifact it has no tool to write. NO pack holds `createDocument`; see
+ * `saveDocument` below for the measurement that separated the two.
  */
 export type PackOutput = "briefing" | "document" | "draft_reply";
 
@@ -347,8 +348,23 @@ const researchTheWeb = (summary: string) =>
     tools: ["webResearch", "declareUnsupported"],
   }) as const satisfies PackOperation;
 
+/**
+ * The save step, and it is NOT `createDocument` — measured, at length, on `pack-sales-call-prep`.
+ *
+ * `createDocument` takes a `topic` STRING and a second model writes the document from that string
+ * alone: it never sees the searches, the reply or the thread. So a pack whose deliverable is a
+ * researched brief has to transcribe the whole brief into a tool argument, and the pilot's model
+ * will not. Over eleven graded runs of six bodies, two cases saved nothing at all (0/3, 0/3), and
+ * on "Save that so I can read it in the car" it saved THE PREFLIGHT PREAMBLE — the text nearest the
+ * pronoun — four runs out of four, while the eval scored `artifactCreated: true` and passed.
+ *
+ * `saveAsDocument` splits the decision from the transcription. The model still decides WHETHER
+ * there is a deliverable (a refusal must not mint a document, and only the model knows), and it
+ * supplies a short title; the CONTENT is the run's own reply, written by the binding after the turn.
+ * Nothing is re-typed, so nothing can be mis-typed.
+ */
 const saveDocument = (id: string, summary: string) =>
-  ({ id, state: "existing", summary, reads: null, tools: ["createDocument"] }) as const;
+  ({ id, state: "existing", summary, reads: null, tools: ["saveAsDocument"] }) as const;
 
 const missing = (id: string, reads: MissingPackSource, summary: string) =>
   ({ id, state: "missing", summary, reads }) as const;

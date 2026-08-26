@@ -1,6 +1,34 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
-> Last verified: 2026-08-26 (**`pack-sales-call-prep` v6 — THE BODY SENT ITS WHOLE DELIVERABLE
+> Last verified: 2026-08-26 (**THE FOUR DOCUMENT PACKS NOW TEACH `saveAsDocument`, NOT
+> `createDocument`** — campaign-plan, sales-call-prep, process-sop and brand-review each moved one
+> tool row and one save step; `pack-sales-call-prep` is at v9 and the other three at v2.
+>
+> The tool row in each body now says the same true thing: **the document is your reply, word for
+> word, so there is nothing to pass but a short title and nothing to re-type.** The old row promised
+> something the tool could not do — `createDocument` hands a `topic` string to a separate drafter
+> that sees nothing else, which is how a call-prep body produced documents titled "Pikar Access
+> Overview" and "Source Availability Overview".
+>
+> **THE SAVE STEP IS THE FIRST STEP OF THE PROCEDURE, NOT THE LAST**, and that is not stylistic: the
+> turn ends with the model's reply, so a save instruction placed after "write the prep" is an
+> instruction with nowhere to execute. Measured on sales-call-prep: written last, the call happened
+> only when the user said "save that"; written first, the prep itself was saved on the turn that
+> produced it. Every document pack's body follows that order now.
+>
+> sales-call-prep also carries, from the same phase: a numbered procedure (it used to refuse a
+> calendar request without ever reading the calendar), the prep written in the REPLY rather than
+> directed into a document nobody grades, an identity rule (it prepped "Harrow Plumbing" from
+> **Harrow, Inc.**'s pharmaceutical quarterly results, cited, under a "please confirm the correct
+> entity" caveat), and a ban on money figures in a prep at all.
+>
+> Provenance moves as four artefacts per pack, as always: the canonical `.md`, the auto-derived
+> `.ts` constant, the `bodySha256` mirror and `manifest.json`'s `adaptedBodySha256`. The fixture
+> allow-lists moved with the grant, so all four `PACK_EVAL_SUITE` `casesHash` values moved too;
+> `revision` was deliberately NOT bumped, because a bump retires business-pulse's 5/5 evidence row
+> and its corpus did not change.
+>
+> PREVIOUS: 2026-08-26 (**`pack-sales-call-prep` v6 — THE BODY SENT ITS WHOLE DELIVERABLE
 > SOMEWHERE NEITHER THE OWNER NOR THE GRADER READS, AND NEVER SAID TO CALL A TOOL.** 0/5 -> a stable
 > 3/5, with every prose assertion (`citations`, `missingNamed`, `unsupportedFigures`) now passing
 > and `--repeat 3` reporting no flake on them.

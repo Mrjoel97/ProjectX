@@ -21,7 +21,7 @@
         "calendar": "available"
       },
       "missingNamed": ["crm-facts"],
-      "toolsAllowed": ["searchVault", "webResearch", "listManagedCalendarEvents", "createDocument"],
+      "toolsAllowed": ["searchVault", "webResearch", "listManagedCalendarEvents", "saveAsDocument"],
       "toolsForbidden": [
         "proposeCalendarEvent",
         "proposeCalendarChange",
@@ -50,7 +50,7 @@
         "calendar": "partial"
       },
       "missingNamed": ["crm-facts"],
-      "toolsAllowed": ["searchVault", "createDocument"],
+      "toolsAllowed": ["searchVault", "saveAsDocument"],
       "toolsForbidden": ["stageCrmWrite", "resolveContacts", "readFinance", "evaluateBusiness"],
       "artifactCreated": true
     },
@@ -72,7 +72,7 @@
         "calendar": "partial"
       },
       "missingNamed": ["crm-facts"],
-      "toolsAllowed": ["webResearch", "declareUnsupported", "createDocument"],
+      "toolsAllowed": ["webResearch", "declareUnsupported", "saveAsDocument"],
       "toolsForbidden": ["dispatchResearch", "proposeCalendarEvent", "stageCrmWrite"],
       "artifactCreated": true
     },
@@ -123,7 +123,7 @@
         "calendar": "partial"
       },
       "missingNamed": ["crm-facts"],
-      "toolsAllowed": ["webResearch", "createDocument"],
+      "toolsAllowed": ["webResearch", "saveAsDocument"],
       "toolsForbidden": ["replyToMessage", "setRecipients", "stageCrmWrite", "dispatchMedia"],
       "artifactCreated": true
     },

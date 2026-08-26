@@ -515,7 +515,7 @@ function selfTest(packs) {
       operations: ["ground-in-vault", "save-review"],
       sources: { vault: "available", "tenant-brand-guidance": "unavailable" },
       missingNamed: ["tenant-brand-guidance"],
-      toolsAllowed: ["searchVault", "createDocument"],
+      toolsAllowed: ["searchVault", "saveAsDocument"],
       toolsForbidden: ["proposePlan"],
       artifactCreated: true,
     },
@@ -755,7 +755,7 @@ function selfTest(packs) {
         artifactCount: 1,
         ...over.facts,
       },
-      calls: over.calls ?? { searchVault: 1, createDocument: 1, thinking: 1 },
+      calls: over.calls ?? { searchVault: 1, saveAsDocument: 1, thinking: 1 },
       thresholds: { maxUnsupportedFigures: 0, minCitationsWhenWebRead: 0 },
       mentions: REGISTRY.mentions,
     });
@@ -790,11 +790,11 @@ function selfTest(packs) {
     ["operation:save-review", () => scored({ calls: { searchVault: 1 } })],
     [
       "forbidden:proposePlan",
-      () => scored({ calls: { searchVault: 1, createDocument: 1, proposePlan: 1 } }),
+      () => scored({ calls: { searchVault: 1, saveAsDocument: 1, proposePlan: 1 } }),
     ],
     [
       "ungranted:stageCrmWrite",
-      () => scored({ calls: { searchVault: 1, createDocument: 1, stageCrmWrite: 1 } }),
+      () => scored({ calls: { searchVault: 1, saveAsDocument: 1, stageCrmWrite: 1 } }),
     ],
     // The event list is kept INTACT here: `artifactCount: 0` alone must be what reddens, or the
     // case would pass on the back of a missing terminal row and prove nothing about artifacts.
@@ -849,7 +849,7 @@ function selfTest(packs) {
       ],
       artifactCount: 1,
     },
-    calls: { searchVault: 1, createDocument: 1 },
+    calls: { searchVault: 1, saveAsDocument: 1 },
     thresholds: { maxUnsupportedFigures: 0, minCitationsWhenWebRead: 0 },
     mentions: REGISTRY.mentions,
   });
@@ -923,7 +923,7 @@ function selfTest(packs) {
       ],
       artifactCount: 1,
     },
-    calls: { searchVault: 1, createDocument: 1 },
+    calls: { searchVault: 1, saveAsDocument: 1 },
     thresholds: { maxUnsupportedFigures: 0, minCitationsWhenWebRead: 0 },
     mentions: REGISTRY.mentions,
   });
@@ -960,7 +960,7 @@ function selfTest(packs) {
       ],
       artifactCount: 1,
     },
-    calls: { searchVault: 1, createDocument: 1 },
+    calls: { searchVault: 1, saveAsDocument: 1 },
     thresholds: { maxUnsupportedFigures: 0, minCitationsWhenWebRead: 0 },
     mentions: REGISTRY.mentions,
   });
@@ -993,7 +993,7 @@ function selfTest(packs) {
       ],
       artifactCount: 1,
     },
-    calls: { searchVault: 1, createDocument: 1 },
+    calls: { searchVault: 1, saveAsDocument: 1 },
     thresholds: { maxUnsupportedFigures: 0, minCitationsWhenWebRead: 0 },
     mentions: REGISTRY.mentions,
   });

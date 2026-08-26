@@ -1,4 +1,29 @@
-> Last verified: 2026-08-26 (**`createDocument`'s TRIGGER CLAUSE IS NOW PER-CALLER — it is the one
+> Last verified: 2026-08-26 (**`saveAsDocument` — a SECOND save channel, built only for a caller
+> whose output contract IS a document, and the executive cockpit is not one.**
+>
+> Structural absence, the `grantWebResearch` precedent: `runAgentLoop` returns the FULL tool record
+> when `toolNames === undefined`, so a tool built unconditionally is one the executive silently
+> acquires. `buildSaveAsDocumentTool()` sits at module scope and is spread in under
+> `agentContext.documentIsDeliverable`, which `runSpecialistTurn` derives from the trusted skill NAME
+> (`packOutputIsDocument`) — never from `toolNames`, because an allow-list is a request from the
+> caller. `createDocument` is unchanged and still the executive's only document tool.
+>
+> **THE FLAG GATES THE READ-BACK TOO, and a test caught that it did not.** `ai@7` records a tool-CALL
+> part even for a name the record does not hold (it becomes a tool-error and the loop carries on), so
+> deriving the save request from the call alone let a BRIEFING pack mint a document by naming a tool
+> it was never granted — a model asking for a capability by spelling it. `runAgentLoop` now returns
+> `saveRequest` only when the same flag that BUILT the tool is set.
+>
+> `saveMarkdownDocument` is a third sibling of `renderAndStore` and `createDocument`, deliberately
+> not a caller of either: both of those start from a topic and end at a model, and this one starts
+> from text that already exists and never calls a model at all. Ceiling stated in its docstring — a
+> fourth kind of document write means extracting the tail (insert → audit → card), not a fifth
+> sibling. `agentSteps.tool` gained the `saveAsDocument` literal and `cards.tsx` its VERB entry in
+> the same commit, because `traceParity.test.ts` asserts the two sets equal both ways — and because
+> without the literal the step insert throws inside a callback the AI SDK swallows. That trap bit
+> again here: the binding's own grant probe read the tool as ABSENT for half an hour.
+>
+> PREVIOUS: 2026-08-26 (**`createDocument`'s TRIGGER CLAUSE IS NOW PER-CALLER — it is the one
 > thing in that record that was ever false for one.**
 >
 > "Create directly when the user asks for one; when creating one is YOUR idea, say what you would

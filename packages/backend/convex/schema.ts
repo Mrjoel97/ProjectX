@@ -1310,6 +1310,13 @@ export default defineSchema({
       // slice, comments included, so the idiomatic spelling would inject phantom literals) — are
       // still trace-less here. Deliberately NOT fixed by Phase 18; see 18-RESEARCH.md Pitfall 2.
       v.literal("createDocument"),
+      // 27-10 (PACK): the workflow-pack save channel. A LOCAL executable tool, so
+      // `onToolExecutionStart` fires and the insert NEEDS this literal — without it the step insert
+      // throws inside an AI-SDK callback the SDK swallows, and the trace is silently missing in
+      // prod while the suite stays green. It cost half an hour here: the binding's own grant probe
+      // read the tool as ABSENT because no agentSteps row existed for it. Its cards.tsx VERB entry
+      // lands in the same commit, because traceParity.test.ts asserts the two sets equal both ways.
+      v.literal("saveAsDocument"),
       // Phase-20 (MEDIA-01): the media specialist's dispatch step. ONE literal, no text field —
       // §4 on this path stays enforced by the ABSENCE of anywhere to put a block description, a
       // prompt or a narration line. Without it the step insert throws inside a callback the AI SDK

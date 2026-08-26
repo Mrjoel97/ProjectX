@@ -1,6 +1,44 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
-> Last verified: 2026-08-26 (**`expect.outcome: "partial"` IS STRUCTURALLY UNREACHABLE FOR A PACK
+> Last verified: 2026-08-26 (**NO PACK HOLDS `createDocument` ANY MORE. A pack whose `output`
+> contract is a document holds `saveAsDocument`, which carries NO CONTENT ARGUMENT — the model
+> decides whether there is a deliverable and titles it; `workflowPackBinding` writes the run's own
+> reply.**
+>
+> WHAT THIS FIXES, and it was measured before it was designed. `createDocument` takes a `topic`
+> string and a SECOND model (`document-drafter`) writes the document from that string alone: it
+> never sees the searches, the reply or the thread. So a pack whose deliverable is a researched brief
+> had to transcribe the whole brief into a tool argument, and `gpt-4o-mini` would not. Over eleven
+> graded runs of six `pack-sales-call-prep` bodies, two cases saved nothing at all (0/3 and 0/3), and
+> on the "Save that so I can read it in the car" follow-up the model saved **the preflight preamble**
+> — the text nearest the pronoun — four runs out of four, while the eval scored
+> `artifactCreated: true` and PASSED. **`artifactCreated` proved a document existed and never that
+> it was the one the owner read.** `workflowPackBinding.test.ts` now reads the stored BYTES back and
+> asserts they are the reply, which is the assertion the old mechanism could not make.
+>
+> **THE ORDER OF THE CALL IS LOAD-BEARING, and this is the part nobody would guess.** The tool must
+> be called BEFORE the model writes, because the turn ends with the reply — there is no step after
+> it. Measured: with the save step written LAST in the body, the model called it only when the user's
+> own words said "save that" (1 of 4 producing cases); moved to the FIRST step of the procedure, the
+> same body saved the real prep on the turn that produced it. Two cases still skip the call — the
+> model produces an excellent brief and forgets the administrative step — so **the pack sits at 3/5,
+> and the remaining gap is model tool-discipline, not wording.** Do not spend another body version on
+> it. The next lever is a pack-lane model pin (a pack's output is read by a human, which is the lane
+> `docs/playbooks/guardrails.md` says quality is bought for) and it costs money, so it is an owner
+> decision. It also needs `EVAL_MODEL` to follow the pin, or the runner refuses to certify the run.
+>
+> STILL TRUE FROM THE PREVIOUS ENTRY: `expect.outcome: "partial"` is structurally unreachable for a
+> pack that researches and must cite, and `pack-campaign-plan` still carries that losing bet on all
+> five of its fixtures.
+>
+> **A REAL WART, LEFT UNDONE AND NAMED:** `preflightPrompt` is prepended to EVERY turn, so on a short
+> follow-up ("Save that so I can read it in the car") the model answers the PREAMBLE instead of the
+> user — measured, twice, as a reply that recites source availability. It no longer poisons the vault
+> (the save is once per prep, and it happens on the turn that writes the prep), but it is still a
+> reply the owner did not ask for. The fix is to send the preflight once per pack thread rather than
+> once per turn; the facts stay in the conversation history either way.
+>
+> PREVIOUS: 2026-08-26 (**`expect.outcome: "partial"` IS STRUCTURALLY UNREACHABLE FOR A PACK
 > THAT RESEARCHES AND MUST CITE — the validator's documented "bet on behaviour" is not a bet there,
 > it is an impossibility, and it cost sales-call-prep 5 of 5 cases across eight models.**
 >

@@ -506,6 +506,126 @@ export const buildWebResearchTool = (): ToolSet => ({
 });
 
 /**
+ * 27-10. The workflow-pack save channel — **the DECISION, never the content.**
+ *
+ * `createDocument` cannot serve a pack whose deliverable is a researched brief: it takes a `topic`
+ * STRING and a second model writes the document from that string alone, so the running model has to
+ * re-type the whole brief into a tool argument. Measured over eleven graded `pack-sales-call-prep`
+ * runs of six bodies: two cases saved nothing at all (0/3, 0/3), and asked to "save that so I can
+ * read it in the car" the model saved THE PREFLIGHT PREAMBLE — the text nearest the pronoun — four
+ * runs out of four, while the eval scored `artifactCreated: true` and PASSED.
+ *
+ * This tool splits the two halves and gives each to whoever can be trusted with it. **The model
+ * decides WHETHER there is a deliverable** — only it knows whether this turn produced a brief or a
+ * refusal, and a refusal must not mint a document — and names it. **The code owns the CONTENT:**
+ * `workflowPackBinding` writes the run's own reply after the turn ends. Nothing is transcribed, so
+ * nothing can be mis-transcribed, and the saved document is exactly what the owner read.
+ *
+ * It therefore SAVES NOTHING HERE, on purpose: at execute time the reply does not exist yet. The
+ * call is the signal and the title is the only argument — read back off the step record by
+ * `runAgentLoop`, the way `declaredUnsupported` already is.
+ *
+ * Module scope and spread under a flag, the `buildWebResearchTool` shape: built ONLY for a caller
+ * whose output contract is a document, because `runAgentLoop` returns the FULL record when
+ * `toolNames === undefined` and the EXECUTIVE agent must not acquire a save channel it has no
+ * contract for.
+ */
+export const buildSaveAsDocumentTool = (): ToolSet => ({
+  saveAsDocument: tool({
+    // Split literal: each chunk under the §5 no-hardcoded-prompt scan ceiling (200 chars).
+    description:
+      "Save what you write in THIS reply to the user's vault as a document, word for word. " +
+      "Call it FIRST on a turn that produces the deliverable — before you gather anything and " +
+      "before you write. Called last it is called too late: the turn ends with your reply. " +
+      "You never pass the text and must never re-type it here: the document IS your reply, so a " +
+      "title is the only thing to give. " +
+      "Do not call it when you have nothing to hand over — a refusal is not a document.",
+    inputSchema: jsonSchema<{ title: string }>({
+      type: "object",
+      properties: {
+        title: {
+          type: "string",
+          description: "A short plain-words title for the saved document.",
+        },
+      },
+      required: ["title"],
+      additionalProperties: false,
+    }),
+    // Code-owned reply (the `declareUnsupported` precedent). It is a promise the BINDING keeps, and
+    // it is honest: this turn's reply is saved once the turn ends. The nudge matters — a model that
+    // believes the saving is done here writes "I've saved it" and nothing else, and then the
+    // document is one sentence long.
+    execute: async ({ title }): Promise<string> =>
+      `Noted — this reply will be saved as "${String(title).slice(0, 120)}". ` +
+      "Now write the deliverable itself, in full, as your reply.",
+  }),
+});
+
+/**
+ * Write ONE markdown document to the vault, content-first: the caller already HAS the prose.
+ *
+ * A THIRD SIBLING of `renderAndStore` (attachments) and `createDocument` (drafted artifacts), and
+ * deliberately not a caller of either — the same reasoning `createDocument` records about
+ * `renderAndStore`. Both of those START from a topic and end at a model; this one starts from text
+ * that already exists and never calls a model at all. Folding it into `createDocument` would mean
+ * threading "sometimes skip the drafter, sometimes skip the `replace` branch" through the one path
+ * the executive cockpit uses on every document it writes.
+ * ponytail: two insert sites, and the ceiling is stated — if a THIRD kind of document write appears,
+ * extract the tail (insert → audit → card) rather than adding a fourth sibling.
+ */
+export async function saveMarkdownDocument(
+  ctx: GenericActionCtx<DataModel>,
+  args: {
+    tenantId: string;
+    planId: Id<"plans">;
+    threadId: string;
+    title: string;
+    markdown: string;
+  },
+): Promise<Id<"vaultDocuments">> {
+  const { tenantId, planId, threadId, title, markdown } = args;
+  // `long` is the whole point: a pack deliverable is a document the owner opens, so it gets the
+  // derived PDF the Download button reads.
+  const bytes = (await markdownToPdf(title, markdown)) as BlobPart;
+  const storageId = await ctx.storage.store(new Blob([bytes], { type: "application/pdf" }));
+  const hash = await contentHash(markdown);
+  const docId = await ctx.runMutation(internal.vault.insertCreatedDoc, {
+    tenantId,
+    title,
+    form: "long",
+    markdown,
+    contentHash: hash,
+    storageId,
+    // From the binding's own trusted args, never from a tool argument.
+    sourceThreadId: threadId,
+    sourcePlanId: planId,
+  });
+  // Refs-only (§4): a hash, an id and a flag — never the title, never the prose.
+  await ctx.runMutation(internal.audit.log, {
+    tenantId,
+    correlationId: planId,
+    eventType: "document.created",
+    actor: "system",
+    payload: { topicHash: hash, form: "long", vaultDocId: String(docId), hasPdf: true },
+  });
+  // APPEND to the thread's one cumulative Output card — the same latest-wins row `createDocument`
+  // maintains, which is also how `newArtifactIds` sees this write at all.
+  const card = await ctx.runQuery(internal.vaultSources.latestCreated, { tenantId, threadId });
+  await ctx.runMutation(internal.vaultSources.insert, {
+    tenantId,
+    threadId,
+    docIds: [...(card?.docIds ?? []), docId],
+    titles: [...(card?.titles ?? []), title],
+    count: (card?.docIds ?? []).length + 1,
+    role: "created",
+    snippet: markdown.slice(0, 240),
+    form: "long",
+    createdAt: Date.now(),
+  });
+  return docId;
+}
+
+/**
  * probeGemini — prove the `google/` half of `resolveModel` end to end before anything routes to it.
  *
  * Gemini was added ALONGSIDE OpenAI (owner decision 2026-08-07): `DEFAULT_MODEL`/`CHEAP_MODEL` still
@@ -1688,9 +1808,9 @@ export function buildCockpitTools(
     grantSkillAuthoring?: boolean;
     /**
      * 27-10. True only for a workflow pack whose `output` contract IS a saved document, derived in
-     * `runSpecialistTurn` from the SKILL NAME (`packOutputIsDocument`). It selects `createDocument`'s
-     * trigger clause and nothing else — see the description for the measurement behind it. Never
-     * derived from `toolNames`: an allow-list is a request from the caller.
+     * `runSpecialistTurn` from the SKILL NAME (`packOutputIsDocument`). It BUILDS `saveAsDocument`
+     * and nothing else — see that tool for the measurement behind it. Never derived from
+     * `toolNames`: an allow-list is a request from the caller.
      */
     documentIsDeliverable?: boolean;
     threadId?: string;
@@ -1708,6 +1828,7 @@ export function buildCockpitTools(
   tenantSkillIds?: Record<string, Id<"tenantSkills">>,
 ) {
   const webResearchTool = buildWebResearchTool();
+  const saveAsDocumentTool = buildSaveAsDocumentTool();
 
   // 19-11 (ACTN-05). THE DEGRADE GRADIENT, and the actual root cause of the measured defect.
   // `stageCrmWrite` refuses ALL-OR-NOTHING over its list, so whenever any element is imperfect the
@@ -2301,6 +2422,14 @@ export function buildCockpitTools(
     ...(agentContext?.grantWebResearch
       ? { ...webResearchTool, ...declareUnsupportedTool }
       : ({} as typeof webResearchTool & typeof declareUnsupportedTool)),
+    // 27-10: BUILT only for a caller whose output contract is a saved document, the same structural
+    // absence as the branch above and for the same reason — `runAgentLoop` returns the FULL record
+    // when `toolNames === undefined`, so unconditional construction would hand the EXECUTIVE agent a
+    // second, content-free save channel it has no contract for. Derived in `runSpecialistTurn` from
+    // the trusted skill NAME, never from `toolNames`: an allow-list is a request from the caller.
+    ...(agentContext?.documentIsDeliverable
+      ? saveAsDocumentTool
+      : ({} as typeof saveAsDocumentTool)),
     // DISP-02: present ONLY for the executive, and only when it has a turn identity to dispatch
     // under (no lineage ⇒ nothing to correlate the async run to). Same one-type-both-branches trick.
     // 20-08: ONE flag, ONE spread, both dispatch tools — the `webResearch`/`declareUnsupported`
@@ -3815,18 +3944,12 @@ export function buildCockpitTools(
         // reported creating a deck "in PowerPoint format" that never existed.
         "It writes markdown and a PDF — never PowerPoint, Word or slides. " +
         "The finished document appears in the workspace as well as the vault. " +
-        // THE TRIGGER CLAUSE, and the ONE thing in this record that is not true for every caller.
-        // "Wait for a yes" is a rule for the executive cockpit, where an unasked-for document is a
-        // surprise. For a workflow pack whose OUTPUT CONTRACT is a document the same sentence is
-        // simply false — the owner asked for the document by starting the pack — and it wins:
-        // three pack bodies instructed the model to save, three different ways, and across nine
-        // graded runs it saved only when the user's own words said "save that". The flag is
-        // derived from the trusted SKILL NAME in `runSpecialistTurn`, never from `toolNames`.
-        (agentContext?.documentIsDeliverable === true
-          ? "Saving the finished piece is what this workflow is for, so it is never merely your " +
-            "idea: create it without asking, on the turn you write it."
-          : "Create directly when the user asks for one; when creating one is YOUR idea, say what " +
-            "you would write and wait for a yes."),
+        // The trigger rule. It is a rule for THIS surface, where an unasked-for document is a
+        // surprise — and it is one reason no workflow pack holds this tool: for a pack whose output
+        // contract IS a document the sentence is false, and it beat three bodies that said so.
+        // Packs get `saveAsDocument` instead, which is a different tool for a different job.
+        "Create directly when the user asks for one; when creating one is YOUR idea, say what you " +
+        "would write and wait for a yes.",
       inputSchema: jsonSchema<{ topic: string; form: "short" | "long"; replace?: number }>({
         type: "object",
         properties: {
@@ -4395,6 +4518,9 @@ async function runAgentLoop(
   /** 22.1b: did the specialist CALL `declareUnsupported`? One bit, monotone downward — it can only
    *  move `evidenceVerdict` from `sourced` to `insufficient_evidence`, never the other way. */
   declaredUnsupported: boolean;
+  /** 27-10: the pack asked for THIS reply to be saved, under this title. Absent when it did not.
+   *  The title is model-authored; the CONTENT is never — see `buildSaveAsDocumentTool`. */
+  saveRequest?: { title: string };
   truncated: boolean;
   /** WHY it truncated. Absent when it did not. Feeds specialistMemoBody's closed reason union. */
   truncatedReason?: "steps" | "clock";
@@ -4503,6 +4629,7 @@ async function runAgentLoop(
     costUsd: number;
     webSearchCalls: number;
     declaredUnsupported: boolean;
+    saveRequest?: { title: string };
     truncated: boolean;
     truncatedReason?: "steps" | "clock";
     sources: readonly { url: string; title: string }[];
@@ -4639,6 +4766,35 @@ async function runAgentLoop(
       }
       return (args as { scope?: unknown } | null)?.scope === "question";
     });
+    // 27-10: the pack save signal, read off the SAME step record and parsed the SAME two ways (the
+    // mocks emit `input` as a JSON string). The tool saved nothing — at execute time this reply did
+    // not exist — so the call plus its title is the whole of what it produced, and the binding does
+    // the writing. FIRST call wins: a second one names the same reply, and one document per turn is
+    // the contract. A blank or absent title is treated as no request rather than defaulted, because
+    // an untitled document in the owner's vault is worse than a document they were not promised.
+    const saveRequest = ((): { title: string } | undefined => {
+      // THE CAPABILITY GATE, and a test caught its absence: `ai@7` records a tool-CALL part even
+      // for a name the record does not hold (it becomes a tool-error and the loop carries on), so
+      // reading the calls alone let a BRIEFING pack mint a document by naming a tool it was never
+      // granted — the model asking for a capability by spelling it. The flag is the same one that
+      // built the tool, so a pack that cannot call it cannot request it either.
+      if (documentIsDeliverable !== true) return undefined;
+      for (const p of toolCalls) {
+        if (p.toolName !== "saveAsDocument") continue;
+        const raw: unknown = (p as { input?: unknown }).input;
+        let args: unknown = raw;
+        if (typeof raw === "string") {
+          try {
+            args = JSON.parse(raw);
+          } catch {
+            continue;
+          }
+        }
+        const title = (args as { title?: unknown } | null)?.title;
+        if (typeof title === "string" && title.trim() !== "") return { title: title.trim() };
+      }
+      return undefined;
+    })();
     // Fee is keyed on the model that ACTUALLY ran (`m.id`), not on RESEARCH_MODEL: `runAgentLoop`
     // may be executing the fallback, and Google Search grounding is ~3.5x OpenAI's hosted-search
     // rate. Charging the wrong vendor's rate under-draws the rail — the silent failure this file
@@ -4690,6 +4846,7 @@ async function runAgentLoop(
       costUsd,
       webSearchCalls,
       declaredUnsupported,
+      saveRequest,
       sources,
       // The step cap is reported first when both are true: it is the more specific cause.
       truncatedReason: hitStepCap ? ("steps" as const) : hitClock ? ("clock" as const) : undefined,
@@ -4793,6 +4950,9 @@ export async function runSpecialistTurn(
    *  see the declaration and the whole channel dead-ends one function short of the verdict, which
    *  is exactly how `webSearchCalls` was lost before 22.1. */
   declaredUnsupported: boolean;
+  /** 27-10: the same pass-through seam again — `{ ...res, skillVersion }` already forwards it, and
+   *  only this type had to widen so `workflowPackBinding` can see the request and write the file. */
+  saveRequest?: { title: string };
   truncated: boolean;
   /** WHY it truncated — the `...res` spread already forwarded it; only this type omitted it, which
    *  made D11's three-way marker invisible to `governedDispatch` (16-06 consumes it). */

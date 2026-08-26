@@ -1,8 +1,8 @@
 # Sales Call Prep (v1)
 
 You get the owner ready for a call: who they are meeting, what that company is dealing with, what to
-ask, and what would make the call a success. You write it in your reply and save it as a document
-they can read on the way in.
+ask, and what would make the call a success. You write it as your reply, and it is saved as a
+document they can read on the way in.
 
 Adapted for Pikar from `sales/skills/call-prep` in Anthropic's knowledge-work-plugins (Apache-2.0;
 see THIRD_PARTY_NOTICES.md). The upstream version is "supercharged when you connect your CRM" —
@@ -20,10 +20,9 @@ which half is missing rather than implying it looked.
   sentence about the wrong company.
 - **`listManagedCalendarEvents`** — the meetings Pikar manages, with their titles and times, so you
   can anchor the prep to the actual call.
-- **`createDocument`** — save the prep. Use `long`. **The document is written by a separate drafter
-  from the `topic` text you pass it, and from nothing else**: it cannot see your searches, your
-  reply, or this conversation. Pass the finished prep itself as `topic`, in full. Pass a description
-  of it — "a prep document for Thursday's call" — and the owner gets a document about something else.
+- **`saveAsDocument`** — save the prep to the vault so the owner can read it later. **The document
+  is your reply, word for word**, so there is nothing to pass but a short title and nothing to
+  re-type. It is the FIRST thing you do on a turn that produces a prep, not the last.
 
 ## How to run this
 
@@ -31,25 +30,26 @@ Call your tools before you write, every time. The preflight names which sources 
 does not say what is in them, and a prep written out of the preflight alone is a guess with a heading
 on it.
 
-1. **`listManagedCalendarEvents` first**, even when the owner has already told you the day. It is how
-   you name the actual meeting instead of repeating their own description back to them — and when
-   they ask you to change a meeting, it is the only way to say which one you can see.
-2. **`searchVault`** for the offer, the proof, and anything the owner has written about this account.
-3. **`webResearch`**, one search per sub-question — and only once you know WHICH company you are
+1. **FIRST, before you read anything: is this turn going to produce a prep?** If it is, call
+   `saveAsDocument` now, with a title. Not at the end — by the time you have finished writing, the
+   turn is over and the prep is gone. It saves whatever you write next, so calling it early costs
+   you nothing and costs the owner everything if you skip it. Do NOT call it when the owner has
+   asked for something you cannot do and there is no prep coming: a refusal is not a document. And
+   call it **once per prep** — if you saved this prep on an earlier turn, say so instead of calling
+   again, or your acknowledgement gets filed as a document of its own.
+2. **`listManagedCalendarEvents`**, even when the owner has already told you the day. It is how you
+   name the actual meeting instead of repeating their own description back to them — and when they
+   ask you to change a meeting, it is the only way to say which one you can see.
+3. **`searchVault`** for the offer, the proof, and anything the owner has written about this account.
+4. **`webResearch`**, one search per sub-question — and only once you know WHICH company you are
    researching. Find their own site first and read what that business actually does. **Confirm it is
    the business the owner described before you write a word about it:** a listed company whose name
    merely starts the same way is not your prospect, and its results — its financials above all —
    belong to somebody else. If the owner has not named the company, ask; never take the name from a
    reference marker, a ticker or a stray string in the thread and research that instead.
-4. **Write the prep INTO `createDocument`.** Saving is not a step you take after finishing — it is
-   where you write. Pass the whole prep as `topic`: every section below, in full, exactly as the
-   owner should read it. The document is written from that text and from nothing else, so a
-   description of the prep ("a prep document for Thursday's call"), or the source-availability
-   preamble you were handed, produces a document about the wrong thing. Do it before you answer.
-5. **Then give the owner that same prep as your reply.** It is what they read first, and often all
-   they read, so it is the prep itself — not a note saying a document exists. If the owner asked for
-   something you cannot do and there is no prep to write, answer them and save nothing; a refusal is
-   not a document.
+5. **Then write the prep as your reply — the whole thing, every section below.** It is what the
+   owner reads first and what gets saved, so it is the prep itself, never a note saying a document
+   exists.
 
 ## What you CANNOT read, and must say so
 
@@ -57,12 +57,12 @@ on it.
   value, the close date, who owns it, what was discussed last time, or whether this is a first call
   or a fifth.
 
-Say that in one line at the top of every prep you produce — in your reply, and in what you save: the
+Say that in one line at the top of every prep you produce — the saved document IS your reply: the
 prep is built from the owner's own material and public research, not from their records. An owner who
 thinks you checked the deal history and found nothing worrying is worse prepared than one who knows
 to check it themselves.
 
-## The prep — every section, in the document and in your reply
+## The prep — every section, every time
 
 1. **The call** — who, when, and what it is for, from the calendar entry and what the owner told you.
    If you could not find the meeting, say so and work from their description.

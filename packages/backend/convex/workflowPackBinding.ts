@@ -36,13 +36,14 @@ import {
   toolsForWorkflowPack,
   type WorkflowPackId,
 } from "@pikar/core";
+import { scanText } from "@pikar/pii";
 import type { GenericActionCtx } from "convex/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { DataModel, Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
 import { traced } from "./lib/foglamp";
-import { runSpecialistTurn } from "./llm";
+import { runSpecialistTurn, saveMarkdownDocument } from "./llm";
 
 /** A governed stop RETURNS; only bugs throw. The `DispatchResult` posture, one lane over. */
 export type PackRunResult =
@@ -83,13 +84,12 @@ export function preflightPrompt(pre: PackPreflight, request: string): string {
     "do not contradict it, and never claim a source listed as unavailable answered.",
     // THIS BLOCK IS PREPENDED TO EVERY TURN, WHICH MAKES IT THE ANTECEDENT OF THE USER'S PRONOUNS.
     // Measured on `pack-sales-call-prep` case 01, whose turn 2 is "Save that so I can read it in
-    // the car": FOUR runs out of four saved a document whose entire body was this paragraph — "that"
-    // binds to the nearest preceding text, which is this, not the prep written a turn earlier. The
-    // eval scores `artifactCreated: true` and PASSES, so today's gate would certify a pack that
-    // saves its own preamble. A disclaimer sentence here ("never the content of anything you save")
-    // was tried on 2026-08-26 and did NOT move it — the cause is `createDocument`'s contract, which
-    // makes the model re-emit the whole document into `topic`, and no wording survives that. Left
-    // undone deliberately rather than patched with a placebo; see docs/playbooks/workflow-packs.md.
+    // the car": while packs held `createDocument`, four runs out of four saved a document whose
+    // entire body was THIS PARAGRAPH — "that" binds to the nearest preceding text, which is this,
+    // not the prep written a turn earlier — and the eval scored `artifactCreated: true` and passed.
+    // A disclaimer sentence here ("never the content of anything you save") was tried and did NOT
+    // move it. The fix was structural: `saveAsDocument` gives the model no content argument at all,
+    // so there is no longer anything for a pronoun to be resolved INTO. Do not re-add one.
     ...lines,
     ...(unlocks.length > 0 ? ["", "Unreadable in this workflow at all:", ...unlocks] : []),
     "",
@@ -281,6 +281,33 @@ async function runPackTurn(
           ...(mockScript === undefined ? {} : { mockScript }),
         }),
     );
+
+    // 27-10. THE SAVE, and the reason it lives here rather than in a tool: the deliverable is the
+    // REPLY, and no tool can read a reply that has not been written yet. `saveAsDocument` carries
+    // the model's decision (there is something to hand over) and its title; the content is taken
+    // from the run, never re-typed by the model. See `buildSaveAsDocumentTool` for the eleven runs
+    // that made this the mechanism instead of `createDocument`.
+    //
+    // BEFORE the artifact diff below, deliberately — this write appends to the same `vaultSources`
+    // card `newArtifactIds` reads, so ordering it here is what makes the `artifact_created` row
+    // appear for it with no second observation path.
+    //
+    // An empty reply saves NOTHING even when asked: `outcomeFor` calls that run `no_findings`, and
+    // a document containing nothing is not an artifact, it is litter in the owner's vault.
+    if (res.saveRequest !== undefined && res.reply.trim() !== "") {
+      // The title is the one model-authored value on this path, and it lands in a stored row and on
+      // a rendered card — so it takes the same redaction gate as every other model string that is
+      // stored (§4). A title that cannot be scanned is replaced by the pack's own code-owned title
+      // rather than dropped: the document is the deliverable and must not be lost over its label.
+      const scan = scanText(res.saveRequest.title);
+      await saveMarkdownDocument(ctx, {
+        tenantId,
+        planId,
+        threadId,
+        title: (scan.ok ? scan.value.safeText.trim() : "") || spec.title,
+        markdown: res.reply,
+      });
+    }
 
     const after = await ctx.runQuery(internal.vaultSources.latestCreated, { tenantId, threadId });
     for (const artifactId of newArtifactIds(before, after?.docIds ?? [])) {

@@ -49,7 +49,11 @@ function runtimeToolNames(): Set<string> {
   // `webResearch` and `declareUnsupported` are built by `buildWebResearchTool()` at module scope
   // (llm.ts:382), not inside the record literal, so the indent-anchored scan cannot see them.
   // They ARE keys of the returned record — spread in at the `grantWebResearch` branch.
-  return new Set([...names, "webResearch", "declareUnsupported"]);
+  // `saveAsDocument` is the same shape one flag over: `buildSaveAsDocumentTool()` at module scope,
+  // spread in at the `documentIsDeliverable` branch. Both are conditional for the same reason —
+  // `runAgentLoop` returns the FULL record when `toolNames === undefined`, so a tool built inside
+  // the literal is one the EXECUTIVE agent silently acquires.
+  return new Set([...names, "webResearch", "declareUnsupported", "saveAsDocument"]);
 }
 
 describe("the workflow-pack registry is total", () => {
@@ -226,7 +230,7 @@ describe("the grant is code-owned and exact", () => {
       // (Phase 26 summaries, the content shelf) are MISSING and stay missing — decision A.
       ["business-pulse", ["readFinance", "searchVault"]],
       // `declareUnsupported` rides `webResearch` — see the pairing test below.
-      ["campaign-plan", ["createDocument", "declareUnsupported", "searchVault", "webResearch"]],
+      ["campaign-plan", ["declareUnsupported", "saveAsDocument", "searchVault", "webResearch"]],
       // `replyToMessage` resolves the message and the recipient SERVER-SIDE; the model never sees
       // an address. Nothing here sends: the plan still stops at the one human Approve gate.
       [
@@ -236,15 +240,15 @@ describe("the grant is code-owned and exact", () => {
       [
         "sales-call-prep",
         [
-          "createDocument",
           "declareUnsupported",
           "listManagedCalendarEvents",
+          "saveAsDocument",
           "searchVault",
           "webResearch",
         ],
       ],
-      ["process-sop", ["createDocument", "findInDrive", "listDriveFolders", "searchVault"]],
-      ["brand-review", ["createDocument", "searchVault"]],
+      ["process-sop", ["findInDrive", "listDriveFolders", "saveAsDocument", "searchVault"]],
+      ["brand-review", ["saveAsDocument", "searchVault"]],
     ]);
   });
 
@@ -290,14 +294,17 @@ describe("the grant is code-owned and exact", () => {
 
   // The output contract is BOUND to the grant. A pack that promises a durable document without the
   // tool that writes one produces prose and loses it; a pack that promises no artifact but holds
-  // `createDocument` writes vault rows nobody asked for.
+  // `saveAsDocument` writes vault rows nobody asked for.
   test("each output contract is backed by exactly the tool that can honour it", () => {
     for (const id of WORKFLOW_PACK_IDS) {
       const tools = toolsForWorkflowPack(id);
       const { output } = WORKFLOW_PACKS[id];
-      expect(tools.includes("createDocument"), `${id} output=${output}`).toBe(
+      expect(tools.includes("saveAsDocument"), `${id} output=${output}`).toBe(
         output === "document",
       );
+      // And NO pack holds `createDocument` — the model would have to re-type the whole deliverable
+      // into `topic`, which is the transcription failure `saveDocument` in the registry records.
+      expect(tools.includes("createDocument"), `${id} must not hold createDocument`).toBe(false);
       // BOTH halves, because either alone is a broken contract: `replyToMessage` without
       // `proposePlan` drafts something nobody can approve, and `proposePlan` without a drafter
       // would stage an empty plan.

@@ -2135,6 +2135,10 @@ const VERB: Record<string, [running: string, done: string]> = {
   // Phase-18 (ACTN-04): MANDATORY beside the schema literal — traceParity.test.ts asserts set
   // equality BOTH ways, so either half alone is RED.
   createDocument: ["Writing it up…", "Saved it to your vault"],
+  // 27-10 (PACK): MANDATORY beside the schema literal — traceParity.test.ts asserts set equality
+  // BOTH ways. The done copy is a PROMISE the binding keeps after the turn, which is the whole
+  // mechanism: the tool records the decision, the code writes the reply.
+  saveAsDocument: ["Setting it aside to keep…", "Saved it to your vault"],
   // Phase-20 (MEDIA-01): MANDATORY beside the schema literal — traceParity.test.ts asserts set
   // equality BOTH ways, so either half alone is RED. The copy is the done-state PROMISE: the media
   // specialist PROPOSES — it does not generate, does not voice and does not render (D2) — so this

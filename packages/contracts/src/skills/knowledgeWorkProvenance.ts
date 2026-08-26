@@ -58,7 +58,7 @@ export const KNOWLEDGE_WORK_PROVENANCE: Readonly<Record<string, KnowledgeWorkPro
     sourceRepo: REPO,
     sourceCommit: COMMIT,
     sourcePaths: ["marketing/skills/campaign-plan/SKILL.md"],
-    bodySha256: "4bcee6bffb91299674a0485e5b21bf1a1e1dc6bdbb591fb15c882319eab2f4c1",
+    bodySha256: "1655bf2dfd889ab24b7db48995e2c5817afb1ec74aa6ae581098480152977b81",
     license: "Apache-2.0",
     modificationNotice:
       "Rewritten to PRODUCE a plan only. The upstream brief implies executing the campaign; a Pikar pack carries a tool allow-list and structurally cannot dispatch a specialist or send anything.",
@@ -80,7 +80,7 @@ export const KNOWLEDGE_WORK_PROVENANCE: Readonly<Record<string, KnowledgeWorkPro
     sourceRepo: REPO,
     sourceCommit: COMMIT,
     sourcePaths: ["sales/skills/call-prep/SKILL.md"],
-    bodySha256: "c710ee1b458eebbf158d4ebd841eb04c9cb9fe9ab80f5993f25ac2f2d300cfd5",
+    bodySha256: "b6c4410c5cee9977c1e45877b8c6ac86136bef9d28ef6e5ee10ea44f3489d812",
     license: "Apache-2.0",
     modificationNotice:
       "CRM account/deal lookups removed and named as MISSING. Keeps the standalone user-input plus web-research path, which is what Pikar can actually serve.",
@@ -89,7 +89,7 @@ export const KNOWLEDGE_WORK_PROVENANCE: Readonly<Record<string, KnowledgeWorkPro
     sourceRepo: REPO,
     sourceCommit: COMMIT,
     sourcePaths: ["operations/skills/process-doc/SKILL.md"],
-    bodySha256: "e49bdac203fbe0af87677299dfd61a2d61295dcf3f9c341555820568f0fc4ba5",
+    bodySha256: "cc54c88d76f927a6666f504f7925dc23d9864dce5aea63bb1def0b422dd9ac17",
     license: "Apache-2.0",
     modificationNotice:
       "Publishing, task-system export and owner assignment removed and named as MISSING. Produces a durable vault document only.",
@@ -98,7 +98,7 @@ export const KNOWLEDGE_WORK_PROVENANCE: Readonly<Record<string, KnowledgeWorkPro
     sourceRepo: REPO,
     sourceCommit: COMMIT,
     sourcePaths: ["marketing/skills/brand-review/SKILL.md"],
-    bodySha256: "53bcde000497a094bb8812842b78001ec34c7359a43b7dfc94e1b5d9247a4919",
+    bodySha256: "a7de497e7f26f330e97d588e5b25093df7e49f8e12d1b14ec2553678dbd7f22d",
     license: "Apache-2.0",
     modificationNotice:
       "Rewritten to review against general principles, because Pikar has no tenant brand store; the pack says so and names what would unlock the stronger review.",

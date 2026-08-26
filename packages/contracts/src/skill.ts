@@ -615,7 +615,7 @@ export const PACK_EVAL_SUITE = {
       caseCount: 5,
     },
     "pack-campaign-plan": {
-      casesHash: "c5344c5644df324b89f0a41081fa35549de51494626ab142753897ea13dfd3ef",
+      casesHash: "73990d81115b93f7ea6b674a7ba9ce4d09963a6cc1052864b7497d7a192c19bf",
       caseCount: 5,
     },
     "pack-customer-complaint": {
@@ -623,15 +623,15 @@ export const PACK_EVAL_SUITE = {
       caseCount: 5,
     },
     "pack-sales-call-prep": {
-      casesHash: "1ea5bbcfd9f2f0b459447c07a56bcc8cd9bb30e7b127e0e73ee1b1feae181313",
+      casesHash: "7669fa82a5662d4613f2e8e9c3da30126d544336c7c3c04d0bb297b41354d9e7",
       caseCount: 5,
     },
     "pack-process-sop": {
-      casesHash: "6afe979e22f54b2fc34becf7c07f33786fd4febcaedd05ea582ea940d625ecb2",
+      casesHash: "9109970ae5245bd636218ff0ab6c2c20e4f618fcf5d76e01d54437c57412e6c6",
       caseCount: 5,
     },
     "pack-brand-review": {
-      casesHash: "4efad67b617442ddaf4c0ab00bf154bdb1672d9f81861abb586541e381956a2a",
+      casesHash: "b37c2ce745c4a616b1915bebd17c783010a04668709d2acfbe729928537b78bf",
       caseCount: 5,
     },
   },

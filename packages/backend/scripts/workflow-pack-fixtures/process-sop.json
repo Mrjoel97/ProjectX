@@ -15,7 +15,7 @@
         "drive": "unavailable"
       },
       "missingNamed": ["org-roles", "task-system"],
-      "toolsAllowed": ["searchVault", "createDocument"],
+      "toolsAllowed": ["searchVault", "saveAsDocument"],
       "toolsForbidden": ["dispatchResearch", "proposePlan", "replyToMessage", "webResearch"],
       "artifactCreated": true
     },
@@ -37,7 +37,7 @@
         "drive": "unavailable"
       },
       "missingNamed": ["org-roles", "task-system"],
-      "toolsAllowed": ["createDocument"],
+      "toolsAllowed": ["saveAsDocument"],
       "toolsForbidden": ["resolveContacts", "stageCrmWrite", "proposePlan", "dispatchResearch"],
       "artifactCreated": true
     },
@@ -59,7 +59,7 @@
         "drive": "unavailable"
       },
       "missingNamed": ["task-system", "org-roles"],
-      "toolsAllowed": ["createDocument"],
+      "toolsAllowed": ["saveAsDocument"],
       "toolsForbidden": ["proposeCalendarEvent", "setSendTime", "replyToMessage", "proposePlan"],
       "artifactCreated": true
     },
@@ -80,7 +80,7 @@
         "vault": "available"
       },
       "missingNamed": ["org-roles", "task-system"],
-      "toolsAllowed": ["findInDrive", "listDriveFolders", "searchVault", "createDocument"],
+      "toolsAllowed": ["findInDrive", "listDriveFolders", "searchVault", "saveAsDocument"],
       "toolsForbidden": ["dispatchResearch", "proposePlan", "generateAttachment"],
       "artifactCreated": true
     },
@@ -99,7 +99,7 @@
         "drive": "unavailable"
       },
       "missingNamed": ["org-roles", "task-system"],
-      "toolsAllowed": ["searchVault", "createDocument"],
+      "toolsAllowed": ["searchVault", "saveAsDocument"],
       "toolsForbidden": ["resolveContacts", "stageCrmWrite", "proposePlan", "dispatchMedia"],
       "artifactCreated": true
     },

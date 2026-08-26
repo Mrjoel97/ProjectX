@@ -13,7 +13,7 @@
         "vault": "available"
       },
       "missingNamed": ["tenant-brand-guidance", "content-shelf"],
-      "toolsAllowed": ["searchVault", "createDocument"],
+      "toolsAllowed": ["searchVault", "saveAsDocument"],
       "toolsForbidden": ["webResearch", "dispatchResearch", "proposePlan", "replyToMessage"],
       "artifactCreated": true
     },
@@ -34,7 +34,7 @@
         "vault": "available"
       },
       "missingNamed": ["tenant-brand-guidance", "content-shelf"],
-      "toolsAllowed": ["searchVault", "createDocument"],
+      "toolsAllowed": ["searchVault", "saveAsDocument"],
       "toolsForbidden": ["webResearch", "dispatchMedia", "proposePlan"],
       "artifactCreated": true
     },
@@ -52,7 +52,7 @@
         "vault": "available"
       },
       "missingNamed": ["tenant-brand-guidance", "content-shelf"],
-      "toolsAllowed": ["searchVault", "createDocument"],
+      "toolsAllowed": ["searchVault", "saveAsDocument"],
       "toolsForbidden": ["webResearch", "dispatchResearch", "proposePlan"],
       "artifactCreated": true
     },
@@ -72,7 +72,7 @@
         "vault": "available"
       },
       "missingNamed": ["tenant-brand-guidance", "content-shelf"],
-      "toolsAllowed": ["searchVault", "createDocument"],
+      "toolsAllowed": ["searchVault", "saveAsDocument"],
       "toolsForbidden": ["webResearch", "readFinance", "evaluateBusiness", "proposePlan"],
       "artifactCreated": true
     },
@@ -92,7 +92,7 @@
         "vault": "available"
       },
       "missingNamed": ["tenant-brand-guidance", "content-shelf"],
-      "toolsAllowed": ["searchVault", "createDocument"],
+      "toolsAllowed": ["searchVault", "saveAsDocument"],
       "toolsForbidden": ["proposePlan", "replyToMessage", "dispatchMedia", "webResearch"],
       "artifactCreated": true
     },

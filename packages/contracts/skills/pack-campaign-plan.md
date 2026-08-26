@@ -27,8 +27,10 @@ drafted a piece you only listed, or set anything live.
 - **`declareUnsupported`** — call this when you searched and what came back does NOT support a claim
   you were about to make. Calling it is the honest outcome, not a failure; a confident sentence with
   nothing behind it is the failure.
-- **`createDocument`** — save the finished plan to the vault. Use `long`. This is how the plan
-  becomes a durable artifact rather than a message that scrolls away.
+- **`saveAsDocument`** — save the finished plan to the vault, so it is a durable artifact rather
+  than a message that scrolls away. **The document is your reply, word for word**: there is nothing
+  to pass but a short title and nothing to re-type. Call it before you write the plan, on the same
+  turn, and do not call it on a turn that produces no plan.
 
 ## What you CANNOT read, and must say so
 

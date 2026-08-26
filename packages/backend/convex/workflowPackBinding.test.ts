@@ -127,7 +127,7 @@ const PROBE_INPUTS: Record<string, unknown> = {
   readFinance: {},
   webResearch: { query: "probe" },
   declareUnsupported: { claim: "probe", scope: "sub-question" },
-  createDocument: { topic: "probe", form: "short" },
+  saveAsDocument: { title: "probe" },
   listInbox: { range: "today" },
   briefInbox: { range: "today" },
   replyToMessage: { intent: "probe" },
@@ -137,6 +137,9 @@ const PROBE_INPUTS: Record<string, unknown> = {
   listDriveFolders: {},
   // Every tool NO pack may be granted: the four structurally unreachable ones plus three send-path
   // tools an allow-list simply does not name.
+  // 27-10: `createDocument` moved into THIS group. No pack holds it any more — a pack whose output
+  // is a document gets `saveAsDocument`, which carries no content argument.
+  createDocument: { topic: "probe", form: "short" },
   dispatchResearch: { question: "probe" },
   dispatchMedia: { brief: "probe" },
   proposeImage: { prompt: "probe" },
@@ -470,6 +473,61 @@ describe("the outcome is derived from what happened", () => {
     });
     const rows = await t.run((ctx) => ctx.db.query("workflowPackEvents").collect());
     expect(rows.some((r) => r.event === "artifact_created")).toBe(false);
+  });
+
+  // 27-10. THE SAVED DOCUMENT IS THE REPLY, and this is the assertion the old mechanism could not
+  // make. While packs held `createDocument`, the model had to re-type the whole deliverable into a
+  // `topic` argument: measured live, it saved the preflight preamble four runs out of four, and the
+  // eval scored `artifactCreated: true` and PASSED. `artifactCreated` proved a document existed and
+  // never that it was the right one. Reading the BYTES back is what closes that hole.
+  test("saveAsDocument stores this run's reply verbatim, under the model's title", async () => {
+    const { t, planId } = await setup();
+    await t.action(internal.workflowPackBinding.__runWorkflowPackWithScript, {
+      ...runArgs(planId, "brand-review"),
+      primary: [toolStep("saveAsDocument", { title: "Brand review — tagline" }), textStep(REPLY)],
+    });
+    const docs = await t.run((ctx) => ctx.db.query("vaultDocuments").collect());
+    expect(docs).toHaveLength(1);
+    // The WHOLE reply, byte for byte. Not a summary, not a topic, not the preamble.
+    expect(docs[0]?.text).toBe(REPLY);
+    expect(docs[0]?.title).toBe("Brand review — tagline");
+    const rows = await t.run((ctx) => ctx.db.query("workflowPackEvents").collect());
+    expect(rows.filter((r) => r.event === "artifact_created")).toHaveLength(1);
+    // The thread's cumulative Output card carries it, which is how the browser and the artifact
+    // diff both see it — a document written past that card is invisible to every reader it has.
+    const card = await t.run((ctx) => ctx.db.query("vaultSources").collect());
+    expect(card.at(-1)?.docIds).toEqual([docs[0]?._id]);
+  });
+
+  test("no saveAsDocument call, no document — a refusal must not mint one", async () => {
+    const { t, planId } = await setup();
+    await t.action(internal.workflowPackBinding.__runWorkflowPackWithScript, {
+      ...runArgs(planId, "brand-review"),
+      primary: [textStep(REPLY)],
+    });
+    expect(await t.run((ctx) => ctx.db.query("vaultDocuments").collect())).toHaveLength(0);
+  });
+
+  // The model asked, and there is nothing to keep. `outcomeFor` calls an empty reply `no_findings`,
+  // and a document holding nothing is litter in the owner's vault rather than an artifact.
+  test("an empty reply saves nothing even when the model asked for a save", async () => {
+    const { t, planId } = await setup();
+    await t.action(internal.workflowPackBinding.__runWorkflowPackWithScript, {
+      ...runArgs(planId, "brand-review"),
+      primary: [toolStep("saveAsDocument", { title: "Nothing at all" }), textStep("   ")],
+    });
+    expect(await t.run((ctx) => ctx.db.query("vaultDocuments").collect())).toHaveLength(0);
+  });
+
+  // A briefing pack is not granted the tool at all, so this is the STRUCTURAL half: even scripted
+  // to call it, the loop has no such key and nothing is written.
+  test("a briefing pack cannot save a document even when it tries", async () => {
+    const { t, planId } = await setup();
+    await t.action(internal.workflowPackBinding.__runWorkflowPackWithScript, {
+      ...runArgs(planId, "business-pulse"),
+      primary: [toolStep("saveAsDocument", { title: "Not mine to write" }), textStep(REPLY)],
+    });
+    expect(await t.run((ctx) => ctx.db.query("vaultDocuments").collect())).toHaveLength(0);
   });
 });
 
