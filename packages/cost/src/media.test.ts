@@ -240,6 +240,68 @@ describe("the price tables agree with the committed vendor fixture", () => {
       if (e.vendor.deprecated) expect(e.vendor.shutdown).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     }
   });
+
+  // ── THE SHUTDOWN TRIPWIRE ────────────────────────────────────────────────────────────────────
+  //
+  // Recording a shutdown date is not the same as being warned by it. Before this, `sora-2` sat in
+  // the fixture flagged `deprecated: true` with a date one month out and EVERY TEST WAS GREEN — so
+  // the day the Videos API is withdrawn, `generated_video` scenes would simply start failing in
+  // production with nothing having gone red first.
+  //
+  // These are deliberately TIME-DEPENDENT. That is the mechanism, not a flaw: a build that can
+  // only break on the day the vendor breaks it has no warning value at all. Each failure below
+  // names the decision it wants, so a red build here is actionable rather than merely alarming.
+  const PINNED_MODELS = new Set<string>([MEDIA_DEFAULT_VIDEO.model, MEDIA_DEFAULT_IMAGE.model]);
+  const daysUntil = (iso: string): number =>
+    Math.floor((Date.parse(`${iso}T00:00:00Z`) - Date.now()) / 86_400_000);
+
+  it("A PINNED MODEL THAT IS DEPRECATED CARRIES A WRITTEN SUCCESSION DECISION", () => {
+    // The point is that "we know" has to become "it is written down". A deprecation with nobody
+    // named as its replacement is how a dependency dies quietly.
+    for (const e of FIXTURES.entries) {
+      if (!e.vendor.deprecated || !PINNED_MODELS.has(e.id)) continue;
+      const succession = (e as { succession?: { status?: string; why?: string } }).succession;
+      expect(
+        succession,
+        `${e.id} is deprecated and PINNED, but no \`succession\` is recorded in media.fixtures.json`,
+      ).toBeDefined();
+      expect(succession?.status).toMatch(/^(decision_pending|decided|migrated)$/);
+      expect((succession?.why ?? "").length, `${e.id}: succession.why must say WHY`).toBeGreaterThan(
+        40,
+      );
+    }
+  });
+
+  it("A PINNED MODEL IS NOT ALREADY PAST ITS SHUTDOWN DATE", () => {
+    // The last line of defence. If this is red, the product is shipping requests to an endpoint the
+    // vendor has withdrawn — every `generated_video` scene is failing right now.
+    for (const e of FIXTURES.entries) {
+      if (!e.vendor.shutdown || !PINNED_MODELS.has(e.id)) continue;
+      expect(
+        daysUntil(String(e.vendor.shutdown)),
+        `${e.id} SHUT DOWN on ${e.vendor.shutdown}. It is still pinned. Migrate it now.`,
+      ).toBeGreaterThan(0);
+    }
+  });
+
+  it("A PENDING SUCCESSION DECISION HAS RUNWAY LEFT", () => {
+    // The real tripwire, and the number is a deadline rather than a preference: choosing a video
+    // vendor means an ADR, a data-transfer decision, a price-table row and a submit path. Two weeks
+    // is the least that is honest, so a decision still open inside it turns the build red while
+    // there is time to act. Moving this number to silence it is the failure mode to resist.
+    const RUNWAY_DAYS = 14;
+    for (const e of FIXTURES.entries) {
+      const succession = (e as { succession?: { status?: string } }).succession;
+      if (!e.vendor.shutdown || !PINNED_MODELS.has(e.id)) continue;
+      if (succession?.status !== "decision_pending") continue;
+      expect(
+        daysUntil(String(e.vendor.shutdown)),
+        `${e.id} shuts down on ${e.vendor.shutdown} and its replacement is STILL UNDECIDED. ` +
+          "Pick one (see succession.shortlistPricedPerOutputSecond), write the ADR, and set " +
+          "succession.status to `decided`.",
+      ).toBeGreaterThan(RUNWAY_DAYS);
+    }
+  });
   it("each number in a table is justified by the vendor's OWN string, or is marked MEDIUM", () => {
     for (const e of FIXTURES.entries) {
       const vendorText = String(e.vendor.pricingInfoOverride ?? "");

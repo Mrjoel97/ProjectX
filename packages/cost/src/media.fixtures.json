@@ -13,13 +13,50 @@
    },
    "confidence": "HIGH",
    "vendor": {
-    "pricingInfoOverride": "Sora 2 costs $0.10 per second at 720p.",
+    "pricingInfoOverride": "Sora 2 costs $0.10 per second at 720p. VERIFIED 2026-08-26 against developers.openai.com/api/docs/pricing.",
     "status": "public",
     "deprecated": true,
     "shutdown": "2026-09-24",
-    "removed": false
+    "removed": false,
+    "alsoShutdown": [
+     "sora-2-pro",
+     "the Videos API itself"
+    ]
    },
-   "notes": "OpenAI Videos API. The adapter pins model, prompt, 720x1280 portrait size and an officially supported duration."
+   "notes": "OpenAI Videos API. The adapter pins model, prompt, 720x1280 portrait size and an officially supported duration.",
+   "succession": {
+    "status": "decision_pending",
+    "raisedOn": "2026-08-26",
+    "replacement": null,
+    "why": "OpenAI is retiring the VIDEOS API ITSELF on 2026-09-24, not merely this model, and names NO replacement. sora-2-pro carries the SAME shutdown date, so the successor cannot be an OpenAI model - which means it amends ADR-024 ('OpenAI is the provider for every media kind') and is an owner decision about where customer prompts are sent. Corroborated 2026-08-26 across developers.openai.com/api/docs/deprecations and independent trade coverage; announced 2026-03-24.",
+    "shortlistPricedPerOutputSecond": [
+     {
+      "model": "veo-3.1-lite",
+      "usdPerSecond": 0.05,
+      "note": "Cheapest, and HALF the sora-2 rate. Owner already holds a GCP credential (ADR-016). ADR-016 currently forbids Veo as a fallback target on ECONOMICS that do not hold for this variant, so it needs a superseding ADR rather than a quiet override."
+     },
+     {
+      "model": "kling-3.0",
+      "usdPerSecond": 0.112,
+      "note": "Per-second on the API side, but yuan-denominated - FX drift inside a USD price table."
+     },
+     {
+      "model": "minimax-h3",
+      "usdPerSecond": 0.13,
+      "note": "2K output at roughly a third of Veo 3.1's full 1080p rate."
+     }
+    ],
+    "rejectedByRule3": [
+     {
+      "model": "seedance-2.0",
+      "why": "Bills per MILLION TOKENS, configuration-dependent. Not pre-computable per output second before the request exists, which is exactly what rule 3 refuses."
+     },
+     {
+      "model": "sora-2-pro",
+      "why": "Shares the 2026-09-24 shutdown. A fallback that dies on the same day as the primary is not a fallback."
+     }
+    ]
+   }
   },
   {
    "id": "openai/tts-1",

@@ -1,5 +1,21 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-08-26 (**THE PINNED VIDEO MODEL SHUTS DOWN IN 29 DAYS, AND EVERY TEST WAS
+> GREEN ABOUT IT.** `sora-2` is deprecated and OpenAI is retiring the VIDEOS API ITSELF on
+> 2026-09-24 with no replacement named; `sora-2-pro` shares the date. Verified against
+> developers.openai.com pricing + deprecations and corroborated against independent coverage; the
+> live pricing page also confirmed our $0.10/s 720p row is still exactly right. THE DEFECT WAS THE
+> SILENCE: the fixture already recorded `deprecated: true` AND the date, and the only assertion
+> touching it checked that a deprecated entry HAS a date — not that the date is in the future, nor
+> that anyone had decided what replaces it. First signal would have been reels failing in
+> production. Three tripwires now sit on the PINNED models — a written succession decision must
+> exist, the shutdown must not have passed, and a `decision_pending` status must have >14 days of
+> runway. Deliberately TIME-DEPENDENT, because a build that can only break when the vendor breaks
+> it has no warning value; both arms mutation-verified. NO VENDOR WAS CHOSEN: the successor cannot
+> be an OpenAI model, so it amends ADR-024 and carries a data-transfer decision that belongs to the
+> owner. The rule-3-filtered shortlist is recorded in `media.fixtures.json` under `succession`, with
+> `seedance-2.0` rejected for per-token billing and `sora-2-pro` for sharing the shutdown date.)
+
 > Last verified: 2026-08-26 (**THE GROUNDING PASS — a reel's facts now come from outside before the
 > deck is written.** `media-director`'s only tool is `searchVault`, so a proposal was grounded ONLY
 > in the tenant's own material — nearly empty for an idea-stage tenant, which is the deck the body
@@ -1745,6 +1761,76 @@ from the same few beds, so two reels in the same niche can sound alike. The upgr
 licensed catalogue API **if and only if it bills a flat rate per track** — at which point
 `MEDIA_MUSIC_PRICING` gains a row per tier and nothing else in the rail moves. A per-second or
 per-compute-second music vendor is not an upgrade path; it is a different rail.
+
+## The provider sunset tripwire (and the sora-2 finding)
+
+**`sora-2` — the pinned video model — is deprecated, and OpenAI is retiring the Videos API itself on
+2026-09-24 with no replacement named.** `sora-2-pro` carries the same shutdown date.
+
+Verified 2026-08-26 against `developers.openai.com/api/docs/pricing` (which confirmed our $0.10/s
+720p row is still exactly right) and `.../deprecations`, and corroborated against independent trade
+coverage. Announced 2026-03-24.
+
+### Why this needed a tripwire and not just a note
+
+The fixture already recorded `deprecated: true` and the shutdown date, and **every test was green**.
+The only assertion touching it checked that a deprecated entry *has* a date — not that the date is
+in the future, not that anyone had decided what replaces it. So the first signal would have been
+`generated_video` scenes failing in production on the day the API was withdrawn.
+
+Three assertions now sit on the *pinned* models (`MEDIA_DEFAULT_VIDEO`, `MEDIA_DEFAULT_IMAGE`):
+
+| Assertion | Fires when |
+|---|---|
+| carries a written succession decision | a pinned model is deprecated with no `succession` block in the fixture |
+| is not already past its shutdown | the product is shipping requests to a withdrawn endpoint |
+| a pending decision has runway left | shutdown is inside 14 days and `status` is still `decision_pending` |
+
+They are **deliberately time-dependent**. A build that can only break on the day the vendor breaks
+it has no warning value. Each failure message names the decision it wants, so a red build here is
+actionable rather than merely alarming. Both were mutation-verified: moving the date inside the
+runway and removing the `succession` block each turn the suite red with the intended message.
+
+**Do not silence the runway test by moving `RUNWAY_DAYS`.** Choosing a video vendor means an ADR, a
+data-transfer decision, a price-table row and a submit path. Fourteen days is the least that is
+honest.
+
+### Why the successor cannot be an OpenAI model
+
+The Videos API itself is being retired, and `sora-2-pro` shuts down on the same date. So the
+replacement is necessarily a different vendor — which means it **amends ADR-024** (*"OpenAI is the
+provider for every media kind"*) and carries a data-transfer decision about where customer prompts
+are sent. That is an owner decision recorded in an ADR, not a code change.
+
+### The shortlist, filtered by rule 3
+
+Rule 3 is the filter: a provider whose cost cannot be pre-computed before the request exists is
+refused by construction. Rates are published per second of OUTPUT video, read 2026-08-26.
+
+| Model | USD/s | Note |
+|---|---|---|
+| `veo-3.1-lite` | **0.05** | Half the sora-2 rate. Owner already holds a GCP credential (ADR-016). |
+| `kling-3.0` | 0.112 | Per-second on the API side, but yuan-denominated — FX drift inside a USD table. |
+| `minimax-h3` | 0.13 | 2K output at ~⅓ of Veo 3.1's full 1080p rate. |
+
+**Rejected, and why it matters that they were rejected on the rule rather than on taste:**
+
+* `seedance-2.0` — bills per **million tokens**, configuration-dependent. Not pre-computable per
+  output second. This is exactly the shape rule 3 exists to refuse, and it is the one that would
+  have been easiest to rationalise in.
+* `sora-2-pro` — same 2026-09-24 shutdown. A fallback that dies on the same day as the primary is
+  not a fallback.
+
+### The ADR-016 complication, stated rather than stepped around
+
+ADR-016 says Veo is *"never a fallback target"*. Its reasoning is explicitly economic — it priced
+Veo 3 at ~$0.40/s against a $3.50 job cap and found one 15 s clip was 1.7× the whole cap. **Veo 3.1
+Lite at $0.05/s is a different economic animal**: a 4 s clip is $0.20, half what sora-2 costs today.
+
+The ADR's *rationale* no longer applies to this variant; its *decision text* still names Veo. That
+gap is resolved by a superseding ADR, not by reading the old one loosely. Note also that ADR-016's
+proposed cap raise (3.50 → 7.50) was **never landed** — `MEDIA_JOB_CAP_USD` is still 3.50.
+
 
 ## The grounding pass (a reel's facts come from outside, before the deck is written)
 
