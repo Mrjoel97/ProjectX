@@ -615,7 +615,7 @@ export const PACK_EVAL_SUITE = {
       caseCount: 5,
     },
     "pack-campaign-plan": {
-      casesHash: "73990d81115b93f7ea6b674a7ba9ce4d09963a6cc1052864b7497d7a192c19bf",
+      casesHash: "109cff453f033429aa9d006e49857098e684f3d5ea81ee0809e732342cae16b0",
       caseCount: 5,
     },
     "pack-customer-complaint": {
@@ -627,11 +627,11 @@ export const PACK_EVAL_SUITE = {
       caseCount: 5,
     },
     "pack-process-sop": {
-      casesHash: "9109970ae5245bd636218ff0ab6c2c20e4f618fcf5d76e01d54437c57412e6c6",
+      casesHash: "74978f5d27e1b7c313285e2ddf15a684b222acd16b1ffe91f427152db0a7e07f",
       caseCount: 5,
     },
     "pack-brand-review": {
-      casesHash: "b37c2ce745c4a616b1915bebd17c783010a04668709d2acfbe729928537b78bf",
+      casesHash: "b176af0e0bf4957eafcbf9b092ef742f768c82e9b11ef4d9c215fac350598c57",
       caseCount: 5,
     },
   },

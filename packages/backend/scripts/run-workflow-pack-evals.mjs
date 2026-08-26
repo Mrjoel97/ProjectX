@@ -249,7 +249,19 @@ function projectRegistry(mod) {
   // caller already passes around, and these three are facts about the REGISTRY as a whole.
   REGISTRY = {
     probeStates: mod.PACK_SOURCE_PROBE_STATES,
-    mentions: mod.MISSING_SOURCE_MENTIONS,
+    // The synonym list PLUS the code-owned label, minus its leading "your " so it matches inside
+    // a sentence. MEASURED 2026-08-26: `connector-financials` produced three DIFFERENT near-misses
+    // in four runs — "connected sales systems", then "Sales conversion data. Revenue, acquisition
+    // cost" under a heading reading "Measurement gaps the owner cannot resolve in this workflow".
+    // Each named the gap correctly and matched no entry. Widening the list one string at a time is a
+    // treadmill; the label is the fix, because the BODIES can be told to emit exactly it and
+    // `PACK_SOURCE_LABEL` exists precisely so six bodies cannot each invent their own name.
+    mentions: Object.fromEntries(
+      Object.entries(mod.MISSING_SOURCE_MENTIONS).map(([source, phrases]) => [
+        source,
+        [...phrases, mod.PACK_SOURCE_LABEL[source].replace(/^your /, "").toLowerCase()],
+      ]),
+    ),
     labels: mod.PACK_SOURCE_LABEL,
     toolsFor: mod.toolsForWorkflowPack,
   };

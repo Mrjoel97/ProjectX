@@ -169,6 +169,10 @@ export const MISSING_SOURCE_MENTIONS: Readonly<Record<MissingPackSource, readonl
     "payment processor",
     "invoicing",
     "connected system",
+    // pack-campaign-plan, MEASURED 2026-08-26: the body says "Their connected sales and accounting
+    // systems" and the reply honestly paraphrased it as "connected sales systems" — which contains
+    // neither "connected system" nor "sales and accounting". The gap WAS named; the matcher missed.
+    "connected sales",
     "no revenue",
     // pack-customer-complaint again: "No processor is connected here."
     "processor",

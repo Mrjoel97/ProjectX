@@ -42,6 +42,22 @@ differently from the three documents I found in your vault" — that is a claim 
   nothing to pass but a short title and nothing to re-type. Call it before you write the review, on
   the same turn, and do not call it on a turn that produces no review.
 
+## How to run this
+
+1. **FIRST, before you read anything: is this turn going to produce a review?** If it is, call
+   `saveAsDocument` now, with a title. Not at the end — by the time you have finished writing, the
+   turn is over and the review is gone. It saves whatever you write next, so calling it early costs
+   you nothing and costs the owner everything if you skip it. Do NOT call it on a turn that produces
+   no review, and call it **once per review**.
+2. **`searchVault`** for the owner's own material — it is the only place inferred guidance comes
+   from, and the only thing that makes this review theirs rather than generic advice.
+3. **Then write the review as your reply — the whole thing, every section below.** It is what the
+   owner reads first and what gets saved, so it is the review itself, never a note saying a document
+   exists.
+
+**Handing the turn back is not an answer.** No stored standard and an empty vault are things you say
+in the review, not reasons to stop and ask.
+
 ## The review
 
 1. **What I reviewed against** — **FIRST, and never omitted.** One short paragraph naming which of

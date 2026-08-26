@@ -1,6 +1,31 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
-> Last verified: 2026-08-26 (**THE FOUR DOCUMENT PACKS NOW TEACH `saveAsDocument`, NOT
+> Last verified: 2026-08-26 (**Pack bodies are NOT published by `seedSkills` — they go through
+> `skills:seedPackCandidates`, and calling the wrong one looks exactly like a stale bundle.**
+>
+> `SEEDS` drives `seedSkills`; the six adapted pack bodies live in a separate `PACK_BODIES` map and
+> are published by `seedPackCandidates`, which also writes the code-owned `provenance` string that
+> `hasValidPackProvenance` checks. Running `seedSkills` after a pack body edit exits silently having
+> done nothing, and `inspectPackCandidates` then shows the OLD `bodyHash` and the OLD version — which
+> is indistinguishable from a `convex dev` that has not re-pushed. Half an hour went into restarting
+> a perfectly healthy watcher over this. **Check the version number moved, not that the command
+> returned.**
+>
+> **THE FULL PROVENANCE CHAIN FOR A PACK BODY EDIT, all six steps or the gate reddens:** edit the
+> canonical `packages/contracts/skills/pack-*.md` → regenerate the derived
+> `packages/contracts/src/skills/pack*.ts` constant (LF, single-quoted, `skillBodies.test.ts` keeps
+> the pair byte-identical) → update `bodySha256` in `knowledgeWorkProvenance.ts` → update the
+> matching `adaptedBodySha256` in `third_party/knowledge-work-plugins/manifest.json` → `node
+> scripts/verify-knowledge-work-provenance.mjs --check` → `npx convex run skills:seedPackCandidates`.
+> The hash is over **LF-normalized** bytes, so a CRLF checkout does not change it.
+>
+> A FIXTURE edit needs its own third step: `casesHash` in `PACK_EVAL_SUITE` (`skill.ts`) is sha256 of
+> the LF-normalized fixture file, asserted against disk by both `workflowPacks.test.ts` and the
+> runner's `--self-test`. Do NOT bump `PACK_EVAL_SUITE.revision` for a corpus CORRECTION: a bump
+> retires every pack's evidence, and `pack-business-pulse`'s certification is over a file this change
+> never touched.
+>
+> PREVIOUS: 2026-08-26 (**THE FOUR DOCUMENT PACKS NOW TEACH `saveAsDocument`, NOT
 > `createDocument`** — campaign-plan, sales-call-prep, process-sop and brand-review each moved one
 > tool row and one save step; `pack-sales-call-prep` is at v9 and the other three at v2.
 >

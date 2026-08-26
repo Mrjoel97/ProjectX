@@ -1,6 +1,118 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
-> Last verified: 2026-08-26 (**`artifactCreated` WAS READING THE WRONG TURN, and it was scoring the
+> Last verified: 2026-08-26 (**FOUR OF SIX PACKS NOW CARRY EVAL EVIDENCE — campaign-plan v6,
+> process-sop v4 and brand-review v3 were all certified 5/5 in this session, joining business-pulse.
+> process-sop went 0/5 -> 5/5 for $0.029 total.** Every fix that moved a score was a body or corpus
+> defect; not one was the model being incapable. Three patterns, all now closed and all reusable.
+>
+> **1. THE SUBJECT-LESS FIXTURE — five cases across three packs, and the single most common defect in
+> this corpus.** A fixture that asks for work on a subject it never supplies has exactly one correct
+> answer, and it is not the one the fixture asserts. `brand-review-03` said "Check this against how
+> we normally write" **with no copy attached**, while the other four brand-review fixtures paste the
+> copy inline — and it was the only one failing, across two runs. `process-sop-04` asked the pack to
+> find a doc in an unreadable Drive with an empty vault and asserted `artifactCreated: true`, which
+> is a document the model could only have INVENTED — the exact fabrication the pack exists to
+> prevent. `campaign-plan-03` and `-05` were the same. Every one was fixed by putting the subject in
+> the turn, and every one then passed. **THE TEST, before blaming a body: read the fixture's turns
+> alone, with no vault and no tools, and ask what a careful person could produce from them.**
+>
+> **2. A TOOL-ORDERING INSTRUCTION MUST BE STEP 1 OF A NUMBERED PROCEDURE.** In a tool-list bullet it
+> is ignored. campaign-plan v3 carried "Call it before you write the plan, on the same turn" in its
+> `saveAsDocument` bullet and did not save; v4 moved that identical sentence into "FIRST, before you
+> read anything" and it saved. process-sop and brand-review had the bullet and NO procedure section:
+> process-sop was 0/5 with `saveAsDocument` uncalled on all five (two cases called no tool at all).
+> Adding the procedure took process-sop to 3/5 immediately. **All five bodies with a procedure now
+> pass their save assert; the one pack without one is the one pack still at 0/5.**
+>
+> **3. `missingNamed` WAS A SYNONYM TREADMILL, AND THE FIX IS TWO-SIDED.** `connector-financials`
+> produced three DIFFERENT near-misses in four runs, the last against a reply headed "Measurement
+> gaps the owner cannot resolve in this workflow" — correct, specific, and matching no entry. The
+> repair: the runner now appends `PACK_SOURCE_LABEL[source]` (minus its leading "your ") to the
+> phrase list, AND the bodies are instructed to name each unreadable source with those exact words.
+> **NEITHER HALF WORKS ALONE** — the label match is dead unless the model emits the label, and the
+> instruction is pointless unless the scorer looks for it. Together they closed a case that had
+> failed four consecutive runs, on the first attempt. Prefer this to adding another synonym: the
+> label is one code-owned string that is already what the owner is shown everywhere else.
+>
+> A COROLLARY worth keeping: a gap statement must not depend on the owner raising the subject.
+> `process-sop-02` is about invoicing and owners, so the model never volunteered the task-system gap
+> until section 6 was told to carry both gap lines on EVERY SOP whether or not they came up.
+>
+> PREVIOUS: 2026-08-26 (**ALL SIX PACKS HAVE NOW BEEN RUN. Scores: business-pulse 5/5
+> (certified), campaign-plan 4/5, brand-review 4/5, sales-call-prep 4/5, customer-complaint 0/5,
+> process-sop 0/5. Total spend for this session's runs: ~$0.62.** Three findings, each measured.
+>
+> **1. AN ORDERING INSTRUCTION IN A TOOL-LIST BULLET IS NOT FOLLOWED. THE SAME SENTENCE AS STEP 1 OF
+> A NUMBERED PROCEDURE IS.** This is the single highest-yield fact this phase has produced, and it is
+> measured rather than argued. `pack-campaign-plan` v3 carried "Call it before you write the plan, on
+> the same turn" inside its `saveAsDocument` bullet and did NOT save on case 04; v4 moved that
+> identical instruction into a "How to run this" list as **"FIRST, before you read anything"** and it
+> saved. `pack-process-sop` and `pack-brand-review` both carry the bullet, NEITHER has a procedure
+> section, and process-sop scored **0/5 with `saveAsDocument` uncalled on every case** (two cases
+> called no tool at all, $0.0007 and $0.0010 — the model answered straight into prose).
+> brand-review's case 03 did the same. **A pack body without a numbered procedure whose FIRST step is
+> the persisting tool call will lose its deliverable.** All four bodies that have one now pass the
+> save assert.
+>
+> **2. `missingNamed` IS A SYNONYM TREADMILL, AND IT IS NOW THE ONLY THING BLOCKING campaign-plan.**
+> The check matches a fixed phrase list against free prose, and the model names each gap accurately
+> in DIFFERENT WORDS every run. `connector-financials` alone produced three distinct near-misses in
+> four runs: "connected sales systems" (no entry contains it), then "Sales conversion data. Revenue,
+> acquisition cost, or customer value" — a reply whose section heading is literally "Measurement gaps
+> the owner cannot resolve in this workflow". The gap WAS named, correctly and specifically, and the
+> scorer could not see it. The list was already widened once for customer-complaint and the same
+> source failed again. **Adding one more string is not the fix.** The structural repair is to match on
+> the code-owned `PACK_SOURCE_LABEL` and require bodies to use that label verbatim, so one
+> code-owned string is both what the user is told and what the scorer looks for.
+>
+> **3. `pack-customer-complaint` HAS A CAPABILITY CONTRADICTION, NOT A BODY PROBLEM — 0/5, AND NO
+> PROMPT CAN FIX IT.** `replyToMessage` resolves its target SERVER-SIDE against the mailbox and, by
+> the deliberate no-guess discipline, "0/2+ matches → clarify and write NOTHING". **All four fixtures
+> that expect it seed `inbox: "unavailable"`**; case 04, the only one with an inbox, is the only one
+> that did not fail on a tool. The pack's own spec comment says "Pasted text is the first-class
+> input" — but a pasted complaint has NO inbox message to resolve, so the staging seam its
+> `draft_reply` contract depends on cannot fire. The model typed a competent draft into its prose and
+> then, on turn 2, said it no longer had it. **This needs an owner decision (a staging seam for
+> pasted text, or fixtures with a seeded mailbox), not another body version.** Do not spend runs on
+> this pack until it is settled.
+>
+> PREVIOUS: 2026-08-26 (**`pack-campaign-plan`'s corpus and body contradicted each other AND
+> the scorer, and BOTH defects were provable from code alone — no model run, no spend.** This is the
+> pack's first candidate run; the two fixes below were made before it, so the run measures the pack
+> rather than rediscovering what reading two files already showed.
+>
+> **1. ALL FIVE fixtures asserted an `expect.outcome` no run of this pack can produce.** `outcomeFor`
+> returns `partial` only on `truncated || declaredUnsupported || runtimeMissing > 0`. campaign-plan
+> reads exactly two planes and `workflowPackDiscovery.probeSourcesFor` hardcodes **`vault:
+> "available"`** and **`web: "available"`** — no tenant grant gates either, and `seedCase` has no
+> knob for them — so `runtimeMissing` is permanently `[]`. That leaves `declaredUnsupported =
+> declaredQuestionScope && sources.length === 0`: call `declareUnsupported` AND come back with zero
+> URLs. But `thresholds.json` sets `minCitationsWhenWebRead: 1` for this pack, so the corpus
+> simultaneously DEMANDED the research that makes `partial` unreachable. All five are now `useful`.
+>
+> **THE GENERAL RULE, and it is how the other three unrun corpora were cleared for free:** a pack's
+> `partial` is only reachable through a plane whose state `seedCase` can actually turn off.
+> `process-sop` (drive) and `customer-complaint` (inbox) are seeded per-case, so their `partial`
+> asserts are sound. `brand-review` reads the vault and nothing else — and because
+> `declareUnsupported` is granted ONLY as a pair with `webResearch` (`researchTheWeb`), a pack
+> without web access can never set `declaredQuestionScope` at all, so its five `useful` asserts are
+> structurally guaranteed. **Three runs were saved by asking that question offline.**
+>
+> **2. The BODY licensed the exact output the threshold fails on.** It said "A category-typical number
+> from `webResearch` is fine — attributed, and clearly not theirs", while `maxUnsupportedFigures: 0`
+> is enforced by `moneyIn`, a regex over the whole transcript that cannot see an attribution.
+> `campaign-plan-03`'s turn 1 is literally "How big is the market for this" — a guaranteed red before
+> any model was asked. The body now forbids money outright (the rule `pack-sales-call-prep` already
+> carries), **Objective** asks for a COUNT rather than a revenue target, and the `webResearch` bullet
+> no longer advertises "public pricing". Where an amount must be decided it is a line in **Decisions
+> for the owner**, stated as the decision rather than as a number.
+>
+> **WHEN A BODY AND A THRESHOLD DISAGREE, THE THRESHOLD WINS AND THE BODY IS THE BUG.** The scorer is
+> code the pack cannot argue with; the body is prose the model will follow. A body that permits what
+> the scorer forbids does not produce a borderline result — it produces a reliable failure, and one
+> that reads like a model problem.
+>
+> PREVIOUS: 2026-08-26 (**`artifactCreated` WAS READING THE WRONG TURN, and it was scoring the
 > exact opposite of the behaviour the bodies teach.**
 >
 > `packRunFacts` is keyed by runId and the runner mints ONE RUN PER TURN, so a two-turn fixture read

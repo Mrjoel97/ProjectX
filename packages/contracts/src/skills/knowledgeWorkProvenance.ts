@@ -58,7 +58,7 @@ export const KNOWLEDGE_WORK_PROVENANCE: Readonly<Record<string, KnowledgeWorkPro
     sourceRepo: REPO,
     sourceCommit: COMMIT,
     sourcePaths: ["marketing/skills/campaign-plan/SKILL.md"],
-    bodySha256: "1655bf2dfd889ab24b7db48995e2c5817afb1ec74aa6ae581098480152977b81",
+    bodySha256: "2d04b66d98fb54feaaec911b1f46f7452af64d04ebf567eca579a93adf12f71e",
     license: "Apache-2.0",
     modificationNotice:
       "Rewritten to PRODUCE a plan only. The upstream brief implies executing the campaign; a Pikar pack carries a tool allow-list and structurally cannot dispatch a specialist or send anything.",
@@ -89,7 +89,7 @@ export const KNOWLEDGE_WORK_PROVENANCE: Readonly<Record<string, KnowledgeWorkPro
     sourceRepo: REPO,
     sourceCommit: COMMIT,
     sourcePaths: ["operations/skills/process-doc/SKILL.md"],
-    bodySha256: "cc54c88d76f927a6666f504f7925dc23d9864dce5aea63bb1def0b422dd9ac17",
+    bodySha256: "9498fd70ff87d221e4407a7155738417450bc194b7f3524128eebe9986a917d3",
     license: "Apache-2.0",
     modificationNotice:
       "Publishing, task-system export and owner assignment removed and named as MISSING. Produces a durable vault document only.",
@@ -98,7 +98,7 @@ export const KNOWLEDGE_WORK_PROVENANCE: Readonly<Record<string, KnowledgeWorkPro
     sourceRepo: REPO,
     sourceCommit: COMMIT,
     sourcePaths: ["marketing/skills/brand-review/SKILL.md"],
-    bodySha256: "a7de497e7f26f330e97d588e5b25093df7e49f8e12d1b14ec2553678dbd7f22d",
+    bodySha256: "f38daaccb3baf9149c5fbad5c4d4c01481d97723ad162544487733cab4bc7bb2",
     license: "Apache-2.0",
     modificationNotice:
       "Rewritten to review against general principles, because Pikar has no tenant brand store; the pack says so and names what would unlock the stronger review.",

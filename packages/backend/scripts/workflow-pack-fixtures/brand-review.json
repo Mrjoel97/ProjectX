@@ -44,7 +44,9 @@
     "id": "brand-review-03-inferred-is-not-confirmed",
     "pack": "brand-review",
     "description": "The vault holds past writing but no stated rules. The review may observe patterns from those documents but must not present them as the brand's confirmed standard.",
-    "turns": ["Check this against how we normally write."],
+    "turns": [
+      "Check this against how we normally write: 'Leverage our best-in-class solution to unlock synergies across your workflow.'"
+    ],
     "expect": {
       "outcome": "useful",
       "operations": ["ground-in-vault", "save-review"],
