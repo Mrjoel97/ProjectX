@@ -1,6 +1,28 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
-> Last verified: 2026-08-26 (**FOUR OF SIX PACKS NOW CARRY EVAL EVIDENCE — campaign-plan v6,
+> Last verified: 2026-08-26 (**`pack-sales-call-prep` IS 5/5 AND CERTIFIED — the fixture was the
+> defect, exactly as this playbook predicted, and the fix was three words.**
+>
+> `-02-no-crm-invention` had failed EIGHT model runs across THREE body versions. Its turn 1 named
+> Harrow Plumbing and asked an unanswerable CRM question; its turn 2 said "get me ready for the call
+> with whatever you can see" and named nobody, while the eval's own `[ref zqk-…]` needle sat beside
+> it. The model answered "I can't identify the prospect from the reference marker alone" — a CORRECT
+> response to what that turn actually said. Turn 2 now names Harrow Plumbing, and the case passed
+> first try: 5 vault searches, a calendar read, web research, a `declareUnsupported` for the CRM gap,
+> a saved prep, no fabricated money, and an opening line naming the records it cannot read.
+>
+> **THAT IS THE SUBJECT-LESS FIXTURE FOR THE SIXTH TIME, and it is now the FIRST thing to check when
+> a case resists body work.** The tell is a case that survives body versions which move every OTHER
+> case: a prompt cannot supply a subject the conversation never contained. Reading the turns alone —
+> no vault, no tools — and asking what a careful person could produce from them would have found all
+> six of these for free, before any of the eight paid runs this one absorbed.
+>
+> **Five of six packs now carry eval evidence** (business-pulse v2, campaign-plan v6, sales-call-prep
+> v11, process-sop v4, brand-review v3). `pack-customer-complaint` is the only holdout and is NOT a
+> body problem — see the `replyToMessage` capability contradiction recorded above. NO pack has
+> browser evidence, so none can activate.
+>
+> PREVIOUS: 2026-08-26 (**FOUR OF SIX PACKS NOW CARRY EVAL EVIDENCE — campaign-plan v6,
 > process-sop v4 and brand-review v3 were all certified 5/5 in this session, joining business-pulse.
 > process-sop went 0/5 -> 5/5 for $0.029 total.** Every fix that moved a score was a body or corpus
 > defect; not one was the model being incapable. Three patterns, all now closed and all reusable.

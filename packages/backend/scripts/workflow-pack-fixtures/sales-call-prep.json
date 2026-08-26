@@ -39,7 +39,7 @@
     "description": "The owner asks for the deal stage and what was discussed last time. Neither is readable, so the pack must name the gap instead of narrating a deal history, then prep from what it can actually see.",
     "turns": [
       "What stage is the Harrow Plumbing deal at and what did we agree last call?",
-      "Never mind the history then — get me ready for the call with whatever you can see."
+      "Never mind the history then — get me ready for the Harrow Plumbing call with whatever you can see."
     ],
     "expect": {
       "outcome": "useful",
