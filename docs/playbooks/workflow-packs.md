@@ -1,6 +1,53 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
-> Last verified: 2026-08-26 (**THE PACK GATE WAS DEADLOCKED, AND HALF THE BREAKER WAS ALREADY
+> Last verified: 2026-08-26 (**THE BROWSER EVIDENCE PLANE IS GREEN. ALL SIX PACKS NOW CARRY ALL
+> THREE: provenance, eval and browser.** `workflow-pack-pilot.spec.ts` had NEVER been run; running
+> it found six defects, five of them in the spec and the harness rather than the product.
+>
+> **HOW AN OWNER IS PROVISIONED, because there was no way to sign one in.** `auth.setup.ts` signs an
+> EXISTING user in; nothing created one, signup is invite-gated, and `listPackCandidates` is
+> owner-only. `e2e/provision-owner.setup.ts` (project `provision`, opt-in via
+> `PIKAR_E2E_PROVISION=1`) walks the sanctioned internal seams: `invites:__seedInvite` ->
+> real /signup form -> `owner:findUserIdByEmail` -> `owner:bootstrapOwner` ->
+> `onboarding:__seedOnboardedTenant`. All five matter; the last one is the `(app)` layout's
+> force-redirect, which makes the workspace unreachable for a fresh account.
+>
+> **DO NOT REUSE `e2e@pikar.test`.** It pre-exists with a password nobody has, so signup silently
+> no-ops, `bootstrapOwner` promotes the old row, and sign-in then fails "Wrong email or password"
+> while everything looks provisioned. The owner used here is `packowner@pikar.test`. And the
+> provisioner MUST check whether the account exists BEFORE seeding an invite: the first successful
+> signup REDEEMS the code, so a second run's preflight rejects it and leaves Create Account disabled.
+>
+> **FIVE SPEC DEFECTS, and every one produced a GREEN-LOOKING run.**
+>   1. `locator.count()` DOES NOT AUTO-WAIT. Counting straight after the navigation saw 0 before the
+>      Convex query resolved, so `test.skip` fired and the whole block reported "skipped" on a page
+>      where the cards were demonstrably rendering. **This is why the pre-existing `@discovery` and
+>      `@run` blocks have never asserted anything** — they use the same count-then-skip shape.
+>   2. `getByRole("listitem")` matched the PREFLIGHT SOURCE ROWS inside each card, not just the
+>      cards — `WorkflowPackPreflight` renders an `<li>` per source. Scope to `li.pack-candidate`.
+>   3. A `getByText` regex over a preflight resolves to MANY elements and dies of strict mode. Read
+>      the card's `innerText` and match against that instead.
+>   4. `text-transform: uppercase` (BRAND §5) reaches `innerText`, so `/Candidate v(\d+)/` never
+>      matched `CANDIDATE V2`. Match case-insensitively.
+>   5. **MODULE STATE DOES NOT SURVIVE A WORKER RESTART.** The versions the browser saw were held in
+>      a `Map`; one unrelated failure started a fresh worker, the map was empty, and the evidence
+>      writer SKIPPED ITSELF and reported success. It is a file under `e2e/.auth/` now.
+>   And one product defect: `listPackCandidates` copied `listPacks`'s `.unique()`, which is right for
+>   `active` (only ever one row) and WRONG for `candidate` (sales-call-prep has eleven). The query
+>   threw, `useQuery` stayed `undefined`, and the section rendered nothing.
+>
+> **WHAT THE EVIDENCE SAYS, and what it does not.** `hasPassingPackBrowserEvidence` asks for "an
+> authenticated person REACHED it at more than one viewport". Each pack's row is written from cards
+> actually rendered at 1440 AND 390 with an enabled control and a visible preflight, plus ONE real
+> Preview press proving the control starts a run. It does NOT claim every pack was run in a browser —
+> that is the eval plane's job, and all six answer it 5/5.
+>
+> **NOTHING HAS BEEN ACTIVATED.** All three planes are green, so `assertPackActivationEvidence` would
+> now pass — activation is a deliberate owner decision and stays one. The `@drill` rollback tests are
+> still `fixme`: they need an owner-facing deactivate CONTROL, because `convexRun` destroys the
+> browser session and `deactivatePack` is an `ownerMutation` the CLI cannot call.
+>
+> PREVIOUS: 2026-08-26 (**THE PACK GATE WAS DEADLOCKED, AND HALF THE BREAKER WAS ALREADY
 > BUILT.** Activation needs browser evidence; browser evidence needs an authenticated person to REACH
 > a pack in a browser; `listPacks` is ACTIVE-ONLY by design and nothing is active until the gate
 > passes. Measured 2026-08-26: six packs with eval evidence, **zero** with browser evidence, and

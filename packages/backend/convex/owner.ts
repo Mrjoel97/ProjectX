@@ -62,6 +62,31 @@ export const ownsDeployment = internalQuery({
  * Idempotent by design so re-running it is safe and so the live checkpoint can PROVE the
  * transition happened exactly once (`changed: true` then `changed: false`).
  */
+/**
+ * Look up ONE user id by email. READ-ONLY, `internalQuery`, and it grants nothing.
+ *
+ * It exists for local provisioning (`apps/web/e2e/provision-owner.setup.ts`): the browser evidence
+ * plane needs a signed-in OWNER, `bootstrapOwner` takes an exact `users._id` by design, and there
+ * was no way to turn the address you just signed up with into that id without opening the dashboard
+ * by hand.
+ *
+ * IT DOES NOT WEAKEN `bootstrapOwner`'s RULE, and the distinction is the whole point. That mutation
+ * refuses to SELECT a row — no first-user rule, no email allowlist, no registration order — because
+ * selecting is how the wrong account becomes owner through data the owner does not control. This
+ * only READS an id and hands it back to a human running a CLI; the grant is still a separate,
+ * deliberate call naming an exact row. Do not call this from `bootstrapOwner`.
+ */
+export const findUserIdByEmail = internalQuery({
+  args: { email: v.string() },
+  handler: async (ctx, { email }) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("email", (q) => q.eq("email", email.trim().toLowerCase()))
+      .unique();
+    return user === null ? null : { userId: user._id, owner: user.owner === true };
+  },
+});
+
 export const bootstrapOwner = internalMutation({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {

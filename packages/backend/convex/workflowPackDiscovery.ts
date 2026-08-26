@@ -172,11 +172,16 @@ export const listPackCandidates = ownerQuery({
     const out = [];
     for (const packId of WORKFLOW_PACK_IDS) {
       const spec = WORKFLOW_PACKS[packId];
-      const candidate = await ctx.db
+      // NEWEST candidate, NOT `.unique()`. `listPacks` can use `.unique()` because exactly one row
+      // is ever `active`; a pack accumulates MANY candidate rows (sales-call-prep is on v11), so
+      // `.unique()` throws, the query errors, and the section silently renders nothing. Measured —
+      // the first browser run skipped every @preview test for exactly this reason.
+      const rows = await ctx.db
         .query("skills")
         .withIndex("by_name_status", (q) => q.eq("name", spec.skillName).eq("status", "candidate"))
-        .unique();
-      if (candidate === null) continue;
+        .collect();
+      if (rows.length === 0) continue;
+      const candidate = rows.reduce((a, b) => (b.version > a.version ? b : a));
 
       const flight = packPreflight(packId, runtime);
       const missingKnown = new Set<string>(flight.missingKnown);

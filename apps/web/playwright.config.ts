@@ -20,8 +20,17 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   projects: [
+    // 27-11: creates the OWNER account the pack candidate preview needs, on a machine that has
+    // none. Opt-in via PIKAR_E2E_PROVISION=1 — it is not part of an ordinary spec run, because it
+    // seeds an invite and grants owner, and neither belongs in the default path. Runs BEFORE
+    // `setup`, which then signs that account in through the real form.
+    { name: "provision", testMatch: /provision-owner\.setup\.ts/ },
     // Signs in once and saves storageState; feature specs depend on it (see auth.setup.ts).
-    { name: "setup", testMatch: /auth\.setup\.ts/ },
+    {
+      name: "setup",
+      testMatch: /auth\.setup\.ts/,
+      dependencies: process.env.PIKAR_E2E_PROVISION === "1" ? ["provision"] : [],
+    },
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"], storageState: "e2e/.auth/user.json" },

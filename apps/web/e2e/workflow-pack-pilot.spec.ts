@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
@@ -70,10 +71,30 @@ const quickStarts = (page: Page) => page.getByRole("region", { name: "Guided wor
 const candidates = (page: Page) =>
   page.getByRole("region", { name: "Candidate workflows — owner preview" });
 
-/** Versions the BROWSER actually saw, per pack, filled by the @preview block and read by the
+/** Versions the BROWSER actually saw, per pack — written by the @preview block, read by the
  *  evidence writer at the bottom. Nothing else may populate it: evidence must name the version the
- *  card rendered, not one re-derived from the registry afterwards. */
-const seen = new Map<string, number>();
+ *  card RENDERED, not one re-derived from the registry afterwards.
+ *
+ *  ON DISK, NOT IN MODULE STATE. Playwright starts a FRESH WORKER after a failure or a retry, which
+ *  resets module-level variables — measured: the viewport tests filled a `Map`, one unrelated test
+ *  failed, and the evidence writer then found an empty map and skipped itself. A file survives the
+ *  worker; the run id in it is what ties the rows to one browser run. */
+const SEEN_PATH = resolve(dirname(fileURLToPath(import.meta.url)), ".auth/pack-seen.json");
+
+const readSeen = (): Record<string, number> => {
+  try {
+    return JSON.parse(readFileSync(SEEN_PATH, "utf8")) as Record<string, number>;
+  } catch {
+    return {};
+  }
+};
+
+const rememberSeen = (title: string, version: number) => {
+  const all = readSeen();
+  all[title] = version;
+  mkdirSync(dirname(SEEN_PATH), { recursive: true });
+  writeFileSync(SEEN_PATH, JSON.stringify(all, null, 2));
+};
 
 /** Card TITLE -> pack id. The titles are code-owned in `@pikar/core`'s `WORKFLOW_PACKS`; this spec
  *  cannot import that (it drives a built app), so the pairing is stated once here and a title that
@@ -218,6 +239,12 @@ test.describe("@preview the owner can reach every candidate pack", () => {
       await openWorkspace(page);
 
       const region = candidates(page);
+      // WAIT BEFORE COUNTING. `locator.count()` does NOT auto-wait — it answers immediately — and
+      // this section only exists once the Convex query resolves, so counting straight after the
+      // navigation always saw 0 and skipped. MEASURED: every @preview test skipped on a deployment
+      // where the cards were demonstrably rendering. Waiting first, then counting, keeps the skip
+      // honest for the genuinely-empty case without faking the populated one.
+      await region.waitFor({ state: "visible", timeout: 20_000 }).catch(() => undefined);
       // A non-owner sees nothing here, and so does an owner once every pack is active. Either way
       // there is no evidence to earn, and skipping is honest where a green assertion would not be.
       const shown = await region.count();
@@ -230,21 +257,32 @@ test.describe("@preview the owner can reach every candidate pack", () => {
       // gets treated as shipped.
       await expect(region.getByText(/Not live/i)).toBeVisible();
 
-      const cards = region.getByRole("listitem");
+      // SCOPED TO THE CARD, not `getByRole("listitem")`: `WorkflowPackPreflight` renders each
+      // source as its own <li> INSIDE the card, so the role query matches the cards AND every
+      // source row, and the loop walks into a row that has no version badge and times out.
+      const cards = region.locator("li.pack-candidate");
       const n = await cards.count();
       expect(n).toBeGreaterThan(0);
 
       for (let i = 0; i < n; i++) {
         const card = cards.nth(i);
         // The preflight — every pack in this pilot has at least one matrix-missing source, so a
-        // card with no "cannot read" line is hiding the phase's primary deliverable.
-        await expect(card.getByText(/cannot read|partly readable|can read/)).toBeVisible();
+        // card with no "cannot read" line is hiding the phase's primary deliverable. Read the
+        // card's TEXT rather than locating by it: a preflight lists several sources, so a
+        // `getByText` regex resolves to many elements and dies of strict mode instead of asserting.
+        const cardText = await card.innerText();
+        expect(
+          cardText,
+          `a candidate card rendered no preflight: ${cardText.slice(0, 120)}`,
+        ).toMatch(/cannot read|partly readable|can read/);
         // The version the browser is looking at, captured for the evidence row.
         const badge = await card.locator(".pack-candidate-badge").innerText();
-        const m = /Candidate v(\d+)/.exec(badge.trim());
+        // CASE-INSENSITIVE: the pill is `text-transform: uppercase` (BRAND §5), so `innerText` comes
+        // back "CANDIDATE V2" and a case-sensitive match silently finds nothing.
+        const m = /Candidate v(\d+)/i.exec(badge.trim());
         expect(m, `a candidate card rendered no version badge: "${badge}"`).not.toBeNull();
         const title = (await card.getByRole("heading").innerText()).trim();
-        seen.set(title, Number(m?.[1]));
+        rememberSeen(title, Number(m?.[1]));
 
         // Reachable means the control is really operable, not merely painted.
         const start = card.getByRole("button", { name: /^Preview / });
@@ -261,9 +299,13 @@ test.describe("@preview the owner can reach every candidate pack", () => {
   // PAID, once. Reaching a control proves nothing if pressing it errors, so exactly one preview is
   // actually started — the seam, not the prose. Whether the OUTPUT is good is the eval runner's
   // question, and all six packs already answer it 5/5.
+  // A real pack turn is minutes. The inner `expect` already allowed 180s; the TEST did not, so it
+  // died on Playwright's 30s default while the run it started was still going.
   test("pressing Preview really starts the candidate", async ({ page }) => {
+    test.setTimeout(300_000);
     await openWorkspace(page);
     const region = candidates(page);
+    await region.waitFor({ state: "visible", timeout: 20_000 }).catch(() => undefined);
     test.skip((await region.count()) === 0, "no candidate is visible");
 
     const start = region.getByRole("button", { name: /^Preview / }).first();
@@ -289,9 +331,14 @@ test.describe("@preview the owner can reach every candidate pack", () => {
 // a failing row both leave the gate shut, but only the failing row says someone looked.
 test.describe("@evidence record what the browser established", () => {
   test("write a browser evidence row for every candidate the browser reached", async () => {
-    test.skip(seen.size === 0, "the @preview block never ran or found nothing — nothing to record");
+    const seen = Object.entries(readSeen());
+    test.skip(
+      seen.length === 0,
+      "the @preview block never ran or found nothing — nothing to record",
+    );
 
-    const runId = process.env.PIKAR_E2E_RUN_ID ?? `pw-${seen.size}-${[...seen.keys()].join("-")}`;
+    const runId =
+      process.env.PIKAR_E2E_RUN_ID ?? `pw-${seen.length}-${seen.map(([t]) => t).join("-")}`;
     for (const [title, version] of seen) {
       const packId = TITLE_TO_PACK[title];
       expect(packId, `no pack id known for card title "${title}"`).toBeDefined();
