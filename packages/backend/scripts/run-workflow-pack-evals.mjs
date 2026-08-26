@@ -104,8 +104,7 @@ function codeOwnedPackModel() {
   // above was written about, one lane over. The regex shape is unchanged, so a pack pin that stops
   // being a single-literal alias still THROWS rather than guessing.
   const pin = /^export const PACK_MODEL = ([A-Za-z_][A-Za-z0-9_]*);/m.exec(src);
-  if (!pin)
-    throw new EnvironmentAbort(`PACK_MODEL not found (or not an alias) in ${costSrcPath}`);
+  if (!pin) throw new EnvironmentAbort(`PACK_MODEL not found (or not an alias) in ${costSrcPath}`);
   const lit = new RegExp(`^export const ${pin[1]} = "([^"]+)";`, "m").exec(src);
   if (!lit)
     throw new EnvironmentAbort(
@@ -1048,7 +1047,11 @@ function selfTest(packs) {
     assert.equal(s.runs, 2);
     assert.equal(s.stablePass, 1, "a passed both runs and must be stable-pass");
     assert.equal(s.stableFail, 1, "c failed both runs and must be stable-fail");
-    assert.equal(s.flaky, 1, "b passed once and failed once — that is the verdict repeat mode exists for");
+    assert.equal(
+      s.flaky,
+      1,
+      "b passed once and failed once — that is the verdict repeat mode exists for",
+    );
     const b = s.cases.find((x) => x.id === "b");
     assert.equal(b.verdict, "flaky");
     assert.equal(b.passed, 1);
@@ -1292,8 +1295,7 @@ export function summarizeRepeats(runs) {
       if (!byCase.has(r.id)) byCase.set(r.id, { id: r.id, passed: 0, failures: new Map() });
       const agg = byCase.get(r.id);
       if (r.pass) agg.passed++;
-      for (const f of r.failures ?? [])
-        agg.failures.set(f.key, (agg.failures.get(f.key) ?? 0) + 1);
+      for (const f of r.failures ?? []) agg.failures.set(f.key, (agg.failures.get(f.key) ?? 0) + 1);
     }
   }
   const cases = [...byCase.values()].map((c) => ({
@@ -1525,9 +1527,7 @@ function runCase(fx, index, { packId, pack, version, runnerRunId, thresholds }) 
     .reduce((n, f) => n + f.artifactCount, 0);
   // THE MODEL HALF of "did the thing we are about to certify actually run". Read from spend rows,
   // which record the model AFTER each call returns, so a fallback attempt is its own row.
-  const ran = parse(
-    must("smoke:modelsForRun", { tenantId: tenant, runId: lastRunId }, RETRY_READ),
-  );
+  const ran = parse(must("smoke:modelsForRun", { tenantId: tenant, runId: lastRunId }, RETRY_READ));
   const { calls } = parse(
     must("smoke:toolCallsForThread", { tenantId: tenant, threadId }, RETRY_READ),
   );
@@ -1716,31 +1716,31 @@ async function runCandidate(argv, packs) {
   }
 
   function runOnce() {
-  const results = [];
-  let total = 0;
-  for (const [index, fx] of cases.entries()) {
-    const out = runCase(fx, index, { packId, pack, version, runnerRunId, thresholds });
-    total += out.cost;
-    results.push({ id: fx.id, ...out });
-    console.log(
-      `    ${out.pass ? "PASS" : "FAIL"} ${fx.id} · ${out.cost.toFixed(4)} · ` +
-        `${out.durationMs === null ? "?" : out.durationMs}ms` +
-        (out.version === null ? "" : ` · v${out.version}`) +
-        // Printed ALWAYS, not only on a mismatch: the run that quietly executed a different model is
-        // the one nobody thinks to check, and it is invisible on a pack that is not green.
-        (out.ranModels.length > 0 ? ` · ${out.ranModels.join("+")}` : " · NO SPEND ROWS"),
-    );
-    for (const f of out.failures) {
+    const results = [];
+    let total = 0;
+    for (const [index, fx] of cases.entries()) {
+      const out = runCase(fx, index, { packId, pack, version, runnerRunId, thresholds });
+      total += out.cost;
+      results.push({ id: fx.id, ...out });
       console.log(
-        `      ${f.key}: expected ${JSON.stringify(f.expected)}, got ${JSON.stringify(f.actual)}`,
+        `    ${out.pass ? "PASS" : "FAIL"} ${fx.id} · ${out.cost.toFixed(4)} · ` +
+          `${out.durationMs === null ? "?" : out.durationMs}ms` +
+          (out.version === null ? "" : ` · v${out.version}`) +
+          // Printed ALWAYS, not only on a mismatch: the run that quietly executed a different model is
+          // the one nobody thinks to check, and it is invisible on a pack that is not green.
+          (out.ranModels.length > 0 ? ` · ${out.ranModels.join("+")}` : " · NO SPEND ROWS"),
       );
+      for (const f of out.failures) {
+        console.log(
+          `      ${f.key}: expected ${JSON.stringify(f.expected)}, got ${JSON.stringify(f.actual)}`,
+        );
+      }
+      // The cap ABORTS (exit 2) rather than failing the pack: overspending is an environment problem,
+      // and reporting it as a pack failure would send someone editing a body that is fine.
+      if (total > COST_CAP_USD)
+        throw new EnvironmentAbort(`cost cap: ${total.toFixed(4)} over ${COST_CAP_USD.toFixed(2)}`);
     }
-    // The cap ABORTS (exit 2) rather than failing the pack: overspending is an environment problem,
-    // and reporting it as a pack failure would send someone editing a body that is fine.
-    if (total > COST_CAP_USD)
-      throw new EnvironmentAbort(`cost cap: ${total.toFixed(4)} over ${COST_CAP_USD.toFixed(2)}`);
-  }
-  return { results, cost: total };
+    return { results, cost: total };
   }
 
   const casesPassed = results.filter((r) => r.pass).length;
@@ -1782,7 +1782,9 @@ async function runCandidate(argv, packs) {
   });
   // No `retryOnEmpty` on the WRITE, exactly as in run-eval-golden.mjs: a retry writes a duplicate.
   must("skills:recordEvalEvidence", { name, version, evidence });
-  console.log(`[eval:pack] evidence recorded on ${name} v${version} (${TARGET}). Still a candidate.`);
+  console.log(
+    `[eval:pack] evidence recorded on ${name} v${version} (${TARGET}). Still a candidate.`,
+  );
   return 0;
 }
 

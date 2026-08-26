@@ -73,10 +73,7 @@ const RETRY_READ = { retryOnEmpty: true };
 // touches that helper for another reason.
 const RETRY_TURN = { retryOnEmpty: true };
 const casesDir = resolve(dirname(fileURLToPath(import.meta.url)), "eval-cases");
-const costSrcPath = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  "../../cost/src/cost.ts",
-);
+const costSrcPath = resolve(dirname(fileURLToPath(import.meta.url)), "../../cost/src/cost.ts");
 
 // Hard per-run cost cap (discretion default; expected actuals $0.05–0.15 at
 // gpt-4o-mini). Cumulative costUsd beyond this ABORTS the run (exit 2).

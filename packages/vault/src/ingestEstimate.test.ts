@@ -171,7 +171,10 @@ describe("estimateFolderCents — conservatism, by direction", () => {
 // is free.
 describe("every ingested document draws at least one cent", () => {
   const kinds = [
-    { label: "text-layer pdf (extract is FREE — the floor is the only cost)", file: { size: 4096, mimeType: "application/pdf", hasTextLayer: true } },
+    {
+      label: "text-layer pdf (extract is FREE — the floor is the only cost)",
+      file: { size: 4096, mimeType: "application/pdf", hasTextLayer: true },
+    },
     { label: "plain text", file: { size: 1024, mimeType: "text/plain" } },
     { label: "markdown", file: { size: 1024, mimeType: "text/markdown" } },
   ];
@@ -180,7 +183,10 @@ describe("every ingested document draws at least one cent", () => {
       const { estCents, perFile, skipped } = estimateFolderCents([file]);
       // Guard the guard: if this input were SKIPPED the >= 1 assertion would pass vacuously, because
       // a skipped file is legitimately 0 cents and never reserved.
-      expect(skipped, "this fixture must actually ingest, or the assertion below proves nothing").toHaveLength(0);
+      expect(
+        skipped,
+        "this fixture must actually ingest, or the assertion below proves nothing",
+      ).toHaveLength(0);
       const first = perFile[0];
       expect(first, "one input in, one estimate out").toBeDefined();
       expect(first?.cents).toBeGreaterThanOrEqual(1);
