@@ -465,8 +465,57 @@ test.describe("@drill rollback", () => {
     ).toBeVisible({ timeout: 20_000 });
   });
 
-  // ROLLBACK-TO-PRIOR-VERSION is supported by the registry today (`activateSkill` on an earlier
-  // version) but still needs a SECOND activated version to roll back to. It stays owed rather than
-  // faked: a green drill that never rolled anything back is worse than a recorded gap.
-  test.fixme("rollback to a prior pack version, once two versions have been activated", () => {});
+  // ROLLBACK TO A PRIOR VERSION, driven by an owner in the browser. It needs a pack with TWO
+  // versions that have both been live — the newest archived row is the target — so it skips rather
+  // than fabricates one: a drill that activated its own precondition would be proving the harness,
+  // not the product.
+  //
+  // THE EXEMPTION IS THE POINT. `planGlobalActivation` gates on `status === "candidate"`, so an
+  // ARCHIVED row goes back WITHOUT re-running the evidence planes. That is deliberate — rollback
+  // must work mid-incident and must never be blocked by a broken eval or browser harness — and this
+  // is the only test that exercises it from the surface an owner would actually use.
+  test("an owner can roll a live pack back to its previous version", async ({ page }) => {
+    test.setTimeout(120_000);
+    await openWorkspace(page);
+
+    const controls = ownerControls(page);
+    await controls.waitFor({ state: "visible", timeout: 20_000 }).catch(() => undefined);
+    test.skip((await controls.count()) === 0, "no pack is live, or this browser is not the owner");
+
+    const row = controls
+      .locator("li.pack-owner-control", {
+        has: page.locator("button.pack-owner-roll-back"),
+      })
+      .first();
+    test.skip(
+      (await row.count()) === 0,
+      "no pack has a previous live version to roll back to — nothing to drill",
+    );
+
+    const before = (await row.innerText()).replace(/\s+/g, " ").trim();
+    const title = before.split("·")[0]?.trim() ?? "";
+    const liveNow = /live v(\d+)/.exec(before)?.[1];
+    const target = /Roll back to v(\d+)/.exec(before)?.[1];
+    expect(title.length, `could not read the pack title from "${before}"`).toBeGreaterThan(2);
+    expect(target, `no roll-back target in "${before}"`).toBeTruthy();
+    // The two must DIFFER, or "it rolled back" would be indistinguishable from nothing happening.
+    expect(target).not.toBe(liveNow);
+
+    await row.getByRole("button", { name: `Roll back ${title} to v${target}` }).click();
+
+    // The owner is told, and the row now reports the OLD version as live.
+    await expect(page.getByText(new RegExp(`${title} is back on v${target}`, "i"))).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(
+      controls.locator("li.pack-owner-control").filter({ hasText: title }),
+    ).toContainText(`live v${target}`, { timeout: 30_000 });
+
+    // AND IT IS STILL OFFERED. A rollback that darkened the pack would be an outage, not a
+    // rollback — the whole point is that users keep a working version.
+    await expect(
+      quickStarts(page).getByRole("button", { name: `Start ${title}` }),
+      "a rolled-back pack must still be on offer",
+    ).toBeVisible({ timeout: 30_000 });
+  });
 });

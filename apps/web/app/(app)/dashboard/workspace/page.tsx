@@ -460,6 +460,24 @@ export default function WorkspacePage() {
   // rule as the preview: the mutation is the real check, the conditional render is only about not
   // showing a button that would refuse.
   const deactivatePack = useMutation(api.skills.deactivatePack);
+  // ROLLBACK TO A PRIOR VERSION. `activateCandidate` is the same owner mutation the ops panel uses;
+  // `planGlobalActivation` gates on `status === "candidate"`, so an ARCHIVED row — one that was live
+  // before — goes back without re-running the evidence planes. That exemption is deliberate:
+  // rollback must work mid-incident and must never be blocked by a broken eval or browser harness.
+  const activatePackVersion = useMutation(api.skills.activateCandidate);
+  const packPriorVersions = useQuery(
+    api.workflowPackDiscovery.listPackPriorVersions,
+    viewer?.isOwner === true ? {} : "skip",
+  );
+  const onRollBackPack = (packId: string, title: string, version: number) => {
+    if (sending || turningOff !== null) return;
+    setPackNotice(null);
+    setTurningOff(packId);
+    void activatePackVersion({ name: `pack-${packId}`, version })
+      .then(() => setPackNotice(`${title} is back on v${version}.`))
+      .catch(() => setPackNotice("That workflow could not be rolled back. Nothing changed."))
+      .finally(() => setTurningOff(null));
+  };
   const [turningOff, setTurningOff] = useState<string | null>(null);
   const onTurnOffPack = (packId: string, title: string) => {
     if (sending || turningOff !== null) return;
@@ -701,7 +719,9 @@ export default function WorkspacePage() {
                 {/* Owner-only, and passed `undefined` for everyone else so it renders nothing. */}
                 <WorkflowPackOwnerControls
                   packs={viewer?.isOwner === true ? packs : undefined}
+                  priorVersions={packPriorVersions}
                   onTurnOff={onTurnOffPack}
+                  onRollBack={onRollBackPack}
                   busy={sending}
                   turningOff={turningOff}
                 />

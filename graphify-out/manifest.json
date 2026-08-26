@@ -180,8 +180,8 @@
     "semantic_hash": ""
   },
   "packages/contracts/src/skill.ts": {
-    "mtime": 1787715060.1243896,
-    "ast_hash": "51a36497f9e2638183593023fd42cfd7",
+    "mtime": 1787743902.2383828,
+    "ast_hash": "57527824e9751199a0cbd57d87af483a",
     "semantic_hash": ""
   },
   "packages/contracts/src/skills/executiveAgentClassifier.ts": {
@@ -420,8 +420,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/smoke.ts": {
-    "mtime": 1787626255.6778388,
-    "ast_hash": "e241576d965b881349a77fb41b8c52e1",
+    "mtime": 1787744262.2549944,
+    "ast_hash": "4090b2918d37f6963a2e1a75f45e7c2b",
     "semantic_hash": ""
   },
   "packages/backend/convex/smokeAssert.ts": {
@@ -1025,8 +1025,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/llm.ts": {
-    "mtime": 1787716847.1268177,
-    "ast_hash": "ab9ae452d3bc1bf4060cfebda49d936c",
+    "mtime": 1787725784.8534722,
+    "ast_hash": "50d2c1f0afd82de03e04c0034886a3d7",
     "semantic_hash": ""
   },
   "packages/contracts/src/drafting.ts": {
@@ -1235,18 +1235,18 @@
     "semantic_hash": ""
   },
   "packages/cost/src/cost.test.ts": {
-    "mtime": 1787699762.6735868,
-    "ast_hash": "febabb362bcce1ba6801e09359ee4e1e",
+    "mtime": 1787729829.3204813,
+    "ast_hash": "abb81e2151ecd2eea5f15b3b778edeba",
     "semantic_hash": ""
   },
   "packages/cost/src/cost.ts": {
-    "mtime": 1787699762.6700363,
-    "ast_hash": "1f6fe2f43fd12ba69508c1ec9852c434",
+    "mtime": 1787728472.284801,
+    "ast_hash": "fa7bdc7adbfead6ffb24654c0a2f2a0b",
     "semantic_hash": ""
   },
   "packages/cost/src/index.ts": {
-    "mtime": 1786144126.5059898,
-    "ast_hash": "4c76a255fd79015f052d3b5b71656fa7",
+    "mtime": 1787726004.9080899,
+    "ast_hash": "2152a4af08fb2d1a5943fa1c5145995f",
     "semantic_hash": ""
   },
   "packages/cost/tsconfig.json": {
@@ -1420,13 +1420,13 @@
     "semantic_hash": ""
   },
   "apps/web/playwright.config.ts": {
-    "mtime": 1783829004.2636924,
-    "ast_hash": "af0e77fc15f6e746ea39a4f7ffcb3061",
+    "mtime": 1787747085.4600382,
+    "ast_hash": "5b10224dac6865eedf19121e596140a2",
     "semantic_hash": ""
   },
   "apps/web/e2e/README.md": {
-    "mtime": 1786725164.7936027,
-    "ast_hash": "2d3b84b6cceccb68f894db6890f31ad1",
+    "mtime": 1787749274.861549,
+    "ast_hash": "8d5f1bc3b02409bff122cfa0a052f4c7",
     "semantic_hash": ""
   },
   ".planning/phases/03.1-cockpit-core/03.1-03-SUMMARY.md": {
@@ -1455,8 +1455,8 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/workspace/page.tsx": {
-    "mtime": 1787515749.7812583,
-    "ast_hash": "7f2325f33878bb8bcdedae8187bef572",
+    "mtime": 1787750259.1724718,
+    "ast_hash": "4cdd4efce311996a56bb54a400077776",
     "semantic_hash": ""
   },
   "packages/backend/convex/cockpitDraft.test.ts": {
@@ -1585,13 +1585,13 @@
     "semantic_hash": ""
   },
   "docs/playbooks/cockpit.md": {
-    "mtime": 1787717173.8111844,
-    "ast_hash": "6c9df2f244d179a42c9b8d3629ef439d",
+    "mtime": 1787746400.0122507,
+    "ast_hash": "47fed5949ed58f80acb51d8130c6ea86",
     "semantic_hash": ""
   },
   "docs/playbooks/skill-registry.md": {
-    "mtime": 1787717173.7874463,
-    "ast_hash": "9457f9dcf30fde0a71bd44631901acaf",
+    "mtime": 1787741342.051344,
+    "ast_hash": "517421e83e45a8a6fd7816f8073277ad",
     "semantic_hash": ""
   },
   "scripts/extract-convex-edges.mjs": {
@@ -1790,8 +1790,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/runCockpitAgent.test.ts": {
-    "mtime": 1787068314.3835285,
-    "ast_hash": "12758d9817999c6b1f60942d8bc6446a",
+    "mtime": 1787725904.7776244,
+    "ast_hash": "b987ec31f3ebe0686df96aed4cfa618a",
     "semantic_hash": ""
   },
   "packages/contracts/src/skills/cockpitAgent.ts": {
@@ -2295,8 +2295,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/agent-runtime.md": {
-    "mtime": 1787627056.4409919,
-    "ast_hash": "f55d981d702bc1d42f09efeb8a6c9c35",
+    "mtime": 1787743378.6103623,
+    "ast_hash": "a7b9d03430cfb6d0630b54928f40bd18",
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/workspace/IntakeControls.tsx": {
@@ -5890,8 +5890,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/owner.ts": {
-    "mtime": 1787511822.8122742,
-    "ast_hash": "4a8ddfd4d44abf0597320cc268edf748",
+    "mtime": 1787746976.2976837,
+    "ast_hash": "7a6552f40bccba70062b68511a7e4190",
     "semantic_hash": ""
   },
   ".planning/phases/22-owner-authorization-primitive-requireowner/22-01-SUMMARY.md": {
@@ -5900,8 +5900,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/authorization.md": {
-    "mtime": 1787512448.7096157,
-    "ast_hash": "bc75758c0654180c77a7856ebe3d9354",
+    "mtime": 1787749445.9819748,
+    "ast_hash": "8df9b70d0bda9ccc7b6c5e0315be395e",
     "semantic_hash": ""
   },
   ".planning/phases/22-owner-authorization-primitive-requireowner/22-02-SUMMARY.md": {
@@ -6400,8 +6400,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/guardrails.md": {
-    "mtime": 1787699973.1461153,
-    "ast_hash": "195913c8ce94d461d2883841c91633e0",
+    "mtime": 1787729679.9732592,
+    "ast_hash": "76f01e9ff6a4a59e6122865d925bc6fb",
     "semantic_hash": ""
   },
   ".planning/phases/20-media-canvas/20-18-SUMMARY.md": {
@@ -7875,8 +7875,8 @@
     "semantic_hash": ""
   },
   "apps/web/e2e/.auth/user.json": {
-    "mtime": 1787446892.7549129,
-    "ast_hash": "0837a35c42adc59c6fcd995a71bcd49c",
+    "mtime": 1787755281.8747795,
+    "ast_hash": "76403513f02cc5e68737abfa44b870d2",
     "semantic_hash": ""
   },
   "packages/backend/convex/contacts.test.ts": {
@@ -8850,8 +8850,8 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/workspace/pinnedPrompts.test.ts": {
-    "mtime": 1787515295.6952858,
-    "ast_hash": "0459c2c142ad6c4bd104876d73c053f0",
+    "mtime": 1787745430.5668268,
+    "ast_hash": "e517a1a2fab109930612c70eb3b2a9a0",
     "semantic_hash": ""
   },
   ".planning/phases/21-user-authored-skills-and-routines/21-05-SUMMARY.md": {
@@ -9650,7 +9650,7 @@
     "semantic_hash": ""
   },
   "apps/web/test-results/.last-run.json": {
-    "mtime": 1787446949.7968118,
+    "mtime": 1787755344.7818844,
     "ast_hash": "f196824657d8858bc7fa44eecbba38b1",
     "semantic_hash": ""
   },
@@ -9670,8 +9670,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/isolation.test.ts": {
-    "mtime": 1787516092.5120437,
-    "ast_hash": "b2746a6d60397757764ebcf084dba08a",
+    "mtime": 1787745853.6876452,
+    "ast_hash": "eb61b39654d7e528ce7997bd8ba52e77",
     "semantic_hash": ""
   },
   ".planning/phases/25-private-beta-productionization/25-01-SUMMARY.md": {
@@ -10450,8 +10450,8 @@
     "semantic_hash": ""
   },
   "packages/backend/scripts/run-workflow-pack-evals.mjs": {
-    "mtime": 1787715124.356599,
-    "ast_hash": "2d42538cfda8db0ab317c04e87ac6c68",
+    "mtime": 1787743013.731712,
+    "ast_hash": "22a9594685ec4c2d39f4950a5eda0e5f",
     "semantic_hash": ""
   },
   "packages/core/src/workflowPacks.test.ts": {
@@ -10460,13 +10460,13 @@
     "semantic_hash": ""
   },
   "packages/core/src/workflowPacks.ts": {
-    "mtime": 1787714346.0638814,
-    "ast_hash": "15d55af7cbb305745337797a7292a64f",
+    "mtime": 1787735044.4925504,
+    "ast_hash": "baaac6e1cb2640709874edc2fd8293eb",
     "semantic_hash": ""
   },
   "docs/playbooks/workflow-packs.md": {
-    "mtime": 1787717173.7757518,
-    "ast_hash": "d83a056469e5a82c56428e9b202ff4b0",
+    "mtime": 1787755518.185982,
+    "ast_hash": "0d35e646e0d9b7bcf26fb697108534c9",
     "semantic_hash": ""
   },
   ".planning/phases/27-curated-knowledge-work-pack-pilot/27-02-SUMMARY.md": {
@@ -10510,8 +10510,8 @@
     "semantic_hash": ""
   },
   "third_party/knowledge-work-plugins/manifest.json": {
-    "mtime": 1787716856.4652128,
-    "ast_hash": "4e8dba5fd98442e5a42d9bd71603ef05",
+    "mtime": 1787743518.5534992,
+    "ast_hash": "5483fff387c8edc70af76801b6b6726f",
     "semantic_hash": ""
   },
   "THIRD_PARTY_NOTICES.md": {
@@ -10590,8 +10590,8 @@
     "semantic_hash": ""
   },
   "packages/backend/scripts/workflow-pack-fixtures/campaign-plan.json": {
-    "mtime": 1787715052.1367383,
-    "ast_hash": "b574883eed920034d2c7f1b1bb46bf07",
+    "mtime": 1787735044.485526,
+    "ast_hash": "313135b26ff9f59c32ced99b3c7ac3fd",
     "semantic_hash": ""
   },
   "packages/contracts/src/skills/packBusinessPulse.ts": {
@@ -10600,8 +10600,8 @@
     "semantic_hash": ""
   },
   "packages/contracts/src/skills/packCampaignPlan.ts": {
-    "mtime": 1787714988.4658425,
-    "ast_hash": "b1b01a70629af6dc241b3c32920cf809",
+    "mtime": 1787738428.7677438,
+    "ast_hash": "344d1851b1030734994f31b82bdcf283",
     "semantic_hash": ""
   },
   "packages/contracts/skills/pack-business-pulse.md": {
@@ -10610,68 +10610,68 @@
     "semantic_hash": ""
   },
   "packages/contracts/skills/pack-campaign-plan.md": {
-    "mtime": 1787714857.8958182,
-    "ast_hash": "a1a789b81e6b08a1af2294df8a4453cf",
+    "mtime": 1787737400.5641687,
+    "ast_hash": "7df656a910b56dd6aa568493951e4a2c",
     "semantic_hash": ""
   },
   "packages/backend/scripts/workflow-pack-fixtures/customer-complaint.json": {
-    "mtime": 1787607657.2456415,
-    "ast_hash": "a4c43c0b632a98261d1f5139c786cef0",
+    "mtime": 1787743893.5126126,
+    "ast_hash": "0510953bd095535017b0d93644161f95",
     "semantic_hash": ""
   },
   "packages/backend/scripts/workflow-pack-fixtures/sales-call-prep.json": {
-    "mtime": 1787715052.1367383,
-    "ast_hash": "14764e10defd867e1714b75cb2983092",
+    "mtime": 1787740952.2754028,
+    "ast_hash": "3a6009c06a9e6c0909e7d5a3bc8bfaf5",
     "semantic_hash": ""
   },
   "packages/contracts/src/skills/packCustomerComplaint.ts": {
-    "mtime": 1787494808.7313657,
-    "ast_hash": "b7b7b99c5df9575bbfe83168b5c4fbe8",
+    "mtime": 1787743518.5275388,
+    "ast_hash": "ba181cbadbdff27daf622d53e361b21f",
     "semantic_hash": ""
   },
   "packages/contracts/src/skills/packSalesCallPrep.ts": {
-    "mtime": 1787716861.028499,
-    "ast_hash": "2e50098829b8ae8765f720094d5daba6",
+    "mtime": 1787729161.726145,
+    "ast_hash": "b5ea7805b0a134400db15cfea2b5c691",
     "semantic_hash": ""
   },
   "packages/contracts/skills/pack-customer-complaint.md": {
-    "mtime": 1787494623.5238914,
-    "ast_hash": "7c0d60bbbd57cfd0a7fe6a218c44c0c3",
+    "mtime": 1787743518.2244935,
+    "ast_hash": "0a54f7de2e1acc9bbb8b7332b5f87394",
     "semantic_hash": ""
   },
   "packages/contracts/skills/pack-sales-call-prep.md": {
-    "mtime": 1787716841.0039895,
-    "ast_hash": "b76ec47d51e5b5b73fd301391a86edec",
+    "mtime": 1787729146.5551517,
+    "ast_hash": "aec30a12cd8701ea5d1f1d7f21417e9c",
     "semantic_hash": ""
   },
   "packages/backend/scripts/workflow-pack-fixtures/brand-review.json": {
-    "mtime": 1787715052.129214,
-    "ast_hash": "63d36f6251c41254e455449867a243e8",
+    "mtime": 1787738403.169393,
+    "ast_hash": "f726e400dd966da13825b7315a3f4ed0",
     "semantic_hash": ""
   },
   "packages/backend/scripts/workflow-pack-fixtures/process-sop.json": {
-    "mtime": 1787715052.143265,
-    "ast_hash": "8d125120861e8c604fda95805498e52c",
+    "mtime": 1787738415.1665266,
+    "ast_hash": "ac5d49b0d8117b39f2bf6628e9ddb877",
     "semantic_hash": ""
   },
   "packages/contracts/src/skills/packBrandReview.ts": {
-    "mtime": 1787714988.4688635,
-    "ast_hash": "5b1ab7dbc8247b5158cdb95ebc972521",
+    "mtime": 1787738428.7833824,
+    "ast_hash": "e18b13867543ce3b5c6a34c0619c4dde",
     "semantic_hash": ""
   },
   "packages/contracts/src/skills/packProcessSop.ts": {
-    "mtime": 1787714983.1642084,
-    "ast_hash": "a69ac17acc791afbcedbb89ba6ffa918",
+    "mtime": 1787738428.7833824,
+    "ast_hash": "d440601f5d350824d03fafa81b60822d",
     "semantic_hash": ""
   },
   "packages/contracts/skills/pack-brand-review.md": {
-    "mtime": 1787714857.9003878,
-    "ast_hash": "09952f5cf6ddfc618d5c1b72de435649",
+    "mtime": 1787737400.5641687,
+    "ast_hash": "a9d66f0466470319307f04df95686814",
     "semantic_hash": ""
   },
   "packages/contracts/skills/pack-process-sop.md": {
-    "mtime": 1787714857.9003878,
-    "ast_hash": "20526331eb2b02cc8c8a74c30b4201d6",
+    "mtime": 1787738422.3235385,
+    "ast_hash": "31b2f2842f5150ca9a5408b0a97d425e",
     "semantic_hash": ""
   },
   ".planning/phases/27-curated-knowledge-work-pack-pilot/27-04-SUMMARY.md": {
@@ -10720,8 +10720,8 @@
     "semantic_hash": ""
   },
   "packages/contracts/src/skills/knowledgeWorkProvenance.ts": {
-    "mtime": 1787716856.4652128,
-    "ast_hash": "0c2fe6871ee99f122f1215af44c43a6c",
+    "mtime": 1787743518.5534992,
+    "ast_hash": "e3b97fd55207039a14799dc28da1aecd",
     "semantic_hash": ""
   },
   "packages/contracts/src/skills/packEvalSuite.test.ts": {
@@ -10755,8 +10755,8 @@
     "semantic_hash": ""
   },
   "apps/web/e2e/workflow-pack-pilot.spec.ts": {
-    "mtime": 1787515753.5184824,
-    "ast_hash": "921c804c9e4b563ff2f0e828f70d5a2c",
+    "mtime": 1787755464.3650708,
+    "ast_hash": "9c8393f0c13209baf3019fec9c403942",
     "semantic_hash": ""
   },
   "packages/backend/convex/workflowPackDiscovery.test.ts": {
@@ -10765,8 +10765,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/workflowPackDiscovery.ts": {
-    "mtime": 1787514878.0168421,
-    "ast_hash": "e16847a62936017d4964e4114207d52d",
+    "mtime": 1787747833.4753437,
+    "ast_hash": "a06dfd30476097cd40570368cec60295",
     "semantic_hash": ""
   },
   ".planning/phases/27-curated-knowledge-work-pack-pilot/27-09-SUMMARY.md": {
@@ -10782,6 +10782,31 @@
   ".planning/design/consistency-audit-2026-08-21.md": {
     "mtime": 1787591377.380475,
     "ast_hash": "0e4563650e509085265036afab00d54f",
+    "semantic_hash": ""
+  },
+  "apps/web/app/(app)/dashboard/workspace/WorkflowPackOwnerPreview.tsx": {
+    "mtime": 1787745196.2196455,
+    "ast_hash": "d26f12de29f028f201e9d9cf29c7bbd4",
+    "semantic_hash": ""
+  },
+  "apps/web/app/(app)/dashboard/workspace/packOwnerPreview.test.ts": {
+    "mtime": 1787745747.2097876,
+    "ast_hash": "5b430f6cef204e97c2a75cc6d722c85e",
+    "semantic_hash": ""
+  },
+  "apps/web/e2e/.auth/pack-seen.json": {
+    "mtime": 1787754452.300772,
+    "ast_hash": "c8f4095dd6e69d2de95a2643fe8f2876",
+    "semantic_hash": ""
+  },
+  "apps/web/e2e/provision-owner.setup.ts": {
+    "mtime": 1787747686.1273758,
+    "ast_hash": "d57e315afffd884c18b5006e20992035",
+    "semantic_hash": ""
+  },
+  "apps/web/app/(app)/dashboard/workspace/WorkflowPackOwnerControls.tsx": {
+    "mtime": 1787755464.1293359,
+    "ast_hash": "2dab5970e3840b03f120029788516026",
     "semantic_hash": ""
   }
 }

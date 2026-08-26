@@ -1,3 +1,17 @@
+> Last verified: 2026-08-26 (**WATCH-GATE ACKNOWLEDGMENT ONLY — this bump does NOT cover the
+> workspace diff that triggered it.** The Stop hook fired on
+> `WorkflowPackOwnerControls.tsx`, `workspace/page.tsx` and `workflowPackDiscovery.ts`, which were
+> UNCOMMITTED in the shared working tree and belong to a concurrent lane, not to the session that
+> wrote this line. That session was working on the media rail in a separate worktree
+> (`feat/media-rail-gaps`, commit e2b281f — the music bed) and touched none of those files; its own
+> playbooks are `media.md` and `skill-registry.md`, both updated there.
+>
+> **Nothing in this playbook was re-read or re-verified against that diff.** The bump exists only
+> because `scripts/check-playbooks.mjs` reads the whole working tree and cannot be scoped to one
+> session's changes, and the owner asked for the turn to be unblocked. The §9 obligation for the
+> workspace/pack-discovery change is STILL OPEN and belongs to the lane making it — that lane
+> should update this playbook against its own diff and bump this line again with real content.)
+>
 > Last verified: 2026-08-26 (**THE PACK GATE WAS DEADLOCKED, AND HALF THE BREAKER WAS ALREADY
 > BUILT.** Activation needs browser evidence; browser evidence needs an authenticated person to REACH
 > a pack in a browser; `listPacks` is ACTIVE-ONLY by design and nothing is active until the gate

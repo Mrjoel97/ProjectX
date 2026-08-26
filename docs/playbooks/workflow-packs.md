@@ -1,6 +1,39 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
-> Last verified: 2026-08-26 (**ALL SIX PACKS ARE LIVE, AND ROLLBACK-TO-DARK IS PROVEN BY A CLICK.**
+> Last verified: 2026-08-26 (**BOTH ROLLBACK PATHS ARE NOW PROVEN FROM THE BROWSER. No `fixme`
+> remains in `@drill`.**
+>
+> **ROLLBACK TO A PRIOR VERSION.** `listPackPriorVersions` (`ownerQuery`) returns each pack's newest
+> ARCHIVED version, and the owner controls render `Roll back to vN` beside `Turn off`. Archived is
+> exactly the right set: `deactivatePack` and `archiveSkill` are its only writers, so an archived
+> row is one that WAS live — which is why `planGlobalActivation` lets it back in without re-running
+> the evidence planes. **That exemption is deliberate and this is the only test that exercises it
+> from a surface an owner would actually use:** rollback must work mid-incident and must never be
+> blocked by a broken eval or browser harness.
+>
+> **THE DRILL ASSERTS THE PACK IS STILL OFFERED AFTERWARDS.** A rollback that darkened the pack would
+> be an OUTAGE, not a rollback — users are supposed to keep a working version. It also asserts the
+> target version DIFFERS from the live one, because otherwise "it rolled back" is indistinguishable
+> from nothing happening. Verified live: brand-review v4 -> v3, still on offer.
+>
+> **THE PRECONDITION WAS EARNED, NOT MANUFACTURED.** Two live versions of one pack were needed. Rather
+> than mint a throwaway version, `pack-brand-review` got the LABEL CONTRACT its body was still
+> missing (`your confirmed brand guidance`, `your saved content shelf`) — real robustness work,
+> since its `missingNamed` asserts pass today but sit one paraphrase away from the failure that cost
+> campaign-plan four runs. v4 certified 5/5 for $0.0125 on the first attempt, earned browser
+> evidence, activated, and archived v3 as a side effect of ordinary work. **business-pulse and
+> sales-call-prep still lack the contract** and are the next two to get it.
+>
+> **THE HARNESS IS NOW DEPLOYMENT-AWARE, and it was not before.** `smokeRun.mjs` invoked
+> `npx convex run` with NO deployment flag, so every pack eval, smoke script and browser
+> provisioning step silently targeted DEV. That is a safe default — an unflagged run can never touch
+> production by accident — but it also meant **the pack gate could not be satisfied on production at
+> all**, which is a missing capability rather than a config gap. `PIKAR_CONVEX_TARGET=prod` now
+> passes `--prod` through, per invocation, with no way to make it the default. The runner's log and
+> evidence line printed a hardcoded "(dev)"; it prints the real target now — mislabelling which
+> deployment a run certified is precisely the failure the per-deployment rule exists to prevent.
+>
+> PREVIOUS: 2026-08-26 (**ALL SIX PACKS ARE LIVE, AND ROLLBACK-TO-DARK IS PROVEN BY A CLICK.**
 > Activation went through `skills.activateSkill` -> `assertPackActivationEvidence`, so the gate
 > itself accepted all three planes for every (name, version); it would have thrown `PACK_GATE`
 > naming the missing one otherwise.

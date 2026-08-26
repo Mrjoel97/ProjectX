@@ -98,7 +98,7 @@ export const KNOWLEDGE_WORK_PROVENANCE: Readonly<Record<string, KnowledgeWorkPro
     sourceRepo: REPO,
     sourceCommit: COMMIT,
     sourcePaths: ["marketing/skills/brand-review/SKILL.md"],
-    bodySha256: "f38daaccb3baf9149c5fbad5c4d4c01481d97723ad162544487733cab4bc7bb2",
+    bodySha256: "1d2261fe18e248a9159b220768f1eebff2e49542d210433cc9b6759732a0c85f",
     license: "Apache-2.0",
     modificationNotice:
       "Rewritten to review against general principles, because Pikar has no tenant brand store; the pack says so and names what would unlock the stronger review.",

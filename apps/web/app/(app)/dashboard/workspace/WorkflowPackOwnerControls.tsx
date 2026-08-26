@@ -21,15 +21,24 @@
 
 export type LivePack = { packId: string; title: string; version: number };
 
+/** Per pack, the newest version that WAS live and is now archived — the rollback target. */
+export type PriorVersion = { packId: string; version: number };
+
 export function WorkflowPackOwnerControls({
   packs,
+  priorVersions,
   onTurnOff,
+  onRollBack,
   busy,
   turningOff,
 }: {
   /** ACTIVE packs, and ONLY passed when the viewer is the owner — `undefined` renders nothing. */
   packs: readonly LivePack[] | undefined;
+  /** Rollback targets. A pack with none simply has no roll-back control — it has never had a
+   *  second live version, and offering one that cannot work is worse than offering none. */
+  priorVersions: readonly PriorVersion[] | undefined;
   onTurnOff: (packId: string, title: string) => void;
+  onRollBack: (packId: string, title: string, version: number) => void;
   busy: boolean;
   turningOff?: string | null;
 }) {
@@ -63,6 +72,7 @@ export function WorkflowPackOwnerControls({
       >
         {packs.map((pack) => {
           const isOff = turningOff === pack.packId;
+          const prior = priorVersions?.find((p) => p.packId === pack.packId);
           return (
             <li
               key={pack.packId}
@@ -83,27 +93,51 @@ export function WorkflowPackOwnerControls({
                 {pack.title}
                 <span style={{ color: "var(--ink-soft)" }}>{` · live v${pack.version}`}</span>
               </span>
-              <button
-                type="button"
-                className="pack-owner-turn-off"
-                // Named per pack: an owner reaching for this during an incident must not have to
-                // count rows to know which one they are about to darken.
-                aria-label={`Turn off ${pack.title}`}
-                aria-busy={isOff}
-                disabled={busy || isOff}
-                onClick={() => onTurnOff(pack.packId, pack.title)}
-                style={{
-                  background: "transparent",
-                  color: "var(--ink)",
-                  border: "1px solid var(--rule)",
-                  borderRadius: "0.4rem",
-                  padding: "0.25rem 0.6rem",
-                  fontSize: "0.8rem",
-                  cursor: busy || isOff ? "default" : "pointer",
-                }}
-              >
-                {isOff ? "Turning off…" : "Turn off"}
-              </button>
+              <span style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+                {prior !== undefined && (
+                  <button
+                    type="button"
+                    className="pack-owner-roll-back"
+                    // The VERSION is in the label, not just "Roll back": an owner mid-incident needs
+                    // to know what they are going back TO before they commit to it.
+                    aria-label={`Roll back ${pack.title} to v${prior.version}`}
+                    disabled={busy || isOff}
+                    onClick={() => onRollBack(pack.packId, pack.title, prior.version)}
+                    style={{
+                      background: "transparent",
+                      color: "var(--ink)",
+                      border: "1px solid var(--rule)",
+                      borderRadius: "0.4rem",
+                      padding: "0.25rem 0.6rem",
+                      fontSize: "0.8rem",
+                      cursor: busy || isOff ? "default" : "pointer",
+                    }}
+                  >
+                    {`Roll back to v${prior.version}`}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="pack-owner-turn-off"
+                  // Named per pack: an owner reaching for this during an incident must not have to
+                  // count rows to know which one they are about to darken.
+                  aria-label={`Turn off ${pack.title}`}
+                  aria-busy={isOff}
+                  disabled={busy || isOff}
+                  onClick={() => onTurnOff(pack.packId, pack.title)}
+                  style={{
+                    background: "transparent",
+                    color: "var(--ink)",
+                    border: "1px solid var(--rule)",
+                    borderRadius: "0.4rem",
+                    padding: "0.25rem 0.6rem",
+                    fontSize: "0.8rem",
+                    cursor: busy || isOff ? "default" : "pointer",
+                  }}
+                >
+                  {isOff ? "Turning off…" : "Turn off"}
+                </button>
+              </span>
             </li>
           );
         })}

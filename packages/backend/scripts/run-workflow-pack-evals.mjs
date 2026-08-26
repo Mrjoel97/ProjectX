@@ -116,6 +116,12 @@ function codeOwnedPackModel() {
 }
 const EVAL_MODEL = codeOwnedPackModel();
 
+/** WHICH DEPLOYMENT this run is talking to, for the log lines and the evidence row. It was the
+ *  hardcoded string "dev", which is exactly the kind of label that stays right until the day it
+ *  silently is not — evidence lives on ONE deployment's skills row, so mislabelling which one a run
+ *  certified is the whole failure mode the per-deployment rule exists to prevent. */
+const TARGET = process.env.PIKAR_CONVEX_TARGET === "prod" ? "prod" : "dev";
+
 // The Windows/Node-24 `UV_HANDLE_CLOSING` teardown crash: `convex run` completes and dies before
 // flushing stdout. `must()` retries only when stdout is EMPTY and no failure banner printed, so a
 // real refusal, governed stop or model error still fails hard. Measured economics are unchanged
@@ -1633,7 +1639,7 @@ async function runCandidate(argv, packs) {
   DUMP_PATH = valueFlag(argv, "--dump");
   const runnerRunId = randomUUID();
   console.log(
-    `[eval:pack] ${packId} -> ${name} v${version} (dev) · ${cases.length} cases · ` +
+    `[eval:pack] ${packId} -> ${name} v${version} (${TARGET}) · ${cases.length} cases · ` +
       `suite ${declared.revision} · cap ${COST_CAP_USD.toFixed(2)}` +
       (repeat > 1 ? ` · REPEAT x${repeat} (measurement only, no evidence)` : ""),
   );
@@ -1776,7 +1782,7 @@ async function runCandidate(argv, packs) {
   });
   // No `retryOnEmpty` on the WRITE, exactly as in run-eval-golden.mjs: a retry writes a duplicate.
   must("skills:recordEvalEvidence", { name, version, evidence });
-  console.log(`[eval:pack] evidence recorded on ${name} v${version} (dev). Still a candidate.`);
+  console.log(`[eval:pack] evidence recorded on ${name} v${version} (${TARGET}). Still a candidate.`);
   return 0;
 }
 

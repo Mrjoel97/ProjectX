@@ -18,11 +18,29 @@ const convexBin = resolve(backendDir, "node_modules/convex/bin/main.js");
 // Distinctive markers the convex CLI prints on a genuine function failure.
 const FAILURE = /Failed to run function|Uncaught Error|isn't running|not listening/;
 
+/**
+ * WHICH DEPLOYMENT. `convex run` with no flag targets whatever the local config points at — the DEV
+ * deployment — and every pack eval, smoke script and browser provisioning step goes through here.
+ * That is correct and safe as a default: an unflagged run can never touch production by accident.
+ *
+ * **IT ALSO MEANT THE PACK GATE COULD NOT BE SATISFIED ON PRODUCTION AT ALL**, which is not a
+ * config problem but a missing capability: evidence lives on the skills ROW of ONE deployment, so a
+ * dev run can never certify a prod candidate (see `docs/playbooks/skill-registry.md`). Set
+ * `PIKAR_CONVEX_TARGET=prod` to pass `--prod` through. It is an EXPLICIT opt-in per invocation and
+ * there is deliberately no way to make it the default — a harness that could silently point at
+ * production is a harness that eventually will.
+ */
+const TARGET_ARGS = process.env.PIKAR_CONVEX_TARGET === "prod" ? ["--prod"] : [];
+
 function invoke(fn, args) {
-  const res = spawnSync(process.execPath, [convexBin, "run", fn, JSON.stringify(args)], {
-    cwd: backendDir,
-    encoding: "utf8",
-  });
+  const res = spawnSync(
+    process.execPath,
+    [convexBin, "run", ...TARGET_ARGS, fn, JSON.stringify(args)],
+    {
+      cwd: backendDir,
+      encoding: "utf8",
+    },
+  );
   const err = res.stderr || "";
   const out = res.stdout || "";
   if (res.error) throw new Error(`spawn failed for ${fn}: ${res.error.message}`);
