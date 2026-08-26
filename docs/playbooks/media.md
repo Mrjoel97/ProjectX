@@ -1,5 +1,20 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-08-26 (**THE GROUNDING PASS — a reel's facts now come from outside before the
+> deck is written.** `media-director`'s only tool is `searchVault`, so a proposal was grounded ONLY
+> in the tenant's own material — nearly empty for an idea-stage tenant, which is the deck the body
+> itself calls "a failed reel". `groundMediaBrief` runs a research turn on the brief first and files
+> the findings as a vault doc, so the deck cites them through the `[doc:...]` slot the scene
+> contract already validates. THE CONSTRAINT THAT SHAPED IT: `plans` is `.unique()` by
+> (tenantId, threadId) and `stageResearchPlan` RECYCLES that row, so a research card staged beside a
+> media card would overwrite the card the reel is proposed on — the pass therefore runs the turn
+> inline and writes only what has no plan row of its own. IT CAN NEVER FAIL THE REEL: every failure
+> arm returns quietly and the media turn proceeds on the vault alone, which is safe BECAUSE the
+> citation gate flags an uncited figure regardless — the gate is the guarantee, this is the raw
+> material. The media-specific asks live in the QUESTION, not in the GATED `research-specialist`
+> body. The turn runner is injected (the `dispatchAndLand` idiom) so all three branches — persist,
+> zero-search skip, degrade-on-throw — are covered at $0 rather than by a source tripwire.)
+
 > Last verified: 2026-08-26 (**SILENCE NOW MEANS UNVERIFIED — the citation default, inverted.** The
 > parser read a scene with no `Source:` line as claiming nothing (`media.ts` said it outright:
 > `// claims nothing`), so the confirm gate only ever fired when the model VOLUNTEERED
@@ -1730,6 +1745,83 @@ from the same few beds, so two reels in the same niche can sound alike. The upgr
 licensed catalogue API **if and only if it bills a flat rate per track** — at which point
 `MEDIA_MUSIC_PRICING` gains a row per tier and nothing else in the rail moves. A per-second or
 per-compute-second music vendor is not an upgrade path; it is a different rail.
+
+## The grounding pass (a reel's facts come from outside, before the deck is written)
+
+`media-director`'s only tool is `searchVault`, so a proposal was grounded **only** in the tenant's
+own material. For an idea-stage tenant that material is nearly empty, and the skill body's own
+words for the outcome are exact: *"a reel that could have been about this business and is instead
+about businesses in general is a failed reel."*
+
+`groundMediaBrief` (`dispatch.ts`) now runs a research turn on the brief before the media turn and
+files the findings as a vault document. The deck cites it through the `[doc:...]` slot the scene
+contract already validates.
+
+### Why it runs INSIDE `runMedia` and not as its own dispatch
+
+**`plans` is `.unique()` by `(tenantId, threadId)` — one plan row per thread — and
+`stageResearchPlan` RECYCLES it.** Staging a research card beside a media card would have research
+overwrite the card the reel is proposed on. So the pass runs the specialist turn directly and
+writes only the thing that has no plan row of its own: a vault document, through the same
+`research.persistFindings` the research route uses.
+
+That choice is what makes everything downstream free. The findings land where `searchVault`
+already looks, as an ordinary vault doc with a real id, so nothing learns a new word — no new
+source kind, no second citation path, and `renderReel`'s existing ownership check on `source.docId`
+covers it unchanged.
+
+### It can never fail the reel
+
+Every outcome — a refusal, a throw, a run that searched nothing — returns quietly and the media
+turn proceeds on the vault alone. A reel grounded only in the tenant's own material is worse than
+a researched one and far better than none.
+
+This is safe **because of the citation gate, not instead of it**: `statesCheckableClaim` flags an
+uncited figure whatever this pass managed to find, so a thin grounding pass cannot let an unsourced
+claim through. **The gate is the guarantee; this is the raw material.** If you ever find yourself
+relaxing the gate because grounding "usually works", that is the mistake this note exists to stop.
+
+A failure writes one `media.grounding_failed` audit row — refs and a reason code, never the error
+text. It is deliberately viewer-visible: the reel ships either way, so without that row a silently
+ungrounded proposal looks identical to a researched one.
+
+### The zero-search floor, and why it is sharper here
+
+A run that made no web searches writes **nothing**, the same floor `persistResearchFindings`
+applies on the research route. The reasoning is stronger in this position: this document is written
+to be cited by the *very next model turn*, so storing a model-memory answer would launder it into a
+"grounded" citation inside the same reel.
+
+### The media-specific asks live in the QUESTION, not in the skill body
+
+`research-specialist` is **gated** — changing its body needs a recorded passing eval run — and its
+job is general-purpose fact-finding for the whole cockpit. What a *video* needs from research
+(citable figures with dates; the objections real customers voice) is a property of this route, so
+it is asked in `MEDIA_GROUNDING_QUESTION` here. That keeps a video concern out of a cockpit-wide
+skill and costs no eval cycle. `dispatch.test.ts` asserts the question carries both halves, so a
+later migration into the body goes red here first.
+
+### Testability
+
+The turn runner is **injected** — the `dispatchAndLand` idiom in the same file. A `LanguageModel`
+is not Convex-serializable, so without that injection none of the persist / skip / degrade branches
+would be reachable by a test at all and the feature would rest on a source tripwire. All three
+branches are covered at $0.
+
+### Cost
+
+One research turn per media proposal. Search fees draw the existing daily LLM allowance
+(`searchFeeUsd`, a quota proxy at $0.01/call — see `cost.ts`), **not** the media reservation. That
+is not a second spending rail: a dispatched media run already spent tokens on that same allowance,
+and no `mediaJobs` row, no media window and no `renderStatus` is touched by this pass.
+
+### Ceiling and upgrade path
+
+ponytail: one research turn per proposal, on the brief as written. The ceiling is that a brief
+naming several claims gets one pass over all of them rather than one per claim. The upgrade path is
+decomposing the brief first — which the research body already does internally, so the cheap version
+is to let it, and only revisit if findings come back thin.
+
 
 ## Silence means unverified (the citation default, inverted)
 

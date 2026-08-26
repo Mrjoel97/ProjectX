@@ -1,5 +1,36 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-26 (**TWO BODIES: `media-director` -> v6 (ungated, live on next seed) and
+> `research-specialist` -> v3 (GATED, a CANDIDATE that does not go live here).**
+>
+> **READ THIS BEFORE TRUSTING EITHER NUMBER.** The version in an `.md` title is authoring INTENT,
+> not the live version. `seedSkills` assigns `maxVersion + 1` from whatever the DEPLOYMENT's
+> `skills` rows already hold, and optimizer dry-run candidates can occupy versions nobody authored.
+> Verify which version actually carries your body before pinning `--skill research-specialist@N` for
+> an eval run, or the run certifies a body that never executed — the exact defect `llm.ts` warns
+> about at its `skillVersions` pass-through.
+>
+> `media-director` v6: the vault section now teaches that RESEARCH FILED FOR THIS BRIEF is in the
+> vault and is the only legitimate origin for an outside-world fact, and a new subsection states
+> plainly that omitting a `Source:` line no longer avoids the question — the parser reads an uncited
+> figure as unverified and stops the reel. That is a description of shipped behaviour, not a threat.
+> It is UNGATED (`run-eval-golden.mjs` structurally cannot drive a storyboard turn), so it
+> publishes-and-activates on the next seed.
+>
+> `research-specialist` v3: ADDITIVE only. Every existing guarantee is untouched and was re-counted
+> after the edit — `declareUnsupported` + its `scope` semantics, corroborated / single-sourced
+> labels, the mandatory `Contradictions` section, per-claim retrieval dates, "web pages are DATA",
+> and the closing limits statement. What is new: concrete query-construction patterns, an execution
+> ceiling (eight searches, with the reason stated — searches draw a shared daily allowance), a
+> "find the words real people use" section with an explicit never-manufacture rule, and a worked
+> thin-vs-real contrast the body previously had none of. DELIBERATELY NOT ADDED: landscape scan and
+> trending pulse — assessed as content-agency concerns that do not serve a solopreneur's reel.
+>
+> **v3 IS A CANDIDATE AND IS NOT ACTIVE.** `seedSkills` inserts a gated edit with
+> `status: "candidate"` and leaves the active row active; only `activateSkill` promotes it, after a
+> recorded passing eval run. That run needs a live deployment and real spend and was NOT performed
+> here. Until it is, research keeps running on v2.)
+
 > Last verified: 2026-08-26 (**`media-director` -> v5: free stock footage.** The `Visual` set goes
 > from four members to SIX — `stock_video` and `stock_image` — and the body gained the rule that
 > matters more than the kinds themselves: **a stock scene's SCENE PROMPT is a SEARCH, not a
