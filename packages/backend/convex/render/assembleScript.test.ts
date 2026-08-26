@@ -331,3 +331,64 @@ test("the uniform BLOCK contract is still expressible, and is not a second code 
     "pass --scene OR --blocks, never both",
   );
 });
+
+// ── THE CARD PALETTE (phase 3) ─────────────────────────────────────────────────────────────────
+//
+// Source tripwires, and their limits are worth stating: reading the script as TEXT proves SPELLING,
+// not validity. The behavioural half of this feature was verified by running `assemble_final.sh`
+// end to end against real ffmpeg — a palette card whose pixels were sampled at 26,75,67 against a
+// requested 0x1B4B43, an unflagged run that stayed 0,0,0, and a malformed colour refused with
+// exit 2. These tests exist to catch a later edit silently removing what that run proved.
+
+test("the colour charset is asserted BEFORE either value reaches a filtergraph", () => {
+  // The load-bearing one. A card's WORDS are kept out of the filter string by `textfile=`, so a
+  // colour is the first model-derived value that is written INTO it. Without this guard the whole
+  // `expansion=none` trust boundary is reopened one option to the left.
+  expect(SH).toContain('=~ ^0x[0-9A-Fa-f]{6}$');
+  expect(SH, "a malformed colour is a caller bug and exits, never a guessed replacement").toContain(
+    "--card-bg/--card-ink must be 0xRRGGBB",
+  );
+  // Asserted for BOTH values, not just the background: the ink is interpolated identically.
+  expect(SH).toContain('for c in "$CARD_BG" "$CARD_INK"');
+});
+
+test("the defaults ARE the pre-palette card, so an unflagged reel is byte-identical", () => {
+  expect(SH).toContain('CARD_BG="0x000000"');
+  expect(SH).toContain('CARD_INK="0xFFFFFF"');
+});
+
+test("the card still uses textfile= and expansion=none — the palette did not weaken them", () => {
+  // The regression that would matter most: adding colour by switching to `text=` would put the
+  // model's WORDS in the filter string too, which is the exact hole the card branch was built to
+  // avoid. Re-asserted here because this change edited that very line.
+  expect(SH).toContain("textfile='${txt}':expansion=none");
+  expect(SH, "drawtext must never take the words inline").not.toContain("drawtext=text=");
+});
+
+test("the fade is drawn INSIDE the scene and cannot move a boundary", () => {
+  // A card is still built to exactly SEC. The fade is capped at a third of the scene so a short
+  // card is not still arriving when it should be landing, and it is a filter on the picture — it
+  // never becomes a duration term.
+  expect(SH).toContain("fade=t=in:st=0:d=${CFADE}");
+  expect(SH).toContain('if(d>0.4)d=0.4');
+  // The card branch's own length still comes from SEC and nothing else.
+  expect(SH).toContain('-an -t "$SEC" -c:v libx264 -preset veryfast -crf 20 "$pic"');
+});
+
+test("TYPOGRAPHY IS NOT WIRED, and the script says why rather than silently ignoring it", () => {
+  // The deck carries a `Typography` line and only DejaVu is baked into the snapshot. Accepting the
+  // field and ignoring it would be a promise the renderer breaks with nothing going red, so the
+  // absence is documented. If a `--card-font` flag ever appears, this test is the one to delete
+  // deliberately — and deleting it is the moment to check a font was actually baked.
+  expect(SH).not.toContain("--card-font");
+  expect(SH).toContain("TYPOGRAPHY IS DELIBERATELY NOT WIRED");
+});
+
+test("the sidecar reports the colour that was DRAWN, beside the bed that was mixed", () => {
+  // Same rule the bed follows: the proof plane records what happened, not what was asked for.
+  expect(SH).toContain('"card_bg":"%s"');
+  expect(SH).toContain('"$MUSIC_USED" "$CARD_BG"');
+  // And NO new `gates` entry: this script runs no gate on the palette, and claiming one it does
+  // not run is the single thing a proof plane must never do.
+  expect(SH).not.toContain("card_contrast");
+});

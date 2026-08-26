@@ -18,6 +18,8 @@
 import { parseAssemblySidecar } from "@pikar/core/assembly";
 import { buildCaptionLines, toAss } from "@pikar/core/captions";
 import {
+  CARD_DEFAULT_BG,
+  cardColorsOf,
   deckStillNeedsJob,
   isRenderableCardText,
   isTransientRenderCode,
@@ -106,6 +108,9 @@ type RenderInputs = {
    *  the sandbox snapshot, so nothing is fetched, stored or written for it. It rides here because
    *  it is a fact about the REEL (deck-wide, off the art direction) rather than about a scene. */
   music?: MusicMood;
+  /** The card colours, resolved from the deck's own palette. Absent for a deck whose palette
+   *  yields no usable hex — and for every BLOCK deck, which has no art direction at all. */
+  card?: { bg: string; ink: string };
 };
 
 /**
@@ -326,7 +331,19 @@ export const batchToRender = internalQuery({
     // would be a third copy whose only distinguishing behaviour is failing earlier and quieter.
     const music = plan.artDirection?.music as MusicMood | undefined;
 
-    return { ok: true, value: { planId, targetSeconds, scenes, inputs, cards, music } };
+    // THE CARD PALETTE, read off the same approved row and for the same reason as the bed above.
+    // `cardColorsOf` is the ONE place a model-authored palette becomes two filtergraph-safe
+    // colours, so it is called here rather than at the POST — the value that crosses the
+    // boundary is already narrowed, and the route re-checks its shape rather than re-deriving it.
+    //
+    // Sent only when the deck actually yields a colour. Absent means the black-and-white card, so
+    // a palette written in words ("warm amber") degrades to exactly the reel we shipped before
+    // rather than refusing a render over a styling detail.
+    const cards_ = cards.length === 0 ? undefined : cardColorsOf(plan.artDirection?.palette);
+    const card =
+      cards_ === undefined || cards_.bg === CARD_DEFAULT_BG ? undefined : cards_;
+
+    return { ok: true, value: { planId, targetSeconds, scenes, inputs, cards, music, card } };
   },
 });
 
@@ -810,7 +827,7 @@ export const renderReel = internalAction({
       });
       return { ok: false, reason: batch.reason };
     }
-    const { planId, targetSeconds, scenes, inputs, cards, music } = batch.value;
+    const { planId, targetSeconds, scenes, inputs, cards, music, card } = batch.value;
 
     await ctx.runMutation(internal.render.renderReel.markRendering, { planId });
 
@@ -861,6 +878,7 @@ export const renderReel = internalAction({
           // list above is unchanged by it, which is why it is not a second exception alongside the
           // card's words.
           ...(music === undefined ? {} : { music }),
+          ...(card === undefined ? {} : { card }),
           uploadUrls,
         }),
       }).catch(() => null);

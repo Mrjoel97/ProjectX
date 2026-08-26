@@ -423,6 +423,74 @@ export function deckStillNeedsJob(
 const WANTS_VIDEO_ROW = new Set(["generated_video", "stock_video"]);
 const WANTS_IMAGE_ROW = new Set(["animated_image", "stock_image"]);
 
+/* ── TEXT-CARD COLOUR (the deck's own palette, finally reaching the frame) ──────────────────────
+ *
+ * A card was black-and-white until this existed, while the deck it belongs to carried a palette
+ * the specialist chose, the parser validated and the owner approved on screen. Nothing was missing
+ * from the renderer; the wire simply stopped three-quarters of the way.
+ *
+ * **THESE STRINGS ARE INTERPOLATED INTO AN FFMPEG FILTERGRAPH**, which is why the shape is fixed
+ * here rather than at the shell. A card's WORDS are safe by construction — `textfile=` keeps them
+ * out of the filter string and `expansion=none` stops `%{...}` being evaluated — but a colour has
+ * to be written INTO that string, so it is the first model-derived value that ever reaches it.
+ * Everything below produces `0x` plus exactly six hex digits or nothing at all; `parseBody` then
+ * re-checks the same shape at the route, and the script bounds the charset a third time. None of
+ * the three makes the others redundant.
+ */
+
+/** `0xRRGGBB`, and nothing else, ever. The one shape allowed near the filtergraph. */
+export const CARD_COLOR = /^0x[0-9A-Fa-f]{6}$/;
+
+/** Today's card, and the fallback whenever a palette yields no usable colour — a block deck has no
+ *  art direction at all, and a scene deck may have a palette written in words. Unchanged output
+ *  for every reel that was renderable before this existed. */
+export const CARD_DEFAULT_BG = "0x000000";
+export const CARD_DEFAULT_INK = "0xFFFFFF";
+
+/** The first 6-digit hex anywhere in a palette entry, normalised. The parser deliberately does NOT
+ *  validate the palette (`storyboard.ts`: "the palette rule is the SKILL BODY's to teach, not this
+ *  parser's"), so entries arrive as `#1B4B43`, `1B4B43`, or `teal (#1B4B43)` — and sometimes as
+ *  `warm amber`, which yields nothing and must not become a colour. */
+const hexIn = (entry: string): string | null => {
+  const m = /(?:^|[^0-9A-Fa-f])([0-9A-Fa-f]{6})(?![0-9A-Fa-f])/.exec(entry);
+  return m?.[1] ? `0x${m[1].toUpperCase()}` : null;
+};
+
+/** WCAG relative luminance. Needed rather than a cheap average because "is this dark?" decides
+ *  whether the words on top of it are readable, and green reads far lighter than blue at the same
+ *  average. Unreadable text is an accessibility failure, not a styling preference. */
+const luminance = (color: string): number => {
+  const channel = (i: number): number => {
+    const v = Number.parseInt(color.slice(2 + i * 2, 4 + i * 2), 16) / 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(0) + 0.7152 * channel(1) + 0.0722 * channel(2);
+};
+
+/**
+ * The deck's palette → the two colours a card is drawn with.
+ *
+ * The BACKGROUND comes from the palette, because that is the brand signal a viewer actually reads.
+ * The INK does NOT: it is computed as whichever of black or white contrasts more with that
+ * background. Picking the ink from the palette too would look more designed and would eventually
+ * put a mid-tone on a mid-tone, which is a card nobody can read — and the deck would still pass
+ * every gate, because the file decodes and the duration is right.
+ *
+ * ponytail: two colours and a computed ink, not a themed layout engine. The ceiling is that every
+ * card in a reel looks the same and the palette's other entries are unused. The upgrade path is a
+ * per-scene accent drawn from `palette[1]` — at which point THIS function grows a third return
+ * value and nothing else in the chain moves.
+ */
+export function cardColorsOf(palette: readonly string[] | undefined): {
+  bg: string;
+  ink: string;
+} {
+  const bg = (palette ?? []).map(hexIn).find((c): c is string => c !== null);
+  if (bg === null || bg === undefined) return { bg: CARD_DEFAULT_BG, ink: CARD_DEFAULT_INK };
+  // 0.179 is the standard crossover: above it black wins the contrast ratio, below it white does.
+  return { bg, ink: luminance(bg) > 0.179 ? "0x000000" : "0xFFFFFF" };
+}
+
 // ── The RUNNER: the route handler's whole body, with the SDK injected ──────────────────────────
 //
 // The Next.js route file is a ~20-line adapter over this function (CLAUDE.md §1: domain logic in
@@ -496,6 +564,12 @@ type RenderRequestBody =
        *  is a name the script resolves against its own library. That is why it is not in
        *  `RENDER_INPUT_NAME` and needs no path guard here beyond the closed set. */
       music?: MusicMood;
+      /** The card palette, already resolved to two `0xRRGGBB` strings by `cardColorsOf`. Resolved
+       *  UPSTREAM rather than sending the raw palette: the deck's palette is model-authored free
+       *  text and these two values are interpolated into a filtergraph, so the narrowing happens
+       *  once, in one tested function, instead of at whichever end happens to look. Absent means
+       *  the black-and-white card every reel had before. */
+      card?: { bg: string; ink: string };
       uploadUrls: { mp4: string; sidecar: string };
     }
   | {
@@ -637,6 +711,20 @@ function parseBody(raw: unknown, uploadOrigin: string): RenderRequestBody | null
   if (b.music !== undefined && (!isStr(b.music) || !MUSIC_MOOD_SET.has(b.music))) return null;
   const music = b.music as MusicMood | undefined;
 
+  // THE CARD PALETTE, and this is a TRUST BOUNDARY rather than a format check. Both values are
+  // written into an ffmpeg filtergraph inside the VM, so the shape is re-asserted here even though
+  // `cardColorsOf` can only produce it: this runner validates what it was SENT, never what it
+  // assumes the sender computed. A malformed pair is a refused render, not a card quietly drawn in
+  // the default colours — the same reasoning as the music slug directly above.
+  let card: { bg: string; ink: string } | undefined;
+  if (b.card !== undefined) {
+    const c = b.card as Record<string, unknown> | null;
+    if (c === null || typeof c !== "object") return null;
+    if (!isStr(c.bg) || !isStr(c.ink)) return null;
+    if (!CARD_COLOR.test(c.bg) || !CARD_COLOR.test(c.ink)) return null;
+    card = { bg: c.bg, ink: c.ink };
+  }
+
   const up = b.uploadUrls;
   if (up === null || typeof up !== "object") return null;
   const { mp4, sidecar } = up as Record<string, unknown>;
@@ -653,6 +741,7 @@ function parseBody(raw: unknown, uploadOrigin: string): RenderRequestBody | null
     inputs,
     cards,
     ...(music === undefined ? {} : { music }),
+    ...(card === undefined ? {} : { card }),
     uploadUrls: { mp4, sidecar },
   };
 }
@@ -847,6 +936,7 @@ export async function handleRenderRequest(req: Request, deps: RenderDeps): Promi
       // The bed, by MOOD. No file was written for it above and none needs to be: the library is
       // baked into the snapshot, so this is a name the script looks up, not bytes we ship.
       ...(body.music === undefined ? [] : ["--music", body.music]),
+      ...(body.card === undefined ? [] : ["--card-bg", body.card.bg, "--card-ink", body.card.ink]),
     ]);
     if (run.exitCode !== 0) {
       // THE ONLY READ OF stderr IN THIS SYSTEM, and it goes straight into a code. See

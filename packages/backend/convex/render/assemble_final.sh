@@ -136,6 +136,29 @@
 # demands, made rather than patched around. What arrived is the ducked bed and nothing else: no
 # `--song`, no music-driven cutting, no caller-settable level. See the MUSIC BED section below.
 #
+# ── THE CARD PALETTE (--card-bg / --card-ink) ─────────────────────────────────────────────────
+#
+# A card was black-on-white-text until this existed, while the deck it belongs to already carried
+# a palette the specialist chose and the owner approved. Nothing was missing from ffmpeg; the
+# value simply never reached it.
+#
+#   * BOTH VALUES ARE INTERPOLATED INTO A FILTERGRAPH. That is what makes them different from the
+#     card's WORDS, which are handed to drawtext via `textfile=` precisely so they never enter the
+#     filter string. A colour cannot be passed that way, so the charset is asserted below before
+#     either one is used — the same posture as the music slug, and for a sharper reason.
+#   * THE INK IS NOT CHOSEN HERE. The caller computes it for contrast against the background
+#     (`cardColorsOf` in @pikar/core/render). A mid-tone on a mid-tone is a card nobody can read,
+#     and it would pass every gate this script has: the file decodes and the duration is right.
+#   * DEFAULTS ARE THE OLD BEHAVIOUR, exactly. Absent flags render the black card every reel had
+#     before, so a deck whose palette is written in words degrades rather than refusing.
+#   * IT CANNOT CHANGE THE LENGTH. A card is still built to exactly SEC seconds; the fade is drawn
+#     INSIDE that window and moves no boundary.
+#
+# TYPOGRAPHY IS DELIBERATELY NOT WIRED. The deck carries a `Typography` line and only DejaVu is
+# baked into the snapshot, so honouring "a grotesque with tabular figures" is not possible here.
+# Accepting the field and ignoring it would be a promise the renderer silently breaks. The upgrade
+# path is baking a second family and mapping the field onto a CLOSED set of faces.
+#
 # Requires: ffmpeg, ffprobe, awk. A `card` scene additionally needs a TrueType font in the image.
 set -euo pipefail
 
@@ -148,6 +171,9 @@ MUSIC_USED="none"   # what actually made it into the mix — the sidecar reports
 # -24 dBTP sits 6 dB below the -18 dB silencedetect threshold that proves narration reached the
 # mix, and ~14 LU under the voice, which is where a narration-forward bed belongs anyway.
 MUSIC_I="-33"; MUSIC_TP="-24"
+# THE CARD COLOURS. Defaults ARE the pre-palette card, so every existing reel renders identically.
+CARD_BG="0x000000"  # the frame behind a text card
+CARD_INK="0xFFFFFF" # the words on it — computed by the caller for contrast, never chosen here
 # THE CEILING IS ENFORCED BY alimiter, NOT BY loudnorm — loudnorm's own `TP` accepts only
 # [-9, 0], so the -24 this gate needs cannot be expressed there at all. (Asking for it is not a
 # silent no-op either: ffmpeg exits "Value -24.000000 for parameter 'TP' out of range", the bed
@@ -173,6 +199,8 @@ while [[ $# -gt 0 ]]; do
     # not be a thing this script can be asked. The caller validates against its own closed set too;
     # this is the half that does not depend on the caller being the one we think it is.
     --music) MUSIC="$2"; shift 2 ;;
+    --card-bg) CARD_BG="$2"; shift 2 ;;
+    --card-ink) CARD_INK="$2"; shift 2 ;;
     --in) IN_DIR="$2"; shift 2 ;;
     --out) OUT="$2"; shift 2 ;;
     --sfx-vol) SFXVOL="$2"; shift 2 ;;
@@ -216,6 +244,12 @@ SFXVOL="$(awk -v v="$SFXVOL" 'BEGIN{v=v+0; if(v<0)v=0; if(v>0.2){print "WARN: --
 if [[ -n "$MUSIC" ]]; then
   [[ "$MUSIC" =~ ^[a-z][a-z0-9-]{0,23}$ ]] || { echo "ERROR: --music must be a lowercase mood slug (a-z, 0-9, -), got: $MUSIC" >&2; exit 2; }
 fi
+# THE COLOUR CHARSET, asserted before either value reaches a filtergraph. Unlike the music slug
+# there is no degrade path here and there should not be: a malformed colour is a caller bug, and
+# guessing a replacement would draw a card in a palette nobody approved.
+for c in "$CARD_BG" "$CARD_INK"; do
+  [[ "$c" =~ ^0x[0-9A-Fa-f]{6}$ ]] || { echo "ERROR: --card-bg/--card-ink must be 0xRRGGBB, got: $c" >&2; exit 2; }
+done
 for b in ffmpeg ffprobe awk; do command -v "$b" >/dev/null 2>&1 || { echo "ERROR: '$b' not found" >&2; exit 1; }; done
 mkdir -p "$(dirname "$OUT")"
 
@@ -373,8 +407,11 @@ for ((i=0;i<SCENES;i++)); do
       # until someone writes a colon. `expansion=none` is the load-bearing half — without it
       # drawtext EVALUATES `%{...}` in the file, so model-authored text could run ffmpeg
       # expressions inside the VM. It is a trust boundary, not a formatting preference.
-      ffmpeg -y -loglevel error -f lavfi -t "$SEC" -i "color=c=black:s=${W}x${H}:r=${FPS}" \
-        -vf "drawtext=fontfile='${FONT}':textfile='${txt}':expansion=none:fontcolor=white:fontsize=${H}/22:line_spacing=14:x=(w-text_w)/2:y=(h-text_h)/2,${NORM}" \
+      # The fade is capped at a third of the scene so a 2-second card is not still arriving when
+      # it should be landing. `awk` because SEC is an integer and the duration is not.
+      CFADE="$(awk -v s="$SEC" 'BEGIN{d=s/3; if(d>0.4)d=0.4; printf "%.3f", d}')"
+      ffmpeg -y -loglevel error -f lavfi -t "$SEC" -i "color=c=${CARD_BG}:s=${W}x${H}:r=${FPS}" \
+        -vf "drawtext=fontfile='${FONT}':textfile='${txt}':expansion=none:fontcolor=${CARD_INK}:fontsize=${H}/22:line_spacing=14:shadowx=2:shadowy=2:shadowcolor=0x000000@0.35:x=(w-text_w)/2:y=(h-text_h)/2,fade=t=in:st=0:d=${CFADE},${NORM}" \
         -an -t "$SEC" -c:v libx264 -preset veryfast -crf 20 "$pic"
       ;;
   esac
@@ -616,8 +653,8 @@ SIDE="${OUT}.assembly.json"
   # whose bed was missing from the snapshot says "none" here, which is the whole reason the
   # degrade path is not silent. No new entry in `gates`: the bed is not separately asserted, and
   # claiming a gate this script does not run is the one thing a proof plane must never do.
-  printf '{"script":"assemble_final.sh","out":"%s","scene_count":%d,"target_duration_s":%s,"total_duration_s":%s,"actual_duration_s":%s,"width":%s,"height":%s,"fps":"%s","sfx_vol":%s,"music":"%s","gates":["speech_fits_the_reel","no_overlapping_lines","clip_covers_window","speech_centred","no_time_stretch","narration_every_narrated_span","master_audio_timeline","linear_loudnorm_-16","duration_within_0.5s","full_decode"],"scenes":[' \
-    "$(basename "$OUT")" "$SCENES" "$TARGET" "$TOT" "$FDUR" "$W" "$H" "$FPS" "$SFXVOL" "$MUSIC_USED"
+  printf '{"script":"assemble_final.sh","out":"%s","scene_count":%d,"target_duration_s":%s,"total_duration_s":%s,"actual_duration_s":%s,"width":%s,"height":%s,"fps":"%s","sfx_vol":%s,"music":"%s","card_bg":"%s","gates":["speech_fits_the_reel","no_overlapping_lines","clip_covers_window","speech_centred","no_time_stretch","narration_every_narrated_span","master_audio_timeline","linear_loudnorm_-16","duration_within_0.5s","full_decode"],"scenes":[' \
+    "$(basename "$OUT")" "$SCENES" "$TARGET" "$TOT" "$FDUR" "$W" "$H" "$FPS" "$SFXVOL" "$MUSIC_USED" "$CARD_BG"
   for ((i=0;i<SCENES;i++)); do printf '%s%s' "${PBJSON[i]}" "$([[ $i -lt $((SCENES-1)) ]] && echo ,)"; done
   printf '],"ts":"%s"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 } > "$SIDE"

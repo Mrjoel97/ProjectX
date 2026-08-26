@@ -1,5 +1,20 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-08-26 (**THE CARD PALETTE — the deck's own colours finally reach the frame.**
+> Text cards were drawn black-on-white while the plan row already carried a `palette` the specialist
+> chose, the parser validated and the owner approved on screen. Nothing was missing from ffmpeg; the
+> wire stopped three-quarters of the way. THE THING THAT NEEDED THOUGHT, twice: (1) **the ink is
+> COMPUTED for contrast, never taken from the palette** — a mid-tone on a mid-tone passes every gate
+> this pipeline has (the file decodes, the duration is right, the sidecar is well-formed) and only
+> the words are invisible, so it is pinned by a 216-colour WCAG sweep rather than by examples;
+> (2) **a colour is the first model-derived value ever interpolated into the filtergraph** — the
+> card's WORDS are kept out of it by `textfile=` + `expansion=none`, and that protection does not
+> extend to a colour, so the shape is asserted at all three layers and a malformed pair is a REFUSED
+> render. Verified end to end against real ffmpeg, not just by source tripwire: card pixels sampled
+> at 26,75,67 for a requested 0x1B4B43, an unflagged run still 0,0,0, and `"black;rm -rf /"` exiting
+> 2. Typography is deliberately NOT wired — only DejaVu is baked, and accepting a field we cannot
+> honour is a promise the renderer breaks silently.)
+
 > Last verified: 2026-08-26 (**FREE STOCK FOOTAGE — two new `VisualKind`s, one $0 provider, and
 > the assembler untouched.** `stock_video` and `stock_image` are fetched from a free library at job
 > time and land on ordinary `mediaJobs` rows. THE THING THAT NEEDED THOUGHT: this is a $0 line that
@@ -1699,6 +1714,83 @@ from the same few beds, so two reels in the same niche can sound alike. The upgr
 licensed catalogue API **if and only if it bills a flat rate per track** — at which point
 `MEDIA_MUSIC_PRICING` gains a row per tier and nothing else in the rail moves. A per-second or
 per-compute-second music vendor is not an upgrade path; it is a different rail.
+
+## The card palette (the wire that stopped three-quarters of the way)
+
+A text card was drawn black-on-white until phase 3, while the deck it belonged to already carried
+a `palette` the specialist chose, `parseArtDirection` validated, the canvas showed, and the owner
+approved. Nothing was missing from ffmpeg. The value simply never reached it.
+
+`cardColorsOf` (`@pikar/core/render`) turns that palette into two colours; `batchToRender` reads it
+off the approved plan row and sends the pair; `assemble_final.sh` draws with it.
+
+### Why the ink is COMPUTED and never taken from the palette
+
+The background is the palette's — that is the brand signal a viewer actually reads. The ink is
+whichever of black or white has more contrast against it, by WCAG relative luminance.
+
+Picking the ink from the palette too would look more designed and would eventually put a mid-tone
+on a mid-tone. **That card passes every gate this pipeline has**: the file decodes, the duration is
+right, the sidecar is well-formed, the render succeeds. Only the words are invisible. There is no
+downstream check that would catch it, which is exactly why the choice is made upstream and pinned
+by a 216-colour contrast sweep in `render.test.ts` rather than by four hand-picked examples.
+
+Relative luminance rather than a channel average is load-bearing: brand greens are common and read
+far lighter than the same-valued blue, so the cheap version gets a real case wrong.
+
+### The trust boundary this change moved
+
+**A colour is the first model-derived value ever interpolated into the filtergraph.**
+
+The card's WORDS are safe by construction and always were: `textfile=` keeps them out of the filter
+string entirely, and `expansion=none` stops drawtext EVALUATING `%{...}` inside the file. A colour
+cannot be passed that way — it has to be written into the filter string — so the protection that
+covers the words does not extend to it.
+
+Three checks, none of which makes the others redundant:
+
+1. `cardColorsOf` can only emit `0x` + six hex digits, or the default. It is the only producer.
+2. `parseBody` re-asserts `CARD_COLOR` at the route, because this runner validates what it was
+   SENT, never what it assumes the sender computed.
+3. `assemble_final.sh` bounds the charset again before either value is used.
+
+A malformed pair is a **refused render**, not a card quietly drawn in the defaults — same posture
+as the music slug, sharper consequence. Verified: `--card-bg "black;rm -rf /"` exits 2.
+
+If a future change adds another palette-derived value to the filtergraph, it needs all three.
+
+### What it does NOT do
+
+* **It cannot change the length.** A card is still built to exactly `SEC`. The fade-in is a filter
+  on the picture, capped at a third of the scene, and never becomes a duration term.
+* **It adds no `gates` entry to the sidecar.** The script runs no contrast gate, and claiming a
+  gate it does not run is the one thing a proof plane must never do. The sidecar reports
+  `card_bg` — what was drawn — beside `music`, what was mixed.
+* **Typography is deliberately NOT wired.** The deck carries a `Typography` line and only DejaVu is
+  baked into the snapshot, so honouring "a grotesque with tabular figures" is impossible here.
+  Accepting the field and ignoring it would be a promise the renderer breaks with nothing going
+  red. The absence is documented in the script and pinned by a test.
+
+### Verified end to end, not just by tripwire
+
+A source tripwire over a filtergraph proves SPELLING, not validity, so `assemble_final.sh` was run
+against real ffmpeg for all four cases:
+
+| Case | Result |
+|---|---|
+| `--card-bg 0x1B4B43 --card-ink 0xFFFFFF` | exit 0; **card pixels sampled at 26,75,67** against a requested 27,75,67 (yuv420p round-trip); reel 10.005s of a declared 10 |
+| the same reel's video scene | unchanged at 51,51,51 — the palette touches cards only |
+| no flags at all | exit 0; card pixels 0,0,0 — byte-identical behaviour to before |
+| `--card-bg "black;rm -rf /"` | **exit 2**, refused on charset |
+
+### Ceiling and upgrade path
+
+ponytail: two colours and a computed ink, not a themed layout engine. The ceiling is that every
+card in a reel looks the same and the palette's remaining entries are unused. The upgrade path is a
+per-scene accent from `palette[1]`, at which point `cardColorsOf` grows a third return value and
+nothing else in the chain moves. Typography's upgrade path is baking a second family and mapping
+the field onto a CLOSED set of faces — never an arbitrary font name, which is a path.
+
 
 ## Free stock footage (the other $0 line, and the opposite shape)
 
