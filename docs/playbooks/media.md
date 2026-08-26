@@ -1,5 +1,15 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-08-26 (**THE MUSIC BED — a $0 PRICED LINE, one baked library, one amix.**
+> `assemble_final.sh` gained `--music <slug>`, which was on its own DELIBERATELY-NOT-HARVESTED list;
+> taking it off that list is the scope decision the list demands, and `assembleScript.test.ts`'s
+> deferred-flag tripwire was edited in the same change rather than worked around. THE ONE THING
+> THAT NEEDED THOUGHT: the narration assert proves a take reached the mix by finding no span
+> quieter than -18dB, so a loud bed under a MISSING take would hold that span above the threshold
+> and the gate would pass on a reel with no narration in it. The bed is therefore loudnorm'd to a
+> pinned -24 dBTP — a GATE, not a mixing preference, pinned by a tripwire. No duration behaviour
+> changed: the bed is built to exactly TOT and takes no part in speech placement.)
+>
 > Last verified: 2026-08-22 (26-11 -- **both rendered-media write sites now stamp `sourceThreadId`
 > beside the `sourcePlanId` they already wrote** (`mediaComplete.ts` for a landed image,
 > `render/renderReel.ts` for a finished reel). Both already held the tenant-checked `plans` row, so
@@ -1548,6 +1558,135 @@ table did not exist yet; a generated clip is 40x a still, so the blend hid the o
 has. `jobEstimate` now emits `clips` and `stills` separately, and omits a kind the deck does not use
 rather than printing it at zero. `uploaded_video` and `text_card` get no line at all — they buy
 nothing, and the timeline ribbon above already shows them.
+
+## The music bed (the $0 line)
+
+A reel may carry ONE instrumental bed under the whole timeline. It is the cheapest capability in
+this rail and the only one that is priced at zero — which is exactly why it needed the most care
+about *how* it is zero.
+
+### It is a LINE, not a freebie
+
+`artDirection.music` holds a slug from `MUSIC_MOODS` (`packages/core/src/storyboard.ts`):
+`calm`, `warm`, `upbeat`, `cinematic`. `musicSpecOf` in `media.ts` reads it, and BOTH money sites
+call that one reader — `reserveSceneJobInner` and `jobEstimate` — so the number on the canvas and
+the number the rail consumes cannot drift.
+
+| Kind | Buys | USD | Billing unit |
+|---|---|---|---|
+| `music` | one track from the baked library | $0.00 | per track, flat |
+
+`MEDIA_MUSIC_PRICING` is keyed per TRACK because that is what the "vendor" charges on, which is the
+same rule every other table in that file follows. **A generative music API could not live here**:
+every one bills per generated second or per compute second, neither of which is knowable before the
+request exists, so it is refused by construction rather than by preference. That is rule 3 doing
+its job, not an oversight to fix later.
+
+It is printed on the estimate at 0c, deliberately breaking `jobEstimate`'s "omit a kind the deck
+does not use" rule — because that is a different rule. A kind the deck does not use has no line; a
+bed the deck DOES declare has a line that happens to cost nothing, and hiding it would make the
+reel look like it was built from fewer inputs than it was.
+
+### It gets NO `mediaJobs` row, and that is load-bearing
+
+`renderReel.batchToRender` refuses a batch unless every row reached `succeeded` with landed bytes.
+A music row buys no provider call, so it would sit `queued` forever and the reel would never render
+at all. The `render` line has exactly this shape for exactly this reason: priced, capped and
+reserved with the job, with no row, no provider request and no webhook.
+
+**This is the opposite of what a stock-footage line would need** — stock DOES fetch bytes, so it
+would want a row to hold its `assetStorageId`. Do not reason from one to the other.
+
+### The level is a GATE, not a mixing preference
+
+`assemble_final.sh` proves narration reached the mix by running `silencedetect=noise=-18dB` across
+each take's speech span: a span quiet through its centre means the voice never arrived. **A bed
+louder than that threshold would hold a silent span above it, and the assert would pass on a reel
+with no narration in it** — the "silent second half" failure the gate exists to catch, reopened by
+a decoration.
+
+So the bed is built at `MUSIC_I=-33` with its peak HARD-LIMITED to `MUSIC_TP=-24` dBFS, ~6dB below
+the threshold and ~14 LU under the voice. Both numbers are pinned by a tripwire in
+`assembleScript.test.ts`, which asserts the margin numerically — so "make the music louder" has to
+come past that assertion.
+
+**The ceiling is `alimiter`'s, NOT `loudnorm`'s, and this cost a real defect.** `loudnorm`'s own
+`TP` parameter accepts only **[-9, 0]**. The first version of this asked it for `TP=-24`, which is
+not a silent no-op: ffmpeg exits with `Value -24.000000 for parameter 'TP' out of range`, the bed
+fails to build, and the reel renders **silently bedless** — while every source tripwire stays
+green, because the string looked right. It was found by running ffmpeg, not by reading. So
+`loudnorm` sets the loudness with its `TP` at the floor of its own range (-9), and
+`alimiter=limit=${MUSIC_PEAK}:level=disabled` puts the peak where the gate needs it.
+`level=disabled` is load-bearing: alimiter's auto-level default normalises the output back to 0 dB,
+which would undo the limit it was just asked to apply. `MUSIC_PEAK` is DERIVED from `MUSIC_TP`
+(`10^(d/20)`) so the dB constant and the linear one cannot drift apart.
+
+**Verified by running the assembler, 2026-08-26** (ffmpeg is available on the dev box; these are
+measured, not reasoned):
+
+| Case | Result |
+|---|---|
+| `--music calm`, narrated take | exit 0, `"music":"calm"`, 15.100s against a declared 15 |
+| `--music calm`, **silent** take | **exit 1** — the narration assert still fires. The gate is NOT vacuous. |
+| `--music upbeat`, no such track | exit 0, `WARN: no 'upbeat' track`, sidecar `"music":"none"` |
+| `--music ../../etc/passwd` | **exit 2**, refused on the charset before touching a path |
+
+Levels in the delivered file: the bed's own region reads mean -23.3 dB / max -19.7 dB (against
+-91 dB — digital silence — with no bed), and the narration region peaks at -2.4 dB. The bed is
+audible and the voice sits ~17 dB over it. (Those figures are POST the final linear loudnorm, which
+adds a constant gain; the -24 ceiling applies pre-mix, which is where the assert reads it.)
+
+For the same reason the bed is STATIC rather than `sidechaincompress`-ducked. A compressor's output
+level is a function of the voice over time, and no source tripwire can pin a release curve; ducking
+would trade a provable property for an audible one. If it is ever wanted, the assert is reworked
+FIRST.
+
+### What it cannot do
+
+- **Change the length.** Built to exactly `TOT` — `-stream_loop -1` then `-t "$TOT"` — so it covers
+  the reel whether the track is 20s or four minutes, and ends with it either way.
+- **Move a take.** It enters the SAME single `amix` at offset 0 with no `adelay`, after every
+  timeline check has already run. There is no placement to compute wrong.
+- **Become a second mix.** Still exactly one `amix`, asserted twice in the drift test.
+
+### The library, and the licence gate
+
+Tracks live in `apps/web/scripts/music/` as committed files, one per slug, and are baked into the
+sandbox snapshot beside ffmpeg and the DejaVu font — the render sandbox is `networkPolicy:
+"deny-all"` and cannot fetch anything at render time.
+
+**`bake-sandbox-snapshot.mjs` refuses to bake a track whose filename does not appear in
+`LICENSES.md`.** It is a filename check, not a licence check: it cannot tell you an attestation is
+true, only that a human wrote one down. What it removes is the accident — a track dropped in to try
+something and never thought about again.
+
+An EMPTY library is a valid state and the state this shipped in. `--music` then degrades: WARN, no
+bed, and the sidecar records `"music":"none"`. That is not the same as `"music":"calm"`, which is
+the whole reason the degrade path writes to the proof plane instead of just logging.
+
+**A missing track WARNS; a malformed slug REFUSES.** They are different failures on purpose. A slug
+with no track behind it is a deployment state (a snapshot baked before that mood existed) and must
+not kill a paid render over a $0 decoration. A slug that is not a slug is a caller bug, and it is
+about to be interpolated into a path.
+
+### Order of operations when adding a track
+
+1. Add the file and its `LICENSES.md` line.
+2. `pnpm --filter @pikar/web bake:sandbox`, then set `MEDIA_SANDBOX_SNAPSHOT_ID`.
+3. Only then re-seed `media-director` (`pnpm --filter @pikar/backend seed`).
+
+**Re-bake BEFORE re-seeding.** The specialist only writes a `Music:` line once the body is seeded;
+if the deployed snapshot has no library yet, every deck that asks for a bed renders without one.
+Nothing breaks and nothing is charged, but the reels are quietly bedless until the snapshot catches
+up.
+
+### Ceiling and upgrade path
+
+A fixed local library, chosen by mood from a closed set, at one pinned level. Every tenant draws
+from the same few beds, so two reels in the same niche can sound alike. The upgrade path is a
+licensed catalogue API **if and only if it bills a flat rate per track** — at which point
+`MEDIA_MUSIC_PRICING` gains a row per tier and nothing else in the rail moves. A per-second or
+per-compute-second music vendor is not an upgrade path; it is a different rail.
 
 ## The budget rail (20-04)
 

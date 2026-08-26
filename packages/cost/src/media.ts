@@ -19,7 +19,7 @@
  *  3. The cents floor happens ONCE, on the batch total. See chooseMediaBatch.
  */
 import { err, ok, type Result } from "@pikar/core/result";
-import type { VisualKind } from "@pikar/core/storyboard";
+import { MUSIC_MOODS, type VisualKind } from "@pikar/core/storyboard";
 
 export type VideoRes = "480p" | "720p" | "1080p";
 
@@ -58,6 +58,29 @@ export const MEDIA_TTS_PRICING: Record<string, number> = {
  *  window count. */
 export const MEDIA_STT_PRICING: Record<string, number> = {
   "openai/whisper-1": 0.006,
+};
+
+/**
+ * USD per TRACK, FLAT. The billing unit is the track, which is why this table can exist at all.
+ *
+ * $0 is not a placeholder and it is not "free by accident" — it is the PRICE of a fixed local
+ * library of licence-cleared files baked into the render snapshot beside the font and ffmpeg
+ * (`apps/web/scripts/bake-sandbox-snapshot.mjs`). There is no request, no vendor and no meter, so
+ * the number is knowable before the job exists, which is the whole of rule 3.
+ *
+ * **A GENERATIVE MUSIC API COULD NOT LIVE HERE**, and that is the point of writing this down: every
+ * one on the market bills per generated second or per compute second, neither of which is
+ * pre-computable before the request, and a 30-second bed at generative rates is a material
+ * fraction of `MEDIA_JOB_CAP_USD` on its own. Refused by construction, not by preference.
+ *
+ * ponytail: a fixed local library, not generated music. The ceiling is that every tenant's reel
+ * draws from the same four beds, so two reels in the same niche can sound alike. The upgrade path
+ * is a licensed catalogue API **if and only if it bills a flat rate per track** — at which point
+ * this table gains a row per catalogue tier and nothing else in the rail moves. A per-second or
+ * per-compute-second music vendor is not an upgrade path; it is a different rail.
+ */
+export const MEDIA_MUSIC_PRICING: Record<string, number> = {
+  "library/v1": 0,
 };
 
 /** D10 — the ceiling on the WHOLE job: clips + voice + STT + render. Supersedes D4's
@@ -103,11 +126,22 @@ export const MEDIA_DEFAULT_STT = {
   model: "openai/whisper-1",
 } as const;
 
+/** The library version, PINNED here the way every other provider spec is pinned. Bumping it is a
+ *  re-bake plus a row in `MEDIA_MUSIC_PRICING`, never a silent swap of what a mood sounds like. */
+export const MEDIA_DEFAULT_MUSIC = {
+  model: "library/v1",
+} as const;
+
 export type MediaSpec =
   | { kind: "video"; model: string; resolution: VideoRes; seconds: number }
   | { kind: "image"; model: string; width: number; height: number }
   | { kind: "tts"; model: string; characters: number }
   | { kind: "stt"; model: string; audioMinutes: number }
+  /** The deck-wide music bed. A $0 line, and it IS a line: it is reserved with the rest of the job
+   *  so the invoice names every input the reel was built from, including the ones that cost
+   *  nothing. Like `render` it buys no provider call, so it gets no `mediaJobs` row — see
+   *  `reserveSceneJobInner`. */
+  | { kind: "music"; model: string; mood: string }
   | { kind: "render" } // the flat sandbox constant — a cost line, not a provider call
   | { kind: "free" }; // a scene whose picture costs nothing — see SCENE_VISUAL_LINE
 
@@ -163,6 +197,19 @@ export function estimateMediaUsd(spec: MediaSpec): Result<number, MediaCostError
       // buys one. Fail-closed bias, and it is bounded: a whole extra minute is $0.008, 0.2% of the
       // job cap. Deliberate deviation from the plan, which pinned only the exact 1-minute case.
       return ok(Math.ceil(spec.audioMinutes) * perMinute);
+    }
+    case "music": {
+      const perTrack = MEDIA_MUSIC_PRICING[spec.model];
+      if (perTrack === undefined) return err({ code: "unknown_model" });
+      // The MOOD is checked here as well as at the parser, and deliberately so: this module is the
+      // gate money passes through, and "the caller already validated it" is the assumption every
+      // pricing hole in this file was written to remove. A mood outside the set names no track in
+      // the baked library, so there is nothing to price — `unknown_model`, the same code a missing
+      // resolution gets, and never a fallback to some other bed.
+      if (!(MUSIC_MOODS as readonly string[]).includes(spec.mood)) {
+        return err({ code: "unknown_model" });
+      }
+      return ok(perTrack);
     }
     case "render":
       return ok(MEDIA_SANDBOX_USD_PER_RENDER);

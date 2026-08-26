@@ -1,5 +1,16 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-26 (**`media-director` -> v4: the music bed.** The body's NOT-DO list said
+> outright that the system does not do "music, a sung track"; it now teaches an OPTIONAL `Music:`
+> field in ART DIRECTION carrying ONE word from a four-member closed set, and still forbids naming a
+> track, an artist, a tempo or a BPM — the same reasoning as the existing "never name a model" rule.
+> THE CLOSED SET IS WHAT MAKES THAT STRUCTURAL rather than a request: `parseMusicMood` scans for a
+> known slug and anything else reads as no music at all, so an invented track name cannot become a
+> lookup. Both WORKED EXAMPLES gained a `Music` line, because `storyboard.test.ts` parses them and
+> the body advertises the worked answer as "the exact shape, end to end". Mirror regenerated;
+> re-seed required — and re-BAKE the sandbox snapshot BEFORE re-seeding, or every deck that asks for
+> a bed renders without one. See docs/playbooks/media.md, "The music bed".)
+>
 > Last verified: 2026-08-26 (**Pack bodies are NOT published by `seedSkills` — they go through
 > `skills:seedPackCandidates`, and calling the wrong one looks exactly like a stale bundle.**
 >

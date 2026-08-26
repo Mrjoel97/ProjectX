@@ -14,6 +14,7 @@ import {
   isPaidScene,
   MAX_CHARS_PER_BLOCK,
   MAX_CHARS_PER_SECOND,
+  MUSIC_MOODS,
   maxCharsFor,
   minCharsFor,
   narrationCeilingSeconds,
@@ -21,6 +22,7 @@ import {
   parseArtDirection,
   parseBlockDeck,
   parseBrief,
+  parseMusicMood,
   parseSceneDeck,
   parseScript,
   parseVariations,
@@ -469,6 +471,11 @@ describe("media-director.md round trip — the body's worked answer survives its
       const art = parseArtDirection(s.body);
       expect(art, "nine fields, per variation").not.toBeNull();
       expect(art?.palette[0]).toMatch(/#[0-9a-f]{6}/i); // hex, never a vague colour word
+      // THE BED, round-tripped out of the body the registry actually seeds. The worked answer is
+      // advertised to the model as "the exact shape, end to end", so a `Music` line the parser
+      // cannot read would teach the shape that does not work — which is precisely the failure this
+      // whole round-trip suite exists to catch for the deck.
+      expect(MUSIC_MOODS, "the example's bed is a real slug").toContain(art?.music);
     }
   });
 
@@ -610,6 +617,61 @@ describe("parseArtDirection", () => {
     // the Approve gate, where a human is already reading the proposal and is the better judge.
     const vague = PROSE.replace(/^- \*\*Palette\*\*.*$/m, "- **Palette** — warm tones");
     expect(parseArtDirection(vague)?.palette).toEqual(["warm tones"]);
+  });
+
+  it("keeps `music` OPTIONAL, and PROSE has none — absence is the normal case", () => {
+    // A reel with no bed is the reel this system shipped before beds existed. Failing an art
+    // direction over a missing music line would be a regression dressed as a feature.
+    const art = parseArtDirection(PROSE);
+    expect(art).not.toBeNull();
+    expect(art?.music).toBeUndefined();
+  });
+
+  it("reads a `Music` line into the closed set", () => {
+    const withBed = PROSE.replace("- **Do NOT** —", "- **Music** — upbeat\n- **Do NOT** —");
+    expect(parseArtDirection(withBed)?.music).toBe("upbeat");
+  });
+
+  it("a bed the library cannot play is NO bed — never a passed-through name", () => {
+    // The containment, end to end at the parser: the skill body ASKS for a mood and forbids naming
+    // a track, but an instruction is a request. This is what makes it structural.
+    const named = PROSE.replace(
+      "- **Do NOT** —",
+      '- **Music** — "Bittersweet Symphony" by The Verve, 128bpm\n- **Do NOT** —',
+    );
+    const art = parseArtDirection(named);
+    expect(art, "the rest of the block still parses").not.toBeNull();
+    expect(art?.music, "an invented track name cannot become a lookup").toBeUndefined();
+  });
+});
+
+describe("parseMusicMood", () => {
+  it("accepts every member of the closed set, and nothing else", () => {
+    for (const mood of MUSIC_MOODS) expect(parseMusicMood(mood)).toBe(mood);
+    for (const junk of ["lofi", "128bpm", "", "jazz", "музыка"]) {
+      expect(parseMusicMood(junk), `${junk} names no track we can play`).toBeUndefined();
+    }
+  });
+
+  it("SCANS a sentence — a model writes a phrase far more often than a bare word", () => {
+    // Refusing the sentence would cost the bed over a comma. Tolerance here is safe precisely
+    // because the scan is bounded by the closed set: it cannot widen what is reachable.
+    expect(parseMusicMood("calm, low strings held under the voice")).toBe("calm");
+    expect(parseMusicMood("Something CINEMATIC but restrained")).toBe("cinematic");
+    expect(parseMusicMood("a warm, unhurried pad")).toBe("warm");
+  });
+
+  it("takes the FIRST slug named, so a two-mood line is not ambiguous", () => {
+    // One bed, one mood. A line naming two is a specialist hedging; picking the first is
+    // deterministic, which is what the reserve and the render both need it to be.
+    expect(parseMusicMood("upbeat, or calm if that reads better")).toBe("upbeat");
+  });
+
+  it("cannot be talked into a path — the slug is never caller-shaped text", () => {
+    // `--music` is interpolated into a path inside the VM. The script bounds the charset again on
+    // its own side; this is the half that stops such a value ever being produced here.
+    expect(parseMusicMood("../../etc/passwd")).toBeUndefined();
+    expect(parseMusicMood("calm; rm -rf /")).toBe("calm"); // the SLUG survives, the rest does not
   });
 });
 

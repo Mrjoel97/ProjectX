@@ -39,6 +39,7 @@ import {
   chooseMediaBatch,
   estimateMediaUsd,
   MEDIA_DEFAULT_IMAGE,
+  MEDIA_DEFAULT_MUSIC,
   MEDIA_DEFAULT_STT,
   MEDIA_DEFAULT_VIDEO,
   MEDIA_DEFAULT_VOICE,
@@ -430,6 +431,23 @@ const firstUnconfirmedClaim = (
 ): { index: number } | null =>
   shots?.find((s) => s.needsConfirmation === true && s.confirmedAt === undefined) ?? null;
 
+/**
+ * The deck-wide music bed as a priced spec, or `null` when the deck declares no bed.
+ *
+ * ONE reader of `artDirection.music` for BOTH money sites — `reserveSceneJobInner` and
+ * `jobEstimate` — which is the wave-5 co-location rule applied to a new line: the number the canvas
+ * prints and the number the rail consumes come from the same three lines, so they cannot drift the
+ * way the per-kind picture branches drifted while they were hand-copied at two call sites.
+ *
+ * A bed is DECK-WIDE, so it is priced on a partial buy too. Re-buying one scene re-renders the
+ * whole reel, and the re-render lays the same bed down again — exactly the reasoning that already
+ * keeps the captions line whole on a partial buy.
+ */
+const musicSpecOf = (plan: Doc<"plans"> | null): Extract<MediaSpec, { kind: "music" }> | null => {
+  const mood = plan?.artDirection?.music;
+  return mood === undefined ? null : { kind: "music", model: MEDIA_DEFAULT_MUSIC.model, mood };
+};
+
 export async function reserveSceneJobInner(
   ctx: MutationCtx,
   a: {
@@ -599,7 +617,24 @@ export async function reserveSceneJobInner(
     });
   }
 
-  const specs: MediaSpec[] = [...lines.map((l) => l.spec), { kind: "render" }];
+  // THE MUSIC BED (deck-wide, $0) — a SPEC, never a `mediaJobs` row, and the distinction is
+  // load-bearing rather than tidy. `renderReel.batchToRender` refuses a batch unless every row
+  // reached `succeeded` with landed bytes; a music row buys no provider call, so it would sit
+  // `queued` forever and the reel would never render at all. The `render` line has exactly this
+  // shape for exactly this reason — priced, capped and reserved with the job, with no row, no
+  // provider request and no webhook. A $0 line is still a line: it belongs on the invoice because
+  // the reel was built from it.
+  //
+  // Priced through `estimateMediaUsd` like every other line, so an unpriceable mood is a REFUSED
+  // job rather than a quietly bedless one — "a job with one unpriceable line is not a cheaper job."
+  // In practice the parser's closed set makes that unreachable; this is the gate that makes it
+  // unreachable rather than merely unlikely.
+  const music = musicSpecOf(planRow && planRow.tenantId === a.tenantId ? planRow : null);
+  const specs: MediaSpec[] = [
+    ...lines.map((l) => l.spec),
+    ...(music === null ? [] : [music]),
+    { kind: "render" },
+  ];
   return await reserveProviderLinesInner(ctx, a.tenantId, batchId, lines, specs);
 }
 
@@ -2162,6 +2197,10 @@ export const jobEstimate = tenantQuery({
       }
       const audioMinutes = targetDurationSeconds / 60;
       specs.push({ kind: "stt", model: MEDIA_DEFAULT_STT.model, audioMinutes });
+      // The SAME reader `reserveSceneJobInner` uses, in the same position of the same order — so
+      // the estimate and the reserve cannot disagree about whether this deck has a bed.
+      const music = musicSpecOf(plan);
+      if (music !== null) specs.push(music);
       specs.push({ kind: "render" });
 
       const priced = chooseMediaBatch(specs, MEDIA_JOB_CAP_USD);
@@ -2210,6 +2249,14 @@ export const jobEstimate = tenantQuery({
             unit: `${audioMinutes.toFixed(2)} min`,
             cents: sub(specs.filter((x) => x.kind === "stt")),
           },
+          // PRINTED AT ZERO, deliberately breaking the "omit a kind the deck does not use" rule
+          // above — because it is not the same rule. A kind the deck does not use has no line;
+          // a bed the deck DOES declare has a line that happens to cost nothing, and hiding it
+          // would make the reel look like it was built from fewer inputs than it was. The owner
+          // should be able to read the estimate and see the bed they approved.
+          ...(music !== null
+            ? [{ label: "music", qty: 1, unit: `${music.mood} bed`, cents: sub([music]) }]
+            : []),
           // 33-04: the label names what the doubled constant covers — one auto-retry sandbox.
           {
             label: "render (incl. one retry)",

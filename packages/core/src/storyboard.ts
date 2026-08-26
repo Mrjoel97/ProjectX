@@ -282,7 +282,44 @@ function sectionOf(body: string, heading: string): string {
  */
 export const parseScript = (body: string): string => sectionOf(body, "SCRIPT");
 
-/** koda's fixed 9-field art direction. `typography` is the ONE optional field (schema.ts). */
+/**
+ * The music bed's mood, as a CLOSED set of slugs — and the closed-ness is the whole containment.
+ *
+ * The skill body ASKS for a mood or a genre and forbids naming a track or a tempo, for the same
+ * reason it forbids naming a model: a specialist that could name the artefact could pick one
+ * nobody priced, nobody licensed and nobody baked. But an instruction is a request. **This set is
+ * what makes it structural** — a value outside it does not parse, so `Music: "Bittersweet
+ * Symphony"` and `Music: 128bpm` both land as no music at all rather than as a lookup.
+ *
+ * One slug is one file in the baked library (`<slug>.mp3`). Adding a member here is therefore
+ * exactly half a change: the other half is a vouched track and a re-bake, and until both are done
+ * the mood parses, prices at $0 and renders WITHOUT a bed — recorded in the assembly sidecar as
+ * `"music":"none"`, never silently.
+ */
+export const MUSIC_MOODS = ["calm", "warm", "upbeat", "cinematic"] as const;
+export type MusicMood = (typeof MUSIC_MOODS)[number];
+
+const MUSIC_MOOD_SET = new Set<string>(MUSIC_MOODS);
+
+/**
+ * The first mood slug named anywhere in an art-direction `Music:` value, or `undefined`.
+ *
+ * SCANS rather than matches whole. A model writes `Music — calm, low strings under the voice` far
+ * more often than it writes `calm`, and refusing the sentence would cost the bed over a comma. The
+ * scan is bounded by `MUSIC_MOOD_SET`, so tolerance here cannot widen what is actually reachable.
+ *
+ * ponytail: a word scan over a four-member set, not a fuzzy match or a synonym table. The ceiling
+ * is that `Music: energetic` yields no bed even though `upbeat` is what it meant; the upgrade path
+ * is a synonym map here (NOT in the skill body, which should keep teaching the four slugs).
+ */
+export const parseMusicMood = (value: string): MusicMood | undefined =>
+  value
+    .toLowerCase()
+    .split(/[^a-z]+/)
+    .find((w) => MUSIC_MOOD_SET.has(w)) as MusicMood | undefined;
+
+/** koda's fixed 9-field art direction, plus the optional music bed. `typography` and `music` are
+ *  the ONLY optional fields (schema.ts). */
 export type ArtDirection = {
   palette: string[];
   mood: string;
@@ -293,6 +330,9 @@ export type ArtDirection = {
   typography?: string;
   references: string[];
   avoid: string;
+  /** The BED's mood — deliberately not the same field as `mood`, which is the PICTURE's. A reel
+   *  can look austere and sound warm, and collapsing the two would make one of them a lie. */
+  music?: MusicMood;
 };
 
 /** `- **Palette** — 3-5 colours…` → the text after the label. Tolerates `-`/`*` bullets, bold or
@@ -329,6 +369,10 @@ export function parseArtDirection(body: string): ArtDirection | null {
   const environment = fieldOf(section, "Environment");
   const texture = fieldOf(section, "Texture");
   const typography = fieldOf(section, "Typography");
+  // OPTIONAL, and never a reason to fail the block. A reel without a bed is the reel we shipped
+  // before there were beds at all; a reel refused at the Approve gate over a music slug is a
+  // regression. Same posture as `typography`, for the same reason.
+  const music = parseMusicMood(fieldOf(section, "Music"));
   const references = listOf(fieldOf(section, "References"));
   // The skill body writes this one as `Do NOT`; `Avoid` is accepted because it is the obvious
   // paraphrase and rejecting it would fail the whole block over a synonym.
@@ -351,6 +395,7 @@ export function parseArtDirection(body: string): ArtDirection | null {
     ...(typography === "" ? {} : { typography }),
     references,
     avoid,
+    ...(music === undefined ? {} : { music }),
   };
 }
 

@@ -67,13 +67,52 @@
 #     never checked; a scene that DOES have a take always is, so the gate cannot go vacuous by
 #     a deck simply using more silent scenes.
 #   * LEVEL LAW: voice is always 1.0; the clips' own diegetic SFX sit under it at 0.12
-#     (--sfx-vol, hard-clamped ≤ 0.20); final two-pass LINEAR loudnorm at -16 LUFS.
+#     (--sfx-vol, hard-clamped ≤ 0.20); the music bed is pinned at MUSIC_TP (below, NOT settable
+#     by the caller); final two-pass LINEAR loudnorm at -16 LUFS.
 #   * An assembly.json SIDECAR is written last. A final video without one was hand-assembled.
+#
+# ── THE MUSIC BED (--music SLUG) ──────────────────────────────────────────────────────────────
+# ONE optional track, laid across the WHOLE reel on the same master timeline as everything else
+# and mixed in the SAME single amix. It is a bed, not a element of the edit:
+#
+#   * IT CANNOT CHANGE THE LENGTH. The bed is built to exactly TOT seconds — looped if the track
+#     is shorter, cut if longer — so the fixed-length guarantee above is untouched by definition.
+#     It is never the reason a reel is padded, and there is no `duration=first` anywhere.
+#   * IT CANNOT MOVE A TAKE. It enters at offset 0 with no adelay and takes no part in the speech
+#     placement, the timeline checks, or the centring arithmetic. Those all run BEFORE it exists.
+#   * IT CANNOT MAKE THE NARRATION ASSERT VACUOUS, and this is the one that needed thought. That
+#     assert proves narration reached the mix by looking for spans QUIETER than -18dB across each
+#     take's speech window. A loud bed under a MISSING voice take would hold that window above the
+#     threshold and the gate would pass on a reel with no narration in it — the exact "silent
+#     second half" failure the gate exists to catch, re-opened by a decoration. So the bed is
+#     HARD-LIMITED to a peak of MUSIC_TP dBFS, which is below the threshold with margin: it is
+#     structurally incapable of lifting a silent span over the line. THE MARGIN BETWEEN MUSIC_TP
+#     AND THE -18dB THRESHOLD IS A GATE, NOT A MIXING PREFERENCE — raising the bed's level toward
+#     -18 quietly disarms the assert. A tripwire in assembleScript.test.ts pins both numbers so a
+#     future "make the music louder" edit has to come past this paragraph. Note it is `alimiter`
+#     that enforces this and NOT loudnorm's `TP`, whose range stops at -9; see MUSIC_PEAK below.
+#   * A STATIC LEVEL, NOT sidechaincompress. Ducking would make the bed's level time-varying,
+#     which is exactly what makes the bound above unprovable — a compressor's release curve is not
+#     something a source tripwire can pin. A fixed 14 LU below the voice is also what a
+#     narration-forward reel wants, and it is the lazier of the two.
+#   * A MISSING TRACK IS NOT A FAILED RENDER. The library is baked into the sandbox snapshot
+#     (apps/web/scripts/bake-sandbox-snapshot.mjs) beside the font, so a deployment whose snapshot
+#     predates a mood has no file for it. A card with no font is a black rectangle and must
+#     hard-error; a reel with no bed is the reel we shipped before beds existed. So this WARNS,
+#     renders without music, and records `"music":"none"` in the sidecar — degraded, never
+#     silently: the sidecar is the proof plane and it has to say which of the two happened.
+#
+# ponytail: a fixed local library of licence-cleared tracks, chosen by MOOD from a closed set, at
+# one pinned level. The ceiling is that every tenant draws from the same few beds and there is no
+# per-reel variation beyond the mood. The upgrade path is a licensed catalogue API **if and only
+# if it bills a flat rate per track** (see MEDIA_MUSIC_PRICING) — a per-second or per-compute-
+# second music vendor cannot be pre-priced and is refused by the cost rail's construction.
 #
 # Usage:
 #   assemble_final.sh --blocks N [--clip-seconds 10] [--in in] [--out out/final.mp4] [--sfx-vol 0.12]
 #   assemble_final.sh --scene video:8 --scene image:6 --scene card:4 --scene video:12 [...]
 #   ... [--target-seconds 30]   the DECLARED reel length; the scenes must sum to exactly it
+#   ... [--music calm]          ONE mood slug from the baked library; absent means no bed
 #
 # Inputs are DISCOVERED BY INDEX, not passed as pairs: scene 1 reads `<in>/block01.*` and
 # `<in>/voice01.wav`, … through N. That is deliberate — upstream took positional clip/voice pairs
@@ -90,14 +129,34 @@
 # 2026-07-29 for transcribing MIXED audio (music and SFX under the speech) and swallowing words.
 #
 # DELIBERATELY NOT HARVESTED (deferred; re-adding either is a scope decision, not a patch):
-# `--music` (ducked bed), `--song` (music-video mode), `--stepped` (on-twos cadence), the poster
-# frame, and the `--manifest` / `--allow-mismatch` pair plumbing that index discovery replaces.
+# `--song` (music-video mode), `--stepped` (on-twos cadence), the poster frame, and the
+# `--manifest` / `--allow-mismatch` pair plumbing that index discovery replaces.
+#
+# `--music` WAS on that list and was taken off it deliberately — the scope decision the line above
+# demands, made rather than patched around. What arrived is the ducked bed and nothing else: no
+# `--song`, no music-driven cutting, no caller-settable level. See the MUSIC BED section below.
 #
 # Requires: ffmpeg, ffprobe, awk. A `card` scene additionally needs a TrueType font in the image.
 set -euo pipefail
 
 IN_DIR="in"; OUT="out/final.mp4"; CLIP=10; SFXVOL="0.12"; BLOCKS=""; TARGET=""
 KINDS=(); SECS=()
+MUSIC=""            # the requested mood slug, "" for a reel with no bed
+MUSIC_USED="none"   # what actually made it into the mix — the sidecar reports THIS, not the ask
+# THE BED'S LEVEL, PINNED. Not a flag, unlike --sfx-vol: this number is half of the narration
+# assert's soundness (see the MUSIC BED notes above), so a caller must not be able to set it.
+# -24 dBTP sits 6 dB below the -18 dB silencedetect threshold that proves narration reached the
+# mix, and ~14 LU under the voice, which is where a narration-forward bed belongs anyway.
+MUSIC_I="-33"; MUSIC_TP="-24"
+# THE CEILING IS ENFORCED BY alimiter, NOT BY loudnorm — loudnorm's own `TP` accepts only
+# [-9, 0], so the -24 this gate needs cannot be expressed there at all. (Asking for it is not a
+# silent no-op either: ffmpeg exits "Value -24.000000 for parameter 'TP' out of range", the bed
+# fails to build, and the reel renders silently bedless. Found by running it.) So loudnorm sets
+# the LOUDNESS with its own ceiling at the floor of its range, and a hard limiter puts the peak
+# where the gate needs it. `level=disabled` is load-bearing: alimiter's default auto-level
+# normalises the result back up to 0dB, which would undo the limit it was just asked to apply.
+MUSIC_PEAK="$(awk -v d="$MUSIC_TP" 'BEGIN{printf "%.4f", 10^(d/20)}')"
+MUSIC_DIR="${ASSEMBLE_MUSIC_DIR:-/usr/local/share/pikar-music}"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --blocks) BLOCKS="$2"; shift 2 ;;
@@ -109,6 +168,11 @@ while [[ $# -gt 0 ]]; do
     # same rule the deck parser follows — the display `#` column is never read as a position.
     --scene)
       KINDS+=("${2%%:*}"); SECS+=("${2##*:}"); shift 2 ;;
+    # A MOOD SLUG, never a path and never a filename. It is interpolated into a path below, so the
+    # charset is bounded HERE rather than trusted from the caller: `--music ../../etc/passwd` must
+    # not be a thing this script can be asked. The caller validates against its own closed set too;
+    # this is the half that does not depend on the caller being the one we think it is.
+    --music) MUSIC="$2"; shift 2 ;;
     --in) IN_DIR="$2"; shift 2 ;;
     --out) OUT="$2"; shift 2 ;;
     --sfx-vol) SFXVOL="$2"; shift 2 ;;
@@ -145,6 +209,13 @@ done
 
 # LEVEL LAW: voice is ALWAYS 1.0; SFX is clamped at 0.20 so no caller can bury the narration.
 SFXVOL="$(awk -v v="$SFXVOL" 'BEGIN{v=v+0; if(v<0)v=0; if(v>0.2){print "WARN: --sfx-vol clamped to 0.20 (voice stays 1.0)" > "/dev/stderr"; v=0.2} printf "%.3f", v}')"
+
+# THE SLUG'S CHARSET, asserted before it is ever put in a path. A malformed slug is a CALLER bug
+# (or worse) and is a hard error — unlike a well-formed slug with no track behind it, which is a
+# deployment state and degrades. The two are deliberately different failures.
+if [[ -n "$MUSIC" ]]; then
+  [[ "$MUSIC" =~ ^[a-z][a-z0-9-]{0,23}$ ]] || { echo "ERROR: --music must be a lowercase mood slug (a-z, 0-9, -), got: $MUSIC" >&2; exit 2; }
+fi
 for b in ffmpeg ffprobe awk; do command -v "$b" >/dev/null 2>&1 || { echo "ERROR: '$b' not found" >&2; exit 1; }; done
 mkdir -p "$(dirname "$OUT")"
 
@@ -205,6 +276,42 @@ if [[ -n "$TARGET" ]]; then
   [[ "$TOT" -eq "$TARGET" ]] || { echo "ERROR: the scenes sum to ${TOT}s but the deck declares --target-seconds ${TARGET} — fix the deck; the assembler will not pad or trim to reach a target." >&2; exit 1; }
 else
   TARGET="$TOT"
+fi
+
+# ── THE MUSIC BED, built to EXACTLY the reel's length ─────────────────────────────────────────
+# Prepared HERE, upstream of every scene, because it depends on nothing but TOT — and because a
+# mood this snapshot cannot serve should be reported before a minute of encoding rather than after.
+MUSICWAV=""
+if [[ -n "$MUSIC" ]]; then
+  MTRACK=""
+  # Extension-agnostic: the library is a bake artifact, and pinning a container here would mean a
+  # re-bake that switched to m4a silently produced bedless reels. The SLUG is the contract.
+  for ext in mp3 m4a ogg wav flac; do
+    [[ -f "$MUSIC_DIR/$MUSIC.$ext" ]] && { MTRACK="$MUSIC_DIR/$MUSIC.$ext"; break; }
+  done
+  if [[ -z "$MTRACK" ]]; then
+    # DEGRADE, do not fail. See the MUSIC BED notes at the top: a card without a font is a black
+    # rectangle and must refuse; a reel without its bed is still the reel, and killing a paid
+    # render over a $0 decoration is the wrong trade. The sidecar records which happened.
+    echo "WARN: no '$MUSIC' track in $MUSIC_DIR — rendering with NO music bed. Re-bake the snapshot (pnpm --filter @pikar/web bake:sandbox) to add it; nothing else about this reel is affected." >&2
+  else
+    MUSICWAV="$TMP/music.wav"
+    # `-stream_loop -1` then `-t TOT`: the bed covers the reel whether the track is 20 seconds or
+    # four minutes, and it ends WITH the reel either way — which is why the bed can never be the
+    # reason a duration assert moves. Fades hide the loop seam and the hard cut at the end.
+    # loudnorm runs LAST of the filters so what it measures is what actually enters the mix.
+    FOUT_ST="$(awk -v t="$TOT" 'BEGIN{s=t-2; if(s<0)s=0; printf "%.3f", s}')"
+    if ffmpeg -y -loglevel error -stream_loop -1 -i "$MTRACK" -t "$TOT" \
+      -af "afade=t=in:st=0:d=1,afade=t=out:st=${FOUT_ST}:d=2,loudnorm=I=${MUSIC_I}:TP=-9:LRA=11,alimiter=limit=${MUSIC_PEAK}:level=disabled,aformat=sample_rates=48000:channel_layouts=stereo" \
+      -ar 48000 -ac 2 "$MUSICWAV" 2>/dev/null; then
+      MUSIC_USED="$MUSIC"
+      printf '  music bed: %s -> %ss at I=%s, peak clamped to %sdBFS (voice stays 1.0)\n' "$MUSIC" "$TOT" "$MUSIC_I" "$MUSIC_TP" >&2
+    else
+      # A track that will not decode is the same class of problem as one that is not there.
+      MUSICWAV=""
+      echo "WARN: could not prepare the '$MUSIC' bed from $MTRACK — rendering without it." >&2
+    fi
+  fi
 fi
 
 echo "[1/4] ${SCENES} scenes -> ${W}x${H} @ ${FPS}fps, ${TOT}s total; speech-centred, no atempo" >&2
@@ -396,7 +503,7 @@ ffmpeg -y -loglevel error -f concat -safe 0 -i "$LIST" -an -c:v libx264 -preset 
 # normalize=0 and it means the mix always has an input and always spans the video, so a reel with
 # no narration at all still carries a full-length audio stream instead of stopping partway.
 # Everything after that is one take or one diegetic bed, delayed to its ABSOLUTE offset.
-echo "[3/4] mix ${NTAKE} take(s) + ${#DIEG_FILE[@]} diegetic bed(s) on ONE timeline" >&2
+echo "[3/4] mix ${NTAKE} take(s) + ${#DIEG_FILE[@]} diegetic bed(s) + music:${MUSIC_USED} on ONE timeline" >&2
 VOTRACK="$TMP/joined.mp4"
 MIXARGS=(); FC=""; LBLS="[1:a]"; NMIX=1; IDX=2
 AFMT="aformat=sample_rates=48000:channel_layouts=stereo"
@@ -411,6 +518,16 @@ for ((k=0;k<NDIEG;k++)); do
   FC="${FC}[${IDX}:a]${AFMT},volume=${SFXVOL},adelay=${DIEG_PAD[k]}:all=1[s${k}];"
   LBLS="${LBLS}[s${k}]"; NMIX=$((NMIX+1)); IDX=$((IDX+1))
 done
+# THE MUSIC BED, into the SAME single amix — not a second mix, not a second pass over the output.
+# Offset 0 with NO adelay: it spans the whole reel by construction, so there is no placement
+# decision to get wrong and nothing here can shift a take. No `volume=` either — the level was
+# fixed by loudnorm when the bed was built, which is what makes it a bound the tripwires can pin
+# rather than a knob two places could disagree about.
+if [[ -n "$MUSICWAV" ]]; then
+  MIXARGS+=(-i "$MUSICWAV")
+  FC="${FC}[${IDX}:a]${AFMT}[mus];"
+  LBLS="${LBLS}[mus]"; NMIX=$((NMIX+1)); IDX=$((IDX+1))
+fi
 # normalize=0 is the LEVEL LAW in one option: amix's default divides every input by the number of
 # inputs, which would make a reel quieter simply for having more lines in it.
 FC="${FC}${LBLS}amix=inputs=${NMIX}:duration=longest:normalize=0[a]"
@@ -495,8 +612,12 @@ DERR="$( (ffmpeg -v error -xerror -i "$OUT" -f null - ) 2>&1 | head -3 || true)"
 # publishing a reel whose sidecar means something different from what the validator reads.
 SIDE="${OUT}.assembly.json"
 {
-  printf '{"script":"assemble_final.sh","out":"%s","scene_count":%d,"target_duration_s":%s,"total_duration_s":%s,"actual_duration_s":%s,"width":%s,"height":%s,"fps":"%s","sfx_vol":%s,"gates":["speech_fits_the_reel","no_overlapping_lines","clip_covers_window","speech_centred","no_time_stretch","narration_every_narrated_span","master_audio_timeline","linear_loudnorm_-16","duration_within_0.5s","full_decode"],"scenes":[' \
-    "$(basename "$OUT")" "$SCENES" "$TARGET" "$TOT" "$FDUR" "$W" "$H" "$FPS" "$SFXVOL"
+  # `music` is the mood that ACTUALLY reached the mix, never the one that was asked for — a reel
+  # whose bed was missing from the snapshot says "none" here, which is the whole reason the
+  # degrade path is not silent. No new entry in `gates`: the bed is not separately asserted, and
+  # claiming a gate this script does not run is the one thing a proof plane must never do.
+  printf '{"script":"assemble_final.sh","out":"%s","scene_count":%d,"target_duration_s":%s,"total_duration_s":%s,"actual_duration_s":%s,"width":%s,"height":%s,"fps":"%s","sfx_vol":%s,"music":"%s","gates":["speech_fits_the_reel","no_overlapping_lines","clip_covers_window","speech_centred","no_time_stretch","narration_every_narrated_span","master_audio_timeline","linear_loudnorm_-16","duration_within_0.5s","full_decode"],"scenes":[' \
+    "$(basename "$OUT")" "$SCENES" "$TARGET" "$TOT" "$FDUR" "$W" "$H" "$FPS" "$SFXVOL" "$MUSIC_USED"
   for ((i=0;i<SCENES;i++)); do printf '%s%s' "${PBJSON[i]}" "$([[ $i -lt $((SCENES-1)) ]] && echo ,)"; done
   printf '],"ts":"%s"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 } > "$SIDE"

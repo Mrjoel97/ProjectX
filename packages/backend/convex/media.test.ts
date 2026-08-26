@@ -6332,3 +6332,136 @@ describe("33-05 a saved reel is REUSABLE FOOTAGE — pickable equals renderable"
     ).toBeNull();
   });
 });
+
+// ── The music bed: a $0 line that is a LINE ──────────────────────────────────────────────────────
+//
+// Two properties, and they pull in opposite directions, which is why both are asserted:
+//   * the bed must be RESERVED with the job — it appears on the estimate and passes the cap; and
+//   * it must NOT become a `mediaJobs` row — a row that never lands would deadlock every render.
+describe("the music bed rides the whole-job reservation, and buys no row", () => {
+  const withBed = async (t: T, mood: string | undefined) => {
+    const { planId, shots } = await seedSceneDeck(t);
+    if (mood !== undefined) {
+      await t.run(async (ctx) =>
+        ctx.db.patch(planId, {
+          artDirection: {
+            palette: ["#0B4F4A deep teal"],
+            mood: "Quietly confident.",
+            lighting: "Warm golden light from camera left.",
+            composition: "Off-centre right.",
+            environment: "A small office.",
+            texture: "35mm grain.",
+            references: ["Gregory Crewdson"],
+            avoid: "No stock-footage handshakes.",
+            music: mood,
+          },
+        }),
+      );
+    }
+    return { planId, shots };
+  };
+
+  const jobRows = (t: T) => t.run(async (ctx) => ctx.db.query("mediaJobs").collect());
+
+  test("a deck with a bed reserves, and NO mediaJobs row is written for it", async () => {
+    const t = harness();
+    const { planId } = await withBed(t, "calm");
+    const res = await t.run(async (ctx) =>
+      reserveSceneJobInner(ctx, {
+        tenantId: A,
+        planId,
+        scenes: sceneDeckOf((await ctx.db.get(planId)) as Doc<"plans">)?.scenes ?? [],
+        targetDurationSeconds: 30,
+        withCaptions: true,
+      }),
+    );
+    expect(res.ok, `refused: ${res.ok ? "" : res.reason}`).toBe(true);
+    const inserted = await jobRows(t);
+    expect(inserted.length).toBeGreaterThan(0);
+    // THE LOAD-BEARING ASSERTION. `batchToRender` refuses a batch unless every row reached
+    // `succeeded` with landed bytes. A music row buys no provider call, so it would sit `queued`
+    // forever and the reel would never render at all — the reason this line has the `render`
+    // line's shape (a spec, no row) rather than the `tts` line's.
+    expect(
+      inserted.some((r) => (r.kind as string) === "music"),
+      "a music row would never land and would deadlock the render",
+    ).toBe(false);
+  });
+
+  test("the bed changes the invoice's SHAPE, never its total", async () => {
+    // TWO HARNESSES, because the comparison is the assertion: the same deck with and without a
+    // bed must reserve the same cents. A single-harness version could only assert the line exists,
+    // which is the half that would still pass if the bed were secretly priced.
+    const bareT = harness();
+    const bare = await withBed(bareT, undefined);
+    const t = harness();
+    const bedded = await withBed(t, "warm");
+    const estOf = (h: T, planId: Id<"plans">) => asA(h).query(api.media.jobEstimate, { planId });
+
+    const without = await estOf(bareT, bare.planId);
+    const est = await estOf(t, bedded.planId);
+
+    // $0 means $0: declaring a bed must not move the reserved total by a cent.
+    expect(est.totalCents).toBe(without.totalCents);
+    expect(est.lines.length, "…but it DOES add a line").toBe(without.lines.length + 1);
+
+    expect(est.refusal).toBeNull();
+    const music = est.lines.find((l) => l.label === "music");
+    // PRINTED AT ZERO, deliberately. A bed the deck declared is an input the reel was built from;
+    // hiding it because it is free would make the reel look like it came from fewer things.
+    expect(music, "a declared bed gets a line").toBeDefined();
+    expect(music?.cents).toBe(0);
+    expect(music?.unit).toBe("warm bed");
+    // …and it sits before the render line, where the deck-wide lines live.
+    expect(est.lines.map((l) => l.label)).toContain("music");
+    expect(est.lines.at(-1)?.label).toBe("render (incl. one retry)");
+  });
+
+  test("no bed declared means NO line — absence is not a zero row", async () => {
+    const t = harness();
+    const { planId } = await withBed(t, undefined);
+    const est = await asA(t).query(api.media.jobEstimate, { planId });
+    expect(est.lines.some((l) => l.label === "music")).toBe(false);
+  });
+
+  test("THE ANTI-DRIFT ASSERTION, extended to the bed: estimate === what the rail consumes", async () => {
+    const t = harness();
+    const { planId } = await withBed(t, "cinematic");
+    const est = await asA(t).query(api.media.jobEstimate, { planId });
+    const res = await t.run(async (ctx) =>
+      reserveSceneJobInner(ctx, {
+        tenantId: A,
+        planId,
+        scenes: sceneDeckOf((await ctx.db.get(planId)) as Doc<"plans">)?.scenes ?? [],
+        targetDurationSeconds: 30,
+        withCaptions: true,
+      }),
+    );
+    expect(res.ok).toBe(true);
+    // ONE reader (`musicSpecOf`) feeds both sites. This is the assertion that keeps it that way.
+    expect(res.ok && res.estCents).toBe(est.totalCents);
+  });
+
+  test("a bed nothing can price REFUSES the job — it does not quietly render bedless", async () => {
+    const t = harness();
+    // A row can only get here by a path other than the parser (a hand-written patch, a future
+    // writer). "The caller already validated it" is the assumption the money gate must not make.
+    const { planId } = await withBed(t, "lofi");
+    const res = await t.run(async (ctx) =>
+      reserveSceneJobInner(ctx, {
+        tenantId: A,
+        planId,
+        scenes: sceneDeckOf((await ctx.db.get(planId)) as Doc<"plans">)?.scenes ?? [],
+        targetDurationSeconds: 30,
+        withCaptions: true,
+      }),
+    );
+    expect(res).toEqual({ ok: false, reason: "unknown_model" });
+    expect(await jobRows(t), "a refused job inserts nothing").toEqual([]);
+    // …and the canvas refuses in the same place, so the button and the number agree.
+    expect(await asA(t).query(api.media.jobEstimate, { planId })).toMatchObject({
+      refusal: { reason: "unknown_model" },
+      lines: [],
+    });
+  });
+});

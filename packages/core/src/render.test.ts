@@ -568,6 +568,57 @@ describe("handleRenderRequest: nothing untrusted reaches the VM", () => {
       },
     ]);
   });
+
+  // ── The music bed ─────────────────────────────────────────────────────────────────────────
+  //
+  // The bed is the one thing in the assemble body that is NOT an input: no file is written for it,
+  // nothing is fetched for it, and no upload URL carries it. It is a NAME the script resolves
+  // against a library baked into the snapshot. These pin that it stays that way.
+
+  it("passes the bed as a --music MOOD and writes no file for it", async () => {
+    const { deps: d, rec } = deps();
+    await handleRenderRequest(post(body({ music: "calm" })), d);
+    expect(rec.commands[0]?.args).toEqual([
+      "assemble_final.sh",
+      "--scene",
+      "video:8",
+      "--scene",
+      "image:6",
+      "--scene",
+      "card:4",
+      "--scene",
+      "video:12",
+      "--target-seconds",
+      "30",
+      "--music",
+      "calm",
+    ]);
+    // NOT AN INPUT. If a bed ever starts arriving as bytes, this is the assertion that has to be
+    // deleted first — and deleting it is the moment to notice that `RENDER_INPUT_NAME`, the blob
+    // route and the path-traversal guard all now have a new case.
+    expect(rec.writes.map((w) => w.path).filter((p) => p.includes("music"))).toEqual([]);
+  });
+
+  it("omits the flag entirely when the deck declares no bed", async () => {
+    const { deps: d, rec } = deps();
+    await handleRenderRequest(post(body()), d);
+    expect(rec.commands[0]?.args).not.toContain("--music");
+  });
+
+  it.each([
+    ["lofi", "a mood outside the closed set"],
+    ["../../etc/passwd", "a path"],
+    ["", "an empty string"],
+    [7, "a number"],
+  ])("refuses %s (%s) rather than dropping it to no bed", async (music, _why) => {
+    // REFUSED, not silently ignored. A slug this runner does not recognise means the caller and
+    // this runner disagree about the library — most likely a Convex deployment newer than the web
+    // one — and rendering a quietly bedless reel would hide that behind a finished file.
+    const { deps: d, rec } = deps();
+    const res = await handleRenderRequest(post(body({ music })), d);
+    await expect(res.json()).resolves.toMatchObject({ ok: false, code: "bad_request" });
+    expect(rec.commands, "no sandbox is created for a refused body").toEqual([]);
+  });
 });
 
 describe("handleRenderRequest: nothing the VM returns is published unchecked", () => {

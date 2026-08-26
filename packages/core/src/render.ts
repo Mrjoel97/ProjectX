@@ -18,7 +18,7 @@ import {
   type AssemblyVisual,
   parseAssemblySidecar,
 } from "./assembly";
-import { TARGET_DURATIONS } from "./storyboard";
+import { MUSIC_MOODS, type MusicMood, TARGET_DURATIONS } from "./storyboard";
 
 // ── The duration ceiling (plan 20-15 Task 1, settled 2026-08-02) ───────────────────────────────
 //
@@ -478,6 +478,11 @@ type RenderRequestBody =
       inputs: Array<{ name: string; jobId: string }>;
       /** Text cards: the only input whose bytes come from the body rather than a job row. */
       cards: Array<{ name: string; text: string }>;
+      /** The music bed's mood slug, or absent for a reel with no bed. NOT an input: the bytes are
+       *  baked into the sandbox snapshot, so nothing is fetched, written or uploaded for it — this
+       *  is a name the script resolves against its own library. That is why it is not in
+       *  `RENDER_INPUT_NAME` and needs no path guard here beyond the closed set. */
+      music?: MusicMood;
       uploadUrls: { mp4: string; sidecar: string };
     }
   | {
@@ -495,6 +500,12 @@ const TARGET_SECONDS_SET = new Set<number>(TARGET_DURATIONS);
 
 /** The three kinds of picture the assembler can build, as the script names them. */
 const SCENE_KIND_SET = new Set<string>(ASSEMBLY_VISUALS);
+
+/** The mood slugs the baked library can be asked for. Closed here as well as at the parser and the
+ *  price table, and the reason is the reason every closed set in this file is repeated: this one is
+ *  applied to a value arriving in a REQUEST BODY, and "the caller already checked" is not a
+ *  property of a body. The slug is interpolated into a path inside the VM. */
+const MUSIC_MOOD_SET = new Set<string>(MUSIC_MOODS);
 
 const isStr = (v: unknown): v is string => typeof v === "string" && v.length > 0;
 
@@ -605,6 +616,14 @@ function parseBody(raw: unknown, uploadOrigin: string): RenderRequestBody | null
   const names = [...inputs.map((i) => i.name), ...cards.map((c) => c.name)];
   if (new Set(names).size !== names.length) return null; // one file, one writer
 
+  // THE MUSIC BED. Absent is the normal case and is not a refusal; PRESENT and outside the closed
+  // set IS a refusal, rather than being dropped to "no bed". A slug we do not recognise means the
+  // caller and this runner disagree about the library — most likely a Convex deployment newer than
+  // the web one — and rendering a silently bedless reel would hide that behind a finished file.
+  // The script bounds the charset again on its own side; neither check makes the other redundant.
+  if (b.music !== undefined && (!isStr(b.music) || !MUSIC_MOOD_SET.has(b.music))) return null;
+  const music = b.music as MusicMood | undefined;
+
   const up = b.uploadUrls;
   if (up === null || typeof up !== "object") return null;
   const { mp4, sidecar } = up as Record<string, unknown>;
@@ -620,6 +639,7 @@ function parseBody(raw: unknown, uploadOrigin: string): RenderRequestBody | null
     scenes,
     inputs,
     cards,
+    ...(music === undefined ? {} : { music }),
     uploadUrls: { mp4, sidecar },
   };
 }
@@ -811,6 +831,9 @@ export async function handleRenderRequest(req: Request, deps: RenderDeps): Promi
       ...body.scenes.flatMap((s) => ["--scene", `${s.kind}:${s.seconds}`]),
       "--target-seconds",
       String(body.targetSeconds),
+      // The bed, by MOOD. No file was written for it above and none needs to be: the library is
+      // baked into the snapshot, so this is a name the script looks up, not bytes we ship.
+      ...(body.music === undefined ? [] : ["--music", body.music]),
     ]);
     if (run.exitCode !== 0) {
       // THE ONLY READ OF stderr IN THIS SYSTEM, and it goes straight into a code. See

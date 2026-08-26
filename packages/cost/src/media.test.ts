@@ -1,17 +1,19 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { TARGET_DURATIONS, type VisualKind } from "@pikar/core/storyboard";
+import { MUSIC_MOODS, TARGET_DURATIONS, type VisualKind } from "@pikar/core/storyboard";
 import { describe, expect, it } from "vitest";
 import {
   chooseMediaBatch,
   estimateBatchUsd,
   estimateMediaUsd,
   MEDIA_DEFAULT_IMAGE,
+  MEDIA_DEFAULT_MUSIC,
   MEDIA_DEFAULT_STT,
   MEDIA_DEFAULT_VIDEO,
   MEDIA_DEFAULT_VOICE,
   MEDIA_IMAGE_PRICING,
   MEDIA_JOB_CAP_USD,
+  MEDIA_MUSIC_PRICING,
   MEDIA_SANDBOX_USD_PER_RENDER,
   MEDIA_STT_PRICING,
   MEDIA_TTS_PRICING,
@@ -353,5 +355,73 @@ describe("SC5 — the ceiling and its upgrade path exist in the source", () => {
   it("D4's superseded constants are GONE, not left as pullable aliases", () => {
     expect(MEDIA_SRC).not.toMatch(/MEDIA_BUDGET_USD_PER_REQUEST/);
     expect(MEDIA_SRC).not.toMatch(/over_batch_cap/);
+  });
+});
+
+describe("the music bed — $0 is a PRICE, not an absence", () => {
+  const bed = (over: Partial<{ model: string; mood: string }> = {}): MediaSpec => ({
+    kind: "music",
+    model: MEDIA_DEFAULT_MUSIC.model,
+    mood: "calm",
+    ...over,
+  });
+
+  it("prices every mood in the closed set at the flat per-track rate", () => {
+    for (const mood of MUSIC_MOODS) {
+      const priced = estimateMediaUsd(bed({ mood }));
+      expect(priced.ok, `${mood} must be priceable`).toBe(true);
+      expect(priced.ok && priced.value).toBe(MEDIA_MUSIC_PRICING[MEDIA_DEFAULT_MUSIC.model]);
+    }
+  });
+
+  it("is a LINE — it reaches the batch and the batch still floors ONCE", () => {
+    // The distinction the whole line exists for: $0 is a priced line that appears on the invoice,
+    // not a thing that was skipped. Adding it must not change the reserved total by a cent.
+    const withoutBed: MediaSpec[] = [{ kind: "render" }];
+    const withBed: MediaSpec[] = [{ kind: "render" }, bed()];
+    const a = chooseMediaBatch(withoutBed, MEDIA_JOB_CAP_USD);
+    const b = chooseMediaBatch(withBed, MEDIA_JOB_CAP_USD);
+    expect(a.ok && b.ok).toBe(true);
+    expect(a.ok && b.ok && b.value.estCents).toBe(a.ok ? a.value.estCents : -1);
+    expect(a.ok && b.ok && b.value.estUsd).toBe(a.ok ? a.value.estUsd : -1);
+  });
+
+  it("a mood outside the set is `unknown_model` — fail closed, never a fallback bed", () => {
+    // The same posture as a missing resolution on a video row: nothing in the table prices this, so
+    // it is refused rather than quietly served from some other row. "The caller already validated
+    // it" is the assumption every pricing hole in this module was written to remove.
+    for (const mood of ["lofi", "128bpm", "", "Bittersweet Symphony"]) {
+      expect(estimateMediaUsd(bed({ mood }))).toEqual({
+        ok: false,
+        error: { code: "unknown_model" },
+      });
+    }
+  });
+
+  it("an unknown library version is `unknown_model` too", () => {
+    expect(estimateMediaUsd(bed({ model: "library/v99" }))).toEqual({
+      ok: false,
+      error: { code: "unknown_model" },
+    });
+  });
+
+  it("one unpriceable bed REFUSES the whole job rather than making it cheaper", () => {
+    // estimateBatchUsd's own rule, asserted on the newest line to use it.
+    expect(estimateBatchUsd([{ kind: "render" }, bed({ mood: "lofi" })])).toEqual({
+      ok: false,
+      error: { code: "unknown_model" },
+    });
+  });
+
+  it("the table is keyed PER TRACK, which is what makes a generative vendor unreachable", () => {
+    // Rule 1 of this module: the table is keyed by the unit the vendor actually bills on. A flat
+    // per-track rate is pre-computable before the request exists; a per-generated-second or
+    // per-compute-second one is not, and there is deliberately no seconds/duration term here to
+    // multiply by. If a future edit adds one, this is where it has to argue with rule 3.
+    const src = MEDIA_SRC.split("export const MEDIA_MUSIC_PRICING")[1]?.split("};")[0] ?? "";
+    expect(src, "the music table must not gain a per-second term").not.toMatch(
+      /perSecond|per_second|seconds/i,
+    );
+    expect(Object.values(MEDIA_MUSIC_PRICING).every((n) => n === 0)).toBe(true);
   });
 });

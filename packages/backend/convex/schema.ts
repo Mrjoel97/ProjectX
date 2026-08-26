@@ -734,7 +734,7 @@ export default defineSchema({
      *  submitted only after their Generate click, and never copied to audit/telemetry rows. */
     mediaMode: v.optional(v.union(v.literal("reel"), v.literal("image"))),
     imagePrompt: v.optional(v.string()),
-    /** koda's fixed 9-field art-direction block, parsed. */
+    /** koda's fixed 9-field art-direction block, parsed, plus the optional music bed. */
     artDirection: v.optional(
       v.object({
         palette: v.array(v.string()),
@@ -746,6 +746,13 @@ export default defineSchema({
         typography: v.optional(v.string()),
         references: v.array(v.string()),
         avoid: v.string(),
+        /** The BED's mood — a `MUSIC_MOODS` slug, or absent for a reel with no music. Stored as a
+         *  bare string rather than a `v.union` of literals ON PURPOSE: the closed set lives in
+         *  `@pikar/core/storyboard` and is enforced by the parser that writes this and the price
+         *  table that reads it, so restating it here would be a third copy to keep in step — and
+         *  the one that fails LOUDEST, by refusing to write a row that every other layer accepts.
+         *  A slug outside the set prices as `unknown_model` and never reaches the assembler. */
+        music: v.optional(v.string()),
       }),
     ),
     /** The narration script for the whole reel (D8 — voiceover has nothing to say without it). */

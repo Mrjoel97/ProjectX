@@ -33,7 +33,14 @@ test("the mirror is not vacuously equal", () => {
 // Delta pitfall 15's second tripwire, and the deferred-feature guard, in one. `atempo` and
 // `setpts` are ffmpeg's time-stretch filters: D8 makes an overrunning voice line a HARD ERROR to
 // be rewritten upstream, never something to rate-shift around, and a stretch is audible in a way
-// no test downstream would catch. `--music` and `--song` are deliberately deferred scope.
+// no test downstream would catch.
+//
+// `--music` WAS on the deferred list below and was REMOVED from it deliberately, which is the
+// event this assertion was shaped to force: the script's header called re-adding it "a scope
+// decision, not a patch", and the list said "must not be re-added SILENTLY". It was re-added
+// loudly — by editing this line, in the same change that added the bed, with the bed's own
+// tripwires below. `--song` (music-video mode) and `--stepped` (on-twos cadence) are still scope
+// nobody has earned, and are still guarded.
 test("no time-stretch filter and no deferred-mode flag survives in the harvested script", () => {
   const code = SH.split("\n")
     .filter((l) => !l.trimStart().startsWith("#")) // strip comments — the 15.2-07 lesson
@@ -45,9 +52,114 @@ test("no time-stretch filter and no deferred-mode flag survives in the harvested
   for (const filter of ["atempo=", "setpts="]) {
     expect(code, `${filter} is a time-stretch filter and must never appear`).not.toContain(filter);
   }
-  for (const flag of ["--music", "--song", "--stepped"]) {
+  for (const flag of ["--song", "--stepped"]) {
     expect(code, `${flag} is deferred scope and must not be re-added silently`).not.toContain(flag);
   }
+});
+
+// ── The music bed ───────────────────────────────────────────────────────────────────────────────
+//
+// Source tripwires, same instrument and same reason as the scene branches: a shell script cannot
+// be unit-tested, and the behavioural half is `smoke_assemble.sh`. What these pin is the SHAPE that
+// makes the bed safe — every one of them is a way a well-meaning "make the music better" edit
+// would quietly break something that has nothing to do with music.
+
+test("the bed cannot make the narration assert vacuous — the level margin is a GATE", () => {
+  const code = SH.split("\n")
+    .filter((l) => !l.trimStart().startsWith("#"))
+    .join("\n");
+  // THE LOAD-BEARING PAIR, and the whole reason this test exists. The narration assert proves a
+  // take reached the mix by finding NO span quieter than -18dB across its speech window. A bed
+  // louder than that threshold would hold a silent window above it, and the assert would pass on a
+  // reel with no narration in it — the "silent second half" failure, reopened by a decoration.
+  //
+  // Pinned as VALUES, not as "is there a loudnorm": someone raising the bed toward the voice is
+  // exactly the plausible future edit, and it has to come past this assertion to do it.
+  expect(code, "the bed's true-peak ceiling is pinned in the script").toContain('MUSIC_TP="-24"');
+  expect(code, "and the narration assert's threshold is the number it must stay under").toContain(
+    "silencedetect=noise=-18dB",
+  );
+  const tp = Number(/MUSIC_TP="(-?\d+)"/.exec(code)?.[1]);
+  expect(tp, "the bed must sit at least 3dB below the narration assert's -18dB floor").toBeLessThan(
+    -21,
+  );
+  // THE CEILING IS alimiter's, NOT loudnorm's — and this assertion exists because the first
+  // version of this code got that wrong. `loudnorm`'s own `TP` accepts only [-9, 0], so asking it
+  // for -24 is not a silent no-op: ffmpeg exits with "out of range", the bed fails to build, and
+  // the reel renders bedless while every source tripwire stays green. Pinning the MECHANISM, not
+  // just the number, is what makes that unrepeatable.
+  expect(code, "the peak is clamped by a hard limiter, which can express -24").toContain(
+    "alimiter=limit=${MUSIC_PEAK}",
+  );
+  // alimiter's auto-level normalises its output back to 0dB by DEFAULT, which would undo the very
+  // limit it was asked to apply — and leave a full-scale bed sitting over the narration assert.
+  expect(code, "alimiter's auto-level must stay OFF or the limit is undone").toContain(
+    "alimiter=limit=${MUSIC_PEAK}:level=disabled",
+  );
+  // …and loudnorm is asked only for a value inside its own range.
+  const lnTp = /loudnorm=I=\$\{MUSIC_I\}:TP=(-?\d+)/.exec(code)?.[1];
+  expect(Number(lnTp), "loudnorm's TP must be within [-9, 0]").toBeGreaterThanOrEqual(-9);
+  // The linear limit is DERIVED from the dB constant, so the two cannot drift into disagreeing.
+  expect(code, "the linear peak is computed from MUSIC_TP, never hand-written").toContain(
+    "10^(d/20)",
+  );
+  expect(code, "the music input enters the mix with no volume knob of its own").not.toMatch(
+    /\[mus\][^;]*volume=/,
+  );
+});
+
+test("the bed is STATIC — sidechain ducking would make the level unprovable", () => {
+  const code = SH.split("\n")
+    .filter((l) => !l.trimStart().startsWith("#"))
+    .join("\n");
+  // A compressor's output level is a function of the voice over time. The bound asserted above is
+  // a constant, and there is no source tripwire that can pin a release curve — so ducking would
+  // trade a provable property for an audible one. If it is ever wanted, the assert has to be
+  // reworked FIRST.
+  expect(code, "sidechaincompress makes the bed's level time-varying").not.toContain(
+    "sidechaincompress",
+  );
+});
+
+test("the bed cannot change the reel's length and cannot move a take", () => {
+  const code = SH.split("\n")
+    .filter((l) => !l.trimStart().startsWith("#"))
+    .join("\n");
+  // Built to exactly TOT — looped up if short, cut if long — so the fixed-length guarantee is
+  // untouched by construction rather than by a check.
+  expect(code, "the bed is looped and then cut to the reel's own length").toMatch(
+    /-stream_loop -1 -i "\$MTRACK" -t "\$TOT"/,
+  );
+  // It enters at offset 0 with no delay. `adelay` on the music input would mean the bed has a
+  // PLACEMENT, and a placement is a thing that can be computed wrong against a take.
+  expect(code, "the music input takes no part in speech placement").not.toMatch(
+    /\[mus\][^;]*adelay=/,
+  );
+  // And it is still ONE mix. This is asserted in the wave-4 test too; repeated here because the
+  // obvious way to add music is a second pass over the finished file, which would also be the way
+  // to bypass every gate that runs between the mix and the output.
+  expect(code.match(/amix=/g) ?? [], "there must still be exactly one amix").toHaveLength(1);
+});
+
+test("a missing track DEGRADES and says so; a malformed slug REFUSES", () => {
+  const code = SH.split("\n")
+    .filter((l) => !l.trimStart().startsWith("#"))
+    .join("\n");
+  // The two are different failures on purpose. A slug with no track behind it is a deployment
+  // state (a snapshot baked before that mood existed) and must not kill a paid render. A slug
+  // that is not a slug is a caller bug — and it is about to be interpolated into a path.
+  expect(code, "the slug's charset is bounded before it reaches a path").toContain(
+    "^[a-z][a-z0-9-]{0,23}$",
+  );
+  expect(SH, "a malformed slug is a hard refusal").toMatch(/--music must be a lowercase mood slug/);
+  expect(SH, "a missing track warns and renders on").toMatch(/rendering with NO music bed/);
+  // NOT SILENT. The sidecar reports what reached the mix, so "the bed was missing" and "there was
+  // no bed" are distinguishable after the fact. `MUSIC_USED` starts at "none" and is only ever set
+  // once the bed has actually been built.
+  expect(code, "the sidecar reports the bed that was USED, not the one requested").toContain(
+    '"music":"%s"',
+  );
+  expect(code, "and it defaults to none rather than to the request").toContain('MUSIC_USED="none"');
 });
 
 // The five inherited properties, each one a failure that has actually happened. If a future edit

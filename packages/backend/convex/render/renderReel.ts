@@ -23,6 +23,7 @@ import {
   isTransientRenderCode,
   renderInputName,
 } from "@pikar/core/render";
+import type { MusicMood } from "@pikar/core/storyboard";
 import { categoryFor } from "@pikar/vault";
 import { v } from "convex/values";
 import { internal } from "./../_generated/api";
@@ -96,6 +97,10 @@ type RenderInputs = {
   inputs: Array<{ name: string; jobId: Id<"mediaJobs"> | Id<"vaultDocuments"> }>;
   /** Text cards: drawn from the deck's own words, with no job and no bytes in storage. */
   cards: Array<{ name: string; text: string }>;
+  /** The music bed's mood slug, or absent. Neither an input nor a card — the bytes are baked into
+   *  the sandbox snapshot, so nothing is fetched, stored or written for it. It rides here because
+   *  it is a fact about the REEL (deck-wide, off the art direction) rather than about a scene. */
+  music?: MusicMood;
 };
 
 /**
@@ -306,7 +311,17 @@ export const batchToRender = internalQuery({
     const targetSeconds = plan.targetDurationSeconds ?? summed;
     if (summed !== targetSeconds) return { ok: false, reason: "incomplete_blocks" };
 
-    return { ok: true, value: { planId, targetSeconds, scenes, inputs, cards } };
+    // THE BED, read off the SAME `artDirection.music` the reservation priced. Read here rather
+    // than passed in, for the reason every other fact in this function is read here: the deck row
+    // is the record of what the owner approved, and a render that took the bed from anywhere else
+    // could lay down a mood the estimate never showed and the reserve never priced.
+    //
+    // Unvalidated on purpose at THIS layer — `parseBody` in the route holds the closed set, on the
+    // side of the trust boundary where the value is about to become a path. Restating it here
+    // would be a third copy whose only distinguishing behaviour is failing earlier and quieter.
+    const music = plan.artDirection?.music as MusicMood | undefined;
+
+    return { ok: true, value: { planId, targetSeconds, scenes, inputs, cards, music } };
   },
 });
 
@@ -790,7 +805,7 @@ export const renderReel = internalAction({
       });
       return { ok: false, reason: batch.reason };
     }
-    const { planId, targetSeconds, scenes, inputs, cards } = batch.value;
+    const { planId, targetSeconds, scenes, inputs, cards, music } = batch.value;
 
     await ctx.runMutation(internal.render.renderReel.markRendering, { planId });
 
@@ -836,6 +851,11 @@ export const renderReel = internalAction({
           scenes,
           inputs: inputs.map((i) => ({ name: i.name, jobId: i.jobId })),
           cards,
+          // A MOOD SLUG from a four-member closed set — no tenant bytes, no content, nothing that
+          // could carry a name, a figure or a line of narration. The "nothing forbidden crosses in"
+          // list above is unchanged by it, which is why it is not a second exception alongside the
+          // card's words.
+          ...(music === undefined ? {} : { music }),
           uploadUrls,
         }),
       }).catch(() => null);
