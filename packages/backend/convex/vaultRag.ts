@@ -127,8 +127,7 @@ export const buildOpenAIEmbedRequest = (values: string[]) => ({
  * direction is expensive: too narrow and a rate limit kills an ingest, too wide and a bad key
  * retries five times on every chunk.
  */
-export const isRetriableEmbedStatus = (status: number): boolean =>
-  status === 429 || status >= 500;
+export const isRetriableEmbedStatus = (status: number): boolean => status === 429 || status >= 500;
 
 /**
  * How long to wait before retry `attempt`. Pure; exported for the offline test.
