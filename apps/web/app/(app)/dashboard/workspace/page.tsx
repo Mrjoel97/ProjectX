@@ -13,6 +13,7 @@ import { CanvasPane } from "./MediaCanvas";
 import { SkillAuthoringPanel } from "./SkillAuthoringPanel";
 import { SplitPane } from "./SplitPane";
 import { useSendCockpitMessage } from "./useSendCockpitMessage";
+import { WorkflowPackOwnerPreview } from "./WorkflowPackOwnerPreview";
 import { WorkflowPackQuickStarts } from "./WorkflowPackQuickStarts";
 
 // The cockpit, wired (plan 08 over the plan-05 shell). LEFT = the live chat pane (guided
@@ -422,6 +423,36 @@ export default function WorkspacePage() {
       });
   };
 
+  // 27-11: THE OWNER'S CANDIDATE PREVIEW, and the only surface that may send `previewVersion`.
+  //
+  // Skipped entirely for a non-owner — `listPackCandidates` is an `ownerQuery` and would throw, so
+  // the `isOwner ? {} : "skip"` idiom (the same one `FinanceView` uses for its owner-only reads) is
+  // what keeps the workspace working for everybody else. The server check is the real one; this is
+  // only about not asking a question the caller is not allowed to ask.
+  //
+  // The version comes FROM THE CARD the owner is looking at, so the run pins the exact row that was
+  // shown. Without that pin a preview would run whatever the newest candidate happened to be by the
+  // time the click landed — and the browser evidence would name a version nobody watched.
+  const viewer = useQuery(api.owner.viewer, {});
+  const packCandidates = useQuery(
+    api.workflowPackDiscovery.listPackCandidates,
+    viewer?.isOwner === true ? {} : "skip",
+  );
+  const onPreviewPack = (packId: string) => {
+    const pack = packCandidates?.find((p) => p.packId === packId);
+    if (pack === undefined || sending || startingPack !== null) return;
+    setPackNotice(null);
+    setSending(true);
+    setStartingPack(packId);
+    void startPack({ packId, text: pack.opener, previewVersion: pack.version })
+      .then((res) => registerThread(res.threadId, pack.title))
+      .catch(() => setPackNotice("That workflow could not be started. Nothing ran — try again."))
+      .finally(() => {
+        setSending(false);
+        setStartingPack(null);
+      });
+  };
+
   const newChat = () => setThreadId(undefined);
   const clearWorkspace = () => {
     window.sessionStorage.removeItem(WORKSPACE_SESSION_KEY);
@@ -638,6 +669,14 @@ export default function WorkspacePage() {
                 <WorkflowPackQuickStarts
                   packs={packs}
                   onStart={onStartPack}
+                  busy={sending}
+                  starting={startingPack}
+                />
+                {/* Renders nothing for a non-owner (the query is skipped, so it stays `undefined`)
+                    and nothing once every pack is active. It is a preview, not a second menu. */}
+                <WorkflowPackOwnerPreview
+                  candidates={packCandidates}
+                  onPreview={onPreviewPack}
                   busy={sending}
                   starting={startingPack}
                 />

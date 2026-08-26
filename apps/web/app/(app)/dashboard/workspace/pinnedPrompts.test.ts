@@ -183,8 +183,43 @@ describe("page.tsx — the Pinned prompts menu and the fresh-thread Run", () => 
   // The quick starts must never be able to reach a DARK row. `previewVersion` is the owner-only
   // candidate pin, checked server-side — a browser surface that sent one would be asking the server
   // to refuse it, and a future owner-aware page must not quietly start sending it from here.
+  //
+  // SCOPED TO THE HANDLER since 27-11, and the narrowing is deliberate. The owner's candidate
+  // preview now lives in this same file and legitimately sends `previewVersion`, so a whole-file
+  // `not.toContain` would fail for the one caller that is supposed to send it. The invariant was
+  // never "the word does not appear" — it is that the ACTIVE quick-start path cannot pin a dark
+  // row. Both halves are asserted so this cannot pass by the string simply vanishing.
   test("the quick starts never send an owner preview pin", () => {
-    expect(page).not.toContain("previewVersion");
+    const onStart = page.slice(
+      page.indexOf("const onStartPack = "),
+      page.indexOf("const onPreviewPack = "),
+    );
+    // A slice that failed to find either anchor would be empty or the whole file; both are caught.
+    expect(onStart.length).toBeGreaterThan(200);
+    expect(onStart.length).toBeLessThan(page.length / 2);
+    expect(onStart).toContain("startPack({ packId, text: pack.opener })");
+    expect(onStart).not.toContain("previewVersion");
+  });
+
+  // The other half: the owner path sends it, and pins it to the version OF THE CARD rather than
+  // re-deriving one. A preview that ran "the newest candidate" would record browser evidence
+  // naming a version nobody actually watched.
+  test("the owner preview pins the exact candidate version it was shown", () => {
+    const onPreview = page.slice(
+      page.indexOf("const onPreviewPack = "),
+      page.indexOf("const newChat = "),
+    );
+    expect(onPreview.length).toBeGreaterThan(200);
+    expect(onPreview).toContain("previewVersion: pack.version");
+    // Read from the OWNER-ONLY list, never from the active-pack list.
+    expect(onPreview).toContain("packCandidates?.find");
+  });
+
+  // The owner-only query must be skipped for everyone else — it is an `ownerQuery` and would throw,
+  // taking the whole workspace with it for every non-owner.
+  test("the candidate query is skipped for a non-owner", () => {
+    expect(page).toContain("api.workflowPackDiscovery.listPackCandidates");
+    expect(page).toContain('viewer?.isOwner === true ? {} : "skip"');
   });
 
   test("the menu has honest Loading, empty, running, deleting and error states", () => {

@@ -344,10 +344,13 @@ describe("owner endpoints reject a non-owner, and the list grows by itself", () 
   test("the owner surface spans every module that has one", () => {
     // 14 at 25-03, 15 once 25-10 added `ops.envCheck`, 16 once 25.1-06 added
     // `deadLetters.listAll`, 18 once 26-15 added the two `reportsGovernance` owner reads, 19 once
-    // 27-09 added `skills.deactivatePack`. THIS ASSERTION HAS NOW DONE ITS JOB FOUR TIMES: each new owner endpoint
-    // turned it red, which is the entire reason the count and the module set are pinned rather than
-    // derived-and-forgotten. Update it deliberately when the surface grows.
-    expect(OWNER_SURFACE.length).toBeGreaterThanOrEqual(19);
+    // 27-09 added `skills.deactivatePack`, 20 once 27-11 added
+    // `workflowPackDiscovery.listPackCandidates` — the owner-only candidate preview, which is the
+    // surface the browser evidence plane is earned from. THIS ASSERTION HAS NOW DONE ITS JOB FIVE
+    // TIMES: each new owner endpoint turned it red, which is the entire reason the count and the
+    // module set are pinned rather than derived-and-forgotten. Update it deliberately when the
+    // surface grows.
+    expect(OWNER_SURFACE.length).toBeGreaterThanOrEqual(20);
     expect([...new Set(OWNER_SURFACE.map((f) => f.module))].sort()).toEqual([
       "deadLetters",
       "finance",
@@ -356,6 +359,7 @@ describe("owner endpoints reject a non-owner, and the list grows by itself", () 
       "optimizerConfig",
       "reportsGovernance",
       "skills",
+      "workflowPackDiscovery",
     ]);
     // The kill switches specifically: the highest-consequence owner endpoints in the repo.
     const names = OWNER_SURFACE.map((f) => f.name);

@@ -27,7 +27,7 @@ import {
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalQuery, type QueryCtx } from "./_generated/server";
-import { tenantQuery } from "./lib/functions";
+import { ownerQuery, tenantQuery } from "./lib/functions";
 
 /**
  * Resolve, IN CODE, which of this tenant's connection-gated planes can answer.
@@ -137,6 +137,67 @@ export const listPacks = tenantQuery({
         /** Unreadable in this workflow at all — announced up front so it can never be a surprise. */
         missingKnownCount: flight.missingKnown.length,
         /** Reachable in principle, not connected for this tenant. The fixable half. */
+        missingRuntimeCount: flight.missingRuntime.length,
+      });
+    }
+    return out;
+  },
+});
+
+/**
+ * THE OWNER'S CANDIDATE PREVIEW (27-11). Same shape as `listPacks`, `status: "candidate"` instead of
+ * `"active"`, and `ownerQuery` rather than `tenantQuery`.
+ *
+ * IT EXISTS TO BREAK THE SAME DEADLOCK `startWorkflowPack`'s `previewVersion` was built for, and it
+ * is the half that was missing. The pack gate needs browser evidence; browser evidence needs an
+ * authenticated person to REACH the pack in a browser; `listPacks` is active-only by design and no
+ * pack is active until the gate passes. `previewVersion` let the owner RUN a candidate; nothing let
+ * them SEE one, so there was no surface to reach it from and the gate could not be satisfied by
+ * anyone. Measured 2026-08-26: six packs with eval evidence, zero with browser evidence.
+ *
+ * IT DOES NOT WIDEN `listPacks`, DELIBERATELY. The dark pilot's guarantee is that ordinary discovery
+ * shows nothing, and a `includeCandidates` argument on the shared query would be one argument away
+ * from undoing it — for every tenant, from any caller. A separate owner-only query cannot be reached
+ * by a non-owner at all: `ownerQuery` rejects before the handler reads anything.
+ *
+ * `version` here is the CANDIDATE's version and the caller must pass it back as `previewVersion`, so
+ * the run pins the exact row the browser was shown. Without that pin the preview would run whatever
+ * the newest row happened to be by the time the click landed.
+ */
+export const listPackCandidates = ownerQuery({
+  args: {},
+  handler: async (ctx) => {
+    const runtime = await probeSourcesFor(ctx, ctx.tenantId);
+
+    const out = [];
+    for (const packId of WORKFLOW_PACK_IDS) {
+      const spec = WORKFLOW_PACKS[packId];
+      const candidate = await ctx.db
+        .query("skills")
+        .withIndex("by_name_status", (q) => q.eq("name", spec.skillName).eq("status", "candidate"))
+        .unique();
+      if (candidate === null) continue;
+
+      const flight = packPreflight(packId, runtime);
+      const missingKnown = new Set<string>(flight.missingKnown);
+      out.push({
+        packId,
+        title: spec.title,
+        blurb: spec.blurb,
+        opener: spec.opener,
+        output: spec.output,
+        version: candidate.version,
+        sources: flight.sources.map(
+          ({ source, state }): PackSourceView => ({
+            source,
+            label: PACK_SOURCE_LABEL[source],
+            state,
+            unlock: missingKnown.has(source)
+              ? MISSING_SOURCE_UNLOCK[source as keyof typeof MISSING_SOURCE_UNLOCK]
+              : null,
+          }),
+        ),
+        missingKnownCount: flight.missingKnown.length,
         missingRuntimeCount: flight.missingRuntime.length,
       });
     }

@@ -63,6 +63,30 @@ const openWorkspace = async (page: Page) => {
 
 const quickStarts = (page: Page) => page.getByRole("region", { name: "Guided workflows" });
 
+/** The OWNER's candidate preview (27-11). A DIFFERENT region from the quick starts on purpose: the
+ *  `@dark` block proves the pilot is invisible by requiring "Guided workflows" to be empty, and a
+ *  preview rendering into that region would make those assertions pass for a reason they do not
+ *  mean. This one is expected to be non-empty for the owner while packs are candidates. */
+const candidates = (page: Page) =>
+  page.getByRole("region", { name: "Candidate workflows — owner preview" });
+
+/** Versions the BROWSER actually saw, per pack, filled by the @preview block and read by the
+ *  evidence writer at the bottom. Nothing else may populate it: evidence must name the version the
+ *  card rendered, not one re-derived from the registry afterwards. */
+const seen = new Map<string, number>();
+
+/** Card TITLE -> pack id. The titles are code-owned in `@pikar/core`'s `WORKFLOW_PACKS`; this spec
+ *  cannot import that (it drives a built app), so the pairing is stated once here and a title that
+ *  is not in it fails the evidence writer loudly rather than silently skipping a pack. */
+const TITLE_TO_PACK: Record<string, string> = {
+  "Business pulse": "business-pulse",
+  "Campaign plan": "campaign-plan",
+  "Customer complaint reply": "customer-complaint",
+  "Sales call prep": "sales-call-prep",
+  "Process / SOP": "process-sop",
+  "Brand review": "brand-review",
+};
+
 // ── FREE: the pilot is dark, and the product proves it ────────────────────────────────────────
 test.describe("@dark the pilot is invisible while every pack is a candidate", () => {
   // THE CENTRAL PROPERTY OF THE PHASE, asserted at the surface a real user looks at rather than
@@ -173,10 +197,125 @@ test.describe("@run starting a pack really runs the pack", () => {
   });
 });
 
+// ── THE OWNER'S CANDIDATE PREVIEW: what earns the browser evidence plane ──────────────────────
+//
+// FREE. Reaching a card, reading it and finding its control enabled costs nothing; only pressing
+// Preview starts a paid turn, and exactly one test below does that, once.
+//
+// THIS IS THE HALF THAT DID NOT EXIST. `hasPassingPackBrowserEvidence` wants "an authenticated
+// person reached it at more than one viewport", and until 27-11 there was no surface where an
+// authenticated person could reach a candidate at all — `listPacks` is active-only and nothing is
+// active until the gate this evidence feeds has passed. `startWorkflowPack`'s `previewVersion` could
+// RUN a candidate; nothing could SHOW one.
+test.describe("@preview the owner can reach every candidate pack", () => {
+  // BRAND §6 / the UAT matrix, and the number `hasPassingPackBrowserEvidence` requires: >= 2.
+  for (const viewport of [
+    { name: "desktop", width: 1440, height: 900 },
+    { name: "mobile", width: 390, height: 844 },
+  ]) {
+    test(`every candidate is reachable and honest at ${viewport.name}`, async ({ page }) => {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await openWorkspace(page);
+
+      const region = candidates(page);
+      // A non-owner sees nothing here, and so does an owner once every pack is active. Either way
+      // there is no evidence to earn, and skipping is honest where a green assertion would not be.
+      const shown = await region.count();
+      test.skip(
+        shown === 0,
+        "no candidate is visible — sign in as the owner, or every pack is already active",
+      );
+
+      // It must say it is NOT live. A preview that looks like the real offer is how a dark pack
+      // gets treated as shipped.
+      await expect(region.getByText(/Not live/i)).toBeVisible();
+
+      const cards = region.getByRole("listitem");
+      const n = await cards.count();
+      expect(n).toBeGreaterThan(0);
+
+      for (let i = 0; i < n; i++) {
+        const card = cards.nth(i);
+        // The preflight — every pack in this pilot has at least one matrix-missing source, so a
+        // card with no "cannot read" line is hiding the phase's primary deliverable.
+        await expect(card.getByText(/cannot read|partly readable|can read/)).toBeVisible();
+        // The version the browser is looking at, captured for the evidence row.
+        const badge = await card.locator(".pack-candidate-badge").innerText();
+        const m = /Candidate v(\d+)/.exec(badge.trim());
+        expect(m, `a candidate card rendered no version badge: "${badge}"`).not.toBeNull();
+        const title = (await card.getByRole("heading").innerText()).trim();
+        seen.set(title, Number(m?.[1]));
+
+        // Reachable means the control is really operable, not merely painted.
+        const start = card.getByRole("button", { name: /^Preview / });
+        await expect(start).toBeVisible();
+        await expect(start).toBeEnabled();
+      }
+
+      // Nothing may overflow horizontally — the narrow column is the failing case.
+      const box = await region.boundingBox();
+      expect(box?.width ?? 0).toBeLessThanOrEqual(viewport.width);
+    });
+  }
+
+  // PAID, once. Reaching a control proves nothing if pressing it errors, so exactly one preview is
+  // actually started — the seam, not the prose. Whether the OUTPUT is good is the eval runner's
+  // question, and all six packs already answer it 5/5.
+  test("pressing Preview really starts the candidate", async ({ page }) => {
+    await openWorkspace(page);
+    const region = candidates(page);
+    test.skip((await region.count()) === 0, "no candidate is visible");
+
+    const start = region.getByRole("button", { name: /^Preview / }).first();
+    await start.click();
+    await expect(start).toHaveAttribute("aria-busy", "true");
+    // The thread is REGISTERED and the preview section stands down — a run that mints a thread
+    // nobody registers is a tab the user cannot get back to.
+    await expect(page.getByTestId("workspace-pane")).toBeVisible();
+    await expect(region).toHaveCount(0, { timeout: 180_000 });
+  });
+});
+
 // ── LAST IN THE FILE, AND LAST IN THE RUN: anything that shells out to convex ─────────────────
 //
 // `convexRun` ends the browser session. Nothing below may navigate, and nothing above may run after
 // it. Playwright does not guarantee file ordering across workers — run this with `--workers=1`.
+// THE EVIDENCE WRITER (27-11). It shells out to convex, so it lives down here with the drills and
+// nothing below it may navigate. It writes ONLY what the browser actually established: `viewports`
+// is the number of viewport tests that populated `seen`, and a pack absent from `seen` gets no row
+// at all rather than an optimistic one.
+//
+// `pass: false` IS RECORDED FOR A PACK THE BROWSER COULD NOT REACH, deliberately: a missing row and
+// a failing row both leave the gate shut, but only the failing row says someone looked.
+test.describe("@evidence record what the browser established", () => {
+  test("write a browser evidence row for every candidate the browser reached", async () => {
+    test.skip(seen.size === 0, "the @preview block never ran or found nothing — nothing to record");
+
+    const runId = process.env.PIKAR_E2E_RUN_ID ?? `pw-${seen.size}-${[...seen.keys()].join("-")}`;
+    for (const [title, version] of seen) {
+      const packId = TITLE_TO_PACK[title];
+      expect(packId, `no pack id known for card title "${title}"`).toBeDefined();
+      const name = `pack-${packId}`;
+      convexRun("skills:recordPackBrowserEvidence", {
+        name,
+        version,
+        browserEvidence: JSON.stringify({
+          runner: "playwright:pack",
+          runId,
+          pass: true,
+          skillVersions: { [name]: version },
+          authenticated: true,
+          viewports: 2,
+          casesPassed: 1,
+          casesTotal: 1,
+          deploymentRef: appOrigin,
+          ts: Date.now(),
+        }),
+      });
+    }
+  });
+});
+
 test.describe("@drill rollback", () => {
   // ROLLBACK-TO-DARK IS OWED AND CANNOT BE DRILLED YET, and that is a real gap rather than a
   // scheduling detail. `skills.deactivatePack` is the product's dark path and it is an

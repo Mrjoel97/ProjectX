@@ -1,4 +1,46 @@
-> Last verified: 2026-08-26 (**`saveAsDocument` — a SECOND save channel, built only for a caller
+> Last verified: 2026-08-26 (**THE PACK GATE WAS DEADLOCKED, AND HALF THE BREAKER WAS ALREADY
+> BUILT.** Activation needs browser evidence; browser evidence needs an authenticated person to REACH
+> a pack in a browser; `listPacks` is ACTIVE-ONLY by design and nothing is active until the gate
+> passes. Measured 2026-08-26: six packs with eval evidence, **zero** with browser evidence, and
+> `recordPackBrowserEvidence` had only unit-test callers — a fully green browser run would have
+> recorded nothing at all.
+>
+> 27-09 had already shipped `startWorkflowPack`'s owner-only `previewVersion` for exactly this, so
+> the owner could RUN a candidate. **Nothing let them SEE one**, so there was no surface to press.
+> 27-11 adds `workflowPackDiscovery.listPackCandidates` (`ownerQuery`, candidate-only) and a
+> `WorkflowPackOwnerPreview` section whose Preview button sends the version THE CARD RENDERED.
+>
+> **IT IS A SEPARATE QUERY AND A SEPARATE REGION, both deliberately.** An `includeCandidates`
+> argument on `listPacks` would be one argument away from undoing the dark pilot for every tenant
+> from any caller; `ownerQuery` cannot be reached by a non-owner at all. And the region is named
+> "Candidate workflows — owner preview" rather than "Guided workflows" because the `@dark`
+> assertions prove the pilot is invisible by requiring the LATTER to be empty — a preview rendering
+> into it would make those assertions pass for a reason they do not mean.
+>
+> **THE VERSION PIN IS THE POINT.** Evidence names a (name, version) pair, so the card shows
+> `Candidate v{n}` and the click sends that exact number back. A preview that ran "the newest
+> candidate" would record browser evidence naming a version nobody watched — the same defect class as
+> `hasPassingPackEvalEvidence` not comparing an evidence row's model to the lane pin.
+>
+> **WHAT THE EVIDENCE MAY CLAIM.** `hasPassingPackBrowserEvidence`'s contract is "an authenticated
+> person REACHED it at more than one viewport" — not that every pack was run. The `@preview` block
+> therefore asserts each card renders its preflight, its version badge and an ENABLED control at 1440
+> and 390, and one test actually presses Preview so that "reachable" is not a claim about a button
+> nobody clicked. Do not widen the row beyond that: `pass: true` for a pack the browser never
+> displayed is the one thing this plane exists to prevent.
+>
+> **THE HAND-COPIED LITERAL, and it was wrong on the first try.** The spec maps a rendered card TITLE
+> back to a pack id and CANNOT import `@pikar/core` (it drives a built app). It said "Process / SOP
+> builder"; the registry says "Process / SOP". `packOwnerPreview.test.ts` now pins the whole map
+> against `WORKFLOW_PACKS` in both directions.
+>
+> **STILL OWED: the live run.** The spec is written but has never executed, and this machine cannot
+> sign one in — `auth.setup.ts` needs `E2E_USER_EMAIL`/`E2E_USER_PASSWORD`, no password is stored,
+> signup is invite-gated, and the only owner account is a Google login. The automatable route exists
+> (`invites:__seedInvite` then `owner:bootstrapOwner`, both `internalMutation`) but has not been
+> walked. **No pack may be activated until it has.**
+>
+> PREVIOUS: 2026-08-26 (**`saveAsDocument` — a SECOND save channel, built only for a caller
 > whose output contract IS a document, and the executive cockpit is not one.**
 >
 > Structural absence, the `grantWebResearch` precedent: `runAgentLoop` returns the FULL tool record
