@@ -1,6 +1,34 @@
 # Playbook: Authorization (tenancy + ownership)
 
-> Last verified: 2026-08-23 (27-09 — **`ownerAction` NOW EXISTS, AND THE COMMENT SAYING IT
+> Last verified: 2026-08-26 (**`owner.findUserIdByEmail` — a new READ in the owner module, and the
+> line it must not cross.**
+>
+> `bootstrapOwner` takes an exact `users._id` and REFUSES TO SELECT A ROW ITSELF: no first-user
+> rule, no email allowlist, no registration order, no env fallback. That is not an ergonomics gap, it
+> is the rule — selecting is how the wrong account becomes owner through data the owner does not
+> control. But it left no way to turn "the address I just signed up with" into that id without
+> opening the dashboard by hand, which is what blocked 27-11's browser evidence plane: it needs a
+> signed-in OWNER and nothing could create one on a fresh machine.
+>
+> `findUserIdByEmail` is `internalQuery`, read-only, and returns `{ userId, owner }` or null. **It
+> READS an id; it does not GRANT anything, and `bootstrapOwner` must never call it.** The grant stays
+> a separate, deliberate call naming an exact row — the split is the whole point, and a future
+> convenience that folds the lookup INTO the grant would re-create precisely the selection rule this
+> module refuses to have.
+>
+> **A NEW OWNER ENDPOINT ALSO LANDED ELSEWHERE:** `workflowPackDiscovery.listPackCandidates`
+> (`ownerQuery`), the owner-only candidate preview. `isolation.test.ts`'s self-growing owner surface
+> caught it — fifth time that assertion has done its job — and auto-generated a passing
+> "rejects a non-owner with OWNER_REQUIRED" case for it. The count is now >= 20 and
+> `workflowPackDiscovery` joins the module set.
+>
+> **THE FRONTEND RULE FOR AN `ownerQuery`, restated because a workspace-wide crash is the failure
+> mode:** an `ownerQuery` THROWS for a non-owner, so a page every user can reach must call it with
+> the `useQuery(api.x, isOwner ? {} : "skip")` idiom (`FinanceView` is the precedent). The server
+> check is the real authorization; the skip is only about not asking a question the caller is not
+> allowed to ask.
+>
+> PREVIOUS: 2026-08-23 (27-09 — **`ownerAction` NOW EXISTS, AND THE COMMENT SAYING IT
 > DELIBERATELY DID NOT WAS WRONG.** It read: "there is deliberately no `ownerAction`: an action has
 > no `ctx.db`, so it cannot read the row this check depends on." The premise is true; the conclusion
 > was not. An action reads the row through a query — `owner.ownsDeployment`, an `internalQuery`
