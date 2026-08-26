@@ -10,6 +10,7 @@ import {
   GENERATED_CLIP_SECONDS,
   GENERIC_DECK_REFUSAL,
   hasAssetSource,
+  statesCheckableClaim,
   isPaidBlock,
   isPaidScene,
   MAX_CHARS_PER_BLOCK,
@@ -1780,5 +1781,123 @@ describe("no_deck means the heading is absent, and nothing else", () => {
     // And the two contracts still name their OWN columns — one vocabulary, two tables.
     expect(deckRefusalClause("scene", "unreadable_deck")).toMatch(/Visual, Seconds/);
     expect(deckRefusalClause("block", "unreadable_deck")).toMatch(/Type, Description/);
+  });
+});
+
+// ── SILENCE MEANS UNVERIFIED (the citation default, inverted) ──────────────────────────────────
+//
+// The parser used to read a scene with no `Source:` line as claiming nothing, which trusted the
+// model to volunteer that it had made a claim. `media-director.md` mandates the line in prose and
+// `dispatch.ts` records the measured worth of a prose mandate on this exact skill family: violated
+// twice in six attempts. These tests pin the inversion and, just as importantly, its BOUNDARY —
+// a gate that fires on ordinary copy gets confirmed blind and then guards nothing.
+
+describe("statesCheckableClaim: a number is not a claim until it measures something", () => {
+  it("flags a quantity attached to a unit", () => {
+    for (const line of [
+      "Founders lose ninety minutes a day to the inbox.",
+      "Ninety minutes a day is a full working week every month.",
+      "Most of it is replies you have written a hundred times before.",
+      "We onboarded 40 customers last quarter.",
+      "It takes 3 days.",
+    ]) {
+      expect(statesCheckableClaim(line), line).toBe(true);
+    }
+  });
+
+  it("flags a figure carrying its own symbol, and an appeal to evidence", () => {
+    for (const line of ["90% FASTER", "We save you $2,000", "Cuts costs by 40%"]) {
+      expect(statesCheckableClaim(line), line).toBe(true);
+    }
+    // The purest form of the failure: authority borrowed and never named.
+    for (const line of [
+      "Studies show it works",
+      "According to recent research, founders lose time",
+      "On average, replies take longer",
+    ]) {
+      expect(statesCheckableClaim(line), line).toBe(true);
+    }
+  });
+
+  it("DOES NOT flag ordinary copy — the boundary that keeps the gate meaningful", () => {
+    // Every one of these is real product prose from the skill body's own worked examples, or the
+    // shape of it. A numeral appears in the first; it measures nothing, so it is not a claim.
+    for (const line of [
+      "You read one screen and decide. Nothing leaves without you.",
+      "Pikar reads the whole thread overnight and drafts the reply in your voice.",
+      "Pikar drafts the whole queue overnight, in your words.",
+      "Nothing sends until you approve it, and every send is written down.",
+      "YOUR INBOX, ANSWERED",
+      "YOU APPROVE",
+      "",
+    ]) {
+      expect(statesCheckableClaim(line), line).toBe(false);
+    }
+  });
+
+  it("is measured against the worked examples, not against its own examples", () => {
+    // The corpus check, kept as a test so a later widening of the keyword lists has to face it.
+    // Flagging B2's "ONE WEEK A MONTH" is DELIBERATE and is not a false positive: it restates the
+    // sourced figure from the scene before it and carries no citation of its own.
+    const sourcedInExamples = [
+      "Founders lose ninety minutes a day to the inbox.",
+      "Most of it is replies you have written a hundred times before, in slightly different words.",
+      "Ninety minutes a day is a full working week every month.",
+    ];
+    for (const line of sourcedInExamples) {
+      expect(statesCheckableClaim(line), `a SOURCED example line must flag when uncited: ${line}`).toBe(true);
+    }
+  });
+});
+
+describe("parseSceneDeck: an uncited claim is flagged for confirmation, not waved through", () => {
+  const deck = (narration: string, overlay: string, source?: string) => `
+SCENE DECK
+Target duration: 15
+| # | Visual | Seconds | Description | Narration | Text overlay | Asset |
+|---|--------|---------|-------------|-----------|--------------|-------|
+| 1 | animated_image | 15 | a desk | ${narration} | ${overlay} | |
+
+SCENE PROMPTS
+
+Scene 1
+Prompt: a desk
+${source === undefined ? "" : `Source: ${source}`}
+`;
+
+  const sceneOf = (narration: string, overlay = "", source?: string) => {
+    const r = parseSceneDeck(deck(narration, overlay, source));
+    expect(r.ok, `deck refused: ${r.ok ? "" : r.reason}`).toBe(true);
+    return r.ok ? r.scenes[0] : undefined;
+  };
+
+  it("THE INVERSION: an uncited figure is now needsConfirmation", () => {
+    // Before this, the scene parsed clean, the money gate saw nothing to confirm, and the figure
+    // reached a rendered frame. Nothing downstream could have caught it.
+    expect(sceneOf("Founders lose ninety minutes a day to the inbox.")?.needsConfirmation).toBe(
+      true,
+    );
+  });
+
+  it("an OVERLAY claim is flagged too — it is the loudest text in the reel and nobody speaks it", () => {
+    expect(sceneOf("Here is how it works.", "90% FASTER")?.needsConfirmation).toBe(true);
+  });
+
+  it("ordinary copy still parses clean, with no flag and no source", () => {
+    const scene = sceneOf("You read one screen and decide.", "YOUR INBOX, ANSWERED");
+    expect(scene?.needsConfirmation).toBeUndefined();
+    expect(scene?.source).toBeUndefined();
+  });
+
+  it("a CITED claim is not flagged — citing is the way out, and it still works", () => {
+    const scene = sceneOf("Founders lose ninety minutes a day.", "", "Time audit [doc:k57h3n9v2]");
+    expect(scene?.needsConfirmation).toBeUndefined();
+    expect(scene?.source).toEqual({ docId: "k57h3n9v2", title: "Time audit" });
+  });
+
+  it("an explicit `Source: unverified` still flags, exactly as before", () => {
+    // The old path is untouched: this change ADDS scenes to the flagged set, it does not
+    // reinterpret the ones the model labelled itself.
+    expect(sceneOf("Something qualitative.", "", "unverified")?.needsConfirmation).toBe(true);
   });
 });

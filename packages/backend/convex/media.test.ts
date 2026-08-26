@@ -6776,3 +6776,82 @@ describe("stock scenes: free, and still a LINE on the same rail", () => {
     expect(row?.providerRequestId).toBeTruthy();
   });
 });
+
+// ── THE CHAIN: an uncited claim cannot be BOUGHT ───────────────────────────────────────────────
+//
+// The parser flip only matters if the flag it sets actually stops money. That chain is
+// parseSceneDeck -> `needsConfirmation` on the scene -> `plans.shots` (dispatch.ts:830) ->
+// `firstUnconfirmedClaim` -> the `unconfirmed_claims` refusal in BOTH money sites. Proven here end
+// to end, because every link existed before and only the first one changed.
+
+describe("uncited claims cannot reach a rendered frame", () => {
+  const claimScenes = (): Scene[] => [
+    sc({
+      index: 0,
+      startMs: 0,
+      durationMs: 15_000,
+      visual: "animated_image",
+      narration: "Founders lose ninety minutes a day to the inbox.",
+    }),
+    sc({
+      index: 1,
+      startMs: 15_000,
+      durationMs: 15_000,
+      visual: "animated_image",
+      narration: "You read one screen and decide.",
+    }),
+  ];
+
+  const reserveWithShots = (t: T, shots: Record<string, unknown>[]) =>
+    t.run(async (ctx) => {
+      const planId = await ctx.db.insert("plans", {
+        tenantId: A,
+        threadId: "thread_claim",
+        status: "proposed",
+        createdAt: Date.now(),
+        shots: shots as never,
+      });
+      return await reserveSceneJobInner(ctx, {
+        tenantId: A,
+        planId,
+        scenes: claimScenes(),
+        targetDurationSeconds: 30,
+        withCaptions: false,
+      });
+    });
+
+  const shot = (index: number, over: Record<string, unknown> = {}) => ({
+    index,
+    visual: "animated_image",
+    seconds: 15,
+    windowStartMs: index * 15_000,
+    description: "d",
+    narration: index === 0 ? "Founders lose ninety minutes a day to the inbox." : "ok",
+    prompt: "p",
+    ...over,
+  });
+
+  test("a scene the parser flagged REFUSES the buy until the owner vouches for it", async () => {
+    const t = harness();
+    const res = await reserveWithShots(t, [shot(0, { needsConfirmation: true }), shot(1)]);
+    expect(res.ok).toBe(false);
+    expect(!res.ok && res.reason).toBe("unconfirmed_claims");
+    // Not one line was inserted — the whole deck stops, including the scenes that claim nothing.
+    expect(await rows(t)).toHaveLength(0);
+  });
+
+  test("...and goes through once it IS confirmed, so the gate is a lever and not a wall", async () => {
+    const t = harness();
+    const res = await reserveWithShots(t, [
+      shot(0, { needsConfirmation: true, confirmedAt: Date.now() }),
+      shot(1),
+    ]);
+    expect(res.ok, `refused: ${res.ok ? "" : res.reason}`).toBe(true);
+  });
+
+  test("a deck that claims nothing is unaffected — the flip adds scenes, it moves no others", async () => {
+    const t = harness();
+    const res = await reserveWithShots(t, [shot(0), shot(1)]);
+    expect(res.ok, `refused: ${res.ok ? "" : res.reason}`).toBe(true);
+  });
+});

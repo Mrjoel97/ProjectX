@@ -1,5 +1,21 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-08-26 (**SILENCE NOW MEANS UNVERIFIED — the citation default, inverted.** The
+> parser read a scene with no `Source:` line as claiming nothing (`media.ts` said it outright:
+> `// claims nothing`), so the confirm gate only ever fired when the model VOLUNTEERED
+> `Source: unverified`. A scene asserting "Founders lose ninety minutes a day", omitting the line,
+> passed reservation, render and publish with the figure burned into a frame and nothing going red.
+> `media-director.md` mandates the line in prose, and `dispatch.ts` already records what a prose
+> mandate on this skill family is worth — "violated twice in six attempts, which is why this is code
+> and not another sentence in the body." THE RULE THAT KEEPS IT USABLE: a number is not a claim
+> until it measures something, so "you read one screen" is copy and "ninety minutes a day" is an
+> assertion. MEASURED, NOT GUESSED, against the two worked examples: 3 of 3 sourced scenes flagged,
+> 0 missed, 1 flag on `ONE WEEK A MONTH` — an uncited restatement of the previous scene's sourced
+> figure, which is the example being loose rather than the predicate being wrong. All 2517 backend
+> tests unaffected. Nothing new downstream: same `needsConfirmation`, same `unconfirmed_claims`
+> refusal, same `confirmClaim` lever — only which scenes reach them. Ceiling stated in the section:
+> it catches quantities and appeals to evidence, NOT unsourced qualitative claims.)
+
 > Last verified: 2026-08-26 (**THE CARD PALETTE — the deck's own colours finally reach the frame.**
 > Text cards were drawn black-on-white while the plan row already carried a `palette` the specialist
 > chose, the parser validated and the owner approved on screen. Nothing was missing from ffmpeg; the
@@ -1714,6 +1730,81 @@ from the same few beds, so two reels in the same niche can sound alike. The upgr
 licensed catalogue API **if and only if it bills a flat rate per track** — at which point
 `MEDIA_MUSIC_PRICING` gains a row per tier and nothing else in the rail moves. A per-second or
 per-compute-second music vendor is not an upgrade path; it is a different rail.
+
+## Silence means unverified (the citation default, inverted)
+
+A reel's factual claims are gated by `needsConfirmation` → `firstUnconfirmedClaim` →
+`unconfirmed_claims` at both money sites → `confirmClaim`. That machinery was already here and is
+unchanged. What changed is **which scenes reach it**.
+
+### What was wrong
+
+The parser read a scene with no `Source:` line as claiming nothing:
+
+```ts
+const src = sources.get(index + 1);
+if (src === undefined) return {};        // ← no flag at all
+```
+
+and `media.ts` said so out loud: `if (s.source === undefined && s.needsConfirmation !== true)
+continue; // claims nothing`.
+
+So the flag was only ever set when the model **volunteered** `Source: unverified`. A scene that
+asserted "Founders lose ninety minutes a day to the inbox", omitted the `Source:` line, and moved
+on passed every gate in the pipeline — reservation, render, publish — with the figure burned into a
+frame and nothing going red.
+
+`media-director.md` mandates the line in prose. **A prose mandate on this skill family is not a
+guarantee, and we have the measurement**: `dispatch.ts`'s `persistResearchFindings` records that
+the analogous research mandate ("every run searches the web, without exception") was *"violated
+twice in six attempts, which is why this is code and not another sentence in the body."*
+
+### What it is now
+
+Silence means unverified. `statesCheckableClaim` (`@pikar/core/storyboard`) runs over the scene's
+narration **and its overlay**, and an uncited assertion gets `needsConfirmation: true` — the same
+flag, the same gate, the same owner-facing lever. Nothing new downstream.
+
+The overlay is checked because it is the loudest text in the reel and nobody speaks it: a card
+reading `90% FASTER` is the strongest claim the video makes.
+
+### The rule that keeps it meaningful: a number is not a claim until it measures something
+
+`"You read one screen and decide"` contains a numeral and asserts nothing. `"ninety minutes a day"`
+asserts something checkable. The difference is whether the number quantifies a **measurable unit**,
+and that single rule is what keeps this off ordinary marketing copy.
+
+**A gate that cries wolf gets confirmed blind and then guards nothing.** So it was measured, not
+guessed, against the only real ground truth available — the two worked examples in
+`media-director.md`, which declare per scene whether a `Source:` line was needed:
+
+| | result |
+|---|---|
+| scenes carrying a `Source:` line, flagged when uncited | **3 of 3** |
+| sourced scenes missed | **0** |
+| flagged with no `Source:` line in the example | **1** — `ONE WEEK A MONTH` |
+
+That last one is not a false positive. It is a text card restating the *sourced* figure from the
+scene before it with no citation of its own — the example being loose, not the predicate being
+wrong. The full backend suite (2517 tests) was unaffected, so no realistic fixture deck trips it.
+
+### The ceiling, stated plainly
+
+It catches **quantities** and **appeals to evidence** ("studies show", "according to"). It will
+**not** catch an unsourced qualitative assertion — "the fastest way to X" has no number and no
+appeal, and sails through. This is a floor that cannot be argued with, not a proof of groundedness.
+
+The upgrade path is a model-side check at proposal time. The thing **not** to do is widen the
+keyword lists until ordinary copy trips them; see the cry-wolf note above.
+
+### Where to look when it misfires
+
+* **Flagging good copy** → `CLAIM_UNIT` in `storyboard.ts`. A unit that is too generic is almost
+  always the cause. Add a test to the boundary block in `storyboard.test.ts` first.
+* **Missing a real claim** → it is probably qualitative, which is the documented ceiling, not a bug.
+* **A deck that used to reserve and now refuses** → that is the feature. The lever is `confirmClaim`
+  on the flagged scene, not a rewrite of the deck.
+
 
 ## The card palette (the wire that stopped three-quarters of the way)
 

@@ -637,6 +637,72 @@ export const hasAssetSource = (s: {
   return true;
 };
 
+/* ── DOES THIS LINE ASSERT SOMETHING ABOUT THE WORLD? ──────────────────────────────────────────
+ *
+ * The parser used to treat a scene with no `Source:` line as claiming nothing, which trusted the
+ * model to volunteer that it had made a claim. `media-director.md` mandates the line in prose, and
+ * a prose mandate is not a guarantee: `dispatch.ts`'s `persistResearchFindings` records the
+ * measured version of exactly this — "the prose mandate ... was violated twice in six attempts,
+ * which is why this is code and not another sentence in the body."
+ *
+ * So the default is inverted. Silence now means UNVERIFIED, and the existing confirm gate
+ * (`firstUnconfirmedClaim` -> `unconfirmed_claims` -> `confirmClaim`) does the rest unchanged.
+ * Nothing new was built downstream; what changed is which scenes reach it.
+ *
+ * **A NUMERAL ALONE IS NOT A CLAIM.** "You read one screen and decide" is copy; "ninety minutes a
+ * day" is an assertion about the world. The difference is whether the number quantifies something
+ * MEASURABLE, so a numeral only counts when a unit follows it closely. That single rule is what
+ * keeps this off ordinary marketing prose — measured against the two worked examples in
+ * `media-director.md`, it flagged 3 of 3 scenes that carry a `Source:` line, missed none, and
+ * flagged one that does not: `ONE WEEK A MONTH`, a card restating the sourced figure from the
+ * scene before it with no citation of its own. That one is the example being loose, not this
+ * predicate being wrong.
+ *
+ * ponytail: a keyword predicate, not a claim-detection model. The ceiling is real and worth saying
+ * plainly — it catches quantities and appeals to evidence, and it will NOT catch an unsourced
+ * qualitative assertion ("the fastest way to X"). It is a floor that cannot be argued with, not a
+ * proof of groundedness. The upgrade path is a model-side check at proposal time; the thing NOT to
+ * do is widen these lists until ordinary copy trips them, because a gate that cries wolf gets
+ * confirmed blind and then guards nothing.
+ */
+
+/** Numbers, as digits or as words. Kept small deliberately: every addition here is a chance to
+ *  flag prose that was never a claim. */
+const CLAIM_NUMERAL =
+  "\\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion|dozen";
+
+/** What a number has to be measuring before it counts as a claim. */
+const CLAIM_UNIT =
+  "second|minute|hour|day|week|month|year|time|percent|dollar|pound|euro|cent|customer|client|user|sale|lead|order|%|x";
+
+/** A quantity ATTACHED to a unit, within a short window so "one screen and decide ... every month"
+ *  does not read as a quantity of months. */
+const CLAIM_QUANTIFIED = new RegExp(
+  `\\b(?:${CLAIM_NUMERAL})\\b[^.!?]{0,24}?\\b(?:${CLAIM_UNIT})s?\\b`,
+  "i",
+);
+
+/** A bare figure with a symbol on it — "40%", "$2,000" — needs no unit word. */
+const CLAIM_SYMBOL = /[%$£€]\s*\d|\d\s*[%$£€]/;
+
+/** An explicit appeal to evidence. "Studies show" with no citation is the purest form of the
+ *  failure this exists to catch: it borrows authority it never names. */
+const CLAIM_APPEAL =
+  /\b(?:studies show|research shows?|according to|survey(?:s|ed)?|report finds?|data shows?|on average|statistics)\b/i;
+
+/**
+ * Does this line assert something a reader could check — and therefore something that needs a
+ * source before it is burned into a frame?
+ *
+ * Applied to BOTH the narration and the overlay. An overlay is the most prominent text in a reel:
+ * a card reading "90% FASTER" is the strongest claim the video makes, and it is spoken by nobody.
+ */
+export const statesCheckableClaim = (text: string | undefined): boolean => {
+  const t = (text ?? "").trim();
+  if (t === "") return false;
+  return CLAIM_QUANTIFIED.test(t) || CLAIM_SYMBOL.test(t) || CLAIM_APPEAL.test(t);
+};
+
 /** Total SUBMITTED characters across the reel — the tts MediaSpec's input, as `narrationChars` is
  *  for blocks. Silent scenes contribute nothing. */
 export const sceneNarrationChars = (scenes: readonly Scene[]): number =>
@@ -943,7 +1009,16 @@ export function parseSceneDeck(body: string): ParsedSceneDeck {
       prompt: prompts.get(index + 1) ?? description,
       ...(() => {
         const src = sources.get(index + 1);
-        if (src === undefined) return {};
+        // NO `Source:` LINE USED TO MEAN "CLAIMS NOTHING". It now means "unverified", and that
+        // inversion is the point — see `statesCheckableClaim`. A scene that asserts a figure and
+        // simply omits the line is the failure this catches, because nothing downstream could:
+        // the money gate reads `needsConfirmation`, and a scene that never set it sails through
+        // reservation, render and publish with the figure burned into a frame.
+        if (src === undefined) {
+          return statesCheckableClaim(narration) || statesCheckableClaim(overlay)
+            ? { needsConfirmation: true as const }
+            : {};
+        }
         return src === "unverified" ? { needsConfirmation: true as const } : { source: src };
       })(),
     });
