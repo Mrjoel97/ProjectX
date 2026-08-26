@@ -1,4 +1,20 @@
-> Last verified: 2026-08-27 (**THE FIRST RETRY CEILING WAS TOO LOW TO WORK, and production proved
+> Last verified: 2026-08-27 (**THE SERVER WAS NAMING THE EXACT WAIT AND WE WERE IGNORING IT.**
+> Google does NOT send a `Retry-After` HEADER — it puts `google.rpc.RetryInfo` in the JSON BODY
+> (`{"retryDelay": "56s"}`). A header-only reader sees nothing, falls back to guessing, and then
+> re-collides, because `embedMany` fires CONCURRENT batches that re-consume the window the instant it
+> opens. That is why two successive ceiling increases (8s, then 30s) both still failed.
+>
+> `parseRetryAfterSeconds` now reads the body and the header — the header WINS when present, so one
+> path serves OpenAI (header) and Google (body). The honoured cap rose to 90s: a cap BELOW what the
+> server asks for silently turns "obey the server" back into "guess", which was the original bug.
+> A hostile value is still capped rather than allowed to park the action, and a body with no usable
+> delay falls back to exponential rather than to a 0ms hot loop — both asserted.
+>
+> **Read the response BODY before concluding anything about a 429.** The status alone hid three
+> different situations here across one day: an illegal header value (a stray `` in the API key),
+> a per-minute limiter, and a server-specified retry delay nobody was reading.
+>
+> PREVIOUS: 2026-08-27 (**THE FIRST RETRY CEILING WAS TOO LOW TO WORK, and production proved
 > that too.** 5 attempts capped at 8s is ~23s of total backoff. The limiter here is PER-MINUTE — a
 > single embed succeeds while a burst 429s — so every one of those attempts landed inside the same
 > unexpired window and the call failed exactly as it had without any retry at all.

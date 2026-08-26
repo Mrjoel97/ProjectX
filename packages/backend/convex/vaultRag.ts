@@ -130,6 +130,34 @@ export const buildOpenAIEmbedRequest = (values: string[]) => ({
 export const isRetriableEmbedStatus = (status: number): boolean => status === 429 || status >= 500;
 
 /**
+ * The delay the SERVER asked for, in seconds, or NaN when it did not ask. Pure; exported for the
+ * offline test.
+ *
+ * **Google does not send a `Retry-After` HEADER.** It puts `google.rpc.RetryInfo` in the JSON BODY
+ * (`{"retryDelay": "56s"}`), so a header-only reader sees nothing and falls back to guessing —
+ * which is what made the first two retry ceilings fail: the server was naming the exact wait and we
+ * were ignoring it, then re-colliding because `embedMany` fires concurrent batches that re-consume
+ * the window the moment it opens. OpenAI DOES use the header, so both are read.
+ */
+export const parseRetryAfterSeconds = (body: string, header: string | null): number => {
+  const fromHeader = Number(header);
+  if (Number.isFinite(fromHeader) && fromHeader > 0) return fromHeader;
+  try {
+    const details = (JSON.parse(body) as { error?: { details?: unknown[] } }).error?.details ?? [];
+    for (const d of details) {
+      const delay = (d as { retryDelay?: unknown }).retryDelay;
+      if (typeof delay === "string") {
+        const seconds = Number(delay.replace(/s$/, ""));
+        if (Number.isFinite(seconds) && seconds > 0) return seconds;
+      }
+    }
+  } catch {
+    // A non-JSON error body is normal (proxies, gateways). Fall through to the exponential guess.
+  }
+  return Number.NaN;
+};
+
+/**
  * How long to wait before retry `attempt`. Pure; exported for the offline test.
  *
  * Honours the provider's own `Retry-After` when it sends one — it knows its window better than a
@@ -138,7 +166,7 @@ export const isRetriableEmbedStatus = (status: number): boolean => status === 42
  */
 export const embedBackoffMs = (attempt: number, retryAfterSeconds: number, jitter = 0): number =>
   Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
-    ? Math.min(retryAfterSeconds * 1000, 30_000)
+    ? Math.min(retryAfterSeconds * 1000, 90_000)
     : Math.min(2 ** attempt * 500, 30_000) + Math.floor(jitter * 250);
 
 export const embeddingContentHash = (contentHash: string): string =>
@@ -199,11 +227,15 @@ const embeddingV2 = {
     // that cannot span the limiter's window is not a retry, it is a slower failure.
     const MAX_ATTEMPTS = 6;
     let res!: Response;
+    let lastBody: string | undefined;
     for (let attempt = 1; ; attempt++) {
       res = await fetchOnce();
       if (res.ok || !isRetriableEmbedStatus(res.status) || attempt === MAX_ATTEMPTS) break;
-      const wait = embedBackoffMs(attempt, Number(res.headers.get("retry-after")), Math.random());
-      await new Promise((r) => setTimeout(r, wait));
+      // Read the body ONCE and keep it: a Response body can only be consumed a single time, and the
+      // final throw below needs the same text this parse reads.
+      lastBody = await res.text();
+      const asked = parseRetryAfterSeconds(lastBody, res.headers.get("retry-after"));
+      await new Promise((r) => setTimeout(r, embedBackoffMs(attempt, asked, Math.random())));
     }
 
     async function fetchOnce() {
@@ -226,7 +258,8 @@ const embeddingV2 = {
         signal: abortSignal,
       });
     }
-    if (!res.ok) throw new Error(`vault: embeddings API ${res.status} ${await res.text()}`);
+    if (!res.ok)
+      throw new Error(`vault: embeddings API ${res.status} ${lastBody ?? (await res.text())}`);
     const json = (await res.json()) as {
       embeddings?: Array<{ values: number[] }>;
       data?: Array<{ embedding: number[] }>;

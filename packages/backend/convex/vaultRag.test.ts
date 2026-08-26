@@ -17,6 +17,7 @@ import {
   embeddingContentHash,
   isRetriableEmbedStatus,
   l2Normalize,
+  parseRetryAfterSeconds,
 } from "./vaultRag";
 
 // ── 1. NORMALISATION — the silent one ────────────────────────────────────────
@@ -119,8 +120,11 @@ test("retries a rate limit and a server fault, and NOTHING else", () => {
 
 test("prefers the provider's Retry-After, but will not be parked by an absurd one", () => {
   expect(embedBackoffMs(1, 3)).toBe(3000);
-  // 10 minutes from a hostile or broken header must not hold the action open.
-  expect(embedBackoffMs(1, 600)).toBe(30_000);
+  // The ceiling is 90s, not 30s: the server legitimately asks for ~56s here, and a cap BELOW what
+  // it asks for silently turns "obey the server" back into "guess" — the bug this whole path had.
+  expect(embedBackoffMs(1, 56)).toBe(56_000);
+  // But 10 minutes from a hostile or broken value must still not hold the action open.
+  expect(embedBackoffMs(1, 600)).toBe(90_000);
 });
 
 test("backs off exponentially, with a ceiling, when no header is given", () => {
@@ -139,4 +143,31 @@ test("adds jitter so parallel callers do not re-collide in lockstep", () => {
   const noHeader = Number.NaN;
   expect(embedBackoffMs(1, noHeader, 0)).toBe(1000);
   expect(embedBackoffMs(1, noHeader, 0.999)).toBe(1249);
+});
+
+// Google does NOT send a Retry-After header — it puts `google.rpc.RetryInfo` in the JSON body.
+// Reading only the header is what made two successive retry ceilings fail against production: the
+// server was naming the exact wait (56s) and the code was guessing instead.
+test("reads the retry delay Google puts in the BODY, not just the header", () => {
+  const body = JSON.stringify({
+    error: {
+      code: 429,
+      details: [
+        { "@type": "type.googleapis.com/google.rpc.QuotaFailure", violations: [] },
+        { "@type": "type.googleapis.com/google.rpc.RetryInfo", retryDelay: "56s" },
+      ],
+    },
+  });
+  expect(parseRetryAfterSeconds(body, null)).toBe(56);
+  // OpenAI uses the header; it wins when present so one code path serves both providers.
+  expect(parseRetryAfterSeconds(body, "3")).toBe(3);
+  // And the wait actually honours it rather than falling back to the exponential guess.
+  expect(embedBackoffMs(1, parseRetryAfterSeconds(body, null))).toBe(56_000);
+});
+
+test("falls back to the exponential guess when the server asks for nothing", () => {
+  expect(parseRetryAfterSeconds("not json at all", null)).toBeNaN();
+  expect(parseRetryAfterSeconds(JSON.stringify({ error: { details: [] } }), null)).toBeNaN();
+  // A body with no usable delay must not become a 0ms wait — that would be a hot retry loop.
+  expect(embedBackoffMs(1, parseRetryAfterSeconds("{}", null))).toBe(1000);
 });
