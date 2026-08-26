@@ -1,4 +1,25 @@
-> Last verified: 2026-08-26 (**THE PACK E2E HARNESS CAN NOW TARGET A DEPLOYMENT IT IS NOT SERVING
+> Last verified: 2026-08-27 (**THE PROD BROWSER-EVIDENCE PLANE IS CLOSED, and getting there cost
+> three separate failures that all LOOKED like "the session is broken".**
+>
+> 1. `context.storageState()` on a CDP-ATTACHED context returns cookies but does not reliably
+>    serialize localStorage — where Convex Auth keeps the session. Harvest it from the page.
+> 2. `workspace-pane` visible was treated as PROOF of authentication. It is not: the shell paints
+>    before auth resolves, so it appeared in a browser nobody had signed into. The only proof is a
+>    `__convexAuthJWT_*` key, and the script now POLLS for that (giving a human time to sign in)
+>    rather than asserting it once.
+> 3. **The tab is not where you left it.** The first `goto` runs BEFORE sign-in, so the auth flow
+>    lands on `/dashboard` — and `workspace-pane` exists only on `/dashboard/workspace`. Waiting on
+>    the pane without re-navigating times out against a perfectly healthy signed-in app.
+>
+> The capture is now ONE command: it launches Chrome itself when no CDP port answers. A separate
+> `--user-data-dir` is MANDATORY — since Chrome 136 `--remote-debugging-port` is SILENTLY IGNORED on
+> the default profile. Check `ProductVersion` before diagnosing anything else. The profile persists,
+> so sign-in is once per machine. The captured file is a LIVE CREDENTIAL: delete it after the run.
+>
+> Evidence recorded PROD versions (five v1, process-sop v2) where the dev file held v5/v10/v4 —
+> the per-deployment `pack-seen-<origin>.json` key doing exactly what it was added for.
+>
+> PREVIOUS: 2026-08-26 (**THE PACK E2E HARNESS CAN NOW TARGET A DEPLOYMENT IT IS NOT SERVING
 > LOCALLY, and three defects had to be fixed before it could be trusted to.**
 >
 > 1. **`convexRun` in `workflow-pack-pilot.spec.ts` passed NO deployment flag** — a second copy of
