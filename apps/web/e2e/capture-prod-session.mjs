@@ -21,7 +21,7 @@
 // The output file IS A LIVE SESSION — treat it as a credential. `/e2e/.auth/` is gitignored;
 // delete it when the run is done.
 
-import { mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
@@ -71,14 +71,42 @@ console.log("[capture] waiting for the workspace to load, then saving the sessio
 
 await page.goto(`${APP}/dashboard/workspace`, { waitUntil: "domcontentloaded" });
 
-// The workspace pane is the signal, NOT the URL: an unauthenticated visit to /dashboard/workspace
-// redirects to sign-in and can bounce BACK to the same path mid-flow, so a URL check can report
-// success while the page is still a login screen. The pane only renders for an authenticated
-// tenant, which is exactly the condition the evidence run needs.
+// The pane is a WAIT, NOT A PROOF — an earlier version of this comment claimed it "only renders for
+// an authenticated tenant" and that was WRONG. The shell paints before auth resolves, so the pane
+// appeared in a browser that had never completed sign-in, the capture reported success, and every
+// spec then failed at its first assertion looking exactly like an expired session.
+// Better than the URL (which bounces through sign-in and back), but the ONLY proof of a session is
+// the `__convexAuthJWT_*` key asserted after the harvest below. Do not restore this to a proof.
 await page.getByTestId("workspace-pane").waitFor({ timeout: SIGN_IN_TIMEOUT_MS });
 
+// HARVEST localStorage FROM THE PAGE, do not trust `storageState()` alone.
+//
+// On a CDP-ATTACHED persistent context, `context.storageState()` returns the cookies but does NOT
+// reliably serialize localStorage: a capture of a demonstrably signed-in page came back with the
+// app's own keys and WITHOUT `__convexAuthJWT_*` / `__convexAuthRefreshToken_*`. Convex Auth keeps
+// the session in localStorage, so that file authenticated nothing and every spec failed at the
+// first `workspace-pane` assertion — a failure that reads exactly like an expired session.
+//
+// Reading it from the page is the source of truth: this is the same tab that just rendered the
+// workspace, so whatever is here IS the live session.
 mkdirSync(dirname(OUT), { recursive: true });
-await context.storageState({ path: OUT });
+const state = await context.storageState();
+const harvested = await page.evaluate(() =>
+  Object.entries(localStorage).map(([name, value]) => ({ name, value: String(value) })),
+);
+const originUrl = new URL(page.url()).origin;
+const existing = state.origins.find((o) => o.origin === originUrl);
+if (existing) existing.localStorage = harvested;
+else state.origins.push({ origin: originUrl, localStorage: harvested });
+writeFileSync(OUT, JSON.stringify(state, null, 2));
+
+// Fail loudly rather than write a file that silently authenticates nothing.
+const authKeys = harvested.filter((kv) => kv.name.startsWith("__convexAuthJWT_"));
+if (authKeys.length === 0) {
+  throw new Error(
+    "captured no __convexAuthJWT_* key — the page is not signed in, or storage was unreadable",
+  );
+}
 
 console.log(`[capture] session saved -> ${OUT}`);
 console.log("[capture] this file is a live credential. Delete it when the evidence run is done.");
