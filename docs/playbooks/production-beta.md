@@ -1,5 +1,27 @@
 # Playbook: Production Beta Readiness (25-10)
 
+> Last verified: 2026-08-28 (28-05 HubSpot rail — **THREE NEW `feature`-TIER MANIFEST NAMES:**
+> `HUBSPOT_OAUTH_CLIENT_ID`, `HUBSPOT_OAUTH_CLIENT_SECRET`, `HUBSPOT_OAUTH_REDIRECT_URI`, added to
+> `ENV_MANIFEST` in `convex/lib/env.ts`. Caught the same way `PEXELS_API_KEY` was: `env.test.ts`
+> scans source for literal `process.env.X` and reds on any consumed name nobody classified.
+>
+> **A THIRD credential family**, unrelated to sign-in or mailboxes: Phase 28 connector grants. All
+> three are `feature` — with none set the app runs and the HubSpot rail refuses to connect loudly
+> (`requireHubSpotConfig` throws naming the variable). No development fallback, per
+> `p25-no-dev-fallback`. Convex deployment vars (`npx convex env set`), never Vercel.
+>
+> **THE GAP THIS PLAYBOOK MUST CARRY: the connector credential ENCRYPTION key is NOT in the**
+> **manifest and cannot be.** `CONNECTOR_CREDENTIAL_KEY_V1`/`_V2` are read through a *computed*
+> `process.env[name]` in `connectorCredentials.requireCredentialKey`, so the literal scan in
+> `env.test.ts` is structurally blind to them — the drift gate that catches every other name will
+> stay green if these are unset or lost. Losing them is unrecoverable: every stored connector
+> credential is AES-256-GCM ciphertext bound to that key. Setup, rotation and loss operations live
+> in docs/playbooks/revenue-connectors.md; this playbook records only that the manifest does not
+> and will not cover them.
+>
+> Three more provider families (QuickBooks, Stripe, PayPal) will add their own names as 28-06..08
+> land. Nothing else in this playbook's scope was re-read against this change.)
+
 > Last verified: 2026-08-26 (**ONE NEW `feature`-TIER MANIFEST NAME: `PEXELS_API_KEY`**, added to
 > `ENV_MANIFEST` in `convex/lib/env.ts` for the free stock-footage scenes. The row is mandatory
 > rather than documentation — `env.test.ts` scans source for `process.env.X` and reds on any
