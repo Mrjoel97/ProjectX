@@ -3,9 +3,62 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 28
-current_plan: 4 of 29 executed (28-17 readiness gate, 28-18 playbook/watch ownership, 28-01 provider admission, 28-02 deterministic finance core) -- 28 IN PROGRESS
+current_plan: 5 of 29 executed (28-17 readiness gate, 28-18 playbook/watch ownership, 28-01 provider admission, 28-02 deterministic finance core, 28-03 encrypted credentials + connector schema) -- 28 IN PROGRESS
 status: executing
-stopped_at: "28-01 SEALED. The four provider admission gates are decided and the register is live at
+stopped_at: "28-03 SEALED (`a86ca13`, `82d14a6`, `5516a9d`). **CONNECTOR CREDENTIALS ARE NOW SEALED
+AND BOUND, AND THE WHOLE PHASE 28 SCHEMA LANDED IN ONE ADDITIVE EDIT.** `packages/revenue/credential.ts`
+is Web Crypto AES-256-GCM with a fresh 96-bit IV per seal; the AAD covers
+`keyVersion|environment|tenantId|provider|connectionId` and is encoded as a JSON ARRAY, because a
+delimiter-joined string is forgeable across field boundaries (`tenant|a`+`b` == `tenant`+`a|b`).
+Four NEW tables, no existing table or field altered, no backfill: `connectorConnections`,
+`connectorOAuthStates`, `contactProviderRefs`, `providerGates`. Readiness gate run FIRST, exit 0.
+**THE LOAD-BEARING DECISION IS THAT `revocation.upstream` IS A FOUR-VALUE ENUM, NOT A BOOLEAN.**
+Three of the four admitted providers cannot be revoked server-side with any confidence -- Stripe
+Apps has no documented platform-initiated revoke (owner override, 28-24 open), PayPal documents
+none anywhere, HubSpot's cascade to already-issued ACCESS tokens is UNPROVEN (28-05 must test it);
+only QuickBooks is confirmed. So `confirmed` / `attempted_failed` / `unsupported` /
+`not_attempted` keeps 'we deleted our copy' apart from 'the grant is dead upstream'. A later plan
+that finds a working revoke changes the VALUE passed, NOT the enum back into a boolean.
+`recordRevocation` CLEARS the ciphertext and KEEPS the row -- unlike `gmailAuth.deleteTokens`,
+which can safely delete because Google's revoke is confirmed -- because the surviving record is the
+only place that truth can live. Tenant ERASURE still deletes the row (`tenant_credential`).
+Disconnect and erasure are different operations now.
+**MUTATION TESTING FOUND A REAL HOLE IN MY OWN NEW GUARD.** Five non-deletion mutations; four went
+red, ONE SURVIVED: weakening the CAS fence from `row.revision !== revision` to `<` left the whole
+suite green, because the first commit releases the lease and the LEASE check was refusing the stale
+retry while the fence was never exercised. The test proved 'the lease was released', not 'the fence
+works'. Fixed by renewing the SAME lease id before the stale retry so only the fence can refuse.
+Refresh needs BOTH guards -- a lease without a fencing token is a lock that lies (Intuit may revoke
+the token a successful refresh issued when a second races it).
+**`tsc --noEmit` CAUGHT 5 REAL ERRORS THAT 134 GREEN TESTS WERE SILENT OVER** (4 ArrayBuffer
+generics, 1 untyped Convex validator getter). Run it SEPARATELY, from inside each package.
+**DELIBERATELY NOT DONE, AND THIS IS A HANDOFF, NOT AN OMISSION: `workflowPackEvents` WAS NOT
+EXTENDED.** Its `packId` union is pinned to `WORKFLOW_PACK_IDS` in `@pikar/core` by a source scan,
+so the seven Phase 28 workflow ids need `schema.ts` AND `workflowPacks.ts` edited together -- and
+those names are 28-14's contract, not guessable from a schema plan. **So 28-03 is the single schema
+owner for the CONNECTOR tables ONLY. 28-14 must own the pack-event literal edit, and 28-15 must not
+emit a pack event whose packId has no literal** or the insert throws and the event silently
+vanishes. No cache table either (no plan asks for one).
+**FOUR `agentSteps.tool` REVENUE LITERALS WERE PRE-DECLARED** -- `dispatchRevenue`,
+`readRevenueCrm`, `readBusinessFinance`, `stageInvoiceReminder` -- with their `cards.tsx` VERB
+entries, because traceParity asserts both sets equal BOTH ways and 28-12/28-13 cannot edit
+`schema.ts`. **THOSE NAMES ARE NOW BINDING ON 28-12 AND 28-13.**
+**NO PROVIDER EXISTS AND NO LANE HAS PASSED.** `requirements-completed: []` -- this is the ability
+to store a credential safely IF one arrives, a precondition, not a feature. All four open admission
+conditions survive untouched. `CONNECTOR_CREDENTIAL_KEY_V1` is NOT set on any deployment yet;
+nothing needs it until 28-05..08, and `requireCredentialKey` THROWS until it is (no dev fallback,
+ever -- `p25-no-dev-fallback` forbids it). Generate/validate/rotate/loss procedure is in
+`docs/playbooks/revenue-connectors.md` and no step prints the key.
+Three playbooks bumped (`revenue-connectors.md`, `cockpit.md` for `cards.tsx`,
+`audit-dead-letter.md` for `tenantData.ts`). Backend `vitest run` exits 1 on a FULLY PASSING suite
+(2571/2571) from a PRE-EXISTING worker-level `process is not defined`, identical 7 occurrences in
+the pre-change baseline -- do not read it as new.
+**NEXT: Wave 4 (28-04 shared OAuth mint/consume + bounded fetch).** The `connectorOAuthStates`
+table is landed and waiting; 28-04 owns the module. Every dependent plan still runs
+`node scripts/check-phase28-readiness.mjs` FIRST; exit 1 means stop, not shim. Do NOT run any
+`gsd-tools state *` subcommand against this file -- it has corrupted it seven times. Working branch
+feat/27-02-pack-contracts."
+previous_stopped_at: "28-01 SEALED. The four provider admission gates are decided and the register is live at
 docs/connectors/. All four markers read `decision: approved_production` -- read them with
 grep -h '^decision:' docs/connectors/*-suitability.md, never from prose. Four INDEPENDENT markers,
 each with its own date, evidence refs and expiry `review_by: 2026-11-27`. There is no all-provider
@@ -55,12 +108,12 @@ in the same window, so read the two together, not one instead of the other.
 `node scripts/check-phase28-readiness.mjs` FIRST; exit 1 means stop, not shim. Do NOT run any
 `gsd-tools state *` subcommand against this file -- it has corrupted it seven times. Working branch
 feat/27-02-pack-contracts."
-last_updated: "2026-08-27T15:21:15.000Z"
+last_updated: "2026-08-27T19:30:00.000Z"
 progress:
   total_phases: 53
   completed_phases: 35
   total_plans: 413
-  completed_plans: 321
+  completed_plans: 322
   percent: 78
 ---
 
