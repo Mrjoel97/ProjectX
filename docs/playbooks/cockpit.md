@@ -1,4 +1,27 @@
-> Last verified: 2026-08-27 (**THE PROD BROWSER-EVIDENCE PLANE IS CLOSED, and getting there cost
+> Last verified: 2026-08-27 (**`@drill` RAN AGAINST PRODUCTION FOR THE FIRST TIME. Rollback-to-dark
+> PASSED — the undo path is now proven on prod, not just dev.**
+>
+> **THE DRILL IS DESTRUCTIVE ON PRODUCTION AND DOES NOT CLEAN UP AFTER ITSELF.** Read the assertion:
+> it turns a live pack off and then requires it to reappear as a CANDIDATE — "a turned-off pack must
+> come back as a candidate, not vanish". That is the contract, and it does NOT re-activate. On dev
+> that is harmless because the next seed re-activates everything; on PROD it leaves a user-facing
+> workflow dark until an operator runs `skills:activateSkill` by hand. It darkened
+> `pack-business-pulse` on 2026-08-27 and the test still reported PASS, because leaving it off IS
+> the expected end state. **Re-activate immediately after any prod drill, and verify with
+> `skills:getActiveSkill` per pack.**
+>
+> **ROLLBACK-TO-PRIOR CANNOT FOLLOW ROLLBACK-TO-DARK IN ONE RUN.** The first test ends with a
+> `convexRun`, which ENDS THE BROWSER SESSION, so the second test's first navigation lands signed
+> out and fails at `openWorkspace` — not at its own skip check. Run it in a separate invocation.
+>
+> **`skills:getActiveSkill` PER PACK IS THE ONLY RELIABLE LIVE-STATE READ.**
+> `inspectPackCandidates` returns the NEWEST row per pack, so once a candidate v2 exists it reports
+> `candidate` while v1 is still serving users — it cannot answer "is this pack live". And a browser
+> probe answers a different question badly: an expired session renders the workspace shell with ZERO
+> packs, which is indistinguishable from a genuinely empty production. Both were misread here before
+> the server-side read settled it.
+>
+> PREVIOUS: 2026-08-27 (**THE PROD BROWSER-EVIDENCE PLANE IS CLOSED, and getting there cost
 > three separate failures that all LOOKED like "the session is broken".**
 >
 > 1. `context.storageState()` on a CDP-ATTACHED context returns cookies but does not reliably
