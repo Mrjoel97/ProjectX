@@ -12,6 +12,7 @@ import { expect, test } from "vitest";
 import {
   buildGeminiEmbedRequest,
   buildOpenAIEmbedRequest,
+  buildOpenRouterEmbedRequest,
   EMBEDDING_DIM,
   embedBackoffMs,
   embeddingContentHash,
@@ -97,8 +98,17 @@ test("buildOpenAIEmbedRequest pins the model and the 1536 `dimensions`", () => {
 test("embeddingContentHash scopes dedup to the MODEL, so a provider swap re-embeds", () => {
   const sha = "abc123";
   // Asserts the SHAPE, not which provider is pinned today — the point is that the identity moves
-  // with the model, in BOTH directions of the OpenAI/Gemini A/B.
-  expect(embeddingContentHash(sha)).toMatch(/^(text-embedding-3-small|gemini-embedding-001):/);
+  // with the model, in EVERY direction of the OpenAI/Gemini/OpenRouter rotation.
+  //
+  // `openai/text-embedding-3-small` is the SAME model as `text-embedding-3-small` reached through a
+  // different account, so the two ids produce DIFFERENT dedup keys for identical vectors. That is
+  // wasteful (one needless re-embed on the route change) and it is the safe direction: the
+  // alternative is normalising the ids, which would make a real model change look like a route
+  // change and leave stale vectors in the index forever. Re-embedding costs cents; a silently
+  // unsearchable corpus costs the feature.
+  expect(embeddingContentHash(sha)).toMatch(
+    /^(text-embedding-3-small|gemini-embedding-001|openai\/text-embedding-3-small):/,
+  );
   expect(embeddingContentHash(sha)).toContain(sha);
   // The whole point: same text, different model ⇒ different dedup identity.
   expect(embeddingContentHash(sha)).not.toBe(sha);
@@ -170,4 +180,23 @@ test("falls back to the exponential guess when the server asks for nothing", () 
   expect(parseRetryAfterSeconds(JSON.stringify({ error: { details: [] } }), null)).toBeNaN();
   // A body with no usable delay must not become a 0ms wait — that would be a hot retry loop.
   expect(embedBackoffMs(1, parseRetryAfterSeconds("{}", null))).toBe(1000);
+});
+
+test("buildOpenRouterEmbedRequest names the NAMESPACED id — the field that picks the account", () => {
+  const req = buildOpenRouterEmbedRequest(["alpha", "beta"]);
+  // The one field that differs from the direct-OpenAI builder, and the one that decides which
+  // balance is billed. Measured against the live endpoint 2026-08-27: 1536 dims back, L2 = 1.0005,
+  // and 2048 inputs accepted in one call (full OpenAI parity).
+  expect(req.model).toBe("openai/text-embedding-3-small");
+  expect(req.dimensions).toBe(EMBEDDING_DIM);
+  expect(req.input).toEqual(["alpha", "beta"]);
+});
+
+test("the OpenRouter and direct-OpenAI payloads differ ONLY in the model id", () => {
+  // If these ever diverge in any other field, the response-parsing branch in `doEmbed` — which
+  // deliberately treats OpenRouter as the OpenAI shape — stops being safe.
+  const viaRouter = buildOpenRouterEmbedRequest(["x"]);
+  const direct = buildOpenAIEmbedRequest(["x"]);
+  expect({ ...viaRouter, model: "" }).toEqual({ ...direct, model: "" });
+  expect(viaRouter.model).not.toBe(direct.model);
 });

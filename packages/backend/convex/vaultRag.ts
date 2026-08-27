@@ -38,6 +38,10 @@ import { internalAction } from "./_generated/server";
 // corpus is a measurable question, not a preference. Keep both until the fixtures answer it.
 const OPENAI_EMBEDDING_MODEL = "text-embedding-3-small";
 const GEMINI_EMBEDDING_MODEL = "gemini-embedding-001";
+/** THE SAME OpenAI model, reached through OpenRouter's namespaced id and OpenRouter's balance.
+ *  Not a third embedding model — a third ROUTE to the second one, which is why it shares the
+ *  1536 width and the response shape and needs no new parsing branch. */
+const OPENROUTER_EMBEDDING_MODEL = "openai/text-embedding-3-small";
 /** The ACTIVE provider. One line — everything below routes off it.
  *
  *  **BACK ON GEMINI 2026-08-24, and this time the reason is a trial, not an outage.** The dev OpenAI
@@ -52,18 +56,50 @@ const GEMINI_EMBEDDING_MODEL = "gemini-embedding-001";
  *  so 29/30/31 are the fixtures that answer whether that was a retrieval fault or a model-pairing
  *  one. Read them as the embedding verdict, not only as the ox-alpha verdict.
  *
+ *  **ON OPENROUTER SINCE 2026-08-27, BECAUSE BOTH DIRECT ROUTES WERE EXHAUSTED AT ONCE.** Gemini's
+ *  free tier spends 1000 embed requests per project per day and `vaultSmoke:seedCorpus` had spent
+ *  them (429 `EmbedContentRequestsPerDayPerProjectPerModel-FreeTier`), which blocks an eval run for
+ *  the rest of the day; the direct OpenAI key answers `credit_balance_exhausted`. OpenRouter bills
+ *  the same `text-embedding-3-small` from a balance that has credit, so this is a ROUTE change and
+ *  not a model change — the vectors are the same vectors.
+ *
+ *  NOTE this is a DIFFERENT 429 from the per-minute limiter the retry loop below exists for. A daily
+ *  quota and a per-minute burst limit read identically at the status line and want OPPOSITE fixes
+ *  (change route / wait vs. back off and retry). The retry loop stays exactly as it is: it is the
+ *  right answer to the other one, and OpenRouter rate-limits too.
+ *
+ *  MEASURED against the live endpoint 2026-08-27 before the flip, because the three things that
+ *  could have made it a model change are exactly the three that would have failed silently:
+ *    * **1536 dims**, natively and with `dimensions` passed — so `EMBEDDING_DIM` is unchanged and
+ *      the vector index needs no schema edit.
+ *    * **L2 = 1.0005**, i.e. already unit length, so `l2Normalize` stays the no-op it is for direct
+ *      OpenAI rather than quietly rescaling.
+ *    * **2048 inputs in one call**, full OpenAI parity, so `MAX_EMBEDDINGS_PER_CALL` keeps its
+ *      non-Gemini branch. Verified by sending 2048 and counting 2048 vectors back.
+ *  Cost is $0.02/1M tokens and reported per call in `usage.cost` — priced per INPUT TOKEN, which is
+ *  pre-computable, unlike a per-compute-second meter.
+ *
+ *  The 2026-08-08 A/B is NOT settled by this and must not be read as settled: this pairing is a
+ *  THIRD combination again (ox-alpha chat + OpenAI embeddings via OpenRouter). Fixtures 29/30/31
+ *  remain the ones that answer it.
+ *
  *  `embeddingContentHash` folds this name into every key, so the flip re-embeds the corpus
- *  automatically — there is no migration to run and no stale-vector window. */
-const EMBEDDING_MODEL: string = GEMINI_EMBEDDING_MODEL;
+ *  automatically — there is no migration to run and no stale-vector window. Note the corpus WILL
+ *  re-embed on the next ingest: the key changes from `gemini-embedding-001:<hash>` to
+ *  `openai/text-embedding-3-small:<hash>`. That is the mechanism working, not a fault. */
+const EMBEDDING_MODEL: string = OPENROUTER_EMBEDDING_MODEL;
 export const EMBEDDING_DIM = 1536; // MUST equal the model output AND stay ≤ Convex's 2048 cap (Pitfall 2)
 
 const usingGemini = (): boolean => EMBEDDING_MODEL === GEMINI_EMBEDDING_MODEL;
+const usingOpenRouter = (): boolean => EMBEDDING_MODEL === OPENROUTER_EMBEDDING_MODEL;
 
 // Per-request input caps, and they differ by 20x. Google refuses 101+ with
 // `BatchEmbedContentsRequest.requests: at most 100 requests can be in one batch` (measured
 // 2026-08-07); OpenAI's cap is 2048. The RAG component READS this to size its batches, so
 // overstating it turns a large ingest into a 400 rather than into slower progress — which is why it
 // has to move WITH the provider rather than being pinned to the smaller of the two.
+// OpenRouter measured at OpenAI parity 2026-08-27 (2048 sent, 2048 returned), so it shares the
+// non-Gemini branch rather than earning a third number.
 const MAX_EMBEDDINGS_PER_CALL = usingGemini() ? 100 : 2048;
 
 /**
@@ -101,6 +137,17 @@ export const buildGeminiEmbedRequest = (values: string[]) => ({
  *  to EMBEDDING_DIM rather than to a default that could move. */
 export const buildOpenAIEmbedRequest = (values: string[]) => ({
   model: OPENAI_EMBEDDING_MODEL,
+  input: values,
+  dimensions: EMBEDDING_DIM,
+});
+
+/** OpenRouter's payload. Byte-for-byte OpenAI's apart from the namespaced model id — which is
+ *  precisely why this is its own builder rather than a flag on the one above: the id is the only
+ *  thing that differs, so a shared builder with a conditional would hide the single field that
+ *  decides which account is billed. The response shape is identical, so `doEmbed` parses both with
+ *  one branch. */
+export const buildOpenRouterEmbedRequest = (values: string[]) => ({
+  model: OPENROUTER_EMBEDDING_MODEL,
   input: values,
   dimensions: EMBEDDING_DIM,
 });
@@ -182,7 +229,11 @@ export const embeddingContentHash = (contentHash: string): string =>
 // bump). Drop when the pinned RAG realigns to ai@7.
 const embeddingV2 = {
   specificationVersion: "v2" as const,
-  provider: usingGemini() ? "google.embedding" : "openai.embedding",
+  provider: usingGemini()
+    ? "google.embedding"
+    : usingOpenRouter()
+      ? "openrouter.embedding"
+      : "openai.embedding",
   modelId: EMBEDDING_MODEL,
   maxEmbeddingsPerCall: MAX_EMBEDDINGS_PER_CALL,
   supportsParallelCalls: true,
@@ -196,19 +247,28 @@ const embeddingV2 = {
     headers?: Record<string, string | undefined>;
   }): Promise<{ embeddings: number[][]; usage: { tokens: number } }> {
     const gemini = usingGemini();
-    const apiKey = gemini ? process.env.GOOGLE_GENERATIVE_AI_API_KEY : process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      throw new Error(
-        `vault: ${gemini ? "GOOGLE_GENERATIVE_AI_API_KEY" : "OPENAI_API_KEY"} unset for embeddings`,
-      );
-    }
+    const router = usingOpenRouter();
+    // The env NAME is carried beside the value so the refusal can say which one to set. Three
+    // routes, three keys — and an unset key is a governed throw before any request, not a 401 from
+    // a line that reads as though it set the header.
+    const keyName = gemini
+      ? "GOOGLE_GENERATIVE_AI_API_KEY"
+      : router
+        ? "OPENROUTER_API_KEY"
+        : "OPENAI_API_KEY";
+    const apiKey = process.env[keyName];
+    if (!apiKey) throw new Error(`vault: ${keyName} unset for embeddings`);
     // Narrowed BEFORE the closure below. The `if (!apiKey) throw` above narrows `apiKey` in this
     // scope, but that narrowing does not reach inside `fetchOnce` — TypeScript cannot know when a
     // hoisted function runs, so it widens back to `string | undefined` there.
     const key: string = apiKey;
+    // OpenRouter reuses the OpenAI `Authorization: Bearer` header below unchanged, which is why the
+    // header ternary stays two-way while this one is three-way.
     const url = gemini
       ? `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_EMBEDDING_MODEL}:batchEmbedContents`
-      : "https://api.openai.com/v1/embeddings";
+      : router
+        ? "https://openrouter.ai/api/v1/embeddings"
+        : "https://api.openai.com/v1/embeddings";
     // RETRY ON RATE LIMIT, because the provider WILL rate-limit and a hard throw here loses the
     // whole ingest. Measured on production 2026-08-27: a burst of vault seeds returned
     // `embeddings API 429` on contact and every caller failed outright. That is not an eval-harness
@@ -253,7 +313,11 @@ const embeddingV2 = {
           ...(gemini ? { "x-goog-api-key": key } : { Authorization: `Bearer ${key}` }),
         },
         body: JSON.stringify(
-          gemini ? buildGeminiEmbedRequest(values) : buildOpenAIEmbedRequest(values),
+          gemini
+            ? buildGeminiEmbedRequest(values)
+            : router
+              ? buildOpenRouterEmbedRequest(values)
+              : buildOpenAIEmbedRequest(values),
         ),
         signal: abortSignal,
       });
