@@ -1,6 +1,20 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
-> Last verified: 2026-08-27 (**THE LABEL CONTRACT NOW COVERS ALL SIX PACKS.** `pack-business-pulse`
+> Last verified: 2026-08-27 (**THE EVAL SUITE MANIFEST WAS STALE FOR EVERYONE, AND RE-CUTTING IT
+> INVALIDATES EVERY RECORDED EVIDENCE ROW.** Four case files had drifted from earlier lanes' commits
+> while `AGENT_EVAL_SUITE` still named `2026-08-18.phase23`. `hasPassingEvidence` matches all THREE
+> of revision / casesHash / caseCount, so a stale manifest means no run can produce matching
+> evidence — the gate reads as "needs a re-run" for every gated skill regardless of what actually
+> passed.
+>
+> **RE-CUTTING IS NOT A FREE TIDY-UP.** Bumping the revision and the hash retires the evidence rows
+> that referenced the old pair, so every gated skill needs a fresh 46-case run to hold activation.
+> That is real spend and it is an OWNER decision, which is why the bump is captured on its own
+> branch (`chore/eval-suite-remanifest`) rather than merged. Regenerate with
+> `pnpm --filter @pikar/backend eval:golden -- --write-suite-manifest`; the two files move TOGETHER
+> or the pair lies.
+>
+> PREVIOUS: 2026-08-27 (**THE LABEL CONTRACT NOW COVERS ALL SIX PACKS.** `pack-business-pulse`
 > and `pack-sales-call-prep` were the last two without it. Their `missingNamed` assertions passed
 > WITHOUT it, which is exactly why this was worth closing rather than leaving: the scorer accepts a
 > synonym list, so a body that says "your reports" instead of `your business and operations

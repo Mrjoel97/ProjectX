@@ -1,7 +1,7 @@
 {
-  "suiteRevision": "2026-08-18.phase23",
+  "suiteRevision": "2026-08-27.corpus-remanifest",
   "caseCount": 46,
-  "casesHash": "a01fc2857755e98ab2d6552d1993e641bac54f62a2eda1ec42ba2a54119a4d64",
+  "casesHash": "1cbf5d5b389173c64490f3932734d445375cfd42a2460a86509bc35308a4e913",
   "cases": [
     {
       "file": "01-happy-single.json",
@@ -141,15 +141,15 @@
     },
     {
       "file": "36-crm-follow-up.json",
-      "sha256": "699464c81884099120a96830becc3ef6bc2a66e15735762a3beab681064529f4"
+      "sha256": "ce0c90715d09468342c489e0a0ba14a5ba1efe420e8869e1a3982e65f123fe80"
     },
     {
       "file": "37-finance-update.json",
-      "sha256": "022b6212b738e9423b09da881ecadf35727d0cfcf5b29eba14bfc479fd5ac39c"
+      "sha256": "394674965a39c91339c13b0220aecac6526eae552808cc41eb4ccc0319d85edf"
     },
     {
       "file": "38-media-dispatch.json",
-      "sha256": "2055cb98670776373d0d0ccb0760a3b91669d9cc7607e1acce235484e03431c4"
+      "sha256": "88f468f6c36dc2d4285d9504ef7647738103f07e516b0e24b66988825891a132"
     },
     {
       "file": "38b-media-not-a-document.json",
@@ -161,7 +161,7 @@
     },
     {
       "file": "40-calendar-stage.json",
-      "sha256": "a06521c90643dadf8e810e24f2f139b65fa64fdfd0ffd31627626f53b0a3e583"
+      "sha256": "0c1abf0a3a17e45495ef871b45801e6a477b3b6b845772a04480fb81b39e117b"
     },
     {
       "file": "41-image-proposal.json",
