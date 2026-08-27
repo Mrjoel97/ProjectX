@@ -31,6 +31,8 @@ import {
   buildSpecialistPrompt,
   type DispatchResult,
   deckTokenCounts,
+  type GroundingTurn,
+  groundMediaBrief,
   MEDIA_TASK_LINE,
 } from "./dispatch";
 import { contentHash } from "./lib/hash";
@@ -3178,5 +3180,139 @@ describe("deckTokenCounts — §4: counts, never content", () => {
     expect(
       deckTokenCounts("SCENE DECK\n| 1 | text_card | 15 | … | … | | |").targetDurationTokens,
     ).toBe(0);
+  });
+});
+
+// ── THE GROUNDING PASS: a reel's claims come from outside before the deck is written ───────────
+//
+// The three branches here decide whether a reel gets grounded, silently gets nothing, or breaks.
+// A LanguageModel is not Convex-serializable, so the turn runner is INJECTED (the `dispatchAndLand`
+// idiom in the same file) — without that, none of this is reachable by a test at all and the whole
+// feature would rest on a source tripwire.
+
+describe("groundMediaBrief: research lands in the vault BEFORE the deck is written", () => {
+  const turn = (over: Partial<GroundingTurn> = {}): GroundingTurn => ({
+    reply: "Founders lose 90 minutes a day on email (Acme Survey, 2026).",
+    sources: [{ url: "https://example.test/survey", title: "Acme Survey 2026" }],
+    webSearchCalls: 3,
+    declaredUnsupported: false,
+    truncated: false,
+    ...over,
+  });
+
+  const args = (planId: Id<"plans">, question?: string) => ({
+    tenantId: TENANT,
+    threadId: THREAD,
+    planId,
+    gapIndex: 0,
+    route: "media",
+    question,
+    rootRequestId: ROOT,
+    parentAgentId: "executive",
+    depth: 1,
+    ancestry: [],
+    envelopeCents: 0,
+    spentCents: 0,
+  });
+
+  /** `persistFindings` ends in `startIngest`, which is a WORKFLOW. Convex mutations are
+   *  transactional, so an unregistered component does not merely skip the ingest — it rolls the
+   *  document insert back with it, and the symptom is an empty vault rather than an error. */
+  const grounded = async (): Promise<{ t: T; planId: Id<"plans"> }> => {
+    const made = await setup();
+    made.t.registerComponent("workflow", workflowSchema, workflowModules);
+    made.t.registerComponent("workflow/workpool", workpoolSchema, workpoolModules);
+    return made;
+  };
+
+  const vaultDocs = (t: T) =>
+    t.run(async (ctx) => await ctx.db.query("vaultDocuments").collect());
+
+  test("a researched brief becomes a CITABLE vault document", async () => {
+    // The whole point: `media-director`'s only tool is `searchVault`, so findings are useless to
+    // it unless they are IN the vault. This is the link that makes the deck able to cite the web.
+    const { t, planId } = await grounded();
+    await t.run(async (ctx) => {
+      await groundMediaBrief(ctx as never, args(planId, "a reel about saving founders time"), () =>
+        Promise.resolve(turn()),
+      );
+    });
+    const docs = await vaultDocs(t);
+    expect(docs).toHaveLength(1);
+    expect(docs[0]?.tenantId).toBe(TENANT);
+    expect(docs[0]?.text).toContain("90 minutes");
+  });
+
+  test("THE QUESTION carries the brief AND the media-specific asks", async () => {
+    // The media asks live in this question rather than in `research-specialist`'s body, which is
+    // GATED and serves the whole cockpit. If they ever migrate into the body, this test is the
+    // one that should go red first.
+    const { t, planId } = await grounded();
+    let asked = "";
+    await t.run(async (ctx) => {
+      await groundMediaBrief(ctx as never, args(planId, "a reel about invoicing"), (prompt) => {
+        asked = prompt;
+        return Promise.resolve(turn());
+      });
+    });
+    expect(asked).toContain("a reel about invoicing");
+    expect(asked).toMatch(/checkable facts/i);
+    expect(asked, "the audience half is the point, not a bonus").toMatch(/objections/i);
+  });
+
+  test("A RUN THAT NEVER SEARCHED WRITES NOTHING — the floor the research route already applies", async () => {
+    // Sharper here than on the research route: this document is written to be cited by the very
+    // next model turn, so storing a model-memory answer would launder it into a "grounded"
+    // citation INSIDE THE SAME REEL.
+    const { t, planId } = await grounded();
+    await t.run(async (ctx) => {
+      await groundMediaBrief(ctx as never, args(planId, "a reel about anything"), () =>
+        Promise.resolve(turn({ webSearchCalls: 0 })),
+      );
+    });
+    expect(await vaultDocs(t)).toHaveLength(0);
+  });
+
+  test("IT CAN NEVER FAIL THE REEL: a throwing research turn is swallowed", async () => {
+    // Grounding is an improvement, never a precondition. A reel grounded only in the tenant's own
+    // material is worse than a researched one and far better than none — and the citation gate
+    // flags an uncited figure regardless of what this pass managed to find.
+    const { t, planId } = await grounded();
+    await expect(
+      t.run(async (ctx) => {
+        await groundMediaBrief(ctx as never, args(planId, "a reel"), () => {
+          throw new Error("provider exploded");
+        });
+      }),
+    ).resolves.toBeNull();
+    expect(await vaultDocs(t)).toHaveLength(0);
+  });
+
+  test("a briefless run researches nothing rather than searching for an empty string", async () => {
+    const { t, planId } = await grounded();
+    let called = false;
+    await t.run(async (ctx) => {
+      await groundMediaBrief(ctx as never, args(planId, "   "), () => {
+        called = true;
+        return Promise.resolve(turn());
+      });
+    });
+    expect(called).toBe(false);
+    expect(await vaultDocs(t)).toHaveLength(0);
+  });
+
+  test("the stored findings carry their SOURCES and search count, not just prose", async () => {
+    // `persistFindings` is what the research route uses, so the artifact a reel cites is the same
+    // shape the cockpit's own research produces — one retrieval surface, not two.
+    const { t, planId } = await grounded();
+    await t.run(async (ctx) => {
+      await groundMediaBrief(ctx as never, args(planId, "a reel about email"), () =>
+        Promise.resolve(turn({ webSearchCalls: 5 })),
+      );
+    });
+    const [doc] = await vaultDocs(t);
+    expect(doc?.text).toContain("Acme Survey");
+    expect(doc?.sourcePlanId).toBe(planId);
+    expect(doc?.sourceThreadId).toBe(THREAD);
   });
 });

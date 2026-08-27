@@ -282,7 +282,44 @@ function sectionOf(body: string, heading: string): string {
  */
 export const parseScript = (body: string): string => sectionOf(body, "SCRIPT");
 
-/** koda's fixed 9-field art direction. `typography` is the ONE optional field (schema.ts). */
+/**
+ * The music bed's mood, as a CLOSED set of slugs — and the closed-ness is the whole containment.
+ *
+ * The skill body ASKS for a mood or a genre and forbids naming a track or a tempo, for the same
+ * reason it forbids naming a model: a specialist that could name the artefact could pick one
+ * nobody priced, nobody licensed and nobody baked. But an instruction is a request. **This set is
+ * what makes it structural** — a value outside it does not parse, so `Music: "Bittersweet
+ * Symphony"` and `Music: 128bpm` both land as no music at all rather than as a lookup.
+ *
+ * One slug is one file in the baked library (`<slug>.mp3`). Adding a member here is therefore
+ * exactly half a change: the other half is a vouched track and a re-bake, and until both are done
+ * the mood parses, prices at $0 and renders WITHOUT a bed — recorded in the assembly sidecar as
+ * `"music":"none"`, never silently.
+ */
+export const MUSIC_MOODS = ["calm", "warm", "upbeat", "cinematic"] as const;
+export type MusicMood = (typeof MUSIC_MOODS)[number];
+
+const MUSIC_MOOD_SET = new Set<string>(MUSIC_MOODS);
+
+/**
+ * The first mood slug named anywhere in an art-direction `Music:` value, or `undefined`.
+ *
+ * SCANS rather than matches whole. A model writes `Music — calm, low strings under the voice` far
+ * more often than it writes `calm`, and refusing the sentence would cost the bed over a comma. The
+ * scan is bounded by `MUSIC_MOOD_SET`, so tolerance here cannot widen what is actually reachable.
+ *
+ * ponytail: a word scan over a four-member set, not a fuzzy match or a synonym table. The ceiling
+ * is that `Music: energetic` yields no bed even though `upbeat` is what it meant; the upgrade path
+ * is a synonym map here (NOT in the skill body, which should keep teaching the four slugs).
+ */
+export const parseMusicMood = (value: string): MusicMood | undefined =>
+  value
+    .toLowerCase()
+    .split(/[^a-z]+/)
+    .find((w) => MUSIC_MOOD_SET.has(w)) as MusicMood | undefined;
+
+/** koda's fixed 9-field art direction, plus the optional music bed. `typography` and `music` are
+ *  the ONLY optional fields (schema.ts). */
 export type ArtDirection = {
   palette: string[];
   mood: string;
@@ -293,6 +330,9 @@ export type ArtDirection = {
   typography?: string;
   references: string[];
   avoid: string;
+  /** The BED's mood — deliberately not the same field as `mood`, which is the PICTURE's. A reel
+   *  can look austere and sound warm, and collapsing the two would make one of them a lie. */
+  music?: MusicMood;
 };
 
 /** `- **Palette** — 3-5 colours…` → the text after the label. Tolerates `-`/`*` bullets, bold or
@@ -329,6 +369,10 @@ export function parseArtDirection(body: string): ArtDirection | null {
   const environment = fieldOf(section, "Environment");
   const texture = fieldOf(section, "Texture");
   const typography = fieldOf(section, "Typography");
+  // OPTIONAL, and never a reason to fail the block. A reel without a bed is the reel we shipped
+  // before there were beds at all; a reel refused at the Approve gate over a music slug is a
+  // regression. Same posture as `typography`, for the same reason.
+  const music = parseMusicMood(fieldOf(section, "Music"));
   const references = listOf(fieldOf(section, "References"));
   // The skill body writes this one as `Do NOT`; `Avoid` is accepted because it is the obvious
   // paraphrase and rejecting it would fail the whole block over a synonym.
@@ -351,6 +395,7 @@ export function parseArtDirection(body: string): ArtDirection | null {
     ...(typography === "" ? {} : { typography }),
     references,
     avoid,
+    ...(music === undefined ? {} : { music }),
   };
 }
 
@@ -478,6 +523,15 @@ export const VISUAL_KINDS = [
   "animated_image",
   "uploaded_video",
   "text_card",
+  /** Stock library footage and stills — free, third-party, fetched at job time. Deliberately NOT
+   *  folded into `uploaded_video`: that kind means "the tenant already owns these bytes" and
+   *  resolves through a `vaultDocuments` row whose OWNERSHIP is checked against the calling tenant
+   *  (`renderReel.batchToRender`'s vault branch). Stock bytes belong to neither the tenant nor us,
+   *  arrive over the network and land in `_storage` on a `mediaJobs` row like any bought asset.
+   *  Widening `uploaded_video` would put "which sort of upload is this" inside the one branch that
+   *  guards a model-authored id against naming any document in the deployment. */
+  "stock_video",
+  "stock_image",
 ] as const;
 export type VisualKind = (typeof VISUAL_KINDS)[number];
 
@@ -536,6 +590,11 @@ const PAID_VISUAL = {
   animated_image: true, // one still generation, then ffmpeg pan/zoom — paid, but ~10x cheaper
   uploaded_video: false, // the tenant already owns the bytes
   text_card: false, // drawtext in the sandbox
+  // FREE, and unlike the two above it still buys a `mediaJobs` row: the bytes have to be fetched
+  // and landed before the assembler can read them. "Unpaid" and "no provider line" came apart
+  // here — see MEDIA_STOCK_PRICING for why $0 is a PRICE and not an absence of one.
+  stock_video: false,
+  stock_image: false,
 } as const satisfies Record<VisualKind, boolean>;
 
 export const isPaidScene = (s: Scene): boolean => PAID_VISUAL[s.visual];
@@ -554,6 +613,12 @@ export const isPaidScene = (s: Scene): boolean => PAID_VISUAL[s.visual];
  *     Only the picture is missing, which is the failure `assemble_final.sh` refuses to ship by
  *     probing for a font rather than trusting one. Same reasoning, one step earlier and for free.
  *   * `generated_video` / `animated_image` — the prompt, which the parser already requires.
+ *   * `stock_video` / `stock_image` — the prompt, and here it is checked rather than assumed. A
+ *     stock scene's prompt IS its search query, and the parser does NOT guarantee one: `prompt`
+ *     falls back to the `Description` cell (`parseSceneDeck`), and that cell is only ever `.trim()`ed
+ *     — never required to be non-empty. So a deck with a blank description and no SCENE PROMPTS
+ *     entry would reach the fetcher asking a stock library for `""` and pull back whatever its
+ *     default ranking returns. That is a picture nobody chose, in a reel someone approved.
  */
 // Structurally typed (33-04): the same question is asked of parser `Scene`s at the money gate and
 // of stored `plans.shots` rows at the render trigger's re-arm, and the two shapes differ only in
@@ -562,10 +627,80 @@ export const hasAssetSource = (s: {
   visual?: string;
   overlay?: string;
   asset?: unknown;
+  prompt?: string;
 }): boolean => {
   if (s.visual === "uploaded_video") return s.asset !== undefined;
   if (s.visual === "text_card") return (s.overlay ?? "").trim() !== "";
+  if (s.visual === "stock_video" || s.visual === "stock_image") {
+    return (s.prompt ?? "").trim() !== "";
+  }
   return true;
+};
+
+/* ── DOES THIS LINE ASSERT SOMETHING ABOUT THE WORLD? ──────────────────────────────────────────
+ *
+ * The parser used to treat a scene with no `Source:` line as claiming nothing, which trusted the
+ * model to volunteer that it had made a claim. `media-director.md` mandates the line in prose, and
+ * a prose mandate is not a guarantee: `dispatch.ts`'s `persistResearchFindings` records the
+ * measured version of exactly this — "the prose mandate ... was violated twice in six attempts,
+ * which is why this is code and not another sentence in the body."
+ *
+ * So the default is inverted. Silence now means UNVERIFIED, and the existing confirm gate
+ * (`firstUnconfirmedClaim` -> `unconfirmed_claims` -> `confirmClaim`) does the rest unchanged.
+ * Nothing new was built downstream; what changed is which scenes reach it.
+ *
+ * **A NUMERAL ALONE IS NOT A CLAIM.** "You read one screen and decide" is copy; "ninety minutes a
+ * day" is an assertion about the world. The difference is whether the number quantifies something
+ * MEASURABLE, so a numeral only counts when a unit follows it closely. That single rule is what
+ * keeps this off ordinary marketing prose — measured against the two worked examples in
+ * `media-director.md`, it flagged 3 of 3 scenes that carry a `Source:` line, missed none, and
+ * flagged one that does not: `ONE WEEK A MONTH`, a card restating the sourced figure from the
+ * scene before it with no citation of its own. That one is the example being loose, not this
+ * predicate being wrong.
+ *
+ * ponytail: a keyword predicate, not a claim-detection model. The ceiling is real and worth saying
+ * plainly — it catches quantities and appeals to evidence, and it will NOT catch an unsourced
+ * qualitative assertion ("the fastest way to X"). It is a floor that cannot be argued with, not a
+ * proof of groundedness. The upgrade path is a model-side check at proposal time; the thing NOT to
+ * do is widen these lists until ordinary copy trips them, because a gate that cries wolf gets
+ * confirmed blind and then guards nothing.
+ */
+
+/** Numbers, as digits or as words. Kept small deliberately: every addition here is a chance to
+ *  flag prose that was never a claim. */
+const CLAIM_NUMERAL =
+  "\\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion|dozen";
+
+/** What a number has to be measuring before it counts as a claim. */
+const CLAIM_UNIT =
+  "second|minute|hour|day|week|month|year|time|percent|dollar|pound|euro|cent|customer|client|user|sale|lead|order|%|x";
+
+/** A quantity ATTACHED to a unit, within a short window so "one screen and decide ... every month"
+ *  does not read as a quantity of months. */
+const CLAIM_QUANTIFIED = new RegExp(
+  `\\b(?:${CLAIM_NUMERAL})\\b[^.!?]{0,24}?\\b(?:${CLAIM_UNIT})s?\\b`,
+  "i",
+);
+
+/** A bare figure with a symbol on it — "40%", "$2,000" — needs no unit word. */
+const CLAIM_SYMBOL = /[%$£€]\s*\d|\d\s*[%$£€]/;
+
+/** An explicit appeal to evidence. "Studies show" with no citation is the purest form of the
+ *  failure this exists to catch: it borrows authority it never names. */
+const CLAIM_APPEAL =
+  /\b(?:studies show|research shows?|according to|survey(?:s|ed)?|report finds?|data shows?|on average|statistics)\b/i;
+
+/**
+ * Does this line assert something a reader could check — and therefore something that needs a
+ * source before it is burned into a frame?
+ *
+ * Applied to BOTH the narration and the overlay. An overlay is the most prominent text in a reel:
+ * a card reading "90% FASTER" is the strongest claim the video makes, and it is spoken by nobody.
+ */
+export const statesCheckableClaim = (text: string | undefined): boolean => {
+  const t = (text ?? "").trim();
+  if (t === "") return false;
+  return CLAIM_QUANTIFIED.test(t) || CLAIM_SYMBOL.test(t) || CLAIM_APPEAL.test(t);
 };
 
 /** Total SUBMITTED characters across the reel — the tts MediaSpec's input, as `narrationChars` is
@@ -874,7 +1009,16 @@ export function parseSceneDeck(body: string): ParsedSceneDeck {
       prompt: prompts.get(index + 1) ?? description,
       ...(() => {
         const src = sources.get(index + 1);
-        if (src === undefined) return {};
+        // NO `Source:` LINE USED TO MEAN "CLAIMS NOTHING". It now means "unverified", and that
+        // inversion is the point — see `statesCheckableClaim`. A scene that asserts a figure and
+        // simply omits the line is the failure this catches, because nothing downstream could:
+        // the money gate reads `needsConfirmation`, and a scene that never set it sails through
+        // reservation, render and publish with the figure burned into a frame.
+        if (src === undefined) {
+          return statesCheckableClaim(narration) || statesCheckableClaim(overlay)
+            ? { needsConfirmation: true as const }
+            : {};
+        }
         return src === "unverified" ? { needsConfirmation: true as const } : { source: src };
       })(),
     });

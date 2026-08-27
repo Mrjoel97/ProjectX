@@ -11,6 +11,7 @@ import { maxCharsFor, minCharsFor } from "@pikar/core/storyboard";
 import {
   chooseMediaBatch,
   MEDIA_DEFAULT_IMAGE,
+  MEDIA_DEFAULT_STOCK,
   MEDIA_DEFAULT_STT,
   MEDIA_DEFAULT_VIDEO,
   MEDIA_DEFAULT_VOICE,
@@ -37,6 +38,9 @@ import { DEPLOYMENT_MEDIA_BUDGET_CENTS, MEDIA_DAILY_BUDGET_CENTS } from "./guard
 import { contentHash } from "./lib/hash";
 import {
   buildSubmitBody,
+  MAX_STOCK_ASSET_BYTES,
+  pickStockPhoto,
+  pickStockVideo,
   reserveJobInner,
   reserveSceneJobInner,
   type SubmittableSpec,
@@ -6330,5 +6334,524 @@ describe("33-05 a saved reel is REUSABLE FOOTAGE — pickable equals renderable"
         ctx.runQuery(internal.render.renderReel.resolveRenderAsset, { raw: plainDocId }),
       ),
     ).toBeNull();
+  });
+});
+
+// ── The music bed: a $0 line that is a LINE ──────────────────────────────────────────────────────
+//
+// Two properties, and they pull in opposite directions, which is why both are asserted:
+//   * the bed must be RESERVED with the job — it appears on the estimate and passes the cap; and
+//   * it must NOT become a `mediaJobs` row — a row that never lands would deadlock every render.
+describe("the music bed rides the whole-job reservation, and buys no row", () => {
+  const withBed = async (t: T, mood: string | undefined) => {
+    const { planId, shots } = await seedSceneDeck(t);
+    if (mood !== undefined) {
+      await t.run(async (ctx) =>
+        ctx.db.patch(planId, {
+          artDirection: {
+            palette: ["#0B4F4A deep teal"],
+            mood: "Quietly confident.",
+            lighting: "Warm golden light from camera left.",
+            composition: "Off-centre right.",
+            environment: "A small office.",
+            texture: "35mm grain.",
+            references: ["Gregory Crewdson"],
+            avoid: "No stock-footage handshakes.",
+            music: mood,
+          },
+        }),
+      );
+    }
+    return { planId, shots };
+  };
+
+  const jobRows = (t: T) => t.run(async (ctx) => ctx.db.query("mediaJobs").collect());
+
+  test("a deck with a bed reserves, and NO mediaJobs row is written for it", async () => {
+    const t = harness();
+    const { planId } = await withBed(t, "calm");
+    const res = await t.run(async (ctx) =>
+      reserveSceneJobInner(ctx, {
+        tenantId: A,
+        planId,
+        scenes: sceneDeckOf((await ctx.db.get(planId)) as Doc<"plans">)?.scenes ?? [],
+        targetDurationSeconds: 30,
+        withCaptions: true,
+      }),
+    );
+    expect(res.ok, `refused: ${res.ok ? "" : res.reason}`).toBe(true);
+    const inserted = await jobRows(t);
+    expect(inserted.length).toBeGreaterThan(0);
+    // THE LOAD-BEARING ASSERTION. `batchToRender` refuses a batch unless every row reached
+    // `succeeded` with landed bytes. A music row buys no provider call, so it would sit `queued`
+    // forever and the reel would never render at all — the reason this line has the `render`
+    // line's shape (a spec, no row) rather than the `tts` line's.
+    expect(
+      inserted.some((r) => (r.kind as string) === "music"),
+      "a music row would never land and would deadlock the render",
+    ).toBe(false);
+  });
+
+  test("the bed changes the invoice's SHAPE, never its total", async () => {
+    // TWO HARNESSES, because the comparison is the assertion: the same deck with and without a
+    // bed must reserve the same cents. A single-harness version could only assert the line exists,
+    // which is the half that would still pass if the bed were secretly priced.
+    const bareT = harness();
+    const bare = await withBed(bareT, undefined);
+    const t = harness();
+    const bedded = await withBed(t, "warm");
+    const estOf = (h: T, planId: Id<"plans">) => asA(h).query(api.media.jobEstimate, { planId });
+
+    const without = await estOf(bareT, bare.planId);
+    const est = await estOf(t, bedded.planId);
+
+    // $0 means $0: declaring a bed must not move the reserved total by a cent.
+    expect(est.totalCents).toBe(without.totalCents);
+    expect(est.lines.length, "…but it DOES add a line").toBe(without.lines.length + 1);
+
+    expect(est.refusal).toBeNull();
+    const music = est.lines.find((l) => l.label === "music");
+    // PRINTED AT ZERO, deliberately. A bed the deck declared is an input the reel was built from;
+    // hiding it because it is free would make the reel look like it came from fewer things.
+    expect(music, "a declared bed gets a line").toBeDefined();
+    expect(music?.cents).toBe(0);
+    expect(music?.unit).toBe("warm bed");
+    // …and it sits before the render line, where the deck-wide lines live.
+    expect(est.lines.map((l) => l.label)).toContain("music");
+    expect(est.lines.at(-1)?.label).toBe("render (incl. one retry)");
+  });
+
+  test("no bed declared means NO line — absence is not a zero row", async () => {
+    const t = harness();
+    const { planId } = await withBed(t, undefined);
+    const est = await asA(t).query(api.media.jobEstimate, { planId });
+    expect(est.lines.some((l) => l.label === "music")).toBe(false);
+  });
+
+  test("THE ANTI-DRIFT ASSERTION, extended to the bed: estimate === what the rail consumes", async () => {
+    const t = harness();
+    const { planId } = await withBed(t, "cinematic");
+    const est = await asA(t).query(api.media.jobEstimate, { planId });
+    const res = await t.run(async (ctx) =>
+      reserveSceneJobInner(ctx, {
+        tenantId: A,
+        planId,
+        scenes: sceneDeckOf((await ctx.db.get(planId)) as Doc<"plans">)?.scenes ?? [],
+        targetDurationSeconds: 30,
+        withCaptions: true,
+      }),
+    );
+    expect(res.ok).toBe(true);
+    // ONE reader (`musicSpecOf`) feeds both sites. This is the assertion that keeps it that way.
+    expect(res.ok && res.estCents).toBe(est.totalCents);
+  });
+
+  test("a bed nothing can price REFUSES the job — it does not quietly render bedless", async () => {
+    const t = harness();
+    // A row can only get here by a path other than the parser (a hand-written patch, a future
+    // writer). "The caller already validated it" is the assumption the money gate must not make.
+    const { planId } = await withBed(t, "lofi");
+    const res = await t.run(async (ctx) =>
+      reserveSceneJobInner(ctx, {
+        tenantId: A,
+        planId,
+        scenes: sceneDeckOf((await ctx.db.get(planId)) as Doc<"plans">)?.scenes ?? [],
+        targetDurationSeconds: 30,
+        withCaptions: true,
+      }),
+    );
+    expect(res).toEqual({ ok: false, reason: "unknown_model" });
+    expect(await jobRows(t), "a refused job inserts nothing").toEqual([]);
+    // …and the canvas refuses in the same place, so the button and the number agree.
+    expect(await asA(t).query(api.media.jobEstimate, { planId })).toMatchObject({
+      refusal: { reason: "unknown_model" },
+      lines: [],
+    });
+  });
+});
+
+// ── The STOCK PICKER (phase 2) ─────────────────────────────────────────────────────────────────
+//
+// The only real algorithm in the stock adapter, and the only half of it testable without a
+// network. Every rule it applies is the ASSEMBLER's, not a preference, so each test names the
+// thing `assemble_final.sh` would do if the rule were dropped.
+//
+// **This suite does NOT prove the integration works.** It pins behaviour against the response
+// shape the adapter encodes; nothing here has been run against the live API. See
+// docs/playbooks/media.md.
+
+const videoFile = (height: number, width: number, id = "f") => ({
+  link: `https://example.test/${id}-${width}x${height}.mp4`,
+  file_type: "video/mp4",
+  width,
+  height,
+});
+
+describe("pickStockVideo: the two rules are the assembler's, not taste", () => {
+  test("REFUSES a clip shorter than its scene — the gate that would otherwise kill the render", () => {
+    // `assemble_final.sh` errors with "a held still frame is not a scene" when a clip is short by
+    // more than 0.5s. Refusing HERE makes it a failed scene the fix menu can swap; letting it
+    // through makes it a hard render failure after every other input in the reel has landed.
+    const body = { videos: [{ id: 1, duration: 3, video_files: [videoFile(1280, 720)] }] };
+    expect(pickStockVideo(body, 8)).toBeNull();
+  });
+
+  test("accepts a clip inside the assembler's OWN slack, and not a millisecond more", () => {
+    const at = (duration: number) =>
+      pickStockVideo({ videos: [{ id: 7, duration, video_files: [videoFile(1280, 720)] }] }, 8);
+    // The slack is read from the pinned constant rather than hardcoded, so the search filter and
+    // the script's tolerance cannot drift apart.
+    expect(at(8 - MEDIA_DEFAULT_STOCK.minDurationSlackSeconds)).not.toBeNull();
+    expect(at(8 - MEDIA_DEFAULT_STOCK.minDurationSlackSeconds - 0.01)).toBeNull();
+    expect(at(30)).not.toBeNull(); // longer is fine — the assembler trims with `-t`
+  });
+
+  test("SKIPS PAST a too-short match to a longer one rather than giving up on the first row", () => {
+    const body = {
+      videos: [
+        { id: 1, duration: 2, video_files: [videoFile(1280, 720, "short")] },
+        { id: 2, duration: 20, video_files: [videoFile(1280, 720, "long")] },
+      ],
+    };
+    expect(pickStockVideo(body, 8)?.assetId).toBe("2");
+  });
+
+  test("prefers a PORTRAIT rendition — a landscape file retunes the whole reel's geometry", () => {
+    // The assembler probes W/H/FPS off the first video scene. A landscape file slipping through a
+    // portrait-filtered search would silently make the entire reel 1920x1080 and letterbox every
+    // still and card after it, with nothing erroring.
+    const body = {
+      videos: [
+        {
+          id: 3,
+          duration: 20,
+          video_files: [videoFile(1080, 1920, "landscape"), videoFile(1280, 720, "portrait")],
+        },
+      ],
+    };
+    expect(pickStockVideo(body, 8)?.link).toContain("portrait");
+  });
+
+  test("among portrait renditions takes the one NEAREST the reel's tier, not the largest", () => {
+    // This is what keeps MAX_STOCK_ASSET_BYTES a backstop instead of a wall: a 4K master is inside
+    // the cap only by luck, and it costs sandbox time for pixels the 720x1280 output throws away.
+    const body = {
+      videos: [
+        {
+          id: 4,
+          duration: 20,
+          video_files: [
+            videoFile(3840, 2160, "uhd"),
+            videoFile(1280, 720, "tier"),
+            videoFile(640, 360, "tiny"),
+          ],
+        },
+      ],
+    };
+    expect(pickStockVideo(body, 8)?.link).toContain("tier");
+  });
+
+  test("ignores renditions that are not mp4 — the container the assembler reads", () => {
+    const body = {
+      videos: [
+        {
+          id: 5,
+          duration: 20,
+          video_files: [
+            { ...videoFile(1280, 720, "webm"), file_type: "video/webm" },
+            videoFile(1600, 900, "mp4"),
+          ],
+        },
+      ],
+    };
+    expect(pickStockVideo(body, 8)?.link).toContain("mp4");
+  });
+
+  test("a row with no usable rendition is skipped, not returned empty", () => {
+    const body = {
+      videos: [
+        { id: 6, duration: 20, video_files: [] },
+        { id: 8, duration: 20, video_files: [videoFile(1280, 720, "ok")] },
+      ],
+    };
+    expect(pickStockVideo(body, 8)?.assetId).toBe("8");
+  });
+
+  test("THROWS on a shape it does not recognise, so the adapter can fail closed", () => {
+    // The caller turns this into `stock_bad_response`. Returning null instead would report "no
+    // match for your search" for what is actually a changed API — the wrong lever entirely.
+    expect(() => pickStockVideo({}, 8)).toThrow();
+    expect(() => pickStockVideo({ videos: "nope" }, 8)).toThrow();
+  });
+
+  test("an empty result set is NO MATCH, which is a different answer from a bad shape", () => {
+    expect(pickStockVideo({ videos: [] }, 8)).toBeNull();
+  });
+});
+
+describe("pickStockPhoto: the rendition the Ken Burns path actually needs", () => {
+  test("prefers large2x over the fixed portrait crop", () => {
+    // The assembler upscales a still 4x before zoompan. The library's `portrait` rendition is a
+    // fixed 800x1200 crop, which would be doing that from under the output tier.
+    const body = {
+      photos: [{ id: 11, src: { portrait: "p.jpg", large2x: "l2x.jpg", original: "o.jpg" } }],
+    };
+    expect(pickStockPhoto(body)?.link).toBe("l2x.jpg");
+  });
+
+  test("falls all the way down the ladder rather than failing on a partial src", () => {
+    expect(pickStockPhoto({ photos: [{ id: 12, src: { original: "o.jpg" } }] })?.link).toBe("o.jpg");
+    expect(pickStockPhoto({ photos: [{ id: 13, src: {} }] })).toBeNull();
+  });
+
+  test("carries the provider id through as the provenance ref", () => {
+    // It lands on `providerRequestId` as `pexels:<id>`, which is how a frame in a finished reel is
+    // traced back to what it was cut from.
+    expect(pickStockPhoto({ photos: [{ id: 14, src: { large: "x.jpg" } }] })?.assetId).toBe("14");
+  });
+
+  test("THROWS on an unrecognised shape, same fail-closed split as the video picker", () => {
+    expect(() => pickStockPhoto({})).toThrow();
+    expect(pickStockPhoto({ photos: [] })).toBeNull();
+  });
+
+  test("the byte cap is a real bound, not a comment", () => {
+    expect(MAX_STOCK_ASSET_BYTES).toBeGreaterThan(0);
+    expect(MAX_STOCK_ASSET_BYTES).toBeLessThanOrEqual(32 * 1024 * 1024);
+  });
+});
+
+// ── STOCK, END TO END THROUGH THE ONE MONEY RAIL (phase 2) ─────────────────────────────────────
+
+/** stock_video:8 + stock_image:10 + generated:12 — 30s, one paid scene among two free ones. */
+const STOCK_SCENES = (): Scene[] => [
+  sc({ index: 0, startMs: 0, durationMs: 8000, visual: "stock_video", prompt: "city street dawn" }),
+  sc({
+    index: 1,
+    startMs: 8000,
+    durationMs: 10_000,
+    visual: "stock_image",
+    prompt: "hands typing laptop",
+  }),
+  sc({ index: 2, startMs: 18_000, durationMs: 12_000, visual: "generated_video" }),
+];
+
+describe("stock scenes: free, and still a LINE on the same rail", () => {
+  test("a stock scene DOES get a mediaJobs row — the opposite of the music bed", async () => {
+    // The distinction that made stock a different shape from the $0 bed: music buys no provider
+    // call and gets no row (a `queued` row would deadlock `batchToRender` forever); stock buys
+    // BYTES, so it must have a row for them to land on.
+    const t = harness();
+    const res = await reserveScenes(t, STOCK_SCENES());
+    expect(res.ok, `refused: ${res.ok ? "" : res.reason}`).toBe(true);
+    const inserted = await rows(t);
+    const stock = inserted.filter((r) => r.provider === "stock");
+    expect(stock).toHaveLength(2);
+    expect(stock.every((r) => r.estUsd === 0)).toBe(true);
+    expect(stock.every((r) => r.status === "queued")).toBe(true);
+  });
+
+  test("the ROW says what the bytes are; the SPEC says what the money is", async () => {
+    const t = harness();
+    await reserveScenes(t, STOCK_SCENES());
+    const inserted = await rows(t);
+    const clip = inserted.find((r) => r.blockIndex === 0 && r.provider === "stock");
+    const still = inserted.find((r) => r.blockIndex === 1 && r.provider === "stock");
+    // `kind` is what `renderReel`'s slot map reads. It must stay video/image, or the render grows
+    // a stock case it does not need — the whole reason the four-member union stayed four.
+    expect(clip?.kind).toBe("video");
+    expect(still?.kind).toBe("image");
+    expect(clip?.spec).toEqual({ kind: "stock", media: "video", seconds: 8 });
+    expect(still?.spec).toEqual({ kind: "stock", media: "image", seconds: 10 });
+    expect(clip?.model).toBe(MEDIA_DEFAULT_STOCK.model);
+  });
+
+  test("a stock row is NEVER confusable with a bought one at the same kind", async () => {
+    const t = harness();
+    await reserveScenes(t, STOCK_SCENES());
+    const inserted = await rows(t);
+    // Both a stock clip and a generated clip land as `kind: "video"`. `provider` is the only thing
+    // separating a $0 fetch from a $1.20 generation, which is exactly why the submit routes on it.
+    const videos = inserted.filter((r) => r.kind === "video");
+    expect(videos).toHaveLength(2);
+    expect(videos.filter((r) => r.provider === "stock")).toHaveLength(1);
+    expect(videos.filter((r) => r.provider === "openai")).toHaveLength(1);
+    expect(videos.find((r) => r.provider === "openai")?.estUsd).toBeGreaterThan(0);
+    expect(videos.find((r) => r.provider === "stock")?.estUsd).toBe(0);
+  });
+
+  test("free pictures change the invoice's TOTAL, never its line COUNT", async () => {
+    // The same three scenes at the same three lengths, differing only in which kind the first two
+    // are. Everything else — durations, narration, the captions and render lines — is held
+    // constant, so the delta is the picture kinds and nothing else.
+    const generatedTwin = (): Scene[] =>
+      STOCK_SCENES().map((scene) =>
+        scene.visual === "stock_video" || scene.visual === "stock_image"
+          ? ({ ...scene, visual: "generated_video", durationMs: 8000 } as Scene)
+          : scene,
+      );
+    // stock deck is 8 + 10 + 12 = 30; the twin re-grids the two free scenes to 8s each (the
+    // generator's grid has no 10), so it declares 28.
+    const t = harness();
+    const withStock = await reserveScenes(t, STOCK_SCENES());
+    const t2 = harness();
+    const allGenerated = await reserveScenes(t2, generatedTwin(), { targetDurationSeconds: 28 });
+    expect(withStock.ok, `stock refused: ${withStock.ok ? "" : withStock.reason}`).toBe(true);
+    expect(
+      allGenerated.ok,
+      `generated refused: ${allGenerated.ok ? "" : allGenerated.reason}`,
+    ).toBe(true);
+    if (!withStock.ok || !allGenerated.ok) throw new Error("both should reserve");
+    // Two scenes moved off the generator and the reel got materially cheaper. The lever, measured
+    // on the rail rather than in the price table.
+    expect(withStock.estCents).toBeLessThan(allGenerated.estCents);
+    // ...and with the SAME number of lines. The free ones are not omitted, they are priced at zero,
+    // which is the difference between "costs nothing" and "is not on the invoice".
+    expect(withStock.lineCount).toBe(allGenerated.lineCount);
+  });
+
+  test("REFUSES a stock scene with no prompt, before a cent moves and before a search runs", async () => {
+    const t = harness();
+    const res = await reserveScenes(
+      t,
+      STOCK_SCENES().map((scene, i) => (i === 0 ? ({ ...scene, prompt: "  " } as Scene) : scene)),
+    );
+    expect(res.ok).toBe(false);
+    expect(!res.ok && res.reason).toBe("unrenderable_block");
+    // Nothing at all was inserted — not the free lines, and not the PAID clip beside them.
+    expect(await rows(t)).toHaveLength(0);
+  });
+
+  test("submitBatch ROUTES ON PROVIDER: a stock row is fetched, never POSTed as a generation", async () => {
+    vi.stubEnv("MEDIA_PROVIDER_FIXTURE", "1");
+    vi.stubEnv("PEXELS_API_KEY", "test-key");
+    vi.stubEnv("OPENAI_API_KEY", "test-key");
+    const t = harness();
+    const scene = sc({
+      index: 0,
+      startMs: 0,
+      durationMs: 30_000,
+      visual: "stock_video",
+      prompt: "city street dawn",
+      narration: "",
+    });
+    // The plan must carry SHOTS: the search query comes off the content plane, never off the job
+    // row (only its `promptHash` lives there). A bare plan reproduces `missing_shot`, which is the
+    // right refusal for a batch with no deck behind it.
+    const res = await t.run(async (ctx) => {
+      const planId = await ctx.db.insert("plans", {
+        tenantId: A,
+        threadId: "thread_stock",
+        status: "proposed",
+        createdAt: Date.now(),
+        shots: [
+          {
+            index: 0,
+            visual: "stock_video",
+            seconds: 30,
+            windowStartMs: 0,
+            description: "d",
+            narration: "",
+            prompt: "city street dawn",
+          },
+        ],
+      });
+      return await reserveSceneJobInner(ctx, {
+        tenantId: A,
+        planId,
+        scenes: [scene],
+        targetDurationSeconds: 30,
+        withCaptions: false,
+      });
+    });
+    expect(res.ok, `refused: ${res.ok ? "" : res.reason}`).toBe(true);
+    if (!res.ok) return;
+    await t.action(internal.media.submitBatch, { tenantId: A, batchId: res.batchId });
+    const [row] = await rows(t);
+    // Landed, with bytes, at zero — the same terminal state a bought line reaches.
+    expect(row?.status).toBe("succeeded");
+    expect(row?.assetStorageId).toBeDefined();
+    // The provenance ref, which is how a frame is traced back to what it was cut from. The fixture
+    // path stamps its own marker; what matters is that SOMETHING identifying was recorded.
+    expect(row?.providerRequestId).toBeTruthy();
+  });
+});
+
+// ── THE CHAIN: an uncited claim cannot be BOUGHT ───────────────────────────────────────────────
+//
+// The parser flip only matters if the flag it sets actually stops money. That chain is
+// parseSceneDeck -> `needsConfirmation` on the scene -> `plans.shots` (dispatch.ts:830) ->
+// `firstUnconfirmedClaim` -> the `unconfirmed_claims` refusal in BOTH money sites. Proven here end
+// to end, because every link existed before and only the first one changed.
+
+describe("uncited claims cannot reach a rendered frame", () => {
+  const claimScenes = (): Scene[] => [
+    sc({
+      index: 0,
+      startMs: 0,
+      durationMs: 15_000,
+      visual: "animated_image",
+      narration: "Founders lose ninety minutes a day to the inbox.",
+    }),
+    sc({
+      index: 1,
+      startMs: 15_000,
+      durationMs: 15_000,
+      visual: "animated_image",
+      narration: "You read one screen and decide.",
+    }),
+  ];
+
+  const reserveWithShots = (t: T, shots: Record<string, unknown>[]) =>
+    t.run(async (ctx) => {
+      const planId = await ctx.db.insert("plans", {
+        tenantId: A,
+        threadId: "thread_claim",
+        status: "proposed",
+        createdAt: Date.now(),
+        shots: shots as never,
+      });
+      return await reserveSceneJobInner(ctx, {
+        tenantId: A,
+        planId,
+        scenes: claimScenes(),
+        targetDurationSeconds: 30,
+        withCaptions: false,
+      });
+    });
+
+  const shot = (index: number, over: Record<string, unknown> = {}) => ({
+    index,
+    visual: "animated_image",
+    seconds: 15,
+    windowStartMs: index * 15_000,
+    description: "d",
+    narration: index === 0 ? "Founders lose ninety minutes a day to the inbox." : "ok",
+    prompt: "p",
+    ...over,
+  });
+
+  test("a scene the parser flagged REFUSES the buy until the owner vouches for it", async () => {
+    const t = harness();
+    const res = await reserveWithShots(t, [shot(0, { needsConfirmation: true }), shot(1)]);
+    expect(res.ok).toBe(false);
+    expect(!res.ok && res.reason).toBe("unconfirmed_claims");
+    // Not one line was inserted — the whole deck stops, including the scenes that claim nothing.
+    expect(await rows(t)).toHaveLength(0);
+  });
+
+  test("...and goes through once it IS confirmed, so the gate is a lever and not a wall", async () => {
+    const t = harness();
+    const res = await reserveWithShots(t, [
+      shot(0, { needsConfirmation: true, confirmedAt: Date.now() }),
+      shot(1),
+    ]);
+    expect(res.ok, `refused: ${res.ok ? "" : res.reason}`).toBe(true);
+  });
+
+  test("a deck that claims nothing is unaffected — the flip adds scenes, it moves no others", async () => {
+    const t = harness();
+    const res = await reserveWithShots(t, [shot(0), shot(1)]);
+    expect(res.ok, `refused: ${res.ok ? "" : res.reason}`).toBe(true);
   });
 });

@@ -154,6 +154,11 @@ export const AUDIT_VIEWER_EVENTS: Readonly<Record<string, readonly string[]>> = 
     "unverifiedScenes",
   ],
   "media.deck_refused": [...LINEAGE, ...DECK_SHAPE, "reason", "variation"],
+  /** The grounding pass could not run. VISIBLE deliberately: it is the difference between a
+   *  reel grounded in live research and one grounded only in the vault, and the reel ships
+   *  either way — so without this row a silently ungrounded proposal looks identical to a
+   *  researched one. Refs and a reason CODE only (§4). */
+  "media.grounding_failed": [...LINEAGE, "reason"],
   "media.image_saved": ["planId", "jobId", "docId"],
   "media.landed": [
     "jobId",

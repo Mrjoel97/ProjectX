@@ -198,10 +198,16 @@ function TimelineRibbon({
               // repeated on the tile below. A generated clip and a still are bought; a card and
               // the tenant's own footage are not, and a solid edge is how the expensive half of a
               // deck is visible before the estimate is read.
+              // Tested against the PAID set, not the free one, and that inversion is deliberate:
+              // free kinds are the ones being added (stock now, whatever follows later) and every
+              // one of them must default to dashed. Listing the free kinds instead means each new
+              // one silently draws a solid "this cost money" edge until somebody notices.
               border:
-                scene.visual === "uploaded_video" || scene.visual === "text_card"
-                  ? "1px dashed var(--rule)"
-                  : "1px solid var(--teal-600)",
+                scene.visual === null ||
+                scene.visual === "generated_video" ||
+                scene.visual === "animated_image"
+                  ? "1px solid var(--teal-600)"
+                  : "1px dashed var(--rule)",
               fontSize: "0.7rem",
               color: "var(--ink-soft)",
             }}
@@ -1596,10 +1602,18 @@ function SceneTile({
   // scene has something to re-buy only if it has a line to re-record. Offering "Regenerate" anyway
   // would send a click to a mutation that answers `nothing_to_regenerate` — a refusal the tile
   // could have known without asking.
+  // A STOCK SCENE BUYS A PICTURE LINE, at zero. That reads like a contradiction and it is the
+  // whole shape of the kind: the fetch needs a `mediaJobs` row, the row needs a reservation, and
+  // the reservation is what "Regenerate" is. Omitting stock here would hide the button that makes
+  // the fix menu's own "Swap it for free stock footage" arm actually produce a picture — set the
+  // kind, then offer no way to land it. `uploaded_video` and `text_card` stay out because they
+  // genuinely buy nothing: the vault already holds one, and ffmpeg draws the other.
   const buysPicture =
     block.visual === null ||
     block.visual === "generated_video" ||
-    block.visual === "animated_image";
+    block.visual === "animated_image" ||
+    block.visual === "stock_video" ||
+    block.visual === "stock_image";
   const buysSomething = buysPicture || block.narration.trim() !== "";
 
   async function run(fn: () => Promise<unknown>) {

@@ -35,7 +35,61 @@
  * already are.
  */
 
+import { readdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { Sandbox } from "@vercel/sandbox";
+
+/** Where `assemble_final.sh` looks the music library up. Its own `ASSEMBLE_MUSIC_DIR` default. */
+const MUSIC_DEST = "/usr/local/share/pikar-music";
+const MUSIC_SRC = join(dirname(fileURLToPath(import.meta.url)), "music");
+const MUSIC_EXTS = [".mp3", ".m4a", ".ogg", ".wav", ".flac"];
+
+/**
+ * The music library, with its licence attestation ENFORCED.
+ *
+ * The risk this library carries is not bytes, it is provenance: an unlicensed track baked into a
+ * commercial multi-tenant product is a legal problem that no amount of governance elsewhere in
+ * this rail compensates for. So a file with no line in `LICENSES.md` FAILS THE BAKE.
+ *
+ * **This is a filename check, not a licence check**, and saying so is the point — it cannot tell
+ * you an attestation is true, only that a human wrote one down. What it removes is the accident:
+ * a track dropped into the directory to try something out and never thought about again. The
+ * judgement stays with whoever writes the line, which is where it has to be.
+ *
+ * An EMPTY library is a valid state and does not fail: `assemble_final.sh` degrades to no bed and
+ * records `"music":"none"` in the sidecar. That keeps this script runnable before any track has
+ * been sourced, which is exactly the state the rail ships in.
+ *
+ * ponytail: a substring scan over one markdown file, not a parsed manifest with checksums. The
+ * bytes are committed to git, so git already provides content integrity and there is nothing for a
+ * checksum to catch that a diff would not. The ceiling is that `LICENSES.md` is prose a human
+ * reads; the upgrade path, if this library ever grows past a handful of tracks, is a JSON manifest
+ * with one entry per slug — at which point this function parses it instead of scanning it.
+ */
+function readMusicLibrary() {
+  let names;
+  try {
+    names = readdirSync(MUSIC_SRC).filter((n) =>
+      MUSIC_EXTS.some((e) => n.toLowerCase().endsWith(e)),
+    );
+  } catch {
+    return []; // no directory at all — same as an empty one
+  }
+  if (names.length === 0) return [];
+
+  const licences = readFileSync(join(MUSIC_SRC, "LICENSES.md"), "utf8");
+  const unvouched = names.filter((n) => !licences.includes(n));
+  if (unvouched.length > 0) {
+    throw new Error(
+      `these tracks have no line in apps/web/scripts/music/LICENSES.md: ${unvouched.join(", ")}. ` +
+        "Add an attestation for each (filename, licence, source, date, who) or remove the file. " +
+        "A track with no recorded licence must not reach a snapshot.",
+    );
+  }
+  return names.map((name) => ({ name, content: readFileSync(join(MUSIC_SRC, name)) }));
+}
 
 /**
  * The EXACT asset, named rather than "a static build": `linux64-gpl` ships ffmpeg AND ffprobe,
@@ -63,6 +117,11 @@ async function step(sandbox, label, cmd, args, opts = {}) {
 }
 
 async function main() {
+  // READ AND VALIDATE THE LIBRARY FIRST, before a sandbox exists. An unvouched track should cost
+  // nothing to discover — the same reasoning `assemble_final.sh` applies to a deck that does not
+  // sum to its target: refuse it while it is still free.
+  const tracks = readMusicLibrary();
+
   console.log("Creating the bake sandbox (egress OPEN, no tenant bytes)…");
   const sandbox = await Sandbox.create({
     // The ONE sandbox in this system with network access. The render sandbox is `deny-all` and
@@ -113,6 +172,29 @@ async function main() {
         sudo: true,
       },
     );
+
+    // THE MUSIC LIBRARY, baked the same way the font is and for the same reason: the render
+    // sandbox is `networkPolicy: "deny-all"`, so anything it needs at render time has to be in the
+    // image. Every track here has a licence line — `readMusicLibrary` refused otherwise.
+    if (tracks.length === 0) {
+      console.log(
+        '  music library: EMPTY — reels will render with no bed (sidecar records "music":"none").',
+      );
+    } else {
+      process.stdout.write(`  stage ${tracks.length} music track(s)… `);
+      await sandbox.writeFiles(
+        tracks.map((t) => ({ path: `music/${t.name}`, content: t.content })),
+      );
+      console.log("ok");
+      await step(
+        sandbox,
+        `install music library to ${MUSIC_DEST}`,
+        "sh",
+        ["-c", `mkdir -p ${MUSIC_DEST} && mv music/* ${MUSIC_DEST}/ && chmod 0444 ${MUSIC_DEST}/*`],
+        { sudo: true },
+      );
+      console.log(`    ${tracks.map((t) => t.name).join(", ")}`);
+    }
 
     // THE ONE COMMAND THAT SETTLES THE `awk` ASSUMPTION. `assemble_final.sh` requires ffmpeg,
     // ffprobe AND awk, and AL2023 is *expected* to ship gawk — expected is not verified. If this

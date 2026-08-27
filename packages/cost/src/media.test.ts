@@ -1,18 +1,22 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { TARGET_DURATIONS, type VisualKind } from "@pikar/core/storyboard";
+import { MUSIC_MOODS, TARGET_DURATIONS, type VisualKind } from "@pikar/core/storyboard";
 import { describe, expect, it } from "vitest";
 import {
   chooseMediaBatch,
   estimateBatchUsd,
   estimateMediaUsd,
   MEDIA_DEFAULT_IMAGE,
+  MEDIA_DEFAULT_MUSIC,
+  MEDIA_DEFAULT_STOCK,
   MEDIA_DEFAULT_STT,
   MEDIA_DEFAULT_VIDEO,
   MEDIA_DEFAULT_VOICE,
   MEDIA_IMAGE_PRICING,
   MEDIA_JOB_CAP_USD,
+  MEDIA_MUSIC_PRICING,
   MEDIA_SANDBOX_USD_PER_RENDER,
+  MEDIA_STOCK_PRICING,
   MEDIA_STT_PRICING,
   MEDIA_TTS_PRICING,
   MEDIA_VIDEO_PRICING,
@@ -236,6 +240,80 @@ describe("the price tables agree with the committed vendor fixture", () => {
       if (e.vendor.deprecated) expect(e.vendor.shutdown).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     }
   });
+
+  // ── THE SHUTDOWN TRIPWIRE ────────────────────────────────────────────────────────────────────
+  //
+  // Recording a shutdown date is not the same as being warned by it. Before this, `sora-2` sat in
+  // the fixture flagged `deprecated: true` with a date one month out and EVERY TEST WAS GREEN — so
+  // the day the Videos API is withdrawn, `generated_video` scenes would simply start failing in
+  // production with nothing having gone red first.
+  //
+  // These are deliberately TIME-DEPENDENT. That is the mechanism, not a flaw: a build that can
+  // only break on the day the vendor breaks it has no warning value at all. Each failure below
+  // names the decision it wants, so a red build here is actionable rather than merely alarming.
+  const PINNED_MODELS = new Set<string>([MEDIA_DEFAULT_VIDEO.model, MEDIA_DEFAULT_IMAGE.model]);
+  const daysUntil = (iso: string): number =>
+    Math.floor((Date.parse(`${iso}T00:00:00Z`) - Date.now()) / 86_400_000);
+
+  it("A PINNED MODEL THAT IS DEPRECATED CARRIES A WRITTEN SUCCESSION DECISION", () => {
+    // The point is that "we know" has to become "it is written down". A deprecation with nobody
+    // named as its replacement is how a dependency dies quietly.
+    for (const e of FIXTURES.entries) {
+      if (!e.vendor.deprecated || !PINNED_MODELS.has(e.id)) continue;
+      const succession = (e as { succession?: { status?: string; why?: string } }).succession;
+      expect(
+        succession,
+        `${e.id} is deprecated and PINNED, but no \`succession\` is recorded in media.fixtures.json`,
+      ).toBeDefined();
+      expect(succession?.status).toMatch(/^(decision_pending|decided|migrated)$/);
+      expect((succession?.why ?? "").length, `${e.id}: succession.why must say WHY`).toBeGreaterThan(
+        40,
+      );
+    }
+  });
+
+  it("A PINNED MODEL IS NOT ALREADY PAST ITS SHUTDOWN DATE", () => {
+    // The last line of defence. If this is red, the product is shipping requests to an endpoint the
+    // vendor has withdrawn — every `generated_video` scene is failing right now.
+    for (const e of FIXTURES.entries) {
+      if (!e.vendor.shutdown || !PINNED_MODELS.has(e.id)) continue;
+      expect(
+        daysUntil(String(e.vendor.shutdown)),
+        `${e.id} SHUT DOWN on ${e.vendor.shutdown}. It is still pinned. Migrate it now.`,
+      ).toBeGreaterThan(0);
+    }
+  });
+
+  it("AN UNWIRED SUCCESSION HAS RUNWAY LEFT — decided is not the same as done", () => {
+    // The real tripwire, and the number is a deadline rather than a preference: choosing a video
+    // vendor means an ADR, a data-transfer decision, a price-table row and a submit path. Two weeks
+    // is the least that is honest, so work still open inside it turns the build red while there is
+    // time to act. Moving this number to silence it is the failure mode to resist.
+    //
+    // THIS USED TO KEY ON `status !== "decision_pending"`, AND THAT WAS A HOLE BIG ENOUGH TO DRIVE
+    // THE WHOLE OUTAGE THROUGH. Writing the ADR flips the status to `decided` — which disarmed
+    // this test while `media.ts` still submitted to the endpoint being withdrawn. The decision is
+    // the cheap half; the submit path is the half that keeps reels rendering. Keyed that way, the
+    // ONLY surviving alarm was "the shutdown must not have passed", which fires the day after
+    // production breaks. A decision is not a migration, and the tripwire now says so.
+    const RUNWAY_DAYS = 14;
+    for (const e of FIXTURES.entries) {
+      const succession = (e as {
+        succession?: { status?: string; replacementWiredUp?: boolean };
+      }).succession;
+      if (!e.vendor.shutdown || !PINNED_MODELS.has(e.id)) continue;
+      // Only a WIRED replacement stands the tripwire down. `migrated` means the code moved;
+      // anything else — undecided, or decided-but-unwired — still needs runway.
+      if (succession?.status === "migrated" || succession?.replacementWiredUp === true) continue;
+      expect(
+        daysUntil(String(e.vendor.shutdown)),
+        `${e.id} shuts down on ${e.vendor.shutdown} and the replacement is NOT WIRED UP ` +
+          `(status: ${succession?.status ?? "none"}, replacementWiredUp: ` +
+          `${String(succession?.replacementWiredUp)}). A written decision does not render a reel — ` +
+          "land the submit path and the price row, then set succession.replacementWiredUp to true.",
+      ).toBeGreaterThan(RUNWAY_DAYS);
+    }
+  });
   it("each number in a table is justified by the vendor's OWN string, or is marked MEDIUM", () => {
     for (const e of FIXTURES.entries) {
       const vendorText = String(e.vendor.pricingInfoOverride ?? "");
@@ -353,5 +431,195 @@ describe("SC5 — the ceiling and its upgrade path exist in the source", () => {
   it("D4's superseded constants are GONE, not left as pullable aliases", () => {
     expect(MEDIA_SRC).not.toMatch(/MEDIA_BUDGET_USD_PER_REQUEST/);
     expect(MEDIA_SRC).not.toMatch(/over_batch_cap/);
+  });
+});
+
+describe("the music bed — $0 is a PRICE, not an absence", () => {
+  const bed = (over: Partial<{ model: string; mood: string }> = {}): MediaSpec => ({
+    kind: "music",
+    model: MEDIA_DEFAULT_MUSIC.model,
+    mood: "calm",
+    ...over,
+  });
+
+  it("prices every mood in the closed set at the flat per-track rate", () => {
+    for (const mood of MUSIC_MOODS) {
+      const priced = estimateMediaUsd(bed({ mood }));
+      expect(priced.ok, `${mood} must be priceable`).toBe(true);
+      expect(priced.ok && priced.value).toBe(MEDIA_MUSIC_PRICING[MEDIA_DEFAULT_MUSIC.model]);
+    }
+  });
+
+  it("is a LINE — it reaches the batch and the batch still floors ONCE", () => {
+    // The distinction the whole line exists for: $0 is a priced line that appears on the invoice,
+    // not a thing that was skipped. Adding it must not change the reserved total by a cent.
+    const withoutBed: MediaSpec[] = [{ kind: "render" }];
+    const withBed: MediaSpec[] = [{ kind: "render" }, bed()];
+    const a = chooseMediaBatch(withoutBed, MEDIA_JOB_CAP_USD);
+    const b = chooseMediaBatch(withBed, MEDIA_JOB_CAP_USD);
+    expect(a.ok && b.ok).toBe(true);
+    expect(a.ok && b.ok && b.value.estCents).toBe(a.ok ? a.value.estCents : -1);
+    expect(a.ok && b.ok && b.value.estUsd).toBe(a.ok ? a.value.estUsd : -1);
+  });
+
+  it("a mood outside the set is `unknown_model` — fail closed, never a fallback bed", () => {
+    // The same posture as a missing resolution on a video row: nothing in the table prices this, so
+    // it is refused rather than quietly served from some other row. "The caller already validated
+    // it" is the assumption every pricing hole in this module was written to remove.
+    for (const mood of ["lofi", "128bpm", "", "Bittersweet Symphony"]) {
+      expect(estimateMediaUsd(bed({ mood }))).toEqual({
+        ok: false,
+        error: { code: "unknown_model" },
+      });
+    }
+  });
+
+  it("an unknown library version is `unknown_model` too", () => {
+    expect(estimateMediaUsd(bed({ model: "library/v99" }))).toEqual({
+      ok: false,
+      error: { code: "unknown_model" },
+    });
+  });
+
+  it("one unpriceable bed REFUSES the whole job rather than making it cheaper", () => {
+    // estimateBatchUsd's own rule, asserted on the newest line to use it.
+    expect(estimateBatchUsd([{ kind: "render" }, bed({ mood: "lofi" })])).toEqual({
+      ok: false,
+      error: { code: "unknown_model" },
+    });
+  });
+
+  it("the table is keyed PER TRACK, which is what makes a generative vendor unreachable", () => {
+    // Rule 1 of this module: the table is keyed by the unit the vendor actually bills on. A flat
+    // per-track rate is pre-computable before the request exists; a per-generated-second or
+    // per-compute-second one is not, and there is deliberately no seconds/duration term here to
+    // multiply by. If a future edit adds one, this is where it has to argue with rule 3.
+    const src = MEDIA_SRC.split("export const MEDIA_MUSIC_PRICING")[1]?.split("};")[0] ?? "";
+    expect(src, "the music table must not gain a per-second term").not.toMatch(
+      /perSecond|per_second|seconds/i,
+    );
+    expect(Object.values(MEDIA_MUSIC_PRICING).every((n) => n === 0)).toBe(true);
+  });
+});
+
+describe("stock: a $0 line that still BUYS an asset", () => {
+  const stockSpec = (media: "video" | "image", seconds = 6): MediaSpec => ({
+    kind: "stock",
+    model: MEDIA_DEFAULT_STOCK.model,
+    media,
+    seconds,
+  });
+
+  it("prices a stock clip and a stock still at exactly zero", () => {
+    expect(estimateMediaUsd(stockSpec("video"))).toEqual({ ok: true, value: 0 });
+    expect(estimateMediaUsd(stockSpec("image"))).toEqual({ ok: true, value: 0 });
+  });
+
+  it("refuses an unpriced library — fail closed, never a silent free pass", () => {
+    const res = estimateMediaUsd({ kind: "stock", model: "shutterstock/v9", media: "video", seconds: 6 });
+    expect(res).toEqual({ ok: false, error: { code: "unknown_model" } });
+  });
+
+  it("refuses an unpriceable window rather than searching for a nonsense length", () => {
+    for (const seconds of [Number.POSITIVE_INFINITY, Number.NaN, -4]) {
+      expect(estimateMediaUsd(stockSpec("video", seconds))).toEqual({
+        ok: false,
+        error: { code: "illegal_duration" },
+      });
+    }
+  });
+
+  it("IS PRICED SEPARATELY FROM THE PAID VIDEO TABLE — the hole a shared table would open", () => {
+    // If `pexels/v1` were a $0 row inside MEDIA_VIDEO_PRICING, a video spec naming it would price
+    // a REAL generated clip at nothing. It must not resolve there at all.
+    expect(MEDIA_VIDEO_PRICING[MEDIA_DEFAULT_STOCK.model]).toBeUndefined();
+    expect(MEDIA_IMAGE_PRICING[MEDIA_DEFAULT_STOCK.model]).toBeUndefined();
+    expect(
+      estimateMediaUsd({
+        kind: "video",
+        model: MEDIA_DEFAULT_STOCK.model,
+        resolution: "720p",
+        seconds: 4,
+      }),
+    ).toEqual({ ok: false, error: { code: "unknown_model" } });
+    // ...and symmetrically, a paid model cannot be laundered through the stock table.
+    expect(MEDIA_STOCK_PRICING[MEDIA_DEFAULT_VIDEO.model]).toBeUndefined();
+  });
+
+  it("the stock table has no per-second term — the rule-3 scan the music table gets", () => {
+    const src = MEDIA_SRC.split("export const MEDIA_STOCK_PRICING")[1]?.split("};")[0] ?? "";
+    expect(src.length, "the stock table must be found in source").toBeGreaterThan(0);
+    expect(src, "the stock table must not gain a per-second term").not.toMatch(
+      /perSecond|per_second|perCompute/i,
+    );
+    expect(Object.values(MEDIA_STOCK_PRICING).every((n) => n === 0)).toBe(true);
+  });
+
+  it("the deck kind decides the BYTES, and sceneVisualSpec carries the scene window through", () => {
+    const clip = sceneVisualSpec("stock_video", 7);
+    expect(clip.ok && clip.value?.spec).toEqual({
+      kind: "stock",
+      model: MEDIA_DEFAULT_STOCK.model,
+      media: "video",
+      seconds: 7,
+    });
+    const still = sceneVisualSpec("stock_image", 7);
+    expect(still.ok && still.value?.spec).toEqual({
+      kind: "stock",
+      model: MEDIA_DEFAULT_STOCK.model,
+      media: "image",
+      seconds: 7,
+    });
+    expect(clip.ok && clip.value?.usd).toBe(0);
+    expect(still.ok && still.value?.usd).toBe(0);
+  });
+
+  it("a stock scene is a LINE, not a null — `null` would mean no row, no fetch, no picture", () => {
+    // The distinction the music bed does NOT share: music is a spec with no row, stock is a spec
+    // WITH one. `null` here is what `uploaded_video` and `text_card` get, and it means the render
+    // expects nothing to land. A stock scene must never be told that.
+    expect(SCENE_VISUAL_LINE.stock_video).toBe("stock");
+    expect(SCENE_VISUAL_LINE.stock_image).toBe("stock");
+    expect(SCENE_VISUAL_LINE.uploaded_video).toBeNull();
+    expect(SCENE_VISUAL_LINE.text_card).toBeNull();
+  });
+
+  it("a whole deck of stock still reserves — free pictures, and the render line is what is left", () => {
+    const scenes: VisualKind[] = ["stock_video", "stock_image", "stock_video"];
+    const specs = scenes.map((k) => {
+      const line = sceneVisualSpec(k, 5);
+      if (!line.ok || line.value === null) throw new Error("expected a stock line");
+      return line.value.spec;
+    });
+    const batch = chooseMediaBatch([...specs, { kind: "render" }], MEDIA_JOB_CAP_USD);
+    expect(batch.ok && batch.value.estUsd).toBe(MEDIA_SANDBOX_USD_PER_RENDER);
+    // The cents floor happens ONCE on the total, so three free pictures add nothing at all —
+    // they do not each floor to a cent. That is D12(a), and stock is where it pays off most.
+    expect(batch.ok && batch.value.estCents).toBe(
+      Math.max(1, Math.ceil(MEDIA_SANDBOX_USD_PER_RENDER * 100)),
+    );
+  });
+
+  it("swapping a generated clip for stock is the whole cost lever, measured", () => {
+    const generated = sceneVisualSpec("generated_video", 4);
+    const stock = sceneVisualSpec("stock_video", 4);
+    if (!generated.ok || generated.value === null) throw new Error("expected a video line");
+    if (!stock.ok || stock.value === null) throw new Error("expected a stock line");
+    expect(generated.value.usd).toBeGreaterThan(0);
+    expect(stock.value.usd).toBe(0);
+    // A SIXTY-SECOND reel is where the lever stops being an optimisation. All-generated it is 15
+    // four-second clips — over the whole-job cap before a word is voiced — which is the
+    // arithmetic `storyboard.ts` cites for why every legal reel mixes kinds. All-stock it is $0,
+    // and the cap stops being the binding constraint on length at all.
+    const allGeneratedAt60s = (generated.value.usd / 4) * 60;
+    expect(allGeneratedAt60s).toBeGreaterThan(MEDIA_JOB_CAP_USD);
+    expect((stock.value.usd / 4) * 60).toBe(0);
+  });
+
+  it("pins the two constants the ASSEMBLER depends on, not just the price", () => {
+    // Both of these are things `assemble_final.sh` hard-fails or silently mis-renders on, so they
+    // are pinned here rather than left as fetch-site defaults. See MEDIA_DEFAULT_STOCK.
+    expect(MEDIA_DEFAULT_STOCK.orientation).toBe("portrait");
+    expect(MEDIA_DEFAULT_STOCK.minDurationSlackSeconds).toBe(0.5);
   });
 });

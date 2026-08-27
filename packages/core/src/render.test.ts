@@ -13,11 +13,16 @@
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { VISUAL_KINDS } from "./storyboard";
 import { describe, expect, it } from "vitest";
 import {
   buildSandboxOptions,
   CAPTION_MAX_ASS_BYTES,
   convexSiteOrigin,
+  CARD_COLOR,
+  CARD_DEFAULT_BG,
+  CARD_DEFAULT_INK,
+  cardColorsOf,
   deckStillNeedsJob,
   handleRenderRequest,
   isRenderableCardText,
@@ -568,6 +573,99 @@ describe("handleRenderRequest: nothing untrusted reaches the VM", () => {
       },
     ]);
   });
+
+  // ── The music bed ─────────────────────────────────────────────────────────────────────────
+  //
+  // The bed is the one thing in the assemble body that is NOT an input: no file is written for it,
+  // nothing is fetched for it, and no upload URL carries it. It is a NAME the script resolves
+  // against a library baked into the snapshot. These pin that it stays that way.
+
+  it("passes the bed as a --music MOOD and writes no file for it", async () => {
+    const { deps: d, rec } = deps();
+    await handleRenderRequest(post(body({ music: "calm" })), d);
+    expect(rec.commands[0]?.args).toEqual([
+      "assemble_final.sh",
+      "--scene",
+      "video:8",
+      "--scene",
+      "image:6",
+      "--scene",
+      "card:4",
+      "--scene",
+      "video:12",
+      "--target-seconds",
+      "30",
+      "--music",
+      "calm",
+    ]);
+    // NOT AN INPUT. If a bed ever starts arriving as bytes, this is the assertion that has to be
+    // deleted first — and deleting it is the moment to notice that `RENDER_INPUT_NAME`, the blob
+    // route and the path-traversal guard all now have a new case.
+    expect(rec.writes.map((w) => w.path).filter((p) => p.includes("music"))).toEqual([]);
+  });
+
+  it("omits the flag entirely when the deck declares no bed", async () => {
+    const { deps: d, rec } = deps();
+    await handleRenderRequest(post(body()), d);
+    expect(rec.commands[0]?.args).not.toContain("--music");
+  });
+
+  it.each([
+    ["lofi", "a mood outside the closed set"],
+    ["../../etc/passwd", "a path"],
+    ["", "an empty string"],
+    [7, "a number"],
+  ])("refuses %s (%s) rather than dropping it to no bed", async (music, _why) => {
+    // REFUSED, not silently ignored. A slug this runner does not recognise means the caller and
+    // this runner disagree about the library — most likely a Convex deployment newer than the web
+    // one — and rendering a quietly bedless reel would hide that behind a finished file.
+    const { deps: d, rec } = deps();
+    const res = await handleRenderRequest(post(body({ music })), d);
+    await expect(res.json()).resolves.toMatchObject({ ok: false, code: "bad_request" });
+    expect(rec.commands, "no sandbox is created for a refused body").toEqual([]);
+  });
+
+  // ── The card palette ────────────────────────────────────────────────────────────────────────
+  //
+  // Unlike the bed, these two values are INTERPOLATED INTO A FILTERGRAPH inside the VM. The card's
+  // WORDS never are — `textfile=` keeps them out of the filter string and `expansion=none` stops
+  // `%{...}` being evaluated — so a colour is the first model-derived value to reach it. That is
+  // what these pin: the shape is re-checked at the route even though `cardColorsOf` can only
+  // produce it, because this runner validates what it was SENT, not what it assumes was computed.
+
+  it("passes the palette as --card-bg / --card-ink, and writes no file for it", async () => {
+    const { deps: d, rec } = deps();
+    await handleRenderRequest(post(body({ card: { bg: "0x1B4B43", ink: "0xFFFFFF" } })), d);
+    const args = rec.commands[0]?.args ?? [];
+    expect(args.slice(-4)).toEqual(["--card-bg", "0x1B4B43", "--card-ink", "0xFFFFFF"]);
+    expect(rec.writes.map((w) => w.path).filter((x) => x.includes("card-"))).toEqual([]);
+  });
+
+  it("omits both flags when the deck yields no colour — the old black card, unchanged", async () => {
+    const { deps: d, rec } = deps();
+    await handleRenderRequest(post(body()), d);
+    expect(rec.commands[0]?.args).not.toContain("--card-bg");
+    expect(rec.commands[0]?.args).not.toContain("--card-ink");
+  });
+
+  it.each([
+    [{ bg: "black", ink: "0xFFFFFF" }, "a colour word"],
+    [{ bg: "0x1B4B43:x=0", ink: "0xFFFFFF" }, "a filtergraph option smuggled onto the value"],
+    [{ bg: "0x1B4B43", ink: "white' -vf 'crop=1:1" }, "a quote break"],
+    [{ bg: "#1B4B43", ink: "0xFFFFFF" }, "the wrong prefix"],
+    [{ bg: "0xGGGGGG", ink: "0xFFFFFF" }, "non-hex digits"],
+    [{ bg: "0x1B4B43" }, "a missing ink"],
+    [{ bg: 7, ink: "0xFFFFFF" }, "a number"],
+    ["0x1B4B43", "a bare string instead of the pair"],
+  ])("REFUSES %o (%s) rather than falling back to the default card", async (card, _why) => {
+    // Refused, never degraded. A malformed pair means the caller and this runner disagree about
+    // what was computed, and drawing the default card would hide that behind a finished file —
+    // the same reasoning as the music slug, with a sharper consequence if it were wrong.
+    const { deps: d, rec } = deps();
+    const res = await handleRenderRequest(post(body({ card })), d);
+    await expect(res.json()).resolves.toMatchObject({ ok: false, code: "bad_request" });
+    expect(rec.commands, "no sandbox is created for a refused body").toEqual([]);
+  });
 });
 
 describe("handleRenderRequest: nothing the VM returns is published unchecked", () => {
@@ -794,6 +892,34 @@ describe("deckStillNeedsJob: a terminal job row holds the reel only while the de
   it("a row whose scene the deck no longer has is history, not a hold", () => {
     expect(deckStillNeedsJob(undefined, "video")).toBe(false);
   });
+
+  it("a STOCK scene needs its landed row exactly as a bought one does", () => {
+    // The bytes are free and they are still fetched, stored and awaited. Answering `false` here
+    // would let the render trigger fire before the fetch landed and hold the reel forever.
+    expect(deckStillNeedsJob({ visual: "stock_video", narration: "x" }, "video")).toBe(true);
+    expect(deckStillNeedsJob({ visual: "stock_image", narration: "x" }, "image")).toBe(true);
+    // ...and each stays in its OWN slot, so a stock clip is never satisfied by a still.
+    expect(deckStillNeedsJob({ visual: "stock_video", narration: "x" }, "image")).toBe(false);
+    expect(deckStillNeedsJob({ visual: "stock_image", narration: "x" }, "video")).toBe(false);
+  });
+
+  it("EVERY VisualKind is decided here — the guard against the next kind being missed", () => {
+    // THE POINT OF THIS TEST. `deckStillNeedsJob` string-compares `visual`, so it is compile-SILENT:
+    // adding a member to VISUAL_KINDS is a type error in `PAID_VISUAL` and `SCENE_VISUAL_LINE` and
+    // is NOT one here. `stock_video` and `stock_image` were both missed exactly this way, and the
+    // symptom is not a crash — it is a reel held at `incomplete_blocks` with no lever, because a
+    // scene that buys bytes reported that it was waiting for none.
+    //
+    // A kind must appear in exactly one column: it lands a video row, an image row, or no row at
+    // all (its picture is drawn, or already the tenant's). Anything else is undecided.
+    const LANDS_NO_ROW = new Set(["uploaded_video", "text_card"]);
+    for (const kind of VISUAL_KINDS) {
+      const video = deckStillNeedsJob({ visual: kind, narration: "x" }, "video");
+      const image = deckStillNeedsJob({ visual: kind, narration: "x" }, "image");
+      const decided = LANDS_NO_ROW.has(kind) ? !video && !image : video !== image;
+      expect(decided, `${kind} is not accounted for in deckStillNeedsJob`).toBe(true);
+    }
+  });
 });
 
 // ── The CAPTION mode (plan 20-17) ──────────────────────────────────────────────────────────────
@@ -917,5 +1043,102 @@ describe("the caption burn shares the sandbox, and that is the point", () => {
       // else — by construction, since `reasonCodeFor` returns a member of a closed union.
       expect(JSON.stringify(json)).not.toContain("ERROR");
     }
+  });
+});
+
+// ── THE CARD PALETTE (phase 3) ─────────────────────────────────────────────────────────────────
+//
+// The deck already carried a palette; the renderer drew every card black-and-white. What is tested
+// here is the narrowing that happens on the way: model-authored free text becoming two values that
+// are safe to interpolate into an ffmpeg filtergraph, with the ink chosen so the words stay
+// readable on whatever the background turned out to be.
+
+describe("cardColorsOf: a model-written palette becomes two filtergraph-safe colours", () => {
+  const contrast = (a: string, b: string): number => {
+    const lum = (c: string): number => {
+      const ch = (i: number): number => {
+        const v = Number.parseInt(c.slice(2 + i * 2, 4 + i * 2), 16) / 255;
+        return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+      };
+      return 0.2126 * ch(0) + 0.7152 * ch(1) + 0.0722 * ch(2);
+    };
+    const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+    return ((hi ?? 0) + 0.05) / ((lo ?? 0) + 0.05);
+  };
+
+  it("reads a hex however the specialist happened to write it", () => {
+    // The parser deliberately does NOT validate the palette, so all of these really do arrive.
+    for (const entry of ["#1B4B43", "1B4B43", "teal (#1B4B43)", "  #1b4b43  "]) {
+      expect(cardColorsOf([entry]).bg, entry).toBe("0x1B4B43");
+    }
+  });
+
+  it("falls back to the OLD CARD when the palette names colours in words", () => {
+    // "warm amber" is a legal palette entry — the hex rule is the skill body's to teach, not the
+    // parser's — and it must not become a colour. The reel renders exactly as it did before.
+    expect(cardColorsOf(["warm amber", "bone"])).toEqual({
+      bg: CARD_DEFAULT_BG,
+      ink: CARD_DEFAULT_INK,
+    });
+    expect(cardColorsOf([])).toEqual({ bg: CARD_DEFAULT_BG, ink: CARD_DEFAULT_INK });
+    expect(cardColorsOf(undefined)).toEqual({ bg: CARD_DEFAULT_BG, ink: CARD_DEFAULT_INK });
+  });
+
+  it("takes the FIRST usable hex, skipping entries that name no colour", () => {
+    expect(cardColorsOf(["warm amber", "#1B4B43", "#F5F0E6"]).bg).toBe("0x1B4B43");
+  });
+
+  it("NEVER produces anything but 0xRRGGBB — these strings enter a filtergraph", () => {
+    // The property that matters, asserted over hostile input rather than over the happy path. A
+    // palette entry is model-authored text and the card's words are kept OUT of the filter string
+    // by `textfile=`; a colour cannot be, so this is the narrowing that replaces that protection.
+    const hostile = [
+      "black;rm -rf /",
+      "0x000000:x=0",
+      "red' -vf 'crop=1:1",
+      "#GGGGGG",
+      "#12345",
+      "#1234567",
+      "",
+      "${IFS}",
+    ];
+    for (const entry of hostile) {
+      const { bg, ink } = cardColorsOf([entry]);
+      expect(CARD_COLOR.test(bg), `bg from ${JSON.stringify(entry)}`).toBe(true);
+      expect(CARD_COLOR.test(ink), `ink from ${JSON.stringify(entry)}`).toBe(true);
+    }
+    // Seven hex digits must not be read as six-plus-one: that would silently shift the colour.
+    expect(cardColorsOf(["#1234567"]).bg).toBe(CARD_DEFAULT_BG);
+  });
+
+  it("CHOOSES THE INK FOR CONTRAST, which is the whole reason it is computed and not picked", () => {
+    // A mid-tone on a mid-tone is a card nobody can read, and it passes every gate this pipeline
+    // has: the file decodes, the duration is right, the sidecar is well-formed. Only the words are
+    // gone. So the ink is never taken from the palette.
+    expect(cardColorsOf(["#1B4B43"]).ink).toBe("0xFFFFFF"); // deep teal -> white
+    expect(cardColorsOf(["#F5F0E6"]).ink).toBe("0x000000"); // bone      -> black
+    expect(cardColorsOf(["#FFFF00"]).ink).toBe("0x000000"); // yellow is LIGHT despite the hex
+    expect(cardColorsOf(["#0000FF"]).ink).toBe("0xFFFFFF"); // blue is DARK despite the hex
+  });
+
+  it("clears WCAG AA large-text contrast for every colour in the space, not just the examples", () => {
+    // A sweep rather than four hand-picked pairs: the threshold is a single number and a wrong one
+    // would still pass the cases above. 3:1 is the AA bar for large text, which a card always is.
+    for (let r = 0; r < 256; r += 51) {
+      for (let g = 0; g < 256; g += 51) {
+        for (let b = 0; b < 256; b += 51) {
+          const hex = `#${[r, g, b].map((n) => n.toString(16).padStart(2, "0")).join("")}`;
+          const { bg, ink } = cardColorsOf([hex]);
+          expect(contrast(bg, ink), `${hex} -> ${ink}`).toBeGreaterThanOrEqual(3);
+        }
+      }
+    }
+  });
+
+  it("green and blue of the SAME hex value get different ink — luminance is not an average", () => {
+    // The cheap implementation (average the channels) gets this wrong, and it is the case that
+    // actually appears: brand greens are common and read far lighter than the same-valued blue.
+    expect(cardColorsOf(["#00CC00"]).ink).toBe("0x000000");
+    expect(cardColorsOf(["#0000CC"]).ink).toBe("0xFFFFFF");
   });
 });

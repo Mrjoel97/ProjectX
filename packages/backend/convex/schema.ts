@@ -734,7 +734,7 @@ export default defineSchema({
      *  submitted only after their Generate click, and never copied to audit/telemetry rows. */
     mediaMode: v.optional(v.union(v.literal("reel"), v.literal("image"))),
     imagePrompt: v.optional(v.string()),
-    /** koda's fixed 9-field art-direction block, parsed. */
+    /** koda's fixed 9-field art-direction block, parsed, plus the optional music bed. */
     artDirection: v.optional(
       v.object({
         palette: v.array(v.string()),
@@ -746,6 +746,13 @@ export default defineSchema({
         typography: v.optional(v.string()),
         references: v.array(v.string()),
         avoid: v.string(),
+        /** The BED's mood — a `MUSIC_MOODS` slug, or absent for a reel with no music. Stored as a
+         *  bare string rather than a `v.union` of literals ON PURPOSE: the closed set lives in
+         *  `@pikar/core/storyboard` and is enforced by the parser that writes this and the price
+         *  table that reads it, so restating it here would be a third copy to keep in step — and
+         *  the one that fails LOUDEST, by refusing to write a row that every other layer accepts.
+         *  A slug outside the set prices as `unknown_model` and never reaches the assembler. */
+        music: v.optional(v.string()),
       }),
     ),
     /** The narration script for the whole reel (D8 — voiceover has nothing to say without it). */
@@ -2134,8 +2141,20 @@ export default defineSchema({
     batchId: v.string(), // server-minted crypto.randomUUID(); groups ONE reservation
     blockIndex: v.number(), // index into plans.shots; -1 for a job that belongs to the whole deck (stt)
     // `fal` remains readable for historical rows; new work uses Wan for visuals and OpenAI audio.
-    provider: v.union(v.literal("fal"), v.literal("wan"), v.literal("openai")),
-    // FOUR kinds, closed. A fifth member is a deliberate schema edit, the `provider` precedent.
+    // `stock` is the free library fetch — it is a PROVIDER, not a kind, because what it returns is
+    // an ordinary video or image and the render's slot map reads `kind` to decide where bytes go.
+    // This is also the routing discriminator `submitBatch` branches on BEFORE `toSubmittable`: a
+    // stock row must never reach `submitLine`, which would POST `pexels/v1` to OpenAI.
+    provider: v.union(
+      v.literal("fal"),
+      v.literal("wan"),
+      v.literal("openai"),
+      v.literal("stock"),
+    ),
+    // FOUR kinds, closed, and they stay four: `kind` says what the BYTES ARE, never who supplied
+    // them or what they cost. A stock clip is a `video` and a stock still is an `image`, which is
+    // why `renderReel` needed no stock case at all. A fifth member is a deliberate schema edit,
+    // the `provider` precedent.
     kind: v.union(v.literal("video"), v.literal("image"), v.literal("tts"), v.literal("stt")),
     model: v.string(), // MUST be a key of the @pikar/cost/media price table (fail-closed at estimate)
     // Exactly what was SUBMITTED — never a provider default. fal's Wan 2.5 defaults to 1080p, so a
@@ -2150,6 +2169,14 @@ export default defineSchema({
         sampleRateHertz: v.number(),
       }),
       v.object({ kind: v.literal("stt"), audioMinutes: v.number() }),
+      /** The stock fetch. `media` mirrors the row's own `kind` and `seconds` is the scene window
+       *  the clip has to cover — carried on the row so a re-submit asks the library the SAME
+       *  question, rather than re-deriving it from a deck that may have been edited since. */
+      v.object({
+        kind: v.literal("stock"),
+        media: v.string(),
+        seconds: v.number(),
+      }),
     ),
     promptHash: v.string(),
     status: v.union(

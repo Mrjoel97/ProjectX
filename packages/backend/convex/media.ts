@@ -39,6 +39,8 @@ import {
   chooseMediaBatch,
   estimateMediaUsd,
   MEDIA_DEFAULT_IMAGE,
+  MEDIA_DEFAULT_MUSIC,
+  MEDIA_DEFAULT_STOCK,
   MEDIA_DEFAULT_STT,
   MEDIA_DEFAULT_VIDEO,
   MEDIA_DEFAULT_VOICE,
@@ -430,6 +432,23 @@ const firstUnconfirmedClaim = (
 ): { index: number } | null =>
   shots?.find((s) => s.needsConfirmation === true && s.confirmedAt === undefined) ?? null;
 
+/**
+ * The deck-wide music bed as a priced spec, or `null` when the deck declares no bed.
+ *
+ * ONE reader of `artDirection.music` for BOTH money sites — `reserveSceneJobInner` and
+ * `jobEstimate` — which is the wave-5 co-location rule applied to a new line: the number the canvas
+ * prints and the number the rail consumes come from the same three lines, so they cannot drift the
+ * way the per-kind picture branches drifted while they were hand-copied at two call sites.
+ *
+ * A bed is DECK-WIDE, so it is priced on a partial buy too. Re-buying one scene re-renders the
+ * whole reel, and the re-render lays the same bed down again — exactly the reasoning that already
+ * keeps the captions line whole on a partial buy.
+ */
+const musicSpecOf = (plan: Doc<"plans"> | null): Extract<MediaSpec, { kind: "music" }> | null => {
+  const mood = plan?.artDirection?.music;
+  return mood === undefined ? null : { kind: "music", model: MEDIA_DEFAULT_MUSIC.model, mood };
+};
+
 export async function reserveSceneJobInner(
   ctx: MutationCtx,
   a: {
@@ -501,14 +520,22 @@ export async function reserveSceneJobInner(
         estUsd: usd,
         row: {
           ...base,
-          provider: "openai",
+          // THE ROW SAYS WHAT THE BYTES ARE; THE SPEC SAYS WHAT THE MONEY IS. They agree for the
+          // two bought kinds and deliberately diverge for stock: a stock line is `spec.kind
+          // "stock"` (its own $0 price table, its own fetcher) landing as `kind: "video"` or
+          // `"image"` (an ordinary asset, in the slot the render already reads). Folding them
+          // together in either direction is the mistake — one way the render grows a stock case,
+          // the other way a free fetch is priced from the paid video table.
+          provider: spec.kind === "stock" ? "stock" : "openai",
           blockIndex: scene.index,
-          kind: spec.kind,
+          kind: spec.kind === "stock" ? spec.media : spec.kind,
           model: spec.model,
           spec:
-            spec.kind === "video"
-              ? { kind: "video", resolution: spec.resolution, seconds: spec.seconds }
-              : { kind: "image", width: spec.width, height: spec.height },
+            spec.kind === "stock"
+              ? { kind: "stock", media: spec.media, seconds: spec.seconds }
+              : spec.kind === "video"
+                ? { kind: "video", resolution: spec.resolution, seconds: spec.seconds }
+                : { kind: "image", width: spec.width, height: spec.height },
           promptHash: await contentHash(scene.prompt),
           status: "queued",
           estUsd: usd,
@@ -599,7 +626,24 @@ export async function reserveSceneJobInner(
     });
   }
 
-  const specs: MediaSpec[] = [...lines.map((l) => l.spec), { kind: "render" }];
+  // THE MUSIC BED (deck-wide, $0) — a SPEC, never a `mediaJobs` row, and the distinction is
+  // load-bearing rather than tidy. `renderReel.batchToRender` refuses a batch unless every row
+  // reached `succeeded` with landed bytes; a music row buys no provider call, so it would sit
+  // `queued` forever and the reel would never render at all. The `render` line has exactly this
+  // shape for exactly this reason — priced, capped and reserved with the job, with no row, no
+  // provider request and no webhook. A $0 line is still a line: it belongs on the invoice because
+  // the reel was built from it.
+  //
+  // Priced through `estimateMediaUsd` like every other line, so an unpriceable mood is a REFUSED
+  // job rather than a quietly bedless one — "a job with one unpriceable line is not a cheaper job."
+  // In practice the parser's closed set makes that unreachable; this is the gate that makes it
+  // unreachable rather than merely unlikely.
+  const music = musicSpecOf(planRow && planRow.tenantId === a.tenantId ? planRow : null);
+  const specs: MediaSpec[] = [
+    ...lines.map((l) => l.spec),
+    ...(music === null ? [] : [music]),
+    { kind: "render" },
+  ];
   return await reserveProviderLinesInner(ctx, a.tenantId, batchId, lines, specs);
 }
 
@@ -1021,12 +1065,21 @@ type SubmitLine = {
   blockIndex: number;
   model: string;
   spec: Doc<"mediaJobs">["spec"];
+  /** WHO supplies the bytes, and therefore which adapter this line is routed to. Read BEFORE the
+   *  spec in `submitBatch`: a stock line's spec is its own kind, but routing on the spec would put
+   *  the decision one field away from the one that names the vendor. */
+  provider: Doc<"mediaJobs">["provider"];
 };
 
 /** The stored spec back into a typed `SubmittableSpec`, or `null` for a kind this plan does not
  *  wire. `spec.resolution` is `v.string()` on the row, so it is CHECKED here rather than cast —
  *  a money boundary does not get to assume. */
 function toSubmittable(line: SubmitLine): SubmittableSpec | null {
+  // BELT AND BRACES, and the same reason `resolution` is checked rather than cast just below: a
+  // money boundary does not get to assume. `submitBatch` routes stock away before it reaches here,
+  // so this line is unreachable by construction — and if construction ever slips, the failure it
+  // prevents is a row whose model is `pexels/v1` being POSTed to OpenAI as a paid generation.
+  if (line.provider === "stock") return null;
   if (line.spec.kind === "video") {
     const resolution = line.spec.resolution;
     if (resolution !== "480p" && resolution !== "720p" && resolution !== "1080p") return null;
@@ -1065,6 +1118,10 @@ const SUBMIT_TEXT: Record<string, (s: { prompt: string; narration: string }) => 
   video: (s) => s.prompt,
   image: (s) => s.prompt,
   tts: (s) => s.narration,
+  // A stock line's prompt IS its search query — the same field, read the same way, from the same
+  // content plane. `hasAssetSource` refuses a stock scene with a blank one upstream of the money,
+  // so nothing reaches here to ask a library for "".
+  stock: (s) => s.prompt,
 };
 
 /** The batch's rows AND the plan's shots in ONE read. Deliberately UNFILTERED by status: `claimLine`
@@ -1092,6 +1149,7 @@ export const batchToSubmit = internalQuery({
         blockIndex: r.blockIndex,
         model: r.model,
         spec: r.spec,
+        provider: r.provider,
       })),
       shots: (plan?.shots ?? []).map((s) => ({
         index: s.index,
@@ -1220,6 +1278,191 @@ async function generateOpenAiVoice(
     bytes: new Uint8Array(await response.arrayBuffer()),
     requestId: response.headers.get("x-request-id") ?? `openai-${crypto.randomUUID()}`,
   };
+}
+
+// ── The STOCK adapter (free library footage and stills) ────────────────────────────────────────
+//
+// The one adapter that generates nothing. It SEARCHES a free library with the scene's own prompt,
+// picks one asset by rules that are entirely about what `assemble_final.sh` can accept, and copies
+// the bytes into Convex storage. Two hops, both fail-closed: nothing here retries, guesses a
+// fallback asset, or relaxes a filter to find a match.
+//
+// It costs $0 and it is still a reserved LINE with a real `mediaJobs` row (see
+// `MEDIA_STOCK_PRICING`), so it lands, fails and is retried through exactly the machinery every
+// paid line uses. There is no second rail.
+//
+// **LICENSING.** The Pexels licence permits commercial use of these assets inside a composed work
+// with no attribution required, and forbids redistributing them UNALTERED as a standalone product.
+// A reel is a composed work; a stock clip is never delivered on its own by this pipeline. The
+// provider's own id is kept on the row as `providerRequestId` (`pexels:<id>`) so any frame in any
+// finished reel can be traced back to what it was cut from — the `asset.docId` rule applied to a
+// third party's bytes.
+
+/** The ceiling on ONE fetched asset, before it reaches Convex storage.
+ *
+ *  A stock library will happily serve a 4K master. Six of those is most of a gigabyte crossing
+ *  into a render sandbox we pay a flat constant for, so the size is BOUNDED rather than trusted —
+ *  the `MAX_STT_AUDIO_BYTES` idiom. The picker below already prefers a file near the reel's own
+ *  720x1280 tier, so this is the backstop for a library that offers nothing small, not the
+ *  everyday path. Over it is a governed `stock_asset_too_large`, never a truncated file. */
+export const MAX_STOCK_ASSET_BYTES = 24 * 1024 * 1024;
+
+/** How many search results to consider before giving up. Deliberately small: these are ranked by
+ *  relevance, and an asset 30 places down is not "the picture the deck asked for" — it is whatever
+ *  happened to be long enough. Refusing is the better outcome; the fix menu can swap the scene. */
+const STOCK_SEARCH_PER_PAGE = 15;
+
+/** One asset from the free stock library, or a governed code. Synchronous — bytes come back on
+ *  this call, like the image and voice adapters and unlike video, so there is no poller. */
+async function fetchStock(
+  spec: { media: string; seconds: number },
+  query: string,
+): Promise<SubmitResult> {
+  const key = requireEnvMedia("PEXELS_API_KEY");
+  if (process.env.MEDIA_PROVIDER_FIXTURE || process.env.FAL_FIXTURE) {
+    return {
+      ok: true,
+      requestId: `fixture-stock-${crypto.randomUUID()}`,
+      asset: {
+        bytes: new Uint8Array(new ArrayBuffer(64)),
+        mimeType: spec.media === "video" ? "video/mp4" : "image/jpeg",
+      },
+    };
+  }
+
+  const isVideo = spec.media === "video";
+  const url = new URL(
+    isVideo ? "https://api.pexels.com/videos/search" : "https://api.pexels.com/v1/search",
+  );
+  url.searchParams.set("query", query);
+  // PINNED, not defaulted. The assembler takes the reel's geometry from its first video scene, so
+  // a landscape stock clip silently retunes the whole reel — see MEDIA_DEFAULT_STOCK.
+  url.searchParams.set("orientation", MEDIA_DEFAULT_STOCK.orientation);
+  url.searchParams.set("per_page", String(STOCK_SEARCH_PER_PAGE));
+
+  let search: Response;
+  try {
+    search = await fetch(url, { headers: { Authorization: key } });
+  } catch {
+    return { ok: false, code: "transport_error", blocked: false };
+  }
+  if (!search.ok) {
+    // A rate-limited free tier is a plain failure the retrier may re-run, never a `blocked`
+    // verdict: nothing about the DECK was refused. 400 is our own malformed query and is not
+    // retryable, so it takes the blocked arm exactly as it does for a generated line.
+    return { ok: false, code: await providerReasonCode(search), blocked: search.status === 400 };
+  }
+
+  let link: string;
+  let assetId: string;
+  try {
+    const body = (await search.json()) as Record<string, unknown>;
+    const picked = isVideo
+      ? pickStockVideo(body, spec.seconds)
+      : pickStockPhoto(body);
+    if (picked === null) return { ok: false, code: "stock_no_match", blocked: false };
+    ({ link, assetId } = picked);
+  } catch {
+    return { ok: false, code: "stock_bad_response", blocked: false };
+  }
+
+  let file: Response;
+  try {
+    file = await fetch(link);
+  } catch {
+    return { ok: false, code: "transport_error", blocked: false };
+  }
+  if (!file.ok) return { ok: false, code: `stock_fetch_${file.status}`, blocked: false };
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (bytes.byteLength === 0) return { ok: false, code: "stock_empty_asset", blocked: false };
+  if (bytes.byteLength > MAX_STOCK_ASSET_BYTES) {
+    return { ok: false, code: "stock_asset_too_large", blocked: false };
+  }
+  return {
+    ok: true,
+    requestId: `pexels:${assetId}`,
+    // The CONTENT-TYPE as served, not as guessed from the URL. `storeAndLand` writes it onto the
+    // row and the render route serves it back; a wrong mime is a file the sandbox cannot decode.
+    asset: {
+      bytes,
+      mimeType: file.headers.get("content-type") ?? (isVideo ? "video/mp4" : "image/jpeg"),
+    },
+  };
+}
+
+/**
+ * The first clip that can COVER its scene, and the rendition of it closest to the reel's own tier.
+ *
+ * Two rules, both of them the assembler's rather than anyone's taste:
+ *
+ *  1. **Duration.** `assemble_final.sh` hard-errors when a clip is shorter than its scene by more
+ *     than `minDurationSlackSeconds` — "a held still frame is not a scene". A generated clip is
+ *     always exactly its grid length, so nothing has ever reached that gate; a stock clip is
+ *     whatever the library has. Filtering HERE means a too-short match is a refused scene the fix
+ *     menu can swap, instead of a hard render failure after every other input has landed.
+ *  2. **Rendition.** The reel is 720x1280, so the file nearest that height is chosen rather than
+ *     the largest. This is what keeps `MAX_STOCK_ASSET_BYTES` a backstop instead of a wall.
+ *
+ * Exported for the test: this is real selection logic over a shape we do not control, and it is
+ * the half of the adapter worth pinning without a network.
+ */
+export function pickStockVideo(
+  body: Record<string, unknown>,
+  seconds: number,
+): { link: string; assetId: string } | null {
+  const videos = body.videos;
+  if (!Array.isArray(videos)) throw new Error("shape");
+  const floor = seconds - MEDIA_DEFAULT_STOCK.minDurationSlackSeconds;
+  for (const raw of videos) {
+    const video = raw as { id?: unknown; duration?: unknown; video_files?: unknown };
+    if (typeof video.duration !== "number" || video.duration < floor) continue;
+    if (typeof video.id !== "number" && typeof video.id !== "string") continue;
+    if (!Array.isArray(video.video_files)) continue;
+    const files = video.video_files
+      .map((f) => f as { link?: unknown; file_type?: unknown; height?: unknown; width?: unknown })
+      .filter(
+        (f): f is { link: string; height: number; width: number } =>
+          typeof f.link === "string" &&
+          typeof f.height === "number" &&
+          typeof f.width === "number" &&
+          f.file_type === "video/mp4",
+      )
+      // Portrait renditions first — a landscape file from a portrait-filtered result would still
+      // set the reel's geometry, which is the failure the orientation parameter exists to prevent.
+      .sort(
+        (l, r) =>
+          Number(r.height >= r.width) - Number(l.height >= l.width) ||
+          Math.abs(l.height - 1280) - Math.abs(r.height - 1280),
+      );
+    const best = files[0];
+    if (best) return { link: best.link, assetId: String(video.id) };
+  }
+  return null;
+}
+
+/**
+ * The top photo, at the rendition the Ken Burns path actually needs.
+ *
+ * `large2x` before `portrait`: the assembler upscales a still 4x before `zoompan` so the crop
+ * window can step in quarter-pixels, and the library's `portrait` rendition is a fixed 800x1200
+ * crop that would be doing that from well under the output tier. `original` is last because it can
+ * be a 25-megapixel master — inside the byte cap it is simply slower for no visible gain.
+ */
+export function pickStockPhoto(
+  body: Record<string, unknown>,
+): { link: string; assetId: string } | null {
+  const photos = body.photos;
+  if (!Array.isArray(photos)) throw new Error("shape");
+  for (const raw of photos) {
+    const photo = raw as { id?: unknown; src?: Record<string, unknown> };
+    if (typeof photo.id !== "number" && typeof photo.id !== "string") continue;
+    const src = photo.src ?? {};
+    const link = ["large2x", "large", "portrait", "original"]
+      .map((k) => src[k])
+      .find((u): u is string => typeof u === "string" && u.length > 0);
+    if (link) return { link, assetId: String(photo.id) };
+  }
+  return null;
 }
 
 /** Poll one Alibaba Wan task; result URLs expire after 24 h, so successful bytes are stored here. */
@@ -1468,6 +1711,58 @@ export const submitBatch = internalAction({
     const tally = { submitted: 0, blocked: 0, failed: 0, skipped: 0 };
 
     for (const line of lines) {
+      // ── STOCK, ROUTED BY PROVIDER AND ROUTED FIRST ────────────────────────────────────────
+      //
+      // Before `toSubmittable`, which deliberately refuses a stock line: reaching it would leave
+      // the row `queued` forever and the reel would never render. Kept as its own arm rather than
+      // threaded through the paid path below — six duplicated lines, against nullable narrowing
+      // running through twenty lines of code that spends real money. The paid path is untouched.
+      if (line.provider === "stock" && line.spec.kind === "stock") {
+        const stock = line.spec;
+        if (!(await ctx.runMutation(internal.media.claimLine, { jobId: line.jobId }))) {
+          tally.skipped += 1;
+          continue;
+        }
+        const stockShot = shots.find((s) => s.index === line.blockIndex);
+        const query = stockShot && SUBMIT_TEXT.stock?.(stockShot);
+        if (query === undefined) {
+          await ctx.runMutation(internal.media.recordSubmission, {
+            jobId: line.jobId,
+            result: { ok: false, blocked: false, code: "missing_shot" },
+          });
+          tally.failed += 1;
+          continue;
+        }
+        const found = await fetchStock(stock, query);
+        if (!found.ok) {
+          await ctx.runMutation(internal.media.recordSubmission, {
+            jobId: line.jobId,
+            result: { ok: false, blocked: found.blocked, code: found.code },
+          });
+          if (found.blocked) tally.blocked += 1;
+          else tally.failed += 1;
+          continue;
+        }
+        await ctx.runMutation(internal.media.recordSubmission, {
+          jobId: line.jobId,
+          result: { ok: true, providerRequestId: found.requestId },
+        });
+        if (!found.asset) {
+          // Structurally unreachable — `fetchStock` never returns ok without bytes — but the
+          // landing plane treats "succeeded with no asset" as an impossible state that refuses the
+          // render, so it is named here rather than left to become one.
+          await ctx.runMutation(internal.mediaComplete.landResult, {
+            jobId: line.jobId,
+            outcome: { ok: false, code: "asset_missing" },
+          });
+          tally.failed += 1;
+          continue;
+        }
+        await storeAndLand(ctx, line.jobId, found.asset.bytes, found.asset.mimeType);
+        tally.submitted += 1;
+        continue;
+      }
+
       // A kind this plan does not wire is left AT `queued` and never claimed, so 20-14 and 20-17
       // pick their rows up untouched. Checking BEFORE the claim is what keeps that true.
       const spec = toSubmittable(line);
@@ -2162,6 +2457,10 @@ export const jobEstimate = tenantQuery({
       }
       const audioMinutes = targetDurationSeconds / 60;
       specs.push({ kind: "stt", model: MEDIA_DEFAULT_STT.model, audioMinutes });
+      // The SAME reader `reserveSceneJobInner` uses, in the same position of the same order — so
+      // the estimate and the reserve cannot disagree about whether this deck has a bed.
+      const music = musicSpecOf(plan);
+      if (music !== null) specs.push(music);
       specs.push({ kind: "render" });
 
       const priced = chooseMediaBatch(specs, MEDIA_JOB_CAP_USD);
@@ -2176,6 +2475,8 @@ export const jobEstimate = tenantQuery({
       const voiceCount = scenes.filter((s) => s.narration !== "").length;
       const clips = specs.filter((x) => x.kind === "video");
       const stills = specs.filter((x) => x.kind === "image");
+      const stock = specs.filter((x) => x.kind === "stock");
+      const stockClips = stock.filter((x) => x.kind === "stock" && x.media === "video").length;
       return {
         // ONE LINE PER PAID KIND (wave 7). Wave 5 printed a blended `pictures` row because the
         // price table did not exist yet; a generated clip is 40x a still, so the blend hid the only
@@ -2198,6 +2499,20 @@ export const jobEstimate = tenantQuery({
           ...(stills.length > 0
             ? [{ label: "stills", qty: stills.length, unit: "pan/zoom", cents: sub(stills) }]
             : []),
+          // PRINTED AT ZERO when the deck uses stock, for the music line's reason: this is not "a
+          // kind the deck does not use", it is a kind the deck DOES use that happens to cost
+          // nothing. It is also the one line that teaches the lever — an owner reading "stock 3
+          // free" beside "clips 1 $0.40" can see what swapping the next clip would save.
+          ...(stock.length > 0
+            ? [
+                {
+                  label: "stock",
+                  qty: stock.length,
+                  unit: `${stockClips} clip${stockClips === 1 ? "" : "s"}, ${stock.length - stockClips} still${stock.length - stockClips === 1 ? "" : "s"}`,
+                  cents: sub(stock),
+                },
+              ]
+            : []),
           {
             label: "voice",
             qty: voiceCount,
@@ -2210,6 +2525,14 @@ export const jobEstimate = tenantQuery({
             unit: `${audioMinutes.toFixed(2)} min`,
             cents: sub(specs.filter((x) => x.kind === "stt")),
           },
+          // PRINTED AT ZERO, deliberately breaking the "omit a kind the deck does not use" rule
+          // above — because it is not the same rule. A kind the deck does not use has no line;
+          // a bed the deck DOES declare has a line that happens to cost nothing, and hiding it
+          // would make the reel look like it was built from fewer inputs than it was. The owner
+          // should be able to read the estimate and see the bed they approved.
+          ...(music !== null
+            ? [{ label: "music", qty: 1, unit: `${music.mood} bed`, cents: sub([music]) }]
+            : []),
           // 33-04: the label names what the doubled constant covers — one auto-retry sandbox.
           {
             label: "render (incl. one retry)",

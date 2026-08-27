@@ -975,7 +975,10 @@ test("dispatch.ts lineage payloads reference no specialist output (reply/body/te
   // leaving it to the name. The helper is called into a `const` at each site and the const is
   // spread, so the scan below stays able to catch a future `res.body` reaching a payload.
   // A THIRTEENTH is a new §4 surface and gets the same treatment, not a renumber.
-  expect(payloads.length, "dispatch.ts audit payload count changed").toBe(12);
+  // 13 since the grounding pass (phase 3 follow-up): its failure arm writes one audit row of
+  // refs + a reason code. The count is asserted so a NEW payload has to be looked at by a
+  // human, which is the whole mechanism — the scan below then proves it carries no output.
+  expect(payloads.length, "dispatch.ts audit payload count changed").toBe(13);
   // All of them SPREAD one shared refs object (15-04 made it the `lineageRefs` helper so the throw
   // path could not drift from the rest) — scanning the payloads alone would miss a leak added
   // inside it, so its body is scanned as a payload too.

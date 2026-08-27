@@ -10,10 +10,12 @@ import {
   GENERATED_CLIP_SECONDS,
   GENERIC_DECK_REFUSAL,
   hasAssetSource,
+  statesCheckableClaim,
   isPaidBlock,
   isPaidScene,
   MAX_CHARS_PER_BLOCK,
   MAX_CHARS_PER_SECOND,
+  MUSIC_MOODS,
   maxCharsFor,
   minCharsFor,
   narrationCeilingSeconds,
@@ -21,6 +23,7 @@ import {
   parseArtDirection,
   parseBlockDeck,
   parseBrief,
+  parseMusicMood,
   parseSceneDeck,
   parseScript,
   parseVariations,
@@ -469,6 +472,11 @@ describe("media-director.md round trip — the body's worked answer survives its
       const art = parseArtDirection(s.body);
       expect(art, "nine fields, per variation").not.toBeNull();
       expect(art?.palette[0]).toMatch(/#[0-9a-f]{6}/i); // hex, never a vague colour word
+      // THE BED, round-tripped out of the body the registry actually seeds. The worked answer is
+      // advertised to the model as "the exact shape, end to end", so a `Music` line the parser
+      // cannot read would teach the shape that does not work — which is precisely the failure this
+      // whole round-trip suite exists to catch for the deck.
+      expect(MUSIC_MOODS, "the example's bed is a real slug").toContain(art?.music);
     }
   });
 
@@ -611,6 +619,61 @@ describe("parseArtDirection", () => {
     const vague = PROSE.replace(/^- \*\*Palette\*\*.*$/m, "- **Palette** — warm tones");
     expect(parseArtDirection(vague)?.palette).toEqual(["warm tones"]);
   });
+
+  it("keeps `music` OPTIONAL, and PROSE has none — absence is the normal case", () => {
+    // A reel with no bed is the reel this system shipped before beds existed. Failing an art
+    // direction over a missing music line would be a regression dressed as a feature.
+    const art = parseArtDirection(PROSE);
+    expect(art).not.toBeNull();
+    expect(art?.music).toBeUndefined();
+  });
+
+  it("reads a `Music` line into the closed set", () => {
+    const withBed = PROSE.replace("- **Do NOT** —", "- **Music** — upbeat\n- **Do NOT** —");
+    expect(parseArtDirection(withBed)?.music).toBe("upbeat");
+  });
+
+  it("a bed the library cannot play is NO bed — never a passed-through name", () => {
+    // The containment, end to end at the parser: the skill body ASKS for a mood and forbids naming
+    // a track, but an instruction is a request. This is what makes it structural.
+    const named = PROSE.replace(
+      "- **Do NOT** —",
+      '- **Music** — "Bittersweet Symphony" by The Verve, 128bpm\n- **Do NOT** —',
+    );
+    const art = parseArtDirection(named);
+    expect(art, "the rest of the block still parses").not.toBeNull();
+    expect(art?.music, "an invented track name cannot become a lookup").toBeUndefined();
+  });
+});
+
+describe("parseMusicMood", () => {
+  it("accepts every member of the closed set, and nothing else", () => {
+    for (const mood of MUSIC_MOODS) expect(parseMusicMood(mood)).toBe(mood);
+    for (const junk of ["lofi", "128bpm", "", "jazz", "музыка"]) {
+      expect(parseMusicMood(junk), `${junk} names no track we can play`).toBeUndefined();
+    }
+  });
+
+  it("SCANS a sentence — a model writes a phrase far more often than a bare word", () => {
+    // Refusing the sentence would cost the bed over a comma. Tolerance here is safe precisely
+    // because the scan is bounded by the closed set: it cannot widen what is reachable.
+    expect(parseMusicMood("calm, low strings held under the voice")).toBe("calm");
+    expect(parseMusicMood("Something CINEMATIC but restrained")).toBe("cinematic");
+    expect(parseMusicMood("a warm, unhurried pad")).toBe("warm");
+  });
+
+  it("takes the FIRST slug named, so a two-mood line is not ambiguous", () => {
+    // One bed, one mood. A line naming two is a specialist hedging; picking the first is
+    // deterministic, which is what the reserve and the render both need it to be.
+    expect(parseMusicMood("upbeat, or calm if that reads better")).toBe("upbeat");
+  });
+
+  it("cannot be talked into a path — the slug is never caller-shaped text", () => {
+    // `--music` is interpolated into a path inside the VM. The script bounds the charset again on
+    // its own side; this is the half that stops such a value ever being produced here.
+    expect(parseMusicMood("../../etc/passwd")).toBeUndefined();
+    expect(parseMusicMood("calm; rm -rf /")).toBe("calm"); // the SLUG survives, the rest does not
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
@@ -719,6 +782,26 @@ describe("hasAssetSource — does this row name what its picture is built FROM? 
   it("a GENERATED kind is always renderable — its source is the prompt the parser required", () => {
     expect(hasAssetSource(scene({ visual: "generated_video" }))).toBe(true);
     expect(hasAssetSource(scene({ visual: "animated_image" }))).toBe(true);
+  });
+
+  it("a STOCK kind needs its PROMPT — because the prompt is the search, and the parser does not require one", () => {
+    // The reason this is checked rather than assumed: `parseSceneDeck` falls `prompt` back to the
+    // `Description` cell, and that cell is only trimmed, never required to be non-empty. A blank
+    // one would ask a stock library for "" and land whatever its default ranking returns — a
+    // picture nobody chose, inside a reel someone approved.
+    for (const visual of ["stock_video", "stock_image"] as const) {
+      expect(hasAssetSource(scene({ visual, prompt: "" }))).toBe(false);
+      expect(hasAssetSource(scene({ visual, prompt: "   " }))).toBe(false);
+      expect(hasAssetSource(scene({ visual, prompt: "hands typing on a laptop" }))).toBe(true);
+    }
+    // An empty prompt is NOT fatal for the kinds whose picture comes from somewhere else — the
+    // guard has to be narrow or it starts refusing decks it has no business refusing.
+    expect(hasAssetSource(scene({ visual: "text_card", overlay: "WORDS", prompt: "" }))).toBe(true);
+    expect(
+      hasAssetSource(
+        scene({ visual: "uploaded_video", asset: { source: "vault", docId: "d" }, prompt: "" }),
+      ),
+    ).toBe(true);
   });
 
   it("is NOT the paid flag — that equivalence is exactly what wave 5 removed", () => {
@@ -1698,5 +1781,123 @@ describe("no_deck means the heading is absent, and nothing else", () => {
     // And the two contracts still name their OWN columns — one vocabulary, two tables.
     expect(deckRefusalClause("scene", "unreadable_deck")).toMatch(/Visual, Seconds/);
     expect(deckRefusalClause("block", "unreadable_deck")).toMatch(/Type, Description/);
+  });
+});
+
+// ── SILENCE MEANS UNVERIFIED (the citation default, inverted) ──────────────────────────────────
+//
+// The parser used to read a scene with no `Source:` line as claiming nothing, which trusted the
+// model to volunteer that it had made a claim. `media-director.md` mandates the line in prose and
+// `dispatch.ts` records the measured worth of a prose mandate on this exact skill family: violated
+// twice in six attempts. These tests pin the inversion and, just as importantly, its BOUNDARY —
+// a gate that fires on ordinary copy gets confirmed blind and then guards nothing.
+
+describe("statesCheckableClaim: a number is not a claim until it measures something", () => {
+  it("flags a quantity attached to a unit", () => {
+    for (const line of [
+      "Founders lose ninety minutes a day to the inbox.",
+      "Ninety minutes a day is a full working week every month.",
+      "Most of it is replies you have written a hundred times before.",
+      "We onboarded 40 customers last quarter.",
+      "It takes 3 days.",
+    ]) {
+      expect(statesCheckableClaim(line), line).toBe(true);
+    }
+  });
+
+  it("flags a figure carrying its own symbol, and an appeal to evidence", () => {
+    for (const line of ["90% FASTER", "We save you $2,000", "Cuts costs by 40%"]) {
+      expect(statesCheckableClaim(line), line).toBe(true);
+    }
+    // The purest form of the failure: authority borrowed and never named.
+    for (const line of [
+      "Studies show it works",
+      "According to recent research, founders lose time",
+      "On average, replies take longer",
+    ]) {
+      expect(statesCheckableClaim(line), line).toBe(true);
+    }
+  });
+
+  it("DOES NOT flag ordinary copy — the boundary that keeps the gate meaningful", () => {
+    // Every one of these is real product prose from the skill body's own worked examples, or the
+    // shape of it. A numeral appears in the first; it measures nothing, so it is not a claim.
+    for (const line of [
+      "You read one screen and decide. Nothing leaves without you.",
+      "Pikar reads the whole thread overnight and drafts the reply in your voice.",
+      "Pikar drafts the whole queue overnight, in your words.",
+      "Nothing sends until you approve it, and every send is written down.",
+      "YOUR INBOX, ANSWERED",
+      "YOU APPROVE",
+      "",
+    ]) {
+      expect(statesCheckableClaim(line), line).toBe(false);
+    }
+  });
+
+  it("is measured against the worked examples, not against its own examples", () => {
+    // The corpus check, kept as a test so a later widening of the keyword lists has to face it.
+    // Flagging B2's "ONE WEEK A MONTH" is DELIBERATE and is not a false positive: it restates the
+    // sourced figure from the scene before it and carries no citation of its own.
+    const sourcedInExamples = [
+      "Founders lose ninety minutes a day to the inbox.",
+      "Most of it is replies you have written a hundred times before, in slightly different words.",
+      "Ninety minutes a day is a full working week every month.",
+    ];
+    for (const line of sourcedInExamples) {
+      expect(statesCheckableClaim(line), `a SOURCED example line must flag when uncited: ${line}`).toBe(true);
+    }
+  });
+});
+
+describe("parseSceneDeck: an uncited claim is flagged for confirmation, not waved through", () => {
+  const deck = (narration: string, overlay: string, source?: string) => `
+SCENE DECK
+Target duration: 15
+| # | Visual | Seconds | Description | Narration | Text overlay | Asset |
+|---|--------|---------|-------------|-----------|--------------|-------|
+| 1 | animated_image | 15 | a desk | ${narration} | ${overlay} | |
+
+SCENE PROMPTS
+
+Scene 1
+Prompt: a desk
+${source === undefined ? "" : `Source: ${source}`}
+`;
+
+  const sceneOf = (narration: string, overlay = "", source?: string) => {
+    const r = parseSceneDeck(deck(narration, overlay, source));
+    expect(r.ok, `deck refused: ${r.ok ? "" : r.reason}`).toBe(true);
+    return r.ok ? r.scenes[0] : undefined;
+  };
+
+  it("THE INVERSION: an uncited figure is now needsConfirmation", () => {
+    // Before this, the scene parsed clean, the money gate saw nothing to confirm, and the figure
+    // reached a rendered frame. Nothing downstream could have caught it.
+    expect(sceneOf("Founders lose ninety minutes a day to the inbox.")?.needsConfirmation).toBe(
+      true,
+    );
+  });
+
+  it("an OVERLAY claim is flagged too — it is the loudest text in the reel and nobody speaks it", () => {
+    expect(sceneOf("Here is how it works.", "90% FASTER")?.needsConfirmation).toBe(true);
+  });
+
+  it("ordinary copy still parses clean, with no flag and no source", () => {
+    const scene = sceneOf("You read one screen and decide.", "YOUR INBOX, ANSWERED");
+    expect(scene?.needsConfirmation).toBeUndefined();
+    expect(scene?.source).toBeUndefined();
+  });
+
+  it("a CITED claim is not flagged — citing is the way out, and it still works", () => {
+    const scene = sceneOf("Founders lose ninety minutes a day.", "", "Time audit [doc:k57h3n9v2]");
+    expect(scene?.needsConfirmation).toBeUndefined();
+    expect(scene?.source).toEqual({ docId: "k57h3n9v2", title: "Time audit" });
+  });
+
+  it("an explicit `Source: unverified` still flags, exactly as before", () => {
+    // The old path is untouched: this change ADDS scenes to the flagged set, it does not
+    // reinterpret the ones the model labelled itself.
+    expect(sceneOf("Something qualitative.", "", "unverified")?.needsConfirmation).toBe(true);
   });
 });

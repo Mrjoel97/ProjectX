@@ -1260,10 +1260,133 @@ export const runResearch = internalAction({
  * row is inserted, neither media window moves, and `renderStatus` is never set. The paid calls fire
  * from `cockpit.ts`'s `EXTERNAL_TARGETS.media` after the human Approve gate, and from nowhere else.
  */
+/**
+ * THE GROUNDING PASS — a reel's claims come from the outside world before the deck is written.
+ *
+ * The media specialist is granted `searchVault` and nothing else, so a proposal was grounded
+ * ONLY in the tenant's own material. For an idea-stage tenant that material is nearly empty, and
+ * the body's own words for the outcome are exact: "a reel that could have been about this business
+ * and is instead about businesses in general is a failed reel."
+ *
+ * **WHY THIS RUNS INSIDE `runMedia` RATHER THAN AS ITS OWN DISPATCH.** `plans` is `.unique()`
+ * by (tenantId, threadId) — ONE row per thread — and `stageResearchPlan` RECYCLES it. Staging a
+ * research card beside a media card would have research overwrite the card the reel is proposed on.
+ * So this runs the specialist turn directly and writes only what has no plan row of its own: a
+ * vault document, via the same `research.persistFindings` the research route uses.
+ *
+ * That choice is what makes the rest free. The findings land where `searchVault` already looks, as
+ * an ordinary vault doc with a real id, so the deck cites them through the `[doc:...]` slot the
+ * scene contract already validates and `renderReel` already ownership-checks. No new source kind,
+ * no second citation path, nothing downstream learns a new word.
+ *
+ * **IT CAN NEVER FAIL THE REEL.** Every outcome — a refusal, a throw, a run that searched nothing —
+ * returns quietly and the media turn proceeds on the vault alone. A reel grounded only in the
+ * tenant's own material is worse than a researched one and far better than none; and since
+ * `statesCheckableClaim` now flags an uncited figure whatever this pass did, a thin grounding pass
+ * cannot let an unsourced claim through. The gate is the guarantee; this is the raw material.
+ *
+ * **THE MEDIA-SPECIFIC ASKS LIVE IN THIS QUESTION, NOT IN THE SKILL BODY.** `research-specialist`
+ * is GATED: changing its body needs a recorded passing eval run, and its job is general-purpose
+ * fact-finding for the whole cockpit. What a VIDEO needs from research — citable figures, and the
+ * objections real customers actually voice — is a property of this route, so it is asked here.
+ * That keeps a video concern out of a cockpit-wide skill and costs no eval cycle.
+ *
+ * ponytail: one research turn per proposal, on the brief as written. The ceiling is that a brief
+ * naming several claims gets one pass over all of them rather than one per claim. The upgrade path
+ * is decomposing the brief first — which is what the research body ALREADY does internally, so the
+ * cheap version is to let it, and only revisit if findings come back thin.
+ */
+const MEDIA_GROUNDING_QUESTION = [
+  "Find published, checkable facts a short marketing video about this could state as true:",
+  "figures with their dates, third-party evidence, and named sources.",
+  "Also find the objections, questions and misconceptions real customers voice about it",
+  "in their own words. Prefer specifics a viewer could look up over general commentary.",
+].join(" ");
+
+/** What the grounding pass needs back from a specialist turn. A STRUCTURAL slice of
+ *  `runSpecialistTurn`'s return, so the real function satisfies it without this signature
+ *  restating forty fields it does not read. */
+export type GroundingTurn = {
+  reply: string;
+  sources: readonly { url: string; title: string }[];
+  webSearchCalls: number;
+  declaredUnsupported: boolean;
+  truncated: boolean;
+  truncatedReason?: "steps" | "clock";
+};
+
+export async function groundMediaBrief(
+  ctx: Ctx,
+  args: DispatchArgs,
+  // INJECTED, the `dispatchAndLand` idiom in this same file: production closes it over
+  // `runSpecialistTurn`, a test closes it over a fake. A LanguageModel is not Convex-serializable,
+  // so this is the only way the persist/skip/degrade branches below are reachable at all — and
+  // they are the three branches that decide whether a reel gets grounded, silently gets nothing,
+  // or breaks.
+  runTurn: (prompt: string) => Promise<GroundingTurn>,
+): Promise<void> {
+  const brief = args.question?.trim();
+  if (!brief) return; // nothing to research; the deck path handles a briefless run already
+  try {
+    // The SAME skill and the SAME grant the research route uses, read off the shared registry
+    // rather than restated — a second copy here could drift into granting media a tool the
+    // research route does not have, which is the one direction that matters.
+    const res = await runTurn(`${cap(brief, MAX_QUESTION_CHARS)}\n\n${MEDIA_GROUNDING_QUESTION}`);
+    // THE SAME STRUCTURAL FLOOR the research route applies (16-09): a run that never searched is
+    // not research and does not earn a RETRIEVABLE artifact. The reasoning is sharper here — this
+    // document exists to be cited by the very next model turn, so a model-memory answer stored now
+    // would be laundered into a "grounded" citation inside the same reel.
+    if (res.webSearchCalls === 0) return;
+    await ctx.runMutation(internal.research.persistFindings, {
+      tenantId: args.tenantId,
+      question: brief,
+      body: res.reply,
+      sources: res.sources.map((x) => ({ url: x.url, title: x.title })),
+      webSearchCalls: res.webSearchCalls,
+      declaredUnsupported: res.declaredUnsupported,
+      retrievedAt: Date.now(),
+      sourceThreadId: args.threadId,
+      sourcePlanId: args.planId,
+      rootRequestId: args.rootRequestId,
+      incomplete: res.truncated,
+      ...(res.truncatedReason === undefined ? {} : { incompleteReason: res.truncatedReason }),
+    });
+  } catch {
+    // ONE audit row with a CODE (§4) — never the error text, which can carry the brief or
+    // retrieved prose. The reel proceeds; grounding is an improvement, never a precondition.
+    await ctx.runMutation(internal.audit.log, {
+      tenantId: args.tenantId,
+      correlationId: args.rootRequestId,
+      eventType: "media.grounding_failed",
+      actor: "system",
+      payload: { ...lineageRefs(args), reason: "grounding_error" },
+    });
+  }
+}
+
 export const runMedia = internalAction({
   args: dispatchArgs,
-  handler: async (ctx, args): Promise<DispatchResult> =>
-    persistStoryboard(
+  handler: async (ctx, args): Promise<DispatchResult> => {
+    // BEFORE the deck is written, not after: the specialist can only cite what is already in the
+    // vault when its turn starts. Awaited rather than scheduled for the same reason.
+    //
+    // The SAME skill and the SAME tool grant the research route uses, read off the shared registry
+    // rather than restated — a second copy could drift into granting the media path a tool the
+    // research route does not have, which is the one direction that matters.
+    await groundMediaBrief(ctx, args, (prompt) =>
+      runSpecialistTurn(ctx, {
+        tenantId: args.tenantId,
+        planId: args.planId,
+        skillName: SPECIALISTS.research.skillName,
+        toolNames: SPECIALISTS.research.tools,
+        prompt,
+        turnId: args.rootRequestId,
+        threadId: args.threadId,
+        skillVersions: args.skillVersions,
+        tenantSkillIds: args.tenantSkillIds,
+      }),
+    );
+    return persistStoryboard(
       ctx,
       args,
       await dispatchAndLand(
@@ -1289,7 +1412,8 @@ export const runMedia = internalAction({
           ),
         MEDIA_FAILED_MEMO,
       ),
-    ),
+    );
+  },
 });
 
 /**

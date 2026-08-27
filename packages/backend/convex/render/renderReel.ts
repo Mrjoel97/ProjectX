@@ -18,11 +18,14 @@
 import { parseAssemblySidecar } from "@pikar/core/assembly";
 import { buildCaptionLines, toAss } from "@pikar/core/captions";
 import {
+  CARD_DEFAULT_BG,
+  cardColorsOf,
   deckStillNeedsJob,
   isRenderableCardText,
   isTransientRenderCode,
   renderInputName,
 } from "@pikar/core/render";
+import type { MusicMood } from "@pikar/core/storyboard";
 import { categoryFor } from "@pikar/vault";
 import { v } from "convex/values";
 import { internal } from "./../_generated/api";
@@ -72,8 +75,13 @@ function assemblerKindOf(shot: {
     case undefined:
     case "generated_video":
     case "uploaded_video":
+    // A stock clip is a clip on disk. It arrives by a third route — fetched from a free library
+    // onto a `mediaJobs` row, rather than generated (job) or owned (vault doc) — and by the time
+    // the assembler sees it that difference has been fully erased. Three intents, one picture.
+    case "stock_video":
       return "video";
     case "animated_image":
+    case "stock_image":
       return "image";
     case "text_card":
       return "card";
@@ -96,6 +104,13 @@ type RenderInputs = {
   inputs: Array<{ name: string; jobId: Id<"mediaJobs"> | Id<"vaultDocuments"> }>;
   /** Text cards: drawn from the deck's own words, with no job and no bytes in storage. */
   cards: Array<{ name: string; text: string }>;
+  /** The music bed's mood slug, or absent. Neither an input nor a card — the bytes are baked into
+   *  the sandbox snapshot, so nothing is fetched, stored or written for it. It rides here because
+   *  it is a fact about the REEL (deck-wide, off the art direction) rather than about a scene. */
+  music?: MusicMood;
+  /** The card colours, resolved from the deck's own palette. Absent for a deck whose palette
+   *  yields no usable hex — and for every BLOCK deck, which has no art direction at all. */
+  card?: { bg: string; ink: string };
 };
 
 /**
@@ -306,7 +321,29 @@ export const batchToRender = internalQuery({
     const targetSeconds = plan.targetDurationSeconds ?? summed;
     if (summed !== targetSeconds) return { ok: false, reason: "incomplete_blocks" };
 
-    return { ok: true, value: { planId, targetSeconds, scenes, inputs, cards } };
+    // THE BED, read off the SAME `artDirection.music` the reservation priced. Read here rather
+    // than passed in, for the reason every other fact in this function is read here: the deck row
+    // is the record of what the owner approved, and a render that took the bed from anywhere else
+    // could lay down a mood the estimate never showed and the reserve never priced.
+    //
+    // Unvalidated on purpose at THIS layer — `parseBody` in the route holds the closed set, on the
+    // side of the trust boundary where the value is about to become a path. Restating it here
+    // would be a third copy whose only distinguishing behaviour is failing earlier and quieter.
+    const music = plan.artDirection?.music as MusicMood | undefined;
+
+    // THE CARD PALETTE, read off the same approved row and for the same reason as the bed above.
+    // `cardColorsOf` is the ONE place a model-authored palette becomes two filtergraph-safe
+    // colours, so it is called here rather than at the POST — the value that crosses the
+    // boundary is already narrowed, and the route re-checks its shape rather than re-deriving it.
+    //
+    // Sent only when the deck actually yields a colour. Absent means the black-and-white card, so
+    // a palette written in words ("warm amber") degrades to exactly the reel we shipped before
+    // rather than refusing a render over a styling detail.
+    const cards_ = cards.length === 0 ? undefined : cardColorsOf(plan.artDirection?.palette);
+    const card =
+      cards_ === undefined || cards_.bg === CARD_DEFAULT_BG ? undefined : cards_;
+
+    return { ok: true, value: { planId, targetSeconds, scenes, inputs, cards, music, card } };
   },
 });
 
@@ -790,7 +827,7 @@ export const renderReel = internalAction({
       });
       return { ok: false, reason: batch.reason };
     }
-    const { planId, targetSeconds, scenes, inputs, cards } = batch.value;
+    const { planId, targetSeconds, scenes, inputs, cards, music, card } = batch.value;
 
     await ctx.runMutation(internal.render.renderReel.markRendering, { planId });
 
@@ -836,6 +873,12 @@ export const renderReel = internalAction({
           scenes,
           inputs: inputs.map((i) => ({ name: i.name, jobId: i.jobId })),
           cards,
+          // A MOOD SLUG from a four-member closed set — no tenant bytes, no content, nothing that
+          // could carry a name, a figure or a line of narration. The "nothing forbidden crosses in"
+          // list above is unchanged by it, which is why it is not a second exception alongside the
+          // card's words.
+          ...(music === undefined ? {} : { music }),
+          ...(card === undefined ? {} : { card }),
           uploadUrls,
         }),
       }).catch(() => null);

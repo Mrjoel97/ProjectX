@@ -170,9 +170,29 @@ describe("a tile says what its kind actually does — three of four never have a
     expect(Object.keys(KIND_LABEL).sort()).toEqual([
       "animated_image",
       "generated_video",
+      "stock_image",
+      "stock_video",
       "text_card",
       "uploaded_video",
     ]);
+    // The badge is only half of it: a kind with a label and no cost note reads as free-or-not
+    // ambiguous on the tile, which is the one question the badge exists to settle.
+    expect(Object.keys(KIND_COST_NOTE).sort()).toEqual(Object.keys(KIND_LABEL).sort());
+  });
+
+  test("a STOCK tile never says 'generating' — nothing is generated for it", () => {
+    // The word is the whole branch. A user watching "generating..." over a free library search has
+    // been told the reel is spending money on that scene, which is exactly what the badge and the
+    // cost note are there to deny.
+    for (const visual of ["stock_video", "stock_image"] as const) {
+      const line = pictureLine(visual, { status: "submitted" }, null);
+      expect(line).not.toMatch(/generating/i);
+      expect(line).toMatch(/free library/i);
+    }
+    // ...and it still reports the JOB's real states, because a stock scene has one.
+    expect(pictureLine("stock_video", { status: "succeeded" }, null)).toMatch(/ready/);
+    expect(pictureLine("stock_image", { status: "succeeded" }, null)).toMatch(/^Still:/);
+    expect(pictureLine("stock_video", { status: "succeeded" }, null)).toMatch(/^Clip:/);
   });
 });
 
@@ -1011,8 +1031,14 @@ describe("a failure is a plain-language card with honest economics", () => {
   test("THE CHEAP FIXES ARE MARKED FREE, and the current kind is never offered back", () => {
     const card = sceneCard({ clip: face({ status: "failed", failureReason: "http_502" }) });
     const arms = card?.fixes.map((f) => f.arm);
-    expect(arms).toEqual(["regenerate", "text_card", "animated_image", "uploaded_video"]);
-    for (const arm of ["text_card", "animated_image", "uploaded_video"] as const) {
+    expect(arms).toEqual([
+      "regenerate",
+      "text_card",
+      "animated_image",
+      "stock_video",
+      "uploaded_video",
+    ]);
+    for (const arm of ["text_card", "animated_image", "stock_video", "uploaded_video"] as const) {
       expect(card?.fixes.find((f) => f.arm === arm)?.priceLabel).toMatch(/free/i);
     }
     // A still is bought by the REGENERATE that follows, not by the switch — and the ratio is the
@@ -1023,7 +1049,26 @@ describe("a failure is a plain-language card with honest economics", () => {
       visual: "animated_image",
       clip: face({ status: "failed", failureReason: "http_502" }),
     });
-    expect(still?.fixes.map((f) => f.arm)).toEqual(["regenerate", "text_card", "uploaded_video"]);
+    expect(still?.fixes.map((f) => f.arm)).toEqual([
+      "regenerate",
+      "text_card",
+      "stock_video",
+      "uploaded_video",
+    ]);
+    // ...and the same exclusion holds for a FAILED STOCK scene: swapping it for stock is not a fix.
+    const stock = sceneCard({
+      visual: "stock_video",
+      clip: face({ status: "failed", failureReason: "stock_no_match" }),
+    });
+    // Asserted as a POSITIVE list, not just an absence: `not.toContain` on an empty fix menu
+    // passes for the wrong reason, and an empty menu is itself the defect (a failed scene with no
+    // lever). The stock scene must still be offered the other three arms.
+    expect(stock?.fixes.map((f) => f.arm)).toEqual([
+      "regenerate",
+      "text_card",
+      "animated_image",
+      "uploaded_video",
+    ]);
   });
 
   test("A VOICE-ONLY FAILURE offers no kind switch — a text card would not fix a missing take", () => {

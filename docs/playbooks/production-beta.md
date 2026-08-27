@@ -1,5 +1,17 @@
 # Playbook: Production Beta Readiness (25-10)
 
+> Last verified: 2026-08-26 (**ONE NEW `feature`-TIER MANIFEST NAME: `PEXELS_API_KEY`**, added to
+> `ENV_MANIFEST` in `convex/lib/env.ts` for the free stock-footage scenes. The row is mandatory
+> rather than documentation — `env.test.ts` scans source for `process.env.X` and reds on any
+> consumed name nobody classified, which is exactly how this addition was caught: the gate failed
+> with `expected [ 'PEXELS_API_KEY' ] to deeply equal []` before the row existed.
+>
+> **`feature`, not `required`, and the tier is the whole claim.** Absent, only `stock_video` /
+> `stock_image` scenes fail — with a governed code, and with no cent at risk, because a stock line
+> reserves $0. Every other part of the media rail, and the whole cockpit, are unaffected. It is a
+> Convex deployment env var (`npx convex env set`), never Vercel. Nothing else in this playbook's
+> scope was re-read against this change. See docs/playbooks/media.md, "Free stock footage".)
+
 > Last verified: 2026-08-24 (ox-alpha trial — **ONE NEW `required`-TIER MANIFEST NAME:
 > `OPENROUTER_API_KEY`.** Added to `ENV_MANIFEST` in `convex/lib/env.ts`. The manifest is
 > derived-checked — `env.test.ts` scans source for `process.env.X` and reds when a consumed name is

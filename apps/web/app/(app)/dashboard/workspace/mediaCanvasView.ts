@@ -27,10 +27,16 @@ import {
   TARGET_DURATIONS,
 } from "@pikar/core/storyboard";
 
-/** The four kinds a scene's picture can come from (`@pikar/core/storyboard`'s `VisualKind`). Typed
+/** The kinds a scene's picture can come from (`@pikar/core/storyboard`'s `VisualKind`). Typed
  *  structurally rather than imported so this module stays free of the backend's build graph; the
  *  `satisfies` tables below are what keep it honest if a member is ever added there. */
-export type VisualKind = "generated_video" | "animated_image" | "uploaded_video" | "text_card";
+export type VisualKind =
+  | "generated_video"
+  | "animated_image"
+  | "uploaded_video"
+  | "text_card"
+  | "stock_video"
+  | "stock_image";
 
 /** Cents → `$1.12`. The ONE money formatter this surface has, and deliberately the only arithmetic
  *  it is allowed to do: every number it prints was computed by `jobEstimate` on the server, against
@@ -88,6 +94,10 @@ export const KIND_LABEL = {
   animated_image: "ANIMATED STILL",
   uploaded_video: "YOUR FOOTAGE",
   text_card: "TEXT CARD",
+  // "STOCK" and not "FREE": free is what it COSTS, stock is what it IS. A viewer who cannot tell
+  // a library clip from a generated one cannot judge whether the reel says what they meant.
+  stock_video: "STOCK CLIP",
+  stock_image: "STOCK STILL",
 } as const satisfies Record<VisualKind, string>;
 
 /**
@@ -112,6 +122,8 @@ export const KIND_COST_NOTE = {
   animated_image: "One still, panned in the render — about a fortieth of a clip.",
   uploaded_video: "Your own file. Nothing is bought for this scene.",
   text_card: "Drawn in the render. Nothing is bought for this scene.",
+  stock_video: "From a free library. Nothing is bought for this scene.",
+  stock_image: "From a free library, panned in the render. Nothing is bought.",
 } as const satisfies Record<VisualKind, string>;
 
 type JobFace = { status: string } | null;
@@ -138,13 +150,24 @@ export function pictureLine(
       ? `Footage: ${assetTitle ?? "chosen from your vault"}`
       : "Footage: none chosen — pick a video from your vault below.";
   }
-  const noun = visual === "animated_image" ? "Still" : "Clip";
+  // A stock line has a JOB and a status like a bought one — the bytes are fetched, not drawn —
+  // so it falls through to the copy table below rather than getting a static line. Only its NOUN
+  // differs, and only so "generating" never appears over something nobody generated.
+  const noun = visual === "animated_image" || visual === "stock_image" ? "Still" : "Clip";
   if (!clip) return `${noun}: not requested yet`;
+  // NOTHING IS GENERATED FOR A STOCK SCENE, so it never says so. The word is the whole point of
+  // the branch: a user watching "generating…" over a free library search has been told the reel is
+  // spending money on that scene, which is the one thing the badge and the cost note exist to deny.
+  const stock = visual === "stock_video" || visual === "stock_image";
   const copy: Record<string, string> = {
     queued: "waiting to start",
-    submitted: visual === "animated_image" ? "generating…" : "generating… (usually 1–3 minutes)",
+    submitted: stock
+      ? "finding it in the free library…"
+      : visual === "animated_image"
+        ? "generating…"
+        : "generating… (usually 1–3 minutes)",
     succeeded: "ready",
-    failed: "failed",
+    failed: stock ? "no match found in the free library" : "failed",
     blocked: "refused by the provider's content check",
   };
   return `${noun}: ${copy[clip.status] ?? clip.status}`;
@@ -1098,6 +1121,7 @@ export type FixArm =
   | "text_card"
   | "animated_image"
   | "uploaded_video"
+  | "stock_video"
   | "retry_render"
   /** 33-13. The PROPOSAL stage's only arm: re-ask the specialist. It buys no media at all, which
    *  is why it is the one arm whose price label is unconditional. */
@@ -1149,7 +1173,10 @@ const sceneEstCents = (s: FailureScene): number =>
   Math.round(((s.clip?.estUsd ?? 0) + (s.voice?.estUsd ?? 0)) * 100);
 
 /** The kinds a failed picture can be swapped TO, cheapest-consequence first. `generated_video` is
- *  absent on purpose: switching to it buys the same thing that just failed. */
+ *  absent on purpose: switching to it buys the same thing that just failed. `stock_image` is absent
+ *  too, and for a milder reason — a menu is a set of DECISIONS, not a listing of the whole
+ *  vocabulary, and "free library still" is a rounding error away from "animated still" to the person
+ *  reading it. Both stay reachable from the scene's own kind picker. */
 const SWAP_ARMS = [
   {
     arm: "text_card" as const,
@@ -1162,6 +1189,16 @@ const SWAP_ARMS = [
     label: "Switch it to an animated still",
     priceLabel: "free to switch",
     note: "The still itself is bought when you regenerate — about a fortieth of a generated clip.",
+  },
+  {
+    // FIRST among the swaps, and the ordering is the point: this is the only arm that replaces a
+    // failed clip with another CLIP at no cost. A card and a still both change what the scene IS;
+    // this one keeps it moving footage. It rides the identical two-step the still arm does —
+    // `setSceneVisual` then `regenerateBlock` — so it needed no new mechanism, only this row.
+    arm: "stock_video" as const,
+    label: "Swap it for free stock footage",
+    priceLabel: "free",
+    note: "A clip from a free library, found from this scene's own description when you regenerate.",
   },
   {
     arm: "uploaded_video" as const,
