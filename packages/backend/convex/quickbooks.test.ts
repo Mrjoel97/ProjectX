@@ -17,7 +17,7 @@
 //     can honestly reach `confirmed`, which is exactly why it must not reach it when it did not.
 //  4. NOTHING PLAINTEXT SURVIVES A WRITE. A sentinel token is hunted across the stored row and the
 //     client projection.
-import { importCredentialKey, openCredential, sealCredential } from "@pikar/revenue";
+import { CAPS, importCredentialKey, openCredential, sealCredential } from "@pikar/revenue";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
@@ -179,9 +179,9 @@ describe("the lane modules contain no write verb and no transport of their own",
     ([path]) => /\/quickbooks[A-Za-z]*\.ts$/.test(path) && !path.endsWith(".test.ts"),
   );
 
-  test("the lane modules were found", () => {
+  test("both lane modules were found", () => {
     // A scan over an empty list passes vacuously, which is the failure mode this guards.
-    expect(laneModules.map(([p]) => p)).toContain("./quickbooksAuth.ts");
+    expect(laneModules.map(([p]) => p).sort()).toEqual(["./quickbooks.ts", "./quickbooksAuth.ts"]);
   });
 
   // This mirrors `scripts/check-provider-lane.mjs`'s `read-only` row exactly, so the rule is
@@ -960,5 +960,416 @@ describe("disconnect revokes upstream first, then clears locally", () => {
       expect(view).not.toContain(secret);
     }
     expect(view).toContain("confirmed");
+  });
+});
+
+// ── Bounded reads ─────────────────────────────────────────────────────────────────────────
+
+const DAY_MS = 86_400_000;
+
+/** A `passed` gate row, written straight to the table the way 28-23's seal eventually will. */
+async function sealPassedGate(t: Awaited<ReturnType<typeof harness>>["t"]) {
+  await t.run((ctx) =>
+    ctx.db.insert("providerGates", {
+      provider: "quickbooks",
+      environment: "sandbox",
+      admission: "approved_production",
+      lane: "passed",
+      evidenceRef: "28-06-SUMMARY.md#offline",
+      reviewBy: Date.now() + 90 * DAY_MS,
+      clearedConditions: ["partner-tier-and-poll-budget"],
+      revision: 1,
+      updatedAt: Date.now(),
+    }),
+  );
+}
+
+const invoiceRow = (over: Record<string, unknown> = {}) => ({
+  Id: "1042",
+  TxnDate: "2026-03-02",
+  DueDate: "2026-04-01",
+  TotalAmt: 100,
+  Balance: 100,
+  CustomerRef: { value: "58", name: "Acme Widgets, Inc." },
+  ...over,
+});
+
+const queryResponse = (entity: string, rows: unknown[]) =>
+  jsonResponse({ QueryResponse: { [entity]: rows }, time: "2026-06-01T00:00:00Z" });
+
+describe("reads fail closed until the lane has actually passed", () => {
+  test("no gate record means no request leaves, and the answer says so", async () => {
+    const { t, asA, tenantA } = await harness();
+    await seedConnection(t, tenantA);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const projection = await asA.action(api.quickbooks.readEntity, {
+      environment: "sandbox",
+      entity: "Invoice",
+    });
+
+    // An admission is permission to BUILD. Only a passed lane lets a request leave.
+    expect(projection).toEqual({
+      state: "unavailable",
+      provider: "quickbooks",
+      because: "the QuickBooks lane is pending",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test("a disconnected connection is unavailable, never an empty ledger", async () => {
+    const { t, asA, tenantA } = await harness();
+    await sealPassedGate(t);
+    await seedConnection(t, tenantA);
+    await t.run(async (ctx) => {
+      const row = await ctx.db.query("connectorConnections").unique();
+      if (row) await ctx.db.patch(row._id, { status: "revoked" });
+    });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const projection = await asA.action(api.quickbooks.readEntity, {
+      environment: "sandbox",
+      entity: "Invoice",
+    });
+
+    expect(projection.state).toBe("unavailable");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("the request is realm-bound, allow-listed and bounded", () => {
+  test("the URL carries the sealed realm, the code-owned query and the pinned minorversion", async () => {
+    const { t, asA, tenantA } = await harness();
+    await sealPassedGate(t);
+    await seedConnection(t, tenantA);
+    let requested: URL | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        requested = new URL(url);
+        return queryResponse("Invoice", [invoiceRow()]);
+      }),
+    );
+
+    await asA.action(api.quickbooks.readEntity, { environment: "sandbox", entity: "Invoice" });
+
+    expect(requested?.origin).toBe("https://sandbox-quickbooks.api.intuit.com");
+    // The realm comes out of the ciphertext, never out of a caller argument.
+    expect(requested?.pathname).toBe(`/v3/company/${REALM}/query`);
+    expect(requested?.searchParams.get("minorversion")).toBe("75");
+    const query = requested?.searchParams.get("query") ?? "";
+    expect(query.startsWith("SELECT * FROM Invoice WHERE TxnDate >=")).toBe(true);
+    expect(query).toContain("MAXRESULTS 200");
+  });
+
+  test("the coverage window is bounded and clamped, whatever the caller asks for", async () => {
+    const { t, asA, tenantA } = await harness();
+    await sealPassedGate(t);
+    await seedConnection(t, tenantA);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(queryResponse("Invoice", [invoiceRow()])));
+
+    const projection = await asA.action(api.quickbooks.readEntity, {
+      environment: "sandbox",
+      entity: "Invoice",
+      windowDays: 100_000,
+    });
+
+    expect(projection.state).not.toBe("unavailable");
+    if (projection.state === "unavailable") return;
+    const span = projection.meta.window.endMs - projection.meta.window.startMs;
+    expect(span).toBe(400 * DAY_MS);
+    expect(projection.meta.provider).toBe("quickbooks");
+    expect(projection.meta.authority).toBe("accounting_authority");
+  });
+
+  test("tenant B's read uses tenant B's realm and never tenant A's", async () => {
+    const { t, asB, tenantA, tenantB } = await harness();
+    await sealPassedGate(t);
+    await seedConnection(t, tenantA);
+    await seedConnection(t, tenantB, { realmId: OTHER_REALM });
+    const paths: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        paths.push(new URL(url).pathname);
+        return queryResponse("Invoice", [invoiceRow()]);
+      }),
+    );
+
+    await asB.action(api.quickbooks.readEntity, { environment: "sandbox", entity: "Invoice" });
+
+    expect(paths).toEqual([`/v3/company/${OTHER_REALM}/query`]);
+  });
+
+  test("an expiring access token is refreshed before the read, not raced", async () => {
+    const { t, asA, tenantA } = await harness();
+    await sealPassedGate(t);
+    await seedConnection(t, tenantA);
+    await t.run(async (ctx) => {
+      const row = await ctx.db.query("connectorConnections").unique();
+      if (row) await ctx.db.patch(row._id, { accessExpiresAt: Date.now() + 30_000 });
+    });
+    const urls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        urls.push(url);
+        return url === QB_TOKEN_ENDPOINT
+          ? jsonResponse(grantBody(ACCESS_2, REFRESH_2))
+          : queryResponse("Invoice", [invoiceRow()]);
+      }),
+    );
+
+    await asA.action(api.quickbooks.readEntity, { environment: "sandbox", entity: "Invoice" });
+
+    expect(urls[0]).toBe(QB_TOKEN_ENDPOINT);
+    expect(urls[1]).toContain("/query");
+    expect(urls).toHaveLength(2);
+  });
+});
+
+describe("a bounded read that fell short is PARTIAL, never zero and never short-but-ready", () => {
+  test("a 429 on page two keeps page one and names the throttle", async () => {
+    const { t, asA, tenantA } = await harness();
+    await sealPassedGate(t);
+    await seedConnection(t, tenantA);
+    const page = Array.from({ length: 200 }, (_v, i) => invoiceRow({ Id: String(3000 + i) }));
+    let call = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        call += 1;
+        return call === 1
+          ? queryResponse("Invoice", page)
+          : new Response("", { status: 429, headers: { "retry-after": "60" } });
+      }),
+    );
+
+    const projection = await asA.action(api.quickbooks.readEntity, {
+      environment: "sandbox",
+      entity: "Invoice",
+    });
+
+    // THE phase's most expensive possible bug: a throttled read presented as a complete one.
+    expect(projection.state).toBe("partial");
+    if (projection.state !== "partial") return;
+    expect(projection.items).toHaveLength(200);
+    expect(projection.missing).toContain("rate_limited");
+
+    const row = await t.run((ctx) => ctx.db.query("connectorConnections").unique());
+    expect(row?.lastFailureClass).toBe("rate_limited");
+    // A throttle is not a reason to demand a reconnect.
+    expect(row?.status).toBe("connected");
+  });
+
+  test("rows that would not normalize are counted in `missing`, and the rest survive", async () => {
+    const { t, asA, tenantA } = await harness();
+    await sealPassedGate(t);
+    await seedConnection(t, tenantA);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        queryResponse("Invoice", [
+          invoiceRow({ Id: "a" }),
+          invoiceRow({ Id: "b", Balance: -5 }),
+          invoiceRow({ Id: "c", TxnDate: undefined }),
+        ]),
+      ),
+    );
+
+    const projection = await asA.action(api.quickbooks.readEntity, {
+      environment: "sandbox",
+      entity: "Invoice",
+    });
+
+    expect(projection.state).toBe("partial");
+    if (projection.state !== "partial") return;
+    expect(projection.items).toHaveLength(1);
+    expect(projection.missing).toContain("2 QuickBooks row(s) could not be read");
+    // A count, never the row or the vendor's reason.
+    expect(projection.missing).not.toContain("Acme");
+  });
+
+  test("foreign-currency rows are separated and NAMED, never summed and never silently dropped", async () => {
+    const { t, asA, tenantA } = await harness();
+    await sealPassedGate(t);
+    await seedConnection(t, tenantA);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        queryResponse("Invoice", [
+          invoiceRow({ Id: "usd", CurrencyRef: { value: "USD" } }),
+          invoiceRow({ Id: "eur", CurrencyRef: { value: "EUR" } }),
+          invoiceRow({ Id: "jpy", CurrencyRef: { value: "JPY" }, TotalAmt: 100, Balance: 100 }),
+        ]),
+      ),
+    );
+
+    const projection = await asA.action(api.quickbooks.readEntity, {
+      environment: "sandbox",
+      entity: "Invoice",
+    });
+
+    expect(projection.state).toBe("partial");
+    if (projection.state !== "partial") return;
+    expect(projection.items).toHaveLength(1);
+    expect(projection.missing).toContain("amounts in EUR, JPY are reported separately");
+  });
+
+  test("hitting the item cap is a cap, and a capped read can never be `ready`", async () => {
+    const { t, asA, tenantA } = await harness();
+    await sealPassedGate(t);
+    await seedConnection(t, tenantA);
+    const page = Array.from({ length: 200 }, (_v, i) => invoiceRow({ Id: String(4000 + i) }));
+    // A FRESH Response per call. `mockResolvedValue` hands back the same object every time and a
+    // Response body reads once, so the second page would arrive as a transport error and this test
+    // would silently assert something else entirely.
+    vi.stubGlobal("fetch", vi.fn(async () => queryResponse("Invoice", page)));
+
+    const projection = await asA.action(api.quickbooks.readEntity, {
+      environment: "sandbox",
+      entity: "Invoice",
+    });
+
+    expect(projection.state).toBe("partial");
+    if (projection.state !== "partial") return;
+    expect(projection.meta.capped).toBe(true);
+    expect(projection.items).toHaveLength(CAPS.maxItems);
+    expect(projection.missing).toContain("the read stopped at the item_cap");
+  });
+
+  test("a clean short page is `ready` — otherwise every assertion above is vacuous", async () => {
+    const { t, asA, tenantA } = await harness();
+    await sealPassedGate(t);
+    await seedConnection(t, tenantA);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(queryResponse("Invoice", [invoiceRow()])));
+
+    const projection = await asA.action(api.quickbooks.readEntity, {
+      environment: "sandbox",
+      entity: "Invoice",
+    });
+
+    expect(projection.state).toBe("ready");
+    if (projection.state !== "ready") return;
+    expect(projection.meta.capped).toBe(false);
+    const first = projection.items[0];
+    // `readEntity` takes the entity at runtime, so its return type is the union of the four row
+    // shapes. Narrowing on the field is the honest way to assert one of them.
+    expect(first !== undefined && "total" in first && first.total).toEqual({
+      minor: 10000,
+      currency: "USD",
+    });
+    expect(projection.meta.sources[0]).toEqual({
+      provider: "quickbooks",
+      kind: "invoice",
+      id: "1042",
+    });
+  });
+});
+
+// ── Every figure comes from the deterministic finance core ────────────────────────────────
+
+describe("derived figures", () => {
+  test("receivables are aged by finance.agingReport and carry the decision-support notice", async () => {
+    const { t, asA, tenantA } = await harness();
+    await sealPassedGate(t);
+    await seedConnection(t, tenantA);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        queryResponse("Invoice", [
+          invoiceRow({ Id: "old", TxnDate: "2026-01-05", DueDate: "2026-01-06", Balance: 100 }),
+          invoiceRow({ Id: "settled", Balance: 0 }),
+        ]),
+      ),
+    );
+
+    const summary = await asA.action(api.quickbooks.receivablesSummary, {
+      environment: "sandbox",
+    });
+
+    expect(summary.confidence).toBe("high");
+    expect(summary.notice).toContain("Decision support");
+    expect(summary.coverage.authorities).toEqual(["accounting_authority"]);
+    expect(summary.value?.outstanding).toEqual({ minor: 10000, currency: "USD" });
+    // A settled invoice contributes nothing, and the aging came from finance.ts, not from here.
+    expect(summary.value?.buckets.d90_plus.count).toBe(1);
+  });
+
+  test("a partial read can only LOWER confidence, never raise it", async () => {
+    const { t, asA, tenantA } = await harness();
+    await sealPassedGate(t);
+    await seedConnection(t, tenantA);
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          queryResponse("Invoice", [invoiceRow(), invoiceRow({ Id: "bad", Balance: -1 })]),
+        ),
+    );
+
+    const summary = await asA.action(api.quickbooks.receivablesSummary, {
+      environment: "sandbox",
+    });
+
+    expect(summary.confidence).toBe("medium");
+    expect(summary.coverage.partial).toBe(true);
+  });
+
+  test("an unavailable read yields null and `unavailable`, NEVER a zero total", async () => {
+    const { t, asA, tenantA } = await harness();
+    await seedConnection(t, tenantA);
+    vi.stubGlobal("fetch", vi.fn());
+
+    const summary = await asA.action(api.quickbooks.receivablesSummary, {
+      environment: "sandbox",
+    });
+
+    // "We could not see your books" and "you are owed nothing" are different sentences.
+    expect(summary.value).toBeNull();
+    expect(summary.confidence).toBe("unavailable");
+    expect(summary.coverage.missing).toContain("quickbooks");
+  });
+
+  test("cash on hand totals active bank balances with finance's sumMoney", async () => {
+    const { t, asA, tenantA } = await harness();
+    await sealPassedGate(t);
+    await seedConnection(t, tenantA);
+    let query = "";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        query = new URL(url).searchParams.get("query") ?? "";
+        return queryResponse("Account", [
+          { Id: "1", AccountType: "Bank", CurrentBalance: 1000.5 },
+          { Id: "2", AccountType: "Bank", CurrentBalance: 250.25 },
+          { Id: "3", AccountType: "Credit Card", CurrentBalance: -900 },
+        ]);
+      }),
+    );
+
+    const cash = await asA.action(api.quickbooks.cashOnHand, { environment: "sandbox" });
+
+    expect(query).toContain("AccountType = ");
+    expect(query).toContain("Active = true");
+    // A credit-card balance is not cash; it is rejected, which makes the read partial.
+    expect(cash.value).toEqual({ minor: 125075, currency: "USD" });
+    expect(cash.confidence).toBe("medium");
+  });
+
+  test("cash on hand is null when we could not look, so cashTimeline stays UNKNOWN", async () => {
+    const { t, asA, tenantA } = await harness();
+    await seedConnection(t, tenantA);
+    vi.stubGlobal("fetch", vi.fn());
+
+    const cash = await asA.action(api.quickbooks.cashOnHand, { environment: "sandbox" });
+
+    // `finance.cashTimeline` treats a null opening balance as unknown and a zero as a real
+    // balance. A zero here would silently assert the tenant has no money.
+    expect(cash.value).toBeNull();
+    expect(cash.confidence).toBe("unavailable");
   });
 });

@@ -75,6 +75,8 @@ import type * as plans from "../plans.js";
 import type * as proactiveReview from "../proactiveReview.js";
 import type * as proposals from "../proposals.js";
 import type * as providerGates from "../providerGates.js";
+import type * as quickbooks from "../quickbooks.js";
+import type * as quickbooksAuth from "../quickbooksAuth.js";
 import type * as reliabilitySweep from "../reliabilitySweep.js";
 import type * as render_assembleScript from "../render/assembleScript.js";
 import type * as render_burnCapsScript from "../render/burnCapsScript.js";
@@ -194,6 +196,8 @@ declare const fullApi: ApiFromModules<{
   proactiveReview: typeof proactiveReview;
   proposals: typeof proposals;
   providerGates: typeof providerGates;
+  quickbooks: typeof quickbooks;
+  quickbooksAuth: typeof quickbooksAuth;
   reliabilitySweep: typeof reliabilitySweep;
   "render/assembleScript": typeof render_assembleScript;
   "render/burnCapsScript": typeof render_burnCapsScript;
