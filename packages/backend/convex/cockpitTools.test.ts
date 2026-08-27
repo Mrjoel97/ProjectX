@@ -3092,3 +3092,23 @@ test("the scorecard and finance tools cannot claim the same figure — both DERI
   const scorecardLine = src.slice(src.indexOf("belong to stageFinanceWrite"));
   expect(scorecardLine.slice(0, 120)).not.toMatch(/cashOnHand|runway/);
 });
+
+test("recordScorecardAnswer REFUSES a finance figure — the Approve gate is not optional", async () => {
+  const { t, planId } = await setup();
+  // 37-finance-update stated a cash position and the model stored it here, 2/2, even after the
+  // description named these figures as out of bounds. A description shifts a tendency; only code
+  // enforces a rule. The stake is the human gate: this tool writes IMMEDIATELY, stageFinanceWrite
+  // stages for approval, so accepting a finance figure here skips the gate AND the source ref.
+  for (const field of ["cashOnHand", "financials.cashOnHand", "FINANCIALS.CashOnHand"]) {
+    const reply = await call(t, planId, "recordScorecardAnswer", { field, value: "42000" });
+    expect(reply, `${field} was accepted`).toMatch(/not a scorecard answer/i);
+    expect(reply).toMatch(/stageFinanceWrite/);
+    expect(reply).toMatch(/nothing was saved/i);
+  }
+  // A genuine scorecard field is untouched — the refusal must not swallow the tool's real job.
+  const ok = await call(t, planId, "recordScorecardAnswer", {
+    field: "identity.headlinePrice",
+    value: "$99",
+  });
+  expect(ok).toMatch(/Noted/i);
+});

@@ -4232,6 +4232,27 @@ export function buildCockpitTools(
         additionalProperties: false,
       }),
       execute: async ({ field, value }): Promise<string> => {
+        // A CODE-OWNED BOUNDARY, because a description demonstrably could not hold it. Naming the
+        // finance figures in this tool's description moved the model's routing (37-finance-update
+        // went from `evaluateBusiness` to `readFinance`) but did NOT stop it storing a cash
+        // position here. That is the ordinary shape of a prompt fix: it shifts a tendency, it does
+        // not enforce a rule. The tools are the enforcement boundary.
+        //
+        // AND THE STAKE IS NOT TIDINESS — IT IS THE APPROVE GATE. This tool WRITES IMMEDIATELY
+        // ("it changes nothing outbound"), while `stageFinanceWrite` only STAGES for a human to
+        // approve. So a finance figure accepted here does not merely land in the wrong store: it
+        // reaches a store without the human gate the finance path exists to enforce, and without
+        // the source reference that path requires. Refuse and redirect — never forward silently,
+        // because this call carries no `source` and `stageFinanceWrite` may not invent one.
+        const leaf = field.split(".").pop()?.trim().toLowerCase() ?? "";
+        const financeField = AGENT_WRITABLE_FIGURES.find((f) => f.toLowerCase() === leaf);
+        if (financeField) {
+          return (
+            `${financeField} is a finance figure, not a scorecard answer, and nothing was saved. ` +
+            "Call stageFinanceWrite instead — it stages the update for the user to approve and " +
+            "requires a short reference saying where the number came from."
+          );
+        }
         const plan = await readPlan(); // threadId + the cross-tenant guard
         await ctx.runMutation(internal.evaluations.recordScorecardAnswerInternal, {
           tenantId,

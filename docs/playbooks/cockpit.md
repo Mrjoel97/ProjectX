@@ -1,4 +1,26 @@
-> Last verified: 2026-08-27 (**TWO TOOLS CLAIMED THE SAME SENTENCE, AND THE MODEL PICKED BY VIBE.**
+> Last verified: 2026-08-27 (**THE DESCRIPTION FIX MOVED THE MODEL AND DID NOT STOP IT, WHICH IS
+> WHAT A DESCRIPTION FIX IS FOR.** Naming the finance figures in `recordScorecardAnswer`'s
+> description shifted `37-finance-update`'s routing — `evaluateBusiness` became `readFinance`, the
+> right DOMAIN — and the model still stored the cash position through the scorecard. A description
+> shifts a tendency; only code enforces a rule. `recordScorecardAnswer` now REFUSES any field whose
+> leaf matches `AGENT_WRITABLE_FIGURES` and names `stageFinanceWrite` in the refusal, so the model
+> can correct itself inside the same tool loop.
+>
+> **THE STAKE IS THE APPROVE GATE, NOT THE STORE.** `recordScorecardAnswer` WRITES IMMEDIATELY —
+> its own description says it "changes nothing outbound" — while `stageFinanceWrite` only STAGES
+> for a human to approve and requires a source reference. A finance figure accepted by the
+> scorecard therefore reached a store **without the human gate the finance path exists to enforce
+> and without any provenance**. The eval fixture was surfacing a governance hole, not a formatting
+> preference. It refuses rather than forwards: this call carries no `source`, and
+> `stageFinanceWrite` must never invent one.
+>
+> Matching is on the LEAF of a dot-path, case-insensitively, so `cashOnHand`,
+> `financials.cashOnHand` and `FINANCIALS.CashOnHand` are all refused while a genuine scorecard
+> field (`identity.headlinePrice`) still writes. cockpitTools 148/148, typecheck 0,
+> mutation-verified. **Full-gate confirmation of the ROUTING still needs a suite run** — 37 passes
+> alone regardless, so only the gate can measure it.)
+>
+> PREVIOUS: 2026-08-27 (**TWO TOOLS CLAIMED THE SAME SENTENCE, AND THE MODEL PICKED BY VIBE.**
 > `recordScorecardAnswer` read *"Store a figure the user states about their own business"* — with
 > a MONEY example — and so did `stageFinanceWrite` in effect. Fixture `37-finance-update` states a
 > cash position and was routed to `recordScorecardAnswer` + `evaluateBusiness`, 2/2, staging no
