@@ -130,8 +130,8 @@ Plans:
 - [x] 27-05-PLAN.md — Complaint Response and Sales Call Prep adaptations/evals (Wave 2)
 - [x] 27-06-PLAN.md — Process/SOP and Brand Review adaptations/evals (Wave 2)
 - [x] 27-07-PLAN.md — Executive Agent runtime and real terminal-event integration (Wave 3)
-- [~] 27-08-PLAN.md — Final provenance/parity, candidate publication and exact-version evals (Wave 4) — PARTIAL: provenance final + six DEV candidates published; the six paid eval runs are blocked on an exhausted OpenAI balance
-- [~] 27-09-PLAN.md — Authenticated browser evidence, owner gate, activation and rollback (Wave 5) — PARTIAL: discovery UI, owner primitive and preview pin shipped; the browser/owner/activation gates need the eval runs first
+- [x] 27-08-PLAN.md — Final provenance/parity, candidate publication and exact-version evals (Wave 4) — the six paid per-pack eval runs LANDED once the balance was restored; every pack carries `runner: "eval:pack"` evidence at its exact version (`evidenceValid: true` on all six)
+- [x] 27-09-PLAN.md — Authenticated browser evidence, owner gate, activation and rollback (Wave 5) — browser gates green on all six (`browserValid: true`), the owner candidate-preview shipped, and the rollback-to-dark drill is a real test rather than a `fixme`; all six packs now hold an ACTIVE row and `listPacks` returns them
 
 ### Phase 28: Connector-Backed Revenue Pack
 

@@ -3,15 +3,43 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 27
-current_plan: 9 of 9 executed (27-01..27-09) -- 27-08 and 27-09 are BOTH PARTIAL; the phase is blocked on money, not code
-status: executing
-stopped_at: "27-09 IS PARTIAL. Task 1 and the SERVER half of Task 2 shipped; Tasks 3 (owner decides) and 4 (activation) cannot start until 27-08's six paid eval runs happen -- **the dev OpenAI key still returns `credit_balance_exhausted`**. Everything in 27-09 cost $0.00, nothing is activated, all six packs are still `candidate` on dev, and the PRODUCT now proves it: `listPacks` returns nothing. **27-09 AS PLANNED WAS A DEADLOCK.** The gate wants browser evidence, browser evidence wants a pack running in a browser, and running one wants an ACTIVE row -- which no pack has by design until the gate passes; `runSpecialistTurn` fails closed on NO_ACTIVE_SKILL. The plan flags this against `sendCockpitMessage`, but the real door is `cockpit.startWorkflowPack` (added by 27-07, AFTER the plan was written), which made the fix small: `runWorkflowPack` already takes `skillVersions`, so **`llm.ts` is byte-unchanged**. **RE-PLAN ITEMS, RESOLVED:** (1) preview THREADED not cut -- owner-only `previewVersion`, checked server-side, checked ONLY when supplied (that action is every user's door to a pack), and REFUSED rather than ignored. (2)+(3) `skills.deactivatePack` shipped (ownerMutation, packs only, idempotent, status-only) BUT it is **not reachable from anywhere yet** -- `convex run` carries no identity, so the dark drill needs an owner-facing Turn-off control this plan did not ship. Both rollback drills are recorded as `test.fixme` WITH THE REASON, not faked. (4) six packs, unchanged. **DECISIONS THE NEXT SESSION MUST CARRY.** (a) **`ownerAction` NOW EXISTS** and the comment saying it deliberately did not was wrong -- an action reads the row through `owner.ownsDeployment` (internalQuery, same exact-`true` rule); `requireOwnerAction(ctx)` is the FUNCTION for a conditional gate, `ownerAction` the builder for a whole owner-only action. The missing third wrapper is exactly why this check had nowhere to go. (b) `listPacks` is ACTIVE-ONLY **on the server** -- no client filter, no `showCandidates` prop, because a filter in the browser is one a future caller can pass `false` to. (c) `probeSources` MOVED out of the \"use node\" binding into `workflowPackDiscovery.ts` so the preflight a user is SHOWN and the one the model is TOLD are one resolution; the binding is otherwise unchanged (31 tests untouched). (d) `title`/`blurb`/`opener` are code-owned in @pikar/core; the opener is sent as the USER's first message and a test refuses one that reads like an instruction to a model. (e) the `useAction(` ban is now CONDITIONAL on `startWorkflowPack` having no `clientContext` -- add one and the test demands a hook. **NOT DONE:** Tasks 3+4; both rollback drills; **`apps/web/e2e/workflow-pack-pilot.spec.ts` HAS NEVER BEEN RUN** (authored against a balance-less deployment; `@dark`/`@discovery` are FREE and should be run first, `@run` spends -- do NOT read it as coverage); and the pack path still sends no `clientContext` (bounded: `briefInbox` degrades to UTC, documented as cosmetic). **NEAR-MISS WORTH KEEPING:** the conditional `useAction` guard first took the WRONG branch because slicing cockpit.ts to `executePlan` swallowed `sendCockpitMessage`'s clientContext -- it would have permanently demanded a hook nobody needs. EVIDENCE: backend 100 files/2475, web 34/586, core 43/1177, contracts 6/93, four typechecks clean, biome zero errors over twelve files; four mutations observed RED and restored. **NEXT: top up the OpenAI balance, run the six per-pack evals (27-08-SUMMARY has the commands), then 27-09 Tasks 3+4.** Working branch feat/27-02-pack-contracts."
-last_updated: "2026-08-23T23:45:00.000Z"
+current_plan: 9 of 9 executed (27-01..27-09) -- PHASE COMPLETE
+status: complete
+stopped_at: "PHASE 27 CLOSED 2026-08-27. **THE BLOCKER RECORDED BELOW WAS MONEY, AND IT IS GONE —
+the six paid per-pack eval runs happened and the RECORD had simply not caught up.** VERIFIED
+AGAINST THE LIVE DEPLOYMENT, NOT THE SUMMARIES: `skills:inspectPackCandidates` reports
+provenanceValid / evidenceValid / browserValid ALL TRUE for all six packs, and every one holds an
+ACTIVE row — business-pulse v2, campaign-plan v6, customer-complaint v3, sales-call-prep v11,
+process-sop v4, brand-review v3. **THE TRAP WORTH KEEPING:** brand-review's v4 is ARCHIVED ABOVE
+its active v3, so a newest-row read alone reports the pack as inactive. Read `getActiveSkill`, not
+the newest row. Success criteria 1-4 are MET.
+**CRITERION 5 IS MET IN STRUCTURE AND PARTIAL IN SUBSTANCE, DELIBERATELY:** `citationCoverage` and
+`unsupportedClaimRate` report `no_data` in the PRODUCTION plane because nothing writes
+claimCount / citedClaimCount there — only 27-08's eval runner grades a body. The `not_applicable`
+arm exists precisely so the projection cannot invent a 100% citation rate from zero claims. They
+light up unchanged when a production writer lands. **Do not 'fix' this by defaulting the ratio.**
+**CARRY-OVER, NOT A PHASE-27 BLOCKER:** `research-specialist@9` is a CANDIDATE, not active
+(research runs on v8). The golden suite sits at 43-44/46 with a rotating cast of intermittent
+fixtures, and `shouldRecordEvidence` gates evidence for EVERY pin on `allGreen` across all 46 — so
+a research skill is hostage to ~20 cockpit fixtures it never touches. Fixtures 32/33/34 are
+ANTI-CORRELATED through ONE signal (`sourceCount`): 32/34 need live search to return sources, 33
+needs it to return none, so all three pass only when the provider discriminates within the same
+run — observed once in four runs. Scoping evidence to the pinned skill's fixtures would fix it and
+LOOSENS EVAL_GATE; that is an owner decision and was deliberately not taken.
+**MEDIA RAIL LANDED THE SAME DAY** and is on main: the assembler was verified END TO END with real
+ffmpeg (10.005s against a declared 10s, ONE `amix`, zero time-stretch, colour-injection refused at
+exit 2). ADR-026 picks `veo-3.1-lite` to succeed `sora-2` before the OpenAI Videos API is withdrawn
+2026-09-24 — **NOTHING IS WIRED to it**; the runway tripwire now keys on `replacementWiredUp` and
+goes red at 14 days. **OWNER-GATED AND STILL DORMANT:** CC0 music files plus their `LICENSES.md`
+attestations (a human legal claim, not a code task), `PEXELS_API_KEY` via `npx convex env set`, and
+`bake:sandbox` (needs an interactive `vercel link`). Stock and music degrade SILENTLY by design, so
+an unbaked deploy ships reels with no bed and no error."
+last_updated: "2026-08-27T00:00:00.000Z"
 progress:
   total_phases: 53
-  completed_phases: 34
+  completed_phases: 35
   total_plans: 413
-  completed_plans: 315
+  completed_plans: 317
   percent: 76
 ---
 
