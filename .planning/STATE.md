@@ -3,6 +3,72 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 28
+current_plan: 4 of 29 executed (28-17 readiness gate, 28-18 playbook/watch ownership, 28-01 provider admission, 28-02 deterministic finance core) -- 28 IN PROGRESS
+status: executing
+stopped_at: "28-01 SEALED. The four provider admission gates are decided and the register is live at
+docs/connectors/. All four markers read `decision: approved_production` -- read them with
+grep -h '^decision:' docs/connectors/*-suitability.md, never from prose. Four INDEPENDENT markers,
+each with its own date, evidence refs and expiry `review_by: 2026-11-27`. There is no all-provider
+approval flag and the README says there never will be one.
+**THE DURABLE FINDING IS THAT ONLY ONE OF THE FOUR RESTS ON EVIDENCE.** HubSpot is
+evidence-consistent (unlisted OAuth needs no HubSpot permission; the 25/10/100 install cap is
+ACCEPTED and a Marketplace listing is DEFERRED, which is exactly what keeps the AI-connector/MCP
+rebuild rule from ever being triggered). The other three are human testimony. STRIPE is an explicit
+OWNER OVERRIDE AGAINST its own record: the prepared evidence says production is NOT supportable
+today because platform-initiated revocation for Stripe Apps is undocumented and 28-CONTEXT makes
+per-tenant revocation a hard requirement -- the owner was shown that and approved anyway. QUICKBOOKS
+and PAYPAL are OWNER ATTESTATIONS of external vendor approvals (live Intuit production credentials,
+i.e. App Assessment Questionnaire approved; PayPal partner acceptance with an assigned partner
+manager on a live partner account) -- nothing in this repo checked either and no vendor page can.
+All three are written in the house style of docs/connectors/phase28-readiness.md, 'This is testimony,
+not evidence', with the claim reproduced as a dated blockquote and what happens if it is wrong
+(approval void, provider `blocked` again). DO NOT let a later document restate an attestation as a
+verified fact -- that laundering is a recorded defect class here.
+**NO OPEN CONDITION WAS RESOLVED, AND EACH IS NOW A NAMED DELIVERABLE.** HubSpot: whether
+`POST /oauth/2026-03/token/revoke` invalidates already-issued ACCESS tokens is UNPROVEN (docs
+silent, the legacy DELETE explicitly did not cascade) -- 28-05 MUST TEST it against a live grant and
+28-22 MUST NOT SEAL without the result. Stripe: the revocation story goes to 28-24 and CANNOT be
+closed by a green test, because no test here can prove an API that is not documented to exist.
+QuickBooks: App Partner Program TIER UNSTATED (Builder = 500,000 CorePlus calls/workspace/month,
+which would bound a polling pack) and the write blast radius is ACCEPTED, so the compile-time
+GET/query/report-only allow-list is MANDATORY (28-06/28-23). PayPal: NO revoke endpoint is documented
+anywhere and sandbox is explicitly NON-PROBATIVE about production authorization (28-25). Unresolved
+on all four: data-processing/commercial terms, retention/deletion duties and data residency are NOT
+RESEARCHED -- production was approved without them.
+**APPROVAL IS PERMISSION TO START, NOT A SHIPPED PHASE.** No lane gate has run and no adapter exists.
+A partial release completes NO REVN requirement; 28-01 records requirements-completed as EMPTY,
+deliberately -- it creates gates, it implements nothing. No `approved_beta` marker was ever recorded
+for any provider: the judgments were issued directly as `approved_production`, so the beta stage was
+SKIPPED, not passed.
+**FIVE PLAYBOOKS WERE BUMPED IN THE SAME COMMIT** (CLAUDE.md 9) because docs/connectors/* is watched.
+connector-stripe.md carried ACTIVE BAD ADVICE -- be accepted/configured as an Extension -- against a
+door Stripe has closed (You can no longer build new Connect extensions); all four provider playbooks
+also still declared their lane `parked`. The gate was observed BOTH RED AND GREEN: the hook blocked
+on revenue-connectors.md mid-task and is clean now. That script still EXITS 0 ON EVERY PATH and hangs
+forever if run bare -- STDOUT is the only signal, so run it as
+echo {} | node scripts/check-playbooks.mjs check. `node scripts/check-phase28-readiness.mjs` still
+exits 0.
+**28-02 LANDED IN PARALLEL AND ITS BLOCK IS DIRECTLY BELOW THIS ONE** -- both lanes wrote this file
+in the same window, so read the two together, not one instead of the other.
+**NEXT: Wave 3 (28-03 encrypted credentials + additive connector schema).** All four provider lanes
+(28-05..28-08) are unparked and may now be built. Every dependent plan still runs
+`node scripts/check-phase28-readiness.mjs` FIRST; exit 1 means stop, not shim. Do NOT run any
+`gsd-tools state *` subcommand against this file -- it has corrupted it seven times. Working branch
+feat/27-02-pack-contracts."
+last_updated: "2026-08-27T15:21:15.000Z"
+progress:
+  total_phases: 53
+  completed_phases: 35
+  total_plans: 413
+  completed_plans: 321
+  percent: 78
+---
+
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: - Platform -> Private Beta
+current_phase: 28
 current_plan: 4 of 29 executed (28-17 readiness gate, 28-18 playbook/watch ownership, 28-01 provider suitability, 28-02 deterministic finance core) -- 28 IN PROGRESS
 status: executing
 stopped_at: "28-02 SEALED. **PHASE 28 NOW HAS CODE, AND IT IS PURE.** `packages/revenue` is a
