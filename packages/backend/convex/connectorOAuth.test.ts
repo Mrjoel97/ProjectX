@@ -25,8 +25,8 @@ import {
   classifyRevokeOutcome,
   DEFAULT_REDIRECT_PATH,
   PROVIDER_REVOKE_SUPPORT,
-  safeRedirectPath,
   STATE_TTL_MS,
+  safeRedirectPath,
 } from "./connectorOAuth";
 import schema from "./schema";
 
@@ -53,6 +53,22 @@ async function harness() {
 }
 
 type Harness = Awaited<ReturnType<typeof harness>>;
+
+/** The single state row, or a loud failure. Indexing position zero passes vacuously on an EMPTY
+ *  collect, which would let a "the row was not consumed" assertion succeed with no row at all. */
+function onlyRow<T>(rows: readonly T[]): T {
+  if (rows.length !== 1) throw new Error(`expected exactly one state row, got ${rows.length}`);
+  const [row] = rows;
+  if (row === undefined) throw new Error("expected exactly one state row, got a hole");
+  return row;
+}
+
+/** The module source for a structural scan. Missing = the scan proved nothing, so it throws. */
+function source(name: string): string {
+  const src = rawSources[name];
+  if (src === undefined) throw new Error(`no raw source for ${name}`);
+  return src;
+}
 
 const stateRows = (h: Harness) => h.t.run((ctx) => ctx.db.query("connectorOAuthStates").collect());
 
@@ -81,16 +97,16 @@ describe("mintConnectState", () => {
     expect(state.length).toBeGreaterThanOrEqual(32);
     const rows = await stateRows(h);
     expect(rows).toHaveLength(1);
-    expect(rows[0].stateHash).not.toBe(state);
+    expect(onlyRow(rows).stateHash).not.toBe(state);
     // The nonce must not survive anywhere in the row — a database read must not yield a state
     // a caller could then present at the callback.
-    expect(JSON.stringify(rows[0])).not.toContain(state);
+    expect(JSON.stringify(onlyRow(rows))).not.toContain(state);
   });
 
   test("binds the CALLER's tenant and refuses to be told a different one", async () => {
     const h = await harness();
     await mint(h, "asA");
-    expect((await stateRows(h))[0].tenantId).toBe(h.tenantA);
+    expect(onlyRow(await stateRows(h)).tenantId).toBe(h.tenantA);
 
     // Convex rejects an argument the validator does not declare, so there is no tenantId to spoof.
     await expect(mint(h, "asA", { tenantId: h.tenantB })).rejects.toThrow();
@@ -126,7 +142,13 @@ describe("mintConnectState", () => {
 
   test("an off-app redirect target is refused at MINT, before any consent happens", async () => {
     const h = await harness();
-    for (const bad of ["//evil.test/pwn", "https://evil.test", "/dash?x=1", "/dash#f", "\\\\evil"]) {
+    for (const bad of [
+      "//evil.test/pwn",
+      "https://evil.test",
+      "/dash?x=1",
+      "/dash#f",
+      "\\\\evil",
+    ]) {
       await expect(mint(h, "asA", { redirectPath: bad })).rejects.toThrow(/redirect/i);
     }
     expect(await stateRows(h)).toHaveLength(0);
@@ -146,7 +168,7 @@ describe("consumeConnectState — each guard refuses on its own", () => {
       connectionId,
       redirectPath: "/dashboard/profile",
     });
-    expect((await stateRows(h))[0].usedAt).toEqual(expect.any(Number));
+    expect(onlyRow(await stateRows(h)).usedAt).toEqual(expect.any(Number));
   });
 
   test("UNKNOWN: a state that was never minted — only this guard can fire", async () => {
@@ -162,7 +184,7 @@ describe("consumeConnectState — each guard refuses on its own", () => {
     const r = await consume(h, { state, provider: "quickbooks" });
     expect(r).toEqual({ ok: false, reason: "provider_mismatch" });
     // Refused, and NOT consumed: a wrong-provider probe must not burn the user's real state.
-    expect((await stateRows(h))[0].usedAt).toBeUndefined();
+    expect(onlyRow(await stateRows(h)).usedAt).toBeUndefined();
   });
 
   test("ENVIRONMENT MISMATCH: right provider, fresh, unused — only this guard can fire", async () => {
@@ -170,7 +192,7 @@ describe("consumeConnectState — each guard refuses on its own", () => {
     const { state } = await mint(h);
     const r = await consume(h, { state, environment: "production" });
     expect(r).toEqual({ ok: false, reason: "environment_mismatch" });
-    expect((await stateRows(h))[0].usedAt).toBeUndefined();
+    expect(onlyRow(await stateRows(h)).usedAt).toBeUndefined();
   });
 
   test("REPLAY: consumed once, still well inside its TTL — only the used guard can fire", async () => {
@@ -189,13 +211,13 @@ describe("consumeConnectState — each guard refuses on its own", () => {
     const h = await harness();
     const { state } = await mint(h);
     await h.t.run(async (ctx) => {
-      const row = (await ctx.db.query("connectorOAuthStates").collect())[0];
+      const row = onlyRow(await ctx.db.query("connectorOAuthStates").collect());
       await ctx.db.patch(row._id, { expiresAt: Date.now() - 1 });
     });
 
     const r = await consume(h, { state });
     expect(r).toEqual({ ok: false, reason: "expired" });
-    expect((await stateRows(h))[0].usedAt).toBeUndefined();
+    expect(onlyRow(await stateRows(h)).usedAt).toBeUndefined();
   });
 
   test("a refusal carries NO tenantId and NO connectionId — nothing for an exchange to seal into", async () => {
@@ -213,7 +235,7 @@ describe("consumeConnectState — each guard refuses on its own", () => {
   });
 
   test("consumeConnectState declares no tenantId argument at all", () => {
-    const src = rawSources["./connectorOAuth.ts"];
+    const src = source("./connectorOAuth.ts");
     const body = src.slice(src.indexOf("export const consumeConnectState"));
     const args = body.slice(body.indexOf("args:"), body.indexOf("handler:"));
     expect(args).not.toMatch(/tenantId/);
@@ -350,7 +372,12 @@ describe("classifyRevokeOutcome", () => {
     expect(
       classifyRevokeOutcome({ provider: "quickbooks", attempted: true, statusCode: 200 }).upstream,
     ).toBe("confirmed");
-    for (const statusCode of [400, 401, 403, 429, 500, undefined]) {
+    expect(
+      classifyRevokeOutcome({ provider: "quickbooks", attempted: true, statusCode: 299 }).upstream,
+    ).toBe("confirmed");
+    // 199 and 300 are the boundaries either side of the 2xx window. A 300 is a REDIRECT, not a
+    // revocation, and a `<= 300` slip would silently record one as confirmed.
+    for (const statusCode of [199, 300, 400, 401, 403, 429, 500, undefined]) {
       expect(
         classifyRevokeOutcome({ provider: "quickbooks", attempted: true, statusCode }).upstream,
       ).toBe("attempted_failed");
@@ -382,8 +409,10 @@ describe("classifyRevokeOutcome", () => {
 
 describe("connectorOAuth.ts structure", () => {
   test("exposes no public write beyond the mint, and no public read of a state", () => {
-    const src = rawSources["./connectorOAuth.ts"];
-    const publicBuilders = [...src.matchAll(/export const (\w+) = (tenant|owner)(Mutation|Query|Action)/g)];
+    const src = source("./connectorOAuth.ts");
+    const publicBuilders = [
+      ...src.matchAll(/export const (\w+) = (tenant|owner)(Mutation|Query|Action)/g),
+    ];
     expect(publicBuilders.map((m) => m[1]).sort()).toEqual([
       "mintConnectState",
       "pendingConnectStates",
@@ -391,7 +420,7 @@ describe("connectorOAuth.ts structure", () => {
   });
 
   test("never logs, and never reaches audit or dead letters with a state", () => {
-    const src = rawSources["./connectorOAuth.ts"];
+    const src = source("./connectorOAuth.ts");
     expect(src).not.toMatch(/console\./);
     expect(src).not.toMatch(/deadLetters/);
   });
