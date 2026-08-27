@@ -1,6 +1,9 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
-> Last verified: 2026-08-26 (**THE SIX PACKS ARE CERTIFIED ON PRODUCTION'S EVAL PLANE AND STILL
+> Last verified: 2026-08-27 (Phase 29 made this file's source registry the repo's ONLY one — see
+> "Phase 29 shares this registry" under Dependencies. Pack behaviour is unchanged.)
+>
+> Previously verified 2026-08-26 (**THE SIX PACKS ARE CERTIFIED ON PRODUCTION'S EVAL PLANE AND STILL
 > DARK THERE.** Prod candidates seeded at v1 — note they are v1 while dev carries v4/v5/v10/v11:
 > versions are PER DEPLOYMENT and a version number is never a cross-deployment identifier. Six gates
 > run with `PIKAR_CONVEX_TARGET=prod`, 30/30, ~$0.41. `campaign-plan` passed FIRST TRY on prod after
@@ -1216,6 +1219,21 @@ Run `graphify query "workflow packs"` for the current subgraph. Couplings graphi
   suite stays green. Pinned by a source scan in `workflowPacks.test.ts`.
 - **The runner imports the registry as TypeScript.** Node >= 22.6 strips types natively; CI's test
   job pins Node 20 and never runs this script.
+- **PHASE 29 SHARES THIS REGISTRY (2026-08-27).** `packages/core/src/knowledgeSearch.ts` declares
+  `KNOWLEDGE_SOURCES = ["vault","drive","inbox","crm-facts","support-desk"] satisfies readonly
+  PackSource[]` — a named SUBSET of `REACHABLE_PACK_SOURCES` + `MISSING_PACK_SOURCES`, reusing
+  `PACK_SOURCE_LABEL` and `MISSING_SOURCE_UNLOCK` rather than restating them. `support-desk` is in
+  `MISSING_PACK_SOURCES` for that reason and for no pack reason: NO pack operation reads it, so
+  `workflowPacks.test.ts`'s "no source is dead vocabulary" assertion now accepts a source read by
+  the search plane. Consequences for this playbook:
+    - A new `MissingPackSource` still needs its `PACK_SOURCE_LABEL`, `MISSING_SOURCE_UNLOCK` and
+      `MISSING_SOURCE_MENTIONS` entries (the typed `Record`s force all three).
+    - **Renaming or removing a source here changes the Phase-29 search plane and the
+      `knowledgeSearches` Convex validator**, whose literals mirror `KNOWLEDGE_SOURCES`. Read
+      `knowledge-search-routines.md` before touching either list.
+    - `SourceState`'s three words are pinned to `KnowledgeSourceState["status"]` by a compile-time
+      bidirectional witness in `knowledgeSearch.ts`. A fourth pack state fails `pnpm typecheck` in
+      `@pikar/core` until the search plane grows the same one.
 
 ## Data flow
 
@@ -1288,7 +1306,11 @@ Run `graphify query "workflow packs"` for the current subgraph. Couplings graphi
   `workflowPacks.test.ts` deliberately, and teach the tool in the pack's body — a granted tool a
   body never names is never called and nothing errors.
 - **Changing a missing classification**: owner decision A (2026-08-23) forbids adding read tools to
-  close a `missing` source inside Phase 27. Reclassifying is a phase-level decision.
+  close a `missing` source inside Phase 27. Reclassifying is a phase-level decision. Since
+  2026-08-27 it is also a PHASE-29 change: `NOT_LANDED_SOURCES` in `knowledgeSearch.ts` is DERIVED
+  from `MISSING_PACK_SOURCES`, so moving a source between the two lists here flips whether the
+  unified search reports it as `unavailable/not_landed`. That is the point — one move, both planes —
+  but do it knowing that, and run `cd packages/core && pnpm vitest run workflowPacks knowledgeSearch`.
 - **Touching the activation gate**: re-run the two mutations recorded above. A gate that cannot be
   observed failing is not a gate.
 

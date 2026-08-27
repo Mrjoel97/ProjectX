@@ -7,7 +7,7 @@ import { v } from "convex/values";
 void CONTRACTS_PACKAGE_NAME;
 
 // ┌──────────────────────────────────────────────────────────────────────────────┐
-// │ SCHEMA TABLE INDEX — 46 tables, grouped by domain.                         │
+// │ SCHEMA TABLE INDEX — 47 tables, grouped by domain.                         │
 // │ Line numbers are approximate; use Find to jump.                            │
 // │                                                                            │
 // │ ── Identity & Auth (Convex Auth + beta admission) ──────── ~L85            │
@@ -82,17 +82,22 @@ export const AGENT_STEP_REFUSAL = v.union(
  * a Convex validator needs a literal union at module load, and because widening the storage
  * vocabulary should be a visible schema diff, not a side effect of an import.
  *
- * `crm` and `support` have NO landed adapter (29-DEPENDENCY-EVIDENCE §2). They are here on purpose:
- * a planned CRM read lands as `{status: "unavailable", reason: "not_landed"}`, which renders as a
- * visible gap. Omitting them would let the product answer a business question from mail and files
- * while never saying the CRM was not consulted.
+ * THE NAMES ARE `PackSource` NAMES. `KNOWLEDGE_SOURCES` is a named SUBSET of `workflowPacks.ts`'s
+ * one source registry, so `inbox` and `crm-facts` here are the same strings the pack plane,
+ * `PACK_SOURCE_LABEL` and `savedPrompts.sourcePreferences` use. 29-01 first shipped `gmail`/`crm`
+ * here, which meant a pin preferring `inbox` could never select the mail search source.
+ *
+ * `crm-facts` and `support-desk` have NO landed adapter (29-DEPENDENCY-EVIDENCE §2). They are here
+ * on purpose: a planned CRM read lands as `{status: "unavailable", reason: "not_landed"}`, which
+ * renders as a visible gap. Omitting them would let the product answer a business question from
+ * mail and files while never saying the CRM was not consulted.
  */
 const knowledgeSource = v.union(
   v.literal("vault"),
   v.literal("drive"),
-  v.literal("gmail"),
-  v.literal("crm"),
-  v.literal("support"),
+  v.literal("inbox"),
+  v.literal("crm-facts"),
+  v.literal("support-desk"),
 );
 
 /** ONE deck element, shared by `plans.shots` and `plans.altShots` (33-02) — a single const so the
@@ -408,16 +413,20 @@ export default defineSchema({
   // are inherited verbatim (CLAUDE.md ladder rung 2). A parallel `pinnedWorkflows` table would
   // duplicate all of that AND put a second pin menu in the workspace.
   //
-  // All four lineage fields are optional, so every existing pin stays valid with no migration and
+  // All FIVE lineage fields are optional, so every existing pin stays valid with no migration and
   // an absent set means "a plain prompt pin", exactly as today.
   //
   // KNOWN CONSTRAINT FOR 29-08: `textHash` is currently computed from the TEXT ALONE, so two pins
   // of the same words against different customizations would collide on `by_tenant_textHash` and
-  // the second `save` would return the first row. The pin writer must fold `templateId`,
-  // `templateVersion`, `tenantSkillId` and `customizationHash` into that hash before it writes the
-  // first lineage-bearing row. This plan does not change `savedPrompts.ts`, so the collision is
-  // unreachable today (nothing writes these fields yet) — it is recorded here because the field
-  // that makes it reachable is being added here.
+  // the second `save` would return the first row. The pin writer must fold ALL FIVE —
+  // `templateId`, `templateVersion`, `tenantSkillId`, `customizationHash` AND `sourcePreferences`
+  // — into that hash before it writes the first lineage-bearing row. `sourcePreferences` was
+  // missing from this list until the 29-01 repair: two pins differing ONLY in their preferred
+  // sources are two different runs, and leaving it out reproduced the exact collision this note
+  // exists to prevent. `@pikar/core`'s `pinIdentity` already covers all five and is the intended
+  // hash input. This plan does not change `savedPrompts.ts`, so the collision is unreachable today
+  // (nothing writes these fields yet) — it is recorded here because the fields that make it
+  // reachable are being added here.
   savedPrompts: defineTable({
     tenantId: v.string(),
     text: v.string(),
@@ -468,9 +477,15 @@ export default defineSchema({
   // payload. The refs/counts projection the log plane gets is `redactedSearchEvent` in
   // `@pikar/core`, which is a pure function precisely so the ban is testable without a database.
   //
-  // BOUNDED BY CONSTRUCTION: `@pikar/core` `SEARCH_CAPS` caps sources at 5, claims at 12, evidence
-  // at 24 and a label at 200 chars, so the whole document is kilobytes. That is why the citations
-  // are an array on this row rather than a second table — one read renders the entire card.
+  // BOUNDED BY THE WRITER, WHICH IS WHERE TO CHECK IT: `@pikar/core` caps sources at 5
+  // (`clampSearchPlan` — one entry per distinct source), evidence at 24 with 8 per source and 1500
+  // chars each, labels at 200 chars and the whole evidence corpus at 8000 chars (`clampEvidence`),
+  // and claims at 12 with 300-char excerpts (`validateSynthesis`). The Convex validator does NOT
+  // re-impose any of those lengths — the array validators here are unbounded — so a writer that
+  // skips `clampEvidence` puts an unbounded array on this row. Six of those eleven caps were
+  // enforced by nothing at all until the 29-01 repair; if you add a cap, add its enforcement in
+  // the same change or do not add the cap. That the document is kilobytes is why the citations are
+  // an array on this row rather than a second table — one read renders the entire card.
   //
   // `authority` and `freshness` are stored as the LITERAL unions `@pikar/core` froze, so the
   // Convex validator refuses a value the contracts do not know. Widening either is a deliberate
@@ -529,7 +544,11 @@ export default defineSchema({
         text: v.string(),
         evidence: v.array(
           v.object({
-            source: v.string(),
+            // THE SAME CLOSED UNION as `sources[]`. It was `v.string()` until the 29-01 repair,
+            // which meant a stored CITATION could name `notion` or `http://evil.example` while the
+            // coverage plane beside it could not — a rendered source the product does not have,
+            // which is the exact lie this table's comment says it exists to make unspellable.
+            source: knowledgeSource,
             /** Stable provider/native ref — the drill-in target. Refs only. */
             sourceRef: v.string(),
             /** Doc title / file name / subject. Labels-to-UI; never an audit payload (§4). */
@@ -554,7 +573,7 @@ export default defineSchema({
         /** Evidence that DISAGREES, kept beside the claim. Synthesis may not resolve it away. */
         conflictEvidence: v.array(
           v.object({
-            source: v.string(),
+            source: knowledgeSource,
             sourceRef: v.string(),
             label: v.string(),
           }),

@@ -19,45 +19,58 @@
 // Map on `convex/lib/hash.ts`'s existing SHA-256 `contentHash`, computed in the adapter and passed
 // in — do not add a second hash implementation to this repo.
 import { err, ok, type Result } from "./result";
+import {
+  MISSING_PACK_SOURCES,
+  MISSING_SOURCE_UNLOCK,
+  type MissingPackSource,
+  PACK_SOURCE_LABEL,
+  type PackSource,
+  type SourceState,
+} from "./workflowPacks";
 
 // ── The closed native-source registry ──────────────────────────────────────────────────────
 
 /**
  * The only sources that exist. Defined in code, never in a skill body or a tenant row — a source
  * the product did not build is not something a prompt can talk itself into.
+ *
+ * A NAMED SUBSET OF `PackSource`, not a second registry. `workflowPacks.ts` already owned a
+ * code-owned closed source vocabulary with user-facing labels, and 29-01 originally restated it
+ * with `gmail` where the pack plane says `inbox` and `crm` where it says `crm-facts`. The concrete
+ * cost was in this phase's own diff: `WorkflowPin.sourcePreferences` is `PackSource[]`, so a pin
+ * preferring `inbox` could never select the `gmail` search source and no code could translate it.
+ * `satisfies readonly PackSource[]` is what makes that impossible to reintroduce.
  */
 export const KNOWLEDGE_SOURCES = [
   "vault",
   "drive",
-  "gmail",
-  "crm",
-  "support",
-] as const satisfies readonly string[];
+  "inbox",
+  "crm-facts",
+  "support-desk",
+] as const satisfies readonly PackSource[];
 export type KnowledgeSource = (typeof KNOWLEDGE_SOURCES)[number];
 
 export function isKnowledgeSource(value: unknown): value is KnowledgeSource {
   return typeof value === "string" && (KNOWLEDGE_SOURCES as readonly string[]).includes(value);
 }
 
-/** What the user is told a source IS. Code-owned so five adapters cannot each name it differently. */
-export const KNOWLEDGE_SOURCE_LABEL: Readonly<Record<KnowledgeSource, string>> = {
-  vault: "your knowledge vault",
-  drive: "your Google Drive",
-  gmail: "your mailbox",
-  crm: "your connected CRM",
-  support: "your connected support inbox",
-};
-
 /**
  * Sources with NO landed adapter (29-DEPENDENCY-EVIDENCE §2: Phase 28 shipped contracts only —
  * zero connector tables, zero credential encryption, zero provider modules).
  *
- * Naming them here is deliberate and is the opposite of pretending they work: a planned `crm`
- * search becomes `unavailable/not_landed`, which renders as a visible gap. Deleting these two from
- * `KNOWLEDGE_SOURCES` instead would make the product silently answer business questions from
- * mail and files while never mentioning that the CRM was not consulted.
+ * DERIVED, not hand-maintained: a knowledge source is not-landed exactly when the one registry
+ * classifies it as missing. When a connector genuinely lands it moves from `MISSING_PACK_SOURCES`
+ * to `REACHABLE_PACK_SOURCES` once and both planes follow — there is no second list to forget.
+ *
+ * Keeping them in `KNOWLEDGE_SOURCES` at all is deliberate and is the opposite of pretending they
+ * work: a planned CRM search becomes `unavailable/not_landed`, which renders as a visible gap.
+ * Dropping them would make the product silently answer business questions from mail and files
+ * while never mentioning that the CRM was not consulted.
  */
-export const NOT_LANDED_SOURCES = ["crm", "support"] as const satisfies readonly KnowledgeSource[];
+export const NOT_LANDED_SOURCES: readonly KnowledgeSource[] = KNOWLEDGE_SOURCES.filter(
+  (source): source is KnowledgeSource & MissingPackSource =>
+    (MISSING_PACK_SOURCES as readonly string[]).includes(source),
+);
 
 function isNotLanded(source: KnowledgeSource): boolean {
   return (NOT_LANDED_SOURCES as readonly string[]).includes(source);
@@ -82,11 +95,21 @@ export const PARTIAL_REASONS = ["cap", "provider_error"] as const satisfies read
 export type PartialReason = (typeof PARTIAL_REASONS)[number];
 
 /**
- * The three — and only three — ways a source read can end, mirroring `@pikar/revenue`'s
- * `Projection` (29-DEPENDENCY-EVIDENCE §2.4).
+ * The three — and only three — ways a source read can end.
+ *
+ * The three WORDS are `workflowPacks.ts`'s `SourceState`, imported rather than restated; this union
+ * only adds the reason and the count each state may carry. `_VOCABULARY_IS_SHARED` below is a
+ * compile-time, bidirectional witness that the two sets are identical, so a fourth state cannot
+ * appear on one plane only.
  *
  * `unavailable` CANNOT carry a count. That is the point: the type makes "reauth failed, so zero
  * results, so nothing exists" unspellable rather than merely discouraged.
+ *
+ * ponytail: two shapes, one vocabulary — `packPreflight` keeps the bare string because 30 landed
+ * eval fixtures and `PACK_SOURCE_PROBE_STATES` assert it. Upgrade path if the two ever need to be
+ * one type: widen `SourceState` into this object and migrate `packPreflight` + those fixtures in
+ * the same change. `@pikar/revenue`'s `Projection` is the third statement, in another package and
+ * another lane; consolidate at merge, not here.
  */
 export type KnowledgeSourceState =
   | { readonly status: "available"; readonly source: KnowledgeSource; readonly returned: number }
@@ -102,46 +125,86 @@ export type KnowledgeSourceState =
       readonly reason: UnavailableReason;
     };
 
+/**
+ * COMPILE-TIME WITNESS, both directions. Adding a fourth `status` here, or dropping one, stops
+ * being assignable — `pnpm typecheck` is the test. A runtime test could not see this at all.
+ */
+type _VocabularyIsShared = KnowledgeSourceState["status"] extends SourceState
+  ? SourceState extends KnowledgeSourceState["status"]
+    ? true
+    : never
+  : never;
+const _VOCABULARY_IS_SHARED: _VocabularyIsShared = true;
+void _VOCABULARY_IS_SHARED;
+
 // ── Caps ───────────────────────────────────────────────────────────────────────────────────
 
-/** Bounds owned by THIS repo, never by a provider's pagination cursor or a model's ambition. */
+/**
+ * Bounds owned by THIS repo, never by a provider's pagination cursor or a model's ambition.
+ *
+ * EVERY entry here is enforced by a function in this file, and each has a test that goes red when
+ * the enforcement is removed. A cap nothing reads is a promise the schema comment repeats and the
+ * code does not keep, which is exactly what the 29-01 audit found. The enforcing site is named on
+ * each line so a later reader can check the claim in one grep.
+ */
 export const SEARCH_CAPS = {
-  /** At most one fan-out per registered source. */
+  /**
+   * Enforced BY CONSTRUCTION rather than by a counter: `clampSearchPlan` admits at most one entry
+   * per DISTINCT source (a repeat is `duplicate_source`), so the plan can never be longer than the
+   * registry. `knowledgeSearch.test.ts` pins `maxSources === KNOWLEDGE_SOURCES.length`, which is
+   * what makes that construction argument falsifiable.
+   */
   maxSources: 5,
-  /** One query per source in the first release. Widening this is a planner change, not a tweak. */
+  /** Enforced by `SourcePlan` having ONE `query` field plus `clampSearchPlan`'s duplicate rule. */
   maxQueriesPerSource: 1,
-  /** A decomposed query is a phrase, not a document. */
+  /** `clampSearchPlan`. A decomposed query is a phrase, not a document. */
   queryCharCap: 200,
+  /** `clampEvidence`. Per source, so one chatty adapter cannot spend the whole run's budget. */
   maxEvidencePerSource: 8,
+  /** `clampEvidence`. The hard ceiling on how many rows reach synthesis and the stored row. */
   maxEvidenceTotal: 24,
-  /** Matches `vaultGround.ts` PER_DOC_CHAR_CAP so vault evidence needs no second truncation. */
+  /**
+   * `clampEvidence` truncates to this. Deliberately the same number as `vaultGround.ts`'s PRIVATE
+   * `PER_DOC_CHAR_CAP`, so vault evidence that already fits is not truncated twice — but there is
+   * NO coupling and none is claimed: that constant is not exported and this file cannot see it.
+   */
   evidenceTextCharCap: 1_500,
-  /** Matches `vaultGround.ts` TOTAL_CHAR_CAP — the synthesis-plane budget. */
+  /** `clampEvidence`. Same relationship to `vaultGround.ts`'s private TOTAL_CHAR_CAP. */
   totalEvidenceCharCap: 8_000,
-  /** A quoted passage, not a re-print of the document. */
+  /** `validateSynthesis`. A quoted passage, not a re-print of the document. */
   excerptCharCap: 300,
+  /** `validateSynthesis`. */
   maxClaims: 12,
-  /** A content-plane label (doc title, file name). */
+  /** `clampEvidence` truncates to this. A content-plane label (doc title, file name). */
   labelCharCap: 200,
-  /** Long enough for a real provider id, far short of a pasted record. */
+  /** `validateSourceRef`. Long enough for a real provider id, far short of a pasted record. */
   refCharCap: 128,
 } as const;
 
 // ── Source refs are refs (CLAUDE.md §4) ────────────────────────────────────────────────────
 
-/** Straight AND curly quotes plus whitespace: a possessive ("Acme's invoice") is the real leak. */
-const CONTENT_SHAPED = /["'‘’“”\n\r\t]/;
+/**
+ * AN ALLOWLIST, matching `@pikar/contracts`' `SAFE_REF` (`auditProjection.ts`) character for
+ * character. The denylist this replaced (`/["'‘’“”\n\r\t]/`) contained no space class, so
+ * "Acme Corp Invoice.pdf" and "Q3 revenue summary for Northwind" both passed as "ids" while its
+ * own docstring claimed it refused whitespace. Prose always contains a space; an id never does.
+ */
+const SAFE_REF = /^[A-Za-z0-9._:/+=|~-]+$/;
 
 /**
- * A `sourceRef` must be an opaque provider/native id, never the thing it points at. Same shape as
- * `@pikar/revenue`'s `validateSourceRef`, deliberately re-stated rather than imported: coupling
- * `@pikar/core` to `@pikar/revenue` for a ten-line predicate would be an abstraction nobody asked
- * for, and the two domains' caps are free to diverge.
+ * A `sourceRef` must be an opaque provider/native id, never the thing it points at.
+ *
+ * ponytail: THE KNOWN DUPLICATE is `packages/revenue/src/contracts.ts` (`validateSourceRef`,
+ * `REF_CHAR_CAP`, `CONTENT_SHAPED`), which landed one commit earlier on the Phase 28 lane and is
+ * owned by it — editing it from here would collide. Ceiling: two shape rules for one §4 boundary,
+ * and revenue's is the laxer denylist form. Upgrade path when the two branches merge: delete
+ * revenue's copy, have it import this one (it already imports `@pikar/core/result`), and keep
+ * `@pikar/contracts`' `SAFE_REF` as the single charset both derive from.
  */
 export function validateSourceRef(refValue: string): Result<true, string> {
   if (typeof refValue !== "string" || refValue.trim() === "") return err("A ref cannot be empty.");
   if (refValue.length > SEARCH_CAPS.refCharCap) return err("A ref is too long to be an id.");
-  if (CONTENT_SHAPED.test(refValue)) return err("A ref must be an id, not content.");
+  if (!SAFE_REF.test(refValue)) return err("A ref must be an id, not content.");
   return ok(true);
 }
 
@@ -189,9 +252,9 @@ export function weakestAuthority(classes: readonly AuthorityClass[]): AuthorityC
 const SOURCE_AUTHORITY: Readonly<Record<KnowledgeSource, AuthorityClass>> = {
   vault: "tenant_owned",
   drive: "tenant_owned",
-  gmail: "correspondence",
-  crm: "system_of_record",
-  support: "system_of_record",
+  inbox: "correspondence",
+  "crm-facts": "system_of_record",
+  "support-desk": "system_of_record",
 };
 
 /**
@@ -288,8 +351,15 @@ export function normalizeEvidenceText(text: string): string {
 
 export type EvidenceGroup = {
   readonly primary: Evidence;
-  /** The SAME record (source + sourceRef) read more than once. Safe to collapse. */
+  /** The SAME record (source + sourceRef) read twice AND SAYING THE SAME THING. Safe to collapse. */
   readonly duplicates: readonly Evidence[];
+  /**
+   * The same `(source, sourceRef)` carrying DIFFERENT text. NOT a duplicate — one ref that reads
+   * "$40" on one pass and "$60" on another is a disagreement, and calling it a safe collapse is how
+   * a renderer that follows the documented contract drops the second figure. Surfaced so the answer
+   * can show both, exactly like `related`.
+   */
+  readonly conflicting: readonly Evidence[];
   /**
    * A DIFFERENT record whose text is identical. Cross-referenced, never merged and never deleted —
    * every source ref survives, because "two systems agree" and "one system was read twice" are
@@ -299,8 +369,9 @@ export type EvidenceGroup = {
 };
 
 /**
- * Deterministic deduplication. Exact identity collapses; identical content across DIFFERENT records
- * is cross-linked; anything else is left alone.
+ * Deterministic deduplication. Exact identity AND identical text collapses; identical content
+ * across DIFFERENT records is cross-linked; a ref that disagrees with itself is reported as a
+ * conflict; anything else is left alone.
  *
  * There is deliberately no semantic/fuzzy tier. Asking a model which near-matches are "the same"
  * is how a $40 rate and a $60 rate become one confident answer.
@@ -309,50 +380,115 @@ export function dedupeEvidence(items: readonly Evidence[]): {
   readonly groups: readonly EvidenceGroup[];
   /** How many rows were absorbed as exact duplicates. Reported, never silently swallowed. */
   readonly collapsed: number;
+  /** How many rows disagreed with an earlier read of the SAME ref. Never counted as collapsed. */
+  readonly conflicts: number;
 } {
-  const byIdentity = new Map<string, { primary: Evidence; duplicates: Evidence[] }>();
+  type Entry = { primary: Evidence; key: string; duplicates: Evidence[]; conflicting: Evidence[] };
+  const byIdentity = new Map<string, Entry>();
   const order: string[] = [];
   let collapsed = 0;
+  let conflicts = 0;
 
   for (const item of items) {
     const identity = `${item.source}|${item.sourceRef}`;
     const existing = byIdentity.get(identity);
     if (existing) {
-      existing.duplicates.push(item);
-      collapsed += 1;
+      // The text is compared, not assumed. Identity alone answers "which record is this?", never
+      // "does it still say the same thing?".
+      if (normalizeEvidenceText(item.text) === existing.key) {
+        existing.duplicates.push(item);
+        collapsed += 1;
+      } else {
+        existing.conflicting.push(item);
+        conflicts += 1;
+      }
       continue;
     }
-    byIdentity.set(identity, { primary: item, duplicates: [] });
+    byIdentity.set(identity, {
+      primary: item,
+      key: normalizeEvidenceText(item.text),
+      duplicates: [],
+      conflicting: [],
+    });
     order.push(identity);
   }
 
-  const entries = order.map(
-    (k) => byIdentity.get(k) as { primary: Evidence; duplicates: Evidence[] },
-  );
-  const normalized = entries.map((e) => normalizeEvidenceText(e.primary.text));
+  const entries = order.map((k) => byIdentity.get(k) as Entry);
 
   const groups: EvidenceGroup[] = entries.map((entry, i) => ({
     primary: entry.primary,
     duplicates: entry.duplicates,
-    related: entries
-      .filter((_, j) => j !== i && normalized[j] === normalized[i])
-      .map((e) => e.primary),
+    conflicting: entry.conflicting,
+    related: entries.filter((other, j) => j !== i && other.key === entry.key).map((e) => e.primary),
   }));
 
-  return { groups, collapsed };
+  return { groups, collapsed, conflicts };
+}
+
+/**
+ * THE ADMISSION BOUNDARY for adapter output. Every per-source and per-run bound in `SEARCH_CAPS`
+ * is enforced here, once, before evidence reaches dedupe, synthesis or the stored row.
+ *
+ * This is a trust boundary, not a tidy-up: `text` and `label` are untrusted connector content and
+ * the caps are what keep an unbounded provider payload off a Convex row. Truncation is visible
+ * (`capped` names every source that lost something) so the caller mints `{status: "partial",
+ * reason: "cap"}` rather than reporting a full read — a capped read is partial, never available.
+ *
+ * Order is preserved; a source's own adapter decides what its best 8 are.
+ */
+export function clampEvidence(items: readonly Evidence[]): {
+  readonly evidence: readonly Evidence[];
+  /** Sources that lost a row or had text/label truncated. Never empty when anything was cut. */
+  readonly capped: readonly KnowledgeSource[];
+} {
+  const kept: Evidence[] = [];
+  const capped = new Set<KnowledgeSource>();
+  const perSource = new Map<KnowledgeSource, number>();
+  let totalChars = 0;
+
+  for (const item of items) {
+    const used = perSource.get(item.source) ?? 0;
+    if (used >= SEARCH_CAPS.maxEvidencePerSource || kept.length >= SEARCH_CAPS.maxEvidenceTotal) {
+      capped.add(item.source);
+      continue;
+    }
+
+    const text = item.text.slice(0, SEARCH_CAPS.evidenceTextCharCap);
+    const label = item.label.slice(0, SEARCH_CAPS.labelCharCap);
+    if (text.length < item.text.length || label.length < item.label.length) capped.add(item.source);
+
+    // The whole-run character budget, checked AFTER per-row truncation so a single huge row cannot
+    // consume it. A row that does not fit is dropped, not silently halved mid-sentence.
+    if (totalChars + text.length > SEARCH_CAPS.totalEvidenceCharCap) {
+      capped.add(item.source);
+      continue;
+    }
+    totalChars += text.length;
+
+    perSource.set(item.source, used + 1);
+    kept.push(text === item.text && label === item.label ? item : { ...item, text, label });
+  }
+
+  return { evidence: kept, capped: [...capped] };
 }
 
 // ── The planner boundary ───────────────────────────────────────────────────────────────────
 
 export type SourcePlan = { readonly source: KnowledgeSource; readonly query: string };
 
+/**
+ * There is deliberately no `source_cap` reason. `clampSearchPlan` admits at most ONE entry per
+ * DISTINCT source and `KNOWLEDGE_SOURCES.length === SEARCH_CAPS.maxSources`, so a plan longer than
+ * the cap is unreachable — the branch that pushed `source_cap` could never run, and the test over
+ * it (`plan.length <= maxSources`) could never fail. A rejection reason the code cannot produce is
+ * a state machine nobody can trust; the cap is now pinned by an equality test instead.
+ */
 export const PLAN_REJECTIONS = [
   "unknown_source",
   "duplicate_source",
   "empty_query",
   "query_too_long",
   "remote_url",
-  "source_cap",
 ] as const satisfies readonly string[];
 export type PlanRejection = (typeof PLAN_REJECTIONS)[number];
 
@@ -407,10 +543,6 @@ export function clampSearchPlan(raw: readonly unknown[]): {
     }
     if (REMOTE_ADDRESS.test(query)) {
       rejected.push({ source, reason: "remote_url" });
-      continue;
-    }
-    if (plan.length >= SEARCH_CAPS.maxSources) {
-      rejected.push({ source, reason: "source_cap" });
       continue;
     }
     seen.add(source);
@@ -468,6 +600,10 @@ export type ValidatedClaim = {
  *  3. An invalid excerpt drops the EXCERPT, not the claim (the Phase 14 rule).
  *  4. Authority and freshness are attached here, from the table. A model-supplied `authority`,
  *     `confidence` or `probability` field is not read, not copied and not returned.
+ *
+ * `evidenceIds` needs no length cap of its own: every id must be IN `evidence`, and `clampEvidence`
+ * already bounds that table to `SEARCH_CAPS.maxEvidenceTotal`. Capping here as well would be a
+ * second bound that can silently disagree with the first.
  */
 export function validateSynthesis(
   synthesis: SearchSynthesis,
@@ -643,12 +779,55 @@ const PARTIAL_SENTENCE: Readonly<Record<PartialReason, string>> = {
  *
  * These strings deliberately never say "no results" or "nothing": the whole failure mode this
  * phase exists to prevent is an unreachable source reading as an empty business.
+ *
+ * The label comes from `PACK_SOURCE_LABEL` — the one code-owned source vocabulary — and a
+ * NOT-LANDED source also names its unlock from `MISSING_SOURCE_UNLOCK`, because naming a gap
+ * without naming its unlock leaves the user with a complaint instead of a next step.
  */
 export function renderSourceGap(state: KnowledgeSourceState): string | null {
   if (state.status === "available") return null;
-  const label = KNOWLEDGE_SOURCE_LABEL[state.source];
-  if (state.status === "unavailable") return `${label} ${UNAVAILABLE_SENTENCE[state.reason]}.`;
+  const label = PACK_SOURCE_LABEL[state.source];
+  if (state.status === "unavailable") {
+    const sentence = `${label} ${UNAVAILABLE_SENTENCE[state.reason]}.`;
+    if (state.reason !== "not_landed") return sentence;
+    const unlock = MISSING_SOURCE_UNLOCK[state.source as MissingPackSource];
+    return unlock ? `${sentence} It would need ${unlock}.` : sentence;
+  }
   return `${label} ${PARTIAL_SENTENCE[state.reason].replace("{n}", String(state.returned))}.`;
+}
+
+// ── The citation shape, and how it maps onto the two landed ones ───────────────────────────
+
+/**
+ * WHY THIS IS A THIRD SET OF FIELD NAMES, and why the repo does not now need a rename shim.
+ *
+ * Landed #1 is the vault plane: `vaultGround.ts` returns `{docIds, titles, origins, chunks}`, the
+ * `vaultSources` row stores `{docIds, titles, count}` and `GroundedSources({titles, docIds})`
+ * renders it. Landed #2 is `evaluations.findings` `{citationDocId, citationTitle, citationExcerpt,
+ * confidence, source}`.
+ *
+ * Phase 29's `Evidence` keeps `sourceRef` / `label` rather than `citationDocId` / `citationTitle`
+ * for one reason a comment can state exactly: a knowledge-search ref is a provider id across FIVE
+ * planes — a Gmail message id, a Drive file id, a CRM record id — and only one of those five is a
+ * vault `docId`. Storing a Gmail message id in a field called `citationDocId` is the kind of name
+ * that later gets read as a vault document and joined against `vaultDocuments`. `authority` and
+ * `freshness` have no counterpart on either landed shape at all.
+ *
+ * So the mapping is CODE, not prose: `groundedSourceProps` hands the landed `GroundedSources`
+ * component exactly the props it already takes. One card component serves both planes and no
+ * caller writes its own translation.
+ */
+export function groundedSourceProps(evidence: readonly Pick<Evidence, "sourceRef" | "label">[]): {
+  readonly docIds: readonly string[];
+  readonly titles: readonly string[];
+  readonly count: number;
+} {
+  // Parallel arrays, index-aligned, exactly like `vaultSources`. Order is the caller's order.
+  return {
+    docIds: evidence.map((e) => e.sourceRef),
+    titles: evidence.map((e) => e.label),
+    count: evidence.length,
+  };
 }
 
 // ── Confidence ─────────────────────────────────────────────────────────────────────────────

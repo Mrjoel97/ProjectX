@@ -82,8 +82,18 @@ describe("recurrence storage is structurally absent", () => {
   test("NO FIELD ANYWHERE is a next-run, cadence, timezone-rule, scheduler-id or standing approval", () => {
     // Field names are read from the SOURCE's `name: v.` declarations, because the parsed validator
     // tree does not expose object-field names uniformly across `v.object` / `v.union` nesting.
+    //
+    // WHITESPACE-INSENSITIVE, not line-anchored. The original scan was `/^\s*(name)\s*:\s*v\./gm`,
+    // which only matched a declaration that BEGINS a line — so a table written on ONE line escaped
+    // it entirely. The audit proved it: injecting
+    // `routines: defineTable({ tenantId: v.string(), nextRunAt: v.number() }).index(...)` as a
+    // single line left this test GREEN with a live `nextRunAt` in the schema (only the two
+    // table-name tests went red). A field declaration is preceded by `{`, `,` or whitespace and by
+    // nothing else, so that is what this matches.
+    //
+    // MUTATION OBSERVED RED: the same one-line `routines` injection now turns THIS test red too.
     const declared = new Set(
-      [...SOURCE.matchAll(/^\s*([A-Za-z][A-Za-z0-9_]*)\s*:\s*v\./gm)].map((m) => m[1]),
+      [...SOURCE.matchAll(/[{,\s]([A-Za-z][A-Za-z0-9_]*)\s*:\s*v\./g)].map((m) => m[1]),
     );
     // THE THREE NAMED EXCEPTIONS. Each is a real, pre-existing, ONE-SHOT field, and each is listed
     // here rather than dropped from the ban so the carve-out is visible instead of implicit —
@@ -148,10 +158,29 @@ describe("recurrence storage is structurally absent", () => {
     expect(block).toContain("scheduledId:v.string()");
   });
 
+  test("the field scan can actually SEE the fields it claims to scan", () => {
+    // Without this control, a regex that matched nothing would report "no banned field anywhere"
+    // forever — which is exactly how the line-anchored version passed over a live `nextRunAt`.
+    const declared = new Set(
+      [...SOURCE.matchAll(/[{,\s]([A-Za-z][A-Za-z0-9_]*)\s*:\s*v\./g)].map((m) => m[1]),
+    );
+    for (const real of ["tenantId", "textHash", "templateId", "sourcePreferences", "createdAt"]) {
+      expect([...declared], `the field scan cannot see ${real}`).toContain(real);
+    }
+  });
+
   test("the Phase-29 pin row has no schedule-shaped field", () => {
     const block = tableBlock("savedPrompts");
-    // Positive witnesses first: the pin lineage this plan DID add.
-    for (const added of ["templateId", "templateVersion", "tenantSkillId", "customizationHash"]) {
+    // Positive witnesses first: all FIVE pin-lineage fields this plan added. `sourcePreferences`
+    // was missing from this loop until the 29-01 repair — the one added field with zero coverage,
+    // and the one the `textHash` fold-list also forgot.
+    for (const added of [
+      "templateId",
+      "templateVersion",
+      "tenantSkillId",
+      "customizationHash",
+      "sourcePreferences",
+    ]) {
       expect(dense(block), `savedPrompts is missing ${added}`).toContain(`${added}:v.optional(`);
     }
     // Then the absence. These are field declarations, so `name: v.` — the comment above the table
@@ -208,6 +237,183 @@ describe("knowledgeSearches is the tenant-scoped, bounded search content plane",
   });
 });
 
+// ── The lineage fields' SHAPE, proved by insert rather than by substring ────────────────────
+
+describe("pin lineage is stored as the shape it claims, not merely as a field name", () => {
+  // WHY THESE ARE INSERTS. The only assertion over the nine new optional fields used to be a
+  // source-text scan for `${field}:v.optional(`, which matches `v.optional(v.string())`,
+  // `v.optional(v.any())` and `v.optional(v.id("tenantSkills"))` IDENTICALLY. The audit relaxed
+  // `tenantSkillId` to `v.optional(v.string())` and `templateVersion` to `v.optional(v.string())`
+  // and every schema and savedPrompts test stayed green. Storing a value proves storage, not shape
+  // — the same defect SC-13 found for `conflictEvidence`, still standing everywhere else.
+  //
+  // `tenantSkillId` is the load-bearing one: the pin must name the EXACT candidate ROW, because
+  // two tenants can hold the same skill name AND version. `v.id("tenantSkills")` is what refuses a
+  // `(name, version)` string at insert time.
+  const pin = {
+    tenantId: "t1",
+    text: "run the pulse",
+    title: "run the pulse",
+    textHash: "h1",
+    createdAt: 1,
+  };
+
+  const aTenantSkill = async (ctx: {
+    db: { insert: (t: "tenantSkills", v: Record<string, unknown>) => Promise<unknown> };
+  }) =>
+    ctx.db.insert("tenantSkills", {
+      tenantId: "t1",
+      name: "pack-business-pulse",
+      version: 1,
+      body: "b",
+      authoredBody: "a",
+      status: "candidate",
+      author: "user",
+      basedOnScope: "global",
+      basedOnName: "pack-business-pulse",
+      basedOnVersion: 1,
+      rollbackEligible: false,
+      createdAt: 1,
+    });
+
+  test("a real tenantSkills row id round-trips, and every lineage value comes back unchanged", async () => {
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      const skillId = await aTenantSkill(ctx as never);
+      await ctx.db.insert("savedPrompts", {
+        ...pin,
+        templateId: "business-pulse",
+        templateVersion: 3,
+        tenantSkillId: skillId as never,
+        customizationHash: "c".repeat(64),
+        sourcePreferences: ["vault", "drive"],
+      });
+    });
+    const [row] = await t.run((ctx) => ctx.db.query("savedPrompts").collect());
+    expect(row?.templateId).toBe("business-pulse");
+    expect(row?.templateVersion).toBe(3);
+    expect(row?.customizationHash).toBe("c".repeat(64));
+    expect(row?.sourcePreferences).toEqual(["vault", "drive"]);
+    // The id came back as a real id, and it resolves to the row it named.
+    const skillId = row?.tenantSkillId;
+    expect(skillId, "the pin lost its tenantSkills row id").toBeDefined();
+    const resolved = await t.run(async (ctx) => (skillId ? await ctx.db.get(skillId) : null));
+    expect(resolved?.name).toBe("pack-business-pulse");
+  });
+
+  test("tenantSkillId is REFUSED a string that is not a tenantSkills row id", async () => {
+    // MUTATION that must turn this RED: `tenantSkillId: v.optional(v.string())`.
+    const t = convexTest(schema, modules);
+    await expect(
+      t.run(async (ctx) => {
+        await ctx.db.insert("savedPrompts", {
+          ...pin,
+          // biome-ignore lint/suspicious/noExplicitAny: a (name, version) string is the illegal shape
+          tenantSkillId: "pack-business-pulse@3" as any,
+        });
+      }),
+    ).rejects.toThrow();
+  });
+
+  test("tenantSkillId is REFUSED an id belonging to a DIFFERENT table", async () => {
+    // A `savedPrompts` id is a well-formed Convex id and still not a candidate row. The validator
+    // is table-typed, which is the property `v.optional(v.string())` would have thrown away.
+    const t = convexTest(schema, modules);
+    await expect(
+      t.run(async (ctx) => {
+        const otherId = await ctx.db.insert("savedPrompts", pin);
+        await ctx.db.insert("savedPrompts", {
+          ...pin,
+          textHash: "h2",
+          // biome-ignore lint/suspicious/noExplicitAny: an id from the wrong table IS the illegal shape
+          tenantSkillId: otherId as any,
+        });
+      }),
+    ).rejects.toThrow();
+  });
+
+  test("templateVersion is a NUMBER — a stringified version is refused", async () => {
+    // MUTATION: `templateVersion: v.optional(v.string())`. A version that can be either type is a
+    // version two comparisons disagree about.
+    const t = convexTest(schema, modules);
+    await expect(
+      t.run(async (ctx) => {
+        // biome-ignore lint/suspicious/noExplicitAny: "3" is the illegal shape
+        await ctx.db.insert("savedPrompts", { ...pin, templateVersion: "3" as any });
+      }),
+    ).rejects.toThrow();
+  });
+
+  test("sourcePreferences is an ARRAY of strings, not a comma-joined one", async () => {
+    const t = convexTest(schema, modules);
+    await expect(
+      t.run(async (ctx) => {
+        // biome-ignore lint/suspicious/noExplicitAny: a joined string is the illegal shape
+        await ctx.db.insert("savedPrompts", { ...pin, sourcePreferences: "vault,drive" as any });
+      }),
+    ).rejects.toThrow();
+  });
+
+  test("a pin with NO lineage still inserts — every field is optional, no row needs migrating", async () => {
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("savedPrompts", pin);
+    });
+    const [row] = await t.run((ctx) => ctx.db.query("savedPrompts").collect());
+    expect(row?.templateId).toBeUndefined();
+    expect(row?.tenantSkillId).toBeUndefined();
+  });
+
+  test("tenantSkills lineage round-trips with the same typed guarantees", async () => {
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("tenantSkills", {
+        tenantId: "t1",
+        name: "pack-business-pulse",
+        version: 1,
+        body: "b",
+        authoredBody: "a",
+        status: "candidate",
+        author: "user",
+        basedOnScope: "global",
+        basedOnName: "pack-business-pulse",
+        basedOnVersion: 1,
+        rollbackEligible: false,
+        createdAt: 1,
+        templateId: "business-pulse",
+        templateVersion: 3,
+        customizationValues: '{"tone":"direct"}',
+        customizationHash: "c".repeat(64),
+      });
+    });
+    const [row] = await t.run((ctx) => ctx.db.query("tenantSkills").collect());
+    expect(row?.templateVersion).toBe(3);
+    // `customizationValues` is the validated form input as JSON — a STRING, so a raw object is
+    // refused rather than silently stored as a second, unvalidated shape.
+    expect(row?.customizationValues).toBe('{"tone":"direct"}');
+    await expect(
+      t.run(async (ctx) => {
+        await ctx.db.insert("tenantSkills", {
+          tenantId: "t1",
+          name: "pack-business-pulse",
+          version: 2,
+          body: "b",
+          authoredBody: "a",
+          status: "candidate",
+          author: "user",
+          basedOnScope: "global",
+          basedOnName: "pack-business-pulse",
+          basedOnVersion: 1,
+          rollbackEligible: false,
+          createdAt: 1,
+          // biome-ignore lint/suspicious/noExplicitAny: an object is the illegal shape
+          customizationValues: { tone: "direct" } as any,
+        });
+      }),
+    ).rejects.toThrow();
+  });
+});
+
 describe("an unreachable source cannot carry a result count", () => {
   // This is the KNOW-01 honesty requirement made STRUCTURAL. The `sources` validator is a
   // discriminated union of three object shapes; the `unavailable` arm simply has no `returned`
@@ -245,8 +451,13 @@ describe("an unreachable source cannot carry a result count", () => {
         await ctx.db.insert("knowledgeSearches", {
           ...base,
           sources: [
-            // biome-ignore lint/suspicious/noExplicitAny: the point is that this shape is illegal
-            { source: "crm", status: "unavailable", reason: "not_landed", returned: 0 } as any,
+            {
+              source: "crm-facts",
+              status: "unavailable",
+              reason: "not_landed",
+              returned: 0,
+              // biome-ignore lint/suspicious/noExplicitAny: the point is that this shape is illegal
+            } as any,
           ],
         });
       }),
@@ -271,15 +482,19 @@ describe("an unreachable source cannot carry a result count", () => {
     await t.run(async (ctx) => {
       await ctx.db.insert("knowledgeSearches", {
         ...base,
-        sources: [{ source: "crm", status: "unavailable", reason: "not_landed" }],
+        sources: [{ source: "crm-facts", status: "unavailable", reason: "not_landed" }],
       });
     });
     const [row] = await t.run((ctx) => ctx.db.query("knowledgeSearches").collect());
-    expect(row?.sources[0]).toEqual({ source: "crm", status: "unavailable", reason: "not_landed" });
+    expect(row?.sources[0]).toEqual({
+      source: "crm-facts",
+      status: "unavailable",
+      reason: "not_landed",
+    });
     expect(row?.sources[0]).not.toHaveProperty("returned");
   });
 
-  test("a source outside the closed enum is refused", async () => {
+  test("a source outside the closed enum is refused on the COVERAGE plane", async () => {
     const t = convexTest(schema, modules);
     await expect(
       t.run(async (ctx) => {
@@ -292,6 +507,90 @@ describe("an unreachable source cannot carry a result count", () => {
     ).rejects.toThrow();
   });
 
+  test("a CITATION naming a source the product does not have is refused too", async () => {
+    // The closed union used to be applied on the coverage plane ONLY: `claims[].evidence[].source`
+    // and `claims[].conflictEvidence[].source` were bare `v.string()`. The audit inserted a row
+    // whose citation source was `"notion"` and whose conflict source was `"http://evil.example"`
+    // and it stored and read back cleanly — a RENDERED citation naming a source that does not
+    // exist, which is the exact lie this table's comment says it makes unspellable.
+    //
+    // MUTATION that must turn this RED: relax either `source:` back to `v.string()`.
+    const t = convexTest(schema, modules);
+    for (const bad of ["notion", "http://evil.example", "gmail", ""]) {
+      await expect(
+        t.run(async (ctx) => {
+          await ctx.db.insert("knowledgeSearches", {
+            ...base,
+            sources: [],
+            claims: [
+              {
+                text: "Rate is $40.",
+                evidence: [
+                  {
+                    // biome-ignore lint/suspicious/noExplicitAny: the point is that this source is illegal
+                    source: bad as any,
+                    sourceRef: "d1",
+                    label: "Rate card",
+                    authority: "tenant_owned" as const,
+                    freshness: "current" as const,
+                    retrievedAt: 1,
+                  },
+                ],
+                conflictEvidence: [],
+              },
+            ],
+          });
+        }),
+        `evidence source "${bad}" was accepted`,
+      ).rejects.toThrow();
+    }
+  });
+
+  test("a CONFLICTING citation is held to the same closed vocabulary", async () => {
+    const t = convexTest(schema, modules);
+    await expect(
+      t.run(async (ctx) => {
+        await ctx.db.insert("knowledgeSearches", {
+          ...base,
+          sources: [],
+          claims: [
+            {
+              text: "Rate is $40.",
+              evidence: [
+                {
+                  source: "vault" as const,
+                  sourceRef: "d1",
+                  label: "Rate card",
+                  authority: "tenant_owned" as const,
+                  freshness: "current" as const,
+                  retrievedAt: 1,
+                },
+              ],
+              conflictEvidence: [
+                {
+                  // biome-ignore lint/suspicious/noExplicitAny: the point is that this source is illegal
+                  source: "http://evil.example" as any,
+                  sourceRef: "x",
+                  label: "",
+                },
+              ],
+            },
+          ],
+        });
+      }),
+    ).rejects.toThrow();
+  });
+
+  test("the coverage plane and the citation plane speak the SAME closed vocabulary", () => {
+    // Two planes on one row that disagree about what a source is called is how `gmail` ends up
+    // beside `inbox`. `knowledgeSource` is now literally the same const in all three positions.
+    const block = dense(tableBlock("knowledgeSearches"));
+    // FIVE uses: the three arms of the `sources[]` discriminated union, plus `evidence[]` and
+    // `conflictEvidence[]` — the last two were bare `v.string()` before the 29-01 repair.
+    expect(block.split("source:knowledgeSource").length - 1).toBe(5);
+    expect(block, "a source field is still a bare string").not.toContain("source:v.string()");
+  });
+
   test("an unavailable reason outside the closed set is refused", async () => {
     const t = convexTest(schema, modules);
     await expect(
@@ -299,7 +598,7 @@ describe("an unreachable source cannot carry a result count", () => {
         await ctx.db.insert("knowledgeSearches", {
           ...base,
           // biome-ignore lint/suspicious/noExplicitAny: the point is that this reason is illegal
-          sources: [{ source: "gmail", status: "unavailable", reason: "dunno" } as any],
+          sources: [{ source: "inbox", status: "unavailable", reason: "dunno" } as any],
         });
       }),
     ).rejects.toThrow();
@@ -399,7 +698,7 @@ describe("an unreachable source cannot carry a result count", () => {
                 retrievedAt: 1,
               },
             ],
-            conflictEvidence: [{ source: "gmail", sourceRef: "m1", label: "Quote to Acme" }],
+            conflictEvidence: [{ source: "inbox", sourceRef: "m1", label: "Quote to Acme" }],
             excerpt: "standard rate is $40",
           },
         ],
@@ -407,7 +706,7 @@ describe("an unreachable source cannot carry a result count", () => {
     });
     const [row] = await t.run((ctx) => ctx.db.query("knowledgeSearches").collect());
     expect(row?.claims[0]?.conflictEvidence).toEqual([
-      { source: "gmail", sourceRef: "m1", label: "Quote to Acme" },
+      { source: "inbox", sourceRef: "m1", label: "Quote to Acme" },
     ]);
   });
 });

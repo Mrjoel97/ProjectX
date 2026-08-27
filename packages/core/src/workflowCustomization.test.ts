@@ -4,6 +4,7 @@
 // Phase 29 puts closed, typed fields in front of it. If any of these tests can be made to pass
 // with a tool grant, a URL, a secret, an MCP block or executable code in a value, the whole
 // "customization, not a prompt editor" claim is theatre.
+import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 import {
   CUSTOMIZATION_CAPS,
@@ -20,6 +21,7 @@ import {
   pinMatchesActive,
   renderCustomization,
   STALE_BASE_ERROR,
+  type TenantSkillRef,
   validateCustomization,
   type WorkflowPin,
 } from "./workflowCustomization";
@@ -90,26 +92,81 @@ describe("the customization vocabulary is closed", () => {
     ]);
   });
 
-  test("caps are positive finite numbers", () => {
+  test("caps are positive FINITE numbers", () => {
     for (const [k, v] of Object.entries(CUSTOMIZATION_CAPS)) {
       expect(typeof v, k).toBe("number");
       expect(v, k).toBeGreaterThan(0);
+      expect(Number.isFinite(v), k).toBe(true);
     }
+  });
+
+  test("NO CAP IS DEAD: every cap is read by validateCustomization", () => {
+    // `maxFields: 12` was declared here and read by nothing — not by the validator, not by a test
+    // — while this suite's "caps are positive numbers" test could not tell the difference. It was
+    // deleted rather than enforced: a `CustomizationSchema` is product-authored, so there is no
+    // untrusted producer for it to bound. The two survivors bound USER input and are applied.
+    const source = readFileSync(new URL("./workflowCustomization.ts", import.meta.url), "utf8");
+    const start = source.indexOf("export const CUSTOMIZATION_CAPS = {");
+    const end = source.indexOf("} as const;", start);
+    const outside = source.slice(0, start) + source.slice(end);
+    for (const key of Object.keys(CUSTOMIZATION_CAPS)) {
+      expect(outside, `CUSTOMIZATION_CAPS.${key} is declared but never applied`).toContain(
+        `CUSTOMIZATION_CAPS.${key}`,
+      );
+    }
+    expect(Object.keys(CUSTOMIZATION_CAPS)).not.toContain("maxFields");
   });
 });
 
 // ── Validation ─────────────────────────────────────────────────────────────────────────────
 
 describe("validateCustomization accepts only what the schema declared", () => {
-  test("a fully valid set passes and returns the normalized values", () => {
+  test("a fully valid set passes and returns EVERY accepted value, unchanged", () => {
+    // THE RETURNED VALUE IS THE POINT, and until the 29-01 repair nothing asserted it. The audit
+    // rewrote the threshold accept to `accepted[key] = 0` and the source-preference accept to
+    // `accepted[key] = []` — silently discarding the user's number and their whole source list —
+    // and 83/83 stayed green, because every test but one read only `out.ok` and that one read a
+    // single string field. A caller renders and hashes this object; a wrong value here is a wrong
+    // pin identity and a wrong body.
+    //
+    // MUTATIONS OBSERVED RED: `accepted[key] = 0` (threshold), `accepted[key] = []`
+    // (source_preference), `accepted[key] = raw.trim()` on the terminology/instruction arm,
+    // and returning `ok({})` for the whole map.
     const out = validateCustomization(SCHEMA, okValues());
     expect(out.ok).toBe(true);
-    if (out.ok) expect(out.value.customerNoun).toBe("client");
+    if (!out.ok) return;
+    expect(out.value).toEqual({
+      customerNoun: "client",
+      tone: "direct",
+      alertPct: 20,
+      prefer: ["vault", "drive"],
+      notes: "Lead with cash position.",
+    });
+    // Types survive too: a threshold is a NUMBER, a source preference is an ARRAY. A stringified
+    // number would hash differently and render differently.
+    expect(typeof out.value.alertPct).toBe("number");
+    expect(Array.isArray(out.value.prefer)).toBe(true);
   });
 
-  test("a partial set passes — every field is optional, absence means 'use the template'", () => {
+  test("boundary values are returned exactly, not clamped or coerced", () => {
+    const out = validateCustomization(SCHEMA, { alertPct: 0, prefer: [], notes: "  keep  " });
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    // Zero is a legal threshold and must not be swallowed by a falsy check.
+    expect(out.value.alertPct).toBe(0);
+    // An EMPTY preference list is a real choice ("prefer nothing in particular"), not absence.
+    expect(out.value.prefer).toEqual([]);
+    // Free text is accepted verbatim; trimming happens at RENDER, not at validation, so the
+    // hash input and the stored value cannot disagree about what the user typed.
+    expect(out.value.notes).toBe("  keep  ");
+  });
+
+  test("a partial set passes and returns ONLY the keys submitted", () => {
     const out = validateCustomization(SCHEMA, { tone: "concise" });
     expect(out.ok).toBe(true);
+    // Absence means "use the template's default" — validation must not invent a default here, or
+    // two users who left a field alone would get two different bodies.
+    if (out.ok) expect(out.value).toEqual({ tone: "concise" });
   });
 
   test("an empty set passes and renders nothing", () => {
@@ -463,10 +520,14 @@ describe("checkBaseVersion never silently merges two authors' edits", () => {
 
 // ── The manual pin (ROUT-02) ───────────────────────────────────────────────────────────────
 
+/** A `tenantSkills` row id, as the Convex validator would hand it over. Opaque here, never parsed. */
+const ROW_A = "js77c8k1r2m3n4p5q6r7s8t9" as TenantSkillRef;
+const ROW_B = "js77zzzzzzzzzzzzzzzzzzzz" as TenantSkillRef;
+
 const PIN: WorkflowPin = {
   templateId: "business-pulse",
   templateVersion: 3,
-  tenantSkillVersion: 12,
+  tenantSkillId: ROW_A,
   customizationHash: "b".repeat(64),
   sourcePreferences: ["vault", "drive"],
 };
@@ -484,8 +545,8 @@ describe("a pinned workflow names an exact version and never replays a plan", ()
     for (const variant of [
       { ...PIN, templateId: "brand-review" as const },
       { ...PIN, templateVersion: 4 },
-      { ...PIN, tenantSkillVersion: 13 },
-      { ...PIN, tenantSkillVersion: null },
+      { ...PIN, tenantSkillId: ROW_B },
+      { ...PIN, tenantSkillId: null },
       { ...PIN, customizationHash: "c".repeat(64) },
       { ...PIN, sourcePreferences: ["vault"] as const },
     ]) {
@@ -493,22 +554,35 @@ describe("a pinned workflow names an exact version and never replays a plan", ()
     }
   });
 
-  test("a pin whose tenant version is still active matches", () => {
-    expect(pinMatchesActive(PIN, { templateVersion: 3, tenantSkillVersion: 12 })).toBe(true);
+  test("THE PIN NAMES A ROW, NOT A VERSION — the identity carries the tenantSkills id", () => {
+    // 29-01 first typed this as `tenantSkillVersion: number | null` and compared that number,
+    // contradicting its own schema field (`tenantSkillId: v.optional(v.id("tenantSkills"))`) and
+    // the landed rail (`Record<string, Id<"tenantSkills">>`, dispatch.ts:234/:256). Two tenants can
+    // hold the same skill name AND version, which is why `recordTenantEvalEvidence` keys on the
+    // row id too. MUTATION that must turn this RED: compare a version number instead of the id.
+    expect(pinIdentity(PIN)).toContain(ROW_A);
+    expect(pinIdentity(PIN)).not.toBe(pinIdentity({ ...PIN, tenantSkillId: ROW_B }));
+    // No version survives anywhere in the pin surface: a second, non-authoritative copy of the
+    // same fact is what a later reader compares by mistake.
+    expect(Object.keys(PIN)).not.toContain("tenantSkillVersion");
+  });
+
+  test("a pin whose tenant candidate row is still active matches", () => {
+    expect(pinMatchesActive(PIN, { templateVersion: 3, tenantSkillId: ROW_A })).toBe(true);
   });
 
   test("a pin is STALE once the tenant's active candidate moves on", () => {
-    expect(pinMatchesActive(PIN, { templateVersion: 3, tenantSkillVersion: 13 })).toBe(false);
+    expect(pinMatchesActive(PIN, { templateVersion: 3, tenantSkillId: ROW_B })).toBe(false);
   });
 
   test("a pin is STALE once the product template is republished", () => {
-    expect(pinMatchesActive(PIN, { templateVersion: 4, tenantSkillVersion: 12 })).toBe(false);
+    expect(pinMatchesActive(PIN, { templateVersion: 4, tenantSkillId: ROW_A })).toBe(false);
   });
 
   test("a pin with NO tenant customization matches the bare product template", () => {
-    const bare = { ...PIN, tenantSkillVersion: null };
-    expect(pinMatchesActive(bare, { templateVersion: 3, tenantSkillVersion: null })).toBe(true);
-    expect(pinMatchesActive(bare, { templateVersion: 3, tenantSkillVersion: 12 })).toBe(false);
+    const bare = { ...PIN, tenantSkillId: null };
+    expect(pinMatchesActive(bare, { templateVersion: 3, tenantSkillId: null })).toBe(true);
+    expect(pinMatchesActive(bare, { templateVersion: 3, tenantSkillId: ROW_A })).toBe(false);
   });
 
   test("EVERY RUN GETS A FRESH CORRELATION — a rerun can never be an old plan", () => {
@@ -529,34 +603,75 @@ describe("a pinned workflow names an exact version and never replays a plan", ()
 // ── Structural bans ────────────────────────────────────────────────────────────────────────
 
 describe("what the customization contracts must never contain", () => {
-  test("no recurrence vocabulary in the module surface", async () => {
+  // WHY THIS IS A SOURCE-TEXT SCAN AND NOT A TYPE OR A FIXTURE.
+  //
+  // Both bans here were unfalsifiable in 29-01, and the audit proved it by adding
+  // `readonly nextRunAt?: number; readonly cadence?: string; readonly timezone?: string;
+  // readonly enabled?: boolean;` to `WorkflowPin` — all four banned words — and watching 83/83
+  // stay GREEN with a clean typecheck. TypeScript types are ERASED at runtime, so:
+  //   • `Object.keys(PIN)` reflects the TEST FILE's own fixture literal, never the type; and
+  //   • `Object.keys(await import(...))` lists runtime exports and is blind to every type.
+  // The only scan that can see a type declaration is one over the source text — the idiom this
+  // repo already uses in `savedPrompts.test.ts` and `pinnedPrompts.test.ts`.
+  //
+  // Comments are stripped first, because the module header legitimately names every banned word
+  // inside the paragraph that bans them. An absence test that had to be widened until it passed
+  // would be an absence test that had started lying.
+  const SOURCE = readFileSync(new URL("./workflowCustomization.ts", import.meta.url), "utf8");
+  const CODE_ONLY = SOURCE.replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/(^|[^:])\/\/[^\n]*/g, "$1 ")
+    .replace(/\s+/g, "");
+
+  const RECURRENCE_WORDS = [
+    "nextRunAt",
+    "nextRun",
+    "cron",
+    "cronExpression",
+    "rrule",
+    "recurrence",
+    "recurrenceRule",
+    "cadence",
+    "interval",
+    "intervalMs",
+    "timezone",
+    "ianaTimezone",
+    "schedulerId",
+    "scheduledId",
+    "standingApproval",
+    "autoRun",
+    "runCount",
+    "enabled",
+  ];
+
+  test("NO DECLARATION in the module is recurrence-shaped — type fields included", () => {
+    // MUTATION OBSERVED RED: adding `readonly nextRunAt?: number;` (and each of `cadence`,
+    // `timezone`, `enabled`) to `WorkflowPin` turns this test red. Reverted.
+    for (const banned of RECURRENCE_WORDS) {
+      // Matches a type field (`nextRunAt?:` / `nextRunAt:`), an object property and a const.
+      for (const form of [`${banned}?:`, `${banned}:`, `${banned}=`]) {
+        expect(CODE_ONLY, `workflowCustomization.ts declares ${banned}`).not.toContain(form);
+      }
+    }
+  });
+
+  test("no recurrence vocabulary in the module's runtime surface either", async () => {
     const mod = await import("./workflowCustomization");
     const names = Object.keys(mod).join(" ").toLowerCase();
-    for (const banned of [
-      "cron",
-      "schedule",
-      "recurrence",
-      "nextrun",
-      "routine",
-      "trigger",
-      "interval",
-      "timezone",
-    ]) {
+    for (const banned of ["cron", "schedule", "recurrence", "nextrun", "routine", "trigger"]) {
       expect(names, `workflowCustomization exports ${banned}`).not.toContain(banned);
     }
   });
 
-  test("a pin has no schedule-shaped field", () => {
-    for (const banned of [
-      "nextRunAt",
-      "cron",
-      "rrule",
-      "timezone",
-      "cadence",
-      "interval",
-      "enabled",
+  test("the scan can actually SEE a WorkflowPin field — the positive control", () => {
+    // Without this, a scan whose comment-stripper accidentally ate the whole file would report
+    // "no banned words" forever. It must find the fields the pin really has.
+    for (const real of [
+      "templateId:",
+      "templateVersion:",
+      "tenantSkillId:",
+      "customizationHash:",
     ]) {
-      expect(Object.keys(PIN), banned).not.toContain(banned);
+      expect(CODE_ONLY, `the scan cannot see ${real}`).toContain(real);
     }
   });
 });

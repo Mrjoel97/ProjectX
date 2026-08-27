@@ -3,29 +3,40 @@
 // These tests exist to make ONE class of lie impossible: a search that could not reach a source
 // reporting "nothing exists". Every branch below has a named mutation recorded in 29-01-SUMMARY.md
 // that turns it red.
+import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 import {
   AUTHORITY_CLASSES,
   aggregateCoverage,
   authorityFor,
   CONFIDENCE_LABELS,
+  clampEvidence,
   clampSearchPlan,
   dedupeEvidence,
   type Evidence,
   freshnessFor,
+  groundedSourceProps,
   isKnowledgeSource,
-  KNOWLEDGE_SOURCE_LABEL,
   KNOWLEDGE_SOURCES,
   type KnowledgeSourceState,
   NOT_LANDED_SOURCES,
   normalizeEvidenceText,
+  oldestFreshness,
+  PLAN_REJECTIONS,
   redactedSearchEvent,
   renderSourceGap,
   SEARCH_CAPS,
   searchConfidence,
   validateSourceRef,
   validateSynthesis,
+  weakestAuthority,
 } from "./knowledgeSearch";
+import {
+  MISSING_PACK_SOURCES,
+  MISSING_SOURCE_UNLOCK,
+  PACK_SOURCE_LABEL,
+  REACHABLE_PACK_SOURCES,
+} from "./workflowPacks";
 
 const NOW = Date.UTC(2026, 7, 27); // 2026-08-27
 const DAY = 86_400_000;
@@ -57,7 +68,13 @@ function ev(over: Partial<Evidence> & Pick<Evidence, "evidenceId">): Evidence {
 
 describe("the source registry is closed and code-owned", () => {
   test("exactly the five native sources, in a fixed order", () => {
-    expect([...KNOWLEDGE_SOURCES]).toEqual(["vault", "drive", "gmail", "crm", "support"]);
+    expect([...KNOWLEDGE_SOURCES]).toEqual([
+      "vault",
+      "drive",
+      "inbox",
+      "crm-facts",
+      "support-desk",
+    ]);
   });
 
   test("a source outside the enum is refused, never defaulted", () => {
@@ -69,13 +86,50 @@ describe("the source registry is closed and code-owned", () => {
 
   test("every source has a user-facing label, so no adapter can name itself", () => {
     for (const s of KNOWLEDGE_SOURCES) {
-      expect(KNOWLEDGE_SOURCE_LABEL[s].length).toBeGreaterThan(0);
+      expect(PACK_SOURCE_LABEL[s].length).toBeGreaterThan(0);
     }
   });
 
   test("crm and support are recorded as NOT LANDED — the Phase 28 half that does not exist", () => {
-    expect([...NOT_LANDED_SOURCES]).toEqual(["crm", "support"]);
+    expect([...NOT_LANDED_SOURCES]).toEqual(["crm-facts", "support-desk"]);
     for (const s of NOT_LANDED_SOURCES) expect(KNOWLEDGE_SOURCES).toContain(s);
+  });
+
+  test("NOT_LANDED is DERIVED from the one registry, not a second hand-kept list", () => {
+    // MUTATION that must turn this RED: move `crm-facts` from MISSING_PACK_SOURCES to
+    // REACHABLE_PACK_SOURCES without touching knowledgeSearch.ts. The point of deriving it is that
+    // a connector landing in the one registry cannot leave a stale not-landed claim behind here.
+    const missing = new Set<string>(MISSING_PACK_SOURCES);
+    expect([...NOT_LANDED_SOURCES]).toEqual(KNOWLEDGE_SOURCES.filter((s) => missing.has(s)));
+    const reachable = new Set<string>(REACHABLE_PACK_SOURCES);
+    for (const s of KNOWLEDGE_SOURCES) {
+      if (NOT_LANDED_SOURCES.includes(s)) continue;
+      expect(reachable.has(s), `${s} is neither reachable nor missing in the pack registry`).toBe(
+        true,
+      );
+    }
+  });
+
+  test("every knowledge source IS a PackSource — one vocabulary, not two", () => {
+    // The defect this replaces: `gmail` here beside `inbox` there, so a pin whose
+    // `sourcePreferences` said `inbox` could never select the mail search source, with no code
+    // anywhere that could translate between the two. MUTATION: rename `inbox` back to `gmail` in
+    // KNOWLEDGE_SOURCES — `satisfies readonly PackSource[]` fails typecheck and this fails at run.
+    const packVocabulary = new Set<string>([...REACHABLE_PACK_SOURCES, ...MISSING_PACK_SOURCES]);
+    for (const s of KNOWLEDGE_SOURCES) {
+      expect(packVocabulary.has(s), `${s} is not a PackSource`).toBe(true);
+    }
+    // And the label is the SAME string object the pack plane renders — not a copy that can drift.
+    expect(PACK_SOURCE_LABEL.vault).toBe("your knowledge vault");
+    expect(PACK_SOURCE_LABEL.inbox).toBe("your mailbox");
+  });
+
+  test("maxSources is the registry size — the cap is enforced by construction, not a counter", () => {
+    // `clampSearchPlan` admits one entry per DISTINCT source, so a plan cannot exceed the registry.
+    // This equality is what makes that argument falsifiable: MUTATION set maxSources to 4 -> RED.
+    expect(SEARCH_CAPS.maxSources).toBe(KNOWLEDGE_SOURCES.length);
+    // And there is no rejection reason for a cap the code cannot hit.
+    expect([...PLAN_REJECTIONS]).not.toContain("source_cap");
   });
 });
 
@@ -87,6 +141,40 @@ describe("caps are owned by this repo, not by a provider cursor or a model", () 
       expect(typeof v, k).toBe("number");
       expect(v, k).toBeGreaterThan(0);
       expect(Number.isFinite(v), k).toBe(true);
+    }
+  });
+
+  test("NO CAP IS DEAD: every key is read by a function, not just declared", () => {
+    // The 29-01 audit found six of eleven caps referenced ONLY at their own declaration while
+    // `schema.ts` cited them as "BOUNDED BY CONSTRUCTION". A cap nothing applies is a documented
+    // invariant with no enforcement, and the tests over those six ("every cap is a positive
+    // number") could not fail. This scan is the tripwire: delete an enforcement site and the key
+    // becomes declaration-only again, RED.
+    //
+    // MUTATIONS OBSERVED RED: removing the `labelCharCap` slice from `clampEvidence`; removing the
+    // `maxEvidencePerSource` guard.
+    const source = readFileSync(new URL("./knowledgeSearch.ts", import.meta.url), "utf8");
+    const start = source.indexOf("export const SEARCH_CAPS = {");
+    expect(start, "SEARCH_CAPS declaration not found").toBeGreaterThan(-1);
+    const end = source.indexOf("} as const;", start);
+    const outsideDeclaration = source.slice(0, start) + source.slice(end);
+    // Comments explain the caps and would satisfy a naive substring scan, so strip them first.
+    const code = outsideDeclaration
+      .replace(/\/\*[\s\S]*?\*\//g, " ")
+      .replace(/(^|[^:])\/\/[^\n]*/g, "$1 ");
+    // TWO NAMED EXCEPTIONS, listed here rather than dropped from the scan so the carve-out is
+    // visible instead of implicit. Both are enforced BY CONSTRUCTION and each is pinned by an
+    // equality assertion in this file, which is the substitute for a `SEARCH_CAPS.x` read:
+    //   • maxSources — `clampSearchPlan` admits one entry per DISTINCT source, so the plan cannot
+    //     exceed the registry; pinned by `maxSources === KNOWLEDGE_SOURCES.length` above.
+    //   • maxQueriesPerSource — `SourcePlan` has ONE `query` field and a repeat is
+    //     `duplicate_source`; pinned by the `=== 1` assertion below.
+    const BY_CONSTRUCTION: readonly string[] = ["maxSources", "maxQueriesPerSource"];
+    for (const key of Object.keys(SEARCH_CAPS)) {
+      if (BY_CONSTRUCTION.includes(key)) continue;
+      expect(code, `SEARCH_CAPS.${key} is declared but never applied`).toContain(
+        `SEARCH_CAPS.${key}`,
+      );
     }
   });
 
@@ -107,11 +195,11 @@ describe("clampSearchPlan is the boundary the planner output crosses", () => {
   test("a well-formed plan survives intact", () => {
     const out = clampSearchPlan([
       { source: "vault", query: "pricing policy" },
-      { source: "gmail", query: "pricing" },
+      { source: "inbox", query: "pricing" },
     ]);
     expect(out.plan).toEqual([
       { source: "vault", query: "pricing policy" },
-      { source: "gmail", query: "pricing" },
+      { source: "inbox", query: "pricing" },
     ]);
     expect(out.rejected).toEqual([]);
     expect(out.notLanded).toEqual([]);
@@ -129,10 +217,12 @@ describe("clampSearchPlan is the boundary the planner output crosses", () => {
   test("a NOT-LANDED source becomes an honest unavailable state, not a plan entry and not silence", () => {
     const out = clampSearchPlan([
       { source: "vault", query: "revenue" },
-      { source: "crm", query: "revenue" },
+      { source: "crm-facts", query: "revenue" },
     ]);
     expect(out.plan.map((p) => p.source)).toEqual(["vault"]);
-    expect(out.notLanded).toEqual([{ status: "unavailable", source: "crm", reason: "not_landed" }]);
+    expect(out.notLanded).toEqual([
+      { status: "unavailable", source: "crm-facts", reason: "not_landed" },
+    ]);
     // It is NOT a rejection: a rejection is a planner error, this is a product gap we must show.
     expect(out.rejected).toEqual([]);
   });
@@ -193,11 +283,20 @@ describe("clampSearchPlan is the boundary the planner output crosses", () => {
     ).toBe(true);
   });
 
-  test("the source cap holds even if the planner names more sources than exist", () => {
-    const raw = KNOWLEDGE_SOURCES.filter((s) => !NOT_LANDED_SOURCES.includes(s as never)).map(
-      (source) => ({ source, query: "q" }),
-    );
+  test("naming every source twice yields one entry each and a named rejection for every repeat", () => {
+    // This replaces a test that asserted only `plan.length <= maxSources` over a `source_cap`
+    // branch that could never run (3 landed sources, cap 5). What is actually true and worth
+    // pinning: one entry per distinct LANDED source, every repeat rejected BY NAME, and the
+    // not-landed half diverted rather than silently dropped.
+    const raw = KNOWLEDGE_SOURCES.filter((s) => !NOT_LANDED_SOURCES.includes(s)).map((source) => ({
+      source,
+      query: "q",
+    }));
     const out = clampSearchPlan([...raw, ...raw]);
+    expect(out.plan.map((p) => p.source)).toEqual(raw.map((r) => r.source));
+    expect(out.rejected).toEqual(
+      raw.map((r) => ({ source: r.source, reason: "duplicate_source" })),
+    );
     expect(out.plan.length).toBeLessThanOrEqual(SEARCH_CAPS.maxSources);
   });
 });
@@ -216,8 +315,32 @@ describe("validateSourceRef keeps content out of the ref plane (CLAUDE.md §4)",
       "line\nbreak",
       "tab\there",
       "'quoted'",
+      // THE ONES THE ORIGINAL DENYLIST LET THROUGH. It listed quotes and \n\r\t and no space
+      // class at all, while its own docstring claimed it refused whitespace. Both of these
+      // returned ok:true. Prose always contains a space; a provider id never does.
+      "Acme Corp Invoice.pdf",
+      "Q3 revenue summary for Northwind",
+      // An allowlist also refuses markup, an address and a path traversal for free.
+      "<script>alert(1)</script>",
+      "joel@example.com",
+      "..\\..\\etc\\passwd",
     ]) {
       expect(validateSourceRef(bad).ok, `${JSON.stringify(bad)} passed as a ref`).toBe(false);
+    }
+  });
+
+  test("the real refs the five adapters actually mint all pass", () => {
+    // The allowlist would be useless if it refused the ids it exists to admit. These are the
+    // shapes each landed plane produces: a Convex document id, a Gmail message id, a Drive file
+    // id, and a provider-prefixed record id.
+    for (const good of [
+      "k1739abcd2efgh3ijkl4mnop5q",
+      "18f2c1a9b7d4e6f0",
+      "1A2b-C3d_E4f.G5h",
+      "inv_1P4kQ2JdRt5uV6w",
+      "https://x", // NOTE: `:` and `/` are id characters (`gid://...`), so a URL is NOT refused
+    ]) {
+      expect(validateSourceRef(good).ok, `${good} was refused as a ref`).toBe(true);
     }
   });
 
@@ -244,9 +367,9 @@ describe("authority is a fixed mapping, never a model output", () => {
   test("each source maps to its adapter's class", () => {
     expect(authorityFor("vault", {})).toBe("tenant_owned");
     expect(authorityFor("drive", {})).toBe("tenant_owned");
-    expect(authorityFor("gmail", {})).toBe("correspondence");
-    expect(authorityFor("crm", {})).toBe("system_of_record");
-    expect(authorityFor("support", {})).toBe("system_of_record");
+    expect(authorityFor("inbox", {})).toBe("correspondence");
+    expect(authorityFor("crm-facts", {})).toBe("system_of_record");
+    expect(authorityFor("support-desk", {})).toBe("system_of_record");
   });
 
   test("a stored web_research vault doc is downgraded — retrieval location is not provenance", () => {
@@ -291,13 +414,49 @@ describe("freshnessFor reads timestamps only", () => {
 // ── Dedupe must not delete disagreement ────────────────────────────────────────────────────
 
 describe("dedupeEvidence collapses identity and RETAINS conflict", () => {
-  test("the same record read twice collapses to one group", () => {
-    const a = ev({ evidenceId: "e1", source: "vault", sourceRef: "doc_9" });
-    const b = ev({ evidenceId: "e2", source: "vault", sourceRef: "doc_9" });
+  test("the same record read twice SAYING THE SAME THING collapses to one group", () => {
+    const a = ev({ evidenceId: "e1", source: "vault", sourceRef: "doc_9", text: "Price is $40." });
+    const b = ev({ evidenceId: "e2", source: "vault", sourceRef: "doc_9", text: "Price is $40." });
     const out = dedupeEvidence([a, b]);
     expect(out.groups).toHaveLength(1);
     expect(first(out.groups).primary.evidenceId).toBe("e1");
     expect(first(out.groups).duplicates.map((d) => d.evidenceId)).toEqual(["e2"]);
+    expect(first(out.groups).conflicting).toEqual([]);
+    expect(out.collapsed).toBe(1);
+    expect(out.conflicts).toBe(0);
+  });
+
+  test("ONE REF THAT DISAGREES WITH ITSELF is a conflict, never a duplicate", () => {
+    // The 29-01 defect: identity was keyed on `source|sourceRef` alone and the text was never
+    // compared, so `doc_9` reading "$40" on one pass and "$60" on another produced ONE group with
+    // `collapsed: 1` and the $60 row filed under `duplicates`. Nothing was deleted — but the
+    // module's own contract says a duplicate is "safe to collapse", so a renderer that follows the
+    // contract drops the second figure. This is the exact $40/$60 case the header says it prevents.
+    //
+    // MUTATION that must turn this RED: key the group on `source|sourceRef` without comparing
+    // `normalizeEvidenceText`, i.e. push every repeat into `duplicates`.
+    const out = dedupeEvidence([
+      ev({ evidenceId: "e1", source: "vault", sourceRef: "doc_9", text: "Price is $40." }),
+      ev({ evidenceId: "e2", source: "vault", sourceRef: "doc_9", text: "Price is $60." }),
+    ]);
+    expect(out.groups).toHaveLength(1);
+    expect(first(out.groups).duplicates).toEqual([]);
+    expect(first(out.groups).conflicting.map((c) => c.text)).toEqual(["Price is $60."]);
+    // A disagreement is NOT a collapse, and the counts must not launder one as the other.
+    expect(out.collapsed).toBe(0);
+    expect(out.conflicts).toBe(1);
+  });
+
+  test("a same-ref repeat that differs only in whitespace or case is still a duplicate", () => {
+    // Conflict detection uses the SAME normalization as `related` grouping, so a provider that
+    // re-wraps its own text does not manufacture a disagreement out of nothing.
+    const out = dedupeEvidence([
+      ev({ evidenceId: "e1", source: "vault", sourceRef: "doc_9", text: "Price is $40." }),
+      ev({ evidenceId: "e2", source: "vault", sourceRef: "doc_9", text: "  PRICE   is\r\n$40. " }),
+    ]);
+    expect(out.groups).toHaveLength(1);
+    expect(first(out.groups).duplicates.map((d) => d.evidenceId)).toEqual(["e2"]);
+    expect(out.conflicts).toBe(0);
     expect(out.collapsed).toBe(1);
   });
 
@@ -325,7 +484,7 @@ describe("dedupeEvidence collapses identity and RETAINS conflict", () => {
   test("CONTRADICTORY text from two records is never merged and never dropped", () => {
     const out = dedupeEvidence([
       ev({ evidenceId: "e1", source: "vault", sourceRef: "d1", text: "Price is $40." }),
-      ev({ evidenceId: "e2", source: "gmail", sourceRef: "d2", text: "Price is $60." }),
+      ev({ evidenceId: "e2", source: "inbox", sourceRef: "d2", text: "Price is $60." }),
     ]);
     expect(out.groups).toHaveLength(2);
     expect(out.groups.every((g) => g.related.length === 0)).toBe(true);
@@ -350,13 +509,149 @@ describe("dedupeEvidence collapses identity and RETAINS conflict", () => {
   });
 });
 
+// ── The admission boundary: caps applied to untrusted adapter output ───────────────────────
+
+describe("clampEvidence enforces every per-source and per-run bound", () => {
+  const many = (source: Evidence["source"], n: number, over: Partial<Evidence> = {}): Evidence[] =>
+    Array.from({ length: n }, (_, i) =>
+      ev({ evidenceId: `${source}_${i}`, source, sourceRef: `${source}_ref_${i}`, ...over }),
+    );
+
+  test("a source is cut to maxEvidencePerSource and REPORTED as capped", () => {
+    // MUTATION that must turn this RED: drop the `used >= SEARCH_CAPS.maxEvidencePerSource` arm.
+    const out = clampEvidence(many("vault", SEARCH_CAPS.maxEvidencePerSource + 3));
+    expect(out.evidence).toHaveLength(SEARCH_CAPS.maxEvidencePerSource);
+    expect(out.capped).toEqual(["vault"]);
+    // The rows kept are the FIRST ones — the adapter's own ordering, not a reshuffle.
+    expect(out.evidence.map((e) => e.evidenceId)).toEqual(
+      many("vault", SEARCH_CAPS.maxEvidencePerSource).map((e) => e.evidenceId),
+    );
+  });
+
+  test("a source under its cap is untouched and NOT reported as capped", () => {
+    const input = many("vault", 3);
+    const out = clampEvidence(input);
+    expect(out.evidence).toHaveLength(3);
+    expect(out.capped).toEqual([]);
+    // The SAME objects, not rebuilt copies: nothing that fits is rewritten.
+    expect(out.evidence[0]).toBe(input[0]);
+    expect(out.evidence[2]).toBe(input[2]);
+  });
+
+  test("the whole run is cut to maxEvidenceTotal across sources", () => {
+    // MUTATION: drop the `kept.length >= SEARCH_CAPS.maxEvidenceTotal` arm.
+    const sources = ["vault", "drive", "inbox"] as const;
+    const out = clampEvidence(sources.flatMap((s) => many(s, SEARCH_CAPS.maxEvidencePerSource)));
+    // 3 x 8 = 24, exactly the total cap, so nothing is cut yet.
+    expect(out.evidence).toHaveLength(SEARCH_CAPS.maxEvidenceTotal);
+    expect(out.capped).toEqual([]);
+  });
+
+  test("text over evidenceTextCharCap is truncated, and the source is reported capped", () => {
+    // MUTATION: remove the `.slice(0, SEARCH_CAPS.evidenceTextCharCap)`.
+    const long = "x".repeat(SEARCH_CAPS.evidenceTextCharCap + 500);
+    const out = clampEvidence([ev({ evidenceId: "e1", text: long })]);
+    expect(out.evidence[0]?.text).toHaveLength(SEARCH_CAPS.evidenceTextCharCap);
+    expect(out.capped).toEqual(["vault"]);
+  });
+
+  test("a label over labelCharCap is truncated — an untrusted title is not a document", () => {
+    // MUTATION: remove the `.slice(0, SEARCH_CAPS.labelCharCap)`. `labelCharCap` was enforced by
+    // NOTHING before this, while `schema.ts` cited "a label at 200 chars" as a bound.
+    const out = clampEvidence([
+      ev({ evidenceId: "e1", label: "L".repeat(SEARCH_CAPS.labelCharCap + 50) }),
+    ]);
+    expect(out.evidence[0]?.label).toHaveLength(SEARCH_CAPS.labelCharCap);
+    expect(out.capped).toEqual(["vault"]);
+  });
+
+  test("the whole-run character budget drops rows rather than half a sentence", () => {
+    // MUTATION: remove the `totalChars + text.length > SEARCH_CAPS.totalEvidenceCharCap` arm.
+    // 8 rows of 1500 chars = 12000, over the 8000 budget: 5 fit, the rest are dropped whole.
+    const big = "y".repeat(SEARCH_CAPS.evidenceTextCharCap);
+    const out = clampEvidence(many("vault", 8, { text: big }));
+    const total = out.evidence.reduce((n, e) => n + e.text.length, 0);
+    expect(total).toBeLessThanOrEqual(SEARCH_CAPS.totalEvidenceCharCap);
+    expect(out.evidence.length).toBeLessThan(8);
+    // Every kept row is WHOLE — no row is halved to make the budget balance exactly.
+    for (const e of out.evidence) expect(e.text).toBe(big);
+    expect(out.capped).toEqual(["vault"]);
+  });
+
+  test("one chatty source cannot spend another's budget", () => {
+    const out = clampEvidence([...many("vault", 20), ...many("drive", 4)]);
+    const perSource = (s: string) => out.evidence.filter((e) => e.source === s).length;
+    expect(perSource("vault")).toBe(SEARCH_CAPS.maxEvidencePerSource);
+    expect(perSource("drive")).toBe(4);
+    expect(out.capped).toEqual(["vault"]);
+  });
+
+  test("an empty read is an empty read — no cap is reported when nothing was cut", () => {
+    expect(clampEvidence([])).toEqual({ evidence: [], capped: [] });
+  });
+});
+
+// ── The citation shape maps onto the landed renderer ───────────────────────────────────────
+
+describe("groundedSourceProps hands the LANDED vault card exactly its own props", () => {
+  test("refs and labels become the index-aligned docIds/titles/count vaultSources shape", () => {
+    // The point is that no caller writes a rename shim: `GroundedSources({titles, docIds})` in
+    // `cards.tsx` and the `vaultSources` row both take these three names, so one card component
+    // serves the vault plane and the knowledge-search plane.
+    const out = groundedSourceProps([
+      { sourceRef: "d1", label: "Rate card" },
+      { sourceRef: "m1", label: "Quote to Acme" },
+    ]);
+    expect(out).toEqual({
+      docIds: ["d1", "m1"],
+      titles: ["Rate card", "Quote to Acme"],
+      count: 2,
+    });
+    // Index alignment is the whole contract: titles[i] describes docIds[i].
+    expect(out.titles[1]).toBe("Quote to Acme");
+    expect(out.docIds[1]).toBe("m1");
+  });
+
+  test("no evidence is a count of zero, not an absent card", () => {
+    expect(groundedSourceProps([])).toEqual({ docIds: [], titles: [], count: 0 });
+  });
+});
+
+// ── The empty-set arms that carry a documented safety guarantee ────────────────────────────
+
+describe("absence is never a strong or fresh claim", () => {
+  test("the weakest of NOTHING is the weakest class", () => {
+    // Documented as a safety property ("absence is never a strong claim") but unreachable from
+    // every caller and untested until the 29-01 repair — a guarantee nothing could exercise.
+    // MUTATION that must turn this RED: `if (classes.length === 0) return "tenant_owned"`.
+    expect(weakestAuthority([])).toBe("agent_authored");
+  });
+
+  test("the weakest of a set is the weakest MEMBER, strongest-first ordering held", () => {
+    expect(weakestAuthority(["tenant_owned"])).toBe("tenant_owned");
+    expect(weakestAuthority(["tenant_owned", "correspondence"])).toBe("correspondence");
+    expect(weakestAuthority(["agent_authored", "tenant_owned"])).toBe("agent_authored");
+  });
+
+  test("the oldest of NOTHING is unknown, not current", () => {
+    // MUTATION: `if (values.length === 0) return "current"`.
+    expect(oldestFreshness([])).toBe("unknown");
+  });
+
+  test("unknown sorts with the worst, so an undatable source cannot look fresh", () => {
+    expect(oldestFreshness(["current", "unknown"])).toBe("unknown");
+    expect(oldestFreshness(["current", "stale"])).toBe("stale");
+    expect(oldestFreshness(["current", "recent"])).toBe("recent");
+  });
+});
+
 // ── Synthesis validation — the citation firewall ───────────────────────────────────────────
 
 const EVIDENCE: Evidence[] = [
   ev({ evidenceId: "e1", sourceRef: "d1", text: "Our standard rate is $40 per hour." }),
   ev({
     evidenceId: "e2",
-    source: "gmail",
+    source: "inbox",
     sourceRef: "m1",
     text: "We quoted them $60 per hour.",
     authority: "correspondence",
@@ -609,11 +904,11 @@ describe("aggregateCoverage keeps an unavailable source from reading as an empty
   test("one unavailable source makes the whole run INCOMPLETE and names the gap", () => {
     const c = aggregateCoverage([
       AVAILABLE("vault"),
-      { status: "unavailable", source: "gmail", reason: "reauth" },
+      { status: "unavailable", source: "inbox", reason: "reauth" },
     ]);
     expect(c.complete).toBe(false);
     expect(c.unavailable).toBe(1);
-    expect(c.gaps).toEqual([{ source: "gmail", reason: "reauth" }]);
+    expect(c.gaps).toEqual([{ source: "inbox", reason: "reauth" }]);
   });
 
   test("a PARTIAL source is a gap too — a capped list is not a complete one", () => {
@@ -633,8 +928,10 @@ describe("aggregateCoverage keeps an unavailable source from reading as an empty
   });
 
   test("the not-landed gap survives aggregation with its own reason", () => {
-    const c = aggregateCoverage([{ status: "unavailable", source: "crm", reason: "not_landed" }]);
-    expect(c.gaps).toEqual([{ source: "crm", reason: "not_landed" }]);
+    const c = aggregateCoverage([
+      { status: "unavailable", source: "crm-facts", reason: "not_landed" },
+    ]);
+    expect(c.gaps).toEqual([{ source: "crm-facts", reason: "not_landed" }]);
   });
 });
 
@@ -648,18 +945,39 @@ describe("renderSourceGap says what could not be seen and why, in the user's wor
       "not_landed",
       "unplanned",
     ] as const) {
-      const line = renderSourceGap({ status: "unavailable", source: "gmail", reason });
+      const line = renderSourceGap({ status: "unavailable", source: "inbox", reason });
       // An unavailable state ALWAYS renders a sentence. Silence here is the bug this file exists for.
       expect(line, reason).not.toBeNull();
-      expect(String(line), reason).toContain(KNOWLEDGE_SOURCE_LABEL.gmail);
-      expect(String(line).length, reason).toBeGreaterThan(KNOWLEDGE_SOURCE_LABEL.gmail.length + 5);
+      expect(String(line), reason).toContain(PACK_SOURCE_LABEL.inbox);
+      expect(String(line).length, reason).toBeGreaterThan(PACK_SOURCE_LABEL.inbox.length + 5);
     }
   });
 
   test("the rendered sentence never claims nothing exists", () => {
-    const line = renderSourceGap({ status: "unavailable", source: "crm", reason: "not_landed" });
+    const line = renderSourceGap({
+      status: "unavailable",
+      source: "crm-facts",
+      reason: "not_landed",
+    });
     expect(String(line).toLowerCase()).not.toContain("no results");
     expect(String(line).toLowerCase()).not.toContain("nothing");
+  });
+
+  test("a NOT-LANDED source names its unlock, reusing the one code-owned unlock record", () => {
+    // The second half of the honest-partial contract, borrowed from `workflowPacks.ts` rather than
+    // reworded here: naming a gap without naming its unlock leaves the user with a complaint
+    // instead of a next step. MUTATION: return the bare sentence for `not_landed` -> RED.
+    for (const source of NOT_LANDED_SOURCES) {
+      const line = String(renderSourceGap({ status: "unavailable", source, reason: "not_landed" }));
+      expect(line, source).toContain(PACK_SOURCE_LABEL[source]);
+      expect(line, source).toContain(
+        MISSING_SOURCE_UNLOCK[source as keyof typeof MISSING_SOURCE_UNLOCK],
+      );
+    }
+    // A reachable source that failed for a RUNTIME reason has no product unlock to name.
+    expect(
+      String(renderSourceGap({ status: "unavailable", source: "inbox", reason: "reauth" })),
+    ).not.toContain("would need");
   });
 
   test("a partial source renders how many it saw, not a total", () => {
@@ -670,7 +988,7 @@ describe("renderSourceGap says what could not be seen and why, in the user's wor
       reason: "cap",
     });
     expect(String(line)).toContain("8");
-    expect(String(line)).toContain(KNOWLEDGE_SOURCE_LABEL.drive);
+    expect(String(line)).toContain(PACK_SOURCE_LABEL.drive);
   });
 
   test("an available source has no gap sentence", () => {
@@ -722,7 +1040,7 @@ describe("searchConfidence is a closed label computed in code", () => {
         claims: strong(2),
         coverage: aggregateCoverage([
           AVAILABLE("vault"),
-          { status: "unavailable", source: "crm", reason: "not_landed" },
+          { status: "unavailable", source: "crm-facts", reason: "not_landed" },
         ]),
         conflicts: 0,
       }),
@@ -794,7 +1112,7 @@ describe("redactedSearchEvent carries refs, counts and enums ONLY", () => {
       questionHash: "a".repeat(64),
       coverage: aggregateCoverage([
         AVAILABLE("vault", 3),
-        { status: "unavailable", source: "gmail", reason: "reauth" },
+        { status: "unavailable", source: "inbox", reason: "reauth" },
       ]),
       claims: 4,
       unsupported: 1,
@@ -825,7 +1143,7 @@ describe("redactedSearchEvent carries refs, counts and enums ONLY", () => {
 
   test("no label, snippet, title, query or prose can reach it", () => {
     const flat = JSON.stringify(built());
-    for (const leak of Object.values(KNOWLEDGE_SOURCE_LABEL)) {
+    for (const leak of KNOWLEDGE_SOURCES.map((s) => PACK_SOURCE_LABEL[s])) {
       expect(flat, `label "${leak}" leaked into the log plane`).not.toContain(leak);
     }
     // Every value is a number, a closed enum string, a hash or a ref — never free text.

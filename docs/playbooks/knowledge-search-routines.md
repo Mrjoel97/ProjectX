@@ -1,6 +1,7 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
-> Last verified: 2026-08-27 against `e84ab78`
+> Last verified: 2026-08-27 against the 29-01 adversarial-repair commits (four independent
+> audits found 22 reproduced defects in the original 29-01; this file records the repaired state)
 > Build history: `.planning/phases/29-unified-knowledge-and-routines/` · Related ADRs:
 > [ADR-003](../decisions/003-skill-registry-for-prompts.md) (skills registry — `tenantSkills` is an
 > additive overlay, not a supersession), [ADR-006](../decisions/ADR-006-vault-chunks-trusted-as-own.md)
@@ -38,17 +39,17 @@ coordinator, no adapter, no UI and no Convex module yet.
 
 | File | Role |
 |---|---|
-| `packages/core/src/knowledgeSearch.ts` | The closed source registry (`KNOWLEDGE_SOURCES`, `NOT_LANDED_SOURCES`), `KnowledgeSourceState`, `SEARCH_CAPS`, `validateSourceRef`, `authorityFor`/`weakestAuthority`, `freshnessFor`/`oldestFreshness`, `normalizeEvidenceText`/`dedupeEvidence`, `clampSearchPlan`, `validateSynthesis`, `aggregateCoverage`, `renderSourceGap`, `searchConfidence`, `redactedSearchEvent`. |
-| `packages/core/src/knowledgeSearch.test.ts` | 73 tests. Every honesty rule above has a mutation recorded in `29-01-SUMMARY.md`. |
-| `packages/core/src/workflowCustomization.ts` | `CUSTOMIZATION_FIELD_KINDS`, `MATERIAL_FIELD_KINDS`, `CUSTOMIZATION_CAPS`, `validateCustomization`, `renderCustomization`, `canonicalCustomization`, `classifyCustomizationChange`, `checkBaseVersion`, `WorkflowPin`/`pinIdentity`/`pinMatchesActive`/`freshRunCorrelation`. |
-| `packages/core/src/workflowCustomization.test.ts` | 83 tests, including the "ordinary business prose is not refused" corpus. |
+| `packages/core/src/knowledgeSearch.ts` | The closed source registry (`KNOWLEDGE_SOURCES` — a named SUBSET of `workflowPacks.ts`'s `PackSource`; `NOT_LANDED_SOURCES`, DERIVED from `MISSING_PACK_SOURCES`), `KnowledgeSourceState`, `SEARCH_CAPS`, `clampEvidence` (the cap-enforcing admission boundary), `validateSourceRef`, `authorityFor`/`weakestAuthority`, `freshnessFor`/`oldestFreshness`, `normalizeEvidenceText`/`dedupeEvidence`, `clampSearchPlan`, `validateSynthesis`, `aggregateCoverage`, `renderSourceGap`, `groundedSourceProps`, `searchConfidence`, `redactedSearchEvent`. |
+| `packages/core/src/knowledgeSearch.test.ts` | 95 tests. Every honesty rule above has a mutation recorded in `29-01-SUMMARY.md`, and each mutation listed there was OBSERVED red. |
+| `packages/core/src/workflowCustomization.ts` | `CUSTOMIZATION_FIELD_KINDS`, `MATERIAL_FIELD_KINDS`, `CUSTOMIZATION_CAPS`, `validateCustomization`, `renderCustomization`, `canonicalCustomization`, `classifyCustomizationChange`, `checkBaseVersion`, `TenantSkillRef`, `WorkflowPin` (carries `tenantSkillId`, NOT a version) / `pinIdentity`/`pinMatchesActive`/`freshRunCorrelation`. |
+| `packages/core/src/workflowCustomization.test.ts` | 87 tests, including the "ordinary business prose is not refused" corpus and the SOURCE-TEXT recurrence scan that replaced two unfalsifiable runtime bans. |
 
 **Backend (schema only, 29-01)**
 
 | File | Role |
 |---|---|
 | `packages/backend/convex/schema.ts` | `knowledgeSearches` (new), `tenantSkills` template-lineage fields + `by_tenant_template`, `savedPrompts` pin-lineage fields + `by_tenant_template`. |
-| `packages/backend/convex/schema.test.ts` | 21 tests: the Phase-29 widening, and the **recurrence-absence scan** that nothing else in the repo performed. |
+| `packages/backend/convex/schema.test.ts` | 32 tests: the Phase-29 widening proved by INSERT (not by substring), and the **recurrence-absence scan** that nothing else in the repo performed. |
 | `packages/core/src/tenantData.ts` | `knowledgeSearches: "tenant_owned"` — owned by `audit-dead-letter.md`, listed here because Phase 29 is why the row exists. |
 
 **Consumed, not owned** (their own playbooks apply — read those before touching them)
@@ -67,23 +68,41 @@ coordinator, no adapter, no UI and no Convex module yet.
 
 Run `graphify query "knowledge search"` for the current subgraph. Couplings graphify cannot see:
 
-- **`@pikar/core` has no runtime dependency on `@pikar/revenue`.** `knowledgeSearch.ts`'s
-  `validateSourceRef` and `KnowledgeSourceState` deliberately *mirror* `packages/revenue/src/contracts.ts`
-  (`validateSourceRef`, `Projection`) rather than importing them. Two domains, two cap sets, one
-  design language. If you change one, read the other and decide on purpose.
-- **`packages/core/src/workflowPacks.ts` already exports a type named `SourceState`**, and
-  `packages/core/src/index.ts` re-exports everything with `export *`. Phase 29's equivalent is
-  `KnowledgeSourceState`. Do not "tidy" the names together.
+- **`knowledgeSearch.ts` IMPORTS FROM `workflowPacks.ts`, and that direction is load-bearing.**
+  `KNOWLEDGE_SOURCES` is `["vault","drive","inbox","crm-facts","support-desk"] satisfies readonly
+  PackSource[]` — a named SUBSET of the one source registry, not a second one. Labels come from
+  `PACK_SOURCE_LABEL`, not-landed unlocks from `MISSING_SOURCE_UNLOCK`, and `NOT_LANDED_SOURCES` is
+  DERIVED as `KNOWLEDGE_SOURCES` intersected with `MISSING_PACK_SOURCES`. 29-01 originally forked
+  the vocabulary and shipped `gmail` beside `inbox` and `crm` beside `crm-facts`, which meant a pin
+  whose `sourcePreferences` said `inbox` could never select the mail search source and no code
+  could translate between the two. `support-desk` was added to `MISSING_PACK_SOURCES` so the one
+  registry carries the fifth member; `workflowPacks.test.ts`'s "no dead vocabulary" test accepts a
+  source read by the search plane, which is where that is visible.
+- **`SourceState` is `workflowPacks.ts`'s, and `KnowledgeSourceState["status"]` is proved equal to
+  it at COMPILE TIME** (`_VOCABULARY_IS_SHARED` in `knowledgeSearch.ts`). The two SHAPES stay
+  separate — `packPreflight` keeps the bare string because 30 landed eval fixtures and
+  `PACK_SOURCE_PROBE_STATES` assert it — but the vocabulary is one. `@pikar/revenue`'s `Projection`
+  is a THIRD statement of the same three states in another package; consolidate at merge.
+- **`validateSourceRef` is an ALLOWLIST** (`/^[A-Za-z0-9._:/+=|~-]+$/`), the same charset as
+  `@pikar/contracts`' `SAFE_REF`. It replaced a denylist copied byte-for-byte from
+  `packages/revenue/src/contracts.ts` that contained NO space class — "Acme Corp Invoice.pdf"
+  passed as an "id" while the docstring claimed whitespace was refused. `packages/revenue` still
+  holds that copy; the Phase 28 lane owns that file, so consolidation is a merge-time job and is
+  recorded as a `ponytail:` comment on the function.
 - **No hash implementation lives in `@pikar/core`.** `canonicalCustomization` returns a deterministic
   STRING; the caller hashes it with `packages/backend/convex/lib/hash.ts` `contentHash` (SHA-256).
   A second hash implementation is exactly what that module exists to prevent.
-- **`crm` and `support` have no adapter.** Phase 28 landed contracts only — no connector table, no
-  credential encryption, no provider module. Evidence:
+- **`crm-facts` and `support-desk` have no adapter.** Phase 28 landed contracts only — no connector
+  table, no credential encryption, no provider module. Evidence:
   `.planning/phases/29-unified-knowledge-and-routines/29-DEPENDENCY-EVIDENCE.md` §2.
 - **Convex validator ↔ pure contract coupling.** `knowledgeSearches`' literal unions duplicate
   `KNOWLEDGE_SOURCES`, `CONFIDENCE_LABELS`, `AUTHORITY_CLASSES` and `FRESHNESS_LABELS` as literals
   because a Convex validator needs them at module load. Widening either side without the other
-  fails `schema.test.ts` on insert.
+  fails `schema.test.ts` on insert. The `knowledgeSource` union is applied in FIVE places on that
+  row — the three arms of `sources[]`, plus `claims[].evidence[].source` and
+  `claims[].conflictEvidence[].source`. The last two were bare `v.string()` in the original 29-01,
+  so a stored CITATION could name `notion` or `http://evil.example` while the coverage plane beside
+  it could not; `schema.test.ts` now proves the refusal by insert and counts the five uses.
 
 ## Data flow
 
@@ -95,12 +114,21 @@ Landed today is only steps 0 and 8; the rest is the shape the later plans must b
    `guardrails.preCall` → `scanText` → `generateObject` → `priceUsage` → `guardrails.recordSpend`)
    proposes `{source, query}` pairs.
 3. `clampSearchPlan` re-checks every pair in code: closed source enum, one query per source,
-   length cap, no remote address. `crm`/`support` come back as ready-made
-   `unavailable/not_landed` states rather than plan entries.
+   length cap, no remote address. `crm-facts`/`support-desk` come back as ready-made
+   `unavailable/not_landed` states rather than plan entries. There is deliberately no `source_cap`
+   rejection: one entry per DISTINCT source plus `maxSources === KNOWLEDGE_SOURCES.length` make it
+   unreachable, and a rejection reason the code cannot produce is a state nobody can trust.
+3b. **`clampEvidence` is the admission boundary.** Every adapter result crosses it before dedupe,
+   synthesis or storage: `maxEvidencePerSource`, `maxEvidenceTotal`, `evidenceTextCharCap`,
+   `labelCharCap` and `totalEvidenceCharCap` are enforced HERE and nowhere else. It reports which
+   sources lost something so the caller mints `{status:"partial", reason:"cap"}` — a capped read is
+   partial, never available. A coordinator that skips it puts an unbounded array on a Convex row:
+   the schema validator imposes no length bound of its own.
 4. Adapters run under `Promise.allSettled`. Every rejection becomes a named `KnowledgeSourceState`.
    One provider failure never erases a successful source.
-5. `dedupeEvidence` collapses the same record read twice and **cross-links** identical text from
-   different records without deleting either.
+5. `dedupeEvidence` collapses the same record read twice AND SAYING THE SAME THING, reports a ref
+   that disagrees with itself as `conflicting`, and **cross-links** identical text from different
+   records without deleting either.
 6. A second **toolless** call synthesizes claims citing evidence ids.
 7. `validateSynthesis` drops invented ids (and counts them), substring-verifies excerpts against the
    evidence *that claim cited*, keeps conflicts, and attaches authority/freshness from the table.
@@ -118,7 +146,7 @@ Customization: form values → `validateCustomization` → `renderCustomization`
 |---|---|---|---|
 | 1 | **An unreachable source cannot carry a result count.** | "Reauth failed → zero results → nothing exists" is the failure this phase exists to prevent. | The `KnowledgeSourceState` union has no `returned` on the `unavailable` arm, and the Convex validator is a discriminated union that REFUSES the insert (`schema.test.ts`, "an UNAVAILABLE source carrying a count is REFUSED"). |
 | 2 | **Aggregate coverage fails closed.** Zero requested sources is not "complete". | Asking nothing is not the same as answering everything. | `knowledgeSearch.test.ts`, "asking nothing is NOT complete". |
-| 3 | **Dedupe never deletes a conflicting record.** Exact `(source, sourceRef)` identity collapses; identical text across *different* records is cross-linked. | A $40 rate and a $60 rate must not become one confident answer. | `dedupeEvidence` + three tests, mutation KS-10. |
+| 3 | **Dedupe never deletes a conflicting record, AND never reports one as a safe collapse.** `(source, sourceRef)` identity collapses ONLY when the normalized TEXT also matches; the same ref carrying different text is `conflicting` with its own count; identical text across *different* records is cross-linked. | A $40 rate and a $60 rate must not become one confident answer — and until the 29-01 repair, one ref reading $40 then $60 was filed under `duplicates` with `collapsed: 1`, so a renderer following the documented contract would drop the $60. | `dedupeEvidence` + six tests. MUTATION OBSERVED RED: key on `source\|sourceRef` without comparing `normalizeEvidenceText`. |
 | 4 | **A model-invented evidence id is removed and counted.** A claim left with none becomes `unsupported`. | A citation list is not provenance. | `validateSynthesis`, mutations KS-04/KS-05/KS-06. |
 | 5 | **An excerpt must be a substring of the evidence THAT CLAIM CITED.** An invalid excerpt drops the excerpt, not the claim. | A quote lifted from another document is a fabrication even though every character is real. | `validateSynthesis`, mutation KS-06. |
 | 6 | **Authority, freshness and confidence are code-owned.** A model-supplied `authority`/`confidence`/`probability` is ignored. Confidence is a closed LABEL. | The model does not get to grade its own work. | `authorityFor`/`freshnessFor`/`searchConfidence`; `confidence` is a literal union in the schema so a number cannot be stored. |
@@ -131,14 +159,24 @@ Customization: form values → `validateCustomization` → `renderCustomization`
 | 13 | **A pinned rerun mints a fresh correlation every run.** | It must create a fresh request and cross current approval, connection, budget and active-version gates — never replay a plan. | `freshRunCorrelation`, mutation WC-12. |
 | 14 | **Activation stays owner-gated in Phase 21's existing seam.** Phase 29 adds NO second activation path or status flip. | One choke point or none. | `skills.ts` `activateTenantCandidate` / `rollbackTenantSkill` are `ownerMutation`. |
 | 15 | **NO RECURRENCE STORAGE.** No `routines`/`routineRuns` table, no cron text, no `nextRunAt`, no cadence, no IANA timezone rule, no scheduler id on a pin, no standing approval, no run-history table. | Plan 29-11's decision-and-proof gate has not been passed. Inert schema invites the UI that assumes it. | `schema.test.ts` "recurrence storage is structurally absent" — table-name scan over the parsed schema, field-name scan over the source, and a per-table scan of `savedPrompts`. Three pre-existing ONE-SHOT exceptions are named in that test on purpose: `optimizerConfig.lastRunAt`, `plans.scheduledFunctionId`, `pendingTimeouts.scheduledId`. |
-| 16 | **A `crm`/`support` gap is `not_landed`, never a stub adapter and never an empty success.** | Owner ruling, 2026-08-27. | `NOT_LANDED_SOURCES` + `clampSearchPlan`, mutation KS-03. |
+| 16 | **A `crm-facts`/`support-desk` gap is `not_landed`, never a stub adapter and never an empty success**, and the sentence also names the UNLOCK. | Owner ruling, 2026-08-27. Naming a gap without naming its unlock leaves a complaint instead of a next step. | `NOT_LANDED_SOURCES` (derived) + `clampSearchPlan` + `renderSourceGap` reading `MISSING_SOURCE_UNLOCK`. MUTATION OBSERVED RED: return the bare sentence for `not_landed`. |
+| 17 | **EVERY `SEARCH_CAPS` ENTRY IS ENFORCED BY CODE.** Six of eleven were enforced by nothing while `schema.ts` cited them as bounds. | A cap nothing applies is a documented invariant with no enforcement, and the 29-0x adapter that trusts the comment puts an unbounded array on a Convex row. | `clampEvidence`/`clampSearchPlan`/`validateSynthesis`, plus a source scan (`NO CAP IS DEAD`) that fails when a key becomes declaration-only. Two by-construction exceptions are named in that test. Same rule and same test for `CUSTOMIZATION_CAPS`. |
+| 18 | **ONE SOURCE VOCABULARY.** `KNOWLEDGE_SOURCES satisfies readonly PackSource[]`; labels and unlocks come from `workflowPacks.ts`. | A pin's `sourcePreferences` are `PackSource[]`; a forked search vocabulary makes a preference unable to select a source with no code that could translate. | `satisfies` at compile time, plus "every knowledge source IS a PackSource" and the derived `NOT_LANDED_SOURCES` test. |
+| 19 | **A PIN NAMES THE EXACT `tenantSkills` ROW, never a (name, version) pair.** | Two tenants can hold the same name AND version — which is why `recordTenantEvalEvidence` keys on the row id, and why the landed rail is `Record<string, Id<"tenantSkills">>` (dispatch.ts:234/:256). | `WorkflowPin.tenantSkillId: TenantSkillRef \| null`, `pinIdentity`/`pinMatchesActive` compare it, and `savedPrompts.tenantSkillId` is `v.id("tenantSkills")` — proved by INSERT, not by a substring scan. MUTATIONS OBSERVED RED: relax to `v.optional(v.string())`; drop the id from `pinIdentity`. |
 
 ## How to change safely
 
-**Adding a source** (only when its adapter genuinely lands): add it to `KNOWLEDGE_SOURCES`,
-`KNOWLEDGE_SOURCE_LABEL`, `SOURCE_AUTHORITY`, the `knowledgeSource` validator in `schema.ts`, and
-remove it from `NOT_LANDED_SOURCES` **in the same change**. Raise `SEARCH_CAPS.maxSources` only if
-the count now exceeds it. Most likely to violate: invariants 1 and 16.
+**Adding a source** (only when its adapter genuinely lands): add it to `workflowPacks.ts`'s
+`REACHABLE_PACK_SOURCES` or `MISSING_PACK_SOURCES` **first** (with its `PACK_SOURCE_LABEL`, and its
+`MISSING_SOURCE_UNLOCK` + `MISSING_SOURCE_MENTIONS` if missing), then to `KNOWLEDGE_SOURCES`,
+`SOURCE_AUTHORITY` and the `knowledgeSource` validator in `schema.ts`. Do NOT edit
+`NOT_LANDED_SOURCES` — it is derived; a connector that lands moves between the two pack lists once
+and both planes follow. Keep `SEARCH_CAPS.maxSources === KNOWLEDGE_SOURCES.length` (a test pins it).
+Most likely to violate: invariants 1, 16 and 18.
+
+**Adding or changing a cap**: add the enforcement in the SAME change, or do not add the cap. The
+`NO CAP IS DEAD` scans in both test files fail on a declaration-only key. If a cap is genuinely
+unnecessary, DELETE it and fix every comment that cited it. Most likely to violate: invariant 17.
 
 **Adding an authority class or confidence label**: both are duplicated as literal unions in
 `schema.ts`. Change both or `schema.test.ts` fails on insert. Most likely to violate: invariant 6.
@@ -149,8 +187,11 @@ likely to violate: invariants 10 and 11.
 
 **Touching `savedPrompts.ts`**: read `cockpit.md` first — that module is owned there, and its own
 test bans `ctx.scheduler`, `cron`, `schedule`, `recurrence`, `nextRunAt`, `trigger` and `routines`
-from the file. **Before the first lineage-bearing pin is written**, fold `templateId`,
-`templateVersion`, `tenantSkillId` and `customizationHash` into `textHash`: it is currently computed
+from the file. **Before the first lineage-bearing pin is written**, fold ALL FIVE lineage fields —
+`templateId`, `templateVersion`, `tenantSkillId`, `customizationHash` AND `sourcePreferences` —
+into `textHash`. (`sourcePreferences` was missing from this list until the 29-01 repair: two pins
+differing only in preferred sources are two different runs. `@pikar/core`'s `pinIdentity` already
+covers all five and is the intended hash input.) `textHash` is currently computed
 from the TEXT ALONE, so two pins of the same words against different customizations would collide on
 `by_tenant_textHash` and the second `save` would silently return the first row. Unreachable today
 (nothing writes those fields yet), recorded because 29-01 added the field that makes it reachable.
@@ -170,12 +211,12 @@ package.
 
 | Command | What it proves |
 |---|---|
-| `cd packages/core && pnpm vitest run knowledgeSearch workflowCustomization` | 156 unit tests over the pure contracts. |
+| `cd packages/core && pnpm vitest run knowledgeSearch workflowCustomization` | 182 unit tests over the pure contracts. |
 | `cd packages/core && pnpm typecheck` | `noUncheckedIndexedAccess` holds across the new modules. |
-| `cd packages/backend && pnpm vitest run convex/schema.test.ts` | 21 tests: the widening, and recurrence absence. |
+| `cd packages/backend && pnpm vitest run convex/schema.test.ts` | 32 tests: the widening proved by insert, and recurrence absence. |
 | `cd packages/backend && pnpm typecheck` | The schema compiles against `_generated`. |
 | `cd packages/backend && pnpm vitest run skills schema` | The Phase-21 seam this phase consumes is still intact beside the widening. |
-| `echo '{}' \| node scripts/check-playbooks.mjs check` | §9 watcher. **Read stdout** — `"decision":"block"` means FAILED, empty means passed. Never read its exit code; every path is `exit(0)`, and run bare it hangs forever on stdin. |
+| `echo '{}' \| node scripts/check-playbooks.mjs check` | §9 watcher. **Read stdout** — `"decision":"block"` means FAILED, empty means passed. Never read its exit code; every path is `exit(0)`, and run bare it hangs forever on stdin. **RUN IT WHILE THE TREE IS DIRTY.** With no baseline file for the session id it compares against `HEAD`, so running it after committing on a clean tree examines ZERO files and its silence means nothing. |
 
 **Not verifiable here (no live deployment, no spend):** every adapter, coordinator and UI gate from
 plans 29-02 onward, and every recurrence live proof in 29-11.
@@ -193,18 +234,32 @@ plans 29-02 onward, and every recurrence live proof in 29-11.
 - The classification is deliberately the OPPOSITE of `workflowPackEvents` (`audit_immutable`): a
   pack event has nowhere to put prose, a search row holds the user's question, answer and document
   titles. The refs-only measurement plane is `redactedSearchEvent`, not this table.
-- The whole `knowledgeSearches` document is kilobytes by construction (`SEARCH_CAPS`: 5 sources,
-  12 claims, 24 evidence, 200-char labels). That is why citations are an array on the row rather
-  than a second table — one read renders the entire card.
+- The whole `knowledgeSearches` document is kilobytes **because `clampEvidence` and
+  `validateSynthesis` make it so** (`SEARCH_CAPS`: 5 sources, 12 claims, 24 evidence at 8 per source
+  and 1500 chars each, 8000 chars total, 200-char labels, 300-char excerpts). The Convex validator
+  imposes NO length of its own — the array validators are unbounded — so the bound is the writer's
+  and a writer that skips `clampEvidence` has no bound at all. That is why citations are an array on
+  the row rather than a second table — one read renders the entire card.
+- **The citation field names are `{source, sourceRef, label}` + `excerpt`, and that is deliberate.**
+  This is the third citation shape in the repo (`vaultSources` `{docIds, titles, count}`;
+  `evaluations.findings` `{citationDocId, citationTitle, citationExcerpt}`). It keeps `sourceRef`
+  rather than `citationDocId` because a knowledge-search ref is a provider id across five planes and
+  only one of the five is a vault `docId` — storing a Gmail message id in a field named
+  `citationDocId` is how it later gets joined against `vaultDocuments`. The mapping is CODE, not
+  prose: `groundedSourceProps` in `@pikar/core` returns exactly the `{docIds, titles, count}` props
+  the landed `GroundedSources` component and the `vaultSources` row already take, so one card serves
+  both planes and no caller writes a rename shim.
 
 ## Known gaps & deferred work
 
 | Gap | Where the upgrade path is recorded |
 |---|---|
 | **Nothing writes `knowledgeSearches` yet.** The table, the contracts and the tests exist; the coordinator does not. | Plans 29-02 … 29-06. |
-| **`crm` and `support` are permanently `not_landed`** until Phase 28 ships a connector rail. | `29-DEPENDENCY-EVIDENCE.md` §2 + owner ruling 2026-08-27. |
+| **`crm-facts` and `support-desk` are permanently `not_landed`** until Phase 28 ships a connector rail. | `29-DEPENDENCY-EVIDENCE.md` §2 + owner ruling 2026-08-27. |
 | **`savedPrompts.textHash` collision** for two pins of the same text under different customizations. | "How to change safely" above; must be fixed in plan 29-08 before the first lineage-bearing pin. |
 | **`USER_AUTHORABLE_SKILLS` is a closed three-name allowlist** and does not yet include the six workflow packs. Widening it is a plan-29-05 decision with eval consequences. | `29-DEPENDENCY-EVIDENCE.md` §1.3. |
 | `ponytail:` no hash function in `@pikar/core` — dedupe compares normalized strings directly. Ceiling: a corpus larger than `totalEvidenceCharCap`. | Header comment of `knowledgeSearch.ts`. |
-| `ponytail:` `validateSourceRef` mirrors `@pikar/revenue` rather than importing it. Ceiling: the two cap sets diverging silently. | Header comment of `validateSourceRef`. |
+| `ponytail:` `validateSourceRef` and `packages/revenue/src/contracts.ts` hold two shape rules for one §4 boundary, and revenue's is the laxer denylist form. The Phase 28 lane owns that file, so it cannot be edited from here. Ceiling: two rules, one boundary. Upgrade at merge: delete revenue's copy, import this one. | `ponytail:` comment on `validateSourceRef`. |
+| `ponytail:` `KnowledgeSourceState` and `packPreflight`'s `SourceState` are two SHAPES over one vocabulary. Ceiling: a caller that needs both must switch on `status` twice. Upgrade path: widen `SourceState` into the reason-carrying object and migrate `packPreflight` + the 30 landed eval fixtures in one change. | Doc comment on `KnowledgeSourceState`. |
+| **The `mediaJobs.provider` reflow in commit `1e914f9` was not reverted.** It is an unrequested formatting-only edit outside Phase 29's blast radius, and the audit was right to flag it — but `biome@2.5.3` at `lineWidth: 100` REQUIRES the collapsed single line (verified: reverting it makes `biome format packages/backend/convex/schema.ts` red). Reverting would ship formatter-red code that the next save flips back. | 29-01-SUMMARY.md, "deliberately not fixed". |
 | **Recurrence is entirely deferred**, by decision, not by omission. | Plan 29-11's decision record; invariant 15. |

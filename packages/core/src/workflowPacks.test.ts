@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
+import { KNOWLEDGE_SOURCES } from "./knowledgeSearch";
 import {
   hasPassingPackBrowserEvidence,
   hasValidPackProvenance,
@@ -205,14 +206,20 @@ describe("the workflow-pack registry is total", () => {
     // dead end the pack cannot honestly explain, which is the defect owner decision A exists to avoid.
     for (const source of MISSING_PACK_SOURCES)
       expect(MISSING_SOURCE_UNLOCK[source], `${source} has no unlock`).toBeTruthy();
-    // …and no source is dead vocabulary: each is read by at least one operation somewhere.
-    const used = new Set(
-      WORKFLOW_PACK_IDS.flatMap((id) =>
+    // …and no source is dead vocabulary: each is read by at least one pack operation, OR is one of
+    // the Phase-29 knowledge-search sources. `KNOWLEDGE_SOURCES` is a named SUBSET of this registry
+    // (`satisfies readonly PackSource[]`) precisely so the search plane and the pack plane cannot
+    // name the same source two different ways — 29-01 originally forked it and produced `gmail`
+    // beside `inbox`, which made a pin's `sourcePreferences` unable to select a search source.
+    // `support-desk` is read by the search plane only, and this is where that is visible.
+    const used = new Set<string>([
+      ...WORKFLOW_PACK_IDS.flatMap((id) =>
         WORKFLOW_PACKS[id].operations.flatMap((op) =>
           op.state === "forbidden" || op.reads === null ? [] : [op.reads as string],
         ),
       ),
-    );
+      ...KNOWLEDGE_SOURCES,
+    ]);
     expect(
       [...all].filter((s) => !used.has(s)),
       "declared but never read by any pack",

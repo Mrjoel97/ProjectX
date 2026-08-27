@@ -98,9 +98,15 @@ export type CustomizationSchema = {
 /** What a user submitted. Every field is optional — absence means "use the template's default". */
 export type CustomizationValues = Readonly<Record<string, string | number | readonly string[]>>;
 
+/**
+ * There is deliberately no `maxFields`. It existed, bounded a PRODUCT-AUTHORED schema (there is no
+ * untrusted producer of a `CustomizationSchema`), and was read by nothing — not by
+ * `validateCustomization`, not by a test. A cap the code never applies is a documented invariant
+ * with no enforcement, which is worse than no cap: a later plan trusts the number. Deleted rather
+ * than enforced. Both survivors below bound UNTRUSTED user input and are enforced in
+ * `validateCustomization`.
+ */
 export const CUSTOMIZATION_CAPS = {
-  /** A form, not a config file. */
-  maxFields: 12,
   /** Entries in one source-preference list. */
   maxValuesPerField: 8,
   /** Absolute ceiling on any single value, matching `USER_SKILL_ADAPTATION_MAX_BYTES`. */
@@ -400,31 +406,52 @@ export function checkBaseVersion(
 // ── The manual pin (ROUT-02) ───────────────────────────────────────────────────────────────
 
 /**
- * Everything a manual re-run must resolve against. Refs, versions and a hash — no prompt text, no
+ * A `tenantSkills` ROW ID, as this pure package can carry one.
+ *
+ * `@pikar/core` cannot import Convex's `Id<"tenantSkills">` (it has no Convex dependency and must
+ * stay portable), so the id travels as an opaque string that is never parsed, compared by parts or
+ * constructed here. The Convex side validates it as `v.id("tenantSkills")` — `savedPrompts
+ * .tenantSkillId` in `schema.ts`, and the landed `tenantSkillIds` rail at `dispatch.ts:234/:256`,
+ * `llm.ts:1840/:5424` — so a string that is not a real row id is refused by the validator before
+ * any handler sees it. The brand keeps a bare `string` from being passed by accident.
+ */
+export type TenantSkillRef = string & { readonly __tenantSkillRow: unique symbol };
+
+/**
+ * Everything a manual re-run must resolve against. Refs, a version and a hash — no prompt text, no
  * plan, no recipient, no schedule.
  *
- * `tenantSkillVersion: null` means "run the approved product template with no tenant customization",
+ * `tenantSkillId` NAMES THE EXACT CANDIDATE ROW, not a (name, version) pair. Two tenants can hold
+ * the same skill name AND the same version, which is why `recordTenantEvalEvidence` keys on the row
+ * id and why the landed pin rail is `Record<string, Id<"tenantSkills">>` rather than a number. This
+ * type originally carried `tenantSkillVersion: number | null` and compared that number — the pure
+ * contract contradicting both its own schema field and the landed rail one scope down, and
+ * unusable against the row this same plan defined without an extra read to turn an id into a
+ * version. No version is kept even as display metadata: a second, non-authoritative copy of the
+ * same fact is what a later reader compares by mistake.
+ *
+ * `tenantSkillId: null` means "run the approved product template with no tenant customization",
  * which is a genuinely different pin from any customized version and must not collapse into one.
  */
 export type WorkflowPin = {
   readonly templateId: WorkflowPackId;
   readonly templateVersion: number;
-  readonly tenantSkillVersion: number | null;
+  readonly tenantSkillId: TenantSkillRef | null;
   /** SHA-256 of `canonicalCustomization`, computed by the caller. */
   readonly customizationHash: string;
   readonly sourcePreferences: readonly PackSource[];
 };
 
 /**
- * A stable identity for "this exact workflow at these exact versions". Order-independent in its
- * source list so two equivalent pins are one pin.
+ * A stable identity for "this exact workflow at this exact template version and candidate row".
+ * Order-independent in its source list so two equivalent pins are one pin.
  */
 export function pinIdentity(pin: WorkflowPin): string {
   const sources = [...pin.sourcePreferences].sort().join(",");
   return [
     pin.templateId,
     `t${pin.templateVersion}`,
-    `c${pin.tenantSkillVersion ?? "none"}`,
+    `c${pin.tenantSkillId ?? "none"}`,
     pin.customizationHash,
     sources,
   ].join("|");
@@ -436,14 +463,17 @@ export function pinIdentity(pin: WorkflowPin): string {
  * A `false` here does NOT mean "refuse the run" — it means the run must re-resolve against the
  * current active version rather than assume the pinned one is still there. A pinned rerun creates a
  * fresh request and crosses every current gate; it never replays.
+ *
+ * `active.tenantSkillId` is the id of the tenant's currently ACTIVE candidate row for this
+ * template, read by the caller. Comparing row ids means a republished candidate that happens to
+ * reuse a version number cannot read as "still live".
  */
 export function pinMatchesActive(
   pin: WorkflowPin,
-  active: { readonly templateVersion: number; readonly tenantSkillVersion: number | null },
+  active: { readonly templateVersion: number; readonly tenantSkillId: TenantSkillRef | null },
 ): boolean {
   return (
-    pin.templateVersion === active.templateVersion &&
-    pin.tenantSkillVersion === active.tenantSkillVersion
+    pin.templateVersion === active.templateVersion && pin.tenantSkillId === active.tenantSkillId
   );
 }
 

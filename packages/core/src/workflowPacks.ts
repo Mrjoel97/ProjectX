@@ -76,6 +76,12 @@ export const MISSING_PACK_SOURCES = [
   "org-roles",
   // No task-system, Canva or publishing tool exists, so an SOP cannot be scheduled or published.
   "task-system",
+  // Phase 29 (KNOW-01): `KNOWLEDGE_SOURCES` in `knowledgeSearch.ts` is a named SUBSET of THIS
+  // registry, so the unified-search plane and the pack plane cannot name the same source two ways.
+  // No workflow pack reads it and no Phase 28 support-desk connector exists — it lives here rather
+  // than in a second registry because forking the vocabulary is what produced `gmail` beside
+  // `inbox` in the first place (29-01 repair, fix group A).
+  "support-desk",
 ] as const satisfies readonly string[];
 export type MissingPackSource = (typeof MISSING_PACK_SOURCES)[number];
 
@@ -96,6 +102,7 @@ export const PACK_SOURCE_LABEL: Readonly<Record<PackSource, string>> = {
   "tenant-brand-guidance": "your confirmed brand guidance",
   "org-roles": "who does what in your business",
   "task-system": "a task or publishing system",
+  "support-desk": "your connected support inbox",
 };
 
 /**
@@ -111,6 +118,7 @@ export const MISSING_SOURCE_UNLOCK: Readonly<Record<MissingPackSource, string>> 
   "tenant-brand-guidance": "somewhere to store brand guidance you have confirmed",
   "org-roles": "a record of who owns which part of the work",
   "task-system": "a connected task or publishing system",
+  "support-desk": "connecting your support desk",
 };
 
 /**
@@ -194,6 +202,10 @@ export const MISSING_SOURCE_MENTIONS: Readonly<Record<MissingPackSource, readonl
   ],
   "org-roles": ["who owns", "who does what", "unassigned", "real owner", "role"],
   "task-system": ["task system", "publishing", "schedule", "task or publishing"],
+  // No pack reads `support-desk`, so the pack eval gate never scores this entry today. It is here
+  // because `MISSING_SOURCE_MENTIONS` is typed over the WHOLE missing half — an empty list would
+  // silently pass the moment a pack did read it, which is the failure this record exists to stop.
+  "support-desk": ["support desk", "support inbox", "support ticket", "helpdesk"],
 };
 
 /** Why a pack must never perform an operation. A closed enum: a model cannot relabel a refusal. */
@@ -595,7 +607,15 @@ export function toolsForWorkflowPack(packId: WorkflowPackId): readonly string[] 
   ].sort();
 }
 
-/** How well a source answered for THIS tenant on THIS run. Absence is never "available". */
+/**
+ * How well a source answered for THIS tenant on THIS run. Absence is never "available".
+ *
+ * THIS IS THE REPO'S ONE THREE-STATE SOURCE VOCABULARY. Phase 29's `KnowledgeSourceState`
+ * (`knowledgeSearch.ts`) is the same three words carrying a reason and a count, and it holds a
+ * compile-time witness that its `status` set is exactly this type — so a fourth state cannot appear
+ * on one plane only. `@pikar/revenue`'s `Projection` states it a third time in another package;
+ * consolidating those two is a merge-time job, recorded in `knowledge-search-routines.md`.
+ */
 export type SourceState = "available" | "partial" | "unavailable";
 
 /**
