@@ -58,6 +58,26 @@ this is load-bearing — and it is now a **lane deliverable**:
   disconnect additionally depends on access-token TTL expiry, and that window must be stated honestly
   in the UI.
 
+#### 28-05 status — 2026-08-28: the TEST EXISTS, the ANSWER DOES NOT
+
+**The condition is NOT cleared and this section does not clear it.**
+
+28-05 built the mechanism the condition asked for and could not run it, because no live HubSpot
+grant exists for this deployment. Recorded honestly rather than left implied:
+
+| | |
+|---|---|
+| **Observed result** | **NONE.** No request has ever been sent to HubSpot from this repository. |
+| **Mechanism** | `hubspotAuth.probeRevocationCascade` (internalAction, requires `confirm: "revoke"`). One action reads with the access token, revokes, then re-issues the SAME allow-listed GET with that same pre-revocation token. It cannot be split, because `recordRevocation` clears the stored ciphertext — the token only exists in memory across the revoke. |
+| **Verdict vocabulary** | `cascaded: true` (post-revoke read rejected 401/403), `false` (it still worked), **`null` (inconclusive — anything else)**. A 429 or a 500 after a revoke proves nothing and must never be recorded as proof. |
+| **Driver** | `node scripts/smoke-hubspot-read.mjs --tenant <id> --revoke`, which writes a sanitized evidence file. Its `--self-test` mode (20 cases, all green offline) proves the validator refuses bad evidence — including any file that claims this condition is resolved. |
+| **What it needs** | A HubSpot developer/test portal, an app with the five read scopes, `HUBSPOT_OAUTH_CLIENT_ID` / `_SECRET` / `_REDIRECT_URI` in Convex environment configuration, and a **disposable** grant (the probe destroys it). |
+
+Until an observation lands here, the shipped behaviour is the conservative one: a 2xx revoke is
+recorded as `confirmed` **with** `residualAccessUntil` set to the access token's own expiry, and the
+connections surface must say access may survive until then. That is the honest reading of the
+evidence, not a workaround for the missing test.
+
 Also unchanged by this approval: data-processing / commercial terms, retention & deletion duties and
 data residency / subprocessors are all still **not researched** (see the checklist). The owner
 approved production without them on record.
@@ -173,7 +193,7 @@ is stale relative to the reference.** Pin from the reference, not the guide.
 
 | Item | Status |
 |---|---|
-| **Does `POST /oauth/2026-03/token/revoke` invalidate already-issued ACCESS tokens?** | **UNPROVEN — MUST TEST.** No primary page states it. The reference only says it "Deletes/Revokes provided Refresh Token". The presence of `token_type_hint` implies an access token could be passed, but that is *inference, not documentation* — and the legacy `DELETE` explicitly did **not** cascade. **28-CONTEXT requires per-tenant revocation**, so this is load-bearing: if it does not cascade, disconnect must additionally rely on access-token TTL expiry and that window must be stated honestly in the UI. |
+| **Does `POST /oauth/2026-03/token/revoke` invalidate already-issued ACCESS tokens?** | **STILL UNPROVEN as of 2026-08-28** — 28-05 built the probe and had no live grant to point it at; see "28-05 status" above. **MUST TEST.** No primary page states it. The reference only says it "Deletes/Revokes provided Refresh Token". The presence of `token_type_hint` implies an access token could be passed, but that is *inference, not documentation* — and the legacy `DELETE` explicitly did **not** cascade. **28-CONTEXT requires per-tenant revocation**, so this is load-bearing: if it does not cascade, disconnect must additionally rely on access-token TTL expiry and that window must be stated honestly in the UI. |
 | **CRM Search API per-account limits** | Documented separately as "limits that are unique from or stricter than the general limits" — not read this pass. Bound CRM Search separately regardless. |
 | **AI-connector classification of Pikar specifically** | Unknowable from docs. It is a HubSpot Ecosystem Quality judgement made at listing review. |
 | **Data-processing / commercial terms, retention & deletion duties, data residency / subprocessor implications** | **NOT RESEARCHED** in either pass. Required before `approved_production`; not required for a sandbox `approved_beta`. |
@@ -199,7 +219,7 @@ is stale relative to the reference.** Pin from the reference, not the guide.
 | Data-processing / commercial terms | **not researched** | Gate for `approved_production` |
 | Retention / deletion duties | **not researched** | Gate for `approved_production` |
 | Data residency / subprocessors | **not researched** | Gate for `approved_production` |
-| Live test account + disconnect/re-auth path | not established | Blocked on the revoke-cascade test above |
+| Live test account + disconnect/re-auth path | not established | Still none. 28-05 landed the code path (connect, refresh, revoke, cascade probe) and proved it offline against a stubbed provider only |
 
 ---
 

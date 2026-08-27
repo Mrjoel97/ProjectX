@@ -1,8 +1,8 @@
 # Playbook: Revenue connectors — shared lifecycle, gates and release semantics
 
-> Last verified: 2026-08-27 against 28-26 (the provider gate plane: admission and live lane held
-> apart as separate axes, plus the per-provider lane gate CLI), on top of 28-04's OAuth state and
-> read transport and 28-03's credential envelope and four Phase 28 tables
+> Last verified: 2026-08-28 against 28-05 (the first provider lane: HubSpot read-only, plus the
+> shared `postTokenForm` — the one non-GET in the connector plane), on top of 28-26's provider gate
+> plane, 28-04's OAuth state and read transport and 28-03's credential envelope and four tables
 > Build history: `.planning/phases/28-connector-backed-revenue-pack/` · Related ADRs: none yet
 
 > **Status: PARTLY IMPLEMENTED.** At the `Last verified` sha the Phase 28 code on disk is the
@@ -370,6 +370,23 @@ transport (`connectorFetch.ts`). Both are **security mechanics, not a connector 
 no plugin registry, no provider-agnostic client and no config table. A provider lane (28-05..28-08)
 is expected to be a small module that calls into these and keeps everything else to itself.
 
+28-05 added a third, for the same reason and under the same rule.
+
+### The token POST — `connectorOAuth.postTokenForm`
+
+**Every rail needs exactly three POSTs** (code exchange, refresh, revoke) and they differ only in
+the form body, which each provider builds in its own pure module. `postTokenForm` is the ONE
+non-GET request the connector plane makes. It takes a URL and a `URLSearchParams` and returns a
+STATUS CODE and a parsed body — no method parameter, no header parameter, `redirect: "error"`, and
+it never returns, logs or throws the response text (a provider error body is vendor content and can
+carry an account identifier — CLAUDE.md §4).
+
+**This is what makes Invariant 1's scan literally true.** `scripts/check-provider-lane.mjs` greps
+every LANE module (`hubspot*.ts`, `quickbooks*.ts`, ...) for `"POST"`, `"PUT"`, `"PATCH"`,
+`"DELETE"` and `fetch(`. A lane that built its own token POST would trip that scan — correctly, and
+the fix is to call this, not to rename the string. Do not add a retry: a token exchange is
+single-use and replaying one can burn the grant.
+
 ### State lifecycle
 
 `mintConnectState` (tenantMutation) -> provider consent -> `consumeConnectState` (internalMutation).
@@ -704,9 +721,10 @@ implying it happened.
 
 - Every **[PLANNED]** item above is unbuilt at the `Last verified` sha. This playbook was registered
   first, deliberately, so parallel lanes have non-overlapping owners before they start writing.
-- **Invariants 1, 2 and 15 are now enforced** (28-26, 28-03, 28-26). Invariant 1's scan is armed
-  but has never bitten: there is no lane module in the tree for it to scan, so it is proven only
-  against a synthetic module in `--self-test`. The first real provider lane is its first real test.
+- **Invariants 1, 2 and 15 are now enforced** (28-26, 28-03, 28-26). Invariant 1's scan is no
+  longer theoretical: as of 28-05 it scans two REAL lane modules (`hubspot.ts`, `hubspotAuth.ts`)
+  and reports `2 module(s) read-only`. It stays true only because the token POST lives in
+  `connectorOAuth.postTokenForm` (above) — the first lane that inlines its own POST will trip it.
 - **`sealGate` writes no audit row.** `providerGates` is deployment-global and the `audit` table is
   tenant-scoped, so there is no tenant to attribute an owner's deployment-wide judgment to. The
   `revision` counter and `evidenceRef` are the only history a gate keeps. If provider admissions
