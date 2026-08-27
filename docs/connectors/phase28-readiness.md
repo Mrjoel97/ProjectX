@@ -25,12 +25,11 @@ session's confident green record is not evidence.
 
 | | |
 |---|---|
-| **Code rows** | **15 / 15 GREEN** |
-| **Owner-attested rows** | **0 / 1** — `p25-production-posture` is `undecided` |
-| **Hard status** | **`blocked`** |
-| **Blocks** | every Phase 28 plan (28-01 … 28-16, 28-18 … 28-29) |
-| **Missing contract** | Production secret source, redirect-URI ownership and hosted fail-closed behaviour — none of them facts about this repository |
-| **Remediation owner** | Owner — 28-17 Task 2 checkpoint |
+| **Code rows** | **15 / 15 GREEN** — each resolved from a file on disk containing a named symbol |
+| **Owner-attested rows** | **1 / 1** — `p25-production-posture` attested `pass` on 2026-08-27. A **human claim**, not a machine proof. |
+| **Hard status** | **`passed`** |
+| **Blocks** | nothing — Phase 28 plans may build against the inventory below |
+| **Standing caveat** | Exactly one green row was checked by nobody but a person. If the attestation in *Owner attestation* below is wrong, Phase 28 connector work starts on an unverified production secret/OAuth posture. That row is the first thing to revisit if a production grant misbehaves. |
 | **Recheck** | `node scripts/check-phase28-readiness.mjs` |
 
 The fifteen code rows are green on the **first** run, which is the exact shape this repo has
@@ -63,9 +62,10 @@ production bundle), **25-12** (automated production qualification) and **25-13**
 acceptance) have **no `SUMMARY.md` on disk**. Those three are precisely where production
 secret/OAuth posture would have been exercised.
 
-Recorded as an honest `blocked` rather than assumed. Phase 28's domain boundary is third-party
-OAuth grants holding a tenant's accounting and payments data; starting connector work on an
-unverified production secret posture is the one mistake this phase cannot afford.
+It was recorded as an honest `blocked` rather than assumed, and it was **closed by an owner
+attestation, not by a landed 25-11/25-12/25-13 SUMMARY**. Those three plans still have no SUMMARY on
+disk. Phase 28's domain boundary is third-party OAuth grants holding a tenant's accounting and
+payments data, so the distinction matters: the row is green because a person said so.
 
 ### Owner attestation
 
@@ -73,7 +73,7 @@ The gate parses the block below. The value set is **closed** — a typo reads `u
 `pass`. Only a literal `pass` clears the row.
 
 <!-- phase28-attestation
-phase25_production_posture: undecided
+phase25_production_posture: pass
 -->
 
 - `pass` — the owner has evidenced production secret source, redirect ownership AND fail-closed
@@ -82,6 +82,29 @@ phase25_production_posture: undecided
   is a Phase 25 lane item (25-11 / 25-12 / 25-13).
 - `undecided` — no judgment on record. **Default. Blocking.** The gate must not be satisfiable by
   forgetting to answer.
+
+#### Recorded judgment — `pass`, 2026-08-27 (plan 28-17, Task 2 checkpoint)
+
+**This is testimony, not evidence.** No line below was verified by `check-phase28-readiness.mjs` or
+by any other code in this repository. It is reproduced so a later reader can see exactly which
+claims a human made and which a script proved. This repo has a recorded defect class — supplied
+figures getting laundered into "observed" facts — and the whole reason the posture row is a separate
+row is to keep that laundering from happening here.
+
+The owner attested, verbatim:
+
+1. Production secret values were set via `npx convex env set --prod`, not copied from a dev
+   `.env.local`.
+2. The Gmail/Microsoft OAuth redirect URIs point at an org-owned OAuth client, not a personal one.
+3. The deployed build actually refuses (fail-closed) when a required secret is unset, rather than
+   serving a left-on fixture seam.
+
+Those three map one-to-one onto the three unprovable facts listed above (secret SOURCE, redirect-URI
+OWNERSHIP, hosted FAIL-CLOSED behaviour). Nothing else is attested — in particular the owner did not
+attest that 25-11 / 25-12 / 25-13 ran, and they still have no SUMMARY on disk.
+
+To reverse it, set the block value to `block`; the gate re-blocks every dependent plan on the next
+run, with no other edit needed.
 
 ---
 
@@ -227,7 +250,7 @@ goes stale and then gets believed.
   - `tier: "fixture"`
   - `fixturesActive`
 
-**`p25-production-posture`** — REVN-01/02/03 production suitability gate — RED
+**`p25-production-posture`** — REVN-01/02/03 production suitability gate — GREEN
 > Production secret SOURCE, redirect-URI OWNERSHIP and hosted fail-closed behaviour. None of these are facts about this repository.
 
 - Not code-provable. Owner attestation key: `phase25_production_posture`
