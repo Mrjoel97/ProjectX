@@ -3,9 +3,73 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 28
-current_plan: 6 of 29 executed (28-17 readiness gate, 28-18 playbook/watch ownership, 28-01 provider admission, 28-02 deterministic finance core, 28-03 encrypted credentials + connector schema, 28-04 shared OAuth state + bounded read transport) -- 28 IN PROGRESS
+current_plan: 7 of 29 executed (28-17 readiness gate, 28-18 playbook/watch ownership, 28-01 provider admission, 28-02 deterministic finance core, 28-03 encrypted credentials + connector schema, 28-04 shared OAuth state + bounded read transport, 28-26 provider eligibility gate) -- 28 IN PROGRESS
 status: executing
-stopped_at: "28-04 SEALED (`20488e6`, `8eaca77`, `c799762`), continuing 28-03's `6757a64`/`48f5ef0`.
+stopped_at: "28-26 SEALED (`1bb8b3b`, `40047f3`), on top of 28-04's `48f5ef0` and 28-03's `82d14a6`.
+**PROVIDER AVAILABILITY IS NOW ONE SERVER-OWNED ANSWER, AND THE TWO AXES ARE HELD APART BY CODE.**
+`admission` (the owner's suitability DECISION -- permission to start) and `lane` (whether a
+controlled LIVE read/revoke was observed) are separate `providerGates` fields, and
+`resolveProviderEligibility` in `@pikar/revenue` is the ONLY place they are ever combined. Do not add
+a convenience boolean, do not let a UI derive availability from `admission`, and do not let any tool
+read the stored `lane` -- read the passed-only `availableProviders` projection (provider +
+environment and NOTHING else; a surface that could see `reviewBy` would start rendering
+`expiring soon` and treating an admission as a status).
+**FIVE RESOLVED STATES OVER THREE STORED ONES, and the two extra ones CANNOT be stored.** `pending`
+is the ABSENCE of a row (a row saying pending would be a row claiming a judgment exists -- which is
+also why there is no `undecided` schema literal), and `expired` is resolved against `now` (a stored
+freshness flag is true when written and false an hour later). A `failed` lane OUTRANKS expiry: a
+lane that broke is an incident, one that never ran is silence.
+**THE COMPOSITE RULE, all six, refusal names EVERY axis that refused:** row exists; lane passed;
+`reviewBy > now`; admission permits that environment (approved_beta reaches sandbox ONLY);
+`readPathCount > 0`; and every `PROVIDER_OPEN_CONDITIONS[provider]` id present in the row's
+`clearedConditions`. **`readPathCount` is passed IN, not imported** -- that is what keeps the pure
+rule Convex-free AND makes it impossible to contradict `PROVIDER_READ_PATHS.stripe = []`, so Stripe
+cannot be made available today whatever the owner approved.
+**`sealGate` VALIDATES A PASS BY RUNNING THE SAME RESOLVER THE READERS RUN.** One rule, one
+implementation -- a pass can never be recorded that a reader would then refuse. Parking is NEVER
+blocked (a lane discovered broken must always be switchable off) and `recordLaneFailure` carries NO
+CAS on purpose (refusing to record a failure on a stale revision would leave a known-broken lane
+readable) but it DOES bump `revision`, so an owner seal already in flight fails rather than
+resurrecting the lane.
+**THE FOUR OPEN ADMISSION CONDITIONS ARE NOW LOAD-BEARING, NOT PROSE.** hubspot
+`revoke-cascades-to-access-tokens` (28-22), quickbooks `partner-tier-and-poll-budget` (28-23),
+stripe `platform-initiated-revocation` (28-24), paypal `no-documented-revoke-endpoint` (28-25).
+28-22..25 CANNOT seal a passed lane without naming theirs with evidence. Ids are pinned by a
+WRITTEN-OUT LITERAL in `contracts.test.ts` and the provider/plan mapping is parity-tested against
+the register's own markdown table.
+**SCHEMA: TWO ADDITIVE FIELDS on a table that had never held a row** -- `lane` widened with `failed`,
+`clearedConditions` optional. 28-03 stays the connector-schema owner; this was flagged, not assumed.
+**`node scripts/check-provider-lane.mjs --all` IS EXIT 0 TODAY WITH 13 PENDING ROWS AND ZERO GREEN
+LANES -- CONSISTENT IS NOT PASSED.** Three statuses because `not built` and `wrong` are different
+facts; at `--stage final` a pending IS red. `--seal-decision from-owner` resolves an ADMITTED
+provider to **park, always** -- an admission is permission to start, never a passed lane, and
+turning one into the other here is the laundering the register exists to prevent.
+**MUTATION: 9 non-deletion mutations, ALL RED, ZERO SURVIVORS**, plus 11 CLI row mutations and 9 seal
+combinations. All three known blind spots addressed: renames are non-substring
+(`passed`->`parked`, `failed`->`broken`) and the builder-import scan compares the WHOLE imported set
+rather than banning substrings; the CAS and composite guards were disabled INDEPENDENTLY (M8 -> 1
+test, no composite; M5 -> 7 tests, no CAS); and because a constant the test imports moves with its
+own mutation, the condition ids are pinned to LITERALS and M9 mutates the SCHEMA literal instead.
+**`tsc --noEmit` RUN SEPARATELY in both packages, exit 0 -- it caught 41 real errors under a fully
+green 24-test suite** (`readonly string[]`, and 40 `Property providerGates does not exist` because
+`npx convex codegen` needs a running backend and timed out; the two `_generated/api.d.ts` lines were
+added by hand exactly as codegen emits them). Backend full run: **104/104 files, 2668/2668 tests
+pass**. The `Errors 1 error` (`ReferenceError: process is not defined`, worker teardown) is
+PRE-EXISTING and was attributed BY EXCLUSION -- re-running with `--exclude providerGates.test.ts`
+reproduces it identically (103 files, 2644 tests, same 1 error).
+**FOUND INSIDE THIS PLAN: the CLI condition row and the runtime resolver disagreed** -- the CLI
+ignored `--clear-condition` so a pass could never be sealed, while the resolver clears via the row.
+Two mechanisms for one rule, exactly the drift class this plan closes. Fixed, and a self-test case
+now proves the pass path is REACHABLE (a gate that refuses everything is broken, not safe).
+`requirements-completed: []` -- REVN-01/02/03/05 STAY PENDING. No adapter, no callback route, no
+connections UI, no live read; all four open conditions survive untouched.
+**NEXT: Wave 6 (28-05..08 provider rails).** Each rail still runs `check-phase28-readiness.mjs`
+FIRST, unpiped, and should now ALSO run `check-provider-lane.mjs --provider <slug>` before and after
+-- the `absence`/`adapter`/`read-only`/`allow-list` rows are about the module it is adding, and the
+read-only scan (playbook invariant 1) is ARMED BUT HAS NEVER BITTEN: there is no lane module in the
+tree for it to scan, so wave 6 is its first real test. Do NOT run any `gsd-tools state *` subcommand
+against this file -- it has corrupted it seven times. Working branch feat/27-02-pack-contracts."
+previous_stopped_at: "28-04 SEALED (`20488e6`, `8eaca77`, `c799762`), continuing 28-03's `6757a64`/`48f5ef0`.
 **THE SHARED CONNECTOR MECHANICS EXIST AND NOTHING HAS SPOKEN TO A PROVIDER YET** -- all 68 tests
 are offline against an injected `fetch` or a fake DB, $0.
 **`consumeConnectState` TAKES NO `tenantId` ARGUMENT AND THAT IS THE SECURITY PROPERTY.** A callback
@@ -56,62 +120,12 @@ passed, all four open admission conditions survive untouched.
 adds its OWN paths to `PROVIDER_READ_PATHS`, whole, per the extension rules now in
 `docs/playbooks/revenue-connectors.md`. Do NOT run any `gsd-tools state *` subcommand against this
 file -- it has corrupted it seven times. Working branch feat/27-02-pack-contracts."
-previous_stopped_at: "28-01 SEALED. The four provider admission gates are decided and the register is live at
-docs/connectors/. All four markers read `decision: approved_production` -- read them with
-grep -h '^decision:' docs/connectors/*-suitability.md, never from prose. Four INDEPENDENT markers,
-each with its own date, evidence refs and expiry `review_by: 2026-11-27`. There is no all-provider
-approval flag and the README says there never will be one.
-**THE DURABLE FINDING IS THAT ONLY ONE OF THE FOUR RESTS ON EVIDENCE.** HubSpot is
-evidence-consistent (unlisted OAuth needs no HubSpot permission; the 25/10/100 install cap is
-ACCEPTED and a Marketplace listing is DEFERRED, which is exactly what keeps the AI-connector/MCP
-rebuild rule from ever being triggered). The other three are human testimony. STRIPE is an explicit
-OWNER OVERRIDE AGAINST its own record: the prepared evidence says production is NOT supportable
-today because platform-initiated revocation for Stripe Apps is undocumented and 28-CONTEXT makes
-per-tenant revocation a hard requirement -- the owner was shown that and approved anyway. QUICKBOOKS
-and PAYPAL are OWNER ATTESTATIONS of external vendor approvals (live Intuit production credentials,
-i.e. App Assessment Questionnaire approved; PayPal partner acceptance with an assigned partner
-manager on a live partner account) -- nothing in this repo checked either and no vendor page can.
-All three are written in the house style of docs/connectors/phase28-readiness.md, 'This is testimony,
-not evidence', with the claim reproduced as a dated blockquote and what happens if it is wrong
-(approval void, provider `blocked` again). DO NOT let a later document restate an attestation as a
-verified fact -- that laundering is a recorded defect class here.
-**NO OPEN CONDITION WAS RESOLVED, AND EACH IS NOW A NAMED DELIVERABLE.** HubSpot: whether
-`POST /oauth/2026-03/token/revoke` invalidates already-issued ACCESS tokens is UNPROVEN (docs
-silent, the legacy DELETE explicitly did not cascade) -- 28-05 MUST TEST it against a live grant and
-28-22 MUST NOT SEAL without the result. Stripe: the revocation story goes to 28-24 and CANNOT be
-closed by a green test, because no test here can prove an API that is not documented to exist.
-QuickBooks: App Partner Program TIER UNSTATED (Builder = 500,000 CorePlus calls/workspace/month,
-which would bound a polling pack) and the write blast radius is ACCEPTED, so the compile-time
-GET/query/report-only allow-list is MANDATORY (28-06/28-23). PayPal: NO revoke endpoint is documented
-anywhere and sandbox is explicitly NON-PROBATIVE about production authorization (28-25). Unresolved
-on all four: data-processing/commercial terms, retention/deletion duties and data residency are NOT
-RESEARCHED -- production was approved without them.
-**APPROVAL IS PERMISSION TO START, NOT A SHIPPED PHASE.** No lane gate has run and no adapter exists.
-A partial release completes NO REVN requirement; 28-01 records requirements-completed as EMPTY,
-deliberately -- it creates gates, it implements nothing. No `approved_beta` marker was ever recorded
-for any provider: the judgments were issued directly as `approved_production`, so the beta stage was
-SKIPPED, not passed.
-**FIVE PLAYBOOKS WERE BUMPED IN THE SAME COMMIT** (CLAUDE.md 9) because docs/connectors/* is watched.
-connector-stripe.md carried ACTIVE BAD ADVICE -- be accepted/configured as an Extension -- against a
-door Stripe has closed (You can no longer build new Connect extensions); all four provider playbooks
-also still declared their lane `parked`. The gate was observed BOTH RED AND GREEN: the hook blocked
-on revenue-connectors.md mid-task and is clean now. That script still EXITS 0 ON EVERY PATH and hangs
-forever if run bare -- STDOUT is the only signal, so run it as
-echo {} | node scripts/check-playbooks.mjs check. `node scripts/check-phase28-readiness.mjs` still
-exits 0.
-**28-02 LANDED IN PARALLEL AND ITS BLOCK IS DIRECTLY BELOW THIS ONE** -- both lanes wrote this file
-in the same window, so read the two together, not one instead of the other.
-**NEXT: Wave 3 (28-03 encrypted credentials + additive connector schema).** All four provider lanes
-(28-05..28-08) are unparked and may now be built. Every dependent plan still runs
-`node scripts/check-phase28-readiness.mjs` FIRST; exit 1 means stop, not shim. Do NOT run any
-`gsd-tools state *` subcommand against this file -- it has corrupted it seven times. Working branch
-feat/27-02-pack-contracts."
-last_updated: "2026-08-27T19:30:00.000Z"
+last_updated: "2026-08-27T23:10:00.000Z"
 progress:
   total_phases: 53
   completed_phases: 35
   total_plans: 413
-  completed_plans: 322
+  completed_plans: 323
   percent: 78
 ---
 
