@@ -1,7 +1,8 @@
 # Playbook: Revenue connectors — shared lifecycle, gates and release semantics
 
-> Last verified: 2026-08-27 against 8eaca77 (28-04 landed the one-time OAuth state and the bounded
-> read transport, on top of 28-03's credential envelope and the four Phase 28 tables)
+> Last verified: 2026-08-27 against 28-26 (the provider gate plane: admission and live lane held
+> apart as separate axes, plus the per-provider lane gate CLI), on top of 28-04's OAuth state and
+> read transport and 28-03's credential envelope and four Phase 28 tables
 > Build history: `.planning/phases/28-connector-backed-revenue-pack/` · Related ADRs: none yet
 
 > **Status: PARTLY IMPLEMENTED.** At the `Last verified` sha the Phase 28 code on disk is the
@@ -11,7 +12,10 @@
 > not a claim that code exists — do
 > not cite a [PLANNED] line as evidence that something works.
 >
-> **NO PROVIDER EXISTS YET AND NO LANE HAS PASSED.** There is no adapter, no OAuth callback route,
+> **NO PROVIDER EXISTS YET AND NO LANE HAS PASSED.** 28-26 landed the machinery that *decides*
+> whether a lane has passed and, run against the tree today, it says every lane is `pending`:
+> `node scripts/check-provider-lane.mjs --all` is exit 0 with 13 pending rows and zero green lanes.
+> There is no adapter, no OAuth callback route,
 > no connections UI and no live read. What 28-03 and 28-04 delivered is the ability to *store a
 > connector credential safely* and to *round-trip a consent and read a page under bounds* if a
 > provider ever arrives — preconditions, not features. Nothing in 28-04 has ever spoken to a
@@ -69,6 +73,21 @@ Phase 27's skill/pack registry (`skill-registry.md`), the cockpit tool loop (`co
   `retryDelayMs`, `readPages`, and the `READ_TIMEOUT_MS` / `MAX_RETRIES` / `MAX_RETRY_DELAY_MS`
   bounds. Declares **no Convex function at all** — it is transport an adapter action calls, and a
   source scan in its test keeps it that way.
+
+**Landed (28-26) — the provider gate plane**
+
+- `packages/revenue/src/contracts.ts` — `resolveProviderEligibility`, THE composite rule, plus the
+  closed `ADMISSIONS` / `LANES` / `ELIGIBILITY_STATES` / `ELIGIBILITY_REASONS` sets and
+  `PROVIDER_OPEN_CONDITIONS`. Pure, Convex-free; the read-path count is passed IN rather than
+  imported, so the rule can never contradict `connectorFetch`'s allow-list.
+- `packages/backend/convex/providerGates.ts` (+ `.test.ts`) — the thin adapter. `availableProviders`
+  (tenantQuery, passed-only, provider+environment and nothing else), `inspectGate` / `sealGate`
+  (ownerQuery/ownerMutation, CAS on `revision`), `gateEligibility` (internalQuery) and
+  `recordLaneFailure` (internalMutation). **No tenant-callable write exists and a source scan in the
+  test file fails if one appears.**
+- `scripts/check-provider-lane.mjs` — the per-provider lane gate. `--provider`/`--all`,
+  `--stage engineering|final`, `--json`, `--seal-decision pass|park|from-owner`, `--verify-gate`,
+  `--self-test`. Every fact is read out of a file; nothing is retyped.
 
 **Landed (28-03 Task 1) — pure package**
 
@@ -184,8 +203,12 @@ Run `graphify query "revenue connectors"` for the current subgraph. Couplings gr
 ## Invariants — what must never break
 
 1. **Read-only.** No write, refund, credit, dispute, journal-entry or CRM-mutation endpoint is
-   reachable from any adapter export or specialist grant. *Enforced by:* static reachability tests
-   [PLANNED, 28-26]. Until those land this is a review-only rule — that is a real gap.
+   reachable from any adapter export or specialist grant. *Enforced by:* the `read-only` row of
+   `scripts/check-provider-lane.mjs`, which scans every provider LANE module for `POST`/`PUT`/
+   `PATCH`/`DELETE` and for a direct `fetch(` outside `connectorFetch` — LANDED, 28-26. It scans
+   lane modules only: `connectorOAuth.ts` legitimately POSTs a token exchange and a revoke. The row
+   is `pending` for a provider with no lane module yet, which is all four today, so the scan has
+   nothing to bite on until wave 6 — it is armed, not yet exercised on real code.
 2. **Tenant isolation.** Credentials are sealed with AAD binding
    `tenantId | provider | connectionId | environment | keyVersion`. Copying ciphertext to another
    tenant or provider must fail authentication. *Enforced by:* `credential.test.ts` (one case per
@@ -244,6 +267,14 @@ Run `graphify query "revenue connectors"` for the current subgraph. Couplings gr
     each cap constructed so only that one guard can fire, mutation-verified by off-by-one on the
     caps and rename on the status/header/path literals — LANDED, 28-04.
 
+15. **An admission is never a passed lane, and one flag can never mean both.** `providerGates`
+    keeps `admission` (the owner's decision) and `lane` (an observed live gate) as separate fields,
+    and `resolveProviderEligibility` is the only place they are combined. Do not add a convenience
+    boolean, do not let a UI derive availability from `admission`, and do not let any tool read the
+    stored `lane` directly — read the passed-only projection. *Enforced by:*
+    `providerGates.test.ts` (24 cases, including a source scan that fails if the projection ever
+    mentions `lane`) and `contracts.test.ts` — LANDED, 28-26.
+
 ## Release semantics — passed / parked / subset / complete
 
 These four states are deliberately distinct. Conflating them is how a partial rollout gets recorded
@@ -251,7 +282,7 @@ as a finished phase.
 
 | State | Meaning | Decided by | Effect |
 |---|---|---|---|
-| **lane `passed`** | One provider holds a current suitability decision **and** a controlled live read/revoke gate observed green. | `scripts/check-provider-lane.mjs` [PLANNED] over that provider's evidence | That provider may appear in the product. |
+| **lane `passed`** | One provider holds a current suitability decision **and** a controlled live read/revoke gate observed green. | `resolveProviderEligibility` over the `providerGates` row; `scripts/check-provider-lane.mjs` over the tree — LANDED, 28-26 | That provider may appear in the product. |
 | **lane `parked`** | Blocked, deferred, or evidence missing/expired. | same | Provider hidden; dependents report unknown coverage, not zero. |
 | **subset release** | At least one lane `passed` and its workflows shipped. | owner | Users get value. **This is NOT phase completion.** |
 | **phase complete** | REVN-01, REVN-02 and REVN-03 each require *every* provider they name to hold a current production-suitability decision and a `passed` live read/revoke gate. | `scripts/check-phase28-completion.mjs` [PLANNED] | Only then may Phase 28 be closed. |
@@ -260,6 +291,77 @@ A suitability record carries an owner, a review date, evidence links, a decision
 (`approved_beta` | `approved_production` | `blocked` | `deferred`) and an expiry/re-review trigger.
 Code may be written against a sandbox after `approved_beta`; navigation and discovery require the
 production decision. **An expired record is `parked`, not `passed`.**
+
+### The two axes — admission is not a passed lane
+
+`providerGates` carries **two** fields and they answer different questions. This is the single most
+important thing in this playbook to not undo.
+
+| Axis | Field | Means | Set by |
+|---|---|---|---|
+| **Admission** | `admission` | The owner's suitability DECISION: engineering and production exposure are *permitted*. Mirrors the `decision:` marker in the record. | An owner judgment, sealed with `sealGate` |
+| **Live gate** | `lane` | Whether a controlled live read/revoke was actually OBSERVED green. | 28-22..25, sealed with live evidence |
+
+On 2026-08-27 all four providers were admitted `approved_production` and **not one lane has ever
+run**; three of those four admissions rest on owner testimony rather than evidence. If the two ever
+collapsed into one flag, the wave-7 seals would be decorative and a provider would go discoverable on
+a say-so. **`approved_production` + `lane: parked` is the normal state for most of this phase.**
+
+**The composite rule** (`resolveProviderEligibility`, and nothing else may re-derive it) — a provider
+is available only when EVERY one of these holds, and a refusal names each axis that refused:
+
+1. a gate record exists (no row is `pending`, never `passed` — a missing row IS `undecided`);
+2. `lane === "passed"` (a `failed` lane short-circuits to `failed`; a failure outranks expiry);
+3. `reviewBy > now` (resolved against the clock, never stored — an expired record is `expired`);
+4. the admission permits that environment (`approved_production` for production; `approved_beta`
+   reaches sandbox only);
+5. the provider has at least one allow-listed read path — **this is why Stripe cannot be made
+   available today whatever the owner approved**: `PROVIDER_READ_PATHS.stripe` is `[]` by decision;
+6. every entry in `PROVIDER_OPEN_CONDITIONS[provider]` appears in the row's `clearedConditions`.
+
+Rule 6 is what makes the four surviving admission conditions load-bearing rather than advisory:
+28-22..25 each own exactly one, and `sealGate` refuses a `passed` lane until it is named with
+evidence. **A seal to `passed` is validated by running the same resolver the readers run**, so a pass
+can never be recorded that a reader would then refuse.
+
+`parking is never blocked.` A refusal must always be recordable, or a lane discovered to be broken
+could not be shut off. `recordLaneFailure` likewise carries **no** compare-and-set — refusing to
+record a failure because the revision moved would leave a known-broken lane readable — but it does
+bump `revision`, so an owner seal already in flight fails rather than resurrecting the lane.
+
+### The lane gate CLI — `scripts/check-provider-lane.mjs`
+
+Three row statuses, because "not built yet" and "wrong" are different facts: `green`, `pending`
+(nothing is wrong, the thing does not exist yet) and `red` (an inconsistency). Exit 0 = no red. At
+`--stage final` a `pending` IS red, because final means "this lane claims to be passed".
+
+| Row | Red when |
+|---|---|
+| `decision` | the marker will not parse, names another provider, carries a value outside the closed vocabulary, or records a decision with no date |
+| `evidence-life` | `review_by` has passed — 90 days is the maximum evidence life |
+| `absence` | a `blocked`/`deferred`/`undecided` provider nonetheless has a lane module |
+| `adapter` | (final only) an admitted provider has no lane module |
+| `read-only` | a lane module contains `POST`/`PUT`/`PATCH`/`DELETE` or a direct `fetch(` — **this is invariant 1's enforcement** |
+| `allow-list` | a lane module exists over an empty read allow-list, or the provider has no `PROVIDER_READ_PATHS` entry at all |
+| `open-conditions` | the register and `PROVIDER_OPEN_CONDITIONS` disagree about which conditions survive or which plan owes them |
+| `parity` | the register, `PROVIDERS` and the `providerGates` schema literals do not name the same four providers |
+
+Seal modes, and the one that matters:
+
+- `--seal-decision from-owner` reads the record's marker and resolves **deterministically to
+  `park`, always**. An admission is permission to start; turning it into a `passed` lane here would
+  be exactly the laundering of testimony into observation the register exists to prevent. An
+  `undecided` record is refused outright — there is no judgment to seal.
+- `--seal-decision park` is always available.
+- `--seal-decision pass` requires `--evidence <ref>` from a live gate, a `--clear-condition <id>` for
+  every open condition, and a fully green `--stage final`. Today it refuses for all four providers.
+- Neither applies anything without `--apply`; the default prints the payload.
+
+`--self-test` mutates the tree in memory and requires every row to be observed going RED, then
+re-runs the real tree to prove the baseline is clean, then walks every seal combination — including
+one that MUST resolve to `pass`, because a gate that refuses everything is broken rather than safe.
+`--verify-gate` runs the real `providerGates` behaviour tests rather than grepping for the branch
+that is supposed to disable a failed lane; a source tripwire proves spelling, not validity.
 
 ## Shared connector mechanics — what a provider lane reuses, and what it must NOT
 
@@ -560,7 +662,10 @@ implying it happened.
 | `cd packages/backend && pnpm vitest run isolation traceParity tenantDelete tenantExport` | The four derived gates a new table or a new tool literal must satisfy. | offline |
 | `cd packages/backend && npx tsc --noEmit` | Same reason as above — it caught an untyped validator getter this suite was green over. | offline |
 | `node scripts/smoke-<provider>-read.mjs` [PLANNED] | Controlled live read and revoke for one lane. | live creds |
-| `node scripts/check-provider-lane.mjs` [PLANNED] | Machine-readable lane status. | offline |
+| `cd packages/backend && npx vitest run convex/providerGates.test.ts` | The two axes stay apart: an admitted provider with an unrun lane is unavailable, a seal cannot invent a pass, expiry and live-refresh failure each empty the projection, two tenants read the same thing and neither can write. 24 tests. | offline |
+| `node scripts/check-provider-lane.mjs --all` | No lane contradicts its record. Exit 0 today with 13 pending rows. **Consistent is not passed.** | offline |
+| `node scripts/check-provider-lane.mjs --self-test` | Every row observed going RED under a rename/substitution mutation, the real tree clean, and every seal combination — including the one that must resolve to `pass`. | offline |
+| `node scripts/check-provider-lane.mjs --verify-gate` | Runs the gate behaviour tests directly, rather than grepping for the branch. | offline |
 | `node scripts/check-phase28-completion.mjs` [PLANNED] | All lanes `passed` — the only proof of phase completion. | offline |
 
 ## Operational notes
@@ -599,8 +704,16 @@ implying it happened.
 
 - Every **[PLANNED]** item above is unbuilt at the `Last verified` sha. This playbook was registered
   first, deliberately, so parallel lanes have non-overlapping owners before they start writing.
-- Invariant 1 (read-only reachability) has no enforcement yet. That is a gap, not a footnote — the
-  static scan lands with 28-26. **Invariant 2 is now enforced** (28-03).
+- **Invariants 1, 2 and 15 are now enforced** (28-26, 28-03, 28-26). Invariant 1's scan is armed
+  but has never bitten: there is no lane module in the tree for it to scan, so it is proven only
+  against a synthetic module in `--self-test`. The first real provider lane is its first real test.
+- **`sealGate` writes no audit row.** `providerGates` is deployment-global and the `audit` table is
+  tenant-scoped, so there is no tenant to attribute an owner's deployment-wide judgment to. The
+  `revision` counter and `evidenceRef` are the only history a gate keeps. If provider admissions
+  ever need a governance trail, that is a deliberate plan, not a one-line addition here.
+- **A condition id is only pinned by a literal in `contracts.test.ts`.** Renaming one there and in
+  the seal invocation together would be self-consistent and silent; the register's table pins the
+  *provider* and the *owning plan*, not the slug. Wave-7 plans type these ids by hand.
 - **`workflowPackEvents` was NOT extended, and 28-14/28-15 must extend it.** Its `packId` and
   `event` unions are Phase 27's, and `packId` is pinned to `WORKFLOW_PACK_IDS` in `@pikar/core` by a
   source scan in `packages/core/src/workflowPacks.test.ts` — so adding the seven Phase 28 workflow
