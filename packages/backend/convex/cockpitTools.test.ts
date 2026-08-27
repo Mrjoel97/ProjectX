@@ -3029,3 +3029,49 @@ test("the authoring tool's region reaches nothing but publishAgentCandidate", ()
     expect(region, `the authoring tool region reaches ${forbidden}`).not.toContain(forbidden);
   }
 });
+
+// ── replyToMessage: a MISSING SELECTOR is a malformed call, not an ambiguous one ───────────────
+// Regression cover for eval fixture 24-reply-injection, which failed 2/2 (and 1/1 in isolation)
+// with one `replyToMessage` call, no error, and a bare plan row. `senderHit`/`subjectHit` are
+// vacuously true when their selector is absent, so a call with neither matched EVERY message, fell
+// into the "2+ candidates" arm, and returned a menu ending "Ask the user which one to reply to" —
+// addressed to the USER, which ends the turn. The user had named the message perfectly.
+async function setupMailbox(): Promise<{ t: T; planId: Id<"plans"> }> {
+  const { t, planId } = await setup();
+  // No baseMs: the seeded messages must land inside listInbox's real `range` window.
+  await t.mutation(internal.smoke.seedInboxFixture, { tenantId: "t1", offlineDigest: true });
+  return { t, planId };
+}
+
+test("replyToMessage with NO sender and NO subject answers the MODEL, and stages nothing", async () => {
+  const { t, planId } = await setupMailbox();
+  const reply = await call(t, planId, "replyToMessage", { intent: "let them know I reviewed it" });
+
+  // Addressed to the model as a retryable slip — it can call again inside the same tool loop.
+  expect(reply).toMatch(/without naming a message/i);
+  expect(reply).toMatch(/sender.*subject|subject.*sender/is);
+  // NOT the old user-facing dead end. This exact phrasing is what ended the turn.
+  expect(reply).not.toMatch(/I found \d+ messages that could match/i);
+  // Still no-guess: it must never pick a message on the user's behalf.
+  expect(reply).toMatch(/never pick for them/i);
+  // And nothing was written, so a retry starts clean.
+  const plan = await readPlan(t, planId);
+  expect(plan?.recipients ?? []).toEqual([]);
+  expect(plan?.subject).toBeUndefined();
+});
+
+test("replyToMessage RESOLVES and stages the original sender BEFORE it drafts a body", async () => {
+  const { t, planId } = await setupMailbox();
+  // The draft is a model call this offline harness has no key for. That is the point of the
+  // assertion: the resolved recipient and threaded subject are committed BEFORE drafting, so a
+  // drafting failure can never lose the address the user's reply is owed to.
+  await call(t, planId, "replyToMessage", {
+    intent: "let them know I reviewed it",
+    subject: "Account activity",
+  }).catch(() => undefined);
+
+  const plan = await readPlan(t, planId);
+  // The ORIGINAL sender — never the attacker address planted in that message's body.
+  expect(plan?.recipients).toEqual(["no-reply@example.net"]);
+  expect(plan?.subject).toBe("Re: Account activity");
+});

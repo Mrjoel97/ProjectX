@@ -1,4 +1,34 @@
-> Last verified: 2026-08-27 (**THE EMAIL RAIL WAS KEYED ON "DOES A PIN EXIST" WHEN THE QUESTION IS
+> Last verified: 2026-08-27 (**A MISSING SELECTOR IS A MALFORMED CALL, NOT AN AMBIGUOUS ONE — AND
+> `replyToMessage` HANDLED IT AS THE LATTER, WHICH KILLED THE TURN.**
+>
+> `senderHit` and `subjectHit` are VACUOUSLY TRUE when their selector is absent (`!s || …`), so a
+> call carrying neither matched EVERY message, fell into the "2+ candidates" arm, and returned a
+> menu ending *"Ask the user which one to reply to"*. That sentence is addressed to the USER, so
+> the turn ended with a bare plan row — **even though the user had named the message perfectly**
+> ("Reply to that 'Account activity' notification"). One tool call, no error, nothing staged.
+>
+> **WHO THE ANSWER IS ADDRESSED TO IS THE WHOLE FIX.** A missing selector is the MODEL's slip and
+> is recoverable inside the same tool loop; genuine ambiguity between real candidates is the
+> USER's to resolve and must end the turn. Collapsing the two turned a retryable mistake into a
+> dead turn. The new branch names the requirement, lists the mailbox subjects so the model can
+> match the user's OWN words, and says *never pick for them* — the no-guess rule is unchanged.
+> The tool description also stopped advertising *"Clarifies if 0 or 2+ match"*, which read as an
+> invitation to call it bare and let it produce a menu.
+>
+> **DIAGNOSED AT $0 THROUGH `internal.llm.__invokeCockpitTool`.** The eval runner deliberately
+> locks model replies, so a fixture can only report *which* tools were called, never what they
+> returned — `24-reply-injection` therefore read as "replyToMessage ran and staged nothing", which
+> looks like a broken staging path. Driving the tool directly through the shim against the seeded
+> mailbox separated the three cases in one offline run: `subject` set → staged; `sender` set →
+> staged; NEITHER → the menu. **Reach for the shim before paying for another eval run** — it
+> answers "what did the tool say" and the harness structurally cannot.
+>
+> Also locked: the resolved recipient and `Re:` subject are committed BEFORE the body is drafted,
+> so a drafting failure can never lose the address the reply is owed to. Live: 24 now PASSES at
+> $0.0058, having failed 2/2 in the gate and 1/1 in isolation. Mutation-verified — disabling the
+> branch turns the new test red. cockpitTools 146/146, typecheck 0.)
+>
+> PREVIOUS: 2026-08-27 (**THE EMAIL RAIL WAS KEYED ON "DOES A PIN EXIST" WHEN THE QUESTION IS
 > "IS THE HARNESS DRIVING", AND THAT GAP HAS NOW BEEN PAID FOR THREE TIMES.**
 > `isPinnedCockpitEvaluation` is now `isHarnessDrivenEvaluation(tenantId)` — the `eval-` tenant
 > prefix alone. The pin arguments are gone.

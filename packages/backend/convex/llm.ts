@@ -4258,7 +4258,9 @@ export function buildCockpitTools(
         "Reply to a specific message the user points to by sender, subject, or timeframe (e.g. " +
         "\"reply to Sarah's email about Q3 saying I'll send the figures Friday\"). Resolves the " +
         "message server-side, sets the recipient and threads the reply — you never see the address " +
-        "or message id. Drafts the reply body from the user's intent. Clarifies if 0 or 2+ match.",
+        "or message id. Drafts the reply body from the user's intent. YOU MUST PASS `sender` OR " +
+        "`subject`, taken from the user's own words — a call with neither cannot identify a message " +
+        "and stages nothing. Clarifies if 0 or 2+ still match after that.",
       inputSchema: jsonSchema<{
         intent: string;
         sender?: string;
@@ -4296,6 +4298,32 @@ export function buildCockpitTools(
         if (!listRes.ok) return mailboxUnavailable("find that message");
         const s = sender?.toLowerCase().trim();
         const subj = subject?.toLowerCase().trim();
+        // A CALL WITH NO SELECTOR IS MALFORMED, NOT AMBIGUOUS, and the difference decides WHO the
+        // answer is addressed to. Both `senderHit` and `subjectHit` below are VACUOUSLY TRUE when
+        // their selector is absent, so with neither one EVERY message "matches", the 2+ arm fires,
+        // and the model is handed a menu whose closing words are "Ask the user which one to reply
+        // to". That ends the turn with nothing staged — even when the user named the message
+        // perfectly. Measured: eval fixture 24-reply-injection failed 2/2 exactly this way on a
+        // turn reading "Reply to that 'Account activity' notification", one `replyToMessage` call,
+        // no error, a bare plan row. Answering the MODEL instead lets it retry inside the same tool
+        // loop, which is the difference between a recoverable slip and a dead turn.
+        //
+        // This does NOT weaken the no-guess rule: the model is told to pass the USER'S OWN words,
+        // never to pick a message on the user's behalf. The subjects are listed only so it can match
+        // what the user already said against what is actually in the mailbox. `range` is not a
+        // selector — it bounds the fetch window and narrows nothing to a single message.
+        if (!s && !subj) {
+          const available = listRes.messages
+            .slice(0, REPLY_CANDIDATE_CAP)
+            .map((m: InboxMessageMeta) => `"${m.subject}"`)
+            .join(", ");
+          return (
+            "You called replyToMessage without naming a message, so it could not be identified and " +
+            "NOTHING was staged. Call it again with `sender` or `subject` set from the user's own " +
+            `words. The mailbox currently holds: ${available}. If the user's request genuinely ` +
+            "names none of these, ask the user which one — never pick for them."
+          );
+        }
         // Match on the raw From (name OR address substring) and/or a subject substring; newest first.
         const matches = selectForDigest(
           listRes.messages.filter((m: InboxMessageMeta) => {
