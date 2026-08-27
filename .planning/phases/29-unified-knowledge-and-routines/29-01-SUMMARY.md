@@ -304,6 +304,105 @@ already take, so one card serves both planes and no caller writes a rename shim.
 **17 mutations were applied to the pure contracts and 5 to the schema during the repair. All 22 were
 observed RED and reverted, and the baseline was re-confirmed green after each batch.**
 
+## The SECOND adversarial repair (2026-08-28)
+
+**The round-1 numbers above are the state as of commit `b46509a`. They are left standing rather
+than edited, because two of them were wrong and rewriting them would hide that.** A second
+adversarial pass re-ran the mutation battery and found **10 of the 22 "repaired" defects still
+standing**, including two the section above claims as "observed RED".
+
+### Where round 1 overstated its own coverage
+
+| Round-1 claim | What round 2 proved |
+|---|---|
+| "**17 mutations applied to the pure contracts … all observed RED**", and `knowledgeSearch.test.ts:542` carries the comment `MUTATION: drop the kept.length >= SEARCH_CAPS.maxEvidenceTotal arm`. | The DELETION goes red — but only through the `NO CAP IS DEAD` source scan, with **zero behavioural failures**. The `*100` weakening (symbol kept, so the scan is satisfied) left **95/95 GREEN**. The fixture fed 3 x 8 = 24 rows, exactly the cap, so the drop branch never executed in any test. The comment sat on a test that could not see it. |
+| "`workflowCustomization.ts` — 17/17 RED", with `CUSTOMIZATION_CAPS` covered by a `NO CAP IS DEAD` scan. | `valueMaxBytes: 4_000 -> 4_000_000` and `Math.min(field.maxBytes, valueMaxBytes * 100)` **both survived at 87/87 GREEN**. Every fixture declared a field whose own `maxBytes` (40, 400) was below the ceiling, so `Math.min` always chose the field's number and the absolute ceiling never bound. |
+
+**The cause of both is one rule this round now writes down:** a test that imports the same constant
+the implementation uses moves its oracle with its subject. Scaling the constant scales the
+expectation, and the test can never fail. **Expected values are now LITERALS** (`24`, `4_000`,
+`4_001`) with the constant itself pinned by an equality assertion beside them.
+
+### The five majors, and the mutation re-applied to prove each fix
+
+| # | Defect | Fix | Mutation re-applied -> RED on |
+|---|---|---|---|
+| 1 | **`groundedSourceProps` handed a Gmail/Drive/CRM id to a vault document modal.** It mapped EVERY source's `sourceRef` into `docIds`, and the landed chain is `cards.tsx:2413 GroundedSources` -> `:2373 VaultDocButton` -> `:2317 <VaultDocModal docId={docId}>`. Four of five sources rendered a clickable control that opens a document that does not exist — the exact naming lie the function's own JSDoc rejects for `citationDocId`, committed one plane over. The round-1 test *enshrined* it (`docIds: ["d1", "m1"]`, `m1` a MAIL ref). | Projects vault evidence only; every non-vault citation comes back in `nonVault` so nothing is silently dropped; `count` counts DOCUMENTS, which is what the card's own words say. | `filter((e) => e.source === "vault")` -> `filter(() => true)`: **2 failed / 97 passed** — "NO NON-VAULT REF EVER REACHES docIds" and "an all-mail answer is zero documents and three citations". |
+| 2 | **The Convex schema enums were hand-copied from `@pikar/core` with nothing crossing the package boundary.** Three narrowings each left the suite AND the typecheck fully green. | `schema.ts` now DERIVES every Phase-29 union from the core const through a `literals()` helper. One list, not two. The domain type is preserved (probed: `Doc<"knowledgeSearches">["confidence"]` still rejects `"not-a-label"`, `Doc<"savedPrompts">["sourcePreferences"]` still rejects `["notion"]`). `schema.test.ts` now imports the core constants and INSERTS every member of every one. | Hand-writing each union back, minus one member: **D1** `knowledgeSource` minus `support-desk` -> 1 failed ("every KNOWLEDGE_SOURCE stores…"); **D2** unavailable reasons minus `unplanned` -> 2 failed; **D3** authority minus `agent_authored` -> 2 failed. All three were GREEN before this fix. |
+| 3 | **`savedPrompts.sourcePreferences` was `v.optional(v.array(v.string()))` under a comment reading "Bounded `PackSource` names".** A convex-test probe stored `["notion","http://evil.example","sharepoint"]` verbatim — the identical hole the same commit had just closed one field over. | Closed by the derived full-`PackSource` union. | Reopened to `v.optional(v.array(v.string()))`: **1 failed** — "sourcePreferences refuses a source the product does not have — a WRONG VALUE, not a wrong type". |
+| 4 | **`SEARCH_CAPS.maxEvidenceTotal` had no behavioural test.** | New fixture feeds all five sources at their per-source cap (5 x 8 = 40) so the TOTAL is the binding constraint; `24` and `8` are literals. | `kept.length >= SEARCH_CAPS.maxEvidenceTotal * 100`: **1 failed / 98 passed** — "the whole run is cut to 24 across sources, and the cut sources are REPORTED". This mutation was GREEN at 95/95 before. |
+| 5 | **`CUSTOMIZATION_CAPS.valueMaxBytes` had no behavioural coverage.** | New fixture declares a field with `maxBytes: 100_000`, so the absolute ceiling is what rejects; `4_000`/`4_001` are literals; byte-vs-character is asserted at the ceiling too. | (a) `valueMaxBytes: 4_000 -> 4_000_000`: **1 failed / 87 passed**. (b) `Math.min(field.maxBytes, CUSTOMIZATION_CAPS.valueMaxBytes * 100)`: **1 failed / 87 passed**. Both were GREEN at 87/87 before. |
+
+### The five smaller ones
+
+- **`schema.ts` header index.** `workflowPackEvents` (landed 27-02) was named nowhere, so the list
+  enumerated 46 under a "47 tables" headline. Added, under a new `Workflow Packs (27-02)` group.
+  The header was also unenforced prose — `tenantData.test.ts:23` counts `defineTable` matches in the
+  source and never reads it. `schema.test.ts` now asserts the stated count AND that every table
+  declared in the file is named in the index. **Mutations RED:** header `47 -> 46` -> 1 failed;
+  removing `workflowPackEvents` from the index -> 1 failed. Both were GREEN before.
+- **`watch.json` had no entry prefix-matching `packages/backend/convex/schema.ts`** while it
+  registered `schema.test.ts`. Registering the source under `knowledge-search-routines.md` was
+  rejected: `watch.json` prefixes are per-file and `schema.ts` holds all 47 tables, so it would
+  demand a knowledge-search playbook bump for every unrelated table edit repo-wide — noise that
+  trains readers to ignore the hook. It is now under `watch._unassigned`, which is the acknowledgment
+  CLAUDE.md section 9 names, and the choice plus its reasoning is recorded in the playbook's Known
+  gaps. **This closes a silent hole into an explicit decision; it does not add protection.** The
+  Phase-29 tables' real gate is `schema.test.ts`, which IS watched and now fails on enum drift,
+  header drift and value drift.
+- **`29-01-PLAN.md` `files_modified`** reconciled against `git diff --name-only e84ab78~1 HEAD`
+  (18 files). The list is those 18 minus `29-01-PLAN.md` and `29-01-SUMMARY.md`;
+  `docs/playbooks/workflow-packs.md` was the one missing entry, modified by `488f6bf` and still
+  absent after `b46509a`, whose stated purpose was to complete the list.
+- **`workflowPacks.test.ts` "no dead vocabulary"** discharged a READ requirement with a
+  DECLARATION (`...KNOWLEDGE_SOURCES`) — the exact shape the same commit rejected for `SEARCH_CAPS`.
+  `support-desk` is the only member that exemption actually carried (no pack operation reads it).
+  The exemption now CALLS `renderSourceGap` and checks the sentence names the source's label, and
+  the whole user-facing sentence for `support-desk` is pinned as a literal in
+  `knowledgeSearch.test.ts`. **Mutation RED:** changing `MISSING_SOURCE_UNLOCK["support-desk"]`
+  from `"connecting your support desk"` to `"connecting a support desk"` -> 1 failed.
+  **Honest limit:** `renderSourceGap` is total over `KNOWLEDGE_SOURCES`, so the exemption is still
+  membership-shaped in effect. The literal-sentence test is the coverage that is real; the
+  registry check is what makes it visible.
+
+### Deliberately NOT fixed in round 2, and why
+
+- **`sourcePreferences` array LENGTH is still unbounded at the storage boundary.** A Convex
+  validator has no array-length bound, so `["vault"] x 10000` remains storable. Adding a length
+  claim to the comment is exactly the defect this round closed (a documented invariant with no
+  enforcement), and there is no writer of the field to clamp — this plan does not change
+  `savedPrompts.ts`. Recorded in the field's `ponytail:` comment and in the playbook's Known gaps,
+  with the upgrade path: clamp in the `savedPrompts` mutation when plan 29-08 writes the first pin.
+- **The three status discriminants (`available`/`partial`/`unavailable`) stay hand-written
+  `v.literal`s** in `schema.ts`. They are the discriminated union's tags, one per arm — not a member
+  of any core list — and `_VOCABULARY_IS_SHARED` in `knowledgeSearch.ts` is already the
+  compile-time bidirectional witness for that set. The literal scan asserts they are still present.
+- **Only the Phase-29 unions were derived.** The other ~40 `v.literal` unions in `schema.ts` are
+  out of this plan's blast radius; touching them would be an unrequested repo-wide refactor.
+- **`apps/web` was not changed.** `groundedSourceProps` still has zero production callers; the
+  `nonVault` renderer is a plan-29-0x job and is recorded as such in the playbook.
+
+### Verification after round 2 — real commands, real output
+
+| Command | Result | Baseline BEFORE 29-01 | After round 1 |
+|---|---|---|---|
+| `cd packages/core && pnpm vitest run` | **45 files / 1419 tests passed** | 43 / 1232 | 45 / 1414 |
+| `cd packages/core && pnpm vitest run src/knowledgeSearch.test.ts src/workflowPacks.test.ts` | 131 passed (99 + 32) | — | — |
+| `cd packages/core && pnpm vitest run src/workflowCustomization.test.ts` | **88 passed** (was 87) | — | — |
+| `cd packages/core && pnpm typecheck` | clean | — | — |
+| `cd packages/backend && pnpm vitest run` | **101 files / 2581 tests passed** (1 benign vitest worker teardown error — the known `process is not defined` noise; all 101 files passed) | 100 / 2540 | 101 / 2572 |
+| `cd packages/backend && pnpm vitest run convex/schema.test.ts` | **41 passed** (was 32) | — | — |
+| `cd packages/backend && pnpm typecheck` | clean | — | — |
+| `cd packages/contracts && pnpm vitest run` | 6 files / 93 passed | 6 / 93 | 6 / 93 — unchanged |
+| `cd packages/contracts && pnpm typecheck` | clean | — | — |
+| `npx biome check` on the 7 changed files | clean after `--write` reflowed `watch.json` | — | — |
+| `echo '{}' \| node scripts/check-playbooks.mjs check` | run on the **DIRTY** tree — empty stdout, PASSED | — | — |
+| `git diff --stat HEAD -- "*.ts"` after the commit | empty — the HEAD tree is the tree the gates ran against | — | — |
+
+**10 mutations were re-applied in round 2 and all 10 were observed RED, each reverted and the
+baseline re-confirmed green.** Unlike round 1, every one of these ten was verified GREEN under the
+pre-fix code first, so each RED is a proven change of state and not an assertion that always held.
+
 ## Deviations from plan
 
 ### Auto-fixed
@@ -406,3 +505,9 @@ stays open until its later plan lands the behaviour.
 All 7 created files verified present on disk; all 3 task commits verified in `git log`;
 `git diff --stat HEAD -- "*.ts"` after the final commit is **empty** (no partial `git add` — the HEAD
 tree is the tree every gate above ran against).
+
+**Round 2 self-check (2026-08-28), commit `5b8a4c5`:** all 10 changed files verified present and
+staged individually (never `git add -A`); `git diff --stat HEAD -- "*.ts"` after the commit is
+**empty**; `git show --stat HEAD` lists exactly the 10 files this round touched. The playbook
+gate was run on the DIRTY tree before committing (empty stdout = passed; its exit code was not
+read). Nothing in `packages/revenue` was touched.
