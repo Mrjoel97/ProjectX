@@ -3,51 +3,52 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 28
-current_plan: 1 of 29 executed (28-17, the Wave 1 readiness gate) -- 28 IN PROGRESS
+current_plan: 2 of 29 executed (28-17 readiness gate, 28-18 playbook/watch ownership) -- 28 IN PROGRESS
 status: executing
-stopped_at: "28-17 SEALED `passed`. **PHASE 28 IS UNBLOCKED, AND EXACTLY ONE OF THE SIXTEEN GREEN
-ROWS WAS CHECKED BY NOBODY BUT A PERSON.** `node scripts/check-phase28-readiness.mjs` exits 0 over
-16 prerequisite rows resolved from a NAMED SYMBOL IN A FILE ON DISK -- never from a SUMMARY.md, a
-ROADMAP row or a planner's memory (Phase 27's own readiness audit found ELEVEN rotted premises of
-exactly that shape). 15 rows are machine-verified. **`p25-production-posture` is green on OWNER
-ATTESTATION dated 2026-08-27** -- prod-set secrets, org-owned OAuth client, deployed build fails
-closed -- and the readiness doc records those three claims verbatim under an explicit 'no code
-checked this' heading, NOT as evidence. **THE BOOKKEEPING STILL DISAGREES WITH THE IMPLIED HISTORY:
-Phase 25 plans 25-11 / 25-12 / 25-13 have NO SUMMARY ON DISK**, and those are precisely where
-production secret/OAuth posture would have been exercised; the owner did not attest that they ran.
-If a production connector grant misbehaves, that row is the first suspect. To reverse it, set
-`phase25_production_posture: block` in the attestation comment -- one edit re-blocks every
-dependent plan.
-**THE DURABLE FINDING IS A DEFECT IN THE GATE ITSELF.** Task 1's checker matched with
-`String.includes` and `--self-check` passed all 91 symbols -- because its only mutation was
-DELETION, which is invisible to a substring matcher. Two real exports were renamed in the working
-tree (`listPacks` -> `listPacksRENAMED`, `pipelineTiles` -> `pipelineTilesRENAMED`) and **THE GATE
-STAYED GREEN over the exact rename it exists to catch.** Fixed with identifier-boundary
-`containsSymbol`, and suffix/prefix RENAME mutations were added to `--self-check` permanently.
-Re-run: `p19-pipeline-view` and `p27-discovery` red, exit 1, files restored clean. **Mutation
-testing only proves what it mutates -- and here the untested assumption was inside the harness.**
-**THREE INVENTORY CONSEQUENCES EVERY 28 PLAN MUST RESPECT** (each contradicts a 2026-08-05
-assumption): (1) THERE IS NO SECOND CRM -- `convex/contacts.ts` is the only
-person/consent/suppression/follow-up store, REVN-04 attaches provider refs to it and creates no
-opportunity/stage/deal-value; (2) A PACK WITH A TOOL ALLOW-LIST IS A LEAF AGENT --
-`runAgentLoop` sets `grantDispatch: toolNames === undefined`, so a revenue pack carrying a static
-grant structurally cannot dispatch a specialist, compose in the Executive Agent; (3) THERE IS NO
-SIXTH EVENT PLANE -- `workflowPackEvents` + `core/workflowPackMetrics.ts` is the contract, and
-cost/latency are READ from `spendEvents`/`telemetry`, never re-emitted. Plus: suppression is
-checked TWICE (`cockpit.executePlan` per-recipient before the group join, `gmail`
-`prepareGovernedMessage` at the wire) -- REVN-06 must not add a third; and missing credentials
-THROW (`requireEnv`/`requireEnvMedia`), a connector that degrades to a dev default is the one thing
-`p25-no-dev-fallback` forbids.
-**NEXT: Wave 2** -- 28-01 (provider suitability), 28-18 (playbook/watch ownership), 28-02 (finance
-core). Every dependent plan runs the gate FIRST; exit 1 means stop, not shim. Regenerate the
-interface inventory with `--inventory`; do not hand-edit it. Working branch
-feat/27-02-pack-contracts."
-last_updated: "2026-08-27T14:10:00.000Z"
+stopped_at: "28-18 SEALED. Seven Phase 28 playbooks and 40 `watch.json` prefixes are committed BEFORE the
+parallel lanes write, so no two plans contend for one doc: `revenue-connectors.md` (shared spine +
+release semantics), one per provider, plus `revenue-crm.md` / `revenue-finance.md`. Proven
+proven mechanically -- 0 Phase-28 prefix collisions and 0 uncovered Phase-28 source paths against a 31-path
+must-cover list drawn from every 28-xx plan's `files_modified`.
+**THE DURABLE FINDING IS THAT THE PLAN'S OWN VERIFY COMMAND IS A NO-OP.**
+`node scripts/check-playbooks.mjs` -- the command 28-18 was told to verify with -- CANNOT verify
+anything. Run bare it BLOCKS FOREVER on stdin (`readFileSync(0)`), and it EXITS 0 IN EVERY CASE.
+Measured here, not assumed: clean tree -> empty stdout, exit 0; one violating probe -> a block
+object on stdout, exit 0; seven violating probes -> seven playbooks named on stdout, exit 0. The
+ONLY signal is a JSON object on STDOUT carrying decision=block. Verify with
+`echo '{}' | node scripts/check-playbooks.mjs check` and grep STDOUT. A green exit code from that
+script is worth nothing, and this is now written into `revenue-connectors.md` Operational notes.
+Load-bearing-ness was therefore proven by OBSERVING RED, not by absence of red: seven probe files,
+one per newly-registered lane, each block naming ONLY its own owner and cross-naming none. The run
+also swept up 28-02's REAL in-flight `packages/revenue/src/{money,finance}.ts` under
+`revenue-finance.md` -- the registration is already working on live code.
+**`gsd-tools state advance-plan` CORRUPTED THIS FILE AND WAS REVERTED.** It collapsed the 26
+stacked frontmatter blocks to one, dropped `current_phase`, wrote `current_plan: 7 (done)` /
+`status: completed` and pasted a PHASE 26 `stopped_at` over Phase 28's. Recovered with
+`git checkout -- .planning/STATE.md`; this block is hand-edited. Do NOT run `state advance-plan`
+or `state update-progress` against this STATE.md.
+**HANDOFF LEFT DELIBERATELY RED:** 28-02 parked `packages/revenue/` under `watch._unassigned` with
+the message `28-18 owns the playbook`; that acknowledgment is now retired, so 28-02's own
+`money.ts`/`finance.ts` are flagged against `revenue-finance.md` until 28-02 bumps it. It was NOT
+pre-bumped -- bumping a playbook to clear a gate over another lane's unreviewed code is the exact
+silencing pattern the hook exists to stop.
+**EACH PROVIDER PLAYBOOK OPENS WITH AN UNANSWERED ADMISSION BLOCKER** and no adapter code should
+be written before 28-01/28-22..25 settle it: HubSpot AI-connector Marketplace classification;
+QuickBooks `com.intuit.quickbooks.accounting` is a DATA CATEGORY not a read verb, plus production
+self-assessment; Stripe `read_only` is Extensions-only; PayPal client credentials read the APP'S
+OWN merchant, so modelling them as a tenant grant would serve one merchant's figures to every
+tenant with every unit test green. Also logged, not fixed: 12 PRE-EXISTING two-owner collisions
+under `apps/web/e2e/` and `dashboard/workspace/`, and `convex/schema.ts` is watched by NO playbook
+(28-03 is Phase 28's single serialized schema owner regardless).
+**NEXT: finish Wave 2** -- 28-01 (provider suitability) is the gate on all four provider lanes.
+Every dependent plan still runs `node scripts/check-phase28-readiness.mjs` FIRST; exit 1 means
+stop, not shim. Working branch feat/27-02-pack-contracts."
+last_updated: "2026-08-27T14:41:27.386Z"
 progress:
   total_phases: 53
   completed_phases: 35
   total_plans: 413
-  completed_plans: 318
+  completed_plans: 319
   percent: 77
 ---
 
