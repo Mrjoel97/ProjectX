@@ -1,0 +1,101 @@
+# Playbook: PayPal connector (REVN-03)
+
+> Last verified: 2026-08-27 against 4295bcc
+> Build history: `.planning/phases/28-connector-backed-revenue-pack/` (28-08, 28-25) · Related ADRs: none yet
+
+> **Status: REGISTERED AHEAD OF IMPLEMENTATION.** No PayPal connector code exists at the
+> `Last verified` sha. Everything marked **[PLANNED]** is a contract a later plan must satisfy, not a
+> claim of landed behaviour. Shared credential, OAuth-state, fetch, telemetry and release rules live
+> in `revenue-connectors.md` and are not repeated here.
+
+## Purpose
+
+Read-only access to a tenant's own PayPal merchant data — transactions, invoices, settlement and
+read-only dispute context — feeding the deterministic finance core. PayPal carries the phase's most
+easily-mismodelled authorization story, and getting it wrong would silently read the **wrong
+merchant's** data.
+
+## Key files
+
+**[PLANNED]**
+
+- `packages/revenue/src/providers/paypal.ts` (+ `.test.ts`) — pure normalization of transaction,
+  invoice and settlement payloads. No Convex imports.
+- `packages/backend/convex/paypalAuth.ts` — onboarding/authorization lifecycle and revoke.
+- `packages/backend/convex/paypalConnector.ts` (+ `.test.ts`) — Node actions performing bounded reads.
+- `scripts/smoke-paypal-read.mjs` — controlled live merchant read + revoke evidence for the lane gate.
+- `docs/connectors/paypal-suitability.md` — the suitability record (28-01 drafts, 28-25 decides).
+
+## Dependencies & blast radius
+
+`graphify query "paypal connector"`. Beyond that:
+
+- `revenue-finance.md` consumes these projections. Same double-counting caution as Stripe: a payment
+  visible in both PayPal and QuickBooks is reconciled by source authority, never summed.
+- Shared envelope + `connectorFetch` + `providerGates`.
+
+## Admission blocker — read this before writing code
+
+**An app-level client-credentials token reads the app/merchant's *own* data. It is NOT a general
+tenant grant for unrelated Pikar customers.** PayPal states that Transaction Search on behalf of
+third parties requires **partner status and partner-manager coordination**.
+
+- Phase 28 **must not model ordinary client credentials as per-tenant authorization.** Doing so would
+  serve one merchant's figures to every tenant — a data-disclosure defect that would read green in
+  every unit test, because the call succeeds.
+- If partner access is approved, use the seller onboarding / Partner Referrals flow.
+- The **default onboarding feature set includes write-capable payment/refund permissions**. The exact
+  read-only permission package must be agreed with PayPal *before* code is written.
+- Until partner status is settled, the lane is `parked`.
+
+## Data flow
+
+1. Seller onboarding / Partner Referrals grants access for a specific merchant.
+2. Verify the returned merchant id belongs to the intended connection before sealing. **This check is
+   the only thing that distinguishes a tenant grant from the app's own account.**
+3. Reads are bounded transaction/invoice/settlement/dispute-context calls, date- and page-capped.
+4. Adapter emits bounded projections with coverage window, retrieval time and partial/capped state.
+5. Disconnect: PayPal revoke first, local encrypted row delete second.
+
+## Invariants — what must never break
+
+1. **Per-merchant binding, asserted on every read.** A projection is attributed only to the merchant
+   whose grant produced it. Never to "the app". *Enforced by:* [PLANNED] two-tenant test (28-08).
+2. **Client credentials are never treated as a tenant grant.** *Enforced by:* [PLANNED] auth-shape
+   test — the read path must require a stored per-connection grant, not an app token.
+3. **Read-only permission package.** No payment, refund, invoice-send or dispute-write permission is
+   requested or reachable. *Enforced by:* [PLANNED] 28-26 reachability test.
+4. **Date and page bounds on Transaction Search.** PayPal's search windows are limited; a truncated
+   window is `partial`, never a complete period.
+5. **429/5xx is partial, not zero.** A missing period is unknown coverage.
+6. Plus every invariant in `revenue-connectors.md`.
+
+## How to change safely
+
+- New permission → re-open the suitability decision with PayPal. Permissions here are contractual,
+  not configuration.
+- New endpoint → allow-list entry + operation-matrix row + fixture test.
+- Webhooks are deferred and app-specific; they may retry, so any later use must verify and dedupe.
+
+## How to verify
+
+| Command | Proves | Needs |
+|---|---|---|
+| `cd packages/revenue && pnpm vitest run src/providers/paypal` [PLANNED] | Payload parsing, date/page bounds, partial states. | offline |
+| backend `pnpm test paypalConnector` [PLANNED] | Merchant binding, two-tenant isolation, revoke ordering. | offline |
+| `node scripts/smoke-paypal-read.mjs` [PLANNED] | Controlled live merchant read + revoke. Lane evidence. | live creds |
+| `node scripts/check-provider-lane.mjs paypal` [PLANNED] | `passed` or `parked`. | offline |
+
+## Operational notes
+
+- **Sandbox proves payload parsing and nothing else.** It does not prove production partner
+  authorization. Production exposure needs written approval/status evidence *plus* a controlled
+  merchant read. A green sandbox run recorded as lane evidence would be a false `passed`.
+
+## Known gaps & deferred work
+
+- Partner status is unresolved and is the single reason this lane cannot start. It is also the most
+  likely of the four to end as a permanent `parked` — which the release semantics support: a parked
+  PayPal must not block a subset release, but it *does* block Phase 28 completion (REVN-03).
+- Everything [PLANNED] is unbuilt; invariants 1-3 have no enforcement yet.
+- PayPal invoice sends, refunds and dispute changes are explicitly deferred by the phase boundary.

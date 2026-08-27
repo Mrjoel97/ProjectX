@@ -1,5 +1,5 @@
 {
-  "_unassigned": ["packages/backend/vitest.diag.setup.ts", "packages/revenue/"],
+  "_unassigned": ["packages/backend/vitest.diag.setup.ts"],
   "tracing.md": ["packages/backend/convex/lib/foglamp.ts"],
   "ci-gate.md": [
     ".github/workflows/ci.yml",
@@ -323,5 +323,56 @@
     "packages/backend/convex/workflowPack",
     "packages/backend/scripts/run-workflow-pack-evals.mjs",
     "packages/backend/scripts/workflow-pack-fixtures/"
+  ],
+  "revenue-connectors.md": [
+    "packages/revenue/package.json",
+    "packages/revenue/tsconfig.json",
+    "packages/revenue/vitest.config.ts",
+    "packages/revenue/src/index.ts",
+    "packages/revenue/src/contracts",
+    "packages/revenue/src/credential",
+    "packages/revenue/src/reminders",
+    "packages/backend/convex/connector",
+    "packages/backend/convex/providerGates",
+    "packages/backend/convex/revenueTools",
+    "packages/backend/convex/revenueTelemetry",
+    "packages/backend/convex/invoiceReminders",
+    "scripts/check-phase28-readiness.mjs",
+    "scripts/check-phase28-completion.mjs",
+    "scripts/check-provider-lane.mjs",
+    "docs/connectors/README.md",
+    "docs/connectors/phase28-readiness.md"
+  ],
+  "connector-hubspot.md": [
+    "packages/revenue/src/providers/hubspot",
+    "packages/backend/convex/hubspot",
+    "scripts/smoke-hubspot-read.mjs",
+    "docs/connectors/hubspot-suitability.md"
+  ],
+  "connector-quickbooks.md": [
+    "packages/revenue/src/providers/quickbooks",
+    "packages/backend/convex/quickbooks",
+    "scripts/smoke-quickbooks-read.mjs",
+    "docs/connectors/quickbooks-suitability.md"
+  ],
+  "connector-stripe.md": [
+    "packages/revenue/src/providers/stripe",
+    "packages/backend/convex/stripeAuth",
+    "packages/backend/convex/stripeConnector",
+    "scripts/smoke-stripe-read.mjs",
+    "docs/connectors/stripe-suitability.md"
+  ],
+  "connector-paypal.md": [
+    "packages/revenue/src/providers/paypal",
+    "packages/backend/convex/paypalAuth",
+    "packages/backend/convex/paypalConnector",
+    "scripts/smoke-paypal-read.mjs",
+    "docs/connectors/paypal-suitability.md"
+  ],
+  "revenue-crm.md": ["packages/revenue/src/crm", "packages/backend/convex/revenueCrm"],
+  "revenue-finance.md": [
+    "packages/revenue/src/money",
+    "packages/revenue/src/finance",
+    "packages/backend/convex/revenueFinance"
   ]
 }
