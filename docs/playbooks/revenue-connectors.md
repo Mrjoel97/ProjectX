@@ -1,6 +1,6 @@
 # Playbook: Revenue connectors — shared lifecycle, gates and release semantics
 
-> Last verified: 2026-08-27 against eaea00c (28-01 Task 3 recorded four provider admission decisions)
+> Last verified: 2026-08-27 against 1dcaa53 (28-03 Task 1 landed the AES-256-GCM credential envelope)
 > Build history: `.planning/phases/28-connector-backed-revenue-pack/` · Related ADRs: none yet
 
 > **Status: REGISTERED AHEAD OF IMPLEMENTATION.** At the `Last verified` sha the Phase 28 code on
@@ -48,9 +48,23 @@ Phase 27's skill/pack registry (`skill-registry.md`), the cockpit tool loop (`co
 - `packages/revenue/src/index.ts`, `package.json`, `tsconfig.json`, `vitest.config.ts` — the package
   boundary.
 
+**Landed (28-03 Task 1) — pure package**
+
+- `packages/revenue/src/credential.ts` (+ `.test.ts`) — the AES-256-GCM envelope AND the connection
+  vocabulary. `importCredentialKey` fails closed on anything that is not exactly 32 decoded bytes;
+  `sealCredential`/`openCredential` bind ciphertext to
+  `keyVersion | environment | tenantId | provider | connectionId` as AAD, encoded as a JSON ARRAY so
+  the binding is injective — a delimiter-joined string is forgeable across field boundaries
+  (`tenant|a` + `b` and `tenant` + `a|b` join to the same bytes). Also the closed sets
+  `CONNECTOR_ENVIRONMENTS`, `CREDENTIAL_KEY_VERSIONS` (`v1` live, `v2` RESERVED so a rotation needs
+  no schema edit), `CONNECTION_STATUSES`, `REVOCATION_UPSTREAM_STATES` and
+  `CONNECTION_FAILURE_CLASSES`. **It seals ONE blob, not one field per token** — that is what makes
+  QuickBooks' rolling refresh survivable, because replacing both tokens is then a single-field patch
+  inside one Convex transaction, and it keeps the scope string (a capability inventory) and the
+  provider account id out of the clear.
+
 **[PLANNED] — pure package**
 
-- `packages/revenue/src/credential.ts` — AES-256-GCM seal/open primitive only.
 - `packages/revenue/src/reminders.ts` — invoice-reminder draft shaping (REVN-06). No send.
 
 **[PLANNED] — Convex adapters (thin, per CLAUDE.md §1)**
