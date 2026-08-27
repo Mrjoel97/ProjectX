@@ -1,6 +1,23 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
-> Last verified: 2026-08-23 (27-02 — **ONE NEW TABLE ON THE REFS-ONLY PLANE: `workflowPackEvents`,
+> Last verified: 2026-08-27 (**ONE NEW VIEWER EVENT: `media.grounding_failed`, AND IT IS VISIBLE ON
+> PURPOSE.** `groundMediaBrief` runs a research turn on the brief before the deck is written and
+> files the findings in the vault. Every failure arm returns quietly and the media turn proceeds on
+> the vault alone — the pass can never fail a reel. **That is exactly why the row has to exist.**
+> A reel grounded in live research and one grounded only in a near-empty vault ship identically,
+> so without this event a silently ungrounded proposal is indistinguishable from a researched one
+> after the fact.
+>
+> **§4 HOLDS AND WAS THE CONSTRAINT ON THE SHAPE:** the row carries `LINEAGE` refs plus a `reason`
+> CODE. No brief text, no query, no retrieved page, no model prose — the failure is identified by
+> a code the reader looks up, never by quoting what was being researched. A grounding failure is
+> precisely the moment when the tempting payload (the question that failed) is user content.
+>
+> The event is registered in `AUDIT_VIEWER_EVENTS` (`packages/contracts/src/auditProjection.ts`),
+> so it is projected to the viewer like every other media event; nothing about the dead-letter
+> path, the insert-only rule, or the WORM export changed.)
+>
+> PREVIOUS: 2026-08-23 (27-02 — **ONE NEW TABLE ON THE REFS-ONLY PLANE: `workflowPackEvents`,
 > classified `audit_immutable` in `packages/core/src/tenantData.ts`.** It first landed
 > `tenant_owned`; the owner reclassified it the same day, because `tenant_owned` enrols a table in
 > the tenant deletion and export walks automatically, and erasing one tenant then silently rewrote
