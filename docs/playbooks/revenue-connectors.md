@@ -1,6 +1,6 @@
 # Playbook: Revenue connectors — shared lifecycle, gates and release semantics
 
-> Last verified: 2026-08-27 against 4295bcc
+> Last verified: 2026-08-27 against 9413a92
 > Build history: `.planning/phases/28-connector-backed-revenue-pack/` · Related ADRs: none yet
 
 > **Status: REGISTERED AHEAD OF IMPLEMENTATION.** At the `Last verified` sha the Phase 28 code on
@@ -68,7 +68,15 @@ Phase 27's skill/pack registry (`skill-registry.md`), the cockpit tool loop (`co
 
 - `scripts/check-provider-lane.mjs` — machine-readable lane status.
 - `scripts/check-phase28-completion.mjs` — the full-phase completion gate (see Release semantics).
-- `docs/connectors/README.md` — index of the four suitability records.
+**Landed — the admission register (28-01 Task 1)**
+
+- `docs/connectors/README.md` — the register: decision vocabulary, marker format, evidence-expiry
+  policy, and the rule that `.mcp.json` is evidence of nothing.
+- `docs/connectors/{hubspot,quickbooks,stripe,paypal}-suitability.md` — one evidence record each,
+  carrying **both** evidence dates (2026-08-05 research, 2026-08-27 re-verification), an explicit
+  verified/could-not-verify split, and the one owner question no vendor doc can answer.
+- **All four decisions are `undecided` at this sha** — no lane is admitted. Read the current state
+  with `grep -h '^decision:' docs/connectors/*-suitability.md`, never from prose.
 
 ## Dependencies & blast radius
 
