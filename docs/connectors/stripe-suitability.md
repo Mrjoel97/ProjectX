@@ -1,13 +1,13 @@
 # Stripe — provider suitability record
 
-> **This document contains no decision.** It is the evidence an owner decides against. The one
-> machine-readable marker below is the authority; the prose is why.
-> Register and vocabulary: [`README.md`](./README.md).
+> **Decision recorded: `approved_production` — 2026-08-27, by OWNER OVERRIDE against this evidence.** The one
+> machine-readable marker below is the authority; the prose is the evidence it was decided
+> against. Register and vocabulary: [`README.md`](./README.md).
 
 <!-- phase28-provider-decision
 provider: stripe
-decision: undecided
-decided_on: none
+decision: approved_production
+decided_on: 2026-08-27
 evidence_first: 2026-08-05
 evidence_reverified: 2026-08-27
 review_by: 2026-11-27
@@ -16,12 +16,64 @@ review_by: 2026-11-27
 | | |
 |---|---|
 | **Provider** | Stripe (Connect OAuth / Stripe Apps) |
-| **Decision** | **`undecided`** — pending owner judgment (plan 28-01 Task 2) |
+| **Decision** | **`approved_production`** — owner judgment, 2026-08-27 (plan 28-01 Task 2), **OWNER OVERRIDE** — the evidence did not support production. Expires `review_by: 2026-11-27`. |
 | **Blocker status** | **REVERSED — in BOTH directions.** See below. |
 | **Evidence first gathered** | 2026-08-05 (`28-RESEARCH.md` lines 172-290) |
 | **Evidence re-verified** | 2026-08-27, independent primary-source pass |
 | **Re-review by** | 2026-11-27 (90-day evidence life) |
 | **Downstream lane** | plan **28-07** (adapter), wave-7 seal **28-24** |
+
+---
+
+## Owner decision — `approved_production`, 2026-08-27 — **OWNER OVERRIDE**
+
+> **This is an override, not a finding.** The evidence below does **not** support production, and the
+> owner was shown that before deciding. Nothing in this record became true on 2026-08-27; a person
+> accepted the risk.
+
+**What the prepared record said — and still says:** production is **not supportable today** on the
+viable route, because **platform-initiated revocation for Stripe Apps is undocumented**. Only two
+mechanisms exist in the documentation: the *user* uninstalling from Settings → Installed Apps, and
+the `account.application.deauthorized` event that reports it after the fact. Connect's
+`POST https://connect.stripe.com/oauth/deauthorize` belongs to the *other* flow, and no documentation
+says it applies to app installs. **28-CONTEXT makes per-tenant revocation a hard requirement.**
+
+**The owner overrode that on 2026-08-27** and recorded `approved_production` anyway.
+
+### The condition REMAINS OPEN
+
+This approval does not resolve it, soften it, or discharge it.
+
+- **28-24 must confront it** — with a Stripe support answer, or with an explicit, tenant-visible
+  statement that "disconnect" on this route means Pikar stops using and deletes the stored ciphertext
+  locally while the grant stays live on Stripe's side until the user uninstalls.
+- It must **not** be closed by a green test. No test in this repository can prove a revocation API
+  that is not documented to exist.
+
+### Route — this part is evidence, not testimony
+
+- Connect **Extensions are deprecated**: "You can no longer build new Connect extensions." The
+  2026-08-05 remedy of "become an Extension" is a closed door, not a slow one.
+- The route is therefore a **Stripe App** with `stripe_api_access_type: "oauth"` declaring only
+  `*_read` permissions — read-only by construction.
+- Stripe's own `oauth-changes-for-standard-platforms` page **still describes the dead Extension
+  path**. It is stale. Do not follow it and do not cite it.
+
+**Authorizes:** plan **28-07** (adapter) and production exposure for Stripe, subject to the open
+condition above and to the wave-7 seal **28-24**.
+
+### Scope of this approval
+
+- It is **Stripe's alone.** There is no all-provider approval flag.
+- It **expires** `review_by: 2026-11-27`, or earlier on any re-review trigger — including the day
+  Stripe documents a platform-initiated revoke, which would turn this override back into an
+  evidence-supported decision.
+- It was issued **directly as `approved_production`**; no `approved_beta` marker was ever recorded.
+  The beta stage was *skipped*, not passed.
+- Data-processing / commercial terms, retention & deletion duties and data residency remain **not
+  researched**. The override covers them by silence, which is not the same as clearing them.
+- **A partial release is not Phase 28.** Stripe shipping does not complete REVN-01..03 and does not
+  complete Phase 28.
 
 ---
 

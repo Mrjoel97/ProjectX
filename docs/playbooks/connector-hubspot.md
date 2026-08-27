@@ -1,6 +1,6 @@
 # Playbook: HubSpot connector (REVN-01)
 
-> Last verified: 2026-08-27 against 4295bcc
+> Last verified: 2026-08-27 against eaea00c (28-01 Task 3 recorded the admission decision)
 > Build history: `.planning/phases/28-connector-backed-revenue-pack/` (28-05, 28-22) · Related ADRs: none yet
 
 > **Status: REGISTERED AHEAD OF IMPLEMENTATION.** No HubSpot code exists at the `Last verified` sha.
@@ -34,7 +34,21 @@ which makes its single hardest rule structural: **it must not become a second CR
 - Shared envelope + `connectorFetch` + `providerGates` — see `revenue-connectors.md`.
 - HubSpot public-app credentials and redirect URI in Convex environment configuration.
 
-## Admission blocker — read this before writing code
+## Admission blocker — SETTLED 2026-08-27
+
+> **`approved_production`, on the evidence.** Owner judgment recorded in
+> [`docs/connectors/hubspot-suitability.md`](../connectors/hubspot-suitability.md); that marker block
+> is the authority, not this paragraph. The lane is **unparked**. The install cap (25 marketplace-
+> distribution / 10 private / 100 Solution Partner) is **accepted** and a Marketplace listing is
+> **deferred** — which is precisely what keeps the rule below from ever being triggered. Expires
+> `review_by: 2026-11-27`.
+>
+> **STILL OPEN — a 28-05 deliverable, not a settled point:** whether
+> `POST /oauth/2026-03/token/revoke` invalidates already-issued **access** tokens is **UNPROVEN**
+> (docs silent; the legacy `DELETE` explicitly did not cascade). **28-05 must test it against a live
+> grant; 28-22 must not seal this lane without the result.**
+
+Why the listing stays deferred:
 
 **HubSpot Marketplace listing rules classify some products as an "AI connector" and require those to
 use HubSpot's MCP Server.** Pikar must determine *with HubSpot* whether this product is classified
@@ -43,7 +57,8 @@ that way and whether private/public direct OAuth distribution is permitted for t
 - This does **not** authorize adding a generic MCP client.
 - If the classification forces a provider-specific MCP path, that is a separate architecture and
   terms decision requiring its own plan — never an implicit fallback inside this lane.
-- Until answered, the lane is `parked`. See `revenue-connectors.md` → Release semantics.
+- Pursuing a listing is a **new decision**: it re-triggers the suitability record and submits Pikar
+  to Ecosystem Quality classification at review time. See `revenue-connectors.md` → Release semantics.
 
 ## Data flow
 

@@ -4,7 +4,8 @@
 > may build reads its authority from exactly one machine-readable marker block in its own record.
 > There is no all-provider approval flag and there never will be one.
 
-**Register opened:** 2026-08-27 (plan 28-01) · **Owner:** repository owner
+**Register opened:** 2026-08-27 (plan 28-01) · **Owner:** repository owner ·
+**All four judged:** 2026-08-27 (plan 28-01 Task 2) — see [Recorded judgments](#recorded-judgments--2026-08-27)
 
 ---
 
@@ -12,10 +13,10 @@
 
 | Provider | Record | Blocker shape (2026-08-27) | Decision |
 |---|---|---|---|
-| HubSpot | [`hubspot-suitability.md`](./hubspot-suitability.md) | Marketplace **listing** requirement + install caps | `undecided` |
-| QuickBooks Online | [`quickbooks-suitability.md`](./quickbooks-suitability.md) | Intuit **approval** gate on production credentials; no read-only scope | `undecided` |
-| Stripe | [`stripe-suitability.md`](./stripe-suitability.md) | Extension path **closed**; a Stripe App read-only route exists | `undecided` |
-| PayPal | [`paypal-suitability.md`](./paypal-suitability.md) | **Partner-network** membership + partner manager | `undecided` |
+| HubSpot | [`hubspot-suitability.md`](./hubspot-suitability.md) | Marketplace **listing** requirement + install caps | `approved_production` — evidence-consistent |
+| QuickBooks Online | [`quickbooks-suitability.md`](./quickbooks-suitability.md) | Intuit **approval** gate on production credentials; no read-only scope | `approved_production` — on owner **attestation** |
+| Stripe | [`stripe-suitability.md`](./stripe-suitability.md) | Extension path **closed**; a Stripe App read-only route exists | `approved_production` — owner **override** |
+| PayPal | [`paypal-suitability.md`](./paypal-suitability.md) | **Partner-network** membership + partner manager | `approved_production` — on owner **attestation** |
 
 The table above is a courtesy copy. The authority is the marker block inside each record:
 
@@ -42,6 +43,13 @@ The value set is **closed**. A typo reads `undecided`, never an approval.
 A `blocked` or `deferred` provider becomes **parked** — it is not a blocker to any other provider's
 lane. The four lanes complete independently.
 
+**On 2026-08-27 all four judgments were issued directly as `approved_production`, with no
+intervening `approved_beta` marker.** Recorded as given. The production marker carries beta
+engineering authority, so every lane may be built — but the beta stage was *skipped*, not passed,
+and none of the `approved_production` gates listed as *not researched* in the records
+(data-processing / commercial terms, retention & deletion duties, data residency) was cleared
+before it was granted.
+
 ### Marker block format
 
 Every record carries exactly one of these, unindented, at the top:
@@ -59,6 +67,38 @@ review_by: 2026-11-27
 
 `decided_on` stays `none` until an owner judgment exists. Writing a decision without a date is not
 a decision.
+
+---
+
+## Recorded judgments — 2026-08-27
+
+Four independent owner judgments, one per provider. **They do not rest on the same kind of thing,
+and the difference is the point.** Only one of the four is supported by the evidence in its record.
+
+| Provider | Decision | Rests on | If that basis is wrong |
+|---|---|---|---|
+| HubSpot | `approved_production` | **Evidence.** The record supports it: unlisted OAuth needs no HubSpot permission, and the install cap is accepted while a Marketplace listing is deferred. | — |
+| Stripe | `approved_production` | **OWNER OVERRIDE.** The record says production is *not* supportable today; the owner was shown that and approved anyway. | The override stands until reversed; the open revocation condition is unaffected either way. |
+| QuickBooks | `approved_production` | **OWNER ATTESTATION** that Pikar holds live Intuit production credentials (App Assessment Questionnaire approved). | Approval is void; QuickBooks is `blocked` again — production credentials are the whole gate. |
+| PayPal | `approved_production` | **OWNER ATTESTATION** that Pikar holds PayPal partner acceptance with an assigned partner manager on a live partner account. | Approval is void; third-party Transaction Search returns 401 and PayPal is `blocked` again. |
+
+**Three of these four are testimony, not evidence.** Nothing in this repository checked the Stripe
+override's risk acceptance, the Intuit approval or the PayPal partner acceptance, and no vendor page
+proves the latter two. They are recorded as human claims with a date, and they must never be
+restated downstream as verified facts — the laundering of supplied claims into "observed" ones is a
+recorded defect class here.
+
+### Open conditions that survived every approval
+
+None of the four approvals resolved its record's open condition. Each is a live obligation on a
+named downstream plan:
+
+| Provider | Condition still open | Who must confront it |
+|---|---|---|
+| HubSpot | Does `POST /oauth/2026-03/token/revoke` cascade to already-issued **access** tokens? Undocumented; the legacy `DELETE` did not. | **28-05 tests it; 28-22 must not seal without the result.** |
+| Stripe | Platform-initiated revocation for Stripe Apps is **undocumented**. 28-CONTEXT requires per-tenant revocation. | **28-24.** It cannot be closed by a green test. |
+| QuickBooks | App Partner Program **tier unstated** (Builder = 500,000 CorePlus calls/workspace/month). Write blast radius **accepted**, so the GET/query-only allow-list is **mandatory**. | **28-06** (allow-list + poll budget); **28-23**. |
+| PayPal | **No revoke endpoint documented anywhere.** Sandbox is **non-probative** about production authorization. | **28-25.** Resolve with the partner manager. |
 
 ---
 
@@ -92,6 +132,10 @@ read/revoke gate marked `passed`.
 
 One provider shipping is a shipped provider. It is not a shipped phase. Do not let a green lane
 close a red requirement.
+
+**As of 2026-08-27 all four providers carry `approved_production` — and Phase 28 is still not
+complete.** Not one lane gate has been run; no adapter exists yet. Four approvals are permission to
+start, not evidence of a finished phase.
 
 ---
 

@@ -1,13 +1,13 @@
 # HubSpot — provider suitability record
 
-> **This document contains no decision.** It is the evidence an owner decides against. The one
-> machine-readable marker below is the authority; the prose is why.
-> Register and vocabulary: [`README.md`](./README.md).
+> **Decision recorded: `approved_production` — 2026-08-27, evidence-consistent.** The one
+> machine-readable marker below is the authority; the prose is the evidence it was decided
+> against. Register and vocabulary: [`README.md`](./README.md).
 
 <!-- phase28-provider-decision
 provider: hubspot
-decision: undecided
-decided_on: none
+decision: approved_production
+decided_on: 2026-08-27
 evidence_first: 2026-08-05
 evidence_reverified: 2026-08-27
 review_by: 2026-11-27
@@ -16,12 +16,63 @@ review_by: 2026-11-27
 | | |
 |---|---|
 | **Provider** | HubSpot CRM API / OAuth apps, developer platform `2026.03` |
-| **Decision** | **`undecided`** — pending owner judgment (plan 28-01 Task 2) |
+| **Decision** | **`approved_production`** — owner judgment, 2026-08-27 (plan 28-01 Task 2), evidence-consistent. Expires `review_by: 2026-11-27`. |
 | **Blocker status** | **CHANGED** — narrower than the 2026-08-05 record |
 | **Evidence first gathered** | 2026-08-05 (`28-RESEARCH.md` lines 172-290) |
 | **Evidence re-verified** | 2026-08-27, independent primary-source pass |
 | **Re-review by** | 2026-11-27 (90-day evidence life) |
 | **Downstream lane** | plan **28-05** (adapter), wave-7 seal **28-22** |
+
+---
+
+## Owner decision — `approved_production`, 2026-08-27
+
+**Basis: the evidence.** HubSpot is the only one of the four whose approval is straightforwardly
+consistent with the record below. Nothing in it rests on a claim this repository cannot see.
+
+The owner's judgment, as given:
+
+- **Accepts the unlisted install cap** — 25 installs for marketplace-distribution apps until a
+  listing is approved; 10 customers for private distribution as an app partner; 100 for a Solution
+  Partner.
+- **Defers a Marketplace listing.** This is the operative half. Not listing is what keeps the
+  AI-connector/MCP rebuild rule from ever being triggered, because the Ecosystem Quality
+  classification only happens at listing review.
+
+**Authorizes:** plan **28-05** (adapter) to be built, and production discovery/exposure for HubSpot,
+subject to the open condition below and to the wave-7 seal **28-22**.
+
+**Does not authorize:** a Marketplace listing, a generic MCP client, or any write scope. Pursuing a
+listing is a *new* decision and re-triggers this record.
+
+### Open condition — carried, NOT resolved by this approval
+
+**Does `POST /oauth/2026-03/token/revoke` invalidate already-issued ACCESS tokens?** Still
+**UNPROVEN**. The documentation is silent, and the legacy `DELETE /v1/refresh-tokens/{token}` it
+replaced explicitly did *not* cascade. 28-CONTEXT makes per-tenant revocation a hard requirement, so
+this is load-bearing — and it is now a **lane deliverable**:
+
+- **28-05 must TEST it** against a live grant — revoke, then attempt a read with the still-unexpired
+  access token — and record the observed result in this file.
+- **28-22 must NOT seal the HubSpot lane without that result.** If revocation does not cascade,
+  disconnect additionally depends on access-token TTL expiry, and that window must be stated honestly
+  in the UI.
+
+Also unchanged by this approval: data-processing / commercial terms, retention & deletion duties and
+data residency / subprocessors are all still **not researched** (see the checklist). The owner
+approved production without them on record.
+
+### Scope of this approval
+
+- It is **HubSpot's alone.** There is no all-provider approval flag; the other three records carry
+  their own independent markers, and three of the four rest on different bases.
+- It **expires with the evidence** — `review_by: 2026-11-27`, or earlier on any re-review trigger.
+- It was issued **directly as `approved_production`**; no `approved_beta` marker was ever recorded
+  for HubSpot. The production marker carries beta engineering authority — the beta stage was
+  *skipped*, not passed.
+- **A partial release is not Phase 28.** HubSpot shipping does not complete REVN-01, REVN-02 or
+  REVN-03, and does not complete Phase 28. Those close only when every provider they name carries a
+  current production-suitability decision **and** a lane gate marked `passed`.
 
 ---
 

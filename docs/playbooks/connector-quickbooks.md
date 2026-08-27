@@ -1,6 +1,6 @@
 # Playbook: QuickBooks Online connector (REVN-02)
 
-> Last verified: 2026-08-27 against 4295bcc
+> Last verified: 2026-08-27 against eaea00c (28-01 Task 3 recorded the admission decision)
 > Build history: `.planning/phases/28-connector-backed-revenue-pack/` (28-06, 28-23) · Related ADRs: none yet
 
 > **Status: REGISTERED AHEAD OF IMPLEMENTATION.** No QuickBooks code exists at the `Last verified`
@@ -35,14 +35,27 @@ naive shared implementation destroys connections.
 - Shared envelope + `connectorFetch` + `providerGates` — see `revenue-connectors.md`.
 - Intuit app credentials, redirect URI and environment (sandbox vs production) in Convex env.
 
-## Admission blockers — read these before writing code
+## Admission blockers — SETTLED 2026-08-27, with conditions
+
+> **`approved_production`, on OWNER ATTESTATION — testimony, not evidence.** Owner judgment recorded
+> in [`docs/connectors/quickbooks-suitability.md`](../connectors/quickbooks-suitability.md); that
+> marker block is the authority. The owner attested that Pikar **holds live Intuit production
+> credentials today** (production App Assessment Questionnaire approved). Nothing in this repository
+> checked that, and no vendor page can. If it is wrong the approval is void and this lane is
+> `blocked` again. Expires `review_by: 2026-11-27`.
+
+Two things the approval did **not** dissolve:
 
 1. **The scope is a data category, not a read verb.** `com.intuit.quickbooks.accounting` grants the
    whole Accounting API. The provider *cannot* enforce read-only for us. The wider stolen-token blast
-   radius must be **explicitly accepted in the suitability record**, or QuickBooks stays `blocked`.
-2. **Production self-assessment is a gate, not paperwork.** Intuit requires production
-   self-assessment and ongoing security obligations even for production connections that are not App
-   Store listed. No production exposure before that evidence exists.
+   radius is now **explicitly ACCEPTED by the owner** — which means containment is entirely ours:
+   the **compile-time GET / query / report-only allow-list is MANDATORY**, with no general
+   request-method parameter and no entity create/update export.
+2. **The App Partner Program tier is UNSTATED.** The owner attested to production credentials, not to
+   a tier. The **Builder tier caps at 500,000 CorePlus API calls / workspace / month**, which would
+   bound a polling revenue pack. Establish the tier before sizing poll budgets here; do not assume
+   headroom. Ongoing security obligations (scans, affidavit, annual review over 500 connections)
+   stand regardless.
 
 ## Data flow
 

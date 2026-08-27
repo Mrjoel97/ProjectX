@@ -1,13 +1,13 @@
 # QuickBooks Online — provider suitability record
 
-> **This document contains no decision.** It is the evidence an owner decides against. The one
-> machine-readable marker below is the authority; the prose is why.
-> Register and vocabulary: [`README.md`](./README.md).
+> **Decision recorded: `approved_production` — 2026-08-27, on OWNER ATTESTATION of an external Intuit approval.** The one
+> machine-readable marker below is the authority; the prose is the evidence it was decided
+> against. Register and vocabulary: [`README.md`](./README.md).
 
 <!-- phase28-provider-decision
 provider: quickbooks
-decision: undecided
-decided_on: none
+decision: approved_production
+decided_on: 2026-08-27
 evidence_first: 2026-08-05
 evidence_reverified: 2026-08-27
 review_by: 2026-11-27
@@ -16,12 +16,62 @@ review_by: 2026-11-27
 | | |
 |---|---|
 | **Provider** | QuickBooks Online (Intuit) Accounting API |
-| **Decision** | **`undecided`** — pending owner judgment (plan 28-01 Task 2) |
+| **Decision** | **`approved_production`** — owner judgment, 2026-08-27 (plan 28-01 Task 2), on **OWNER ATTESTATION** of live Intuit production credentials. Expires `review_by: 2026-11-27`. |
 | **Blocker status** | **STANDS — and is STRONGER than the 2026-08-05 record** |
 | **Evidence first gathered** | 2026-08-05 (`28-RESEARCH.md` lines 172-290) |
 | **Evidence re-verified** | 2026-08-27, independent primary-source pass |
 | **Re-review by** | 2026-11-27 (90-day evidence life) |
 | **Downstream lane** | plan **28-06** (adapter), wave-7 seal **28-23** |
+
+---
+
+## Owner decision — `approved_production`, 2026-08-27 — **on OWNER ATTESTATION**
+
+> **This is testimony, not evidence.** The fact this approval rests on is an approval granted by
+> Intuit, outside this repository. No script here checked it, no vendor page proves it, and the
+> evidence pass below established that no documentation *can* answer it. It is reproduced verbatim so
+> a later reader can see exactly which claim a human made.
+
+**The owner attested, on direct and specific question, on 2026-08-27:**
+
+> Pikar **holds live Intuit production credentials today** — i.e. the production **App Assessment
+> Questionnaire is APPROVED**.
+
+That is the answer to the owner question below, and production credentials are the entire gate: if
+the attestation is wrong, this approval is void and QuickBooks is `blocked` again. Intuit does not
+reveal a production Client ID/Secret until it approves the questionnaire, so nothing short of holding
+those credentials clears it.
+
+**Authorizes:** plan **28-06** (adapter) and production exposure for QuickBooks, subject to the open
+items below and to the wave-7 seal **28-23**.
+
+### Carried forward — NOT resolved by this approval
+
+1. **There is no read-only accounting scope.** `com.intuit.quickbooks.accounting` is the only
+   Accounting-API scope and it includes writes; the provider **will not** constrain this.
+   → The **compile-time GET / query / report-only endpoint allow-list is MANDATORY**, with no general
+   request-method parameter and no entity create/update export. Binding on plan 28-06.
+2. **The write blast radius is ACCEPTED, not eliminated.** The owner approved production knowing a
+   stolen live token carries full Accounting-API write reach. Containment is entirely Pikar's
+   allow-list — there is no vendor-side backstop.
+3. **The App Partner Program tier was NOT stated.** The owner attested to production credentials, not
+   to a tier. **Open item:** the **Builder tier carries a 500,000 CorePlus API calls / workspace /
+   month** ceiling, which would bound a polling revenue pack. Establish the tier before sizing poll
+   budgets in 28-06; do not assume headroom.
+4. The concurrent-refresh hazard stands: a racing refresh can **kill the connection**, not merely
+   fail. Single-flight lease/CAS and atomic write-back of both ciphertexts remain mandatory.
+5. Data-processing / commercial terms, retention & deletion duties and data residency remain **not
+   researched**.
+
+### Scope of this approval
+
+- It is **QuickBooks' alone.** There is no all-provider approval flag.
+- It **expires** `review_by: 2026-11-27`, or earlier on any re-review trigger — including the
+  attestation ceasing to hold (credentials revoked, tier changed, connections approaching 500).
+- It was issued **directly as `approved_production`**; no `approved_beta` marker was ever recorded.
+  The beta stage was *skipped*, not passed.
+- **A partial release is not Phase 28.** QuickBooks shipping does not complete REVN-01..03 and does
+  not complete Phase 28.
 
 ---
 

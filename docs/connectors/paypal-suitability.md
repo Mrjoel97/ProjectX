@@ -1,13 +1,13 @@
 # PayPal — provider suitability record
 
-> **This document contains no decision.** It is the evidence an owner decides against. The one
-> machine-readable marker below is the authority; the prose is why.
-> Register and vocabulary: [`README.md`](./README.md).
+> **Decision recorded: `approved_production` — 2026-08-27, on OWNER ATTESTATION of an external PayPal partner approval.** The one
+> machine-readable marker below is the authority; the prose is the evidence it was decided
+> against. Register and vocabulary: [`README.md`](./README.md).
 
 <!-- phase28-provider-decision
 provider: paypal
-decision: undecided
-decided_on: none
+decision: approved_production
+decided_on: 2026-08-27
 evidence_first: 2026-08-05
 evidence_reverified: 2026-08-27
 review_by: 2026-11-27
@@ -16,12 +16,63 @@ review_by: 2026-11-27
 | | |
 |---|---|
 | **Provider** | PayPal (Transaction Search / Partner Referrals) |
-| **Decision** | **`undecided`** — pending owner judgment (plan 28-01 Task 2) |
+| **Decision** | **`approved_production`** — owner judgment, 2026-08-27 (plan 28-01 Task 2), on **OWNER ATTESTATION** of live PayPal partner acceptance. Expires `review_by: 2026-11-27`. |
 | **Blocker status** | **STANDS — verbatim, in PayPal's live OpenAPI spec (v1.9)** |
 | **Evidence first gathered** | 2026-08-05 (`28-RESEARCH.md` lines 172-290) |
 | **Evidence re-verified** | 2026-08-27, independent primary-source pass |
 | **Re-review by** | 2026-11-27 (90-day evidence life) |
 | **Downstream lane** | plan **28-08** (adapter), wave-7 seal **28-25** |
+
+---
+
+## Owner decision — `approved_production`, 2026-08-27 — **on OWNER ATTESTATION**
+
+> **This is testimony, not evidence.** The fact this approval rests on is PayPal's acceptance of
+> Pikar as a partner — an event outside this repository. No script here checked it, no vendor page
+> proves it, and the evidence pass below established that PayPal's live enablement is a human,
+> representative-mediated process with no self-serve answer. It is reproduced verbatim so a later
+> reader can see exactly which claim a human made.
+
+**The owner attested, on direct and specific question, on 2026-08-27:**
+
+> Pikar **holds PayPal partner acceptance**, with an **assigned partner manager**, on a **LIVE
+> partner account** today.
+
+That is the answer to the owner question below. If the attestation is wrong, third-party Transaction
+Search returns 401 Unauthorized, this approval is void, and PayPal is `blocked` again.
+
+**Authorizes:** plan **28-08** (adapter) and production exposure for PayPal, subject to the open
+items below and to the wave-7 seal **28-25**.
+
+### Carried forward — NOT resolved by this approval
+
+1. **No revoke endpoint is documented anywhere for PayPal.** `POST /v1/oauth2/token` is the only
+   documented authentication call; seller-side revocation of granted third-party permissions is an
+   **account action, not an API**. 28-CONTEXT requires per-tenant revocation. **Partner acceptance
+   does not create an endpoint** — resolve the revocation story with the assigned partner manager,
+   and **28-25 must not seal the lane on an undocumented assumption**.
+2. **Sandbox is explicitly NON-PROBATIVE about production authorization.** PayPal states outright
+   that sandbox calls work *before* approval. A green sandbox suite is evidence of nothing here and
+   must never be cited as corroborating the attestation above.
+3. The partner surface is **separate**: `partner-transactions` is named in the published spec with
+   **no published operation**. Do not plan on `GET /v1/reporting/transactions` simply behaving
+   differently once a partner token is in hand.
+4. **The exact read-only permission package is still not documented as self-serve.**
+   `ADVANCED_TRANSACTIONS_SEARCH` is schema-expressible, but no public page documents enabling it,
+   and the Partner Referrals default feature set is write-capable (`PAYMENT`, `REFUND`,
+   `DELAY_FUNDS_DISBURSEMENT`). Agree the package with the partner manager before writing code.
+5. Rate limits are **not readable**; data-processing / commercial terms, retention & deletion duties
+   and data residency remain **not researched**.
+
+### Scope of this approval
+
+- It is **PayPal's alone.** There is no all-provider approval flag.
+- It **expires** `review_by: 2026-11-27`, or earlier on any re-review trigger — including loss of
+  partner status or reassignment of the partner manager.
+- It was issued **directly as `approved_production`**; no `approved_beta` marker was ever recorded.
+  The beta stage was *skipped*, not passed.
+- **A partial release is not Phase 28.** PayPal shipping does not complete REVN-01..03 and does not
+  complete Phase 28.
 
 ---
 

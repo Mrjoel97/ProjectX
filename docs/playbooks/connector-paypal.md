@@ -1,6 +1,6 @@
 # Playbook: PayPal connector (REVN-03)
 
-> Last verified: 2026-08-27 against 4295bcc
+> Last verified: 2026-08-27 against eaea00c (28-01 Task 3 recorded the admission decision)
 > Build history: `.planning/phases/28-connector-backed-revenue-pack/` (28-08, 28-25) · Related ADRs: none yet
 
 > **Status: REGISTERED AHEAD OF IMPLEMENTATION.** No PayPal connector code exists at the
@@ -34,7 +34,22 @@ merchant's** data.
   visible in both PayPal and QuickBooks is reconciled by source authority, never summed.
 - Shared envelope + `connectorFetch` + `providerGates`.
 
-## Admission blocker — read this before writing code
+## Admission blocker — SETTLED 2026-08-27, with conditions
+
+> **`approved_production`, on OWNER ATTESTATION — testimony, not evidence.** Owner judgment recorded
+> in [`docs/connectors/paypal-suitability.md`](../connectors/paypal-suitability.md); that marker block
+> is the authority. The owner attested that Pikar **holds PayPal partner acceptance with an assigned
+> partner manager on a LIVE partner account today**. Nothing here checked that and no vendor page can.
+> If it is wrong, third-party Transaction Search returns 401 and this lane is `blocked` again.
+> Expires `review_by: 2026-11-27`.
+>
+> **STILL OPEN:** **no revoke endpoint is documented anywhere for PayPal** — partner acceptance does
+> not create one. Resolve the revocation story with the partner manager; **28-25 must not seal this
+> lane on an undocumented assumption.** And **sandbox is explicitly NON-PROBATIVE** about production
+> authorization: PayPal states sandbox calls work *before* approval, so a green sandbox suite
+> corroborates nothing here.
+
+The authorization shape below is unchanged by the approval:
 
 **An app-level client-credentials token reads the app/merchant's *own* data. It is NOT a general
 tenant grant for unrelated Pikar customers.** PayPal states that Transaction Search on behalf of
@@ -46,7 +61,9 @@ third parties requires **partner status and partner-manager coordination**.
 - If partner access is approved, use the seller onboarding / Partner Referrals flow.
 - The **default onboarding feature set includes write-capable payment/refund permissions**. The exact
   read-only permission package must be agreed with PayPal *before* code is written.
-- Until partner status is settled, the lane is `parked`.
+- The partner surface is **separate**: `partner-transactions` is named in the published spec with no
+  published operation. Do not expect `GET /v1/reporting/transactions` to behave differently once a
+  partner token is in hand.
 
 ## Data flow
 

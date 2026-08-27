@@ -1,6 +1,6 @@
 # Playbook: Stripe connector (REVN-03)
 
-> Last verified: 2026-08-27 against 4295bcc
+> Last verified: 2026-08-27 against eaea00c (28-01 Task 3 recorded the admission decision)
 > Build history: `.planning/phases/28-connector-backed-revenue-pack/` (28-07, 28-24) · Related ADRs: none yet
 
 > **Status: REGISTERED AHEAD OF IMPLEMENTATION.** No Stripe connector code exists at the
@@ -33,14 +33,29 @@
   authority, never summed (see `revenue-connectors.md` invariant 6).
 - Shared envelope + `connectorFetch` + `providerGates`.
 
-## Admission blocker — read this before writing code
+## Admission blocker — decided 2026-08-27 by OWNER OVERRIDE
 
-**Only Stripe *Extensions* can request `read_only`.** Ordinary Connect Platforms use a different
-control model. Pikar must be accepted/configured as an Extension, or **explicitly decide Stripe is
-blocked for this read-only phase**.
+> **`approved_production` — and the evidence did not support it.** Owner judgment recorded in
+> [`docs/connectors/stripe-suitability.md`](../connectors/stripe-suitability.md); that marker block
+> is the authority. The record states production is **not supportable today** because
+> **platform-initiated revocation for Stripe Apps is undocumented**, and 28-CONTEXT makes per-tenant
+> revocation a hard requirement. The owner was shown that and approved anyway. This is an override,
+> not a finding — do not restate it as an evidence-supported decision.
+>
+> **THE REVOCATION CONDITION REMAINS OPEN. 28-24 must confront it** — with a Stripe support answer,
+> or with an explicit, tenant-visible statement that "disconnect" means Pikar deletes the stored
+> ciphertext locally while the grant stays live on Stripe's side until the *user* uninstalls. It
+> cannot be closed by a green test; no test here can prove an API that is not documented to exist.
+
+**The Extension route is DEAD, not gated.** Stripe: "You can no longer build new Connect extensions."
+The old advice to "be accepted/configured as an Extension" is a closed door. The route is a **Stripe
+App** with `stripe_api_access_type: "oauth"` declaring only `*_read` permissions — read-only by
+construction. Stripe's own `oauth-changes-for-standard-platforms` page still describes the dead
+Extension path; it is stale, do not follow it.
 
 - Do **not** request `read_write` "for later". That is the exact substitution this phase forbids.
-- Until the Extension question is answered, the lane is `parked`.
+- Size polling against the **500 reads / transaction, 10,000 / month floor** allocation, not the
+  100 req/s rate limit.
 
 ## Data flow
 

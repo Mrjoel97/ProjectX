@@ -1,6 +1,6 @@
 # Playbook: Revenue connectors — shared lifecycle, gates and release semantics
 
-> Last verified: 2026-08-27 against 9413a92
+> Last verified: 2026-08-27 against eaea00c (28-01 Task 3 recorded four provider admission decisions)
 > Build history: `.planning/phases/28-connector-backed-revenue-pack/` · Related ADRs: none yet
 
 > **Status: REGISTERED AHEAD OF IMPLEMENTATION.** At the `Last verified` sha the Phase 28 code on
@@ -75,8 +75,18 @@ Phase 27's skill/pack registry (`skill-registry.md`), the cockpit tool loop (`co
 - `docs/connectors/{hubspot,quickbooks,stripe,paypal}-suitability.md` — one evidence record each,
   carrying **both** evidence dates (2026-08-05 research, 2026-08-27 re-verification), an explicit
   verified/could-not-verify split, and the one owner question no vendor doc can answer.
-- **All four decisions are `undecided` at this sha** — no lane is admitted. Read the current state
-  with `grep -h '^decision:' docs/connectors/*-suitability.md`, never from prose.
+- **All four decisions are `approved_production` as of 2026-08-27** (28-01 Task 3) — every lane is
+  admitted for build *and* production exposure. Read the current state with
+  `grep -h '^decision:' docs/connectors/*-suitability.md`, never from prose.
+- **Three of the four do not rest on evidence.** HubSpot is evidence-consistent. **Stripe is an owner
+  OVERRIDE against its own record** (platform-initiated revocation is undocumented and the condition
+  is still open — 28-24). **QuickBooks and PayPal rest on owner ATTESTATIONS** of external vendor
+  approvals (live Intuit production credentials; PayPal partner acceptance with a partner manager)
+  that nothing here can check. Never restate an attestation as a verified fact.
+- **Approval is permission to start, not a `passed` lane.** All four open conditions survive —
+  HubSpot's revoke-cascade test (28-05/28-22), Stripe's revocation story (28-24), QuickBooks' unstated
+  partner tier + mandatory GET-only allow-list (28-06/28-23), PayPal's absent revoke endpoint and
+  non-probative sandbox (28-25). A partial release still completes no REVN requirement.
 
 ## Dependencies & blast radius
 
