@@ -3,9 +3,70 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 28
-current_plan: 7 of 29 executed (28-17 readiness gate, 28-18 playbook/watch ownership, 28-01 provider admission, 28-02 deterministic finance core, 28-03 encrypted credentials + connector schema, 28-04 shared OAuth state + bounded read transport, 28-26 provider eligibility gate) -- 28 IN PROGRESS
+current_plan: 8 of 29 executed (28-17 readiness gate, 28-18 playbook/watch ownership, 28-01 provider admission, 28-02 deterministic finance core, 28-03 encrypted credentials + connector schema, 28-04 shared OAuth state + bounded read transport, 28-26 provider eligibility gate, 28-05 read-only HubSpot rail) -- 28 IN PROGRESS
 status: executing
-stopped_at: "28-26 SEALED (`1bb8b3b`, `40047f3`), on top of 28-04's `48f5ef0` and 28-03's `82d14a6`.
+stopped_at: "28-05 SEALED (`ccb0281` rail, `362dee8` smoke+docs, `0dca7bd` env manifest), on top of 28-26's `1bb8b3b`/`40047f3`.
+**THE FIRST PROVIDER RAIL EXISTS AND IT HAS NEVER SPOKEN TO HUBSPOT.**
+`node scripts/check-provider-lane.mjs --provider hubspot` reads `consistent` -- decision, evidence
+life, absence, adapter, read-only, allow-list and parity all OK, open condition `PEND`. CONSISTENT
+IS NOT PASSED. Every one of the 77 new tests is offline against a stubbed `fetch`, $0.
+**THE OPEN CONDITION IS NOT CLEARED, AND THE REASON IS RECORDED IN THOSE WORDS.** 28-05 owed a live
+test of whether `POST /oauth/2026-03/token/revoke` cascades to already-issued ACCESS tokens. The
+MECHANISM shipped -- `hubspotAuth.probeRevocationCascade`, ONE action that reads with the token,
+revokes, then re-issues the SAME allow-listed GET with that same pre-revocation token (it cannot be
+split: `recordRevocation` clears the ciphertext, so the token only exists in memory across the
+revoke). It reports `true` / `false` / **`null`**, and `null` is the point -- a 429 or a 500 after a
+revoke proves NOTHING and must never read as proof. **It has never been run: there is no live grant,
+no client id, no test portal.** `docs/connectors/hubspot-suitability.md` now says
+**"Observed result: NONE"**. 28-22 MUST NOT SEAL THIS LANE until an observation lands there.
+Three things enforce that rather than trusting anyone: `PROVIDER_REVOKE_SUPPORT.hubspot =
+"unproven"` makes the clean-kill answer unreachable (a 2xx revoke is `confirmed` WITH
+`residualAccessUntil` = the access token's own expiry); the smoke's validator REFUSES any evidence
+file claiming the condition resolved; and a test asserts the probe writes no `providerGates` row.
+**"NO SECOND CRM" IS ENFORCED AT THE REQUEST, NOT AT THE PARSE.** The compile-time
+`HUBSPOT_CONTACT/COMPANY/DEAL_PROPERTIES` allow-lists mean Pikar never ASKS HubSpot for a name, an
+email, a phone or a deal title -- so there is no free text in the response to filter out and no way
+to forget the filter. Phase 19's contacts substrate stays the only person store; this rail produces
+refs for it and nothing consumes them yet (28-10/28-21).
+**EXACTLY FIVE READ SCOPES, and NO `crm.pipelines.*`** -- that family is ORDER pipelines; deal
+pipelines/stages come from `crm.objects.deals.read` + `crm.schemas.deals.read` together. OAuth is
+pinned to the date-versioned `2026-03` endpoints FROM THE API REFERENCE; the `working-with-oauth`
+guide still says `/oauth/v3/token` and is stale.
+**`postTokenForm` NOW LIVES IN `connectorOAuth.ts` AS THE ONE NON-GET IN THE CONNECTOR PLANE.** That
+is what makes the lane checker's read-only scan literally true, and the scan is no longer
+theoretical: it reads 2 REAL lane modules and passes. A rail that inlines its own token POST trips
+its own gate -- call the shared one, do not rename the string.
+**NO `providerGates` CHECK ON THE CONNECT/READ PATH, DELIBERATELY.** Gating it on a PASSED lane is
+circular (the lane cannot pass without a live read, which needs a connection). The gate governs
+CONSUMPTION via the passed-only `availableProviders` projection; 28-09 builds the surface.
+**DEFECT FOUND AND FIXED IN-PLAN: the `revoked` branch was unreachable.** A ciphertext guard above it
+absorbed every disconnected row into `not_connected` -- "you never connected this" instead of "you
+disconnected this". The outer-swallows-inner class, twice now in this phase.
+**MUTATION: 10 non-deletion mutations, ALL RED, ZERO SURVIVORS**, all three blind spots covered --
+renames not deletions (scope string, OAuth version, read path), the two guards disabled
+INDEPENDENTLY (exactly 1 test red each), and every constant the test imports ALSO pinned to a
+written-out LITERAL. **The first pass found the ciphertext guard SURVIVING; the hole was closed with
+a new test rather than accepted.**
+`tsc --noEmit` run SEPARATELY per package: revenue exit 0, backend exit 0 for this lane.
+**28-06 RAN IN THE SAME WORKING TREE AND A SHARED-FILE NEAR-MISS IS RECORDED.** Mid-plan, its
+in-flight edit had `classifyRevokeOutcome` treating a 400 as success (Intuit's rule) -- a SHARED
+function the HubSpot revoke also calls, under which a HubSpot 400 revoke would have read `confirmed`
+with nothing in the record supporting it. 28-05 staged only ITS OWN version of `connectorOAuth.ts`
+via git plumbing rather than committing a neighbour's unfinished work; 28-06 then dropped that
+change, and the landed `d18a70e` only adds an OPT-IN `basicAuth` + `asJson` to `postTokenForm`
+(HubSpot passes neither). The hubspot suite is green against the landed version. **The rule stands:
+never `git add` a shared connector file wholesale here, and never `git add -A`.** Their unclassified
+`QUICKBOOKS_*` env names are the ONE remaining backend test failure and their `quickbooks*.ts`
+account for every backend `tsc` error and the only `check-playbooks.mjs` block.
+`requirements-completed: []` -- **REVN-01 STAYS PENDING.** No callback route, no connections UI, no
+live read, no consumer. All four open conditions survive.
+**NEXT: the rest of wave 6 (28-06 QuickBooks in flight, 28-07 Stripe, 28-08 PayPal).** Each rail
+runs `check-phase28-readiness.mjs` FIRST, unpiped, and `check-provider-lane.mjs --provider <slug>`
+before and after. Note 28-07 starts with `PROVIDER_READ_PATHS.stripe = []` by decision -- a lane
+module over an empty allow-list is a RED row, so the paths and the module must land together. Do NOT
+run any `gsd-tools state *` subcommand against this file -- it has corrupted it seven times. Working
+branch feat/27-02-pack-contracts."
+previous_stopped_at: "28-26 SEALED (`1bb8b3b`, `40047f3`), on top of 28-04's `48f5ef0` and 28-03's `82d14a6`.
 **PROVIDER AVAILABILITY IS NOW ONE SERVER-OWNED ANSWER, AND THE TWO AXES ARE HELD APART BY CODE.**
 `admission` (the owner's suitability DECISION -- permission to start) and `lane` (whether a
 controlled LIVE read/revoke was observed) are separate `providerGates` fields, and
@@ -69,57 +130,6 @@ FIRST, unpiped, and should now ALSO run `check-provider-lane.mjs --provider <slu
 read-only scan (playbook invariant 1) is ARMED BUT HAS NEVER BITTEN: there is no lane module in the
 tree for it to scan, so wave 6 is its first real test. Do NOT run any `gsd-tools state *` subcommand
 against this file -- it has corrupted it seven times. Working branch feat/27-02-pack-contracts."
-previous_stopped_at: "28-04 SEALED (`20488e6`, `8eaca77`, `c799762`), continuing 28-03's `6757a64`/`48f5ef0`.
-**THE SHARED CONNECTOR MECHANICS EXIST AND NOTHING HAS SPOKEN TO A PROVIDER YET** -- all 68 tests
-are offline against an injected `fetch` or a fake DB, $0.
-**`consumeConnectState` TAKES NO `tenantId` ARGUMENT AND THAT IS THE SECURITY PROPERTY.** A callback
-arrives with a code and a state and no session; the tenant is read OUT of the row the state hash
-resolves to, so a callback can only ever reach the tenant that minted it. State is 32 CSPRNG bytes
-stored ONLY as SHA-256, burned by setting `usedAt` inside the SAME serializable Convex mutation that
-read it -- the atomicity is the platform's, so do NOT add a lease or a CAS in front of it. This is
-deliberately NOT the HMAC-of-tenantId pattern `gmailAuth`/`microsoftAuth` already use twice: an HMAC
-binds the tenant but REPLAYS FOREVER and its signing key is the OAuth client secret. A refusal does
-NOT burn the row (a wrong-provider probe must not strand a real in-flight consent) and carries no
-tenantId/connectionId/redirectPath, so 'zero exchange, zero store' does not depend on the caller
-checking `ok`. CALLBACK ORDER IS THE CONTRACT: consume BEFORE the code exchange.
-**`connectorFetch.readPages` HAS NO METHOD, ORIGIN, HOST, HEADER OR BODY PARAMETER.** Provider +
-environment + a path from the compile-time `PROVIDER_READ_PATHS`, hardcoded GET, `redirect: \"error\"`
-(undici would replay the bearer at an origin the provider named). For QuickBooks the allow-list is
-the ONLY thing between a stolen token and a journal entry -- the accounting scope grants writes,
-Intuit ships no read-only alternative and will not constrain it (28-01 carried-forward item 1).
-Matching is WHOLE-SEGMENT equality with a single-segment `{}` placeholder; never a prefix or
-`includes`. **`PROVIDER_READ_PATHS.stripe` IS `[]` BY DECISION, NOT OMISSION** -- the Stripe App
-route is unsettled and its revocation condition is open, so Stripe reads nothing and fails closed.
-**28-07 MUST FILL IT.**
-**A CAP IS NEVER A COMPLETE ANSWER.** Page/item/byte cap, repeated cursor, 4xx, 5xx, network,
-timeout and malformed JSON all yield `partial: true`; `capped` separates a repo-owned bound from a
-provider failure; a 401 on page one is an EMPTY PARTIAL, never an empty success. Completed pages
-survive a later page's failure. A `Retry-After` LONGER than `MAX_RETRY_DELAY_MS` means STOP, not
-retry sooner (Intuit documents a 60 s wait; an action cannot sleep that long and calling back early
-turns a rate limit into a ban). A timeout is NOT retried -- the attempt already spent the budget.
-**MUTATION TESTING: 11 non-deletion mutations, ALL RED; ONE SURVIVOR THAT IS A FINDING.** Setting
-`MAX_RETRIES = 2 -> 3` left the suite fully green because the TEST IMPORTS `MAX_RETRIES` and asserts
-against it, so mutating the constant moves the assertion with it. **A constant the test imports
-cannot be pinned by mutating that constant -- mutate the RELATION that consumes it** (`retries <
-MAX_RETRIES` -> `<=` is red). The 28-03 absorbed-guard lesson was applied directly: the byte cap is
-TWO guards in sequence (declared content-length before the body is touched, then measured bytes),
-each was disabled independently and EXACTLY ONE test failed per guard, so neither absorbs the
-other.
-**`tsc --noEmit` RUN SEPARATELY, exit 0.** Backend `vitest run` was **2641/2641 at EXIT 0** -- the
-pre-existing worker-level `process is not defined` that 28-03 recorded did NOT reproduce; observed,
-not fixed, nothing here touched it. `biome check` found ONE REAL DEFECT in the pre-written test
-(`noUnsafeOptionalChaining` on the Authorization assertion, would have failed CI); the cast was
-widened and the assertion left unchanged.
-**DID NOT HOIST ANYTHING ELSE.** No shared refresh routine, account verifier, normalizer or
-provider-config table: two concrete implementations must justify any further shared abstraction, and
-QuickBooks' rolling refresh token needs a lease+fence the other three must not inherit.
-`requirements-completed: []` -- REVN-01/02/03 STAY PENDING. No provider rail exists, no lane has
-passed, all four open admission conditions survive untouched.
-**NEXT: Wave 5, then Wave 6 (28-05..28-08 provider rails).** Every dependent plan still runs
-`node scripts/check-phase28-readiness.mjs` FIRST, unpiped; exit 1 means stop, not shim. Each rail
-adds its OWN paths to `PROVIDER_READ_PATHS`, whole, per the extension rules now in
-`docs/playbooks/revenue-connectors.md`. Do NOT run any `gsd-tools state *` subcommand against this
-file -- it has corrupted it seven times. Working branch feat/27-02-pack-contracts."
 last_updated: "2026-08-27T23:10:00.000Z"
 progress:
   total_phases: 53
