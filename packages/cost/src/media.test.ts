@@ -284,21 +284,33 @@ describe("the price tables agree with the committed vendor fixture", () => {
     }
   });
 
-  it("A PENDING SUCCESSION DECISION HAS RUNWAY LEFT", () => {
+  it("AN UNWIRED SUCCESSION HAS RUNWAY LEFT — decided is not the same as done", () => {
     // The real tripwire, and the number is a deadline rather than a preference: choosing a video
     // vendor means an ADR, a data-transfer decision, a price-table row and a submit path. Two weeks
-    // is the least that is honest, so a decision still open inside it turns the build red while
-    // there is time to act. Moving this number to silence it is the failure mode to resist.
+    // is the least that is honest, so work still open inside it turns the build red while there is
+    // time to act. Moving this number to silence it is the failure mode to resist.
+    //
+    // THIS USED TO KEY ON `status !== "decision_pending"`, AND THAT WAS A HOLE BIG ENOUGH TO DRIVE
+    // THE WHOLE OUTAGE THROUGH. Writing the ADR flips the status to `decided` — which disarmed
+    // this test while `media.ts` still submitted to the endpoint being withdrawn. The decision is
+    // the cheap half; the submit path is the half that keeps reels rendering. Keyed that way, the
+    // ONLY surviving alarm was "the shutdown must not have passed", which fires the day after
+    // production breaks. A decision is not a migration, and the tripwire now says so.
     const RUNWAY_DAYS = 14;
     for (const e of FIXTURES.entries) {
-      const succession = (e as { succession?: { status?: string } }).succession;
+      const succession = (e as {
+        succession?: { status?: string; replacementWiredUp?: boolean };
+      }).succession;
       if (!e.vendor.shutdown || !PINNED_MODELS.has(e.id)) continue;
-      if (succession?.status !== "decision_pending") continue;
+      // Only a WIRED replacement stands the tripwire down. `migrated` means the code moved;
+      // anything else — undecided, or decided-but-unwired — still needs runway.
+      if (succession?.status === "migrated" || succession?.replacementWiredUp === true) continue;
       expect(
         daysUntil(String(e.vendor.shutdown)),
-        `${e.id} shuts down on ${e.vendor.shutdown} and its replacement is STILL UNDECIDED. ` +
-          "Pick one (see succession.shortlistPricedPerOutputSecond), write the ADR, and set " +
-          "succession.status to `decided`.",
+        `${e.id} shuts down on ${e.vendor.shutdown} and the replacement is NOT WIRED UP ` +
+          `(status: ${succession?.status ?? "none"}, replacementWiredUp: ` +
+          `${String(succession?.replacementWiredUp)}). A written decision does not render a reel — ` +
+          "land the submit path and the price row, then set succession.replacementWiredUp to true.",
       ).toBeGreaterThan(RUNWAY_DAYS);
     }
   });

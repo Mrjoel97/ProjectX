@@ -1,6 +1,35 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
-> Last verified: 2026-08-26 (**THE PINNED VIDEO MODEL SHUTS DOWN IN 29 DAYS, AND EVERY TEST WAS
+> Last verified: 2026-08-27 (**THE SUCCESSOR IS CHOSEN — `veo-3.1-lite`, ADR-026 — AND RECORDING
+> THAT DECISION ALMOST DISARMED THE ALARM THAT FOUND IT.**
+>
+> The runway tripwire keyed on `succession.status !== "decision_pending"`. Writing the ADR flips
+> the status to `decided`, so the very act of deciding turned the test green **while `media.ts`
+> still submits to the endpoint being withdrawn**. The only surviving alarm would have been "the
+> shutdown must not have passed", which fires the day AFTER production breaks. It now keys on
+> `succession.replacementWiredUp === true` instead: **a decision is not a migration.** Mutation-
+> verified — 5 days of runway while unwired fails with a message naming the submit path and the
+> price row.
+>
+> **WHY VEO, given ADR-016 forbade it.** ADR-016's objection was ECONOMIC — it priced Veo 3 at
+> ~$0.40/s against the $3.50 cap and called one 15 s clip *structurally unreachable* at 1.7× the
+> whole cap. Veo 3.1 Lite is **$0.05/s**, an eighth of that, and cheaper than the `sora-2` it
+> replaces, so `MEDIA_JOB_CAP_USD` stays 3.50 and ADR-016's never-landed raise to 7.50 stays
+> unlanded. The decisive reason is not price though: **it adds no new data-transfer counterparty.**
+> The owner already holds the GCP credential and ADR-016 already admitted Google as a media
+> counterparty, so the one question that genuinely belonged to the owner was already answered.
+> `kling-3.0` is yuan-denominated (FX drift inside a USD table) and `minimax-h3` costs more than
+> today; `seedance-2.0` was refused on rule 3 (per-million-tokens is not pre-computable per output
+> second) and `sora-2-pro` shares the shutdown date.
+>
+> **NOTHING IS WIRED YET, AND THE FIXTURE SAYS SO** (`replacementWiredUp: false`). Still to build:
+> submit/poll/download against Google's endpoint replacing the three `api.openai.com/v1/videos`
+> call sites, a `veo-3.1-lite` row in `MEDIA_VIDEO_PRICING` with its `MEDIA_VIDEO_SECONDS`
+> durations, repinning `MEDIA_DEFAULT_VIDEO`, and the credential in **Convex env** (never Vercel).
+> 28 days of runway; the tripwire goes red at 14. `wan2.5-*` rows stay priceable but have no submit
+> path and are NOT a fallback.)
+>
+> PREVIOUS: 2026-08-26 (**THE PINNED VIDEO MODEL SHUTS DOWN IN 29 DAYS, AND EVERY TEST WAS
 > GREEN ABOUT IT.** `sora-2` is deprecated and OpenAI is retiring the VIDEOS API ITSELF on
 > 2026-09-24 with no replacement named; `sora-2-pro` shares the date. Verified against
 > developers.openai.com pricing + deprecations and corroborated against independent coverage; the
