@@ -22,6 +22,7 @@ import type * as calendarViews from "../calendarViews.js";
 import type * as cash from "../cash.js";
 import type * as cockpit from "../cockpit.js";
 import type * as cockpitCapabilities from "../cockpitCapabilities.js";
+import type * as connectorCredentials from "../connectorCredentials.js";
 import type * as contacts from "../contacts.js";
 import type * as content from "../content.js";
 import type * as contentAudit from "../contentAudit.js";
@@ -136,6 +137,7 @@ declare const fullApi: ApiFromModules<{
   cash: typeof cash;
   cockpit: typeof cockpit;
   cockpitCapabilities: typeof cockpitCapabilities;
+  connectorCredentials: typeof connectorCredentials;
   contacts: typeof contacts;
   content: typeof content;
   contentAudit: typeof contentAudit;

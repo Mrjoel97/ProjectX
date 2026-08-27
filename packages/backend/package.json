@@ -48,6 +48,7 @@
     "@pikar/cost": "workspace:*",
     "@pikar/extraction": "workspace:*",
     "@pikar/pii": "workspace:*",
+    "@pikar/revenue": "workspace:*",
     "@pikar/vault": "workspace:*",
     "@pikar/voice": "workspace:*",
     "ai": "7.0.20",

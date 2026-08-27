@@ -1,6 +1,27 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
-> Last verified: 2026-08-27 (**ONE NEW VIEWER EVENT: `media.grounding_failed`, AND IT IS VISIBLE ON
+> Last verified: 2026-08-27 (28-03 — **FOUR PHASE-28 TABLES CLASSIFIED, AND ONE OF THEM DOES NOT
+> BEHAVE LIKE `gmailTokens`.** `TENANT_TABLE_CLASSIFICATION` gains `connectorConnections`
+> (`tenant_credential`), `connectorOAuthStates` (`tenant_credential`), `contactProviderRefs`
+> (`tenant_owned`) and `providerGates` (`global`). Registry-only — no export or deletion code
+> changed, and `isolation.test.ts`'s both-directions drift test is what forced the entry.
+>
+> **DISCONNECT IS NOT ERASURE ON `connectorConnections`, AND THAT IS DELIBERATE.** `gmailAuth`
+> deletes its row on disconnect because Google's revoke is confirmed to kill the whole grant, so
+> nothing is left to say. Three of the four Phase 28 providers are not like that — Stripe Apps has
+> no documented platform-initiated revoke, PayPal documents none at all, and HubSpot's cascade to
+> already-issued access tokens is unproven — so for them LOCAL DELETION MAY BE THE ONLY REVOCATION
+> PIKAR CAN PERFORM. `recordRevocation` therefore CLEARS the ciphertext and KEEPS the row: the
+> surviving `revocation.upstream` value is the only place the honest answer lives, and deleting the
+> row would leave the connections surface with nothing to be truthful with.
+>
+> **ERASURE IS UNAFFECTED.** `tenant_credential` puts the row on the normal `tenantDelete` walk, so
+> an erasure request still removes it entirely. The two operations are different and stay that way.
+> `providerGates` is `global` and carries NO `tenantId` column — a tenant must not be able to widen
+> or erase the deployment's own provider lane status. isolation 37/37, tenantDelete 8/8,
+> tenantExport 4/4, core typecheck 0.)
+>
+> PREVIOUS: 2026-08-27 (**ONE NEW VIEWER EVENT: `media.grounding_failed`, AND IT IS VISIBLE ON
 > PURPOSE.** `groundMediaBrief` runs a research turn on the brief before the deck is written and
 > files the findings in the vault. Every failure arm returns quietly and the media turn proceeds on
 > the vault alone — the pass can never fail a reel. **That is exactly why the row has to exist.**

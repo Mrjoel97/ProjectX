@@ -178,6 +178,13 @@ const NON_TENANT_LEADING: Record<string, string> = {
   "vaultDocuments.by_kind": "internal corpus maintenance; no tenant-facing caller",
   "feedback.by_skill": "skill-optimizer aggregation across tenants; owner/token plane",
   "spendEvents.by_correlation": "correlation trace, internal",
+  // 28-03. The OAuth callback arrives from the provider with a nonce and NOTHING else — no
+  // session, no cookie, no tenant — so the lookup cannot lead with tenantId; that is the entire
+  // reason a state row exists instead of a bare HMAC. The consumer is 28-04's callback handler,
+  // which has no tenant-facing caller: it resolves the row, checks `usedAt`/`expiresAt`, and the
+  // tenant it then acts as comes FROM the row rather than from the request.
+  "connectorOAuthStates.by_state":
+    "OAuth callback resolves a server-minted nonce; no tenant in the request",
 };
 
 describe("every tenant-owned index leads with tenantId, or names why it does not", () => {

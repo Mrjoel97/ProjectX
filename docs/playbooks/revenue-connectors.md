@@ -1,6 +1,7 @@
 # Playbook: Revenue connectors — shared lifecycle, gates and release semantics
 
-> Last verified: 2026-08-27 against 1dcaa53 (28-03 Task 1 landed the AES-256-GCM credential envelope)
+> Last verified: 2026-08-27 against a86ca13 (28-03 landed the credential envelope, the four Phase 28
+> tables and the credential adapter)
 > Build history: `.planning/phases/28-connector-backed-revenue-pack/` · Related ADRs: none yet
 
 > **Status: REGISTERED AHEAD OF IMPLEMENTATION.** At the `Last verified` sha the Phase 28 code on
@@ -67,9 +68,26 @@ Phase 27's skill/pack registry (`skill-registry.md`), the cockpit tool loop (`co
 
 - `packages/revenue/src/reminders.ts` — invoice-reminder draft shaping (REVN-06). No send.
 
+**Landed (28-03 Task 2) — schema and the credential adapter**
+
+- `packages/backend/convex/schema.ts` — the WHOLE Phase 28 schema, in one additive edit, because
+  28-03 is the phase's single serialized owner of that file. Four NEW tables, no existing table or
+  field altered, no backfill: `connectorConnections` (tenant × provider × environment, sealed
+  credential + honest lifecycle), `connectorOAuthStates` (SHA-256 of a server nonce, consumed
+  atomically), `contactProviderRefs` (a JOIN to Phase 19 contacts, never a second person store) and
+  `providerGates` (deployment-wide, no `tenantId`). Also the four pre-declared `agentSteps.tool`
+  revenue literals — see the cross-lane note under Operational notes.
+- `packages/backend/convex/connectorCredentials.ts` (+ `.test.ts`) — the thin adapter.
+  `requireCredentialKey` (fail-closed env read), `newConnectionId`, `hashExternalAccountId`, and
+  the internal lifecycle `get` / `upsertSealed` / `acquireRefreshLease` / `commitRefresh` /
+  `recordRevocation` / `recordReadOutcome`. EXACTLY ONE public function — `connectorStatuses`, a
+  read — and a source scan in the test file fails if a public write builder ever appears here.
+- `packages/core/src/tenantData.ts` — the four tables classified. `connectorConnections` and
+  `connectorOAuthStates` are `tenant_credential`, `contactProviderRefs` is `tenant_owned`,
+  `providerGates` is `global`. Bumped `audit-dead-letter.md` in the same commit.
+
 **[PLANNED] — Convex adapters (thin, per CLAUDE.md §1)**
 
-- `connectorCredentials.ts` — envelope persistence. No public "store secret" mutation.
 - `connectorOAuth.ts` — one-time `connectorOAuthStates` nonce, consumed atomically.
 - `connectorFetch.ts` — bounded outbound fetch: allow-listed host and path, timeout, page cap.
 - `connectorConnections.ts` — sanitized `ConnectionStatus` projection for the UI.
@@ -149,7 +167,9 @@ Run `graphify query "revenue connectors"` for the current subgraph. Couplings gr
    [PLANNED, 28-26]. Until those land this is a review-only rule — that is a real gap.
 2. **Tenant isolation.** Credentials are sealed with AAD binding
    `tenantId | provider | connectionId | environment | keyVersion`. Copying ciphertext to another
-   tenant or provider must fail authentication. *Enforced by:* two-tenant tests [PLANNED, 28-03].
+   tenant or provider must fail authentication. *Enforced by:* `credential.test.ts` (one case per
+   AAD component) and `connectorCredentials.test.ts` (two tenants over real `users` rows, plus a
+   plaintext-sentinel scan of the stored row and the client projection) — LANDED, 28-03.
 3. **No public secret write.** Only provider callback handlers create or replace an envelope. Public
    queries return a sanitized `ConnectionStatus` — never ciphertext, IV, external account id, scopes,
    tokens, or provider errors that may embed secrets.
@@ -170,6 +190,23 @@ Run `graphify query "revenue connectors"` for the current subgraph. Couplings gr
     parked provider must not block release of an already-proven provider or workflow subset.
 11. **The LLM explains, it does not compute.** No financial formula in a skill body; no model-supplied
     figure stored or rendered as if the tenant stated it.
+12. **"We deleted our copy" is never rendered as "the grant is revoked."** For at least THREE of the
+    four admitted providers, local credential deletion may be the only revocation Pikar can actually
+    perform: Stripe Apps has no documented platform-initiated revoke (owner override, condition
+    open), PayPal documents no revocation endpoint anywhere, and HubSpot's revoke is unproven
+    against already-issued ACCESS tokens. Only QuickBooks is confirmed. `revocation.upstream` is
+    therefore a four-value enum — `confirmed` / `attempted_failed` / `unsupported` /
+    `not_attempted` — and a boolean `revoked` flag must never be reintroduced. *Enforced by:*
+    `connectorCredentials.test.ts` ("an UNSUPPORTED upstream revoke never reads as a confirmed
+    one"), mutation-verified by forcing `upstream` to `confirmed` and observing red — LANDED, 28-03.
+13. **Refresh is single-flight AND fenced.** Intuit may revoke the token a successful refresh issued
+    when a second refresh races it, so a racing refresh does not merely fail — it can kill the
+    connection and force re-consent. `acquireRefreshLease` stops a concurrent refresher from
+    starting; `revision` is the compare-and-set FENCE that stops one which already started, slept
+    past its lease and came back stale. Both are required: the lease alone is a lock that lies.
+    *Enforced by:* `connectorCredentials.test.ts` — and read the note in
+    "the FENCE refuses a stale revision even when the lease check would pass" before touching
+    either guard, because the first version of that test proved the wrong thing.
 
 ## Release semantics — passed / parked / subset / complete
 

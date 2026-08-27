@@ -149,6 +149,9 @@ importers:
       '@pikar/pii':
         specifier: workspace:*
         version: link:../pii
+      '@pikar/revenue':
+        specifier: workspace:*
+        version: link:../revenue
       '@pikar/vault':
         specifier: workspace:*
         version: link:../vault
