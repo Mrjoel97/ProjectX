@@ -1,7 +1,7 @@
 # Playbook: Revenue connectors — shared lifecycle, gates and release semantics
 
-> Last verified: 2026-08-28 against 28-05 (the first provider lane: HubSpot read-only, plus the
-> shared `postTokenForm` — the one non-GET in the connector plane), on top of 28-26's provider gate
+> Last verified: 2026-08-28 against 28-06 (the QuickBooks lane, plus `postTokenForm`'s optional
+> Basic-auth and JSON-body inputs) and 28-05 (HubSpot read-only), on top of 28-26's provider gate
 > plane, 28-04's OAuth state and read transport and 28-03's credential envelope and four tables
 > Build history: `.planning/phases/28-connector-backed-revenue-pack/` · Related ADRs: none yet
 
@@ -380,6 +380,24 @@ non-GET request the connector plane makes. It takes a URL and a `URLSearchParams
 STATUS CODE and a parsed body — no method parameter, no header parameter, `redirect: "error"`, and
 it never returns, logs or throws the response text (a provider error body is vendor content and can
 carry an account identifier — CLAUDE.md §4).
+
+**Two optional inputs, both added by 28-06 for Intuit and both off by default:**
+
+- `basicAuth: { clientId, clientSecret }` — sends `Authorization: Basic base64(id:secret)`. Intuit
+  documents its token and revoke endpoints with Basic and *nothing else*, and RFC 6749 §2.3.1 makes
+  form-body credentials the OPTIONAL half a server may decline. HubSpot takes form fields, so this
+  stays optional rather than becoming the one true way. Empty credentials THROW rather than sending
+  `Basic Og==`: an empty credential draws a 400 the caller would then classify as the tenant's dead
+  grant, and the user would be told to reconnect over a deployment fault reconnecting cannot fix.
+- `asJson: true` — serialises the same pairs as a flat JSON object. Intuit's revoke endpoint
+  documents a JSON `{"token": "..."}` body. One flag rather than a second function, because the
+  https check, the redirect refusal, the timeout and the "no body ever leaves" rule are identical
+  either way and a parallel function is a second place for one of them to be forgotten.
+
+**Whatever a caller passes, the response contract does not change:** a failure still yields a status
+code and `body: null`. A provider's OAuth `error` code is therefore *not available* to a caller, on
+purpose. QuickBooks classifies from the status alone and says so in its own module — which costs
+nothing, because Intuit's documented hazard makes "retry" the wrong answer for every class.
 
 **This is what makes Invariant 1's scan literally true.** `scripts/check-provider-lane.mjs` greps
 every LANE module (`hubspot*.ts`, `quickbooks*.ts`, ...) for `"POST"`, `"PUT"`, `"PATCH"`,

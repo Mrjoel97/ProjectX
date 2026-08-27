@@ -373,6 +373,25 @@ const TOKEN_BODY_BYTE_CAP = 64_000;
 export async function postTokenForm(input: {
   url: string;
   form: URLSearchParams;
+  /**
+   * HTTP Basic client authentication, when the provider requires it rather than accepting the
+   * client credentials as form fields. Intuit does: its token and revoke endpoints are documented
+   * with `Authorization: Basic base64(client_id:client_secret)` and nothing else, and RFC 6749
+   * §2.3.1 makes body credentials the OPTIONAL half a server may not support. HubSpot's endpoint
+   * takes form fields, so this stays optional rather than becoming the one true way.
+   *
+   * The secret is consumed into a header inside this function and is never returned or logged.
+   */
+  basicAuth?: { clientId: string; clientSecret: string };
+  /**
+   * Send `form`'s pairs as a flat JSON object instead of `application/x-www-form-urlencoded`.
+   *
+   * One flag rather than a second body type, because the only caller that needs it is Intuit's
+   * revoke endpoint, which documents a JSON `{"token": "..."}` body. The pairs, the https check,
+   * the redirect refusal, the timeout and the "no body ever leaves" rule are identical either way,
+   * and a parallel function would be a second place for one of those to be forgotten.
+   */
+  asJson?: boolean;
   /** Test seam only. Production passes nothing and gets the platform fetch. */
   fetchImpl?: typeof fetch;
 }): Promise<TokenPostResult> {
@@ -380,17 +399,31 @@ export async function postTokenForm(input: {
     throw new Error("A connector token endpoint must be https.");
   }
   const send = input.fetchImpl ?? fetch;
+  const headers: Record<string, string> = {
+    "Content-Type":
+      input.asJson === true ? "application/json" : "application/x-www-form-urlencoded",
+    Accept: "application/json",
+  };
+  if (input.basicAuth !== undefined) {
+    const { clientId, clientSecret } = input.basicAuth;
+    if (clientId === "" || clientSecret === "") {
+      // Refusing beats sending `Basic Og==`: an empty credential produces a 400 the caller would
+      // then classify as the tenant's dead grant, and the user would be told to reconnect over a
+      // deployment misconfiguration reconnecting cannot fix.
+      throw new Error("A connector token endpoint needs both client credentials.");
+    }
+    headers.Authorization = `Basic ${btoa(`${clientId}:${clientSecret}`)}`;
+  }
+  const body =
+    input.asJson === true ? JSON.stringify(Object.fromEntries(input.form)) : input.form.toString();
   let response: Response;
   try {
     response = await send(input.url, {
       method: "POST",
       redirect: "error",
       signal: AbortSignal.timeout(TOKEN_POST_TIMEOUT_MS),
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        Accept: "application/json",
-      },
-      body: input.form.toString(),
+      headers,
+      body,
     });
   } catch {
     return { ok: false, statusCode: null, body: null };
