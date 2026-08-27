@@ -538,13 +538,33 @@ describe("clampEvidence enforces every per-source and per-run bound", () => {
     expect(out.evidence[2]).toBe(input[2]);
   });
 
-  test("the whole run is cut to maxEvidenceTotal across sources", () => {
-    // MUTATION: drop the `kept.length >= SEARCH_CAPS.maxEvidenceTotal` arm.
+  test("3 x 8 = 24 is EXACTLY the total cap, so the boundary itself cuts nothing", () => {
     const sources = ["vault", "drive", "inbox"] as const;
     const out = clampEvidence(sources.flatMap((s) => many(s, SEARCH_CAPS.maxEvidencePerSource)));
-    // 3 x 8 = 24, exactly the total cap, so nothing is cut yet.
     expect(out.evidence).toHaveLength(SEARCH_CAPS.maxEvidenceTotal);
     expect(out.capped).toEqual([]);
+  });
+
+  test("the whole run is cut to 24 across sources, and the cut sources are REPORTED", () => {
+    // THE BINDING CONSTRAINT HERE IS THE TOTAL, NOT THE PER-SOURCE CAP. The test above feeds
+    // exactly 24 rows, so the drop branch never executed and `kept.length >= maxEvidenceTotal`
+    // could be weakened to `>= maxEvidenceTotal * 100` with 95/95 green. All five sources at
+    // their per-source cap is 5 x 8 = 40 rows, so 16 must be dropped by the TOTAL alone.
+    //
+    // 24 IS A LITERAL ON PURPOSE. This file imports `SEARCH_CAPS`, so writing the expectation as
+    // `SEARCH_CAPS.maxEvidenceTotal` moves the oracle with the subject: raise the constant and
+    // the assertion follows it. The literal is what pins the VALUE.
+    const out = clampEvidence(KNOWLEDGE_SOURCES.flatMap((s) => many(s, 8)));
+    expect(SEARCH_CAPS.maxEvidencePerSource).toBe(8);
+    expect(SEARCH_CAPS.maxEvidenceTotal).toBe(24);
+    expect(out.evidence).toHaveLength(24);
+    // The first three sources fill the budget; the last two are refused entirely and say so.
+    expect(out.evidence.map((e) => e.source)).toEqual([
+      ...Array<string>(8).fill("vault"),
+      ...Array<string>(8).fill("drive"),
+      ...Array<string>(8).fill("inbox"),
+    ]);
+    expect(out.capped).toEqual(["crm-facts", "support-desk"]);
   });
 
   test("text over evidenceTextCharCap is truncated, and the source is reported capped", () => {
@@ -594,26 +614,70 @@ describe("clampEvidence enforces every per-source and per-run bound", () => {
 // ── The citation shape maps onto the landed renderer ───────────────────────────────────────
 
 describe("groundedSourceProps hands the LANDED vault card exactly its own props", () => {
-  test("refs and labels become the index-aligned docIds/titles/count vaultSources shape", () => {
+  test("vault refs and labels become the index-aligned docIds/titles/count vaultSources shape", () => {
     // The point is that no caller writes a rename shim: `GroundedSources({titles, docIds})` in
     // `cards.tsx` and the `vaultSources` row both take these three names, so one card component
     // serves the vault plane and the knowledge-search plane.
     const out = groundedSourceProps([
-      { sourceRef: "d1", label: "Rate card" },
-      { sourceRef: "m1", label: "Quote to Acme" },
+      { source: "vault", sourceRef: "d1", label: "Rate card" },
+      { source: "vault", sourceRef: "d2", label: "Pricing memo" },
     ]);
     expect(out).toEqual({
-      docIds: ["d1", "m1"],
-      titles: ["Rate card", "Quote to Acme"],
+      docIds: ["d1", "d2"],
+      titles: ["Rate card", "Pricing memo"],
       count: 2,
+      nonVault: [],
     });
     // Index alignment is the whole contract: titles[i] describes docIds[i].
-    expect(out.titles[1]).toBe("Quote to Acme");
-    expect(out.docIds[1]).toBe("m1");
+    expect(out.titles[1]).toBe("Pricing memo");
+    expect(out.docIds[1]).toBe("d2");
+  });
+
+  test("NO NON-VAULT REF EVER REACHES docIds — the prop opens a vault document modal", () => {
+    // THE DEFECT THIS PINS, in the landed consumer's own words:
+    //   cards.tsx:2413  <GroundedSources titles={sources.titles} docIds={sources.docIds} />
+    //   cards.tsx:2373  <VaultDocButton docId={docIds[i]}>
+    //   cards.tsx:2317  {open && <VaultDocModal docId={docId} .../>}
+    // `docIds[i]` is opened AS A VAULT DOCUMENT. The first version of this function mapped every
+    // source's ref into it, so a Gmail message id rendered a control that opens a document that
+    // does not exist — the exact naming lie the function's own JSDoc rejects for `citationDocId`.
+    //
+    // MUTATION that must turn this RED: drop the `.filter((e) => e.source === "vault")`.
+    const out = groundedSourceProps([
+      { source: "vault", sourceRef: "d1", label: "Rate card" },
+      { source: "inbox", sourceRef: "m1", label: "Quote to Acme" },
+      { source: "drive", sourceRef: "f1", label: "Q3 forecast.xlsx" },
+      { source: "crm-facts", sourceRef: "c1", label: "Acme — open deal" },
+      { source: "vault", sourceRef: "d2", label: "Pricing memo" },
+    ]);
+    expect(out.docIds).toEqual(["d1", "d2"]);
+    expect(out.titles).toEqual(["Rate card", "Pricing memo"]);
+    expect(out.count).toBe(2);
+    for (const ref of out.docIds) expect(["m1", "f1", "c1"]).not.toContain(ref);
+    // …and NOTHING is silently discarded: every non-vault citation comes back for the caller to
+    // render without a vault drill-in. A shorter list with no record of the drop would trade a
+    // broken control for missing provenance.
+    expect(out.nonVault).toEqual([
+      { source: "inbox", sourceRef: "m1", label: "Quote to Acme" },
+      { source: "drive", sourceRef: "f1", label: "Q3 forecast.xlsx" },
+      { source: "crm-facts", sourceRef: "c1", label: "Acme — open deal" },
+    ]);
+    expect(out.docIds.length + out.nonVault.length).toBe(5);
+  });
+
+  test("an all-mail answer is zero documents and three citations, not an empty result", () => {
+    const out = groundedSourceProps([
+      { source: "inbox", sourceRef: "m1", label: "Quote to Acme" },
+      { source: "inbox", sourceRef: "m2", label: "Re: Quote to Acme" },
+      { source: "support-desk", sourceRef: "t1", label: "Ticket 41" },
+    ]);
+    expect(out.docIds).toEqual([]);
+    expect(out.count).toBe(0);
+    expect(out.nonVault).toHaveLength(3);
   });
 
   test("no evidence is a count of zero, not an absent card", () => {
-    expect(groundedSourceProps([])).toEqual({ docIds: [], titles: [], count: 0 });
+    expect(groundedSourceProps([])).toEqual({ docIds: [], titles: [], count: 0, nonVault: [] });
   });
 });
 
@@ -978,6 +1042,20 @@ describe("renderSourceGap says what could not be seen and why, in the user's wor
     expect(
       String(renderSourceGap({ status: "unavailable", source: "inbox", reason: "reauth" })),
     ).not.toContain("would need");
+  });
+
+  test("support-desk is LIVE vocabulary: the whole sentence, as a literal", () => {
+    // `support-desk` is the one knowledge source no workflow-pack operation reads, so
+    // `workflowPacks.test.ts`'s "no dead vocabulary" check exempts it via the search plane. That
+    // exemption is only honest if something actually READS it. This is that read, and it is the
+    // rendered STRING rather than a lookup through the same constants the implementation uses:
+    // drop `support-desk` from `KNOWLEDGE_SOURCES`, from `PACK_SOURCE_LABEL` or from
+    // `MISSING_SOURCE_UNLOCK` and this goes red on the value a user would actually see.
+    expect(
+      renderSourceGap({ status: "unavailable", source: "support-desk", reason: "not_landed" }),
+    ).toBe(
+      "your connected support inbox is not available in Pikar yet, so it was not searched. It would need connecting your support desk.",
+    );
   });
 
   test("a partial source renders how many it saw, not a total", () => {

@@ -816,17 +816,39 @@ export function renderSourceGap(state: KnowledgeSourceState): string | null {
  * So the mapping is CODE, not prose: `groundedSourceProps` hands the landed `GroundedSources`
  * component exactly the props it already takes. One card component serves both planes and no
  * caller writes its own translation.
+ *
+ * AND IT PROJECTS VAULT EVIDENCE ONLY. The first version of this function mapped EVERY source's
+ * `sourceRef` into `docIds` — committing, one plane over, the exact naming lie the paragraph above
+ * rejects. The landed consumer is not a neutral list: `cards.tsx` renders
+ * `GroundedSources({titles, docIds})` -> `<VaultDocButton docId={docIds[i]}>` ->
+ * `<VaultDocModal docId={docId}>`, so a Gmail message id or a Drive file id handed to `docIds`
+ * becomes a clickable control that opens a vault-document modal for something that is not a vault
+ * document. Four of the five sources would have rendered that.
+ *
+ * The non-vault citations are RETURNED, never dropped: `nonVault` is what the caller renders
+ * through a path that does not pretend a provider ref is a document. Filtering to a silently
+ * shorter list would trade a broken control for missing provenance, which is worse.
+ *
+ * `count` counts DOCUMENTS, because the card's own words are "Grounded in N documents". The total
+ * number of citations is `docIds.length + nonVault.length`, and a caller that wants it says so.
  */
-export function groundedSourceProps(evidence: readonly Pick<Evidence, "sourceRef" | "label">[]): {
+export function groundedSourceProps(
+  evidence: readonly Pick<Evidence, "source" | "sourceRef" | "label">[],
+): {
+  /** VAULT document ids, safe to hand to `VaultDocButton`/`VaultDocModal`. */
   readonly docIds: readonly string[];
   readonly titles: readonly string[];
   readonly count: number;
+  /** Every non-vault citation, in order. NOT documents — no vault drill-in may be rendered. */
+  readonly nonVault: readonly Pick<Evidence, "source" | "sourceRef" | "label">[];
 } {
   // Parallel arrays, index-aligned, exactly like `vaultSources`. Order is the caller's order.
+  const vault = evidence.filter((e) => e.source === "vault");
   return {
-    docIds: evidence.map((e) => e.sourceRef),
-    titles: evidence.map((e) => e.label),
-    count: evidence.length,
+    docIds: vault.map((e) => e.sourceRef),
+    titles: vault.map((e) => e.label),
+    count: vault.length,
+    nonVault: evidence.filter((e) => e.source !== "vault"),
   };
 }
 

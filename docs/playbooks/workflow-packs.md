@@ -1,7 +1,14 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
-> Last verified: 2026-08-27 (Phase 29 made this file's source registry the repo's ONLY one — see
-> "Phase 29 shares this registry" under Dependencies. Pack behaviour is unchanged.)
+> Last verified: 2026-08-28 (29-01 second repair round: the "no dead vocabulary" exemption for
+> `support-desk` now CALLS `renderSourceGap` instead of spreading `KNOWLEDGE_SOURCES`.
+> Membership in a second const is a DECLARATION, not a read — the exact shape this file rejects
+> for tool grants — and `support-desk` is the one source no pack operation reads, so it was the
+> only member the exemption actually carried. The user-facing sentence is now pinned as a
+> literal in `knowledgeSearch.test.ts`. Pack behaviour is unchanged.)
+>
+> Previously verified 2026-08-27 (Phase 29 made this file's source registry the repo's ONLY one —
+> see "Phase 29 shares this registry" under Dependencies. Pack behaviour is unchanged.)
 >
 > Previously verified 2026-08-26 (**THE SIX PACKS ARE CERTIFIED ON PRODUCTION'S EVAL PLANE AND STILL
 > DARK THERE.** Prod candidates seeded at v1 — note they are v1 while dev carries v4/v5/v10/v11:

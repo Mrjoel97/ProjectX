@@ -1,7 +1,9 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
-> Last verified: 2026-08-27 against the 29-01 adversarial-repair commits (four independent
-> audits found 22 reproduced defects in the original 29-01; this file records the repaired state)
+> Last verified: 2026-08-28 against the SECOND 29-01 adversarial-repair round (a first pass found
+> 22 defects, a fixer repaired them, a second pass re-ran the mutations and found 10 still
+> standing — including two the first round's SUMMARY had claimed as "observed RED". This file
+> records the state after the second repair.)
 > Build history: `.planning/phases/29-unified-knowledge-and-routines/` · Related ADRs:
 > [ADR-003](../decisions/003-skill-registry-for-prompts.md) (skills registry — `tenantSkills` is an
 > additive overlay, not a supersession), [ADR-006](../decisions/ADR-006-vault-chunks-trusted-as-own.md)
@@ -149,7 +151,7 @@ Customization: form values → `validateCustomization` → `renderCustomization`
 | 3 | **Dedupe never deletes a conflicting record, AND never reports one as a safe collapse.** `(source, sourceRef)` identity collapses ONLY when the normalized TEXT also matches; the same ref carrying different text is `conflicting` with its own count; identical text across *different* records is cross-linked. | A $40 rate and a $60 rate must not become one confident answer — and until the 29-01 repair, one ref reading $40 then $60 was filed under `duplicates` with `collapsed: 1`, so a renderer following the documented contract would drop the $60. | `dedupeEvidence` + six tests. MUTATION OBSERVED RED: key on `source\|sourceRef` without comparing `normalizeEvidenceText`. |
 | 4 | **A model-invented evidence id is removed and counted.** A claim left with none becomes `unsupported`. | A citation list is not provenance. | `validateSynthesis`, mutations KS-04/KS-05/KS-06. |
 | 5 | **An excerpt must be a substring of the evidence THAT CLAIM CITED.** An invalid excerpt drops the excerpt, not the claim. | A quote lifted from another document is a fabrication even though every character is real. | `validateSynthesis`, mutation KS-06. |
-| 6 | **Authority, freshness and confidence are code-owned.** A model-supplied `authority`/`confidence`/`probability` is ignored. Confidence is a closed LABEL. | The model does not get to grade its own work. | `authorityFor`/`freshnessFor`/`searchConfidence`; `confidence` is a literal union in the schema so a number cannot be stored. |
+| 6 | **Authority, freshness and confidence are code-owned.** A model-supplied `authority`/`confidence`/`probability` is ignored. Confidence is a closed LABEL. | The model does not get to grade its own work. | `authorityFor`/`freshnessFor`/`searchConfidence`; `confidence` is a literal union in the schema so a number cannot be stored — and that union is now DERIVED from `CONFIDENCE_LABELS` (invariant 20). |
 | 7 | **`agent_promoted` vault content is the WEAKEST authority class.** | The provenance-laundering defect class: the agent's own earlier output must never read back as the owner's own word. | `authorityFor` + mutation KS-19. |
 | 8 | **The Blueprint `spine` is never search evidence.** | It is not a result and must not alter counts, no-match behaviour or citations. | `vaultGround.ts` returns it as a separate field; `searchVaultSpine.test.ts` guards it. **Phase 29 must not put it in the evidence array.** |
 | 9 | **Labels/excerpts/prose live on the CONTENT plane; audit gets refs and counts.** | CLAUDE.md §4 — the log must not become a PII honeypot. | `redactedSearchEvent` is a pure function so the ban is testable without a database; `knowledgeSearch.test.ts`, "no label, snippet, title, query or prose can reach it". |
@@ -162,14 +164,18 @@ Customization: form values → `validateCustomization` → `renderCustomization`
 | 16 | **A `crm-facts`/`support-desk` gap is `not_landed`, never a stub adapter and never an empty success**, and the sentence also names the UNLOCK. | Owner ruling, 2026-08-27. Naming a gap without naming its unlock leaves a complaint instead of a next step. | `NOT_LANDED_SOURCES` (derived) + `clampSearchPlan` + `renderSourceGap` reading `MISSING_SOURCE_UNLOCK`. MUTATION OBSERVED RED: return the bare sentence for `not_landed`. |
 | 17 | **EVERY `SEARCH_CAPS` ENTRY IS ENFORCED BY CODE.** Six of eleven were enforced by nothing while `schema.ts` cited them as bounds. | A cap nothing applies is a documented invariant with no enforcement, and the 29-0x adapter that trusts the comment puts an unbounded array on a Convex row. | `clampEvidence`/`clampSearchPlan`/`validateSynthesis`, plus a source scan (`NO CAP IS DEAD`) that fails when a key becomes declaration-only. Two by-construction exceptions are named in that test. Same rule and same test for `CUSTOMIZATION_CAPS`. |
 | 18 | **ONE SOURCE VOCABULARY.** `KNOWLEDGE_SOURCES satisfies readonly PackSource[]`; labels and unlocks come from `workflowPacks.ts`. | A pin's `sourcePreferences` are `PackSource[]`; a forked search vocabulary makes a preference unable to select a source with no code that could translate. | `satisfies` at compile time, plus "every knowledge source IS a PackSource" and the derived `NOT_LANDED_SOURCES` test. |
+| 20 | **THE CONVEX ENUMS ARE THE `@pikar/core` ENUMS, DERIVED — NOT HAND-COPIED.** `knowledgeSource`, the unavailable/partial reasons, the authority classes, the freshness labels and the confidence labels are all built by `schema.ts`'s `literals(...)` helper from the exported const array. | They were hand-copied, and three separate narrowings of them each left the whole backend suite AND the typecheck green: dropping `support-desk` from the source union, `unplanned` from the unavailable reasons, `agent_authored` from the authority classes. Nothing crossed the package boundary. The cost is exactly the honest-gap row this phase exists to produce: core can construct `{status:"unavailable", reason:"not_landed", source:"support-desk"}` and the validator would refuse it at INSERT time, at runtime, with nothing red in CI. | One list, not two. Falsified by `schema.test.ts`, "the Convex enums are the @pikar/core enums, proved by storing every member" — it inserts EVERY member of every core constant, plus a scan that fails if any member reappears as a hand-written `v.literal` inside `knowledgeSearches`. MUTATIONS OBSERVED RED: hand-write each of the three unions back minus one member. |
+| 21 | **`groundedSourceProps` PROJECTS VAULT EVIDENCE ONLY into `docIds`.** Non-vault citations come back in `nonVault` and must be rendered without a vault drill-in. | `docIds[i]` is not a neutral id: `cards.tsx:2413 GroundedSources` -> `:2373 VaultDocButton` -> `:2317 VaultDocModal` OPENS it as a vault document. The first version mapped every source's `sourceRef` in, so a Gmail message id rendered a clickable control that opens a document that does not exist — committing, one plane over, the exact naming lie this function's own JSDoc rejects for `citationDocId`. | `knowledgeSearch.test.ts`, "NO NON-VAULT REF EVER REACHES docIds". MUTATION OBSERVED RED: drop the `.filter((e) => e.source === "vault")`. |
+| 22 | **`savedPrompts.sourcePreferences` MEMBERSHIP is closed by the Convex validator** — the full `PackSource` vocabulary, derived, not `v.array(v.string())`. | It was `v.array(v.string())` under a comment reading "Bounded `PackSource` names", and a convex-test probe stored `["notion","http://evil.example","sharepoint"]` verbatim: a documented invariant with no enforcement, one field over from where the identical hole had just been closed on `claims[].evidence[].source`. | `schema.test.ts`, "sourcePreferences refuses a source the product does not have — a WRONG VALUE, not a wrong type". MUTATION OBSERVED RED: reopen to `v.optional(v.array(v.string()))`. **LENGTH is NOT bounded** — see Known gaps. |
 | 19 | **A PIN NAMES THE EXACT `tenantSkills` ROW, never a (name, version) pair.** | Two tenants can hold the same name AND version — which is why `recordTenantEvalEvidence` keys on the row id, and why the landed rail is `Record<string, Id<"tenantSkills">>` (dispatch.ts:234/:256). | `WorkflowPin.tenantSkillId: TenantSkillRef \| null`, `pinIdentity`/`pinMatchesActive` compare it, and `savedPrompts.tenantSkillId` is `v.id("tenantSkills")` — proved by INSERT, not by a substring scan. MUTATIONS OBSERVED RED: relax to `v.optional(v.string())`; drop the id from `pinIdentity`. |
 
 ## How to change safely
 
 **Adding a source** (only when its adapter genuinely lands): add it to `workflowPacks.ts`'s
 `REACHABLE_PACK_SOURCES` or `MISSING_PACK_SOURCES` **first** (with its `PACK_SOURCE_LABEL`, and its
-`MISSING_SOURCE_UNLOCK` + `MISSING_SOURCE_MENTIONS` if missing), then to `KNOWLEDGE_SOURCES`,
-`SOURCE_AUTHORITY` and the `knowledgeSource` validator in `schema.ts`. Do NOT edit
+`MISSING_SOURCE_UNLOCK` + `MISSING_SOURCE_MENTIONS` if missing), then to `KNOWLEDGE_SOURCES` and
+`SOURCE_AUTHORITY`. Do **not** touch `schema.ts`'s `knowledgeSource` — it is DERIVED from
+`KNOWLEDGE_SOURCES` (invariant 20) and follows on its own. Do NOT edit
 `NOT_LANDED_SOURCES` — it is derived; a connector that lands moves between the two pack lists once
 and both planes follow. Keep `SEARCH_CAPS.maxSources === KNOWLEDGE_SOURCES.length` (a test pins it).
 Most likely to violate: invariants 1, 16 and 18.
@@ -178,8 +184,10 @@ Most likely to violate: invariants 1, 16 and 18.
 `NO CAP IS DEAD` scans in both test files fail on a declaration-only key. If a cap is genuinely
 unnecessary, DELETE it and fix every comment that cited it. Most likely to violate: invariant 17.
 
-**Adding an authority class or confidence label**: both are duplicated as literal unions in
-`schema.ts`. Change both or `schema.test.ts` fails on insert. Most likely to violate: invariant 6.
+**Adding an authority class or confidence label**: change the `@pikar/core` const ONLY.
+`schema.ts` derives both (invariant 20), so there is nothing to keep in sync — and
+re-introducing a hand-written `v.literal` copy is itself red. Most likely to violate:
+invariants 6 and 20.
 
 **Adding a customization field kind**: extend `CUSTOMIZATION_FIELD_KINDS`, add the validation arm,
 the `renderValue` arm, and decide explicitly whether it belongs in `MATERIAL_FIELD_KINDS`. Most
@@ -211,9 +219,9 @@ package.
 
 | Command | What it proves |
 |---|---|
-| `cd packages/core && pnpm vitest run knowledgeSearch workflowCustomization` | 182 unit tests over the pure contracts. |
+| `cd packages/core && pnpm vitest run knowledgeSearch workflowCustomization` | 187 unit tests over the pure contracts. |
 | `cd packages/core && pnpm typecheck` | `noUncheckedIndexedAccess` holds across the new modules. |
-| `cd packages/backend && pnpm vitest run convex/schema.test.ts` | 32 tests: the widening proved by insert, and recurrence absence. |
+| `cd packages/backend && pnpm vitest run convex/schema.test.ts` | 41 tests: the widening proved by insert, the core->storage enum seam proved by inserting EVERY member of every core constant, the header index, and recurrence absence. |
 | `cd packages/backend && pnpm typecheck` | The schema compiles against `_generated`. |
 | `cd packages/backend && pnpm vitest run skills schema` | The Phase-21 seam this phase consumes is still intact beside the widening. |
 | `echo '{}' \| node scripts/check-playbooks.mjs check` | §9 watcher. **Read stdout** — `"decision":"block"` means FAILED, empty means passed. Never read its exit code; every path is `exit(0)`, and run bare it hangs forever on stdin. **RUN IT WHILE THE TREE IS DIRTY.** With no baseline file for the session id it compares against `HEAD`, so running it after committing on a clean tree examines ZERO files and its silence means nothing. |
@@ -248,7 +256,10 @@ plans 29-02 onward, and every recurrence live proof in 29-11.
   `citationDocId` is how it later gets joined against `vaultDocuments`. The mapping is CODE, not
   prose: `groundedSourceProps` in `@pikar/core` returns exactly the `{docIds, titles, count}` props
   the landed `GroundedSources` component and the `vaultSources` row already take, so one card serves
-  both planes and no caller writes a rename shim.
+  both planes and no caller writes a rename shim. **It projects VAULT evidence only**
+  (invariant 21) and hands back everything else in `nonVault`, because `docIds[i]` is opened as a
+  vault document by `VaultDocButton`/`VaultDocModal`. A 29-0x renderer must give `nonVault` a
+  non-vault affordance.
 
 ## Known gaps & deferred work
 
@@ -262,4 +273,6 @@ plans 29-02 onward, and every recurrence live proof in 29-11.
 | `ponytail:` `validateSourceRef` and `packages/revenue/src/contracts.ts` hold two shape rules for one §4 boundary, and revenue's is the laxer denylist form. The Phase 28 lane owns that file, so it cannot be edited from here. Ceiling: two rules, one boundary. Upgrade at merge: delete revenue's copy, import this one. | `ponytail:` comment on `validateSourceRef`. |
 | `ponytail:` `KnowledgeSourceState` and `packPreflight`'s `SourceState` are two SHAPES over one vocabulary. Ceiling: a caller that needs both must switch on `status` twice. Upgrade path: widen `SourceState` into the reason-carrying object and migrate `packPreflight` + the 30 landed eval fixtures in one change. | Doc comment on `KnowledgeSourceState`. |
 | **The `mediaJobs.provider` reflow in commit `1e914f9` was not reverted.** It is an unrequested formatting-only edit outside Phase 29's blast radius, and the audit was right to flag it — but `biome@2.5.3` at `lineWidth: 100` REQUIRES the collapsed single line (verified: reverting it makes `biome format packages/backend/convex/schema.ts` red). Reverting would ship formatter-red code that the next save flips back. | 29-01-SUMMARY.md, "deliberately not fixed". |
+| **`sourcePreferences` array LENGTH is unbounded at the storage boundary.** Membership is closed (invariant 22); a Convex validator has no array-length bound, so 10000 repeats of `"vault"` is storable. Claiming a length bound in a comment is the defect invariant 22 exists to record, so it is recorded here instead. | `ponytail:` comment on the field. The real ceiling is `CUSTOMIZATION_CAPS.maxValuesPerField` (8) in `validateCustomization`; there is no writer of this field yet. Upgrade path: clamp in the `savedPrompts` mutation when plan 29-08 writes the first pin, and assert the refusal there. |
+| **`packages/backend/convex/schema.ts` is NOT watched by the §9 hook.** It is registered under `watch._unassigned` — explicitly acknowledged rather than left as a silent hole. | `watch.json` prefixes are per-file and `schema.ts` holds all 47 tables, so assigning it to this playbook would demand a knowledge-search bump for every unrelated table edit repo-wide — noise that trains readers to ignore the hook. The Phase-29 tables' real gate is `schema.test.ts`, which IS watched here and which now fails on enum drift, header drift and value drift. |
 | **Recurrence is entirely deferred**, by decision, not by omission. | Plan 29-11's decision record; invariant 15. |

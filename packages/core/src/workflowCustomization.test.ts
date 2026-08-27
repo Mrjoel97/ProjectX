@@ -241,6 +241,35 @@ describe("validateCustomization accepts only what the schema declared", () => {
     expect(validateCustomization(SCHEMA, okValues({ customerNoun: emoji })).ok).toBe(false);
   });
 
+  test("the ABSOLUTE ceiling binds when the FIELD asks for more than 4000 bytes", () => {
+    // EVERY OTHER FIXTURE IN THIS FILE declares a field whose own `maxBytes` (40, 400) is below
+    // the absolute ceiling, so `Math.min(field.maxBytes, CUSTOMIZATION_CAPS.valueMaxBytes)` always
+    // selected the FIELD's number and the ceiling arm never executed. Two independent weakenings
+    // therefore survived with 87/87 green: `valueMaxBytes: 4_000` -> `4_000_000`, and the
+    // `Math.min` second argument -> `CUSTOMIZATION_CAPS.valueMaxBytes * 100`. A product schema is
+    // trusted to declare a field; it is NOT trusted to raise the ceiling on one untrusted user
+    // value, because Phase 21 composes the accepted value into a skill body under
+    // `USER_SKILL_ADAPTATION_MAX_BYTES` — the number this cap is documented as matching.
+    //
+    // 4_000 AND 4_001 ARE LITERALS. This file imports `CUSTOMIZATION_CAPS`, so an expectation
+    // written as `CUSTOMIZATION_CAPS.valueMaxBytes` moves the oracle with the subject and could
+    // not fail when the constant is scaled. The literals are what pin the VALUE.
+    const GREEDY: CustomizationSchema = {
+      templateId: "business-pulse",
+      templateVersion: 3,
+      fields: [{ key: "notes", kind: "instruction", label: "Extra", maxBytes: 100_000 }],
+    };
+    expect(CUSTOMIZATION_CAPS.valueMaxBytes).toBe(4_000);
+    expect(validateCustomization(GREEDY, { notes: "n".repeat(4_000) }).ok).toBe(true);
+    const out = validateCustomization(GREEDY, { notes: "n".repeat(4_001) });
+    expect(out.ok).toBe(false);
+    expect(out.ok === false && out.error).toEqual([{ key: "notes", reason: "too_large" }]);
+    // …and BYTES, not characters, at the absolute ceiling too: "é" is two UTF-8 bytes, so 2_001 of
+    // them is 4_002 bytes in a 2_001-character string.
+    expect(validateCustomization(GREEDY, { notes: "é".repeat(2_000) }).ok).toBe(true);
+    expect(validateCustomization(GREEDY, { notes: "é".repeat(2_001) }).ok).toBe(false);
+  });
+
   test("a source preference outside the field's declared list is refused", () => {
     const out = validateCustomization(SCHEMA, okValues({ prefer: ["vault", "notion"] }));
     expect(out.ok).toBe(false);

@@ -1,10 +1,37 @@
 import { authTables } from "@convex-dev/auth/server";
 import { CONTRACTS_PACKAGE_NAME } from "@pikar/contracts";
+import {
+  AUTHORITY_CLASSES,
+  CONFIDENCE_LABELS,
+  FRESHNESS_LABELS,
+  KNOWLEDGE_SOURCES,
+  MISSING_PACK_SOURCES,
+  PARTIAL_REASONS,
+  REACHABLE_PACK_SOURCES,
+  UNAVAILABLE_REASONS,
+} from "@pikar/core";
 import { defineSchema, defineTable } from "convex/server";
-import { v } from "convex/values";
+import { type VLiteral, v } from "convex/values";
 
 // Compile-time proof the Convex bundler resolves source-export workspace packages.
 void CONTRACTS_PACKAGE_NAME;
+
+/**
+ * A closed Convex union built FROM a `@pikar/core` constant instead of restating its members.
+ *
+ * WHY: the Phase-29 enums were first hand-copied here, and three separate narrowings of them
+ * (dropping `support-desk` from the source union, `unplanned` from the unavailable reasons,
+ * `agent_authored` from the authority classes) each left the whole backend suite AND the typecheck
+ * green — `schema.test.ts` imported nothing from `@pikar/core`, so nothing crossed the package
+ * boundary. The failure that buys is the honest-gap row this phase exists to produce: core can
+ * construct `{status: "unavailable", reason: "not_landed", source: "support-desk"}` and the Convex
+ * validator would refuse it at insert time, at runtime, with nothing red in CI.
+ *
+ * Deriving is the fix rather than a second source scan: there is now ONE list. The domain type is
+ * preserved through the cast, so `Doc<"knowledgeSearches">` still narrows to the literal union.
+ */
+const literals = <T extends string>(values: readonly [T, ...T[]]) =>
+  v.union(...(values.map((value) => v.literal(value)) as unknown as [VLiteral<T>, VLiteral<T>]));
 
 // ┌──────────────────────────────────────────────────────────────────────────────┐
 // │ SCHEMA TABLE INDEX — 47 tables, grouped by domain.                         │
@@ -54,6 +81,9 @@ void CONTRACTS_PACKAGE_NAME;
 // │                                                                            │
 // │ ── Proposals ───────────────────────────────────────────── ~L2238          │
 // │   proposals                                                                │
+// │                                                                            │
+// │ ── Workflow Packs (27-02) ──────────────────────────────── ~L2652          │
+// │   workflowPackEvents                                                       │
 // └──────────────────────────────────────────────────────────────────────────────┘
 
 /**
@@ -92,13 +122,14 @@ export const AGENT_STEP_REFUSAL = v.union(
  * renders as a visible gap. Omitting them would let the product answer a business question from
  * mail and files while never saying the CRM was not consulted.
  */
-const knowledgeSource = v.union(
-  v.literal("vault"),
-  v.literal("drive"),
-  v.literal("inbox"),
-  v.literal("crm-facts"),
-  v.literal("support-desk"),
-);
+const knowledgeSource = literals(KNOWLEDGE_SOURCES);
+
+/**
+ * The FULL `PackSource` vocabulary — `KNOWLEDGE_SOURCES` plus the pack-only planes (`web`,
+ * `calendar`, `finance-inputs`, `phase26-summaries`, …). Used by `savedPrompts.sourcePreferences`,
+ * whose domain type is `PackSource[]`, not `KnowledgeSource[]`.
+ */
+const packSource = literals([...REACHABLE_PACK_SOURCES, ...MISSING_PACK_SOURCES]);
 
 /** ONE deck element, shared by `plans.shots` and `plans.altShots` (33-02) — a single const so the
  *  two arrays can never drift apart field-by-field. `type` is a ShotType value; @pikar/core/storyboard
@@ -442,9 +473,20 @@ export default defineSchema({
     tenantSkillId: v.optional(v.id("tenantSkills")),
     /** SHA-256 over `canonicalCustomization` — what the pin's identity is built from. */
     customizationHash: v.optional(v.string()),
-    /** Bounded `PackSource` names. Preferences, not grants: a preference cannot reach a source
-     *  the pack's static tool allow-list does not already contain. */
-    sourcePreferences: v.optional(v.array(v.string())),
+    /** `PackSource` names, CLOSED BY THE VALIDATOR — the same derived vocabulary the coverage and
+     *  citation planes use. It was `v.array(v.string())` under this same "bounded" comment until
+     *  the second 29-01 repair, and a convex-test probe stored
+     *  `["notion","http://evil.example","sharepoint"]` verbatim: a documented invariant with no
+     *  enforcement, one field over from where the identical hole had just been closed.
+     *  Preferences, not grants: a preference cannot reach a source the pack's static tool
+     *  allow-list does not already contain.
+     *
+     *  ponytail: MEMBERSHIP is enforced here; LENGTH is not, because a Convex validator has no
+     *  array-length bound and claiming one in a comment is the defect above. The ceiling that
+     *  matters is `CUSTOMIZATION_CAPS.maxValuesPerField` (8) in `validateCustomization`, which
+     *  every writer must run — there is no writer of this field yet. Upgrade path when one lands:
+     *  clamp in the `savedPrompts` mutation, and assert the refusal there. */
+    sourcePreferences: v.optional(v.array(packSource)),
     //
     // THERE IS STILL DELIBERATELY NO cadence, timezone, nextRunAt, enabled flag, scheduler id,
     // run-history ref or standing approval on this row. Pinning is not scheduling, and Phase 29's
@@ -501,12 +543,7 @@ export default defineSchema({
     question: v.string(),
     summary: v.string(),
     /** A closed LABEL. There is deliberately no probability field for a model to author. */
-    confidence: v.union(
-      v.literal("unsupported"),
-      v.literal("low"),
-      v.literal("medium"),
-      v.literal("high"),
-    ),
+    confidence: literals(CONFIDENCE_LABELS),
     // A DISCRIMINATED union of three object shapes, not one object with optional fields. That is
     // the whole safety property: `unavailable` HAS NO `returned` FIELD, so "reauth failed, so zero
     // results, so nothing exists" is refused by the Convex validator at insert time rather than by
@@ -522,19 +559,12 @@ export default defineSchema({
           source: knowledgeSource,
           status: v.literal("partial"),
           returned: v.number(),
-          reason: v.union(v.literal("cap"), v.literal("provider_error")),
+          reason: literals(PARTIAL_REASONS),
         }),
         v.object({
           source: knowledgeSource,
           status: v.literal("unavailable"),
-          reason: v.union(
-            v.literal("not_connected"),
-            v.literal("reauth"),
-            v.literal("refresh_failed"),
-            v.literal("provider_error"),
-            v.literal("not_landed"),
-            v.literal("unplanned"),
-          ),
+          reason: literals(UNAVAILABLE_REASONS),
         }),
       ),
     ),
@@ -553,19 +583,8 @@ export default defineSchema({
             sourceRef: v.string(),
             /** Doc title / file name / subject. Labels-to-UI; never an audit payload (§4). */
             label: v.string(),
-            authority: v.union(
-              v.literal("tenant_owned"),
-              v.literal("system_of_record"),
-              v.literal("correspondence"),
-              v.literal("third_party_research"),
-              v.literal("agent_authored"),
-            ),
-            freshness: v.union(
-              v.literal("current"),
-              v.literal("recent"),
-              v.literal("stale"),
-              v.literal("unknown"),
-            ),
+            authority: literals(AUTHORITY_CLASSES),
+            freshness: literals(FRESHNESS_LABELS),
             sourceUpdatedAt: v.optional(v.number()),
             retrievedAt: v.number(),
           }),

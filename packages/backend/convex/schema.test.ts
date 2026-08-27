@@ -13,6 +13,16 @@
 // The absence test reads the PARSED SCHEMA OBJECT, not the source text, precisely because the
 // source text legitimately contains every banned word — inside the comment that bans them.
 import { readFileSync } from "node:fs";
+import {
+  AUTHORITY_CLASSES,
+  CONFIDENCE_LABELS,
+  FRESHNESS_LABELS,
+  KNOWLEDGE_SOURCES,
+  MISSING_PACK_SOURCES,
+  PARTIAL_REASONS,
+  REACHABLE_PACK_SOURCES,
+  UNAVAILABLE_REASONS,
+} from "@pikar/core";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import schema from "./schema";
@@ -352,6 +362,32 @@ describe("pin lineage is stored as the shape it claims, not merely as a field na
         await ctx.db.insert("savedPrompts", { ...pin, sourcePreferences: "vault,drive" as any });
       }),
     ).rejects.toThrow();
+  });
+
+  test("sourcePreferences refuses a source the product does not have — a WRONG VALUE, not a wrong type", async () => {
+    // The test above refuses the wrong TYPE. Nothing refused a wrong VALUE: the field was
+    // `v.optional(v.array(v.string()))` under a comment reading "Bounded `PackSource` names", and
+    // a convex-test probe stored `["notion","http://evil.example","sharepoint"]` verbatim — the
+    // identical hole the same commit had just closed one field over on `claims[].evidence[]`.
+    // MUTATION that must turn this RED: `sourcePreferences: v.optional(v.array(v.string()))`.
+    const t = convexTest(schema, modules);
+    for (const bad of [["notion"], ["http://evil.example"], ["vault", "sharepoint"], ["gmail"]]) {
+      await expect(
+        t.run(async (ctx) => {
+          // biome-ignore lint/suspicious/noExplicitAny: the point is that these values are illegal
+          await ctx.db.insert("savedPrompts", { ...pin, sourcePreferences: bad as any });
+        }),
+        bad.join(","),
+      ).rejects.toThrow();
+    }
+    // …and the WHOLE `PackSource` vocabulary still inserts: this is `PackSource[]`, not
+    // `KnowledgeSource[]`, so narrowing it to the five search sources is also a defect.
+    await t.run(async (ctx) => {
+      await ctx.db.insert("savedPrompts", {
+        ...pin,
+        sourcePreferences: [...REACHABLE_PACK_SOURCES, ...MISSING_PACK_SOURCES],
+      });
+    });
   });
 
   test("a pin with NO lineage still inserts — every field is optional, no row needs migrating", async () => {
@@ -708,6 +744,157 @@ describe("an unreachable source cannot carry a result count", () => {
     expect(row?.claims[0]?.conflictEvidence).toEqual([
       { source: "inbox", sourceRef: "m1", label: "Quote to Acme" },
     ]);
+  });
+});
+
+// ── The core -> storage seam: every state `@pikar/core` can CONSTRUCT must be STORABLE ─────
+
+describe("the Convex enums are the @pikar/core enums, proved by storing every member", () => {
+  // WHY THIS EXISTS. The Phase-29 unions were first hand-copied into `schema.ts`, and three
+  // separate narrowings of them each left the whole backend suite AND the typecheck green:
+  // dropping `support-desk` from the source union, `unplanned` from the unavailable reasons, and
+  // `agent_authored` from the authority classes. Nothing crossed the package boundary — this file
+  // imported nothing from `@pikar/core`. The cost is the honest-gap row the phase exists to
+  // produce: core can construct `{status:"unavailable", reason:"not_landed",
+  // source:"support-desk"}` and the validator would refuse it at INSERT time, at runtime, with
+  // nothing red in CI.
+  //
+  // `schema.ts` now DERIVES each union from the core constant, so there is one list rather than
+  // two. These inserts are what makes that derivation falsifiable: hand-write any of these unions
+  // back into `schema.ts` minus a member and the matching loop below goes red.
+  const base = {
+    tenantId: "t1",
+    threadId: "th1",
+    runId: "r1",
+    question: "q",
+    summary: "s",
+    confidence: "medium" as const,
+    sources: [],
+    claims: [],
+    unanswered: [],
+    unsupportedCount: 0,
+    invalidCitationCount: 0,
+    createdAt: 1,
+  };
+  const citation = (over: Record<string, unknown>) => ({
+    source: "vault" as const,
+    sourceRef: "d1",
+    label: "Rate card",
+    authority: "tenant_owned" as const,
+    freshness: "current" as const,
+    retrievedAt: 1,
+    ...over,
+  });
+  const insert = (row: Record<string, unknown>) => {
+    const t = convexTest(schema, modules);
+    // biome-ignore lint/suspicious/noExplicitAny: the row is built from core constants, not literals
+    return t.run(async (ctx) => ctx.db.insert("knowledgeSearches", { ...base, ...row } as any));
+  };
+
+  test("every KNOWLEDGE_SOURCE stores on the coverage plane AND as a citation", async () => {
+    for (const source of KNOWLEDGE_SOURCES) {
+      await insert({ sources: [{ source, status: "available", returned: 1 }] });
+      await insert({
+        claims: [{ text: "c", evidence: [citation({ source })], conflictEvidence: [] }],
+      });
+    }
+    expect(KNOWLEDGE_SOURCES).toHaveLength(5);
+  });
+
+  test("every UNAVAILABLE_REASON and PARTIAL_REASON stores", async () => {
+    for (const reason of UNAVAILABLE_REASONS) {
+      await insert({ sources: [{ source: "crm-facts", status: "unavailable", reason }] });
+    }
+    for (const reason of PARTIAL_REASONS) {
+      await insert({ sources: [{ source: "drive", status: "partial", returned: 2, reason }] });
+    }
+    expect([UNAVAILABLE_REASONS.length, PARTIAL_REASONS.length]).toEqual([6, 2]);
+  });
+
+  test("every AUTHORITY_CLASS and FRESHNESS_LABEL stores on a citation", async () => {
+    for (const authority of AUTHORITY_CLASSES) {
+      await insert({
+        claims: [{ text: "c", evidence: [citation({ authority })], conflictEvidence: [] }],
+      });
+    }
+    for (const freshness of FRESHNESS_LABELS) {
+      await insert({
+        claims: [{ text: "c", evidence: [citation({ freshness })], conflictEvidence: [] }],
+      });
+    }
+    expect([AUTHORITY_CLASSES.length, FRESHNESS_LABELS.length]).toEqual([5, 4]);
+  });
+
+  test("every CONFIDENCE_LABEL stores, and none of them is a number", async () => {
+    for (const confidence of CONFIDENCE_LABELS) await insert({ confidence });
+    for (const notALabel of [0.9, "0.9", "certain"]) {
+      await expect(insert({ confidence: notALabel }), String(notALabel)).rejects.toThrow();
+    }
+  });
+
+  test("the schema restates NO Phase-29 enum member as a hand-written literal", () => {
+    // The derivation is the control; this is the tripwire that keeps it. A `v.literal("vault")`
+    // reappearing inside `knowledgeSearches` is the fork coming back, and the loops above would
+    // still pass as long as the hand-written copy happened to be complete on the day it landed.
+    const block = dense(tableBlock("knowledgeSearches"));
+    for (const member of [
+      ...KNOWLEDGE_SOURCES,
+      ...UNAVAILABLE_REASONS,
+      ...AUTHORITY_CLASSES,
+      ...FRESHNESS_LABELS,
+      ...CONFIDENCE_LABELS,
+    ]) {
+      expect(block, `${member} is hand-written here instead of derived`).not.toContain(
+        `v.literal("${member}")`,
+      );
+    }
+    // …and the three status discriminants ARE still hand-written, deliberately: they are the
+    // discriminated union's tags, one per arm, not a member of any core list.
+    for (const status of ["available", "partial", "unavailable"]) {
+      expect(block).toContain(`v.literal("${status}")`);
+    }
+  });
+});
+
+// ── The header index is a map the next reader trusts ───────────────────────────────────────
+
+describe("the schema header index is not decorative prose", () => {
+  const header = SOURCE.slice(
+    SOURCE.indexOf("SCHEMA TABLE INDEX"),
+    SOURCE.indexOf("\n/**", SOURCE.indexOf("SCHEMA TABLE INDEX")),
+  );
+
+  // The header indexes the tables DECLARED IN THIS FILE. `tableNames` also contains the six
+  // `authTables` spread in from `@convex-dev/auth`, which the header has never claimed to list.
+  const declaredHere = [...SOURCE.matchAll(/\n {2}([A-Za-z][A-Za-z0-9]*): defineTable\(/g)].map(
+    (m) => m[1] as string,
+  );
+
+  test("the header block and the table scan are both real, so the two tests below are not vacuous", () => {
+    expect(header.length).toBeGreaterThan(500);
+    expect(header).toContain("grouped by domain");
+    expect(declaredHere.length).toBeGreaterThan(40);
+    // The regex is tied to the PARSED schema: a name it finds that Convex does not have would mean
+    // the scan is reading something other than table declarations.
+    for (const name of declaredHere)
+      expect(tableNames, `${name} is not a real table`).toContain(name);
+  });
+
+  test("the STATED count is the real number of tables declared here", () => {
+    // `tenantData.test.ts:23` counts `defineTable` matches in this source and NEVER reads the
+    // header, so the number the first 29-01 repair corrected 46 -> 47 was protected by nothing:
+    // changing it back to "46 tables" left every suite green.
+    const stated = header.match(/SCHEMA TABLE INDEX — (\d+) tables/);
+    expect(stated?.[1], "the header no longer states a table count").toBeDefined();
+    expect(Number(stated?.[1])).toBe(declaredHere.length);
+  });
+
+  test("every table is NAMED in the index — the list disagreed with its own headline by one", () => {
+    // `workflowPackEvents` (landed 27-02) appeared nowhere in the index, so the list enumerated 46
+    // names under a "47 tables" headline. A map that silently omits a table sends the next reader
+    // to grep, which is the thing the index exists to save.
+    const missing = declaredHere.filter((name) => !new RegExp(`\\b${name}\\b`).test(header));
+    expect(missing, "tables absent from the header index").toEqual([]);
   });
 });
 
