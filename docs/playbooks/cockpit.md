@@ -1,4 +1,22 @@
-> Last verified: 2026-08-27 (**A MISSING SELECTOR IS A MALFORMED CALL, NOT AN AMBIGUOUS ONE — AND
+> Last verified: 2026-08-27 (**TWO TOOLS CLAIMED THE SAME SENTENCE, AND THE MODEL PICKED BY VIBE.**
+> `recordScorecardAnswer` read *"Store a figure the user states about their own business"* — with
+> a MONEY example — and so did `stageFinanceWrite` in effect. Fixture `37-finance-update` states a
+> cash position and was routed to `recordScorecardAnswer` + `evaluateBusiness`, 2/2, staging no
+> finance claim at all.
+>
+> **THE BOUNDARY ALREADY EXISTED IN CODE AND WAS INVISIBLE TO THE MODEL.** `applyFinanceClaims`
+> refuses every scorecard-stored field, so the split was enforced where it could not be read by
+> the thing making the choice. `recordScorecardAnswer` now names the finance figures it must not
+> take, DERIVED from `AGENT_WRITABLE_FIGURES` — the same constant `stageFinanceWrite`'s
+> description is built from, so the two cannot drift into claiming one field. Hand-listing either
+> side turns the new test red; that is precisely how the older wording went stale by 6 of 11.
+>
+> **A DESCRIPTION CHANGE IS A BEHAVIOURAL CHANGE AND CANNOT BE PROVEN OFFLINE.** 37 passes ALONE
+> and fails in the full gate — a dose-response to accumulated tenant context, documented in the
+> fixture itself — so no unit test can confirm the routing. The test locks the STRUCTURE (both
+> descriptions derived from one constant); only a full-suite run measures the behaviour.)
+>
+> PREVIOUS: 2026-08-27 (**A MISSING SELECTOR IS A MALFORMED CALL, NOT AN AMBIGUOUS ONE — AND
 > `replyToMessage` HANDLED IT AS THE LATTER, WHICH KILLED THE TURN.**
 >
 > `senderHit` and `subjectHit` are VACUOUSLY TRUE when their selector is absent (`!s || …`), so a

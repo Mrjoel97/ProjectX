@@ -4207,7 +4207,14 @@ export function buildCockpitTools(
       description:
         "Store a figure the user states about their own business (e.g. 'my CAC is 120', 'we make " +
         "$4k a month') into their evaluation scorecard so the next assessment uses it and never " +
-        "re-asks. Use ONLY for a number or fact the user gave; it changes nothing outbound.",
+        "re-asks. Use ONLY for a number or fact the user gave; it changes nothing outbound. " +
+        // DERIVED, not hand-listed — the same constant stageFinanceWrite's description is built
+        // from, so the two can never drift into claiming the same figure. Without this line BOTH
+        // tools read as "store a figure the user stated about their business", and the model picks
+        // by vibe: eval fixture 37-finance-update states a cash position and was routed here
+        // (recordScorecardAnswer + evaluateBusiness) instead of to stageFinanceWrite, 2/2. The
+        // boundary was already enforced in code — it was just invisible to the model.
+        `NEVER use it for these — they belong to stageFinanceWrite: ${AGENT_WRITABLE_FIGURES.join(", ")}.`,
       inputSchema: jsonSchema<{ field: string; value: string }>({
         type: "object",
         properties: {

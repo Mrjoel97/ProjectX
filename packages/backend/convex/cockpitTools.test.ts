@@ -3075,3 +3075,20 @@ test("replyToMessage RESOLVES and stages the original sender BEFORE it drafts a 
   expect(plan?.recipients).toEqual(["no-reply@example.net"]);
   expect(plan?.subject).toBe("Re: Account activity");
 });
+
+test("the scorecard and finance tools cannot claim the same figure — both DERIVED", () => {
+  // 37-finance-update stated a cash position and was routed to recordScorecardAnswer +
+  // evaluateBusiness, 2/2, because BOTH tools read as "store a figure the user stated about their
+  // own business". The boundary was already enforced in code (`applyFinanceClaims` refuses every
+  // scorecard-stored field) but was INVISIBLE TO THE MODEL, which picks by description.
+  //
+  // A source assertion is the right shape here and not a weaker stand-in: the defect is that a
+  // human hand-listed one side and it went stale. Both descriptions must be built from the SAME
+  // constant, and that is a property of the source, not of any single call's return value.
+  const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "llm.ts"), "utf8");
+  expect(src).toContain('belong to stageFinanceWrite: ${AGENT_WRITABLE_FIGURES.join(", ")}');
+  expect(src).toContain('only update these five: ${AGENT_WRITABLE_FIGURES.join(", ")}');
+  // And neither may name a figure literally — that is exactly how the two drifted apart before.
+  const scorecardLine = src.slice(src.indexOf("belong to stageFinanceWrite"));
+  expect(scorecardLine.slice(0, 120)).not.toMatch(/cashOnHand|runway/);
+});
