@@ -1,19 +1,22 @@
 # Playbook: Revenue connectors — shared lifecycle, gates and release semantics
 
-> Last verified: 2026-08-27 against 82d14a6 (28-03 landed the credential envelope, the four Phase 28
-> tables and the credential adapter)
+> Last verified: 2026-08-27 against 8eaca77 (28-04 landed the one-time OAuth state and the bounded
+> read transport, on top of 28-03's credential envelope and the four Phase 28 tables)
 > Build history: `.planning/phases/28-connector-backed-revenue-pack/` · Related ADRs: none yet
 
 > **Status: PARTLY IMPLEMENTED.** At the `Last verified` sha the Phase 28 code on disk is the
-> readiness gate (28-17), the `@pikar/revenue` contracts (28-02), and 28-03: the credential
-> envelope, the four connector tables and the credential adapter. Every item still marked
-> **[PLANNED]** below is a *contract a later plan must satisfy*, not a claim that code exists — do
+> readiness gate (28-17), the `@pikar/revenue` contracts (28-02), 28-03's credential envelope, the
+> four connector tables and the credential adapter, and 28-04's shared OAuth-state and read-transport
+> mechanics. Every item still marked **[PLANNED]** below is a *contract a later plan must satisfy*,
+> not a claim that code exists — do
 > not cite a [PLANNED] line as evidence that something works.
 >
-> **NO PROVIDER EXISTS YET AND NO LANE HAS PASSED.** There is no adapter, no OAuth callback, no
-> connections UI and no live read. What 28-03 delivered is the ability to store a connector
-> credential safely if one ever arrives — a precondition, not a feature. All four open conditions
-> from the admission decisions survive untouched.
+> **NO PROVIDER EXISTS YET AND NO LANE HAS PASSED.** There is no adapter, no OAuth callback route,
+> no connections UI and no live read. What 28-03 and 28-04 delivered is the ability to *store a
+> connector credential safely* and to *round-trip a consent and read a page under bounds* if a
+> provider ever arrives — preconditions, not features. Nothing in 28-04 has ever spoken to a
+> provider: every one of its 68 tests is offline against an injected `fetch` or a fake DB. All four
+> open conditions from the admission decisions survive untouched.
 
 ## Purpose
 
@@ -53,6 +56,19 @@ Phase 27's skill/pack registry (`skill-registry.md`), the cockpit tool loop (`co
   **A capped read is `partial`, never `ready` — a prefix of reality is not a total.**
 - `packages/revenue/src/index.ts`, `package.json`, `tsconfig.json`, `vitest.config.ts` — the package
   boundary.
+
+**Landed (28-04) — shared mechanics, reused by every provider lane**
+
+- `packages/backend/convex/connectorOAuth.ts` (+ `.test.ts`) — the consent round-trip. `STATE_TTL_MS`
+  (10 min), `hashState`, `safeRedirectPath`, `CONNECT_RESULTS`/`callbackRedirectPath`,
+  `PROVIDER_REVOKE_SUPPORT`, `classifyRevokeOutcome`, the `mintConnectState` tenantMutation, the
+  `pendingConnectStates` tenantQuery (counts only) and the `consumeConnectState` internalMutation.
+  **Neither public function accepts a `tenantId` and neither does the consume.**
+- `packages/backend/convex/connectorFetch.ts` (+ `.test.ts`) — the bounded read transport.
+  `PROVIDER_API_ORIGINS`, `PROVIDER_READ_PATHS`, `isAllowedRead`, `buildReadUrl`, `classifyStatus`,
+  `retryDelayMs`, `readPages`, and the `READ_TIMEOUT_MS` / `MAX_RETRIES` / `MAX_RETRY_DELAY_MS`
+  bounds. Declares **no Convex function at all** — it is transport an adapter action calls, and a
+  source scan in its test keeps it that way.
 
 **Landed (28-03 Task 1) — pure package**
 
@@ -187,8 +203,14 @@ Run `graphify query "revenue connectors"` for the current subgraph. Couplings gr
    partial/capped state. Missing history is **unknown**, never zero, and never silently merged across
    providers in a way that could double-count.
 7. **Fail closed on missing credentials.** Throw, per the `requireEnv` idiom. No dev default, ever.
-8. **One-time OAuth state.** State is consumed atomically before token exchange. HMAC binding alone
-   prevents tenant tampering but not callback replay.
+8. **One-time OAuth state.** State is a 32-byte CSPRNG nonce stored only as its SHA-256, bound to
+   tenant + provider + environment + connectionId + redirectPath at mint, expiring in
+   `STATE_TTL_MS`, and burned atomically **before** the code exchange. HMAC binding alone prevents
+   tenant tampering but **not** callback replay, which is why the two pre-existing HMAC states
+   (`gmailAuth`, `microsoftAuth`) were not the pattern copied here. A refusal returns a bare reason
+   and **no tenantId, connectionId or redirectPath**, so "zero exchange, zero store" does not depend
+   on the caller checking `ok`. *Enforced by:* `connectorOAuth.test.ts`, each of the five guards
+   observed refusing alone — LANDED, 28-04.
 9. **Suppression is checked twice, not three times.** `cockpit.executePlan` per-recipient before the
    group join, and `gmail.prepareGovernedMessage` at the wire. REVN-06 must not add a third check.
 10. **Independent lanes.** A provider lane resolves to `passed` or `parked` on its own evidence. One
@@ -212,6 +234,15 @@ Run `graphify query "revenue connectors"` for the current subgraph. Couplings gr
     *Enforced by:* `connectorCredentials.test.ts` — and read the note in
     "the FENCE refuses a stale revision even when the lease check would pass" before touching
     either guard, because the first version of that test proved the wrong thing.
+14. **A provider read cannot be steered, and a bounded read is never a complete one.** `readPages`
+    takes a provider, an environment and a path from `PROVIDER_READ_PATHS` — there is no method,
+    origin, host, header or body parameter to point somewhere else, the verb is a hardcoded `GET`,
+    and `redirect: "error"` refuses to replay the bearer at an origin the provider named. Every
+    stop short of the provider's own end-of-list (page/item/byte cap, repeated cursor, 4xx, 5xx,
+    network, timeout, malformed JSON) yields `partial: true` with the pages already read intact.
+    **A cap is never an empty success and never a zero.** *Enforced by:* `connectorFetch.test.ts`,
+    each cap constructed so only that one guard can fire, mutation-verified by off-by-one on the
+    caps and rename on the status/header/path literals — LANDED, 28-04.
 
 ## Release semantics — passed / parked / subset / complete
 
@@ -229,6 +260,142 @@ A suitability record carries an owner, a review date, evidence links, a decision
 (`approved_beta` | `approved_production` | `blocked` | `deferred`) and an expiry/re-review trigger.
 Code may be written against a sandbox after `approved_beta`; navigation and discovery require the
 production decision. **An expired record is `parked`, not `passed`.**
+
+## Shared connector mechanics — what a provider lane reuses, and what it must NOT
+
+28-04 generalised exactly two things: the consent round-trip (`connectorOAuth.ts`) and the read
+transport (`connectorFetch.ts`). Both are **security mechanics, not a connector runtime.** There is
+no plugin registry, no provider-agnostic client and no config table. A provider lane (28-05..28-08)
+is expected to be a small module that calls into these and keeps everything else to itself.
+
+### State lifecycle
+
+`mintConnectState` (tenantMutation) -> provider consent -> `consumeConnectState` (internalMutation).
+
+- The nonce is 32 CSPRNG bytes, base64url, returned to the caller **once** and never stored. Only
+  its SHA-256 lands in `connectorOAuthStates.stateHash`, so a database read yields nothing a
+  callback could present.
+- The row fixes `tenantId`, `provider`, `environment`, `connectionId` and `redirectPath` at mint.
+  `connectionId` is minted **before** the redirect, so the credential AAD tuple exists before any
+  token does and a callback cannot choose which connection its tokens get sealed into.
+- `expiresAt = now + STATE_TTL_MS` (10 minutes: a consent screen plus a slow login, nothing more).
+- Consume burns the row by setting `usedAt` inside the same Convex mutation that read it. **The
+  atomicity is the platform's serializable transaction** — do not add a lease, a CAS column or a
+  "check then act" query in front of it. That is why consuming is a mutation, not a query the
+  callback action inspects first.
+- A **refusal does not burn the row.** A wrong-provider or wrong-environment probe against a state a
+  user is legitimately mid-consent with must not strand their real connect.
+
+### Callback ordering — this order is the contract
+
+1. `consumeConnectState({ state, provider, environment })`. If `ok` is false, STOP: no exchange, no
+   store, redirect with the mapped result.
+2. Exchange the code (provider-specific, in the provider's own module).
+3. Verify the external account and bind it (below).
+4. Seal the credential with `connectorCredentials` under the `connectionId` the state carried.
+5. Redirect via `callbackRedirectPath`.
+
+Step 1 before step 2 is the whole point: a replayed, expired, grafted or cross-provider callback
+must perform **zero** external calls and **zero** writes. `consumeConnectState` takes **no
+`tenantId` argument** — the tenant is read out of the row. Adding one would reopen tenant grafting
+for an attacker who completes their own consent.
+
+### Redirect hygiene
+
+- `safeRedirectPath` is a **character allow-list**, not a blocklist of known tricks (`//host`,
+  `/\host`, `%2f%2f`, a `\n` header injection and a `user@host` authority are each their own bypass
+  of a blocklist, and the next one is not invented yet). Anything not matching the unreserved-plus-
+  slash pattern, longer than 128 chars, or containing `..` becomes `DEFAULT_REDIRECT_PATH`.
+- It runs at mint **and** again on the way out of consume. A defence that only runs at the write is
+  one migration away from not running at all.
+- The `Location` carries the provider name and one member of `CONNECT_RESULTS` and nothing else. A
+  provider error string is **never** echoed, so a code, a token or a customer name can never reach
+  browser history or a referrer header (CLAUDE.md 4). An unrecognised result degrades to
+  `unavailable` rather than being passed through.
+
+### Account binding
+
+The connection is scoped by the server-minted `connectionId` from the mint, never by an id the
+callback supplies. The provider's own account id is stored **hashed**
+(`connectorCredentials.hashExternalAccountId`) so a reconnect can be recognised as the same account
+without the raw id sitting in a row. A callback whose verified account does not match an existing
+binding is `account_mismatch` — a terminal, not a silent re-seal over someone else's grant.
+
+### Refresh — deliberately NOT shared
+
+`connectorCredentials` provides `acquireRefreshLease` (stops a concurrent refresher starting) and
+the `revision` compare-and-set fence (stops one that already started, slept past its lease and came
+back stale). **Both are required; the lease alone is a lock that lies.** But the *policy* stays per
+provider: QuickBooks rotates its refresh token and Intuit may revoke the token a successful refresh
+issued when a second refresh races it, so a racing refresh there does not merely fail — it can kill
+the connection and force re-consent. The other three must not inherit that shape by assumption.
+**Do not hoist a shared refresh routine until two concrete implementations justify it.**
+
+### The endpoint allow-list
+
+`PROVIDER_READ_PATHS` is the containment boundary, and for QuickBooks it is the *only* one: the
+`com.intuit.quickbooks.accounting` scope grants writes, Intuit publishes no read-only alternative
+and will not constrain it, so a stolen live token has full Accounting-API write reach and nothing
+vendor-side stops it. Rules for extending the table:
+
+- The path must be a **documented read** in that provider's suitability record.
+- List it **whole**. Matching is segment-by-segment equality; `{}` is a placeholder for exactly one
+  non-empty segment and cannot swallow a `/`. Never introduce a prefix, a substring or an `includes`
+  match — a rename mutation walks straight through those and this repo has shipped that defect.
+- **QuickBooks stays inside `query` and `reports`.** Every other Accounting-API path has a write
+  sibling reachable with the same token.
+- `PROVIDER_READ_PATHS.stripe` is `[]` **by decision, not by omission** — the Stripe route is an
+  unbuilt Stripe App with `*_read` permissions and its server-initiated revocation condition is
+  still open. 28-07 lands its paths when the route is settled. Until then Stripe reads nothing and
+  fails closed.
+- Adding an entry is a **security change**: it needs the same review as a scope change, not a
+  drive-by edit.
+
+### Retry and partial semantics
+
+| Situation | Class | Retried? | Result |
+|---|---|---|---|
+| 401 | `reauth` | no — the same dead token returns the same 401 | `partial` |
+| 403 | `forbidden` | no | `partial` |
+| 429 | `rate_limited` | only if `Retry-After` fits `MAX_RETRY_DELAY_MS` | `partial` if it does not |
+| 5xx | `provider_error` | yes, up to `MAX_RETRIES` **per read** | `partial` on exhaustion |
+| 3xx | `provider_error` | no — a redirect is refused, never followed | `partial` |
+| other 4xx | `provider_error` | no | `partial` |
+| network throw | `network` | yes | `partial` |
+| abort / timeout | `timeout` | **no** — the attempt already spent the whole budget | `partial` |
+| malformed JSON | `provider_error` | no | `partial`, pages that parsed are kept |
+| page/item/byte cap, repeated cursor | — | — | `partial` **and** `capped` |
+
+- A `Retry-After` **longer** than the budget means STOP, not "retry sooner". Intuit documents "wait
+  60 s" on a 429; an action cannot sleep that long and calling back inside the provider's stated
+  window is how a rate limit becomes a suspension. An unparseable (HTTP-date) value falls back to
+  backoff, never to zero.
+- **Pages already read are never discarded.** A 500 on page three returns pages one and two.
+- `partial` is `stoppedBy !== null`; `capped` is a code-owned bound firing rather than the provider
+  failing. Both feed Invariant 6: a projection built from a partial read reports honest coverage.
+  **Missing history is unknown, never zero** — a capped receivables read presented as complete would
+  silently understate what a tenant is owed.
+- Only the closed `ConnectionFailureClass` leaves the transport. Vendor text can embed a customer
+  name or an invoice memo, so it stops there — the module contains no `console.*` and no reach into
+  audit, telemetry or dead letters, and a source scan keeps it that way.
+
+### The rule for any FURTHER shared abstraction
+
+**Two concrete implementations must exist and be shown to need the same thing before anything else
+is hoisted here.** `connectorOAuth.ts` earned its place because `gmailAuth.ts` and
+`microsoftAuth.ts` had already written the same round-trip twice and it got weaker the second time.
+Nothing else has cleared that bar. In particular: no shared refresh routine, no shared account
+verifier, no shared normalizer and no provider-config table. A lane that "just needs one more
+parameter" on a shared helper is telling you it should have kept its own copy.
+
+### Diagnostics — status and counts only
+
+| Question | How | What comes back |
+|---|---|---|
+| Are consents in flight for this tenant? | `connectorOAuth.pendingConnectStates` (tenantQuery) | `{ provider, environment, pending }` per provider. **No hash, no nonce, no connection id** — nothing a support session could paste into a callback. |
+| What state is a connection in? | the `connectorCredentials` sanitized projection | `ConnectionStatus`, `lastFailureClass`, `revocation.upstream`. Never ciphertext, IV, external account id, scopes or tokens. |
+| Why did the last read stop? | the caller's `ReadPagesResult.stoppedBy` | a cap reason or a `ConnectionFailureClass` — never the provider's message body. |
+| Can this provider be revoked upstream? | `PROVIDER_REVOKE_SUPPORT` | `confirmed` (QuickBooks only) / `unproven` / `unsupported`. Read Invariant 12 before writing any UI copy. |
 
 ## Credential key operations — setup, rotation, loss
 
@@ -388,6 +555,8 @@ implying it happened.
 | `cd packages/revenue && pnpm vitest run` | Contract, money, finance AND credential-envelope logic. 104 tests. | offline |
 | `cd packages/revenue && npx tsc --noEmit` | **Run this SEPARATELY.** Vitest transpiles without typechecking; 104 green tests sat over 4 real `ArrayBuffer`-generic errors here. | offline |
 | `cd packages/backend && pnpm vitest run connectorCredentials` | Two-tenant isolation, plaintext-sentinel scan, lease/CAS, revocation honesty. 30 tests. | offline |
+| `cd packages/backend && npx vitest run convex/connectorOAuth.test.ts` | Replay, expiry, wrong-tenant, wrong-provider and wrong-environment states each perform zero exchange and zero store, observed refusing alone. 30 tests. | offline |
+| `cd packages/backend && npx vitest run convex/connectorFetch.test.ts` | The allow-list refuses relocation, each cap fires on its own, a later failure keeps earlier pages, and no token or vendor body escapes. 38 tests. | offline |
 | `cd packages/backend && pnpm vitest run isolation traceParity tenantDelete tenantExport` | The four derived gates a new table or a new tool literal must satisfy. | offline |
 | `cd packages/backend && npx tsc --noEmit` | Same reason as above — it caught an untyped validator getter this suite was green over. | offline |
 | `node scripts/smoke-<provider>-read.mjs` [PLANNED] | Controlled live read and revoke for one lane. | live creds |
