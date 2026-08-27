@@ -1,4 +1,41 @@
-> Last verified: 2026-08-27 (**`@drill` RAN AGAINST PRODUCTION FOR THE FIRST TIME. Rollback-to-dark
+> Last verified: 2026-08-27 (**THE EMAIL RAIL WAS KEYED ON "DOES A PIN EXIST" WHEN THE QUESTION IS
+> "IS THE HARNESS DRIVING", AND THAT GAP HAS NOW BEEN PAID FOR THREE TIMES.**
+> `isPinnedCockpitEvaluation` is now `isHarnessDrivenEvaluation(tenantId)` — the `eval-` tenant
+> prefix alone. The pin arguments are gone.
+>
+> **THE SIGNATURE, so it is recognised on sight rather than diagnosed again:** email fixtures fail
+> with `status: collecting`, `recipients: []`, no subject, no body, and a tool list of exactly
+> `{proposeCalendarEvent, stageCrmWrite}`. The model is not confused — `addRecipients` and
+> `proposePlan` are STRUCTURALLY ABSENT, because `applyGmailCapability` filtered them out, so it
+> reaches for whatever is left. Cost is roughly ONE cheap turn, not two: turn 1 returns
+> `GMAIL_CONNECTION_REQUIRED_REPLY` at `costUsd: 0`, and only the bare follow-up turn bills.
+>
+> **A RESEARCH FIXTURE CAN CATCH THIS TOO, and that is the part that fooled a whole session.**
+> Fixture `34-research-injection` returned `$0.0000` with `no research document before timeout`,
+> which reads as a scheduler or dispatch fault. It is not: the fixture's injection bait is an email
+> ADDRESS, the capability router's last alternative is a bare address regex, so a RESEARCH turn is
+> routed to email, takes the disconnected-Gmail early return and dispatches nothing. Any fixture
+> whose prose contains an `@` can fail this way.
+>
+> **THE THREE OCCURRENCES.** 21-03: only the global pin scope counted, `--tenant-skill`-only ran
+> 21/41 for `$0.4157`; fixed by adding the tenant scope BESIDE it. 2026-08-27: a run pinning
+> `research-specialist@9` and nothing else ran 26/46, and the 20 email failures were within an hour
+> of being filed as a cockpit regression. Then the `--only` probe sent to diagnose THAT reproduced
+> it a third time, because the probe was unpinned as well.
+>
+> **WIDENING THE SCOPE A FOURTH TIME WOULD REPEAT A FIX THAT ALREADY FAILED TWICE.** Each previous
+> fix enumerated the pin shapes known that day, and each was broken by a shape nobody had thought
+> to enumerate — including "no pin at all". The predicate is the TENANT now, so there is no shape
+> left to miss. Safe because the prefix is not caller-supplied: `sendCockpitMessage` is a
+> `tenantAction` passing `ctx.tenantId` from the authenticated identity, so no production turn can
+> reach the branch. `real-tenant`, `k57row…` and `tenant-eval-…` are all asserted false.
+>
+> PROVEN BOTH WAYS, LIVE: `--only 01-happy` UNPINNED failed with the signature above, then passed
+> at `$0.0098` after the change with no other edit. Narrowing the predicate turns exactly the two
+> new tests red. **Do not diagnose an email fixture off an unpinned run made before this change** —
+> the previous entry in `skill-registry.md` requiring a pin is superseded, not merely dated.)
+>
+> PREVIOUS: 2026-08-27 (**`@drill` RAN AGAINST PRODUCTION FOR THE FIRST TIME. Rollback-to-dark
 > PASSED — the undo path is now proven on prod, not just dev.**
 >
 > **THE DRILL IS DESTRUCTIVE ON PRODUCTION AND DOES NOT CLEAN UP AFTER ITSELF.** Read the assertion:

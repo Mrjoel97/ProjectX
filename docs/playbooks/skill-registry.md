@@ -1,6 +1,27 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
-> Last verified: 2026-08-27 (**THE EVAL SUITE MANIFEST WAS STALE FOR EVERYONE, AND RE-CUTTING IT
+> Last verified: 2026-08-27 (**SUPERSEDES "A FILTERED PROBE OF AN EMAIL FIXTURE MUST CARRY A PIN"
+> BELOW. THAT RULE IS GONE, BECAUSE THE THING THAT MADE IT NECESSARY IS FIXED.** An unpinned run no
+> longer withholds the email rail: `isPinnedCockpitEvaluation` became
+> `isHarnessDrivenEvaluation(tenantId)`, keyed on the `eval-` tenant prefix alone. Any run shape —
+> global pin, tenant pin, a pin on some unrelated skill, or no pin at all — now measures the
+> product. Full reasoning in `cockpit.md`.
+>
+> **WHY THE OLD RULE IS RECORDED AS SUPERSEDED RATHER THAN DELETED.** It was correct when written
+> and it is the reason the third occurrence was caught in minutes instead of being filed as a
+> cockpit regression: the run below matched its documented signature exactly
+> (`recipients: []`, `{proposeCalendarEvent, stageCrmWrite}`). A rule that saves the next reader an
+> afternoon is worth keeping visible even after the defect it guarded is closed. **But it must not
+> be followed as live guidance** — a probe made today needs no pin, and requiring one would hide
+> the very failures the suite exists to find.
+>
+> WHAT THIS COST BEFORE IT WAS FIXED: a 46-case run pinned to `research-specialist@9` scored 26/46
+> for `$0.7173`, and all 20 email failures plus fixture 34's `$0.0000` timeout were harness
+> artifacts, not product faults. **A PIN ON ONE SKILL IS NOT A PIN ON THE COCKPIT** — that is the
+> assumption that made the run look like a product regression, and it is the one to check first
+> when a suite goes red in bulk.)
+>
+> PREVIOUS: 2026-08-27 (**THE EVAL SUITE MANIFEST WAS STALE FOR EVERYONE, AND RE-CUTTING IT
 > INVALIDATES EVERY RECORDED EVIDENCE ROW.** Four case files had drifted from earlier lanes' commits
 > while `AGENT_EVAL_SUITE` still named `2026-08-18.phase23`. `hasPassingEvidence` matches all THREE
 > of revision / casesHash / caseCount, so a stale manifest means no run can produce matching

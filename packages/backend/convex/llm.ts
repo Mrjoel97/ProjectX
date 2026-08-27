@@ -117,7 +117,7 @@ import { internalAction } from "./_generated/server";
 import {
   applyGmailCapability,
   GMAIL_CONNECTION_REQUIRED_REPLY,
-  isPinnedCockpitEvaluation,
+  isHarnessDrivenEvaluation,
   shouldUseGmailCapability,
 } from "./cockpitCapabilities";
 import { fogIntegration, traced } from "./lib/foglamp";
@@ -5443,17 +5443,15 @@ export const runCockpitAgent = internalAction({
         (plan.recipients?.length || plan.subject || plan.body || plan.candidates?.length),
     );
     const gmailRequired = shouldUseGmailCapability(text, continuingEmailPlan);
-    const pinnedGoldenEvaluation = isPinnedCockpitEvaluation(
-      tenantId,
-      skillVersions?.[COCKPIT_AGENT_SKILL],
-      // 21-03: a `--tenant-skill` run pins in the OTHER scope and is just as much a harness-driven
-      // evaluation. Omitting this is what made a tenant-pinned golden run 21/41.
-      tenantSkillIds,
-    );
+    // Keyed on the eval tenant alone, NOT on whether this run happens to pin a skill. A pin is
+    // evidence the harness is driving; it was never the definition, and requiring one made every
+    // unpinned run withhold the email rail and measure the harness. See the three paid-for
+    // recurrences in `isHarnessDrivenEvaluation`.
+    const harnessDriven = isHarnessDrivenEvaluation(tenantId);
     // No grant read at all on a non-email route. Gmail is not even a dependency of ordinary
     // business work, rather than merely a check whose negative result happens to be ignored.
     const gmailConnected: boolean =
-      smokeOp || !gmailRequired || pinnedGoldenEvaluation
+      smokeOp || !gmailRequired || harnessDriven
         ? true
         : await ctx.runQuery(internal.gmailAuth.hasGmailConnection, { tenantId });
     if (gmailRequired && !gmailConnected) {
