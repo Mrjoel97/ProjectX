@@ -66,8 +66,20 @@ export const PROVIDER_API_ORIGINS: Record<Provider, Record<ConnectorEnvironment,
  * other Accounting-API path has a write sibling reachable with the same token.
  */
 export const PROVIDER_READ_PATHS: Record<Provider, readonly string[]> = {
-  // Supplemental only — deal stages are colour, never a total.
-  hubspot: ["/crm/v3/objects/deals", "/crm/v3/objects/contacts"],
+  // Supplemental only — deal stages are colour, never a total. Mirrors `HUBSPOT_READ_PATHS` in
+  // `@pikar/revenue/providers/hubspot`, which `hubspot.test.ts` compares against this list so the
+  // pure module and the transport cannot drift. CRM SEARCH IS DELIBERATELY ABSENT: HubSpot's
+  // "110 requests / 10 s per installed account" limit EXCLUDES the Search API, which carries its
+  // own stricter limits, so Search needs its own budget and its own decision.
+  hubspot: [
+    "/crm/v3/objects/contacts",
+    "/crm/v3/objects/companies",
+    "/crm/v3/objects/deals",
+    "/crm/v3/owners",
+    // Deal pipelines and stages. NOT a `crm.pipelines.*` scope — that family is ORDER pipelines;
+    // this reads under `crm.objects.deals.read` + `crm.schemas.deals.read`.
+    "/crm/v3/pipelines/deals",
+  ],
   // Query and reports ONLY. No entity path, because `/v3/company/{}/invoice` is also the CREATE
   // route and the scope that reads it can write it.
   quickbooks: ["/v3/company/{}/query", "/v3/company/{}/reports/{}"],

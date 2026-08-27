@@ -333,3 +333,85 @@ export const consumeConnectState = internalMutation({
     };
   },
 });
+
+// ── The token POST (shared, and the ONLY non-GET a connector may make) ────────────────────
+
+/**
+ * Post one `application/x-www-form-urlencoded` OAuth token request and hand back a STATUS CODE and
+ * a parsed body — nothing else.
+ *
+ * WHY IT LIVES HERE and not in a provider module. Every rail needs exactly three POSTs (exchange,
+ * refresh, revoke) and they differ only in the form body, which each provider builds in its own
+ * pure module. Retyping this per rail is how the third one forgets `redirect: "error"` or starts
+ * logging a response body. It also keeps the guarantee `scripts/check-provider-lane.mjs` scans
+ * for literally true: a LANE module (`hubspot*.ts`, `quickbooks*.ts`, ...) contains no write verb
+ * and no direct fetch, because the only POST in the connector plane is this one.
+ *
+ * THREE THINGS IT REFUSES TO DO.
+ *   • It never follows a redirect. `redirect: "error"` — undici would otherwise replay the form,
+ *     client secret and all, at whatever origin the provider named.
+ *   • It never returns, logs or throws the response TEXT. A provider error body is vendor content
+ *     and can carry an account identifier (CLAUDE.md §4); only the status code travels.
+ *   • It never takes a header or a method parameter. The URL is the caller's, from a pinned
+ *     constant in the provider's pure module; everything else is fixed here.
+ */
+export type TokenPostResult = {
+  /** 2xx. A caller must not infer success from a parsed body alone. */
+  ok: boolean;
+  /** The provider's HTTP status code, or `null` when the request never completed. */
+  statusCode: number | null;
+  /** Parsed JSON on 2xx, `null` otherwise or on unparseable bytes. */
+  body: unknown;
+};
+
+/** One attempt, no retries: a token exchange is single-use and replaying one can burn the grant. */
+export const TOKEN_POST_TIMEOUT_MS = 15_000;
+
+/** Enough for any token response; a megabyte of "JSON" is a maintenance page, not a grant. */
+const TOKEN_BODY_BYTE_CAP = 64_000;
+
+export async function postTokenForm(input: {
+  url: string;
+  form: URLSearchParams;
+  /** Test seam only. Production passes nothing and gets the platform fetch. */
+  fetchImpl?: typeof fetch;
+}): Promise<TokenPostResult> {
+  if (!input.url.startsWith("https://")) {
+    throw new Error("A connector token endpoint must be https.");
+  }
+  const send = input.fetchImpl ?? fetch;
+  let response: Response;
+  try {
+    response = await send(input.url, {
+      method: "POST",
+      redirect: "error",
+      signal: AbortSignal.timeout(TOKEN_POST_TIMEOUT_MS),
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "application/json",
+      },
+      body: input.form.toString(),
+    });
+  } catch {
+    return { ok: false, statusCode: null, body: null };
+  }
+
+  const ok = response.status >= 200 && response.status < 300;
+  if (!ok) return { ok: false, statusCode: response.status, body: null };
+
+  let text: string;
+  try {
+    text = await response.text();
+  } catch {
+    return { ok: false, statusCode: response.status, body: null };
+  }
+  if (text.length > TOKEN_BODY_BYTE_CAP) {
+    return { ok: false, statusCode: response.status, body: null };
+  }
+  try {
+    return { ok: true, statusCode: response.status, body: JSON.parse(text) };
+  } catch {
+    // A 200 that is not JSON is not a grant. The text itself never leaves this function.
+    return { ok: false, statusCode: response.status, body: null };
+  }
+}
