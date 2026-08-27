@@ -2770,12 +2770,21 @@ export default defineSchema({
       v.literal("blocked"),
       v.literal("deferred"),
     ),
-    lane: v.union(v.literal("passed"), v.literal("parked")),
+    /** The LIVE-GATE axis, pinned to `LANES` in @pikar/revenue by a source scan in
+     *  `providerGates.test.ts`. `failed` is not a synonym for `parked`: a lane that ran and
+     *  broke is an incident, one that never ran is silence. Both are unavailable; only one
+     *  needs a human. Widened additively by 28-26 on a table that had never held a row. */
+    lane: v.union(v.literal("passed"), v.literal("parked"), v.literal("failed")),
     /** A doc/commit REF, never evidence prose. */
     evidenceRef: v.string(),
     /** The re-review trigger. An EXPIRED record is `parked`, not `passed` — readers compare this
      *  against now rather than trusting `lane` alone. */
     reviewBy: v.number(),
+    /** Open-condition ids (see `PROVIDER_OPEN_CONDITIONS`) this lane closed WITH EVIDENCE.
+     *  Not one of the four 2026-08-27 approvals resolved its record's open condition, so an
+     *  empty/absent list is the honest default and it blocks `passed`. Optional and additive:
+     *  absent reads as “nothing cleared”, never as “everything cleared”. */
+    clearedConditions: v.optional(v.array(v.string())),
     /** CAS token, so two owner edits cannot silently clobber one another. */
     revision: v.number(),
     updatedAt: v.number(),

@@ -72,6 +72,7 @@ import type * as pipeline from "../pipeline.js";
 import type * as plans from "../plans.js";
 import type * as proactiveReview from "../proactiveReview.js";
 import type * as proposals from "../proposals.js";
+import type * as providerGates from "../providerGates.js";
 import type * as reliabilitySweep from "../reliabilitySweep.js";
 import type * as render_assembleScript from "../render/assembleScript.js";
 import type * as render_burnCapsScript from "../render/burnCapsScript.js";
@@ -188,6 +189,7 @@ declare const fullApi: ApiFromModules<{
   plans: typeof plans;
   proactiveReview: typeof proactiveReview;
   proposals: typeof proposals;
+  providerGates: typeof providerGates;
   reliabilitySweep: typeof reliabilitySweep;
   "render/assembleScript": typeof render_assembleScript;
   "render/burnCapsScript": typeof render_burnCapsScript;

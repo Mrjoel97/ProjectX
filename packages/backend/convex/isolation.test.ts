@@ -340,6 +340,18 @@ const OWNER_ARGS: Record<string, Record<string, unknown>> = {
   "skills.activateTenantCandidate": { candidateId: "id:tenantSkills" },
   "skills.rollbackTenantSkill": { targetId: "id:tenantSkills" },
   "invites.approve": { waitlistId: "id:betaWaitlist" },
+  // 28-26. Both are HARMLESS on purpose: `sealGate` here would PARK hubspot on a `blocked`
+  // admission with an already-expired review date, so if the owner wrapper ever let it through,
+  // the worst it could do is switch a provider off.
+  "providerGates.inspectGate": { provider: "hubspot", environment: "production" },
+  "providerGates.sealGate": {
+    provider: "hubspot",
+    environment: "production",
+    admission: "blocked",
+    lane: "parked",
+    evidenceRef: "isolation.test#non-owner",
+    reviewBy: 0,
+  },
 };
 
 /** The endpoints whose validator has at least one required field. Kept beside `OWNER_ARGS` so a
@@ -353,17 +365,19 @@ describe("owner endpoints reject a non-owner, and the list grows by itself", () 
     // `deadLetters.listAll`, 18 once 26-15 added the two `reportsGovernance` owner reads, 19 once
     // 27-09 added `skills.deactivatePack`, 20 once 27-11 added
     // `workflowPackDiscovery.listPackCandidates` — the owner-only candidate preview, which is the
-    // surface the browser evidence plane is earned from. THIS ASSERTION HAS NOW DONE ITS JOB FIVE
+    // surface the browser evidence plane is earned from, 22 once 28-26 added
+    // `providerGates.inspectGate`/`sealGate`. THIS ASSERTION HAS NOW DONE ITS JOB SIX
     // TIMES: each new owner endpoint turned it red, which is the entire reason the count and the
     // module set are pinned rather than derived-and-forgotten. Update it deliberately when the
     // surface grows.
-    expect(OWNER_SURFACE.length).toBeGreaterThanOrEqual(21);
+    expect(OWNER_SURFACE.length).toBeGreaterThanOrEqual(23);
     expect([...new Set(OWNER_SURFACE.map((f) => f.module))].sort()).toEqual([
       "deadLetters",
       "finance",
       "invites",
       "ops",
       "optimizerConfig",
+      "providerGates",
       "reportsGovernance",
       "skills",
       "workflowPackDiscovery",
