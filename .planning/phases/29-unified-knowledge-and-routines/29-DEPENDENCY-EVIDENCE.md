@@ -211,13 +211,19 @@ Four **parallel arrays** plus a separate `spine`. Bounds, all already code-owned
 `internal.vault.ownedDocsMeta`, which **silently drops foreign ids** (the isolation seam) — and the
 `SMOKE::<docId,…>` sentinel is the offline test seam.
 
-**Correction to a prior note:** `vaultGroundHydrated` has **five** production call sites, not three:
+**Correction to a prior note (RE-CORRECTED 2026-08-27):** `vaultGroundHydrated` has **four**
+production call sites. The inherited note said three; 29-01 over-corrected to five by counting a
+CODE COMMENT as a call site. The four are:
 
 - `blueprint.ts` **L540**
 - `evaluations.ts` **L295**
 - `llm.ts` **L3873** (the `searchVault` cockpit tool)
 - `voiceDoc.ts` **L75**
-- `blueprint.ts` L180 passes it as an injected function (production passes it verbatim; tests inject)
+
+NOT a fifth site: `blueprint.ts` L180 is a `// ponytail:` COMMENT, not a call. The real injection
+seam is `__collectGroundedSources` (blueprint.ts L173), whose parameter is a generic
+`ground: (query: string) => Promise<HydratedGround>` that never names the action — and the function
+it receives in production is the L540 call already counted above.
 
 `spine` is deliberately **not** entry 0 of the arrays, so it can never fabricate a result, a count or a
 citation. `searchVaultSpine.test.ts` guards this. **Phase 29 must keep `spine` out of evidence.**
@@ -374,16 +380,17 @@ Every one of these was run in this worktree; the numbers are what came back.
 | Every `skills.ts` export line | `grep -n "^export const \|^export function \|^export async function " packages/backend/convex/skills.ts` | **all 13 Phase-21 line numbers in §1.2 confirmed exactly** |
 | `contracts/src/skill.ts` symbols | same grep | L290 / L405 / L408 / L429 / L540 — **confirmed exactly** |
 | Phase 28 connector absence | four commands in §2.2 | **confirmed absent** |
-| `vaultGroundHydrated` callers | `grep -rn "vaultGroundHydrated" packages/backend/convex/*.ts` | **five** production sites — prior note said three, **corrected** |
+| `vaultGroundHydrated` callers | `grep -rn "vaultGroundHydrated" packages/backend/convex/*.ts` (excluding tests) | **four** production sites: blueprint L540, evaluations L295, llm L3873, voiceDoc L75. Inherited note said three, 29-01 said five (it counted a comment); **four is the verified number** |
 | Gmail read verbs | `grep -n "^export const \|^export function \|^export async function " packages/backend/convex/gmail.ts` | **four** GET verbs — prior note said five, **corrected** |
 | `tenantSkillIds` pin rail | `grep -n "tenantSkillIds" packages/backend/convex/*.ts` | dispatch L234/L257, llm L1840, evaluations L921/L1027 — **confirmed** |
 | `telemetry.writeTerminal` binding | `grep -n "writeTerminal\|no request for" packages/backend/convex/telemetry.ts` | L44 / L59 — **confirmed** |
 | ADR numbering | `ls docs/decisions/` | 013 taken, 026 highest, **027 is next free** |
 | `blueprint.deriveCandidates` toolless shape | `grep -n "deriveCandidates\|crypto.randomUUID\|getActiveSkill\|guardrails.preCall\|generateObject(\|priceUsage(\|guardrails.recordSpend" packages/backend/convex/blueprint.ts` | L271/L285/L287/L291/L302/L310/L312 — **three inherited numbers corrected** |
 | Other `preCall` sites | `grep -n "guardrails.preCall" packages/backend/convex/{vaultDigest,vaultExtract,intake}.ts` | L335 / L344 / L173 — **confirmed exactly** |
-| `SourceState` collision | `grep -n "SourceState" packages/core/src/workflowPacks.ts` | **L599 — real collision, avoided** |
+| `SourceState` collision | `grep -n "SourceState" packages/core/src/workflowPacks.ts` | **L599 — real, and it was a REUSE SIGNAL, not a naming problem.** 29-01 repair: `KNOWLEDGE_SOURCES` is now a named subset of `PackSource` and `KnowledgeSourceState["status"]` carries a compile-time witness that it is exactly `SourceState` |
 
-**Four corrections were made to the inherited notes**: the `vaultGroundHydrated` caller count (3 -> 5),
+**Corrections made to the inherited notes**: the `vaultGroundHydrated` caller count (inherited 3, this
+file first said 5, **verified 4** — see above),
 the Gmail read-verb count (5 -> 4), and three drifted `blueprint.ts` line numbers (L261->L271,
 L286->L287, L310->L312 for `recordSpend`). None changes a design decision; all are recorded here rather
 than silently absorbed.

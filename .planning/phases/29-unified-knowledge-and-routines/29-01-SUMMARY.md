@@ -92,6 +92,13 @@ completed: 2026-08-27
 - **Wrote the recurrence-absence test the repo had been promising itself in a comment since Phase 21.**
 - **52 mutations applied, observed RED, and reverted** — including one vacuous test this process found and fixed.
 
+> **THAT CLAIM WAS MISLEADING, AND IS CORRECTED BELOW.** Four independent adversarial audits then
+> reproduced **22 real defects** in what this plan landed, several of them tests that could not
+> fail. See "The adversarial repair (2026-08-27)". The 52 mutations were applied and did go red —
+> but they were the mutations I thought to try, and the ones that mattered (a `?:` field added to a
+> type, a validator relaxed from `v.id(...)` to `v.string()`, an accepted value silently replaced)
+> were not among them. Each of those left the suite fully green.
+
 ## Task Commits
 
 1. **Task 1: Prove the Phase 21 and Phase 28 dependency seams** — `fb5edda` (docs)
@@ -115,7 +122,7 @@ never by exit code. Corrected forms below.
 | `cd packages/backend && pnpm vitest run schema skills` | **3 files / 165 tests passed** | Task 1 + Task 3 gate |
 | `cd packages/backend && pnpm vitest run convex/schema.test.ts` | **21 tests passed** | new |
 | `cd packages/contracts && pnpm vitest run` | **6 files / 93 tests passed** | 6 / 93 — unchanged |
-| `echo '{}' \| node scripts/check-playbooks.mjs check` | **empty stdout — PASSED** (no `"decision":"block"`) | — |
+| `echo '{}' \| node scripts/check-playbooks.mjs check` | **empty stdout, but as run this proved NOTHING** — it was run AFTER committing, on a clean tree, with no baseline file for session id `default`, so `git diff --name-only HEAD` returned an empty changed set and the gate examined ZERO files. Re-run correctly during the repair (dirty tree), it is genuinely empty. | — |
 | `npx biome check` on all 7 new/changed TS files | `No fixes applied`, 0 warnings | — |
 
 ## Mutations observed RED
@@ -207,6 +214,95 @@ throw. Re-run as `SC-13b`: **RED**.
 That is one vacuous assertion caught out of 52 mutations. It is recorded rather than smoothed over
 because the failure mode — "mechanism coverage is not behaviour coverage" — is the exact one this
 repo has paid for before.
+
+## The adversarial repair (2026-08-27)
+
+Four independent agents attacked this plan after it was committed and reproduced **22 defects** by
+running something, not by reading. Waves 2 and 3 consume these contracts, so they were repaired
+before anything was built on them. Every fix below is committed; every mutation named was applied,
+observed RED, and reverted.
+
+### 1. Vacuous tests — assertions that could not fail
+
+| Defect | Proof it was vacuous | Fix | Mutation now RED |
+|---|---|---|---|
+| `workflowCustomization.test.ts` "a pin has no schedule-shaped field" (`Object.keys(PIN)` over the TEST FILE'S OWN fixture) and "no recurrence vocabulary in the module surface" (`Object.keys(mod)`, runtime exports only) | Adding `readonly nextRunAt?: number; cadence?: string; timezone?: string; enabled?: boolean;` to `WorkflowPin` left **83/83 green and typecheck clean**. Types are erased at runtime; neither scan can see a type. | A SOURCE-TEXT scan of `workflowCustomization.ts` with comments stripped (the `savedPrompts.test.ts` idiom), plus a positive control that the scan can see the pin's real fields. | `WC-M1`: the same four fields added to `WorkflowPin` — RED |
+| `schema.test.ts` lineage scan for the substring `${field}:v.optional(` | Matches `v.optional(v.string())`, `v.optional(v.any())` and `v.optional(v.id(...))` identically. Relaxing `tenantSkillId` to `v.string()` and `templateVersion` to `v.string()` left 21/21 + 50/50 green. | Seven INSERT-and-read-back tests through `convex-test`: a real row id resolves, a `(name, version)` string is refused, an id from a DIFFERENT table is refused, a stringified version is refused, a joined `sourcePreferences` string is refused, a bare pin still inserts. | `tenantSkillId: v.optional(v.string())` — RED (2 tests); `templateVersion: v.optional(v.string())` — RED (2); deleting `sourcePreferences` — RED (3) |
+| `validateCustomization`'s 20+ tests asserting only `out.ok` | Rewriting the threshold accept to `accepted[key] = 0` and the source-preference accept to `accepted[key] = []` — discarding the user's number and their whole source list — left **83/83 green**. | Deep-equality on the whole returned map, plus a boundary test (`0` is a legal threshold, `[]` is a real choice, free text is verbatim). | `WC-M2` `= 0` — RED; `WC-M3` `= []` — RED; `WC-M4` silent `.trim()` — RED |
+| `knowledgeSearch.test.ts` "the source cap holds…" over an UNREACHABLE `source_cap` branch | Deleting the guard left **73/73 green**. Only 3 of 5 sources can enter `plan` (the not-landed pair diverts first), so `plan.length >= 5` was impossible. | Branch and `PLAN_REJECTIONS` entry **deleted**; replaced by an assertion of what is actually true (one entry per distinct source, every repeat rejected by name) plus `maxSources === KNOWLEDGE_SOURCES.length`. | `KS-M11` `maxSources: 4` — RED |
+| `schema.test.ts` recurrence field scan, line-anchored | Injecting `routines: defineTable({ tenantId: v.string(), nextRunAt: v.number() })` as ONE line left "NO FIELD ANYWHERE" **green** with a live `nextRunAt` in the schema (only the two table-NAME tests went red). | Whitespace-insensitive match on a field declaration preceded by `{`, `,` or whitespace, plus a positive control that the scan sees real fields. | The same one-line `routines` injection — now RED |
+| "every cap is a positive finite number" over caps enforced nowhere | Six of eleven `SEARCH_CAPS` keys and `CUSTOMIZATION_CAPS.maxFields` appeared ONLY at their declaration while `schema.ts` cited them as bounds. | `clampEvidence` now enforces `maxEvidencePerSource`, `maxEvidenceTotal`, `evidenceTextCharCap`, `labelCharCap`, `totalEvidenceCharCap`; `maxFields` DELETED (a `CustomizationSchema` is product-authored — no untrusted producer); a `NO CAP IS DEAD` source scan in both test files fails on a declaration-only key. | `KS-M1`…`KS-M5` (each enforcement removed) — RED; `KS-M12` (cap replaced by the literal `200`) — RED |
+
+### 2. Real behavioural defects
+
+| Defect | Fix | Mutation now RED |
+|---|---|---|
+| **The citation plane was open.** `claims[].evidence[].source` and `claims[].conflictEvidence[].source` were bare `v.string()`; a row citing `"notion"` or `"http://evil.example"` inserted and read back cleanly, while the coverage plane beside it was closed. | `knowledgeSource` applied on all three planes (5 uses on the row) plus refusal tests for both. | citation `source: v.string()` — RED (2 tests) |
+| **The pin contract contradicted its own schema and the landed rail.** `WorkflowPin.tenantSkillVersion: number \| null` compared a VERSION, while the row stores `tenantSkillId: v.id("tenantSkills")` and the landed rail is `Record<string, Id<"tenantSkills">>` (dispatch.ts:234/:256). Two tenants can hold the same name AND version. | `WorkflowPin.tenantSkillId: TenantSkillRef \| null` (an opaque branded string — `@pikar/core` cannot import a Convex `Id`); `pinIdentity`/`pinMatchesActive` compare the row id. No version is kept, not even as display metadata. | `WC-M5` drop the id from `pinIdentity` — RED (2 tests) |
+| **`dedupeEvidence` reported a CONFLICT as a safe COLLAPSE.** Identity was keyed on `source\|sourceRef` alone and the text was never compared, so `doc_9` reading "$40" then "$60" produced one group with `collapsed: 1` and the $60 filed under `duplicates` — which the module's own contract calls "safe to collapse". | A repeat under one ref is a duplicate ONLY if the normalized text matches; otherwise it is `conflicting`, with its own count. | `KS-M6` key on the ref without comparing text — RED |
+| **`validateSourceRef` was a denylist with no space class**, copied byte-for-byte from `packages/revenue/src/contracts.ts`, while its docstring claimed it refused whitespace. `"Acme Corp Invoice.pdf"` and `"Q3 revenue summary for Northwind"` both passed as "ids". | Replaced with the ALLOWLIST `@pikar/contracts`' `SAFE_REF` already uses. | `KS-M9` readmit the space character — RED |
+| **Two forked source vocabularies.** `KNOWLEDGE_SOURCES` restated `workflowPacks.ts`'s registry with `gmail` where it says `inbox` and `crm` where it says `crm-facts`, and duplicated `PACK_SOURCE_LABEL` string-for-string — while `WorkflowPin.sourcePreferences` is `PackSource[]`. A pin preferring `inbox` could never select the `gmail` search source, and no code could translate. | `KNOWLEDGE_SOURCES` is now `["vault","drive","inbox","crm-facts","support-desk"] satisfies readonly PackSource[]`; `KNOWLEDGE_SOURCE_LABEL` deleted in favour of `PACK_SOURCE_LABEL`; `NOT_LANDED_SOURCES` DERIVED from `MISSING_PACK_SOURCES`; `support-desk` added to the one registry with its label, unlock and mention phrases. The schema literals moved with it. | rename `inbox` back to `gmail` — typecheck RED (`satisfies`) and the runtime test RED |
+| **A not-landed gap named no unlock.** | `renderSourceGap` reads `MISSING_SOURCE_UNLOCK` — reuse, not a reworded second copy. | `KS-M10` return the bare sentence — RED |
+| **`weakestAuthority([])` / `oldestFreshness([])` carried a documented safety guarantee, were unreachable from every caller, and were not even imported by the test file.** | Both exported arms now tested directly. | `KS-M7` empty set returns `tenant_owned` — RED; `KS-M8` empty set returns `current` — RED |
+| **Five lineage fields were added to `savedPrompts`, not four.** `sourcePreferences` was missing from the prose count, from the recorded 29-08 `textHash` fold-list, and from the positive-witness loop — so two pins differing only in preferred sources would collide on `by_tenant_textHash`, the exact failure that note exists to prevent. | Corrected in `schema.ts` (both places), `schema.test.ts` and the playbook; `sourcePreferences` now has round-trip and refusal coverage. | deleting `sourcePreferences` — RED (3 tests) |
+| **`schema.ts`'s own header said "46 tables"** while it defines 47 and `tenantData.test.ts` — landed in the SAME commit — asserts 47. | Header corrected to 47. | — |
+| **`29-DEPENDENCY-EVIDENCE.md` claimed FIVE `vaultGroundHydrated` production call sites.** There are four (blueprint L540, evaluations L295, llm L3873, voiceDoc L75); the "fifth" was a `// ponytail:` COMMENT at blueprint.ts L180. A confident correction that was itself wrong, in the one file whose whole job is being the trustworthy record for 29-02..29-13. | Corrected in both places, with the comment named so it cannot be "re-corrected" back. | — |
+
+### 3. The third citation shape
+
+The audit was right that `{source, sourceRef, label}` is a third set of names beside `vaultSources`
+`{docIds, titles, count}` and `evaluations.findings` `{citationDocId, citationTitle,
+citationExcerpt}`. The names were **kept**, with the reason now stated in code rather than left
+implicit: a knowledge-search ref is a provider id across five planes and only one of the five is a
+vault `docId`, so `citationDocId` is a name that later gets joined against `vaultDocuments`, and
+`authority`/`freshness` have no counterpart on either landed shape. What was genuinely missing — and
+is now landed — is the MAPPING: `groundedSourceProps` in `@pikar/core` returns exactly the
+`{docIds, titles, count}` props the landed `GroundedSources` component and the `vaultSources` row
+already take, so one card serves both planes and no caller writes a rename shim.
+
+### 4. Deliberately NOT fixed, with the reason
+
+- **The `mediaJobs.provider` reflow was NOT reverted.** The finding is correct that it is an
+  unrequested formatting-only edit outside this phase's blast radius. But `biome@2.5.3` at
+  `lineWidth: 100` REQUIRES the collapsed single line — verified by reverting it and running
+  `npx biome format packages/backend/convex/schema.ts`, which printed the collapse back as a
+  required fix. Reverting would ship formatter-red code that the next save of that file flips back.
+  Left as the formatter demands, and recorded here and in the playbook rather than silently kept.
+- **`packages/revenue/src/contracts.ts` was NOT touched.** It holds the byte-identical
+  `validateSourceRef` / `CONTENT_SHAPED` / `REF_CHAR_CAP` copy. The Phase 28 lane owns that file and
+  an edit from here would collide. The duplicate and its merge-time consolidation (delete revenue's
+  copy, import this one — revenue already imports `@pikar/core/result`) are named in a `ponytail:`
+  comment on the function.
+- **`vaultGround.ts`'s private `PER_DOC_CHAR_CAP` / `TOTAL_CHAR_CAP` were NOT exported and imported.**
+  The comment claiming `SEARCH_CAPS.evidenceTextCharCap` "matches" them had nothing enforcing it.
+  Rather than edit a vault-playbook file for a comment, **the promise was dropped**: the numbers are
+  still deliberately the same and the comment now says there is no coupling and none is claimed. A
+  documented invariant with no enforcement is worse than no invariant.
+- **`packPreflight`'s `SourceState` was NOT widened into the reason-carrying object.** 30 landed pack
+  eval fixtures and `PACK_SOURCE_PROBE_STATES` assert the bare string. The VOCABULARY is now shared
+  (a compile-time bidirectional witness pins `KnowledgeSourceState["status"]` to `SourceState`); the
+  two SHAPES stay separate, with the upgrade path in a `ponytail:` comment.
+- **`29-01-PLAN.md`'s `files_modified` list** now names the three files commit `1e914f9` touched
+  without declaring them (`tenantData.ts`, `tenantData.test.ts`, `audit-dead-letter.md`) plus the two
+  the repair touched (`workflowPacks.ts`, `workflowPacks.test.ts`), so a reviewer diffing the list
+  against the commits no longer sees unexplained files.
+
+### 5. Corrected verification numbers, after the repair
+
+| Command | Result | Baseline before plan 29-01 |
+|---|---|---|
+| `cd packages/core && pnpm vitest run` | **45 files / 1414 tests passed** | 43 / 1232 |
+| `cd packages/core && pnpm vitest run knowledgeSearch workflowCustomization` | **182 tests passed** (was 156) | new |
+| `cd packages/core && pnpm typecheck` | clean | — |
+| `cd packages/backend && pnpm vitest run` | **101 files / 2572 tests passed** | 100 / 2540 |
+| `cd packages/backend && pnpm vitest run convex/schema.test.ts` | **32 tests passed** (was 21) | new |
+| `cd packages/backend && pnpm typecheck` | clean | — |
+| `cd packages/contracts && pnpm vitest run` | **6 files / 93 tests passed** | 6 / 93 — unchanged |
+| `npx biome check` on the 8 changed TS files | `No fixes applied`, 0 warnings | — |
+| `echo '{}' \| node scripts/check-playbooks.mjs check` | run on the DIRTY tree this time — empty stdout, PASSED | — |
+
+**17 mutations were applied to the pure contracts and 5 to the schema during the repair. All 22 were
+observed RED and reverted, and the baseline was re-confirmed green after each batch.**
 
 ## Deviations from plan
 
