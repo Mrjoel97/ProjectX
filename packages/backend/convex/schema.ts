@@ -7,7 +7,7 @@ import { v } from "convex/values";
 void CONTRACTS_PACKAGE_NAME;
 
 // ┌──────────────────────────────────────────────────────────────────────────────┐
-// │ SCHEMA TABLE INDEX — 45 tables, grouped by domain.                         │
+// │ SCHEMA TABLE INDEX — 46 tables, grouped by domain.                         │
 // │ Line numbers are approximate; use Find to jump.                            │
 // │                                                                            │
 // │ ── Identity & Auth (Convex Auth + beta admission) ──────── ~L85            │
@@ -15,7 +15,7 @@ void CONTRACTS_PACKAGE_NAME;
 // │                                                                            │
 // │ ── Governance & Audit ──────────────────────────────────── ~L150           │
 // │   audit, deadLetters, skills, tenantSkills, savedPrompts,                  │
-// │   pendingTimeouts, exportCursors, guardrailConfig                          │
+// │   knowledgeSearches, pendingTimeouts, exportCursors, guardrailConfig       │
 // │                                                                            │
 // │ ── Content & Pipeline ──────────────────────────────────── ~L334           │
 // │   requests, plans, briefings, intakeArtifacts, attachments,                │
@@ -73,6 +73,26 @@ export const AGENT_STEP_REFUSAL = v.union(
   v.literal("unknown_field"), // a field outside CASH_INPUTS (a hallucinated name)
   v.literal("scorecard_field"), // a scorecard-stored figure the agent may not write
   v.literal("invalid_claim"), // validateFigureClaim said no (basis quoting, bounds, dates)
+);
+
+/**
+ * The closed Phase-29 native-source enum (KNOW-01), declared once because `knowledgeSearches.sources`
+ * uses it in three arms of a discriminated union. It mirrors `KNOWLEDGE_SOURCES` in
+ * `@pikar/core/knowledgeSearch` — kept as literals here rather than derived from that array because
+ * a Convex validator needs a literal union at module load, and because widening the storage
+ * vocabulary should be a visible schema diff, not a side effect of an import.
+ *
+ * `crm` and `support` have NO landed adapter (29-DEPENDENCY-EVIDENCE §2). They are here on purpose:
+ * a planned CRM read lands as `{status: "unavailable", reason: "not_landed"}`, which renders as a
+ * visible gap. Omitting them would let the product answer a business question from mail and files
+ * while never saying the CRM was not consulted.
+ */
+const knowledgeSource = v.union(
+  v.literal("vault"),
+  v.literal("drive"),
+  v.literal("gmail"),
+  v.literal("crm"),
+  v.literal("support"),
 );
 
 /** ONE deck element, shared by `plans.shots` and `plans.altShots` (33-02) — a single const so the
@@ -325,6 +345,22 @@ export default defineSchema({
         evalRunId: v.string(),
       }),
     ),
+    // ---- Phase 29 (ROUT-01): WHICH APPROVED PACK TEMPLATE this row customizes.
+    // `basedOnName`/`basedOnVersion` above already say which REGISTRY ROW it came from. These say
+    // which product TEMPLATE and which of that template's customization schemas produced it —
+    // the two are not the same once a pack template is republished without the skill row moving.
+    // Optional at schema level so every Phase-21 and Phase-23 row stays valid with no migration.
+    //
+    // `customizationValues` is the validated form input as JSON — CONTENT PLANE, the tenant's own
+    // words like `savedPrompts.text`, and it never reaches an audit payload (CLAUDE.md §4).
+    // `customizationHash` is SHA-256 over `@pikar/core` `canonicalCustomization(schema, values)`,
+    // and it is what a pin points at. Both are SERVER-DERIVED: the client sends values, code
+    // validates them against the closed schema, renders the body and computes the hash. Nothing
+    // reachable from a model writes any of these three.
+    templateId: v.optional(v.string()),
+    templateVersion: v.optional(v.number()),
+    customizationValues: v.optional(v.string()),
+    customizationHash: v.optional(v.string()),
     basedOnScope: v.union(v.literal("global"), v.literal("tenant")),
     basedOnName: v.string(),
     basedOnVersion: v.number(),
@@ -352,7 +388,10 @@ export default defineSchema({
     // TENANT-SCOPED FIRST on purpose: a thread/turn-only index would answer the same question
     // ACROSS tenants and hand any caller holding a turn ref a cross-tenant existence oracle. It is
     // an index, not a public query; no read surface is opened by adding it.
-    .index("by_tenant_source_turn", ["tenantId", "sourceThreadId", "sourceTurnId"]),
+    .index("by_tenant_source_turn", ["tenantId", "sourceThreadId", "sourceTurnId"])
+    // Phase 29: "what has this tenant customized for THIS pack template?" — the customization
+    // list surface and the stale-pin check. Tenant-first, like every other read index here.
+    .index("by_tenant_template", ["tenantId", "templateId"]),
 
   // "Routine v0" (Phase 21, SKILL-01): saved cockpit prompt text, INERT AT REST.
   //
@@ -361,16 +400,180 @@ export default defineSchema({
   // starts an ORDINARY fresh cockpit turn through the existing governed send path — so plan,
   // guardrail, spend, approval and activity boundaries are unchanged. `title` is code-derived
   // (bounded trimmed first line); `textHash` makes save idempotent within one tenant.
+  //
+  // PHASE 29 (ROUT-02) EXTENDS THIS ROW RATHER THAN ADDING A SECOND PINNED SURFACE.
+  // A "pinned workflow" is a pinned prompt that also names an exact approved template version and
+  // an exact tenant candidate row — so `save`/`list`/`remove`, the twenty-entry menu, the
+  // code-derived title and, crucially, the "Run is an ordinary fresh cockpit turn" execution path
+  // are inherited verbatim (CLAUDE.md ladder rung 2). A parallel `pinnedWorkflows` table would
+  // duplicate all of that AND put a second pin menu in the workspace.
+  //
+  // All four lineage fields are optional, so every existing pin stays valid with no migration and
+  // an absent set means "a plain prompt pin", exactly as today.
+  //
+  // KNOWN CONSTRAINT FOR 29-08: `textHash` is currently computed from the TEXT ALONE, so two pins
+  // of the same words against different customizations would collide on `by_tenant_textHash` and
+  // the second `save` would return the first row. The pin writer must fold `templateId`,
+  // `templateVersion`, `tenantSkillId` and `customizationHash` into that hash before it writes the
+  // first lineage-bearing row. This plan does not change `savedPrompts.ts`, so the collision is
+  // unreachable today (nothing writes these fields yet) — it is recorded here because the field
+  // that makes it reachable is being added here.
   savedPrompts: defineTable({
     tenantId: v.string(),
     text: v.string(),
     title: v.string(),
     textHash: v.string(),
+    // ---- Phase 29 pin lineage. REFS AND VERSIONS ONLY: no plan, no recipient, no artifact.
+    /** The approved pack template this pin runs. A `WorkflowPackId` from `@pikar/core`. */
+    templateId: v.optional(v.string()),
+    /** The template version pinned. A bump makes the pin stale and forces re-resolution. */
+    templateVersion: v.optional(v.number()),
+    /** The EXACT tenant candidate row, not a (name, version) pair — two tenants can hold the
+     *  same name AND version, which is why `recordTenantEvalEvidence` keys on the row id too. */
+    tenantSkillId: v.optional(v.id("tenantSkills")),
+    /** SHA-256 over `canonicalCustomization` — what the pin's identity is built from. */
+    customizationHash: v.optional(v.string()),
+    /** Bounded `PackSource` names. Preferences, not grants: a preference cannot reach a source
+     *  the pack's static tool allow-list does not already contain. */
+    sourcePreferences: v.optional(v.array(v.string())),
+    //
+    // THERE IS STILL DELIBERATELY NO cadence, timezone, nextRunAt, enabled flag, scheduler id,
+    // run-history ref or standing approval on this row. Pinning is not scheduling, and Phase 29's
+    // recurrence gate (plan 29-11) has not been decided. `schema.test.ts` scans for all of them.
     createdAt: v.number(),
   })
     .index("by_tenant", ["tenantId"])
     .index("by_tenant_createdAt", ["tenantId", "createdAt"])
-    .index("by_tenant_textHash", ["tenantId", "textHash"]),
+    .index("by_tenant_textHash", ["tenantId", "textHash"])
+    // Phase 29: the tenant's pins for one pack template — the "you already pinned this" read and
+    // the stale-pin sweep after a template republish.
+    .index("by_tenant_template", ["tenantId", "templateId"]),
+
+  // ── Phase-29 unified-search CONTENT PLANE (KNOW-01) ───────────────────────
+  //
+  // ONE ROW PER SEARCH RUN: the answer the user reads, plus its citations, plus the honest record
+  // of which sources actually answered. It is the `vaultSources` pattern one plane over — stable
+  // REFS with PARALLEL LABELS for the card, and the tool-bearing cockpit gets only counts.
+  //
+  // WHY THE SOURCE STATES ARE STORED AND NOT DERIVED: a source that could not be reached and a
+  // source that answered with nothing are the same zero rows and completely different facts. If
+  // the states are not durable beside the answer, a re-render can only guess, and the guess that
+  // costs nothing is "we searched everything and found nothing". `sources[].returned` is therefore
+  // OPTIONAL and legal only on `available`/`partial` — the `unavailable` shape has no count to
+  // write, mirroring `@pikar/core`'s `KnowledgeSourceState` union.
+  //
+  // §4 BOUNDARY: `question`, `summary`, `claims[].text`, `label` and `excerpt` are CONTENT — the
+  // user's own words and their own documents' titles, stored on their own tenant row like
+  // `plans.body` and `savedPrompts.text`. NONE of them may be copied into an audit or dead-letter
+  // payload. The refs/counts projection the log plane gets is `redactedSearchEvent` in
+  // `@pikar/core`, which is a pure function precisely so the ban is testable without a database.
+  //
+  // BOUNDED BY CONSTRUCTION: `@pikar/core` `SEARCH_CAPS` caps sources at 5, claims at 12, evidence
+  // at 24 and a label at 200 chars, so the whole document is kilobytes. That is why the citations
+  // are an array on this row rather than a second table — one read renders the entire card.
+  //
+  // `authority` and `freshness` are stored as the LITERAL unions `@pikar/core` froze, so the
+  // Convex validator refuses a value the contracts do not know. Widening either is a deliberate
+  // schema change, which is the point: it is exactly how an ungoverned sixth authority class
+  // would otherwise appear.
+  knowledgeSearches: defineTable({
+    tenantId: v.string(),
+    /** Renders the result card in this thread, like `vaultSources.threadId`. */
+    threadId: v.string(),
+    /** The run correlation the toolless planner/synthesizer calls spent against. */
+    runId: v.string(),
+    /** The user's question. CONTENT PLANE — the log plane gets `questionHash`, never this. */
+    question: v.string(),
+    summary: v.string(),
+    /** A closed LABEL. There is deliberately no probability field for a model to author. */
+    confidence: v.union(
+      v.literal("unsupported"),
+      v.literal("low"),
+      v.literal("medium"),
+      v.literal("high"),
+    ),
+    // A DISCRIMINATED union of three object shapes, not one object with optional fields. That is
+    // the whole safety property: `unavailable` HAS NO `returned` FIELD, so "reauth failed, so zero
+    // results, so nothing exists" is refused by the Convex validator at insert time rather than by
+    // a code review. `schema.test.ts` proves it by trying the insert.
+    sources: v.array(
+      v.union(
+        v.object({
+          source: knowledgeSource,
+          status: v.literal("available"),
+          returned: v.number(),
+        }),
+        v.object({
+          source: knowledgeSource,
+          status: v.literal("partial"),
+          returned: v.number(),
+          reason: v.union(v.literal("cap"), v.literal("provider_error")),
+        }),
+        v.object({
+          source: knowledgeSource,
+          status: v.literal("unavailable"),
+          reason: v.union(
+            v.literal("not_connected"),
+            v.literal("reauth"),
+            v.literal("refresh_failed"),
+            v.literal("provider_error"),
+            v.literal("not_landed"),
+            v.literal("unplanned"),
+          ),
+        }),
+      ),
+    ),
+    /** Post-validation claims only: every `evidence` entry survived citation checking. */
+    claims: v.array(
+      v.object({
+        text: v.string(),
+        evidence: v.array(
+          v.object({
+            source: v.string(),
+            /** Stable provider/native ref — the drill-in target. Refs only. */
+            sourceRef: v.string(),
+            /** Doc title / file name / subject. Labels-to-UI; never an audit payload (§4). */
+            label: v.string(),
+            authority: v.union(
+              v.literal("tenant_owned"),
+              v.literal("system_of_record"),
+              v.literal("correspondence"),
+              v.literal("third_party_research"),
+              v.literal("agent_authored"),
+            ),
+            freshness: v.union(
+              v.literal("current"),
+              v.literal("recent"),
+              v.literal("stale"),
+              v.literal("unknown"),
+            ),
+            sourceUpdatedAt: v.optional(v.number()),
+            retrievedAt: v.number(),
+          }),
+        ),
+        /** Evidence that DISAGREES, kept beside the claim. Synthesis may not resolve it away. */
+        conflictEvidence: v.array(
+          v.object({
+            source: v.string(),
+            sourceRef: v.string(),
+            label: v.string(),
+          }),
+        ),
+        /** Substring-verified against the evidence THIS claim cited, or absent. Never a summary. */
+        excerpt: v.optional(v.string()),
+      }),
+    ),
+    /** Questions the run could not answer. Said out loud rather than left as a silent gap. */
+    unanswered: v.array(v.string()),
+    /** Claims dropped for citing nothing the run minted. A count, so the gap is visible. */
+    unsupportedCount: v.number(),
+    /** Evidence ids the model produced that no adapter ever minted. The fabrication signal. */
+    invalidCitationCount: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_thread", ["tenantId", "threadId"])
+    .index("by_tenant_createdAt", ["tenantId", "createdAt"]),
 
   // Scheduled awaitEvent-timeout bookkeeping (cancel the scheduled event on real decision).
   // by_correlation added for 02-04's sendDecision (currently full-scans; unbounded now).
@@ -2145,12 +2348,7 @@ export default defineSchema({
     // an ordinary video or image and the render's slot map reads `kind` to decide where bytes go.
     // This is also the routing discriminator `submitBatch` branches on BEFORE `toSubmittable`: a
     // stock row must never reach `submitLine`, which would POST `pexels/v1` to OpenAI.
-    provider: v.union(
-      v.literal("fal"),
-      v.literal("wan"),
-      v.literal("openai"),
-      v.literal("stock"),
-    ),
+    provider: v.union(v.literal("fal"), v.literal("wan"), v.literal("openai"), v.literal("stock")),
     // FOUR kinds, closed, and they stay four: `kind` says what the BYTES ARE, never who supplied
     // them or what they cost. A stock clip is a `video` and a stock still is an `image`, which is
     // why `renderReel` needed no stock case at all. A fifth member is a deliberate schema edit,

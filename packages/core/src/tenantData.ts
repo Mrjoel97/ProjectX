@@ -100,6 +100,20 @@ export const TENANT_TABLE_CLASSIFICATION = {
    * operational records are not tenant content"), which is accurate for this shape.
    */
   workflowPackEvents: "audit_immutable",
+  /**
+   * Phase-29 unified-search results (KNOW-01). `tenant_owned`, NOT `audit_immutable`.
+   *
+   * The distinction from `workflowPackEvents` directly above is content, not convention: a pack
+   * event is refs/enums/counts with nowhere to put prose, while a `knowledgeSearches` row holds the
+   * user's own QUESTION, the ANSWER they were shown, and the TITLES of their own documents. That is
+   * tenant content by every definition this file uses, so it exports in full and it deletes.
+   *
+   * Nothing here is the measurement plane. The refs-only search telemetry a reviewer needs is
+   * `redactedSearchEvent` in `@pikar/core/knowledgeSearch` — counts and closed enums, landed
+   * separately — precisely so erasing a tenant cannot rewrite the denominator of a measure while
+   * their prose still goes away. `by_tenant` is the deletion index.
+   */
+  knowledgeSearches: "tenant_owned",
 } as const satisfies Readonly<Record<string, TenantTableCategory>>;
 
 export type ClassifiedTenantTable = keyof typeof TENANT_TABLE_CLASSIFICATION;

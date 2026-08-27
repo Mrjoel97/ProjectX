@@ -15,10 +15,12 @@ describe("tenant table classification registry", () => {
   test("classifies every explicit schema table exactly once, in both directions", () => {
     const classifiedTables = Object.keys(TENANT_TABLE_CLASSIFICATION);
 
-    // 43 + the two BETA-01 admission tables (25-01) + workflowPackEvents (27-02, PACK-02).
+    // 43 + the two BETA-01 admission tables (25-01) + workflowPackEvents (27-02, PACK-02)
+    //    + knowledgeSearches (29-01, KNOW-01 — `tenant_owned`: it holds the user's question, the
+    //      answer they were shown and their own document titles).
     // This count is a TRIPWIRE, not bookkeeping: a new table cannot reach the export/deletion
     // walks without someone deliberately bumping it and classifying the table on the way past.
-    expect(schemaTables).toHaveLength(46);
+    expect(schemaTables).toHaveLength(47);
     expect(new Set(schemaTables).size).toBe(schemaTables.length);
     expect(classifiedTables.sort()).toEqual([...schemaTables].sort());
   });

@@ -1,6 +1,25 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
-> Last verified: 2026-08-27 (**ONE NEW VIEWER EVENT: `media.grounding_failed`, AND IT IS VISIBLE ON
+> Last verified: 2026-08-27 (**ONE NEW TENANT-OWNED TABLE: `knowledgeSearches` (29-01, KNOW-01).**
+> It is classified `tenant_owned` in `packages/core/src/tenantData.ts`, which is the OPPOSITE call
+> from `workflowPackEvents` directly below — and the difference is content, not convention. A pack
+> event is refs, enums and counts with nowhere to put prose; a `knowledgeSearches` row holds the
+> user's own QUESTION, the ANSWER they were shown, and the TITLES of their own documents. That is
+> tenant content, so it exports in full and it deletes.
+>
+> The denominator argument that reclassified `workflowPackEvents` does NOT apply here, because the
+> search measurement plane is a different object: `redactedSearchEvent` in
+> `@pikar/core/knowledgeSearch` is a pure refs/counts/enum projection, so erasing a tenant removes
+> their prose without rewriting any measure. Nothing writes either one yet — 29-01 landed the table,
+> the classification and the contracts only.
+>
+> THE INDEX RULE APPLIES: `tenantDelete.ts`/`tenantExport.ts` call `.withIndex("by_tenant")` on
+> every name `deletableTables()` returns, so `knowledgeSearches` carries a bare `by_tenant`
+> alongside `by_thread` and `by_tenant_createdAt`. `tenantData.test.ts`'s table-count tripwire moved
+> 46 -> 47. Nothing about the insert-only rule, the dead-letter path or the WORM export changed.
+> See `docs/playbooks/knowledge-search-routines.md`.)
+>
+> PREVIOUS: 2026-08-27 (**ONE NEW VIEWER EVENT: `media.grounding_failed`, AND IT IS VISIBLE ON
 > PURPOSE.** `groundMediaBrief` runs a research turn on the brief before the deck is written and
 > files the findings in the vault. Every failure arm returns quietly and the media turn proceeds on
 > the vault alone — the pass can never fail a reel. **That is exactly why the row has to exist.**
