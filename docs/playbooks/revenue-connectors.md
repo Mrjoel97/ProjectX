@@ -1,14 +1,19 @@
 # Playbook: Revenue connectors — shared lifecycle, gates and release semantics
 
-> Last verified: 2026-08-27 against a86ca13 (28-03 landed the credential envelope, the four Phase 28
+> Last verified: 2026-08-27 against 82d14a6 (28-03 landed the credential envelope, the four Phase 28
 > tables and the credential adapter)
 > Build history: `.planning/phases/28-connector-backed-revenue-pack/` · Related ADRs: none yet
 
-> **Status: REGISTERED AHEAD OF IMPLEMENTATION.** At the `Last verified` sha the Phase 28 code on
-> disk is the readiness gate (28-17) and the `@pikar/revenue` scaffold + frozen contracts (28-02,
-> `d963bf3`, still in flight). Every item marked **[PLANNED]** below is a *contract a later plan must
-> satisfy*, not a claim that code exists. Do not cite a [PLANNED] line as evidence that something
-> works.
+> **Status: PARTLY IMPLEMENTED.** At the `Last verified` sha the Phase 28 code on disk is the
+> readiness gate (28-17), the `@pikar/revenue` contracts (28-02), and 28-03: the credential
+> envelope, the four connector tables and the credential adapter. Every item still marked
+> **[PLANNED]** below is a *contract a later plan must satisfy*, not a claim that code exists — do
+> not cite a [PLANNED] line as evidence that something works.
+>
+> **NO PROVIDER EXISTS YET AND NO LANE HAS PASSED.** There is no adapter, no OAuth callback, no
+> connections UI and no live read. What 28-03 delivered is the ability to store a connector
+> credential safely if one ever arrives — a precondition, not a feature. All four open conditions
+> from the admission decisions survive untouched.
 
 ## Purpose
 
@@ -225,17 +230,141 @@ A suitability record carries an owner, a review date, evidence links, a decision
 Code may be written against a sandbox after `approved_beta`; navigation and discovery require the
 production decision. **An expired record is `parked`, not `passed`.**
 
+## Credential key operations — setup, rotation, loss
+
+Everything below concerns `CONNECTOR_CREDENTIAL_KEY_V1`, the base64-encoded 32-byte AES-256-GCM key
+that seals every connector credential. **No command here prints the key**, and none should be added
+that does: a key echoed into a terminal is a key in a scrollback buffer, a screen share and a shell
+history file.
+
+### Generating and installing it
+
+Generate 32 random bytes and pipe them straight into Convex environment configuration — never into
+a file, a clipboard step or a `console.log`:
+
+```bash
+# From packages/backend. The value is written to the deployment and never displayed.
+npx convex env set CONNECTOR_CREDENTIAL_KEY_V1 "$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("base64"))')"
+```
+
+**Validate WITHOUT printing.** The only correct check is a decode-and-length check whose output is a
+verdict, not the material:
+
+```bash
+npx convex env get CONNECTOR_CREDENTIAL_KEY_V1 | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const b=Buffer.from(s.trim(),"base64");console.log(b.length===32?"OK: 32 bytes":`BAD: ${b.length} bytes`)})'
+```
+
+`importCredentialKey` performs the same check at runtime and THROWS on anything that is not exactly
+32 decoded bytes, so a 16-byte key cannot silently become AES-128.
+
+**Environment names.** `CONNECTOR_CREDENTIAL_KEY_V1` today; `CONNECTOR_CREDENTIAL_KEY_V2` is read by
+`requireCredentialKey("v2")` and exists only for rotation. Set on the DEPLOYMENT (`npx convex env
+set`), not in `.env.local` — a Convex function reads the deployment's environment, and this has
+caught people out here before.
+
+**Missing key = THROW.** `requireCredentialKey` fails closed with
+`Connector credential key not configured: CONNECTOR_CREDENTIAL_KEY_V1`. There is no development
+default and there must never be one: `p25-no-dev-fallback` in the readiness gate exists to forbid
+exactly that, because a connector that falls back to a dev key writes rows that look encrypted and
+are not, and nobody finds out until someone reads the database.
+
+### Rotating the key
+
+The envelope binds its `keyVersion` into the AAD, so a row cannot be relabelled onto another key —
+rotation is a real re-seal, per row, and both keys must be live while it runs.
+
+1. **Set the new key alongside the old.** `npx convex env set CONNECTOR_CREDENTIAL_KEY_V2 ...`.
+   **Do not remove V1.** Every row at rest is still sealed under it.
+2. **Re-seal row by row, with the fence.** For each connection: take the refresh lease
+   (`acquireRefreshLease`), read `revision`, `openCredential` with the v1 key, `sealCredential` with
+   the v2 key **for the same scope tuple**, then `commitRefresh` with the revision read in step 2.
+   The CAS refuses if anything else moved the row meanwhile — a rotation must never clobber a
+   credential a live refresh just replaced.
+3. **Read back before believing it.** Re-open each rotated row with the v2 key and compare. A
+   rotation that reports success without a read-back has proven nothing.
+4. **Retain V1 until every row is proven.** A row still carrying `keyVersion: "v1"` is unreadable
+   the moment V1 is removed. Query for stragglers before retiring the old key, not after.
+5. **Then, and only then**, unset `CONNECTOR_CREDENTIAL_KEY_V1`.
+
+To roll a rotation BACK mid-flight: stop re-sealing and leave both keys set. Mixed-version rows are
+a supported state — `openCredential` selects the key by the row's own `keyVersion` — so a paused
+rotation is not an outage.
+
+### If the key is lost
+
+**It is irrecoverable. There is no escrow, no backup and no recovery path.** Every
+`credentialCiphertextB64` sealed under the lost version becomes permanently unreadable. That is the
+intended property, not a gap.
+
+Recovery is re-consent, not decryption:
+
+1. Set a fresh key under the NEXT version.
+2. Mark the affected connections `failed` (or `reauth_required`) so the UI stops implying a working
+   connection. Do **not** mark them `revoked` — nothing was revoked, and Invariant 12 forbids
+   saying so.
+3. Each tenant reconnects through the normal OAuth flow, which writes a new envelope.
+4. The unreadable ciphertext is dead weight, not a secret; it is cleared by the next
+   `upsertSealed` on that row.
+
+Note what is NOT lost: `provider`, `status`, `connectedAt`, `revocation` and the whole lifecycle
+history are plaintext metadata by design, so the connections surface can still tell each user the
+truth about what happened.
+
+### Disconnect: revoke first, delete second — and say which one worked
+
+The order is provider revoke/deauthorize FIRST, local clear SECOND, matching the Google
+privacy-control invariant. The local clear runs **even when the provider refuses**, because
+leaving a crown-jewel credential at rest in a database where nothing honours it is strictly worse.
+
+What `recordRevocation` must be passed is **what the caller observed**, never what it hoped:
+
+| Situation | `upstream` | What the UI must say |
+|---|---|---|
+| Provider's revoke endpoint returned success (or an already-invalid 4xx) | `confirmed` | Disconnected and revoked. |
+| Called it, got a network error or 5xx | `attempted_failed` | Disconnected here. We could not confirm with the provider — retry available. |
+| Provider documents no revocation call we can make | `unsupported` | Disconnected here. Your grant stays active at the provider until you remove it there. |
+| Nothing was called (internal cleanup, erasure sweep) | `not_attempted` | Removed. |
+
+**As of the 2026-08-27 admissions, `unsupported` is the honest answer for PayPal and — pending
+28-24 — for Stripe Apps, and HubSpot may need `residualAccessUntil` because its revoke is unproven
+against already-issued ACCESS tokens.** Only QuickBooks is confirmed. A future plan that finds a
+working revoke for one of them changes the VALUE passed here; it does not get to change the enum
+into a boolean.
+
+**Partial revoke is a terminal state with a retry, not a silent success.** A row left at
+`attempted_failed` keeps its cleared ciphertext (nothing is usable) and its retry affordance. Do not
+"resolve" it by flipping it to `confirmed` without a successful provider call.
+
+### This does NOT touch the existing Google or Microsoft tokens
+
+`gmailTokens` and `microsoftCalendarTokens` are UNCHANGED by Phase 28 — same tables, same plaintext
+columns, same modules. Nothing here migrates, re-seals, reads or deletes them, and
+`CONNECTOR_CREDENTIAL_KEY_V1` has no bearing on Gmail, Calendar, Drive or Outlook. Setting or
+losing the connector key cannot affect mail delivery.
+
+Bringing those two grants under this envelope would be a real migration with a real rollback plan
+and its own owner decision. It is not in this phase, and this playbook must not be read as
+implying it happened.
+
 ## Rollback
 
 - **Per provider (fast, no deploy):** park the lane — set that provider's suitability decision to
   `blocked` or `deferred`. `providerGates` hides the provider, its tools drop out of the grant, and
   dependent workflows report unknown coverage. Other lanes are unaffected.
-- **Per tenant:** disconnect (provider revoke first, local delete second). A partial-revoke state is
-  an honest terminal, not a retryable no-op.
+- **Per tenant:** disconnect (provider revoke first, local clear second). A partial-revoke state is
+  an honest terminal with a retry, not a retryable no-op — and for PayPal and Stripe Apps the
+  honest terminal is `unsupported`, meaning the grant stays live at the provider. See
+  "Credential key operations → Disconnect" for the exact enum value each situation takes.
+- **Rolling back THIS plan's schema:** you cannot un-add a Convex table by reverting the file — a
+  deployed schema with rows in it is data. The rollback is behavioural: park all four lanes so
+  nothing writes, and leave the empty tables in place. They cost nothing and no code reads them
+  when every lane is parked.
 - **Whole phase:** set `phase25_production_posture: block` in the readiness attestation comment —
   one edit re-blocks every dependent plan. Then park all four lanes.
 - **Key rotation** (not a rollback, but the same discipline): decrypt with the old key version,
   reseal with the new, CAS on the original row, and retain the old key until verification completes.
+  Full procedure, including the read-back step and what happens if the key is lost, is under
+  "Credential key operations" above.
 
 ## How to change safely
 
@@ -256,8 +385,11 @@ production decision. **An expired record is `parked`, not `passed`.**
 | `node scripts/check-phase28-readiness.mjs` | The 16 prerequisite rows are still green. Exit 0 is required before any Phase 28 work. | offline |
 | `node scripts/check-phase28-readiness.mjs --self-check` | The gate can still go red (delete plus rename mutations). | offline |
 | `echo '{}' \| node scripts/check-playbooks.mjs check` | Watch coverage. **Read stdout, not the exit code — see Operational notes.** | git repo |
-| `cd packages/revenue && pnpm vitest run` [PLANNED] | Pure contract, money and finance logic. | offline |
-| backend `pnpm test` [PLANNED] | Adapter, credential and two-tenant isolation tests. | offline |
+| `cd packages/revenue && pnpm vitest run` | Contract, money, finance AND credential-envelope logic. 104 tests. | offline |
+| `cd packages/revenue && npx tsc --noEmit` | **Run this SEPARATELY.** Vitest transpiles without typechecking; 104 green tests sat over 4 real `ArrayBuffer`-generic errors here. | offline |
+| `cd packages/backend && pnpm vitest run connectorCredentials` | Two-tenant isolation, plaintext-sentinel scan, lease/CAS, revocation honesty. 30 tests. | offline |
+| `cd packages/backend && pnpm vitest run isolation traceParity tenantDelete tenantExport` | The four derived gates a new table or a new tool literal must satisfy. | offline |
+| `cd packages/backend && npx tsc --noEmit` | Same reason as above — it caught an untyped validator getter this suite was green over. | offline |
 | `node scripts/smoke-<provider>-read.mjs` [PLANNED] | Controlled live read and revoke for one lane. | live creds |
 | `node scripts/check-provider-lane.mjs` [PLANNED] | Machine-readable lane status. | offline |
 | `node scripts/check-phase28-completion.mjs` [PLANNED] | All lanes `passed` — the only proof of phase completion. | offline |
@@ -279,14 +411,45 @@ production decision. **An expired record is `parked`, not `passed`.**
   28-16 → `cockpit.md`; 28-21 and 28-29 → every provider/CRM/finance playbook they touch, plus
   `cockpit.md`.
 - **`packages/backend/convex/schema.ts` is watched by no playbook.** That is a pre-existing repo gap,
-  not a Phase 28 decision. 28-03 is the single serialized schema owner for this phase.
+  not a Phase 28 decision. 28-03 is the single serialized schema owner for this phase's CONNECTOR
+  tables — see Known gaps for the one edit it deliberately left to 28-14.
+- **Adding a table costs three edits, not one**, and two of them are in other playbooks' files.
+  `isolation.test.ts` derives its coverage from the runtime schema in BOTH directions, so a new
+  table must also be classified in `packages/core/src/tenantData.ts` (bump `audit-dead-letter.md`),
+  and any index that does not lead with `tenantId` must be registered in `NON_TENANT_LEADING` with
+  the consumer that makes it safe. `connectorOAuthStates.by_state` is there because an OAuth
+  callback arrives with a nonce and no tenant at all. A `tenant_owned`/`tenant_credential` table
+  also needs a bare `by_tenant` index or the backend does not typecheck — `tenantDelete.ts` calls
+  `.withIndex("by_tenant", ...)` on every name `deletableTables()` returns.
+- **A green vitest run is not a typecheck, and this plan hit it twice.** Vitest transpiles without
+  checking types: 104 green revenue tests sat over 4 real `Uint8Array<ArrayBufferLike>` errors, and
+  30 green backend tests sat over an untyped `.json` validator getter. Run `npx tsc --noEmit` from
+  INSIDE each package, separately, and read its exit code.
 
 ## Known gaps & deferred work
 
 - Every **[PLANNED]** item above is unbuilt at the `Last verified` sha. This playbook was registered
   first, deliberately, so parallel lanes have non-overlapping owners before they start writing.
-- Invariants 1 and 2 have no enforcement yet. That is a gap, not a footnote — the tests land with
-  28-26 and 28-03/28-04 respectively.
+- Invariant 1 (read-only reachability) has no enforcement yet. That is a gap, not a footnote — the
+  static scan lands with 28-26. **Invariant 2 is now enforced** (28-03).
+- **`workflowPackEvents` was NOT extended, and 28-14/28-15 must extend it.** Its `packId` and
+  `event` unions are Phase 27's, and `packId` is pinned to `WORKFLOW_PACK_IDS` in `@pikar/core` by a
+  source scan in `packages/core/src/workflowPacks.test.ts` — so adding the seven Phase 28 workflow
+  ids means editing `schema.ts` AND `workflowPacks.ts` together, and their exact names are 28-14's
+  contract, not 28-03's. Guessing seven literals from a schema plan would have produced wrong names
+  with a green test over them. **Consequence: 28-03 is the single schema owner for the CONNECTOR
+  tables only, not for the pack-event literals.** 28-14 (pack registration) must own that edit, and
+  28-15 must not emit a pack event whose `packId` has no literal — the insert throws
+  `ArgumentValidationError` and the event silently vanishes.
+- **No provider cache table was added.** 28-RESEARCH allows "optional non-authoritative caches" and
+  no Phase 28 plan asks for one; a speculative table with no reader is a migration nobody needed
+  (CLAUDE.md §8 rung 1). If a lane later proves a bounded cache is required, it adds one table with
+  an explicit freshness column — a cache without a visible retrieval time would break Invariant 6.
+- **`tenantDelete.ts` reports per-provider disconnect truth for Google/Microsoft and does not yet
+  know about connector connections.** Erasure DOES delete the rows (they are `tenant_credential`),
+  but the deletion report says nothing about whether the four provider grants were revoked upstream
+  — which, per Invariant 12, is often "we could not". `tenantDelete.ts` is owned by
+  `audit-dead-letter.md` and no Phase 28 plan currently claims it. Flagged, not fixed.
 - Deferred by phase boundary: refunds, credits, PayPal invoice sends, CRM cleanup, journal entries,
   any accounting mutation, and the Canva/DocuSign/Slack/Square connector candidates.
 - Webhooks are out of scope for v1 (polling only). The suitability records still capture each
