@@ -100,6 +100,32 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
     whatBreaks: "The Microsoft consent callback lands nowhere.",
   },
 
+  // ── Phase 28 connector grants. A THIRD credential family, unrelated to sign-in or mailboxes. ──
+  // Every one is `feature`: with none of them set, the app runs and the HubSpot rail simply refuses
+  // to connect, loudly (`requireHubSpotConfig` throws naming the variable). There is deliberately no
+  // development fallback — `p25-no-dev-fallback`.
+  //
+  // The credential ENCRYPTION key (`CONNECTOR_CREDENTIAL_KEY_V1`/`_V2`) is NOT here because it is
+  // read through a computed `process.env[name]` in `connectorCredentials.requireCredentialKey`, so
+  // the literal scan in `env.test.ts` cannot see it. Its operations live in
+  // `docs/playbooks/revenue-connectors.md`.
+  {
+    name: "HUBSPOT_OAUTH_CLIENT_ID",
+    tier: "feature",
+    whatBreaks: "Connecting a HubSpot CRM, and therefore every HubSpot read.",
+  },
+  {
+    name: "HUBSPOT_OAUTH_CLIENT_SECRET",
+    tier: "feature",
+    whatBreaks:
+      "The HubSpot token exchange, refresh and revoke. Disconnect stops working upstream.",
+  },
+  {
+    name: "HUBSPOT_OAUTH_REDIRECT_URI",
+    tier: "feature",
+    whatBreaks: "The HubSpot consent callback lands nowhere.",
+  },
+
   // ── Governed delivery ───────────────────────────────────────────────────────────────────────
   {
     name: "UNSUBSCRIBE_SECRET",
@@ -287,6 +313,9 @@ export const ORIGIN_ENV: readonly string[] = [
   "SITE_URL",
   "GMAIL_OAUTH_REDIRECT_URI",
   "MICROSOFT_CALENDAR_REDIRECT_URI",
+  // Same class as the two above: an OAuth callback minted from an ephemeral preview URL stops
+  // resolving, and the consent that used it can never come back.
+  "HUBSPOT_OAUTH_REDIRECT_URI",
 ];
 
 /**
