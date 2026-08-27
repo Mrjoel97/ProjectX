@@ -3,61 +3,59 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 28
-current_plan: 5 of 29 executed (28-17 readiness gate, 28-18 playbook/watch ownership, 28-01 provider admission, 28-02 deterministic finance core, 28-03 encrypted credentials + connector schema) -- 28 IN PROGRESS
+current_plan: 6 of 29 executed (28-17 readiness gate, 28-18 playbook/watch ownership, 28-01 provider admission, 28-02 deterministic finance core, 28-03 encrypted credentials + connector schema, 28-04 shared OAuth state + bounded read transport) -- 28 IN PROGRESS
 status: executing
-stopped_at: "28-03 SEALED (`a86ca13`, `82d14a6`, `5516a9d`). **CONNECTOR CREDENTIALS ARE NOW SEALED
-AND BOUND, AND THE WHOLE PHASE 28 SCHEMA LANDED IN ONE ADDITIVE EDIT.** `packages/revenue/credential.ts`
-is Web Crypto AES-256-GCM with a fresh 96-bit IV per seal; the AAD covers
-`keyVersion|environment|tenantId|provider|connectionId` and is encoded as a JSON ARRAY, because a
-delimiter-joined string is forgeable across field boundaries (`tenant|a`+`b` == `tenant`+`a|b`).
-Four NEW tables, no existing table or field altered, no backfill: `connectorConnections`,
-`connectorOAuthStates`, `contactProviderRefs`, `providerGates`. Readiness gate run FIRST, exit 0.
-**THE LOAD-BEARING DECISION IS THAT `revocation.upstream` IS A FOUR-VALUE ENUM, NOT A BOOLEAN.**
-Three of the four admitted providers cannot be revoked server-side with any confidence -- Stripe
-Apps has no documented platform-initiated revoke (owner override, 28-24 open), PayPal documents
-none anywhere, HubSpot's cascade to already-issued ACCESS tokens is UNPROVEN (28-05 must test it);
-only QuickBooks is confirmed. So `confirmed` / `attempted_failed` / `unsupported` /
-`not_attempted` keeps 'we deleted our copy' apart from 'the grant is dead upstream'. A later plan
-that finds a working revoke changes the VALUE passed, NOT the enum back into a boolean.
-`recordRevocation` CLEARS the ciphertext and KEEPS the row -- unlike `gmailAuth.deleteTokens`,
-which can safely delete because Google's revoke is confirmed -- because the surviving record is the
-only place that truth can live. Tenant ERASURE still deletes the row (`tenant_credential`).
-Disconnect and erasure are different operations now.
-**MUTATION TESTING FOUND A REAL HOLE IN MY OWN NEW GUARD.** Five non-deletion mutations; four went
-red, ONE SURVIVED: weakening the CAS fence from `row.revision !== revision` to `<` left the whole
-suite green, because the first commit releases the lease and the LEASE check was refusing the stale
-retry while the fence was never exercised. The test proved 'the lease was released', not 'the fence
-works'. Fixed by renewing the SAME lease id before the stale retry so only the fence can refuse.
-Refresh needs BOTH guards -- a lease without a fencing token is a lock that lies (Intuit may revoke
-the token a successful refresh issued when a second races it).
-**`tsc --noEmit` CAUGHT 5 REAL ERRORS THAT 134 GREEN TESTS WERE SILENT OVER** (4 ArrayBuffer
-generics, 1 untyped Convex validator getter). Run it SEPARATELY, from inside each package.
-**DELIBERATELY NOT DONE, AND THIS IS A HANDOFF, NOT AN OMISSION: `workflowPackEvents` WAS NOT
-EXTENDED.** Its `packId` union is pinned to `WORKFLOW_PACK_IDS` in `@pikar/core` by a source scan,
-so the seven Phase 28 workflow ids need `schema.ts` AND `workflowPacks.ts` edited together -- and
-those names are 28-14's contract, not guessable from a schema plan. **So 28-03 is the single schema
-owner for the CONNECTOR tables ONLY. 28-14 must own the pack-event literal edit, and 28-15 must not
-emit a pack event whose packId has no literal** or the insert throws and the event silently
-vanishes. No cache table either (no plan asks for one).
-**FOUR `agentSteps.tool` REVENUE LITERALS WERE PRE-DECLARED** -- `dispatchRevenue`,
-`readRevenueCrm`, `readBusinessFinance`, `stageInvoiceReminder` -- with their `cards.tsx` VERB
-entries, because traceParity asserts both sets equal BOTH ways and 28-12/28-13 cannot edit
-`schema.ts`. **THOSE NAMES ARE NOW BINDING ON 28-12 AND 28-13.**
-**NO PROVIDER EXISTS AND NO LANE HAS PASSED.** `requirements-completed: []` -- this is the ability
-to store a credential safely IF one arrives, a precondition, not a feature. All four open admission
-conditions survive untouched. `CONNECTOR_CREDENTIAL_KEY_V1` is NOT set on any deployment yet;
-nothing needs it until 28-05..08, and `requireCredentialKey` THROWS until it is (no dev fallback,
-ever -- `p25-no-dev-fallback` forbids it). Generate/validate/rotate/loss procedure is in
-`docs/playbooks/revenue-connectors.md` and no step prints the key.
-Three playbooks bumped (`revenue-connectors.md`, `cockpit.md` for `cards.tsx`,
-`audit-dead-letter.md` for `tenantData.ts`). Backend `vitest run` exits 1 on a FULLY PASSING suite
-(2571/2571) from a PRE-EXISTING worker-level `process is not defined`, identical 7 occurrences in
-the pre-change baseline -- do not read it as new.
-**NEXT: Wave 4 (28-04 shared OAuth mint/consume + bounded fetch).** The `connectorOAuthStates`
-table is landed and waiting; 28-04 owns the module. Every dependent plan still runs
-`node scripts/check-phase28-readiness.mjs` FIRST; exit 1 means stop, not shim. Do NOT run any
-`gsd-tools state *` subcommand against this file -- it has corrupted it seven times. Working branch
-feat/27-02-pack-contracts."
+stopped_at: "28-04 SEALED (`20488e6`, `8eaca77`, `c799762`), continuing 28-03's `6757a64`/`48f5ef0`.
+**THE SHARED CONNECTOR MECHANICS EXIST AND NOTHING HAS SPOKEN TO A PROVIDER YET** -- all 68 tests
+are offline against an injected `fetch` or a fake DB, $0.
+**`consumeConnectState` TAKES NO `tenantId` ARGUMENT AND THAT IS THE SECURITY PROPERTY.** A callback
+arrives with a code and a state and no session; the tenant is read OUT of the row the state hash
+resolves to, so a callback can only ever reach the tenant that minted it. State is 32 CSPRNG bytes
+stored ONLY as SHA-256, burned by setting `usedAt` inside the SAME serializable Convex mutation that
+read it -- the atomicity is the platform's, so do NOT add a lease or a CAS in front of it. This is
+deliberately NOT the HMAC-of-tenantId pattern `gmailAuth`/`microsoftAuth` already use twice: an HMAC
+binds the tenant but REPLAYS FOREVER and its signing key is the OAuth client secret. A refusal does
+NOT burn the row (a wrong-provider probe must not strand a real in-flight consent) and carries no
+tenantId/connectionId/redirectPath, so 'zero exchange, zero store' does not depend on the caller
+checking `ok`. CALLBACK ORDER IS THE CONTRACT: consume BEFORE the code exchange.
+**`connectorFetch.readPages` HAS NO METHOD, ORIGIN, HOST, HEADER OR BODY PARAMETER.** Provider +
+environment + a path from the compile-time `PROVIDER_READ_PATHS`, hardcoded GET, `redirect: \"error\"`
+(undici would replay the bearer at an origin the provider named). For QuickBooks the allow-list is
+the ONLY thing between a stolen token and a journal entry -- the accounting scope grants writes,
+Intuit ships no read-only alternative and will not constrain it (28-01 carried-forward item 1).
+Matching is WHOLE-SEGMENT equality with a single-segment `{}` placeholder; never a prefix or
+`includes`. **`PROVIDER_READ_PATHS.stripe` IS `[]` BY DECISION, NOT OMISSION** -- the Stripe App
+route is unsettled and its revocation condition is open, so Stripe reads nothing and fails closed.
+**28-07 MUST FILL IT.**
+**A CAP IS NEVER A COMPLETE ANSWER.** Page/item/byte cap, repeated cursor, 4xx, 5xx, network,
+timeout and malformed JSON all yield `partial: true`; `capped` separates a repo-owned bound from a
+provider failure; a 401 on page one is an EMPTY PARTIAL, never an empty success. Completed pages
+survive a later page's failure. A `Retry-After` LONGER than `MAX_RETRY_DELAY_MS` means STOP, not
+retry sooner (Intuit documents a 60 s wait; an action cannot sleep that long and calling back early
+turns a rate limit into a ban). A timeout is NOT retried -- the attempt already spent the budget.
+**MUTATION TESTING: 11 non-deletion mutations, ALL RED; ONE SURVIVOR THAT IS A FINDING.** Setting
+`MAX_RETRIES = 2 -> 3` left the suite fully green because the TEST IMPORTS `MAX_RETRIES` and asserts
+against it, so mutating the constant moves the assertion with it. **A constant the test imports
+cannot be pinned by mutating that constant -- mutate the RELATION that consumes it** (`retries <
+MAX_RETRIES` -> `<=` is red). The 28-03 absorbed-guard lesson was applied directly: the byte cap is
+TWO guards in sequence (declared content-length before the body is touched, then measured bytes),
+each was disabled independently and EXACTLY ONE test failed per guard, so neither absorbs the
+other.
+**`tsc --noEmit` RUN SEPARATELY, exit 0.** Backend `vitest run` was **2641/2641 at EXIT 0** -- the
+pre-existing worker-level `process is not defined` that 28-03 recorded did NOT reproduce; observed,
+not fixed, nothing here touched it. `biome check` found ONE REAL DEFECT in the pre-written test
+(`noUnsafeOptionalChaining` on the Authorization assertion, would have failed CI); the cast was
+widened and the assertion left unchanged.
+**DID NOT HOIST ANYTHING ELSE.** No shared refresh routine, account verifier, normalizer or
+provider-config table: two concrete implementations must justify any further shared abstraction, and
+QuickBooks' rolling refresh token needs a lease+fence the other three must not inherit.
+`requirements-completed: []` -- REVN-01/02/03 STAY PENDING. No provider rail exists, no lane has
+passed, all four open admission conditions survive untouched.
+**NEXT: Wave 5, then Wave 6 (28-05..28-08 provider rails).** Every dependent plan still runs
+`node scripts/check-phase28-readiness.mjs` FIRST, unpiped; exit 1 means stop, not shim. Each rail
+adds its OWN paths to `PROVIDER_READ_PATHS`, whole, per the extension rules now in
+`docs/playbooks/revenue-connectors.md`. Do NOT run any `gsd-tools state *` subcommand against this
+file -- it has corrupted it seven times. Working branch feat/27-02-pack-contracts."
 previous_stopped_at: "28-01 SEALED. The four provider admission gates are decided and the register is live at
 docs/connectors/. All four markers read `decision: approved_production` -- read them with
 grep -h '^decision:' docs/connectors/*-suitability.md, never from prose. Four INDEPENDENT markers,
