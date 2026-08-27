@@ -4078,7 +4078,9 @@ describe("workflow-pack candidate lifecycle", () => {
         ).rejects.toThrow(/NOT_A_PACK/);
       }
       // The cockpit agent is still active — the refusal happened before any patch.
-      expect((await t.run((ctx) => loadSkill(ctx, COCKPIT_AGENT_SKILL))).version).toBeGreaterThan(0);
+      expect((await t.run((ctx) => loadSkill(ctx, COCKPIT_AGENT_SKILL))).version).toBeGreaterThan(
+        0,
+      );
     });
   });
 

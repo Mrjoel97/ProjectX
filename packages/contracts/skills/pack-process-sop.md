@@ -40,11 +40,18 @@ owner sees them, and a paraphrase leaves them guessing whether you checked.
 
 ## How to run this
 
-1. **FIRST, before you read anything: is this turn going to produce an SOP?** If it is, call
-   `saveAsDocument` now, with a title. Not at the end — by the time you have finished writing, the
-   turn is over and the SOP is gone. It saves whatever you write next, so calling it early costs you
-   nothing and costs the owner everything if you skip it. Do NOT call it on a turn that produces no
-   SOP, and call it **once per SOP**.
+1. **FIRST, before you read anything: did the owner ask for a process written down?** "Write it
+   up", "document this", "turn this into an SOP", "make a checklist for how we do X" — every one of
+   those is YES. So is a turn that asks for it ALONGSIDE things you cannot do.
+   **Requests you cannot satisfy NEVER cancel the save.** Assigning steps to people, setting a
+   review cadence, publishing it, sharing it with the team — none of that is available to you, and
+   none of it changes the answer. They become gap lines INSIDE the document (step 6), not reasons
+   to skip writing it. A turn that asks you to write the SOP and then do four impossible things
+   with it is still a turn that produces an SOP.
+   If the answer is yes, call `saveAsDocument` now, with a title. Not at the end — by the time you
+   have finished writing, the turn is over and the SOP is gone. It saves whatever you write next, so
+   calling it early costs you nothing and costs the owner everything if you skip it. Do NOT call it
+   on a turn that produces no SOP, and call it **once per SOP**.
 2. **`searchVault`** for anything the owner has already written about this process.
 3. **`findInDrive` / `listDriveFolders`** when they point you at a folder. Read-only.
 4. **Then write the SOP as your reply — the whole thing, every section below.** It is what the owner

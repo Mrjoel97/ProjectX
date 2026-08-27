@@ -1,6 +1,64 @@
 # Playbook: Authorization (tenancy + ownership)
 
-> Last verified: 2026-08-23 (27-09 — **`ownerAction` NOW EXISTS, AND THE COMMENT SAYING IT
+> Last verified: 2026-08-27 (**`inspectUsersByEmail` — a READ-ONLY census of the rows sharing one
+> address.** `findUserIdByEmail` deliberately refuses to pick between duplicates, which left an
+> operator holding a count and no way to see what they were choosing between. This is that view:
+> ids, the owner flag, creation time. **Refs and flags only (§4)** — never the address it was asked
+> about, never a name. An operator already knows the address; echoing identity into logs is how a
+> diagnostic becomes a PII honeypot.
+>
+> **IT CANNOT DELETE, AND THAT IS THE POINT.** `tenantId` IS the Convex Auth user id
+> (`requireScope`), so every row it returns is a TENANT — a "duplicate" may own real data written
+> while someone was signed in as it. Whether one is safe to remove is a human judgement about what
+> that tenant holds, not something a query should decide.
+>
+> PREVIOUS: 2026-08-26 (**AN EMAIL IS NOT AN IDENTITY ON THIS DEPLOYMENT, and
+> `findUserIdByEmail` assumed it was.** It used `.unique()`, which THROWS on more than one row, and
+> production has several `users` rows per address (Convex Auth writes one per identity, so a Google
+> sign-in and a password sign-in are two rows). The opaque "unique() returned more than one result"
+> told an operator nothing. It now collects and, on more than one match, throws
+> `AMBIGUOUS_EMAIL: <n> user rows` — **a count, never the ids or addresses of the others** (§4).
+>
+> **IT STILL REFUSES TO SELECT, which is the property that must not be weakened.** With several
+> matches it names the count and stops rather than returning "the newest" or "the first". Choosing
+> here would put the choice of who becomes owner back into data the owner does not control — exactly
+> what `bootstrapOwner`'s no-selection rule exists to prevent.
+>
+> **PRODUCTION HAD NO OWNER UNTIL TODAY.** `bootstrapOwner` had never been run there. Owner was
+> granted to the row the browser SESSION authenticates as, derived from the captured session's JWT
+> subject (`sub` before `|`, per `requireScope`) rather than from an address — with several rows
+> sharing one address, the email would have been a guess. `changed: true` then `isOwner: true`
+> confirms the transition happened exactly once, which is what the idempotent design is for.
+>
+> PREVIOUS: 2026-08-26 (**`owner.findUserIdByEmail` — a new READ in the owner module, and the
+> line it must not cross.**
+>
+> `bootstrapOwner` takes an exact `users._id` and REFUSES TO SELECT A ROW ITSELF: no first-user
+> rule, no email allowlist, no registration order, no env fallback. That is not an ergonomics gap, it
+> is the rule — selecting is how the wrong account becomes owner through data the owner does not
+> control. But it left no way to turn "the address I just signed up with" into that id without
+> opening the dashboard by hand, which is what blocked 27-11's browser evidence plane: it needs a
+> signed-in OWNER and nothing could create one on a fresh machine.
+>
+> `findUserIdByEmail` is `internalQuery`, read-only, and returns `{ userId, owner }` or null. **It
+> READS an id; it does not GRANT anything, and `bootstrapOwner` must never call it.** The grant stays
+> a separate, deliberate call naming an exact row — the split is the whole point, and a future
+> convenience that folds the lookup INTO the grant would re-create precisely the selection rule this
+> module refuses to have.
+>
+> **A NEW OWNER ENDPOINT ALSO LANDED ELSEWHERE:** `workflowPackDiscovery.listPackCandidates`
+> (`ownerQuery`), the owner-only candidate preview. `isolation.test.ts`'s self-growing owner surface
+> caught it — fifth time that assertion has done its job — and auto-generated a passing
+> "rejects a non-owner with OWNER_REQUIRED" case for it. The count is now >= 20 and
+> `workflowPackDiscovery` joins the module set.
+>
+> **THE FRONTEND RULE FOR AN `ownerQuery`, restated because a workspace-wide crash is the failure
+> mode:** an `ownerQuery` THROWS for a non-owner, so a page every user can reach must call it with
+> the `useQuery(api.x, isOwner ? {} : "skip")` idiom (`FinanceView` is the precedent). The server
+> check is the real authorization; the skip is only about not asking a question the caller is not
+> allowed to ask.
+>
+> PREVIOUS: 2026-08-23 (27-09 — **`ownerAction` NOW EXISTS, AND THE COMMENT SAYING IT
 > DELIBERATELY DID NOT WAS WRONG.** It read: "there is deliberately no `ownerAction`: an action has
 > no `ctx.db`, so it cannot read the row this check depends on." The premise is true; the conclusion
 > was not. An action reads the row through a query — `owner.ownsDeployment`, an `internalQuery`

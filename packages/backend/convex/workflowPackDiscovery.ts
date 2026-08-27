@@ -164,6 +164,39 @@ export const listPacks = tenantQuery({
  * the run pins the exact row the browser was shown. Without that pin the preview would run whatever
  * the newest row happened to be by the time the click landed.
  */
+/**
+ * THE OWNER'S ROLLBACK TARGETS (27-11): per pack, the newest version that WAS active and is now
+ * archived. `ownerQuery`, refs and numbers only.
+ *
+ * WHY ARCHIVED IS THE RIGHT SET. A pack's older rows are `candidate` if they were never activated
+ * and `archived` once they have been — `deactivatePack` and `archiveSkill` are the only writers of
+ * that status. So "archived" is exactly "this version was live at some point", which is what makes
+ * it a legitimate rollback target: `planGlobalActivation` gates on `status === "candidate"` and
+ * therefore lets an archived row back in WITHOUT re-running the evidence planes, deliberately —
+ * rollback must work mid-incident and must never be blocked by a broken eval or browser harness.
+ *
+ * Returning it is what lets the owner roll back with a CLICK. `npx convex run skills:activateSkill`
+ * can do it, but one `convex run` on this stack destroys the browser session, so the operator route
+ * is unusable mid-incident and unusable mid-drill.
+ */
+export const listPackPriorVersions = ownerQuery({
+  args: {},
+  handler: async (ctx) => {
+    const out: { packId: string; version: number }[] = [];
+    for (const packId of WORKFLOW_PACK_IDS) {
+      const rows = await ctx.db
+        .query("skills")
+        .withIndex("by_name_status", (q) =>
+          q.eq("name", WORKFLOW_PACKS[packId].skillName).eq("status", "archived"),
+        )
+        .collect();
+      if (rows.length === 0) continue;
+      out.push({ packId, version: rows.reduce((a, b) => (b.version > a.version ? b : a)).version });
+    }
+    return out;
+  },
+});
+
 export const listPackCandidates = ownerQuery({
   args: {},
   handler: async (ctx) => {
@@ -172,11 +205,16 @@ export const listPackCandidates = ownerQuery({
     const out = [];
     for (const packId of WORKFLOW_PACK_IDS) {
       const spec = WORKFLOW_PACKS[packId];
-      const candidate = await ctx.db
+      // NEWEST candidate, NOT `.unique()`. `listPacks` can use `.unique()` because exactly one row
+      // is ever `active`; a pack accumulates MANY candidate rows (sales-call-prep is on v11), so
+      // `.unique()` throws, the query errors, and the section silently renders nothing. Measured —
+      // the first browser run skipped every @preview test for exactly this reason.
+      const rows = await ctx.db
         .query("skills")
         .withIndex("by_name_status", (q) => q.eq("name", spec.skillName).eq("status", "candidate"))
-        .unique();
-      if (candidate === null) continue;
+        .collect();
+      if (rows.length === 0) continue;
+      const candidate = rows.reduce((a, b) => (b.version > a.version ? b : a));
 
       const flight = packPreflight(packId, runtime);
       const missingKnown = new Set<string>(flight.missingKnown);

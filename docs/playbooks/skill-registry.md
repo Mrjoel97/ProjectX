@@ -1,6 +1,70 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
-> Last verified: 2026-08-26 (**TWO BODIES: `media-director` -> v6 (ungated, live on next seed) and
+> Last verified: 2026-08-27 (**THE EVAL SUITE MANIFEST WAS STALE FOR EVERYONE, AND RE-CUTTING IT
+> INVALIDATES EVERY RECORDED EVIDENCE ROW.** Four case files had drifted from earlier lanes' commits
+> while `AGENT_EVAL_SUITE` still named `2026-08-18.phase23`. `hasPassingEvidence` matches all THREE
+> of revision / casesHash / caseCount, so a stale manifest means no run can produce matching
+> evidence — the gate reads as "needs a re-run" for every gated skill regardless of what actually
+> passed.
+>
+> **RE-CUTTING IS NOT A FREE TIDY-UP.** Bumping the revision and the hash retires the evidence rows
+> that referenced the old pair, so every gated skill needs a fresh 46-case run to hold activation.
+> That is real spend and it is an OWNER decision, which is why the bump is captured on its own
+> branch (`chore/eval-suite-remanifest`) rather than merged. Regenerate with
+> `pnpm --filter @pikar/backend eval:golden -- --write-suite-manifest`; the two files move TOGETHER
+> or the pair lies.
+>
+> PREVIOUS: 2026-08-27 (**THE LABEL CONTRACT NOW COVERS ALL SIX PACKS.** `pack-business-pulse`
+> and `pack-sales-call-prep` were the last two without it. Their `missingNamed` assertions passed
+> WITHOUT it, which is exactly why this was worth closing rather than leaving: the scorer accepts a
+> synonym list, so a body that says "your reports" instead of `your business and operations
+> summaries` passes until the model picks a paraphrase nobody listed — the failure that cost
+> campaign-plan four runs and three near-misses.
+>
+> The labels are CODE-OWNED in `PACK_SOURCE_LABEL` (`@pikar/core`) and must be copied from there
+> verbatim, never invented to match a body: business-pulse names `your business and operations
+> summaries`, `your saved content shelf`, `your contact and pipeline records`, `your connected sales
+> and accounting systems`; sales-call-prep names `your contact and pipeline records`.
+>
+> Re-pinning TWO bodies is eight places, and the mirror is still the one `--check` passes over.
+> Regenerate the `.ts`, re-pin `bodySha256` in `knowledgeWorkProvenance.ts` AND `adaptedBodySha256`
+> in the manifest, `biome check --write` the derived literal (JSON.stringify emits double quotes;
+> biome rewrites a body containing an apostrophe to single), then run the CONTRACTS SUITE — the
+> provenance script alone will report green over a stale mirror.
+>
+> PREVIOUS: 2026-08-26 (**A PACK BODY LIVES IN FOUR PLACES AND THE PROVENANCE SCRIPT CHECKS
+> ONLY THREE.** `pack-process-sop.md` changed (its save trigger was a judgement the model got wrong
+> — see the workflow-packs playbook). Re-pinning it means: the canonical `.md`, the auto-derived
+> `.ts` constant, `bodySha256` in the code-owned `knowledgeWorkProvenance.ts` MIRROR, and
+> `adaptedBodySha256` in `third_party/knowledge-work-plugins/manifest.json`.
+>
+> `verify-knowledge-work-provenance.mjs --check` reported **green with the mirror still stale** — it
+> compares the `.md` against the manifest and the derived `.ts`, and passes over the mirror.
+> `knowledgeWorkProvenance.test.ts` is what caught it (`expected '9498fd70…' to be 'bf1166a4…'`).
+> **Run the contracts suite after any body edit; the provenance script alone is not sufficient.**
+>
+> One more trap: the derived `.ts` is a quoted literal, and `JSON.stringify` emits DOUBLE quotes
+> while biome reformats a body containing an apostrophe to SINGLE quotes. Regenerate, then
+> `biome check --write`, then re-run the sync test — the value is unchanged, but CI fails on format.
+>
+> PREVIOUS: 2026-08-26 (**WATCH-GATE ACKNOWLEDGMENT ONLY — this bump does NOT cover the pack
+> bodies that triggered it.** The Stop hook fired on `pack-brand-review.md`, `packBrandReview.ts`
+> and `knowledgeWorkProvenance.ts`, which belong to a concurrent lane and are already committed as
+> `12ea37c`. The session that wrote this line was working on the media rail in a separate worktree
+> (`feat/media-rail-gaps`, commit e2b281f) and touched none of them; its OWN skill-registry entry —
+> `media-director` -> v4, the music bed, and the re-bake-before-re-seed ordering — lives in that
+> worktree's copy of this file and is NOT in this tree yet.
+>
+> **Nothing here was re-read against `12ea37c`.** `scripts/check-playbooks.mjs` reads the whole
+> working tree and cannot be scoped to one session's diff, so it demanded this of the wrong
+> session; the owner asked for the turn to be unblocked. The §9 obligation for the pack-body change
+> is STILL OPEN and belongs to the lane that made it.
+>
+> NOTE for whoever reads the history: the equivalent disclaimer this session added to
+> `cockpit.md` was swept INTO `12ea37c` by that lane's `git add`, so it now appears inside a commit
+> it explicitly disclaims. That is the hook's collision, not a claim by either lane.)
+
+> PREVIOUS: 2026-08-26 (**TWO BODIES: `media-director` -> v6 (ungated, live on next seed) and
 > `research-specialist` -> v3 (GATED, a CANDIDATE that does not go live here).**
 >
 > **READ THIS BEFORE TRUSTING EITHER NUMBER.** The version in an `.md` title is authoring INTENT,

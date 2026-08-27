@@ -1,3 +1,86 @@
+> Last verified: 2026-08-27 (**`@drill` RAN AGAINST PRODUCTION FOR THE FIRST TIME. Rollback-to-dark
+> PASSED — the undo path is now proven on prod, not just dev.**
+>
+> **THE DRILL IS DESTRUCTIVE ON PRODUCTION AND DOES NOT CLEAN UP AFTER ITSELF.** Read the assertion:
+> it turns a live pack off and then requires it to reappear as a CANDIDATE — "a turned-off pack must
+> come back as a candidate, not vanish". That is the contract, and it does NOT re-activate. On dev
+> that is harmless because the next seed re-activates everything; on PROD it leaves a user-facing
+> workflow dark until an operator runs `skills:activateSkill` by hand. It darkened
+> `pack-business-pulse` on 2026-08-27 and the test still reported PASS, because leaving it off IS
+> the expected end state. **Re-activate immediately after any prod drill, and verify with
+> `skills:getActiveSkill` per pack.**
+>
+> **ROLLBACK-TO-PRIOR CANNOT FOLLOW ROLLBACK-TO-DARK IN ONE RUN.** The first test ends with a
+> `convexRun`, which ENDS THE BROWSER SESSION, so the second test's first navigation lands signed
+> out and fails at `openWorkspace` — not at its own skip check. Run it in a separate invocation.
+>
+> **`skills:getActiveSkill` PER PACK IS THE ONLY RELIABLE LIVE-STATE READ.**
+> `inspectPackCandidates` returns the NEWEST row per pack, so once a candidate v2 exists it reports
+> `candidate` while v1 is still serving users — it cannot answer "is this pack live". And a browser
+> probe answers a different question badly: an expired session renders the workspace shell with ZERO
+> packs, which is indistinguishable from a genuinely empty production. Both were misread here before
+> the server-side read settled it.
+>
+> PREVIOUS: 2026-08-27 (**THE PROD BROWSER-EVIDENCE PLANE IS CLOSED, and getting there cost
+> three separate failures that all LOOKED like "the session is broken".**
+>
+> 1. `context.storageState()` on a CDP-ATTACHED context returns cookies but does not reliably
+>    serialize localStorage — where Convex Auth keeps the session. Harvest it from the page.
+> 2. `workspace-pane` visible was treated as PROOF of authentication. It is not: the shell paints
+>    before auth resolves, so it appeared in a browser nobody had signed into. The only proof is a
+>    `__convexAuthJWT_*` key, and the script now POLLS for that (giving a human time to sign in)
+>    rather than asserting it once.
+> 3. **The tab is not where you left it.** The first `goto` runs BEFORE sign-in, so the auth flow
+>    lands on `/dashboard` — and `workspace-pane` exists only on `/dashboard/workspace`. Waiting on
+>    the pane without re-navigating times out against a perfectly healthy signed-in app.
+>
+> The capture is now ONE command: it launches Chrome itself when no CDP port answers. A separate
+> `--user-data-dir` is MANDATORY — since Chrome 136 `--remote-debugging-port` is SILENTLY IGNORED on
+> the default profile. Check `ProductVersion` before diagnosing anything else. The profile persists,
+> so sign-in is once per machine. The captured file is a LIVE CREDENTIAL: delete it after the run.
+>
+> Evidence recorded PROD versions (five v1, process-sop v2) where the dev file held v5/v10/v4 —
+> the per-deployment `pack-seen-<origin>.json` key doing exactly what it was added for.
+>
+> PREVIOUS: 2026-08-26 (**THE PACK E2E HARNESS CAN NOW TARGET A DEPLOYMENT IT IS NOT SERVING
+> LOCALLY, and three defects had to be fixed before it could be trusted to.**
+>
+> 1. **`convexRun` in `workflow-pack-pilot.spec.ts` passed NO deployment flag** — a second copy of
+>    the defect already fixed in `smokeRun.mjs`. Pointing the browser at production would have driven
+>    the PROD app and written its evidence to the DEV skills row: a run certifying a deployment it
+>    never touched. `PIKAR_CONVEX_TARGET=prod` now threads `--prod`; unflagged still means dev.
+> 2. **A VOID RETURN READ AS A FAILURE.** `recordPackBrowserEvidence` returns nothing, so
+>    `convex run` prints an empty stdout and `JSON.parse("")` throws. The rescue only fired when
+>    stderr carried the Windows/Node-24 `UV_HANDLE_CLOSING` assertion — which dev always produced and
+>    prod did not. **Dev did not pass that path, it accidentally satisfied it.** `CLI_FAILURE` is what
+>    decides failure; empty stdout without it is now success.
+> 3. **`pack-seen.json` WAS SHARED ACROSS DEPLOYMENTS.** It survives between runs, so the prod
+>    evidence writer read dev's observations — dev versions (campaign-plan v5, sales-call-prep v10)
+>    against a prod registry that is all v1. Most would have failed the version pin, but
+>    `business-pulse: 1` exists on BOTH, so the writer was one unrelated crash away from recording a
+>    DEV browser run against PROD's row. The file is now keyed by origin.
+>
+> `baseURL` and `storageState` are env-overridable (`PIKAR_E2E_BASE_URL`, `PIKAR_E2E_STORAGE_STATE`),
+> and supplying a storageState SKIPS the `setup` sign-in — a deployment whose only human account is a
+> Google identity cannot be driven through the local password form. `e2e/capture-prod-session.mjs`
+> captures that session by WATCHING a human sign in; it types nothing and reads no credential.
+> **Chrome 136+ SILENTLY IGNORES `--remote-debugging-port` on the DEFAULT profile** — no error, no
+> port. Use a separate `--user-data-dir`. Check `ProductVersion` before diagnosing anything else.
+>
+> PREVIOUS: 2026-08-26 (**WATCH-GATE ACKNOWLEDGMENT ONLY — this bump does NOT cover the
+> workspace diff that triggered it.** The Stop hook fired on
+> `WorkflowPackOwnerControls.tsx`, `workspace/page.tsx` and `workflowPackDiscovery.ts`, which were
+> UNCOMMITTED in the shared working tree and belong to a concurrent lane, not to the session that
+> wrote this line. That session was working on the media rail in a separate worktree
+> (`feat/media-rail-gaps`, commit e2b281f — the music bed) and touched none of those files; its own
+> playbooks are `media.md` and `skill-registry.md`, both updated there.
+>
+> **Nothing in this playbook was re-read or re-verified against that diff.** The bump exists only
+> because `scripts/check-playbooks.mjs` reads the whole working tree and cannot be scoped to one
+> session's changes, and the owner asked for the turn to be unblocked. The §9 obligation for the
+> workspace/pack-discovery change is STILL OPEN and belongs to the lane making it — that lane
+> should update this playbook against its own diff and bump this line again with real content.)
+>
 > Last verified: 2026-08-26 (**THE PACK GATE WAS DEADLOCKED, AND HALF THE BREAKER WAS ALREADY
 > BUILT.** Activation needs browser evidence; browser evidence needs an authenticated person to REACH
 > a pack in a browser; `listPacks` is ACTIVE-ONLY by design and nothing is active until the gate

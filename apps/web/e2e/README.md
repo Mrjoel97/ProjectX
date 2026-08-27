@@ -55,6 +55,21 @@ So a spec that needs internal-mutation fixtures must **stage first and authentic
 `requireTenant` uses), stages, then signs in again. Its `signIn()` helper carries the note. Specs
 that only read public data are unaffected.
 
+## Provisioning an owner (27-11)
+
+The pack candidate preview is owner-only, so the browser evidence plane needs a signed-in OWNER —
+and `auth.setup.ts` only signs an EXISTING user in. `provision-owner.setup.ts` creates one:
+
+
+
+It seeds an invite, signs up through the real form, grants owner by id, and seeds the onboarding
+profile. Idempotent: it checks for the account FIRST, because the first successful signup redeems
+the invite and a second attempt leaves Create Account disabled forever.
+
+**Do not reuse `e2e@pikar.test` for this.** It pre-exists with a password nobody has, so the signup
+silently no-ops, the owner grant lands on the old row, and sign-in then fails "Wrong email or
+password" while every step looks like it worked.
+
 ## The onboarding gate
 
 A tenant with no committed business profile is force-redirected to `/dashboard/onboarding` by the

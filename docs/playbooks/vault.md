@@ -1,4 +1,103 @@
-> Last verified: 2026-08-25 (**A DOCUMENT THAT INGESTS IS NEVER FREE — `estimateFile` now floors the
+> Last verified: 2026-08-27 (**EMBEDDINGS RUN THROUGH OPENROUTER NOW — AND THE CHANGE NEARLY TOOK
+> THE RETRY WORK WITH IT.** `EMBEDDING_MODEL` is `openai/text-embedding-3-small`: the SAME OpenAI
+> model as before, reached through OpenRouter's namespaced id and OpenRouter's balance. A ROUTE
+> change, not a model change — the vectors are the same vectors.
+>
+> **WHY, and it is not the reason the 429 banners below are about.** Both direct routes died on the
+> same day: Gemini's free tier spends 1000 embed requests per project per DAY and `seedCorpus` had
+> spent them, and the direct OpenAI key answers `credit_balance_exhausted`. **A daily quota and a
+> per-minute burst limiter both read as `429` and want OPPOSITE fixes** — change route / wait until
+> tomorrow, versus back off and retry. The retry loop below is the right answer to the other one and
+> is untouched; OpenRouter rate-limits too.
+>
+> MEASURED against the live endpoint BEFORE the flip, because the three things that would have made
+> this a model change are the three that fail silently: **1536 dims** (so `EMBEDDING_DIM` and the
+> vector index are unchanged), **L2 = 1.0005** (already unit length, so `l2Normalize` stays the
+> no-op it is for direct OpenAI rather than quietly rescaling), and **2048 inputs per call** (full
+> OpenAI parity, so `MAX_EMBEDDINGS_PER_CALL` keeps its non-Gemini branch — verified by sending 2048
+> and counting 2048 back). Response shape is identical, so `doEmbed` parses both with one branch and
+> the `Authorization: Bearer` header ternary stays two-way while the URL ternary is three-way.
+>
+> **THE NEAR-MISS IS THE PART TO REMEMBER.** The route was written against a base from before the
+> retry commits, then the whole FILE was copied into the shared tree — silently reverting 115 lines
+> of `parseRetryAfterSeconds` and the backoff. **Typecheck was green, the unit tests were green, and
+> a live eval run passed over it**, because a reverted file is still a valid file. The only thing
+> that exposed it was `git diff --stat HEAD` reading `86 insertions, 115 deletions` on a change
+> whose entire intent was additive. **When you mean to ADD a branch and the diff reports deletions,
+> your base is wrong** — and on a shared working tree that is the default failure, not the unlucky
+> one. Rebuilt on `origin/main` (which local `main` was BEHIND — basing on the local ref would have
+> re-created the same clobber), and both suites kept: 12 tests at HEAD, 14 now.
+>
+> Corpus re-embeds on next ingest — the dedup key moves `gemini-embedding-001:<hash>` →
+> `openai/text-embedding-3-small:<hash>`. That is `embeddingContentHash` working, not a fault. Note
+> the two ids are the same MODEL, so this costs one needless re-embed; normalising them is the wrong
+> trade — it would make a real model change look like a route change and strand stale vectors.
+>
+> **The 2026-08-08 A/B is NOT settled by this.** This is a THIRD pairing again (ox-alpha chat +
+> OpenAI embeddings via OpenRouter). Fixtures 29/30/31 remain the ones that answer it; they passed
+> in this pairing, which is evidence for the ROUTE, not a verdict on the A/B.)
+>
+> PREVIOUS: 2026-08-27 (**THE SERVER WAS NAMING THE EXACT WAIT AND WE WERE IGNORING IT.**
+> Google does NOT send a `Retry-After` HEADER — it puts `google.rpc.RetryInfo` in the JSON BODY
+> (`{"retryDelay": "56s"}`). A header-only reader sees nothing, falls back to guessing, and then
+> re-collides, because `embedMany` fires CONCURRENT batches that re-consume the window the instant it
+> opens. That is why two successive ceiling increases (8s, then 30s) both still failed.
+>
+> `parseRetryAfterSeconds` now reads the body and the header — the header WINS when present, so one
+> path serves OpenAI (header) and Google (body). The honoured cap rose to 90s: a cap BELOW what the
+> server asks for silently turns "obey the server" back into "guess", which was the original bug.
+> A hostile value is still capped rather than allowed to park the action, and a body with no usable
+> delay falls back to exponential rather than to a 0ms hot loop — both asserted.
+>
+> **Read the response BODY before concluding anything about a 429.** The status alone hid three
+> different situations here across one day: an illegal header value (a stray `` in the API key),
+> a per-minute limiter, and a server-specified retry delay nobody was reading.
+>
+> PREVIOUS: 2026-08-27 (**THE FIRST RETRY CEILING WAS TOO LOW TO WORK, and production proved
+> that too.** 5 attempts capped at 8s is ~23s of total backoff. The limiter here is PER-MINUTE — a
+> single embed succeeds while a burst 429s — so every one of those attempts landed inside the same
+> unexpired window and the call failed exactly as it had without any retry at all.
+>
+> **A backoff that cannot span the limiter's window is not a retry, it is a slower failure.** Now 6
+> attempts at a 30s ceiling: 1+2+4+8+16+30 ≈ 61s, which outlasts a whole minute window. Verified the
+> distinction with a single `embedContent` call — it returned 3072 dims WHILE the seeding burst was
+> being rejected, which is what identifies a rate limit rather than an exhausted daily quota. Make
+> that probe before concluding anything about embedding 429s; "wait until tomorrow" and "back off
+> harder" are opposite fixes and the error text alone does not tell them apart.
+>
+> PREVIOUS: 2026-08-27 (**EMBEDDING HAD NO RATE-LIMIT RETRY, AND PRODUCTION PROVED IT.** A burst
+> of vault seeds against prod returned `vault: embeddings API 429` ON CONTACT and every caller failed
+> outright — `doEmbed` surfaced the provider's 429 straight to the caller as a hard throw.
+>
+> **This is a USER-FACING defect, not an eval-harness quirk.** `embedDoc` drives the same path, so
+> anyone importing more than a trickle of documents hit the same wall and saw the ingest fail. It was
+> invisible until now only because the pack evals are the heaviest embedding workload ever pointed at
+> production — and because, until the same day, a stray carriage return in
+> `GOOGLE_GENERATIVE_AI_API_KEY` meant the call died at the HTTP header and never reached Google at
+> all. **Hitting a quota was PROGRESS.**
+>
+> Now retries 429 and 5xx, up to 5 attempts. **429/5xx ONLY, deliberately:** a 400/401/403 is a
+> request or credential fault that retrying cannot fix, and retrying a bad key five times per chunk
+> burns the action's budget before failing identically. Honours `Retry-After` when the provider sends
+> one, capped at 30s so a hostile or broken header cannot park an action; otherwise exponential with
+> jitter so parallel callers that collided once do not re-collide in lockstep.
+>
+> The two decisions are PURE and EXPORTED (`isRetriableEmbedStatus`, `embedBackoffMs`), matching this
+> file's existing "pure; exported for the offline test" idiom — the retry loop itself needs a live
+> socket to exercise, but the policy that makes it right or wrong does not.
+>
+> One narrowing trap worth keeping: moving the `fetch` into a closure LOST TypeScript's narrowing of
+> `apiKey` from the guard above it, because TS cannot know when a hoisted function runs. Capture the
+> narrowed value in a `const` before the closure.
+>
+> PREVIOUS: 2026-08-26 (**FORMATTING ONLY — no vault behaviour was read or changed.**
+> `packages/vault/src/ingestEstimate.test.ts` was reformatted by `biome check --write` as part of
+> clearing five PRE-EXISTING lint errors that were failing `pnpm lint --diagnostic-level=error`, and
+> therefore CI, on `feat/27-02-pack-contracts`. Ten lines, whitespace only; the assertions are
+> untouched and the suite is unchanged. Nothing in this playbook was re-verified against the vault
+> code, and this bump must not be read as if it had been.
+>
+> PREVIOUS: 2026-08-25 (**A DOCUMENT THAT INGESTS IS NEVER FREE — `estimateFile` now floors the
 > per-document term at ONE CENT, and the hole it closes was open in plain sight.**
 >
 > `perDocumentUsd()` is `EMBED_USD_PER_MTOK + modelUsd(DEFAULT_MODEL)`. `EMBED_USD_PER_MTOK` is

@@ -13,6 +13,7 @@ import { CanvasPane } from "./MediaCanvas";
 import { SkillAuthoringPanel } from "./SkillAuthoringPanel";
 import { SplitPane } from "./SplitPane";
 import { useSendCockpitMessage } from "./useSendCockpitMessage";
+import { WorkflowPackOwnerControls } from "./WorkflowPackOwnerControls";
 import { WorkflowPackOwnerPreview } from "./WorkflowPackOwnerPreview";
 import { WorkflowPackQuickStarts } from "./WorkflowPackQuickStarts";
 
@@ -453,6 +454,41 @@ export default function WorkspacePage() {
       });
   };
 
+  // 27-11: THE UNDO PATH. `skills.deactivatePack` is an `ownerMutation` and the CLI cannot call it
+  // (`convex run` carries no identity, and on this stack it also destroys the browser session), so
+  // until there was a control here rollback-to-dark was proven by nothing. Owner-only by the same
+  // rule as the preview: the mutation is the real check, the conditional render is only about not
+  // showing a button that would refuse.
+  const deactivatePack = useMutation(api.skills.deactivatePack);
+  // ROLLBACK TO A PRIOR VERSION. `activateCandidate` is the same owner mutation the ops panel uses;
+  // `planGlobalActivation` gates on `status === "candidate"`, so an ARCHIVED row — one that was live
+  // before — goes back without re-running the evidence planes. That exemption is deliberate:
+  // rollback must work mid-incident and must never be blocked by a broken eval or browser harness.
+  const activatePackVersion = useMutation(api.skills.activateCandidate);
+  const packPriorVersions = useQuery(
+    api.workflowPackDiscovery.listPackPriorVersions,
+    viewer?.isOwner === true ? {} : "skip",
+  );
+  const onRollBackPack = (packId: string, title: string, version: number) => {
+    if (sending || turningOff !== null) return;
+    setPackNotice(null);
+    setTurningOff(packId);
+    void activatePackVersion({ name: `pack-${packId}`, version })
+      .then(() => setPackNotice(`${title} is back on v${version}.`))
+      .catch(() => setPackNotice("That workflow could not be rolled back. Nothing changed."))
+      .finally(() => setTurningOff(null));
+  };
+  const [turningOff, setTurningOff] = useState<string | null>(null);
+  const onTurnOffPack = (packId: string, title: string) => {
+    if (sending || turningOff !== null) return;
+    setPackNotice(null);
+    setTurningOff(packId);
+    void deactivatePack({ name: `pack-${packId}` })
+      .then(() => setPackNotice(`${title} is off. Nobody is offered it now.`))
+      .catch(() => setPackNotice("That workflow could not be turned off. Nothing changed."))
+      .finally(() => setTurningOff(null));
+  };
+
   const newChat = () => setThreadId(undefined);
   const clearWorkspace = () => {
     window.sessionStorage.removeItem(WORKSPACE_SESSION_KEY);
@@ -679,6 +715,15 @@ export default function WorkspacePage() {
                   onPreview={onPreviewPack}
                   busy={sending}
                   starting={startingPack}
+                />
+                {/* Owner-only, and passed `undefined` for everyone else so it renders nothing. */}
+                <WorkflowPackOwnerControls
+                  packs={viewer?.isOwner === true ? packs : undefined}
+                  priorVersions={packPriorVersions}
+                  onTurnOff={onTurnOffPack}
+                  onRollBack={onRollBackPack}
+                  busy={sending}
+                  turningOff={turningOff}
                 />
                 {packNotice !== null && (
                   <p role="status" style={{ color: "var(--ink-soft)", fontSize: "0.85rem" }}>

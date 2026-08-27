@@ -16,16 +16,35 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   reporter: "list",
   use: {
-    baseURL: "http://127.0.0.1:3111",
+    // 27-12: env-overridable so the pack BROWSER EVIDENCE plane can be earned against production.
+    // Evidence lives on ONE deployment's skills row, so a dev browser run certifies nothing on prod
+    // — the same per-deployment rule that made `PIKAR_CONVEX_TARGET` necessary for the eval plane.
+    // Local stays the default: an unflagged run can never point at production by accident.
+    baseURL: process.env.PIKAR_E2E_BASE_URL ?? "http://127.0.0.1:3111",
     trace: "on-first-retry",
   },
   projects: [
+    // 27-11: creates the OWNER account the pack candidate preview needs, on a machine that has
+    // none. Opt-in via PIKAR_E2E_PROVISION=1 — it is not part of an ordinary spec run, because it
+    // seeds an invite and grants owner, and neither belongs in the default path. Runs BEFORE
+    // `setup`, which then signs that account in through the real form.
+    { name: "provision", testMatch: /provision-owner\.setup\.ts/ },
     // Signs in once and saves storageState; feature specs depend on it (see auth.setup.ts).
-    { name: "setup", testMatch: /auth\.setup\.ts/ },
+    {
+      name: "setup",
+      testMatch: /auth\.setup\.ts/,
+      dependencies: process.env.PIKAR_E2E_PROVISION === "1" ? ["provision"] : [],
+    },
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"], storageState: "e2e/.auth/user.json" },
-      dependencies: ["setup"],
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: process.env.PIKAR_E2E_STORAGE_STATE ?? "e2e/.auth/user.json",
+      },
+      // `setup` signs in through the local password form, which cannot work against a deployment
+      // whose only human account is a Google identity. Supplying a storageState captured elsewhere
+      // (see e2e/capture-prod-session.mjs) is therefore also the signal to SKIP that sign-in.
+      dependencies: process.env.PIKAR_E2E_STORAGE_STATE ? [] : ["setup"],
     },
   ],
 });

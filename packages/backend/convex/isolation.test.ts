@@ -350,7 +350,7 @@ describe("owner endpoints reject a non-owner, and the list grows by itself", () 
     // TIMES: each new owner endpoint turned it red, which is the entire reason the count and the
     // module set are pinned rather than derived-and-forgotten. Update it deliberately when the
     // surface grows.
-    expect(OWNER_SURFACE.length).toBeGreaterThanOrEqual(20);
+    expect(OWNER_SURFACE.length).toBeGreaterThanOrEqual(21);
     expect([...new Set(OWNER_SURFACE.map((f) => f.module))].sort()).toEqual([
       "deadLetters",
       "finance",

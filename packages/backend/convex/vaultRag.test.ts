@@ -12,9 +12,13 @@ import { expect, test } from "vitest";
 import {
   buildGeminiEmbedRequest,
   buildOpenAIEmbedRequest,
+  buildOpenRouterEmbedRequest,
   EMBEDDING_DIM,
+  embedBackoffMs,
   embeddingContentHash,
+  isRetriableEmbedStatus,
   l2Normalize,
+  parseRetryAfterSeconds,
 } from "./vaultRag";
 
 // ── 1. NORMALISATION — the silent one ────────────────────────────────────────
@@ -94,9 +98,105 @@ test("buildOpenAIEmbedRequest pins the model and the 1536 `dimensions`", () => {
 test("embeddingContentHash scopes dedup to the MODEL, so a provider swap re-embeds", () => {
   const sha = "abc123";
   // Asserts the SHAPE, not which provider is pinned today — the point is that the identity moves
-  // with the model, in BOTH directions of the OpenAI/Gemini A/B.
-  expect(embeddingContentHash(sha)).toMatch(/^(text-embedding-3-small|gemini-embedding-001):/);
+  // with the model, in EVERY direction of the OpenAI/Gemini/OpenRouter rotation.
+  //
+  // `openai/text-embedding-3-small` is the SAME model as `text-embedding-3-small` reached through a
+  // different account, so the two ids produce DIFFERENT dedup keys for identical vectors. That is
+  // wasteful (one needless re-embed on the route change) and it is the safe direction: the
+  // alternative is normalising the ids, which would make a real model change look like a route
+  // change and leave stale vectors in the index forever. Re-embedding costs cents; a silently
+  // unsearchable corpus costs the feature.
+  expect(embeddingContentHash(sha)).toMatch(
+    /^(text-embedding-3-small|gemini-embedding-001|openai\/text-embedding-3-small):/,
+  );
   expect(embeddingContentHash(sha)).toContain(sha);
   // The whole point: same text, different model ⇒ different dedup identity.
   expect(embeddingContentHash(sha)).not.toBe(sha);
+});
+
+// A burst of vault seeds against production returned `embeddings API 429` on contact and every
+// caller failed outright. The same path serves a user importing documents, so the retry is the
+// difference between a slow ingest and a failed one.
+test("retries a rate limit and a server fault, and NOTHING else", () => {
+  expect(isRetriableEmbedStatus(429)).toBe(true);
+  expect(isRetriableEmbedStatus(500)).toBe(true);
+  expect(isRetriableEmbedStatus(503)).toBe(true);
+  // A credential or request fault cannot be fixed by asking again.
+  expect(isRetriableEmbedStatus(400)).toBe(false);
+  expect(isRetriableEmbedStatus(401)).toBe(false);
+  expect(isRetriableEmbedStatus(403)).toBe(false);
+  expect(isRetriableEmbedStatus(404)).toBe(false);
+});
+
+test("prefers the provider's Retry-After, but will not be parked by an absurd one", () => {
+  expect(embedBackoffMs(1, 3)).toBe(3000);
+  // The ceiling is 90s, not 30s: the server legitimately asks for ~56s here, and a cap BELOW what
+  // it asks for silently turns "obey the server" back into "guess" — the bug this whole path had.
+  expect(embedBackoffMs(1, 56)).toBe(56_000);
+  // But 10 minutes from a hostile or broken value must still not hold the action open.
+  expect(embedBackoffMs(1, 600)).toBe(90_000);
+});
+
+test("backs off exponentially, with a ceiling, when no header is given", () => {
+  const noHeader = Number.NaN;
+  expect(embedBackoffMs(1, noHeader)).toBe(1000);
+  expect(embedBackoffMs(2, noHeader)).toBe(2000);
+  expect(embedBackoffMs(3, noHeader)).toBe(4000);
+  // Ceiling holds however many attempts have failed.
+  // Ceiling is 30s, NOT 8s: the limiter is per-minute, so a backoff that tops out below the
+  // window just fails more slowly. Six attempts at this curve span ~61s.
+  expect(embedBackoffMs(5, noHeader)).toBe(16_000);
+  expect(embedBackoffMs(9, noHeader)).toBe(30_000);
+});
+
+test("adds jitter so parallel callers do not re-collide in lockstep", () => {
+  const noHeader = Number.NaN;
+  expect(embedBackoffMs(1, noHeader, 0)).toBe(1000);
+  expect(embedBackoffMs(1, noHeader, 0.999)).toBe(1249);
+});
+
+// Google does NOT send a Retry-After header — it puts `google.rpc.RetryInfo` in the JSON body.
+// Reading only the header is what made two successive retry ceilings fail against production: the
+// server was naming the exact wait (56s) and the code was guessing instead.
+test("reads the retry delay Google puts in the BODY, not just the header", () => {
+  const body = JSON.stringify({
+    error: {
+      code: 429,
+      details: [
+        { "@type": "type.googleapis.com/google.rpc.QuotaFailure", violations: [] },
+        { "@type": "type.googleapis.com/google.rpc.RetryInfo", retryDelay: "56s" },
+      ],
+    },
+  });
+  expect(parseRetryAfterSeconds(body, null)).toBe(56);
+  // OpenAI uses the header; it wins when present so one code path serves both providers.
+  expect(parseRetryAfterSeconds(body, "3")).toBe(3);
+  // And the wait actually honours it rather than falling back to the exponential guess.
+  expect(embedBackoffMs(1, parseRetryAfterSeconds(body, null))).toBe(56_000);
+});
+
+test("falls back to the exponential guess when the server asks for nothing", () => {
+  expect(parseRetryAfterSeconds("not json at all", null)).toBeNaN();
+  expect(parseRetryAfterSeconds(JSON.stringify({ error: { details: [] } }), null)).toBeNaN();
+  // A body with no usable delay must not become a 0ms wait — that would be a hot retry loop.
+  expect(embedBackoffMs(1, parseRetryAfterSeconds("{}", null))).toBe(1000);
+});
+
+test("buildOpenRouterEmbedRequest names the NAMESPACED id — the field that picks the account", () => {
+  const req = buildOpenRouterEmbedRequest(["alpha", "beta"]);
+  // The one field that differs from the direct-OpenAI builder, and the one that decides which
+  // balance is billed. Measured against the live endpoint 2026-08-27: 1536 dims back, L2 = 1.0005,
+  // and 2048 inputs accepted in one call (full OpenAI parity).
+  expect(req.model).toBe("openai/text-embedding-3-small");
+  expect(req.dimensions).toBe(EMBEDDING_DIM);
+  expect(req.input).toEqual(["alpha", "beta"]);
+});
+
+test("the OpenRouter and direct-OpenAI payloads differ ONLY in the model id", () => {
+  // If these ever diverge in any other field, the response-parsing branch in `doEmbed` — which
+  // deliberately treats OpenRouter as the OpenAI shape — stops being safe.
+  const viaRouter = buildOpenRouterEmbedRequest(["x"]);
+  const direct = buildOpenAIEmbedRequest(["x"]);
+  expect({ ...viaRouter, model: "" }).toEqual({ ...direct, model: "" });
+  expect(viaRouter.model).not.toBe(direct.model);
 });

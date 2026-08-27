@@ -62,6 +62,81 @@ export const ownsDeployment = internalQuery({
  * Idempotent by design so re-running it is safe and so the live checkpoint can PROVE the
  * transition happened exactly once (`changed: true` then `changed: false`).
  */
+/**
+ * Look up ONE user id by email. READ-ONLY, `internalQuery`, and it grants nothing.
+ *
+ * It exists for local provisioning (`apps/web/e2e/provision-owner.setup.ts`): the browser evidence
+ * plane needs a signed-in OWNER, `bootstrapOwner` takes an exact `users._id` by design, and there
+ * was no way to turn the address you just signed up with into that id without opening the dashboard
+ * by hand.
+ *
+ * IT DOES NOT WEAKEN `bootstrapOwner`'s RULE, and the distinction is the whole point. That mutation
+ * refuses to SELECT a row — no first-user rule, no email allowlist, no registration order — because
+ * selecting is how the wrong account becomes owner through data the owner does not control. This
+ * only READS an id and hands it back to a human running a CLI; the grant is still a separate,
+ * deliberate call naming an exact row. Do not call this from `bootstrapOwner`.
+ */
+export const findUserIdByEmail = internalQuery({
+  args: { email: v.string() },
+  handler: async (ctx, { email }) => {
+    // `.unique()` THROWS when an address has more than one row, and production HAS such rows
+    // (observed 2026-08-26: one human, several `users` rows for one address — Convex Auth writes a
+    // row per identity, so a Google sign-in and a password sign-in are two rows). The opaque
+    // "unique() returned more than one result" that produced says nothing an operator can act on.
+    //
+    // It still REFUSES TO SELECT, which is the rule this helper must not weaken: with several
+    // matches it names the count and stops, rather than handing back "the newest" or "the first".
+    // Picking one here would put the choice of who becomes owner back into data the owner does not
+    // control — exactly what `bootstrapOwner` exists to prevent. The operator disambiguates by id.
+    const rows = await ctx.db
+      .query("users")
+      .withIndex("email", (q) => q.eq("email", email.trim().toLowerCase()))
+      .collect();
+    if (rows.length > 1) {
+      // Count only, never the addresses or ids of the other rows (CLAUDE.md §4).
+      throw new Error(`AMBIGUOUS_EMAIL: ${rows.length} user rows share this address`);
+    }
+    const user = rows[0];
+    return user === undefined ? null : { userId: user._id, owner: user.owner === true };
+  },
+});
+
+/**
+ * READ-ONLY census of the rows sharing one address. `internalQuery`, grants nothing, changes
+ * nothing — the operator counterpart to `findUserIdByEmail`'s deliberate refusal to guess.
+ *
+ * WHY IT EXISTS. Production has SEVERAL `users` rows for one address (Convex Auth writes a row per
+ * identity, so a Google sign-in and a password sign-in are two rows). `findUserIdByEmail` correctly
+ * refuses to pick one, which left an operator with a count and no way to see what they were picking
+ * BETWEEN. This is that view.
+ *
+ * REFS AND FLAGS ONLY (CLAUDE.md §4): ids, the owner flag, and creation time. Never the address it
+ * was asked about, never a name, never a token — an operator already knows the address, they typed
+ * it, and echoing identity into logs is how a diagnostic becomes a PII honeypot.
+ *
+ * **A DUPLICATE ROW IS NOT OBVIOUSLY DELETABLE, and this query deliberately cannot delete one.**
+ * `tenantId` IS the Convex Auth user id (`requireScope`), so every row here is a TENANT, and a
+ * "duplicate" may own real data written while someone was signed in as it. Deciding is a human
+ * judgement over what each tenant holds; this only shows that the choice exists.
+ */
+export const inspectUsersByEmail = internalQuery({
+  args: { email: v.string() },
+  handler: async (ctx, { email }) => {
+    const rows = await ctx.db
+      .query("users")
+      .withIndex("email", (q) => q.eq("email", email.trim().toLowerCase()))
+      .collect();
+    return {
+      count: rows.length,
+      rows: rows.map((u) => ({
+        userId: u._id,
+        owner: u.owner === true,
+        createdAt: u._creationTime,
+      })),
+    };
+  },
+});
+
 export const bootstrapOwner = internalMutation({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
