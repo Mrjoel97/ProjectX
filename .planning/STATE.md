@@ -3,6 +3,76 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 28
+current_plan: 4 of 29 executed (28-17 readiness gate, 28-18 playbook/watch ownership, 28-01 provider suitability, 28-02 deterministic finance core) -- 28 IN PROGRESS
+status: executing
+stopped_at: "28-02 SEALED. **PHASE 28 NOW HAS CODE, AND IT IS PURE.** `packages/revenue` is a
+Convex-free, LLM-free, dependency-free (bar `@pikar/core`) workspace package: 79 tests green,
+`tsc` clean, biome clean. `node scripts/check-phase28-readiness.mjs` was run FIRST and exited 0
+before a line was written.
+
+**WHAT IS FROZEN, AND WHAT EVERY LATER LANE MUST OBEY.** (1) `Money` is a SAFE-INTEGER count of
+minor units plus an explicit ISO 4217 code. Parsing is BigInt string arithmetic -- `0.1` USD is
+exactly `10`, never `10.000000000000002` -- and the magnitude check happens BEFORE any lossy
+conversion. Exponents come from a code-owned ISO 4217 exception table (JPY 0, BHD 3, CLF 4) with the
+ISO default of 2; enumerating the exceptions IS enumerating all of them. **An adapter may create a
+`Money` ONLY through `parseMoney` / `moneyFromMinor` / `moneyFromNumber`.** (2) Every combining
+operation returns a `Result` and REFUSES a mixed currency; the currency is a REQUIRED argument to
+`sumMoney`/`agingReport`, never read off the first element. (3) `validateProjection` REFUSES a
+capped `ready` -- a prefix of reality is not a total, so a capped read is `partial` or it does not
+land. (4) `receiptsTotal` takes a `Reconciled` and is the ONLY exported total over payments, so
+books+rail double-counting has no route through the public API. Do not add a second one.
+(5) `confidenceFor` is closed and MONOTONE DOWNWARD, asserted over every authority-subset x
+capped x partial x missing permutation.
+
+**MISSING IS UNKNOWN, NEVER ZERO, IN FOUR PLACES:** a null due date is the `unknown` aging bucket
+(not `current`); a median over no settled invoices is `not-computable` (not 0); missing opening
+cash makes the whole cash timeline `unknown` (not a balance starting at zero); and **no payroll run
+on file returns `unknown`, NEVER `covered: true` -- silence is not safety.**
+
+**REUSE, NOT RE-MINT.** `@pikar/core`'s `CashFigure` states are imported via
+`Exclude<CashFigure, {state:'known'}>`, so there is still exactly ONE definition of unknown vs
+not-applicable vs not-computable in the repo. What is genuinely new is the money type (core's
+`CashUnit` is the literal `\"usd\"` -- it cannot express EUR) and all the AR/lag/cash/payroll math.
+`toCashFigure` bridges back and returns `not-computable` for non-USD rather than losing the code.
+
+**THE MUTATION FINDING.** 18 non-deletion mutations were replayed (off-by-one on every boundary,
+RENAME on every discriminating literal -- never a deletion, per 28-17's own lesson). **ONE SURVIVED
+AND IT WAS A REAL DEFECT:** `low.minor >= 0` vs `> 0` decides whether a payroll run that lands the
+balance on EXACTLY zero is a shortfall. It is not -- reporting a $0.00 shortfall tells an owner they
+missed payroll when they made it. Boundary test added, mutation replayed RED, suite now 79.
+
+**TWO BUGS AUTO-FIXED WHILE IMPLEMENTING**, both worth remembering: `receiptsTotal` summed
+`Payment` ROWS instead of their amounts (caught by a test, not by `tsc`), and `nearestRank` ended
+`?? 0` -- the exact fabricated zero this module exists to prevent. **AND A PROCESS FINDING: 78
+TESTS WERE GREEN OVER TWO REAL `tsc` ERRORS.** Vitest transpiles without typechecking. Run both
+gates, every time -- a green suite in this package proves nothing about types.
+
+**REVN-05 IS DELIBERATELY STILL `Pending`.** 17 of the 29 Phase 28 plans claim it and only the pure
+core landed; the Convex orchestration (`revenueFinance.ts`) and the LLM-explains-only guard are
+28-11. Marking it Complete here would have told every later reader that cash-flow reporting works
+when nothing is wired. `docs/playbooks/revenue-finance.md` was flipped from REGISTERED-AHEAD to
+THE-PURE-CORE-HAS-LANDED and its `Last verified` bumped; **note it had listed FIVE function names
+that do not exist (`ageReceivables`, `buildCashTimeline`, `classifyCoverage`, `classifyConfidence`,
+`composeFinanceResult`) -- the landed names are `agingReport`, `cashTimeline`, `coverageOf`,
+`confidenceFor`, `financeResult`, and 28-11 must use those.** `revenue-connectors.md` was already
+current (another lane bumped it to `eaea00c`) and was not touched.
+
+Every dependent plan still runs `node scripts/check-phase28-readiness.mjs` FIRST; exit 1 means
+stop, not shim. Working branch feat/27-02-pack-contracts."
+last_updated: "2026-08-27T15:17:35.000Z"
+progress:
+  total_phases: 53
+  completed_phases: 35
+  total_plans: 413
+  completed_plans: 321
+  percent: 78
+---
+
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: - Platform -> Private Beta
+current_phase: 28
 current_plan: 2 of 29 executed (28-17 readiness gate, 28-18 playbook/watch ownership) -- 28 IN PROGRESS
 status: executing
 stopped_at: "28-18 SEALED. Seven Phase 28 playbooks and 40 `watch.json` prefixes are committed BEFORE the

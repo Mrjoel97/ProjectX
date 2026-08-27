@@ -144,13 +144,13 @@ Plans:
   3. Cash-flow and payroll-confidence calculations are deterministic pure-TypeScript domain logic with fixtures, normalized-input validation, provenance, coverage/confidence semantics and no LLM arithmetic.
   4. Invoice reminders stage drafts into the existing plan gate; no revenue specialist can send, refund, credit or mutate CRM/accounting state directly.
   5. Authenticated two-tenant tests, provider replay/rate-limit tests and live read-only smoke gates pass before each connector-backed workflow is exposed; outcome telemetry can measure follow-up completion, overdue-item recovery and handling time without raw content.
-**Plans:** 2/29 plans executed (29 plans across 20 waves)
+**Plans:** 4/29 plans executed
 
 Plans:
 - [x] 28-17-PLAN.md — Hard Phase 19/25/27 readiness gate before connector work (Wave 1) — **`passed` 2026-08-27** (`fe73938`); 15/16 rows machine-verified, `p25-production-posture` green on OWNER ATTESTATION only. Recheck: `node scripts/check-phase28-readiness.mjs`
 - [ ] 28-01-PLAN.md — Independent provider suitability, OAuth, security and terms decisions (Wave 2)
 - [x] 28-18-PLAN.md — Operational playbook and watch ownership (Wave 2) — **complete 2026-08-27** (`1cdfef4`); 7 playbooks + 40 `watch.json` prefixes, 0 collisions / 0 uncovered paths. Load-bearing proven by OBSERVING RED on all 7 lanes via STDOUT — `check-playbooks.mjs` exits 0 in the violating case AND the clean case, so its exit code proves nothing. `packages/revenue/` retired from `_unassigned` (28-02 handoff). Implements NO requirement — registration only
-- [ ] 28-02-PLAN.md — Normalized deterministic finance core (Wave 2)
+- [x] 28-02-PLAN.md — Normalized deterministic finance core (Wave 2) — **complete 2026-08-27** (`d963bf3`, `eaea00c`); `@pikar/revenue` is a pure-TS package, 79 tests, no Convex/LLM/new dependency. Money is safe-integer minor units + explicit ISO 4217 currency parsed by BigInt string arithmetic (never float multiplication); every combining op REFUSES a mixed currency. AR aging / payment-lag p50-p90 / cash timeline / payroll gap are code-owned and fail closed. `receiptsTotal` takes a `Reconciled`, so books+rail double-counting has no route through the public API. **REVN-05 deliberately left Pending** — 17 of 29 plans claim it and only the pure core landed; the Convex orchestration and the LLM-explains-only guard are 28-11. **18 non-deletion mutations (off-by-one on boundaries, rename on literals) were replayed; ONE SURVIVED and found a real defect** — `low.minor >= 0` vs `> 0` decides whether landing on exactly zero on payday is a shortfall (it is not), boundary test added and the mutation now kills. Two bugs auto-fixed while implementing: `receiptsTotal` summed `Payment` rows not amounts, and `nearestRank` had a `?? 0` fallback — the exact fabricated zero the module exists to prevent
 - [ ] 28-03-PLAN.md — Encrypted credentials and additive connector schema (Wave 3)
 - [ ] 28-04-PLAN.md — Shared OAuth/revocation/security mechanics without a generic runtime (Wave 4)
 - [ ] 28-26-PLAN.md — Durable machine-readable provider eligibility gate (Wave 5)
