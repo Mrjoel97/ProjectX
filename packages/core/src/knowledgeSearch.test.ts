@@ -28,6 +28,8 @@ import {
   renderSourceGap,
   SEARCH_CAPS,
   searchConfidence,
+  settleRead,
+  unavailableRead,
   validateSourceRef,
   validateSynthesis,
   weakestAuthority,
@@ -665,6 +667,128 @@ describe("clampEvidence enforces every per-source and per-run bound", () => {
 
   test("an empty read is an empty read — no cap is reported when nothing was cut", () => {
     expect(clampEvidence([])).toEqual({ evidence: [], capped: [] });
+  });
+
+  // ── SCOPE: which bounds one call is entitled to enforce ─────────────────────────────────
+  //
+  // The run-level caps were being applied INSIDE a single-source adapter, where they mean nothing:
+  // five adapters each clamping to `maxEvidenceTotal` by itself admit 5x the run's cap while every
+  // one of them reports a complete read. Splitting the scope is what lets the per-adapter call stay
+  // honest and moves the union clamp to the place the union exists.
+
+  test('"source" scope does NOT apply the run-level row cap', () => {
+    // Unreachable from one adapter today (8 < 24), so it is asserted the only way it can be: a
+    // corpus already over the run cap in one source is cut to 8 by the per-source rule and NOT
+    // touched by the total. MUTATION: make `runScoped` always true — capped still says vault, but
+    // the character assertion below goes red.
+    const out = clampEvidence(many("vault", 30), "source");
+    expect(out.evidence).toHaveLength(SEARCH_CAPS.maxEvidencePerSource);
+  });
+
+  test('"source" scope does NOT apply the whole-run CHARACTER budget', () => {
+    // 8 rows x 1500 chars = 12,000, over the 8,000 run budget. An adapter must return all 8: it
+    // cannot see the other four sources, so it cannot spend a shared budget honestly.
+    const big = many("vault", SEARCH_CAPS.maxEvidencePerSource, {
+      text: "z".repeat(SEARCH_CAPS.evidenceTextCharCap),
+    });
+    const perSource = clampEvidence(big, "source");
+    expect(perSource.evidence).toHaveLength(8);
+    expect(perSource.evidence.reduce((n, e) => n + e.text.length, 0)).toBe(12_000);
+    expect(perSource.capped).toEqual([]);
+
+    // The SAME input at run scope is cut to the run budget and says so. MUTATION that must turn
+    // this RED: drop the `runScoped &&` guard, or drop the `totalChars` arm entirely.
+    const run = clampEvidence(big);
+    expect(run.evidence.reduce((n, e) => n + e.text.length, 0)).toBeLessThanOrEqual(
+      SEARCH_CAPS.totalEvidenceCharCap,
+    );
+    expect(run.capped).toEqual(["vault"]);
+  });
+
+  test('"source" scope still truncates a row — a per-ROW cap is not a per-run one', () => {
+    const out = clampEvidence(many("vault", 1, { text: "y".repeat(9000) }), "source");
+    expect(out.evidence[0]?.text).toHaveLength(SEARCH_CAPS.evidenceTextCharCap);
+    expect(out.capped).toEqual(["vault"]);
+  });
+
+  test("the DEFAULT scope is the run — an unscoped call must be the strict one", () => {
+    // Fail-safe by default: a new caller that forgets the argument gets the tighter bounds, not the
+    // looser ones. MUTATION: flip the default to "source".
+    const sources = KNOWLEDGE_SOURCES.flatMap((source) =>
+      many(source, SEARCH_CAPS.maxEvidencePerSource),
+    );
+    expect(clampEvidence(sources)).toEqual(clampEvidence(sources, "run"));
+    expect(clampEvidence(sources).evidence.length).toBeLessThanOrEqual(
+      SEARCH_CAPS.maxEvidenceTotal,
+    );
+  });
+});
+
+// ── The one adapter result contract ─────────────────────────────────────────────────────────
+
+describe("settleRead and unavailableRead are the only two ways a read can end", () => {
+  const many = (source: Evidence["source"], n: number, over: Partial<Evidence> = {}): Evidence[] =>
+    Array.from({ length: n }, (_, i) =>
+      ev({ evidenceId: `${source}_${i}`, source, sourceRef: `${source}_ref_${i}`, ...over }),
+    );
+
+  test("an UNAVAILABLE read carries a reason, no rows and NO COUNT", () => {
+    const out = unavailableRead("inbox", "provider_error");
+    expect(out).toEqual({
+      state: { status: "unavailable", source: "inbox", reason: "provider_error" },
+      evidence: [],
+    });
+    // The whole point of the union: "we could not read it, so zero results, so nothing exists" is
+    // not discouraged here, it is unspellable.
+    expect("returned" in out.state).toBe(false);
+  });
+
+  test("a clean read is AVAILABLE with the row count it actually returned", () => {
+    const out = settleRead("drive", many("drive", 3), { cap: false, providerError: false });
+    expect(out.state).toEqual({ status: "available", source: "drive", returned: 3 });
+    expect(out.evidence).toHaveLength(3);
+  });
+
+  test("the adapter's OWN reported loss makes the read partial even when nothing was clamped", () => {
+    // A provider page cap, a dropped hit: the clamp cannot see it, so the adapter says so.
+    expect(
+      settleRead("drive", many("drive", 2), { cap: true, providerError: false }).state,
+    ).toEqual({ status: "partial", source: "drive", returned: 2, reason: "cap" });
+  });
+
+  test("a clamp that cut something makes the read partial even when the adapter reported nothing", () => {
+    const out = settleRead("vault", many("vault", 12), { cap: false, providerError: false });
+    expect(out.state).toEqual({
+      status: "partial",
+      source: "vault",
+      returned: SEARCH_CAPS.maxEvidencePerSource,
+      reason: "cap",
+    });
+  });
+
+  test("provider_error OUTRANKS cap — an unusable row is not a budget working as designed", () => {
+    expect(settleRead("inbox", many("inbox", 2), { cap: true, providerError: true }).state).toEqual(
+      {
+        status: "partial",
+        source: "inbox",
+        returned: 2,
+        reason: "provider_error",
+      },
+    );
+  });
+
+  test("the adapter clamp is PER SOURCE — it never spends the run's budget by itself", () => {
+    // MUTATION that must turn this RED: change `clampEvidence(raw, "source")` inside `settleRead`
+    // to `clampEvidence(raw)`. Then one adapter's 8 x 1500 rows are cut to the RUN's 8,000
+    // characters and reported as `cap`, while the other four sources are still to come.
+    const out = settleRead(
+      "vault",
+      many("vault", SEARCH_CAPS.maxEvidencePerSource, {
+        text: "z".repeat(SEARCH_CAPS.evidenceTextCharCap),
+      }),
+      { cap: false, providerError: false },
+    );
+    expect(out.state).toEqual({ status: "available", source: "vault", returned: 8 });
   });
 });
 

@@ -463,8 +463,30 @@ export function dedupeEvidence(items: readonly Evidence[]): {
 }
 
 /**
+ * WHICH bounds one `clampEvidence` call is entitled to enforce.
+ *
+ * `"source"` — ONE source's rows, inside its own adapter: the per-source row cap and the per-row
+ * text/label caps. The two RUN-level bounds are deliberately NOT applied, because an adapter that
+ * cannot see the other sources cannot spend a shared budget honestly: each of five adapters
+ * clamping to `maxEvidenceTotal` by itself would admit 5x the run's cap while every one of them
+ * reported a complete read.
+ *
+ * `"run"` — the WHOLE corpus, at the point the sources are combined. `maxEvidenceTotal` and
+ * `totalEvidenceCharCap` are only meaningful here, and this is the call that has to happen before
+ * anything is paid for.
+ *
+ * ponytail: today the run-scope caller is `knowledgeLlm.synthesizeKnowledge`, immediately before
+ * the paid model call, because that is the first place the union of adapter output exists.
+ * Ceiling: the per-source counts an adapter already published are minted before that clamp, so a
+ * corpus cut at the union can leave a state whose `returned` overstates what reached synthesis.
+ * Upgrade path: plan 29-06's coordinator clamps the union ONCE and mints every state after, and
+ * this comment comes out when it does.
+ */
+export type EvidenceScope = "source" | "run";
+
+/**
  * THE ADMISSION BOUNDARY for adapter output. Every per-source and per-run bound in `SEARCH_CAPS`
- * is enforced here, once, before evidence reaches dedupe, synthesis or the stored row.
+ * is enforced here — the per-source ones in every adapter, the per-run ones once over the union.
  *
  * This is a trust boundary, not a tidy-up: `text` and `label` are untrusted connector content and
  * the caps are what keep an unbounded provider payload off a Convex row. Truncation is visible
@@ -473,7 +495,10 @@ export function dedupeEvidence(items: readonly Evidence[]): {
  *
  * Order is preserved; a source's own adapter decides what its best 8 are.
  */
-export function clampEvidence(items: readonly Evidence[]): {
+export function clampEvidence(
+  items: readonly Evidence[],
+  scope: EvidenceScope = "run",
+): {
   readonly evidence: readonly Evidence[];
   /** Sources that lost a row or had text/label truncated. Never empty when anything was cut. */
   readonly capped: readonly KnowledgeSource[];
@@ -481,11 +506,15 @@ export function clampEvidence(items: readonly Evidence[]): {
   const kept: Evidence[] = [];
   const capped = new Set<KnowledgeSource>();
   const perSource = new Map<KnowledgeSource, number>();
+  const runScoped = scope === "run";
   let totalChars = 0;
 
   for (const item of items) {
     const used = perSource.get(item.source) ?? 0;
-    if (used >= SEARCH_CAPS.maxEvidencePerSource || kept.length >= SEARCH_CAPS.maxEvidenceTotal) {
+    if (
+      used >= SEARCH_CAPS.maxEvidencePerSource ||
+      (runScoped && kept.length >= SEARCH_CAPS.maxEvidenceTotal)
+    ) {
       capped.add(item.source);
       continue;
     }
@@ -496,7 +525,7 @@ export function clampEvidence(items: readonly Evidence[]): {
 
     // The whole-run character budget, checked AFTER per-row truncation so a single huge row cannot
     // consume it. A row that does not fit is dropped, not silently halved mid-sentence.
-    if (totalChars + text.length > SEARCH_CAPS.totalEvidenceCharCap) {
+    if (runScoped && totalChars + text.length > SEARCH_CAPS.totalEvidenceCharCap) {
       capped.add(item.source);
       continue;
     }
@@ -507,6 +536,65 @@ export function clampEvidence(items: readonly Evidence[]): {
   }
 
   return { evidence: kept, capped: [...capped] };
+}
+
+// ── The one adapter result contract ────────────────────────────────────────────────────────
+
+/**
+ * WHAT EVERY KNOWLEDGE-SOURCE ADAPTER RETURNS: what was read, and how the read ended.
+ *
+ * ONE type and ONE pair of constructors, in the pure package, for every adapter in every module
+ * (CLAUDE.md §1). This was two structurally-identical types three minutes apart — `vault`/`drive`
+ * in one convex module and `inbox`/`crm-facts` in another — and they had already drifted on the
+ * question that matters: one clamped its evidence at the admission boundary and the other applied
+ * hand-written slices. A fourth adapter was free to invent a fourth answer.
+ */
+export type KnowledgeAdapterResult = {
+  readonly state: KnowledgeSourceState;
+  /** ALWAYS empty when `state.status === "unavailable"` — structurally, see `unavailableRead`. */
+  readonly evidence: readonly Evidence[];
+};
+
+/**
+ * The ONE constructor of an unavailable read. **UNREACHABLE IS NOT EMPTY.**
+ *
+ * A source that could not be read — no connection, a dead token, a provider failure, a query that
+ * was never sent — comes back here WITH A NAMED REASON and no rows at all. There is no argument
+ * by which a count could reach this state: the `unavailable` arm has no `returned` field and this
+ * function is the only place the arm is built, so "your CRM is unreachable" can never be rendered
+ * as "your business has no deals".
+ */
+export function unavailableRead(
+  source: KnowledgeSource,
+  reason: UnavailableReason,
+): KnowledgeAdapterResult {
+  return { state: { status: "unavailable", source, reason }, evidence: [] };
+}
+
+/**
+ * The ONE constructor of an ANSWERED read: admit the rows, then say honestly how the read ended.
+ *
+ * `degraded` is the adapter's own report of what was lost BEFORE admission — a provider page cap, a
+ * hit with no usable text, a dropped malformed ref. `clampEvidence` then applies this repo's
+ * per-source bounds and reports anything IT cut. Either kind of loss makes the read `partial`: a
+ * capped read is never reported as a complete one.
+ *
+ * `provider_error` outranks `cap` because an unusable row is a different problem from a full one,
+ * and collapsing the two would hide it.
+ */
+export function settleRead(
+  source: KnowledgeSource,
+  raw: readonly Evidence[],
+  degraded: { readonly cap: boolean; readonly providerError: boolean },
+): KnowledgeAdapterResult {
+  const { evidence, capped } = clampEvidence(raw, "source");
+  const cut = degraded.cap || capped.includes(source);
+  const state: KnowledgeSourceState = degraded.providerError
+    ? { status: "partial", source, returned: evidence.length, reason: "provider_error" }
+    : cut
+      ? { status: "partial", source, returned: evidence.length, reason: "cap" }
+      : { status: "available", source, returned: evidence.length };
+  return { state, evidence };
 }
 
 // ── The planner boundary ───────────────────────────────────────────────────────────────────
@@ -577,8 +665,14 @@ export function clampSearchPlan(raw: readonly unknown[]): {
     // provider boundary strips punctuation before it searches (`gmail.ts escapeGmailQuery`,
     // `vaultDrive.ts escapeDriveQueryLiteral`), so `"---"` reaches the provider as nothing —
     // and an adapter handed nothing either searches for nothing or lists the whole mailbox.
-    // Refusing it HERE, with the reason the planner can act on, is what keeps the adapters'
-    // fail-closed guards unreachable in the product rather than load-bearing.
+    //
+    // ⚠ THIS CHECK DOES NOT MAKE THE ADAPTERS' OWN EMPTY-QUERY GUARDS UNREACHABLE, AND AN EARLIER
+    // VERSION OF THIS COMMENT CLAIMED IT DID. Each provider escaper drops MORE than punctuation:
+    // `escapeGmailQuery` also drops the bare boolean operators, so `"OR"`, `"AND"` and `"OR AND"`
+    // carry a letter, pass here, and reach Gmail as `""`. Restating one escaper's token rules here
+    // would only put a second, drifting copy of them in a package that cannot see the first — so
+    // this guard refuses what it can name, and every adapter fails CLOSED on its own empty query
+    // with a governed state rather than trusting a claim made about another module.
     if (!HAS_SEARCHABLE_TERM.test(query)) {
       rejected.push({ source, reason: "empty_query" });
       continue;
